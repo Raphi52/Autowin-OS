@@ -1,334 +1,165 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
-  DEFAULT_HARNESS_FILTERS,
-  FLOW_LABEL,
-  HARNESS_FLOWS,
-  HARNESS_LAYERS,
-  LAYER_LABEL,
-  RUNTIME_LABEL,
-  SOURCE_LABEL,
-  STATE_LABEL,
-  filterHarness,
-  harnessFilterOptions,
-  layoutHarness,
-  type HarnessFilters,
-  type HarnessNode,
-  type HarnessSnapshot
-} from './harness-model'
+  buildHarnessTimelineFromTrace,
+  type HarnessTraceEvent,
+  type HarnessTimelineEvent,
+  type HarnessTimeline
+} from './harness-timeline-model'
 import './HarnessView.css'
+import { diffPayloadLines } from './harness-payload-diff'
+import { summarizeHermesTraces, type HermesTraceSummaryInput } from './hermes-trace-summary'
+import { HumanJson } from './HumanJson'
 
-const EMPTY: HarnessSnapshot = {
-  generatedAt: '',
-  focusModelId: '',
-  nodes: [],
-  edges: [],
-  caps: { maxNodes: 250, maxEdges: 500, nodeCount: 0, edgeCount: 0, truncated: false },
-  providers: [],
-  runtimes: []
+interface ConversationItem { id: string; title: string; provider: string; updatedAt: number }
+interface HermesTrace extends HermesTraceSummaryInput { messageCount: number; toolCount: number }
+const EMPTY: HarnessTimeline = { turns: [], anomalies: [], totalTokens: 0, totalCostUsd: 0 }
+
+const EVENT_LABEL: Record<HarnessTimelineEvent['kind'], string> = {
+  'response-displayed': 'RÃ©ponse affichÃ©e',
+  message: 'Message', injection: 'Injection', decision: 'Décision', 'tool-call': 'Commande',
+  'tool-result': 'Résultat outil', 'model-response': 'Réponse modèle', handoff: 'Délégation',
+  verdict: 'Verdict', gate: 'Contrôle', retry: 'Nouvelle tentative', cancellation: 'Annulation',
+  error: 'Erreur', boundary: 'Frontière modèle'
 }
 
 export function HarnessView(): React.JSX.Element {
-  const [snapshot, setSnapshot] = useState<HarnessSnapshot>(EMPTY)
-  const [filters, setFilters] = useState<HarnessFilters>(DEFAULT_HARNESS_FILTERS)
-  const [selectedId, setSelectedId] = useState<string>('')
+  const [conversations, setConversations] = useState<ConversationItem[]>([])
+  const [conversationId, setConversationId] = useState('')
+  const [timeline, setTimeline] = useState<HarnessTimeline>(EMPTY)
+  const [selected, setSelected] = useState<HarnessTimelineEvent | null>(null)
+  const [expert, setExpert] = useState(false)
+  const [query, setQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [providerFilter, setProviderFilter] = useState('all')
+  const [actorFilter, setActorFilter] = useState('all')
+  const [compare, setCompare] = useState<HarnessTimelineEvent[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [hermesTraces, setHermesTraces] = useState<HermesTrace[]>([])
 
   useEffect(() => {
-    let cancelled = false
-    void window.api
-      .harnessSnapshot()
-      .then((value) => {
-        if (cancelled) return
-        setSnapshot(value)
-        setSelectedId('')
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause))
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
+    void window.api.conversations().then((items) => {
+      const sorted = [...items].sort((a,b)=>b.updatedAt-a.updatedAt)
+      setConversations(sorted)
+      setConversationId(sorted[0]?.id ?? '')
+    })
   }, [])
 
-  const filtered = useMemo(() => filterHarness(snapshot, filters), [snapshot, filters])
-  const options = useMemo(() => harnessFilterOptions(snapshot), [snapshot])
-  const layout = useMemo(() => layoutHarness(filtered.nodes), [filtered.nodes])
-  const visibleIds = useMemo(() => new Set(filtered.nodes.map((node) => node.id)), [filtered.nodes])
-  const selected = snapshot.nodes.find((node) => node.id === selectedId)
+  useEffect(() => {
+    if (!conversationId) { setHermesTraces([]); return }
+    void window.api.hermesPromptTraces(conversationId).then((traces) =>
+      setHermesTraces((traces as HermesTrace[]).slice(-100))
+    )
+  }, [conversationId, refreshKey])
 
-  function update<K extends keyof HarnessFilters>(key: K, value: HarnessFilters[K]): void {
-    setFilters((current) => ({ ...current, [key]: value }))
+  useEffect(() => {
+    if (!conversationId) { setTimeline(EMPTY); setLoading(false); return }
+    setLoading(true); setSelected(null)
+    void window.api.causalTrace(conversationId)
+      .then((events) => setTimeline(buildHarnessTimelineFromTrace(events as HarnessTraceEvent[])))
+      .finally(() => setLoading(false))
+  }, [conversationId, refreshKey])
+
+  const needle = query.trim().toLocaleLowerCase('fr')
+  const allEvents = timeline.turns.flatMap((turn) => turn.events)
+  const typeOptions = [...new Set(allEvents.map((event) => event.kind))]
+  const providerOptions = [...new Set(allEvents.map((event) => event.provider).filter(Boolean))] as string[]
+  const actorOptions = [...new Set(allEvents.map((event) => event.actor))]
+  const visibleTurns = timeline.turns.map((turn) => ({
+    ...turn,
+    events: turn.events.filter((event) =>
+      (typeFilter === 'all' || event.kind === typeFilter) &&
+      (providerFilter === 'all' || event.provider === providerFilter) &&
+      (actorFilter === 'all' || event.actor === actorFilter) &&
+      (!needle || `${event.actor} ${event.label} ${event.content} ${event.detail}`.toLocaleLowerCase('fr').includes(needle))
+    )
+  })).filter((turn)=>turn.events.length>0)
+  const hermesSummary = summarizeHermesTraces(hermesTraces)
+
+  async function exportTrace(): Promise<void> {
+    if (!conversationId) return
+    const events = await window.api.causalTrace(conversationId)
+    const blob = new Blob([JSON.stringify({ schema: 'autowin.trace-export/v1', conversationId, events }, null, 2)], { type: 'application/json' })
+    const href = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = href; link.download = `autowin-trace-${conversationId}.json`; link.click()
+    URL.revokeObjectURL(href)
+  }
+
+  function openAnomaly(eventId: string): void {
+    setQuery('')
+    setTypeFilter('all')
+    setProviderFilter('all')
+    setActorFilter('all')
+    setSelected(allEvents.find((event) => event.id === eventId) ?? null)
   }
 
   return (
-    <section className="harness-view">
+    <section className="harness-view harness-control-room">
       <header className="harness-head">
-        <div>
-          <span className="harness-kicker">CARTE EXPLICATIVE · LECTURE SEULE</span>
-          <h1>Harnais</h1>
-          <p>Ce qui relie le modèle, les règles, les données et les preuves.</p>
-        </div>
-        <div className="harness-badges">
-          <span>Runtime local</span>
-          <span>Brain partagé · lecture seule</span>
-          <span>{snapshot.caps.nodeCount} nœuds</span>
-        </div>
+        <div><span className="harness-kicker">BOÎTE NOIRE · EXÉCUTION RÉELLE</span><h1>Tour de contrôle</h1><p>Qui a reçu quoi, pourquoi, et ce qui s’est réellement passé.</p></div>
+        <div className="harness-badges"><span>{timeline.turns.length} tours</span><span>{timeline.totalTokens.toLocaleString('fr-FR')} tokens</span><span>{timeline.totalCostUsd ? `$${timeline.totalCostUsd.toFixed(4)}` : 'coût non mesuré'}</span><span className={hermesSummary.count ? 'is-observed' : ''}>{hermesSummary.count ? `${hermesSummary.count} appels Hermes · ${hermesSummary.coverage}` : 'Hermes non observé'}</span>{hermesSummary.lastTimestamp && <span>Dernier · {new Date(hermesSummary.lastTimestamp).toLocaleString('fr-FR')} · {hermesSummary.lastModel}</span>}{hermesSummary.boundary && <span>{hermesSummary.boundary} · exact-redacted</span>}</div>
       </header>
 
-      <div className="harness-story" aria-label="Lecture rapide du harnais">
-        <span>
-          <b>1</b>
-          <strong>Vous demandez</strong>
-          <small>Chat ou mission</small>
-        </span>
-        <i aria-hidden="true">→</i>
-        <span>
-          <b>2</b>
-          <strong>Le modèle orchestre</strong>
-          <small>Règles, skills et outils</small>
-        </span>
-        <i aria-hidden="true">→</i>
-        <span>
-          <b>3</b>
-          <strong>Le système vérifie</strong>
-          <small>Gates, traces et coûts</small>
-        </span>
+      <div className="harness-toolbar">
+        <div className="harness-level"><button className={!expert?'is-active':''} onClick={()=>setExpert(false)}>Comprendre</button><button className={expert?'is-active':''} onClick={()=>setExpert(true)}>Expert</button></div>
+        <input value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Rechercher un acteur, une injection, un contenu…" />
+        <select value={typeFilter} onChange={(event)=>setTypeFilter(event.target.value)} aria-label="Type d’événement"><option value="all">Tous les types</option>{typeOptions.map((type)=><option key={type} value={type}>{EVENT_LABEL[type]}</option>)}</select>
+        <select value={providerFilter} onChange={(event)=>setProviderFilter(event.target.value)} aria-label="Provider"><option value="all">Tous providers</option>{providerOptions.map((provider)=><option key={provider}>{provider}</option>)}</select>
+        <select value={actorFilter} onChange={(event)=>setActorFilter(event.target.value)} aria-label="Acteur"><option value="all">Tous acteurs</option>{actorOptions.map((actor)=><option key={actor}>{actor}</option>)}</select>
+        <button className="harness-refresh" onClick={()=>void exportTrace()}>Exporter JSON</button>
+        <button className="harness-refresh" onClick={()=>setRefreshKey((value)=>value+1)}>Actualiser</button>
       </div>
 
-      <div className="harness-controls" aria-label="Filtres du harnais">
-        <div className="harness-level">
-          <button
-            className={filters.level === 'beginner' ? 'is-active' : ''}
-            onClick={() => update('level', 'beginner')}
-          >
-            Comprendre
-          </button>
-          <button
-            className={filters.level === 'expert' ? 'is-active' : ''}
-            onClick={() => update('level', 'expert')}
-          >
-            Expert
-          </button>
-        </div>
-        <select
-          value={filters.flow}
-          onChange={(event) => update('flow', event.target.value as HarnessFilters['flow'])}
-          aria-label="Flux"
-        >
-          <option value="all">Tous les flux</option>
-          {HARNESS_FLOWS.map((flow) => (
-            <option key={flow} value={flow}>
-              {FLOW_LABEL[flow]}
-            </option>
-          ))}
-        </select>
-        {filters.level === 'expert' && (
-          <>
-            <select
-              value={filters.runtime}
-              onChange={(event) =>
-                update('runtime', event.target.value as HarnessFilters['runtime'])
-              }
-              aria-label="Runtime"
-            >
-              <option value="all">Tous les runtimes</option>
-              {options.runtimes.map((runtime) => (
-                <option key={runtime} value={runtime}>
-                  {RUNTIME_LABEL[runtime]}
-                </option>
-              ))}
-            </select>
-            <select
-              value={filters.provider}
-              onChange={(event) => update('provider', event.target.value)}
-              aria-label="Provider"
-            >
-              <option value="all">Tous les providers</option>
-              {options.providers.map((provider) => (
-                <option key={provider} value={provider}>
-                  {provider}
-                </option>
-              ))}
-            </select>
-            <select
-              value={filters.health}
-              onChange={(event) => update('health', event.target.value as HarnessFilters['health'])}
-              aria-label="Santé"
-            >
-              <option value="all">Tous les états</option>
-              {options.states.map((state) => (
-                <option key={state} value={state}>
-                  {STATE_LABEL[state]}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
-        <input
-          value={filters.query}
-          onChange={(event) => update('query', event.target.value)}
-          placeholder="Chercher un composant…"
-          aria-label="Recherche"
-        />
+      <div className="harness-flightdeck">
+        <aside className="harness-runs">
+          <span className="harness-panel-title">CONVERSATIONS</span>
+          {conversations.map((conversation)=><button key={conversation.id} className={conversation.id===conversationId?'is-active':''} onClick={()=>setConversationId(conversation.id)}><strong>{conversation.title}</strong><small>{conversation.provider}</small></button>)}
+          <section className="harness-diagnostics">
+            <span className="harness-panel-title">À REGARDER</span>
+            {timeline.anomalies.length === 0 ? <p>Aucune répétition ou surcharge évidente détectée.</p> :
+              timeline.anomalies.map((item) => <button
+                key={`${item.kind}:${item.eventId}`}
+                onClick={() => openAnomaly(item.eventId)}
+              >
+                <strong><b>{item.count}×</b>{item.label}</strong>
+                <span><em>Mesuré</em>{item.fact}</span>
+                <span><em>Hypothèse</em>{item.hypothesis}</span>
+                <span><em>Recommandé</em>{item.recommendation}</span>
+              </button>)}
+          </section>
+        </aside>
+
+        <main className="harness-timeline" data-testid="harness-timeline" aria-busy={loading} onClick={()=>setSelected(null)}>
+          {loading && <div className="harness-empty">Lecture de la boîte noire…</div>}
+          {!loading && visibleTurns.length===0 && <div className="harness-empty"><strong>Aucune trace pour cette conversation</strong><span>Envoie un message dans le chat : son parcours apparaîtra ici automatiquement.</span></div>}
+          {visibleTurns.map((turn,turnIndex)=><section className="harness-turn" key={turn.id}>
+            <header><div><span>TOUR {timeline.turns.length-turnIndex}</span><time>{new Date(turn.ts).toLocaleString('fr-FR')}</time></div><small>{turn.tokens.toLocaleString('fr-FR')} tokens · {turn.costUsd?`$${turn.costUsd.toFixed(4)}`:'coût indisponible'}</small></header>
+            <nav className="harness-causal-map" aria-label="Carte causale du tour">
+              {turn.events.map((event)=><button key={event.id} title={`${event.actor} · ${event.label}\nParent: ${event.parentId??'début du tour'}`} className={selected?.id===event.id?'is-active':''} onClick={(clickEvent)=>{clickEvent.stopPropagation();setSelected(event)}}><span>{EVENT_LABEL[event.kind]}</span><b>{event.actor}</b>{turn.events.some((child)=>child.parentId===event.id)&&<i>{turn.events.filter((child)=>child.parentId===event.id).length}</i>}</button>)}
+            </nav>
+            <div className="harness-event-track">
+              {turn.events.map((event,index)=><button key={event.id} className={`harness-event is-${event.kind}${selected?.id===event.id?' is-selected':''}${compare.some((item)=>item.id===event.id)?' is-compared':''}`} onClick={(clickEvent)=>{clickEvent.stopPropagation(); if(clickEvent.shiftKey){setCompare((items)=>items.some((item)=>item.id===event.id)?items.filter((item)=>item.id!==event.id):[...items,event].slice(-2))}else setSelected(event)}}>
+                <i>{index+1}</i><span className="harness-event-kind">{EVENT_LABEL[event.kind]}</span><strong>{event.actor}</strong><em>{event.label}</em><p>{event.content || 'Aucun contenu sur cette étape.'}</p>{index<turn.events.length-1&&<span className="harness-causal-arrow">→</span>}
+              </button>)}
+            </div>
+          </section>)}
+        </main>
+
+        <aside className="harness-detail">
+          <span className="harness-panel-title">INSPECTEUR</span>
+          <button className="harness-compare-action" onClick={()=>selected&&setCompare((items)=>items.some((item)=>item.id===selected.id)?items.filter((item)=>item.id!==selected.id):[...items,selected].slice(-2))}>{compare.length<2?'Ajouter à la comparaison':'Remplacer dans le diff'}</button>
+          {compare.length===2&&<section className="harness-diff" data-testid="harness-diff"><h3>DIFF DE DEUX PAYLOADS</h3><div><article><b>{compare[0].actor} · {compare[0].label}</b>{diffPayloadLines(compare[0].content,compare[1].content).map((line,index)=><code key={index} className={`is-${line.kind}`}>{line.kind==='added'?'':line.left}</code>)}</article><article><b>{compare[1].actor} · {compare[1].label}</b>{diffPayloadLines(compare[0].content,compare[1].content).map((line,index)=><code key={index} className={`is-${line.kind}`}>{line.kind==='removed'?'':line.right}</code>)}</article></div><small>{compare[0].content===compare[1].content?'Contenu identique : injection répétée.':'Vert = ajouté · rouge = supprimé · ambre = modifié.'}</small></section>}
+          {!selected?<div className="harness-detail-empty"><b>Sélectionne une étape</b><span>Tu verras son contenu, son origine et sa destination.</span></div>:<>
+            <div className={`harness-detail-icon is-${selected.kind}`}>{EVENT_LABEL[selected.kind]}</div>
+            <h2>{selected.actor}</h2><p>{selected.label}</p>
+            <dl><div><dt>Parent causal</dt><dd>{selected.parentId??'début du tour'}</dd></div>{selected.timestamp&&<div><dt>Horodatage</dt><dd>{new Date(selected.timestamp).toLocaleString('fr-FR')}</dd></div>}{selected.channel&&<div><dt>Canal</dt><dd>{selected.channel}</dd></div>}{selected.injector&&<div><dt>Injecteur</dt><dd>{selected.injector}</dd></div>}{selected.recipient&&<div><dt>Destinataire</dt><dd>{selected.recipient}</dd></div>}{selected.model&&<div><dt>Modèle</dt><dd>{selected.model}</dd></div>}{selected.reasoningEffort&&<div><dt>Effort</dt><dd>{selected.reasoningEffort}</dd></div>}{selected.transport&&<div><dt>Transport</dt><dd>{selected.transport}</dd></div>}{selected.sessionId&&<div><dt>Session</dt><dd>{selected.sessionId}</dd></div>}{selected.inputTokens!=null&&<div><dt>Tokens entrée</dt><dd>{selected.inputTokens}</dd></div>}{selected.outputTokens!=null&&<div><dt>Tokens sortie</dt><dd>{selected.outputTokens}</dd></div>}{selected.cacheReadTokens!=null&&<div><dt>Cache</dt><dd>{selected.cacheReadTokens}</dd></div>}{selected.durationMs!=null&&<div><dt>Latence</dt><dd>{Math.round(selected.durationMs)} ms</dd></div>}</dl>
+            <section><h3>Contenu exact · {selected.payloads.length} fragment{selected.payloads.length>1?'s':''}</h3><div className="harness-payloads">{selected.payloads.map((payload,index)=><article key={`${payload.kind}-${index}`}><header><b>{payload.kind}</b>{payload.name&&<span>{payload.name}</span>}{payload.mediaType&&<em>{payload.mediaType}</em>}</header><HumanJson value={payload.content||'(vide)'} /></article>)}</div></section>
+            <section><h3>Ce qui est observable</h3><p>{selected.detail}</p></section>
+            {expert&&<section><h3>Brut</h3><HumanJson value={selected.raw ?? selected} /></section>}
+          </>}
+        </aside>
       </div>
-
-      <div className="harness-workspace">
-        <div className="harness-canvas" aria-busy={loading}>
-          {loading && <div className="harness-empty">Lecture du harnais réel…</div>}
-          {error && <div className="harness-empty is-error">{error}</div>}
-          {!loading && !error && filtered.nodes.length === 0 && (
-            <div className="harness-empty">Aucun composant ne correspond aux filtres.</div>
-          )}
-          {!loading && !error && filtered.nodes.length > 0 && (
-            <svg
-              viewBox={`0 0 ${layout.width} ${layout.height}`}
-              role="img"
-              aria-label="Graphe du harnais Autowin OS"
-            >
-              {layout.lanes.map((lane) => (
-                <g key={lane.layer} className={`harness-lane lane-${lane.layer}`}>
-                  <rect
-                    x="6"
-                    y={lane.y + 4}
-                    width={layout.width - 12}
-                    height={lane.height - 8}
-                    rx="12"
-                  />
-                  <text x="22" y={lane.y + 25}>
-                    {LAYER_LABEL[lane.layer]}
-                  </text>
-                </g>
-              ))}
-              <g className="harness-edges">
-                {filtered.edges.map((edge) => {
-                  const from = layout.positions[edge.from]
-                  const to = layout.positions[edge.to]
-                  if (!from || !to || !visibleIds.has(edge.from) || !visibleIds.has(edge.to))
-                    return null
-                  const midY = (from.y + to.y) / 2
-                  return (
-                    <path
-                      key={edge.id}
-                      d={`M ${from.x} ${from.y} C ${from.x} ${midY}, ${to.x} ${midY}, ${to.x} ${to.y}`}
-                      data-kind={edge.kind}
-                    />
-                  )
-                })}
-              </g>
-              <g className="harness-nodes">
-                {filtered.nodes.map((node) => {
-                  const pos = layout.positions[node.id]
-                  if (!pos) return null
-                  return (
-                    <g
-                      key={node.id}
-                      className={`harness-node state-${node.state}${node.focal ? ' is-focal' : ''}${selectedId === node.id ? ' is-selected' : ''}${filtered.matched.has(node.id) ? ' is-match' : ''}`}
-                      transform={`translate(${pos.x - 76} ${pos.y - 30})`}
-                      onClick={() => setSelectedId(node.id)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') setSelectedId(node.id)
-                      }}
-                    >
-                      <rect width="152" height="60" rx="9" />
-                      <circle cx="14" cy="15" r="4" />
-                      <text className="node-kind" x="24" y="18">
-                        {node.kind}
-                      </text>
-                      <text className="node-label" x="12" y="41">
-                        {node.label.length > 23 ? `${node.label.slice(0, 22)}…` : node.label}
-                      </text>
-                    </g>
-                  )
-                })}
-              </g>
-            </svg>
-          )}
-        </div>
-
-        {selected && (
-          <aside className="harness-inspector">
-            <button
-              type="button"
-              className="harness-inspector__close"
-              aria-label="Fermer l’inspecteur"
-              onClick={() => setSelectedId('')}
-            >
-              ×
-            </button>
-            <NodeInspector node={selected} />
-          </aside>
-        )}
-      </div>
-
-      <footer className="harness-legend">
-        {HARNESS_LAYERS.map((layer) => (
-          <span key={layer} className={`legend-${layer}`}>
-            {LAYER_LABEL[layer]}
-          </span>
-        ))}
-        <span>
-          <i className="state-healthy" /> prouvé sain
-        </span>
-        <span>
-          <i className="state-unknown" /> non vérifié
-        </span>
-        {snapshot.caps.truncated && <strong>Vue plafonnée pour rester lisible</strong>}
-      </footer>
     </section>
-  )
-}
-
-function NodeInspector({ node }: { node: HarnessNode }): React.JSX.Element {
-  return (
-    <>
-      <span className={`inspector-state state-${node.state}`}>{STATE_LABEL[node.state]}</span>
-      <h2>{node.label}</h2>
-      <p className="inspector-kind">
-        {LAYER_LABEL[node.layer]} · {node.kind}
-      </p>
-      <section>
-        <h3>Rôle</h3>
-        <p>{node.roleDesc}</p>
-      </section>
-      <section>
-        <h3>Source réelle</h3>
-        <p>{SOURCE_LABEL[node.source]}</p>
-        <code>{node.evidence.ref}</code>
-        {node.evidence.detail && <p>{node.evidence.detail}</p>}
-      </section>
-      <section>
-        <h3>Ce qui est observé</h3>
-        <p>{node.observed}</p>
-      </section>
-      <section>
-        <h3>Ce qui ne l’est pas</h3>
-        <p>{node.notObserved}</p>
-      </section>
-      {node.metrics && node.metrics.length > 0 && (
-        <section>
-          <h3>Mesures bornées</h3>
-          <dl>
-            {node.metrics.map((metric) => (
-              <div key={metric.label}>
-                <dt>{metric.label}</dt>
-                <dd>{metric.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
-      )}
-      <section>
-        <h3>Références</h3>
-        {node.references.map((reference) => (
-          <code key={reference}>{reference}</code>
-        ))}
-      </section>
-    </>
   )
 }

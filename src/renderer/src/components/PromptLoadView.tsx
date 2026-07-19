@@ -5,6 +5,7 @@ import {
   targetToolIds,
   type PromptLoadPreset
 } from './prompt-load-model'
+import { HumanJson } from './HumanJson'
 import './PromptLoadView.css'
 
 type ControlKind = 'tools' | 'skills' | 'plugins' | 'hooks'
@@ -16,6 +17,30 @@ interface ControlItem {
   enabled: boolean
   mutable: boolean
   source?: string
+}
+
+interface ObservedPromptCall {
+  id: string
+  ts: string
+  conversationId: string
+  turnId: string
+  iteration: number
+  actor: string
+  provider: string
+  model?: string
+  transport: string
+  boundary: string
+  limitation: string
+  system?: string
+  messages: Array<{ role: string; content: string }>
+  options: Record<string, unknown>
+  response: string
+  usage?: {
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens?: number
+    costUsd?: number
+  }
 }
 
 const PRESETS: Array<{
@@ -83,6 +108,8 @@ export function PromptLoadView({ active }: { active: boolean }): React.JSX.Eleme
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [restartRequired, setRestartRequired] = useState(false)
+  const [promptCalls, setPromptCalls] = useState<ObservedPromptCall[]>([])
+  const [selectedCallId, setSelectedCallId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!active) return
@@ -98,6 +125,12 @@ export function PromptLoadView({ active }: { active: boolean }): React.JSX.Eleme
         setCatalogues(Object.fromEntries(entries) as Record<ControlKind, ControlItem[]>)
         setError('')
       })
+    void window.api
+      .promptCalls()
+      .then((calls) => {
+        if (current) setPromptCalls(calls as ObservedPromptCall[])
+      })
+      .catch(() => undefined)
       .catch((reason) => {
         if (current) setError(message(reason))
       })
@@ -111,6 +144,22 @@ export function PromptLoadView({ active }: { active: boolean }): React.JSX.Eleme
 
   const preset = detectPromptLoadPreset(catalogues.tools)
   const summary = promptLoadSummary(catalogues.tools)
+  const observed = useMemo(() => {
+    const measuredCalls = promptCalls.filter((call) => call.usage !== undefined).length
+    const inputTokens = promptCalls.reduce((sum, call) => sum + (call.usage?.inputTokens ?? 0), 0)
+    const outputTokens = promptCalls.reduce((sum, call) => sum + (call.usage?.outputTokens ?? 0), 0)
+    const cacheTokens = promptCalls.reduce((sum, call) => sum + (call.usage?.cacheReadTokens ?? 0), 0)
+    const characters = promptCalls.reduce(
+      (sum, call) =>
+        sum +
+        (call.system?.length ?? 0) +
+        call.messages.reduce((messageSum, item) => messageSum + item.content.length, 0),
+      0
+    )
+    return { inputTokens, outputTokens, cacheTokens, characters, measuredCalls }
+  }, [promptCalls])
+  const selectedCall =
+    promptCalls.find((call) => call.id === selectedCallId) ?? promptCalls.at(0) ?? null
   const needle = query.trim().toLocaleLowerCase('fr')
 
   const visible = useMemo(() => {
@@ -229,6 +278,80 @@ export function PromptLoadView({ active }: { active: boolean }): React.JSX.Eleme
           <p>Services runtime distincts du ratio de schémas affiché ici.</p>
         </article>
       </div>
+
+      <section className="prompt-observatory" aria-label="Charge réellement observée">
+        <div className="prompt-observatory-head">
+          <div>
+            <span className="prompt-load-eyebrow">Mesuré aux frontières providers</span>
+            <h2>Charge réellement observée</h2>
+            <p>Les tokens viennent du provider. Les caractères correspondent au payload exact visible.</p>
+          </div>
+          <div className="prompt-observed-metrics">
+            <strong>{observed.measuredCalls ? observed.inputTokens.toLocaleString('fr-FR') : 'non mesuré'}<small>tokens in</small></strong>
+            <strong>{observed.measuredCalls ? observed.outputTokens.toLocaleString('fr-FR') : 'non mesuré'}<small>tokens out</small></strong>
+            <strong>{observed.measuredCalls ? observed.cacheTokens.toLocaleString('fr-FR') : 'non mesuré'}<small>cache lu</small></strong>
+            <strong>{observed.characters.toLocaleString('fr-FR')}<small>caractères visibles</small></strong>
+          </div>
+        </div>
+
+        {promptCalls.length === 0 ? (
+          <p className="prompt-load-empty">Aucun appel observé. Lance un chat pour mesurer son payload exact.</p>
+        ) : (
+          <div className="prompt-observed-layout">
+            <div className="prompt-call-list" role="list" aria-label="Appels observés">
+              {promptCalls.slice(0, 30).map((call) => (
+                <button
+                  type="button"
+                  role="listitem"
+                  key={call.id}
+                  className={selectedCall?.id === call.id ? 'is-active' : ''}
+                  onClick={() => setSelectedCallId(call.id)}
+                >
+                  <span>{call.actor} → {call.provider}</span>
+                  <strong>{call.model ?? call.provider}</strong>
+                  <small>
+                    {new Date(call.ts).toLocaleString('fr-FR')} · {call.usage?.inputTokens ?? '—'} in
+                  </small>
+                </button>
+              ))}
+            </div>
+            {selectedCall && (
+              <article className="prompt-call-inspector">
+                <header>
+                  <div><strong>Payload exact</strong><small>{selectedCall.boundary}</small></div>
+                  <span>{selectedCall.transport}</span>
+                </header>
+                <details open>
+                  <summary>Instructions système · {selectedCall.system?.length ?? 0} caractères</summary>
+                  <pre>{selectedCall.system || '(aucune)'}</pre>
+                </details>
+                <details>
+                  <summary>Messages · {selectedCall.messages.length}</summary>
+                  <HumanJson value={selectedCall.messages} />
+                </details>
+                <details>
+                  <summary>Options et provenance</summary>
+                  <HumanJson value={{
+                    conversationId: selectedCall.conversationId,
+                    turnId: selectedCall.turnId,
+                    iteration: selectedCall.iteration,
+                    actor: selectedCall.actor,
+                    provider: selectedCall.provider,
+                    model: selectedCall.model,
+                    transport: selectedCall.transport,
+                    options: selectedCall.options
+                  }} />
+                </details>
+                <details>
+                  <summary>Réponse exacte</summary>
+                  <pre>{selectedCall.response}</pre>
+                </details>
+                <p className="prompt-envelope-limit">Zone opaque : {selectedCall.limitation}</p>
+              </article>
+            )}
+          </div>
+        )}
+      </section>
 
       <div className="prompt-load-toolbar">
         <input

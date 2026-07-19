@@ -3,6 +3,13 @@ productName: Autowin OS
 directories:
   buildResources: build
 files:
+  - '!dist/**'
+  - '!dist-*/**'
+  - '!Audit/**'
+  - '!artifacts/**'
+  - '!sketches/**'
+  - '!*.png'
+  - '!.git/**'
   - '!**/.vscode/*'
   - '!src/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'

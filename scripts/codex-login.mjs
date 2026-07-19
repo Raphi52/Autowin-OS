@@ -1,7 +1,13 @@
 // Auth Codex LIVE (device-code) — À LANCER PAR L'UTILISATEUR : la saisie du code
 // dans le navigateur est une action humaine (on ne tape jamais tes identifiants).
-// Usage : node scripts/codex-login.mjs
-import { startDeviceLogin, pollForToken, saveTokens, VERIFY_URL, defaultAuthPath } from '../src/main/providers/codex-auth.ts'
+// Usage : npm run codex:login
+import {
+  startDeviceLogin,
+  pollForToken,
+  saveTokens,
+  VERIFY_URL,
+  defaultAuthPath
+} from '../src/main/providers/codex-auth.ts'
 
 console.log('→ Demande d’un code d’appareil à OpenAI…')
 const login = await startDeviceLogin()

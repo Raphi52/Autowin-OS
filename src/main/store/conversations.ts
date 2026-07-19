@@ -4,11 +4,18 @@
 /** Catégorie libre (ex. 'hermes' | 'claude' | 'codex', mais pas de contrainte figée). */
 export type Category = string
 
+export interface AttachmentMeta {
+  name: string
+  mimeType: string
+  size: number
+}
+
 /** Un message échangé dans une conversation. */
 export interface Msg {
   role: 'user' | 'assistant'
   content: string
   ts: number
+  attachments?: AttachmentMeta[]
 }
 
 /** Une conversation, regroupée par catégorie et rattachée à un provider. */
@@ -70,13 +77,21 @@ export class ConversationStore {
   }
 
   /** Ajoute un message à une conversation existante et met à jour updatedAt. Jette si l'id est inconnu. */
-  append(id: string, m: { role: 'user' | 'assistant'; content: string }): Conversation {
+  append(
+    id: string,
+    m: { role: 'user' | 'assistant'; content: string; attachments?: AttachmentMeta[] }
+  ): Conversation {
     const conversation = this.conversations.get(id)
     if (!conversation) {
       throw new Error(`Conversation inconnue: ${id}`)
     }
     const ts = this.now()
-    conversation.messages.push({ role: m.role, content: m.content, ts })
+    conversation.messages.push({
+      role: m.role,
+      content: m.content,
+      ts,
+      ...(m.attachments?.length ? { attachments: m.attachments } : {})
+    })
     conversation.updatedAt = ts
     this.changed()
     return conversation

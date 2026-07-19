@@ -12,8 +12,9 @@ export type GraphLink = {
   source: string | GraphNode
   target: string | GraphNode
   weight: number
+  relation?: string
 }
-export type GraphData = { nodes: GraphNode[]; links: GraphLink[] }
+export type GraphData = { nodes: GraphNode[]; links: GraphLink[]; totalNodes?: number }
 export type GraphVisualMode = 'serious' | 'galaxy'
 export type GraphVisualProfile = {
   modeClass: string
@@ -33,7 +34,7 @@ export type ThemeClusterAnchor = ThemeDefinition & {
   z: number
   count: number
 }
-export type LinkedNode = { node: GraphNode; direction: 'incoming' | 'outgoing' }
+export type LinkedNode = { node: GraphNode; direction: 'incoming' | 'outgoing'; relation?: string }
 export type GalaxyNodeAppearance = { color: string; opacity: number }
 
 export const GRAPH_PALETTE = [
@@ -46,17 +47,13 @@ export const GRAPH_PALETTE = [
   '#e7dd72'
 ]
 
-export const GALAXY_PALETTE = [
-  '#56f3ff',
-  '#ff4fd8',
-  '#9a7cff',
-  '#ffb84d',
-  '#ff647c',
-  '#4f8cff',
-  '#7dffb2'
-]
+export const GALAXY_PALETTE = GRAPH_PALETTE
 
 export const DEFAULT_GRAPH_NODE_SPACING = 72
+
+export function graphMotionProfile(): { warmupTicks: number; cooldownTicks: number } {
+  return { warmupTicks: 80, cooldownTicks: 0 }
+}
 
 export function normalizeGraphNodeSpacing(value: unknown): number {
   if (value === null || value === undefined || value === '') return DEFAULT_GRAPH_NODE_SPACING
@@ -118,7 +115,15 @@ export function buildThemeSummaries(
     for (const theme of nodeThemeIds(node)) counts.set(theme, (counts.get(theme) ?? 0) + 1)
   }
   if (declaredThemes.length > 0) {
-    return declaredThemes.map((theme) => ({ ...theme, count: counts.get(theme.id) ?? 0 }))
+    const declaredIds = new Set(declaredThemes.map((theme) => theme.id))
+    const dynamicThemes = [...counts.entries()]
+      .filter(([id]) => id.startsWith('theme/') && !declaredIds.has(id))
+      .map(([id, count]) => ({ id, label: themeLabel(id), count }))
+      .sort((a, b) => a.id.localeCompare(b.id))
+    return [
+      ...declaredThemes.map((theme) => ({ ...theme, count: counts.get(theme.id) ?? 0 })),
+      ...dynamicThemes
+    ]
   }
   return [...counts.entries()]
     .map(([id, count]) => ({ id, label: themeLabel(id), count }))
@@ -184,15 +189,39 @@ export function toggleThemeSelection(current: ReadonlySet<string>, theme: string
   return next
 }
 
-export function shouldShowFloatingNodeName(
-  node: GraphNode,
-  activeThemes: ReadonlySet<string>,
-  connectedNodeIds: ReadonlySet<string>
-): boolean {
-  return (
-    connectedNodeIds.has(node.id) ||
-    (activeThemes.size > 0 && nodeThemeIds(node).some((theme) => activeThemes.has(theme)))
-  )
+/** Les tags flottants représentent un cluster : un clic remplace le filtre, le second le retire. */
+export function selectExclusiveTheme(current: ReadonlySet<string>, theme: string): Set<string> {
+  return current.size === 1 && current.has(theme) ? new Set() : new Set([theme])
+}
+
+export type ProgressiveGraphPhase = 'preview' | 'complete' | 'cached'
+
+/** Le preview lazy sert à afficher vite, jamais à piloter la caméra. */
+export function shouldAutoFitGraphPhase(phase: ProgressiveGraphPhase): boolean {
+  return phase === 'complete' || phase === 'cached'
+}
+
+export function shouldShowFloatingNodeName(node: GraphNode, hoveredNodeIds: ReadonlySet<string>): boolean {
+  return hoveredNodeIds.has(node.id)
+}
+
+export function focusedNodeIdsFor(nodeId: string, graph: GraphData): Set<string> {
+  return new Set([nodeId, ...linkedNodesFor(nodeId, graph).map((linked) => linked.node.id)])
+}
+
+export function nodeSelectionEmphasis(
+  nodeId: string,
+  selectedNodeId: string | null,
+  focusedNodeIds: ReadonlySet<string>
+): { scale: number; opacity: number } {
+  if (!selectedNodeId) return { scale: 1, opacity: 1 }
+  if (nodeId === selectedNodeId) return { scale: 1.6, opacity: 1 }
+  if (focusedNodeIds.has(nodeId)) return { scale: 1.35, opacity: 1 }
+  return { scale: 1, opacity: 0.14 }
+}
+
+export function isLinkAttachedToNode(link: GraphLink, nodeId: string): boolean {
+  return endpointId(link.source) === nodeId || endpointId(link.target) === nodeId
 }
 
 export function filterGraphVisibility(graph: GraphData, showOrphans: boolean): GraphData {
@@ -225,13 +254,14 @@ export function galaxyNodeAppearance(
   activeThemes: ReadonlySet<string>,
   contextOpacity: number,
   themeOrder: readonly string[],
-  palette: readonly string[] = GALAXY_PALETTE
+  palette: readonly string[] = GALAXY_PALETTE,
+  themeCounts: ReadonlyMap<string, number> = new Map()
 ): GalaxyNodeAppearance {
   const isActive =
     activeThemes.size === 0 || nodeThemeIds(node).some((theme) => activeThemes.has(theme))
 
   return {
-    color: nodeThemeColor(node, activeThemes, themeOrder, palette),
+    color: nodeThemeColor(node, activeThemes, themeOrder, palette, themeCounts),
     opacity: isActive ? 1 : clamp(contextOpacity, 0.05, 1)
   }
 }
@@ -304,16 +334,61 @@ export function linkedNodesFor(nodeId: string, graph: GraphData): LinkedNode[] {
     const targetId = endpointId(link.target)
     if (sourceId === nodeId && targetId !== nodeId) {
       const target = nodesById.get(targetId)
-      if (target) neighbours.set(`outgoing:${target.id}`, { node: target, direction: 'outgoing' })
+      if (target)
+        neighbours.set(`outgoing:${target.id}`, { node: target, direction: 'outgoing', relation: link.relation })
     }
     if (targetId === nodeId && sourceId !== nodeId) {
       const source = nodesById.get(sourceId)
-      if (source) neighbours.set(`incoming:${source.id}`, { node: source, direction: 'incoming' })
+      if (source)
+        neighbours.set(`incoming:${source.id}`, { node: source, direction: 'incoming', relation: link.relation })
     }
   }
   return [...neighbours.values()].sort(
     (a, b) => a.direction.localeCompare(b.direction) || a.node.label.localeCompare(b.node.label)
   )
+}
+
+/** Fusion additive et idempotente d'un voisinage chargé à la demande. */
+export function mergeGraphDelta(graph: GraphData, delta: GraphData): GraphData {
+  const nodes = [...graph.nodes]
+  const nodeIds = new Set(nodes.map((node) => node.id))
+  for (const node of delta.nodes) {
+    if (!nodeIds.has(node.id)) {
+      nodeIds.add(node.id)
+      nodes.push(node)
+    }
+  }
+
+  const links = [...graph.links]
+  const linkKeys = new Set(
+    links.map((link) => `${endpointId(link.source)}\u0000${endpointId(link.target)}\u0000${link.relation ?? ''}`)
+  )
+  for (const link of delta.links) {
+    const key = `${endpointId(link.source)}\u0000${endpointId(link.target)}\u0000${link.relation ?? ''}`
+    if (!linkKeys.has(key)) {
+      linkKeys.add(key)
+      links.push(link)
+    }
+  }
+
+  return {
+    nodes,
+    links,
+    totalNodes: Math.max(graph.totalNodes ?? nodes.length, delta.totalNodes ?? nodes.length)
+  }
+}
+
+/** Termine preview→full sans perdre les voisinages chargés pendant l'indexation. */
+export function completeProgressiveGraph(fullGraph: GraphData, dynamicGraph: GraphData): GraphData {
+  return mergeGraphDelta(fullGraph, dynamicGraph)
+}
+
+export function dynamicGraphForKey(
+  currentKey: string,
+  nextKey: string,
+  dynamicGraph: GraphData
+): GraphData {
+  return currentKey === nextKey ? dynamicGraph : { nodes: [], links: [] }
 }
 
 function themeLabel(id: string): string {

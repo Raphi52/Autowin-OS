@@ -6,8 +6,11 @@ import {
   AMITEL_BRAIN_THEMES,
   loadBrainGraph,
   loadVaultBrainGraph,
+  loadVaultBrainGraphPreviewAsync,
+  loadVaultBrainNeighborhood,
   readNodeFile,
-  scanBrainGraphs
+  scanBrainGraphs,
+  searchVaultBrainNotes
 } from './fs-brains'
 
 describe('Amitel Brain graph', () => {
@@ -87,6 +90,67 @@ describe('Amitel Brain graph', () => {
       ])
     )
     expect(graph.links).toHaveLength(2)
+  })
+
+  it('discovers YAML themes dynamically and searches notes outside the displayed LOD', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-os-dynamic-theme-'))
+    mkdirSync(join(root, 'knowledge/domain'), { recursive: true })
+    writeFileSync(
+      join(root, 'knowledge/domain/autowin.md'),
+      "---\ntags: [theme/autowin-os, theme/architecture]\n---\n# Autowin OS\n",
+      'utf8'
+    )
+    writeFileSync(join(root, 'knowledge/domain/other.md'), '# Other\n', 'utf8')
+
+    const ref = scanBrainGraphs([], root)[0]
+    expect(ref.themes).toEqual(
+      expect.arrayContaining([
+        { id: 'theme/autowin-os', label: 'Autowin OS' },
+        { id: 'theme/architecture', label: 'Architecture' }
+      ])
+    )
+
+    // LOD 1 masque au moins une note, mais la recherche reste exhaustive.
+    expect(loadVaultBrainGraph(root, 1).nodes).toHaveLength(1)
+    expect(searchVaultBrainNotes(root, 'autowin')).toEqual([
+      expect.objectContaining({
+        id: 'knowledge/domain/autowin',
+        label: 'Autowin OS',
+        themes: expect.arrayContaining(['theme/autowin-os', 'theme/architecture'])
+      })
+    ])
+    expect(searchVaultBrainNotes(root, 'theme/autowin-os')).toHaveLength(1)
+  })
+
+  it('loads only an out-of-LOD note and its direct neighbourhood', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-os-neighbourhood-'))
+    mkdirSync(join(root, 'knowledge'), { recursive: true })
+    writeFileSync(join(root, 'hub.md'), '# Hub\n[[knowledge/left]]\n[[knowledge/right]]\n', 'utf8')
+    writeFileSync(join(root, 'knowledge/left.md'), '# Left\n', 'utf8')
+    writeFileSync(join(root, 'knowledge/right.md'), '# Right\n', 'utf8')
+    writeFileSync(join(root, 'unrelated.md'), '# Unrelated\n', 'utf8')
+
+    const delta = loadVaultBrainNeighborhood(root, 'hub')
+
+    expect(delta.nodes.map((node) => node.id).sort()).toEqual([
+      'hub',
+      'knowledge/left',
+      'knowledge/right'
+    ])
+    expect(delta.links).toHaveLength(2)
+    expect(delta.nodes.some((node) => node.id === 'unrelated')).toBe(false)
+  })
+
+  it('returns a bounded preview before the full vault graph', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-os-preview-'))
+    writeFileSync(join(root, 'a.md'), '# A\n', 'utf8')
+    writeFileSync(join(root, 'b.md'), '# B\n', 'utf8')
+    writeFileSync(join(root, 'c.md'), '# C\n', 'utf8')
+
+    const preview = await loadVaultBrainGraphPreviewAsync(root, 1)
+
+    expect(preview.nodes).toHaveLength(1)
+    expect(preview.totalNodes).toBe(3)
   })
 
   it('does not expose an arbitrary directory through the renderer loader', () => {

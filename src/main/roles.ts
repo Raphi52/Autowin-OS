@@ -11,6 +11,7 @@ export interface RoleBinding {
   provider: string
   model?: string
   reasoningEffort?: ReasoningEffort
+  capabilityProfileId?: string
 }
 
 /** Config par defaut raisonnable : claude pour l'essentiel, codex pour le scout. */

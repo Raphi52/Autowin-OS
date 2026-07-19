@@ -3,25 +3,32 @@ import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
 import * as THREE from 'three'
 import { autowinStorageKey, readMigratedStorageValue } from '../storage-keys'
 import {
+  fitDetailColumnWidth,
   fitNormalColumnWidths,
   GRAPH_COLUMN_LIMITS,
   type GraphColumnWidths
 } from './graph-column-layout'
 import {
   buildThemeSummaries,
+  completeProgressiveGraph,
+  dynamicGraphForKey,
   DEFAULT_GRAPH_NODE_SPACING,
   filterGraphVisibility,
+  focusedNodeIdsFor,
   galaxyNodeAppearance,
   getGraphVisualProfile,
   graphForcesForSpacing,
-  isCurrentGraphFitRequest,
-  isHighlightedLink,
+  graphMotionProfile,
+  isLinkAttachedToNode,
   linkedNodesFor,
+  mergeGraphDelta,
   nodeColorForTheme,
   nodeThemeIds,
+  nodeSelectionEmphasis,
+  selectExclusiveTheme,
+  shouldAutoFitGraphPhase,
   nodeValueForTheme,
   normalizeGraphNodeSpacing,
-  nextGraphFitRequest,
   searchGraphCatalog,
   shouldShowFloatingNodeName,
   themeClusterAnchors,
@@ -33,6 +40,7 @@ import {
   type GraphVisualMode
 } from './graph-view-model'
 import { BrainMarkdown } from './BrainMarkdown'
+import { HumanJson } from './HumanJson'
 import './GraphView.css'
 
 type BrainTheme = { id: string; label: string }
@@ -149,6 +157,16 @@ function galaxyStarTexture(color: string): THREE.CanvasTexture {
   if (!context) return new THREE.CanvasTexture(canvas)
 
   const center = canvas.width / 2
+  const halo = context.createRadialGradient(center, center, 2, center, center, 62)
+  halo.addColorStop(0, '#ffffff')
+  halo.addColorStop(0.08, color)
+  halo.addColorStop(0.32, `${color}b8`)
+  halo.addColorStop(1, `${color}00`)
+  context.fillStyle = halo
+  context.beginPath()
+  context.arc(center, center, 62, 0, Math.PI * 2)
+  context.fill()
+  context.globalCompositeOperation = 'lighter'
   context.beginPath()
   for (let point = 0; point < 16; point += 1) {
     const angle = -Math.PI / 2 + (point * Math.PI) / 8
@@ -159,12 +177,13 @@ function galaxyStarTexture(color: string): THREE.CanvasTexture {
     else context.lineTo(x, y)
   }
   context.closePath()
-  context.fillStyle = color
+  context.fillStyle = `${color}d9`
   context.fill()
   context.beginPath()
-  context.arc(center, center, 5, 0, Math.PI * 2)
+  context.arc(center, center, 9, 0, Math.PI * 2)
   context.fillStyle = '#ffffff'
   context.fill()
+  context.globalCompositeOperation = 'source-over'
 
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
@@ -183,7 +202,7 @@ function createGalaxyStar(
     opacity: appearance.opacity,
     transparent: true,
     depthWrite: false,
-    blending: THREE.NormalBlending
+    blending: THREE.AdditiveBlending
   })
   const star = new THREE.Sprite(material)
   const scale = 12 * Math.sqrt(Math.max(0.5, value))
@@ -261,7 +280,7 @@ function createConnectedLabel(
 }
 
 /** Observatoire 3D : thèmes en surbrillance, visibilité réglable et lecture du nœud. */
-export function GraphView(): React.JSX.Element {
+export function GraphView({ visualMode }: { visualMode: GraphVisualMode }): React.JSX.Element {
   const [brains, setBrains] = useState<Brain[]>([])
   const [selected, setSelected] = useState('')
   const [graph, setGraph] = useState<GraphData>({ nodes: [], links: [] })
@@ -270,22 +289,27 @@ export function GraphView(): React.JSX.Element {
   const [themeQuery, setThemeQuery] = useState('')
   const [activeThemes, setActiveThemes] = useState<Set<string>>(() => new Set())
   const [settings, setSettings] = useState<VisibilitySettings>(initialVisibilitySettings)
-  const [visualMode, setVisualMode] = useState<GraphVisualMode>('serious')
   const [panelTab, setPanelTab] = useState<PanelTab>('node')
   const [columnWidths, setColumnWidths] = useState<ColumnWidths>(initialColumnWidths)
   const [resizingColumn, setResizingColumn] = useState<ResizableColumn | null>(null)
   const [node, setNode] = useState<GraphNode | null>(null)
+  const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null)
+  const [vaultSearch, setVaultSearch] = useState<GraphNode[]>([])
   const [file, setFile] = useState<{ path: string; content: string } | null>(null)
   const [fileErr, setFileErr] = useState('')
+  const [expandingNodeId, setExpandingNodeId] = useState<string | null>(null)
   const wrap = useRef<HTMLDivElement>(null)
   const layoutRef = useRef<HTMLElement>(null)
   const themeSidebarRef = useRef<HTMLElement>(null)
   const visibilitySidebarRef = useRef<HTMLElement>(null)
   const graphRef = useRef<ForceGraphMethods<GraphNode, GraphLink> | undefined>(undefined)
+  const graphCacheRef = useRef(new Map<string, GraphData>())
+  const dynamicGraphRef = useRef<GraphData>({ nodes: [], links: [] })
+  const dynamicGraphKeyRef = useRef('')
   const previousNodeSpacingRef = useRef(settings.nodeSpacing)
   const themeLabelsRef = useRef<HTMLDivElement>(null)
-  const fitOnEngineStopRef = useRef(false)
-  const deferredFitRequestRef = useRef(0)
+  const initialFitTimeoutRef = useRef<number | null>(null)
+  const [initialFitRequest, setInitialFitRequest] = useState(0)
   const fileRequestRef = useRef(0)
   const columnResizeCleanupRef = useRef<(() => void) | null>(null)
   const [size, setSize] = useState({ w: 800, h: 500 })
@@ -300,7 +324,7 @@ export function GraphView(): React.JSX.Element {
     []
   )
 
-  useEffect(() => {
+  const refreshBrains = useCallback((): void => {
     window.api
       .listBrains()
       .then((available) => {
@@ -311,7 +335,47 @@ export function GraphView(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
+    refreshBrains()
+  }, [refreshBrains])
+
+  useEffect(() => {
+    const query = themeQuery.trim()
+    const selectedBrain = brains.find((brain) => brain.path === selected)
+    if (!query || !selectedBrain || selectedBrain.kind !== 'vault') {
+      setVaultSearch([])
+      return
+    }
+    let current = true
+    const timeout = window.setTimeout(() => {
+      window.api
+        .searchBrain(selected, query)
+        .then((results) => {
+          if (!current) return
+          setVaultSearch(results.map((result) => ({ ...result, group: 0 })))
+        })
+        .catch(() => current && setVaultSearch([]))
+    }, 200)
+    return () => {
+      current = false
+      window.clearTimeout(timeout)
+    }
+  }, [brains, selected, themeQuery])
+
+  useEffect(() => {
     if (!selected) return
+    const cacheKey = `${selected}\u0000${settings.lod}`
+    dynamicGraphRef.current = dynamicGraphForKey(
+      dynamicGraphKeyRef.current,
+      cacheKey,
+      dynamicGraphRef.current
+    )
+    dynamicGraphKeyRef.current = cacheKey
+    const cached = graphCacheRef.current.get(cacheKey)
+    if (cached) {
+      setGraph(cached)
+      if (shouldAutoFitGraphPhase('cached')) setInitialFitRequest((request) => request + 1)
+      return
+    }
     let current = true
     queueMicrotask(() => {
       if (!current) return
@@ -319,9 +383,27 @@ export function GraphView(): React.JSX.Element {
       setErr('')
     })
     window.api
-      .loadBrainGraph(selected, settings.lod)
+      .loadBrainGraphPreview(selected, Math.min(settings.lod, 100))
       .then((loaded) => {
-        if (current) setGraph(loaded as GraphData)
+        if (current) {
+          const next = loaded as GraphData
+          graphCacheRef.current.set(cacheKey, next)
+          setGraph(next)
+        }
+        return window.api.loadBrainGraph(selected, settings.lod)
+      })
+      .then((loaded) => {
+        if (!current) return
+        const next = completeProgressiveGraph(loaded as GraphData, dynamicGraphRef.current)
+        graphCacheRef.current.set(cacheKey, next)
+        setGraph(next)
+        if (shouldAutoFitGraphPhase('complete')) setInitialFitRequest((request) => request + 1)
+        void window.api.loadBrainThemes(selected).then((themes) => {
+          if (!current) return
+          setBrains((available) =>
+            available.map((brain) => (brain.path === selected ? { ...brain, themes } : brain))
+          )
+        })
       })
       .catch((error) => {
         if (current) setErr(String(error))
@@ -351,17 +433,20 @@ export function GraphView(): React.JSX.Element {
     []
   )
 
+  // Le moteur a besoin de finir son warmup avant un unique cadrage initial.
+  // Ne pas dépendre du layout ou des filtres : ils ne doivent jamais déplacer la caméra.
   useEffect(() => {
-    if (resizingColumn) return
-    const scheduledRequest = nextGraphFitRequest(deferredFitRequestRef.current)
-    deferredFitRequestRef.current = scheduledRequest
-    const timeout = window.setTimeout(() => {
-      if (!isCurrentGraphFitRequest(scheduledRequest, deferredFitRequestRef.current)) return
-      const padding = Math.min(72, Math.max(48, size.w * 0.12))
-      graphRef.current?.zoomToFit(420, padding)
-    }, 80)
-    return () => window.clearTimeout(timeout)
-  }, [resizingColumn, size.h, size.w, visualMode])
+    if (initialFitRequest === 0 || graph.nodes.length < 2) return
+    if (initialFitTimeoutRef.current !== null) window.clearTimeout(initialFitTimeoutRef.current)
+    initialFitTimeoutRef.current = window.setTimeout(() => {
+      graphRef.current?.zoomToFit(600, 72)
+      initialFitTimeoutRef.current = null
+    }, 700)
+    return () => {
+      if (initialFitTimeoutRef.current !== null) window.clearTimeout(initialFitTimeoutRef.current)
+      initialFitTimeoutRef.current = null
+    }
+  }, [initialFitRequest])
 
   const selectedBrain = useMemo(
     () => brains.find((brain) => brain.path === selected),
@@ -384,6 +469,7 @@ export function GraphView(): React.JSX.Element {
     () => filterGraphVisibility(graph, settings.orphans),
     [graph, settings.orphans]
   )
+  const renderedGraph = useMemo(() => ({ ...displayGraph }), [displayGraph])
 
   useEffect(() => {
     const instance = graphRef.current
@@ -409,9 +495,6 @@ export function GraphView(): React.JSX.Element {
     localStorage.setItem(autowinStorageKey(GRAPH_NODE_SPACING_SUFFIX), String(settings.nodeSpacing))
   }, [displayGraph, settings.nodeSpacing])
 
-  useEffect(() => {
-    fitOnEngineStopRef.current = true
-  }, [displayGraph])
   const nodesById = useMemo(
     () => new Map(displayGraph.nodes.map((item) => [item.id, item])),
     [displayGraph.nodes]
@@ -425,11 +508,23 @@ export function GraphView(): React.JSX.Element {
     [activeThemes, graph.nodes]
   )
   const visualProfile = getGraphVisualProfile(visualMode)
+  const motionProfile = graphMotionProfile()
   const linkedNodes = useMemo(() => (node ? linkedNodesFor(node.id, graph) : []), [graph, node])
-  const connectedNodeIds = useMemo(
-    () => new Set(linkedNodes.map((linked) => linked.node.id)),
-    [linkedNodes]
+  const hoveredNodeIds = useMemo(
+    () => new Set(hoveredNode ? [hoveredNode.id, ...linkedNodesFor(hoveredNode.id, graph).map((linked) => linked.node.id)] : []),
+    [graph, hoveredNode]
   )
+  const selectedNodeIds = useMemo(
+    () => node ? focusedNodeIdsFor(node.id, graph) : new Set<string>(),
+    [graph, node]
+  )
+  const floatingNodeIds = useMemo(
+    () => hoveredNode ? hoveredNodeIds : new Set(linkedNodes.map((linked) => linked.node.id)),
+    [hoveredNode, hoveredNodeIds, linkedNodes]
+  )
+  useEffect(() => {
+    graphRef.current?.refresh()
+  }, [floatingNodeIds, selectedNodeIds, visualMode])
   const detailOpen = Boolean(node)
   const visibleThemeLabelIds = useMemo(
     () => new Set(visibleThemeClusterIds(themeSummaries, activeThemes, node)),
@@ -440,7 +535,15 @@ export function GraphView(): React.JSX.Element {
   const syncThemeClusterLabels = useCallback((): void => {
     const graphApi = graphRef.current
     const layer = themeLabelsRef.current
-    if (!graphApi || !layer || !showThemeClusterLabels) return
+    if (!graphApi) return
+    const camera = (graphApi as unknown as { cameraPosition(): { x: number; y: number; z: number } })
+      .cameraPosition()
+    if (wrap.current && camera) {
+      wrap.current.dataset.cameraDistance = String(
+        Math.round(Math.hypot(camera.x, camera.y, camera.z) * 100) / 100
+      )
+    }
+    if (!layer || !showThemeClusterLabels) return
     const anchors = themeClusterAnchors(displayGraph.nodes, themeSummaries)
     const labels = new Map(
       [...layer.querySelectorAll<HTMLElement>('[data-theme-id]')].map((label) => [
@@ -512,14 +615,20 @@ export function GraphView(): React.JSX.Element {
   }, [displayGraph.nodes, showThemeClusterLabels, themeSummaries])
 
   useEffect(() => {
-    let frame = 0
-    const update = (): void => {
-      syncThemeClusterLabels()
-      frame = requestAnimationFrame(update)
-    }
-    frame = requestAnimationFrame(update)
+    const frame = requestAnimationFrame(syncThemeClusterLabels)
     return () => cancelAnimationFrame(frame)
   }, [syncThemeClusterLabels])
+
+  useEffect(() => {
+    if (!showThemeClusterLabels) return
+    let frame = 0
+    const followCamera = (): void => {
+      syncThemeClusterLabels()
+      frame = requestAnimationFrame(followCamera)
+    }
+    frame = requestAnimationFrame(followCamera)
+    return () => cancelAnimationFrame(frame)
+  }, [showThemeClusterLabels, syncThemeClusterLabels])
 
   useEffect(() => {
     if (resizingColumn) return
@@ -534,15 +643,7 @@ export function GraphView(): React.JSX.Element {
         setColumnWidths((current) => {
           if (detailOpen) {
             if (current.detail === null) return current
-            const detail = Math.round(
-              Math.min(
-                GRAPH_COLUMN_LIMITS.detail.max,
-                Math.max(
-                  GRAPH_COLUMN_LIMITS.detail.min,
-                  Math.min(current.detail, contentWidth - GRAPH_COLUMN_LIMITS.detailGraph)
-                )
-              )
-            )
+            const detail = fitDetailColumnWidth(current.detail, contentWidth, current.theme)
             return detail === current.detail ? current : { ...current, detail }
           }
           const fitted = fitNormalColumnWidths(current, contentWidth)
@@ -575,8 +676,8 @@ export function GraphView(): React.JSX.Element {
   }
 
   function invalidatePendingGraphFit(): void {
-    fitOnEngineStopRef.current = false
-    deferredFitRequestRef.current = nextGraphFitRequest(deferredFitRequestRef.current)
+    if (initialFitTimeoutRef.current !== null) window.clearTimeout(initialFitTimeoutRef.current)
+    initialFitTimeoutRef.current = null
   }
 
   function resizeColumn(column: ResizableColumn, clientX: number): void {
@@ -594,7 +695,7 @@ export function GraphView(): React.JSX.Element {
         ? contentWidth - visibilityWidth - GRAPH_COLUMN_LIMITS.graph
         : column === 'visibility'
           ? contentWidth - themeWidth - GRAPH_COLUMN_LIMITS.graph
-          : contentWidth - GRAPH_COLUMN_LIMITS.detailGraph
+          : contentWidth - themeWidth - GRAPH_COLUMN_LIMITS.detailGraph
     const maxWidth = Math.max(limits.min, Math.min(limits.max, availableWidth))
     const width = Math.round(Math.min(maxWidth, Math.max(limits.min, rawWidth)))
     setColumnWidths((current) => ({ ...current, [column]: width }))
@@ -666,23 +767,26 @@ export function GraphView(): React.JSX.Element {
   }
 
   function toggleTheme(theme: string): void {
+    invalidatePendingGraphFit()
     setActiveThemes((current) => toggleThemeSelection(current, theme))
   }
 
-  function fitLoadedGraph(): void {
-    syncThemeClusterLabels()
-    if (!fitOnEngineStopRef.current) return
-    fitOnEngineStopRef.current = false
-    graphRef.current?.zoomToFit(500, 48)
+  function activateThemeCluster(theme: string): void {
+    invalidatePendingGraphFit()
+    clearNodeSelection()
+    setActiveThemes((current) => selectExclusiveTheme(current, theme))
   }
 
   function clearNodeSelection(): void {
     fileRequestRef.current += 1
+    setExpandingNodeId(null)
     setNode(null)
+    setHoveredNode(null)
     setFile(null)
     setFileErr('')
-    setPanelTab('visibility')
+    setPanelTab('node')
   }
+
 
   function focusNode(nextNode: GraphNode): void {
     if ([nextNode.x, nextNode.y, nextNode.z].some((coordinate) => typeof coordinate !== 'number'))
@@ -702,6 +806,28 @@ export function GraphView(): React.JSX.Element {
     focusNode(nextNode)
     setFile(null)
     setFileErr('')
+    setExpandingNodeId(nextNode.id)
+    window.api
+      .loadBrainNeighborhood(selected, nextNode.id)
+      .then((loaded) => {
+        if (requestId !== fileRequestRef.current) return
+        const delta = loaded as GraphData
+        dynamicGraphRef.current = mergeGraphDelta(dynamicGraphRef.current, delta)
+        const cacheKey = `${selected}\u0000${settings.lod}`
+        setGraph((currentGraph) => {
+          const merged = mergeGraphDelta(currentGraph, delta)
+          graphCacheRef.current.set(cacheKey, merged)
+          return merged
+        })
+        const loadedNode = delta.nodes.find((candidate) => candidate.id === nextNode.id)
+        if (loadedNode) setNode(loadedNode)
+      })
+      .catch((error) => {
+        if (requestId === fileRequestRef.current) setFileErr(String(error))
+      })
+      .finally(() => {
+        if (requestId === fileRequestRef.current) setExpandingNodeId(null)
+      })
     if (!nextNode.file) {
       setFileErr('Ce nœud n’a pas de fichier source.')
       return
@@ -733,22 +859,28 @@ export function GraphView(): React.JSX.Element {
         activeThemes,
         settings.contextOpacity,
         themeOrder,
-        visualProfile.palette
+        visualProfile.palette,
+        themeCounts
       )
+      const emphasis = nodeSelectionEmphasis(nextNode.id, node?.id ?? null, selectedNodeIds)
+      appearance.opacity *= emphasis.opacity
       const star = createGalaxyStar(
         nextNode,
         appearance,
-        nodeValueForTheme(nextNode, activeThemes, settings.nodeSize) * visualProfile.nodeScale
+        nodeValueForTheme(nextNode, activeThemes, settings.nodeSize) * visualProfile.nodeScale * emphasis.scale
       )
-      if (shouldShowFloatingNodeName(nextNode, activeThemes, connectedNodeIds))
+      if (shouldShowFloatingNodeName(nextNode, floatingNodeIds))
         star.add(createConnectedLabel(nextNode.label, appearance.color, star.scale.x, 0.03))
       return star
     },
     [
       activeThemes,
-      connectedNodeIds,
+      floatingNodeIds,
+      node,
+      selectedNodeIds,
       settings.contextOpacity,
       settings.nodeSize,
+      themeCounts,
       themeOrder,
       visualProfile
     ]
@@ -761,26 +893,33 @@ export function GraphView(): React.JSX.Element {
         activeThemes,
         settings.contextOpacity,
         themeOrder,
-        visualProfile.palette
+        visualProfile.palette,
+        themeCounts
       )
+      const emphasis = nodeSelectionEmphasis(nextNode.id, node?.id ?? null, selectedNodeIds)
+      appearance.opacity *= emphasis.opacity
       return createSeriousNode(
         nextNode,
         appearance,
-        nodeValueForTheme(nextNode, activeThemes, settings.nodeSize) * visualProfile.nodeScale,
-        shouldShowFloatingNodeName(nextNode, activeThemes, connectedNodeIds)
+        nodeValueForTheme(nextNode, activeThemes, settings.nodeSize) * visualProfile.nodeScale * emphasis.scale,
+        shouldShowFloatingNodeName(nextNode, floatingNodeIds)
       )
     },
     [
       activeThemes,
-      connectedNodeIds,
+      floatingNodeIds,
+      node,
+      selectedNodeIds,
       settings.contextOpacity,
       settings.nodeSize,
+      themeCounts,
       themeOrder,
       visualProfile
     ]
   )
+  const focusedNode = hoveredNode ?? node
   const linkIsHighlighted = (value: object): boolean =>
-    isHighlightedLink(value as GraphLink, activeThemes, nodesById)
+    Boolean(focusedNode?.id) && isLinkAttachedToNode(value as GraphLink, focusedNode?.id ?? '')
   const linkColor = (value: object): string => {
     if (visualMode === 'serious')
       return linkIsHighlighted(value) ? visualProfile.linkHighlight : visualProfile.linkBase
@@ -804,14 +943,12 @@ export function GraphView(): React.JSX.Element {
       }
     >
       <header className="graph-toolbar">
-        <div className="graph-toolbar__title">
-          <span>Observatoire</span>
-          <strong>Graphe de connaissances</strong>
-        </div>
         <select
           aria-label="Graphe de connaissances"
           value={selected}
           onChange={(event) => {
+            fileRequestRef.current += 1
+            setExpandingNodeId(null)
             setSelected(event.target.value)
             setActiveThemes(new Set())
             setNode(null)
@@ -826,25 +963,19 @@ export function GraphView(): React.JSX.Element {
             </option>
           ))}
         </select>
-        <div className="view-mode-switch" aria-label="Style du graphe">
-          <button
-            type="button"
-            aria-pressed={visualMode === 'serious'}
-            onClick={() => setVisualMode('serious')}
-          >
-            Noir
-          </button>
-          <button
-            type="button"
-            aria-pressed={visualMode === 'galaxy'}
-            onClick={() => setVisualMode('galaxy')}
-          >
-            <span aria-hidden="true">✦</span> Galaxy
-          </button>
-        </div>
+        <button
+          type="button"
+          className="graph-refresh"
+          onClick={refreshBrains}
+          disabled={loading}
+          aria-label="Rafraîchir les graphes"
+          title="Rafraîchir les graphes"
+        >
+          ↻
+        </button>
         <div className="graph-toolbar__stats" aria-live="polite">
           <span>
-            <strong>{graph.nodes.length}</strong> nœuds
+            <strong>{graph.nodes.length}{graph.totalNodes && graph.totalNodes !== graph.nodes.length ? ` / ${graph.totalNodes}` : ''}</strong> nœuds
           </span>
           <span>
             <strong>{graph.links.length}</strong> relations
@@ -872,13 +1003,15 @@ export function GraphView(): React.JSX.Element {
         >
           <i style={{ background: visualProfile.palette[0] }} />
           <span>Tous les thèmes</span>
-          <small>{graph.nodes.length}</small>
+          <small>{graph.totalNodes && graph.totalNodes !== graph.nodes.length ? `${graph.nodes.length} / ${graph.totalNodes}` : graph.nodes.length}</small>
         </button>
         <div className="theme-list">
-          {themeQuery.trim() && catalogSearch.nodes.length > 0 && (
+          {themeQuery.trim() && [...catalogSearch.nodes, ...vaultSearch].length > 0 && (
             <div className="node-search-results" aria-label="Fiches trouvées">
               <span className="search-results-heading">Fiches</span>
-              {catalogSearch.nodes.map((resultNode) => (
+              {[...catalogSearch.nodes, ...vaultSearch]
+                .filter((resultNode, index, all) => all.findIndex((item) => item.id === resultNode.id) === index)
+                .map((resultNode) => (
                 <button
                   key={resultNode.id}
                   className="node-search-result"
@@ -886,9 +1019,8 @@ export function GraphView(): React.JSX.Element {
                 >
                   <i aria-hidden="true">✦</i>
                   <span>{resultNode.label}</span>
-                  <small>Ouvrir</small>
                 </button>
-              ))}
+                ))}
             </div>
           )}
           {themeQuery.trim() && catalogSearch.themes.length > 0 && (
@@ -941,6 +1073,9 @@ export function GraphView(): React.JSX.Element {
           </small>
         </div>
         {loading && <div className="graph-status">Chargement du graphe…</div>}
+        {expandingNodeId && !loading && (
+          <div className="graph-status">Chargement des connexions…</div>
+        )}
         {err && <div className="graph-status graph-status--error">{err}</div>}
         {!loading && !err && graph.nodes.length === 0 && (
           <div className="graph-status">Aucun nœud disponible pour ce graphe.</div>
@@ -950,7 +1085,9 @@ export function GraphView(): React.JSX.Element {
             ref={graphRef}
             width={size.w}
             height={size.h}
-            graphData={displayGraph}
+            graphData={renderedGraph}
+            warmupTicks={motionProfile.warmupTicks}
+            cooldownTicks={motionProfile.cooldownTicks}
             backgroundColor={visualProfile.background}
             showNavInfo={false}
             nodeLabel={settings.labels ? 'label' : () => ''}
@@ -959,17 +1096,16 @@ export function GraphView(): React.JSX.Element {
             nodeOpacity={1}
             nodeThreeObject={visualMode === 'galaxy' ? galaxyNodeObject : seriousNodeObject}
             nodeThreeObjectExtend={false}
-            linkVisibility={() => settings.links}
+            linkVisibility={(value) => focusedNode ? linkIsHighlighted(value) : settings.links}
             linkColor={linkColor}
-            linkOpacity={
-              activeThemes.size === 0 ? visualProfile.linkOpacity : visualProfile.linkOpacity * 0.72
-            }
+            linkOpacity={focusedNode ? 1 : visualProfile.linkOpacity}
             linkWidth={(value) => settings.linkWidth * (linkIsHighlighted(value) ? 1.8 : 1)}
             linkDirectionalArrowLength={settings.arrows ? 3.5 : 0}
             linkDirectionalArrowColor={() => '#6f8193'}
             onEngineTick={syncThemeClusterLabels}
-            onEngineStop={fitLoadedGraph}
+            onEngineStop={syncThemeClusterLabels}
             onBackgroundClick={clearNodeSelection}
+            onNodeHover={(value) => setHoveredNode(value ? value as GraphNode : null)}
             onNodeClick={(value) => openNode(value as GraphNode)}
           />
           <div
@@ -986,7 +1122,11 @@ export function GraphView(): React.JSX.Element {
                   data-theme-id={theme.id}
                   aria-label={`Filtrer par ${theme.label}`}
                   aria-pressed={activeThemes.has(theme.id)}
-                  onClick={() => toggleTheme(theme.id)}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    activateThemeCluster(theme.id)
+                  }}
                   style={
                     {
                       '--theme-color': visualProfile.palette[index % visualProfile.palette.length]
@@ -1243,7 +1383,7 @@ function NodePanel({
   node: GraphNode | null
   file: { path: string; content: string } | null
   fileErr: string
-  linkedNodes: Array<{ node: GraphNode; direction: 'incoming' | 'outgoing' }>
+  linkedNodes: Array<{ node: GraphNode; direction: 'incoming' | 'outgoing'; relation?: string }>
   onNavigate: (node: GraphNode) => void
 }): React.JSX.Element {
   if (!node)
@@ -1264,6 +1404,7 @@ function NodePanel({
           >
             <span aria-hidden="true">{linked.direction === 'outgoing' ? '→' : '←'}</span>
             <strong>{linked.node.label}</strong>
+            {linked.relation && <small>{linked.relation}</small>}
           </button>
         ))}
       </nav>
@@ -1277,7 +1418,7 @@ function NodePanel({
           (/\.md$/i.test(file.path) ? (
             <BrainMarkdown source={file.content} />
           ) : (
-            <pre>{file.content}</pre>
+            <HumanJson value={file.content} />
           ))}
       </article>
     </div>

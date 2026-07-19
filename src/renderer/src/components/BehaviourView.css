@@ -1,8 +1,10 @@
 .behaviour-view {
+  box-sizing: border-box;
   height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  padding: 18px 20px 20px;
   color: var(--text);
 }
 .behaviour-view > header {
@@ -30,6 +32,7 @@
 }
 .behaviour-count {
   display: grid;
+  margin-left: auto;
   text-align: right;
 }
 .behaviour-count strong {
@@ -280,7 +283,7 @@
 .behaviour-reader pre {
   min-height: 0;
   margin: 0;
-  padding: 18px;
+  padding: 28px 32px 36px;
   overflow: auto;
   color: #cbd2db;
   font:

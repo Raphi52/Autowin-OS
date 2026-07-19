@@ -23,6 +23,24 @@ export interface BehaviourGroup {
 
 const ENGINE_ORDER: readonly BehaviourEngine[] = ['codex', 'claude', 'hermes']
 
+export function applicableBehaviourFiles(
+  files: readonly BehaviourFileItem[]
+): BehaviourFileItem[] {
+  return files.filter((file) => file.active)
+}
+
+/** Sources utiles au lecteur : les déclarées sont visibles, les masquées non. */
+export function visibleBehaviourFiles(files: readonly BehaviourFileItem[]): BehaviourFileItem[] {
+  return files.filter((file) => file.state !== 'shadowed')
+}
+
+export function visibleBehaviourSelection(
+  files: readonly BehaviourFileItem[],
+  selectedId: string
+): BehaviourFileItem | undefined {
+  return files.find((file) => file.id === selectedId) ?? files[0]
+}
+
 export function filterBehaviourFiles(
   files: readonly BehaviourFileItem[],
   query: string,

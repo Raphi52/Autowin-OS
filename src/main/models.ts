@@ -4,10 +4,11 @@
 // glisse sur un slot de topologie (orchestrateur / sous-agent / scout / judge).
 // La liste est BORNÉE par ce que les adaptateurs providers savent réellement
 // piloter — on n'invente jamais un modèle qui n'existe pas. Le seed par défaut
-// reflète les voies vérifiées (Codex → gpt-5.6-terra ; Claude CLI → alias
+// reflète les voies vérifiées (catalogue du compte ChatGPT ; Claude CLI → alias
 // --model réels) et l'utilisateur peut importer/supprimer explicitement.
 
 import type { ReasoningEffort } from './roles'
+import { loadTokens, type Tokens } from './providers/codex-auth'
 
 /** Un modèle importé, atomique et adressable par son `id` canonique. */
 export interface ImportedModel {
@@ -27,8 +28,7 @@ export interface ImportedModel {
 
 /**
  * Seed de repli — borné aux voies vérifiées, JAMAIS un modèle inventé.
- * - Codex : `gpt-5.6-terra` accepté live (gpt-5-codex rejeté « model not supported »).
- *   L'API Responses accepte `reasoning.effort` ∈ minimal|low|medium|high.
+ * - Codex : `gpt-5.6-terra` reste le repli hors ligne vérifié.
  * - Claude : modèles exposés par le bridge local `/models`. Le CLI installé expose
  *   `--effort low|medium|high|xhigh|max` et accepte les identifiants complets.
  */
@@ -64,10 +64,87 @@ export const DEFAULT_IMPORTED_MODELS: ImportedModel[] = [
     label: 'Claude Opus 4.6 · CLI',
     reasoningEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
     defaultReasoningEffort: 'high'
+  },
+  {
+    // Alias officiel Kimi Code pour les comptes OAuth (pas une clé API).
+    // Le CLI sélectionne ensuite le modèle effectivement autorisé par le compte.
+    id: 'kimi/kimi-code/kimi-for-coding',
+    provider: 'kimi',
+    model: 'kimi-code/kimi-for-coding',
+    label: 'Kimi Code · compte OAuth',
+    reasoningEfforts: ['none'],
+    defaultReasoningEffort: 'none'
   }
 ]
 
 const CLAUDE_EFFORTS: ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
+const CODEX_MODELS_URL = 'https://chatgpt.com/backend-api/codex/models?client_version=0.0.0'
+const REASONING_EFFORTS = new Set<ReasoningEffort>([
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+  'ultra'
+])
+
+interface CodexModelPayload {
+  slug?: unknown
+  display_name?: unknown
+  default_reasoning_level?: unknown
+  supported_reasoning_levels?: Array<{ effort?: unknown }>
+}
+
+async function discoverCodexModels(
+  fetchFn: typeof fetch,
+  loadTokensFn: () => Tokens | null
+): Promise<ImportedModel[]> {
+  const tokens = loadTokensFn()
+  if (!tokens) return [DEFAULT_IMPORTED_MODELS[0]]
+  try {
+    const response = await fetchFn(CODEX_MODELS_URL, {
+      headers: {
+        authorization: `Bearer ${tokens.accessToken}`,
+        originator: 'codex_cli_rs',
+        'User-Agent': 'codex_cli_rs/0.0.0 (autowin-os)'
+      },
+      signal: AbortSignal.timeout(4_000)
+    })
+    if (!response.ok) return [DEFAULT_IMPORTED_MODELS[0]]
+    const payload = (await response.json()) as { models?: CodexModelPayload[] }
+    const discovered = (payload.models ?? []).flatMap<ImportedModel>((entry) => {
+      if (typeof entry.slug !== 'string' || !/^[a-z0-9][a-z0-9.-]*$/.test(entry.slug)) return []
+      const efforts = (entry.supported_reasoning_levels ?? [])
+        .map((level) => level.effort)
+        .filter(
+          (effort): effort is ReasoningEffort =>
+            typeof effort === 'string' && REASONING_EFFORTS.has(effort as ReasoningEffort)
+        )
+      if (efforts.length === 0) return []
+      const requestedDefault = entry.default_reasoning_level
+      const defaultReasoningEffort =
+        typeof requestedDefault === 'string' &&
+        efforts.includes(requestedDefault as ReasoningEffort)
+          ? (requestedDefault as ReasoningEffort)
+          : efforts[0]
+      return [
+        {
+          id: `codex/${entry.slug}`,
+          provider: 'codex',
+          model: entry.slug,
+          label: `${typeof entry.display_name === 'string' ? entry.display_name : entry.slug} · ChatGPT`,
+          reasoningEfforts: efforts,
+          defaultReasoningEffort
+        }
+      ]
+    })
+    return discovered.length > 0 ? discovered : [DEFAULT_IMPORTED_MODELS[0]]
+  } catch {
+    return [DEFAULT_IMPORTED_MODELS[0]]
+  }
+}
 
 function labelClaudeModel(id: string): string {
   const match = /^claude-(fable|haiku|opus|sonnet)-(\d+)(?:-(\d+))?(?:-(\d{8}))?$/.exec(id)
@@ -78,13 +155,14 @@ function labelClaudeModel(id: string): string {
 }
 
 /**
- * Découvre le catalogue Claude/Fable réellement exposé par le bridge local.
- * Le modèle Codex reste le seul variant ChatGPT prouvé par son transport actuel.
- * Une indisponibilité du bridge retombe sur le seed vérifié, sans inventer de noms.
+ * Découvre indépendamment les catalogues ChatGPT et Claude/Fable réellement exposés.
+ * Une indisponibilité d'une voie retombe sur son seed vérifié, sans inventer de noms.
  */
 export async function discoverImportedModels(
-  fetchFn: typeof fetch = fetch
+  fetchFn: typeof fetch = fetch,
+  loadTokensFn: () => Tokens | null = loadTokens
 ): Promise<ImportedModel[]> {
+  const codexModels = await discoverCodexModels(fetchFn, loadTokensFn)
   try {
     const response = await fetchFn('http://127.0.0.1:8787/models', {
       signal: AbortSignal.timeout(2_000)
@@ -102,9 +180,12 @@ export async function discoverImportedModels(
         reasoningEfforts: [...CLAUDE_EFFORTS],
         defaultReasoningEffort: model.includes('haiku') ? 'medium' : 'high'
       }))
-    return [DEFAULT_IMPORTED_MODELS[0], ...discovered]
+    return [...codexModels, ...discovered, ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi')]
   } catch {
-    return DEFAULT_IMPORTED_MODELS
+    return [
+      ...codexModels,
+      ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider !== 'codex')
+    ]
   }
 }
 

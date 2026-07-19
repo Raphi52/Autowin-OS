@@ -1,20 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildThemeSummaries,
+  completeProgressiveGraph,
+  dynamicGraphForKey,
   filterGraphVisibility,
+  focusedNodeIdsFor,
   galaxyNodeAppearance,
   getGraphVisualProfile,
   graphForcesForSpacing,
+  graphMotionProfile,
+  isLinkAttachedToNode,
   isCurrentGraphFitRequest,
   isHighlightedLink,
   linkedNodesFor,
+  mergeGraphDelta,
   searchGraphCatalog,
   nodeColorForTheme,
   shouldShowFloatingNodeName,
   themeClusterAnchors,
+  selectExclusiveTheme,
+  shouldAutoFitGraphPhase,
   toggleThemeSelection,
   visibleThemeClusterIds,
   nodeValueForTheme,
+  nodeSelectionEmphasis,
   normalizeGraphNodeSpacing,
   nextGraphFitRequest,
   type GraphLink,
@@ -33,6 +42,23 @@ const links: GraphLink[] = [
 ]
 
 describe('graph view presentation model', () => {
+  it('makes a cluster tag highlight exactly its category and lets a second click clear it', () => {
+    expect([...selectExclusiveTheme(new Set(['theme/rig']), 'theme/architecture')]).toEqual([
+      'theme/architecture'
+    ])
+    expect([...selectExclusiveTheme(new Set(['theme/rig']), 'theme/rig')]).toEqual([])
+  })
+
+  it('never fits the camera on a lazy preview and fits once data is complete', () => {
+    expect(shouldAutoFitGraphPhase('preview')).toBe(false)
+    expect(shouldAutoFitGraphPhase('complete')).toBe(true)
+    expect(shouldAutoFitGraphPhase('cached')).toBe(true)
+  })
+
+  it('bounds initial graph motion so nodes become clickable immediately', () => {
+    expect(graphMotionProfile()).toEqual({ warmupTicks: 80, cooldownTicks: 0 })
+  })
+
   it('maps a bounded spacing setting to link distance and repulsion', () => {
     expect(normalizeGraphNodeSpacing('120')).toBe(120)
     expect(normalizeGraphNodeSpacing(-20)).toBe(30)
@@ -64,7 +90,42 @@ describe('graph view presentation model', () => {
     expect(searchGraphCatalog('', nodes, []).nodes).toEqual([])
   })
 
-  it('defines distinct serious and galaxy rendering profiles', () => {
+  it('merges a dynamically loaded neighbourhood without replacing or duplicating the graph', () => {
+    const initial = { nodes: [nodes[0]], links: [] }
+    const delta = { nodes: [nodes[0], nodes[1]], links: [links[0]] }
+
+    const once = mergeGraphDelta(initial, delta)
+    const twice = mergeGraphDelta(once, delta)
+
+    expect(once.nodes.map((node) => node.id)).toEqual(['a', 'b'])
+    expect(once.links).toHaveLength(1)
+    expect(twice).toEqual(once)
+  })
+
+  it('keeps an expansion loaded between the preview and the full graph', () => {
+    const preview = { nodes: [nodes[0]], links: [] }
+    const expansion = mergeGraphDelta(preview, { nodes: [nodes[1]], links: [links[0]] })
+    const dynamicOnly = { nodes: [nodes[1]], links: [links[0]] }
+    const full = { nodes: [nodes[0], nodes[2]], links: [] }
+
+    const completed = completeProgressiveGraph(full, dynamicOnly)
+
+    expect(expansion.nodes.map((item) => item.id)).toEqual(['a', 'b'])
+    expect(completed.nodes.map((item) => item.id)).toEqual(['a', 'c', 'b'])
+    expect(completed.links).toEqual([links[0]])
+  })
+
+  it('drops dynamic expansions when switching Brain or LOD keys', () => {
+    const expansion = { nodes: [nodes[1]], links: [links[0]] }
+
+    expect(dynamicGraphForKey('brain-a\u0000300', 'brain-a\u0000300', expansion)).toBe(expansion)
+    expect(dynamicGraphForKey('brain-a\u0000300', 'brain-b\u0000300', expansion)).toEqual({
+      nodes: [],
+      links: []
+    })
+  })
+
+  it('keeps category colors stable across distinct serious and galaxy rendering profiles', () => {
     const serious = getGraphVisualProfile('serious')
     expect(serious).toMatchObject({
       background: '#000000',
@@ -74,9 +135,9 @@ describe('graph view presentation model', () => {
     const galaxy = getGraphVisualProfile('galaxy')
     expect(galaxy).toMatchObject({
       background: 'rgba(0,0,0,0)',
-      palette: ['#56f3ff', '#ff4fd8', '#9a7cff', '#ffb84d', '#ff647c', '#4f8cff', '#7dffb2'],
       modeClass: 'graph-observatory--galaxy'
     })
+    expect(galaxy.palette).toEqual(serious.palette)
     expect(galaxy).not.toHaveProperty('particles')
   })
 
@@ -102,6 +163,18 @@ describe('graph view presentation model', () => {
     expect(buildThemeSummaries(nodes, declared).map(({ id, label }) => ({ id, label }))).toEqual(
       declared
     )
+  })
+
+  it('appends YAML themes discovered after the lightweight Brain catalog', () => {
+    const summaries = buildThemeSummaries(
+      [{ id: 'dynamic', label: 'Dynamic', group: 0, themes: ['theme/autowin-os'] }],
+      [{ id: 'theme/rig', label: 'RIG' }]
+    )
+
+    expect(summaries).toEqual([
+      { id: 'theme/rig', label: 'RIG', count: 0 },
+      { id: 'theme/autowin-os', label: 'Autowin-os', count: 1 }
+    ])
   })
 
   it('places each non-empty theme label above its positioned cluster', () => {
@@ -142,15 +215,25 @@ describe('graph view presentation model', () => {
     expect(secondClick).toEqual(new Set())
   })
 
-  it('shows floating names only for active-theme nodes or selected-node neighbours', () => {
-    const activeThemes = new Set(['theme/rig'])
-    const connectedNodeIds = new Set(['c'])
+  it('shows floating names only for the hovered node and its neighbours', () => {
+    const hoveredNodeIds = new Set(['a', 'c'])
 
-    expect(shouldShowFloatingNodeName(nodes[0], activeThemes, connectedNodeIds)).toBe(true)
-    expect(shouldShowFloatingNodeName(nodes[1], activeThemes, connectedNodeIds)).toBe(true)
-    expect(shouldShowFloatingNodeName(nodes[2], activeThemes, connectedNodeIds)).toBe(true)
-    expect(shouldShowFloatingNodeName(nodes[3], activeThemes, connectedNodeIds)).toBe(false)
-    expect(shouldShowFloatingNodeName(nodes[0], new Set(), new Set())).toBe(false)
+    expect(shouldShowFloatingNodeName(nodes[0], hoveredNodeIds)).toBe(true)
+    expect(shouldShowFloatingNodeName(nodes[1], hoveredNodeIds)).toBe(false)
+    expect(shouldShowFloatingNodeName(nodes[2], hoveredNodeIds)).toBe(true)
+    expect(shouldShowFloatingNodeName(nodes[3], hoveredNodeIds)).toBe(false)
+    expect(shouldShowFloatingNodeName(nodes[0], new Set())).toBe(false)
+    expect(isLinkAttachedToNode(links[0], 'a')).toBe(true)
+    expect(isLinkAttachedToNode(links[0], 'c')).toBe(false)
+  })
+
+  it('focuses only the opened node and its direct neighbours', () => {
+    const focused = focusedNodeIdsFor('b', { nodes, links })
+    expect(focused).toEqual(new Set(['b', 'a', 'c']))
+    expect(nodeSelectionEmphasis('b', 'b', focused)).toEqual({ scale: 1.6, opacity: 1 })
+    expect(nodeSelectionEmphasis('a', 'b', focused)).toEqual({ scale: 1.35, opacity: 1 })
+    expect(nodeSelectionEmphasis('orphan', 'b', focused)).toEqual({ scale: 1, opacity: 0.14 })
+    expect(nodeSelectionEmphasis('orphan', null, new Set())).toEqual({ scale: 1, opacity: 1 })
   })
 
   it('keeps the whole graph when orphans are visible', () => {
@@ -246,6 +329,28 @@ describe('graph view presentation model', () => {
     ).toEqual({ color: '#aa0000', opacity: 1 })
   })
 
+  it('uses the same primary category for serious nodes and galaxy stars', () => {
+    const node: GraphNode = {
+      id: 'inscription',
+      label: 'Inscription RCS',
+      group: 1,
+      themes: ['category/rig', 'category/documentation', 'category/rcs']
+    }
+    const themeOrder = ['category/rig', 'category/documentation', 'category/rcs']
+    const palette = ['#00bb00', '#ff9900', '#3355ff']
+    const counts = new Map([
+      ['category/rig', 264],
+      ['category/documentation', 154],
+      ['category/rcs', 15]
+    ])
+
+    expect(nodeColorForTheme(node, new Set(), 0.22, themeOrder, palette, counts)).toBe('#3355ff')
+    expect(galaxyNodeAppearance(node, new Set(), 0.22, themeOrder, palette, counts)).toEqual({
+      color: '#3355ff',
+      opacity: 1
+    })
+  })
+
   it('enlarges highlighted nodes only', () => {
     expect(nodeValueForTheme(nodes[0], new Set(['theme/rig']), 1.5)).toBe(3)
     expect(nodeValueForTheme(nodes[2], new Set(['theme/rig']), 1.5)).toBe(1.5)
@@ -277,4 +382,5 @@ describe('graph view presentation model', () => {
       { node: nodes[2], direction: 'outgoing' }
     ])
   })
+
 })

@@ -3,6 +3,9 @@ import {
   filterBehaviourFiles,
   groupBehaviourFiles,
   preferredBehaviourFileId,
+  applicableBehaviourFiles,
+  visibleBehaviourFiles,
+  visibleBehaviourSelection,
   type BehaviourFileItem
 } from './behaviour-view-model'
 
@@ -49,6 +52,23 @@ const files: BehaviourFileItem[] = [
 ]
 
 describe('behaviour view model', () => {
+  it('projects only files applicable to the selected context', () => {
+    expect(applicableBehaviourFiles(files).map((file) => file.id)).toEqual(['claude-global'])
+  })
+
+  it('keeps declared sources visible while excluding shadowed files', () => {
+    const declared = { ...files[2], id: 'hermes-soul', label: 'SOUL.md', state: 'declared' as const }
+    const shadowed = { ...files[1], id: 'shadowed', state: 'shadowed' as const }
+    const visible = visibleBehaviourFiles([...files, declared, shadowed]).map((file) => file.id)
+    expect(visible).toContain('hermes-soul')
+    expect(visible).not.toContain('shadowed')
+  })
+
+  it('never keeps a reader selection hidden by the active filters', () => {
+    expect(visibleBehaviourSelection([files[0]], 'codex-project')?.id).toBe('claude-global')
+    expect(visibleBehaviourSelection([], 'claude-global')).toBeUndefined()
+  })
+
   it('groups files in Codex, Claude, Hermes order without losing empty engines', () => {
     expect(groupBehaviourFiles(files).map((group) => [group.engine, group.files.length])).toEqual([
       ['codex', 1],

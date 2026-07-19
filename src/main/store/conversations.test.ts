@@ -41,6 +41,21 @@ describe('ConversationStore', () => {
     expect(updated.updatedAt).toBeGreaterThan(before)
   })
 
+  it('persiste les métadonnées des fichiers joints sans leur contenu', () => {
+    const store = new ConversationStore(makeClock())
+    const conv = store.create({ title: 'A', category: 'claude', provider: 'claude' })
+    const updated = store.append(conv.id, {
+      role: 'user',
+      content: 'Analyse',
+      attachments: [{ name: 'notes.md', mimeType: 'text/markdown', size: 7 }]
+    })
+
+    expect(updated.messages[0].attachments).toEqual([
+      { name: 'notes.md', mimeType: 'text/markdown', size: 7 }
+    ])
+    expect(JSON.stringify(updated.messages[0])).not.toContain('# Notes')
+  })
+
   it('append sur un id inconnu jette', () => {
     const store = new ConversationStore(makeClock())
     expect(() => store.append('conv-inconnue', { role: 'user', content: 'x' })).toThrow()

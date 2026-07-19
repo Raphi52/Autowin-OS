@@ -1,7 +1,9 @@
 import { app, shell, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'path'
+import { randomUUID } from 'node:crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import devIcon from '../../resources/autowin-os-dev.png?asset'
 import type { Message } from './providers/types'
 import { AutowinOS } from './os'
 import type { Role } from './roles'
@@ -13,6 +15,23 @@ import { persistConversations } from './store/conversations-disk'
 import { listConvRuns, loadConvRunTrace } from './runs/conv-runs'
 import { appendConvActivity, loadConvActivity } from './activity/conv-activity'
 import {
+  appendPromptCall,
+  deletePromptCalls,
+  loadAllPromptCalls,
+  loadPromptCalls
+} from './activity/prompt-observability'
+import { promptConfigChange } from './activity/prompt-config-change'
+import { appendPromptConfigActivity } from './activity/prompt-config-store'
+import { promptCallToTraceEvents } from './activity/prompt-call-trace'
+import { pilotActionToTraceEvent } from './activity/pilot-action-trace'
+import { TraceStore } from './activity/trace-store'
+import { HermesDiagnosticCapabilities } from './activity/hermes-diagnostic-capability'
+import { responseDisplayedTrace } from './activity/response-displayed-trace'
+import { persistOrchestrationStep } from './activity/orchestration-observability'
+import { LoopRunStore } from './loop-run-store'
+import { ProfileStore, type AutowinProfile } from './profile-store'
+import { loadCapabilityProfiles, saveCapabilityProfiles, type CapabilityProfileState } from './capability-profiles'
+import {
   listHermesControls,
   setHermesPlugin,
   setHermesTool,
@@ -23,12 +42,15 @@ import {
   defaultBehaviourWorkspace,
   listBehaviourContexts,
   listBehaviourFiles,
-  readBehaviourFile
+  readBehaviourFile,
+  type BehaviourFile
 } from './behaviour-files'
 import { ApprovedBehaviourWorkspaces, isTrustedRendererUrl } from './behaviour-access'
 import { runSkillLoop, type LoopRunInput } from './loop-runner'
+import { parseGeneratedLoop } from './loop-draft'
 import { listLoopSkills } from './loop-skills'
-import { listClaudeHooks } from './claude-hooks'
+import { discoverConfiguredSkillRegistry } from './skill-registry'
+import { listClaudeHooks, listCodexHooks } from './claude-hooks'
 import { ModelQuestionHub, type ModelQuestion, type PendingModelQuestion } from './model-questions'
 import { DEFAULT_IMPORTED_MODELS, discoverImportedModels, findModel } from './models'
 import { loadAgentTopology, saveAgentTopology } from './topology-disk'
@@ -46,12 +68,18 @@ import {
   readLegacyRendererStorage,
   type MigratedRendererStorage
 } from './renderer-storage-migration'
-import { guardBoolean } from './ipc-guards'
+import { guardAttachments, guardBoolean } from './ipc-guards'
+import { readBoundedUtf8FileWithin } from './bounded-file-read'
+import { BrainWorkerClient } from './viz/brain-worker-client'
+import { filterHermesPreflight, readHermesPreflight, resolveHermesSessionsRoot, secureHermesSpool } from './activity/hermes-prompt-trace'
+import { proveHermesInjections } from './hermes-injection-proof'
+import { automationAppIdentity, presentAutomationWindow, resolveAutomationInstanceMode } from './headless-instance'
 
-const isolatedTestInstance =
-  !app.isPackaged && process.env['AUTOWIN_ISOLATED_TEST_INSTANCE'] === '1'
+const automationInstanceMode = resolveAutomationInstanceMode(process.argv, process.env, app.isPackaged)
+const isolatedTestInstance = automationInstanceMode.isolated
+const headlessTestInstance = automationInstanceMode.headless
 const appDataRoot = resolveAutowinAppDataBase(app.getPath('appData'), app.isPackaged)
-app.setName(AUTOWIN_DISPLAY_NAME)
+app.setName(isolatedTestInstance ? `${AUTOWIN_DISPLAY_NAME} Test` : AUTOWIN_DISPLAY_NAME)
 const explicitUserDataDir = process.argv.some((argument) => argument.startsWith('--user-data-dir'))
 const canonicalAppDataRoot = createAutowinAppDataRoot(appDataRoot)
 if (!explicitUserDataDir) app.setPath('userData', canonicalAppDataRoot)
@@ -62,6 +90,7 @@ let startupStorageMigration = false
 
 /** Noyau applicatif unique (P0-P4 câblés) : kit SOUL injecté, 2 voies, modules. */
 const os = new AutowinOS()
+const brainWorker = new BrainWorkerClient(join(__dirname, 'brain-worker.js'))
 // Conversations persistées sur disque : rechargées au démarrage, sauvées à chaque mutation.
 persistConversations(os.conversations)
 
@@ -73,7 +102,9 @@ function broadcast(e: AppEvent): void {
 const bus = new AppCommandBus(os, broadcast)
 const pilot = new AgentPilot(os.registry, os.roles, bus)
 const modelQuestions = new ModelQuestionHub()
+const activeChatControllers = new Map<string, AbortController>()
 const questionWindows = new Map<string, BrowserWindow>()
+const hermesDiagnosticCapabilities = new HermesDiagnosticCapabilities()
 let agentModels = DEFAULT_IMPORTED_MODELS
 const agentTopologyPath = join(app.getPath('userData'), 'agent-topology.json')
 let agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
@@ -92,7 +123,8 @@ function syncRuntimeTopology(topology: AgentTopology): void {
     os.setRole(role, {
       provider: binding.provider,
       model: model.model,
-      reasoningEffort: binding.reasoningEffort
+      reasoningEffort: binding.reasoningEffort,
+      capabilityProfileId: os.roles.getBinding(role).capabilityProfileId
     })
   }
   sync('orchestrator', topology.orchestrator)
@@ -100,8 +132,6 @@ function syncRuntimeTopology(topology: AgentTopology): void {
   sync('scout', topology.panels.scout[0])
   sync('judge', topology.panels.judge[0])
 }
-
-syncRuntimeTopology(agentTopology)
 
 function openQuestionWindow(parent: BrowserWindow | null, question: PendingModelQuestion): void {
   const win = new BrowserWindow({
@@ -131,9 +161,7 @@ function openQuestionWindow(parent: BrowserWindow | null, question: PendingModel
     }
   })
   win.once('ready-to-show', () => {
-    win.show()
-    win.focus()
-    win.flashFrame(true)
+    presentAutomationWindow(win, headlessTestInstance, { focus: true, flash: true })
   })
   win.webContents.once('did-finish-load', () => win.webContents.send('model:question', question))
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -158,6 +186,10 @@ function askModelQuestion(
 }
 /** Ledger d'activité in-app : chaque action d'agent laisse une trace consultable. */
 const ledger = new TraceLedger(join(app.getPath('userData'), 'trace'))
+const causalTrace = new TraceStore(join(app.getPath('userData'), 'causal-trace'))
+const loopRuns = new LoopRunStore(join(app.getPath('userData'), 'loop-runs.json'))
+const profiles = new ProfileStore(join(app.getPath('userData'), 'profiles.json'))
+let capabilityProfiles = loadCapabilityProfiles()
 bus.trace = (name, args, ok) =>
   ledger.append({ source: 'bus', name, detail: JSON.stringify(args).slice(0, 200), ok })
 
@@ -177,6 +209,20 @@ function guardMessages(m: unknown): Message[] {
 
 const defaultBehaviourRoot = defaultBehaviourWorkspace()
 const behaviourAccess = new ApprovedBehaviourWorkspaces(defaultBehaviourRoot)
+const behaviourManifestCache = new Map<string, { capturedAt: number; files: BehaviourFile[] }>()
+
+function behaviourManifestKey(workspaceRoot: string, contextRoot: string): string {
+  return `${workspaceRoot}\u0000${contextRoot}`
+}
+
+async function behaviourManifest(workspaceRoot: string, contextRoot: string): Promise<BehaviourFile[]> {
+  const key = behaviourManifestKey(workspaceRoot, contextRoot)
+  const cached = behaviourManifestCache.get(key)
+  if (cached && Date.now() - cached.capturedAt < 15_000) return cached.files
+  const files = await listBehaviourFiles({ workspaceRoot, contextRoot })
+  behaviourManifestCache.set(key, { capturedAt: Date.now(), files })
+  return files
+}
 
 function assertTrustedRendererSender(event: IpcMainInvokeEvent, scope: string): void {
   const trusted = isTrustedRendererUrl(event.senderFrame?.url ?? '', behaviourRendererOptions())
@@ -244,12 +290,27 @@ function registerChatIpc(): void {
       }
     }
   )
+  ipcMain.handle('skills:registry:list', (event) => {
+    assertTrustedRendererSender(event, 'Skills')
+    return discoverConfiguredSkillRegistry(join(app.getPath('userData'), 'skill-sources.json'))
+  })
   ipcMain.handle('chat:providers', () => os.registry.ids())
+  ipcMain.handle('os:kimiLogin', () => {
+    os.startKimiLogin()
+    return { ok: true }
+  })
 
   // --- Orchestration disciplinée (le cœur) : streame chaque étape ---
   ipcMain.handle('os:orchestrate', async (event, task: string) => {
     try {
+      const conversationId = bus.activeConversationId ?? '__autonomous__'
+      const turnId = randomUUID()
       const result = await os.runTask(guardString(task, 'task'), (step) => {
+        persistOrchestrationStep(step, {
+          conversationId,
+          turnId,
+          iteration: step.step === 'exec' ? 0 : 1
+        }, undefined, causalTrace)
         ledger.append({
           source: 'orchestrate',
           name: step.step,
@@ -269,6 +330,32 @@ function registerChatIpc(): void {
     os.setRole(role, { provider, model })
   )
   ipcMain.handle('os:models:list', () => agentModelsReady)
+  ipcMain.handle('os:capabilityProfiles:get', () => capabilityProfiles)
+  ipcMain.handle('os:capabilityProfiles:save', (_event, next: CapabilityProfileState) => {
+    capabilityProfiles = saveCapabilityProfiles(next)
+    return capabilityProfiles
+  })
+  ipcMain.handle('os:capabilityProfiles:assign', (_event, role: Role, profileId: string) => {
+    if (!capabilityProfiles.profiles.some((profile) => profile.id === profileId)) throw new Error('Profil de capacités introuvable')
+    capabilityProfiles = saveCapabilityProfiles({ ...capabilityProfiles, assignments: { ...capabilityProfiles.assignments, [role]: profileId } })
+    os.setRole(role, { ...os.roles.getBinding(role), capabilityProfileId: profileId })
+    return capabilityProfiles
+  })
+  ipcMain.handle('os:profiles:list', () => profiles.list())
+  ipcMain.handle('os:profiles:save', async (_event, profile: AutowinProfile) => {
+    await agentModelsReady
+    const safe = { ...profile, topology: agentTopology, roles: os.roles.all(), updatedAt: new Date().toISOString() }
+    return profiles.save(safe)
+  })
+  ipcMain.handle('os:profiles:apply', async (_event, id: string) => {
+    await agentModelsReady
+    const profile = profiles.list().find((item) => item.id === guardString(id, 'profile.id'))
+    if (!profile) throw new Error('Profil introuvable')
+    agentTopology = saveAgentTopology(agentTopologyPath, profile.topology, agentModels)
+    syncRuntimeTopology(agentTopology)
+    for (const [role, binding] of Object.entries(profile.roles) as Array<[Role, import('./roles').RoleBinding]>) os.setRole(role, binding)
+    return profile
+  })
   ipcMain.handle('os:topology:get', async () => {
     await agentModelsReady
     return agentTopology
@@ -291,20 +378,63 @@ function registerChatIpc(): void {
       return listHermesControls(kind)
     }
   )
-  ipcMain.handle('hermes:tools:select', (event, names: unknown) => {
+  ipcMain.handle('hermes:tools:select', async (event, names: unknown) => {
     assertTrustedRendererSender(event, 'Hermes')
     if (!Array.isArray(names) || !names.every((name) => typeof name === 'string'))
       throw new Error('Sélection de toolsets invalide')
-    return setHermesToolSelection(names)
+    const before = await listHermesControls('tools')
+    const result = await setHermesToolSelection(names)
+    const change = promptConfigChange('tools', before, result.items)
+    appendPromptConfigActivity('Prompt Load · preset tools', change)
+    if (bus.activeConversationId) {
+      appendConvActivity(bus.activeConversationId, {
+        kind: 'configuration-change',
+        label: 'Prompt Load · preset tools',
+        text: JSON.stringify(change)
+      })
+    }
+    broadcast({ type: 'refresh', scope: 'workflows' })
+    return result
   })
-  ipcMain.handle('hermes:plugins:set', (event, name: string, enabled: unknown) => {
+  ipcMain.handle('hermes:plugins:set', async (event, name: string, enabled: unknown) => {
     assertTrustedRendererSender(event, 'Hermes')
-    return setHermesPlugin(guardString(name, 'plugin'), guardBoolean(enabled, 'plugin.enabled'))
+    const before = await listHermesControls('plugins')
+    const result = await setHermesPlugin(
+      guardString(name, 'plugin'),
+      guardBoolean(enabled, 'plugin.enabled')
+    )
+    const change = promptConfigChange('plugins', before, result.items)
+    appendPromptConfigActivity(`Prompt Load · plugin ${name}`, change)
+    if (bus.activeConversationId) {
+      appendConvActivity(bus.activeConversationId, {
+        kind: 'configuration-change',
+        label: `Prompt Load · plugin ${name}`,
+        text: JSON.stringify(change)
+      })
+    }
+    broadcast({ type: 'refresh', scope: 'workflows' })
+    return result
   })
   ipcMain.handle('claude:hooks:list', () => listClaudeHooks())
-  ipcMain.handle('hermes:tools:set', (event, name: string, enabled: unknown) => {
+  ipcMain.handle('codex:hooks:list', () => listCodexHooks())
+  ipcMain.handle('hermes:tools:set', async (event, name: string, enabled: unknown) => {
     assertTrustedRendererSender(event, 'Hermes')
-    return setHermesTool(guardString(name, 'toolset'), guardBoolean(enabled, 'toolset.enabled'))
+    const before = await listHermesControls('tools')
+    const result = await setHermesTool(
+      guardString(name, 'toolset'),
+      guardBoolean(enabled, 'toolset.enabled')
+    )
+    const change = promptConfigChange('tools', before, result.items)
+    appendPromptConfigActivity(`Prompt Load · toolset ${name}`, change)
+    if (bus.activeConversationId) {
+      appendConvActivity(bus.activeConversationId, {
+        kind: 'configuration-change',
+        label: `Prompt Load · toolset ${name}`,
+        text: JSON.stringify(change)
+      })
+    }
+    broadcast({ type: 'refresh', scope: 'workflows' })
+    return result
   })
   ipcMain.handle('hermes:behaviour:workspace', (event) => {
     assertTrustedBehaviourSender(event)
@@ -312,6 +442,7 @@ function registerChatIpc(): void {
   })
   ipcMain.handle('hermes:behaviour:choose-workspace', async (event) => {
     assertTrustedBehaviourSender(event)
+    if (headlessTestInstance) return null
     const result = await dialog.showOpenDialog({ properties: ['openDirectory'] })
     const selected = result.canceled ? null : (result.filePaths[0] ?? null)
     return selected ? behaviourAccess.approve(selected) : null
@@ -324,10 +455,8 @@ function registerChatIpc(): void {
   ipcMain.handle('hermes:behaviour:list', (event, workspaceRoot?: string, contextRoot?: string) => {
     assertTrustedBehaviourSender(event)
     const workspace = approvedBehaviourWorkspace(workspaceRoot)
-    return listBehaviourFiles({
-      workspaceRoot: workspace,
-      contextRoot: contextRoot ? guardString(contextRoot, 'behaviour.contextRoot') : workspace
-    })
+    const activeContext = contextRoot ? guardString(contextRoot, 'behaviour.contextRoot') : workspace
+    return behaviourManifest(workspace, activeContext)
   })
   ipcMain.handle(
     'hermes:behaviour:read',
@@ -340,16 +469,63 @@ function registerChatIpc(): void {
       })
     }
   )
-  ipcMain.handle('hermes:loop:run', (event, input: LoopRunInput) =>
-    runSkillLoop(
+  ipcMain.handle('hermes:behaviour:proof', async (event, workspaceRoot?: string, contextRoot?: string) => {
+    assertTrustedBehaviourSender(event)
+    const workspace = approvedBehaviourWorkspace(workspaceRoot)
+    const query = { workspaceRoot: workspace, contextRoot: contextRoot ? guardString(contextRoot, 'behaviour.contextRoot') : workspace }
+    const files = await behaviourManifest(query.workspaceRoot, query.contextRoot)
+    const contents = new Map<string, string>()
+    const allowedRoots = [
+      workspace,
+      join(app.getPath('home'), '.codex'),
+      join(app.getPath('home'), '.claude'),
+      join(process.env['LOCALAPPDATA'] ?? join(app.getPath('home'), 'AppData', 'Local'), 'hermes')
+    ]
+    for (const file of files) {
+      if (file.engine !== 'hermes' || file.scope === 'skill') continue
+      try { contents.set(file.id, readBoundedUtf8FileWithin(file.path, allowedRoots, 512_000)) } catch { /* non prouvable */ }
+    }
+    return proveHermesInjections(files, contents, loadHermesTraces())
+  })
+  ipcMain.handle('hermes:loop:run', (event, input: LoopRunInput) => {
+    assertTrustedRendererSender(event, 'Loop')
+    const events: import('./loop-runner').LoopEvent[] = []
+    const startedAt = new Date().toISOString()
+    return runSkillLoop(
       input,
       os.registry,
       os.roles.getBinding('orchestrator').provider,
-      (loopEvent) => event.sender.send('hermes:loop:event', loopEvent),
+      (loopEvent) => {
+        events.push(loopEvent)
+        event.sender.send('hermes:loop:event', loopEvent)
+      },
       (question, context) => askModelQuestion(event.sender, 'loop', question, context)
-    )
-  )
-  ipcMain.handle('hermes:loop:skills', () => listLoopSkills())
+    ).then((result) => {
+      loopRuns.save({ ...result, startedAt, finishedAt: new Date().toISOString(), input, events })
+      return result
+    })
+  })
+  ipcMain.handle('hermes:loop:skills', (event) => {
+    assertTrustedRendererSender(event, 'Loop')
+    return listLoopSkills()
+  })
+  ipcMain.handle('hermes:loop:generate', async (event, objective: unknown) => {
+    assertTrustedRendererSender(event, 'Loop')
+    const goal = guardString(objective, 'loop.objective').trim()
+    if (!goal) throw new Error('Objectif requis.')
+    const skills = await listLoopSkills()
+    const binding = os.roles.getBinding('orchestrator')
+    const response = await os.registry.send(binding.provider, [{ role: 'user', content: goal }], {
+      model: binding.model,
+      reasoningEffort: binding.reasoningEffort,
+      system: `Tu es le planificateur de Loop Builder. Propose un workflow SPECIFIQUE a l'objectif utilisateur. Reponds UNIQUEMENT avec du JSON valide : {"steps":[{"id":"","skill":"","capabilities":[],"prompt":""}],"passes":1,"stopOnFailure":true,"carryOutput":true}. Catalogue autorise (id | role | description) : ${skills.map((skill) => `${skill.id} | ${skill.role} | ${skill.description}`).join(' ; ')}. Une skill est un mecanisme interne : ne decris jamais son fonctionnement dans prompt. Chaque prompt decrit une action concrete, un livrable mesurable et ses contraintes. Les skills role=capability vont dans capabilities sur la tache qui les utilise, jamais dans une etape artificielle. Les skills role=gate sont les validations finales. Si build est utilise, ajoute clean puis judge. Interdit : "cadre le besoin", "prepare le terrain", "execute le travail", "audite le resultat". Choisis seulement les skills necessaires; un workflow peut avoir 1 a 8 etapes.`
+    })
+    return parseGeneratedLoop(response.text, new Set(skills.map((skill) => skill.id)))
+  })
+  ipcMain.handle('hermes:loop:runs', (event) => {
+    assertTrustedRendererSender(event, 'Loop')
+    return loopRuns.list()
+  })
   ipcMain.handle('model:question:answer', (event, id: string, answer: unknown) => {
     const safeId = guardString(id, 'modelQuestion.id')
     const win = questionWindows.get(safeId)
@@ -372,9 +548,9 @@ function registerChatIpc(): void {
   // --- Sas d'autorité (décisions AFK ouvertes par l'orchestrateur) ---
   ipcMain.handle('os:authority:pending', () => os.authority.pending())
   ipcMain.handle('os:authority:resolve', (_e, id: string, choice: unknown) =>
-    os.authority.resolve(id, choice)
+    bus.resolveDecision(id, choice)
   )
-  ipcMain.handle('os:authority:sweep', () => os.authority.sweepExpired())
+  ipcMain.handle('os:authority:sweep', () => bus.sweepExpired())
 
   // --- Conversations catégorisées ---
   ipcMain.handle('os:conversations', () => os.conversations.list())
@@ -385,15 +561,39 @@ function registerChatIpc(): void {
   ipcMain.handle('os:conversations:rename', (_e, id: string, title: string) =>
     os.conversations.rename(id, guardString(title, 'title'))
   )
-  ipcMain.handle('os:conversations:remove', (_e, id: string) => os.conversations.remove(id))
+  ipcMain.handle('os:conversations:remove', (_e, rawId: string) => {
+    const id = guardString(rawId, 'id')
+    const removed = os.conversations.remove(id)
+    if (removed) {
+      causalTrace.deleteConversation(id)
+      deletePromptCalls(id)
+    }
+    return removed
+  })
 
   // --- Graphe brain 3D (données réelles disque) + workflow ---
-  ipcMain.handle('os:listBrains', () => os.listBrains())
+  ipcMain.handle('os:listBrains', () => brainWorker.request('listBrains'))
+  ipcMain.handle('os:loadBrainGraphPreview', (_e, path: string, lod?: number) =>
+    brainWorker.request('loadPreview', guardString(path, 'path'), lod)
+  )
+  ipcMain.handle('os:loadBrainThemes', (_e, path: string) =>
+    brainWorker.request('loadThemes', guardString(path, 'path'))
+  )
   ipcMain.handle('os:loadBrainGraph', (_e, path: string, lod?: number, community?: number) =>
-    os.loadBrainGraph(guardString(path, 'path'), lod, community)
+    brainWorker.request('loadGraph', guardString(path, 'path'), lod, community)
+  )
+  ipcMain.handle('os:loadBrainNeighborhood', (_e, path: string, nodeId: string) =>
+    brainWorker.request(
+      'loadNeighborhood',
+      guardString(path, 'path'),
+      guardString(nodeId, 'nodeId')
+    )
   )
   ipcMain.handle('os:readNodeFile', (_e, path: string) =>
-    os.readNodeFile(guardString(path, 'path'))
+    brainWorker.request('readNodeFile', guardString(path, 'path'))
+  )
+  ipcMain.handle('os:searchBrain', (_e, path: string, query: string) =>
+    brainWorker.request('searchBrain', guardString(path, 'path'), guardString(query, 'query'))
   )
   ipcMain.handle('os:listRuns', () => os.listRuns())
   // --- Harnais : projection lecture seule, bornée, SANS chemin ni mutation ---
@@ -424,16 +624,26 @@ function registerChatIpc(): void {
     'os:pilotChat',
     async (
       event,
-      messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+      messages: Array<{
+        role: 'user' | 'assistant'
+        content: string
+        attachments?: Message['attachments']
+      }>,
       conversationId?: string
     ) => {
+      const controller = new AbortController()
+      if (conversationId) activeChatControllers.set(conversationId, controller)
       try {
-        const safe = (Array.isArray(messages) ? messages : [])
-          .slice(-40)
-          .map((m) => ({ role: m.role, content: guardString(m.content, 'content') }))
-        // Contexte : les workflows créés pendant ce tour se rattachent à CETTE conversation.
-        bus.activeConversationId = conversationId
+        const safe = (Array.isArray(messages) ? messages : []).slice(-40).map((m) => ({
+          role: m.role,
+          content: guardString(m.content, 'content'),
+          ...(m.attachments?.length ? { attachments: guardAttachments(m.attachments) } : {})
+        }))
         const spoken: string[] = []
+        const turnId = randomUUID()
+        let traceParentId: string | undefined
+        let traceSequence = conversationId ? causalTrace.nextSequence(conversationId) : 0
+        let traceActionIndex = 0
         let turnUsage: { inputTokens: number; outputTokens: number; costUsd?: number } | undefined
         await pilot.chat(
           safe,
@@ -441,9 +651,56 @@ function registerChatIpc(): void {
             if (e.kind === 'think' && e.text) spoken.push(e.text)
             if (e.kind === 'command' && e.name) spoken.push(`[a exécuté ${e.name}]`)
             if (e.kind === 'done' && e.usage) turnUsage = e.usage
-            event.sender.send('pilot:event', e)
+            if (conversationId && e.kind === 'prompt-call' && e.prompt) {
+              const promptCall = appendPromptCall({
+                conversationId,
+                turnId,
+                iteration: e.iteration ?? 0,
+                actor: 'orchestrator',
+                provider: e.prompt.provider,
+                model: e.prompt.model,
+                transport: e.prompt.transport,
+                boundary: 'Autowin OS -> provider adapter',
+                limitation: e.prompt.limitation,
+                system: e.prompt.system,
+                messages: e.prompt.messages,
+                options: e.prompt.options,
+                response: e.response ?? '',
+                status: e.status,
+                error: e.error,
+                usage: e.callUsage,
+                durationMs: e.callDurationMs,
+                sessionId: e.sessionId
+              })
+              const promptTraceEvents = promptCallToTraceEvents(promptCall, traceSequence, traceParentId)
+              for (const traceEvent of promptTraceEvents)
+                causalTrace.append(traceEvent)
+              traceParentId = `${promptCall.id}:3`
+              traceSequence += promptTraceEvents.length
+              traceActionIndex = 0
+            }
+            if (conversationId && (e.kind === 'command' || e.kind === 'result' || e.kind === 'error' || e.kind === 'retry' || e.kind === 'cancellation')) {
+              const action = pilotActionToTraceEvent({
+                id: `${turnId}:action:${traceActionIndex++}`,
+                conversationId,
+                turnId,
+                parentId: traceParentId,
+                timestamp: new Date().toISOString(),
+                sequence: traceSequence++,
+                kind: e.kind,
+                name: e.name,
+                data: e.kind === 'command' ? e.args : e.data ?? e.text,
+                ok: e.ok
+              })
+              causalTrace.append(action)
+              traceParentId = action.id
+            }
+            event.sender.send('pilot:event', { ...e, conversationId })
           },
-          (question) => askModelQuestion(event.sender, 'chat', question, 'Chat')
+          (question) => askModelQuestion(event.sender, 'chat', question, 'Chat'),
+          6,
+          conversationId,
+          controller.signal
         )
         // Journal d'activité de la conversation : le tour de chat, avec son coût en tokens.
         if (conversationId) {
@@ -462,18 +719,48 @@ function registerChatIpc(): void {
         if (conversationId && os.conversations.get(conversationId)) {
           const last = safe[safe.length - 1]
           if (last?.role === 'user')
-            os.conversations.append(conversationId, { role: 'user', content: last.content })
+            os.conversations.append(conversationId, {
+              role: 'user',
+              content: last.content,
+              attachments: last.attachments?.map(({ name, mimeType, size }) => ({
+                name,
+                mimeType,
+                size
+              }))
+            })
           os.conversations.append(conversationId, {
             role: 'assistant',
             content: spoken.join('\n') || '(aucune réponse)'
           })
         }
-        return { ok: true }
+        broadcast({ type: 'refresh', scope: 'workflows' })
+        if (conversationId) activeChatControllers.delete(conversationId)
+        return { ok: true, cancelled: false }
       } catch (e) {
-        return { ok: false, error: e instanceof Error ? e.message : String(e) }
+        broadcast({ type: 'refresh', scope: 'workflows' })
+        if (conversationId) activeChatControllers.delete(conversationId)
+        if (controller.signal.aborted) return { ok: true, cancelled: true }
+        return { ok: false, cancelled: false, error: e instanceof Error ? e.message : String(e) }
       }
     }
   )
+  ipcMain.handle('os:pilotChat:cancel', (_e, rawConversationId: string) => {
+    const conversationId = guardString(rawConversationId, 'conversationId')
+    const controller = activeChatControllers.get(conversationId)
+    if (!controller) return { ok: false }
+    controller.abort('user')
+    return { ok: true }
+  })
+  ipcMain.handle('os:causalTrace:displayed', (_e, rawConversationId: string, rawContent: string) => {
+    const conversationId = guardString(rawConversationId, 'conversationId')
+    const content = guardString(rawContent, 'content')
+    const existing = causalTrace.readConversation(conversationId)
+    const parentId = existing.at(-1)?.id
+    const sequence = causalTrace.nextSequence(conversationId)
+    const event = responseDisplayedTrace({ conversationId, turnId: existing.at(-1)?.turnId ?? `${conversationId}:displayed`, parentId, sequence, content, timestamp: new Date().toISOString() })
+    causalTrace.append(event)
+    return { ok: true, eventId: event.id }
+  })
 
   // --- Workflows PAR CONVERSATION : créés par ses orchestrations + RUN.md attachés ---
   ipcMain.handle('os:conversationRuns', (_e, convId: string) => {
@@ -491,6 +778,89 @@ function registerChatIpc(): void {
   ipcMain.handle('os:conversationActivity', (_e, convId: string) =>
     loadConvActivity(guardString(convId, 'convId'))
   )
+  ipcMain.handle('os:promptCalls', (_e, convId?: string) =>
+    convId ? loadPromptCalls(guardString(convId, 'convId')) : loadAllPromptCalls()
+  )
+  const loadHermesTraces = () => {
+    const spoolRoot = join(app.getPath('userData'), 'hermes-trace-spool')
+    if (!secureHermesSpool(spoolRoot)) throw new Error('Hermes trace ACL hardening failed')
+    return readHermesPreflight(
+      spoolRoot, 100,
+      resolveHermesSessionsRoot(app.getPath('home'), process.env['LOCALAPPDATA'], process.env['HERMES_HOME'])
+    )
+  }
+  ipcMain.handle('os:hermesPromptTraces', (event, conversationId: unknown) => {
+    assertTrustedRendererSender(event, 'Hermes traces')
+    const safeConversationId = guardString(conversationId, 'conversationId')
+    const traces = loadHermesTraces()
+    for (const trace of traces) {
+      if (!trace.conversationId || !os.conversations.get(trace.conversationId)) continue
+      const id = `hermes:${trace.apiRequestId}`
+      if (causalTrace.readConversation(trace.conversationId).some((event) => event.id === id)) continue
+      causalTrace.append({
+        schema: 'autowin.trace/v1',
+        id,
+        conversationId: trace.conversationId,
+        turnId: trace.turnId,
+        timestamp: trace.timestamp,
+        sequence: causalTrace.nextSequence(trace.conversationId),
+        type: 'boundary',
+        status: 'completed',
+        actor: { id: 'hermes', kind: 'hook', label: 'Hermes preflight' },
+        recipient: { id: trace.provider, kind: 'provider', label: trace.provider },
+        channel: 'internal',
+        payloads: [{ kind: 'resource', name: 'Hermes request', mediaType: 'application/json', content: JSON.stringify(trace.request) }],
+        observation: { boundary: trace.boundary, fidelity: 'exact', limitation: 'Secrets masqués avant persistance.' },
+        provider: { id: trace.provider, model: trace.model, transport: trace.apiMode, sessionId: trace.sessionId }
+      })
+    }
+    return filterHermesPreflight(traces, safeConversationId)
+  })
+  ipcMain.handle('os:hermesPromptTraceSummary', (event) => {
+    assertTrustedRendererSender(event, 'Hermes trace summary')
+    return loadHermesTraces().map(({ request: _request, ...metadata }) => metadata)
+  })
+  ipcMain.handle('os:authorizeHermesDiagnostics', async (event) => {
+    assertTrustedRendererSender(event, 'Hermes diagnostics authorization')
+    if (headlessTestInstance) return null
+    const options = {
+      type: 'warning' as const,
+      buttons: ['Annuler', 'Déverrouiller'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Payloads Hermes sensibles',
+      message: 'Afficher les payloads Hermes globaux ?',
+      detail: 'Ils peuvent contenir des données métier malgré le masquage automatique des secrets.'
+    }
+    const parent = BrowserWindow.fromWebContents(event.sender)
+    const result = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options)
+    if (result.response !== 1) return null
+    return hermesDiagnosticCapabilities.issue(event.sender.id)
+  })
+  ipcMain.handle('os:hermesPromptTracesGlobal', (event, token: unknown) => {
+    assertTrustedRendererSender(event, 'Hermes global diagnostics')
+    const safeToken = guardString(token, 'capability')
+    if (!hermesDiagnosticCapabilities.consume(safeToken, event.sender.id)) {
+      throw new Error('Hermes diagnostics capability denied')
+    }
+    return filterHermesPreflight(loadHermesTraces())
+  })
+  ipcMain.handle('os:causalTrace', (_e, convId: string) => {
+    const conversationId = guardString(convId, 'convId')
+    let events = causalTrace.readConversation(conversationId)
+    // Migration transparente des conversations enregistrées avant la trace canonique.
+    const knownIds = new Set(events.map((traceEvent) => traceEvent.id))
+    for (const call of loadPromptCalls(conversationId)) {
+      if (knownIds.has(`${call.id}:0`)) continue
+      const base = causalTrace.nextSequence(conversationId)
+      for (const traceEvent of promptCallToTraceEvents(call, base)) {
+        causalTrace.append(traceEvent)
+        knownIds.add(traceEvent.id)
+      }
+    }
+    events = causalTrace.readConversation(conversationId)
+    return events
+  })
 
   // --- Observatoire d'activité : transcripts Claude Code (lecture seule) + ledger in-app ---
   ipcMain.handle('os:activity:sessions', () => listSessions(60))
@@ -531,11 +901,11 @@ function createWindow(): void {
     autoHideMenuBar: true,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#000000',
+      color: '#00000000',
       symbolColor: '#f5f7fb',
       height: 28
     },
-    icon,
+    icon: process.env['AUTOWIN_OS_DEV'] === '1' ? devIcon : icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       // sandbox:false requis par le preload @electron-toolkit ; contextIsolation
@@ -566,8 +936,7 @@ function createWindow(): void {
   mainWindow.webContents.on('will-redirect', blockUntrustedNavigation)
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow.maximize()
-    mainWindow.show()
+    presentAutomationWindow(mainWindow, headlessTestInstance, { maximize: true })
     setTimeout(() => void warmHermesControls(), 250)
   })
 
@@ -596,7 +965,7 @@ if (!isolatedTestInstance && ownsInstanceLock) {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId(AUTOWIN_APP_ID)
+  electronApp.setAppUserModelId(automationAppIdentity(AUTOWIN_APP_ID, automationInstanceMode))
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.

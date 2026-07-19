@@ -4,7 +4,8 @@ import type { CostAggregator } from './dashboards/cost'
 import type { TrustLedger } from './trust/ledger'
 import type { AuthoritySas } from './authority/sas'
 import { evaluateClosure } from './gates/stopgate'
-import type { PromptEnvelope } from './providers/types'
+import { capabilityInstruction } from './capability-profiles'
+import type { PromptEnvelope, SendOptions, Usage } from './providers/types'
 
 /**
  * Boucle d'orchestration DISCIPLINÉE — le cœur d'Autowin OS.
@@ -24,6 +25,10 @@ export interface OrchestrationStep {
   costUsd?: number
   detail?: string
   prompt?: PromptEnvelope
+  usage?: Usage
+  status?: 'completed' | 'failed'
+  error?: string
+  durationMs?: number
 }
 
 export interface OrchestrationResult {
@@ -62,17 +67,28 @@ export class Orchestrator {
     const subBinding = roles.getBinding('subagent')
     const subProvider = subBinding.provider
     const execMessages = [{ role: 'user' as const, content: task }]
-    const subOptions = {
+    let execPrompt = registry.describePrompt(subProvider, execMessages, {
       model: subBinding.model,
       reasoningEffort: subBinding.reasoningEffort
+    }, subBinding.model)
+    const subOptions: SendOptions = {
+      system: capabilityInstruction(subBinding.capabilityProfileId),
+      model: subBinding.model,
+      reasoningEffort: subBinding.reasoningEffort,
+      observePrompt: (observed) => { execPrompt = observed }
     }
-    const execPrompt = registry.describePrompt(
-      subProvider,
-      execMessages,
-      subOptions,
-      subBinding.model
-    )
-    const exec = await registry.send(subProvider, execMessages, subOptions)
+    const execStartedAt = performance.now()
+    let exec
+    try {
+      exec = await registry.send(subProvider, execMessages, subOptions)
+    } catch (error) {
+      push({
+        step: 'exec', provider: subProvider, role: 'subagent', text: '', prompt: execPrompt,
+        status: 'failed', error: error instanceof Error ? error.message : String(error),
+        durationMs: performance.now() - execStartedAt
+      })
+      throw error
+    }
     if (exec.usage) {
       cost.add({
         provider: subProvider,
@@ -90,7 +106,10 @@ export class Orchestrator {
       text: exec.text,
       tokens: exec.usage ? exec.usage.inputTokens + exec.usage.outputTokens : undefined,
       costUsd: exec.usage?.costUsd,
-      prompt: execPrompt
+      usage: exec.usage,
+      prompt: execPrompt,
+      status: 'completed',
+      durationMs: performance.now() - execStartedAt
     })
 
     // 2. Un JUGE (autre rôle → potentiellement autre modèle) évalue le résultat.
@@ -99,19 +118,29 @@ export class Orchestrator {
     const judgePrompt =
       `Tu es un juge. Évalue si cette réponse répond correctement à la tâche.\n` +
       `TÂCHE: ${task}\nRÉPONSE: ${exec.text}\n` +
-      `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
+      `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".` + capabilityInstruction(judgeBinding.capabilityProfileId)
     const judgeMessages = [{ role: 'user' as const, content: judgePrompt }]
-    const judgeOptions = {
+    let judgeEnvelope = registry.describePrompt(judgeProvider, judgeMessages, {
       model: judgeBinding.model,
       reasoningEffort: judgeBinding.reasoningEffort
+    }, judgeBinding.model)
+    const judgeOptions: SendOptions = {
+      model: judgeBinding.model,
+      reasoningEffort: judgeBinding.reasoningEffort,
+      observePrompt: (observed) => { judgeEnvelope = observed }
     }
-    const judgeEnvelope = registry.describePrompt(
-      judgeProvider,
-      judgeMessages,
-      judgeOptions,
-      judgeBinding.model
-    )
-    const verdict = await registry.send(judgeProvider, judgeMessages, judgeOptions)
+    const judgeStartedAt = performance.now()
+    let verdict
+    try {
+      verdict = await registry.send(judgeProvider, judgeMessages, judgeOptions)
+    } catch (error) {
+      push({
+        step: 'judge', provider: judgeProvider, role: 'judge', text: '', prompt: judgeEnvelope,
+        status: 'failed', error: error instanceof Error ? error.message : String(error),
+        durationMs: performance.now() - judgeStartedAt
+      })
+      throw error
+    }
     if (verdict.usage) {
       cost.add({
         provider: judgeProvider,
@@ -131,8 +160,11 @@ export class Orchestrator {
       text: verdict.text.trim(),
       tokens: verdict.usage ? verdict.usage.inputTokens + verdict.usage.outputTokens : undefined,
       costUsd: verdict.usage?.costUsd,
+      usage: verdict.usage,
       detail: valid ? 'validé' : 'défaut',
-      prompt: judgeEnvelope
+      prompt: judgeEnvelope,
+      status: 'completed',
+      durationMs: performance.now() - judgeStartedAt
     })
 
     // 3. Le GATE déterministe tranche la clôture (model-agnostic).

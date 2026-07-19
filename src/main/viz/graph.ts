@@ -36,12 +36,15 @@ export interface VizLink {
   source: string
   target: string
   weight: number
+  relation?: string
 }
 
 /** Graphe normalisé pour la visu 3D. */
 export interface VizGraph {
   nodes: VizNode[]
   links: VizLink[]
+  /** Taille de la source avant application du LOD, si la vue est tronquée. */
+  totalNodes?: number
 }
 
 /**
@@ -68,7 +71,8 @@ export function normalize(raw: RawGraph): VizGraph {
     .map((l) => ({
       source: l.source,
       target: l.target,
-      weight: l.weight ?? 1
+      weight: l.weight ?? 1,
+      ...(l.relation === undefined ? {} : { relation: l.relation })
     }))
 
   return { nodes, links }

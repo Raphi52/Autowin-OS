@@ -83,6 +83,9 @@ export class AuthoritySas {
     if (this.resolved.has(id)) {
       throw new Error(`AuthoritySas.resolve: id "${id}" déjà résolu`)
     }
+    if (!decision.options.includes(choice)) {
+      throw new Error(`AuthoritySas.resolve: choix invalide pour "${id}"`)
+    }
     this.resolved.add(id)
     const resolution: Resolution<unknown> = {
       id,

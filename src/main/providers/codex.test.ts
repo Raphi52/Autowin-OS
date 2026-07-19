@@ -157,6 +157,65 @@ describe('CodexAdapter — inférence + injection (mocké, hors-ligne)', () => {
     expect(captured.reasoning).toEqual({ effort: 'high' })
   })
 
+  it('sérialise réellement le texte, les images et les fichiers joints', async () => {
+    let captured: Record<string, unknown> = {}
+    const fetchFn = vi.fn(async (_url: string, init: RequestInit) => {
+      captured = JSON.parse(init.body as string)
+      return sseRes(['data: {"type":"response.completed","response":{"id":"r"}}\n'])
+    })
+    const adapter = new CodexAdapter({
+      fetchFn: fetchFn as unknown as typeof fetch,
+      loadTokensFn: () => tokens
+    })
+    const messages: Message[] = [
+      {
+        role: 'user',
+        content: 'Analyse ces fichiers',
+        attachments: [
+          {
+            name: 'notes.md',
+            mimeType: 'text/markdown',
+            size: 7,
+            kind: 'text',
+            content: '# Notes'
+          },
+          {
+            name: 'capture.png',
+            mimeType: 'image/png',
+            size: 3,
+            kind: 'image',
+            content: 'YWJj'
+          },
+          {
+            name: 'document.pdf',
+            mimeType: 'application/pdf',
+            size: 3,
+            kind: 'file',
+            content: 'ZGVm'
+          }
+        ]
+      }
+    ]
+
+    let observed: unknown
+    const gen = adapter.send(messages, { observePrompt: (prompt) => { observed = prompt } })
+    let step = await gen.next()
+    while (!step.done) step = await gen.next()
+
+    const input = captured.input as Array<{ content: Array<Record<string, string>> }>
+    expect(input[0].content).toEqual([
+      { type: 'input_text', text: 'Analyse ces fichiers' },
+      { type: 'input_text', text: '<fichier nom="notes.md">\n# Notes\n</fichier>' },
+      { type: 'input_image', image_url: 'data:image/png;base64,YWJj' },
+      {
+        type: 'input_file',
+        filename: 'document.pdf',
+        file_data: 'data:application/pdf;base64,ZGVm'
+      }
+    ])
+    expect((observed as { options: { body: unknown } }).options.body).toEqual(captured)
+  })
+
   it('sans système → instructions absent (contrôle négatif)', async () => {
     let captured: Record<string, unknown> = {}
     const fetchFn = vi.fn(async (_url: string, init: RequestInit) => {

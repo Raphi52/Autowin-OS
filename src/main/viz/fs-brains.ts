@@ -1,4 +1,5 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { readFile, readdir } from 'node:fs/promises'
 import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
 import { normalize, topByDegree, filterByCommunity, type RawGraph, type VizGraph } from './graph'
 
@@ -21,6 +22,14 @@ export interface BrainGraphRef {
 export interface BrainTheme {
   id: string
   label: string
+}
+
+/** Métadonnées légères d'une note, disponibles même lorsqu'elle est hors LOD. */
+export interface BrainNoteSearchResult {
+  id: string
+  label: string
+  file: string
+  themes: string[]
 }
 
 export const AMITEL_BRAIN_ROOT = '\\\\ged2\\rig\\Projets IA\\Amitel Brain'
@@ -57,7 +66,8 @@ export function defaultBrainRoots(): string[] {
 /** Découvre les graphes graphify-out/graph.json sous les roots donnés. */
 export function scanBrainGraphs(
   roots: string[] = defaultBrainRoots(),
-  vaultRoot = AMITEL_BRAIN_ROOT
+  vaultRoot = AMITEL_BRAIN_ROOT,
+  includeVaultThemes = true
 ): BrainGraphRef[] {
   const found: BrainGraphRef[] = []
   if (existsSync(vaultRoot)) {
@@ -67,7 +77,10 @@ export function scanBrainGraphs(
       path: vaultRoot,
       sizeMb: 0,
       kind: 'vault',
-      themes: AMITEL_BRAIN_THEMES
+      // Le catalogue fixe garde les catégories historiques ; les tags YAML
+      // permettent aux nouveaux domaines (ex. theme/autowin-os) d'apparaître
+      // sans nouvelle livraison de l'application.
+      themes: includeVaultThemes ? vaultThemeCatalog(vaultRoot) : AMITEL_BRAIN_THEMES
     })
   }
   for (const root of roots) {
@@ -120,7 +133,8 @@ export function loadBrainGraph(path: string, lod = 300, community?: number): Viz
   const keep = new Set(topByDegree(g, lod).map((n) => n.id))
   return {
     nodes: g.nodes.filter((n) => keep.has(n.id)),
-    links: g.links.filter((l) => keep.has(l.source) && keep.has(l.target))
+    links: g.links.filter((l) => keep.has(l.source) && keep.has(l.target)),
+    totalNodes: g.nodes.length
   }
 }
 
@@ -129,12 +143,39 @@ const WIKI_LINK_RE = /\[\[([^\]]+)\]\]/g
 
 /** Charge les notes Markdown du Brain comme un graphe navigable, sans les modifier. */
 export function loadVaultBrainGraph(root: string, lod = 300): VizGraph {
-  const records = markdownFiles(root).map((file) => {
-    const content = readFileSync(file, 'utf8')
+  const records = vaultNoteRecords(root)
+  return graphFromVaultRecords(records, lod)
+}
+
+/** Variante asynchrone : les petites notes réseau sont lues en parallèle hors du main Electron. */
+export async function loadVaultBrainGraphAsync(root: string, lod = 300): Promise<VizGraph> {
+  const records = await vaultNoteRecordsAsync(root)
+  return graphFromVaultRecords(records, lod)
+}
+
+/** Premier lot borné pour afficher Memory avant l'indexation complète du vault. */
+export async function loadVaultBrainGraphPreviewAsync(root: string, lod = 100): Promise<VizGraph> {
+  const files = await markdownFilesAsync(root)
+  const selectedFiles = files.slice(0, Math.max(1, Math.min(lod, 100)))
+  const records = await mapWithConcurrency(selectedFiles, 32, async (file) => {
+    const content = await readFile(file, 'utf8')
     const id = relative(root, file).replace(/\\/g, '/').replace(/\.md$/i, '')
     const label = content.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? id.split('/').at(-1) ?? id
     return { id, file, content, label, themes: noteThemes(id, content) }
   })
+  return { ...graphFromVaultRecords(records, records.length), totalNodes: files.length }
+}
+
+export async function loadBrainGraphPreviewAsync(path: string, lod = 100): Promise<VizGraph> {
+  if (!existsSync(path) || !statSync(path).isDirectory()) return loadBrainGraph(path, lod)
+  const requestedRoot = realpathSync(resolve(path)).toLowerCase()
+  const allowedRoot = realpathSync(resolve(AMITEL_BRAIN_ROOT)).toLowerCase()
+  if (requestedRoot !== allowedRoot) throw new Error('brain vault hors périmètre autorisé')
+  return loadVaultBrainGraphPreviewAsync(path, lod)
+}
+
+function graphFromVaultRecords(records: VaultNoteRecord[], lod: number): VizGraph {
+  const themes = themeCatalog(records)
   const ids = new Set(records.map((record) => record.id))
   const byBasename = new Map<string, string[]>()
   for (const record of records) {
@@ -156,7 +197,7 @@ export function loadVaultBrainGraph(root: string, lod = 300): VizGraph {
       label: record.label,
       group: Math.max(
         0,
-        AMITEL_BRAIN_THEMES.findIndex((theme) => record.themes.includes(theme.id))
+        themes.findIndex((theme) => record.themes.includes(theme.id))
       ),
       file: record.file,
       themes: record.themes
@@ -166,8 +207,184 @@ export function loadVaultBrainGraph(root: string, lod = 300): VizGraph {
   const keep = new Set(topByDegree(graph, lod).map((node) => node.id))
   return {
     nodes: graph.nodes.filter((node) => keep.has(node.id)),
-    links: graph.links.filter((link) => keep.has(link.source) && keep.has(link.target))
+    links: graph.links.filter((link) => keep.has(link.source) && keep.has(link.target)),
+    totalNodes: graph.nodes.length
   }
+}
+
+export async function loadBrainGraphAsync(
+  path: string,
+  lod = 300,
+  community?: number
+): Promise<VizGraph> {
+  if (!existsSync(path) || !statSync(path).isDirectory()) return loadBrainGraph(path, lod, community)
+  const requestedRoot = realpathSync(resolve(path)).toLowerCase()
+  const allowedRoot = realpathSync(resolve(AMITEL_BRAIN_ROOT)).toLowerCase()
+  if (requestedRoot !== allowedRoot) throw new Error('brain vault hors périmètre autorisé')
+  return loadVaultBrainGraphAsync(path, lod)
+}
+
+/** Charge uniquement un nœud du vault et ses voisins directs. */
+export function loadVaultBrainNeighborhood(root: string, nodeId: string): VizGraph {
+  return graphNeighborhood(loadVaultBrainGraph(root, Number.MAX_SAFE_INTEGER), nodeId)
+}
+
+/**
+ * Charge un voisinage borné depuis une source autorisée. Le renderer fusionne ce
+ * delta avec son LOD courant au lieu de remplacer le graphe déjà positionné.
+ */
+export function loadBrainNeighborhood(path: string, nodeId: string): VizGraph {
+  if (!existsSync(path)) throw new Error(`graphe introuvable: ${path}`)
+  if (statSync(path).isDirectory()) {
+    const requestedRoot = realpathSync(resolve(path)).toLowerCase()
+    const allowedRoot = realpathSync(resolve(AMITEL_BRAIN_ROOT)).toLowerCase()
+    if (requestedRoot !== allowedRoot) throw new Error('brain vault hors périmètre autorisé')
+    return loadVaultBrainNeighborhood(path, nodeId)
+  }
+  return graphNeighborhood(loadBrainGraph(path, Number.MAX_SAFE_INTEGER), nodeId)
+}
+
+function graphNeighborhood(graph: VizGraph, nodeId: string): VizGraph {
+  const keep = new Set([nodeId])
+  for (const link of graph.links) {
+    if (link.source === nodeId) keep.add(link.target)
+    if (link.target === nodeId) keep.add(link.source)
+  }
+  return {
+    nodes: graph.nodes.filter((node) => keep.has(node.id)),
+    links: graph.links.filter((link) => keep.has(link.source) && keep.has(link.target)),
+    totalNodes: graph.totalNodes ?? graph.nodes.length
+  }
+}
+
+/**
+ * Recherche dans les métadonnées de TOUT le vault, et non seulement dans le
+ * sous-graphe LOD chargé à l'écran. Le renderer peut ensuite demander le
+ * voisinage de la note trouvée sans rendre tout le Brain.
+ */
+export function searchVaultBrainNotes(
+  root: string,
+  query: string,
+  limit = 40
+): BrainNoteSearchResult[] {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized || limit <= 0) return []
+  return vaultNoteRecords(root)
+    .filter((record) =>
+      `${record.id}\n${record.label}\n${record.themes.join('\n')}`.toLowerCase().includes(normalized)
+    )
+    .slice(0, limit)
+    .map(({ id, label, file, themes }) => ({ id, label, file, themes }))
+}
+
+type VaultNoteRecord = BrainNoteSearchResult & { content: string }
+const vaultRecordsCache = new Map<string, VaultNoteRecord[]>()
+const vaultRecordsPromises = new Map<string, Promise<VaultNoteRecord[]>>()
+
+function vaultNoteRecords(root: string): VaultNoteRecord[] {
+  const cached = vaultRecordsCache.get(root)
+  if (cached) return cached
+  const records = markdownFiles(root).map((file) => {
+    const content = readFileSync(file, 'utf8')
+    const id = relative(root, file).replace(/\\/g, '/').replace(/\.md$/i, '')
+    const label = content.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? id.split('/').at(-1) ?? id
+    return { id, file, content, label, themes: noteThemes(id, content) }
+  })
+  vaultRecordsCache.set(root, records)
+  return records
+}
+
+async function vaultNoteRecordsAsync(root: string): Promise<VaultNoteRecord[]> {
+  const cached = vaultRecordsCache.get(root)
+  if (cached) return cached
+  const pending = vaultRecordsPromises.get(root)
+  if (pending) return pending
+  const loading = (async () => {
+    const files = await markdownFilesAsync(root)
+    const records = await mapWithConcurrency(files, 32, async (file) => {
+      const content = await readFile(file, 'utf8')
+      const id = relative(root, file).replace(/\\/g, '/').replace(/\.md$/i, '')
+      const label = content.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? id.split('/').at(-1) ?? id
+      return { id, file, content, label, themes: noteThemes(id, content) }
+    })
+    vaultRecordsCache.set(root, records)
+    vaultRecordsPromises.delete(root)
+    return records
+  })()
+  vaultRecordsPromises.set(root, loading)
+  return loading
+}
+
+async function markdownFilesAsync(root: string): Promise<string[]> {
+  const visit = async (directory: string): Promise<string[]> => {
+    const entries = await readdir(directory, { withFileTypes: true })
+    const nested = await Promise.all(
+      entries.map(async (entry) => {
+        if (entry.isDirectory() && !SKIPPED_VAULT_DIRS.has(entry.name))
+          return visit(join(directory, entry.name))
+        if (entry.isFile() && extname(entry.name).toLowerCase() === '.md')
+          return [join(directory, entry.name)]
+        return []
+      })
+    )
+    return nested.flat()
+  }
+  return (await visit(root)).sort()
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  map: (value: T) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(values.length)
+  let cursor = 0
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+      while (cursor < values.length) {
+        const index = cursor++
+        results[index] = await map(values[index])
+      }
+    })
+  )
+  return results
+}
+
+function vaultThemeCatalog(root: string): BrainTheme[] {
+  return themeCatalog(vaultNoteRecords(root))
+}
+
+export function loadBrainThemes(path: string): BrainTheme[] {
+  if (!existsSync(path) || !statSync(path).isDirectory()) return []
+  const requestedRoot = realpathSync(resolve(path)).toLowerCase()
+  const allowedRoot = realpathSync(resolve(AMITEL_BRAIN_ROOT)).toLowerCase()
+  if (requestedRoot !== allowedRoot) throw new Error('brain vault hors périmètre autorisé')
+  return vaultThemeCatalog(path)
+}
+
+function themeCatalog(records: readonly Pick<VaultNoteRecord, 'themes'>[]): BrainTheme[] {
+  const known = new Set(AMITEL_BRAIN_THEMES.map((theme) => theme.id))
+  const dynamic = new Set<string>()
+  for (const record of records) {
+    for (const theme of record.themes) if (!known.has(theme)) dynamic.add(theme)
+  }
+  return [
+    ...AMITEL_BRAIN_THEMES,
+    ...[...dynamic]
+      .sort((left, right) => left.localeCompare(right))
+      .map((id) => ({ id, label: themeLabel(id) }))
+  ]
+}
+
+function themeLabel(id: string): string {
+  if (id === 'theme/autowin-os') return 'Autowin OS'
+  return id
+    .split('/')
+    .at(-1)!
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((word) => word[0].toUpperCase() + word.slice(1))
+    .join(' ')
 }
 
 function markdownFiles(root: string): string[] {
@@ -192,6 +409,9 @@ function noteThemes(id: string, content: string): string[] {
   const title = semanticContent.match(/^#\s+(.+)$/m)?.[1] ?? ''
   const identity = `${normalizedId}\n${title}`.toLowerCase()
   const categories = new Set<string>()
+  // Le frontmatter est la source explicite de thèmes. Les règles historiques
+  // ci-dessous restent un filet de sécurité pour les anciennes notes sans tag.
+  for (const tag of frontmatterTags(content)) categories.add(tag)
   const add = (category: string, condition: boolean): void => {
     if (condition) categories.add(category)
   }
@@ -269,7 +489,25 @@ function noteThemes(id: string, content: string): string[] {
   }
 
   const order = new Map(AMITEL_BRAIN_THEMES.map((theme, index) => [theme.id, index]))
-  return [...categories].sort((left, right) => (order.get(left) ?? 999) - (order.get(right) ?? 999))
+  return [...categories].sort(
+    (left, right) => (order.get(left) ?? 999) - (order.get(right) ?? 999) || left.localeCompare(right)
+  )
+}
+
+function frontmatterTags(content: string): string[] {
+  const frontmatter = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)/)
+  if (!frontmatter) return []
+  const block = frontmatter[1]
+  const inline = block.match(/^tags\s*:\s*\[([^\]]*)\]\s*$/m)?.[1]
+  const listed = block.match(/^tags\s*:\s*\r?\n((?:\s+-\s+[^\r\n]+\r?\n?)*)/m)?.[1]
+  const candidates = inline
+    ? inline.split(',')
+    : listed
+      ? [...listed.matchAll(/^\s+-\s+(.+)$/gm)].map((match) => match[1])
+      : []
+  return candidates
+    .map((tag) => tag.trim().replace(/^['"]|['"]$/g, ''))
+    .filter((tag) => /^(?:theme|category|project)\/[a-z0-9][a-z0-9/_-]*$/i.test(tag))
 }
 
 function resolveWikiTarget(

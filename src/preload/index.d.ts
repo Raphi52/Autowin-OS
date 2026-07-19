@@ -4,6 +4,18 @@ interface Message {
   role: 'system' | 'user' | 'assistant'
   content: string
 }
+interface ChatAttachment {
+  name: string
+  mimeType: string
+  size: number
+  kind: 'text' | 'image' | 'file'
+  content: string
+}
+interface ChatAttachmentMeta {
+  name: string
+  mimeType: string
+  size: number
+}
 interface ChatResult {
   ok: boolean
   result?: { text: string; provider: string; systemInjected: boolean }
@@ -29,7 +41,8 @@ interface OrchestrationResult {
 }
 interface Brain3d {
   nodes: Array<{ id: string; label: string; group: number; file?: string; themes?: string[] }>
-  links: Array<{ source: string; target: string; weight: number }>
+  links: Array<{ source: string; target: string; weight: number; relation?: string }>
+  totalNodes?: number
 }
 interface SessionMeta {
   id: string
@@ -107,6 +120,11 @@ interface HermesControlItem {
   matcher?: string
 }
 
+interface SkillRegistryItem extends HermesControlItem {
+  source: string
+  sourceLabel: string
+}
+
 interface BehaviourFile {
   id: string
   label: string
@@ -125,9 +143,10 @@ interface BehaviourContext {
   label: string
   depth: number
 }
+interface HermesInjectionProof { id: string; verdict: 'injected' | 'unproven'; observedAt?: string; reason: string }
 
 interface SkillLoopInput {
-  steps: Array<{ id: string; skill: string; prompt: string }>
+  steps: Array<{ id: string; skill: string; capabilities?: string[]; prompt: string; requires?: string[]; produces?: string[] }>
   passes: number
   stopOnFailure: boolean
   carryOutput: boolean
@@ -172,6 +191,50 @@ interface AgentTopology {
   subagents: SlotBinding[]
   panels: { scout: SlotBinding[]; judge: SlotBinding[] }
 }
+interface CapabilityProfile { id: string; name: string; description: string; selections: Record<'skills' | 'hooks' | 'tools', Record<string, boolean>>; updatedAt: string }
+interface CapabilityProfileState { profiles: CapabilityProfile[]; assignments: Record<'orchestrator' | 'subagent' | 'judge' | 'scout', string> }
+
+interface PromptCallRecord {
+  id: string
+  ts: string
+  conversationId: string
+  turnId: string
+  iteration: number
+  actor: string
+  provider: string
+  model?: string
+  transport: string
+  boundary: string
+  limitation: string
+  system?: string
+  messages: Array<{ role: string; content: string }>
+  options: Record<string, unknown>
+  response: string
+  usage?: {
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens?: number
+    costUsd?: number
+  }
+}
+
+interface HermesPreflightTrace {
+  schema: 'autowin.hermes-preflight/v1'
+  timestamp: string
+  sessionId: string
+  turnId: string
+  apiRequestId: string
+  provider: string
+  model: string
+  apiMode?: string
+  conversationId?: string
+  fidelity: 'exact-redacted'
+  boundary: 'hermes.pre_api_request' | 'hermes.request_dump'
+  source: 'plugin-hook' | 'request-dump'
+  messageCount: number
+  toolCount: number
+  request: Record<string, unknown>
+}
 
 interface ChatApi {
   storageMigration: () => Promise<Record<string, string>>
@@ -195,10 +258,25 @@ interface ChatApi {
     model?: string
   ) => Promise<Record<string, { provider: string; model?: string }>>
   models: () => Promise<ImportedModel[]>
+  profiles: () => Promise<Array<{ id: string; name: string; description?: string; updatedAt: string; topology: AgentTopology }>>
+  saveProfile: (profile: unknown) => Promise<unknown[]>
+  applyProfile: (id: string) => Promise<{ topology: AgentTopology }>
+  kimiLogin: () => Promise<{ ok: true }>
   topology: () => Promise<AgentTopology>
   setTopology: (topology: AgentTopology) => Promise<AgentTopology>
+  capabilityProfiles: () => Promise<CapabilityProfileState>
+  saveCapabilityProfiles: (state: CapabilityProfileState) => Promise<CapabilityProfileState>
+  assignCapabilityProfile: (role: 'orchestrator' | 'subagent' | 'judge' | 'scout', profileId: string) => Promise<CapabilityProfileState>
   hermesControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins') => Promise<HermesControlItem[]>
+  skills: () => Promise<SkillRegistryItem[]>
+  promptCalls: (conversationId?: string) => Promise<PromptCallRecord[]>
+  hermesPromptTraces: (conversationId: string) => Promise<HermesPreflightTrace[]>
+  hermesPromptTraceSummary: () => Promise<HermesPreflightTrace[]>
+  authorizeHermesDiagnostics: () => Promise<string | null>
+  hermesPromptTracesGlobal: (capability: string) => Promise<HermesPreflightTrace[]>
+  causalTrace: (conversationId: string) => Promise<unknown[]>
   claudeHooks: () => Promise<HermesControlItem[]>
+  codexHooks: () => Promise<HermesControlItem[]>
   setHermesTool: (
     name: string,
     enabled: boolean
@@ -215,6 +293,7 @@ interface ChatApi {
   behaviourContexts: (workspaceRoot: string) => Promise<BehaviourContext[]>
   behaviourFiles: (workspaceRoot?: string, contextRoot?: string) => Promise<BehaviourFile[]>
   readBehaviourFile: (id: string, workspaceRoot?: string, contextRoot?: string) => Promise<string>
+  behaviourProof: (workspaceRoot?: string, contextRoot?: string) => Promise<HermesInjectionProof[]>
   runSkillLoop: (
     input: SkillLoopInput
   ) => Promise<{ runId: string; completed: number; failed: number }>
@@ -224,6 +303,18 @@ interface ChatApi {
       label: string
       description: string
       source: 'autowin' | 'global'
+      role: 'phase' | 'capability' | 'gate' | 'meta'
+    }>
+  >
+  generateLoopDraft: (objective: string) => Promise<SkillLoopInput>
+  loopRuns: () => Promise<
+    Array<{
+      runId: string
+      startedAt: string
+      finishedAt?: string
+      completed: number
+      failed: number
+      events: SkillLoopEvent[]
     }>
   >
   onSkillLoopEvent: (cb: (event: SkillLoopEvent) => void) => () => void
@@ -250,7 +341,12 @@ interface ChatApi {
       title: string
       category: string
       provider: string
-      messages: Array<{ role: 'user' | 'assistant'; content: string; ts: number }>
+      messages: Array<{
+        role: 'user' | 'assistant'
+        content: string
+        ts: number
+        attachments?: ChatAttachmentMeta[]
+      }>
       updatedAt: number
     }>
   >
@@ -273,9 +369,15 @@ interface ChatApi {
   ) => Promise<{ ok: boolean; data?: unknown; error?: string }>
   pilot: (goal: string) => Promise<{ ok: boolean; error?: string }>
   pilotChat: (
-    messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+    messages: Array<{
+      role: 'user' | 'assistant'
+      content: string
+      attachments?: ChatAttachment[]
+    }>,
     conversationId?: string
-  ) => Promise<{ ok: boolean; error?: string }>
+  ) => Promise<{ ok: boolean; cancelled?: boolean; error?: string }>
+  cancelPilotChat: (conversationId: string) => Promise<{ ok: boolean }>
+  markResponseDisplayed: (conversationId: string, content: string) => Promise<{ ok: boolean; eventId: string }>
   onPilotEvent: (
     cb: (e: {
       kind: string
@@ -319,7 +421,14 @@ interface ChatApi {
     }>
   >
   loadBrainGraph: (path: string, lod?: number, community?: number) => Promise<Brain3d>
+  loadBrainGraphPreview: (path: string, lod?: number) => Promise<Brain3d>
+  loadBrainThemes: (path: string) => Promise<Array<{ id: string; label: string }>>
+  loadBrainNeighborhood: (path: string, nodeId: string) => Promise<Brain3d>
   readNodeFile: (path: string) => Promise<{ path: string; content: string }>
+  searchBrain: (
+    path: string,
+    query: string
+  ) => Promise<Array<{ id: string; label: string; file: string; themes: string[] }>>
   listRuns: () => Promise<RunEntry[]>
   harnessSnapshot: () => Promise<import('../renderer/src/components/harness-model').HarnessSnapshot>
 }

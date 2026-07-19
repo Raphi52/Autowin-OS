@@ -7,10 +7,26 @@ export type GraphColumnWidths = {
 export const GRAPH_COLUMN_LIMITS = {
   theme: { min: 120, max: 420 },
   visibility: { min: 160, max: 520 },
-  detail: { min: 240, max: 760 },
+  detail: { min: 240, max: 2400 },
   graph: 200,
-  detailGraph: 240
+  detailGraph: 96
 } as const
+
+export function fitDetailColumnWidth(
+  width: number,
+  contentWidth: number,
+  reservedLeftWidth = 0
+): number {
+  return Math.round(
+    Math.min(
+      GRAPH_COLUMN_LIMITS.detail.max,
+      Math.max(
+        GRAPH_COLUMN_LIMITS.detail.min,
+        Math.min(width, contentWidth - reservedLeftWidth - GRAPH_COLUMN_LIMITS.detailGraph)
+      )
+    )
+  )
+}
 
 export function fitNormalColumnWidths(
   widths: Pick<GraphColumnWidths, 'theme' | 'visibility'>,

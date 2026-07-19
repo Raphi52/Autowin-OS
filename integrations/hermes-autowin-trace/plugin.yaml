@@ -1,0 +1,5 @@
+name: autowin-observability
+version: 0.1.0
+description: Export redacted Hermes pre_api_request payloads to the local Autowin OS trace spool.
+hooks:
+  - pre_api_request

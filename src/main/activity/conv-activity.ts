@@ -17,9 +17,17 @@ export interface ConvActivityEntry {
   outputTokens?: number
   costUsd?: number
   text?: string
+  screenshots?: string[]
 }
 
 const TEXT_CAP = 600
+const SCREENSHOT_RE = /(?:[A-Za-z]:[\\/][^\n\r<>|?*"']+?\.(?:png|jpe?g|webp|gif|bmp)|(?:\.\.?[\\/])[^\n\r<>|?*"']+?\.(?:png|jpe?g|webp|gif|bmp))/gi
+
+/** Chemins image cités par un agent : preuve locale, jamais un scan du disque. */
+export function extractScreenshotEvidence(text?: string): string[] {
+  if (!text) return []
+  return [...new Set((text.match(SCREENSHOT_RE) ?? []).map((path) => path.trim()))]
+}
 
 export function convActivityRoot(): string {
   return join(ensureAutowinAppData(), 'activity')
@@ -46,7 +54,15 @@ export function appendConvActivity(
       inputTokens: entry.inputTokens,
       outputTokens: entry.outputTokens,
       costUsd: entry.costUsd,
-      text: entry.text ? entry.text.slice(0, TEXT_CAP) : undefined
+      // Configuration diffs are audit evidence: truncating them would make the
+      // Workflows view unable to explain the exact effective prompt change.
+      text: entry.text
+        ? entry.kind === 'configuration-change'
+          ? entry.text
+          : entry.text.slice(0, TEXT_CAP)
+        : undefined
+      ,
+      screenshots: extractScreenshotEvidence(entry.text)
     }
     appendFileSync(fileFor(convId, root), `${JSON.stringify(e)}\n`, 'utf8')
   } catch {

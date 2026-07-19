@@ -16,10 +16,9 @@
 
 .topology-toolbar {
   grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: auto minmax(220px, 1fr) auto;
+  display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 12px;
   min-width: 0;
   padding: 0 20px;
   border-bottom: 1px solid #202936;
@@ -42,12 +41,23 @@
 }
 
 .topology-toolbar p {
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow: hidden;
   margin: 0;
   color: #74879a;
   font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+.topology-toolbar > .topology-assign-button { width: auto; margin: 0; white-space: nowrap; }
+.topology-profiles { display: flex; align-items: center; gap: 7px; padding: 5px 7px; border: 1px solid #2b4155; border-radius: 8px; background: #0a1018; white-space: nowrap; }
+.topology-profiles .topology-assign-button { width: auto; margin: 0; padding: 5px 7px; border-style: solid; }
+.topology-profiles select { max-width: 170px; border: 0; outline: 0; background: transparent; color: #c9d9e8; font-size: 10px; }
+
 .topology-state {
+  margin-left: auto;
   padding: 7px 10px;
   border: 1px solid #24533f;
   border-radius: 999px;
@@ -321,6 +331,8 @@
   font-size: 8px;
   text-transform: uppercase;
 }
+.topology-slot .topology-capability-picker { color: #8fcdb6; }
+.topology-slot .topology-capability-picker select { border-color: #30624f; }
 
 .topology-slot select {
   min-width: 76px;
@@ -430,6 +442,194 @@
   border-radius: 12px;
   background: #05070a;
   color: #8498aa;
+}
+
+/* Mode Noir · Black Glass: surfaces neutres et translucides, accents réservés aux rôles. */
+.theme-serious .agents-topology {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.3);
+  color: #f2f3f5;
+}
+
+.theme-serious .topology-toolbar {
+  border-bottom-color: rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.theme-serious .topology-library {
+  border-right-color: rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.48);
+  scrollbar-color: #555 transparent;
+}
+
+.theme-serious .topology-workspace {
+  background: rgba(0, 0, 0, 0.12);
+  scrollbar-color: #555 transparent;
+}
+
+.theme-serious .topology-model,
+.theme-serious .topology-slot {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(7, 8, 10, 0.74);
+  color: #f0f1f3;
+}
+
+.theme-serious .topology-model:hover {
+  border-color: rgba(255, 255, 255, 0.34);
+  background: rgba(18, 19, 22, 0.88);
+  transform: translateY(-1px);
+}
+
+.theme-serious .topology-model.is-selected {
+  border-color: rgba(225, 193, 103, 0.88);
+  background: rgba(16, 15, 11, 0.9);
+  transform: none;
+}
+
+.theme-serious .topology-panel {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(3, 4, 6, 0.68);
+  box-shadow: none;
+}
+
+.theme-serious .topology-panel > header {
+  border-bottom-color: rgba(255, 255, 255, 0.13);
+}
+
+.theme-serious .topology-panel > header b,
+.theme-serious .topology-profiles,
+.theme-serious .topology-slot select {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.7);
+  color: #e7e8eb;
+}
+
+.theme-serious .topology-slot .topology-capability-picker select {
+  border-color: rgba(99, 202, 157, 0.4);
+}
+
+.theme-serious .topology-empty,
+.theme-serious .topology-assign-button {
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #95999f;
+}
+
+.theme-serious .topology-assign-button:hover:not(:disabled) {
+  border-color: rgba(225, 193, 103, 0.7);
+  color: #ead18b;
+}
+
+.theme-serious .topology-panel.is-drop-target {
+  border-color: rgba(225, 193, 103, 0.82);
+  background: rgba(18, 16, 10, 0.86);
+  box-shadow: none;
+}
+
+.theme-serious .topology-toolbar span,
+.theme-serious .topology-eyebrow,
+.theme-serious .topology-panel > header span,
+.theme-serious .topology-parallel-heading span,
+.theme-serious .topology-model small,
+.theme-serious .topology-slot-copy span,
+.theme-serious .topology-slot-copy small,
+.theme-serious .topology-slot label,
+.theme-serious .topology-toolbar p,
+.theme-serious .topology-panel > header p {
+  color: #8b8f96;
+}
+
+/* Mode Transparent · Black Glass: même langage, avec davantage de galaxie visible. */
+.theme-galaxy .agents-topology {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.12);
+  color: #f2f3f7;
+}
+
+.theme-galaxy .topology-toolbar {
+  border-bottom-color: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.36);
+}
+
+.theme-galaxy .topology-library {
+  border-right-color: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.25);
+  scrollbar-color: #666 transparent;
+}
+
+.theme-galaxy .topology-workspace {
+  background: transparent;
+  scrollbar-color: #666 transparent;
+}
+
+.theme-galaxy .topology-model,
+.theme-galaxy .topology-slot {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(5, 6, 9, 0.52);
+  color: #f1f2f5;
+}
+
+.theme-galaxy .topology-model:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(15, 15, 19, 0.68);
+  transform: translateY(-1px);
+}
+
+.theme-galaxy .topology-model.is-selected {
+  border-color: rgba(225, 193, 103, 0.92);
+  background: rgba(18, 15, 9, 0.68);
+  transform: none;
+}
+
+.theme-galaxy .topology-panel {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(2, 3, 6, 0.44);
+  box-shadow: none;
+}
+
+.theme-galaxy .topology-panel > header {
+  border-bottom-color: rgba(255, 255, 255, 0.14);
+}
+
+.theme-galaxy .topology-panel > header b,
+.theme-galaxy .topology-profiles,
+.theme-galaxy .topology-slot select {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(0, 0, 0, 0.58);
+  color: #ebecef;
+}
+
+.theme-galaxy .topology-slot .topology-capability-picker select {
+  border-color: rgba(99, 202, 157, 0.44);
+}
+
+.theme-galaxy .topology-empty,
+.theme-galaxy .topology-assign-button {
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #a1a4ab;
+}
+
+.theme-galaxy .topology-assign-button:hover:not(:disabled) {
+  border-color: rgba(225, 193, 103, 0.76);
+  color: #f0d68e;
+}
+
+.theme-galaxy .topology-panel.is-drop-target {
+  border-color: rgba(225, 193, 103, 0.88);
+  background: rgba(20, 16, 8, 0.66);
+  box-shadow: none;
+}
+
+.theme-galaxy .topology-toolbar span,
+.theme-galaxy .topology-eyebrow,
+.theme-galaxy .topology-panel > header span,
+.theme-galaxy .topology-parallel-heading span,
+.theme-galaxy .topology-model small,
+.theme-galaxy .topology-slot-copy span,
+.theme-galaxy .topology-slot-copy small,
+.theme-galaxy .topology-slot label,
+.theme-galaxy .topology-toolbar p,
+.theme-galaxy .topology-panel > header p {
+  color: #9a9da7;
 }
 
 @media (max-width: 1100px) {

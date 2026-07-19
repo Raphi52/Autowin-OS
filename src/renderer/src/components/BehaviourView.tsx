@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { HumanJson } from './HumanJson'
 import {
   filterBehaviourFiles,
   groupBehaviourFiles,
   preferredBehaviourFileId,
+  applicableBehaviourFiles,
+  visibleBehaviourFiles,
+  visibleBehaviourSelection,
   type BehaviourEngine,
   type BehaviourFileItem,
   type BehaviourState
@@ -14,6 +18,7 @@ interface BehaviourContextItem {
   label: string
   depth: number
 }
+type HermesInjectionProof = { id: string; verdict: 'injected' | 'unproven'; observedAt?: string; reason: string }
 
 const ENGINE_LABEL: Record<BehaviourEngine, string> = {
   codex: 'Codex',
@@ -45,9 +50,9 @@ export function BehaviourView(): React.JSX.Element {
   const [content, setContent] = useState('')
   const [query, setQuery] = useState('')
   const [engine, setEngine] = useState<'all' | BehaviourEngine>('all')
-  const [state, setState] = useState<'all' | BehaviourState>('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [proofs, setProofs] = useState<Map<string, HermesInjectionProof>>(new Map())
 
   const loadWorkspace = useCallback(async (root: string, preferredContext?: string) => {
     setLoading(true)
@@ -59,11 +64,13 @@ export function BehaviourView(): React.JSX.Element {
           ? preferredContext
           : root
       const nextFiles = await window.api.behaviourFiles(root, nextContext)
+      const nextProofs = await window.api.behaviourProof(root, nextContext)
       setWorkspaceRoot(root)
       setContextRoot(nextContext)
       setContexts(nextContexts)
       setFiles(nextFiles)
-      setSelectedId(preferredBehaviourFileId(nextFiles))
+      setProofs(new Map(nextProofs.map((proof) => [proof.id, proof])))
+      setSelectedId(preferredBehaviourFileId(visibleBehaviourFiles(nextFiles)))
       setContent('')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -82,24 +89,16 @@ export function BehaviourView(): React.JSX.Element {
       })
   }, [loadWorkspace])
 
-  useEffect(() => {
-    if (!selectedId || !workspaceRoot || !contextRoot) return
-    window.api
-      .readBehaviourFile(selectedId, workspaceRoot, contextRoot)
-      .then(setContent)
-      .catch((reason) =>
-        setContent(`Erreur : ${reason instanceof Error ? reason.message : String(reason)}`)
-      )
-  }, [contextRoot, selectedId, workspaceRoot])
-
   const selectContext = async (nextContext: string): Promise<void> => {
     setLoading(true)
     setError('')
     try {
       const nextFiles = await window.api.behaviourFiles(workspaceRoot, nextContext)
+      const nextProofs = await window.api.behaviourProof(workspaceRoot, nextContext)
       setContextRoot(nextContext)
       setFiles(nextFiles)
-      setSelectedId(preferredBehaviourFileId(nextFiles))
+      setProofs(new Map(nextProofs.map((proof) => [proof.id, proof])))
+      setSelectedId(preferredBehaviourFileId(visibleBehaviourFiles(nextFiles)))
       setContent('')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -113,13 +112,39 @@ export function BehaviourView(): React.JSX.Element {
     if (next) await loadWorkspace(next)
   }
 
+  const applicableFiles = useMemo(() => applicableBehaviourFiles(files), [files])
+  const visibleFiles = useMemo(() => visibleBehaviourFiles(files), [files])
   const filtered = useMemo(
-    () => filterBehaviourFiles(files, query, engine, state),
-    [engine, files, query, state]
+    () => filterBehaviourFiles(visibleFiles, query, engine, 'all'),
+    [visibleFiles, engine, query]
   )
   const groups = useMemo(() => groupBehaviourFiles(filtered), [filtered])
-  const selected = files.find((file) => file.id === selectedId)
-  const activeCount = files.filter((file) => file.active).length
+  const selected = visibleBehaviourSelection(filtered, selectedId)
+  const selectedProof = selected ? proofs.get(selected.id) : undefined
+  const activeCount = applicableFiles.length
+
+  useEffect(() => {
+    const effectiveId = selected?.id
+    if (!effectiveId || !workspaceRoot || !contextRoot) {
+      setContent('')
+      return
+    }
+    let cancelled = false
+    setContent('')
+    window.api
+      .readBehaviourFile(effectiveId, workspaceRoot, contextRoot)
+      .then((nextContent) => {
+        if (!cancelled) setContent(nextContent)
+      })
+      .catch((reason) => {
+        if (!cancelled)
+          setContent(`Erreur : ${reason instanceof Error ? reason.message : String(reason)}`)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [contextRoot, selected?.id, workspaceRoot])
+
   const locationLabel = (file: BehaviourFileItem): string => {
     if (file.scope === 'global' || file.scope === 'skill') return SCOPE_LABEL[file.scope]
     const normalizedRoot = workspaceRoot.replaceAll('\\', '/').replace(/\/$/, '')
@@ -133,14 +158,9 @@ export function BehaviourView(): React.JSX.Element {
   return (
     <section className="behaviour-view">
       <header>
-        <div>
-          <span>Instructions effectives</span>
-          <h1>Behaviour Map</h1>
-          <p>La chaîne qui gouverne chaque moteur, du global au projet courant.</p>
-        </div>
         <div className="behaviour-count">
           <strong>{activeCount}</strong>
-          <span>applicables · {files.length} inventoriés</span>
+          <span>fichiers injectés ou actifs au contexte</span>
         </div>
       </header>
 
@@ -189,18 +209,6 @@ export function BehaviourView(): React.JSX.Element {
             {value === 'all' ? 'Tous' : ENGINE_LABEL[value]}
           </button>
         ))}
-        <select
-          aria-label="État d’activation"
-          value={state}
-          onChange={(event) => setState(event.target.value as 'all' | BehaviourState)}
-        >
-          <option value="all">Tous les états</option>
-          {Object.entries(STATE_LABEL).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
       </div>
 
       {error && <div className="behaviour-error">{error}</div>}
@@ -223,14 +231,14 @@ export function BehaviourView(): React.JSX.Element {
                     data-engine={file.engine}
                     data-state={file.state}
                     data-path={file.path}
-                    className={selectedId === file.id ? 'active' : ''}
+                    className={selected?.id === file.id ? 'active' : ''}
                     onClick={() => setSelectedId(file.id)}
                   >
-                    <i className={`is-${file.state}`} />
+                    <i className={`is-${proofs.get(file.id)?.verdict === 'injected' ? 'injected' : file.state}`} />
                     <span>
                       <strong>{file.label}</strong>
                       <small>
-                        {locationLabel(file)} · {STATE_LABEL[file.state]}
+                        {locationLabel(file)} · {proofs.get(file.id)?.verdict === 'injected' ? 'Injecté · preuve payload' : STATE_LABEL[file.state]}
                       </small>
                     </span>
                   </button>
@@ -239,7 +247,9 @@ export function BehaviourView(): React.JSX.Element {
             ) : null
           )}
           {!loading && filtered.length === 0 && (
-            <p className="behaviour-list-empty">Aucun fichier pour ce filtre.</p>
+            <p className="behaviour-list-empty">
+              Aucune source d’instruction visible pour ce contexte et ce filtre.
+            </p>
           )}
         </aside>
 
@@ -254,7 +264,7 @@ export function BehaviourView(): React.JSX.Element {
                   <h2>{selected.label}</h2>
                   <p title={selected.path}>{selected.path}</p>
                 </div>
-                <b className={`is-${selected.state}`}>{STATE_LABEL[selected.state]}</b>
+                <b className={`is-${selectedProof?.verdict === 'injected' ? 'injected' : selected.state}`}>{selectedProof?.verdict === 'injected' ? 'Injecté · preuve payload' : STATE_LABEL[selected.state]}</b>
               </header>
               <dl>
                 <div>
@@ -269,8 +279,12 @@ export function BehaviourView(): React.JSX.Element {
                   <dt>Où</dt>
                   <dd>{selected.injectedInto}</dd>
                 </div>
+                <div>
+                  <dt>Preuve Hermes</dt>
+                  <dd>{selectedProof?.reason ?? 'Non vérifié'}</dd>
+                </div>
               </dl>
-              <pre>{content}</pre>
+              <HumanJson value={content} />
             </>
           ) : (
             <p className="behaviour-empty">

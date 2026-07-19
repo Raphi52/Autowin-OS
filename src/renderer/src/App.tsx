@@ -1,50 +1,58 @@
 import { useEffect, useState } from 'react'
 import { ChatView } from './components/ChatView'
 import { GraphView } from './components/GraphView'
-import { HarnessView } from './components/HarnessView'
+import { ObservatoryView } from './components/ObservatoryView'
 import { RolesView } from './components/RolesView'
 import { HermesControlsView } from './components/HermesControlsView'
 import { BehaviourView } from './components/BehaviourView'
-import { LoopBuilderView } from './components/LoopBuilderView'
 import { ModelQuestionPopup } from './components/ModelQuestionPopup'
-import { PromptLoadView } from './components/PromptLoadView'
 import { normalizeTab, type Tab } from './tabs'
 import autowinLogo from './assets/autowin-logo.png'
 import './assets/app-shell.css'
 import './assets/cosmic-outline.css'
+import './assets/theme-modes.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
+import type { GraphVisualMode } from './components/graph-view-model'
 
 // Icônes : petits SVG path (stroke) — style linéaire, cohérent.
 const I: Record<Tab, string> = {
-  chat: 'M4 5h16v10H8l-4 4V5z',
-  memory: 'M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2c3 3 3 17 0 20M12 2c-3 3-3 17 0 20',
-  harness: 'M4 7h5l3-3 3 3h5v10h-5l-3 3-3-3H4V7zm5 0v10m6-10v10',
-  agents: 'M12 12a4 4 0 100-8 4 4 0 000 8zm-7 8a7 7 0 0114 0',
-  prompt: 'M5 4h14v4H5V4zm0 6h9v4H5v-4zm0 6h12v4H5v-4',
-  skills: 'M8 3h8v4h4v8h-4v4H8v-4H4V7h4V3z',
-  hooks: 'M8 5a4 4 0 118 0v8a6 6 0 11-12 0v-2',
-  tools: 'M14 6l4-4 4 4-4 4m-4-4L4 16l4 4L18 10',
-  behaviour: 'M6 3h9l3 3v15H6V3zm3 5h6M9 12h6M9 16h4',
-  loops: 'M8 7h8a5 5 0 010 10H7m1-3l-3 3 3 3M16 10l3-3-3-3'
+  chat: 'M5 5h14a3 3 0 013 3v6a3 3 0 01-3 3H11l-5 3v-3H5a3 3 0 01-3-3V8a3 3 0 013-3zm3 6h.01M12 11h.01M16 11h.01',
+  memory: 'M5 7l6 4m2 0l6-4M5 17l6-4m2 0l6 4M5 5a2 2 0 110 4 2 2 0 010-4zm7 5a2 2 0 110 4 2 2 0 010-4zm7-5a2 2 0 110 4 2 2 0 010-4zM5 15a2 2 0 110 4 2 2 0 010-4zm14 0a2 2 0 110 4 2 2 0 010-4z',
+  observatory: 'M7 7h9l-2 6h-5L7 7zm3 6l-5 7m8-7l5 7M4 21h16M5 4l2 3m10-3l-2 3',
+  agents: 'M7 8V6h10v2m-11 1h12a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6a2 2 0 012-2zm4 4h.01M14 13h.01M9 17c1.8 1 4.2 1 6 0',
+  capabilities: 'M5 10h14v10H5V10zm3 0V7h8v3m-8 4l2-2 2 2 2-2 2 2m-7 6l2-2m5 2l-2-2',
+  behaviour: 'M8 5a4 4 0 017 2 4 4 0 013 6 4 4 0 01-5 5 4 4 0 01-7-2 4 4 0 012-11zm2 7h.01M14 12h.01M10 15c1.2.8 2.8.8 4 0'
+}
+
+void I
+const TOY: Record<Tab, string> = {
+  chat: '💬', memory: '🕸️', observatory: '🔭', agents: '🤖', capabilities: '🧰', behaviour: '🧠'
+}
+
+function ThemeIcon({ kind }: { kind: 'moon' | 'aurora' }): React.JSX.Element {
+  return (
+    <svg className="theme-switch-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      {kind === 'moon' ? <path d="M20.3 14.2A8.7 8.7 0 019.8 3.7 8.7 8.7 0 1019.3 18a8.3 8.3 0 001-3.8z" /> : <path d="M12 2.8l1.8 5.4 5.4 1.8-5.4 1.8-1.8 5.4-1.8-5.4-5.4-1.8 5.4-1.8L12 2.8zm6.5 12.8.7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7.7-2.1z" />}
+    </svg>
+  )
 }
 
 const NAV: Array<{ id: Tab; label: string }> = [
   { id: 'chat', label: 'Chat' },
   { id: 'memory', label: 'Memory' },
-  { id: 'harness', label: 'Harnais' },
-  { id: 'agents', label: 'Agents' },
-  { id: 'prompt', label: 'Prompt Load' },
-  { id: 'skills', label: 'Skills' },
-  { id: 'hooks', label: 'Hooks' },
-  { id: 'tools', label: 'Tools' },
-  { id: 'behaviour', label: 'Behaviour' },
-  { id: 'loops', label: 'Loops' }
+  { id: 'observatory', label: 'Observatory' },
+  { id: 'agents', label: 'Models' },
+  { id: 'capabilities', label: 'Skills · Hooks · Tools' },
+  { id: 'behaviour', label: 'Behaviour' }
 ]
 
 function MainApp(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('chat')
   const [driven, setDriven] = useState(false) // un agent pilote → halo sur la vue
   const [railCollapsed, setRailCollapsed] = useState(false)
+  const [visualMode, setVisualMode] = useState<GraphVisualMode>(() =>
+    localStorage.getItem('autowin-os.visual-mode.v1') === 'galaxy' ? 'galaxy' : 'serious'
+  )
   const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set(['chat']))
 
   useEffect(() => {
@@ -66,6 +74,11 @@ function MainApp(): React.JSX.Element {
       }
     })()
   }, [])
+
+  useEffect(() => {
+    localStorage.setItem('autowin-os.visual-mode.v1', visualMode)
+    document.body.dataset.autowinTheme = visualMode
+  }, [visualMode])
 
   function navigate(nextTab: Tab): void {
     setVisitedTabs((visited) => {
@@ -99,7 +112,7 @@ function MainApp(): React.JSX.Element {
   }, [])
 
   return (
-    <div className="shell cosmic-outline">
+    <div className={`shell cosmic-outline theme-${visualMode}`}>
       <aside className={`rail${railCollapsed ? ' is-collapsed' : ''}`}>
         <div className="brand">
           <img className="brand-logo" src={autowinLogo} alt="" aria-hidden="true" />
@@ -137,23 +150,16 @@ function MainApp(): React.JSX.Element {
                 className={`nav-item${tab === it.id ? ' active' : ''}`}
                 onClick={() => navigate(it.id)}
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  width="16"
-                  height="16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d={I[it.id]} />
-                </svg>
+                <span className="space-toy-icon" aria-hidden="true">{TOY[it.id]}</span>
                 <span>{it.label}</span>
               </button>
             ))}
           </div>
         </nav>
+        <div className="app-theme-switch" aria-label="Thème de l’application">
+          <button className="theme-switch-option theme-switch-option--moon" type="button" aria-label="Mode dark" data-tooltip="Mode dark" aria-pressed={visualMode === 'serious'} onClick={() => setVisualMode('serious')}><ThemeIcon kind="moon" /></button>
+          <button className="theme-switch-option theme-switch-option--aurora" type="button" aria-label="Mode glass" data-tooltip="Mode glass" aria-pressed={visualMode === 'galaxy'} onClick={() => setVisualMode('galaxy')}><ThemeIcon kind="aurora" /></button>
+        </div>
         <div className="rail-foot c-faint">v0 · MVP</div>
       </aside>
       <main className={`main${driven ? ' driven' : ''}`} data-driven={driven}>
@@ -164,12 +170,12 @@ function MainApp(): React.JSX.Element {
         )}
         {visitedTabs.has('memory') && (
           <div className={`view-slot${tab === 'memory' ? ' is-active' : ''}`}>
-            <GraphView />
+            <GraphView visualMode={visualMode} />
           </div>
         )}
-        {visitedTabs.has('harness') && (
-          <div className={`view-slot${tab === 'harness' ? ' is-active' : ''}`}>
-            <HarnessView />
+        {visitedTabs.has('observatory') && (
+          <div className={`view-slot${tab === 'observatory' ? ' is-active' : ''}`}>
+            <ObservatoryView active={tab === 'observatory'} />
           </div>
         )}
         {visitedTabs.has('agents') && (
@@ -177,34 +183,16 @@ function MainApp(): React.JSX.Element {
             <RolesView />
           </div>
         )}
-        {visitedTabs.has('prompt') && (
-          <div className={`view-slot${tab === 'prompt' ? ' is-active' : ''}`}>
-            <PromptLoadView active={tab === 'prompt'} />
-          </div>
-        )}
-        {visitedTabs.has('skills') && (
-          <div className={`view-slot${tab === 'skills' ? ' is-active' : ''}`}>
-            <HermesControlsView active={tab === 'skills'} kind="skills" />
-          </div>
-        )}
-        {visitedTabs.has('hooks') && (
-          <div className={`view-slot${tab === 'hooks' ? ' is-active' : ''}`}>
-            <HermesControlsView active={tab === 'hooks'} kind="hooks" />
-          </div>
-        )}
-        {visitedTabs.has('tools') && (
-          <div className={`view-slot${tab === 'tools' ? ' is-active' : ''}`}>
-            <HermesControlsView active={tab === 'tools'} kind="tools" />
+        {visitedTabs.has('capabilities') && (
+          <div className={`view-slot${tab === 'capabilities' ? ' is-active' : ''}`}>
+            <section className="capabilities-view">
+              <HermesControlsView active={tab === 'capabilities'} />
+            </section>
           </div>
         )}
         {visitedTabs.has('behaviour') && (
           <div className={`view-slot${tab === 'behaviour' ? ' is-active' : ''}`}>
             <BehaviourView />
-          </div>
-        )}
-        {visitedTabs.has('loops') && (
-          <div className={`view-slot${tab === 'loops' ? ' is-active' : ''}`}>
-            <LoopBuilderView />
           </div>
         )}
       </main>

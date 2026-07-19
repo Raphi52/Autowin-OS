@@ -189,6 +189,10 @@
 }
 
 /* Transparence sobre : le fond galaxie reste l'unique ambiance lumineuse. */
+.cosmic-outline .chat-layout {
+  background: rgba(0, 0, 0, 0.58);
+}
+
 .cosmic-outline
   :where(
     .conv-pane,
@@ -301,4 +305,431 @@
 .cosmic-outline .model-question-popup {
   background: rgba(2, 3, 13, 0.62);
   box-shadow: none;
+}
+
+/* Conversation — noir fume transparent, sans halos decoratifs. */
+.cosmic-outline .chat-layout {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.42);
+  box-shadow: none;
+}
+
+.cosmic-outline .conv-pane,
+.cosmic-outline .runs-pane {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.38);
+  box-shadow: none;
+}
+
+.cosmic-outline .chat,
+.cosmic-outline .chat-scroll {
+  background: transparent;
+}
+
+.cosmic-outline .chat-head {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.28);
+  box-shadow: none;
+}
+
+.cosmic-outline .conv-search,
+.cosmic-outline .chat-head .btn,
+.cosmic-outline .chat-suggest .btn,
+.cosmic-outline .action-chip,
+.cosmic-outline .composer-field {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.38);
+  box-shadow: none;
+}
+
+.cosmic-outline .conv-search:focus-within,
+.cosmic-outline .composer-field:focus-within {
+  border-color: rgba(255, 212, 90, 0.72);
+  box-shadow: none;
+}
+
+.cosmic-outline .conv-item,
+.cosmic-outline .conv-item:hover {
+  background: rgba(0, 0, 0, 0.24);
+  box-shadow: none;
+}
+
+.cosmic-outline .conv-item:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.cosmic-outline .conv-item.active {
+  border-color: rgba(255, 212, 90, 0.76);
+  background: rgba(255, 60, 172, 0.12);
+  box-shadow: inset 3px 0 #ff3cac;
+}
+
+.cosmic-outline .conv-actions {
+  background: rgba(0, 0, 0, 0.5);
+  box-shadow: none;
+}
+
+.cosmic-outline .chat-head-signal {
+  border-color: rgba(255, 60, 172, 0.7);
+  background: linear-gradient(#ff3cac, #ffd45a);
+  box-shadow: none;
+}
+
+.cosmic-outline .msg-body,
+.cosmic-outline .msg.assistant .msg-body {
+  border-color: rgba(255, 255, 255, 0.2);
+  border-left-color: rgba(255, 212, 90, 0.78);
+  background: rgba(0, 0, 0, 0.46);
+  box-shadow: none;
+}
+
+.cosmic-outline .msg.assistant .msg-role {
+  color: #ffd45a;
+}
+
+.cosmic-outline .msg.user .msg-body {
+  border-color: rgba(255, 60, 172, 0.58);
+  background: rgba(89, 18, 57, 0.48);
+  box-shadow: none;
+}
+
+.cosmic-outline .chat-welcome {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.26);
+  box-shadow: none;
+}
+
+.cosmic-outline .composer {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.42);
+  box-shadow: none;
+}
+
+.cosmic-outline .composer > .btn {
+  border-color: rgba(255, 60, 172, 0.62);
+  background: rgba(126, 24, 80, 0.74);
+  box-shadow: none;
+}
+
+/* Chat Orbital : conversation d'abord, technique en divulgation progressive. */
+.cosmic-outline .chat-layout {
+  position: relative;
+  gap: 0;
+  border: 0;
+  border-radius: inherit;
+}
+
+.cosmic-outline .conv-pane {
+  gap: 16px;
+  padding: 22px 17px 18px;
+  border-right-color: rgba(255, 255, 255, 0.12);
+}
+
+.cosmic-outline .conv-pane-resizer,
+.cosmic-outline .runs-pane-resizer {
+  z-index: 4;
+  width: 9px;
+  margin: 0 -4px;
+}
+
+.cosmic-outline .conv-pane-resizer::after,
+.cosmic-outline .runs-pane-resizer::after {
+  inset: 0 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.cosmic-outline .conv-pane-resizer:hover::after,
+.cosmic-outline .runs-pane-resizer:hover::after {
+  background: #ffd45a;
+}
+
+.cosmic-outline .conv-list {
+  gap: 5px;
+}
+
+.cosmic-outline .conv-item {
+  min-height: 58px;
+  border-radius: 7px;
+}
+
+.cosmic-outline .conv-pick {
+  min-height: 58px;
+  padding: 9px 8px 9px 11px;
+}
+
+.cosmic-outline .conv-item:not(.active) {
+  border-color: transparent;
+  background: transparent;
+}
+
+.cosmic-outline .chat-head {
+  min-height: 82px;
+  padding: 14px 24px 13px;
+}
+
+.cosmic-outline .chat-head-signal {
+  width: 5px;
+  height: 38px;
+  border: 0;
+  background: linear-gradient(180deg, #ff4eae, #ffd45a 58%, #57d3f6);
+}
+
+.cosmic-outline .chat-runtime {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  color: #778696;
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cosmic-outline .chat-runtime > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cosmic-outline .chat-runtime > span + span::before {
+  margin-right: 6px;
+  color: rgba(255, 212, 90, 0.62);
+  content: '·';
+}
+
+.cosmic-outline .chat-runtime-provider {
+  color: #f1c966;
+  font-weight: 800;
+}
+
+.cosmic-outline .chat-runtime-state {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  color: #79d9b7;
+}
+
+.cosmic-outline .chat-runtime-state .status-dot {
+  background: #63d4ac;
+}
+
+.cosmic-outline .chat-runtime-state.is-busy {
+  color: #79cef0;
+}
+
+.cosmic-outline .chat-runtime-state.is-busy .status-dot {
+  background: #62cdf5;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.cosmic-outline .chat-scroll {
+  gap: 34px;
+  padding: 38px max(34px, calc((100% - 900px) / 2)) 34px;
+}
+
+.cosmic-outline .msg {
+  width: min(100%, 820px);
+  max-width: 820px;
+  gap: 9px;
+}
+
+.cosmic-outline .msg.user {
+  width: auto;
+  max-width: min(76%, 650px);
+}
+
+.cosmic-outline .msg-meta {
+  padding-inline: 2px;
+  color: #73808c;
+}
+
+.cosmic-outline .msg-turn {
+  gap: 10px;
+}
+
+.cosmic-outline .msg.assistant .msg-body {
+  padding: 1px 0 1px 17px;
+  border: 0;
+  border-left: 2px solid rgba(255, 212, 90, 0.74);
+  border-radius: 0;
+  background: transparent;
+  color: #e1e7ec;
+  font-size: 13px;
+  line-height: 1.72;
+}
+
+.cosmic-outline .msg.user .msg-body {
+  padding: 13px 16px;
+  border: 1px solid rgba(255, 78, 174, 0.45);
+  border-radius: 12px 12px 3px 12px;
+  background: rgba(84, 16, 54, 0.52);
+  color: #fff4fa;
+  font-size: 13px;
+  line-height: 1.62;
+}
+
+.cosmic-outline .action-event {
+  width: min(100%, 720px);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-left: 2px solid #5ecaf0;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #9caab5;
+}
+
+.cosmic-outline .action-event.failed {
+  border-left-color: #ff6d8f;
+}
+
+.cosmic-outline .action-event summary {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.cosmic-outline .action-event summary::-webkit-details-marker {
+  display: none;
+}
+
+.cosmic-outline .action-event summary::after {
+  margin-left: 2px;
+  color: #61707d;
+  content: '⌄';
+  font-size: 12px;
+}
+
+.cosmic-outline .action-event[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.cosmic-outline .action-event .action-name {
+  color: #dbe4ea;
+  font-size: 11px;
+}
+
+.cosmic-outline .action-event .action-args {
+  flex: 1;
+  max-width: none;
+  color: #657481;
+  font-size: 9px;
+}
+
+.cosmic-outline .action-status {
+  margin-left: auto;
+  color: #74828e;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cosmic-outline .action-detail {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px 12px 28px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.cosmic-outline .action-detail section {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.cosmic-outline .action-detail small {
+  color: #7e8d99;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cosmic-outline .chat-jump-latest {
+  position: absolute;
+  z-index: 8;
+  right: 50%;
+  bottom: 106px;
+  translate: 50% 0;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 212, 90, 0.5);
+  border-radius: 999px;
+  background: rgba(2, 3, 7, 0.9);
+  color: #f0d98c;
+  font: 700 9px/1 var(--font);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.cosmic-outline .chat-welcome {
+  padding: 36px;
+  border: 0;
+  background: transparent;
+}
+
+.cosmic-outline .composer {
+  padding: 13px max(26px, calc((100% - 900px) / 2)) 16px;
+}
+
+.cosmic-outline .composer-field {
+  gap: 7px;
+  padding: 11px 13px 8px;
+  border-color: rgba(255, 255, 255, 0.18);
+  border-radius: 11px;
+}
+
+.cosmic-outline .composer-input-row {
+  align-items: flex-end;
+}
+
+.cosmic-outline .composer-field textarea {
+  min-height: 26px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.cosmic-outline .composer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cosmic-outline .composer-runtime {
+  overflow: hidden;
+  color: #827c65;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cosmic-outline .runs-pane {
+  gap: 14px;
+  padding: 18px 15px;
+}
+
+@media (max-width: 1120px) {
+  .cosmic-outline .conv-pane {
+    max-width: 250px;
+  }
+
+  .cosmic-outline .runs-pane {
+    position: absolute;
+    z-index: 25;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    max-width: min(520px, calc(100% - 224px));
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .cosmic-outline .runs-pane-resizer {
+    display: none;
+  }
 }

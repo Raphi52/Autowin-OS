@@ -8,6 +8,7 @@ export interface LoopSkillItem {
   label: string
   description: string
   source: 'autowin' | 'global'
+  role: 'phase' | 'capability' | 'gate' | 'meta'
 }
 
 interface ResolvedLoopSkill extends LoopSkillItem {
@@ -35,7 +36,15 @@ function metadata(path: string, source: LoopSkillItem['source']): ResolvedLoopSk
   const label = /^name:\s*["']?([^\r\n"']+)/m.exec(header)?.[1].trim() || fallback
   const description =
     /^description:\s*["']?([^\r\n"']+)/m.exec(header)?.[1].trim() || 'Sans description'
-  return { id: `${source}:${label}`, label, description, source, path }
+  const declaredRole = /^loop-role:\s*(phase|capability|gate|meta)\s*$/mi.exec(header)?.[1]
+  const normalized = label.toLowerCase()
+  const role = (declaredRole ??
+    (['clean', 'judge'].includes(normalized) ? 'gate' :
+      normalized === 'kaizen' ? 'meta' :
+        source === 'global' || ['see', 'graphify', 'front-converge'].includes(normalized)
+          ? 'capability'
+          : 'phase')) as LoopSkillItem['role']
+  return { id: `${source}:${label}`, label, description, source, role, path }
 }
 
 async function manifest(): Promise<ResolvedLoopSkill[]> {
@@ -62,11 +71,12 @@ async function manifest(): Promise<ResolvedLoopSkill[]> {
 }
 
 export async function listLoopSkills(): Promise<LoopSkillItem[]> {
-  return (await manifest()).map(({ id, label, description, source }) => ({
+  return (await manifest()).map(({ id, label, description, source, role }) => ({
     id,
     label,
     description,
-    source
+    source,
+    role
   }))
 }
 

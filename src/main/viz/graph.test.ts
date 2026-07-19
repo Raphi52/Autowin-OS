@@ -24,6 +24,15 @@ describe('normalize', () => {
     expect(g.nodes[0]).toEqual({ id: 'a', label: 'Nœud A', group: 2, file: 'a.ts' })
   })
 
+  it('préserve le sens explicite d’une relation de source', () => {
+    const g = normalize({
+      nodes: [{ id: 'a' }, { id: 'b' }],
+      links: [{ source: 'a', target: 'b', relation: 'documents' }]
+    })
+
+    expect(g.links[0]).toMatchObject({ relation: 'documents' })
+  })
+
   it('ignore un lien orphelin (source ou target absent des nœuds)', () => {
     const raw: RawGraph = {
       nodes: [{ id: 'a' }, { id: 'b' }],

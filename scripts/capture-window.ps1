@@ -9,7 +9,11 @@ public class W{
  [StructLayout(LayoutKind.Sequential)] public struct RECT{public int Left,Top,Right,Bottom;}
 }
 "@
-$p = Get-Process | Where-Object { $_.MainWindowTitle -eq $TitleLike -and $_.ProcessName -eq 'electron' } | Select-Object -First 1
+$p = Get-Process | Where-Object {
+  $_.MainWindowHandle -ne 0 -and
+  $_.MainWindowTitle -like "*$TitleLike*" -and
+  $_.ProcessName -in @('electron', 'autowin-os')
+} | Select-Object -First 1
 if(-not $p){ Write-Host "fenetre introuvable"; exit 2 }
 [W]::ShowWindow($p.MainWindowHandle,9) | Out-Null
 [W]::SetForegroundWindow($p.MainWindowHandle) | Out-Null

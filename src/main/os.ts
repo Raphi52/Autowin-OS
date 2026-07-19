@@ -7,6 +7,7 @@
 import { ProviderRegistry } from './providers/registry'
 import { ClaudeCliAdapter } from './providers/claude'
 import { CodexAdapter } from './providers/codex'
+import { KimiCliAdapter } from './providers/kimi'
 import type { Message } from './providers/types'
 import { loadKitSoul } from './kit'
 import { RoleModelConfig, type Role, type RoleBinding } from './roles'
@@ -16,7 +17,14 @@ import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
 import { isBlocked } from './dashboards/runs'
 import { recurrentPatterns, parseJsonl } from './dashboards/kaizen'
-import { loadBrainGraph, scanBrainGraphs, readNodeFile, type BrainGraphRef } from './viz/fs-brains'
+import {
+  loadBrainGraph,
+  loadBrainNeighborhood,
+  scanBrainGraphs,
+  readNodeFile,
+  searchVaultBrainNotes,
+  type BrainGraphRef
+} from './viz/fs-brains'
 import { scanRuns, type RunEntry } from './dashboards/runs-scan'
 import { ConversationStore } from './store/conversations'
 import { TrustLedger } from './trust/ledger'
@@ -53,6 +61,7 @@ function safeSync<T>(read: () => T, fallback: T): T {
 
 /** Noyau applicatif : une instance partagée, injectée dans les handlers IPC. */
 export class AutowinOS {
+  private readonly brainGraphCache = new Map<string, ReturnType<typeof loadBrainGraph>>()
   readonly registry: ProviderRegistry
   readonly roles = new RoleModelConfig(loadRoleBindings()) // restaure la config persistée
   readonly authority = new AuthoritySas()
@@ -65,6 +74,7 @@ export class AutowinOS {
     this.registry = new ProviderRegistry(loadKitSoul())
       .register(new ClaudeCliAdapter())
       .register(new CodexAdapter())
+      .register(new KimiCliAdapter())
     this.orchestrator = new Orchestrator({
       registry: this.registry,
       roles: this.roles,
@@ -97,6 +107,12 @@ export class AutowinOS {
       })
     }
     return { text: r.text, provider: r.provider, systemInjected: r.systemInjected }
+  }
+
+  startKimiLogin(): void {
+    const kimi = this.registry.get('kimi')
+    if (!(kimi instanceof KimiCliAdapter)) throw new Error('Pont Kimi Code indisponible.')
+    kimi.startLogin()
   }
 
   /** Change le binding d'un rôle ET persiste sur disque. */
@@ -138,10 +154,26 @@ export class AutowinOS {
     lod?: number,
     community?: number
   ): ReturnType<typeof loadBrainGraph> {
-    return loadBrainGraph(path, lod, community)
+    const key = `${path}\u0000${lod ?? 300}\u0000${community ?? ''}`
+    const cached = this.brainGraphCache.get(key)
+    if (cached) return cached
+    const graph = loadBrainGraph(path, lod, community)
+    this.brainGraphCache.set(key, graph)
+    return graph
+  }
+  loadBrainNeighborhood(path: string, nodeId: string): ReturnType<typeof loadBrainNeighborhood> {
+    const key = `${path}\u0000neighbourhood\u0000${nodeId}`
+    const cached = this.brainGraphCache.get(key)
+    if (cached) return cached
+    const graph = loadBrainNeighborhood(path, nodeId)
+    this.brainGraphCache.set(key, graph)
+    return graph
   }
   readNodeFile(path: string): ReturnType<typeof readNodeFile> {
     return readNodeFile(path)
+  }
+  searchBrain(path: string, query: string): ReturnType<typeof searchVaultBrainNotes> {
+    return searchVaultBrainNotes(path, query)
   }
   listRuns(): RunEntry[] {
     return scanRuns()

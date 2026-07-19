@@ -1,6 +1,8 @@
 import type { ProviderRegistry } from './providers/registry'
 import type { RoleModelConfig } from './roles'
 import type { AppCommandBus } from './commands'
+import { capabilityInstruction } from './capability-profiles'
+import type { Message, PromptEnvelope, SendOptions, Usage } from './providers/types'
 import {
   MODEL_QUESTION_INSTRUCTION,
   parseModelQuestion,
@@ -15,12 +17,21 @@ import {
  * jusqu'à écrire DONE (ou cap d'itérations). C'est « l'agent voit ce qu'il update ».
  */
 export interface PilotEvent {
-  kind: 'think' | 'command' | 'result' | 'done' | 'error'
+  conversationId?: string
+  kind: 'think' | 'command' | 'result' | 'done' | 'error' | 'retry' | 'cancellation' | 'prompt-call'
   text?: string
   name?: string
   args?: unknown
   ok?: boolean
   data?: unknown
+  iteration?: number
+  prompt?: PromptEnvelope
+  response?: string
+  status?: 'completed' | 'failed'
+  error?: string
+  callUsage?: Usage
+  callDurationMs?: number
+  sessionId?: string
   /** Coût cumulé du tour (surfacé sur l'event 'done') → journal d'activité par conversation. */
   usage?: { inputTokens: number; outputTokens: number; costUsd?: number }
 }
@@ -47,7 +58,8 @@ export class AgentPilot {
         .map((c) => `- ${c.name}(${Object.keys(c.args).join(', ')}) : ${c.description}`)
         .join('\n') +
       `\nRègles : agis par petits pas, une ou deux commandes par tour. Après exécution tu recevras le résultat + l'état. ` +
-      `Quand l'objectif est atteint, réponds UNIQUEMENT "DONE: <résumé>" sans commande.`
+      `Quand l'objectif est atteint, réponds UNIQUEMENT "DONE: <résumé>" sans commande.` +
+      capabilityInstruction(this.roles.getBinding('orchestrator').capabilityProfileId)
 
     const convo: string[] = [`ÉTAT INITIAL:\n${JSON.stringify(snapshot)}`]
 
@@ -103,10 +115,12 @@ export class AgentPilot {
    * itérations (agir → constater → répondre) jusqu'à ce qu'il ne reste plus de commande.
    */
   async chat(
-    history: Array<{ role: 'user' | 'assistant'; content: string }>,
+    history: Message[],
     onEvent: (e: PilotEvent) => void,
     ask?: (question: ModelQuestion) => Promise<string>,
-    maxIter = 6
+    maxIter = 6,
+    conversationId?: string,
+    signal?: AbortSignal
   ): Promise<void> {
     const provider = this.roles.getBinding('orchestrator').provider
     const catalog = this.bus.catalog()
@@ -125,23 +139,69 @@ export class AgentPilot {
       `\nRègles : réponds normalement quand c'est une simple question ; n'utilise des commandes ` +
       `QUE si l'objectif demande d'agir sur l'app. Après une commande tu reçois le résultat + le ` +
       `nouvel état et tu peux continuer. Quand tu as fini d'agir, termine par ta réponse en clair ` +
-      `SANS commande.\n${MODEL_QUESTION_INSTRUCTION}`
+      `SANS commande.\n${MODEL_QUESTION_INSTRUCTION}` +
+      capabilityInstruction(this.roles.getBinding('orchestrator').capabilityProfileId)
 
     // Reconstruit le fil : historique de la conversation + état courant de l'app.
     const convo: string[] = [
       `ÉTAT DE L'APP:\n${JSON.stringify(snapshot)}`,
       ...history.map((m) => `${m.role === 'user' ? 'UTILISATEUR' : 'TOI'}: ${m.content}`)
     ]
+    const currentAttachments = history.at(-1)?.attachments
 
     // Coût cumulé du tour (toutes les itérations LLM du même message utilisateur).
     const usage = { inputTokens: 0, outputTokens: 0, costUsd: 0 }
 
     for (let i = 0; i < maxIter; i++) {
-      const res = await this.registry.send(
-        provider,
-        [{ role: 'user', content: `${convo.join('\n\n')}\n\n(Réponds à l'utilisateur / agis.)` }],
-        { system }
-      )
+      const binding = this.roles.getBinding('orchestrator')
+      const messages: Message[] = [
+        {
+          role: 'user',
+          content: `${convo.join('\n\n')}\n\n(Réponds à l'utilisateur / agis.)`,
+          ...(i === 0 && currentAttachments?.length ? { attachments: currentAttachments } : {})
+        }
+      ]
+      let prompt = this.registry.describePrompt(provider, messages, {
+        system,
+        model: binding.model,
+        reasoningEffort: binding.reasoningEffort
+      }, binding.model)
+      const options: SendOptions = {
+        system,
+        model: binding.model,
+        reasoningEffort: binding.reasoningEffort,
+        observePrompt: (observed) => { prompt = observed },
+        signal
+      }
+      let res
+      let attempt = 0
+      let callStartedAt = performance.now()
+      while (!res) {
+        try {
+          callStartedAt = performance.now()
+          res = await this.registry.send(provider, messages, options)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          if (signal?.aborted) {
+            onEvent({ kind: 'cancellation', iteration: i, name: provider, text: 'Annulation demandée par utilisateur', data: { reason: signal.reason ?? 'user' } })
+            throw error
+          }
+          onEvent({ kind: 'prompt-call', iteration: i, prompt, response: '', status: 'failed', error: message, callDurationMs: performance.now() - callStartedAt })
+          if (attempt >= 1) throw error
+          attempt += 1
+          onEvent({ kind: 'retry', iteration: i, name: provider, text: message, data: { attempt, maxAttempts: 2 } })
+        }
+      }
+      onEvent({
+        kind: 'prompt-call',
+        iteration: i,
+        prompt,
+        response: res.text,
+        status: 'completed',
+        callUsage: res.usage,
+        callDurationMs: performance.now() - callStartedAt,
+        sessionId: res.sessionId
+      })
       if (res.usage) {
         usage.inputTokens += res.usage.inputTokens
         usage.outputTokens += res.usage.outputTokens
@@ -179,7 +239,7 @@ export class AgentPilot {
       const results: string[] = []
       for (const c of cmds) {
         onEvent({ kind: 'command', name: c.name, args: c.args })
-        const r = await this.bus.exec(c.name, c.args)
+        const r = await this.bus.exec(c.name, c.args, conversationId)
         onEvent({ kind: 'result', name: c.name, ok: r.ok, data: r.ok ? r.data : r.error })
         results.push(`${c.name} → ${r.ok ? JSON.stringify(r.data) : 'ERREUR ' + r.error}`)
       }

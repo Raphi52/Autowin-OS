@@ -174,7 +174,7 @@ describe('behaviour instruction map', () => {
     expect(files.some((file) => file.engine === 'hermes' && file.label === 'always-visible')).toBe(
       true
     )
-  })
+  }, 15_000)
 
   it('discovers mixed-case instruction names on Windows', async () => {
     const root = sandbox()

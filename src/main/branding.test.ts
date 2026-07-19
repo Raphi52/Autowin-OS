@@ -86,5 +86,9 @@ describe('identite Autowin OS', () => {
     expect(theme).toContain("url('./autowin-galaxy-bg.png')")
     expect(main).not.toContain("process.platform === 'linux' ? { icon } : {}")
     expect(main).toMatch(/new BrowserWindow\(\{[\s\S]*?\n\s+icon,\n/)
+    expect(main).toMatch(/titleBarOverlay:\s*\{[\s\S]*?color:\s*'#00000000'/)
+    expect(readFileSync(join(ROOT, 'src/renderer/src/assets/cosmic-outline.css'), 'utf8')).toMatch(
+      /\.cosmic-outline \.chat-layout\s*\{\s*background:\s*rgba\(0, 0, 0, 0\.58\)/
+    )
   })
 })

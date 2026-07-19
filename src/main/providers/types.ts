@@ -11,9 +11,19 @@
 /** Rôle d'un message dans une conversation. `system` = injection kit (SOUL). */
 export type Role = 'system' | 'user' | 'assistant'
 
+export interface Attachment {
+  name: string
+  mimeType: string
+  size: number
+  kind: 'text' | 'image' | 'file'
+  /** UTF-8 pour `text`, base64 sans préfixe data URL pour `image` et `file`. */
+  content: string
+}
+
 export interface Message {
   role: Role
   content: string
+  attachments?: Attachment[]
 }
 
 /** Options d'un tour d'envoi. */
@@ -33,6 +43,8 @@ export interface SendOptions {
   resumeSessionId?: string
   /** Signal d'annulation coopératif. */
   signal?: AbortSignal
+  /** Observation du payload final, juste avant spawn/fetch. Jamais transmis au provider. */
+  observePrompt?: (prompt: PromptEnvelope) => void
 }
 
 /** Enveloppe observable réellement remise à l'adaptateur, avant transport provider. */
@@ -42,7 +54,7 @@ export interface PromptEnvelope {
   transport: string
   system?: string
   messages: Message[]
-  options: Record<string, string | boolean | undefined>
+  options: Record<string, unknown>
   limitation: string
 }
 

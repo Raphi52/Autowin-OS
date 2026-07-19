@@ -18,11 +18,9 @@
 }
 
 .graph-observatory.is-detail-open {
-  grid-template-columns: minmax(240px, 1fr) minmax(240px, var(--detail-column-width));
-}
-
-.graph-observatory.is-detail-open .theme-sidebar {
-  display: none;
+  grid-template-columns:
+    var(--theme-column-width) minmax(96px, 1fr)
+    minmax(240px, var(--detail-column-width));
 }
 
 .graph-observatory.is-column-resizing {
@@ -68,6 +66,19 @@
   min-width: 250px;
   padding: 8px 10px;
 }
+
+.graph-refresh {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #293543;
+  border-radius: 7px;
+  background: #101722;
+  color: #dce7f3;
+  cursor: pointer;
+  font-size: 19px;
+  line-height: 1;
+}
+.graph-refresh:disabled { cursor: wait; opacity: .55; }
 
 .view-mode-switch {
   display: inline-flex;
@@ -292,6 +303,15 @@
 .theme-sidebar__note strong {
   display: block;
   color: #91a1b4;
+}
+
+.theme-sidebar__mode {
+  width: 100%;
+  margin-top: auto;
+}
+
+.theme-sidebar__mode button {
+  flex: 1;
 }
 
 .graph-stage {
@@ -555,11 +575,11 @@
 }
 
 .graph-observatory.is-detail-open .graph-stage {
-  grid-column: 1;
+  grid-column: 2;
 }
 
 .graph-observatory.is-detail-open .visibility-sidebar {
-  grid-column: 2;
+  grid-column: 3;
 }
 
 .column-resizer {
@@ -608,12 +628,8 @@
   transform: translateX(-50%);
 }
 
-.graph-observatory.is-detail-open .column-resizer--theme {
-  display: none;
-}
-
 .graph-observatory.is-detail-open .column-resizer--detail {
-  grid-column: 2;
+  grid-column: 3;
 }
 
 .visibility-sidebar.is-detail-open {
@@ -624,6 +640,9 @@
 
 .visibility-sidebar.is-detail-open .node-panel {
   grid-template-columns: 220px minmax(0, 1fr);
+  gap: 10px;
+  box-sizing: border-box;
+  padding: 18px 20px 20px;
 }
 
 .panel-tabs {
@@ -1076,17 +1095,24 @@
   }
 
   .graph-observatory.is-detail-open {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 132px minmax(0, 1fr);
     grid-template-rows: 64px minmax(180px, 1fr) 230px;
   }
 
   .graph-observatory.is-detail-open .theme-sidebar {
-    display: none;
+    display: flex;
+    grid-column: 1;
+    grid-row: 2 / 4;
   }
 
-  .graph-observatory.is-detail-open .graph-stage,
+  .graph-observatory.is-detail-open .graph-stage {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
   .graph-observatory.is-detail-open .visibility-sidebar {
-    grid-column: 1;
+    grid-column: 2;
+    grid-row: 3;
   }
 
   .graph-observatory--galaxy .visibility-sidebar {

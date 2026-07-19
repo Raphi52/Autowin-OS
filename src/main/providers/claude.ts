@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type {
+  Attachment,
   Message,
   PromptEnvelope,
   ProviderAdapter,
@@ -10,6 +11,35 @@ import type {
   SendResult,
   StreamChunk
 } from './types'
+
+export interface MaterializedAttachments {
+  dir: string
+  paths: string[]
+  promptSuffix: string
+  cleanup: () => void
+}
+
+export function materializeClaudeAttachments(attachments: Attachment[]): MaterializedAttachments {
+  const dir = mkdtempSync(join(tmpdir(), 'autowin-os-attachments-'))
+  const paths = attachments.map((attachment, index) => {
+    const safeName =
+      attachment.name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/^\.+/, '') || 'fichier'
+    const path = join(dir, `${index + 1}-${safeName}`)
+    const data =
+      attachment.kind === 'text' ? attachment.content : Buffer.from(attachment.content, 'base64')
+    writeFileSync(path, data)
+    return path
+  })
+  return {
+    dir,
+    paths,
+    promptSuffix:
+      '\n\nPIÈCES JOINTES EXPLICITEMENT FOURNIES PAR L’UTILISATEUR :\n' +
+      paths.map((path) => `- ${path}`).join('\n') +
+      '\nUtilise Read uniquement pour consulter ces fichiers si nécessaire.',
+    cleanup: () => rmSync(dir, { recursive: true, force: true })
+  }
+}
 
 /**
  * Résout le binaire natif `claude.exe` (ou `claude`) SANS passer par le shim
@@ -63,6 +93,28 @@ export function appendClaudeSelectionArgs(args: string[], opts: SendOptions): vo
   }
 }
 
+export function claudeTransportEnvelope(
+  messages: Message[],
+  opts: SendOptions,
+  materialized: MaterializedAttachments | undefined,
+  args: string[]
+): PromptEnvelope {
+  const lastUserMessage = [...messages].reverse().find((message) => message.role === 'user')
+  return {
+    provider: 'claude',
+    model: opts.model,
+    transport: 'claude CLI spawn argv',
+    system: opts.system,
+    messages: [{
+      role: 'user',
+      content: `${lastUserMessage?.content ?? ''}${materialized?.promptSuffix ?? ''}`,
+      attachments: lastUserMessage?.attachments
+    }],
+    options: { argv: [...args] },
+    limitation: 'Arguments exacts remis au CLI Claude. Les ajouts internes du CLI et la requete Anthropic finale ne sont pas exposes.'
+  }
+}
+
 export class ClaudeCliAdapter implements ProviderAdapter {
   readonly id = 'claude'
   private readonly bin: string
@@ -105,7 +157,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     messages: Message[],
     opts: SendOptions = {}
   ): AsyncGenerator<StreamChunk, SendResult, void> {
-    const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
+    const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')
+    const materialized = lastUserMessage?.attachments?.length
+      ? materializeClaudeAttachments(lastUserMessage.attachments)
+      : undefined
+    const lastUser = `${lastUserMessage?.content ?? ''}${materialized?.promptSuffix ?? ''}`
     const system = opts.system
     const systemInjected = typeof system === 'string' && system.length > 0
 
@@ -115,9 +171,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       '--output-format',
       'stream-json',
       '--verbose',
-      '--disallowedTools',
-      '*',
-      '--strict-mcp-config'
+      '--strict-mcp-config',
+      ...(materialized ? ['--tools', 'Read', '--allowedTools', 'Read'] : ['--disallowedTools', '*'])
     ]
     let systemPromptDir: string | undefined
     if (systemInjected && system!.length > 4_000) {
@@ -130,6 +185,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     }
     if (opts.resumeSessionId) args.push('--resume', opts.resumeSessionId)
     appendClaudeSelectionArgs(args, opts)
+
+    opts.observePrompt?.(claudeTransportEnvelope(messages, opts, materialized, args))
 
     const child = spawn(this.bin, args, { shell: false })
     opts.signal?.addEventListener('abort', () => child.kill())
@@ -203,6 +260,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     child.on('close', (code) => {
       clearTimeout(timer)
       if (systemPromptDir) rmSync(systemPromptDir, { recursive: true, force: true })
+      materialized?.cleanup()
       // Flush du reliquat : un dernier event JSON sans '\n' terminal ne serait
       // jamais parsé (result/session_id perdus silencieusement) — on le traite ici.
       const rest = buffer.trim()
