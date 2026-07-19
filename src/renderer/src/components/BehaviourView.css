@@ -1,0 +1,301 @@
+.behaviour-view {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  color: var(--text);
+}
+.behaviour-view > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 4px 4px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.behaviour-view > header span,
+.behaviour-reader header span {
+  color: var(--text-faint);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.behaviour-view h1 {
+  margin: 4px 0;
+  font-size: 24px;
+}
+.behaviour-view > header p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.behaviour-count {
+  display: grid;
+  text-align: right;
+}
+.behaviour-count strong {
+  color: #ca82eb;
+  font-size: 24px;
+}
+.behaviour-count span {
+  color: var(--text-faint);
+  font-size: 9px;
+}
+.behaviour-context-bar {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto minmax(220px, 0.8fr) auto;
+  gap: 9px;
+  align-items: end;
+  padding: 11px 4px 0;
+}
+.behaviour-context-bar > div,
+.behaviour-context-bar label {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.behaviour-context-bar span {
+  color: var(--text-faint);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.behaviour-context-bar strong {
+  overflow: hidden;
+  color: #cbd2db;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.behaviour-context-bar button,
+.behaviour-context-bar select,
+.behaviour-toolbar select {
+  min-height: 29px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-1);
+  color: var(--text-dim);
+  font-size: 9px;
+}
+.behaviour-context-bar button {
+  padding: 0 11px;
+}
+.behaviour-context-bar select,
+.behaviour-toolbar select {
+  padding: 0 8px;
+}
+.behaviour-context-bar .behaviour-readonly {
+  align-self: center;
+  color: #69cba4;
+  text-transform: none;
+}
+.behaviour-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 12px 4px;
+}
+.behaviour-toolbar input {
+  width: 310px;
+  margin-right: 6px;
+}
+.behaviour-toolbar button {
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-1);
+  color: var(--text-dim);
+  font-size: 9px;
+}
+.behaviour-toolbar button.active {
+  border-color: #79508d;
+  color: #e2a5ff;
+  background: #24172c;
+}
+.behaviour-error {
+  margin: 0 4px 10px;
+  color: #ff8998;
+}
+.behaviour-workspace {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 10px;
+}
+.behaviour-files {
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg-1);
+}
+.behaviour-engine-group > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: #12171e;
+}
+.behaviour-engine-group > header strong {
+  color: #9eabb8;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.behaviour-engine-group > header small {
+  color: var(--text-faint);
+  font-size: 8px;
+}
+.behaviour-engine-group--codex > header strong {
+  color: #70b7ff;
+}
+.behaviour-engine-group--claude > header strong {
+  color: #e8a16f;
+}
+.behaviour-engine-group--hermes > header strong {
+  color: #c98cf0;
+}
+.behaviour-engine-group > button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.behaviour-engine-group > button:hover,
+.behaviour-engine-group > button.active {
+  background: #1d1724;
+}
+.behaviour-engine-group > button.active {
+  box-shadow: inset 2px 0 #c879ee;
+}
+.behaviour-engine-group > button i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #58616b;
+}
+.behaviour-engine-group > button i.is-active,
+.behaviour-engine-group > button i.is-injected {
+  background: #67d9a9;
+  box-shadow: 0 0 7px #67d9a9;
+}
+.behaviour-engine-group > button i.is-conditional {
+  background: #67b9e8;
+}
+.behaviour-engine-group > button i.is-declared {
+  background: #efb85f;
+}
+.behaviour-engine-group > button i.is-shadowed {
+  background: #5d6269;
+}
+.behaviour-engine-group > button span {
+  display: grid;
+  min-width: 0;
+}
+.behaviour-engine-group > button strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10px;
+}
+.behaviour-engine-group > button small {
+  color: var(--text-faint);
+  font-size: 8px;
+}
+.behaviour-reader {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg-1);
+  overflow: hidden;
+}
+.behaviour-reader > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 17px;
+  border-bottom: 1px solid var(--line);
+}
+.behaviour-reader h2 {
+  margin: 3px 0;
+  font-size: 16px;
+}
+.behaviour-reader header p {
+  max-width: 700px;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.behaviour-reader header b {
+  align-self: center;
+  color: #8f99a5;
+  font-size: 9px;
+}
+.behaviour-reader header b.is-active {
+  color: #67d9a9;
+}
+.behaviour-reader header b.is-injected {
+  color: #67d9a9;
+}
+.behaviour-reader header b.is-conditional {
+  color: #67b9e8;
+}
+.behaviour-reader header b.is-declared {
+  color: #efb85f;
+}
+.behaviour-reader dl {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: 14px;
+  margin: 0;
+  padding: 10px 17px;
+  border-bottom: 1px solid var(--line);
+}
+.behaviour-reader dl div {
+  display: grid;
+  gap: 3px;
+}
+.behaviour-reader dt {
+  color: #c879ee;
+  font-size: 9px;
+}
+.behaviour-reader dd {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 9px;
+}
+.behaviour-reader pre {
+  min-height: 0;
+  margin: 0;
+  padding: 18px;
+  overflow: auto;
+  color: #cbd2db;
+  font:
+    10px/1.65 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+  white-space: pre-wrap;
+}
+.behaviour-empty {
+  padding: 30px;
+  color: var(--text-faint);
+}
+.behaviour-list-empty {
+  padding: 20px 12px;
+  color: var(--text-faint);
+  font-size: 9px;
+}

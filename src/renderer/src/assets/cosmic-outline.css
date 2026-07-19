@@ -1,0 +1,304 @@
+/* Reference: sketches/autowin-galaxy-combo/05-black-cosmic-outline.png */
+
+.cosmic-outline
+  :where(
+    .conv-pane,
+    .chat-thread,
+    .runs-pane,
+    .loop-library,
+    .loop-composer,
+    .loop-output,
+    .control-row,
+    .behaviour-sidebar,
+    .behaviour-reader
+  ) {
+  background: rgba(0, 0, 7, 0.88);
+  border-color: var(--line-strong);
+  box-shadow: none;
+}
+
+.cosmic-outline :where(.input, .select, textarea.input) {
+  background-color: #010102;
+  border-color: var(--line);
+}
+
+.cosmic-outline :where(.input, .select, textarea.input):focus {
+  border-color: rgba(255, 255, 255, 0.65);
+  box-shadow: 0 0 0 1px rgba(73, 207, 255, 0.26);
+}
+
+.cosmic-outline .btn-accent {
+  background: var(--rose-bright);
+  border-color: #ff9bcb;
+  color: #fff;
+  box-shadow: 0 0 18px rgba(239, 63, 145, 0.24);
+}
+
+/* Memory */
+.graph-observatory,
+.graph-toolbar,
+.theme-sidebar,
+.visibility-sidebar,
+.graph-stage {
+  background-color: rgba(0, 0, 0, 0.96);
+  border-color: var(--line-strong);
+}
+
+.graph-observatory--galaxy .theme-sidebar,
+.graph-observatory--galaxy .visibility-sidebar,
+.graph-observatory--galaxy .graph-stage {
+  border-color: var(--line-strong);
+}
+
+.graph-observatory--galaxy {
+  border-color: #000;
+  background: #000;
+}
+
+.graph-observatory--galaxy .graph-toolbar,
+.graph-observatory--galaxy .theme-sidebar,
+.graph-observatory--galaxy .visibility-sidebar {
+  background: #000;
+}
+
+.graph-observatory--galaxy .graph-toolbar {
+  border-bottom-color: #000;
+}
+
+.graph-observatory--galaxy .theme-sidebar {
+  border-right-color: #000;
+}
+
+.graph-observatory--galaxy .visibility-sidebar {
+  border-left-color: #000;
+}
+
+.theme-filter,
+.node-search-result,
+.panel-tabs,
+.settings-section,
+.node-links button {
+  background: #020204;
+  border-color: var(--line);
+}
+
+.theme-filter.is-active,
+.node-search-result:hover {
+  border-color: var(--gold);
+  background: rgba(233, 189, 78, 0.07);
+}
+
+.graph-canvas {
+  background: radial-gradient(circle at 50% 48%, rgba(32, 75, 165, 0.3), transparent 42%), #000;
+}
+
+/* Agent Studio */
+.agent-studio,
+.studio-library,
+.studio-canvas,
+.studio-inspector,
+.studio-frame,
+.studio-resource,
+.studio-assignment,
+.studio-persona-cell,
+.studio-matrix-cell {
+  background-color: rgba(0, 0, 0, 0.95);
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+.studio-library,
+.studio-inspector {
+  border-color: var(--line-strong);
+}
+
+.studio-frames {
+  grid-template-columns: repeat(5, minmax(155px, 1fr));
+}
+
+.studio-frame {
+  min-width: 0;
+}
+
+.studio-frame-slot {
+  border-color: rgba(73, 207, 255, 0.64);
+  background: rgba(73, 207, 255, 0.035);
+}
+
+.studio-resource:hover,
+.studio-assignment:hover {
+  border-color: var(--cyan);
+}
+
+/* Chat, Loops, Controls, Behaviour */
+.chat-layout,
+.loop-builder,
+.hermes-controls,
+.behaviour-view {
+  background: transparent;
+}
+
+.conv-pane,
+.runs-pane,
+.loop-library,
+.loop-composer,
+.loop-output,
+.control-list,
+.behaviour-sidebar,
+.behaviour-reader {
+  border-color: var(--line-strong);
+}
+
+.conv-item,
+.run-row,
+.loop-skill-list article,
+.loop-step,
+.control-row,
+.behaviour-engine-group > button {
+  background: #020203;
+  border-color: var(--line);
+}
+
+.conv-item.active,
+.run-row.active,
+.loop-step.is-active,
+.behaviour-engine-group > button.active {
+  background: rgba(239, 63, 145, 0.09);
+  border-color: var(--rose-bright);
+}
+
+/* Fenêtre question séparée */
+.model-question-layer {
+  background: radial-gradient(circle at 84% 8%, rgba(239, 63, 145, 0.12), transparent 28%), #000;
+}
+
+.model-question-popup {
+  border: 1px solid var(--line-strong);
+  background: #010102;
+  box-shadow: 0 22px 70px #000;
+}
+
+.model-question-options button {
+  background: #020203;
+  border-color: var(--line);
+}
+
+.model-question-options button:hover {
+  border-color: var(--rose-bright);
+  background: rgba(239, 63, 145, 0.09);
+}
+
+/* Transparence sobre : le fond galaxie reste l'unique ambiance lumineuse. */
+.cosmic-outline
+  :where(
+    .conv-pane,
+    .chat-thread,
+    .runs-pane,
+    .loop-library,
+    .loop-composer,
+    .loop-output,
+    .control-list,
+    .control-row,
+    .behaviour-sidebar,
+    .behaviour-reader,
+    .agent-studio,
+    .studio-library,
+    .studio-canvas,
+    .studio-inspector,
+    .studio-frame,
+    .studio-resource,
+    .studio-assignment,
+    .studio-persona-cell,
+    .studio-matrix-cell
+  ) {
+  background: rgba(1, 2, 10, 0.46);
+  box-shadow: none;
+}
+
+.cosmic-outline
+  :where(
+    .conv-item,
+    .run-row,
+    .loop-skill-list article,
+    .loop-step,
+    .theme-filter,
+    .node-search-result,
+    .panel-tabs,
+    .settings-section,
+    .node-links button,
+    .behaviour-engine-group > button,
+    .model-question-options button
+  ) {
+  background: rgba(3, 4, 14, 0.42);
+  box-shadow: none;
+  text-shadow: none;
+}
+
+.cosmic-outline :where(.input, .select, textarea.input) {
+  background: rgba(0, 0, 7, 0.54);
+  box-shadow: none;
+}
+
+.cosmic-outline :where(.btn, .card, .selected-node, .float-tooltip-kap) {
+  box-shadow: none;
+  text-shadow: none;
+}
+
+.cosmic-outline :where(.panel, .card) {
+  background: rgba(2, 3, 12, 0.46);
+}
+
+.cosmic-outline .graph-observatory,
+.cosmic-outline .graph-observatory--galaxy,
+.cosmic-outline .graph-observatory--galaxy .graph-stage,
+.cosmic-outline .graph-observatory--galaxy .graph-canvas {
+  background: transparent;
+  box-shadow: none;
+}
+
+.cosmic-outline .graph-observatory--galaxy .graph-toolbar,
+.cosmic-outline .graph-observatory--galaxy .theme-sidebar,
+.cosmic-outline .graph-observatory--galaxy .visibility-sidebar {
+  background: rgba(1, 2, 10, 0.48);
+  backdrop-filter: blur(10px);
+  box-shadow: none;
+}
+
+.cosmic-outline .graph-observatory--galaxy .graph-settings-popover,
+.cosmic-outline .graph-observatory--galaxy .graph-settings-popover__heading {
+  background: rgba(1, 2, 10, 0.58);
+  box-shadow: none;
+}
+
+.cosmic-outline .graph-observatory--galaxy .graph-canvas::after {
+  display: none;
+}
+
+.cosmic-outline .graph-observatory--galaxy .graph-canvas canvas {
+  filter: saturate(1.12) contrast(1.04);
+}
+
+.cosmic-outline .graph-observatory--galaxy .panel-tabs button.is-active,
+.cosmic-outline .graph-observatory--galaxy .toggle-row input:checked + i::after,
+.cosmic-outline .graph-observatory--galaxy .theme-filter.is-active,
+.cosmic-outline .graph-observatory--galaxy .theme-cluster-label,
+.cosmic-outline .graph-observatory--galaxy .theme-cluster-label:hover,
+.cosmic-outline .graph-observatory--galaxy .theme-cluster-label:focus-visible,
+.cosmic-outline .graph-observatory--galaxy .theme-cluster-label.is-active,
+.cosmic-outline .graph-observatory--galaxy .theme-cluster-label i,
+.cosmic-outline .graph-observatory--galaxy .selected-node {
+  box-shadow: none;
+  text-shadow: none;
+}
+
+.cosmic-outline .graph-observatory--galaxy .theme-cluster-label {
+  background: rgba(2, 3, 12, 0.58);
+}
+
+.cosmic-outline .graph-observatory--galaxy .selected-node,
+.cosmic-outline .graph-observatory--galaxy .node-panel pre,
+.cosmic-outline .model-question-layer,
+.cosmic-outline .model-question-popup {
+  background: rgba(2, 3, 13, 0.62);
+  box-shadow: none;
+}

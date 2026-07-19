@@ -1,0 +1,11 @@
+node_modules
+dist
+out
+.DS_Store
+.eslintcache
+*.log*
+codex-login.out
+Audit/
+artifacts/
+.hermes/
+agent-studio-*.png

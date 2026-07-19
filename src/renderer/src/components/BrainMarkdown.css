@@ -1,0 +1,227 @@
+.brain-markdown {
+  min-width: 0;
+  padding: 22px clamp(18px, 4vw, 42px) 48px;
+  color: #cbd6e3;
+  font-size: 13px;
+  line-height: 1.72;
+  overflow-wrap: anywhere;
+}
+
+.brain-markdown > :first-child,
+.brain-markdown > .brain-markdown__meta + * {
+  margin-top: 0;
+}
+
+.brain-markdown__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 0 24px;
+  padding: 0 0 18px;
+  border-bottom: 1px solid #263444;
+}
+
+.brain-markdown__meta div {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 8px;
+  border: 1px solid #2a3a4c;
+  border-radius: 999px;
+  background: #0c151f;
+}
+
+.brain-markdown__meta dt {
+  color: #73869a;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.brain-markdown__meta dd {
+  margin: 0;
+  color: #d9bd78;
+  font-size: 10px;
+}
+
+.brain-markdown h1,
+.brain-markdown h2,
+.brain-markdown h3,
+.brain-markdown h4 {
+  scroll-margin-top: 18px;
+  color: #f2f6fa;
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1.25;
+}
+
+.brain-markdown h1 {
+  margin: 0 0 22px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #34465a;
+  font-size: clamp(24px, 3vw, 34px);
+}
+
+.brain-markdown h2 {
+  margin: 34px 0 13px;
+  color: #e7cf96;
+  font-size: 21px;
+}
+
+.brain-markdown h3 {
+  margin: 27px 0 10px;
+  color: #9bdcf5;
+  font-size: 16px;
+}
+
+.brain-markdown h4 {
+  margin: 22px 0 8px;
+  color: #e69bc9;
+  font-size: 13px;
+}
+
+.brain-markdown p {
+  margin: 10px 0 15px;
+}
+
+.brain-markdown strong {
+  color: #f4f7fa;
+}
+
+.brain-markdown a {
+  color: #72d5ff;
+  text-decoration-color: rgba(114, 213, 255, 0.35);
+  text-underline-offset: 3px;
+}
+
+.brain-markdown a:hover {
+  color: #b8ebff;
+  text-decoration-color: currentColor;
+}
+
+.brain-markdown ul,
+.brain-markdown ol {
+  margin: 12px 0 18px;
+  padding-left: 25px;
+}
+
+.brain-markdown li {
+  margin: 5px 0;
+  padding-left: 3px;
+}
+
+.brain-markdown li::marker {
+  color: #d7b45c;
+}
+
+.brain-markdown blockquote {
+  margin: 18px 0;
+  padding: 12px 17px;
+  border-left: 3px solid #d36aaf;
+  background: linear-gradient(90deg, rgba(211, 106, 175, 0.1), transparent);
+  color: #b9c7d5;
+}
+
+.brain-markdown blockquote > :first-child {
+  margin-top: 0;
+}
+
+.brain-markdown blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.brain-markdown code {
+  padding: 2px 5px;
+  border: 1px solid #26384a;
+  border-radius: 4px;
+  background: #0a131d;
+  color: #9ce1ff;
+  font:
+    0.9em/1.4 'Cascadia Code',
+    Consolas,
+    monospace;
+}
+
+.brain-markdown pre {
+  max-width: 100%;
+  margin: 18px 0;
+  padding: 15px 17px;
+  overflow: auto;
+  border: 1px solid #293b4e;
+  border-radius: 8px;
+  background: #070d14;
+  box-shadow: inset 3px 0 #2d7796;
+}
+
+.brain-markdown pre code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #c8dae8;
+  white-space: pre;
+}
+
+.brain-markdown table {
+  display: block;
+  max-width: 100%;
+  margin: 18px 0;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.brain-markdown th,
+.brain-markdown td {
+  padding: 9px 12px;
+  border: 1px solid #2a3949;
+  text-align: left;
+  vertical-align: top;
+}
+
+.brain-markdown th {
+  background: #111d29;
+  color: #e8ce91;
+  font-size: 9px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.brain-markdown tr:nth-child(even) td {
+  background: rgba(18, 30, 42, 0.55);
+}
+
+.brain-markdown hr {
+  margin: 30px 0;
+  border: 0;
+  border-top: 1px solid #304156;
+}
+
+.brain-markdown input[type='checkbox'] {
+  margin-right: 7px;
+  accent-color: #d56caf;
+}
+
+.node-content > .brain-markdown {
+  min-height: 0;
+}
+
+.node-content:has(> .brain-markdown) {
+  padding: 0;
+  overflow: auto;
+  scrollbar-color: #536376 #101722;
+  scrollbar-width: thin;
+}
+
+.node-panel .brain-markdown pre {
+  flex: none;
+  min-height: auto;
+  margin: 18px 0;
+  padding: 15px 17px;
+  overflow: auto;
+  border-color: #293b4e;
+  border-radius: 8px;
+  background: #070d14;
+  color: #c8dae8;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre;
+}

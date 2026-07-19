@@ -1,0 +1,71 @@
+// Configuration du modele par role du pipeline autowin.
+// Chaque role (orchestrator, subagent, judge, scout) est lie a un provider
+// (claude, codex, ...) et optionnellement a un modele precis ; si le modele
+// est absent, le provider utilise son modele par defaut.
+
+export type Role = 'orchestrator' | 'subagent' | 'judge' | 'scout'
+
+export const ALL_ROLES: Role[] = ['orchestrator', 'subagent', 'judge', 'scout']
+
+export interface RoleBinding {
+  provider: string
+  model?: string
+  reasoningEffort?: ReasoningEffort
+}
+
+/** Config par defaut raisonnable : claude pour l'essentiel, codex pour le scout. */
+const DEFAULT_BINDINGS: Record<Role, RoleBinding> = {
+  orchestrator: { provider: 'claude' },
+  subagent: { provider: 'claude' },
+  judge: { provider: 'claude' },
+  scout: { provider: 'codex' }
+}
+
+export class RoleModelConfig {
+  private bindings: Record<Role, RoleBinding>
+
+  constructor(defaults?: Partial<Record<Role, RoleBinding>>) {
+    // Fusion superficielle : chaque role explicitement fourni remplace entierement
+    // le binding par defaut correspondant (pas de merge partiel provider/model).
+    this.bindings = { ...DEFAULT_BINDINGS }
+    if (defaults) {
+      for (const role of ALL_ROLES) {
+        const override = defaults[role]
+        if (override) {
+          this.bindings[role] = { ...override }
+        }
+      }
+    }
+  }
+
+  getBinding(role: Role): RoleBinding {
+    // Garde runtime defensive : le type Role empeche deja les valeurs invalides
+    // a la compilation, mais on se protege d'un appel JS non type ou d'une
+    // valeur corrompue a l'execution.
+    if (!ALL_ROLES.includes(role)) {
+      throw new Error(`Role inconnu: ${String(role)}`)
+    }
+    return this.bindings[role]
+  }
+
+  setBinding(role: Role, b: RoleBinding): this {
+    if (!ALL_ROLES.includes(role)) {
+      throw new Error(`Role inconnu: ${String(role)}`)
+    }
+    this.bindings[role] = { ...b }
+    return this
+  }
+
+  all(): Record<Role, RoleBinding> {
+    return { ...this.bindings }
+  }
+}
+
+/**
+ * Effort de raisonnement d'un binding atomique. La liste est le SUR-ENSEMBLE
+ * possible ; chaque modèle importé déclare le sous-ensemble qu'il supporte
+ * réellement (cf. ImportedModel.reasoningEfforts) et chaque adaptateur rejette
+ * explicitement une valeur qu'il ne sait pas transmettre (cf. providers/*).
+ */
+export type ReasoningEffort =
+  'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'

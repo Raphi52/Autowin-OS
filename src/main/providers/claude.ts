@@ -1,0 +1,235 @@
+import { spawn } from 'node:child_process'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import type {
+  Message,
+  PromptEnvelope,
+  ProviderAdapter,
+  SendOptions,
+  SendResult,
+  StreamChunk
+} from './types'
+
+/**
+ * Résout le binaire natif `claude.exe` (ou `claude`) SANS passer par le shim
+ * shell — indispensable pour spawner avec `shell:false` (args séparés → aucune
+ * injection d'arguments possible, et --system-prompt à espaces/accents intact).
+ */
+export function resolveClaudeBin(explicit?: string): string {
+  if (explicit) return explicit
+  if (process.env.CLAUDE_BIN) return process.env.CLAUDE_BIN
+  if (process.platform === 'win32') {
+    const appdata = process.env.APPDATA
+    if (appdata) {
+      const p = join(
+        appdata,
+        'npm',
+        'node_modules',
+        '@anthropic-ai',
+        'claude-code',
+        'bin',
+        'claude.exe'
+      )
+      if (existsSync(p)) return p
+    }
+  }
+  return 'claude'
+}
+
+/**
+ * Adaptateur voie Claude — SOUVERAIN (aucune dépendance Hermes).
+ *
+ * Spawne le CLI officiel `claude -p` (abonnement, JAMAIS de replay du token OAuth
+ * Anthropic — sanctionné HTTP 400 depuis 2026-06-15 ; la voie couverte par
+ * l'abonnement est le CLI). Injection système via `--system-prompt` (REMPLACE le
+ * prompt Claude Code par défaut → souverain + ~3× moins cher que --append) et
+ * consigne LÉGITIME de style/discipline (le modèle refuse à raison une "consigne
+ * secrète" d'allure injectée — l'injection se fait par contenu légitime).
+ * Sortie parsée en `--output-format stream-json --verbose`.
+ */
+export interface ClaudeAdapterOptions {
+  /** Binaire claude (défaut: 'claude' résolu via PATH). */
+  bin?: string
+  /** Timeout d'un tour en ms. */
+  timeoutMs?: number
+}
+
+/** Ajoute au spawn les choix Agents réellement supportés par le CLI installé. */
+export function appendClaudeSelectionArgs(args: string[], opts: SendOptions): void {
+  if (opts.model) args.push('--model', opts.model)
+  if (opts.reasoningEffort && opts.reasoningEffort !== 'none') {
+    args.push('--effort', opts.reasoningEffort)
+  }
+}
+
+export class ClaudeCliAdapter implements ProviderAdapter {
+  readonly id = 'claude'
+  private readonly bin: string
+  private readonly timeoutMs: number
+
+  constructor(opts: ClaudeAdapterOptions = {}) {
+    this.bin = resolveClaudeBin(opts.bin)
+    this.timeoutMs = opts.timeoutMs ?? 120_000
+  }
+
+  /** L'auth vit dans le CLI (abonnement déjà loggé) — on vérifie qu'il répond. */
+  async auth(): Promise<boolean> {
+    return await new Promise((resolve) => {
+      const p = spawn(this.bin, ['--version'], { shell: false })
+      p.on('error', () => resolve(false))
+      p.on('close', (code) => resolve(code === 0))
+    })
+  }
+
+  describePrompt(messages: Message[], opts: SendOptions, model?: string): PromptEnvelope {
+    const lastUser = [...messages].reverse().find((message) => message.role === 'user')
+    return {
+      provider: this.id,
+      model: model ?? opts.model,
+      transport: 'claude CLI · -p + --system-prompt[-file]',
+      system: opts.system,
+      messages: lastUser ? [lastUser] : [],
+      options: {
+        toolsDisabled: true,
+        strictMcpConfig: true,
+        resumed: Boolean(opts.resumeSessionId),
+        effort: opts.reasoningEffort
+      },
+      limitation:
+        'Exact à l’entrée du CLI Claude. Les ajouts dynamiques internes du CLI et la requête Anthropic finale ne sont pas exposés.'
+    }
+  }
+
+  async *send(
+    messages: Message[],
+    opts: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
+    const system = opts.system
+    const systemInjected = typeof system === 'string' && system.length > 0
+
+    const args = [
+      '-p',
+      lastUser,
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--disallowedTools',
+      '*',
+      '--strict-mcp-config'
+    ]
+    let systemPromptDir: string | undefined
+    if (systemInjected && system!.length > 4_000) {
+      systemPromptDir = mkdtempSync(join(tmpdir(), 'autowin-os-system-'))
+      const systemPromptFile = join(systemPromptDir, 'system.md')
+      writeFileSync(systemPromptFile, system!, 'utf8')
+      args.push('--system-prompt-file', systemPromptFile)
+    } else if (systemInjected) {
+      args.push('--system-prompt', system!)
+    }
+    if (opts.resumeSessionId) args.push('--resume', opts.resumeSessionId)
+    appendClaudeSelectionArgs(args, opts)
+
+    const child = spawn(this.bin, args, { shell: false })
+    opts.signal?.addEventListener('abort', () => child.kill())
+
+    const timer = setTimeout(() => child.kill(), this.timeoutMs)
+    let buffer = ''
+    let text = ''
+    let sessionId: string | undefined
+    let usage: SendResult['usage']
+    const queue: StreamChunk[] = []
+    let done = false
+    let errored: Error | null = null
+    let resolveWait: (() => void) | null = null
+
+    const wake = (): void => {
+      resolveWait?.()
+      resolveWait = null
+    }
+
+    const handleEvent = (o: Record<string, unknown>): void => {
+      const t = o['type']
+      if (t === 'assistant') {
+        const msg = o['message'] as { content?: Array<{ type: string; text?: string }> } | undefined
+        for (const part of msg?.content ?? []) {
+          if (part.type === 'text' && part.text) {
+            text += part.text
+            queue.push({ delta: part.text })
+          }
+        }
+      } else if (t === 'result') {
+        if (typeof o['result'] === 'string' && !text) text = o['result'] as string
+        if (typeof o['session_id'] === 'string') sessionId = o['session_id'] as string
+        if (o['is_error'] === true)
+          errored = new Error(`claude result error: ${String(o['result'] ?? '')}`)
+        // Tokens/coût RÉELS du tour (le result event du CLI les porte).
+        const u = o['usage'] as
+          | { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number }
+          | undefined
+        if (u) {
+          usage = {
+            inputTokens: u.input_tokens ?? 0,
+            outputTokens: u.output_tokens ?? 0,
+            cacheReadTokens: u.cache_read_input_tokens,
+            costUsd:
+              typeof o['total_cost_usd'] === 'number' ? (o['total_cost_usd'] as number) : undefined
+          }
+        }
+      }
+    }
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      buffer += chunk.toString('utf8')
+      let nl: number
+      while ((nl = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, nl).trim()
+        buffer = buffer.slice(nl + 1)
+        if (!line) continue
+        try {
+          handleEvent(JSON.parse(line) as Record<string, unknown>)
+        } catch {
+          /* ligne non-JSON (bruit) — ignorée */
+        }
+      }
+      wake()
+    })
+    child.on('error', (e) => {
+      errored = e
+      done = true
+      wake()
+    })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      if (systemPromptDir) rmSync(systemPromptDir, { recursive: true, force: true })
+      // Flush du reliquat : un dernier event JSON sans '\n' terminal ne serait
+      // jamais parsé (result/session_id perdus silencieusement) — on le traite ici.
+      const rest = buffer.trim()
+      if (rest) {
+        try {
+          handleEvent(JSON.parse(rest) as Record<string, unknown>)
+        } catch {
+          /* reliquat non-JSON — ignoré */
+        }
+        buffer = ''
+      }
+      if (code !== 0 && !errored) errored = new Error(`claude CLI exit ${code}`)
+      done = true
+      wake()
+    })
+
+    // pompe : yield les chunks au fil de l'eau
+    while (!done || queue.length > 0) {
+      if (queue.length > 0) {
+        yield queue.shift()!
+        continue
+      }
+      if (done) break
+      await new Promise<void>((r) => (resolveWait = r))
+    }
+
+    if (errored) throw errored
+    return { text, provider: this.id, sessionId, systemInjected, usage }
+  }
+}
