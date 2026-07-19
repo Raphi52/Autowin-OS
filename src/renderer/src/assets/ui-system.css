@@ -13,6 +13,11 @@
   --container-radius-card: 8px;
   --container-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
   --container-blur: 16px;
+  --module-title-font: var(--display);
+  --module-title-color: var(--text);
+  --module-title-size: 22px;
+  --module-eyebrow-color: var(--text-faint);
+  --module-eyebrow-size: 9px;
 }
 
 .shell.theme-serious {
@@ -30,8 +35,8 @@
   gap: 3px;
 }
 .module-header > span {
-  color: var(--text-faint);
-  font-size: 9px;
+  color: var(--module-eyebrow-color);
+  font-size: var(--module-eyebrow-size);
   font-weight: 750;
   letter-spacing: 0.15em;
   line-height: 1.2;
@@ -39,9 +44,9 @@
 }
 .module-header > h1 {
   margin: 0;
-  color: var(--text);
-  font-family: var(--display);
-  font-size: 22px;
+  color: var(--module-title-color);
+  font-family: var(--module-title-font);
+  font-size: var(--module-title-size);
   font-weight: 700;
   letter-spacing: -0.035em;
   line-height: 1;

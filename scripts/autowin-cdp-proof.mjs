@@ -36,17 +36,16 @@ const send = (method, params = {}) =>
     socket.send(JSON.stringify({ id: callId, method, params }))
   })
 if (theme) {
-  const themeLabel = theme === 'transparent' ? 'Mode glass' : 'Mode dark'
-  const switched = await send('Runtime.evaluate', {
-    expression: `(() => {
-      const target = document.querySelector(${JSON.stringify(`[aria-label="${themeLabel}"]`)})
-      target?.click()
-      return Boolean(target)
-    })()`,
+  if (theme !== 'dark') throw new Error(`Mode visuel supprimé : ${theme}`)
+  const verified = await send('Runtime.evaluate', {
+    expression: `(() => ({
+      dark: document.querySelector('.shell')?.classList.contains('theme-serious') === true,
+      controls: document.querySelectorAll('.app-theme-switch').length
+    }))()`,
     returnByValue: true
   })
-  if (!switched.result.value) throw new Error(`Mode visuel introuvable : ${theme}`)
-  await new Promise((resolve) => setTimeout(resolve, 250))
+  if (!verified.result.value?.dark || verified.result.value?.controls !== 0)
+    throw new Error('Le thème Dark unique n’est pas actif')
 }
 if (hoverTheme) {
   const hovered = await send('Runtime.evaluate', {

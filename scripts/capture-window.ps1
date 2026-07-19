@@ -1,4 +1,8 @@
-param([string]$TitleLike = "Electron", [string]$Out = "C:\Amitel\Autowin OS\p0-capture.png")
+param(
+  [string]$TitleLike = "Electron",
+  [string]$Out = "C:\Amitel\Autowin OS\p0-capture.png",
+  [int]$ProcessId = 0
+)
 Add-Type -AssemblyName System.Drawing
 Add-Type @"
 using System;using System.Runtime.InteropServices;
@@ -9,11 +13,16 @@ public class W{
  [StructLayout(LayoutKind.Sequential)] public struct RECT{public int Left,Top,Right,Bottom;}
 }
 "@
-$p = Get-Process | Where-Object {
-  $_.MainWindowHandle -ne 0 -and
-  $_.MainWindowTitle -like "*$TitleLike*" -and
-  $_.ProcessName -in @('electron', 'autowin-os')
-} | Select-Object -First 1
+$deadline = (Get-Date).AddSeconds(5)
+do {
+  $p = Get-Process | Where-Object {
+    $_.MainWindowHandle -ne 0 -and
+    ($ProcessId -eq 0 -or $_.Id -eq $ProcessId) -and
+    $_.MainWindowTitle -like "*$TitleLike*" -and
+    $_.ProcessName -in @('electron', 'autowin-os')
+  } | Select-Object -First 1
+  if (-not $p) { Start-Sleep -Milliseconds 100 }
+} while (-not $p -and (Get-Date) -lt $deadline)
 if(-not $p){ Write-Host "fenetre introuvable"; exit 2 }
 [W]::ShowWindow($p.MainWindowHandle,9) | Out-Null
 [W]::SetForegroundWindow($p.MainWindowHandle) | Out-Null

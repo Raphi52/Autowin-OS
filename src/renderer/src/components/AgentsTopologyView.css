@@ -25,7 +25,6 @@
   background: var(--surface-panel);
 }
 
-.topology-toolbar span,
 .topology-eyebrow,
 .topology-panel > header span,
 .topology-parallel-heading span {
@@ -476,48 +475,48 @@
 /* Mode Noir · Black Glass: surfaces neutres et translucides, accents réservés aux rôles. */
 .theme-serious .agents-topology {
   border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--surface-page);
   color: #f2f3f5;
 }
 
 .theme-serious .topology-toolbar {
   border-bottom-color: rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.62);
+  background: var(--surface-panel);
 }
 
 .theme-serious .topology-library {
   border-right-color: rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.48);
+  background: var(--surface-panel);
   scrollbar-color: #555 transparent;
 }
 
 .theme-serious .topology-workspace {
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--surface-page);
   scrollbar-color: #555 transparent;
 }
 
 .theme-serious .topology-model,
 .theme-serious .topology-slot {
   border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(7, 8, 10, 0.74);
+  background: var(--surface-card);
   color: #f0f1f3;
 }
 
 .theme-serious .topology-model:hover {
   border-color: rgba(255, 255, 255, 0.34);
-  background: rgba(18, 19, 22, 0.88);
+  background: var(--surface-hover);
   transform: translateY(-1px);
 }
 
 .theme-serious .topology-model.is-selected {
   border-color: rgba(225, 193, 103, 0.88);
-  background: rgba(16, 15, 11, 0.9);
+  background: var(--surface-selected);
   transform: none;
 }
 
 .theme-serious .topology-panel {
   border-color: rgba(255, 255, 255, 0.2);
-  background: rgba(3, 4, 6, 0.68);
+  background: var(--surface-panel);
   box-shadow: none;
 }
 
@@ -529,7 +528,7 @@
 .theme-serious .topology-profiles,
 .theme-serious .topology-slot select {
   border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--surface-inset);
   color: #e7e8eb;
 }
 
@@ -554,7 +553,6 @@
   box-shadow: none;
 }
 
-.theme-serious .topology-toolbar span,
 .theme-serious .topology-eyebrow,
 .theme-serious .topology-panel > header span,
 .theme-serious .topology-parallel-heading span,
@@ -565,100 +563,6 @@
 .theme-serious .topology-toolbar p,
 .theme-serious .topology-panel > header p {
   color: #8b8f96;
-}
-
-/* Mode Transparent · Black Glass: même langage, avec davantage de galaxie visible. */
-.theme-galaxy .agents-topology {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: rgba(0, 0, 0, 0.12);
-  color: #f2f3f7;
-}
-
-.theme-galaxy .topology-toolbar {
-  border-bottom-color: rgba(255, 255, 255, 0.15);
-  background: rgba(0, 0, 0, 0.36);
-}
-
-.theme-galaxy .topology-library {
-  border-right-color: rgba(255, 255, 255, 0.15);
-  background: rgba(0, 0, 0, 0.25);
-  scrollbar-color: #666 transparent;
-}
-
-.theme-galaxy .topology-workspace {
-  background: transparent;
-  scrollbar-color: #666 transparent;
-}
-
-.theme-galaxy .topology-model,
-.theme-galaxy .topology-slot {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: rgba(5, 6, 9, 0.52);
-  color: #f1f2f5;
-}
-
-.theme-galaxy .topology-model:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-  background: rgba(15, 15, 19, 0.68);
-  transform: translateY(-1px);
-}
-
-.theme-galaxy .topology-model.is-selected {
-  border-color: rgba(225, 193, 103, 0.92);
-  background: rgba(18, 15, 9, 0.68);
-  transform: none;
-}
-
-.theme-galaxy .topology-panel {
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(2, 3, 6, 0.44);
-  box-shadow: none;
-}
-
-.theme-galaxy .topology-panel > header {
-  border-bottom-color: rgba(255, 255, 255, 0.14);
-}
-
-.theme-galaxy .topology-panel > header b,
-.theme-galaxy .topology-profiles,
-.theme-galaxy .topology-slot select {
-  border-color: rgba(255, 255, 255, 0.24);
-  background: rgba(0, 0, 0, 0.58);
-  color: #ebecef;
-}
-
-.theme-galaxy .topology-slot .topology-capability-picker select {
-  border-color: rgba(99, 202, 157, 0.44);
-}
-
-.theme-galaxy .topology-empty,
-.theme-galaxy .topology-assign-button {
-  border-color: rgba(255, 255, 255, 0.28);
-  color: #a1a4ab;
-}
-
-.theme-galaxy .topology-assign-button:hover:not(:disabled) {
-  border-color: rgba(225, 193, 103, 0.76);
-  color: #f0d68e;
-}
-
-.theme-galaxy .topology-panel.is-drop-target {
-  border-color: rgba(225, 193, 103, 0.88);
-  background: rgba(20, 16, 8, 0.66);
-  box-shadow: none;
-}
-
-.theme-galaxy .topology-toolbar span,
-.theme-galaxy .topology-eyebrow,
-.theme-galaxy .topology-panel > header span,
-.theme-galaxy .topology-parallel-heading span,
-.theme-galaxy .topology-model small,
-.theme-galaxy .topology-slot-copy span,
-.theme-galaxy .topology-slot-copy small,
-.theme-galaxy .topology-slot label,
-.theme-galaxy .topology-toolbar p,
-.theme-galaxy .topology-panel > header p {
-  color: #9a9da7;
 }
 
 @media (max-width: 1100px) {

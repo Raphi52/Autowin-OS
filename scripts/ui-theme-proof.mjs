@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 
@@ -6,7 +7,9 @@ const port = process.env.AUTOWIN_CDP_PORT
 const outputDir = resolve(process.env.AUTOWIN_UI_PROOF_DIR || 'artifacts/ui-theme-proof')
 const fingerprint = process.env.AUTOWIN_UI_FINGERPRINT || 'unbound'
 const negativeControl = process.argv.includes('--negative-control')
+const verifyNegativeControl = process.argv.includes('--verify-negative-control')
 const skipScreenshots = process.env.AUTOWIN_UI_SKIP_SCREENSHOTS === '1'
+const nativeWindowPid = process.env.AUTOWIN_WINDOW_PID
 if (!port) throw new Error('AUTOWIN_CDP_PORT est requis.')
 
 const sha256 = (value) => createHash('sha256').update(value).digest('hex')
@@ -87,27 +90,24 @@ const views = [
   },
   { route: 'behaviour', nav: 'Behaviour', title: 'Behaviour', root: '.behaviour-view' }
 ]
-const themes = [
-  { id: 'galaxy', aria: 'Mode glass', shellClass: 'theme-galaxy' },
-  { id: 'noir', aria: 'Mode dark', shellClass: 'theme-serious' }
-]
+const theme = { id: 'dark', shellClass: 'theme-serious' }
 
 const manifest = []
 try {
-  for (const theme of themes) {
-    const clickedTheme = await evaluate(
-      `(() => { const button = document.querySelector('.app-theme-switch button[aria-label=${JSON.stringify(theme.aria)}]'); if (!button) return false; button.click(); return true })()`
-    )
-    if (!clickedTheme) throw new Error(`Bouton de thème absent: ${theme.aria}`)
-    for (const view of views) {
+  await evaluate(`localStorage.setItem('autowin-os.visual-mode.v1', 'galaxy')`)
+  await send('Page.reload', { ignoreCache: true })
+  await wait(300)
+  await poll(
+    `(() => { const shell = document.querySelector('.shell'); return { ok: shell?.classList.contains('theme-serious') === true } })()`,
+    'redémarrage avec stockage legacy'
+  )
+  for (const view of views) {
       const clickedView = await evaluate(
         `(() => { const button = [...document.querySelectorAll('.nav-item')].find((item) => item.querySelector('span:last-child')?.textContent?.trim() === ${JSON.stringify(view.nav)}); if (!button) return false; button.click(); return true })()`
       )
       if (!clickedView) throw new Error(`Navigation absente: ${view.nav}`)
       const expectedTheme =
-        negativeControl && theme.id === 'galaxy' && view.route === 'memory'
-          ? 'theme-serious'
-          : theme.shellClass
+        negativeControl && view.route === 'memory' ? 'theme-invalid' : theme.shellClass
       const state = await poll(
         `(async () => {
         await document.fonts.ready;
@@ -118,15 +118,15 @@ try {
         const slot = activeSlots[0];
         const root = slot?.querySelector(${JSON.stringify(view.root)});
         const title = slot?.querySelector('.module-header h1')?.textContent?.trim();
-        const themeButton = document.querySelector('.app-theme-switch button[aria-label=${JSON.stringify(theme.aria)}]');
         const actual = {
           shellClass: [...(shell?.classList ?? [])].find((name) => name.startsWith('theme-')),
           activeNav: activeNav?.querySelector('span:last-child')?.textContent?.trim(),
           activeSlots: activeSlots.length,
           root: Boolean(root), title,
-          themePressed: themeButton?.getAttribute('aria-pressed')
+          themeControls: document.querySelectorAll('.app-theme-switch').length,
+          legacyStoredMode: localStorage.getItem('autowin-os.visual-mode.v1')
         };
-        return { ok: actual.shellClass === ${JSON.stringify(expectedTheme)} && actual.activeNav === ${JSON.stringify(view.nav)} && actual.activeSlots === 1 && actual.root && actual.title === ${JSON.stringify(view.title)} && actual.themePressed === 'true', actual };
+        return { ok: actual.shellClass === ${JSON.stringify(expectedTheme)} && actual.activeNav === ${JSON.stringify(view.nav)} && actual.activeSlots === 1 && actual.root && actual.title === ${JSON.stringify(view.title)} && actual.themeControls === 0 && actual.legacyStoredMode === 'galaxy', actual };
       })()`,
         `${theme.id}/${view.route}`
       )
@@ -137,7 +137,25 @@ try {
       const name = `${theme.id}-${view.route}.png`
       const pngPath = join(outputDir, name)
       let png
-      if (!skipScreenshots) {
+      if (nativeWindowPid) {
+        execFileSync(
+          'powershell',
+          [
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            resolve('scripts/capture-window.ps1'),
+            '-TitleLike',
+            'Autowin',
+            '-Out',
+            pngPath,
+            '-ProcessId',
+            nativeWindowPid
+          ],
+          { stdio: 'pipe' }
+        )
+        png = readFileSync(pngPath)
+      } else if (!skipScreenshots) {
         const capture = await send('Page.captureScreenshot', { format: 'png', fromSurface: true })
         png = Buffer.from(capture.data, 'base64')
         writeFileSync(pngPath, png)
@@ -157,13 +175,26 @@ try {
       writeFileSync(`${pngPath}.json`, JSON.stringify(metadata, null, 2))
       manifest.push(metadata)
       await evaluate(`document.querySelector('#autowin-proof-badge')?.remove()`)
-    }
   }
   writeFileSync(
     join(outputDir, 'manifest.json'),
     JSON.stringify({ fingerprint, count: manifest.length, captures: manifest }, null, 2)
   )
-  if (manifest.length !== 12) throw new Error(`Preuve incomplète: ${manifest.length}/12`)
+  if (manifest.length !== 6) throw new Error(`Preuve incomplète: ${manifest.length}/6`)
+  if (verifyNegativeControl) {
+    let rejected = false
+    try {
+      await poll(
+        `(() => { const shell = document.querySelector('.shell'); const actual = { shellClass: [...(shell?.classList ?? [])].find((name) => name.startsWith('theme-')) }; return { ok: actual.shellClass === 'theme-invalid', actual } })()`,
+        'dark/memory',
+        300
+      )
+    } catch (error) {
+      if (String(error).includes('dark/memory')) rejected = true
+      else throw error
+    }
+    if (!rejected) throw new Error('Negative control unexpectedly passed.')
+  }
   console.log(
     JSON.stringify({ status: 'verified', count: manifest.length, outputDir, fingerprint })
   )

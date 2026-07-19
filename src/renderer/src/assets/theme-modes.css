@@ -1,32 +1,12 @@
 /* Theme modes select mood only. Component geometry lives in ui-system.css. */
 .theme-serious .main {
-  background: transparent;
+  background: #000;
 }
 .theme-serious .rail {
-  background: rgba(0, 0, 0, 0.58);
+  background: #000;
   border-right-color: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(12px);
+  backdrop-filter: none;
 }
-.theme-serious .brand,
-.theme-serious .app-theme-switch {
+.theme-serious .brand {
   background: #070708;
-}
-
-.theme-galaxy .rail {
-  background: rgba(0, 0, 0, 0.3);
-  border-right-color: rgba(255, 255, 255, 0.16);
-  backdrop-filter: blur(16px);
-}
-
-.rail.is-collapsed .app-theme-switch {
-  display: grid;
-  width: 34px;
-  padding: 2px;
-}
-.rail.is-collapsed .app-theme-switch button {
-  padding: 8px 0;
-  font-size: 0;
-}
-.rail.is-collapsed .app-theme-switch button::first-letter {
-  font-size: 10px;
 }

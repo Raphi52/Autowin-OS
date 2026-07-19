@@ -13,7 +13,6 @@ import './assets/cosmic-outline.css'
 import './assets/theme-modes.css'
 import './assets/ui-system.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
-import type { GraphVisualMode } from './components/graph-view-model'
 
 // Icônes : petits SVG path (stroke) — style linéaire, cohérent.
 const I: Record<Tab, string> = {
@@ -38,27 +37,6 @@ const TOY: Record<Tab, string> = {
   behaviour: '🧠'
 }
 
-function ThemeIcon({ kind }: { kind: 'moon' | 'aurora' }): React.JSX.Element {
-  return (
-    <svg
-      className="theme-switch-icon"
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {kind === 'moon' ? (
-        <path d="M20.3 14.2A8.7 8.7 0 019.8 3.7 8.7 8.7 0 1019.3 18a8.3 8.3 0 001-3.8z" />
-      ) : (
-        <path d="M12 2.8l1.8 5.4 5.4 1.8-5.4 1.8-1.8 5.4-1.8-5.4-5.4-1.8 5.4-1.8L12 2.8zm6.5 12.8.7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7.7-2.1z" />
-      )}
-    </svg>
-  )
-}
-
 const NAV: Array<{ id: Tab; label: string }> = [
   { id: 'chat', label: 'Chat' },
   { id: 'memory', label: 'Memory' },
@@ -72,9 +50,6 @@ function MainApp(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('chat')
   const [driven, setDriven] = useState(false) // un agent pilote → halo sur la vue
   const [railCollapsed, setRailCollapsed] = useState(false)
-  const [visualMode, setVisualMode] = useState<GraphVisualMode>(() =>
-    localStorage.getItem('autowin-os.visual-mode.v1') === 'galaxy' ? 'galaxy' : 'serious'
-  )
   const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set(['chat']))
 
   useEffect(() => {
@@ -96,11 +71,6 @@ function MainApp(): React.JSX.Element {
       }
     })()
   }, [])
-
-  useEffect(() => {
-    localStorage.setItem('autowin-os.visual-mode.v1', visualMode)
-    document.body.dataset.autowinTheme = visualMode
-  }, [visualMode])
 
   function navigate(nextTab: Tab): void {
     setVisitedTabs((visited) => {
@@ -147,7 +117,7 @@ function MainApp(): React.JSX.Element {
   }, [])
 
   return (
-    <div className={`shell cosmic-outline theme-${visualMode}`}>
+    <div className="shell cosmic-outline theme-serious">
       <aside className={`rail${railCollapsed ? ' is-collapsed' : ''}`}>
         <div className="brand">
           <img className="brand-logo" src={autowinLogo} alt="" aria-hidden="true" />
@@ -193,28 +163,6 @@ function MainApp(): React.JSX.Element {
             ))}
           </div>
         </nav>
-        <div className="app-theme-switch" aria-label="Thème de l’application">
-          <button
-            className="theme-switch-option theme-switch-option--moon"
-            type="button"
-            aria-label="Mode dark"
-            data-tooltip="Mode dark"
-            aria-pressed={visualMode === 'serious'}
-            onClick={() => setVisualMode('serious')}
-          >
-            <ThemeIcon kind="moon" />
-          </button>
-          <button
-            className="theme-switch-option theme-switch-option--aurora"
-            type="button"
-            aria-label="Mode glass"
-            data-tooltip="Mode glass"
-            aria-pressed={visualMode === 'galaxy'}
-            onClick={() => setVisualMode('galaxy')}
-          >
-            <ThemeIcon kind="aurora" />
-          </button>
-        </div>
         <div className="rail-foot c-faint">v0 · MVP</div>
       </aside>
       <main className={`main${driven ? ' driven' : ''}`} data-driven={driven}>
@@ -225,7 +173,7 @@ function MainApp(): React.JSX.Element {
         )}
         {visitedTabs.has('memory') && (
           <div className={`view-slot${tab === 'memory' ? ' is-active' : ''}`}>
-            <GraphView visualMode={visualMode} onCleanMemory={openBrainwashConversation} />
+            <GraphView visualMode="serious" onCleanMemory={openBrainwashConversation} />
           </div>
         )}
         {visitedTabs.has('observatory') && (

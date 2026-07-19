@@ -19,16 +19,11 @@
   padding: 4px 4px 18px;
   border-bottom: 1px solid var(--line);
 }
-.behaviour-view > header span,
 .behaviour-reader header span {
   color: var(--text-faint);
   font-size: 9px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-}
-.behaviour-view h1 {
-  margin: 4px 0;
-  font-size: 24px;
 }
 .behaviour-view > header p {
   margin: 0;

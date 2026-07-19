@@ -19,16 +19,10 @@
   align-items: flex-end;
   margin-bottom: 14px;
 }
-.observatory-head > div:first-child > span,
 .observatory-panel-title {
   color: #59dcff;
   font-size: 8px;
   letter-spacing: 0.17em;
-}
-.observatory-head h1 {
-  margin: 4px 0 2px;
-  font-family: var(--display);
-  font-size: 31px;
 }
 .observatory-head p {
   margin: 0;

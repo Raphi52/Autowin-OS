@@ -1,4 +1,8 @@
-param([string]$Title="Electron",[string]$Out="C:\Amitel\Autowin OS\p0-capture.png")
+param(
+  [string]$Title="Electron",
+  [string]$Out="C:\Amitel\Autowin OS\p0-capture.png",
+  [int]$ProcessId=0
+)
 Add-Type -AssemblyName System.Drawing
 Add-Type @"
 using System;using System.Runtime.InteropServices;
@@ -8,7 +12,12 @@ public class PW{
  [StructLayout(LayoutKind.Sequential)] public struct RECT{public int Left,Top,Right,Bottom;}
 }
 "@
-$p = Get-Process | ?{ $_.MainWindowHandle -ne 0 -and ($Title -eq '*' -or $_.MainWindowTitle -like "*$Title*") -and $_.ProcessName -in @('electron','autowin-os') } | Select -First 1
+$p = Get-Process | ?{
+  $_.MainWindowHandle -ne 0 -and
+  ($ProcessId -eq 0 -or $_.Id -eq $ProcessId) -and
+  ($Title -eq '*' -or $_.MainWindowTitle -like "*$Title*") -and
+  $_.ProcessName -in @('electron','autowin-os')
+} | Select -First 1
 if(-not $p){ Write-Host "introuvable"; exit 2 }
 $r = New-Object PW+RECT; [PW]::GetWindowRect($p.MainWindowHandle,[ref]$r) | Out-Null
 $w=$r.Right-$r.Left; $h=$r.Bottom-$r.Top

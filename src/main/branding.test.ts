@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 const ROOT = process.cwd()
 const ALLOWED_LEGACY_FILE = 'src/shared/app-identity.ts'
-const EXCLUDED = new Set(['node_modules', 'out', 'Audit', '.git'])
+const EXCLUDED = new Set(['node_modules', 'out', 'dist', 'Audit', '.git'])
 const TEXT_EXTENSIONS = new Set([
   '.ts',
   '.tsx',
@@ -92,7 +92,7 @@ describe('identite Autowin OS', () => {
     expect(main).toContain("icon: process.env['AUTOWIN_OS_DEV'] === '1' ? devIcon : icon")
     expect(main).toMatch(/titleBarOverlay:\s*\{[\s\S]*?color:\s*'#00000000'/)
     expect(readFileSync(join(ROOT, 'src/renderer/src/assets/cosmic-outline.css'), 'utf8')).toMatch(
-      /\.cosmic-outline \.chat-layout\s*\{\s*background:\s*rgba\(0, 0, 0, 0\.58\)/
+      /\.cosmic-outline \.chat-layout\s*\{[\s\S]*?background:\s*var\(--surface-page\)/
     )
   })
 })

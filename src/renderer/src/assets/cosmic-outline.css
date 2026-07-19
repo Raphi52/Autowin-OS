@@ -180,7 +180,7 @@
 
 /* Transparence sobre : le fond galaxie reste l'unique ambiance lumineuse. */
 .cosmic-outline .chat-layout {
-  background: rgba(0, 0, 0, 0.58);
+  background: var(--surface-page);
 }
 
 .cosmic-outline
@@ -202,7 +202,7 @@
     .studio-persona-cell,
     .studio-matrix-cell
   ) {
-  background: rgba(1, 2, 10, 0.46);
+  background: var(--surface-panel);
   box-shadow: none;
 }
 
@@ -218,13 +218,13 @@
     .behaviour-engine-group > button,
     .model-question-options button
   ) {
-  background: rgba(3, 4, 14, 0.42);
+  background: var(--surface-card);
   box-shadow: none;
   text-shadow: none;
 }
 
 .cosmic-outline :where(.input, .select, textarea.input) {
-  background: rgba(0, 0, 7, 0.54);
+  background: var(--surface-inset);
   box-shadow: none;
 }
 
@@ -234,7 +234,7 @@
 }
 
 .cosmic-outline :where(.panel, .card) {
-  background: rgba(2, 3, 12, 0.46);
+  background: var(--surface-card);
 }
 
 .cosmic-outline .graph-observatory,
@@ -248,14 +248,14 @@
 .cosmic-outline .graph-observatory--galaxy .graph-toolbar,
 .cosmic-outline .graph-observatory--galaxy .theme-sidebar,
 .cosmic-outline .graph-observatory--galaxy .visibility-sidebar {
-  background: rgba(1, 2, 10, 0.48);
+  background: var(--surface-panel);
   backdrop-filter: blur(10px);
   box-shadow: none;
 }
 
 .cosmic-outline .graph-observatory--galaxy .graph-settings-popover,
 .cosmic-outline .graph-observatory--galaxy .graph-settings-popover__heading {
-  background: rgba(1, 2, 10, 0.58);
+  background: var(--surface-card);
   box-shadow: none;
 }
 
@@ -281,28 +281,28 @@
 }
 
 .cosmic-outline .graph-observatory--galaxy .theme-cluster-label {
-  background: rgba(2, 3, 12, 0.58);
+  background: var(--surface-card);
 }
 
 .cosmic-outline .graph-observatory--galaxy .selected-node,
 .cosmic-outline .graph-observatory--galaxy .node-panel pre,
 .cosmic-outline .model-question-layer,
 .cosmic-outline .model-question-popup {
-  background: rgba(2, 3, 13, 0.62);
+  background: var(--surface-card);
   box-shadow: none;
 }
 
 /* Conversation — noir fume transparent, sans halos decoratifs. */
 .cosmic-outline .chat-layout {
   border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(0, 0, 0, 0.42);
+  background: var(--surface-page);
   box-shadow: none;
 }
 
 .cosmic-outline .conv-pane,
 .cosmic-outline .runs-pane {
   border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.38);
+  background: var(--surface-panel);
   box-shadow: none;
 }
 
@@ -313,7 +313,7 @@
 
 .cosmic-outline .chat-head {
   border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.28);
+  background: var(--surface-panel);
   box-shadow: none;
 }
 
@@ -323,7 +323,7 @@
 .cosmic-outline .action-chip,
 .cosmic-outline .composer-field {
   border-color: rgba(255, 255, 255, 0.2);
-  background: rgba(0, 0, 0, 0.38);
+  background: var(--surface-inset);
   box-shadow: none;
 }
 

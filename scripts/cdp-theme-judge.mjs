@@ -48,23 +48,16 @@ const views = [
   { label: 'Memory', id: 'memory' }
 ]
 const output = {}
-for (const theme of ['Noir', 'Galaxy']) {
-  const themeLabel = theme === 'Noir' ? 'Mode dark' : 'Mode glass'
-  const selected = await evaluate(
-    `(() => { const item = [...document.querySelectorAll('.app-theme-switch button')].find((candidate) => candidate.getAttribute('aria-label') === ${JSON.stringify(themeLabel)}); if (!item) return false; item.click(); return true })()`
-  )
-  if (!selected) throw new Error(`Thème introuvable : ${theme}`)
-  for (const view of views) {
+for (const view of views) {
     const clicked = await evaluate(
       `(() => { const item = [...document.querySelectorAll('.nav-item')].find((candidate) => candidate.querySelector('span:last-child')?.textContent?.trim() === ${JSON.stringify(view.label)}); if (!item) return false; item.click(); return true })()`
     )
     if (!clicked) throw new Error(`Navigation introuvable : ${view.label}`)
     await new Promise((resolve) => setTimeout(resolve, 180))
-    output[`${theme}:${view.label}`] = await capture(`${theme.toLowerCase()}-${view.id}`)
-  }
+    output[`Dark:${view.label}`] = await capture(`dark-${view.id}`)
 }
 output.themeControl = await evaluate(
-  `({buttons:[...document.querySelectorAll('.app-theme-switch button')].map((button)=>({label:button.getAttribute('aria-label'),active:button.getAttribute('aria-pressed')})), memoryLocalControl:document.querySelectorAll('.theme-sidebar .view-mode-switch').length})`
+  `({shellClass:[...document.querySelector('.shell').classList].find((name)=>name.startsWith('theme-')), buttons:document.querySelectorAll('.app-theme-switch').length, memoryLocalControl:document.querySelectorAll('.theme-sidebar .view-mode-switch').length})`
 )
 console.log(JSON.stringify(output, null, 2))
 socket.close()
