@@ -1,17 +1,137 @@
-export interface ChatActionPart {
-  kind: 'action'
-  name: string
+import {
+  reduceChatTurn,
+  type ChatTurnEvent,
+  type ChatTurnStatus,
+  type PersistedChatActionPart,
+  type PersistedChatPart,
+  type PersistedChatTextPart
+} from '../../../shared/chat-turn'
+
+export type ChatActionPart = PersistedChatActionPart
+export type ChatTextPart = PersistedChatTextPart
+export type ChatPart = PersistedChatPart
+
+export interface HydratedAssistantMessage {
+  role: 'assistant'
+  turnId?: string
+  parts: ChatPart[]
+  status: ChatTurnStatus
+  done: boolean
+  error?: string
+}
+
+export interface StoredAssistantMessage {
+  content: string
+  turnId?: string
+  parts?: ChatPart[]
+  status?: ChatTurnStatus
+  error?: string
+}
+
+export interface AssistantPilotEvent {
+  turnId?: string
+  kind:
+    | 'delta'
+    | 'stream-reset'
+    | 'think'
+    | 'command'
+    | 'result'
+    | 'done'
+    | 'error'
+    | 'retry'
+    | 'cancellation'
+  streamId?: string
+  actionId?: string
+  iteration?: number
+  text?: string
+  name?: string
   args?: unknown
   ok?: boolean
   data?: unknown
 }
 
-export interface ChatTextPart {
-  kind: 'text'
-  text: string
+export function hydrateStoredAssistant(message: StoredAssistantMessage): HydratedAssistantMessage {
+  const status = message.status ?? 'completed'
+  return {
+    role: 'assistant',
+    ...(message.turnId ? { turnId: message.turnId } : {}),
+    parts:
+      message.parts?.map((part) => ({ ...part })) ??
+      (message.content ? [{ kind: 'text', text: message.content }] : []),
+    status,
+    done: status !== 'streaming',
+    ...(message.error ? { error: message.error } : {})
+  }
 }
 
-export type ChatPart = ChatTextPart | ChatActionPart
+export function reduceAssistantPilotEvent(
+  message: HydratedAssistantMessage,
+  event: AssistantPilotEvent
+): HydratedAssistantMessage {
+  if (message.done && !message.turnId) return message
+  if (message.turnId && event.turnId && message.turnId !== event.turnId) return message
+  const turnId = message.turnId ?? event.turnId ?? 'pending'
+  let turnEvent: ChatTurnEvent | undefined
+  if (event.kind === 'delta' && event.text && event.streamId)
+    turnEvent = { kind: 'delta', streamId: event.streamId, text: event.text }
+  else if (event.kind === 'stream-reset' && event.streamId)
+    turnEvent = { kind: 'stream-reset', streamId: event.streamId }
+  else if (event.kind === 'think' && event.text)
+    turnEvent = {
+      kind: 'delta',
+      streamId: `fallback:${event.iteration ?? 0}`,
+      text: event.text
+    }
+  else if (event.kind === 'command' && event.name)
+    turnEvent = {
+      kind: 'command',
+      actionId: event.actionId ?? `action:${message.parts.length}`,
+      name: event.name,
+      args: event.args
+    }
+  else if (event.kind === 'result' && event.name) {
+    const matching = [...message.parts]
+      .reverse()
+      .find(
+        (part) =>
+          part.kind === 'action' &&
+          part.name === event.name &&
+          (event.actionId ? part.actionId === event.actionId : part.ok === undefined)
+      )
+    turnEvent = {
+      kind: 'result',
+      actionId:
+        event.actionId ??
+        (matching?.kind === 'action' ? matching.actionId : undefined) ??
+        `action:${message.parts.length}`,
+      name: event.name,
+      ok: event.ok,
+      data: event.data
+    }
+  } else if (event.kind === 'done') turnEvent = { kind: 'done' }
+  else if (event.kind === 'error')
+    turnEvent = { kind: 'failed', error: event.text ?? 'Erreur inconnue' }
+  else if (event.kind === 'cancellation') turnEvent = { kind: 'cancelled' }
+  if (!turnEvent) return message
+
+  const next = reduceChatTurn(
+    {
+      turnId,
+      status: message.status,
+      parts: message.parts,
+      ...(message.error ? { error: message.error } : {})
+    },
+    turnEvent
+  )
+  return {
+    role: 'assistant',
+    turnId,
+    parts: next.parts,
+    status: next.status,
+    done: next.status !== 'streaming',
+    ...(next.error ? { error: next.error } : {})
+  }
+}
 
 interface RuntimeSlot {
   slotId?: string
@@ -31,11 +151,37 @@ interface RuntimeModel {
   label?: string
 }
 
+interface RuntimeRoleBinding {
+  provider: string
+  model?: string
+  reasoningEffort?: string
+}
+
 export interface ChatRuntimeIdentity {
   provider: string
   model: string
   modelLabel: string
   reasoningEffort: string
+}
+
+export interface ScopedLiveRun<TStep = unknown> {
+  convId: string
+  runPath?: string
+  task: string
+  steps: TStep[]
+  status: 'running' | 'green' | 'red'
+}
+
+export type ScopedLiveRunEvent<TStep = unknown> =
+  | { type: 'start'; convId: string; runPath?: string; task: string }
+  | { type: 'step'; convId: string; runPath?: string; step: TStep }
+  | { type: 'end'; convId: string; runPath?: string; status: 'green' | 'red' }
+  | { type: 'clear'; convId: string; runPath?: string }
+
+export interface RunRequestIdentity {
+  id: number
+  scope: 'conv' | 'tous'
+  convId: string | null
 }
 
 export const CHAT_PANE_LIMITS = {
@@ -45,9 +191,25 @@ export const CHAT_PANE_LIMITS = {
 
 export function resolveChatRuntimeIdentity(
   topology: RuntimeTopology,
-  models: RuntimeModel[]
+  models: RuntimeModel[],
+  role?: RuntimeRoleBinding
 ): ChatRuntimeIdentity {
   const slot = topology.orchestrator
+  if (role) {
+    const imported = role.model
+      ? models.find(
+          (model) =>
+            model.provider === role.provider &&
+            (model.id === role.model || model.model === role.model)
+        )
+      : undefined
+    return {
+      provider: role.provider,
+      model: imported?.model ?? role.model ?? 'default',
+      modelLabel: imported?.label?.trim() || role.model || `${role.provider} · modèle par défaut`,
+      reasoningEffort: role.reasoningEffort ?? 'auto'
+    }
+  }
   const imported = models.find(
     (model) => model.id === slot.modelId && model.provider === slot.provider
   )
@@ -88,5 +250,48 @@ export function clampConversationPaneWidth(width: number): number {
       CHAT_PANE_LIMITS.conversations.max,
       Math.max(CHAT_PANE_LIMITS.conversations.min, width)
     )
+  )
+}
+
+export function reduceScopedLiveRuns<TStep>(
+  current: Record<string, ScopedLiveRun<TStep>>,
+  event: ScopedLiveRunEvent<TStep>
+): Record<string, ScopedLiveRun<TStep>> {
+  if (event.type === 'start') {
+    return {
+      ...current,
+      [event.convId]: {
+        convId: event.convId,
+        runPath: event.runPath,
+        task: event.task,
+        steps: [],
+        status: 'running'
+      }
+    }
+  }
+
+  const existing = current[event.convId]
+  if (!existing || (event.runPath && existing.runPath && event.runPath !== existing.runPath)) {
+    return current
+  }
+  if (event.type === 'step') {
+    return { ...current, [event.convId]: { ...existing, steps: [...existing.steps, event.step] } }
+  }
+  if (event.type === 'end') {
+    return { ...current, [event.convId]: { ...existing, status: event.status } }
+  }
+  const next = { ...current }
+  delete next[event.convId]
+  return next
+}
+
+export function isRunRequestCurrent(
+  requested: RunRequestIdentity,
+  current: RunRequestIdentity
+): boolean {
+  return (
+    requested.id === current.id &&
+    requested.scope === current.scope &&
+    requested.convId === current.convId
   )
 }

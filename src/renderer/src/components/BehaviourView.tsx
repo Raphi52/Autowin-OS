@@ -12,6 +12,7 @@ import {
   type BehaviourState
 } from './behaviour-view-model'
 import './BehaviourView.css'
+import { ModuleHeader } from './ModuleHeader'
 
 interface BehaviourContextItem {
   path: string
@@ -158,6 +159,7 @@ export function BehaviourView(): React.JSX.Element {
   return (
     <section className="behaviour-view">
       <header>
+        <ModuleHeader eyebrow="Instructions et règles actives" title="Behaviour" />
         <div className="behaviour-count">
           <strong>{activeCount}</strong>
           <span>fichiers injectés ou actifs au contexte</span>

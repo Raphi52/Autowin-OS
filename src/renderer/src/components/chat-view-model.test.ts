@@ -3,9 +3,82 @@ import {
   CHAT_PANE_LIMITS,
   clampConversationPaneWidth,
   coalesceAssistantParts,
+  isRunRequestCurrent,
   isChatNearBottom,
+  hydrateStoredAssistant,
+  reduceAssistantPilotEvent,
+  reduceScopedLiveRuns,
   resolveChatRuntimeIdentity
 } from './chat-view-model'
+
+describe('durable assistant hydration and streaming', () => {
+  it('restores structured parts and terminal state without flattening actions', () => {
+    expect(
+      hydrateStoredAssistant({
+        content: 'projection',
+        turnId: 'turn-1',
+        status: 'completed',
+        parts: [
+          { kind: 'text', text: 'Avant.' },
+          {
+            kind: 'action',
+            actionId: 'a1',
+            name: 'get_state',
+            args: { target: 'chat' },
+            ok: true,
+            data: { source: 'disk' }
+          },
+          { kind: 'text', text: 'Après.' }
+        ]
+      })
+    ).toEqual({
+      role: 'assistant',
+      turnId: 'turn-1',
+      status: 'completed',
+      done: true,
+      parts: [
+        { kind: 'text', text: 'Avant.' },
+        {
+          kind: 'action',
+          actionId: 'a1',
+          name: 'get_state',
+          args: { target: 'chat' },
+          ok: true,
+          data: { source: 'disk' }
+        },
+        { kind: 'text', text: 'Après.' }
+      ]
+    })
+  })
+
+  it('hydrates legacy flat messages and ignores an event from another turn', () => {
+    const legacy = hydrateStoredAssistant({ content: 'Ancien texte' })
+    expect(legacy.parts).toEqual([{ kind: 'text', text: 'Ancien texte' }])
+    expect(
+      reduceAssistantPilotEvent(legacy, {
+        kind: 'delta',
+        turnId: 'other-turn',
+        streamId: '0:0',
+        text: 'fuite'
+      })
+    ).toBe(legacy)
+  })
+
+  it('binds the first turn id then reduces progressive deltas without duplication', () => {
+    const empty = hydrateStoredAssistant({ content: '', status: 'streaming', parts: [] })
+    const first = reduceAssistantPilotEvent(empty, {
+      kind: 'delta', turnId: 'turn-live', streamId: '0:0', text: 'Bon'
+    })
+    const second = reduceAssistantPilotEvent(first, {
+      kind: 'delta', turnId: 'turn-live', streamId: '0:0', text: 'jour'
+    })
+    expect(second).toMatchObject({
+      turnId: 'turn-live',
+      done: false,
+      parts: [{ kind: 'text', streamId: '0:0', text: 'Bonjour' }]
+    })
+  })
+})
 
 describe('resolveChatRuntimeIdentity', () => {
   it('resolves the actual orchestrator provider, model and effort from the dynamic catalog', () => {
@@ -56,6 +129,34 @@ describe('resolveChatRuntimeIdentity', () => {
       reasoningEffort: 'high'
     })
   })
+
+  it('prefers the live orchestrator role consumed by chat over a stale topology', () => {
+    expect(
+      resolveChatRuntimeIdentity(
+        {
+          orchestrator: {
+            provider: 'claude',
+            modelId: 'claude/claude-fable-5',
+            reasoningEffort: 'high'
+          }
+        },
+        [
+          {
+            id: 'codex/gpt-5.6-terra',
+            provider: 'codex',
+            model: 'gpt-5.6-terra',
+            label: 'GPT-5.6 Terra · Codex'
+          }
+        ],
+        { provider: 'codex', model: 'gpt-5.6-terra', reasoningEffort: 'ultra' }
+      )
+    ).toEqual({
+      provider: 'codex',
+      model: 'gpt-5.6-terra',
+      modelLabel: 'GPT-5.6 Terra · Codex',
+      reasoningEffort: 'ultra'
+    })
+  })
 })
 
 describe('coalesceAssistantParts', () => {
@@ -95,5 +196,39 @@ describe('chat scrolling and layout rules', () => {
     expect(clampConversationPaneWidth(100)).toBe(CHAT_PANE_LIMITS.conversations.min)
     expect(clampConversationPaneWidth(999)).toBe(CHAT_PANE_LIMITS.conversations.max)
     expect(clampConversationPaneWidth(344.6)).toBe(345)
+  })
+})
+
+describe('conversation-scoped workflow state', () => {
+  it('keeps a live run attached to its conversation across navigation', () => {
+    const started = reduceScopedLiveRuns(
+      {},
+      {
+        type: 'start',
+        convId: 'conversation-a',
+        runPath: 'run-a',
+        task: 'audit A'
+      }
+    )
+    const stepped = reduceScopedLiveRuns(started, {
+      type: 'step',
+      convId: 'conversation-a',
+      runPath: 'run-a',
+      step: { type: 'exec', label: 'worker A' }
+    })
+
+    expect(stepped['conversation-a']).toMatchObject({ task: 'audit A', status: 'running' })
+    expect(stepped['conversation-a']?.steps).toEqual([{ type: 'exec', label: 'worker A' }])
+    expect(stepped['conversation-b']).toBeUndefined()
+  })
+
+  it('rejects a runs response when its conversation or scope is no longer current', () => {
+    const requested = { id: 4, scope: 'conv' as const, convId: 'conversation-a' }
+
+    expect(isRunRequestCurrent(requested, requested)).toBe(true)
+    expect(isRunRequestCurrent(requested, { id: 5, scope: 'conv', convId: 'conversation-b' })).toBe(
+      false
+    )
+    expect(isRunRequestCurrent(requested, { id: 4, scope: 'tous', convId: null })).toBe(false)
   })
 })

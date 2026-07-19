@@ -8,6 +8,7 @@ import {
   parseModelQuestion,
   type ModelQuestion
 } from './model-questions'
+import { VisibleStreamFilter } from '../shared/stream-markup-filter'
 
 /**
  * Boucle de PILOTAGE : un agent LLM conduit l'app lui-même.
@@ -18,7 +19,17 @@ import {
  */
 export interface PilotEvent {
   conversationId?: string
-  kind: 'think' | 'command' | 'result' | 'done' | 'error' | 'retry' | 'cancellation' | 'prompt-call'
+  kind:
+    | 'delta'
+    | 'stream-reset'
+    | 'think'
+    | 'command'
+    | 'result'
+    | 'done'
+    | 'error'
+    | 'retry'
+    | 'cancellation'
+    | 'prompt-call'
   text?: string
   name?: string
   args?: unknown
@@ -32,6 +43,8 @@ export interface PilotEvent {
   callUsage?: Usage
   callDurationMs?: number
   sessionId?: string
+  streamId?: string
+  actionId?: string
   /** Coût cumulé du tour (surfacé sur l'event 'done') → journal d'activité par conversation. */
   usage?: { inputTokens: number; outputTokens: number; costUsd?: number }
 }
@@ -176,11 +189,28 @@ export class AgentPilot {
       let res
       let attempt = 0
       let callStartedAt = performance.now()
+      let successfulStreamedVisible = false
       while (!res) {
+        const streamId = `${i}:${attempt}`
+        const visibleFilter = new VisibleStreamFilter()
+        let attemptStreamedVisible = false
         try {
           callStartedAt = performance.now()
-          res = await this.registry.send(provider, messages, options)
+          res = await this.registry.send(provider, messages, options, (chunk) => {
+            const visible = visibleFilter.push(chunk.delta)
+            if (!visible) return
+            attemptStreamedVisible = true
+            onEvent({ kind: 'delta', streamId, text: visible, iteration: i })
+          })
+          const tail = visibleFilter.finish()
+          if (tail) {
+            attemptStreamedVisible = true
+            onEvent({ kind: 'delta', streamId, text: tail, iteration: i })
+          }
+          successfulStreamedVisible = attemptStreamedVisible
         } catch (error) {
+          if (attemptStreamedVisible)
+            onEvent({ kind: 'stream-reset', streamId, iteration: i })
           const message = error instanceof Error ? error.message : String(error)
           if (signal?.aborted) {
             onEvent({ kind: 'cancellation', iteration: i, name: provider, text: 'Annulation demandée par utilisateur', data: { reason: signal.reason ?? 'user' } })
@@ -229,7 +259,7 @@ export class AgentPilot {
       }
 
       const spoken = text.replace(CMD_RE, '').trim()
-      if (spoken) onEvent({ kind: 'think', text: spoken })
+      if (spoken && !successfulStreamedVisible) onEvent({ kind: 'think', text: spoken })
 
       if (cmds.length === 0) {
         onEvent({ kind: 'done', text: spoken, usage })
@@ -237,10 +267,18 @@ export class AgentPilot {
       }
 
       const results: string[] = []
-      for (const c of cmds) {
-        onEvent({ kind: 'command', name: c.name, args: c.args })
+      for (let commandIndex = 0; commandIndex < cmds.length; commandIndex += 1) {
+        const c = cmds[commandIndex]
+        const actionId = `${i}:${commandIndex}`
+        onEvent({ kind: 'command', actionId, name: c.name, args: c.args })
         const r = await this.bus.exec(c.name, c.args, conversationId)
-        onEvent({ kind: 'result', name: c.name, ok: r.ok, data: r.ok ? r.data : r.error })
+        onEvent({
+          kind: 'result',
+          actionId,
+          name: c.name,
+          ok: r.ok,
+          data: r.ok ? r.data : r.error
+        })
         results.push(`${c.name} → ${r.ok ? JSON.stringify(r.data) : 'ERREUR ' + r.error}`)
       }
 

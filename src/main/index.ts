@@ -8,7 +8,9 @@ import type { Message } from './providers/types'
 import { AutowinOS } from './os'
 import type { Role } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
-import { AgentPilot } from './agent-pilot'
+import { AgentPilot, type PilotEvent } from './agent-pilot'
+import type { ChatTurnEvent } from '../shared/chat-turn'
+import { VisibleStreamFilter } from '../shared/stream-markup-filter'
 import { TraceLedger } from './activity/ledger'
 import { aggregateHabits, listSessions, parseSession } from './activity/transcripts'
 import { persistConversations } from './store/conversations-disk'
@@ -266,6 +268,23 @@ function registerStorageMigrationIpc(
 
 /** IPC : chat, orchestration, dashboards et graphe. */
 function registerChatIpc(): void {
+  ipcMain.handle('app:test:emit-event', (event, payload: unknown) => {
+    assertTrustedRendererSender(event, 'Fixture UI')
+    if (!isolatedTestInstance) throw new Error('Émission de test indisponible hors instance isolée')
+    if (!payload || typeof payload !== 'object') throw new Error('Événement de test invalide')
+    const appEvent = payload as Record<string, unknown>
+    if (
+      !['orchestrate-start', 'orchestrate-step', 'orchestrate-end', 'refresh'].includes(
+        String(appEvent.type)
+      )
+    ) {
+      throw new Error('Type d’événement de test interdit')
+    }
+    if (appEvent.type === 'refresh' && appEvent.scope !== 'conversations')
+      throw new Error('Scope de refresh de test interdit')
+    broadcast(appEvent as unknown as AppEvent)
+    return true
+  })
   // --- Chat direct : streame les deltas, alimente le coût RÉEL ---
   ipcMain.handle(
     'chat:send',
@@ -326,9 +345,11 @@ function registerChatIpc(): void {
 
   // --- Config par rôle (orchestrateur / sous-agent / juge / scout) ---
   ipcMain.handle('os:roles', () => os.roles.all())
-  ipcMain.handle('os:setRole', (_e, role: Role, provider: string, model?: string) =>
-    os.setRole(role, { provider, model })
-  )
+  ipcMain.handle('os:setRole', (_e, role: Role, provider: string, model?: string) => {
+    const binding = os.setRole(role, { provider, model })
+    broadcast({ type: 'refresh', scope: 'roles' })
+    return binding
+  })
   ipcMain.handle('os:models:list', () => agentModelsReady)
   ipcMain.handle('os:capabilityProfiles:get', () => capabilityProfiles)
   ipcMain.handle('os:capabilityProfiles:save', (_event, next: CapabilityProfileState) => {
@@ -354,6 +375,7 @@ function registerChatIpc(): void {
     agentTopology = saveAgentTopology(agentTopologyPath, profile.topology, agentModels)
     syncRuntimeTopology(agentTopology)
     for (const [role, binding] of Object.entries(profile.roles) as Array<[Role, import('./roles').RoleBinding]>) os.setRole(role, binding)
+    broadcast({ type: 'refresh', scope: 'roles' })
     return profile
   })
   ipcMain.handle('os:topology:get', async () => {
@@ -365,6 +387,7 @@ function registerChatIpc(): void {
     guardString(JSON.stringify(topology), 'topology')
     agentTopology = saveAgentTopology(agentTopologyPath, topology, agentModels)
     syncRuntimeTopology(agentTopology)
+    broadcast({ type: 'refresh', scope: 'roles' })
     return agentTopology
   })
 
@@ -632,6 +655,7 @@ function registerChatIpc(): void {
       conversationId?: string
     ) => {
       const controller = new AbortController()
+      const turnId = randomUUID()
       if (conversationId) activeChatControllers.set(conversationId, controller)
       try {
         const safe = (Array.isArray(messages) ? messages : []).slice(-40).map((m) => ({
@@ -640,63 +664,191 @@ function registerChatIpc(): void {
           ...(m.attachments?.length ? { attachments: guardAttachments(m.attachments) } : {})
         }))
         const spoken: string[] = []
-        const turnId = randomUUID()
+        let streamedSpoken = ''
         let traceParentId: string | undefined
         let traceSequence = conversationId ? causalTrace.nextSequence(conversationId) : 0
         let traceActionIndex = 0
         let turnUsage: { inputTokens: number; outputTokens: number; costUsd?: number } | undefined
-        await pilot.chat(
+        let turnSessionId: string | undefined
+        const last = safe[safe.length - 1]
+        if (conversationId && last?.role === 'user' && os.conversations.get(conversationId)) {
+          const binding = os.roles.getBinding('orchestrator')
+          os.conversations.beginTurn(
+            conversationId,
+            {
+              content: last.content,
+              attachments: last.attachments?.map(({ name, mimeType, size }) => ({
+                name,
+                mimeType,
+                size
+              }))
+            },
+            {
+              turnId,
+              runtime: {
+                provider: binding.provider,
+                model: binding.model,
+                reasoningEffort: binding.reasoningEffort
+              }
+            }
+          )
+        }
+        const applyDurableEvent = (pilotEvent: PilotEvent): void => {
+          if (!conversationId || !os.conversations.get(conversationId)) return
+          let durableEvent: ChatTurnEvent | undefined
+          if (pilotEvent.kind === 'delta' && pilotEvent.text && pilotEvent.streamId)
+            durableEvent = {
+              kind: 'delta',
+              streamId: pilotEvent.streamId,
+              text: pilotEvent.text
+            }
+          else if (pilotEvent.kind === 'stream-reset' && pilotEvent.streamId)
+            durableEvent = { kind: 'stream-reset', streamId: pilotEvent.streamId }
+          else if (pilotEvent.kind === 'think' && pilotEvent.text)
+            durableEvent = {
+              kind: 'delta',
+              streamId: `fallback:${pilotEvent.iteration ?? 0}`,
+              text: pilotEvent.text
+            }
+          else if (pilotEvent.kind === 'command' && pilotEvent.name)
+            durableEvent = {
+              kind: 'command',
+              actionId: pilotEvent.actionId ?? `${pilotEvent.iteration ?? 0}:${traceActionIndex}`,
+              name: pilotEvent.name,
+              args: pilotEvent.args
+            }
+          else if (pilotEvent.kind === 'result' && pilotEvent.name)
+            durableEvent = {
+              kind: 'result',
+              actionId: pilotEvent.actionId ?? `${pilotEvent.iteration ?? 0}:${Math.max(0, traceActionIndex - 1)}`,
+              name: pilotEvent.name,
+              ok: pilotEvent.ok,
+              data: pilotEvent.data
+            }
+          else if (pilotEvent.kind === 'done')
+            durableEvent = { kind: 'done', sessionId: turnSessionId }
+          else if (pilotEvent.kind === 'cancellation') durableEvent = { kind: 'cancelled' }
+          if (durableEvent) os.conversations.applyTurnEvent(conversationId, turnId, durableEvent)
+        }
+        const handlePilotEvent = (pilotEvent: PilotEvent): void => {
+          if (pilotEvent.kind === 'delta' && pilotEvent.text) streamedSpoken += pilotEvent.text
+          if (pilotEvent.kind === 'think' && pilotEvent.text) spoken.push(pilotEvent.text)
+          if (pilotEvent.kind === 'command' && pilotEvent.name)
+            spoken.push(`[a exécuté ${pilotEvent.name}]`)
+          if (pilotEvent.kind === 'done' && pilotEvent.usage) turnUsage = pilotEvent.usage
+          if (pilotEvent.kind === 'prompt-call' && pilotEvent.sessionId)
+            turnSessionId = pilotEvent.sessionId
+          applyDurableEvent(pilotEvent)
+          if (conversationId && pilotEvent.kind === 'prompt-call' && pilotEvent.prompt) {
+            const promptCall = appendPromptCall({
+              conversationId,
+              turnId,
+              iteration: pilotEvent.iteration ?? 0,
+              actor: 'orchestrator',
+              provider: pilotEvent.prompt.provider,
+              model: pilotEvent.prompt.model,
+              transport: pilotEvent.prompt.transport,
+              boundary: 'Autowin OS -> provider adapter',
+              limitation: pilotEvent.prompt.limitation,
+              system: pilotEvent.prompt.system,
+              messages: pilotEvent.prompt.messages,
+              options: pilotEvent.prompt.options,
+              response: pilotEvent.response ?? '',
+              status: pilotEvent.status,
+              error: pilotEvent.error,
+              usage: pilotEvent.callUsage,
+              durationMs: pilotEvent.callDurationMs,
+              sessionId: pilotEvent.sessionId
+            })
+            const promptTraceEvents = promptCallToTraceEvents(promptCall, traceSequence, traceParentId)
+            for (const traceEvent of promptTraceEvents) causalTrace.append(traceEvent)
+            traceParentId = `${promptCall.id}:3`
+            traceSequence += promptTraceEvents.length
+            traceActionIndex = 0
+          }
+          if (
+            conversationId &&
+            (pilotEvent.kind === 'command' ||
+              pilotEvent.kind === 'result' ||
+              pilotEvent.kind === 'error' ||
+              pilotEvent.kind === 'retry' ||
+              pilotEvent.kind === 'cancellation')
+          ) {
+            const action = pilotActionToTraceEvent({
+              id: `${turnId}:action:${traceActionIndex++}`,
+              conversationId,
+              turnId,
+              parentId: traceParentId,
+              timestamp: new Date().toISOString(),
+              sequence: traceSequence++,
+              kind: pilotEvent.kind,
+              name: pilotEvent.name,
+              data:
+                pilotEvent.kind === 'command'
+                  ? pilotEvent.args
+                  : pilotEvent.data ?? pilotEvent.text,
+              ok: pilotEvent.ok
+            })
+            causalTrace.append(action)
+            traceParentId = action.id
+          }
+          event.sender.send('pilot:event', { ...pilotEvent, conversationId, turnId })
+        }
+        const delayedPilotFixture =
+          isolatedTestInstance &&
+          safe.at(-1)?.content.startsWith('[[autowin-fixture-delayed-pilot]]')
+        const durableStreamPrefix = '[[autowin-fixture-durable-stream]]'
+        const durableStreamFixture =
+          isolatedTestInstance && safe.at(-1)?.content.startsWith(durableStreamPrefix)
+        if (durableStreamFixture) {
+          const target = safe.at(-1)?.content.slice(durableStreamPrefix.length).trim() || 'fixture'
+          const filter = new VisibleStreamFilter()
+          const streamId = 'fixture:0'
+          const emitChunk = (delta: string): void => {
+            const visible = filter.push(delta)
+            if (visible)
+              handlePilotEvent({ kind: 'delta', streamId, iteration: 0, text: visible })
+          }
+          for (const chunk of ['Je ', 'réponds ', 'progressivement.']) {
+            emitChunk(chunk)
+            await new Promise((resolve) => setTimeout(resolve, 120))
+          }
+          emitChunk('<cm')
+          emitChunk(
+            `d>{"name":"get_state","args":{"target":${JSON.stringify(target)},"token":"fixture-secret"}}</cmd>`
+          )
+          emitChunk('<question>{"question":"fixture-private"}</question>')
+          handlePilotEvent({
+            kind: 'command',
+            actionId: 'fixture-action',
+            iteration: 0,
+            name: 'get_state',
+            args: { target, token: 'fixture-secret' }
+          })
+          handlePilotEvent({
+            kind: 'result',
+            actionId: 'fixture-action',
+            iteration: 0,
+            name: 'get_state',
+            ok: true,
+            data: { source: 'durable-fixture', target }
+          })
+          emitChunk(' Terminé.')
+          const tail = filter.finish()
+          if (tail) handlePilotEvent({ kind: 'delta', streamId, iteration: 0, text: tail })
+          handlePilotEvent({ kind: 'done', text: 'fixture durable terminée' })
+        } else if (delayedPilotFixture) {
+          await new Promise((resolve) => setTimeout(resolve, 600))
+          const fixtureEvents = [
+            { kind: 'think', text: 'événement tardif correctement routé' },
+            { kind: 'command', name: 'get_state', args: { target: 'late-conversation' } },
+            { kind: 'result', name: 'get_state', ok: true, data: { source: 'isolated' } },
+            { kind: 'done', text: 'fixture pilot terminée' }
+          ]
+          for (const fixtureEvent of fixtureEvents) handlePilotEvent(fixtureEvent as PilotEvent)
+        } else await pilot.chat(
           safe,
-          (e) => {
-            if (e.kind === 'think' && e.text) spoken.push(e.text)
-            if (e.kind === 'command' && e.name) spoken.push(`[a exécuté ${e.name}]`)
-            if (e.kind === 'done' && e.usage) turnUsage = e.usage
-            if (conversationId && e.kind === 'prompt-call' && e.prompt) {
-              const promptCall = appendPromptCall({
-                conversationId,
-                turnId,
-                iteration: e.iteration ?? 0,
-                actor: 'orchestrator',
-                provider: e.prompt.provider,
-                model: e.prompt.model,
-                transport: e.prompt.transport,
-                boundary: 'Autowin OS -> provider adapter',
-                limitation: e.prompt.limitation,
-                system: e.prompt.system,
-                messages: e.prompt.messages,
-                options: e.prompt.options,
-                response: e.response ?? '',
-                status: e.status,
-                error: e.error,
-                usage: e.callUsage,
-                durationMs: e.callDurationMs,
-                sessionId: e.sessionId
-              })
-              const promptTraceEvents = promptCallToTraceEvents(promptCall, traceSequence, traceParentId)
-              for (const traceEvent of promptTraceEvents)
-                causalTrace.append(traceEvent)
-              traceParentId = `${promptCall.id}:3`
-              traceSequence += promptTraceEvents.length
-              traceActionIndex = 0
-            }
-            if (conversationId && (e.kind === 'command' || e.kind === 'result' || e.kind === 'error' || e.kind === 'retry' || e.kind === 'cancellation')) {
-              const action = pilotActionToTraceEvent({
-                id: `${turnId}:action:${traceActionIndex++}`,
-                conversationId,
-                turnId,
-                parentId: traceParentId,
-                timestamp: new Date().toISOString(),
-                sequence: traceSequence++,
-                kind: e.kind,
-                name: e.name,
-                data: e.kind === 'command' ? e.args : e.data ?? e.text,
-                ok: e.ok
-              })
-              causalTrace.append(action)
-              traceParentId = action.id
-            }
-            event.sender.send('pilot:event', { ...e, conversationId })
-          },
+          handlePilotEvent,
           (question) => askModelQuestion(event.sender, 'chat', question, 'Chat'),
           6,
           conversationId,
@@ -712,31 +864,22 @@ function registerChatIpc(): void {
             inputTokens: turnUsage?.inputTokens,
             outputTokens: turnUsage?.outputTokens,
             costUsd: turnUsage?.costUsd,
-            text: spoken.join('\n').slice(0, 600)
-          })
-        }
-        // Persistance best-effort : la conv peut avoir été supprimée PENDANT le tour (par l'agent).
-        if (conversationId && os.conversations.get(conversationId)) {
-          const last = safe[safe.length - 1]
-          if (last?.role === 'user')
-            os.conversations.append(conversationId, {
-              role: 'user',
-              content: last.content,
-              attachments: last.attachments?.map(({ name, mimeType, size }) => ({
-                name,
-                mimeType,
-                size
-              }))
-            })
-          os.conversations.append(conversationId, {
-            role: 'assistant',
-            content: spoken.join('\n') || '(aucune réponse)'
+            text: (streamedSpoken || spoken.join('\n')).slice(0, 600)
           })
         }
         broadcast({ type: 'refresh', scope: 'workflows' })
         if (conversationId) activeChatControllers.delete(conversationId)
         return { ok: true, cancelled: false }
       } catch (e) {
+        if (conversationId && os.conversations.get(conversationId)) {
+          os.conversations.applyTurnEvent(
+            conversationId,
+            turnId,
+            controller.signal.aborted
+              ? { kind: 'cancelled' }
+              : { kind: 'failed', error: e instanceof Error ? e.message : String(e) }
+          )
+        }
         broadcast({ type: 'refresh', scope: 'workflows' })
         if (conversationId) activeChatControllers.delete(conversationId)
         if (controller.signal.aborted) return { ok: true, cancelled: true }

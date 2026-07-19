@@ -5,9 +5,6 @@
     .conv-pane,
     .chat-thread,
     .runs-pane,
-    .loop-library,
-    .loop-composer,
-    .loop-output,
     .control-row,
     .behaviour-sidebar,
     .behaviour-reader
@@ -130,9 +127,8 @@
   border-color: var(--cyan);
 }
 
-/* Chat, Loops, Controls, Behaviour */
+/* Chat, Controls, Behaviour */
 .chat-layout,
-.loop-builder,
 .hermes-controls,
 .behaviour-view {
   background: transparent;
@@ -140,9 +136,6 @@
 
 .conv-pane,
 .runs-pane,
-.loop-library,
-.loop-composer,
-.loop-output,
 .control-list,
 .behaviour-sidebar,
 .behaviour-reader {
@@ -151,8 +144,6 @@
 
 .conv-item,
 .run-row,
-.loop-skill-list article,
-.loop-step,
 .control-row,
 .behaviour-engine-group > button {
   background: #020203;
@@ -161,7 +152,6 @@
 
 .conv-item.active,
 .run-row.active,
-.loop-step.is-active,
 .behaviour-engine-group > button.active {
   background: rgba(239, 63, 145, 0.09);
   border-color: var(--rose-bright);
@@ -198,9 +188,6 @@
     .conv-pane,
     .chat-thread,
     .runs-pane,
-    .loop-library,
-    .loop-composer,
-    .loop-output,
     .control-list,
     .control-row,
     .behaviour-sidebar,
@@ -223,8 +210,6 @@
   :where(
     .conv-item,
     .run-row,
-    .loop-skill-list article,
-    .loop-step,
     .theme-filter,
     .node-search-result,
     .panel-tabs,

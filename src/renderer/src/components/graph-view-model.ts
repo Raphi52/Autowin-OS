@@ -189,6 +189,26 @@ export function toggleThemeSelection(current: ReadonlySet<string>, theme: string
   return next
 }
 
+export function highlightedNodeIdsForThemes(
+  nodes: readonly GraphNode[],
+  activeThemes: ReadonlySet<string>
+): Set<string> {
+  if (activeThemes.size === 0) return new Set(nodes.map((node) => node.id))
+  return new Set(
+    nodes
+      .filter((node) => nodeThemeIds(node).some((theme) => activeThemes.has(theme)))
+      .map((node) => node.id)
+  )
+}
+
+export function floatingNodeIdsForThemeHighlight(
+  highlightedNodeIds: ReadonlySet<string>,
+  hoveredNodeIds: ReadonlySet<string>,
+  linkedNodeIds: ReadonlySet<string>
+): Set<string> {
+  return new Set([...highlightedNodeIds, ...hoveredNodeIds, ...linkedNodeIds])
+}
+
 /** Les tags flottants représentent un cluster : un clic remplace le filtre, le second le retire. */
 export function selectExclusiveTheme(current: ReadonlySet<string>, theme: string): Set<string> {
   return current.size === 1 && current.has(theme) ? new Set() : new Set([theme])

@@ -79,37 +79,9 @@
   line-height: 1;
 }
 .graph-refresh:disabled { cursor: wait; opacity: .55; }
-
-.view-mode-switch {
-  display: inline-flex;
-  flex: 0 0 auto;
-  padding: 3px;
-  border: 1px solid #283440;
-  border-radius: 8px;
-  background: #0b1119;
-}
-
-.view-mode-switch button {
-  padding: 6px 10px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: #657589;
-  cursor: pointer;
-  font-size: 10px;
-}
-
-.view-mode-switch button[aria-pressed='true'] {
-  background: #173044;
-  color: #c9efff;
-  box-shadow: 0 0 0 1px rgba(117, 215, 255, 0.18);
-}
-
-.view-mode-switch button:last-child[aria-pressed='true'] {
-  background: linear-gradient(135deg, #432078, #7d285e);
-  color: #fff2ff;
-  box-shadow: 0 0 18px rgba(201, 87, 255, 0.32);
-}
+.graph-clean-memory { padding: 8px 11px; border: 1px solid rgba(103,225,178,.52); border-radius: 7px; background: rgba(0,0,0,.34); color: #8de9c4; cursor: pointer; font-size: 10px; font-weight: 750; }
+.graph-clean-memory:hover { background: rgba(103,225,178,.12); }
+.graph-clean-memory:disabled { cursor: wait; opacity: .48; }
 
 .graph-toolbar__stats {
   display: flex;
@@ -303,15 +275,6 @@
 .theme-sidebar__note strong {
   display: block;
   color: #91a1b4;
-}
-
-.theme-sidebar__mode {
-  width: 100%;
-  margin-top: auto;
-}
-
-.theme-sidebar__mode button {
-  flex: 1;
 }
 
 .graph-stage {
@@ -1160,26 +1123,11 @@
   border-color: var(--line);
 }
 .graph-toolbar select,
-.theme-sidebar input,
-.view-mode-switch {
+.theme-sidebar input {
   border-color: var(--line-strong);
   border-radius: var(--r1);
   background: var(--bg-1);
   color: var(--text);
-}
-.view-mode-switch button {
-  border-radius: var(--r1);
-  color: var(--text-dim);
-}
-.view-mode-switch button[aria-pressed='true'] {
-  background: rgba(201, 167, 93, 0.13);
-  color: var(--gold-bright);
-  box-shadow: inset 0 0 0 1px rgba(201, 167, 93, 0.25);
-}
-.view-mode-switch button:last-child[aria-pressed='true'] {
-  background: rgba(184, 70, 116, 0.16);
-  color: #e9acc4;
-  box-shadow: inset 0 0 0 1px rgba(184, 70, 116, 0.3);
 }
 .graph-toolbar__title span,
 .graph-stage__heading span,

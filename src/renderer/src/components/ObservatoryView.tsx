@@ -4,6 +4,7 @@ import { PromptLoadView } from './PromptLoadView'
 import { HumanJson } from './HumanJson'
 import { summarizeHermesTraces, type HermesTraceSummaryInput } from './hermes-trace-summary'
 import './ObservatoryView.css'
+import { ModuleHeader } from './ModuleHeader'
 
 interface ConversationItem { id: string; title: string; provider: string; updatedAt: number }
 interface PromptCall {
@@ -95,6 +96,7 @@ export function ObservatoryView({ active }: { active: boolean }): React.JSX.Elem
 
   return <section className="observatory-view">
     <header className="observatory-head">
+      <ModuleHeader eyebrow="Traçabilité des conversations" title="Observatory" />
       <div className="observatory-metrics">
         <strong data-metric="calls">{currentCalls.length.toLocaleString('fr-FR')}<small>appels · conversation</small></strong>
         <strong data-metric="input">{observed.input.toLocaleString('fr-FR')}<small>tokens in</small></strong>

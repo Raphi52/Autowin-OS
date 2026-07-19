@@ -11,6 +11,7 @@ const theme = value('--theme', '')
 const hoverTheme = value('--hover-theme', '')
 const verifyBehaviourFilters = process.argv.includes('--verify-behaviour-filters')
 const skipDialogs = process.argv.includes('--skip-dialogs')
+const collapseRail = process.argv.includes('--collapse-rail')
 const pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
 const page = pages.find((item) => item.type === 'page')
 if (!page) throw new Error(`Aucune page CDP sur le port ${port}`)
@@ -60,6 +61,30 @@ if (hoverTheme) {
     y: hovered.result.value.y
   })
   await new Promise((resolve) => setTimeout(resolve, 200))
+}
+if (collapseRail) {
+  await send('Runtime.evaluate', {
+    expression: `(() => {
+      const rail = document.querySelector('.rail')
+      const toggle = document.querySelector('.rail-toggle')
+      if (!rail?.classList.contains('is-collapsed')) toggle?.click()
+    })()`,
+    returnByValue: true
+  })
+  await new Promise((resolve) => setTimeout(resolve, 150))
+  const collapsed = await send('Runtime.evaluate', {
+    expression: `(() => {
+      const icons = [...document.querySelectorAll('.nav-item .space-toy-icon')]
+      return {
+        collapsed: document.querySelector('.rail')?.classList.contains('is-collapsed') ?? false,
+        iconCount: icons.length,
+        visibleIconCount: icons.filter((icon) => getComputedStyle(icon).display !== 'none').length
+      }
+    })()`,
+    returnByValue: true
+  })
+  if (!collapsed.result.value?.collapsed) throw new Error('La barre latérale ne s’est pas repliée')
+  console.log(JSON.stringify({ rail: collapsed.result.value }))
 }
 if (section) {
   const navigation = await send('Runtime.evaluate', {

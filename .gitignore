@@ -9,3 +9,8 @@ Audit/
 artifacts/
 .hermes/
 agent-studio-*.png
+/dist-*/
+/attachment-button-check.png
+/harness-timeline-*.png
+/sketches/*-converge/
+**/__pycache__/

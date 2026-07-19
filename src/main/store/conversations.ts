@@ -1,3 +1,13 @@
+import {
+  createChatTurn,
+  flattenChatParts,
+  reduceChatTurn,
+  type ChatTurnEvent,
+  type ChatTurnRuntime,
+  type ChatTurnStatus,
+  type PersistedChatPart
+} from '../../shared/chat-turn'
+
 // Store en mémoire pour les conversations catégorisées (candidat type Hermes/claude.exe/codex).
 // Interface pensée pour être remplacée plus tard par un backend sqlite sans changer l'appelant.
 
@@ -16,10 +26,16 @@ export interface Msg {
   content: string
   ts: number
   attachments?: AttachmentMeta[]
+  turnId?: string
+  status?: ChatTurnStatus
+  parts?: PersistedChatPart[]
+  runtime?: ChatTurnRuntime
+  error?: string
 }
 
 /** Une conversation, regroupée par catégorie et rattachée à un provider. */
 export interface Conversation {
+  schemaVersion?: 2
   id: string
   title: string
   category: Category
@@ -37,32 +53,57 @@ export class ConversationStore {
   private readonly now: () => number
   private nextId = 1
   /** Hook de persistance : appelé après CHAQUE mutation (create/append/rename/remove). */
-  onChange?: (all: Conversation[]) => void
+  onChange?: (all: Conversation[], urgency: 'immediate' | 'checkpoint') => void
 
   constructor(now: () => number = () => Date.now()) {
     this.now = now
   }
 
   /** Recharge un état persisté (au démarrage). nextId repart au-delà des ids existants. */
-  hydrate(saved: Conversation[]): void {
+  hydrate(saved: Conversation[]): boolean {
     this.conversations.clear()
     let max = 0
+    let migrated = false
     for (const c of saved) {
-      this.conversations.set(c.id, c)
+      const messages = c.messages.map((message) => {
+        if (message.role !== 'assistant') return message
+        if (!message.parts) {
+          migrated = true
+          return {
+            ...message,
+            status: 'completed' as const,
+            parts: message.content ? [{ kind: 'text' as const, text: message.content }] : []
+          }
+        }
+        if (message.status === 'streaming') {
+          migrated = true
+          return { ...message, status: 'interrupted' as const }
+        }
+        return { ...message, status: message.status ?? ('completed' as const) }
+      })
+      const hydrated = {
+        ...c,
+        schemaVersion: 2 as const,
+        messages
+      }
+      if (c.schemaVersion !== 2) migrated = true
+      this.conversations.set(c.id, hydrated)
       const n = Number(c.id.replace(/^conv-/, ''))
       if (Number.isFinite(n) && n > max) max = n
     }
     this.nextId = max + 1
+    return migrated
   }
 
-  private changed(): void {
-    this.onChange?.(this.list())
+  private changed(urgency: 'immediate' | 'checkpoint' = 'immediate'): void {
+    this.onChange?.(this.list(), urgency)
   }
 
   /** Crée une nouvelle conversation vide et la stocke. */
   create(p: { title: string; category: Category; provider: string }): Conversation {
     const ts = this.now()
     const conversation: Conversation = {
+      schemaVersion: 2,
       id: `conv-${this.nextId++}`,
       title: p.title,
       category: p.category,
@@ -94,6 +135,64 @@ export class ConversationStore {
     })
     conversation.updatedAt = ts
     this.changed()
+    return conversation
+  }
+
+  /** Persiste atomiquement le message utilisateur et le brouillon assistant avant le transport. */
+  beginTurn(
+    id: string,
+    user: { content: string; attachments?: AttachmentMeta[] },
+    assistant: { turnId: string; runtime?: ChatTurnRuntime }
+  ): Conversation {
+    const conversation = this.conversations.get(id)
+    if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
+    const ts = this.now()
+    conversation.messages.push({
+      role: 'user',
+      content: user.content,
+      ts,
+      ...(user.attachments?.length ? { attachments: user.attachments } : {})
+    })
+    const turn = createChatTurn(assistant.turnId, assistant.runtime)
+    conversation.messages.push({
+      role: 'assistant',
+      content: '',
+      ts,
+      turnId: turn.turnId,
+      status: turn.status,
+      parts: turn.parts,
+      ...(turn.runtime ? { runtime: turn.runtime } : {})
+    })
+    conversation.schemaVersion = 2
+    conversation.updatedAt = ts
+    this.changed('immediate')
+    return conversation
+  }
+
+  /** Applique un événement au tour structuré ; les deltas demandent un checkpoint regroupé. */
+  applyTurnEvent(id: string, turnId: string, event: ChatTurnEvent): Conversation {
+    const conversation = this.conversations.get(id)
+    if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
+    const message = [...conversation.messages]
+      .reverse()
+      .find((candidate) => candidate.role === 'assistant' && candidate.turnId === turnId)
+    if (!message) throw new Error(`Tour assistant inconnu: ${turnId}`)
+    const current = {
+      turnId,
+      status: message.status ?? ('streaming' as const),
+      parts: message.parts ?? [],
+      ...(message.runtime ? { runtime: message.runtime } : {}),
+      ...(message.error ? { error: message.error } : {})
+    }
+    const next = reduceChatTurn(current, event)
+    message.status = next.status
+    message.parts = next.parts
+    message.content = flattenChatParts(next.parts)
+    message.runtime = next.runtime
+    message.error = next.error
+    conversation.updatedAt = this.now()
+    const terminal = ['done', 'failed', 'cancelled', 'interrupted'].includes(event.kind)
+    this.changed(terminal ? 'immediate' : 'checkpoint')
     return conversation
   }
 

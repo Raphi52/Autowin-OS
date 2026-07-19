@@ -1,12 +1,13 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import { ConversationStore } from './conversations'
 import { loadConversations, persistConversations, saveConversations } from './conversations-disk'
 
 const dir = mkdtempSync(join(tmpdir(), 'aos-convs-'))
 afterAll(() => rmSync(dir, { recursive: true, force: true }))
+afterEach(() => vi.useRealTimers())
 
 describe('conversations-disk — persistance à chaque mutation', () => {
   it('roundtrip complet : mutations → disque → rechargement dans un store neuf', () => {
@@ -60,5 +61,71 @@ describe('conversations-disk — persistance à chaque mutation', () => {
     expect(loadConversations(join(dir, 'nexiste.json'))).toEqual([])
     // save ne jette jamais même sur chemin impossible
     expect(() => saveConversations([], join(dir, 'sub', 'ok.json'))).not.toThrow()
+  })
+})
+
+describe('conversations-disk structured restart', () => {
+  it('groups streaming checkpoints but flushes terminal state immediately', () => {
+    vi.useFakeTimers()
+    const p = join(dir, 'debounced.json')
+    const store = new ConversationStore(() => 1000)
+    persistConversations(store, p)
+    const c = store.create({ title: 'Debounce', category: 'codex', provider: 'codex' })
+    store.beginTurn(c.id, { content: 'Go' }, { turnId: 'turn-debounce' })
+    const beforeDelta = readFileSync(p, 'utf8')
+
+    store.applyTurnEvent(c.id, 'turn-debounce', {
+      kind: 'delta', streamId: '0:0', text: 'partiel'
+    })
+    expect(readFileSync(p, 'utf8')).toBe(beforeDelta)
+
+    vi.advanceTimersByTime(150)
+    expect(readFileSync(p, 'utf8')).toContain('partiel')
+    store.applyTurnEvent(c.id, 'turn-debounce', { kind: 'done' })
+    expect(readFileSync(p, 'utf8')).toContain('"status": "completed"')
+  })
+
+  it('restores ordered parts, results and status after restart', () => {
+    const p = join(dir, 'structured.json')
+    const a = new ConversationStore(() => 1000)
+    persistConversations(a, p)
+    const c = a.create({ title: 'Structurée', category: 'codex', provider: 'codex' })
+    a.beginTurn(c.id, { content: 'Go' }, { turnId: 'turn-structured' })
+    a.applyTurnEvent(c.id, 'turn-structured', {
+      kind: 'delta',
+      streamId: '0:0',
+      text: 'Avant.'
+    })
+    a.applyTurnEvent(c.id, 'turn-structured', {
+      kind: 'command',
+      actionId: 'a1',
+      name: 'get_state',
+      args: { target: 'chat' }
+    })
+    a.applyTurnEvent(c.id, 'turn-structured', {
+      kind: 'result',
+      actionId: 'a1',
+      name: 'get_state',
+      ok: true,
+      data: { source: 'disk' }
+    })
+    a.applyTurnEvent(c.id, 'turn-structured', { kind: 'done' })
+
+    const b = new ConversationStore(() => 2000)
+    persistConversations(b, p)
+    expect(b.get(c.id)?.messages[1]).toMatchObject({
+      turnId: 'turn-structured',
+      status: 'completed',
+      parts: [
+        { kind: 'text', text: 'Avant.' },
+        {
+          kind: 'action',
+          name: 'get_state',
+          args: { target: 'chat' },
+          ok: true,
+          data: { source: 'disk' }
+        }
+      ]
+    })
   })
 })

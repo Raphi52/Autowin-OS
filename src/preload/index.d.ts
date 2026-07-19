@@ -16,6 +16,16 @@ interface ChatAttachmentMeta {
   mimeType: string
   size: number
 }
+type StoredChatPart =
+  | { kind: 'text'; text: string; streamId?: string }
+  | {
+      kind: 'action'
+      actionId?: string
+      name: string
+      args?: unknown
+      ok?: boolean
+      data?: unknown
+    }
 interface ChatResult {
   ok: boolean
   result?: { text: string; provider: string; systemInjected: boolean }
@@ -346,6 +356,10 @@ interface ChatApi {
         content: string
         ts: number
         attachments?: ChatAttachmentMeta[]
+        turnId?: string
+        status?: 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
+        parts?: StoredChatPart[]
+        error?: string
       }>
       updatedAt: number
     }>
@@ -381,6 +395,11 @@ interface ChatApi {
   onPilotEvent: (
     cb: (e: {
       kind: string
+      conversationId?: string
+      turnId?: string
+      streamId?: string
+      actionId?: string
+      iteration?: number
       text?: string
       name?: string
       args?: unknown
@@ -401,6 +420,7 @@ interface ChatApi {
       step?: OrchestrationStep
     }) => void
   ) => () => void
+  emitIsolatedTestAppEvent: (event: Record<string, unknown> & { type: string }) => Promise<boolean>
   conversationRuns: (convId: string) => Promise<RunEntry[]>
   conversationActivity: (convId: string) => Promise<ConvActivityEntry[]>
   runTrace: (path: string) => Promise<OrchestrationStep[] | null>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './HermesControlsView.css'
+import { ModuleHeader } from './ModuleHeader'
 
 type Kind = 'skills' | 'hooks' | 'tools'
 type HookModel = 'hermes' | 'claude' | 'codex'
@@ -186,6 +187,7 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
   return (
     <section className="capability-cockpit">
       <header className="cockpit-header">
+        <ModuleHeader eyebrow="Capacités connectées" title="Skills · Hooks · Tools" />
         <div className="cockpit-toolbar">
           <label><span>Profil</span><select value={profileId} onChange={(event) => setProfileId(event.target.value)}>{profileState?.profiles.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select></label>
           <input className="input" value={query} placeholder="Rechercher une capacité…" onChange={(event) => setQuery(event.target.value)} />

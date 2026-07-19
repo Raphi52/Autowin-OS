@@ -11,6 +11,7 @@ import autowinLogo from './assets/autowin-logo.png'
 import './assets/app-shell.css'
 import './assets/cosmic-outline.css'
 import './assets/theme-modes.css'
+import './assets/ui-system.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
 import type { GraphVisualMode } from './components/graph-view-model'
 
@@ -88,6 +89,19 @@ function MainApp(): React.JSX.Element {
       return next
     })
     setTab(nextTab)
+  }
+
+  function openBrainwashConversation(brainLabel: string): void {
+    navigate('chat')
+    window.setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent('autowin:brainwash', {
+          detail: {
+            prompt: `$brainwash\n\nAudite l’intégrité du brain « ${brainLabel} ». Vérifie les fichiers source, liens cassés, doublons, métadonnées incohérentes et index obsolètes. N’efface ni ne réécris rien sans me proposer un plan, puis rends un rapport d’intégrité priorisé.`
+          }
+        })
+      )
+    }, 0)
   }
 
   useEffect(() => {
@@ -170,7 +184,7 @@ function MainApp(): React.JSX.Element {
         )}
         {visitedTabs.has('memory') && (
           <div className={`view-slot${tab === 'memory' ? ' is-active' : ''}`}>
-            <GraphView visualMode={visualMode} />
+            <GraphView visualMode={visualMode} onCleanMemory={openBrainwashConversation} />
           </div>
         )}
         {visitedTabs.has('observatory') && (
@@ -185,9 +199,7 @@ function MainApp(): React.JSX.Element {
         )}
         {visitedTabs.has('capabilities') && (
           <div className={`view-slot${tab === 'capabilities' ? ' is-active' : ''}`}>
-            <section className="capabilities-view">
-              <HermesControlsView active={tab === 'capabilities'} />
-            </section>
+            <HermesControlsView active={tab === 'capabilities'} />
           </div>
         )}
         {visitedTabs.has('behaviour') && (

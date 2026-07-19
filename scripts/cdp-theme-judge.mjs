@@ -30,6 +30,8 @@ const capture = async (name) => {
 }
 
 mkdirSync('C:/Amitel/Autowin OS/artifacts', { recursive: true })
+await send('Page.enable')
+await send('Runtime.enable')
 const views = [
   { label: 'Chat', id: 'chat' },
   { label: 'Observatory', id: 'observatory' },
@@ -39,12 +41,12 @@ const views = [
   { label: 'Memory', id: 'memory' }
 ]
 const output = {}
-for (const theme of ['Noir', 'Transparent']) {
-  const themeLabel = theme === 'Noir' ? 'Modules noirs' : 'Modules violet bleu'
+for (const theme of ['Noir', 'Galaxy']) {
+  const themeLabel = theme === 'Noir' ? 'Mode dark' : 'Mode glass'
   const selected = await evaluate(`(() => { const item = [...document.querySelectorAll('.app-theme-switch button')].find((candidate) => candidate.getAttribute('aria-label') === ${JSON.stringify(themeLabel)}); if (!item) return false; item.click(); return true })()`)
   if (!selected) throw new Error(`Thème introuvable : ${theme}`)
   for (const view of views) {
-    const clicked = await evaluate(`(() => { const item = [...document.querySelectorAll('.nav-item')].find((candidate) => candidate.textContent?.trim() === ${JSON.stringify(view.label)}); if (!item) return false; item.click(); return true })()`)
+    const clicked = await evaluate(`(() => { const item = [...document.querySelectorAll('.nav-item')].find((candidate) => candidate.querySelector('span:last-child')?.textContent?.trim() === ${JSON.stringify(view.label)}); if (!item) return false; item.click(); return true })()`)
     if (!clicked) throw new Error(`Navigation introuvable : ${view.label}`)
     await new Promise((resolve) => setTimeout(resolve, 180))
     output[`${theme}:${view.label}`] = await capture(`${theme.toLowerCase()}-${view.id}`)

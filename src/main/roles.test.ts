@@ -35,7 +35,11 @@ describe('RoleModelConfig', () => {
 
   it('permet un override via le constructeur', () => {
     const cfg = new RoleModelConfig({ scout: { provider: 'claude', model: 'haiku' } })
-    expect(cfg.getBinding('scout')).toEqual({ provider: 'claude', model: 'haiku' })
+    expect(cfg.getBinding('scout')).toEqual({
+      provider: 'claude',
+      model: 'haiku',
+      reasoningEffort: 'high'
+    })
     // les autres roles restent aux defauts
     expect(cfg.getBinding('orchestrator').provider).toBe('claude')
   })
@@ -46,8 +50,16 @@ describe('RoleModelConfig', () => {
       .setBinding('judge', { provider: 'codex', model: 'gpt-5' })
       .setBinding('scout', { provider: 'claude' })
     expect(result).toBe(cfg) // chainable : retourne this
-    expect(cfg.getBinding('judge')).toEqual({ provider: 'codex', model: 'gpt-5' })
-    expect(cfg.getBinding('scout')).toEqual({ provider: 'claude' })
+    expect(cfg.getBinding('judge')).toEqual({
+      provider: 'codex',
+      model: 'gpt-5',
+      reasoningEffort: 'medium'
+    })
+    expect(cfg.getBinding('scout')).toEqual({
+      provider: 'claude',
+      model: 'claude-fable-5',
+      reasoningEffort: 'high'
+    })
   })
 
   it('all() renvoie un snapshot des 4 roles', () => {
@@ -66,9 +78,22 @@ describe('RoleModelConfig', () => {
     expect(cfg.getBinding('orchestrator').provider).toBe('claude')
   })
 
-  it('le model optionnel est absent (undefined) quand non fourni, jamais invente', () => {
+  it('rend explicites le modele et effort effectivement transmis sur une installation neuve', () => {
     const cfg = new RoleModelConfig()
-    expect(cfg.getBinding('orchestrator').model).toBeUndefined()
+    expect(cfg.getBinding('orchestrator')).toEqual({
+      provider: 'claude',
+      model: 'claude-fable-5',
+      reasoningEffort: 'high'
+    })
+  })
+
+  it('normalise un role provider-only vers la selection canonique de son adaptateur', () => {
+    const cfg = new RoleModelConfig({ orchestrator: { provider: 'codex' } })
+    expect(cfg.getBinding('orchestrator')).toEqual({
+      provider: 'codex',
+      model: 'gpt-5.6-terra',
+      reasoningEffort: 'medium'
+    })
   })
 
   it('controle negatif : getBinding leve sur un role invalide (garde runtime)', () => {

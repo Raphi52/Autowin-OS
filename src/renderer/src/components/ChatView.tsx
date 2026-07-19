@@ -6,11 +6,18 @@ import {
   CHAT_PANE_LIMITS,
   clampConversationPaneWidth,
   coalesceAssistantParts,
+  hydrateStoredAssistant,
+  isRunRequestCurrent,
   isChatNearBottom,
+  reduceScopedLiveRuns,
+  reduceAssistantPilotEvent,
   resolveChatRuntimeIdentity,
   type ChatActionPart,
   type ChatPart,
-  type ChatRuntimeIdentity
+  type HydratedAssistantMessage,
+  type ChatRuntimeIdentity,
+  type RunRequestIdentity,
+  type ScopedLiveRun
 } from './chat-view-model'
 import { searchConversations } from './conversation-search'
 import './ChatView.css'
@@ -33,17 +40,26 @@ interface UserMsg {
   content: string
   attachments?: AttachmentMeta[]
 }
-interface AsstMsg {
-  role: 'assistant'
-  parts: Part[]
-  done: boolean
-}
+type AsstMsg = HydratedAssistantMessage
 type Msg = UserMsg | AsstMsg
 
 interface PilotEvent {
   conversationId?: string
-  kind: 'think' | 'command' | 'result' | 'done' | 'error'
+  turnId?: string
+  kind:
+    | 'delta'
+    | 'stream-reset'
+    | 'think'
+    | 'command'
+    | 'result'
+    | 'done'
+    | 'error'
+    | 'retry'
+    | 'cancellation'
   text?: string
+  streamId?: string
+  actionId?: string
+  iteration?: number
   name?: string
   args?: unknown
   ok?: boolean
@@ -60,6 +76,10 @@ type Conv = {
     content: string
     ts: number
     attachments?: AttachmentMeta[]
+    turnId?: string
+    status?: 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
+    parts?: Part[]
+    error?: string
   }>
   updatedAt: number
 }
@@ -103,14 +123,6 @@ type OrchStep = {
   }
 }
 /** Orchestration en cours (statut temps réel). */
-type LiveRun = {
-  convId?: string
-  runPath?: string
-  task: string
-  steps: OrchStep[]
-  status: 'running' | 'green' | 'red'
-}
-
 const STEP_META: Record<string, { icon: string; label: string }> = {
   exec: { icon: '🤖', label: 'sous-agent' },
   judge: { icon: '⚖️', label: 'juge' },
@@ -337,7 +349,7 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
   const [runs, setRuns] = useState<RunEntry[]>([])
   const [openRun, setOpenRun] = useState<{ path: string; content: string } | null>(null)
   const [openTrace, setOpenTrace] = useState<OrchStep[] | null>(null)
-  const [liveRun, setLiveRun] = useState<LiveRun | null>(null)
+  const [liveRuns, setLiveRuns] = useState<Record<string, ScopedLiveRun<OrchStep>>>({})
   const [decisions, setDecisions] = useState<Decision[]>([])
   const [showDecisions, setShowDecisions] = useState(false)
   const [decisionError, setDecisionError] = useState<string | null>(null)
@@ -348,6 +360,7 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
   const liveMessagesRef = useRef(new Map<string, Msg[]>())
   const busyConversationsRef = useRef(new Set<string>())
   const activeRef = useRef<string | null>(null)
+  const runsRequestRef = useRef<RunRequestIdentity>({ id: 0, scope: 'conv', convId: null })
   const followTailRef = useRef(true)
 
   function beginConversationsResize(event: React.PointerEvent<HTMLDivElement>): void {
@@ -383,10 +396,15 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
   }
 
   async function refreshRuntimeIdentity(): Promise<ChatRuntimeIdentity> {
-    const [topology, models] = await Promise.all([window.api.topology(), window.api.models()])
+    const [topology, models, roles] = await Promise.all([
+      window.api.topology(),
+      window.api.models(),
+      window.api.roles()
+    ])
     const resolved = resolveChatRuntimeIdentity(
       topology as RuntimeTopology,
-      models as RuntimeModel[]
+      models as RuntimeModel[],
+      roles.orchestrator
     )
     setRuntimeIdentity(resolved)
     return resolved
@@ -449,13 +467,28 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
   }, [runScope])
   /** Workflows affichés : ceux de la CONVERSATION ACTIVE par défaut, global sur demande. */
   async function refreshRuns(): Promise<void> {
-    if (runScopeRef.current === 'tous') {
-      setRuns(await window.api.listRuns())
-    } else if (activeRef.current) {
-      setRuns((await window.api.conversationRuns(activeRef.current)) as RunEntry[])
-    } else {
-      setRuns([])
+    const request: RunRequestIdentity = {
+      id: runsRequestRef.current.id + 1,
+      scope: runScopeRef.current,
+      convId: activeRef.current
     }
+    runsRequestRef.current = request
+    const nextRuns =
+      request.scope === 'tous'
+        ? await window.api.listRuns()
+        : request.convId
+          ? ((await window.api.conversationRuns(request.convId)) as RunEntry[])
+          : []
+    const currentRequest = {
+      id: runsRequestRef.current.id,
+      scope: runScopeRef.current,
+      convId: activeRef.current
+    }
+    if (isRunRequestCurrent(request, currentRequest)) setRuns(nextRuns)
+  }
+  function selectRunScope(scope: 'conv' | 'tous'): void {
+    runScopeRef.current = scope
+    setRunScope(scope)
   }
   useEffect(() => {
     void Promise.resolve().then(refreshRuns)
@@ -482,26 +515,51 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
         if (e.scope === 'conversations') refreshConvs()
         if (e.scope === 'decisions') refreshDecisions()
         if (e.scope === 'workflows') refreshRuns()
+        if (e.scope === 'roles') refreshRuntimeIdentity()
       } else if (e.type === 'orchestrate-start') {
-        // Orchestration lancée pour CETTE conversation → statut temps réel visible.
-        if (e.convId && e.convId !== activeRef.current) return
-        setShowRuns(true)
-        setPaneTab('runs')
-        setLiveRun({
-          convId: e.convId,
-          runPath: e.runPath,
-          task: e.task ?? 'tâche',
-          steps: [],
-          status: 'running'
-        })
-      } else if (e.type === 'orchestrate-step' && e.step) {
+        if (!e.convId) return
+        setLiveRuns((current) =>
+          reduceScopedLiveRuns(current, {
+            type: 'start',
+            convId: e.convId!,
+            runPath: e.runPath,
+            task: e.task ?? 'tâche'
+          })
+        )
+        if (e.convId === activeRef.current) {
+          setShowRuns(true)
+          setPaneTab('runs')
+        }
+      } else if (e.type === 'orchestrate-step' && e.step && e.convId) {
         const step = e.step as OrchStep
-        setLiveRun((lr) => (lr ? { ...lr, steps: [...lr.steps, step] } : lr))
-      } else if (e.type === 'orchestrate-end') {
-        setLiveRun((lr) => (lr ? { ...lr, status: (e.status as 'green' | 'red') ?? 'green' } : lr))
-        refreshRuns()
+        setLiveRuns((current) =>
+          reduceScopedLiveRuns(current, {
+            type: 'step',
+            convId: e.convId!,
+            runPath: e.runPath,
+            step
+          })
+        )
+      } else if (e.type === 'orchestrate-end' && e.convId) {
+        const convId = e.convId
+        const runPath = e.runPath
+        setLiveRuns((current) =>
+          reduceScopedLiveRuns(current, {
+            type: 'end',
+            convId,
+            runPath,
+            status: (e.status as 'green' | 'red') ?? 'green'
+          })
+        )
+        void refreshRuns()
         // Laisse le run terminé visible ~4 s en tant que « live », puis il rejoint la liste.
-        setTimeout(() => setLiveRun(null), 4000)
+        setTimeout(
+          () =>
+            setLiveRuns((current) =>
+              reduceScopedLiveRuns(current, { type: 'clear', convId, runPath })
+            ),
+          4000
+        )
       }
     })
     return () => {
@@ -537,30 +595,9 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
       const e = raw as PilotEvent
       const conversationId = e.conversationId
       if (!conversationId || !busyConversationsRef.current.has(conversationId)) return
-      if (e.kind === 'think' && e.text) {
-        patchLast(conversationId, (m) => m.parts.push({ kind: 'text', text: e.text! }))
-      } else if (e.kind === 'command') {
-        patchLast(conversationId, (m) => m.parts.push({ kind: 'action', name: e.name!, args: e.args }))
-      } else if (e.kind === 'result') {
-        patchLast(conversationId, (m) => {
-          for (let i = m.parts.length - 1; i >= 0; i--) {
-            const p = m.parts[i]
-            if (p.kind === 'action' && p.name === e.name && p.ok === undefined) {
-              m.parts[i] = { ...p, ok: e.ok, data: e.data }
-              return
-            }
-          }
-        })
-      } else if (e.kind === 'error') {
-        patchLast(conversationId, (m) => m.parts.push({ kind: 'text', text: `⚠️ ${e.text ?? 'erreur'}` }))
-      } else if (e.kind === 'done') {
-        patchLast(conversationId, (m) => {
-          if (e.text && !m.parts.some((p) => p.kind === 'text' && p.text === e.text)) {
-            m.parts.push({ kind: 'text', text: e.text })
-          }
-          m.done = true
-        })
-      }
+      patchLast(conversationId, (message) =>
+        Object.assign(message, reduceAssistantPilotEvent(message, e))
+      )
     })
     return off
   }, [])
@@ -590,15 +627,15 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
   function loadConv(c: Conv): void {
     followTailRef.current = true
     setHasNewActivity(false)
+    activeRef.current = c.id
     setActiveId(c.id)
-    const stored = liveMessagesRef.current.get(c.id) ??
+    const stored =
+      liveMessagesRef.current.get(c.id) ??
       c.messages.map((m) =>
         m.role === 'user'
           ? { role: 'user' as const, content: m.content, attachments: m.attachments }
           : {
-              role: 'assistant' as const,
-              parts: [{ kind: 'text' as const, text: m.content }],
-              done: true
+              ...hydrateStoredAssistant(m)
             }
       )
     liveMessagesRef.current.set(c.id, stored)
@@ -611,12 +648,25 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
   function newConv(): void {
     followTailRef.current = true
     setHasNewActivity(false)
+    activeRef.current = null
     setActiveId(null)
     setMessages([])
     setInput('')
     setAttachments([])
     setAttachmentError(null)
   }
+
+  useEffect(() => {
+    const openBrainwash = (event: Event): void => {
+      const prompt = (event as CustomEvent<{ prompt?: string }>).detail?.prompt
+      if (!prompt) return
+      newConv()
+      setInput(prompt)
+      requestAnimationFrame(() => composerInputRef.current?.focus())
+    }
+    window.addEventListener('autowin:brainwash', openBrainwash)
+    return () => window.removeEventListener('autowin:brainwash', openBrainwash)
+  }, [])
 
   async function renameConv(c: Conv): Promise<void> {
     const t = prompt('Nouveau titre', c.title)
@@ -659,7 +709,7 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
     // Pas de conversation active → on en crée une (titre = début du message).
     let convId = activeId
     if (!convId) {
-      const identity = runtimeIdentity ?? (await refreshRuntimeIdentity())
+      const identity = await refreshRuntimeIdentity()
       const titleSource = value || outgoingAttachments[0].name
       const title = titleSource.length > 42 ? `${titleSource.slice(0, 42)}…` : titleSource
       const c = await window.api.conversationsCreate({
@@ -668,8 +718,8 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
         provider: identity.provider
       })
       convId = c.id
-      setActiveId(c.id)
       activeRef.current = c.id
+      setActiveId(c.id)
       refreshConvs()
     }
 
@@ -684,7 +734,7 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
           size
         }))
       },
-      { role: 'assistant', parts: [], done: false }
+      hydrateStoredAssistant({ content: '', parts: [], status: 'streaming' })
     ]
     setMessages(history)
     liveMessagesRef.current.set(convId, history)
@@ -701,24 +751,40 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
     payload[payload.length - 1].attachments = outgoingAttachments
     try {
       const res = await window.api.pilotChat(payload, convId)
-      if (!res.ok)
-        patchLast(convId, (m) => m.parts.push({ kind: 'text', text: `⚠️ ${res.error ?? 'erreur'}` }))
+      if (!res.ok || res.cancelled)
+        patchLast(convId, (m) => {
+          m.status = res.cancelled ? 'cancelled' : 'failed'
+          m.done = true
+          if (!res.cancelled)
+            m.parts.push({ kind: 'text', text: `⚠️ ${res.error ?? 'erreur'}` })
+        })
     } catch (error) {
-      patchLast(convId, (m) =>
+      patchLast(convId, (m) => {
+        m.status = 'failed'
+        m.done = true
         m.parts.push({
           kind: 'text',
           text: `⚠️ ${error instanceof Error ? error.message : String(error)}`
         })
-      )
+      })
     } finally {
       setConversationBusy(convId, false)
       patchLast(convId, (m) => {
+        if (m.status === 'streaming') m.status = 'interrupted'
         m.done = true
         if (m.parts.length === 0) m.parts.push({ kind: 'text', text: '_(aucune réponse)_' })
       })
-      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
-      const rendered = [...(liveMessagesRef.current.get(convId) ?? [])].reverse().find((message) => message.role === 'assistant') as AsstMsg | undefined
-      const renderedText = rendered?.parts.filter((part) => part.kind === 'text').map((part) => part.text).join('\n') ?? ''
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      )
+      const rendered = [...(liveMessagesRef.current.get(convId) ?? [])]
+        .reverse()
+        .find((message) => message.role === 'assistant') as AsstMsg | undefined
+      const renderedText =
+        rendered?.parts
+          .filter((part) => part.kind === 'text')
+          .map((part) => part.text)
+          .join('\n') ?? ''
       if (renderedText.trim()) await window.api.markResponseDisplayed(convId, renderedText)
     }
     refreshConvs()
@@ -867,7 +933,9 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
               <span className="chat-head-kicker">Conversation active</span>
               <b className="chat-conv-title">{active ? active.title : 'Nouvelle conversation'}</b>
               <div className="chat-runtime" data-testid="chat-runtime-identity">
-                <span className={`chat-runtime-provider is-${runtimeIdentity?.provider ?? 'loading'}`}>
+                <span
+                  className={`chat-runtime-provider is-${runtimeIdentity?.provider ?? 'loading'}`}
+                >
                   {runtimeIdentity?.provider ?? 'connexion…'}
                 </span>
                 <span>{runtimeIdentity?.modelLabel ?? 'modèle en cours de résolution'}</span>
@@ -882,7 +950,14 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
             </div>
           </div>
           <div className="row gap2">
-            {busy && activeId && <button className="btn btn-sm" onClick={()=>void window.api.cancelPilotChat(activeId)}>Arrêter</button>}
+            {busy && activeId && (
+              <button
+                className="btn btn-sm"
+                onClick={() => void window.api.cancelPilotChat(activeId)}
+              >
+                Arrêter
+              </button>
+            )}
             {decisions.length > 0 && (
               <button
                 className={`btn btn-sm${showDecisions ? ' btn-accent' : ''}`}
@@ -933,7 +1008,11 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
         )}
 
         {deleteCandidate && (
-          <div className="delete-confirm-layer" role="presentation" onClick={() => setDeleteCandidate(null)}>
+          <div
+            className="delete-confirm-layer"
+            role="presentation"
+            onClick={() => setDeleteCandidate(null)}
+          >
             <section
               className="delete-confirm-card"
               role="dialog"
@@ -941,17 +1020,27 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
               aria-labelledby="delete-confirm-title"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="delete-confirm-orbit" aria-hidden="true">✦</div>
+              <div className="delete-confirm-orbit" aria-hidden="true">
+                ✦
+              </div>
               <span className="delete-confirm-kicker">ACTION IRRÉVERSIBLE</span>
               <h2 id="delete-confirm-title">Supprimer la conversation ?</h2>
               <p>
-                <strong>« {deleteCandidate.title} »</strong> et son historique local seront retirés de cet appareil.
+                <strong>« {deleteCandidate.title} »</strong> et son historique local seront retirés
+                de cet appareil.
               </p>
               <div className="delete-confirm-actions">
-                <button className="btn delete-confirm-cancel" onClick={() => setDeleteCandidate(null)} autoFocus>
+                <button
+                  className="btn delete-confirm-cancel"
+                  onClick={() => setDeleteCandidate(null)}
+                  autoFocus
+                >
                   Garder la conversation
                 </button>
-                <button className="btn delete-confirm-danger" onClick={() => void confirmRemoveConv()}>
+                <button
+                  className="btn delete-confirm-danger"
+                  onClick={() => void confirmRemoveConv()}
+                >
                   Supprimer définitivement
                 </button>
               </div>
@@ -1085,12 +1174,7 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
                 aria-label="Joindre des fichiers"
                 title="Joindre des fichiers"
               >
-                <svg
-                  className="attachment-icon"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  aria-hidden="true"
-                >
+                <svg className="attachment-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path
                     d="m8.75 12.85 5.9-5.9a3.05 3.05 0 0 1 4.31 4.31l-7.42 7.42a5.05 5.05 0 0 1-7.14-7.14l7.25-7.25"
                     stroke="currentColor"
@@ -1158,171 +1242,176 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
       {/* ---- Panneau droit : workflows + observatoire d'activité (repliable) ---- */}
       {showRuns && (
         <>
-        <div
-          className="runs-pane-resizer"
-          role="separator"
-          aria-label="Redimensionner la colonne Workflows"
-          aria-orientation="vertical"
-          onPointerDown={beginRunsResize}
-        />
-        <aside
-          className={`runs-pane fade-in${paneTab === 'activite' ? ' wide' : ''}`}
-          style={{ width: `${runsPaneWidth}px` }}
-        >
-          <div className="conv-head">
-            <div className="row gap2">
-              <button
-                className={`btn btn-sm${paneTab === 'runs' ? ' btn-accent' : ''}`}
-                onClick={() => setPaneTab('runs')}
-              >
-                Runs
-              </button>
-              <button
-                className={`btn btn-sm${paneTab === 'activite' ? ' btn-accent' : ''}`}
-                onClick={() => setPaneTab('activite')}
-              >
-                Activité
-              </button>
-            </div>
-            <div className="row gap2">
-              {paneTab === 'runs' && (
-                <button className="btn btn-sm" onClick={refreshRuns} title="Rafraîchir">
-                  ⟳
-                </button>
-              )}
-              <button className="btn btn-sm btn-ghost" onClick={() => setShowRuns(false)}>
-                ✕
-              </button>
-            </div>
-          </div>
-          {paneTab === 'activite' && <ActivityPane convId={activeId} />}
-          {paneTab === 'runs' && (
-            <div className="row gap2" style={{ fontSize: 11 }}>
-              <button
-                className={`btn btn-sm${runScope === 'conv' ? ' btn-accent' : ''}`}
-                onClick={() => setRunScope('conv')}
-              >
-                cette conversation
-              </button>
-              <button
-                className={`btn btn-sm${runScope === 'tous' ? ' btn-accent' : ''}`}
-                onClick={() => setRunScope('tous')}
-              >
-                tous
-              </button>
-            </div>
-          )}
           <div
-            className="scroll-y col grow"
-            style={{
-              gap: 'var(--s2)',
-              minHeight: 0,
-              display: paneTab === 'runs' ? undefined : 'none'
-            }}
+            className="runs-pane-resizer"
+            role="separator"
+            aria-label="Redimensionner la colonne Workflows"
+            aria-orientation="vertical"
+            onPointerDown={beginRunsResize}
+          />
+          <aside
+            className={`runs-pane fade-in${paneTab === 'activite' ? ' wide' : ''}`}
+            style={{ width: `${runsPaneWidth}px` }}
           >
-            {/* Orchestration EN COURS : statut temps réel + sous-agents qui se remplissent. */}
-            {liveRun && (
-              <div className={`card live-run stripe stripe-accent fade-in`}>
-                <div className="row" style={{ justifyContent: 'space-between' }}>
-                  <div className="row gap2" style={{ minWidth: 0 }}>
-                    {liveRun.status === 'running' ? (
-                      <span className="spinner" />
-                    ) : (
-                      <span
-                        className={`status-dot ${liveRun.status === 'green' ? 'st-ok' : 'st-err'}`}
-                      />
-                    )}
-                    <span className="run-subject">{liveRun.task}</span>
-                  </div>
-                  <span className="badge">
-                    {liveRun.status === 'running' ? 'en cours' : liveRun.status}
-                  </span>
-                </div>
-                <div style={{ marginTop: 'var(--s2)' }}>
-                  <StepThread steps={liveRun.steps} />
-                  {liveRun.status === 'running' && (
-                    <div className="c-faint" style={{ fontSize: 11, marginTop: 4 }}>
-                      <span className="spinner" /> le sous-agent travaille…
-                    </div>
-                  )}
-                </div>
+            <div className="conv-head">
+              <div className="row gap2">
+                <button
+                  className={`btn btn-sm${paneTab === 'runs' ? ' btn-accent' : ''}`}
+                  onClick={() => setPaneTab('runs')}
+                >
+                  Runs
+                </button>
+                <button
+                  className={`btn btn-sm${paneTab === 'activite' ? ' btn-accent' : ''}`}
+                  onClick={() => setPaneTab('activite')}
+                >
+                  Activité
+                </button>
               </div>
-            )}
-            {runs.length === 0 && !liveRun && (
-              <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
-                {runScope === 'conv'
-                  ? activeId
-                    ? 'Aucun workflow pour cette conversation — lance une tâche (orchestration) ou attache un RUN.md.'
-                    : 'Sélectionne ou démarre une conversation pour voir ses workflows.'
-                  : 'Aucun run.'}
-              </div>
-            )}
-            {runs.map((r) => {
-              const pct =
-                r.summary.dodTotal > 0
-                  ? Math.round((r.summary.dodChecked / r.summary.dodTotal) * 100)
-                  : 0
-              const isOpen = openRun?.path === r.path
-              return (
-                <div key={r.path} className="col" style={{ gap: 0 }}>
-                  <button
-                    className="card run-row"
-                    onClick={() => {
-                      if (isOpen) {
-                        setOpenRun(null)
-                        setOpenTrace(null)
-                      } else {
-                        viewRun(r)
-                      }
-                    }}
-                  >
-                    <div className="row" style={{ justifyContent: 'space-between' }}>
-                      <div className="row gap2" style={{ minWidth: 0 }}>
-                        <span className={`status-dot ${RUN_DOT[r.summary.status] ?? ''}`} />
-                        <span className="run-subject">{r.subject}</span>
-                      </div>
-                      <span className="badge">{r.summary.status}</span>
-                    </div>
-                    <div className="row" style={{ marginTop: 6, gap: 'var(--s2)' }}>
-                      <div className="meter grow">
-                        <span
-                          style={{
-                            width: `${pct}%`,
-                            background: r.summary.status === 'green' ? 'var(--ok)' : 'var(--accent)'
-                          }}
-                        />
-                      </div>
-                      <span className="c-faint tnum" style={{ fontSize: 10 }}>
-                        {r.summary.dodChecked}/{r.summary.dodTotal}
-                      </span>
-                    </div>
+              <div className="row gap2">
+                {paneTab === 'runs' && (
+                  <button className="btn btn-sm" onClick={refreshRuns} title="Rafraîchir">
+                    ⟳
                   </button>
-                  {isOpen && (
-                    <div className="run-detail-box fade-in">
-                      {openTrace ? (
-                        <div className="col" style={{ gap: 'var(--s2)' }}>
-                          <div
-                            className="c-faint"
-                            style={{
-                              fontSize: 10,
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.05em'
-                            }}
-                          >
-                            Fil des sous-agents
-                          </div>
-                          <StepThread steps={openTrace} />
-                        </div>
+                )}
+                <button className="btn btn-sm btn-ghost" onClick={() => setShowRuns(false)}>
+                  ✕
+                </button>
+              </div>
+            </div>
+            {paneTab === 'activite' && <ActivityPane convId={activeId} />}
+            {paneTab === 'runs' && (
+              <div className="row gap2" style={{ fontSize: 11 }}>
+                <button
+                  className={`btn btn-sm${runScope === 'conv' ? ' btn-accent' : ''}`}
+                  onClick={() => selectRunScope('conv')}
+                >
+                  cette conversation
+                </button>
+                <button
+                  className={`btn btn-sm${runScope === 'tous' ? ' btn-accent' : ''}`}
+                  onClick={() => selectRunScope('tous')}
+                >
+                  tous
+                </button>
+              </div>
+            )}
+            <div
+              className="scroll-y col grow"
+              style={{
+                gap: 'var(--s2)',
+                minHeight: 0,
+                display: paneTab === 'runs' ? undefined : 'none'
+              }}
+            >
+              {/* Orchestration EN COURS : statut temps réel + sous-agents qui se remplissent. */}
+              {activeId && liveRuns[activeId] && (
+                <div className={`card live-run stripe stripe-accent fade-in`}>
+                  <div className="row" style={{ justifyContent: 'space-between' }}>
+                    <div className="row gap2" style={{ minWidth: 0 }}>
+                      {liveRuns[activeId].status === 'running' ? (
+                        <span className="spinner" />
                       ) : (
-                        openRun && <pre className="run-detail mono scroll-y">{openRun.content}</pre>
+                        <span
+                          className={`status-dot ${liveRuns[activeId].status === 'green' ? 'st-ok' : 'st-err'}`}
+                        />
                       )}
+                      <span className="run-subject">{liveRuns[activeId].task}</span>
                     </div>
-                  )}
+                    <span className="badge">
+                      {liveRuns[activeId].status === 'running'
+                        ? 'en cours'
+                        : liveRuns[activeId].status}
+                    </span>
+                  </div>
+                  <div style={{ marginTop: 'var(--s2)' }}>
+                    <StepThread steps={liveRuns[activeId].steps} />
+                    {liveRuns[activeId].status === 'running' && (
+                      <div className="c-faint" style={{ fontSize: 11, marginTop: 4 }}>
+                        <span className="spinner" /> le sous-agent travaille…
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )
-            })}
-          </div>
-        </aside>
+              )}
+              {runs.length === 0 && (!activeId || !liveRuns[activeId]) && (
+                <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
+                  {runScope === 'conv'
+                    ? activeId
+                      ? 'Aucun workflow pour cette conversation — lance une tâche (orchestration) ou attache un RUN.md.'
+                      : 'Sélectionne ou démarre une conversation pour voir ses workflows.'
+                    : 'Aucun run.'}
+                </div>
+              )}
+              {runs.map((r) => {
+                const pct =
+                  r.summary.dodTotal > 0
+                    ? Math.round((r.summary.dodChecked / r.summary.dodTotal) * 100)
+                    : 0
+                const isOpen = openRun?.path === r.path
+                return (
+                  <div key={r.path} className="col" style={{ gap: 0 }}>
+                    <button
+                      className="card run-row"
+                      onClick={() => {
+                        if (isOpen) {
+                          setOpenRun(null)
+                          setOpenTrace(null)
+                        } else {
+                          viewRun(r)
+                        }
+                      }}
+                    >
+                      <div className="row" style={{ justifyContent: 'space-between' }}>
+                        <div className="row gap2" style={{ minWidth: 0 }}>
+                          <span className={`status-dot ${RUN_DOT[r.summary.status] ?? ''}`} />
+                          <span className="run-subject">{r.subject}</span>
+                        </div>
+                        <span className="badge">{r.summary.status}</span>
+                      </div>
+                      <div className="row" style={{ marginTop: 6, gap: 'var(--s2)' }}>
+                        <div className="meter grow">
+                          <span
+                            style={{
+                              width: `${pct}%`,
+                              background:
+                                r.summary.status === 'green' ? 'var(--ok)' : 'var(--accent)'
+                            }}
+                          />
+                        </div>
+                        <span className="c-faint tnum" style={{ fontSize: 10 }}>
+                          {r.summary.dodChecked}/{r.summary.dodTotal}
+                        </span>
+                      </div>
+                    </button>
+                    {isOpen && (
+                      <div className="run-detail-box fade-in">
+                        {openTrace ? (
+                          <div className="col" style={{ gap: 'var(--s2)' }}>
+                            <div
+                              className="c-faint"
+                              style={{
+                                fontSize: 10,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em'
+                              }}
+                            >
+                              Fil des sous-agents
+                            </div>
+                            <StepThread steps={openTrace} />
+                          </div>
+                        ) : (
+                          openRun && (
+                            <pre className="run-detail mono scroll-y">{openRun.content}</pre>
+                          )
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </aside>
         </>
       )}
     </div>

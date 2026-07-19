@@ -14,12 +14,32 @@ export interface RoleBinding {
   capabilityProfileId?: string
 }
 
+const PROVIDER_DEFAULT_SELECTIONS: Record<
+  string,
+  { model: string; reasoningEffort: ReasoningEffort }
+> = {
+  claude: { model: 'claude-fable-5', reasoningEffort: 'high' },
+  codex: { model: 'gpt-5.6-terra', reasoningEffort: 'medium' },
+  kimi: { model: 'kimi-code/kimi-for-coding', reasoningEffort: 'none' }
+}
+
+/** Rend explicite ce que l'adaptateur utiliserait sinon implicitement. */
+export function normalizeRoleBinding(binding: RoleBinding): RoleBinding {
+  const defaults = PROVIDER_DEFAULT_SELECTIONS[binding.provider]
+  if (!defaults) return { ...binding }
+  return {
+    ...binding,
+    model: binding.model ?? defaults.model,
+    reasoningEffort: binding.reasoningEffort ?? defaults.reasoningEffort
+  }
+}
+
 /** Config par defaut raisonnable : claude pour l'essentiel, codex pour le scout. */
 const DEFAULT_BINDINGS: Record<Role, RoleBinding> = {
-  orchestrator: { provider: 'claude' },
-  subagent: { provider: 'claude' },
-  judge: { provider: 'claude' },
-  scout: { provider: 'codex' }
+  orchestrator: normalizeRoleBinding({ provider: 'claude' }),
+  subagent: normalizeRoleBinding({ provider: 'claude' }),
+  judge: normalizeRoleBinding({ provider: 'claude' }),
+  scout: normalizeRoleBinding({ provider: 'codex' })
 }
 
 export class RoleModelConfig {
@@ -33,7 +53,7 @@ export class RoleModelConfig {
       for (const role of ALL_ROLES) {
         const override = defaults[role]
         if (override) {
-          this.bindings[role] = { ...override }
+          this.bindings[role] = normalizeRoleBinding(override)
         }
       }
     }
@@ -53,7 +73,7 @@ export class RoleModelConfig {
     if (!ALL_ROLES.includes(role)) {
       throw new Error(`Role inconnu: ${String(role)}`)
     }
-    this.bindings[role] = { ...b }
+    this.bindings[role] = normalizeRoleBinding(b)
     return this
   }
 

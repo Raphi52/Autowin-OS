@@ -66,9 +66,10 @@ describe('identite Autowin OS', () => {
     expect(main.indexOf("app.setPath('userData'")).toBeLessThan(
       main.indexOf("app.getPath('userData')")
     )
-    expect(main).toContain(
-      "!app.isPackaged && process.env['AUTOWIN_ISOLATED_TEST_INSTANCE'] === '1'"
+    expect(main).toMatch(
+      /resolveAutomationInstanceMode\(\s*process\.argv,\s*process\.env,\s*app\.isPackaged\s*\)/
     )
+    expect(main).toContain('const isolatedTestInstance = automationInstanceMode.isolated')
     expect(main).toContain("resolveAutowinAppDataBase(app.getPath('appData'), app.isPackaged)")
   })
 
@@ -83,9 +84,12 @@ describe('identite Autowin OS', () => {
     expect(appShell).toContain('className="brand-logo"')
     expect(appShell).not.toContain('className="brand-dot"')
     expect(packagingIcon).toEqual(runtimeIcon)
+    expect(readFileSync(join(ROOT, 'electron-builder.yml'), 'utf8')).toContain(
+      'icon: build/icon.ico'
+    )
     expect(theme).toContain("url('./autowin-galaxy-bg.png')")
     expect(main).not.toContain("process.platform === 'linux' ? { icon } : {}")
-    expect(main).toMatch(/new BrowserWindow\(\{[\s\S]*?\n\s+icon,\n/)
+    expect(main).toContain("icon: process.env['AUTOWIN_OS_DEV'] === '1' ? devIcon : icon")
     expect(main).toMatch(/titleBarOverlay:\s*\{[\s\S]*?color:\s*'#00000000'/)
     expect(readFileSync(join(ROOT, 'src/renderer/src/assets/cosmic-outline.css'), 'utf8')).toMatch(
       /\.cosmic-outline \.chat-layout\s*\{\s*background:\s*rgba\(0, 0, 0, 0\.58\)/

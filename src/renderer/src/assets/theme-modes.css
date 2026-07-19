@@ -1,12 +1,26 @@
-/* Deux thèmes applicatifs explicites. Ce fichier est chargé après les styles de vues. */
-.shell.theme-serious{--app-surface:#050507;--app-surface-strong:#08090c;--app-border:rgba(255,255,255,.18);--app-chrome:#000;--app-glass:0}
-.shell.theme-galaxy{--app-surface:rgba(7,8,23,.46);--app-surface-strong:rgba(5,6,19,.64);--app-border:rgba(148,125,225,.34);--app-chrome:rgba(4,4,18,.42);--app-glass:1}
-.view-slot>:not(.graph-observatory){height:100%;min-height:0;overflow:hidden;border:1px solid var(--app-border);border-radius:14px;background:var(--app-surface)!important;backdrop-filter:blur(calc(12px * var(--app-glass)))}
-.theme-serious .main{background:transparent}.theme-serious .rail{background:rgba(0,0,0,.58);border-right-color:rgba(255,255,255,.2);backdrop-filter:blur(12px)}.theme-serious .brand,.theme-serious .app-theme-switch{background:#070708}.theme-serious .chat-layout,.theme-serious .conv-pane,.theme-serious .runs-pane,.theme-serious .chat,.theme-serious .chat-scroll,.theme-serious .chat-head,.theme-serious .composer,.theme-serious .conv-search,.theme-serious .composer-field,.theme-serious .observatory-view,.theme-serious .behaviour-view,.theme-serious .capability-cockpit,.theme-serious .cockpit-shell,.theme-serious .cockpit-sources,.theme-serious .cockpit-inspector,.theme-serious .cockpit-registry,.theme-serious .control-row{background:#000!important;box-shadow:none!important}
-.theme-serious .agent-studio,.theme-serious .studio-toolbar,.theme-serious .studio-library,.theme-serious .studio-canvas,.theme-serious .studio-inspector,.theme-serious .studio-regime,.theme-serious .studio-save-state,.theme-serious .studio-mode-switch,.theme-serious .studio-resource,.theme-serious .studio-frame,.theme-serious .studio-frame-slot,.theme-serious .studio-assignment,.theme-serious .studio-persona-cell,.theme-serious .studio-matrix-cell,.theme-serious .studio-persona-brief,.theme-serious .studio-inspector-steps div,.theme-serious .studio-injection-path,.theme-serious .studio-model-binding,.theme-serious .studio-config-grid textarea{background:#000!important;box-shadow:none!important}
-.theme-serious .graph-observatory,.theme-serious .graph-observatory--serious .graph-stage,.theme-serious .graph-observatory--serious .graph-canvas{background:#000!important;box-shadow:none!important}.theme-serious .graph-observatory--serious .graph-toolbar,.theme-serious .graph-observatory--serious .theme-sidebar,.theme-serious .graph-observatory--serious .visibility-sidebar{background:#050507!important}
-.theme-galaxy .rail{background:rgba(3,4,18,.4)}.theme-galaxy .view-slot>:not(.graph-observatory){box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}.theme-galaxy .graph-observatory--galaxy .graph-toolbar,.theme-galaxy .graph-observatory--galaxy .theme-sidebar,.theme-galaxy .graph-observatory--galaxy .visibility-sidebar{background:rgba(4,5,18,.46)!important;backdrop-filter:blur(15px)}
-/* Le chat conserve un verre noir neutre : la galaxie reste visible sans voile bleu ni halo. */
-.theme-galaxy .chat-layout{background:rgba(0,0,0,.44)!important}.theme-galaxy .conv-pane,.theme-galaxy .runs-pane{background:rgba(0,0,0,.32)!important}.theme-galaxy .chat-head,.theme-galaxy .composer{background:rgba(0,0,0,.28)!important}
-@media (max-width:1120px){.theme-galaxy .runs-pane{background:rgba(0,0,0,.9)!important;backdrop-filter:blur(14px)}}
-.rail.is-collapsed .app-theme-switch{display:grid;width:34px;padding:2px}.rail.is-collapsed .app-theme-switch button{font-size:0;padding:8px 0}.rail.is-collapsed .app-theme-switch button::first-letter{font-size:10px}
+/* Theme modes select mood only. Component geometry lives in ui-system.css. */
+.theme-serious .main { background: transparent; }
+.theme-serious .rail {
+  background: rgba(0, 0, 0, .58);
+  border-right-color: rgba(255, 255, 255, .2);
+  backdrop-filter: blur(12px);
+}
+.theme-serious .brand,
+.theme-serious .app-theme-switch { background: #070708; }
+
+.theme-galaxy .rail {
+  background: rgba(0, 0, 0, .3);
+  border-right-color: rgba(255, 255, 255, .16);
+  backdrop-filter: blur(16px);
+}
+
+.rail.is-collapsed .app-theme-switch {
+  display: grid;
+  width: 34px;
+  padding: 2px;
+}
+.rail.is-collapsed .app-theme-switch button {
+  padding: 8px 0;
+  font-size: 0;
+}
+.rail.is-collapsed .app-theme-switch button::first-letter { font-size: 10px; }

@@ -19,6 +19,8 @@ import {
   getGraphVisualProfile,
   graphForcesForSpacing,
   graphMotionProfile,
+  highlightedNodeIdsForThemes,
+  floatingNodeIdsForThemeHighlight,
   isLinkAttachedToNode,
   linkedNodesFor,
   mergeGraphDelta,
@@ -41,6 +43,7 @@ import {
 } from './graph-view-model'
 import { BrainMarkdown } from './BrainMarkdown'
 import { HumanJson } from './HumanJson'
+import { ModuleHeader } from './ModuleHeader'
 import './GraphView.css'
 
 type BrainTheme = { id: string; label: string }
@@ -274,13 +277,18 @@ function createConnectedLabel(
   sprite.scale.set(height * aspectRatio, height, 1)
   sprite.center.set(0.5, -0.16)
   sprite.renderOrder = 20
-  sprite.raycast = () => undefined
   sprite.userData.connectedNodeLabel = label
   return sprite
 }
 
 /** Observatoire 3D : thèmes en surbrillance, visibilité réglable et lecture du nœud. */
-export function GraphView({ visualMode }: { visualMode: GraphVisualMode }): React.JSX.Element {
+export function GraphView({
+  visualMode,
+  onCleanMemory
+}: {
+  visualMode: GraphVisualMode
+  onCleanMemory: (brainLabel: string) => void
+}): React.JSX.Element {
   const [brains, setBrains] = useState<Brain[]>([])
   const [selected, setSelected] = useState('')
   const [graph, setGraph] = useState<GraphData>({ nodes: [], links: [] })
@@ -499,14 +507,11 @@ export function GraphView({ visualMode }: { visualMode: GraphVisualMode }): Reac
     () => new Map(displayGraph.nodes.map((item) => [item.id, item])),
     [displayGraph.nodes]
   )
-  const highlightedCount = useMemo(
-    () =>
-      activeThemes.size === 0
-        ? graph.nodes.length
-        : graph.nodes.filter((item) => nodeThemeIds(item).some((theme) => activeThemes.has(theme)))
-            .length,
+  const highlightedNodeIds = useMemo(
+    () => highlightedNodeIdsForThemes(graph.nodes, activeThemes),
     [activeThemes, graph.nodes]
   )
+  const highlightedCount = highlightedNodeIds.size
   const visualProfile = getGraphVisualProfile(visualMode)
   const motionProfile = graphMotionProfile()
   const linkedNodes = useMemo(() => (node ? linkedNodesFor(node.id, graph) : []), [graph, node])
@@ -519,12 +524,17 @@ export function GraphView({ visualMode }: { visualMode: GraphVisualMode }): Reac
     [graph, node]
   )
   const floatingNodeIds = useMemo(
-    () => hoveredNode ? hoveredNodeIds : new Set(linkedNodes.map((linked) => linked.node.id)),
-    [hoveredNode, hoveredNodeIds, linkedNodes]
+    () =>
+      floatingNodeIdsForThemeHighlight(
+        activeThemes.size > 0 ? highlightedNodeIds : new Set(),
+        hoveredNode ? hoveredNodeIds : new Set(),
+        new Set(linkedNodes.map((linked) => linked.node.id))
+      ),
+    [activeThemes, highlightedNodeIds, hoveredNode, hoveredNodeIds, linkedNodes]
   )
   useEffect(() => {
     graphRef.current?.refresh()
-  }, [floatingNodeIds, selectedNodeIds, visualMode])
+  }, [activeThemes, floatingNodeIds, highlightedNodeIds, selectedNodeIds, visualMode])
   const detailOpen = Boolean(node)
   const visibleThemeLabelIds = useMemo(
     () => new Set(visibleThemeClusterIds(themeSummaries, activeThemes, node)),
@@ -943,6 +953,7 @@ export function GraphView({ visualMode }: { visualMode: GraphVisualMode }): Reac
       }
     >
       <header className="graph-toolbar">
+        <ModuleHeader eyebrow="Connaissances connectées" title="Memory" />
         <select
           aria-label="Graphe de connaissances"
           value={selected}
@@ -972,6 +983,15 @@ export function GraphView({ visualMode }: { visualMode: GraphVisualMode }): Reac
           title="Rafraîchir les graphes"
         >
           ↻
+        </button>
+        <button
+          type="button"
+          className="graph-clean-memory"
+          onClick={() => onCleanMemory(brains.find((brain) => brain.path === selected)?.label ?? 'brain actif')}
+          disabled={!selected || loading}
+          title="Ouvrir une conversation brainwash pour auditer ce brain"
+        >
+          Clean memory
         </button>
         <div className="graph-toolbar__stats" aria-live="polite">
           <span>

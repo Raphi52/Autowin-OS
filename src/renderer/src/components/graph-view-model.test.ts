@@ -9,6 +9,8 @@ import {
   getGraphVisualProfile,
   graphForcesForSpacing,
   graphMotionProfile,
+  highlightedNodeIdsForThemes,
+  floatingNodeIdsForThemeHighlight,
   isLinkAttachedToNode,
   isCurrentGraphFitRequest,
   isHighlightedLink,
@@ -42,6 +44,19 @@ const links: GraphLink[] = [
 ]
 
 describe('graph view presentation model', () => {
+  it('highlights every node carrying a clicked floating theme, including secondary themes', () => {
+    expect(highlightedNodeIdsForThemes(nodes, new Set(['theme/architecture']))).toEqual(
+      new Set(['a'])
+    )
+    expect(highlightedNodeIdsForThemes(nodes, new Set(['theme/rig']))).toEqual(new Set(['a', 'b']))
+  })
+
+  it('shows floating names for every highlighted theme node', () => {
+    expect(
+      floatingNodeIdsForThemeHighlight(new Set(['a', 'b']), new Set(['hovered']), new Set(['linked']))
+    ).toEqual(new Set(['a', 'b', 'hovered', 'linked']))
+  })
+
   it('makes a cluster tag highlight exactly its category and lets a second click clear it', () => {
     expect([...selectExclusiveTheme(new Set(['theme/rig']), 'theme/architecture')]).toEqual([
       'theme/architecture'

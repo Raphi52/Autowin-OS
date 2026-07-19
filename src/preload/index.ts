@@ -174,6 +174,8 @@ const api = {
     ipcRenderer.on('app:event', h)
     return () => ipcRenderer.removeListener('app:event', h)
   },
+  emitIsolatedTestAppEvent: (event: Record<string, unknown> & { type: string }): Promise<boolean> =>
+    ipcRenderer.invoke('app:test:emit-event', event),
   // Workflows de la conversation active (créés in-app + attachés)
   conversationRuns: (convId: string): Promise<unknown[]> =>
     ipcRenderer.invoke('os:conversationRuns', convId),

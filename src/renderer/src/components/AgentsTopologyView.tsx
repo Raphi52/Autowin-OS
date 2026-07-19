@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './AgentsTopologyView.css'
+import { ModuleHeader } from './ModuleHeader'
 
 type ImportedModel = {
   id: string
@@ -304,6 +305,7 @@ export function AgentsTopologyView(): React.JSX.Element {
   return (
     <div className="agents-topology">
       <header className="topology-toolbar">
+        <ModuleHeader eyebrow="Configuration des agents" title="Models" />
         <strong className={`topology-state is-${state}`}>
           {state === 'saving'
             ? 'Enregistrement…'

@@ -36,6 +36,29 @@ export function saveConversations(all: Conversation[], path = conversationsPath(
 
 /** Branche un store sur le disque : recharge l'existant + sauve à chaque mutation. */
 export function persistConversations(store: ConversationStore, path = conversationsPath()): void {
-  store.hydrate(loadConversations(path))
-  store.onChange = (all) => saveConversations(all, path)
+  const migrated = store.hydrate(loadConversations(path))
+  let pending: Conversation[] | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  const flush = (): void => {
+    if (timer) clearTimeout(timer)
+    timer = undefined
+    if (!pending) return
+    const snapshot = pending
+    pending = undefined
+    saveConversations(snapshot, path)
+  }
+
+  store.onChange = (all, urgency) => {
+    pending = all
+    if (urgency === 'immediate') {
+      flush()
+      return
+    }
+    if (timer) return
+    timer = setTimeout(flush, 120)
+    ;(timer as ReturnType<typeof setTimeout> & { unref?: () => void }).unref?.()
+  }
+
+  if (migrated) saveConversations(store.list(), path)
 }

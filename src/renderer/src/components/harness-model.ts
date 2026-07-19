@@ -2,7 +2,7 @@
  * Modèle PUR de la vue « Harnais » — contrat canonique + filtres + layout.
  *
  * Aucune dépendance React/IPC ici : cette couche est testée en isolation
- * (vitest) et réutilisée telle quelle par `HarnessView.tsx`. Le graphe est
+ * (vitest) et partage le contrat du snapshot avec le preload. Le graphe est
  * composé côté main (`os:harness:snapshot`, lecture seule, bornée) ; ici on
  * ne fait que FILTRER et POSITIONNER de façon déterministe.
  *

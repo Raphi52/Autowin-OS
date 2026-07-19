@@ -117,7 +117,7 @@
 }
 .rail.is-collapsed .brand-logo,
 .rail.is-collapsed .brand-name,
-.rail.is-collapsed .nav-item > span,
+.rail.is-collapsed .nav-item > span:not(.space-toy-icon),
 .rail.is-collapsed .rail-foot {
   display: none;
 }
@@ -241,11 +241,11 @@
 .shell.theme-galaxy{--bg-0:rgba(0,0,0,.3);--bg-1:rgba(0,0,0,.5);--bg-2:rgba(0,0,0,.38);--bg-3:rgba(0,0,0,.28);--bg-inset:rgba(0,0,0,.54);--line:rgba(135,119,207,.32);--line-strong:rgba(160,130,235,.48);--text:#edf3ff;--text-dim:#aeb7d4;--text-faint:#7883a4}.theme-galaxy .rail{background:rgba(0,0,0,.3);border-right-color:rgba(146,112,230,.36)}.theme-galaxy .main{background:transparent}.theme-galaxy .view-slot>:not(.graph-observatory){border:1px solid rgba(255,255,255,.16);border-radius:14px;background:rgba(0,0,0,.28);backdrop-filter:blur(16px)}
 
 /* Toutes les vues reprennent le verre noir du chat. Les couleurs restent des accents, jamais des fonds. */
-.shell .view-slot > :is(.agents-topology,.behaviour-view,.agent-studio,.capability-cockpit,.semantic-loop,.harness-view,.observatory-view,.prompt-load) {
+.shell .view-slot > :is(.agents-topology,.behaviour-view,.agent-studio,.capability-cockpit,.observatory-view,.prompt-load) {
   background: rgba(0, 0, 0, 0.22) !important;
   backdrop-filter: blur(16px);
 }
-.shell :is(.topology-toolbar,.topology-canvas,.topology-panel,.topology-profiles,.cockpit-shell,.cockpit-sources,.cockpit-inspector,.control-row,.objective-composer,.capability-dock,.semantic-rail,.live-output,.harness-panel,.observatory-panel,.prompt-load-card,.studio-toolbar,.studio-panel) {
+.shell :is(.topology-toolbar,.topology-canvas,.topology-panel,.topology-profiles,.cockpit-shell,.cockpit-sources,.cockpit-inspector,.control-row,.observatory-panel,.prompt-load-card,.studio-toolbar,.studio-panel) {
   background: rgba(0, 0, 0, 0.38) !important;
   backdrop-filter: blur(14px);
 }

@@ -20,6 +20,7 @@ asarUnpack:
   - resources/**
 win:
   executableName: autowin-os
+  icon: build/icon.ico
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

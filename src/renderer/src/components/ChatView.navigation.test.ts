@@ -18,12 +18,29 @@ describe('navigation pendant une reponse', () => {
 
   it('etiquette une nouvelle conversation avec le provider orchestrateur reel', () => {
     const creation = source.match(
-      /const identity = runtimeIdentity[\s\S]*?conversationsCreate\(\{[\s\S]*?\}\)/
+      /const identity = await refreshRuntimeIdentity\(\)[\s\S]*?conversationsCreate\(\{[\s\S]*?\}\)/
     )?.[0]
 
     expect(creation).toBeDefined()
     expect(creation).toContain('category: identity.provider')
     expect(creation).toContain('provider: identity.provider')
     expect(creation).not.toMatch(/provider:\s*['"]claude['"]/)
+    expect(source).toContain("if (e.scope === 'roles') refreshRuntimeIdentity()")
+  })
+
+  it('synchronise le routage live avant de publier une nouvelle selection', () => {
+    const load = source.match(/function loadConv\(c: Conv\): void \{[\s\S]*?\n\s{2}\}/)?.[0]
+    const fresh = source.match(/function newConv\(\): void \{[\s\S]*?\n\s{2}\}/)?.[0]
+
+    expect(load).toBeDefined()
+    expect(fresh).toBeDefined()
+    expect(load!.indexOf('activeRef.current = c.id')).toBeGreaterThanOrEqual(0)
+    expect(load!.indexOf('activeRef.current = c.id')).toBeLessThan(
+      load!.indexOf('setActiveId(c.id)')
+    )
+    expect(fresh!.indexOf('activeRef.current = null')).toBeGreaterThanOrEqual(0)
+    expect(fresh!.indexOf('activeRef.current = null')).toBeLessThan(
+      fresh!.indexOf('setActiveId(null)')
+    )
   })
 })
