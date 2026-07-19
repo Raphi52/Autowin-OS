@@ -23,9 +23,7 @@ export interface BehaviourGroup {
 
 const ENGINE_ORDER: readonly BehaviourEngine[] = ['codex', 'claude', 'hermes']
 
-export function applicableBehaviourFiles(
-  files: readonly BehaviourFileItem[]
-): BehaviourFileItem[] {
+export function applicableBehaviourFiles(files: readonly BehaviourFileItem[]): BehaviourFileItem[] {
   return files.filter((file) => file.active)
 }
 

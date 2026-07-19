@@ -3,9 +3,17 @@ import { AppCommandBus } from './commands'
 import { AuthoritySas } from './authority/sas'
 
 function fakeOs(): any {
-  const conversations = new Map<string, { id: string; title: string; category: string; provider: string }>()
+  const conversations = new Map<
+    string,
+    { id: string; title: string; category: string; provider: string }
+  >()
   const calls = { setRole: 0, attachRun: 0, runTask: 0 }
-  conversations.set('conv-1', { id: 'conv-1', title: 'A garder', category: 'claude', provider: 'claude' })
+  conversations.set('conv-1', {
+    id: 'conv-1',
+    title: 'A garder',
+    category: 'claude',
+    provider: 'claude'
+  })
   return {
     conversations: {
       get: (id: string) => conversations.get(id),
@@ -53,7 +61,9 @@ describe('AppCommandBus authority policy', () => {
   it('does not expose decision resolution to the model and annotates risk', () => {
     const catalogue = new AppCommandBus(fakeOs(), () => {}).catalog()
     expect(catalogue.some((tool) => tool.name === 'resolve_decision')).toBe(false)
-    expect(catalogue.find((tool) => tool.name === 'remove_conversation')?.annotations).toMatchObject({
+    expect(
+      catalogue.find((tool) => tool.name === 'remove_conversation')?.annotations
+    ).toMatchObject({
       destructiveHint: true,
       readOnlyHint: false
     })
@@ -73,7 +83,10 @@ describe('AppCommandBus authority policy', () => {
     const orchestration = await bus.exec('orchestrate', { task: 'use token=top-secret' })
 
     expect(os.calls).toMatchObject({ setRole: 0, attachRun: 0, runTask: 0 })
-    const previews = os.authority.pending().map((d: { question: string }) => d.question).join('\n')
+    const previews = os.authority
+      .pending()
+      .map((d: { question: string }) => d.question)
+      .join('\n')
     expect(previews).toContain('judge')
     expect(previews).toContain('RUN.md')
     expect(previews).toContain('masquée')

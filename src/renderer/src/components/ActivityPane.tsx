@@ -55,7 +55,11 @@ const KIND_META: Record<string, { icon: string; label: string }> = {
 }
 
 const timeFmt = (iso: string): string =>
-  new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  new Date(iso).toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
 const nf = new Intl.NumberFormat('fr-FR')
 const tokensOf = (e: ConvActivityEntry): number => (e.inputTokens ?? 0) + (e.outputTokens ?? 0)
 export function ActivityPane({ convId }: { convId: string | null }): React.JSX.Element {
@@ -90,13 +94,16 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
         window.api.promptCalls(convId),
         window.api.hermesPromptTraces(convId)
       ])
-      setEntries(mergeActivityEntries(
-        activity as ConvActivityEntry[], globalConfig as ConvActivityEntry[]
-      ))
+      setEntries(
+        mergeActivityEntries(activity as ConvActivityEntry[], globalConfig as ConvActivityEntry[])
+      )
       setPromptCalls(calls as PromptCall[])
-      setHermesTraces((hermes as HermesTrace[])
-        .filter((trace) => !trace.conversationId || trace.conversationId === convId)
-        .slice(-20).reverse())
+      setHermesTraces(
+        (hermes as HermesTrace[])
+          .filter((trace) => !trace.conversationId || trace.conversationId === convId)
+          .slice(-20)
+          .reverse()
+      )
     } finally {
       setLoading(false)
     }
@@ -139,17 +146,23 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
 
       {promptCalls.length > 0 && (
         <details className="workflow-prompt-calls">
-          <summary>{promptCalls.length} payload{promptCalls.length > 1 ? 's' : ''} exact{promptCalls.length > 1 ? 's' : ''}</summary>
+          <summary>
+            {promptCalls.length} payload{promptCalls.length > 1 ? 's' : ''} exact
+            {promptCalls.length > 1 ? 's' : ''}
+          </summary>
           <div className="col" style={{ gap: 6, marginTop: 6 }}>
             {promptCalls.map((call) => (
               <details key={call.id} className="prompt-envelope">
                 <summary>
-                  {call.actor} → {call.provider} · {call.model ?? 'modèle par défaut'} · itération {call.iteration + 1}
+                  {call.actor} → {call.provider} · {call.model ?? 'modèle par défaut'} · itération{' '}
+                  {call.iteration + 1}
                 </summary>
                 <div className="prompt-envelope-meta">
                   <span>{call.usage?.inputTokens ?? '—'} tokens in</span>
                   <span>{call.usage?.outputTokens ?? '—'} out</span>
-                  <span>{call.usage ? `${call.usage.cacheReadTokens ?? 0} cache` : 'usage non mesuré'}</span>
+                  <span>
+                    {call.usage ? `${call.usage.cacheReadTokens ?? 0} cache` : 'usage non mesuré'}
+                  </span>
                 </div>
                 <strong>Instructions système</strong>
                 <pre>{call.system || '(aucune)'}</pre>
@@ -166,14 +179,29 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
 
       {hermesTraces.length > 0 && (
         <details className="workflow-prompt-calls hermes-preflight">
-          <summary>{hermesTraces.length} requête{hermesTraces.length > 1 ? 's' : ''} Hermes · {hermesTraces.filter((trace) => trace.conversationId === convId).length} rattachée{hermesTraces.filter((trace) => trace.conversationId === convId).length > 1 ? 's' : ''} · {hermesTraces.filter((trace) => !trace.conversationId).length} non rattachée{hermesTraces.filter((trace) => !trace.conversationId).length > 1 ? 's' : ''}</summary>
-          <p className="prompt-envelope-limit">Les payloads non rattachés sont hors conversation sélectionnée · secrets masqués</p>
+          <summary>
+            {hermesTraces.length} requête{hermesTraces.length > 1 ? 's' : ''} Hermes ·{' '}
+            {hermesTraces.filter((trace) => trace.conversationId === convId).length} rattachée
+            {hermesTraces.filter((trace) => trace.conversationId === convId).length > 1
+              ? 's'
+              : ''}{' '}
+            · {hermesTraces.filter((trace) => !trace.conversationId).length} non rattachée
+            {hermesTraces.filter((trace) => !trace.conversationId).length > 1 ? 's' : ''}
+          </summary>
+          <p className="prompt-envelope-limit">
+            Les payloads non rattachés sont hors conversation sélectionnée · secrets masqués
+          </p>
           <div className="col" style={{ gap: 6 }}>
             {hermesTraces.map((trace) => (
               <details key={`${trace.apiRequestId}:${trace.timestamp}`} className="prompt-envelope">
-                <summary>{trace.provider} → {trace.model} · {timeFmt(trace.timestamp)}</summary>
+                <summary>
+                  {trace.provider} → {trace.model} · {timeFmt(trace.timestamp)}
+                </summary>
                 <div className="prompt-envelope-meta">
-                  <span>{trace.messageCount} messages</span><span>{trace.toolCount} outils</span><span>{trace.boundary}</span><span>{trace.source}</span>
+                  <span>{trace.messageCount} messages</span>
+                  <span>{trace.toolCount} outils</span>
+                  <span>{trace.boundary}</span>
+                  <span>{trace.source}</span>
                 </div>
                 <strong>Requête exacte transmise par Hermes</strong>
                 <HumanJson value={trace.request} />
@@ -232,7 +260,12 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
               {e.screenshots && e.screenshots.length > 0 && (
                 <div className="row gap2 wrap" style={{ marginTop: 6 }}>
                   {e.screenshots.map((path) => (
-                    <button key={path} className="btn btn-sm" onClick={() => openProof(path)} title={path}>
+                    <button
+                      key={path}
+                      className="btn btn-sm"
+                      onClick={() => openProof(path)}
+                      title={path}
+                    >
                       ▧ preuve visuelle
                     </button>
                   ))}
@@ -244,11 +277,20 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
       </div>
       {proofError && <div className="attachment-error">⚠️ {proofError}</div>}
       {proof && (
-        <div className="proof-lightbox" role="dialog" aria-label="Preuve visuelle" onClick={() => setProof(null)}>
+        <div
+          className="proof-lightbox"
+          role="dialog"
+          aria-label="Preuve visuelle"
+          onClick={() => setProof(null)}
+        >
           <div className="proof-card" onClick={(event) => event.stopPropagation()}>
             <div className="row gap2" style={{ justifyContent: 'space-between' }}>
-              <span className="c-faint" title={proof.path}>▧ Preuve visuelle</span>
-              <button className="btn btn-sm" onClick={() => setProof(null)}>×</button>
+              <span className="c-faint" title={proof.path}>
+                ▧ Preuve visuelle
+              </span>
+              <button className="btn btn-sm" onClick={() => setProof(null)}>
+                ×
+              </button>
             </div>
             <img src={proof.dataUrl} alt={`Capture ${proof.path}`} />
           </div>

@@ -12,16 +12,25 @@ socket.onmessage = ({ data }) => {
   const callback = pending.get(message.id)
   if (!callback) return
   pending.delete(message.id)
-  message.error ? callback.reject(new Error(message.error.message)) : callback.resolve(message.result)
+  message.error
+    ? callback.reject(new Error(message.error.message))
+    : callback.resolve(message.result)
 }
-await new Promise((resolve) => { socket.onopen = resolve })
-const send = (method, params = {}) => new Promise((resolve, reject) => {
-  const id = ++nextId
-  pending.set(id, { resolve, reject })
-  socket.send(JSON.stringify({ id, method, params }))
+await new Promise((resolve) => {
+  socket.onopen = resolve
 })
+const send = (method, params = {}) =>
+  new Promise((resolve, reject) => {
+    const id = ++nextId
+    pending.set(id, { resolve, reject })
+    socket.send(JSON.stringify({ id, method, params }))
+  })
 const evaluate = async (expression) => {
-  const result = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+  const result = await send('Runtime.evaluate', {
+    expression,
+    returnByValue: true,
+    awaitPromise: true
+  })
   if (result.exceptionDetails) throw new Error('Évaluation DOM en échec')
   return result.result?.value
 }
@@ -60,7 +69,9 @@ await evaluate(`(() => {
 await wait(150)
 const screenshot = await send('Page.captureScreenshot', { format: 'png' })
 mkdirSync('C:/Amitel/Autowin OS/artifacts', { recursive: true })
-const output = process.env.AUTOWIN_SKILLS_SCREENSHOT || 'C:/Amitel/Autowin OS/artifacts/skills-multisource-green.png'
+const output =
+  process.env.AUTOWIN_SKILLS_SCREENSHOT ||
+  'C:/Amitel/Autowin OS/artifacts/skills-multisource-green.png'
 writeFileSync(output, Buffer.from(screenshot.data, 'base64'))
 console.log(JSON.stringify({ counts, output }, null, 2))
 socket.close()

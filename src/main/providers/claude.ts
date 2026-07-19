@@ -105,13 +105,16 @@ export function claudeTransportEnvelope(
     model: opts.model,
     transport: 'claude CLI spawn argv',
     system: opts.system,
-    messages: [{
-      role: 'user',
-      content: `${lastUserMessage?.content ?? ''}${materialized?.promptSuffix ?? ''}`,
-      attachments: lastUserMessage?.attachments
-    }],
+    messages: [
+      {
+        role: 'user',
+        content: `${lastUserMessage?.content ?? ''}${materialized?.promptSuffix ?? ''}`,
+        attachments: lastUserMessage?.attachments
+      }
+    ],
     options: { argv: [...args] },
-    limitation: 'Arguments exacts remis au CLI Claude. Les ajouts internes du CLI et la requete Anthropic finale ne sont pas exposes.'
+    limitation:
+      'Arguments exacts remis au CLI Claude. Les ajouts internes du CLI et la requete Anthropic finale ne sont pas exposes.'
   }
 }
 

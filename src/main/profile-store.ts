@@ -17,7 +17,12 @@ export class ProfileStore {
   constructor(private readonly path: string) {}
   list(): AutowinProfile[] {
     if (!existsSync(this.path)) return []
-    try { const value = JSON.parse(readFileSync(this.path, 'utf8')); return Array.isArray(value) ? value : [] } catch { return [] }
+    try {
+      const value = JSON.parse(readFileSync(this.path, 'utf8'))
+      return Array.isArray(value) ? value : []
+    } catch {
+      return []
+    }
   }
   save(profile: AutowinProfile): AutowinProfile[] {
     const next = [profile, ...this.list().filter((item) => item.id !== profile.id)]

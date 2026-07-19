@@ -57,7 +57,12 @@ const CATALOG: CommandSpec[] = [
     name: 'navigate',
     description: 'Afficher une vue',
     args: { tab: 'chat|memory|agents' },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
   },
   {
     name: 'chat_send',
@@ -69,26 +74,46 @@ const CATALOG: CommandSpec[] = [
     description: 'Lancer une orchestration disciplinée',
     args: { task: 'la tâche' },
     authority: 'sensitive',
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true
+    }
   },
   {
     name: 'create_conversation',
     description: 'Créer une conversation',
     args: { title: 'titre', category: 'claude|codex|hermes' },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    }
   },
   {
     name: 'rename_conversation',
     description: 'Renommer',
     args: { id: 'id', title: 'nouveau titre' },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
   },
   {
     name: 'remove_conversation',
     description: 'Supprimer',
     args: { id: 'id' },
     authority: 'destructive',
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false
+    }
   },
   {
     name: 'set_role',
@@ -99,20 +124,35 @@ const CATALOG: CommandSpec[] = [
       model: 'modèle (optionnel)'
     },
     authority: 'sensitive',
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
   },
   {
     name: 'attach_run',
     description: 'Attacher un RUN.md (workflow) existant à la conversation courante',
     args: { path: 'chemin du RUN.md', conversationId: 'id (optionnel, défaut = conv active)' },
     authority: 'sensitive',
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false
+    }
   },
   {
     name: 'load_graph',
     description: 'Charger un graphe brain (par id)',
     args: { brainId: 'id du brain' },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
   },
   { name: 'get_state', description: 'Relire l’état courant de l’app', args: {} }
 ]
@@ -129,7 +169,8 @@ const SECRET_KEY = /(?:api[_-]?key|token|secret|password|credential|authorizatio
 function redactedArgs(name: string, args: Record<string, unknown>): Record<string, unknown> {
   if (name === 'orchestrate') return { task: '[redacted]' }
   if (name === 'attach_run') return { path: '[redacted]', conversationId: '[redacted]' }
-  if (name === 'chat_send') return { message: '[redacted]', provider: args.provider, role: args.role }
+  if (name === 'chat_send')
+    return { message: '[redacted]', provider: args.provider, role: args.role }
   return Object.fromEntries(
     Object.entries(args).map(([key, value]) => [key, SECRET_KEY.test(key) ? '[redacted]' : value])
   )
@@ -137,7 +178,12 @@ function redactedArgs(name: string, args: Record<string, unknown>): Record<strin
 
 function safePreview(value: unknown, fallback: string): string {
   const text = String(value ?? '').trim()
-  if (!text || SECRET_KEY.test(text) || /(?:bearer\s+|token\s*[=:]|secret\s*[=:]|password\s*[=:]|\bsk-[a-z0-9_-]+)/i.test(text)) return fallback
+  if (
+    !text ||
+    SECRET_KEY.test(text) ||
+    /(?:bearer\s+|token\s*[=:]|secret\s*[=:]|password\s*[=:]|\bsk-[a-z0-9_-]+)/i.test(text)
+  )
+    return fallback
   return text.replace(/\s+/g, ' ').slice(0, 96)
 }
 
@@ -146,7 +192,12 @@ function approvalQuestion(name: string, args: Record<string, unknown>): string {
     case 'remove_conversation':
       return 'Supprimer définitivement cette conversation ?'
     case 'attach_run':
-      return `Attacher le RUN.md « ${safePreview(String(args.path ?? '').split(/[\\/]/).pop(), 'nom masqué')} » à la conversation active ?`
+      return `Attacher le RUN.md « ${safePreview(
+        String(args.path ?? '')
+          .split(/[\\/]/)
+          .pop(),
+        'nom masqué'
+      )} » à la conversation active ?`
     case 'set_role':
       return `Modifier le rôle ${safePreview(args.role, 'sélectionné')} vers ${safePreview(args.provider, 'fournisseur masqué')}${args.model ? ` / ${safePreview(args.model, 'modèle masqué')}` : ''} ?`
     case 'orchestrate':
@@ -192,7 +243,11 @@ export class AppCommandBus {
     const resolution = this.os.authority.resolve(id, choice)
     const pending = this.pendingActions.get(id)
     this.pendingActions.delete(id)
-    this.trace?.('authority_decision', { action: pending?.name ?? 'unknown', choice: String(choice), by: resolution.by }, true)
+    this.trace?.(
+      'authority_decision',
+      { action: pending?.name ?? 'unknown', choice: String(choice), by: resolution.by },
+      true
+    )
     this.broadcast({ type: 'refresh', scope: 'decisions' })
     if (!pending || choice !== 'approve') return resolution
     try {
@@ -212,7 +267,11 @@ export class AppCommandBus {
     for (const resolution of resolutions) {
       const pending = this.pendingActions.get(resolution.id)
       this.pendingActions.delete(resolution.id)
-      this.trace?.('authority_decision', { action: pending?.name ?? 'unknown', choice: 'cancel', by: resolution.by }, true)
+      this.trace?.(
+        'authority_decision',
+        { action: pending?.name ?? 'unknown', choice: 'cancel', by: resolution.by },
+        true
+      )
     }
     if (resolutions.length) this.broadcast({ type: 'refresh', scope: 'decisions' })
     return resolutions
@@ -255,10 +314,16 @@ export class AppCommandBus {
   }
 
   /** Exécute une commande nommée, mute l'app, diffuse le changement. */
-  async exec(name: string, args: Record<string, unknown> = {}, conversationId?: string): Promise<CommandResult> {
+  async exec(
+    name: string,
+    args: Record<string, unknown> = {},
+    conversationId?: string
+  ): Promise<CommandResult> {
     try {
       if (name === 'set_role' || name === 'orchestrate') {
-        const pending = this.deferSensitiveAction(name, args, () => this.run(name, args, conversationId))
+        const pending = this.deferSensitiveAction(name, args, () =>
+          this.run(name, args, conversationId)
+        )
         return { ok: true, data: pending }
       }
       const data = await this.run(name, args, conversationId)
@@ -270,7 +335,11 @@ export class AppCommandBus {
     }
   }
 
-  private async run(name: string, a: Record<string, unknown>, conversationId?: string): Promise<unknown> {
+  private async run(
+    name: string,
+    a: Record<string, unknown>,
+    conversationId?: string
+  ): Promise<unknown> {
     const s = (k: string): string => String(a[k] ?? '')
     switch (name) {
       case 'navigate': {
@@ -396,13 +465,20 @@ export class AppCommandBus {
         return all
       }
       case 'attach_run': {
-        const convId = (a.conversationId ? s('conversationId') : conversationId ?? this.activeConversationId) ?? ''
+        const convId =
+          (a.conversationId
+            ? s('conversationId')
+            : (conversationId ?? this.activeConversationId)) ?? ''
         if (!convId) throw new Error('aucune conversation active pour attacher le run')
         const path = s('path')
-        return this.deferSensitiveAction('attach_run', { path, conversationId: convId }, async () => {
-          const c = this.os.conversations.attachRun(convId, path)
-          return { conversation: c.id, runPaths: c.runPaths }
-        })
+        return this.deferSensitiveAction(
+          'attach_run',
+          { path, conversationId: convId },
+          async () => {
+            const c = this.os.conversations.attachRun(convId, path)
+            return { conversation: c.id, runPaths: c.runPaths }
+          }
+        )
       }
       case 'load_graph': {
         const brain = this.os.listBrains().find((b) => b.id === s('brainId'))

@@ -21,7 +21,8 @@ export interface ConvActivityEntry {
 }
 
 const TEXT_CAP = 600
-const SCREENSHOT_RE = /(?:[A-Za-z]:[\\/][^\n\r<>|?*"']+?\.(?:png|jpe?g|webp|gif|bmp)|(?:\.\.?[\\/])[^\n\r<>|?*"']+?\.(?:png|jpe?g|webp|gif|bmp))/gi
+const SCREENSHOT_RE =
+  /(?:[A-Za-z]:[\\/][^\n\r<>|?*"']+?\.(?:png|jpe?g|webp|gif|bmp)|(?:\.\.?[\\/])[^\n\r<>|?*"']+?\.(?:png|jpe?g|webp|gif|bmp))/gi
 
 /** Chemins image cités par un agent : preuve locale, jamais un scan du disque. */
 export function extractScreenshotEvidence(text?: string): string[] {
@@ -60,8 +61,7 @@ export function appendConvActivity(
         ? entry.kind === 'configuration-change'
           ? entry.text
           : entry.text.slice(0, TEXT_CAP)
-        : undefined
-      ,
+        : undefined,
       screenshots: extractScreenshotEvidence(entry.text)
     }
     appendFileSync(fileFor(convId, root), `${JSON.stringify(e)}\n`, 'utf8')

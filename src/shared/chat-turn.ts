@@ -1,9 +1,4 @@
-export type ChatTurnStatus =
-  | 'streaming'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
-  | 'interrupted'
+export type ChatTurnStatus = 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
 
 export interface PersistedChatTextPart {
   kind: 'text'
@@ -140,7 +135,13 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
       ...state,
       status: 'completed',
       ...(event.sessionId
-        ? { runtime: { provider: state.runtime?.provider ?? 'unknown', ...state.runtime, sessionId: event.sessionId } }
+        ? {
+            runtime: {
+              provider: state.runtime?.provider ?? 'unknown',
+              ...state.runtime,
+              sessionId: event.sessionId
+            }
+          }
         : {})
     }
   if (event.kind === 'failed') return { ...state, status: 'failed', error: event.error }

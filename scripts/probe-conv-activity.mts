@@ -30,7 +30,10 @@ if (!r.ok) {
 
 const actA = loadConvActivity(a.id)
 const actB = loadConvActivity(b.id)
-console.log('[conv A étapes]', actA.map((e) => `${e.kind}:${(e.inputTokens ?? 0) + (e.outputTokens ?? 0)}tok`).join(' '))
+console.log(
+  '[conv A étapes]',
+  actA.map((e) => `${e.kind}:${(e.inputTokens ?? 0) + (e.outputTokens ?? 0)}tok`).join(' ')
+)
 console.log('[conv B étapes]', actB.length)
 const withTokens = actA.filter((e) => (e.inputTokens ?? 0) + (e.outputTokens ?? 0) > 0)
 console.log('[étapes avec tokens]', withTokens.length, '/', actA.length)

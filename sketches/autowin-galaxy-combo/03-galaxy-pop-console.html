@@ -1,1 +1,314 @@
-<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Autowin OS — Galaxy Pop Console</title><style>*{box-sizing:border-box}body{margin:0;background:#07102a;color:#fff;font:14px Inter,Segoe UI,sans-serif;overflow:hidden}.app{height:100vh;padding:16px;background:radial-gradient(circle at 72% 20%,#ff4fa62d,transparent 30%),radial-gradient(circle at 45% 60%,#207cff44,transparent 42%),#07102a}.shell{height:100%;border:3px solid #f5c64e;border-radius:28px;background:#091332;box-shadow:8px 8px 0 #e34897,14px 14px 0 #315de0;display:grid;grid-template-columns:220px 1fr;overflow:hidden}.rail{padding:22px 16px;background:#0b1638;border-right:2px solid #315cd0}.brand{font:900 21px Georgia;color:#f9d25e}.brand b{color:#ff62ae}.nav{display:grid;gap:9px;margin-top:25px}.nav button{padding:12px 14px;border:2px solid #304eab;border-radius:14px;background:#101f4b;color:#bacbff;text-align:left;font-weight:700}.nav .active{transform:translateX(4px);background:#f04599;border-color:#ffc95b;color:#fff;box-shadow:4px 4px 0 #f2c449}.tip{margin-top:28px;border:2px dashed #3d69df;border-radius:16px;padding:13px;color:#8fafff;font-size:12px}.main{padding:22px;display:grid;grid-template-rows:auto 1fr;gap:16px}.top{display:flex;justify-content:space-between;align-items:center}.title small{display:block;color:#61c9ff;font-weight:800;letter-spacing:.15em}.title h1{margin:4px 0 0;font:900 28px Georgia;text-shadow:3px 3px 0 #b52f78}.top button{padding:11px 17px;border:2px solid #f8d25e;border-radius:15px;background:#ef4698;color:#fff;font-weight:900;box-shadow:4px 4px 0 #335fd2}.workspace{display:grid;grid-template-columns:280px 1fr;gap:15px;min-height:0}.left{display:grid;grid-template-rows:auto 1fr;gap:12px}.card{border:2px solid #355bd0;border-radius:20px;background:#0d1a42;padding:16px;box-shadow:4px 4px 0 #101a50}.search{width:100%;padding:12px;border:2px solid #f0c64f;border-radius:14px;background:#07112f;color:#fff}.result{margin-top:9px;padding:11px;border:2px solid #284ab3;border-radius:14px;background:#13265a}.result b{color:#5ed7ff}.result.node{border-color:#ef4c9c}.result.node b{color:#ff83bf}.tag{float:right;border-radius:10px;padding:3px 7px;background:#f2c84d;color:#201700;font-size:9px;font-weight:900}.galaxy{position:relative;border:2px solid #f1c650;border-radius:22px;background:radial-gradient(circle at 50% 48%,#2455c8 0,#14275e 36%,#080d2b 72%);overflow:hidden}.galaxy:before{content:"";position:absolute;inset:0;background-image:radial-gradient(#fff 1.5px,transparent 1.5px),radial-gradient(#ff63b1 1.5px,transparent 1.5px),radial-gradient(#ffd55c 1.5px,transparent 1.5px);background-size:50px 50px,83px 83px,131px 131px;opacity:.45}.bubble{position:absolute;border-radius:22px;padding:11px 15px;font-weight:900;border:3px solid #fff;background:#10235a;box-shadow:5px 5px 0 currentColor}.b1{left:42%;top:42%;color:#ff56a6;font-size:18px}.b2{left:14%;top:22%;color:#58d5ff}.b3{right:15%;top:20%;color:#f5ca52}.b4{left:22%;bottom:20%;color:#7590ff}.b5{right:23%;bottom:19%;color:#ff77b8}.connector{position:absolute;height:4px;border-radius:4px;background:linear-gradient(90deg,#55d4ff,#ff55a8,#f4ca50);transform-origin:left}.c1{width:350px;left:19%;top:30%;transform:rotate(15deg)}.c2{width:300px;left:49%;top:51%;transform:rotate(-26deg)}.legend h3{font:900 17px Georgia;color:#ffd566;margin:0 0 13px}.legend-row{display:flex;gap:10px;align-items:center;margin:10px 0}.legend-row i{width:17px;height:17px;border-radius:6px;background:#57cbff}.legend-row:nth-child(3) i{background:#ff59a9}.legend-row:nth-child(4) i{background:#f4ca50}</style></head><body><div class="app"><div class="shell"><aside class="rail"><div class="brand">★ Autowin <b>OS</b></div><div class="nav"><button>💬 Chat</button><button class="active">🌌 Memory</button><button>🧩 Agents</button><button>🪄 Skills</button><button>🔁 Loops</button></div><div class="tip">💡 Clique une planète pour ouvrir sa fiche.</div></aside><main class="main"><header class="top"><div class="title"><small>GALAXY POP CONSOLE</small><h1>Memory Explorer</h1></div><button>▶ Lancer le flow</button></header><section class="workspace"><aside class="left"><div class="card"><input class="search" placeholder="Thème ou fiche…"><div class="result"><span class="tag">THÈME</span><b>Architecture</b><br>42 fiches</div><div class="result node"><span class="tag">FICHE</span><b>Agent Studio</b><br>Ouvrir le nœud →</div></div><div class="card legend"><h3>Constellation</h3><div class="legend-row"><i></i>Connaissances</div><div class="legend-row"><i></i>Agents & activité</div><div class="legend-row"><i></i>Autorité & décisions</div></div></aside><div class="galaxy"><div class="connector c1"></div><div class="connector c2"></div><div class="bubble b1">Autowin OS</div><div class="bubble b2">Brain 3D</div><div class="bubble b3">Décisions</div><div class="bubble b4">Skills</div><div class="bubble b5">Agent Studio</div></div></section></main></div></div></body></html>
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Autowin OS — Galaxy Pop Console</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #07102a;
+        color: #fff;
+        font:
+          14px Inter,
+          Segoe UI,
+          sans-serif;
+        overflow: hidden;
+      }
+      .app {
+        height: 100vh;
+        padding: 16px;
+        background:
+          radial-gradient(circle at 72% 20%, #ff4fa62d, transparent 30%),
+          radial-gradient(circle at 45% 60%, #207cff44, transparent 42%), #07102a;
+      }
+      .shell {
+        height: 100%;
+        border: 3px solid #f5c64e;
+        border-radius: 28px;
+        background: #091332;
+        box-shadow:
+          8px 8px 0 #e34897,
+          14px 14px 0 #315de0;
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        overflow: hidden;
+      }
+      .rail {
+        padding: 22px 16px;
+        background: #0b1638;
+        border-right: 2px solid #315cd0;
+      }
+      .brand {
+        font: 900 21px Georgia;
+        color: #f9d25e;
+      }
+      .brand b {
+        color: #ff62ae;
+      }
+      .nav {
+        display: grid;
+        gap: 9px;
+        margin-top: 25px;
+      }
+      .nav button {
+        padding: 12px 14px;
+        border: 2px solid #304eab;
+        border-radius: 14px;
+        background: #101f4b;
+        color: #bacbff;
+        text-align: left;
+        font-weight: 700;
+      }
+      .nav .active {
+        transform: translateX(4px);
+        background: #f04599;
+        border-color: #ffc95b;
+        color: #fff;
+        box-shadow: 4px 4px 0 #f2c449;
+      }
+      .tip {
+        margin-top: 28px;
+        border: 2px dashed #3d69df;
+        border-radius: 16px;
+        padding: 13px;
+        color: #8fafff;
+        font-size: 12px;
+      }
+      .main {
+        padding: 22px;
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 16px;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .title small {
+        display: block;
+        color: #61c9ff;
+        font-weight: 800;
+        letter-spacing: 0.15em;
+      }
+      .title h1 {
+        margin: 4px 0 0;
+        font: 900 28px Georgia;
+        text-shadow: 3px 3px 0 #b52f78;
+      }
+      .top button {
+        padding: 11px 17px;
+        border: 2px solid #f8d25e;
+        border-radius: 15px;
+        background: #ef4698;
+        color: #fff;
+        font-weight: 900;
+        box-shadow: 4px 4px 0 #335fd2;
+      }
+      .workspace {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 15px;
+        min-height: 0;
+      }
+      .left {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 12px;
+      }
+      .card {
+        border: 2px solid #355bd0;
+        border-radius: 20px;
+        background: #0d1a42;
+        padding: 16px;
+        box-shadow: 4px 4px 0 #101a50;
+      }
+      .search {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #f0c64f;
+        border-radius: 14px;
+        background: #07112f;
+        color: #fff;
+      }
+      .result {
+        margin-top: 9px;
+        padding: 11px;
+        border: 2px solid #284ab3;
+        border-radius: 14px;
+        background: #13265a;
+      }
+      .result b {
+        color: #5ed7ff;
+      }
+      .result.node {
+        border-color: #ef4c9c;
+      }
+      .result.node b {
+        color: #ff83bf;
+      }
+      .tag {
+        float: right;
+        border-radius: 10px;
+        padding: 3px 7px;
+        background: #f2c84d;
+        color: #201700;
+        font-size: 9px;
+        font-weight: 900;
+      }
+      .galaxy {
+        position: relative;
+        border: 2px solid #f1c650;
+        border-radius: 22px;
+        background: radial-gradient(circle at 50% 48%, #2455c8 0, #14275e 36%, #080d2b 72%);
+        overflow: hidden;
+      }
+      .galaxy:before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image:
+          radial-gradient(#fff 1.5px, transparent 1.5px),
+          radial-gradient(#ff63b1 1.5px, transparent 1.5px),
+          radial-gradient(#ffd55c 1.5px, transparent 1.5px);
+        background-size:
+          50px 50px,
+          83px 83px,
+          131px 131px;
+        opacity: 0.45;
+      }
+      .bubble {
+        position: absolute;
+        border-radius: 22px;
+        padding: 11px 15px;
+        font-weight: 900;
+        border: 3px solid #fff;
+        background: #10235a;
+        box-shadow: 5px 5px 0 currentColor;
+      }
+      .b1 {
+        left: 42%;
+        top: 42%;
+        color: #ff56a6;
+        font-size: 18px;
+      }
+      .b2 {
+        left: 14%;
+        top: 22%;
+        color: #58d5ff;
+      }
+      .b3 {
+        right: 15%;
+        top: 20%;
+        color: #f5ca52;
+      }
+      .b4 {
+        left: 22%;
+        bottom: 20%;
+        color: #7590ff;
+      }
+      .b5 {
+        right: 23%;
+        bottom: 19%;
+        color: #ff77b8;
+      }
+      .connector {
+        position: absolute;
+        height: 4px;
+        border-radius: 4px;
+        background: linear-gradient(90deg, #55d4ff, #ff55a8, #f4ca50);
+        transform-origin: left;
+      }
+      .c1 {
+        width: 350px;
+        left: 19%;
+        top: 30%;
+        transform: rotate(15deg);
+      }
+      .c2 {
+        width: 300px;
+        left: 49%;
+        top: 51%;
+        transform: rotate(-26deg);
+      }
+      .legend h3 {
+        font: 900 17px Georgia;
+        color: #ffd566;
+        margin: 0 0 13px;
+      }
+      .legend-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin: 10px 0;
+      }
+      .legend-row i {
+        width: 17px;
+        height: 17px;
+        border-radius: 6px;
+        background: #57cbff;
+      }
+      .legend-row:nth-child(3) i {
+        background: #ff59a9;
+      }
+      .legend-row:nth-child(4) i {
+        background: #f4ca50;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="shell">
+        <aside class="rail">
+          <div class="brand">★ Autowin <b>OS</b></div>
+          <div class="nav">
+            <button>💬 Chat</button><button class="active">🌌 Memory</button
+            ><button>🧩 Agents</button><button>🪄 Skills</button><button>🔁 Loops</button>
+          </div>
+          <div class="tip">💡 Clique une planète pour ouvrir sa fiche.</div>
+        </aside>
+        <main class="main">
+          <header class="top">
+            <div class="title">
+              <small>GALAXY POP CONSOLE</small>
+              <h1>Memory Explorer</h1>
+            </div>
+            <button>▶ Lancer le flow</button>
+          </header>
+          <section class="workspace">
+            <aside class="left">
+              <div class="card">
+                <input class="search" placeholder="Thème ou fiche…" />
+                <div class="result">
+                  <span class="tag">THÈME</span><b>Architecture</b><br />42 fiches
+                </div>
+                <div class="result node">
+                  <span class="tag">FICHE</span><b>Agent Studio</b><br />Ouvrir le nœud →
+                </div>
+              </div>
+              <div class="card legend">
+                <h3>Constellation</h3>
+                <div class="legend-row"><i></i>Connaissances</div>
+                <div class="legend-row"><i></i>Agents & activité</div>
+                <div class="legend-row"><i></i>Autorité & décisions</div>
+              </div>
+            </aside>
+            <div class="galaxy">
+              <div class="connector c1"></div>
+              <div class="connector c2"></div>
+              <div class="bubble b1">Autowin OS</div>
+              <div class="bubble b2">Brain 3D</div>
+              <div class="bubble b3">Décisions</div>
+              <div class="bubble b4">Skills</div>
+              <div class="bubble b5">Agent Studio</div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

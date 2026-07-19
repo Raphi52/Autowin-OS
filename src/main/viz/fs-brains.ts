@@ -217,7 +217,8 @@ export async function loadBrainGraphAsync(
   lod = 300,
   community?: number
 ): Promise<VizGraph> {
-  if (!existsSync(path) || !statSync(path).isDirectory()) return loadBrainGraph(path, lod, community)
+  if (!existsSync(path) || !statSync(path).isDirectory())
+    return loadBrainGraph(path, lod, community)
   const requestedRoot = realpathSync(resolve(path)).toLowerCase()
   const allowedRoot = realpathSync(resolve(AMITEL_BRAIN_ROOT)).toLowerCase()
   if (requestedRoot !== allowedRoot) throw new Error('brain vault hors périmètre autorisé')
@@ -271,7 +272,9 @@ export function searchVaultBrainNotes(
   if (!normalized || limit <= 0) return []
   return vaultNoteRecords(root)
     .filter((record) =>
-      `${record.id}\n${record.label}\n${record.themes.join('\n')}`.toLowerCase().includes(normalized)
+      `${record.id}\n${record.label}\n${record.themes.join('\n')}`
+        .toLowerCase()
+        .includes(normalized)
     )
     .slice(0, limit)
     .map(({ id, label, file, themes }) => ({ id, label, file, themes }))
@@ -490,7 +493,8 @@ function noteThemes(id: string, content: string): string[] {
 
   const order = new Map(AMITEL_BRAIN_THEMES.map((theme, index) => [theme.id, index]))
   return [...categories].sort(
-    (left, right) => (order.get(left) ?? 999) - (order.get(right) ?? 999) || left.localeCompare(right)
+    (left, right) =>
+      (order.get(left) ?? 999) - (order.get(right) ?? 999) || left.localeCompare(right)
   )
 }
 

@@ -38,31 +38,43 @@ const shot = async (file) => {
 }
 
 // 0. état propre : fermer le panneau workflows s'il est ouvert
-await ev(`(() => { const x = [...document.querySelectorAll('.runs-pane .btn-ghost')].find(b => b.textContent.trim()==='✕'); if (x) x.click(); return 'ok' })()`)
+await ev(
+  `(() => { const x = [...document.querySelectorAll('.runs-pane .btn-ghost')].find(b => b.textContent.trim()==='✕'); if (x) x.click(); return 'ok' })()`
+)
 await sleep(300)
 
 // 1. taper le prompt (setter natif React) + envoyer
-const PROMPT = 'Crée une conversation « Test complet » en catégorie codex, puis dis-moi en une phrase ce que tu as fait.'
-console.log('[1 type]', await ev(`(() => {
+const PROMPT =
+  'Crée une conversation « Test complet » en catégorie codex, puis dis-moi en une phrase ce que tu as fait.'
+console.log(
+  '[1 type]',
+  await ev(`(() => {
   const ta = document.querySelector('.composer textarea')
   if (!ta) return 'PAS DE TEXTAREA'
   const set = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set
   set.call(ta, ${JSON.stringify(PROMPT)})
   ta.dispatchEvent(new Event('input', { bubbles: true }))
   return 'ok'
-})()`))
-console.log('[2 send]', await ev(`(() => {
+})()`)
+)
+console.log(
+  '[2 send]',
+  await ev(`(() => {
   const b = [...document.querySelectorAll('.composer button')].find(x => !x.disabled)
   if (!b) return 'BOUTON DISABLED'
   b.click(); return 'clicked'
-})()`))
+})()`)
+)
 
 // 2. attendre la fin du tour (spinner header disparu), cap 120 s
 let done = false
 for (let i = 0; i < 60; i++) {
   await sleep(2000)
   const busy = await ev(`!!document.querySelector('.composer button .spinner')`)
-  if (!busy) { done = true; break }
+  if (!busy) {
+    done = true
+    break
+  }
 }
 console.log('[3 tour terminé]', done)
 await sleep(500)
@@ -80,13 +92,21 @@ console.log('[4 éléments]', JSON.stringify(checks, null, 1))
 await shot('C:/Amitel/Autowin OS/e2e-chat.png')
 
 // 4. observatoire : ledger in-app doit contenir create_conversation
-await ev(`(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('Workflows')); b?.click(); return 'ok' })()`)
+await ev(
+  `(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('Workflows')); b?.click(); return 'ok' })()`
+)
 await sleep(300)
-await ev(`(() => { const b = [...document.querySelectorAll('.runs-pane button')].find(x => x.textContent.trim()==='Activité'); b?.click(); return 'ok' })()`)
+await ev(
+  `(() => { const b = [...document.querySelectorAll('.runs-pane button')].find(x => x.textContent.trim()==='Activité'); b?.click(); return 'ok' })()`
+)
 await sleep(800)
-await ev(`(() => { const b = [...document.querySelectorAll('.runs-pane button')].find(x => x.textContent.trim()==='in-app'); b?.click(); return 'ok' })()`)
+await ev(
+  `(() => { const b = [...document.querySelectorAll('.runs-pane button')].find(x => x.textContent.trim()==='in-app'); b?.click(); return 'ok' })()`
+)
 await sleep(800)
-const ledger = await ev(`[...document.querySelectorAll('.runs-pane .act-tool')].slice(0, 6).map(e => e.textContent.trim().slice(0, 90))`)
+const ledger = await ev(
+  `[...document.querySelectorAll('.runs-pane .act-tool')].slice(0, 6).map(e => e.textContent.trim().slice(0, 90))`
+)
 console.log('[5 ledger in-app]', JSON.stringify(ledger, null, 1))
 await shot('C:/Amitel/Autowin OS/e2e-ledger.png')
 
@@ -94,7 +114,8 @@ const ok =
   done &&
   checks.chips.some((c) => /Conversation créée|create_conversation/.test(c)) &&
   checks.convs.some((c) => /Test complet/i.test(c)) &&
-  Array.isArray(ledger) && ledger.some((l) => /create_conversation/.test(l))
+  Array.isArray(ledger) &&
+  ledger.some((l) => /create_conversation/.test(l))
 console.log('[verdict]', ok ? 'TOUS LES ÉLÉMENTS OK' : 'MANQUE UN ÉLÉMENT')
 ws.close()
 process.exit(ok ? 0 : 1)

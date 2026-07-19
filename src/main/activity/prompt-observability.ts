@@ -88,7 +88,10 @@ export function loadAllPromptCalls(root = promptObservabilityRoot()): PromptCall
   }
 }
 
-export function deletePromptCalls(conversationId: string, root = promptObservabilityRoot()): boolean {
+export function deletePromptCalls(
+  conversationId: string,
+  root = promptObservabilityRoot()
+): boolean {
   const path = fileFor(conversationId, root)
   if (!existsSync(path)) return false
   rmSync(path)

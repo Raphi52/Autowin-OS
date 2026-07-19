@@ -7,7 +7,11 @@ import { appendPromptConfigActivity, loadPromptConfigActivity } from './prompt-c
 describe('journal global Prompt Load', () => {
   it('persiste et recharge sans conversation active', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-config-'))
-    appendPromptConfigActivity('Prompt Load · toolset browser', { disabled: ['browser'], activation: 'next-session' }, root)
+    appendPromptConfigActivity(
+      'Prompt Load · toolset browser',
+      { disabled: ['browser'], activation: 'next-session' },
+      root
+    )
     expect(loadPromptConfigActivity(root)[0].text).toContain('next-session')
   })
 })

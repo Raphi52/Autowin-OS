@@ -40,9 +40,7 @@ describe('chat turn reducer', () => {
       },
       { kind: 'text', streamId: '1:0', text: ' Terminé.' }
     ])
-    expect(flattenChatParts(turn.parts)).toBe(
-      'Bonjour Raphaël.\n[a exécuté get_state]\n Terminé.'
-    )
+    expect(flattenChatParts(turn.parts)).toBe('Bonjour Raphaël.\n[a exécuté get_state]\n Terminé.')
   })
 
   it('removes only the failed retry stream', () => {

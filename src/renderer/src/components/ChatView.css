@@ -4,6 +4,11 @@
   height: 100%;
   min-height: 0;
   gap: var(--s4);
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-page);
+  background: var(--surface-page);
+  box-shadow: var(--container-shadow);
+  backdrop-filter: blur(var(--container-blur));
 }
 .conv-pane {
   width: 232px;
@@ -14,6 +19,7 @@
   border-right: 1px solid var(--line);
   padding-right: var(--s3);
   min-height: 0;
+  background: var(--surface-panel);
 }
 .runs-pane {
   width: 300px;
@@ -24,6 +30,7 @@
   border-left: 1px solid var(--line);
   padding-left: var(--s3);
   min-height: 0;
+  background: var(--surface-panel);
 }
 .conv-pane-resizer,
 .runs-pane-resizer {
@@ -49,7 +56,9 @@
 .conv-pane-resizer:hover::after,
 .conv-pane-resizer:focus-visible::after,
 .runs-pane-resizer:hover::after,
-.runs-pane-resizer:focus-visible::after { background: var(--accent); }
+.runs-pane-resizer:focus-visible::after {
+  background: var(--accent);
+}
 .conv-head {
   display: flex;
   align-items: center;
@@ -178,7 +187,7 @@
   color: #70e9bf;
   font-size: 7px;
   font-weight: 800;
-  letter-spacing: .08em;
+  letter-spacing: 0.08em;
 }
 .conv-item:hover .conv-actions {
   display: flex;
@@ -633,9 +642,14 @@
   inset: 0;
   pointer-events: none;
   opacity: 0.34;
-  background-image: radial-gradient(circle at 12% 18%, #ff6f9b 0 1px, transparent 1.7px), radial-gradient(circle at 86% 15%, #75d4ff 0 1px, transparent 1.7px), radial-gradient(circle at 76% 78%, #f4c868 0 1px, transparent 1.7px);
+  background-image:
+    radial-gradient(circle at 12% 18%, #ff6f9b 0 1px, transparent 1.7px),
+    radial-gradient(circle at 86% 15%, #75d4ff 0 1px, transparent 1.7px),
+    radial-gradient(circle at 76% 78%, #f4c868 0 1px, transparent 1.7px);
 }
-.delete-confirm-card > * { position: relative; }
+.delete-confirm-card > * {
+  position: relative;
+}
 .delete-confirm-orbit {
   display: grid;
   width: 44px;
@@ -655,13 +669,35 @@
   font-weight: 800;
   letter-spacing: 0.16em;
 }
-.delete-confirm-card h2 { margin: 0; color: #fff4f7; font-size: 24px; }
-.delete-confirm-card p { margin: 12px 0 24px; color: var(--text-muted); line-height: 1.55; }
-.delete-confirm-card p strong { color: #fff1f5; }
-.delete-confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
-.delete-confirm-cancel { background: rgba(255,255,255,0.06); }
-.delete-confirm-danger { border-color: rgba(255, 103, 141, 0.82); background: #b8385c; color: #fff; }
-.delete-confirm-danger:hover { background: #d14a71; }
+.delete-confirm-card h2 {
+  margin: 0;
+  color: #fff4f7;
+  font-size: 24px;
+}
+.delete-confirm-card p {
+  margin: 12px 0 24px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+.delete-confirm-card p strong {
+  color: #fff1f5;
+}
+.delete-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.delete-confirm-cancel {
+  background: rgba(255, 255, 255, 0.06);
+}
+.delete-confirm-danger {
+  border-color: rgba(255, 103, 141, 0.82);
+  background: #b8385c;
+  color: #fff;
+}
+.delete-confirm-danger:hover {
+  background: #d14a71;
+}
 .composer-hint {
   color: var(--text-faint);
   font-size: 8px;

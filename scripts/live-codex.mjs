@@ -11,13 +11,19 @@ if (!loadTokens()) {
   process.exit(2)
 }
 
-const SOUL = "Tu es l'assistant d'Autowin OS. Style imposé: réponds TOUJOURS entièrement en MAJUSCULES."
+const SOUL =
+  "Tu es l'assistant d'Autowin OS. Style imposé: réponds TOUJOURS entièrement en MAJUSCULES."
 const reg = new ProviderRegistry(SOUL).register(new CodexAdapter())
 
 let streamed = ''
-const r = await reg.send('codex', [{ role: 'user', content: 'Dis bonjour en trois mots.' }], {}, (c) => {
-  streamed += c.delta
-})
+const r = await reg.send(
+  'codex',
+  [{ role: 'user', content: 'Dis bonjour en trois mots.' }],
+  {},
+  (c) => {
+    streamed += c.delta
+  }
+)
 
 const upper = r.text === r.text.toUpperCase() && /[A-Z]/.test(r.text)
 console.log('PROVIDER:', r.provider)

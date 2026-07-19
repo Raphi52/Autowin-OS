@@ -67,10 +67,16 @@ describe('durable assistant hydration and streaming', () => {
   it('binds the first turn id then reduces progressive deltas without duplication', () => {
     const empty = hydrateStoredAssistant({ content: '', status: 'streaming', parts: [] })
     const first = reduceAssistantPilotEvent(empty, {
-      kind: 'delta', turnId: 'turn-live', streamId: '0:0', text: 'Bon'
+      kind: 'delta',
+      turnId: 'turn-live',
+      streamId: '0:0',
+      text: 'Bon'
     })
     const second = reduceAssistantPilotEvent(first, {
-      kind: 'delta', turnId: 'turn-live', streamId: '0:0', text: 'jour'
+      kind: 'delta',
+      turnId: 'turn-live',
+      streamId: '0:0',
+      text: 'jour'
     })
     expect(second).toMatchObject({
       turnId: 'turn-live',

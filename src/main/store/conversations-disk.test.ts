@@ -75,7 +75,9 @@ describe('conversations-disk structured restart', () => {
     const beforeDelta = readFileSync(p, 'utf8')
 
     store.applyTurnEvent(c.id, 'turn-debounce', {
-      kind: 'delta', streamId: '0:0', text: 'partiel'
+      kind: 'delta',
+      streamId: '0:0',
+      text: 'partiel'
     })
     expect(readFileSync(p, 'utf8')).toBe(beforeDelta)
 

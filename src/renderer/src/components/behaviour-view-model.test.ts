@@ -57,7 +57,12 @@ describe('behaviour view model', () => {
   })
 
   it('keeps declared sources visible while excluding shadowed files', () => {
-    const declared = { ...files[2], id: 'hermes-soul', label: 'SOUL.md', state: 'declared' as const }
+    const declared = {
+      ...files[2],
+      id: 'hermes-soul',
+      label: 'SOUL.md',
+      state: 'declared' as const
+    }
     const shadowed = { ...files[1], id: 'shadowed', state: 'shadowed' as const }
     const visible = visibleBehaviourFiles([...files, declared, shadowed]).map((file) => file.id)
     expect(visible).toContain('hermes-soul')

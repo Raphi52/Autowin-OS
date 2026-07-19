@@ -59,8 +59,7 @@ const EXCLUDED_DIRECTORIES = new Set([
 ])
 
 export function defaultBehaviourWorkspace(): string {
-  const configured =
-    process.env[AUTOWIN_WORKSPACE_ENV] ?? process.env[legacyWorkspaceEnvName()]
+  const configured = process.env[AUTOWIN_WORKSPACE_ENV] ?? process.env[legacyWorkspaceEnvName()]
   if (configured && existsSync(configured)) return resolve(configured)
   const amitelWorkspace = 'C:\\Code RIG'
   return existsSync(amitelWorkspace) ? amitelWorkspace : process.cwd()

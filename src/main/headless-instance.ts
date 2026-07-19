@@ -33,6 +33,8 @@ export function resolveAutomationInstanceMode(
   env: Readonly<Record<string, string | undefined>>,
   isPackaged: boolean
 ): AutomationInstanceMode {
-  const isolated = (!isPackaged && env['AUTOWIN_ISOLATED_TEST_INSTANCE'] === '1') || argv.includes('--isolated-test-instance')
+  const isolated =
+    (!isPackaged && env['AUTOWIN_ISOLATED_TEST_INSTANCE'] === '1') ||
+    argv.includes('--isolated-test-instance')
   return { isolated, headless: isolated && argv.includes('--headless-test-instance') }
 }

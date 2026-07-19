@@ -19,7 +19,11 @@ os.setRole('judge', { provider: 'claude' })
 const bus = new AppCommandBus(os, () => {})
 
 // 1. une conversation + contexte actif
-const conv = os.conversations.create({ title: 'Probe workflows', category: 'claude', provider: 'claude' })
+const conv = os.conversations.create({
+  title: 'Probe workflows',
+  category: 'claude',
+  provider: 'claude'
+})
 bus.activeConversationId = conv.id
 
 // 2. orchestration réelle → doit créer + clore un RUN dans runs/<convId>/
@@ -29,14 +33,17 @@ if (!r.ok) {
   process.exit(1)
 }
 const data = r.data as { valid: boolean; gateBlocked: boolean; runPath?: string }
-console.log('[orchestrate]', JSON.stringify({ valid: data.valid, gateBlocked: data.gateBlocked, runPath: !!data.runPath }))
+console.log(
+  '[orchestrate]',
+  JSON.stringify({ valid: data.valid, gateBlocked: data.gateBlocked, runPath: !!data.runPath })
+)
 const runOk = !!data.runPath && existsSync(data.runPath)
 const md = runOk ? readFileSync(data.runPath!, 'utf8') : ''
 const statusLine = md.split('\n')[0]
 console.log('[RUN.md]', runOk ? `créé, ${statusLine}` : 'ABSENT')
 
 // 3. scope : listé pour cette conv, PAS pour une autre
-const mine = (await bus.exec('get_state', {})) // sanity
+const mine = await bus.exec('get_state', {}) // sanity
 const { listConvRuns } = await import('../src/main/runs/conv-runs')
 const own = listConvRuns(conv.id, [])
 const other = listConvRuns('conv-inexistante', [])
@@ -50,7 +57,9 @@ writeFileSync(ext, 'status: green\n\n## Besoin\nexterne\n', 'utf8')
 const att = await bus.exec('attach_run', { path: ext })
 console.log('[attach]', JSON.stringify(att.ok ? att.data : att.error))
 const merged = listConvRuns(conv.id, os.conversations.get(conv.id)?.runPaths ?? [])
-console.log(`[merged] ${merged.length} runs (dont attaché: ${merged.some((x) => x.session === 'attaché')})`)
+console.log(
+  `[merged] ${merged.length} runs (dont attaché: ${merged.some((x) => x.session === 'attaché')})`
+)
 
 const statusClosed = /^status: (green|red)$/m.test(md)
 const verdict =

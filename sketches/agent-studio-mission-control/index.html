@@ -1,5 +1,582 @@
-<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent Studio — Mission Control</title><style>
-*{box-sizing:border-box}body{margin:0;font:13px Inter,Segoe UI,sans-serif;background:#070b11;color:#dce7f4;overflow:hidden}button{font:inherit;color:inherit}.app{height:100vh;display:grid;grid-template-columns:224px 1fr 286px;grid-template-rows:64px 1fr;background:radial-gradient(circle at 55% 45%,#132133 0,#080d14 48%,#06090e 80%)}header{grid-column:1/-1;display:flex;align-items:center;gap:16px;padding:0 20px;border-bottom:1px solid #1e2a38;background:#090e15}.brand{font-weight:700;letter-spacing:.04em}.brand b{color:#55b9ff}.crumb{color:#526379}.title{font-size:17px;font-weight:650}.status{margin-left:auto;display:flex;gap:8px}.pill{padding:6px 10px;border:1px solid #26384a;border-radius:999px;color:#7f94aa;font-size:11px}.pill.live{color:#76e4b3;border-color:#245943;background:#0d2a20}.library,.inspector{min-height:0;padding:14px;border-right:1px solid #1e2a38;background:#090f17}.inspector{border:0;border-left:1px solid #1e2a38}.eyebrow{font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:#5f7287}.search{width:100%;margin:12px 0;padding:9px;border:1px solid #263545;border-radius:7px;background:#0d1520;color:#cfe1f0}.section{margin-top:18px}.section h3{font-size:10px;text-transform:uppercase;letter-spacing:.11em;color:#71859a}.agent{display:flex;align-items:center;gap:10px;margin:7px 0;padding:10px;border:1px solid #223140;border-radius:8px;background:linear-gradient(135deg,#101a26,#0b121c);cursor:grab}.agent:hover{border-color:#3b7595;transform:translateY(-1px)}.avatar{width:28px;height:28px;display:grid;place-items:center;border-radius:8px;background:#17354a;color:#70d0ff;font-weight:700}.agent small{display:block;color:#62768b;margin-top:2px}.macro{border-color:#673885;background:linear-gradient(135deg,#241632,#111323)}.macro .avatar{background:#43265c;color:#e39aff}.canvas{min-width:0;min-height:0;display:flex;flex-direction:column}.canvasbar{height:46px;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid #172332;color:#75889c}.canvasbar strong{color:#dce7f4;margin-right:8px}.zoom{margin-left:auto}.stages{flex:1;min-height:0;display:flex;gap:14px;padding:18px;overflow:auto}.frame{position:relative;flex:0 0 235px;min-height:520px;padding:12px;border:1px solid #223144;border-radius:12px;background:rgba(10,16,24,.78);box-shadow:0 12px 35px rgba(0,0,0,.2)}.frame.over{border-color:#60c9ff;box-shadow:0 0 25px #2c8dc744}.frame-head{display:flex;align-items:center;gap:8px;padding-bottom:10px;border-bottom:1px solid #1d2937}.num{font:700 10px ui-monospace;color:#55bfff}.frame h2{font-size:13px;margin:0}.frame p{margin:4px 0 0;font-size:10px;color:#5f7185}.count{margin-left:auto;color:#52677b}.slot{margin-top:12px;min-height:78px;padding:8px;border:1px dashed #27394b;border-radius:9px}.slot:empty:after{content:'Déposer un agent ou une skill';display:block;padding:18px 6px;text-align:center;color:#405469}.card{position:relative;margin:7px 0;padding:11px;border:1px solid #294052;border-radius:8px;background:#0f1c28;box-shadow:0 8px 18px #0004}.card strong{font-size:12px}.card .meta{margin-top:6px;color:#617b92;font-size:10px}.card .dot{float:right;width:7px;height:7px;border-radius:50%;background:#65e1af;box-shadow:0 0 8px #65e1af}.judge-card{border-color:#744790;background:linear-gradient(135deg,#24172e,#111929)}.judge-card .dot{background:#dd8aff;box-shadow:0 0 8px #dd8aff}.skill-details{display:none;margin-top:9px;padding-top:8px;border-top:1px solid #543567;color:#b990cf;font-size:10px}.judge-card.open .skill-details{display:block}.connector{position:absolute;right:-15px;top:52px;width:15px;border-top:1px solid #31506a}.inspector h2{margin:8px 0 4px;font-size:16px}.muted{color:#60758a;font-size:11px}.field{margin-top:17px}.field label{display:block;margin-bottom:6px;color:#71869a;font-size:10px;text-transform:uppercase;letter-spacing:.08em}.field select,.field input{width:100%;padding:9px;border:1px solid #283849;border-radius:7px;background:#0d1621;color:#dce7f4}.checks{display:grid;gap:8px}.check{display:flex;justify-content:space-between;padding:9px;border:1px solid #203040;border-radius:7px}.toggle{width:28px;height:15px;border-radius:10px;background:#1d708d;position:relative}.toggle:after{content:'';position:absolute;right:2px;top:2px;width:11px;height:11px;border-radius:50%;background:#bcecff}.run{width:100%;margin-top:20px;padding:10px;border:1px solid #35647c;border-radius:8px;background:linear-gradient(135deg,#15364a,#16263a);color:#9de1ff;cursor:pointer}.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(60px);padding:10px 16px;border:1px solid #346886;border-radius:8px;background:#102435;opacity:0;transition:.25s}.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-</style></head><body><div class="app"><header><div class="brand">agentic <b>OS</b></div><span class="crumb">/</span><div class="title">Agent Studio</div><span class="pill">Workflow · Standard</span><div class="status"><span class="pill live">● Hermes connecté</span><span class="pill">Brouillon auto-enregistré</span></div></header><aside class="library"><div class="eyebrow">Bibliothèque</div><input class="search" placeholder="Rechercher agent, persona, skill"><div class="section"><h3>Personas</h3><div class="agent" draggable="true" data-name="Architecte RIG" data-role="Persona"><span class="avatar">AR</span><div><b>Architecte RIG</b><small>architecture · contraintes</small></div></div><div class="agent" draggable="true" data-name="Expert métier" data-role="Persona"><span class="avatar">EM</span><div><b>Expert métier</b><small>greffe · discriminants</small></div></div><div class="agent" draggable="true" data-name="Correcteur" data-role="Persona"><span class="avatar">CR</span><div><b>Correcteur</b><small>fix · preuves</small></div></div></div><div class="section"><h3>Agents système</h3><div class="agent" draggable="true" data-name="Scout" data-role="Agent"><span class="avatar">S</span><div><b>Scout</b><small>diverge et classe</small></div></div><div class="agent" draggable="true" data-name="Sous-agent" data-role="Agent"><span class="avatar">A</span><div><b>Sous-agent</b><small>exécute une tâche</small></div></div></div><div class="section"><h3>Skills composées</h3><div class="agent macro" draggable="true" data-name="Judge · skill complète" data-role="Skill"><span class="avatar">J</span><div><b>Judge · complète</b><small>panel → synthèse → verdict</small></div></div></div></aside><main class="canvas"><div class="canvasbar"><strong>Pipeline RIG</strong> Glisse personas et skills dans les frames <span class="zoom">− &nbsp; 82% &nbsp; +</span></div><div class="stages"><section class="frame"><div class="frame-head"><span class="num">00</span><div><h2>Scout</h2><p>Choisir le bon front</p></div><span class="count">1</span></div><div class="slot"><div class="card"><span class="dot"></span><strong>Scout système</strong><div class="meta">codex · faible coût · 3 pistes</div></div></div><i class="connector"></i></section><section class="frame"><div class="frame-head"><span class="num">01</span><div><h2>Frame</h2><p>Problème et approche</p></div><span class="count">2</span></div><div class="slot"><div class="card"><span class="dot"></span><strong>Architecte RIG</strong><div class="meta">persona · contexte Brain</div></div><div class="card"><span class="dot"></span><strong>Expert métier</strong><div class="meta">persona · fidélité legacy</div></div></div><i class="connector"></i></section><section class="frame"><div class="frame-head"><span class="num">02</span><div><h2>Terrain</h2><p>Harness et observabilité</p></div><span class="count">0</span></div><div class="slot"></div><i class="connector"></i></section><section class="frame"><div class="frame-head"><span class="num">03</span><div><h2>Build</h2><p>Exécuter et prouver</p></div><span class="count">1</span></div><div class="slot"><div class="card"><span class="dot"></span><strong>Sous-agent principal</strong><div class="meta">claude · workspace isolé</div></div></div><i class="connector"></i></section><section class="frame"><div class="frame-head"><span class="num">04</span><div><h2>Judge</h2><p>Challenger avant sortie</p></div><span class="count">1</span></div><div class="slot"><div class="card judge-card" title="Cliquer pour déplier"><span class="dot"></span><strong>Judge · skill complète</strong><div class="meta">3 personas · synthèse adverse</div><div class="skill-details">① conformité<br>② sécurité & frontières<br>③ utilité humaine<br>④ synthèse / verdict</div></div></div></section></div></main><aside class="inspector"><div class="eyebrow">Inspecteur</div><h2>Judge · skill complète</h2><div class="muted">Macro autonome · 4 étapes · autorité en lecture seule</div><div class="field"><label>Provider / modèle</label><select><option>Auto · modèle distinct</option><option>Claude</option><option>Codex</option></select></div><div class="field"><label>Contexte injecté</label><div class="checks"><div class="check">RUN.md <i class="toggle"></i></div><div class="check">Diff réel <i class="toggle"></i></div><div class="check">Constitution <i class="toggle"></i></div></div></div><div class="field"><label>Politique de sortie</label><select><option>Bloquer sur finding critique</option><option>Avertir uniquement</option></select></div><button class="run">▶ Simuler cette étape</button></aside></div><div class="toast">Persona ajouté à la frame</div><script>
-let dragged=null;document.querySelectorAll('[draggable]').forEach(x=>x.addEventListener('dragstart',()=>dragged=x));document.querySelectorAll('.frame').forEach(f=>{f.addEventListener('dragover',e=>{e.preventDefault();f.classList.add('over')});f.addEventListener('dragleave',()=>f.classList.remove('over'));f.addEventListener('drop',e=>{e.preventDefault();f.classList.remove('over');if(!dragged)return;const c=document.createElement('div');c.className='card'+(dragged.dataset.role==='Skill'?' judge-card':'');c.innerHTML='<span class="dot"></span><strong>'+dragged.dataset.name+'</strong><div class="meta">'+dragged.dataset.role+' · à configurer</div>';f.querySelector('.slot').append(c);const t=document.querySelector('.toast');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1000)});});document.addEventListener('click',e=>{const j=e.target.closest('.judge-card');if(j)j.classList.toggle('open')});document.querySelector('.run').onclick=()=>{const t=document.querySelector('.toast');t.textContent='Simulation prête — aucun agent lancé';t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1400)};
-</script></body></html>
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Agent Studio — Mission Control</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font:
+          13px Inter,
+          Segoe UI,
+          sans-serif;
+        background: #070b11;
+        color: #dce7f4;
+        overflow: hidden;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+      }
+      .app {
+        height: 100vh;
+        display: grid;
+        grid-template-columns: 224px 1fr 286px;
+        grid-template-rows: 64px 1fr;
+        background: radial-gradient(circle at 55% 45%, #132133 0, #080d14 48%, #06090e 80%);
+      }
+      header {
+        grid-column: 1/-1;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 0 20px;
+        border-bottom: 1px solid #1e2a38;
+        background: #090e15;
+      }
+      .brand {
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+      .brand b {
+        color: #55b9ff;
+      }
+      .crumb {
+        color: #526379;
+      }
+      .title {
+        font-size: 17px;
+        font-weight: 650;
+      }
+      .status {
+        margin-left: auto;
+        display: flex;
+        gap: 8px;
+      }
+      .pill {
+        padding: 6px 10px;
+        border: 1px solid #26384a;
+        border-radius: 999px;
+        color: #7f94aa;
+        font-size: 11px;
+      }
+      .pill.live {
+        color: #76e4b3;
+        border-color: #245943;
+        background: #0d2a20;
+      }
+      .library,
+      .inspector {
+        min-height: 0;
+        padding: 14px;
+        border-right: 1px solid #1e2a38;
+        background: #090f17;
+      }
+      .inspector {
+        border: 0;
+        border-left: 1px solid #1e2a38;
+      }
+      .eyebrow {
+        font-size: 9px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: #5f7287;
+      }
+      .search {
+        width: 100%;
+        margin: 12px 0;
+        padding: 9px;
+        border: 1px solid #263545;
+        border-radius: 7px;
+        background: #0d1520;
+        color: #cfe1f0;
+      }
+      .section {
+        margin-top: 18px;
+      }
+      .section h3 {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.11em;
+        color: #71859a;
+      }
+      .agent {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 7px 0;
+        padding: 10px;
+        border: 1px solid #223140;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #101a26, #0b121c);
+        cursor: grab;
+      }
+      .agent:hover {
+        border-color: #3b7595;
+        transform: translateY(-1px);
+      }
+      .avatar {
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        background: #17354a;
+        color: #70d0ff;
+        font-weight: 700;
+      }
+      .agent small {
+        display: block;
+        color: #62768b;
+        margin-top: 2px;
+      }
+      .macro {
+        border-color: #673885;
+        background: linear-gradient(135deg, #241632, #111323);
+      }
+      .macro .avatar {
+        background: #43265c;
+        color: #e39aff;
+      }
+      .canvas {
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .canvasbar {
+        height: 46px;
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        border-bottom: 1px solid #172332;
+        color: #75889c;
+      }
+      .canvasbar strong {
+        color: #dce7f4;
+        margin-right: 8px;
+      }
+      .zoom {
+        margin-left: auto;
+      }
+      .stages {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        gap: 14px;
+        padding: 18px;
+        overflow: auto;
+      }
+      .frame {
+        position: relative;
+        flex: 0 0 235px;
+        min-height: 520px;
+        padding: 12px;
+        border: 1px solid #223144;
+        border-radius: 12px;
+        background: rgba(10, 16, 24, 0.78);
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.2);
+      }
+      .frame.over {
+        border-color: #60c9ff;
+        box-shadow: 0 0 25px #2c8dc744;
+      }
+      .frame-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #1d2937;
+      }
+      .num {
+        font: 700 10px ui-monospace;
+        color: #55bfff;
+      }
+      .frame h2 {
+        font-size: 13px;
+        margin: 0;
+      }
+      .frame p {
+        margin: 4px 0 0;
+        font-size: 10px;
+        color: #5f7185;
+      }
+      .count {
+        margin-left: auto;
+        color: #52677b;
+      }
+      .slot {
+        margin-top: 12px;
+        min-height: 78px;
+        padding: 8px;
+        border: 1px dashed #27394b;
+        border-radius: 9px;
+      }
+      .slot:empty:after {
+        content: 'Déposer un agent ou une skill';
+        display: block;
+        padding: 18px 6px;
+        text-align: center;
+        color: #405469;
+      }
+      .card {
+        position: relative;
+        margin: 7px 0;
+        padding: 11px;
+        border: 1px solid #294052;
+        border-radius: 8px;
+        background: #0f1c28;
+        box-shadow: 0 8px 18px #0004;
+      }
+      .card strong {
+        font-size: 12px;
+      }
+      .card .meta {
+        margin-top: 6px;
+        color: #617b92;
+        font-size: 10px;
+      }
+      .card .dot {
+        float: right;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #65e1af;
+        box-shadow: 0 0 8px #65e1af;
+      }
+      .judge-card {
+        border-color: #744790;
+        background: linear-gradient(135deg, #24172e, #111929);
+      }
+      .judge-card .dot {
+        background: #dd8aff;
+        box-shadow: 0 0 8px #dd8aff;
+      }
+      .skill-details {
+        display: none;
+        margin-top: 9px;
+        padding-top: 8px;
+        border-top: 1px solid #543567;
+        color: #b990cf;
+        font-size: 10px;
+      }
+      .judge-card.open .skill-details {
+        display: block;
+      }
+      .connector {
+        position: absolute;
+        right: -15px;
+        top: 52px;
+        width: 15px;
+        border-top: 1px solid #31506a;
+      }
+      .inspector h2 {
+        margin: 8px 0 4px;
+        font-size: 16px;
+      }
+      .muted {
+        color: #60758a;
+        font-size: 11px;
+      }
+      .field {
+        margin-top: 17px;
+      }
+      .field label {
+        display: block;
+        margin-bottom: 6px;
+        color: #71869a;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .field select,
+      .field input {
+        width: 100%;
+        padding: 9px;
+        border: 1px solid #283849;
+        border-radius: 7px;
+        background: #0d1621;
+        color: #dce7f4;
+      }
+      .checks {
+        display: grid;
+        gap: 8px;
+      }
+      .check {
+        display: flex;
+        justify-content: space-between;
+        padding: 9px;
+        border: 1px solid #203040;
+        border-radius: 7px;
+      }
+      .toggle {
+        width: 28px;
+        height: 15px;
+        border-radius: 10px;
+        background: #1d708d;
+        position: relative;
+      }
+      .toggle:after {
+        content: '';
+        position: absolute;
+        right: 2px;
+        top: 2px;
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: #bcecff;
+      }
+      .run {
+        width: 100%;
+        margin-top: 20px;
+        padding: 10px;
+        border: 1px solid #35647c;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #15364a, #16263a);
+        color: #9de1ff;
+        cursor: pointer;
+      }
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 18px;
+        transform: translateX(-50%) translateY(60px);
+        padding: 10px 16px;
+        border: 1px solid #346886;
+        border-radius: 8px;
+        background: #102435;
+        opacity: 0;
+        transition: 0.25s;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <div class="brand">agentic <b>OS</b></div>
+        <span class="crumb">/</span>
+        <div class="title">Agent Studio</div>
+        <span class="pill">Workflow · Standard</span>
+        <div class="status">
+          <span class="pill live">● Hermes connecté</span
+          ><span class="pill">Brouillon auto-enregistré</span>
+        </div>
+      </header>
+      <aside class="library">
+        <div class="eyebrow">Bibliothèque</div>
+        <input class="search" placeholder="Rechercher agent, persona, skill" />
+        <div class="section">
+          <h3>Personas</h3>
+          <div class="agent" draggable="true" data-name="Architecte RIG" data-role="Persona">
+            <span class="avatar">AR</span>
+            <div><b>Architecte RIG</b><small>architecture · contraintes</small></div>
+          </div>
+          <div class="agent" draggable="true" data-name="Expert métier" data-role="Persona">
+            <span class="avatar">EM</span>
+            <div><b>Expert métier</b><small>greffe · discriminants</small></div>
+          </div>
+          <div class="agent" draggable="true" data-name="Correcteur" data-role="Persona">
+            <span class="avatar">CR</span>
+            <div><b>Correcteur</b><small>fix · preuves</small></div>
+          </div>
+        </div>
+        <div class="section">
+          <h3>Agents système</h3>
+          <div class="agent" draggable="true" data-name="Scout" data-role="Agent">
+            <span class="avatar">S</span>
+            <div><b>Scout</b><small>diverge et classe</small></div>
+          </div>
+          <div class="agent" draggable="true" data-name="Sous-agent" data-role="Agent">
+            <span class="avatar">A</span>
+            <div><b>Sous-agent</b><small>exécute une tâche</small></div>
+          </div>
+        </div>
+        <div class="section">
+          <h3>Skills composées</h3>
+          <div
+            class="agent macro"
+            draggable="true"
+            data-name="Judge · skill complète"
+            data-role="Skill"
+          >
+            <span class="avatar">J</span>
+            <div><b>Judge · complète</b><small>panel → synthèse → verdict</small></div>
+          </div>
+        </div>
+      </aside>
+      <main class="canvas">
+        <div class="canvasbar">
+          <strong>Pipeline RIG</strong> Glisse personas et skills dans les frames
+          <span class="zoom">− &nbsp; 82% &nbsp; +</span>
+        </div>
+        <div class="stages">
+          <section class="frame">
+            <div class="frame-head">
+              <span class="num">00</span>
+              <div>
+                <h2>Scout</h2>
+                <p>Choisir le bon front</p>
+              </div>
+              <span class="count">1</span>
+            </div>
+            <div class="slot">
+              <div class="card">
+                <span class="dot"></span><strong>Scout système</strong>
+                <div class="meta">codex · faible coût · 3 pistes</div>
+              </div>
+            </div>
+            <i class="connector"></i>
+          </section>
+          <section class="frame">
+            <div class="frame-head">
+              <span class="num">01</span>
+              <div>
+                <h2>Frame</h2>
+                <p>Problème et approche</p>
+              </div>
+              <span class="count">2</span>
+            </div>
+            <div class="slot">
+              <div class="card">
+                <span class="dot"></span><strong>Architecte RIG</strong>
+                <div class="meta">persona · contexte Brain</div>
+              </div>
+              <div class="card">
+                <span class="dot"></span><strong>Expert métier</strong>
+                <div class="meta">persona · fidélité legacy</div>
+              </div>
+            </div>
+            <i class="connector"></i>
+          </section>
+          <section class="frame">
+            <div class="frame-head">
+              <span class="num">02</span>
+              <div>
+                <h2>Terrain</h2>
+                <p>Harness et observabilité</p>
+              </div>
+              <span class="count">0</span>
+            </div>
+            <div class="slot"></div>
+            <i class="connector"></i>
+          </section>
+          <section class="frame">
+            <div class="frame-head">
+              <span class="num">03</span>
+              <div>
+                <h2>Build</h2>
+                <p>Exécuter et prouver</p>
+              </div>
+              <span class="count">1</span>
+            </div>
+            <div class="slot">
+              <div class="card">
+                <span class="dot"></span><strong>Sous-agent principal</strong>
+                <div class="meta">claude · workspace isolé</div>
+              </div>
+            </div>
+            <i class="connector"></i>
+          </section>
+          <section class="frame">
+            <div class="frame-head">
+              <span class="num">04</span>
+              <div>
+                <h2>Judge</h2>
+                <p>Challenger avant sortie</p>
+              </div>
+              <span class="count">1</span>
+            </div>
+            <div class="slot">
+              <div class="card judge-card" title="Cliquer pour déplier">
+                <span class="dot"></span><strong>Judge · skill complète</strong>
+                <div class="meta">3 personas · synthèse adverse</div>
+                <div class="skill-details">
+                  ① conformité<br />② sécurité & frontières<br />③ utilité humaine<br />④ synthèse /
+                  verdict
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+      <aside class="inspector">
+        <div class="eyebrow">Inspecteur</div>
+        <h2>Judge · skill complète</h2>
+        <div class="muted">Macro autonome · 4 étapes · autorité en lecture seule</div>
+        <div class="field">
+          <label>Provider / modèle</label
+          ><select>
+            <option>Auto · modèle distinct</option>
+            <option>Claude</option>
+            <option>Codex</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Contexte injecté</label>
+          <div class="checks">
+            <div class="check">RUN.md <i class="toggle"></i></div>
+            <div class="check">Diff réel <i class="toggle"></i></div>
+            <div class="check">Constitution <i class="toggle"></i></div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Politique de sortie</label
+          ><select>
+            <option>Bloquer sur finding critique</option>
+            <option>Avertir uniquement</option>
+          </select>
+        </div>
+        <button class="run">▶ Simuler cette étape</button>
+      </aside>
+    </div>
+    <div class="toast">Persona ajouté à la frame</div>
+    <script>
+      let dragged = null
+      document
+        .querySelectorAll('[draggable]')
+        .forEach((x) => x.addEventListener('dragstart', () => (dragged = x)))
+      document.querySelectorAll('.frame').forEach((f) => {
+        f.addEventListener('dragover', (e) => {
+          e.preventDefault()
+          f.classList.add('over')
+        })
+        f.addEventListener('dragleave', () => f.classList.remove('over'))
+        f.addEventListener('drop', (e) => {
+          e.preventDefault()
+          f.classList.remove('over')
+          if (!dragged) return
+          const c = document.createElement('div')
+          c.className = 'card' + (dragged.dataset.role === 'Skill' ? ' judge-card' : '')
+          c.innerHTML =
+            '<span class="dot"></span><strong>' +
+            dragged.dataset.name +
+            '</strong><div class="meta">' +
+            dragged.dataset.role +
+            ' · à configurer</div>'
+          f.querySelector('.slot').append(c)
+          const t = document.querySelector('.toast')
+          t.classList.add('show')
+          setTimeout(() => t.classList.remove('show'), 1000)
+        })
+      })
+      document.addEventListener('click', (e) => {
+        const j = e.target.closest('.judge-card')
+        if (j) j.classList.toggle('open')
+      })
+      document.querySelector('.run').onclick = () => {
+        const t = document.querySelector('.toast')
+        t.textContent = 'Simulation prête — aucun agent lancé'
+        t.classList.add('show')
+        setTimeout(() => t.classList.remove('show'), 1400)
+      }
+    </script>
+  </body>
+</html>

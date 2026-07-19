@@ -29,7 +29,11 @@ const send = (method, params = {}) =>
   })
 
 const evaluate = async (expr) => {
-  const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true })
+  const r = await send('Runtime.evaluate', {
+    expression: expr,
+    returnByValue: true,
+    awaitPromise: true
+  })
   if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails).slice(0, 300))
   return r.result?.value
 }

@@ -11,22 +11,36 @@ socket.onmessage = ({ data }) => {
   const callback = pending.get(message.id)
   if (!callback) return
   pending.delete(message.id)
-  message.error ? callback.reject(new Error(message.error.message)) : callback.resolve(message.result)
+  message.error
+    ? callback.reject(new Error(message.error.message))
+    : callback.resolve(message.result)
 }
-await new Promise((resolve) => { socket.onopen = resolve })
-const send = (method, params = {}) => new Promise((resolve, reject) => {
-  const id = ++nextId
-  pending.set(id, { resolve, reject })
-  socket.send(JSON.stringify({ id, method, params }))
+await new Promise((resolve) => {
+  socket.onopen = resolve
 })
+const send = (method, params = {}) =>
+  new Promise((resolve, reject) => {
+    const id = ++nextId
+    pending.set(id, { resolve, reject })
+    socket.send(JSON.stringify({ id, method, params }))
+  })
 const evaluate = async (expression) => {
-  const result = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
-  if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description ?? 'Évaluation DOM en échec')
+  const result = await send('Runtime.evaluate', {
+    expression,
+    returnByValue: true,
+    awaitPromise: true
+  })
+  if (result.exceptionDetails)
+    throw new Error(result.exceptionDetails.exception?.description ?? 'Évaluation DOM en échec')
   return result.result?.value
 }
-await evaluate(`(() => [...document.querySelectorAll('button.nav-item')].find((node) => node.textContent?.trim() === 'Chat')?.click())()`)
+await evaluate(
+  `(() => [...document.querySelectorAll('button.nav-item')].find((node) => node.textContent?.trim() === 'Chat')?.click())()`
+)
 await new Promise((resolve) => setTimeout(resolve, 800))
-await evaluate(`(() => [...document.querySelectorAll('button')].find((node) => node.textContent?.trim().startsWith('hey'))?.click())()`)
+await evaluate(
+  `(() => [...document.querySelectorAll('button')].find((node) => node.textContent?.trim().startsWith('hey'))?.click())()`
+)
 await new Promise((resolve) => setTimeout(resolve, 300))
 await evaluate(`(() => {
   const workflows = document.querySelector('button[title="Workflows (RUN.md)"]')
@@ -47,7 +61,9 @@ await evaluate(`(() => {
   if (first) first.open = true
 })()`)
 await new Promise((resolve) => setTimeout(resolve, 300))
-const state = await evaluate(`({ summary: document.querySelector('.hermes-preflight > summary')?.textContent, visible: Boolean(document.querySelector('.hermes-preflight .prompt-envelope[open]')), text: document.querySelector('.hermes-preflight')?.innerText })`)
+const state = await evaluate(
+  `({ summary: document.querySelector('.hermes-preflight > summary')?.textContent, visible: Boolean(document.querySelector('.hermes-preflight .prompt-envelope[open]')), text: document.querySelector('.hermes-preflight')?.innerText })`
+)
 const screenshot = await send('Page.captureScreenshot', { format: 'png' })
 const output = 'C:/Amitel/Autowin OS/artifacts/hermes-trace-workflows.png'
 writeFileSync(output, Buffer.from(screenshot.data, 'base64'))

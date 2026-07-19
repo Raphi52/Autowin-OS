@@ -19,7 +19,12 @@ interface BehaviourContextItem {
   label: string
   depth: number
 }
-type HermesInjectionProof = { id: string; verdict: 'injected' | 'unproven'; observedAt?: string; reason: string }
+type HermesInjectionProof = {
+  id: string
+  verdict: 'injected' | 'unproven'
+  observedAt?: string
+  reason: string
+}
 
 const ENGINE_LABEL: Record<BehaviourEngine, string> = {
   codex: 'Codex',
@@ -236,11 +241,16 @@ export function BehaviourView(): React.JSX.Element {
                     className={selected?.id === file.id ? 'active' : ''}
                     onClick={() => setSelectedId(file.id)}
                   >
-                    <i className={`is-${proofs.get(file.id)?.verdict === 'injected' ? 'injected' : file.state}`} />
+                    <i
+                      className={`is-${proofs.get(file.id)?.verdict === 'injected' ? 'injected' : file.state}`}
+                    />
                     <span>
                       <strong>{file.label}</strong>
                       <small>
-                        {locationLabel(file)} · {proofs.get(file.id)?.verdict === 'injected' ? 'Injecté · preuve payload' : STATE_LABEL[file.state]}
+                        {locationLabel(file)} ·{' '}
+                        {proofs.get(file.id)?.verdict === 'injected'
+                          ? 'Injecté · preuve payload'
+                          : STATE_LABEL[file.state]}
                       </small>
                     </span>
                   </button>
@@ -266,7 +276,13 @@ export function BehaviourView(): React.JSX.Element {
                   <h2>{selected.label}</h2>
                   <p title={selected.path}>{selected.path}</p>
                 </div>
-                <b className={`is-${selectedProof?.verdict === 'injected' ? 'injected' : selected.state}`}>{selectedProof?.verdict === 'injected' ? 'Injecté · preuve payload' : STATE_LABEL[selected.state]}</b>
+                <b
+                  className={`is-${selectedProof?.verdict === 'injected' ? 'injected' : selected.state}`}
+                >
+                  {selectedProof?.verdict === 'injected'
+                    ? 'Injecté · preuve payload'
+                    : STATE_LABEL[selected.state]}
+                </b>
               </header>
               <dl>
                 <div>

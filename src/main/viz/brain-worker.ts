@@ -12,7 +12,14 @@ import {
 
 type BrainWorkerRequest = {
   id: number
-  method: 'listBrains' | 'loadPreview' | 'loadGraph' | 'loadThemes' | 'loadNeighborhood' | 'readNodeFile' | 'searchBrain'
+  method:
+    | 'listBrains'
+    | 'loadPreview'
+    | 'loadGraph'
+    | 'loadThemes'
+    | 'loadNeighborhood'
+    | 'readNodeFile'
+    | 'searchBrain'
   args: unknown[]
 }
 
@@ -35,7 +42,11 @@ parentPort.on('message', async (request: BrainWorkerRequest) => {
         )
         break
       case 'loadGraph': {
-        const [path, lod, community] = request.args as [string, number | undefined, number | undefined]
+        const [path, lod, community] = request.args as [
+          string,
+          number | undefined,
+          number | undefined
+        ]
         const key = `${path}\u0000${lod ?? 300}\u0000${community ?? ''}`
         value = graphCache.get(key)
         if (!value) {
@@ -66,6 +77,10 @@ parentPort.on('message', async (request: BrainWorkerRequest) => {
     }
     parentPort?.postMessage({ id: request.id, ok: true, value })
   } catch (error) {
-    parentPort?.postMessage({ id: request.id, ok: false, error: error instanceof Error ? error.message : String(error) })
+    parentPort?.postMessage({
+      id: request.id,
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    })
   }
 })

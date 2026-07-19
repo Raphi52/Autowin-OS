@@ -11,17 +11,27 @@ socket.onmessage = ({ data }) => {
   const callback = pending.get(message.id)
   if (!callback) return
   pending.delete(message.id)
-  message.error ? callback.reject(new Error(message.error.message)) : callback.resolve(message.result)
+  message.error
+    ? callback.reject(new Error(message.error.message))
+    : callback.resolve(message.result)
 }
-await new Promise((resolve) => { socket.onopen = resolve })
-const send = (method, params = {}) => new Promise((resolve, reject) => {
-  const id = ++nextId
-  pending.set(id, { resolve, reject })
-  socket.send(JSON.stringify({ id, method, params }))
+await new Promise((resolve) => {
+  socket.onopen = resolve
 })
+const send = (method, params = {}) =>
+  new Promise((resolve, reject) => {
+    const id = ++nextId
+    pending.set(id, { resolve, reject })
+    socket.send(JSON.stringify({ id, method, params }))
+  })
 const evaluate = async (expression) => {
-  const result = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
-  if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description ?? 'Évaluation DOM en échec')
+  const result = await send('Runtime.evaluate', {
+    expression,
+    returnByValue: true,
+    awaitPromise: true
+  })
+  if (result.exceptionDetails)
+    throw new Error(result.exceptionDetails.exception?.description ?? 'Évaluation DOM en échec')
   return result.result?.value
 }
 await evaluate(`(() => {
@@ -48,7 +58,9 @@ await evaluate(`(() => {
   if (first) first.open = true
 })()`)
 await new Promise((resolve) => setTimeout(resolve, 300))
-const state = await evaluate(`({ text: document.body.innerText, hermesMetric: document.querySelector('[data-metric="hermes"]')?.innerText, proof: document.querySelector('.observatory-hermes-proof')?.innerText })`)
+const state = await evaluate(
+  `({ text: document.body.innerText, hermesMetric: document.querySelector('[data-metric="hermes"]')?.innerText, proof: document.querySelector('.observatory-hermes-proof')?.innerText })`
+)
 const screenshot = await send('Page.captureScreenshot', { format: 'png' })
 const output = 'C:/Amitel/Autowin OS/artifacts/hermes-trace-observatory.png'
 writeFileSync(output, Buffer.from(screenshot.data, 'base64'))

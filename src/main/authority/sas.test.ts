@@ -88,7 +88,12 @@ describe('AuthoritySas', () => {
   })
   it('rejects a choice outside the proposed options', () => {
     const sas = new AuthoritySas()
-    const id = sas.propose({ question: 'Q', options: ['approve', 'cancel'], safeDefault: 'cancel', ttlMs: 1000 })
+    const id = sas.propose({
+      question: 'Q',
+      options: ['approve', 'cancel'],
+      safeDefault: 'cancel',
+      ttlMs: 1000
+    })
     expect(() => sas.resolve(id, 'bypass')).toThrow('choix invalide')
     expect(sas.pending()).toHaveLength(1)
   })

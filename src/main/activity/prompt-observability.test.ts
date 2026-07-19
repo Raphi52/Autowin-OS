@@ -31,7 +31,12 @@ describe('prompt observability', () => {
   it('conserve sans troncature le payload exact et le rattachement causal', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-prompt-observability-'))
     try {
-      appendPromptCall(call, root, () => 1_700_000_000_000, () => 'call-1')
+      appendPromptCall(
+        call,
+        root,
+        () => 1_700_000_000_000,
+        () => 'call-1'
+      )
       expect(loadPromptCalls('conv-42', root)).toEqual([
         expect.objectContaining({
           id: 'call-1',
@@ -64,7 +69,12 @@ describe('prompt observability', () => {
 
   it('supprime explicitement le journal exact d une conversation', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-prompt-delete-'))
-    appendPromptCall(call, root, () => 1_700_000_000_000, () => 'call-1')
+    appendPromptCall(
+      call,
+      root,
+      () => 1_700_000_000_000,
+      () => 'call-1'
+    )
     expect(deletePromptCalls('conv-42', root)).toBe(true)
     expect(loadPromptCalls('conv-42', root)).toEqual([])
     expect(deletePromptCalls('conv-42', root)).toBe(false)

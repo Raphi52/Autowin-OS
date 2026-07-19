@@ -50,6 +50,42 @@ export interface PilotEvent {
 }
 
 const CMD_RE = /<cmd>\s*(\{[\s\S]*?\})\s*<\/cmd>/g
+const CONTROL_RE = /<(cmd|question)>\s*([\s\S]*?)\s*<\/\1>/g
+
+type OrderedPilotToken =
+  { kind: 'text'; text: string } | { kind: 'command'; name: string; args: Record<string, unknown> }
+
+function filterVisibleText(raw: string): string {
+  const filter = new VisibleStreamFilter()
+  return filter.push(raw) + filter.finish()
+}
+
+function parseOrderedPilotTokens(raw: string): OrderedPilotToken[] {
+  const tokens: OrderedPilotToken[] = []
+  let cursor = 0
+  CONTROL_RE.lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = CONTROL_RE.exec(raw)) !== null) {
+    const visible = filterVisibleText(raw.slice(cursor, match.index))
+    if (visible) tokens.push({ kind: 'text', text: visible })
+    if (match[1] === 'cmd') {
+      try {
+        const parsed = JSON.parse(match[2]) as {
+          name?: string
+          args?: Record<string, unknown>
+        }
+        if (parsed.name)
+          tokens.push({ kind: 'command', name: parsed.name, args: parsed.args ?? {} })
+      } catch {
+        /* bloc de commande invalide : supprimé du texte visible, jamais exécuté */
+      }
+    }
+    cursor = match.index + match[0].length
+  }
+  const trailing = filterVisibleText(raw.slice(cursor))
+  if (trailing) tokens.push({ kind: 'text', text: trailing })
+  return tokens
+}
 
 export class AgentPilot {
   constructor(
@@ -174,52 +210,87 @@ export class AgentPilot {
           ...(i === 0 && currentAttachments?.length ? { attachments: currentAttachments } : {})
         }
       ]
-      let prompt = this.registry.describePrompt(provider, messages, {
-        system,
-        model: binding.model,
-        reasoningEffort: binding.reasoningEffort
-      }, binding.model)
+      let prompt = this.registry.describePrompt(
+        provider,
+        messages,
+        {
+          system,
+          model: binding.model,
+          reasoningEffort: binding.reasoningEffort
+        },
+        binding.model
+      )
       const options: SendOptions = {
         system,
         model: binding.model,
         reasoningEffort: binding.reasoningEffort,
-        observePrompt: (observed) => { prompt = observed },
+        observePrompt: (observed) => {
+          prompt = observed
+        },
         signal
       }
       let res
       let attempt = 0
       let callStartedAt = performance.now()
-      let successfulStreamedVisible = false
+      let successfulStreamedPrefix = ''
+      let successfulAttempt = 0
       while (!res) {
         const streamId = `${i}:${attempt}`
         const visibleFilter = new VisibleStreamFilter()
-        let attemptStreamedVisible = false
+        let attemptStreamedPrefix = ''
+        let commandBoundarySeen = false
+        const emitVisiblePrefix = (
+          segments: ReturnType<VisibleStreamFilter['pushSegments']>
+        ): void => {
+          for (const segment of segments) {
+            if (segment.kind === 'control') {
+              if (segment.control === 'cmd') commandBoundarySeen = true
+              continue
+            }
+            if (commandBoundarySeen || !segment.text) continue
+            attemptStreamedPrefix += segment.text
+            onEvent({ kind: 'delta', streamId, text: segment.text, iteration: i })
+          }
+        }
         try {
           callStartedAt = performance.now()
           res = await this.registry.send(provider, messages, options, (chunk) => {
-            const visible = visibleFilter.push(chunk.delta)
-            if (!visible) return
-            attemptStreamedVisible = true
-            onEvent({ kind: 'delta', streamId, text: visible, iteration: i })
+            emitVisiblePrefix(visibleFilter.pushSegments(chunk.delta))
           })
-          const tail = visibleFilter.finish()
-          if (tail) {
-            attemptStreamedVisible = true
-            onEvent({ kind: 'delta', streamId, text: tail, iteration: i })
-          }
-          successfulStreamedVisible = attemptStreamedVisible
+          emitVisiblePrefix(visibleFilter.finishSegments())
+          successfulStreamedPrefix = attemptStreamedPrefix
+          successfulAttempt = attempt
         } catch (error) {
-          if (attemptStreamedVisible)
-            onEvent({ kind: 'stream-reset', streamId, iteration: i })
           const message = error instanceof Error ? error.message : String(error)
           if (signal?.aborted) {
-            onEvent({ kind: 'cancellation', iteration: i, name: provider, text: 'Annulation demandée par utilisateur', data: { reason: signal.reason ?? 'user' } })
+            onEvent({
+              kind: 'cancellation',
+              iteration: i,
+              name: provider,
+              text: 'Annulation demandée par utilisateur',
+              data: { reason: signal.reason ?? 'user' }
+            })
             throw error
           }
-          onEvent({ kind: 'prompt-call', iteration: i, prompt, response: '', status: 'failed', error: message, callDurationMs: performance.now() - callStartedAt })
+          onEvent({
+            kind: 'prompt-call',
+            iteration: i,
+            prompt,
+            response: '',
+            status: 'failed',
+            error: message,
+            callDurationMs: performance.now() - callStartedAt
+          })
           if (attempt >= 1) throw error
+          if (attemptStreamedPrefix) onEvent({ kind: 'stream-reset', streamId, iteration: i })
           attempt += 1
-          onEvent({ kind: 'retry', iteration: i, name: provider, text: message, data: { attempt, maxAttempts: 2 } })
+          onEvent({
+            kind: 'retry',
+            iteration: i,
+            name: provider,
+            text: message,
+            data: { attempt, maxAttempts: 2 }
+          })
         }
       }
       onEvent({
@@ -246,40 +317,83 @@ export class AgentPilot {
         continue
       }
 
-      const cmds: Array<{ name: string; args: Record<string, unknown> }> = []
-      let m: RegExpExecArray | null
-      CMD_RE.lastIndex = 0
-      while ((m = CMD_RE.exec(text)) !== null) {
-        try {
-          const parsed = JSON.parse(m[1]) as { name: string; args?: Record<string, unknown> }
-          if (parsed.name) cmds.push({ name: parsed.name, args: parsed.args ?? {} })
-        } catch {
-          /* commande invalide — ignorée */
+      const ordered = parseOrderedPilotTokens(res.text)
+      const spoken = ordered
+        .filter(
+          (token): token is Extract<OrderedPilotToken, { kind: 'text' }> => token.kind === 'text'
+        )
+        .map((token) => token.text)
+        .join('')
+        .trim()
+      const hasCommand = ordered.some((token) => token.kind === 'command')
+
+      if (!hasCommand) {
+        if (!successfulStreamedPrefix && spoken) onEvent({ kind: 'think', text: spoken })
+        else if (successfulStreamedPrefix) {
+          const visible = ordered
+            .filter(
+              (token): token is Extract<OrderedPilotToken, { kind: 'text' }> =>
+                token.kind === 'text'
+            )
+            .map((token) => token.text)
+            .join('')
+          const remainder = visible.startsWith(successfulStreamedPrefix)
+            ? visible.slice(successfulStreamedPrefix.length)
+            : ''
+          if (remainder)
+            onEvent({
+              kind: 'delta',
+              streamId: `${i}:${successfulAttempt}:remainder`,
+              text: remainder,
+              iteration: i
+            })
         }
-      }
-
-      const spoken = text.replace(CMD_RE, '').trim()
-      if (spoken && !successfulStreamedVisible) onEvent({ kind: 'think', text: spoken })
-
-      if (cmds.length === 0) {
         onEvent({ kind: 'done', text: spoken, usage })
         return
       }
 
       const results: string[] = []
-      for (let commandIndex = 0; commandIndex < cmds.length; commandIndex += 1) {
-        const c = cmds[commandIndex]
-        const actionId = `${i}:${commandIndex}`
-        onEvent({ kind: 'command', actionId, name: c.name, args: c.args })
-        const r = await this.bus.exec(c.name, c.args, conversationId)
+      let commandIndex = 0
+      let tokenIndex = 0
+      let streamedPrefixRemaining = successfulStreamedPrefix
+      for (const token of ordered) {
+        if (token.kind === 'text') {
+          let visible = token.text
+          if (streamedPrefixRemaining) {
+            if (streamedPrefixRemaining.startsWith(visible)) {
+              streamedPrefixRemaining = streamedPrefixRemaining.slice(visible.length)
+              visible = ''
+            } else if (visible.startsWith(streamedPrefixRemaining)) {
+              visible = visible.slice(streamedPrefixRemaining.length)
+              streamedPrefixRemaining = ''
+            } else {
+              visible = ''
+              streamedPrefixRemaining = ''
+            }
+          }
+          if (visible)
+            onEvent({
+              kind: 'delta',
+              streamId: `${i}:${successfulAttempt}:ordered:${tokenIndex}`,
+              text: visible,
+              iteration: i
+            })
+          tokenIndex += 1
+          continue
+        }
+
+        const actionId = `${i}:${commandIndex++}`
+        onEvent({ kind: 'command', actionId, name: token.name, args: token.args })
+        const r = await this.bus.exec(token.name, token.args, conversationId)
         onEvent({
           kind: 'result',
           actionId,
-          name: c.name,
+          name: token.name,
           ok: r.ok,
           data: r.ok ? r.data : r.error
         })
-        results.push(`${c.name} → ${r.ok ? JSON.stringify(r.data) : 'ERREUR ' + r.error}`)
+        results.push(`${token.name} → ${r.ok ? JSON.stringify(r.data) : 'ERREUR ' + r.error}`)
+        tokenIndex += 1
       }
 
       const state = await this.bus.snapshot()

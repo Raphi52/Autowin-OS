@@ -13,7 +13,10 @@ const pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
 const page = pages.find((item) => item.type === 'page')
 if (!page) throw new Error(`Aucune page CDP sur ${port}`)
 const socket = new WebSocket(page.webSocketDebuggerUrl)
-await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject })
+await new Promise((resolve, reject) => {
+  socket.onopen = resolve
+  socket.onerror = reject
+})
 let id = 0
 const pending = new Map()
 socket.onmessage = (event) => {
@@ -23,17 +26,23 @@ socket.onmessage = (event) => {
   pending.delete(message.id)
   message.error ? call.reject(new Error(message.error.message)) : call.resolve(message.result)
 }
-const send = (method, params = {}) => new Promise((resolve, reject) => {
-  const callId = ++id
-  pending.set(callId, { resolve, reject })
-  socket.send(JSON.stringify({ id: callId, method, params }))
-})
+const send = (method, params = {}) =>
+  new Promise((resolve, reject) => {
+    const callId = ++id
+    pending.set(callId, { resolve, reject })
+    socket.send(JSON.stringify({ id: callId, method, params }))
+  })
 const evaluate = async (expression) => {
-  const result = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })
+  const result = await send('Runtime.evaluate', {
+    expression,
+    awaitPromise: true,
+    returnByValue: true
+  })
   return result.result.value
 }
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-const click = async (selector) => evaluate(`(() => {
+const click = async (selector) =>
+  evaluate(`(() => {
   const target = document.querySelector(${JSON.stringify(selector)})
   target?.click()
   return Boolean(target)
@@ -62,7 +71,8 @@ const memoryOpened = await evaluate(`(() => {
 if (!memoryOpened) throw new Error('Navigation Memory introuvable')
 await wait(4000)
 const states = [await snapshot('01-open-memory')]
-if (!Number.isFinite(states[0].distance)) throw new Error('Télémétrie caméra absente après ouverture Memory')
+if (!Number.isFinite(states[0].distance))
+  throw new Error('Télémétrie caméra absente après ouverture Memory')
 
 await click('.theme-cluster-label:not(.is-active)')
 await wait(500)
@@ -101,7 +111,11 @@ await wait(700)
 states.push(await snapshot('10-black'))
 
 const baseline = states[0].distance
-const failures = states.filter((state) => !Number.isFinite(state.distance) || Math.abs(state.distance - baseline) > Math.max(1, baseline * 0.01))
+const failures = states.filter(
+  (state) =>
+    !Number.isFinite(state.distance) ||
+    Math.abs(state.distance - baseline) > Math.max(1, baseline * 0.01)
+)
 const result = { port, baseline, states, failures: failures.map((state) => state.name) }
 writeFileSync(join(outputDir, 'result.json'), JSON.stringify(result, null, 2))
 console.log(JSON.stringify(result))

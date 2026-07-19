@@ -66,9 +66,21 @@ describe('TraceEvent v1 — contrat causal canonique', () => {
     const variants: TraceEventV1[] = [
       completeEvent({ id: 'retry', type: 'retry', status: 'running' }),
       completeEvent({ id: 'cancel', type: 'cancellation', status: 'cancelled' }),
-      completeEvent({ id: 'subagent', type: 'handoff', actor: { id: 'sub', kind: 'agent', label: 'Sous-agent' } }),
-      completeEvent({ id: 'judge', type: 'verdict', actor: { id: 'judge', kind: 'judge', label: 'Juge' } }),
-      completeEvent({ id: 'opaque', type: 'boundary', observation: { boundary: 'inside-provider', fidelity: 'opaque', limitation: 'Non exposé.' } })
+      completeEvent({
+        id: 'subagent',
+        type: 'handoff',
+        actor: { id: 'sub', kind: 'agent', label: 'Sous-agent' }
+      }),
+      completeEvent({
+        id: 'judge',
+        type: 'verdict',
+        actor: { id: 'judge', kind: 'judge', label: 'Juge' }
+      }),
+      completeEvent({
+        id: 'opaque',
+        type: 'boundary',
+        observation: { boundary: 'inside-provider', fidelity: 'opaque', limitation: 'Non exposé.' }
+      })
     ]
     expect(variants.map(assertTraceEvent)).toEqual(variants)
   })

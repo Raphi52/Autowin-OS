@@ -43,5 +43,7 @@ rmSync(dir, { recursive: true, force: true })
 
 const perfOk = ms < 3000
 const contentOk = a.totalToolCalls > 0 && a.turns.length > 0
-console.log(`[verdict] perf(<3s)=${perfOk} contenu=${contentOk} cache(<100ms)=${cacheMs < 100} ledger=${ledgerOk}`)
+console.log(
+  `[verdict] perf(<3s)=${perfOk} contenu=${contentOk} cache(<100ms)=${cacheMs < 100} ledger=${ledgerOk}`
+)
 process.exit(perfOk && contentOk && ledgerOk ? 0 : 1)

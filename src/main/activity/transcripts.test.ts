@@ -18,7 +18,11 @@ const LINES = [
     message: {
       content: [
         { type: 'text', text: 'Je lis la capture puis le code.' },
-        { type: 'tool_use', name: 'Read', input: { file_path: 'C:\\tmp\\capture-inexistante.png' } },
+        {
+          type: 'tool_use',
+          name: 'Read',
+          input: { file_path: 'C:\\tmp\\capture-inexistante.png' }
+        },
         { type: 'tool_use', name: 'Bash', input: { command: 'npm test' } }
       ]
     }
@@ -27,7 +31,9 @@ const LINES = [
   JSON.stringify({
     type: 'assistant',
     timestamp: '2026-07-18T10:00:09Z',
-    message: { content: [{ type: 'tool_use', name: 'Read', input: { file_path: 'C:\\code\\a.ts' } }] }
+    message: {
+      content: [{ type: 'tool_use', name: 'Read', input: { file_path: 'C:\\code\\a.ts' } }]
+    }
   }),
   // tool_result (événement user sans texte) → PAS un tour humain
   JSON.stringify({

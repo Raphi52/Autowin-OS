@@ -221,7 +221,10 @@ export function shouldAutoFitGraphPhase(phase: ProgressiveGraphPhase): boolean {
   return phase === 'complete' || phase === 'cached'
 }
 
-export function shouldShowFloatingNodeName(node: GraphNode, hoveredNodeIds: ReadonlySet<string>): boolean {
+export function shouldShowFloatingNodeName(
+  node: GraphNode,
+  hoveredNodeIds: ReadonlySet<string>
+): boolean {
   return hoveredNodeIds.has(node.id)
 }
 
@@ -355,12 +358,20 @@ export function linkedNodesFor(nodeId: string, graph: GraphData): LinkedNode[] {
     if (sourceId === nodeId && targetId !== nodeId) {
       const target = nodesById.get(targetId)
       if (target)
-        neighbours.set(`outgoing:${target.id}`, { node: target, direction: 'outgoing', relation: link.relation })
+        neighbours.set(`outgoing:${target.id}`, {
+          node: target,
+          direction: 'outgoing',
+          relation: link.relation
+        })
     }
     if (targetId === nodeId && sourceId !== nodeId) {
       const source = nodesById.get(sourceId)
       if (source)
-        neighbours.set(`incoming:${source.id}`, { node: source, direction: 'incoming', relation: link.relation })
+        neighbours.set(`incoming:${source.id}`, {
+          node: source,
+          direction: 'incoming',
+          relation: link.relation
+        })
     }
   }
   return [...neighbours.values()].sort(
@@ -381,7 +392,10 @@ export function mergeGraphDelta(graph: GraphData, delta: GraphData): GraphData {
 
   const links = [...graph.links]
   const linkKeys = new Set(
-    links.map((link) => `${endpointId(link.source)}\u0000${endpointId(link.target)}\u0000${link.relation ?? ''}`)
+    links.map(
+      (link) =>
+        `${endpointId(link.source)}\u0000${endpointId(link.target)}\u0000${link.relation ?? ''}`
+    )
   )
   for (const link of delta.links) {
     const key = `${endpointId(link.source)}\u0000${endpointId(link.target)}\u0000${link.relation ?? ''}`

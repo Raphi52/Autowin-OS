@@ -67,15 +67,22 @@ export class Orchestrator {
     const subBinding = roles.getBinding('subagent')
     const subProvider = subBinding.provider
     const execMessages = [{ role: 'user' as const, content: task }]
-    let execPrompt = registry.describePrompt(subProvider, execMessages, {
-      model: subBinding.model,
-      reasoningEffort: subBinding.reasoningEffort
-    }, subBinding.model)
+    let execPrompt = registry.describePrompt(
+      subProvider,
+      execMessages,
+      {
+        model: subBinding.model,
+        reasoningEffort: subBinding.reasoningEffort
+      },
+      subBinding.model
+    )
     const subOptions: SendOptions = {
       system: capabilityInstruction(subBinding.capabilityProfileId),
       model: subBinding.model,
       reasoningEffort: subBinding.reasoningEffort,
-      observePrompt: (observed) => { execPrompt = observed }
+      observePrompt: (observed) => {
+        execPrompt = observed
+      }
     }
     const execStartedAt = performance.now()
     let exec
@@ -83,8 +90,13 @@ export class Orchestrator {
       exec = await registry.send(subProvider, execMessages, subOptions)
     } catch (error) {
       push({
-        step: 'exec', provider: subProvider, role: 'subagent', text: '', prompt: execPrompt,
-        status: 'failed', error: error instanceof Error ? error.message : String(error),
+        step: 'exec',
+        provider: subProvider,
+        role: 'subagent',
+        text: '',
+        prompt: execPrompt,
+        status: 'failed',
+        error: error instanceof Error ? error.message : String(error),
         durationMs: performance.now() - execStartedAt
       })
       throw error
@@ -118,16 +130,24 @@ export class Orchestrator {
     const judgePrompt =
       `Tu es un juge. Évalue si cette réponse répond correctement à la tâche.\n` +
       `TÂCHE: ${task}\nRÉPONSE: ${exec.text}\n` +
-      `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".` + capabilityInstruction(judgeBinding.capabilityProfileId)
+      `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".` +
+      capabilityInstruction(judgeBinding.capabilityProfileId)
     const judgeMessages = [{ role: 'user' as const, content: judgePrompt }]
-    let judgeEnvelope = registry.describePrompt(judgeProvider, judgeMessages, {
-      model: judgeBinding.model,
-      reasoningEffort: judgeBinding.reasoningEffort
-    }, judgeBinding.model)
+    let judgeEnvelope = registry.describePrompt(
+      judgeProvider,
+      judgeMessages,
+      {
+        model: judgeBinding.model,
+        reasoningEffort: judgeBinding.reasoningEffort
+      },
+      judgeBinding.model
+    )
     const judgeOptions: SendOptions = {
       model: judgeBinding.model,
       reasoningEffort: judgeBinding.reasoningEffort,
-      observePrompt: (observed) => { judgeEnvelope = observed }
+      observePrompt: (observed) => {
+        judgeEnvelope = observed
+      }
     }
     const judgeStartedAt = performance.now()
     let verdict
@@ -135,8 +155,13 @@ export class Orchestrator {
       verdict = await registry.send(judgeProvider, judgeMessages, judgeOptions)
     } catch (error) {
       push({
-        step: 'judge', provider: judgeProvider, role: 'judge', text: '', prompt: judgeEnvelope,
-        status: 'failed', error: error instanceof Error ? error.message : String(error),
+        step: 'judge',
+        provider: judgeProvider,
+        role: 'judge',
+        text: '',
+        prompt: judgeEnvelope,
+        status: 'failed',
+        error: error instanceof Error ? error.message : String(error),
         durationMs: performance.now() - judgeStartedAt
       })
       throw error

@@ -69,7 +69,10 @@ export function closeConvRun(path: string, green: boolean, journalLine: string):
     md = md.replace(/^status: open/m, `status: ${green ? 'green' : 'red'}`)
     if (green) md = md.replace(/^ {2}- \[ \] (le juge valide.*)$/m, '  - [x] $1')
     md = md.replace(/^## Journal$/m, `## Journal`)
-    md = md.replace(/(## Journal\n)/, `$1[${new Date().toISOString().slice(0, 10)}] ${journalLine}\n`)
+    md = md.replace(
+      /(## Journal\n)/,
+      `$1[${new Date().toISOString().slice(0, 10)}] ${journalLine}\n`
+    )
     writeFileSync(path, md, 'utf8')
   } catch {
     /* clôture best-effort : un RUN resté open est visible, pas fatal */
@@ -123,7 +126,10 @@ export function listConvRuns(
     if (!existsSync(p)) continue
     try {
       const md = readFileSync(p, 'utf8')
-      const subject = dirname(p).split(/[\\/]/).pop()!.replace(/-workspace$/, '')
+      const subject = dirname(p)
+        .split(/[\\/]/)
+        .pop()!
+        .replace(/-workspace$/, '')
       attached.push({
         subject,
         session: 'attaché',

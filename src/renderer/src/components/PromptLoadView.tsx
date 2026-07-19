@@ -119,12 +119,11 @@ export function PromptLoadView({ active }: { active: boolean }): React.JSX.Eleme
         kind,
         await window.api.hermesControls(kind)
       ])
-    )
-      .then((entries) => {
-        if (!current) return
-        setCatalogues(Object.fromEntries(entries) as Record<ControlKind, ControlItem[]>)
-        setError('')
-      })
+    ).then((entries) => {
+      if (!current) return
+      setCatalogues(Object.fromEntries(entries) as Record<ControlKind, ControlItem[]>)
+      setError('')
+    })
     void window.api
       .promptCalls()
       .then((calls) => {
@@ -148,7 +147,10 @@ export function PromptLoadView({ active }: { active: boolean }): React.JSX.Eleme
     const measuredCalls = promptCalls.filter((call) => call.usage !== undefined).length
     const inputTokens = promptCalls.reduce((sum, call) => sum + (call.usage?.inputTokens ?? 0), 0)
     const outputTokens = promptCalls.reduce((sum, call) => sum + (call.usage?.outputTokens ?? 0), 0)
-    const cacheTokens = promptCalls.reduce((sum, call) => sum + (call.usage?.cacheReadTokens ?? 0), 0)
+    const cacheTokens = promptCalls.reduce(
+      (sum, call) => sum + (call.usage?.cacheReadTokens ?? 0),
+      0
+    )
     const characters = promptCalls.reduce(
       (sum, call) =>
         sum +
@@ -284,18 +286,37 @@ export function PromptLoadView({ active }: { active: boolean }): React.JSX.Eleme
           <div>
             <span className="prompt-load-eyebrow">Mesuré aux frontières providers</span>
             <h2>Charge réellement observée</h2>
-            <p>Les tokens viennent du provider. Les caractères correspondent au payload exact visible.</p>
+            <p>
+              Les tokens viennent du provider. Les caractères correspondent au payload exact
+              visible.
+            </p>
           </div>
           <div className="prompt-observed-metrics">
-            <strong>{observed.measuredCalls ? observed.inputTokens.toLocaleString('fr-FR') : 'non mesuré'}<small>tokens in</small></strong>
-            <strong>{observed.measuredCalls ? observed.outputTokens.toLocaleString('fr-FR') : 'non mesuré'}<small>tokens out</small></strong>
-            <strong>{observed.measuredCalls ? observed.cacheTokens.toLocaleString('fr-FR') : 'non mesuré'}<small>cache lu</small></strong>
-            <strong>{observed.characters.toLocaleString('fr-FR')}<small>caractères visibles</small></strong>
+            <strong>
+              {observed.measuredCalls ? observed.inputTokens.toLocaleString('fr-FR') : 'non mesuré'}
+              <small>tokens in</small>
+            </strong>
+            <strong>
+              {observed.measuredCalls
+                ? observed.outputTokens.toLocaleString('fr-FR')
+                : 'non mesuré'}
+              <small>tokens out</small>
+            </strong>
+            <strong>
+              {observed.measuredCalls ? observed.cacheTokens.toLocaleString('fr-FR') : 'non mesuré'}
+              <small>cache lu</small>
+            </strong>
+            <strong>
+              {observed.characters.toLocaleString('fr-FR')}
+              <small>caractères visibles</small>
+            </strong>
           </div>
         </div>
 
         {promptCalls.length === 0 ? (
-          <p className="prompt-load-empty">Aucun appel observé. Lance un chat pour mesurer son payload exact.</p>
+          <p className="prompt-load-empty">
+            Aucun appel observé. Lance un chat pour mesurer son payload exact.
+          </p>
         ) : (
           <div className="prompt-observed-layout">
             <div className="prompt-call-list" role="list" aria-label="Appels observés">
@@ -307,10 +328,13 @@ export function PromptLoadView({ active }: { active: boolean }): React.JSX.Eleme
                   className={selectedCall?.id === call.id ? 'is-active' : ''}
                   onClick={() => setSelectedCallId(call.id)}
                 >
-                  <span>{call.actor} → {call.provider}</span>
+                  <span>
+                    {call.actor} → {call.provider}
+                  </span>
                   <strong>{call.model ?? call.provider}</strong>
                   <small>
-                    {new Date(call.ts).toLocaleString('fr-FR')} · {call.usage?.inputTokens ?? '—'} in
+                    {new Date(call.ts).toLocaleString('fr-FR')} · {call.usage?.inputTokens ?? '—'}{' '}
+                    in
                   </small>
                 </button>
               ))}
@@ -318,11 +342,16 @@ export function PromptLoadView({ active }: { active: boolean }): React.JSX.Eleme
             {selectedCall && (
               <article className="prompt-call-inspector">
                 <header>
-                  <div><strong>Payload exact</strong><small>{selectedCall.boundary}</small></div>
+                  <div>
+                    <strong>Payload exact</strong>
+                    <small>{selectedCall.boundary}</small>
+                  </div>
                   <span>{selectedCall.transport}</span>
                 </header>
                 <details open>
-                  <summary>Instructions système · {selectedCall.system?.length ?? 0} caractères</summary>
+                  <summary>
+                    Instructions système · {selectedCall.system?.length ?? 0} caractères
+                  </summary>
                   <pre>{selectedCall.system || '(aucune)'}</pre>
                 </details>
                 <details>
@@ -331,16 +360,18 @@ export function PromptLoadView({ active }: { active: boolean }): React.JSX.Eleme
                 </details>
                 <details>
                   <summary>Options et provenance</summary>
-                  <HumanJson value={{
-                    conversationId: selectedCall.conversationId,
-                    turnId: selectedCall.turnId,
-                    iteration: selectedCall.iteration,
-                    actor: selectedCall.actor,
-                    provider: selectedCall.provider,
-                    model: selectedCall.model,
-                    transport: selectedCall.transport,
-                    options: selectedCall.options
-                  }} />
+                  <HumanJson
+                    value={{
+                      conversationId: selectedCall.conversationId,
+                      turnId: selectedCall.turnId,
+                      iteration: selectedCall.iteration,
+                      actor: selectedCall.actor,
+                      provider: selectedCall.provider,
+                      model: selectedCall.model,
+                      transport: selectedCall.transport,
+                      options: selectedCall.options
+                    }}
+                  />
                 </details>
                 <details>
                   <summary>Réponse exacte</summary>

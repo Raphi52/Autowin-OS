@@ -146,7 +146,8 @@ export class CodexAdapter implements ProviderAdapter {
       system: body.instructions,
       messages: [{ role: 'user', content: serializedBody }],
       options: { body },
-      limitation: 'Corps JSON exact remis a fetch. Les instructions internes du service Codex ne sont pas exposees.'
+      limitation:
+        'Corps JSON exact remis a fetch. Les instructions internes du service Codex ne sont pas exposees.'
     })
 
     const headers: Record<string, string> = {
@@ -187,7 +188,11 @@ export class CodexAdapter implements ProviderAdapter {
           delta?: string
           response?: {
             id?: string
-            usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number } }
+            usage?: {
+              input_tokens?: number
+              output_tokens?: number
+              input_tokens_details?: { cached_tokens?: number }
+            }
           }
         }
         if (ev.type === 'response.output_text.delta' && typeof ev.delta === 'string')
@@ -195,7 +200,10 @@ export class CodexAdapter implements ProviderAdapter {
         if (ev.type === 'response.completed') {
           responseId = ev.response?.id
           const measured = ev.response?.usage
-          if (measured && (measured.input_tokens !== undefined || measured.output_tokens !== undefined)) {
+          if (
+            measured &&
+            (measured.input_tokens !== undefined || measured.output_tokens !== undefined)
+          ) {
             usage = {
               inputTokens: measured.input_tokens ?? 0,
               outputTokens: measured.output_tokens ?? 0,

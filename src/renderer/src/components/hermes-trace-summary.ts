@@ -18,20 +18,31 @@ export function summarizeHermesTraces(traces: HermesTraceSummaryInput[]): {
   source?: HermesTraceSummaryInput['source']
   coverage: 'aucune' | 'partielle' | 'rattachée' | 'non-rattachée'
 } {
-  const ordered = [...traces].sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp))
+  const ordered = [...traces].sort(
+    (left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp)
+  )
   const linkedCount = ordered.filter((trace) => Boolean(trace.conversationId)).length
   const last = ordered.at(-1)
   return {
     count: ordered.length,
     linkedCount,
     unlinkedCount: ordered.length - linkedCount,
-    ...(last ? {
-      lastTimestamp: last.timestamp,
-      lastProvider: last.provider,
-      lastModel: last.model,
-      boundary: last.boundary,
-      source: last.source
-    } : {}),
-    coverage: ordered.length === 0 ? 'aucune' : linkedCount === 0 ? 'non-rattachée' : linkedCount === ordered.length ? 'rattachée' : 'partielle'
+    ...(last
+      ? {
+          lastTimestamp: last.timestamp,
+          lastProvider: last.provider,
+          lastModel: last.model,
+          boundary: last.boundary,
+          source: last.source
+        }
+      : {}),
+    coverage:
+      ordered.length === 0
+        ? 'aucune'
+        : linkedCount === 0
+          ? 'non-rattachée'
+          : linkedCount === ordered.length
+            ? 'rattachée'
+            : 'partielle'
   }
 }

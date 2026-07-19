@@ -1,16 +1,20 @@
 /* Theme modes select mood only. Component geometry lives in ui-system.css. */
-.theme-serious .main { background: transparent; }
+.theme-serious .main {
+  background: transparent;
+}
 .theme-serious .rail {
-  background: rgba(0, 0, 0, .58);
-  border-right-color: rgba(255, 255, 255, .2);
+  background: rgba(0, 0, 0, 0.58);
+  border-right-color: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(12px);
 }
 .theme-serious .brand,
-.theme-serious .app-theme-switch { background: #070708; }
+.theme-serious .app-theme-switch {
+  background: #070708;
+}
 
 .theme-galaxy .rail {
-  background: rgba(0, 0, 0, .3);
-  border-right-color: rgba(255, 255, 255, .16);
+  background: rgba(0, 0, 0, 0.3);
+  border-right-color: rgba(255, 255, 255, 0.16);
   backdrop-filter: blur(16px);
 }
 
@@ -23,4 +27,6 @@
   padding: 8px 0;
   font-size: 0;
 }
-.rail.is-collapsed .app-theme-switch button::first-letter { font-size: 10px; }
+.rail.is-collapsed .app-theme-switch button::first-letter {
+  font-size: 10px;
+}

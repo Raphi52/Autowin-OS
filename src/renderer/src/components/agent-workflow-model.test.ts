@@ -51,13 +51,15 @@ describe('agent workflow model', () => {
     const next = assignResource(workflow, 'judge', 'judge', 'adversarial-reviewer')
 
     expect(next.assignments).toHaveLength(workflow.assignments.length + 1)
-    expect(next.assignments.at(-1)).toEqual(expect.objectContaining({
-      id: 'judge-judge-adversarial-reviewer-2',
-      stageId: 'judge',
-      personaId: 'adversarial-reviewer',
-      resourceId: 'judge',
-      kind: 'skill'
-    }))
+    expect(next.assignments.at(-1)).toEqual(
+      expect.objectContaining({
+        id: 'judge-judge-adversarial-reviewer-2',
+        stageId: 'judge',
+        personaId: 'adversarial-reviewer',
+        resourceId: 'judge',
+        kind: 'skill'
+      })
+    )
     expect(workflow.assignments).toHaveLength(6)
   })
 
@@ -185,9 +187,9 @@ describe('agent workflow model', () => {
         dependsOn: ['judge-security']
       })
     )
-    expect(workflow.assignments.find((assignment) => assignment.id === 'judge-skill')?.modelId).toBe(
-      null
-    )
+    expect(
+      workflow.assignments.find((assignment) => assignment.id === 'judge-skill')?.modelId
+    ).toBe(null)
   })
 
   it('rejects invalid timing and empty invocation parameters', () => {

@@ -153,10 +153,22 @@ interface BehaviourContext {
   label: string
   depth: number
 }
-interface HermesInjectionProof { id: string; verdict: 'injected' | 'unproven'; observedAt?: string; reason: string }
+interface HermesInjectionProof {
+  id: string
+  verdict: 'injected' | 'unproven'
+  observedAt?: string
+  reason: string
+}
 
 interface SkillLoopInput {
-  steps: Array<{ id: string; skill: string; capabilities?: string[]; prompt: string; requires?: string[]; produces?: string[] }>
+  steps: Array<{
+    id: string
+    skill: string
+    capabilities?: string[]
+    prompt: string
+    requires?: string[]
+    produces?: string[]
+  }>
   passes: number
   stopOnFailure: boolean
   carryOutput: boolean
@@ -201,8 +213,17 @@ interface AgentTopology {
   subagents: SlotBinding[]
   panels: { scout: SlotBinding[]; judge: SlotBinding[] }
 }
-interface CapabilityProfile { id: string; name: string; description: string; selections: Record<'skills' | 'hooks' | 'tools', Record<string, boolean>>; updatedAt: string }
-interface CapabilityProfileState { profiles: CapabilityProfile[]; assignments: Record<'orchestrator' | 'subagent' | 'judge' | 'scout', string> }
+interface CapabilityProfile {
+  id: string
+  name: string
+  description: string
+  selections: Record<'skills' | 'hooks' | 'tools', Record<string, boolean>>
+  updatedAt: string
+}
+interface CapabilityProfileState {
+  profiles: CapabilityProfile[]
+  assignments: Record<'orchestrator' | 'subagent' | 'judge' | 'scout', string>
+}
 
 interface PromptCallRecord {
   id: string
@@ -268,7 +289,15 @@ interface ChatApi {
     model?: string
   ) => Promise<Record<string, { provider: string; model?: string }>>
   models: () => Promise<ImportedModel[]>
-  profiles: () => Promise<Array<{ id: string; name: string; description?: string; updatedAt: string; topology: AgentTopology }>>
+  profiles: () => Promise<
+    Array<{
+      id: string
+      name: string
+      description?: string
+      updatedAt: string
+      topology: AgentTopology
+    }>
+  >
   saveProfile: (profile: unknown) => Promise<unknown[]>
   applyProfile: (id: string) => Promise<{ topology: AgentTopology }>
   kimiLogin: () => Promise<{ ok: true }>
@@ -276,7 +305,10 @@ interface ChatApi {
   setTopology: (topology: AgentTopology) => Promise<AgentTopology>
   capabilityProfiles: () => Promise<CapabilityProfileState>
   saveCapabilityProfiles: (state: CapabilityProfileState) => Promise<CapabilityProfileState>
-  assignCapabilityProfile: (role: 'orchestrator' | 'subagent' | 'judge' | 'scout', profileId: string) => Promise<CapabilityProfileState>
+  assignCapabilityProfile: (
+    role: 'orchestrator' | 'subagent' | 'judge' | 'scout',
+    profileId: string
+  ) => Promise<CapabilityProfileState>
   hermesControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins') => Promise<HermesControlItem[]>
   skills: () => Promise<SkillRegistryItem[]>
   promptCalls: (conversationId?: string) => Promise<PromptCallRecord[]>
@@ -391,7 +423,10 @@ interface ChatApi {
     conversationId?: string
   ) => Promise<{ ok: boolean; cancelled?: boolean; error?: string }>
   cancelPilotChat: (conversationId: string) => Promise<{ ok: boolean }>
-  markResponseDisplayed: (conversationId: string, content: string) => Promise<{ ok: boolean; eventId: string }>
+  markResponseDisplayed: (
+    conversationId: string,
+    content: string
+  ) => Promise<{ ok: boolean; eventId: string }>
   onPilotEvent: (
     cb: (e: {
       kind: string

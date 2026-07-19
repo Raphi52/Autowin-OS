@@ -12,16 +12,25 @@ socket.onmessage = ({ data }) => {
   const callback = pending.get(message.id)
   if (!callback) return
   pending.delete(message.id)
-  message.error ? callback.reject(new Error(message.error.message)) : callback.resolve(message.result)
+  message.error
+    ? callback.reject(new Error(message.error.message))
+    : callback.resolve(message.result)
 }
-await new Promise((resolve) => { socket.onopen = resolve })
-const send = (method, params = {}) => new Promise((resolve, reject) => {
-  const id = ++nextId
-  pending.set(id, { resolve, reject })
-  socket.send(JSON.stringify({ id, method, params }))
+await new Promise((resolve) => {
+  socket.onopen = resolve
 })
+const send = (method, params = {}) =>
+  new Promise((resolve, reject) => {
+    const id = ++nextId
+    pending.set(id, { resolve, reject })
+    socket.send(JSON.stringify({ id, method, params }))
+  })
 const evaluate = async (expression) => {
-  const result = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+  const result = await send('Runtime.evaluate', {
+    expression,
+    returnByValue: true,
+    awaitPromise: true
+  })
   if (result.exceptionDetails) throw new Error('Évaluation DOM en échec')
   return result.result?.value
 }

@@ -516,11 +516,19 @@ export function GraphView({
   const motionProfile = graphMotionProfile()
   const linkedNodes = useMemo(() => (node ? linkedNodesFor(node.id, graph) : []), [graph, node])
   const hoveredNodeIds = useMemo(
-    () => new Set(hoveredNode ? [hoveredNode.id, ...linkedNodesFor(hoveredNode.id, graph).map((linked) => linked.node.id)] : []),
+    () =>
+      new Set(
+        hoveredNode
+          ? [
+              hoveredNode.id,
+              ...linkedNodesFor(hoveredNode.id, graph).map((linked) => linked.node.id)
+            ]
+          : []
+      ),
     [graph, hoveredNode]
   )
   const selectedNodeIds = useMemo(
-    () => node ? focusedNodeIdsFor(node.id, graph) : new Set<string>(),
+    () => (node ? focusedNodeIdsFor(node.id, graph) : new Set<string>()),
     [graph, node]
   )
   const floatingNodeIds = useMemo(
@@ -546,8 +554,9 @@ export function GraphView({
     const graphApi = graphRef.current
     const layer = themeLabelsRef.current
     if (!graphApi) return
-    const camera = (graphApi as unknown as { cameraPosition(): { x: number; y: number; z: number } })
-      .cameraPosition()
+    const camera = (
+      graphApi as unknown as { cameraPosition(): { x: number; y: number; z: number } }
+    ).cameraPosition()
     if (wrap.current && camera) {
       wrap.current.dataset.cameraDistance = String(
         Math.round(Math.hypot(camera.x, camera.y, camera.z) * 100) / 100
@@ -797,7 +806,6 @@ export function GraphView({
     setPanelTab('node')
   }
 
-
   function focusNode(nextNode: GraphNode): void {
     if ([nextNode.x, nextNode.y, nextNode.z].some((coordinate) => typeof coordinate !== 'number'))
       return
@@ -877,7 +885,9 @@ export function GraphView({
       const star = createGalaxyStar(
         nextNode,
         appearance,
-        nodeValueForTheme(nextNode, activeThemes, settings.nodeSize) * visualProfile.nodeScale * emphasis.scale
+        nodeValueForTheme(nextNode, activeThemes, settings.nodeSize) *
+          visualProfile.nodeScale *
+          emphasis.scale
       )
       if (shouldShowFloatingNodeName(nextNode, floatingNodeIds))
         star.add(createConnectedLabel(nextNode.label, appearance.color, star.scale.x, 0.03))
@@ -911,7 +921,9 @@ export function GraphView({
       return createSeriousNode(
         nextNode,
         appearance,
-        nodeValueForTheme(nextNode, activeThemes, settings.nodeSize) * visualProfile.nodeScale * emphasis.scale,
+        nodeValueForTheme(nextNode, activeThemes, settings.nodeSize) *
+          visualProfile.nodeScale *
+          emphasis.scale,
         shouldShowFloatingNodeName(nextNode, floatingNodeIds)
       )
     },
@@ -987,7 +999,9 @@ export function GraphView({
         <button
           type="button"
           className="graph-clean-memory"
-          onClick={() => onCleanMemory(brains.find((brain) => brain.path === selected)?.label ?? 'brain actif')}
+          onClick={() =>
+            onCleanMemory(brains.find((brain) => brain.path === selected)?.label ?? 'brain actif')
+          }
           disabled={!selected || loading}
           title="Ouvrir une conversation brainwash pour auditer ce brain"
         >
@@ -995,7 +1009,13 @@ export function GraphView({
         </button>
         <div className="graph-toolbar__stats" aria-live="polite">
           <span>
-            <strong>{graph.nodes.length}{graph.totalNodes && graph.totalNodes !== graph.nodes.length ? ` / ${graph.totalNodes}` : ''}</strong> nœuds
+            <strong>
+              {graph.nodes.length}
+              {graph.totalNodes && graph.totalNodes !== graph.nodes.length
+                ? ` / ${graph.totalNodes}`
+                : ''}
+            </strong>{' '}
+            nœuds
           </span>
           <span>
             <strong>{graph.links.length}</strong> relations
@@ -1023,23 +1043,30 @@ export function GraphView({
         >
           <i style={{ background: visualProfile.palette[0] }} />
           <span>Tous les thèmes</span>
-          <small>{graph.totalNodes && graph.totalNodes !== graph.nodes.length ? `${graph.nodes.length} / ${graph.totalNodes}` : graph.nodes.length}</small>
+          <small>
+            {graph.totalNodes && graph.totalNodes !== graph.nodes.length
+              ? `${graph.nodes.length} / ${graph.totalNodes}`
+              : graph.nodes.length}
+          </small>
         </button>
         <div className="theme-list">
           {themeQuery.trim() && [...catalogSearch.nodes, ...vaultSearch].length > 0 && (
             <div className="node-search-results" aria-label="Fiches trouvées">
               <span className="search-results-heading">Fiches</span>
               {[...catalogSearch.nodes, ...vaultSearch]
-                .filter((resultNode, index, all) => all.findIndex((item) => item.id === resultNode.id) === index)
+                .filter(
+                  (resultNode, index, all) =>
+                    all.findIndex((item) => item.id === resultNode.id) === index
+                )
                 .map((resultNode) => (
-                <button
-                  key={resultNode.id}
-                  className="node-search-result"
-                  onClick={() => void openNode(resultNode, true)}
-                >
-                  <i aria-hidden="true">✦</i>
-                  <span>{resultNode.label}</span>
-                </button>
+                  <button
+                    key={resultNode.id}
+                    className="node-search-result"
+                    onClick={() => void openNode(resultNode, true)}
+                  >
+                    <i aria-hidden="true">✦</i>
+                    <span>{resultNode.label}</span>
+                  </button>
                 ))}
             </div>
           )}
@@ -1116,7 +1143,7 @@ export function GraphView({
             nodeOpacity={1}
             nodeThreeObject={visualMode === 'galaxy' ? galaxyNodeObject : seriousNodeObject}
             nodeThreeObjectExtend={false}
-            linkVisibility={(value) => focusedNode ? linkIsHighlighted(value) : settings.links}
+            linkVisibility={(value) => (focusedNode ? linkIsHighlighted(value) : settings.links)}
             linkColor={linkColor}
             linkOpacity={focusedNode ? 1 : visualProfile.linkOpacity}
             linkWidth={(value) => settings.linkWidth * (linkIsHighlighted(value) ? 1.8 : 1)}
@@ -1125,7 +1152,7 @@ export function GraphView({
             onEngineTick={syncThemeClusterLabels}
             onEngineStop={syncThemeClusterLabels}
             onBackgroundClick={clearNodeSelection}
-            onNodeHover={(value) => setHoveredNode(value ? value as GraphNode : null)}
+            onNodeHover={(value) => setHoveredNode(value ? (value as GraphNode) : null)}
             onNodeClick={(value) => openNode(value as GraphNode)}
           />
           <div

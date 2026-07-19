@@ -180,7 +180,11 @@ export async function discoverImportedModels(
         reasoningEfforts: [...CLAUDE_EFFORTS],
         defaultReasoningEffort: model.includes('haiku') ? 'medium' : 'high'
       }))
-    return [...codexModels, ...discovered, ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi')]
+    return [
+      ...codexModels,
+      ...discovered,
+      ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi')
+    ]
   } catch {
     return [
       ...codexModels,

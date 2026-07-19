@@ -47,18 +47,33 @@ function validate(input: LoopRunInput, skills: Set<string>): LoopRunInput {
     ids.add(step.id)
     if (!skills.has(step.skill)) throw new Error(`Skill de loop inconnue : ${step.skill}`)
     const name = step.skill.split(':').pop()?.toLowerCase()
-    const rank = name === 'scout' ? 0 : name === 'frame' ? 1 : name === 'terrain' ? 2 : name === 'build' ? 3 : name === 'clean' ? 4 : name === 'judge' ? 5 : 3
+    const rank =
+      name === 'scout'
+        ? 0
+        : name === 'frame'
+          ? 1
+          : name === 'terrain'
+            ? 2
+            : name === 'build'
+              ? 3
+              : name === 'clean'
+                ? 4
+                : name === 'judge'
+                  ? 5
+                  : 3
     if (rank < previousRank) throw new Error(`Ordre semantique invalide avant ${step.id}`)
     previousRank = rank
     for (const capability of step.capabilities ?? []) {
       if (!skills.has(capability)) throw new Error(`Capacite de loop inconnue : ${capability}`)
-      if (capability === step.skill) throw new Error(`Capacite dupliquee sur ${step.id} : ${capability}`)
+      if (capability === step.skill)
+        throw new Error(`Capacite dupliquee sur ${step.id} : ${capability}`)
     }
     if (typeof step.prompt !== 'string' || !step.prompt.trim() || step.prompt.length > 20_000) {
       throw new Error(`Prompt invalide pour ${step.skill}`)
     }
     for (const name of [...(step.requires ?? []), ...(step.produces ?? [])]) {
-      if (!/^[a-z][a-z0-9_-]{0,63}$/i.test(name)) throw new Error(`Nom d'artefact invalide : ${name}`)
+      if (!/^[a-z][a-z0-9_-]{0,63}$/i.test(name))
+        throw new Error(`Nom d'artefact invalide : ${name}`)
     }
   }
   return { ...input, passes: 1, stopOnFailure: true, carryOutput: true }
@@ -67,7 +82,10 @@ function validate(input: LoopRunInput, skills: Set<string>): LoopRunInput {
 function extractArtifacts(output: string, names: string[]): Map<string, string> {
   const found = new Map<string, string>()
   for (const name of names) {
-    const match = new RegExp(`<<<ARTIFACT:${name}\\s*>>>\\n([\\s\\S]*?)\\n<<<END_ARTIFACT>>>`, 'i').exec(output)
+    const match = new RegExp(
+      `<<<ARTIFACT:${name}\\s*>>>\\n([\\s\\S]*?)\\n<<<END_ARTIFACT>>>`,
+      'i'
+    ).exec(output)
     if (!match) throw new Error(`Artefact requis non produit : ${name}`)
     found.set(name, match[1].trim())
   }
@@ -137,7 +155,8 @@ export async function runSkillLoop(
           messages.push({ role: 'assistant', content: output }, { role: 'user', content: answer })
         }
         previousOutput = output
-        for (const [name, value] of extractArtifacts(output, step.produces ?? [])) artifacts.set(name, value)
+        for (const [name, value] of extractArtifacts(output, step.produces ?? []))
+          artifacts.set(name, value)
         completed++
         emit({ runId, kind: 'step-done', stepId: step.id, pass, output: previousOutput })
       } catch (reason) {

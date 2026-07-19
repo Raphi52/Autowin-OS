@@ -6,6 +6,11 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-page);
+  background: var(--surface-page);
+  box-shadow: var(--container-shadow);
+  backdrop-filter: blur(var(--container-blur));
 }
 .observatory-head {
   display: flex;
@@ -38,9 +43,9 @@
 }
 .observatory-metrics > strong {
   padding: 9px 11px;
-  border: 1px solid var(--line-strong);
-  border-radius: 9px;
-  background: rgba(2, 7, 13, 0.68);
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-card);
+  background: var(--surface-card);
   font-size: 16px;
 }
 .observatory-metrics small {
@@ -55,9 +60,9 @@
   flex-wrap: wrap;
   gap: 7px;
   padding: 9px;
-  border: 1px solid var(--line);
-  border-radius: 9px 9px 0 0;
-  background: rgba(2, 6, 11, 0.68);
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-panel) var(--container-radius-panel) 0 0;
+  background: var(--surface-panel);
 }
 .observatory-hermes-proof {
   align-self: center;
@@ -73,16 +78,32 @@
   z-index: 8;
   padding: 8px 10px;
   border: 1px solid rgba(89, 220, 255, 0.28);
-  background: rgba(2, 7, 13, 0.9);
+  background: var(--surface-card);
   color: var(--text-dim);
   font-size: 10px;
 }
 .observatory-hermes-diagnostics > summary,
-.observatory-hermes-diagnostics details > summary { cursor: pointer; color: var(--cyan); }
-.observatory-hermes-diagnostics p { margin: 6px 0; color: var(--text-faint); }
-.observatory-hermes-diagnostics > div { max-height: 42vh; overflow: auto; }
-.observatory-hermes-diagnostics details { padding: 5px 0; border-top: 1px solid var(--line); }
-.observatory-hermes-diagnostics pre { max-height: 34vh; overflow: auto; white-space: pre-wrap; }
+.observatory-hermes-diagnostics details > summary {
+  cursor: pointer;
+  color: var(--cyan);
+}
+.observatory-hermes-diagnostics p {
+  margin: 6px 0;
+  color: var(--text-faint);
+}
+.observatory-hermes-diagnostics > div {
+  max-height: 42vh;
+  overflow: auto;
+}
+.observatory-hermes-diagnostics details {
+  padding: 5px 0;
+  border-top: 1px solid var(--line);
+}
+.observatory-hermes-diagnostics pre {
+  max-height: 34vh;
+  overflow: auto;
+  white-space: pre-wrap;
+}
 .observatory-toolbar input {
   flex: 1;
   min-width: 180px;
@@ -96,7 +117,7 @@
   padding: 0 10px;
   border: 1px solid var(--line-strong);
   border-radius: 6px;
-  background: rgba(3, 8, 14, 0.76);
+  background: var(--surface-inset);
   color: var(--text-dim);
   font: inherit;
 }
@@ -111,7 +132,7 @@
   overflow: auto;
   border: 1px solid rgba(89, 220, 255, 0.36);
   border-radius: 12px;
-  background: rgba(1, 4, 9, 0.96);
+  background: var(--surface-page);
 }
 .observatory-config .prompt-load-header,
 .observatory-config .prompt-observatory {
@@ -129,7 +150,7 @@
   border: 1px solid var(--line);
   border-top: 0;
   border-radius: 0 0 10px 10px;
-  background: rgba(1, 4, 8, 0.5);
+  background: var(--surface-panel);
   overflow: hidden;
 }
 .observatory-rail {
@@ -151,13 +172,13 @@
   text-align: left;
   border: 1px solid #27333f;
   border-radius: 7px;
-  background: rgba(3, 8, 14, 0.7);
+  background: var(--surface-card);
   color: var(--text-dim);
   cursor: pointer;
 }
 .observatory-conversations > button.is-active {
   border-color: #59dcff;
-  background: rgba(18, 61, 75, 0.34);
+  background: var(--surface-selected);
   color: var(--text);
 }
 .observatory-calls {
@@ -167,7 +188,7 @@
 }
 .observatory-calls button.is-active {
   border-color: #e9bd4e;
-  background: rgba(75, 52, 12, 0.18);
+  background: var(--surface-selected);
 }
 .observatory-conversations small,
 .observatory-diagnostics span {
@@ -232,7 +253,7 @@
   padding: 11px 12px;
   border: 1px solid #25313b;
   border-radius: 9px;
-  background: rgba(2, 7, 12, 0.76);
+  background: var(--surface-card);
   color: var(--text);
   text-align: left;
   cursor: pointer;
@@ -240,7 +261,7 @@
 .observatory-event:hover,
 .observatory-event.is-selected {
   border-color: #e9bd4e;
-  background: rgba(75, 52, 12, 0.14);
+  background: var(--surface-selected);
 }
 .observatory-event.is-compared {
   box-shadow: inset 3px 0 #59dcff;
@@ -292,7 +313,7 @@
   border: 1px solid rgba(233, 189, 78, 0.45);
   border-top: 0;
   border-radius: 0 0 9px 9px;
-  background: rgba(2, 6, 11, 0.9);
+  background: var(--surface-card);
 }
 .observatory-call-detail {
   display: grid;
@@ -301,7 +322,7 @@
   padding: 14px;
   border: 1px solid #59dcff;
   border-radius: 9px;
-  background: rgba(2, 8, 14, 0.92);
+  background: var(--surface-card);
 }
 .observatory-call-detail > header,
 .observatory-call-metrics {
@@ -317,7 +338,7 @@
   height: 31px;
   border: 1px solid var(--line-strong);
   border-radius: 6px;
-  background: rgba(3, 8, 14, 0.76);
+  background: var(--surface-inset);
   color: var(--text-dim);
 }
 .observatory-call-metrics {
@@ -347,7 +368,7 @@
   overflow-wrap: anywhere;
   padding: 11px;
   border: 1px solid var(--line);
-  background: #02060b;
+  background: var(--surface-inset);
   color: var(--text-dim);
 }
 .observatory-payload-list {
@@ -359,7 +380,7 @@
   padding: 9px;
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: rgba(1, 4, 8, 0.72);
+  background: var(--surface-card);
 }
 .observatory-payload-list > article > header {
   display: flex;
@@ -383,7 +404,7 @@
   padding: 12px;
   border: 1px solid #59dcff;
   border-radius: 9px;
-  background: rgba(2, 8, 14, 0.88);
+  background: var(--surface-card);
 }
 .observatory-diff header {
   display: flex;

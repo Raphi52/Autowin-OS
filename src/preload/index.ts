@@ -46,15 +46,18 @@ const api = {
     ipcRenderer.invoke('os:setRole', role, provider, model),
   models: (): Promise<unknown[]> => ipcRenderer.invoke('os:models:list'),
   profiles: (): Promise<unknown[]> => ipcRenderer.invoke('os:profiles:list'),
-  saveProfile: (profile: unknown): Promise<unknown[]> => ipcRenderer.invoke('os:profiles:save', profile),
+  saveProfile: (profile: unknown): Promise<unknown[]> =>
+    ipcRenderer.invoke('os:profiles:save', profile),
   applyProfile: (id: string): Promise<unknown> => ipcRenderer.invoke('os:profiles:apply', id),
   kimiLogin: (): Promise<{ ok: true }> => ipcRenderer.invoke('os:kimiLogin'),
   topology: (): Promise<unknown> => ipcRenderer.invoke('os:topology:get'),
   setTopology: (topology: unknown): Promise<unknown> =>
     ipcRenderer.invoke('os:topology:set', topology),
   capabilityProfiles: (): Promise<unknown> => ipcRenderer.invoke('os:capabilityProfiles:get'),
-  saveCapabilityProfiles: (state: unknown): Promise<unknown> => ipcRenderer.invoke('os:capabilityProfiles:save', state),
-  assignCapabilityProfile: (role: string, profileId: string): Promise<unknown> => ipcRenderer.invoke('os:capabilityProfiles:assign', role, profileId),
+  saveCapabilityProfiles: (state: unknown): Promise<unknown> =>
+    ipcRenderer.invoke('os:capabilityProfiles:save', state),
+  assignCapabilityProfile: (role: string, profileId: string): Promise<unknown> =>
+    ipcRenderer.invoke('os:capabilityProfiles:assign', role, profileId),
   hermesControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins'): Promise<unknown[]> =>
     ipcRenderer.invoke('hermes:controls:list', kind),
   skills: (): Promise<unknown[]> => ipcRenderer.invoke('skills:registry:list'),
@@ -62,9 +65,12 @@ const api = {
     ipcRenderer.invoke('os:promptCalls', conversationId),
   hermesPromptTraces: (conversationId: string): Promise<unknown[]> =>
     ipcRenderer.invoke('os:hermesPromptTraces', conversationId),
-  hermesPromptTraceSummary: (): Promise<unknown[]> => ipcRenderer.invoke('os:hermesPromptTraceSummary'),
-  authorizeHermesDiagnostics: (): Promise<string | null> => ipcRenderer.invoke('os:authorizeHermesDiagnostics'),
-  hermesPromptTracesGlobal: (capability: string): Promise<unknown[]> => ipcRenderer.invoke('os:hermesPromptTracesGlobal', capability),
+  hermesPromptTraceSummary: (): Promise<unknown[]> =>
+    ipcRenderer.invoke('os:hermesPromptTraceSummary'),
+  authorizeHermesDiagnostics: (): Promise<string | null> =>
+    ipcRenderer.invoke('os:authorizeHermesDiagnostics'),
+  hermesPromptTracesGlobal: (capability: string): Promise<unknown[]> =>
+    ipcRenderer.invoke('os:hermesPromptTracesGlobal', capability),
   causalTrace: (conversationId: string): Promise<unknown[]> =>
     ipcRenderer.invoke('os:causalTrace', conversationId),
   claudeHooks: (): Promise<unknown[]> => ipcRenderer.invoke('claude:hooks:list'),
@@ -88,7 +94,8 @@ const api = {
     ipcRenderer.invoke('hermes:behaviour:proof', workspaceRoot, contextRoot),
   runSkillLoop: (input: unknown): Promise<unknown> => ipcRenderer.invoke('hermes:loop:run', input),
   loopSkills: (): Promise<unknown[]> => ipcRenderer.invoke('hermes:loop:skills'),
-  generateLoopDraft: (objective: string): Promise<unknown> => ipcRenderer.invoke('hermes:loop:generate', objective),
+  generateLoopDraft: (objective: string): Promise<unknown> =>
+    ipcRenderer.invoke('hermes:loop:generate', objective),
   loopRuns: (): Promise<unknown[]> => ipcRenderer.invoke('hermes:loop:runs'),
   onSkillLoopEvent: (cb: (event: unknown) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, loopEvent: unknown): void => cb(loopEvent)
@@ -162,7 +169,10 @@ const api = {
     ipcRenderer.invoke('os:pilotChat', messages, conversationId),
   cancelPilotChat: (conversationId: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('os:pilotChat:cancel', conversationId),
-  markResponseDisplayed: (conversationId: string, content: string): Promise<{ ok: boolean; eventId: string }> =>
+  markResponseDisplayed: (
+    conversationId: string,
+    content: string
+  ): Promise<{ ok: boolean; eventId: string }> =>
     ipcRenderer.invoke('os:causalTrace:displayed', conversationId, content),
   onPilotEvent: (cb: (e: unknown) => void): (() => void) => {
     const h = (_e: unknown, ev: unknown): void => cb(ev)
@@ -207,7 +217,8 @@ const api = {
     ipcRenderer.invoke('os:loadBrainGraph', path, lod, community),
   loadBrainGraphPreview: (path: string, lod?: number): Promise<unknown> =>
     ipcRenderer.invoke('os:loadBrainGraphPreview', path, lod),
-  loadBrainThemes: (path: string): Promise<unknown> => ipcRenderer.invoke('os:loadBrainThemes', path),
+  loadBrainThemes: (path: string): Promise<unknown> =>
+    ipcRenderer.invoke('os:loadBrainThemes', path),
   loadBrainNeighborhood: (path: string, nodeId: string): Promise<unknown> =>
     ipcRenderer.invoke('os:loadBrainNeighborhood', path, nodeId),
   readNodeFile: (path: string): Promise<{ path: string; content: string }> =>

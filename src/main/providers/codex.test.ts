@@ -198,7 +198,11 @@ describe('CodexAdapter — inférence + injection (mocké, hors-ligne)', () => {
     ]
 
     let observed: unknown
-    const gen = adapter.send(messages, { observePrompt: (prompt) => { observed = prompt } })
+    const gen = adapter.send(messages, {
+      observePrompt: (prompt) => {
+        observed = prompt
+      }
+    })
     let step = await gen.next()
     while (!step.done) step = await gen.next()
 

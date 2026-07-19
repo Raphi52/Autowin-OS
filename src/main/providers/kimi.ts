@@ -2,7 +2,14 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Message, PromptEnvelope, ProviderAdapter, SendOptions, SendResult, StreamChunk } from './types'
+import type {
+  Message,
+  PromptEnvelope,
+  ProviderAdapter,
+  SendOptions,
+  SendResult,
+  StreamChunk
+} from './types'
 
 /** Résolution sans shell : le CLI Kimi Code officiel appartient au compte local. */
 export type KimiCommand = { executable: string; prefix: string[] }
@@ -41,7 +48,10 @@ export function resolveKimiCommand(
 export function buildKimiPrompt(messages: Message[], system?: string): string {
   const history = messages
     .filter((message) => message.role !== 'system')
-    .map((message) => `${message.role === 'assistant' ? 'ASSISTANT' : 'UTILISATEUR'}:\n${message.content}`)
+    .map(
+      (message) =>
+        `${message.role === 'assistant' ? 'ASSISTANT' : 'UTILISATEUR'}:\n${message.content}`
+    )
     .join('\n\n')
   const parts: string[] = []
   if (system?.trim()) {
@@ -67,7 +77,11 @@ export function kimiTextFromEvent(event: Record<string, unknown>): string {
       return content
         .map((part) => {
           if (typeof part === 'string') return part
-          if (part && typeof part === 'object' && typeof (part as { text?: unknown }).text === 'string') {
+          if (
+            part &&
+            typeof part === 'object' &&
+            typeof (part as { text?: unknown }).text === 'string'
+          ) {
             return (part as { text: string }).text
           }
           return ''
@@ -101,7 +115,9 @@ export class KimiCliAdapter implements ProviderAdapter {
   async auth(): Promise<boolean> {
     return await new Promise((resolve) => {
       try {
-        const child = spawn(this.command.executable, [...this.command.prefix, '--version'], { shell: false })
+        const child = spawn(this.command.executable, [...this.command.prefix, '--version'], {
+          shell: false
+        })
         child.on('error', () => resolve(false))
         child.on('close', (code) => resolve(code === 0))
       } catch {
@@ -141,7 +157,14 @@ export class KimiCliAdapter implements ProviderAdapter {
   ): AsyncGenerator<StreamChunk, SendResult, void> {
     const systemInjected = typeof opts.system === 'string' && opts.system.trim().length > 0
     const sandbox = mkdtempSync(join(tmpdir(), 'autowin-os-kimi-'))
-    const args = ['--prompt', buildKimiPrompt(messages, opts.system), '--output-format', 'stream-json', '--skills-dir', sandbox]
+    const args = [
+      '--prompt',
+      buildKimiPrompt(messages, opts.system),
+      '--output-format',
+      'stream-json',
+      '--skills-dir',
+      sandbox
+    ]
     if (opts.model) args.push('--model', opts.model)
     const child = spawn(this.command.executable, [...this.command.prefix, ...args], {
       shell: false,

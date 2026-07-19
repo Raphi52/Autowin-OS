@@ -20,7 +20,11 @@ os.setRole('judge', { provider: 'claude' })
 const events: AppEvent[] = []
 const bus = new AppCommandBus(os, (e) => events.push(e))
 
-const conv = os.conversations.create({ title: 'Probe live', category: 'claude', provider: 'claude' })
+const conv = os.conversations.create({
+  title: 'Probe live',
+  category: 'claude',
+  provider: 'claude'
+})
 bus.activeConversationId = conv.id
 
 const r = await bus.exec('orchestrate', { task: 'Réponds exactement: OK' })
@@ -36,8 +40,7 @@ const stepEvents = events.filter((e) => e.type === 'orchestrate-step') as Array<
   Extract<AppEvent, { type: 'orchestrate-step' }>
 >
 const end = events.find((e) => e.type === 'orchestrate-end') as
-  | Extract<AppEvent, { type: 'orchestrate-end' }>
-  | undefined
+  Extract<AppEvent, { type: 'orchestrate-end' }> | undefined
 const stepNames = stepEvents.map((e) => e.step.step)
 console.log('[live steps]', JSON.stringify(stepNames), '→ end status:', end?.status)
 

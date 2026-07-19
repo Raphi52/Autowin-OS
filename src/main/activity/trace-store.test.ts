@@ -33,7 +33,9 @@ describe('TraceStore append-only', () => {
     const reloaded = new TraceStore(root).readConversation('conv-1')
     expect(reloaded.map((item) => item.id)).toEqual(['evt-0', 'evt-1'])
     expect(reloaded[1].payloads[0].content).toHaveLength(12_000)
-    expect(readFileSync(join(root, 'conv-1.jsonl'), 'utf8').split('\n').filter(Boolean)).toHaveLength(2)
+    expect(
+      readFileSync(join(root, 'conv-1.jsonl'), 'utf8').split('\n').filter(Boolean)
+    ).toHaveLength(2)
   })
 
   it('refuse un identifiant dupliqué sans modifier le journal', () => {
@@ -46,8 +48,12 @@ describe('TraceStore append-only', () => {
   it('refuse une sequence non monotone et un parent orphelin', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-trace-integrity-'))
     const store = new TraceStore(root).append(event('evt-0', 0))
-    expect(() => store.append({ ...event('evt-other', 0), parentId: undefined })).toThrow(/sequence non monotone/)
-    expect(() => store.append({ ...event('evt-1', 1), parentId: 'absent' })).toThrow(/parent causal introuvable/)
+    expect(() => store.append({ ...event('evt-other', 0), parentId: undefined })).toThrow(
+      /sequence non monotone/
+    )
+    expect(() => store.append({ ...event('evt-1', 1), parentId: 'absent' })).toThrow(
+      /parent causal introuvable/
+    )
     expect(store.readConversation('conv-1')).toHaveLength(1)
   })
 
@@ -71,7 +77,11 @@ describe('TraceStore append-only', () => {
   it('signale une corruption au milieu du journal au lieu de supprimer une etape', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-trace-corrupt-'))
     const path = join(root, 'conv-1.jsonl')
-    appendFileSync(path, `${JSON.stringify(event('evt-0', 0))}\n{invalide}\n${JSON.stringify(event('evt-1', 1))}\n`, 'utf8')
+    appendFileSync(
+      path,
+      `${JSON.stringify(event('evt-0', 0))}\n{invalide}\n${JSON.stringify(event('evt-1', 1))}\n`,
+      'utf8'
+    )
     expect(() => new TraceStore(root).readConversation('conv-1')).toThrow(/trace corrompue ligne 2/)
   })
   it('absorbe 1 000 evenements sans bloquer une interaction', () => {

@@ -53,7 +53,11 @@ describe('graph view presentation model', () => {
 
   it('shows floating names for every highlighted theme node', () => {
     expect(
-      floatingNodeIdsForThemeHighlight(new Set(['a', 'b']), new Set(['hovered']), new Set(['linked']))
+      floatingNodeIdsForThemeHighlight(
+        new Set(['a', 'b']),
+        new Set(['hovered']),
+        new Set(['linked'])
+      )
     ).toEqual(new Set(['a', 'b', 'hovered', 'linked']))
   })
 
@@ -397,5 +401,4 @@ describe('graph view presentation model', () => {
       { node: nodes[2], direction: 'outgoing' }
     ])
   })
-
 })

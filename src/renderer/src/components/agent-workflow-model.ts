@@ -123,11 +123,7 @@ function assertInvocation(configuration: InvocationConfiguration): void {
   ) {
     throw new Error('Liste d’invocation invalide')
   }
-  const modelFields = [
-    configuration.provider,
-    configuration.modelId,
-    configuration.reasoningEffort
-  ]
+  const modelFields = [configuration.provider, configuration.modelId, configuration.reasoningEffort]
   if (modelFields.some(Boolean) && modelFields.some((value) => !value)) {
     throw new Error('Modèle, provider et effort doivent être configurés ensemble')
   }
@@ -190,7 +186,12 @@ export function assignResource(
         personaId,
         resourceId,
         kind: resource.kind,
-        ...invocationDefaults(`${resourceId}-${sequence}`, persona, `${stageId}:ready`, sequence - 1)
+        ...invocationDefaults(
+          `${resourceId}-${sequence}`,
+          persona,
+          `${stageId}:ready`,
+          sequence - 1
+        )
       }
     ]
   }

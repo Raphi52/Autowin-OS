@@ -1,34 +1,72 @@
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, readSync, statSync } from 'node:fs'
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  readSync,
+  statSync
+} from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 
 const SCHEMA = 'autowin.hermes-preflight/v1'
 const MAX_READ_BYTES = 4 * 1024 * 1024
-const SECRET_VALUE = /(Bearer\s+)[^\s"']+|((?:api[_-]?key|token|secret|password)\s*[=:]\s*)[^\s,"']+|\b(?:sk-(?:proj-)?|gh[pousr]_)[A-Za-z0-9_-]{8,}|xox[baprs]-[A-Za-z0-9-]{8,}|\bAKIA[A-Z0-9]{16}\b|\bAIza[A-Za-z0-9_-]{30,}\b|\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b|-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/gi
+const SECRET_VALUE =
+  /(Bearer\s+)[^\s"']+|((?:api[_-]?key|token|secret|password)\s*[=:]\s*)[^\s,"']+|\b(?:sk-(?:proj-)?|gh[pousr]_)[A-Za-z0-9_-]{8,}|xox[baprs]-[A-Za-z0-9-]{8,}|\bAKIA[A-Z0-9]{16}\b|\bAIza[A-Za-z0-9_-]{30,}\b|\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b|-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/gi
 
 function secretKey(key: string): boolean {
   const normalized = key.replace(/[^a-z0-9]/gi, '').toLowerCase()
-  return normalized === 'authorization' || normalized === 'proxyauthorization' ||
-    normalized === 'cookie' || normalized === 'setcookie' || normalized === 'token' ||
-    normalized.endsWith('apikey') || normalized.endsWith('accesstoken') ||
-    normalized.endsWith('refreshtoken') || normalized.endsWith('idtoken') ||
-    normalized.endsWith('secret') || normalized.endsWith('password') ||
-    normalized.endsWith('credential') || normalized.includes('privatekey')
+  return (
+    normalized === 'authorization' ||
+    normalized === 'proxyauthorization' ||
+    normalized === 'cookie' ||
+    normalized === 'setcookie' ||
+    normalized === 'token' ||
+    normalized.endsWith('apikey') ||
+    normalized.endsWith('accesstoken') ||
+    normalized.endsWith('refreshtoken') ||
+    normalized.endsWith('idtoken') ||
+    normalized.endsWith('secret') ||
+    normalized.endsWith('password') ||
+    normalized.endsWith('credential') ||
+    normalized.includes('privatekey')
+  )
 }
 
-export function resolveHermesSessionsRoot(home: string, localAppData?: string, hermesHome?: string): string {
-  return join(hermesHome || (localAppData ? join(localAppData, 'hermes') : join(home, '.hermes')), 'sessions')
+export function resolveHermesSessionsRoot(
+  home: string,
+  localAppData?: string,
+  hermesHome?: string
+): string {
+  return join(
+    hermesHome || (localAppData ? join(localAppData, 'hermes') : join(home, '.hermes')),
+    'sessions'
+  )
 }
 
 export function secureHermesSpool(root: string): boolean {
   mkdirSync(root, { recursive: true })
   if (process.platform !== 'win32') return true
-  const user = `${process.env['USERDOMAIN'] ?? ''}\\${process.env['USERNAME'] ?? ''}`.replace(/^\\|\\$/g, '')
+  const user = `${process.env['USERDOMAIN'] ?? ''}\\${process.env['USERNAME'] ?? ''}`.replace(
+    /^\\|\\$/g,
+    ''
+  )
   if (!user) return false
-  const secure = (path: string, directory: boolean): boolean => spawnSync('icacls', [
-    path, '/inheritance:r', '/grant:r', directory ? `${user}:(OI)(CI)F` : `${user}:F`,
-    '*S-1-5-18:F', '*S-1-5-32-544:F'
-  ], { windowsHide: true }).status === 0
+  const secure = (path: string, directory: boolean): boolean =>
+    spawnSync(
+      'icacls',
+      [
+        path,
+        '/inheritance:r',
+        '/grant:r',
+        directory ? `${user}:(OI)(CI)F` : `${user}:F`,
+        '*S-1-5-18:F',
+        '*S-1-5-32-544:F'
+      ],
+      { windowsHide: true }
+    ).status === 0
   if (!secure(root, true)) return false
   return ['events.jsonl', 'events.previous.jsonl']
     .filter((name) => existsSync(join(root, name)))
@@ -62,14 +100,17 @@ function record(value: unknown): Record<string, unknown> | null {
 function redact(value: unknown, key = ''): unknown {
   if (secretKey(key)) return '[REDACTED]'
   if (typeof value === 'string') {
-    return value.replace(SECRET_VALUE, (_match, bearer: string, assignment: string) =>
-      `${bearer || assignment || ''}[REDACTED]`
+    return value.replace(
+      SECRET_VALUE,
+      (_match, bearer: string, assignment: string) => `${bearer || assignment || ''}[REDACTED]`
     )
   }
   if (Array.isArray(value)) return value.map((item) => redact(item))
   const object = record(value)
   if (!object) return value
-  return Object.fromEntries(Object.entries(object).map(([name, item]) => [name, redact(item, name)]))
+  return Object.fromEntries(
+    Object.entries(object).map(([name, item]) => [name, redact(item, name)])
+  )
 }
 
 export function normalizeHermesPreflight(raw: unknown): HermesPreflightTrace {
@@ -134,11 +175,16 @@ function readRequestDumps(root: string): HermesPreflightTrace[] {
       const request = record(source?.request)
       const body = record(request?.body)
       if (!request || !body) continue
-      const messages = Array.isArray(body.messages) ? body.messages : Array.isArray(body.input) ? body.input : []
+      const messages = Array.isArray(body.messages)
+        ? body.messages
+        : Array.isArray(body.input)
+          ? body.input
+          : []
       const tools = Array.isArray(body.tools) ? body.tools : []
       events.push({
         schema: SCHEMA,
-        timestamp: typeof source?.timestamp === 'string' ? source.timestamp : new Date(0).toISOString(),
+        timestamp:
+          typeof source?.timestamp === 'string' ? source.timestamp : new Date(0).toISOString(),
         sessionId: String(source?.session_id ?? 'unknown'),
         turnId: 'unknown',
         apiRequestId: `dump:${name}`,
@@ -158,7 +204,11 @@ function readRequestDumps(root: string): HermesPreflightTrace[] {
   return events
 }
 
-export function readHermesPreflight(root: string, cap = 100, dumpRoot?: string): HermesPreflightTrace[] {
+export function readHermesPreflight(
+  root: string,
+  cap = 100,
+  dumpRoot?: string
+): HermesPreflightTrace[] {
   const events: HermesPreflightTrace[] = []
   for (const name of ['events.previous.jsonl', 'events.jsonl']) {
     const path = join(root, name)
@@ -179,7 +229,8 @@ export function readHermesPreflight(root: string, cap = 100, dumpRoot?: string):
 }
 
 export function filterHermesPreflight(
-  traces: HermesPreflightTrace[], conversationId?: string
+  traces: HermesPreflightTrace[],
+  conversationId?: string
 ): HermesPreflightTrace[] {
   return conversationId === undefined
     ? traces

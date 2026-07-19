@@ -16,7 +16,10 @@ const pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
 const page = pages.find((item) => item.type === 'page')
 if (!page) throw new Error(`Aucune page CDP sur le port ${port}`)
 const socket = new WebSocket(page.webSocketDebuggerUrl)
-await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject })
+await new Promise((resolve, reject) => {
+  socket.onopen = resolve
+  socket.onerror = reject
+})
 let id = 0
 const pending = new Map()
 socket.onmessage = (event) => {
@@ -26,11 +29,12 @@ socket.onmessage = (event) => {
   pending.delete(message.id)
   message.error ? call.reject(new Error(message.error.message)) : call.resolve(message.result)
 }
-const send = (method, params = {}) => new Promise((resolve, reject) => {
-  const callId = ++id
-  pending.set(callId, { resolve, reject })
-  socket.send(JSON.stringify({ id: callId, method, params }))
-})
+const send = (method, params = {}) =>
+  new Promise((resolve, reject) => {
+    const callId = ++id
+    pending.set(callId, { resolve, reject })
+    socket.send(JSON.stringify({ id: callId, method, params }))
+  })
 if (theme) {
   const themeLabel = theme === 'transparent' ? 'Mode glass' : 'Mode dark'
   const switched = await send('Runtime.evaluate', {
@@ -133,17 +137,19 @@ const inspected = await send('Runtime.evaluate', {
   expression: `({ title: document.title, bodyCharacters: document.body?.innerText.length ?? 0, url: location.href })`,
   returnByValue: true
 })
-const dialogs = skipDialogs ? { result: { value: { suppressed: true } } } : await send('Runtime.evaluate', {
-  expression: `(async () => {
+const dialogs = skipDialogs
+  ? { result: { value: { suppressed: true } } }
+  : await send('Runtime.evaluate', {
+      expression: `(async () => {
     const [workspace, diagnostics] = await Promise.all([
       window.api.chooseBehaviourWorkspace(),
       window.api.authorizeHermesDiagnostics()
     ])
     return { workspace, diagnostics, suppressed: workspace === null && diagnostics === null }
   })()`,
-  awaitPromise: true,
-  returnByValue: true
-})
+      awaitPromise: true,
+      returnByValue: true
+    })
 const screenshot = await send('Page.captureScreenshot', { format: 'png', fromSurface: true })
 writeFileSync(output, Buffer.from(screenshot.data, 'base64'))
 socket.close()
@@ -161,4 +167,5 @@ if (
   !result.nativeDialogs?.suppressed ||
   (verifyBehaviourFilters &&
     (!result.behaviourFilters?.sameVisibleFile || !result.behaviourFilters?.emptyConsistent))
-) process.exit(1)
+)
+  process.exit(1)

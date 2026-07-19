@@ -54,14 +54,7 @@ export type HarnessNodeKind =
 
 /** Verbe de l'arête — un flux orienté et typé. */
 export type HarnessEdgeKind =
-  | 'executes'
-  | 'routes'
-  | 'invokes'
-  | 'injects'
-  | 'reads'
-  | 'persists'
-  | 'observes'
-  | 'gates'
+  'executes' | 'routes' | 'invokes' | 'injects' | 'reads' | 'persists' | 'observes' | 'gates'
 
 /** Couloir narratif : quel flux traverse ce nœud/arête. */
 export type HarnessFlow = 'chat' | 'orchestration' | 'loop' | 'pilotage' | 'brain' | 'observability'
@@ -368,9 +361,7 @@ export function layoutHarness(
 
   for (const layer of HARNESS_LAYERS) {
     const laneNodes = nodes.filter((node) => node.layer === layer)
-    const ordered = [...laneNodes].sort(
-      (a, b) => a.order - b.order || a.id.localeCompare(b.id)
-    )
+    const ordered = [...laneNodes].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
     const arranged = centerFocal(ordered, perRow)
     const rows = Math.max(1, Math.ceil(arranged.length / perRow))
     const laneHeight = laneHead + rows * rowHeight + lanePadBottom

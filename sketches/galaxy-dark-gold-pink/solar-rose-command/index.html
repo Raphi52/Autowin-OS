@@ -1,18 +1,659 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Solar Rose Command Center</title><style>*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Inter,Segoe UI,sans-serif}body{overflow:hidden}.app{height:100vh;display:grid;grid-template-columns:210px 1fr;position:relative}.stars{position:fixed;inset:0;pointer-events:none}aside{padding:24px 16px;display:flex;flex-direction:column;position:relative;z-index:2}.brand{font-size:15px;letter-spacing:.12em}.brand i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:9px}.brand b{font-weight:800}aside>small{font-size:8px;letter-spacing:.25em;margin:7px 0 34px 18px}nav{display:grid;gap:6px}button{font:inherit;cursor:pointer}nav button{border:0;background:transparent;text-align:left;padding:10px 12px;border-radius:7px}.status{margin-top:auto;font-size:10px}.status span{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:7px}main{padding:26px 30px 30px;overflow:auto}header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}header small,.panel small,.metrics small{letter-spacing:.16em;font-size:8px}h1{font-size:25px;margin:5px 0 0;font-weight:550}h2{font-size:14px;margin:4px 0 0}.header-actions{display:flex;gap:9px}.header-actions button,.panel button,.qcard button{padding:8px 12px;border-radius:6px}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px}.metrics article{padding:15px 16px;border-radius:9px}.metrics b{display:block;font-size:21px;margin:8px 0 4px}.metrics em{font-size:8px;font-style:normal}.grid{display:grid;grid-template-columns:1.65fr .85fr;grid-template-rows:320px 200px;gap:10px}.panel{padding:17px;border-radius:10px;min-width:0}.panel-head{display:flex;justify-content:space-between;align-items:flex-start}.panel-head button{border:0;background:none;padding:0}.live{font-size:8px}.pipeline{display:flex;align-items:center;margin:35px 5px 28px}.node{width:86px;text-align:center}.node i{display:grid;width:31px;height:31px;border-radius:50%;place-items:center;margin:0 auto 8px;font-size:9px;font-style:normal}.node b{display:block;font-size:10px}.node small{font-size:7px;letter-spacing:0}.line{height:1px;flex:1;margin-top:-26px}.terminal{padding:13px;border-radius:7px;font:9px Consolas,monospace;line-height:1.9}.terminal span{opacity:.45;margin-right:8px}.agent{display:flex;align-items:center;gap:10px;padding:11px 0}.agent>i{display:grid;place-items:center;width:27px;height:27px;border-radius:50%;font-size:9px;font-style:normal}.agent div{display:grid;gap:3px;flex:1}.agent b{font-size:9px}.agent small{font-size:7px;letter-spacing:0}.agent>span{font-size:7px}.orbit{height:88px;position:relative;display:grid;place-items:center}.planet{width:20px;height:20px;border-radius:50%}.orbit>span{position:absolute;border-radius:50%;border:1px solid;animation:spin 9s linear infinite}.o1{width:50px;height:50px}.o2{width:75px;height:75px;animation-direction:reverse!important}.o3{width:98px;height:98px}@keyframes spin{to{transform:rotate(360deg)}}.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}.chips button{font-size:8px}.chart{height:105px;display:flex;align-items:end;gap:9px;margin-top:18px}.chart i{flex:1;border-radius:3px 3px 0 0}.legend{display:flex;justify-content:space-between;font-size:7px;margin-top:7px}.toast{position:fixed;right:25px;bottom:25px;transform:translateY(90px);padding:11px 16px;border-radius:8px;font-size:10px;transition:.3s;z-index:5}.toast.show{transform:none}.question{display:none;position:fixed;inset:0;place-items:center;background:#05060bd9;z-index:20}.question.show{display:grid}.qcard{width:500px;padding:25px;border-radius:12px}.qcard h2{font-size:20px;margin:12px 0}.qcard p{font-size:13px}.qcard>div{display:flex;gap:8px;margin:18px 0}.qcard textarea{width:100%;min-height:80px;padding:10px;border-radius:7px;background:transparent;color:inherit}.qcard footer{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}.focused aside,.focused .metrics,.focused .agents,.focused .skills,.focused .signal{opacity:.15;transition:.3s}:root{--gold:#ffc85b;--pink:#ff4f9a;--ink:#08070c}body{background:linear-gradient(145deg,#08070c,#16101e);color:#fff4e6}.stars{background:linear-gradient(#ffcb6512 1px,transparent 1px),linear-gradient(90deg,#ffcb6512 1px,transparent 1px);background-size:42px 42px;mask-image:linear-gradient(to bottom,black,transparent)}aside{background:#0b0910;border-right:1px solid #51333f}.brand i,.status span{background:var(--pink);box-shadow:0 0 15px var(--pink)}.brand b,.active,.hot,.live{color:var(--gold)}aside small,.panel small,.metrics small,.agent small{color:#957e8e}nav button{color:#8c7989}nav button.active{background:linear-gradient(90deg,#ff4f9a2a,#ffc85b0c);border:1px solid #ff4f9a55;color:white}.primary{background:linear-gradient(90deg,var(--pink),#ff8c7a,var(--gold))!important;border:0!important;color:#180a10!important}.header-actions button,.panel button{border:1px solid #6a3b4e;background:#170f19;color:white}.metrics article,.panel{background:#140e18d9;border:1px solid #4d2b3d;box-shadow:inset 0 1px #ffc85b1f,0 12px 36px #0007}.metrics b{color:var(--gold)}.metrics em{color:#ff78b2}.node i{border:1px solid #71364f;background:#160c15}.node.done i{background:var(--gold);color:#180f08}.node.active i{background:var(--pink);box-shadow:0 0 28px #ff4f9a}.line{background:#47263a}.line.done{background:var(--gold)}.line.active{background:linear-gradient(90deg,var(--gold),var(--pink));box-shadow:0 0 8px var(--pink)}.terminal{background:#09070c;border-left:2px solid var(--pink)}.agent{border-bottom:1px solid #38202f}.agent>i{background:#291624}.pink{color:var(--pink)}.gold{color:var(--gold)}.planet{background:var(--pink);box-shadow:0 0 32px var(--pink)}.orbit>span{border-color:#ffc85b55}.chips button{background:#1c111d;border:1px solid #633048;color:#dcb7c9}.chips .selected{background:#ff4f9a22;border-color:var(--pink);color:white}.chart i{background:linear-gradient(var(--pink),#58203b)}.chart .last{background:linear-gradient(var(--gold),var(--pink))}.toast,.qcard{background:#180f1b;border:1px solid var(--pink);box-shadow:0 0 50px #ff4f9a33}.qcard button{background:#251421;border:1px solid #75405a;color:white}.qcard textarea{border:1px solid #75405a}</style></head><body>
-<div class="stars"></div><div class="app">
-<aside><div class="brand"><i></i>AGENTIC <b>OS</b></div><small>CONTROL PLANE</small>
-<nav><button class="active">✦ Overview</button><button>◈ Chat</button><button>⌘ Agents</button><button>◇ Skills</button><button>↻ Loops</button><button>⌁ Memory</button></nav>
-<div class="status"><span></span> 4 agents online</div></aside>
-<main><header><div><small>MISSION CONTROL / AMITEL</small><h1>Orchestration cockpit</h1></div><div class="header-actions"><button id="focus">Focus mode</button><button class="primary" onclick="openQuestion()">Run classic flow</button></div></header>
-<section class="metrics"><article><small>ACTIVE RUNS</small><b>07</b><em>+2 today</em></article><article><small>SUCCESS RATE</small><b>96.4%</b><em>verified</em></article><article><small>MODEL LOAD</small><b>41%</b><em>healthy</em></article><article><small>PENDING</small><b>03</b><em>needs review</em></article></section>
-<div class="grid"><section class="flow panel"><div class="panel-head"><div><small>CLASSIC FLOW</small><h2>Build authentication guard</h2></div><span class="live">● LIVE</span></div>
-<div class="pipeline"><div class="node done"><i>01</i><b>Frame</b><small>Need & approach</small></div><div class="line done"></div><div class="node done"><i>02</i><b>Terrain</b><small>Harness ready</small></div><div class="line active"></div><div class="node active"><i>03</i><b>Build</b><small>Agent running</small></div><div class="line"></div><div class="node"><i>04</i><b>Judge</b><small>Waiting</small></div></div>
-<div class="terminal"><div><span>23:41:08</span> provider claude · sonnet-4</div><div><span>23:41:11</span> skill <b>autowin:build</b> injected</div><div class="hot"><span>23:41:16</span> validating runtime boundary…</div></div></section>
-<section class="agents panel"><div class="panel-head"><div><small>AGENT SWARM</small><h2>Live activity</h2></div><button>•••</button></div>
-<div class="agent"><i class="pink">S</i><div><b>Scout</b><small>Mapping auth surface</small></div><span>12s</span></div><div class="agent"><i class="gold">B</i><div><b>Builder</b><small>Writing discriminant test</small></div><span>LIVE</span></div><div class="agent"><i>J</i><div><b>Judge</b><small>Queued after build</small></div><span>—</span></div>
-<div class="orbit"><div class="planet"></div><span class="o1"></span><span class="o2"></span><span class="o3"></span></div></section>
-<section class="skills panel"><div class="panel-head"><div><small>SKILL LIBRARY</small><h2>Injected behavior</h2></div><span>10 Autowin</span></div><div class="chips"><button>frame</button><button>terrain</button><button class="selected">build</button><button>judge</button><button>systematic-debugging</button><button>requesting-code-review</button></div></section>
-<section class="signal panel"><small>SYSTEM SIGNAL</small><h2>Confidence trajectory</h2><div class="chart"><i style="height:34%"></i><i style="height:45%"></i><i style="height:42%"></i><i style="height:58%"></i><i style="height:68%"></i><i style="height:81%"></i><i class="last" style="height:88%"></i></div><div class="legend"><span>Frame</span><span>Terrain</span><span>Build</span><span>Judge</span></div></section></div>
-</main></div>
-<div class="toast" id="toast">Focus mode enabled</div><div class="question" id="question"><div class="qcard"><small>MODEL QUESTION · BUILD</small><h2>The model needs your input</h2><p>Which deployment boundary should be used for this run?</p><div><button onclick="closeQuestion()">Local sandbox</button><button onclick="closeQuestion()">Staging</button></div><textarea placeholder="Or type a custom answer…"></textarea><footer><button onclick="closeQuestion()">Wait for now</button><button class="primary" onclick="closeQuestion()">Answer & resume</button></footer></div></div>
-<script>document.getElementById('focus').onclick=()=>{document.body.classList.toggle('focused');const t=document.getElementById('toast');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1400)};function openQuestion(){document.getElementById('question').classList.add('show')}function closeQuestion(){document.getElementById('question').classList.remove('show')}document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active')})</script></body></html>
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Solar Rose Command Center</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        font-family:
+          Inter,
+          Segoe UI,
+          sans-serif;
+      }
+      body {
+        overflow: hidden;
+      }
+      .app {
+        height: 100vh;
+        display: grid;
+        grid-template-columns: 210px 1fr;
+        position: relative;
+      }
+      .stars {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+      }
+      aside {
+        padding: 24px 16px;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        z-index: 2;
+      }
+      .brand {
+        font-size: 15px;
+        letter-spacing: 0.12em;
+      }
+      .brand i {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 9px;
+      }
+      .brand b {
+        font-weight: 800;
+      }
+      aside > small {
+        font-size: 8px;
+        letter-spacing: 0.25em;
+        margin: 7px 0 34px 18px;
+      }
+      nav {
+        display: grid;
+        gap: 6px;
+      }
+      button {
+        font: inherit;
+        cursor: pointer;
+      }
+      nav button {
+        border: 0;
+        background: transparent;
+        text-align: left;
+        padding: 10px 12px;
+        border-radius: 7px;
+      }
+      .status {
+        margin-top: auto;
+        font-size: 10px;
+      }
+      .status span {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        margin-right: 7px;
+      }
+      main {
+        padding: 26px 30px 30px;
+        overflow: auto;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 22px;
+      }
+      header small,
+      .panel small,
+      .metrics small {
+        letter-spacing: 0.16em;
+        font-size: 8px;
+      }
+      h1 {
+        font-size: 25px;
+        margin: 5px 0 0;
+        font-weight: 550;
+      }
+      h2 {
+        font-size: 14px;
+        margin: 4px 0 0;
+      }
+      .header-actions {
+        display: flex;
+        gap: 9px;
+      }
+      .header-actions button,
+      .panel button,
+      .qcard button {
+        padding: 8px 12px;
+        border-radius: 6px;
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .metrics article {
+        padding: 15px 16px;
+        border-radius: 9px;
+      }
+      .metrics b {
+        display: block;
+        font-size: 21px;
+        margin: 8px 0 4px;
+      }
+      .metrics em {
+        font-size: 8px;
+        font-style: normal;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1.65fr 0.85fr;
+        grid-template-rows: 320px 200px;
+        gap: 10px;
+      }
+      .panel {
+        padding: 17px;
+        border-radius: 10px;
+        min-width: 0;
+      }
+      .panel-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+      }
+      .panel-head button {
+        border: 0;
+        background: none;
+        padding: 0;
+      }
+      .live {
+        font-size: 8px;
+      }
+      .pipeline {
+        display: flex;
+        align-items: center;
+        margin: 35px 5px 28px;
+      }
+      .node {
+        width: 86px;
+        text-align: center;
+      }
+      .node i {
+        display: grid;
+        width: 31px;
+        height: 31px;
+        border-radius: 50%;
+        place-items: center;
+        margin: 0 auto 8px;
+        font-size: 9px;
+        font-style: normal;
+      }
+      .node b {
+        display: block;
+        font-size: 10px;
+      }
+      .node small {
+        font-size: 7px;
+        letter-spacing: 0;
+      }
+      .line {
+        height: 1px;
+        flex: 1;
+        margin-top: -26px;
+      }
+      .terminal {
+        padding: 13px;
+        border-radius: 7px;
+        font:
+          9px Consolas,
+          monospace;
+        line-height: 1.9;
+      }
+      .terminal span {
+        opacity: 0.45;
+        margin-right: 8px;
+      }
+      .agent {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 0;
+      }
+      .agent > i {
+        display: grid;
+        place-items: center;
+        width: 27px;
+        height: 27px;
+        border-radius: 50%;
+        font-size: 9px;
+        font-style: normal;
+      }
+      .agent div {
+        display: grid;
+        gap: 3px;
+        flex: 1;
+      }
+      .agent b {
+        font-size: 9px;
+      }
+      .agent small {
+        font-size: 7px;
+        letter-spacing: 0;
+      }
+      .agent > span {
+        font-size: 7px;
+      }
+      .orbit {
+        height: 88px;
+        position: relative;
+        display: grid;
+        place-items: center;
+      }
+      .planet {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+      }
+      .orbit > span {
+        position: absolute;
+        border-radius: 50%;
+        border: 1px solid;
+        animation: spin 9s linear infinite;
+      }
+      .o1 {
+        width: 50px;
+        height: 50px;
+      }
+      .o2 {
+        width: 75px;
+        height: 75px;
+        animation-direction: reverse !important;
+      }
+      .o3 {
+        width: 98px;
+        height: 98px;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 22px;
+      }
+      .chips button {
+        font-size: 8px;
+      }
+      .chart {
+        height: 105px;
+        display: flex;
+        align-items: end;
+        gap: 9px;
+        margin-top: 18px;
+      }
+      .chart i {
+        flex: 1;
+        border-radius: 3px 3px 0 0;
+      }
+      .legend {
+        display: flex;
+        justify-content: space-between;
+        font-size: 7px;
+        margin-top: 7px;
+      }
+      .toast {
+        position: fixed;
+        right: 25px;
+        bottom: 25px;
+        transform: translateY(90px);
+        padding: 11px 16px;
+        border-radius: 8px;
+        font-size: 10px;
+        transition: 0.3s;
+        z-index: 5;
+      }
+      .toast.show {
+        transform: none;
+      }
+      .question {
+        display: none;
+        position: fixed;
+        inset: 0;
+        place-items: center;
+        background: #05060bd9;
+        z-index: 20;
+      }
+      .question.show {
+        display: grid;
+      }
+      .qcard {
+        width: 500px;
+        padding: 25px;
+        border-radius: 12px;
+      }
+      .qcard h2 {
+        font-size: 20px;
+        margin: 12px 0;
+      }
+      .qcard p {
+        font-size: 13px;
+      }
+      .qcard > div {
+        display: flex;
+        gap: 8px;
+        margin: 18px 0;
+      }
+      .qcard textarea {
+        width: 100%;
+        min-height: 80px;
+        padding: 10px;
+        border-radius: 7px;
+        background: transparent;
+        color: inherit;
+      }
+      .qcard footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .focused aside,
+      .focused .metrics,
+      .focused .agents,
+      .focused .skills,
+      .focused .signal {
+        opacity: 0.15;
+        transition: 0.3s;
+      }
+      :root {
+        --gold: #ffc85b;
+        --pink: #ff4f9a;
+        --ink: #08070c;
+      }
+      body {
+        background: linear-gradient(145deg, #08070c, #16101e);
+        color: #fff4e6;
+      }
+      .stars {
+        background:
+          linear-gradient(#ffcb6512 1px, transparent 1px),
+          linear-gradient(90deg, #ffcb6512 1px, transparent 1px);
+        background-size: 42px 42px;
+        mask-image: linear-gradient(to bottom, black, transparent);
+      }
+      aside {
+        background: #0b0910;
+        border-right: 1px solid #51333f;
+      }
+      .brand i,
+      .status span {
+        background: var(--pink);
+        box-shadow: 0 0 15px var(--pink);
+      }
+      .brand b,
+      .active,
+      .hot,
+      .live {
+        color: var(--gold);
+      }
+      aside small,
+      .panel small,
+      .metrics small,
+      .agent small {
+        color: #957e8e;
+      }
+      nav button {
+        color: #8c7989;
+      }
+      nav button.active {
+        background: linear-gradient(90deg, #ff4f9a2a, #ffc85b0c);
+        border: 1px solid #ff4f9a55;
+        color: white;
+      }
+      .primary {
+        background: linear-gradient(90deg, var(--pink), #ff8c7a, var(--gold)) !important;
+        border: 0 !important;
+        color: #180a10 !important;
+      }
+      .header-actions button,
+      .panel button {
+        border: 1px solid #6a3b4e;
+        background: #170f19;
+        color: white;
+      }
+      .metrics article,
+      .panel {
+        background: #140e18d9;
+        border: 1px solid #4d2b3d;
+        box-shadow:
+          inset 0 1px #ffc85b1f,
+          0 12px 36px #0007;
+      }
+      .metrics b {
+        color: var(--gold);
+      }
+      .metrics em {
+        color: #ff78b2;
+      }
+      .node i {
+        border: 1px solid #71364f;
+        background: #160c15;
+      }
+      .node.done i {
+        background: var(--gold);
+        color: #180f08;
+      }
+      .node.active i {
+        background: var(--pink);
+        box-shadow: 0 0 28px #ff4f9a;
+      }
+      .line {
+        background: #47263a;
+      }
+      .line.done {
+        background: var(--gold);
+      }
+      .line.active {
+        background: linear-gradient(90deg, var(--gold), var(--pink));
+        box-shadow: 0 0 8px var(--pink);
+      }
+      .terminal {
+        background: #09070c;
+        border-left: 2px solid var(--pink);
+      }
+      .agent {
+        border-bottom: 1px solid #38202f;
+      }
+      .agent > i {
+        background: #291624;
+      }
+      .pink {
+        color: var(--pink);
+      }
+      .gold {
+        color: var(--gold);
+      }
+      .planet {
+        background: var(--pink);
+        box-shadow: 0 0 32px var(--pink);
+      }
+      .orbit > span {
+        border-color: #ffc85b55;
+      }
+      .chips button {
+        background: #1c111d;
+        border: 1px solid #633048;
+        color: #dcb7c9;
+      }
+      .chips .selected {
+        background: #ff4f9a22;
+        border-color: var(--pink);
+        color: white;
+      }
+      .chart i {
+        background: linear-gradient(var(--pink), #58203b);
+      }
+      .chart .last {
+        background: linear-gradient(var(--gold), var(--pink));
+      }
+      .toast,
+      .qcard {
+        background: #180f1b;
+        border: 1px solid var(--pink);
+        box-shadow: 0 0 50px #ff4f9a33;
+      }
+      .qcard button {
+        background: #251421;
+        border: 1px solid #75405a;
+        color: white;
+      }
+      .qcard textarea {
+        border: 1px solid #75405a;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stars"></div>
+    <div class="app">
+      <aside>
+        <div class="brand"><i></i>AGENTIC <b>OS</b></div>
+        <small>CONTROL PLANE</small>
+        <nav>
+          <button class="active">✦ Overview</button><button>◈ Chat</button><button>⌘ Agents</button
+          ><button>◇ Skills</button><button>↻ Loops</button><button>⌁ Memory</button>
+        </nav>
+        <div class="status"><span></span> 4 agents online</div>
+      </aside>
+      <main>
+        <header>
+          <div>
+            <small>MISSION CONTROL / AMITEL</small>
+            <h1>Orchestration cockpit</h1>
+          </div>
+          <div class="header-actions">
+            <button id="focus">Focus mode</button
+            ><button class="primary" onclick="openQuestion()">Run classic flow</button>
+          </div>
+        </header>
+        <section class="metrics">
+          <article><small>ACTIVE RUNS</small><b>07</b><em>+2 today</em></article>
+          <article><small>SUCCESS RATE</small><b>96.4%</b><em>verified</em></article>
+          <article><small>MODEL LOAD</small><b>41%</b><em>healthy</em></article>
+          <article><small>PENDING</small><b>03</b><em>needs review</em></article>
+        </section>
+        <div class="grid">
+          <section class="flow panel">
+            <div class="panel-head">
+              <div>
+                <small>CLASSIC FLOW</small>
+                <h2>Build authentication guard</h2>
+              </div>
+              <span class="live">● LIVE</span>
+            </div>
+            <div class="pipeline">
+              <div class="node done"><i>01</i><b>Frame</b><small>Need & approach</small></div>
+              <div class="line done"></div>
+              <div class="node done"><i>02</i><b>Terrain</b><small>Harness ready</small></div>
+              <div class="line active"></div>
+              <div class="node active"><i>03</i><b>Build</b><small>Agent running</small></div>
+              <div class="line"></div>
+              <div class="node"><i>04</i><b>Judge</b><small>Waiting</small></div>
+            </div>
+            <div class="terminal">
+              <div><span>23:41:08</span> provider claude · sonnet-4</div>
+              <div><span>23:41:11</span> skill <b>autowin:build</b> injected</div>
+              <div class="hot"><span>23:41:16</span> validating runtime boundary…</div>
+            </div>
+          </section>
+          <section class="agents panel">
+            <div class="panel-head">
+              <div>
+                <small>AGENT SWARM</small>
+                <h2>Live activity</h2>
+              </div>
+              <button>•••</button>
+            </div>
+            <div class="agent">
+              <i class="pink">S</i>
+              <div><b>Scout</b><small>Mapping auth surface</small></div>
+              <span>12s</span>
+            </div>
+            <div class="agent">
+              <i class="gold">B</i>
+              <div><b>Builder</b><small>Writing discriminant test</small></div>
+              <span>LIVE</span>
+            </div>
+            <div class="agent">
+              <i>J</i>
+              <div><b>Judge</b><small>Queued after build</small></div>
+              <span>—</span>
+            </div>
+            <div class="orbit">
+              <div class="planet"></div>
+              <span class="o1"></span><span class="o2"></span><span class="o3"></span>
+            </div>
+          </section>
+          <section class="skills panel">
+            <div class="panel-head">
+              <div>
+                <small>SKILL LIBRARY</small>
+                <h2>Injected behavior</h2>
+              </div>
+              <span>10 Autowin</span>
+            </div>
+            <div class="chips">
+              <button>frame</button><button>terrain</button><button class="selected">build</button
+              ><button>judge</button><button>systematic-debugging</button
+              ><button>requesting-code-review</button>
+            </div>
+          </section>
+          <section class="signal panel">
+            <small>SYSTEM SIGNAL</small>
+            <h2>Confidence trajectory</h2>
+            <div class="chart">
+              <i style="height: 34%"></i><i style="height: 45%"></i><i style="height: 42%"></i
+              ><i style="height: 58%"></i><i style="height: 68%"></i><i style="height: 81%"></i
+              ><i class="last" style="height: 88%"></i>
+            </div>
+            <div class="legend">
+              <span>Frame</span><span>Terrain</span><span>Build</span><span>Judge</span>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+    <div class="toast" id="toast">Focus mode enabled</div>
+    <div class="question" id="question">
+      <div class="qcard">
+        <small>MODEL QUESTION · BUILD</small>
+        <h2>The model needs your input</h2>
+        <p>Which deployment boundary should be used for this run?</p>
+        <div>
+          <button onclick="closeQuestion()">Local sandbox</button
+          ><button onclick="closeQuestion()">Staging</button>
+        </div>
+        <textarea placeholder="Or type a custom answer…"></textarea>
+        <footer>
+          <button onclick="closeQuestion()">Wait for now</button
+          ><button class="primary" onclick="closeQuestion()">Answer & resume</button>
+        </footer>
+      </div>
+    </div>
+    <script>
+      document.getElementById('focus').onclick = () => {
+        document.body.classList.toggle('focused')
+        const t = document.getElementById('toast')
+        t.classList.add('show')
+        setTimeout(() => t.classList.remove('show'), 1400)
+      }
+      function openQuestion() {
+        document.getElementById('question').classList.add('show')
+      }
+      function closeQuestion() {
+        document.getElementById('question').classList.remove('show')
+      }
+      document.querySelectorAll('nav button').forEach(
+        (b) =>
+          (b.onclick = () => {
+            document.querySelectorAll('nav button').forEach((x) => x.classList.remove('active'))
+            b.classList.add('active')
+          })
+      )
+    </script>
+  </body>
+</html>

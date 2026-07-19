@@ -20,7 +20,9 @@ export class LoopRunStore {
     try {
       const value = JSON.parse(readFileSync(this.path, 'utf8')) as StoredLoopRun[]
       return Array.isArray(value) ? value : []
-    } catch { return [] }
+    } catch {
+      return []
+    }
   }
 
   save(run: StoredLoopRun): void {

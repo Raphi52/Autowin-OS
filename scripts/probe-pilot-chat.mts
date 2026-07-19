@@ -44,17 +44,23 @@ await pilot.chat(
 const after = os.conversations.list()
 console.log(`[probe] conversations après: ${after.length}`)
 const created = after.find((c) => c.title.toLowerCase().includes('probe'))
-console.log(`[probe] créée: ${created ? `${created.id} "${created.title}" cat=${created.category}` : 'NON'}`)
+console.log(
+  `[probe] créée: ${created ? `${created.id} "${created.title}" cat=${created.category}` : 'NON'}`
+)
 
 // 3. persistance : append + relecture (le chemin que l'IPC os:pilotChat exécute)
 if (created) {
   os.conversations.append(created.id, { role: 'user', content: 'message test' })
   os.conversations.append(created.id, { role: 'assistant', content: 'réponse test' })
   const reread = os.conversations.get(created.id)
-  console.log(`[probe] fil persistant: ${reread?.messages.length === 2 ? 'OK (2 messages relus)' : 'ÉCHEC'}`)
+  console.log(
+    `[probe] fil persistant: ${reread?.messages.length === 2 ? 'OK (2 messages relus)' : 'ÉCHEC'}`
+  )
 }
 
 const okConversational = events.includes('think') || events.includes('done')
 const okAction = events.includes('command') && events.includes('result')
-console.log(`[verdict] conversationnel=${okConversational} action=${okAction} mutation=${!!created}`)
+console.log(
+  `[verdict] conversationnel=${okConversational} action=${okAction} mutation=${!!created}`
+)
 process.exit(okConversational && okAction && created ? 0 : 1)

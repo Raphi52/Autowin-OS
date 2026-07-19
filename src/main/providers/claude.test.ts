@@ -26,16 +26,27 @@ describe('ClaudeCliAdapter — pièces jointes', () => {
       { name: 'preuve.txt', mimeType: 'text/plain', size: 3, kind: 'text', content: 'abc' }
     ])
     const envelope = claudeTransportEnvelope(
-      [{ role: 'user', content: 'Lis', attachments: [
-        { name: 'preuve.txt', mimeType: 'text/plain', size: 3, kind: 'text', content: 'abc' }
-      ] }],
+      [
+        {
+          role: 'user',
+          content: 'Lis',
+          attachments: [
+            { name: 'preuve.txt', mimeType: 'text/plain', size: 3, kind: 'text', content: 'abc' }
+          ]
+        }
+      ],
       { system: 'REGLE', model: 'claude-sonnet' },
       materialized,
       ['-p', `Lis${materialized.promptSuffix}`, '--tools', 'Read']
     )
     expect(envelope.messages[0].content).toBe(`Lis${materialized.promptSuffix}`)
     expect(envelope.messages[0].attachments?.[0].content).toBe('abc')
-    expect(envelope.options.argv).toEqual(['-p', `Lis${materialized.promptSuffix}`, '--tools', 'Read'])
+    expect(envelope.options.argv).toEqual([
+      '-p',
+      `Lis${materialized.promptSuffix}`,
+      '--tools',
+      'Read'
+    ])
     materialized.cleanup()
   })
 })

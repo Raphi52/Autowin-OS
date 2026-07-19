@@ -6,6 +6,11 @@
   flex-direction: column;
   padding: 18px 20px 20px;
   color: var(--text);
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-page);
+  background: var(--surface-page);
+  box-shadow: var(--container-shadow);
+  backdrop-filter: blur(var(--container-blur));
 }
 .behaviour-view > header {
   display: flex;
@@ -112,7 +117,7 @@
 .behaviour-toolbar button.active {
   border-color: #79508d;
   color: #e2a5ff;
-  background: #24172c;
+  background: var(--surface-selected);
 }
 .behaviour-error {
   margin: 0 4px 10px;
@@ -128,9 +133,9 @@
 .behaviour-files {
   min-height: 0;
   overflow-y: auto;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--bg-1);
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-panel);
+  background: var(--surface-panel);
 }
 .behaviour-engine-group > header {
   display: flex;
@@ -138,7 +143,7 @@
   align-items: center;
   padding: 8px 12px;
   border-bottom: 1px solid var(--line);
-  background: #12171e;
+  background: var(--surface-card);
 }
 .behaviour-engine-group > header strong {
   color: #9eabb8;
@@ -174,7 +179,7 @@
 }
 .behaviour-engine-group > button:hover,
 .behaviour-engine-group > button.active {
-  background: #1d1724;
+  background: var(--surface-selected);
 }
 .behaviour-engine-group > button.active {
   box-shadow: inset 2px 0 #c879ee;
@@ -217,9 +222,9 @@
   min-height: 0;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--bg-1);
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-panel);
+  background: var(--surface-panel);
   overflow: hidden;
 }
 .behaviour-reader > header {

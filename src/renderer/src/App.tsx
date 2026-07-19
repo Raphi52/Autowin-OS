@@ -18,22 +18,43 @@ import type { GraphVisualMode } from './components/graph-view-model'
 // Icônes : petits SVG path (stroke) — style linéaire, cohérent.
 const I: Record<Tab, string> = {
   chat: 'M5 5h14a3 3 0 013 3v6a3 3 0 01-3 3H11l-5 3v-3H5a3 3 0 01-3-3V8a3 3 0 013-3zm3 6h.01M12 11h.01M16 11h.01',
-  memory: 'M5 7l6 4m2 0l6-4M5 17l6-4m2 0l6 4M5 5a2 2 0 110 4 2 2 0 010-4zm7 5a2 2 0 110 4 2 2 0 010-4zm7-5a2 2 0 110 4 2 2 0 010-4zM5 15a2 2 0 110 4 2 2 0 010-4zm14 0a2 2 0 110 4 2 2 0 010-4z',
+  memory:
+    'M5 7l6 4m2 0l6-4M5 17l6-4m2 0l6 4M5 5a2 2 0 110 4 2 2 0 010-4zm7 5a2 2 0 110 4 2 2 0 010-4zm7-5a2 2 0 110 4 2 2 0 010-4zM5 15a2 2 0 110 4 2 2 0 010-4zm14 0a2 2 0 110 4 2 2 0 010-4z',
   observatory: 'M7 7h9l-2 6h-5L7 7zm3 6l-5 7m8-7l5 7M4 21h16M5 4l2 3m10-3l-2 3',
-  agents: 'M7 8V6h10v2m-11 1h12a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6a2 2 0 012-2zm4 4h.01M14 13h.01M9 17c1.8 1 4.2 1 6 0',
+  agents:
+    'M7 8V6h10v2m-11 1h12a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6a2 2 0 012-2zm4 4h.01M14 13h.01M9 17c1.8 1 4.2 1 6 0',
   capabilities: 'M5 10h14v10H5V10zm3 0V7h8v3m-8 4l2-2 2 2 2-2 2 2m-7 6l2-2m5 2l-2-2',
-  behaviour: 'M8 5a4 4 0 017 2 4 4 0 013 6 4 4 0 01-5 5 4 4 0 01-7-2 4 4 0 012-11zm2 7h.01M14 12h.01M10 15c1.2.8 2.8.8 4 0'
+  behaviour:
+    'M8 5a4 4 0 017 2 4 4 0 013 6 4 4 0 01-5 5 4 4 0 01-7-2 4 4 0 012-11zm2 7h.01M14 12h.01M10 15c1.2.8 2.8.8 4 0'
 }
 
 void I
 const TOY: Record<Tab, string> = {
-  chat: '💬', memory: '🕸️', observatory: '🔭', agents: '🤖', capabilities: '🧰', behaviour: '🧠'
+  chat: '💬',
+  memory: '🕸️',
+  observatory: '🔭',
+  agents: '🤖',
+  capabilities: '🧰',
+  behaviour: '🧠'
 }
 
 function ThemeIcon({ kind }: { kind: 'moon' | 'aurora' }): React.JSX.Element {
   return (
-    <svg className="theme-switch-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      {kind === 'moon' ? <path d="M20.3 14.2A8.7 8.7 0 019.8 3.7 8.7 8.7 0 1019.3 18a8.3 8.3 0 001-3.8z" /> : <path d="M12 2.8l1.8 5.4 5.4 1.8-5.4 1.8-1.8 5.4-1.8-5.4-5.4-1.8 5.4-1.8L12 2.8zm6.5 12.8.7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7.7-2.1z" />}
+    <svg
+      className="theme-switch-icon"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {kind === 'moon' ? (
+        <path d="M20.3 14.2A8.7 8.7 0 019.8 3.7 8.7 8.7 0 1019.3 18a8.3 8.3 0 001-3.8z" />
+      ) : (
+        <path d="M12 2.8l1.8 5.4 5.4 1.8-5.4 1.8-1.8 5.4-1.8-5.4-5.4-1.8 5.4-1.8L12 2.8zm6.5 12.8.7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7.7-2.1z" />
+      )}
     </svg>
   )
 }
@@ -164,15 +185,35 @@ function MainApp(): React.JSX.Element {
                 className={`nav-item${tab === it.id ? ' active' : ''}`}
                 onClick={() => navigate(it.id)}
               >
-                <span className="space-toy-icon" aria-hidden="true">{TOY[it.id]}</span>
+                <span className="space-toy-icon" aria-hidden="true">
+                  {TOY[it.id]}
+                </span>
                 <span>{it.label}</span>
               </button>
             ))}
           </div>
         </nav>
         <div className="app-theme-switch" aria-label="Thème de l’application">
-          <button className="theme-switch-option theme-switch-option--moon" type="button" aria-label="Mode dark" data-tooltip="Mode dark" aria-pressed={visualMode === 'serious'} onClick={() => setVisualMode('serious')}><ThemeIcon kind="moon" /></button>
-          <button className="theme-switch-option theme-switch-option--aurora" type="button" aria-label="Mode glass" data-tooltip="Mode glass" aria-pressed={visualMode === 'galaxy'} onClick={() => setVisualMode('galaxy')}><ThemeIcon kind="aurora" /></button>
+          <button
+            className="theme-switch-option theme-switch-option--moon"
+            type="button"
+            aria-label="Mode dark"
+            data-tooltip="Mode dark"
+            aria-pressed={visualMode === 'serious'}
+            onClick={() => setVisualMode('serious')}
+          >
+            <ThemeIcon kind="moon" />
+          </button>
+          <button
+            className="theme-switch-option theme-switch-option--aurora"
+            type="button"
+            aria-label="Mode glass"
+            data-tooltip="Mode glass"
+            aria-pressed={visualMode === 'galaxy'}
+            onClick={() => setVisualMode('galaxy')}
+          >
+            <ThemeIcon kind="aurora" />
+          </button>
         </div>
         <div className="rail-foot c-faint">v0 · MVP</div>
       </aside>

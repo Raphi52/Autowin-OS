@@ -30,7 +30,9 @@ function node(partial: Partial<HarnessNode> & Pick<HarnessNode, 'id' | 'layer'>)
   }
 }
 
-function edge(partial: Partial<HarnessEdge> & Pick<HarnessEdge, 'id' | 'from' | 'to'>): HarnessEdge {
+function edge(
+  partial: Partial<HarnessEdge> & Pick<HarnessEdge, 'id' | 'from' | 'to'>
+): HarnessEdge {
   return {
     kind: 'routes',
     flows: ['orchestration'],
@@ -97,7 +99,13 @@ const snapshot: HarnessSnapshot = {
     edge({ id: 'e-you-orch', from: 'you', to: 'orchestrator', kind: 'invokes', flows: ['chat'] }),
     edge({ id: 'e-orch-model', from: 'orchestrator', to: 'model', level: 'beginner' }),
     edge({ id: 'e-orch-scout', from: 'orchestrator', to: 'scout', level: 'expert' }),
-    edge({ id: 'e-cost-model', from: 'cost', to: 'model', kind: 'observes', flows: ['observability'] })
+    edge({
+      id: 'e-cost-model',
+      from: 'cost',
+      to: 'model',
+      kind: 'observes',
+      flows: ['observability']
+    })
   ]
 }
 

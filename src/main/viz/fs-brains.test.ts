@@ -97,7 +97,7 @@ describe('Amitel Brain graph', () => {
     mkdirSync(join(root, 'knowledge/domain'), { recursive: true })
     writeFileSync(
       join(root, 'knowledge/domain/autowin.md'),
-      "---\ntags: [theme/autowin-os, theme/architecture]\n---\n# Autowin OS\n",
+      '---\ntags: [theme/autowin-os, theme/architecture]\n---\n# Autowin OS\n',
       'utf8'
     )
     writeFileSync(join(root, 'knowledge/domain/other.md'), '# Other\n', 'utf8')

@@ -3,7 +3,13 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { afterEach, describe, expect, it } from 'vitest'
-import { filterHermesPreflight, normalizeHermesPreflight, readHermesPreflight, resolveHermesSessionsRoot, secureHermesSpool } from './hermes-prompt-trace'
+import {
+  filterHermesPreflight,
+  normalizeHermesPreflight,
+  readHermesPreflight,
+  resolveHermesSessionsRoot,
+  secureHermesSpool
+} from './hermes-prompt-trace'
 
 const roots: string[] = []
 afterEach(() => {
@@ -32,7 +38,8 @@ const fixture = () => ({
     },
     body: {
       max_tokens: 512,
-      instructions: 'SOUL + AGENTS.md avec token=top-secret, sk-proj-raw-secret, AKIA1234567890ABCDEF, AIza123456789012345678901234567890 et eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature123',
+      instructions:
+        'SOUL + AGENTS.md avec token=top-secret, sk-proj-raw-secret, AKIA1234567890ABCDEF, AIza123456789012345678901234567890 et eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature123',
       input: [{ role: 'user', content: 'Analyse cette tâche' }],
       tools: [{ type: 'function', name: 'read_file' }]
     }
@@ -89,23 +96,40 @@ describe('Hermes pre_api_request trace', () => {
     const spoolRoot = mkdtempSync(join(tmpdir(), 'autowin-hermes-empty-'))
     const dumpRoot = mkdtempSync(join(tmpdir(), 'autowin-hermes-dumps-'))
     roots.push(spoolRoot, dumpRoot)
-    writeFileSync(join(dumpRoot, 'request_dump_session-x_20260719.json'), JSON.stringify({
-      timestamp: '2026-07-19T13:00:00.000Z',
-      session_id: 'session-x',
-      reason: 'preflight',
-      request: { method: 'POST', body: { model: 'fallback-model', messages: [{ role: 'user', content: 'AKIA1234567890ABCDEF' }], tools: [] } }
-    }))
+    writeFileSync(
+      join(dumpRoot, 'request_dump_session-x_20260719.json'),
+      JSON.stringify({
+        timestamp: '2026-07-19T13:00:00.000Z',
+        session_id: 'session-x',
+        reason: 'preflight',
+        request: {
+          method: 'POST',
+          body: {
+            model: 'fallback-model',
+            messages: [{ role: 'user', content: 'AKIA1234567890ABCDEF' }],
+            tools: []
+          }
+        }
+      })
+    )
     const fallback = readHermesPreflight(spoolRoot, 10, dumpRoot)[0]
     expect(fallback).toMatchObject({
-      sessionId: 'session-x', model: 'fallback-model', source: 'request-dump',
-      boundary: 'hermes.request_dump', fidelity: 'exact-redacted'
+      sessionId: 'session-x',
+      model: 'fallback-model',
+      source: 'request-dump',
+      boundary: 'hermes.request_dump',
+      fidelity: 'exact-redacted'
     })
     expect(JSON.stringify(fallback)).not.toContain('AKIA1234567890ABCDEF')
   })
 
   it('résout HERMES_HOME puis l’installation Windows locale avant ~/.hermes', () => {
-    expect(resolveHermesSessionsRoot('C:\\Users\\me', 'C:\\Local', 'D:\\Hermes')).toBe('D:\\Hermes\\sessions')
-    expect(resolveHermesSessionsRoot('C:\\Users\\me', 'C:\\Local')).toBe('C:\\Local\\hermes\\sessions')
+    expect(resolveHermesSessionsRoot('C:\\Users\\me', 'C:\\Local', 'D:\\Hermes')).toBe(
+      'D:\\Hermes\\sessions'
+    )
+    expect(resolveHermesSessionsRoot('C:\\Users\\me', 'C:\\Local')).toBe(
+      'C:\\Local\\hermes\\sessions'
+    )
     expect(resolveHermesSessionsRoot('/home/me')).toBe(join('/home/me', '.hermes', 'sessions'))
   })
 

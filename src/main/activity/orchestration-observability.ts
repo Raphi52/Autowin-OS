@@ -15,42 +15,64 @@ export function persistOrchestrationStep(
   const existing = traceStore.readConversation(context.conversationId)
   let parentId = existing.at(-1)?.id
   let sequence = traceStore.nextSequence(context.conversationId)
-  const structuralType: TraceEventV1['type'] = step.step === 'exec' ? 'handoff' : step.step === 'judge' ? 'verdict' : 'gate'
-  const structural = (): TraceEventV1 => assertTraceEvent({
-    schema: 'autowin.trace/v1', id: `${context.turnId}:${step.step}:${context.iteration}:${sequence}`,
-    conversationId: context.conversationId, turnId: context.turnId, parentId,
-    timestamp: new Date().toISOString(), sequence: sequence++, type: structuralType,
-    status: step.status ?? 'completed',
-    actor: { id: step.role ?? step.step, kind: step.step === 'gate' ? 'system' : 'agent', label: step.role ?? step.step },
-    recipient: { id: 'orchestrator', kind: 'agent', label: 'orchestrator' }, channel: 'internal',
-    payloads: [{ kind: step.step === 'gate' ? 'app-state' : 'model-response', content: step.error ?? step.text ?? step.detail ?? '' }],
-    observation: { boundary: `Autowin orchestration ${step.step}`, fidelity: 'exact' }
-  })
+  const structuralType: TraceEventV1['type'] =
+    step.step === 'exec' ? 'handoff' : step.step === 'judge' ? 'verdict' : 'gate'
+  const structural = (): TraceEventV1 =>
+    assertTraceEvent({
+      schema: 'autowin.trace/v1',
+      id: `${context.turnId}:${step.step}:${context.iteration}:${sequence}`,
+      conversationId: context.conversationId,
+      turnId: context.turnId,
+      parentId,
+      timestamp: new Date().toISOString(),
+      sequence: sequence++,
+      type: structuralType,
+      status: step.status ?? 'completed',
+      actor: {
+        id: step.role ?? step.step,
+        kind: step.step === 'gate' ? 'system' : 'agent',
+        label: step.role ?? step.step
+      },
+      recipient: { id: 'orchestrator', kind: 'agent', label: 'orchestrator' },
+      channel: 'internal',
+      payloads: [
+        {
+          kind: step.step === 'gate' ? 'app-state' : 'model-response',
+          content: step.error ?? step.text ?? step.detail ?? ''
+        }
+      ],
+      observation: { boundary: `Autowin orchestration ${step.step}`, fidelity: 'exact' }
+    })
 
   if (step.step === 'exec') {
-    const event = structural(); traceStore.append(event); parentId = event.id
+    const event = structural()
+    traceStore.append(event)
+    parentId = event.id
   }
   if (!step.prompt || !step.provider || !step.role || step.text === undefined) {
     if (step.step !== 'exec') traceStore.append(structural())
     return
   }
-  const call = appendPromptCall({
-    ...context,
-    actor: step.role,
-    provider: step.prompt.provider,
-    model: step.prompt.model,
-    transport: step.prompt.transport,
-    boundary: 'Autowin OS -> provider transport',
-    limitation: step.prompt.limitation,
-    system: step.prompt.system,
-    messages: step.prompt.messages,
-    options: step.prompt.options,
-    response: step.text,
-    status: step.status ?? 'completed',
-    error: step.error,
-    usage: step.usage,
-    durationMs: step.durationMs
-  }, promptRoot)
+  const call = appendPromptCall(
+    {
+      ...context,
+      actor: step.role,
+      provider: step.prompt.provider,
+      model: step.prompt.model,
+      transport: step.prompt.transport,
+      boundary: 'Autowin OS -> provider transport',
+      limitation: step.prompt.limitation,
+      system: step.prompt.system,
+      messages: step.prompt.messages,
+      options: step.prompt.options,
+      response: step.text,
+      status: step.status ?? 'completed',
+      error: step.error,
+      usage: step.usage,
+      durationMs: step.durationMs
+    },
+    promptRoot
+  )
   const providerEvents = promptCallToTraceEvents(call, sequence, parentId)
   for (const event of providerEvents) traceStore.append(event)
   sequence += providerEvents.length

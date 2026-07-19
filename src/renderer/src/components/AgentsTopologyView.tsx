@@ -27,7 +27,10 @@ type AgentTopology = {
 
 type Target = 'orchestrator' | 'subagents' | 'scout' | 'judge'
 type Profile = { id: string; name: string; updatedAt: string; topology: AgentTopology }
-type CapabilityState = { profiles: Array<{ id: string; name: string }>; assignments: Record<string, string> }
+type CapabilityState = {
+  profiles: Array<{ id: string; name: string }>
+  assignments: Record<string, string>
+}
 
 const DRAG_TYPE = 'application/x-autowin-model'
 
@@ -67,15 +70,35 @@ export function AgentsTopologyView(): React.JSX.Element {
         setState('error')
       })
   }, [])
-  useEffect(() => { window.api.profiles().then(setProfiles).catch(() => undefined) }, [])
-  useEffect(() => { window.api.capabilityProfiles().then(setCapabilities).catch(() => undefined) }, [])
+  useEffect(() => {
+    window.api
+      .profiles()
+      .then(setProfiles)
+      .catch(() => undefined)
+  }, [])
+  useEffect(() => {
+    window.api
+      .capabilityProfiles()
+      .then(setCapabilities)
+      .catch(() => undefined)
+  }, [])
 
   async function saveProfile(): Promise<void> {
     if (!topology) return
     const name = window.prompt('Nom du profil')?.trim()
     if (!name) return
-    const id = `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${Date.now().toString(36)}`
-    setProfiles((await window.api.saveProfile({ schema: 'autowin.profile/v1', id, name, topology })) as Profile[])
+    const id = `${name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')}-${Date.now().toString(36)}`
+    setProfiles(
+      (await window.api.saveProfile({
+        schema: 'autowin.profile/v1',
+        id,
+        name,
+        topology
+      })) as Profile[]
+    )
   }
   async function applyProfile(id: string): Promise<void> {
     const applied = await window.api.applyProfile(id)
@@ -259,9 +282,20 @@ export function AgentsTopologyView(): React.JSX.Element {
                     Profil
                     <select
                       value={capabilities.assignments[role] ?? 'balanced'}
-                      onChange={(event) => void window.api.assignCapabilityProfile(role as 'orchestrator' | 'subagent' | 'judge' | 'scout', event.target.value).then(setCapabilities)}
+                      onChange={(event) =>
+                        void window.api
+                          .assignCapabilityProfile(
+                            role as 'orchestrator' | 'subagent' | 'judge' | 'scout',
+                            event.target.value
+                          )
+                          .then(setCapabilities)
+                      }
                     >
-                      {capabilities.profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+                      {capabilities.profiles.map((profile) => (
+                        <option key={profile.id} value={profile.id}>
+                          {profile.name}
+                        </option>
+                      ))}
                     </select>
                   </label>
                 )}
@@ -314,10 +348,24 @@ export function AgentsTopologyView(): React.JSX.Element {
               : 'Enregistré dans le profil Autowin'}
         </strong>
         <div className="topology-profiles">
-          <button type="button" className="topology-assign-button" onClick={() => void saveProfile()}>＋ Profil</button>
-          <select aria-label="Appliquer un profil" defaultValue="" onChange={(event) => event.target.value && void applyProfile(event.target.value)}>
+          <button
+            type="button"
+            className="topology-assign-button"
+            onClick={() => void saveProfile()}
+          >
+            ＋ Profil
+          </button>
+          <select
+            aria-label="Appliquer un profil"
+            defaultValue=""
+            onChange={(event) => event.target.value && void applyProfile(event.target.value)}
+          >
             <option value="">Profils sauvegardés</option>
-            {profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+            {profiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.name}
+              </option>
+            ))}
           </select>
         </div>
       </header>

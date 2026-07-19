@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Markdown } from './Markdown'
 import { ActivityPane } from './ActivityPane'
 import { HumanJson } from './HumanJson'
+import { ModuleHeader } from './ModuleHeader'
 import {
   CHAT_PANE_LIMITS,
   clampConversationPaneWidth,
@@ -755,8 +756,7 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
         patchLast(convId, (m) => {
           m.status = res.cancelled ? 'cancelled' : 'failed'
           m.done = true
-          if (!res.cancelled)
-            m.parts.push({ kind: 'text', text: `⚠️ ${res.error ?? 'erreur'}` })
+          if (!res.cancelled) m.parts.push({ kind: 'text', text: `⚠️ ${res.error ?? 'erreur'}` })
         })
     } catch (error) {
       patchLast(convId, (m) => {
@@ -819,10 +819,7 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
       {/* ---- Panneau gauche : conversations ---- */}
       <aside className="conv-pane" style={{ width: `${conversationsPaneWidth}px` }}>
         <div className="conv-head">
-          <div className="conv-heading-copy">
-            <span className="conv-kicker">Espace de travail</span>
-            <strong className="conv-title">Conversations</strong>
-          </div>
+          <ModuleHeader eyebrow="Espace de travail" title="Conversations" />
           <button className="btn btn-sm" onClick={newConv} title="Nouvelle conversation">
             +
           </button>

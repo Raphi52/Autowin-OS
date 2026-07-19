@@ -501,15 +501,26 @@
   border-radius: 9px;
   background: rgba(0, 0, 0, 0.45);
   color: #d8e8f1;
-  font: 10px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace;
+  font:
+    10px/1.55 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 @media (max-width: 1050px) {
-  .prompt-observatory-head { flex-direction: column; }
-  .prompt-observed-metrics { width: 100%; grid-template-columns: repeat(2, 1fr); }
-  .prompt-observed-layout { grid-template-columns: 1fr; }
+  .prompt-observatory-head {
+    flex-direction: column;
+  }
+  .prompt-observed-metrics {
+    width: 100%;
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .prompt-observed-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 1050px) {

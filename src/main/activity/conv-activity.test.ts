@@ -22,7 +22,11 @@ describe('conversation activity', () => {
     roots.push(root)
     const longText = 'x'.repeat(900)
 
-    appendConvActivity('conv-1', { kind: 'configuration-change', label: 'config', text: longText }, root)
+    appendConvActivity(
+      'conv-1',
+      { kind: 'configuration-change', label: 'config', text: longText },
+      root
+    )
     appendConvActivity('conv-1', { kind: 'chat', label: 'chat', text: longText }, root)
 
     const entries = loadConvActivity('conv-1', root)
