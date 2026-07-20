@@ -26,7 +26,6 @@ import {
   mergeGraphDelta,
   nodeColorForTheme,
   nodeFocusForSelectionOrHover,
-  nodeThemeIds,
   nodeSelectionEmphasis,
   nodesForThemesAlphabetically,
   selectExclusiveTheme,
@@ -43,8 +42,19 @@ import {
   type GraphNode,
   type GraphVisualMode
 } from './graph-view-model'
-import { BrainMarkdown } from './BrainMarkdown'
-import { HumanJson } from './HumanJson'
+import {
+  createConnectedLabel,
+  createGalaxyStar,
+  createSeriousNode,
+  disposeGraphTextures
+} from './graph-three-helpers'
+import {
+  NodePanel,
+  RangeRow,
+  SettingsSection,
+  ThemeNodesPanel,
+  ToggleRow
+} from './GraphView.panels'
 import { ModuleHeader } from './ModuleHeader'
 import './GraphView.css'
 
@@ -105,185 +115,6 @@ function initialColumnWidths(): ColumnWidths {
   }
 }
 
-const galaxyStarTextures = new Map<string, THREE.CanvasTexture>()
-const connectedLabelTextures = new Map<
-  string,
-  { texture: THREE.CanvasTexture; aspectRatio: number }
->()
-let seriousNodeTextureCache: THREE.CanvasTexture | null = null
-
-function seriousNodeTexture(): THREE.CanvasTexture {
-  if (seriousNodeTextureCache) return seriousNodeTextureCache
-  const canvas = document.createElement('canvas')
-  canvas.width = 64
-  canvas.height = 64
-  const context = canvas.getContext('2d')
-  if (context) {
-    context.fillStyle = '#ffffff'
-    context.beginPath()
-    context.arc(32, 32, 25, 0, Math.PI * 2)
-    context.fill()
-  }
-  seriousNodeTextureCache = new THREE.CanvasTexture(canvas)
-  seriousNodeTextureCache.colorSpace = THREE.SRGBColorSpace
-  return seriousNodeTextureCache
-}
-
-function createSeriousNode(
-  node: GraphNode,
-  appearance: { color: string; opacity: number },
-  value: number,
-  showLabel: boolean
-): THREE.Sprite {
-  const scale = 8 * Math.sqrt(Math.max(0.5, value))
-  const dot = new THREE.Sprite(
-    new THREE.SpriteMaterial({
-      map: seriousNodeTexture(),
-      color: appearance.color,
-      opacity: appearance.opacity,
-      transparent: true,
-      depthWrite: false
-    })
-  )
-  dot.scale.set(scale, scale, 1)
-  dot.renderOrder = appearance.opacity === 1 ? 2 : 1
-  dot.userData.nodeId = node.id
-  if (showLabel) dot.add(createConnectedLabel(node.label, appearance.color, scale, 0.035))
-  return dot
-}
-
-function galaxyStarTexture(color: string): THREE.CanvasTexture {
-  const cached = galaxyStarTextures.get(color)
-  if (cached) return cached
-
-  const canvas = document.createElement('canvas')
-  canvas.width = 128
-  canvas.height = 128
-  const context = canvas.getContext('2d')
-  if (!context) return new THREE.CanvasTexture(canvas)
-
-  const center = canvas.width / 2
-  const halo = context.createRadialGradient(center, center, 2, center, center, 62)
-  halo.addColorStop(0, '#ffffff')
-  halo.addColorStop(0.08, color)
-  halo.addColorStop(0.32, `${color}b8`)
-  halo.addColorStop(1, `${color}00`)
-  context.fillStyle = halo
-  context.beginPath()
-  context.arc(center, center, 62, 0, Math.PI * 2)
-  context.fill()
-  context.globalCompositeOperation = 'lighter'
-  context.beginPath()
-  for (let point = 0; point < 16; point += 1) {
-    const angle = -Math.PI / 2 + (point * Math.PI) / 8
-    const radius = point % 4 === 0 ? 61 : point % 2 === 0 ? 30 : 9
-    const x = center + Math.cos(angle) * radius
-    const y = center + Math.sin(angle) * radius
-    if (point === 0) context.moveTo(x, y)
-    else context.lineTo(x, y)
-  }
-  context.closePath()
-  context.fillStyle = `${color}d9`
-  context.fill()
-  context.beginPath()
-  context.arc(center, center, 9, 0, Math.PI * 2)
-  context.fillStyle = '#ffffff'
-  context.fill()
-  context.globalCompositeOperation = 'source-over'
-
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.colorSpace = THREE.SRGBColorSpace
-  galaxyStarTextures.set(color, texture)
-  return texture
-}
-
-function createGalaxyStar(
-  node: GraphNode,
-  appearance: { color: string; opacity: number },
-  value: number
-): THREE.Sprite {
-  const material = new THREE.SpriteMaterial({
-    map: galaxyStarTexture(appearance.color),
-    color: '#ffffff',
-    opacity: appearance.opacity,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending
-  })
-  const star = new THREE.Sprite(material)
-  const scale = 12 * Math.sqrt(Math.max(0.5, value))
-  star.scale.set(scale, scale, 1)
-  star.renderOrder = appearance.opacity === 1 ? 2 : 1
-  star.userData.nodeId = node.id
-  return star
-}
-
-function connectedLabelTexture(
-  label: string,
-  color: string
-): { texture: THREE.CanvasTexture; aspectRatio: number } {
-  const cacheKey = `${color}:${label}`
-  const cached = connectedLabelTextures.get(cacheKey)
-  if (cached) return cached
-
-  const measureCanvas = document.createElement('canvas')
-  const measureContext = measureCanvas.getContext('2d')
-  const font = '600 20px Inter, system-ui, sans-serif'
-  if (measureContext) measureContext.font = font
-  const measuredWidth = measureContext?.measureText(label).width ?? label.length * 11
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.ceil(Math.min(560, Math.max(120, measuredWidth + 30)))
-  canvas.height = 54
-  const context = canvas.getContext('2d')
-  if (context) {
-    context.font = font
-    context.fillStyle = 'rgba(4, 9, 17, 0.94)'
-    context.strokeStyle = color
-    context.lineWidth = 2
-    context.beginPath()
-    context.roundRect(1, 1, canvas.width - 2, canvas.height - 2, 10)
-    context.fill()
-    context.stroke()
-    context.fillStyle = '#f7fbff'
-    context.textAlign = 'center'
-    context.textBaseline = 'middle'
-    context.fillText(label, canvas.width / 2, canvas.height / 2, canvas.width - 24)
-  }
-
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.colorSpace = THREE.SRGBColorSpace
-  texture.minFilter = THREE.LinearFilter
-  const result = { texture, aspectRatio: canvas.width / canvas.height }
-  connectedLabelTextures.set(cacheKey, result)
-  return result
-}
-
-function createConnectedLabel(
-  label: string,
-  color: string,
-  parentScale = 1,
-  screenHeight = 0.035
-): THREE.Sprite {
-  const { texture, aspectRatio } = connectedLabelTexture(label, color)
-  const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({
-      map: texture,
-      color: '#ffffff',
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-      sizeAttenuation: false
-    })
-  )
-  const height = screenHeight / parentScale
-  sprite.position.set(0, 0, 0)
-  sprite.scale.set(height * aspectRatio, height, 1)
-  sprite.center.set(0.5, -0.16)
-  sprite.renderOrder = 20
-  sprite.userData.connectedNodeLabel = label
-  return sprite
-}
-
 /** Observatoire 3D : thèmes en surbrillance, visibilité réglable et lecture du nœud. */
 export function GraphView({
   visualMode,
@@ -327,15 +158,7 @@ export function GraphView({
   const columnResizeCleanupRef = useRef<(() => void) | null>(null)
   const [size, setSize] = useState({ w: 800, h: 500 })
 
-  useEffect(
-    () => () => {
-      for (const texture of galaxyStarTextures.values()) texture.dispose()
-      galaxyStarTextures.clear()
-      for (const { texture } of connectedLabelTextures.values()) texture.dispose()
-      connectedLabelTextures.clear()
-    },
-    []
-  )
+  useEffect(() => () => disposeGraphTextures(), [])
 
   const refreshBrains = useCallback((): void => {
     window.api
@@ -1398,157 +1221,5 @@ export function GraphView({
         </>
       )}
     </section>
-  )
-}
-
-function SettingsSection({
-  title,
-  onReset,
-  children
-}: {
-  title: string
-  onReset?: () => void
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <section className="settings-section">
-      <div className="settings-section__heading">
-        <span>{title}</span>
-        {onReset && <button onClick={onReset}>Réinitialiser</button>}
-      </div>
-      {children}
-    </section>
-  )
-}
-
-function ToggleRow({
-  label,
-  checked,
-  onChange
-}: {
-  label: string
-  checked: boolean
-  onChange: (value: boolean) => void
-}): React.JSX.Element {
-  return (
-    <label className="toggle-row">
-      <span>{label}</span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-      />
-      <i aria-hidden="true" />
-    </label>
-  )
-}
-
-function RangeRow({
-  label,
-  value,
-  min,
-  max,
-  step,
-  display,
-  onChange
-}: {
-  label: string
-  value: number
-  min: number
-  max: number
-  step: number
-  display: string
-  onChange: (value: number) => void
-}): React.JSX.Element {
-  return (
-    <label className="range-row">
-      <span>
-        {label} <strong>{display}</strong>
-      </span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-    </label>
-  )
-}
-
-function NodePanel({
-  node,
-  file,
-  fileErr,
-  linkedNodes,
-  onNavigate
-}: {
-  node: GraphNode
-  file: { path: string; content: string } | null
-  fileErr: string
-  linkedNodes: Array<{ node: GraphNode; direction: 'incoming' | 'outgoing'; relation?: string }>
-  onNavigate: (node: GraphNode) => void
-}): React.JSX.Element {
-  return (
-    <div className="node-panel">
-      <nav className="node-links" aria-label="Nœuds reliés">
-        <div className="node-links__heading">
-          <strong>Liens</strong>
-          <span>{linkedNodes.length}</span>
-        </div>
-        {linkedNodes.length === 0 && <p>Aucun nœud relié dans cette vue.</p>}
-        {linkedNodes.map((linked) => (
-          <button
-            key={`${linked.direction}:${linked.node.id}`}
-            type="button"
-            onClick={() => onNavigate(linked.node)}
-          >
-            <span aria-hidden="true">{linked.direction === 'outgoing' ? '→' : '←'}</span>
-            <strong>{linked.node.label}</strong>
-            {linked.relation && <small>{linked.relation}</small>}
-          </button>
-        ))}
-      </nav>
-      <article className="node-content">
-        <span className="node-panel__theme">{nodeThemeIds(node).join(' · ')}</span>
-        <h2>{node.label}</h2>
-        <div className="node-panel__path">{node.file ?? 'Aucun fichier associé'}</div>
-        {fileErr && <div className="node-panel__error">{fileErr}</div>}
-        {!file && !fileErr && <div className="node-panel__loading">Chargement du contenu…</div>}
-        {file &&
-          (/\.md$/i.test(file.path) ? (
-            <BrainMarkdown source={file.content} />
-          ) : (
-            <HumanJson value={file.content} />
-          ))}
-      </article>
-    </div>
-  )
-}
-
-function ThemeNodesPanel({
-  nodes,
-  onNavigate
-}: {
-  nodes: GraphNode[]
-  onNavigate: (node: GraphNode) => void
-}): React.JSX.Element {
-  return (
-    <div className="theme-nodes-panel">
-      <div className="theme-nodes-panel__heading">
-        <span>Nœuds du thème</span>
-        <strong>{nodes.length}</strong>
-      </div>
-      <nav className="node-links" aria-label="Nœuds des thèmes actifs par ordre alphabétique">
-        {nodes.length === 0 && <p>Aucun nœud dans ce thème.</p>}
-        {nodes.map((themeNode) => (
-          <button key={themeNode.id} type="button" onClick={() => onNavigate(themeNode)}>
-            <span aria-hidden="true">✦</span>
-            <strong>{themeNode.label}</strong>
-          </button>
-        ))}
-      </nav>
-    </div>
   )
 }
