@@ -5,7 +5,6 @@ import { ObservatoryView } from './components/ObservatoryView'
 import { RolesView } from './components/RolesView'
 import { HermesControlsView } from './components/HermesControlsView'
 import { BehaviourView } from './components/BehaviourView'
-import { RouterView } from './components/RouterView'
 import { ModelQuestionPopup } from './components/ModelQuestionPopup'
 import { normalizeTab, type Tab } from './tabs'
 import autowinLogo from './assets/autowin-logo.png'
@@ -31,7 +30,6 @@ const NAV: Array<{ id: Tab; label: string }> = [
   { id: 'chat', label: 'Chat' },
   { id: 'memory', label: 'Memory' },
   { id: 'observatory', label: 'Observatory' },
-  { id: 'router', label: 'Router' },
   { id: 'agents', label: 'Models' },
   { id: 'capabilities', label: 'Skills · Hooks · Tools' },
   { id: 'behaviour', label: 'Behaviour' }
@@ -176,11 +174,6 @@ export function MainApp(): React.JSX.Element {
         {visitedTabs.has('observatory') && (
           <div className={`view-slot${tab === 'observatory' ? ' is-active' : ''}`}>
             <ObservatoryView active={tab === 'observatory'} focus={observatoryFocus} />
-          </div>
-        )}
-        {visitedTabs.has('router') && (
-          <div className={`view-slot${tab === 'router' ? ' is-active' : ''}`}>
-            <RouterView active={tab === 'router'} />
           </div>
         )}
         {visitedTabs.has('agents') && (

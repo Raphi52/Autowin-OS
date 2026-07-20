@@ -369,7 +369,9 @@ function registerChatIpc(): void {
   ipcMain.handle('chat:providers', () => os.registry.ids())
   ipcMain.handle('router:snapshot', (event) => {
     assertTrustedRendererSender(event, 'Router')
-    return loadOmniRouteSnapshot()
+    // Comptes/quotas exigent un « management token » OmniRoute (≠ clé API /v1) que l'app
+    // ne stocke pas encore → on n'envoie rien (la clé API donnerait 403). Santé reste dispo.
+    return loadOmniRouteSnapshot(fetch)
   })
   ipcMain.handle('router:migration-state', (event) => {
     assertTrustedRendererSender(event, 'Router')

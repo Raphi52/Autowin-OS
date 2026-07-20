@@ -115,6 +115,9 @@ function initialColumnWidths(): ColumnWidths {
   }
 }
 
+/** Largeur confortable de la colonne détail à l'ouverture d'un nœud (clampée aux limites). */
+const GRAPH_DETAIL_EXPANDED = 560
+
 /** Observatoire 3D : thèmes en surbrillance, visibilité réglable et lecture du nœud. */
 export function GraphView({
   visualMode,
@@ -681,10 +684,20 @@ export function GraphView({
     graphRef.current?.cameraPosition({ x: x * ratio, y: y * ratio, z: z * ratio }, { x, y, z }, 700)
   }
 
-  async function openNode(nextNode: GraphNode, expandDetail = false): Promise<void> {
+  async function openNode(nextNode: GraphNode): Promise<void> {
     const requestId = ++fileRequestRef.current
     setNode(nextNode)
-    if (expandDetail) setPanelTab('node')
+    setPanelTab('node')
+    // Clic sur un nœud → élargir la colonne de droite (sans jamais rétrécir un réglage plus large).
+    setColumnWidths((current) => {
+      const contentWidth = layoutRef.current?.getBoundingClientRect().width ?? size.w
+      const detail = fitDetailColumnWidth(
+        Math.max(current.detail ?? 0, GRAPH_DETAIL_EXPANDED),
+        contentWidth,
+        current.theme
+      )
+      return current.detail === detail ? current : { ...current, detail }
+    })
     focusNode(nextNode)
     setFile(null)
     setFileErr('')
@@ -937,7 +950,7 @@ export function GraphView({
                   <button
                     key={resultNode.id}
                     className="node-search-result"
-                    onClick={() => void openNode(resultNode, true)}
+                    onClick={() => void openNode(resultNode)}
                   >
                     <i aria-hidden="true">✦</i>
                     <span>{resultNode.label}</span>
@@ -1209,12 +1222,12 @@ export function GraphView({
                 file={file}
                 fileErr={fileErr}
                 linkedNodes={linkedNodes}
-                onNavigate={(nextNode) => openNode(nextNode, true)}
+                onNavigate={(nextNode) => openNode(nextNode)}
               />
             ) : (
               <ThemeNodesPanel
                 nodes={activeThemeNodes}
-                onNavigate={(nextNode) => openNode(nextNode, true)}
+                onNavigate={(nextNode) => openNode(nextNode)}
               />
             )}
           </aside>

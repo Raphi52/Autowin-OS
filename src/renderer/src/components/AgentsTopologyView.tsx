@@ -56,6 +56,35 @@ export function AgentsTopologyView(): React.JSX.Element {
   const [error, setError] = useState('')
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [capabilities, setCapabilities] = useState<CapabilityState | null>(null)
+  // Coin OmniRoute (relogé depuis l'ancienne vue Router) : gateway token + accès dashboard.
+  const [omniToken, setOmniToken] = useState('')
+  const [omniConfigured, setOmniConfigured] = useState(false)
+  const [omniBusy, setOmniBusy] = useState(false)
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const state = (await window.api.routerMigrationState?.()) as
+          | { credentialConfigured?: boolean }
+          | undefined
+        setOmniConfigured(Boolean(state?.credentialConfigured))
+      } catch {
+        setOmniConfigured(false)
+      }
+    })()
+  }, [])
+
+  async function saveOmniToken(): Promise<void> {
+    if (!omniToken.trim() || omniBusy) return
+    setOmniBusy(true)
+    try {
+      await window.api.setOmniRouteCredential(omniToken.trim())
+      setOmniToken('')
+      setOmniConfigured(true)
+    } finally {
+      setOmniBusy(false)
+    }
+  }
 
   useEffect(() => {
     Promise.all([window.api.models(), window.api.topology()])
@@ -367,6 +396,35 @@ export function AgentsTopologyView(): React.JSX.Element {
               </option>
             ))}
           </select>
+        </div>
+        <div className="topology-omniroute">
+          <input
+            type="password"
+            className="topology-omniroute-token"
+            value={omniToken}
+            placeholder={omniConfigured ? 'Gateway token configuré' : 'Coller le gateway token'}
+            aria-label="Gateway token OmniRoute"
+            onChange={(event) => setOmniToken(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') void saveOmniToken()
+            }}
+          />
+          <button
+            type="button"
+            className="topology-assign-button"
+            disabled={omniBusy || !omniToken.trim()}
+            onClick={() => void saveOmniToken()}
+          >
+            {omniBusy ? '…' : 'Enregistrer'}
+          </button>
+          <button
+            type="button"
+            className="topology-assign-button"
+            title="Ouvrir le dashboard OmniRoute"
+            onClick={() => void window.api.openOmniRouteDashboard()}
+          >
+            🛰️ OmniRoute
+          </button>
         </div>
       </header>
 

@@ -92,11 +92,17 @@ async function readBoundedBody(response: Response): Promise<string> {
 async function fetchJson(
   fetchFn: typeof fetch,
   path: string,
-  validate: (payload: JsonObject) => boolean
+  validate: (payload: JsonObject) => boolean,
+  managementToken?: string | null
 ): Promise<JsonObject> {
   const response = await fetchFn(`${OMNIROUTE_ORIGIN}${path}`, {
     method: 'GET',
-    headers: { accept: 'application/json' },
+    // Comptes/quotas = endpoints ADMIN → exigent un « management token » (≠ clé API /v1).
+    // Sans lui : 401. Avec la clé API : 403 « Invalid management token ». Santé passe sans.
+    headers: {
+      accept: 'application/json',
+      ...(managementToken ? { authorization: `Bearer ${managementToken}` } : {})
+    },
     cache: 'no-store',
     redirect: 'error',
     signal: AbortSignal.timeout(2200)
@@ -183,7 +189,8 @@ function projectConnections(
 }
 
 export async function loadOmniRouteSnapshot(
-  fetchFn: typeof fetch = fetch
+  fetchFn: typeof fetch = fetch,
+  managementToken?: string | null
 ): Promise<OmniRouteSnapshot> {
   const paths = [
     [
@@ -200,7 +207,7 @@ export async function loadOmniRouteSnapshot(
     ['/api/usage/provider-limits', 'quotas', (value: JsonObject) => Boolean(object(value.caches))]
   ] as const
   const settled = await Promise.allSettled(
-    paths.map(([path, , validate]) => fetchJson(fetchFn, path, validate))
+    paths.map(([path, , validate]) => fetchJson(fetchFn, path, validate, managementToken))
   )
   if (settled.every((result) => result.status === 'rejected')) {
     return {

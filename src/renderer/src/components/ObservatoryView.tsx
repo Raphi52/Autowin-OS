@@ -301,6 +301,15 @@ export function ObservatoryView({
       )
     : timeline.anomalies
 
+  useEffect(() => {
+    if (!configOpen) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setConfigOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [configOpen])
+
   function openEvent(eventId: string): void {
     setQuery('')
     setTypeFilter('all')
@@ -486,7 +495,16 @@ export function ObservatoryView({
         </details>
       )}
       {configOpen && (
-        <aside className="observatory-config">
+        <aside className="observatory-config" role="dialog" aria-label="Configuration du prompt">
+          <button
+            type="button"
+            className="observatory-config-close"
+            aria-label="Fermer la configuration"
+            title="Fermer (Échap)"
+            onClick={() => setConfigOpen(false)}
+          >
+            ✕
+          </button>
           <PromptLoadView active={active && configOpen} />
         </aside>
       )}
