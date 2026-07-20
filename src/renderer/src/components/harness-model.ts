@@ -10,127 +10,35 @@
  * Le modèle actif est marqué `focal` et recentré dans son couloir.
  */
 
-/** Couche logique — un couloir horizontal lisible dans le canvas. */
-export type HarnessLayer = 'runtime' | 'configuration' | 'storage' | 'observability'
-
-/** Provenance de la preuve. `derived` = déduit, sans artefact direct lu. */
-export type HarnessSource = 'ipc' | 'filesystem' | 'provider-boundary' | 'derived'
-
-/** Statut STRICT. `unknown` par défaut tant qu'aucune sonde non-mutante n'a confirmé. */
-export type HarnessState = 'healthy' | 'unknown' | 'warning' | 'blocked' | 'inactive'
-
-/** Où le nœud s'exécute réellement. Le Brain partagé est `shared-brain` : connaissance, jamais exécuteur. */
-export type HarnessRuntime = 'autowin-local' | 'provider' | 'shared-brain' | 'none'
-
-export type HarnessNodeKind =
-  | 'you'
-  | 'model'
-  | 'provider'
-  | 'orchestrator'
-  | 'subagent'
-  | 'scout'
-  | 'judge'
-  | 'runtime'
-  | 'pilot'
-  | 'command-bus'
-  | 'loop'
-  | 'roles'
-  | 'skill'
-  | 'hook'
-  | 'tool'
-  | 'behaviour'
-  | 'authority'
-  | 'gate'
-  | 'kit'
-  | 'brain'
-  | 'conversation'
-  | 'run'
-  | 'cost'
-  | 'trust'
-  | 'activity'
-  | 'trace'
-  | 'question'
-  | 'kaizen'
-
-/** Verbe de l'arête — un flux orienté et typé. */
-export type HarnessEdgeKind =
-  'executes' | 'routes' | 'invokes' | 'injects' | 'reads' | 'persists' | 'observes' | 'gates'
-
-/** Couloir narratif : quel flux traverse ce nœud/arête. */
-export type HarnessFlow = 'chat' | 'orchestration' | 'loop' | 'pilotage' | 'brain' | 'observability'
-
-/** Niveau de révélation. `both` = visible en Débutant ET Expert. */
-export type HarnessLevel = 'beginner' | 'expert' | 'both'
-
-/** Preuve/source d'un nœud — JAMAIS un secret, une commande brute ou un contenu de fichier. */
-export interface HarnessEvidence {
-  source: HarnessSource
-  /** Référence lisible de la preuve (module, endpoint, racine disque). */
-  ref: string
-  detail?: string
-}
-
-/** Métrique bornée affichée dans l'inspecteur (compteur, taille) — jamais un dump. */
-export interface HarnessMetric {
-  label: string
-  value: string | number
-}
-
-export interface HarnessNode {
-  id: string
-  kind: HarnessNodeKind
-  label: string
-  layer: HarnessLayer
-  source: HarnessSource
-  state: HarnessState
-  runtime: HarnessRuntime
-  level: HarnessLevel
-  flows: HarnessFlow[]
-  role?: string
-  provider?: string
-  /** Ordre stable dans son couloir (layout déterministe). */
-  order: number
-  /** Modèle actif / point focal du canvas. */
-  focal?: boolean
-  evidence: HarnessEvidence
-  /** Inspecteur — champs bornés. */
-  roleDesc: string
-  observed: string
-  notObserved: string
-  references: string[]
-  metrics?: HarnessMetric[]
-}
-
-export interface HarnessEdge {
-  id: string
-  from: string
-  to: string
-  kind: HarnessEdgeKind
-  flows: HarnessFlow[]
-  level: HarnessLevel
-  label?: string
-}
-
-export interface HarnessCaps {
-  maxNodes: number
-  maxEdges: number
-  nodeCount: number
-  edgeCount: number
-  truncated: boolean
-}
-
-export interface HarnessSnapshot {
-  /** ISO — horodatage de composition (posé côté main). */
-  generatedAt: string
-  /** Étiquette du modèle actif (binding orchestrateur). */
-  focusModelId: string
-  nodes: HarnessNode[]
-  edges: HarnessEdge[]
-  caps: HarnessCaps
-  /** Valeurs distinctes pour les filtres (dérivées côté main). */
-  providers: string[]
-  runtimes: HarnessRuntime[]
-}
+// Contrat harnais : source unique dans src/shared/harness-types.ts (miroir de la
+// frontière IPC). Ré-exporté ici pour les composants qui importent depuis ce module.
+export type {
+  HarnessLayer,
+  HarnessSource,
+  HarnessState,
+  HarnessRuntime,
+  HarnessNodeKind,
+  HarnessEdgeKind,
+  HarnessFlow,
+  HarnessLevel,
+  HarnessEvidence,
+  HarnessMetric,
+  HarnessNode,
+  HarnessEdge,
+  HarnessCaps,
+  HarnessSnapshot
+} from '../../../shared/harness-types'
+import type {
+  HarnessLayer,
+  HarnessSource,
+  HarnessState,
+  HarnessRuntime,
+  HarnessFlow,
+  HarnessLevel,
+  HarnessNode,
+  HarnessEdge,
+  HarnessSnapshot
+} from '../../../shared/harness-types'
 
 /* --- Libellés (partagés vue + légende, testables) ----------------------- */
 

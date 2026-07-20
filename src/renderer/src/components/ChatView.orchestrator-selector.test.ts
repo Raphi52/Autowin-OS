@@ -5,10 +5,14 @@ import { act, createElement, useState, type ComponentProps } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { buildOrchestratorModelGroups } from './chat-view-model'
-import { OrchestratorModelSelector } from './ChatView'
+import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 
 const source = readFileSync(
   resolve(process.cwd(), 'src/renderer/src/components/ChatView.tsx'),
+  'utf8'
+)
+const selectorSource = readFileSync(
+  resolve(process.cwd(), 'src/renderer/src/components/OrchestratorModelSelector.tsx'),
   'utf8'
 )
 
@@ -217,12 +221,16 @@ describe('selecteur orchestrateur Chat', () => {
   })
 
   it('change uniquement la route OmniRoute sans toucher la conversation', () => {
+    // Logique de changement de route : reste dans ChatView.
     expect(source).toContain("option.provider !== 'omniroute'")
     expect(source).toContain('activateOmniRoute(option.model)')
-    expect(source).toContain('const disabled = busy || pending || models.length === 0')
-    expect(source).toContain('className="model-select-menu"')
-    expect(source).toContain('Le changement s’appliquera au prochain tour')
     expect(source).toContain('generation === runtimeRefreshGenerationRef.current')
-    expect(source).not.toMatch(/model-select[\s\S]{0,800}(navigate|newConv|location\.reload)/)
+    // Rendu du sélecteur : extrait dans OrchestratorModelSelector.
+    expect(selectorSource).toContain('const disabled = busy || pending || models.length === 0')
+    expect(selectorSource).toContain('className="model-select-menu"')
+    expect(selectorSource).toContain('Le changement s’appliquera au prochain tour')
+    expect(selectorSource).not.toMatch(
+      /model-select[\s\S]{0,800}(navigate|newConv|location\.reload)/
+    )
   })
 })
