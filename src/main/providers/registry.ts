@@ -14,7 +14,11 @@ import type {
  */
 export class ProviderRegistry {
   private readonly adapters = new Map<string, ProviderAdapter>()
-  private conversationTransport: { provider: string; model: string } | null = null
+  private conversationTransport: {
+    provider: string
+    model: string
+    reasoningEffort?: string
+  } | null = null
 
   /** Bloc système par défaut (kit condensé SOUL) injecté sur CHAQUE tour. */
   constructor(private readonly systemBlock: string | undefined = undefined) {}
@@ -38,14 +42,22 @@ export class ProviderRegistry {
     return a
   }
 
-  setConversationTransport(route: { provider: string; model: string }): void {
+  setConversationTransport(route: {
+    provider: string
+    model: string
+    reasoningEffort?: string
+  }): void {
     this.get(route.provider)
     if (route.provider !== 'omniroute') throw new Error('OmniRoute est le seul transport autorisé')
     if (!route.model.trim()) throw new Error('Modèle de transport vide')
     this.conversationTransport = { ...route }
   }
 
-  getConversationTransport(): { provider: string; model: string } | null {
+  getConversationTransport(): {
+    provider: string
+    model: string
+    reasoningEffort?: string
+  } | null {
     return this.conversationTransport ? { ...this.conversationTransport } : null
   }
 
@@ -71,7 +83,12 @@ export class ProviderRegistry {
       throw new Error('OmniRoute obligatoire : aucun transport conversationnel configuré')
     return {
       id: this.conversationTransport.provider,
-      opts: { ...opts, model: this.conversationTransport.model }
+      opts: {
+        ...opts,
+        model: this.conversationTransport.model,
+        // L'effort choisi pour la route (UI) prime ; sinon on garde celui de la requête.
+        reasoningEffort: this.conversationTransport.reasoningEffort ?? opts.reasoningEffort
+      }
     }
   }
 

@@ -148,7 +148,7 @@ describe('selecteur orchestrateur Chat', () => {
       llama?.click()
     })
     const effort = [...dom.querySelectorAll<HTMLButtonElement>('.model-effort-menu button')].find(
-      (button) => button.textContent?.includes('Auto')
+      (button) => button.textContent?.includes('Défaut')
     )
     await act(async () => {
       effort?.click()
@@ -253,7 +253,7 @@ describe('selecteur orchestrateur Chat', () => {
   it('change uniquement la route OmniRoute sans toucher la conversation', () => {
     // Logique de changement de route : reste dans ChatView.
     expect(source).toContain("option.provider !== 'omniroute'")
-    expect(source).toContain('activateOmniRoute(option.model)')
+    expect(source).toContain('activateOmniRoute(option.model, option.reasoningEffort)')
     expect(source).toContain('generation === runtimeRefreshGenerationRef.current')
     // Rendu du sélecteur : extrait dans OrchestratorModelSelector.
     expect(selectorSource).toContain('const disabled = busy || pending || models.length === 0')

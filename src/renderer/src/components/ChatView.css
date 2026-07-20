@@ -1412,20 +1412,27 @@
   flex-wrap: wrap;
   align-items: center;
 }
-.msg-inspect-turn,
-.msg-fork-turn {
-  align-self: flex-start;
-  margin-top: 6px;
-  padding: 4px 8px;
+.msg-turn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
   border: 1px solid var(--line-strong);
-  border-radius: 999px;
+  border-radius: 8px;
   background: transparent;
-  color: var(--cyan);
-  font-size: 9px;
+  color: var(--text-faint);
   cursor: pointer;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease,
+    background 120ms ease;
 }
-.msg-fork-turn:hover {
+.msg-turn-icon:hover {
+  color: var(--cyan);
   border-color: var(--cyan);
+  background: var(--bg-2);
 }
 
 /* Barre de branches d'une conversation (fork / rewind) */

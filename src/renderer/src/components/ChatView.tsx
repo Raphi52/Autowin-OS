@@ -212,6 +212,33 @@ function messageKey(message: Msg, index: number): string {
   return `${message.role}:${index}`
 }
 
+/** Icône « brancher » (fork) — deux nœuds reliés, monochrome via currentColor. */
+function ForkIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
+      <circle cx="4" cy="3" r="1.8" stroke="currentColor" strokeWidth="1.3" />
+      <circle cx="4" cy="13" r="1.8" stroke="currentColor" strokeWidth="1.3" />
+      <circle cx="12" cy="6" r="1.8" stroke="currentColor" strokeWidth="1.3" />
+      <path
+        d="M4 4.8v6.4M4 8h4a2 2 0 0 0 2-2"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+/** Icône « inspecter » (loupe), monochrome via currentColor. */
+function InspectIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
+      <circle cx="7" cy="7" r="4.2" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M10.2 10.2 14 14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 const ChatMessageRow = memo(function ChatMessageRow({
   message,
   conversationId,
@@ -249,11 +276,12 @@ const ChatMessageRow = memo(function ChatMessageRow({
           <div className="msg-turn-actions">
             <button
               type="button"
-              className="msg-fork-turn"
+              className="msg-turn-icon"
               title="Créer une branche à partir de ce message"
+              aria-label="Créer une branche à partir de ce message"
               onClick={() => onFork(message.messageId!)}
             >
-              Forker depuis ce tour
+              <ForkIcon />
             </button>
           </div>
         )}
@@ -284,20 +312,23 @@ const ChatMessageRow = memo(function ChatMessageRow({
         {message.turnId && message.turnId !== 'pending' && conversationId && onInspectTurn && (
           <button
             type="button"
-            className="msg-inspect-turn"
+            className="msg-turn-icon"
+            title="Inspecter ce tour dans l'Observatory"
+            aria-label="Inspecter ce tour"
             onClick={() => onInspectTurn({ conversationId, turnId: message.turnId! })}
           >
-            Inspecter ce tour
+            <InspectIcon />
           </button>
         )}
         {message.messageId && onFork && (
           <button
             type="button"
-            className="msg-fork-turn"
+            className="msg-turn-icon"
             title="Créer une branche à partir de ce tour"
+            aria-label="Créer une branche à partir de ce tour"
             onClick={() => onFork(message.messageId!)}
           >
-            Forker depuis ce tour
+            <ForkIcon />
           </button>
         )}
       </div>
@@ -462,18 +493,19 @@ export function ChatView({
     const omniRouteModels = (models as RuntimeModel[]).filter(
       (model) => model.provider === 'omniroute'
     )
+    const transportEffort = (transport as { reasoningEffort?: string }).reasoningEffort ?? 'none'
     const resolved: ChatRuntimeIdentity = {
       provider: 'omniroute',
       model: transport.routeModel ?? 'auto/coding',
       modelLabel: transport.routeModel ?? 'auto/coding',
-      reasoningEffort: 'none'
+      reasoningEffort: transportEffort
     }
     if (generation === runtimeRefreshGenerationRef.current) {
       setModelCatalog(omniRouteModels)
       setOrchestratorBinding({
         provider: 'omniroute',
         model: transport.routeModel ?? 'auto/coding',
-        reasoningEffort: 'none'
+        reasoningEffort: transportEffort
       })
       setModelCatalogLoaded(true)
       setRuntimeIdentity(resolved)
@@ -489,7 +521,7 @@ export function ChatView({
       if (option.provider !== 'omniroute') {
         throw new Error('Seules les routes OmniRoute peuvent être sélectionnées dans le chat')
       }
-      await window.api.activateOmniRoute(option.model)
+      await window.api.activateOmniRoute(option.model, option.reasoningEffort)
       await refreshRuntimeIdentity()
     } catch (error) {
       setModelChangeError(

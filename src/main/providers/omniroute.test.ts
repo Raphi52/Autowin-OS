@@ -89,6 +89,30 @@ describe('OmniRouteAdapter', () => {
     expect(body.messages[0]).toEqual({ role: 'system', content: 'SOUL' })
   })
 
+  it('transmet reasoning_effort quand un palier est choisi, et l’omet pour le défaut', async () => {
+    const bodies: Array<Record<string, unknown>> = []
+    const fetchFn = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)))
+      return sseResponse(['data: {"choices":[{"delta":{"content":"ok"}}]}\n\n', 'data: [DONE]\n\n'])
+    })
+    const adapter = new OmniRouteAdapter({
+      fetchFn: fetchFn as typeof fetch,
+      credentialStore: { get: () => 'k' },
+      requestId: () => 'r'
+    })
+    const drain = async (opts: Parameters<OmniRouteAdapter['send']>[1]): Promise<void> => {
+      const generator = adapter.send(messages, opts)
+      let step = await generator.next()
+      while (!step.done) step = await generator.next()
+    }
+    await drain({ model: 'cc/claude-fable-5', reasoningEffort: 'high' })
+    await drain({ model: 'cc/claude-fable-5', reasoningEffort: 'none' })
+    await drain({ model: 'cc/claude-fable-5' })
+    expect(bodies[0].reasoning_effort).toBe('high')
+    expect(bodies[1]).not.toHaveProperty('reasoning_effort') // 'none' = défaut modèle
+    expect(bodies[2]).not.toHaveProperty('reasoning_effort')
+  })
+
   it('reports missing auth without calling the endpoint or leaking remote details', async () => {
     const fetchFn = vi.fn()
     const adapter = new OmniRouteAdapter({

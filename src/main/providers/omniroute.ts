@@ -125,7 +125,11 @@ export class OmniRouteAdapter implements ProviderAdapter {
           .map((message) => ({ role: message.role, content: openAIContent(message) }))
       ],
       stream: true,
-      stream_options: { include_usage: true }
+      stream_options: { include_usage: true },
+      // Effort de raisonnement (champ OpenAI-compatible). 'none' = défaut du modèle → on n'envoie rien.
+      ...(opts.reasoningEffort && opts.reasoningEffort !== 'none'
+        ? { reasoning_effort: opts.reasoningEffort }
+        : {})
     }
     opts.observePrompt?.(this.describePrompt(messages, opts, model))
 

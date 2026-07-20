@@ -149,18 +149,40 @@ export function RouterView({ active }: { active: boolean }): React.JSX.Element {
         </div>
       </header>
       <div className="router-scroll">
-        <section className="router-migration surface-page">
-          <div>
-            <span className="router-kicker">Transport des conversations</span>
-            <h2>OmniRoute obligatoire</h2>
+        <div className="router-grid">
+          <section className="router-hero surface-card">
+            <div className="router-hero-head">
+              <span className={`router-status-dot is-${status}`} />
+              <span className="router-kicker">Instance locale</span>
+            </div>
+            <h2>{statusLabel(status)}</h2>
+            <p className="router-endpoint">{snapshot?.endpoint ?? 'http://127.0.0.1:20128'}</p>
+            <div className="router-metrics">
+              <div>
+                <strong>{snapshot?.version ?? '—'}</strong>
+                <span>Version</span>
+              </div>
+              <div>
+                <strong>{snapshot?.connectionCount ?? '—'}</strong>
+                <span>Comptes</span>
+              </div>
+              <div>
+                <strong>{snapshot?.availableConnectionCount ?? '—'}</strong>
+                <span>Disponibles</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="router-route surface-card">
+            <span className="router-kicker">Route active</span>
+            <h2 className="router-route-current">
+              {migration?.routeModel ?? 'Aucune route configurée'}
+            </h2>
             <p>
-              Toutes les conversations passent exclusivement par{' '}
-              {migration?.routeModel ?? 'la route OmniRoute configurée'}. Aucun transport direct
-              Claude, Codex ou Kimi n’est autorisé.
+              Transport EXCLUSIF des conversations. Le provider final et les fallbacks restent gérés
+              dans OmniRoute — aucun chemin direct Claude/Codex/Kimi.
             </p>
-          </div>
-          <div className="router-migration-controls">
-            <label>
+            <label className="router-field">
               <span>Gateway token</span>
               <input
                 type="password"
@@ -177,7 +199,7 @@ export function RouterView({ active }: { active: boolean }): React.JSX.Element {
                 autoComplete="off"
               />
             </label>
-            <div className="router-migration-row">
+            <div className="router-route-actions">
               <button
                 type="button"
                 disabled={actionBusy || (!credential && !migration?.credentialConfigured)}
@@ -231,35 +253,11 @@ export function RouterView({ active }: { active: boolean }): React.JSX.Element {
                 Catalogue vérifié · {routeTest.models.length} routes
               </p>
             )}
-          </div>
-        </section>
-        <section className="router-hero surface-page">
-          <div>
-            <span className={`router-status-dot is-${status}`} />
-            <span className="router-kicker">Instance locale</span>
-            <h2>{statusLabel(status)}</h2>
-            <p>{snapshot?.endpoint ?? 'http://127.0.0.1:20128'}</p>
-          </div>
-          <div className="router-metrics">
-            <div>
-              <strong>{snapshot?.version ?? '—'}</strong>
-              <span>Version</span>
-            </div>
-            <div>
-              <strong>{snapshot?.connectionCount ?? '—'}</strong>
-              <span>Comptes</span>
-            </div>
-            <div>
-              <strong>{snapshot?.availableConnectionCount ?? '—'}</strong>
-              <span>Disponibles</span>
-            </div>
-          </div>
-        </section>
+          </section>
+        </div>
+
         {snapshot && snapshot.sources.length > 0 && (
-          <section
-            className="router-source-strip surface-panel"
-            aria-label="État des sources OmniRoute"
-          >
+          <section className="router-health surface-panel" aria-label="Santé OmniRoute">
             <div className="router-source-list">
               {snapshot.sources.map((source) => (
                 <span className={`router-source is-${source.status}`} key={source.id}>
@@ -268,19 +266,23 @@ export function RouterView({ active }: { active: boolean }): React.JSX.Element {
                 </span>
               ))}
             </div>
-            {snapshot.protections ? (
-              <div className="router-protection-list">
-                <span>{snapshot.protections.circuitBreakers ?? '—'} circuits ouverts</span>
-                <span>{snapshot.protections.lockouts ?? '—'} verrouillages</span>
-                <span>{snapshot.protections.quotaAlerts ?? '—'} alertes quota</span>
+            <div className="router-stat-tiles">
+              <div className="router-stat">
+                <strong>{snapshot.protections?.circuitBreakers ?? '—'}</strong>
+                <span>Circuits ouverts</span>
               </div>
-            ) : (
-              <div className="router-protection-list">
-                <span>Protections indisponibles</span>
+              <div className="router-stat">
+                <strong>{snapshot.protections?.lockouts ?? '—'}</strong>
+                <span>Verrouillages</span>
               </div>
-            )}
+              <div className="router-stat">
+                <strong>{snapshot.protections?.quotaAlerts ?? '—'}</strong>
+                <span>Alertes quota</span>
+              </div>
+            </div>
           </section>
         )}
+
         {!snapshot || snapshot.status === 'unavailable' ? (
           <section className="router-empty surface-panel">
             <div className="router-orbit" aria-hidden="true">
@@ -315,14 +317,6 @@ export function RouterView({ active }: { active: boolean }): React.JSX.Element {
             )}
           </>
         )}
-        <section className="router-boundary surface-panel">
-          <span>État du raccordement</span>
-          <strong>OmniRoute exclusif · {migration?.routeModel ?? 'auto/coding'}</strong>
-          <p>
-            Le provider final et les fallbacks restent gérés à l’intérieur d’OmniRoute. Autowin ne
-            possède aucun chemin conversationnel direct.
-          </p>
-        </section>
       </div>
     </section>
   )

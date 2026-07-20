@@ -7,7 +7,7 @@ import {
 import './ChatView.css'
 
 const EFFORT_LABELS: Record<string, string> = {
-  none: 'Auto',
+  none: 'Défaut',
   minimal: 'Minimal',
   low: 'Léger',
   medium: 'Moyen',
@@ -127,7 +127,7 @@ export function OrchestratorModelSelector({
                                 onSelect({ ...option, reasoningEffort: effort })
                               }}
                             >
-                              <span>{effort === 'none' ? 'Auto' : effort}</span>
+                              <span>{effort === 'none' ? 'Défaut' : effort}</span>
                               {effortActive && <i>✓</i>}
                             </button>
                           )

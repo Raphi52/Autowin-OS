@@ -31,6 +31,21 @@ describe('OmniRoute transport state', () => {
     expect(JSON.parse(readFileSync(path, 'utf8')).mode).toBe('omniroute')
   })
 
+  it('persiste l’effort de raisonnement, le conserve et le valide', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-omniroute-migration-'))
+    roots.push(root)
+    const path = join(root, 'migration.json')
+    let clock = 0
+    const store = new OmniRouteMigrationStore(path, () => `2026-07-20T10:00:0${clock++}.000Z`)
+    // Effort explicite persisté + relu.
+    expect(store.activate('cc/claude-fable-5', 'high').reasoningEffort).toBe('high')
+    expect(new OmniRouteMigrationStore(path).load().reasoningEffort).toBe('high')
+    // Changer de route sans repréciser l'effort le CONSERVE.
+    expect(store.activate('cc/claude-opus-4-8').reasoningEffort).toBe('high')
+    // Effort invalide rejeté.
+    expect(() => store.activate('cc/claude-fable-5', 'turbo')).toThrow(/effort/i)
+  })
+
   it('fails closed on invalid route models and corrupted persisted state', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-omniroute-migration-'))
     roots.push(root)

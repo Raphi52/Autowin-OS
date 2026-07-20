@@ -253,7 +253,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('.conv-pick')
 
     const inspectButtons = [...container.querySelectorAll('button')].filter(
-      (button) => button.textContent === 'Inspecter ce tour'
+      (button) => button.getAttribute('aria-label') === 'Inspecter ce tour'
     )
     expect(inspectButtons).toHaveLength(1)
     await act(async () => (inspectButtons[0] as HTMLButtonElement).click())
@@ -334,7 +334,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('.conv-pick')
     const assistantRow = container!.querySelector('.msg.assistant') as HTMLElement
     const forkBtn = [...assistantRow.querySelectorAll('button')].find((b) =>
-      /forker/i.test(b.textContent ?? '')
+      /branche/i.test(b.getAttribute('aria-label') ?? '')
     )
     expect(forkBtn).toBeTruthy()
     await act(async () => (forkBtn as HTMLButtonElement).click())
@@ -376,7 +376,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('.conv-pick')
     const userRow = container!.querySelector('.msg.user') as HTMLElement
     const forkBtn = [...userRow.querySelectorAll('button')].find((b) =>
-      /forker/i.test(b.textContent ?? '')
+      /branche/i.test(b.getAttribute('aria-label') ?? '')
     )
     expect(forkBtn).toBeTruthy()
     await act(async () => (forkBtn as HTMLButtonElement).click())

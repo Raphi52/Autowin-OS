@@ -307,9 +307,13 @@ interface ChatApi {
     models: Array<{ id: string; label: string }>
     reason?: string
   }>
-  activateOmniRoute: (routeModel: string) => Promise<{
+  activateOmniRoute: (
+    routeModel: string,
+    reasoningEffort?: string
+  ) => Promise<{
     mode: 'omniroute'
     routeModel: string
+    reasoningEffort?: string
     credentialConfigured: true
   }>
   openOmniRouteDashboard: () => Promise<void>

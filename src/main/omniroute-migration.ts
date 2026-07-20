@@ -4,11 +4,14 @@ import { dirname } from 'node:path'
 const SCHEMA = 'autowin.omniroute-migration/v1'
 const MAX_STATE_BYTES = 512 * 1024
 const ROUTE_MODEL = /^[a-z0-9][a-z0-9._:/-]{0,119}$/i
+const EFFORT = new Set(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'])
 
 export type OmniRouteMigrationState = {
   schema: typeof SCHEMA
   mode: 'omniroute'
   routeModel: string
+  /** Effort de raisonnement choisi pour la route ('none' = défaut modèle). Optionnel (legacy). */
+  reasoningEffort?: string
   updatedAt: string
 }
 
@@ -25,6 +28,11 @@ function isState(value: unknown): value is OmniRouteMigrationState {
   const state = value as Record<string, unknown>
   if (state.schema !== SCHEMA || state.mode !== 'omniroute') return false
   if (typeof state.updatedAt !== 'string' || !Number.isFinite(Date.parse(state.updatedAt)))
+    return false
+  if (
+    state.reasoningEffort !== undefined &&
+    !(typeof state.reasoningEffort === 'string' && EFFORT.has(state.reasoningEffort))
+  )
     return false
   return typeof state.routeModel === 'string' && ROUTE_MODEL.test(state.routeModel)
 }
@@ -46,14 +54,19 @@ export class OmniRouteMigrationStore {
     }
   }
 
-  activate(routeModel: string): OmniRouteMigrationState {
+  activate(routeModel: string, reasoningEffort?: string): OmniRouteMigrationState {
     if (!ROUTE_MODEL.test(routeModel)) throw new Error('Route OmniRoute invalide')
+    if (reasoningEffort !== undefined && !EFFORT.has(reasoningEffort))
+      throw new Error('Effort de raisonnement invalide')
     const current = this.load()
-    if (current.routeModel === routeModel) return current
+    // Effort conservé si non précisé cette fois-ci.
+    const effort = reasoningEffort ?? current.reasoningEffort
+    if (current.routeModel === routeModel && current.reasoningEffort === effort) return current
     const next: OmniRouteMigrationState = {
       schema: SCHEMA,
       mode: 'omniroute',
       routeModel,
+      ...(effort ? { reasoningEffort: effort } : {}),
       updatedAt: this.now()
     }
     this.write(next)

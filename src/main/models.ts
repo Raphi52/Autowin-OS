@@ -353,7 +353,6 @@ export async function discoverImportedModels(
   }
 }
 
-
 /** Retrouve un modèle importé par son id canonique. */
 export function findModel(models: ImportedModel[], id: string): ImportedModel | undefined {
   return models.find((m) => m.id === id)

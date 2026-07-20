@@ -126,7 +126,8 @@ const omniRouteMigration = new OmniRouteMigrationStore(
 const startupTransport = omniRouteMigration.load()
 os.registry.setConversationTransport({
   provider: 'omniroute',
-  model: startupTransport.routeModel
+  model: startupTransport.routeModel,
+  reasoningEffort: startupTransport.reasoningEffort
 })
 const brainWorker = new BrainWorkerClient(join(__dirname, 'brain-worker.js'))
 // Conversations persistées sur disque : rechargées au démarrage, sauvées à chaque mutation.
@@ -376,6 +377,7 @@ function registerChatIpc(): void {
     return {
       mode: 'omniroute' as const,
       routeModel: state.routeModel,
+      reasoningEffort: state.reasoningEffort,
       credentialConfigured: Boolean(os.omniRouteCredentialStore.get())
     }
   })
@@ -401,21 +403,34 @@ function registerChatIpc(): void {
           : 'OmniRoute inaccessible, credential refusé ou catalogue invalide'
     }
   })
-  ipcMain.handle('router:activate', async (event, routeModel: unknown) => {
-    assertTrustedRendererSender(event, 'Router')
-    const route = guardString(routeModel, 'router.routeModel')
-    const models = await discoverOmniRouteModels(fetch, os.omniRouteCredentialStore)
-    if (!models.some((model) => model.model === route)) {
-      throw new Error('Route non confirmée par le catalogue OmniRoute')
+  ipcMain.handle(
+    'router:activate',
+    async (event, routeModel: unknown, reasoningEffort?: unknown) => {
+      assertTrustedRendererSender(event, 'Router')
+      const route = guardString(routeModel, 'router.routeModel')
+      const effort =
+        reasoningEffort === undefined || reasoningEffort === null
+          ? undefined
+          : guardString(reasoningEffort, 'router.reasoningEffort')
+      const models = await discoverOmniRouteModels(fetch, os.omniRouteCredentialStore)
+      if (!models.some((model) => model.model === route)) {
+        throw new Error('Route non confirmée par le catalogue OmniRoute')
+      }
+      const state = omniRouteMigration.activate(route, effort)
+      os.registry.setConversationTransport({
+        provider: 'omniroute',
+        model: state.routeModel,
+        reasoningEffort: state.reasoningEffort
+      })
+      broadcast({ type: 'refresh', scope: 'roles' })
+      return {
+        mode: 'omniroute',
+        routeModel: route,
+        reasoningEffort: state.reasoningEffort,
+        credentialConfigured: true
+      }
     }
-    const state = omniRouteMigration.activate(route)
-    os.registry.setConversationTransport({
-      provider: 'omniroute',
-      model: state.routeModel
-    })
-    broadcast({ type: 'refresh', scope: 'roles' })
-    return { mode: 'omniroute', routeModel: route, credentialConfigured: true }
-  })
+  )
   ipcMain.handle('router:open-dashboard', async (event) => {
     assertTrustedRendererSender(event, 'Router')
     await shell.openExternal(omniRouteDashboardUrl)
@@ -516,8 +531,12 @@ function registerChatIpc(): void {
       [Role, import('./roles').RoleBinding]
     >)
       os.setRole(role, binding)
-    omniRouteMigration.activate(validatedRoute)
-    os.registry.setConversationTransport({ provider: 'omniroute', model: validatedRoute })
+    const migratedState = omniRouteMigration.activate(validatedRoute)
+    os.registry.setConversationTransport({
+      provider: 'omniroute',
+      model: validatedRoute,
+      reasoningEffort: migratedState.reasoningEffort
+    })
     broadcast({ type: 'refresh', scope: 'roles' })
     return profile
   })

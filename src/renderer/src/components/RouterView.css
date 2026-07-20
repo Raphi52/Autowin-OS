@@ -6,6 +6,11 @@
   flex-direction: column;
   padding: 28px 30px 24px;
   color: var(--text);
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-page);
+  background: var(--surface-page);
+  box-shadow: var(--container-shadow);
+  backdrop-filter: blur(var(--container-blur));
 }
 .router-head {
   min-height: 54px;
@@ -54,40 +59,47 @@
   gap: 18px;
   padding-right: 4px;
 }
-.router-migration {
+/* Haut de vue : statut + contrôle de route côte à côte (grille dense type Models). */
+.router-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.85fr) minmax(360px, 1.15fr);
+  gap: 18px;
+  align-items: stretch;
+}
+.router-route {
   padding: 20px 22px;
   display: grid;
-  grid-template-columns: minmax(240px, 0.7fr) minmax(430px, 1.3fr);
-  gap: 24px;
+  gap: 10px;
+  align-content: start;
 }
-.router-migration h2 {
-  margin: 8px 0 6px;
-  font-size: 18px;
+.router-route h2.router-route-current {
+  margin: 6px 0 2px;
+  font-family: var(--display);
+  font-size: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.router-migration p {
-  margin: 0;
+.router-route p {
+  margin: 0 0 4px;
   color: var(--text-muted);
   font-size: 11px;
   line-height: 1.5;
 }
-.router-migration-controls {
-  display: grid;
-  gap: 10px;
-}
-.router-migration-controls label {
+.router-field {
   display: grid;
   gap: 5px;
 }
-.router-migration-controls label > span {
+.router-field > span {
   color: var(--text-faint);
   font-size: 9px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.12em;
 }
-.router-migration input,
-.router-migration select,
-.router-migration button {
+.router-route input,
+.router-route select,
+.router-route button {
   min-height: 36px;
   border: 1px solid var(--container-border);
   border-radius: 9px;
@@ -95,24 +107,28 @@
   color: var(--text);
   padding: 0 11px;
 }
-.router-migration input {
+.router-route input {
   width: 100%;
   box-sizing: border-box;
 }
-.router-migration-row {
+.router-route-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
-.router-migration button {
+.router-route-actions select {
+  flex: 1;
+  min-width: 150px;
+}
+.router-route button {
   cursor: pointer;
   font-weight: 700;
 }
-.router-migration button.is-primary {
+.router-route button.is-primary {
   border-color: rgba(95, 241, 178, 0.45);
   color: #7ff4c3;
 }
-.router-migration button:disabled {
+.router-route button:disabled {
   opacity: 0.42;
   cursor: not-allowed;
 }
@@ -123,12 +139,14 @@
   color: #7ff4c3 !important;
 }
 .router-hero {
-  min-height: 128px;
   padding: 22px 24px;
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+.router-hero-head {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 28px;
 }
 .router-status-dot {
   display: inline-block;
@@ -148,8 +166,7 @@
   box-shadow: 0 0 0 4px rgba(255, 199, 102, 0.12);
 }
 .router-kicker,
-.router-section-title span,
-.router-boundary > span {
+.router-section-title span {
   color: var(--text-faint);
   font-size: 9px;
   font-weight: 800;
@@ -157,27 +174,34 @@
   text-transform: uppercase;
 }
 .router-hero h2 {
-  margin: 9px 0 5px;
+  margin: 9px 0 3px;
   font-family: var(--display);
   font-size: 24px;
 }
 .router-hero p,
-.router-boundary p,
 .router-empty p {
   margin: 0;
   color: var(--text-muted);
   font-size: 12px;
 }
+.router-endpoint {
+  font-family: var(--mono, monospace);
+  font-size: 11px !important;
+}
 .router-metrics {
+  margin-top: 16px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(90px, 1fr));
-  min-width: 330px;
+  grid-template-columns: repeat(3, 1fr);
 }
 .router-metrics > div {
   display: grid;
-  gap: 5px;
-  padding: 7px 20px;
+  gap: 4px;
+  padding: 4px 0 4px 16px;
   border-left: 1px solid var(--container-border);
+}
+.router-metrics > div:first-child {
+  padding-left: 0;
+  border-left: none;
 }
 .router-metrics strong {
   font-family: var(--display);
@@ -193,26 +217,45 @@
   align-items: end;
   padding: 4px 3px 0;
 }
-.router-source-strip {
-  padding: 11px 14px;
+.router-health {
+  padding: 14px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 18px;
+  flex-wrap: wrap;
 }
-.router-source-list,
-.router-protection-list {
+.router-source-list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
-.router-source,
-.router-protection-list span {
+.router-source {
   border: 1px solid var(--container-border);
   border-radius: 999px;
-  padding: 5px 8px;
+  padding: 5px 10px;
   color: var(--text-muted);
+  font-size: 10px;
+}
+.router-stat-tiles {
+  display: flex;
+  gap: 22px;
+  margin-left: auto;
+}
+.router-stat {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+.router-stat strong {
+  font-family: var(--display);
+  font-size: 18px;
+}
+.router-stat span {
+  color: var(--text-faint);
   font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 .router-source i {
   display: inline-block;
@@ -365,30 +408,14 @@
   color: var(--text-muted);
   font-size: 12px;
 }
-.router-boundary {
-  padding: 15px 18px;
-  display: grid;
-  grid-template-columns: minmax(130px, 0.35fr) minmax(260px, 0.65fr) 1fr;
-  gap: 16px;
-  align-items: center;
-}
-.router-boundary strong {
-  font-size: 11px;
-  color: #ffc766;
-}
-@media (max-width: 900px) {
-  .router-migration {
+@media (max-width: 980px) {
+  .router-grid {
     grid-template-columns: 1fr;
   }
-  .router-hero {
-    align-items: stretch;
-    flex-direction: column;
+  .router-health {
+    align-items: flex-start;
   }
-  .router-metrics {
-    min-width: 0;
-  }
-  .router-boundary {
-    grid-template-columns: 1fr;
-    gap: 6px;
+  .router-stat-tiles {
+    margin-left: 0;
   }
 }

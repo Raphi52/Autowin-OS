@@ -26,8 +26,8 @@ const api = {
     ipcRenderer.invoke('router:set-credential', credential),
   deleteOmniRouteCredential: (): Promise<unknown> => ipcRenderer.invoke('router:delete-credential'),
   testOmniRoute: (): Promise<unknown> => ipcRenderer.invoke('router:test-route'),
-  activateOmniRoute: (routeModel: string): Promise<unknown> =>
-    ipcRenderer.invoke('router:activate', routeModel),
+  activateOmniRoute: (routeModel: string, reasoningEffort?: string): Promise<unknown> =>
+    ipcRenderer.invoke('router:activate', routeModel, reasoningEffort),
   openOmniRouteDashboard: (): Promise<void> => ipcRenderer.invoke('router:open-dashboard'),
   send: (
     provider: string | undefined,
