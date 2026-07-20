@@ -1329,20 +1329,18 @@ export function GraphView({
                   Augmentez cette valeur pour étaler le Brain et distinguer les relations.
                 </p>
               </SettingsSection>
-              <SettingsSection title="Densité">
-                <div className="lod-presets">
-                  {[100, 300, 600].map((lod) => (
-                    <button
-                      key={lod}
-                      className={settings.lod === lod ? 'is-active' : ''}
-                      onClick={() => patchSettings({ lod })}
-                    >
-                      {lod}
-                    </button>
-                  ))}
-                </div>
+              <SettingsSection title="Nombre de nœuds">
+                <RangeRow
+                  label="Nœuds affichés"
+                  value={settings.lod}
+                  min={100}
+                  max={10_000}
+                  step={100}
+                  display={settings.lod.toLocaleString('fr-FR')}
+                  onChange={(lod) => patchSettings({ lod })}
+                />
                 <p className="setting-help">
-                  Le LOD recharge les nœuds les plus connectés du graphe.
+                  Affiche en priorité les nœuds les plus connectés du graphe.
                 </p>
               </SettingsSection>
             </div>
