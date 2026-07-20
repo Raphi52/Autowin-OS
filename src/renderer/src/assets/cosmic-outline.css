@@ -396,6 +396,12 @@
   box-shadow: none;
 }
 
+.cosmic-outline .composer-send.is-stop {
+  border-color: rgba(255, 103, 126, 0.82);
+  background: rgba(142, 29, 50, 0.88);
+  color: #fff;
+}
+
 /* Chat Orbital : conversation d'abord, technique en divulgation progressive. */
 .cosmic-outline .chat-layout {
   position: relative;

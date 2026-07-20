@@ -43,4 +43,15 @@ describe('navigation pendant une reponse', () => {
       fresh!.indexOf('setActiveId(null)')
     )
   })
+
+  it('transforme le bouton principal en vrai Stop pendant la reflexion', () => {
+    const composerButton = source.match(
+      /<button\s+className=\{`btn-accent btn composer-send[\s\S]*?<\/button>/
+    )?.[0]
+
+    expect(composerButton).toBeDefined()
+    expect(composerButton).toContain("window.api.cancelPilotChat(activeId)")
+    expect(composerButton).toContain("busy ? '■ Stop' : 'Envoyer'")
+    expect(composerButton).not.toContain('disabled={busy ||')
+  })
 })

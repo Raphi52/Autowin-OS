@@ -911,7 +911,19 @@ function registerChatIpc(): void {
             controller.signal
           )
         } else if (delayedPilotFixture) {
-          await new Promise((resolve) => setTimeout(resolve, 600))
+          await new Promise<void>((resolve, reject) => {
+            const finish = (): void => {
+              controller.signal.removeEventListener('abort', cancel)
+              resolve()
+            }
+            const cancel = (): void => {
+              clearTimeout(timeout)
+              reject(new Error('aborted'))
+            }
+            const timeout = setTimeout(finish, 600)
+            if (controller.signal.aborted) cancel()
+            else controller.signal.addEventListener('abort', cancel, { once: true })
+          })
           const fixtureEvents = [
             { kind: 'think', text: 'événement tardif correctement routé' },
             { kind: 'command', name: 'get_state', args: { target: 'late-conversation' } },

@@ -947,14 +947,6 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
             </div>
           </div>
           <div className="row gap2">
-            {busy && activeId && (
-              <button
-                className="btn btn-sm"
-                onClick={() => void window.api.cancelPilotChat(activeId)}
-              >
-                Arrêter
-              </button>
-            )}
             {decisions.length > 0 && (
               <button
                 className={`btn btn-sm${showDecisions ? ' btn-accent' : ''}`}
@@ -1215,11 +1207,14 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
                 disabled={busy && activeId !== null}
               />
               <button
-                className="btn-accent btn composer-send"
-                onClick={() => send()}
-                disabled={busy || (!input.trim() && attachments.length === 0)}
+                className={`btn-accent btn composer-send${busy ? ' is-stop' : ''}`}
+                onClick={() =>
+                  busy && activeId ? void window.api.cancelPilotChat(activeId) : send()
+                }
+                disabled={busy ? !activeId : !input.trim() && attachments.length === 0}
+                aria-label={busy ? 'Arrêter la réponse' : 'Envoyer le message'}
               >
-                {busy ? <span className="spinner" /> : 'Envoyer'}
+                {busy ? '■ Stop' : 'Envoyer'}
               </button>
             </div>
             <div className="composer-meta">
