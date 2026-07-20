@@ -267,47 +267,6 @@
   color: inherit;
   cursor: pointer;
 }
-.observatory-config {
-  position: absolute;
-  z-index: 20;
-  inset: 72px 24px 24px 210px;
-  padding: 18px 18px 18px;
-  overflow: auto;
-  border: 1px solid rgba(89, 220, 255, 0.36);
-  border-radius: 12px;
-  background: var(--surface-page);
-  box-shadow: var(--container-shadow);
-}
-.observatory-config-close {
-  position: sticky;
-  top: 0;
-  float: right;
-  z-index: 1;
-  width: 30px;
-  height: 30px;
-  margin: -4px -4px 0 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--line-strong);
-  border-radius: 8px;
-  background: var(--surface-card);
-  color: var(--text-dim);
-  font-size: 15px;
-  cursor: pointer;
-}
-.observatory-config-close:hover {
-  color: var(--text);
-  border-color: var(--cyan);
-}
-.observatory-config .prompt-load-header,
-.observatory-config .prompt-observatory {
-  display: none;
-}
-.observatory-config .prompt-load {
-  min-height: auto;
-  padding: 0;
-}
 .observatory-flightdeck {
   min-height: 0;
   flex: 1;
@@ -723,9 +682,6 @@
   .observatory-event {
     grid-template-columns: 34px 92px minmax(150px, 1fr) 125px;
   }
-  .observatory-config {
-    left: 70px;
-  }
 }
 @media (max-width: 820px) {
   .observatory-head {
@@ -750,8 +706,5 @@
     border-left: 0;
     border-top: 1px solid var(--line);
     padding: 6px 0 0;
-  }
-  .observatory-config {
-    inset: 60px 10px 10px;
   }
 }

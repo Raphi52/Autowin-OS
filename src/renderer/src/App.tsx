@@ -173,7 +173,11 @@ export function MainApp(): React.JSX.Element {
         )}
         {visitedTabs.has('observatory') && (
           <div className={`view-slot${tab === 'observatory' ? ' is-active' : ''}`}>
-            <ObservatoryView active={tab === 'observatory'} focus={observatoryFocus} />
+            <ObservatoryView
+              active={tab === 'observatory'}
+              focus={observatoryFocus}
+              onOpenCapabilities={() => navigate('capabilities')}
+            />
           </div>
         )}
         {visitedTabs.has('agents') && (

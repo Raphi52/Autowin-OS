@@ -5,7 +5,6 @@ import {
   type HarnessTimelineEvent,
   type HarnessTimeline
 } from './harness-timeline-model'
-import { PromptLoadView } from './PromptLoadView'
 import { HumanJson } from './HumanJson'
 import { summarizeHermesTraces, type HermesTraceSummaryInput } from './hermes-trace-summary'
 import './ObservatoryView.css'
@@ -65,10 +64,12 @@ const LABEL: Record<HarnessTimelineEvent['kind'], string> = {
 
 export function ObservatoryView({
   active,
-  focus = null
+  focus = null,
+  onOpenCapabilities
 }: {
   active: boolean
   focus?: ObservatoryFocus | null
+  onOpenCapabilities?: () => void
 }): React.JSX.Element {
   const [conversations, setConversations] = useState<ConversationItem[]>([])
   const [conversationId, setConversationId] = useState('')
@@ -82,7 +83,6 @@ export function ObservatoryView({
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [providerFilter, setProviderFilter] = useState('all')
-  const [configOpen, setConfigOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0)
   const [viewMode, setViewMode] = useState<'timeline' | 'causal'>('timeline')
@@ -301,15 +301,6 @@ export function ObservatoryView({
       )
     : timeline.anomalies
 
-  useEffect(() => {
-    if (!configOpen) return
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setConfigOpen(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [configOpen])
-
   function openEvent(eventId: string): void {
     setQuery('')
     setTypeFilter('all')
@@ -403,8 +394,11 @@ export function ObservatoryView({
             <option key={provider}>{provider}</option>
           ))}
         </select>
-        <button onClick={() => setConfigOpen((value) => !value)}>
-          {configOpen ? 'Fermer la configuration' : 'Configuration du prompt'}
+        <button
+          onClick={() => onOpenCapabilities?.()}
+          title="Éditer les capacités injectées dans le prompt (Skills · Hooks · Tools)"
+        >
+          Capacités du prompt →
         </button>
         <div className="observatory-view-switch" aria-label="Mode de visualisation">
           <button
@@ -493,20 +487,6 @@ export function ObservatoryView({
               ))}
           </div>
         </details>
-      )}
-      {configOpen && (
-        <aside className="observatory-config" role="dialog" aria-label="Configuration du prompt">
-          <button
-            type="button"
-            className="observatory-config-close"
-            aria-label="Fermer la configuration"
-            title="Fermer (Échap)"
-            onClick={() => setConfigOpen(false)}
-          >
-            ✕
-          </button>
-          <PromptLoadView active={active && configOpen} />
-        </aside>
       )}
       <div className="observatory-flightdeck">
         <aside className="observatory-rail">
