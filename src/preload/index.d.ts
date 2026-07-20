@@ -286,6 +286,7 @@ interface ChatApi {
     connections: Array<{
       id: string
       provider: string
+      authorityMode?: 'plan' | 'ask' | 'auto'
       label?: string
       email?: string
       authType?: string
@@ -295,7 +296,7 @@ interface ChatApi {
     }>
   }>
   routerMigrationState: () => Promise<{
-    mode: 'direct' | 'omniroute'
+    mode: 'omniroute'
     routeModel?: string
     credentialConfigured: boolean
   }>
@@ -311,10 +312,6 @@ interface ChatApi {
     routeModel: string
     credentialConfigured: true
   }>
-  rollbackOmniRoute: () => Promise<{
-    mode: 'direct'
-    credentialConfigured: boolean
-  }>
   openOmniRouteDashboard: () => Promise<void>
   send: (
     provider: string | undefined,
@@ -327,12 +324,15 @@ interface ChatApi {
     task: string
   ) => Promise<{ ok: boolean; result?: OrchestrationResult; error?: string }>
   onOrchestrateStep: (cb: (step: OrchestrationStep) => void) => () => void
-  roles: () => Promise<Record<string, { provider: string; model?: string }>>
+  roles: () => Promise<
+    Record<string, { provider: string; model?: string; reasoningEffort?: string }>
+  >
   setRole: (
     role: string,
     provider: string,
-    model?: string
-  ) => Promise<Record<string, { provider: string; model?: string }>>
+    model?: string,
+    reasoningEffort?: string
+  ) => Promise<Record<string, { provider: string; model?: string; reasoningEffort?: string }>>
   models: () => Promise<ImportedModel[]>
   profiles: () => Promise<
     Array<{
@@ -448,6 +448,7 @@ interface ChatApi {
     provider: string
   }>
   conversationsRename: (id: string, title: string) => Promise<unknown>
+  conversationsSetAuthorityMode: (id: string, mode: 'plan' | 'ask' | 'auto') => Promise<unknown>
   conversationsRemove: (id: string) => Promise<boolean>
   openFolder: (path: string) => Promise<void>
   appState: () => Promise<unknown>

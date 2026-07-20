@@ -107,6 +107,20 @@ describe('ConversationStore', () => {
     expect(store.get(conv.id)?.title).toBe('Nouveau titre')
   })
 
+  it('change et persiste le mode d’autorité de la conversation', () => {
+    const store = new ConversationStore(makeClock())
+    const conv = store.create({ title: 'A', category: 'codex', provider: 'codex' })
+    let persisted = 0
+    store.onChange = () => {
+      persisted += 1
+    }
+
+    store.setAuthorityMode(conv.id, 'plan')
+
+    expect(store.get(conv.id)?.authorityMode).toBe('plan')
+    expect(persisted).toBe(1)
+  })
+
   it("remove supprime la conversation et retourne true/false selon l'existence", () => {
     const store = new ConversationStore(makeClock())
     const conv = store.create({ title: 'A', category: 'hermes', provider: 'p' })

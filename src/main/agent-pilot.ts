@@ -115,6 +115,7 @@ export class AgentPilot {
     const system =
       `Tu PILOTES l'application "Autowin OS" via des commandes. Objectif de l'utilisateur : "${goal}".\n` +
       `Pour agir, émets une ou plusieurs commandes AU FORMAT EXACT : <cmd>{"name":"...","args":{...}}</cmd>.\n` +
+      `Tu peux faire modifier le code du workspace par la commande orchestrate. Ne dis jamais que tu ne peux pas modifier le code lorsque cette commande est disponible : utilise-la avec la demande complète de l'utilisateur.\n` +
       `Commandes disponibles :\n` +
       catalog
         .map((c) => `- ${c.name}(${Object.keys(c.args).join(', ')}) : ${c.description}`)
@@ -201,6 +202,7 @@ export class AgentPilot {
       `Pour agir sur l'app, émets une ou plusieurs commandes AU FORMAT EXACT : ` +
       `<cmd>{"name":"...","args":{...}}</cmd>. Tout texte HORS commande est ta réponse parlée à ` +
       `l'utilisateur (il la voit dans le chat). L'UI se met à jour EN DIRECT quand tu agis.\n` +
+      `Tu peux faire modifier le code du workspace par la commande orchestrate. Ne dis jamais que tu ne peux pas modifier le code lorsque cette commande est disponible : utilise-la avec la demande complète de l'utilisateur.\n` +
       `Commandes disponibles :\n` +
       catalog
         .map((c) => `- ${c.name}(${Object.keys(c.args).join(', ')}) : ${c.description}`)

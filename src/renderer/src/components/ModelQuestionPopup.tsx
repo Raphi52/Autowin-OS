@@ -30,6 +30,18 @@ export function ModelQuestionPopup(): React.JSX.Element | null {
     if (current) requestAnimationFrame(() => inputRef.current?.focus())
   }, [current])
 
+  // Échappatoire : Escape ferme la fenêtre de question ; le main la résout
+  // gracieusement ('attend pour l’instant') sur l'événement 'closed', ce qui
+  // débloque le tour sans forcer l'utilisateur à répondre.
+  useEffect(() => {
+    if (!current) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') window.close()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [current])
+
   if (!current) return null
 
   async function submit(value = answer): Promise<void> {
@@ -80,10 +92,20 @@ export function ModelQuestionPopup(): React.JSX.Element | null {
           />
         </label>
         <footer>
-          <small>Ctrl + Entrée pour envoyer</small>
-          <button disabled={!answer.trim() || sending} onClick={() => void submit()}>
-            {sending ? 'Transmission…' : 'Répondre et reprendre'}
-          </button>
+          <small>Ctrl + Entrée pour envoyer · Échap pour passer</small>
+          <div className="model-question-actions">
+            <button
+              type="button"
+              className="model-question-skip"
+              disabled={sending}
+              onClick={() => window.close()}
+            >
+              Passer
+            </button>
+            <button disabled={!answer.trim() || sending} onClick={() => void submit()}>
+              {sending ? 'Transmission…' : 'Répondre et reprendre'}
+            </button>
+          </div>
         </footer>
       </section>
     </div>

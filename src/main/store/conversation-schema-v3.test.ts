@@ -25,7 +25,8 @@ describe('conversation schema v3', () => {
       schemaVersion: 3,
       rootBranchId: 'branch-conv-7-root',
       activeBranchId: 'branch-conv-7-root',
-      workspaceId: 'workspace-conv-7'
+      workspaceId: 'workspace-conv-7',
+      authorityMode: 'auto'
     })
     expect(migrated.branches).toEqual([
       { id: 'branch-conv-7-root', createdAt: 9 }
@@ -52,6 +53,7 @@ describe('conversation schema v3', () => {
     store.beginTurn(conversation.id, { content: 'Go' }, { turnId: 'turn-new' })
 
     expect(conversation.schemaVersion).toBe(3)
+    expect(conversation.authorityMode).toBe('auto')
     expect(conversation.branches).toHaveLength(1)
     expect(conversation.messages[0]).toMatchObject({
       messageId: 'message-conv-1-1',

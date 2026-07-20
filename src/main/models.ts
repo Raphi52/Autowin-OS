@@ -101,6 +101,64 @@ interface OmniRouteCredentialReader {
   get(): string | null
 }
 
+const OMNIROUTE_ROUTE_LABELS: Record<string, string> = {
+  auto: 'Sélection automatique',
+  'auto/coding': 'Automatique · Code',
+  'auto/reasoning': 'Automatique · Raisonnement',
+  'auto/best-coding': 'Meilleur modèle · Code',
+  'auto/best-reasoning': 'Meilleur modèle · Raisonnement',
+  'auto/cheap': 'Économique · Automatique',
+  'custom:priority-chain': 'Chaîne prioritaire personnalisée'
+}
+
+/** Libellé humain uniquement ; l'identifiant de transport reste strictement inchangé. */
+export function labelOmniRouteModel(id: string): string {
+  const known = OMNIROUTE_ROUTE_LABELS[id]
+  if (known) return known
+  let cleanId = id
+  let suffix = ''
+  if (cleanId.startsWith('no-think/')) {
+    cleanId = cleanId.slice('no-think/'.length)
+    suffix = ' · Sans raisonnement'
+  }
+  cleanId = cleanId.replace(
+    /^(?:cc|claude|cx|codex|aug|ddgw|oc|tllm|veo|veoaifree|mcode)\//i,
+    ''
+  )
+  if (cleanId.startsWith('claude-')) {
+    return `${labelClaudeModel(cleanId).replace(/ · CLI$/, '')}${suffix}`
+  }
+  const claudeAlternate = /^claude[_-](\d+)[_.-](\d+)[_-](opus|sonnet|haiku)$/i.exec(cleanId)
+  if (claudeAlternate) {
+    const [, major, minor, family] = claudeAlternate
+    return `Claude ${family.charAt(0).toUpperCase()}${family.slice(1).toLowerCase()} ${major}.${minor}${suffix}`
+  }
+  const gpt = /^gpt[-_](\d+)(?:[._-](\d+|o))?(?:[-_](.+))?$/i.exec(cleanId)
+  if (gpt) {
+    const detail = gpt[3]
+      ?.split(/[-_/]+/)
+      .map((part) => {
+        const translated: Record<string, string> = {
+          xhigh: 'Très élevé',
+          high: 'Élevé',
+          medium: 'Moyen',
+          low: 'Léger'
+        }
+        return translated[part.toLowerCase()] ?? part.charAt(0).toUpperCase() + part.slice(1)
+      })
+      .join(' · ')
+    const version = `${gpt[1]}${gpt[2] ? `.${gpt[2]}` : ''}`
+    return `GPT-${version}${detail ? ` ${detail}` : ''}${suffix}`
+  }
+  const generic = cleanId
+    .split(/[/:_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+    .replace(/\b(\d+) (\d+)\b/, '$1.$2')
+  return `${generic}${suffix}`
+}
+
 async function readBoundedJson(response: Response, maxBytes = 1024 * 1024): Promise<unknown> {
   const declared = Number(response.headers.get('content-length'))
   if (Number.isFinite(declared) && declared > maxBytes) throw new Error('response-too-large')
@@ -163,7 +221,7 @@ export async function discoverOmniRouteModels(
         id: `omniroute/${id}`,
         provider: 'omniroute',
         model: id,
-        label: `${id} · OmniRoute`,
+        label: labelOmniRouteModel(id),
         reasoningEfforts: ['none'],
         defaultReasoningEffort: 'none'
       }]

@@ -38,12 +38,11 @@ export class ProviderRegistry {
     return a
   }
 
-  setConversationTransport(route: { provider: string; model: string } | null): void {
-    if (route) {
-      this.get(route.provider)
-      if (!route.model.trim()) throw new Error('Modèle de transport vide')
-    }
-    this.conversationTransport = route ? { ...route } : null
+  setConversationTransport(route: { provider: string; model: string }): void {
+    this.get(route.provider)
+    if (route.provider !== 'omniroute') throw new Error('OmniRoute est le seul transport autorisé')
+    if (!route.model.trim()) throw new Error('Modèle de transport vide')
+    this.conversationTransport = { ...route }
   }
 
   getConversationTransport(): { provider: string; model: string } | null {
@@ -51,9 +50,25 @@ export class ProviderRegistry {
   }
 
   private resolve(id: string, opts: SendOptions): { id: string; opts: SendOptions } {
-    if (!this.conversationTransport) return { id, opts }
-    if (opts.execution)
-      throw new Error('Exécution locale refusée tant que le transport OmniRoute est actif')
+    if (opts.execution) {
+      const requested = this.get(id)
+      if (requested.supportsExecution === true) return { id, opts }
+
+      // OmniRoute reste la voie de conversation, mais n'expose pas de terminal local.
+      // Les mutations sont confiées à un runner outillé sans réutiliser son modèle.
+      const localExecutor = [...this.adapters.values()].find(
+        (adapter) => adapter.supportsExecution === true
+      )
+      if (localExecutor) {
+        return {
+          id: localExecutor.id,
+          opts: { ...opts, model: undefined, reasoningEffort: undefined }
+        }
+      }
+      return { id, opts }
+    }
+    if (!this.conversationTransport)
+      throw new Error('OmniRoute obligatoire : aucun transport conversationnel configuré')
     return {
       id: this.conversationTransport.provider,
       opts: { ...opts, model: this.conversationTransport.model }

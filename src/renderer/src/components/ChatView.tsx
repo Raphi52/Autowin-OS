@@ -80,6 +80,7 @@ type Conv = {
   title: string
   category: string
   provider: string
+  authorityMode?: 'plan' | 'ask' | 'auto'
   messages: Array<{
     role: 'user' | 'assistant'
     content: string
@@ -110,7 +111,6 @@ type RunEntry = {
 
 type Decision = { id: string; question: string; options?: unknown[]; safeDefault?: unknown }
 
-type RuntimeTopology = Parameters<typeof resolveChatRuntimeIdentity>[0]
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 
 /** Une étape d'orchestration (sous-agent / juge / gate) — fil des sous-agents. */
@@ -433,6 +433,17 @@ const ChatMessageRow = memo(function ChatMessageRow({
 
 /* ---------- Vue ---------- */
 
+const EFFORT_LABELS: Record<string, string> = {
+  none: 'Auto',
+  minimal: 'Minimal',
+  low: 'Léger',
+  medium: 'Moyen',
+  high: 'Élevé',
+  xhigh: 'Très élevé',
+  max: 'Max',
+  ultra: 'Ultra'
+}
+
 export function OrchestratorModelSelector({
   busy,
   catalogLoaded,
@@ -445,11 +456,13 @@ export function OrchestratorModelSelector({
   busy: boolean
   catalogLoaded: boolean
   models: RuntimeModel[]
-  binding: { provider: string; model?: string } | null
+  binding: { provider: string; model?: string; reasoningEffort?: string } | null
   pending: boolean
   error: string | null
   onSelect: (option: OrchestratorModelOption) => void
 }): React.JSX.Element {
+  const dropdownRef = useRef<HTMLDetailsElement>(null)
+  const [expandedModel, setExpandedModel] = useState<string | null>(null)
   const grouped = useMemo(
     () => buildOrchestratorModelGroups(models, binding ?? undefined),
     [models, binding]
@@ -461,43 +474,100 @@ export function OrchestratorModelSelector({
           (item.model === binding.model || item.id === binding.model)
       )?.model
     : undefined
-  const value = binding?.model
-    ? `${binding.provider}\u0000${currentCatalogModel ?? binding.model}`
-    : ''
+  const currentOption = grouped.groups
+    .flatMap((group) => group.options)
+    .find(
+      (option) =>
+        option.provider === binding?.provider &&
+        option.model === (currentCatalogModel ?? binding?.model)
+    )
+  const disabled = busy || pending || models.length === 0
+  const currentLabel = !catalogLoaded
+    ? 'Chargement des modèles…'
+    : models.length === 0
+      ? 'Aucun modèle disponible'
+      : `OmniRoute · ${grouped.currentMissing?.label ?? currentOption?.label ?? 'Choisir une cible'}`
 
   return (
     <div className="model-select-shell">
-      <label htmlFor="chat-orchestrator-model">Orchestrateur</label>
-      <select
+      <span className="model-select-label">Orchestrateur</span>
+      <details
+        ref={dropdownRef}
         id="chat-orchestrator-model"
         data-testid="chat-orchestrator-model"
         className="model-select"
-        value={value}
-        disabled={busy || pending || models.length === 0}
         aria-describedby="chat-orchestrator-model-help chat-orchestrator-model-status"
-        onChange={(event) => {
-          const [provider, model] = event.currentTarget.value.split('\u0000')
-          const option = grouped.groups
-            .flatMap((group) => group.options)
-            .find((candidate) => candidate.provider === provider && candidate.model === model)
-          if (option) onSelect(option)
+        data-disabled={disabled || undefined}
+        onClick={(event) => {
+          if (disabled) event.preventDefault()
         }}
       >
-        {!catalogLoaded && <option value="">Chargement des modèles…</option>}
-        {catalogLoaded && models.length === 0 && <option value="">Aucun modèle disponible</option>}
-        {grouped.groups.map((group) => (
-          <optgroup key={group.provider} label={group.provider}>
-            {group.options.map((option) => (
-              <option
-                key={`${option.provider}:${option.model}`}
-                value={`${option.provider}\u0000${option.model}`}
-              >
-                {option.label}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
+        <summary aria-disabled={disabled}>
+          <strong>{currentLabel}</strong>
+          {binding?.reasoningEffort && (
+            <em>{EFFORT_LABELS[binding.reasoningEffort] ?? binding.reasoningEffort}</em>
+          )}
+          {pending ? (
+            <i className="model-select-spinner" />
+          ) : (
+            <i className="model-select-chevron" />
+          )}
+        </summary>
+        <div className="model-select-menu" role="listbox" aria-label="Modèle orchestrateur">
+          {grouped.groups.map((group) => (
+            <section key={group.provider} className="model-select-group">
+              <span>{group.provider}</span>
+              {group.options.map((option) => {
+                const optionKey = `${option.provider}:${option.model}`
+                const active =
+                  option.provider === binding?.provider &&
+                  option.model === (currentCatalogModel ?? binding?.model)
+                return (
+                  <div key={optionKey} className="model-select-option">
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      aria-expanded={expandedModel === optionKey}
+                      onClick={() =>
+                        setExpandedModel((current) => (current === optionKey ? null : optionKey))
+                      }
+                    >
+                      <span>
+                        <strong>{option.label}</strong>
+                        <small>{option.model}</small>
+                      </span>
+                      <i className="model-option-chevron">›</i>
+                    </button>
+                    {expandedModel === optionKey && (
+                      <div className="model-effort-menu" aria-label={`Effort pour ${option.label}`}>
+                        {option.reasoningEfforts.map((effort) => {
+                          const effortActive = active && effort === binding?.reasoningEffort
+                          return (
+                            <button
+                              key={effort}
+                              type="button"
+                              className={effortActive ? 'is-active' : ''}
+                              onClick={() => {
+                                dropdownRef.current?.removeAttribute('open')
+                                setExpandedModel(null)
+                                onSelect({ ...option, reasoningEffort: effort })
+                              }}
+                            >
+                              <span>{effort === 'none' ? 'Auto' : effort}</span>
+                              {effortActive && <i>✓</i>}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </section>
+          ))}
+        </div>
+      </details>
       <span id="chat-orchestrator-model-help" className="model-select-help">
         {busy
           ? 'Sélecteur verrouillé pendant le tour en cours de cette conversation.'
@@ -546,6 +616,7 @@ export function ChatView({
   const [orchestratorBinding, setOrchestratorBinding] = useState<{
     provider: string
     model?: string
+    reasoningEffort?: string
   } | null>(null)
   const [modelCatalogLoaded, setModelCatalogLoaded] = useState(false)
   const [modelChangePending, setModelChangePending] = useState(false)
@@ -651,19 +722,31 @@ export function ChatView({
 
   async function refreshRuntimeIdentity(): Promise<ChatRuntimeIdentity> {
     const generation = ++runtimeRefreshGenerationRef.current
-    const [topology, models, roles] = await Promise.all([
-      window.api.topology(),
+    const [models, transport] = await Promise.all([
       window.api.models(),
-      window.api.roles()
+      window.api.routerMigrationState?.() ??
+        Promise.resolve({
+          mode: 'omniroute' as const,
+          routeModel: 'auto/coding',
+          credentialConfigured: false
+        })
     ])
-    const resolved = resolveChatRuntimeIdentity(
-      topology as RuntimeTopology,
-      models as RuntimeModel[],
-      roles.orchestrator
+    const omniRouteModels = (models as RuntimeModel[]).filter(
+      (model) => model.provider === 'omniroute'
     )
+    const resolved: ChatRuntimeIdentity = {
+      provider: 'omniroute',
+      model: transport.routeModel ?? 'auto/coding',
+      modelLabel: transport.routeModel ?? 'auto/coding',
+      reasoningEffort: 'none'
+    }
     if (generation === runtimeRefreshGenerationRef.current) {
-      setModelCatalog(models as RuntimeModel[])
-      setOrchestratorBinding(roles.orchestrator ?? null)
+      setModelCatalog(omniRouteModels)
+      setOrchestratorBinding({
+        provider: 'omniroute',
+        model: transport.routeModel ?? 'auto/coding',
+        reasoningEffort: 'none'
+      })
       setModelCatalogLoaded(true)
       setRuntimeIdentity(resolved)
     }
@@ -675,7 +758,10 @@ export function ChatView({
     setModelChangePending(true)
     setModelChangeError(null)
     try {
-      await window.api.setRole('orchestrator', option.provider, option.model)
+      if (option.provider !== 'omniroute') {
+        throw new Error('Seules les routes OmniRoute peuvent être sélectionnées dans le chat')
+      }
+      await window.api.activateOmniRoute(option.model)
       await refreshRuntimeIdentity()
     } catch (error) {
       setModelChangeError(
@@ -1260,12 +1346,41 @@ export function ChatView({
                 )}
                 <span className={`chat-runtime-state${busy ? ' is-busy' : ''}`}>
                   <span className="status-dot" />
-                  {busy ? 'en cours' : 'prêt'}
+                  {busy ? 'en cours' : 'interface prête'}
                 </span>
               </div>
             </div>
           </div>
           <div className="row gap2 chat-head-actions">
+            {active && (
+              <label
+                className="chat-authority-mode"
+                title="Niveau d’autonomie pour les prochaines actions"
+              >
+                <span>Permissions</span>
+                <select
+                  aria-label="Permissions de la conversation"
+                  value={active.authorityMode ?? 'auto'}
+                  disabled={busy}
+                  onChange={async (event) => {
+                    const mode = event.target.value as 'plan' | 'ask' | 'auto'
+                    const updated = (await window.api.conversationsSetAuthorityMode(
+                      active.id,
+                      mode
+                    )) as Conv
+                    setConvs((current) =>
+                      current.map((conversation) =>
+                        conversation.id === updated.id ? updated : conversation
+                      )
+                    )
+                  }}
+                >
+                  <option value="plan">Plan</option>
+                  <option value="ask">Demander</option>
+                  <option value="auto">Max</option>
+                </select>
+              </label>
+            )}
             {decisions.length > 0 && (
               <button
                 className={`btn btn-sm${showDecisions ? ' btn-accent' : ''}`}
@@ -1359,6 +1474,9 @@ export function ChatView({
         <div
           className="chat-scroll scroll-y"
           ref={scrollRef}
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions text"
           onScroll={(event) => {
             const nearBottom = isChatNearBottom(event.currentTarget)
             followTailRef.current = nearBottom
@@ -1484,6 +1602,13 @@ export function ChatView({
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
                     send()
+                  }
+                }}
+                onPaste={(e) => {
+                  const pasted = e.clipboardData?.files
+                  if (pasted && pasted.length > 0) {
+                    e.preventDefault()
+                    void addFiles(pasted)
                   }
                 }}
                 placeholder="Écrire à l’agent ou déposer des fichiers…"

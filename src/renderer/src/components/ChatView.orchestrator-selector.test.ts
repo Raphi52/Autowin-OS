@@ -48,11 +48,10 @@ describe('selecteur orchestrateur Chat', () => {
 
   it('rend honnêtement un catalogue models() vide sans option inventée ni faux succès', async () => {
     const dom = await renderSelector()
-    const select = dom.querySelector('select') as HTMLSelectElement
-    expect([...select.options].map((option) => option.textContent)).toEqual([
-      'Aucun modèle disponible'
-    ])
-    expect(select.disabled).toBe(true)
+    const selector = dom.querySelector('[data-testid="chat-orchestrator-model"]') as HTMLElement
+    expect(selector.textContent).toContain('Aucun modèle disponible')
+    expect(selector.dataset.disabled).toBe('true')
+    expect(dom.querySelectorAll('[role="option"]')).toHaveLength(0)
     expect(dom.textContent).toContain('Catalogue de modèles vide.')
     expect(dom.textContent).not.toMatch(/enregistré|réussi/i)
   })
@@ -64,11 +63,47 @@ describe('selecteur orchestrateur Chat', () => {
       binding: { provider: 'legacy', model: 'gone' },
       onSelect
     })
-    const select = dom.querySelector('select') as HTMLSelectElement
-    expect([...select.options].map((option) => option.textContent)).toEqual(['GPT-5'])
+    const options = [...dom.querySelectorAll('[role="option"]')]
+    expect(options.map((option) => option.querySelector('strong')?.textContent)).toEqual(['GPT-5'])
     expect(dom.textContent).toContain('legacy · gone (indisponible)')
-    expect(select.value).toBe('codex\u0000gpt-5')
     expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('ouvre le sous-menu du modèle et transmet explicitement son effort', async () => {
+    const onSelect = vi.fn()
+    const dom = await renderSelector({
+      models: [
+        {
+          id: 'c1',
+          provider: 'codex',
+          model: 'gpt-5.6-terra',
+          label: 'GPT-5.6 Terra',
+          reasoningEfforts: ['low', 'high', 'ultra'],
+          defaultReasoningEffort: 'high'
+        }
+      ],
+      binding: { provider: 'codex', model: 'gpt-5.6-terra', reasoningEffort: 'high' },
+      onSelect
+    })
+    expect(dom.querySelector('summary')?.textContent).toContain('GPT-5.6 TerraÉlevé')
+    await act(async () => {
+      dom.querySelector<HTMLButtonElement>('[role="option"]')?.click()
+    })
+    expect(
+      [...dom.querySelectorAll('.model-effort-menu button')].map((item) => item.textContent)
+    ).toEqual(['low', 'high✓', 'ultra'])
+    await act(async () => {
+      ;[...dom.querySelectorAll<HTMLButtonElement>('.model-effort-menu button')]
+        .find((item) => item.textContent === 'ultra')
+        ?.click()
+    })
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'codex',
+        model: 'gpt-5.6-terra',
+        reasoningEffort: 'ultra'
+      })
+    )
   })
 
   it('restitue un rejet setRole sans faux succès et conserve le binding runtime confirmé', async () => {
@@ -88,7 +123,7 @@ describe('selecteur orchestrateur Chat', () => {
         error,
         onSelect: async (option) => {
           try {
-            await setRole('orchestrator', option.provider, option.model)
+            await setRole('orchestrator', option.provider, option.model, option.reasoningEffort)
           } catch (reason) {
             setError(
               `Changement non enregistré : ${reason instanceof Error ? reason.message : String(reason)}`
@@ -102,14 +137,20 @@ describe('selecteur orchestrateur Chat', () => {
     const root = createRoot(container)
     await act(async () => root.render(createElement(RejectionHarness)))
     const dom = container
-    const select = dom.querySelector('select') as HTMLSelectElement
+    const llama = [...dom.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(
+      (option) => option.querySelector('strong')?.textContent === 'Llama'
+    )
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set
-      setter?.call(select, 'hermes\u0000llama')
-      select.dispatchEvent(new Event('change', { bubbles: true }))
+      llama?.click()
     })
-    expect(setRole).toHaveBeenCalledWith('orchestrator', 'hermes', 'llama')
-    expect(select.value).toBe('codex\u0000gpt-5')
+    const effort = [...dom.querySelectorAll<HTMLButtonElement>('.model-effort-menu button')].find(
+      (button) => button.textContent?.includes('Auto')
+    )
+    await act(async () => {
+      effort?.click()
+    })
+    expect(setRole).toHaveBeenCalledWith('orchestrator', 'hermes', 'llama', 'none')
+    expect(dom.querySelector('summary')?.textContent).toContain('GPT-5')
     expect(dom.querySelector('[role="status"]')?.textContent).toContain(
       'Changement non enregistré : refus fixture'
     )
@@ -127,16 +168,33 @@ describe('selecteur orchestrateur Chat', () => {
       )
     ).toEqual({
       groups: [
-        { provider: 'codex', options: [{ provider: 'codex', model: 'gpt-5', label: 'GPT-5' }] },
-        { provider: 'hermes', options: [{ provider: 'hermes', model: 'llama', label: 'Llama' }] }
+        {
+          provider: 'codex',
+          options: [
+            { provider: 'codex', model: 'gpt-5', label: 'GPT-5', reasoningEfforts: ['none'] }
+          ]
+        },
+        {
+          provider: 'hermes',
+          options: [
+            { provider: 'hermes', model: 'llama', label: 'Llama', reasoningEfforts: ['none'] }
+          ]
+        }
       ],
-      currentMissing: { provider: 'legacy', model: 'gone', label: 'legacy · gone (indisponible)' }
+      currentMissing: {
+        provider: 'legacy',
+        model: 'gone',
+        label: 'legacy · gone (indisponible)',
+        reasoningEfforts: []
+      }
     })
   })
 
-  it('change uniquement le binding orchestrator sans toucher la conversation', () => {
-    expect(source).toContain("window.api.setRole('orchestrator', option.provider, option.model)")
-    expect(source).toContain('disabled={busy || pending || models.length === 0}')
+  it('change uniquement la route OmniRoute sans toucher la conversation', () => {
+    expect(source).toContain("option.provider !== 'omniroute'")
+    expect(source).toContain('activateOmniRoute(option.model)')
+    expect(source).toContain('const disabled = busy || pending || models.length === 0')
+    expect(source).toContain('className="model-select-menu"')
     expect(source).toContain('Le changement s’appliquera au prochain tour')
     expect(source).toContain('generation === runtimeRefreshGenerationRef.current')
     expect(source).not.toMatch(/model-select[\s\S]{0,800}(navigate|newConv|location\.reload)/)

@@ -28,7 +28,6 @@ const api = {
   testOmniRoute: (): Promise<unknown> => ipcRenderer.invoke('router:test-route'),
   activateOmniRoute: (routeModel: string): Promise<unknown> =>
     ipcRenderer.invoke('router:activate', routeModel),
-  rollbackOmniRoute: (): Promise<unknown> => ipcRenderer.invoke('router:rollback'),
   openOmniRouteDashboard: (): Promise<void> => ipcRenderer.invoke('router:open-dashboard'),
   send: (
     provider: string | undefined,
@@ -51,10 +50,15 @@ const api = {
     return () => ipcRenderer.removeListener('orchestrate:step', handler)
   },
   // Config par rôle
-  roles: (): Promise<Record<string, { provider: string; model?: string }>> =>
-    ipcRenderer.invoke('os:roles'),
-  setRole: (role: string, provider: string, model?: string): Promise<unknown> =>
-    ipcRenderer.invoke('os:setRole', role, provider, model),
+  roles: (): Promise<
+    Record<string, { provider: string; model?: string; reasoningEffort?: string }>
+  > => ipcRenderer.invoke('os:roles'),
+  setRole: (
+    role: string,
+    provider: string,
+    model?: string,
+    reasoningEffort?: string
+  ): Promise<unknown> => ipcRenderer.invoke('os:setRole', role, provider, model, reasoningEffort),
   models: (): Promise<unknown[]> => ipcRenderer.invoke('os:models:list'),
   profiles: (): Promise<unknown[]> => ipcRenderer.invoke('os:profiles:list'),
   saveProfile: (profile: unknown): Promise<unknown[]> =>
@@ -153,6 +157,8 @@ const api = {
     ipcRenderer.invoke('os:conversations:create', p),
   conversationsRename: (id: string, title: string): Promise<unknown> =>
     ipcRenderer.invoke('os:conversations:rename', id, title),
+  conversationsSetAuthorityMode: (id: string, mode: 'plan' | 'ask' | 'auto'): Promise<unknown> =>
+    ipcRenderer.invoke('os:conversations:authorityMode', id, mode),
   conversationsRemove: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:remove', id),
   openFolder: (path: string): Promise<void> => ipcRenderer.invoke('os:openFolder', path),

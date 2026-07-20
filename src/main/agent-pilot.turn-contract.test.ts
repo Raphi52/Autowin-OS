@@ -1,7 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 describe('AgentPilot turn contract', () => {
+  it('passes the persisted authority mode from the real pilotChat IPC path', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    expect(source).toMatch(
+      /pilot\.chat\([\s\S]*?conversationId,[\s\S]*?controller\.signal,[\s\S]*?authorityMode/
+    )
+  })
+
   it('binds the conversation authority mode to every command in the turn', async () => {
     const responses = [
       '<cmd>{"name":"remove_conversation","args":{"id":"conv-1"}}</cmd>',
@@ -86,6 +95,7 @@ describe('AgentPilot turn contract', () => {
     for (const call of send.mock.calls) {
       expect(call[0]).toBe('codex')
       expect(call[2]).toMatchObject({ model: 'gpt-initial', reasoningEffort: 'low' })
+      expect(call[2].system).toMatch(/ne dis jamais que tu ne peux pas modifier le code/i)
     }
     for (const call of describePrompt.mock.calls) {
       expect(call[3]).toBe('gpt-initial')

@@ -1,10 +1,33 @@
 import { describe, expect, it, vi } from 'vitest'
-import { DEFAULT_IMPORTED_MODELS, discoverImportedModels, discoverOmniRouteModels } from './models'
+import {
+  DEFAULT_IMPORTED_MODELS,
+  discoverImportedModels,
+  discoverOmniRouteModels,
+  labelOmniRouteModel
+} from './models'
 import { appendClaudeSelectionArgs } from './providers/claude'
 
 const noCodexAuth = (): null => null
 
 describe('catalogue Agents dynamique', () => {
+  it('affiche des noms OmniRoute propres sans altérer les ids techniques', () => {
+    expect(labelOmniRouteModel('auto')).toBe('Sélection automatique')
+    expect(labelOmniRouteModel('auto/coding')).toBe('Automatique · Code')
+    expect(labelOmniRouteModel('auto/best-coding')).toBe('Meilleur modèle · Code')
+    expect(labelOmniRouteModel('auto/best-reasoning')).toBe('Meilleur modèle · Raisonnement')
+    expect(labelOmniRouteModel('custom:priority-chain')).toBe('Chaîne prioritaire personnalisée')
+    expect(labelOmniRouteModel('claude-opus-4-6')).toBe('Claude Opus 4.6')
+    expect(labelOmniRouteModel('gpt-5.6-sol')).toBe('GPT-5.6 Sol')
+    expect(labelOmniRouteModel('cc/claude-opus-4-8')).toBe('Claude Opus 4.8')
+    expect(labelOmniRouteModel('claude/claude-sonnet-4-6')).toBe('Claude Sonnet 4.6')
+    expect(labelOmniRouteModel('cx/gpt-5.6-terra-ultra')).toBe('GPT-5.6 Terra · Ultra')
+    expect(labelOmniRouteModel('tllm/GPT_5_4')).toBe('GPT-5.4')
+    expect(labelOmniRouteModel('aug/gemini-3.1-pro')).toBe('Gemini 3.1 Pro')
+    expect(labelOmniRouteModel('no-think/cc/claude-opus-4-8')).toBe(
+      'Claude Opus 4.8 · Sans raisonnement'
+    )
+  })
+
   it('importe uniquement les modèles réellement exposés par OmniRoute', async () => {
     const fetchFn = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
       expect((init?.headers as Record<string, string>).authorization).toBe('Bearer gateway-token')
@@ -30,7 +53,10 @@ describe('catalogue Agents dynamique', () => {
       'omniroute/custom:priority-chain'
     ])
     expect(models[1]).toEqual(expect.objectContaining({
-      provider: 'omniroute', model: 'auto/coding', reasoningEfforts: ['none']
+      provider: 'omniroute',
+      model: 'auto/coding',
+      label: 'Automatique · Code',
+      reasoningEfforts: ['none']
     }))
   })
 

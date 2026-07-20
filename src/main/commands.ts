@@ -75,7 +75,8 @@ const CATALOG: CommandSpec[] = [
   },
   {
     name: 'orchestrate',
-    description: 'Lancer une orchestration disciplinée',
+    description:
+      'Lancer un agent de développement capable de lire, modifier et tester le code ou les fichiers du workspace',
     args: { task: 'la tâche' },
     authority: 'sensitive',
     annotations: {

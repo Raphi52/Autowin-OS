@@ -35,6 +35,26 @@ export function codexExecSpec(
   appData = process.env.APPDATA,
   entrypointExists: (path: string) => boolean = existsSync
 ): CodexExecSpec {
+  const explicitBinary = process.env.CODEX_BIN
+  if (explicitBinary) {
+    return {
+      executable: explicitBinary,
+      cwd,
+      args: [
+        'exec',
+        '--json',
+        '--ephemeral',
+        '--sandbox',
+        sandbox,
+        '--cd',
+        cwd,
+        '--model',
+        model,
+        ...(reasoningEffort ? ['-c', `model_reasoning_effort="${reasoningEffort}"`] : []),
+        '-'
+      ]
+    }
+  }
   if (!appData) throw new Error('APPDATA indisponible : impossible de localiser Codex CLI')
   const entrypoint = join(appData, 'npm', 'node_modules', '@openai', 'codex', 'bin', 'codex.js')
   if (!entrypointExists(entrypoint)) throw new Error(`Codex CLI introuvable: ${entrypoint}`)
@@ -150,6 +170,22 @@ async function runCodexExec(
                 ok,
                 summary: summary.slice(-4_000)
               })
+              // Une commande atomique peut écrire puis vérifier (lecture + assertion).
+              // Conserver les deux signaux évite que la mutation masque sa preuve.
+              const embeddedVerification =
+                kind === 'mutation' &&
+                /\b(ReadAllText|ReadAllBytes|Get-Content|Test-Path)\b[\s\S]*\b(if|throw|Compare-Object)\b/i.test(
+                  command
+                )
+              if (embeddedVerification) {
+                executionEvidence.push({
+                  type: item.type,
+                  kind: 'verification',
+                  status: item.status ?? 'completed',
+                  ok,
+                  summary: summary.slice(-4_000)
+                })
+              }
             }
           }
           if (event.type === 'turn.completed') {

@@ -490,6 +490,8 @@
 }
 
 .cosmic-outline .chat-runtime-provider {
+  flex: none;
+  overflow: visible;
   color: #f1c966;
   font-weight: 800;
 }

@@ -8,7 +8,7 @@ import devIcon from '../../resources/autowin-os-dev.png?asset'
 import type { Message, ProviderAdapter, SendResult, StreamChunk } from './providers/types'
 import { ProviderRegistry } from './providers/registry'
 import { AutowinOS } from './os'
-import { RoleModelConfig, type Role } from './roles'
+import { RoleModelConfig, type ReasoningEffort, type Role } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
@@ -33,7 +33,7 @@ import { HermesDiagnosticCapabilities } from './activity/hermes-diagnostic-capab
 import { responseDisplayedTrace } from './activity/response-displayed-trace'
 import { persistOrchestrationStep } from './activity/orchestration-observability'
 import { LoopRunStore } from './loop-run-store'
-import { ProfileStore, type AutowinProfile } from './profile-store'
+import { ProfileStore, resolveProfileRoute, type AutowinProfile } from './profile-store'
 import {
   loadCapabilityProfiles,
   saveCapabilityProfiles,
@@ -124,12 +124,10 @@ const omniRouteMigration = new OmniRouteMigrationStore(
   join(app.getPath('userData'), 'omniroute-migration.json')
 )
 const startupTransport = omniRouteMigration.load()
-if (startupTransport.mode === 'omniroute') {
-  os.registry.setConversationTransport({
-    provider: 'omniroute',
-    model: startupTransport.routeModel
-  })
-}
+os.registry.setConversationTransport({
+  provider: 'omniroute',
+  model: startupTransport.routeModel
+})
 const brainWorker = new BrainWorkerClient(join(__dirname, 'brain-worker.js'))
 // Conversations persistées sur disque : rechargées au démarrage, sauvées à chaque mutation.
 persistConversations(os.conversations)
@@ -383,8 +381,8 @@ function registerChatIpc(): void {
     assertTrustedRendererSender(event, 'Router')
     const state = omniRouteMigration.load()
     return {
-      mode: state.mode,
-      routeModel: state.mode === 'omniroute' ? state.routeModel : undefined,
+      mode: 'omniroute' as const,
+      routeModel: state.routeModel,
       credentialConfigured: Boolean(os.omniRouteCredentialStore.get())
     }
   })
@@ -417,32 +415,13 @@ function registerChatIpc(): void {
     if (!models.some((model) => model.model === route)) {
       throw new Error('Route non confirmée par le catalogue OmniRoute')
     }
-    const state = omniRouteMigration.activate(route, {
-      roles: os.roles.all(),
-      topology: agentTopology
-    })
+    const state = omniRouteMigration.activate(route)
     os.registry.setConversationTransport({
       provider: 'omniroute',
-      model: state.mode === 'omniroute' ? state.routeModel : route
+      model: state.routeModel
     })
     broadcast({ type: 'refresh', scope: 'roles' })
     return { mode: 'omniroute', routeModel: route, credentialConfigured: true }
-  })
-  ipcMain.handle('router:rollback', (event) => {
-    assertTrustedRendererSender(event, 'Router')
-    const restore = omniRouteMigration.prepareRollback()
-    if (restore) {
-      agentTopology = saveAgentTopology(agentTopologyPath, restore.topology, agentModels)
-      for (const [role, binding] of Object.entries(restore.roles) as Array<
-        [Role, import('./roles').RoleBinding]
-      >)
-        os.setRole(role, binding)
-      syncRuntimeTopology(agentTopology)
-    }
-    omniRouteMigration.commitRollback()
-    os.registry.setConversationTransport(null)
-    broadcast({ type: 'refresh', scope: 'roles' })
-    return { mode: 'direct', credentialConfigured: Boolean(os.omniRouteCredentialStore.get()) }
   })
   ipcMain.handle('router:open-dashboard', async (event) => {
     assertTrustedRendererSender(event, 'Router')
@@ -484,11 +463,18 @@ function registerChatIpc(): void {
 
   // --- Config par rôle (orchestrateur / sous-agent / juge / scout) ---
   ipcMain.handle('os:roles', () => os.roles.all())
-  ipcMain.handle('os:setRole', (_e, role: Role, provider: string, model?: string) => {
-    const binding = os.setRole(role, { provider, model })
-    broadcast({ type: 'refresh', scope: 'roles' })
-    return binding
-  })
+  ipcMain.handle(
+    'os:setRole',
+    (_e, role: Role, provider: string, model?: string, reasoningEffort?: string) => {
+      const binding = os.setRole(role, {
+        provider,
+        model,
+        reasoningEffort: reasoningEffort as ReasoningEffort | undefined
+      })
+      broadcast({ type: 'refresh', scope: 'roles' })
+      return binding
+    }
+  )
   ipcMain.handle('os:models:list', () => agentModelsReady)
   ipcMain.handle('os:capabilityProfiles:get', () => capabilityProfiles)
   ipcMain.handle('os:capabilityProfiles:save', (_event, next: CapabilityProfileState) => {
@@ -514,9 +500,7 @@ function registerChatIpc(): void {
       roles: os.roles.all(),
       transport: (() => {
         const state = omniRouteMigration.load()
-        return state.mode === 'omniroute'
-          ? { mode: 'omniroute' as const, routeModel: state.routeModel }
-          : { mode: 'direct' as const }
+        return { mode: 'omniroute' as const, routeModel: state.routeModel }
       })(),
       updatedAt: new Date().toISOString()
     }
@@ -527,29 +511,18 @@ function registerChatIpc(): void {
     const profile = profiles.list().find((item) => item.id === guardString(id, 'profile.id'))
     if (!profile) throw new Error('Profil introuvable')
     let validatedRoute: string | undefined
-    if (profile.transport?.mode === 'omniroute') {
-      validatedRoute = profile.transport.routeModel
-      if (!validatedRoute) throw new Error('Profil OmniRoute sans route')
-      const models = await discoverOmniRouteModels(fetch, os.omniRouteCredentialStore)
-      if (!models.some((model) => model.model === validatedRoute))
-        throw new Error('Route du profil indisponible')
-    }
+    validatedRoute = resolveProfileRoute(profile.transport, omniRouteMigration.load().routeModel)
+    const models = await discoverOmniRouteModels(fetch, os.omniRouteCredentialStore)
+    if (!models.some((model) => model.model === validatedRoute))
+      throw new Error('Route OmniRoute du profil indisponible')
     agentTopology = saveAgentTopology(agentTopologyPath, profile.topology, agentModels)
     syncRuntimeTopology(agentTopology)
     for (const [role, binding] of Object.entries(profile.roles) as Array<
       [Role, import('./roles').RoleBinding]
     >)
       os.setRole(role, binding)
-    if (validatedRoute) {
-      omniRouteMigration.activate(validatedRoute, {
-        roles: profile.roles,
-        topology: profile.topology
-      })
-      os.registry.setConversationTransport({ provider: 'omniroute', model: validatedRoute })
-    } else {
-      omniRouteMigration.rollback()
-      os.registry.setConversationTransport(null)
-    }
+    omniRouteMigration.activate(validatedRoute)
+    os.registry.setConversationTransport({ provider: 'omniroute', model: validatedRoute })
     broadcast({ type: 'refresh', scope: 'roles' })
     return profile
   })
@@ -771,6 +744,14 @@ function registerChatIpc(): void {
   ipcMain.handle('os:conversations:rename', (_e, id: string, title: string) =>
     os.conversations.rename(id, guardString(title, 'title'))
   )
+  ipcMain.handle('os:conversations:authorityMode', (event, rawId: string, rawMode: unknown) => {
+    assertTrustedRendererSender(event, 'Conversation authority')
+    const id = guardString(rawId, 'id')
+    if (!['plan', 'ask', 'auto'].includes(String(rawMode))) {
+      throw new Error('Mode d’autorité invalide')
+    }
+    return os.conversations.setAuthorityMode(id, rawMode as 'plan' | 'ask' | 'auto')
+  })
   ipcMain.handle('os:conversations:remove', async (_e, rawId: string) => {
     const id = guardString(rawId, 'id')
     await activeChatTurns.abortAndWait(id, 'conversation-deleted')
@@ -972,8 +953,10 @@ function registerChatIpc(): void {
               pilotEvent.kind === 'retry' ||
               pilotEvent.kind === 'cancellation')
           ) {
+            const actionSequence = traceActionIndex++
+            const stableActionId = pilotEvent.actionId?.replaceAll(':', '-') ?? `${actionSequence}`
             const action = pilotActionToTraceEvent({
-              id: `${turnId}:action:${traceActionIndex++}`,
+              id: `${turnId}:action:${stableActionId}:${pilotEvent.kind}`,
               conversationId,
               turnId,
               parentId: traceParentId,
@@ -1085,7 +1068,10 @@ function registerChatIpc(): void {
               askModelQuestion(event.sender, 'chat', question, 'Chat', controller.signal),
             6,
             conversationId,
-            controller.signal
+            controller.signal,
+            conversationId
+              ? (os.conversations.get(conversationId)?.authorityMode ?? 'ask')
+              : 'ask'
           )
         // Journal d'activité de la conversation : le tour de chat, avec son coût en tokens.
         if (conversationId) {
@@ -1093,7 +1079,7 @@ function registerChatIpc(): void {
           appendConvActivity(conversationId, {
             kind: 'chat',
             label: last?.role === 'user' ? last.content : 'tour agent',
-            provider: os.roles.getBinding('orchestrator').provider,
+            provider: os.registry.getConversationTransport()?.provider ?? 'omniroute',
             inputTokens: turnUsage?.inputTokens,
             outputTokens: turnUsage?.outputTokens,
             costUsd: turnUsage?.costUsd,

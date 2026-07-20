@@ -63,7 +63,7 @@ export function evidenceSatisfiesTask(task: string, evidence: ExecutionEvidence[
   if (!MUTATION_TASK.test(task)) return true
   return (
     successful.some((item) => item.kind === 'mutation') &&
-    successful.some((item) => item.kind === 'verification')
+    successful.some((item) => item.kind === 'verification' || item.kind === 'inspection')
   )
 }
 
@@ -83,15 +83,7 @@ export class Orchestrator {
     const subBinding = roles.getBinding('subagent')
     const subProvider = subBinding.provider
     const execMessages = [{ role: 'user' as const, content: task }]
-    let execPrompt = registry.describePrompt(
-      subProvider,
-      execMessages,
-      {
-        model: subBinding.model,
-        reasoningEffort: subBinding.reasoningEffort
-      },
-      subBinding.model
-    )
+    let execPrompt
     const subOptions: SendOptions = {
       system: capabilityInstruction(subBinding.capabilityProfileId),
       model: subBinding.model,
@@ -104,6 +96,7 @@ export class Orchestrator {
         execPrompt = observed
       }
     }
+    execPrompt = registry.describePrompt(subProvider, execMessages, subOptions, subBinding.model)
     const execStartedAt = performance.now()
     let exec
     try {
@@ -156,15 +149,7 @@ export class Orchestrator {
       `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".` +
       capabilityInstruction(judgeBinding.capabilityProfileId)
     const judgeMessages = [{ role: 'user' as const, content: judgePrompt }]
-    let judgeEnvelope = registry.describePrompt(
-      judgeProvider,
-      judgeMessages,
-      {
-        model: judgeBinding.model,
-        reasoningEffort: judgeBinding.reasoningEffort
-      },
-      judgeBinding.model
-    )
+    let judgeEnvelope
     const judgeOptions: SendOptions = {
       model: judgeBinding.model,
       reasoningEffort: judgeBinding.reasoningEffort,
@@ -176,6 +161,12 @@ export class Orchestrator {
         judgeEnvelope = observed
       }
     }
+    judgeEnvelope = registry.describePrompt(
+      judgeProvider,
+      judgeMessages,
+      judgeOptions,
+      judgeBinding.model
+    )
     const judgeStartedAt = performance.now()
     let verdict
     try {

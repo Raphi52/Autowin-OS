@@ -160,13 +160,13 @@ describe('ChatView behavior under concurrent UI actions', () => {
   })
 
   it('preserves a failed bootstrap draft and retries it', async () => {
-    const topology = vi.fn().mockResolvedValue({
-      orchestrator: { provider: 'codex', modelId: 'gpt', reasoningEffort: 'auto' }
-    })
+    const models = vi.fn().mockResolvedValue([
+      { id: 'omniroute/auto/coding', provider: 'omniroute', model: 'auto/coding' }
+    ])
     const create = vi.fn().mockResolvedValue(conversation('A'))
-    const mockApi = api({ topology, conversationsCreate: create })
+    const mockApi = api({ models, conversationsCreate: create })
     await mount(mockApi)
-    topology.mockRejectedValueOnce(new Error('bootstrap indisponible'))
+    models.mockRejectedValueOnce(new Error('bootstrap indisponible'))
     await type('à conserver')
     await click('.composer-send')
     expect((container!.querySelector('textarea') as HTMLTextAreaElement).value).toBe('à conserver')
@@ -256,5 +256,28 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(inspectButtons).toHaveLength(1)
     await act(async () => (inspectButtons[0] as HTMLButtonElement).click())
     expect(onInspectTurn).toHaveBeenCalledWith({ conversationId: 'A', turnId: 'turn-42' })
+  })
+
+  it('exposes the message stream as an aria-live log region for screen readers', async () => {
+    await mount(api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) }))
+    const scroll = container!.querySelector('.chat-scroll')
+    expect(scroll?.getAttribute('role')).toBe('log')
+    expect(scroll?.getAttribute('aria-live')).toBe('polite')
+  })
+
+  it('adds a pasted file to the composer draft via onPaste', async () => {
+    const encoded = deferred<string>()
+    await mount(api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) }))
+    await click('.conv-pick')
+    const file = new File(['x'], 'colle.txt', { type: 'text/plain' })
+    Object.defineProperty(file, 'text', { configurable: true, value: () => encoded.promise })
+    const textarea = container!.querySelector('textarea') as HTMLTextAreaElement
+    const paste = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(paste, 'clipboardData', { configurable: true, value: { files: [file] } })
+    await act(async () => {
+      textarea.dispatchEvent(paste)
+    })
+    await act(async () => encoded.resolve('contenu'))
+    expect(container!.textContent).toContain('colle.txt')
   })
 })

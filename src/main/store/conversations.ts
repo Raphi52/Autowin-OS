@@ -120,7 +120,7 @@ export class ConversationStore {
         activeBranchId: c.activeBranchId ?? rootBranchId,
         workspaceId: c.workspaceId ?? `workspace-${c.id}`,
         branches: c.branches ?? [{ id: rootBranchId, createdAt: c.createdAt }],
-        authorityMode: c.authorityMode ?? 'ask',
+        authorityMode: c.authorityMode ?? 'auto',
         messages
       }
       if (
@@ -161,7 +161,7 @@ export class ConversationStore {
       activeBranchId: rootBranchId,
       workspaceId: `workspace-${id}`,
       branches: [{ id: rootBranchId, createdAt: ts }],
-      authorityMode: 'ask',
+      authorityMode: 'auto',
       createdAt: ts,
       updatedAt: ts
     }
@@ -288,6 +288,15 @@ export class ConversationStore {
       conversation.title = title
       this.changed()
     }
+  }
+
+  setAuthorityMode(id: string, authorityMode: ConversationAuthorityMode): Conversation {
+    const conversation = this.conversations.get(id)
+    if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
+    conversation.authorityMode = authorityMode
+    conversation.updatedAt = this.now()
+    this.changed()
+    return conversation
   }
 
   /** Attache un RUN.md externe à une conversation (idempotent). Jette si l'id est inconnu. */

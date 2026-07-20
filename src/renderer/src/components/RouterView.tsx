@@ -152,13 +152,11 @@ export function RouterView({ active }: { active: boolean }): React.JSX.Element {
         <section className="router-migration surface-page">
           <div>
             <span className="router-kicker">Transport des conversations</span>
-            <h2>
-              {migration?.mode === 'omniroute' ? 'OmniRoute actif' : 'Adaptateurs directs actifs'}
-            </h2>
+            <h2>OmniRoute obligatoire</h2>
             <p>
-              {migration?.mode === 'omniroute'
-                ? `Toutes les conversations compatibles passent par ${migration.routeModel}. L'exécution locale reste directe.`
-                : 'Teste le gateway, choisis une route, puis active le remplacement. Le rollback reste local.'}
+              Toutes les conversations passent exclusivement par{' '}
+              {migration?.routeModel ?? 'la route OmniRoute configurée'}. Aucun transport direct Claude,
+              Codex ou Kimi n'est autorisé.
             </p>
           </div>
           <div className="router-migration-controls">
@@ -220,19 +218,7 @@ export function RouterView({ active }: { active: boolean }): React.JSX.Element {
                   })
                 }
               >
-                Activer OmniRoute
-              </button>
-              <button
-                type="button"
-                disabled={migration?.mode !== 'omniroute' || actionBusy}
-                onClick={() =>
-                  void runAction(async () => {
-                    setMigration(await window.api.rollbackOmniRoute())
-                    setRouteTest(undefined)
-                  })
-                }
-              >
-                Rollback
+                Appliquer la route
               </button>
             </div>
             {actionError && (
@@ -303,8 +289,8 @@ export function RouterView({ active }: { active: boolean }): React.JSX.Element {
             <div>
               <h2>OmniRoute n’est pas connecté</h2>
               <p>
-                Lance OmniRoute sur le port 20128, puis rafraîchis cette vue. Autowin continue
-                d’utiliser directement Claude, Codex et Kimi.
+                Lance OmniRoute sur le port 20128, puis rafraîchis cette vue. Les conversations
+                restent bloquées tant que le gateway est indisponible.
               </p>
             </div>
           </section>
@@ -331,15 +317,10 @@ export function RouterView({ active }: { active: boolean }): React.JSX.Element {
         )}
         <section className="router-boundary surface-panel">
           <span>État du raccordement</span>
-          <strong>
-            {migration?.mode === 'omniroute'
-              ? `OmniRoute actif · ${migration.routeModel}`
-              : 'Supervision active · transport direct'}
-          </strong>
+          <strong>OmniRoute exclusif · {migration?.routeModel ?? 'auto/coding'}</strong>
           <p>
-            {migration?.mode === 'omniroute'
-              ? 'Les conversations compatibles passent par OmniRoute. Le provider final et les fallbacks ne sont pas exposés par son API publique.'
-              : 'Les conversations passent directement par les adaptateurs Claude, Codex et Kimi.'}
+            Le provider final et les fallbacks restent gérés à l'intérieur d'OmniRoute. Autowin ne
+            possède aucun chemin conversationnel direct.
           </p>
         </section>
       </div>

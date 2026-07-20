@@ -37,16 +37,30 @@ const evaluate = async (expression) => {
 
 await evaluate(`(() => {
   const target = [...document.querySelectorAll('button')].find((button) =>
-    /agents/i.test(button.textContent || ''))
-  if (!target) throw new Error('Navigation Agents introuvable')
+    /models|agents/i.test(button.textContent || ''))
+  if (!target) throw new Error('Navigation Models introuvable')
   target.click()
 })()`)
 await new Promise((resolve) => setTimeout(resolve, 1200))
 const labels = await evaluate(`[
   ...document.querySelectorAll('.topology-model strong')
 ].map((element) => element.textContent?.trim()).filter(Boolean)`)
+const spacing = await evaluate(`(() => {
+  const library = document.querySelector('.topology-library')
+  const card = document.querySelector('.topology-model')
+  if (!library || !card) return null
+  const libraryRect = library.getBoundingClientRect()
+  const cardRect = card.getBoundingClientRect()
+  return {
+    libraryRight: libraryRect.right,
+    cardRight: cardRect.right,
+    rightGap: libraryRect.right - cardRect.right,
+    paddingRight: getComputedStyle(library).paddingRight,
+    scrollbarGutter: getComputedStyle(library).scrollbarGutter
+  }
+})()`)
 const screenshot = await send('Page.captureScreenshot', { format: 'png' })
 const output = 'C:/Amitel/Autowin OS/artifacts/model-catalog.png'
 writeFileSync(output, Buffer.from(screenshot.data, 'base64'))
-console.log(JSON.stringify({ labels, output }, null, 2))
+console.log(JSON.stringify({ labels, spacing, output }, null, 2))
 socket.close()

@@ -151,12 +151,17 @@ export interface RuntimeModel {
   provider: string
   model: string
   label?: string
+  reasoningEfforts?: string[]
+  defaultReasoningEffort?: string
 }
 
 export interface OrchestratorModelOption {
   provider: string
   model: string
   label: string
+  reasoningEfforts: string[]
+  defaultReasoningEffort?: string
+  reasoningEffort?: string
 }
 
 export interface OrchestratorModelGroup {
@@ -176,7 +181,9 @@ export function buildOrchestratorModelGroups(
     const option = {
       provider: item.provider,
       model: item.model,
-      label: item.label?.trim() || item.model
+      label: item.label?.trim() || item.model,
+      reasoningEfforts: item.reasoningEfforts ?? ['none'],
+      defaultReasoningEffort: item.defaultReasoningEffort
     }
     const options = byProvider.get(item.provider) ?? []
     if (!options.some((entry) => entry.model === option.model)) options.push(option)
@@ -198,7 +205,8 @@ export function buildOrchestratorModelGroups(
           currentMissing: {
             provider: current.provider,
             model: currentModel,
-            label: `${current.provider} · ${currentModel} (indisponible)`
+            label: `${current.provider} · ${currentModel} (indisponible)`,
+            reasoningEfforts: []
           }
         }
       : {})

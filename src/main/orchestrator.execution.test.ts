@@ -150,4 +150,19 @@ describe('Orchestrator execution contract', () => {
       expect(result.gateBlocked).toBe(true)
     }
   })
+
+  it('accepte une mutation suivie d’une relecture réussie validée par le juge', async () => {
+    const evidence: ExecutionEvidence[] = [
+      { type: 'file_change', kind: 'mutation', status: 'completed', ok: true, summary: 'add' },
+      {
+        type: 'command_execution',
+        kind: 'inspection',
+        status: 'completed',
+        ok: true,
+        summary: 'Get-Content: valeur attendue'
+      }
+    ]
+    const { evidenceSatisfiesTask } = await import('./orchestrator')
+    expect(evidenceSatisfiesTask('crée puis relis le fichier', evidence)).toBe(true)
+  })
 })

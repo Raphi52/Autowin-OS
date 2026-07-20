@@ -96,6 +96,9 @@ describe('AppCommandBus authority policy', () => {
       readOnlyHint: true,
       destructiveHint: false
     })
+    expect(catalogue.find((tool) => tool.name === 'orchestrate')?.description).toMatch(
+      /lire, modifier et tester le code/i
+    )
   })
 
   it('waits for approval for role, RUN attachment and orchestration', async () => {
