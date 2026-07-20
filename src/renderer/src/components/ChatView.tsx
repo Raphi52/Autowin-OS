@@ -6,7 +6,7 @@ import { ModuleHeader } from './ModuleHeader'
 import {
   CHAT_PANE_LIMITS,
   clampConversationPaneWidth,
-  coalesceAssistantParts,
+  groupAssistantActivity,
   hydrateStoredAssistant,
   isRunRequestCurrent,
   isChatNearBottom,
@@ -217,6 +217,41 @@ export function AssistantActionEvent({ part }: { part: ChatActionPart }): React.
             {part.ok === undefined ? 'Action en cours…' : 'Aucun détail supplémentaire.'}
           </span>
         )}
+      </div>
+    </details>
+  )
+}
+
+export function AssistantActivityGroup({
+  actions
+}: {
+  actions: ChatActionPart[]
+}): React.JSX.Element {
+  const failed = actions.some((action) => action.ok === false)
+  const running = actions.some((action) => action.ok === undefined)
+  const status = running
+    ? 'en cours'
+    : failed
+      ? 'avec erreur'
+      : actions.length > 1
+        ? 'terminées'
+        : 'terminée'
+  return (
+    <details className={`activity-group${failed ? ' failed' : ''}`}>
+      <summary>
+        <span className={`status-dot ${running ? 'st-info' : failed ? 'st-err' : 'st-ok'}`} />
+        <span className="activity-group-title">
+          {actions.length} action{actions.length > 1 ? 's' : ''} {status}
+        </span>
+        <span className="activity-group-tools">
+          {actions.map((action) => CMD_LABEL[action.name] ?? action.name).join(' · ')}
+        </span>
+        {running && <span className="spinner" />}
+      </summary>
+      <div className="activity-group-list">
+        {actions.map((action, index) => (
+          <AssistantActionEvent key={action.actionId ?? `${action.name}-${index}`} part={action} />
+        ))}
       </div>
     </details>
   )
@@ -1096,13 +1131,13 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
                   {m.parts.length === 0 && !m.done && (
                     <div className="msg-body c-faint">réflexion…</div>
                   )}
-                  {coalesceAssistantParts(m.parts).map((p, j) =>
+                  {groupAssistantActivity(m.parts).map((p, j) =>
                     p.kind === 'text' ? (
                       <div key={j} className="msg-body">
                         <Markdown text={p.text} />
                       </div>
                     ) : (
-                      <AssistantActionEvent key={j} part={p} />
+                      <AssistantActivityGroup key={j} actions={p.actions} />
                     )
                   )}
                 </div>

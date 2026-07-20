@@ -3,6 +3,7 @@ import {
   CHAT_PANE_LIMITS,
   clampConversationPaneWidth,
   coalesceAssistantParts,
+  groupAssistantActivity,
   isRunRequestCurrent,
   isChatNearBottom,
   hydrateStoredAssistant,
@@ -189,6 +190,29 @@ describe('coalesceAssistantParts', () => {
         { kind: 'text', text: '' }
       ])
     ).toEqual([{ kind: 'action', name: 'get_state' }])
+  })
+})
+
+describe('groupAssistantActivity', () => {
+  it('groups consecutive actions without crossing surrounding text', () => {
+    expect(
+      groupAssistantActivity([
+        { kind: 'text', text: 'Avant.' },
+        { kind: 'action', name: 'navigate', ok: true },
+        { kind: 'action', name: 'get_state', ok: false, data: { error: 'boom' } },
+        { kind: 'text', text: 'Après.' }
+      ])
+    ).toEqual([
+      { kind: 'text', text: 'Avant.' },
+      {
+        kind: 'activity',
+        actions: [
+          { kind: 'action', name: 'navigate', ok: true },
+          { kind: 'action', name: 'get_state', ok: false, data: { error: 'boom' } }
+        ]
+      },
+      { kind: 'text', text: 'Après.' }
+    ])
   })
 })
 

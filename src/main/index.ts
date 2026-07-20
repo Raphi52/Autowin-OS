@@ -928,6 +928,8 @@ function registerChatIpc(): void {
             { kind: 'think', text: 'événement tardif correctement routé' },
             { kind: 'command', name: 'get_state', args: { target: 'late-conversation' } },
             { kind: 'result', name: 'get_state', ok: true, data: { source: 'isolated' } },
+            { kind: 'command', name: 'navigate', args: { tab: 'memory' } },
+            { kind: 'result', name: 'navigate', ok: true, data: { activeTab: 'memory' } },
             { kind: 'done', text: 'fixture pilot terminée' }
           ]
           for (const fixtureEvent of fixtureEvents) handlePilotEvent(fixtureEvent as PilotEvent)
@@ -1081,23 +1083,9 @@ function registerChatIpc(): void {
     assertTrustedRendererSender(event, 'Hermes trace summary')
     return loadHermesTraces().map(({ request: _request, ...metadata }) => metadata)
   })
-  ipcMain.handle('os:authorizeHermesDiagnostics', async (event) => {
+  ipcMain.handle('os:authorizeHermesDiagnostics', (event) => {
     assertTrustedRendererSender(event, 'Hermes diagnostics authorization')
     if (headlessTestInstance) return null
-    const options = {
-      type: 'warning' as const,
-      buttons: ['Annuler', 'Déverrouiller'],
-      defaultId: 0,
-      cancelId: 0,
-      title: 'Payloads Hermes sensibles',
-      message: 'Afficher les payloads Hermes globaux ?',
-      detail: 'Ils peuvent contenir des données métier malgré le masquage automatique des secrets.'
-    }
-    const parent = BrowserWindow.fromWebContents(event.sender)
-    const result = parent
-      ? await dialog.showMessageBox(parent, options)
-      : await dialog.showMessageBox(options)
-    if (result.response !== 1) return null
     return hermesDiagnosticCapabilities.issue(event.sender.id)
   })
   ipcMain.handle('os:hermesPromptTracesGlobal', (event, token: unknown) => {

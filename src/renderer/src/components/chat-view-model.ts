@@ -10,6 +10,8 @@ import {
 export type ChatActionPart = PersistedChatActionPart
 export type ChatTextPart = PersistedChatTextPart
 export type ChatPart = PersistedChatPart
+export type ChatActivityBlock = { kind: 'activity'; actions: ChatActionPart[] }
+export type ChatRenderBlock = ChatTextPart | ChatActivityBlock
 
 export interface HydratedAssistantMessage {
   role: 'assistant'
@@ -235,6 +237,20 @@ export function coalesceAssistantParts(parts: ChatPart[]): ChatPart[] {
     else compact.push({ kind: 'text', text })
   }
   return compact
+}
+
+export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
+  const blocks: ChatRenderBlock[] = []
+  for (const part of coalesceAssistantParts(parts)) {
+    if (part.kind === 'text') {
+      blocks.push(part)
+      continue
+    }
+    const previous = blocks.at(-1)
+    if (previous?.kind === 'activity') previous.actions.push(part)
+    else blocks.push({ kind: 'activity', actions: [part] })
+  }
+  return blocks
 }
 
 export function isChatNearBottom(
