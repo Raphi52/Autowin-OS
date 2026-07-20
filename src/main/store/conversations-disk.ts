@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { Conversation, ConversationStore } from './conversations'
 import { ensureAutowinAppData } from '../app-data'
@@ -13,13 +13,46 @@ export function conversationsPath(): string {
   return join(ensureAutowinAppData(), 'conversations.json')
 }
 
+export class ConversationPersistenceError extends Error {
+  constructor(
+    message: string,
+    readonly path: string,
+    options?: ErrorOptions
+  ) {
+    super(message, options)
+    this.name = 'ConversationPersistenceError'
+  }
+}
+
+function parseConversationArray(path: string): Conversation[] {
+  const data: unknown = JSON.parse(readFileSync(path, 'utf8'))
+  if (!Array.isArray(data)) throw new Error('Conversation store root must be an array.')
+  return data as Conversation[]
+}
+
 export function loadConversations(path = conversationsPath()): Conversation[] {
   if (!existsSync(path)) return []
   try {
-    const data = JSON.parse(readFileSync(path, 'utf8'))
-    return Array.isArray(data) ? (data as Conversation[]) : []
-  } catch {
-    return [] // fichier corrompu → on repart vide plutôt que de crasher l'app
+    return parseConversationArray(path)
+  } catch (primaryError) {
+    const temporaryPath = `${path}.tmp`
+    if (existsSync(temporaryPath)) {
+      try {
+        const recovered = parseConversationArray(temporaryPath)
+        copyFileSync(path, `${path}.corrupt`)
+        saveConversations(recovered, path)
+        return recovered
+      } catch (recoveryError) {
+        throw new ConversationPersistenceError(
+          `Store conversations corrompu et récupération temporaire impossible: ${path}`,
+          path,
+          { cause: recoveryError }
+        )
+      }
+    }
+    throw new ConversationPersistenceError(`Store conversations corrompu: ${path}`, path, {
+      cause: primaryError
+    })
   }
 }
 
@@ -29,8 +62,10 @@ export function saveConversations(all: Conversation[], path = conversationsPath(
     const tmp = `${path}.tmp`
     writeFileSync(tmp, JSON.stringify(all, null, 1), 'utf8')
     renameSync(tmp, path)
-  } catch {
-    /* la persistance ne doit jamais casser la mutation qui l'a déclenchée */
+  } catch (error) {
+    throw new ConversationPersistenceError(`Écriture du store conversations impossible: ${path}`, path, {
+      cause: error
+    })
   }
 }
 

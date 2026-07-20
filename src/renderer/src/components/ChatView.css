@@ -1003,6 +1003,93 @@
   background: rgba(157, 34, 105, 0.22);
 }
 
+.chat-head-actions {
+  align-items: center;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.model-select-shell {
+  position: relative;
+  display: inline-flex;
+  flex: 0 1 210px;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.model-select-shell::after {
+  content: '⌄';
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  color: #9fb0bd;
+  font-size: 12px;
+  pointer-events: none;
+  transform: translateY(-58%);
+}
+
+.model-select-shell label,
+.model-select-help,
+.model-select-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.model-select {
+  width: 100%;
+  max-width: 210px;
+  min-height: 28px;
+  padding: 3px 27px 3px 9px;
+  appearance: none;
+  border: 1px solid rgba(126, 148, 165, 0.3);
+  border-radius: 7px;
+  background: #070b0f;
+  color: #c4d0d8;
+  font: 600 10px/1.2 var(--font);
+  cursor: pointer;
+}
+
+.model-select:hover:not(:disabled),
+.model-select:focus-visible {
+  background: rgba(104, 207, 250, 0.07);
+  border-color: rgba(104, 207, 250, 0.52);
+  color: #edf7fb;
+  box-shadow: 0 0 0 2px rgba(64, 176, 225, 0.08);
+}
+
+.model-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.model-select-help,
+.model-select-status {
+  white-space: nowrap;
+}
+
+.model-select-status:not(:empty) {
+  position: absolute;
+  bottom: calc(100% + 5px);
+  top: auto;
+  right: 0;
+  z-index: 8;
+  width: min(320px, 40vw);
+  height: auto;
+  padding: 6px 8px;
+  overflow: visible;
+  clip: auto;
+  border: 1px solid rgba(221, 173, 74, 0.45);
+  border-radius: 6px;
+  background: #120f08;
+  color: #e4c77b;
+  white-space: normal;
+  font-size: 9px;
+}
+
 .cosmic-outline .decision-strip {
   margin: 12px 22px 0;
   border-color: rgba(222, 183, 87, 0.34);
@@ -1114,6 +1201,17 @@
 .cosmic-outline .composer-field:focus-within {
   border-color: rgba(104, 207, 250, 0.74);
   box-shadow: 0 0 0 2px rgba(64, 176, 225, 0.08);
+}
+
+.msg-inspect-turn {
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--cyan);
+  font-size: 9px;
 }
 
 .cosmic-outline .composer-field textarea {

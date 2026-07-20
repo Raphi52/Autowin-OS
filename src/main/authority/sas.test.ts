@@ -3,7 +3,7 @@ import { AuthoritySas } from './sas'
 
 describe('AuthoritySas', () => {
   it('propose retourne des ids incrémentaux déterministes', () => {
-    let t = 0
+    const t = 0
     const sas = new AuthoritySas(() => t)
     const id1 = sas.propose({ question: 'Q1', options: ['a', 'b'], safeDefault: 'a', ttlMs: 1000 })
     const id2 = sas.propose({ question: 'Q2', options: ['x', 'y'], safeDefault: 'x', ttlMs: 1000 })
@@ -12,7 +12,7 @@ describe('AuthoritySas', () => {
   })
 
   it('pending liste les décisions non résolues et non expirées', () => {
-    let t = 0
+    const t = 0
     const sas = new AuthoritySas(() => t)
     const id1 = sas.propose({ question: 'Q1', options: ['a', 'b'], safeDefault: 'a', ttlMs: 1000 })
     const pending = sas.pending()
@@ -20,7 +20,7 @@ describe('AuthoritySas', () => {
   })
 
   it('resolve par user trace une résolution by=user', () => {
-    let t = 0
+    const t = 0
     const sas = new AuthoritySas(() => t)
     const id = sas.propose({ question: 'Q1', options: ['a', 'b'], safeDefault: 'a', ttlMs: 1000 })
     const res = sas.resolve(id, 'b')
@@ -34,7 +34,7 @@ describe('AuthoritySas', () => {
   })
 
   it('resolve deux fois sur le même id jette', () => {
-    let t = 0
+    const t = 0
     const sas = new AuthoritySas(() => t)
     const id = sas.propose({ question: 'Q1', options: ['a', 'b'], safeDefault: 'a', ttlMs: 1000 })
     sas.resolve(id, 'a')

@@ -268,9 +268,54 @@ interface HermesPreflightTrace {
 }
 
 interface ChatApi {
+  captureTestPage: () => Promise<string>
   storageMigration: () => Promise<Record<string, string>>
   completeStorageMigration: () => Promise<boolean>
   listProviders: () => Promise<string[]>
+  routerSnapshot: () => Promise<{
+    status: 'healthy' | 'degraded' | 'unavailable'
+    version?: string
+    uptimeSeconds?: number
+    observedAt: string
+    endpoint: string
+    transportConnected: false
+    connectionCount?: number
+    availableConnectionCount?: number
+    sources: Array<{ id: 'health' | 'connections' | 'quotas'; status: 'ok' | 'error' }>
+    protections?: { circuitBreakers?: number; lockouts?: number; quotaAlerts?: number }
+    connections: Array<{
+      id: string
+      provider: string
+      label?: string
+      email?: string
+      authType?: string
+      status: 'active' | 'limited' | 'error' | 'inactive'
+      incident?: { label: string; at?: string }
+      quotas: Array<{ label: string; remainingPercent?: number; resetAt?: string }>
+    }>
+  }>
+  routerMigrationState: () => Promise<{
+    mode: 'direct' | 'omniroute'
+    routeModel?: string
+    credentialConfigured: boolean
+  }>
+  setOmniRouteCredential: (credential: string) => Promise<{ configured: true }>
+  deleteOmniRouteCredential: () => Promise<{ configured: false }>
+  testOmniRoute: () => Promise<{
+    ok: boolean
+    models: Array<{ id: string; label: string }>
+    reason?: string
+  }>
+  activateOmniRoute: (routeModel: string) => Promise<{
+    mode: 'omniroute'
+    routeModel: string
+    credentialConfigured: true
+  }>
+  rollbackOmniRoute: () => Promise<{
+    mode: 'direct'
+    credentialConfigured: boolean
+  }>
+  openOmniRouteDashboard: () => Promise<void>
   send: (
     provider: string | undefined,
     messages: Message[],

@@ -23,7 +23,11 @@ export function materializeClaudeAttachments(attachments: Attachment[]): Materia
   const dir = mkdtempSync(join(tmpdir(), 'autowin-os-attachments-'))
   const paths = attachments.map((attachment, index) => {
     const safeName =
-      attachment.name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/^\.+/, '') || 'fichier'
+      Array.from(attachment.name.replace(/[\\/:*?"<>|]/g, '_'), (character) =>
+        character.charCodeAt(0) <= 31 ? '_' : character
+      )
+        .join('')
+        .replace(/^\.+/, '') || 'fichier'
     const path = join(dir, `${index + 1}-${safeName}`)
     const data =
       attachment.kind === 'text' ? attachment.content : Buffer.from(attachment.content, 'base64')

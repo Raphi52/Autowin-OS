@@ -43,7 +43,7 @@ const statusLine = md.split('\n')[0]
 console.log('[RUN.md]', runOk ? `créé, ${statusLine}` : 'ABSENT')
 
 // 3. scope : listé pour cette conv, PAS pour une autre
-const mine = await bus.exec('get_state', {}) // sanity
+await bus.exec('get_state', {}) // sanity
 const { listConvRuns } = await import('../src/main/runs/conv-runs')
 const own = listConvRuns(conv.id, [])
 const other = listConvRuns('conv-inexistante', [])

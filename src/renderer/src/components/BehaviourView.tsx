@@ -132,6 +132,8 @@ export function BehaviourView(): React.JSX.Element {
   useEffect(() => {
     const effectiveId = selected?.id
     if (!effectiveId || !workspaceRoot || !contextRoot) {
+      // Efface immédiatement le contenu d'un fichier qui n'est plus sélectionnable.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setContent('')
       return
     }

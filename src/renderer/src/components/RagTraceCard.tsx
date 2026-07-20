@@ -40,8 +40,9 @@ export function RagTraceCard({ request }: { request: unknown }): React.JSX.Eleme
             <li key={`${source.rank}:${source.path}`}>
               <strong>{source.path}</strong>
               <small>
-                {[source.type, source.scope, source.author, source.date].filter(Boolean).join(' · ') ||
-                  'Provenance non renseignée'}
+                {[source.type, source.scope, source.author, source.date]
+                  .filter(Boolean)
+                  .join(' · ') || 'Provenance non renseignée'}
               </small>
             </li>
           ))}
@@ -51,18 +52,31 @@ export function RagTraceCard({ request }: { request: unknown }): React.JSX.Eleme
   )
 }
 
-export function RagObservabilitySummary({ requests }: { requests: readonly unknown[] }): React.JSX.Element {
+export function RagObservabilitySummary({
+  requests
+}: {
+  requests: readonly unknown[]
+}): React.JSX.Element {
   const traces = requests.map(summarizeRagTrace)
   const injected = traces.filter((trace) => trace.status === 'injected').length
   const notInjected = traces.filter((trace) => trace.status === 'not-injected').length
   const unparseable = traces.filter((trace) => trace.status === 'unparseable').length
-  const status = requests.length === 0
-    ? 'unavailable'
-    : unparseable > 0
-      ? 'unparseable'
-      : injected > 0
-        ? 'injected'
-        : 'not-injected'
+  const status =
+    requests.length === 0
+      ? 'unavailable'
+      : unparseable > 0
+        ? 'unparseable'
+        : injected > 0
+          ? 'injected'
+          : 'not-injected'
+  const diagnostic =
+    status === 'injected'
+      ? 'Contexte Brain observé dans la requête Hermes.'
+      : status === 'unparseable'
+        ? 'Marqueur Brain observé, mais sa provenance reste non analysable.'
+        : status === 'not-injected'
+          ? 'Requêtes Hermes observées sans contexte Brain injecté.'
+          : 'Aucune requête Hermes disponible pour contrôler le RAG.'
 
   return (
     <section className={`observatory-rag-summary is-${status}`} data-rag-status={status}>
@@ -75,7 +89,7 @@ export function RagObservabilitySummary({ requests }: { requests: readonly unkno
           {injected > 1 ? 's' : ''} · {notInjected} sans RAG · {unparseable} non analysable
         </span>
       )}
-      <small>Autowin Chat · RAG non branché, donc aucune récupération à tracer.</small>
+      <small>{diagnostic}</small>
     </section>
   )
 }

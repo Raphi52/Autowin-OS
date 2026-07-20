@@ -7,6 +7,12 @@ describe('normalizeTab — mapping des vues canoniques et legacy', () => {
     expect(normalizeTab('memory')).toBe('memory')
     expect(normalizeTab('agents')).toBe('agents')
     expect(normalizeTab('observatory')).toBe('observatory')
+    expect(normalizeTab('router')).toBe('router')
+  })
+
+  it('mappe les alias OmniRoute sur Router', () => {
+    expect(normalizeTab('omniroute')).toBe('router')
+    expect(normalizeTab('routeur')).toBe('router')
   })
 
   it('mappe les onglets legacy du catalogue précédent', () => {

@@ -146,11 +146,63 @@ interface RuntimeTopology {
   orchestrator: RuntimeSlot
 }
 
-interface RuntimeModel {
+export interface RuntimeModel {
   id: string
   provider: string
   model: string
   label?: string
+}
+
+export interface OrchestratorModelOption {
+  provider: string
+  model: string
+  label: string
+}
+
+export interface OrchestratorModelGroup {
+  provider: string
+  options: OrchestratorModelOption[]
+}
+
+export function buildOrchestratorModelGroups(
+  models: RuntimeModel[],
+  current?: { provider: string; model?: string }
+): {
+  groups: OrchestratorModelGroup[]
+  currentMissing?: OrchestratorModelOption
+} {
+  const byProvider = new Map<string, OrchestratorModelOption[]>()
+  for (const item of models) {
+    const option = {
+      provider: item.provider,
+      model: item.model,
+      label: item.label?.trim() || item.model
+    }
+    const options = byProvider.get(item.provider) ?? []
+    if (!options.some((entry) => entry.model === option.model)) options.push(option)
+    byProvider.set(item.provider, options)
+  }
+  const groups = [...byProvider.entries()].map(([provider, options]) => ({ provider, options }))
+  const currentModel = current?.model
+  const currentExists =
+    currentModel !== undefined &&
+    models.some(
+      (item) =>
+        item.provider === current?.provider &&
+        (item.model === currentModel || item.id === currentModel)
+    )
+  return {
+    groups,
+    ...(!currentExists && current && currentModel
+      ? {
+          currentMissing: {
+            provider: current.provider,
+            model: currentModel,
+            label: `${current.provider} · ${currentModel} (indisponible)`
+          }
+        }
+      : {})
+  }
 }
 
 interface RuntimeRoleBinding {

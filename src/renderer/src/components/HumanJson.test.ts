@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseJsonValue } from './HumanJson'
+import { parseJsonValue } from './human-json-model'
 
 describe('HumanJson', () => {
   it('only offers structured rendering for valid JSON values', () => {

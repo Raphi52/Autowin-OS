@@ -43,8 +43,15 @@ export interface SendOptions {
   resumeSessionId?: string
   /** Signal d'annulation coopératif. */
   signal?: AbortSignal
+  /** Identité stable d'un tour, réutilisée par tous ses retries pour l'idempotence. */
+  requestId?: string
   /** Observation du payload final, juste avant spawn/fetch. Jamais transmis au provider. */
   observePrompt?: (prompt: PromptEnvelope) => void
+  /** Mode agentique local, réservé à l'étape d'exécution d'une orchestration. */
+  execution?: {
+    cwd: string
+    sandbox: 'read-only' | 'workspace-write' | 'danger-full-access'
+  }
 }
 
 /** Enveloppe observable réellement remise à l'adaptateur, avant transport provider. */
@@ -72,6 +79,14 @@ export interface Usage {
   costUsd?: number
 }
 
+export interface ExecutionEvidence {
+  type: string
+  kind: 'mutation' | 'verification' | 'inspection' | 'other'
+  status: string
+  ok: boolean
+  summary: string
+}
+
 /** Résultat final d'un tour, après consommation du stream. */
 export interface SendResult {
   /** Texte complet assemblé. */
@@ -84,6 +99,8 @@ export interface SendResult {
   systemInjected: boolean
   /** Tokens/coût réels du tour (undefined si le provider ne les remonte pas). */
   usage?: Usage
+  /** Traces bornées observées par le runner local, jamais inventées depuis le texte final. */
+  executionEvidence?: ExecutionEvidence[]
 }
 
 /**
@@ -94,6 +111,8 @@ export interface SendResult {
 export interface ProviderAdapter {
   /** Identifiant stable, ex. 'claude' | 'codex'. */
   readonly id: string
+  /** Le provider possède un vrai runner local (terminal/fichiers), pas seulement du chat. */
+  readonly supportsExecution?: boolean
 
   /**
    * S'assure que l'adaptateur est authentifié (OAuth abonnement, PAS clé API).

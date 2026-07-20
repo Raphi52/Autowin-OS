@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs'
 
-const targets = await (await fetch('http://127.0.0.1:9247/json')).json()
+const port = process.env.AUTOWIN_CDP_PORT || '9247'
+const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
 const page = targets.find((target) => target.type === 'page')
 if (!page) throw new Error('Fenêtre Autowin introuvable via CDP')
 const socket = new WebSocket(page.webSocketDebuggerUrl)
@@ -57,17 +58,19 @@ if (process.argv.includes('--unlock')) {
 }
 await evaluate(`(() => {
   const panel = document.querySelector('.observatory-hermes-diagnostics')
-  if (!panel) throw new Error('Diagnostic Hermes global introuvable')
-  panel.open = true
-  const first = panel.querySelector('div > details')
-  if (first) first.open = true
+  if (panel) {
+    panel.open = true
+    const first = panel.querySelector('div > details')
+    if (first) first.open = true
+  }
+  if (!document.querySelector('.observatory-rag-summary')) throw new Error('Résumé RAG introuvable')
 })()`)
 await new Promise((resolve) => setTimeout(resolve, 300))
 const state = await evaluate(
   `({ text: document.body.innerText, hermesMetric: document.querySelector('[data-metric="hermes"]')?.innerText, proof: document.querySelector('.observatory-hermes-proof')?.innerText })`
 )
 const screenshot = await send('Page.captureScreenshot', { format: 'png' })
-const output = 'C:/Amitel/Autowin OS/artifacts/hermes-trace-observatory.png'
+const output = process.env.AUTOWIN_RAG_SCREENSHOT || 'C:/Amitel/Autowin OS/artifacts/hermes-trace-observatory.png'
 writeFileSync(output, Buffer.from(screenshot.data, 'base64'))
 console.log(JSON.stringify({ state, output }, null, 2))
 socket.close()

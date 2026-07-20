@@ -58,6 +58,23 @@
   border-radius: var(--container-radius-panel) var(--container-radius-panel) 0 0;
   background: var(--surface-panel);
 }
+.observatory-turn-focus {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 11px;
+  border: 1px solid rgba(89, 220, 255, 0.42);
+  background: rgba(21, 92, 122, 0.18);
+  color: var(--cyan);
+  font-size: 10px;
+}
+.observatory-turn-focus button {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-decoration: underline;
+}
 .observatory-hermes-proof {
   align-self: center;
   max-width: 310px;
@@ -209,6 +226,47 @@
 .observatory-toolbar button {
   cursor: pointer;
 }
+.observatory-view-switch {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-inset);
+}
+.observatory-view-switch button {
+  height: 25px;
+  border: 0;
+  background: transparent;
+}
+.observatory-view-switch button.is-active {
+  background: var(--surface-selected);
+  color: var(--cyan);
+}
+.observatory-source-errors {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  padding: 9px 12px;
+  border: 1px solid rgba(242, 130, 104, 0.48);
+  background: rgba(92, 28, 31, 0.32);
+  color: #ffad9b;
+}
+.observatory-source-errors div {
+  display: grid;
+  gap: 3px;
+}
+.observatory-source-errors small {
+  color: var(--text-faint);
+}
+.observatory-source-errors button {
+  padding: 6px 10px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
 .observatory-config {
   position: absolute;
   z-index: 20;
@@ -301,6 +359,121 @@
   min-width: 0;
   padding: 15px;
   overflow: auto;
+}
+.observatory-causal-path {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+.observatory-causal-path > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.observatory-causal-path > header div {
+  display: grid;
+  gap: 4px;
+}
+.observatory-causal-path > header small,
+.observatory-causal-path > header span {
+  color: var(--text-faint);
+  font-size: 9px;
+}
+.observatory-causal-tree {
+  display: grid;
+  gap: 5px;
+}
+.observatory-causal-node-wrap > button {
+  position: relative;
+  display: grid;
+  grid-template-columns: 12px minmax(100px, 1fr) 90px minmax(0, 72px);
+  gap: 10px;
+  align-items: center;
+  margin-left: min(calc(var(--causal-depth) * 10px), 42px);
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-card);
+  color: var(--text-dim);
+  text-align: left;
+  cursor: pointer;
+}
+.observatory-causal-node-wrap > button::before {
+  position: absolute;
+  right: 100%;
+  width: calc(var(--causal-depth) * 24px);
+  height: 1px;
+  background: var(--line-strong);
+  content: '';
+}
+.observatory-causal-node-wrap > button > i {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--text-faint);
+  border-radius: 50%;
+}
+.observatory-causal-node-wrap > button > span {
+  display: grid;
+  gap: 2px;
+}
+.observatory-causal-node-wrap > button small,
+.observatory-causal-node-wrap > button em {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-faint);
+  font-size: 9px;
+  font-style: normal;
+}
+.observatory-causal-node-wrap > button.is-critical {
+  border-color: rgba(89, 220, 255, 0.46);
+  background: linear-gradient(90deg, rgba(89, 220, 255, 0.1), var(--surface-card));
+}
+.observatory-causal-node-wrap > button.is-critical > i {
+  border-color: var(--cyan);
+  background: var(--cyan);
+  box-shadow: 0 0 8px rgba(89, 220, 255, 0.65);
+}
+.observatory-causal-node-wrap > button.is-bottleneck {
+  border-color: rgba(242, 189, 104, 0.75);
+}
+.observatory-causal-node-wrap > button.is-bottleneck::after {
+  color: #f2bd68;
+  font-size: 8px;
+  content: 'GOULOT';
+}
+.observatory-causal-node-wrap > button.is-selected {
+  outline: 1px solid var(--cyan);
+  outline-offset: 2px;
+}
+.observatory-causal-detail {
+  display: grid;
+  gap: 8px;
+  margin: 7px 0 10px 42px;
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-inset);
+}
+.observatory-causal-detail > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.observatory-causal-detail > header div {
+  display: grid;
+  gap: 3px;
+}
+.observatory-causal-detail > header small,
+.observatory-causal-detail > p {
+  color: var(--text-faint);
+}
+.observatory-causal-detail button {
+  border: 0;
+  background: transparent;
+  color: var(--cyan);
+  cursor: pointer;
 }
 .observatory-empty {
   padding: 40px;

@@ -14,6 +14,7 @@ import type {
  */
 export class ProviderRegistry {
   private readonly adapters = new Map<string, ProviderAdapter>()
+  private conversationTransport: { provider: string; model: string } | null = null
 
   /** Bloc système par défaut (kit condensé SOUL) injecté sur CHAQUE tour. */
   constructor(private readonly systemBlock: string | undefined = undefined) {}
@@ -37,18 +38,41 @@ export class ProviderRegistry {
     return a
   }
 
+  setConversationTransport(route: { provider: string; model: string } | null): void {
+    if (route) {
+      this.get(route.provider)
+      if (!route.model.trim()) throw new Error('Modèle de transport vide')
+    }
+    this.conversationTransport = route ? { ...route } : null
+  }
+
+  getConversationTransport(): { provider: string; model: string } | null {
+    return this.conversationTransport ? { ...this.conversationTransport } : null
+  }
+
+  private resolve(id: string, opts: SendOptions): { id: string; opts: SendOptions } {
+    if (!this.conversationTransport) return { id, opts }
+    if (opts.execution)
+      throw new Error('Exécution locale refusée tant que le transport OmniRoute est actif')
+    return {
+      id: this.conversationTransport.provider,
+      opts: { ...opts, model: this.conversationTransport.model }
+    }
+  }
+
   describePrompt(
     id: string,
     messages: Message[],
     opts: SendOptions = {},
     model?: string
   ): PromptEnvelope {
-    const adapter = this.get(id)
-    const resolved = { ...opts, system: opts.system ?? this.systemBlock }
+    const route = this.resolve(id, opts)
+    const adapter = this.get(route.id)
+    const resolved = { ...route.opts, system: route.opts.system ?? this.systemBlock }
     return (
-      adapter.describePrompt?.(messages, resolved, model) ?? {
-        provider: id,
-        model,
+      adapter.describePrompt?.(messages, resolved, resolved.model ?? model) ?? {
+        provider: route.id,
+        model: resolved.model ?? model,
         transport: 'ProviderAdapter.send',
         system: resolved.system,
         messages,
@@ -70,9 +94,13 @@ export class ProviderRegistry {
     opts: SendOptions = {},
     onChunk?: (c: StreamChunk) => void
   ): Promise<SendResult> {
-    const adapter = this.get(id)
-    const system = opts.system ?? this.systemBlock
-    const gen = adapter.send(messages, { ...opts, system })
+    const route = this.resolve(id, opts)
+    const adapter = this.get(route.id)
+    if (route.opts.execution && adapter.supportsExecution !== true) {
+      throw new Error(`Provider ${route.id} sans exécuteur local outillé`)
+    }
+    const system = route.opts.system ?? this.systemBlock
+    const gen = adapter.send(messages, { ...route.opts, system })
 
     let step = await gen.next()
     while (!step.done) {

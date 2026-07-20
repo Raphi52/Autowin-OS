@@ -97,6 +97,82 @@ interface CodexModelPayload {
   supported_reasoning_levels?: Array<{ effort?: unknown }>
 }
 
+interface OmniRouteCredentialReader {
+  get(): string | null
+}
+
+async function readBoundedJson(response: Response, maxBytes = 1024 * 1024): Promise<unknown> {
+  const declared = Number(response.headers.get('content-length'))
+  if (Number.isFinite(declared) && declared > maxBytes) throw new Error('response-too-large')
+  if (!response.body) throw new Error('response-empty')
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let received = 0
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      received += value.byteLength
+      if (received > maxBytes) {
+        await reader.cancel('response-too-large')
+        throw new Error('response-too-large')
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  const merged = new Uint8Array(received)
+  let offset = 0
+  for (const chunk of chunks) {
+    merged.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(merged))
+}
+
+export async function discoverOmniRouteModels(
+  fetchFn: typeof fetch,
+  credentialStore: OmniRouteCredentialReader
+): Promise<ImportedModel[]> {
+  let credential: string | null
+  try {
+    credential = credentialStore.get()
+  } catch {
+    return []
+  }
+  if (!credential) return []
+  try {
+    const response = await fetchFn('http://127.0.0.1:20128/v1/models', {
+      method: 'GET',
+      headers: { authorization: `Bearer ${credential}`, accept: 'application/json' },
+      redirect: 'error',
+      signal: AbortSignal.timeout(3_000)
+    })
+    if (!response.ok) return []
+    if (!(response.headers.get('content-type') ?? '').toLowerCase().includes('application/json')) {
+      return []
+    }
+    const payload = (await readBoundedJson(response)) as { object?: unknown; data?: unknown }
+    if (payload?.object !== 'list' || !Array.isArray(payload.data)) return []
+    return payload.data.flatMap<ImportedModel>((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return []
+      const id = (entry as { id?: unknown }).id
+      if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9._:/-]{0,119}$/i.test(id)) return []
+      return [{
+        id: `omniroute/${id}`,
+        provider: 'omniroute',
+        model: id,
+        label: `${id} · OmniRoute`,
+        reasoningEfforts: ['none'],
+        defaultReasoningEffort: 'none'
+      }]
+    })
+  } catch {
+    return []
+  }
+}
+
 async function discoverCodexModels(
   fetchFn: typeof fetch,
   loadTokensFn: () => Tokens | null
@@ -160,8 +236,12 @@ function labelClaudeModel(id: string): string {
  */
 export async function discoverImportedModels(
   fetchFn: typeof fetch = fetch,
-  loadTokensFn: () => Tokens | null = loadTokens
+  loadTokensFn: () => Tokens | null = loadTokens,
+  omniRouteCredentialStore?: OmniRouteCredentialReader
 ): Promise<ImportedModel[]> {
+  const omniRouteModels = omniRouteCredentialStore
+    ? await discoverOmniRouteModels(fetchFn, omniRouteCredentialStore)
+    : []
   const codexModels = await discoverCodexModels(fetchFn, loadTokensFn)
   try {
     const response = await fetchFn('http://127.0.0.1:8787/models', {
@@ -183,12 +263,14 @@ export async function discoverImportedModels(
     return [
       ...codexModels,
       ...discovered,
-      ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi')
+      ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi'),
+      ...omniRouteModels
     ]
   } catch {
     return [
       ...codexModels,
-      ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider !== 'codex')
+      ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider !== 'codex'),
+      ...omniRouteModels
     ]
   }
 }

@@ -758,14 +758,6 @@
   gap: 12px;
 }
 
-.cosmic-outline .composer-runtime {
-  overflow: hidden;
-  color: #827c65;
-  font-size: 8px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .cosmic-outline .runs-pane {
   gap: 14px;
   padding: 18px 15px;

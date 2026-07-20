@@ -7,8 +7,6 @@
  */
 import { ProviderRegistry } from '../src/main/providers/registry'
 import { ClaudeCliAdapter } from '../src/main/providers/claude'
-import { RoleModelConfig } from '../src/main/roles'
-import { ConversationStore } from '../src/main/store/conversations'
 import { AppCommandBus } from '../src/main/commands'
 import { AgentPilot } from '../src/main/agent-pilot'
 import { AutowinOS } from '../src/main/os'

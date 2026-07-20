@@ -42,11 +42,30 @@ export class ModelQuestionHub {
     source: PendingModelQuestion['source'],
     question: ModelQuestion,
     notify: (pending: PendingModelQuestion) => void,
-    context?: string
+    context?: string,
+    signal?: AbortSignal
   ): Promise<string> {
     const id = `model-question-${this.nextId++}`
     return new Promise((resolve, reject) => {
-      this.waiting.set(id, { resolve, reject })
+      const abort = (): void => {
+        this.cancel(id, String(signal?.reason ?? 'Annulation demandée'))
+      }
+      const cleanup = (): void => signal?.removeEventListener('abort', abort)
+      this.waiting.set(id, {
+        resolve: (answer) => {
+          cleanup()
+          resolve(answer)
+        },
+        reject: (reason) => {
+          cleanup()
+          reject(reason)
+        }
+      })
+      if (signal?.aborted) {
+        abort()
+        return
+      }
+      signal?.addEventListener('abort', abort, { once: true })
       notify({ id, source, context, ...question })
     })
   }
@@ -59,6 +78,14 @@ export class ModelQuestionHub {
     }
     this.waiting.delete(id)
     pending.resolve(answer.trim())
+  }
+
+  cancel(id: string, reason = 'Question annulée'): boolean {
+    const pending = this.waiting.get(id)
+    if (!pending) return false
+    this.waiting.delete(id)
+    pending.reject(new Error(reason))
+    return true
   }
 
   cancelAll(reason = 'Fenêtre fermée'): void {

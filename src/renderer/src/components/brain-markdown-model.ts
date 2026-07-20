@@ -12,5 +12,6 @@ export function splitFrontmatter(source: string): Frontmatter {
     .map((line) => /^([\w-]+):\s*(.+)$/.exec(line))
     .filter((entry): entry is RegExpExecArray => entry !== null)
     .map((entry) => ({ key: entry[1], value: entry[2].replace(/^['"]|['"]$/g, '') }))
+    .filter((entry) => !/^(?:\[\s*\]|\{\s*\})$/.test(entry.value.trim()))
   return { body: normalized.slice(match[0].length), entries }
 }

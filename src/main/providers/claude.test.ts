@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { basename } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { claudeTransportEnvelope, materializeClaudeAttachments } from './claude'
 
@@ -20,6 +21,20 @@ describe('ClaudeCliAdapter — pièces jointes', () => {
     expect(materialized.promptSuffix).toContain(materialized.paths[0])
     materialized.cleanup()
     expect(existsSync(materialized.dir)).toBe(false)
+  })
+  it('retire tous les caractères de contrôle Windows des noms matérialisés', () => {
+    const materialized = materializeClaudeAttachments([
+      {
+        name: 'evil\ncarriage\rnull\u0000.txt',
+        mimeType: 'text/plain',
+        size: 3,
+        kind: 'text',
+        content: 'YWJj'
+      }
+    ])
+
+    expect(basename(materialized.paths[0])).toBe('1-evil_carriage_null_.txt')
+    materialized.cleanup()
   })
   it('decrit le prompt materialise et les vrais arguments transport', () => {
     const materialized = materializeClaudeAttachments([

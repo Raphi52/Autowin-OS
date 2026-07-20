@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { Markdown } from './Markdown'
 import { ActivityPane } from './ActivityPane'
 import { HumanJson } from './HumanJson'
 import { ModuleHeader } from './ModuleHeader'
 import {
   CHAT_PANE_LIMITS,
+  buildOrchestratorModelGroups,
   clampConversationPaneWidth,
   groupAssistantActivity,
   hydrateStoredAssistant,
@@ -17,11 +18,13 @@ import {
   type ChatPart,
   type HydratedAssistantMessage,
   type ChatRuntimeIdentity,
+  type OrchestratorModelOption,
   type RunRequestIdentity,
   type ScopedLiveRun
 } from './chat-view-model'
 import { searchConversations } from './conversation-search'
 import './ChatView.css'
+import type { InspectTurnTarget } from '../observatory-focus'
 
 /* ---------- Types ---------- */
 
@@ -35,6 +38,11 @@ interface AttachmentMeta {
 interface ChatAttachment extends AttachmentMeta {
   kind: 'text' | 'image' | 'file'
   content: string
+}
+interface ComposerDraft {
+  input: string
+  attachments: ChatAttachment[]
+  error: string | null
 }
 interface UserMsg {
   role: 'user'
@@ -288,6 +296,7 @@ const RUN_DOT: Record<string, string> = {
 }
 
 const MAX_ATTACHMENTS = 8
+const NEW_DRAFT_KEY = '__new__'
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 const MAX_ATTACHMENTS_BYTES = 20 * 1024 * 1024
 const MAX_INLINE_TEXT_BYTES = 2 * 1024 * 1024
@@ -355,14 +364,174 @@ async function encodeAttachment(file: File): Promise<ChatAttachment> {
   }
 }
 
+function messageKey(message: Msg, index: number): string {
+  return `${message.role}:${index}`
+}
+
+const ChatMessageRow = memo(function ChatMessageRow({
+  message,
+  conversationId,
+  onInspectTurn
+}: {
+  message: Msg
+  conversationId: string | null
+  onInspectTurn?: (target: InspectTurnTarget) => void
+}): React.JSX.Element {
+  if (message.role === 'user') {
+    return (
+      <div className="msg user fade-in">
+        <div className="msg-meta">
+          <span className="msg-role">Toi</span>
+        </div>
+        {message.content && <div className="msg-body">{message.content}</div>}
+        {message.attachments && message.attachments.length > 0 && (
+          <div className="attachment-list sent">
+            {message.attachments.map((file, fileIndex) => (
+              <span className="attachment-chip" key={`${file.name}-${fileIndex}`}>
+                <span aria-hidden="true">{file.mimeType.startsWith('image/') ? '▧' : '▤'}</span>
+                <span className="attachment-name">{file.name}</span>
+                <small>{formatFileSize(file.size)}</small>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+  return (
+    <div className="msg assistant fade-in">
+      <div className="msg-meta">
+        <span className="msg-role">Agent</span>
+        {!message.done && <span className="spinner" />}
+      </div>
+      <div className="msg-turn">
+        {message.parts.length === 0 && !message.done && (
+          <div className="msg-body c-faint">réflexion…</div>
+        )}
+        {groupAssistantActivity(message.parts).map((part, index) =>
+          part.kind === 'text' ? (
+            <div key={index} className="msg-body">
+              <Markdown text={part.text} />
+            </div>
+          ) : (
+            <AssistantActivityGroup key={index} actions={part.actions} />
+          )
+        )}
+      </div>
+      {message.turnId && message.turnId !== 'pending' && conversationId && onInspectTurn && (
+        <button
+          type="button"
+          className="msg-inspect-turn"
+          onClick={() => onInspectTurn({ conversationId, turnId: message.turnId! })}
+        >
+          Inspecter ce tour
+        </button>
+      )}
+    </div>
+  )
+})
+
 /* ---------- Vue ---------- */
+
+export function OrchestratorModelSelector({
+  busy,
+  catalogLoaded,
+  models,
+  binding,
+  pending,
+  error,
+  onSelect
+}: {
+  busy: boolean
+  catalogLoaded: boolean
+  models: RuntimeModel[]
+  binding: { provider: string; model?: string } | null
+  pending: boolean
+  error: string | null
+  onSelect: (option: OrchestratorModelOption) => void
+}): React.JSX.Element {
+  const grouped = useMemo(
+    () => buildOrchestratorModelGroups(models, binding ?? undefined),
+    [models, binding]
+  )
+  const currentCatalogModel = binding?.model
+    ? models.find(
+        (item) =>
+          item.provider === binding.provider &&
+          (item.model === binding.model || item.id === binding.model)
+      )?.model
+    : undefined
+  const value = binding?.model
+    ? `${binding.provider}\u0000${currentCatalogModel ?? binding.model}`
+    : ''
+
+  return (
+    <div className="model-select-shell">
+      <label htmlFor="chat-orchestrator-model">Orchestrateur</label>
+      <select
+        id="chat-orchestrator-model"
+        data-testid="chat-orchestrator-model"
+        className="model-select"
+        value={value}
+        disabled={busy || pending || models.length === 0}
+        aria-describedby="chat-orchestrator-model-help chat-orchestrator-model-status"
+        onChange={(event) => {
+          const [provider, model] = event.currentTarget.value.split('\u0000')
+          const option = grouped.groups
+            .flatMap((group) => group.options)
+            .find((candidate) => candidate.provider === provider && candidate.model === model)
+          if (option) onSelect(option)
+        }}
+      >
+        {!catalogLoaded && <option value="">Chargement des modèles…</option>}
+        {catalogLoaded && models.length === 0 && <option value="">Aucun modèle disponible</option>}
+        {grouped.groups.map((group) => (
+          <optgroup key={group.provider} label={group.provider}>
+            {group.options.map((option) => (
+              <option
+                key={`${option.provider}:${option.model}`}
+                value={`${option.provider}\u0000${option.model}`}
+              >
+                {option.label}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      <span id="chat-orchestrator-model-help" className="model-select-help">
+        {busy
+          ? 'Sélecteur verrouillé pendant le tour en cours de cette conversation.'
+          : 'Le changement s’appliquera au prochain tour. La conversation Autowin et son historique sont conservés.'}
+      </span>
+      <span
+        id="chat-orchestrator-model-status"
+        className="model-select-status"
+        role="status"
+        aria-live="polite"
+      >
+        {pending
+          ? 'Enregistrement…'
+          : (error ??
+            (catalogLoaded && models.length === 0
+              ? 'Catalogue de modèles vide.'
+              : (grouped.currentMissing?.label ?? '')))}
+      </span>
+    </div>
+  )
+}
 
 /**
  * Chat façon Claude Code : conversations à gauche, fil transparent au centre
  * (l'agent parle ET pilote — ses actions en puces inline), workflows (RUN.md)
  * repliables à droite. Tout se passe ici.
  */
-export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX.Element {
+export function ChatView({
+  isActive = true,
+  onInspectTurn
+}: {
+  isActive?: boolean
+  onInspectTurn?: (target: InspectTurnTarget) => void
+}): React.JSX.Element {
   const [convs, setConvs] = useState<Conv[]>([])
   const [convQuery, setConvQuery] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -373,6 +542,14 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
   const [dragActive, setDragActive] = useState(false)
   const [busyConversations, setBusyConversations] = useState<Set<string>>(() => new Set())
   const [runtimeIdentity, setRuntimeIdentity] = useState<ChatRuntimeIdentity | null>(null)
+  const [modelCatalog, setModelCatalog] = useState<RuntimeModel[]>([])
+  const [orchestratorBinding, setOrchestratorBinding] = useState<{
+    provider: string
+    model?: string
+  } | null>(null)
+  const [modelCatalogLoaded, setModelCatalogLoaded] = useState(false)
+  const [modelChangePending, setModelChangePending] = useState(false)
+  const [modelChangeError, setModelChangeError] = useState<string | null>(null)
   const [conversationsPaneWidth, setConversationsPaneWidth] = useState(() => {
     const saved = Number(window.localStorage.getItem('autowin.chat.conversationsPaneWidth'))
     return clampConversationPaneWidth(Number.isFinite(saved) && saved > 0 ? saved : 292)
@@ -395,9 +572,50 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
   const fileInputRef = useRef<HTMLInputElement>(null)
   const liveMessagesRef = useRef(new Map<string, Msg[]>())
   const busyConversationsRef = useRef(new Set<string>())
+  const sendLocksRef = useRef(new Set<string>())
+  const composerDraftKeyRef = useRef(NEW_DRAFT_KEY)
+  const composerSelectionGenerationRef = useRef(0)
+  const composerDraftsRef = useRef(
+    new Map<string, ComposerDraft>([[NEW_DRAFT_KEY, { input: '', attachments: [], error: null }]])
+  )
   const activeRef = useRef<string | null>(null)
+  const runtimeRefreshGenerationRef = useRef(0)
   const runsRequestRef = useRef<RunRequestIdentity>({ id: 0, scope: 'conv', convId: null })
   const followTailRef = useRef(true)
+
+  function getComposerDraft(key: string): ComposerDraft {
+    return composerDraftsRef.current.get(key) ?? { input: '', attachments: [], error: null }
+  }
+
+  function setDraftInput(key: string, value: string): void {
+    composerDraftsRef.current.set(key, { ...getComposerDraft(key), input: value })
+    if (composerDraftKeyRef.current === key) setInput(value)
+  }
+
+  function setDraftAttachments(
+    key: string,
+    update: (current: ChatAttachment[]) => ChatAttachment[]
+  ): void {
+    const draft = getComposerDraft(key)
+    const next = update(draft.attachments)
+    composerDraftsRef.current.set(key, { ...draft, attachments: next })
+    if (composerDraftKeyRef.current === key) setAttachments(next)
+  }
+
+  function setDraftError(key: string, error: string | null): void {
+    composerDraftsRef.current.set(key, { ...getComposerDraft(key), error })
+    if (composerDraftKeyRef.current === key) setAttachmentError(error)
+  }
+
+  function switchComposerDraft(key: string): void {
+    composerSelectionGenerationRef.current += 1
+    composerDraftKeyRef.current = key
+    const draft = getComposerDraft(key)
+    composerDraftsRef.current.set(key, draft)
+    setInput(draft.input)
+    setAttachments(draft.attachments)
+    setAttachmentError(draft.error)
+  }
 
   function beginConversationsResize(event: React.PointerEvent<HTMLDivElement>): void {
     event.preventDefault()
@@ -432,6 +650,7 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
   }
 
   async function refreshRuntimeIdentity(): Promise<ChatRuntimeIdentity> {
+    const generation = ++runtimeRefreshGenerationRef.current
     const [topology, models, roles] = await Promise.all([
       window.api.topology(),
       window.api.models(),
@@ -442,8 +661,34 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
       models as RuntimeModel[],
       roles.orchestrator
     )
-    setRuntimeIdentity(resolved)
+    if (generation === runtimeRefreshGenerationRef.current) {
+      setModelCatalog(models as RuntimeModel[])
+      setOrchestratorBinding(roles.orchestrator ?? null)
+      setModelCatalogLoaded(true)
+      setRuntimeIdentity(resolved)
+    }
     return resolved
+  }
+
+  async function changeOrchestratorModel(option: OrchestratorModelOption): Promise<void> {
+    if (busy || modelChangePending) return
+    setModelChangePending(true)
+    setModelChangeError(null)
+    try {
+      await window.api.setRole('orchestrator', option.provider, option.model)
+      await refreshRuntimeIdentity()
+    } catch (error) {
+      setModelChangeError(
+        `Changement non enregistré : ${error instanceof Error ? error.message : String(error)}`
+      )
+      try {
+        await refreshRuntimeIdentity()
+      } catch {
+        // L'identité affichée reste la dernière identité confirmée.
+      }
+    } finally {
+      setModelChangePending(false)
+    }
   }
   useEffect(() => {
     activeRef.current = activeId
@@ -458,35 +703,38 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
 
   async function addFiles(files: FileList | File[]): Promise<void> {
     if (busy) return
-    setAttachmentError(null)
-    const seen = new Set(attachments.map((file) => `${file.name}\u0000${file.size}`))
+    const originDraftKey = composerDraftKeyRef.current
+    const originDraft = getComposerDraft(originDraftKey)
+    setDraftError(originDraftKey, null)
+    const seen = new Set(originDraft.attachments.map((file) => `${file.name}\u0000${file.size}`))
     const candidates = Array.from(files).filter((file) => {
       const key = `${file.name}\u0000${file.size}`
       if (seen.has(key)) return false
       seen.add(key)
       return true
     })
-    if (attachments.length + candidates.length > MAX_ATTACHMENTS) {
-      setAttachmentError(`Maximum ${MAX_ATTACHMENTS} fichiers par message.`)
+    if (originDraft.attachments.length + candidates.length > MAX_ATTACHMENTS) {
+      setDraftError(originDraftKey, `Maximum ${MAX_ATTACHMENTS} fichiers par message.`)
       return
     }
     const oversized = candidates.find((file) => file.size > MAX_ATTACHMENT_BYTES)
     if (oversized) {
-      setAttachmentError(`${oversized.name} dépasse la limite de 10 Mo.`)
+      setDraftError(originDraftKey, `${oversized.name} dépasse la limite de 10 Mo.`)
       return
     }
     const totalBytes =
-      attachments.reduce((sum, file) => sum + file.size, 0) +
+      originDraft.attachments.reduce((sum, file) => sum + file.size, 0) +
       candidates.reduce((sum, file) => sum + file.size, 0)
     if (totalBytes > MAX_ATTACHMENTS_BYTES) {
-      setAttachmentError('Le total des pièces jointes dépasse 20 Mo.')
+      setDraftError(originDraftKey, 'Le total des pièces jointes dépasse 20 Mo.')
       return
     }
     try {
       const encoded = await Promise.all(candidates.map(encodeAttachment))
-      setAttachments((current) => [...current, ...encoded])
+      setDraftAttachments(originDraftKey, (current) => [...current, ...encoded])
     } catch (error) {
-      setAttachmentError(
+      setDraftError(
+        originDraftKey,
         `Lecture impossible : ${error instanceof Error ? error.message : String(error)}`
       )
     }
@@ -676,9 +924,7 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
       )
     liveMessagesRef.current.set(c.id, stored)
     setMessages(stored)
-    setInput('')
-    setAttachments([])
-    setAttachmentError(null)
+    switchComposerDraft(c.id)
   }
 
   function newConv(): void {
@@ -687,9 +933,7 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
     activeRef.current = null
     setActiveId(null)
     setMessages([])
-    setInput('')
-    setAttachments([])
-    setAttachmentError(null)
+    switchComposerDraft(NEW_DRAFT_KEY)
   }
 
   useEffect(() => {
@@ -697,7 +941,7 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
       const prompt = (event as CustomEvent<{ prompt?: string }>).detail?.prompt
       if (!prompt) return
       newConv()
-      setInput(prompt)
+      setDraftInput(NEW_DRAFT_KEY, prompt)
       requestAnimationFrame(() => composerInputRef.current?.focus())
     }
     window.addEventListener('autowin:brainwash', openBrainwash)
@@ -719,6 +963,7 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
     if (!c) return
     setDeleteCandidate(null)
     await window.api.conversationsRemove(c.id)
+    composerDraftsRef.current.delete(c.id)
     if (activeId === c.id) newConv()
     await refreshConvs()
   }
@@ -739,53 +984,79 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
 
   async function send(text?: string): Promise<void> {
     const value = (text ?? input).trim()
-    if ((!value && attachments.length === 0) || busy) return
-    const outgoingAttachments = attachments
+    const sendDraftKey = composerDraftKeyRef.current
+    const outgoingDraft = getComposerDraft(sendDraftKey)
+    const outgoingAttachments = outgoingDraft.attachments
+    const sendSelectionGeneration = composerSelectionGenerationRef.current
+    const sendLockKey = activeId ?? NEW_DRAFT_KEY
+    if (
+      (!value && outgoingAttachments.length === 0) ||
+      busy ||
+      sendLocksRef.current.has(sendLockKey)
+    )
+      return
+    sendLocksRef.current.add(sendLockKey)
 
-    // Pas de conversation active → on en crée une (titre = début du message).
     let convId = activeId
-    if (!convId) {
-      const identity = await refreshRuntimeIdentity()
-      const titleSource = value || outgoingAttachments[0].name
-      const title = titleSource.length > 42 ? `${titleSource.slice(0, 42)}…` : titleSource
-      const c = await window.api.conversationsCreate({
-        title,
-        category: identity.provider,
-        provider: identity.provider
-      })
-      convId = c.id
-      activeRef.current = c.id
-      setActiveId(c.id)
-      refreshConvs()
-    }
-
-    const history: Msg[] = [
-      ...messages,
-      {
-        role: 'user',
-        content: value,
-        attachments: outgoingAttachments.map(({ name, mimeType, size }) => ({
-          name,
-          mimeType,
-          size
-        }))
-      },
-      hydrateStoredAssistant({ content: '', parts: [], status: 'streaming' })
-    ]
-    setMessages(history)
-    liveMessagesRef.current.set(convId, history)
-    setInput('')
-    setAttachments([])
-    setAttachmentError(null)
-    followTailRef.current = true
-    setConversationBusy(convId, true)
-    const payload: Array<{
-      role: 'user' | 'assistant'
-      content: string
-      attachments?: ChatAttachment[]
-    }> = flatten(history.slice(0, -1))
-    payload[payload.length - 1].attachments = outgoingAttachments
+    let messageCommitted = false
     try {
+      // Pas de conversation active → on en crée une (titre = début du message).
+      if (!convId) {
+        const identity = await refreshRuntimeIdentity()
+        const titleSource = value || outgoingAttachments[0].name
+        const title = titleSource.length > 42 ? `${titleSource.slice(0, 42)}…` : titleSource
+        const c = await window.api.conversationsCreate({
+          title,
+          category: identity.provider,
+          provider: identity.provider
+        })
+        convId = c.id
+        const shouldAdoptCreatedConversation =
+          activeRef.current === null &&
+          composerDraftKeyRef.current === sendDraftKey &&
+          composerSelectionGenerationRef.current === sendSelectionGeneration
+        sendLocksRef.current.add(convId)
+        sendLocksRef.current.delete(sendLockKey)
+        composerDraftsRef.current.set(c.id, outgoingDraft)
+        if (getComposerDraft(NEW_DRAFT_KEY) === outgoingDraft) {
+          composerDraftsRef.current.set(NEW_DRAFT_KEY, { input: '', attachments: [], error: null })
+        }
+        if (shouldAdoptCreatedConversation) {
+          activeRef.current = c.id
+          setActiveId(c.id)
+          composerDraftKeyRef.current = c.id
+        }
+        void refreshConvs()
+      }
+
+      const previousMessages = liveMessagesRef.current.get(convId) ?? messages
+      const history: Msg[] = [
+        ...previousMessages,
+        {
+          role: 'user',
+          content: value,
+          attachments: outgoingAttachments.map(({ name, mimeType, size }) => ({
+            name,
+            mimeType,
+            size
+          }))
+        },
+        hydrateStoredAssistant({ content: '', parts: [], status: 'streaming' })
+      ]
+      liveMessagesRef.current.set(convId, history)
+      if (activeRef.current === convId) setMessages(history)
+      setDraftInput(convId, '')
+      setDraftAttachments(convId, () => [])
+      setDraftError(convId, null)
+      followTailRef.current = true
+      setConversationBusy(convId, true)
+      messageCommitted = true
+      const payload: Array<{
+        role: 'user' | 'assistant'
+        content: string
+        attachments?: ChatAttachment[]
+      }> = flatten(history.slice(0, -1))
+      payload[payload.length - 1].attachments = outgoingAttachments
       const res = await window.api.pilotChat(payload, convId)
       if (!res.ok || res.cancelled)
         patchLast(convId, (m) => {
@@ -794,36 +1065,49 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
           if (!res.cancelled) m.parts.push({ kind: 'text', text: `⚠️ ${res.error ?? 'erreur'}` })
         })
     } catch (error) {
-      patchLast(convId, (m) => {
-        m.status = 'failed'
-        m.done = true
-        m.parts.push({
-          kind: 'text',
-          text: `⚠️ ${error instanceof Error ? error.message : String(error)}`
+      if (!messageCommitted) {
+        setDraftError(
+          sendDraftKey,
+          `Envoi impossible : ${error instanceof Error ? error.message : String(error)}`
+        )
+      } else if (convId) {
+        patchLast(convId, (m) => {
+          m.status = 'failed'
+          m.done = true
+          m.parts.push({
+            kind: 'text',
+            text: `⚠️ ${error instanceof Error ? error.message : String(error)}`
+          })
         })
-      })
+      }
     } finally {
-      setConversationBusy(convId, false)
-      patchLast(convId, (m) => {
-        if (m.status === 'streaming') m.status = 'interrupted'
-        m.done = true
-        if (m.parts.length === 0) m.parts.push({ kind: 'text', text: '_(aucune réponse)_' })
-      })
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-      )
-      const rendered = [...(liveMessagesRef.current.get(convId) ?? [])]
-        .reverse()
-        .find((message) => message.role === 'assistant') as AsstMsg | undefined
-      const renderedText =
-        rendered?.parts
-          .filter((part) => part.kind === 'text')
-          .map((part) => part.text)
-          .join('\n') ?? ''
-      if (renderedText.trim()) await window.api.markResponseDisplayed(convId, renderedText)
+      sendLocksRef.current.delete(sendLockKey)
+      if (convId) sendLocksRef.current.delete(convId)
+      if (messageCommitted && convId) {
+        setConversationBusy(convId, false)
+        patchLast(convId, (m) => {
+          if (m.status === 'streaming') m.status = 'interrupted'
+          m.done = true
+          if (m.parts.length === 0) m.parts.push({ kind: 'text', text: '_(aucune réponse)_' })
+        })
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+        )
+        const rendered = [...(liveMessagesRef.current.get(convId) ?? [])]
+          .reverse()
+          .find((message) => message.role === 'assistant') as AsstMsg | undefined
+        const renderedText =
+          rendered?.parts
+            .filter((part) => part.kind === 'text')
+            .map((part) => part.text)
+            .join('\n') ?? ''
+        if (renderedText.trim()) await window.api.markResponseDisplayed(convId, renderedText)
+      }
     }
-    refreshConvs()
-    refreshRuns()
+    if (messageCommitted) {
+      void refreshConvs()
+      void refreshRuns()
+    }
   }
 
   /* --- workflows --- */
@@ -850,7 +1134,7 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
 
   return (
-    <div className="chat-layout">
+    <div className="chat-layout" data-active-conversation-id={activeId ?? ''}>
       {/* ---- Panneau gauche : conversations ---- */}
       <aside className="conv-pane" style={{ width: `${conversationsPaneWidth}px` }}>
         <div className="conv-head">
@@ -981,7 +1265,7 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
               </div>
             </div>
           </div>
-          <div className="row gap2">
+          <div className="row gap2 chat-head-actions">
             {decisions.length > 0 && (
               <button
                 className={`btn btn-sm${showDecisions ? ' btn-accent' : ''}`}
@@ -1100,50 +1384,14 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
             </div>
           )}
 
-          {messages.map((m, i) =>
-            m.role === 'user' ? (
-              <div key={i} className="msg user fade-in">
-                <div className="msg-meta">
-                  <span className="msg-role">Toi</span>
-                </div>
-                {m.content && <div className="msg-body">{m.content}</div>}
-                {m.attachments && m.attachments.length > 0 && (
-                  <div className="attachment-list sent">
-                    {m.attachments.map((file, fileIndex) => (
-                      <span className="attachment-chip" key={`${file.name}-${fileIndex}`}>
-                        <span aria-hidden="true">
-                          {file.mimeType.startsWith('image/') ? '▧' : '▤'}
-                        </span>
-                        <span className="attachment-name">{file.name}</span>
-                        <small>{formatFileSize(file.size)}</small>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div key={i} className="msg assistant fade-in">
-                <div className="msg-meta">
-                  <span className="msg-role">Agent</span>
-                  {!m.done && <span className="spinner" />}
-                </div>
-                <div className="msg-turn">
-                  {m.parts.length === 0 && !m.done && (
-                    <div className="msg-body c-faint">réflexion…</div>
-                  )}
-                  {groupAssistantActivity(m.parts).map((p, j) =>
-                    p.kind === 'text' ? (
-                      <div key={j} className="msg-body">
-                        <Markdown text={p.text} />
-                      </div>
-                    ) : (
-                      <AssistantActivityGroup key={j} actions={p.actions} />
-                    )
-                  )}
-                </div>
-              </div>
-            )
-          )}
+          {messages.map((message, index) => (
+            <ChatMessageRow
+              key={messageKey(message, index)}
+              message={message}
+              conversationId={activeId}
+              onInspectTurn={onInspectTurn}
+            />
+          ))}
         </div>
 
         {hasNewActivity && (
@@ -1175,7 +1423,7 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
                     <button
                       type="button"
                       onClick={() =>
-                        setAttachments((current) =>
+                        setDraftAttachments(composerDraftKeyRef.current, (current) =>
                           current.filter((_, index) => index !== fileIndex)
                         )
                       }
@@ -1231,7 +1479,7 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
                 className="input grow"
                 rows={1}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => setDraftInput(composerDraftKeyRef.current, e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
@@ -1256,11 +1504,15 @@ export function ChatView({ isActive = true }: { isActive?: boolean }): React.JSX
               <span className="composer-hint">
                 Entrée pour envoyer · Maj + Entrée pour une nouvelle ligne · 8 fichiers max
               </span>
-              {runtimeIdentity && (
-                <span className="composer-runtime">
-                  {runtimeIdentity.modelLabel} · {runtimeIdentity.reasoningEffort}
-                </span>
-              )}
+              <OrchestratorModelSelector
+                busy={busy}
+                catalogLoaded={modelCatalogLoaded}
+                models={modelCatalog}
+                binding={orchestratorBinding}
+                pending={modelChangePending}
+                error={modelChangeError}
+                onSelect={(option) => void changeOrchestratorModel(option)}
+              />
             </div>
           </div>
         </div>

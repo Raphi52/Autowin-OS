@@ -1,6 +1,7 @@
 import { app, shell, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'path'
 import { randomUUID } from 'node:crypto'
+import { writeFileSync } from 'node:fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import devIcon from '../../resources/autowin-os-dev.png?asset'
@@ -10,6 +11,7 @@ import { AutowinOS } from './os'
 import { RoleModelConfig, type Role } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
+import { ActiveChatTurns } from './active-chat-turns'
 import type { ChatTurnEvent } from '../shared/chat-turn'
 import { TraceLedger } from './activity/ledger'
 import { aggregateHabits, listSessions, parseSession } from './activity/transcripts'
@@ -58,7 +60,12 @@ import { listLoopSkills } from './loop-skills'
 import { discoverConfiguredSkillRegistry } from './skill-registry'
 import { listClaudeHooks, listCodexHooks } from './claude-hooks'
 import { ModelQuestionHub, type ModelQuestion, type PendingModelQuestion } from './model-questions'
-import { DEFAULT_IMPORTED_MODELS, discoverImportedModels, findModel } from './models'
+import {
+  DEFAULT_IMPORTED_MODELS,
+  discoverImportedModels,
+  discoverOmniRouteModels,
+  findModel
+} from './models'
 import { loadAgentTopology, saveAgentTopology } from './topology-disk'
 import type { AgentTopology, SlotBinding } from './topology'
 import {
@@ -68,6 +75,9 @@ import {
   resolveAutowinAppDataBase
 } from './app-data'
 import { AUTOWIN_APP_ID, AUTOWIN_DISPLAY_NAME } from '../shared/app-identity'
+import { loadOmniRouteSnapshot, omniRouteDashboardUrl } from './omniroute-client'
+import { runOmniRouteKeyringSmoke } from './credentials/omniroute-keyring-smoke'
+import { OmniRouteMigrationStore } from './omniroute-migration'
 import {
   isRendererStorageMigrationComplete,
   markRendererStorageMigrationComplete,
@@ -78,6 +88,7 @@ import { guardAttachments, guardBoolean } from './ipc-guards'
 import { readBoundedUtf8FileWithin } from './bounded-file-read'
 import { BrainWorkerClient } from './viz/brain-worker-client'
 import {
+  createHermesPromptTraceReader,
   filterHermesPreflight,
   readHermesPreflight,
   resolveHermesSessionsRoot,
@@ -109,6 +120,16 @@ let startupStorageMigration = false
 
 /** Noyau applicatif unique (P0-P4 câblés) : kit SOUL injecté, 2 voies, modules. */
 const os = new AutowinOS()
+const omniRouteMigration = new OmniRouteMigrationStore(
+  join(app.getPath('userData'), 'omniroute-migration.json')
+)
+const startupTransport = omniRouteMigration.load()
+if (startupTransport.mode === 'omniroute') {
+  os.registry.setConversationTransport({
+    provider: 'omniroute',
+    model: startupTransport.routeModel
+  })
+}
 const brainWorker = new BrainWorkerClient(join(__dirname, 'brain-worker.js'))
 // Conversations persistées sur disque : rechargées au démarrage, sauvées à chaque mutation.
 persistConversations(os.conversations)
@@ -121,18 +142,20 @@ function broadcast(e: AppEvent): void {
 const bus = new AppCommandBus(os, broadcast)
 const pilot = new AgentPilot(os.registry, os.roles, bus)
 const modelQuestions = new ModelQuestionHub()
-const activeChatControllers = new Map<string, AbortController>()
+const activeChatTurns = new ActiveChatTurns()
 const questionWindows = new Map<string, BrowserWindow>()
 const hermesDiagnosticCapabilities = new HermesDiagnosticCapabilities()
 let agentModels = DEFAULT_IMPORTED_MODELS
 const agentTopologyPath = join(app.getPath('userData'), 'agent-topology.json')
 let agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
-const agentModelsReady = discoverImportedModels().then((models) => {
-  agentModels = models
-  agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
-  syncRuntimeTopology(agentTopology)
-  return models
-})
+const agentModelsReady = discoverImportedModels(fetch, undefined, os.omniRouteCredentialStore).then(
+  (models) => {
+    agentModels = models
+    agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
+    syncRuntimeTopology(agentTopology)
+    return models
+  }
+)
 
 function syncRuntimeTopology(topology: AgentTopology): void {
   const sync = (role: Role, binding: SlotBinding | undefined): void => {
@@ -194,14 +217,26 @@ function askModelQuestion(
   sender: Electron.WebContents,
   source: 'chat' | 'loop',
   question: ModelQuestion,
-  context?: string
+  context?: string,
+  signal?: AbortSignal
 ): Promise<string> {
-  return modelQuestions.ask(
+  let pendingId: string | undefined
+  const answer = modelQuestions.ask(
     source,
     question,
-    (pending) => openQuestionWindow(BrowserWindow.fromWebContents(sender), pending),
-    context
+    (pending) => {
+      pendingId = pending.id
+      openQuestionWindow(BrowserWindow.fromWebContents(sender), pending)
+    },
+    context,
+    signal
   )
+  return answer.finally(() => {
+    if (!signal?.aborted || !pendingId) return
+    const win = questionWindows.get(pendingId)
+    questionWindows.delete(pendingId)
+    if (win && !win.isDestroyed()) win.close()
+  })
 }
 /** Ledger d'activité in-app : chaque action d'agent laisse une trace consultable. */
 const ledger = new TraceLedger(join(app.getPath('userData'), 'trace'))
@@ -288,6 +323,12 @@ function registerStorageMigrationIpc(
 
 /** IPC : chat, orchestration, dashboards et graphe. */
 function registerChatIpc(): void {
+  ipcMain.handle('app:test:capture-page', async (event) => {
+    assertTrustedRendererSender(event, 'Capture UI de test')
+    if (!isolatedTestInstance)
+      throw new Error('Capture UI de test indisponible hors instance isolée')
+    return (await event.sender.capturePage()).toPNG().toString('base64')
+  })
   ipcMain.handle('app:test:emit-event', (event, payload: unknown) => {
     assertTrustedRendererSender(event, 'Fixture UI')
     if (!isolatedTestInstance) throw new Error('Émission de test indisponible hors instance isolée')
@@ -334,6 +375,79 @@ function registerChatIpc(): void {
     return discoverConfiguredSkillRegistry(join(app.getPath('userData'), 'skill-sources.json'))
   })
   ipcMain.handle('chat:providers', () => os.registry.ids())
+  ipcMain.handle('router:snapshot', (event) => {
+    assertTrustedRendererSender(event, 'Router')
+    return loadOmniRouteSnapshot()
+  })
+  ipcMain.handle('router:migration-state', (event) => {
+    assertTrustedRendererSender(event, 'Router')
+    const state = omniRouteMigration.load()
+    return {
+      mode: state.mode,
+      routeModel: state.mode === 'omniroute' ? state.routeModel : undefined,
+      credentialConfigured: Boolean(os.omniRouteCredentialStore.get())
+    }
+  })
+  ipcMain.handle('router:set-credential', (event, credential: unknown) => {
+    assertTrustedRendererSender(event, 'Router')
+    os.omniRouteCredentialStore.set(guardString(credential, 'router.credential'))
+    return { configured: true }
+  })
+  ipcMain.handle('router:delete-credential', (event) => {
+    assertTrustedRendererSender(event, 'Router')
+    os.omniRouteCredentialStore.delete()
+    return { configured: false }
+  })
+  ipcMain.handle('router:test-route', async (event) => {
+    assertTrustedRendererSender(event, 'Router')
+    const models = await discoverOmniRouteModels(fetch, os.omniRouteCredentialStore)
+    return {
+      ok: models.length > 0,
+      models: models.map(({ model, label }) => ({ id: model, label })),
+      reason:
+        models.length > 0
+          ? undefined
+          : 'OmniRoute inaccessible, credential refusé ou catalogue invalide'
+    }
+  })
+  ipcMain.handle('router:activate', async (event, routeModel: unknown) => {
+    assertTrustedRendererSender(event, 'Router')
+    const route = guardString(routeModel, 'router.routeModel')
+    const models = await discoverOmniRouteModels(fetch, os.omniRouteCredentialStore)
+    if (!models.some((model) => model.model === route)) {
+      throw new Error('Route non confirmée par le catalogue OmniRoute')
+    }
+    const state = omniRouteMigration.activate(route, {
+      roles: os.roles.all(),
+      topology: agentTopology
+    })
+    os.registry.setConversationTransport({
+      provider: 'omniroute',
+      model: state.mode === 'omniroute' ? state.routeModel : route
+    })
+    broadcast({ type: 'refresh', scope: 'roles' })
+    return { mode: 'omniroute', routeModel: route, credentialConfigured: true }
+  })
+  ipcMain.handle('router:rollback', (event) => {
+    assertTrustedRendererSender(event, 'Router')
+    const restore = omniRouteMigration.prepareRollback()
+    if (restore) {
+      agentTopology = saveAgentTopology(agentTopologyPath, restore.topology, agentModels)
+      for (const [role, binding] of Object.entries(restore.roles) as Array<
+        [Role, import('./roles').RoleBinding]
+      >)
+        os.setRole(role, binding)
+      syncRuntimeTopology(agentTopology)
+    }
+    omniRouteMigration.commitRollback()
+    os.registry.setConversationTransport(null)
+    broadcast({ type: 'refresh', scope: 'roles' })
+    return { mode: 'direct', credentialConfigured: Boolean(os.omniRouteCredentialStore.get()) }
+  })
+  ipcMain.handle('router:open-dashboard', async (event) => {
+    assertTrustedRendererSender(event, 'Router')
+    await shell.openExternal(omniRouteDashboardUrl)
+  })
   ipcMain.handle('os:kimiLogin', () => {
     os.startKimiLogin()
     return { ok: true }
@@ -398,6 +512,12 @@ function registerChatIpc(): void {
       ...profile,
       topology: agentTopology,
       roles: os.roles.all(),
+      transport: (() => {
+        const state = omniRouteMigration.load()
+        return state.mode === 'omniroute'
+          ? { mode: 'omniroute' as const, routeModel: state.routeModel }
+          : { mode: 'direct' as const }
+      })(),
       updatedAt: new Date().toISOString()
     }
     return profiles.save(safe)
@@ -406,12 +526,30 @@ function registerChatIpc(): void {
     await agentModelsReady
     const profile = profiles.list().find((item) => item.id === guardString(id, 'profile.id'))
     if (!profile) throw new Error('Profil introuvable')
+    let validatedRoute: string | undefined
+    if (profile.transport?.mode === 'omniroute') {
+      validatedRoute = profile.transport.routeModel
+      if (!validatedRoute) throw new Error('Profil OmniRoute sans route')
+      const models = await discoverOmniRouteModels(fetch, os.omniRouteCredentialStore)
+      if (!models.some((model) => model.model === validatedRoute))
+        throw new Error('Route du profil indisponible')
+    }
     agentTopology = saveAgentTopology(agentTopologyPath, profile.topology, agentModels)
     syncRuntimeTopology(agentTopology)
     for (const [role, binding] of Object.entries(profile.roles) as Array<
       [Role, import('./roles').RoleBinding]
     >)
       os.setRole(role, binding)
+    if (validatedRoute) {
+      omniRouteMigration.activate(validatedRoute, {
+        roles: profile.roles,
+        topology: profile.topology
+      })
+      os.registry.setConversationTransport({ provider: 'omniroute', model: validatedRoute })
+    } else {
+      omniRouteMigration.rollback()
+      os.registry.setConversationTransport(null)
+    }
     broadcast({ type: 'refresh', scope: 'roles' })
     return profile
   })
@@ -633,8 +771,9 @@ function registerChatIpc(): void {
   ipcMain.handle('os:conversations:rename', (_e, id: string, title: string) =>
     os.conversations.rename(id, guardString(title, 'title'))
   )
-  ipcMain.handle('os:conversations:remove', (_e, rawId: string) => {
+  ipcMain.handle('os:conversations:remove', async (_e, rawId: string) => {
     const id = guardString(rawId, 'id')
+    await activeChatTurns.abortAndWait(id, 'conversation-deleted')
     const removed = os.conversations.remove(id)
     if (removed) {
       causalTrace.deleteConversation(id)
@@ -704,8 +843,12 @@ function registerChatIpc(): void {
       conversationId?: string
     ) => {
       const controller = new AbortController()
+      let resolveCompletion!: () => void
+      const completion = new Promise<void>((resolve) => {
+        resolveCompletion = resolve
+      })
       const turnId = randomUUID()
-      if (conversationId) activeChatControllers.set(conversationId, controller)
+      if (conversationId) activeChatTurns.set(conversationId, controller, completion)
       try {
         const safe = (Array.isArray(messages) ? messages : []).slice(-40).map((m) => ({
           role: m.role,
@@ -908,7 +1051,8 @@ function registerChatIpc(): void {
             undefined,
             6,
             conversationId,
-            controller.signal
+            controller.signal,
+            conversationId ? (os.conversations.get(conversationId)?.authorityMode ?? 'ask') : 'ask'
           )
         } else if (delayedPilotFixture) {
           await new Promise<void>((resolve, reject) => {
@@ -937,7 +1081,8 @@ function registerChatIpc(): void {
           await pilot.chat(
             safe,
             handlePilotEvent,
-            (question) => askModelQuestion(event.sender, 'chat', question, 'Chat'),
+            (question) =>
+              askModelQuestion(event.sender, 'chat', question, 'Chat', controller.signal),
             6,
             conversationId,
             controller.signal
@@ -956,7 +1101,6 @@ function registerChatIpc(): void {
           })
         }
         broadcast({ type: 'refresh', scope: 'workflows' })
-        if (conversationId) activeChatControllers.delete(conversationId)
         return { ok: true, cancelled: false }
       } catch (e) {
         if (conversationId && os.conversations.get(conversationId)) {
@@ -969,18 +1113,17 @@ function registerChatIpc(): void {
           )
         }
         broadcast({ type: 'refresh', scope: 'workflows' })
-        if (conversationId) activeChatControllers.delete(conversationId)
         if (controller.signal.aborted) return { ok: true, cancelled: true }
         return { ok: false, cancelled: false, error: e instanceof Error ? e.message : String(e) }
+      } finally {
+        if (conversationId) activeChatTurns.delete(conversationId, controller)
+        resolveCompletion()
       }
     }
   )
   ipcMain.handle('os:pilotChat:cancel', (_e, rawConversationId: string) => {
     const conversationId = guardString(rawConversationId, 'conversationId')
-    const controller = activeChatControllers.get(conversationId)
-    if (!controller) return { ok: false }
-    controller.abort('user')
-    return { ok: true }
+    return { ok: activeChatTurns.abort(conversationId, 'user') }
   })
   ipcMain.handle(
     'os:causalTrace:displayed',
@@ -1022,7 +1165,7 @@ function registerChatIpc(): void {
   ipcMain.handle('os:promptCalls', (_e, convId?: string) =>
     convId ? loadPromptCalls(guardString(convId, 'convId')) : loadAllPromptCalls()
   )
-  const loadHermesTraces = () => {
+  const loadHermesTraces = (): ReturnType<typeof readHermesPreflight> => {
     const spoolRoot = join(app.getPath('userData'), 'hermes-trace-spool')
     if (!secureHermesSpool(spoolRoot)) throw new Error('Hermes trace ACL hardening failed')
     return readHermesPreflight(
@@ -1035,52 +1178,73 @@ function registerChatIpc(): void {
       )
     )
   }
+  const migrateLegacyCausalTraces = (): void => {
+    const hermes = loadHermesTraces()
+    for (const conversation of os.conversations.list()) {
+      const conversationId = conversation.id
+      const events = causalTrace.readConversation(conversationId)
+      const knownIds = new Set(events.map((traceEvent) => traceEvent.id))
+      let nextSequence = events.length
+        ? Math.max(...events.map((traceEvent) => traceEvent.sequence)) + 1
+        : 0
+      for (const call of loadPromptCalls(conversationId)) {
+        if (knownIds.has(`${call.id}:0`)) continue
+        for (const traceEvent of promptCallToTraceEvents(call, nextSequence)) {
+          causalTrace.append(traceEvent)
+          knownIds.add(traceEvent.id)
+          nextSequence = traceEvent.sequence + 1
+        }
+      }
+      for (const trace of filterHermesPreflight(hermes, conversationId)) {
+        const id = `hermes:${trace.apiRequestId}`
+        if (knownIds.has(id)) continue
+        causalTrace.append({
+          schema: 'autowin.trace/v1',
+          id,
+          conversationId,
+          turnId: trace.turnId,
+          timestamp: trace.timestamp,
+          sequence: nextSequence++,
+          type: 'boundary',
+          status: 'completed',
+          actor: { id: 'hermes', kind: 'hook', label: 'Hermes preflight' },
+          recipient: { id: trace.provider, kind: 'provider', label: trace.provider },
+          channel: 'internal',
+          payloads: [
+            {
+              kind: 'resource',
+              name: 'Hermes request',
+              mediaType: 'application/json',
+              content: JSON.stringify(trace.request)
+            }
+          ],
+          observation: {
+            boundary: trace.boundary,
+            fidelity: 'exact',
+            limitation: 'Secrets masqués avant persistance.'
+          },
+          provider: {
+            id: trace.provider,
+            model: trace.model,
+            transport: trace.apiMode,
+            sessionId: trace.sessionId
+          }
+        })
+        knownIds.add(id)
+      }
+    }
+  }
+  migrateLegacyCausalTraces()
+  const readHermesPromptTraces = createHermesPromptTraceReader(loadHermesTraces)
   ipcMain.handle('os:hermesPromptTraces', (event, conversationId: unknown) => {
     assertTrustedRendererSender(event, 'Hermes traces')
     const safeConversationId = guardString(conversationId, 'conversationId')
-    const traces = loadHermesTraces()
-    for (const trace of traces) {
-      if (!trace.conversationId || !os.conversations.get(trace.conversationId)) continue
-      const id = `hermes:${trace.apiRequestId}`
-      if (causalTrace.readConversation(trace.conversationId).some((event) => event.id === id))
-        continue
-      causalTrace.append({
-        schema: 'autowin.trace/v1',
-        id,
-        conversationId: trace.conversationId,
-        turnId: trace.turnId,
-        timestamp: trace.timestamp,
-        sequence: causalTrace.nextSequence(trace.conversationId),
-        type: 'boundary',
-        status: 'completed',
-        actor: { id: 'hermes', kind: 'hook', label: 'Hermes preflight' },
-        recipient: { id: trace.provider, kind: 'provider', label: trace.provider },
-        channel: 'internal',
-        payloads: [
-          {
-            kind: 'resource',
-            name: 'Hermes request',
-            mediaType: 'application/json',
-            content: JSON.stringify(trace.request)
-          }
-        ],
-        observation: {
-          boundary: trace.boundary,
-          fidelity: 'exact',
-          limitation: 'Secrets masqués avant persistance.'
-        },
-        provider: {
-          id: trace.provider,
-          model: trace.model,
-          transport: trace.apiMode,
-          sessionId: trace.sessionId
-        }
-      })
-    }
-    return filterHermesPreflight(traces, safeConversationId)
+    return readHermesPromptTraces(safeConversationId)
   })
   ipcMain.handle('os:hermesPromptTraceSummary', (event) => {
     assertTrustedRendererSender(event, 'Hermes trace summary')
+    // La requête brute est volontairement exclue de ce résumé IPC.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     return loadHermesTraces().map(({ request: _request, ...metadata }) => metadata)
   })
   ipcMain.handle('os:authorizeHermesDiagnostics', (event) => {
@@ -1098,19 +1262,7 @@ function registerChatIpc(): void {
   })
   ipcMain.handle('os:causalTrace', (_e, convId: string) => {
     const conversationId = guardString(convId, 'convId')
-    let events = causalTrace.readConversation(conversationId)
-    // Migration transparente des conversations enregistrées avant la trace canonique.
-    const knownIds = new Set(events.map((traceEvent) => traceEvent.id))
-    for (const call of loadPromptCalls(conversationId)) {
-      if (knownIds.has(`${call.id}:0`)) continue
-      const base = causalTrace.nextSequence(conversationId)
-      for (const traceEvent of promptCallToTraceEvents(call, base)) {
-        causalTrace.append(traceEvent)
-        knownIds.add(traceEvent.id)
-      }
-    }
-    events = causalTrace.readConversation(conversationId)
-    return events
+    return causalTrace.readConversation(conversationId)
   })
 
   // --- Observatoire d'activité : transcripts Claude Code (lecture seule) + ledger in-app ---
@@ -1215,6 +1367,20 @@ if (!isolatedTestInstance && ownsInstanceLock) {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
+  if (headlessTestInstance && process.argv.includes('--omniroute-keyring-smoke')) {
+    const result = runOmniRouteKeyringSmoke()
+    writeFileSync(
+      join(app.getPath('userData'), 'omniroute-keyring-smoke.json'),
+      JSON.stringify(result),
+      {
+        encoding: 'utf8',
+        flag: 'wx'
+      }
+    )
+    process.stdout.write(`${JSON.stringify(result)}\n`)
+    app.quit()
+    return
+  }
   // Set app user model id for windows
   electronApp.setAppUserModelId(automationAppIdentity(AUTOWIN_APP_ID, automationInstanceMode))
 

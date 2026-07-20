@@ -5,7 +5,7 @@ import type { TrustLedger } from './trust/ledger'
 import type { AuthoritySas } from './authority/sas'
 import { evaluateClosure } from './gates/stopgate'
 import { capabilityInstruction } from './capability-profiles'
-import type { PromptEnvelope, SendOptions, Usage } from './providers/types'
+import type { ExecutionEvidence, PromptEnvelope, SendOptions, Usage } from './providers/types'
 
 /**
  * Boucle d'orchestration DISCIPLINÉE — le cœur d'Autowin OS.
@@ -29,6 +29,7 @@ export interface OrchestrationStep {
   status?: 'completed' | 'failed'
   error?: string
   durationMs?: number
+  evidence?: ExecutionEvidence[]
 }
 
 export interface OrchestrationResult {
@@ -49,6 +50,21 @@ export interface OrchestratorDeps {
   cost: CostAggregator
   trust: TrustLedger
   authority: AuthoritySas
+  /** Workspace borné remis au sous-agent outillé. Jamais transmis au juge ou au chat. */
+  executionWorkspace: string
+}
+
+const MUTATION_TASK =
+  /\b(ajout|ajouter|add|modifi|change|corrig|fix|cr[eé]|create|impl[eé]ment|refactor|supprim|remove|renomm|update|build)\w*/i
+
+export function evidenceSatisfiesTask(task: string, evidence: ExecutionEvidence[] = []): boolean {
+  const successful = evidence.filter((item) => item.ok)
+  if (!successful.length) return false
+  if (!MUTATION_TASK.test(task)) return true
+  return (
+    successful.some((item) => item.kind === 'mutation') &&
+    successful.some((item) => item.kind === 'verification')
+  )
 }
 
 export class Orchestrator {
@@ -80,6 +96,10 @@ export class Orchestrator {
       system: capabilityInstruction(subBinding.capabilityProfileId),
       model: subBinding.model,
       reasoningEffort: subBinding.reasoningEffort,
+      execution: {
+        cwd: this.deps.executionWorkspace,
+        sandbox: 'danger-full-access'
+      },
       observePrompt: (observed) => {
         execPrompt = observed
       }
@@ -121,15 +141,18 @@ export class Orchestrator {
       usage: exec.usage,
       prompt: execPrompt,
       status: 'completed',
-      durationMs: performance.now() - execStartedAt
+      durationMs: performance.now() - execStartedAt,
+      evidence: exec.executionEvidence
     })
 
     // 2. Un JUGE (autre rôle → potentiellement autre modèle) évalue le résultat.
     const judgeBinding = roles.getBinding('judge')
     const judgeProvider = judgeBinding.provider
     const judgePrompt =
-      `Tu es un juge. Évalue si cette réponse répond correctement à la tâche.\n` +
+      `Tu es un juge outillé en lecture seule. Inspecte réellement le workspace et confronte au moins une preuve d'outil ci-dessous. ` +
+      `Une affirmation sans preuve d'exécution observable est un défaut.\n` +
       `TÂCHE: ${task}\nRÉPONSE: ${exec.text}\n` +
+      `PREUVES OUTILS OBSERVÉES: ${JSON.stringify(exec.executionEvidence ?? [])}\n` +
       `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".` +
       capabilityInstruction(judgeBinding.capabilityProfileId)
     const judgeMessages = [{ role: 'user' as const, content: judgePrompt }]
@@ -145,6 +168,10 @@ export class Orchestrator {
     const judgeOptions: SendOptions = {
       model: judgeBinding.model,
       reasoningEffort: judgeBinding.reasoningEffort,
+      execution: {
+        cwd: this.deps.executionWorkspace,
+        sandbox: 'read-only'
+      },
       observePrompt: (observed) => {
         judgeEnvelope = observed
       }
@@ -176,7 +203,8 @@ export class Orchestrator {
         costUsd: verdict.usage.costUsd
       })
     }
-    const valid = /^\s*valide/i.test(verdict.text)
+    const valid =
+      evidenceSatisfiesTask(task, exec.executionEvidence) && /^\s*valide/i.test(verdict.text)
     trust.record({ judgeModel: judgeProvider, verdict: valid ? 'green' : 'red' })
     push({
       step: 'judge',

@@ -1,0 +1,260 @@
+// @vitest-environment happy-dom
+import { act, createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { ChatView } from './ChatView'
+
+const markdownRenderCount = vi.hoisted(() => ({ value: 0 }))
+vi.mock('./Markdown', () => ({
+  Markdown: ({ text }: { text: string }) => {
+    markdownRenderCount.value += 1
+    return createElement('span', null, text)
+  }
+}))
+
+type Deferred<T> = {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes
+    reject = no
+  })
+  return { promise, resolve, reject }
+}
+
+const conversation = (id: string, messages: unknown[] = []) => ({
+  id,
+  title: `Conversation ${id}`,
+  category: 'codex',
+  provider: 'codex',
+  messages,
+  updatedAt: 1
+})
+
+function api(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    conversations: vi.fn().mockResolvedValue([]),
+    conversationRuns: vi.fn().mockResolvedValue([]),
+    listRuns: vi.fn().mockResolvedValue([]),
+    authorityPending: vi.fn().mockResolvedValue([]),
+    topology: vi.fn().mockResolvedValue({
+      orchestrator: { provider: 'codex', modelId: 'gpt', reasoningEffort: 'auto' }
+    }),
+    models: vi.fn().mockResolvedValue([{ id: 'gpt', provider: 'codex', model: 'gpt' }]),
+    roles: vi.fn().mockResolvedValue({ orchestrator: { provider: 'codex', model: 'gpt' } }),
+    onAppEvent: vi.fn(() => vi.fn()),
+    onPilotEvent: vi.fn(() => vi.fn()),
+    setActiveConversation: vi.fn(),
+    conversationsCreate: vi.fn(),
+    pilotChat: vi.fn().mockResolvedValue({ ok: true }),
+    markResponseDisplayed: vi.fn().mockResolvedValue(undefined),
+    cancelPilotChat: vi.fn().mockResolvedValue(undefined),
+    ...overrides
+  }
+}
+
+describe('ChatView behavior under concurrent UI actions', () => {
+  beforeAll(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    Object.defineProperty(window, 'requestAnimationFrame', {
+      configurable: true,
+      value: (callback: FrameRequestCallback) => window.setTimeout(() => callback(0), 0)
+    })
+  })
+
+  let container: HTMLDivElement | null = null
+  let root: Root | null = null
+
+  afterEach(async () => {
+    if (root) await act(async () => root?.unmount())
+    container?.remove()
+    root = null
+    container = null
+    vi.restoreAllMocks()
+  })
+
+  async function mount(mockApi: Record<string, unknown>): Promise<HTMLDivElement> {
+    Object.defineProperty(window, 'api', { configurable: true, value: mockApi })
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ChatView))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    return container
+  }
+
+  async function type(value: string): Promise<void> {
+    const textarea = container?.querySelector('textarea') as HTMLTextAreaElement
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+      setter?.call(textarea, value)
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  }
+
+  async function click(selector: string): Promise<void> {
+    const element = container?.querySelector(selector) as HTMLElement
+    await act(async () => element.click())
+  }
+
+  it('blocks a synchronous double Enter with one pilot request', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('B')]),
+      pilotChat: vi.fn(() => pilot.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('une seule fois')
+    const textarea = container!.querySelector('textarea') as HTMLTextAreaElement
+    await act(async () => {
+      textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+    expect(mockApi.pilotChat).toHaveBeenCalledTimes(1)
+    await act(async () => pilot.resolve({ ok: true }))
+  })
+
+  it('does not steal conversation B when creation from New resolves late', async () => {
+    const creation = deferred<ReturnType<typeof conversation>>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('B')]),
+      conversationsCreate: vi.fn(() => creation.promise)
+    })
+    await mount(mockApi)
+    await type('draft A')
+    await click('.composer-send')
+    await click('.conv-pick')
+    await type('draft B')
+    await act(async () => creation.resolve(conversation('A')))
+    expect(
+      container!.querySelector('.chat-layout')?.getAttribute('data-active-conversation-id')
+    ).toBe('B')
+    expect((container!.querySelector('textarea') as HTMLTextAreaElement).value).toBe('draft B')
+  })
+
+  it('releases the New lock after assigning A while retaining A busy', async () => {
+    const pilotA = deferred<{ ok: boolean }>()
+    const create = vi
+      .fn()
+      .mockResolvedValueOnce(conversation('A'))
+      .mockResolvedValueOnce(conversation('C'))
+    const mockApi = api({ conversationsCreate: create, pilotChat: vi.fn(() => pilotA.promise) })
+    await mount(mockApi)
+    await type('premier')
+    await click('.composer-send')
+    await click('.conv-head .btn')
+    await type('deuxième')
+    await click('.composer-send')
+    expect(create).toHaveBeenCalledTimes(2)
+    await act(async () => pilotA.resolve({ ok: true }))
+  })
+
+  it('preserves a failed bootstrap draft and retries it', async () => {
+    const topology = vi.fn().mockResolvedValue({
+      orchestrator: { provider: 'codex', modelId: 'gpt', reasoningEffort: 'auto' }
+    })
+    const create = vi.fn().mockResolvedValue(conversation('A'))
+    const mockApi = api({ topology, conversationsCreate: create })
+    await mount(mockApi)
+    topology.mockRejectedValueOnce(new Error('bootstrap indisponible'))
+    await type('à conserver')
+    await click('.composer-send')
+    expect((container!.querySelector('textarea') as HTMLTextAreaElement).value).toBe('à conserver')
+    expect(container!.textContent).toContain('bootstrap indisponible')
+    await click('.composer-send')
+    expect(create).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps delayed attachments in their originating conversation draft', async () => {
+    const encoded = deferred<string>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('B')])
+    })
+    await mount(mockApi)
+    const picks = container!.querySelectorAll('.conv-pick')
+    await act(async () => (picks[0] as HTMLElement).click())
+    await type('draft A')
+    const file = new File(['x'], 'preuve.txt', { type: 'text/plain' })
+    Object.defineProperty(file, 'text', { configurable: true, value: () => encoded.promise })
+    const input = container!.querySelector('input[type="file"]') as HTMLInputElement
+    Object.defineProperty(input, 'files', { configurable: true, value: [file] })
+    await act(async () => input.dispatchEvent(new Event('change', { bubbles: true })))
+    await act(async () => (picks[1] as HTMLElement).click())
+    await type('draft B')
+    await act(async () => encoded.resolve('contenu'))
+    expect((container!.querySelector('textarea') as HTMLTextAreaElement).value).toBe('draft B')
+    expect(container!.querySelector('.attachment-list.pending')).toBeNull()
+    await act(async () => (picks[0] as HTMLElement).click())
+    expect((container!.querySelector('textarea') as HTMLTextAreaElement).value).toBe('draft A')
+    expect(container!.textContent).toContain('preuve.txt')
+  })
+
+  it('does not rerender historical Markdown rows when only the composer changes', async () => {
+    const history = [
+      {
+        role: 'assistant',
+        content: 'réponse historique',
+        ts: 1,
+        status: 'completed',
+        parts: [{ kind: 'text', text: 'réponse historique' }]
+      }
+    ]
+    await mount(api({ conversations: vi.fn().mockResolvedValue([conversation('A', history)]) }))
+    await click('.conv-pick')
+    expect(markdownRenderCount.value).toBeGreaterThan(0)
+    markdownRenderCount.value = 0
+    await type('nouveau draft')
+    expect(markdownRenderCount.value).toBe(0)
+  })
+
+  it('offers inspection only for persisted assistant turns and reports the exact target', async () => {
+    const onInspectTurn = vi.fn()
+    const history = [
+      {
+        role: 'assistant',
+        content: 'réponse traçable',
+        ts: 1,
+        turnId: 'turn-42',
+        status: 'completed',
+        parts: [{ kind: 'text', text: 'réponse traçable' }]
+      },
+      {
+        role: 'assistant',
+        content: 'réponse historique sans trace',
+        ts: 2,
+        status: 'completed',
+        parts: [{ kind: 'text', text: 'réponse historique sans trace' }]
+      }
+    ]
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: api({ conversations: vi.fn().mockResolvedValue([conversation('A', history)]) })
+    })
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(createElement(ChatView, { onInspectTurn }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await click('.conv-pick')
+
+    const inspectButtons = [...container.querySelectorAll('button')].filter(
+      (button) => button.textContent === 'Inspecter ce tour'
+    )
+    expect(inspectButtons).toHaveLength(1)
+    await act(async () => (inspectButtons[0] as HTMLButtonElement).click())
+    expect(onInspectTurn).toHaveBeenCalledWith({ conversationId: 'A', turnId: 'turn-42' })
+  })
+})

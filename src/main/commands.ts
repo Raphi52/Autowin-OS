@@ -6,6 +6,10 @@ import { appendConvActivity } from './activity/conv-activity'
 import type { OrchestrationStep } from './orchestrator'
 import { persistOrchestrationStep } from './activity/orchestration-observability'
 import { randomUUID } from 'node:crypto'
+import {
+  decideConversationCapability,
+  type ConversationAuthorityMode
+} from './conversation-capabilities'
 
 /**
  * Bus de commandes de l'app — le PLAN DE CONTRÔLE que les agents pilotent.
@@ -317,10 +321,22 @@ export class AppCommandBus {
   async exec(
     name: string,
     args: Record<string, unknown> = {},
-    conversationId?: string
+    conversationId?: string,
+    authorityMode: ConversationAuthorityMode = 'ask'
   ): Promise<CommandResult> {
     try {
-      if (name === 'set_role' || name === 'orchestrate') {
+      const specification = this.catalog().find((command) => command.name === name)
+      if (!specification) throw new Error(`Commande inconnue: ${name}`)
+      const decision = decideConversationCapability({
+        mode: authorityMode,
+        mutates: !specification.annotations?.readOnlyHint,
+        authority: specification.authority ?? 'automatic'
+      })
+      if (decision === 'deny') {
+        this.trace?.(name, redactedArgs(name, args), false)
+        return { ok: false, error: `Action interdite en mode Plan: ${name}` }
+      }
+      if (decision === 'confirm') {
         const pending = this.deferSensitiveAction(name, args, () =>
           this.run(name, args, conversationId)
         )
@@ -452,9 +468,7 @@ export class AppCommandBus {
       }
       case 'remove_conversation': {
         const id = s('id')
-        return this.deferSensitiveAction('remove_conversation', { id }, async () => ({
-          removed: this.os.conversations.remove(id)
-        }))
+        return { removed: this.os.conversations.remove(id) }
       }
       case 'set_role': {
         const all = this.os.setRole(s('role') as Role, {
@@ -471,14 +485,8 @@ export class AppCommandBus {
             : (conversationId ?? this.activeConversationId)) ?? ''
         if (!convId) throw new Error('aucune conversation active pour attacher le run')
         const path = s('path')
-        return this.deferSensitiveAction(
-          'attach_run',
-          { path, conversationId: convId },
-          async () => {
-            const c = this.os.conversations.attachRun(convId, path)
-            return { conversation: c.id, runPaths: c.runPaths }
-          }
-        )
+        const c = this.os.conversations.attachRun(convId, path)
+        return { conversation: c.id, runPaths: c.runPaths }
       }
       case 'load_graph': {
         const brain = this.os.listBrains().find((b) => b.id === s('brainId'))

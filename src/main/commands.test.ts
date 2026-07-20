@@ -45,6 +45,30 @@ function fakeOs(): any {
 }
 
 describe('AppCommandBus authority policy', () => {
+  it('enforces conversation Plan and Auto modes before any mutation', async () => {
+    const os = fakeOs()
+    const bus = new AppCommandBus(os, () => {})
+
+    const planned = await bus.exec(
+      'remove_conversation',
+      { id: 'conv-1' },
+      'conv-1',
+      'plan'
+    )
+    expect(planned).toMatchObject({ ok: false })
+    expect(os.conversations.get('conv-1')).toBeTruthy()
+    expect(os.authority.pending()).toHaveLength(0)
+
+    const automatic = await bus.exec(
+      'remove_conversation',
+      { id: 'conv-1' },
+      'conv-1',
+      'auto'
+    )
+    expect(automatic).toMatchObject({ ok: true, data: { pendingApproval: true } })
+    expect(os.conversations.get('conv-1')).toBeTruthy()
+  })
+
   it('defers deletion until human approval and consumes it once', async () => {
     const os = fakeOs()
     const bus = new AppCommandBus(os, () => {})

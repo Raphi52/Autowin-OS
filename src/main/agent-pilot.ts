@@ -9,6 +9,8 @@ import {
   type ModelQuestion
 } from './model-questions'
 import { VisibleStreamFilter } from '../shared/stream-markup-filter'
+import type { ConversationAuthorityMode } from './conversation-capabilities'
+import { randomUUID } from 'node:crypto'
 
 /**
  * Boucle de PILOTAGE : un agent LLM conduit l'app lui-même.
@@ -87,6 +89,16 @@ function parseOrderedPilotTokens(raw: string): OrderedPilotToken[] {
   return tokens
 }
 
+function waitForAnswer(answer: Promise<string>, signal?: AbortSignal): Promise<string> {
+  if (!signal) return answer
+  if (signal.aborted) return Promise.reject(new Error(String(signal.reason ?? 'aborted')))
+  return new Promise((resolve, reject) => {
+    const abort = (): void => reject(new Error(String(signal.reason ?? 'aborted')))
+    signal.addEventListener('abort', abort, { once: true })
+    answer.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort))
+  })
+}
+
 export class AgentPilot {
   constructor(
     private readonly registry: ProviderRegistry,
@@ -95,7 +107,8 @@ export class AgentPilot {
   ) {}
 
   async run(goal: string, onEvent: (e: PilotEvent) => void, maxIter = 6): Promise<void> {
-    const provider = this.roles.getBinding('orchestrator').provider
+    const binding = this.roles.getBinding('orchestrator')
+    const provider = binding.provider
     const catalog = this.bus.catalog()
     const snapshot = await this.bus.snapshot()
 
@@ -108,7 +121,7 @@ export class AgentPilot {
         .join('\n') +
       `\nRègles : agis par petits pas, une ou deux commandes par tour. Après exécution tu recevras le résultat + l'état. ` +
       `Quand l'objectif est atteint, réponds UNIQUEMENT "DONE: <résumé>" sans commande.` +
-      capabilityInstruction(this.roles.getBinding('orchestrator').capabilityProfileId)
+      capabilityInstruction(binding.capabilityProfileId)
 
     const convo: string[] = [`ÉTAT INITIAL:\n${JSON.stringify(snapshot)}`]
 
@@ -153,7 +166,12 @@ export class AgentPilot {
       convo.push(`TU AS ÉMIS: ${text}`)
       convo.push(`RÉSULTATS:\n${results.join('\n')}\n\nÉTAT MAINTENANT:\n${JSON.stringify(state)}`)
     }
-    onEvent({ kind: 'done', text: `cap d'itérations (${maxIter}) atteint` })
+    const capError = `Cap d'itérations (${maxIter}) atteint sans réponse finale`
+    onEvent({
+      kind: 'error',
+      text: capError
+    })
+    throw new Error(capError)
   }
 
   /**
@@ -169,9 +187,11 @@ export class AgentPilot {
     ask?: (question: ModelQuestion) => Promise<string>,
     maxIter = 6,
     conversationId?: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    authorityMode: ConversationAuthorityMode = 'ask'
   ): Promise<void> {
-    const provider = this.roles.getBinding('orchestrator').provider
+    const binding = this.roles.getBinding('orchestrator')
+    const provider = binding.provider
     const catalog = this.bus.catalog()
     const snapshot = await this.bus.snapshot()
 
@@ -189,7 +209,7 @@ export class AgentPilot {
       `QUE si l'objectif demande d'agir sur l'app. Après une commande tu reçois le résultat + le ` +
       `nouvel état et tu peux continuer. Quand tu as fini d'agir, termine par ta réponse en clair ` +
       `SANS commande.\n${MODEL_QUESTION_INSTRUCTION}` +
-      capabilityInstruction(this.roles.getBinding('orchestrator').capabilityProfileId)
+      capabilityInstruction(binding.capabilityProfileId)
 
     // Reconstruit le fil : historique de la conversation + état courant de l'app.
     const convo: string[] = [
@@ -202,7 +222,6 @@ export class AgentPilot {
     const usage = { inputTokens: 0, outputTokens: 0, costUsd: 0 }
 
     for (let i = 0; i < maxIter; i++) {
-      const binding = this.roles.getBinding('orchestrator')
       const messages: Message[] = [
         {
           role: 'user',
@@ -227,7 +246,8 @@ export class AgentPilot {
         observePrompt: (observed) => {
           prompt = observed
         },
-        signal
+        signal,
+        requestId: randomUUID()
       }
       let res
       let attempt = 0
@@ -311,7 +331,7 @@ export class AgentPilot {
       const text = res.text.trim()
       const question = parseModelQuestion(text)
       if (question && ask) {
-        const answer = await ask(question)
+        const answer = await waitForAnswer(ask(question), signal)
         convo.push(`TOI: ${text}`)
         convo.push(`UTILISATEUR: ${answer}`)
         continue
@@ -357,6 +377,7 @@ export class AgentPilot {
       let tokenIndex = 0
       let streamedPrefixRemaining = successfulStreamedPrefix
       for (const token of ordered) {
+        signal?.throwIfAborted()
         if (token.kind === 'text') {
           let visible = token.text
           if (streamedPrefixRemaining) {
@@ -384,7 +405,8 @@ export class AgentPilot {
 
         const actionId = `${i}:${commandIndex++}`
         onEvent({ kind: 'command', actionId, name: token.name, args: token.args })
-        const r = await this.bus.exec(token.name, token.args, conversationId)
+        signal?.throwIfAborted()
+        const r = await this.bus.exec(token.name, token.args, conversationId, authorityMode)
         onEvent({
           kind: 'result',
           actionId,
@@ -400,6 +422,12 @@ export class AgentPilot {
       convo.push(`TU AS ÉMIS: ${text}`)
       convo.push(`RÉSULTATS:\n${results.join('\n')}\n\nÉTAT MAINTENANT:\n${JSON.stringify(state)}`)
     }
-    onEvent({ kind: 'done', text: '', usage })
+    const capError = `Cap d'itérations (${maxIter}) atteint sans réponse finale`
+    onEvent({
+      kind: 'error',
+      text: capError,
+      usage
+    })
+    throw new Error(capError)
   }
 }

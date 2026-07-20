@@ -53,6 +53,15 @@ describe('ProviderRegistry — contrat d’adaptateur', () => {
     expect(r.text).not.toContain('system-applied')
   })
 
+  it('refuse explicitement un mode exécution sur un provider de chat', async () => {
+    const reg = new ProviderRegistry().register(new MockProvider('claude'))
+    await expect(
+      reg.send('claude', conv, {
+        execution: { cwd: 'C:\\workspace', sandbox: 'workspace-write' }
+      })
+    ).rejects.toThrow(/sans exécuteur local outillé/)
+  })
+
   it('opts.system surcharge le bloc par défaut du registre', async () => {
     const reg = new ProviderRegistry('DEFAUT').register(new MockProvider('claude'))
     const r = await reg.send('claude', conv, { system: 'OVERRIDE-KIT' })
@@ -69,5 +78,29 @@ describe('ProviderRegistry — contrat d’adaptateur', () => {
     expect(envelope.provider).toBe('claude')
     expect(envelope.model).toBe('claude-sonnet')
     expect(envelope.limitation).toMatch(/provider/i)
+  })
+
+  it('remplace every conversational provider by OmniRoute when migration is active', async () => {
+    const direct = new MockProvider('claude')
+    const omniRoute = new MockProvider('omniroute')
+    const reg = new ProviderRegistry().register(direct).register(omniRoute)
+    reg.setConversationTransport({ provider: 'omniroute', model: 'auto/coding' })
+    const result = await reg.send('claude', conv, { model: 'claude-opus' })
+    expect(result.provider).toBe('omniroute')
+    const prompt = reg.describePrompt('codex', conv, { model: 'gpt-direct' })
+    expect(prompt.provider).toBe('omniroute')
+    expect(prompt.model).toBe('auto/coding')
+  })
+
+  it('refuses local execution while OmniRoute is active and restores it after rollback', async () => {
+    const direct = Object.assign(new MockProvider('codex'), { supportsExecution: true as const })
+    const omniRoute = new MockProvider('omniroute')
+    const reg = new ProviderRegistry().register(direct).register(omniRoute)
+    reg.setConversationTransport({ provider: 'omniroute', model: 'auto/coding' })
+    await expect(
+      reg.send('codex', conv, { execution: { cwd: 'C:\\workspace', sandbox: 'read-only' } })
+    ).rejects.toThrow(/refusée/i)
+    reg.setConversationTransport(null)
+    expect((await reg.send('codex', conv)).provider).toBe('codex')
   })
 })

@@ -15,7 +15,7 @@ export interface CapabilityProfileState {
   profiles: CapabilityProfile[]
   assignments: Record<Role, string>
 }
-const now = () => new Date().toISOString()
+const now = (): string => new Date().toISOString()
 const defaults = (): CapabilityProfileState => ({
   profiles: [
     {
@@ -42,7 +42,7 @@ const defaults = (): CapabilityProfileState => ({
   ],
   assignments: { orchestrator: 'balanced', subagent: 'balanced', judge: 'lean', scout: 'full' }
 })
-const profilePath = () => join(ensureAutowinAppData(), 'capability-profiles.json')
+const profilePath = (): string => join(ensureAutowinAppData(), 'capability-profiles.json')
 export function loadCapabilityProfiles(): CapabilityProfileState {
   try {
     const p = profilePath()

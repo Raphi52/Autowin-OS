@@ -352,6 +352,8 @@ export function GraphView({
     const query = themeQuery.trim()
     const selectedBrain = brains.find((brain) => brain.path === selected)
     if (!query || !selectedBrain || selectedBrain.kind !== 'vault') {
+      // Une recherche devenue inapplicable doit retirer immédiatement ses anciens résultats.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setVaultSearch([])
       return
     }
@@ -479,15 +481,24 @@ export function GraphView({
     () => filterGraphVisibility(graph, settings.orphans),
     [graph, settings.orphans]
   )
-  const renderedGraph = useMemo(() => ({ ...displayGraph }), [displayGraph])
+  const renderedGraph = useMemo(
+    () => ({
+      nodes: displayGraph.nodes.map((graphNode) => ({ ...graphNode })),
+      links: displayGraph.links.map((graphLink) => ({ ...graphLink }))
+    }),
+    [displayGraph]
+  )
 
+  // react-force-graph-3d positionne ses nœuds par mutation. `renderedGraph` est une copie profonde
+  // dédiée au moteur impératif : `graph` et `displayGraph`, détenus par React, restent immuables.
+  /* eslint-disable react-hooks/immutability */
   useEffect(() => {
     const instance = graphRef.current
     if (!instance) return
     const previousSpacing = previousNodeSpacingRef.current
     const positionRatio = settings.nodeSpacing / previousSpacing
     if (positionRatio !== 1) {
-      for (const graphNode of displayGraph.nodes) {
+      for (const graphNode of renderedGraph.nodes) {
         if (typeof graphNode.x === 'number') graphNode.x *= positionRatio
         if (typeof graphNode.y === 'number') graphNode.y *= positionRatio
         if (typeof graphNode.z === 'number') graphNode.z *= positionRatio
@@ -503,7 +514,8 @@ export function GraphView({
     chargeForce?.strength?.(chargeStrength)
     if (positionRatio !== 1) instance.d3ReheatSimulation()
     localStorage.setItem(autowinStorageKey(GRAPH_NODE_SPACING_SUFFIX), String(settings.nodeSpacing))
-  }, [displayGraph, settings.nodeSpacing])
+  }, [renderedGraph, settings.nodeSpacing])
+  /* eslint-enable react-hooks/immutability */
 
   const nodesById = useMemo(
     () => new Map(displayGraph.nodes.map((item) => [item.id, item])),
@@ -518,10 +530,7 @@ export function GraphView({
   const motionProfile = graphMotionProfile()
   const linkedNodes = useMemo(() => (node ? linkedNodesFor(node.id, graph) : []), [graph, node])
   const visualActiveThemes = node ? EMPTY_THEME_SELECTION : activeThemes
-  const hoveredNodeIds = useMemo(
-    () => new Set(hoveredNode ? [hoveredNode.id] : []),
-    [hoveredNode]
-  )
+  const hoveredNodeIds = useMemo(() => new Set(hoveredNode ? [hoveredNode.id] : []), [hoveredNode])
   const selectedNodeIds = useMemo(
     () => (node ? focusedNodeIdsFor(node.id, graph) : new Set<string>()),
     [graph, node]
@@ -899,7 +908,7 @@ export function GraphView({
           visualProfile.nodeScale *
           emphasis.scale
       )
-      if (shouldShowFloatingNodeName(nextNode, floatingNodeIds))
+      if (settings.labels && shouldShowFloatingNodeName(nextNode, floatingNodeIds))
         star.add(createConnectedLabel(nextNode.label, appearance.color, star.scale.x, 0.03))
       return star
     },
@@ -939,7 +948,7 @@ export function GraphView({
         nodeValueForTheme(nextNode, visualActiveThemes, settings.nodeSize) *
           visualProfile.nodeScale *
           emphasis.scale,
-        shouldShowFloatingNodeName(nextNode, floatingNodeIds)
+        settings.labels && shouldShowFloatingNodeName(nextNode, floatingNodeIds)
       )
     },
     [
@@ -1153,7 +1162,7 @@ export function GraphView({
             cooldownTicks={motionProfile.cooldownTicks}
             backgroundColor={visualProfile.background}
             showNavInfo={false}
-            nodeLabel={settings.labels ? 'label' : () => ''}
+            nodeLabel={() => ''}
             nodeColor={nodeColor}
             nodeVal={nodeValue}
             nodeOpacity={1}
@@ -1342,20 +1351,20 @@ export function GraphView({
         <div className="graph-hint">Glisser : pivoter · molette : zoomer · clic : sélectionner</div>
       </main>
 
-      {columnResizer(detailOpen ? 'detail' : 'visibility', 'Redimensionner la colonne du nœud')}
-
-      <aside
-        ref={visibilitySidebarRef}
-        className={`visibility-sidebar ${detailOpen ? 'is-detail-open' : ''}`}
-      >
-        <NodePanel
-          node={node}
-          file={file}
-          fileErr={fileErr}
-          linkedNodes={linkedNodes}
-          onNavigate={(nextNode) => openNode(nextNode, true)}
-        />
-      </aside>
+      {node && (
+        <>
+          {columnResizer('detail', 'Redimensionner la colonne du nœud')}
+          <aside ref={visibilitySidebarRef} className="visibility-sidebar is-detail-open">
+            <NodePanel
+              node={node}
+              file={file}
+              fileErr={fileErr}
+              linkedNodes={linkedNodes}
+              onNavigate={(nextNode) => openNode(nextNode, true)}
+            />
+          </aside>
+        </>
+      )}
     </section>
   )
 }
@@ -1443,14 +1452,12 @@ function NodePanel({
   linkedNodes,
   onNavigate
 }: {
-  node: GraphNode | null
+  node: GraphNode
   file: { path: string; content: string } | null
   fileErr: string
   linkedNodes: Array<{ node: GraphNode; direction: 'incoming' | 'outgoing'; relation?: string }>
   onNavigate: (node: GraphNode) => void
 }): React.JSX.Element {
-  if (!node)
-    return <div className="node-panel node-panel--empty">Sélectionnez un nœud dans le graphe.</div>
   return (
     <div className="node-panel">
       <nav className="node-links" aria-label="Nœuds reliés">

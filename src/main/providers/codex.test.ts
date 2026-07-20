@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { CodexAdapter } from './codex'
+import { CodexAdapter, codexExecSpec } from './codex'
 import { startDeviceLogin, pollForToken, refreshTokens, CODEX_CLIENT_ID } from './codex-auth'
 import type { Message } from './types'
 
@@ -244,5 +244,37 @@ describe('CodexAdapter — inférence + injection (mocké, hors-ligne)', () => {
     expect(await adapter.auth()).toBe(false)
     const gen = adapter.send(conv, { system: 'x' })
     await expect(gen.next()).rejects.toThrow(/non authentifié/)
+  })
+})
+
+describe('CodexAdapter — exécution agentique locale', () => {
+  it('borne codex exec au workspace-write et au cwd demandé', () => {
+    const spec = codexExecSpec(
+      'C:\\repo',
+      'gpt-5.6-sol',
+      'workspace-write',
+      'high',
+      'C:\\AppData',
+      () => true
+    )
+    expect(spec.cwd).toBe('C:\\repo')
+    expect(spec.args).toContain('workspace-write')
+    expect(spec.args).toContain('C:\\repo')
+    expect(spec.args).toContain('gpt-5.6-sol')
+    expect(spec.args).not.toContain('danger-full-access')
+    expect(spec.args).not.toContain('--dangerously-bypass-approvals-and-sandbox')
+  })
+
+  it('échoue explicitement quand le CLI local est absent', () => {
+    expect(() =>
+      codexExecSpec(
+        'C:\\repo',
+        'gpt-5.6-sol',
+        'workspace-write',
+        'low',
+        'C:\\Missing',
+        () => false
+      )
+    ).toThrow(/Codex CLI introuvable/)
   })
 })

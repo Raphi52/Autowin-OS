@@ -236,3 +236,9 @@ export function filterHermesPreflight(
     ? traces
     : traces.filter((trace) => trace.conversationId === conversationId)
 }
+
+export function createHermesPromptTraceReader(
+  load: () => HermesPreflightTrace[]
+): (conversationId: string) => HermesPreflightTrace[] {
+  return (conversationId) => filterHermesPreflight(load(), conversationId)
+}

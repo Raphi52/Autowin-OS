@@ -5,6 +5,7 @@ import { ObservatoryView } from './components/ObservatoryView'
 import { RolesView } from './components/RolesView'
 import { HermesControlsView } from './components/HermesControlsView'
 import { BehaviourView } from './components/BehaviourView'
+import { RouterView } from './components/RouterView'
 import { ModelQuestionPopup } from './components/ModelQuestionPopup'
 import { normalizeTab, type Tab } from './tabs'
 import autowinLogo from './assets/autowin-logo.png'
@@ -13,6 +14,7 @@ import './assets/cosmic-outline.css'
 import './assets/theme-modes.css'
 import './assets/ui-system.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
+import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'
 
 // Icônes : petits SVG path (stroke) — style linéaire, cohérent.
 const I: Record<Tab, string> = {
@@ -20,6 +22,7 @@ const I: Record<Tab, string> = {
   memory:
     'M5 7l6 4m2 0l6-4M5 17l6-4m2 0l6 4M5 5a2 2 0 110 4 2 2 0 010-4zm7 5a2 2 0 110 4 2 2 0 010-4zm7-5a2 2 0 110 4 2 2 0 010-4zM5 15a2 2 0 110 4 2 2 0 010-4zm14 0a2 2 0 110 4 2 2 0 010-4z',
   observatory: 'M7 7h9l-2 6h-5L7 7zm3 6l-5 7m8-7l5 7M4 21h16M5 4l2 3m10-3l-2 3',
+  router: 'M12 3a9 9 0 109 9M12 3v9m0 0l6-6m-6 6h9M5 19l4-4',
   agents:
     'M7 8V6h10v2m-11 1h12a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6a2 2 0 012-2zm4 4h.01M14 13h.01M9 17c1.8 1 4.2 1 6 0',
   capabilities: 'M5 10h14v10H5V10zm3 0V7h8v3m-8 4l2-2 2 2 2-2 2 2m-7 6l2-2m5 2l-2-2',
@@ -32,6 +35,7 @@ const TOY: Record<Tab, string> = {
   chat: '💬',
   memory: '🕸️',
   observatory: '🔭',
+  router: '🛰️',
   agents: '🤖',
   capabilities: '🧰',
   behaviour: '🧠'
@@ -41,16 +45,18 @@ const NAV: Array<{ id: Tab; label: string }> = [
   { id: 'chat', label: 'Chat' },
   { id: 'memory', label: 'Memory' },
   { id: 'observatory', label: 'Observatory' },
+  { id: 'router', label: 'Router' },
   { id: 'agents', label: 'Models' },
   { id: 'capabilities', label: 'Skills · Hooks · Tools' },
   { id: 'behaviour', label: 'Behaviour' }
 ]
 
-function MainApp(): React.JSX.Element {
+export function MainApp(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('chat')
   const [driven, setDriven] = useState(false) // un agent pilote → halo sur la vue
   const [railCollapsed, setRailCollapsed] = useState(false)
   const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set(['chat']))
+  const [observatoryFocus, setObservatoryFocus] = useState<ObservatoryFocus | null>(null)
 
   useEffect(() => {
     migrateAutowinStorage(localStorage)
@@ -93,6 +99,11 @@ function MainApp(): React.JSX.Element {
         })
       )
     }, 0)
+  }
+
+  function inspectTurn(target: InspectTurnTarget): void {
+    setObservatoryFocus({ ...target, requestId: Date.now() })
+    navigate('observatory')
   }
 
   useEffect(() => {
@@ -168,7 +179,7 @@ function MainApp(): React.JSX.Element {
       <main className={`main${driven ? ' driven' : ''}`} data-driven={driven}>
         {visitedTabs.has('chat') && (
           <div className={`view-slot${tab === 'chat' ? ' is-active' : ''}`}>
-            <ChatView isActive={tab === 'chat'} />
+            <ChatView isActive={tab === 'chat'} onInspectTurn={inspectTurn} />
           </div>
         )}
         {visitedTabs.has('memory') && (
@@ -178,7 +189,12 @@ function MainApp(): React.JSX.Element {
         )}
         {visitedTabs.has('observatory') && (
           <div className={`view-slot${tab === 'observatory' ? ' is-active' : ''}`}>
-            <ObservatoryView active={tab === 'observatory'} />
+            <ObservatoryView active={tab === 'observatory'} focus={observatoryFocus} />
+          </div>
+        )}
+        {visitedTabs.has('router') && (
+          <div className={`view-slot${tab === 'router' ? ' is-active' : ''}`}>
+            <RouterView active={tab === 'router'} />
           </div>
         )}
         {visitedTabs.has('agents') && (

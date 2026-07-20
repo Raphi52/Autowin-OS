@@ -31,6 +31,7 @@ describe('Autowin UI contract', () => {
       'ChatView.tsx',
       'GraphView.tsx',
       'ObservatoryView.tsx',
+      'RouterView.tsx',
       'AgentsTopologyView.tsx',
       'HermesControlsView.tsx',
       'BehaviourView.tsx'
@@ -43,7 +44,12 @@ describe('Autowin UI contract', () => {
   it('keeps Noir opaque and routes shared cosmic surfaces through semantic tokens', () => {
     expect(themeModes).toMatch(/\.theme-serious \.main\s*\{\s*background:\s*#000;/)
     expect(themeModes).toMatch(/\.theme-serious \.rail\s*\{[\s\S]*?background:\s*#000;/)
-    for (const token of ['var(--surface-page)', 'var(--surface-panel)', 'var(--surface-card)', 'var(--surface-inset)']) {
+    for (const token of [
+      'var(--surface-page)',
+      'var(--surface-panel)',
+      'var(--surface-card)',
+      'var(--surface-inset)'
+    ]) {
       expect(cosmicOutline).toContain(token)
     }
   })

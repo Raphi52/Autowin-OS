@@ -7,6 +7,7 @@ import {
   type ChatTurnStatus,
   type PersistedChatPart
 } from '../../shared/chat-turn'
+import type { ConversationAuthorityMode } from '../conversation-capabilities'
 
 // Store en mémoire pour les conversations catégorisées (candidat type Hermes/claude.exe/codex).
 // Interface pensée pour être remplacée plus tard par un backend sqlite sans changer l'appelant.
@@ -22,6 +23,9 @@ export interface AttachmentMeta {
 
 /** Un message échangé dans une conversation. */
 export interface Msg {
+  messageId?: string
+  branchId?: string
+  parentMessageId?: string
   role: 'user' | 'assistant'
   content: string
   ts: number
@@ -33,14 +37,26 @@ export interface Msg {
   error?: string
 }
 
+export interface ConversationBranch {
+  id: string
+  parentBranchId?: string
+  forkedFromTurnId?: string
+  createdAt: number
+}
+
 /** Une conversation, regroupée par catégorie et rattachée à un provider. */
 export interface Conversation {
-  schemaVersion?: 2
+  schemaVersion?: 2 | 3
   id: string
   title: string
   category: Category
   provider: string
   messages: Msg[]
+  rootBranchId?: string
+  activeBranchId?: string
+  workspaceId?: string
+  branches?: ConversationBranch[]
+  authorityMode?: ConversationAuthorityMode
   /** RUN.md externes (Claude Code) attachés à cette conversation. */
   runPaths?: string[]
   createdAt: number
@@ -65,7 +81,23 @@ export class ConversationStore {
     let max = 0
     let migrated = false
     for (const c of saved) {
-      const messages = c.messages.map((message) => {
+      const rootBranchId = c.rootBranchId ?? `branch-${c.id}-root`
+      let previousMessageId: string | undefined
+      const messages = c.messages.map((sourceMessage, index) => {
+        let message = sourceMessage
+        const messageId = message.messageId ?? `message-${c.id}-${index + 1}`
+        const branchId = message.branchId ?? rootBranchId
+        const parentMessageId = message.parentMessageId ?? previousMessageId
+        if (!message.messageId || !message.branchId || message.parentMessageId !== parentMessageId) {
+          migrated = true
+          message = {
+            ...message,
+            messageId,
+            branchId,
+            ...(parentMessageId ? { parentMessageId } : {})
+          }
+        }
+        previousMessageId = messageId
         if (message.role !== 'assistant') return message
         if (!message.parts) {
           migrated = true
@@ -83,10 +115,24 @@ export class ConversationStore {
       })
       const hydrated = {
         ...c,
-        schemaVersion: 2 as const,
+        schemaVersion: 3 as const,
+        rootBranchId,
+        activeBranchId: c.activeBranchId ?? rootBranchId,
+        workspaceId: c.workspaceId ?? `workspace-${c.id}`,
+        branches: c.branches ?? [{ id: rootBranchId, createdAt: c.createdAt }],
+        authorityMode: c.authorityMode ?? 'ask',
         messages
       }
-      if (c.schemaVersion !== 2) migrated = true
+      if (
+        c.schemaVersion !== 3 ||
+        !c.rootBranchId ||
+        !c.activeBranchId ||
+        !c.workspaceId ||
+        !c.branches ||
+        !c.authorityMode
+      ) {
+        migrated = true
+      }
       this.conversations.set(c.id, hydrated)
       const n = Number(c.id.replace(/^conv-/, ''))
       if (Number.isFinite(n) && n > max) max = n
@@ -102,13 +148,20 @@ export class ConversationStore {
   /** Crée une nouvelle conversation vide et la stocke. */
   create(p: { title: string; category: Category; provider: string }): Conversation {
     const ts = this.now()
+    const id = `conv-${this.nextId++}`
+    const rootBranchId = `branch-${id}-root`
     const conversation: Conversation = {
-      schemaVersion: 2,
-      id: `conv-${this.nextId++}`,
+      schemaVersion: 3,
+      id,
       title: p.title,
       category: p.category,
       provider: p.provider,
       messages: [],
+      rootBranchId,
+      activeBranchId: rootBranchId,
+      workspaceId: `workspace-${id}`,
+      branches: [{ id: rootBranchId, createdAt: ts }],
+      authorityMode: 'ask',
       createdAt: ts,
       updatedAt: ts
     }
@@ -127,7 +180,11 @@ export class ConversationStore {
       throw new Error(`Conversation inconnue: ${id}`)
     }
     const ts = this.now()
+    const previous = conversation.messages.at(-1)
     conversation.messages.push({
+      messageId: `message-${conversation.id}-${conversation.messages.length + 1}`,
+      branchId: conversation.activeBranchId ?? conversation.rootBranchId,
+      ...(previous?.messageId ? { parentMessageId: previous.messageId } : {}),
       role: m.role,
       content: m.content,
       ts,
@@ -147,7 +204,12 @@ export class ConversationStore {
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const ts = this.now()
+    const previous = conversation.messages.at(-1)
+    const userMessageId = `message-${conversation.id}-${conversation.messages.length + 1}`
     conversation.messages.push({
+      messageId: userMessageId,
+      branchId: conversation.activeBranchId ?? conversation.rootBranchId,
+      ...(previous?.messageId ? { parentMessageId: previous.messageId } : {}),
       role: 'user',
       content: user.content,
       ts,
@@ -155,6 +217,9 @@ export class ConversationStore {
     })
     const turn = createChatTurn(assistant.turnId, assistant.runtime)
     conversation.messages.push({
+      messageId: `message-${conversation.id}-${conversation.messages.length + 1}`,
+      branchId: conversation.activeBranchId ?? conversation.rootBranchId,
+      parentMessageId: userMessageId,
       role: 'assistant',
       content: '',
       ts,
@@ -163,7 +228,7 @@ export class ConversationStore {
       parts: turn.parts,
       ...(turn.runtime ? { runtime: turn.runtime } : {})
     })
-    conversation.schemaVersion = 2
+    conversation.schemaVersion = 3
     conversation.updatedAt = ts
     this.changed('immediate')
     return conversation

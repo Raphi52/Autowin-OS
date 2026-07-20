@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { mergeActivityEntries } from './activity-pane-model'
 import { HumanJson } from './HumanJson'
 import { RagTraceCard } from './RagTraceCard'
@@ -70,6 +70,7 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
   const [hermesTraces, setHermesTraces] = useState<HermesTrace[]>([])
   const [proof, setProof] = useState<{ path: string; dataUrl: string } | null>(null)
   const [proofError, setProofError] = useState<string | null>(null)
+  const refreshGenerationRef = useRef(0)
 
   async function openProof(path: string): Promise<void> {
     setProofError(null)
@@ -82,9 +83,11 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
   }
 
   async function refresh(): Promise<void> {
+    const generation = ++refreshGenerationRef.current
     if (!convId) {
       setEntries([])
       setPromptCalls([])
+      setHermesTraces([])
       return
     }
     setLoading(true)
@@ -95,6 +98,7 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
         window.api.promptCalls(convId),
         window.api.hermesPromptTraces(convId)
       ])
+      if (generation !== refreshGenerationRef.current) return
       setEntries(
         mergeActivityEntries(activity as ConvActivityEntry[], globalConfig as ConvActivityEntry[])
       )
@@ -106,11 +110,13 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
           .reverse()
       )
     } finally {
-      setLoading(false)
+      if (generation === refreshGenerationRef.current) setLoading(false)
     }
   }
 
   useEffect(() => {
+    // Réinitialisation intentionnelle à chaque changement de conversation avant l'abonnement aux événements.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh()
     // Les orchestrations/tours de chat rafraîchissent l'activité de la conversation.
     const off = window.api.onAppEvent((e) => {
@@ -121,7 +127,10 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
         refresh()
       }
     })
-    return off
+    return () => {
+      refreshGenerationRef.current += 1
+      off()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [convId])
 
@@ -223,7 +232,7 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
         )}
         {!loading && entries.length === 0 && (
           <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
-            Aucune étape pour l'instant — écris un message ou lance une orchestration.
+            Aucune étape pour l&apos;instant — écris un message ou lance une orchestration.
           </div>
         )}
         {entries.map((e, i) => {

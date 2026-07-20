@@ -54,12 +54,12 @@ describe('conversations-disk — persistance à chaque mutation', () => {
     expect(b.get(c.id)?.runPaths).toEqual(['C:\\x\\RUN.md'])
   })
 
-  it('fichier corrompu ou absent → repart vide sans crasher', () => {
+  it('fichier absent retourne vide mais une corruption est explicite', () => {
     const p = join(dir, 'corrompu.json')
     writeFileSync(p, '{pas du json', 'utf8')
-    expect(loadConversations(p)).toEqual([])
+    expect(() => loadConversations(p)).toThrow('Store conversations corrompu')
     expect(loadConversations(join(dir, 'nexiste.json'))).toEqual([])
-    // save ne jette jamais même sur chemin impossible
+    // Un sous-dossier valide est créé à la demande.
     expect(() => saveConversations([], join(dir, 'sub', 'ok.json'))).not.toThrow()
   })
 })

@@ -27,4 +27,28 @@ describe('RAG observability rendering', () => {
     expect(malformed).toContain('data-rag-status="unparseable"')
     expect(malformed).toContain('format non analysable')
   })
+
+  it('describes the observed RAG state without contradicting an injected trace', () => {
+    const injected = renderToStaticMarkup(
+      <RagObservabilitySummary
+        requests={[
+          {
+            body: {
+              messages: [
+                {
+                  content:
+                    'Question\n\n[AMITEL BRAIN REFERENCE DATA]\n\n### Source 1 - knowledge/test.md\nProvenance: domain | test | codex | 2026-07-20'
+                }
+              ]
+            }
+          }
+        ]}
+      />
+    )
+    const unavailable = renderToStaticMarkup(<RagObservabilitySummary requests={[]} />)
+
+    expect(injected).toContain('Contexte Brain observé dans la requête Hermes')
+    expect(injected).not.toContain('RAG non branché')
+    expect(unavailable).toContain('Aucune requête Hermes disponible pour contrôler le RAG')
+  })
 })

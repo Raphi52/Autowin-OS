@@ -22,4 +22,17 @@ describe('model questions', () => {
     hub.resolve(id, 'A')
     await expect(answer).resolves.toBe('A')
   })
+  it('rejects a pending question when its signal is aborted', async () => {
+    const hub = new ModelQuestionHub()
+    const controller = new AbortController()
+    const answer = hub.ask(
+      'chat',
+      { text: 'Choix ?', options: ['A'] },
+      vi.fn(),
+      'tour-1',
+      controller.signal
+    )
+    controller.abort('conversation-deleted')
+    await expect(answer).rejects.toThrow('conversation-deleted')
+  })
 })

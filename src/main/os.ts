@@ -8,6 +8,11 @@ import { ProviderRegistry } from './providers/registry'
 import { ClaudeCliAdapter } from './providers/claude'
 import { CodexAdapter } from './providers/codex'
 import { KimiCliAdapter } from './providers/kimi'
+import { OmniRouteAdapter } from './providers/omniroute'
+import {
+  createOmniRouteCredentialStore,
+  type OmniRouteCredentialStore
+} from './credentials/omniroute-credential-store'
 import type { Message } from './providers/types'
 import { loadKitSoul } from './kit'
 import { RoleModelConfig, type Role, type RoleBinding } from './roles'
@@ -32,8 +37,37 @@ import { Orchestrator, type OrchestrationResult, type OrchestrationStep } from '
 import { composeHarnessSnapshot, type HarnessSnapshot } from './harness/snapshot'
 import { listHermesControls } from './hermes-controls'
 import { listClaudeHooks } from './claude-hooks'
-import { listBehaviourFiles } from './behaviour-files'
+import { defaultBehaviourWorkspace, listBehaviourFiles } from './behaviour-files'
 import { listSessions } from './activity/transcripts'
+import { existsSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+import { AUTOWIN_WORKSPACE_ENV } from '../shared/app-identity'
+
+interface ExecutionWorkspaceInput {
+  cwd?: string
+  execPath?: string
+  configured?: string
+}
+
+function gitWorkspaceFrom(start: string): string | undefined {
+  let cursor = resolve(start)
+  for (;;) {
+    if (existsSync(join(cursor, '.git')) && existsSync(join(cursor, 'package.json'))) return cursor
+    const parent = dirname(cursor)
+    if (parent === cursor) return undefined
+    cursor = parent
+  }
+}
+
+export function resolveExecutionWorkspace(input: ExecutionWorkspaceInput = {}): string {
+  const configured = input.configured ?? process.env[AUTOWIN_WORKSPACE_ENV]
+  if (configured && existsSync(configured)) return resolve(configured)
+  const cwdWorkspace = gitWorkspaceFrom(input.cwd ?? process.cwd())
+  if (cwdWorkspace) return cwdWorkspace
+  const executableWorkspace = gitWorkspaceFrom(dirname(input.execPath ?? process.execPath))
+  if (executableWorkspace) return executableWorkspace
+  return defaultBehaviourWorkspace()
+}
 
 /** Course bornée : rend `fallback` si la promesse dépasse `ms` (sonde jamais bloquante). */
 async function settleWithin<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -69,18 +103,23 @@ export class AutowinOS {
   readonly conversations = new ConversationStore()
   readonly trust = new TrustLedger()
   readonly orchestrator: Orchestrator
+  readonly omniRouteCredentialStore: OmniRouteCredentialStore
 
-  constructor() {
+  constructor(options: { omniRouteCredentialStore?: OmniRouteCredentialStore } = {}) {
+    this.omniRouteCredentialStore =
+      options.omniRouteCredentialStore ?? createOmniRouteCredentialStore()
     this.registry = new ProviderRegistry(loadKitSoul())
       .register(new ClaudeCliAdapter())
       .register(new CodexAdapter())
       .register(new KimiCliAdapter())
+      .register(new OmniRouteAdapter({ credentialStore: this.omniRouteCredentialStore }))
     this.orchestrator = new Orchestrator({
       registry: this.registry,
       roles: this.roles,
       cost: this.cost,
       trust: this.trust,
-      authority: this.authority
+      authority: this.authority,
+      executionWorkspace: resolveExecutionWorkspace()
     })
   }
 
@@ -117,9 +156,10 @@ export class AutowinOS {
 
   /** Change le binding d'un rôle ET persiste sur disque. */
   setRole(role: Role, binding: RoleBinding): Record<Role, RoleBinding> {
-    const all = this.roles.setBinding(role, binding).all()
-    saveRoleBindings(all)
-    return all
+    const proposed = new RoleModelConfig(this.roles.all()).setBinding(role, binding).all()
+    saveRoleBindings(proposed)
+    this.roles.setBinding(role, proposed[role])
+    return this.roles.all()
   }
 
   // --- Orchestration disciplinée (le cœur) ---

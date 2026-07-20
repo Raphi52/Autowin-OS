@@ -4,9 +4,13 @@ import type {
   ProviderAdapter,
   SendOptions,
   SendResult,
-  StreamChunk
+  StreamChunk,
+  ExecutionEvidence
 } from './types'
 import { loadTokens, refreshTokens, saveTokens, type FetchLike, type Tokens } from './codex-auth'
+import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 
 /**
  * Adaptateur voie Codex — abonnement ChatGPT via OAuth device-code (cf. codex-auth).
@@ -16,6 +20,184 @@ import { loadTokens, refreshTokens, saveTokens, type FetchLike, type Tokens } fr
  * équivalence de CONTENU (même bloc SOUL).
  */
 const CODEX_RESPONSES_URL = 'https://chatgpt.com/backend-api/codex/responses'
+
+export interface CodexExecSpec {
+  executable: string
+  args: string[]
+  cwd: string
+}
+
+export function codexExecSpec(
+  cwd: string,
+  model: string,
+  sandbox: 'read-only' | 'workspace-write' | 'danger-full-access',
+  reasoningEffort?: string,
+  appData = process.env.APPDATA,
+  entrypointExists: (path: string) => boolean = existsSync
+): CodexExecSpec {
+  if (!appData) throw new Error('APPDATA indisponible : impossible de localiser Codex CLI')
+  const entrypoint = join(appData, 'npm', 'node_modules', '@openai', 'codex', 'bin', 'codex.js')
+  if (!entrypointExists(entrypoint)) throw new Error(`Codex CLI introuvable: ${entrypoint}`)
+  return {
+    executable: 'node',
+    cwd,
+    args: [
+      entrypoint,
+      'exec',
+      '--json',
+      '--ephemeral',
+      '--sandbox',
+      sandbox,
+      '--cd',
+      cwd,
+      '--model',
+      model,
+      ...(reasoningEffort ? ['-c', `model_reasoning_effort="${reasoningEffort}"`] : []),
+      '-'
+    ]
+  }
+}
+
+async function runCodexExec(
+  messages: Message[],
+  opts: SendOptions,
+  model: string
+): Promise<SendResult> {
+  const execution = opts.execution
+  if (!execution) throw new Error('Contrat d’exécution Codex absent')
+  const spec = codexExecSpec(execution.cwd, model, execution.sandbox, opts.reasoningEffort)
+  const prompt = [
+    opts.system,
+    ...messages.filter((message) => message.role !== 'system').map((m) => m.content)
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+  opts.observePrompt?.({
+    provider: 'codex',
+    model,
+    transport: `Codex CLI exec JSONL · ${execution.sandbox}`,
+    system: opts.system,
+    messages: messages.filter((message) => message.role !== 'system'),
+    options: { argv: spec.args.slice(1), cwd: spec.cwd, sandbox: execution.sandbox },
+    limitation:
+      'Arguments exacts remis au CLI Codex ; ses instructions internes ne sont pas exposées.'
+  })
+  return await new Promise((resolvePromise, reject) => {
+    const child = spawn(spec.executable, spec.args, {
+      cwd: spec.cwd,
+      shell: false,
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+    let stdout = ''
+    let stderr = ''
+    let finalText = ''
+    let sessionId: string | undefined
+    let usage: SendResult['usage']
+    const executionEvidence: ExecutionEvidence[] = []
+    const timer = setTimeout(() => child.kill(), 30 * 60_000)
+    opts.signal?.addEventListener('abort', () => child.kill())
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString('utf8')
+      const lines = stdout.split(/\r?\n/)
+      stdout = lines.pop() ?? ''
+      for (const line of lines) {
+        try {
+          const event = JSON.parse(line) as Record<string, unknown>
+          if (event.type === 'thread.started' && typeof event.thread_id === 'string')
+            sessionId = event.thread_id
+          if (event.type === 'item.completed') {
+            const item = event.item as
+              | {
+                  type?: string
+                  text?: string
+                  status?: string
+                  command?: string
+                  aggregated_output?: string
+                  exit_code?: number
+                  changes?: unknown
+                }
+              | undefined
+            if (item?.type === 'agent_message' && item.text) finalText = item.text
+            else if (item?.type && item.type !== 'reasoning') {
+              const command = item.command ?? ''
+              const ok =
+                item.type === 'file_change'
+                  ? item.status !== 'failed'
+                  : item.type === 'command_execution'
+                    ? item.exit_code === 0 && item.status !== 'failed'
+                    : item.status !== 'failed'
+              const mutationCommand =
+                /\b(apply_patch|set-content|new-item|copy-item|move-item|remove-item|sed\s+-i|perl\s+-pi)\b|(?:^|\s)(?:echo|printf)\b[^\n]*>/i
+              const verificationCommand =
+                /\b(vitest|jest|pytest|cargo\s+test|dotnet\s+test|go\s+test|tsc|eslint|npm(?:\.cmd)?\s+(?:test|run\s+(?:test|typecheck|build|lint))|pnpm\s+(?:test|run\s+(?:test|typecheck|build|lint))|node\s+-e)\b/i
+              const kind: ExecutionEvidence['kind'] =
+                item.type === 'file_change' || mutationCommand.test(command)
+                  ? 'mutation'
+                  : item.type === 'command_execution' && verificationCommand.test(command)
+                    ? 'verification'
+                    : item.type === 'command_execution'
+                      ? 'inspection'
+                      : 'other'
+              const summary =
+                item.type === 'command_execution'
+                  ? `${item.command ?? ''}\nexit=${item.exit_code ?? 'unknown'}\n${item.aggregated_output ?? ''}`
+                  : JSON.stringify(item.changes ?? item)
+              executionEvidence.push({
+                type: item.type,
+                kind,
+                status: item.status ?? 'completed',
+                ok,
+                summary: summary.slice(-4_000)
+              })
+            }
+          }
+          if (event.type === 'turn.completed') {
+            const measured = event.usage as
+              | { input_tokens?: number; output_tokens?: number; cached_input_tokens?: number }
+              | undefined
+            if (measured) {
+              usage = {
+                inputTokens: measured.input_tokens ?? 0,
+                outputTokens: measured.output_tokens ?? 0,
+                cacheReadTokens: measured.cached_input_tokens
+              }
+            }
+          }
+        } catch {
+          // Le CLI peut écrire une ligne informative non JSON ; stderr garde le diagnostic fatal.
+        }
+      }
+    })
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf8')
+    })
+    child.on('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      if (code !== 0) {
+        reject(new Error(`codex exec échec (${code ?? 'signal'}): ${stderr.trim().slice(-800)}`))
+        return
+      }
+      if (!finalText.trim()) {
+        reject(new Error('codex exec terminé sans message final'))
+        return
+      }
+      resolvePromise({
+        text: finalText,
+        provider: 'codex',
+        sessionId,
+        systemInjected: Boolean(opts.system),
+        usage,
+        executionEvidence
+      })
+    })
+    child.stdin.end(prompt)
+  })
+}
 
 function escapeAttribute(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;')
@@ -74,6 +256,7 @@ export interface CodexAdapterOptions {
 
 export class CodexAdapter implements ProviderAdapter {
   readonly id = 'codex'
+  readonly supportsExecution = true
   private readonly fetchFn: FetchLike
   private readonly loadTokensFn: () => Tokens | null
   private readonly model: string
@@ -118,6 +301,11 @@ export class CodexAdapter implements ProviderAdapter {
     messages: Message[],
     opts: SendOptions = {}
   ): AsyncGenerator<StreamChunk, SendResult, void> {
+    if (opts.execution) {
+      const result = await runCodexExec(messages, opts, opts.model ?? this.model)
+      yield { delta: result.text }
+      return result
+    }
     const system = opts.system
     const systemInjected = typeof system === 'string' && system.length > 0
     const token = await this.accessToken()

@@ -1,0 +1,82 @@
+import { describe, expect, it } from 'vitest'
+import { buildObservatoryExport } from './observatory-export-model'
+
+describe('observatory export model', () => {
+  it('exports every observability plane under a versioned schema', () => {
+    const result = buildObservatoryExport({
+      exportedAt: '2026-07-20T02:00:00.000Z',
+      conversationId: 'conv-1',
+      filters: { query: 'brain', type: 'injection', provider: 'hermes' },
+      limitations: ['Hermes global non rattaché'],
+      timeline: { turns: [{ id: 'turn-1' }], anomalies: [] },
+      promptCalls: [{ id: 'call-1', provider: 'codex', limitation: 'usage estimé' }],
+      hermesTraces: [
+        {
+          apiRequestId: 'api-1',
+          timestamp: '2026-07-20T01:59:00.000Z',
+          provider: 'openai-codex',
+          model: 'gpt',
+          boundary: 'hermes.pre_api_request',
+          source: 'plugin-hook',
+          fidelity: 'exact-redacted',
+          request: {
+            headers: { authorization: 'Bearer raw-secret' },
+            body: {
+              messages: [
+                {
+                  content:
+                    'Question\n\n[AMITEL BRAIN REFERENCE DATA]\n### Source 1 - knowledge/a.md\nProvenance: domain | global | codex | 2026-07-20'
+                }
+              ]
+            }
+          }
+        }
+      ]
+    })
+
+    expect(result).toMatchObject({
+      schema: 'autowin.observatory-export/v1',
+      conversationId: 'conv-1',
+      filters: { query: 'brain', type: 'injection', provider: 'hermes' },
+      limitations: ['Hermes global non rattaché'],
+      timeline: { turns: [{ id: 'turn-1' }] },
+      promptCalls: [{ id: 'call-1' }],
+      hermesRag: [
+        {
+          apiRequestId: 'api-1',
+          fidelity: 'exact-redacted',
+          rag: { status: 'injected', sources: [{ path: 'knowledge/a.md' }] }
+        }
+      ]
+    })
+    expect(JSON.stringify(result)).not.toContain('raw-secret')
+    expect(result.hermesRag[0].request).toMatchObject({
+      headers: { authorization: '[REDACTED]' }
+    })
+  })
+
+  it('rejects a Hermes payload whose fidelity is not exact-redacted', () => {
+    expect(() =>
+      buildObservatoryExport({
+        exportedAt: '2026-07-20T02:00:00.000Z',
+        conversationId: 'conv-1',
+        filters: { query: '', type: 'all', provider: 'all' },
+        limitations: [],
+        timeline: { turns: [] },
+        promptCalls: [],
+        hermesTraces: [
+          {
+            apiRequestId: 'unsafe',
+            timestamp: '2026-07-20T01:59:00.000Z',
+            provider: 'custom',
+            model: 'model',
+            boundary: 'hermes.request_dump',
+            source: 'request-dump',
+            fidelity: 'raw' as 'exact-redacted',
+            request: {}
+          }
+        ]
+      })
+    ).toThrow(/exact-redacted/)
+  })
+})

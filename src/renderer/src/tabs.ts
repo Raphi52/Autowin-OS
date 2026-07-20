@@ -1,4 +1,5 @@
-export type Tab = 'chat' | 'memory' | 'observatory' | 'agents' | 'capabilities' | 'behaviour'
+export type Tab =
+  'chat' | 'memory' | 'observatory' | 'router' | 'agents' | 'capabilities' | 'behaviour'
 
 /** Tolère les anciens noms d'onglets émis par un agent (catalogue legacy). */
 export function normalizeTab(t: string): Tab {
@@ -13,6 +14,7 @@ export function normalizeTab(t: string): Tab {
   )
     return 'observatory'
   if (t === 'agents' || t === 'roles') return 'agents'
+  if (t === 'router' || t === 'routeur' || t === 'omniroute') return 'router'
   if (t === 'skills' || t === 'hooks' || t === 'tools' || t === 'capabilities')
     return 'capabilities'
   if (t === 'behaviour' || t === 'behavior') return 'behaviour'

@@ -1,22 +1,6 @@
 import { useState } from 'react'
 import './HumanJson.css'
-
-type JsonPrimitive = string | number | boolean | null
-type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue }
-
-export function parseJsonValue(value: unknown): JsonValue | null {
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value) as JsonValue
-    } catch {
-      return null
-    }
-  }
-  if (value === null || typeof value === 'boolean' || typeof value === 'number') return value
-  if (Array.isArray(value) || (typeof value === 'object' && value !== null))
-    return value as JsonValue
-  return null
-}
+import { parseJsonValue, type JsonValue } from './human-json-model'
 
 function JsonTree({ value, depth = 0 }: { value: JsonValue; depth?: number }): React.JSX.Element {
   if (value === null) return <span className="human-json__null">aucune valeur</span>

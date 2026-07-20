@@ -11,6 +11,7 @@ export interface AutowinProfile {
   updatedAt: string
   topology: AgentTopology
   roles: Record<Role, RoleBinding>
+  transport?: { mode: 'direct' | 'omniroute'; routeModel?: string }
 }
 
 export class ProfileStore {

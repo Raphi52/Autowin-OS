@@ -13,12 +13,23 @@ interface ChatResult {
 
 /** API exposée au renderer — chaque méthode a un handler main réel. */
 const api = {
+  captureTestPage: (): Promise<string> => ipcRenderer.invoke('app:test:capture-page'),
   storageMigration: (): Promise<Record<string, string>> =>
     ipcRenderer.invoke('app:storage-migration'),
   completeStorageMigration: (): Promise<boolean> =>
     ipcRenderer.invoke('app:storage-migration-complete'),
   // Chat
   listProviders: (): Promise<string[]> => ipcRenderer.invoke('chat:providers'),
+  routerSnapshot: (): Promise<unknown> => ipcRenderer.invoke('router:snapshot'),
+  routerMigrationState: (): Promise<unknown> => ipcRenderer.invoke('router:migration-state'),
+  setOmniRouteCredential: (credential: string): Promise<unknown> =>
+    ipcRenderer.invoke('router:set-credential', credential),
+  deleteOmniRouteCredential: (): Promise<unknown> => ipcRenderer.invoke('router:delete-credential'),
+  testOmniRoute: (): Promise<unknown> => ipcRenderer.invoke('router:test-route'),
+  activateOmniRoute: (routeModel: string): Promise<unknown> =>
+    ipcRenderer.invoke('router:activate', routeModel),
+  rollbackOmniRoute: (): Promise<unknown> => ipcRenderer.invoke('router:rollback'),
+  openOmniRouteDashboard: (): Promise<void> => ipcRenderer.invoke('router:open-dashboard'),
   send: (
     provider: string | undefined,
     messages: Message[],

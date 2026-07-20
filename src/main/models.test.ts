@@ -1,10 +1,45 @@
 import { describe, expect, it, vi } from 'vitest'
-import { DEFAULT_IMPORTED_MODELS, discoverImportedModels } from './models'
+import { DEFAULT_IMPORTED_MODELS, discoverImportedModels, discoverOmniRouteModels } from './models'
 import { appendClaudeSelectionArgs } from './providers/claude'
 
 const noCodexAuth = (): null => null
 
 describe('catalogue Agents dynamique', () => {
+  it('importe uniquement les modèles réellement exposés par OmniRoute', async () => {
+    const fetchFn = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      expect((init?.headers as Record<string, string>).authorization).toBe('Bearer gateway-token')
+      return Response.json({
+        object: 'list',
+        data: [
+          { id: 'auto', owned_by: 'combo' },
+          { id: 'auto/coding', owned_by: 'combo' },
+          { id: 'custom:priority-chain' },
+          { id: '../intrus' },
+          { id: '' },
+          { nope: 'missing-id' }
+        ]
+      })
+    })
+    const models = await discoverOmniRouteModels(
+      fetchFn as typeof fetch,
+      { get: () => 'gateway-token' }
+    )
+    expect(models.map((model) => model.id)).toEqual([
+      'omniroute/auto',
+      'omniroute/auto/coding',
+      'omniroute/custom:priority-chain'
+    ])
+    expect(models[1]).toEqual(expect.objectContaining({
+      provider: 'omniroute', model: 'auto/coding', reasoningEfforts: ['none']
+    }))
+  })
+
+  it('does not invent OmniRoute models when auth or schema is unavailable', async () => {
+    const fetchFn = vi.fn(async () => Response.json({ object: 'list', data: 'hostile' }))
+    expect(await discoverOmniRouteModels(fetchFn as typeof fetch, { get: () => null })).toEqual([])
+    expect(await discoverOmniRouteModels(fetchFn as typeof fetch, { get: () => 'token' })).toEqual([])
+  })
+
   it('expose Kimi Code compte comme modèle sélectionnable, sans API key', () => {
     expect(DEFAULT_IMPORTED_MODELS).toContainEqual(
       expect.objectContaining({

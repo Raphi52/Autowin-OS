@@ -17,10 +17,30 @@ describe('floating note labels', () => {
 
   it('gives an opened node visual priority over an active theme', () => {
     const source = readFileSync(new URL('./GraphView.tsx', import.meta.url), 'utf8')
-    expect(source).toContain('const visualActiveThemes = node ? EMPTY_THEME_SELECTION : activeThemes')
     expect(source).toContain(
-      'visualActiveThemes.size > 0 ? highlightedNodeIds : new Set()'
+      'const visualActiveThemes = node ? EMPTY_THEME_SELECTION : activeThemes'
     )
-    expect(source).toContain('nodeColorForTheme(\n      value as GraphNode,\n      visualActiveThemes,')
+    expect(source).toContain('visualActiveThemes.size > 0 ? highlightedNodeIds : new Set()')
+    expect(source).toContain(
+      'nodeColorForTheme(\n      value as GraphNode,\n      visualActiveThemes,'
+    )
+  })
+
+  it('mounts the detail column only while a node is selected', () => {
+    const source = readFileSync(new URL('./GraphView.tsx', import.meta.url), 'utf8')
+    const styles = readFileSync(new URL('./GraphView.css', import.meta.url), 'utf8')
+
+    expect(source).toContain("{columnResizer('detail', 'Redimensionner la colonne du nœud')}")
+    expect(source).not.toContain('Sélectionnez un nœud dans le graphe.')
+    expect(source).not.toContain("detailOpen ? 'detail' : 'visibility'")
+    expect(styles).toContain('grid-template-columns: var(--theme-column-width) minmax(0, 1fr);')
+  })
+
+  it('uses only the floating node name instead of stacking the native hover tooltip below it', () => {
+    const source = readFileSync(new URL('./GraphView.tsx', import.meta.url), 'utf8')
+
+    expect(source).toContain("nodeLabel={() => ''}")
+    expect(source).not.toContain("nodeLabel={settings.labels ? 'label' : () => ''}")
+    expect(source).toContain('settings.labels && shouldShowFloatingNodeName')
   })
 })
