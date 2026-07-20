@@ -159,6 +159,10 @@ const api = {
     ipcRenderer.invoke('os:conversations:rename', id, title),
   conversationsSetAuthorityMode: (id: string, mode: 'plan' | 'ask' | 'auto'): Promise<unknown> =>
     ipcRenderer.invoke('os:conversations:authorityMode', id, mode),
+  conversationsFork: (id: string, messageId: string): Promise<unknown> =>
+    ipcRenderer.invoke('os:conversations:fork', id, messageId),
+  conversationsSwitchBranch: (id: string, branchId: string): Promise<unknown> =>
+    ipcRenderer.invoke('os:conversations:switchBranch', id, branchId),
   conversationsRemove: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:remove', id),
   openFolder: (path: string): Promise<void> => ipcRenderer.invoke('os:openFolder', path),
@@ -236,6 +240,8 @@ const api = {
     ipcRenderer.invoke('os:loadBrainGraphPreview', path, lod),
   loadBrainThemes: (path: string): Promise<unknown> =>
     ipcRenderer.invoke('os:loadBrainThemes', path),
+  loadBrainThemeNodes: (path: string, themeIds: string[]): Promise<unknown> =>
+    ipcRenderer.invoke('os:loadBrainThemeNodes', path, themeIds),
   loadBrainNeighborhood: (path: string, nodeId: string): Promise<unknown> =>
     ipcRenderer.invoke('os:loadBrainNeighborhood', path, nodeId),
   readNodeFile: (path: string): Promise<{ path: string; content: string }> =>

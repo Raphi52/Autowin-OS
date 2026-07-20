@@ -19,6 +19,29 @@ const normalize = (value: unknown): string =>
     .replace(/[\u0300-\u036f]/g, '')
     .toLocaleLowerCase('fr')
 
+/**
+ * Cache de normalisation par conversation (cl\u00e9 id, invalid\u00e9 quand updatedAt change).
+ * \u00c9vite de renormaliser titre + TOUT le contenu de TOUTES les conversations \u00e0 CHAQUE
+ * frappe : le co\u00fbt par frappe retombe \u00e0 O(conversations) au lieu de O(caract\u00e8res stock\u00e9s).
+ */
+type NormalizedConversation = { updatedAt: number; title: string; contents: string[] }
+// Clé = l'OBJET conversation (WeakMap) : deux objets distincts ne collisionnent jamais
+// (même en cas d'id réutilisé), et la garde updatedAt couvre une mutation en place.
+const normalizationCache = new WeakMap<ConversationSearchSource, NormalizedConversation>()
+
+function normalizedFor(conversation: ConversationSearchSource): NormalizedConversation {
+  const cached = normalizationCache.get(conversation)
+  if (cached && cached.updatedAt === conversation.updatedAt) return cached
+  const messages = Array.isArray(conversation.messages) ? conversation.messages : []
+  const entry: NormalizedConversation = {
+    updatedAt: conversation.updatedAt,
+    title: normalize(conversation.title),
+    contents: messages.map((message) => normalize(message.content))
+  }
+  normalizationCache.set(conversation, entry)
+  return entry
+}
+
 function excerpt(content: unknown, query: string, cap = 96): string {
   const compact = String(content ?? '')
     .replace(/\s+/g, ' ')
@@ -46,18 +69,22 @@ export function searchConversations<T extends ConversationSearchSource>(
   const tokens = query.split(/\s+/).filter(Boolean)
   return conversations
     .flatMap((conversation) => {
-      const title = normalize(conversation.title)
+      const norm = normalizedFor(conversation)
       const messages = Array.isArray(conversation.messages) ? conversation.messages : []
-      const matchingMessage = [...messages]
-        .reverse()
-        .find((message) => tokens.every((token) => normalize(message.content).includes(token)))
-      const titleMatches = tokens.every((token) => title.includes(token))
-      if (!titleMatches && !matchingMessage) return []
+      let matchingIdx = -1
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (tokens.every((token) => norm.contents[i]?.includes(token))) {
+          matchingIdx = i
+          break
+        }
+      }
+      const titleMatches = tokens.every((token) => norm.title.includes(token))
+      if (!titleMatches && matchingIdx < 0) return []
       return [
         {
           conversation,
           matchedIn: titleMatches ? ('title' as const) : ('message' as const),
-          snippet: matchingMessage ? excerpt(matchingMessage.content, query) : undefined
+          snippet: matchingIdx >= 0 ? excerpt(messages[matchingIdx].content, query) : undefined
         }
       ]
     })

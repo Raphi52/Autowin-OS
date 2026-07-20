@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Markdown } from './Markdown'
 import { ActivityPane } from './ActivityPane'
 import { HumanJson } from './HumanJson'
@@ -23,6 +23,7 @@ import {
   type ScopedLiveRun
 } from './chat-view-model'
 import { searchConversations } from './conversation-search'
+import { reconstructBranchChain } from '../../../shared/conversation-branches'
 import './ChatView.css'
 import type { InspectTurnTarget } from '../observatory-focus'
 
@@ -50,7 +51,7 @@ interface UserMsg {
   attachments?: AttachmentMeta[]
 }
 type AsstMsg = HydratedAssistantMessage
-type Msg = UserMsg | AsstMsg
+type Msg = (UserMsg | AsstMsg) & { messageId?: string }
 
 interface PilotEvent {
   conversationId?: string
@@ -75,17 +76,24 @@ interface PilotEvent {
   data?: unknown
 }
 
+type ConvBranch = { id: string; parentBranchId?: string; forkedFromMessageId?: string }
 type Conv = {
   id: string
   title: string
   category: string
   provider: string
   authorityMode?: 'plan' | 'ask' | 'auto'
+  rootBranchId?: string
+  activeBranchId?: string
+  branches?: ConvBranch[]
   messages: Array<{
     role: 'user' | 'assistant'
     content: string
     ts: number
     attachments?: AttachmentMeta[]
+    messageId?: string
+    branchId?: string
+    parentMessageId?: string
     turnId?: string
     status?: 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
     parts?: Part[]
@@ -371,11 +379,13 @@ function messageKey(message: Msg, index: number): string {
 const ChatMessageRow = memo(function ChatMessageRow({
   message,
   conversationId,
-  onInspectTurn
+  onInspectTurn,
+  onFork
 }: {
   message: Msg
   conversationId: string | null
   onInspectTurn?: (target: InspectTurnTarget) => void
+  onFork?: (messageId: string) => void
 }): React.JSX.Element {
   if (message.role === 'user') {
     return (
@@ -383,7 +393,11 @@ const ChatMessageRow = memo(function ChatMessageRow({
         <div className="msg-meta">
           <span className="msg-role">Toi</span>
         </div>
-        {message.content && <div className="msg-body">{message.content}</div>}
+        {message.content && (
+          <div className="msg-body" dir="auto">
+            {message.content}
+          </div>
+        )}
         {message.attachments && message.attachments.length > 0 && (
           <div className="attachment-list sent">
             {message.attachments.map((file, fileIndex) => (
@@ -393,6 +407,18 @@ const ChatMessageRow = memo(function ChatMessageRow({
                 <small>{formatFileSize(file.size)}</small>
               </span>
             ))}
+          </div>
+        )}
+        {message.messageId && onFork && (
+          <div className="msg-turn-actions">
+            <button
+              type="button"
+              className="msg-fork-turn"
+              title="Créer une branche à partir de ce message"
+              onClick={() => onFork(message.messageId!)}
+            >
+              Forker depuis ce tour
+            </button>
           </div>
         )}
       </div>
@@ -410,7 +436,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
         )}
         {groupAssistantActivity(message.parts).map((part, index) =>
           part.kind === 'text' ? (
-            <div key={index} className="msg-body">
+            <div key={index} className="msg-body" dir="auto">
               <Markdown text={part.text} />
             </div>
           ) : (
@@ -418,15 +444,27 @@ const ChatMessageRow = memo(function ChatMessageRow({
           )
         )}
       </div>
-      {message.turnId && message.turnId !== 'pending' && conversationId && onInspectTurn && (
-        <button
-          type="button"
-          className="msg-inspect-turn"
-          onClick={() => onInspectTurn({ conversationId, turnId: message.turnId! })}
-        >
-          Inspecter ce tour
-        </button>
-      )}
+      <div className="msg-turn-actions">
+        {message.turnId && message.turnId !== 'pending' && conversationId && onInspectTurn && (
+          <button
+            type="button"
+            className="msg-inspect-turn"
+            onClick={() => onInspectTurn({ conversationId, turnId: message.turnId! })}
+          >
+            Inspecter ce tour
+          </button>
+        )}
+        {message.messageId && onFork && (
+          <button
+            type="button"
+            className="msg-fork-turn"
+            title="Créer une branche à partir de ce tour"
+            onClick={() => onFork(message.messageId!)}
+          >
+            Forker depuis ce tour
+          </button>
+        )}
+      </div>
     </div>
   )
 })
@@ -627,7 +665,11 @@ export function ChatView({
   })
   const [hasNewActivity, setHasNewActivity] = useState(false)
   const [showRuns, setShowRuns] = useState(false)
-  const [runsPaneWidth, setRunsPaneWidth] = useState(340)
+  const [runsPaneWidth, setRunsPaneWidth] = useState(() => {
+    const saved = Number(window.localStorage.getItem('autowin.chat.runsPaneWidth'))
+    const value = Number.isFinite(saved) && saved > 0 ? saved : 340
+    return Math.min(CHAT_PANE_LIMITS.workflows.max, Math.max(CHAT_PANE_LIMITS.workflows.min, value))
+  })
   const [paneTab, setPaneTab] = useState<'runs' | 'activite'>('runs')
   const [runScope, setRunScope] = useState<'conv' | 'tous'>('conv')
   const [runs, setRuns] = useState<RunEntry[]>([])
@@ -710,9 +752,16 @@ export function ChatView({
     event.preventDefault()
     const startX = event.clientX
     const startWidth = runsPaneWidth
-    const onMove = (move: PointerEvent): void =>
-      setRunsPaneWidth(Math.min(760, Math.max(260, startWidth + startX - move.clientX)))
+    let latestWidth = startWidth
+    const onMove = (move: PointerEvent): void => {
+      latestWidth = Math.min(
+        CHAT_PANE_LIMITS.workflows.max,
+        Math.max(CHAT_PANE_LIMITS.workflows.min, startWidth + startX - move.clientX)
+      )
+      setRunsPaneWidth(latestWidth)
+    }
     const onUp = (): void => {
+      window.localStorage.setItem('autowin.chat.runsPaneWidth', String(latestWidth))
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
     }
@@ -999,13 +1048,23 @@ export function ChatView({
     setHasNewActivity(false)
     activeRef.current = c.id
     setActiveId(c.id)
+    const activeBranch = c.activeBranchId ?? c.rootBranchId
+    const branchMessages = activeBranch
+      ? reconstructBranchChain(c.messages, c.branches, activeBranch)
+      : c.messages
     const stored =
       liveMessagesRef.current.get(c.id) ??
-      c.messages.map((m) =>
+      branchMessages.map((m) =>
         m.role === 'user'
-          ? { role: 'user' as const, content: m.content, attachments: m.attachments }
+          ? {
+              role: 'user' as const,
+              content: m.content,
+              attachments: m.attachments,
+              messageId: m.messageId
+            }
           : {
-              ...hydrateStoredAssistant(m)
+              ...hydrateStoredAssistant(m),
+              messageId: m.messageId
             }
       )
     liveMessagesRef.current.set(c.id, stored)
@@ -1053,6 +1112,29 @@ export function ChatView({
     if (activeId === c.id) newConv()
     await refreshConvs()
   }
+
+  /** Recharge la conversation active depuis le store à jour (invalide le cache live). */
+  async function reloadActiveFromStore(id: string): Promise<void> {
+    liveMessagesRef.current.delete(id)
+    const fresh = (await window.api.conversations()) as Conv[]
+    setConvs(fresh)
+    const updated = fresh.find((c) => c.id === id)
+    if (updated) loadConv(updated)
+  }
+  async function forkFromMessage(messageId: string): Promise<void> {
+    if (!activeId) return
+    await window.api.conversationsFork(activeId, messageId)
+    await reloadActiveFromStore(activeId)
+  }
+  async function switchBranch(branchId: string): Promise<void> {
+    if (!activeId) return
+    await window.api.conversationsSwitchBranch(activeId, branchId)
+    await reloadActiveFromStore(activeId)
+  }
+  // Callback STABLE (le row est memo'd — une ref inline casserait la mémoïsation).
+  const forkRef = useRef(forkFromMessage)
+  forkRef.current = forkFromMessage
+  const handleFork = useCallback((messageId: string) => void forkRef.current(messageId), [])
 
   /* --- envoi --- */
 
@@ -1471,6 +1553,26 @@ export function ChatView({
           </div>
         )}
 
+        {active && (active.branches?.length ?? 0) > 1 && (
+          <div className="branch-bar" role="tablist" aria-label="Branches de la conversation">
+            {active.branches!.map((b, i) => {
+              const current = b.id === (active.activeBranchId ?? active.rootBranchId)
+              return (
+                <button
+                  key={b.id}
+                  role="tab"
+                  aria-selected={current}
+                  className={`branch-chip${current ? ' active' : ''}`}
+                  title="Revenir à cette branche"
+                  onClick={() => void switchBranch(b.id)}
+                >
+                  {b.id === active.rootBranchId ? 'Principale' : `Branche ${i}`}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         <div
           className="chat-scroll scroll-y"
           ref={scrollRef}
@@ -1508,6 +1610,7 @@ export function ChatView({
               message={message}
               conversationId={activeId}
               onInspectTurn={onInspectTurn}
+              onFork={handleFork}
             />
           ))}
         </div>

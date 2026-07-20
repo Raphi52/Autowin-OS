@@ -87,6 +87,20 @@ describe('conversations-disk structured restart', () => {
     expect(readFileSync(p, 'utf8')).toContain('"status": "completed"')
   })
 
+  it('flush() exposé écrit immédiatement l’état débouncé (chemin before-quit)', () => {
+    vi.useFakeTimers()
+    const p = join(dir, 'flush-quit.json')
+    const store = new ConversationStore(() => 1000)
+    const flush = persistConversations(store, p)
+    const c = store.create({ title: 'Q', category: 'codex', provider: 'codex' })
+    store.beginTurn(c.id, { content: 'Go' }, { turnId: 't' })
+    const before = readFileSync(p, 'utf8')
+    store.applyTurnEvent(c.id, 't', { kind: 'delta', streamId: '0:0', text: 'fragment-final' })
+    expect(readFileSync(p, 'utf8')).toBe(before) // débouncé, pas encore écrit
+    flush() // simule before-quit
+    expect(readFileSync(p, 'utf8')).toContain('fragment-final')
+  })
+
   it('restores ordered parts, results and status after restart', () => {
     const p = join(dir, 'structured.json')
     const a = new ConversationStore(() => 1000)

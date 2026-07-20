@@ -1361,7 +1361,14 @@
   box-shadow: 0 0 0 2px rgba(64, 176, 225, 0.08);
 }
 
-.msg-inspect-turn {
+.msg-turn-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.msg-inspect-turn,
+.msg-fork-turn {
   align-self: flex-start;
   margin-top: 6px;
   padding: 4px 8px;
@@ -1370,6 +1377,32 @@
   background: transparent;
   color: var(--cyan);
   font-size: 9px;
+  cursor: pointer;
+}
+.msg-fork-turn:hover {
+  border-color: var(--cyan);
+}
+
+/* Barre de branches d'une conversation (fork / rewind) */
+.branch-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px var(--s2);
+  border-bottom: 1px solid var(--line);
+}
+.branch-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--c-faint, inherit);
+  font-size: 10px;
+  cursor: pointer;
+}
+.branch-chip.active {
+  border-color: var(--cyan);
+  color: var(--cyan);
 }
 
 .cosmic-outline .composer-field textarea {

@@ -70,4 +70,27 @@ describe('conversation search', () => {
     expect(() => searchConversations([malformed], 'déploiement')).not.toThrow()
     expect(searchConversations([malformed], 'déploiement')).toEqual([])
   })
+
+  it('invalide le cache de normalisation quand la conversation change (updatedAt)', () => {
+    const conv: ConversationSearchSource = {
+      id: 'evolutive',
+      title: 'Sujet initial',
+      category: 'claude',
+      provider: 'claude',
+      updatedAt: 1,
+      messages: [{ role: 'user', content: 'contenu alpha', ts: 1 }]
+    }
+    expect(searchConversations([conv], 'alpha').map((h) => h.conversation.id)).toEqual(['evolutive'])
+    expect(searchConversations([conv], 'beta')).toEqual([])
+    // même id, contenu changé + updatedAt incrémenté → le cache doit se rafraîchir
+    const updated: ConversationSearchSource = {
+      ...conv,
+      updatedAt: 2,
+      messages: [{ role: 'user', content: 'contenu beta', ts: 2 }]
+    }
+    expect(searchConversations([updated], 'beta').map((h) => h.conversation.id)).toEqual([
+      'evolutive'
+    ])
+    expect(searchConversations([updated], 'alpha')).toEqual([])
+  })
 })

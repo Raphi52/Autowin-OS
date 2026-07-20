@@ -130,7 +130,7 @@ os.registry.setConversationTransport({
 })
 const brainWorker = new BrainWorkerClient(join(__dirname, 'brain-worker.js'))
 // Conversations persistées sur disque : rechargées au démarrage, sauvées à chaque mutation.
-persistConversations(os.conversations)
+const flushConversations = persistConversations(os.conversations)
 
 /** Diffuse un événement d'app à toutes les fenêtres (UI live quand un agent pilote). */
 function broadcast(e: AppEvent): void {
@@ -752,6 +752,14 @@ function registerChatIpc(): void {
     }
     return os.conversations.setAuthorityMode(id, rawMode as 'plan' | 'ask' | 'auto')
   })
+  ipcMain.handle('os:conversations:fork', (event, rawId: string, rawMessageId: string) => {
+    assertTrustedRendererSender(event, 'Conversation fork')
+    return os.conversations.fork(guardString(rawId, 'id'), guardString(rawMessageId, 'messageId'))
+  })
+  ipcMain.handle('os:conversations:switchBranch', (event, rawId: string, rawBranchId: string) => {
+    assertTrustedRendererSender(event, 'Conversation branch')
+    return os.conversations.switchBranch(guardString(rawId, 'id'), guardString(rawBranchId, 'branchId'))
+  })
   ipcMain.handle('os:conversations:remove', async (_e, rawId: string) => {
     const id = guardString(rawId, 'id')
     await activeChatTurns.abortAndWait(id, 'conversation-deleted')
@@ -771,6 +779,14 @@ function registerChatIpc(): void {
   ipcMain.handle('os:loadBrainThemes', (_e, path: string) =>
     brainWorker.request('loadThemes', guardString(path, 'path'))
   )
+  ipcMain.handle('os:loadBrainThemeNodes', (_e, path: string, rawThemeIds: unknown) => {
+    if (!Array.isArray(rawThemeIds) || rawThemeIds.length > 100)
+      throw new Error('IPC themeIds: tableau borné attendu')
+    const themeIds = rawThemeIds.map((themeId, index) =>
+      guardString(themeId, `themeIds[${index}]`)
+    )
+    return brainWorker.request('loadThemeNodes', guardString(path, 'path'), themeIds)
+  })
   ipcMain.handle('os:loadBrainGraph', (_e, path: string, lod?: number, community?: number) =>
     brainWorker.request('loadGraph', guardString(path, 'path'), lod, community)
   )
@@ -1411,6 +1427,10 @@ app.whenReady().then(async () => {
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
+// Flush forcé avant la fermeture : ne pas perdre le dernier fragment de streaming
+// resté dans la fenêtre de debounce de 120 ms de la persistance.
+app.on('before-quit', () => flushConversations())
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin' && !startupStorageMigration) {
     app.quit()

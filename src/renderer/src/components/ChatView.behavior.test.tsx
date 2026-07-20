@@ -280,4 +280,104 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => encoded.resolve('contenu'))
     expect(container!.textContent).toContain('colle.txt')
   })
+
+  const branched = (activeBranchId: string): Record<string, unknown> => ({
+    id: 'A',
+    title: 'A',
+    category: 'codex',
+    provider: 'codex',
+    updatedAt: 1,
+    rootBranchId: 'branch-A-root',
+    activeBranchId,
+    branches: [
+      { id: 'branch-A-root' },
+      { id: 'branch-A-2', parentBranchId: 'branch-A-root', forkedFromMessageId: 'm2' }
+    ],
+    messages: [
+      { role: 'user', content: 'u1', ts: 1, messageId: 'm1', branchId: 'branch-A-root' },
+      {
+        role: 'assistant',
+        content: 'a1',
+        ts: 1,
+        messageId: 'm2',
+        branchId: 'branch-A-root',
+        parentMessageId: 'm1',
+        turnId: 't1',
+        status: 'completed',
+        parts: [{ kind: 'text', text: 'a1' }]
+      },
+      { role: 'user', content: 'u2', ts: 2, messageId: 'm3', branchId: 'branch-A-root', parentMessageId: 'm2' },
+      { role: 'user', content: 'alt', ts: 3, messageId: 'm5', branchId: 'branch-A-2', parentMessageId: 'm2' }
+    ]
+  })
+
+  it('forke depuis un tour assistant persistant en appelant conversationsFork', async () => {
+    const fork = vi.fn().mockResolvedValue(undefined)
+    const conv = branched('branch-A-root')
+    await mount(
+      api({ conversations: vi.fn().mockResolvedValue([conv]), conversationsFork: fork })
+    )
+    await click('.conv-pick')
+    const assistantRow = container!.querySelector('.msg.assistant') as HTMLElement
+    const forkBtn = [...assistantRow.querySelectorAll('button')].find((b) =>
+      /forker/i.test(b.textContent ?? '')
+    )
+    expect(forkBtn).toBeTruthy()
+    await act(async () => (forkBtn as HTMLButtonElement).click())
+    expect(fork).toHaveBeenCalledWith('A', 'm2')
+  })
+
+  it('affiche les branches et bascule via conversationsSwitchBranch', async () => {
+    const sw = vi.fn().mockResolvedValue(undefined)
+    await mount(
+      api({
+        conversations: vi.fn().mockResolvedValue([branched('branch-A-root')]),
+        conversationsSwitchBranch: sw
+      })
+    )
+    await click('.conv-pick')
+    const chips = container!.querySelectorAll('.branch-chip')
+    expect(chips.length).toBe(2)
+    await act(async () => (chips[1] as HTMLElement).click())
+    expect(sw).toHaveBeenCalledWith('A', 'branch-A-2')
+  })
+
+  it('ne rend que la chaîne de la branche active', async () => {
+    await mount(api({ conversations: vi.fn().mockResolvedValue([branched('branch-A-2')]) }))
+    await click('.conv-pick')
+    const body = container!.querySelector('.chat-scroll')!.textContent ?? ''
+    expect(body).toContain('u1')
+    expect(body).toContain('alt')
+    expect(body).not.toContain('u2') // message postérieur au fork sur la branche parente
+  })
+
+  it('offre le bouton forker aussi sur un message utilisateur (avec messageId)', async () => {
+    const fork = vi.fn().mockResolvedValue(undefined)
+    await mount(
+      api({ conversations: vi.fn().mockResolvedValue([branched('branch-A-root')]), conversationsFork: fork })
+    )
+    await click('.conv-pick')
+    const userRow = container!.querySelector('.msg.user') as HTMLElement
+    const forkBtn = [...userRow.querySelectorAll('button')].find((b) =>
+      /forker/i.test(b.textContent ?? '')
+    )
+    expect(forkBtn).toBeTruthy()
+    await act(async () => (forkBtn as HTMLButtonElement).click())
+    expect(fork).toHaveBeenCalledWith('A', 'm1') // forke depuis le 1er message user
+  })
+
+  it('invalide le cache live et re-rend la bonne branche APRÈS un switch réel', async () => {
+    const conversations = vi
+      .fn()
+      .mockResolvedValueOnce([branched('branch-A-root')]) // montage : branche racine active
+      .mockResolvedValue([branched('branch-A-2')]) // après switch : branche 2 active
+    await mount(api({ conversations, conversationsSwitchBranch: vi.fn().mockResolvedValue(undefined) }))
+    await click('.conv-pick')
+    expect(container!.querySelector('.chat-scroll')!.textContent).toContain('u2') // racine
+    const chips = container!.querySelectorAll('.branch-chip')
+    await act(async () => (chips[1] as HTMLElement).click())
+    const body = container!.querySelector('.chat-scroll')!.textContent ?? ''
+    expect(body).toContain('alt')
+    expect(body).not.toContain('u2') // cache live invalidé → chaîne de la branche 2
+  })
 })

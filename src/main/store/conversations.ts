@@ -8,6 +8,7 @@ import {
   type PersistedChatPart
 } from '../../shared/chat-turn'
 import type { ConversationAuthorityMode } from '../conversation-capabilities'
+import { reconstructBranchChain } from '../../shared/conversation-branches'
 
 // Store en mémoire pour les conversations catégorisées (candidat type Hermes/claude.exe/codex).
 // Interface pensée pour être remplacée plus tard par un backend sqlite sans changer l'appelant.
@@ -41,6 +42,7 @@ export interface ConversationBranch {
   id: string
   parentBranchId?: string
   forkedFromTurnId?: string
+  forkedFromMessageId?: string
   createdAt: number
 }
 
@@ -180,7 +182,7 @@ export class ConversationStore {
       throw new Error(`Conversation inconnue: ${id}`)
     }
     const ts = this.now()
-    const previous = conversation.messages.at(-1)
+    const previous = this.branchTip(conversation, conversation.activeBranchId ?? conversation.rootBranchId!)
     conversation.messages.push({
       messageId: `message-${conversation.id}-${conversation.messages.length + 1}`,
       branchId: conversation.activeBranchId ?? conversation.rootBranchId,
@@ -204,7 +206,7 @@ export class ConversationStore {
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const ts = this.now()
-    const previous = conversation.messages.at(-1)
+    const previous = this.branchTip(conversation, conversation.activeBranchId ?? conversation.rootBranchId!)
     const userMessageId = `message-${conversation.id}-${conversation.messages.length + 1}`
     conversation.messages.push({
       messageId: userMessageId,
@@ -312,6 +314,70 @@ export class ConversationStore {
       this.changed()
     }
     return conversation
+  }
+
+  /** Message « tip » (dernier) d'une branche, ou son point de fork si la branche est vide. */
+  private branchTip(c: Conversation, branchId: string): Msg | undefined {
+    for (let i = c.messages.length - 1; i >= 0; i--) {
+      if (c.messages[i].branchId === branchId) return c.messages[i]
+    }
+    const branch = c.branches?.find((b) => b.id === branchId)
+    if (branch?.forkedFromMessageId) {
+      return c.messages.find((m) => m.messageId === branch.forkedFromMessageId)
+    }
+    return undefined
+  }
+
+  /** Chaîne de messages visible pour une branche (helper PARTAGÉ, source unique). */
+  private chainFor(c: Conversation, branchId: string): Msg[] {
+    return reconstructBranchChain(c.messages, c.branches, branchId)
+  }
+
+  /** Messages visibles pour une branche (défaut : la branche active). Jette si l'id est inconnu. */
+  branchMessages(id: string, branchId?: string): Msg[] {
+    const c = this.conversations.get(id)
+    if (!c) throw new Error(`Conversation inconnue: ${id}`)
+    return this.chainFor(c, branchId ?? c.activeBranchId ?? c.rootBranchId!)
+  }
+
+  /** Forke une conversation depuis un message : nouvelle branche rendue active. */
+  fork(id: string, fromMessageId: string): Conversation {
+    const c = this.conversations.get(id)
+    if (!c) throw new Error(`Conversation inconnue: ${id}`)
+    if (!fromMessageId) throw new Error('fromMessageId requis') // sinon matche un message legacy sans id
+    const anchor = c.messages.find((m) => m.messageId === fromMessageId)
+    if (!anchor) throw new Error(`Message inconnu: ${fromMessageId}`)
+    // Le point de fork doit appartenir à la chaîne de la branche ACTIVE (pas une
+    // branche sœur non-ancêtre) — sinon la reconstruction mélangerait deux histoires.
+    const activeChain = this.chainFor(c, c.activeBranchId ?? c.rootBranchId!)
+    if (!activeChain.some((m) => m.messageId === fromMessageId)) {
+      throw new Error(`Message hors de la branche active: ${fromMessageId}`)
+    }
+    const ts = this.now()
+    c.branches ??= []
+    const branch: ConversationBranch = {
+      id: `branch-${c.id}-${c.branches.length + 1}`,
+      parentBranchId: c.activeBranchId ?? c.rootBranchId,
+      forkedFromMessageId: fromMessageId,
+      ...(anchor.turnId ? { forkedFromTurnId: anchor.turnId } : {}),
+      createdAt: ts
+    }
+    c.branches.push(branch)
+    c.activeBranchId = branch.id
+    c.updatedAt = ts
+    this.changed()
+    return c
+  }
+
+  /** Change la branche active. Jette si la conversation ou la branche est inconnue. */
+  switchBranch(id: string, branchId: string): Conversation {
+    const c = this.conversations.get(id)
+    if (!c) throw new Error(`Conversation inconnue: ${id}`)
+    if (!c.branches?.some((b) => b.id === branchId)) throw new Error(`Branche inconnue: ${branchId}`)
+    c.activeBranchId = branchId
+    c.updatedAt = this.now()
+    this.changed()
+    return c
   }
 
   /** Supprime une conversation. Retourne true si elle existait. */

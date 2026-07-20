@@ -449,6 +449,8 @@ interface ChatApi {
   }>
   conversationsRename: (id: string, title: string) => Promise<unknown>
   conversationsSetAuthorityMode: (id: string, mode: 'plan' | 'ask' | 'auto') => Promise<unknown>
+  conversationsFork: (id: string, messageId: string) => Promise<unknown>
+  conversationsSwitchBranch: (id: string, branchId: string) => Promise<unknown>
   conversationsRemove: (id: string) => Promise<boolean>
   openFolder: (path: string) => Promise<void>
   appState: () => Promise<unknown>
@@ -524,6 +526,7 @@ interface ChatApi {
   loadBrainGraph: (path: string, lod?: number, community?: number) => Promise<Brain3d>
   loadBrainGraphPreview: (path: string, lod?: number) => Promise<Brain3d>
   loadBrainThemes: (path: string) => Promise<Array<{ id: string; label: string }>>
+  loadBrainThemeNodes: (path: string, themeIds: string[]) => Promise<Brain3d['nodes']>
   loadBrainNeighborhood: (path: string, nodeId: string) => Promise<Brain3d>
   readNodeFile: (path: string) => Promise<{ path: string; content: string }>
   searchBrain: (

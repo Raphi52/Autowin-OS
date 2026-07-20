@@ -70,7 +70,10 @@ export function saveConversations(all: Conversation[], path = conversationsPath(
 }
 
 /** Branche un store sur le disque : recharge l'existant + sauve à chaque mutation. */
-export function persistConversations(store: ConversationStore, path = conversationsPath()): void {
+export function persistConversations(
+  store: ConversationStore,
+  path = conversationsPath()
+): () => void {
   const migrated = store.hydrate(loadConversations(path))
   let pending: Conversation[] | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -96,4 +99,8 @@ export function persistConversations(store: ConversationStore, path = conversati
   }
 
   if (migrated) saveConversations(store.list(), path)
+
+  // Exposé pour un flush forcé (ex. before-quit) : évite de perdre le dernier
+  // fragment de streaming resté dans la fenêtre de debounce de 120 ms.
+  return flush
 }
