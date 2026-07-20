@@ -10,7 +10,7 @@ import { HumanJson } from './HumanJson'
 import { summarizeHermesTraces, type HermesTraceSummaryInput } from './hermes-trace-summary'
 import './ObservatoryView.css'
 import { ModuleHeader } from './ModuleHeader'
-import { RagTraceCard } from './RagTraceCard'
+import { RagObservabilitySummary, RagTraceCard } from './RagTraceCard'
 import { summarizeRagTrace } from './rag-trace-model'
 
 interface ConversationItem {
@@ -254,6 +254,7 @@ export function ObservatoryView({ active }: { active: boolean }): React.JSX.Elem
         <button onClick={() => void exportTrace()}>Exporter JSON</button>
         <button onClick={() => setRefreshKey((value) => value + 1)}>Actualiser</button>
       </div>
+      <RagObservabilitySummary requests={hermesTraces.map((trace) => trace.request)} />
       {hermesTraces.length > 0 && (
         <details className="observatory-hermes-diagnostics">
           <summary>
@@ -265,13 +266,6 @@ export function ObservatoryView({ active }: { active: boolean }): React.JSX.Elem
             Ces requêtes ne sont attribuées à aucune conversation sans identifiant partagé. Secrets
             masqués.
           </p>
-          <div className="observatory-rag-summary" data-testid="rag-observability-summary">
-            <strong>Traçabilité RAG · Hermes</strong>
-            <span>
-              {ragInjected}/{hermesTraces.length} appels avec contexte Amitel Brain détecté
-            </span>
-            <small>Autowin Chat · RAG non branché, donc aucune récupération à tracer.</small>
-          </div>
           <div>
             {[...hermesTraces]
               .reverse()

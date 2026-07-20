@@ -50,3 +50,32 @@ export function RagTraceCard({ request }: { request: unknown }): React.JSX.Eleme
     </section>
   )
 }
+
+export function RagObservabilitySummary({ requests }: { requests: readonly unknown[] }): React.JSX.Element {
+  const traces = requests.map(summarizeRagTrace)
+  const injected = traces.filter((trace) => trace.status === 'injected').length
+  const notInjected = traces.filter((trace) => trace.status === 'not-injected').length
+  const unparseable = traces.filter((trace) => trace.status === 'unparseable').length
+  const status = requests.length === 0
+    ? 'unavailable'
+    : unparseable > 0
+      ? 'unparseable'
+      : injected > 0
+        ? 'injected'
+        : 'not-injected'
+
+  return (
+    <section className={`observatory-rag-summary is-${status}`} data-rag-status={status}>
+      <strong>Traçabilité RAG · Hermes</strong>
+      {requests.length === 0 ? (
+        <span>Aucune trace Hermes disponible · récupération non observable</span>
+      ) : (
+        <span>
+          {requests.length} appel{requests.length > 1 ? 's' : ''} · {injected} injecté
+          {injected > 1 ? 's' : ''} · {notInjected} sans RAG · {unparseable} non analysable
+        </span>
+      )}
+      <small>Autowin Chat · RAG non branché, donc aucune récupération à tracer.</small>
+    </section>
+  )
+}

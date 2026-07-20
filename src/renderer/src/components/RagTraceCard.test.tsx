@@ -1,0 +1,30 @@
+import { renderToStaticMarkup } from 'react-dom/server'
+import { describe, expect, it } from 'vitest'
+import { RagObservabilitySummary, RagTraceCard } from './RagTraceCard'
+
+describe('RAG observability rendering', () => {
+  it('keeps an explicit diagnostic visible when no Hermes trace exists', () => {
+    const html = renderToStaticMarkup(<RagObservabilitySummary requests={[]} />)
+
+    expect(html).toContain('data-rag-status="unavailable"')
+    expect(html).toContain('Aucune trace Hermes disponible')
+  })
+
+  it('distinguishes calls without RAG from malformed RAG traces', () => {
+    const withoutRag = renderToStaticMarkup(
+      <RagTraceCard request={{ body: { messages: [{ content: 'Question simple' }] } }} />
+    )
+    const malformed = renderToStaticMarkup(
+      <RagTraceCard
+        request={{
+          body: { messages: [{ content: 'Question\n\n[AMITEL BRAIN REFERENCE DATA — tronqué]' }] }
+        }}
+      />
+    )
+
+    expect(withoutRag).toContain('data-rag-status="not-injected"')
+    expect(withoutRag).toContain('Aucun contexte Brain')
+    expect(malformed).toContain('data-rag-status="unparseable"')
+    expect(malformed).toContain('format non analysable')
+  })
+})

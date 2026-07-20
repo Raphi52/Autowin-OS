@@ -45,12 +45,13 @@ await evaluate(`(() => {
 })()`)
 await new Promise((resolve) => setTimeout(resolve, 800))
 if (process.argv.includes('--unlock')) {
-  await evaluate(`(() => {
+  const unlockState = await evaluate(`(() => {
     const target = [...document.querySelectorAll('button')].find((button) => /déverrouiller hermes/i.test(button.textContent ?? ''))
-    if (!target) throw new Error('Déverrouillage Hermes introuvable')
-    target.click()
+    if (target) { target.click(); return 'requested' }
+    return document.querySelector('.observatory-hermes-diagnostics') ? 'already-available' : 'unavailable'
   })()`)
-  console.log('Hermes authorization requested')
+  if (unlockState === 'unavailable') throw new Error('Diagnostic Hermes global introuvable')
+  console.log(`Hermes diagnostics: ${unlockState}`)
   socket.close()
   process.exit(0)
 }
