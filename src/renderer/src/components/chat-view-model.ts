@@ -155,6 +155,32 @@ export interface RuntimeModel {
   defaultReasoningEffort?: string
 }
 
+/** Une étape d'orchestration (sous-agent / juge / gate) — fil des sous-agents. */
+export type OrchStep = {
+  step: 'exec' | 'judge' | 'gate' | string
+  provider?: string
+  role?: string
+  text?: string
+  detail?: string
+  costUsd?: number
+  prompt?: {
+    provider: string
+    model?: string
+    transport: string
+    system?: string
+    messages: Array<{ role: string; content: string }>
+    options: Record<string, unknown>
+    limitation: string
+  }
+}
+
+/** Icône + libellé par type d'étape d'orchestration (affichage temps réel). */
+export const STEP_META: Record<string, { icon: string; label: string }> = {
+  exec: { icon: '🤖', label: 'sous-agent' },
+  judge: { icon: '⚖️', label: 'juge' },
+  gate: { icon: '🚦', label: 'gate' }
+}
+
 export interface OrchestratorModelOption {
   provider: string
   model: string
@@ -246,7 +272,11 @@ export function buildOrchestratorModelGroups(
       defaultReasoningEffort: item.defaultReasoningEffort
     }
     const vendor = modelVendor(item.model)
-    const bucket = byVendor.get(vendor.key) ?? { label: vendor.label, rank: vendor.rank, options: [] }
+    const bucket = byVendor.get(vendor.key) ?? {
+      label: vendor.label,
+      rank: vendor.rank,
+      options: []
+    }
     if (!bucket.options.some((entry) => entry.model === option.model)) bucket.options.push(option)
     byVendor.set(vendor.key, bucket)
   }
@@ -263,7 +293,12 @@ export function buildOrchestratorModelGroups(
       )
       .map(({ option }) => option)
   const groups = [...byVendor.entries()]
-    .map(([key, bucket]) => ({ key, label: bucket.label, rank: bucket.rank, options: sortOptions(bucket.options) }))
+    .map(([key, bucket]) => ({
+      key,
+      label: bucket.label,
+      rank: bucket.rank,
+      options: sortOptions(bucket.options)
+    }))
     .sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label, 'fr'))
     .map(({ key, label, options }) => ({ key, label, options }))
   const currentModel = current?.model

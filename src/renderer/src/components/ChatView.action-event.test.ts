@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { AssistantActionEvent, AssistantActivityGroup } from './ChatView'
+import { AssistantActionEvent, AssistantActivityGroup } from './ChatView.parts'
 
 describe('AssistantActionEvent', () => {
   it('keeps a compact summary and inspectable input/result in semantic details', () => {
