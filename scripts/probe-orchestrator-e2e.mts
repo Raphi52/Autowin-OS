@@ -38,11 +38,13 @@ const result = await orchestrator.run(
 if (!existsSync(proof)) throw new Error(`Preuve E2E absente: ${proof}`)
 const proofContent = readFileSync(proof, 'utf8').trim()
 if (proofContent !== 'ORCHESTRATOR_E2E_OK') throw new Error('Preuve E2E invalide')
-if (!result.valid || result.gateBlocked) throw new Error(`Gate E2E rouge: ${result.gateReasons.join('; ')}`)
+if (!result.valid || result.gateBlocked)
+  throw new Error(`Gate E2E rouge: ${result.gateReasons.join('; ')}`)
 const execTransport = result.trace.find((step) => step.step === 'exec')?.prompt?.transport
 const judgeTransport = result.trace.find((step) => step.step === 'judge')?.prompt?.transport
 const evidence = result.trace.find((step) => step.step === 'exec')?.evidence ?? []
-if (!execTransport?.includes('danger-full-access')) throw new Error('Transport exécuteur non prouvé')
+if (!execTransport?.includes('danger-full-access'))
+  throw new Error('Transport exécuteur non prouvé')
 if (!judgeTransport?.includes('read-only')) throw new Error('Transport juge read-only non prouvé')
 if (!evidence.some((item) => item.kind === 'mutation' && item.ok))
   throw new Error('Preuve de mutation réussie absente')

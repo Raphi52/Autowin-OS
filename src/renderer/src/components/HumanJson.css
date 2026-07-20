@@ -36,28 +36,42 @@
   cursor: pointer;
   font-size: 9px;
 }
-.human-json__group dl {
-  display: grid;
-  gap: 5px;
-  margin: 7px 0 0;
+.human-json__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0 0;
   padding-left: 10px;
   border-left: 1px solid rgba(116, 145, 175, 0.22);
 }
-.human-json__group dl > div {
-  display: grid;
-  grid-template-columns: minmax(80px, 30%) minmax(0, 1fr);
+.human-json__row {
+  display: flex;
   gap: 8px;
+  align-items: baseline;
 }
-.human-json__group dt {
+/* Clé compacte à largeur naturelle : elle n'étrangle plus la valeur. */
+.human-json__key {
+  flex: 0 0 auto;
+  max-width: 40%;
   overflow: hidden;
   color: #90a6be;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
-.human-json__group dd {
+/* Valeur pleine largeur : coupe aux ESPACES (jamais au milieu d'un token). */
+.human-json__value {
+  flex: 1 1 auto;
   min-width: 0;
-  margin: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: normal;
+  white-space: pre-wrap;
+}
+/* Liste de primitives (argv…) : index discret, valeur au plus près. */
+.human-json__body.is-array > .human-json__row > .human-json__key {
+  min-width: 1.4em;
+  text-align: right;
+  opacity: 0.6;
 }
 .human-json__string {
   color: #edf4fc;

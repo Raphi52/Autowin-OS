@@ -231,6 +231,13 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Dans un run LIVE, le sujet est l'info clé : on l'affiche en entier (pas de clamp). */
+.live-subject {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.35;
+}
 .runs-pane.wide {
   width: min(440px, 40vw);
 }
@@ -353,6 +360,32 @@
 /* Orchestration live + fil des sous-agents */
 .live-run {
   border-left: 2px solid var(--accent);
+}
+/* Bouton Stop du sous-agent : coupe l'orchestration en vol. */
+.btn-danger {
+  background: transparent;
+  border-color: var(--err);
+  color: var(--err);
+}
+.btn-danger:hover {
+  background: var(--err);
+  color: #fff;
+}
+/* Texte streamé du sous-agent en cours : il « écrit » sous nos yeux. */
+.subagent-live-text {
+  margin-top: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--r2);
+  background: var(--bg-inset, #000);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .subagent-step {
   padding: var(--s2);
@@ -586,6 +619,18 @@
   background: rgba(8, 19, 28, 0.94);
   color: var(--text-dim);
   font-size: 10px;
+}
+/* Miniature d'image collée/déposée dans le composer. */
+.attachment-chip.has-thumb {
+  padding: 4px 8px 4px 4px;
+}
+.attachment-thumb {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 5px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.04);
 }
 .attachment-name {
   min-width: 0;
@@ -1467,31 +1512,6 @@
   max-height: calc(90vh - 72px);
   margin: auto;
   object-fit: contain;
-}
-
-.chat-authority-mode {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 5px 3px 9px;
-  border: 1px solid rgba(125, 169, 196, 0.28);
-  border-radius: 999px;
-  background: rgba(3, 8, 13, 0.72);
-  color: var(--text-dim);
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.chat-authority-mode select {
-  min-width: 64px;
-  padding: 4px 20px 4px 8px;
-  border: 0;
-  border-radius: 999px;
-  background: rgba(117, 63, 180, 0.32);
-  color: var(--text);
-  font-size: 10px;
-  font-weight: 700;
 }
 
 @media (max-width: 1050px) {

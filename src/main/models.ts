@@ -121,10 +121,7 @@ export function labelOmniRouteModel(id: string): string {
     cleanId = cleanId.slice('no-think/'.length)
     suffix = ' · Sans raisonnement'
   }
-  cleanId = cleanId.replace(
-    /^(?:cc|claude|cx|codex|aug|ddgw|oc|tllm|veo|veoaifree|mcode)\//i,
-    ''
-  )
+  cleanId = cleanId.replace(/^(?:cc|claude|cx|codex|aug|ddgw|oc|tllm|veo|veoaifree|mcode)\//i, '')
   if (cleanId.startsWith('claude-')) {
     return `${labelClaudeModel(cleanId).replace(/ · CLI$/, '')}${suffix}`
   }
@@ -213,18 +210,41 @@ export async function discoverOmniRouteModels(
     }
     const payload = (await readBoundedJson(response)) as { object?: unknown; data?: unknown }
     if (payload?.object !== 'list' || !Array.isArray(payload.data)) return []
-    return payload.data.flatMap<ImportedModel>((entry) => {
+    const discovered = payload.data.flatMap<ImportedModel>((entry) => {
       if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return []
       const id = (entry as { id?: unknown }).id
       if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9._:/-]{0,119}$/i.test(id)) return []
-      return [{
-        id: `omniroute/${id}`,
-        provider: 'omniroute',
-        model: id,
-        label: labelOmniRouteModel(id),
-        reasoningEfforts: ['none'],
-        defaultReasoningEffort: 'none'
-      }]
+      // Efforts RÉELS exposés par la capability `effort_tiers` ; sinon 'none'
+      // (routes combo/`auto/` qui gèrent l'effort en interne, non réglable).
+      const rawTiers = (entry as { capabilities?: { effort_tiers?: unknown } }).capabilities
+        ?.effort_tiers
+      const tiers = Array.isArray(rawTiers)
+        ? rawTiers.filter(
+            (effort): effort is ReasoningEffort =>
+              typeof effort === 'string' && REASONING_EFFORTS.has(effort as ReasoningEffort)
+          )
+        : []
+      const reasoningEfforts: ReasoningEffort[] = tiers.length > 0 ? tiers : ['none']
+      const defaultReasoningEffort: ReasoningEffort = reasoningEfforts.includes('high')
+        ? 'high'
+        : reasoningEfforts[0]
+      return [
+        {
+          id: `omniroute/${id}`,
+          provider: 'omniroute',
+          model: id,
+          label: labelOmniRouteModel(id),
+          reasoningEfforts,
+          defaultReasoningEffort
+        }
+      ]
+    })
+    const visibleLabels = new Set<string>()
+    return discovered.filter((model) => {
+      const key = model.label.toLocaleLowerCase('fr-FR')
+      if (visibleLabels.has(key)) return false
+      visibleLabels.add(key)
+      return true
     })
   } catch {
     return []
@@ -333,29 +353,6 @@ export async function discoverImportedModels(
   }
 }
 
-/** Validation stricte d'un modèle importé (avant persistance). */
-export function assertImportedModel(model: ImportedModel): ImportedModel {
-  const fields: Array<[keyof ImportedModel, unknown]> = [
-    ['id', model.id],
-    ['provider', model.provider],
-    ['model', model.model],
-    ['label', model.label]
-  ]
-  for (const [name, value] of fields) {
-    if (typeof value !== 'string' || !value.trim()) {
-      throw new Error(`Modèle importé invalide : champ « ${String(name)} » vide`)
-    }
-  }
-  if (!Array.isArray(model.reasoningEfforts) || model.reasoningEfforts.length === 0) {
-    throw new Error(`Modèle importé « ${model.id} » : reasoningEfforts vide`)
-  }
-  if (!model.reasoningEfforts.includes(model.defaultReasoningEffort)) {
-    throw new Error(
-      `Modèle importé « ${model.id} » : effort par défaut « ${model.defaultReasoningEffort} » hors liste`
-    )
-  }
-  return model
-}
 
 /** Retrouve un modèle importé par son id canonique. */
 export function findModel(models: ImportedModel[], id: string): ImportedModel | undefined {
@@ -368,19 +365,4 @@ export function defaultModelForProvider(
   provider: string
 ): ImportedModel | undefined {
   return models.find((m) => m.provider === provider)
-}
-
-/**
- * Importe (ajoute ou remplace) un modèle dans la liste, immuablement.
- * Un id déjà présent est REMPLACÉ (import idempotent), jamais dupliqué.
- */
-export function importModel(models: ImportedModel[], model: ImportedModel): ImportedModel[] {
-  assertImportedModel(model)
-  const rest = models.filter((m) => m.id !== model.id)
-  return [...rest, { ...model, reasoningEfforts: [...model.reasoningEfforts] }]
-}
-
-/** Retire un modèle par id, immuablement. */
-export function removeModel(models: ImportedModel[], id: string): ImportedModel[] {
-  return models.filter((m) => m.id !== id)
 }

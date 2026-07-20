@@ -11,7 +11,7 @@
 //   - chaque binding atomique = provider + model + effort.
 // Aucun axe « métier / persona ».
 
-import type { ReasoningEffort, RoleBinding, Role } from './roles'
+import type { ReasoningEffort } from './roles'
 import { defaultModelForProvider, findModel, type ImportedModel } from './models'
 
 /** Version du schéma de topologie persistée (migration sûre à l'ouverture). */
@@ -207,48 +207,4 @@ export function createDefaultTopology(models: ImportedModel[]): AgentTopology {
       judge: [bindingForModel('judge-1', judgeModel)]
     }
   }
-}
-
-/**
- * Migration SÛRE depuis les bindings historiques (roles.json : provider + model
- * optionnel, sans effort ni catalogue). On mappe chaque rôle legacy vers un
- * modèle RÉELLEMENT importé (jamais inventé) : si `binding.model` correspond à un
- * ImportedModel de même provider on le prend, sinon le modèle par défaut du
- * provider ; effort = effort par défaut de ce modèle. Un provider sans modèle
- * importé fait tomber sa cible (aucun binding fabriqué à vide).
- */
-export function migrateLegacyBindings(
-  bindings: Partial<Record<Role, RoleBinding>>,
-  models: ImportedModel[]
-): AgentTopology {
-  const pick = (
-    binding: RoleBinding | undefined,
-    fallbackProvider: string
-  ): ImportedModel | undefined => {
-    const provider = binding?.provider ?? fallbackProvider
-    if (binding?.model) {
-      const byId = findModel(models, binding.model)
-      if (byId && byId.provider === provider) return byId
-      const byTransport = models.find((m) => m.provider === provider && m.model === binding.model)
-      if (byTransport) return byTransport
-    }
-    return (
-      defaultModelForProvider(models, provider) ?? defaultModelForProvider(models, fallbackProvider)
-    )
-  }
-
-  const orchestratorModel = pick(bindings.orchestrator, 'claude') ?? models[0]
-  const topology: AgentTopology = {
-    version: TOPOLOGY_VERSION,
-    orchestrator: bindingForModel('orchestrator', orchestratorModel),
-    subagents: [],
-    panels: { scout: [], judge: [] }
-  }
-  const subModel = pick(bindings.subagent, 'claude')
-  if (subModel) topology.subagents.push(bindingForModel('subagent-1', subModel))
-  const scoutModel = pick(bindings.scout, 'codex')
-  if (scoutModel) topology.panels.scout.push(bindingForModel('scout-1', scoutModel))
-  const judgeModel = pick(bindings.judge, 'claude')
-  if (judgeModel) topology.panels.judge.push(bindingForModel('judge-1', judgeModel))
-  return topology
 }

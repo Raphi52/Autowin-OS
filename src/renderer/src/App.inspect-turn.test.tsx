@@ -4,7 +4,11 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./components/ChatView', () => ({
-  ChatView: ({ onInspectTurn }: { onInspectTurn: (target: { conversationId: string; turnId: string }) => void }) =>
+  ChatView: ({
+    onInspectTurn
+  }: {
+    onInspectTurn: (target: { conversationId: string; turnId: string }) => void
+  }) =>
     createElement(
       'button',
       {

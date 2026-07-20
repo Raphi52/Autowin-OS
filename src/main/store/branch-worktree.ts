@@ -10,7 +10,8 @@ const SAFE_ID = /^[A-Za-z0-9_-]+$/
 
 /** Rejette tout id pouvant produire une traversée de chemin (`..`, `/`, `\`, espaces…). */
 function assertSafeId(value: string, label: string): void {
-  if (!SAFE_ID.test(value)) throw new Error(`${label} invalide (caractères non autorisés): ${value}`)
+  if (!SAFE_ID.test(value))
+    throw new Error(`${label} invalide (caractères non autorisés): ${value}`)
 }
 
 /** Chemin déterministe du worktree d'une branche de conversation (ids validés). */

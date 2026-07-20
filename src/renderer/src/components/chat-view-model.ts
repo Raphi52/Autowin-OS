@@ -165,8 +165,64 @@ export interface OrchestratorModelOption {
 }
 
 export interface OrchestratorModelGroup {
-  provider: string
+  /** Clé stable de la catégorie éditeur (anthropic, openai, google…). */
+  key: string
+  /** Libellé d'en-tête affiché (Anthropic, ChatGPT, Google…). */
+  label: string
   options: OrchestratorModelOption[]
+}
+
+/**
+ * Catégorie ÉDITEUR déduite de l'id du modèle (les modèles OmniRoute partagent tous
+ * le provider technique « omniroute » → on regroupe par vraie marque). Ordre voulu :
+ * Anthropic, puis ChatGPT, puis les autres éditeurs (alpha), puis routes auto, puis divers.
+ */
+export function modelVendor(model: string): { key: string; label: string; rank: number } {
+  const id = model.toLowerCase()
+  if (id.includes('claude')) return { key: 'anthropic', label: 'Anthropic', rank: 0 }
+  if (/gpt|codex|\bo\d/.test(id)) return { key: 'openai', label: 'ChatGPT', rank: 1 }
+  if (id.includes('gemini') || id.includes('gemma'))
+    return { key: 'google', label: 'Google', rank: 2 }
+  if (id.includes('kimi')) return { key: 'moonshot', label: 'Kimi (Moonshot)', rank: 2 }
+  if (id.includes('mimo') || id.includes('xiaomi'))
+    return { key: 'xiaomi', label: 'Xiaomi', rank: 2 }
+  if (id.includes('glm') || id.includes('zai') || id.includes('z-ai'))
+    return { key: 'zai', label: 'Z.ai', rank: 2 }
+  if (id.includes('llama')) return { key: 'meta', label: 'Meta (Llama)', rank: 2 }
+  if (id.includes('qwen')) return { key: 'qwen', label: 'Qwen', rank: 2 }
+  if (id.includes('grok')) return { key: 'xai', label: 'xAI (Grok)', rank: 2 }
+  if (id.includes('deepseek')) return { key: 'deepseek', label: 'DeepSeek', rank: 2 }
+  if (id.includes('mistral')) return { key: 'mistral', label: 'Mistral', rank: 2 }
+  const isAuto = id.startsWith('auto') || id.startsWith('custom:') || id.includes('/auto')
+  if (isAuto) return { key: 'auto', label: 'Sélection automatique', rank: 8 }
+  return { key: 'other', label: 'Autres', rank: 9 }
+}
+
+/**
+ * Rang de tri d'une option dans le sélecteur (surtout le groupe OmniRoute, qui mêle
+ * routes auto/* ET modèles concrets). Ordre voulu :
+ *  1. modèles Anthropic (Claude), puis modèles ChatGPT (GPT) ;
+ *  2. routes auto/* : Chat → Raisonnement → Code → reste, tier « best » avant « pro » ;
+ *  3. le reste, bien trié (alphabétique par libellé).
+ * Retourne [catégorie, sous-rang] ; le libellé puis l'index tranchent les égalités.
+ */
+export function orchestratorOptionRank(model: string): [number, number] {
+  const id = model.toLowerCase()
+  if (id.includes('claude')) return [0, 0]
+  if (/gpt|codex|\bo\d/.test(id)) return [1, 0]
+  const isAutoRoute = id.startsWith('auto') || id.startsWith('custom:') || id.includes('/auto')
+  if (isAutoRoute) {
+    const dimension = id.includes('chat')
+      ? 0
+      : id.includes('reason')
+        ? 1
+        : id.includes('cod')
+          ? 2
+          : 3
+    const tier = id.includes('best') ? 0 : id.includes('pro') ? 1 : 2
+    return [2, dimension * 10 + tier]
+  }
+  return [3, 0]
 }
 
 export function buildOrchestratorModelGroups(
@@ -176,7 +232,11 @@ export function buildOrchestratorModelGroups(
   groups: OrchestratorModelGroup[]
   currentMissing?: OrchestratorModelOption
 } {
-  const byProvider = new Map<string, OrchestratorModelOption[]>()
+  // Regroupement par ÉDITEUR (pas par le provider technique « omniroute » commun à tout).
+  const byVendor = new Map<
+    string,
+    { label: string; rank: number; options: OrchestratorModelOption[] }
+  >()
   for (const item of models) {
     const option = {
       provider: item.provider,
@@ -185,11 +245,27 @@ export function buildOrchestratorModelGroups(
       reasoningEfforts: item.reasoningEfforts ?? ['none'],
       defaultReasoningEffort: item.defaultReasoningEffort
     }
-    const options = byProvider.get(item.provider) ?? []
-    if (!options.some((entry) => entry.model === option.model)) options.push(option)
-    byProvider.set(item.provider, options)
+    const vendor = modelVendor(item.model)
+    const bucket = byVendor.get(vendor.key) ?? { label: vendor.label, rank: vendor.rank, options: [] }
+    if (!bucket.options.some((entry) => entry.model === option.model)) bucket.options.push(option)
+    byVendor.set(vendor.key, bucket)
   }
-  const groups = [...byProvider.entries()].map(([provider, options]) => ({ provider, options }))
+  // Tri des options DANS chaque catégorie (alpha lisible, numérique-aware).
+  const sortOptions = (options: OrchestratorModelOption[]): OrchestratorModelOption[] =>
+    options
+      .map((option, index) => ({ option, index, rank: orchestratorOptionRank(option.model) }))
+      .sort(
+        (a, b) =>
+          a.rank[0] - b.rank[0] ||
+          a.rank[1] - b.rank[1] ||
+          a.option.label.localeCompare(b.option.label, 'fr', { numeric: true }) ||
+          a.index - b.index
+      )
+      .map(({ option }) => option)
+  const groups = [...byVendor.entries()]
+    .map(([key, bucket]) => ({ key, label: bucket.label, rank: bucket.rank, options: sortOptions(bucket.options) }))
+    .sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label, 'fr'))
+    .map(({ key, label, options }) => ({ key, label, options }))
   const currentModel = current?.model
   const currentExists =
     currentModel !== undefined &&
@@ -226,16 +302,29 @@ export interface ChatRuntimeIdentity {
   reasoningEffort: string
 }
 
+/** Phase en cours d'exécution (avant que l'étape ne soit enregistrée) — avancement live. */
+export interface LiveRunPhase {
+  step: string
+  provider?: string
+  role?: string
+}
+
 export interface ScopedLiveRun<TStep = unknown> {
   convId: string
   runPath?: string
   task: string
   steps: TStep[]
   status: 'running' | 'green' | 'red'
+  /** Phase active (sous-agent/juge/gate) tant qu'elle n'a pas produit son étape. */
+  phase?: LiveRunPhase
+  /** Texte streamé de la phase en cours (réinitialisé à chaque nouvelle phase/étape). */
+  liveText?: string
 }
 
 export type ScopedLiveRunEvent<TStep = unknown> =
   | { type: 'start'; convId: string; runPath?: string; task: string }
+  | { type: 'phase'; convId: string; runPath?: string; phase: LiveRunPhase }
+  | { type: 'delta'; convId: string; runPath?: string; delta: string }
   | { type: 'step'; convId: string; runPath?: string; step: TStep }
   | { type: 'end'; convId: string; runPath?: string; status: 'green' | 'red' }
   | { type: 'clear'; convId: string; runPath?: string }
@@ -350,11 +439,33 @@ export function reduceScopedLiveRuns<TStep>(
   if (!existing || (event.runPath && existing.runPath && event.runPath !== existing.runPath)) {
     return current
   }
+  if (event.type === 'phase') {
+    // Nouvelle phase → on repart d'un texte streamé vierge.
+    return { ...current, [event.convId]: { ...existing, phase: event.phase, liveText: '' } }
+  }
+  if (event.type === 'delta') {
+    return {
+      ...current,
+      [event.convId]: { ...existing, liveText: (existing.liveText ?? '') + event.delta }
+    }
+  }
   if (event.type === 'step') {
-    return { ...current, [event.convId]: { ...existing, steps: [...existing.steps, event.step] } }
+    // L'étape est enregistrée → la phase active et son texte streamé sont terminés.
+    return {
+      ...current,
+      [event.convId]: {
+        ...existing,
+        steps: [...existing.steps, event.step],
+        phase: undefined,
+        liveText: undefined
+      }
+    }
   }
   if (event.type === 'end') {
-    return { ...current, [event.convId]: { ...existing, status: event.status } }
+    return {
+      ...current,
+      [event.convId]: { ...existing, status: event.status, phase: undefined, liveText: undefined }
+    }
   }
   const next = { ...current }
   delete next[event.convId]

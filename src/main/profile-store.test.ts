@@ -7,8 +7,8 @@ describe('profile transport migration', () => {
   })
 
   it('conserve une route OmniRoute explicitement enregistrée', () => {
-    expect(resolveProfileRoute({ mode: 'omniroute', routeModel: 'auto/cheap' }, 'auto/coding')).toBe(
-      'auto/cheap'
-    )
+    expect(
+      resolveProfileRoute({ mode: 'omniroute', routeModel: 'auto/cheap' }, 'auto/coding')
+    ).toBe('auto/cheap')
   })
 })

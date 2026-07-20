@@ -33,7 +33,12 @@ import {
 import { scanRuns, type RunEntry } from './dashboards/runs-scan'
 import { ConversationStore } from './store/conversations'
 import { TrustLedger } from './trust/ledger'
-import { Orchestrator, type OrchestrationResult, type OrchestrationStep } from './orchestrator'
+import {
+  Orchestrator,
+  type OrchestrationResult,
+  type OrchestrationStep,
+  type OrchestrationPhase
+} from './orchestrator'
 import { composeHarnessSnapshot, type HarnessSnapshot } from './harness/snapshot'
 import { listHermesControls } from './hermes-controls'
 import { listClaudeHooks } from './claude-hooks'
@@ -163,8 +168,14 @@ export class AutowinOS {
   }
 
   // --- Orchestration disciplinée (le cœur) ---
-  runTask(task: string, onStep?: (s: OrchestrationStep) => void): Promise<OrchestrationResult> {
-    return this.orchestrator.run(task, onStep)
+  runTask(
+    task: string,
+    onStep?: (s: OrchestrationStep) => void,
+    onPhase?: (p: OrchestrationPhase) => void,
+    onDelta?: (step: 'exec' | 'judge', delta: string) => void,
+    signal?: AbortSignal
+  ): Promise<OrchestrationResult> {
+    return this.orchestrator.run(task, onStep, onPhase, onDelta, signal)
   }
 
   // --- Dashboards : données RÉELLES ---

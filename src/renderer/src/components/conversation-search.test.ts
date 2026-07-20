@@ -80,7 +80,9 @@ describe('conversation search', () => {
       updatedAt: 1,
       messages: [{ role: 'user', content: 'contenu alpha', ts: 1 }]
     }
-    expect(searchConversations([conv], 'alpha').map((h) => h.conversation.id)).toEqual(['evolutive'])
+    expect(searchConversations([conv], 'alpha').map((h) => h.conversation.id)).toEqual([
+      'evolutive'
+    ])
     expect(searchConversations([conv], 'beta')).toEqual([])
     // même id, contenu changé + updatedAt incrémenté → le cache doit se rafraîchir
     const updated: ConversationSearchSource = {

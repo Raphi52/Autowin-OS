@@ -1,7 +1,14 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
-import { normalize, topByDegree, filterByCommunity, type RawGraph, type VizGraph } from './graph'
+import {
+  normalize,
+  topByDegree,
+  filterByCommunity,
+  type RawGraph,
+  type VizGraph,
+  type VizNode
+} from './graph'
 
 /**
  * Accès DISQUE aux graphes de connaissance réels (graphify) — côté main uniquement.
@@ -145,6 +152,32 @@ const WIKI_LINK_RE = /\[\[([^\]]+)\]\]/g
 export function loadVaultBrainGraph(root: string, lod = 300): VizGraph {
   const records = vaultNoteRecords(root)
   return graphFromVaultRecords(records, lod)
+}
+
+export function loadVaultBrainNodesForThemes(root: string, themeIds: readonly string[]): VizNode[] {
+  const activeThemes = new Set(themeIds)
+  if (activeThemes.size === 0) return []
+  return vaultNoteRecords(root)
+    .filter((record) => record.themes.some((theme) => activeThemes.has(theme)))
+    .map(({ id, label, file, themes }) => ({ id, label, file, themes, group: 0 }))
+}
+
+/** Métadonnées exhaustives des nœuds d'un thème, indépendantes du LOD 3D. */
+export function loadBrainThemeNodes(path: string, themeIds: readonly string[]): VizNode[] {
+  if (!existsSync(path)) throw new Error(`graphe introuvable: ${path}`)
+  if (statSync(path).isDirectory()) {
+    const requestedRoot = realpathSync(resolve(path)).toLowerCase()
+    const allowedRoot = realpathSync(resolve(AMITEL_BRAIN_ROOT)).toLowerCase()
+    if (requestedRoot !== allowedRoot) throw new Error('brain vault hors périmètre autorisé')
+    return loadVaultBrainNodesForThemes(path, themeIds)
+  }
+  const activeThemes = new Set(themeIds)
+  if (activeThemes.size === 0) return []
+  return loadBrainGraph(path, Number.MAX_SAFE_INTEGER).nodes.filter((node) =>
+    (node.themes?.length ? node.themes : [`community/${node.group}`]).some((theme) =>
+      activeThemes.has(theme)
+    )
+  )
 }
 
 /** Variante asynchrone : les petites notes réseau sont lues en parallèle hors du main Electron. */
@@ -531,10 +564,12 @@ function resolveWikiTarget(
 /** Racines autorisées en LECTURE de fichier (navigation nœud→texte, anti-traversal). */
 function allowedReadRoots(): string[] {
   const home = process.env.USERPROFILE ?? '.'
+  const appData = process.env.APPDATA ?? join(home, 'AppData', 'Roaming')
   return [
     '\\\\ged2\\rig\\Projets IA\\Amitel Brain',
     join(home, '.graphify'),
     join(home, '.claude', 'runs'), // RUN.md du pipeline (vue Workflow)
+    join(appData, 'autowin-os', 'runs'), // RUN.md créés par les conversations Autowin
     'C:\\Nouveau dossier',
     'C:\\Amitel',
     'C:\\Code RIG'

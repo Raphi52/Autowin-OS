@@ -19,7 +19,11 @@ if (stateFile) mkdirSync(dirname(stateFile), { recursive: true })
 
 function record(event) {
   if (!stateFile) return
-  appendFileSync(stateFile, `${JSON.stringify({ at: new Date().toISOString(), ...event })}\n`, 'utf8')
+  appendFileSync(
+    stateFile,
+    `${JSON.stringify({ at: new Date().toISOString(), ...event })}\n`,
+    'utf8'
+  )
 }
 
 function sendJson(response, status, body, headers = {}) {
@@ -30,7 +34,12 @@ function sendJson(response, status, body, headers = {}) {
 function authorize(request, response) {
   const valid = request.headers.authorization === `Bearer ${expectedToken}`
   if (valid) return true
-  record({ kind: 'auth-rejected', method: request.method, path: request.url, authorization: '[REDACTED]' })
+  record({
+    kind: 'auth-rejected',
+    method: request.method,
+    path: request.url,
+    authorization: '[REDACTED]'
+  })
   sendJson(response, 401, { error: { message: 'invalid gateway credential' } })
   return false
 }

@@ -27,6 +27,7 @@ import {
   visibleThemeClusterIds,
   nodeValueForTheme,
   nodeSelectionEmphasis,
+  nodesForThemesAlphabetically,
   normalizeGraphNodeSpacing,
   nextGraphFitRequest,
   type GraphLink,
@@ -45,6 +46,20 @@ const links: GraphLink[] = [
 ]
 
 describe('graph view presentation model', () => {
+  it('lists active-theme nodes once in French alphabetical order', () => {
+    const accentedNodes: GraphNode[] = [
+      ...nodes,
+      { id: 'd', label: 'Échéances', group: 3, themes: ['theme/rig', 'theme/architecture'] }
+    ]
+
+    expect(
+      nodesForThemesAlphabetically(accentedNodes, new Set(['theme/rig', 'theme/architecture'])).map(
+        (node) => node.id
+      )
+    ).toEqual(['a', 'b', 'd'])
+    expect(nodesForThemesAlphabetically(accentedNodes, new Set())).toEqual([])
+  })
+
   it('highlights every node carrying a clicked floating theme, including secondary themes', () => {
     expect(highlightedNodeIdsForThemes(nodes, new Set(['theme/architecture']))).toEqual(
       new Set(['a'])

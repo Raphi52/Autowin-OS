@@ -82,7 +82,6 @@ type Conv = {
   title: string
   category: string
   provider: string
-  authorityMode?: 'plan' | 'ask' | 'auto'
   rootBranchId?: string
   activeBranchId?: string
   branches?: ConvBranch[]
@@ -553,8 +552,8 @@ export function OrchestratorModelSelector({
         </summary>
         <div className="model-select-menu" role="listbox" aria-label="Modèle orchestrateur">
           {grouped.groups.map((group) => (
-            <section key={group.provider} className="model-select-group">
-              <span>{group.provider}</span>
+            <section key={group.key} className="model-select-group">
+              <span>{group.label}</span>
               {group.options.map((option) => {
                 const optionKey = `${option.provider}:${option.model}`
                 const active =
@@ -949,6 +948,24 @@ export function ChatView({
           setShowRuns(true)
           setPaneTab('runs')
         }
+      } else if (e.type === 'orchestrate-phase' && e.phase && e.convId) {
+        setLiveRuns((current) =>
+          reduceScopedLiveRuns(current, {
+            type: 'phase',
+            convId: e.convId!,
+            runPath: e.runPath,
+            phase: e.phase as { step: string; provider?: string; role?: string }
+          })
+        )
+      } else if (e.type === 'orchestrate-delta' && typeof e.delta === 'string' && e.convId) {
+        setLiveRuns((current) =>
+          reduceScopedLiveRuns(current, {
+            type: 'delta',
+            convId: e.convId!,
+            runPath: e.runPath,
+            delta: e.delta as string
+          })
+        )
       } else if (e.type === 'orchestrate-step' && e.step && e.convId) {
         const step = e.step as OrchStep
         setLiveRuns((current) =>
@@ -1434,35 +1451,6 @@ export function ChatView({
             </div>
           </div>
           <div className="row gap2 chat-head-actions">
-            {active && (
-              <label
-                className="chat-authority-mode"
-                title="Niveau d’autonomie pour les prochaines actions"
-              >
-                <span>Permissions</span>
-                <select
-                  aria-label="Permissions de la conversation"
-                  value={active.authorityMode ?? 'auto'}
-                  disabled={busy}
-                  onChange={async (event) => {
-                    const mode = event.target.value as 'plan' | 'ask' | 'auto'
-                    const updated = (await window.api.conversationsSetAuthorityMode(
-                      active.id,
-                      mode
-                    )) as Conv
-                    setConvs((current) =>
-                      current.map((conversation) =>
-                        conversation.id === updated.id ? updated : conversation
-                      )
-                    )
-                  }}
-                >
-                  <option value="plan">Plan</option>
-                  <option value="ask">Demander</option>
-                  <option value="auto">Max</option>
-                </select>
-              </label>
-            )}
             {decisions.length > 0 && (
               <button
                 className={`btn btn-sm${showDecisions ? ' btn-accent' : ''}`}
@@ -1637,8 +1625,19 @@ export function ChatView({
             {attachments.length > 0 && (
               <div className="attachment-list pending">
                 {attachments.map((file, fileIndex) => (
-                  <span className="attachment-chip" key={`${file.name}-${fileIndex}`}>
-                    <span aria-hidden="true">{file.kind === 'image' ? '▧' : '▤'}</span>
+                  <span
+                    className={`attachment-chip${file.kind === 'image' ? ' has-thumb' : ''}`}
+                    key={`${file.name}-${fileIndex}`}
+                  >
+                    {file.kind === 'image' ? (
+                      <img
+                        className="attachment-thumb"
+                        src={`data:${file.mimeType};base64,${file.content}`}
+                        alt={file.name}
+                      />
+                    ) : (
+                      <span aria-hidden="true">▤</span>
+                    )}
                     <span className="attachment-name">{file.name}</span>
                     <small>{formatFileSize(file.size)}</small>
                     <button
@@ -1823,20 +1822,46 @@ export function ChatView({
                           className={`status-dot ${liveRuns[activeId].status === 'green' ? 'st-ok' : 'st-err'}`}
                         />
                       )}
-                      <span className="run-subject">{liveRuns[activeId].task}</span>
+                      <span className="run-subject live-subject" title={liveRuns[activeId].task}>
+                        {liveRuns[activeId].task}
+                      </span>
                     </div>
-                    <span className="badge">
-                      {liveRuns[activeId].status === 'running'
-                        ? 'en cours'
-                        : liveRuns[activeId].status}
-                    </span>
+                    <div className="row gap2">
+                      <span className="badge">
+                        {liveRuns[activeId].status === 'running'
+                          ? 'en cours'
+                          : liveRuns[activeId].status}
+                      </span>
+                      {liveRuns[activeId].status === 'running' && (
+                        <button
+                          className="btn btn-sm btn-danger"
+                          title="Stopper le sous-agent en cours"
+                          onClick={() => void window.api.cancelOrchestration(activeId)}
+                        >
+                          ⏹ Stop
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div style={{ marginTop: 'var(--s2)' }}>
                     <StepThread steps={liveRuns[activeId].steps} />
-                    {liveRuns[activeId].status === 'running' && (
-                      <div className="c-faint" style={{ fontSize: 11, marginTop: 4 }}>
-                        <span className="spinner" /> le sous-agent travaille…
-                      </div>
+                    {liveRuns[activeId].status === 'running' &&
+                      (() => {
+                        const phase = liveRuns[activeId].phase
+                        const meta = phase ? STEP_META[phase.step] : undefined
+                        const label = meta?.label ?? phase?.step ?? 'sous-agent'
+                        return (
+                          <div className="c-faint" style={{ fontSize: 11, marginTop: 4 }}>
+                            <span className="spinner" /> {meta?.icon ?? '⏳'} {label}
+                            {phase?.provider && (
+                              <span className="mono c-accent"> {phase.provider}</span>
+                            )}{' '}
+                            en cours…
+                          </div>
+                        )
+                      })()}
+                    {liveRuns[activeId].status === 'running' && liveRuns[activeId].liveText && (
+                      <pre className="subagent-live-text">{liveRuns[activeId].liveText}</pre>
                     )}
                   </div>
                 </div>

@@ -133,18 +133,23 @@ describe('OmniRoute supervision contract', () => {
       if (url.endsWith('/api/monitoring/health')) return json({ status: 'healthy' })
       if (url.endsWith('/api/providers/client')) {
         return json({
-          connections: [{
-            id: 'account-1', provider: 'claude', status: 'error',
-            lastError: 'SECRET_REFRESH raw upstream failure',
-            lastErrorAt: '2026-07-20T12:00:00Z'
-          }]
+          connections: [
+            {
+              id: 'account-1',
+              provider: 'claude',
+              status: 'error',
+              lastError: 'SECRET_REFRESH raw upstream failure',
+              lastErrorAt: '2026-07-20T12:00:00Z'
+            }
+          ]
         })
       }
       return json({ caches: {} })
     })
     const snapshot = await loadOmniRouteSnapshot(fetchFn as typeof fetch)
     expect(snapshot.connections[0].incident).toEqual({
-      label: 'Connexion signalée en erreur', at: '2026-07-20T12:00:00Z'
+      label: 'Connexion signalée en erreur',
+      at: '2026-07-20T12:00:00Z'
     })
     expect(JSON.stringify(snapshot)).not.toContain('SECRET_REFRESH')
   })

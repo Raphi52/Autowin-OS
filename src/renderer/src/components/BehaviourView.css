@@ -247,6 +247,35 @@
   color: #8f99a5;
   font-size: 9px;
 }
+.behaviour-reader-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.behaviour-reader-mode {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-inset);
+}
+.behaviour-reader-mode button {
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 9px;
+  cursor: pointer;
+}
+.behaviour-reader-mode button.active {
+  background: var(--surface-selected);
+  color: #e2a5ff;
+}
+.behaviour-reader-content {
+  min-height: 0;
+  overflow: auto;
+}
 .behaviour-reader header b.is-active {
   color: #67d9a9;
 }

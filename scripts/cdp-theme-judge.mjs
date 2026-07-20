@@ -49,12 +49,12 @@ const views = [
 ]
 const output = {}
 for (const view of views) {
-    const clicked = await evaluate(
-      `(() => { const item = [...document.querySelectorAll('.nav-item')].find((candidate) => candidate.querySelector('span:last-child')?.textContent?.trim() === ${JSON.stringify(view.label)}); if (!item) return false; item.click(); return true })()`
-    )
-    if (!clicked) throw new Error(`Navigation introuvable : ${view.label}`)
-    await new Promise((resolve) => setTimeout(resolve, 180))
-    output[`Dark:${view.label}`] = await capture(`dark-${view.id}`)
+  const clicked = await evaluate(
+    `(() => { const item = [...document.querySelectorAll('.nav-item')].find((candidate) => candidate.querySelector('span:last-child')?.textContent?.trim() === ${JSON.stringify(view.label)}); if (!item) return false; item.click(); return true })()`
+  )
+  if (!clicked) throw new Error(`Navigation introuvable : ${view.label}`)
+  await new Promise((resolve) => setTimeout(resolve, 180))
+  output[`Dark:${view.label}`] = await capture(`dark-${view.id}`)
 }
 output.themeControl = await evaluate(
   `({shellClass:[...document.querySelector('.shell').classList].find((name)=>name.startsWith('theme-')), buttons:document.querySelectorAll('.app-theme-switch').length, memoryLocalControl:document.querySelectorAll('.theme-sidebar .view-mode-switch').length})`

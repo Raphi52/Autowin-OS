@@ -43,27 +43,79 @@ describe('catalogue Agents dynamique', () => {
         ]
       })
     })
-    const models = await discoverOmniRouteModels(
-      fetchFn as typeof fetch,
-      { get: () => 'gateway-token' }
-    )
+    const models = await discoverOmniRouteModels(fetchFn as typeof fetch, {
+      get: () => 'gateway-token'
+    })
     expect(models.map((model) => model.id)).toEqual([
       'omniroute/auto',
       'omniroute/auto/coding',
       'omniroute/custom:priority-chain'
     ])
-    expect(models[1]).toEqual(expect.objectContaining({
-      provider: 'omniroute',
-      model: 'auto/coding',
-      label: 'Automatique · Code',
-      reasoningEfforts: ['none']
-    }))
+    expect(models[1]).toEqual(
+      expect.objectContaining({
+        provider: 'omniroute',
+        model: 'auto/coding',
+        label: 'Automatique · Code',
+        reasoningEfforts: ['none']
+      })
+    )
+  })
+
+  it('expose les vrais paliers d’effort quand OmniRoute publie effort_tiers', async () => {
+    const fetchFn = vi.fn(async () =>
+      Response.json({
+        object: 'list',
+        data: [
+          {
+            id: 'cc/claude-opus-4-8',
+            owned_by: 'claude',
+            capabilities: { effort_tiers: ['none', 'low', 'medium', 'high', 'xhigh'] }
+          },
+          { id: 'auto/claude-opus', owned_by: 'combo' }
+        ]
+      })
+    )
+    const models = await discoverOmniRouteModels(fetchFn as typeof fetch, {
+      get: () => 'gateway-token'
+    })
+    // Modèle fixe : les 5 paliers réels + défaut 'high'.
+    expect(models.find((model) => model.model === 'cc/claude-opus-4-8')).toEqual(
+      expect.objectContaining({
+        reasoningEfforts: ['none', 'low', 'medium', 'high', 'xhigh'],
+        defaultReasoningEffort: 'high'
+      })
+    )
+    // Route combo sans effort_tiers : fallback 'none' (effort géré par OmniRoute).
+    expect(models.find((model) => model.model === 'auto/claude-opus')).toEqual(
+      expect.objectContaining({ reasoningEfforts: ['none'], defaultReasoningEffort: 'none' })
+    )
+  })
+
+  it('déduplique les alias OmniRoute qui produisent le même modèle visible', async () => {
+    const fetchFn = vi.fn(async () =>
+      Response.json({
+        object: 'list',
+        data: [
+          { id: 'cc/claude-opus-4-8' },
+          { id: 'claude/claude-opus-4-8' },
+          { id: 'cx/gpt-5.6-terra-ultra' }
+        ]
+      })
+    )
+
+    const models = await discoverOmniRouteModels(fetchFn as typeof fetch, {
+      get: () => 'gateway-token'
+    })
+
+    expect(models.map((model) => model.label)).toEqual(['Claude Opus 4.8', 'GPT-5.6 Terra · Ultra'])
   })
 
   it('does not invent OmniRoute models when auth or schema is unavailable', async () => {
     const fetchFn = vi.fn(async () => Response.json({ object: 'list', data: 'hostile' }))
     expect(await discoverOmniRouteModels(fetchFn as typeof fetch, { get: () => null })).toEqual([])
-    expect(await discoverOmniRouteModels(fetchFn as typeof fetch, { get: () => 'token' })).toEqual([])
+    expect(await discoverOmniRouteModels(fetchFn as typeof fetch, { get: () => 'token' })).toEqual(
+      []
+    )
   })
 
   it('expose Kimi Code compte comme modèle sélectionnable, sans API key', () => {

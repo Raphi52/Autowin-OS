@@ -4,6 +4,7 @@ import {
   loadBrainGraphAsync,
   loadBrainGraphPreviewAsync,
   loadBrainNeighborhood,
+  loadBrainThemeNodes,
   loadBrainThemes,
   readNodeFile,
   scanBrainGraphs,
@@ -17,6 +18,7 @@ type BrainWorkerRequest = {
     | 'loadPreview'
     | 'loadGraph'
     | 'loadThemes'
+    | 'loadThemeNodes'
     | 'loadNeighborhood'
     | 'readNodeFile'
     | 'searchBrain'
@@ -57,6 +59,9 @@ parentPort.on('message', async (request: BrainWorkerRequest) => {
       }
       case 'loadThemes':
         value = loadBrainThemes(request.args[0] as string)
+        break
+      case 'loadThemeNodes':
+        value = loadBrainThemeNodes(request.args[0] as string, request.args[1] as string[])
         break
       case 'loadNeighborhood': {
         const [path, nodeId] = request.args as [string, string]

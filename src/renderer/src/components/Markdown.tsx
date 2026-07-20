@@ -64,8 +64,7 @@ function renderTextBlock(block: string): React.ReactNode[] {
 /** `code` inline, **gras**, liens markdown et auto-liens http(s) dans une ligne. */
 function inline(line: string): React.ReactNode[] {
   const out: React.ReactNode[] = []
-  const re =
-    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s)]+)|`([^`]+)`|\*\*([^*]+)\*\*/g
+  const re = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s)]+)|`([^`]+)`|\*\*([^*]+)\*\*/g
   let last = 0
   let m: RegExpExecArray | null
   let k = 0

@@ -9,14 +9,13 @@ const root = mkdtempSync(join(tmpdir(), 'autowin-conversation-benchmark-'))
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
 describe('conversation foundation benchmark', () => {
-  it(
-    'queries 10k events across 100 branches within the Wave 0 budget',
-    () => {
-      const lines: string[] = []
-      let parentEventId: string | undefined
-      for (let index = 0; index < 10_000; index += 1) {
-        const eventId = `event-${index}`
-        lines.push(JSON.stringify({
+  it('queries 10k events across 100 branches within the Wave 0 budget', () => {
+    const lines: string[] = []
+    let parentEventId: string | undefined
+    for (let index = 0; index < 10_000; index += 1) {
+      const eventId = `event-${index}`
+      lines.push(
+        JSON.stringify({
           eventId,
           ...(parentEventId ? { parentEventId } : {}),
           conversationId: 'conv-benchmark',
@@ -24,21 +23,20 @@ describe('conversation foundation benchmark', () => {
           turnId: `turn-${Math.floor(index / 2)}`,
           kind: index % 2 === 0 ? 'turn.started' : 'turn.completed',
           ts: index
-        }))
-        parentEventId = eventId
-      }
-      mkdirSync(root, { recursive: true })
-      writeFileSync(join(root, 'conv-benchmark.jsonl'), `${lines.join('\n')}\n`, 'utf8')
-      const store = new ConversationEventStore(root)
+        })
+      )
+      parentEventId = eventId
+    }
+    mkdirSync(root, { recursive: true })
+    writeFileSync(join(root, 'conv-benchmark.jsonl'), `${lines.join('\n')}\n`, 'utf8')
+    const store = new ConversationEventStore(root)
 
-      const started = performance.now()
-      const events = store.list('conv-benchmark')
-      const queryMs = performance.now() - started
+    const started = performance.now()
+    const events = store.list('conv-benchmark')
+    const queryMs = performance.now() - started
 
-      expect(events).toHaveLength(10_000)
-      expect(new Set(events.map((event) => event.branchId))).toHaveLength(100)
-      expect(queryMs).toBeLessThanOrEqual(250)
-    },
-    15_000
-  )
+    expect(events).toHaveLength(10_000)
+    expect(new Set(events.map((event) => event.branchId))).toHaveLength(100)
+    expect(queryMs).toBeLessThanOrEqual(250)
+  }, 15_000)
 })

@@ -1,11 +1,12 @@
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   AMITEL_BRAIN_THEMES,
   loadBrainGraph,
   loadVaultBrainGraph,
+  loadVaultBrainNodesForThemes,
   loadVaultBrainGraphPreviewAsync,
   loadVaultBrainNeighborhood,
   readNodeFile,
@@ -100,7 +101,11 @@ describe('Amitel Brain graph', () => {
       '---\ntags: [theme/autowin-os, theme/architecture]\n---\n# Autowin OS\n',
       'utf8'
     )
-    writeFileSync(join(root, 'knowledge/domain/other.md'), '# Other\n', 'utf8')
+    writeFileSync(
+      join(root, 'knowledge/domain/other.md'),
+      '---\ntags: [theme/autowin-os]\n---\n# Other\n',
+      'utf8'
+    )
 
     const ref = scanBrainGraphs([], root)[0]
     expect(ref.themes).toEqual(
@@ -112,14 +117,22 @@ describe('Amitel Brain graph', () => {
 
     // LOD 1 masque au moins une note, mais la recherche reste exhaustive.
     expect(loadVaultBrainGraph(root, 1).nodes).toHaveLength(1)
-    expect(searchVaultBrainNotes(root, 'autowin')).toEqual([
-      expect.objectContaining({
-        id: 'knowledge/domain/autowin',
-        label: 'Autowin OS',
-        themes: expect.arrayContaining(['theme/autowin-os', 'theme/architecture'])
-      })
-    ])
-    expect(searchVaultBrainNotes(root, 'theme/autowin-os')).toHaveLength(1)
+    expect(searchVaultBrainNotes(root, 'autowin')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'knowledge/domain/autowin',
+          label: 'Autowin OS',
+          themes: expect.arrayContaining(['theme/autowin-os', 'theme/architecture'])
+        })
+      ])
+    )
+    expect(searchVaultBrainNotes(root, 'theme/autowin-os')).toHaveLength(2)
+    expect(loadVaultBrainNodesForThemes(root, ['theme/autowin-os'])).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'knowledge/domain/autowin', label: 'Autowin OS' }),
+        expect.objectContaining({ id: 'knowledge/domain/other', label: 'Other' })
+      ])
+    )
   })
 
   it('loads only an out-of-LOD note and its direct neighbourhood', () => {
@@ -171,6 +184,25 @@ describe('Amitel Brain graph', () => {
       expect(() => readNodeFile(file)).toThrow('fichier hors périmètre autorisé')
     } finally {
       process.env.USERPROFILE = previousHome
+    }
+  })
+
+  it('reads an Autowin workflow RUN.md without opening an AppData sibling', () => {
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-os-appdata-'))
+    const runRoot = join(appData, 'autowin-os', 'runs')
+    const runFile = join(runRoot, 'conv-1', 'subject-workspace', 'RUN.md')
+    const sibling = join(appData, 'autowin-os-private', 'secret.md')
+    mkdirSync(dirname(runFile), { recursive: true })
+    mkdirSync(dirname(sibling), { recursive: true })
+    writeFileSync(runFile, '# Workflow\n', 'utf8')
+    writeFileSync(sibling, '# Secret\n', 'utf8')
+    const previousAppData = process.env.APPDATA
+    process.env.APPDATA = appData
+    try {
+      expect(readNodeFile(runFile).content).toBe('# Workflow\n')
+      expect(() => readNodeFile(sibling)).toThrow('fichier hors périmètre autorisé')
+    } finally {
+      process.env.APPDATA = previousAppData
     }
   })
 })

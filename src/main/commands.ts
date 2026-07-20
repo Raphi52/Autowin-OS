@@ -3,7 +3,7 @@ import type { Message } from './providers/types'
 import type { Role } from './roles'
 import { closeConvRun, createConvRun, saveConvRunTrace } from './runs/conv-runs'
 import { appendConvActivity } from './activity/conv-activity'
-import type { OrchestrationStep } from './orchestrator'
+import type { OrchestrationStep, OrchestrationPhase } from './orchestrator'
 import { persistOrchestrationStep } from './activity/orchestration-observability'
 import { randomUUID } from 'node:crypto'
 import {
@@ -53,6 +53,14 @@ export type AppEvent =
   | { type: 'toast'; text: string }
   // Orchestration LIVE (statut temps réel + fil des sous-agents), diffusée par étape.
   | { type: 'orchestrate-start'; convId?: string; runPath?: string; task: string }
+  | { type: 'orchestrate-phase'; convId?: string; runPath?: string; phase: OrchestrationPhase }
+  | {
+      type: 'orchestrate-delta'
+      convId?: string
+      runPath?: string
+      deltaStep: 'exec' | 'judge'
+      delta: string
+    }
   | { type: 'orchestrate-step'; convId?: string; runPath?: string; step: OrchestrationStep }
   | { type: 'orchestrate-end'; convId?: string; runPath?: string; status: 'green' | 'red' }
 
@@ -222,6 +230,16 @@ export class AppCommandBus {
     string,
     { name: string; args: Record<string, unknown>; action: () => Promise<unknown> }
   >()
+  /** Orchestrations en vol, par conversation : permet de STOPPER le sous-agent. */
+  private readonly activeOrchestrations = new Map<string, AbortController>()
+
+  /** Abort l'orchestration (sous-agent/juge) en cours pour une conversation. */
+  abortOrchestration(convId: string): boolean {
+    const controller = this.activeOrchestrations.get(convId)
+    if (!controller) return false
+    controller.abort()
+    return true
+  }
   constructor(
     private readonly os: AutowinOS,
     private readonly broadcast: (e: AppEvent) => void,
@@ -391,33 +409,46 @@ export class AppCommandBus {
         const runPath = createConvRun(convId, task)
         const orchestrationTurnId = randomUUID()
         const steps: OrchestrationStep[] = []
+        // Sous-agent STOPPABLE : un AbortController par conversation, coupé par abortOrchestration.
+        const abortController = new AbortController()
+        this.activeOrchestrations.set(convId, abortController)
         this.broadcast({ type: 'orchestrate-start', convId, runPath, task })
         try {
-          const r = await this.os.runTask(task, (step) => {
-            steps.push(step)
-            persistOrchestrationStep(step, {
-              conversationId: convId,
-              turnId: orchestrationTurnId,
-              iteration: step.step === 'exec' ? 0 : 1
-            })
-            this.broadcast({ type: 'orchestrate-step', convId, runPath, step })
-            // Journal d'activité de la conversation : chaque étape facturée + coût tokens.
-            if (convId) {
-              const s = step as OrchestrationStep & {
-                inputTokens?: number
-                outputTokens?: number
-              }
-              appendConvActivity(convId, {
-                kind: step.step,
-                label: step.role ?? step.step,
-                provider: step.provider,
-                inputTokens: s.inputTokens,
-                outputTokens: s.outputTokens ?? step.tokens,
-                costUsd: step.costUsd,
-                text: step.text ?? step.detail
+          const r = await this.os.runTask(
+            task,
+            (step) => {
+              steps.push(step)
+              persistOrchestrationStep(step, {
+                conversationId: convId,
+                turnId: orchestrationTurnId,
+                iteration: step.step === 'exec' ? 0 : 1
               })
-            }
-          })
+              this.broadcast({ type: 'orchestrate-step', convId, runPath, step })
+              // Journal d'activité de la conversation : chaque étape facturée + coût tokens.
+              if (convId) {
+                const s = step as OrchestrationStep & {
+                  inputTokens?: number
+                  outputTokens?: number
+                }
+                appendConvActivity(convId, {
+                  kind: step.step,
+                  label: step.role ?? step.step,
+                  provider: step.provider,
+                  inputTokens: s.inputTokens,
+                  outputTokens: s.outputTokens ?? step.tokens,
+                  costUsd: step.costUsd,
+                  text: step.text ?? step.detail
+                })
+              }
+            },
+            (phase) => {
+              this.broadcast({ type: 'orchestrate-phase', convId, runPath, phase })
+            },
+            (step, delta) => {
+              this.broadcast({ type: 'orchestrate-delta', convId, runPath, deltaStep: step, delta })
+            },
+            abortController.signal
+          )
           if (runPath) {
             saveConvRunTrace(runPath, steps)
             closeConvRun(
@@ -451,6 +482,8 @@ export class AppCommandBus {
           this.broadcast({ type: 'orchestrate-end', convId, runPath, status: 'red' })
           this.broadcast({ type: 'refresh', scope: 'workflows' })
           throw e
+        } finally {
+          this.activeOrchestrations.delete(convId)
         }
       }
       case 'create_conversation': {

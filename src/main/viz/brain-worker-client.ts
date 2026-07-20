@@ -5,6 +5,7 @@ type BrainWorkerMethod =
   | 'loadPreview'
   | 'loadGraph'
   | 'loadThemes'
+  | 'loadThemeNodes'
   | 'loadNeighborhood'
   | 'readNodeFile'
   | 'searchBrain'

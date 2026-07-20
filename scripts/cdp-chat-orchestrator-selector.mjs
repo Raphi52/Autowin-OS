@@ -22,7 +22,8 @@ socket.onmessage = ({ data }) => {
   const message = JSON.parse(data)
   const callback = pending.get(message.id)
   if (!callback) {
-    if (message.method?.startsWith('Page.')) pageEvents.push({ method: message.method, at: Date.now() })
+    if (message.method?.startsWith('Page.'))
+      pageEvents.push({ method: message.method, at: Date.now() })
     return
   }
   pending.delete(message.id)
@@ -42,7 +43,8 @@ const evaluate = async (expression) => {
     returnByValue: true,
     awaitPromise: true
   })
-  if (result.exceptionDetails) throw new Error(result.exceptionDetails.text || 'Évaluation DOM en échec')
+  if (result.exceptionDetails)
+    throw new Error(result.exceptionDetails.text || 'Évaluation DOM en échec')
   return result.result?.value
 }
 await send('Page.enable')
@@ -237,8 +239,13 @@ if (
   new Set(proof.measurement.tabs.map((sample) => sample.value)).size !== 1 ||
   proof.measurement.historyCalls.length !== 0 ||
   proof.measurement.reloadCalls !== 0 ||
-  proof.measurement.pageEvents.some((event) => ['Page.frameNavigated', 'Page.loadEventFired', 'Page.frameStartedLoading'].includes(event.method)) ||
-  JSON.stringify(proof.measurement.conversationIdsBefore) !== JSON.stringify(proof.measurement.conversationIdsAfter) ||
+  proof.measurement.pageEvents.some((event) =>
+    ['Page.frameNavigated', 'Page.loadEventFired', 'Page.frameStartedLoading'].includes(
+      event.method
+    )
+  ) ||
+  JSON.stringify(proof.measurement.conversationIdsBefore) !==
+    JSON.stringify(proof.measurement.conversationIdsAfter) ||
   !proof.oldMessagesPreserved ||
   proof.activeTitleBefore !== proof.activeTitleAfter ||
   JSON.stringify(proof.oldPanels) !== JSON.stringify(proof.panelsAfter) ||

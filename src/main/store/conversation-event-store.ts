@@ -37,11 +37,11 @@ export class ConversationEventStore {
     const content = readFileSync(path, 'utf8').trim()
     const events = content
       ? content.split(/\r?\n/).map((line, index) => {
-      try {
-        return JSON.parse(line) as ConversationEvent
-      } catch (error) {
-        throw new Error(`corrupt conversation event at line ${index + 1}`, { cause: error })
-      }
+          try {
+            return JSON.parse(line) as ConversationEvent
+          } catch (error) {
+            throw new Error(`corrupt conversation event at line ${index + 1}`, { cause: error })
+          }
         })
       : []
     this.cache.set(conversationId, events)

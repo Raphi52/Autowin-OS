@@ -267,14 +267,7 @@ describe('CodexAdapter — exécution agentique locale', () => {
 
   it('échoue explicitement quand le CLI local est absent', () => {
     expect(() =>
-      codexExecSpec(
-        'C:\\repo',
-        'gpt-5.6-sol',
-        'workspace-write',
-        'low',
-        'C:\\Missing',
-        () => false
-      )
+      codexExecSpec('C:\\repo', 'gpt-5.6-sol', 'workspace-write', 'low', 'C:\\Missing', () => false)
     ).toThrow(/Codex CLI introuvable/)
   })
 })

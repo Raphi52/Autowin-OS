@@ -189,6 +189,16 @@
   line-height: 1;
   filter: saturate(1.15);
 }
+.memory-nav-icon {
+  width: 20px;
+  height: 20px;
+  overflow: visible;
+  color: #72e7ff;
+  filter: none;
+}
+.nav-item.active .memory-nav-icon {
+  color: #a8f4ff;
+}
 .nav-item .constellation-icon path {
   opacity: 0.72;
 }

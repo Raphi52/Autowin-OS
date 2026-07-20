@@ -201,6 +201,20 @@ export function highlightedNodeIdsForThemes(
   )
 }
 
+export function nodesForThemesAlphabetically(
+  nodes: readonly GraphNode[],
+  activeThemes: ReadonlySet<string>
+): GraphNode[] {
+  if (activeThemes.size === 0) return []
+  return nodes
+    .filter((node) => nodeThemeIds(node).some((theme) => activeThemes.has(theme)))
+    .sort(
+      (left, right) =>
+        left.label.localeCompare(right.label, 'fr', { sensitivity: 'base' }) ||
+        left.id.localeCompare(right.id)
+    )
+}
+
 export function floatingNodeIdsForThemeHighlight(
   highlightedNodeIds: ReadonlySet<string>,
   hoveredNodeIds: ReadonlySet<string>,

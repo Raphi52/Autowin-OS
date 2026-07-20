@@ -471,6 +471,7 @@ interface ChatApi {
     conversationId?: string
   ) => Promise<{ ok: boolean; cancelled?: boolean; error?: string }>
   cancelPilotChat: (conversationId: string) => Promise<{ ok: boolean }>
+  cancelOrchestration: (conversationId: string) => Promise<{ ok: boolean }>
   markResponseDisplayed: (
     conversationId: string,
     content: string
@@ -501,6 +502,9 @@ interface ChatApi {
       task?: string
       status?: string
       step?: OrchestrationStep
+      phase?: { step: string; provider?: string; role?: string }
+      deltaStep?: 'exec' | 'judge'
+      delta?: string
     }) => void
   ) => () => void
   emitIsolatedTestAppEvent: (event: Record<string, unknown> & { type: string }) => Promise<boolean>

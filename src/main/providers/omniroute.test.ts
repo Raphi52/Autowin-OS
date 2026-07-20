@@ -80,7 +80,11 @@ describe('OmniRouteAdapter', () => {
     expect((captured.init?.headers as Record<string, string>)['x-request-id']).toBe('request-1')
     const body = JSON.parse(String(captured.init?.body))
     expect(body).toEqual(
-      expect.objectContaining({ model: 'auto/coding', stream: true, stream_options: { include_usage: true } })
+      expect.objectContaining({
+        model: 'auto/coding',
+        stream: true,
+        stream_options: { include_usage: true }
+      })
     )
     expect(body.messages[0]).toEqual({ role: 'system', content: 'SOUL' })
   })
@@ -111,24 +115,33 @@ describe('OmniRouteAdapter', () => {
       fetchFn: fetchFn as typeof fetch,
       credentialStore: { get: () => 'secret' }
     })
-    const withFile: Message[] = [{
-      role: 'user',
-      content: 'Lis ceci',
-      attachments: [{
-        name: 'document.pdf', mimeType: 'application/pdf', size: 3, kind: 'file', content: 'YWJj'
-      }]
-    }]
+    const withFile: Message[] = [
+      {
+        role: 'user',
+        content: 'Lis ceci',
+        attachments: [
+          {
+            name: 'document.pdf',
+            mimeType: 'application/pdf',
+            size: 3,
+            kind: 'file',
+            content: 'YWJj'
+          }
+        ]
+      }
+    ]
     await expect(consume(adapter, withFile)).rejects.toThrow(/pièce jointe/i)
     expect(fetchFn).not.toHaveBeenCalled()
   })
 
   it('never includes a hostile upstream body or credential in its error', async () => {
     const adapter = new OmniRouteAdapter({
-      fetchFn: vi.fn(async () =>
-        new Response('{"error":"SECRET_REMOTE gateway-secret"}', {
-          status: 401,
-          headers: { 'content-type': 'application/json' }
-        })
+      fetchFn: vi.fn(
+        async () =>
+          new Response('{"error":"SECRET_REMOTE gateway-secret"}', {
+            status: 401,
+            headers: { 'content-type': 'application/json' }
+          })
       ) as typeof fetch,
       credentialStore: { get: () => 'gateway-secret' }
     })
@@ -150,7 +163,9 @@ describe('OmniRouteAdapter', () => {
           headers: init?.headers as Record<string, string>,
           body: JSON.parse(String(init?.body))
         })
-        return sseResponse(['data: {"choices":[{"delta":{"content":"ok"}}]}\r\n\r\ndata: [DONE]\r\n\r\n'])
+        return sseResponse([
+          'data: {"choices":[{"delta":{"content":"ok"}}]}\r\n\r\ndata: [DONE]\r\n\r\n'
+        ])
       }) as typeof fetch,
       credentialStore: { get: () => 'secret' }
     })
@@ -164,8 +179,9 @@ describe('OmniRouteAdapter', () => {
       'stable-turn-id',
       'stable-turn-id'
     ])
-    expect((calls[0].body.messages as Array<{ role: string }>).filter((m) => m.role === 'system'))
-      .toHaveLength(1)
+    expect(
+      (calls[0].body.messages as Array<{ role: string }>).filter((m) => m.role === 'system')
+    ).toHaveLength(1)
   })
 
   it('fails closed when a tool call is returned but unsupported', async () => {

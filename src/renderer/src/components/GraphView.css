@@ -626,6 +626,35 @@
   padding: 18px 20px 20px;
 }
 
+.theme-nodes-panel {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  padding: 18px 20px 20px;
+}
+
+.theme-nodes-panel__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  color: #718094;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.theme-nodes-panel__heading strong {
+  color: #dbe6f2;
+  font-size: 12px;
+}
+
+.theme-nodes-panel .node-links {
+  min-height: 0;
+  overflow: auto;
+}
+
 .panel-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;

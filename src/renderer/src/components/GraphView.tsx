@@ -28,6 +28,7 @@ import {
   nodeFocusForSelectionOrHover,
   nodeThemeIds,
   nodeSelectionEmphasis,
+  nodesForThemesAlphabetically,
   selectExclusiveTheme,
   shouldAutoFitGraphPhase,
   nodeValueForTheme,
@@ -298,6 +299,7 @@ export function GraphView({
   const [err, setErr] = useState('')
   const [themeQuery, setThemeQuery] = useState('')
   const [activeThemes, setActiveThemes] = useState<Set<string>>(() => new Set())
+  const [themeNodes, setThemeNodes] = useState<GraphNode[]>([])
   const [settings, setSettings] = useState<VisibilitySettings>(initialVisibilitySettings)
   const [panelTab, setPanelTab] = useState<PanelTab>('node')
   const [columnWidths, setColumnWidths] = useState<ColumnWidths>(initialColumnWidths)
@@ -321,6 +323,7 @@ export function GraphView({
   const initialFitTimeoutRef = useRef<number | null>(null)
   const [initialFitRequest, setInitialFitRequest] = useState(0)
   const fileRequestRef = useRef(0)
+  const themeNodesRequestRef = useRef(0)
   const columnResizeCleanupRef = useRef<(() => void) | null>(null)
   const [size, setSize] = useState({ w: 800, h: 500 })
 
@@ -526,6 +529,10 @@ export function GraphView({
     [activeThemes, graph.nodes]
   )
   const highlightedCount = highlightedNodeIds.size
+  const activeThemeNodes = useMemo(
+    () => nodesForThemesAlphabetically(themeNodes, activeThemes),
+    [activeThemes, themeNodes]
+  )
   const visualProfile = getGraphVisualProfile(visualMode)
   const motionProfile = graphMotionProfile()
   const linkedNodes = useMemo(() => (node ? linkedNodesFor(node.id, graph) : []), [graph, node])
@@ -557,12 +564,29 @@ export function GraphView({
   useEffect(() => {
     graphRef.current?.refresh()
   }, [activeThemes, floatingNodeIds, highlightedNodeIds, selectedNodeIds, visualMode])
-  const detailOpen = Boolean(node)
+  const detailOpen = Boolean(node) || activeThemes.size > 0
   const visibleThemeLabelIds = useMemo(
     () => new Set(visibleThemeClusterIds(themeSummaries, activeThemes, node)),
     [activeThemes, node, themeSummaries]
   )
   const showThemeClusterLabels = visibleThemeLabelIds.size > 0
+
+  useEffect(() => {
+    const requestId = ++themeNodesRequestRef.current
+    const themeIds = [...activeThemes]
+    if (!selected || themeIds.length === 0) return
+    window.api
+      .loadBrainThemeNodes(selected, themeIds)
+      .then((loaded) => {
+        if (requestId === themeNodesRequestRef.current) setThemeNodes(loaded as GraphNode[])
+      })
+      .catch((error) => {
+        if (requestId === themeNodesRequestRef.current) {
+          setThemeNodes([])
+          setErr(String(error))
+        }
+      })
+  }, [activeThemes, selected])
 
   const syncThemeClusterLabels = useCallback((): void => {
     const graphApi = graphRef.current
@@ -577,7 +601,7 @@ export function GraphView({
       )
     }
     if (!layer || !showThemeClusterLabels) return
-    const anchors = themeClusterAnchors(displayGraph.nodes, themeSummaries)
+    const anchors = themeClusterAnchors(renderedGraph.nodes, themeSummaries)
     const labels = new Map(
       [...layer.querySelectorAll<HTMLElement>('[data-theme-id]')].map((label) => [
         label.dataset.themeId,
@@ -645,7 +669,7 @@ export function GraphView({
     for (const [themeId, label] of labels) {
       if (!themeId || !processedThemes.has(themeId)) label.style.display = 'none'
     }
-  }, [displayGraph.nodes, showThemeClusterLabels, themeSummaries])
+  }, [renderedGraph.nodes, showThemeClusterLabels, themeSummaries])
 
   useEffect(() => {
     const frame = requestAnimationFrame(syncThemeClusterLabels)
@@ -801,12 +825,15 @@ export function GraphView({
 
   function toggleTheme(theme: string): void {
     invalidatePendingGraphFit()
+    clearNodeSelection()
+    setThemeNodes([])
     setActiveThemes((current) => toggleThemeSelection(current, theme))
   }
 
   function activateThemeCluster(theme: string): void {
     invalidatePendingGraphFit()
     clearNodeSelection()
+    setThemeNodes([])
     setActiveThemes((current) => selectExclusiveTheme(current, theme))
   }
 
@@ -1349,17 +1376,24 @@ export function GraphView({
         <div className="graph-hint">Glisser : pivoter · molette : zoomer · clic : sélectionner</div>
       </main>
 
-      {node && (
+      {detailOpen && (
         <>
-          {columnResizer('detail', 'Redimensionner la colonne du nœud')}
+          {columnResizer('detail', 'Redimensionner la colonne de droite')}
           <aside ref={visibilitySidebarRef} className="visibility-sidebar is-detail-open">
-            <NodePanel
-              node={node}
-              file={file}
-              fileErr={fileErr}
-              linkedNodes={linkedNodes}
-              onNavigate={(nextNode) => openNode(nextNode, true)}
-            />
+            {node ? (
+              <NodePanel
+                node={node}
+                file={file}
+                fileErr={fileErr}
+                linkedNodes={linkedNodes}
+                onNavigate={(nextNode) => openNode(nextNode, true)}
+              />
+            ) : (
+              <ThemeNodesPanel
+                nodes={activeThemeNodes}
+                onNavigate={(nextNode) => openNode(nextNode, true)}
+              />
+            )}
           </aside>
         </>
       )}
@@ -1489,6 +1523,32 @@ function NodePanel({
             <HumanJson value={file.content} />
           ))}
       </article>
+    </div>
+  )
+}
+
+function ThemeNodesPanel({
+  nodes,
+  onNavigate
+}: {
+  nodes: GraphNode[]
+  onNavigate: (node: GraphNode) => void
+}): React.JSX.Element {
+  return (
+    <div className="theme-nodes-panel">
+      <div className="theme-nodes-panel__heading">
+        <span>Nœuds du thème</span>
+        <strong>{nodes.length}</strong>
+      </div>
+      <nav className="node-links" aria-label="Nœuds des thèmes actifs par ordre alphabétique">
+        {nodes.length === 0 && <p>Aucun nœud dans ce thème.</p>}
+        {nodes.map((themeNode) => (
+          <button key={themeNode.id} type="button" onClick={() => onNavigate(themeNode)}>
+            <span aria-hidden="true">✦</span>
+            <strong>{themeNode.label}</strong>
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }

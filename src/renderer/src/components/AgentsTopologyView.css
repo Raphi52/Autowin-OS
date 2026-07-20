@@ -313,7 +313,7 @@
 .topology-slot {
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -378,6 +378,9 @@
 }
 
 .topology-slot > button {
+  grid-column: 5;
+  align-self: end;
+  margin-bottom: 4px;
   width: 24px;
   height: 24px;
   border: 1px solid #4b2c36;

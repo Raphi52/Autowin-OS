@@ -17,7 +17,9 @@ describe('AgentPilot turn contract', () => {
       'Refus confirmé'
     ]
     const registry = {
-      send: vi.fn().mockImplementation(async () => ({ text: responses.shift()!, provider: 'codex' })),
+      send: vi
+        .fn()
+        .mockImplementation(async () => ({ text: responses.shift()!, provider: 'codex' })),
       describePrompt: () => ({ provider: 'codex', transport: 'fixture', messages: [], options: {} })
     }
     const roles = {
@@ -39,19 +41,11 @@ describe('AgentPilot turn contract', () => {
       'plan'
     )
 
-    expect(bus.exec).toHaveBeenCalledWith(
-      'remove_conversation',
-      { id: 'conv-1' },
-      'conv-1',
-      'plan'
-    )
+    expect(bus.exec).toHaveBeenCalledWith('remove_conversation', { id: 'conv-1' }, 'conv-1', 'plan')
   })
 
   it('keeps the provider and model binding immutable for the whole chat turn', async () => {
-    const responses = [
-      '<cmd>{"name":"get_state","args":{}}</cmd>',
-      'RÃ©ponse finale'
-    ]
+    const responses = ['<cmd>{"name":"get_state","args":{}}</cmd>', 'RÃ©ponse finale']
     const send = vi.fn().mockImplementation(async () => ({
       text: responses.shift()!,
       provider: 'fixture'
@@ -64,17 +58,17 @@ describe('AgentPilot turn contract', () => {
       limitation: 'test'
     })
     const initialBinding = {
-        provider: 'codex',
-        model: 'gpt-initial',
-        reasoningEffort: 'low',
-        capabilityProfileId: 'full'
-      }
+      provider: 'codex',
+      model: 'gpt-initial',
+      reasoningEffort: 'low',
+      capabilityProfileId: 'full'
+    }
     const mutatedBinding = {
-        provider: 'hermes',
-        model: 'model-mutated',
-        reasoningEffort: 'high',
-        capabilityProfileId: 'readonly'
-      }
+      provider: 'hermes',
+      model: 'model-mutated',
+      reasoningEffort: 'high',
+      capabilityProfileId: 'readonly'
+    }
     let bindingReadCount = 0
     const roles = {
       getBinding: vi.fn(() => (bindingReadCount++ === 0 ? initialBinding : mutatedBinding))
@@ -147,7 +141,11 @@ describe('AgentPilot turn contract', () => {
         provider: 'codex'
       }),
       describePrompt: () => ({
-        provider: 'codex', transport: 'fixture', messages: [], options: {}, limitation: 'test'
+        provider: 'codex',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
       })
     }
     const roles = {
@@ -165,7 +163,10 @@ describe('AgentPilot turn contract', () => {
 
     controller.abort('conversation-deleted')
     const result = await Promise.race([
-      pending.then(() => 'resolved', () => 'rejected'),
+      pending.then(
+        () => 'resolved',
+        () => 'rejected'
+      ),
       new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 30))
     ])
     expect(result).toBe('rejected')

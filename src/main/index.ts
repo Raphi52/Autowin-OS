@@ -333,9 +333,14 @@ function registerChatIpc(): void {
     if (!payload || typeof payload !== 'object') throw new Error('Événement de test invalide')
     const appEvent = payload as Record<string, unknown>
     if (
-      !['orchestrate-start', 'orchestrate-step', 'orchestrate-end', 'refresh'].includes(
-        String(appEvent.type)
-      )
+      ![
+        'orchestrate-start',
+        'orchestrate-phase',
+        'orchestrate-delta',
+        'orchestrate-step',
+        'orchestrate-end',
+        'refresh'
+      ].includes(String(appEvent.type))
     ) {
       throw new Error('Type d’événement de test interdit')
     }
@@ -510,8 +515,10 @@ function registerChatIpc(): void {
     await agentModelsReady
     const profile = profiles.list().find((item) => item.id === guardString(id, 'profile.id'))
     if (!profile) throw new Error('Profil introuvable')
-    let validatedRoute: string | undefined
-    validatedRoute = resolveProfileRoute(profile.transport, omniRouteMigration.load().routeModel)
+    const validatedRoute = resolveProfileRoute(
+      profile.transport,
+      omniRouteMigration.load().routeModel
+    )
     const models = await discoverOmniRouteModels(fetch, os.omniRouteCredentialStore)
     if (!models.some((model) => model.model === validatedRoute))
       throw new Error('Route OmniRoute du profil indisponible')
@@ -758,7 +765,10 @@ function registerChatIpc(): void {
   })
   ipcMain.handle('os:conversations:switchBranch', (event, rawId: string, rawBranchId: string) => {
     assertTrustedRendererSender(event, 'Conversation branch')
-    return os.conversations.switchBranch(guardString(rawId, 'id'), guardString(rawBranchId, 'branchId'))
+    return os.conversations.switchBranch(
+      guardString(rawId, 'id'),
+      guardString(rawBranchId, 'branchId')
+    )
   })
   ipcMain.handle('os:conversations:remove', async (_e, rawId: string) => {
     const id = guardString(rawId, 'id')
@@ -782,9 +792,7 @@ function registerChatIpc(): void {
   ipcMain.handle('os:loadBrainThemeNodes', (_e, path: string, rawThemeIds: unknown) => {
     if (!Array.isArray(rawThemeIds) || rawThemeIds.length > 100)
       throw new Error('IPC themeIds: tableau borné attendu')
-    const themeIds = rawThemeIds.map((themeId, index) =>
-      guardString(themeId, `themeIds[${index}]`)
-    )
+    const themeIds = rawThemeIds.map((themeId, index) => guardString(themeId, `themeIds[${index}]`))
     return brainWorker.request('loadThemeNodes', guardString(path, 'path'), themeIds)
   })
   ipcMain.handle('os:loadBrainGraph', (_e, path: string, lod?: number, community?: number) =>
@@ -1085,9 +1093,7 @@ function registerChatIpc(): void {
             6,
             conversationId,
             controller.signal,
-            conversationId
-              ? (os.conversations.get(conversationId)?.authorityMode ?? 'ask')
-              : 'ask'
+            conversationId ? (os.conversations.get(conversationId)?.authorityMode ?? 'ask') : 'ask'
           )
         // Journal d'activité de la conversation : le tour de chat, avec son coût en tokens.
         if (conversationId) {
@@ -1125,7 +1131,14 @@ function registerChatIpc(): void {
   )
   ipcMain.handle('os:pilotChat:cancel', (_e, rawConversationId: string) => {
     const conversationId = guardString(rawConversationId, 'conversationId')
-    return { ok: activeChatTurns.abort(conversationId, 'user') }
+    // Stoppe le tour pilote ET le sous-agent en vol rattaché à cette conversation.
+    const orchestrationAborted = bus.abortOrchestration(conversationId)
+    const pilotAborted = activeChatTurns.abort(conversationId, 'user')
+    return { ok: pilotAborted || orchestrationAborted }
+  })
+  ipcMain.handle('os:orchestrate:cancel', (_e, rawConversationId: string) => {
+    const conversationId = guardString(rawConversationId, 'conversationId')
+    return { ok: bus.abortOrchestration(conversationId) }
   })
   ipcMain.handle(
     'os:causalTrace:displayed',

@@ -26,14 +26,30 @@ describe('floating note labels', () => {
     )
   })
 
-  it('mounts the detail column only while a node is selected', () => {
+  it('uses the right column for a theme index, then replaces it with node detail', () => {
     const source = readFileSync(new URL('./GraphView.tsx', import.meta.url), 'utf8')
     const styles = readFileSync(new URL('./GraphView.css', import.meta.url), 'utf8')
 
-    expect(source).toContain("{columnResizer('detail', 'Redimensionner la colonne du nœud')}")
+    expect(source).toContain('const detailOpen = Boolean(node) || activeThemes.size > 0')
+    expect(source).toContain("{columnResizer('detail', 'Redimensionner la colonne de droite')}")
+    expect(source).toContain('{node ? (')
+    expect(source).toContain('<ThemeNodesPanel')
+    expect(source).toContain('nodes={activeThemeNodes}')
+    expect(source).toContain('nodesForThemesAlphabetically(themeNodes, activeThemes)')
+    expect(source).toContain('.loadBrainThemeNodes(selected, themeIds)')
     expect(source).not.toContain('Sélectionnez un nœud dans le graphe.')
     expect(source).not.toContain("detailOpen ? 'detail' : 'visibility'")
     expect(styles).toContain('grid-template-columns: var(--theme-column-width) minmax(0, 1fr);')
+  })
+
+  it('clears an opened node when a sidebar theme is selected', () => {
+    const source = readFileSync(new URL('./GraphView.tsx', import.meta.url), 'utf8')
+    const toggleThemeBody = source.slice(
+      source.indexOf('function toggleTheme(theme: string)'),
+      source.indexOf('function activateThemeCluster(theme: string)')
+    )
+
+    expect(toggleThemeBody).toContain('clearNodeSelection()')
   })
 
   it('uses only the floating node name instead of stacking the native hover tooltip below it', () => {

@@ -52,9 +52,7 @@ describe('ActivityPane request ordering', () => {
           return id === 'A' ? activityA.promise : activityB.promise
         }),
         promptCalls: vi.fn((id: string) => (id === 'A' ? callsA.promise : callsB.promise)),
-        hermesPromptTraces: vi.fn((id: string) =>
-          id === 'A' ? hermesA.promise : hermesB.promise
-        ),
+        hermesPromptTraces: vi.fn((id: string) => (id === 'A' ? hermesA.promise : hermesB.promise)),
         onAppEvent: vi.fn(() => vi.fn())
       }
     })

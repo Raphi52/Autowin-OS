@@ -32,9 +32,11 @@ function trace(turnId: string, content: string, sequence: number): HarnessTraceE
 
 function api(events: HarnessTraceEvent[], promptCalls: unknown[] = []) {
   return {
-    conversations: vi.fn().mockResolvedValue([
-      { id: 'conv-1', title: 'Conversation ciblée', provider: 'codex', updatedAt: 1 }
-    ]),
+    conversations: vi
+      .fn()
+      .mockResolvedValue([
+        { id: 'conv-1', title: 'Conversation ciblée', provider: 'codex', updatedAt: 1 }
+      ]),
     promptCalls: vi.fn().mockResolvedValue(promptCalls),
     hermesPromptTraceSummary: vi.fn().mockResolvedValue([]),
     authorizeHermesDiagnostics: vi.fn().mockResolvedValue(null),
@@ -58,7 +60,11 @@ describe('Observatory turn focus', () => {
     container = null
   })
 
-  async function mount(mockApi: ReturnType<typeof api>, conversationId = 'conv-1', turnId = 'turn-2') {
+  async function mount(
+    mockApi: ReturnType<typeof api>,
+    conversationId = 'conv-1',
+    turnId = 'turn-2'
+  ) {
     Object.defineProperty(window, 'api', { configurable: true, value: mockApi })
     container = document.createElement('div')
     document.body.append(container)
@@ -78,7 +84,9 @@ describe('Observatory turn focus', () => {
   }
 
   it('applies the requested turn after the asynchronous timeline load and resets to the conversation', async () => {
-    const container = await mount(api([trace('turn-1', 'ancien tour', 1), trace('turn-2', 'tour ciblé', 2)]))
+    const container = await mount(
+      api([trace('turn-1', 'ancien tour', 1), trace('turn-2', 'tour ciblé', 2)])
+    )
 
     expect(container.textContent).toContain('Tour ciblé · turn-2')
     expect(container.textContent).toContain('tour ciblé')
@@ -135,7 +143,11 @@ describe('Observatory turn focus', () => {
       { id: 'conv-2', title: 'Conversation B', provider: 'claude', updatedAt: 1 }
     ])
     mockApi.causalTrace.mockImplementation((id: string) =>
-      Promise.resolve(id === 'conv-1' ? [trace('turn-2', 'tour A', 1)] : [{ ...trace('turn-B', 'tour B', 1), conversationId: 'conv-2' }])
+      Promise.resolve(
+        id === 'conv-1'
+          ? [trace('turn-2', 'tour A', 1)]
+          : [{ ...trace('turn-B', 'tour B', 1), conversationId: 'conv-2' }]
+      )
     )
     const view = await mount(mockApi)
     const conversationB = [...view.querySelectorAll('.observatory-conversations button')].find(

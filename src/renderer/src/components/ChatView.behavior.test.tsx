@@ -160,9 +160,11 @@ describe('ChatView behavior under concurrent UI actions', () => {
   })
 
   it('preserves a failed bootstrap draft and retries it', async () => {
-    const models = vi.fn().mockResolvedValue([
-      { id: 'omniroute/auto/coding', provider: 'omniroute', model: 'auto/coding' }
-    ])
+    const models = vi
+      .fn()
+      .mockResolvedValue([
+        { id: 'omniroute/auto/coding', provider: 'omniroute', model: 'auto/coding' }
+      ])
     const create = vi.fn().mockResolvedValue(conversation('A'))
     const mockApi = api({ models, conversationsCreate: create })
     await mount(mockApi)
@@ -306,17 +308,29 @@ describe('ChatView behavior under concurrent UI actions', () => {
         status: 'completed',
         parts: [{ kind: 'text', text: 'a1' }]
       },
-      { role: 'user', content: 'u2', ts: 2, messageId: 'm3', branchId: 'branch-A-root', parentMessageId: 'm2' },
-      { role: 'user', content: 'alt', ts: 3, messageId: 'm5', branchId: 'branch-A-2', parentMessageId: 'm2' }
+      {
+        role: 'user',
+        content: 'u2',
+        ts: 2,
+        messageId: 'm3',
+        branchId: 'branch-A-root',
+        parentMessageId: 'm2'
+      },
+      {
+        role: 'user',
+        content: 'alt',
+        ts: 3,
+        messageId: 'm5',
+        branchId: 'branch-A-2',
+        parentMessageId: 'm2'
+      }
     ]
   })
 
   it('forke depuis un tour assistant persistant en appelant conversationsFork', async () => {
     const fork = vi.fn().mockResolvedValue(undefined)
     const conv = branched('branch-A-root')
-    await mount(
-      api({ conversations: vi.fn().mockResolvedValue([conv]), conversationsFork: fork })
-    )
+    await mount(api({ conversations: vi.fn().mockResolvedValue([conv]), conversationsFork: fork }))
     await click('.conv-pick')
     const assistantRow = container!.querySelector('.msg.assistant') as HTMLElement
     const forkBtn = [...assistantRow.querySelectorAll('button')].find((b) =>
@@ -354,7 +368,10 @@ describe('ChatView behavior under concurrent UI actions', () => {
   it('offre le bouton forker aussi sur un message utilisateur (avec messageId)', async () => {
     const fork = vi.fn().mockResolvedValue(undefined)
     await mount(
-      api({ conversations: vi.fn().mockResolvedValue([branched('branch-A-root')]), conversationsFork: fork })
+      api({
+        conversations: vi.fn().mockResolvedValue([branched('branch-A-root')]),
+        conversationsFork: fork
+      })
     )
     await click('.conv-pick')
     const userRow = container!.querySelector('.msg.user') as HTMLElement
@@ -371,7 +388,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
       .fn()
       .mockResolvedValueOnce([branched('branch-A-root')]) // montage : branche racine active
       .mockResolvedValue([branched('branch-A-2')]) // après switch : branche 2 active
-    await mount(api({ conversations, conversationsSwitchBranch: vi.fn().mockResolvedValue(undefined) }))
+    await mount(
+      api({ conversations, conversationsSwitchBranch: vi.fn().mockResolvedValue(undefined) })
+    )
     await click('.conv-pick')
     expect(container!.querySelector('.chat-scroll')!.textContent).toContain('u2') // racine
     const chips = container!.querySelectorAll('.branch-chip')

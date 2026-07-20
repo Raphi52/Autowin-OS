@@ -102,14 +102,14 @@ try {
     'redémarrage avec stockage legacy'
   )
   for (const view of views) {
-      const clickedView = await evaluate(
-        `(() => { const button = [...document.querySelectorAll('.nav-item')].find((item) => item.querySelector('span:last-child')?.textContent?.trim() === ${JSON.stringify(view.nav)}); if (!button) return false; button.click(); return true })()`
-      )
-      if (!clickedView) throw new Error(`Navigation absente: ${view.nav}`)
-      const expectedTheme =
-        negativeControl && view.route === 'memory' ? 'theme-invalid' : theme.shellClass
-      const state = await poll(
-        `(async () => {
+    const clickedView = await evaluate(
+      `(() => { const button = [...document.querySelectorAll('.nav-item')].find((item) => item.querySelector('span:last-child')?.textContent?.trim() === ${JSON.stringify(view.nav)}); if (!button) return false; button.click(); return true })()`
+    )
+    if (!clickedView) throw new Error(`Navigation absente: ${view.nav}`)
+    const expectedTheme =
+      negativeControl && view.route === 'memory' ? 'theme-invalid' : theme.shellClass
+    const state = await poll(
+      `(async () => {
         await document.fonts.ready;
         await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
         const shell = document.querySelector('.shell');
@@ -128,53 +128,53 @@ try {
         };
         return { ok: actual.shellClass === ${JSON.stringify(expectedTheme)} && actual.activeNav === ${JSON.stringify(view.nav)} && actual.activeSlots === 1 && actual.root && actual.title === ${JSON.stringify(view.title)} && actual.themeControls === 0 && actual.legacyStoredMode === 'galaxy', actual };
       })()`,
-        `${theme.id}/${view.route}`
+      `${theme.id}/${view.route}`
+    )
+    const badgeText = `route=${view.route} | title=${view.title} | theme=${theme.shellClass} | fp=${fingerprint.slice(0, 12)}`
+    await evaluate(
+      `(() => { const badge = document.createElement('div'); badge.id = 'autowin-proof-badge'; badge.textContent = ${JSON.stringify(badgeText)}; Object.assign(badge.style, { position:'fixed', right:'10px', bottom:'10px', zIndex:'2147483647', padding:'5px 8px', border:'1px solid #fff', background:'#000', color:'#fff', font:'10px monospace' }); document.body.appendChild(badge); return true })()`
+    )
+    const name = `${theme.id}-${view.route}.png`
+    const pngPath = join(outputDir, name)
+    let png
+    if (nativeWindowPid) {
+      execFileSync(
+        'powershell',
+        [
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          resolve('scripts/capture-window.ps1'),
+          '-TitleLike',
+          'Autowin',
+          '-Out',
+          pngPath,
+          '-ProcessId',
+          nativeWindowPid
+        ],
+        { stdio: 'pipe' }
       )
-      const badgeText = `route=${view.route} | title=${view.title} | theme=${theme.shellClass} | fp=${fingerprint.slice(0, 12)}`
-      await evaluate(
-        `(() => { const badge = document.createElement('div'); badge.id = 'autowin-proof-badge'; badge.textContent = ${JSON.stringify(badgeText)}; Object.assign(badge.style, { position:'fixed', right:'10px', bottom:'10px', zIndex:'2147483647', padding:'5px 8px', border:'1px solid #fff', background:'#000', color:'#fff', font:'10px monospace' }); document.body.appendChild(badge); return true })()`
-      )
-      const name = `${theme.id}-${view.route}.png`
-      const pngPath = join(outputDir, name)
-      let png
-      if (nativeWindowPid) {
-        execFileSync(
-          'powershell',
-          [
-            '-ExecutionPolicy',
-            'Bypass',
-            '-File',
-            resolve('scripts/capture-window.ps1'),
-            '-TitleLike',
-            'Autowin',
-            '-Out',
-            pngPath,
-            '-ProcessId',
-            nativeWindowPid
-          ],
-          { stdio: 'pipe' }
-        )
-        png = readFileSync(pngPath)
-      } else if (!skipScreenshots) {
-        const capture = await send('Page.captureScreenshot', { format: 'png', fromSurface: true })
-        png = Buffer.from(capture.data, 'base64')
-        writeFileSync(pngPath, png)
-      }
-      const metadata = {
-        route: view.route,
-        title: view.title,
-        theme: theme.shellClass,
-        fingerprint,
-        port: Number(port),
-        targetUrl: page.url,
-        timestamp: new Date().toISOString(),
-        state: state.actual,
-        png: png ? basename(pngPath) : null,
-        pngSha256: png ? sha256(png) : null
-      }
-      writeFileSync(`${pngPath}.json`, JSON.stringify(metadata, null, 2))
-      manifest.push(metadata)
-      await evaluate(`document.querySelector('#autowin-proof-badge')?.remove()`)
+      png = readFileSync(pngPath)
+    } else if (!skipScreenshots) {
+      const capture = await send('Page.captureScreenshot', { format: 'png', fromSurface: true })
+      png = Buffer.from(capture.data, 'base64')
+      writeFileSync(pngPath, png)
+    }
+    const metadata = {
+      route: view.route,
+      title: view.title,
+      theme: theme.shellClass,
+      fingerprint,
+      port: Number(port),
+      targetUrl: page.url,
+      timestamp: new Date().toISOString(),
+      state: state.actual,
+      png: png ? basename(pngPath) : null,
+      pngSha256: png ? sha256(png) : null
+    }
+    writeFileSync(`${pngPath}.json`, JSON.stringify(metadata, null, 2))
+    manifest.push(metadata)
+    await evaluate(`document.querySelector('#autowin-proof-badge')?.remove()`)
   }
   writeFileSync(
     join(outputDir, 'manifest.json'),

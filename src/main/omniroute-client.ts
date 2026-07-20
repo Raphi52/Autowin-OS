@@ -186,10 +186,17 @@ export async function loadOmniRouteSnapshot(
   fetchFn: typeof fetch = fetch
 ): Promise<OmniRouteSnapshot> {
   const paths = [
-    ['/api/monitoring/health', 'health', (value: JsonObject) =>
-      ['healthy', 'degraded', 'unhealthy'].includes(text(value.status)?.toLowerCase() ?? '')],
-    ['/api/providers/client', 'connections', (value: JsonObject) =>
-      Array.isArray(value.connections)],
+    [
+      '/api/monitoring/health',
+      'health',
+      (value: JsonObject) =>
+        ['healthy', 'degraded', 'unhealthy'].includes(text(value.status)?.toLowerCase() ?? '')
+    ],
+    [
+      '/api/providers/client',
+      'connections',
+      (value: JsonObject) => Array.isArray(value.connections)
+    ],
     ['/api/usage/provider-limits', 'quotas', (value: JsonObject) => Boolean(object(value.caches))]
   ] as const
   const settled = await Promise.allSettled(

@@ -16,29 +16,15 @@ import './assets/ui-system.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
 import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'
 
-// Icônes : petits SVG path (stroke) — style linéaire, cohérent.
-const I: Record<Tab, string> = {
-  chat: 'M5 5h14a3 3 0 013 3v6a3 3 0 01-3 3H11l-5 3v-3H5a3 3 0 01-3-3V8a3 3 0 013-3zm3 6h.01M12 11h.01M16 11h.01',
-  memory:
-    'M5 7l6 4m2 0l6-4M5 17l6-4m2 0l6 4M5 5a2 2 0 110 4 2 2 0 010-4zm7 5a2 2 0 110 4 2 2 0 010-4zm7-5a2 2 0 110 4 2 2 0 010-4zM5 15a2 2 0 110 4 2 2 0 010-4zm14 0a2 2 0 110 4 2 2 0 010-4z',
-  observatory: 'M7 7h9l-2 6h-5L7 7zm3 6l-5 7m8-7l5 7M4 21h16M5 4l2 3m10-3l-2 3',
-  router: 'M12 3a9 9 0 109 9M12 3v9m0 0l6-6m-6 6h9M5 19l4-4',
-  agents:
-    'M7 8V6h10v2m-11 1h12a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6a2 2 0 012-2zm4 4h.01M14 13h.01M9 17c1.8 1 4.2 1 6 0',
-  capabilities: 'M5 10h14v10H5V10zm3 0V7h8v3m-8 4l2-2 2 2 2-2 2 2m-7 6l2-2m5 2l-2-2',
-  behaviour:
-    'M8 5a4 4 0 017 2 4 4 0 013 6 4 4 0 01-5 5 4 4 0 01-7-2 4 4 0 012-11zm2 7h.01M14 12h.01M10 15c1.2.8 2.8.8 4 0'
-}
-
-void I
+// Icônes de navigation : emoji, un par onglet.
 const TOY: Record<Tab, string> = {
   chat: '💬',
-  memory: '🕸️',
+  memory: '🧠',
   observatory: '🔭',
   router: '🛰️',
   agents: '🤖',
   capabilities: '🧰',
-  behaviour: '🧠'
+  behaviour: '🧬'
 }
 
 const NAV: Array<{ id: Tab; label: string }> = [

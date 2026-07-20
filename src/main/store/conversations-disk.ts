@@ -1,4 +1,11 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync
+} from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { Conversation, ConversationStore } from './conversations'
 import { ensureAutowinAppData } from '../app-data'
@@ -63,9 +70,13 @@ export function saveConversations(all: Conversation[], path = conversationsPath(
     writeFileSync(tmp, JSON.stringify(all, null, 1), 'utf8')
     renameSync(tmp, path)
   } catch (error) {
-    throw new ConversationPersistenceError(`Écriture du store conversations impossible: ${path}`, path, {
-      cause: error
-    })
+    throw new ConversationPersistenceError(
+      `Écriture du store conversations impossible: ${path}`,
+      path,
+      {
+        cause: error
+      }
+    )
   }
 }
 

@@ -4,6 +4,11 @@ import { describe, expect, it } from 'vitest'
 const source = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
 
 describe('navigation pendant une reponse', () => {
+  it('ne propose plus le selecteur de permissions defectueux', () => {
+    expect(source).not.toContain('Permissions de la conversation')
+    expect(source).not.toContain('conversationsSetAuthorityMode')
+  })
+
   it('laisse Nouvelle conversation accessible pendant la reflexion', () => {
     const newConversation = source.match(
       /<button\s+className="btn btn-sm"\s+onClick=\{newConv\}[\s\S]*?title="Nouvelle conversation"[\s\S]*?<\/button>/
@@ -50,7 +55,7 @@ describe('navigation pendant une reponse', () => {
     )?.[0]
 
     expect(composerButton).toBeDefined()
-    expect(composerButton).toContain("window.api.cancelPilotChat(activeId)")
+    expect(composerButton).toContain('window.api.cancelPilotChat(activeId)')
     expect(composerButton).toContain("busy ? '■ Stop' : 'Envoyer'")
     expect(composerButton).not.toContain('disabled={busy ||')
   })

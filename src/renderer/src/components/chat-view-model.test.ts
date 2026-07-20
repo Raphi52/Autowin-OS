@@ -252,6 +252,63 @@ describe('conversation-scoped workflow state', () => {
     expect(stepped['conversation-b']).toBeUndefined()
   })
 
+  it('tracks the active phase then clears it when the step is recorded', () => {
+    const started = reduceScopedLiveRuns(
+      {},
+      { type: 'start', convId: 'conversation-a', runPath: 'run-a', task: 'audit A' }
+    )
+    const phased = reduceScopedLiveRuns(started, {
+      type: 'phase',
+      convId: 'conversation-a',
+      runPath: 'run-a',
+      phase: { step: 'exec', provider: 'claude', role: 'subagent' }
+    })
+    expect(phased['conversation-a']?.phase).toEqual({
+      step: 'exec',
+      provider: 'claude',
+      role: 'subagent'
+    })
+
+    const stepped = reduceScopedLiveRuns(phased, {
+      type: 'step',
+      convId: 'conversation-a',
+      runPath: 'run-a',
+      step: { type: 'exec', label: 'worker A' }
+    })
+    expect(stepped['conversation-a']?.phase).toBeUndefined()
+    expect(stepped['conversation-a']?.steps).toEqual([{ type: 'exec', label: 'worker A' }])
+  })
+
+  it('accumulates streamed deltas then clears them when the step lands', () => {
+    let state = reduceScopedLiveRuns({}, { type: 'start', convId: 'c', runPath: 'r', task: 't' })
+    state = reduceScopedLiveRuns(state, {
+      type: 'phase',
+      convId: 'c',
+      runPath: 'r',
+      phase: { step: 'exec' }
+    })
+    state = reduceScopedLiveRuns(state, { type: 'delta', convId: 'c', runPath: 'r', delta: 'Hel' })
+    state = reduceScopedLiveRuns(state, { type: 'delta', convId: 'c', runPath: 'r', delta: 'lo' })
+    expect(state['c']?.liveText).toBe('Hello')
+
+    // Une nouvelle phase repart d'un texte vierge.
+    state = reduceScopedLiveRuns(state, {
+      type: 'phase',
+      convId: 'c',
+      runPath: 'r',
+      phase: { step: 'judge' }
+    })
+    expect(state['c']?.liveText).toBe('')
+
+    const stepped = reduceScopedLiveRuns(state, {
+      type: 'step',
+      convId: 'c',
+      runPath: 'r',
+      step: { type: 'judge' }
+    })
+    expect(stepped['c']?.liveText).toBeUndefined()
+  })
+
   it('rejects a runs response when its conversation or scope is no longer current', () => {
     const requested = { id: 4, scope: 'conv' as const, convId: 'conversation-a' }
 

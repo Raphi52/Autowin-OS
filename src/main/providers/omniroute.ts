@@ -25,11 +25,7 @@ export interface OmniRouteAdapterOptions {
 }
 
 type OpenAIContent =
-  | string
-  | Array<
-      | { type: 'text'; text: string }
-      | { type: 'image_url'; image_url: { url: string } }
-    >
+  string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>
 
 function openAIContent(message: Message): OpenAIContent {
   const attachments = message.attachments ?? []

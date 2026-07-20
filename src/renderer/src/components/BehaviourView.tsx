@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { HumanJson } from './HumanJson'
+import { BrainMarkdown } from './BrainMarkdown'
 import {
   filterBehaviourFiles,
   groupBehaviourFiles,
@@ -59,6 +60,7 @@ export function BehaviourView(): React.JSX.Element {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [proofs, setProofs] = useState<Map<string, HermesInjectionProof>>(new Map())
+  const [readerMode, setReaderMode] = useState<'rendered' | 'source'>('rendered')
 
   const loadWorkspace = useCallback(async (root: string, preferredContext?: string) => {
     setLoading(true)
@@ -278,13 +280,31 @@ export function BehaviourView(): React.JSX.Element {
                   <h2>{selected.label}</h2>
                   <p title={selected.path}>{selected.path}</p>
                 </div>
-                <b
-                  className={`is-${selectedProof?.verdict === 'injected' ? 'injected' : selected.state}`}
-                >
-                  {selectedProof?.verdict === 'injected'
-                    ? 'Injecté · preuve payload'
-                    : STATE_LABEL[selected.state]}
-                </b>
+                <div className="behaviour-reader-actions">
+                  <div className="behaviour-reader-mode" aria-label="Affichage du fichier Markdown">
+                    <button
+                      type="button"
+                      className={readerMode === 'rendered' ? 'active' : ''}
+                      onClick={() => setReaderMode('rendered')}
+                    >
+                      Rendu
+                    </button>
+                    <button
+                      type="button"
+                      className={readerMode === 'source' ? 'active' : ''}
+                      onClick={() => setReaderMode('source')}
+                    >
+                      Source
+                    </button>
+                  </div>
+                  <b
+                    className={`is-${selectedProof?.verdict === 'injected' ? 'injected' : selected.state}`}
+                  >
+                    {selectedProof?.verdict === 'injected'
+                      ? 'Injecté · preuve payload'
+                      : STATE_LABEL[selected.state]}
+                  </b>
+                </div>
               </header>
               <dl>
                 <div>
@@ -304,7 +324,13 @@ export function BehaviourView(): React.JSX.Element {
                   <dd>{selectedProof?.reason ?? 'Non vérifié'}</dd>
                 </div>
               </dl>
-              <HumanJson value={content} />
+              <div className="behaviour-reader-content">
+                {readerMode === 'rendered' ? (
+                  <BrainMarkdown source={content} />
+                ) : (
+                  <HumanJson value={content} />
+                )}
+              </div>
             </>
           ) : (
             <p className="behaviour-empty">

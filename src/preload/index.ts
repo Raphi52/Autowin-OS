@@ -190,6 +190,8 @@ const api = {
     ipcRenderer.invoke('os:pilotChat', messages, conversationId),
   cancelPilotChat: (conversationId: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('os:pilotChat:cancel', conversationId),
+  cancelOrchestration: (conversationId: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('os:orchestrate:cancel', conversationId),
   markResponseDisplayed: (
     conversationId: string,
     content: string

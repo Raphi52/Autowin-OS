@@ -155,8 +155,8 @@ export function RouterView({ active }: { active: boolean }): React.JSX.Element {
             <h2>OmniRoute obligatoire</h2>
             <p>
               Toutes les conversations passent exclusivement par{' '}
-              {migration?.routeModel ?? 'la route OmniRoute configurée'}. Aucun transport direct Claude,
-              Codex ou Kimi n'est autorisé.
+              {migration?.routeModel ?? 'la route OmniRoute configurée'}. Aucun transport direct
+              Claude, Codex ou Kimi n’est autorisé.
             </p>
           </div>
           <div className="router-migration-controls">
@@ -319,7 +319,7 @@ export function RouterView({ active }: { active: boolean }): React.JSX.Element {
           <span>État du raccordement</span>
           <strong>OmniRoute exclusif · {migration?.routeModel ?? 'auto/coding'}</strong>
           <p>
-            Le provider final et les fallbacks restent gérés à l'intérieur d'OmniRoute. Autowin ne
+            Le provider final et les fallbacks restent gérés à l’intérieur d’OmniRoute. Autowin ne
             possède aucun chemin conversationnel direct.
           </p>
         </section>

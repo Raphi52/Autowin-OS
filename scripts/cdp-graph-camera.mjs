@@ -116,12 +116,25 @@ await wait(700)
 states.push(await snapshot('10-black'))
 
 const baseline = states[0].distance
-const failures = states.filter(
-  (state) =>
+const failures = states.filter((state) => {
+  if (
     !Number.isFinite(state.distance) ||
     state.visibleTags === 0 ||
     Math.abs(state.distance - baseline) > Math.max(1, baseline * 0.01)
-)
+  )
+    return true
+  if (state.name === '02-floating-tag' || state.name === '04-sidebar-filter') {
+    return state.activeTheme === null || state.activeTag === null || state.visibleTags !== 1
+  }
+  if (state.name === '03-floating-tag-off' || state.name === '05-sidebar-filter-off') {
+    return (
+      state.activeTheme !== null ||
+      state.activeTag !== null ||
+      state.visibleTags !== states[0].visibleTags
+    )
+  }
+  return false
+})
 const result = { port, baseline, states, failures: failures.map((state) => state.name) }
 writeFileSync(join(outputDir, 'result.json'), JSON.stringify(result, null, 2))
 console.log(JSON.stringify(result))

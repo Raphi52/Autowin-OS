@@ -157,37 +157,63 @@ describe('selecteur orchestrateur Chat', () => {
     expect(dom.textContent).not.toMatch(/réussi|appliqué/i)
   })
 
-  it('groupe exclusivement le catalogue dynamique et preserve le modele courant disparu', () => {
-    expect(
-      buildOrchestratorModelGroups(
-        [
-          { id: 'c1', provider: 'codex', model: 'gpt-5', label: 'GPT-5' },
-          { id: 'h1', provider: 'hermes', model: 'llama', label: 'Llama' }
-        ],
-        { provider: 'legacy', model: 'gone' }
-      )
-    ).toEqual({
-      groups: [
-        {
-          provider: 'codex',
-          options: [
-            { provider: 'codex', model: 'gpt-5', label: 'GPT-5', reasoningEfforts: ['none'] }
-          ]
-        },
-        {
-          provider: 'hermes',
-          options: [
-            { provider: 'hermes', model: 'llama', label: 'Llama', reasoningEfforts: ['none'] }
-          ]
-        }
+  it('regroupe par éditeur et preserve le modele courant disparu', () => {
+    const result = buildOrchestratorModelGroups(
+      [
+        { id: 'c1', provider: 'omniroute', model: 'gpt-5', label: 'GPT-5' },
+        { id: 'h1', provider: 'omniroute', model: 'llama', label: 'Llama' }
       ],
-      currentMissing: {
-        provider: 'legacy',
-        model: 'gone',
-        label: 'legacy · gone (indisponible)',
-        reasoningEfforts: []
-      }
+      { provider: 'legacy', model: 'gone' }
+    )
+    // ChatGPT (rang 1) avant Meta (rang 2).
+    expect(result.groups.map((group) => group.key)).toEqual(['openai', 'meta'])
+    expect(result.groups.map((group) => group.label)).toEqual(['ChatGPT', 'Meta (Llama)'])
+    expect(result.currentMissing).toEqual({
+      provider: 'legacy',
+      model: 'gone',
+      label: 'legacy · gone (indisponible)',
+      reasoningEfforts: []
     })
+  })
+
+  it('ordonne les catégories : Anthropic, ChatGPT, puis les autres éditeurs', () => {
+    const result = buildOrchestratorModelGroups([
+      { id: 'h1', provider: 'omniroute', model: 'llama', label: 'Llama' },
+      { id: 'c1', provider: 'omniroute', model: 'gpt-5', label: 'GPT-5' },
+      { id: 'a1', provider: 'omniroute', model: 'claude-opus', label: 'Opus' }
+    ])
+    expect(result.groups.map((group) => group.label)).toEqual([
+      'Anthropic',
+      'ChatGPT',
+      'Meta (Llama)'
+    ])
+  })
+
+  it('éclate le catalogue OmniRoute en catégories éditeur propres', () => {
+    const result = buildOrchestratorModelGroups([
+      { id: 'o0', provider: 'omniroute', model: 'zeta-model', label: 'Zeta' },
+      { id: 'o1', provider: 'omniroute', model: 'gpt-5.6-terra', label: 'GPT-5.6' },
+      { id: 'o2', provider: 'omniroute', model: 'auto/pro-coding', label: 'Pro Code' },
+      { id: 'o3', provider: 'omniroute', model: 'claude-opus-4-6', label: 'Opus' },
+      { id: 'o4', provider: 'omniroute', model: 'auto/best-chat', label: 'Best Chat' },
+      { id: 'o5', provider: 'omniroute', model: 'auto/best-coding', label: 'Best Code' }
+    ])
+    // Catégories dans l'ordre : Anthropic, ChatGPT, Sélection automatique, Autres.
+    expect(result.groups.map((group) => group.key)).toEqual([
+      'anthropic',
+      'openai',
+      'auto',
+      'other'
+    ])
+    expect(result.groups[0].options.map((option) => option.model)).toEqual(['claude-opus-4-6'])
+    expect(result.groups[1].options.map((option) => option.model)).toEqual(['gpt-5.6-terra'])
+    // Dans la catégorie auto : Chat puis Code (best avant pro) — sous-tri conservé.
+    expect(result.groups[2].options.map((option) => option.model)).toEqual([
+      'auto/best-chat',
+      'auto/best-coding',
+      'auto/pro-coding'
+    ])
+    expect(result.groups[3].options.map((option) => option.model)).toEqual(['zeta-model'])
   })
 
   it('change uniquement la route OmniRoute sans toucher la conversation', () => {

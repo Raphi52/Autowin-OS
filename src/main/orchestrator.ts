@@ -32,6 +32,13 @@ export interface OrchestrationStep {
   evidence?: ExecutionEvidence[]
 }
 
+/** Signal « phase démarrée » émis AVANT l'appel bloquant, pour l'avancement live. */
+export interface OrchestrationPhase {
+  step: 'exec' | 'judge' | 'gate'
+  provider?: string
+  role?: string
+}
+
 export interface OrchestrationResult {
   task: string
   result: string
@@ -71,7 +78,13 @@ export class Orchestrator {
   constructor(private readonly deps: OrchestratorDeps) {}
 
   /** Exécute une tâche à travers le pipeline discipliné complet (appels réels). */
-  async run(task: string, onStep?: (s: OrchestrationStep) => void): Promise<OrchestrationResult> {
+  async run(
+    task: string,
+    onStep?: (s: OrchestrationStep) => void,
+    onPhase?: (p: OrchestrationPhase) => void,
+    onDelta?: (step: 'exec' | 'judge', delta: string) => void,
+    signal?: AbortSignal
+  ): Promise<OrchestrationResult> {
     const { registry, roles, cost, trust, authority } = this.deps
     const trace: OrchestrationStep[] = []
     const push = (s: OrchestrationStep): void => {
@@ -92,15 +105,19 @@ export class Orchestrator {
         cwd: this.deps.executionWorkspace,
         sandbox: 'danger-full-access'
       },
+      signal,
       observePrompt: (observed) => {
         execPrompt = observed
       }
     }
     execPrompt = registry.describePrompt(subProvider, execMessages, subOptions, subBinding.model)
+    onPhase?.({ step: 'exec', provider: subProvider, role: 'subagent' })
     const execStartedAt = performance.now()
     let exec
     try {
-      exec = await registry.send(subProvider, execMessages, subOptions)
+      exec = await registry.send(subProvider, execMessages, subOptions, (c) =>
+        onDelta?.('exec', c.delta)
+      )
     } catch (error) {
       push({
         step: 'exec',
@@ -157,6 +174,7 @@ export class Orchestrator {
         cwd: this.deps.executionWorkspace,
         sandbox: 'read-only'
       },
+      signal,
       observePrompt: (observed) => {
         judgeEnvelope = observed
       }
@@ -167,10 +185,13 @@ export class Orchestrator {
       judgeOptions,
       judgeBinding.model
     )
+    onPhase?.({ step: 'judge', provider: judgeProvider, role: 'judge' })
     const judgeStartedAt = performance.now()
     let verdict
     try {
-      verdict = await registry.send(judgeProvider, judgeMessages, judgeOptions)
+      verdict = await registry.send(judgeProvider, judgeMessages, judgeOptions, (c) =>
+        onDelta?.('judge', c.delta)
+      )
     } catch (error) {
       push({
         step: 'judge',
@@ -212,6 +233,7 @@ export class Orchestrator {
     })
 
     // 3. Le GATE déterministe tranche la clôture (model-agnostic).
+    onPhase?.({ step: 'gate' })
     const gate = evaluateClosure({
       status: valid ? 'green' : 'red',
       dod: [{ checked: valid, hasContent: true }]

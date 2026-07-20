@@ -150,41 +150,6 @@ export const HARNESS_FLOWS: readonly HarnessFlow[] = [
   'observability'
 ]
 
-export const LAYER_LABEL: Record<HarnessLayer, string> = {
-  runtime: 'Runtime local',
-  configuration: 'Configuration',
-  storage: 'Stockage & connaissance',
-  observability: 'Observabilité'
-}
-
-/** Variable de couleur CSS par couche (cyan data/runtime, or config, violet savoir, rose activité). */
-export const LAYER_COLOR_VAR: Record<HarnessLayer, string> = {
-  runtime: 'var(--cyan)',
-  configuration: 'var(--gold)',
-  storage: 'var(--violet)',
-  observability: 'var(--rose)'
-}
-
-export const FLOW_LABEL: Record<HarnessFlow, string> = {
-  chat: 'Chat',
-  orchestration: 'Orchestration',
-  loop: 'Boucle',
-  pilotage: 'Pilotage app',
-  brain: 'Brain partagé',
-  observability: 'Observabilité'
-}
-
-export const EDGE_LABEL: Record<HarnessEdgeKind, string> = {
-  executes: 'exécute',
-  routes: 'route',
-  invokes: 'invoque',
-  injects: 'injecte',
-  reads: 'lit',
-  persists: 'persiste',
-  observes: 'observe',
-  gates: 'contrôle'
-}
-
 export const STATE_LABEL: Record<HarnessState, string> = {
   healthy: 'Sain',
   unknown: 'Inconnu',
@@ -198,13 +163,6 @@ export const SOURCE_LABEL: Record<HarnessSource, string> = {
   filesystem: 'Système de fichiers',
   'provider-boundary': 'Frontière provider',
   derived: 'Déduit (sans artefact direct)'
-}
-
-export const RUNTIME_LABEL: Record<HarnessRuntime, string> = {
-  'autowin-local': 'Autowin (local)',
-  provider: 'Provider (distant)',
-  'shared-brain': 'Brain partagé (SMB, lecture seule)',
-  none: 'Hors runtime'
 }
 
 /* --- Filtres ------------------------------------------------------------- */

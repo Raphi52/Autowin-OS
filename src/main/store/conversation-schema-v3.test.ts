@@ -28,9 +28,7 @@ describe('conversation schema v3', () => {
       workspaceId: 'workspace-conv-7',
       authorityMode: 'auto'
     })
-    expect(migrated.branches).toEqual([
-      { id: 'branch-conv-7-root', createdAt: 9 }
-    ])
+    expect(migrated.branches).toEqual([{ id: 'branch-conv-7-root', createdAt: 9 }])
     expect(migrated.messages.map((message) => message.messageId)).toEqual([
       'message-conv-7-1',
       'message-conv-7-2'

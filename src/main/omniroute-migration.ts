@@ -26,10 +26,7 @@ function isState(value: unknown): value is OmniRouteMigrationState {
   if (state.schema !== SCHEMA || state.mode !== 'omniroute') return false
   if (typeof state.updatedAt !== 'string' || !Number.isFinite(Date.parse(state.updatedAt)))
     return false
-  return (
-    typeof state.routeModel === 'string' &&
-    ROUTE_MODEL.test(state.routeModel)
-  )
+  return typeof state.routeModel === 'string' && ROUTE_MODEL.test(state.routeModel)
 }
 
 export class OmniRouteMigrationStore {

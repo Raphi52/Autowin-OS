@@ -9,8 +9,7 @@ export interface OmniRouteKeyringSmokeResult {
 }
 
 export function runOmniRouteKeyringSmoke(
-  entryFactory: () => KeyringEntry = () =>
-    new Entry('Autowin OS Test', `OmniRoute ${randomUUID()}`)
+  entryFactory: () => KeyringEntry = () => new Entry('Autowin OS Test', `OmniRoute ${randomUUID()}`)
 ): OmniRouteKeyringSmokeResult {
   const secret = `autowin-smoke-${randomUUID()}`
   const store = createOmniRouteCredentialStore(entryFactory)

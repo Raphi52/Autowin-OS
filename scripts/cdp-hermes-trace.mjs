@@ -70,7 +70,9 @@ const state = await evaluate(
   `({ text: document.body.innerText, hermesMetric: document.querySelector('[data-metric="hermes"]')?.innerText, proof: document.querySelector('.observatory-hermes-proof')?.innerText })`
 )
 const screenshot = await send('Page.captureScreenshot', { format: 'png' })
-const output = process.env.AUTOWIN_RAG_SCREENSHOT || 'C:/Amitel/Autowin OS/artifacts/hermes-trace-observatory.png'
+const output =
+  process.env.AUTOWIN_RAG_SCREENSHOT ||
+  'C:/Amitel/Autowin OS/artifacts/hermes-trace-observatory.png'
 writeFileSync(output, Buffer.from(screenshot.data, 'base64'))
 console.log(JSON.stringify({ state, output }, null, 2))
 socket.close()

@@ -3,11 +3,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$electron = Join-Path $ProjectRoot 'node_modules\electron\dist\electron.exe'
-$main = Join-Path $ProjectRoot 'out\main\index.js'
-if (-not (Test-Path -LiteralPath $electron -PathType Leaf) -or -not (Test-Path -LiteralPath $main -PathType Leaf)) {
-  throw 'Version Dev introuvable. Lance d''abord npm run build.'
-}
+$npm = (Get-Command npm.cmd -ErrorAction Stop).Source
+$manifest = Join-Path $ProjectRoot 'package.json'
+if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { throw "Projet Autowin OS introuvable : $ProjectRoot" }
 
 $env:AUTOWIN_OS_DEV = '1'
-Start-Process -FilePath $electron -ArgumentList 'out\main\index.js' -WorkingDirectory $ProjectRoot
+Start-Process -FilePath $npm -ArgumentList @('run', 'dev') -WorkingDirectory $ProjectRoot -WindowStyle Hidden

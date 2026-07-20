@@ -90,7 +90,11 @@ export class ConversationStore {
         const messageId = message.messageId ?? `message-${c.id}-${index + 1}`
         const branchId = message.branchId ?? rootBranchId
         const parentMessageId = message.parentMessageId ?? previousMessageId
-        if (!message.messageId || !message.branchId || message.parentMessageId !== parentMessageId) {
+        if (
+          !message.messageId ||
+          !message.branchId ||
+          message.parentMessageId !== parentMessageId
+        ) {
           migrated = true
           message = {
             ...message,
@@ -182,7 +186,10 @@ export class ConversationStore {
       throw new Error(`Conversation inconnue: ${id}`)
     }
     const ts = this.now()
-    const previous = this.branchTip(conversation, conversation.activeBranchId ?? conversation.rootBranchId!)
+    const previous = this.branchTip(
+      conversation,
+      conversation.activeBranchId ?? conversation.rootBranchId!
+    )
     conversation.messages.push({
       messageId: `message-${conversation.id}-${conversation.messages.length + 1}`,
       branchId: conversation.activeBranchId ?? conversation.rootBranchId,
@@ -206,7 +213,10 @@ export class ConversationStore {
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const ts = this.now()
-    const previous = this.branchTip(conversation, conversation.activeBranchId ?? conversation.rootBranchId!)
+    const previous = this.branchTip(
+      conversation,
+      conversation.activeBranchId ?? conversation.rootBranchId!
+    )
     const userMessageId = `message-${conversation.id}-${conversation.messages.length + 1}`
     conversation.messages.push({
       messageId: userMessageId,
@@ -373,7 +383,8 @@ export class ConversationStore {
   switchBranch(id: string, branchId: string): Conversation {
     const c = this.conversations.get(id)
     if (!c) throw new Error(`Conversation inconnue: ${id}`)
-    if (!c.branches?.some((b) => b.id === branchId)) throw new Error(`Branche inconnue: ${branchId}`)
+    if (!c.branches?.some((b) => b.id === branchId))
+      throw new Error(`Branche inconnue: ${branchId}`)
     c.activeBranchId = branchId
     c.updatedAt = this.now()
     this.changed()

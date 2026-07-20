@@ -112,7 +112,15 @@ describe('Orchestrator execution contract', () => {
 
   it('garde le gate rouge avec une simple inspection ou une commande en échec', async () => {
     const evidenceCases: ExecutionEvidence[][] = [
-      [{ type: 'command_execution', kind: 'inspection', status: 'completed', ok: true, summary: 'rg' }],
+      [
+        {
+          type: 'command_execution',
+          kind: 'inspection',
+          status: 'completed',
+          ok: true,
+          summary: 'rg'
+        }
+      ],
       [
         {
           type: 'command_execution',
