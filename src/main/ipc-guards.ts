@@ -26,6 +26,7 @@ export interface GuardedAttachment {
   size: number
   kind: 'text' | 'image' | 'file'
   content: string
+  thumbnail?: string
 }
 
 const MAX_ATTACHMENTS = 8
@@ -33,6 +34,7 @@ const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 const MAX_ATTACHMENTS_BYTES = 20 * 1024 * 1024
 const MAX_TEXT_CHARS = 2_000_000
 const MAX_BASE64_CHARS = Math.ceil((MAX_ATTACHMENT_BYTES * 4) / 3) + 4
+const MAX_THUMBNAIL_CHARS = 300_000
 
 export function guardAttachments(value: unknown): GuardedAttachment[] {
   if (value == null) return []
@@ -62,6 +64,15 @@ export function guardAttachments(value: unknown): GuardedAttachment[] {
       throw new Error(`IPC attachment ${index}: texte trop volumineux`)
     if (candidate.kind !== 'text' && candidate.content.length > MAX_BASE64_CHARS)
       throw new Error(`IPC attachment ${index}: contenu trop volumineux`)
+
+    // Miniature optionnelle : on ne garde qu'une data URL image bornée, sinon on l'écarte.
+    if (
+      typeof candidate.thumbnail !== 'string' ||
+      !candidate.thumbnail.startsWith('data:image/') ||
+      candidate.thumbnail.length > MAX_THUMBNAIL_CHARS
+    ) {
+      delete candidate.thumbnail
+    }
 
     totalBytes += candidate.size
     if (totalBytes > MAX_ATTACHMENTS_BYTES)

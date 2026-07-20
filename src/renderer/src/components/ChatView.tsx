@@ -36,6 +36,8 @@ interface AttachmentMeta {
   name: string
   mimeType: string
   size: number
+  /** Miniature downscalée (data URL) pour les images — persistée, affichée dans le fil. */
+  thumbnail?: string
 }
 interface ChatAttachment extends AttachmentMeta {
   kind: 'text' | 'image' | 'file'
@@ -121,7 +123,6 @@ type Decision = { id: string; question: string; options?: unknown[]; safeDefault
 
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 
-/** Une étape d'orchestration (sous-agent / juge / gate) — fil des sous-agents. */
 /* ---------- Constantes ---------- */
 
 const SUGGESTIONS = [
@@ -196,15 +197,41 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
+/** Miniature downscalée (max 96px, JPEG léger) pour une image — reconnaissable + persistable. */
+async function makeThumbnail(dataUrl: string, max = 96): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const scale = Math.min(1, max / Math.max(img.width, img.height))
+      const w = Math.max(1, Math.round(img.width * scale))
+      const h = Math.max(1, Math.round(img.height * scale))
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const context = canvas.getContext('2d')
+      if (!context) return resolve(undefined)
+      context.drawImage(img, 0, 0, w, h)
+      resolve(canvas.toDataURL('image/jpeg', 0.72))
+    }
+    img.onerror = () => resolve(undefined)
+    img.src = dataUrl
+  })
+}
+
 async function encodeAttachment(file: File): Promise<ChatAttachment> {
   const kind = fileKind(file)
+  const mimeType = file.type || 'application/octet-stream'
+  const content =
+    kind === 'text' ? await file.text() : bytesToBase64(new Uint8Array(await file.arrayBuffer()))
+  const thumbnail =
+    kind === 'image' ? await makeThumbnail(`data:${mimeType};base64,${content}`) : undefined
   return {
     name: file.name,
-    mimeType: file.type || 'application/octet-stream',
+    mimeType,
     size: file.size,
     kind,
-    content:
-      kind === 'text' ? await file.text() : bytesToBase64(new Uint8Array(await file.arrayBuffer()))
+    content,
+    ...(thumbnail && { thumbnail })
   }
 }
 
@@ -264,8 +291,15 @@ const ChatMessageRow = memo(function ChatMessageRow({
         {message.attachments && message.attachments.length > 0 && (
           <div className="attachment-list sent">
             {message.attachments.map((file, fileIndex) => (
-              <span className="attachment-chip" key={`${file.name}-${fileIndex}`}>
-                <span aria-hidden="true">{file.mimeType.startsWith('image/') ? '▧' : '▤'}</span>
+              <span
+                className={`attachment-chip${file.thumbnail ? ' has-thumb' : ''}`}
+                key={`${file.name}-${fileIndex}`}
+              >
+                {file.thumbnail ? (
+                  <img className="attachment-thumb" src={file.thumbnail} alt={file.name} />
+                ) : (
+                  <span aria-hidden="true">{file.mimeType.startsWith('image/') ? '▧' : '▤'}</span>
+                )}
                 <span className="attachment-name">{file.name}</span>
                 <small>{formatFileSize(file.size)}</small>
               </span>
@@ -932,10 +966,11 @@ export function ChatView({
         {
           role: 'user',
           content: value,
-          attachments: outgoingAttachments.map(({ name, mimeType, size }) => ({
+          attachments: outgoingAttachments.map(({ name, mimeType, size, thumbnail }) => ({
             name,
             mimeType,
-            size
+            size,
+            ...(thumbnail && { thumbnail })
           }))
         },
         hydrateStoredAssistant({ content: '', parts: [], status: 'streaming' })

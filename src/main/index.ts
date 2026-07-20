@@ -883,10 +883,11 @@ function registerChatIpc(): void {
             conversationId,
             {
               content: last.content,
-              attachments: last.attachments?.map(({ name, mimeType, size }) => ({
+              attachments: last.attachments?.map(({ name, mimeType, size, thumbnail }) => ({
                 name,
                 mimeType,
-                size
+                size,
+                ...(thumbnail && { thumbnail })
               }))
             },
             {

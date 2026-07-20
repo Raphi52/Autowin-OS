@@ -20,6 +20,8 @@ export interface AttachmentMeta {
   name: string
   mimeType: string
   size: number
+  /** Miniature downscalée (data URL) d'une image — persistée pour l'aperçu dans le fil. */
+  thumbnail?: string
 }
 
 /** Un message échangé dans une conversation. */
