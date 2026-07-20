@@ -25,6 +25,7 @@ import {
   linkedNodesFor,
   mergeGraphDelta,
   nodeColorForTheme,
+  nodeFocusForSelectionOrHover,
   nodeThemeIds,
   nodeSelectionEmphasis,
   selectExclusiveTheme,
@@ -83,6 +84,7 @@ const DEFAULT_VISIBILITY: VisibilitySettings = {
 }
 
 const GRAPH_NODE_SPACING_SUFFIX = 'graph.node-spacing.v1'
+const EMPTY_THEME_SELECTION = new Set<string>()
 
 function initialVisibilitySettings(): VisibilitySettings {
   return {
@@ -515,30 +517,33 @@ export function GraphView({
   const visualProfile = getGraphVisualProfile(visualMode)
   const motionProfile = graphMotionProfile()
   const linkedNodes = useMemo(() => (node ? linkedNodesFor(node.id, graph) : []), [graph, node])
+  const visualActiveThemes = node ? EMPTY_THEME_SELECTION : activeThemes
   const hoveredNodeIds = useMemo(
-    () =>
-      new Set(
-        hoveredNode
-          ? [
-              hoveredNode.id,
-              ...linkedNodesFor(hoveredNode.id, graph).map((linked) => linked.node.id)
-            ]
-          : []
-      ),
-    [graph, hoveredNode]
+    () => new Set(hoveredNode ? [hoveredNode.id] : []),
+    [hoveredNode]
   )
   const selectedNodeIds = useMemo(
     () => (node ? focusedNodeIdsFor(node.id, graph) : new Set<string>()),
     [graph, node]
   )
+  const nodeFocus = useMemo(
+    () =>
+      nodeFocusForSelectionOrHover(
+        node?.id ?? null,
+        hoveredNode?.id ?? null,
+        selectedNodeIds,
+        hoveredNodeIds
+      ),
+    [hoveredNode, hoveredNodeIds, node, selectedNodeIds]
+  )
   const floatingNodeIds = useMemo(
     () =>
       floatingNodeIdsForThemeHighlight(
-        activeThemes.size > 0 ? highlightedNodeIds : new Set(),
-        hoveredNode ? hoveredNodeIds : new Set(),
+        visualActiveThemes.size > 0 ? highlightedNodeIds : new Set(),
+        node ? new Set() : hoveredNode ? hoveredNodeIds : new Set(),
         new Set(linkedNodes.map((linked) => linked.node.id))
       ),
-    [activeThemes, highlightedNodeIds, hoveredNode, hoveredNodeIds, linkedNodes]
+    [highlightedNodeIds, hoveredNode, hoveredNodeIds, linkedNodes, node, visualActiveThemes]
   )
   useEffect(() => {
     graphRef.current?.refresh()
@@ -861,31 +866,36 @@ export function GraphView({
   const nodeColor = (value: object): string =>
     nodeColorForTheme(
       value as GraphNode,
-      activeThemes,
+      visualActiveThemes,
       settings.contextOpacity,
       themeOrder,
       visualProfile.palette,
       themeCounts
     )
   const nodeValue = (value: object): number =>
-    nodeValueForTheme(value as GraphNode, activeThemes, settings.nodeSize) * visualProfile.nodeScale
+    nodeValueForTheme(value as GraphNode, visualActiveThemes, settings.nodeSize) *
+    visualProfile.nodeScale
   const galaxyNodeObject = useCallback(
     (value: object): THREE.Object3D => {
       const nextNode = value as GraphNode
       const appearance = galaxyNodeAppearance(
         nextNode,
-        activeThemes,
+        visualActiveThemes,
         settings.contextOpacity,
         themeOrder,
         visualProfile.palette,
         themeCounts
       )
-      const emphasis = nodeSelectionEmphasis(nextNode.id, node?.id ?? null, selectedNodeIds)
+      const emphasis = nodeSelectionEmphasis(
+        nextNode.id,
+        nodeFocus.focusedNodeId,
+        nodeFocus.focusedNodeIds
+      )
       appearance.opacity *= emphasis.opacity
       const star = createGalaxyStar(
         nextNode,
         appearance,
-        nodeValueForTheme(nextNode, activeThemes, settings.nodeSize) *
+        nodeValueForTheme(nextNode, visualActiveThemes, settings.nodeSize) *
           visualProfile.nodeScale *
           emphasis.scale
       )
@@ -894,14 +904,15 @@ export function GraphView({
       return star
     },
     [
-      activeThemes,
       floatingNodeIds,
       node,
+      nodeFocus,
       selectedNodeIds,
       settings.contextOpacity,
       settings.nodeSize,
       themeCounts,
       themeOrder,
+      visualActiveThemes,
       visualProfile
     ]
   )
@@ -910,36 +921,41 @@ export function GraphView({
       const nextNode = value as GraphNode
       const appearance = galaxyNodeAppearance(
         nextNode,
-        activeThemes,
+        visualActiveThemes,
         settings.contextOpacity,
         themeOrder,
         visualProfile.palette,
         themeCounts
       )
-      const emphasis = nodeSelectionEmphasis(nextNode.id, node?.id ?? null, selectedNodeIds)
+      const emphasis = nodeSelectionEmphasis(
+        nextNode.id,
+        nodeFocus.focusedNodeId,
+        nodeFocus.focusedNodeIds
+      )
       appearance.opacity *= emphasis.opacity
       return createSeriousNode(
         nextNode,
         appearance,
-        nodeValueForTheme(nextNode, activeThemes, settings.nodeSize) *
+        nodeValueForTheme(nextNode, visualActiveThemes, settings.nodeSize) *
           visualProfile.nodeScale *
           emphasis.scale,
         shouldShowFloatingNodeName(nextNode, floatingNodeIds)
       )
     },
     [
-      activeThemes,
       floatingNodeIds,
       node,
+      nodeFocus,
       selectedNodeIds,
       settings.contextOpacity,
       settings.nodeSize,
       themeCounts,
       themeOrder,
+      visualActiveThemes,
       visualProfile
     ]
   )
-  const focusedNode = hoveredNode ?? node
+  const focusedNode = node
   const linkIsHighlighted = (value: object): boolean =>
     Boolean(focusedNode?.id) && isLinkAttachedToNode(value as GraphLink, focusedNode?.id ?? '')
   const linkColor = (value: object): string => {

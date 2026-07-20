@@ -18,6 +18,7 @@ import {
   mergeGraphDelta,
   searchGraphCatalog,
   nodeColorForTheme,
+  nodeFocusForSelectionOrHover,
   shouldShowFloatingNodeName,
   themeClusterAnchors,
   selectExclusiveTheme,
@@ -253,6 +254,24 @@ describe('graph view presentation model', () => {
     expect(nodeSelectionEmphasis('a', 'b', focused)).toEqual({ scale: 1.35, opacity: 1 })
     expect(nodeSelectionEmphasis('orphan', 'b', focused)).toEqual({ scale: 1, opacity: 0.14 })
     expect(nodeSelectionEmphasis('orphan', null, new Set())).toEqual({ scale: 1, opacity: 1 })
+  })
+
+  it('keeps selection and its neighbours above hover until the node is closed', () => {
+    const selected = new Set(['a', 'b'])
+    const hovered = new Set(['c'])
+
+    expect(nodeFocusForSelectionOrHover('a', 'a', selected, new Set(['a']))).toEqual({
+      focusedNodeId: 'a',
+      focusedNodeIds: selected
+    })
+    expect(nodeFocusForSelectionOrHover('a', 'c', selected, hovered)).toEqual({
+      focusedNodeId: 'a',
+      focusedNodeIds: selected
+    })
+    expect(nodeFocusForSelectionOrHover(null, 'c', new Set(), hovered)).toEqual({
+      focusedNodeId: 'c',
+      focusedNodeIds: hovered
+    })
   })
 
   it('keeps the whole graph when orphans are visible', () => {

@@ -232,6 +232,17 @@ export function focusedNodeIdsFor(nodeId: string, graph: GraphData): Set<string>
   return new Set([nodeId, ...linkedNodesFor(nodeId, graph).map((linked) => linked.node.id)])
 }
 
+export function nodeFocusForSelectionOrHover(
+  selectedNodeId: string | null,
+  hoveredNodeId: string | null,
+  selectedNodeIds: ReadonlySet<string>,
+  hoveredNodeIds: ReadonlySet<string>
+): { focusedNodeId: string | null; focusedNodeIds: ReadonlySet<string> } {
+  if (selectedNodeId) return { focusedNodeId: selectedNodeId, focusedNodeIds: selectedNodeIds }
+  if (hoveredNodeId) return { focusedNodeId: hoveredNodeId, focusedNodeIds: hoveredNodeIds }
+  return { focusedNodeId: null, focusedNodeIds: new Set() }
+}
+
 export function nodeSelectionEmphasis(
   nodeId: string,
   selectedNodeId: string | null,
