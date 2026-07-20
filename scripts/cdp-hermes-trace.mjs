@@ -34,8 +34,12 @@ const evaluate = async (expression) => {
     throw new Error(result.exceptionDetails.exception?.description ?? 'Évaluation DOM en échec')
   return result.result?.value
 }
+if (process.argv.includes('--reload')) {
+  await send('Page.reload', { ignoreCache: true })
+  await new Promise((resolve) => setTimeout(resolve, 800))
+}
 await evaluate(`(() => {
-  const target = [...document.querySelectorAll('button')].find((button) => /observatoire|harnais/i.test(button.textContent ?? ''))
+  const target = [...document.querySelectorAll('button')].find((button) => /observatory|observatoire|harnais/i.test(button.textContent ?? ''))
   if (!target) throw new Error('Navigation Observatoire introuvable')
   target.click()
 })()`)

@@ -85,6 +85,97 @@
   margin: 6px 0;
   color: var(--text-faint);
 }
+.observatory-rag-summary {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 8px 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(104, 238, 183, 0.36);
+  border-radius: 8px;
+  background: rgba(23, 106, 78, 0.12);
+}
+.observatory-rag-summary strong {
+  color: #68eeb7;
+}
+.observatory-rag-summary small {
+  grid-column: 1 / -1;
+  color: var(--text-faint);
+}
+.rag-trace-card {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-inset);
+}
+.rag-trace-card > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+.rag-trace-card > header > div {
+  display: grid;
+  gap: 2px;
+}
+.rag-trace-card > header span {
+  color: var(--text-faint);
+  font-size: 8px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+.rag-trace-card > header strong {
+  color: var(--text-dim);
+}
+.rag-trace-card.is-injected {
+  border-color: rgba(104, 238, 183, 0.45);
+}
+.rag-trace-card.is-injected > header strong {
+  color: #68eeb7;
+}
+.rag-trace-card.is-warning > header strong {
+  color: #f2bd68;
+}
+.rag-trace-card > p {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr);
+  gap: 8px;
+  margin: 0;
+}
+.rag-trace-card > p span {
+  overflow: hidden;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rag-trace-card ol {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 24px;
+}
+.rag-trace-card li {
+  padding-left: 3px;
+}
+.rag-trace-card li strong,
+.rag-trace-card li small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.rag-trace-card li small,
+.rag-trace-card > header small {
+  color: var(--text-faint);
+}
+.observatory-rag-payload {
+  margin: 8px 0;
+}
+.observatory-rag-payload > summary {
+  cursor: pointer;
+  color: var(--text-faint);
+}
 .observatory-hermes-diagnostics > div {
   max-height: 42vh;
   overflow: auto;

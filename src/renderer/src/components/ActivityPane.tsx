@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { mergeActivityEntries } from './activity-pane-model'
 import { HumanJson } from './HumanJson'
+import { RagTraceCard } from './RagTraceCard'
 
 /**
  * Activité de la CONVERSATION courante — chaque étape facturée (tour de chat de l'agent,
@@ -203,8 +204,11 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
                   <span>{trace.boundary}</span>
                   <span>{trace.source}</span>
                 </div>
-                <strong>Requête exacte transmise par Hermes</strong>
-                <HumanJson value={trace.request} />
+                <RagTraceCard request={trace.request} />
+                <details className="observatory-rag-payload">
+                  <summary>Requête exacte transmise par Hermes · exact-redacted</summary>
+                  <HumanJson value={trace.request} />
+                </details>
               </details>
             ))}
           </div>

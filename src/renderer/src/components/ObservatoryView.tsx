@@ -10,6 +10,8 @@ import { HumanJson } from './HumanJson'
 import { summarizeHermesTraces, type HermesTraceSummaryInput } from './hermes-trace-summary'
 import './ObservatoryView.css'
 import { ModuleHeader } from './ModuleHeader'
+import { RagTraceCard } from './RagTraceCard'
+import { summarizeRagTrace } from './rag-trace-model'
 
 interface ConversationItem {
   id: string
@@ -89,6 +91,22 @@ export function ObservatoryView({ active }: { active: boolean }): React.JSX.Elem
   }, [active, refreshKey])
 
   useEffect(() => {
+    if (!active) return
+    let disposed = false
+    void window.api
+      .authorizeHermesDiagnostics()
+      .then((capability) =>
+        capability ? window.api.hermesPromptTracesGlobal(capability) : Promise.resolve([])
+      )
+      .then((traces) => {
+        if (!disposed) setHermesTraces(traces as HermesDiagnosticTrace[])
+      })
+    return () => {
+      disposed = true
+    }
+  }, [active, refreshKey])
+
+  useEffect(() => {
     if (!active || !conversationId) {
       setTimeline(EMPTY)
       setLoading(false)
@@ -123,6 +141,8 @@ export function ObservatoryView({ active }: { active: boolean }): React.JSX.Elem
   )
   const allEvents = timeline.turns.flatMap((turn) => turn.events)
   const hermesSummary = summarizeHermesTraces(hermesMetadata)
+  const ragSummaries = hermesTraces.map((trace) => summarizeRagTrace(trace.request))
+  const ragInjected = ragSummaries.filter((summary) => summary.status === 'injected').length
   const typeOptions = [...new Set(allEvents.map((event) => event.kind))]
   const providerOptions = [
     ...new Set(allEvents.map((event) => event.provider).filter(Boolean))
@@ -165,14 +185,6 @@ export function ObservatoryView({ active }: { active: boolean }): React.JSX.Elem
     link.download = `autowin-trace-${conversationId}.json`
     link.click()
     URL.revokeObjectURL(href)
-  }
-
-  async function unlockHermesDiagnostics(): Promise<void> {
-    const capability = await window.api.authorizeHermesDiagnostics()
-    if (!capability) return
-    setHermesTraces(
-      (await window.api.hermesPromptTracesGlobal(capability)) as HermesDiagnosticTrace[]
-    )
   }
 
   return (
@@ -239,7 +251,6 @@ export function ObservatoryView({ active }: { active: boolean }): React.JSX.Elem
         <button onClick={() => setConfigOpen((value) => !value)}>
           {configOpen ? 'Fermer la configuration' : 'Configuration du prompt'}
         </button>
-        <button onClick={() => void unlockHermesDiagnostics()}>Déverrouiller Hermes</button>
         <button onClick={() => void exportTrace()}>Exporter JSON</button>
         <button onClick={() => setRefreshKey((value) => value + 1)}>Actualiser</button>
       </div>
@@ -247,12 +258,20 @@ export function ObservatoryView({ active }: { active: boolean }): React.JSX.Elem
         <details className="observatory-hermes-diagnostics">
           <summary>
             {hermesTraces.length} payload{hermesTraces.length > 1 ? 's' : ''} Hermes globaux · accès
-            autorisé
+            autorisé · {ragInjected} injection{ragInjected > 1 ? 's' : ''} RAG prouvée
+            {ragInjected > 1 ? 's' : ''}
           </summary>
           <p>
             Ces requêtes ne sont attribuées à aucune conversation sans identifiant partagé. Secrets
             masqués.
           </p>
+          <div className="observatory-rag-summary" data-testid="rag-observability-summary">
+            <strong>Traçabilité RAG · Hermes</strong>
+            <span>
+              {ragInjected}/{hermesTraces.length} appels avec contexte Amitel Brain détecté
+            </span>
+            <small>Autowin Chat · RAG non branché, donc aucune récupération à tracer.</small>
+          </div>
           <div>
             {[...hermesTraces]
               .reverse()
@@ -263,7 +282,11 @@ export function ObservatoryView({ active }: { active: boolean }): React.JSX.Elem
                     {new Date(trace.timestamp).toLocaleString('fr-FR')} · {trace.provider} →{' '}
                     {trace.model} · {trace.messageCount} messages · {trace.toolCount} outils
                   </summary>
-                  <HumanJson value={trace.request} />
+                  <RagTraceCard request={trace.request} />
+                  <details className="observatory-rag-payload">
+                    <summary>Payload exact · exact-redacted</summary>
+                    <HumanJson value={trace.request} />
+                  </details>
                 </details>
               ))}
           </div>
