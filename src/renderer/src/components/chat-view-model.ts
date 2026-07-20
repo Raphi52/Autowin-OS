@@ -232,14 +232,14 @@ export function modelVendor(model: string): { key: string; label: string; rank: 
  */
 export function modelRecencyKey(model: string): [number, number] {
   const id = model.toLowerCase()
-  const family = id.includes('opus')
-    ? 4
-    : id.includes('sonnet')
-      ? 3
-      : id.includes('haiku')
-        ? 2
-        : id.includes('fable')
-          ? 1
+  const family = id.includes('fable')
+    ? 5
+    : id.includes('opus')
+      ? 4
+      : id.includes('sonnet')
+        ? 3
+        : id.includes('haiku')
+          ? 2
           : 0
   const version = /(\d+)[._-](\d+)/.exec(id)
   const versionScore = version
@@ -251,30 +251,15 @@ export function modelRecencyKey(model: string): [number, number] {
 }
 
 /**
- * Rang de tri d'une option dans le sélecteur (surtout le groupe OmniRoute, qui mêle
- * routes auto/* ET modèles concrets). Ordre voulu :
- *  1. modèles Anthropic (Claude), puis modèles ChatGPT (GPT) ;
- *  2. routes auto/* : Chat → Raisonnement → Code → reste, tier « best » avant « pro » ;
- *  3. le reste, bien trié (alphabétique par libellé).
- * Retourne [catégorie, sous-rang] ; le libellé puis l'index tranchent les égalités.
+ * Sous-tri des routes auto/* du bucket « Sélection automatique » (le regroupement par
+ * éditeur est fait en amont par modelVendor). Ordre : Chat → Raisonnement → Code → reste,
+ * tier « best » avant « pro ». Retourne [sous-rang, 0] ; libellé puis index tranchent les égalités.
  */
 export function orchestratorOptionRank(model: string): [number, number] {
   const id = model.toLowerCase()
-  if (id.includes('claude')) return [0, 0]
-  if (/gpt|codex|\bo\d/.test(id)) return [1, 0]
-  const isAutoRoute = id.startsWith('auto') || id.startsWith('custom:') || id.includes('/auto')
-  if (isAutoRoute) {
-    const dimension = id.includes('chat')
-      ? 0
-      : id.includes('reason')
-        ? 1
-        : id.includes('cod')
-          ? 2
-          : 3
-    const tier = id.includes('best') ? 0 : id.includes('pro') ? 1 : 2
-    return [2, dimension * 10 + tier]
-  }
-  return [3, 0]
+  const dimension = id.includes('chat') ? 0 : id.includes('reason') ? 1 : id.includes('cod') ? 2 : 3
+  const tier = id.includes('best') ? 0 : id.includes('pro') ? 1 : 2
+  return [dimension * 10 + tier, 0]
 }
 
 export function buildOrchestratorModelGroups(

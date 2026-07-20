@@ -226,6 +226,7 @@ describe('selecteur orchestrateur Chat', () => {
       { id: 'm2', provider: 'omniroute', model: 'cc/claude-opus-4-8', label: 'Opus 4.8' },
       { id: 'm3', provider: 'omniroute', model: 'cc/claude-sonnet-4-6', label: 'Sonnet 4.6' },
       { id: 'm4', provider: 'omniroute', model: 'cc/claude-opus-4-7', label: 'Opus 4.7' },
+      { id: 'm7', provider: 'omniroute', model: 'cc/claude-fable-5', label: 'Fable 5' },
       {
         id: 'm5',
         provider: 'omniroute',
@@ -235,8 +236,9 @@ describe('selecteur orchestrateur Chat', () => {
       { id: 'm6', provider: 'omniroute', model: 'auto/claude-opus', label: 'Auto Claude Opus' }
     ])
     const anthropic = result.groups.find((group) => group.key === 'anthropic')
-    // no-think masqué ; Opus décroissant (4.8 > 4.7 > 4.5) puis Sonnet ; auto/claude ABSENT d’ici.
+    // Fable en tête ; no-think masqué ; Opus décroissant puis Sonnet ; auto/claude ABSENT d’ici.
     expect(anthropic?.options.map((option) => option.model)).toEqual([
+      'cc/claude-fable-5',
       'cc/claude-opus-4-8',
       'cc/claude-opus-4-7',
       'cc/claude-opus-4-5-20251101',
