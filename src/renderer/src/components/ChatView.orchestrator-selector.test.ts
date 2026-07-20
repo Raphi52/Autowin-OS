@@ -220,6 +220,34 @@ describe('selecteur orchestrateur Chat', () => {
     expect(result.groups[3].options.map((option) => option.model)).toEqual(['zeta-model'])
   })
 
+  it('sort les auto/claude d’Anthropic, masque no-think, trie du plus récent au plus vieux', () => {
+    const result = buildOrchestratorModelGroups([
+      { id: 'm1', provider: 'omniroute', model: 'cc/claude-opus-4-5-20251101', label: 'Opus 4.5' },
+      { id: 'm2', provider: 'omniroute', model: 'cc/claude-opus-4-8', label: 'Opus 4.8' },
+      { id: 'm3', provider: 'omniroute', model: 'cc/claude-sonnet-4-6', label: 'Sonnet 4.6' },
+      { id: 'm4', provider: 'omniroute', model: 'cc/claude-opus-4-7', label: 'Opus 4.7' },
+      {
+        id: 'm5',
+        provider: 'omniroute',
+        model: 'no-think/cc/claude-opus-4-8',
+        label: 'Opus 4.8 · Sans raisonnement'
+      },
+      { id: 'm6', provider: 'omniroute', model: 'auto/claude-opus', label: 'Auto Claude Opus' }
+    ])
+    const anthropic = result.groups.find((group) => group.key === 'anthropic')
+    // no-think masqué ; Opus décroissant (4.8 > 4.7 > 4.5) puis Sonnet ; auto/claude ABSENT d’ici.
+    expect(anthropic?.options.map((option) => option.model)).toEqual([
+      'cc/claude-opus-4-8',
+      'cc/claude-opus-4-7',
+      'cc/claude-opus-4-5-20251101',
+      'cc/claude-sonnet-4-6'
+    ])
+    // La route auto/claude-opus vit dans la catégorie « Sélection automatique ».
+    expect(result.groups.find((group) => group.key === 'auto')?.options[0]?.model).toBe(
+      'auto/claude-opus'
+    )
+  })
+
   it('change uniquement la route OmniRoute sans toucher la conversation', () => {
     // Logique de changement de route : reste dans ChatView.
     expect(source).toContain("option.provider !== 'omniroute'")

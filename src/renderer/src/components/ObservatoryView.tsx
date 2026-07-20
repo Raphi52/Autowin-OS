@@ -14,7 +14,7 @@ import { RagObservabilitySummary, RagTraceCard } from './RagTraceCard'
 import { summarizeRagTrace } from './rag-trace-model'
 import { LatestRequestGate, settleObservatorySources } from './observatory-reliability'
 import { buildObservatoryExport } from './observatory-export-model'
-import { buildCausalPath, type CausalPathNode } from './causal-path-model'
+import { buildCausalPath, flattenCausalNodes } from './causal-path-model'
 import type { ObservatoryFocus } from '../observatory-focus'
 
 interface ConversationItem {
@@ -61,10 +61,6 @@ const LABEL: Record<HarnessTimelineEvent['kind'], string> = {
   cancellation: 'Annulation',
   error: 'Erreur',
   boundary: 'Frontière'
-}
-
-function flattenCausalNodes(nodes: readonly CausalPathNode[]): CausalPathNode[] {
-  return nodes.flatMap((node) => [node, ...flattenCausalNodes(node.children)])
 }
 
 export function ObservatoryView({

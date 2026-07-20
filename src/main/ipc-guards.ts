@@ -1,3 +1,20 @@
+import type { Message } from './providers/types'
+
+const MAX_IPC_STRING = 2_000_000 // ~2 Mo
+
+export function guardString(s: unknown, name: string): string {
+  if (typeof s !== 'string') throw new Error(`IPC ${name}: string attendue`)
+  if (s.length > MAX_IPC_STRING) throw new Error(`IPC ${name}: payload trop volumineux`)
+  return s
+}
+
+export function guardMessages(m: unknown): Message[] {
+  if (!Array.isArray(m)) throw new Error('IPC messages: tableau attendu')
+  if (m.length > 1000) throw new Error('IPC messages: trop de messages')
+  for (const x of m) guardString((x as Message)?.content, 'message.content')
+  return m as Message[]
+}
+
 export function guardBoolean(value: unknown, name: string): boolean {
   if (typeof value !== 'boolean') throw new Error(`IPC ${name}: boolean attendu`)
   return value

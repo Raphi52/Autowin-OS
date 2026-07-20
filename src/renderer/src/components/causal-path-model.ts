@@ -16,6 +16,11 @@ export interface CausalPathNode {
   isBottleneck: boolean
 }
 
+/** Aplatit l'arbre causal en liste préfixe (parent avant ses descendants). */
+export function flattenCausalNodes(nodes: readonly CausalPathNode[]): CausalPathNode[] {
+  return nodes.flatMap((node) => [node, ...flattenCausalNodes(node.children)])
+}
+
 export interface CausalPath {
   roots: CausalPathNode[]
   byId: Map<string, CausalPathNode>

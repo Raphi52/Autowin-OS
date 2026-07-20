@@ -84,7 +84,7 @@ import {
   readLegacyRendererStorage,
   type MigratedRendererStorage
 } from './renderer-storage-migration'
-import { guardAttachments, guardBoolean } from './ipc-guards'
+import { guardAttachments, guardBoolean, guardMessages, guardString } from './ipc-guards'
 import { readBoundedUtf8FileWithin } from './bounded-file-read'
 import { BrainWorkerClient } from './viz/brain-worker-client'
 import {
@@ -246,18 +246,6 @@ bus.trace = (name, args, ok) =>
   ledger.append({ source: 'bus', name, detail: JSON.stringify(args).slice(0, 200), ok })
 
 /** Plafond de taille des payloads IPC (anti-DoS main process). */
-const MAX_IPC_STRING = 2_000_000 // ~2 Mo
-function guardString(s: unknown, name: string): string {
-  if (typeof s !== 'string') throw new Error(`IPC ${name}: string attendue`)
-  if (s.length > MAX_IPC_STRING) throw new Error(`IPC ${name}: payload trop volumineux`)
-  return s
-}
-function guardMessages(m: unknown): Message[] {
-  if (!Array.isArray(m)) throw new Error('IPC messages: tableau attendu')
-  if (m.length > 1000) throw new Error('IPC messages: trop de messages')
-  for (const x of m) guardString((x as Message)?.content, 'message.content')
-  return m as Message[]
-}
 
 const defaultBehaviourRoot = defaultBehaviourWorkspace()
 const behaviourAccess = new ApprovedBehaviourWorkspaces(defaultBehaviourRoot)

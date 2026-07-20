@@ -205,6 +205,10 @@ export interface OrchestratorModelGroup {
  */
 export function modelVendor(model: string): { key: string; label: string; rank: number } {
   const id = model.toLowerCase()
+  // Les routes auto/* forment LEUR PROPRE catégorie (jamais mélangées à un éditeur),
+  // testées AVANT la marque pour que `auto/claude-opus` n'atterrisse pas dans Anthropic.
+  const isAuto = id.startsWith('auto') || id.startsWith('custom:') || id.includes('/auto')
+  if (isAuto) return { key: 'auto', label: 'Sélection automatique', rank: 8 }
   if (id.includes('claude')) return { key: 'anthropic', label: 'Anthropic', rank: 0 }
   if (/gpt|codex|\bo\d/.test(id)) return { key: 'openai', label: 'ChatGPT', rank: 1 }
   if (id.includes('gemini') || id.includes('gemma'))
@@ -219,9 +223,31 @@ export function modelVendor(model: string): { key: string; label: string; rank: 
   if (id.includes('grok')) return { key: 'xai', label: 'xAI (Grok)', rank: 2 }
   if (id.includes('deepseek')) return { key: 'deepseek', label: 'DeepSeek', rank: 2 }
   if (id.includes('mistral')) return { key: 'mistral', label: 'Mistral', rank: 2 }
-  const isAuto = id.startsWith('auto') || id.startsWith('custom:') || id.includes('/auto')
-  if (isAuto) return { key: 'auto', label: 'Sélection automatique', rank: 8 }
   return { key: 'other', label: 'Autres', rank: 9 }
+}
+
+/**
+ * Clé de tri d'un modèle CONCRET dans sa catégorie éditeur : famille puis version,
+ * du plus capable/récent au plus ancien. Ex. Opus 4.8 avant Opus 4.5 avant Sonnet.
+ */
+export function modelRecencyKey(model: string): [number, number] {
+  const id = model.toLowerCase()
+  const family = id.includes('opus')
+    ? 4
+    : id.includes('sonnet')
+      ? 3
+      : id.includes('haiku')
+        ? 2
+        : id.includes('fable')
+          ? 1
+          : 0
+  const version = /(\d+)[._-](\d+)/.exec(id)
+  const versionScore = version
+    ? Number(version[1]) * 100 + Number(version[2])
+    : /(\d+)/.test(id)
+      ? Number(/(\d+)/.exec(id)![1]) * 100
+      : 0
+  return [family, versionScore]
 }
 
 /**
@@ -264,6 +290,8 @@ export function buildOrchestratorModelGroups(
     { label: string; rank: number; options: OrchestratorModelOption[] }
   >()
   for (const item of models) {
+    // Bruit masqué : les variantes « Sans raisonnement » (no-think/*) n'encombrent plus le menu.
+    if (/(^|\/)no-think\//i.test(item.model)) continue
     const option = {
       provider: item.provider,
       model: item.model,
@@ -280,24 +308,40 @@ export function buildOrchestratorModelGroups(
     if (!bucket.options.some((entry) => entry.model === option.model)) bucket.options.push(option)
     byVendor.set(vendor.key, bucket)
   }
-  // Tri des options DANS chaque catégorie (alpha lisible, numérique-aware).
-  const sortOptions = (options: OrchestratorModelOption[]): OrchestratorModelOption[] =>
+  // Éditeurs : plus récent/capable d'abord (Opus 4.8 → 4.7 …). Auto : sous-tri Chat/Code conservé.
+  const sortOptions = (
+    key: string,
+    options: OrchestratorModelOption[]
+  ): OrchestratorModelOption[] =>
     options
-      .map((option, index) => ({ option, index, rank: orchestratorOptionRank(option.model) }))
-      .sort(
-        (a, b) =>
-          a.rank[0] - b.rank[0] ||
-          a.rank[1] - b.rank[1] ||
+      .map((option, index) => ({ option, index }))
+      .sort((a, b) => {
+        if (key === 'auto') {
+          const ra = orchestratorOptionRank(a.option.model)
+          const rb = orchestratorOptionRank(b.option.model)
+          return (
+            ra[0] - rb[0] ||
+            ra[1] - rb[1] ||
+            a.option.label.localeCompare(b.option.label, 'fr', { numeric: true }) ||
+            a.index - b.index
+          )
+        }
+        const ka = modelRecencyKey(a.option.model)
+        const kb = modelRecencyKey(b.option.model)
+        return (
+          kb[0] - ka[0] || // famille décroissante (Opus > Sonnet > Haiku)
+          kb[1] - ka[1] || // version décroissante (4.8 > 4.7)
           a.option.label.localeCompare(b.option.label, 'fr', { numeric: true }) ||
           a.index - b.index
-      )
+        )
+      })
       .map(({ option }) => option)
   const groups = [...byVendor.entries()]
     .map(([key, bucket]) => ({
       key,
       label: bucket.label,
       rank: bucket.rank,
-      options: sortOptions(bucket.options)
+      options: sortOptions(key, bucket.options)
     }))
     .sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label, 'fr'))
     .map(({ key, label, options }) => ({ key, label, options }))
