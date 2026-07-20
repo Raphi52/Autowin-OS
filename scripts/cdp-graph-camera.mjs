@@ -52,7 +52,12 @@ const snapshot = async (name) => {
     distance: Number(document.querySelector('.graph-canvas')?.dataset.cameraDistance),
     activeTheme: document.querySelector('.theme-filter.is-active[data-theme-id]')?.dataset.themeId ?? null,
     activeTag: document.querySelector('.theme-cluster-label.is-active')?.dataset.themeId ?? null,
+    tagCount: document.querySelectorAll('.theme-cluster-label').length,
     visibleTags: [...document.querySelectorAll('.theme-cluster-label')].filter((item) => getComputedStyle(item).display !== 'none').length,
+    labelLayer: (() => {
+      const layer = document.querySelector('.theme-cluster-labels')
+      return layer ? { width: layer.clientWidth, height: layer.clientHeight, hidden: layer.hidden } : null
+    })(),
     settingsOpen: Boolean(document.querySelector('.graph-settings-popover')),
     graphWidth: Math.round(document.querySelector('.graph-canvas')?.getBoundingClientRect().width ?? 0)
   }))()`)
@@ -114,6 +119,7 @@ const baseline = states[0].distance
 const failures = states.filter(
   (state) =>
     !Number.isFinite(state.distance) ||
+    state.visibleTags === 0 ||
     Math.abs(state.distance - baseline) > Math.max(1, baseline * 0.01)
 )
 const result = { port, baseline, states, failures: failures.map((state) => state.name) }
