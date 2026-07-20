@@ -220,4 +220,12 @@ describe('OmniRouteAdapter', () => {
     })
     await expect(consume(adapter)).rejects.toThrow(/tool call/i)
   })
+
+  it('fails closed when the stream completes without any content (route dégradée)', async () => {
+    const adapter = new OmniRouteAdapter({
+      fetchFn: vi.fn(async () => sseResponse(['data: [DONE]\n\n'])) as typeof fetch,
+      credentialStore: { get: () => 'secret' }
+    })
+    await expect(consume(adapter)).rejects.toThrow(/vide/i)
+  })
 })

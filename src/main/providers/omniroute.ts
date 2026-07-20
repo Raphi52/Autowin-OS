@@ -237,6 +237,10 @@ export class OmniRouteAdapter implements ProviderAdapter {
       }
     }
     if (!completed) throw new Error('Flux OmniRoute incomplet')
+    // Un flux complet mais SANS contenu (route dégradée / aucun compte dispo) est un échec,
+    // pas un succès vide : le remonter en erreur (retry + ⚠️ clair) plutôt que « (aucune réponse) ».
+    if (!finalText.trim())
+      throw new Error('OmniRoute a renvoyé une réponse vide (route indisponible ou dégradée ?)')
 
     return {
       text: finalText,
