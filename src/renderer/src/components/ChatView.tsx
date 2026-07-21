@@ -256,6 +256,21 @@ function ForkIcon(): React.JSX.Element {
   )
 }
 
+/** Icône « éditer » (crayon), monochrome via currentColor. */
+function EditIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
+      <path
+        d="M9.8 3.2 12.8 6.2 6 13H3v-3l6.8-6.8ZM11.2 1.8l3 3"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 /** Icône « inspecter » (loupe), monochrome via currentColor. */
 function InspectIcon(): React.JSX.Element {
   return (
@@ -270,12 +285,14 @@ const ChatMessageRow = memo(function ChatMessageRow({
   message,
   conversationId,
   onInspectTurn,
-  onFork
+  onFork,
+  onEdit
 }: {
   message: Msg
   conversationId: string | null
   onInspectTurn?: (target: InspectTurnTarget) => void
   onFork?: (messageId: string) => void
+  onEdit?: (messageId: string) => void
 }): React.JSX.Element {
   if (message.role === 'user') {
     return (
@@ -306,17 +323,30 @@ const ChatMessageRow = memo(function ChatMessageRow({
             ))}
           </div>
         )}
-        {message.messageId && onFork && (
+        {message.messageId && (onFork || onEdit) && (
           <div className="msg-turn-actions">
-            <button
-              type="button"
-              className="msg-turn-icon"
-              title="Créer une branche à partir de ce message"
-              aria-label="Créer une branche à partir de ce message"
-              onClick={() => onFork(message.messageId!)}
-            >
-              <ForkIcon />
-            </button>
+            {onEdit && (
+              <button
+                type="button"
+                className="msg-turn-icon"
+                title="Éditer et renvoyer (crée une branche)"
+                aria-label="Éditer et renvoyer ce message"
+                onClick={() => onEdit(message.messageId!)}
+              >
+                <EditIcon />
+              </button>
+            )}
+            {onFork && (
+              <button
+                type="button"
+                className="msg-turn-icon"
+                title="Créer une branche à partir de ce message"
+                aria-label="Créer une branche à partir de ce message"
+                onClick={() => onFork(message.messageId!)}
+              >
+                <ForkIcon />
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -894,10 +924,38 @@ export function ChatView({
     await window.api.conversationsSwitchBranch(activeId, branchId)
     await reloadActiveFromStore(activeId)
   }
+  /**
+   * Édite un message utilisateur envoyé : branche depuis son PARENT (le message édité
+   * remplace l'original dans la nouvelle branche) + composer pré-rempli avec son contenu.
+   */
+  async function editFromMessage(messageId: string): Promise<void> {
+    if (!activeId) return
+    const msgs = liveMessagesRef.current.get(activeId) ?? []
+    const index = msgs.findIndex((m) => m.messageId === messageId)
+    if (index < 0) return
+    const original = msgs[index]
+    if (original.role !== 'user') return
+    // Parent = le message précédent identifiable dans la chaîne active.
+    let parentId: string | undefined
+    for (let i = index - 1; i >= 0; i--) {
+      if (msgs[i].messageId) {
+        parentId = msgs[i].messageId
+        break
+      }
+    }
+    if (!parentId) return // 1er message : pas de point d'ancrage de branche (v1)
+    await window.api.conversationsFork(activeId, parentId)
+    await reloadActiveFromStore(activeId)
+    setDraftInput(activeId, original.content)
+    composerInputRef.current?.focus()
+  }
   // Callback STABLE (le row est memo'd — une ref inline casserait la mémoïsation).
   const forkRef = useRef(forkFromMessage)
   forkRef.current = forkFromMessage
   const handleFork = useCallback((messageId: string) => void forkRef.current(messageId), [])
+  const editRef = useRef(editFromMessage)
+  editRef.current = editFromMessage
+  const handleEdit = useCallback((messageId: string) => void editRef.current(messageId), [])
 
   /* --- envoi --- */
 
@@ -1352,6 +1410,7 @@ export function ChatView({
               conversationId={activeId}
               onInspectTurn={onInspectTurn}
               onFork={handleFork}
+              onEdit={handleEdit}
             />
           ))}
         </div>
