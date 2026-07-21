@@ -44,6 +44,49 @@ describe('AgentPilot turn contract', () => {
     expect(bus.exec).toHaveBeenCalledWith('remove_conversation', { id: 'conv-1' }, 'conv-1', 'plan')
   })
 
+  it('injecte une directive utilisateur au prochain point d’itération du tour', async () => {
+    const responses = ['<cmd>{"name":"get_state","args":{}}</cmd>', 'Terminé']
+    const send = vi
+      .fn()
+      .mockImplementation(async () => ({ text: responses.shift()!, provider: 'codex' }))
+    const registry = {
+      send,
+      describePrompt: () => ({ provider: 'codex', transport: 'fixture', messages: [], options: {} })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const queue: string[] = []
+    const bus = {
+      catalog: () => [{ name: 'get_state', args: {}, description: 'état' }],
+      snapshot: async () => ({}),
+      // La directive arrive PENDANT l'itération 1 (l'utilisateur tape pendant que l'agent agit).
+      exec: vi.fn().mockImplementation(async () => {
+        queue.push('priorise le module X')
+        return { ok: true, data: {} }
+      })
+    }
+    const drain = (): string[] => queue.splice(0, queue.length)
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'go' }],
+      () => undefined,
+      undefined,
+      6,
+      'conv-1',
+      undefined,
+      'ask',
+      drain
+    )
+
+    expect(send).toHaveBeenCalledTimes(2)
+    const firstPrompt = (send.mock.calls[0][1] as Array<{ content: string }>)[0].content
+    const secondPrompt = (send.mock.calls[1][1] as Array<{ content: string }>)[0].content
+    expect(firstPrompt).not.toContain('DIRECTIVE INJECTÉE')
+    expect(secondPrompt).toContain('DIRECTIVE INJECTÉE EN COURS DE TOUR')
+    expect(secondPrompt).toContain('priorise le module X')
+  })
+
   it('keeps the provider and model binding immutable for the whole chat turn', async () => {
     const responses = ['<cmd>{"name":"get_state","args":{}}</cmd>', 'RÃ©ponse finale']
     const send = vi.fn().mockImplementation(async () => ({

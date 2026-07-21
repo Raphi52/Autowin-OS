@@ -949,6 +949,23 @@ export function ChatView({
     setDraftInput(activeId, original.content)
     composerInputRef.current?.focus()
   }
+  /** Injection LIVE : directive envoyée PENDANT le tour → boucle pilote à la prochaine itération. */
+  async function injectCurrentDirective(): Promise<void> {
+    if (!activeId) return
+    const text = input.trim()
+    if (!text) return
+    const r = (await window.api.injectDirective(activeId, text)) as { ok: boolean }
+    if (!r?.ok) return
+    // Affichage immédiat dans le fil (non persisté v1 — la directive vit dans le tour).
+    const next = [
+      ...(liveMessagesRef.current.get(activeId) ?? []),
+      { role: 'user' as const, content: `⚡ ${text}` }
+    ]
+    liveMessagesRef.current.set(activeId, next)
+    if (activeRef.current === activeId) setMessages(next)
+    setDraftInput(activeId, '')
+  }
+
   // Callback STABLE (le row est memo'd — une ref inline casserait la mémoïsation).
   const forkRef = useRef(forkFromMessage)
   forkRef.current = forkFromMessage
@@ -1515,7 +1532,8 @@ export function ChatView({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
-                    send()
+                    if (busy && activeId) void injectCurrentDirective()
+                    else send()
                   }
                 }}
                 onPaste={(e) => {
@@ -1525,18 +1543,31 @@ export function ChatView({
                     void addFiles(pasted)
                   }
                 }}
-                placeholder="Écrire à l’agent ou déposer des fichiers…"
-                disabled={busy && activeId !== null}
+                placeholder={
+                  busy && activeId !== null
+                    ? 'Injecter une directive pendant le tour… (Entrée)'
+                    : 'Écrire à l’agent ou déposer des fichiers…'
+                }
               />
               <button
-                className={`btn-accent btn composer-send${busy ? ' is-stop' : ''}`}
+                className={`btn-accent btn composer-send${busy && !input.trim() ? ' is-stop' : ''}`}
                 onClick={() =>
-                  busy && activeId ? void window.api.cancelPilotChat(activeId) : send()
+                  busy && activeId
+                    ? input.trim()
+                      ? void injectCurrentDirective()
+                      : void window.api.cancelPilotChat(activeId)
+                    : send()
                 }
                 disabled={busy ? !activeId : !input.trim() && attachments.length === 0}
-                aria-label={busy ? 'Arrêter la réponse' : 'Envoyer le message'}
+                aria-label={
+                  busy
+                    ? input.trim()
+                      ? 'Injecter la directive dans le tour en cours'
+                      : 'Arrêter la réponse'
+                    : 'Envoyer le message'
+                }
               >
-                {busy ? '■ Stop' : 'Envoyer'}
+                {busy ? (input.trim() ? '⚡ Injecter' : '■ Stop') : 'Envoyer'}
               </button>
             </div>
             <div className="composer-meta">

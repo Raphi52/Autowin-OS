@@ -142,6 +142,13 @@ const bus = new AppCommandBus(os, broadcast)
 const pilot = new AgentPilot(os.registry, os.roles, bus)
 const modelQuestions = new ModelQuestionHub()
 const activeChatTurns = new ActiveChatTurns()
+/** Directives utilisateur injectées PENDANT un tour, par conversation (drainées à chaque itération). */
+const pendingDirectives = new Map<string, string[]>()
+function drainPendingDirectives(conversationId: string): string[] {
+  const queued = pendingDirectives.get(conversationId) ?? []
+  pendingDirectives.delete(conversationId)
+  return queued
+}
 const questionWindows = new Map<string, BrowserWindow>()
 const hermesDiagnosticCapabilities = new HermesDiagnosticCapabilities()
 let agentModels = DEFAULT_IMPORTED_MODELS
@@ -1103,7 +1110,8 @@ function registerChatIpc(): void {
             6,
             conversationId,
             controller.signal,
-            conversationId ? (os.conversations.get(conversationId)?.authorityMode ?? 'ask') : 'ask'
+            conversationId ? (os.conversations.get(conversationId)?.authorityMode ?? 'ask') : 'ask',
+            conversationId ? () => drainPendingDirectives(conversationId) : undefined
           )
         // Journal d'activité de la conversation : le tour de chat, avec son coût en tokens.
         if (conversationId) {
@@ -1134,7 +1142,10 @@ function registerChatIpc(): void {
         if (controller.signal.aborted) return { ok: true, cancelled: true }
         return { ok: false, cancelled: false, error: e instanceof Error ? e.message : String(e) }
       } finally {
-        if (conversationId) activeChatTurns.delete(conversationId, controller)
+        if (conversationId) {
+          activeChatTurns.delete(conversationId, controller)
+          pendingDirectives.delete(conversationId) // directives non consommées = obsolètes
+        }
         resolveCompletion()
       }
     }
@@ -1149,6 +1160,17 @@ function registerChatIpc(): void {
   ipcMain.handle('os:orchestrate:cancel', (_e, rawConversationId: string) => {
     const conversationId = guardString(rawConversationId, 'conversationId')
     return { ok: bus.abortOrchestration(conversationId) }
+  })
+  // Injection LIVE : une directive envoyée pendant un tour atteint la boucle pilote
+  // au prochain point d'itération (pilotage continu, sans attendre la fin du tour).
+  ipcMain.handle('os:pilotChat:inject', (_e, rawConversationId: string, rawDirective: string) => {
+    const conversationId = guardString(rawConversationId, 'conversationId')
+    const directive = guardString(rawDirective, 'directive').trim()
+    if (!directive) return { ok: false }
+    const queued = pendingDirectives.get(conversationId) ?? []
+    queued.push(directive)
+    pendingDirectives.set(conversationId, queued)
+    return { ok: true }
   })
   ipcMain.handle(
     'os:causalTrace:displayed',

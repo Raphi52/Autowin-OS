@@ -55,8 +55,10 @@ describe('navigation pendant une reponse', () => {
     )?.[0]
 
     expect(composerButton).toBeDefined()
+    // Tour en cours + composer VIDE → vrai Stop (annule le tour) ; texte présent → Injecter.
     expect(composerButton).toContain('window.api.cancelPilotChat(activeId)')
-    expect(composerButton).toContain("busy ? '■ Stop' : 'Envoyer'")
+    expect(composerButton).toContain("'■ Stop'")
+    expect(composerButton).toContain("'⚡ Injecter'")
     expect(composerButton).not.toContain('disabled={busy ||')
   })
 })

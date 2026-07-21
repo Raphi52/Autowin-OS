@@ -189,7 +189,9 @@ export class AgentPilot {
     maxIter = 6,
     conversationId?: string,
     signal?: AbortSignal,
-    authorityMode: ConversationAuthorityMode = 'ask'
+    authorityMode: ConversationAuthorityMode = 'ask',
+    /** Directives injectées par l'utilisateur PENDANT le tour — drainées à chaque itération. */
+    drainDirectives?: () => string[]
   ): Promise<void> {
     const binding = this.roles.getBinding('orchestrator')
     const provider = binding.provider
@@ -224,6 +226,11 @@ export class AgentPilot {
     const usage = { inputTokens: 0, outputTokens: 0, costUsd: 0 }
 
     for (let i = 0; i < maxIter; i++) {
+      // Pilotage continu : les directives envoyées PENDANT le tour entrent au prochain
+      // point d'itération (priorité immédiate, sans attendre la fin du tour).
+      for (const directive of drainDirectives?.() ?? []) {
+        convo.push(`UTILISATEUR (DIRECTIVE INJECTÉE EN COURS DE TOUR — PRIORITAIRE): ${directive}`)
+      }
       const messages: Message[] = [
         {
           role: 'user',
