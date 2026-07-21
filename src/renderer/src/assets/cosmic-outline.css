@@ -131,7 +131,9 @@
 .chat-layout,
 .hermes-controls,
 .behaviour-view {
-  background: transparent;
+  /* Container de page a 95% comme les autres vues (chat-layout) : le cosmique n'apparait
+     qu'au contour (.main transparent), pas a travers tout le header/toolbar. */
+  background: var(--surface-page);
 }
 
 .conv-pane,
