@@ -845,7 +845,9 @@ export function ObservatoryView({
                   </div>
                   <small>
                     {turn.tokens.toLocaleString('fr-FR')} tokens ·{' '}
-                    {turn.costUsd ? `$${turn.costUsd.toFixed(4)}` : 'coût indisponible'}
+                    {turn.costUsd
+                      ? `$${turn.costUsd.toFixed(4)}`
+                      : `${turn.inputTokens.toLocaleString('fr-FR')} in · ${turn.outputTokens.toLocaleString('fr-FR')} out`}
                   </small>
                 </header>
                 {turn.events.map((event, index) => (

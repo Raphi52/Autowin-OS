@@ -46,6 +46,8 @@ export interface HarnessTimelineTurn {
   events: HarnessTimelineEvent[]
   tokens: number
   costUsd: number
+  inputTokens: number
+  outputTokens: number
 }
 export interface HarnessAnomaly {
   kind: 'duplicate-injection' | 'large-injection'
@@ -149,7 +151,9 @@ export function buildHarnessTimelineFromTrace(events: HarnessTraceEvent[]): Harn
         ts: ordered[0]?.timestamp ?? '',
         events: mapped,
         tokens: mapped.reduce((sum, event) => sum + (event.tokens ?? 0), 0),
-        costUsd: mapped.reduce((sum, event) => sum + (event.costUsd ?? 0), 0)
+        costUsd: mapped.reduce((sum, event) => sum + (event.costUsd ?? 0), 0),
+        inputTokens: mapped.reduce((sum, event) => sum + (event.inputTokens ?? 0), 0),
+        outputTokens: mapped.reduce((sum, event) => sum + (event.outputTokens ?? 0), 0)
       }
     })
     .sort((a, b) => b.ts.localeCompare(a.ts))
