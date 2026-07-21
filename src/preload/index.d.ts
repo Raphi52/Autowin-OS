@@ -477,6 +477,8 @@ interface ChatApi {
   cancelPilotChat: (conversationId: string) => Promise<{ ok: boolean }>
   cancelOrchestration: (conversationId: string) => Promise<{ ok: boolean }>
   injectDirective: (conversationId: string, directive: string) => Promise<{ ok: boolean }>
+  pendingDirectives: (conversationId: string) => Promise<string[]>
+  removePendingDirective: (conversationId: string, index: number) => Promise<{ ok: boolean }>
   markResponseDisplayed: (
     conversationId: string,
     content: string

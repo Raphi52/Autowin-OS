@@ -250,6 +250,24 @@ export function modelRecencyKey(model: string): [number, number] {
   return [family, versionScore]
 }
 
+/** Seuils de coût-équivalent par tour (dérivés de 78k tours réels : p33/p66). */
+export const COST_EQ_LOW = 18_000
+export const COST_EQ_HIGH = 47_000
+
+/** Coût-équivalent tokens d'un tour (output ×5, input ×1). Cache non fourni par OmniRoute. */
+export function turnCostEq(usage: { inputTokens?: number; outputTokens?: number } | null): number {
+  if (!usage) return 0
+  return (usage.inputTokens ?? 0) + 5 * (usage.outputTokens ?? 0)
+}
+
+/** Palier de coût du DERNIER tour (pastille live) — vert/orange/rouge selon les seuils réels. */
+export function costEqTier(costEq: number): { dotClass: string; label: string } {
+  const k = Math.round(costEq / 1000)
+  if (costEq < COST_EQ_LOW) return { dotClass: 'st-ok', label: `Dernier tour léger (~${k}k)` }
+  if (costEq < COST_EQ_HIGH) return { dotClass: 'st-warn', label: `Dernier tour moyen (~${k}k)` }
+  return { dotClass: 'st-err', label: `Dernier tour lourd (~${k}k)` }
+}
+
 /**
  * Palier de prix d'un modèle (pastille coût du Chat), déduit de l'id.
  * vert = pas cher · orange = moyen · rouge = cher · gris = inconnu (auto/*, non classé).
@@ -459,19 +477,41 @@ export function resolveChatRuntimeIdentity(
   }
 }
 
+export function stripAssistantThinking(text: string): string {
+  let sanitized = text
+
+  // Complete blocks, including multiline reasoning.
+  sanitized = sanitized.replace(/<think(?:\s[^>]*)?>[\s\S]*?<\/think\s*>/gi, '')
+  // A remaining closing tag is orphaned: everything before it is hidden reasoning.
+  while (/<\/think\s*>/i.test(sanitized)) {
+    sanitized = sanitized.replace(/^[\s\S]*?<\/think\s*>/i, '')
+  }
+  // An opening tag without its closing tag is a reasoning block still streaming.
+  sanitized = sanitized.replace(/<think(?:\s[^>]*)?>[\s\S]*$/gi, '')
+  // Do not flash a tag while either boundary itself is arriving token by token.
+  sanitized = sanitized.replace(/<t(?:h(?:i(?:n(?:k(?:\s[^>]*)?)?)?)?)?$/i, '')
+  sanitized = sanitized.replace(/^[\s\S]*?<\/(?:t(?:h(?:i(?:n(?:k)?)?)?)?)?$/i, '')
+
+  return sanitized
+}
+
 export function coalesceAssistantParts(parts: ChatPart[]): ChatPart[] {
   const compact: ChatPart[] = []
+  let pendingText: string[] = []
+  const flushText = (): void => {
+    const text = stripAssistantThinking(pendingText.join('\n\n')).trim()
+    if (text) compact.push({ kind: 'text', text })
+    pendingText = []
+  }
   for (const part of parts) {
     if (part.kind === 'action') {
+      flushText()
       compact.push(part)
       continue
     }
-    const text = part.text.trim()
-    if (!text) continue
-    const previous = compact.at(-1)
-    if (previous?.kind === 'text') previous.text = `${previous.text}\n\n${text}`
-    else compact.push({ kind: 'text', text })
+    pendingText.push(part.text)
   }
+  flushText()
   return compact
 }
 

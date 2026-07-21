@@ -467,6 +467,8 @@ export class AppCommandBus {
           })
           this.broadcast({ type: 'refresh', scope: 'workflows' })
           this.broadcast({ type: 'refresh', scope: 'orchestration' })
+          // Gate bloqué → une décision d'autorité est ouverte : la surfacer TOUT DE SUITE.
+          if (r.gateBlocked) this.broadcast({ type: 'refresh', scope: 'decisions' })
           return {
             valid: r.valid,
             gateBlocked: r.gateBlocked,

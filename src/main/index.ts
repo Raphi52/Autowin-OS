@@ -111,9 +111,16 @@ const headlessTestInstance = automationInstanceMode.headless
 const appDataRoot = resolveAutowinAppDataBase(app.getPath('appData'), app.isPackaged)
 app.setName(isolatedTestInstance ? `${AUTOWIN_DISPLAY_NAME} Test` : AUTOWIN_DISPLAY_NAME)
 const explicitUserDataDir = process.argv.some((argument) => argument.startsWith('--user-data-dir'))
+// En DEV uniquement : ouvre le port CDP pour piloter/inspecter le renderer réel (localhost:9223).
+// Jamais en packagé (surface de debug). Doit être posé avant app ready.
+if (is.dev) app.commandLine.appendSwitch('remote-debugging-port', '9223')
 const canonicalAppDataRoot = createAutowinAppDataRoot(appDataRoot)
 if (!explicitUserDataDir) app.setPath('userData', canonicalAppDataRoot)
-const ownsInstanceLock = isolatedTestInstance || app.requestSingleInstanceLock()
+// En DEV, on n'enforce PAS le single-instance lock : un hot-restart electron-vite (ou un
+// process résiduel qui détient encore le lock) ne doit jamais laisser une instance PÉRIMÉE
+// à l'écran en tuant la nouvelle. Le lock n'est appliqué que sur le build packagé.
+const ownsInstanceLock =
+  isolatedTestInstance || !app.isPackaged || app.requestSingleInstanceLock()
 if (!ownsInstanceLock) app.quit()
 else ensureAutowinAppData(appDataRoot)
 let startupStorageMigration = false
@@ -147,6 +154,7 @@ const pendingDirectives = new Map<string, string[]>()
 function drainPendingDirectives(conversationId: string): string[] {
   const queued = pendingDirectives.get(conversationId) ?? []
   pendingDirectives.delete(conversationId)
+  if (queued.length) broadcast({ type: 'refresh', scope: 'directives' })
   return queued
 }
 const questionWindows = new Map<string, BrowserWindow>()
@@ -1144,7 +1152,8 @@ function registerChatIpc(): void {
       } finally {
         if (conversationId) {
           activeChatTurns.delete(conversationId, controller)
-          pendingDirectives.delete(conversationId) // directives non consommées = obsolètes
+          if (pendingDirectives.delete(conversationId)) // directives non consommées = obsolètes
+            broadcast({ type: 'refresh', scope: 'directives' })
         }
         resolveCompletion()
       }
@@ -1170,6 +1179,25 @@ function registerChatIpc(): void {
     const queued = pendingDirectives.get(conversationId) ?? []
     queued.push(directive)
     pendingDirectives.set(conversationId, queued)
+    broadcast({ type: 'refresh', scope: 'directives' })
+    return { ok: true }
+  })
+  // Lire la file d'attente (directives non encore consommées) d'une conversation.
+  ipcMain.handle('os:pilotChat:pending', (_e, rawConversationId: string) => {
+    const conversationId = guardString(rawConversationId, 'conversationId')
+    return [...(pendingDirectives.get(conversationId) ?? [])]
+  })
+  // Retirer une directive en attente par index (avant qu'elle soit consommée).
+  ipcMain.handle('os:pilotChat:removeDirective', (_e, rawConversationId: string, rawIndex: unknown) => {
+    const conversationId = guardString(rawConversationId, 'conversationId')
+    const index = Number(rawIndex)
+    const queued = pendingDirectives.get(conversationId)
+    if (!queued || !Number.isInteger(index) || index < 0 || index >= queued.length)
+      return { ok: false }
+    queued.splice(index, 1)
+    if (queued.length) pendingDirectives.set(conversationId, queued)
+    else pendingDirectives.delete(conversationId)
+    broadcast({ type: 'refresh', scope: 'directives' })
     return { ok: true }
   })
   ipcMain.handle(

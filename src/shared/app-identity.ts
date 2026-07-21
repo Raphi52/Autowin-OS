@@ -2,7 +2,11 @@ export const AUTOWIN_DISPLAY_NAME = 'Autowin OS'
 export const AUTOWIN_APP_DATA_DIR = 'autowin-os'
 export const AUTOWIN_APP_ID = 'com.amitel.autowin-os'
 export const AUTOWIN_WORKSPACE_ENV = 'AUTOWIN_OS_WORKSPACE'
-export const AUTOWIN_STORAGE_SUFFIXES = ['agent-workflow.v1'] as const
+export const AUTOWIN_STORAGE_SUFFIXES = [
+  'agent-workflow.v1',
+  'graph.visibility-settings.v1',
+  'graph.node-spacing.v1'
+] as const
 
 // Compatibilite de lecture pour une version de migration. Ne jamais utiliser
 // ces valeurs comme cible d'ecriture ni les exposer dans l'interface.

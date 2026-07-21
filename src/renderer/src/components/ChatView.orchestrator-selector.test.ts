@@ -110,6 +110,32 @@ describe('selecteur orchestrateur Chat', () => {
     )
   })
 
+  it('ne présente pas l’absence d’effort comme un niveau Défaut', async () => {
+    const onSelect = vi.fn()
+    const dom = await renderSelector({
+      models: [
+        {
+          id: 'h1',
+          provider: 'hermes',
+          model: 'llama',
+          label: 'Llama',
+          reasoningEfforts: ['none'],
+          defaultReasoningEffort: 'none'
+        }
+      ],
+      binding: { provider: 'hermes', model: 'llama', reasoningEffort: 'none' },
+      onSelect
+    })
+    expect(dom.textContent).not.toContain('Défaut')
+    await act(async () => {
+      dom.querySelector<HTMLButtonElement>('[role="option"]')?.click()
+    })
+    expect(dom.querySelector('.model-effort-menu')).toBeNull()
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'hermes', model: 'llama', reasoningEffort: 'none' })
+    )
+  })
+
   it('restitue un rejet setRole sans faux succès et conserve le binding runtime confirmé', async () => {
     const models = [
       { id: 'c1', provider: 'codex', model: 'gpt-5', label: 'GPT-5' },

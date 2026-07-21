@@ -7,7 +7,7 @@ export type GraphColumnWidths = {
 export const GRAPH_COLUMN_LIMITS = {
   theme: { min: 120, max: 420 },
   visibility: { min: 160, max: 520 },
-  detail: { min: 240, max: 2400 },
+  detail: { min: 160, max: 2400 },
   graph: 200,
   detailGraph: 96
 } as const

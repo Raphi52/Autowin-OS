@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Markdown } from './Markdown'
 import { ActivityPane } from './ActivityPane'
 import { ModuleHeader } from './ModuleHeader'
@@ -13,6 +14,8 @@ import {
   reduceAssistantPilotEvent,
   resolveChatRuntimeIdentity,
   modelCostTier,
+  turnCostEq,
+  costEqTier,
   STEP_META,
   type OrchStep,
   type ChatPart,
@@ -78,6 +81,7 @@ interface PilotEvent {
   args?: unknown
   ok?: boolean
   data?: unknown
+  usage?: { inputTokens?: number; outputTokens?: number; costUsd?: number }
 }
 
 type ConvBranch = { id: string; parentBranchId?: string; forkedFromMessageId?: string }
@@ -257,21 +261,6 @@ function ForkIcon(): React.JSX.Element {
   )
 }
 
-/** Icône « éditer » (crayon), monochrome via currentColor. */
-function EditIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
-      <path
-        d="M9.8 3.2 12.8 6.2 6 13H3v-3l6.8-6.8ZM11.2 1.8l3 3"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
 /** Icône « inspecter » (loupe), monochrome via currentColor. */
 function InspectIcon(): React.JSX.Element {
   return (
@@ -286,14 +275,12 @@ const ChatMessageRow = memo(function ChatMessageRow({
   message,
   conversationId,
   onInspectTurn,
-  onFork,
-  onEdit
+  onFork
 }: {
   message: Msg
   conversationId: string | null
   onInspectTurn?: (target: InspectTurnTarget) => void
   onFork?: (messageId: string) => void
-  onEdit?: (messageId: string) => void
 }): React.JSX.Element {
   if (message.role === 'user') {
     return (
@@ -324,19 +311,8 @@ const ChatMessageRow = memo(function ChatMessageRow({
             ))}
           </div>
         )}
-        {message.messageId && (onFork || onEdit) && (
+        {message.messageId && onFork && (
           <div className="msg-turn-actions">
-            {onEdit && (
-              <button
-                type="button"
-                className="msg-turn-icon"
-                title="Éditer et renvoyer (crée une branche)"
-                aria-label="Éditer et renvoyer ce message"
-                onClick={() => onEdit(message.messageId!)}
-              >
-                <EditIcon />
-              </button>
-            )}
             {onFork && (
               <button
                 type="button"
@@ -425,6 +401,12 @@ export function ChatView({
   const [dragActive, setDragActive] = useState(false)
   const [busyConversations, setBusyConversations] = useState<Set<string>>(() => new Set())
   const [runtimeIdentity, setRuntimeIdentity] = useState<ChatRuntimeIdentity | null>(null)
+  // Coût-eq du dernier tour par conversation → pastille coût live.
+  const [lastTurnCost, setLastTurnCost] = useState<Record<string, number>>({})
+  // Menu ⋮ d'une conversation, rendu en position fixe (déborde du conteneur scrollable).
+  const [convMenu, setConvMenu] = useState<{ conv: Conv; top: number; left: number } | null>(null)
+  // File d'attente : directives injectées pendant le tour, pas encore consommées (conv active).
+  const [pendingDirectives, setPendingDirectives] = useState<string[]>([])
   const [modelCatalog, setModelCatalog] = useState<RuntimeModel[]>([])
   const [orchestratorBinding, setOrchestratorBinding] = useState<{
     provider: string
@@ -436,7 +418,7 @@ export function ChatView({
   const [modelChangeError, setModelChangeError] = useState<string | null>(null)
   const [conversationsPaneWidth, setConversationsPaneWidth] = useState(() => {
     const saved = Number(window.localStorage.getItem('autowin.chat.conversationsPaneWidth'))
-    return clampConversationPaneWidth(Number.isFinite(saved) && saved > 0 ? saved : 292)
+    return clampConversationPaneWidth(Number.isFinite(saved) && saved > 0 ? saved : 232)
   })
   const [hasNewActivity, setHasNewActivity] = useState(false)
   const [showRuns, setShowRuns] = useState(false)
@@ -656,6 +638,21 @@ export function ChatView({
   async function refreshConvs(): Promise<void> {
     setConvs((await window.api.conversations()) as Conv[])
   }
+  // File d'attente LOCALE (renderer) : messages tapés pendant un tour, envoyés comme des tours
+  // NORMAUX un par un à la fin du tour courant → chaque message = sa propre paire Q/R (rendu propre).
+  const queueRef = useRef<Map<string, string[]>>(new Map())
+  function setConversationQueue(id: string, next: string[]): void {
+    if (next.length) queueRef.current.set(id, next)
+    else queueRef.current.delete(id)
+    if (activeRef.current === id) setPendingDirectives(next)
+  }
+  function enqueueMessage(id: string, text: string): void {
+    setConversationQueue(id, [...(queueRef.current.get(id) ?? []), text])
+  }
+  useEffect(() => {
+    setPendingDirectives(queueRef.current.get(activeId ?? '') ?? [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId])
   const runScopeRef = useRef(runScope)
   useEffect(() => {
     runScopeRef.current = runScope
@@ -692,6 +689,10 @@ export function ChatView({
   useEffect(() => {
     window.api.setActiveConversation(activeId)
   }, [activeId])
+  // Une décision en attente doit se VOIR (questionnaire déplié), pas rester derrière un toggle.
+  useEffect(() => {
+    if (decisions.length > 0) setShowDecisions(true)
+  }, [decisions.length])
   async function refreshDecisions(): Promise<void> {
     const d = (await window.api.authorityPending()) as Decision[]
     setDecisions(Array.isArray(d) ? d : [])
@@ -808,6 +809,11 @@ export function ChatView({
       const e = raw as PilotEvent
       const conversationId = e.conversationId
       if (!conversationId || !busyConversationsRef.current.has(conversationId)) return
+      // Coût du dernier tour → pastille live (coût-eq tokens).
+      if (e.kind === 'done' && e.usage) {
+        const cost = turnCostEq(e.usage)
+        setLastTurnCost((current) => ({ ...current, [conversationId]: cost }))
+      }
       patchLast(conversationId, (message) =>
         Object.assign(message, reduceAssistantPilotEvent(message, e))
       )
@@ -925,55 +931,44 @@ export function ChatView({
     await window.api.conversationsSwitchBranch(activeId, branchId)
     await reloadActiveFromStore(activeId)
   }
-  /**
-   * Édite un message utilisateur envoyé : branche depuis son PARENT (le message édité
-   * remplace l'original dans la nouvelle branche) + composer pré-rempli avec son contenu.
-   */
-  async function editFromMessage(messageId: string): Promise<void> {
-    if (!activeId) return
-    const msgs = liveMessagesRef.current.get(activeId) ?? []
-    const index = msgs.findIndex((m) => m.messageId === messageId)
-    if (index < 0) return
-    const original = msgs[index]
-    if (original.role !== 'user') return
-    // Parent = le message précédent identifiable dans la chaîne active.
-    let parentId: string | undefined
-    for (let i = index - 1; i >= 0; i--) {
-      if (msgs[i].messageId) {
-        parentId = msgs[i].messageId
-        break
-      }
-    }
-    if (!parentId) return // 1er message : pas de point d'ancrage de branche (v1)
-    await window.api.conversationsFork(activeId, parentId)
-    await reloadActiveFromStore(activeId)
-    setDraftInput(activeId, original.content)
-    composerInputRef.current?.focus()
-  }
-  /** Injection LIVE : directive envoyée PENDANT le tour → boucle pilote à la prochaine itération. */
+  /** Met le message en FILE D'ATTENTE (envoyé comme tour normal à la fin du tour courant). */
   async function injectCurrentDirective(): Promise<void> {
     if (!activeId) return
     const text = input.trim()
     if (!text) return
-    const r = (await window.api.injectDirective(activeId, text)) as { ok: boolean }
-    if (!r?.ok) return
-    // Affichage immédiat dans le fil (non persisté v1 — la directive vit dans le tour).
-    const next = [
-      ...(liveMessagesRef.current.get(activeId) ?? []),
-      { role: 'user' as const, content: `⚡ ${text}` }
-    ]
-    liveMessagesRef.current.set(activeId, next)
-    if (activeRef.current === activeId) setMessages(next)
+    enqueueMessage(activeId, text)
     setDraftInput(activeId, '')
   }
+
+  /**
+   * Interrompre le tour en cours → la file se draine depuis le début via l'effet `busy→false`
+   * (le message choisi + ses antérieurs partent d'abord ; les postérieurs suivent en auto-drain).
+   * Sert au bouton « Interrompre et envoyer tout » (en tête de file) ET aux boutons par-message.
+   */
+  async function interruptAndFlushQueue(): Promise<void> {
+    const id = activeRef.current
+    if (!id) return
+    await window.api.cancelPilotChat(id)
+  }
+  // À la libération de `busy` (render frais, busy=false), on draine la FILE D'ATTENTE — un message
+  // par tour (chacun = sa propre paire Q/R). Vaut aussi bien pour l'auto-drain fin de tour que pour
+  // une interruption manuelle (les deux passent par une transition busy→false).
+  useEffect(() => {
+    if (busy) return
+    const id = activeRef.current
+    if (!id) return
+    const queued = queueRef.current.get(id)
+    if (!queued || queued.length === 0) return
+    const [nextMessage, ...rest] = queued
+    setConversationQueue(id, rest)
+    void send(nextMessage)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy])
 
   // Callback STABLE (le row est memo'd — une ref inline casserait la mémoïsation).
   const forkRef = useRef(forkFromMessage)
   forkRef.current = forkFromMessage
   const handleFork = useCallback((messageId: string) => void forkRef.current(messageId), [])
-  const editRef = useRef(editFromMessage)
-  editRef.current = editFromMessage
-  const handleEdit = useCallback((messageId: string) => void editRef.current(messageId), [])
 
   /* --- envoi --- */
 
@@ -1170,14 +1165,14 @@ export function ChatView({
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
 
   return (
-    <div className="chat-layout" data-active-conversation-id={activeId ?? ''}>
+    <div
+      className={`chat-layout${showRuns ? '' : ' is-runs-collapsed'}`}
+      data-active-conversation-id={activeId ?? ''}
+    >
       {/* ---- Panneau gauche : conversations ---- */}
       <aside className="conv-pane" style={{ width: `${conversationsPaneWidth}px` }}>
         <div className="conv-head">
           <ModuleHeader eyebrow="Espace de travail" title="Conversations" />
-          <button className="btn btn-sm" onClick={newConv} title="Nouvelle conversation">
-            +
-          </button>
         </div>
         {activeAgents.length > 0 && (
           <section className="agent-inbox" aria-label="Agents actifs">
@@ -1218,6 +1213,10 @@ export function ChatView({
           )}
         </div>
         <div className="conv-list scroll-y">
+          <button className="conv-new-row" onClick={newConv} title="Nouvelle conversation">
+            <span className="conv-new-plus" aria-hidden="true">+</span>
+            <span className="conv-label">Nouvelle conversation</span>
+          </button>
           {convs.length === 0 && (
             <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
               Aucune conversation — écris un message pour en démarrer une.
@@ -1243,26 +1242,66 @@ export function ChatView({
                 </span>
                 {convQuery && <span className="conv-count tnum">{c.messages.length}</span>}
               </button>
-              <div className="conv-actions">
-                <button
-                  className="btn-ghost btn btn-sm"
-                  onClick={() => renameConv(c)}
-                  title="Renommer"
-                >
-                  ✎
-                </button>
-                <button
-                  className="btn-ghost btn btn-sm c-err"
-                  onClick={() => removeConv(c)}
-                  title="Supprimer"
-                >
-                  ✕
-                </button>
-              </div>
+              <button
+                className="conv-menu-trigger"
+                title="Actions"
+                aria-label="Actions de la conversation"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  const rect = event.currentTarget.getBoundingClientRect()
+                  setConvMenu((current) =>
+                    current?.conv.id === c.id
+                      ? null
+                      : { conv: c, top: rect.top, left: rect.right + 6 }
+                  )
+                }}
+              >
+                ⋮
+              </button>
             </div>
           ))}
         </div>
       </aside>
+      {convMenu &&
+        createPortal(
+          <>
+            <div className="conv-menu-backdrop" onClick={() => setConvMenu(null)} />
+            <div
+              className="conv-menu-pop"
+              role="menu"
+              style={{ top: convMenu.top, left: convMenu.left }}
+            >
+            <button
+              role="menuitem"
+              onClick={() => {
+                const conv = convMenu.conv
+                setConvMenu(null)
+                renameConv(conv)
+              }}
+            >
+              <span className="conv-menu-ic" aria-hidden="true">
+                ✎
+              </span>
+              Renommer
+            </button>
+            <button
+              role="menuitem"
+              className="c-err"
+              onClick={() => {
+                const conv = convMenu.conv
+                setConvMenu(null)
+                removeConv(conv)
+              }}
+            >
+              <span className="conv-menu-ic" aria-hidden="true">
+                🗑
+              </span>
+              Supprimer
+            </button>
+            </div>
+          </>,
+          document.body
+        )}
       <div
         className="conv-pane-resizer"
         role="separator"
@@ -1317,12 +1356,17 @@ export function ChatView({
                 <span>{runtimeIdentity?.modelLabel ?? 'modèle en cours de résolution'}</span>
                 {runtimeIdentity?.model &&
                   (() => {
-                    const cost = modelCostTier(runtimeIdentity.model)
+                    // Coût-eq du dernier tour (live) si dispo pour la conv active ; sinon palier modèle.
+                    const liveCost = activeId != null ? lastTurnCost[activeId] : undefined
+                    const cost =
+                      liveCost !== undefined
+                        ? costEqTier(liveCost)
+                        : modelCostTier(runtimeIdentity.model)
                     return (
                       <span
                         className="chat-cost-dot"
-                        title={`Coût du modèle : ${cost.label}`}
-                        aria-label={`Coût du modèle : ${cost.label}`}
+                        title={cost.label}
+                        aria-label={cost.label}
                       >
                         <span className={`status-dot ${cost.dotClass}`} />
                         {cost.label}
@@ -1488,7 +1532,6 @@ export function ChatView({
               conversationId={activeId}
               onInspectTurn={onInspectTurn}
               onFork={handleFork}
-              onEdit={handleEdit}
             />
           ))}
         </div>
@@ -1510,6 +1553,63 @@ export function ChatView({
           </button>
         )}
 
+        {pendingDirectives.length > 0 && (
+          <div className="directive-queue" aria-label="Messages en attente">
+            <div className="directive-queue-head">
+              <span className="directive-queue-title">
+                ⚡ File d’attente · {pendingDirectives.length}
+              </span>
+              <span className="directive-queue-hint">
+                envoyés un par un à la fin du tour en cours
+              </span>
+              {busy && (
+                <button
+                  type="button"
+                  className="directive-queue-send directive-queue-send-all"
+                  title="Interrompre le tour en cours et envoyer tous les messages en file maintenant"
+                  aria-label="Interrompre et envoyer tout"
+                  onClick={() => void interruptAndFlushQueue()}
+                >
+                  ⏹ Interrompre et envoyer tout
+                </button>
+              )}
+            </div>
+            {pendingDirectives.map((directive, index) => (
+              <div className="directive-queue-item" key={`${index}-${directive.slice(0, 12)}`}>
+                <span className="directive-queue-index">{index + 1}</span>
+                <span className="directive-queue-text" title={directive}>
+                  {directive}
+                </span>
+                <button
+                  type="button"
+                  className="directive-queue-send"
+                  title="Interrompre le tour et envoyer ce message + ses antérieurs maintenant"
+                  aria-label={`Interrompre et envoyer jusqu’au message ${index + 1}`}
+                  onClick={() => void interruptAndFlushQueue()}
+                >
+                  ⏹ Interrompre et envoyer
+                </button>
+                <button
+                  type="button"
+                  className="directive-queue-remove"
+                  title="Retirer de la file"
+                  aria-label={`Retirer le message ${index + 1}`}
+                  onClick={() => {
+                    const id = activeRef.current
+                    if (!id) return
+                    const q = queueRef.current.get(id) ?? []
+                    setConversationQueue(
+                      id,
+                      q.filter((_, i) => i !== index)
+                    )
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="composer">
           <div className="composer-field">
             {attachments.length > 0 && (
@@ -1606,7 +1706,7 @@ export function ChatView({
                 }}
                 placeholder={
                   busy && activeId !== null
-                    ? 'Injecter une directive pendant le tour… (Entrée)'
+                    ? 'Mettre en file… envoyé à la fin du tour (Entrée)'
                     : 'Écrire à l’agent ou déposer des fichiers…'
                 }
               />
@@ -1623,12 +1723,12 @@ export function ChatView({
                 aria-label={
                   busy
                     ? input.trim()
-                      ? 'Injecter la directive dans le tour en cours'
+                      ? 'Mettre le message en file d’attente'
                       : 'Arrêter la réponse'
                     : 'Envoyer le message'
                 }
               >
-                {busy ? (input.trim() ? '⚡ Injecter' : '■ Stop') : 'Envoyer'}
+                {busy ? (input.trim() ? '⚡ Mettre en file' : '■ Stop') : 'Envoyer'}
               </button>
             </div>
             <div className="composer-meta">

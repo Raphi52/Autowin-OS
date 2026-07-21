@@ -194,6 +194,10 @@ const api = {
     ipcRenderer.invoke('os:orchestrate:cancel', conversationId),
   injectDirective: (conversationId: string, directive: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('os:pilotChat:inject', conversationId, directive),
+  pendingDirectives: (conversationId: string): Promise<string[]> =>
+    ipcRenderer.invoke('os:pilotChat:pending', conversationId),
+  removePendingDirective: (conversationId: string, index: number): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('os:pilotChat:removeDirective', conversationId, index),
   markResponseDisplayed: (
     conversationId: string,
     content: string

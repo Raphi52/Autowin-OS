@@ -7,7 +7,6 @@ import {
 import './ChatView.css'
 
 const EFFORT_LABELS: Record<string, string> = {
-  none: 'Défaut',
   minimal: 'Minimal',
   low: 'Léger',
   medium: 'Moyen',
@@ -77,7 +76,7 @@ export function OrchestratorModelSelector({
       >
         <summary aria-disabled={disabled}>
           <strong>{currentLabel}</strong>
-          {binding?.reasoningEffort && (
+          {binding?.reasoningEffort && binding.reasoningEffort !== 'none' && (
             <em>{EFFORT_LABELS[binding.reasoningEffort] ?? binding.reasoningEffort}</em>
           )}
           {pending ? (
@@ -92,6 +91,7 @@ export function OrchestratorModelSelector({
               <span>{group.label}</span>
               {group.options.map((option) => {
                 const optionKey = `${option.provider}:${option.model}`
+                const selectableEfforts = option.reasoningEfforts.filter((effort) => effort !== 'none')
                 const active =
                   option.provider === binding?.provider &&
                   option.model === (currentCatalogModel ?? binding?.model)
@@ -101,20 +101,28 @@ export function OrchestratorModelSelector({
                       type="button"
                       role="option"
                       aria-selected={active}
-                      aria-expanded={expandedModel === optionKey}
-                      onClick={() =>
-                        setExpandedModel((current) => (current === optionKey ? null : optionKey))
+                      aria-expanded={
+                        selectableEfforts.length > 0 ? expandedModel === optionKey : undefined
                       }
+                      onClick={() => {
+                        if (selectableEfforts.length === 0) {
+                          dropdownRef.current?.removeAttribute('open')
+                          setExpandedModel(null)
+                          onSelect({ ...option, reasoningEffort: 'none' })
+                          return
+                        }
+                        setExpandedModel((current) => (current === optionKey ? null : optionKey))
+                      }}
                     >
                       <span>
                         <strong>{option.label}</strong>
                         <small>{option.model}</small>
                       </span>
-                      <i className="model-option-chevron">›</i>
+                      {selectableEfforts.length > 0 && <i className="model-option-chevron">›</i>}
                     </button>
-                    {expandedModel === optionKey && (
+                    {selectableEfforts.length > 0 && expandedModel === optionKey && (
                       <div className="model-effort-menu" aria-label={`Effort pour ${option.label}`}>
-                        {option.reasoningEfforts.map((effort) => {
+                        {selectableEfforts.map((effort) => {
                           const effortActive = active && effort === binding?.reasoningEffort
                           return (
                             <button
@@ -127,7 +135,7 @@ export function OrchestratorModelSelector({
                                 onSelect({ ...option, reasoningEffort: effort })
                               }}
                             >
-                              <span>{effort === 'none' ? 'Défaut' : effort}</span>
+                              <span>{effort}</span>
                               {effortActive && <i>✓</i>}
                             </button>
                           )

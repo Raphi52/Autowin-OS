@@ -158,33 +158,6 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(container!.textContent).not.toContain('aucune réponse')
   })
 
-  it('édite un message envoyé : branche depuis le parent + composer pré-rempli', async () => {
-    const messages = [
-      { role: 'user', content: 'premier', ts: 1, messageId: 'm1' },
-      { role: 'assistant', content: 'réponse', ts: 2, messageId: 'm2' },
-      { role: 'user', content: 'mesage avec fote', ts: 3, messageId: 'm3' }
-    ]
-    const mockApi = api({
-      conversations: vi.fn().mockResolvedValue([conversation('A', messages)]),
-      conversationsFork: vi.fn().mockResolvedValue(undefined)
-    })
-    await mount(mockApi)
-    await click('.conv-pick')
-    const editButtons = [...container!.querySelectorAll('button')].filter(
-      (button) => button.getAttribute('aria-label') === 'Éditer et renvoyer ce message'
-    )
-    expect(editButtons.length).toBeGreaterThan(0)
-    await act(async () => {
-      ;(editButtons.at(-1) as HTMLButtonElement).click()
-      await new Promise((resolve) => setTimeout(resolve, 20))
-    })
-    // Branche créée depuis le PARENT (m2), pas depuis le message édité.
-    expect(mockApi.conversationsFork).toHaveBeenCalledWith('A', 'm2')
-    expect((container!.querySelector('textarea') as HTMLTextAreaElement).value).toBe(
-      'mesage avec fote'
-    )
-  })
-
   it('affiche une inbox d’agents pour une conversation dont un tour est en cours', async () => {
     const pilot = deferred<{ ok: boolean }>()
     const mockApi = api({
@@ -236,7 +209,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await mount(mockApi)
     await type('premier')
     await click('.composer-send')
-    await click('.conv-head .btn')
+    await click('.conv-new-row')
     await type('deuxième')
     await click('.composer-send')
     expect(create).toHaveBeenCalledTimes(2)

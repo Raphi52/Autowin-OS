@@ -62,6 +62,124 @@ const LABEL: Record<HarnessTimelineEvent['kind'], string> = {
   boundary: 'Frontière'
 }
 
+/** Sépare un préfixe libellé ("ÉTAT DE L'APP: {…}") du JSON qui suit, si le JSON parse. */
+function splitLabeledJson(content: string): { prefix: string; json: string } | null {
+  const start = content.search(/[{[]/)
+  if (start < 0) return null
+  const json = content.slice(start).trim()
+  try {
+    JSON.parse(json)
+  } catch {
+    return null
+  }
+  return { prefix: content.slice(0, start).trim(), json }
+}
+
+/**
+ * Extrait le message HUMAIN d'un contenu composé ("ÉTAT DE L'APP:\n{json}\n\nUTILISATEUR: …").
+ * Prend le dernier segment "UTILISATEUR:" ; sinon un contenu normal est rendu tel quel ;
+ * un pur blob d'état retombe sur un libellé court.
+ */
+function extractHumanMessage(content: string, max = 100): string {
+  const segments = (content ?? '').split('\n\n')
+  const utilisateur = segments.filter((s) => /^\s*UTILISATEUR\s*:/.test(s))
+  let human: string
+  if (utilisateur.length) {
+    human = utilisateur[utilisateur.length - 1].replace(/^\s*UTILISATEUR\s*:\s*/, '')
+  } else if (/^\s*(ÉTAT|ETAT)\b/.test(content ?? '')) {
+    human =
+      segments.find((s) => {
+        const t = s.trim()
+        return t && !/^(ÉTAT|ETAT|TOI\s*:|\()/.test(t) && !t.startsWith('{')
+      }) ?? '(état de l’app)'
+  } else {
+    human = content ?? ''
+  }
+  const text = human.replace(/\s+/g, ' ').trim()
+  return text.length > max ? `${text.slice(0, max)}…` : text
+}
+
+/** Tente de parser le contenu JSON d'un événement ; null si ce n'est pas du JSON objet. */
+function parseEventJson(content: string): Record<string, unknown> | null {
+  const trimmed = (content ?? '').trim()
+  if (!trimmed.startsWith('{')) return null
+  try {
+    const value = JSON.parse(trimmed)
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : null
+  } catch {
+    return null
+  }
+}
+
+/** Aperçu HUMAIN d'un événement selon son type (retry/frontière lisibles ; sinon message ou brut). */
+function humanEventPreview(kind: string, content: string, max = 140): string {
+  const data = parseEventJson(content)
+  if (kind === 'retry' && data) {
+    const attempt = Number(data.attempt ?? data.attemptNumber ?? 0)
+    const maxAttempts = Number(data.maxAttempts ?? data.max ?? 0)
+    const reason = typeof data.reason === 'string' ? ` — ${data.reason}` : ''
+    if (attempt && maxAttempts) return `Nouvel essai · tentative ${attempt} sur ${maxAttempts}${reason}`
+    return `Nouvel essai${reason}`
+  }
+  if (kind === 'boundary' && data) {
+    const parts: string[] = []
+    if ('stream' in data) parts.push(data.stream ? 'streaming' : 'sans streaming')
+    if (typeof data.reasoningEffort === 'string')
+      parts.push(
+        data.reasoningEffort === 'none' ? 'effort par défaut' : `effort ${data.reasoningEffort}`
+      )
+    if ('resumed' in data) parts.push(data.resumed ? 'session réutilisée' : 'nouvelle session')
+    if (typeof data.model === 'string') parts.push(`modèle ${data.model}`)
+    // Clés restantes non couvertes, pour ne rien cacher.
+    for (const [k, v] of Object.entries(data)) {
+      if (['stream', 'reasoningEffort', 'resumed', 'model'].includes(k)) continue
+      if (v != null && typeof v !== 'object') parts.push(`${k} : ${v}`)
+    }
+    if (parts.length) {
+      const text = `Passage au provider · ${parts.join(' · ')}`
+      return text.length > max ? `${text.slice(0, max)}…` : text
+    }
+  }
+  if (kind === 'cancellation' && data) {
+    const reason = typeof data.reason === 'string' ? data.reason : ''
+    if (reason === 'user') return 'Annulé par l’utilisateur'
+    return reason ? `Annulé — ${reason}` : 'Annulé'
+  }
+  // Filet générique : tout objet JSON restant → « clé : valeur · … » (jamais de JSON brut).
+  if (data) {
+    const pairs = Object.entries(data)
+      .filter(([, v]) => v != null && typeof v !== 'object')
+      .map(([k, v]) => `${k} : ${v}`)
+    if (pairs.length) {
+      const text = pairs.join(' · ')
+      return text.length > max ? `${text.slice(0, max)}…` : text
+    }
+  }
+  return extractHumanMessage(content, max)
+}
+
+/** Aperçu du dernier message humain d'un appel (liste + détail). */
+function lastUserMessagePreview(
+  messages: Array<{ role: string; content: string }>,
+  max = 100
+): string {
+  const userMsg = [...messages].reverse().find((m) => m.role === 'user')
+  return userMsg ? extractHumanMessage(userMsg.content, max) : ''
+}
+
+/** Rendu lisible d'un contenu de payload : JSON embarqué → arbre HumanJson ; sinon texte brut. */
+function PayloadContent({ content }: { content: string }): React.JSX.Element {
+  const text = content || '(vide)'
+  const split = splitLabeledJson(text)
+  if (!split) return <pre className="observatory-payload">{text}</pre>
+  return (
+    <div className="observatory-payload">
+      {split.prefix && <div className="observatory-payload-label">{split.prefix}</div>}
+      <HumanJson value={split.json} />
+    </div>
+  )
+}
+
 export function ObservatoryView({
   active,
   focus = null,
@@ -523,6 +641,14 @@ export function ObservatoryView({
                   {call.provider}
                   {call.model ? ` · ${call.model}` : ''}
                 </strong>
+                {(() => {
+                  const preview = lastUserMessagePreview(call.messages)
+                  return preview ? (
+                    <span className="observatory-call-preview" title={preview}>
+                      « {preview} »
+                    </span>
+                  ) : null
+                })()}
                 <small>
                   {new Date(call.ts).toLocaleTimeString('fr-FR')} ·{' '}
                   {(call.usage?.inputTokens ?? 0).toLocaleString('fr-FR')} in ·{' '}
@@ -629,7 +755,7 @@ export function ObservatoryView({
                           </div>
                           <button onClick={() => setSelected(null)}>Fermer</button>
                         </header>
-                        <pre className="observatory-payload">{node.event.content || '(vide)'}</pre>
+                        <PayloadContent content={node.event.content} />
                         <p>{node.event.detail}</p>
                         {node.event.payloads.length > 0 && (
                           <HumanJson value={node.event.payloads} className="observatory-payload" />
@@ -667,6 +793,15 @@ export function ObservatoryView({
                 <span>${(selectedCall.usage?.costUsd ?? 0).toFixed(4)}</span>
               </div>
               <small>{selectedCall.limitation}</small>
+              {(() => {
+                const preview = lastUserMessagePreview(selectedCall.messages, 400)
+                return preview ? (
+                  <div className="observatory-call-sent">
+                    <b>Message envoyé</b>
+                    <p>{preview}</p>
+                  </div>
+                ) : null
+              })()}
               {selectedCall.system && (
                 <>
                   <b>System</b>
@@ -737,7 +872,11 @@ export function ObservatoryView({
                         <small>{event.actor}</small>
                       </span>
                       <p>
-                        <strong>{event.content || 'Aucun contenu observable.'}</strong>
+                        <strong>
+                          {event.content
+                            ? humanEventPreview(event.kind, event.content, 140)
+                            : 'Aucun contenu observable.'}
+                        </strong>
                         <small>
                           {event.provider
                             ? `${event.provider}${event.model ? ` · ${event.model}` : ''}`
@@ -790,7 +929,7 @@ export function ObservatoryView({
                               : 'Comparer'}
                           </button>
                         </header>
-                        <pre className="observatory-payload">{event.content || '(vide)'}</pre>
+                        <PayloadContent content={event.content} />
                         <p>{event.detail}</p>
                         {event.payloads.length > 0 && (
                           <section className="observatory-payload-list">
@@ -804,9 +943,7 @@ export function ObservatoryView({
                                     {payload.mediaType ? ` · ${payload.mediaType}` : ''}
                                   </small>
                                 </header>
-                                <pre className="observatory-payload">
-                                  {payload.content || '(vide)'}
-                                </pre>
+                                <PayloadContent content={payload.content} />
                               </article>
                             ))}
                           </section>

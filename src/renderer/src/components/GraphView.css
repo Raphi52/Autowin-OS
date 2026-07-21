@@ -21,7 +21,16 @@
 .graph-observatory.is-detail-open {
   grid-template-columns:
     var(--theme-column-width) minmax(96px, 1fr)
-    minmax(240px, var(--detail-column-width));
+    minmax(160px, var(--detail-column-width));
+}
+/* Largeur de la colonne détail pilotée par le mode (le resize manuel, en px inline, prime). */
+/* Clic sur un TAG de thème → colonne étroite (~3× moins que le défaut 58%). */
+.graph-observatory.is-theme-detail {
+  --detail-column-width: 20%;
+}
+/* Clic sur un NŒUD → colonne large (~2× le défaut). */
+.graph-observatory.is-node-detail {
+  --detail-column-width: 88%;
 }
 
 .graph-observatory.is-column-resizing {

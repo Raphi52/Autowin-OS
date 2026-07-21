@@ -11,7 +11,7 @@ describe('navigation pendant une reponse', () => {
 
   it('laisse Nouvelle conversation accessible pendant la reflexion', () => {
     const newConversation = source.match(
-      /<button\s+className="btn btn-sm"\s+onClick=\{newConv\}[\s\S]*?title="Nouvelle conversation"[\s\S]*?<\/button>/
+      /<button\s+className="conv-new-row"\s+onClick=\{newConv\}[\s\S]*?title="Nouvelle conversation"[\s\S]*?<\/button>/
     )?.[0]
 
     expect(newConversation).toBeDefined()
@@ -55,10 +55,10 @@ describe('navigation pendant une reponse', () => {
     )?.[0]
 
     expect(composerButton).toBeDefined()
-    // Tour en cours + composer VIDE → vrai Stop (annule le tour) ; texte présent → Injecter.
+    // Tour en cours + composer VIDE → vrai Stop (annule le tour) ; texte présent → mise en file.
     expect(composerButton).toContain('window.api.cancelPilotChat(activeId)')
     expect(composerButton).toContain("'■ Stop'")
-    expect(composerButton).toContain("'⚡ Injecter'")
+    expect(composerButton).toContain("'⚡ Mettre en file'")
     expect(composerButton).not.toContain('disabled={busy ||')
   })
 })

@@ -708,3 +708,39 @@
     padding: 6px 0 0;
   }
 }
+
+/* Libellé de préfixe d'un payload (ex. "ÉTAT DE L'APP:") au-dessus de l'arbre JSON lisible. */
+.observatory-payload-label {
+  margin-bottom: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-faint, #8391a4);
+}
+
+/* Aperçu du message humain envoyé (liste des appels + tête du détail). */
+.observatory-call-preview {
+  display: block;
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--text, #e8edf4);
+  font-size: 11px;
+  font-style: italic;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.observatory-call-sent {
+  margin: 4px 0 2px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--accent, #ef3f91);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.observatory-call-sent p {
+  margin: 3px 0 0;
+  color: var(--text, #e8edf4);
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

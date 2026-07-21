@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
 import * as THREE from 'three'
-import { autowinStorageKey, readMigratedStorageValue } from '../storage-keys'
+import {
+  DEFAULT_GRAPH_VISIBILITY_SETTINGS,
+  loadGraphVisibilitySettings,
+  saveGraphVisibilitySettings,
+  loadMemoryDetailWidths,
+  saveMemoryDetailWidths,
+  type GraphVisibilitySettings,
+  type MemoryDetailWidths
+} from './graph-settings'
 import {
   fitDetailColumnWidth,
   fitNormalColumnWidths,
@@ -12,7 +20,6 @@ import {
   buildThemeSummaries,
   completeProgressiveGraph,
   dynamicGraphForKey,
-  DEFAULT_GRAPH_NODE_SPACING,
   filterGraphVisibility,
   focusedNodeIdsFor,
   galaxyNodeAppearance,
@@ -31,7 +38,6 @@ import {
   selectExclusiveTheme,
   shouldAutoFitGraphPhase,
   nodeValueForTheme,
-  normalizeGraphNodeSpacing,
   searchGraphCatalog,
   shouldShowFloatingNodeName,
   themeClusterAnchors,
@@ -70,40 +76,10 @@ type Brain = {
 type PanelTab = 'visibility' | 'node'
 type ResizableColumn = 'theme' | 'visibility' | 'detail'
 type ColumnWidths = GraphColumnWidths
-type VisibilitySettings = {
-  labels: boolean
-  links: boolean
-  orphans: boolean
-  arrows: boolean
-  contextOpacity: number
-  nodeSize: number
-  linkWidth: number
-  nodeSpacing: number
-  lod: number
-}
-
-const DEFAULT_VISIBILITY: VisibilitySettings = {
-  labels: true,
-  links: true,
-  orphans: true,
-  arrows: false,
-  contextOpacity: 0.22,
-  nodeSize: 1.4,
-  linkWidth: 0.7,
-  nodeSpacing: DEFAULT_GRAPH_NODE_SPACING,
-  lod: 300
-}
-
-const GRAPH_NODE_SPACING_SUFFIX = 'graph.node-spacing.v1'
 const EMPTY_THEME_SELECTION = new Set<string>()
 
-function initialVisibilitySettings(): VisibilitySettings {
-  return {
-    ...DEFAULT_VISIBILITY,
-    nodeSpacing: normalizeGraphNodeSpacing(
-      readMigratedStorageValue(localStorage, GRAPH_NODE_SPACING_SUFFIX)
-    )
-  }
+function initialVisibilitySettings(): GraphVisibilitySettings {
+  return loadGraphVisibilitySettings(localStorage)
 }
 
 function initialColumnWidths(): ColumnWidths {
@@ -115,8 +91,6 @@ function initialColumnWidths(): ColumnWidths {
   }
 }
 
-/** Largeur confortable de la colonne détail à l'ouverture d'un nœud (clampée aux limites). */
-const GRAPH_DETAIL_EXPANDED = 560
 
 /** Observatoire 3D : thèmes en surbrillance, visibilité réglable et lecture du nœud. */
 export function GraphView({
@@ -134,9 +108,13 @@ export function GraphView({
   const [themeQuery, setThemeQuery] = useState('')
   const [activeThemes, setActiveThemes] = useState<Set<string>>(() => new Set())
   const [themeNodes, setThemeNodes] = useState<GraphNode[]>([])
-  const [settings, setSettings] = useState<VisibilitySettings>(initialVisibilitySettings)
+  const [settings, setSettings] = useState<GraphVisibilitySettings>(initialVisibilitySettings)
   const [panelTab, setPanelTab] = useState<PanelTab>('node')
   const [columnWidths, setColumnWidths] = useState<ColumnWidths>(initialColumnWidths)
+  // Largeurs de la colonne détail mémorisées PAR MODE (thème vs nœud), persistées entre lancements.
+  const [detailWidths, setDetailWidths] = useState<MemoryDetailWidths>(() =>
+    loadMemoryDetailWidths(localStorage)
+  )
   const [resizingColumn, setResizingColumn] = useState<ResizableColumn | null>(null)
   const [node, setNode] = useState<GraphNode | null>(null)
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null)
@@ -162,6 +140,11 @@ export function GraphView({
   const [size, setSize] = useState({ w: 800, h: 500 })
 
   useEffect(() => () => disposeGraphTextures(), [])
+
+  // Persiste les largeurs détail (par mode) à chaque changement.
+  useEffect(() => {
+    saveMemoryDetailWidths(localStorage, detailWidths)
+  }, [detailWidths])
 
   const refreshBrains = useCallback((): void => {
     window.api
@@ -342,9 +325,12 @@ export function GraphView({
     linkForce?.distance?.(linkDistance)
     chargeForce?.strength?.(chargeStrength)
     if (positionRatio !== 1) instance.d3ReheatSimulation()
-    localStorage.setItem(autowinStorageKey(GRAPH_NODE_SPACING_SUFFIX), String(settings.nodeSpacing))
   }, [renderedGraph, settings.nodeSpacing])
   /* eslint-enable react-hooks/immutability */
+
+  useEffect(() => {
+    saveGraphVisibilitySettings(localStorage, settings)
+  }, [settings])
 
   const nodesById = useMemo(
     () => new Map(displayGraph.nodes.map((item) => [item.id, item])),
@@ -545,16 +531,7 @@ export function GraphView({
     }
   }, [detailOpen, resizingColumn])
 
-  useEffect(() => {
-    if (!detailOpen || columnWidths.detail !== null) return
-    const frame = requestAnimationFrame(() => {
-      const width = visibilitySidebarRef.current?.getBoundingClientRect().width
-      if (width) setColumnWidths((current) => ({ ...current, detail: Math.round(width) }))
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [columnWidths.detail, detailOpen])
-
-  function patchSettings(patch: Partial<VisibilitySettings>): void {
+  function patchSettings(patch: Partial<GraphVisibilitySettings>): void {
     setSettings((current) => ({ ...current, ...patch }))
   }
 
@@ -581,6 +558,12 @@ export function GraphView({
           : contentWidth - themeWidth - GRAPH_COLUMN_LIMITS.detailGraph
     const maxWidth = Math.max(limits.min, Math.min(limits.max, availableWidth))
     const width = Math.round(Math.min(maxWidth, Math.max(limits.min, rawWidth)))
+    if (column === 'detail') {
+      // Sauve dans le slot du mode courant (thème/nœud) → persistance par mode, zéro conflit.
+      const mode = node ? 'node' : activeThemes.size > 0 ? 'theme' : null
+      if (mode) setDetailWidths((current) => ({ ...current, [mode]: width }))
+      return
+    }
     setColumnWidths((current) => ({ ...current, [column]: width }))
   }
 
@@ -653,7 +636,8 @@ export function GraphView({
     invalidatePendingGraphFit()
     clearNodeSelection()
     setThemeNodes([])
-    setActiveThemes((current) => toggleThemeSelection(current, theme))
+    setActiveThemes(toggleThemeSelection(activeThemes, theme))
+    // Largeur de la colonne détail = pilotée par le mode en CSS (is-theme-detail).
   }
 
   function activateThemeCluster(theme: string): void {
@@ -688,16 +672,7 @@ export function GraphView({
     const requestId = ++fileRequestRef.current
     setNode(nextNode)
     setPanelTab('node')
-    // Clic sur un nœud → élargir la colonne de droite (sans jamais rétrécir un réglage plus large).
-    setColumnWidths((current) => {
-      const contentWidth = layoutRef.current?.getBoundingClientRect().width ?? size.w
-      const detail = fitDetailColumnWidth(
-        Math.max(current.detail ?? 0, GRAPH_DETAIL_EXPANDED),
-        contentWidth,
-        current.theme
-      )
-      return current.detail === detail ? current : { ...current, detail }
-    })
+    // Largeur de la colonne détail = pilotée par le mode en CSS (is-node-detail).
     focusNode(nextNode)
     setFile(null)
     setFileErr('')
@@ -838,17 +813,24 @@ export function GraphView({
     if (!source) return visualProfile.linkBase
     return visualProfile.palette[Math.abs(source.group) % visualProfile.palette.length]
   }
+  // Mode détail courant → largeur persistée de CE mode (sinon défaut CSS 20%/88% via la classe).
+  const detailMode: 'node' | 'theme' | null = node
+    ? 'node'
+    : activeThemes.size > 0
+      ? 'theme'
+      : null
+  const activeDetailWidth = detailMode ? detailWidths[detailMode] : null
   return (
     <section
       ref={layoutRef}
-      className={`graph-observatory ${visualProfile.modeClass} ${detailOpen ? 'is-detail-open' : ''} ${resizingColumn ? 'is-column-resizing' : ''}`}
+      className={`graph-observatory ${visualProfile.modeClass} ${detailOpen ? 'is-detail-open' : ''} ${node ? 'is-node-detail' : activeThemes.size > 0 ? 'is-theme-detail' : ''} ${resizingColumn ? 'is-column-resizing' : ''}`}
       style={
         {
           '--theme-column-width': `${columnWidths.theme}px`,
           '--visibility-column-width': `${columnWidths.visibility}px`,
-          ...(columnWidths.detail === null
+          ...(activeDetailWidth == null
             ? {}
-            : { '--detail-column-width': `${columnWidths.detail}px` })
+            : { '--detail-column-width': `${activeDetailWidth}px` })
         } as React.CSSProperties
       }
     >
@@ -1122,7 +1104,7 @@ export function GraphView({
                 title="Contenu affiché"
                 onReset={() => {
                   invalidatePendingGraphFit()
-                  setSettings(DEFAULT_VISIBILITY)
+                  setSettings(DEFAULT_GRAPH_VISIBILITY_SETTINGS)
                 }}
               >
                 <ToggleRow

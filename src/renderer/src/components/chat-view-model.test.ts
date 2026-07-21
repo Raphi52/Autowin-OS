@@ -10,8 +10,42 @@ import {
   reduceAssistantPilotEvent,
   reduceScopedLiveRuns,
   resolveChatRuntimeIdentity,
-  modelCostTier
+  modelCostTier,
+  stripAssistantThinking,
+  turnCostEq,
+  costEqTier
 } from './chat-view-model'
+
+describe('assistant reasoning sanitization', () => {
+  it('removes an orphan closing think tag at the start of a message', () => {
+    expect(stripAssistantThinking('</think>R\u00e9ponse visible.')).toBe('R\u00e9ponse visible.')
+  })
+
+  it('removes complete, unterminated, and partially streamed think blocks', () => {
+    expect(stripAssistantThinking('<think>raisonnement</think>R\u00e9ponse')).toBe('R\u00e9ponse')
+    expect(stripAssistantThinking('<think>raisonnement en cours')).toBe('')
+    expect(stripAssistantThinking('R\u00e9ponse<thi')).toBe('R\u00e9ponse')
+    expect(stripAssistantThinking('<thinking>contenu normal</thinking>')).toBe(
+      '<thinking>contenu normal</thinking>'
+    )
+    expect(
+      coalesceAssistantParts([
+        { kind: 'text', text: '<thi' },
+        { kind: 'text', text: 'nk>raisonnement</think>R\u00e9ponse' }
+      ])
+    ).toEqual([{ kind: 'text', text: 'R\u00e9ponse' }])
+  })
+})
+
+describe('coût par tour (pastille live)', () => {
+  it('calcule le coût-eq (output ×5) et classe par seuils réels', () => {
+    expect(turnCostEq({ inputTokens: 3000, outputTokens: 500 })).toBe(3000 + 2500)
+    expect(turnCostEq(null)).toBe(0)
+    expect(costEqTier(5000).dotClass).toBe('st-ok') // < 18k
+    expect(costEqTier(30000).dotClass).toBe('st-warn') // 18k-47k
+    expect(costEqTier(80000).dotClass).toBe('st-err') // > 47k
+  })
+})
 
 describe('modelCostTier', () => {
   it('classe le prix par famille de modèle', () => {

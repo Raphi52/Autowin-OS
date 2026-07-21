@@ -22,7 +22,11 @@ class MemoryStorage {
 
 describe('cles LocalStorage Autowin OS', () => {
   it('excludes retired Loop Builder drafts from startup migration', () => {
-    expect(MIGRATED_STORAGE_SUFFIXES).toEqual(['agent-workflow.v1'])
+    expect(MIGRATED_STORAGE_SUFFIXES).toEqual([
+      'agent-workflow.v1',
+      'graph.visibility-settings.v1',
+      'graph.node-spacing.v1'
+    ])
   })
 
   it('copies a legacy value into the canonical key without deleting the source', () => {
