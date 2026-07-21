@@ -1144,6 +1144,28 @@ export function ChatView({
 
   const active = convs.find((c) => c.id === activeId)
   const conversationHits = useMemo(() => searchConversations(convs, convQuery), [convs, convQuery])
+
+  /**
+   * Inbox d'agents : conversations avec un agent EN TRAVAIL (tour en cours) ou une
+   * orchestration live — visible en tête, même quand la conv active est ailleurs.
+   */
+  const activeAgents = useMemo(() => {
+    const byId = new Map(convs.map((c) => [c.id, c]))
+    const ids = new Set<string>([
+      ...busyConversations,
+      ...Object.keys(liveRuns).filter((id) => liveRuns[id]?.status === 'running')
+    ])
+    return [...ids].map((id) => {
+      const run = liveRuns[id]
+      const phase = run?.phase ? (STEP_META[run.phase.step]?.label ?? run.phase.step) : undefined
+      return {
+        id,
+        title: byId.get(id)?.title ?? 'Conversation',
+        state: run ? (phase ? `${phase} en cours` : 'orchestration') : 'réponse en cours',
+        task: run?.task
+      }
+    })
+  }, [convs, busyConversations, liveRuns])
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
 
   return (
@@ -1156,6 +1178,30 @@ export function ChatView({
             +
           </button>
         </div>
+        {activeAgents.length > 0 && (
+          <section className="agent-inbox" aria-label="Agents actifs">
+            <span className="agent-inbox-title">
+              Agents actifs<span className="agent-inbox-count">{activeAgents.length}</span>
+            </span>
+            {activeAgents.map((agent) => (
+              <button
+                key={agent.id}
+                className={`agent-inbox-row${agent.id === activeId ? ' active' : ''}`}
+                onClick={() => {
+                  const target = convs.find((c) => c.id === agent.id)
+                  if (target) loadConv(target)
+                }}
+                title={agent.task ?? agent.title}
+              >
+                <span className="agent-inbox-pulse" aria-hidden="true" />
+                <span className="agent-inbox-copy">
+                  <span className="agent-inbox-name">{agent.title}</span>
+                  <span className="agent-inbox-state">{agent.state}</span>
+                </span>
+              </button>
+            ))}
+          </section>
+        )}
         <div className="conv-search">
           <span aria-hidden="true">⌕</span>
           <input

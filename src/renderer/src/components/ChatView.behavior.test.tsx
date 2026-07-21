@@ -185,6 +185,29 @@ describe('ChatView behavior under concurrent UI actions', () => {
     )
   })
 
+  it('affiche une inbox d’agents pour une conversation dont un tour est en cours', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('lance un truc long')
+    await click('.composer-send')
+    // Tour en cours → l'inbox d'agents apparaît avec la conversation.
+    const inbox = container!.querySelector('.agent-inbox')
+    expect(inbox).toBeTruthy()
+    expect(inbox!.textContent).toContain('Agents actifs')
+    expect(container!.querySelectorAll('.agent-inbox-row').length).toBe(1)
+    await act(async () => pilot.resolve({ ok: true }))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    // Tour fini → l'inbox se vide.
+    expect(container!.querySelector('.agent-inbox')).toBeNull()
+  })
+
   it('does not steal conversation B when creation from New resolves late', async () => {
     const creation = deferred<ReturnType<typeof conversation>>()
     const mockApi = api({
