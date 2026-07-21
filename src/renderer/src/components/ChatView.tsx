@@ -1016,12 +1016,18 @@ export function ChatView({
       sendLocksRef.current.delete(sendLockKey)
       if (convId) sendLocksRef.current.delete(convId)
       if (messageCommitted && convId) {
-        setConversationBusy(convId, false)
+        // Les derniers événements pilote peuvent encore être EN VOL (IPC) quand la promesse
+        // se résout : on les laisse se réduire AVANT de finaliser et de couper la garde busy,
+        // sinon la fin de la réponse est silencieusement perdue (course busy-flag).
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+        )
         patchLast(convId, (m) => {
           if (m.status === 'streaming') m.status = 'interrupted'
           m.done = true
           if (m.parts.length === 0) m.parts.push({ kind: 'text', text: '_(aucune réponse)_' })
         })
+        setConversationBusy(convId, false)
         await new Promise<void>((resolve) =>
           requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
         )

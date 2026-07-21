@@ -124,6 +124,40 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => pilot.resolve({ ok: true }))
   })
 
+  it('ne perd pas un événement pilote encore en vol quand le tour se termine', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    let pilotHandler: ((event: unknown) => void) | undefined
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise),
+      onPilotEvent: vi.fn((cb: (event: unknown) => void) => {
+        pilotHandler = cb
+        return vi.fn()
+      })
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('question rapide')
+    await click('.composer-send')
+    await act(async () => {
+      // Événement IPC EN VOL (macrotask) programmé AVANT la résolution de la promesse :
+      // il doit être réduit, pas jeté par la garde busy qui se coupe à la fin du tour.
+      setTimeout(() => {
+        pilotHandler?.({
+          conversationId: 'A',
+          turnId: 'turn-tardif',
+          kind: 'delta',
+          streamId: '0:0',
+          text: 'Réponse tardive complète'
+        })
+      }, 0)
+      pilot.resolve({ ok: true })
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    })
+    expect(container!.textContent).toContain('Réponse tardive complète')
+    expect(container!.textContent).not.toContain('aucune réponse')
+  })
+
   it('does not steal conversation B when creation from New resolves late', async () => {
     const creation = deferred<ReturnType<typeof conversation>>()
     const mockApi = api({
