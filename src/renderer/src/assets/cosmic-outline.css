@@ -307,10 +307,20 @@
   background: var(--surface-panel);
   box-shadow: none;
 }
+/* Liste de conversations : legerement plus transparente (90%) que les autres panneaux. */
+.cosmic-outline .conv-pane {
+  background: rgba(5, 5, 6, 0.9);
+}
 
 .cosmic-outline .chat,
 .cosmic-outline .chat-scroll {
   background: transparent;
+}
+/* Fenetre "conversation active" : container borde arrondi comme les autres panneaux. */
+.cosmic-outline .chat {
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-panel);
+  overflow: hidden;
 }
 
 .cosmic-outline .chat-head {
