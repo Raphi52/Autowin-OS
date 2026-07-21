@@ -637,7 +637,7 @@
 }
 .observatory-turn-load {
   height: 2px;
-  background: #1e2730;
+  background: rgba(30, 39, 48, 0.95);
 }
 .observatory-turn-load i {
   display: block;

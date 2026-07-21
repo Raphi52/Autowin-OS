@@ -68,7 +68,7 @@
   border: 1px solid #293543;
   border-radius: 6px;
   outline: none;
-  background: #101722;
+  background: rgba(16, 23, 34, 0.95);
   color: #dce7f3;
 }
 
@@ -82,7 +82,7 @@
   height: 32px;
   border: 1px solid #293543;
   border-radius: 7px;
-  background: #101722;
+  background: rgba(16, 23, 34, 0.95);
   color: #dce7f3;
   cursor: pointer;
   font-size: 19px;
@@ -196,7 +196,7 @@
 .theme-list::-webkit-scrollbar-track,
 .visibility-sidebar::-webkit-scrollbar-track,
 .node-panel pre::-webkit-scrollbar-track {
-  background: #101722;
+  background: rgba(16, 23, 34, 0.95);
 }
 
 .theme-filter {
@@ -783,7 +783,7 @@
   padding: 6px;
   border: 1px solid #283440;
   border-radius: 5px;
-  background: #0c131b;
+  background: rgba(12, 19, 27, 0.95);
   color: #68788b;
   cursor: pointer;
   font-size: 9px;
@@ -814,7 +814,7 @@
   padding: 14px 10px;
   overflow: auto;
   border-right: 1px solid #202936;
-  background: #090e15;
+  background: rgba(9, 14, 21, 0.95);
 }
 
 .node-links__heading {
