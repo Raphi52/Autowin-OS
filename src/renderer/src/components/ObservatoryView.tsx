@@ -468,10 +468,20 @@ export function ObservatoryView({
             {observed.cache.toLocaleString('fr-FR')}
             <small>cache lu</small>
           </strong>
-          <strong data-metric="cost">
-            ${observed.cost.toFixed(3)}
-            <small>coût</small>
-          </strong>
+          {observed.cost === 0 && observed.input + observed.output > 0 ? (
+            // A1 — coût 0 alors que des tokens ont été consommés = usage sur abonnement forfaitaire
+            // (ex. codex/sol via OAuth ChatGPT, non facturé au token). Ne pas afficher « $0.000 »
+            // qui se lit comme une panne d'observabilité.
+            <strong data-metric="cost" title="Providers sur abonnement (OAuth) — non facturés au token">
+              forfait
+              <small>abonnement</small>
+            </strong>
+          ) : (
+            <strong data-metric="cost">
+              ${observed.cost.toFixed(3)}
+              <small>coût</small>
+            </strong>
+          )}
           <strong data-metric="hermes">
             {hermesSummary.count.toLocaleString('fr-FR')}
             <small>Hermes · {hermesSummary.coverage}</small>

@@ -52,14 +52,80 @@ ${task}
 **Critere de succes (DoD cochable)** :
   - [ ] le juge valide le résultat et le gate autorise la clôture
 
+## Contraintes
+<!-- bornes de la solution (HARD/SOFT), source + conséquence si violée -->
+
+## Options
+<!-- si un choix d'approche est engagé : >=3 options scorées + ligne Décision -->
+
+## SOP
+<!-- terrain : procédure opératoire spécifique à la tâche — action -> commande/outil -> signal attendu -> fallback/arrêt -->
+
 ## Journal
 [${date}] Orchestration lancée depuis la conversation ${convId}.
 
 ## Défauts
+
+## Reprise
+Goal:
+Hypothesis:
+Tried:
+Next:
+Blockers:
+
+## Cicatrices
+
+## Checks
 `,
     'utf8'
   )
   return path
+}
+
+/** Extrait le contenu d'une section `## Nom` d'un markdown (jusqu'à la prochaine `## ` ou la fin). */
+function extractSection(md: string, name: string): string {
+  const re = new RegExp(`(?:^|\\n)##\\s+${name}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|$)`, 'i')
+  const m = md.match(re)
+  return m ? m[1].trim() : ''
+}
+
+/**
+ * J2 — peuple le RUN.md de la conversation avec le VRAI livrable des phases : le sous-agent
+ * produit son travail structuré (Contraintes/Options/SOP…) dans sa réponse, mais le RUN.md que
+ * Workflows affiche restait un template vide. On remplit les placeholders `<!-- -->` avec le
+ * meilleur contenu (le plus complet) trouvé sur l'ensemble des phases, et on annexe l'agrégat.
+ */
+export function populateConvRunSections(
+  runPath: string,
+  phaseOutputs: { phase: string; text: string }[]
+): void {
+  if (!phaseOutputs?.length) return
+  try {
+    let md = readFileSync(runPath, 'utf8')
+    for (const section of ['Contraintes', 'Options', 'SOP']) {
+      // le contenu le plus long parmi les phases = le plus complet (résiste à une phase qui dérive)
+      const best = phaseOutputs
+        .map((p) => extractSection(p.text, section))
+        .filter((c) => c && !c.startsWith('<!--'))
+        .sort((a, b) => b.length - a.length)[0]
+      if (!best) continue
+      const placeholder = new RegExp(`(##\\s+${section}\\n)<!--[\\s\\S]*?-->`, 'i')
+      if (placeholder.test(md)) md = md.replace(placeholder, `$1${best}`)
+    }
+    const annexe = phaseOutputs
+      .map((p) => `### phase ${p.phase}\n${p.text.slice(0, 2000)}`)
+      .join('\n\n')
+    const section = `## Livrable des phases\n${annexe}\n`
+    if (md.includes('## Livrable des phases')) {
+      // A3 — peuplement LIVE : la section est réécrite à chaque phase (idempotent), pas dupliquée.
+      md = md.replace(/## Livrable des phases\n[\s\S]*?(?=\n## Reprise)/, section)
+    } else {
+      md = md.replace(/\n## Reprise/, `\n${section}\n## Reprise`)
+    }
+    writeFileSync(runPath, md, 'utf8')
+  } catch {
+    /* peuplement best-effort : un RUN.md template reste lisible, pas fatal */
+  }
 }
 
 /** Clôt le RUN selon le verdict du gate (green = validé, red = rejeté/crash). */

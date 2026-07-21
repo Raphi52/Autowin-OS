@@ -124,7 +124,10 @@ export class AutowinOS {
       cost: this.cost,
       trust: this.trust,
       authority: this.authority,
-      executionWorkspace: resolveExecutionWorkspace()
+      executionWorkspace: resolveExecutionWorkspace(),
+      // Pipeline du kit COMPLÈTE : SCOUT → FRAME → TERRAIN → BUILD → CLEAN (1 skill/phase),
+      // puis le juge (rôle distinct). Chaque phase injecte le SKILL.md réel du kit.
+      execPhases: ['scout', 'frame', 'terrain', 'build', 'clean']
     })
   }
 

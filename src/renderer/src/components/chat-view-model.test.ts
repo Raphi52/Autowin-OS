@@ -9,6 +9,7 @@ import {
   hydrateStoredAssistant,
   reduceAssistantPilotEvent,
   reduceScopedLiveRuns,
+  phaseLabel,
   resolveChatRuntimeIdentity,
   modelCostTier,
   stripAssistantThinking,
@@ -366,5 +367,19 @@ describe('conversation-scoped workflow state', () => {
       false
     )
     expect(isRunRequestCurrent(requested, { id: 4, scope: 'tous', convId: null })).toBe(false)
+  })
+})
+
+describe('phaseLabel (A4 — libellé de phase live)', () => {
+  it('nomme la phase pipeline en clair', () => {
+    expect(phaseLabel({ step: 'exec', phase: 'scout' })).toBe('sous-agent · scout')
+    expect(phaseLabel({ step: 'exec', phase: 'frame' })).toBe('sous-agent · cadrage')
+    expect(phaseLabel({ step: 'exec', phase: 'clean' })).toBe('sous-agent · nettoyage')
+  })
+
+  it('retombe sur le libellé d’étape si pas de phase', () => {
+    expect(phaseLabel({ step: 'exec' })).toBe('sous-agent')
+    expect(phaseLabel({ step: 'judge' })).toBe('juge')
+    expect(phaseLabel({ step: 'gate' })).toBe('gate')
   })
 })

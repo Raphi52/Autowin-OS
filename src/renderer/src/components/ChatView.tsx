@@ -17,6 +17,7 @@ import {
   turnCostEq,
   costEqTier,
   STEP_META,
+  phaseLabel,
   type OrchStep,
   type ChatPart,
   type HydratedAssistantMessage,
@@ -275,12 +276,14 @@ const ChatMessageRow = memo(function ChatMessageRow({
   message,
   conversationId,
   onInspectTurn,
-  onFork
+  onFork,
+  onOpenImage
 }: {
   message: Msg
   conversationId: string | null
   onInspectTurn?: (target: InspectTurnTarget) => void
   onFork?: (messageId: string) => void
+  onOpenImage?: (image: { src: string; name: string }) => void
 }): React.JSX.Element {
   if (message.role === 'user') {
     return (
@@ -301,7 +304,14 @@ const ChatMessageRow = memo(function ChatMessageRow({
                 key={`${file.name}-${fileIndex}`}
               >
                 {file.thumbnail ? (
-                  <img className="attachment-thumb" src={file.thumbnail} alt={file.name} />
+                  <button
+                    type="button"
+                    className="attachment-thumb-button"
+                    aria-label={`Agrandir ${file.name}`}
+                    onClick={() => onOpenImage?.({ src: file.thumbnail!, name: file.name })}
+                  >
+                    <img className="attachment-thumb" src={file.thumbnail} alt={file.name} />
+                  </button>
                 ) : (
                   <span aria-hidden="true">{file.mimeType.startsWith('image/') ? '▧' : '▤'}</span>
                 )}
@@ -398,7 +408,22 @@ export function ChatView({
   const [input, setInput] = useState('')
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
+  const [openImage, setOpenImage] = useState<{ src: string; name: string } | null>(null)
   const [dragActive, setDragActive] = useState(false)
+
+  useEffect(() => {
+    if (!openImage) return
+    const previousOverflow = document.body.style.overflow
+    const closeOnEscape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setOpenImage(null)
+    }
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [openImage])
   const [busyConversations, setBusyConversations] = useState<Set<string>>(() => new Set())
   const [runtimeIdentity, setRuntimeIdentity] = useState<ChatRuntimeIdentity | null>(null)
   // Coût-eq du dernier tour par conversation → pastille coût live.
@@ -432,6 +457,8 @@ export function ChatView({
   const [runs, setRuns] = useState<RunEntry[]>([])
   const [openRun, setOpenRun] = useState<{ path: string; content: string } | null>(null)
   const [openTrace, setOpenTrace] = useState<OrchStep[] | null>(null)
+  // Détail d'un run : bascule entre le fil des sous-agents (trace) et le RUN.md brut.
+  const [runDetailTab, setRunDetailTab] = useState<'trace' | 'runmd'>('trace')
   const [liveRuns, setLiveRuns] = useState<Record<string, ScopedLiveRun<OrchStep>>>({})
   const [decisions, setDecisions] = useState<Decision[]>([])
   const [showDecisions, setShowDecisions] = useState(false)
@@ -528,32 +555,24 @@ export function ChatView({
 
   async function refreshRuntimeIdentity(): Promise<ChatRuntimeIdentity> {
     const generation = ++runtimeRefreshGenerationRef.current
-    const [models, transport] = await Promise.all([
-      window.api.models(),
-      window.api.routerMigrationState?.() ??
-        Promise.resolve({
-          mode: 'omniroute' as const,
-          routeModel: 'auto/coding',
-          credentialConfigured: false
-        })
-    ])
-    const omniRouteModels = (models as RuntimeModel[]).filter(
-      (model) => model.provider === 'omniroute'
+    const [models, roles] = await Promise.all([window.api.models(), window.api.roles()])
+    const catalog = models as RuntimeModel[]
+    const binding = roles.orchestrator
+    const resolved = resolveChatRuntimeIdentity(
+      {
+        orchestrator: {
+          slotId: 'orchestrator',
+          provider: binding.provider,
+          modelId: binding.model ?? '',
+          reasoningEffort: binding.reasoningEffort ?? 'auto'
+        }
+      },
+      catalog,
+      binding
     )
-    const transportEffort = (transport as { reasoningEffort?: string }).reasoningEffort ?? 'none'
-    const resolved: ChatRuntimeIdentity = {
-      provider: 'omniroute',
-      model: transport.routeModel ?? 'auto/coding',
-      modelLabel: transport.routeModel ?? 'auto/coding',
-      reasoningEffort: transportEffort
-    }
     if (generation === runtimeRefreshGenerationRef.current) {
-      setModelCatalog(omniRouteModels)
-      setOrchestratorBinding({
-        provider: 'omniroute',
-        model: transport.routeModel ?? 'auto/coding',
-        reasoningEffort: transportEffort
-      })
+      setModelCatalog(catalog)
+      setOrchestratorBinding(binding)
       setModelCatalogLoaded(true)
       setRuntimeIdentity(resolved)
     }
@@ -565,10 +584,12 @@ export function ChatView({
     setModelChangePending(true)
     setModelChangeError(null)
     try {
-      if (option.provider !== 'omniroute') {
-        throw new Error('Seules les routes OmniRoute peuvent être sélectionnées dans le chat')
-      }
-      await window.api.activateOmniRoute(option.model, option.reasoningEffort)
+      await window.api.setRole(
+        'orchestrator',
+        option.provider,
+        option.model,
+        option.reasoningEffort
+      )
       await refreshRuntimeIdentity()
     } catch (error) {
       setModelChangeError(
@@ -732,7 +753,14 @@ export function ChatView({
             type: 'phase',
             convId: e.convId!,
             runPath: e.runPath,
-            phase: e.phase as { step: string; provider?: string; role?: string }
+            phase: e.phase as {
+              step: string
+              provider?: string
+              role?: string
+              model?: string
+              reasoningEffort?: string
+              phase?: string
+            }
           })
         )
       } else if (e.type === 'orchestrate-delta' && typeof e.delta === 'string' && e.convId) {
@@ -1153,7 +1181,7 @@ export function ChatView({
     ])
     return [...ids].map((id) => {
       const run = liveRuns[id]
-      const phase = run?.phase ? (STEP_META[run.phase.step]?.label ?? run.phase.step) : undefined
+      const phase = run?.phase ? phaseLabel(run.phase) : undefined
       return {
         id,
         title: byId.get(id)?.title ?? 'Conversation',
@@ -1214,7 +1242,9 @@ export function ChatView({
         </div>
         <div className="conv-list scroll-y">
           <button className="conv-new-row" onClick={newConv} title="Nouvelle conversation">
-            <span className="conv-new-plus" aria-hidden="true">+</span>
+            <span className="conv-new-plus" aria-hidden="true">
+              +
+            </span>
             <span className="conv-label">Nouvelle conversation</span>
           </button>
           {convs.length === 0 && (
@@ -1235,7 +1265,7 @@ export function ChatView({
                   {convQuery && snippet && <span className="conv-snippet">{snippet}</span>}
                   {!convQuery && (
                     <span className="conv-meta">
-                      <span>{c.provider}</span>
+                      {c.category !== 'omniroute' && <span>{c.provider}</span>}
                       <span>{c.messages.length} messages</span>
                     </span>
                   )}
@@ -1271,33 +1301,33 @@ export function ChatView({
               role="menu"
               style={{ top: convMenu.top, left: convMenu.left }}
             >
-            <button
-              role="menuitem"
-              onClick={() => {
-                const conv = convMenu.conv
-                setConvMenu(null)
-                renameConv(conv)
-              }}
-            >
-              <span className="conv-menu-ic" aria-hidden="true">
-                ✎
-              </span>
-              Renommer
-            </button>
-            <button
-              role="menuitem"
-              className="c-err"
-              onClick={() => {
-                const conv = convMenu.conv
-                setConvMenu(null)
-                removeConv(conv)
-              }}
-            >
-              <span className="conv-menu-ic" aria-hidden="true">
-                🗑
-              </span>
-              Supprimer
-            </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  const conv = convMenu.conv
+                  setConvMenu(null)
+                  renameConv(conv)
+                }}
+              >
+                <span className="conv-menu-ic" aria-hidden="true">
+                  ✎
+                </span>
+                Renommer
+              </button>
+              <button
+                role="menuitem"
+                className="c-err"
+                onClick={() => {
+                  const conv = convMenu.conv
+                  setConvMenu(null)
+                  removeConv(conv)
+                }}
+              >
+                <span className="conv-menu-ic" aria-hidden="true">
+                  🗑
+                </span>
+                Supprimer
+              </button>
             </div>
           </>,
           document.body
@@ -1363,11 +1393,7 @@ export function ChatView({
                         ? costEqTier(liveCost)
                         : modelCostTier(runtimeIdentity.model)
                     return (
-                      <span
-                        className="chat-cost-dot"
-                        title={cost.label}
-                        aria-label={cost.label}
-                      >
+                      <span className="chat-cost-dot" title={cost.label} aria-label={cost.label}>
                         <span className={`status-dot ${cost.dotClass}`} />
                         {cost.label}
                       </span>
@@ -1532,6 +1558,7 @@ export function ChatView({
               conversationId={activeId}
               onInspectTurn={onInspectTurn}
               onFork={handleFork}
+              onOpenImage={setOpenImage}
             />
           ))}
         </div>
@@ -1853,13 +1880,31 @@ export function ChatView({
                       (() => {
                         const phase = liveRuns[activeId].phase
                         const meta = phase ? STEP_META[phase.step] : undefined
-                        const label = meta?.label ?? phase?.step ?? 'sous-agent'
+                        const label = phase ? phaseLabel(phase) : 'sous-agent'
+                        // Modèle réel (ex "cc/claude-opus-4-8" → "claude-opus-4-8") + effort en clair,
+                        // au lieu du transport ("omniroute").
+                        const EFFORT_FR: Record<string, string> = {
+                          low: 'faible',
+                          medium: 'moyen',
+                          high: 'élevé',
+                          xhigh: 'très élevé',
+                          max: 'max',
+                          ultra: 'ultra'
+                        }
+                        const shortModel = phase?.model?.split('/').pop()
+                        const eff =
+                          phase?.reasoningEffort &&
+                          phase.reasoningEffort !== 'none' &&
+                          phase.reasoningEffort !== 'auto'
+                            ? (EFFORT_FR[phase.reasoningEffort] ?? phase.reasoningEffort)
+                            : undefined
+                        const detail = shortModel
+                          ? `${shortModel}${eff ? ` · ${eff}` : ''}`
+                          : phase?.provider
                         return (
                           <div className="c-faint" style={{ fontSize: 11, marginTop: 4 }}>
                             <span className="spinner" /> {meta?.icon ?? '⏳'} {label}
-                            {phase?.provider && (
-                              <span className="mono c-accent"> {phase.provider}</span>
-                            )}{' '}
+                            {detail && <span className="mono c-accent"> {detail}</span>}{' '}
                             en cours…
                           </div>
                         )
@@ -1922,20 +1967,26 @@ export function ChatView({
                     </button>
                     {isOpen && (
                       <div className="run-detail-box fade-in">
-                        {openTrace ? (
-                          <div className="col" style={{ gap: 'var(--s2)' }}>
-                            <div
-                              className="c-faint"
-                              style={{
-                                fontSize: 10,
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.05em'
-                              }}
+                        {openTrace && openRun && (
+                          <div className="run-detail-tabs">
+                            <button
+                              type="button"
+                              className={`run-detail-tab${runDetailTab === 'trace' ? ' is-active' : ''}`}
+                              onClick={() => setRunDetailTab('trace')}
                             >
                               Fil des sous-agents
-                            </div>
-                            <StepThread steps={openTrace} />
+                            </button>
+                            <button
+                              type="button"
+                              className={`run-detail-tab${runDetailTab === 'runmd' ? ' is-active' : ''}`}
+                              onClick={() => setRunDetailTab('runmd')}
+                            >
+                              RUN.md
+                            </button>
                           </div>
+                        )}
+                        {openTrace && (runDetailTab === 'trace' || !openRun) ? (
+                          <StepThread steps={openTrace} />
                         ) : (
                           openRun && (
                             <pre className="run-detail mono scroll-y">{openRun.content}</pre>
@@ -1950,6 +2001,29 @@ export function ChatView({
           </aside>
         </>
       )}
+      {openImage &&
+        createPortal(
+          <div
+            className="image-lightbox"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Aperçu de ${openImage.name}`}
+            onClick={() => setOpenImage(null)}
+          >
+            <div className="image-lightbox-content" onClick={(event) => event.stopPropagation()}>
+              <button
+                type="button"
+                className="image-lightbox-close"
+                aria-label="Fermer l’aperçu"
+                onClick={() => setOpenImage(null)}
+              >
+                ×
+              </button>
+              <img src={openImage.src} alt={openImage.name} />
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   )
 }

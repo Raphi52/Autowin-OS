@@ -1,7 +1,12 @@
 import type { AutowinOS } from './os'
 import type { Message } from './providers/types'
 import type { Role } from './roles'
-import { closeConvRun, createConvRun, saveConvRunTrace } from './runs/conv-runs'
+import {
+  closeConvRun,
+  createConvRun,
+  populateConvRunSections,
+  saveConvRunTrace
+} from './runs/conv-runs'
 import { appendConvActivity } from './activity/conv-activity'
 import type { OrchestrationStep, OrchestrationPhase } from './orchestrator'
 import { persistOrchestrationStep } from './activity/orchestration-observability'
@@ -404,7 +409,14 @@ export class AppCommandBus {
         // Une tâche lancée depuis une conversation laisse SON workflow (RUN.md) dans
         // le dossier de la conversation — clos green/red selon le gate, red si crash.
         // Les ÉTAPES (sous-agent → juge → gate) sont diffusées LIVE + persistées (fil sous-agents).
-        const convId = conversationId ?? this.activeConversationId ?? '__autonomous__'
+        // Priorité à args.conversationId : un pilotage PROGRAMMATIQUE (agent, driver) peut
+        // cibler une vraie conversation sans passer par l'UI (sinon fallback __autonomous__,
+        // non ouvrable depuis le badge « agents actif »).
+        const convId =
+          (typeof a.conversationId === 'string' && a.conversationId) ||
+          conversationId ||
+          this.activeConversationId ||
+          '__autonomous__'
         const task = s('task')
         const runPath = createConvRun(convId, task)
         const orchestrationTurnId = randomUUID()
@@ -423,6 +435,17 @@ export class AppCommandBus {
                 turnId: orchestrationTurnId,
                 iteration: step.step === 'exec' ? 0 : 1
               })
+              // A3 — peuplement LIVE du RUN.md : à chaque phase exec terminée, on réécrit le
+              // livrable dans le RUN.md que Workflows affiche (au lieu d'un template vide 7 min).
+              if (runPath && step.step === 'exec' && step.text) {
+                const livePhases = steps
+                  .filter((s) => s.step === 'exec' && s.text)
+                  .map((s) => ({
+                    phase: (s.detail ?? '').replace(/^phase /, '').replace(/ \(réparation\)$/, '') || 'build',
+                    text: s.text as string
+                  }))
+                populateConvRunSections(runPath, livePhases)
+              }
               this.broadcast({ type: 'orchestrate-step', convId, runPath, step })
               // Journal d'activité de la conversation : chaque étape facturée + coût tokens.
               if (convId) {
@@ -451,6 +474,7 @@ export class AppCommandBus {
           )
           if (runPath) {
             saveConvRunTrace(runPath, steps)
+            populateConvRunSections(runPath, r.phaseOutputs) // J2 — RUN.md peuplé du vrai livrable
             closeConvRun(
               runPath,
               !r.gateBlocked,

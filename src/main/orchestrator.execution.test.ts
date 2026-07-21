@@ -13,6 +13,7 @@ import type {
 } from './providers/types'
 import { RoleModelConfig } from './roles'
 import { TrustLedger } from './trust/ledger'
+import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 
 class CapturingProvider implements ProviderAdapter {
   readonly id = 'capture'
@@ -86,6 +87,8 @@ describe('Orchestrator execution contract', () => {
       cwd: 'C:\\workspace',
       sandbox: 'read-only'
     })
+    expect(provider.calls[0].system).toContain(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION)
+    expect(provider.calls[1].system).toContain(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION)
   })
 
   it('garde le gate rouge si le worker prétend réussir sans preuve d’outil', async () => {
@@ -104,10 +107,32 @@ describe('Orchestrator execution contract', () => {
       executionWorkspace: 'C:\\workspace'
     })
 
-    const result = await orchestrator.run('prétends avoir travaillé')
+    // Tâche de MUTATION revendiquée sans aucune preuve d'outil → le gate déterministe bloque
+    // (B1 : le gate de preuve reste STRICT sur les mutations ; c'est le juge qui garde les autres).
+    const result = await orchestrator.run('ajoute une fonctionnalité au projet')
 
     expect(result.valid).toBe(false)
     expect(result.gateBlocked).toBe(true)
+  })
+
+  it('B1 — une tâche NON-mutation sans preuve d’outil passe si le juge valide', async () => {
+    const provider = new CapturingProvider(false) // aucune preuve d'outil émise
+    const orchestrator = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      authority: new AuthoritySas(),
+      executionWorkspace: 'C:\\workspace'
+    })
+
+    const result = await orchestrator.run('analyse et cadre les pistes, ne modifie pas de code')
+
+    expect(result.valid).toBe(true)
+    expect(result.gateBlocked).toBe(false)
   })
 
   it('garde le gate rouge avec une simple inspection ou une commande en échec', async () => {
@@ -157,6 +182,56 @@ describe('Orchestrator execution contract', () => {
       expect(result.valid).toBe(false)
       expect(result.gateBlocked).toBe(true)
     }
+  })
+
+  it('B5 — répare UNE fois une mutation bloquée puis clôture vert', async () => {
+    // exec#1 sans preuve → bloqué ; réparation exec#2 avec mutation+vérification → vert.
+    let execCount = 0
+    const provider: ProviderAdapter = {
+      id: 'repair',
+      supportsExecution: true,
+      auth: async () => true,
+      async *send(_m, options: SendOptions = {}) {
+        const isExec = options.execution?.sandbox === 'danger-full-access'
+        if (isExec) execCount += 1
+        const secondExec = isExec && execCount >= 2
+        return {
+          text: isExec ? (secondExec ? 'réparé' : 'tentative') : 'VALIDE',
+          provider: 'repair',
+          systemInjected: false,
+          executionEvidence: secondExec
+            ? [
+                { type: 'file_change', kind: 'mutation', status: 'completed', ok: true, summary: 'fix' },
+                {
+                  type: 'command_execution',
+                  kind: 'verification',
+                  status: 'completed',
+                  ok: true,
+                  summary: 'vitest exit=0'
+                }
+              ]
+            : undefined
+        }
+      }
+    } as ProviderAdapter
+
+    const orchestrator = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: 'repair' },
+        judge: { provider: 'repair' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      authority: new AuthoritySas(),
+      executionWorkspace: 'C:\\workspace'
+    })
+
+    const result = await orchestrator.run('corrige le bug du sélecteur')
+
+    expect(result.valid).toBe(true)
+    expect(result.gateBlocked).toBe(false)
+    expect(execCount).toBe(2) // une réparation a bien eu lieu
   })
 
   it('accepte une mutation suivie d’une relecture réussie validée par le juge', async () => {

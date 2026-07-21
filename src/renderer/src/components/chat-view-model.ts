@@ -412,6 +412,24 @@ export interface LiveRunPhase {
   step: string
   provider?: string
   role?: string
+  model?: string
+  reasoningEffort?: string
+  /** A4 — phase pipeline (scout/frame/…) pour un libellé live précis. */
+  phase?: string
+}
+
+/** Libellé lisible d'une phase de pipeline (A4) — sinon retombe sur le libellé d'étape. */
+export function phaseLabel(p: { step: string; phase?: string }): string {
+  const PHASE_FR: Record<string, string> = {
+    scout: 'scout',
+    frame: 'cadrage',
+    terrain: 'terrain',
+    build: 'build',
+    clean: 'nettoyage',
+    judge: 'juge'
+  }
+  if (p.phase && PHASE_FR[p.phase]) return `sous-agent · ${PHASE_FR[p.phase]}`
+  return STEP_META[p.step]?.label ?? p.step
 }
 
 export interface ScopedLiveRun<TStep = unknown> {
