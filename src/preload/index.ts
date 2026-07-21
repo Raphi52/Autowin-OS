@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 interface Message {
@@ -273,7 +273,10 @@ const api = {
     }>
   > => ipcRenderer.invoke('os:listRuns'),
   // Harnais : projection lecture seule (typée dans index.d.ts)
-  harnessSnapshot: (): Promise<unknown> => ipcRenderer.invoke('os:harness:snapshot')
+  harnessSnapshot: (): Promise<unknown> => ipcRenderer.invoke('os:harness:snapshot'),
+  // Zoom app-wide (accessibilité) — agit sur tout le rendu comme un navigateur.
+  getZoomFactor: (): number => webFrame.getZoomFactor(),
+  setZoomFactor: (factor: number): void => webFrame.setZoomFactor(factor)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

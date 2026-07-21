@@ -62,6 +62,49 @@ export function MainApp(): React.JSX.Element {
     })()
   }, [])
 
+  // Zoom app-wide (accessibilité malvoyant) : Ctrl + molette agrandit/réduit TOUT le rendu,
+  // Ctrl+0 réinitialise, Ctrl+±/= ajustent au clavier. Persisté entre lancements. Borné 0.5–3.
+  useEffect(() => {
+    const api = window.api
+    if (!api?.setZoomFactor || !api?.getZoomFactor) return
+    const KEY = 'autowin:zoom-factor'
+    const MIN = 0.5
+    const MAX = 3
+    const STEP = 0.1
+    const clamp = (f: number): number => Math.min(MAX, Math.max(MIN, Math.round(f * 100) / 100))
+    const apply = (f: number): void => {
+      const z = clamp(f)
+      api.setZoomFactor(z)
+      localStorage.setItem(KEY, String(z))
+    }
+    const saved = Number(localStorage.getItem(KEY))
+    if (saved && saved > 0) api.setZoomFactor(clamp(saved))
+    const onWheel = (e: WheelEvent): void => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      apply(api.getZoomFactor() + (e.deltaY < 0 ? STEP : -STEP))
+    }
+    const onKey = (e: KeyboardEvent): void => {
+      if (!e.ctrlKey) return
+      if (e.key === '0') {
+        e.preventDefault()
+        apply(1)
+      } else if (e.key === '+' || e.key === '=') {
+        e.preventDefault()
+        apply(api.getZoomFactor() + STEP)
+      } else if (e.key === '-') {
+        e.preventDefault()
+        apply(api.getZoomFactor() - STEP)
+      }
+    }
+    window.addEventListener('wheel', onWheel, { passive: false })
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('wheel', onWheel)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [])
+
   function navigate(nextTab: Tab): void {
     setVisitedTabs((visited) => {
       if (visited.has(nextTab)) return visited

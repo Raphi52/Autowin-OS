@@ -546,6 +546,8 @@ interface ChatApi {
   ) => Promise<Array<{ id: string; label: string; file: string; themes: string[] }>>
   listRuns: () => Promise<RunEntry[]>
   harnessSnapshot: () => Promise<import('../renderer/src/components/harness-model').HarnessSnapshot>
+  getZoomFactor: () => number
+  setZoomFactor: (factor: number) => void
 }
 
 declare global {
