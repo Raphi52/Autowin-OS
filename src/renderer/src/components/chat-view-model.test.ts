@@ -9,8 +9,23 @@ import {
   hydrateStoredAssistant,
   reduceAssistantPilotEvent,
   reduceScopedLiveRuns,
-  resolveChatRuntimeIdentity
+  resolveChatRuntimeIdentity,
+  modelCostTier
 } from './chat-view-model'
+
+describe('modelCostTier', () => {
+  it('classe le prix par famille de modèle', () => {
+    expect(modelCostTier('cc/claude-opus-4-8').tier).toBe('high')
+    expect(modelCostTier('cc/claude-haiku-4-5-20251001').tier).toBe('low')
+    expect(modelCostTier('cc/claude-sonnet-4-6').tier).toBe('mid')
+    expect(modelCostTier('aug/gemini-3.1-flash').tier).toBe('low')
+    // Route auto → coût variable, pas de fausse assertion.
+    expect(modelCostTier('auto/claude-opus').tier).toBe('unknown')
+    expect(modelCostTier('auto/best-coding').tier).toBe('unknown')
+    // Inconnu → gris, jamais deviné.
+    expect(modelCostTier('tllm/some_weird_model').tier).toBe('unknown')
+  })
+})
 
 describe('durable assistant hydration and streaming', () => {
   it('restores structured parts and terminal state without flattening actions', () => {

@@ -1613,3 +1613,14 @@
     padding-left: 20px;
   }
 }
+
+/* Pastille coût du modèle courant (bandeau runtime du Chat). */
+.chat-cost-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.status-dot.st-neutral {
+  background: var(--text-faint, #7c869b);
+  opacity: 0.6;
+}

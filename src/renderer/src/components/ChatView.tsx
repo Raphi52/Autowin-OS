@@ -12,6 +12,7 @@ import {
   reduceScopedLiveRuns,
   reduceAssistantPilotEvent,
   resolveChatRuntimeIdentity,
+  modelCostTier,
   STEP_META,
   type OrchStep,
   type ChatPart,
@@ -1314,6 +1315,20 @@ export function ChatView({
                   {runtimeIdentity?.provider ?? 'connexion…'}
                 </span>
                 <span>{runtimeIdentity?.modelLabel ?? 'modèle en cours de résolution'}</span>
+                {runtimeIdentity?.model &&
+                  (() => {
+                    const cost = modelCostTier(runtimeIdentity.model)
+                    return (
+                      <span
+                        className="chat-cost-dot"
+                        title={`Coût du modèle : ${cost.label}`}
+                        aria-label={`Coût du modèle : ${cost.label}`}
+                      >
+                        <span className={`status-dot ${cost.dotClass}`} />
+                        {cost.label}
+                      </span>
+                    )
+                  })()}
                 {runtimeIdentity?.reasoningEffort && (
                   <span>effort {runtimeIdentity.reasoningEffort}</span>
                 )}

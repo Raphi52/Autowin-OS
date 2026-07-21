@@ -251,6 +251,29 @@ export function modelRecencyKey(model: string): [number, number] {
 }
 
 /**
+ * Palier de prix d'un modèle (pastille coût du Chat), déduit de l'id.
+ * vert = pas cher · orange = moyen · rouge = cher · gris = inconnu (auto/*, non classé).
+ * Heuristique par famille — un coût $/token LIVE pourra l'affiner plus tard.
+ */
+export function modelCostTier(model: string): {
+  tier: 'low' | 'mid' | 'high' | 'unknown'
+  dotClass: string
+  label: string
+} {
+  const id = model.toLowerCase()
+  const isAuto = id.startsWith('auto') || id.startsWith('custom:') || id.includes('/auto')
+  if (isAuto)
+    return { tier: 'unknown', dotClass: 'st-neutral', label: 'Coût variable (route auto)' }
+  if (/opus|gpt-5\.\d+-pro|grok-\d+-reasoning/.test(id))
+    return { tier: 'high', dotClass: 'st-err', label: 'Modèle cher' }
+  if (/haiku|flash|mini|nano|lite|small|8b|7b|scout/.test(id))
+    return { tier: 'low', dotClass: 'st-ok', label: 'Modèle pas cher' }
+  if (/sonnet|gpt-5|gemini-\d|glm|mimo|qwen|deepseek|llama|kimi|fable/.test(id))
+    return { tier: 'mid', dotClass: 'st-warn', label: 'Coût moyen' }
+  return { tier: 'unknown', dotClass: 'st-neutral', label: 'Coût inconnu' }
+}
+
+/**
  * Sous-tri des routes auto/* du bucket « Sélection automatique » (le regroupement par
  * éditeur est fait en amont par modelVendor). Ordre : Chat → Raisonnement → Code → reste,
  * tier « best » avant « pro ». Retourne [sous-rang, 0] ; libellé puis index tranchent les égalités.
