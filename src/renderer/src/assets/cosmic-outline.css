@@ -316,11 +316,13 @@
 .cosmic-outline .chat-scroll {
   background: transparent;
 }
-/* Fenetre "conversation active" : container borde arrondi comme les autres panneaux. */
+/* Fenetre "conversation active" : carte autonome (fond 95% propre, plus dependante de
+   chat-layout) bordee arrondie comme les autres panneaux. */
 .cosmic-outline .chat {
   border: 1px solid var(--container-border);
   border-radius: var(--container-radius-panel);
   overflow: hidden;
+  background: var(--surface-panel);
 }
 
 .cosmic-outline .chat-head {
@@ -417,9 +419,15 @@
 /* Chat Orbital : conversation d'abord, technique en divulgation progressive. */
 .cosmic-outline .chat-layout {
   position: relative;
-  gap: 0;
+  /* Pas de "fenetre" englobante : chat-layout est un simple conteneur flex transparent.
+     Les 3 panneaux sont des cartes arrondies autonomes flottant sur le cosmique (gaps). */
+  gap: var(--s2);
+  padding: 0;
   border: 0;
-  border-radius: inherit;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .cosmic-outline .conv-pane {
