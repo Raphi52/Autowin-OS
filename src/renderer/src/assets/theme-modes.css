@@ -1,12 +1,14 @@
 /* Theme modes select mood only. Component geometry lives in ui-system.css. */
+/* Backdrop de page transparent : les bords / espaces hors containers laissent voir le fond cosmique. */
 .theme-serious .main {
-  background: #000;
+  background: transparent;
 }
+/* Le rail est un container "fenetre" -> 95% d'opacite (le cosmique transparait legerement). */
 .theme-serious .rail {
-  background: #000;
+  background: rgba(0, 0, 0, 0.95);
   border-right-color: rgba(255, 255, 255, 0.2);
   backdrop-filter: none;
 }
 .theme-serious .brand {
-  background: #070708;
+  background: rgba(7, 7, 8, 0.95);
 }

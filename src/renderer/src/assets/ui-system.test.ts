@@ -41,9 +41,14 @@ describe('Autowin UI contract', () => {
     }
   })
 
-  it('keeps Noir opaque and routes shared cosmic surfaces through semantic tokens', () => {
-    expect(themeModes).toMatch(/\.theme-serious \.main\s*\{\s*background:\s*#000;/)
-    expect(themeModes).toMatch(/\.theme-serious \.rail\s*\{[\s\S]*?background:\s*#000;/)
+  it('lets the cosmic backdrop show: transparent shell edges, ~95% translucent containers', () => {
+    // Backdrop de shell transparent -> les bords / espaces hors containers montrent le cosmique.
+    expect(themeModes).toMatch(/\.theme-serious \.main\s*\{\s*background:\s*transparent;/)
+    // Rail = container "fenetre" a 95% d'opacite.
+    expect(themeModes).toMatch(/\.theme-serious \.rail\s*\{[\s\S]*?background:\s*rgba\(0, 0, 0, 0\.95\);/)
+    // Surfaces partagees translucides (alpha 0.95) et toujours routees via tokens semantiques.
+    expect(css).toMatch(/--surface-panel:\s*rgba\([^)]*0\.95\)/)
+    expect(css).toMatch(/--surface-card:\s*rgba\([^)]*0\.95\)/)
     for (const token of [
       'var(--surface-page)',
       'var(--surface-panel)',

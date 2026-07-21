@@ -21,10 +21,13 @@
 }
 
 .shell.theme-serious {
-  --surface-page: #000;
-  --surface-panel: #050506;
-  --surface-card: #09090b;
-  --surface-inset: #000;
+  /* Surfaces legerement transparentes (95%) : le fond cosmique transparait a travers les
+     containers (page/panel/card). Le backdrop de shell (.main) est transparent ->
+     bords/espaces hors containers = cosmique plein (cf. theme-modes.css). */
+  --surface-page: rgba(0, 0, 0, 0.95);
+  --surface-panel: rgba(5, 5, 6, 0.95);
+  --surface-card: rgba(9, 9, 11, 0.95);
+  --surface-inset: rgba(0, 0, 0, 0.95);
   --container-shadow: none;
   --container-blur: 0px;
 }
