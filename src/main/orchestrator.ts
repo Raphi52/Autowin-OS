@@ -10,7 +10,6 @@ import { type PipelinePhase } from './skill-pipeline'
 import { phaseBrief } from './phase-briefs'
 import { retrieveBrainContext } from './brain-retrieval'
 import { projectContextBlock } from './context-files'
-import { repoMapBlock } from './repo-map'
 import type { ExecutionEvidence, PromptEnvelope, SendOptions, Usage } from './providers/types'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
@@ -168,10 +167,10 @@ export class Orchestrator {
     // hybride chaud du brain_server) et on l'injecte en tête de contexte. Le sous-agent part du
     // savoir CURÉ au lieu de brute-forcer le repo. Dégrade à '' si le serveur est absent.
     const brainContext = await retrieveBrainContext(task)
-    // #1 — carte du code graphify (repo-map). 1×/run, en tête de contexte : le sous-agent localise
-    // le code via la carte au lieu de le relire fichier par fichier (baisse du résiduel lecture).
-    // Dégrade à '' si le graphe n'est pas généré → comportement inchangé.
-    const repoMap = repoMapBlock(this.deps.executionWorkspace)
+    // #1 repo-map graphify RÉFUTÉ par mesure A/B (2026-07-22) : injecter GRAPH_REPORT.md (28k) à
+    // chaque phase coûtait +206k tokens (ON 573k vs OFF 367k) SANS réduire la lecture agentique du
+    // sous-agent → contre-productif (piège du soft-steer saturé). Levier retiré. Cf. harnais
+    // scripts/measure-orchestration-tokens.mjs pour re-mesurer une éventuelle version micro.
     const phaseContext: string[] = [
       ...(brainContext
         ? [
@@ -179,7 +178,6 @@ export class Orchestrator {
             `Sers-toi de la CONNAISSANCE (Brain) ci-dessus en priorité ; ne relis le dépôt que si strictement nécessaire.`
           ]
         : []),
-      ...(repoMap ? [repoMap] : []),
       `TÂCHE: ${task}`
     ]
     // Session-resume chaîné (levier coût) : on RÉUTILISE la session de l'exécuteur d'une phase à la
