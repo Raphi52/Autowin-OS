@@ -94,3 +94,21 @@ describe('skill-pipeline — chargement du kit au runtime', () => {
     }
   })
 })
+
+describe('fondation ENGINE 1×/run', () => {
+  it('withFoundation=false omet THE FOUNDATION mais garde le chapitre de phase', () => {
+    const withF = engineForPhase('scout', undefined, true)
+    const without = engineForPhase('scout', undefined, false)
+    // Si le kit ENGINE est absent sur ce poste, les deux sont vides → test trivialement vrai.
+    if (!withF) return
+    expect(withF).toContain('THE FOUNDATION')
+    expect(without).not.toContain('THE FOUNDATION')
+    expect(without.length).toBeLessThan(withF.length)
+  })
+  it('phaseInstruction propage withFoundation', () => {
+    const first = phaseInstruction('frame', undefined, { withFoundation: true })
+    const later = phaseInstruction('frame', undefined, { withFoundation: false })
+    if (!first.includes('THE FOUNDATION')) return
+    expect(later).not.toContain('THE FOUNDATION')
+  })
+})

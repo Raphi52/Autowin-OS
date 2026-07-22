@@ -81,10 +81,16 @@ function engineSection(full: string, headingPattern: string, stop: string): stri
  * Les SKILL.md renvoient à `_engine/ENGINE.md` comme mécanique canonique ; sans ça le sous-agent
  * lit des références vers un fichier qu'il n'a pas. Ciblé pour rester sous ~2 k tokens/phase.
  */
-export function engineForPhase(phase: PipelinePhase, root = skillsRoot()): string {
+export function engineForPhase(
+  phase: PipelinePhase,
+  root = skillsRoot(),
+  withFoundation = true
+): string {
   const full = loadEngineText(root)
   if (!full) return ''
-  const foundation = engineSection(full, '## ⚡ THE FOUNDATION', '\\n# REFERENCE')
+  // La FONDATION (7 concepts) est identique à chaque phase → réinjectée 5× sur un run = gaspillage.
+  // `withFoundation=false` la coupe : l'orchestrateur ne la fournit qu'à la 1ʳᵉ phase (1×/run).
+  const foundation = withFoundation ? engineSection(full, '## ⚡ THE FOUNDATION', '\\n# REFERENCE') : ''
   const chap = PHASE_ENGINE_CHAPTER[phase]
   const chapter = chap
     ? engineSection(full, `## ${chap.replace('.', '\\.')}`, '\\n## (?:Ch\\.\\d|Telemetry|Roadmap)|$')
@@ -97,12 +103,18 @@ export function engineForPhase(phase: PipelinePhase, root = skillsRoot()): strin
  * Instruction system prompt pour une phase = CORPS du SKILL.md (sans frontmatter de routing)
  * + la mécanique ENGINE ciblée (fondation + chapitre de la phase).
  */
-export function phaseInstruction(phase: PipelinePhase, root = skillsRoot()): string {
+export function phaseInstruction(
+  phase: PipelinePhase,
+  root = skillsRoot(),
+  opts: { withFoundation?: boolean } = {}
+): string {
+  // Défaut true : un appel ISOLÉ (chat, phase unique) garde la fondation. L'orchestrateur multi-phases
+  // passe false sur les phases ≥2 pour n'injecter la fondation qu'UNE fois par run.
+  const withFoundation = opts.withFoundation ?? true
   const body = stripSkillFrontmatter(loadSkillText(phase, root))
   if (!body) return ''
   const skill = `\n=== SKILL ${phase.toUpperCase()} (kit) ===\n${body}\n`
-  // A/B LEAN (env AUTOWIN_LEAN_INJECT=1) : corps du skill SEUL, sans la mécanique ENGINE
-  // (ré-injectée à chaque phase = poste lourd). Sert à mesurer le ratio coût/perf du minimum.
+  // A/B LEAN (env AUTOWIN_LEAN_INJECT=1) : corps du skill SEUL, sans la mécanique ENGINE.
   if (process.env.AUTOWIN_LEAN_INJECT === '1') return skill
-  return skill + engineForPhase(phase, root)
+  return skill + engineForPhase(phase, root, withFoundation)
 }

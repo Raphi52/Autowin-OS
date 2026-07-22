@@ -1276,7 +1276,8 @@ function registerChatIpc(): void {
       let nextSequence = events.length
         ? Math.max(...events.map((traceEvent) => traceEvent.sequence)) + 1
         : 0
-      for (const call of loadPromptCalls(conversationId)) {
+      const nativeCalls = loadPromptCalls(conversationId)
+      for (const call of nativeCalls) {
         if (knownIds.has(`${call.id}:0`)) continue
         for (const traceEvent of promptCallToTraceEvents(call, nextSequence)) {
           causalTrace.append(traceEvent)
@@ -1284,7 +1285,12 @@ function registerChatIpc(): void {
           nextSequence = traceEvent.sequence + 1
         }
       }
-      for (const trace of filterHermesPreflight(hermes, conversationId)) {
+      // Anti-double-frontière : une conversation avec des appels NATIFS Autowin (codex/claude)
+      // porte déjà sa propre frontière par appel. Les préflight Hermes legacy dupliqueraient la
+      // même frontière dans la timeline → on ne les fusionne QUE pour les convs Hermes-only
+      // (aucun appel natif). La vue Hermes dédiée (os:hermesPromptTraces) reste inchangée.
+      const hermesPreflight = nativeCalls.length ? [] : filterHermesPreflight(hermes, conversationId)
+      for (const trace of hermesPreflight) {
         const id = `hermes:${trace.apiRequestId}`
         if (knownIds.has(id)) continue
         causalTrace.append({

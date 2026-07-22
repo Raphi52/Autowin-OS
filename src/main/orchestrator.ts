@@ -142,12 +142,16 @@ export class Orchestrator {
     const aggregatedEvidence: ExecutionEvidence[] = []
     const phaseOutputs: { phase: PipelinePhase; text: string }[] = []
     const phaseContext: string[] = [`TÂCHE: ${task}`]
-    for (const phase of execPhases) {
+    for (const [phaseIndex, phase] of execPhases.entries()) {
       const phaseMessages = [{ role: 'user' as const, content: phaseContext.join('\n\n') }]
       // F6 — le system est composé de blocs NOMMÉS : on garde leur décomposition (nom + taille)
       // pour l'observabilité, en plus de la chaîne concaténée réellement envoyée.
+      // Fondation ENGINE 1×/run : injectée seulement à la 1ʳᵉ phase (identique ensuite = gaspillage).
       const parts = [
-        { name: `skill:${phase}`, text: phaseInstruction(phase) },
+        {
+          name: `skill:${phase}`,
+          text: phaseInstruction(phase, undefined, { withFoundation: phaseIndex === 0 })
+        },
         { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
         { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
         { name: 'projectContext', text: projectContext }
@@ -391,7 +395,8 @@ export class Orchestrator {
         let repairPrompt
         const repairOptions: SendOptions = {
           system:
-            phaseInstruction('build') +
+            // Réparation = re-build : la fondation ENGINE a déjà été envoyée par la chaîne exec.
+            phaseInstruction('build', undefined, { withFoundation: false }) +
             PIPELINE_DISCIPLINE_INSTRUCTION +
             CONCISE_STRUCTURED_RESPONSE_INSTRUCTION +
             projectContext,
