@@ -391,9 +391,15 @@ export function ObservatoryView({
   const allEvents = useMemo(() => scopedTurns.flatMap((turn) => turn.events), [scopedTurns])
   const causalPath = useMemo(() => buildCausalPath(allEvents), [allEvents])
   const causalNodes = flattenCausalNodes(causalPath.roots)
-  const hermesSummary = summarizeHermesTraces(hermesMetadata)
-  const ragSummaries = hermesTraces.map((trace) => summarizeRagTrace(trace.request))
+  // Hermes/RAG ne concernent que les tours réellement passés par Hermes. On SCOPE à la conversation
+  // affichée : sinon les payloads Hermes GLOBAUX legacy (chargés à part) polluent une conv codex/claude
+  // avec un « Hermes · 24 » et « 24 sans RAG » qui ne la décrivent pas.
+  const convHermesMetadata = hermesMetadata.filter((t) => t.conversationId === conversationId)
+  const convHermesTraces = hermesTraces.filter((t) => t.conversationId === conversationId)
+  const hermesSummary = summarizeHermesTraces(convHermesMetadata)
+  const ragSummaries = convHermesTraces.map((trace) => summarizeRagTrace(trace.request))
   const ragInjected = ragSummaries.filter((summary) => summary.status === 'injected').length
+  const hasHermes = convHermesTraces.length > 0 || hermesSummary.count > 0
   const typeOptions = [...new Set(allEvents.map((event) => event.kind))]
   const providerOptions = [
     ...new Set(allEvents.map((event) => event.provider).filter(Boolean))
@@ -491,14 +497,16 @@ export function ObservatoryView({
               .length.toLocaleString('fr-FR')}
             <small>actions réelles</small>
           </strong>
-          <strong data-metric="hermes">
-            {hermesSummary.count.toLocaleString('fr-FR')}
-            <small>Hermes · {hermesSummary.coverage}</small>
-          </strong>
+          {hasHermes && (
+            <strong data-metric="hermes">
+              {hermesSummary.count.toLocaleString('fr-FR')}
+              <small>Hermes · {hermesSummary.coverage}</small>
+            </strong>
+          )}
         </div>
       </header>
       <div className="observatory-toolbar">
-        {hermesSummary.lastTimestamp && (
+        {hasHermes && hermesSummary.lastTimestamp && (
           <span className="observatory-hermes-proof">
             Dernier Hermes · {new Date(hermesSummary.lastTimestamp).toLocaleString('fr-FR')} ·{' '}
             {hermesSummary.lastModel} · {hermesSummary.boundary} · exact-redacted
@@ -593,7 +601,9 @@ export function ObservatoryView({
           <button onClick={() => setRefreshKey((value) => value + 1)}>Réessayer</button>
         </aside>
       )}
-      <RagObservabilitySummary requests={hermesTraces.map((trace) => trace.request)} />
+      {hasHermes && (
+        <RagObservabilitySummary requests={convHermesTraces.map((trace) => trace.request)} />
+      )}
       {hermesTraces.length > 0 && (
         <details className="observatory-hermes-diagnostics">
           <summary>
