@@ -7,6 +7,7 @@ import { evaluateClosure } from './gates/stopgate'
 import { runHooks } from './gates/hooks'
 import { type PipelinePhase } from './skill-pipeline'
 import { phaseBrief } from './phase-briefs'
+import { retrieveBrainContext } from './brain-retrieval'
 import { projectContextBlock } from './context-files'
 import type { ExecutionEvidence, PromptEnvelope, SendOptions, Usage } from './providers/types'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
@@ -142,7 +143,17 @@ export class Orchestrator {
     let lastUsage: Usage | undefined
     const aggregatedEvidence: ExecutionEvidence[] = []
     const phaseOutputs: { phase: PipelinePhase; text: string }[] = []
-    const phaseContext: string[] = [`TÂCHE: ${task}`]
+    // RAG Brain : 1×/run, on récupère du cerveau Amitel la connaissance pertinente (retriever
+    // hybride chaud du brain_server) et on l'injecte en tête de contexte. Le sous-agent part du
+    // savoir CURÉ au lieu de brute-forcer le repo. Dégrade à '' si le serveur est absent.
+    const brainContext = await retrieveBrainContext(task)
+    const phaseContext: string[] = brainContext
+      ? [
+          brainContext,
+          `Sers-toi de la CONNAISSANCE (Brain) ci-dessus en priorité ; ne relis le dépôt que si strictement nécessaire.`,
+          `TÂCHE: ${task}`
+        ]
+      : [`TÂCHE: ${task}`]
     for (const phase of execPhases) {
       const phaseMessages = [{ role: 'user' as const, content: phaseContext.join('\n\n') }]
       // F6 — le system est composé de blocs NOMMÉS : on garde leur décomposition (nom + taille)
