@@ -123,7 +123,7 @@ describe('AgentPilot turn contract', () => {
       reasoningEffort: 'low'
     }
     const mutatedBinding = {
-      provider: 'hermes',
+      provider: 'native',
       model: 'model-mutated',
       reasoningEffort: 'high'
     }

@@ -86,7 +86,7 @@ function redact(value: unknown, key = ''): unknown {
 export function buildObservatoryExport(input: ObservatoryExportInput): ObservatoryExportV1 {
   const nativeRag = input.nativeTraces.map((trace) => {
     if (trace.fidelity !== 'exact-redacted') {
-      throw new Error(`Observatory export: Hermes fidelity must be exact-redacted`)
+      throw new Error(`Observatory export: fidelity must be exact-redacted`)
     }
     const request = redact(trace.request) as Record<string, unknown>
     return { ...trace, request, rag: summarizeRagTrace(request) }

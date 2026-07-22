@@ -32,7 +32,7 @@ describe('native-registry (Chantier 1 — souveraineté inventaire)', () => {
     expect(nativeRegistryActive(base)).toBe(true) // fichier créé
   })
 
-  it('enablement persisté : un toggle survit à une relecture (plus aucun hermes.exe)', () => {
+  it('enablement persisté : un toggle survit à une relecture (plus aucun native.exe)', () => {
     setNativeEnablement('skills', 'frame', false, base)
     const items = listNativeRegistry('tools', base) // relit le disque
     expect(items).toEqual([]) // pas de catalogue → tools vide (natif, pas d'erreur)
@@ -58,7 +58,7 @@ describe('native-registry (Chantier 1 — souveraineté inventaire)', () => {
     expect(Array.isArray(nativeSkills(base))).toBe(true)
   })
 
-  it('amorçage unique depuis Hermes fige tools/plugins + état, sans écraser si déjà amorcé', () => {
+  it('amorçage unique depuis Native fige tools/plugins + état, sans écraser si déjà amorcé', () => {
     seedRegistrySnapshot(
       {
         tools: [{ id: 't1', label: 't1', description: 'outil', enabled: true, mutable: true }],

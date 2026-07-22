@@ -16,7 +16,7 @@ Provenance: decision | global | claude | 2026-07-18
 Autre contenu.`
 
 describe('RAG trace summary', () => {
-  it('extracts the query, sources, provenance and injected size from a Hermes request', () => {
+  it('extracts the query, sources, provenance and injected size from a Native request', () => {
     const summary = summarizeRagTrace({
       body: {
         messages: [{ role: 'user', content: `Comment fonctionne le RAG ?\n\n${brainContext}` }]

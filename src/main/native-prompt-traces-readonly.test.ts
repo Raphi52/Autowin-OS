@@ -13,7 +13,7 @@ function handlerBody(source: string, channel: string, nextChannel: string): stri
   return source.slice(start, end)
 }
 
-describe('Hermes prompt trace read contract', () => {
+describe('Native prompt trace read contract', () => {
   it('keeps os:promptTraces free of causal reads and writes', () => {
     const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
     const body = handlerBody(source, 'os:promptTraces', 'os:promptTraceSummary')

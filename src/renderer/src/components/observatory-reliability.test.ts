@@ -39,10 +39,10 @@ describe('Observatory reliability', () => {
     const result = await settleObservatorySources({
       conversations: Promise.resolve(['ok']),
       promptCalls: Promise.reject(new Error('ledger unavailable')),
-      hermes: Promise.resolve([1])
+      native: Promise.resolve([1])
     })
 
-    expect(result.values).toEqual({ conversations: ['ok'], hermes: [1] })
+    expect(result.values).toEqual({ conversations: ['ok'], native: [1] })
     expect(result.errors).toEqual({ promptCalls: 'ledger unavailable' })
   })
 

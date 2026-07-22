@@ -116,14 +116,14 @@ describe('selecteur orchestrateur Chat', () => {
       models: [
         {
           id: 'h1',
-          provider: 'hermes',
+          provider: 'native',
           model: 'llama',
           label: 'Llama',
           reasoningEfforts: ['none'],
           defaultReasoningEffort: 'none'
         }
       ],
-      binding: { provider: 'hermes', model: 'llama', reasoningEffort: 'none' },
+      binding: { provider: 'native', model: 'llama', reasoningEffort: 'none' },
       onSelect
     })
     expect(dom.textContent).not.toContain('Défaut')
@@ -132,14 +132,14 @@ describe('selecteur orchestrateur Chat', () => {
     })
     expect(dom.querySelector('.model-effort-menu')).toBeNull()
     expect(onSelect).toHaveBeenCalledWith(
-      expect.objectContaining({ provider: 'hermes', model: 'llama', reasoningEffort: 'none' })
+      expect.objectContaining({ provider: 'native', model: 'llama', reasoningEffort: 'none' })
     )
   })
 
   it('restitue un rejet setRole sans faux succès et conserve le binding runtime confirmé', async () => {
     const models = [
       { id: 'c1', provider: 'codex', model: 'gpt-5', label: 'GPT-5' },
-      { id: 'h1', provider: 'hermes', model: 'llama', label: 'Llama' }
+      { id: 'h1', provider: 'native', model: 'llama', label: 'Llama' }
     ]
     const setRole = vi.fn().mockRejectedValue(new Error('refus fixture'))
     function RejectionHarness(): React.JSX.Element {
@@ -179,7 +179,7 @@ describe('selecteur orchestrateur Chat', () => {
     await act(async () => {
       effort?.click()
     })
-    expect(setRole).toHaveBeenCalledWith('orchestrator', 'hermes', 'llama', 'none')
+    expect(setRole).toHaveBeenCalledWith('orchestrator', 'native', 'llama', 'none')
     expect(dom.querySelector('summary')?.textContent).toContain('GPT-5')
     expect(dom.querySelector('[role="status"]')?.textContent).toContain(
       'Changement non enregistré : refus fixture'

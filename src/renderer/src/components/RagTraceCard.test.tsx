@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { RagObservabilitySummary, RagTraceCard } from './RagTraceCard'
 
 describe('RAG observability rendering', () => {
-  it('keeps an explicit diagnostic visible when no Hermes trace exists', () => {
+  it('keeps an explicit diagnostic visible when no Native trace exists', () => {
     const html = renderToStaticMarkup(<RagObservabilitySummary requests={[]} />)
 
     expect(html).toContain('data-rag-status="unavailable"')

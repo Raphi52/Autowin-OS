@@ -1,6 +1,15 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
+describe('chat wallpaper', () => {
+  it('keeps the root layout free of backdrop blur', () => {
+    const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+    const layout = css.match(/\.chat-layout\s*{([^}]*)}/s)?.[1]
+    expect(layout).toBeDefined()
+    expect(layout).not.toContain('backdrop-filter')
+  })
+})
+
 describe('chat top bar surface', () => {
   it('uses the page surface through a transparent header while keeping its separator', () => {
     const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
@@ -11,7 +20,7 @@ describe('chat top bar surface', () => {
 })
 
 describe('minimal conversation status lights', () => {
-  it('keeps the Hermes-style dot compact and reserves animation for running work', () => {
+  it('keeps the Native-style dot compact and reserves animation for running work', () => {
     const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
     expect(css).toMatch(
       /\.conversation-state\s*{[^}]*width:\s*7px;[^}]*height:\s*7px;[^}]*background:\s*currentColor;[^}]*color:\s*#38bdf8;[^}]*box-shadow:/s

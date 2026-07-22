@@ -39,8 +39,8 @@ describe('ActivityPane request ordering', () => {
     const globalB = deferred<unknown[]>()
     const callsA = deferred<unknown[]>()
     const callsB = deferred<unknown[]>()
-    const hermesA = deferred<unknown[]>()
-    const hermesB = deferred<unknown[]>()
+    const nativeA = deferred<unknown[]>()
+    const nativeB = deferred<unknown[]>()
     const globals = [globalA.promise, globalB.promise]
     let globalIndex = 0
 
@@ -52,7 +52,7 @@ describe('ActivityPane request ordering', () => {
           return id === 'A' ? activityA.promise : activityB.promise
         }),
         promptCalls: vi.fn((id: string) => (id === 'A' ? callsA.promise : callsB.promise)),
-        promptTraces: vi.fn((id: string) => (id === 'A' ? hermesA.promise : hermesB.promise)),
+        promptTraces: vi.fn((id: string) => (id === 'A' ? nativeA.promise : nativeB.promise)),
         onAppEvent: vi.fn(() => vi.fn())
       }
     })
@@ -67,7 +67,7 @@ describe('ActivityPane request ordering', () => {
       activityB.resolve([{ ts: '2026-07-20T10:00:00Z', kind: 'chat', label: 'conversation B' }])
       globalB.resolve([])
       callsB.resolve([])
-      hermesB.resolve([])
+      nativeB.resolve([])
       await Promise.resolve()
     })
     expect(container.textContent).toContain('conversation B')
@@ -76,7 +76,7 @@ describe('ActivityPane request ordering', () => {
       activityA.resolve([{ ts: '2026-07-20T09:00:00Z', kind: 'chat', label: 'conversation A' }])
       globalA.resolve([])
       callsA.resolve([])
-      hermesA.resolve([])
+      nativeA.resolve([])
       await Promise.resolve()
     })
 

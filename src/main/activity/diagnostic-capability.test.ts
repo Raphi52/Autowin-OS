@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagnosticCapabilities } from './diagnostic-capability'
 
-describe('Hermes diagnostic capability', () => {
+describe('Native diagnostic capability', () => {
   it('est liée au renderer, expire et ne sert qu’une fois', () => {
     const capabilities = new DiagnosticCapabilities()
     const wrongSender = capabilities.issue(4, 1_000)

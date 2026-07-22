@@ -6,8 +6,8 @@ describe('observatory export model', () => {
     const result = buildObservatoryExport({
       exportedAt: '2026-07-20T02:00:00.000Z',
       conversationId: 'conv-1',
-      filters: { query: 'brain', type: 'injection', provider: 'hermes' },
-      limitations: ['Hermes global non rattaché'],
+      filters: { query: 'brain', type: 'injection', provider: 'native' },
+      limitations: ['Native global non rattaché'],
       timeline: { turns: [{ id: 'turn-1' }], anomalies: [] },
       promptCalls: [{ id: 'call-1', provider: 'codex', limitation: 'usage estimé' }],
       nativeTraces: [
@@ -37,8 +37,8 @@ describe('observatory export model', () => {
     expect(result).toMatchObject({
       schema: 'autowin.observatory-export/v1',
       conversationId: 'conv-1',
-      filters: { query: 'brain', type: 'injection', provider: 'hermes' },
-      limitations: ['Hermes global non rattaché'],
+      filters: { query: 'brain', type: 'injection', provider: 'native' },
+      limitations: ['Native global non rattaché'],
       timeline: { turns: [{ id: 'turn-1' }] },
       promptCalls: [{ id: 'call-1' }],
       nativeRag: [
@@ -55,7 +55,7 @@ describe('observatory export model', () => {
     })
   })
 
-  it('rejects a Hermes payload whose fidelity is not exact-redacted', () => {
+  it('rejects a Native payload whose fidelity is not exact-redacted', () => {
     expect(() =>
       buildObservatoryExport({
         exportedAt: '2026-07-20T02:00:00.000Z',

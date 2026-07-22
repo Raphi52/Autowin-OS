@@ -24,8 +24,8 @@ const conversations: ConversationSearchSource[] = [
   {
     id: 'other',
     title: 'Interface Agents',
-    category: 'hermes',
-    provider: 'hermes',
+    category: 'native',
+    provider: 'native',
     updatedAt: 40,
     messages: [{ role: 'user', content: 'Améliorer la lisibilité', ts: 40 }]
   }

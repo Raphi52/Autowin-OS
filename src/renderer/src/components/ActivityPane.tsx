@@ -94,7 +94,7 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
     }
     setLoading(true)
     try {
-      const [activity, globalConfig, calls, hermes] = await Promise.all([
+      const [activity, globalConfig, calls, native] = await Promise.all([
         window.api.conversationActivity(convId),
         window.api.conversationActivity('__global_prompt_config__'),
         window.api.promptCalls(convId),
@@ -106,7 +106,7 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
       )
       setPromptCalls(calls as PromptCall[])
       setNativeTraces(
-        (hermes as NativeTrace[])
+        (native as NativeTrace[])
           .filter((trace) => !trace.conversationId || trace.conversationId === convId)
           .slice(-20)
           .reverse()
@@ -192,7 +192,7 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
       {nativeTraces.length > 0 && (
         <details className="workflow-prompt-calls native-preflight">
           <summary>
-            {nativeTraces.length} requête{nativeTraces.length > 1 ? 's' : ''} Hermes ·{' '}
+            {nativeTraces.length} requête{nativeTraces.length > 1 ? 's' : ''} natives ·{' '}
             {nativeTraces.filter((trace) => trace.conversationId === convId).length} rattachée
             {nativeTraces.filter((trace) => trace.conversationId === convId).length > 1
               ? 's'
@@ -217,7 +217,7 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
                 </div>
                 <RagTraceCard request={trace.request} />
                 <details className="observatory-rag-payload">
-                  <summary>Requête exacte transmise par Hermes · exact-redacted</summary>
+                  <summary>Requête exacte transmise · exact-redacted</summary>
                   <HumanJson value={trace.request} />
                 </details>
               </details>

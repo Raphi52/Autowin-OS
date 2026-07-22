@@ -27,7 +27,7 @@ function roots(base: string): SkillRegistryRoots {
   }
 }
 
-describe('registre multi-source des skills (souverain de Hermes)', () => {
+describe('registre multi-source des skills (souverain de Native)', () => {
   it('conserve les homonymes Codex, Claude et Autowin avec des identités qualifiées', async () => {
     const base = join(process.cwd(), 'node_modules', '.tmp-skill-registry', crypto.randomUUID())
     const configured = roots(base)
@@ -49,7 +49,7 @@ describe('registre multi-source des skills (souverain de Hermes)', () => {
     )
   })
 
-  it('un skill présent sur disque est actif (plus d’état enabled via Hermes)', async () => {
+  it('un skill présent sur disque est actif (plus d’état enabled via Native)', async () => {
     const base = join(process.cwd(), 'node_modules', '.tmp-skill-registry', crypto.randomUUID())
     const configured = roots(base)
     put(configured.autowin, 'frame', 'frame')

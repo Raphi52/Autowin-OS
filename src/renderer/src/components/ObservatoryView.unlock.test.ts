@@ -1,15 +1,15 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-describe('Observatory Hermes diagnostics default access', () => {
+describe('Observatory Native diagnostics default access', () => {
   it('loads global diagnostics automatically without a popup or unlock button', () => {
     const renderer = readFileSync(new URL('./ObservatoryView.tsx', import.meta.url), 'utf8')
     const main = readFileSync(new URL('../../../main/index.ts', import.meta.url), 'utf8')
 
-    expect(renderer).not.toContain('Déverrouiller Hermes')
+    expect(renderer).not.toContain('Déverrouiller Native')
     expect(renderer).toMatch(/window\.api\s*\.authorizeDiagnostics\(\)/)
     expect(renderer).toContain('window.api.promptTracesGlobal(capability)')
-    expect(main).not.toContain("title: 'Payloads Hermes sensibles'")
+    expect(main).not.toContain("title: 'Payloads Native sensibles'")
     expect(main).not.toContain('dialog.showMessageBox(parent, options)')
     expect(main).toContain('return diagnosticCapabilities.issue(event.sender.id)')
     expect(main).toContain("assertTrustedRendererSender(event, 'Diagnostics authorization')")

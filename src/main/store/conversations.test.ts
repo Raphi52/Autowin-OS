@@ -10,11 +10,11 @@ function makeClock(start = 1000): () => number {
 describe('ConversationStore', () => {
   it('create crée une conversation vide avec id déterministe', () => {
     const store = new ConversationStore(makeClock())
-    const conv = store.create({ title: 'Titre', category: 'hermes', provider: 'anthropic' })
+    const conv = store.create({ title: 'Titre', category: 'native', provider: 'anthropic' })
 
     expect(conv.id).toBe('conv-1')
     expect(conv.title).toBe('Titre')
-    expect(conv.category).toBe('hermes')
+    expect(conv.category).toBe('native')
     expect(conv.provider).toBe('anthropic')
     expect(conv.messages).toEqual([])
     expect(conv.createdAt).toBe(conv.updatedAt)
@@ -22,8 +22,8 @@ describe('ConversationStore', () => {
 
   it("create incrémente le compteur d'id à chaque appel", () => {
     const store = new ConversationStore(makeClock())
-    const c1 = store.create({ title: 'A', category: 'hermes', provider: 'p' })
-    const c2 = store.create({ title: 'B', category: 'hermes', provider: 'p' })
+    const c1 = store.create({ title: 'A', category: 'native', provider: 'p' })
+    const c2 = store.create({ title: 'B', category: 'native', provider: 'p' })
 
     expect(c1.id).toBe('conv-1')
     expect(c2.id).toBe('conv-2')
@@ -31,7 +31,7 @@ describe('ConversationStore', () => {
 
   it('append ajoute un message et met à jour updatedAt', () => {
     const store = new ConversationStore(makeClock())
-    const conv = store.create({ title: 'A', category: 'hermes', provider: 'p' })
+    const conv = store.create({ title: 'A', category: 'native', provider: 'p' })
     const before = conv.updatedAt
 
     const updated = store.append(conv.id, { role: 'user', content: 'Salut' })
@@ -63,7 +63,7 @@ describe('ConversationStore', () => {
 
   it('get retourne la conversation ou undefined', () => {
     const store = new ConversationStore(makeClock())
-    const conv = store.create({ title: 'A', category: 'hermes', provider: 'p' })
+    const conv = store.create({ title: 'A', category: 'native', provider: 'p' })
 
     expect(store.get(conv.id)).toBe(conv)
     expect(store.get('conv-inconnue')).toBeUndefined()
@@ -71,8 +71,8 @@ describe('ConversationStore', () => {
 
   it('list retourne les conversations triées par updatedAt décroissant', () => {
     const store = new ConversationStore(makeClock())
-    const c1 = store.create({ title: 'A', category: 'hermes', provider: 'p' })
-    const c2 = store.create({ title: 'B', category: 'hermes', provider: 'p' })
+    const c1 = store.create({ title: 'A', category: 'native', provider: 'p' })
+    const c2 = store.create({ title: 'B', category: 'native', provider: 'p' })
     // Touche c1 en dernier pour qu'il passe devant c2.
     store.append(c1.id, { role: 'user', content: 'x' })
 
@@ -82,25 +82,25 @@ describe('ConversationStore', () => {
 
   it('byCategory filtre par catégorie', () => {
     const store = new ConversationStore(makeClock())
-    const hermes = store.create({ title: 'A', category: 'hermes', provider: 'p' })
+    const native = store.create({ title: 'A', category: 'native', provider: 'p' })
     store.create({ title: 'B', category: 'codex', provider: 'p' })
 
-    const result = store.byCategory('hermes')
-    expect(result).toEqual([hermes])
+    const result = store.byCategory('native')
+    expect(result).toEqual([native])
   })
 
   it('categories retourne les catégories distinctes', () => {
     const store = new ConversationStore(makeClock())
-    store.create({ title: 'A', category: 'hermes', provider: 'p' })
+    store.create({ title: 'A', category: 'native', provider: 'p' })
     store.create({ title: 'B', category: 'codex', provider: 'p' })
-    store.create({ title: 'C', category: 'hermes', provider: 'p' })
+    store.create({ title: 'C', category: 'native', provider: 'p' })
 
-    expect(store.categories().sort()).toEqual(['codex', 'hermes'])
+    expect(store.categories().sort()).toEqual(['codex', 'native'])
   })
 
   it('rename change le titre', () => {
     const store = new ConversationStore(makeClock())
-    const conv = store.create({ title: 'A', category: 'hermes', provider: 'p' })
+    const conv = store.create({ title: 'A', category: 'native', provider: 'p' })
 
     store.rename(conv.id, 'Nouveau titre')
 
@@ -123,7 +123,7 @@ describe('ConversationStore', () => {
 
   it("remove supprime la conversation et retourne true/false selon l'existence", () => {
     const store = new ConversationStore(makeClock())
-    const conv = store.create({ title: 'A', category: 'hermes', provider: 'p' })
+    const conv = store.create({ title: 'A', category: 'native', provider: 'p' })
 
     expect(store.remove(conv.id)).toBe(true)
     expect(store.get(conv.id)).toBeUndefined()

@@ -7,7 +7,7 @@ import { catalogPath, enablementPath } from './native-registry'
 // On teste la couche capability-controls contre un registre natif LOCAL (aucun sous-processus).
 // setCapabilitySelection est importé dynamiquement après avoir pointé le registre sur un base tmp.
 
-describe('capability-controls (source locale générique, sans Hermes)', () => {
+describe('capability-controls (source locale générique, sans Native)', () => {
   let base: string
   beforeEach(() => {
     base = mkdtempSync(join(tmpdir(), 'capctl-'))

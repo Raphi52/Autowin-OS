@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { summarizeNativeTraces } from './native-trace-summary'
 
-describe('résumé des traces Hermes', () => {
+describe('résumé des traces Native', () => {
   it('distingue clairement les appels non rattachés et la dernière preuve', () => {
     expect(
       summarizeNativeTraces([

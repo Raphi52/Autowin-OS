@@ -120,7 +120,7 @@ function instruction(
           : 'Au chargement de la mémoire Claude'
         : scope === 'skill'
           ? 'À l’invocation de la skill'
-          : 'Déclaré par Hermes · injection non tracée'
+          : 'Déclaré · injection non tracée'
   return {
     id: `${engine}:${scope}:${Buffer.from(realpathSync(path)).toString('base64url')}`,
     label: basename(path),
@@ -135,7 +135,7 @@ function instruction(
         ? 'Instructions Codex'
         : engine === 'claude'
           ? 'Mémoire Claude'
-          : 'Configuration Hermes déclarée',
+          : 'Configuration déclarée',
     active: state === 'active' || state === 'injected',
     size: statSync(path).size
   }
