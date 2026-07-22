@@ -78,7 +78,7 @@
   color: var(--text);
   text-decoration: underline;
 }
-.observatory-hermes-proof {
+.observatory-native-proof {
   align-self: center;
   max-width: 310px;
   overflow: hidden;
@@ -87,7 +87,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.observatory-hermes-diagnostics {
+.observatory-native-diagnostics {
   position: relative;
   z-index: 8;
   padding: 8px 10px;
@@ -96,12 +96,12 @@
   color: var(--text-dim);
   font-size: 10px;
 }
-.observatory-hermes-diagnostics > summary,
-.observatory-hermes-diagnostics details > summary {
+.observatory-native-diagnostics > summary,
+.observatory-native-diagnostics details > summary {
   cursor: pointer;
   color: var(--cyan);
 }
-.observatory-hermes-diagnostics p {
+.observatory-native-diagnostics p {
   margin: 6px 0;
   color: var(--text-faint);
 }
@@ -196,15 +196,15 @@
   cursor: pointer;
   color: var(--text-faint);
 }
-.observatory-hermes-diagnostics > div {
+.observatory-native-diagnostics > div {
   max-height: 42vh;
   overflow: auto;
 }
-.observatory-hermes-diagnostics details {
+.observatory-native-diagnostics details {
   padding: 5px 0;
   border-top: 1px solid var(--line);
 }
-.observatory-hermes-diagnostics pre {
+.observatory-native-diagnostics pre {
   max-height: 34vh;
   overflow: auto;
   white-space: pre-wrap;

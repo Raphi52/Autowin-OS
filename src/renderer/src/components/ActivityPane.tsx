@@ -37,14 +37,14 @@ type PromptCall = {
   usage?: { inputTokens: number; outputTokens: number; cacheReadTokens?: number }
 }
 
-type HermesTrace = {
+type NativeTrace = {
   timestamp: string
   apiRequestId: string
   provider: string
   model: string
   messageCount: number
   toolCount: number
-  boundary: 'hermes.pre_api_request' | 'hermes.request_dump'
+  boundary: 'native.pre_api_request'
   source: 'plugin-hook' | 'request-dump'
   conversationId?: string
   request: Record<string, unknown>
@@ -69,7 +69,7 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
   const [entries, setEntries] = useState<ConvActivityEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [promptCalls, setPromptCalls] = useState<PromptCall[]>([])
-  const [hermesTraces, setHermesTraces] = useState<HermesTrace[]>([])
+  const [nativeTraces, setNativeTraces] = useState<NativeTrace[]>([])
   const [proof, setProof] = useState<{ path: string; dataUrl: string } | null>(null)
   const [proofError, setProofError] = useState<string | null>(null)
   const refreshGenerationRef = useRef(0)
@@ -89,7 +89,7 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
     if (!convId) {
       setEntries([])
       setPromptCalls([])
-      setHermesTraces([])
+      setNativeTraces([])
       return
     }
     setLoading(true)
@@ -105,8 +105,8 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
         mergeActivityEntries(activity as ConvActivityEntry[], globalConfig as ConvActivityEntry[])
       )
       setPromptCalls(calls as PromptCall[])
-      setHermesTraces(
-        (hermes as HermesTrace[])
+      setNativeTraces(
+        (hermes as NativeTrace[])
           .filter((trace) => !trace.conversationId || trace.conversationId === convId)
           .slice(-20)
           .reverse()
@@ -189,22 +189,22 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
         </details>
       )}
 
-      {hermesTraces.length > 0 && (
-        <details className="workflow-prompt-calls hermes-preflight">
+      {nativeTraces.length > 0 && (
+        <details className="workflow-prompt-calls native-preflight">
           <summary>
-            {hermesTraces.length} requête{hermesTraces.length > 1 ? 's' : ''} Hermes ·{' '}
-            {hermesTraces.filter((trace) => trace.conversationId === convId).length} rattachée
-            {hermesTraces.filter((trace) => trace.conversationId === convId).length > 1
+            {nativeTraces.length} requête{nativeTraces.length > 1 ? 's' : ''} Hermes ·{' '}
+            {nativeTraces.filter((trace) => trace.conversationId === convId).length} rattachée
+            {nativeTraces.filter((trace) => trace.conversationId === convId).length > 1
               ? 's'
               : ''}{' '}
-            · {hermesTraces.filter((trace) => !trace.conversationId).length} non rattachée
-            {hermesTraces.filter((trace) => !trace.conversationId).length > 1 ? 's' : ''}
+            · {nativeTraces.filter((trace) => !trace.conversationId).length} non rattachée
+            {nativeTraces.filter((trace) => !trace.conversationId).length > 1 ? 's' : ''}
           </summary>
           <p className="prompt-envelope-limit">
             Les payloads non rattachés sont hors conversation sélectionnée · secrets masqués
           </p>
           <div className="col" style={{ gap: 6 }}>
-            {hermesTraces.map((trace) => (
+            {nativeTraces.map((trace) => (
               <details key={`${trace.apiRequestId}:${trace.timestamp}`} className="prompt-envelope">
                 <summary>
                   {trace.provider} → {trace.model} · {timeFmt(trace.timestamp)}

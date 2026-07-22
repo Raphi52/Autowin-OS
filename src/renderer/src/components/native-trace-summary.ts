@@ -2,7 +2,7 @@ export interface NativeTraceSummaryInput {
   timestamp: string
   provider: string
   model: string
-  boundary: 'hermes.pre_api_request' | 'hermes.request_dump'
+  boundary: 'native.pre_api_request'
   source: 'plugin-hook' | 'request-dump'
   conversationId?: string
 }

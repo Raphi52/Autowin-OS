@@ -6,12 +6,12 @@ export interface ObservatoryExportFilters {
   provider: string
 }
 
-export interface ObservatoryExportHermesTrace {
+export interface ObservatoryExportNativeTrace {
   apiRequestId: string
   timestamp: string
   provider: string
   model: string
-  boundary: 'hermes.pre_api_request' | 'hermes.request_dump'
+  boundary: 'native.pre_api_request'
   source: 'plugin-hook' | 'request-dump'
   fidelity: 'exact-redacted'
   request: Record<string, unknown>
@@ -24,10 +24,10 @@ export interface ObservatoryExportInput {
   limitations: string[]
   timeline: unknown
   promptCalls: unknown[]
-  hermesTraces: ObservatoryExportHermesTrace[]
+  nativeTraces: ObservatoryExportNativeTrace[]
 }
 
-export interface ObservatoryExportHermesRag extends Omit<ObservatoryExportHermesTrace, 'request'> {
+export interface ObservatoryExportNativeRag extends Omit<ObservatoryExportNativeTrace, 'request'> {
   request: Record<string, unknown>
   rag: RagTraceSummary
 }
@@ -40,7 +40,7 @@ export interface ObservatoryExportV1 {
   limitations: string[]
   timeline: unknown
   promptCalls: unknown[]
-  hermesRag: ObservatoryExportHermesRag[]
+  nativeRag: ObservatoryExportNativeRag[]
 }
 
 const SECRET_VALUE =
@@ -84,7 +84,7 @@ function redact(value: unknown, key = ''): unknown {
 }
 
 export function buildObservatoryExport(input: ObservatoryExportInput): ObservatoryExportV1 {
-  const hermesRag = input.hermesTraces.map((trace) => {
+  const nativeRag = input.nativeTraces.map((trace) => {
     if (trace.fidelity !== 'exact-redacted') {
       throw new Error(`Observatory export: Hermes fidelity must be exact-redacted`)
     }
@@ -100,6 +100,6 @@ export function buildObservatoryExport(input: ObservatoryExportInput): Observato
     limitations: [...input.limitations],
     timeline: redact(input.timeline),
     promptCalls: redact(input.promptCalls) as unknown[],
-    hermesRag
+    nativeRag
   }
 }

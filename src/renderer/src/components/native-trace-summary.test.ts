@@ -9,7 +9,7 @@ describe('résumé des traces Hermes', () => {
           timestamp: '2026-07-19T13:00:00.000Z',
           provider: 'custom',
           model: 'gpt',
-          boundary: 'hermes.pre_api_request',
+          boundary: 'native.pre_api_request',
           source: 'plugin-hook'
         }
       ])
@@ -20,7 +20,7 @@ describe('résumé des traces Hermes', () => {
       lastTimestamp: '2026-07-19T13:00:00.000Z',
       lastProvider: 'custom',
       lastModel: 'gpt',
-      boundary: 'hermes.pre_api_request',
+      boundary: 'native.pre_api_request',
       source: 'plugin-hook',
       coverage: 'non-rattachée'
     })

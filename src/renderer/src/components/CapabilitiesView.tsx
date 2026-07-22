@@ -3,7 +3,7 @@ import './CapabilitiesView.css'
 import { ModuleHeader } from './ModuleHeader'
 
 type Kind = 'skills' | 'hooks' | 'tools'
-type HookModel = 'hermes' | 'claude' | 'codex'
+type HookModel = 'claude' | 'codex'
 
 interface Item {
   id: string
@@ -28,15 +28,14 @@ const META: Record<Kind, { title: string; empty: string }> = {
 
 const HOOK_SOURCES: Array<{ id: HookModel; label: string }> = [
   { id: 'claude', label: 'Claude' },
-  { id: 'codex', label: 'Codex' },
-  { id: 'hermes', label: 'Hermes' }
+  { id: 'codex', label: 'Codex' }
 ]
 
 function sourceClass(source?: string): string {
   if (!source) return 'is-neutral'
   if (source.includes('claude')) return 'is-claude'
   if (source.includes('codex')) return 'is-codex'
-  if (source.includes('hermes')) return 'is-hermes'
+  if (source.includes('native')) return 'is-native'
   return 'is-neutral'
 }
 
@@ -50,8 +49,8 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
   const [restartRequired, setRestartRequired] = useState(false)
   const [hookModel, setHookModel] = useState<HookModel>('claude')
   const [skillSource, setSkillSource] = useState('all')
-  // Tools : 'real' = actions réellement exécutées par les sous-agents (défaut) ; 'hermes' = catalogue.
-  const [toolSource, setToolSource] = useState<'real' | 'hermes'>('real')
+  // Tools : 'real' = actions réellement exécutées par les sous-agents (défaut) ; 'catalog' = catalogue local du registre natif.
+  const [toolSource, setToolSource] = useState<'real' | 'catalog'>('real')
   // Façon 1 (« n'afficher que ce qui sert ») : par défaut on n'affiche que les capacités ACTIVES.
   const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('enabled')
   const [selectedId, setSelectedId] = useState('')
@@ -116,14 +115,14 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
         entries.map((item) => ({
           ...item,
           relationKind: 'hook' as const,
-          relationSource: 'Hermes'
+          relationSource: 'Autowin'
         }))
       ),
       window.api.capabilityControls('tools').then((entries) =>
         entries.map((item) => ({
           ...item,
           relationKind: 'tool' as const,
-          relationSource: 'Hermes'
+          relationSource: 'Autowin'
         }))
       )
     ])
@@ -221,7 +220,7 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
       {error && <div className="control-error">{error}</div>}
       {restartRequired && (
         <div className="control-notice">
-          Changement enregistré · nouvelle session Hermes ou redémarrage gateway requis.
+          Changement enregistré · nouvelle session ou redémarrage requis.
         </div>
       )}
 
@@ -276,11 +275,11 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
                 <small>Exécutées par les agents</small>
               </button>
               <button
-                className={toolSource === 'hermes' ? 'is-active' : ''}
-                onClick={() => setToolSource('hermes')}
+                className={toolSource === 'catalog' ? 'is-active' : ''}
+                onClick={() => setToolSource('catalog')}
               >
-                <b>Catalogue Hermes</b>
-                {toolSource === 'hermes' && <strong>{items.length}</strong>}
+                <b>Catalogue local</b>
+                {toolSource === 'catalog' && <strong>{items.length}</strong>}
                 <small>Décoratif · non invoqué</small>
               </button>
             </>
@@ -354,7 +353,7 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
                       item.source ||
                       (kind === 'hooks'
                         ? HOOK_SOURCES.find((source) => source.id === hookModel)?.label
-                        : 'Hermes')}
+                        : 'Autowin')}
                   </span>
                   {kind === 'tools' && toolSource === 'real' ? (
                     // Actions réellement exécutées = lecture seule (observabilité, pas d'admin).
@@ -435,7 +434,7 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
                   {META[kind].title.slice(0, -1)} ·{' '}
                   {selected.sourceLabel ||
                     selected.source ||
-                    (kind === 'hooks' ? hookModel : 'Hermes')}
+                    (kind === 'hooks' ? hookModel : 'Autowin')}
                 </span>
                 <h3>{selected.label}</h3>
                 <p>{selected.enabled ? 'Active' : 'Désactivée'}</p>
@@ -443,7 +442,7 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
               <dl>
                 <div>
                   <dt>Origine</dt>
-                  <dd>{selected.source || (kind === 'hooks' ? hookModel : 'Hermes')}</dd>
+                  <dd>{selected.source || (kind === 'hooks' ? hookModel : 'Autowin')}</dd>
                 </div>
                 <div>
                   <dt>Portée</dt>

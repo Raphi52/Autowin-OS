@@ -37,7 +37,7 @@ interface PromptCall {
   response: string
   usage?: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; costUsd?: number }
 }
-interface HermesDiagnosticTrace extends NativeTraceSummaryInput {
+interface NativeDiagnosticTrace extends NativeTraceSummaryInput {
   apiRequestId: string
   messageCount: number
   toolCount: number
@@ -194,8 +194,8 @@ export function ObservatoryView({
   const [timeline, setTimeline] = useState<HarnessTimeline>(EMPTY)
   const [promptCalls, setPromptCalls] = useState<PromptCall[]>([])
   const [selectedCall, setSelectedCall] = useState<PromptCall | null>(null)
-  const [hermesTraces, setHermesTraces] = useState<HermesDiagnosticTrace[]>([])
-  const [hermesMetadata, setHermesMetadata] = useState<NativeTraceSummaryInput[]>([])
+  const [nativeTraces, setNativeTraces] = useState<NativeDiagnosticTrace[]>([])
+  const [nativeMetadata, setNativeMetadata] = useState<NativeTraceSummaryInput[]>([])
   const [selected, setSelected] = useState<HarnessTimelineEvent | null>(null)
   const [compare, setCompare] = useState<HarnessTimelineEvent[]>([])
   const [query, setQuery] = useState('')
@@ -240,7 +240,7 @@ export function ObservatoryView({
     void settleObservatorySources({
       conversations: window.api.conversations(),
       promptCalls: window.api.promptCalls(),
-      hermes: window.api.promptTraceSummary()
+      native: window.api.promptTraceSummary()
     }).then(({ values, errors }) => {
       if (disposed) return
       const items = values.conversations
@@ -261,10 +261,10 @@ export function ObservatoryView({
         }
       }
       if (values.promptCalls) setPromptCalls(values.promptCalls as PromptCall[])
-      if (values.hermes) setHermesMetadata(values.hermes as NativeTraceSummaryInput[])
+      if (values.native) setNativeMetadata(values.native as NativeTraceSummaryInput[])
       setSourceErrors((current) => {
         const next = { ...current }
-        for (const source of ['conversations', 'promptCalls', 'hermes']) delete next[source]
+        for (const source of ['conversations', 'promptCalls', 'native']) delete next[source]
         for (const [source, message] of Object.entries(errors)) next[source] = message ?? 'Erreur'
         return next
       })
@@ -285,13 +285,13 @@ export function ObservatoryView({
       )
       .then((traces) => {
         if (!disposed) {
-          setHermesTraces(traces as HermesDiagnosticTrace[])
-          updateSourceError('hermesDetails')
+          setNativeTraces(traces as NativeDiagnosticTrace[])
+          updateSourceError('nativeDetails')
         }
       })
       .catch((error: unknown) => {
         if (!disposed)
-          updateSourceError('hermesDetails', error instanceof Error ? error.message : String(error))
+          updateSourceError('nativeDetails', error instanceof Error ? error.message : String(error))
       })
     return () => {
       disposed = true
@@ -394,12 +394,12 @@ export function ObservatoryView({
   // Hermes/RAG ne concernent que les tours réellement passés par Hermes. On SCOPE à la conversation
   // affichée : sinon les payloads Hermes GLOBAUX legacy (chargés à part) polluent une conv codex/claude
   // avec un « Hermes · 24 » et « 24 sans RAG » qui ne la décrivent pas.
-  const convHermesMetadata = hermesMetadata.filter((t) => t.conversationId === conversationId)
-  const convHermesTraces = hermesTraces.filter((t) => t.conversationId === conversationId)
-  const hermesSummary = summarizeNativeTraces(convHermesMetadata)
-  const ragSummaries = convHermesTraces.map((trace) => summarizeRagTrace(trace.request))
+  const convNativeMetadata = nativeMetadata.filter((t) => t.conversationId === conversationId)
+  const convNativeTraces = nativeTraces.filter((t) => t.conversationId === conversationId)
+  const nativeSummary = summarizeNativeTraces(convNativeMetadata)
+  const ragSummaries = convNativeTraces.map((trace) => summarizeRagTrace(trace.request))
   const ragInjected = ragSummaries.filter((summary) => summary.status === 'injected').length
-  const hasHermes = convHermesTraces.length > 0 || hermesSummary.count > 0
+  const hasNativeTraces = convNativeTraces.length > 0 || nativeSummary.count > 0
   const typeOptions = [...new Set(allEvents.map((event) => event.kind))]
   const providerOptions = [
     ...new Set(allEvents.map((event) => event.provider).filter(Boolean))
@@ -445,7 +445,7 @@ export function ObservatoryView({
       ],
       timeline,
       promptCalls: currentCalls,
-      hermesTraces
+      nativeTraces
     })
     const href = URL.createObjectURL(
       new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' })
@@ -497,19 +497,19 @@ export function ObservatoryView({
               .length.toLocaleString('fr-FR')}
             <small>actions réelles</small>
           </strong>
-          {hasHermes && (
-            <strong data-metric="hermes">
-              {hermesSummary.count.toLocaleString('fr-FR')}
-              <small>Hermes · {hermesSummary.coverage}</small>
+          {hasNativeTraces && (
+            <strong data-metric="native">
+              {nativeSummary.count.toLocaleString('fr-FR')}
+              <small>Hermes · {nativeSummary.coverage}</small>
             </strong>
           )}
         </div>
       </header>
       <div className="observatory-toolbar">
-        {hasHermes && hermesSummary.lastTimestamp && (
-          <span className="observatory-hermes-proof">
-            Dernier Hermes · {new Date(hermesSummary.lastTimestamp).toLocaleString('fr-FR')} ·{' '}
-            {hermesSummary.lastModel} · {hermesSummary.boundary} · exact-redacted
+        {hasNativeTraces && nativeSummary.lastTimestamp && (
+          <span className="observatory-native-proof">
+            Dernier Hermes · {new Date(nativeSummary.lastTimestamp).toLocaleString('fr-FR')} ·{' '}
+            {nativeSummary.lastModel} · {nativeSummary.boundary} · exact-redacted
           </span>
         )}
         <input
@@ -601,13 +601,13 @@ export function ObservatoryView({
           <button onClick={() => setRefreshKey((value) => value + 1)}>Réessayer</button>
         </aside>
       )}
-      {hasHermes && (
-        <RagObservabilitySummary requests={convHermesTraces.map((trace) => trace.request)} />
+      {hasNativeTraces && (
+        <RagObservabilitySummary requests={convNativeTraces.map((trace) => trace.request)} />
       )}
-      {hermesTraces.length > 0 && (
-        <details className="observatory-hermes-diagnostics">
+      {nativeTraces.length > 0 && (
+        <details className="observatory-native-diagnostics">
           <summary>
-            {hermesTraces.length} payload{hermesTraces.length > 1 ? 's' : ''} Hermes globaux · accès
+            {nativeTraces.length} payload{nativeTraces.length > 1 ? 's' : ''} Hermes globaux · accès
             autorisé · {ragInjected} injection{ragInjected > 1 ? 's' : ''} RAG prouvée
             {ragInjected > 1 ? 's' : ''}
           </summary>
@@ -616,7 +616,7 @@ export function ObservatoryView({
             masqués.
           </p>
           <div>
-            {[...hermesTraces]
+            {[...nativeTraces]
               .reverse()
               .slice(0, 20)
               .map((trace) => (

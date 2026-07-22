@@ -10,13 +10,13 @@ describe('observatory export model', () => {
       limitations: ['Hermes global non rattaché'],
       timeline: { turns: [{ id: 'turn-1' }], anomalies: [] },
       promptCalls: [{ id: 'call-1', provider: 'codex', limitation: 'usage estimé' }],
-      hermesTraces: [
+      nativeTraces: [
         {
           apiRequestId: 'api-1',
           timestamp: '2026-07-20T01:59:00.000Z',
           provider: 'openai-codex',
           model: 'gpt',
-          boundary: 'hermes.pre_api_request',
+          boundary: 'native.pre_api_request',
           source: 'plugin-hook',
           fidelity: 'exact-redacted',
           request: {
@@ -41,7 +41,7 @@ describe('observatory export model', () => {
       limitations: ['Hermes global non rattaché'],
       timeline: { turns: [{ id: 'turn-1' }] },
       promptCalls: [{ id: 'call-1' }],
-      hermesRag: [
+      nativeRag: [
         {
           apiRequestId: 'api-1',
           fidelity: 'exact-redacted',
@@ -50,7 +50,7 @@ describe('observatory export model', () => {
       ]
     })
     expect(JSON.stringify(result)).not.toContain('raw-secret')
-    expect(result.hermesRag[0].request).toMatchObject({
+    expect(result.nativeRag[0].request).toMatchObject({
       headers: { authorization: '[REDACTED]' }
     })
   })
@@ -64,13 +64,13 @@ describe('observatory export model', () => {
         limitations: [],
         timeline: { turns: [] },
         promptCalls: [],
-        hermesTraces: [
+        nativeTraces: [
           {
             apiRequestId: 'unsafe',
             timestamp: '2026-07-20T01:59:00.000Z',
             provider: 'custom',
             model: 'model',
-            boundary: 'hermes.request_dump',
+            boundary: 'native.pre_api_request',
             source: 'request-dump',
             fidelity: 'raw' as 'exact-redacted',
             request: {}

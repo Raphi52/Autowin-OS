@@ -238,8 +238,8 @@ interface PromptCallRecord {
   }
 }
 
-interface HermesPreflightTrace {
-  schema: 'autowin.hermes-preflight/v1'
+interface NativePreflightTrace {
+  schema: 'autowin.native-preflight/v1'
   timestamp: string
   sessionId: string
   turnId: string
@@ -249,13 +249,24 @@ interface HermesPreflightTrace {
   apiMode?: string
   conversationId?: string
   fidelity: 'exact-redacted'
-  boundary: 'hermes.pre_api_request' | 'hermes.request_dump'
+  boundary: 'native.pre_api_request'
   source: 'plugin-hook' | 'request-dump'
   messageCount: number
   toolCount: number
   request: Record<string, unknown>
 }
 
+interface PreflightCheck {
+  id: string
+  label: string
+  ok: boolean
+  detail?: string
+}
+interface PreflightResult {
+  ok: boolean
+  summary: string
+  checks: PreflightCheck[]
+}
 interface ChatApi {
   captureTestPage: () => Promise<string>
   storageMigration: () => Promise<Record<string, string>>
@@ -317,6 +328,8 @@ interface ChatApi {
     task: string
   ) => Promise<{ ok: boolean; result?: OrchestrationResult; error?: string }>
   onOrchestrateStep: (cb: (step: OrchestrationStep) => void) => () => void
+  onPreflight: (cb: (result: PreflightResult) => void) => () => void
+  recheckPreflight: () => Promise<PreflightResult>
   roles: () => Promise<
     Record<string, { provider: string; model?: string; reasoningEffort?: string }>
   >
@@ -344,10 +357,10 @@ interface ChatApi {
   capabilityControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins') => Promise<HermesControlItem[]>
   skills: () => Promise<SkillRegistryItem[]>
   promptCalls: (conversationId?: string) => Promise<PromptCallRecord[]>
-  promptTraces: (conversationId: string) => Promise<HermesPreflightTrace[]>
-  promptTraceSummary: () => Promise<HermesPreflightTrace[]>
+  promptTraces: (conversationId: string) => Promise<NativePreflightTrace[]>
+  promptTraceSummary: () => Promise<NativePreflightTrace[]>
   authorizeDiagnostics: () => Promise<string | null>
-  promptTracesGlobal: (capability: string) => Promise<HermesPreflightTrace[]>
+  promptTracesGlobal: (capability: string) => Promise<NativePreflightTrace[]>
   causalTrace: (conversationId: string) => Promise<unknown[]>
   claudeHooks: () => Promise<HermesControlItem[]>
   codexHooks: () => Promise<HermesControlItem[]>
