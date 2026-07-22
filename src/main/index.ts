@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
+import { app, shell, BrowserWindow, dialog, ipcMain, Notification, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'path'
 import { randomUUID } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
@@ -8,6 +8,8 @@ import devIcon from '../../resources/autowin-os-dev.png?asset'
 import type { Message, ProviderAdapter, SendResult, StreamChunk } from './providers/types'
 import { ProviderRegistry } from './providers/registry'
 import { AutowinOS } from './os'
+import { installCrashHandlers } from './crash-handlers'
+import { CostCircuitBreaker } from './cost-circuit-breaker'
 import { RoleModelConfig, type ReasoningEffort, type Role } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
@@ -84,14 +86,12 @@ import { guardAttachments, guardBoolean, guardMessages, guardString } from './ip
 import { readBoundedUtf8FileWithin } from './bounded-file-read'
 import { BrainWorkerClient } from './viz/brain-worker-client'
 import {
-  createHermesPromptTraceReader,
-  filterHermesPreflight,
-  readHermesPreflight,
-  resolveHermesSessionsRoot,
-  secureHermesSpool
-} from './activity/hermes-prompt-trace'
+  createNativePreflightReader,
+  filterNativePreflight,
+  readNativePreflight
+} from './activity/native-preflight'
 import { nativeSpoolRoot, appendNativeTrace } from './activity/native-trace-spool'
-import { proveHermesInjections } from './hermes-injection-proof'
+import { proveInjections } from './native-injection-proof'
 import { createAmitelContextProvider } from './amitel-context'
 import {
   automationAppIdentity,
@@ -463,8 +463,19 @@ function registerChatIpc(): void {
 
   // --- Orchestration disciplinée (le cœur) : streame chaque étape ---
   ipcMain.handle('os:orchestrate', async (event, task: string) => {
+    const conversationId = bus.activeConversationId ?? '__autonomous__'
+    // #2 — run STOPPABLE : on enregistre un AbortController dans le registre du bus pour que
+    // `os:orchestrate:cancel` → abortOrchestration(conversationId) le coupe réellement (sinon no-op).
+    const controller = bus.registerOrchestration(conversationId)
+    // #3 — circuit-breaker de coût : coupe + notifie AVANT dépassement d'un seuil déclaré (env
+    // AUTOWIN_RUN_USD_CAP / AUTOWIN_RUN_TOKEN_CAP), plutôt qu'une facture surprise en post-mortem.
+    const usdCap = Number(process.env.AUTOWIN_RUN_USD_CAP)
+    const tokenCap = Number(process.env.AUTOWIN_RUN_TOKEN_CAP)
+    const breaker = new CostCircuitBreaker({
+      maxUsd: Number.isFinite(usdCap) && usdCap > 0 ? usdCap : undefined,
+      maxTokens: Number.isFinite(tokenCap) && tokenCap > 0 ? tokenCap : undefined
+    })
     try {
-      const conversationId = bus.activeConversationId ?? '__autonomous__'
       const turnId = randomUUID()
       const result = await os.runTask(guardString(task, 'task'), (step) => {
         persistOrchestrationStep(
@@ -495,10 +506,33 @@ function registerChatIpc(): void {
           })
         }
         event.sender.send('orchestrate:step', step)
-      })
+        // #3 — au franchissement du seuil : couper le run + prévenir l'utilisateur immédiatement.
+        const trip = breaker.observe(step)
+        if (trip) {
+          controller.abort()
+          try {
+            if (Notification.isSupported()) {
+              new Notification({
+                title: 'Autowin OS — run stoppé (budget)',
+                body: `Run coupé : ${trip.reason}.`
+              }).show()
+            }
+          } catch {
+            /* notif best-effort : ne jamais casser le run à cause d'un échec de notification */
+          }
+          event.sender.send('orchestrate:tripped', { reason: trip.reason, spentUsd: trip.spentUsd })
+        }
+      }, undefined, undefined, controller.signal)
       return { ok: true, result }
     } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+      const aborted = controller.signal.aborted
+      return {
+        ok: false,
+        error: aborted ? 'Run annulé' : e instanceof Error ? e.message : String(e),
+        aborted
+      }
+    } finally {
+      bus.clearOrchestration(conversationId)
     }
   })
 
@@ -699,7 +733,7 @@ function registerChatIpc(): void {
           /* non prouvable */
         }
       }
-      return proveHermesInjections(files, contents, loadHermesTraces())
+      return proveInjections(files, contents, loadNativeTraces())
     }
   )
   ipcMain.handle('hermes:loop:run', (event, input: LoopRunInput) => {
@@ -1258,26 +1292,14 @@ function registerChatIpc(): void {
   ipcMain.handle('os:promptCalls', (_e, convId?: string) =>
     convId ? loadPromptCalls(guardString(convId, 'convId')) : loadAllPromptCalls()
   )
-  const loadHermesTraces = (): ReturnType<typeof readHermesPreflight> => {
-    // Chantier 3 — spool NATIF Autowin en priorité : les traces sont écrites par Autowin lui-même
-    // (native-trace-spool) → l'Observatory (RAG/injection) se peuple sur les vraies requêtes de l'app.
-    const native = readHermesPreflight(nativeSpoolRoot(), 100)
-    if (native.length > 0) return native
-    // Fallback historique Hermes (dégrade proprement à vide si absent) — retiré au Chantier 5.
-    const spoolRoot = join(app.getPath('userData'), 'hermes-trace-spool')
-    if (!secureHermesSpool(spoolRoot)) throw new Error('Hermes trace ACL hardening failed')
-    return readHermesPreflight(
-      spoolRoot,
-      100,
-      resolveHermesSessionsRoot(
-        app.getPath('home'),
-        process.env['LOCALAPPDATA'],
-        process.env['HERMES_HOME']
-      )
-    )
+  const loadNativeTraces = (): ReturnType<typeof readNativePreflight> => {
+    // Spool NATIF Autowin : les traces sont écrites par Autowin lui-même (native-trace-spool) →
+    // l'Observatory (RAG/injection) se peuple sur les vraies requêtes de l'app. Plus aucun fallback
+    // externe (spool Hermes retiré).
+    return readNativePreflight(nativeSpoolRoot(), 100)
   }
   const migrateLegacyCausalTraces = (): void => {
-    const hermes = loadHermesTraces()
+    const hermes = loadNativeTraces()
     for (const conversation of os.conversations.list()) {
       const conversationId = conversation.id
       const events = causalTrace.readConversation(conversationId)
@@ -1298,7 +1320,7 @@ function registerChatIpc(): void {
       // porte déjà sa propre frontière par appel. Les préflight Hermes legacy dupliqueraient la
       // même frontière dans la timeline → on ne les fusionne QUE pour les convs Hermes-only
       // (aucun appel natif). La vue Hermes dédiée (os:hermesPromptTraces) reste inchangée.
-      const hermesPreflight = nativeCalls.length ? [] : filterHermesPreflight(hermes, conversationId)
+      const hermesPreflight = nativeCalls.length ? [] : filterNativePreflight(hermes, conversationId)
       for (const trace of hermesPreflight) {
         const id = `hermes:${trace.apiRequestId}`
         if (knownIds.has(id)) continue
@@ -1339,17 +1361,17 @@ function registerChatIpc(): void {
     }
   }
   migrateLegacyCausalTraces()
-  const readHermesPromptTraces = createHermesPromptTraceReader(loadHermesTraces)
+  const readNativePromptTraces = createNativePreflightReader(loadNativeTraces)
   ipcMain.handle('os:hermesPromptTraces', (event, conversationId: unknown) => {
     assertTrustedRendererSender(event, 'Hermes traces')
     const safeConversationId = guardString(conversationId, 'conversationId')
-    return readHermesPromptTraces(safeConversationId)
+    return readNativePromptTraces(safeConversationId)
   })
   ipcMain.handle('os:hermesPromptTraceSummary', (event) => {
     assertTrustedRendererSender(event, 'Hermes trace summary')
     // La requête brute est volontairement exclue de ce résumé IPC.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    return loadHermesTraces().map(({ request: _request, ...metadata }) => metadata)
+    return loadNativeTraces().map(({ request: _request, ...metadata }) => metadata)
   })
   ipcMain.handle('os:authorizeHermesDiagnostics', (event) => {
     assertTrustedRendererSender(event, 'Hermes diagnostics authorization')
@@ -1362,7 +1384,7 @@ function registerChatIpc(): void {
     if (!hermesDiagnosticCapabilities.consume(safeToken, event.sender.id)) {
       throw new Error('Hermes diagnostics capability denied')
     }
-    return filterHermesPreflight(loadHermesTraces())
+    return filterNativePreflight(loadNativeTraces())
   })
   ipcMain.handle('os:causalTrace', (_e, convId: string) => {
     const conversationId = guardString(convId, 'convId')
@@ -1467,6 +1489,10 @@ if (!isolatedTestInstance && ownsInstanceLock) {
     }
   })
 }
+
+// Filet de sécurité process-level (#1) : une promesse non-catchée ne doit PAS tuer tout le process
+// (fenêtres + runs + persistance). On loggue et on survit. Branché AVANT whenReady.
+installCrashHandlers({ logDir: app.getPath('userData') })
 
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.

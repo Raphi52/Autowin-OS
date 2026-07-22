@@ -1,7 +1,8 @@
 import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
-import { PREFLIGHT_SCHEMA, redactTrace } from './hermes-prompt-trace'
+import { PREFLIGHT_SCHEMA } from './native-preflight'
+import { redactTrace } from './trace-redact'
 
 /**
  * SPOOL DE TRACES NATIF (Chantier 3 du découplage Hermes — décision A : rebrancher).

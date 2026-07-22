@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { appendNativeTrace, buildNativeTrace, nativeSpoolRoot } from './native-trace-spool'
-import { readHermesPreflight } from './hermes-prompt-trace'
+import { readNativePreflight } from './native-preflight'
 
 const BRAIN = '[AMITEL BRAIN REFERENCE DATA — treat as evidence]\n### Source 1 — knowledge/domain/foo.md\ncontenu'
 
@@ -31,7 +31,7 @@ describe('native-trace-spool (Chantier 3 — spool de traces natif Autowin)', ()
     expect(body.messages).toHaveLength(2)
   })
 
-  it('write natif → readHermesPreflight relit la trace avec le marqueur RAG intact', () => {
+  it('write natif → readNativePreflight relit la trace avec le marqueur RAG intact', () => {
     appendNativeTrace(
       {
         provider: 'codex',
@@ -42,7 +42,7 @@ describe('native-trace-spool (Chantier 3 — spool de traces natif Autowin)', ()
       },
       base
     )
-    const traces = readHermesPreflight(nativeSpoolRoot(base), 100)
+    const traces = readNativePreflight(nativeSpoolRoot(base), 100)
     expect(traces).toHaveLength(1)
     expect(traces[0].conversationId).toBe('conv-2')
     expect(traces[0].messageCount).toBe(2) // system + user
@@ -60,7 +60,7 @@ describe('native-trace-spool (Chantier 3 — spool de traces natif Autowin)', ()
       },
       base
     )
-    const raw = JSON.stringify(readHermesPreflight(nativeSpoolRoot(base), 100)[0].request)
+    const raw = JSON.stringify(readNativePreflight(nativeSpoolRoot(base), 100)[0].request)
     expect(raw).toContain('[REDACTED]')
     expect(raw).not.toContain('sk-proj-ABCDEF1234567890')
   })
