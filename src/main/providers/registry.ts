@@ -62,11 +62,12 @@ export class ProviderRegistry {
       const requested = this.get(id)
       if (requested.supportsExecution === true) return { id, opts }
 
-      // OmniRoute reste la voie de conversation, mais n'expose pas de terminal local.
-      // Les mutations sont confiées à un runner outillé sans réutiliser son modèle.
-      const localExecutor = [...this.adapters.values()].find(
-        (adapter) => adapter.supportsExecution === true
-      )
+      // Un rôle NON-exécuteur (ex. OmniRoute) demandant une exécution est délégué à un runner
+      // outillé local. Ordre de préférence DÉTERMINISTE : codex (exécuteur canonique éprouvé) en
+      // premier, sinon le 1er exécuteur déclaré. Évite qu'un nouvel exécuteur enregistré avant
+      // (ex. claude, dont l'auth peut être expirée) devienne silencieusement le fallback par défaut.
+      const executors = [...this.adapters.values()].filter((a) => a.supportsExecution === true)
+      const localExecutor = executors.find((a) => a.id === 'codex') ?? executors[0]
       if (localExecutor) {
         return {
           id: localExecutor.id,
