@@ -1,8 +1,7 @@
 import { app, shell, BrowserWindow, dialog, ipcMain, Notification, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'path'
 import { randomUUID } from 'node:crypto'
-import { writeFileSync, existsSync } from 'node:fs'
-import { spawnSync } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import devIcon from '../../resources/autowin-os-dev.png?asset'
@@ -12,7 +11,7 @@ import { AutowinOS } from './os'
 import { installCrashHandlers } from './crash-handlers'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
 import { runPreflight } from './preflight'
-import { brainServiceToken } from './brain-retrieval'
+import { appPreflightProbes } from './preflight-probes'
 import { RoleModelConfig, type ReasoningEffort, type Role } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
@@ -539,6 +538,8 @@ function registerChatIpc(): void {
   })
 
   // --- Config par rôle (orchestrateur / sous-agent / juge / scout) ---
+  // #5 — le wizard first-run re-vérifie la config à la demande (bouton "re-vérifier").
+  ipcMain.handle('preflight:recheck', () => runPreflight(appPreflightProbes()))
   ipcMain.handle('os:roles', () => os.roles.all())
   ipcMain.handle(
     'os:setRole',
@@ -730,7 +731,7 @@ function registerChatIpc(): void {
         join(process.env['LOCALAPPDATA'] ?? join(app.getPath('home'), 'AppData', 'Local'), 'hermes')
       ]
       for (const file of files) {
-        if (file.engine !== 'hermes' || file.scope === 'skill') continue
+        if (file.engine !== 'autowin' || file.scope === 'skill') continue
         try {
           contents.set(file.id, readBoundedUtf8FileWithin(file.path, allowedRoots, 512_000))
         } catch {
@@ -1552,27 +1553,7 @@ app.whenReady().then(async () => {
   // #4 — diagnostic de démarrage (non bloquant) : on vérifie brain_server, CLI providers et token,
   // et on pousse le résultat au renderer (bannière) pour que l'utilisateur voie une config incomplète
   // AVANT de lancer un run, plutôt qu'un échec silencieux en plein run. Best-effort, jamais bloquant.
-  void runPreflight({
-    pingBrain: async () => {
-      const ctrl = new AbortController()
-      const t = setTimeout(() => ctrl.abort(), 1500) // sleep-ok: timeout d'abort d'un fetch réseau, borne la latence du ping (pas un sleep de polling)
-      try {
-        await fetch('http://127.0.0.1:8765/', { signal: ctrl.signal })
-        return true
-      } catch {
-        return false
-      } finally {
-        clearTimeout(t)
-      }
-    },
-    hasBin: async (which) => {
-      const envBin = process.env[`${which.toUpperCase()}_BIN`]
-      if (envBin) return existsSync(envBin)
-      const probe = spawnSync(which, ['--version'], { timeout: 3000, windowsHide: true })
-      return probe.status === 0
-    },
-    hasBrainToken: () => brainServiceToken().length > 0
-  })
+  void runPreflight(appPreflightProbes())
     .then((result) => {
       if (!result.ok) {
         for (const w of BrowserWindow.getAllWindows()) w.webContents.send('preflight:result', result)

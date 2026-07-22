@@ -30,7 +30,7 @@ type HermesInjectionProof = {
 const ENGINE_LABEL: Record<BehaviourEngine, string> = {
   codex: 'Codex',
   claude: 'Claude',
-  hermes: 'Hermes'
+  autowin: 'Autowin'
 }
 
 const STATE_LABEL: Record<BehaviourState, string> = {
@@ -210,7 +210,7 @@ export function BehaviourView(): React.JSX.Element {
           placeholder="Filtrer nom, chemin ou raison…"
           onChange={(event) => setQuery(event.target.value)}
         />
-        {(['all', 'codex', 'claude', 'hermes'] as const).map((value) => (
+        {(['all', 'codex', 'claude', 'autowin'] as const).map((value) => (
           <button
             key={value}
             type="button"

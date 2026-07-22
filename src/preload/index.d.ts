@@ -139,7 +139,7 @@ interface BehaviourFile {
   id: string
   label: string
   path: string
-  engine: 'codex' | 'claude' | 'hermes'
+  engine: 'codex' | 'claude' | 'autowin'
   state: 'active' | 'conditional' | 'shadowed' | 'declared' | 'injected'
   scope: 'global' | 'workspace' | 'project' | 'skill'
   reason: string

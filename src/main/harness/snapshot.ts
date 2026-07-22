@@ -102,7 +102,7 @@ export interface HarnessSnapshotInput {
   /** Évènements de hooks (noms redigés, JAMAIS de commande). */
   hookEvents: string[]
   /** Répartition Behaviour par moteur, ou `null` si indisponible. */
-  behaviourByEngine: { codex: number; claude: number; hermes: number } | null
+  behaviourByEngine: { codex: number; claude: number; autowin: number } | null
   /** Réfs de graphes du Brain : identité + taille, jamais le contenu des notes. */
   brains: Array<{
     id: string
@@ -450,11 +450,11 @@ export function composeHarnessSnapshot(input: HarnessSnapshotInput): HarnessSnap
       level: 'both',
       flows: ['orchestration', 'loop'],
       order: 2,
-      evidence: { source: 'ipc', ref: 'hermes-controls · listHermesControls(skills)' },
+      evidence: { source: 'ipc', ref: 'capability-controls · listCapabilities(skills)' },
       roleDesc: 'Les procédures nommées que le modèle peut charger (scout, frame, build, judge…).',
       observed: 'Le nombre de skills disponibles (inventaire borné Hermes).',
       notObserved: 'Le contenu des SKILL.md n’est pas exposé ici.',
-      references: ['main/hermes-controls.ts', 'main/loop-skills.ts'],
+      references: ['main/capability-controls.ts', 'main/loop-skills.ts'],
       metrics: [{ label: 'Disponibles', value: input.counts.skills ?? 'inconnu' }]
     }),
     makeNode({
@@ -490,11 +490,11 @@ export function composeHarnessSnapshot(input: HarnessSnapshotInput): HarnessSnap
       level: 'expert',
       flows: ['pilotage', 'orchestration'],
       order: 4,
-      evidence: { source: 'ipc', ref: 'hermes-controls · listHermesControls(tools)' },
+      evidence: { source: 'ipc', ref: 'capability-controls · listCapabilities(tools)' },
       roleDesc: 'Les outils activables côté Hermes que les agents peuvent invoquer.',
       observed: 'Le nombre d’outils exposés.',
       notObserved: 'Le détail d’implémentation de chaque outil.',
-      references: ['main/hermes-controls.ts'],
+      references: ['main/capability-controls.ts'],
       metrics: [{ label: 'Exposés', value: input.counts.tools ?? 'inconnu' }]
     }),
     makeNode({
@@ -518,7 +518,7 @@ export function composeHarnessSnapshot(input: HarnessSnapshotInput): HarnessSnap
         ? [
             { label: 'Codex', value: input.behaviourByEngine.codex },
             { label: 'Claude', value: input.behaviourByEngine.claude },
-            { label: 'Hermes', value: input.behaviourByEngine.hermes }
+            { label: 'Autowin', value: input.behaviourByEngine.autowin }
           ]
         : [{ label: 'Fichiers', value: 'inconnu' }]
     }),

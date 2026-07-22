@@ -1,11 +1,10 @@
 import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { listCapabilities } from './capability-controls'
-import { readBoundedUtf8FileWithin, readUtf8Prefix } from './bounded-file-read'
+import { readBoundedUtf8FileWithin } from './bounded-file-read'
 import { AUTOWIN_WORKSPACE_ENV, legacyWorkspaceEnvName } from '../shared/app-identity'
 
-export type BehaviourEngine = 'codex' | 'claude' | 'hermes'
+export type BehaviourEngine = 'codex' | 'claude' | 'autowin'
 export type BehaviourState = 'active' | 'conditional' | 'shadowed' | 'declared' | 'injected'
 export type BehaviourScope = 'global' | 'workspace' | 'project' | 'skill'
 
@@ -14,7 +13,6 @@ export interface BehaviourQuery {
   contextRoot?: string
   homeRoot?: string
   localAppDataRoot?: string
-  includeHermesSkills?: boolean
 }
 
 export interface BehaviourContext {
@@ -85,8 +83,7 @@ function normalizeQuery(query?: string | BehaviourQuery): Required<BehaviourQuer
         ? join(homeRoot, 'AppData', 'Local')
         : (process.env.LOCALAPPDATA ?? join(homeRoot, 'AppData', 'Local')))
   )
-  const includeHermesSkills = input.includeHermesSkills ?? input.homeRoot === undefined
-  return { workspaceRoot, contextRoot, homeRoot, localAppDataRoot, includeHermesSkills }
+  return { workspaceRoot, contextRoot, homeRoot, localAppDataRoot }
 }
 
 function pathInsideLexically(path: string, root: string): boolean {
@@ -184,8 +181,8 @@ function cappedBehaviourFiles(groups: BehaviourFile[][]): BehaviourFile[] {
     }
   }
 
-  // Hermes has no descendant flood: keep its declared sources and enabled skills visible first.
-  for (const file of groups.find((group) => group[0]?.engine === 'hermes') ?? []) add(file)
+  // Le groupe Autowin n'a pas de cascade descendante : ses sources déclarées restent visibles d'abord.
+  for (const file of groups.find((group) => group[0]?.engine === 'autowin') ?? []) add(file)
 
   const remaining = groups.map((group) => group.filter((file) => !selectedIds.has(file.id)))
   while (selected.length < MAX_FILES && remaining.some((group) => group.length > 0)) {
@@ -333,38 +330,11 @@ function claudeFiles(query: Required<BehaviourQuery>, discovered: string[]): Beh
   return files
 }
 
-function skillFiles(root: string, source: string): BehaviourFile[] {
-  if (!existsSync(root)) return []
-  return discover(root, new Set(['SKILL.md'])).flatMap((path) => {
-    const fallbackName = basename(dirname(path))
-    let header = ''
-    try {
-      header = readUtf8Prefix(path, 2048)
-    } catch {
-      return []
-    }
-    const skill = /^name:\s*["']?([^\r\n"']+)/m.exec(header)?.[1].trim() || fallbackName
-    return [
-      {
-        ...instruction(path, 'hermes', 'conditional', 'skill', 'À l’invocation de la skill'),
-        id: `hermes:skill:${source}:${relative(root, path).replaceAll('\\', '/')}`,
-        label: skill,
-        injectedInto: `Sous-agent utilisant ${skill}`
-      }
-    ]
-  })
-}
-
-async function hermesFiles(query: Required<BehaviourQuery>): Promise<BehaviourFile[]> {
+function autowinFiles(query: Required<BehaviourQuery>): BehaviourFile[] {
   const files: BehaviourFile[] = []
-  const hermesRoot = join(query.localAppDataRoot, 'hermes')
-  const soul = join(hermesRoot, 'SOUL.md')
-  if (existsSync(soul))
-    files.push(
-      instruction(soul, 'hermes', 'declared', 'global', 'Déclaré par Hermes, injection non tracée')
-    )
-
-  const candidates = ['.hermes.md', 'AGENTS.md', 'CLAUDE.md', '.cursorrules']
+  // Fichiers d'instruction génériques du contexte (conventions d'agent), étiquetés engine natif
+  // « autowin ». Aucune dépendance à un runtime externe.
+  const candidates = ['AGENTS.md', 'CLAUDE.md', '.cursorrules']
   let selected = false
   for (const name of candidates) {
     const path = join(query.contextRoot, name)
@@ -373,7 +343,7 @@ async function hermesFiles(query: Required<BehaviourQuery>): Promise<BehaviourFi
     files.push(
       instruction(
         path,
-        'hermes',
+        'autowin',
         state,
         scopeFor(query.contextRoot, query),
         selected
@@ -383,20 +353,6 @@ async function hermesFiles(query: Required<BehaviourQuery>): Promise<BehaviourFi
     )
     selected = true
   }
-
-  if (!query.includeHermesSkills) return files
-
-  const enabled = new Set(
-    (await listCapabilities('skills')).filter((skill) => skill.enabled).map((skill) => skill.id)
-  )
-  const byName = new Map<string, BehaviourFile>()
-  for (const skill of [
-    ...skillFiles(join(hermesRoot, 'skills'), 'local'),
-    ...skillFiles(join(hermesRoot, 'hermes-agent', 'skills'), 'builtin')
-  ]) {
-    if (enabled.has(skill.label) && !byName.has(skill.label)) byName.set(skill.label, skill)
-  }
-  files.push(...byName.values())
   return files
 }
 
@@ -412,7 +368,6 @@ export async function listBehaviourContexts(
       'AGENTS.override.md',
       'CLAUDE.md',
       'CLAUDE.local.md',
-      '.hermes.md',
       '.cursorrules'
     ])
   )) {
@@ -444,7 +399,7 @@ export async function listBehaviourFiles(
       normalized,
       discovered.filter((path) => /^CLAUDE(?:\.local)?\.md$/i.test(basename(path)))
     ),
-    await hermesFiles(normalized)
+    autowinFiles(normalized)
   ]
   return cappedBehaviourFiles(groups)
 }
@@ -462,7 +417,6 @@ export async function readBehaviourFile(
     join(normalized.homeRoot, '.codex'),
     join(normalized.homeRoot, '.claude')
   ]
-  allowedRoots.push(join(normalized.localAppDataRoot, 'hermes'))
   if (!allowedRoots.some((root) => canonicalInside(file.path, root)))
     throw new Error('Fichier hors des racines autorisées')
   if (statSync(file.path).size > MAX_BYTES)

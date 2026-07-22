@@ -262,7 +262,7 @@ export class AutowinOS {
       ? {
           codex: behaviour.filter((f) => f.engine === 'codex').length,
           claude: behaviour.filter((f) => f.engine === 'claude').length,
-          hermes: behaviour.filter((f) => f.engine === 'hermes').length
+          autowin: behaviour.filter((f) => f.engine === 'autowin').length
         }
       : null
 

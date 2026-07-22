@@ -145,35 +145,29 @@ describe('behaviour instruction map', () => {
     }
   })
 
-  it('keeps every engine anchor and enabled Hermes skills when discovery exceeds the cap', async () => {
+  it('keeps every engine anchor (codex, claude, autowin) when discovery exceeds the cap', async () => {
     const root = sandbox()
     const opts = options(root, join(root, 'workspace'))
     put(join(opts.homeRoot, '.codex', 'AGENTS.md'))
     put(join(opts.homeRoot, '.claude', 'CLAUDE.md'))
     put(join(opts.workspaceRoot, 'AGENTS.md'))
     put(join(opts.workspaceRoot, 'CLAUDE.md'))
-    const hermesRoot = join(root, 'local-app-data', 'hermes')
-    put(join(hermesRoot, 'SOUL.md'))
-    put(join(hermesRoot, 'skills', 'always-visible', 'SKILL.md'), 'name: always-visible')
     for (let index = 0; index < 520; index += 1) {
       put(join(opts.workspaceRoot, `codex-${String(index).padStart(3, '0')}`, 'AGENTS.md'))
     }
 
     const files = await listBehaviourFiles({
       ...opts,
-      localAppDataRoot: join(root, 'local-app-data'),
-      includeHermesSkills: true
+      localAppDataRoot: join(root, 'local-app-data')
     })
 
     expect(files.length).toBeLessThanOrEqual(500)
+    // Engine natif « autowin » (fichiers d'instruction génériques du contexte) + codex + claude.
     expect(new Set(files.map((file) => file.engine))).toEqual(
-      new Set(['codex', 'claude', 'hermes'])
+      new Set(['codex', 'claude', 'autowin'])
     )
     expect(files.some((file) => file.engine === 'claude' && file.scope === 'global')).toBe(true)
-    expect(files.some((file) => file.engine === 'hermes' && file.label === 'SOUL.md')).toBe(true)
-    expect(files.some((file) => file.engine === 'hermes' && file.label === 'always-visible')).toBe(
-      true
-    )
+    expect(files.some((file) => file.engine === 'autowin')).toBe(true)
   }, 15_000)
 
   it('discovers mixed-case instruction names on Windows', async () => {

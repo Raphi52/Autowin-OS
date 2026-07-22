@@ -37,15 +37,15 @@ const files: BehaviourFileItem[] = [
     size: 18
   },
   {
-    id: 'hermes-skill',
+    id: 'autowin-skill',
     label: 'clean',
-    path: 'C:/hermes/skills/clean/SKILL.md',
-    engine: 'hermes',
+    path: 'C:/skills/clean/SKILL.md',
+    engine: 'autowin',
     scope: 'skill',
     state: 'conditional',
     reason: 'À l’invocation',
     injectedAt: 'Invocation',
-    injectedInto: 'Hermes',
+    injectedInto: 'Autowin',
     active: false,
     size: 20
   }
@@ -59,13 +59,13 @@ describe('behaviour view model', () => {
   it('keeps declared sources visible while excluding shadowed files', () => {
     const declared = {
       ...files[2],
-      id: 'hermes-soul',
+      id: 'autowin-soul',
       label: 'SOUL.md',
       state: 'declared' as const
     }
     const shadowed = { ...files[1], id: 'shadowed', state: 'shadowed' as const }
     const visible = visibleBehaviourFiles([...files, declared, shadowed]).map((file) => file.id)
-    expect(visible).toContain('hermes-soul')
+    expect(visible).toContain('autowin-soul')
     expect(visible).not.toContain('shadowed')
   })
 
@@ -74,11 +74,11 @@ describe('behaviour view model', () => {
     expect(visibleBehaviourSelection([], 'claude-global')).toBeUndefined()
   })
 
-  it('groups files in Codex, Claude, Hermes order without losing empty engines', () => {
+  it('groups files in Codex, Claude, Autowin order without losing empty engines', () => {
     expect(groupBehaviourFiles(files).map((group) => [group.engine, group.files.length])).toEqual([
       ['codex', 1],
       ['claude', 1],
-      ['hermes', 1]
+      ['autowin', 1]
     ])
   })
 

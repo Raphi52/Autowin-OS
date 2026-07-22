@@ -29,7 +29,7 @@ function baseInput(overrides: Partial<HarnessSnapshotInput> = {}): HarnessSnapsh
       trustModels: 2
     },
     hookEvents: ['Stop', 'PreToolUse', 'UserPromptSubmit'],
-    behaviourByEngine: { codex: 2, claude: 5, hermes: 2 },
+    behaviourByEngine: { codex: 2, claude: 5, autowin: 2 },
     brains: [
       { id: 'amitel-brain', label: 'Amitel Brain', kind: 'vault', sizeMb: 0, themes: 7 },
       { id: 'rigapplication', label: 'RIG', kind: 'graphify', sizeMb: 4.2, themes: 0 }

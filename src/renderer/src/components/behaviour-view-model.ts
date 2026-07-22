@@ -1,4 +1,4 @@
-export type BehaviourEngine = 'codex' | 'claude' | 'hermes'
+export type BehaviourEngine = 'codex' | 'claude' | 'autowin'
 export type BehaviourScope = 'global' | 'workspace' | 'project' | 'skill'
 export type BehaviourState = 'active' | 'conditional' | 'shadowed' | 'declared' | 'injected'
 
@@ -21,7 +21,7 @@ export interface BehaviourGroup {
   files: BehaviourFileItem[]
 }
 
-const ENGINE_ORDER: readonly BehaviourEngine[] = ['codex', 'claude', 'hermes']
+const ENGINE_ORDER: readonly BehaviourEngine[] = ['codex', 'claude', 'autowin']
 
 export function applicableBehaviourFiles(files: readonly BehaviourFileItem[]): BehaviourFileItem[] {
   return files.filter((file) => file.active)
