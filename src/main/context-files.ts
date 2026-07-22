@@ -2,7 +2,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 /**
- * Souveraineté sur les fichiers de contexte projet (décision : PLIER façon Hermes).
+ * Souveraineté sur les fichiers de contexte projet (décision : PLIER).
  *
  * Autowin — et non le CLI par-vendeur — est l'autorité sur le contexte injecté. On lit UNE
  * chaîne de précédence (premier-trouvé-gagne, JAMAIS empilé), on plie le fichier gagnant dans le
@@ -15,12 +15,10 @@ import { join } from 'node:path'
  * cf. registry.ts) — décision assumée « sans overkill », les réflexes porteurs étant aussi
  * enforce par le GATE déterministe.
  *
- * Ordre calqué sur hermes-agent : `.hermes.md` (convention maison) → `AGENTS.md` (Codex/OpenAI) →
- * `CLAUDE.md` (Claude) → `.cursorrules` (Cursor). On accepte les variantes de casse usuelles.
+ * Ordre : `AGENTS.md` (Codex/OpenAI) → `CLAUDE.md` (Claude) → `.cursorrules` (Cursor).
+ * On accepte les variantes de casse usuelles.
  */
 export const PROJECT_CONTEXT_CHAIN: string[] = [
-  '.hermes.md',
-  'HERMES.md',
   'AGENTS.md',
   'agents.md',
   'CLAUDE.md',

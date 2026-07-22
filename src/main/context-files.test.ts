@@ -30,10 +30,10 @@ describe('context-files — souveraineté (chaîne de précédence)', () => {
     expect(block).not.toContain('depuis claude')
   })
 
-  it('.hermes.md prime sur AGENTS.md', () => {
-    writeFileSync(join(dir, '.hermes.md'), 'hermes maison')
+  it('AGENTS.md prime en tête de chaîne', () => {
     writeFileSync(join(dir, 'AGENTS.md'), 'agents')
-    expect(loadProjectContext(dir)?.file).toBe('.hermes.md')
+    writeFileSync(join(dir, 'CLAUDE.md'), 'claude')
+    expect(loadProjectContext(dir)?.file).toBe('AGENTS.md')
   })
 
   it('retombe sur CLAUDE.md si AGENTS.md absent', () => {

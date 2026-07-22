@@ -71,18 +71,18 @@ export function RagObservabilitySummary({
           : 'not-injected'
   const diagnostic =
     status === 'injected'
-      ? 'Contexte Brain observé dans la requête Hermes.'
+      ? 'Contexte Brain observé dans la requête native.'
       : status === 'unparseable'
         ? 'Marqueur Brain observé, mais sa provenance reste non analysable.'
         : status === 'not-injected'
-          ? 'Requêtes Hermes observées sans contexte Brain injecté.'
-          : 'Aucune requête Hermes disponible pour contrôler le RAG.'
+          ? 'Requêtes natives observées sans contexte Brain injecté.'
+          : 'Aucune requête native disponible pour contrôler le RAG.'
 
   return (
     <section className={`observatory-rag-summary is-${status}`} data-rag-status={status}>
-      <strong>Traçabilité RAG · Hermes</strong>
+      <strong>Traçabilité RAG · natif</strong>
       {requests.length === 0 ? (
-        <span>Aucune trace Hermes disponible · récupération non observable</span>
+        <span>Aucune trace native disponible · récupération non observable</span>
       ) : (
         <span>
           {requests.length} appel{requests.length > 1 ? 's' : ''} · {injected} injecté

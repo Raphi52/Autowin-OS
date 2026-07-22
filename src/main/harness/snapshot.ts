@@ -452,7 +452,7 @@ export function composeHarnessSnapshot(input: HarnessSnapshotInput): HarnessSnap
       order: 2,
       evidence: { source: 'ipc', ref: 'capability-controls · listCapabilities(skills)' },
       roleDesc: 'Les procédures nommées que le modèle peut charger (scout, frame, build, judge…).',
-      observed: 'Le nombre de skills disponibles (inventaire borné Hermes).',
+      observed: 'Le nombre de skills disponibles (inventaire borné).',
       notObserved: 'Le contenu des SKILL.md n’est pas exposé ici.',
       references: ['main/capability-controls.ts', 'main/loop-skills.ts'],
       metrics: [{ label: 'Disponibles', value: input.counts.skills ?? 'inconnu' }]
@@ -482,7 +482,7 @@ export function composeHarnessSnapshot(input: HarnessSnapshotInput): HarnessSnap
     makeNode({
       id: 'tools',
       kind: 'tool',
-      label: 'Tools Hermes',
+      label: 'Tools',
       layer: 'configuration',
       source: 'ipc',
       state: countState(input.counts.tools),
@@ -491,7 +491,7 @@ export function composeHarnessSnapshot(input: HarnessSnapshotInput): HarnessSnap
       flows: ['pilotage', 'orchestration'],
       order: 4,
       evidence: { source: 'ipc', ref: 'capability-controls · listCapabilities(tools)' },
-      roleDesc: 'Les outils activables côté Hermes que les agents peuvent invoquer.',
+      roleDesc: 'Les outils activables localement que les agents peuvent invoquer.',
       observed: 'Le nombre d’outils exposés.',
       notObserved: 'Le détail d’implémentation de chaque outil.',
       references: ['main/capability-controls.ts'],
@@ -510,7 +510,7 @@ export function composeHarnessSnapshot(input: HarnessSnapshotInput): HarnessSnap
       order: 5,
       evidence: { source: 'filesystem', ref: 'behaviour-files · racines revalidées' },
       roleDesc:
-        'La chaîne d’instructions qui gouverne chaque moteur (Codex/Claude/Hermes), du global au projet.',
+        'La chaîne d’instructions qui gouverne chaque moteur (Codex/Claude), du global au projet.',
       observed: 'Le nombre de fichiers effectifs et leur moteur.',
       notObserved: 'Leur contenu n’est pas affiché dans cette vue.',
       references: ['main/behaviour-files.ts'],

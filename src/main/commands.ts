@@ -103,7 +103,7 @@ const CATALOG: CommandSpec[] = [
   {
     name: 'create_conversation',
     description: 'Créer une conversation',
-    args: { title: 'titre', category: 'claude|codex|hermes' },
+    args: { title: 'titre', category: 'claude|codex' },
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -262,8 +262,13 @@ export class AppCommandBus {
     return controller
   }
 
-  /** Retire l'orchestration du registre (à appeler en finally, après fin/erreur/abort). */
-  clearOrchestration(convId: string): void {
+  /**
+   * Retire l'orchestration du registre (à appeler en finally). Ne supprime QUE si l'entrée courante
+   * est bien CE controller : si un run plus récent (même conversation) l'a remplacé entre-temps, on
+   * ne doit pas effacer son entrée (sinon son cancel deviendrait un no-op silencieux). (Corrector #2.)
+   */
+  clearOrchestration(convId: string, controller?: AbortController): void {
+    if (controller && this.activeOrchestrations.get(convId) !== controller) return
     this.activeOrchestrations.delete(convId)
   }
   constructor(

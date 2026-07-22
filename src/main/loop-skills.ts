@@ -51,8 +51,8 @@ function metadata(path: string, source: LoopSkillItem['source']): ResolvedLoopSk
 async function manifest(): Promise<ResolvedLoopSkill[]> {
   const user = homedir()
   const localAppData = process.env.LOCALAPPDATA ?? join(user, 'AppData', 'Local')
-  // Chantier 2 — souverain de Hermes : le loop utilise le kit `~/.claude/skills` + la racine Autowin.
-  // Plus de scan `hermes/skills` ni d'appel `listHermesControls` (l'arbre Hermes est retiré).
+  // Souverain : le loop utilise le kit `~/.claude/skills` + la racine Autowin.
+  // Plus de scan d'un arbre de skills externe.
   const autowin = [
     ...discoverSkillFiles(join(user, '.claude', 'skills')),
     ...discoverSkillFiles(join(localAppData, 'autowin-os', 'skills'))

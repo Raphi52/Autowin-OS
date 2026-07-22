@@ -5,15 +5,15 @@ import { PREFLIGHT_SCHEMA } from './native-preflight'
 import { redactTrace } from './trace-redact'
 
 /**
- * SPOOL DE TRACES NATIF (Chantier 3 du découplage Hermes — décision A : rebrancher).
+ * SPOOL DE TRACES NATIF.
  *
- * Autowin écrit LUI-MÊME ses traces de pré-requête (au format `autowin.hermes-preflight/v1`, lu tel
- * quel par `readHermesPreflight`), au lieu de dépendre du spool écrit par un hook Hermes externe
- * (`~/.hermes/sessions/events.jsonl`). Ainsi l'Observatory (preuve d'injection + traçabilité RAG
+ * Autowin écrit LUI-MÊME ses traces de pré-requête (au format `autowin.native-preflight/v1`, lu tel
+ * quel par `readNativePreflight`), sans dépendre d'un spool externe
+ * Ainsi l'Observatory (preuve d'injection + traçabilité RAG
  * « Amitel Brain ») se peuple sur les VRAIES requêtes envoyées par les providers d'Autowin.
  *
  * Le `system` (qui porte le marqueur RAG « [AMITEL BRAIN REFERENCE DATA] » + le contexte projet)
- * est inclus comme 1er message → `summarizeRagTrace` le détecte comme pour une trace Hermes.
+ * est inclus comme 1er message → `summarizeRagTrace` le détecte comme pour une trace native.
  * Secrets redcatés via `redactTrace` (même politique que la lecture). Rotation simple à ~4 Mo.
  */
 

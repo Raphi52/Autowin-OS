@@ -336,7 +336,7 @@ export class CodexAdapter implements ProviderAdapter {
       .filter((m) => m.role !== 'system')
       .map((m) => ({ role: m.role, content: codexContent(m) }))
 
-    // fix-ok: contrat live (Hermes auxiliary_client.py:748) — chatgpt.com/backend-api/codex
+    // fix-ok: contrat live (auxiliary_client.py:748) — chatgpt.com/backend-api/codex
     // exige store:false + les headers originator/User-Agent/ChatGPT-Account-ID (sinon 400/403
     // Cloudflare). L'account-id est extrait du claim JWT chatgpt_account_id.
     const body = {

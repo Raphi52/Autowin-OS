@@ -7,7 +7,7 @@ describe('RAG observability rendering', () => {
     const html = renderToStaticMarkup(<RagObservabilitySummary requests={[]} />)
 
     expect(html).toContain('data-rag-status="unavailable"')
-    expect(html).toContain('Aucune trace Hermes disponible')
+    expect(html).toContain('Aucune trace native disponible')
   })
 
   it('distinguishes calls without RAG from malformed RAG traces', () => {
@@ -47,8 +47,8 @@ describe('RAG observability rendering', () => {
     )
     const unavailable = renderToStaticMarkup(<RagObservabilitySummary requests={[]} />)
 
-    expect(injected).toContain('Contexte Brain observé dans la requête Hermes')
+    expect(injected).toContain('Contexte Brain observé dans la requête native')
     expect(injected).not.toContain('RAG non branché')
-    expect(unavailable).toContain('Aucune requête Hermes disponible pour contrôler le RAG')
+    expect(unavailable).toContain('Aucune requête native disponible pour contrôler le RAG')
   })
 })

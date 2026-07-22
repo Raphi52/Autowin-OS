@@ -13,7 +13,6 @@ export interface SkillDiscoveryProvider {
   id: string
   label: string
   root: string
-  usesHermesState?: boolean
 }
 
 interface SkillSourcesConfig {
@@ -33,7 +32,7 @@ const METADATA_BYTES = 16_384
 export function defaultSkillRegistryRoots(): SkillRegistryRoots {
   const user = homedir()
   const localAppData = process.env.LOCALAPPDATA ?? join(user, 'AppData', 'Local')
-  // Chantier 2 — souverain de Hermes : kit `~/.claude/skills` + `~/.codex/skills` + racine Autowin.
+  // Souverain : kit `~/.claude/skills` + `~/.codex/skills` + racine Autowin.
   return {
     codex: join(user, '.codex', 'skills'),
     claude: join(user, '.claude', 'skills'),
@@ -140,7 +139,7 @@ export async function discoverConfiguredSkillRegistry(
   return discoverSkillProviders(loadConfiguredProviders(configPath, roots))
 }
 
-// Chantier 2 — souverain de Hermes : plus d'état enabled récupéré via hermes.exe. Un skill présent
+// Souverain : plus d'état enabled récupéré via un binaire externe. Un skill présent
 // sur disque est actif (l'activation/désactivation vit désormais dans le registre natif local).
 export async function discoverSkillProviders(
   providers: readonly SkillDiscoveryProvider[]

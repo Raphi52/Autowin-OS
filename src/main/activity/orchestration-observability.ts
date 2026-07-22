@@ -50,7 +50,7 @@ export function persistOrchestrationStep(
     parentId = event.id
     // G1/G3 — persiste les VRAIES actions du sous-agent (commandes shell, patchs fichiers) comme
     // événements causaux `tool-call` : sinon l'usage d'outils réel reste invisible dans Observatory
-    // (seules les traces Hermes y comptaient). Rattachés à l'étape exec, dans l'ordre observé.
+    // (seules les traces natives y comptaient). Rattachés à l'étape exec, dans l'ordre observé.
     for (const item of step.evidence ?? []) {
       const toolEvent = assertTraceEvent({
         schema: 'autowin.trace/v1',

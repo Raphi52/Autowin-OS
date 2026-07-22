@@ -12,6 +12,6 @@ describe('Observatory Hermes diagnostics default access', () => {
     expect(main).not.toContain("title: 'Payloads Hermes sensibles'")
     expect(main).not.toContain('dialog.showMessageBox(parent, options)')
     expect(main).toContain('return diagnosticCapabilities.issue(event.sender.id)')
-    expect(main).toContain("assertTrustedRendererSender(event, 'Hermes diagnostics authorization')")
+    expect(main).toContain("assertTrustedRendererSender(event, 'Diagnostics authorization')")
   })
 })

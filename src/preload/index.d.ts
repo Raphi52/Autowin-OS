@@ -118,7 +118,7 @@ interface RunEntry {
     defauts: number
   }
 }
-interface HermesControlItem {
+interface CapabilityItem {
   id: string
   label: string
   description: string
@@ -130,7 +130,7 @@ interface HermesControlItem {
   matcher?: string
 }
 
-interface SkillRegistryItem extends HermesControlItem {
+interface SkillRegistryItem extends CapabilityItem {
   source: string
   sourceLabel: string
 }
@@ -153,7 +153,7 @@ interface BehaviourContext {
   label: string
   depth: number
 }
-interface HermesInjectionProof {
+interface InjectionProof {
   id: string
   verdict: 'injected' | 'unproven'
   observedAt?: string
@@ -329,7 +329,7 @@ interface ChatApi {
   ) => Promise<{ ok: boolean; result?: OrchestrationResult; error?: string }>
   onOrchestrateStep: (cb: (step: OrchestrationStep) => void) => () => void
   onPreflight: (cb: (result: PreflightResult) => void) => () => void
-  recheckPreflight: () => Promise<PreflightResult>
+  recheckPreflight: (force?: boolean) => Promise<PreflightResult>
   roles: () => Promise<
     Record<string, { provider: string; model?: string; reasoningEffort?: string }>
   >
@@ -354,7 +354,7 @@ interface ChatApi {
   kimiLogin: () => Promise<{ ok: true }>
   topology: () => Promise<AgentTopology>
   setTopology: (topology: AgentTopology) => Promise<AgentTopology>
-  capabilityControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins') => Promise<HermesControlItem[]>
+  capabilityControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins') => Promise<CapabilityItem[]>
   skills: () => Promise<SkillRegistryItem[]>
   promptCalls: (conversationId?: string) => Promise<PromptCallRecord[]>
   promptTraces: (conversationId: string) => Promise<NativePreflightTrace[]>
@@ -362,25 +362,25 @@ interface ChatApi {
   authorizeDiagnostics: () => Promise<string | null>
   promptTracesGlobal: (capability: string) => Promise<NativePreflightTrace[]>
   causalTrace: (conversationId: string) => Promise<unknown[]>
-  claudeHooks: () => Promise<HermesControlItem[]>
-  codexHooks: () => Promise<HermesControlItem[]>
+  claudeHooks: () => Promise<CapabilityItem[]>
+  codexHooks: () => Promise<CapabilityItem[]>
   setCapabilityTool: (
     name: string,
     enabled: boolean
-  ) => Promise<{ items: HermesControlItem[]; restartRequired: true }>
+  ) => Promise<{ items: CapabilityItem[]; restartRequired: true }>
   setCapabilityToolSelection: (
     names: string[]
-  ) => Promise<{ items: HermesControlItem[]; restartRequired: true }>
+  ) => Promise<{ items: CapabilityItem[]; restartRequired: true }>
   setCapabilityPlugin: (
     name: string,
     enabled: boolean
-  ) => Promise<{ items: HermesControlItem[]; restartRequired: true }>
+  ) => Promise<{ items: CapabilityItem[]; restartRequired: true }>
   behaviourWorkspace: () => Promise<string>
   chooseBehaviourWorkspace: () => Promise<string | null>
   behaviourContexts: (workspaceRoot: string) => Promise<BehaviourContext[]>
   behaviourFiles: (workspaceRoot?: string, contextRoot?: string) => Promise<BehaviourFile[]>
   readBehaviourFile: (id: string, workspaceRoot?: string, contextRoot?: string) => Promise<string>
-  behaviourProof: (workspaceRoot?: string, contextRoot?: string) => Promise<HermesInjectionProof[]>
+  behaviourProof: (workspaceRoot?: string, contextRoot?: string) => Promise<InjectionProof[]>
   runSkillLoop: (
     input: SkillLoopInput
   ) => Promise<{ runId: string; completed: number; failed: number }>

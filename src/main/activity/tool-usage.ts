@@ -6,7 +6,7 @@ import { TraceStore } from './trace-store'
 /**
  * Usage RÉEL des outils — agrège les événements causaux `tool-call` (émis par
  * persistOrchestrationStep depuis l'executionEvidence des sous-agents) sur TOUTES les
- * conversations. Contrairement au catalogue Hermes (décoratif, jamais invoqué par les
+ * conversations. Contrairement au catalogue natif (décoratif, jamais invoqué par les
  * modèles Autowin), ceci reflète ce que Codex/Claude ont réellement exécuté sur la machine.
  * Forme compatible avec l'item de la vue Capacités (id/label/description/enabled/mutable).
  */

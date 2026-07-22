@@ -82,7 +82,7 @@
 
 /* Chat, Controls, Behaviour */
 .chat-layout,
-.hermes-controls,
+.capability-controls,
 .behaviour-view {
   /* Page uniforme (--surface-panel), comme Models : cosmique seulement au contour (.main). */
   background: var(--surface-panel);

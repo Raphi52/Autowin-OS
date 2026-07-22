@@ -85,7 +85,7 @@ export function resolveClaudeBin(explicit?: string): string {
 }
 
 /**
- * Adaptateur voie Claude — SOUVERAIN (aucune dépendance Hermes).
+ * Adaptateur voie Claude — SOUVERAIN (aucune dépendance externe).
  *
  * Spawne le CLI officiel `claude -p` (abonnement, JAMAIS de replay du token OAuth
  * Anthropic — sanctionné HTTP 400 depuis 2026-06-15 ; la voie couverte par

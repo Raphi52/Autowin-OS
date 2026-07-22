@@ -20,7 +20,7 @@ interface BehaviourContextItem {
   label: string
   depth: number
 }
-type HermesInjectionProof = {
+type InjectionProof = {
   id: string
   verdict: 'injected' | 'unproven'
   observedAt?: string
@@ -59,7 +59,7 @@ export function BehaviourView(): React.JSX.Element {
   const [engine, setEngine] = useState<'all' | BehaviourEngine>('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [proofs, setProofs] = useState<Map<string, HermesInjectionProof>>(new Map())
+  const [proofs, setProofs] = useState<Map<string, InjectionProof>>(new Map())
   const [readerMode, setReaderMode] = useState<'rendered' | 'source'>('rendered')
 
   const loadWorkspace = useCallback(async (root: string, preferredContext?: string) => {
@@ -320,7 +320,7 @@ export function BehaviourView(): React.JSX.Element {
                   <dd>{selected.injectedInto}</dd>
                 </div>
                 <div>
-                  <dt>Preuve Hermes</dt>
+                  <dt>Preuve d'injection</dt>
                   <dd>{selectedProof?.reason ?? 'Non vérifié'}</dd>
                 </div>
               </dl>

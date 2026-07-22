@@ -10,10 +10,10 @@ import {
 import type { ConversationAuthorityMode } from '../conversation-capabilities'
 import { reconstructBranchChain } from '../../shared/conversation-branches'
 
-// Store en mémoire pour les conversations catégorisées (candidat type Hermes/claude.exe/codex).
+// Store en mémoire pour les conversations catégorisées (candidat type claude/codex).
 // Interface pensée pour être remplacée plus tard par un backend sqlite sans changer l'appelant.
 
-/** Catégorie libre (ex. 'hermes' | 'claude' | 'codex', mais pas de contrainte figée). */
+/** Catégorie libre (ex. 'claude' | 'codex', mais pas de contrainte figée). */
 export type Category = string
 
 export interface AttachmentMeta {

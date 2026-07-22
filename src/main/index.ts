@@ -10,8 +10,7 @@ import { ProviderRegistry } from './providers/registry'
 import { AutowinOS } from './os'
 import { installCrashHandlers } from './crash-handlers'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
-import { runPreflight } from './preflight'
-import { appPreflightProbes } from './preflight-probes'
+import { runAppPreflight } from './preflight-probes'
 import { RoleModelConfig, type ReasoningEffort, type Role } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
@@ -521,7 +520,6 @@ function registerChatIpc(): void {
           } catch {
             /* notif best-effort : ne jamais casser le run à cause d'un échec de notification */
           }
-          event.sender.send('orchestrate:tripped', { reason: trip.reason, spentUsd: trip.spentUsd })
         }
       }, undefined, undefined, controller.signal)
       return { ok: true, result }
@@ -533,13 +531,14 @@ function registerChatIpc(): void {
         aborted
       }
     } finally {
-      bus.clearOrchestration(conversationId)
+      bus.clearOrchestration(conversationId, controller)
     }
   })
 
   // --- Config par rôle (orchestrateur / sous-agent / juge / scout) ---
-  // #5 — le wizard first-run re-vérifie la config à la demande (bouton "re-vérifier").
-  ipcMain.handle('preflight:recheck', () => runPreflight(appPreflightProbes()))
+  // #5 — le wizard first-run re-vérifie la config à la demande. `force` (bouton) ignore le cache TTL ;
+  // sans force (montage) le cache déduplique avec le run de démarrage.
+  ipcMain.handle('preflight:recheck', (_e, force?: boolean) => runAppPreflight(force === true))
   ipcMain.handle('os:roles', () => os.roles.all())
   ipcMain.handle(
     'os:setRole',
@@ -608,18 +607,18 @@ function registerChatIpc(): void {
     return agentTopology
   })
 
-  // --- Contrôles Hermes : inventaire prompt + mutations bornées ---
+  // --- Contrôles de capacités : inventaire + mutations bornées ---
   ipcMain.handle(
     'os:capabilities:list',
     (event, kind: 'skills' | 'hooks' | 'tools' | 'plugins') => {
-      assertTrustedRendererSender(event, 'Hermes')
+      assertTrustedRendererSender(event, 'Capabilities')
       if (!['skills', 'hooks', 'tools', 'plugins'].includes(kind))
-        throw new Error('Vue Hermes inconnue')
+        throw new Error('Vue de capacités inconnue')
       return listCapabilities(kind)
     }
   )
   ipcMain.handle('os:capabilities:tools:select', async (event, names: unknown) => {
-    assertTrustedRendererSender(event, 'Hermes')
+    assertTrustedRendererSender(event, 'Capabilities')
     if (!Array.isArray(names) || !names.every((name) => typeof name === 'string'))
       throw new Error('Sélection de toolsets invalide')
     const before = await listCapabilities('tools')
@@ -637,7 +636,7 @@ function registerChatIpc(): void {
     return result
   })
   ipcMain.handle('os:capabilities:plugins:set', async (event, name: string, enabled: unknown) => {
-    assertTrustedRendererSender(event, 'Hermes')
+    assertTrustedRendererSender(event, 'Capabilities')
     const before = await listCapabilities('plugins')
     const result = await setCapabilityEnabled(
       'plugins',
@@ -659,7 +658,7 @@ function registerChatIpc(): void {
   ipcMain.handle('claude:hooks:list', () => listClaudeHooks())
   ipcMain.handle('codex:hooks:list', () => listCodexHooks())
   ipcMain.handle('os:capabilities:tools:set', async (event, name: string, enabled: unknown) => {
-    assertTrustedRendererSender(event, 'Hermes')
+    assertTrustedRendererSender(event, 'Capabilities')
     const before = await listCapabilities('tools')
     const result = await setCapabilityEnabled(
       'tools',
@@ -727,8 +726,7 @@ function registerChatIpc(): void {
       const allowedRoots = [
         workspace,
         join(app.getPath('home'), '.codex'),
-        join(app.getPath('home'), '.claude'),
-        join(process.env['LOCALAPPDATA'] ?? join(app.getPath('home'), 'AppData', 'Local'), 'hermes')
+        join(app.getPath('home'), '.claude')
       ]
       for (const file of files) {
         if (file.engine !== 'autowin' || file.scope === 'skill') continue
@@ -797,7 +795,7 @@ function registerChatIpc(): void {
   ipcMain.handle('os:costByRole', () => os.costByRole())
   ipcMain.handle('os:trustRanking', () => os.trustRanking())
   ipcMain.handle('os:runsWithGate', () => os.runsWithGate())
-  // Usage RÉEL des outils (actions Codex/Claude observées) — distinct du catalogue Hermes décoratif.
+  // Usage RÉEL des outils (actions Codex/Claude observées) — distinct du catalogue natif décoratif.
   ipcMain.handle('os:toolUsage', () => aggregateToolUsage())
   ipcMain.handle('os:kaizen', (_e, jsonl: string) => os.kaizenPatterns(guardString(jsonl, 'jsonl')))
 
@@ -1300,11 +1298,11 @@ function registerChatIpc(): void {
   const loadNativeTraces = (): ReturnType<typeof readNativePreflight> => {
     // Spool NATIF Autowin : les traces sont écrites par Autowin lui-même (native-trace-spool) →
     // l'Observatory (RAG/injection) se peuple sur les vraies requêtes de l'app. Plus aucun fallback
-    // externe (spool Hermes retiré).
+    // externe (spool externe retiré).
     return readNativePreflight(nativeSpoolRoot(), 100)
   }
   const migrateLegacyCausalTraces = (): void => {
-    const hermes = loadNativeTraces()
+    const nativePreflight = loadNativeTraces()
     for (const conversation of os.conversations.list()) {
       const conversationId = conversation.id
       const events = causalTrace.readConversation(conversationId)
@@ -1322,12 +1320,12 @@ function registerChatIpc(): void {
         }
       }
       // Anti-double-frontière : une conversation avec des appels NATIFS Autowin (codex/claude)
-      // porte déjà sa propre frontière par appel. Les préflight Hermes legacy dupliqueraient la
-      // même frontière dans la timeline → on ne les fusionne QUE pour les convs Hermes-only
-      // (aucun appel natif). La vue Hermes dédiée (os:promptTraces) reste inchangée.
-      const hermesPreflight = nativeCalls.length ? [] : filterNativePreflight(hermes, conversationId)
-      for (const trace of hermesPreflight) {
-        const id = `hermes:${trace.apiRequestId}`
+      // porte déjà sa propre frontière par appel. Les préflight legacy dupliqueraient la
+      // même frontière dans la timeline → on ne les fusionne QUE pour les convs sans natif
+      // (aucun appel natif). La vue dédiée (os:promptTraces) reste inchangée.
+      const preflightTraces = nativeCalls.length ? [] : filterNativePreflight(nativePreflight, conversationId)
+      for (const trace of preflightTraces) {
+        const id = `native:${trace.apiRequestId}`
         if (knownIds.has(id)) continue
         causalTrace.append({
           schema: 'autowin.trace/v1',
@@ -1338,13 +1336,13 @@ function registerChatIpc(): void {
           sequence: nextSequence++,
           type: 'boundary',
           status: 'completed',
-          actor: { id: 'hermes', kind: 'hook', label: 'Hermes preflight' },
+          actor: { id: 'native', kind: 'hook', label: 'Trace préflight' },
           recipient: { id: trace.provider, kind: 'provider', label: trace.provider },
           channel: 'internal',
           payloads: [
             {
               kind: 'resource',
-              name: 'Hermes request',
+              name: 'Requête native',
               mediaType: 'application/json',
               content: JSON.stringify(trace.request)
             }
@@ -1368,26 +1366,26 @@ function registerChatIpc(): void {
   migrateLegacyCausalTraces()
   const readNativePromptTraces = createNativePreflightReader(loadNativeTraces)
   ipcMain.handle('os:promptTraces', (event, conversationId: unknown) => {
-    assertTrustedRendererSender(event, 'Hermes traces')
+    assertTrustedRendererSender(event, 'Native traces')
     const safeConversationId = guardString(conversationId, 'conversationId')
     return readNativePromptTraces(safeConversationId)
   })
   ipcMain.handle('os:promptTraceSummary', (event) => {
-    assertTrustedRendererSender(event, 'Hermes trace summary')
+    assertTrustedRendererSender(event, 'Native trace summary')
     // La requête brute est volontairement exclue de ce résumé IPC.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     return loadNativeTraces().map(({ request: _request, ...metadata }) => metadata)
   })
   ipcMain.handle('os:authorizeDiagnostics', (event) => {
-    assertTrustedRendererSender(event, 'Hermes diagnostics authorization')
+    assertTrustedRendererSender(event, 'Diagnostics authorization')
     if (headlessTestInstance) return null
     return diagnosticCapabilities.issue(event.sender.id)
   })
   ipcMain.handle('os:promptTracesGlobal', (event, token: unknown) => {
-    assertTrustedRendererSender(event, 'Hermes global diagnostics')
+    assertTrustedRendererSender(event, 'Native global diagnostics')
     const safeToken = guardString(token, 'capability')
     if (!diagnosticCapabilities.consume(safeToken, event.sender.id)) {
-      throw new Error('Hermes diagnostics capability denied')
+      throw new Error('Diagnostics capability denied')
     }
     return filterNativePreflight(loadNativeTraces())
   })
@@ -1553,7 +1551,7 @@ app.whenReady().then(async () => {
   // #4 — diagnostic de démarrage (non bloquant) : on vérifie brain_server, CLI providers et token,
   // et on pousse le résultat au renderer (bannière) pour que l'utilisateur voie une config incomplète
   // AVANT de lancer un run, plutôt qu'un échec silencieux en plein run. Best-effort, jamais bloquant.
-  void runPreflight(appPreflightProbes())
+  void runAppPreflight()
     .then((result) => {
       if (!result.ok) {
         for (const w of BrowserWindow.getAllWindows()) w.webContents.send('preflight:result', result)

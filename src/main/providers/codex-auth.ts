@@ -5,11 +5,11 @@ import { ensureAutowinAppData } from '../app-data'
 /**
  * Auth OAuth « abonnement ChatGPT/Codex » — device-code + PKCE (le verifier est
  * renvoyé par OpenAI, pas généré client). Reproduit le flow standard SANS aucune
- * dépendance Hermes. La SAISIE du user_code dans le navigateur est une action
+ * dépendance externe. La SAISIE du user_code dans le navigateur est une action
  * HUMAINE (on ne tape jamais les identifiants de l'utilisateur) : `startDeviceLogin`
  * retourne le code + l'URL, l'app les AFFICHE, puis `pollForToken` attend.
  *
- * Store PROPRE à Autowin OS (jamais celui d'Hermes) : %APPDATA%\autowin-os\auth.json.
+ * Store PROPRE à Autowin OS (jamais un runtime externe) : %APPDATA%\autowin-os\auth.json.
  */
 
 // client_id PUBLIC du produit Codex (identique au CLI codex officiel). Zone grise
@@ -81,7 +81,7 @@ export async function pollForToken(
   const maxAttempts = opts.maxAttempts ?? 120
 
   for (let i = 0; i < maxAttempts; i++) {
-    // fix-ok: contrat live vérifié contre Hermes auth.py:7446 — le poll envoie
+    // fix-ok: contrat live vérifié (auth.py:7446) — le poll envoie
     // {device_auth_id, user_code} (PAS client_id) ; pending = 403/404 (le 400 initial
     // venait du user_code manquant, pas d'un « authorization_pending »).
     const res = await fetchFn(DEVICE_TOKEN_URL, {
@@ -101,7 +101,7 @@ export async function pollForToken(
 }
 
 async function exchangeCode(code: string, verifier: string, fetchFn: FetchLike): Promise<Tokens> {
-  // fix-ok: contrat live (Hermes auth.py:7484) — oauth/token attend un corps
+  // fix-ok: contrat live (auth.py:7484) — oauth/token attend un corps
   // application/x-www-form-urlencoded, PAS du JSON.
   const res = await fetchFn(OAUTH_TOKEN_URL, {
     method: 'POST',

@@ -391,9 +391,9 @@ export function ObservatoryView({
   const allEvents = useMemo(() => scopedTurns.flatMap((turn) => turn.events), [scopedTurns])
   const causalPath = useMemo(() => buildCausalPath(allEvents), [allEvents])
   const causalNodes = flattenCausalNodes(causalPath.roots)
-  // Hermes/RAG ne concernent que les tours réellement passés par Hermes. On SCOPE à la conversation
-  // affichée : sinon les payloads Hermes GLOBAUX legacy (chargés à part) polluent une conv codex/claude
-  // avec un « Hermes · 24 » et « 24 sans RAG » qui ne la décrivent pas.
+  // Les traces/RAG ne concernent que les tours réellement capturés. On SCOPE à la conversation
+  // affichée : sinon les payloads GLOBAUX legacy (chargés à part) polluent une conv codex/claude
+  // avec un « Requêtes · 24 » et « 24 sans RAG » qui ne la décrivent pas.
   const convNativeMetadata = nativeMetadata.filter((t) => t.conversationId === conversationId)
   const convNativeTraces = nativeTraces.filter((t) => t.conversationId === conversationId)
   const nativeSummary = summarizeNativeTraces(convNativeMetadata)
@@ -440,8 +440,8 @@ export function ObservatoryView({
       conversationId,
       filters: { query, type: typeFilter, provider: providerFilter },
       limitations: [
-        'Les traces Hermes globales sans conversationId ne peuvent pas être attribuées à cette conversation.',
-        'Les payloads Hermes exportés sont exact-redacted ; les secrets connus sont masqués à nouveau.'
+        'Les traces globales sans conversationId ne peuvent pas être attribuées à cette conversation.',
+        'Les payloads exportés sont exact-redacted ; les secrets connus sont masqués à nouveau.'
       ],
       timeline,
       promptCalls: currentCalls,
@@ -500,7 +500,7 @@ export function ObservatoryView({
           {hasNativeTraces && (
             <strong data-metric="native">
               {nativeSummary.count.toLocaleString('fr-FR')}
-              <small>Hermes · {nativeSummary.coverage}</small>
+              <small>Requêtes · {nativeSummary.coverage}</small>
             </strong>
           )}
         </div>
@@ -508,7 +508,7 @@ export function ObservatoryView({
       <div className="observatory-toolbar">
         {hasNativeTraces && nativeSummary.lastTimestamp && (
           <span className="observatory-native-proof">
-            Dernier Hermes · {new Date(nativeSummary.lastTimestamp).toLocaleString('fr-FR')} ·{' '}
+            Dernière requête · {new Date(nativeSummary.lastTimestamp).toLocaleString('fr-FR')} ·{' '}
             {nativeSummary.lastModel} · {nativeSummary.boundary} · exact-redacted
           </span>
         )}
@@ -607,7 +607,7 @@ export function ObservatoryView({
       {nativeTraces.length > 0 && (
         <details className="observatory-native-diagnostics">
           <summary>
-            {nativeTraces.length} payload{nativeTraces.length > 1 ? 's' : ''} Hermes globaux · accès
+            {nativeTraces.length} payload{nativeTraces.length > 1 ? 's' : ''} globaux · accès
             autorisé · {ragInjected} injection{ragInjected > 1 ? 's' : ''} RAG prouvée
             {ragInjected > 1 ? 's' : ''}
           </summary>
