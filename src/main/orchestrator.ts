@@ -5,7 +5,8 @@ import type { TrustLedger } from './trust/ledger'
 import type { AuthoritySas } from './authority/sas'
 import { evaluateClosure } from './gates/stopgate'
 import { runHooks } from './gates/hooks'
-import { phaseInstruction, type PipelinePhase } from './skill-pipeline'
+import { type PipelinePhase } from './skill-pipeline'
+import { phaseBrief } from './phase-briefs'
 import { projectContextBlock } from './context-files'
 import type { ExecutionEvidence, PromptEnvelope, SendOptions, Usage } from './providers/types'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
@@ -142,16 +143,14 @@ export class Orchestrator {
     const aggregatedEvidence: ExecutionEvidence[] = []
     const phaseOutputs: { phase: PipelinePhase; text: string }[] = []
     const phaseContext: string[] = [`TÂCHE: ${task}`]
-    for (const [phaseIndex, phase] of execPhases.entries()) {
+    for (const phase of execPhases) {
       const phaseMessages = [{ role: 'user' as const, content: phaseContext.join('\n\n') }]
       // F6 — le system est composé de blocs NOMMÉS : on garde leur décomposition (nom + taille)
       // pour l'observabilité, en plus de la chaîne concaténée réellement envoyée.
-      // Fondation ENGINE 1×/run : injectée seulement à la 1ʳᵉ phase (identique ensuite = gaspillage).
+      // Consigne courte purpose-built (phase-briefs) : ~1-2k au lieu du SKILL.md brut. L'état
+      // (besoin + acquis des phases) vit dans le message user ci-dessous, pas dans le system.
       const parts = [
-        {
-          name: `skill:${phase}`,
-          text: phaseInstruction(phase, undefined, { withFoundation: phaseIndex === 0 })
-        },
+        { name: `consigne:${phase}`, text: phaseBrief(phase) },
         { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
         { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
         { name: 'projectContext', text: projectContext }
@@ -278,7 +277,7 @@ export class Orchestrator {
       let judgeEnvelope
       // A2 — le juge charge le SKILL.md judge du kit ; F6 — blocs nommés pour l'observabilité.
       const judgeParts = [
-        { name: 'skill:judge', text: phaseInstruction('judge') },
+        { name: 'skill:judge', text: phaseBrief('judge') },
         { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
         { name: 'projectContext', text: projectContext }
       ]
@@ -395,8 +394,7 @@ export class Orchestrator {
         let repairPrompt
         const repairOptions: SendOptions = {
           system:
-            // Réparation = re-build : la fondation ENGINE a déjà été envoyée par la chaîne exec.
-            phaseInstruction('build', undefined, { withFoundation: false }) +
+            phaseBrief('build') +
             PIPELINE_DISCIPLINE_INSTRUCTION +
             CONCISE_STRUCTURED_RESPONSE_INSTRUCTION +
             projectContext,
