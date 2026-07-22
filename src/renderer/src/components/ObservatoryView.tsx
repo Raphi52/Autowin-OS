@@ -482,6 +482,15 @@ export function ObservatoryView({
               <small>coût</small>
             </strong>
           )}
+          <strong
+            data-metric="actions"
+            title="Actions réelles exécutées par les sous-agents (commandes shell, patchs fichiers)"
+          >
+            {allEvents
+              .filter((event) => event.kind === 'tool-call')
+              .length.toLocaleString('fr-FR')}
+            <small>actions réelles</small>
+          </strong>
           <strong data-metric="hermes">
             {hermesSummary.count.toLocaleString('fr-FR')}
             <small>Hermes · {hermesSummary.coverage}</small>
@@ -618,7 +627,7 @@ export function ObservatoryView({
       )}
       <div className="observatory-flightdeck">
         <aside className="observatory-rail">
-          <span className="observatory-panel-title">FILTRES & DIAGNOSTICS</span>
+          <span className="observatory-panel-title">conversations</span>
           <div className="observatory-conversations">
             {conversations.map((conversation) => (
               <button

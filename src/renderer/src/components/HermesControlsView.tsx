@@ -58,7 +58,10 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
   const [restartRequired, setRestartRequired] = useState(false)
   const [hookModel, setHookModel] = useState<HookModel>('claude')
   const [skillSource, setSkillSource] = useState('all')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('all')
+  // Tools : 'real' = actions réellement exécutées par les sous-agents (défaut) ; 'hermes' = catalogue.
+  const [toolSource, setToolSource] = useState<'real' | 'hermes'>('real')
+  // Façon 1 (« n'afficher que ce qui sert ») : par défaut on n'affiche que les capacités ACTIVES.
+  const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('enabled')
   const [selectedId, setSelectedId] = useState('')
   const [profileState, setProfileState] = useState<CapabilityState | null>(null)
   const [profileId, setProfileId] = useState('balanced')
@@ -78,7 +81,9 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
             ? window.api.claudeHooks()
             : kind === 'hooks' && hookModel === 'codex'
               ? window.api.codexHooks()
-              : window.api.hermesControls(kind)
+              : kind === 'tools' && toolSource === 'real'
+                ? window.api.toolUsage()
+                : window.api.hermesControls(kind)
       request
         .then((nextItems) => {
           if (!current) return
@@ -97,7 +102,7 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
     return () => {
       current = false
     }
-  }, [active, hookModel, kind])
+  }, [active, hookModel, kind, toolSource])
 
   useEffect(() => {
     if (!active) return
@@ -260,7 +265,9 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
   function selectKind(nextKind: Kind): void {
     setKind(nextKind)
     setSelectedId('')
-    setStatusFilter('all')
+    // Façon 1 : chaque onglet s'ouvre filtré sur l'ACTIF (Skills · Hooks · Tools) — on ne montre
+    // par défaut que les capacités en service, pas le registre complet bruité.
+    setStatusFilter('enabled')
     setSkillSource('all')
   }
 
@@ -336,11 +343,24 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
               </button>
             ))
           ) : (
-            <button className="is-active">
-              <b>Hermes</b>
-              <strong>{items.length}</strong>
-              <small>Toolsets locaux</small>
-            </button>
+            <>
+              <button
+                className={toolSource === 'real' ? 'is-active' : ''}
+                onClick={() => setToolSource('real')}
+              >
+                <b>Actions réelles</b>
+                {toolSource === 'real' && <strong>{items.length}</strong>}
+                <small>Exécutées par les agents</small>
+              </button>
+              <button
+                className={toolSource === 'hermes' ? 'is-active' : ''}
+                onClick={() => setToolSource('hermes')}
+              >
+                <b>Catalogue Hermes</b>
+                {toolSource === 'hermes' && <strong>{items.length}</strong>}
+                <small>Décoratif · non invoqué</small>
+              </button>
+            </>
           )}
 
           <h2 className="status-title">État</h2>
@@ -413,24 +433,31 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
                         ? HOOK_SOURCES.find((source) => source.id === hookModel)?.label
                         : 'Hermes')}
                   </span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={item.enabled}
-                    className={`control-toggle ${item.enabled ? 'is-on' : ''}`}
-                    disabled={!profile || busy === item.id}
-                    title={
-                      kind === 'tools'
-                        ? 'Modifier Hermes et synchroniser le profil'
-                        : 'Activer ou retirer cette capacité du profil'
-                    }
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      void toggle(item)
-                    }}
-                  >
-                    <i />
-                  </button>
+                  {kind === 'tools' && toolSource === 'real' ? (
+                    // Actions réellement exécutées = lecture seule (observabilité, pas d'admin).
+                    <span className="control-usage-count" title="Occurrences observées">
+                      ×{(item as { count?: number }).count ?? ''}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={item.enabled}
+                      className={`control-toggle ${item.enabled ? 'is-on' : ''}`}
+                      disabled={!profile || busy === item.id}
+                      title={
+                        kind === 'tools'
+                          ? 'Modifier Hermes et synchroniser le profil'
+                          : 'Activer ou retirer cette capacité du profil'
+                      }
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        void toggle(item)
+                      }}
+                    >
+                      <i />
+                    </button>
+                  )}
                 </article>
               ))
             )}

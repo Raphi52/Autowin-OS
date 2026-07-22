@@ -32,6 +32,7 @@ import { TraceStore } from './activity/trace-store'
 import { HermesDiagnosticCapabilities } from './activity/hermes-diagnostic-capability'
 import { responseDisplayedTrace } from './activity/response-displayed-trace'
 import { persistOrchestrationStep } from './activity/orchestration-observability'
+import { aggregateToolUsage } from './activity/tool-usage'
 import { LoopRunStore } from './loop-run-store'
 import { ProfileStore, resolveProfileRoute, type AutowinProfile } from './profile-store'
 import {
@@ -757,6 +758,8 @@ function registerChatIpc(): void {
   ipcMain.handle('os:costByRole', () => os.costByRole())
   ipcMain.handle('os:trustRanking', () => os.trustRanking())
   ipcMain.handle('os:runsWithGate', () => os.runsWithGate())
+  // Usage RÉEL des outils (actions Codex/Claude observées) — distinct du catalogue Hermes décoratif.
+  ipcMain.handle('os:toolUsage', () => aggregateToolUsage())
   ipcMain.handle('os:kaizen', (_e, jsonl: string) => os.kaizenPatterns(guardString(jsonl, 'jsonl')))
 
   // --- Sas d'autorité (décisions AFK ouvertes par l'orchestrateur) ---

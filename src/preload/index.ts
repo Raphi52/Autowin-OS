@@ -138,6 +138,9 @@ const api = {
   runsWithGate: (): Promise<
     Array<{ subject: string; summary: { status: string }; blocked: boolean }>
   > => ipcRenderer.invoke('os:runsWithGate'),
+  toolUsage: (): Promise<
+    Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
+  > => ipcRenderer.invoke('os:toolUsage'),
   kaizen: (jsonl: string): Promise<Array<{ key: string; count: number }>> =>
     ipcRenderer.invoke('os:kaizen', jsonl),
   // Sas d'autorité

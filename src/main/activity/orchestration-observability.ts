@@ -48,6 +48,29 @@ export function persistOrchestrationStep(
     const event = structural()
     traceStore.append(event)
     parentId = event.id
+    // G1/G3 — persiste les VRAIES actions du sous-agent (commandes shell, patchs fichiers) comme
+    // événements causaux `tool-call` : sinon l'usage d'outils réel reste invisible dans Observatory
+    // (seules les traces Hermes y comptaient). Rattachés à l'étape exec, dans l'ordre observé.
+    for (const item of step.evidence ?? []) {
+      const toolEvent = assertTraceEvent({
+        schema: 'autowin.trace/v1',
+        id: `${context.turnId}:tool:${step.step}:${context.iteration}:${sequence}`,
+        conversationId: context.conversationId,
+        turnId: context.turnId,
+        parentId,
+        timestamp: new Date().toISOString(),
+        sequence: sequence++,
+        type: 'tool-call',
+        status: item.ok ? 'completed' : 'failed',
+        actor: { id: item.kind, kind: 'tool', label: item.kind },
+        recipient: { id: step.role ?? 'subagent', kind: 'agent', label: step.role ?? 'subagent' },
+        channel: 'tool',
+        payloads: [{ kind: 'tool-call', content: item.summary || item.type }],
+        observation: { boundary: `Autowin exec ${item.type}`, fidelity: 'exact' }
+      })
+      traceStore.append(toolEvent)
+      parentId = toolEvent.id
+    }
   }
   if (!step.prompt || !step.provider || !step.role || step.text === undefined) {
     if (step.step !== 'exec') traceStore.append(structural())

@@ -38,6 +38,37 @@ describe('observabilite orchestration', () => {
       'model-response'
     ])
   })
+  it('G1/G3 — persiste les actions reelles (evidence) comme evenements tool-call', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-orchestration-tools-'))
+    const trace = new TraceStore(join(root, 'trace'))
+    persistOrchestrationStep(
+      {
+        step: 'exec',
+        role: 'subagent',
+        provider: 'codex',
+        text: 'fait',
+        prompt: {
+          provider: 'codex',
+          transport: 'fetch',
+          messages: [{ role: 'user', content: 'tache' }],
+          options: {},
+          limitation: 'opaque'
+        },
+        evidence: [
+          { type: 'command_execution', kind: 'verification', status: 'completed', ok: true, summary: 'npm test\nexit=0' },
+          { type: 'file_change', kind: 'mutation', status: 'completed', ok: true, summary: 'apply_patch' }
+        ]
+      },
+      { conversationId: 'conv-tools', turnId: 'turn-1', iteration: 0 },
+      join(root, 'prompts'),
+      trace
+    )
+    const events = trace.readConversation('conv-tools')
+    const toolEvents = events.filter((e) => e.type === 'tool-call')
+    expect(toolEvents).toHaveLength(2)
+    expect(toolEvents.every((e) => e.actor.kind === 'tool')).toBe(true)
+    expect(toolEvents[0].parentId).toBe(events.find((e) => e.type === 'handoff')?.id)
+  })
   it('persiste verdict puis gate meme lorsque le gate ne fait aucun appel provider', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-orchestration-gate-'))
     const trace = new TraceStore(join(root, 'trace'))

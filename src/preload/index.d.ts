@@ -422,6 +422,9 @@ interface ChatApi {
   runsWithGate: () => Promise<
     Array<{ subject: string; summary: { status: string }; blocked: boolean }>
   >
+  toolUsage: () => Promise<
+    Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
+  >
   kaizen: (jsonl: string) => Promise<Array<{ key: string; count: number }>>
   authorityPending: () => Promise<Array<{ id: string; question: string }>>
   authorityResolve: (id: string, choice: unknown) => Promise<unknown>
