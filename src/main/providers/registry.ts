@@ -107,6 +107,7 @@ export class ProviderRegistry {
         model: resolved.model ?? model,
         transport: 'ProviderAdapter.send',
         system: resolved.system,
+        systemBlocks: resolved.systemBlocks,
         messages,
         options: { resumed: Boolean(resolved.resumeSessionId) },
         limitation:
@@ -131,6 +132,11 @@ export class ProviderRegistry {
     if (route.opts.execution && adapter.supportsExecution !== true) {
       throw new Error(`Provider ${route.id} sans exécuteur local outillé`)
     }
+    // F4 (décision : SOUL chat-only, intentionnel) — `systemBlock` = le kit SOUL, injecté par
+    // DÉFAUT (chat direct). L'orchestration passe TOUJOURS `opts.system` (SKILL.md + discipline +
+    // style + capacités + contexte), qui REMPLACE le soul : les phases ne reçoivent donc pas le
+    // soul, et c'est VOULU (le SKILL.md de la phase porte déjà la discipline pertinente ; concaténer
+    // le soul long à chaque phase gonflerait les tokens sans valeur nette).
     const system = route.opts.system ?? this.systemBlock
     const gen = adapter.send(messages, { ...route.opts, system })
 

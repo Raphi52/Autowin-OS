@@ -184,6 +184,35 @@ describe('Orchestrator execution contract', () => {
     }
   })
 
+  it('plie le fichier de contexte projet du workspace dans les system (exec + juge)', async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const ws = mkdtempSync(join(tmpdir(), 'orch-ctx-'))
+    writeFileSync(join(ws, 'CLAUDE.md'), 'RÈGLE PROJET: préfixer les commits par TICKET-123')
+    try {
+      const provider = new CapturingProvider()
+      const orchestrator = new Orchestrator({
+        registry: new ProviderRegistry().register(provider),
+        roles: new RoleModelConfig({
+          subagent: { provider: provider.id },
+          judge: { provider: provider.id }
+        }),
+        cost: new CostAggregator(),
+        trust: new TrustLedger(),
+        authority: new AuthoritySas(),
+        executionWorkspace: ws
+      })
+      await orchestrator.run('analyse le projet, ne modifie rien')
+      // exec (calls[0]) ET juge (calls[1]) reçoivent le bloc contexte, étiqueté par le fichier gagnant
+      expect(provider.calls[0].system).toContain('=== CONTEXTE PROJET (CLAUDE.md) ===')
+      expect(provider.calls[0].system).toContain('TICKET-123')
+      expect(provider.calls[1].system).toContain('=== CONTEXTE PROJET (CLAUDE.md) ===')
+    } finally {
+      rmSync(ws, { recursive: true, force: true })
+    }
+  })
+
   it('B5 — répare UNE fois une mutation bloquée puis clôture vert', async () => {
     // exec#1 sans preuve → bloqué ; réparation exec#2 avec mutation+vérification → vert.
     let execCount = 0
@@ -234,18 +263,26 @@ describe('Orchestrator execution contract', () => {
     expect(execCount).toBe(2) // une réparation a bien eu lieu
   })
 
-  it('accepte une mutation suivie d’une relecture réussie validée par le juge', async () => {
-    const evidence: ExecutionEvidence[] = [
-      { type: 'file_change', kind: 'mutation', status: 'completed', ok: true, summary: 'add' },
-      {
-        type: 'command_execution',
-        kind: 'inspection',
-        status: 'completed',
-        ok: true,
-        summary: 'Get-Content: valeur attendue'
-      }
-    ]
+  it('F3 (strict) — une mutation exige une VÉRIFICATION, pas une simple inspection', async () => {
     const { evidenceSatisfiesTask } = await import('./orchestrator')
-    expect(evidenceSatisfiesTask('crée puis relis le fichier', evidence)).toBe(true)
+    const mut = { type: 'file_change', kind: 'mutation' as const, status: 'done', ok: true, summary: 'add' }
+    const inspection = {
+      type: 'command_execution',
+      kind: 'inspection' as const,
+      status: 'done',
+      ok: true,
+      summary: 'Get-Content: valeur attendue'
+    }
+    const verification = {
+      type: 'command_execution',
+      kind: 'verification' as const,
+      status: 'done',
+      ok: true,
+      summary: 'vitest exit=0'
+    }
+    // mutation + relecture (inspection) seule → NE suffit plus (F3)
+    expect(evidenceSatisfiesTask('crée puis relis le fichier', [mut, inspection])).toBe(false)
+    // mutation + vrai test (verification) → validé
+    expect(evidenceSatisfiesTask('crée le fichier', [mut, verification])).toBe(true)
   })
 })

@@ -38,6 +38,37 @@ describe('observabilite orchestration', () => {
       'model-response'
     ])
   })
+  it('F6 — persiste la décomposition du system (systemBlocks) dans le record', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-orchestration-blocks-'))
+    const trace = new TraceStore(join(root, 'trace'))
+    persistOrchestrationStep(
+      {
+        step: 'exec',
+        role: 'subagent',
+        provider: 'codex',
+        text: 'ok',
+        prompt: {
+          provider: 'codex',
+          transport: 'fetch',
+          messages: [{ role: 'user', content: 't' }],
+          options: {},
+          limitation: 'opaque',
+          systemBlocks: [
+            { name: 'skill:frame', chars: 1200 },
+            { name: 'discipline', chars: 300 }
+          ]
+        }
+      },
+      { conversationId: 'conv-blocks', turnId: 'turn-1', iteration: 0 },
+      join(root, 'prompts'),
+      trace
+    )
+    const call = loadPromptCalls('conv-blocks', join(root, 'prompts'))[0]
+    expect(call.systemBlocks).toEqual([
+      { name: 'skill:frame', chars: 1200 },
+      { name: 'discipline', chars: 300 }
+    ])
+  })
   it('G1/G3 — persiste les actions reelles (evidence) comme evenements tool-call', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-orchestration-tools-'))
     const trace = new TraceStore(join(root, 'trace'))

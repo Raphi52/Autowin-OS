@@ -39,6 +39,8 @@ export interface SendOptions {
    * Codex) — l'équivalence est au niveau CONTENU, pas protocole.
    */
   system?: string
+  /** F6 — décomposition observable du `system` (passthrough, jamais transmis au provider). */
+  systemBlocks?: SystemBlock[]
   /** Reprise d'une session existante (cache-friendly) si l'adaptateur le gère. */
   resumeSessionId?: string
   /** Signal d'annulation coopératif. */
@@ -55,11 +57,19 @@ export interface SendOptions {
 }
 
 /** Enveloppe observable réellement remise à l'adaptateur, avant transport provider. */
+/** F6 — un bloc nommé composant le `system` injecté (skill/discipline/style/capacités/contexte). */
+export interface SystemBlock {
+  name: string
+  chars: number
+}
+
 export interface PromptEnvelope {
   provider: string
   model?: string
   transport: string
   system?: string
+  /** F6 — décomposition du `system` en blocs nommés, pour auditer ce qui a été injecté. */
+  systemBlocks?: SystemBlock[]
   messages: Message[]
   options: Record<string, unknown>
   limitation: string

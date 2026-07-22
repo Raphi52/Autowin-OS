@@ -1,14 +1,32 @@
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { promisify } from 'node:util'
+import {
+  nativeRegistryActive,
+  listNativeRegistry,
+  setNativeEnablement,
+  seedRegistryFromHermes
+} from './native-registry'
 
 const execFileAsync = promisify(execFile)
 const CACHE_TTL_MS = 60_000
-const HERMES =
-  process.platform === 'win32'
+
+/**
+ * F5 — binaire Hermes RÉSOLU, plus hardcodé Windows-only :
+ * 1) `HERMES_BIN` (chemin complet) ; 2) `HERMES_HOME` (racine de l'install) ; 3) défaut historique.
+ * Un chemin absolu introuvable → erreur EXPLICITE (avant : échec muet → Tools/Skills/Hooks vides).
+ */
+export function hermesBin(env: NodeJS.ProcessEnv = process.env): string {
+  if (env.HERMES_BIN) return env.HERMES_BIN
+  const scriptName = process.platform === 'win32' ? 'hermes.exe' : 'hermes'
+  if (env.HERMES_HOME)
+    return join(env.HERMES_HOME, 'hermes-agent', 'venv', 'Scripts', scriptName)
+  return process.platform === 'win32'
     ? join(homedir(), 'AppData', 'Local', 'hermes', 'hermes-agent', 'venv', 'Scripts', 'hermes.exe')
     : 'hermes'
+}
 
 export interface HermesControlItem {
   id: string
@@ -24,13 +42,37 @@ const controlCache = new Map<HermesControlKind, { expiresAt: number; items: Herm
 const controlRequests = new Map<HermesControlKind, Promise<HermesControlItem[]>>()
 
 async function runHermes(args: string[]): Promise<string> {
-  const { stdout } = await execFileAsync(HERMES, args, {
+  const bin = hermesBin()
+  // F5 — chemin absolu introuvable → message actionnable, plutôt qu'un ENOENT opaque.
+  if (isAbsolute(bin) && !existsSync(bin))
+    throw new Error(
+      `Hermes introuvable à « ${bin} ». Définir HERMES_BIN (chemin complet) ou HERMES_HOME (racine de l'install).`
+    )
+  const { stdout } = await execFileAsync(bin, args, {
     windowsHide: true,
     timeout: 15_000,
     maxBuffer: 512_000,
     env: { ...process.env, COLUMNS: '240', NO_COLOR: '1' }
   })
   return stdout
+}
+
+/**
+ * F2 — garde anti-échec-silencieux : si la sortie Hermes contient des entrées (marqueurs
+ * `enabled`/`disabled`) mais que le parseur n'a rien extrait, c'est un changement de format
+ * (update Hermes) → on LÈVE une erreur explicite au lieu de rendre une liste vide trompeuse.
+ */
+export function guardParsed(
+  items: HermesControlItem[],
+  output: string,
+  kind: string
+): HermesControlItem[] {
+  if (items.length === 0 && /\b(enabled|disabled)\b/i.test(output))
+    throw new Error(
+      `Format de sortie Hermes « ${kind} » non reconnu (probable changement de version) : ` +
+        `sortie non vide, 0 entrée parsée.`
+    )
+  return items
 }
 
 export function parseTools(output: string): HermesControlItem[] {
@@ -102,8 +144,16 @@ export function parsePlugins(output: string): HermesControlItem[] {
 }
 
 async function loadHermesControls(kind: HermesControlKind): Promise<HermesControlItem[]> {
-  if (kind === 'tools') return parseTools(await runHermes(['tools', 'list', '--platform', 'cli']))
-  if (kind === 'skills') return parseSkills(await runHermes(['skills', 'list']))
+  // Chantier 1 — registre natif actif : source LOCALE, aucun shell-out vers hermes.exe.
+  if (nativeRegistryActive()) return listNativeRegistry(kind)
+  if (kind === 'tools') {
+    const out = await runHermes(['tools', 'list', '--platform', 'cli'])
+    return guardParsed(parseTools(out), out, 'tools')
+  }
+  if (kind === 'skills') {
+    const out = await runHermes(['skills', 'list'])
+    return guardParsed(parseSkills(out), out, 'skills')
+  }
   if (kind === 'plugins') return parsePlugins(await runHermes(['plugins', 'list', '--json']))
   const output = await runHermes(['hooks', 'list'])
   if (/No shell hooks configured/i.test(output)) return []
@@ -141,6 +191,22 @@ export async function listHermesControls(kind: HermesControlKind): Promise<Herme
 
 export async function warmHermesControls(): Promise<void> {
   try {
+    // AMORÇAGE UNIQUE (fin du chantier 1) : si le registre natif n'est pas encore activé, on fige
+    // l'état courant une seule fois — depuis Hermes s'il est présent, sinon vide — dans
+    // enablement.v1.json + catalog.v1.json. Dès lors `nativeRegistryActive()` est vrai et TOUTES
+    // les lectures/mutations passent en LOCAL : plus aucun appel à hermes.exe.
+    if (!nativeRegistryActive()) {
+      const snapshot: Partial<Record<HermesControlKind, HermesControlItem[]>> = {}
+      for (const kind of ['skills', 'tools', 'plugins', 'hooks'] as HermesControlKind[]) {
+        try {
+          snapshot[kind] = await loadHermesControls(kind) // natif inactif → lecture Hermes brute
+        } catch {
+          /* hermes.exe absent/échoue → cette catégorie reste vide, l'amorçage continue */
+        }
+      }
+      seedRegistryFromHermes(snapshot)
+      controlCache.clear() // purge le cache Hermes → prochaines lectures = registre natif
+    }
     await listHermesControls('skills')
   } catch {
     // Opportuniste : l'appel IPC affichera l'erreur réelle si nécessaire.
@@ -157,6 +223,11 @@ export async function setHermesTool(
   if (!/^[a-z][a-z0-9_-]{0,63}$/.test(name)) throw new Error('Nom de toolset invalide')
   const known = await listHermesControls('tools')
   if (!known.some((item) => item.id === name)) throw new Error(`Toolset Hermes inconnu: ${name}`)
+  if (nativeRegistryActive()) {
+    setNativeEnablement('tools', name, enabled)
+    controlCache.delete('tools')
+    return { items: await listHermesControls('tools'), restartRequired: true }
+  }
   await runHermes(['tools', enabled ? 'enable' : 'disable', name, '--platform', 'cli'])
   controlCache.delete('tools')
   return { items: await listHermesControls('tools'), restartRequired: true }
@@ -226,6 +297,11 @@ export async function setHermesPlugin(
   const matches = known.filter((item) => item.id === name)
   if (matches.length === 0) throw new Error(`Plugin Hermes inconnu: ${name}`)
   if (matches.length > 1) throw new Error(`Plugin Hermes ambigu: ${name}`)
+  if (nativeRegistryActive()) {
+    setNativeEnablement('plugins', name, enabled)
+    controlCache.delete('plugins')
+    return { items: await listHermesControls('plugins'), restartRequired: true }
+  }
   await runHermes([
     'plugins',
     enabled ? 'enable' : 'disable',

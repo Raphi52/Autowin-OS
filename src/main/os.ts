@@ -46,6 +46,7 @@ import { defaultBehaviourWorkspace, listBehaviourFiles } from './behaviour-files
 import { listSessions } from './activity/transcripts'
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { ensureAutowinAppData } from './app-data'
 import { AUTOWIN_WORKSPACE_ENV } from '../shared/app-identity'
 
 interface ExecutionWorkspaceInput {
@@ -104,9 +105,9 @@ export class AutowinOS {
   readonly registry: ProviderRegistry
   readonly roles = new RoleModelConfig(loadRoleBindings()) // restaure la config persistée
   readonly authority = new AuthoritySas()
-  readonly cost = new CostAggregator()
+  readonly cost = new CostAggregator(undefined, join(ensureAutowinAppData(), 'cost.jsonl'))
   readonly conversations = new ConversationStore()
-  readonly trust = new TrustLedger()
+  readonly trust = new TrustLedger(join(ensureAutowinAppData(), 'trust.jsonl'))
   readonly orchestrator: Orchestrator
   readonly omniRouteCredentialStore: OmniRouteCredentialStore
 

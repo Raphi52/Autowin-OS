@@ -7,6 +7,7 @@ import { evaluateClosure } from './gates/stopgate'
 import { runHooks } from './gates/hooks'
 import { phaseInstruction, type PipelinePhase } from './skill-pipeline'
 import { capabilityInstruction } from './capability-profiles'
+import { projectContextBlock } from './context-files'
 import type { ExecutionEvidence, PromptEnvelope, SendOptions, Usage } from './providers/types'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
@@ -100,9 +101,13 @@ export function evidenceSatisfiesTask(task: string, evidence: ExecutionEvidence[
   if (!isMutationTask(task)) return true
   const successful = evidence.filter((item) => item.ok)
   if (!successful.length) return false
+  // F3 (strict) — une mutation exige une VÉRIFICATION réelle (test/exit-code), pas une simple
+  // inspection : une lecture (`rg`, `Get-Content`) n'atteste pas que la mutation est correcte.
+  // Compromis assumé : une mutation « vérifiée par relecture » doit désormais porter un test, ou
+  // être close en degraded-closed/humain si aucun oracle n'existe (ex. édition de doc pure).
   return (
     successful.some((item) => item.kind === 'mutation') &&
-    successful.some((item) => item.kind === 'verification' || item.kind === 'inspection')
+    successful.some((item) => item.kind === 'verification')
   )
 }
 
@@ -118,6 +123,9 @@ export class Orchestrator {
     signal?: AbortSignal
   ): Promise<OrchestrationResult> {
     const { registry, roles, cost, trust, authority } = this.deps
+    // Souveraineté contexte (décision PLIER) : Autowin lit LUI-MÊME le fichier projet gagnant de la
+    // chaîne de précédence et le plie dans chaque system → source unique, quel que soit le modèle.
+    const projectContext = projectContextBlock(this.deps.executionWorkspace)
     const trace: OrchestrationStep[] = []
     const push = (s: OrchestrationStep): void => {
       trace.push(s)
@@ -137,12 +145,19 @@ export class Orchestrator {
     const phaseContext: string[] = [`TÂCHE: ${task}`]
     for (const phase of execPhases) {
       const phaseMessages = [{ role: 'user' as const, content: phaseContext.join('\n\n') }]
+      // F6 — le system est composé de blocs NOMMÉS : on garde leur décomposition (nom + taille)
+      // pour l'observabilité, en plus de la chaîne concaténée réellement envoyée.
+      const parts = [
+        { name: `skill:${phase}`, text: phaseInstruction(phase) },
+        { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
+        { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+        { name: 'capabilities', text: capabilityInstruction(subBinding.capabilityProfileId) },
+        { name: 'projectContext', text: projectContext }
+      ]
+      const systemBlocks = parts.filter((p) => p.text).map((p) => ({ name: p.name, chars: p.text.length }))
       const subOptions: SendOptions = {
-        system:
-          phaseInstruction(phase) +
-          PIPELINE_DISCIPLINE_INSTRUCTION +
-          CONCISE_STRUCTURED_RESPONSE_INSTRUCTION +
-          capabilityInstruction(subBinding.capabilityProfileId),
+        system: parts.map((p) => p.text).join(''),
+        systemBlocks,
         model: subBinding.model,
         reasoningEffort: subBinding.reasoningEffort,
         execution: {
@@ -153,10 +168,12 @@ export class Orchestrator {
         },
         signal,
         observePrompt: (observed) => {
+          observed.systemBlocks = systemBlocks
           execPrompt = observed
         }
       }
       execPrompt = registry.describePrompt(subProvider, phaseMessages, subOptions, subBinding.model)
+      execPrompt.systemBlocks = systemBlocks
       onPhase?.({
         step: 'exec',
         provider: subProvider,
@@ -188,10 +205,12 @@ export class Orchestrator {
         cost.add({
           provider: subProvider,
           role: 'subagent',
+          phase,
           inputTokens: phaseRes.usage.inputTokens,
           outputTokens: phaseRes.usage.outputTokens,
           cacheReadTokens: phaseRes.usage.cacheReadTokens,
-          costUsd: phaseRes.usage.costUsd
+          costUsd: phaseRes.usage.costUsd,
+          durationMs: performance.now() - phaseStartedAt
         })
       }
       push({
@@ -254,22 +273,30 @@ export class Orchestrator {
         `ni de chemin kit ; juge la SUBSTANCE du livrable et les preuves d'outil réellement observées.\n` +
         `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${exec.text}\n` +
         `PREUVES OUTILS OBSERVÉES: ${JSON.stringify(exec.executionEvidence ?? [])}\n` +
-        `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".` +
-        capabilityInstruction(judgeBinding.capabilityProfileId)
+        `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
+      // capabilityInstruction n'est PLUS concaténée ici : elle vit déjà dans le `system` du juge
+      // (judgeOptions ci-dessous) — la doubler dans le prompt user gaspillait des tokens.
       const judgeMessages = [{ role: 'user' as const, content: judgePrompt }]
       let judgeEnvelope
+      // A2 — le juge charge le SKILL.md judge du kit ; F6 — blocs nommés pour l'observabilité.
+      const judgeParts = [
+        { name: 'skill:judge', text: phaseInstruction('judge') },
+        { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+        { name: 'capabilities', text: capabilityInstruction(judgeBinding.capabilityProfileId) },
+        { name: 'projectContext', text: projectContext }
+      ]
+      const judgeBlocks = judgeParts
+        .filter((p) => p.text)
+        .map((p) => ({ name: p.name, chars: p.text.length }))
       const judgeOptions: SendOptions = {
-        // A2 — le juge charge le SKILL.md judge du kit (comme les phases exec chargent le leur) :
-        // corrige l'asymétrie où le juge n'était qu'un prompt nu → audit réellement outillé.
-        system:
-          phaseInstruction('judge') +
-          CONCISE_STRUCTURED_RESPONSE_INSTRUCTION +
-          capabilityInstruction(judgeBinding.capabilityProfileId),
+        system: judgeParts.map((p) => p.text).join(''),
+        systemBlocks: judgeBlocks,
         model: judgeBinding.model,
         reasoningEffort: judgeBinding.reasoningEffort,
         execution: { cwd: this.deps.executionWorkspace, sandbox: 'read-only' },
         signal,
         observePrompt: (observed) => {
+          observed.systemBlocks = judgeBlocks
           judgeEnvelope = observed
         }
       }
@@ -279,6 +306,7 @@ export class Orchestrator {
         judgeOptions,
         judgeBinding.model
       )
+      judgeEnvelope.systemBlocks = judgeBlocks
       onPhase?.({
         step: 'judge',
         provider: judgeProvider,
@@ -309,10 +337,12 @@ export class Orchestrator {
         cost.add({
           provider: judgeProvider,
           role: 'judge',
+          phase: 'judge',
           inputTokens: verdict.usage.inputTokens,
           outputTokens: verdict.usage.outputTokens,
           cacheReadTokens: verdict.usage.cacheReadTokens,
-          costUsd: verdict.usage.costUsd
+          costUsd: verdict.usage.costUsd,
+          durationMs: performance.now() - judgeStartedAt
         })
       }
       const ok =
@@ -373,7 +403,8 @@ export class Orchestrator {
             phaseInstruction('build') +
             PIPELINE_DISCIPLINE_INSTRUCTION +
             CONCISE_STRUCTURED_RESPONSE_INSTRUCTION +
-            capabilityInstruction(subBinding.capabilityProfileId),
+            capabilityInstruction(subBinding.capabilityProfileId) +
+            projectContext,
           model: subBinding.model,
           reasoningEffort: subBinding.reasoningEffort,
           execution: { cwd: this.deps.executionWorkspace, sandbox: 'danger-full-access' },
@@ -404,10 +435,12 @@ export class Orchestrator {
           cost.add({
             provider: subProvider,
             role: 'subagent',
+            phase: 'build',
             inputTokens: repairRes.usage.inputTokens,
             outputTokens: repairRes.usage.outputTokens,
             cacheReadTokens: repairRes.usage.cacheReadTokens,
-            costUsd: repairRes.usage.costUsd
+            costUsd: repairRes.usage.costUsd,
+            durationMs: performance.now() - repairStartedAt
           })
         }
         push({

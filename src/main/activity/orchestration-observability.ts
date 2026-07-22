@@ -86,6 +86,7 @@ export function persistOrchestrationStep(
       boundary: 'Autowin OS -> provider transport',
       limitation: step.prompt.limitation,
       system: step.prompt.system,
+      systemBlocks: step.prompt.systemBlocks,
       messages: step.prompt.messages,
       options: step.prompt.options,
       response: step.text,

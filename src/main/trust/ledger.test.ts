@@ -90,3 +90,20 @@ describe('TrustLedger', () => {
     expect(ledger.models().sort()).toEqual(['claude', 'codex'])
   })
 })
+
+describe('TrustLedger — persistance (F1)', () => {
+  it('recharge les verdicts depuis le fichier au démarrage', async () => {
+    const { mkdtempSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const path = join(mkdtempSync(join(tmpdir(), 'trust-')), 'trust.jsonl')
+    const first = new TrustLedger(path)
+    first.record({ judgeModel: 'sol', verdict: 'green', humanTruth: 'green' })
+    first.record({ judgeModel: 'sol', verdict: 'red', humanTruth: 'green' })
+    const reloaded = new TrustLedger(path)
+    const cal = reloaded.calibration('sol')
+    expect(cal.total).toBe(2)
+    expect(cal.confirmed).toBe(2)
+    expect(cal.falseRed).toBe(1)
+  })
+})

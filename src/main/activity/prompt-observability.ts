@@ -17,6 +17,8 @@ export interface PromptCallRecord {
   boundary: string
   limitation: string
   system?: string
+  /** F6 — décomposition du `system` en blocs nommés (skill/discipline/style/capacités/contexte). */
+  systemBlocks?: { name: string; chars: number }[]
   messages: Message[]
   options: Record<string, unknown>
   response: string

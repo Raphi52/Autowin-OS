@@ -3,6 +3,9 @@
 // Un verdict n'entre dans le calcul de calibration que s'il porte une humanTruth
 // (verite terrain confirmee par l'humain) ; sans elle, il est ignore.
 
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { dirname } from 'node:path'
+
 export type Verdict = 'green' | 'red'
 
 export interface JudgeVerdict {
@@ -34,8 +37,30 @@ export interface RankingEntry {
 export class TrustLedger {
   private verdicts: JudgeVerdict[] = []
 
+  /** `persistPath` : fichier JSONL où historiser les verdicts (rechargé au démarrage). */
+  constructor(private readonly persistPath?: string) {
+    if (persistPath && existsSync(persistPath)) {
+      for (const line of readFileSync(persistPath, 'utf8').split(/\r?\n/)) {
+        if (!line) continue
+        try {
+          this.verdicts.push(JSON.parse(line) as JudgeVerdict)
+        } catch {
+          /* ligne corrompue — ignorée */
+        }
+      }
+    }
+  }
+
   record(v: JudgeVerdict): void {
     this.verdicts.push(v)
+    if (this.persistPath) {
+      try {
+        mkdirSync(dirname(this.persistPath), { recursive: true })
+        appendFileSync(this.persistPath, `${JSON.stringify(v)}\n`, 'utf8')
+      } catch {
+        /* persistance best-effort */
+      }
+    }
   }
 
   calibration(model: string): Calibration {

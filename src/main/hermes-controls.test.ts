@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { applyToolSelectionPlan, parsePlugins, planToolSelection } from './hermes-controls'
+import {
+  applyToolSelectionPlan,
+  guardParsed,
+  hermesBin,
+  parsePlugins,
+  parseTools,
+  planToolSelection
+} from './hermes-controls'
 
 describe('Hermes prompt-load controls', () => {
   it('parses every plugin row including disabled bundled plugins', () => {
@@ -101,5 +108,25 @@ describe('Hermes prompt-load controls', () => {
       ['tools', 'disable', 'terminal', '--platform', 'cli'],
       ['tools', 'enable', 'web', '--platform', 'cli']
     ])
+  })
+})
+
+describe('F2 — guardParsed (anti-échec silencieux)', () => {
+  it('lève une erreur si la sortie a des entrées mais que 0 est parsé (format changé)', () => {
+    const drifted = 'Tool  status\nfoo   enabled\nbar   disabled' // format inconnu → parseTools rend []
+    expect(() => guardParsed(parseTools(drifted), drifted, 'tools')).toThrow(/non reconnu/i)
+  })
+  it('rend la liste vide sans erreur si la sortie est réellement vide', () => {
+    expect(guardParsed([], 'Aucun outil.\n', 'tools')).toEqual([])
+  })
+})
+
+describe('F5 — hermesBin (chemin configurable)', () => {
+  it('honore HERMES_BIN puis HERMES_HOME, sinon défaut', () => {
+    expect(hermesBin({ HERMES_BIN: '/opt/hermes/bin/hermes' } as NodeJS.ProcessEnv)).toBe(
+      '/opt/hermes/bin/hermes'
+    )
+    expect(hermesBin({ HERMES_HOME: '/opt/hermes' } as NodeJS.ProcessEnv)).toContain('hermes-agent')
+    expect(hermesBin({} as NodeJS.ProcessEnv)).toMatch(/hermes/)
   })
 })
