@@ -4,17 +4,13 @@ import { join } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
 
 /**
- * REGISTRE NATIF (Chantier 1 du découplage Hermes — le VERROU).
- *
- * Remplace le shell-out `hermes.exe {skills|tools|plugins|hooks} list|enable|disable` par une source
- * LOCALE à Autowin, sans sous-processus externe :
+ * REGISTRE NATIF — source LOCALE unique des capacités, sans aucun sous-processus externe :
  *  - inventaire skills = scan disque des racines de skills (SKILL.md), déjà présent sur le poste ;
  *  - inventaire tools/plugins/hooks = un CATALOGUE local déclaratif (`catalog.v1.json`), amorçable une
- *    fois depuis Hermes puis figé (ces vues sont de l'AFFICHAGE — jamais injectées aux modèles) ;
+ *    fois via un snapshot puis figé (ces vues sont de l'AFFICHAGE — jamais injectées aux modèles) ;
  *  - état enabled/disabled = un fichier de préférences local (`enablement.v1.json`).
  *
- * `hermes-controls.ts` bascule sur ce registre quand il est actif (flag + présence du fichier), en
- * gardant le chemin Hermes en parallèle tant que la bascule n'est pas validée (rétro-compat douce).
+ * `capability-controls.ts` lit exclusivement ce registre (générique tous providers).
  */
 
 export interface RegistryItem {
@@ -67,9 +63,8 @@ export function nativeRegistryActive(base = ensureAutowinAppData()): boolean {
 }
 
 /**
- * Racines de skills scannées (Chantier 2 — souverain de Hermes) : le kit `~/.claude/skills` (l'âme
- * d'Autowin), `~/.codex/skills`, et la racine Autowin `%APPDATA%/autowin-os/skills`. Les dossiers
- * `hermes/skills` et `hermes-agent/skills` sont RETIRÉS : Autowin ne dépend plus de l'arbre Hermes.
+ * Racines de skills scannées : le kit `~/.claude/skills` (l'âme d'Autowin), `~/.codex/skills`, et la
+ * racine Autowin `%APPDATA%/autowin-os/skills`. Générique : indépendant de tout arbre externe.
  */
 export function skillRoots(home = homedir(), localAppData = process.env.LOCALAPPDATA): string[] {
   const roots = [join(home, '.codex', 'skills'), join(home, '.claude', 'skills')]
@@ -138,7 +133,7 @@ function catalogControls(kind: 'tools' | 'plugins' | 'hooks', base = ensureAutow
   return decls.map((d) => ({ ...d, enabled: enablement[d.id] !== false }))
 }
 
-/** Inventaire natif d'un type — remplace `listHermesControls(kind)` sans sous-processus. */
+/** Inventaire natif d'un type de capacité (source locale, sans sous-processus). */
 export function listNativeRegistry(kind: RegistryKind, base = ensureAutowinAppData()): RegistryItem[] {
   if (kind === 'skills') return nativeSkills(base)
   return catalogControls(kind, base)
@@ -160,8 +155,8 @@ export function setNativeEnablement(
   return listNativeRegistry(kind, base)
 }
 
-/** Amorçage unique : fige l'état Hermes courant en local, puis Hermes n'est plus jamais appelé. */
-export function seedRegistryFromHermes(
+/** Amorçage unique : fige un snapshot d'état en local (catalogue + activation). Idempotent. */
+export function seedRegistrySnapshot(
   snapshot: Partial<Record<RegistryKind, RegistryItem[]>>,
   base = ensureAutowinAppData()
 ): void {

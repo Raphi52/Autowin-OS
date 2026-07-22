@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { listBehaviourFiles, readBehaviourFile } from './behaviour-files'
 
-vi.mock('./hermes-controls', () => ({
-  listHermesControls: vi.fn(async (kind: string) =>
+vi.mock('./capability-controls', () => ({
+  listCapabilities: vi.fn(async (kind: string) =>
     kind === 'skills' ? [{ id: 'always-visible', enabled: true }] : []
   )
 }))

@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { listHermesControls } from './hermes-controls'
+import { listCapabilities } from './capability-controls'
 import { readBoundedUtf8FileWithin, readUtf8Prefix } from './bounded-file-read'
 import { AUTOWIN_WORKSPACE_ENV, legacyWorkspaceEnvName } from '../shared/app-identity'
 
@@ -387,7 +387,7 @@ async function hermesFiles(query: Required<BehaviourQuery>): Promise<BehaviourFi
   if (!query.includeHermesSkills) return files
 
   const enabled = new Set(
-    (await listHermesControls('skills')).filter((skill) => skill.enabled).map((skill) => skill.id)
+    (await listCapabilities('skills')).filter((skill) => skill.enabled).map((skill) => skill.id)
   )
   const byName = new Map<string, BehaviourFile>()
   for (const skill of [

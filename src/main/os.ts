@@ -41,7 +41,7 @@ import {
 } from './orchestrator'
 import { regimePhases } from './task-regime'
 import { composeHarnessSnapshot, type HarnessSnapshot } from './harness/snapshot'
-import { listHermesControls } from './hermes-controls'
+import { listCapabilities } from './capability-controls'
 import { listClaudeHooks } from './claude-hooks'
 import { defaultBehaviourWorkspace, listBehaviourFiles } from './behaviour-files'
 import { listSessions } from './activity/transcripts'
@@ -247,8 +247,8 @@ export class AutowinOS {
     const soul = safeSync(() => loadKitSoul(), '')
 
     const [skills, tools, behaviour] = await Promise.all([
-      settleWithin(listHermesControls('skills'), 3500, null),
-      settleWithin(listHermesControls('tools'), 3500, null),
+      settleWithin(listCapabilities('skills'), 3500, null),
+      settleWithin(listCapabilities('tools'), 3500, null),
       settleWithin(listBehaviourFiles(), 3500, null)
     ])
 

@@ -7,7 +7,7 @@ import {
   nativeRegistryActive,
   listNativeRegistry,
   setNativeEnablement,
-  seedRegistryFromHermes,
+  seedRegistrySnapshot,
   nativeSkills
 } from './native-registry'
 
@@ -59,7 +59,7 @@ describe('native-registry (Chantier 1 — souveraineté inventaire)', () => {
   })
 
   it('amorçage unique depuis Hermes fige tools/plugins + état, sans écraser si déjà amorcé', () => {
-    seedRegistryFromHermes(
+    seedRegistrySnapshot(
       {
         tools: [{ id: 't1', label: 't1', description: 'outil', enabled: true, mutable: true }],
         plugins: [{ id: 'p1', label: 'p1', description: 'plug', enabled: false, mutable: true }]
@@ -73,7 +73,7 @@ describe('native-registry (Chantier 1 — souveraineté inventaire)', () => {
     const plugins = listNativeRegistry('plugins', base)
     expect(plugins[0].enabled).toBe(false)
     // 2e amorçage ignoré (état local préservé)
-    seedRegistryFromHermes({ tools: [] }, base)
+    seedRegistrySnapshot({ tools: [] }, base)
     expect(listNativeRegistry('tools', base)).toHaveLength(1)
   })
 })

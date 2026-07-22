@@ -1,7 +1,8 @@
 import { app, shell, BrowserWindow, dialog, ipcMain, Notification, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'path'
 import { randomUUID } from 'node:crypto'
-import { writeFileSync } from 'node:fs'
+import { writeFileSync, existsSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import devIcon from '../../resources/autowin-os-dev.png?asset'
@@ -10,6 +11,8 @@ import { ProviderRegistry } from './providers/registry'
 import { AutowinOS } from './os'
 import { installCrashHandlers } from './crash-handlers'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
+import { runPreflight } from './preflight'
+import { brainServiceToken } from './brain-retrieval'
 import { RoleModelConfig, type ReasoningEffort, type Role } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
@@ -38,12 +41,11 @@ import { aggregateToolUsage } from './activity/tool-usage'
 import { LoopRunStore } from './loop-run-store'
 import { ProfileStore, resolveProfileRoute, type AutowinProfile } from './profile-store'
 import {
-  listHermesControls,
-  setHermesPlugin,
-  setHermesTool,
-  setHermesToolSelection,
-  warmHermesControls
-} from './hermes-controls'
+  listCapabilities,
+  setCapabilityEnabled,
+  setCapabilitySelection,
+  warmCapabilities
+} from './capability-controls'
 import {
   defaultBehaviourWorkspace,
   listBehaviourContexts,
@@ -612,15 +614,15 @@ function registerChatIpc(): void {
       assertTrustedRendererSender(event, 'Hermes')
       if (!['skills', 'hooks', 'tools', 'plugins'].includes(kind))
         throw new Error('Vue Hermes inconnue')
-      return listHermesControls(kind)
+      return listCapabilities(kind)
     }
   )
   ipcMain.handle('hermes:tools:select', async (event, names: unknown) => {
     assertTrustedRendererSender(event, 'Hermes')
     if (!Array.isArray(names) || !names.every((name) => typeof name === 'string'))
       throw new Error('Sélection de toolsets invalide')
-    const before = await listHermesControls('tools')
-    const result = await setHermesToolSelection(names)
+    const before = await listCapabilities('tools')
+    const result = await setCapabilitySelection('tools', names)
     const change = promptConfigChange('tools', before, result.items)
     appendPromptConfigActivity('Prompt Load · preset tools', change)
     if (bus.activeConversationId) {
@@ -635,8 +637,9 @@ function registerChatIpc(): void {
   })
   ipcMain.handle('hermes:plugins:set', async (event, name: string, enabled: unknown) => {
     assertTrustedRendererSender(event, 'Hermes')
-    const before = await listHermesControls('plugins')
-    const result = await setHermesPlugin(
+    const before = await listCapabilities('plugins')
+    const result = await setCapabilityEnabled(
+      'plugins',
       guardString(name, 'plugin'),
       guardBoolean(enabled, 'plugin.enabled')
     )
@@ -656,8 +659,9 @@ function registerChatIpc(): void {
   ipcMain.handle('codex:hooks:list', () => listCodexHooks())
   ipcMain.handle('hermes:tools:set', async (event, name: string, enabled: unknown) => {
     assertTrustedRendererSender(event, 'Hermes')
-    const before = await listHermesControls('tools')
-    const result = await setHermesTool(
+    const before = await listCapabilities('tools')
+    const result = await setCapabilityEnabled(
+      'tools',
       guardString(name, 'toolset'),
       guardBoolean(enabled, 'toolset.enabled')
     )
@@ -1466,7 +1470,7 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     presentAutomationWindow(mainWindow, headlessTestInstance, { maximize: true })
-    setTimeout(() => void warmHermesControls(), 250)
+    setTimeout(() => void warmCapabilities(), 250)
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -1544,6 +1548,39 @@ app.whenReady().then(async () => {
   registerStorageMigrationIpc(legacyStorageValues, canWriteMigrationMarker)
   registerChatIpc()
   createWindow()
+
+  // #4 — diagnostic de démarrage (non bloquant) : on vérifie brain_server, CLI providers et token,
+  // et on pousse le résultat au renderer (bannière) pour que l'utilisateur voie une config incomplète
+  // AVANT de lancer un run, plutôt qu'un échec silencieux en plein run. Best-effort, jamais bloquant.
+  void runPreflight({
+    pingBrain: async () => {
+      const ctrl = new AbortController()
+      const t = setTimeout(() => ctrl.abort(), 1500) // sleep-ok: timeout d'abort d'un fetch réseau, borne la latence du ping (pas un sleep de polling)
+      try {
+        await fetch('http://127.0.0.1:8765/', { signal: ctrl.signal })
+        return true
+      } catch {
+        return false
+      } finally {
+        clearTimeout(t)
+      }
+    },
+    hasBin: async (which) => {
+      const envBin = process.env[`${which.toUpperCase()}_BIN`]
+      if (envBin) return existsSync(envBin)
+      const probe = spawnSync(which, ['--version'], { timeout: 3000, windowsHide: true })
+      return probe.status === 0
+    },
+    hasBrainToken: () => brainServiceToken().length > 0
+  })
+    .then((result) => {
+      if (!result.ok) {
+        for (const w of BrowserWindow.getAllWindows()) w.webContents.send('preflight:result', result)
+      }
+    })
+    .catch(() => {
+      /* preflight best-effort : ne jamais casser le démarrage */
+    })
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the

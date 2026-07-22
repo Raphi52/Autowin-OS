@@ -1,9 +1,9 @@
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join } from 'node:path'
-import { type HermesControlItem } from './hermes-controls'
+import { type CapabilityItem } from './capability-controls'
 
-export interface SkillRegistryItem extends HermesControlItem {
+export interface SkillRegistryItem extends CapabilityItem {
   source: string
   sourceLabel: string
   path: string
