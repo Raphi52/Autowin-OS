@@ -33,7 +33,7 @@ describe('Autowin UI contract', () => {
       'ObservatoryView.tsx',
       'RouterView.tsx',
       'AgentsTopologyView.tsx',
-      'HermesControlsView.tsx',
+      'CapabilitiesView.tsx',
       'BehaviourView.tsx'
     ]) {
       expect(component(file), file).toContain("import { ModuleHeader } from './ModuleHeader'")
@@ -72,7 +72,7 @@ describe('Autowin UI contract', () => {
 
     const forbiddenOverrides: Array<[string, RegExp]> = [
       ['ObservatoryView.css', /\.observatory-head > div:first-child > span|\.observatory-head h1/],
-      ['HermesControlsView.css', /\.cockpit-header > div:first-child > span|\.cockpit-header h1/],
+      ['CapabilitiesView.css', /\.cockpit-header > div:first-child > span|\.cockpit-header h1/],
       ['BehaviourView.css', /\.behaviour-view > header span|\.behaviour-view h1/],
       ['AgentsTopologyView.css', /\.topology-toolbar span/]
     ]

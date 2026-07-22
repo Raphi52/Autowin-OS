@@ -24,7 +24,7 @@ vi.mock('./components/ObservatoryView', () => ({
 }))
 vi.mock('./components/GraphView', () => ({ GraphView: () => null }))
 vi.mock('./components/RolesView', () => ({ RolesView: () => null }))
-vi.mock('./components/HermesControlsView', () => ({ HermesControlsView: () => null }))
+vi.mock('./components/CapabilitiesView', () => ({ CapabilitiesView: () => null }))
 vi.mock('./components/BehaviourView', () => ({ BehaviourView: () => null }))
 vi.mock('./components/RouterView', () => ({ RouterView: () => null }))
 vi.mock('./components/ModelQuestionPopup', () => ({ ModelQuestionPopup: () => null }))

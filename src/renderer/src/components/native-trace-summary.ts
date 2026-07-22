@@ -1,4 +1,4 @@
-export interface HermesTraceSummaryInput {
+export interface NativeTraceSummaryInput {
   timestamp: string
   provider: string
   model: string
@@ -7,15 +7,15 @@ export interface HermesTraceSummaryInput {
   conversationId?: string
 }
 
-export function summarizeHermesTraces(traces: HermesTraceSummaryInput[]): {
+export function summarizeNativeTraces(traces: NativeTraceSummaryInput[]): {
   count: number
   linkedCount: number
   unlinkedCount: number
   lastTimestamp?: string
   lastProvider?: string
   lastModel?: string
-  boundary?: HermesTraceSummaryInput['boundary']
-  source?: HermesTraceSummaryInput['source']
+  boundary?: NativeTraceSummaryInput['boundary']
+  source?: NativeTraceSummaryInput['source']
   coverage: 'aucune' | 'partielle' | 'rattachée' | 'non-rattachée'
 } {
   const ordered = [...traces].sort(

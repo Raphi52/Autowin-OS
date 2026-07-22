@@ -6,7 +6,7 @@ import {
   type HarnessTimeline
 } from './harness-timeline-model'
 import { HumanJson } from './HumanJson'
-import { summarizeHermesTraces, type HermesTraceSummaryInput } from './hermes-trace-summary'
+import { summarizeNativeTraces, type NativeTraceSummaryInput } from './native-trace-summary'
 import './ObservatoryView.css'
 import { ModuleHeader } from './ModuleHeader'
 import { RagObservabilitySummary, RagTraceCard } from './RagTraceCard'
@@ -37,7 +37,7 @@ interface PromptCall {
   response: string
   usage?: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; costUsd?: number }
 }
-interface HermesDiagnosticTrace extends HermesTraceSummaryInput {
+interface HermesDiagnosticTrace extends NativeTraceSummaryInput {
   apiRequestId: string
   messageCount: number
   toolCount: number
@@ -195,7 +195,7 @@ export function ObservatoryView({
   const [promptCalls, setPromptCalls] = useState<PromptCall[]>([])
   const [selectedCall, setSelectedCall] = useState<PromptCall | null>(null)
   const [hermesTraces, setHermesTraces] = useState<HermesDiagnosticTrace[]>([])
-  const [hermesMetadata, setHermesMetadata] = useState<HermesTraceSummaryInput[]>([])
+  const [hermesMetadata, setHermesMetadata] = useState<NativeTraceSummaryInput[]>([])
   const [selected, setSelected] = useState<HarnessTimelineEvent | null>(null)
   const [compare, setCompare] = useState<HarnessTimelineEvent[]>([])
   const [query, setQuery] = useState('')
@@ -261,7 +261,7 @@ export function ObservatoryView({
         }
       }
       if (values.promptCalls) setPromptCalls(values.promptCalls as PromptCall[])
-      if (values.hermes) setHermesMetadata(values.hermes as HermesTraceSummaryInput[])
+      if (values.hermes) setHermesMetadata(values.hermes as NativeTraceSummaryInput[])
       setSourceErrors((current) => {
         const next = { ...current }
         for (const source of ['conversations', 'promptCalls', 'hermes']) delete next[source]
@@ -396,7 +396,7 @@ export function ObservatoryView({
   // avec un « Hermes · 24 » et « 24 sans RAG » qui ne la décrivent pas.
   const convHermesMetadata = hermesMetadata.filter((t) => t.conversationId === conversationId)
   const convHermesTraces = hermesTraces.filter((t) => t.conversationId === conversationId)
-  const hermesSummary = summarizeHermesTraces(convHermesMetadata)
+  const hermesSummary = summarizeNativeTraces(convHermesMetadata)
   const ragSummaries = convHermesTraces.map((trace) => summarizeRagTrace(trace.request))
   const ragInjected = ragSummaries.filter((summary) => summary.status === 'injected').length
   const hasHermes = convHermesTraces.length > 0 || hermesSummary.count > 0

@@ -3,7 +3,7 @@ import { ChatView } from './components/ChatView'
 import { GraphView } from './components/GraphView'
 import { ObservatoryView } from './components/ObservatoryView'
 import { RolesView } from './components/RolesView'
-import { HermesControlsView } from './components/HermesControlsView'
+import { CapabilitiesView } from './components/CapabilitiesView'
 import { BehaviourView } from './components/BehaviourView'
 import { ModelQuestionPopup } from './components/ModelQuestionPopup'
 import { normalizeTab, type Tab } from './tabs'
@@ -261,7 +261,7 @@ export function MainApp(): React.JSX.Element {
         )}
         {visitedTabs.has('capabilities') && (
           <div className={`view-slot${tab === 'capabilities' ? ' is-active' : ''}`}>
-            <HermesControlsView active={tab === 'capabilities'} />
+            <CapabilitiesView active={tab === 'capabilities'} />
           </div>
         )}
         {visitedTabs.has('behaviour') && (

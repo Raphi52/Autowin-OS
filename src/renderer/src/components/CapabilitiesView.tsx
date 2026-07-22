@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import './HermesControlsView.css'
+import './CapabilitiesView.css'
 import { ModuleHeader } from './ModuleHeader'
 
 type Kind = 'skills' | 'hooks' | 'tools'
@@ -40,7 +40,7 @@ function sourceClass(source?: string): string {
   return 'is-neutral'
 }
 
-export function HermesControlsView({ active }: { active: boolean }): React.JSX.Element {
+export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Element {
   const [kind, setKind] = useState<Kind>('skills')
   const [items, setItems] = useState<Item[]>([])
   const [query, setQuery] = useState('')

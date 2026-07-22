@@ -49,6 +49,12 @@ const api = {
     ipcRenderer.on('orchestrate:step', handler)
     return () => ipcRenderer.removeListener('orchestrate:step', handler)
   },
+  // #4 — résultat du diagnostic de démarrage (émis seulement si dégradé) → bannière.
+  onPreflight: (cb: (result: unknown) => void): (() => void) => {
+    const handler = (_e: unknown, result: unknown): void => cb(result)
+    ipcRenderer.on('preflight:result', handler)
+    return () => ipcRenderer.removeListener('preflight:result', handler)
+  },
   // Config par rôle
   roles: (): Promise<
     Record<string, { provider: string; model?: string; reasoningEffort?: string }>
