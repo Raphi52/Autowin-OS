@@ -14,9 +14,9 @@ function handlerBody(source: string, channel: string, nextChannel: string): stri
 }
 
 describe('Hermes prompt trace read contract', () => {
-  it('keeps os:hermesPromptTraces free of causal reads and writes', () => {
+  it('keeps os:promptTraces free of causal reads and writes', () => {
     const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
-    const body = handlerBody(source, 'os:hermesPromptTraces', 'os:hermesPromptTraceSummary')
+    const body = handlerBody(source, 'os:promptTraces', 'os:promptTraceSummary')
 
     expect(body).not.toContain('causalTrace.readConversation')
     expect(body).not.toContain('causalTrace.nextSequence')

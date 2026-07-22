@@ -68,49 +68,49 @@ const api = {
   topology: (): Promise<unknown> => ipcRenderer.invoke('os:topology:get'),
   setTopology: (topology: unknown): Promise<unknown> =>
     ipcRenderer.invoke('os:topology:set', topology),
-  hermesControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins'): Promise<unknown[]> =>
-    ipcRenderer.invoke('hermes:controls:list', kind),
+  capabilityControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins'): Promise<unknown[]> =>
+    ipcRenderer.invoke('os:capabilities:list', kind),
   skills: (): Promise<unknown[]> => ipcRenderer.invoke('skills:registry:list'),
   promptCalls: (conversationId?: string): Promise<unknown[]> =>
     ipcRenderer.invoke('os:promptCalls', conversationId),
-  hermesPromptTraces: (conversationId: string): Promise<unknown[]> =>
-    ipcRenderer.invoke('os:hermesPromptTraces', conversationId),
-  hermesPromptTraceSummary: (): Promise<unknown[]> =>
-    ipcRenderer.invoke('os:hermesPromptTraceSummary'),
-  authorizeHermesDiagnostics: (): Promise<string | null> =>
-    ipcRenderer.invoke('os:authorizeHermesDiagnostics'),
-  hermesPromptTracesGlobal: (capability: string): Promise<unknown[]> =>
-    ipcRenderer.invoke('os:hermesPromptTracesGlobal', capability),
+  promptTraces: (conversationId: string): Promise<unknown[]> =>
+    ipcRenderer.invoke('os:promptTraces', conversationId),
+  promptTraceSummary: (): Promise<unknown[]> =>
+    ipcRenderer.invoke('os:promptTraceSummary'),
+  authorizeDiagnostics: (): Promise<string | null> =>
+    ipcRenderer.invoke('os:authorizeDiagnostics'),
+  promptTracesGlobal: (capability: string): Promise<unknown[]> =>
+    ipcRenderer.invoke('os:promptTracesGlobal', capability),
   causalTrace: (conversationId: string): Promise<unknown[]> =>
     ipcRenderer.invoke('os:causalTrace', conversationId),
   claudeHooks: (): Promise<unknown[]> => ipcRenderer.invoke('claude:hooks:list'),
   codexHooks: (): Promise<unknown[]> => ipcRenderer.invoke('codex:hooks:list'),
-  setHermesTool: (name: string, enabled: boolean): Promise<unknown> =>
-    ipcRenderer.invoke('hermes:tools:set', name, enabled),
-  setHermesToolSelection: (names: string[]): Promise<unknown> =>
-    ipcRenderer.invoke('hermes:tools:select', names),
-  setHermesPlugin: (name: string, enabled: boolean): Promise<unknown> =>
-    ipcRenderer.invoke('hermes:plugins:set', name, enabled),
-  behaviourWorkspace: (): Promise<string> => ipcRenderer.invoke('hermes:behaviour:workspace'),
+  setCapabilityTool: (name: string, enabled: boolean): Promise<unknown> =>
+    ipcRenderer.invoke('os:capabilities:tools:set', name, enabled),
+  setCapabilityToolSelection: (names: string[]): Promise<unknown> =>
+    ipcRenderer.invoke('os:capabilities:tools:select', names),
+  setCapabilityPlugin: (name: string, enabled: boolean): Promise<unknown> =>
+    ipcRenderer.invoke('os:capabilities:plugins:set', name, enabled),
+  behaviourWorkspace: (): Promise<string> => ipcRenderer.invoke('os:behaviour:workspace'),
   chooseBehaviourWorkspace: (): Promise<string | null> =>
-    ipcRenderer.invoke('hermes:behaviour:choose-workspace'),
+    ipcRenderer.invoke('os:behaviour:choose-workspace'),
   behaviourContexts: (workspaceRoot: string): Promise<unknown> =>
-    ipcRenderer.invoke('hermes:behaviour:contexts', workspaceRoot),
+    ipcRenderer.invoke('os:behaviour:contexts', workspaceRoot),
   behaviourFiles: (workspaceRoot?: string, contextRoot?: string): Promise<unknown> =>
-    ipcRenderer.invoke('hermes:behaviour:list', workspaceRoot, contextRoot),
+    ipcRenderer.invoke('os:behaviour:list', workspaceRoot, contextRoot),
   readBehaviourFile: (id: string, workspaceRoot?: string, contextRoot?: string): Promise<string> =>
-    ipcRenderer.invoke('hermes:behaviour:read', id, workspaceRoot, contextRoot),
+    ipcRenderer.invoke('os:behaviour:read', id, workspaceRoot, contextRoot),
   behaviourProof: (workspaceRoot?: string, contextRoot?: string): Promise<unknown> =>
-    ipcRenderer.invoke('hermes:behaviour:proof', workspaceRoot, contextRoot),
-  runSkillLoop: (input: unknown): Promise<unknown> => ipcRenderer.invoke('hermes:loop:run', input),
-  loopSkills: (): Promise<unknown[]> => ipcRenderer.invoke('hermes:loop:skills'),
+    ipcRenderer.invoke('os:behaviour:proof', workspaceRoot, contextRoot),
+  runSkillLoop: (input: unknown): Promise<unknown> => ipcRenderer.invoke('os:loop:run', input),
+  loopSkills: (): Promise<unknown[]> => ipcRenderer.invoke('os:loop:skills'),
   generateLoopDraft: (objective: string): Promise<unknown> =>
-    ipcRenderer.invoke('hermes:loop:generate', objective),
-  loopRuns: (): Promise<unknown[]> => ipcRenderer.invoke('hermes:loop:runs'),
+    ipcRenderer.invoke('os:loop:generate', objective),
+  loopRuns: (): Promise<unknown[]> => ipcRenderer.invoke('os:loop:runs'),
   onSkillLoopEvent: (cb: (event: unknown) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, loopEvent: unknown): void => cb(loopEvent)
-    ipcRenderer.on('hermes:loop:event', handler)
-    return () => ipcRenderer.removeListener('hermes:loop:event', handler)
+    ipcRenderer.on('os:loop:event', handler)
+    return () => ipcRenderer.removeListener('os:loop:event', handler)
   },
   onModelQuestion: (cb: (question: unknown) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, question: unknown): void => cb(question)

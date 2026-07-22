@@ -38,9 +38,9 @@ function api(events: HarnessTraceEvent[], promptCalls: unknown[] = []) {
         { id: 'conv-1', title: 'Conversation ciblée', provider: 'codex', updatedAt: 1 }
       ]),
     promptCalls: vi.fn().mockResolvedValue(promptCalls),
-    hermesPromptTraceSummary: vi.fn().mockResolvedValue([]),
-    authorizeHermesDiagnostics: vi.fn().mockResolvedValue(null),
-    hermesPromptTracesGlobal: vi.fn().mockResolvedValue([]),
+    promptTraceSummary: vi.fn().mockResolvedValue([]),
+    authorizeDiagnostics: vi.fn().mockResolvedValue(null),
+    promptTracesGlobal: vi.fn().mockResolvedValue([]),
     causalTrace: vi.fn().mockResolvedValue(events)
   }
 }

@@ -246,6 +246,26 @@ export class AppCommandBus {
     controller.abort()
     return true
   }
+
+  /**
+   * Enregistre une orchestration STOPPABLE dans le MÊME registre que le chemin `commands.ts` interne,
+   * pour que `abortOrchestration(convId)` puisse la couper. Utilisé par le handler IPC direct
+   * `os:orchestrate` (#2) qui, sinon, ne câblait aucun AbortController → bouton annuler no-op.
+   * Retourne le controller dont il faut passer `.signal` à `runTask`. Toujours appeler
+   * `clearOrchestration(convId)` en `finally`.
+   */
+  registerOrchestration(convId: string): AbortController {
+    // Coupe une orchestration précédente laissée pendante sur la même conversation avant d'en armer une.
+    this.activeOrchestrations.get(convId)?.abort()
+    const controller = new AbortController()
+    this.activeOrchestrations.set(convId, controller)
+    return controller
+  }
+
+  /** Retire l'orchestration du registre (à appeler en finally, après fin/erreur/abort). */
+  clearOrchestration(convId: string): void {
+    this.activeOrchestrations.delete(convId)
+  }
   constructor(
     private readonly os: AutowinOS,
     private readonly broadcast: (e: AppEvent) => void,

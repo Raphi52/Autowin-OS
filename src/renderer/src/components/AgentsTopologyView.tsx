@@ -399,6 +399,17 @@ export function AgentsTopologyView(): React.JSX.Element {
                   </button>
                 )}
                 {index === 0 && <em>{target === 'orchestrator' ? 'actif' : 'rôle runtime'}</em>}
+                {/* #8 — le fan-out parallèle n'est pas branché au runtime : un slot >1 est cosmétique.
+                    On le marque explicitement "non actif" (pas seulement un encart texte en bas de page)
+                    pour ne pas laisser croire qu'une topologie parallèle est effective. */}
+                {index > 0 && (
+                  <em
+                    className="slot-inactive"
+                    title="Le fan-out parallèle n'est pas encore branché — ce slot n'est pas utilisé au runtime"
+                  >
+                    non actif
+                  </em>
+                )}
               </article>
             )
           })}

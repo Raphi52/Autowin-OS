@@ -341,24 +341,24 @@ interface ChatApi {
   kimiLogin: () => Promise<{ ok: true }>
   topology: () => Promise<AgentTopology>
   setTopology: (topology: AgentTopology) => Promise<AgentTopology>
-  hermesControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins') => Promise<HermesControlItem[]>
+  capabilityControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins') => Promise<HermesControlItem[]>
   skills: () => Promise<SkillRegistryItem[]>
   promptCalls: (conversationId?: string) => Promise<PromptCallRecord[]>
-  hermesPromptTraces: (conversationId: string) => Promise<HermesPreflightTrace[]>
-  hermesPromptTraceSummary: () => Promise<HermesPreflightTrace[]>
-  authorizeHermesDiagnostics: () => Promise<string | null>
-  hermesPromptTracesGlobal: (capability: string) => Promise<HermesPreflightTrace[]>
+  promptTraces: (conversationId: string) => Promise<HermesPreflightTrace[]>
+  promptTraceSummary: () => Promise<HermesPreflightTrace[]>
+  authorizeDiagnostics: () => Promise<string | null>
+  promptTracesGlobal: (capability: string) => Promise<HermesPreflightTrace[]>
   causalTrace: (conversationId: string) => Promise<unknown[]>
   claudeHooks: () => Promise<HermesControlItem[]>
   codexHooks: () => Promise<HermesControlItem[]>
-  setHermesTool: (
+  setCapabilityTool: (
     name: string,
     enabled: boolean
   ) => Promise<{ items: HermesControlItem[]; restartRequired: true }>
-  setHermesToolSelection: (
+  setCapabilityToolSelection: (
     names: string[]
   ) => Promise<{ items: HermesControlItem[]; restartRequired: true }>
-  setHermesPlugin: (
+  setCapabilityPlugin: (
     name: string,
     enabled: boolean
   ) => Promise<{ items: HermesControlItem[]; restartRequired: true }>

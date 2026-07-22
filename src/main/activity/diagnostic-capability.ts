@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
-export class HermesDiagnosticCapabilities {
+/** Jetons de capacité éphémères (60 s) liés à un sender IPC — garde les diagnostics lecture seule. */
+export class DiagnosticCapabilities {
   private readonly values = new Map<string, { senderId: number; expiresAt: number }>()
 
   issue(senderId: number, now = Date.now()): string {

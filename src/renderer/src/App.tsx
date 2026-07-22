@@ -38,7 +38,11 @@ const NAV: Array<{ id: Tab; label: string }> = [
 export function MainApp(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('chat')
   const [driven, setDriven] = useState(false) // un agent pilote → halo sur la vue
-  const [railCollapsed, setRailCollapsed] = useState(false)
+  // #11 — l'état replié/déplié de la rail est PERSISTÉ (comme le zoom), pour ne pas re-replier à
+  // chaque lancement.
+  const [railCollapsed, setRailCollapsed] = useState<boolean>(
+    () => localStorage.getItem('autowin:rail-collapsed') === '1'
+  )
   const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set(['chat']))
   const [observatoryFocus, setObservatoryFocus] = useState<ObservatoryFocus | null>(null)
 
@@ -103,6 +107,35 @@ export function MainApp(): React.JSX.Element {
       window.removeEventListener('wheel', onWheel)
       window.removeEventListener('keydown', onKey)
     }
+  }, [])
+
+  // #11 — persiste l'état de la rail.
+  useEffect(() => {
+    localStorage.setItem('autowin:rail-collapsed', railCollapsed ? '1' : '0')
+  }, [railCollapsed])
+
+  // #11 — raccourcis clavier : Ctrl+1..6 changent d'onglet, Ctrl+K focalise la recherche de
+  // conversation (best-effort : ne fait rien si le champ n'est pas monté). N'interfère pas avec le
+  // zoom (Ctrl+0/±) ni la saisie (on ignore si un modificateur alt/meta est présent).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (!e.ctrlKey || e.altKey || e.metaKey) return
+      const n = Number(e.key)
+      if (Number.isInteger(n) && n >= 1 && n <= NAV.length) {
+        e.preventDefault()
+        const id = NAV[n - 1].id
+        setTab(id)
+        setVisitedTabs((visited) => (visited.has(id) ? visited : new Set(visited).add(id)))
+      } else if (e.key.toLowerCase() === 'k') {
+        const el = document.querySelector<HTMLInputElement>('input.conv-search, .conv-search input')
+        if (el) {
+          e.preventDefault()
+          el.focus()
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   function navigate(nextTab: Tab): void {

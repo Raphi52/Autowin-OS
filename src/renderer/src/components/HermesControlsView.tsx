@@ -73,7 +73,7 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
               ? window.api.codexHooks()
               : kind === 'tools' && toolSource === 'real'
                 ? window.api.toolUsage()
-                : window.api.hermesControls(kind)
+                : window.api.capabilityControls(kind)
       request
         .then((nextItems) => {
           if (!current) return
@@ -112,14 +112,14 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
           relationSource: 'Codex'
         }))
       ),
-      window.api.hermesControls('hooks').then((entries) =>
+      window.api.capabilityControls('hooks').then((entries) =>
         entries.map((item) => ({
           ...item,
           relationKind: 'hook' as const,
           relationSource: 'Hermes'
         }))
       ),
-      window.api.hermesControls('tools').then((entries) =>
+      window.api.capabilityControls('tools').then((entries) =>
         entries.map((item) => ({
           ...item,
           relationKind: 'tool' as const,
@@ -177,7 +177,7 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
     )
   }, [kind, relationCatalog, selected])
 
-  // Seul le canal `tools` a un backend d'activation RÉEL (setHermesTool → registre natif). Les
+  // Seul le canal `tools` a un backend d'activation RÉEL (setCapabilityTool → registre natif). Les
   // skills/hooks n'écrivaient que dans le profil décoratif (retiré) → ils sont désormais en
   // lecture seule (pas de toggle qui ne ferait rien).
   async function toggle(item: Item): Promise<void> {
@@ -185,7 +185,7 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
     setBusy(item.id)
     setError('')
     try {
-      const result = await window.api.setHermesTool(item.id, !item.enabled)
+      const result = await window.api.setCapabilityTool(item.id, !item.enabled)
       setItems(result.items)
       setRestartRequired(result.restartRequired)
     } catch (reason) {

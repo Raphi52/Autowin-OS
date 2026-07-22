@@ -98,7 +98,7 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
         window.api.conversationActivity(convId),
         window.api.conversationActivity('__global_prompt_config__'),
         window.api.promptCalls(convId),
-        window.api.hermesPromptTraces(convId)
+        window.api.promptTraces(convId)
       ])
       if (generation !== refreshGenerationRef.current) return
       setEntries(

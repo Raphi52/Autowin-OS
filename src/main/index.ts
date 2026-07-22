@@ -34,7 +34,7 @@ import { appendPromptConfigActivity } from './activity/prompt-config-store'
 import { promptCallToTraceEvents } from './activity/prompt-call-trace'
 import { pilotActionToTraceEvent } from './activity/pilot-action-trace'
 import { TraceStore } from './activity/trace-store'
-import { HermesDiagnosticCapabilities } from './activity/hermes-diagnostic-capability'
+import { DiagnosticCapabilities } from './activity/diagnostic-capability'
 import { responseDisplayedTrace } from './activity/response-displayed-trace'
 import { persistOrchestrationStep } from './activity/orchestration-observability'
 import { aggregateToolUsage } from './activity/tool-usage'
@@ -166,7 +166,7 @@ function drainPendingDirectives(conversationId: string): string[] {
   return queued
 }
 const questionWindows = new Map<string, BrowserWindow>()
-const hermesDiagnosticCapabilities = new HermesDiagnosticCapabilities()
+const diagnosticCapabilities = new DiagnosticCapabilities()
 let agentModels = DEFAULT_IMPORTED_MODELS
 const agentTopologyPath = join(app.getPath('userData'), 'agent-topology.json')
 let agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
@@ -609,7 +609,7 @@ function registerChatIpc(): void {
 
   // --- Contrôles Hermes : inventaire prompt + mutations bornées ---
   ipcMain.handle(
-    'hermes:controls:list',
+    'os:capabilities:list',
     (event, kind: 'skills' | 'hooks' | 'tools' | 'plugins') => {
       assertTrustedRendererSender(event, 'Hermes')
       if (!['skills', 'hooks', 'tools', 'plugins'].includes(kind))
@@ -617,7 +617,7 @@ function registerChatIpc(): void {
       return listCapabilities(kind)
     }
   )
-  ipcMain.handle('hermes:tools:select', async (event, names: unknown) => {
+  ipcMain.handle('os:capabilities:tools:select', async (event, names: unknown) => {
     assertTrustedRendererSender(event, 'Hermes')
     if (!Array.isArray(names) || !names.every((name) => typeof name === 'string'))
       throw new Error('Sélection de toolsets invalide')
@@ -635,7 +635,7 @@ function registerChatIpc(): void {
     broadcast({ type: 'refresh', scope: 'workflows' })
     return result
   })
-  ipcMain.handle('hermes:plugins:set', async (event, name: string, enabled: unknown) => {
+  ipcMain.handle('os:capabilities:plugins:set', async (event, name: string, enabled: unknown) => {
     assertTrustedRendererSender(event, 'Hermes')
     const before = await listCapabilities('plugins')
     const result = await setCapabilityEnabled(
@@ -657,7 +657,7 @@ function registerChatIpc(): void {
   })
   ipcMain.handle('claude:hooks:list', () => listClaudeHooks())
   ipcMain.handle('codex:hooks:list', () => listCodexHooks())
-  ipcMain.handle('hermes:tools:set', async (event, name: string, enabled: unknown) => {
+  ipcMain.handle('os:capabilities:tools:set', async (event, name: string, enabled: unknown) => {
     assertTrustedRendererSender(event, 'Hermes')
     const before = await listCapabilities('tools')
     const result = await setCapabilityEnabled(
@@ -677,23 +677,23 @@ function registerChatIpc(): void {
     broadcast({ type: 'refresh', scope: 'workflows' })
     return result
   })
-  ipcMain.handle('hermes:behaviour:workspace', (event) => {
+  ipcMain.handle('os:behaviour:workspace', (event) => {
     assertTrustedBehaviourSender(event)
     return defaultBehaviourRoot
   })
-  ipcMain.handle('hermes:behaviour:choose-workspace', async (event) => {
+  ipcMain.handle('os:behaviour:choose-workspace', async (event) => {
     assertTrustedBehaviourSender(event)
     if (headlessTestInstance) return null
     const result = await dialog.showOpenDialog({ properties: ['openDirectory'] })
     const selected = result.canceled ? null : (result.filePaths[0] ?? null)
     return selected ? behaviourAccess.approve(selected) : null
   })
-  ipcMain.handle('hermes:behaviour:contexts', (event, workspaceRoot: string) => {
+  ipcMain.handle('os:behaviour:contexts', (event, workspaceRoot: string) => {
     assertTrustedBehaviourSender(event)
     const workspace = approvedBehaviourWorkspace(workspaceRoot)
     return listBehaviourContexts({ workspaceRoot: workspace, contextRoot: workspace })
   })
-  ipcMain.handle('hermes:behaviour:list', (event, workspaceRoot?: string, contextRoot?: string) => {
+  ipcMain.handle('os:behaviour:list', (event, workspaceRoot?: string, contextRoot?: string) => {
     assertTrustedBehaviourSender(event)
     const workspace = approvedBehaviourWorkspace(workspaceRoot)
     const activeContext = contextRoot
@@ -702,7 +702,7 @@ function registerChatIpc(): void {
     return behaviourManifest(workspace, activeContext)
   })
   ipcMain.handle(
-    'hermes:behaviour:read',
+    'os:behaviour:read',
     (event, id: string, workspaceRoot?: string, contextRoot?: string) => {
       assertTrustedBehaviourSender(event)
       const workspace = approvedBehaviourWorkspace(workspaceRoot)
@@ -713,7 +713,7 @@ function registerChatIpc(): void {
     }
   )
   ipcMain.handle(
-    'hermes:behaviour:proof',
+    'os:behaviour:proof',
     async (event, workspaceRoot?: string, contextRoot?: string) => {
       assertTrustedBehaviourSender(event)
       const workspace = approvedBehaviourWorkspace(workspaceRoot)
@@ -740,7 +740,7 @@ function registerChatIpc(): void {
       return proveInjections(files, contents, loadNativeTraces())
     }
   )
-  ipcMain.handle('hermes:loop:run', (event, input: LoopRunInput) => {
+  ipcMain.handle('os:loop:run', (event, input: LoopRunInput) => {
     assertTrustedRendererSender(event, 'Loop')
     const events: import('./loop-runner').LoopEvent[] = []
     const startedAt = new Date().toISOString()
@@ -750,7 +750,7 @@ function registerChatIpc(): void {
       os.roles.getBinding('orchestrator').provider,
       (loopEvent) => {
         events.push(loopEvent)
-        event.sender.send('hermes:loop:event', loopEvent)
+        event.sender.send('os:loop:event', loopEvent)
       },
       (question, context) => askModelQuestion(event.sender, 'loop', question, context)
     ).then((result) => {
@@ -758,11 +758,11 @@ function registerChatIpc(): void {
       return result
     })
   })
-  ipcMain.handle('hermes:loop:skills', (event) => {
+  ipcMain.handle('os:loop:skills', (event) => {
     assertTrustedRendererSender(event, 'Loop')
     return listLoopSkills()
   })
-  ipcMain.handle('hermes:loop:generate', async (event, objective: unknown) => {
+  ipcMain.handle('os:loop:generate', async (event, objective: unknown) => {
     assertTrustedRendererSender(event, 'Loop')
     const goal = guardString(objective, 'loop.objective').trim()
     if (!goal) throw new Error('Objectif requis.')
@@ -775,7 +775,7 @@ function registerChatIpc(): void {
     })
     return parseGeneratedLoop(response.text, new Set(skills.map((skill) => skill.id)))
   })
-  ipcMain.handle('hermes:loop:runs', (event) => {
+  ipcMain.handle('os:loop:runs', (event) => {
     assertTrustedRendererSender(event, 'Loop')
     return loopRuns.list()
   })
@@ -1323,7 +1323,7 @@ function registerChatIpc(): void {
       // Anti-double-frontière : une conversation avec des appels NATIFS Autowin (codex/claude)
       // porte déjà sa propre frontière par appel. Les préflight Hermes legacy dupliqueraient la
       // même frontière dans la timeline → on ne les fusionne QUE pour les convs Hermes-only
-      // (aucun appel natif). La vue Hermes dédiée (os:hermesPromptTraces) reste inchangée.
+      // (aucun appel natif). La vue Hermes dédiée (os:promptTraces) reste inchangée.
       const hermesPreflight = nativeCalls.length ? [] : filterNativePreflight(hermes, conversationId)
       for (const trace of hermesPreflight) {
         const id = `hermes:${trace.apiRequestId}`
@@ -1366,26 +1366,26 @@ function registerChatIpc(): void {
   }
   migrateLegacyCausalTraces()
   const readNativePromptTraces = createNativePreflightReader(loadNativeTraces)
-  ipcMain.handle('os:hermesPromptTraces', (event, conversationId: unknown) => {
+  ipcMain.handle('os:promptTraces', (event, conversationId: unknown) => {
     assertTrustedRendererSender(event, 'Hermes traces')
     const safeConversationId = guardString(conversationId, 'conversationId')
     return readNativePromptTraces(safeConversationId)
   })
-  ipcMain.handle('os:hermesPromptTraceSummary', (event) => {
+  ipcMain.handle('os:promptTraceSummary', (event) => {
     assertTrustedRendererSender(event, 'Hermes trace summary')
     // La requête brute est volontairement exclue de ce résumé IPC.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     return loadNativeTraces().map(({ request: _request, ...metadata }) => metadata)
   })
-  ipcMain.handle('os:authorizeHermesDiagnostics', (event) => {
+  ipcMain.handle('os:authorizeDiagnostics', (event) => {
     assertTrustedRendererSender(event, 'Hermes diagnostics authorization')
     if (headlessTestInstance) return null
-    return hermesDiagnosticCapabilities.issue(event.sender.id)
+    return diagnosticCapabilities.issue(event.sender.id)
   })
-  ipcMain.handle('os:hermesPromptTracesGlobal', (event, token: unknown) => {
+  ipcMain.handle('os:promptTracesGlobal', (event, token: unknown) => {
     assertTrustedRendererSender(event, 'Hermes global diagnostics')
     const safeToken = guardString(token, 'capability')
-    if (!hermesDiagnosticCapabilities.consume(safeToken, event.sender.id)) {
+    if (!diagnosticCapabilities.consume(safeToken, event.sender.id)) {
       throw new Error('Hermes diagnostics capability denied')
     }
     return filterNativePreflight(loadNativeTraces())

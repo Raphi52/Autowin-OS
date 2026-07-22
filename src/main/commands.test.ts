@@ -44,6 +44,31 @@ function fakeOs(): any {
   }
 }
 
+describe('AppCommandBus orchestration cancel (#2)', () => {
+  it('register → abort coupe le signal ; clear le retire (le chemin direct devient stoppable)', () => {
+    const bus = new AppCommandBus(fakeOs(), () => {})
+    // Avant : aucune orchestration → abort est un no-op honnête.
+    expect(bus.abortOrchestration('conv-1')).toBe(false)
+    // register arme un AbortController dans le MÊME registre que le chemin interne.
+    const controller = bus.registerOrchestration('conv-1')
+    expect(controller.signal.aborted).toBe(false)
+    // abort le coupe réellement.
+    expect(bus.abortOrchestration('conv-1')).toBe(true)
+    expect(controller.signal.aborted).toBe(true)
+    // clear le retire → un nouvel abort ne trouve plus rien.
+    bus.clearOrchestration('conv-1')
+    expect(bus.abortOrchestration('conv-1')).toBe(false)
+  })
+
+  it('register coupe une orchestration précédente pendante sur la même conversation', () => {
+    const bus = new AppCommandBus(fakeOs(), () => {})
+    const first = bus.registerOrchestration('conv-1')
+    const second = bus.registerOrchestration('conv-1')
+    expect(first.signal.aborted).toBe(true) // l'ancienne est coupée
+    expect(second.signal.aborted).toBe(false)
+  })
+})
+
 describe('AppCommandBus authority policy', () => {
   it('enforces conversation Plan and Auto modes before any mutation', async () => {
     const os = fakeOs()

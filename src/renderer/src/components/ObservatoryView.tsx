@@ -240,7 +240,7 @@ export function ObservatoryView({
     void settleObservatorySources({
       conversations: window.api.conversations(),
       promptCalls: window.api.promptCalls(),
-      hermes: window.api.hermesPromptTraceSummary()
+      hermes: window.api.promptTraceSummary()
     }).then(({ values, errors }) => {
       if (disposed) return
       const items = values.conversations
@@ -279,9 +279,9 @@ export function ObservatoryView({
     if (!active) return
     let disposed = false
     void window.api
-      .authorizeHermesDiagnostics()
+      .authorizeDiagnostics()
       .then((capability) =>
-        capability ? window.api.hermesPromptTracesGlobal(capability) : Promise.resolve([])
+        capability ? window.api.promptTracesGlobal(capability) : Promise.resolve([])
       )
       .then((traces) => {
         if (!disposed) {
