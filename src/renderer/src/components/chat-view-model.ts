@@ -30,6 +30,71 @@ export interface StoredAssistantMessage {
   error?: string
 }
 
+export type ConversationStateKey =
+  'running' | 'completed' | 'failed' | 'interrupted' | 'cancelled' | 'waiting' | 'empty'
+
+export interface ConversationState {
+  key: ConversationStateKey
+  label: string
+  detail: string
+  glyph: string
+}
+
+export function deriveConversationState(input: {
+  busy: boolean
+  messageCount: number
+  lastMessageRole?: 'user' | 'assistant'
+  lastAssistantStatus?: ChatTurnStatus
+}): ConversationState {
+  if (input.busy || input.lastAssistantStatus === 'streaming') {
+    return {
+      key: 'running',
+      label: 'En cours',
+      detail: 'Réponse en cours de génération',
+      glyph: ''
+    }
+  }
+  if (input.lastMessageRole === 'user') {
+    return {
+      key: 'waiting',
+      label: 'Sans réponse',
+      detail: 'Le dernier message utilisateur est sans réponse',
+      glyph: '·'
+    }
+  }
+  if (input.lastAssistantStatus === 'failed') {
+    return { key: 'failed', label: 'Erreur', detail: 'Le dernier tour a échoué', glyph: '!' }
+  }
+  if (input.lastAssistantStatus === 'interrupted') {
+    return {
+      key: 'interrupted',
+      label: 'Interrompue',
+      detail: 'Le dernier tour a été interrompu',
+      glyph: 'Ⅱ'
+    }
+  }
+  if (input.lastAssistantStatus === 'cancelled') {
+    return {
+      key: 'cancelled',
+      label: 'Arrêtée',
+      detail: 'Le dernier tour a été arrêté',
+      glyph: '×'
+    }
+  }
+  if (input.lastAssistantStatus === 'completed') {
+    return { key: 'completed', label: 'À jour', detail: 'Le dernier tour est terminé', glyph: '✓' }
+  }
+  if (input.messageCount === 0) {
+    return { key: 'empty', label: 'Vide', detail: 'Aucun message', glyph: '○' }
+  }
+  return {
+    key: 'waiting',
+    label: 'Sans réponse',
+    detail: 'Le dernier message utilisateur est sans réponse',
+    glyph: '·'
+  }
+}
+
 export interface AssistantPilotEvent {
   turnId?: string
   kind:

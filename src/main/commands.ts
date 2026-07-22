@@ -7,6 +7,7 @@ import {
   populateConvRunSections,
   saveConvRunTrace
 } from './runs/conv-runs'
+import { appendNativeTrace } from './activity/native-trace-spool'
 import { appendConvActivity } from './activity/conv-activity'
 import type { OrchestrationStep, OrchestrationPhase } from './orchestrator'
 import { persistOrchestrationStep } from './activity/orchestration-observability'
@@ -437,6 +438,18 @@ export class AppCommandBus {
               })
               // A3 — peuplement LIVE du RUN.md : à chaque phase exec terminée, on réécrit le
               // livrable dans le RUN.md que Workflows affiche (au lieu d'un template vide 7 min).
+              // Chantier 3 — trace native (spool Autowin) pour l'observabilité RAG/injection.
+              if (step.prompt) {
+                appendNativeTrace({
+                  provider: step.prompt.provider,
+                  model: step.prompt.model,
+                  conversationId: convId,
+                  turnId: orchestrationTurnId,
+                  system: step.prompt.system,
+                  messages: step.prompt.messages,
+                  timestamp: new Date().toISOString()
+                })
+              }
               if (runPath && step.step === 'exec' && step.text) {
                 const livePhases = steps
                   .filter((s) => s.step === 'exec' && s.text)

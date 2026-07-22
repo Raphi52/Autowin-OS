@@ -68,11 +68,6 @@ const api = {
   topology: (): Promise<unknown> => ipcRenderer.invoke('os:topology:get'),
   setTopology: (topology: unknown): Promise<unknown> =>
     ipcRenderer.invoke('os:topology:set', topology),
-  capabilityProfiles: (): Promise<unknown> => ipcRenderer.invoke('os:capabilityProfiles:get'),
-  saveCapabilityProfiles: (state: unknown): Promise<unknown> =>
-    ipcRenderer.invoke('os:capabilityProfiles:save', state),
-  assignCapabilityProfile: (role: string, profileId: string): Promise<unknown> =>
-    ipcRenderer.invoke('os:capabilityProfiles:assign', role, profileId),
   hermesControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins'): Promise<unknown[]> =>
     ipcRenderer.invoke('hermes:controls:list', kind),
   skills: (): Promise<unknown[]> => ipcRenderer.invoke('skills:registry:list'),

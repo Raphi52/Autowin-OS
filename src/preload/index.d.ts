@@ -213,17 +213,6 @@ interface AgentTopology {
   subagents: SlotBinding[]
   panels: { scout: SlotBinding[]; judge: SlotBinding[] }
 }
-interface CapabilityProfile {
-  id: string
-  name: string
-  description: string
-  selections: Record<'skills' | 'hooks' | 'tools', Record<string, boolean>>
-  updatedAt: string
-}
-interface CapabilityProfileState {
-  profiles: CapabilityProfile[]
-  assignments: Record<'orchestrator' | 'subagent' | 'judge' | 'scout', string>
-}
 
 interface PromptCallRecord {
   id: string
@@ -352,12 +341,6 @@ interface ChatApi {
   kimiLogin: () => Promise<{ ok: true }>
   topology: () => Promise<AgentTopology>
   setTopology: (topology: AgentTopology) => Promise<AgentTopology>
-  capabilityProfiles: () => Promise<CapabilityProfileState>
-  saveCapabilityProfiles: (state: CapabilityProfileState) => Promise<CapabilityProfileState>
-  assignCapabilityProfile: (
-    role: 'orchestrator' | 'subagent' | 'judge' | 'scout',
-    profileId: string
-  ) => Promise<CapabilityProfileState>
   hermesControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins') => Promise<HermesControlItem[]>
   skills: () => Promise<SkillRegistryItem[]>
   promptCalls: (conversationId?: string) => Promise<PromptCallRecord[]>

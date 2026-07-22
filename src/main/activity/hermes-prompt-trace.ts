@@ -11,7 +11,8 @@ import {
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 
-const SCHEMA = 'autowin.hermes-preflight/v1'
+export const PREFLIGHT_SCHEMA = 'autowin.hermes-preflight/v1'
+const SCHEMA = PREFLIGHT_SCHEMA
 const MAX_READ_BYTES = 4 * 1024 * 1024
 const SECRET_VALUE =
   /(Bearer\s+)[^\s"']+|((?:api[_-]?key|token|secret|password)\s*[=:]\s*)[^\s,"']+|\b(?:sk-(?:proj-)?|gh[pousr]_)[A-Za-z0-9_-]{8,}|xox[baprs]-[A-Za-z0-9-]{8,}|\bAKIA[A-Z0-9]{16}\b|\bAIza[A-Za-z0-9_-]{30,}\b|\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b|-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/gi
@@ -97,6 +98,9 @@ function record(value: unknown): Record<string, unknown> | null {
     : null
 }
 
+export function redactTrace(value: unknown): unknown {
+  return redact(value)
+}
 function redact(value: unknown, key = ''): unknown {
   if (secretKey(key)) return '[REDACTED]'
   if (typeof value === 'string') {

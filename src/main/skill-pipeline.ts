@@ -47,8 +47,62 @@ export function kitAvailable(root = skillsRoot()): boolean {
   return loadSkillText('frame', root).length > 0 || loadSkillText('build', root).length > 0
 }
 
-/** Instruction system prompt pour une phase = le SKILL.md du kit s'il existe, sinon ''. */
+/**
+ * Retire la frontmatter YAML (`---\n…\n---`) d'un SKILL.md. Ce bloc (`name:` + le long
+ * `description:` d'heuristiques "Trigger on… / Do NOT use to…") sert au SÉLECTEUR de skill de
+ * Claude Code, PAS à un sous-agent qui exécute déjà la phase imposée : l'injecter est du bruit
+ * (tokens gaspillés + risque de confusion). On ne garde que le CORPS (les vraies instructions).
+ */
+export function stripSkillFrontmatter(text: string): string {
+  const m = /^﻿?---\r?\n[\s\S]*?\r?\n---\r?\n?/.exec(text)
+  return m ? text.slice(m[0].length).replace(/^\s+/, '') : text
+}
+
+/**
+ * Chapitre d'ENGINE.md pertinent par phase (le doc lui-même annote « used during <phase> »).
+ * Injecter ENGINE.md ENTIER (22 k chars) à chaque phase serait l'overkill qu'on combat : on ne
+ * fournit que la FONDATION (les 7 concepts « keep in mind ») + le seul chapitre de la phase.
+ */
+const PHASE_ENGINE_CHAPTER: Record<PipelinePhase, 'Ch.1' | 'Ch.2' | 'Ch.3' | 'Ch.4' | null> = {
+  scout: 'Ch.1',
+  frame: 'Ch.1',
+  terrain: 'Ch.3',
+  build: 'Ch.4',
+  clean: 'Ch.4',
+  judge: 'Ch.2'
+}
+
+function engineSection(full: string, headingPattern: string, stop: string): string {
+  return new RegExp(`${headingPattern}[\\s\\S]*?(?=${stop})`).exec(full)?.[0].trim() ?? ''
+}
+
+/**
+ * Mécanique ENGINE ciblée pour une phase : FONDATION (toujours) + chapitre de la phase.
+ * Les SKILL.md renvoient à `_engine/ENGINE.md` comme mécanique canonique ; sans ça le sous-agent
+ * lit des références vers un fichier qu'il n'a pas. Ciblé pour rester sous ~2 k tokens/phase.
+ */
+export function engineForPhase(phase: PipelinePhase, root = skillsRoot()): string {
+  const full = loadEngineText(root)
+  if (!full) return ''
+  const foundation = engineSection(full, '## ⚡ THE FOUNDATION', '\\n# REFERENCE')
+  const chap = PHASE_ENGINE_CHAPTER[phase]
+  const chapter = chap
+    ? engineSection(full, `## ${chap.replace('.', '\\.')}`, '\\n## (?:Ch\\.\\d|Telemetry|Roadmap)|$')
+    : ''
+  const body = [foundation, chapter].filter(Boolean).join('\n\n')
+  return body ? `\n=== ENGINE (mécanique partagée du kit) ===\n${body}\n` : ''
+}
+
+/**
+ * Instruction system prompt pour une phase = CORPS du SKILL.md (sans frontmatter de routing)
+ * + la mécanique ENGINE ciblée (fondation + chapitre de la phase).
+ */
 export function phaseInstruction(phase: PipelinePhase, root = skillsRoot()): string {
-  const text = loadSkillText(phase, root)
-  return text ? `\n=== SKILL ${phase.toUpperCase()} (kit) ===\n${text}\n` : ''
+  const body = stripSkillFrontmatter(loadSkillText(phase, root))
+  if (!body) return ''
+  const skill = `\n=== SKILL ${phase.toUpperCase()} (kit) ===\n${body}\n`
+  // A/B LEAN (env AUTOWIN_LEAN_INJECT=1) : corps du skill SEUL, sans la mécanique ENGINE
+  // (ré-injectée à chaque phase = poste lourd). Sert à mesurer le ratio coût/perf du minimum.
+  if (process.env.AUTOWIN_LEAN_INJECT === '1') return skill
+  return skill + engineForPhase(phase, root)
 }

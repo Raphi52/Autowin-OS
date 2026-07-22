@@ -224,7 +224,10 @@ export async function discoverOmniRouteModels(
               typeof effort === 'string' && REASONING_EFFORTS.has(effort as ReasoningEffort)
           )
         : []
-      const reasoningEfforts: ReasoningEffort[] = tiers.length > 0 ? tiers : ['none']
+      // 'none' n'est PAS un niveau d'effort : trompeur à côté de low/medium/high. On le retire
+      // dès qu'il existe de vrais tiers ; on ne le garde QUE pour un modèle sans aucun autre effort.
+      const realTiers = tiers.filter((effort) => effort !== 'none')
+      const reasoningEfforts: ReasoningEffort[] = realTiers.length > 0 ? realTiers : ['none']
       const defaultReasoningEffort: ReasoningEffort = reasoningEfforts.includes('high')
         ? 'high'
         : reasoningEfforts[0]

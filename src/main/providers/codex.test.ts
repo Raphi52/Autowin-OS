@@ -265,6 +265,21 @@ describe('CodexAdapter — exécution agentique locale', () => {
     expect(spec.args).not.toContain('--dangerously-bypass-approvals-and-sandbox')
   })
 
+  it('supprime l’auto-load AGENTS.md par défaut (souveraineté contexte), désactivable', () => {
+    const on = codexExecSpec('C:\\repo', 'm', 'read-only', undefined, 'C:\\AppData', () => true)
+    expect(on.args).toContain('project_doc_max_bytes=0')
+    const off = codexExecSpec(
+      'C:\\repo',
+      'm',
+      'read-only',
+      undefined,
+      'C:\\AppData',
+      () => true,
+      false
+    )
+    expect(off.args).not.toContain('project_doc_max_bytes=0')
+  })
+
   it('échoue explicitement quand le CLI local est absent', () => {
     expect(() =>
       codexExecSpec('C:\\repo', 'gpt-5.6-sol', 'workspace-write', 'low', 'C:\\Missing', () => false)

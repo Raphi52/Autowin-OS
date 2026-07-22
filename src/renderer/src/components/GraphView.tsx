@@ -5,6 +5,8 @@ import {
   DEFAULT_GRAPH_VISIBILITY_SETTINGS,
   loadGraphVisibilitySettings,
   saveGraphVisibilitySettings,
+  loadGraphVisualMode,
+  saveGraphVisualMode,
   loadMemoryDetailWidths,
   saveMemoryDetailWidths,
   type GraphVisibilitySettings,
@@ -24,6 +26,8 @@ import {
   focusedNodeIdsFor,
   galaxyNodeAppearance,
   getGraphVisualProfile,
+  graphLinkArrowColor,
+  graphLinkColor,
   graphForcesForSpacing,
   graphMotionProfile,
   highlightedNodeIdsForThemes,
@@ -94,12 +98,14 @@ function initialColumnWidths(): ColumnWidths {
 
 /** Observatoire 3D : thèmes en surbrillance, visibilité réglable et lecture du nœud. */
 export function GraphView({
-  visualMode,
   onCleanMemory
 }: {
-  visualMode: GraphVisualMode
   onCleanMemory: (brainLabel: string) => void
 }): React.JSX.Element {
+  // Mode visuel (sombre vs galaxy) : choisi via le toggle de la toolbar, persisté entre lancements.
+  const [visualMode, setVisualMode] = useState<GraphVisualMode>(() =>
+    loadGraphVisualMode(localStorage)
+  )
   const [brains, setBrains] = useState<Brain[]>([])
   const [selected, setSelected] = useState('')
   const [graph, setGraph] = useState<GraphData>({ nodes: [], links: [] })
@@ -332,10 +338,6 @@ export function GraphView({
     saveGraphVisibilitySettings(localStorage, settings)
   }, [settings])
 
-  const nodesById = useMemo(
-    () => new Map(displayGraph.nodes.map((item) => [item.id, item])),
-    [displayGraph.nodes]
-  )
   const highlightedNodeIds = useMemo(
     () => highlightedNodeIdsForThemes(graph.nodes, activeThemes),
     [activeThemes, graph.nodes]
@@ -376,6 +378,30 @@ export function GraphView({
   useEffect(() => {
     graphRef.current?.refresh()
   }, [activeThemes, floatingNodeIds, highlightedNodeIds, selectedNodeIds, visualMode])
+  // Mode galaxy « vivant » : les étoiles scintillent (opacité + taille) — une boucle rAF module
+  // les sprites marqués userData.twinkle. Coupée hors mode galaxy (zéro coût en mode sombre).
+  useEffect(() => {
+    if (visualMode !== 'galaxy') return
+    let frame = 0
+    const animate = (time: number): void => {
+      const scene = graphRef.current?.scene()
+      scene?.traverse((object) => {
+        const twinkle = object.userData.twinkle as
+          | { phase: number; speed: number; baseOpacity: number; baseScale: number; amp: number }
+          | undefined
+        if (!twinkle || !(object instanceof THREE.Sprite)) return
+        const wave = Math.sin(time * 0.0012 * twinkle.speed + twinkle.phase)
+        object.material.opacity = twinkle.baseOpacity * (1 - twinkle.amp / 2 + (twinkle.amp / 2) * wave)
+        const size =
+          twinkle.baseScale *
+          (1 + 0.06 * twinkle.amp * Math.sin(time * 0.0017 * twinkle.speed + twinkle.phase * 1.7))
+        object.scale.set(size, size, 1)
+      })
+      frame = requestAnimationFrame(animate)
+    }
+    frame = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(frame)
+  }, [visualMode])
   const detailOpen = Boolean(node) || activeThemes.size > 0
   const visibleThemeLabelIds = useMemo(
     () => new Set(visibleThemeClusterIds(themeSummaries, activeThemes, node)),
@@ -806,12 +832,7 @@ export function GraphView({
   const linkIsHighlighted = (value: object): boolean =>
     Boolean(focusedNode?.id) && isLinkAttachedToNode(value as GraphLink, focusedNode?.id ?? '')
   const linkColor = (value: object): string => {
-    if (visualMode === 'serious')
-      return linkIsHighlighted(value) ? visualProfile.linkHighlight : visualProfile.linkBase
-    const link = value as GraphLink
-    const source = typeof link.source === 'string' ? nodesById.get(link.source) : link.source
-    if (!source) return visualProfile.linkBase
-    return visualProfile.palette[Math.abs(source.group) % visualProfile.palette.length]
+    return graphLinkColor(visualMode, visualProfile, linkIsHighlighted(value))
   }
   // Mode détail courant → largeur persistée de CE mode (sinon défaut CSS 20%/88% via la classe).
   const detailMode: 'node' | 'theme' | null = node
@@ -865,6 +886,24 @@ export function GraphView({
           title="Rafraîchir les graphes"
         >
           ↻
+        </button>
+        <button
+          type="button"
+          role="switch"
+          className={`graph-mode-switch${visualMode === 'galaxy' ? ' is-galaxy' : ''}`}
+          onClick={() => {
+            const next = visualMode === 'galaxy' ? 'serious' : 'galaxy'
+            setVisualMode(next)
+            saveGraphVisualMode(localStorage, next)
+          }}
+          aria-checked={visualMode === 'galaxy'}
+          title={visualMode === 'galaxy' ? 'Repasser en mode sombre' : 'Passer en mode galaxy'}
+        >
+          <span className="graph-mode-switch__track" aria-hidden="true">
+            <span className="graph-mode-switch__icon">🌑</span>
+            <span className="graph-mode-switch__icon">🌌</span>
+            <span className="graph-mode-switch__thumb" />
+          </span>
         </button>
         <button
           type="button"
@@ -989,7 +1028,12 @@ export function GraphView({
             contexte
           </small>
         </div>
-        {loading && <div className="graph-status">Chargement du graphe…</div>}
+        {loading && (
+          <div className="graph-loading" role="status" aria-live="polite">
+            <span className="graph-loading__spinner" aria-hidden="true" />
+            <span className="graph-loading__label">Chargement du graphe…</span>
+          </div>
+        )}
         {expandingNodeId && !loading && (
           <div className="graph-status">Chargement des connexions…</div>
         )}
@@ -1018,7 +1062,7 @@ export function GraphView({
             linkOpacity={focusedNode ? 1 : visualProfile.linkOpacity}
             linkWidth={(value) => settings.linkWidth * (linkIsHighlighted(value) ? 1.8 : 1)}
             linkDirectionalArrowLength={settings.arrows ? 3.5 : 0}
-            linkDirectionalArrowColor={() => '#6f8193'}
+            linkDirectionalArrowColor={() => graphLinkArrowColor(visualMode)}
             onEngineTick={syncThemeClusterLabels}
             onEngineStop={syncThemeClusterLabels}
             onBackgroundClick={clearNodeSelection}

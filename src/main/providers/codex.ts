@@ -33,49 +33,34 @@ export function codexExecSpec(
   sandbox: 'read-only' | 'workspace-write' | 'danger-full-access',
   reasoningEffort?: string,
   appData = process.env.APPDATA,
-  entrypointExists: (path: string) => boolean = existsSync
+  entrypointExists: (path: string) => boolean = existsSync,
+  // Souveraineté contexte : Autowin plie LUI-MÊME le fichier projet (AGENTS.md…) dans le system.
+  // On coupe donc l'auto-load AGENTS.md du CLI Codex (`project_doc_max_bytes=0`) → source UNIQUE,
+  // pas de double-chargement. Switch explicite (défaut ON) ; le repasser à false rendrait la main au CLI.
+  suppressProjectDoc = true
 ): CodexExecSpec {
+  const commonArgs = [
+    'exec',
+    '--json',
+    '--ephemeral',
+    '--sandbox',
+    sandbox,
+    '--cd',
+    cwd,
+    '--model',
+    model,
+    ...(suppressProjectDoc ? ['-c', 'project_doc_max_bytes=0'] : []),
+    ...(reasoningEffort ? ['-c', `model_reasoning_effort="${reasoningEffort}"`] : []),
+    '-'
+  ]
   const explicitBinary = process.env.CODEX_BIN
   if (explicitBinary) {
-    return {
-      executable: explicitBinary,
-      cwd,
-      args: [
-        'exec',
-        '--json',
-        '--ephemeral',
-        '--sandbox',
-        sandbox,
-        '--cd',
-        cwd,
-        '--model',
-        model,
-        ...(reasoningEffort ? ['-c', `model_reasoning_effort="${reasoningEffort}"`] : []),
-        '-'
-      ]
-    }
+    return { executable: explicitBinary, cwd, args: commonArgs }
   }
   if (!appData) throw new Error('APPDATA indisponible : impossible de localiser Codex CLI')
   const entrypoint = join(appData, 'npm', 'node_modules', '@openai', 'codex', 'bin', 'codex.js')
   if (!entrypointExists(entrypoint)) throw new Error(`Codex CLI introuvable: ${entrypoint}`)
-  return {
-    executable: 'node',
-    cwd,
-    args: [
-      entrypoint,
-      'exec',
-      '--json',
-      '--ephemeral',
-      '--sandbox',
-      sandbox,
-      '--cd',
-      cwd,
-      '--model',
-      model,
-      ...(reasoningEffort ? ['-c', `model_reasoning_effort="${reasoningEffort}"`] : []),
-      '-'
-    ]
-  }
+  return { executable: 'node', cwd, args: [entrypoint, ...commonArgs] }
 }
 
 async function runCodexExec(

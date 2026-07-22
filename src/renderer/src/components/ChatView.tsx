@@ -6,6 +6,7 @@ import { ModuleHeader } from './ModuleHeader'
 import {
   CHAT_PANE_LIMITS,
   clampConversationPaneWidth,
+  deriveConversationState,
   groupAssistantActivity,
   hydrateStoredAssistant,
   isRunRequestCurrent,
@@ -138,7 +139,6 @@ const SUGGESTIONS = [
   'Quel est l’état des workflows ?'
 ]
 
-const CAT_DOT: Record<string, string> = { claude: 'st-info', codex: 'st-violet', hermes: 'st-warn' }
 const RUN_DOT: Record<string, string> = {
   green: 'st-ok',
   open: 'st-warn',
@@ -978,6 +978,22 @@ export function ChatView({
     if (!id) return
     await window.api.cancelPilotChat(id)
   }
+
+  /**
+   * ORIENTER SANS INTERROMPRE : injecte le message comme directive dans le tour EN COURS
+   * (drainée à l'itération suivante du pilote) sans l'annuler, puis le retire de la file.
+   * Différent de « Interrompre et envoyer » qui coupe le tour.
+   */
+  async function steerWithoutInterrupt(index: number, text: string): Promise<void> {
+    const id = activeRef.current
+    if (!id) return
+    await window.api.injectDirective(id, text)
+    const q = queueRef.current.get(id) ?? []
+    setConversationQueue(
+      id,
+      q.filter((_, i) => i !== index)
+    )
+  }
   // À la libération de `busy` (render frais, busy=false), on draine la FILE D'ATTENTE — un message
   // par tour (chacun = sa propre paire Q/R). Vaut aussi bien pour l'auto-drain fin de tour que pour
   // une interruption manuelle (les deux passent par une transition busy→false).
@@ -1241,11 +1257,18 @@ export function ChatView({
           )}
         </div>
         <div className="conv-list scroll-y">
-          <button className="conv-new-row" onClick={newConv} title="Nouvelle conversation">
-            <span className="conv-new-plus" aria-hidden="true">
-              +
+          <button
+            className={`conv-new-row${activeId === null ? ' active' : ''}`}
+            onClick={newConv}
+            title="Démarrer une nouvelle conversation"
+            aria-current={activeId === null ? 'page' : undefined}
+          >
+            <span className="conv-new-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M13.6 5.4 18.6 10.4M4 20l3.7-.8L19.4 7.5a1.8 1.8 0 0 0 0-2.5l-.4-.4a1.8 1.8 0 0 0-2.5 0L4.8 16.3 4 20ZM13 20h7" />
+              </svg>
             </span>
-            <span className="conv-label">Nouvelle conversation</span>
+            <span className="conv-new-title">Nouveau</span>
           </button>
           {convs.length === 0 && (
             <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
@@ -1255,41 +1278,62 @@ export function ChatView({
           {convs.length > 0 && conversationHits.length === 0 && (
             <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
           )}
-          {conversationHits.map(({ conversation: c, snippet }) => (
-            <div key={c.id} className={`conv-item${c.id === activeId ? ' active' : ''}`}>
-              <button className="conv-pick" onClick={() => loadConv(c)}>
-                <span className={`status-dot ${CAT_DOT[c.category] ?? 'st-info'}`} />
-                <span className="conv-copy">
-                  <span className="conv-label">{c.title}</span>
-                  {busyConversations.has(c.id) && <span className="conv-live">EN COURS</span>}
-                  {convQuery && snippet && <span className="conv-snippet">{snippet}</span>}
-                  {!convQuery && (
-                    <span className="conv-meta">
-                      {c.category !== 'omniroute' && <span>{c.provider}</span>}
-                      <span>{c.messages.length} messages</span>
-                    </span>
-                  )}
-                </span>
-                {convQuery && <span className="conv-count tnum">{c.messages.length}</span>}
-              </button>
-              <button
-                className="conv-menu-trigger"
-                title="Actions"
-                aria-label="Actions de la conversation"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  const rect = event.currentTarget.getBoundingClientRect()
-                  setConvMenu((current) =>
-                    current?.conv.id === c.id
-                      ? null
-                      : { conv: c, top: rect.top, left: rect.right + 6 }
-                  )
-                }}
-              >
-                ⋮
-              </button>
-            </div>
-          ))}
+          {conversationHits.map(({ conversation: c, snippet }) => {
+            const activeBranch = c.activeBranchId ?? c.rootBranchId
+            const branchMessages = activeBranch
+              ? reconstructBranchChain(c.messages, c.branches, activeBranch)
+              : c.messages
+            const lastAssistant = [...branchMessages]
+              .reverse()
+              .find((message) => message.role === 'assistant')
+            const conversationState = deriveConversationState({
+              busy: busyConversations.has(c.id),
+              messageCount: branchMessages.length,
+              lastMessageRole: branchMessages.at(-1)?.role,
+              lastAssistantStatus: lastAssistant?.status
+            })
+            const stateDescription = `${conversationState.label} — ${conversationState.detail}`
+            return (
+              <div key={c.id} className={`conv-item${c.id === activeId ? ' active' : ''}`}>
+                <button className="conv-pick" onClick={() => loadConv(c)}>
+                  <span
+                    className={`conversation-state is-${conversationState.key}`}
+                    data-conversation-state={conversationState.key}
+                    role="img"
+                    aria-label={`État de la conversation : ${stateDescription}`}
+                    title={stateDescription}
+                  />
+                  <span className="conv-copy">
+                    <span className="conv-label">{c.title}</span>
+                    {convQuery && snippet && <span className="conv-snippet">{snippet}</span>}
+                    {!convQuery && (
+                      <span className="conv-meta">
+                        {c.category !== 'omniroute' && <span>{c.provider}</span>}
+                        <span>{c.messages.length} messages</span>
+                      </span>
+                    )}
+                  </span>
+                  {convQuery && <span className="conv-count tnum">{c.messages.length}</span>}
+                </button>
+                <button
+                  className="conv-menu-trigger"
+                  title="Actions"
+                  aria-label="Actions de la conversation"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    const rect = event.currentTarget.getBoundingClientRect()
+                    setConvMenu((current) =>
+                      current?.conv.id === c.id
+                        ? null
+                        : { conv: c, top: rect.top, left: rect.right + 6 }
+                    )
+                  }}
+                >
+                  ⋮
+                </button>
+              </div>
+            )
+          })}
         </div>
       </aside>
       {convMenu &&
@@ -1616,6 +1660,17 @@ export function ChatView({
                 >
                   ⏹ Interrompre et envoyer
                 </button>
+                {busy && (
+                  <button
+                    type="button"
+                    className="directive-queue-steer"
+                    title="Injecter ce message comme orientation dans le tour en cours, sans l’interrompre"
+                    aria-label={`Orienter sans interrompre avec le message ${index + 1}`}
+                    onClick={() => void steerWithoutInterrupt(index, directive)}
+                  >
+                    🧭 Orienter sans interrompre
+                  </button>
+                )}
                 <button
                   type="button"
                   className="directive-queue-remove"
@@ -1904,8 +1959,7 @@ export function ChatView({
                         return (
                           <div className="c-faint" style={{ fontSize: 11, marginTop: 4 }}>
                             <span className="spinner" /> {meta?.icon ?? '⏳'} {label}
-                            {detail && <span className="mono c-accent"> {detail}</span>}{' '}
-                            en cours…
+                            {detail && <span className="mono c-accent"> {detail}</span>} en cours…
                           </div>
                         )
                       })()}

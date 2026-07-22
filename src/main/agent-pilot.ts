@@ -1,7 +1,6 @@
 import type { ProviderRegistry } from './providers/registry'
 import type { RoleModelConfig } from './roles'
 import type { AppCommandBus } from './commands'
-import { capabilityInstruction } from './capability-profiles'
 import type { Message, PromptEnvelope, SendOptions, Usage } from './providers/types'
 import {
   MODEL_QUESTION_INSTRUCTION,
@@ -11,6 +10,7 @@ import {
 import { VisibleStreamFilter } from '../shared/stream-markup-filter'
 import type { ConversationAuthorityMode } from './conversation-capabilities'
 import { randomUUID } from 'node:crypto'
+import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 
 /**
  * Boucle de PILOTAGE : un agent LLM conduit l'app lui-même.
@@ -122,7 +122,7 @@ export class AgentPilot {
         .join('\n') +
       `\nRègles : agis par petits pas, une ou deux commandes par tour. Après exécution tu recevras le résultat + l'état. ` +
       `Quand l'objectif est atteint, réponds UNIQUEMENT "DONE: <résumé>" sans commande.` +
-      capabilityInstruction(binding.capabilityProfileId)
+      CONCISE_STRUCTURED_RESPONSE_INSTRUCTION
 
     const convo: string[] = [`ÉTAT INITIAL:\n${JSON.stringify(snapshot)}`]
 
@@ -213,7 +213,7 @@ export class AgentPilot {
       `QUE si l'objectif demande d'agir sur l'app. Après une commande tu reçois le résultat + le ` +
       `nouvel état et tu peux continuer. Quand tu as fini d'agir, termine par ta réponse en clair ` +
       `SANS commande.\n${MODEL_QUESTION_INSTRUCTION}` +
-      capabilityInstruction(binding.capabilityProfileId)
+      CONCISE_STRUCTURED_RESPONSE_INSTRUCTION
 
     // Reconstruit le fil : historique de la conversation + état courant de l'app.
     const convo: string[] = [

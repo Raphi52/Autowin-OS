@@ -10,28 +10,10 @@ import { dirname } from 'node:path'
 export interface TurnCost {
   provider: string
   role?: string
-  /** #7 — phase de pipeline (scout/frame/build/clean/judge) pour ventiler cout & latence. */
-  phase?: string
   inputTokens: number
   outputTokens: number
   cacheReadTokens?: number
   costUsd?: number
-  /** #7 — latence de l'appel (ms) pour les percentiles par phase. */
-  durationMs?: number
-}
-
-/** Percentiles de latence pour une phase. */
-export interface LatencyStat {
-  p50: number
-  p95: number
-  count: number
-}
-
-/** Percentile par rang le plus proche (nearest-rank) sur un tableau TRIÉ croissant. */
-function nearestRankPercentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0
-  const rank = Math.ceil((p / 100) * sorted.length)
-  return sorted[Math.min(sorted.length - 1, Math.max(0, rank - 1))]
 }
 
 /** Totaux de tokens cumules. */
@@ -116,32 +98,6 @@ export class CostAggregator {
   /** Agregation cout/tours par role (les tours sans role sont ignores). */
   byRole(): Record<string, GroupTotal> {
     return this.groupBy((t) => t.role)
-  }
-
-  /** #7 — agregation cout/tours par phase de pipeline (les tours sans phase sont ignores). */
-  byPhase(): Record<string, GroupTotal> {
-    return this.groupBy((t) => t.phase)
-  }
-
-  /** #7 — latence p50/p95 par phase (les tours sans durationMs sont ignores). */
-  latencyByPhase(): Record<string, LatencyStat> {
-    const buckets = new Map<string, number[]>()
-    for (const t of this.turns) {
-      if (t.phase === undefined || t.durationMs === undefined) continue
-      const list = buckets.get(t.phase) ?? []
-      list.push(t.durationMs)
-      buckets.set(t.phase, list)
-    }
-    const result: Record<string, LatencyStat> = {}
-    for (const [phase, values] of buckets) {
-      const sorted = [...values].sort((a, b) => a - b)
-      result[phase] = {
-        p50: nearestRankPercentile(sorted, 50),
-        p95: nearestRankPercentile(sorted, 95),
-        count: sorted.length
-      }
-    }
-    return result
   }
 
   /** Statut budget : ratio et alerte (>= 80% du budget defini). */

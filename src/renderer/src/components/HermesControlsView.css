@@ -6,7 +6,7 @@
   padding: 18px 20px 20px;
   border: 1px solid var(--container-border);
   border-radius: var(--container-radius-page);
-  background: var(--surface-page);
+  background: var(--surface-panel);
   box-shadow: var(--container-shadow);
   backdrop-filter: blur(var(--container-blur));
   color: var(--text);

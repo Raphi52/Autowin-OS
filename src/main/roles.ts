@@ -11,7 +11,6 @@ export interface RoleBinding {
   provider: string
   model?: string
   reasoningEffort?: ReasoningEffort
-  capabilityProfileId?: string
 }
 
 const PROVIDER_DEFAULT_SELECTIONS: Record<

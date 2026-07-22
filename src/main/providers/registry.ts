@@ -28,10 +28,6 @@ export class ProviderRegistry {
     return this
   }
 
-  has(id: string): boolean {
-    return this.adapters.has(id)
-  }
-
   ids(): string[] {
     return [...this.adapters.keys()]
   }

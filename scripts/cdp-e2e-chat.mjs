@@ -44,8 +44,8 @@ await ev(
 await sleep(300)
 
 // 1. taper le prompt (setter natif React) + envoyer
-const PROMPT =
-  'Crée une conversation « Test complet » en catégorie codex, puis dis-moi en une phrase ce que tu as fait.'
+const TEST_TITLE = `Test complet ${Date.now()}`
+const PROMPT = `Crée une conversation « ${TEST_TITLE} » en catégorie codex, puis dis-moi en une phrase ce que tu as fait.`
 console.log(
   '[1 type]',
   await ev(`(() => {
@@ -60,18 +60,21 @@ console.log(
 console.log(
   '[2 send]',
   await ev(`(() => {
-  const b = [...document.querySelectorAll('.composer button')].find(x => !x.disabled)
+  const b = document.querySelector('.composer .composer-send:not(:disabled)')
   if (!b) return 'BOUTON DISABLED'
   b.click(); return 'clicked'
 })()`)
 )
 
-// 2. attendre la fin du tour (spinner header disparu), cap 120 s
+// 2. attendre la fin du tour et le rendu de l'action attendue, cap 120 s
 let done = false
 for (let i = 0; i < 60; i++) {
   await sleep(2000)
-  const busy = await ev(`!!document.querySelector('.composer button .spinner')`)
-  if (!busy) {
+  const state = await ev(`(() => ({
+    busy: document.querySelector('.composer-send')?.getAttribute('aria-label') !== 'Envoyer le message',
+    hasAction: document.querySelector('.action-event') !== null
+  }))()`)
+  if (!state.busy && state.hasAction) {
     done = true
     break
   }
@@ -83,7 +86,7 @@ await sleep(500)
 const checks = await ev(`(() => {
   const userMsg = [...document.querySelectorAll('.msg.user .msg-body')].map(e => e.textContent)
   const agentTexts = [...document.querySelectorAll('.msg.assistant .msg-body')].map(e => e.textContent.slice(0, 120))
-  const chips = [...document.querySelectorAll('.action-chip')].map(e => e.textContent.trim().slice(0, 80))
+  const chips = [...document.querySelectorAll('.action-event')].map(e => e.textContent.trim().slice(0, 80))
   const convs = [...document.querySelectorAll('.conv-item .conv-label')].map(e => e.textContent)
   const title = document.querySelector('.chat-conv-title')?.textContent
   return { userMsg, agentTexts, chips, convs, title }
@@ -91,7 +94,7 @@ const checks = await ev(`(() => {
 console.log('[4 éléments]', JSON.stringify(checks, null, 1))
 await shot('C:/Amitel/Autowin OS/e2e-chat.png')
 
-// 4. observatoire : ledger in-app doit contenir create_conversation
+// 4. activité conversationnelle : le tour courant doit être tracé
 await ev(
   `(() => { const b = [...document.querySelectorAll('button')].find(x => x.textContent.includes('Workflows')); b?.click(); return 'ok' })()`
 )
@@ -100,22 +103,20 @@ await ev(
   `(() => { const b = [...document.querySelectorAll('.runs-pane button')].find(x => x.textContent.trim()==='Activité'); b?.click(); return 'ok' })()`
 )
 await sleep(800)
-await ev(
-  `(() => { const b = [...document.querySelectorAll('.runs-pane button')].find(x => x.textContent.trim()==='in-app'); b?.click(); return 'ok' })()`
-)
-await sleep(800)
 const ledger = await ev(
-  `[...document.querySelectorAll('.runs-pane .act-tool')].slice(0, 6).map(e => e.textContent.trim().slice(0, 90))`
+  `[...document.querySelectorAll('.runs-pane .act-step')].slice(0, 6).map(e => e.textContent.trim().slice(0, 180))`
 )
 console.log('[5 ledger in-app]', JSON.stringify(ledger, null, 1))
 await shot('C:/Amitel/Autowin OS/e2e-ledger.png')
 
 const ok =
   done &&
-  checks.chips.some((c) => /Conversation créée|create_conversation/.test(c)) &&
-  checks.convs.some((c) => /Test complet/i.test(c)) &&
+  checks.userMsg.some((message) => message.includes(TEST_TITLE)) &&
+  checks.agentTexts.some((message) => message.includes(TEST_TITLE)) &&
+  checks.chips.some((chip) => chip.includes(TEST_TITLE)) &&
+  checks.convs.some((conversation) => conversation.includes(TEST_TITLE)) &&
   Array.isArray(ledger) &&
-  ledger.some((l) => /create_conversation/.test(l))
+  ledger.some((entry) => entry.includes(TEST_TITLE))
 console.log('[verdict]', ok ? 'TOUS LES ÉLÉMENTS OK' : 'MANQUE UN ÉLÉMENT')
 ws.close()
 process.exit(ok ? 0 : 1)

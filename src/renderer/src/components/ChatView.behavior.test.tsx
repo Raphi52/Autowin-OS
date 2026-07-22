@@ -324,6 +324,62 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(scroll?.getAttribute('aria-live')).toBe('polite')
   })
 
+  it('hides the redundant omniroute label but keeps other conversation categories', async () => {
+    await mount(
+      api({
+        conversations: vi.fn().mockResolvedValue([
+          { ...conversation('A'), category: 'omniroute', provider: 'omniroute' },
+          { ...conversation('B'), category: 'codex', provider: 'codex' }
+        ])
+      })
+    )
+    const metadata = [...container!.querySelectorAll('.conv-meta')].map((node) => node.textContent)
+    expect(metadata[0]).not.toContain('omniroute')
+    expect(metadata[1]).toContain('codex')
+  })
+
+  it('opens an image thumbnail in a dismissible fullscreen lightbox', async () => {
+    const history = [
+      {
+        role: 'user',
+        content: '',
+        ts: 1,
+        attachments: [
+          {
+            name: 'preuve.png',
+            mimeType: 'image/png',
+            size: 42,
+            thumbnail: 'data:image/png;base64,cHJldXZl'
+          }
+        ]
+      }
+    ]
+    await mount(api({ conversations: vi.fn().mockResolvedValue([conversation('A', history)]) }))
+    await click('.conv-pick')
+
+    await click('.attachment-thumb')
+    expect(
+      document.body.querySelector('[role="dialog"][aria-label="Aperçu de preuve.png"]')
+    ).toBeTruthy()
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(document.body.querySelector('.image-lightbox')).toBeNull()
+
+    await click('.attachment-thumb')
+    await act(async () => {
+      ;(document.body.querySelector('.image-lightbox-close') as HTMLButtonElement).click()
+    })
+    expect(document.body.querySelector('.image-lightbox')).toBeNull()
+
+    await click('.attachment-thumb')
+    await act(async () => {
+      ;(document.body.querySelector('.image-lightbox') as HTMLElement).click()
+    })
+    expect(document.body.querySelector('.image-lightbox')).toBeNull()
+  })
+
   it('adds a pasted file to the composer draft via onPaste', async () => {
     const encoded = deferred<string>()
     await mount(api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) }))

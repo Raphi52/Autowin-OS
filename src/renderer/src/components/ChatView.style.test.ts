@@ -1,0 +1,30 @@
+import { readFileSync } from 'node:fs'
+import { describe, expect, it } from 'vitest'
+
+describe('chat top bar surface', () => {
+  it('uses the page surface through a transparent header while keeping its separator', () => {
+    const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+    expect(css).toMatch(
+      /\.cosmic-outline \.chat-head\s*{[^}]*border-bottom:\s*1px solid rgba\(212, 225, 239, 0\.18\)[^}]*background:\s*transparent/s
+    )
+  })
+})
+
+describe('minimal conversation status lights', () => {
+  it('keeps the Hermes-style dot compact and reserves animation for running work', () => {
+    const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+    expect(css).toMatch(
+      /\.conversation-state\s*{[^}]*width:\s*7px;[^}]*height:\s*7px;[^}]*background:\s*currentColor;[^}]*color:\s*#38bdf8;[^}]*box-shadow:/s
+    )
+    expect(css).toMatch(
+      /\.conversation-state\.is-running\s*{[^}]*animation:\s*conversation-state-pulse/s
+    )
+    expect(css).toMatch(/\.conversation-state\.is-failed\s*{[^}]*color:\s*#ff4057/s)
+    expect(css).toMatch(
+      /\.conversation-state\.is-interrupted,[^}]*\.conversation-state\.is-cancelled\s*{[^}]*color:\s*#ffb020/s
+    )
+    expect(css).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)[^{]*{[^}]*\.conversation-state\.is-running,[^}]*animation:\s*none/s
+    )
+  })
+})

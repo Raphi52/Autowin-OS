@@ -56,6 +56,36 @@ describe('RAG trace summary', () => {
     expect(summarizeRagTrace(undefined)).toMatchObject({ status: 'unavailable', sources: [] })
   })
 
+  it('reconnaît le canal contexte projet (plus de faux « non injecté »)', () => {
+    const summary = summarizeRagTrace({
+      body: {
+        messages: [
+          {
+            role: 'system',
+            content:
+              '\n=== SKILL BUILD (kit) ===\n# build\n\n=== CONTEXTE PROJET (CLAUDE.md) ===\nRègles projet.\n'
+          }
+        ]
+      }
+    })
+    expect(summary.status).toBe('injected')
+    expect(summary.engine).toBe('Contexte projet')
+    expect(summary.sources).toEqual([
+      { rank: 1, path: 'CLAUDE.md', type: 'contexte projet', scope: '', author: '', date: '' }
+    ])
+  })
+
+  it('borne le compte au bloc contexte, sans gonfler avec un bloc suivant', () => {
+    const block = '\n=== CONTEXTE PROJET (AGENTS.md) ===\nRègles.\n'
+    const trailing = '\n=== AUTRE BLOC ===\n' + 'x'.repeat(5000)
+    const summary = summarizeRagTrace({
+      body: { messages: [{ role: 'system', content: block + trailing }] }
+    })
+    expect(summary.status).toBe('injected')
+    // borné au bloc contexte (~44c), PAS gonflé par les 5000c du bloc suivant
+    expect(summary.injectedCharacters).toBeLessThan(100)
+  })
+
   it('does not report a malformed marked context as a successful retrieval', () => {
     expect(
       summarizeRagTrace({
@@ -66,5 +96,46 @@ describe('RAG trace summary', () => {
         }
       })
     ).toMatchObject({ status: 'unparseable', query: 'Question', sources: [] })
+  })
+
+  it('unifies duplicate Amitel Brain sources by logical path', () => {
+    const duplicatedContext = `[AMITEL BRAIN REFERENCE DATA]
+
+### Source 1 - file:knowledge/domain/RIGAPPLICATION-DOCUMENTATION/reference/90-transverse/habilitation-permissions.md
+Provenance: domain | rig | codex | 2026-07-19
+
+Contenu A.
+
+---
+
+### Source 2 - knowledge\\domain\\rigapplication-documentation\\reference\\90-transverse\\habilitation-permissions
+Provenance: domain | rig | claude | 2026-07-20
+
+Contenu A bis.
+
+---
+
+### Source 3 - knowledge/domain/rigapplication-documentation/reference/proc/proc_requetes.md
+Provenance: domain | rig | codex | 2026-07-19
+
+Contenu B.`
+
+    const summary = summarizeRagTrace({
+      body: {
+        messages: [{ role: 'user', content: `Question doublons\n\n${duplicatedContext}` }]
+      }
+    })
+
+    expect(summary.sources).toEqual([
+      expect.objectContaining({
+        rank: 1,
+        path: 'file:knowledge/domain/RIGAPPLICATION-DOCUMENTATION/reference/90-transverse/habilitation-permissions.md',
+        author: 'codex'
+      }),
+      expect.objectContaining({
+        rank: 3,
+        path: 'knowledge/domain/rigapplication-documentation/reference/proc/proc_requetes.md'
+      })
+    ])
   })
 })

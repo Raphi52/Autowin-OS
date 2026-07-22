@@ -14,6 +14,8 @@ type ConvActivityEntry = {
   kind: 'chat' | 'exec' | 'judge' | 'gate' | string
   label: string
   provider?: string
+  model?: string
+  reasoningEffort?: string
   inputTokens?: number
   outputTokens?: number
   costUsd?: number
@@ -238,6 +240,7 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
         {entries.map((e, i) => {
           const meta = KIND_META[e.kind] ?? { icon: '•', label: e.kind }
           const toks = tokensOf(e)
+          const modelIdentity = e.model?.trim() || e.provider
           return (
             <div key={i} className="act-step">
               <div className="row gap2" style={{ fontSize: 11 }}>
@@ -245,7 +248,12 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
                 <span className="c-dim" style={{ fontWeight: 600 }}>
                   {meta.label}
                 </span>
-                {e.provider && <span className="mono c-accent">{e.provider}</span>}
+                {modelIdentity && (
+                  <span className="mono c-accent">
+                    {modelIdentity}
+                    {e.reasoningEffort ? ` · ${e.reasoningEffort}` : ''}
+                  </span>
+                )}
                 <span className="c-faint tnum">{timeFmt(e.ts)}</span>
                 <span className="tnum act-cost" style={{ marginLeft: 'auto' }}>
                   {toks > 0 ? `${nf.format(toks)} tok` : '—'}

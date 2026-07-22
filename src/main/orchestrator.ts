@@ -6,7 +6,6 @@ import type { AuthoritySas } from './authority/sas'
 import { evaluateClosure } from './gates/stopgate'
 import { runHooks } from './gates/hooks'
 import { phaseInstruction, type PipelinePhase } from './skill-pipeline'
-import { capabilityInstruction } from './capability-profiles'
 import { projectContextBlock } from './context-files'
 import type { ExecutionEvidence, PromptEnvelope, SendOptions, Usage } from './providers/types'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
@@ -151,7 +150,6 @@ export class Orchestrator {
         { name: `skill:${phase}`, text: phaseInstruction(phase) },
         { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
         { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
-        { name: 'capabilities', text: capabilityInstruction(subBinding.capabilityProfileId) },
         { name: 'projectContext', text: projectContext }
       ]
       const systemBlocks = parts.filter((p) => p.text).map((p) => ({ name: p.name, chars: p.text.length }))
@@ -205,12 +203,10 @@ export class Orchestrator {
         cost.add({
           provider: subProvider,
           role: 'subagent',
-          phase,
           inputTokens: phaseRes.usage.inputTokens,
           outputTokens: phaseRes.usage.outputTokens,
           cacheReadTokens: phaseRes.usage.cacheReadTokens,
-          costUsd: phaseRes.usage.costUsd,
-          durationMs: performance.now() - phaseStartedAt
+          costUsd: phaseRes.usage.costUsd
         })
       }
       push({
@@ -274,15 +270,12 @@ export class Orchestrator {
         `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${exec.text}\n` +
         `PREUVES OUTILS OBSERVÉES: ${JSON.stringify(exec.executionEvidence ?? [])}\n` +
         `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
-      // capabilityInstruction n'est PLUS concaténée ici : elle vit déjà dans le `system` du juge
-      // (judgeOptions ci-dessous) — la doubler dans le prompt user gaspillait des tokens.
       const judgeMessages = [{ role: 'user' as const, content: judgePrompt }]
       let judgeEnvelope
       // A2 — le juge charge le SKILL.md judge du kit ; F6 — blocs nommés pour l'observabilité.
       const judgeParts = [
         { name: 'skill:judge', text: phaseInstruction('judge') },
         { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
-        { name: 'capabilities', text: capabilityInstruction(judgeBinding.capabilityProfileId) },
         { name: 'projectContext', text: projectContext }
       ]
       const judgeBlocks = judgeParts
@@ -337,12 +330,10 @@ export class Orchestrator {
         cost.add({
           provider: judgeProvider,
           role: 'judge',
-          phase: 'judge',
           inputTokens: verdict.usage.inputTokens,
           outputTokens: verdict.usage.outputTokens,
           cacheReadTokens: verdict.usage.cacheReadTokens,
-          costUsd: verdict.usage.costUsd,
-          durationMs: performance.now() - judgeStartedAt
+          costUsd: verdict.usage.costUsd
         })
       }
       const ok =
@@ -403,7 +394,6 @@ export class Orchestrator {
             phaseInstruction('build') +
             PIPELINE_DISCIPLINE_INSTRUCTION +
             CONCISE_STRUCTURED_RESPONSE_INSTRUCTION +
-            capabilityInstruction(subBinding.capabilityProfileId) +
             projectContext,
           model: subBinding.model,
           reasoningEffort: subBinding.reasoningEffort,
@@ -435,12 +425,10 @@ export class Orchestrator {
           cost.add({
             provider: subProvider,
             role: 'subagent',
-            phase: 'build',
             inputTokens: repairRes.usage.inputTokens,
             outputTokens: repairRes.usage.outputTokens,
             cacheReadTokens: repairRes.usage.cacheReadTokens,
-            costUsd: repairRes.usage.costUsd,
-            durationMs: performance.now() - repairStartedAt
+            costUsd: repairRes.usage.costUsd
           })
         }
         push({

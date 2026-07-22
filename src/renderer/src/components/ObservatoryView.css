@@ -1,14 +1,14 @@
 .observatory-view {
   height: 100%;
   min-width: 0;
-  padding: 25px 28px;
+  padding: 5px 28px;
   color: var(--text);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--container-border);
   border-radius: var(--container-radius-page);
-  background: var(--surface-page);
+  background: var(--surface-panel);
   box-shadow: var(--container-shadow);
   backdrop-filter: blur(var(--container-blur));
 }
@@ -18,6 +18,9 @@
   gap: 20px;
   align-items: flex-end;
   margin-bottom: 14px;
+}
+.observatory-head .module-header > h1 {
+  font-family: 'Segoe UI Variable Display', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
 }
 .observatory-panel-title {
   color: #59dcff;
@@ -56,7 +59,7 @@
   padding: 9px;
   border: 1px solid var(--container-border);
   border-radius: var(--container-radius-panel) var(--container-radius-panel) 0 0;
-  background: var(--surface-panel);
+  background: transparent;
 }
 .observatory-turn-focus {
   display: flex;

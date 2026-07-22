@@ -11,13 +11,14 @@ describe('single Dark theme contract', () => {
   const systemCss = read('./assets/ui-system.css')
   const topologyCss = read('./components/AgentsTopologyView.css')
 
-  it('renders one fixed serious shell without a Glass control or persisted choice', () => {
+  it('renders one fixed serious shell without a global Glass control', () => {
+    // Le THÈME GLOBAL reste unique (dark) : aucun sélecteur de thème au niveau App.
+    // Le mode visuel du GRAPHE Memory (sombre/galaxy) est un réglage LOCAL à GraphView,
+    // persisté par graph-settings — il ne remonte pas dans App.
     expect(app).toContain('className="shell cosmic-outline theme-serious"')
     expect(app).not.toMatch(/Mode glass|setVisualMode|visual-mode\.v1|ThemeIcon|GraphVisualMode/)
-    expect(app.match(/visualMode/g)).toHaveLength(1)
-    expect(app).toContain(
-      '<GraphView visualMode="serious" onCleanMemory={openBrainwashConversation} />'
-    )
+    expect(app).not.toMatch(/visualMode/)
+    expect(app).toContain('<GraphView onCleanMemory={openBrainwashConversation} />')
   })
 
   it('removes global Galaxy branches and theme switch styling', () => {

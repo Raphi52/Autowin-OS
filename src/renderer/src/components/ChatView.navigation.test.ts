@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const source = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
+const modelsSource = readFileSync(new URL('./AgentsTopologyView.tsx', import.meta.url), 'utf8')
 
 describe('navigation pendant une reponse', () => {
   it('ne propose plus le selecteur de permissions defectueux', () => {
@@ -9,9 +10,9 @@ describe('navigation pendant une reponse', () => {
     expect(source).not.toContain('conversationsSetAuthorityMode')
   })
 
-  it('laisse Nouvelle conversation accessible pendant la reflexion', () => {
+  it('laisse Nouveau accessible pendant la reflexion', () => {
     const newConversation = source.match(
-      /<button\s+className="conv-new-row"\s+onClick=\{newConv\}[\s\S]*?title="Nouvelle conversation"[\s\S]*?<\/button>/
+      /<button\s+className=\{`conv-new-row\$\{activeId === null \? ' active' : ''\}`\}[\s\S]*?onClick=\{newConv\}[\s\S]*?<\/button>/
     )?.[0]
 
     expect(newConversation).toBeDefined()
@@ -31,6 +32,18 @@ describe('navigation pendant une reponse', () => {
     expect(creation).toContain('provider: identity.provider')
     expect(creation).not.toMatch(/provider:\s*['"]claude['"]/)
     expect(source).toContain("if (e.scope === 'roles') refreshRuntimeIdentity()")
+    expect(source).toContain('window.api.roles()')
+    expect(source).toMatch(/window\.api\.setRole\(\s*'orchestrator'/)
+    expect(modelsSource).toContain('window.api.roles()')
+    expect(modelsSource).toMatch(/window\.api\.setRole\(\s*'orchestrator'/)
+    expect(modelsSource).toContain("event.scope === 'roles'")
+    expect(modelsSource).toMatch(/function withOrchestratorRole\(/)
+    expect(modelsSource).toContain('provider: role.provider')
+    expect(modelsSource).toContain('model?.id ?? role.model')
+    expect(modelsSource).toContain('role.reasoningEffort ?? model?.defaultReasoningEffort')
+    expect(modelsSource).toMatch(
+      /const applied = await window\.api\.applyProfile\(id\)[\s\S]*?const roles = await window\.api\.roles\(\)[\s\S]*?withOrchestratorRole\(applied\.topology, models, roles\.orchestrator\)/
+    )
   })
 
   it('synchronise le routage live avant de publier une nouvelle selection', () => {

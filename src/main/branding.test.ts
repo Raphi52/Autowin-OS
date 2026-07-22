@@ -73,21 +73,26 @@ describe('identite Autowin OS', () => {
     expect(main).toContain("resolveAutowinAppDataBase(app.getPath('appData'), app.isPackaged)")
   })
 
-  it('uses the same Autowin logo in the app shell and packaging', () => {
+  it('uses the transparent Autowin logo in the app shell while preserving packaging identity', () => {
     const appShell = readFileSync(join(ROOT, 'src/renderer/src/App.tsx'), 'utf8')
     const theme = readFileSync(join(ROOT, 'src/renderer/src/assets/theme.css'), 'utf8')
     const main = readFileSync(join(ROOT, 'src/main/index.ts'), 'utf8')
     const runtimeIcon = readFileSync(join(ROOT, 'resources/icon.png'))
     const packagingIcon = readFileSync(join(ROOT, 'build/icon.png'))
 
-    expect(appShell).toContain("import autowinLogo from './assets/autowin-logo.png'")
+    expect(appShell).toContain("import autowinLogo from './assets/autowin-logo-transparent.png'")
     expect(appShell).toContain('className="brand-logo"')
     expect(appShell).not.toContain('className="brand-dot"')
     expect(packagingIcon).toEqual(runtimeIcon)
     expect(readFileSync(join(ROOT, 'electron-builder.yml'), 'utf8')).toContain(
       'icon: build/icon.ico'
     )
-    expect(theme).toContain("url('./autowin-galaxy-bg.png')")
+    expect(theme).toContain("url('./autowin-galaxy-bg-hq.png')")
+    const galaxyBackground = readFileSync(
+      join(ROOT, 'src/renderer/src/assets/autowin-galaxy-bg-hq.png')
+    )
+    expect(galaxyBackground.readUInt32BE(16)).toBe(3840)
+    expect(galaxyBackground.readUInt32BE(20)).toBe(2160)
     expect(main).not.toContain("process.platform === 'linux' ? { icon } : {}")
     expect(main).toContain("icon: process.env['AUTOWIN_OS_DEV'] === '1' ? devIcon : icon")
     expect(main).toMatch(/titleBarOverlay:\s*\{[\s\S]*?color:\s*'#00000000'/)

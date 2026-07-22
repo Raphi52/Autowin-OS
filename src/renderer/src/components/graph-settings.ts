@@ -1,5 +1,9 @@
 import { autowinStorageKey, readMigratedStorageValue } from '../storage-keys'
-import { DEFAULT_GRAPH_NODE_SPACING, normalizeGraphNodeSpacing } from './graph-view-model'
+import {
+  DEFAULT_GRAPH_NODE_SPACING,
+  normalizeGraphNodeSpacing,
+  type GraphVisualMode
+} from './graph-view-model'
 
 export type GraphVisibilitySettings = {
   labels: boolean
@@ -110,4 +114,17 @@ export function loadMemoryDetailWidths(storage: StorageLike): MemoryDetailWidths
 
 export function saveMemoryDetailWidths(storage: StorageLike, widths: MemoryDetailWidths): void {
   storage.setItem(autowinStorageKey(MEMORY_DETAIL_WIDTHS_SUFFIX), JSON.stringify(widths))
+}
+
+/** Mode visuel du graphe Memory (sombre vs galaxy), persisté entre lancements. */
+export const GRAPH_VISUAL_MODE_SUFFIX = 'memory.visual-mode.v1'
+
+export function loadGraphVisualMode(storage: StorageLike): GraphVisualMode {
+  return readMigratedStorageValue(storage, GRAPH_VISUAL_MODE_SUFFIX) === 'galaxy'
+    ? 'galaxy'
+    : 'serious'
+}
+
+export function saveGraphVisualMode(storage: StorageLike, mode: GraphVisualMode): void {
+  storage.setItem(autowinStorageKey(GRAPH_VISUAL_MODE_SUFFIX), mode)
 }

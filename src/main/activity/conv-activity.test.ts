@@ -34,4 +34,27 @@ describe('conversation activity', () => {
     expect(entries[1]?.text).toHaveLength(600)
     expect(readFileSync(join(root, 'conv-1.jsonl'), 'utf8')).toContain(longText)
   })
+
+  it('persists the routed model and reasoning effort for a chat turn', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-activity-'))
+    roots.push(root)
+
+    appendConvActivity(
+      'conv-1',
+      {
+        kind: 'chat',
+        label: 'tour agent',
+        provider: 'omniroute',
+        model: 'claude-opus-4-6',
+        reasoningEffort: 'high'
+      },
+      root
+    )
+
+    expect(loadConvActivity('conv-1', root)[0]).toMatchObject({
+      provider: 'omniroute',
+      model: 'claude-opus-4-6',
+      reasoningEffort: 'high'
+    })
+  })
 })

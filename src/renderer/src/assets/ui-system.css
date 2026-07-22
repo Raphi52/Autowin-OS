@@ -21,10 +21,10 @@
 }
 
 .shell.theme-serious {
-  /* Surfaces legerement transparentes (95%) : le fond cosmique transparait a travers les
-     containers (page/panel/card). Le backdrop de shell (.main) est transparent ->
-     bords/espaces hors containers = cosmique plein (cf. theme-modes.css). */
-  --surface-page: rgba(0, 0, 0, 0.95);
+  /* --surface-page = backdrop de PAGE : transparent -> le cosmique transparait derriere chaque
+     vue (comme Chat), et les CARTES (panel/card, 95%) flottent dessus. Uniformise toutes les
+     vues sur le rendu de Chat (racine transparente + cartes 95% + gaps cosmiques). */
+  --surface-page: transparent;
   --surface-panel: rgba(5, 5, 6, 0.95);
   --surface-card: rgba(9, 9, 11, 0.95);
   --surface-inset: rgba(0, 0, 0, 0.95);
@@ -55,13 +55,6 @@
   line-height: 1;
 }
 
-.surface-page {
-  border: 1px solid var(--container-border);
-  border-radius: var(--container-radius-page);
-  background: var(--surface-page);
-  box-shadow: var(--container-shadow);
-  backdrop-filter: blur(var(--container-blur));
-}
 .surface-panel {
   border: 1px solid var(--container-border);
   border-radius: var(--container-radius-panel);
@@ -73,7 +66,4 @@
   border-radius: var(--container-radius-card);
   background: var(--surface-card);
   box-shadow: none;
-}
-.surface-inset {
-  background: var(--surface-inset);
 }

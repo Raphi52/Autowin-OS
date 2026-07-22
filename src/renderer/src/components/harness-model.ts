@@ -30,7 +30,6 @@ export type {
 } from '../../../shared/harness-types'
 import type {
   HarnessLayer,
-  HarnessSource,
   HarnessState,
   HarnessRuntime,
   HarnessFlow,
@@ -57,21 +56,6 @@ export const HARNESS_FLOWS: readonly HarnessFlow[] = [
   'brain',
   'observability'
 ]
-
-export const STATE_LABEL: Record<HarnessState, string> = {
-  healthy: 'Sain',
-  unknown: 'Inconnu',
-  warning: 'Vigilance',
-  blocked: 'Bloqué',
-  inactive: 'Inactif'
-}
-
-export const SOURCE_LABEL: Record<HarnessSource, string> = {
-  ipc: 'IPC (runtime local)',
-  filesystem: 'Système de fichiers',
-  'provider-boundary': 'Frontière provider',
-  derived: 'Déduit (sans artefact direct)'
-}
 
 /* --- Filtres ------------------------------------------------------------- */
 

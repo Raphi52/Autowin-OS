@@ -36,11 +36,6 @@ import { aggregateToolUsage } from './activity/tool-usage'
 import { LoopRunStore } from './loop-run-store'
 import { ProfileStore, resolveProfileRoute, type AutowinProfile } from './profile-store'
 import {
-  loadCapabilityProfiles,
-  saveCapabilityProfiles,
-  type CapabilityProfileState
-} from './capability-profiles'
-import {
   listHermesControls,
   setHermesPlugin,
   setHermesTool,
@@ -95,6 +90,7 @@ import {
   resolveHermesSessionsRoot,
   secureHermesSpool
 } from './activity/hermes-prompt-trace'
+import { nativeSpoolRoot, appendNativeTrace } from './activity/native-trace-spool'
 import { proveHermesInjections } from './hermes-injection-proof'
 import {
   automationAppIdentity,
@@ -180,8 +176,7 @@ function syncRuntimeTopology(topology: AgentTopology): void {
     os.setRole(role, {
       provider: binding.provider,
       model: model.model,
-      reasoningEffort: binding.reasoningEffort,
-      capabilityProfileId: os.roles.getBinding(role).capabilityProfileId
+      reasoningEffort: binding.reasoningEffort
     })
   }
   sync('orchestrator', topology.orchestrator)
@@ -258,7 +253,6 @@ const ledger = new TraceLedger(join(app.getPath('userData'), 'trace'))
 const causalTrace = new TraceStore(join(app.getPath('userData'), 'causal-trace'))
 const loopRuns = new LoopRunStore(join(app.getPath('userData'), 'loop-runs.json'))
 const profiles = new ProfileStore(join(app.getPath('userData'), 'profiles.json'))
-let capabilityProfiles = loadCapabilityProfiles()
 bus.trace = (name, args, ok) =>
   ledger.append({ source: 'bus', name, detail: JSON.stringify(args).slice(0, 200), ok })
 
@@ -479,6 +473,18 @@ function registerChatIpc(): void {
           name: step.step,
           detail: `${step.role ?? ''} ${step.provider ?? ''} ${step.detail ?? ''}`.trim()
         })
+        // Chantier 3 — trace native : capture l'envelope réel (system porte le RAG Brain + contexte).
+        if (step.prompt) {
+          appendNativeTrace({
+            provider: step.prompt.provider,
+            model: step.prompt.model,
+            conversationId,
+            turnId,
+            system: step.prompt.system,
+            messages: step.prompt.messages,
+            timestamp: new Date().toISOString()
+          })
+        }
         event.sender.send('orchestrate:step', step)
       })
       return { ok: true, result }
@@ -502,21 +508,6 @@ function registerChatIpc(): void {
     }
   )
   ipcMain.handle('os:models:list', () => agentModelsReady)
-  ipcMain.handle('os:capabilityProfiles:get', () => capabilityProfiles)
-  ipcMain.handle('os:capabilityProfiles:save', (_event, next: CapabilityProfileState) => {
-    capabilityProfiles = saveCapabilityProfiles(next)
-    return capabilityProfiles
-  })
-  ipcMain.handle('os:capabilityProfiles:assign', (_event, role: Role, profileId: string) => {
-    if (!capabilityProfiles.profiles.some((profile) => profile.id === profileId))
-      throw new Error('Profil de capacités introuvable')
-    capabilityProfiles = saveCapabilityProfiles({
-      ...capabilityProfiles,
-      assignments: { ...capabilityProfiles.assignments, [role]: profileId }
-    })
-    os.setRole(role, { ...os.roles.getBinding(role), capabilityProfileId: profileId })
-    return capabilityProfiles
-  })
   ipcMain.handle('os:profiles:list', () => profiles.list())
   ipcMain.handle('os:profiles:save', async (_event, profile: AutowinProfile) => {
     await agentModelsReady
@@ -894,6 +885,9 @@ function registerChatIpc(): void {
         let traceActionIndex = 0
         let turnUsage: { inputTokens: number; outputTokens: number; costUsd?: number } | undefined
         let turnSessionId: string | undefined
+        let turnPromptIdentity:
+          | { provider: string; model?: string; reasoningEffort?: string }
+          | undefined
         const last = safe[safe.length - 1]
         if (conversationId && last?.role === 'user' && os.conversations.get(conversationId)) {
           const binding = os.roles.getBinding('orchestrator')
@@ -965,6 +959,14 @@ function registerChatIpc(): void {
           if (pilotEvent.kind === 'done' && pilotEvent.usage) turnUsage = pilotEvent.usage
           if (pilotEvent.kind === 'prompt-call' && pilotEvent.sessionId)
             turnSessionId = pilotEvent.sessionId
+          if (pilotEvent.kind === 'prompt-call' && pilotEvent.prompt) {
+            const reasoningEffort = pilotEvent.prompt.options.reasoningEffort
+            turnPromptIdentity ??= {
+              provider: pilotEvent.prompt.provider,
+              model: pilotEvent.prompt.model,
+              reasoningEffort: typeof reasoningEffort === 'string' ? reasoningEffort : undefined
+            }
+          }
           applyDurableEvent(pilotEvent)
           if (conversationId && pilotEvent.kind === 'prompt-call' && pilotEvent.prompt) {
             const promptCall = appendPromptCall({
@@ -1127,10 +1129,14 @@ function registerChatIpc(): void {
         // Journal d'activité de la conversation : le tour de chat, avec son coût en tokens.
         if (conversationId) {
           const last = safe[safe.length - 1]
+          const conversationRoute = os.registry.getConversationTransport()
           appendConvActivity(conversationId, {
             kind: 'chat',
             label: last?.role === 'user' ? last.content : 'tour agent',
-            provider: os.registry.getConversationTransport()?.provider ?? 'omniroute',
+            provider: turnPromptIdentity?.provider ?? conversationRoute?.provider ?? 'omniroute',
+            model: turnPromptIdentity?.model ?? conversationRoute?.model,
+            reasoningEffort:
+              turnPromptIdentity?.reasoningEffort ?? conversationRoute?.reasoningEffort,
             inputTokens: turnUsage?.inputTokens,
             outputTokens: turnUsage?.outputTokens,
             costUsd: turnUsage?.costUsd,
@@ -1244,6 +1250,11 @@ function registerChatIpc(): void {
     convId ? loadPromptCalls(guardString(convId, 'convId')) : loadAllPromptCalls()
   )
   const loadHermesTraces = (): ReturnType<typeof readHermesPreflight> => {
+    // Chantier 3 — spool NATIF Autowin en priorité : les traces sont écrites par Autowin lui-même
+    // (native-trace-spool) → l'Observatory (RAG/injection) se peuple sur les vraies requêtes de l'app.
+    const native = readHermesPreflight(nativeSpoolRoot(), 100)
+    if (native.length > 0) return native
+    // Fallback historique Hermes (dégrade proprement à vide si absent) — retiré au Chantier 5.
     const spoolRoot = join(app.getPath('userData'), 'hermes-trace-spool')
     if (!secureHermesSpool(spoolRoot)) throw new Error('Hermes trace ACL hardening failed')
     return readHermesPreflight(

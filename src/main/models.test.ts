@@ -78,14 +78,14 @@ describe('catalogue Agents dynamique', () => {
     const models = await discoverOmniRouteModels(fetchFn as typeof fetch, {
       get: () => 'gateway-token'
     })
-    // Modèle fixe : les 5 paliers réels + défaut 'high'.
+    // Paliers réels SANS 'none' (trompeur à côté de low/medium/high) + défaut 'high'.
     expect(models.find((model) => model.model === 'cc/claude-opus-4-8')).toEqual(
       expect.objectContaining({
-        reasoningEfforts: ['none', 'low', 'medium', 'high', 'xhigh'],
+        reasoningEfforts: ['low', 'medium', 'high', 'xhigh'],
         defaultReasoningEffort: 'high'
       })
     )
-    // Route combo sans effort_tiers : fallback 'none' (effort géré par OmniRoute).
+    // Route combo sans effort_tiers : fallback 'none' conservé (seul, effort géré par OmniRoute).
     expect(models.find((model) => model.model === 'auto/claude-opus')).toEqual(
       expect.objectContaining({ reasoningEfforts: ['none'], defaultReasoningEffort: 'none' })
     )

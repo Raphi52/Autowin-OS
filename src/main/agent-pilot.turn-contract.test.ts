@@ -2,12 +2,29 @@ import { describe, expect, it, vi } from 'vitest'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 
 describe('AgentPilot turn contract', () => {
   it('passes the persisted authority mode from the real pilotChat IPC path', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     expect(source).toMatch(
       /pilot\.chat\([\s\S]*?conversationId,[\s\S]*?controller\.signal,[\s\S]*?authorityMode/
+    )
+  })
+
+  it('journals the routed model and reasoning effort used by pilotChat', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    expect(source).toContain('turnPromptIdentity ??= {')
+    const activityBlock = source.match(
+      /appendConvActivity\(conversationId, \{[\s\S]*?kind: 'chat',[\s\S]*?\}\)/
+    )?.[0]
+
+    const normalizedActivityBlock = activityBlock?.replace(/\s+/g, ' ')
+    expect(normalizedActivityBlock).toContain(
+      'model: turnPromptIdentity?.model ?? conversationRoute?.model'
+    )
+    expect(normalizedActivityBlock).toContain(
+      'reasoningEffort: turnPromptIdentity?.reasoningEffort ?? conversationRoute?.reasoningEffort'
     )
   })
 
@@ -103,14 +120,12 @@ describe('AgentPilot turn contract', () => {
     const initialBinding = {
       provider: 'codex',
       model: 'gpt-initial',
-      reasoningEffort: 'low',
-      capabilityProfileId: 'full'
+      reasoningEffort: 'low'
     }
     const mutatedBinding = {
       provider: 'hermes',
       model: 'model-mutated',
-      reasoningEffort: 'high',
-      capabilityProfileId: 'readonly'
+      reasoningEffort: 'high'
     }
     let bindingReadCount = 0
     const roles = {
@@ -133,10 +148,19 @@ describe('AgentPilot turn contract', () => {
       expect(call[0]).toBe('codex')
       expect(call[2]).toMatchObject({ model: 'gpt-initial', reasoningEffort: 'low' })
       expect(call[2].system).toMatch(/ne dis jamais que tu ne peux pas modifier le code/i)
+      expect(call[2].system).toContain(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION)
     }
     for (const call of describePrompt.mock.calls) {
       expect(call[3]).toBe('gpt-initial')
     }
+
+    const runSend = vi.fn().mockResolvedValue({ text: 'DONE: ok', provider: 'codex' })
+    await new AgentPilot(
+      { send: runSend } as never,
+      { getBinding: () => initialBinding } as never,
+      bus as never
+    ).run('test', () => undefined)
+    expect(runSend.mock.calls[0][2].system).toContain(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION)
   })
 
   it('reports the iteration cap as an error terminal event, never as done', async () => {

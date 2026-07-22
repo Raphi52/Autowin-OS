@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import './AgentsTopologyView.css'
 import { ModuleHeader } from './ModuleHeader'
+import { modelRecencyKey, modelVendor } from './chat-view-model'
 
 type ImportedModel = {
   id: string
@@ -27,10 +28,7 @@ type AgentTopology = {
 
 type Target = 'orchestrator' | 'subagents' | 'scout' | 'judge'
 type Profile = { id: string; name: string; updatedAt: string; topology: AgentTopology }
-type CapabilityState = {
-  profiles: Array<{ id: string; name: string }>
-  assignments: Record<string, string>
-}
+type RoleBinding = { provider: string; model?: string; reasoningEffort?: string }
 
 const DRAG_TYPE = 'application/x-autowin-model'
 
@@ -47,6 +45,27 @@ function nextSlotId(target: Exclude<Target, 'orchestrator'>, topology: AgentTopo
   return `${target.replace(/s$/, '')}-${index}`
 }
 
+function withOrchestratorRole(
+  topology: AgentTopology,
+  models: ImportedModel[],
+  role: RoleBinding
+): AgentTopology {
+  const model = models.find(
+    (candidate) =>
+      candidate.provider === role.provider &&
+      (candidate.id === role.model || candidate.model === role.model)
+  )
+  return {
+    ...topology,
+    orchestrator: {
+      slotId: 'orchestrator',
+      provider: role.provider,
+      modelId: model?.id ?? role.model ?? `${role.provider}:default`,
+      reasoningEffort: role.reasoningEffort ?? model?.defaultReasoningEffort ?? 'auto'
+    }
+  }
+}
+
 export function AgentsTopologyView(): React.JSX.Element {
   const [models, setModels] = useState<ImportedModel[]>([])
   const [topology, setTopology] = useState<AgentTopology | null>(null)
@@ -55,7 +74,6 @@ export function AgentsTopologyView(): React.JSX.Element {
   const [state, setState] = useState<'loading' | 'ready' | 'saving' | 'error'>('loading')
   const [error, setError] = useState('')
   const [profiles, setProfiles] = useState<Profile[]>([])
-  const [capabilities, setCapabilities] = useState<CapabilityState | null>(null)
   // Coin OmniRoute (relogé depuis l'ancienne vue Router) : gateway token + accès dashboard.
   const [omniToken, setOmniToken] = useState('')
   const [omniConfigured, setOmniConfigured] = useState(false)
@@ -65,8 +83,7 @@ export function AgentsTopologyView(): React.JSX.Element {
     void (async () => {
       try {
         const state = (await window.api.routerMigrationState?.()) as
-          | { credentialConfigured?: boolean }
-          | undefined
+          { credentialConfigured?: boolean } | undefined
         setOmniConfigured(Boolean(state?.credentialConfigured))
       } catch {
         setOmniConfigured(false)
@@ -87,10 +104,10 @@ export function AgentsTopologyView(): React.JSX.Element {
   }
 
   useEffect(() => {
-    Promise.all([window.api.models(), window.api.topology()])
-      .then(([catalog, current]) => {
+    Promise.all([window.api.models(), window.api.topology(), window.api.roles()])
+      .then(([catalog, current, roles]) => {
         setModels(catalog)
-        setTopology(current)
+        setTopology(withOrchestratorRole(current, catalog, roles.orchestrator))
         setSelectedModelId(catalog[0]?.id ?? '')
         setState('ready')
       })
@@ -100,15 +117,21 @@ export function AgentsTopologyView(): React.JSX.Element {
       })
   }, [])
   useEffect(() => {
+    const off = window.api.onAppEvent((event) => {
+      if (event.type === 'refresh' && event.scope === 'roles') {
+        void window.api.roles().then((roles) => {
+          setTopology((current) =>
+            current ? withOrchestratorRole(current, models, roles.orchestrator) : current
+          )
+        })
+      }
+    })
+    return off
+  }, [models])
+  useEffect(() => {
     window.api
       .profiles()
       .then(setProfiles)
-      .catch(() => undefined)
-  }, [])
-  useEffect(() => {
-    window.api
-      .capabilityProfiles()
-      .then(setCapabilities)
       .catch(() => undefined)
   }, [])
 
@@ -131,10 +154,49 @@ export function AgentsTopologyView(): React.JSX.Element {
   }
   async function applyProfile(id: string): Promise<void> {
     const applied = await window.api.applyProfile(id)
-    setTopology(applied.topology)
+    const roles = await window.api.roles()
+    setTopology(withOrchestratorRole(applied.topology, models, roles.orchestrator))
   }
 
   const modelsById = useMemo(() => new Map(models.map((model) => [model.id, model])), [models])
+  // Colonne gauche : les DERNIERES versions de ChatGPT et d'Anthropic en premier, entrelacees
+  // (le plus recent de CHAQUE vendeur d'abord : GPT-5.6, Fable 5, Opus 4.8, ...), les autres
+  // vendeurs ensuite. Evite d'enfouir Opus 4.8 sous 16 entrees ChatGPT. Cles de tri = celles du Chat.
+  const sortedModels = useMemo(() => {
+    const vendorKey = (id: string): string => modelVendor(id).key
+    const isPriority = (k: string): boolean => k === 'openai' || k === 'anthropic'
+    const rec = (id: string): number => {
+      const [family, version] = modelRecencyKey(id)
+      return family * 10000 + version
+    }
+    // Rang de recence PAR vendeur (0 = le plus recent de ce vendeur).
+    const perVendorIndex = new Map<string, number>()
+    const groups = new Map<string, typeof models>()
+    for (const model of models) {
+      const key = vendorKey(model.id)
+      groups.set(key, [...(groups.get(key) ?? []), model])
+    }
+    for (const arr of groups.values()) {
+      arr.sort((a, b) => rec(b.id) - rec(a.id) || a.label.localeCompare(b.label))
+      arr.forEach((model, index) => perVendorIndex.set(model.id, index))
+    }
+    return [...models].sort((a, b) => {
+      const pa = isPriority(vendorKey(a.id))
+      const pb = isPriority(vendorKey(b.id))
+      if (pa !== pb) return pa ? -1 : 1
+      if (pa && pb) {
+        const ia = perVendorIndex.get(a.id) ?? 999
+        const ib = perVendorIndex.get(b.id) ?? 999
+        if (ia !== ib) return ia - ib // plus recent de chaque vendeur d'abord (entrelace)
+        // egalite de rang : ChatGPT avant Anthropic
+        return (vendorKey(a.id) === 'openai' ? 0 : 1) - (vendorKey(b.id) === 'openai' ? 0 : 1)
+      }
+      const ra = rec(a.id)
+      const rb = rec(b.id)
+      if (ra !== rb) return rb - ra
+      return a.label.localeCompare(b.label)
+    })
+  }, [models])
   const selectedModel = modelsById.get(selectedModelId)
 
   async function persist(next: AgentTopology): Promise<void> {
@@ -143,6 +205,26 @@ export function AgentsTopologyView(): React.JSX.Element {
     try {
       const saved = await window.api.setTopology(next)
       setTopology(saved)
+      setState('ready')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+      setState('error')
+    }
+  }
+
+  async function persistOrchestrator(binding: SlotBinding): Promise<void> {
+    setState('saving')
+    setError('')
+    try {
+      const roles = await window.api.setRole(
+        'orchestrator',
+        binding.provider,
+        modelsById.get(binding.modelId)?.model ?? binding.modelId,
+        binding.reasoningEffort
+      )
+      setTopology((current) =>
+        current ? withOrchestratorRole(current, models, roles.orchestrator) : current
+      )
       setState('ready')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -180,7 +262,8 @@ export function AgentsTopologyView(): React.JSX.Element {
                 [target]: replaceOrAppend(topology.panels[target], binding)
               }
             }
-    void persist(next)
+    if (target === 'orchestrator') void persistOrchestrator(binding)
+    else void persist(next)
   }
 
   function replaceOrAppend(slots: SlotBinding[], binding: SlotBinding): SlotBinding[] {
@@ -202,7 +285,8 @@ export function AgentsTopologyView(): React.JSX.Element {
               ...topology,
               panels: { ...topology.panels, [target]: topology.panels[target].map(update) }
             }
-    void persist(next)
+    if (target === 'orchestrator') void persistOrchestrator(next.orchestrator)
+    else void persist(next)
   }
 
   function remove(target: Exclude<Target, 'orchestrator'>, slotId: string): void {
@@ -239,7 +323,6 @@ export function AgentsTopologyView(): React.JSX.Element {
     accent: string
   }): React.JSX.Element {
     const slots = slotsFor(target)
-    const role = target === 'subagents' ? 'subagent' : target
     const panelId = `panel:${target}`
     return (
       <section
@@ -306,28 +389,6 @@ export function AgentsTopologyView(): React.JSX.Element {
                     ))}
                   </select>
                 </label>
-                {capabilities && (
-                  <label className="topology-capability-picker">
-                    Profil
-                    <select
-                      value={capabilities.assignments[role] ?? 'balanced'}
-                      onChange={(event) =>
-                        void window.api
-                          .assignCapabilityProfile(
-                            role as 'orchestrator' | 'subagent' | 'judge' | 'scout',
-                            event.target.value
-                          )
-                          .then(setCapabilities)
-                      }
-                    >
-                      {capabilities.profiles.map((profile) => (
-                        <option key={profile.id} value={profile.id}>
-                          {profile.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
                 {target !== 'orchestrator' && (
                   <button
                     type="button"
@@ -432,7 +493,7 @@ export function AgentsTopologyView(): React.JSX.Element {
         <span className="topology-eyebrow">Modèles importés</span>
         <p>Glissez un modèle sur un slot ou sélectionnez-le puis utilisez Ajouter.</p>
         <div className="topology-models">
-          {models.map((model) => (
+          {sortedModels.map((model) => (
             <button
               type="button"
               draggable
@@ -449,7 +510,12 @@ export function AgentsTopologyView(): React.JSX.Element {
               <span>
                 <strong>{model.label}</strong>
                 <small>
-                  {model.provider} · efforts {model.reasoningEfforts.join(', ')}
+                  {model.provider}
+                  {(() => {
+                    // 'none' n'est pas un niveau : on ne l'affiche jamais comme effort.
+                    const efforts = model.reasoningEfforts.filter((effort) => effort !== 'none')
+                    return efforts.length > 0 ? ` · efforts ${efforts.join(', ')}` : ''
+                  })()}
                 </small>
               </span>
             </button>

@@ -13,6 +13,8 @@ export interface ConvActivityEntry {
   kind: 'chat' | 'exec' | 'judge' | 'gate' | string
   label: string
   provider?: string
+  model?: string
+  reasoningEffort?: string
   inputTokens?: number
   outputTokens?: number
   costUsd?: number
@@ -52,6 +54,8 @@ export function appendConvActivity(
       kind: entry.kind,
       label: entry.label,
       provider: entry.provider,
+      model: entry.model,
+      reasoningEffort: entry.reasoningEffort,
       inputTokens: entry.inputTokens,
       outputTokens: entry.outputTokens,
       costUsd: entry.costUsd,

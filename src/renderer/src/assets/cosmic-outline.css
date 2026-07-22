@@ -1,14 +1,6 @@
 /* Reference: sketches/autowin-galaxy-combo/05-black-cosmic-outline.png */
 
-.cosmic-outline
-  :where(
-    .conv-pane,
-    .chat-thread,
-    .runs-pane,
-    .control-row,
-    .behaviour-sidebar,
-    .behaviour-reader
-  ) {
+.cosmic-outline :where(.conv-pane, .runs-pane, .control-row, .behaviour-reader) {
   background: rgba(0, 0, 7, 0.88);
   border-color: var(--line-strong);
   box-shadow: none;
@@ -72,7 +64,6 @@
 
 .theme-filter,
 .node-search-result,
-.panel-tabs,
 .settings-section,
 .node-links button {
   background: #020204;
@@ -89,57 +80,17 @@
   background: radial-gradient(circle at 50% 48%, rgba(32, 75, 165, 0.3), transparent 42%), #000;
 }
 
-/* Agent Studio */
-.agent-studio,
-.studio-library,
-.studio-canvas,
-.studio-inspector,
-.studio-frame,
-.studio-resource,
-.studio-assignment,
-.studio-persona-cell,
-.studio-matrix-cell {
-  background-color: rgba(0, 0, 0, 0.95);
-  border-color: var(--line);
-  box-shadow: none;
-}
-
-.studio-library,
-.studio-inspector {
-  border-color: var(--line-strong);
-}
-
-.studio-frames {
-  grid-template-columns: repeat(5, minmax(155px, 1fr));
-}
-
-.studio-frame {
-  min-width: 0;
-}
-
-.studio-frame-slot {
-  border-color: rgba(73, 207, 255, 0.64);
-  background: rgba(73, 207, 255, 0.035);
-}
-
-.studio-resource:hover,
-.studio-assignment:hover {
-  border-color: var(--cyan);
-}
-
 /* Chat, Controls, Behaviour */
 .chat-layout,
 .hermes-controls,
 .behaviour-view {
-  /* Container de page a 95% comme les autres vues (chat-layout) : le cosmique n'apparait
-     qu'au contour (.main transparent), pas a travers tout le header/toolbar. */
-  background: var(--surface-page);
+  /* Page uniforme (--surface-panel), comme Models : cosmique seulement au contour (.main). */
+  background: var(--surface-panel);
 }
 
 .conv-pane,
 .runs-pane,
 .control-list,
-.behaviour-sidebar,
 .behaviour-reader {
   border-color: var(--line-strong);
 }
@@ -185,25 +136,7 @@
   background: var(--surface-page);
 }
 
-.cosmic-outline
-  :where(
-    .conv-pane,
-    .chat-thread,
-    .runs-pane,
-    .control-list,
-    .control-row,
-    .behaviour-sidebar,
-    .behaviour-reader,
-    .agent-studio,
-    .studio-library,
-    .studio-canvas,
-    .studio-inspector,
-    .studio-frame,
-    .studio-resource,
-    .studio-assignment,
-    .studio-persona-cell,
-    .studio-matrix-cell
-  ) {
+.cosmic-outline :where(.conv-pane, .runs-pane, .control-list, .control-row, .behaviour-reader) {
   background: var(--surface-panel);
   box-shadow: none;
 }
@@ -214,7 +147,6 @@
     .run-row,
     .theme-filter,
     .node-search-result,
-    .panel-tabs,
     .settings-section,
     .node-links button,
     .behaviour-engine-group > button,
@@ -230,7 +162,7 @@
   box-shadow: none;
 }
 
-.cosmic-outline :where(.btn, .card, .selected-node, .float-tooltip-kap) {
+.cosmic-outline :where(.btn, .card, .selected-node) {
   box-shadow: none;
   text-shadow: none;
 }
@@ -245,6 +177,10 @@
 .cosmic-outline .graph-observatory--galaxy .graph-canvas {
   background: transparent;
   box-shadow: none;
+}
+/* Mode serious : page uniforme (--surface-panel) comme les autres vues (galaxy reste transparent). */
+.cosmic-outline .graph-observatory--serious {
+  background: var(--surface-panel);
 }
 
 .cosmic-outline .graph-observatory--galaxy .graph-toolbar,
@@ -269,7 +205,6 @@
   filter: saturate(1.12) contrast(1.04);
 }
 
-.cosmic-outline .graph-observatory--galaxy .panel-tabs button.is-active,
 .cosmic-outline .graph-observatory--galaxy .toggle-row input:checked + i::after,
 .cosmic-outline .graph-observatory--galaxy .theme-filter.is-active,
 .cosmic-outline .graph-observatory--galaxy .theme-cluster-label,
@@ -334,7 +269,6 @@
 .cosmic-outline .conv-search,
 .cosmic-outline .chat-head .btn,
 .cosmic-outline .chat-suggest .btn,
-.cosmic-outline .action-chip,
 .cosmic-outline .composer-field {
   border-color: rgba(255, 255, 255, 0.2);
   background: var(--surface-inset);
@@ -361,11 +295,6 @@
   border-color: rgba(255, 212, 90, 0.76);
   background: rgba(255, 60, 172, 0.12);
   box-shadow: inset 3px 0 #ff3cac;
-}
-
-.cosmic-outline .conv-actions {
-  background: rgba(0, 0, 0, 0.5);
-  box-shadow: none;
 }
 
 .cosmic-outline .chat-head-signal {
@@ -803,4 +732,22 @@
   .cosmic-outline .runs-pane-resizer {
     display: none;
   }
+}
+
+/* Memory : le CHÂSSIS (root + sous-panneaux) est IDENTIQUE en mode sombre ET galaxy — seul le
+   RENDU DU GRAPHE (nœuds étoiles WebGL) change en galaxy. Le root porte l'unique couche 0.95,
+   les sous-panneaux sont transparents (pas d'empilement, pas de blur galaxy, pas de fond bleu
+   du cosmique qui transparaît). Une seule couche 95% uniforme, y compris le milieu (graphe). */
+.cosmic-outline .graph-observatory,
+.cosmic-outline .graph-observatory--galaxy {
+  background: var(--surface-panel);
+  backdrop-filter: none;
+}
+.cosmic-outline .graph-observatory .graph-stage,
+.cosmic-outline .graph-observatory .graph-canvas,
+.cosmic-outline .graph-observatory .graph-toolbar,
+.cosmic-outline .graph-observatory .theme-sidebar,
+.cosmic-outline .graph-observatory .visibility-sidebar {
+  background: transparent;
+  backdrop-filter: none;
 }

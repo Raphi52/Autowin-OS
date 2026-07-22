@@ -1,7 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { listHermesControls } from './hermes-controls'
 
 export interface LoopSkillItem {
   id: string
@@ -52,24 +51,15 @@ function metadata(path: string, source: LoopSkillItem['source']): ResolvedLoopSk
 async function manifest(): Promise<ResolvedLoopSkill[]> {
   const user = homedir()
   const localAppData = process.env.LOCALAPPDATA ?? join(user, 'AppData', 'Local')
-  const autowin = discoverSkillFiles(join(user, '.claude', 'skills')).map((path) =>
-    metadata(path, 'autowin')
-  )
-  const enabled = new Set(
-    (await listHermesControls('skills')).filter((skill) => skill.enabled).map((skill) => skill.id)
-  )
-  const globalCandidates = [
-    ...discoverSkillFiles(join(localAppData, 'hermes', 'skills')),
-    ...discoverSkillFiles(join(localAppData, 'hermes', 'hermes-agent', 'skills'))
-  ].map((path) => metadata(path, 'global'))
-  const globalByName = new Map<string, ResolvedLoopSkill>()
-  for (const skill of globalCandidates) {
-    if (enabled.has(skill.label) && !globalByName.has(skill.label))
-      globalByName.set(skill.label, skill)
-  }
-  return [...autowin, ...globalByName.values()].sort((a, b) =>
-    a.source === b.source ? a.label.localeCompare(b.label) : a.source === 'autowin' ? -1 : 1
-  )
+  // Chantier 2 — souverain de Hermes : le loop utilise le kit `~/.claude/skills` + la racine Autowin.
+  // Plus de scan `hermes/skills` ni d'appel `listHermesControls` (l'arbre Hermes est retiré).
+  const autowin = [
+    ...discoverSkillFiles(join(user, '.claude', 'skills')),
+    ...discoverSkillFiles(join(localAppData, 'autowin-os', 'skills'))
+  ].map((path) => metadata(path, 'autowin'))
+  const byName = new Map<string, ResolvedLoopSkill>()
+  for (const skill of autowin) if (!byName.has(skill.label)) byName.set(skill.label, skill)
+  return [...byName.values()].sort((a, b) => a.label.localeCompare(b.label))
 }
 
 export async function listLoopSkills(): Promise<LoopSkillItem[]> {

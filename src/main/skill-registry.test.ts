@@ -23,54 +23,41 @@ function roots(base: string): SkillRegistryRoots {
   return {
     codex: join(base, 'codex'),
     claude: join(base, 'claude'),
-    hermesLocal: join(base, 'hermes-local'),
-    hermesBuiltin: join(base, 'hermes-builtin')
+    autowin: join(base, 'autowin')
   }
 }
 
-describe('registre multi-source des skills', () => {
-  it('conserve les homonymes Codex, Claude et Hermes avec des identités qualifiées', async () => {
+describe('registre multi-source des skills (souverain de Hermes)', () => {
+  it('conserve les homonymes Codex, Claude et Autowin avec des identités qualifiées', async () => {
     const base = join(process.cwd(), 'node_modules', '.tmp-skill-registry', crypto.randomUUID())
     const configured = roots(base)
     put(configured.codex, 'shared', 'shared')
     put(configured.claude, 'shared', 'shared')
-    put(configured.hermesLocal, 'shared', 'shared')
-    put(configured.hermesBuiltin, 'builtin-only', 'builtin-only')
+    put(configured.autowin, 'shared', 'shared')
+    put(configured.autowin, 'autowin-only', 'autowin-only')
 
-    const items = await discoverSkillRegistry(configured, async () => [])
+    const items = await discoverSkillRegistry(configured)
 
     expect(items.map((item) => item.id)).toEqual([
       'codex:shared',
       'claude:shared',
-      'hermes-local:shared',
-      'hermes-builtin:builtin-only'
+      'autowin:autowin-only',
+      'autowin:shared'
     ])
     expect(new Set(items.map((item) => item.source))).toEqual(
-      new Set(['codex', 'claude', 'hermes-local', 'hermes-builtin'])
+      new Set(['codex', 'claude', 'autowin'])
     )
   })
 
-  it('rapproche un identifiant Hermes tronqué avec le nom canonique du fichier', async () => {
+  it('un skill présent sur disque est actif (plus d’état enabled via Hermes)', async () => {
     const base = join(process.cwd(), 'node_modules', '.tmp-skill-registry', crypto.randomUUID())
     const configured = roots(base)
-    put(configured.hermesLocal, 'hermes-oauth-operations', 'hermes-oauth-operations')
+    put(configured.autowin, 'frame', 'frame')
 
-    const items = await discoverSkillRegistry(configured, async () => [
-      {
-        id: 'hermes-oauth-operatio…',
-        label: 'hermes-oauth-operatio…',
-        description: 'oauth',
-        enabled: true,
-        mutable: false
-      }
-    ])
+    const items = await discoverSkillRegistry(configured)
 
     expect(items).toEqual([
-      expect.objectContaining({
-        id: 'hermes-local:hermes-oauth-operations',
-        label: 'hermes-oauth-operations',
-        enabled: true
-      })
+      expect.objectContaining({ id: 'autowin:frame', label: 'frame', enabled: true })
     ])
   })
 
@@ -79,10 +66,9 @@ describe('registre multi-source des skills', () => {
     const windsurf = join(base, 'windsurf')
     put(windsurf, 'custom', 'custom')
 
-    const items = await discoverSkillProviders(
-      [{ id: 'windsurf', label: 'Windsurf', root: windsurf }],
-      async () => []
-    )
+    const items = await discoverSkillProviders([
+      { id: 'windsurf', label: 'Windsurf', root: windsurf }
+    ])
 
     expect(items).toEqual([
       expect.objectContaining({
@@ -93,7 +79,7 @@ describe('registre multi-source des skills', () => {
     ])
   })
 
-  it('charge une cinquième source depuis la configuration runtime du chemin applicatif', async () => {
+  it('charge une source supplémentaire depuis la configuration runtime', async () => {
     const base = join(process.cwd(), 'node_modules', '.tmp-skill-registry', crypto.randomUUID())
     const configured = roots(base)
     const windsurf = join(base, 'windsurf')
@@ -105,7 +91,7 @@ describe('registre multi-source des skills', () => {
       JSON.stringify({ sources: [{ id: 'windsurf', label: 'Windsurf', root: windsurf }] })
     )
 
-    const items = await discoverConfiguredSkillRegistry(configPath, configured, async () => [])
+    const items = await discoverConfiguredSkillRegistry(configPath, configured)
 
     expect(items).toContainEqual(
       expect.objectContaining({ id: 'windsurf:custom', sourceLabel: 'Windsurf' })

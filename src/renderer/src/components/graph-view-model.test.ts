@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  GRAPH_PALETTE,
   buildThemeSummaries,
   completeProgressiveGraph,
   dynamicGraphForKey,
@@ -7,6 +8,8 @@ import {
   focusedNodeIdsFor,
   galaxyNodeAppearance,
   getGraphVisualProfile,
+  graphLinkArrowColor,
+  graphLinkColor,
   graphForcesForSpacing,
   graphMotionProfile,
   highlightedNodeIdsForThemes,
@@ -33,6 +36,13 @@ import {
   type GraphLink,
   type GraphNode
 } from './graph-view-model'
+
+describe('graph theme palette', () => {
+  it('keeps enough unique colors for every current Memory theme', () => {
+    expect(GRAPH_PALETTE).toHaveLength(32)
+    expect(new Set(GRAPH_PALETTE).size).toBe(GRAPH_PALETTE.length)
+  })
+})
 
 const nodes: GraphNode[] = [
   { id: 'a', label: 'Accueil', group: 2, themes: ['theme/rig', 'theme/architecture'] },
@@ -163,16 +173,22 @@ describe('graph view presentation model', () => {
   it('keeps category colors stable across distinct serious and galaxy rendering profiles', () => {
     const serious = getGraphVisualProfile('serious')
     expect(serious).toMatchObject({
-      background: '#000000',
+      background: 'rgba(0,0,0,0)',
       modeClass: 'graph-observatory--serious'
     })
     expect(serious).not.toHaveProperty('particles')
     const galaxy = getGraphVisualProfile('galaxy')
     expect(galaxy).toMatchObject({
       background: 'rgba(0,0,0,0)',
-      modeClass: 'graph-observatory--galaxy'
+      modeClass: 'graph-observatory--galaxy',
+      linkBase: '#ffffff'
     })
     expect(galaxy.palette).toEqual(serious.palette)
+    expect(graphLinkColor('galaxy', galaxy, false)).toBe('#ffffff')
+    expect(graphLinkColor('galaxy', galaxy, true)).toBe('#ffffff')
+    expect(graphLinkArrowColor('galaxy')).toBe('#ffffff')
+    expect(graphLinkArrowColor('serious')).toBe('#6f8193')
+    expect(graphLinkColor('serious', serious, true)).toBe(serious.linkHighlight)
     expect(galaxy).not.toHaveProperty('particles')
   })
 
@@ -363,7 +379,7 @@ describe('graph view presentation model', () => {
   })
 
   it('dims context nodes without hiding them', () => {
-    expect(nodeColorForTheme(nodes[2], new Set(['theme/rig']), 0.22)).toBe('rgba(117,215,255,0.22)')
+    expect(nodeColorForTheme(nodes[2], new Set(['theme/rig']), 0.22)).toBe('rgba(255,133,200,0.22)')
   })
 
   it('maps galaxy stars to the declared theme order and dims only context stars', () => {

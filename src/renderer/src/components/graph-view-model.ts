@@ -44,10 +44,33 @@ export const GRAPH_PALETTE = [
   '#ca9cff',
   '#ff7e7e',
   '#7588ff',
-  '#e7dd72'
+  '#e7dd72',
+  '#ff85c8',
+  '#4de1c1',
+  '#ff9f43',
+  '#b8e986',
+  '#e68cff',
+  '#4fc3f7',
+  '#ffd166',
+  '#69f0ae',
+  '#b39ddb',
+  '#ff5c8a',
+  '#18ffff',
+  '#c6ff00',
+  '#ff7043',
+  '#80cbc4',
+  '#ea80fc',
+  '#8c9eff',
+  '#ffb36b',
+  '#00e5ff',
+  '#ccff90',
+  '#ff80ab',
+  '#7c4dff',
+  '#64ffda',
+  '#ffff00',
+  '#ffab40',
+  '#40c4ff'
 ]
-
-export const GALAXY_PALETTE = GRAPH_PALETTE
 
 export const DEFAULT_GRAPH_NODE_SPACING = 72
 
@@ -84,7 +107,9 @@ export function isCurrentGraphFitRequest(
 const GRAPH_VISUAL_PROFILES: Record<GraphVisualMode, GraphVisualProfile> = {
   serious: {
     modeClass: 'graph-observatory--serious',
-    background: '#000000',
+    // Transparent (comme galaxy) : le canvas WebGL du graphe ne peint plus un fond noir opaque,
+    // il laisse voir la surface 0.95 de la vue Memory (fond uniforme, pas de "fond noir" isolé).
+    background: 'rgba(0,0,0,0)',
     linkBase: '#263542',
     linkHighlight: '#5a9f80',
     linkOpacity: 0.45,
@@ -94,16 +119,29 @@ const GRAPH_VISUAL_PROFILES: Record<GraphVisualMode, GraphVisualProfile> = {
   galaxy: {
     modeClass: 'graph-observatory--galaxy',
     background: 'rgba(0,0,0,0)',
-    linkBase: '#35336f',
+    linkBase: '#ffffff',
     linkHighlight: '#ff5dde',
     linkOpacity: 0.56,
     nodeScale: 1.18,
-    palette: GALAXY_PALETTE
+    palette: GRAPH_PALETTE
   }
 }
 
 export function getGraphVisualProfile(mode: GraphVisualMode): GraphVisualProfile {
   return GRAPH_VISUAL_PROFILES[mode]
+}
+
+export function graphLinkColor(
+  mode: GraphVisualMode,
+  profile: GraphVisualProfile,
+  highlighted: boolean
+): string {
+  if (mode === 'galaxy') return profile.linkBase
+  return highlighted ? profile.linkHighlight : profile.linkBase
+}
+
+export function graphLinkArrowColor(mode: GraphVisualMode): string {
+  return mode === 'galaxy' ? '#ffffff' : '#6f8193'
 }
 
 export function buildThemeSummaries(
@@ -302,7 +340,7 @@ export function galaxyNodeAppearance(
   activeThemes: ReadonlySet<string>,
   contextOpacity: number,
   themeOrder: readonly string[],
-  palette: readonly string[] = GALAXY_PALETTE,
+  palette: readonly string[] = GRAPH_PALETTE,
   themeCounts: ReadonlyMap<string, number> = new Map()
 ): GalaxyNodeAppearance {
   const isActive =

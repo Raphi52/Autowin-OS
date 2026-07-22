@@ -124,6 +124,17 @@ export function createGalaxyStar(
   star.scale.set(scale, scale, 1)
   star.renderOrder = appearance.opacity === 1 ? 2 : 1
   star.userData.nodeId = node.id
+  // Scintillement : phase/vitesse DÉTERMINISTES par nœud (stables entre re-rendus) — la boucle
+  // d'animation de GraphView module opacité + taille en mode galaxy. Les nœuds de contexte
+  // (opacité faible) scintillent moins pour rester lisibles.
+  const seed = [...node.id].reduce((sum, ch) => (sum * 31 + ch.charCodeAt(0)) % 9973, 7)
+  star.userData.twinkle = {
+    phase: (seed % 628) / 100,
+    speed: 0.55 + ((seed % 97) / 97) * 1.25,
+    baseOpacity: appearance.opacity,
+    baseScale: scale,
+    amp: appearance.opacity >= 0.9 ? 0.3 : 0.12
+  }
   return star
 }
 

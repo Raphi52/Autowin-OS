@@ -7,7 +7,7 @@ import { HermesControlsView } from './components/HermesControlsView'
 import { BehaviourView } from './components/BehaviourView'
 import { ModelQuestionPopup } from './components/ModelQuestionPopup'
 import { normalizeTab, type Tab } from './tabs'
-import autowinLogo from './assets/autowin-logo.png'
+import autowinLogo from './assets/autowin-logo-transparent.png'
 import './assets/app-shell.css'
 import './assets/cosmic-outline.css'
 import './assets/theme-modes.css'
@@ -159,9 +159,7 @@ export function MainApp(): React.JSX.Element {
       <aside className={`rail${railCollapsed ? ' is-collapsed' : ''}`}>
         <div className="brand">
           <img className="brand-logo" src={autowinLogo} alt="" aria-hidden="true" />
-          <span className="brand-name">
-            Autowin <b>OS</b>
-          </span>
+          <span className="brand-name">Autowin OS</span>
           <button
             type="button"
             className="rail-toggle"
@@ -211,7 +209,7 @@ export function MainApp(): React.JSX.Element {
         )}
         {visitedTabs.has('memory') && (
           <div className={`view-slot${tab === 'memory' ? ' is-active' : ''}`}>
-            <GraphView visualMode="serious" onCleanMemory={openBrainwashConversation} />
+            <GraphView onCleanMemory={openBrainwashConversation} />
           </div>
         )}
         {visitedTabs.has('observatory') && (

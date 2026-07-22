@@ -19,7 +19,7 @@
 }
 
 .shell:has(.rail.is-collapsed)::before {
-  left: 58px;
+  left: 54px;
 }
 
 .rail {
@@ -63,14 +63,6 @@
   background: linear-gradient(90deg, #36e6ff, #ff3cac, #ffd45a);
   content: '';
 }
-.brand b {
-  margin-left: -2px;
-  color: #fff;
-  font-weight: 800;
-  text-shadow:
-    0 0 5px rgba(255, 255, 255, 0.78),
-    0 0 10px rgba(54, 230, 255, 0.34);
-}
 .brand-logo {
   width: 38px;
   height: 38px;
@@ -82,6 +74,13 @@
 .brand-name {
   min-width: 0;
   white-space: nowrap;
+  color: #fff;
+  font-family: 'Segoe UI Variable Display', 'Segoe UI', sans-serif;
+  font-weight: 720;
+  letter-spacing: 0.015em;
+  text-shadow:
+    0 0 5px rgba(255, 255, 255, 0.78),
+    0 0 10px rgba(54, 230, 255, 0.34);
 }
 .rail-toggle {
   width: 27px;
@@ -102,7 +101,7 @@
 }
 
 .rail.is-collapsed {
-  width: 58px;
+  width: 54px;
   padding-inline: 9px;
 }
 .rail.is-collapsed .brand {
@@ -122,11 +121,20 @@
   display: none;
 }
 .rail.is-collapsed .nav-item {
+  width: 36px;
+  height: 36px;
+  margin-inline: auto;
   justify-content: center;
-  padding-inline: 0;
+  padding: 0;
+}
+.rail.is-collapsed .space-toy-icon {
+  transform: translateX(-3px);
 }
 .rail.is-collapsed .rail-toggle {
-  margin-left: 0;
+  margin-inline: auto;
+}
+.rail.is-collapsed .nav {
+  overflow-x: hidden;
 }
 
 .nav {
@@ -140,13 +148,6 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-}
-.nav-title {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: var(--text-faint);
-  padding: 0 var(--s2) var(--s1);
 }
 .nav-item {
   display: flex;
@@ -189,40 +190,8 @@
   line-height: 1;
   filter: saturate(1.15);
 }
-.memory-nav-icon {
-  width: 20px;
-  height: 20px;
-  overflow: visible;
-  color: #72e7ff;
-  filter: none;
-}
-.nav-item.active .memory-nav-icon {
-  color: #a8f4ff;
-}
-.nav-item .constellation-icon path {
-  opacity: 0.72;
-}
-.nav-item .constellation-icon circle {
-  fill: currentColor;
-  stroke: none;
-}
-.nav-item:hover .constellation-icon circle,
-.nav-item.active .constellation-icon circle {
-  opacity: 1;
-}
 .nav-item > span:not(.space-toy-icon) {
   flex: 1;
-}
-.nav-badge {
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  background: var(--warn);
-  color: #1a1205;
-  border-radius: 999px;
-  padding: 0 6px;
-  min-width: 17px;
-  text-align: center;
-  font-weight: 700;
 }
 .rail-foot {
   font-size: 11px;
@@ -238,6 +207,9 @@
   transition: box-shadow var(--dur) var(--ease);
   background: transparent;
 }
+.shell:has(.rail.is-collapsed) .main {
+  padding-left: var(--s2);
+}
 .view-slot {
   display: none;
   flex: 1;
@@ -249,12 +221,6 @@
   flex-direction: column;
 }
 
-.capabilities-view {
-  height: 100%;
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-}
 /* Flash discret quand un agent pilote la vue (inset accent, pas de halo flou). */
 .main.driven {
   box-shadow: inset 0 0 0 2px var(--accent);

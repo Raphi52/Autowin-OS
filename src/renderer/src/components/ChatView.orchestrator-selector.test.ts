@@ -276,10 +276,11 @@ describe('selecteur orchestrateur Chat', () => {
     )
   })
 
-  it('change uniquement la route OmniRoute sans toucher la conversation', () => {
-    // Logique de changement de route : reste dans ChatView.
-    expect(source).toContain("option.provider !== 'omniroute'")
-    expect(source).toContain('activateOmniRoute(option.model, option.reasoningEffort)')
+  it('change le role orchestrateur partage sans toucher la conversation', () => {
+    expect(source).toMatch(/window\.api\.setRole\(\s*'orchestrator'/)
+    expect(source).toContain('option.provider,')
+    expect(source).toContain('option.model,')
+    expect(source).toContain('option.reasoningEffort')
     expect(source).toContain('generation === runtimeRefreshGenerationRef.current')
     // Rendu du sélecteur : extrait dans OrchestratorModelSelector.
     expect(selectorSource).toContain('const disabled = busy || pending || models.length === 0')

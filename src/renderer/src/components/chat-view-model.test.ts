@@ -3,6 +3,7 @@ import {
   CHAT_PANE_LIMITS,
   clampConversationPaneWidth,
   coalesceAssistantParts,
+  deriveConversationState,
   groupAssistantActivity,
   isRunRequestCurrent,
   isChatNearBottom,
@@ -16,6 +17,52 @@ import {
   turnCostEq,
   costEqTier
 } from './chat-view-model'
+
+describe('conversation state indicator', () => {
+  it('prioritizes a real live run over the persisted terminal state', () => {
+    expect(
+      deriveConversationState({ busy: true, messageCount: 2, lastAssistantStatus: 'completed' })
+    ).toMatchObject({ key: 'running', label: 'En cours', glyph: '' })
+  })
+
+  it.each([
+    ['streaming', 'running', 'En cours', ''],
+    ['completed', 'completed', 'À jour', '✓'],
+    ['failed', 'failed', 'Erreur', '!'],
+    ['interrupted', 'interrupted', 'Interrompue', 'Ⅱ'],
+    ['cancelled', 'cancelled', 'Arrêtée', '×']
+  ] as const)('maps persisted %s turns to %s', (status, key, label, glyph) => {
+    expect(
+      deriveConversationState({ busy: false, messageCount: 2, lastAssistantStatus: status })
+    ).toMatchObject({ key, label, glyph })
+  })
+
+  it('distinguishes an empty conversation from a user message without an answer', () => {
+    expect(deriveConversationState({ busy: false, messageCount: 0 })).toMatchObject({
+      key: 'empty',
+      label: 'Vide',
+      glyph: '○'
+    })
+    expect(
+      deriveConversationState({ busy: false, messageCount: 1, lastMessageRole: 'user' })
+    ).toMatchObject({
+      key: 'waiting',
+      label: 'Sans réponse',
+      glyph: '·'
+    })
+  })
+
+  it('does not reuse an older completed assistant after a newer user message', () => {
+    expect(
+      deriveConversationState({
+        busy: false,
+        messageCount: 3,
+        lastMessageRole: 'user',
+        lastAssistantStatus: 'completed'
+      })
+    ).toMatchObject({ key: 'waiting', label: 'Sans réponse', glyph: '·' })
+  })
+})
 
 describe('assistant reasoning sanitization', () => {
   it('removes an orphan closing think tag at the start of a message', () => {

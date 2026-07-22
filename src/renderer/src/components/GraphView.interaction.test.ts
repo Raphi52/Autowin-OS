@@ -59,4 +59,16 @@ describe('floating note labels', () => {
     expect(source).not.toContain("nodeLabel={settings.labels ? 'label' : () => ''}")
     expect(source).toContain('settings.labels && shouldShowFloatingNodeName')
   })
+
+  it('centers an animated and accessible loader while the graph is loading', () => {
+    const source = readFileSync(new URL('./GraphView.tsx', import.meta.url), 'utf8')
+    const styles = readFileSync(new URL('./GraphView.css', import.meta.url), 'utf8')
+
+    expect(source).toContain('className="graph-loading" role="status" aria-live="polite"')
+    expect(source).toContain('className="graph-loading__spinner" aria-hidden="true"')
+    expect(source).not.toContain('<div className="graph-status">Chargement du graphe…</div>')
+    expect(styles).toMatch(/\.graph-loading\s*\{[\s\S]*?place-content:\s*center;/)
+    expect(styles).toContain('animation: graph-loading-spin 850ms linear infinite;')
+    expect(styles).toMatch(/prefers-reduced-motion:[\s\S]*?\.graph-loading__spinner/)
+  })
 })

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join } from 'node:path'
-import { listHermesControls, type HermesControlItem } from './hermes-controls'
+import { type HermesControlItem } from './hermes-controls'
 
 export interface SkillRegistryItem extends HermesControlItem {
   source: string
@@ -23,8 +23,7 @@ interface SkillSourcesConfig {
 export interface SkillRegistryRoots {
   codex: string
   claude: string
-  hermesLocal: string
-  hermesBuiltin: string
+  autowin: string
 }
 
 const MAX_DEPTH = 6
@@ -34,11 +33,11 @@ const METADATA_BYTES = 16_384
 export function defaultSkillRegistryRoots(): SkillRegistryRoots {
   const user = homedir()
   const localAppData = process.env.LOCALAPPDATA ?? join(user, 'AppData', 'Local')
+  // Chantier 2 — souverain de Hermes : kit `~/.claude/skills` + `~/.codex/skills` + racine Autowin.
   return {
     codex: join(user, '.codex', 'skills'),
     claude: join(user, '.claude', 'skills'),
-    hermesLocal: join(localAppData, 'hermes', 'skills'),
-    hermesBuiltin: join(localAppData, 'hermes', 'hermes-agent', 'skills')
+    autowin: join(localAppData, 'autowin-os', 'skills')
   }
 }
 
@@ -46,13 +45,7 @@ export function providersFromRoots(roots: SkillRegistryRoots): SkillDiscoveryPro
   return [
     { id: 'codex', label: 'Codex', root: roots.codex },
     { id: 'claude', label: 'Claude', root: roots.claude },
-    { id: 'hermes-local', label: 'Hermes local', root: roots.hermesLocal, usesHermesState: true },
-    {
-      id: 'hermes-builtin',
-      label: 'Hermes intégré',
-      root: roots.hermesBuiltin,
-      usesHermesState: true
-    }
+    { id: 'autowin', label: 'Autowin', root: roots.autowin }
   ]
 }
 
@@ -134,50 +127,34 @@ function metadata(path: string): { label: string; description: string } | null {
   }
 }
 
-function isHermesEnabled(label: string, enabledIds: readonly string[]): boolean {
-  return enabledIds.some((raw) => {
-    const truncated = raw.endsWith('…') || raw.endsWith('...')
-    const prefix = raw.replace(/(?:…|\.\.\.)$/, '')
-    return truncated ? label.startsWith(prefix) : label === raw
-  })
-}
-
 export async function discoverSkillRegistry(
-  roots: SkillRegistryRoots = defaultSkillRegistryRoots(),
-  loadHermesSkills: () => Promise<HermesControlItem[]> = () => listHermesControls('skills')
+  roots: SkillRegistryRoots = defaultSkillRegistryRoots()
 ): Promise<SkillRegistryItem[]> {
-  return discoverSkillProviders(providersFromRoots(roots), loadHermesSkills)
+  return discoverSkillProviders(providersFromRoots(roots))
 }
 
 export async function discoverConfiguredSkillRegistry(
   configPath: string,
-  roots: SkillRegistryRoots = defaultSkillRegistryRoots(),
-  loadHermesSkills: () => Promise<HermesControlItem[]> = () => listHermesControls('skills')
+  roots: SkillRegistryRoots = defaultSkillRegistryRoots()
 ): Promise<SkillRegistryItem[]> {
-  return discoverSkillProviders(loadConfiguredProviders(configPath, roots), loadHermesSkills)
+  return discoverSkillProviders(loadConfiguredProviders(configPath, roots))
 }
 
+// Chantier 2 — souverain de Hermes : plus d'état enabled récupéré via hermes.exe. Un skill présent
+// sur disque est actif (l'activation/désactivation vit désormais dans le registre natif local).
 export async function discoverSkillProviders(
-  providers: readonly SkillDiscoveryProvider[],
-  loadHermesSkills: () => Promise<HermesControlItem[]> = () => listHermesControls('skills')
+  providers: readonly SkillDiscoveryProvider[]
 ): Promise<SkillRegistryItem[]> {
-  let hermesEnabled: string[] = []
-  try {
-    hermesEnabled = (await loadHermesSkills()).filter((item) => item.enabled).map((item) => item.id)
-  } catch {
-    // Le catalogue disque reste consultable même si la CLI Hermes est indisponible.
-  }
   return providers.flatMap((provider) =>
     discoverFiles(provider.root).flatMap<SkillRegistryItem>((path) => {
       const meta = metadata(path)
       if (!meta) return []
-      const enabled = provider.usesHermesState ? isHermesEnabled(meta.label, hermesEnabled) : true
       return [
         {
           id: `${provider.id}:${meta.label}`,
           label: meta.label,
           description: meta.description,
-          enabled,
+          enabled: true,
           mutable: false,
           source: provider.id,
           sourceLabel: provider.label,

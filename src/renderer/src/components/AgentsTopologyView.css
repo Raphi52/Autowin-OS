@@ -4,6 +4,8 @@
   grid-template-rows: 72px minmax(0, 1fr);
   width: 100%;
   height: 100%;
+  /* Aligne le titre a la meme hauteur que les autres vues (~52px du haut). */
+  padding-top: 9px;
   min-height: 0;
   overflow: hidden;
   border: 1px solid var(--container-border);
@@ -360,12 +362,6 @@
   font-size: 8px;
   text-transform: uppercase;
 }
-.topology-slot .topology-capability-picker {
-  color: #8fcdb6;
-}
-.topology-slot .topology-capability-picker select {
-  border-color: #30624f;
-}
 
 .topology-slot select {
   min-width: 76px;
@@ -483,13 +479,16 @@
 /* Mode Noir · Black Glass: surfaces neutres et translucides, accents réservés aux rôles. */
 .theme-serious .agents-topology {
   border-color: rgba(255, 255, 255, 0.18);
-  background: var(--surface-page);
+  /* Fond de page = meme param que la barre gauche (--surface-panel) : page uniforme. */
+  background: var(--surface-panel);
   color: #f2f3f5;
 }
 
 .theme-serious .topology-toolbar {
   border-bottom-color: rgba(255, 255, 255, 0.14);
-  background: var(--surface-panel);
+  /* Transparente : laisse voir le fond de page uniforme (--surface-panel sur .agents-topology),
+     evite une double-couche qui rendrait la top bar plus sombre que le corps. */
+  background: transparent;
 }
 
 .theme-serious .topology-library {
@@ -538,10 +537,6 @@
   border-color: rgba(255, 255, 255, 0.22);
   background: var(--surface-inset);
   color: #e7e8eb;
-}
-
-.theme-serious .topology-slot .topology-capability-picker select {
-  border-color: rgba(99, 202, 157, 0.4);
 }
 
 .theme-serious .topology-empty,

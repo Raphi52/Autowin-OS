@@ -4,14 +4,6 @@ import { ModuleHeader } from './ModuleHeader'
 
 type Kind = 'skills' | 'hooks' | 'tools'
 type HookModel = 'hermes' | 'claude' | 'codex'
-type CapabilityProfile = {
-  id: string
-  name: string
-  description: string
-  selections: Record<Kind, Record<string, boolean>>
-  updatedAt: string
-}
-type CapabilityState = { profiles: CapabilityProfile[]; assignments: Record<string, string> }
 
 interface Item {
   id: string
@@ -63,8 +55,6 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
   // Façon 1 (« n'afficher que ce qui sert ») : par défaut on n'affiche que les capacités ACTIVES.
   const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('enabled')
   const [selectedId, setSelectedId] = useState('')
-  const [profileState, setProfileState] = useState<CapabilityState | null>(null)
-  const [profileId, setProfileId] = useState('balanced')
   const [relationCatalog, setRelationCatalog] = useState<RelatedItem[]>([])
 
   useEffect(() => {
@@ -103,21 +93,6 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
       current = false
     }
   }, [active, hookModel, kind, toolSource])
-
-  useEffect(() => {
-    if (!active) return
-    window.api
-      .capabilityProfiles()
-      .then((state) => {
-        setProfileState(state)
-        setProfileId((current) =>
-          state.profiles.some((profile) => profile.id === current)
-            ? current
-            : (state.profiles[0]?.id ?? '')
-        )
-      })
-      .catch(() => undefined)
-  }, [active])
 
   useEffect(() => {
     if (!active) return
@@ -161,15 +136,8 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
     }
   }, [active])
 
-  const profile = profileState?.profiles.find((candidate) => candidate.id === profileId)
-  const effectiveItems = useMemo(
-    () =>
-      items.map((item) => ({
-        ...item,
-        enabled: profile?.selections[kind][item.id] ?? item.enabled
-      })),
-    [items, kind, profile]
-  )
+  // État = celui de la source native (registre disque) directement — plus de couche « profil ».
+  const effectiveItems = items
 
   const skillSources = useMemo(() => {
     const labels = new Map<string, string>()
@@ -209,52 +177,17 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
     )
   }, [kind, relationCatalog, selected])
 
+  // Seul le canal `tools` a un backend d'activation RÉEL (setHermesTool → registre natif). Les
+  // skills/hooks n'écrivaient que dans le profil décoratif (retiré) → ils sont désormais en
+  // lecture seule (pas de toggle qui ne ferait rien).
   async function toggle(item: Item): Promise<void> {
-    if (!profileState || !profile) return
+    if (kind !== 'tools') return
     setBusy(item.id)
     setError('')
     try {
-      if (kind === 'tools') {
-        const result = await window.api.setHermesTool(item.id, !item.enabled)
-        setItems(result.items)
-        const next: CapabilityState = {
-          ...profileState,
-          profiles: profileState.profiles.map((candidate) =>
-            candidate.id === profile.id
-              ? {
-                  ...candidate,
-                  updatedAt: new Date().toISOString(),
-                  selections: {
-                    ...candidate.selections,
-                    tools: {
-                      ...candidate.selections.tools,
-                      ...Object.fromEntries(result.items.map((tool) => [tool.id, tool.enabled]))
-                    }
-                  }
-                }
-              : candidate
-          )
-        }
-        setProfileState(await window.api.saveCapabilityProfiles(next))
-        setRestartRequired(result.restartRequired)
-        return
-      }
-      const next: CapabilityState = {
-        ...profileState,
-        profiles: profileState.profiles.map((candidate) =>
-          candidate.id === profile.id
-            ? {
-                ...candidate,
-                updatedAt: new Date().toISOString(),
-                selections: {
-                  ...candidate.selections,
-                  [kind]: { ...candidate.selections[kind], [item.id]: !item.enabled }
-                }
-              }
-            : candidate
-        )
-      }
-      setProfileState(await window.api.saveCapabilityProfiles(next))
+      const result = await window.api.setHermesTool(item.id, !item.enabled)
+      setItems(result.items)
+      setRestartRequired(result.restartRequired)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -276,16 +209,6 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
       <header className="cockpit-header">
         <ModuleHeader eyebrow="Capacités connectées" title="Skills · Hooks · Tools" />
         <div className="cockpit-toolbar">
-          <label>
-            <span>Profil</span>
-            <select value={profileId} onChange={(event) => setProfileId(event.target.value)}>
-              {profileState?.profiles.map((candidate) => (
-                <option key={candidate.id} value={candidate.id}>
-                  {candidate.name}
-                </option>
-              ))}
-            </select>
-          </label>
           <input
             className="input"
             value={query}
@@ -438,18 +361,15 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
                     <span className="control-usage-count" title="Occurrences observées">
                       ×{(item as { count?: number }).count ?? ''}
                     </span>
-                  ) : (
+                  ) : kind === 'tools' ? (
+                    // Seul le catalogue Tools a un backend d'activation réel (registre natif).
                     <button
                       type="button"
                       role="switch"
                       aria-checked={item.enabled}
                       className={`control-toggle ${item.enabled ? 'is-on' : ''}`}
-                      disabled={!profile || busy === item.id}
-                      title={
-                        kind === 'tools'
-                          ? 'Modifier Hermes et synchroniser le profil'
-                          : 'Activer ou retirer cette capacité du profil'
-                      }
+                      disabled={busy === item.id}
+                      title="Activer ou désactiver cet outil dans le registre natif"
                       onClick={(event) => {
                         event.stopPropagation()
                         void toggle(item)
@@ -457,6 +377,14 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
                     >
                       <i />
                     </button>
+                  ) : (
+                    // Skills/hooks = lecture seule (état lu du registre natif, pas d'admin ici).
+                    <span
+                      className={`control-status-tag ${item.enabled ? 'is-on' : ''}`}
+                      title="État lu du registre (lecture seule)"
+                    >
+                      {item.enabled ? 'Actif' : 'Inactif'}
+                    </span>
                   )}
                 </article>
               ))
@@ -510,11 +438,7 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
                     (kind === 'hooks' ? hookModel : 'Hermes')}
                 </span>
                 <h3>{selected.label}</h3>
-                <p>
-                  {selected.enabled
-                    ? `Active dans le profil ${profile?.name ?? ''}`
-                    : `Désactivée dans le profil ${profile?.name ?? ''}`}
-                </p>
+                <p>{selected.enabled ? 'Active' : 'Désactivée'}</p>
               </div>
               <dl>
                 <div>
@@ -550,15 +474,15 @@ export function HermesControlsView({ active }: { active: boolean }): React.JSX.E
                 )}
                 <div>
                   <dt>Gestion</dt>
-                  <dd>{kind === 'tools' ? 'Hermes + profil' : 'Appartenance au profil'}</dd>
+                  <dd>{kind === 'tools' ? 'Registre natif' : 'Lecture seule'}</dd>
                 </div>
               </dl>
               <div className="inspector-impact">
                 <b>Impact du changement</b>
                 <p>
                   {kind === 'tools'
-                    ? 'Modifie la configuration Hermes, synchronise le profil sélectionné et nécessite une nouvelle session ou un redémarrage gateway.'
-                    : `${selected.enabled ? 'Désactiver' : 'Activer'} modifie uniquement le profil ${profile?.name ?? 'sélectionné'}, sans altérer la source.`}
+                    ? 'Modifie le registre natif ; peut nécessiter une nouvelle session pour prise en compte.'
+                    : 'Capacité en lecture seule ici : son état est lu du registre, non modifiable depuis cette vue.'}
                 </p>
               </div>
             </>

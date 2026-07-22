@@ -83,4 +83,72 @@ describe('ActivityPane request ordering', () => {
     expect(container.textContent).toContain('conversation B')
     expect(container.textContent).not.toContain('conversation A')
   })
+
+  it('affiche le modele route et son effort plutot que le transport OmniRoute', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        conversationActivity: vi.fn((id: string) =>
+          Promise.resolve(
+            id === '__global_prompt_config__'
+              ? []
+              : [
+                  {
+                    ts: '2026-07-22T11:09:01Z',
+                    kind: 'chat',
+                    label: 'tour agent',
+                    provider: 'omniroute',
+                    model: 'claude-opus-4-6',
+                    reasoningEffort: 'high'
+                  }
+                ]
+          )
+        ),
+        promptCalls: vi.fn(() => Promise.resolve([])),
+        hermesPromptTraces: vi.fn(() => Promise.resolve([])),
+        onAppEvent: vi.fn(() => vi.fn())
+      }
+    })
+
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(ActivityPane, { convId: 'A' })))
+
+    expect(container.textContent).toContain('claude-opus-4-6 · high')
+    expect(container.textContent).not.toContain('omniroute')
+  })
+
+  it('retombe sur le provider historique quand le modele journalise est vide', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        conversationActivity: vi.fn((id: string) =>
+          Promise.resolve(
+            id === '__global_prompt_config__'
+              ? []
+              : [
+                  {
+                    ts: '2026-07-22T11:09:01Z',
+                    kind: 'chat',
+                    label: 'ancien tour',
+                    provider: 'omniroute',
+                    model: '   '
+                  }
+                ]
+          )
+        ),
+        promptCalls: vi.fn(() => Promise.resolve([])),
+        hermesPromptTraces: vi.fn(() => Promise.resolve([])),
+        onAppEvent: vi.fn(() => vi.fn())
+      }
+    })
+
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(ActivityPane, { convId: 'A' })))
+
+    expect(container.textContent).toContain('omniroute')
+  })
 })

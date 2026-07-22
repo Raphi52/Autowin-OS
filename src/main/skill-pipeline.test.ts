@@ -7,6 +7,8 @@ import {
   loadEngineText,
   kitAvailable,
   phaseInstruction,
+  stripSkillFrontmatter,
+  engineForPhase,
   PIPELINE_PHASES
 } from './skill-pipeline'
 
@@ -39,5 +41,56 @@ describe('skill-pipeline — chargement du kit au runtime', () => {
 
   it('expose les 6 phases de la pipeline dans l’ordre', () => {
     expect(PIPELINE_PHASES).toEqual(['scout', 'frame', 'terrain', 'build', 'clean', 'judge'])
+  })
+
+  it('retire la frontmatter de routing avant injection, garde le corps', () => {
+    const root = mkdtempSync(join(tmpdir(), 'skills-fm-'))
+    try {
+      mkdirSync(join(root, 'scout'), { recursive: true })
+      const md = '---\nname: scout\ndescription: >-\n  Trigger on X. Do NOT use to Y.\n---\n\n# scout\nCorps réel du skill.'
+      writeFileSync(join(root, 'scout', 'SKILL.md'), md)
+      const injected = phaseInstruction('scout', root)
+      expect(injected).toContain('Corps réel du skill.')
+      expect(injected).not.toContain('description:')
+      expect(injected).not.toContain('Do NOT use to')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('stripSkillFrontmatter est un no-op sans frontmatter', () => {
+    expect(stripSkillFrontmatter('# build\nsans frontmatter')).toBe('# build\nsans frontmatter')
+  })
+
+  it('injecte la FONDATION + le seul chapitre de la phase (pas ENGINE entier)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'skills-eng-'))
+    try {
+      mkdirSync(join(root, '_engine'), { recursive: true })
+      const engine = [
+        '# ENGINE',
+        '## ⚡ THE FOUNDATION — 7 things',
+        'les 7 concepts',
+        '# REFERENCE',
+        '## Ch.1 — GENERATE',
+        'contenu ch1',
+        '## Ch.2 — JUDGE',
+        'contenu ch2',
+        '## Ch.4 — BUILD',
+        'contenu ch4',
+        '## Telemetry',
+        'hors usage'
+      ].join('\n')
+      writeFileSync(join(root, '_engine', 'ENGINE.md'), engine)
+      const build = engineForPhase('build', root)
+      expect(build).toContain('les 7 concepts') // fondation toujours
+      expect(build).toContain('contenu ch4') // chapitre de la phase build
+      expect(build).not.toContain('contenu ch1') // pas les autres chapitres
+      expect(build).not.toContain('contenu ch2')
+      expect(build).not.toContain('hors usage') // ni Telemetry/Roadmap
+      expect(engineForPhase('scout', root)).toContain('contenu ch1')
+      expect(engineForPhase('judge', root)).toContain('contenu ch2')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
