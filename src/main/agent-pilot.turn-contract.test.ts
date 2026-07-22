@@ -163,6 +163,41 @@ describe('AgentPilot turn contract', () => {
     expect(runSend.mock.calls[0][2].system).toContain(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION)
   })
 
+  it('injects Amitel Brain and Graphify evidence into the exact provider prompt', async () => {
+    const send = vi.fn().mockResolvedValue({ text: 'Réponse finale', provider: 'codex' })
+    const registry = {
+      send,
+      describePrompt: () => ({
+        provider: 'codex',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshot: async () => ({}) }
+    const retrieveContext = vi.fn().mockResolvedValue(
+      '[AMITEL BRAIN REFERENCE DATA]\nknowledge evidence\n\n' +
+        '[GRAPHIFY CODE EVIDENCE]\nstructural evidence'
+    )
+
+    await new AgentPilot(
+      registry as never,
+      roles as never,
+      bus as never,
+      retrieveContext
+    ).chat([{ role: 'user', content: 'Explique AgentPilot' }], () => undefined)
+
+    expect(retrieveContext).toHaveBeenCalledOnce()
+    expect(retrieveContext).toHaveBeenCalledWith('Explique AgentPilot')
+    const system = send.mock.calls[0][2].system as string
+    expect(system).toContain('[AMITEL BRAIN REFERENCE DATA]')
+    expect(system).toContain('[GRAPHIFY CODE EVIDENCE]')
+  })
+
   it('reports the iteration cap as an error terminal event, never as done', async () => {
     const registry = {
       send: vi.fn().mockResolvedValue({

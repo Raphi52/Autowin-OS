@@ -103,7 +103,8 @@ export class AgentPilot {
   constructor(
     private readonly registry: ProviderRegistry,
     private readonly roles: RoleModelConfig,
-    private readonly bus: AppCommandBus
+    private readonly bus: AppCommandBus,
+    private readonly retrieveContext?: (query: string) => Promise<string>
   ) {}
 
   async run(goal: string, onEvent: (e: PilotEvent) => void, maxIter = 6): Promise<void> {
@@ -198,6 +199,12 @@ export class AgentPilot {
     const catalog = this.bus.catalog()
     const snapshot = await this.bus.snapshot()
 
+    const latestUserMessage = [...history].reverse().find((message) => message.role === 'user')?.content
+    const retrievedContext =
+      this.retrieveContext && latestUserMessage
+        ? await this.retrieveContext(latestUserMessage).catch(() => '')
+        : ''
+
     const system =
       `Tu es l'agent d'"Autowin OS", un cockpit d'orchestration d'agents. Tu CONVERSES avec ` +
       `l'utilisateur en français, naturellement, ET tu peux PILOTER l'application toi-même.\n` +
@@ -213,7 +220,8 @@ export class AgentPilot {
       `QUE si l'objectif demande d'agir sur l'app. Après une commande tu reçois le résultat + le ` +
       `nouvel état et tu peux continuer. Quand tu as fini d'agir, termine par ta réponse en clair ` +
       `SANS commande.\n${MODEL_QUESTION_INSTRUCTION}` +
-      CONCISE_STRUCTURED_RESPONSE_INSTRUCTION
+      CONCISE_STRUCTURED_RESPONSE_INSTRUCTION +
+      (retrievedContext ? `\n\n${retrievedContext}` : '')
 
     // Reconstruit le fil : historique de la conversation + état courant de l'app.
     const convo: string[] = [

@@ -35,7 +35,7 @@
 .observatory-metrics {
   display: grid;
   margin-left: auto;
-  grid-template-columns: repeat(5, minmax(82px, 1fr));
+  grid-template-columns: repeat(6, minmax(82px, 1fr));
   gap: 8px;
 }
 .observatory-metrics > strong {

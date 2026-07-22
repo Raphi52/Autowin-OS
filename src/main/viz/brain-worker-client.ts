@@ -9,6 +9,7 @@ type BrainWorkerMethod =
   | 'loadNeighborhood'
   | 'readNodeFile'
   | 'searchBrain'
+  | 'graphifyEvidence'
 type PendingCall = { resolve(value: unknown): void; reject(error: Error): void }
 
 export class BrainWorkerClient {

@@ -1,5 +1,6 @@
 import type { ProviderRegistry } from './providers/registry'
 import type { RoleModelConfig } from './roles'
+import { resolvePhaseBinding } from './roles'
 import type { CostAggregator } from './dashboards/cost'
 import type { TrustLedger } from './trust/ledger'
 import type { AuthoritySas } from './authority/sas'
@@ -78,6 +79,12 @@ export interface OrchestratorDeps {
    * (exec simple, comportement historique) ; la prod passe `['frame','build']` → vraie pipeline.
    */
   execPhases?: PipelinePhase[]
+  /**
+   * Sélection ADAPTATIVE des phases en fonction de la tâche (proportionnalité : une tâche triviale
+   * ne joue pas les 5 phases). Si fourni, PRIME sur `execPhases`. Générique/déterministe (voir
+   * task-regime.ts). Absent → `execPhases` statique (rétrocompat, tests).
+   */
+  classifyPhases?: (task: string) => PipelinePhase[]
 }
 
 const MUTATION_TASK =
@@ -147,7 +154,11 @@ export class Orchestrator {
     //    provider-agnostique). Défaut ['build'] = exec simple ; prod = ['frame','build'] etc.
     const subBinding = roles.getBinding('subagent')
     const subProvider = subBinding.provider
-    const execPhases: PipelinePhase[] = this.deps.execPhases ?? ['build']
+    // Sélection ADAPTATIVE (proportionnalité) : `classifyPhases(task)` prime si fourni — une tâche
+    // triviale ne joue pas les 5 phases. Fallback `execPhases` statique (rétrocompat/tests).
+    const execPhases: PipelinePhase[] = this.deps.classifyPhases
+      ? this.deps.classifyPhases(task)
+      : (this.deps.execPhases ?? ['build'])
     let execPrompt
     let lastExecText = ''
     let lastUsage: Usage | undefined
@@ -171,12 +182,26 @@ export class Orchestrator {
       ...(repoMap ? [repoMap] : []),
       `TÂCHE: ${task}`
     ]
+    // Session-resume chaîné (levier coût) : on RÉUTILISE la session de l'exécuteur d'une phase à la
+    // suivante quand le provider rend un sessionId. La tâche + le Brain + l'acquis des phases sont
+    // alors DÉJÀ dans l'historique de session → on n'envoie que l'instruction de la nouvelle phase
+    // (supprime la re-injection ×N). Dégrade proprement : pas de sessionId → resumeSessionId undefined
+    // → on retombe sur la re-injection complète (comportement actuel). Le sandbox est constant sur un
+    // run (isMutationTask(task) fixe) → jamais de resume à travers un changement de sandbox.
+    let prevSessionId: string | undefined
     for (const phase of execPhases) {
-      const phaseMessages = [{ role: 'user' as const, content: phaseContext.join('\n\n') }]
+      const resuming = Boolean(prevSessionId)
+      const userContent = resuming
+        ? `Phase suivante du pipeline : ${phase}. Continue À PARTIR de l'état de la session (tâche, connaissance Brain et acquis des phases précédentes déjà connus — ne les redemande pas). Applique la consigne de phase et enrichis le livrable existant.`
+        : phaseContext.join('\n\n')
+      const phaseMessages = [{ role: 'user' as const, content: userContent }]
       // F6 — le system est composé de blocs NOMMÉS : on garde leur décomposition (nom + taille)
       // pour l'observabilité, en plus de la chaîne concaténée réellement envoyée.
       // Consigne courte purpose-built (phase-briefs) : ~1-2k au lieu du SKILL.md brut. L'état
       // (besoin + acquis des phases) vit dans le message user ci-dessous, pas dans le system.
+      // Modèle EFFECTIF de la phase : override par phase (petit modèle sur analyse, gros sur build)
+      // → défaut = modèle du binding. Générique/rétrocompat (resolvePhaseBinding).
+      const phaseBinding = resolvePhaseBinding(subBinding, phase)
       const parts = [
         { name: `consigne:${phase}`, text: phaseBrief(phase) },
         { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
@@ -187,8 +212,9 @@ export class Orchestrator {
       const subOptions: SendOptions = {
         system: parts.map((p) => p.text).join(''),
         systemBlocks,
-        model: subBinding.model,
-        reasoningEffort: subBinding.reasoningEffort,
+        model: phaseBinding.model,
+        reasoningEffort: phaseBinding.reasoningEffort,
+        resumeSessionId: prevSessionId,
         execution: {
           cwd: this.deps.executionWorkspace,
           // B3 — une tâche NON-mutation (cadrage/analyse) n'a aucune raison d'écrire : sandbox
@@ -201,14 +227,14 @@ export class Orchestrator {
           execPrompt = observed
         }
       }
-      execPrompt = registry.describePrompt(subProvider, phaseMessages, subOptions, subBinding.model)
+      execPrompt = registry.describePrompt(subProvider, phaseMessages, subOptions, phaseBinding.model)
       execPrompt.systemBlocks = systemBlocks
       onPhase?.({
         step: 'exec',
         provider: subProvider,
         role: 'subagent',
-        model: subBinding.model,
-        reasoningEffort: subBinding.reasoningEffort,
+        model: phaseBinding.model,
+        reasoningEffort: phaseBinding.reasoningEffort,
         phase
       })
       const phaseStartedAt = performance.now()
@@ -230,6 +256,9 @@ export class Orchestrator {
         })
         throw error
       }
+      // Chaîne la session pour la phase suivante (fallback : garde l'ancien id si le provider n'en
+      // rend pas de nouveau — un resume claude conserve le même id et y APPEND les tours).
+      prevSessionId = phaseRes.sessionId ?? prevSessionId
       if (phaseRes.usage) {
         cost.add({
           provider: subProvider,

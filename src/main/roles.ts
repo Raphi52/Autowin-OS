@@ -3,6 +3,8 @@
 // (claude, codex, ...) et optionnellement a un modele precis ; si le modele
 // est absent, le provider utilise son modele par defaut.
 
+import type { PipelinePhase } from './skill-pipeline'
+
 export type Role = 'orchestrator' | 'subagent' | 'judge' | 'scout'
 
 export const ALL_ROLES: Role[] = ['orchestrator', 'subagent', 'judge', 'scout']
@@ -11,6 +13,25 @@ export interface RoleBinding {
   provider: string
   model?: string
   reasoningEffort?: ReasoningEffort
+  /**
+   * Override de modèle PAR PHASE (proportionnalité coût/latence) : les phases d'analyse
+   * (scout/frame/terrain) peuvent tourner sur un petit modèle rapide, build/juge sur le gros.
+   * Générique : référence des modèles du provider ACTIF, jamais un id figé. Absent pour une phase
+   * → on retombe sur `model`/`reasoningEffort` du binding (rétrocompat → 0 régression).
+   */
+  phaseModel?: Partial<Record<PipelinePhase, { model?: string; reasoningEffort?: ReasoningEffort }>>
+}
+
+/** Résout le (modèle, effort) EFFECTIF d'une phase pour un binding (override phase → défaut binding). */
+export function resolvePhaseBinding(
+  binding: RoleBinding,
+  phase: PipelinePhase
+): { model?: string; reasoningEffort?: ReasoningEffort } {
+  const override = binding.phaseModel?.[phase]
+  return {
+    model: override?.model ?? binding.model,
+    reasoningEffort: override?.reasoningEffort ?? binding.reasoningEffort
+  }
 }
 
 const PROVIDER_DEFAULT_SELECTIONS: Record<

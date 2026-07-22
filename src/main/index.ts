@@ -92,6 +92,7 @@ import {
 } from './activity/hermes-prompt-trace'
 import { nativeSpoolRoot, appendNativeTrace } from './activity/native-trace-spool'
 import { proveHermesInjections } from './hermes-injection-proof'
+import { createAmitelContextProvider } from './amitel-context'
 import {
   automationAppIdentity,
   presentAutomationWindow,
@@ -143,7 +144,15 @@ function broadcast(e: AppEvent): void {
 }
 /** Bus de commandes (plan de contrôle) + pilote agent (tool-loop). */
 const bus = new AppCommandBus(os, broadcast)
-const pilot = new AgentPilot(os.registry, os.roles, bus)
+const pilot = new AgentPilot(
+  os.registry,
+  os.roles,
+  bus,
+  createAmitelContextProvider({
+    graphEvidence: (raw, query, limit) =>
+      brainWorker.request<string>('graphifyEvidence', raw, query, limit)
+  })
+)
 const modelQuestions = new ModelQuestionHub()
 const activeChatTurns = new ActiveChatTurns()
 /** Directives utilisateur injectées PENDANT un tour, par conversation (drainées à chaque itération). */

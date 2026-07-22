@@ -39,6 +39,7 @@ import {
   type OrchestrationStep,
   type OrchestrationPhase
 } from './orchestrator'
+import { regimePhases } from './task-regime'
 import { composeHarnessSnapshot, type HarnessSnapshot } from './harness/snapshot'
 import { listHermesControls } from './hermes-controls'
 import { listClaudeHooks } from './claude-hooks'
@@ -126,9 +127,11 @@ export class AutowinOS {
       trust: this.trust,
       authority: this.authority,
       executionWorkspace: resolveExecutionWorkspace(),
-      // Pipeline du kit COMPLÈTE : SCOUT → FRAME → TERRAIN → BUILD → CLEAN (1 skill/phase),
-      // puis le juge (rôle distinct). Chaque phase injecte le SKILL.md réel du kit.
-      execPhases: ['scout', 'frame', 'terrain', 'build', 'clean']
+      // Pipeline ADAPTATIF (proportionnalité) : le régime de la tâche choisit le sous-ensemble de
+      // phases (trivial → build seul ; standard → frame+build ; critical → les 5 scout→clean), puis
+      // le juge (rôle distinct). Déterministe/générique (task-regime.ts). Économise tokens + latence
+      // sur les tâches simples sans jamais sous-traiter les complexes (doute → critical).
+      classifyPhases: regimePhases
     })
   }
 

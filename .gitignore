@@ -14,3 +14,4 @@ agent-studio-*.png
 /harness-timeline-*.png
 /sketches/*-converge/
 **/__pycache__/
+/graphify-out/

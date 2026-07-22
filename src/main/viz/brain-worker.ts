@@ -1,4 +1,5 @@
 import { parentPort } from 'node:worker_threads'
+import { graphifyEvidence } from '../amitel-context'
 import {
   loadBrainGraph,
   loadBrainGraphAsync,
@@ -22,6 +23,7 @@ type BrainWorkerRequest = {
     | 'loadNeighborhood'
     | 'readNodeFile'
     | 'searchBrain'
+    | 'graphifyEvidence'
   args: unknown[]
 }
 
@@ -78,6 +80,13 @@ parentPort.on('message', async (request: BrainWorkerRequest) => {
         break
       case 'searchBrain':
         value = searchVaultBrainNotes(request.args[0] as string, request.args[1] as string)
+        break
+      case 'graphifyEvidence':
+        value = graphifyEvidence(
+          request.args[0] as string,
+          request.args[1] as string,
+          request.args[2] as number
+        )
         break
     }
     parentPort?.postMessage({ id: request.id, ok: true, value })
