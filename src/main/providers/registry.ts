@@ -43,8 +43,12 @@ export class ProviderRegistry {
     model: string
     reasoningEffort?: string
   }): void {
-    this.get(route.provider)
-    if (route.provider !== 'omniroute') throw new Error('OmniRoute est le seul transport autorisé')
+    const adapter = this.get(route.provider)
+    const isFabricLocalTools =
+      route.provider.startsWith('fabric:') && adapter.supportsExecution !== true
+    if (route.provider !== 'omniroute' && !isFabricLocalTools) {
+      throw new Error('Transport conversationnel non autorisé')
+    }
     if (!route.model.trim()) throw new Error('Modèle de transport vide')
     this.conversationTransport = { ...route }
   }

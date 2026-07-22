@@ -42,8 +42,10 @@ export class CostCircuitBreaker {
    * re-déclenchent pas de notification en boucle).
    */
   observe(step: OrchestrationStep): CircuitBreakerTrip | null {
-    if (typeof step.costUsd === 'number') this.spentUsd += step.costUsd
-    if (typeof step.tokens === 'number') this.spentTokens += step.tokens
+    // Number.isFinite (pas `typeof === 'number'`) : `typeof NaN === 'number'` empoisonnerait le cumul
+    // (NaN + x = NaN, comparaisons toujours false → breaker désactivé silencieusement). (Corrector #3.)
+    if (Number.isFinite(step.costUsd)) this.spentUsd += step.costUsd as number
+    if (Number.isFinite(step.tokens)) this.spentTokens += step.tokens as number
     if (this.tripped) return null
     const reasons: string[] = []
     if (this.limits.maxUsd !== undefined && this.spentUsd > this.limits.maxUsd) {

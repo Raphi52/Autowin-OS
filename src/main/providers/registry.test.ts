@@ -113,6 +113,18 @@ describe('ProviderRegistry — contrat d’adaptateur', () => {
     ).toBe('codex')
   })
 
+  it('autorise une ressource Fabric enregistrée comme transport conversationnel local-tools', async () => {
+    const fabricId = 'fabric:node-gpu-01:qwen3-32b'
+    const fabric = new MockProvider(fabricId)
+    const reg = new ProviderRegistry().register(fabric)
+
+    reg.setConversationTransport({ provider: fabricId, model: 'qwen3-32b' })
+    const result = await reg.send('claude', conv)
+
+    expect(result.provider).toBe(fabricId)
+    expect(reg.getConversationTransport()).toEqual({ provider: fabricId, model: 'qwen3-32b' })
+  })
+
   it('confie automatiquement une action OmniRoute au runner local outillé', async () => {
     const direct = Object.assign(new MockProvider('codex'), { supportsExecution: true as const })
     const directSend = vi.spyOn(direct, 'send')

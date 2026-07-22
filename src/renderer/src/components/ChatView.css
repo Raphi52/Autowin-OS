@@ -8,7 +8,6 @@
   border-radius: var(--container-radius-page);
   background: var(--surface-page);
   box-shadow: var(--container-shadow);
-  backdrop-filter: blur(var(--container-blur));
 }
 .conv-pane {
   width: 232px;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatCrashLine, makeCrashHandlers } from './crash-handlers'
+import { formatCrashLine, makeCrashHandlers, redactSecrets } from './crash-handlers'
 
 const NOW = () => '2026-07-22T00:00:00.000Z'
 
@@ -26,6 +26,39 @@ describe('makeCrashHandlers (le process SURVIT)', () => {
     expect(logged).toHaveLength(2)
     expect(logged[0]).toContain('uncaughtException: crash1')
     expect(logged[1]).toContain('unhandledRejection: rejet2')
+  })
+
+  it('invoque onFatal après le log (récupération best-effort) sans propager si elle jette', () => {
+    let called = 0
+    const h = makeCrashHandlers({
+      logDir: 'C:\\nope',
+      sink: () => {},
+      now: NOW,
+      onFatal: () => {
+        called++
+        throw new Error('onFatal cassé')
+      }
+    })
+    expect(() => h.onUncaughtException(new Error('x'))).not.toThrow()
+    expect(called).toBe(1)
+  })
+
+  it('inviolable sur une valeur CIRCULAIRE (JSON.stringify throw) — le handler ne propage pas', () => {
+    // Régression Corrector #1 : formatCrashLine était hors du try → une rejection circulaire crashait.
+    const logged: string[] = []
+    const h = makeCrashHandlers({ logDir: 'C:\\nope', sink: (l) => logged.push(l), now: NOW })
+    const circular: Record<string, unknown> = {}
+    circular.self = circular
+    expect(() => h.onUnhandledRejection(circular)).not.toThrow()
+    expect(logged[0]).toContain('[Circular]')
+  })
+
+  it('redacte les secrets courants avant écriture (crash.log)', () => {
+    expect(redactSecrets('Authorization: Bearer sk-abc123XYZ')).not.toContain('sk-abc123XYZ')
+    expect(redactSecrets('token=supersecret')).not.toContain('supersecret')
+    expect(redactSecrets('https://user:p@ss@host')).toContain('***')
+    const line = formatCrashLine('uncaughtException', new Error('leak Bearer sk-zzz'), NOW)
+    expect(line).not.toContain('sk-zzz')
   })
 
   it('inviolable : même un sink qui throw ne fait PAS propager (le process survit)', () => {

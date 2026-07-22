@@ -248,6 +248,23 @@ export class AppCommandBus {
   }
 
   /**
+   * Abort + vide TOUTES les orchestrations en vol. Appelé par le filet de crash global : sur une
+   * exception non catchée, le `finally` du handler os:orchestrate ne s'exécute pas → sans ça, les
+   * AbortControllers resteraient dans le registre et `abortOrchestration` deviendrait un no-op
+   * permanent jusqu'au redémarrage. (Faithful minor.)
+   */
+  abortAllOrchestrations(): void {
+    for (const controller of this.activeOrchestrations.values()) {
+      try {
+        controller.abort()
+      } catch {
+        /* best-effort : couper les autres même si l'un jette */
+      }
+    }
+    this.activeOrchestrations.clear()
+  }
+
+  /**
    * Enregistre une orchestration STOPPABLE dans le MÊME registre que le chemin `commands.ts` interne,
    * pour que `abortOrchestration(convId)` puisse la couper. Utilisé par le handler IPC direct
    * `os:orchestrate` (#2) qui, sinon, ne câblait aucun AbortController → bouton annuler no-op.

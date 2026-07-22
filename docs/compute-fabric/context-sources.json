@@ -1,0 +1,195 @@
+{
+  "schema": "autowin.compute-fabric-context-sources/v1",
+  "documents": [
+    "docs/compute-fabric/README.md",
+    "docs/compute-fabric/protocol-v1.md",
+    "docs/compute-fabric/AI-HANDOFF.md"
+  ],
+  "sources": [
+    {
+      "path": "src/shared/compute-fabric.ts",
+      "why": "Contrat manifeste et binding fermé",
+      "mode": "full"
+    },
+    {
+      "path": "src/shared/compute-fabric.test.ts",
+      "why": "Tests du schéma fermé, des bornes et des politiques de binding",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/compute-fabric/manifest.ts",
+      "why": "JSON canonique, Ed25519, TTL, anti-rejeu et digest",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/compute-fabric/manifest.test.ts",
+      "why": "Preuves Ed25519, TTL, anti-rejeu, fingerprint et projection signée",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/compute-fabric/control-plane.ts",
+      "why": "Pairing, refresh, état runtime et création de l’adaptateur",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/compute-fabric/control-plane.test.ts",
+      "why": "Tests d’appairage, refresh et invalidation du control plane",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/compute-fabric/resource-adapter.ts",
+      "why": "Wire chat SSE actuel et frontière supportsExecution=false",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/compute-fabric/resource-adapter.test.ts",
+      "why": "Test du flux SSE et de la frontière d’exécution Fabric",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/compute-fabric/node-transport-store.ts",
+      "why": "Origine, pin TLS/SPKI obligatoire et credential conservés dans le keyring",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/compute-fabric/node-transport-store.test.ts",
+      "why": "Tests du stockage transport, credentials et origine HTTPS",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/compute-fabric/manifest-client.ts",
+      "why": "Lecture bornée du manifeste via le transport HTTPS piné",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/compute-fabric/manifest-client.test.ts",
+      "why": "Tests des bornes réseau et de la lecture du manifeste",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/compute-fabric/fabric-http-client.ts",
+      "why": "Transport HTTPS main-owned, validation CA/hostname et pin SHA-256 du SPKI TLS",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/compute-fabric/fabric-http-client.test.ts",
+      "why": "Tests du pin concordant/non concordant, des options HTTPS et du confinement d’origine",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/compute-fabric/fabric-store.ts",
+      "why": "Persistance atomique et erreur fail-closed sur état existant invalide ou illisible",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/compute-fabric/fabric-store.test.ts",
+      "why": "Tests de persistance atomique, rechargement et préservation fail-closed de la corruption",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/providers/types.ts",
+      "why": "Frontière provider stable à étendre additivement",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/providers/registry.ts",
+      "why": "Transport Fabric accepté et fallback d’exécution à isoler",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/providers/registry.test.ts",
+      "why": "Tests de sélection Fabric et de non-substitution d’exécuteur",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/agent-pilot.ts",
+      "why": "Boucle locale, bridge cmd et réinjection des résultats",
+      "ranges": [
+        { "start": 54, "end": 89 },
+        { "start": 110, "end": 169 },
+        { "start": 208, "end": 224 },
+        { "start": 300, "end": 449 }
+      ]
+    },
+    {
+      "path": "src/main/commands.ts",
+      "why": "Catalogue applicatif, niveaux d’autorité et orchestrate à exclure",
+      "ranges": [
+        { "start": 26, "end": 101 },
+        { "start": 301, "end": 472 }
+      ]
+    },
+    {
+      "path": "src/main/conversation-capabilities.ts",
+      "why": "Décision allow/confirm/deny existante",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/bounded-file-read.ts",
+      "why": "Confinement réel, O_NOFOLLOW, inode et lecture bornée",
+      "mode": "full"
+    },
+    {
+      "path": "src/main/orchestrator.ts",
+      "why": "ExecutionWorkspace et danger-full-access du chemin orchestrate",
+      "ranges": [{ "start": 190, "end": 243 }]
+    },
+    {
+      "path": "src/main/models.ts",
+      "why": "Projection ImportedModel et catalogue actuel",
+      "ranges": [
+        { "start": 1, "end": 40 },
+        { "start": 321, "end": 370 }
+      ]
+    },
+    {
+      "path": "src/main/topology.ts",
+      "why": "Binding Compute conservé dans la topologie",
+      "ranges": [{ "start": 1, "end": 95 }]
+    },
+    {
+      "path": "src/main/index.ts",
+      "why": "Composition root, synchronisation runtime et traces Pilot",
+      "ranges": [
+        { "start": 126, "end": 195 },
+        { "start": 557, "end": 593 },
+        { "start": 1025, "end": 1076 }
+      ]
+    },
+    {
+      "path": "src/main/os.ts",
+      "why": "Adaptateurs actuellement enregistrés",
+      "ranges": [
+        { "start": 69, "end": 77 },
+        { "start": 115, "end": 135 }
+      ]
+    },
+    {
+      "path": "src/main/profile-store.ts",
+      "why": "Schéma profil actuel à migrer sans perte",
+      "ranges": [{ "start": 1, "end": 35 }]
+    },
+    {
+      "path": "src/preload/index.ts",
+      "why": "Surface IPC AgentPilot actuelle",
+      "ranges": [{ "start": 176, "end": 203 }]
+    },
+    {
+      "path": "scripts/export-compute-fabric-context.test.mjs",
+      "why": "Tests du fingerprint, de la provenance Git et de la complétude dynamique",
+      "mode": "full"
+    }
+  ],
+  "tests": [
+    "src/shared/compute-fabric.test.ts",
+    "src/main/compute-fabric/manifest.test.ts",
+    "src/main/compute-fabric/fabric-store.test.ts",
+    "src/main/compute-fabric/node-transport-store.test.ts",
+    "src/main/compute-fabric/manifest-client.test.ts",
+    "src/main/compute-fabric/fabric-http-client.test.ts",
+    "src/main/compute-fabric/control-plane.test.ts",
+    "src/main/compute-fabric/resource-adapter.test.ts",
+    "src/main/providers/registry.test.ts",
+    "scripts/export-compute-fabric-context.test.mjs"
+  ]
+}

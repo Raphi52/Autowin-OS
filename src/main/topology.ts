@@ -13,6 +13,7 @@
 
 import type { ReasoningEffort } from './roles'
 import { defaultModelForProvider, findModel, type ImportedModel } from './models'
+import { parseComputeBinding, type ComputeBinding } from '../shared/compute-fabric'
 
 /** Version du schéma de topologie persistée (migration sûre à l'ouverture). */
 export const TOPOLOGY_VERSION = 1
@@ -27,6 +28,8 @@ export interface SlotBinding {
   modelId: string
   /** Effort de raisonnement (∈ ImportedModel.reasoningEfforts). */
   reasoningEffort: ReasoningEffort
+  /** Pin cryptographique et politique d'une ressource distante. */
+  compute?: ComputeBinding
 }
 
 /** Les quatre cibles de la topologie. Orchestrateur = singleton. */
@@ -51,6 +54,7 @@ export interface ResolvedSlot {
   /** Identifiant de transport (ImportedModel.model), pas l'id canonique. */
   model: string
   reasoningEffort: ReasoningEffort
+  compute?: ComputeBinding
 }
 
 /** Valide un binding contre le catalogue de modèles importés. Jette si incohérent. */
@@ -70,6 +74,15 @@ export function assertBinding(binding: SlotBinding, models: ImportedModel[]): Sl
       `Effort « ${binding.reasoningEffort} » non supporté par ${binding.modelId} (attendu : ${model.reasoningEfforts.join('|')})`
     )
   }
+  if (model.compute) {
+    if (!binding.compute) throw new Error(`Binding Fabric incomplet pour ${binding.modelId}`)
+    const compute = parseComputeBinding(binding.compute)
+    if (JSON.stringify(compute) !== JSON.stringify(model.compute)) {
+      throw new Error(`Binding Fabric périmé ou incohérent pour ${binding.modelId}`)
+    }
+  } else if (binding.compute) {
+    throw new Error(`Binding Fabric interdit pour le modèle local ${binding.modelId}`)
+  }
   return binding
 }
 
@@ -79,7 +92,8 @@ export function bindingForModel(slotId: string, model: ImportedModel): SlotBindi
     slotId,
     provider: model.provider,
     modelId: model.id,
-    reasoningEffort: model.defaultReasoningEffort
+    reasoningEffort: model.defaultReasoningEffort,
+    ...(model.compute ? { compute: structuredClone(model.compute) } : {})
   }
 }
 
@@ -173,7 +187,8 @@ export function resolveTopology(
       target,
       provider: binding.provider,
       model: model.model,
-      reasoningEffort: binding.reasoningEffort
+      reasoningEffort: binding.reasoningEffort,
+      ...(binding.compute ? { compute: structuredClone(binding.compute) } : {})
     }
   }
   return {

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ChatView } from './components/ChatView'
+import { PreflightBanner } from './components/PreflightBanner'
+import { FirstRunWizard } from './components/FirstRunWizard'
 import { GraphView } from './components/GraphView'
 import { ObservatoryView } from './components/ObservatoryView'
 import { RolesView } from './components/RolesView'
@@ -120,6 +122,10 @@ export function MainApp(): React.JSX.Element {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (!e.ctrlKey || e.altKey || e.metaKey) return
+      // Ne pas voler les raccourcis à un champ de saisie actif (le contrat le promettait).
+      const t = e.target as HTMLElement | null
+      const tag = t?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || t?.isContentEditable) return
       const n = Number(e.key)
       if (Number.isInteger(n) && n >= 1 && n <= NAV.length) {
         e.preventDefault()
@@ -189,6 +195,7 @@ export function MainApp(): React.JSX.Element {
 
   return (
     <div className="shell cosmic-outline theme-serious">
+      <FirstRunWizard />
       <aside className={`rail${railCollapsed ? ' is-collapsed' : ''}`}>
         <div className="brand">
           <img className="brand-logo" src={autowinLogo} alt="" aria-hidden="true" />
@@ -235,6 +242,7 @@ export function MainApp(): React.JSX.Element {
         <div className="rail-foot c-faint">v0 · MVP</div>
       </aside>
       <main className={`main${driven ? ' driven' : ''}`} data-driven={driven}>
+        <PreflightBanner />
         {visitedTabs.has('chat') && (
           <div className={`view-slot${tab === 'chat' ? ' is-active' : ''}`}>
             <ChatView isActive={tab === 'chat'} onInspectTurn={inspectTurn} />

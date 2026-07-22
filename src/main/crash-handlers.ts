@@ -17,15 +17,49 @@ export interface CrashHandlerOptions {
   sink?: (line: string) => void
   /** Horodatage injectable (test déterministe). Défaut : ISO now. */
   now?: () => string
+  /**
+   * Action de récupération best-effort exécutée après le log (ex. abort des orchestrations en vol dont
+   * le `finally` ne tournera pas). Invoquée DANS le filet : si elle jette, on l'avale (inviolable).
+   */
+  onFatal?: () => void
+}
+
+/**
+ * Redaction best-effort de secrets courants (token Bearer, clés, URL avec credentials) : une lib
+ * tierce peut insérer un token dans un message/stack d'erreur (ex. dump d'une requête HTTP) qui
+ * finirait en clair dans crash.log. On masque avant d'écrire. (Guardian.)
+ */
+export function redactSecrets(text: string): string {
+  return text
+    .replace(/(Bearer\s+)[A-Za-z0-9._-]+/gi, '$1***')
+    .replace(/((?:authorization|api[-_]?key|token|secret|password)["']?\s*[:=]\s*["']?)[^\s"',}]+/gi, '$1***')
+    .replace(/(https?:\/\/[^:/\s]+:)[^@\s/]+(@)/gi, '$1***$2')
+}
+
+/** JSON.stringify infaillible (valeurs circulaires → placeholder au lieu de throw). */
+function safeStringify(value: unknown): string {
+  const seen = new WeakSet<object>()
+  try {
+    return JSON.stringify(value, (_k, v) => {
+      if (typeof v === 'object' && v !== null) {
+        if (seen.has(v)) return '[Circular]'
+        seen.add(v)
+      }
+      return v
+    })
+  } catch {
+    return String(value)
+  }
 }
 
 /** Formate une erreur (ou valeur rejetée) en une ligne de journal horodatée avec stack si dispo. */
 export function formatCrashLine(kind: string, err: unknown, now: () => string): string {
   const ts = now()
-  if (err instanceof Error) {
-    return `[${ts}] ${kind}: ${err.message}\n${err.stack ?? '(no stack)'}\n`
-  }
-  return `[${ts}] ${kind}: ${typeof err === 'string' ? err : JSON.stringify(err)}\n`
+  const raw =
+    err instanceof Error
+      ? `[${ts}] ${kind}: ${err.message}\n${err.stack ?? '(no stack)'}\n`
+      : `[${ts}] ${kind}: ${typeof err === 'string' ? err : safeStringify(err)}\n`
+  return redactSecrets(raw)
 }
 
 /**
@@ -49,18 +83,24 @@ export function makeCrashHandlers(opts: CrashHandlerOptions): {
       // eslint-disable-next-line no-console
       console.error(line.trimEnd())
     })
-  // Le handler est INVIOLABLE : même si le sink lui-même casse, on n'a JAMAIS le droit de propager
-  // (ça tuerait le process qu'on protège). On avale toute erreur du sink en dernier recours.
-  const safe = (line: string): void => {
+  // Le handler est INVIOLABLE : même si le FORMATAGE de la ligne (JSON.stringify d'une valeur
+  // circulaire) OU le sink casse, on n'a JAMAIS le droit de propager — ça tuerait le process qu'on
+  // protège. Le try englobe donc formatCrashLine ET sink (bug corrigé : le formatage était hors try).
+  const safe = (kind: string, payload: unknown): void => {
     try {
-      sink(line)
+      sink(formatCrashLine(kind, payload, now))
     } catch {
       /* filet ultime : ne jamais relancer depuis le handler global */
     }
+    try {
+      opts.onFatal?.()
+    } catch {
+      /* la récupération est best-effort et ne doit jamais faire propager le handler */
+    }
   }
   return {
-    onUncaughtException: (err) => safe(formatCrashLine('uncaughtException', err, now)),
-    onUnhandledRejection: (reason) => safe(formatCrashLine('unhandledRejection', reason, now))
+    onUncaughtException: (err) => safe('uncaughtException', err),
+    onUnhandledRejection: (reason) => safe('unhandledRejection', reason)
   }
 }
 

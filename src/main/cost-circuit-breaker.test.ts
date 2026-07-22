@@ -36,6 +36,14 @@ describe('CostCircuitBreaker', () => {
     expect(b.hasTripped).toBe(true)
   })
 
+  it('un costUsd/tokens NaN n’empoisonne PAS le cumul (Corrector #3)', () => {
+    const b = new CostCircuitBreaker({ maxTokens: 1000 })
+    b.observe(step({ tokens: NaN })) // ne doit pas rendre spentTokens NaN
+    expect(b.totals.tokens).toBe(0)
+    const t = b.observe(step({ tokens: 1500 })) // le dépassement réel doit toujours trip
+    expect(t?.trip).toBe(true)
+  })
+
   it('sans limite déclarée : ne trip jamais (opt-in)', () => {
     const b = new CostCircuitBreaker({})
     expect(b.observe(step({ tokens: 10_000_000, costUsd: 999 }))).toBeNull()

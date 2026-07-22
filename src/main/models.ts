@@ -8,6 +8,7 @@
 // --model réels) et l'utilisateur peut importer/supprimer explicitement.
 
 import type { ReasoningEffort } from './roles'
+import type { ComputeBinding } from '../shared/compute-fabric'
 import { loadTokens, type Tokens } from './providers/codex-auth'
 
 /** Un modèle importé, atomique et adressable par son `id` canonique. */
@@ -24,6 +25,8 @@ export interface ImportedModel {
   reasoningEfforts: ReasoningEffort[]
   /** Effort par défaut (∈ reasoningEfforts) proposé lors d'un binding. */
   defaultReasoningEffort: ReasoningEffort
+  /** Contrat vérifié d'une ressource Fabric ; absent pour les providers locaux historiques. */
+  compute?: ComputeBinding
 }
 
 /**

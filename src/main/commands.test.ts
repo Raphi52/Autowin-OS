@@ -67,6 +67,29 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     expect(first.signal.aborted).toBe(true) // l'ancienne est coupée
     expect(second.signal.aborted).toBe(false)
   })
+
+  it('abortAllOrchestrations coupe et vide tout le registre (filet de crash, Faithful minor)', () => {
+    const bus = new AppCommandBus(fakeOs(), () => {})
+    const a = bus.registerOrchestration('conv-1')
+    const b = bus.registerOrchestration('conv-2')
+    bus.abortAllOrchestrations()
+    expect(a.signal.aborted).toBe(true)
+    expect(b.signal.aborted).toBe(true)
+    // Registre vidé → plus rien à couper.
+    expect(bus.abortOrchestration('conv-1')).toBe(false)
+    expect(bus.abortOrchestration('conv-2')).toBe(false)
+  })
+
+  it('clearOrchestration par IDENTITÉ : le finally d’un run écrasé n’efface pas le run courant (Corrector #2)', () => {
+    const bus = new AppCommandBus(fakeOs(), () => {})
+    const a = bus.registerOrchestration('conv-1') // run A
+    const b = bus.registerOrchestration('conv-1') // run B écrase A (A.abort())
+    // Le finally de A arrive APRÈS et ne doit PAS supprimer l'entrée de B.
+    bus.clearOrchestration('conv-1', a)
+    // Le cancel doit toujours couper B (entrée préservée).
+    expect(bus.abortOrchestration('conv-1')).toBe(true)
+    expect(b.signal.aborted).toBe(true)
+  })
 })
 
 describe('AppCommandBus authority policy', () => {

@@ -16,6 +16,7 @@
     "test:worktree-fingerprint": "powershell -ExecutionPolicy Bypass -File scripts/worktree-fingerprint.test.ps1",
     "codex:login": "tsx scripts/codex-login.mjs",
     "clean:generated": "powershell -ExecutionPolicy Bypass -File scripts/clean-generated-artifacts.ps1",
+    "context:compute-fabric": "node scripts/export-compute-fabric-context.mjs",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",

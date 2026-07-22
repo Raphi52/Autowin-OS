@@ -145,6 +145,34 @@ describe('role-store Autowin OS', () => {
 })
 
 describe('AgentTopology', () => {
+  it('pins a Fabric slot to its verified resource, manifest digest and explicit fallback', () => {
+    const fabricModel = {
+      id: 'fabric/node-gpu-01/qwen3-32b',
+      provider: 'fabric:node-gpu-01:qwen3-32b',
+      model: 'qwen3-32b',
+      label: 'Qwen3 32B · node-gpu-01',
+      reasoningEfforts: ['none' as const],
+      defaultReasoningEffort: 'none' as const,
+      compute: {
+        kind: 'fabric' as const,
+        nodeId: 'node-gpu-01',
+        resourceId: 'qwen3-32b',
+        mode: 'local-tools' as const,
+        policyRef: 'policy:local-app-control-v1',
+        manifestDigest: 'b'.repeat(64),
+        fallback: { kind: 'none' as const }
+      }
+    }
+
+    const binding = bindingForModel('orchestrator', fabricModel)
+    const topology = createDefaultTopology([fabricModel])
+
+    expect(binding.compute).toEqual(fabricModel.compute)
+    expect(resolveTopology(topology, [fabricModel]).orchestrator.compute).toEqual(
+      fabricModel.compute
+    )
+  })
+
   it('stores model and effort independently for Scout and Judge slots', () => {
     const base = createDefaultTopology(DEFAULT_IMPORTED_MODELS)
     const codex = DEFAULT_IMPORTED_MODELS.find((model) => model.provider === 'codex')!
