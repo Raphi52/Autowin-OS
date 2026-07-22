@@ -65,3 +65,19 @@ describe('ClaudeCliAdapter — pièces jointes', () => {
     materialized.cleanup()
   })
 })
+
+describe('B — Claude exécuteur', () => {
+  it('déclare supportsExecution', async () => {
+    const { ClaudeCliAdapter } = await import('./claude')
+    expect(new ClaudeCliAdapter().supportsExecution).toBe(true)
+  })
+  it('claudeToolEvidenceKind classe mutation / vérification / inspection', async () => {
+    const { claudeToolEvidenceKind } = await import('./claude')
+    expect(claudeToolEvidenceKind('Edit', 'src/x.ts')).toBe('mutation')
+    expect(claudeToolEvidenceKind('Write', 'f')).toBe('mutation')
+    expect(claudeToolEvidenceKind('Bash', 'npm test')).toBe('verification')
+    expect(claudeToolEvidenceKind('Bash', 'ls -la')).toBe('inspection')
+    expect(claudeToolEvidenceKind('Read', 'x')).toBe('inspection')
+    expect(claudeToolEvidenceKind('Grep', 'foo')).toBe('inspection')
+  })
+})

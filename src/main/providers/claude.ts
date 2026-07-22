@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type {
   Attachment,
+  ExecutionEvidence,
   Message,
   PromptEnvelope,
   ProviderAdapter,
@@ -11,6 +12,18 @@ import type {
   SendResult,
   StreamChunk
 } from './types'
+
+/**
+ * Mappe un outil Claude (tool_use) vers le type de preuve d'exécution commun (mutation / vérification
+ * / inspection), miroir de codex. Contrat provider-agnostique : tout exécuteur émet ce même shape.
+ */
+export function claudeToolEvidenceKind(name: string, command: string): ExecutionEvidence['kind'] {
+  if (/^(Edit|Write|MultiEdit|NotebookEdit)$/i.test(name)) return 'mutation'
+  const verify =
+    /\b(vitest|jest|pytest|cargo\s+test|dotnet\s+test|go\s+test|tsc|eslint|npm(?:\.cmd)?\s+(?:test|run\s+(?:test|typecheck|build|lint))|pnpm\s+(?:test|run)|node\s+-e)\b/i
+  if (/^Bash$/i.test(name)) return verify.test(command) ? 'verification' : 'inspection'
+  return 'inspection'
+}
 
 export interface MaterializedAttachments {
   dir: string
@@ -124,6 +137,9 @@ export function claudeTransportEnvelope(
 
 export class ClaudeCliAdapter implements ProviderAdapter {
   readonly id = 'claude'
+  // B — Claude EST un exécuteur outillé (Claude Code). Quand `opts.execution` est fourni, on lance
+  // le CLI avec les outils activés + un mode permission autonome, et on remonte l'executionEvidence.
+  readonly supportsExecution = true
   private readonly bin: string
   private readonly timeoutMs: number
 
@@ -172,15 +188,19 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const system = opts.system
     const systemInjected = typeof system === 'string' && system.length > 0
 
-    const args = [
-      '-p',
-      lastUser,
-      '--output-format',
-      'stream-json',
-      '--verbose',
-      '--strict-mcp-config',
-      ...(materialized ? ['--tools', 'Read', '--allowedTools', 'Read'] : ['--disallowedTools', '*'])
-    ]
+    const execution = opts.execution
+    const args = ['-p', lastUser, '--output-format', 'stream-json', '--verbose', '--strict-mcp-config']
+    if (execution) {
+      // B — mode exécuteur : outils activés + permission autonome, dans le cwd borné. A (générique) :
+      // read-only ⇒ pas d'écriture/Bash-mutation ; workspace-write/danger ⇒ édition + Bash.
+      const write = execution.sandbox !== 'read-only'
+      const tools = write ? 'Read,Grep,Glob,Bash,Edit,Write,MultiEdit' : 'Read,Grep,Glob'
+      args.push('--permission-mode', 'bypassPermissions', '--add-dir', execution.cwd, '--allowedTools', tools)
+    } else if (materialized) {
+      args.push('--tools', 'Read', '--allowedTools', 'Read')
+    } else {
+      args.push('--disallowedTools', '*')
+    }
     let systemPromptDir: string | undefined
     if (systemInjected && system!.length > 4_000) {
       systemPromptDir = mkdtempSync(join(tmpdir(), 'autowin-os-system-'))
@@ -195,7 +215,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
 
     opts.observePrompt?.(claudeTransportEnvelope(messages, opts, materialized, args))
 
-    const child = spawn(this.bin, args, { shell: false })
+    const child = spawn(this.bin, args, { shell: false, cwd: execution?.cwd })
     opts.signal?.addEventListener('abort', () => child.kill())
 
     const timer = setTimeout(() => child.kill(), this.timeoutMs)
@@ -203,6 +223,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     let text = ''
     let sessionId: string | undefined
     let usage: SendResult['usage']
+    const executionEvidence: ExecutionEvidence[] = []
+    const pendingTools = new Map<string, { name: string; command: string }>()
     const queue: StreamChunk[] = []
     let done = false
     let errored: Error | null = null
@@ -216,12 +238,44 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const handleEvent = (o: Record<string, unknown>): void => {
       const t = o['type']
       if (t === 'assistant') {
-        const msg = o['message'] as { content?: Array<{ type: string; text?: string }> } | undefined
+        const msg = o['message'] as
+          | {
+              content?: Array<{
+                type: string
+                text?: string
+                id?: string
+                name?: string
+                input?: Record<string, unknown>
+              }>
+            }
+          | undefined
         for (const part of msg?.content ?? []) {
           if (part.type === 'text' && part.text) {
             text += part.text
             queue.push({ delta: part.text })
+          } else if (part.type === 'tool_use' && part.id && part.name) {
+            // B — mémorise l'appel outil ; la preuve (ok/échec) arrive dans le tool_result associé.
+            const command = String(part.input?.command ?? part.input?.file_path ?? '')
+            pendingTools.set(part.id, { name: part.name, command })
           }
+        }
+      } else if (t === 'user') {
+        // tool_result : apparie l'appel outil → executionEvidence (shape commun à tous les exécuteurs).
+        const msg = o['message'] as
+          | { content?: Array<{ type: string; tool_use_id?: string; is_error?: boolean }> }
+          | undefined
+        for (const part of msg?.content ?? []) {
+          if (part.type !== 'tool_result' || !part.tool_use_id) continue
+          const call = pendingTools.get(part.tool_use_id)
+          if (!call) continue
+          pendingTools.delete(part.tool_use_id)
+          executionEvidence.push({
+            type: call.name,
+            kind: claudeToolEvidenceKind(call.name, call.command),
+            status: part.is_error ? 'failed' : 'completed',
+            ok: part.is_error !== true,
+            summary: `${call.name} ${call.command}`.trim()
+          })
         }
       } else if (t === 'result') {
         if (typeof o['result'] === 'string' && !text) text = o['result'] as string
@@ -295,6 +349,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     }
 
     if (errored) throw errored
-    return { text, provider: this.id, sessionId, systemInjected, usage }
+    return {
+      text,
+      provider: this.id,
+      sessionId,
+      systemInjected,
+      usage,
+      executionEvidence: executionEvidence.length ? executionEvidence : undefined
+    }
   }
 }
