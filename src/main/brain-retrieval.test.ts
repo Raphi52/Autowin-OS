@@ -6,22 +6,51 @@ const okFetch = (body: unknown): typeof fetch =>
 
 describe('retrieveBrainContext', () => {
   it('renvoie le contexte du serveur quand il répond', async () => {
-    const ctx = await retrieveBrainContext('autowin', {
+    const res = await retrieveBrainContext('autowin', {
       env: { AMITEL_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
       fetchFn: okFetch({ context: '[BRAIN] note pertinente' })
     })
-    expect(ctx).toBe('[BRAIN] note pertinente')
+    expect(res.context).toBe('[BRAIN] note pertinente')
+  })
+  it('capture la navigation quand le serveur l’expose', async () => {
+    const res = await retrieveBrainContext('autowin', {
+      env: { AMITEL_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
+      fetchFn: okFetch({
+        context: '[BRAIN]',
+        navigation: {
+          query: 'autowin',
+          minDense: 0.25,
+          candidates: [{ rank: 1, path: 'a.md', type: 'domain', denseCos: 0.44, retained: true }]
+        }
+      })
+    })
+    expect(res.navigation?.candidates[0]).toEqual({
+      rank: 1,
+      path: 'a.md',
+      type: 'domain',
+      denseCos: 0.44,
+      retained: true
+    })
+  })
+  it('navigation undefined si serveur ancien (dégradation gracieuse)', async () => {
+    const res = await retrieveBrainContext('q', {
+      env: { AMITEL_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
+      fetchFn: okFetch({ context: 'x' })
+    })
+    expect(res.navigation).toBeUndefined()
   })
   it('dégrade à vide si pas de token', async () => {
-    expect(await retrieveBrainContext('q', { env: {} as NodeJS.ProcessEnv, fetchFn: okFetch({ context: 'x' }) })).toBe('')
+    expect(
+      (await retrieveBrainContext('q', { env: {} as NodeJS.ProcessEnv, fetchFn: okFetch({ context: 'x' }) })).context
+    ).toBe('')
   })
   it('dégrade à vide si le fetch throw (serveur down)', async () => {
     const boom = (async () => { throw new Error('ECONNREFUSED') }) as unknown as typeof fetch
-    const ctx = await retrieveBrainContext('q', {
+    const res = await retrieveBrainContext('q', {
       env: { AMITEL_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
       fetchFn: boom
     })
-    expect(ctx).toBe('')
+    expect(res.context).toBe('')
   })
   it('brainServiceToken lit AMITEL_BRAIN_TOKEN en priorité', () => {
     expect(brainServiceToken({ AMITEL_BRAIN_TOKEN: 'tok' } as NodeJS.ProcessEnv)).toBe('tok')

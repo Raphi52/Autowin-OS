@@ -34,16 +34,62 @@ export interface BrainRetrievalOptions {
   env?: NodeJS.ProcessEnv
 }
 
-/** Récupère le contexte Brain pertinent pour `query` (borné). '' si indisponible (jamais throw). */
+/** Un candidat parcouru par le retriever : rang fusionné, chemin, score dense, retenu ou écarté. */
+export interface BrainNavigationCandidate {
+  rank: number
+  path: string
+  type: string
+  denseCos: number
+  retained: boolean
+}
+
+/** Navigation interne du Brain pour une requête (parcouru → scoré → retenu). */
+export interface BrainNavigation {
+  query: string
+  minDense: number
+  candidates: BrainNavigationCandidate[]
+}
+
+/** Résultat d'une récupération Brain : contexte injecté + (si le serveur l'expose) sa navigation. */
+export interface BrainRetrievalResult {
+  context: string
+  navigation?: BrainNavigation
+}
+
+function parseNavigation(raw: unknown): BrainNavigation | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const nav = raw as Record<string, unknown>
+  if (!Array.isArray(nav.candidates)) return undefined
+  const candidates: BrainNavigationCandidate[] = nav.candidates
+    .filter((c): c is Record<string, unknown> => Boolean(c) && typeof c === 'object')
+    .map((c) => ({
+      rank: Number(c.rank ?? 0),
+      path: String(c.path ?? ''),
+      type: String(c.type ?? ''),
+      denseCos: Number(c.denseCos ?? 0),
+      retained: Boolean(c.retained)
+    }))
+  return {
+    query: String(nav.query ?? ''),
+    minDense: Number(nav.minDense ?? 0),
+    candidates
+  }
+}
+
+/**
+ * Récupère le contexte Brain pertinent pour `query` (borné) + sa navigation interne si le serveur
+ * l'expose. `{ context: '' }` si indisponible (jamais throw). Dégrade proprement : un serveur ancien
+ * sans champ `navigation` → `navigation` undefined, le run continue.
+ */
 export async function retrieveBrainContext(
   query: string,
   opts: BrainRetrievalOptions = {}
-): Promise<string> {
+): Promise<BrainRetrievalResult> {
   // Hygiène test : sous Vitest on ne touche jamais le réseau (le serveur peut être live sur la
   // machine de dev → appels réels lents/non déterministes). Les tests injectent un fetchFn explicite.
-  if (process.env.VITEST && !opts.fetchFn) return ''
+  if (process.env.VITEST && !opts.fetchFn) return { context: '' }
   const token = brainServiceToken(opts.env)
-  if (!token || !query.trim()) return ''
+  if (!token || !query.trim()) return { context: '' }
   const doFetch = opts.fetchFn ?? fetch
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 5000)
@@ -54,11 +100,14 @@ export async function retrieveBrainContext(
       body: JSON.stringify({ query: query.slice(0, 8000) }),
       signal: controller.signal
     })
-    if (!res.ok) return ''
-    const data = (await res.json()) as { context?: unknown }
-    return typeof data.context === 'string' ? data.context : ''
+    if (!res.ok) return { context: '' }
+    const data = (await res.json()) as { context?: unknown; navigation?: unknown }
+    return {
+      context: typeof data.context === 'string' ? data.context : '',
+      navigation: parseNavigation(data.navigation)
+    }
   } catch {
-    return '' // serveur down / timeout / réseau → dégrade, run continue sans RAG
+    return { context: '' } // serveur down / timeout / réseau → dégrade, run continue sans RAG
   } finally {
     clearTimeout(timer)
   }

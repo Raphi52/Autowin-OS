@@ -752,3 +752,22 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* Carte Navigation Brain (parcouru → scoré → retenu → injecté) */
+.observatory-brain-nav { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.brain-nav-card { border: 1px solid var(--stroke, rgba(255,255,255,.12)); border-radius: 10px; padding: 10px 12px; background: var(--surface-2, rgba(255,255,255,.03)); }
+.brain-nav-card.is-absent { opacity: .7; }
+.brain-nav-card > header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.brain-nav-card > header > span { font-weight: 600; }
+.brain-nav-card > header > small { margin-left: auto; opacity: .7; }
+.brain-nav-query { display: flex; gap: 8px; margin: 6px 0; font-size: .9em; }
+.brain-nav-query > b { opacity: .7; }
+.brain-nav-candidates { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.brain-nav-candidates > li { display: flex; align-items: center; gap: 8px; font-size: .85em; padding: 3px 6px; border-radius: 6px; background: rgba(255,255,255,.03); }
+.brain-nav-candidates > li.is-dropped { opacity: .55; }
+.brain-nav-candidates > li.is-retained { background: rgba(80,200,140,.10); }
+.brain-nav-rank { opacity: .6; font-variant-numeric: tabular-nums; }
+.brain-nav-candidates > li > strong { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.brain-nav-score { font-variant-numeric: tabular-nums; opacity: .8; }
+.brain-nav-badge { font-size: .8em; opacity: .8; }
+.brain-nav-candidates > li.is-retained .brain-nav-badge { color: var(--ok, #6ad39b); opacity: 1; }

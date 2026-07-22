@@ -91,6 +91,7 @@ import {
   readNativePreflight
 } from './activity/native-preflight'
 import { nativeSpoolRoot, appendNativeTrace } from './activity/native-trace-spool'
+import { appendBrainTrace, readBrainTraces } from './activity/brain-trace-spool'
 import { proveInjections } from './native-injection-proof'
 import { createAmitelContextProvider } from './amitel-context'
 import {
@@ -522,6 +523,16 @@ function registerChatIpc(): void {
           }
         }
       }, undefined, undefined, controller.signal)
+      // Trace Brain (observabilité Observatory) : requête réelle + navigation interne + injecté.
+      if (result.brainNavigation || (result.brainInjectedChars ?? 0) > 0) {
+        appendBrainTrace({
+          timestamp: new Date().toISOString(),
+          conversationId,
+          query: result.brainQuery ?? '',
+          injectedChars: result.brainInjectedChars ?? 0,
+          navigation: result.brainNavigation
+        })
+      }
       return { ok: true, result }
     } catch (e) {
       const aborted = controller.signal.aborted
@@ -538,6 +549,12 @@ function registerChatIpc(): void {
   // --- Config par rôle (orchestrateur / sous-agent / juge / scout) ---
   // #5 — le wizard first-run re-vérifie la config à la demande. `force` (bouton) ignore le cache TTL ;
   // sans force (montage) le cache déduplique avec le run de démarrage.
+  ipcMain.handle('os:brainTraces', (event, conversationId?: unknown) => {
+    assertTrustedRendererSender(event, 'Brain traces')
+    return readBrainTraces(
+      typeof conversationId === 'string' ? guardString(conversationId, 'conversationId') : undefined
+    )
+  })
   ipcMain.handle('preflight:recheck', (_e, force?: boolean) => runAppPreflight(force === true))
   ipcMain.handle('os:roles', () => os.roles.all())
   ipcMain.handle(
@@ -1495,7 +1512,12 @@ if (!isolatedTestInstance && ownsInstanceLock) {
 
 // Filet de sécurité process-level (#1) : une promesse non-catchée ne doit PAS tuer tout le process
 // (fenêtres + runs + persistance). On loggue et on survit. Branché AVANT whenReady.
-installCrashHandlers({ logDir: app.getPath('userData') })
+installCrashHandlers({
+  logDir: app.getPath('userData'),
+  // Sur crash non catché, le finally du handler os:orchestrate ne tourne pas → couper les
+  // orchestrations en vol pour ne pas laisser de controllers fantômes (cancel no-op sinon).
+  onFatal: () => bus.abortAllOrchestrations()
+})
 
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.

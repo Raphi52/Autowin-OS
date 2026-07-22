@@ -8,7 +8,7 @@ import { evaluateClosure } from './gates/stopgate'
 import { runHooks } from './gates/hooks'
 import { type PipelinePhase } from './skill-pipeline'
 import { phaseBrief } from './phase-briefs'
-import { retrieveBrainContext } from './brain-retrieval'
+import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
 import { projectContextBlock } from './context-files'
 import type { ExecutionEvidence, PromptEnvelope, SendOptions, Usage } from './providers/types'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
@@ -62,6 +62,12 @@ export interface OrchestrationResult {
   pendingDecisionId?: string
   /** Sortie brute de chaque phase exec — sert à peupler le RUN.md de la conversation (J2). */
   phaseOutputs: { phase: PipelinePhase; text: string }[]
+  /** Requête envoyée au Brain (RAG 1×/run) — pour la traçabilité Observatory. */
+  brainQuery?: string
+  /** Navigation interne du Brain (candidats parcourus/scorés/retenus) si le serveur l'expose. */
+  brainNavigation?: BrainNavigation
+  /** Caractères de contexte Brain réellement injectés. */
+  brainInjectedChars?: number
   trace: OrchestrationStep[]
 }
 
@@ -166,7 +172,8 @@ export class Orchestrator {
     // RAG Brain : 1×/run, on récupère du cerveau Amitel la connaissance pertinente (retriever
     // hybride chaud du brain_server) et on l'injecte en tête de contexte. Le sous-agent part du
     // savoir CURÉ au lieu de brute-forcer le repo. Dégrade à '' si le serveur est absent.
-    const brainContext = await retrieveBrainContext(task)
+    const brain = await retrieveBrainContext(task)
+    const brainContext = brain.context
     // #1 repo-map graphify RÉFUTÉ par mesure A/B (2026-07-22) : injecter GRAPH_REPORT.md (28k) à
     // chaque phase coûtait +206k tokens (ON 573k vs OFF 367k) SANS réduire la lecture agentique du
     // sous-agent → contre-productif (piège du soft-steer saturé). Levier retiré. Cf. harnais
@@ -547,6 +554,9 @@ export class Orchestrator {
       gateReasons: gate.reasons,
       pendingDecisionId,
       phaseOutputs,
+      brainQuery: brain.navigation?.query ?? (brainContext ? task : undefined),
+      brainNavigation: brain.navigation,
+      brainInjectedChars: brainContext.length,
       costUsd: cost.totalUsd(),
       trace
     }

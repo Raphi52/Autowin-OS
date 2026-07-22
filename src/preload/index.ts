@@ -55,6 +55,9 @@ const api = {
     ipcRenderer.on('preflight:result', handler)
     return () => ipcRenderer.removeListener('preflight:result', handler)
   },
+  // #5 — le wizard first-run re-vérifie la config à la demande (force=true pour le bouton).
+  recheckPreflight: (force?: boolean): Promise<unknown> =>
+    ipcRenderer.invoke('preflight:recheck', force),
   // Config par rôle
   roles: (): Promise<
     Record<string, { provider: string; model?: string; reasoningEffort?: string }>
@@ -81,6 +84,8 @@ const api = {
     ipcRenderer.invoke('os:promptCalls', conversationId),
   promptTraces: (conversationId: string): Promise<unknown[]> =>
     ipcRenderer.invoke('os:promptTraces', conversationId),
+  brainTraces: (conversationId?: string): Promise<unknown[]> =>
+    ipcRenderer.invoke('os:brainTraces', conversationId),
   promptTraceSummary: (): Promise<unknown[]> =>
     ipcRenderer.invoke('os:promptTraceSummary'),
   authorizeDiagnostics: (): Promise<string | null> =>

@@ -238,6 +238,25 @@ interface PromptCallRecord {
   }
 }
 
+interface BrainNavigationCandidate {
+  rank: number
+  path: string
+  type: string
+  denseCos: number
+  retained: boolean
+}
+interface BrainNavigation {
+  query: string
+  minDense: number
+  candidates: BrainNavigationCandidate[]
+}
+interface BrainTrace {
+  timestamp: string
+  conversationId: string
+  query: string
+  injectedChars: number
+  navigation?: BrainNavigation
+}
 interface NativePreflightTrace {
   schema: 'autowin.native-preflight/v1'
   timestamp: string
@@ -358,6 +377,7 @@ interface ChatApi {
   skills: () => Promise<SkillRegistryItem[]>
   promptCalls: (conversationId?: string) => Promise<PromptCallRecord[]>
   promptTraces: (conversationId: string) => Promise<NativePreflightTrace[]>
+  brainTraces: (conversationId?: string) => Promise<BrainTrace[]>
   promptTraceSummary: () => Promise<NativePreflightTrace[]>
   authorizeDiagnostics: () => Promise<string | null>
   promptTracesGlobal: (capability: string) => Promise<NativePreflightTrace[]>

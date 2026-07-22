@@ -10,6 +10,7 @@ import { summarizeNativeTraces, type NativeTraceSummaryInput } from './native-tr
 import './ObservatoryView.css'
 import { ModuleHeader } from './ModuleHeader'
 import { RagObservabilitySummary, RagTraceCard } from './RagTraceCard'
+import { BrainNavigationCard, type BrainTraceView } from './BrainNavigationCard'
 import { summarizeRagTrace } from './rag-trace-model'
 import { LatestRequestGate, settleObservatorySources } from './observatory-reliability'
 import { buildObservatoryExport } from './observatory-export-model'
@@ -196,6 +197,7 @@ export function ObservatoryView({
   const [selectedCall, setSelectedCall] = useState<PromptCall | null>(null)
   const [nativeTraces, setNativeTraces] = useState<NativeDiagnosticTrace[]>([])
   const [nativeMetadata, setNativeMetadata] = useState<NativeTraceSummaryInput[]>([])
+  const [brainTraces, setBrainTraces] = useState<BrainTraceView[]>([])
   const [selected, setSelected] = useState<HarnessTimelineEvent | null>(null)
   const [compare, setCompare] = useState<HarnessTimelineEvent[]>([])
   const [query, setQuery] = useState('')
@@ -237,6 +239,12 @@ export function ObservatoryView({
       setSelectedCall(null)
       setCompare([])
     }
+    void window.api
+      .brainTraces?.()
+      ?.then((t) => {
+        if (!disposed) setBrainTraces(t as BrainTraceView[])
+      })
+      ?.catch(() => undefined)
     void settleObservatorySources({
       conversations: window.api.conversations(),
       promptCalls: window.api.promptCalls(),
@@ -395,6 +403,7 @@ export function ObservatoryView({
   // affichée : sinon les payloads GLOBAUX legacy (chargés à part) polluent une conv codex/claude
   // avec un « Requêtes · 24 » et « 24 sans RAG » qui ne la décrivent pas.
   const convNativeMetadata = nativeMetadata.filter((t) => t.conversationId === conversationId)
+  const convBrainTraces = brainTraces.filter((t) => t.conversationId === conversationId)
   const convNativeTraces = nativeTraces.filter((t) => t.conversationId === conversationId)
   const nativeSummary = summarizeNativeTraces(convNativeMetadata)
   const ragSummaries = convNativeTraces.map((trace) => summarizeRagTrace(trace.request))
@@ -603,6 +612,13 @@ export function ObservatoryView({
       )}
       {hasNativeTraces && (
         <RagObservabilitySummary requests={convNativeTraces.map((trace) => trace.request)} />
+      )}
+      {convBrainTraces.length > 0 && (
+        <div className="observatory-brain-nav">
+          {convBrainTraces.map((trace) => (
+            <BrainNavigationCard key={`${trace.timestamp}:${trace.conversationId}`} trace={trace} />
+          ))}
+        </div>
       )}
       {nativeTraces.length > 0 && (
         <details className="observatory-native-diagnostics">
