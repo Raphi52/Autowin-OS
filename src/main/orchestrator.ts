@@ -9,6 +9,7 @@ import { type PipelinePhase } from './skill-pipeline'
 import { phaseBrief } from './phase-briefs'
 import { retrieveBrainContext } from './brain-retrieval'
 import { projectContextBlock } from './context-files'
+import { repoMapBlock } from './repo-map'
 import type { ExecutionEvidence, PromptEnvelope, SendOptions, Usage } from './providers/types'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
@@ -86,6 +87,15 @@ const MUTATION_TASK =
 const PHASE_CONTEXT_CAP = 2000
 
 /**
+ * #3 — plafond du texte d'UNE phase agrégé dans le livrable remis au JUGE. Le portage phase→phase
+ * était déjà borné (PHASE_CONTEXT_CAP), mais l'agrégat juge (`buildExec`) concaténait les sorties
+ * COMPLÈTES non tronquées → croissance linéaire du prompt juge avec le nb de phases. On borne chaque
+ * bloc de phase (plus large que le portage : le juge doit voir la substance du livrable, pas juste
+ * un aperçu). La sortie complète reste dans `phaseOutputs` + la trace des sous-agents.
+ */
+const JUDGE_PHASE_CAP = 6000
+
+/**
  * J3 — une tâche est une MUTATION seulement si un verbe de mutation apparaît HORS d'une négation.
  * « Ne modifie pas de code » (cadrage) ne doit PAS exiger de preuve de mutation → sinon faux-red.
  * On neutralise les clauses négatives « ne … pas » / « n'… pas » avant de tester.
@@ -147,13 +157,20 @@ export class Orchestrator {
     // hybride chaud du brain_server) et on l'injecte en tête de contexte. Le sous-agent part du
     // savoir CURÉ au lieu de brute-forcer le repo. Dégrade à '' si le serveur est absent.
     const brainContext = await retrieveBrainContext(task)
-    const phaseContext: string[] = brainContext
-      ? [
-          brainContext,
-          `Sers-toi de la CONNAISSANCE (Brain) ci-dessus en priorité ; ne relis le dépôt que si strictement nécessaire.`,
-          `TÂCHE: ${task}`
-        ]
-      : [`TÂCHE: ${task}`]
+    // #1 — carte du code graphify (repo-map). 1×/run, en tête de contexte : le sous-agent localise
+    // le code via la carte au lieu de le relire fichier par fichier (baisse du résiduel lecture).
+    // Dégrade à '' si le graphe n'est pas généré → comportement inchangé.
+    const repoMap = repoMapBlock(this.deps.executionWorkspace)
+    const phaseContext: string[] = [
+      ...(brainContext
+        ? [
+            brainContext,
+            `Sers-toi de la CONNAISSANCE (Brain) ci-dessus en priorité ; ne relis le dépôt que si strictement nécessaire.`
+          ]
+        : []),
+      ...(repoMap ? [repoMap] : []),
+      `TÂCHE: ${task}`
+    ]
     for (const phase of execPhases) {
       const phaseMessages = [{ role: 'user' as const, content: phaseContext.join('\n\n') }]
       // F6 — le system est composé de blocs NOMMÉS : on garde leur décomposition (nom + taille)
@@ -255,7 +272,17 @@ export class Orchestrator {
     const buildExec = (): { text: string; usage: Usage | undefined; executionEvidence: ExecutionEvidence[] } => ({
       text:
         phaseOutputs.length > 1
-          ? phaseOutputs.map((p) => `[phase ${p.phase}]\n${p.text}`).join('\n\n')
+          ? phaseOutputs
+              .map((p) => {
+                // #3 — chaque bloc de phase est borné avant agrégation pour le juge (l'agrégat
+                // n'est plus la concaténation des sorties COMPLÈTES). Sortie intégrale = phaseOutputs.
+                const body =
+                  p.text.length > JUDGE_PHASE_CAP
+                    ? `${p.text.slice(0, JUDGE_PHASE_CAP)}\n…[tronqué — voir le fil des sous-agents]`
+                    : p.text
+                return `[phase ${p.phase}]\n${body}`
+              })
+              .join('\n\n')
           : lastExecText,
       usage: lastUsage,
       executionEvidence: aggregatedEvidence
