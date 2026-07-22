@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { findProviderCapabilities } from './provider-capabilities'
 
 export interface ClaudeHookItem {
   id: string
@@ -20,7 +19,11 @@ function redact(command: string): string {
     .slice(0, 2_000)
 }
 
-function parseFile(path: string, scope: 'global' | 'project'): ClaudeHookItem[] {
+function parseFile(
+  path: string,
+  scope: 'global' | 'project',
+  providerId: string
+): ClaudeHookItem[] {
   if (!existsSync(path)) return []
   try {
     const source = realpathSync(path)
@@ -40,7 +43,7 @@ function parseFile(path: string, scope: 'global' | 'project'): ClaudeHookItem[] 
           const type = typeof hook.type === 'string' ? hook.type : 'command'
           const matcher = typeof group.matcher === 'string' ? group.matcher : undefined
           items.push({
-            id: `claude-${scope}-${event}-${groupIndex}-${hookIndex}`,
+            id: `${providerId}-${scope}-${event}-${groupIndex}-${hookIndex}`,
             label: event,
             description: command || `${type} hook`,
             enabled: true,
@@ -59,19 +62,21 @@ function parseFile(path: string, scope: 'global' | 'project'): ClaudeHookItem[] 
   }
 }
 
-export function listClaudeHooks(projectRoot = process.cwd()): ClaudeHookItem[] {
-  const candidates: Array<[string, 'global' | 'project']> = [
-    [join(homedir(), '.claude', 'settings.json'), 'global'],
-    [join(homedir(), '.claude', 'settings.local.json'), 'global'],
-    [join(projectRoot, '.claude', 'settings.json'), 'project'],
-    [join(projectRoot, '.claude', 'settings.local.json'), 'project']
-  ]
-  return candidates.flatMap(([path, scope]) => parseFile(path, scope))
+/**
+ * Hooks d'un provider — GÉNÉRIQUE : lit les fichiers déclarés pour ce provider dans la source unique
+ * `provider-capabilities`. Un futur provider = 1 entrée là-bas, zéro code ici.
+ */
+export function listProviderHooks(providerId: string, projectRoot = process.cwd()): ClaudeHookItem[] {
+  const provider = findProviderCapabilities(providerId, { projectRoot })
+  if (!provider) return []
+  return provider.hookFiles.flatMap((file) => parseFile(file.path, file.scope, providerId))
 }
 
-export function listCodexHooks(): ClaudeHookItem[] {
-  return parseFile(join(homedir(), '.codex', 'hooks.json'), 'global').map((item) => ({
-    ...item,
-    id: item.id.replace(/^claude-/, 'codex-')
-  }))
+/** Wrappers de compat (API stable) — délèguent au générique ci-dessus. */
+export function listClaudeHooks(projectRoot = process.cwd()): ClaudeHookItem[] {
+  return listProviderHooks('claude', projectRoot)
+}
+
+export function listCodexHooks(projectRoot = process.cwd()): ClaudeHookItem[] {
+  return listProviderHooks('codex', projectRoot)
 }

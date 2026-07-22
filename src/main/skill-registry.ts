@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import { type CapabilityItem } from './capability-controls'
+import { providerCapabilities } from './provider-capabilities'
 
 export interface SkillRegistryItem extends CapabilityItem {
   source: string
@@ -30,21 +30,17 @@ const MAX_FILES_PER_SOURCE = 500
 const METADATA_BYTES = 16_384
 
 export function defaultSkillRegistryRoots(): SkillRegistryRoots {
-  const user = homedir()
-  const localAppData = process.env.LOCALAPPDATA ?? join(user, 'AppData', 'Local')
-  // Souverain : kit `~/.claude/skills` + `~/.codex/skills` + racine Autowin.
-  return {
-    codex: join(user, '.codex', 'skills'),
-    claude: join(user, '.claude', 'skills'),
-    autowin: join(localAppData, 'autowin-os', 'skills')
-  }
+  // Racines dérivées de la SOURCE UNIQUE (provider-capabilities) — plus de hardcoding dupliqué.
+  const byId = Object.fromEntries(providerCapabilities().map((p) => [p.id, p.skillsRoot]))
+  return { codex: byId.codex, claude: byId.claude, autowin: byId.autowin }
 }
 
 export function providersFromRoots(roots: SkillRegistryRoots): SkillDiscoveryProvider[] {
+  const labelById = new Map(providerCapabilities().map((p) => [p.id, p.label]))
   return [
-    { id: 'codex', label: 'Codex', root: roots.codex },
-    { id: 'claude', label: 'Claude', root: roots.claude },
-    { id: 'autowin', label: 'Autowin', root: roots.autowin }
+    { id: 'codex', label: labelById.get('codex') ?? 'Codex', root: roots.codex },
+    { id: 'claude', label: labelById.get('claude') ?? 'Claude', root: roots.claude },
+    { id: 'autowin', label: labelById.get('autowin') ?? 'Autowin', root: roots.autowin }
   ]
 }
 
