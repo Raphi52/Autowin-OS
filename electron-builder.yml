@@ -3,8 +3,6 @@ productName: Autowin OS
 directories:
   buildResources: build
 files:
-  - '**/*'
-  - 'node_modules/@napi-rs/keyring-*/**'
   - '!dist/**'
   - '!dist-*/**'
   - '!Audit/**'
