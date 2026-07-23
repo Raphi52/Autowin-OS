@@ -40,6 +40,59 @@ describe('Observatory visual contracts', () => {
     )
   })
 
+  const ALL_KINDS = [
+    'message',
+    'injection',
+    'decision',
+    'tool-call',
+    'tool-result',
+    'model-response',
+    'handoff',
+    'verdict',
+    'gate',
+    'retry',
+    'cancellation',
+    'error',
+    'boundary',
+    'response-displayed'
+  ] as const
+  const readCss = (): string => readFileSync(new URL('./ObservatoryView.css', import.meta.url), 'utf8')
+  const barColor = (css: string, kind: string): string | undefined => {
+    const rule = css.match(new RegExp(`\\.observatory-event\\.is-${kind}\\s*{[^}]*}`, 's'))?.[0]
+    return rule?.match(/box-shadow:\s*inset 3px 0 (#[0-9a-fA-F]{6})/)?.[1]?.toLowerCase()
+  }
+
+  it('donne une barre de couleur dédiée à CHAQUE type d’action', () => {
+    const css = readCss()
+    for (const kind of ALL_KINDS) {
+      expect(barColor(css, kind), `is-${kind} devrait avoir une barre de couleur`).toMatch(
+        /^#[0-9a-f]{6}$/
+      )
+    }
+  })
+
+  it('rend TOOL et TOOL RESULT distincts mais de la même famille', () => {
+    const css = readCss()
+    const tool = barColor(css, 'tool-call')
+    const toolResult = barColor(css, 'tool-result')
+    expect(tool).toBeTruthy()
+    expect(toolResult).toBeTruthy()
+    expect(tool).not.toBe(toolResult)
+  })
+
+  it('n’utilise ni l’or de sélection ni le cyan de comparaison comme accent de type', () => {
+    const css = readCss()
+    for (const kind of ALL_KINDS.filter((k) => k !== 'error')) {
+      const bar = barColor(css, kind)
+      expect(bar, `is-${kind} ne doit pas réutiliser l’or de sélection`).not.toBe('#e9bd4e')
+      expect(bar, `is-${kind} ne doit pas réutiliser le cyan de comparaison`).not.toBe('#59dcff')
+    }
+  })
+
+  it('conserve le rouge d’erreur existant (pas de régression)', () => {
+    expect(barColor(readCss(), 'error')).toBe('#ff6078')
+  })
+
   it('uses the Models gold selection in the critical-path view', () => {
     const css = readFileSync(new URL('./ObservatoryView.css', import.meta.url), 'utf8')
     const selectedCausalRule = css.match(

@@ -579,6 +579,125 @@
 .observatory-event.is-error p strong {
   color: #ff758a;
 }
+
+/*
+ * Couleur PAR TYPE d'action — barre gauche (inset 3px) + tint du libellé, sur le motif de is-error.
+ * Regroupées par famille sémantique. On ne touche PAS au border-color : le hover/sélection (or) et
+ * la comparaison (cyan) restent maîtres (cf. is-compared réaffirmé en fin de bloc). Gold/cyan bannis
+ * comme accent de type (réservés aux états d'interaction). error garde son rouge ci-dessus.
+ */
+/* Famille Conversation */
+.observatory-event.is-message {
+  box-shadow: inset 3px 0 #6aa8ff;
+}
+.observatory-event.is-message > i,
+.observatory-event.is-message > span:nth-child(2) b,
+.observatory-event.is-message p strong {
+  color: #8fbcff;
+}
+.observatory-event.is-model-response {
+  box-shadow: inset 3px 0 #8f7cff;
+}
+.observatory-event.is-model-response > i,
+.observatory-event.is-model-response > span:nth-child(2) b,
+.observatory-event.is-model-response p strong {
+  color: #a89bff;
+}
+.observatory-event.is-response-displayed {
+  box-shadow: inset 3px 0 #68eeb7;
+}
+.observatory-event.is-response-displayed > i,
+.observatory-event.is-response-displayed > span:nth-child(2) b,
+.observatory-event.is-response-displayed p strong {
+  color: #7ff0c4;
+}
+/* Famille Outils / commande — TOOL et TOOL RESULT, teintes sœurs (teal → vert) */
+.observatory-event.is-tool-call {
+  box-shadow: inset 3px 0 #2fb0a0;
+}
+.observatory-event.is-tool-call > i,
+.observatory-event.is-tool-call > span:nth-child(2) b,
+.observatory-event.is-tool-call p strong {
+  color: #4fc8b8;
+}
+.observatory-event.is-tool-result {
+  box-shadow: inset 3px 0 #7ee08a;
+}
+.observatory-event.is-tool-result > i,
+.observatory-event.is-tool-result > span:nth-child(2) b,
+.observatory-event.is-tool-result p strong {
+  color: #9be8a4;
+}
+/* Famille Décision & contrôle */
+.observatory-event.is-decision {
+  box-shadow: inset 3px 0 #c98bff;
+}
+.observatory-event.is-decision > i,
+.observatory-event.is-decision > span:nth-child(2) b,
+.observatory-event.is-decision p strong {
+  color: #d5a5ff;
+}
+.observatory-event.is-verdict {
+  box-shadow: inset 3px 0 #ff8fb0;
+}
+.observatory-event.is-verdict > i,
+.observatory-event.is-verdict > span:nth-child(2) b,
+.observatory-event.is-verdict p strong {
+  color: #ffa8c2;
+}
+.observatory-event.is-gate {
+  box-shadow: inset 3px 0 #ef3f91;
+}
+.observatory-event.is-gate > i,
+.observatory-event.is-gate > span:nth-child(2) b,
+.observatory-event.is-gate p strong {
+  color: #f56aa8;
+}
+.observatory-event.is-handoff {
+  box-shadow: inset 3px 0 #5c9dff;
+}
+.observatory-event.is-handoff > i,
+.observatory-event.is-handoff > span:nth-child(2) b,
+.observatory-event.is-handoff p strong {
+  color: #82b6ff;
+}
+.observatory-event.is-injection {
+  box-shadow: inset 3px 0 #ff9d5c;
+}
+.observatory-event.is-injection > i,
+.observatory-event.is-injection > span:nth-child(2) b,
+.observatory-event.is-injection p strong {
+  color: #ffb583;
+}
+.observatory-event.is-boundary {
+  box-shadow: inset 3px 0 #6f7cff;
+}
+.observatory-event.is-boundary > i,
+.observatory-event.is-boundary > span:nth-child(2) b,
+.observatory-event.is-boundary p strong {
+  color: #9199ff;
+}
+/* Famille Problème (error traité au-dessus) */
+.observatory-event.is-retry {
+  box-shadow: inset 3px 0 #ffb347;
+}
+.observatory-event.is-retry > i,
+.observatory-event.is-retry > span:nth-child(2) b,
+.observatory-event.is-retry p strong {
+  color: #ffc76e;
+}
+.observatory-event.is-cancellation {
+  box-shadow: inset 3px 0 #9aa0a8;
+}
+.observatory-event.is-cancellation > i,
+.observatory-event.is-cancellation > span:nth-child(2) b,
+.observatory-event.is-cancellation p strong {
+  color: #b3b9c0;
+}
+/* Réaffirmé APRÈS les types : la comparaison (cyan) garde la priorité sur la barre de type. */
+.observatory-event.is-compared {
+  box-shadow: inset 3px 0 #59dcff;
+}
 .observatory-event > i {
   font-style: normal;
   font-weight: 800;
