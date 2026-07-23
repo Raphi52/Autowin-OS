@@ -150,44 +150,43 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     []
   )
 
+  const loadSources = useCallback(async (): Promise<void> => {
+    const generation = ++requestGeneration.current
+    setSourcesLoaded(false)
+    setError(undefined)
+    try {
+      const summaries = (await window.api.ticketSources()) as TicketSourceSummary[]
+      if (generation !== requestGeneration.current) return
+      setSources(summaries)
+      setSourcesLoaded(true)
+      const persistedSourceId = localStorage.getItem(SOURCE_KEY) ?? ''
+      const saved = summaries.find(({ profile }) => profile.id === persistedSourceId)?.profile
+      const source = saved ?? summaries[0]?.profile
+      if (!source) {
+        setLoading(false)
+        return
+      }
+      setSourceId(source.id)
+      localStorage.setItem(SOURCE_KEY, source.id)
+      await load(source)
+    } catch (failure) {
+      if (generation !== requestGeneration.current) return
+      setLoading(false)
+      setError(errorMessage(failure))
+      setSourcesLoaded(true)
+    }
+  }, [load])
+
   useEffect(() => {
     if (!active || typeof window.api?.ticketSources !== 'function') return
-    let disposed = false
-    const generation = ++requestGeneration.current
-    void window.api.ticketSources().then(
-      (nextSources) => {
-        if (disposed || generation !== requestGeneration.current) return
-        const summaries = nextSources as TicketSourceSummary[]
-        setSources(summaries)
-        setSourcesLoaded(true)
-        const saved = summaries.find(({ profile }) => profile.id === sourceId)?.profile
-        const source = saved ?? summaries[0]?.profile
-        if (!source) {
-          setLoading(false)
-          return
-        }
-        setSourceId(source.id)
-        localStorage.setItem(SOURCE_KEY, source.id)
-        void load(source)
-      },
-      (failure) => {
-        if (!disposed && generation === requestGeneration.current) {
-          setLoading(false)
-          setError(errorMessage(failure))
-          setSourcesLoaded(true)
-        }
-      }
-    )
+    void loadSources()
     return () => {
-      disposed = true
       requestGeneration.current += 1
       const current = activeRequestId.current
       activeRequestId.current = undefined
       if (current) void window.api.cancelTickets(current)
     }
-    // The selected source is resolved once from persisted state during activation.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, load])
+  }, [active, loadSources])
 
   const clearSourceData = (): void => {
     itemsRef.current = []
@@ -262,6 +261,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
 
   const retry = (): void => {
     if (selectedSource) void load(selectedSource)
+    else void loadSources()
   }
   const initialLoading = active && !sourcesLoaded && !error
 

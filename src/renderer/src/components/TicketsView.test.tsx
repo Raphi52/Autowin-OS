@@ -220,6 +220,26 @@ describe('vue Tickets', () => {
     await act(async () => root.unmount())
   })
 
+  it('recharge les sources quand leur lecture initiale échoue', async () => {
+    const ticketSources = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Store de sources indisponible.'))
+      .mockResolvedValueOnce([{ profile: DEFAULT_TICKET_SOURCE, credentialConfigured: false }])
+    api({ ticketSources })
+    const { root, container } = await render()
+
+    expect(container.textContent).toContain('Store de sources indisponible')
+    await act(async () => {
+      ;(container.querySelector('[data-testid="tickets-retry"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(ticketSources).toHaveBeenCalledTimes(2)
+    expect(container.textContent).toContain('Ticket 1')
+    await act(async () => root.unmount())
+  })
+
   it('distingue aucune source, filtre localement et charge la page suivante', async () => {
     api({ ticketSources: vi.fn(async () => []) })
     const first = await render()
