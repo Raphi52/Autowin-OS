@@ -11,17 +11,6 @@ export interface AutowinProfile {
   updatedAt: string
   topology: AgentTopology
   roles: Record<Role, RoleBinding>
-  /** `direct` reste accepté en lecture pour migrer les anciens profils, mais n'est jamais appliqué. */
-  transport?: { mode: 'direct' | 'omniroute'; routeModel?: string }
-}
-
-export function resolveProfileRoute(
-  transport: AutowinProfile['transport'],
-  currentRoute: string
-): string {
-  return transport?.mode === 'omniroute' && transport.routeModel
-    ? transport.routeModel
-    : currentRoute
 }
 
 export class ProfileStore {

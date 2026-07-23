@@ -190,8 +190,8 @@ describe('selecteur orchestrateur Chat', () => {
   it('regroupe par éditeur et preserve le modele courant disparu', () => {
     const result = buildOrchestratorModelGroups(
       [
-        { id: 'c1', provider: 'omniroute', model: 'gpt-5', label: 'GPT-5' },
-        { id: 'h1', provider: 'omniroute', model: 'llama', label: 'Llama' }
+        { id: 'c1', provider: 'gateway', model: 'gpt-5', label: 'GPT-5' },
+        { id: 'h1', provider: 'gateway', model: 'llama', label: 'Llama' }
       ],
       { provider: 'legacy', model: 'gone' }
     )
@@ -208,9 +208,9 @@ describe('selecteur orchestrateur Chat', () => {
 
   it('ordonne les catégories : Anthropic, ChatGPT, puis les autres éditeurs', () => {
     const result = buildOrchestratorModelGroups([
-      { id: 'h1', provider: 'omniroute', model: 'llama', label: 'Llama' },
-      { id: 'c1', provider: 'omniroute', model: 'gpt-5', label: 'GPT-5' },
-      { id: 'a1', provider: 'omniroute', model: 'claude-opus', label: 'Opus' }
+      { id: 'h1', provider: 'gateway', model: 'llama', label: 'Llama' },
+      { id: 'c1', provider: 'gateway', model: 'gpt-5', label: 'GPT-5' },
+      { id: 'a1', provider: 'gateway', model: 'claude-opus', label: 'Opus' }
     ])
     expect(result.groups.map((group) => group.label)).toEqual([
       'Anthropic',
@@ -219,14 +219,14 @@ describe('selecteur orchestrateur Chat', () => {
     ])
   })
 
-  it('éclate le catalogue OmniRoute en catégories éditeur propres', () => {
+  it('éclate le catalogue gateway en catégories éditeur propres', () => {
     const result = buildOrchestratorModelGroups([
-      { id: 'o0', provider: 'omniroute', model: 'zeta-model', label: 'Zeta' },
-      { id: 'o1', provider: 'omniroute', model: 'gpt-5.6-terra', label: 'GPT-5.6' },
-      { id: 'o2', provider: 'omniroute', model: 'auto/pro-coding', label: 'Pro Code' },
-      { id: 'o3', provider: 'omniroute', model: 'claude-opus-4-6', label: 'Opus' },
-      { id: 'o4', provider: 'omniroute', model: 'auto/best-chat', label: 'Best Chat' },
-      { id: 'o5', provider: 'omniroute', model: 'auto/best-coding', label: 'Best Code' }
+      { id: 'o0', provider: 'gateway', model: 'zeta-model', label: 'Zeta' },
+      { id: 'o1', provider: 'gateway', model: 'gpt-5.6-terra', label: 'GPT-5.6' },
+      { id: 'o2', provider: 'gateway', model: 'auto/pro-coding', label: 'Pro Code' },
+      { id: 'o3', provider: 'gateway', model: 'claude-opus-4-6', label: 'Opus' },
+      { id: 'o4', provider: 'gateway', model: 'auto/best-chat', label: 'Best Chat' },
+      { id: 'o5', provider: 'gateway', model: 'auto/best-coding', label: 'Best Code' }
     ])
     // Catégories dans l'ordre : Anthropic, ChatGPT, Sélection automatique, Autres.
     expect(result.groups.map((group) => group.key)).toEqual([
@@ -248,18 +248,18 @@ describe('selecteur orchestrateur Chat', () => {
 
   it('sort les auto/claude d’Anthropic, masque no-think, trie du plus récent au plus vieux', () => {
     const result = buildOrchestratorModelGroups([
-      { id: 'm1', provider: 'omniroute', model: 'cc/claude-opus-4-5-20251101', label: 'Opus 4.5' },
-      { id: 'm2', provider: 'omniroute', model: 'cc/claude-opus-4-8', label: 'Opus 4.8' },
-      { id: 'm3', provider: 'omniroute', model: 'cc/claude-sonnet-4-6', label: 'Sonnet 4.6' },
-      { id: 'm4', provider: 'omniroute', model: 'cc/claude-opus-4-7', label: 'Opus 4.7' },
-      { id: 'm7', provider: 'omniroute', model: 'cc/claude-fable-5', label: 'Fable 5' },
+      { id: 'm1', provider: 'gateway', model: 'cc/claude-opus-4-5-20251101', label: 'Opus 4.5' },
+      { id: 'm2', provider: 'gateway', model: 'cc/claude-opus-4-8', label: 'Opus 4.8' },
+      { id: 'm3', provider: 'gateway', model: 'cc/claude-sonnet-4-6', label: 'Sonnet 4.6' },
+      { id: 'm4', provider: 'gateway', model: 'cc/claude-opus-4-7', label: 'Opus 4.7' },
+      { id: 'm7', provider: 'gateway', model: 'cc/claude-fable-5', label: 'Fable 5' },
       {
         id: 'm5',
-        provider: 'omniroute',
+        provider: 'gateway',
         model: 'no-think/cc/claude-opus-4-8',
         label: 'Opus 4.8 · Sans raisonnement'
       },
-      { id: 'm6', provider: 'omniroute', model: 'auto/claude-opus', label: 'Auto Claude Opus' }
+      { id: 'm6', provider: 'gateway', model: 'auto/claude-opus', label: 'Auto Claude Opus' }
     ])
     const anthropic = result.groups.find((group) => group.key === 'anthropic')
     // Fable en tête ; no-think masqué ; Opus décroissant puis Sonnet ; auto/claude ABSENT d’ici.

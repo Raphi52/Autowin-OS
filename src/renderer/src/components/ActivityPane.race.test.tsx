@@ -84,7 +84,7 @@ describe('ActivityPane request ordering', () => {
     expect(container.textContent).not.toContain('conversation A')
   })
 
-  it('affiche le modele route et son effort plutot que le transport OmniRoute', async () => {
+  it('affiche le modele route et son effort plutot que le transport gateway', async () => {
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -97,7 +97,7 @@ describe('ActivityPane request ordering', () => {
                     ts: '2026-07-22T11:09:01Z',
                     kind: 'chat',
                     label: 'tour agent',
-                    provider: 'omniroute',
+                    provider: 'gateway',
                     model: 'claude-opus-4-6',
                     reasoningEffort: 'high'
                   }
@@ -116,7 +116,7 @@ describe('ActivityPane request ordering', () => {
     await act(async () => root?.render(createElement(ActivityPane, { convId: 'A' })))
 
     expect(container.textContent).toContain('claude-opus-4-6 · high')
-    expect(container.textContent).not.toContain('omniroute')
+    expect(container.textContent).not.toContain('gateway')
   })
 
   it('retombe sur le provider historique quand le modele journalise est vide', async () => {
@@ -132,7 +132,7 @@ describe('ActivityPane request ordering', () => {
                     ts: '2026-07-22T11:09:01Z',
                     kind: 'chat',
                     label: 'ancien tour',
-                    provider: 'omniroute',
+                    provider: 'gateway',
                     model: '   '
                   }
                 ]
@@ -149,6 +149,6 @@ describe('ActivityPane request ordering', () => {
     root = createRoot(container)
     await act(async () => root?.render(createElement(ActivityPane, { convId: 'A' })))
 
-    expect(container.textContent).toContain('omniroute')
+    expect(container.textContent).toContain('gateway')
   })
 })

@@ -31,7 +31,6 @@ describe('Autowin UI contract', () => {
       'ChatView.tsx',
       'GraphView.tsx',
       'ObservatoryView.tsx',
-      'RouterView.tsx',
       'AgentsTopologyView.tsx',
       'CapabilitiesView.tsx',
       'BehaviourView.tsx'

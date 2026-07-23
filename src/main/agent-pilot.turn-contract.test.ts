@@ -21,10 +21,10 @@ describe('AgentPilot turn contract', () => {
 
     const normalizedActivityBlock = activityBlock?.replace(/\s+/g, ' ')
     expect(normalizedActivityBlock).toContain(
-      'model: turnPromptIdentity?.model ?? conversationRoute?.model'
+      'model: turnPromptIdentity?.model ?? orchestratorBinding.model'
     )
     expect(normalizedActivityBlock).toContain(
-      'reasoningEffort: turnPromptIdentity?.reasoningEffort ?? conversationRoute?.reasoningEffort'
+      'reasoningEffort: turnPromptIdentity?.reasoningEffort ?? orchestratorBinding.reasoningEffort'
     )
   })
 

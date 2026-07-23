@@ -594,25 +594,3 @@
   }
 }
 
-/* Coin OmniRoute dans la barre d'outils Models : gateway token + accès dashboard. */
-.topology-omniroute {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-}
-.topology-omniroute-token {
-  width: 180px;
-  max-width: 34vw;
-  padding: 5px 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--r1);
-  background: #000;
-  color: var(--text);
-  font: inherit;
-  font-size: 11px;
-}
-.topology-omniroute-token:focus {
-  outline: 0;
-  border-color: var(--accent);
-}

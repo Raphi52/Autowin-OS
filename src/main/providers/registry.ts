@@ -20,11 +20,6 @@ function assertOutsideLegacyFabricBridge(providerId: string): void {
  */
 export class ProviderRegistry {
   private readonly adapters = new Map<string, ProviderAdapter>()
-  private conversationTransport: {
-    provider: string
-    model: string
-    reasoningEffort?: string
-  } | null = null
 
   /** Bloc système par défaut (kit condensé SOUL) injecté sur CHAQUE tour. */
   constructor(private readonly systemBlock: string | undefined = undefined) {}
@@ -44,35 +39,13 @@ export class ProviderRegistry {
     return a
   }
 
-  setConversationTransport(route: {
-    provider: string
-    model: string
-    reasoningEffort?: string
-  }): void {
-    assertOutsideLegacyFabricBridge(route.provider)
-    this.get(route.provider)
-    if (route.provider !== 'omniroute') {
-      throw new Error('Transport conversationnel non autorisé')
-    }
-    if (!route.model.trim()) throw new Error('Modèle de transport vide')
-    this.conversationTransport = { ...route }
-  }
-
-  getConversationTransport(): {
-    provider: string
-    model: string
-    reasoningEffort?: string
-  } | null {
-    return this.conversationTransport ? { ...this.conversationTransport } : null
-  }
-
   private resolve(id: string, opts: SendOptions): { id: string; opts: SendOptions } {
     assertOutsideLegacyFabricBridge(id)
     if (opts.execution) {
       const requested = this.get(id)
       if (requested.supportsExecution === true) return { id, opts }
 
-      // Un rôle NON-exécuteur (ex. OmniRoute) demandant une exécution est délégué à un runner
+      // Un rôle NON-exécuteur demandant une exécution est délégué à un runner
       // outillé local. Ordre de préférence DÉTERMINISTE : codex (exécuteur canonique éprouvé) en
       // premier, sinon le 1er exécuteur déclaré. Évite qu'un nouvel exécuteur enregistré avant
       // (ex. claude, dont l'auth peut être expirée) devienne silencieusement le fallback par défaut.
@@ -89,7 +62,7 @@ export class ProviderRegistry {
     // Chat direct : route vers l'adaptateur du provider DEMANDÉ (le binding de rôle, ex. claude/
     // codex/kimi) tel quel. Chaque adaptateur streame nativement en mode conversation (send =
     // AsyncGenerator yield delta). Plus d'intermédiaire « transport » : le provider affiché EST
-    // celui qui répond (fin de la redirection OmniRoute silencieuse + du throw obligatoire).
+    // celui qui répond (fin de la redirection silencieuse + du throw obligatoire).
     this.get(id)
     return { id, opts }
   }

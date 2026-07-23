@@ -264,8 +264,7 @@ export interface OrchestratorModelGroup {
 }
 
 /**
- * Catégorie ÉDITEUR déduite de l'id du modèle (les modèles OmniRoute partagent tous
- * le provider technique « omniroute » → on regroupe par vraie marque). Ordre voulu :
+ * Catégorie ÉDITEUR déduite de l'id du modèle. Ordre voulu :
  * Anthropic, puis ChatGPT, puis les autres éditeurs (alpha), puis routes auto, puis divers.
  */
 export function modelVendor(model: string): { key: string; label: string; rank: number } {
@@ -319,7 +318,7 @@ export function modelRecencyKey(model: string): [number, number] {
 export const COST_EQ_LOW = 18_000
 export const COST_EQ_HIGH = 47_000
 
-/** Coût-équivalent tokens d'un tour (output ×5, input ×1). Cache non fourni par OmniRoute. */
+/** Coût-équivalent tokens d'un tour (output ×5, input ×1). */
 export function turnCostEq(usage: { inputTokens?: number; outputTokens?: number } | null): number {
   if (!usage) return 0
   return (usage.inputTokens ?? 0) + 5 * (usage.outputTokens ?? 0)
@@ -375,7 +374,7 @@ export function buildOrchestratorModelGroups(
   groups: OrchestratorModelGroup[]
   currentMissing?: OrchestratorModelOption
 } {
-  // Regroupement par ÉDITEUR (pas par le provider technique « omniroute » commun à tout).
+  // Regroupement par ÉDITEUR (pas par le provider technique).
   const byVendor = new Map<
     string,
     { label: string; rank: number; options: OrchestratorModelOption[] }

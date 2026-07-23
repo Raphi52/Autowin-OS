@@ -58,7 +58,7 @@ export function OrchestratorModelSelector({
     ? 'Chargement des modèles…'
     : models.length === 0
       ? 'Aucun modèle disponible'
-      : `OmniRoute · ${grouped.currentMissing?.label ?? currentOption?.label ?? 'Choisir une cible'}`
+      : (grouped.currentMissing?.label ?? currentOption?.label ?? 'Choisir une cible')
 
   return (
     <div className="model-select-shell">

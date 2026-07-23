@@ -1,16 +1,6 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
-interface Message {
-  role: 'system' | 'user' | 'assistant'
-  content: string
-}
-interface ChatResult {
-  ok: boolean
-  result?: { text: string; provider: string; systemInjected: boolean }
-  error?: string
-}
-
 /** API exposée au renderer — chaque méthode a un handler main réel. */
 const api = {
   captureTestPage: (): Promise<string> => ipcRenderer.invoke('app:test:capture-page'),
@@ -18,29 +8,6 @@ const api = {
     ipcRenderer.invoke('app:storage-migration'),
   completeStorageMigration: (): Promise<boolean> =>
     ipcRenderer.invoke('app:storage-migration-complete'),
-  // Chat
-  listProviders: (): Promise<string[]> => ipcRenderer.invoke('chat:providers'),
-  routerSnapshot: (): Promise<unknown> => ipcRenderer.invoke('router:snapshot'),
-  routerMigrationState: (): Promise<unknown> => ipcRenderer.invoke('router:migration-state'),
-  setOmniRouteCredential: (credential: string): Promise<unknown> =>
-    ipcRenderer.invoke('router:set-credential', credential),
-  deleteOmniRouteCredential: (): Promise<unknown> => ipcRenderer.invoke('router:delete-credential'),
-  testOmniRoute: (): Promise<unknown> => ipcRenderer.invoke('router:test-route'),
-  activateOmniRoute: (routeModel: string, reasoningEffort?: string): Promise<unknown> =>
-    ipcRenderer.invoke('router:activate', routeModel, reasoningEffort),
-  openOmniRouteDashboard: (): Promise<void> => ipcRenderer.invoke('router:open-dashboard'),
-  send: (
-    provider: string | undefined,
-    messages: Message[],
-    conversationId?: string,
-    role?: string
-  ): Promise<ChatResult> =>
-    ipcRenderer.invoke('chat:send', { provider, messages, conversationId, role }),
-  onDelta: (cb: (delta: string) => void): (() => void) => {
-    const handler = (_e: unknown, delta: string): void => cb(delta)
-    ipcRenderer.on('chat:delta', handler)
-    return () => ipcRenderer.removeListener('chat:delta', handler)
-  },
   // Orchestration disciplinée
   orchestrate: (task: string): Promise<{ ok: boolean; result?: unknown; error?: string }> =>
     ipcRenderer.invoke('os:orchestrate', task),
@@ -87,10 +54,8 @@ const api = {
   brainTraces: (conversationId?: string): Promise<unknown[]> =>
     ipcRenderer.invoke('os:brainTraces', conversationId),
   behaviourComposition: (): Promise<unknown> => ipcRenderer.invoke('os:behaviourComposition'),
-  promptTraceSummary: (): Promise<unknown[]> =>
-    ipcRenderer.invoke('os:promptTraceSummary'),
-  authorizeDiagnostics: (): Promise<string | null> =>
-    ipcRenderer.invoke('os:authorizeDiagnostics'),
+  promptTraceSummary: (): Promise<unknown[]> => ipcRenderer.invoke('os:promptTraceSummary'),
+  authorizeDiagnostics: (): Promise<string | null> => ipcRenderer.invoke('os:authorizeDiagnostics'),
   promptTracesGlobal: (capability: string): Promise<unknown[]> =>
     ipcRenderer.invoke('os:promptTracesGlobal', capability),
   causalTrace: (conversationId: string): Promise<unknown[]> =>

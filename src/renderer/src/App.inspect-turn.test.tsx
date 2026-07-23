@@ -23,10 +23,9 @@ vi.mock('./components/ObservatoryView', () => ({
     createElement('output', null, focus ? `${focus.conversationId}:${focus.turnId}` : 'sans cible')
 }))
 vi.mock('./components/GraphView', () => ({ GraphView: () => null }))
-vi.mock('./components/RolesView', () => ({ RolesView: () => null }))
+vi.mock('./components/RolesView', () => ({ RolesView: () => createElement('output', null, 'Topology visible') }))
 vi.mock('./components/CapabilitiesView', () => ({ CapabilitiesView: () => null }))
 vi.mock('./components/BehaviourView', () => ({ BehaviourView: () => null }))
-vi.mock('./components/RouterView', () => ({ RouterView: () => null }))
 vi.mock('./components/ModelQuestionPopup', () => ({ ModelQuestionPopup: () => null }))
 
 import { MainApp } from './App'
@@ -62,6 +61,61 @@ describe('App inspect-turn navigation', () => {
 
     expect(container.querySelector('output')?.textContent).toBe('conv-7:turn-8')
     expect(container.querySelector('.nav-item.active')?.textContent).toContain('Observatory')
+    await act(async () => root.unmount())
+  })
+
+  it('renders exactly the five canonical product destinations', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        storageMigration: vi.fn().mockResolvedValue({}),
+        completeStorageMigration: vi.fn().mockResolvedValue(true),
+        onAppEvent: vi.fn(() => vi.fn())
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(MainApp))
+      await Promise.resolve()
+    })
+
+    const navItems = [...container.querySelectorAll('.nav-item')]
+    const expectedLabels = ['Chat', 'Agent Studio', 'Knowledge', 'Observatory', 'Settings']
+    expect(navItems).toHaveLength(expectedLabels.length)
+    expectedLabels.forEach((label, index) => expect(navItems[index].textContent).toContain(label))
+    for (const id of ['chat', 'agent-studio', 'knowledge', 'observatory', 'settings']) {
+      expect(container.querySelector(`[data-testid="nav-${id}"]`)).not.toBeNull()
+    }
+    await act(async () => root.unmount())
+  })
+
+  it('opens Agent Studio when an agent navigates to the legacy Router target', async () => {
+    let emitAppEvent: ((event: { type: string; tab?: string }) => void) | undefined
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        storageMigration: vi.fn().mockResolvedValue({}),
+        completeStorageMigration: vi.fn().mockResolvedValue(true),
+        onAppEvent: vi.fn((listener) => {
+          emitAppEvent = listener
+          return vi.fn()
+        })
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(MainApp))
+      await Promise.resolve()
+    })
+
+    await act(async () => emitAppEvent?.({ type: 'navigate', tab: 'router' }))
+
+    expect(container.querySelector('.nav-item.active')?.textContent).toContain('Agent Studio')
+    expect(container.textContent).toContain('Topology visible')
     await act(async () => root.unmount())
   })
 })

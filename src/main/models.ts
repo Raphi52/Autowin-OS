@@ -100,163 +100,6 @@ interface CodexModelPayload {
   supported_reasoning_levels?: Array<{ effort?: unknown }>
 }
 
-interface OmniRouteCredentialReader {
-  get(): string | null
-}
-
-const OMNIROUTE_ROUTE_LABELS: Record<string, string> = {
-  auto: 'Sélection automatique',
-  'auto/coding': 'Automatique · Code',
-  'auto/reasoning': 'Automatique · Raisonnement',
-  'auto/best-coding': 'Meilleur modèle · Code',
-  'auto/best-reasoning': 'Meilleur modèle · Raisonnement',
-  'auto/cheap': 'Économique · Automatique',
-  'custom:priority-chain': 'Chaîne prioritaire personnalisée'
-}
-
-/** Libellé humain uniquement ; l'identifiant de transport reste strictement inchangé. */
-export function labelOmniRouteModel(id: string): string {
-  const known = OMNIROUTE_ROUTE_LABELS[id]
-  if (known) return known
-  let cleanId = id
-  let suffix = ''
-  if (cleanId.startsWith('no-think/')) {
-    cleanId = cleanId.slice('no-think/'.length)
-    suffix = ' · Sans raisonnement'
-  }
-  cleanId = cleanId.replace(/^(?:cc|claude|cx|codex|aug|ddgw|oc|tllm|veo|veoaifree|mcode)\//i, '')
-  if (cleanId.startsWith('claude-')) {
-    return `${labelClaudeModel(cleanId).replace(/ · CLI$/, '')}${suffix}`
-  }
-  const claudeAlternate = /^claude[_-](\d+)[_.-](\d+)[_-](opus|sonnet|haiku)$/i.exec(cleanId)
-  if (claudeAlternate) {
-    const [, major, minor, family] = claudeAlternate
-    return `Claude ${family.charAt(0).toUpperCase()}${family.slice(1).toLowerCase()} ${major}.${minor}${suffix}`
-  }
-  const gpt = /^gpt[-_](\d+)(?:[._-](\d+|o))?(?:[-_](.+))?$/i.exec(cleanId)
-  if (gpt) {
-    const detail = gpt[3]
-      ?.split(/[-_/]+/)
-      .map((part) => {
-        const translated: Record<string, string> = {
-          xhigh: 'Très élevé',
-          high: 'Élevé',
-          medium: 'Moyen',
-          low: 'Léger'
-        }
-        return translated[part.toLowerCase()] ?? part.charAt(0).toUpperCase() + part.slice(1)
-      })
-      .join(' · ')
-    const version = `${gpt[1]}${gpt[2] ? `.${gpt[2]}` : ''}`
-    return `GPT-${version}${detail ? ` ${detail}` : ''}${suffix}`
-  }
-  const generic = cleanId
-    .split(/[/:_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ')
-    .replace(/\b(\d+) (\d+)\b/, '$1.$2')
-  return `${generic}${suffix}`
-}
-
-async function readBoundedJson(response: Response, maxBytes = 1024 * 1024): Promise<unknown> {
-  const declared = Number(response.headers.get('content-length'))
-  if (Number.isFinite(declared) && declared > maxBytes) throw new Error('response-too-large')
-  if (!response.body) throw new Error('response-empty')
-  const reader = response.body.getReader()
-  const chunks: Uint8Array[] = []
-  let received = 0
-  try {
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      received += value.byteLength
-      if (received > maxBytes) {
-        await reader.cancel('response-too-large')
-        throw new Error('response-too-large')
-      }
-      chunks.push(value)
-    }
-  } finally {
-    reader.releaseLock()
-  }
-  const merged = new Uint8Array(received)
-  let offset = 0
-  for (const chunk of chunks) {
-    merged.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-  return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(merged))
-}
-
-export async function discoverOmniRouteModels(
-  fetchFn: typeof fetch,
-  credentialStore: OmniRouteCredentialReader
-): Promise<ImportedModel[]> {
-  let credential: string | null
-  try {
-    credential = credentialStore.get()
-  } catch {
-    return []
-  }
-  if (!credential) return []
-  try {
-    const response = await fetchFn('http://127.0.0.1:20128/v1/models', {
-      method: 'GET',
-      headers: { authorization: `Bearer ${credential}`, accept: 'application/json' },
-      redirect: 'error',
-      signal: AbortSignal.timeout(3_000)
-    })
-    if (!response.ok) return []
-    if (!(response.headers.get('content-type') ?? '').toLowerCase().includes('application/json')) {
-      return []
-    }
-    const payload = (await readBoundedJson(response)) as { object?: unknown; data?: unknown }
-    if (payload?.object !== 'list' || !Array.isArray(payload.data)) return []
-    const discovered = payload.data.flatMap<ImportedModel>((entry) => {
-      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return []
-      const id = (entry as { id?: unknown }).id
-      if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9._:/-]{0,119}$/i.test(id)) return []
-      // Efforts RÉELS exposés par la capability `effort_tiers` ; sinon 'none'
-      // (routes combo/`auto/` qui gèrent l'effort en interne, non réglable).
-      const rawTiers = (entry as { capabilities?: { effort_tiers?: unknown } }).capabilities
-        ?.effort_tiers
-      const tiers = Array.isArray(rawTiers)
-        ? rawTiers.filter(
-            (effort): effort is ReasoningEffort =>
-              typeof effort === 'string' && REASONING_EFFORTS.has(effort as ReasoningEffort)
-          )
-        : []
-      // 'none' n'est PAS un niveau d'effort : trompeur à côté de low/medium/high. On le retire
-      // dès qu'il existe de vrais tiers ; on ne le garde QUE pour un modèle sans aucun autre effort.
-      const realTiers = tiers.filter((effort) => effort !== 'none')
-      const reasoningEfforts: ReasoningEffort[] = realTiers.length > 0 ? realTiers : ['none']
-      const defaultReasoningEffort: ReasoningEffort = reasoningEfforts.includes('high')
-        ? 'high'
-        : reasoningEfforts[0]
-      return [
-        {
-          id: `omniroute/${id}`,
-          provider: 'omniroute',
-          model: id,
-          label: labelOmniRouteModel(id),
-          reasoningEfforts,
-          defaultReasoningEffort
-        }
-      ]
-    })
-    const visibleLabels = new Set<string>()
-    return discovered.filter((model) => {
-      const key = model.label.toLocaleLowerCase('fr-FR')
-      if (visibleLabels.has(key)) return false
-      visibleLabels.add(key)
-      return true
-    })
-  } catch {
-    return []
-  }
-}
-
 async function discoverCodexModels(
   fetchFn: typeof fetch,
   loadTokensFn: () => Tokens | null
@@ -320,12 +163,8 @@ function labelClaudeModel(id: string): string {
  */
 export async function discoverImportedModels(
   fetchFn: typeof fetch = fetch,
-  loadTokensFn: () => Tokens | null = loadTokens,
-  omniRouteCredentialStore?: OmniRouteCredentialReader
+  loadTokensFn: () => Tokens | null = loadTokens
 ): Promise<ImportedModel[]> {
-  const omniRouteModels = omniRouteCredentialStore
-    ? await discoverOmniRouteModels(fetchFn, omniRouteCredentialStore)
-    : []
   const codexModels = await discoverCodexModels(fetchFn, loadTokensFn)
   try {
     const response = await fetchFn('http://127.0.0.1:8787/models', {
@@ -347,15 +186,10 @@ export async function discoverImportedModels(
     return [
       ...codexModels,
       ...discovered,
-      ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi'),
-      ...omniRouteModels
+      ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi')
     ]
   } catch {
-    return [
-      ...codexModels,
-      ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider !== 'codex'),
-      ...omniRouteModels
-    ]
+    return [...codexModels, ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider !== 'codex')]
   }
 }
 

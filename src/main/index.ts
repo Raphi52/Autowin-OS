@@ -1,7 +1,6 @@
 import { app, shell, BrowserWindow, dialog, ipcMain, Notification, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'path'
 import { randomUUID } from 'node:crypto'
-import { writeFileSync } from 'node:fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import devIcon from '../../resources/autowin-os-dev.png?asset'
@@ -37,7 +36,7 @@ import { responseDisplayedTrace } from './activity/response-displayed-trace'
 import { persistOrchestrationStep } from './activity/orchestration-observability'
 import { aggregateToolUsage } from './activity/tool-usage'
 import { LoopRunStore } from './loop-run-store'
-import { ProfileStore, resolveProfileRoute, type AutowinProfile } from './profile-store'
+import { ProfileStore, type AutowinProfile } from './profile-store'
 import {
   listCapabilities,
   setCapabilityEnabled,
@@ -58,12 +57,7 @@ import { listLoopSkills } from './loop-skills'
 import { discoverConfiguredSkillRegistry } from './skill-registry'
 import { listClaudeHooks, listCodexHooks } from './claude-hooks'
 import { ModelQuestionHub, type ModelQuestion, type PendingModelQuestion } from './model-questions'
-import {
-  DEFAULT_IMPORTED_MODELS,
-  discoverImportedModels,
-  discoverOmniRouteModels,
-  findModel
-} from './models'
+import { DEFAULT_IMPORTED_MODELS, discoverImportedModels, findModel } from './models'
 import { loadAgentTopology, saveAgentTopology } from './topology-disk'
 import { migrateTopologyShape } from './topology'
 import type { AgentTopology, SlotBinding } from './topology'
@@ -74,16 +68,13 @@ import {
   resolveAutowinAppDataBase
 } from './app-data'
 import { AUTOWIN_APP_ID, AUTOWIN_DISPLAY_NAME } from '../shared/app-identity'
-import { loadOmniRouteSnapshot, omniRouteDashboardUrl } from './omniroute-client'
-import { runOmniRouteKeyringSmoke } from './credentials/omniroute-keyring-smoke'
-import { OmniRouteMigrationStore } from './omniroute-migration'
 import {
   isRendererStorageMigrationComplete,
   markRendererStorageMigrationComplete,
   readLegacyRendererStorage,
   type MigratedRendererStorage
 } from './renderer-storage-migration'
-import { guardAttachments, guardBoolean, guardMessages, guardString } from './ipc-guards'
+import { guardAttachments, guardBoolean, guardString } from './ipc-guards'
 import { readBoundedUtf8FileWithin } from './bounded-file-read'
 import { BrainWorkerClient } from './viz/brain-worker-client'
 import {
@@ -128,15 +119,6 @@ let startupStorageMigration = false
 
 /** Noyau applicatif unique (P0-P4 câblés) : kit SOUL injecté, 2 voies, modules. */
 const os = new AutowinOS()
-const omniRouteMigration = new OmniRouteMigrationStore(
-  join(app.getPath('userData'), 'omniroute-migration.json')
-)
-const startupTransport = omniRouteMigration.load()
-os.registry.setConversationTransport({
-  provider: 'omniroute',
-  model: startupTransport.routeModel,
-  reasoningEffort: startupTransport.reasoningEffort
-})
 const brainWorker = new BrainWorkerClient(join(__dirname, 'brain-worker.js'))
 // Conversations persistées sur disque : rechargées au démarrage, sauvées à chaque mutation.
 const flushConversations = persistConversations(os.conversations)
@@ -171,7 +153,7 @@ const diagnosticCapabilities = new DiagnosticCapabilities()
 let agentModels = DEFAULT_IMPORTED_MODELS
 const agentTopologyPath = join(app.getPath('userData'), 'agent-topology.json')
 let agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
-const agentModelsReady = discoverImportedModels(fetch, undefined, os.omniRouteCredentialStore).then(
+const agentModelsReady = discoverImportedModels(fetch).then(
   (models) => {
     agentModels = models
     agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
@@ -383,104 +365,9 @@ function registerChatIpc(): void {
     broadcast(appEvent as unknown as AppEvent)
     return true
   })
-  // --- Chat direct : streame les deltas, alimente le coût RÉEL ---
-  ipcMain.handle(
-    'chat:send',
-    async (
-      event,
-      req: { provider?: string; role?: Role; messages: Message[]; conversationId?: string }
-    ) => {
-      try {
-        const messages = guardMessages(req?.messages)
-        const result = await os.chat(req.provider, req.role, messages, (d) =>
-          event.sender.send('chat:delta', d)
-        )
-        if (req.conversationId) {
-          const last = messages[messages.length - 1]
-          if (last?.role === 'user')
-            os.conversations.append(req.conversationId, { role: 'user', content: last.content })
-          os.conversations.append(req.conversationId, { role: 'assistant', content: result.text })
-        }
-        return { ok: true, result }
-      } catch (e) {
-        return { ok: false, error: e instanceof Error ? e.message : String(e) }
-      }
-    }
-  )
   ipcMain.handle('skills:registry:list', (event) => {
     assertTrustedRendererSender(event, 'Skills')
     return discoverConfiguredSkillRegistry(join(app.getPath('userData'), 'skill-sources.json'))
-  })
-  ipcMain.handle('chat:providers', () => os.registry.ids())
-  ipcMain.handle('router:snapshot', (event) => {
-    assertTrustedRendererSender(event, 'Router')
-    // Comptes/quotas exigent un « management token » OmniRoute (≠ clé API /v1) que l'app
-    // ne stocke pas encore → on n'envoie rien (la clé API donnerait 403). Santé reste dispo.
-    return loadOmniRouteSnapshot(fetch)
-  })
-  ipcMain.handle('router:migration-state', (event) => {
-    assertTrustedRendererSender(event, 'Router')
-    const state = omniRouteMigration.load()
-    return {
-      mode: 'omniroute' as const,
-      routeModel: state.routeModel,
-      reasoningEffort: state.reasoningEffort,
-      credentialConfigured: Boolean(os.omniRouteCredentialStore.get())
-    }
-  })
-  ipcMain.handle('router:set-credential', (event, credential: unknown) => {
-    assertTrustedRendererSender(event, 'Router')
-    os.omniRouteCredentialStore.set(guardString(credential, 'router.credential'))
-    return { configured: true }
-  })
-  ipcMain.handle('router:delete-credential', (event) => {
-    assertTrustedRendererSender(event, 'Router')
-    os.omniRouteCredentialStore.delete()
-    return { configured: false }
-  })
-  ipcMain.handle('router:test-route', async (event) => {
-    assertTrustedRendererSender(event, 'Router')
-    const models = await discoverOmniRouteModels(fetch, os.omniRouteCredentialStore)
-    return {
-      ok: models.length > 0,
-      models: models.map(({ model, label }) => ({ id: model, label })),
-      reason:
-        models.length > 0
-          ? undefined
-          : 'OmniRoute inaccessible, credential refusé ou catalogue invalide'
-    }
-  })
-  ipcMain.handle(
-    'router:activate',
-    async (event, routeModel: unknown, reasoningEffort?: unknown) => {
-      assertTrustedRendererSender(event, 'Router')
-      const route = guardString(routeModel, 'router.routeModel')
-      const effort =
-        reasoningEffort === undefined || reasoningEffort === null
-          ? undefined
-          : guardString(reasoningEffort, 'router.reasoningEffort')
-      const models = await discoverOmniRouteModels(fetch, os.omniRouteCredentialStore)
-      if (!models.some((model) => model.model === route)) {
-        throw new Error('Route non confirmée par le catalogue OmniRoute')
-      }
-      const state = omniRouteMigration.activate(route, effort)
-      os.registry.setConversationTransport({
-        provider: 'omniroute',
-        model: state.routeModel,
-        reasoningEffort: state.reasoningEffort
-      })
-      broadcast({ type: 'refresh', scope: 'roles' })
-      return {
-        mode: 'omniroute',
-        routeModel: route,
-        reasoningEffort: state.reasoningEffort,
-        credentialConfigured: true
-      }
-    }
-  )
-  ipcMain.handle('router:open-dashboard', async (event) => {
-    assertTrustedRendererSender(event, 'Router')
-    await shell.openExternal(omniRouteDashboardUrl)
   })
   ipcMain.handle('os:kimiLogin', () => {
     os.startKimiLogin()
@@ -606,10 +493,6 @@ function registerChatIpc(): void {
       ...profile,
       topology: agentTopology,
       roles: os.roles.all(),
-      transport: (() => {
-        const state = omniRouteMigration.load()
-        return { mode: 'omniroute' as const, routeModel: state.routeModel }
-      })(),
       updatedAt: new Date().toISOString()
     }
     return profiles.save(safe)
@@ -618,13 +501,6 @@ function registerChatIpc(): void {
     await agentModelsReady
     const profile = profiles.list().find((item) => item.id === guardString(id, 'profile.id'))
     if (!profile) throw new Error('Profil introuvable')
-    const validatedRoute = resolveProfileRoute(
-      profile.transport,
-      omniRouteMigration.load().routeModel
-    )
-    const models = await discoverOmniRouteModels(fetch, os.omniRouteCredentialStore)
-    if (!models.some((model) => model.model === validatedRoute))
-      throw new Error('Route OmniRoute du profil indisponible')
     // Rétrocompat : un profil sauvegardé AVANT le bloc `frame` n'a pas `panels.frame` → on migre
     // la forme avant validation (sinon assertTopology jetterait « Profil introuvable/incohérent »).
     agentTopology = saveAgentTopology(
@@ -637,12 +513,6 @@ function registerChatIpc(): void {
       [Role, import('./roles').RoleBinding]
     >)
       os.setRole(role, binding)
-    const migratedState = omniRouteMigration.activate(validatedRoute)
-    os.registry.setConversationTransport({
-      provider: 'omniroute',
-      model: validatedRoute,
-      reasoningEffort: migratedState.reasoningEffort
-    })
     broadcast({ type: 'refresh', scope: 'roles' })
     return profile
   })
@@ -1227,14 +1097,13 @@ function registerChatIpc(): void {
         // Journal d'activité de la conversation : le tour de chat, avec son coût en tokens.
         if (conversationId) {
           const last = safe[safe.length - 1]
-          const conversationRoute = os.registry.getConversationTransport()
+          const orchestratorBinding = os.roles.getBinding('orchestrator')
           appendConvActivity(conversationId, {
             kind: 'chat',
             label: last?.role === 'user' ? last.content : 'tour agent',
-            provider: turnPromptIdentity?.provider ?? conversationRoute?.provider ?? 'omniroute',
-            model: turnPromptIdentity?.model ?? conversationRoute?.model,
-            reasoningEffort:
-              turnPromptIdentity?.reasoningEffort ?? conversationRoute?.reasoningEffort,
+            provider: turnPromptIdentity?.provider ?? orchestratorBinding.provider,
+            model: turnPromptIdentity?.model ?? orchestratorBinding.model,
+            reasoningEffort: turnPromptIdentity?.reasoningEffort ?? orchestratorBinding.reasoningEffort,
             inputTokens: turnUsage?.inputTokens,
             outputTokens: turnUsage?.outputTokens,
             costUsd: turnUsage?.costUsd,
@@ -1557,20 +1426,6 @@ installCrashHandlers({
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
-  if (headlessTestInstance && process.argv.includes('--omniroute-keyring-smoke')) {
-    const result = runOmniRouteKeyringSmoke()
-    writeFileSync(
-      join(app.getPath('userData'), 'omniroute-keyring-smoke.json'),
-      JSON.stringify(result),
-      {
-        encoding: 'utf8',
-        flag: 'wx'
-      }
-    )
-    process.stdout.write(`${JSON.stringify(result)}\n`)
-    app.quit()
-    return
-  }
   // Set app user model id for windows
   electronApp.setAppUserModelId(automationAppIdentity(AUTOWIN_APP_ID, automationInstanceMode))
 

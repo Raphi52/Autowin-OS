@@ -44,7 +44,7 @@ describe('conversation activity', () => {
       {
         kind: 'chat',
         label: 'tour agent',
-        provider: 'omniroute',
+        provider: 'claude',
         model: 'claude-opus-4-6',
         reasoningEffort: 'high'
       },
@@ -52,7 +52,7 @@ describe('conversation activity', () => {
     )
 
     expect(loadConvActivity('conv-1', root)[0]).toMatchObject({
-      provider: 'omniroute',
+      provider: 'claude',
       model: 'claude-opus-4-6',
       reasoningEffort: 'high'
     })

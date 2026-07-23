@@ -352,7 +352,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
         {groupAssistantActivity(message.parts).map((part, index) =>
           part.kind === 'text' ? (
             <div key={index} className="msg-body" dir="auto">
-              <Markdown text={part.text} />
+              <Markdown text={part.text} highlightFinalSummary />
             </div>
           ) : (
             <AssistantActivityGroup key={index} actions={part.actions} />
@@ -1211,6 +1211,7 @@ export function ChatView({
   return (
     <div
       className={`chat-layout${showRuns ? '' : ' is-runs-collapsed'}`}
+      data-testid="chat-view"
       data-active-conversation-id={activeId ?? ''}
     >
       {/* ---- Panneau gauche : conversations ---- */}
@@ -1308,7 +1309,7 @@ export function ChatView({
                     {convQuery && snippet && <span className="conv-snippet">{snippet}</span>}
                     {!convQuery && (
                       <span className="conv-meta">
-                        {c.category !== 'omniroute' && <span>{c.provider}</span>}
+                        <span>{c.provider}</span>
                         <span>{c.messages.length} messages</span>
                       </span>
                     )}
@@ -1936,8 +1937,7 @@ export function ChatView({
                         const phase = liveRuns[activeId].phase
                         const meta = phase ? STEP_META[phase.step] : undefined
                         const label = phase ? phaseLabel(phase) : 'sous-agent'
-                        // Modèle réel (ex "cc/claude-opus-4-8" → "claude-opus-4-8") + effort en clair,
-                        // au lieu du transport ("omniroute").
+                        // Modèle réel (ex "cc/claude-opus-4-8" → "claude-opus-4-8") + effort en clair.
                         const EFFORT_FR: Record<string, string> = {
                           low: 'faible',
                           medium: 'moyen',

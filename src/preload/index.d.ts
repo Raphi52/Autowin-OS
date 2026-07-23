@@ -1,9 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 
-interface Message {
-  role: 'system' | 'user' | 'assistant'
-  content: string
-}
 interface ChatAttachment {
   name: string
   mimeType: string
@@ -26,11 +22,6 @@ type StoredChatPart =
       ok?: boolean
       data?: unknown
     }
-interface ChatResult {
-  ok: boolean
-  result?: { text: string; provider: string; systemInjected: boolean }
-  error?: string
-}
 interface OrchestrationStep {
   step: 'exec' | 'judge' | 'gate'
   provider?: string
@@ -313,59 +304,6 @@ interface ChatApi {
   captureTestPage: () => Promise<string>
   storageMigration: () => Promise<Record<string, string>>
   completeStorageMigration: () => Promise<boolean>
-  listProviders: () => Promise<string[]>
-  routerSnapshot: () => Promise<{
-    status: 'healthy' | 'degraded' | 'unavailable'
-    version?: string
-    uptimeSeconds?: number
-    observedAt: string
-    endpoint: string
-    transportConnected: false
-    connectionCount?: number
-    availableConnectionCount?: number
-    sources: Array<{ id: 'health' | 'connections' | 'quotas'; status: 'ok' | 'error' }>
-    protections?: { circuitBreakers?: number; lockouts?: number; quotaAlerts?: number }
-    connections: Array<{
-      id: string
-      provider: string
-      authorityMode?: 'plan' | 'ask' | 'auto'
-      label?: string
-      email?: string
-      authType?: string
-      status: 'active' | 'limited' | 'error' | 'inactive'
-      incident?: { label: string; at?: string }
-      quotas: Array<{ label: string; remainingPercent?: number; resetAt?: string }>
-    }>
-  }>
-  routerMigrationState: () => Promise<{
-    mode: 'omniroute'
-    routeModel?: string
-    credentialConfigured: boolean
-  }>
-  setOmniRouteCredential: (credential: string) => Promise<{ configured: true }>
-  deleteOmniRouteCredential: () => Promise<{ configured: false }>
-  testOmniRoute: () => Promise<{
-    ok: boolean
-    models: Array<{ id: string; label: string }>
-    reason?: string
-  }>
-  activateOmniRoute: (
-    routeModel: string,
-    reasoningEffort?: string
-  ) => Promise<{
-    mode: 'omniroute'
-    routeModel: string
-    reasoningEffort?: string
-    credentialConfigured: true
-  }>
-  openOmniRouteDashboard: () => Promise<void>
-  send: (
-    provider: string | undefined,
-    messages: Message[],
-    conversationId?: string,
-    role?: string
-  ) => Promise<ChatResult>
-  onDelta: (cb: (delta: string) => void) => () => void
   orchestrate: (
     task: string
   ) => Promise<{ ok: boolean; result?: OrchestrationResult; error?: string }>

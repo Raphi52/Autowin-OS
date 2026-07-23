@@ -5,7 +5,7 @@ import type { Message, StreamChunk } from './types'
 
 const conv: Message[] = [{ role: 'user', content: 'bonjour' }]
 
-/** Registre de chat direct : le provider demandé répond LUI-MÊME (plus d'intermédiaire OmniRoute). */
+/** Registre de chat direct : le provider demandé répond LUI-MÊME (plus d'intermédiaire de transport). */
 function directRegistry(system?: string): ProviderRegistry {
   return new ProviderRegistry(system)
     .register(new MockProvider('claude'))
@@ -13,7 +13,7 @@ function directRegistry(system?: string): ProviderRegistry {
 }
 
 describe('ProviderRegistry — contrat d’adaptateur', () => {
-  it('route une conversation DIRECTEMENT vers le provider demandé (plus d’OmniRoute)', async () => {
+  it('route une conversation DIRECTEMENT vers le provider demandé', async () => {
     const reg = directRegistry()
     expect(reg.ids().sort()).toEqual(['claude', 'codex'])
     const r = await reg.send('codex', conv)

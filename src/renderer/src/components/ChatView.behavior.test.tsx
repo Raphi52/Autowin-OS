@@ -220,7 +220,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const models = vi
       .fn()
       .mockResolvedValue([
-        { id: 'omniroute/auto/coding', provider: 'omniroute', model: 'auto/coding' }
+        { id: 'codex/gpt-5.6-terra', provider: 'codex', model: 'gpt-5.6-terra' }
       ])
     const create = vi.fn().mockResolvedValue(conversation('A'))
     const mockApi = api({ models, conversationsCreate: create })
@@ -322,20 +322,6 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const scroll = container!.querySelector('.chat-scroll')
     expect(scroll?.getAttribute('role')).toBe('log')
     expect(scroll?.getAttribute('aria-live')).toBe('polite')
-  })
-
-  it('hides the redundant omniroute label but keeps other conversation categories', async () => {
-    await mount(
-      api({
-        conversations: vi.fn().mockResolvedValue([
-          { ...conversation('A'), category: 'omniroute', provider: 'omniroute' },
-          { ...conversation('B'), category: 'codex', provider: 'codex' }
-        ])
-      })
-    )
-    const metadata = [...container!.querySelectorAll('.conv-meta')].map((node) => node.textContent)
-    expect(metadata[0]).not.toContain('omniroute')
-    expect(metadata[1]).toContain('codex')
   })
 
   it('opens an image thumbnail in a dismissible fullscreen lightbox', async () => {

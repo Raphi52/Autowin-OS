@@ -8,11 +8,6 @@ import { ProviderRegistry } from './providers/registry'
 import { ClaudeCliAdapter } from './providers/claude'
 import { CodexAdapter } from './providers/codex'
 import { KimiCliAdapter } from './providers/kimi'
-import { OmniRouteAdapter } from './providers/omniroute'
-import {
-  createOmniRouteCredentialStore,
-  type OmniRouteCredentialStore
-} from './credentials/omniroute-credential-store'
 import type { Message } from './providers/types'
 import { loadKitSoul } from './kit'
 import { RoleModelConfig, type Role, type RoleBinding, type ReasoningEffort } from './roles'
@@ -117,7 +112,6 @@ export class AutowinOS {
   readonly conversations = new ConversationStore()
   readonly trust = new TrustLedger(join(ensureAutowinAppData(), 'trust.jsonl'))
   readonly orchestrator: Orchestrator
-  readonly omniRouteCredentialStore: OmniRouteCredentialStore
   /**
    * Source LIVE du fan-out multi-modèles, alimentée par la topology (index.ts `syncRuntimeTopology`).
    * Les blocs scout/frame/judge de la topology y déposent leurs N modèles ; l'orchestrateur les lit
@@ -129,14 +123,11 @@ export class AutowinOS {
     judge: FanMember[]
   } = { scout: [], frame: [], judge: [] }
 
-  constructor(options: { omniRouteCredentialStore?: OmniRouteCredentialStore } = {}) {
-    this.omniRouteCredentialStore =
-      options.omniRouteCredentialStore ?? createOmniRouteCredentialStore()
+  constructor() {
     this.registry = new ProviderRegistry(loadKitSoul())
       .register(new ClaudeCliAdapter())
       .register(new CodexAdapter())
       .register(new KimiCliAdapter())
-      .register(new OmniRouteAdapter({ credentialStore: this.omniRouteCredentialStore }))
     this.orchestrator = new Orchestrator({
       registry: this.registry,
       roles: this.roles,
