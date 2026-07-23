@@ -19,6 +19,7 @@ import {
   costEqTier,
   STEP_META,
   phaseLabel,
+  parseBtw,
   type OrchStep,
   type ChatPart,
   type HydratedAssistantMessage,
@@ -994,6 +995,35 @@ export function ChatView({
       q.filter((_, i) => i !== index)
     )
   }
+
+  /**
+   * Commande composer `/btw <texte>` — « au fait… » : oriente le tour EN COURS sans l'interrompre
+   * (alias clavier du bouton « btw »/steering via `injectDirective`). Idle (aucun tour) → envoi normal.
+   */
+  async function submitBtw(body: string): Promise<void> {
+    const text = body.trim()
+    if (!text) {
+      setDraftInput(composerDraftKeyRef.current, '') // "/btw" seul → rien à orienter, on nettoie
+      return
+    }
+    // Le guard `id` ne borne QUE la branche busy (injectDirective en a besoin). En idle, send(text)
+    // gère lui-même la création de conversation si aucune n'est active → un /btw en 1er message marche.
+    if (busy) {
+      const id = activeRef.current
+      if (!id) return
+      await window.api.injectDirective(id, text)
+      setDraftInput(composerDraftKeyRef.current, '')
+    } else {
+      void send(text) // aucun tour à orienter → le texte part comme message normal
+    }
+  }
+  /** True (et déclenche submitBtw) si le composer commence par `/btw` ; sinon false (submit normal). */
+  function handleBtw(): boolean {
+    const parsed = parseBtw(input)
+    if (!parsed.isBtw) return false
+    void submitBtw(parsed.body)
+    return true
+  }
   // À la libération de `busy` (render frais, busy=false), on draine la FILE D'ATTENTE — un message
   // par tour (chacun = sa propre paire Q/R). Vaut aussi bien pour l'auto-drain fin de tour que pour
   // une interruption manuelle (les deux passent par une transition busy→false).
@@ -1665,11 +1695,11 @@ export function ChatView({
                   <button
                     type="button"
                     className="directive-queue-steer"
-                    title="Injecter ce message comme orientation dans le tour en cours, sans l’interrompre"
-                    aria-label={`Orienter sans interrompre avec le message ${index + 1}`}
+                    title="btw — injecter ce message comme orientation dans le tour en cours, sans l’interrompre (ou tape /btw dans le composer)"
+                    aria-label={`btw : orienter sans interrompre avec le message ${index + 1}`}
                     onClick={() => void steerWithoutInterrupt(index, directive)}
                   >
-                    🧭 Orienter sans interrompre
+                    🧭 btw
                   </button>
                 )}
                 <button
@@ -1776,6 +1806,7 @@ export function ChatView({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
+                    if (handleBtw()) return
                     if (busy && activeId) void injectCurrentDirective()
                     else send()
                   }
@@ -1795,13 +1826,14 @@ export function ChatView({
               />
               <button
                 className={`btn-accent btn composer-send${busy && !input.trim() ? ' is-stop' : ''}`}
-                onClick={() =>
+                onClick={() => {
+                  if (handleBtw()) return
                   busy && activeId
                     ? input.trim()
                       ? void injectCurrentDirective()
                       : void window.api.cancelPilotChat(activeId)
                     : send()
-                }
+                }}
                 disabled={busy ? !activeId : !input.trim() && attachments.length === 0}
                 aria-label={
                   busy

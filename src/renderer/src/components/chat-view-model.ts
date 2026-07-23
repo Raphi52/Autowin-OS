@@ -310,6 +310,16 @@ export function groupSubagentSteps(steps: OrchStep[]): StepGroup[] {
 }
 
 /**
+ * Détecte la commande composer `/btw <texte>` (« by the way » — orienter sans interrompre).
+ * Insensible à la casse ; le corps peut être multi-ligne. `/btwfoo` (pas de frontière) n'est PAS
+ * une commande. Pur → testable. `/btw` seul → isBtw avec body vide (traité en no-op côté UI).
+ */
+export function parseBtw(text: string): { isBtw: boolean; body: string } {
+  const m = /^\s*\/btw\b[ \t]*([\s\S]*)$/i.exec(text)
+  return m ? { isBtw: true, body: m[1] ?? '' } : { isBtw: false, body: '' }
+}
+
+/**
  * Récap coût PAR MODÈLE d'un run : somme `costUsd` + nombre d'appels par `model` (steps sans model
  * ignorés), trié coût décroissant. Pur → testable. Sert à voir « Opus vs Codex vs Kimi » dans un run.
  */

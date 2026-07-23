@@ -1,5 +1,28 @@
 import { describe, it, expect } from 'vitest'
-import { groupSubagentSteps, costByModel, type OrchStep } from './chat-view-model'
+import { groupSubagentSteps, costByModel, parseBtw, type OrchStep } from './chat-view-model'
+
+describe('parseBtw', () => {
+  it('détecte /btw en préfixe + extrait le corps', () => {
+    expect(parseBtw('/btw pense aussi aux tests')).toEqual({ isBtw: true, body: 'pense aussi aux tests' })
+  })
+  it('insensible à la casse + espaces/tab avant le corps', () => {
+    expect(parseBtw('  /BTW\t oriente ainsi').isBtw).toBe(true)
+    expect(parseBtw('  /BTW\t oriente ainsi').body).toBe('oriente ainsi')
+  })
+  it('/btw seul → isBtw avec corps vide (no-op côté UI)', () => {
+    expect(parseBtw('/btw')).toEqual({ isBtw: true, body: '' })
+  })
+  it('corps multi-ligne conservé', () => {
+    expect(parseBtw('/btw ligne1\nligne2').body).toBe('ligne1\nligne2')
+  })
+  it('/btwfoo (pas de frontière) N’EST PAS une commande', () => {
+    expect(parseBtw('/btwfoo').isBtw).toBe(false)
+  })
+  it('un message normal (ou /btw en milieu) n’est pas capté', () => {
+    expect(parseBtw('message normal').isBtw).toBe(false)
+    expect(parseBtw('au fait /btw non').isBtw).toBe(false)
+  })
+})
 
 const member = (phase: string, model: string, role = 'subagent'): OrchStep => ({
   step: role === 'judge' ? 'judge' : 'exec',
