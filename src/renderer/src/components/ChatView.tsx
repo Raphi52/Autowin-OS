@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Markdown, extractRecommendation } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
-import { WorktreePaneTab } from './WorktreePaneTab'
+import { SourceControlPane } from './SourceControlPane'
 import { ActivityPane } from './ActivityPane'
 import { ModuleHeader } from './ModuleHeader'
 import {
@@ -2002,7 +2002,7 @@ export function ChatView({
                   className={`btn btn-sm${paneTab === 'worktrees' ? ' btn-accent' : ''}`}
                   onClick={() => setPaneTab('worktrees')}
                 >
-                  Worktrees
+                  Source control
                 </button>
               </div>
               <div className="row gap2">
@@ -2017,7 +2017,7 @@ export function ChatView({
               </div>
             </div>
             {paneTab === 'activite' && <ActivityPane convId={activeId} />}
-            {paneTab === 'worktrees' && <WorktreePaneTab />}
+            {paneTab === 'worktrees' && <SourceControlPane onSendPrompt={send} />}
             {paneTab === 'runs' && (
               <div className="row gap2" style={{ fontSize: 11 }}>
                 <button
