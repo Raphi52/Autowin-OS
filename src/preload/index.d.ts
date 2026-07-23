@@ -183,6 +183,13 @@ interface PromptCallRecord {
   }
 }
 
+type AuthStatus = 'authenticated' | 'expired' | 'installed-untested' | 'absent' | 'unknown'
+interface ProviderStatus {
+  provider: string
+  status: AuthStatus
+  testable: boolean
+  detail?: string
+}
 interface BehaviourInfluencerField {
   label: string
   value: string
@@ -263,6 +270,7 @@ interface ChatApi {
   ) => Promise<{ ok: boolean; result?: OrchestrationResult; error?: string }>
   onOrchestrateStep: (cb: (step: OrchestrationStep) => void) => () => void
   onPreflight: (cb: (result: PreflightResult) => void) => () => void
+  getPreflight: () => Promise<PreflightResult | null>
   recheckPreflight: (force?: boolean) => Promise<PreflightResult>
   roles: () => Promise<
     Record<string, { provider: string; model?: string; reasoningEffort?: string }>
@@ -294,6 +302,8 @@ interface ChatApi {
   promptTraces: (conversationId: string) => Promise<NativePreflightTrace[]>
   brainTraces: (conversationId?: string) => Promise<BrainTrace[]>
   behaviourComposition: () => Promise<BehaviourComposition>
+  providerStatus: () => Promise<ProviderStatus[]>
+  providerTest: (provider: string) => Promise<{ provider: string; status: AuthStatus }>
   promptTraceSummary: () => Promise<NativePreflightTrace[]>
   authorizeDiagnostics: () => Promise<string | null>
   promptTracesGlobal: (capability: string) => Promise<NativePreflightTrace[]>

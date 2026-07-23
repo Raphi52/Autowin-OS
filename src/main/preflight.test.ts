@@ -6,10 +6,11 @@ describe('runPreflight', () => {
     const r = await runPreflight({
       pingBrain: async () => true,
       hasBin: async () => true,
+      hasCodexSession: () => true,
       hasBrainToken: () => true
     })
     expect(r.ok).toBe(true)
-    expect(r.checks).toHaveLength(4)
+    expect(r.checks).toHaveLength(6)
     expect(r.summary).toContain('OK')
   })
 
@@ -17,6 +18,7 @@ describe('runPreflight', () => {
     const r = await runPreflight({
       pingBrain: async () => false,
       hasBin: async (w) => w === 'claude',
+      hasCodexSession: () => true,
       hasBrainToken: () => true
     })
     expect(r.ok).toBe(false)
@@ -27,6 +29,25 @@ describe('runPreflight', () => {
     expect(r.summary).toMatch(/incomplète/i)
   })
 
+  it('CLI codex présent sans session → état non opérationnel explicite', async () => {
+    const r = await runPreflight({
+      pingBrain: async () => true,
+      hasBin: async () => true,
+      hasBrainToken: () => true,
+      hasCodexSession: () => false
+    })
+
+    expect(r.ok).toBe(false)
+    expect(r.checks).toContainEqual(
+      expect.objectContaining({
+        id: 'codex-session',
+        ok: false,
+        detail: expect.stringMatching(/session|oauth|authent/i)
+      })
+    )
+    expect(r.checks).toContainEqual(expect.objectContaining({ id: 'codex', ok: true }))
+  })
+
   it('un probe qui throw = ko, jamais un crash', async () => {
     const r = await runPreflight({
       pingBrain: async () => {
@@ -34,6 +55,9 @@ describe('runPreflight', () => {
       },
       hasBin: async () => {
         throw new Error('spawn fail')
+      },
+      hasCodexSession: () => {
+        throw new Error('auth store fail')
       },
       hasBrainToken: () => {
         throw new Error('fs')

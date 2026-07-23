@@ -22,6 +22,7 @@ const api = {
     ipcRenderer.on('preflight:result', handler)
     return () => ipcRenderer.removeListener('preflight:result', handler)
   },
+  getPreflight: (): Promise<unknown> => ipcRenderer.invoke('preflight:current'),
   // #5 — le wizard first-run re-vérifie la config à la demande (force=true pour le bouton).
   recheckPreflight: (force?: boolean): Promise<unknown> =>
     ipcRenderer.invoke('preflight:recheck', force),
@@ -54,6 +55,9 @@ const api = {
   brainTraces: (conversationId?: string): Promise<unknown[]> =>
     ipcRenderer.invoke('os:brainTraces', conversationId),
   behaviourComposition: (): Promise<unknown> => ipcRenderer.invoke('os:behaviourComposition'),
+  providerStatus: (): Promise<unknown[]> => ipcRenderer.invoke('os:providerStatus'),
+  providerTest: (provider: string): Promise<unknown> =>
+    ipcRenderer.invoke('os:providerTest', provider),
   promptTraceSummary: (): Promise<unknown[]> => ipcRenderer.invoke('os:promptTraceSummary'),
   authorizeDiagnostics: (): Promise<string | null> => ipcRenderer.invoke('os:authorizeDiagnostics'),
   promptTracesGlobal: (capability: string): Promise<unknown[]> =>

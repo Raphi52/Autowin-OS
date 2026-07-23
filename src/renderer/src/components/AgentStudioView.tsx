@@ -1,5 +1,6 @@
 import type { AgentStudioSection } from '../tabs'
 import { RolesView } from './RolesView'
+import { RouterView } from './RouterView'
 import './DomainShell.css'
 
 export function AgentStudioView({
@@ -31,7 +32,7 @@ export function AgentStudioView({
         </button>
       </nav>
       <div className="domain-content">
-        <RolesView />
+        {section === 'routing' ? <RouterView /> : <RolesView />}
       </div>
     </section>
   )

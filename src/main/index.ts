@@ -9,7 +9,7 @@ import { ProviderRegistry } from './providers/registry'
 import { AutowinOS } from './os'
 import { installCrashHandlers } from './crash-handlers'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
-import { runAppPreflight } from './preflight-probes'
+import { getLastAppPreflightResult, runAppPreflight } from './preflight-probes'
 import { RoleModelConfig, type ReasoningEffort, type Role } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
@@ -75,6 +75,8 @@ import {
 import { nativeSpoolRoot, appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace, readBrainTraces } from './activity/brain-trace-spool'
 import { buildBehaviourComposition } from './behaviour-composition'
+import { buildProviderStatuses, probeResultStatus } from './provider-status'
+import { loadTokens } from './providers/codex-auth'
 
 import { createAmitelContextProvider } from './amitel-context'
 import {
@@ -437,7 +439,14 @@ function registerChatIpc(): void {
       typeof conversationId === 'string' ? guardString(conversationId, 'conversationId') : undefined
     )
   })
-  ipcMain.handle('preflight:recheck', (_e, force?: boolean) => runAppPreflight(force === true))
+  ipcMain.handle('preflight:recheck', (event, force?: boolean) => {
+    assertTrustedRendererSender(event, 'Preflight')
+    return runAppPreflight(force === true)
+  })
+  ipcMain.handle('preflight:current', (event) => {
+    assertTrustedRendererSender(event, 'Preflight')
+    return getLastAppPreflightResult()
+  })
   ipcMain.handle('os:roles', () => os.roles.all())
   ipcMain.handle(
     'os:setRole',
@@ -452,6 +461,54 @@ function registerChatIpc(): void {
     }
   )
   ipcMain.handle('os:models:list', () => agentModelsReady)
+  // Page Routeur — statut d'auth au CHARGEMENT (cheap/local) : codex exact (expiry token),
+  // claude/kimi = présence CLI seulement (JAMAIS « authenticated » sans probe réel). Borné.
+  ipcMain.handle('os:providerStatus', async (event) => {
+    assertTrustedRendererSender(event, 'Provider status')
+    const bounded = (p: Promise<boolean>): Promise<boolean> =>
+      Promise.race([
+        p.catch(() => false),
+        new Promise<boolean>((r) => setTimeout(() => r(false), 4000)) // sleep-ok: garde-timeout bornant auth() (spawn CLI), pas un délai flaky
+      ])
+    const responds = async (id: string): Promise<boolean> => {
+      try {
+        const adapter = os.registry.get(id) as { auth?: () => Promise<boolean> }
+        return adapter.auth ? await bounded(adapter.auth()) : false
+      } catch {
+        return false
+      }
+    }
+    const [claudeResponds, kimiResponds] = await Promise.all([responds('claude'), responds('kimi')])
+    return buildProviderStatuses({
+      codexTokens: loadTokens(),
+      claudeResponds,
+      kimiResponds,
+      now: Date.now()
+    })
+  })
+  // Bouton « Tester » — probe RÉEL borné à la demande (claude/kimi) : un vrai mini-tour dont
+  // l'erreur d'auth révèle l'expiration. Timeout/exception → unknown (jamais authenticated).
+  ipcMain.handle('os:providerTest', async (event, provider: unknown) => {
+    assertTrustedRendererSender(event, 'Provider test')
+    const id = guardString(provider, 'provider')
+    try {
+      const res = (await Promise.race([
+        os.registry.send(id, [{ role: 'user', content: 'ping' }], {}),
+        new Promise((_r, reject) => setTimeout(() => reject(new Error('timeout')), 20000)) // sleep-ok: garde-timeout bornant un vrai appel provider (réseau/CLI)
+      ])) as { text?: string }
+      const t = (res?.text ?? '').toLowerCase()
+      const status = /authenticate|oauth|expired|not logged|login/.test(t)
+        ? probeResultStatus({ expired: true })
+        : probeResultStatus({ ok: true })
+      return { provider: id, status }
+    } catch (e) {
+      const msg = (e instanceof Error ? e.message : String(e)).toLowerCase()
+      const status = /authenticate|oauth|expired|not logged|login/.test(msg)
+        ? probeResultStatus({ expired: true })
+        : probeResultStatus({ errored: true })
+      return { provider: id, status }
+    }
+  })
   ipcMain.handle('os:profiles:list', () => profiles.list())
   ipcMain.handle('os:profiles:save', async (_event, profile: AutowinProfile) => {
     await agentModelsReady
