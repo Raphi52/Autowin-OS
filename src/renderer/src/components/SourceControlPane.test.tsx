@@ -19,9 +19,10 @@ const GIT: GitReadResult = {
   history: [{ hash: 'a1b2c3d', subject: 'feat: git-read' }]
 }
 
-function mockApi(git: GitReadResult): void {
+function mockApi(git: GitReadResult, diff = 'diff --git a/x b/x\n@@ -1 +1 @@\n-old\n+new'): void {
   ;(window as unknown as { api: unknown }).api = {
     getGitState: () => Promise.resolve(git),
+    getGitDiff: () => Promise.resolve({ available: true, diff }),
     getWorktreeActivity: () => Promise.resolve([]),
     onWorktreeActivity: () => () => {}
   }
@@ -55,6 +56,19 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(container.textContent).toContain('feat/source-control')
     expect(container.querySelectorAll('[data-testid="sc-file"]')).toHaveLength(2)
     expect(container.textContent).toContain('a1b2c3d')
+  })
+
+  it('clic sur un fichier affiche son diff (consultation read-only)', async () => {
+    mockApi(GIT)
+    await render()
+    const file = container.querySelector('[data-testid="sc-file"]') as HTMLDivElement
+    await act(async () => {
+      file.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-testid="diff-view"]')).not.toBeNull()
+    expect(container.textContent).toContain('+new')
   })
 
   it('un bouton PRÉ-REMPLIT le prompt, il n’exécute pas de git', async () => {

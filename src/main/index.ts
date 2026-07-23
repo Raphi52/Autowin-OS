@@ -88,7 +88,7 @@ import { ProviderStateStore, type ProviderMode } from './provider-state-store'
 import { loadTokens } from './providers/codex-auth'
 
 import { createAmitelContextProvider } from './amitel-context'
-import { readGitState } from './git-read-main'
+import { readGitState, readGitDiff } from './git-read-main'
 import {
   automationAppIdentity,
   presentAutomationWindow,
@@ -478,6 +478,10 @@ function registerChatIpc(): void {
   ipcMain.handle('git:read', (event) => {
     assertTrustedRendererSender(event, 'GitRead')
     return readGitState(process.cwd())
+  })
+  ipcMain.handle('git:diff', (event, path: string) => {
+    assertTrustedRendererSender(event, 'GitDiff')
+    return readGitDiff(process.cwd(), String(path ?? ''))
   })
   // Cockpit worktree (volet A) : snapshot à la demande + push live des changements d'activité.
   ipcMain.handle('worktree:activity', (event) => {

@@ -1,8 +1,42 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { parseGitStatus, parseGitLog, type GitReadResult } from '../shared/git-read'
+import { parseGitStatus, parseGitLog, type GitReadResult, type GitDiffResult } from '../shared/git-read'
 
 const run = promisify(execFile)
+
+/** stdout d'une erreur execFile (git renvoie exit≠0 avec un diff valide sur --no-index). */
+function stdoutOf(error: unknown): string {
+  return error && typeof error === 'object' && 'stdout' in error
+    ? String((error as { stdout: unknown }).stdout ?? '')
+    : ''
+}
+
+/**
+ * Diff READ-ONLY d'un fichier (vs HEAD ; fallback --no-index pour un fichier non suivi). N'exécute
+ * QUE `git diff` (aucune mutation). Le path vient du renderer → passé en argv (jamais un shell) + `--`.
+ */
+export async function readGitDiff(cwd: string, path: string): Promise<GitDiffResult> {
+  try {
+    const r = await run('git', ['diff', '--no-color', 'HEAD', '--', path], { cwd, windowsHide: true })
+    let diff = r.stdout
+    if (!diff.trim()) {
+      try {
+        const u = await run('git', ['diff', '--no-color', '--no-index', '--', '/dev/null', path], {
+          cwd,
+          windowsHide: true
+        })
+        diff = u.stdout
+      } catch (e) {
+        diff = stdoutOf(e) // --no-index sort exit 1 QUAND il y a des différences → stdout valide
+      }
+    }
+    return { available: true, diff }
+  } catch (error) {
+    const stdout = stdoutOf(error)
+    if (stdout.trim()) return { available: true, diff: stdout }
+    return { available: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
 
 /**
  * Lecture git READ-ONLY pour la surface "Source control". N'exécute QUE status/log (aucune mutation).

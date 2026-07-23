@@ -77,6 +77,17 @@
 .sc-file:hover {
   color: var(--accent, #4b9fff);
 }
+.sc-file-open {
+  color: var(--accent, #4b9fff);
+}
+.sc-chev {
+  margin-left: auto;
+  color: var(--muted, #8b939f);
+  font-size: 10px;
+}
+.sc-diff-wrap {
+  margin: 2px 0 8px 20px;
+}
 .sc-m {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-weight: 700;

@@ -28,6 +28,11 @@ export interface GitReadResult {
   history?: GitCommit[]
   error?: string
 }
+export interface GitDiffResult {
+  available: boolean
+  diff?: string
+  error?: string
+}
 
 function classify(code: string): GitFileStatus {
   if (code.includes('R')) return 'renamed'
@@ -62,6 +67,38 @@ export function parseGitStatus(porcelain: string): GitState {
     }
   }
   return state
+}
+
+export type DiffLineKind = 'add' | 'del' | 'context' | 'hunk' | 'meta'
+export interface DiffLine {
+  kind: DiffLineKind
+  text: string
+}
+
+/** Parse un diff unifié (`git diff --no-color`) en lignes typées pour un rendu coloré read-only. */
+export function parseUnifiedDiff(text: string): DiffLine[] {
+  const lines: DiffLine[] = []
+  for (const raw of text.split('\n')) {
+    const line = raw.replace(/\r$/, '')
+    if (line.startsWith('@@')) lines.push({ kind: 'hunk', text: line })
+    else if (
+      line.startsWith('diff ') ||
+      line.startsWith('index ') ||
+      line.startsWith('--- ') ||
+      line.startsWith('+++ ') ||
+      line.startsWith('new file') ||
+      line.startsWith('deleted file') ||
+      line.startsWith('similarity ') ||
+      line.startsWith('rename ')
+    )
+      lines.push({ kind: 'meta', text: line })
+    else if (line.startsWith('+')) lines.push({ kind: 'add', text: line })
+    else if (line.startsWith('-')) lines.push({ kind: 'del', text: line })
+    else lines.push({ kind: 'context', text: line })
+  }
+  // supprime une éventuelle dernière ligne vide (split trailing \n)
+  if (lines.length && lines[lines.length - 1].text === '') lines.pop()
+  return lines
 }
 
 /** Parse `git log --pretty=format:%h%x09%s -n N`. */

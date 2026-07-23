@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { WorktreeActivityView } from './WorktreeActivityView'
+import { DiffView } from './DiffView'
 import type { WorktreeAgentActivity } from '../../../shared/worktree-activity-model'
-import type { GitReadResult, GitChange } from '../../../shared/git-read'
+import type { GitReadResult, GitChange, GitDiffResult } from '../../../shared/git-read'
 import './SourceControlPane.css'
 
 /**
@@ -26,6 +27,8 @@ export function SourceControlPane({
   const [git, setGit] = useState<GitReadResult | null>(null)
   const [worktrees, setWorktrees] = useState<WorktreeAgentActivity[]>([])
   const [prompt, setPrompt] = useState('')
+  const [openFile, setOpenFile] = useState<string | null>(null)
+  const [diff, setDiff] = useState<GitDiffResult | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -43,6 +46,15 @@ export function SourceControlPane({
   }, [])
 
   const propose = (text: string): void => setPrompt(text)
+  const toggleDiff = (path: string): void => {
+    if (openFile === path) {
+      setOpenFile(null)
+      return
+    }
+    setOpenFile(path)
+    setDiff(null)
+    void window.api.getGitDiff?.(path).then((d) => setDiff(d as GitDiffResult))
+  }
   const send = (): void => {
     const t = prompt.trim()
     if (t) onSendPrompt?.(t)
@@ -85,17 +97,37 @@ export function SourceControlPane({
             ) : (
               <>
                 {changes.map((c) => (
-                  <div
-                    className="sc-file"
-                    key={c.path}
-                    data-testid="sc-file"
-                    title={`${c.path} — clic : proposer un prompt`}
-                    onClick={() =>
-                      propose(`explique ce qui a changé dans ${c.path} et propose un commit`)
-                    }
-                  >
-                    <span className={`sc-m sc-m-${c.status}`}>{markGlyph[c.status]}</span>
-                    <span className="sc-fn">{c.path}</span>
+                  <div key={c.path}>
+                    <div
+                      className={`sc-file${openFile === c.path ? ' sc-file-open' : ''}`}
+                      data-testid="sc-file"
+                      title={`${c.path} — clic : voir le diff`}
+                      onClick={() => toggleDiff(c.path)}
+                    >
+                      <span className={`sc-m sc-m-${c.status}`}>{markGlyph[c.status]}</span>
+                      <span className="sc-fn">{c.path}</span>
+                      <span className="sc-chev">{openFile === c.path ? '▾' : '▸'}</span>
+                    </div>
+                    {openFile === c.path && (
+                      <div className="sc-diff-wrap">
+                        {diff === null ? (
+                          <div className="sc-clean">Chargement du diff…</div>
+                        ) : diff.available ? (
+                          <DiffView diff={diff.diff ?? ''} />
+                        ) : (
+                          <div className="sc-clean">Diff indisponible.</div>
+                        )}
+                        <button
+                          className="sc-btn"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            propose(`explique ce qui a changé dans ${c.path} et propose un commit`)
+                          }}
+                        >
+                          Expliquer / committer ce fichier <span className="sc-prompt-badge">→ prompt</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
                 <div className="sc-btns">
