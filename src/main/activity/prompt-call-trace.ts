@@ -66,7 +66,7 @@ export function promptCallToTraceEvents(
       injector: { id: 'autowin', kind: 'system', label: 'Autowin OS' }
     }),
     make(2, 'boundary', [
-      { kind: 'app-state', content: JSON.stringify(call.options), mediaType: 'application/json' }
+      { kind: 'provider-options', content: JSON.stringify(call.options), mediaType: 'application/json' }
     ]),
     make(
       3,

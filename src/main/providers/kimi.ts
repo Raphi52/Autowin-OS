@@ -145,7 +145,7 @@ export class KimiCliAdapter implements ProviderAdapter {
       transport: 'Kimi Code CLI · --prompt + --output-format stream-json · OAuth compte local',
       system: opts.system,
       messages: messages.filter((message) => message.role !== 'system'),
-      options: { resumed: false, model: opts.model, effortIgnored: Boolean(opts.reasoningEffort) },
+      options: { resumed: false, effortIgnored: Boolean(opts.reasoningEffort) },
       limitation:
         'Exact à l’entrée du CLI Kimi. Kimi Code ne fournit pas de canal system distinct en `-p` ; le bloc est préfixé dans la consigne. Auth OAuth et transformations internes restent privées au CLI.'
     }

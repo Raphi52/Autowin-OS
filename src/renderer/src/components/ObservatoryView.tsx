@@ -838,15 +838,6 @@ export function ObservatoryView({
                 <span>${(selectedCall.usage?.costUsd ?? 0).toFixed(4)}</span>
               </div>
               <small>{selectedCall.limitation}</small>
-              {(() => {
-                const preview = lastUserMessagePreview(selectedCall.messages, 400)
-                return preview ? (
-                  <div className="observatory-call-sent">
-                    <b>Message envoyé</b>
-                    <p>{preview}</p>
-                  </div>
-                ) : null
-              })()}
               {selectedCall.system && (
                 <>
                   <b>System</b>

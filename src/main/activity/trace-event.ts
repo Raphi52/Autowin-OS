@@ -22,6 +22,7 @@ export type TracePayloadKind =
   | 'user-message'
   | 'system-instruction'
   | 'app-state'
+  | 'provider-options'
   | 'history'
   | 'resource'
   | 'attachment'
@@ -120,6 +121,7 @@ const PAYLOAD_KINDS = new Set<TracePayloadKind>([
   'user-message',
   'system-instruction',
   'app-state',
+  'provider-options',
   'history',
   'resource',
   'attachment',
