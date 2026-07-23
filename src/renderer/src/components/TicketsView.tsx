@@ -340,8 +340,9 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                 onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })}
               />
               <span className="tickets-auth-help" data-testid="tickets-auth-help">
-                Dépôt privé : connecte {draft.provider === 'github' ? 'gh' : 'glab'} ou configure{' '}
-                {draft.provider === 'github' ? 'GH_TOKEN' : 'GITLAB_TOKEN'} côté application.
+                {draft.provider === 'github'
+                  ? 'Privé : GH_TOKEN sur github.com ; pour une URL personnalisée, connecte gh à cet hôte.'
+                  : 'Privé : GITLAB_TOKEN sur gitlab.com ; pour une URL personnalisée, connecte glab à cet hôte.'}
               </span>
             </>
           )}

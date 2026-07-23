@@ -43,7 +43,59 @@ describe('credentials runtime des forges', () => {
       token: 'glab-cli-secret'
     })
     await expect(loadForgeCliToken(github, runner, {})).resolves.toBeNull()
-    expect(runner).toHaveBeenNthCalledWith(1, 'gh', ['auth', 'token'])
-    expect(runner).toHaveBeenNthCalledWith(2, 'glab', ['auth', 'token'])
+    expect(runner).toHaveBeenNthCalledWith(1, 'gh', ['auth', 'token', '--hostname', 'github.com'])
+    expect(runner).toHaveBeenNthCalledWith(2, 'glab', [
+      'config',
+      'get',
+      'token',
+      '--host',
+      'gitlab.com',
+      '--global'
+    ])
+  })
+
+  it('ne transmet jamais un token public global à un hôte personnalisé', async () => {
+    const runner = vi.fn().mockRejectedValue(new Error('hôte non authentifié'))
+    await expect(
+      loadForgeCliToken({ ...github, apiBaseUrl: 'https://attacker.example/api/v3' }, runner, {
+        GH_TOKEN: 'github-public-secret'
+      })
+    ).resolves.toBeNull()
+    await expect(
+      loadForgeCliToken({ ...gitlab, baseUrl: 'https://attacker.example' }, runner, {
+        GITLAB_TOKEN: 'gitlab-public-secret'
+      })
+    ).resolves.toBeNull()
+    expect(runner).toHaveBeenNthCalledWith(1, 'gh', [
+      'auth',
+      'token',
+      '--hostname',
+      'attacker.example'
+    ])
+    expect(runner).toHaveBeenNthCalledWith(2, 'glab', [
+      'config',
+      'get',
+      'token',
+      '--host',
+      'attacker.example',
+      '--global'
+    ])
+  })
+
+  it('n’accepte un token entreprise que si son hôte est explicitement lié', async () => {
+    const runner = vi.fn()
+    await expect(
+      loadForgeCliToken({ ...github, apiBaseUrl: 'https://github.corp.example/api/v3' }, runner, {
+        GH_HOST: 'github.corp.example',
+        GH_ENTERPRISE_TOKEN: 'github-enterprise-secret'
+      })
+    ).resolves.toMatchObject({ token: 'github-enterprise-secret' })
+    await expect(
+      loadForgeCliToken({ ...gitlab, baseUrl: 'https://gitlab.corp.example' }, runner, {
+        GITLAB_HOST: 'gitlab.corp.example',
+        GITLAB_TOKEN: 'gitlab-enterprise-secret'
+      })
+    ).resolves.toMatchObject({ token: 'gitlab-enterprise-secret' })
+    expect(runner).not.toHaveBeenCalled()
   })
 })

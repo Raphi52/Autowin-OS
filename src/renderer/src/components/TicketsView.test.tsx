@@ -232,6 +232,9 @@ describe('vue Tickets', () => {
     expect(container.querySelector('[data-testid="tickets-auth-help"]')?.textContent).toContain(
       'GH_TOKEN'
     )
+    expect(container.querySelector('[data-testid="tickets-auth-help"]')?.textContent).toContain(
+      'cet hôte'
+    )
     expect(container.querySelector('input[type="password"]')).toBeNull()
     await act(async () => root.unmount())
   })
