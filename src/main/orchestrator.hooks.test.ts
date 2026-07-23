@@ -1,0 +1,63 @@
+import { describe, expect, it } from 'vitest'
+import { Orchestrator } from './orchestrator'
+import { ProviderRegistry } from './providers/registry'
+import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk } from './providers/types'
+import { RoleModelConfig } from './roles'
+import { CostAggregator } from './dashboards/cost'
+import { TrustLedger } from './trust/ledger'
+import { AuthoritySas } from './authority/sas'
+import { HookBus } from './hooks/hook-bus'
+
+/** Provider dont l'exec fournit mutation+verification ok et le juge répond VALIDE (gate vert par défaut). */
+class GreenProvider implements ProviderAdapter {
+  readonly id = 'rec'
+  readonly supportsExecution = true
+  async auth(): Promise<boolean> {
+    return true
+  }
+  async *send(_m: Message[], options: SendOptions = {}): AsyncGenerator<StreamChunk, SendResult, void> {
+    const isExec = options.execution?.sandbox === 'danger-full-access'
+    const isJudge = options.execution?.sandbox === 'read-only'
+    return {
+      text: isJudge ? 'VALIDE' : 'livrable',
+      provider: this.id,
+      systemInjected: Boolean(options.system),
+      executionEvidence: isExec
+        ? [
+            { type: 'file_change', kind: 'mutation', status: 'done', ok: true, summary: 'edit' },
+            { type: 'command_execution', kind: 'verification', status: 'done', ok: true, summary: 'test exit=0' }
+          ]
+        : undefined
+    }
+  }
+}
+
+function makeOrchestrator(hooks?: HookBus): Orchestrator {
+  const provider = new GreenProvider()
+  return new Orchestrator({
+    registry: new ProviderRegistry().register(provider),
+    roles: new RoleModelConfig({
+      subagent: { provider: provider.id, model: 'gros' },
+      judge: { provider: provider.id, model: 'juge' }
+    }),
+    cost: new CostAggregator(),
+    trust: new TrustLedger(),
+    authority: new AuthoritySas(),
+    executionWorkspace: 'C:\\ws',
+    classifyPhases: () => ['build'],
+    ...(hooks ? { hooks } : {})
+  })
+}
+
+describe('HookBus branché dans l’orchestrateur (pre-green)', () => {
+  it('sans bus custom : une mutation prouvée passe le gate (rétrocompat)', async () => {
+    const r = await makeOrchestrator().run('corrige le bug')
+    expect(r.gateBlocked).toBe(false)
+  })
+
+  it('un hook pre-green bloquant fait échouer le gate MÊME si preuve + juge OK', async () => {
+    const bus = new HookBus().register('pre-green', () => ({ block: true, reason: 'verify-replay refusé' }))
+    const r = await makeOrchestrator(bus).run('corrige le bug')
+    expect(r.gateBlocked).toBe(true)
+  })
+})
