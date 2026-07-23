@@ -3,6 +3,8 @@ import { DEFAULT_TICKET_SOURCE } from '../shared/tickets'
 import { registerTicketsIpc, type TicketsIpcRegistrar } from './tickets-ipc'
 
 function setup(isolated = false) {
+  // Mirrors Electron's variadic invoke boundary for the in-memory registrar.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handlers = new Map<string, (...args: any[]) => unknown>()
   const ipc = {
     handle: (channel, handler) => handlers.set(channel, handler)
@@ -10,7 +12,10 @@ function setup(isolated = false) {
   const service = {
     sources: vi.fn(() => []),
     saveSource: vi.fn(() => []),
-    list: vi.fn(async () => ({ items: [], hasMore: false }))
+    list: vi.fn(async (_request?: unknown, _signal?: AbortSignal) => ({
+      items: [],
+      hasMore: false
+    }))
   }
   const assertTrusted = vi.fn()
   registerTicketsIpc({ ipc, service, assertTrusted, isolated })
@@ -23,10 +28,34 @@ describe('IPC Tickets', () => {
     const event = { senderFrame: { url: 'app://trusted' } }
 
     expect(await handlers.get('tickets:sources')!(event)).toEqual([])
-    await handlers.get('tickets:list')!(event, { source: DEFAULT_TICKET_SOURCE })
+    await handlers.get('tickets:list')!(event, {
+      source: DEFAULT_TICKET_SOURCE,
+      requestId: 'request-1'
+    })
 
     expect(assertTrusted).toHaveBeenCalledTimes(2)
-    expect(service.list).toHaveBeenCalledWith({ source: DEFAULT_TICKET_SOURCE })
+    expect(service.list).toHaveBeenCalledWith(
+      { source: DEFAULT_TICKET_SOURCE, requestId: 'request-1' },
+      expect.any(AbortSignal)
+    )
+  })
+
+  it('annule réellement une lecture active à la demande du renderer', async () => {
+    const { handlers, service } = setup()
+    service.list.mockImplementation(
+      (_request, signal?: AbortSignal) =>
+        new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+        })
+    )
+    const event = { senderFrame: { url: 'app://trusted' } }
+    const pending = handlers.get('tickets:list')!(event, {
+      source: DEFAULT_TICKET_SOURCE,
+      requestId: 'request-active'
+    })
+
+    expect(await handlers.get('tickets:cancel')!(event, 'request-active')).toBe(true)
+    await expect(pending).rejects.toBeDefined()
   })
 
   it('n’expose jamais la fixture hors instance isolée', async () => {
@@ -52,13 +81,18 @@ describe('IPC Tickets', () => {
             title: 'Fixture',
             state: 'En cours',
             description: '',
+            createdAt: '2026-07-22T09:00:00.000Z',
+            updatedAt: '2026-07-23T09:00:00.000Z',
             relations: []
           }
         ]
       }
     )
 
-    const page = await handlers.get('tickets:list')!({}, { source: DEFAULT_TICKET_SOURCE })
+    const page = await handlers.get('tickets:list')!(
+      {},
+      { source: DEFAULT_TICKET_SOURCE, requestId: 'fixture-request' }
+    )
     expect(page).toMatchObject({
       items: [{ id: '1', sourceId: DEFAULT_TICKET_SOURCE.id, title: 'Fixture' }],
       hasMore: false

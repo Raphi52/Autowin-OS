@@ -292,6 +292,7 @@ interface ChatApi {
   listTickets: (
     request: import('../shared/tickets').TicketListRequest
   ) => Promise<import('../shared/tickets').TicketPage>
+  cancelTickets: (requestId: string) => Promise<boolean>
   installTicketsProofFixture: (fixture: unknown) => Promise<boolean>
   getWorktreeActivity: () => Promise<WorktreeAgentActivity[]>
   getWorktreeStatus: () => Promise<WorktreeRuntimeStatus>

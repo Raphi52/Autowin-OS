@@ -27,6 +27,7 @@ function item(id: string, sourceId = DEFAULT_TICKET_SOURCE.id): TicketItem {
     state: id === '3' ? 'Closed' : 'En cours',
     assignee: 'Équipe RIG',
     description: id === '1' ? 'Description lisible' : '',
+    createdAt: '2026-07-22T09:00:00.000Z',
     updatedAt: '2026-07-23T10:00:00.000Z',
     url: `https://example.test/tickets/${id}`,
     relations: id === '1' ? [{ kind: 'child', target: '2' }] : [],
@@ -46,6 +47,7 @@ function api(overrides: Record<string, unknown> = {}): void {
         hasMore: false
       })),
       saveTicketSource: vi.fn(),
+      cancelTickets: vi.fn(async () => false),
       ...overrides
     }
   })
@@ -87,6 +89,7 @@ describe('vue Tickets', () => {
     })
     const detail = container.querySelector('[data-testid="ticket-detail"]')
     expect(detail?.textContent).toContain('Description lisible')
+    expect(detail?.textContent).toContain('2026-07-22T09:00:00.000Z')
     expect(detail?.textContent).toContain('child')
     expect(detail?.querySelector('a[href="https://example.test/tickets/1"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="tickets-page-end"]')).not.toBeNull()
@@ -137,6 +140,7 @@ describe('vue Tickets', () => {
     })
     expect(container.textContent).toContain('Ticket 99')
     expect(container.textContent).not.toContain('Ticket 1')
+    expect(window.api.cancelTickets).toHaveBeenCalled()
     await act(async () => root.unmount())
   })
 
@@ -157,6 +161,78 @@ describe('vue Tickets', () => {
     })
     expect(listTickets).toHaveBeenCalledTimes(2)
     expect(container.textContent).toContain('Aucun ticket')
+    await act(async () => root.unmount())
+  })
+
+  it('distingue aucune source, filtre localement et charge la page suivante', async () => {
+    api({ ticketSources: vi.fn(async () => []) })
+    const first = await render()
+    expect(first.container.textContent).toContain('Aucune source configurée')
+    await act(async () => first.root.unmount())
+
+    const listTickets = vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: [item('1'), item('3')],
+        cursor: 'next',
+        hasMore: true
+      })
+      .mockResolvedValueOnce({ items: [item('4')], hasMore: false })
+    api({ listTickets })
+    const { root, container } = await render()
+    const state = container.querySelector('[aria-label="Filtrer par état"]') as HTMLSelectElement
+    await act(async () => {
+      state.value = 'Closed'
+      state.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(container.querySelectorAll('[data-testid="ticket-row"]')).toHaveLength(1)
+    await act(async () => {
+      ;(container.querySelector('.tickets-load-more') as HTMLButtonElement).click()
+      await Promise.resolve()
+    })
+    expect(listTickets).toHaveBeenCalledTimes(2)
+    await act(async () => root.unmount())
+  })
+
+  it('conserve les données et les marque périmées après une erreur de rafraîchissement', async () => {
+    const listTickets = vi
+      .fn()
+      .mockResolvedValueOnce({ items: [item('1')], hasMore: false })
+      .mockRejectedValueOnce(new Error('Délai fournisseur dépassé.'))
+    api({ listTickets })
+    const { root, container } = await render()
+    await act(async () => {
+      ;(container.querySelector('[data-testid="tickets-refresh"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-testid="tickets-stale"]')?.textContent).toContain(
+      'Données périmées'
+    )
+    expect(container.textContent).toContain('Ticket 1')
+    await act(async () => root.unmount())
+  })
+
+  it('explique le raccordement privé sans demander de secret au renderer', async () => {
+    api()
+    const { root, container } = await render()
+    await act(async () => {
+      const add = [...container.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Ajouter une source'
+      ) as HTMLButtonElement
+      add.click()
+    })
+    const provider = container.querySelector('[aria-label="Fournisseur"]') as HTMLSelectElement
+    await act(async () => {
+      provider.value = 'github'
+      provider.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(container.querySelector('[data-testid="tickets-auth-help"]')?.textContent).toContain(
+      'gh'
+    )
+    expect(container.querySelector('[data-testid="tickets-auth-help"]')?.textContent).toContain(
+      'GH_TOKEN'
+    )
+    expect(container.querySelector('input[type="password"]')).toBeNull()
     await act(async () => root.unmount())
   })
 })

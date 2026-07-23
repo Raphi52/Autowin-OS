@@ -187,6 +187,7 @@ async function fetchWorkItems(
       `${baseUrl}/_apis/wit/workitems?ids=${batch.join(',')}&$expand=Relations&api-version=${API_VERSION}`,
       {
         fetchFn: context.fetchFn,
+        signal: context.signal,
         headers: { authorization }
       }
     )
@@ -225,6 +226,7 @@ export const azureTicketProvider: TicketProviderAdapter = {
       `${baseUrl}/_apis/wit/wiql?$top=${pageSize + 1}&api-version=${API_VERSION}`,
       {
         fetchFn: context.fetchFn,
+        signal: context.signal,
         method: 'POST',
         headers: { authorization },
         body: { query }

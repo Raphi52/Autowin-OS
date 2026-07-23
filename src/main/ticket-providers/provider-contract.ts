@@ -11,6 +11,8 @@ export type TicketProviderErrorCode =
   | 'RATE_LIMITED'
   | 'REMOTE_ERROR'
   | 'NETWORK_ERROR'
+  | 'TIMEOUT'
+  | 'ABORTED'
   | 'INVALID_RESPONSE'
   | 'RESPONSE_TOO_LARGE'
   | 'UNSAFE_URL'
@@ -30,6 +32,7 @@ export interface TicketProviderContext {
   token: string
   authScheme?: 'bearer' | 'pat'
   fetchFn?: typeof fetch
+  signal?: AbortSignal
 }
 
 export interface TicketProviderAdapter {
@@ -38,10 +41,7 @@ export interface TicketProviderAdapter {
 }
 
 export interface TicketProviderRegistry {
-  list(
-    request: TicketListRequest,
-    context: TicketProviderContext
-  ): Promise<TicketPage>
+  list(request: TicketListRequest, context: TicketProviderContext): Promise<TicketPage>
   supports(source: TicketSourceProfile): boolean
 }
 
@@ -51,6 +51,7 @@ interface FetchTicketJsonOptions {
   method?: 'GET' | 'POST'
   body?: Readonly<Record<string, unknown>>
   timeoutMs?: number
+  signal?: AbortSignal
   maxBytes?: number
 }
 
@@ -74,7 +75,10 @@ function errorForStatus(status: number): TicketProviderError {
   if (status === 401) return new TicketProviderError('AUTH_REQUIRED', 'Authentification requise.')
   if (status === 403) return new TicketProviderError('ACCESS_DENIED', 'Accès refusé.')
   if (status === 429) return new TicketProviderError('RATE_LIMITED', 'Limite fournisseur atteinte.')
-  return new TicketProviderError('REMOTE_ERROR', `Le fournisseur a répondu avec le statut ${status}.`)
+  return new TicketProviderError(
+    'REMOTE_ERROR',
+    `Le fournisseur a répondu avec le statut ${status}.`
+  )
 }
 
 export async function fetchTicketJson<T>(
@@ -90,14 +94,22 @@ export async function fetchTicketJson<T>(
     ...(method === 'POST' ? { 'content-type': 'application/json' } : {})
   }
   let response: Response
+  const timeoutSignal = AbortSignal.timeout(options.timeoutMs ?? 10_000)
+  const signal = options.signal ? AbortSignal.any([options.signal, timeoutSignal]) : timeoutSignal
   try {
     response = await fetchFn(url, {
       method,
       headers,
       ...(method === 'POST' ? { body: JSON.stringify(options.body ?? {}) } : {}),
-      signal: AbortSignal.timeout(options.timeoutMs ?? 10_000)
+      signal
     })
   } catch {
+    if (options.signal?.aborted) {
+      throw new TicketProviderError('ABORTED', 'Chargement annulé.')
+    }
+    if (timeoutSignal.aborted) {
+      throw new TicketProviderError('TIMEOUT', 'Délai fournisseur dépassé.')
+    }
     throw new TicketProviderError('NETWORK_ERROR', 'Fournisseur indisponible.')
   }
   if (!response.ok) throw errorForStatus(response.status)

@@ -108,17 +108,33 @@
 
 .tickets-toolbar {
   padding: 0 4px;
+  flex-wrap: wrap;
 }
 
 .tickets-toolbar input {
   min-width: 220px;
   flex: 1;
 }
-.tickets-toolbar > span {
+.tickets-count {
   margin-left: auto;
   color: var(--text-dim);
   font-size: 11px;
   white-space: nowrap;
+}
+.tickets-auth-mode {
+  color: var(--text-faint);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.tickets-auth-help {
+  flex-basis: 100%;
+  color: var(--text-faint);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.tickets-toolbar > button {
+  min-height: 34px;
+  padding: 7px 10px;
 }
 
 .tickets-content {
@@ -190,6 +206,21 @@
   border: 1px solid var(--container-border);
   border-radius: var(--container-radius-card);
   background: color-mix(in srgb, var(--surface-card) 92%, transparent);
+}
+
+.tickets-stale {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--container-border));
+  border-radius: 8px;
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--gold) 7%, var(--surface-card));
+}
+.tickets-stale strong {
+  color: var(--gold);
 }
 
 .tickets-list {
@@ -349,7 +380,7 @@
     align-items: stretch;
     flex-direction: column;
   }
-  .tickets-toolbar > span {
+  .tickets-count {
     margin-left: 0;
   }
   .tickets-detail dl {

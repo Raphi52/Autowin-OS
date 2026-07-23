@@ -110,6 +110,7 @@ export const gitlabTicketProvider: TicketProviderAdapter = {
     }
     const payload = await fetchTicketJson<unknown>(url, {
       fetchFn,
+      signal: context.signal,
       headers: {
         accept: 'application/json',
         ...(context.token ? { authorization: `Bearer ${context.token}` } : {})

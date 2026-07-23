@@ -49,7 +49,7 @@ export class TicketService {
     }))
   }
 
-  async list(value: TicketListRequest): Promise<TicketPage> {
+  async list(value: TicketListRequest, signal?: AbortSignal): Promise<TicketPage> {
     const source = parseTicketSourceProfile(value?.source)
     if (!source) throw new Error('Profil Tickets invalide')
     const authorized = this.dependencies.sourceStore
@@ -88,7 +88,7 @@ export class TicketService {
         ...(value.cursor ? { cursor: value.cursor } : {}),
         ...(value.pageSize ? { pageSize: value.pageSize } : {})
       },
-      credential
+      { ...credential, ...(signal ? { signal } : {}) }
     )
   }
 }

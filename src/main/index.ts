@@ -102,6 +102,7 @@ import { azureTicketProvider } from './ticket-providers/azure'
 import { githubTicketProvider } from './ticket-providers/github'
 import { gitlabTicketProvider } from './ticket-providers/gitlab'
 import { loadAzureDevOpsCliToken } from './azure-cli-token'
+import { loadForgeCliToken } from './forge-cli-token'
 import { registerTicketsIpc } from './tickets-ipc'
 import {
   automationAppIdentity,
@@ -389,7 +390,7 @@ const tickets = new TicketService({
   tokenFallback: async (source) =>
     source.provider === 'azure'
       ? { token: await loadAzureDevOpsCliToken(), authScheme: 'bearer' }
-      : null
+      : loadForgeCliToken(source)
 })
 bus.trace = (name, args, ok) =>
   ledger.append({ source: 'bus', name, detail: JSON.stringify(args).slice(0, 200), ok })

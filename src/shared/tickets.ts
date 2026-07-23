@@ -64,6 +64,7 @@ export interface TicketPage {
 
 export interface TicketListRequest {
   source: TicketSourceProfile
+  requestId?: string
   cursor?: string
   pageSize?: number
 }
@@ -92,6 +93,7 @@ function isSafeText(value: unknown, maxLength = 256): value is string {
     typeof value === 'string' &&
     value.length > 0 &&
     value.length <= maxLength &&
+    // eslint-disable-next-line no-control-regex
     !/[\u0000-\u001f\u007f]/.test(value)
   )
 }

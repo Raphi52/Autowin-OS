@@ -1,4 +1,4 @@
-import type { GitHubTicketSource, TicketItem } from '../../shared/tickets'
+import type { GitHubTicketSource, TicketItem, TicketPage } from '../../shared/tickets'
 import {
   TicketProviderError,
   fetchTicketJson,
@@ -143,7 +143,7 @@ async function listGitHubIssues(
   cursor: string | undefined,
   pageSize: number | undefined,
   context: TicketProviderContext
-) {
+): Promise<TicketPage> {
   let linkHeader: string | null = null
   const delegate = context.fetchFn ?? fetch
   const captureFetch: typeof fetch = async (input, init) => {
@@ -155,6 +155,7 @@ async function listGitHubIssues(
     issuesUrl(source, cursorPage(cursor), boundedInteger(pageSize, 50, 1, 100)),
     {
       fetchFn: captureFetch,
+      signal: context.signal,
       headers: {
         accept: 'application/vnd.github+json',
         ...(context.token ? { authorization: `Bearer ${context.token}` } : {}),

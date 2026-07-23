@@ -87,6 +87,7 @@ function sourceFromDraft(draft: SourceDraft): TicketSourceProfile | null {
 
 export function TicketsView({ active }: { active: boolean }): React.JSX.Element {
   const [sources, setSources] = useState<TicketSourceSummary[]>([])
+  const [sourcesLoaded, setSourcesLoaded] = useState(false)
   const [sourceId, setSourceId] = useState(() => localStorage.getItem(SOURCE_KEY) ?? '')
   const [items, setItems] = useState<TicketItem[]>([])
   const [selectedId, setSelectedId] = useState<string>()
@@ -94,25 +95,40 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>()
+  const [stale, setStale] = useState(false)
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [stateFilter, setStateFilter] = useState('')
   const [showSourceForm, setShowSourceForm] = useState(false)
   const [draft, setDraft] = useState<SourceDraft>(EMPTY_DRAFT)
   const requestGeneration = useRef(0)
+  const requestSequence = useRef(0)
+  const activeRequestId = useRef<string | undefined>(undefined)
+  const itemsRef = useRef(items)
 
-  const selectedSource = sources.find(({ profile }) => profile.id === sourceId)?.profile
+  useEffect(() => {
+    itemsRef.current = items
+  }, [items])
+
+  const selectedSummary = sources.find(({ profile }) => profile.id === sourceId)
+  const selectedSource = selectedSummary?.profile
   const selectedItem =
     items.find((item) => `${item.sourceId}::${item.id}` === selectedId) ?? items[0]
 
   const load = useCallback(
     async (source: TicketSourceProfile, nextCursor?: string, append = false): Promise<void> => {
+      if (activeRequestId.current) {
+        void window.api.cancelTickets(activeRequestId.current)
+      }
       const generation = ++requestGeneration.current
+      const requestId = `tickets-${++requestSequence.current}`
+      activeRequestId.current = requestId
       setLoading(true)
       setError(undefined)
       try {
         const page = (await window.api.listTickets({
           source,
+          requestId,
           ...(nextCursor ? { cursor: nextCursor } : {}),
           pageSize: 50
         })) as TicketPage
@@ -120,13 +136,18 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         setItems((current) => (append ? [...current, ...page.items] : page.items))
         setCursor(page.cursor)
         setHasMore(page.hasMore)
+        setStale(false)
         if (!append) setSelectedId(undefined)
       } catch (failure) {
         if (generation !== requestGeneration.current) return
-        if (!append) setItems([])
+        if (!append && itemsRef.current.length === 0) setItems([])
+        else setStale(true)
         setError(errorMessage(failure))
       } finally {
-        if (generation === requestGeneration.current) setLoading(false)
+        if (generation === requestGeneration.current) {
+          setLoading(false)
+          if (activeRequestId.current === requestId) activeRequestId.current = undefined
+        }
       }
     },
     []
@@ -136,12 +157,12 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     if (!active || typeof window.api?.ticketSources !== 'function') return
     let disposed = false
     const generation = ++requestGeneration.current
-    setLoading(true)
     void window.api.ticketSources().then(
       (nextSources) => {
         if (disposed || generation !== requestGeneration.current) return
         const summaries = nextSources as TicketSourceSummary[]
         setSources(summaries)
+        setSourcesLoaded(true)
         const saved = summaries.find(({ profile }) => profile.id === sourceId)?.profile
         const source = saved ?? summaries[0]?.profile
         if (!source) {
@@ -156,12 +177,16 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         if (!disposed && generation === requestGeneration.current) {
           setLoading(false)
           setError(errorMessage(failure))
+          setSourcesLoaded(true)
         }
       }
     )
     return () => {
       disposed = true
       requestGeneration.current += 1
+      const current = activeRequestId.current
+      activeRequestId.current = undefined
+      if (current) void window.api.cancelTickets(current)
     }
     // The selected source is resolved once from persisted state during activation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -227,6 +252,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const retry = (): void => {
     if (selectedSource) void load(selectedSource)
   }
+  const initialLoading = active && !sourcesLoaded && !error
 
   return (
     <section className="tickets-view" data-testid="tickets-view" data-active={active}>
@@ -306,12 +332,18 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
             onChange={(event) => setDraft({ ...draft, repository: event.target.value })}
           />
           {draft.provider !== 'azure' && (
-            <input
-              aria-label="URL personnalisée"
-              placeholder="URL personnalisée (optionnel)"
-              value={draft.baseUrl}
-              onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })}
-            />
+            <>
+              <input
+                aria-label="URL personnalisée"
+                placeholder="URL personnalisée (optionnel)"
+                value={draft.baseUrl}
+                onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })}
+              />
+              <span className="tickets-auth-help" data-testid="tickets-auth-help">
+                Dépôt privé : connecte {draft.provider === 'github' ? 'gh' : 'glab'} ou configure{' '}
+                {draft.provider === 'github' ? 'GH_TOKEN' : 'GITLAB_TOKEN'} côté application.
+              </span>
+            </>
           )}
           <button type="button" onClick={() => void saveSource()}>
             Enregistrer
@@ -347,24 +379,46 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
             <option key={state}>{state}</option>
           ))}
         </select>
-        <span>
+        <span className="tickets-count">
           {visibleItems.length} affiché(s) · {items.length} chargé(s)
         </span>
+        {selectedSource && (
+          <span className="tickets-auth-mode">
+            {selectedSummary?.credentialConfigured
+              ? 'Coffre configuré'
+              : selectedSource.provider === 'azure'
+                ? 'Session Azure CLI'
+                : 'Public · session CLI/env si privée'}
+          </span>
+        )}
+        <button
+          data-testid="tickets-refresh"
+          type="button"
+          disabled={!selectedSource || loading}
+          onClick={() => selectedSource && void load(selectedSource)}
+        >
+          Actualiser
+        </button>
       </div>
 
       <div className="tickets-content">
-        {loading && items.length === 0 ? (
+        {(loading || initialLoading) && items.length === 0 ? (
           <div className="tickets-loading" role="status" aria-label="Chargement des tickets">
             <span className="tickets-spinner" aria-hidden="true" />
             <span>Synchronisation des tickets…</span>
           </div>
-        ) : error ? (
+        ) : error && items.length === 0 ? (
           <div className="tickets-error" role="alert">
             <strong>Chargement impossible</strong>
             <span>{error}</span>
             <button data-testid="tickets-retry" type="button" onClick={retry}>
               Réessayer
             </button>
+          </div>
+        ) : sourcesLoaded && sources.length === 0 ? (
+          <div className="tickets-empty">
+            <strong>Aucune source configurée</strong>
+            <span>Ajoute une source Azure DevOps, GitHub ou GitLab.</span>
           </div>
         ) : items.length === 0 ? (
           <div className="tickets-empty">
@@ -378,6 +432,12 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
           </div>
         ) : (
           <>
+            {stale && error && (
+              <div className="tickets-stale" data-testid="tickets-stale" role="status">
+                <strong>Données périmées</strong>
+                <span>{error}</span>
+              </div>
+            )}
             <div className="tickets-list" role="list" aria-label="Tickets">
               {visibleItems.map((item) => {
                 const identity = `${item.sourceId}::${item.id}`
@@ -435,6 +495,10 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                   <div>
                     <dt>Priorité</dt>
                     <dd>{selectedItem.priority ?? '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Créé</dt>
+                    <dd>{selectedItem.createdAt || '—'}</dd>
                   </div>
                   <div>
                     <dt>Mis à jour</dt>

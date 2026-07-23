@@ -3,11 +3,12 @@ import { TicketProviderError, fetchTicketJson } from './provider-contract'
 
 describe('frontière HTTP des fournisseurs Tickets', () => {
   it('effectue uniquement une lecture HTTPS avec timeout et limite de réponse', async () => {
-    const fetchFn = vi.fn(async () =>
-      new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
-      })
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        })
     )
 
     await expect(
@@ -61,11 +62,24 @@ describe('frontière HTTP des fournisseurs Tickets', () => {
     ).rejects.toEqual(new TicketProviderError('AUTH_REQUIRED', 'Authentification requise.'))
   })
 
+  it.each([
+    [403, 'ACCESS_DENIED', 'Accès refusé.'],
+    [429, 'RATE_LIMITED', 'Limite fournisseur atteinte.'],
+    [502, 'REMOTE_ERROR', 'Le fournisseur a répondu avec le statut 502.']
+  ])('distingue le statut HTTP %i', async (status, code, message) => {
+    const fetchFn = vi.fn(async () => new Response('détail serveur privé', { status }))
+
+    await expect(
+      fetchTicketJson('https://example.test/items', { fetchFn: fetchFn as typeof fetch })
+    ).rejects.toMatchObject({ code, message })
+  })
+
   it('rejette une réponse trop volumineuse avant parsing', async () => {
-    const fetchFn = vi.fn(async () =>
-      new Response(JSON.stringify({ value: 'x'.repeat(200) }), {
-        headers: { 'content-length': '212' }
-      })
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ value: 'x'.repeat(200) }), {
+          headers: { 'content-length': '212' }
+        })
     )
 
     await expect(
@@ -74,5 +88,25 @@ describe('frontière HTTP des fournisseurs Tickets', () => {
         maxBytes: 100
       })
     ).rejects.toMatchObject({ code: 'RESPONSE_TOO_LARGE' })
+  })
+
+  it('distingue un timeout d’une panne réseau et propage une annulation externe', async () => {
+    const never = vi.fn(
+      (_input, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true })
+        })
+    ) as typeof fetch
+    await expect(
+      fetchTicketJson('https://example.test/items', { fetchFn: never, timeoutMs: 1 })
+    ).rejects.toMatchObject({ code: 'TIMEOUT' })
+
+    const controller = new AbortController()
+    const pending = fetchTicketJson('https://example.test/items', {
+      fetchFn: never,
+      signal: controller.signal
+    })
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ code: 'ABORTED' })
   })
 })

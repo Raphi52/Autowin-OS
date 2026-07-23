@@ -32,6 +32,8 @@ const api = {
   saveTicketSource: (profile: unknown): Promise<unknown[]> =>
     ipcRenderer.invoke('tickets:source:save', profile),
   listTickets: (request: unknown): Promise<unknown> => ipcRenderer.invoke('tickets:list', request),
+  cancelTickets: (requestId: string): Promise<boolean> =>
+    ipcRenderer.invoke('tickets:cancel', requestId),
   installTicketsProofFixture: (fixture: unknown): Promise<boolean> =>
     ipcRenderer.invoke('app:test:tickets-fixture', fixture),
   // Cockpit worktree (volet A) — activité des copies isolées par agent (frise + journal).
