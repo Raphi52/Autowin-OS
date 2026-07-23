@@ -144,6 +144,41 @@ describe('vue Tickets', () => {
     await act(async () => root.unmount())
   })
 
+  it('masque immédiatement les tickets déjà chargés lors d’un changement de source', async () => {
+    let resolveGitHub!: (page: TicketPage) => void
+    const githubPage = new Promise<TicketPage>((resolve) => {
+      resolveGitHub = resolve
+    })
+    api({
+      ticketSources: vi.fn(async () => [
+        { profile: DEFAULT_TICKET_SOURCE, credentialConfigured: false },
+        { profile: github, credentialConfigured: false }
+      ]),
+      listTickets: vi.fn(({ source }: { source: { provider: string } }) =>
+        source.provider === 'azure'
+          ? Promise.resolve({ items: [item('1')], hasMore: false })
+          : githubPage
+      )
+    })
+    const { root, container } = await render()
+    expect(container.textContent).toContain('Ticket 1')
+    const select = container.querySelector('[aria-label="Source de tickets"]') as HTMLSelectElement
+
+    await act(async () => {
+      select.value = github.id
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).not.toContain('Ticket 1')
+    expect(container.querySelector('[role="status"]')).not.toBeNull()
+    await act(async () => {
+      resolveGitHub({ items: [item('99', github.id)], hasMore: false })
+      await Promise.resolve()
+    })
+    await act(async () => root.unmount())
+  })
+
   it('rend une erreur actionnable et permet de réessayer', async () => {
     const listTickets = vi
       .fn()
@@ -228,6 +263,39 @@ describe('vue Tickets', () => {
     })
     expect(container.textContent).toContain('Ticket 4')
     expect(listTickets).toHaveBeenCalledTimes(2)
+    await act(async () => root.unmount())
+  })
+
+  it('conserve la pagination quand un filtre ne correspond pas encore à la page courante', async () => {
+    const listTickets = vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: [item('1'), item('3')],
+        cursor: 'next',
+        hasMore: true
+      })
+      .mockResolvedValueOnce({
+        items: [{ ...item('4'), type: 'Bug', state: 'En cours' }],
+        hasMore: false
+      })
+    api({ listTickets })
+    const { root, container } = await render()
+    const type = container.querySelector('[aria-label="Filtrer par type"]') as HTMLSelectElement
+    const state = container.querySelector('[aria-label="Filtrer par état"]') as HTMLSelectElement
+    await act(async () => {
+      type.value = 'Bug'
+      type.dispatchEvent(new Event('change', { bubbles: true }))
+      state.value = 'En cours'
+      state.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    const loadMore = container.querySelector('.tickets-load-more') as HTMLButtonElement
+    expect(loadMore).not.toBeNull()
+    await act(async () => {
+      loadMore.click()
+      await Promise.resolve()
+    })
+    expect(container.textContent).toContain('Ticket 4')
     await act(async () => root.unmount())
   })
 

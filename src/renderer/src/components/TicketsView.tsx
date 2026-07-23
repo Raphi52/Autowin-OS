@@ -191,9 +191,20 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, load])
 
+  const clearSourceData = (): void => {
+    itemsRef.current = []
+    setItems([])
+    setSelectedId(undefined)
+    setCursor(undefined)
+    setHasMore(false)
+    setStale(false)
+    setError(undefined)
+  }
+
   const changeSource = (nextId: string): void => {
     const source = sources.find(({ profile }) => profile.id === nextId)?.profile
     if (!source) return
+    clearSourceData()
     setSourceId(nextId)
     localStorage.setItem(SOURCE_KEY, nextId)
     setQuery('')
@@ -222,6 +233,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const changeSourceFrom = (nextSources: TicketSourceSummary[], nextId: string): void => {
     const source = nextSources.find(({ profile }) => profile.id === nextId)?.profile
     if (!source) return
+    clearSourceData()
     setSourceId(source.id)
     localStorage.setItem(SOURCE_KEY, source.id)
     void load(source)
@@ -425,7 +437,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
             <strong>Aucun ticket</strong>
             <span>Cette source ne renvoie aucun élément accessible.</span>
           </div>
-        ) : visibleItems.length === 0 && items.length > 0 ? (
+        ) : visibleItems.length === 0 && items.length > 0 && !hasMore ? (
           <div className="tickets-empty">
             <strong>Aucun résultat</strong>
             <span>Modifie la recherche ou les filtres.</span>
