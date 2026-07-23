@@ -276,8 +276,9 @@ interface ChatApi {
   onPreflight: (cb: (result: PreflightResult) => void) => () => void
   getPreflight: () => Promise<PreflightResult | null>
   recheckPreflight: (force?: boolean) => Promise<PreflightResult>
-  getGitState: () => Promise<import('../shared/git-read').GitReadResult>
-  getGitDiff: (path: string) => Promise<import('../shared/git-read').GitDiffResult>
+  getGitState: (repoPath?: string) => Promise<import('../shared/git-read').GitReadResult>
+  getGitDiff: (path: string, repoPath?: string) => Promise<import('../shared/git-read').GitDiffResult>
+  pickGitRepo: () => Promise<string | null>
   getWorktreeActivity: () => Promise<WorktreeAgentActivity[]>
   onWorktreeActivity: (cb: (activity: WorktreeAgentActivity[]) => void) => () => void
   roles: () => Promise<

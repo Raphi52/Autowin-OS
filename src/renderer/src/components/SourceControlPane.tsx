@@ -29,10 +29,15 @@ export function SourceControlPane({
   const [prompt, setPrompt] = useState('')
   const [openFile, setOpenFile] = useState<string | null>(null)
   const [diff, setDiff] = useState<GitDiffResult | null>(null)
+  // v3 — dépôt configurable (multi-repo), persisté ; '' = cwd de l'app par défaut.
+  const [repoPath, setRepoPath] = useState<string>(
+    () => localStorage.getItem('autowin:sc-repo') ?? ''
+  )
 
   useEffect(() => {
     let alive = true
-    void window.api.getGitState?.().then((g) => {
+    setGit(null)
+    void window.api.getGitState?.(repoPath || undefined).then((g) => {
       if (alive) setGit(g as GitReadResult)
     })
     void window.api.getWorktreeActivity?.().then((a) => {
@@ -43,7 +48,16 @@ export function SourceControlPane({
       alive = false
       off?.()
     }
-  }, [])
+  }, [repoPath])
+
+  const pickRepo = async (): Promise<void> => {
+    const chosen = await window.api.pickGitRepo?.()
+    if (chosen) {
+      localStorage.setItem('autowin:sc-repo', chosen)
+      setOpenFile(null)
+      setRepoPath(chosen)
+    }
+  }
 
   const propose = (text: string): void => setPrompt(text)
   const toggleDiff = (path: string): void => {
@@ -53,7 +67,7 @@ export function SourceControlPane({
     }
     setOpenFile(path)
     setDiff(null)
-    void window.api.getGitDiff?.(path).then((d) => setDiff(d as GitDiffResult))
+    void window.api.getGitDiff?.(path, repoPath || undefined).then((d) => setDiff(d as GitDiffResult))
   }
   const send = (): void => {
     const t = prompt.trim()
@@ -66,6 +80,14 @@ export function SourceControlPane({
   return (
     <div className="sc-pane" data-testid="source-control-pane">
       <div className="sc-scroll">
+        <div className="sc-repo" data-testid="sc-repo">
+          <span className="sc-repo-path" title={repoPath || 'Dépôt courant (app)'}>
+            📁 {repoPath ? repoPath.replace(/^.*[\\/]/, '') : 'Dépôt courant'}
+          </span>
+          <button className="sc-btn sc-repo-btn" data-testid="sc-pick-repo" onClick={() => void pickRepo()}>
+            Changer de dépôt
+          </button>
+        </div>
         {git && !git.available && (
           <div className="sc-empty">Dépôt git introuvable ici (lecture indisponible).</div>
         )}

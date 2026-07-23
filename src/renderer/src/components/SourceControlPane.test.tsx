@@ -19,10 +19,19 @@ const GIT: GitReadResult = {
   history: [{ hash: 'a1b2c3d', subject: 'feat: git-read' }]
 }
 
+const calls: { repoArgs: (string | undefined)[]; pickReturns: (string | null)[] } = {
+  repoArgs: [],
+  pickReturns: []
+}
 function mockApi(git: GitReadResult, diff = 'diff --git a/x b/x\n@@ -1 +1 @@\n-old\n+new'): void {
+  calls.repoArgs = []
   ;(window as unknown as { api: unknown }).api = {
-    getGitState: () => Promise.resolve(git),
+    getGitState: (repoPath?: string) => {
+      calls.repoArgs.push(repoPath)
+      return Promise.resolve(git)
+    },
     getGitDiff: () => Promise.resolve({ available: true, diff }),
+    pickGitRepo: () => Promise.resolve(calls.pickReturns.shift() ?? null),
     getWorktreeActivity: () => Promise.resolve([]),
     onWorktreeActivity: () => () => {}
   }
@@ -38,6 +47,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount())
   container.remove()
+  localStorage.clear()
 })
 async function render(onSendPrompt?: (p: string) => void): Promise<void> {
   await act(async () => {
@@ -82,6 +92,27 @@ describe('SourceControlPane (prompt-first)', () => {
     // Le prompt est pré-rempli dans la barre — RIEN n'est envoyé tant que l'utilisateur ne valide pas.
     expect(input().value).toContain('commit')
     expect(onSendPrompt).not.toHaveBeenCalled()
+  })
+
+  it('v3 : le dépôt persisté est passé à getGitState', async () => {
+    localStorage.setItem('autowin:sc-repo', 'C:/rig')
+    mockApi(GIT)
+    await render()
+    expect(calls.repoArgs).toContain('C:/rig')
+  })
+
+  it('v3 : « Changer de dépôt » recharge sur le nouveau dépôt + persiste', async () => {
+    mockApi(GIT)
+    calls.pickReturns = ['D:/autre-repo']
+    await render()
+    const pick = container.querySelector('[data-testid="sc-pick-repo"]') as HTMLButtonElement
+    await act(async () => {
+      pick.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(calls.repoArgs).toContain('D:/autre-repo')
+    expect(localStorage.getItem('autowin:sc-repo')).toBe('D:/autre-repo')
   })
 
   it('Envoyer transmet le prompt (pré-rempli par un bouton) à l’agent', async () => {

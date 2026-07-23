@@ -475,13 +475,23 @@ function registerChatIpc(): void {
     return getLastAppPreflightResult()
   })
   // Source control : lecture git READ-ONLY (statut/branche/changements/historique). Aucune action git ici.
-  ipcMain.handle('git:read', (event) => {
+  // Le dépôt lu est configurable (multi-repo) : le renderer fournit un cwd (défaut = cwd de l'app).
+  ipcMain.handle('git:read', (event, cwd?: string) => {
     assertTrustedRendererSender(event, 'GitRead')
-    return readGitState(process.cwd())
+    return readGitState(cwd && typeof cwd === 'string' ? cwd : process.cwd())
   })
-  ipcMain.handle('git:diff', (event, path: string) => {
+  ipcMain.handle('git:diff', (event, path: string, cwd?: string) => {
     assertTrustedRendererSender(event, 'GitDiff')
-    return readGitDiff(process.cwd(), String(path ?? ''))
+    return readGitDiff(cwd && typeof cwd === 'string' ? cwd : process.cwd(), String(path ?? ''))
+  })
+  // Sélecteur de dépôt (dialogue dossier, read-only) → renvoie le chemin choisi ou null si annulé.
+  ipcMain.handle('git:pickRepo', async (event) => {
+    assertTrustedRendererSender(event, 'GitPickRepo')
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const res = await (win
+      ? dialog.showOpenDialog(win, { properties: ['openDirectory'] })
+      : dialog.showOpenDialog({ properties: ['openDirectory'] }))
+    return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
   })
   // Cockpit worktree (volet A) : snapshot à la demande + push live des changements d'activité.
   ipcMain.handle('worktree:activity', (event) => {
