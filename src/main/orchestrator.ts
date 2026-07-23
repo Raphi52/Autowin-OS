@@ -417,12 +417,21 @@ export class Orchestrator {
       // Modèle EFFECTIF de la phase : override par phase (petit modèle sur analyse, gros sur build)
       // → défaut = modèle du binding. Générique/rétrocompat (resolvePhaseBinding).
       const phaseBinding = resolvePhaseBinding(subBinding, phase)
-      const parts = [
-        { name: `consigne:${phase}`, text: phaseBrief(phase) },
-        { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
-        { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
-        { name: 'projectContext', text: projectContext }
-      ]
+      // Anti-perte-de-contexte / longs runs : en session-resume, la discipline (~1-2k) et le
+      // projectContext (≤32k) sont DÉJÀ connus de la session (envoyés en phase 1) → les ré-envoyer
+      // à chaque phase gonfle le contexte pour rien ("ENGINE injectée N fois", "1M3 tokens"). On ne
+      // renvoie que la consigne de phase (qui CHANGE) + le style. Fallback (pas de resume) = complet.
+      const parts = resuming
+        ? [
+            { name: `consigne:${phase}`, text: phaseBrief(phase) },
+            { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION }
+          ]
+        : [
+            { name: `consigne:${phase}`, text: phaseBrief(phase) },
+            { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
+            { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+            { name: 'projectContext', text: projectContext }
+          ]
       const systemBlocks = parts.filter((p) => p.text).map((p) => ({ name: p.name, chars: p.text.length }))
       const subOptions: SendOptions = {
         system: parts.map((p) => p.text).join(''),
