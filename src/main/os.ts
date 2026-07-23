@@ -35,6 +35,7 @@ import {
   type OrchestrationStep,
   type OrchestrationPhase
 } from './orchestrator'
+import { resolveVerifyReplayConfig } from './hooks/verify-replay-config'
 import { buildOrchestratorDecomposer } from './greedy-decompose'
 import { regimePhases } from './task-regime'
 import { defaultBehaviourWorkspace } from './behaviour-files'
@@ -139,6 +140,9 @@ export class AutowinOS {
       trust: this.trust,
       authority: this.authority,
       executionWorkspace,
+      // verify-replay EN PROD (opt-in via AUTOWIN_VERIFY_REPLAY) : rejoue la vérif au gate au lieu
+      // de croire l'evidence sur parole. Off par défaut (voir resolveVerifyReplayConfig).
+      ...resolveVerifyReplayConfig(),
       worktrees: this.worktrees,
       // Pipeline ADAPTATIF (proportionnalité) : le régime de la tâche choisit le sous-ensemble de
       // phases (trivial → build seul ; standard → frame+build ; critical → les 5 scout→clean), puis
