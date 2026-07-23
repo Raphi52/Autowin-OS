@@ -95,6 +95,7 @@ export class AutowinOS {
     frame: FanMember[]
     judge: FanMember[]
   } = { scout: [], frame: [], judge: [] }
+  private taskReadiness: Promise<void> = Promise.resolve()
 
   constructor() {
     this.registry = new ProviderRegistry(loadKitSoul())
@@ -124,6 +125,11 @@ export class AutowinOS {
   /** Met à jour la source live du fan-out (appelé par la topology au boot et à chaque changement). */
   setFanOut(next: { scout: FanMember[]; frame: FanMember[]; judge: FanMember[] }): void {
     this.fanOut = next
+  }
+
+  /** Empêche tout run de lire la topology avant la fin de la découverte des modèles. */
+  setTaskReadiness(readiness: Promise<unknown>): void {
+    this.taskReadiness = readiness.then(() => undefined)
   }
 
   // --- Conversation directe (chat) : alimente le coût réel ---
@@ -180,13 +186,14 @@ export class AutowinOS {
   }
 
   // --- Orchestration disciplinée (le cœur) ---
-  runTask(
+  async runTask(
     task: string,
     onStep?: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
     signal?: AbortSignal
   ): Promise<OrchestrationResult> {
+    await this.taskReadiness
     return this.orchestrator.run(task, onStep, onPhase, onDelta, signal)
   }
 

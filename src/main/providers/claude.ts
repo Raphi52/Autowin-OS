@@ -1,3 +1,4 @@
+import { joinThinking } from './thinking'
 import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -23,6 +24,25 @@ export function claudeToolEvidenceKind(name: string, command: string): Execution
     /\b(vitest|jest|pytest|cargo\s+test|dotnet\s+test|go\s+test|tsc|eslint|npm(?:\.cmd)?\s+(?:test|run\s+(?:test|typecheck|build|lint))|pnpm\s+(?:test|run)|node\s+-e)\b/i
   if (/^Bash$/i.test(name)) return verify.test(command) ? 'verification' : 'inspection'
   return 'inspection'
+}
+
+/**
+ * Extrait le TEXTE d'un `tool_result` Claude, dont le `content` est soit une string, soit un
+ * tableau de blocs `{ type: 'text', text }`. Pur → testable. Vide si rien d'exploitable.
+ */
+export function claudeToolResultText(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content
+      .map((block) =>
+        block && typeof block === 'object' && typeof (block as { text?: unknown }).text === 'string'
+          ? (block as { text: string }).text
+          : ''
+      )
+      .filter(Boolean)
+      .join('\n')
+  }
+  return ''
 }
 
 export interface MaterializedAttachments {
@@ -221,10 +241,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const timer = setTimeout(() => child.kill(), this.timeoutMs)
     let buffer = ''
     let text = ''
+    const reasoningFragments: string[] = []
     let sessionId: string | undefined
     let usage: SendResult['usage']
     const executionEvidence: ExecutionEvidence[] = []
-    const pendingTools = new Map<string, { name: string; command: string }>()
+    const pendingTools = new Map<string, { name: string; command: string; filePath: string }>()
     const queue: StreamChunk[] = []
     let done = false
     let errored: Error | null = null
@@ -243,6 +264,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
               content?: Array<{
                 type: string
                 text?: string
+                thinking?: string
                 id?: string
                 name?: string
                 input?: Record<string, unknown>
@@ -253,28 +275,45 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           if (part.type === 'text' && part.text) {
             text += part.text
             queue.push({ delta: part.text })
+          } else if (part.type === 'thinking' && part.thinking) {
+            // Raisonnement CONSERVÉ (plus ignoré) pour l'observation post-mortem.
+            reasoningFragments.push(part.thinking)
           } else if (part.type === 'tool_use' && part.id && part.name) {
             // B — mémorise l'appel outil ; la preuve (ok/échec) arrive dans le tool_result associé.
-            const command = String(part.input?.command ?? part.input?.file_path ?? '')
-            pendingTools.set(part.id, { name: part.name, command })
+            const filePath = String(part.input?.file_path ?? '')
+            const command = String(part.input?.command ?? filePath)
+            pendingTools.set(part.id, { name: part.name, command, filePath })
           }
         }
       } else if (t === 'user') {
         // tool_result : apparie l'appel outil → executionEvidence (shape commun à tous les exécuteurs).
         const msg = o['message'] as
-          | { content?: Array<{ type: string; tool_use_id?: string; is_error?: boolean }> }
+          | {
+              content?: Array<{
+                type: string
+                tool_use_id?: string
+                is_error?: boolean
+                content?: unknown
+              }>
+            }
           | undefined
         for (const part of msg?.content ?? []) {
           if (part.type !== 'tool_result' || !part.tool_use_id) continue
           const call = pendingTools.get(part.tool_use_id)
           if (!call) continue
           pendingTools.delete(part.tool_use_id)
+          // Contenu réel du résultat d'outil (stdout / retour d'édition), pour un rendu inline lisible.
+          const output = claudeToolResultText(part.content).slice(-20_000)
+          const isFile = Boolean(call.filePath)
           executionEvidence.push({
             type: call.name,
             kind: claudeToolEvidenceKind(call.name, call.command),
             status: part.is_error ? 'failed' : 'completed',
             ok: part.is_error !== true,
-            summary: `${call.name} ${call.command}`.trim()
+            summary: `${call.name} ${call.command}`.trim(),
+            // Champs STRUCTURÉS (parité avec Codex) : chemin pour une édition, commande + stdout sinon.
+            ...(isFile ? { path: call.filePath } : call.command ? { command: call.command } : {}),
+            ...(output ? { stdout: output } : {})
           })
         }
       } else if (t === 'result') {
@@ -355,7 +394,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       sessionId,
       systemInjected,
       usage,
-      executionEvidence: executionEvidence.length ? executionEvidence : undefined
+      executionEvidence: executionEvidence.length ? executionEvidence : undefined,
+      thinking: joinThinking(reasoningFragments)
     }
   }
 }

@@ -228,6 +228,12 @@ export type OrchStep = {
   text?: string
   detail?: string
   costUsd?: number
+  /** Statut du sous-agent — un échec doit se voir (sinon un step raté passe pour réussi). */
+  status?: 'completed' | 'failed'
+  /** Cause de l'échec (message), affichée quand status==='failed'. */
+  error?: string
+  /** Raisonnement/thinking du sous-agent, conservé pour post-mortem (rendu repliable). */
+  thinking?: string
   prompt?: {
     provider: string
     model?: string

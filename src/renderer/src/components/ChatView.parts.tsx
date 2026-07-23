@@ -23,13 +23,14 @@ export function StepThread({ steps }: { steps: OrchStep[] }): React.JSX.Element 
       {steps.map((s, i) => {
         const meta = STEP_META[s.step] ?? { icon: '•', label: s.step }
         return (
-          <div key={i} className="subagent-step">
+          <div key={i} className={`subagent-step${s.status === 'failed' ? ' failed' : ''}`}>
             <div className="row gap2" style={{ fontSize: 11 }}>
               <span>{meta.icon}</span>
               <span className="c-dim" style={{ fontWeight: 600 }}>
                 {meta.label}
               </span>
               {s.provider && <span className="mono c-accent">{s.provider}</span>}
+              {s.status === 'failed' && <span className="subagent-failed-pill">échec</span>}
               {s.detail && <span className="c-faint">{s.detail}</span>}
               {typeof s.costUsd === 'number' && (
                 <span className="c-faint tnum" style={{ marginLeft: 'auto' }}>
@@ -37,6 +38,13 @@ export function StepThread({ steps }: { steps: OrchStep[] }): React.JSX.Element 
                 </span>
               )}
             </div>
+            {s.status === 'failed' && s.error && <div className="subagent-error">{s.error}</div>}
+            {s.thinking && (
+              <details className="subagent-thinking">
+                <summary>Raisonnement</summary>
+                <pre>{s.thinking}</pre>
+              </details>
+            )}
             {s.text && <div className="subagent-text c-dim">{s.text}</div>}
             {s.prompt && (
               <details className="prompt-envelope">

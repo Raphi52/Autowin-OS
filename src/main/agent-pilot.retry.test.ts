@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
+import type { PromptSnapshot } from './commands'
+
+const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
+  tab: 'chat',
+  providers: [],
+  pendingDecisions: [],
+  runsBlocked: [],
+  conversationsCount: 0
+})
 
 describe('AgentPilot retry observable', () => {
   it('journalise l echec, la tentative puis la reponse reussie', async () => {
@@ -20,7 +29,7 @@ describe('AgentPilot retry observable', () => {
     const roles = {
       getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
     }
-    const bus = { catalog: () => [], snapshot: async () => ({}) }
+    const bus = { catalog: () => [], snapshotForPrompt }
     const events: PilotEvent[] = []
     await new AgentPilot(registry as never, roles as never, bus as never).chat(
       [{ role: 'user', content: 'test' }],
@@ -56,7 +65,7 @@ describe('AgentPilot retry observable', () => {
     const roles = {
       getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
     }
-    const bus = { catalog: () => [], snapshot: async () => ({}) }
+    const bus = { catalog: () => [], snapshotForPrompt }
     const events: PilotEvent[] = []
     const pending = new AgentPilot(registry as never, roles as never, bus as never).chat(
       [{ role: 'user', content: 'test' }],
@@ -100,7 +109,7 @@ describe('AgentPilot retry observable', () => {
     const roles = {
       getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
     }
-    const bus = { catalog: () => [], snapshot: async () => ({}) }
+    const bus = { catalog: () => [], snapshotForPrompt }
     const events: PilotEvent[] = []
     const pending = new AgentPilot(registry as never, roles as never, bus as never).chat(
       [{ role: 'user', content: 'test' }],

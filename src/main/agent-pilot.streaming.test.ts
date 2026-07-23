@@ -1,6 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
+import type { PromptSnapshot } from './commands'
 import { createChatTurn, reduceChatTurn, type ChatTurnEvent } from '../shared/chat-turn'
+
+const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
+  tab: 'chat',
+  providers: [],
+  pendingDecisions: [],
+  runsBlocked: [],
+  conversationsCount: 0
+})
 
 describe('AgentPilot chat streaming', () => {
   it('emits progressive visible deltas while suppressing fragmented command markup', async () => {
@@ -44,7 +53,7 @@ describe('AgentPilot chat streaming', () => {
     }
     const bus = {
       catalog: () => [{ name: 'get_state', args: {}, description: 'state' }],
-      snapshot: async () => ({}),
+      snapshotForPrompt,
       exec: vi.fn().mockResolvedValue({ ok: true, data: { source: 'fixture' } })
     }
     const events: PilotEvent[] = []
@@ -109,7 +118,7 @@ describe('AgentPilot chat streaming', () => {
     }
     const bus = {
       catalog: () => [{ name: 'get_state', args: {}, description: 'state' }],
-      snapshot: async () => ({}),
+      snapshotForPrompt,
       exec: vi.fn().mockResolvedValue({ ok: true, data: { source: 'fixture' } })
     }
     const events: PilotEvent[] = []
@@ -183,7 +192,7 @@ describe('AgentPilot chat streaming', () => {
     const roles = {
       getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
     }
-    const bus = { catalog: () => [], snapshot: async () => ({}) }
+    const bus = { catalog: () => [], snapshotForPrompt }
     const events: PilotEvent[] = []
 
     await new AgentPilot(registry as never, roles as never, bus as never).chat(
@@ -223,7 +232,7 @@ describe('AgentPilot chat streaming', () => {
     const roles = {
       getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
     }
-    const bus = { catalog: () => [], snapshot: async () => ({}) }
+    const bus = { catalog: () => [], snapshotForPrompt }
     const events: PilotEvent[] = []
 
     await expect(
@@ -267,7 +276,7 @@ describe('AgentPilot chat streaming', () => {
       const roles = {
         getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
       }
-      const bus = { catalog: () => [], snapshot: async () => ({}) }
+      const bus = { catalog: () => [], snapshotForPrompt }
       const events: PilotEvent[] = []
 
       await new AgentPilot(registry as never, roles as never, bus as never).chat(

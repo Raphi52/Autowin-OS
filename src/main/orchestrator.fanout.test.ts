@@ -22,6 +22,7 @@ class RecordingProvider implements ProviderAdapter {
     _messages: Message[],
     options: SendOptions = {}
   ): AsyncGenerator<StreamChunk, SendResult, void> {
+    yield* [] as StreamChunk[]
     this.calls.push(options)
     const model = options.model ?? ''
     // Un modèle dont le nom contient "crash" LÈVE (simule une erreur réseau/provider) → ne répond pas.

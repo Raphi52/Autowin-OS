@@ -8,6 +8,7 @@ import type {
   ExecutionEvidence
 } from './types'
 import { loadTokens, refreshTokens, saveTokens, type FetchLike, type Tokens } from './codex-auth'
+import { joinThinking } from './thinking'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -140,6 +141,7 @@ async function runCodexExec(
     let stdout = ''
     let stderr = ''
     let finalText = ''
+    const reasoningFragments: string[] = []
     let sessionId: string | undefined
     let usage: SendResult['usage']
     const executionEvidence: ExecutionEvidence[] = []
@@ -167,7 +169,10 @@ async function runCodexExec(
                 }
               | undefined
             if (item?.type === 'agent_message' && item.text) finalText = item.text
-            else if (item?.type && item.type !== 'reasoning') {
+            else if (item?.type === 'reasoning') {
+              // Raisonnement CONSERVÉ (plus jeté) : accumulé pour l'observation post-mortem.
+              if (item.text) reasoningFragments.push(item.text)
+            } else if (item?.type) {
               const command = item.command ?? ''
               const ok =
                 item.type === 'file_change'
@@ -259,7 +264,8 @@ async function runCodexExec(
         sessionId,
         systemInjected: Boolean(opts.system),
         usage,
-        executionEvidence
+        executionEvidence,
+        thinking: joinThinking(reasoningFragments)
       })
     })
     child.stdin.end(prompt)

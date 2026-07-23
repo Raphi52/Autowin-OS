@@ -1,5 +1,6 @@
 param(
-  [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot)
+  [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
+  [string]$ShortcutPath = (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Autowin OS.lnk')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,26 +18,27 @@ $executableVersion = $executableItem.VersionInfo.ProductVersion
 if ([string]::IsNullOrWhiteSpace($executableVersion)) {
   $executableVersion = $executableItem.VersionInfo.FileVersion
 }
+if ([string]::IsNullOrWhiteSpace($executableVersion)) {
+  throw "L'exécutable canonique n'expose aucune version : $($executableItem.FullName)"
+}
 $identity = [pscustomobject]@{
   executable = $executableItem.FullName
   executableSha256 = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash.ToLowerInvariant()
   executableVersion = $executableVersion
 }
 
-$desktop = [Environment]::GetFolderPath('Desktop')
-$shortcutPath = Join-Path $desktop 'Autowin OS.lnk'
 $shell = New-Object -ComObject WScript.Shell
-$shortcut = $shell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = $executable
-$shortcut.WorkingDirectory = Split-Path -Parent $executable
+$shortcut = $shell.CreateShortcut($ShortcutPath)
+$shortcut.TargetPath = $identity.executable
+$shortcut.WorkingDirectory = Split-Path -Parent $identity.executable
 $shortcut.IconLocation = "$stableIcon,0"
 $shortcut.Description = 'Autowin OS - build desktop canonique'
 $shortcut.Save()
 
-$verified = $shell.CreateShortcut($shortcutPath)
-if ($verified.TargetPath -ne $executable -or $verified.IconLocation -notlike "$stableIcon,*") {
-  throw "Le raccourci Bureau n'a pas été mis à jour : $shortcutPath"
+$verified = $shell.CreateShortcut($ShortcutPath)
+if ($verified.TargetPath -ne $identity.executable -or $verified.IconLocation -notlike "$stableIcon,*") {
+  throw "Le raccourci Bureau n'a pas été mis à jour : $ShortcutPath"
 }
 
-Write-Output "Desktop shortcut updated: $shortcutPath -> $executable"
+Write-Output "Desktop shortcut updated: $ShortcutPath -> $($identity.executable)"
 $identity | ConvertTo-Json -Compress

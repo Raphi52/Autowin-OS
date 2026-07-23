@@ -26,16 +26,25 @@ export function FirstRunWizard(): React.JSX.Element | null {
   const [open, setOpen] = useState(() => localStorage.getItem(DONE_KEY) !== '1')
   const [result, setResult] = useState<PreflightResult | null>(null)
   const [checking, setChecking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const reqRef = useRef(0)
+  const initialActionRef = useRef<HTMLButtonElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
   const recheck = useCallback(async (force = false) => {
-    if (!window.api?.recheckPreflight) return
+    if (!window.api?.recheckPreflight) {
+      setError('Le diagnostic est indisponible. Réessayez après le redémarrage de l’application.')
+      return
+    }
     const req = ++reqRef.current
     setChecking(true)
+    setError(null)
     try {
       const r = await window.api.recheckPreflight(force)
       // Anti-race (Corrector) : ignorer une réponse périmée si un appel plus récent a démarré.
       if (req === reqRef.current) setResult(r)
+    } catch {
+      if (req === reqRef.current) setError('Le diagnostic a échoué. Vérifiez la configuration puis réessayez.')
     } finally {
       if (req === reqRef.current) setChecking(false)
     }
@@ -45,15 +54,48 @@ export function FirstRunWizard(): React.JSX.Element | null {
     if (open) void recheck(false) // montage : sans force → partage le cache du run de démarrage
   }, [open, recheck])
 
+  useEffect(() => {
+    if (!open) return
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    initialActionRef.current?.focus()
+    return () => {
+      previousFocusRef.current?.focus()
+      previousFocusRef.current = null
+    }
+  }, [open])
+
   if (!open) return null
+  const trapFocus = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== 'Tab') return
+    const actions = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not([disabled])')
+    )
+    if (actions.length === 0) return
+    const first = actions[0]
+    const last = actions[actions.length - 1]
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
   const finish = (): void => {
     localStorage.setItem(DONE_KEY, '1')
     setOpen(false)
   }
   return (
-    <div className="frw-overlay" role="dialog" aria-modal="true" data-testid="first-run-wizard">
+    <div
+      className="frw-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="first-run-wizard-title"
+      data-testid="first-run-wizard"
+      onKeyDown={trapFocus}
+    >
       <div className="frw-card">
-        <h2>Bienvenue dans Autowin OS</h2>
+        <h2 id="first-run-wizard-title">Bienvenue dans Autowin OS</h2>
         <p className="frw-sub">
           Vérification des dépendances externes. L'installeur a posé l'app ; certaines dépendances se
           configurent une seule fois, ici.
@@ -66,11 +108,21 @@ export function FirstRunWizard(): React.JSX.Element | null {
               {!c.ok && c.detail ? <span className="frw-detail">{c.detail}</span> : null}
             </li>
           ))}
-          {!result && <li className="frw-loading">Vérification…</li>}
+          {error ? (
+            <li className="frw-error" role="alert">
+              {error}
+            </li>
+          ) : null}
+          {!result && !error && <li className="frw-loading">Vérification…</li>}
         </ul>
         <div className="frw-actions">
-          <button type="button" onClick={() => void recheck(true)} disabled={checking}>
-            {checking ? 'Vérification…' : 'Re-vérifier'}
+          <button
+            ref={initialActionRef}
+            type="button"
+            onClick={() => void recheck(true)}
+            disabled={checking}
+          >
+            {checking ? 'Vérification…' : error ? 'Réessayer' : 'Re-vérifier'}
           </button>
           <button type="button" className="frw-primary" onClick={finish}>
             {result?.ok ? 'Terminer' : 'Continuer quand même'}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import packageManifest from '../../../package.json'
 import { ChatView } from './components/ChatView'
 import { PreflightBanner } from './components/PreflightBanner'
@@ -37,6 +37,8 @@ export function MainApp(): React.JSX.Element {
   const [observatoryFocus, setObservatoryFocus] = useState<ObservatoryFocus | null>(null)
   const [agentStudioSection, setAgentStudioSection] = useState<AgentStudioSection>('topology')
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('capabilities')
+  const [navigationOrigin] = useState(() => `renderer-${globalThis.crypto.randomUUID()}`)
+  const navigationGeneration = useRef(0)
 
   useEffect(() => {
     migrateAutowinStorage(localStorage)
@@ -106,12 +108,53 @@ export function MainApp(): React.JSX.Element {
     localStorage.setItem('autowin:rail-collapsed', railCollapsed ? '1' : '0')
   }, [railCollapsed])
 
-  // #11 — raccourcis clavier : Ctrl+1..6 changent d'onglet, Ctrl+K focalise la recherche de
+  const activateTab = useCallback((nextTab: Tab): void => {
+    setVisitedTabs((visited) => {
+      if (visited.has(nextTab)) return visited
+      const next = new Set(visited)
+      next.add(nextTab)
+      return next
+    })
+    setTab(nextTab)
+  }, [])
+
+  const applyLocation = useCallback(
+    (requestedTab: string): void => {
+      const location = resolveAppLocation(requestedTab)
+      if (location.destination === 'agent-studio' && location.section) {
+        setAgentStudioSection(location.section as AgentStudioSection)
+      }
+      if (location.destination === 'settings' && location.section) {
+        setSettingsSection(location.section as SettingsSection)
+      }
+      activateTab(location.destination)
+    },
+    [activateTab]
+  )
+
+  const navigate = useCallback(
+    (nextTab: Tab): void => {
+      const command = window.api?.appCommand
+      if (!command) return
+      const generation = ++navigationGeneration.current
+      void command('navigate', { tab: nextTab, origin: navigationOrigin }).then(
+        (result) => {
+          if (result.ok && generation === navigationGeneration.current) activateTab(nextTab)
+        },
+        () => {
+          // Le main reste l'autorité : sans accusé IPC, la vue locale ne diverge pas de appState().
+        }
+      )
+    },
+    [activateTab, navigationOrigin]
+  )
+
+  // #11 — raccourcis clavier : Ctrl/Cmd+1..6 changent d'onglet, Ctrl/Cmd+K focalise la recherche de
   // conversation (best-effort : ne fait rien si le champ n'est pas monté). N'interfère pas avec le
-  // zoom (Ctrl+0/±) ni la saisie (on ignore si un modificateur alt/meta est présent).
+  // zoom (Ctrl+0/±) ni la saisie (on ignore Alt).
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (!e.ctrlKey || e.altKey || e.metaKey) return
+      if ((!e.ctrlKey && !e.metaKey) || e.altKey) return
       // Ne pas voler les raccourcis à un champ de saisie actif (le contrat le promettait).
       const t = e.target as HTMLElement | null
       const tag = t?.tagName
@@ -131,18 +174,7 @@ export function MainApp(): React.JSX.Element {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
-
-  function navigate(nextTab: Tab): void {
-    setVisitedTabs((visited) => {
-      if (visited.has(nextTab)) return visited
-      const next = new Set(visited)
-      next.add(nextTab)
-      return next
-    })
-    setTab(nextTab)
-    void window.api.appCommand?.('navigate', { tab: nextTab })
-  }
+  }, [navigate])
 
   function openBrainwashConversation(brainLabel: string): void {
     navigate('chat')
@@ -166,29 +198,44 @@ export function MainApp(): React.JSX.Element {
     // Un agent pilote l'app → l'UI suit EN DIRECT (navigate change la vue active).
     // Les refresh de données sont gérés PAR les vues (pas de remount : il tuerait
     // le fil de chat en plein tour d'agent).
+    let disposed = false
     const off = window.api.onAppEvent((e) => {
       if (e.type === 'navigate' && e.tab) {
-        const location = resolveAppLocation(e.tab)
-        const nextTab = location.destination
-        if (nextTab === 'agent-studio' && location.section) {
-          setAgentStudioSection(location.section as AgentStudioSection)
+        navigationGeneration.current += 1
+        applyLocation(e.tab)
+        if (e.origin !== navigationOrigin) {
+          setDriven(true)
+          setTimeout(() => setDriven(false), 900)
         }
-        if (nextTab === 'settings' && location.section) {
-          setSettingsSection(location.section as SettingsSection)
-        }
-        setVisitedTabs((visited) => {
-          if (visited.has(nextTab)) return visited
-          const next = new Set(visited)
-          next.add(nextTab)
-          return next
-        })
-        setTab(nextTab)
-        setDriven(true)
-        setTimeout(() => setDriven(false), 900)
       }
     })
-    return off
-  }, [])
+    const readAppState = window.api?.appState
+    if (typeof readAppState === 'function') {
+      const hydrationGeneration = navigationGeneration.current
+      void readAppState().then(
+        (state) => {
+          const stateTab =
+            state && typeof state === 'object' && 'tab' in state
+              ? (state as { tab?: unknown }).tab
+              : undefined
+          if (
+            !disposed &&
+            hydrationGeneration === navigationGeneration.current &&
+            typeof stateTab === 'string'
+          ) {
+            applyLocation(stateTab)
+          }
+        },
+        () => {
+          // L'événementiel reste l'autorité si le snapshot initial est indisponible.
+        }
+      )
+    }
+    return () => {
+      disposed = true
+      off()
+    }
+  }, [applyLocation, navigationOrigin])
 
   return (
     <div className="shell cosmic-outline theme-serious">

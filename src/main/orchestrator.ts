@@ -40,6 +40,8 @@ export interface OrchestrationStep {
   error?: string
   durationMs?: number
   evidence?: ExecutionEvidence[]
+  /** Raisonnement/thinking du sous-agent (si le provider le remonte), conservé pour observation. */
+  thinking?: string
 }
 
 /** Signal « phase démarrée » émis AVANT l'appel bloquant, pour l'avancement live. */
@@ -270,6 +272,7 @@ export class Orchestrator {
                 role: 'subagent',
                 model: member.model,
                 text: res.text,
+                thinking: res.thinking,
                 tokens: res.usage ? res.usage.inputTokens + res.usage.outputTokens : undefined,
                 costUsd: res.usage?.costUsd,
                 usage: res.usage,
@@ -308,6 +311,7 @@ export class Orchestrator {
             role: 'subagent',
             text: '',
             status: 'failed',
+            error: `Les ${fanMembers.length} modèles du fan-out ${phase} ont échoué`,
             detail: `phase ${phase} : les ${fanMembers.length} modèles du fan-out ont échoué`,
             durationMs: 0
           })
@@ -487,6 +491,7 @@ export class Orchestrator {
         provider: phaseRes.provider ?? subProvider,
         role: 'subagent',
         text: phaseRes.text,
+        thinking: phaseRes.thinking,
         tokens: phaseRes.usage ? phaseRes.usage.inputTokens + phaseRes.usage.outputTokens : undefined,
         costUsd: phaseRes.usage?.costUsd,
         usage: phaseRes.usage,

@@ -8,6 +8,9 @@ vi.mock('./BehaviourView', () => ({ BehaviourView: () => null }))
 
 import { SettingsView } from './SettingsView'
 
+;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
+  true
+
 const mounted: Array<{ root: ReturnType<typeof createRoot>; container: HTMLDivElement }> = []
 
 afterEach(async () => {
@@ -21,14 +24,12 @@ describe('SettingsView diagnostic', () => {
   it('relance le preflight forcé et rend son résultat', async () => {
     const recheckPreflight = vi.fn().mockResolvedValue({
       ok: true,
-      checkedAt: '2026-07-23T09:00:00.000Z',
+      summary: 'Tous les prérequis sont OK.',
       checks: [
         {
-          id: 'git',
-          label: 'Git',
-          required: true,
-          status: 'ok',
-          detail: 'git 2.x détecté'
+          id: 'codex-session',
+          label: 'Session OAuth Codex',
+          ok: true
         }
       ]
     })
@@ -56,7 +57,7 @@ describe('SettingsView diagnostic', () => {
     await act(async () => button?.click())
 
     expect(recheckPreflight).toHaveBeenCalledWith(true)
-    expect(container.textContent).toContain('Git')
-    expect(container.textContent).toContain('git 2.x détecté')
+    expect(container.textContent).toContain('Session OAuth Codex')
+    expect(container.querySelector('.settings-preflight-list li')?.className).toContain('is-ok')
   })
 })

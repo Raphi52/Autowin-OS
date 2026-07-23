@@ -75,4 +75,24 @@ describe('StepThread — preuves d’exécution inline', () => {
     render([{ step: 'exec', text: 'juste du texte' }])
     expect(container.querySelector('.evidence-list')).toBeNull()
   })
+
+  it('un step en ÉCHEC est rendu distinctement (classe failed + pill + cause)', () => {
+    render([{ step: 'exec', status: 'failed', error: 'timeout du sous-agent' }])
+    expect(container.querySelector('.subagent-step.failed')).not.toBeNull()
+    expect(container.querySelector('.subagent-failed-pill')).not.toBeNull()
+    expect((container.textContent ?? '')).toContain('timeout du sous-agent')
+  })
+
+  it('un step réussi n’a NI classe failed NI cause (rétrocompat)', () => {
+    render([{ step: 'exec', status: 'completed', text: 'ok' }])
+    expect(container.querySelector('.subagent-step.failed')).toBeNull()
+    expect(container.querySelector('.subagent-error')).toBeNull()
+  })
+
+  it('le raisonnement (thinking) est consultable en details, pas jeté', () => {
+    render([{ step: 'exec', thinking: 'je pèse A contre B', text: 'réponse' }])
+    const details = container.querySelector('.subagent-thinking')
+    expect(details).not.toBeNull()
+    expect((container.textContent ?? '')).toContain('je pèse A contre B')
+  })
 })

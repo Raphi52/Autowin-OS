@@ -121,6 +121,8 @@ export interface SendResult {
   usage?: Usage
   /** Traces bornées observées par le runner local, jamais inventées depuis le texte final. */
   executionEvidence?: ExecutionEvidence[]
+  /** Raisonnement/thinking du modèle (blocs reasoning/thinking du stream), conservé pour observation. */
+  thinking?: string
 }
 
 /**

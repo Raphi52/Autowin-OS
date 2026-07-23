@@ -23,7 +23,10 @@ vi.mock('./components/ObservatoryView', () => ({
     createElement('output', null, focus ? `${focus.conversationId}:${focus.turnId}` : 'sans cible')
 }))
 vi.mock('./components/GraphView', () => ({ GraphView: () => null }))
-vi.mock('./components/RolesView', () => ({ RolesView: () => createElement('output', null, 'Topology visible') }))
+vi.mock('./components/AgentStudioView', () => ({
+  AgentStudioView: ({ section }: { section: string }) =>
+    createElement('output', null, `Agent Studio ${section}`)
+}))
 vi.mock('./components/CapabilitiesView', () => ({ CapabilitiesView: () => null }))
 vi.mock('./components/BehaviourView', () => ({ BehaviourView: () => null }))
 vi.mock('./components/ModelQuestionPopup', () => ({ ModelQuestionPopup: () => null }))
@@ -43,6 +46,7 @@ describe('App inspect-turn navigation', () => {
       value: {
         storageMigration: vi.fn().mockResolvedValue({}),
         completeStorageMigration: vi.fn().mockResolvedValue(true),
+        appCommand: vi.fn().mockResolvedValue({ ok: true }),
         onAppEvent: vi.fn(() => vi.fn())
       }
     })
@@ -115,7 +119,7 @@ describe('App inspect-turn navigation', () => {
     await act(async () => emitAppEvent?.({ type: 'navigate', tab: 'router' }))
 
     expect(container.querySelector('.nav-item.active')?.textContent).toContain('Agent Studio')
-    expect(container.textContent).toContain('Topology visible')
+    expect(container.textContent).toContain('Agent Studio routing')
     await act(async () => root.unmount())
   })
 })

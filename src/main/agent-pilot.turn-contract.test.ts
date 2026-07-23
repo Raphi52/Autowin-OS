@@ -1,8 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
+import type { PromptSnapshot } from './commands'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
+
+const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
+  tab: 'chat',
+  providers: [],
+  pendingDecisions: [],
+  runsBlocked: [],
+  conversationsCount: 0
+})
 
 describe('AgentPilot turn contract', () => {
   it('passes the persisted authority mode from the real pilotChat IPC path', () => {
@@ -44,7 +53,7 @@ describe('AgentPilot turn contract', () => {
     }
     const bus = {
       catalog: () => [{ name: 'remove_conversation', args: { id: 'id' }, description: 'remove' }],
-      snapshot: async () => ({}),
+      snapshotForPrompt,
       exec: vi.fn().mockResolvedValue({ ok: false, error: 'Action interdite en mode Plan' })
     }
 
@@ -76,7 +85,7 @@ describe('AgentPilot turn contract', () => {
     const queue: string[] = []
     const bus = {
       catalog: () => [{ name: 'get_state', args: {}, description: 'état' }],
-      snapshot: async () => ({}),
+      snapshotForPrompt,
       // La directive arrive PENDANT l'itération 1 (l'utilisateur tape pendant que l'agent agit).
       exec: vi.fn().mockImplementation(async () => {
         queue.push('priorise le module X')
@@ -133,7 +142,7 @@ describe('AgentPilot turn contract', () => {
     }
     const bus = {
       catalog: () => [{ name: 'get_state', args: {}, description: 'state' }],
-      snapshot: async () => ({}),
+      snapshotForPrompt,
       exec: vi.fn().mockResolvedValue({ ok: true, data: {} })
     }
 
@@ -178,7 +187,7 @@ describe('AgentPilot turn contract', () => {
     const roles = {
       getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
     }
-    const bus = { catalog: () => [], snapshot: async () => ({}) }
+    const bus = { catalog: () => [], snapshotForPrompt }
     const retrieveContext = vi.fn().mockResolvedValue(
       '[AMITEL BRAIN REFERENCE DATA]\nknowledge evidence\n\n' +
         '[GRAPHIFY CODE EVIDENCE]\nstructural evidence'
@@ -217,7 +226,7 @@ describe('AgentPilot turn contract', () => {
     }
     const bus = {
       catalog: () => [{ name: 'get_state', args: {}, description: 'state' }],
-      snapshot: async () => ({}),
+      snapshotForPrompt,
       exec: vi.fn().mockResolvedValue({ ok: true, data: {} })
     }
     const events: PilotEvent[] = []
@@ -253,7 +262,7 @@ describe('AgentPilot turn contract', () => {
     const roles = {
       getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
     }
-    const bus = { catalog: () => [], snapshot: async () => ({}) }
+    const bus = { catalog: () => [], snapshotForPrompt }
     const pending = new AgentPilot(registry as never, roles as never, bus as never).chat(
       [{ role: 'user', content: 'question' }],
       () => undefined,

@@ -7,6 +7,8 @@ import { existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { runPreflight, type PreflightProbes, type PreflightResult } from './preflight'
 import { brainServiceToken } from './brain-retrieval'
+import { loadTokens } from './providers/codex-auth'
+import { codexTokenStatus } from './provider-status'
 
 export function appPreflightProbes(): PreflightProbes {
   return {
@@ -38,6 +40,7 @@ export function appPreflightProbes(): PreflightProbes {
       })
       return probe.status === 0
     },
+    hasCodexSession: () => codexTokenStatus(loadTokens(), Date.now()) === 'authenticated',
     hasBrainToken: () => brainServiceToken().length > 0
   }
 }
@@ -47,13 +50,30 @@ export function appPreflightProbes(): PreflightProbes {
 // passe `force` pour ignorer le cache. (Conformer sobriété.)
 const PREFLIGHT_TTL_MS = 5000
 let preflightCache: { at: number; result: PreflightResult } | null = null
+let preflightInFlight: Promise<PreflightResult> | null = null
+let preflightGeneration = 0
+
+export function getLastAppPreflightResult(): PreflightResult | null {
+  return preflightCache?.result ?? null
+}
 
 export async function runAppPreflight(force = false): Promise<PreflightResult> {
   const now = Date.now()
   if (!force && preflightCache && now - preflightCache.at < PREFLIGHT_TTL_MS) {
     return preflightCache.result
   }
-  const result = await runPreflight(appPreflightProbes())
-  preflightCache = { at: now, result }
-  return result
+  if (!force && preflightInFlight) return preflightInFlight
+
+  const generation = ++preflightGeneration
+  const run = runPreflight(appPreflightProbes()).then((result) => {
+    if (generation === preflightGeneration) {
+      preflightCache = { at: Date.now(), result }
+    }
+    return result
+  })
+  const tracked = run.finally(() => {
+    if (preflightInFlight === tracked) preflightInFlight = null
+  })
+  preflightInFlight = tracked
+  return tracked
 }

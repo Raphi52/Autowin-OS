@@ -399,6 +399,7 @@ interface ChatApi {
     cb: (e: {
       type: string
       tab?: string
+      origin?: string
       scope?: string
       text?: string
       convId?: string

@@ -153,6 +153,7 @@ const agentModelsReady = discoverImportedModels(fetch).then(
     return models
   }
 )
+os.setTaskReadiness(agentModelsReady)
 
 function syncRuntimeTopology(topology: AgentTopology): void {
   const sync = (role: Role, binding: SlotBinding | undefined): void => {

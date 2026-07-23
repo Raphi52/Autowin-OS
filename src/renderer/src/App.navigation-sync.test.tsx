@@ -14,6 +14,14 @@ vi.mock('./components/ModelQuestionPopup', () => ({ ModelQuestionPopup: () => nu
 
 import { MainApp } from './App'
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((next) => {
+    resolve = next
+  })
+  return { promise, resolve }
+}
+
 describe('navigation humaine synchronisée avec le main', () => {
   beforeAll(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -37,6 +45,14 @@ describe('navigation humaine synchronisée avec le main', () => {
       trigger: (_container: HTMLElement) =>
         window.dispatchEvent(
           new KeyboardEvent('keydown', { key: '4', ctrlKey: true, bubbles: true })
+        )
+    },
+    {
+      interaction: 'le raccourci Cmd+5',
+      destination: 'settings',
+      trigger: (_container: HTMLElement) =>
+        window.dispatchEvent(
+          new KeyboardEvent('keydown', { key: '5', metaKey: true, bubbles: true })
         )
     }
   ])(
@@ -76,8 +92,223 @@ describe('navigation humaine synchronisée avec le main', () => {
         `nav-${destination}`
       )
       expect((await window.api.appState()) as { tab: string }).toEqual({ tab: destination })
-      expect(appCommand).toHaveBeenCalledWith('navigate', { tab: destination })
+      expect(appCommand).toHaveBeenCalledWith(
+        'navigate',
+        expect.objectContaining({ tab: destination, origin: expect.any(String) })
+      )
       await act(async () => root.unmount())
     }
   )
+
+  it('hydrate la vue initiale depuis l’état autoritaire sans émettre de commande', async () => {
+    const appCommand = vi.fn().mockResolvedValue({ ok: true })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        storageMigration: vi.fn().mockResolvedValue({}),
+        completeStorageMigration: vi.fn().mockResolvedValue(true),
+        appCommand,
+        appState: vi.fn(async () => ({ tab: 'settings' })),
+        onAppEvent: vi.fn(() => vi.fn())
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(createElement(MainApp))
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('.nav-item.active')?.getAttribute('data-testid')).toBe(
+      'nav-settings'
+    )
+    expect(appCommand).not.toHaveBeenCalled()
+    await act(async () => root.unmount())
+  })
+
+  it('ne marque pas comme pilotage agent l’écho d’une navigation humaine locale', async () => {
+    let emitAppEvent: ((event: { type: string; tab?: string; origin?: string }) => void) | undefined
+    const appCommand = vi.fn(
+      async (_name: string, args?: Record<string, unknown>): Promise<{ ok: boolean }> => {
+        emitAppEvent?.({
+          type: 'navigate',
+          tab: String(args?.tab),
+          origin: typeof args?.origin === 'string' ? args.origin : undefined
+        })
+        return { ok: true }
+      }
+    )
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        storageMigration: vi.fn().mockResolvedValue({}),
+        completeStorageMigration: vi.fn().mockResolvedValue(true),
+        appCommand,
+        appState: vi.fn(async () => ({ tab: 'chat' })),
+        onAppEvent: vi.fn((listener) => {
+          emitAppEvent = listener
+          return vi.fn()
+        })
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(MainApp))
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      ;(container.querySelector('[data-testid="nav-knowledge"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('main')?.getAttribute('data-driven')).toBe('false')
+    expect(appCommand).toHaveBeenCalledTimes(1)
+    await act(async () => root.unmount())
+  })
+
+  it('ignore un ACK humain résolu après une navigation plus récente', async () => {
+    let mainTab = 'chat'
+    const pending: Array<ReturnType<typeof deferred<{ ok: boolean }>>> = []
+    const appCommand = vi.fn((_name: string, args?: Record<string, unknown>) => {
+      mainTab = String(args?.tab)
+      const ack = deferred<{ ok: boolean }>()
+      pending.push(ack)
+      return ack.promise
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        storageMigration: vi.fn().mockResolvedValue({}),
+        completeStorageMigration: vi.fn().mockResolvedValue(true),
+        appCommand,
+        appState: vi.fn(async () => ({ tab: mainTab })),
+        onAppEvent: vi.fn(() => vi.fn())
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(MainApp))
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      ;(container.querySelector('[data-testid="nav-knowledge"]') as HTMLButtonElement).click()
+      ;(container.querySelector('[data-testid="nav-settings"]') as HTMLButtonElement).click()
+    })
+    expect(pending).toHaveLength(2)
+    await act(async () => {
+      pending[1].resolve({ ok: true })
+      await pending[1].promise
+    })
+    expect(container.querySelector('.nav-item.active')?.getAttribute('data-testid')).toBe(
+      'nav-settings'
+    )
+
+    await act(async () => {
+      pending[0].resolve({ ok: true })
+      await pending[0].promise
+    })
+    expect(container.querySelector('.nav-item.active')?.getAttribute('data-testid')).toBe(
+      'nav-settings'
+    )
+    expect(await window.api.appState()).toEqual({ tab: 'settings' })
+    await act(async () => root.unmount())
+  })
+
+  it('laisse un événement agent invalider un ACK humain en attente sans émettre de commande', async () => {
+    let mainTab = 'chat'
+    let emitAppEvent: ((event: { type: string; tab?: string }) => void) | undefined
+    const ack = deferred<{ ok: boolean }>()
+    const appCommand = vi.fn((_name: string, args?: Record<string, unknown>) => {
+      mainTab = String(args?.tab)
+      return ack.promise
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        storageMigration: vi.fn().mockResolvedValue({}),
+        completeStorageMigration: vi.fn().mockResolvedValue(true),
+        appCommand,
+        appState: vi.fn(async () => ({ tab: mainTab })),
+        onAppEvent: vi.fn((listener) => {
+          emitAppEvent = listener
+          return vi.fn()
+        })
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(MainApp))
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      ;(container.querySelector('[data-testid="nav-knowledge"]') as HTMLButtonElement).click()
+      mainTab = 'observatory'
+      emitAppEvent?.({ type: 'navigate', tab: 'observatory' })
+    })
+    expect(appCommand).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      ack.resolve({ ok: true })
+      await ack.promise
+    })
+
+    expect(container.querySelector('.nav-item.active')?.getAttribute('data-testid')).toBe(
+      'nav-observatory'
+    )
+    expect(await window.api.appState()).toEqual({ tab: 'observatory' })
+    expect(appCommand).toHaveBeenCalledTimes(1)
+    await act(async () => root.unmount())
+  })
+
+  it.each([
+    {
+      failure: 'un refus métier',
+      command: () => vi.fn().mockResolvedValue({ ok: false, error: 'refus simulé' })
+    },
+    {
+      failure: 'un rejet IPC',
+      command: () => vi.fn().mockRejectedValue(new Error('IPC indisponible'))
+    },
+    { failure: 'une API absente', command: () => undefined }
+  ])('ne désynchronise pas la vue après $failure', async ({ command }) => {
+    const appCommand = command()
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        storageMigration: vi.fn().mockResolvedValue({}),
+        completeStorageMigration: vi.fn().mockResolvedValue(true),
+        appCommand,
+        appState: vi.fn(async () => ({ tab: 'chat' })),
+        onAppEvent: vi.fn(() => vi.fn())
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(MainApp))
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      ;(container.querySelector('[data-testid="nav-knowledge"]') as HTMLButtonElement).click()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(container.querySelector('.nav-item.active')?.getAttribute('data-testid')).toBe(
+      'nav-chat'
+    )
+    expect(await window.api.appState()).toEqual({ tab: 'chat' })
+    await act(async () => root.unmount())
+  })
 })

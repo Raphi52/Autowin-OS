@@ -53,3 +53,49 @@
   color: #ff8ea1;
   background: rgba(248, 81, 73, 0.12);
 }
+
+/* Sous-agent en échec : doit se voir (pas confondu avec un step réussi). */
+.subagent-step.failed {
+  border-left: 2px solid #ff8ea1;
+  padding-left: 8px;
+}
+.subagent-failed-pill {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(248, 81, 73, 0.18);
+  color: #ff8ea1;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.subagent-error {
+  margin-top: 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(248, 81, 73, 0.1);
+  color: #ff8ea1;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.subagent-thinking {
+  margin-top: 4px;
+}
+.subagent-thinking > summary {
+  cursor: pointer;
+  font-size: 11px;
+  opacity: 0.7;
+}
+.subagent-thinking pre {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  max-height: 280px;
+  overflow: auto;
+  border-left: 2px solid rgba(157, 121, 237, 0.5);
+  background: rgba(0, 0, 0, 0.22);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  opacity: 0.85;
+}
