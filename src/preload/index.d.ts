@@ -211,7 +211,7 @@ interface AgentTopology {
   version: number
   orchestrator: SlotBinding
   subagents: SlotBinding[]
-  panels: { scout: SlotBinding[]; judge: SlotBinding[] }
+  panels: { scout: SlotBinding[]; judge: SlotBinding[]; frame: SlotBinding[] }
 }
 
 interface PromptCallRecord {
@@ -238,6 +238,29 @@ interface PromptCallRecord {
   }
 }
 
+interface BehaviourInfluencerField {
+  label: string
+  value: string
+  source: string
+  excerpt?: string
+}
+interface BehaviourPhaseSystemPrompt {
+  phase: string
+  blocks: BehaviourInfluencerField[]
+}
+interface BehaviourComposition {
+  orchestrated: {
+    systemPrompt: BehaviourPhaseSystemPrompt[]
+    injectedContext: BehaviourInfluencerField[]
+    modelSelection: BehaviourInfluencerField[]
+    regime: BehaviourInfluencerField[]
+    guardrails: BehaviourInfluencerField[]
+  }
+  direct: {
+    systemPrompt: BehaviourInfluencerField[]
+    modelSelection: BehaviourInfluencerField[]
+  }
+}
 interface BrainNavigationCandidate {
   rank: number
   path: string
@@ -378,6 +401,7 @@ interface ChatApi {
   promptCalls: (conversationId?: string) => Promise<PromptCallRecord[]>
   promptTraces: (conversationId: string) => Promise<NativePreflightTrace[]>
   brainTraces: (conversationId?: string) => Promise<BrainTrace[]>
+  behaviourComposition: () => Promise<BehaviourComposition>
   promptTraceSummary: () => Promise<NativePreflightTrace[]>
   authorizeDiagnostics: () => Promise<string | null>
   promptTracesGlobal: (capability: string) => Promise<NativePreflightTrace[]>

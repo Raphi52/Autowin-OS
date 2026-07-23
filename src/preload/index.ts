@@ -86,6 +86,7 @@ const api = {
     ipcRenderer.invoke('os:promptTraces', conversationId),
   brainTraces: (conversationId?: string): Promise<unknown[]> =>
     ipcRenderer.invoke('os:brainTraces', conversationId),
+  behaviourComposition: (): Promise<unknown> => ipcRenderer.invoke('os:behaviourComposition'),
   promptTraceSummary: (): Promise<unknown[]> =>
     ipcRenderer.invoke('os:promptTraceSummary'),
   authorizeDiagnostics: (): Promise<string | null> =>

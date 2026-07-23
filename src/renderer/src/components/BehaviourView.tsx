@@ -1,344 +1,199 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { HumanJson } from './HumanJson'
-import { BrainMarkdown } from './BrainMarkdown'
-import {
-  filterBehaviourFiles,
-  groupBehaviourFiles,
-  preferredBehaviourFileId,
-  applicableBehaviourFiles,
-  visibleBehaviourFiles,
-  visibleBehaviourSelection,
-  type BehaviourEngine,
-  type BehaviourFileItem,
-  type BehaviourState
-} from './behaviour-view-model'
+import { useEffect, useState } from 'react'
 import './BehaviourView.css'
 import { ModuleHeader } from './ModuleHeader'
 
-interface BehaviourContextItem {
-  path: string
+/**
+ * Vue « Behaviour » — miroir FIDÈLE (config statique) de TOUT ce qui influe sur le comportement du
+ * chat Autowin, et RIEN d'autre. Organisée par ANATOMIE d'un tour (ordre réel du pipeline), avec un
+ * toggle entre les 2 chemins : ORCHESTRÉ (pipeline riche) et DIRECT (os.chat, kit SOUL seul).
+ * Source unique = `window.api.behaviourComposition()` (assemblé côté main depuis les modules réels ;
+ * chaque champ porte sa citation file:line). Aucun non-influenceur (capabilities/hooks natifs) ici.
+ */
+interface InfluencerField {
   label: string
-  depth: number
+  value: string
+  source: string
+  excerpt?: string
 }
-type InjectionProof = {
-  id: string
-  verdict: 'injected' | 'unproven'
-  observedAt?: string
-  reason: string
+interface PhaseSystemPrompt {
+  phase: string
+  blocks: InfluencerField[]
+}
+interface BehaviourComposition {
+  orchestrated: {
+    systemPrompt: PhaseSystemPrompt[]
+    injectedContext: InfluencerField[]
+    modelSelection: InfluencerField[]
+    regime: InfluencerField[]
+    guardrails: InfluencerField[]
+  }
+  direct: {
+    systemPrompt: InfluencerField[]
+    modelSelection: InfluencerField[]
+  }
 }
 
-const ENGINE_LABEL: Record<BehaviourEngine, string> = {
-  codex: 'Codex',
-  claude: 'Claude',
-  autowin: 'Autowin'
+function Field({ field }: { field: InfluencerField }): React.JSX.Element {
+  return (
+    <li className="behaviour-field">
+      <div className="behaviour-field-head">
+        <strong>{field.label}</strong>
+        <code className="behaviour-field-source" title="Source dans le code (preuve d'effet réel)">
+          {field.source}
+        </code>
+      </div>
+      <p className="behaviour-field-value">{field.value}</p>
+      {field.excerpt && (
+        <details className="behaviour-field-excerpt">
+          <summary>texte injecté</summary>
+          <pre>{field.excerpt}</pre>
+        </details>
+      )}
+    </li>
+  )
 }
 
-const STATE_LABEL: Record<BehaviourState, string> = {
-  active: 'Actif',
-  injected: 'Injecté',
-  conditional: 'Conditionnel',
-  declared: 'Déclaré · non tracé',
-  shadowed: 'Masqué'
+function Category({
+  title,
+  hint,
+  fields
+}: {
+  title: string
+  hint: string
+  fields: InfluencerField[]
+}): React.JSX.Element {
+  return (
+    <section className="behaviour-category">
+      <header>
+        <h3>{title}</h3>
+        <small>{hint}</small>
+      </header>
+      <ul>
+        {fields.map((f) => (
+          <Field key={`${f.label}:${f.source}`} field={f} />
+        ))}
+      </ul>
+    </section>
+  )
 }
-
-const SCOPE_LABEL = {
-  global: 'Global',
-  workspace: 'Workspace',
-  project: 'Projet',
-  skill: 'Skill'
-} as const
 
 export function BehaviourView(): React.JSX.Element {
-  const [files, setFiles] = useState<BehaviourFileItem[]>([])
-  const [contexts, setContexts] = useState<BehaviourContextItem[]>([])
-  const [workspaceRoot, setWorkspaceRoot] = useState('')
-  const [contextRoot, setContextRoot] = useState('')
-  const [selectedId, setSelectedId] = useState('')
-  const [content, setContent] = useState('')
-  const [query, setQuery] = useState('')
-  const [engine, setEngine] = useState<'all' | BehaviourEngine>('all')
-  const [loading, setLoading] = useState(true)
+  const [composition, setComposition] = useState<BehaviourComposition | null>(null)
+  const [path, setPath] = useState<'orchestrated' | 'direct'>('orchestrated')
   const [error, setError] = useState('')
-  const [proofs, setProofs] = useState<Map<string, InjectionProof>>(new Map())
-  const [readerMode, setReaderMode] = useState<'rendered' | 'source'>('rendered')
 
-  const loadWorkspace = useCallback(async (root: string, preferredContext?: string) => {
-    setLoading(true)
-    setError('')
-    try {
-      const nextContexts = await window.api.behaviourContexts(root)
-      const nextContext =
-        preferredContext && nextContexts.some((item) => item.path === preferredContext)
-          ? preferredContext
-          : root
-      const nextFiles = await window.api.behaviourFiles(root, nextContext)
-      const nextProofs = await window.api.behaviourProof(root, nextContext)
-      setWorkspaceRoot(root)
-      setContextRoot(nextContext)
-      setContexts(nextContexts)
-      setFiles(nextFiles)
-      setProofs(new Map(nextProofs.map((proof) => [proof.id, proof])))
-      setSelectedId(preferredBehaviourFileId(visibleBehaviourFiles(nextFiles)))
-      setContent('')
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason))
-    } finally {
-      setLoading(false)
-    }
+  useEffect(() => {
+    window.api
+      .behaviourComposition()
+      .then((c) => setComposition(c as BehaviourComposition))
+      .catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)))
   }, [])
 
-  useEffect(() => {
-    window.api
-      .behaviourWorkspace()
-      .then((root) => loadWorkspace(root))
-      .catch((reason) => {
-        setError(reason instanceof Error ? reason.message : String(reason))
-        setLoading(false)
-      })
-  }, [loadWorkspace])
-
-  const selectContext = async (nextContext: string): Promise<void> => {
-    setLoading(true)
-    setError('')
-    try {
-      const nextFiles = await window.api.behaviourFiles(workspaceRoot, nextContext)
-      const nextProofs = await window.api.behaviourProof(workspaceRoot, nextContext)
-      setContextRoot(nextContext)
-      setFiles(nextFiles)
-      setProofs(new Map(nextProofs.map((proof) => [proof.id, proof])))
-      setSelectedId(preferredBehaviourFileId(visibleBehaviourFiles(nextFiles)))
-      setContent('')
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const chooseWorkspace = async (): Promise<void> => {
-    const next = await window.api.chooseBehaviourWorkspace()
-    if (next) await loadWorkspace(next)
-  }
-
-  const applicableFiles = useMemo(() => applicableBehaviourFiles(files), [files])
-  const visibleFiles = useMemo(() => visibleBehaviourFiles(files), [files])
-  const filtered = useMemo(
-    () => filterBehaviourFiles(visibleFiles, query, engine, 'all'),
-    [visibleFiles, engine, query]
-  )
-  const groups = useMemo(() => groupBehaviourFiles(filtered), [filtered])
-  const selected = visibleBehaviourSelection(filtered, selectedId)
-  const selectedProof = selected ? proofs.get(selected.id) : undefined
-  const activeCount = applicableFiles.length
-
-  useEffect(() => {
-    const effectiveId = selected?.id
-    if (!effectiveId || !workspaceRoot || !contextRoot) {
-      // Efface immédiatement le contenu d'un fichier qui n'est plus sélectionnable.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setContent('')
-      return
-    }
-    let cancelled = false
-    setContent('')
-    window.api
-      .readBehaviourFile(effectiveId, workspaceRoot, contextRoot)
-      .then((nextContent) => {
-        if (!cancelled) setContent(nextContent)
-      })
-      .catch((reason) => {
-        if (!cancelled)
-          setContent(`Erreur : ${reason instanceof Error ? reason.message : String(reason)}`)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [contextRoot, selected?.id, workspaceRoot])
-
-  const locationLabel = (file: BehaviourFileItem): string => {
-    if (file.scope === 'global' || file.scope === 'skill') return SCOPE_LABEL[file.scope]
-    const normalizedRoot = workspaceRoot.replaceAll('\\', '/').replace(/\/$/, '')
-    const normalizedPath = file.path.replaceAll('\\', '/')
-    const relativePath = normalizedPath.startsWith(`${normalizedRoot}/`)
-      ? normalizedPath.slice(normalizedRoot.length + 1)
-      : normalizedPath
-    return relativePath.split('/').slice(0, -1).join(' / ') || 'Workspace'
-  }
+  const orch = composition?.orchestrated
+  const direct = composition?.direct
 
   return (
     <section className="behaviour-view">
       <header>
-        <ModuleHeader eyebrow="Instructions et règles actives" title="Behaviour" />
-        <div className="behaviour-count">
-          <strong>{activeCount}</strong>
-          <span>fichiers injectés ou actifs au contexte</span>
+        <ModuleHeader
+          eyebrow="Tout ce qui influe sur le comportement du chat — et rien d'autre"
+          title="Behaviour"
+        />
+        <div className="behaviour-path-toggle" role="tablist" aria-label="Chemin de chat">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={path === 'orchestrated'}
+            className={path === 'orchestrated' ? 'active' : ''}
+            onClick={() => setPath('orchestrated')}
+          >
+            Orchestré <small>(pipeline)</small>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={path === 'direct'}
+            className={path === 'direct' ? 'active' : ''}
+            onClick={() => setPath('direct')}
+          >
+            Direct <small>(os.chat)</small>
+          </button>
         </div>
       </header>
 
-      <div className="behaviour-context-bar">
-        <div>
-          <span>Workspace</span>
-          <strong title={workspaceRoot}>{workspaceRoot || 'Détection…'}</strong>
-        </div>
-        <button type="button" onClick={chooseWorkspace}>
-          Changer…
-        </button>
-        <label>
-          <span>Contexte actif</span>
-          <select
-            aria-label="Contexte projet actif"
-            value={contextRoot}
-            onChange={(event) => void selectContext(event.target.value)}
-            disabled={loading}
-          >
-            {contexts.map((item) => (
-              <option key={item.path} value={item.path}>
-                {'  '.repeat(item.depth)}
-                {item.depth > 0 ? '↳ ' : ''}
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span className="behaviour-readonly">Lecture seule · chemins revalidés</span>
-      </div>
-
-      <div className="behaviour-toolbar">
-        <input
-          className="input"
-          value={query}
-          placeholder="Filtrer nom, chemin ou raison…"
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        {(['all', 'codex', 'claude', 'autowin'] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            className={engine === value ? 'active' : ''}
-            onClick={() => setEngine(value)}
-          >
-            {value === 'all' ? 'Tous' : ENGINE_LABEL[value]}
-          </button>
-        ))}
-      </div>
-
       {error && <div className="behaviour-error">{error}</div>}
-      <div className="behaviour-workspace">
-        <aside className="behaviour-files" aria-label="Fichiers de comportement">
-          {groups.map((group) =>
-            group.files.length > 0 ? (
-              <section
-                key={group.engine}
-                className={`behaviour-engine-group behaviour-engine-group--${group.engine}`}
-              >
-                <header>
-                  <strong>{ENGINE_LABEL[group.engine]}</strong>
-                  <small>{group.files.length}</small>
-                </header>
-                {group.files.map((file) => (
-                  <button
-                    key={file.id}
-                    type="button"
-                    data-engine={file.engine}
-                    data-state={file.state}
-                    data-path={file.path}
-                    className={selected?.id === file.id ? 'active' : ''}
-                    onClick={() => setSelectedId(file.id)}
-                  >
-                    <i
-                      className={`is-${proofs.get(file.id)?.verdict === 'injected' ? 'injected' : file.state}`}
-                    />
-                    <span>
-                      <strong>{file.label}</strong>
-                      <small>
-                        {locationLabel(file)} ·{' '}
-                        {proofs.get(file.id)?.verdict === 'injected'
-                          ? 'Injecté · preuve payload'
-                          : STATE_LABEL[file.state]}
-                      </small>
-                    </span>
-                  </button>
-                ))}
-              </section>
-            ) : null
-          )}
-          {!loading && filtered.length === 0 && (
-            <p className="behaviour-list-empty">
-              Aucune source d’instruction visible pour ce contexte et ce filtre.
-            </p>
-          )}
-        </aside>
+      {!composition && !error && <p className="behaviour-empty">Chargement de la composition…</p>}
 
-        <article className="behaviour-reader">
-          {selected ? (
-            <>
-              <header>
-                <div>
-                  <span>
-                    {ENGINE_LABEL[selected.engine]} · {SCOPE_LABEL[selected.scope]}
-                  </span>
-                  <h2>{selected.label}</h2>
-                  <p title={selected.path}>{selected.path}</p>
-                </div>
-                <div className="behaviour-reader-actions">
-                  <div className="behaviour-reader-mode" aria-label="Affichage du fichier Markdown">
-                    <button
-                      type="button"
-                      className={readerMode === 'rendered' ? 'active' : ''}
-                      onClick={() => setReaderMode('rendered')}
-                    >
-                      Rendu
-                    </button>
-                    <button
-                      type="button"
-                      className={readerMode === 'source' ? 'active' : ''}
-                      onClick={() => setReaderMode('source')}
-                    >
-                      Source
-                    </button>
-                  </div>
-                  <b
-                    className={`is-${selectedProof?.verdict === 'injected' ? 'injected' : selected.state}`}
-                  >
-                    {selectedProof?.verdict === 'injected'
-                      ? 'Injecté · preuve payload'
-                      : STATE_LABEL[selected.state]}
-                  </b>
-                </div>
-              </header>
-              <dl>
-                <div>
-                  <dt>Pourquoi</dt>
-                  <dd>{selected.reason}</dd>
-                </div>
-                <div>
-                  <dt>Quand</dt>
-                  <dd>{selected.injectedAt}</dd>
-                </div>
-                <div>
-                  <dt>Où</dt>
-                  <dd>{selected.injectedInto}</dd>
-                </div>
-                <div>
-                  <dt>Preuve d'injection</dt>
-                  <dd>{selectedProof?.reason ?? 'Non vérifié'}</dd>
-                </div>
-              </dl>
-              <div className="behaviour-reader-content">
-                {readerMode === 'rendered' ? (
-                  <BrainMarkdown source={content} />
-                ) : (
-                  <HumanJson value={content} />
-                )}
-              </div>
-            </>
-          ) : (
-            <p className="behaviour-empty">
-              {loading ? 'Construction de la chaîne…' : 'Sélectionne un fichier Markdown.'}
-            </p>
-          )}
-        </article>
-      </div>
+      {orch && path === 'orchestrated' && (
+        <div className="behaviour-anatomy">
+          <p className="behaviour-path-note">
+            Le vrai pipeline (os:orchestrate) : le system prompt VARIE par phase, du contexte est
+            injecté, le modèle/rôle est choisi, le régime décide des phases, des garde-fous encadrent.
+          </p>
+
+          <section className="behaviour-category">
+            <header>
+              <h3>A · System prompt par phase</h3>
+              <small>blocs concaténés dans `system`, différents selon la phase</small>
+            </header>
+            {orch.systemPrompt.map((p) => (
+              <details key={p.phase} className="behaviour-phase">
+                <summary>
+                  <span className="behaviour-phase-name">{p.phase}</span>
+                  <small>
+                    {p.blocks.map((b) => b.label).join(' + ')}
+                  </small>
+                </summary>
+                <ul>
+                  {p.blocks.map((b) => (
+                    <Field key={`${p.phase}:${b.label}`} field={b} />
+                  ))}
+                </ul>
+              </details>
+            ))}
+          </section>
+
+          <Category
+            title="B · Contexte injecté"
+            hint="ajouté au message (hors system) : Brain, tâche, portage, session-resume"
+            fields={orch.injectedContext}
+          />
+          <Category
+            title="C · Modèle / rôle / effort"
+            hint="qui répond, avec quel modèle — y compris la redirection d'exécution"
+            fields={orch.modelSelection}
+          />
+          <Category
+            title="D · Régime → phases"
+            hint="quelles phases tournent selon la tâche (heuristique déterministe)"
+            fields={orch.regime}
+          />
+          <Category
+            title="E · Garde-fous"
+            hint="ce qui borne ou coupe le tour (déterministe)"
+            fields={orch.guardrails}
+          />
+        </div>
+      )}
+
+      {direct && path === 'direct' && (
+        <div className="behaviour-anatomy">
+          <p className="behaviour-path-note">
+            Le chat direct (os.chat) : beaucoup plus simple — pas de phases, pas de Brain, pas de
+            garde-fous. Sa « personnalité » vient du seul kit SOUL.
+          </p>
+          <Category
+            title="System prompt"
+            hint="kit SOUL (chat direct uniquement)"
+            fields={direct.systemPrompt}
+          />
+          <Category
+            title="Modèle / rôle"
+            hint="binding du rôle demandé, sans pipeline"
+            fields={direct.modelSelection}
+          />
+        </div>
+      )}
     </section>
   )
 }

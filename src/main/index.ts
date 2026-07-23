@@ -65,6 +65,7 @@ import {
   findModel
 } from './models'
 import { loadAgentTopology, saveAgentTopology } from './topology-disk'
+import { migrateTopologyShape } from './topology'
 import type { AgentTopology, SlotBinding } from './topology'
 import {
   createAutowinAppDataRoot,
@@ -92,6 +93,7 @@ import {
 } from './activity/native-preflight'
 import { nativeSpoolRoot, appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace, readBrainTraces } from './activity/brain-trace-spool'
+import { buildBehaviourComposition } from './behaviour-composition'
 import { proveInjections } from './native-injection-proof'
 import { createAmitelContextProvider } from './amitel-context'
 import {
@@ -193,6 +195,23 @@ function syncRuntimeTopology(topology: AgentTopology): void {
   sync('subagent', topology.subagents[0])
   sync('scout', topology.panels.scout[0])
   sync('judge', topology.panels.judge[0])
+  // Fan-out multi-modèles : on fournit à l'orchestrateur la LISTE COMPLÈTE des modèles de chaque
+  // bloc de divergence/jugement (plus le seul `[0]`). ≥2 → il duplique + agrège. La ligne `sync`
+  // ci-dessus reste pour le chemin mono-modèle (rétrocompat : 0/1 slot → comportement actuel).
+  const toMembers = (
+    slots: SlotBinding[]
+  ): Array<{ provider: string; model?: string; reasoningEffort?: ReasoningEffort }> =>
+    slots.flatMap((b) => {
+      const model = findModel(agentModels, b.modelId)
+      return model
+        ? [{ provider: b.provider, model: model.model, reasoningEffort: b.reasoningEffort }]
+        : []
+    })
+  os.setFanOut({
+    scout: toMembers(topology.panels.scout),
+    frame: toMembers(topology.panels.frame),
+    judge: toMembers(topology.panels.judge)
+  })
 }
 
 function openQuestionWindow(parent: BrowserWindow | null, question: PendingModelQuestion): void {
@@ -549,6 +568,10 @@ function registerChatIpc(): void {
   // --- Config par rôle (orchestrateur / sous-agent / juge / scout) ---
   // #5 — le wizard first-run re-vérifie la config à la demande. `force` (bouton) ignore le cache TTL ;
   // sans force (montage) le cache déduplique avec le run de démarrage.
+  ipcMain.handle('os:behaviourComposition', (event) => {
+    assertTrustedRendererSender(event, 'Behaviour composition')
+    return buildBehaviourComposition(os.roles)
+  })
   ipcMain.handle('os:brainTraces', (event, conversationId?: unknown) => {
     assertTrustedRendererSender(event, 'Brain traces')
     return readBrainTraces(
@@ -596,7 +619,13 @@ function registerChatIpc(): void {
     const models = await discoverOmniRouteModels(fetch, os.omniRouteCredentialStore)
     if (!models.some((model) => model.model === validatedRoute))
       throw new Error('Route OmniRoute du profil indisponible')
-    agentTopology = saveAgentTopology(agentTopologyPath, profile.topology, agentModels)
+    // Rétrocompat : un profil sauvegardé AVANT le bloc `frame` n'a pas `panels.frame` → on migre
+    // la forme avant validation (sinon assertTopology jetterait « Profil introuvable/incohérent »).
+    agentTopology = saveAgentTopology(
+      agentTopologyPath,
+      migrateTopologyShape(profile.topology) as AgentTopology,
+      agentModels
+    )
     syncRuntimeTopology(agentTopology)
     for (const [role, binding] of Object.entries(profile.roles) as Array<
       [Role, import('./roles').RoleBinding]

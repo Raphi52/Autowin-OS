@@ -331,3 +331,28 @@
   color: var(--text-faint);
   font-size: 9px;
 }
+
+/* Refonte par anatomie d'un tour */
+.behaviour-path-toggle { display: inline-flex; gap: 4px; padding: 3px; border-radius: 10px; background: rgba(255,255,255,.05); }
+.behaviour-path-toggle button { border: 0; background: transparent; padding: 6px 14px; border-radius: 8px; cursor: pointer; color: inherit; font: inherit; }
+.behaviour-path-toggle button.active { background: rgba(120,140,255,.22); font-weight: 600; }
+.behaviour-path-toggle button small { opacity: .6; margin-left: 4px; }
+.behaviour-path-note { opacity: .75; font-size: .9em; margin: 10px 0 14px; }
+.behaviour-anatomy { display: flex; flex-direction: column; gap: 16px; }
+.behaviour-category { border: 1px solid var(--stroke, rgba(255,255,255,.12)); border-radius: 12px; padding: 12px 14px; background: var(--surface-2, rgba(255,255,255,.03)); }
+.behaviour-category > header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.behaviour-category > header h3 { margin: 0; font-size: 1em; }
+.behaviour-category > header small { opacity: .6; }
+.behaviour-category ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.behaviour-field { padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.03); }
+.behaviour-field-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.behaviour-field-source { font-size: .78em; opacity: .65; white-space: nowrap; }
+.behaviour-field-value { margin: 4px 0 0; font-size: .9em; opacity: .9; }
+.behaviour-field-excerpt { margin-top: 6px; }
+.behaviour-field-excerpt summary { cursor: pointer; font-size: .82em; opacity: .7; }
+.behaviour-field-excerpt pre { margin: 6px 0 0; padding: 8px; border-radius: 6px; background: rgba(0,0,0,.25); white-space: pre-wrap; font-size: .8em; max-height: 240px; overflow: auto; }
+.behaviour-phase { border-top: 1px solid rgba(255,255,255,.08); padding: 8px 0; }
+.behaviour-phase summary { cursor: pointer; display: flex; align-items: baseline; gap: 10px; }
+.behaviour-phase-name { font-weight: 600; text-transform: capitalize; }
+.behaviour-phase summary small { opacity: .55; font-size: .8em; }
+.behaviour-phase ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
