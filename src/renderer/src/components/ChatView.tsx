@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Markdown, extractRecommendation } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
+import { ScoutTable } from './ScoutTable'
 import { ActivityPane } from './ActivityPane'
 import { ModuleHeader } from './ModuleHeader'
 import {
@@ -365,6 +366,12 @@ const ChatMessageRow = memo(function ChatMessageRow({
             <SuggestionGrid
               key={index}
               groups={part.groups}
+              onPick={(prompt) => onPickSuggestion?.(prompt)}
+            />
+          ) : part.kind === 'scout-table' ? (
+            <ScoutTable
+              key={index}
+              rows={part.rows}
               onPick={(prompt) => onPickSuggestion?.(prompt)}
             />
           ) : (

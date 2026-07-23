@@ -7,13 +7,16 @@ import {
   type PersistedChatTextPart
 } from '../../../shared/chat-turn'
 import { parseScoutSuggestions, type SuggestionGroup } from './scout-suggestions'
+import { parseScoutTable, type ScoutRow } from './scout-table'
 
 export type ChatActionPart = PersistedChatActionPart
 export type ChatTextPart = PersistedChatTextPart
 export type ChatPart = PersistedChatPart
 export type ChatActivityBlock = { kind: 'activity'; actions: ChatActionPart[] }
 export type ChatSuggestionsBlock = { kind: 'suggestions'; groups: SuggestionGroup[] }
-export type ChatRenderBlock = ChatTextPart | ChatActivityBlock | ChatSuggestionsBlock
+export type ChatScoutTableBlock = { kind: 'scout-table'; rows: ScoutRow[] }
+export type ChatRenderBlock =
+  ChatTextPart | ChatActivityBlock | ChatSuggestionsBlock | ChatScoutTableBlock
 
 export interface HydratedAssistantMessage {
   role: 'assistant'
@@ -731,6 +734,12 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
   const blocks: ChatRenderBlock[] = []
   for (const part of coalesceAssistantParts(parts)) {
     if (part.kind === 'text') {
+      // Retour scout : tableau markdown rankée → vrai tableau à pastilles (Ledger dense).
+      const scoutRows = parseScoutTable(part.text)
+      if (scoutRows) {
+        blocks.push({ kind: 'scout-table', rows: scoutRows })
+        continue
+      }
       // Retour scout (suggestions groupées en markdown) → vrai array de chips cliquables.
       const suggestions = parseScoutSuggestions(part.text)
       if (suggestions) blocks.push({ kind: 'suggestions', groups: suggestions })
