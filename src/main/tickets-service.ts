@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import {
   parseTicketSourceProfile,
   type TicketListRequest,
@@ -25,27 +26,51 @@ function sameProfile(left: TicketSourceProfile, right: TicketSourceProfile): boo
   return JSON.stringify(left) === JSON.stringify(right)
 }
 
+function credentialOrigin(source: TicketSourceProfile): string {
+  if (source.provider === 'azure') return 'https://dev.azure.com'
+  if (source.provider === 'github') {
+    return source.apiBaseUrl ? new URL(source.apiBaseUrl).origin : 'https://api.github.com'
+  }
+  return source.baseUrl ? new URL(source.baseUrl).origin : 'https://gitlab.com'
+}
+
+export function ticketCredentialKey(source: TicketSourceProfile): string {
+  const digest = createHash('sha256')
+    .update(JSON.stringify([source.id, source.provider, credentialOrigin(source)]))
+    .digest('hex')
+  return `v2:${digest}`
+}
+
 export class TicketService {
   constructor(private readonly dependencies: TicketServiceDependencies) {}
 
   sources(): TicketSourceSummary[] {
     return this.dependencies.sourceStore.list().map((profile) => ({
       profile,
-      credentialConfigured: this.dependencies.credentialStore.has(profile.id)
+      credentialConfigured: this.dependencies.credentialStore.has(ticketCredentialKey(profile))
     }))
   }
 
   saveSource(value: unknown): TicketSourceSummary[] {
-    this.dependencies.sourceStore.save(value)
+    const profile = parseTicketSourceProfile(value)
+    if (!profile) throw new Error('Profil Tickets invalide')
+    const previous = this.dependencies.sourceStore
+      .list()
+      .find((candidate) => candidate.id === profile.id)
+    this.dependencies.sourceStore.save(profile)
+    if (previous && ticketCredentialKey(previous) !== ticketCredentialKey(profile)) {
+      this.dependencies.credentialStore.delete(ticketCredentialKey(previous))
+    }
     return this.sources()
   }
 
   removeSource(id: string): TicketSourceSummary[] {
+    const removed = this.dependencies.sourceStore.list().find((profile) => profile.id === id)
     const next = this.dependencies.sourceStore.remove(id)
-    this.dependencies.credentialStore.delete(id)
+    if (removed) this.dependencies.credentialStore.delete(ticketCredentialKey(removed))
     return next.map((profile) => ({
       profile,
-      credentialConfigured: this.dependencies.credentialStore.has(profile.id)
+      credentialConfigured: this.dependencies.credentialStore.has(ticketCredentialKey(profile))
     }))
   }
 
@@ -74,7 +99,7 @@ export class TicketService {
       throw new Error(`Fournisseur Tickets non supporté : ${source.provider}`)
     }
 
-    const storedCredential = this.dependencies.credentialStore.get(source.id)
+    const storedCredential = this.dependencies.credentialStore.get(ticketCredentialKey(source))
     const fallbackCredential =
       storedCredential === null && this.dependencies.tokenFallback
         ? await this.dependencies.tokenFallback(source)
