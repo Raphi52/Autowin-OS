@@ -2,6 +2,7 @@ import { HumanJson } from './HumanJson'
 import {
   STEP_META,
   groupSubagentSteps,
+  costByModel,
   type ChatActionPart,
   type EvidencePart,
   type OrchStep
@@ -84,8 +85,21 @@ export function SubAgentStep({ step: s }: { step: OrchStep }): React.JSX.Element
  *  Les membres d'un même fan-out (≥2 modèles d'une phase) sont rendus CÔTE À CÔTE pour comparaison. */
 export function StepThread({ steps }: { steps: OrchStep[] }): React.JSX.Element {
   const groups = groupSubagentSteps(steps)
+  const perModel = costByModel(steps)
   return (
     <div className="col" style={{ gap: 'var(--s2)' }}>
+      {perModel.length >= 2 && (
+        <div className="run-cost-recap" data-testid="run-cost-recap">
+          <span className="c-faint">Coût par modèle</span>
+          {perModel.map((m) => (
+            <span key={m.model} className="run-cost-chip">
+              <span className="mono">{m.model}</span>
+              <b className="tnum">{m.costUsd.toFixed(4)} $</b>
+              <i className="c-faint">×{m.count}</i>
+            </span>
+          ))}
+        </div>
+      )}
       {groups.map((g, i) =>
         g.kind === 'fanout' ? (
           <div key={i} className="fanout-grid" data-count={g.steps.length}>

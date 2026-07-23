@@ -309,6 +309,24 @@ export function groupSubagentSteps(steps: OrchStep[]): StepGroup[] {
   return out
 }
 
+/**
+ * Récap coût PAR MODÈLE d'un run : somme `costUsd` + nombre d'appels par `model` (steps sans model
+ * ignorés), trié coût décroissant. Pur → testable. Sert à voir « Opus vs Codex vs Kimi » dans un run.
+ */
+export function costByModel(steps: OrchStep[]): Array<{ model: string; costUsd: number; count: number }> {
+  const map = new Map<string, { costUsd: number; count: number }>()
+  for (const s of steps) {
+    if (!s.model) continue
+    const e = map.get(s.model) ?? { costUsd: 0, count: 0 }
+    e.costUsd += s.costUsd ?? 0
+    e.count += 1
+    map.set(s.model, e)
+  }
+  return [...map.entries()]
+    .map(([model, v]) => ({ model, costUsd: v.costUsd, count: v.count }))
+    .sort((a, b) => b.costUsd - a.costUsd)
+}
+
 /** Icône + libellé par type d'étape d'orchestration (affichage temps réel). */
 export const STEP_META: Record<string, { icon: string; label: string }> = {
   exec: { icon: '🤖', label: 'sous-agent' },

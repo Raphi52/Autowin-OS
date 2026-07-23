@@ -127,4 +127,22 @@ describe('StepThread — preuves d’exécution inline', () => {
     const header = container.querySelector('.subagent-step .mono')
     expect(header?.textContent).toBe('codex')
   })
+
+  it('récap coût par modèle affiché quand ≥2 modèles', () => {
+    render([
+      { step: 'exec', model: 'opus', costUsd: 0.02, detail: 'phase frame · modèle opus' },
+      { step: 'exec', model: 'codex', costUsd: 0.05, detail: 'phase frame · modèle codex' }
+    ])
+    const recap = container.querySelector('[data-testid="run-cost-recap"]')
+    expect(recap).not.toBeNull()
+    const txt = recap?.textContent ?? ''
+    expect(txt).toContain('opus')
+    expect(txt).toContain('codex')
+    expect(txt).toContain('0.0500') // codex, coût le plus élevé en premier
+  })
+
+  it('pas de récap coût pour un run mono-modèle (rétrocompat)', () => {
+    render([{ step: 'exec', role: 'subagent', provider: 'codex', text: 'x' }])
+    expect(container.querySelector('[data-testid="run-cost-recap"]')).toBeNull()
+  })
 })

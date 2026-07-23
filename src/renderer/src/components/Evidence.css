@@ -54,6 +54,30 @@
   background: rgba(248, 81, 73, 0.12);
 }
 
+/* Récap coût par modèle en tête d'un run (Opus vs Codex vs Kimi). */
+.run-cost-recap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.1));
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.2);
+  font-size: 10px;
+}
+.run-cost-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+}
+.run-cost-chip b {
+  font-variant-numeric: tabular-nums;
+}
+
 /* Membres d'un fan-out rendus CÔTE À CÔTE (comparaison des N modèles d'une phase). */
 .fanout-grid {
   display: grid;

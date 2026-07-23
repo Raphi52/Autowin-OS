@@ -554,11 +554,14 @@ export function ObservatoryView({
               {compare.some((item) => item.id === event.id) ? 'Retirer du diff' : 'Comparer'}
             </button>
           </header>
-          <PayloadContent content={event.content} />
+          {/* `event.content` = concaténation des payloads (harness-timeline-model). Redondant dès
+              qu'il y a des blocs → on ne l'affiche qu'en FALLBACK (aucun bloc), sinon on montre
+              uniquement les blocs décomposés + nommés ci-dessous. */}
+          {event.payloads.length === 0 && <PayloadContent content={event.content} />}
           <p>{event.detail}</p>
           {event.payloads.length > 0 && (
             <section className="observatory-payload-list">
-              <b>Fragments · {event.payloads.length}</b>
+              <b>Blocs · {event.payloads.length}</b>
               {event.payloads.map((payload, payloadIndex) => (
                 <article key={`${event.id}:payload:${payloadIndex}`}>
                   <header>

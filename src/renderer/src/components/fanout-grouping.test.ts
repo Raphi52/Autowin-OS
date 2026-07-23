@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { groupSubagentSteps, type OrchStep } from './chat-view-model'
+import { groupSubagentSteps, costByModel, type OrchStep } from './chat-view-model'
 
 const member = (phase: string, model: string, role = 'subagent'): OrchStep => ({
   step: role === 'judge' ? 'judge' : 'exec',
@@ -49,5 +49,26 @@ describe('groupSubagentSteps', () => {
   it('un gate/step sans model n’est jamais groupé (rétrocompat)', () => {
     const g = groupSubagentSteps([{ step: 'gate', detail: 'clôture autorisée' }])
     expect(g[0].kind).toBe('single')
+  })
+})
+
+describe('costByModel', () => {
+  it('somme le coût + compte les appels par modèle, trié coût décroissant', () => {
+    const r = costByModel([
+      { step: 'exec', model: 'opus', costUsd: 0.04 },
+      { step: 'exec', model: 'codex', costUsd: 0.05 },
+      { step: 'exec', model: 'opus', costUsd: 0.03 }
+    ])
+    // opus = 0.07 (2 appels) > codex = 0.05 (1) → opus en premier
+    expect(r.map((m) => m.model)).toEqual(['opus', 'codex'])
+    expect(r[0]).toEqual({ model: 'opus', costUsd: expect.closeTo(0.07, 5), count: 2 })
+    expect(r[1]).toEqual({ model: 'codex', costUsd: 0.05, count: 1 })
+  })
+  it('ignore les steps sans model', () => {
+    const r = costByModel([{ step: 'gate', costUsd: 1 }, { step: 'exec', model: 'm', costUsd: 0.1 }])
+    expect(r).toEqual([{ model: 'm', costUsd: 0.1, count: 1 }])
+  })
+  it('coût absent → 0 (pas de crash)', () => {
+    expect(costByModel([{ step: 'exec', model: 'm' }])).toEqual([{ model: 'm', costUsd: 0, count: 1 }])
   })
 })
