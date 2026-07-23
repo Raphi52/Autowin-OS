@@ -1,20 +1,23 @@
-/* #5 — wizard first-run (overlay modal). */
+/* Wizard first-run (overlay modal) — aligné sur theme-serious (rendu dans .shell → tokens dispo). */
 .frw-overlay {
   position: fixed;
   inset: 0;
   z-index: 1000;
   display: grid;
   place-items: center;
-  background: rgba(4, 10, 16, 0.72);
+  background:
+    radial-gradient(circle at 78% 12%, rgba(157, 121, 237, 0.1), transparent 42%),
+    rgba(4, 4, 6, 0.72);
+  backdrop-filter: blur(6px);
 }
 .frw-card {
   width: min(520px, 92vw);
   padding: 22px 24px;
-  border-radius: 14px;
-  background: #0f1a24;
-  border: 1px solid #24384a;
-  color: #dce7f0;
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5);
+  border-radius: var(--container-radius-page, 16px);
+  background: var(--surface-panel, rgba(12, 12, 14, 0.96));
+  border: 1px solid var(--container-border, rgba(255, 255, 255, 0.14));
+  color: var(--text, #e7edf5);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
 }
 .frw-card h2 {
   margin: 0 0 4px;
@@ -23,7 +26,7 @@
 .frw-sub {
   margin: 0 0 14px;
   font-size: 12px;
-  color: #8fa6ba;
+  color: var(--text-secondary, #8fa6ba);
 }
 .frw-checks {
   list-style: none;
@@ -41,19 +44,19 @@
   flex-wrap: wrap;
 }
 .frw-checks li.ok .frw-icon {
-  color: #3fb27f;
+  color: var(--success, #6be0aa);
 }
 .frw-checks li.ko .frw-icon {
-  color: #d98236;
+  color: var(--warning, #f4cc68);
 }
 .frw-detail {
   width: 100%;
   padding-left: 24px;
   font-size: 11px;
-  color: #c8912f;
+  color: var(--warning, #e6c369);
 }
 .frw-loading {
-  color: #536b80;
+  color: var(--text-faint, #536b80);
   font-size: 12px;
 }
 .frw-actions {
@@ -62,17 +65,25 @@
   gap: 10px;
 }
 .frw-actions button {
-  padding: 7px 14px;
-  border-radius: 8px;
-  border: 1px solid #2c4357;
+  padding: 8px 15px;
+  border-radius: 10px;
+  border: 1px solid var(--container-border, rgba(255, 255, 255, 0.14));
   background: transparent;
-  color: #dce7f0;
+  color: var(--text, #e7edf5);
   cursor: pointer;
   font-size: 12px;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+}
+.frw-actions button:hover:not(:disabled) {
+  border-color: var(--rose, #ef3f91);
 }
 .frw-actions .frw-primary {
-  background: #2e6f9e;
-  border-color: #3a86bd;
+  background: var(--rose, #ef3f91);
+  border-color: var(--rose, #ef3f91);
+  color: #fff;
+  font-weight: 700;
 }
 .frw-actions button:disabled {
   opacity: 0.5;
