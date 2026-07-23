@@ -16,6 +16,7 @@ import { LatestRequestGate, settleObservatorySources } from './observatory-relia
 import { buildObservatoryExport } from './observatory-export-model'
 import { buildCausalPath, flattenCausalNodes } from './causal-path-model'
 import type { ObservatoryFocus } from '../observatory-focus'
+import { layoutTurnEvents } from './observatory-turn-layout'
 
 interface ConversationItem {
   id: string
@@ -60,7 +61,7 @@ const LABEL: Record<HarnessTimelineEvent['kind'], string> = {
   retry: 'Retry',
   cancellation: 'Annulation',
   error: 'Erreur',
-  boundary: 'Sortant'
+  boundary: 'Options'
 }
 
 /** Sépare un préfixe libellé ("ÉTAT DE L'APP: {…}") du JSON qui suit, si le JSON parse. */
@@ -465,6 +466,107 @@ export function ObservatoryView({
     link.click()
     URL.revokeObjectURL(href)
   }
+
+  /** Rend une ligne d'event de la timeline (extrait pour permettre le regroupement « Sortant »). */
+  const renderEvent = (
+    event: HarnessTimelineEvent,
+    index: number,
+    diverges = false
+  ): React.JSX.Element => (
+    <div key={event.id} className="observatory-event-wrap">
+      <button
+        className={`observatory-event is-${event.kind}${selected?.id === event.id ? ' is-selected' : ''}${compare.some((item) => item.id === event.id) ? ' is-compared' : ''}`}
+        onClick={(click) => {
+          click.stopPropagation()
+          if (click.shiftKey)
+            setCompare((items) =>
+              items.some((item) => item.id === event.id)
+                ? items.filter((item) => item.id !== event.id)
+                : [...items, event].slice(-2)
+            )
+          else {
+            setSelectedCall(null)
+            setSelected(selected?.id === event.id ? null : event)
+          }
+        }}
+      >
+        <i>{index + 1}</i>
+        <span>
+          <b>{LABEL[event.kind]}</b>
+          {diverges && <em className="observatory-diverge-badge">divergeant</em>}
+          <small>{event.actor}</small>
+        </span>
+        <p>
+          <strong>
+            {event.content
+              ? humanEventPreview(event.kind, event.content, 140)
+              : 'Aucun contenu observable.'}
+          </strong>
+          <small>
+            {event.provider
+              ? `${event.provider}${event.model ? ` · ${event.model}` : ''}`
+              : event.detail}
+          </small>
+        </p>
+        <span className="observatory-load">
+          {event.inputTokens != null && <b>{event.inputTokens.toLocaleString('fr-FR')} in</b>}
+          {event.cacheReadTokens != null && (
+            <small>{event.cacheReadTokens.toLocaleString('fr-FR')} cache</small>
+          )}
+          {event.outputTokens != null && (
+            <small>{event.outputTokens.toLocaleString('fr-FR')} out</small>
+          )}
+          {event.costUsd != null && <small>${event.costUsd.toFixed(4)}</small>}
+          {event.durationMs != null && <small>{Math.round(event.durationMs)} ms</small>}
+          {event.inputTokens == null && event.outputTokens == null && (
+            <small>{event.content.length.toLocaleString('fr-FR')} caractères</small>
+          )}
+        </span>
+      </button>
+      {selected?.id === event.id && (
+        <article className="observatory-event-detail" onClick={(click) => click.stopPropagation()}>
+          <header>
+            <div>
+              <b>Payload exact</b>
+              <small>
+                {event.channel} · {event.injector ?? event.actor} → {event.recipient ?? 'non exposé'}
+              </small>
+            </div>
+            <button
+              onClick={() =>
+                setCompare((items) =>
+                  items.some((item) => item.id === event.id)
+                    ? items.filter((item) => item.id !== event.id)
+                    : [...items, event].slice(-2)
+                )
+              }
+            >
+              {compare.some((item) => item.id === event.id) ? 'Retirer du diff' : 'Comparer'}
+            </button>
+          </header>
+          <PayloadContent content={event.content} />
+          <p>{event.detail}</p>
+          {event.payloads.length > 0 && (
+            <section className="observatory-payload-list">
+              <b>Fragments · {event.payloads.length}</b>
+              {event.payloads.map((payload, payloadIndex) => (
+                <article key={`${event.id}:payload:${payloadIndex}`}>
+                  <header>
+                    <strong>{payload.name || payload.kind}</strong>
+                    <small>
+                      {payload.kind}
+                      {payload.mediaType ? ` · ${payload.mediaType}` : ''}
+                    </small>
+                  </header>
+                  <PayloadContent content={payload.content} />
+                </article>
+              ))}
+            </section>
+          )}
+        </article>
+      )}
+    </div>
+  )
 
   return (
     <section className="observatory-view" data-testid="observatory-view">
@@ -886,110 +988,22 @@ export function ObservatoryView({
                       : `${turn.inputTokens.toLocaleString('fr-FR')} in · ${turn.outputTokens.toLocaleString('fr-FR')} out`}
                   </small>
                 </header>
-                {turn.events.map((event, index) => (
-                  <div key={event.id} className="observatory-event-wrap">
-                    <button
-                      className={`observatory-event is-${event.kind}${selected?.id === event.id ? ' is-selected' : ''}${compare.some((item) => item.id === event.id) ? ' is-compared' : ''}`}
-                      onClick={(click) => {
-                        click.stopPropagation()
-                        if (click.shiftKey)
-                          setCompare((items) =>
-                            items.some((item) => item.id === event.id)
-                              ? items.filter((item) => item.id !== event.id)
-                              : [...items, event].slice(-2)
-                          )
-                        else {
-                          setSelectedCall(null)
-                          setSelected(selected?.id === event.id ? null : event)
-                        }
-                      }}
-                    >
-                      <i>{index + 1}</i>
-                      <span>
-                        <b>{LABEL[event.kind]}</b>
-                        <small>{event.actor}</small>
-                      </span>
-                      <p>
-                        <strong>
-                          {event.content
-                            ? humanEventPreview(event.kind, event.content, 140)
-                            : 'Aucun contenu observable.'}
-                        </strong>
-                        <small>
-                          {event.provider
-                            ? `${event.provider}${event.model ? ` · ${event.model}` : ''}`
-                            : event.detail}
-                        </small>
-                      </p>
-                      <span className="observatory-load">
-                        {event.inputTokens != null && (
-                          <b>{event.inputTokens.toLocaleString('fr-FR')} in</b>
-                        )}
-                        {event.cacheReadTokens != null && (
-                          <small>{event.cacheReadTokens.toLocaleString('fr-FR')} cache</small>
-                        )}
-                        {event.outputTokens != null && (
-                          <small>{event.outputTokens.toLocaleString('fr-FR')} out</small>
-                        )}
-                        {event.costUsd != null && <small>${event.costUsd.toFixed(4)}</small>}
-                        {event.durationMs != null && (
-                          <small>{Math.round(event.durationMs)} ms</small>
-                        )}
-                        {event.inputTokens == null && event.outputTokens == null && (
-                          <small>{event.content.length.toLocaleString('fr-FR')} caractères</small>
-                        )}
-                      </span>
-                    </button>
-                    {selected?.id === event.id && (
-                      <article
-                        className="observatory-event-detail"
-                        onClick={(click) => click.stopPropagation()}
-                      >
-                        <header>
-                          <div>
-                            <b>Payload exact</b>
-                            <small>
-                              {event.channel} · {event.injector ?? event.actor} →{' '}
-                              {event.recipient ?? 'non exposé'}
-                            </small>
-                          </div>
-                          <button
-                            onClick={() =>
-                              setCompare((items) =>
-                                items.some((item) => item.id === event.id)
-                                  ? items.filter((item) => item.id !== event.id)
-                                  : [...items, event].slice(-2)
-                              )
-                            }
-                          >
-                            {compare.some((item) => item.id === event.id)
-                              ? 'Retirer du diff'
-                              : 'Comparer'}
-                          </button>
-                        </header>
-                        <PayloadContent content={event.content} />
-                        <p>{event.detail}</p>
-                        {event.payloads.length > 0 && (
-                          <section className="observatory-payload-list">
-                            <b>Fragments conservés · {event.payloads.length}</b>
-                            {event.payloads.map((payload, payloadIndex) => (
-                              <article key={`${event.id}:payload:${payloadIndex}`}>
-                                <header>
-                                  <strong>{payload.name || payload.kind}</strong>
-                                  <small>
-                                    {payload.kind}
-                                    {payload.mediaType ? ` · ${payload.mediaType}` : ''}
-                                  </small>
-                                </header>
-                                <PayloadContent content={payload.content} />
-                              </article>
-                            ))}
-                          </section>
-                        )}
-                      </article>
-                    )}
-                  </div>
-                ))}
+                {(() => {
+                  let n = 0
+                  return layoutTurnEvents(turn.events).map((item, itemIndex) =>
+                    item.type === 'sortant' ? (
+                      <div key={`sortant:${turn.id}:${itemIndex}`} className="observatory-sortant">
+                        <div className="observatory-sortant-head">
+                          <b>Sortant</b>
+                          <small>ce qui part au provider · message + injection + options</small>
+                        </div>
+                        {item.events.map((event) => renderEvent(event, n++))}
+                      </div>
+                    ) : (
+                      renderEvent(item.event, n++, item.diverges)
+                    )
+                  )
+                })()}
                 <div className="observatory-turn-load">
                   <i
                     style={{

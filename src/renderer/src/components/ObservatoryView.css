@@ -492,6 +492,46 @@
 .observatory-event-wrap {
   margin: 7px 0;
 }
+/* Bloc « Sortant » : regroupe et met en avant ce qui part au provider (message + injection + options). */
+.observatory-sortant {
+  margin: 10px 0;
+  padding: 8px 8px 4px;
+  border: 1px solid #2f6d8a;
+  border-left: 3px solid #4aa3c7;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-card) 88%, #4aa3c7 12%);
+}
+.observatory-sortant .observatory-event-wrap {
+  margin: 5px 0;
+}
+.observatory-sortant-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 4px 6px;
+}
+.observatory-sortant-head b {
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #7fc4de;
+}
+.observatory-sortant-head small {
+  color: var(--text-muted);
+}
+/* Badge rouge : le texte affiché diverge de la sortie brute du modèle. */
+.observatory-diverge-badge {
+  font-style: normal;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #b3261e;
+  color: #fff;
+  margin-left: 6px;
+}
 .observatory-event {
   display: grid;
   width: 100%;
