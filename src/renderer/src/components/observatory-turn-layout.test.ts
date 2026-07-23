@@ -4,49 +4,60 @@ import { layoutTurnEvents, normalizeResponse, type MinimalEvent } from './observ
 const ev = (kind: string, content = ''): MinimalEvent => ({ kind, content })
 
 describe('layoutTurnEvents', () => {
-  it('regroupe message + injection + boundary en un seul item « sortant »', () => {
+  it('regroupe message + injection + boundary en un groupe zone « sortant »', () => {
     const items = layoutTurnEvents([ev('message', 'salut'), ev('injection', 'sys'), ev('boundary', '{}')])
     expect(items).toHaveLength(1)
-    expect(items[0]).toMatchObject({ type: 'sortant' })
-    expect(items[0].type === 'sortant' && items[0].events.map((e) => e.kind)).toEqual([
+    expect(items[0]).toMatchObject({ type: 'group', zone: 'sortant' })
+    expect(items[0].type === 'group' && items[0].events.map((e) => e.event.kind)).toEqual([
       'message',
       'injection',
       'boundary'
     ])
   })
 
-  it('réponse identique : masque response-displayed → une seule ligne model-response', () => {
+  it('regroupe model-response + response-displayed en zone « reponse »', () => {
+    const items = layoutTurnEvents([
+      ev('model-response', 'Texte + <cmd>x</cmd>'),
+      ev('response-displayed', 'Texte')
+    ])
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ type: 'group', zone: 'reponse' })
+    const group = items[0]
+    if (group.type !== 'group') throw new Error('attendu group')
+    expect(group.events.map((e) => e.event.kind)).toEqual(['model-response', 'response-displayed'])
+    // Le displayed divergent est marqué
+    expect(group.events.find((e) => e.event.kind === 'response-displayed')?.diverges).toBe(true)
+  })
+
+  it('réponse identique : masque response-displayed → groupe reponse à une seule ligne', () => {
     const items = layoutTurnEvents([
       ev('model-response', 'Bonjour à toi'),
-      ev('response-displayed', 'Bonjour  à toi\n') // même texte, espaces différents
+      ev('response-displayed', 'Bonjour  à toi\n')
     ])
-    const kinds = items.map((i) => (i.type === 'event' ? i.event.kind : 'sortant'))
-    expect(kinds).toEqual(['model-response'])
+    expect(items).toHaveLength(1)
+    const group = items[0]
+    if (group.type !== 'group') throw new Error('attendu group')
+    expect(group.events.map((e) => e.event.kind)).toEqual(['model-response'])
   })
 
-  it('réponse divergente : garde les 2 lignes + marque response-displayed diverges', () => {
-    const items = layoutTurnEvents([
-      ev('model-response', 'Texte + <cmd>{"name":"x"}</cmd>'),
-      ev('response-displayed', 'Texte') // commande retirée à l’affichage
-    ])
-    expect(items).toHaveLength(2)
-    const displayed = items.find((i) => i.type === 'event' && i.event.kind === 'response-displayed')
-    expect(displayed).toMatchObject({ type: 'event', diverges: true })
+  it('regroupe handoff + verdict en zone « sousagent »', () => {
+    const items = layoutTurnEvents([ev('handoff', 'délègue'), ev('verdict', 'ok')])
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ type: 'group', zone: 'sousagent' })
   })
 
-  it('response-displayed vide → pas de divergence signalée, et masqué', () => {
-    const items = layoutTurnEvents([ev('model-response', 'x'), ev('response-displayed', '   ')])
-    expect(items.map((i) => (i.type === 'event' ? i.event.kind : 's'))).toEqual(['model-response'])
-  })
-
-  it('préserve les autres events (retry, error) et l’ordre autour du bloc sortant', () => {
+  it('events hors zone (retry, décision, outil) rendus isolés, ordre préservé', () => {
     const items = layoutTurnEvents([
       ev('message', 'm'),
       ev('boundary', 'o'),
       ev('retry', 'r'),
       ev('model-response', 'ok')
     ])
-    expect(items.map((i) => i.type)).toEqual(['sortant', 'event', 'event'])
+    expect(items.map((i) => (i.type === 'group' ? `g:${i.zone}` : `e:${i.event.kind}`))).toEqual([
+      'g:sortant',
+      'e:retry',
+      'g:reponse'
+    ])
   })
 
   it('normalizeResponse écrase espaces/bords', () => {

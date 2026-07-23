@@ -63,6 +63,16 @@ const LABEL: Record<HarnessTimelineEvent['kind'], string> = {
   error: 'Erreur',
   boundary: 'Options'
 }
+const ZONE_LABEL: Record<'sortant' | 'reponse' | 'sousagent', string> = {
+  sortant: 'Sortant',
+  reponse: 'Réponse',
+  sousagent: 'Sous-agents'
+}
+const ZONE_HINT: Record<'sortant' | 'reponse' | 'sousagent', string> = {
+  sortant: 'ce qui part au provider · message + injection + options',
+  reponse: 'ce que le modèle a produit et ce qui a été affiché',
+  sousagent: 'délégation et jugements des sous-agents'
+}
 
 /** Sépare un préfixe libellé ("ÉTAT DE L'APP: {…}") du JSON qui suit, si le JSON parse. */
 function splitLabeledJson(content: string): { prefix: string; json: string } | null {
@@ -991,16 +1001,19 @@ export function ObservatoryView({
                 {(() => {
                   let n = 0
                   return layoutTurnEvents(turn.events).map((item, itemIndex) =>
-                    item.type === 'sortant' ? (
-                      <div key={`sortant:${turn.id}:${itemIndex}`} className="observatory-sortant">
-                        <div className="observatory-sortant-head">
-                          <b>Sortant</b>
-                          <small>ce qui part au provider · message + injection + options</small>
+                    item.type === 'group' ? (
+                      <div
+                        key={`${item.zone}:${turn.id}:${itemIndex}`}
+                        className={`observatory-group is-${item.zone}`}
+                      >
+                        <div className="observatory-group-head">
+                          <b>{ZONE_LABEL[item.zone]}</b>
+                          <small>{ZONE_HINT[item.zone]}</small>
                         </div>
-                        {item.events.map((event) => renderEvent(event, n++))}
+                        {item.events.map(({ event, diverges }) => renderEvent(event, n++, diverges))}
                       </div>
                     ) : (
-                      renderEvent(item.event, n++, item.diverges)
+                      renderEvent(item.event, n++)
                     )
                   )
                 })()}

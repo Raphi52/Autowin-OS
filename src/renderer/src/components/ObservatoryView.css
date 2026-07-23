@@ -492,31 +492,41 @@
 .observatory-event-wrap {
   margin: 7px 0;
 }
-/* Bloc « Sortant » : regroupe et met en avant ce qui part au provider (message + injection + options). */
-.observatory-sortant {
+/* Groupes encadrés par ZONE : Sortant (bleu), Réponse (jaune), Sous-agents (violet). */
+.observatory-group {
+  --zone-accent: #4aa3c7;
   margin: 10px 0;
   padding: 8px 8px 4px;
-  border: 1px solid #2f6d8a;
-  border-left: 3px solid #4aa3c7;
+  border: 1px solid color-mix(in srgb, var(--zone-accent) 55%, #25313b);
+  border-left: 3px solid var(--zone-accent);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--surface-card) 88%, #4aa3c7 12%);
+  background: color-mix(in srgb, var(--surface-card) 88%, var(--zone-accent) 12%);
 }
-.observatory-sortant .observatory-event-wrap {
+.observatory-group.is-sortant {
+  --zone-accent: #4aa3c7;
+}
+.observatory-group.is-reponse {
+  --zone-accent: #e0b437;
+}
+.observatory-group.is-sousagent {
+  --zone-accent: #9b6dd6;
+}
+.observatory-group .observatory-event-wrap {
   margin: 5px 0;
 }
-.observatory-sortant-head {
+.observatory-group-head {
   display: flex;
   align-items: baseline;
   gap: 8px;
   padding: 2px 4px 6px;
 }
-.observatory-sortant-head b {
+.observatory-group-head b {
   font-size: 0.82rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #7fc4de;
+  color: color-mix(in srgb, var(--zone-accent) 70%, #ffffff);
 }
-.observatory-sortant-head small {
+.observatory-group-head small {
   color: var(--text-muted);
 }
 /* Badge rouge : le texte affiché diverge de la sortie brute du modèle. */
