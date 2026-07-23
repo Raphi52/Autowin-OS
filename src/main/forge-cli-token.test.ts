@@ -32,7 +32,9 @@ describe('credentials runtime des forges', () => {
         GLAB_TOKEN: 'glab-token',
         GITLAB_HOST: 'gitlab.corp.example',
         OAUTH_TOKEN: 'oauth-token',
-        CI_JOB_TOKEN: 'ci-job-token'
+        CI_JOB_TOKEN: 'ci-job-token',
+        Gh_ToKeN: 'mixed-case-github-token',
+        gItLaB_tOkEn: 'mixed-case-gitlab-token'
       })
     ).toEqual({ PATH: 'bin' })
   })

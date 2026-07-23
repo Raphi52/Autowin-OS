@@ -19,12 +19,15 @@ const FORGE_AUTH_ENVIRONMENT_KEYS = [
   'OAUTH_TOKEN',
   'CI_JOB_TOKEN'
 ] as const
+const FORGE_AUTH_ENVIRONMENT_KEY_SET = new Set<string>(FORGE_AUTH_ENVIRONMENT_KEYS)
 
 export function forgeCliEnvironment(
   environment: Readonly<NodeJS.ProcessEnv> = process.env
 ): NodeJS.ProcessEnv {
   const sanitized = { ...environment }
-  for (const key of FORGE_AUTH_ENVIRONMENT_KEYS) delete sanitized[key]
+  for (const key of Object.keys(sanitized)) {
+    if (FORGE_AUTH_ENVIRONMENT_KEY_SET.has(key.toUpperCase())) delete sanitized[key]
+  }
   return sanitized
 }
 
