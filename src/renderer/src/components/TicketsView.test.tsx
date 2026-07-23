@@ -270,6 +270,36 @@ describe('vue Tickets', () => {
     await act(async () => root.unmount())
   })
 
+  it('ne rattache pas les anciennes données à une nouvelle source après réactivation', async () => {
+    const ticketSources = vi
+      .fn()
+      .mockResolvedValueOnce([{ profile: DEFAULT_TICKET_SOURCE, credentialConfigured: false }])
+      .mockResolvedValueOnce([{ profile: github, credentialConfigured: false }])
+    const listTickets = vi
+      .fn()
+      .mockResolvedValueOnce({ items: [item('1')], hasMore: false })
+      .mockRejectedValueOnce(new Error('GitHub indisponible.'))
+    api({ ticketSources, listTickets })
+    const { root, container } = await render()
+
+    await act(async () => {
+      root.render(createElement(TicketsView, { active: false }))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      root.render(createElement(TicketsView, { active: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[data-testid="tickets-source"]')?.textContent).toContain(
+      'openai / codex'
+    )
+    expect(container.textContent).toContain('GitHub indisponible')
+    expect(container.textContent).not.toContain('Ticket 1')
+    await act(async () => root.unmount())
+  })
+
   it('distingue aucune source, filtre localement et charge la page suivante', async () => {
     api({ ticketSources: vi.fn(async () => []) })
     const first = await render()

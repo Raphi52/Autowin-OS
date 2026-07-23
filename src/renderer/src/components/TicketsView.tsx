@@ -104,6 +104,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const [draft, setDraft] = useState<SourceDraft>(EMPTY_DRAFT)
   const requestGeneration = useRef(0)
   const activeRequestId = useRef<string | undefined>(undefined)
+  const activeSourceRef = useRef<TicketSourceProfile | undefined>(undefined)
   const itemsRef = useRef(items)
 
   useEffect(() => {
@@ -115,6 +116,23 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
 
   const load = useCallback(
     async (source: TicketSourceProfile, nextCursor?: string, append = false): Promise<void> => {
+      const previousSource = activeSourceRef.current
+      const sourceChanged =
+        previousSource !== undefined &&
+        JSON.stringify(previousSource) !== JSON.stringify(source)
+      activeSourceRef.current = source
+      if (sourceChanged) {
+        itemsRef.current = []
+        setItems([])
+        setSelectedId(undefined)
+        setCursor(undefined)
+        setHasMore(false)
+        setStale(false)
+        setError(undefined)
+        setQuery('')
+        setTypeFilter('')
+        setStateFilter('')
+      }
       if (activeRequestId.current) {
         void window.api.cancelTickets(activeRequestId.current)
       }
