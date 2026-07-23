@@ -9,10 +9,9 @@ import { join } from 'node:path'
  * system prompt de chaque phase, puis on supprime l'auto-load du CLI (Codex `project_doc_max_bytes=0`)
  * → source UNIQUE, portable sur tous les modèles importés (c'est Autowin qui lit, pas le CLI).
  *
- * NB : en orchestration, le `system` explicite des phases porte déjà la discipline
- * (PIPELINE_DISCIPLINE_INSTRUCTION + SKILL.md + ENGINE ciblé) ; le kit-soul global du
- * ProviderRegistry n'est PAS réinjecté ici (il serait shadowé par ce `system` explicite,
- * cf. registry.ts) — décision assumée « sans overkill », les réflexes porteurs étant aussi
+ * NB : depuis l'unification chat↔orchestrateur, le `system` explicite des phases porte la
+ * CONSTITUTION (source unique, constitution.ts) + la discipline (PIPELINE_DISCIPLINE_INSTRUCTION)
+ * + le brief de phase ; ce bloc de contexte projet s'y ajoute. Les réflexes porteurs sont aussi
  * enforce par le GATE déterministe.
  *
  * Ordre : `AGENTS.md` (Codex/OpenAI) → `CLAUDE.md` (Claude) → `.cursorrules` (Cursor).

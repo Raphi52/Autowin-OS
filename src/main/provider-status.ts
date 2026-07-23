@@ -30,6 +30,8 @@ export interface ProviderStatus {
   lastCheckedAt?: number
 }
 
+const FRESH_STARTUP_PROBE_MS = 60_000
+
 interface ProviderStateSnapshot {
   mode: 'active' | 'standby'
   lastProbe?: { status: AuthStatus; checkedAt: number }
@@ -41,6 +43,24 @@ export async function probePresenceUnlessStandby(
   probe: () => Promise<boolean>
 ): Promise<boolean> {
   return state.mode === 'standby' ? false : probe()
+}
+
+/** Lance en parallèle un probe réel pour chaque provider actif, sans qu'un échec annule le batch. */
+export async function runStartupProviderProbes<Provider extends string>(
+  providers: readonly Provider[],
+  stateOf: (provider: Provider) => Pick<ProviderStateSnapshot, 'mode'>,
+  probe: (provider: Provider) => Promise<unknown>
+): Promise<void> {
+  await Promise.all(
+    providers.map(async (provider) => {
+      if (stateOf(provider).mode === 'standby') return
+      try {
+        await probe(provider)
+      } catch {
+        // Chaque probe persiste son propre statut ; une panne ne doit pas empêcher les autres tests.
+      }
+    })
+  )
 }
 
 /** Statut codex depuis le token (cheap, exact) : expiry vs horloge. */
@@ -99,9 +119,14 @@ export function buildProviderStatuses(inputs: {
         detail: 'En standby — aucun probe ni reconnexion automatique.'
       }
     }
-    // Codex possède un oracle token local plus actuel. Pour les CLI opaques, le dernier mini-tour
-    // explicite est la meilleure preuve disponible et doit survivre au redémarrage.
-    if (provider !== 'codex' && state?.lastProbe) {
+    // Le probe de démarrage frais est la preuve la plus actuelle, y compris pour Codex. Passé la
+    // fenêtre de démarrage, Codex retombe sur l'expiration locale déterministe ; les CLI opaques
+    // conservent leur dernier test daté jusqu'au prochain démarrage.
+    const probeIsFresh =
+      state?.lastProbe &&
+      state.lastProbe.checkedAt <= inputs.now &&
+      inputs.now - state.lastProbe.checkedAt <= FRESH_STARTUP_PROBE_MS
+    if (state?.lastProbe && (provider !== 'codex' || probeIsFresh)) {
       return {
         provider,
         status: state.lastProbe.status,

@@ -9,13 +9,18 @@ import { regimePhases } from './task-regime'
 import { phaseBrief } from './phase-briefs'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
+import { CONSTITUTION } from './constitution'
 import type { PipelinePhase } from './skill-pipeline'
 
 const OLD_PHASES: PipelinePhase[] = ['scout', 'frame', 'terrain', 'build', 'clean']
+// Bloc système CONSTANT injecté à chaque phase orchestrée = constitution + discipline + style
+// (CONSTITUTION ajoutée à l'unification chat↔orchestrateur : elle DOIT compter dans le coût mesuré).
 const CONSTANT_SYSTEM =
-  PIPELINE_DISCIPLINE_INSTRUCTION.length + CONCISE_STRUCTURED_RESPONSE_INSTRUCTION.length
+  CONSTITUTION.length +
+  PIPELINE_DISCIPLINE_INSTRUCTION.length +
+  CONCISE_STRUCTURED_RESPONSE_INSTRUCTION.length
 
-/** Octets système injectés pour un ensemble de phases (consigne/phase + discipline + style, ×phases). */
+/** Octets système injectés pour un ensemble de phases (consigne/phase + constitution + discipline + style, ×phases). */
 function injectedSystemBytes(phases: PipelinePhase[]): number {
   return phases.reduce((sum, p) => sum + phaseBrief(p).length + CONSTANT_SYSTEM, 0)
 }

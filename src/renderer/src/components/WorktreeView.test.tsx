@@ -6,7 +6,7 @@ import { WorktreeView } from './WorktreeView'
 import type { WorktreeAgentActivity } from '../../../shared/worktree-activity-model'
 
 type WorktreeApi = Pick<Window['api'], 'getWorktreeActivity' | 'onWorktreeActivity'> & {
-  getWorktreeStatus?: () => Promise<{ available: boolean }>
+  getWorktreeStatus?: () => Promise<unknown>
 }
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -30,6 +30,13 @@ async function renderView(): Promise<void> {
   root = createRoot(container)
   await act(async () => {
     root?.render(createElement(WorktreeView, { active: true }))
+    await Promise.resolve()
+  })
+}
+
+async function rerenderView(active: boolean): Promise<void> {
+  await act(async () => {
+    root?.render(createElement(WorktreeView, { active }))
     await Promise.resolve()
   })
 }
@@ -71,6 +78,23 @@ describe('WorktreeView — contrat preload', () => {
     expect(container?.textContent).not.toContain('Aucune copie en cours')
     expect(container?.querySelector('[data-testid="wt-view"]')).toBeNull()
   })
+
+  it.each([{}, null])(
+    'refuse un statut IPC mal formé au lieu d’afficher une fausse activité vide',
+    async (malformedStatus) => {
+      installApi({
+        getWorktreeActivity: vi.fn(async () => []),
+        onWorktreeActivity: vi.fn(() => () => undefined),
+        getWorktreeStatus: vi.fn(async () => malformedStatus)
+      })
+
+      await renderView()
+
+      expect(container?.textContent).toContain('Relance Autowin OS')
+      expect(container?.textContent).not.toContain('Aucune copie en cours')
+      expect(container?.querySelector('[data-testid="wt-view"]')).toBeNull()
+    }
+  )
 
   it('attend le statut sans afficher fugitivement une fausse activité vide', async () => {
     const pendingStatus = new Promise<{ available: boolean }>(() => undefined)
@@ -117,6 +141,44 @@ describe('WorktreeView — contrat preload', () => {
     })
 
     expect(container?.querySelectorAll('[data-testid="wt-lane"]')).toHaveLength(1)
+    expect(container?.textContent).toContain('Builder travaille')
+  })
+
+  it('rafraîchit l’activité avant de réafficher l’onglet réactivé', async () => {
+    let resolveSecondSnapshot!: (items: WorktreeAgentActivity[]) => void
+    const secondSnapshot = new Promise<WorktreeAgentActivity[]>((resolve) => {
+      resolveSecondSnapshot = resolve
+    })
+    const getWorktreeActivity = vi
+      .fn<() => Promise<WorktreeAgentActivity[]>>()
+      .mockResolvedValueOnce([])
+      .mockReturnValueOnce(secondSnapshot)
+    installApi({
+      getWorktreeActivity,
+      getWorktreeStatus: vi.fn(async () => ({ available: true })),
+      onWorktreeActivity: vi.fn(() => () => undefined)
+    })
+    await renderView()
+    expect(container?.textContent).toContain('Aucune copie en cours')
+
+    await rerenderView(false)
+    await rerenderView(true)
+
+    expect(container?.textContent).toContain('Connexion au moteur des copies')
+    expect(container?.textContent).not.toContain('Aucune copie en cours')
+
+    await act(async () => {
+      resolveSecondSnapshot([
+        {
+          agentId: 'run-3',
+          agentName: 'Builder',
+          state: 'working',
+          files: [],
+          startedAtMs: 1
+        }
+      ])
+      await Promise.resolve()
+    })
     expect(container?.textContent).toContain('Builder travaille')
   })
 

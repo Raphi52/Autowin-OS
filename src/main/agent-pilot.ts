@@ -11,6 +11,7 @@ import { VisibleStreamFilter } from '../shared/stream-markup-filter'
 import type { ConversationAuthorityMode } from './conversation-capabilities'
 import { randomUUID } from 'node:crypto'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
+import { CONSTITUTION } from './constitution'
 
 /**
  * Boucle de PILOTAGE : un agent LLM conduit l'app lui-même.
@@ -104,7 +105,12 @@ export class AgentPilot {
     private readonly registry: ProviderRegistry,
     private readonly roles: RoleModelConfig,
     private readonly bus: AppCommandBus,
-    private readonly retrieveContext?: (query: string) => Promise<string>
+    private readonly retrieveContext?: (query: string) => Promise<string>,
+    /**
+     * Contexte projet plié (CLAUDE.md/AGENTS.md du workspace), MÊME source que les phases
+     * orchestrées (context-files). Défaut vide → le chat reste fonctionnel sans workspace.
+     */
+    private readonly projectContext: () => string = () => ''
   ) {}
 
   async run(goal: string, onEvent: (e: PilotEvent) => void, maxIter = 6): Promise<void> {
@@ -113,7 +119,9 @@ export class AgentPilot {
     const catalog = this.bus.catalog()
     const snapshot = await this.bus.snapshotForPrompt()
 
-    const system =
+    // MÊME pattern nommé que chat() : la CONSTITUTION est la source UNIQUE partagée ; run() n'ajoute
+    // que son pilotage-goal. systemBlocks → l'injection est traçable dans Observatory (parité chat).
+    const pilotage =
       `Tu PILOTES l'application "Autowin OS" via des commandes. Objectif de l'utilisateur : "${goal}".\n` +
       `Pour agir, émets une ou plusieurs commandes AU FORMAT EXACT : <cmd>{"name":"...","args":{...}}</cmd>.\n` +
       `Tu peux faire modifier le code du workspace par la commande orchestrate. Ne dis jamais que tu ne peux pas modifier le code lorsque cette commande est disponible : utilise-la avec la demande complète de l'utilisateur.\n` +
@@ -122,17 +130,23 @@ export class AgentPilot {
         .map((c) => `- ${c.name}(${Object.keys(c.args).join(', ')}) : ${c.description}`)
         .join('\n') +
       `\nRègles : agis par petits pas, une ou deux commandes par tour. Après exécution tu recevras le résultat + l'état. ` +
-      `Quand l'objectif est atteint, réponds UNIQUEMENT "DONE: <résumé>" sans commande.` +
-      CONCISE_STRUCTURED_RESPONSE_INSTRUCTION
+      `Quand l'objectif est atteint, réponds UNIQUEMENT "DONE: <résumé>" sans commande.`
+    const systemParts = [
+      { name: 'constitution', text: CONSTITUTION },
+      { name: 'pilotage', text: `\n${pilotage}` },
+      { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION }
+    ]
+    const system = systemParts.map((p) => p.text).join('')
+    const systemBlocks = systemParts.filter((p) => p.text).map((p) => ({ name: p.name, chars: p.text.length }))
 
     const convo: string[] = [`ÉTAT INITIAL:\n${JSON.stringify(snapshot)}`]
 
     for (let i = 0; i < maxIter; i++) {
-      const res = await this.registry.send(
-        provider,
-        [{ role: 'user', content: `${convo.join('\n\n')}\n\nProchaine action ?` }],
-        { system }
-      )
+      const messages = [{ role: 'user' as const, content: `${convo.join('\n\n')}\n\nProchaine action ?` }]
+      const prompt = this.registry.describePrompt(provider, messages, { system, systemBlocks }, binding.model)
+      prompt.systemBlocks = systemBlocks
+      onEvent({ kind: 'prompt-call', iteration: i, prompt })
+      const res = await this.registry.send(provider, messages, { system, systemBlocks })
       const text = res.text.trim()
 
       // Extraire les commandes émises par le modèle.
@@ -205,7 +219,9 @@ export class AgentPilot {
         ? await this.retrieveContext(latestUserMessage).catch(() => '')
         : ''
 
-    const system =
+    // MÊME config que les phases orchestrées : la CONSTITUTION (soul/réflexes) est la source
+    // UNIQUE partagée ; le chat y ajoute seulement ce qui lui est propre (pilotage par commandes).
+    const pilotage =
       `Tu es l'agent d'"Autowin OS", un cockpit d'orchestration d'agents. Tu CONVERSES avec ` +
       `l'utilisateur en français, naturellement, ET tu peux PILOTER l'application toi-même.\n` +
       `Pour agir sur l'app, émets une ou plusieurs commandes AU FORMAT EXACT : ` +
@@ -225,9 +241,18 @@ export class AgentPilot {
       `\`orchestrate\` avec la demande complète (pipeline scout/frame) OU propose directement ` +
       `plusieurs options concrètes et scorées, puis laisse l'utilisateur choisir. Demander à ` +
       `l'utilisateur de faire le travail (ex. « donne-moi la liste ») est un DERNIER recours, ` +
-      `jamais le réflexe par défaut.\n${MODEL_QUESTION_INSTRUCTION}` +
-      CONCISE_STRUCTURED_RESPONSE_INSTRUCTION +
-      (retrievedContext ? `\n\n${retrievedContext}` : '')
+      `jamais le réflexe par défaut.\n${MODEL_QUESTION_INSTRUCTION}`
+    const systemParts = [
+      { name: 'constitution', text: CONSTITUTION },
+      { name: 'pilotage', text: pilotage },
+      { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+      { name: 'projectContext', text: this.projectContext() },
+      { name: 'brainContext', text: retrievedContext ? `\n\n${retrievedContext}` : '' }
+    ]
+    const system = systemParts.map((p) => p.text).join('')
+    const systemBlocks = systemParts
+      .filter((p) => p.text)
+      .map((p) => ({ name: p.name, chars: p.text.length }))
 
     // Reconstruit le fil : historique de la conversation + état courant de l'app.
     const convo: string[] = [
@@ -257,16 +282,20 @@ export class AgentPilot {
         messages,
         {
           system,
+          systemBlocks,
           model: binding.model,
           reasoningEffort: binding.reasoningEffort
         },
         binding.model
       )
+      prompt.systemBlocks = systemBlocks
       const options: SendOptions = {
         system,
+        systemBlocks,
         model: binding.model,
         reasoningEffort: binding.reasoningEffort,
         observePrompt: (observed) => {
+          observed.systemBlocks = systemBlocks
           prompt = observed
         },
         signal,

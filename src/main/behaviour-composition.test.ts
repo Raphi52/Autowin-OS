@@ -40,13 +40,13 @@ describe('buildBehaviourComposition — COMPLÉTUDE', () => {
     }
   })
 
-  it('reflète les influenceurs clés : Brain, redirection exécution, régime, circuit-breaker, kit SOUL', () => {
+  it('reflète les influenceurs clés : Brain, redirection exécution, régime, circuit-breaker, constitution', () => {
     const labels = allFields(build()).map((f) => f.label.toLowerCase())
     expect(labels.some((l) => l.includes('brain'))).toBe(true)
     expect(labels.some((l) => l.includes('redirection'))).toBe(true)
     expect(labels.some((l) => l.includes('régime') || l.includes('regime'))).toBe(true)
     expect(labels.some((l) => l.includes('circuit-breaker'))).toBe(true)
-    expect(labels.some((l) => l.includes('soul'))).toBe(true)
+    expect(labels.some((l) => l.includes('constitution'))).toBe(true)
   })
 
   it('le juge n’injecte PAS la discipline de pipeline (fidèle à orchestrator.ts:527)', () => {

@@ -6,6 +6,7 @@ import {
   type HarnessTimeline
 } from './harness-timeline-model'
 import { HumanJson } from './HumanJson'
+import { BrainMarkdown } from './BrainMarkdown'
 import { summarizeNativeTraces, type NativeTraceSummaryInput } from './native-trace-summary'
 import './ObservatoryView.css'
 import { ModuleHeader } from './ModuleHeader'
@@ -179,11 +180,16 @@ function lastUserMessagePreview(
   return userMsg ? extractHumanMessage(userMsg.content, max) : ''
 }
 
-/** Rendu lisible d'un contenu de payload : JSON embarqué → arbre HumanJson ; sinon texte brut. */
+/** Rendu lisible d'un contenu de payload : JSON embarqué → arbre HumanJson ; sinon Markdown. */
 function PayloadContent({ content }: { content: string }): React.JSX.Element {
   const text = content || '(vide)'
   const split = splitLabeledJson(text)
-  if (!split) return <pre className="observatory-payload">{text}</pre>
+  if (!split)
+    return (
+      <div className="observatory-payload observatory-payload--markdown">
+        <BrainMarkdown source={text} />
+      </div>
+    )
   return (
     <div className="observatory-payload">
       {split.prefix && <div className="observatory-payload-label">{split.prefix}</div>}

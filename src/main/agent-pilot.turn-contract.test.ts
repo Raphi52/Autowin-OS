@@ -164,12 +164,15 @@ describe('AgentPilot turn contract', () => {
     }
 
     const runSend = vi.fn().mockResolvedValue({ text: 'DONE: ok', provider: 'codex' })
+    const runDescribe = vi.fn().mockReturnValue({ provider: 'codex', transport: 'fixture', messages: [], options: {}, limitation: 'test' })
     await new AgentPilot(
-      { send: runSend } as never,
+      { send: runSend, describePrompt: runDescribe } as never,
       { getBinding: () => initialBinding } as never,
       bus as never
     ).run('test', () => undefined)
     expect(runSend.mock.calls[0][2].system).toContain(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION)
+    // Parité chat : run() expose aussi systemBlocks nommés (traçable dans Observatory).
+    expect(runSend.mock.calls[0][2].systemBlocks.map((b) => b.name)).toContain('constitution')
   })
 
   it('injects Amitel Brain and Graphify evidence into the exact provider prompt', async () => {

@@ -19,6 +19,7 @@
 import { PHASE_BRIEFS } from './phase-briefs'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
+import { CONSTITUTION } from './constitution'
 import { PROJECT_CONTEXT_CHAIN, PROJECT_CONTEXT_MAX_BYTES } from './context-files'
 import { phasesForRegime, type TaskRegime } from './task-regime'
 import { resolvePhaseBinding, ALL_ROLES, type Role, type RoleBinding, type RoleModelConfig } from './roles'
@@ -80,14 +81,25 @@ const ORCHESTRATED_PHASES: PipelinePhase[] = ['scout', 'frame', 'terrain', 'buil
 
 function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
   const brief = PHASE_BRIEFS[phase] ?? ''
-  const blocks: InfluencerField[] = [
+  const blocks: InfluencerField[] = []
+  // La CONSTITUTION (soul/réflexes) est la source UNIQUE partagée, injectée en tête de chaque
+  // phase de TRAVAIL (le juge garde sa composition stricte séparée, sans constitution).
+  if (phase !== 'judge') {
+    blocks.push({
+      label: 'constitution',
+      value: 'Constitution (13 réflexes + limite honnête) — source UNIQUE partagée, injectée aussi au chat cockpit et à os.chat.',
+      source: 'src/main/constitution.ts:16',
+      excerpt: injectedText(CONSTITUTION)
+    })
+  }
+  blocks.push(
     {
       label: `consigne:${phase}`,
       value: brief ? 'Brief de phase purpose-built injecté en tête du system.' : 'Aucun brief (retombe sur la discipline générique).',
       source: 'src/main/phase-briefs.ts:39',
       excerpt: brief ? injectedText(brief) : undefined
     }
-  ]
+  )
   // La synthèse fan-out et le juge n'injectent PAS la discipline de pipeline (orchestrator.ts:306,527).
   if (phase !== 'judge') {
     blocks.push({
@@ -224,9 +236,10 @@ export function buildBehaviourComposition(
   const direct: DirectBehaviour = {
     systemPrompt: [
       {
-        label: 'kit SOUL',
-        value: 'CHAT DIRECT SEULEMENT : le kit condensé (resources/kit-soul.md) est le system du chat direct. En orchestration il est TOUJOURS shadowé par le system explicite des phases → sans effet là-bas.',
-        source: 'src/main/kit.ts:12'
+        label: 'constitution',
+        value: "os.chat (commande chat_send) utilise la CONSTITUTION comme system par défaut du registre. C'est désormais la MÊME source que les phases orchestrées et le chat cockpit — plus de doublon kit-soul.",
+        source: 'src/main/constitution.ts:16',
+        excerpt: injectedText(CONSTITUTION)
       }
     ],
     modelSelection: [

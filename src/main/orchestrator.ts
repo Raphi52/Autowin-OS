@@ -13,7 +13,9 @@ import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
 import { projectContextBlock } from './context-files'
 import type { ExecutionEvidence, PromptEnvelope, SendOptions, Usage } from './providers/types'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
+import { CONSTITUTION } from './constitution'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
+import { runGreedy, type GreedyNode } from './greedy-scheduler'
 
 /**
  * Boucle d'orchestration DISCIPLINÉE — le cœur d'Autowin OS.
@@ -74,6 +76,10 @@ export interface OrchestrationResult {
   /** Caractères de contexte Brain réellement injectés. */
   brainInjectedChars?: number
   trace: OrchestrationStep[]
+  /** Mode greedy : ids des sous-tâches dont le run a échoué (rejet). */
+  failedTasks?: string[]
+  /** Mode greedy : ids des sous-tâches jamais lancées car une dépendance a échoué (cascade). */
+  skippedTasks?: string[]
 }
 
 export interface OrchestratorDeps {
@@ -116,6 +122,32 @@ export interface OrchestratorDeps {
    * unique partagé). Injecté par AutowinOS ; les tests le laissent absent (rétrocompat HARD).
    */
   worktrees?: RunWorktrees
+  /**
+   * MODE d'orchestration. `sequential` (défaut, rétrocompat HARD) = pipeline phase-par-phase actuel.
+   * `greedy` = dispatch completion-driven d'un DAG de sous-tâches (traite chaque sous-agent DÈS son
+   * arrivée, enchaîne les avals sans barrière). N'a d'effet que si `decompose` fournit ≥2 sous-tâches ;
+   * sinon on retombe sur le pipeline séquentiel (rétrocompat). Injecté par AutowinOS ; absent = séquentiel.
+   */
+  /**
+   * DÉCOMPOSEUR — le fonctionnement NORMAL d'Autowin : découpe la tâche en sous-tâches
+   * indépendantes/enchaînables + leurs dépendances, dispatchées en completion-driven (chaque
+   * sous-agent traité DÈS son arrivée, sans barrière). Injectable → l'implémentation prod interroge le
+   * modèle orchestrateur (il sait juger quand une tâche N'EST PAS décomposable) ; les tests injectent un
+   * plan déterministe. Renvoyer <2 nœuds (tâche atomique) ⇒ exécution séquentielle classique (fallback
+   * naturel, aucun « mode » à activer). Absent ⇒ séquentiel (rétrocompat tests).
+   */
+  decompose?: (task: string) => Promise<GreedyTaskNode[]>
+  /** Plafond de sous-agents simultanés en mode greedy (défaut 4). */
+  greedyConcurrency?: number
+}
+
+/** Un nœud du plan greedy : une sous-tâche + les ids dont elle dépend (doivent réussir avant). */
+export interface GreedyTaskNode {
+  id: string
+  /** Consigne complète de la sous-tâche (remise au sous-agent build). */
+  prompt: string
+  /** Ids des sous-tâches prérequises (vide = indépendante, dispatchable d'emblée). */
+  deps: string[]
 }
 
 /** Contrat minimal du coordinateur worktree niveau run (implémenté par RunWorktreeCoordinator). */
@@ -190,10 +222,271 @@ export class Orchestrator {
     const workCwd =
       this.deps.worktrees?.begin(runId, 'Agent', isMut) ?? this.deps.executionWorkspace
     try {
+      // Fonctionnement NORMAL : on tente TOUJOURS de décomposer (le modèle orchestrateur juge s'il
+      // peut). ≥2 sous-tâches → dispatch completion-driven (DAG). Tâche atomique (plan <2) ou pas de
+      // décomposeur → pipeline séquentiel classique (fallback naturel, aucun « mode » à basculer).
+      if (this.deps.decompose) {
+        const plan = await this.deps.decompose(task)
+        if (plan.length >= 2) {
+          return await this.runGreedyPipeline(task, plan, workCwd, onStep, onPhase, onDelta, signal)
+        }
+      }
       return await this.runInner(task, workCwd, onStep, onPhase, onDelta, signal)
     } finally {
       this.deps.worktrees?.end(runId)
     }
+  }
+
+  /**
+   * Chemin GREEDY (isolé du séquentiel) : exécute un DAG de sous-tâches en completion-driven.
+   * Chaque sous-tâche = un sous-agent `build` lancé via `registry.send` ; l'ordonnanceur traite
+   * chaque résultat DÈS son arrivée et dispatche les avals dont les dépendances viennent d'être
+   * satisfaites, sans barrière. On agrège les livrables puis on passe UNE fois le juge + le gate.
+   */
+  private async runGreedyPipeline(
+    task: string,
+    plan: GreedyTaskNode[],
+    workCwd: string,
+    onStep?: (s: OrchestrationStep) => void,
+    onPhase?: (p: OrchestrationPhase) => void,
+    onDelta?: (step: 'exec' | 'judge', delta: string) => void,
+    signal?: AbortSignal
+  ): Promise<OrchestrationResult> {
+    const { registry, roles, cost } = this.deps
+    const projectContext = projectContextBlock(this.deps.executionWorkspace)
+    const trace: OrchestrationStep[] = []
+    const push = (s: OrchestrationStep): void => {
+      trace.push(s)
+      onStep?.(s)
+    }
+    const subBinding = roles.getBinding('subagent')
+    const subProvider = subBinding.provider
+    const phaseBinding = resolvePhaseBinding(subBinding, 'build')
+    const sandbox = isMutationTask(task) ? 'danger-full-access' : 'read-only'
+    const aggregatedEvidence: ExecutionEvidence[] = []
+    const outputs: { id: string; text: string }[] = []
+
+    // Un nœud du DAG = exécuter une sous-tâche en sous-agent build. Reçoit les livrables de ses
+    // dépendances (déjà arrivées) pour les porter en contexte.
+    const nodes: GreedyNode<{ text: string; evidence: ExecutionEvidence[] }>[] = plan.map((node) => ({
+      id: node.id,
+      deps: node.deps,
+      run: async (depResults) => {
+        const depContext = Object.entries(depResults)
+          .map(([id, r]) => `[dépendance ${id}]\n${r.text.slice(0, PHASE_CONTEXT_CAP)}`)
+          .join('\n\n')
+        const header = `[sous-tâche ${node.id}] ${node.prompt}`
+        const userContent = depContext ? `${depContext}\n\n${header}` : header
+        const parts = [
+          { name: 'constitution', text: CONSTITUTION },
+          { name: 'consigne:build', text: phaseBrief('build') },
+          { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
+          { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+          { name: 'projectContext', text: projectContext }
+        ]
+        const systemBlocks = parts.filter((p) => p.text).map((p) => ({ name: p.name, chars: p.text.length }))
+        let envelope: PromptEnvelope | undefined
+        const messages = [{ role: 'user' as const, content: userContent }]
+        const opts: SendOptions = {
+          system: parts.map((p) => p.text).join(''),
+          systemBlocks,
+          model: phaseBinding.model,
+          reasoningEffort: phaseBinding.reasoningEffort,
+          execution: { cwd: workCwd, sandbox },
+          signal,
+          observePrompt: (observed) => {
+            observed.systemBlocks = systemBlocks
+            envelope = observed
+          }
+        }
+        envelope = registry.describePrompt(subProvider, messages, opts, phaseBinding.model)
+        envelope.systemBlocks = systemBlocks
+        onPhase?.({
+          step: 'exec',
+          provider: subProvider,
+          role: 'subagent',
+          model: phaseBinding.model,
+          reasoningEffort: phaseBinding.reasoningEffort,
+          phase: 'build'
+        })
+        const startedAt = performance.now()
+        const res = await registry.send(subProvider, messages, opts, (c) => onDelta?.('exec', c.delta))
+        if (res.usage) {
+          cost.add({
+            provider: res.provider ?? subProvider,
+            role: 'subagent',
+            model: phaseBinding.model,
+            inputTokens: res.usage.inputTokens,
+            outputTokens: res.usage.outputTokens,
+            cacheReadTokens: res.usage.cacheReadTokens,
+            costUsd: res.usage.costUsd
+          })
+        }
+        // Le step est poussé DANS le run() du nœud → il apparaît à l'ARRIVÉE (ordre completion-driven),
+        // pas à l'ordre de dispatch. C'est exactement le « traite le premier revenu ».
+        push({
+          step: 'exec',
+          provider: res.provider ?? subProvider,
+          role: 'subagent',
+          model: res.model ?? phaseBinding.model,
+          text: res.text,
+          thinking: res.thinking,
+          tokens: res.usage ? res.usage.inputTokens + res.usage.outputTokens : undefined,
+          costUsd: res.usage?.costUsd,
+          usage: res.usage,
+          prompt: envelope,
+          status: 'completed',
+          durationMs: performance.now() - startedAt,
+          evidence: res.executionEvidence,
+          detail: `sous-tâche ${node.id}`
+        })
+        const evidence = res.executionEvidence ?? []
+        aggregatedEvidence.push(...evidence)
+        outputs.push({ id: node.id, text: res.text })
+        return { text: res.text, evidence }
+      }
+    }))
+
+    const run = await runGreedy(nodes, {
+      concurrency: this.deps.greedyConcurrency ?? 4,
+      onSettled: (ev) => {
+        if (ev.skipped) {
+          push({
+            step: 'exec',
+            provider: subProvider,
+            role: 'subagent',
+            text: '',
+            status: 'failed',
+            error: `sous-tâche ${ev.id} sautée (dépendance en échec)`,
+            detail: `sous-tâche ${ev.id}`
+          })
+        }
+      }
+    })
+
+    // Agrégat des livrables (ordre du plan pour la lisibilité) → remis au juge.
+    const orderedOutputs = plan
+      .map((n) => outputs.find((o) => o.id === n.id))
+      .filter((o): o is { id: string; text: string } => Boolean(o))
+    const aggregate = orderedOutputs.map((o) => `[sous-tâche ${o.id}]\n${o.text}`).join('\n\n')
+
+    const { valid, gate } = await this.greedyJudgeAndGate(
+      task,
+      aggregate,
+      aggregatedEvidence,
+      workCwd,
+      push,
+      onPhase,
+      onDelta,
+      signal
+    )
+
+    return {
+      task,
+      result: aggregate,
+      valid,
+      gateBlocked: gate.blocked,
+      gateReasons: gate.reasons,
+      costUsd: cost.totalUsd(),
+      phaseOutputs: orderedOutputs.map((o) => ({ phase: 'build' as PipelinePhase, text: o.text })),
+      trace,
+      failedTasks: run.failed,
+      skippedTasks: run.skipped
+    }
+  }
+
+  /** Juge + gate en mode greedy (une passe sur l'agrégat). Isolé du closure séquentiel. */
+  private async greedyJudgeAndGate(
+    task: string,
+    aggregate: string,
+    evidence: ExecutionEvidence[],
+    workCwd: string,
+    push: (s: OrchestrationStep) => void,
+    onPhase?: (p: OrchestrationPhase) => void,
+    onDelta?: (step: 'exec' | 'judge', delta: string) => void,
+    signal?: AbortSignal
+  ): Promise<{ valid: boolean; gate: ReturnType<typeof evaluateClosure> }> {
+    const { registry, roles, cost, trust } = this.deps
+    const projectContext = projectContextBlock(this.deps.executionWorkspace)
+    const judgeBinding = roles.getBinding('judge')
+    const judgeProvider = judgeBinding.provider
+    const judgePrompt =
+      `Tu es un juge outillé en lecture seule. Confronte le livrable aux preuves d'outil. ` +
+      `Le livrable est le TEXTE agrégé (sous-tâches parallèles), PAS un RUN.md sur disque.\n` +
+      `TÂCHE: ${task}\nRÉPONSE (agrégat des sous-tâches) : ${aggregate}\n` +
+      `PREUVES OUTILS: ${JSON.stringify(evidence ?? [])}\n` +
+      `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
+    const messages = [{ role: 'user' as const, content: judgePrompt }]
+    const parts = [
+      { name: 'skill:judge', text: phaseBrief('judge') },
+      { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+      { name: 'projectContext', text: projectContext }
+    ]
+    const systemBlocks = parts.filter((p) => p.text).map((p) => ({ name: p.name, chars: p.text.length }))
+    let envelope: PromptEnvelope | undefined
+    const opts: SendOptions = {
+      system: parts.map((p) => p.text).join(''),
+      systemBlocks,
+      model: judgeBinding.model,
+      reasoningEffort: judgeBinding.reasoningEffort,
+      execution: { cwd: workCwd, sandbox: 'read-only' },
+      signal,
+      observePrompt: (observed) => {
+        observed.systemBlocks = systemBlocks
+        envelope = observed
+      }
+    }
+    envelope = registry.describePrompt(judgeProvider, messages, opts, judgeBinding.model)
+    envelope.systemBlocks = systemBlocks
+    onPhase?.({ step: 'judge', provider: judgeProvider, role: 'judge', model: judgeBinding.model })
+    const startedAt = performance.now()
+    const res = await registry.send(judgeProvider, messages, opts, (c) => onDelta?.('judge', c.delta))
+    if (res.usage) {
+      cost.add({
+        provider: res.provider ?? judgeProvider,
+        role: 'judge',
+        model: judgeBinding.model,
+        inputTokens: res.usage.inputTokens,
+        outputTokens: res.usage.outputTokens,
+        cacheReadTokens: res.usage.cacheReadTokens,
+        costUsd: res.usage.costUsd
+      })
+    }
+    const verdictText = res.text ?? ''
+    // Même règle que le séquentiel : VALIDE du juge ET preuves d'outil suffisantes pour la tâche.
+    const ok = evidenceSatisfiesTask(task, evidence) && /^\s*valide/i.test(verdictText)
+    trust.record({ judgeModel: judgeProvider, verdict: ok ? 'green' : 'red' })
+    push({
+      step: 'judge',
+      provider: res.provider ?? judgeProvider,
+      role: 'judge',
+      model: res.model ?? judgeBinding.model,
+      text: verdictText.trim(),
+      thinking: res.thinking,
+      tokens: res.usage ? res.usage.inputTokens + res.usage.outputTokens : undefined,
+      costUsd: res.usage?.costUsd,
+      usage: res.usage,
+      prompt: envelope,
+      detail: ok ? 'validé' : 'défaut',
+      status: 'completed',
+      durationMs: performance.now() - startedAt
+    })
+    // GATE déterministe + hooks in-app reproduits (enforcement HORS-MODÈLE), comme le séquentiel.
+    const hookViolations = runHooks({
+      requireProof: isMutationTask(task),
+      evidenceOkCount: evidence.filter((e) => e.ok).length
+    })
+    onPhase?.({ step: 'gate' })
+    const gate = evaluateClosure({
+      status: ok && hookViolations.length === 0 ? 'green' : 'red',
+      dod: [{ checked: ok, hasContent: true }]
+    })
+    if (hookViolations.length) gate.reasons.push(...hookViolations.map((h) => `hook ${h.hook}: ${h.detail}`))
+    push({
+      step: 'gate',
+      detail: gate.blocked ? `BLOQUÉ: ${gate.reasons.join('; ')}` : 'clôture autorisée'
+    })
+    return { valid: ok, gate }
   }
 
   /** Exécute une tâche à travers le pipeline discipliné complet (appels réels). */
@@ -263,6 +556,7 @@ export class Orchestrator {
         // Le fan-out casse la chaîne de session (N sessions //). Chaque membre part du contexte complet.
         const fanMessages = [{ role: 'user' as const, content: phaseContext.join('\n\n') }]
         const parts = [
+          { name: 'constitution', text: CONSTITUTION },
           { name: `consigne:${phase}`, text: phaseBrief(phase) },
           { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
           { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
@@ -379,6 +673,7 @@ export class Orchestrator {
           .map((o, i) => `### Proposition ${i + 1} (modèle ${o.member.model ?? o.member.provider})\n${o.text}`)
           .join('\n\n')
         const synthParts = [
+          { name: 'constitution', text: CONSTITUTION },
           { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
           { name: 'projectContext', text: projectContext }
         ]
@@ -459,6 +754,7 @@ export class Orchestrator {
       // → défaut = modèle du binding. Générique/rétrocompat (resolvePhaseBinding).
       const phaseBinding = resolvePhaseBinding(subBinding, phase)
       const parts = [
+        { name: 'constitution', text: CONSTITUTION },
         { name: `consigne:${phase}`, text: phaseBrief(phase) },
         { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
         { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },

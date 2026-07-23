@@ -4,7 +4,9 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
+  Menu,
   Notification,
+  Tray,
   type IpcMainInvokeEvent
 } from 'electron'
 import { join } from 'path'
@@ -15,9 +17,11 @@ import devIcon from '../../resources/autowin-os-dev.png?asset'
 import type { Message, ProviderAdapter, SendResult, StreamChunk } from './providers/types'
 import { ProviderRegistry } from './providers/registry'
 import { AutowinOS } from './os'
+import { projectContextBlock } from './context-files'
+import { ensureBrainServerStarted } from './brain-server-launch'
 import { installCrashHandlers } from './crash-handlers'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
-import { getLastAppPreflightResult, runAppPreflight, watchAppPreflight } from './preflight-probes'
+import { appPreflightProbes, getLastAppPreflightResult, runAppPreflight, watchAppPreflight } from './preflight-probes'
 import { RoleModelConfig, type ReasoningEffort, type Role } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
@@ -82,7 +86,8 @@ import { buildBehaviourComposition } from './behaviour-composition'
 import {
   buildProviderStatuses,
   probePresenceUnlessStandby,
-  probeResultStatus
+  probeResultStatus,
+  runStartupProviderProbes
 } from './provider-status'
 import { ProviderStateStore, type ProviderMode } from './provider-state-store'
 import { loadTokens } from './providers/codex-auth'
@@ -115,7 +120,6 @@ if (!explicitUserDataDir) app.setPath('userData', canonicalAppDataRoot)
 const ownsInstanceLock = isolatedTestInstance || !app.isPackaged || app.requestSingleInstanceLock()
 if (!ownsInstanceLock) app.quit()
 else ensureAutowinAppData(appDataRoot)
-let startupStorageMigration = false
 
 /** Noyau applicatif unique (P0-P4 câblés) : kit SOUL injecté, 2 voies, modules. */
 const os = new AutowinOS()
@@ -136,7 +140,9 @@ const pilot = new AgentPilot(
   createAmitelContextProvider({
     graphEvidence: (raw, query, limit) =>
       brainWorker.request<string>('graphifyEvidence', raw, query, limit)
-  })
+  }),
+  // MÊME source de contexte projet que les phases orchestrées (fold du CLAUDE.md/AGENTS.md du workspace).
+  () => projectContextBlock(os.executionWorkspace)
 )
 const modelQuestions = new ModelQuestionHub()
 const activeChatTurns = new ActiveChatTurns()
@@ -152,10 +158,88 @@ const questionWindows = new Map<string, BrowserWindow>()
 const diagnosticCapabilities = new DiagnosticCapabilities()
 /** Boucle de re-probe du diagnostic de démarrage (#4) — arrêtée à la fermeture pour ne pas fuir de timer. */
 let preflightWatchHandle: { stop: () => void } | null = null
+
+/**
+ * Survie à la fermeture de FENÊTRE (robustesse niveau 1) : fermer la fenêtre ne tue plus l'app ni le
+ * run en cours — le process main reste vivant en TRAY (les tours d'agent y tournent + s'y persistent),
+ * et rouvrir la fenêtre rebranche sur la conversation (résultat conservé). Quit RÉEL via le menu tray.
+ */
+let tray: Tray | null = null
+let isQuitting = false
+
+/** Montre la fenêtre existante (ou en recrée une si toutes fermées). */
+function showMainWindow(): void {
+  const existing = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+  if (existing) {
+    if (existing.isMinimized()) existing.restore()
+    existing.show()
+    existing.focus()
+  } else {
+    createWindow()
+  }
+}
+
+/** Icône de barre d'état : présence VISIBLE de l'app vivante (anti « process fantôme ») + quit réel. */
+function setupTray(): void {
+  if (tray) return
+  try {
+    tray = new Tray(process.env['AUTOWIN_OS_DEV'] === '1' ? devIcon : icon)
+    tray.setToolTip('Autowin OS — actif (les runs continuent fenêtre fermée)')
+    const menu = Menu.buildFromTemplate([
+      { label: 'Ouvrir Autowin', click: () => showMainWindow() },
+      { type: 'separator' },
+      {
+        label: 'Quitter Autowin',
+        click: () => {
+          isQuitting = true
+          app.quit()
+        }
+      }
+    ])
+    tray.setContextMenu(menu)
+    tray.on('click', () => showMainWindow())
+  } catch {
+    // Tray best-effort : un échec (env sans zone de notification) ne doit pas casser le démarrage.
+    tray = null
+  }
+}
 const providerStateStore = new ProviderStateStore(
   join(app.getPath('userData'), 'provider-state.json')
 )
 const routedProviders = ['codex', 'claude', 'kimi'] as const
+type RoutedProvider = (typeof routedProviders)[number]
+let startupProviderChecks: Promise<void> = Promise.resolve()
+
+async function probeProviderConnection(
+  id: RoutedProvider
+): Promise<{ provider: RoutedProvider; status: ReturnType<typeof probeResultStatus> | 'standby' }> {
+  if (providerStateStore.get(id).mode === 'standby') {
+    return { provider: id, status: 'standby' }
+  }
+  try {
+    const result = (await Promise.race([
+      // Probe minimal : aucun kit système injecté, pour éviter de facturer le contexte applicatif.
+      os.registry.send(id, [{ role: 'user', content: 'ping' }], { system: '' }),
+      new Promise<never>((_resolve, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 20000)
+      ) // sleep-ok: garde-timeout bornant un vrai appel provider (réseau/CLI)
+    ])) as { text?: string }
+    const text = (result?.text ?? '').toLowerCase()
+    const status = /authenticate|oauth|expired|not logged|login/.test(text)
+      ? probeResultStatus({ expired: true })
+      : probeResultStatus({ ok: true })
+    providerStateStore.recordProbe(id, status)
+    return { provider: id, status }
+  } catch (error) {
+    const message = (error instanceof Error ? error.message : String(error)).toLowerCase()
+    const status = /authenticate|oauth|expired|not logged|login/.test(message)
+      ? probeResultStatus({ expired: true })
+      : probeResultStatus({ errored: true })
+    providerStateStore.recordProbe(id, status)
+    return { provider: id, status }
+  }
+}
+
 function preflightProviderOptions(): { standbyProviders: Array<(typeof routedProviders)[number]> } {
   return {
     standbyProviders: routedProviders.filter(
@@ -508,6 +592,7 @@ function registerChatIpc(): void {
   // claude/kimi = présence CLI seulement (JAMAIS « authenticated » sans probe réel). Borné.
   ipcMain.handle('os:providerStatus', async (event) => {
     assertTrustedRendererSender(event, 'Provider status')
+    await startupProviderChecks
     const bounded = (p: Promise<boolean>): Promise<boolean> =>
       Promise.race([
         p.catch(() => false),
@@ -551,28 +636,10 @@ function registerChatIpc(): void {
   ipcMain.handle('os:providerTest', async (event, provider: unknown) => {
     assertTrustedRendererSender(event, 'Provider test')
     const id = guardString(provider, 'provider')
-    if (providerStateStore.get(id).mode === 'standby') {
-      return { provider: id, status: 'standby' as const }
+    if (!routedProviders.includes(id as RoutedProvider)) {
+      throw new Error('Provider non supporté.')
     }
-    try {
-      const res = (await Promise.race([
-        os.registry.send(id, [{ role: 'user', content: 'ping' }], {}),
-        new Promise((_r, reject) => setTimeout(() => reject(new Error('timeout')), 20000)) // sleep-ok: garde-timeout bornant un vrai appel provider (réseau/CLI)
-      ])) as { text?: string }
-      const t = (res?.text ?? '').toLowerCase()
-      const status = /authenticate|oauth|expired|not logged|login/.test(t)
-        ? probeResultStatus({ expired: true })
-        : probeResultStatus({ ok: true })
-      providerStateStore.recordProbe(id, status)
-      return { provider: id, status }
-    } catch (e) {
-      const msg = (e instanceof Error ? e.message : String(e)).toLowerCase()
-      const status = /authenticate|oauth|expired|not logged|login/.test(msg)
-        ? probeResultStatus({ expired: true })
-        : probeResultStatus({ errored: true })
-      providerStateStore.recordProbe(id, status)
-      return { provider: id, status }
-    }
+    return probeProviderConnection(id as RoutedProvider)
   })
   ipcMain.handle('os:profiles:list', () => profiles.list())
   ipcMain.handle('os:profiles:save', async (_event, profile: AutowinProfile) => {
@@ -1375,26 +1442,29 @@ app.whenReady().then(async () => {
   let legacyStorageValues: MigratedRendererStorage = {}
   let canWriteMigrationMarker = isRendererStorageMigrationComplete(canonicalAppDataRoot)
   if (!explicitUserDataDir && !canWriteMigrationMarker) {
-    startupStorageMigration = true
-    try {
-      const legacyRead = await readLegacyRendererStorage(
-        legacyAppDataRoot(appDataRoot),
-        rendererLocation()
+    const legacyRead = await readLegacyRendererStorage(
+      legacyAppDataRoot(appDataRoot),
+      rendererLocation()
+    )
+    legacyStorageValues = legacyRead.values
+    canWriteMigrationMarker = legacyRead.status !== 'failed'
+    if (legacyRead.status === 'failed') {
+      console.warn(
+        `[Autowin migration] legacy LocalStorage read failed at ${legacyRead.stage ?? 'unknown-stage'} (${legacyRead.errorCode ?? 'UNKNOWN'}); will retry on next application launch`
       )
-      legacyStorageValues = legacyRead.values
-      canWriteMigrationMarker = legacyRead.status !== 'failed'
-      if (legacyRead.status === 'failed') {
-        console.warn(
-          `[Autowin migration] legacy LocalStorage read failed at ${legacyRead.stage ?? 'unknown-stage'} (${legacyRead.errorCode ?? 'UNKNOWN'}); will retry on next application launch`
-        )
-      }
-    } finally {
-      startupStorageMigration = false
     }
   }
   registerStorageMigrationIpc(legacyStorageValues, canWriteMigrationMarker)
   registerChatIpc()
+  // Validation d'auth réelle en arrière-plan à chaque démarrage. Le batch est lancé avant la fenêtre,
+  // sans être attendu ici : l'ouverture reste immédiate, tandis que providerStatus attend le résultat.
+  startupProviderChecks = runStartupProviderProbes(
+    routedProviders,
+    (provider) => providerStateStore.get(provider),
+    probeProviderConnection
+  )
   createWindow()
+  setupTray() // l'app vit en tray → fermer la fenêtre ne tue plus les runs en cours
 
   // #4 — diagnostic de démarrage (non bloquant) : on vérifie brain_server, CLI providers et token,
   // et on pousse le résultat au renderer (bannière) pour que l'utilisateur voie une config incomplète
@@ -1415,6 +1485,14 @@ app.whenReady().then(async () => {
       if (signature === lastPreflightSignature) return
       lastPreflightSignature = signature
       for (const w of BrowserWindow.getAllWindows()) w.webContents.send('preflight:result', result)
+      // #2 — un rouge « brain » → tenter de DÉMARRER le service local (garde anti-doublon + tentative
+      // unique par session dans ensureBrainServerStarted). Le backoff de watchAppPreflight re-sondera
+      // ensuite jusqu'à sa disponibilité (warm-up fastembed). Fire-and-forget : ne bloque pas le push.
+      if (result.checks.some((c) => c.id === 'brain' && !c.ok)) {
+        void ensureBrainServerStarted(() => appPreflightProbes().pingBrain()).then((r) =>
+          console.log('[brain-launch]', r.status, '—', r.detail)
+        )
+      }
     },
     preflightProviderOptions()
   )
@@ -1438,7 +1516,11 @@ app.on('before-quit', () => {
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin' && !startupStorageMigration) {
+  // Robustesse niveau 1 : on NE QUITTE PLUS quand la dernière fenêtre se ferme — l'app reste vivante
+  // en tray pour que les runs en cours continuent (et que le résultat soit là à la réouverture). Le
+  // quit réel passe UNIQUEMENT par le menu tray (isQuitting). La migration de démarrage garde son
+  // comportement historique (elle ne quittait pas ici — elle gère son propre relaunch).
+  if (isQuitting) {
     app.quit()
   }
 })

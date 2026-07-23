@@ -9,7 +9,7 @@ import { ClaudeCliAdapter } from './providers/claude'
 import { CodexAdapter } from './providers/codex'
 import { KimiCliAdapter } from './providers/kimi'
 import type { Message } from './providers/types'
-import { loadKitSoul } from './kit'
+import { CONSTITUTION } from './constitution'
 import { planProviderLogin, spawnLoginTerminal } from './provider-login'
 import { RoleModelConfig, type Role, type RoleBinding, type ReasoningEffort } from './roles'
 import { loadRoleBindings, saveRoleBindings } from './role-store'
@@ -35,6 +35,7 @@ import {
   type OrchestrationStep,
   type OrchestrationPhase
 } from './orchestrator'
+import { buildOrchestratorDecomposer } from './greedy-decompose'
 import { regimePhases } from './task-regime'
 import { defaultBehaviourWorkspace } from './behaviour-files'
 import { WorktreeManager } from './store/worktree-manager'
@@ -112,7 +113,7 @@ export class AutowinOS {
   private worktreeActivityListener?: (a: WorktreeAgentActivity[]) => void
 
   constructor() {
-    this.registry = new ProviderRegistry(loadKitSoul())
+    this.registry = new ProviderRegistry(CONSTITUTION)
       .register(new ClaudeCliAdapter())
       .register(new CodexAdapter())
       .register(new KimiCliAdapter())
@@ -148,7 +149,14 @@ export class AutowinOS {
       // ≥2 modèles déposés → l'orchestrateur duplique + agrège (voir orchestrator.ts). Sinon mono.
       phaseFanOut: (phase) =>
         phase === 'scout' || phase === 'frame' ? this.fanOut[phase] : [],
-      judgeFanOut: () => this.fanOut.judge
+      judgeFanOut: () => this.fanOut.judge,
+      // Fonctionnement NORMAL : on décompose systématiquement via le modèle orchestrateur (best-effort
+      // → [] pour une tâche atomique = fallback séquentiel naturel). Pas de « mode » à activer.
+      decompose: buildOrchestratorDecomposer({
+        registry: this.registry,
+        roles: this.roles,
+        cwd: executionWorkspace
+      })
     })
   }
 

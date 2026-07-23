@@ -803,6 +803,28 @@
   background: var(--surface-inset);
   color: var(--text-dim);
 }
+.observatory-payload--markdown {
+  white-space: normal;
+}
+.observatory-payload--markdown .brain-markdown {
+  padding: 0;
+  color: inherit;
+  font-size: 12px;
+}
+.observatory-payload--markdown .brain-markdown h1 {
+  font-size: 22px;
+}
+.observatory-payload--markdown .brain-markdown h2 {
+  margin-top: 18px;
+  font-size: 18px;
+}
+.observatory-payload--markdown .brain-markdown h3 {
+  margin-top: 16px;
+  font-size: 15px;
+}
+.observatory-payload--markdown .brain-markdown pre {
+  white-space: pre;
+}
 .observatory-payload-list {
   display: grid;
   gap: 8px;

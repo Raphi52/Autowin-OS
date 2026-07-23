@@ -7,15 +7,28 @@ import type {
 } from '../../../shared/worktree-activity-model'
 import './WorktreeView.css'
 
+function isWorktreeRuntimeStatus(value: unknown): value is WorktreeRuntimeStatus {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof Reflect.get(value, 'available') === 'boolean'
+  )
+}
+
 /**
  * Onglet "Worktrees" (cockpit) — conteneur : récupère l'activité worktree au montage puis s'abonne
  * aux changements live (IPC) et la passe au rendu pur `WorktreeActivityView`.
  */
 export function WorktreeView({ active }: { active: boolean }): React.JSX.Element {
+  return <WorktreeViewSession key={active ? 'active' : 'inactive'} active={active} />
+}
+
+function WorktreeViewSession({ active }: { active: boolean }): React.JSX.Element {
   const [activity, setActivity] = useState<WorktreeAgentActivity[]>([])
   const [bridgeError, setBridgeError] = useState<string>()
   const [statusError, setStatusError] = useState<string>()
   const [runtimeStatus, setRuntimeStatus] = useState<WorktreeRuntimeStatus>()
+  const [activityReady, setActivityReady] = useState(false)
   const api = window.api
   const bridgeAvailable =
     typeof api?.getWorktreeActivity === 'function' &&
@@ -31,8 +44,12 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
       void api.getWorktreeStatus().then(
         (status) => {
           if (!disposed) {
-            setStatusError(undefined)
-            setRuntimeStatus(status)
+            if (isWorktreeRuntimeStatus(status)) {
+              setStatusError(undefined)
+              setRuntimeStatus(status)
+            } else {
+              setStatusError('Relance Autowin OS pour reconnecter la vue Worktrees.')
+            }
           }
         },
         () => {
@@ -45,6 +62,7 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
       if (!disposed) {
         setBridgeError(undefined)
         setActivity(nextActivity)
+        setActivityReady(true)
       }
     })
     void api.getWorktreeActivity().then(
@@ -52,6 +70,7 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
         if (!disposed && !receivedLiveActivity) {
           setBridgeError(undefined)
           setActivity(nextActivity)
+          setActivityReady(true)
         }
       },
       () => {
@@ -97,6 +116,10 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
               Autowin OS.
             </span>
           </div>
+        ) : activityReady === false ? (
+          <p className="worktree-view__loading" role="status">
+            Connexion au moteur des copies…
+          </p>
         ) : (
           <WorktreeActivityView agents={activity} />
         )}

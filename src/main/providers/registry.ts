@@ -107,11 +107,11 @@ export class ProviderRegistry {
     if (route.opts.execution && adapter.supportsExecution !== true) {
       throw new Error(`Provider ${route.id} sans exécuteur local outillé`)
     }
-    // F4 (décision : SOUL chat-only, intentionnel) — `systemBlock` = le kit SOUL, injecté par
-    // DÉFAUT (chat direct). L'orchestration passe TOUJOURS `opts.system` (SKILL.md + discipline +
-    // style + capacités + contexte), qui REMPLACE le soul : les phases ne reçoivent donc pas le
-    // soul, et c'est VOULU (le SKILL.md de la phase porte déjà la discipline pertinente ; concaténer
-    // le soul long à chaque phase gonflerait les tokens sans valeur nette).
+    // `systemBlock` = la CONSTITUTION (source unique du soul, cf. constitution.ts). Elle sert ici de
+    // FALLBACK uniquement quand aucun `opts.system` explicite n'est fourni (os.chat/chat_send).
+    // Depuis l'unification chat↔orchestrateur, le chat cockpit ET les phases orchestrées injectent
+    // la MÊME CONSTITUTION explicitement via leurs propres `parts` (agent-pilot.ts / orchestrator.ts) :
+    // ce fallback ne les concerne donc pas — ce n'est plus une exclusion voulue du soul.
     const system = route.opts.system ?? this.systemBlock
     const gen = adapter.send(messages, { ...route.opts, system })
 

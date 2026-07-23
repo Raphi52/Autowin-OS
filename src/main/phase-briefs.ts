@@ -22,7 +22,7 @@ Livrable : ## SOP — pour CHAQUE étape : action → commande/outil précis →
 Gardes : le SOP est spécifique à CETTE tâche (pas générique) ; chaque étape a un signal vérifiable ; nomme l'artefact qui prouvera le "vert".`,
 
   build: `Tu es en phase BUILD. Objectif : implémenter le livrable cadré, par petits pas VÉRIFIÉS.
-Livrable : le vrai changement (code/fichier) + la preuve : après chaque pas, un artefact HORS-MODÈLE (test rouge→vert, exit-code 0, capture lue), jamais une auto-déclaration.
+Livrable : le vrai changement (code/fichier) + la preuve : après chaque pas, un artefact HORS-MODÈLE, jamais une auto-déclaration. Si tu as les outils d'écriture/exécution (tâche de mutation) : test rouge→vert / exit-code 0 / capture lue. Si ta tâche est en LECTURE SEULE (Read/Grep/Glob only) : une lecture ou inspection ciblée qui démontre l'état — n'invente jamais un exit-code que tu ne peux pas produire.
 Gardes : reproduis le rouge AVANT de fixer un bug ; fix minimal (pas de refactor opportuniste) ; ne dis "fait" que preuve à l'appui ; si bloqué, dis "bloqué" — ne déguise pas un statut.`,
 
   clean: `Tu es en phase CLEAN. Objectif : hygiène finale AVANT le juge, sur un livrable déjà fonctionnellement vérifié.

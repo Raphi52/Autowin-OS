@@ -48,7 +48,7 @@ async function render(): Promise<void> {
 }
 
 describe('FirstRunWizard (#5)', () => {
-  it('s’affiche au 1er lancement et liste les checks détectés', async () => {
+  it('s’affiche quand une dépendance est ROUGE et liste les checks détectés', async () => {
     await render()
     expect(container.querySelector('[data-testid="first-run-wizard"]')).toBeTruthy()
     expect(container.querySelector('[data-testid="frw-check-brain"]')?.className).toContain('ko')
@@ -56,28 +56,59 @@ describe('FirstRunWizard (#5)', () => {
     expect(container.textContent).toContain('injoignable')
   })
 
-  it('ne s’affiche PAS si le first-run est déjà terminé', async () => {
-    localStorage.setItem('autowin:first-run-done', '1')
+  it('ne s’affiche PAS si TOUT est vert (visibilité pilotée par l’état)', async () => {
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      recheckPreflight: async () => ({
+        ok: true,
+        summary: 'OK',
+        checks: [{ id: 'claude', label: 'CLI claude', ok: true }]
+      })
+    }
     await render()
     expect(container.querySelector('[data-testid="first-run-wizard"]')).toBeNull()
   })
 
-  it('"Continuer quand même" ferme le wizard et pose le drapeau', async () => {
+  it('se referme tout seul si l’état repasse au vert (push onPreflight)', async () => {
+    let pushed: ((r: unknown) => void) | undefined
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      recheckPreflight: async () => ({
+        ok: false,
+        summary: 'incomplète',
+        checks: [{ id: 'brain', label: 'brain_server (:8765)', ok: false, detail: 'injoignable' }]
+      }),
+      onPreflight: (cb: (r: unknown) => void) => {
+        pushed = cb
+        return () => undefined
+      }
+    }
+    await render()
+    expect(container.querySelector('[data-testid="first-run-wizard"]')).toBeTruthy()
+    await act(async () => {
+      pushed?.({ ok: true, summary: 'OK', checks: [{ id: 'brain', label: 'brain_server (:8765)', ok: true }] })
+    })
+    await flush()
+    expect(container.querySelector('[data-testid="first-run-wizard"]')).toBeNull()
+  })
+
+  it('"Continuer quand même" ferme le wizard (dismiss de session, sans persistance)', async () => {
     await render()
     const primary = container.querySelector<HTMLButtonElement>('.frw-primary')!
     await act(async () => primary.click())
-    expect(localStorage.getItem('autowin:first-run-done')).toBe('1')
+    expect(localStorage.getItem('autowin:first-run-done')).toBeNull()
     expect(container.querySelector('[data-testid="first-run-wizard"]')).toBeNull()
   })
 
-  it('affiche une erreur de diagnostic puis réussit au deuxième essai', async () => {
+  it('affiche une erreur de diagnostic puis, au 2e essai (encore rouge), l’efface en restant ouvert', async () => {
     const recheckPreflight = vi
       .fn()
       .mockRejectedValueOnce(new Error('IPC indisponible'))
       .mockResolvedValueOnce({
-        ok: true,
-        summary: 'OK',
-        checks: [{ id: 'codex-session', label: 'Session OAuth Codex', ok: true }]
+        ok: false,
+        summary: 'incomplète',
+        checks: [
+          { id: 'codex-session', label: 'Session OAuth Codex', ok: true },
+          { id: 'brain', label: 'brain_server (:8765)', ok: false, detail: 'injoignable' }
+        ]
       })
     ;(globalThis as unknown as { window: { api: unknown } }).window.api = { recheckPreflight }
 

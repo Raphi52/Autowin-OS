@@ -100,6 +100,37 @@ describe('Observatory turn focus', () => {
     expect(container.textContent).toContain('ancien tour')
   })
 
+  it('renders Markdown in an expanded text payload', async () => {
+    const view = await mount(
+      api([
+        trace(
+          'turn-2',
+          '## Besoin\n\n**Important**\n\n- premier\n\n<script data-injected>danger</script>',
+          1
+        )
+      ])
+    )
+    const eventButton = view.querySelector('.observatory-event') as HTMLButtonElement
+
+    await act(async () => eventButton.click())
+
+    const payload = view.querySelector('.observatory-payload')
+    expect(payload?.querySelector('h2')?.textContent).toBe('Besoin')
+    expect(payload?.querySelector('strong')?.textContent).toBe('Important')
+    expect(payload?.querySelector('li')?.textContent).toBe('premier')
+    expect(payload?.querySelector('script')).toBeNull()
+  })
+
+  it('keeps valid JSON payloads in the structured viewer', async () => {
+    const view = await mount(api([trace('turn-2', 'ÉTAT: {"ready":true}', 1)]))
+    const eventButton = view.querySelector('.observatory-event') as HTMLButtonElement
+
+    await act(async () => eventButton.click())
+
+    expect(view.querySelector('.observatory-payload .human-json')).not.toBeNull()
+    expect(view.querySelector('.observatory-payload--markdown')).toBeNull()
+  })
+
   it('shows no unrelated details when the requested conversation or turn is missing', async () => {
     const missingConversationApi = api([trace('turn-2', 'ne doit pas apparaître', 1)])
     const first = await mount(missingConversationApi, 'deleted-conversation', 'turn-2')
