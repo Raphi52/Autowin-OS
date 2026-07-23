@@ -23,12 +23,14 @@ interface BehaviourComposition {
   cockpit: {
     systemPrompt: InfluencerField[]
     retrievedContext: InfluencerField[]
+    turnContext: InfluencerField[]
     modelSelection: InfluencerField[]
   }
   orchestrated: {
     systemPrompt: PhaseSystemPrompt[]
     injectedContext: InfluencerField[]
     modelSelection: InfluencerField[]
+    topology: InfluencerField[]
     regime: InfluencerField[]
     guardrails: InfluencerField[]
   }
@@ -157,6 +159,11 @@ export function BehaviourView(): React.JSX.Element {
             fields={cockpit.retrievedContext}
           />
           <Category
+            title="Contexte du tour"
+            hint="commandes, état, historique, pièces jointes, autorité et bornes réellement appliqués"
+            fields={cockpit.turnContext}
+          />
+          <Category
             title="Modèle / rôle"
             hint="binding utilisé par AgentPilot"
             fields={cockpit.modelSelection}
@@ -204,6 +211,11 @@ export function BehaviourView(): React.JSX.Element {
             fields={orch.modelSelection}
           />
           <Category
+            title="C2 · Topologie / fan-out"
+            hint="panels vivants scout, frame et judge, avec règle de quorum"
+            fields={orch.topology}
+          />
+          <Category
             title="D · Régime → phases"
             hint="quelles phases tournent selon la tâche (heuristique déterministe)"
             fields={orch.regime}
@@ -229,7 +241,7 @@ export function BehaviourView(): React.JSX.Element {
           />
           <Category
             title="Modèle / rôle"
-            hint="binding du rôle demandé, sans pipeline"
+            hint="binding du rôle si aucun provider explicite ; sinon override provider seul"
             fields={direct.modelSelection}
           />
         </div>

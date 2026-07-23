@@ -571,7 +571,7 @@ function registerChatIpc(): void {
   // sans force (montage) le cache déduplique avec le run de démarrage.
   ipcMain.handle('os:behaviourComposition', (event) => {
     assertTrustedRendererSender(event, 'Behaviour composition')
-    return buildBehaviourComposition(os.roles)
+    return buildBehaviourComposition(os.roles, process.env, agentTopology)
   })
   ipcMain.handle('os:brainTraces', (event, conversationId?: unknown) => {
     assertTrustedRendererSender(event, 'Brain traces')

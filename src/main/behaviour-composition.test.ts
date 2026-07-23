@@ -8,10 +8,12 @@ const build = (env: NodeJS.ProcessEnv = {}): ReturnType<typeof buildBehaviourCom
 const allFields = (c: ReturnType<typeof buildBehaviourComposition>): InfluencerField[] => [
   ...c.cockpit.systemPrompt,
   ...c.cockpit.retrievedContext,
+  ...c.cockpit.turnContext,
   ...c.cockpit.modelSelection,
   ...c.orchestrated.systemPrompt.flatMap((p) => p.blocks),
   ...c.orchestrated.injectedContext,
   ...c.orchestrated.modelSelection,
+  ...c.orchestrated.topology,
   ...c.orchestrated.regime,
   ...c.orchestrated.guardrails,
   ...c.direct.systemPrompt,
@@ -30,6 +32,7 @@ describe('buildBehaviourComposition — COMPLÉTUDE', () => {
     const c = build()
     expect(c.orchestrated.injectedContext.length).toBeGreaterThan(0) // B
     expect(c.orchestrated.modelSelection.length).toBeGreaterThan(0) // C
+    expect(c.orchestrated.topology.length).toBeGreaterThan(0) // C2
     expect(c.orchestrated.regime.length).toBeGreaterThan(0) // D
     expect(c.orchestrated.guardrails.length).toBeGreaterThan(0) // E
     expect(c.direct.systemPrompt.length).toBeGreaterThan(0)
@@ -61,6 +64,62 @@ describe('buildBehaviourComposition — COMPLÉTUDE', () => {
     ])
     expect(JSON.stringify(cockpit)).toContain('dernier message utilisateur')
     expect(JSON.stringify(cockpit)).toContain('fallback')
+  })
+
+  it('décrit tous les influenceurs variables du cockpit', () => {
+    const blob = JSON.stringify(build().cockpit)
+    for (const token of [
+      'catalogue vivant',
+      'snapshot courant',
+      'historique complet',
+      'pièces jointes',
+      "mode d'autorité",
+      'directives',
+      '6 itérations'
+    ]) {
+      expect(blob).toContain(token)
+    }
+  })
+
+  it('reflète les panels vivants et la règle de quorum', () => {
+    const c = buildBehaviourComposition(new RoleModelConfig(), {}, {
+      panels: {
+        scout: [
+          {
+            slotId: 's1',
+            provider: 'codex',
+            modelId: 'codex:gpt-5.6',
+            reasoningEffort: 'high'
+          }
+        ],
+        frame: [],
+        judge: [
+          {
+            slotId: 'j1',
+            provider: 'claude',
+            modelId: 'claude:opus',
+            reasoningEffort: 'high'
+          },
+          {
+            slotId: 'j2',
+            provider: 'codex',
+            modelId: 'codex:gpt-5.6',
+            reasoningEffort: 'medium'
+          }
+        ]
+      }
+    })
+    const blob = JSON.stringify(c.orchestrated.topology)
+    expect(blob).toContain('codex/codex:gpt-5.6/high')
+    expect(blob).toContain('claude/claude:opus/high')
+    expect(blob).toContain('quorum')
+  })
+
+  it('distingue provider explicite et binding de rôle dans os.chat', () => {
+    const direct = JSON.stringify(build().direct)
+    expect(direct).toContain('Sans provider explicite')
+    expect(direct).toContain('options modèle/effort vides')
+    expect(direct).toContain('binding du rôle est alors ignoré')
   })
 
   it('le juge n’injecte PAS la discipline de pipeline (fidèle à orchestrator.ts:527)', () => {

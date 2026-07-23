@@ -25,6 +25,7 @@ import { PROJECT_CONTEXT_CHAIN, PROJECT_CONTEXT_MAX_BYTES } from './context-file
 import { phasesForRegime, type TaskRegime } from './task-regime'
 import { resolvePhaseBinding, ALL_ROLES, type Role, type RoleBinding, type RoleModelConfig } from './roles'
 import type { PipelinePhase } from './skill-pipeline'
+import type { AgentTopology } from './topology'
 
 /** Un influenceur réel : ce qu'il fait, sa valeur/règle actuelle, et sa source dans le code. */
 export interface InfluencerField {
@@ -51,6 +52,8 @@ export interface OrchestratedBehaviour {
   injectedContext: InfluencerField[]
   /** C — sélection modèle / rôle / effort (qui répond, avec quoi). */
   modelSelection: InfluencerField[]
+  /** C2 — fan-out vivant issu de la topologie. */
+  topology: InfluencerField[]
   /** D — régime → sous-ensemble de phases joué. */
   regime: InfluencerField[]
   /** E — garde-fous déterministes. */
@@ -66,6 +69,7 @@ export interface DirectBehaviour {
 export interface CockpitBehaviour {
   systemPrompt: InfluencerField[]
   retrievedContext: InfluencerField[]
+  turnContext: InfluencerField[]
   modelSelection: InfluencerField[]
 }
 
@@ -159,7 +163,8 @@ function roleField(role: Role, binding: RoleBinding): InfluencerField {
  */
 export function buildBehaviourComposition(
   roles: Pick<RoleModelConfig, 'all'>,
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  topology?: Pick<AgentTopology, 'panels'>
 ): BehaviourComposition {
   const bindings = roles.all()
 
@@ -241,6 +246,32 @@ export function buildBehaviourComposition(
     }
   ]
 
+  const panelValue = (target: 'scout' | 'frame' | 'judge'): string => {
+    const members = topology?.panels[target]
+    if (!members) return 'Topologie non transmise.'
+    if (members.length === 0) return '0 membre : exécution mono-modèle.'
+    return `${members.length} membre(s) : ${members
+      .map((member) => `${member.provider}/${member.modelId}/${member.reasoningEffort}`)
+      .join(' · ')}`
+  }
+  const topologyFields: InfluencerField[] = [
+    {
+      label: 'panel scout',
+      value: `${panelValue('scout')} À partir de 2 membres, divergence parallèle puis synthèse.`,
+      source: 'src/main/orchestrator.ts:554'
+    },
+    {
+      label: 'panel frame',
+      value: `${panelValue('frame')} À partir de 2 membres, divergence parallèle puis synthèse.`,
+      source: 'src/main/orchestrator.ts:554'
+    },
+    {
+      label: 'panel judge + quorum',
+      value: `${panelValue('judge')} Les votes valides sont agrégés ; le seuil de quorum est calculé sur le nombre de votants valides.`,
+      source: 'src/main/orchestrator.ts:941'
+    }
+  ]
+
   const direct: DirectBehaviour = {
     systemPrompt: [
       {
@@ -252,9 +283,9 @@ export function buildBehaviourComposition(
     ],
     modelSelection: [
       {
-        label: 'binding de rôle',
-        value: `Le chat direct utilise le binding du rôle demandé (défaut orchestrator: ${bindings.orchestrator.provider}/${bindings.orchestrator.model ?? 'défaut'}). Aucune phase, aucun Brain, aucun garde-fou.`,
-        source: 'src/main/os.ts:116'
+        label: 'provider explicite ou binding de rôle',
+        value: `Sans provider explicite, le chat direct utilise provider, modèle et effort du rôle demandé (défaut orchestrator: ${bindings.orchestrator.provider}/${bindings.orchestrator.model ?? 'défaut'}). Avec un provider explicite, il remplace le provider et envoie les options modèle/effort vides : le binding du rôle est alors ignoré. Aucune phase, aucun Brain, aucun garde-fou.`,
+        source: 'src/main/os.ts:184'
       }
     ]
   }
@@ -282,6 +313,26 @@ export function buildBehaviourComposition(
         source: 'src/main/amitel-context.ts:175'
       }
     ],
+    turnContext: [
+      {
+        label: 'catalogue de commandes + état courant',
+        value:
+          "À chaque tour, le system prompt reçoit le catalogue vivant des commandes ; le message reçoit un snapshot courant de l'application.",
+        source: 'src/main/agent-pilot.ts:213'
+      },
+      {
+        label: 'historique + pièces jointes',
+        value:
+          "L'historique complet est reconstruit dans le message. Les pièces jointes du dernier message sont envoyées uniquement à la première itération.",
+        source: 'src/main/agent-pilot.ts:257'
+      },
+      {
+        label: "autorité + directives + cap d'itérations",
+        value:
+          "Le mode d'autorité de la conversation gouverne l'exécution des commandes. Les directives reçues pendant le tour sont drainées avant l'itération suivante. Le cockpit est borné à 6 itérations et termine en erreur explicite si le cap est atteint.",
+        source: 'src/main/agent-pilot.ts:267'
+      }
+    ],
     modelSelection: [
       {
         label: 'binding orchestrator',
@@ -297,6 +348,7 @@ export function buildBehaviourComposition(
       systemPrompt: ORCHESTRATED_PHASES.map(phaseSystemPrompt),
       injectedContext,
       modelSelection,
+      topology: topologyFields,
       regime,
       guardrails
     },
