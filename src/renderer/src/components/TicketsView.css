@@ -122,6 +122,7 @@
 }
 
 .tickets-content {
+  min-width: 0;
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(300px, 0.9fr) minmax(360px, 1.1fr);
@@ -183,6 +184,7 @@
 
 .tickets-list,
 .tickets-detail {
+  min-width: 0;
   min-height: 0;
   overflow: auto;
   border: 1px solid var(--container-border);
@@ -191,6 +193,7 @@
 }
 
 .tickets-list {
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -199,6 +202,7 @@
 
 .tickets-list [data-testid='ticket-row'] {
   width: 100%;
+  min-width: 0;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
@@ -257,6 +261,7 @@
 
 .tickets-detail {
   padding: 18px;
+  overflow-wrap: anywhere;
 }
 .tickets-detail-title > span {
   color: var(--gold);
@@ -316,6 +321,7 @@
   .tickets-content {
     grid-template-columns: 1fr;
     overflow: auto;
+    overflow-x: hidden;
   }
   .tickets-list,
   .tickets-detail {
