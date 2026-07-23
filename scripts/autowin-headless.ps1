@@ -2,7 +2,7 @@ param(
   [ValidateSet('Start', 'Status', 'Stop')][string]$Action = 'Start',
   [Parameter(Mandatory = $true)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$InstanceId,
   [ValidateRange(1024, 65535)][int]$Port = 9240,
-  [string]$Executable = 'C:\Amitel\Autowin OS\dist\observatoire-final\win-unpacked\autowin-os.exe',
+  [string]$Executable = 'C:\Amitel\Autowin OS\dist\win-unpacked\autowin-os.exe',
   [string]$InstancesRoot = 'C:\Amitel\Autowin OS\Audit\headless-instances'
 )
 
@@ -11,6 +11,24 @@ $instanceRoot = Join-Path $InstancesRoot $InstanceId
 $userData = Join-Path $instanceRoot 'user-data'
 $appData = Join-Path $instanceRoot 'appdata'
 $stateFile = Join-Path $instanceRoot 'instance.json'
+
+function Read-ExecutableIdentity {
+  if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) {
+    return [pscustomobject]@{
+      executable = $Executable
+      executableSha256 = $null
+      executableVersion = $null
+    }
+  }
+  $item = Get-Item -LiteralPath $Executable
+  $version = $item.VersionInfo.ProductVersion
+  if ([string]::IsNullOrWhiteSpace($version)) { $version = $item.VersionInfo.FileVersion }
+  return [pscustomobject]@{
+    executable = $item.FullName
+    executableSha256 = (Get-FileHash -LiteralPath $Executable -Algorithm SHA256).Hash.ToLowerInvariant()
+    executableVersion = $version
+  }
+}
 
 function Read-OwnedProcess {
   if (-not (Test-Path -LiteralPath $stateFile)) { return $null }
@@ -25,18 +43,20 @@ function Read-OwnedProcess {
   return $process
 }
 
+$identity = Read-ExecutableIdentity
+
 if ($Action -eq 'Stop') {
   $owned = Read-OwnedProcess
   if ($null -ne $owned) { Stop-Process -Id $owned.ProcessId -Force }
   if (Test-Path -LiteralPath $stateFile) { Remove-Item -LiteralPath $stateFile -Force }
-  [pscustomobject]@{ instanceId = $InstanceId; status = 'stopped'; port = $Port } | ConvertTo-Json -Compress
+  [pscustomobject]@{ instanceId = $InstanceId; status = 'stopped'; port = $Port; executable = $identity.executable; executableSha256 = $identity.executableSha256; executableVersion = $identity.executableVersion } | ConvertTo-Json -Compress
   exit 0
 }
 
 if ($Action -eq 'Status') {
   $owned = Read-OwnedProcess
   try { $pages = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/json" -TimeoutSec 1 } catch { $pages = $null }
-  [pscustomobject]@{ instanceId = $InstanceId; running = $null -ne $owned; cdpReady = $null -ne $pages; pid = if ($owned) { $owned.ProcessId } else { $null }; port = $Port } | ConvertTo-Json -Compress
+  [pscustomobject]@{ instanceId = $InstanceId; running = $null -ne $owned; cdpReady = $null -ne $pages; pid = if ($owned) { $owned.ProcessId } else { $null }; port = $Port; executable = $identity.executable; executableSha256 = $identity.executableSha256; executableVersion = $identity.executableVersion } | ConvertTo-Json -Compress
   exit $(if ($owned -and $pages) { 0 } else { 1 })
 }
 
@@ -51,7 +71,7 @@ $process = Start-Process -FilePath $Executable -ArgumentList @(
   '--isolated-test-instance',
   '--headless-test-instance'
 ) -WorkingDirectory (Split-Path -Parent $Executable) -WindowStyle Hidden -PassThru
-@{ pid = $process.Id; executable = $Executable; port = $Port; userData = $userData } | ConvertTo-Json | Set-Content -LiteralPath $stateFile -Encoding utf8
+@{ pid = $process.Id; executable = $Executable; executableSha256 = $identity.executableSha256; executableVersion = $identity.executableVersion; port = $Port; userData = $userData } | ConvertTo-Json | Set-Content -LiteralPath $stateFile -Encoding utf8
 
 $deadline = (Get-Date).AddSeconds(20)
 do {
@@ -60,7 +80,7 @@ do {
   if ($pages) {
     $listener = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -eq $process.Id }
     if (-not $listener) { throw "Le endpoint CDP $Port n'appartient pas au PID $($process.Id)." }
-    [pscustomobject]@{ instanceId = $InstanceId; status = 'ready'; pid = $process.Id; port = $Port; userData = $userData; webSocketDebuggerUrl = $pages[0].webSocketDebuggerUrl } | ConvertTo-Json -Compress
+    [pscustomobject]@{ instanceId = $InstanceId; status = 'ready'; pid = $process.Id; port = $Port; userData = $userData; webSocketDebuggerUrl = $pages[0].webSocketDebuggerUrl; executable = $identity.executable; executableSha256 = $identity.executableSha256; executableVersion = $identity.executableVersion } | ConvertTo-Json -Compress
     exit 0
   }
   Start-Sleep -Milliseconds 100

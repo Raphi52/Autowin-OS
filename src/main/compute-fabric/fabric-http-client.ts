@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual, X509Certificate } from 'node:crypto'
-import type { ClientRequest, IncomingMessage } from 'node:http'
+import type { IncomingMessage } from 'node:http'
 import { request as httpsRequest, type RequestOptions } from 'node:https'
 import { Readable } from 'node:stream'
 import { checkServerIdentity, type PeerCertificate } from 'node:tls'
@@ -19,15 +19,6 @@ export type FabricTransportFetch = (
   relativePath: string,
   init: FabricTransportRequestInit
 ) => Promise<Response>
-
-export type FabricHttpsRequest = (
-  options: RequestOptions,
-  onResponse: (response: IncomingMessage) => void
-) => ClientRequest
-
-export interface CreateFabricTransportFetchOptions {
-  requestFn?: FabricHttpsRequest
-}
 
 export function checkFabricServerIdentity(
   hostname: string,
@@ -98,37 +89,30 @@ function toResponseHeaders(response: IncomingMessage): Headers {
   return headers
 }
 
-export function createFabricTransportFetch(
-  options: CreateFabricTransportFetchOptions = {}
-): FabricTransportFetch {
-  const requestFn = options.requestFn ?? (httpsRequest as FabricHttpsRequest)
-  return async (transport, relativePath, init) =>
-    new Promise<Response>((resolve, reject) => {
-      const request = requestFn(
-        createFabricHttpsRequestOptions(transport, relativePath, init),
-        (response) => {
-          const status = response.statusCode
-          if (!status || status < 200 || status > 599) {
-            response.destroy()
-            reject(new Error('Statut HTTP Compute Fabric invalide'))
-            return
-          }
-          const hasBody = status !== 204 && status !== 205 && status !== 304
-          const body = hasBody
-            ? (Readable.toWeb(response) as unknown as ReadableStream<Uint8Array>)
-            : null
-          resolve(
-            new Response(body, {
-              status,
-              statusText: response.statusMessage,
-              headers: toResponseHeaders(response)
-            })
-          )
+export const fetchFabricTransport: FabricTransportFetch = async (transport, relativePath, init) =>
+  new Promise<Response>((resolve, reject) => {
+    const request = httpsRequest(
+      createFabricHttpsRequestOptions(transport, relativePath, init),
+      (response) => {
+        const status = response.statusCode
+        if (!status || status < 200 || status > 599) {
+          response.destroy()
+          reject(new Error('Statut HTTP Compute Fabric invalide'))
+          return
         }
-      )
-      request.once('error', reject)
-      request.end(init.body)
-    })
-}
-
-export const fetchFabricTransport = createFabricTransportFetch()
+        const hasBody = status !== 204 && status !== 205 && status !== 304
+        const body = hasBody
+          ? (Readable.toWeb(response) as unknown as ReadableStream<Uint8Array>)
+          : null
+        resolve(
+          new Response(body, {
+            status,
+            statusText: response.statusMessage,
+            headers: toResponseHeaders(response)
+          })
+        )
+      }
+    )
+    request.once('error', reject)
+    request.end(init.body)
+  })

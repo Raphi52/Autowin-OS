@@ -1,3 +1,4 @@
+import { createHash, generateKeyPairSync } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -19,15 +20,19 @@ function temporaryFile(): string {
 }
 
 function pairedState(): FabricState {
+  const { publicKey } = generateKeyPairSync('ed25519')
+  const signingPublicKeyPem = publicKey.export({ format: 'pem', type: 'spki' }).toString()
+  const signingPublicKeyFingerprint = createHash('sha256')
+    .update(publicKey.export({ format: 'der', type: 'spki' }))
+    .digest('hex')
   return {
     schema: FABRIC_STATE_SCHEMA,
     nodes: [
       {
         nodeId: 'node-gpu-01',
         keyId: 'node-gpu-01:signing:v1',
-        signingPublicKeyFingerprint: 'a'.repeat(64),
-        signingPublicKeyPem:
-          '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n-----END PUBLIC KEY-----\n',
+        signingPublicKeyFingerprint,
+        signingPublicKeyPem,
         transportRef: 'fabric-node:node-gpu-01',
         trust: 'paired',
         lastSequence: 7,
@@ -77,5 +82,30 @@ describe('Compute Fabric state persistence', () => {
     expect(failure).toBeInstanceOf(FabricStateCorruptionError)
     expect(failure).toMatchObject({ code: 'FABRIC_STATE_CORRUPT', statePath: path })
     expect(readFileSync(path, 'utf8')).toBe(corrupted)
+  })
+
+  it.each([
+    [
+      'une clé publique non importable',
+      (state: FabricState) => {
+        state.nodes[0].signingPublicKeyPem =
+          '-----BEGIN PUBLIC KEY-----\nAAAA\n-----END PUBLIC KEY-----\n'
+      }
+    ],
+    [
+      'un fingerprint ne correspondant pas au SPKI',
+      (state: FabricState) => {
+        state.nodes[0].signingPublicKeyFingerprint = 'a'.repeat(64)
+      }
+    ]
+  ])('fails closed on %s', (_label, corrupt) => {
+    const path = temporaryFile()
+    const state = pairedState()
+    corrupt(state)
+    const stored = JSON.stringify(state)
+    writeFileSync(path, stored, 'utf8')
+
+    expect(() => loadFabricState(path)).toThrowError(FabricStateCorruptionError)
+    expect(readFileSync(path, 'utf8')).toBe(stored)
   })
 })

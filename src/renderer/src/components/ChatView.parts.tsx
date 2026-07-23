@@ -1,6 +1,7 @@
 import { HumanJson } from './HumanJson'
-import { STEP_META, type ChatActionPart, type OrchStep } from './chat-view-model'
+import { STEP_META, type ChatActionPart, type EvidencePart, type OrchStep } from './chat-view-model'
 import './ChatView.css'
+import './Evidence.css'
 
 const CMD_LABEL: Record<string, string> = {
   navigate: 'Navigation',
@@ -59,9 +60,60 @@ export function StepThread({ steps }: { steps: OrchStep[] }): React.JSX.Element 
                 <HumanJson value={s.prompt.options} />
               </details>
             )}
+            {s.evidence && s.evidence.length > 0 && <EvidenceList items={s.evidence} />}
           </div>
         )
       })}
+    </div>
+  )
+}
+
+/** Preuves d'exécution rendues LISIBLEMENT inline : diff pour un file_change, stdout+exit pour une
+ *  commande. Remplace le dump JSON générique — c'est ce qui rend le travail « visible » dans le Chat. */
+export function EvidenceList({ items }: { items: EvidencePart[] }): React.JSX.Element {
+  return (
+    <div className="evidence-list">
+      {items.map((e, i) => (
+        <details key={i} className={`evidence-item${e.ok ? '' : ' failed'}`} open={!e.ok}>
+          <summary>
+            <span className={`status-dot ${e.ok ? 'st-ok' : 'st-err'}`} />
+            {e.type === 'file_change' ? (
+              <span className="mono">📝 {e.path || 'fichier modifié'}</span>
+            ) : (
+              <>
+                <span className="mono">
+                  {e.command ? `$ ${e.command}` : e.type}
+                </span>
+                {typeof e.exitCode === 'number' && (
+                  <span className={`evidence-exit ${e.exitCode === 0 ? 'st-ok' : 'st-err'}`}>
+                    exit {e.exitCode}
+                  </span>
+                )}
+              </>
+            )}
+          </summary>
+          {e.diff && (
+            <pre className="evidence-diff">
+              {e.diff.split('\n').map((line, li) => (
+                <span
+                  key={li}
+                  className={
+                    line.startsWith('+')
+                      ? 'diff-add'
+                      : line.startsWith('-')
+                        ? 'diff-del'
+                        : undefined
+                  }
+                >
+                  {line + '\n'}
+                </span>
+              ))}
+            </pre>
+          )}
+          {e.stdout && <pre className="evidence-stdout">{e.stdout}</pre>}
+          {!e.diff && !e.stdout && <pre className="evidence-stdout c-faint">{e.summary}</pre>}
+        </details>
+      ))}
     </div>
   )
 }

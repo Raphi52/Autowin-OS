@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
 import { AuthoritySas } from './authority/sas'
+import { APP_DESTINATIONS } from '../shared/navigation'
 
 function fakeOs(): any {
   const conversations = new Map<
@@ -93,6 +94,23 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
 })
 
 describe('AppCommandBus authority policy', () => {
+  it('publie les destinations canoniques et autorise la navigation en mode Plan', async () => {
+    const events: Array<{ type: string; tab?: string }> = []
+    const bus = new AppCommandBus(fakeOs(), (event) => events.push(event))
+    const navigate = bus.catalog().find((tool) => tool.name === 'navigate')
+
+    expect(navigate?.args.tab).toBe(APP_DESTINATIONS.map(({ id }) => id).join('|'))
+    expect(navigate?.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false })
+
+    const result = await bus.exec('navigate', { tab: 'router' }, undefined, 'plan')
+    expect(result).toMatchObject({
+      ok: true,
+      data: { tab: 'agent-studio', section: 'routing' }
+    })
+    expect(events).toContainEqual({ type: 'navigate', tab: 'router' })
+    await expect(bus.snapshot()).resolves.toMatchObject({ tab: 'agent-studio' })
+  })
+
   it('enforces conversation Plan and Auto modes before any mutation', async () => {
     const os = fakeOs()
     const bus = new AppCommandBus(os, () => {})

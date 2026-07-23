@@ -16,7 +16,7 @@ import { AgentPilot, type PilotEvent } from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
 import type { ChatTurnEvent } from '../shared/chat-turn'
 import { TraceLedger } from './activity/ledger'
-import { aggregateHabits, listSessions, parseSession } from './activity/transcripts'
+import { listSessions, parseSession } from './activity/transcripts'
 import { persistConversations } from './store/conversations-disk'
 import { listConvRuns, loadConvRunTrace } from './runs/conv-runs'
 import { appendConvActivity, loadConvActivity } from './activity/conv-activity'
@@ -35,25 +35,15 @@ import { DiagnosticCapabilities } from './activity/diagnostic-capability'
 import { responseDisplayedTrace } from './activity/response-displayed-trace'
 import { persistOrchestrationStep } from './activity/orchestration-observability'
 import { aggregateToolUsage } from './activity/tool-usage'
-import { LoopRunStore } from './loop-run-store'
+
 import { ProfileStore, type AutowinProfile } from './profile-store'
 import {
   listCapabilities,
   setCapabilityEnabled,
-  setCapabilitySelection,
   warmCapabilities
 } from './capability-controls'
-import {
-  defaultBehaviourWorkspace,
-  listBehaviourContexts,
-  listBehaviourFiles,
-  readBehaviourFile,
-  type BehaviourFile
-} from './behaviour-files'
+import { defaultBehaviourWorkspace } from './behaviour-files'
 import { ApprovedBehaviourWorkspaces, isTrustedRendererUrl } from './behaviour-access'
-import { runSkillLoop, type LoopRunInput } from './loop-runner'
-import { parseGeneratedLoop } from './loop-draft'
-import { listLoopSkills } from './loop-skills'
 import { discoverConfiguredSkillRegistry } from './skill-registry'
 import { listClaudeHooks, listCodexHooks } from './claude-hooks'
 import { ModelQuestionHub, type ModelQuestion, type PendingModelQuestion } from './model-questions'
@@ -75,7 +65,7 @@ import {
   type MigratedRendererStorage
 } from './renderer-storage-migration'
 import { guardAttachments, guardBoolean, guardString } from './ipc-guards'
-import { readBoundedUtf8FileWithin } from './bounded-file-read'
+
 import { BrainWorkerClient } from './viz/brain-worker-client'
 import {
   createNativePreflightReader,
@@ -85,7 +75,7 @@ import {
 import { nativeSpoolRoot, appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace, readBrainTraces } from './activity/brain-trace-spool'
 import { buildBehaviourComposition } from './behaviour-composition'
-import { proveInjections } from './native-injection-proof'
+
 import { createAmitelContextProvider } from './amitel-context'
 import {
   automationAppIdentity,
@@ -268,7 +258,7 @@ function askModelQuestion(
 /** Ledger d'activité in-app : chaque action d'agent laisse une trace consultable. */
 const ledger = new TraceLedger(join(app.getPath('userData'), 'trace'))
 const causalTrace = new TraceStore(join(app.getPath('userData'), 'causal-trace'))
-const loopRuns = new LoopRunStore(join(app.getPath('userData'), 'loop-runs.json'))
+
 const profiles = new ProfileStore(join(app.getPath('userData'), 'profiles.json'))
 bus.trace = (name, args, ok) =>
   ledger.append({ source: 'bus', name, detail: JSON.stringify(args).slice(0, 200), ok })
@@ -277,23 +267,6 @@ bus.trace = (name, args, ok) =>
 
 const defaultBehaviourRoot = defaultBehaviourWorkspace()
 const behaviourAccess = new ApprovedBehaviourWorkspaces(defaultBehaviourRoot)
-const behaviourManifestCache = new Map<string, { capturedAt: number; files: BehaviourFile[] }>()
-
-function behaviourManifestKey(workspaceRoot: string, contextRoot: string): string {
-  return `${workspaceRoot}\u0000${contextRoot}`
-}
-
-async function behaviourManifest(
-  workspaceRoot: string,
-  contextRoot: string
-): Promise<BehaviourFile[]> {
-  const key = behaviourManifestKey(workspaceRoot, contextRoot)
-  const cached = behaviourManifestCache.get(key)
-  if (cached && Date.now() - cached.capturedAt < 15_000) return cached.files
-  const files = await listBehaviourFiles({ workspaceRoot, contextRoot })
-  behaviourManifestCache.set(key, { capturedAt: Date.now(), files })
-  return files
-}
 
 function assertTrustedRendererSender(event: IpcMainInvokeEvent, scope: string): void {
   const trusted = isTrustedRendererUrl(event.senderFrame?.url ?? '', behaviourRendererOptions())
@@ -304,13 +277,6 @@ function assertTrustedBehaviourSender(event: IpcMainInvokeEvent): void {
   assertTrustedRendererSender(event, 'Behaviour')
 }
 
-function approvedBehaviourWorkspace(workspaceRoot?: unknown): string {
-  return behaviourAccess.require(
-    workspaceRoot === undefined
-      ? defaultBehaviourRoot
-      : guardString(workspaceRoot, 'behaviour.workspaceRoot')
-  )
-}
 
 function behaviourRendererOptions(): { devRendererUrl?: string; rendererHtmlPath: string } {
   return {
@@ -539,44 +505,7 @@ function registerChatIpc(): void {
       return listCapabilities(kind)
     }
   )
-  ipcMain.handle('os:capabilities:tools:select', async (event, names: unknown) => {
-    assertTrustedRendererSender(event, 'Capabilities')
-    if (!Array.isArray(names) || !names.every((name) => typeof name === 'string'))
-      throw new Error('Sélection de toolsets invalide')
-    const before = await listCapabilities('tools')
-    const result = await setCapabilitySelection('tools', names)
-    const change = promptConfigChange('tools', before, result.items)
-    appendPromptConfigActivity('Prompt Load · preset tools', change)
-    if (bus.activeConversationId) {
-      appendConvActivity(bus.activeConversationId, {
-        kind: 'configuration-change',
-        label: 'Prompt Load · preset tools',
-        text: JSON.stringify(change)
-      })
-    }
-    broadcast({ type: 'refresh', scope: 'workflows' })
-    return result
-  })
-  ipcMain.handle('os:capabilities:plugins:set', async (event, name: string, enabled: unknown) => {
-    assertTrustedRendererSender(event, 'Capabilities')
-    const before = await listCapabilities('plugins')
-    const result = await setCapabilityEnabled(
-      'plugins',
-      guardString(name, 'plugin'),
-      guardBoolean(enabled, 'plugin.enabled')
-    )
-    const change = promptConfigChange('plugins', before, result.items)
-    appendPromptConfigActivity(`Prompt Load · plugin ${name}`, change)
-    if (bus.activeConversationId) {
-      appendConvActivity(bus.activeConversationId, {
-        kind: 'configuration-change',
-        label: `Prompt Load · plugin ${name}`,
-        text: JSON.stringify(change)
-      })
-    }
-    broadcast({ type: 'refresh', scope: 'workflows' })
-    return result
-  })
+
   ipcMain.handle('claude:hooks:list', () => listClaudeHooks())
   ipcMain.handle('codex:hooks:list', () => listCodexHooks())
   ipcMain.handle('os:capabilities:tools:set', async (event, name: string, enabled: unknown) => {
@@ -599,10 +528,7 @@ function registerChatIpc(): void {
     broadcast({ type: 'refresh', scope: 'workflows' })
     return result
   })
-  ipcMain.handle('os:behaviour:workspace', (event) => {
-    assertTrustedBehaviourSender(event)
-    return defaultBehaviourRoot
-  })
+
   ipcMain.handle('os:behaviour:choose-workspace', async (event) => {
     assertTrustedBehaviourSender(event)
     if (headlessTestInstance) return null
@@ -610,96 +536,7 @@ function registerChatIpc(): void {
     const selected = result.canceled ? null : (result.filePaths[0] ?? null)
     return selected ? behaviourAccess.approve(selected) : null
   })
-  ipcMain.handle('os:behaviour:contexts', (event, workspaceRoot: string) => {
-    assertTrustedBehaviourSender(event)
-    const workspace = approvedBehaviourWorkspace(workspaceRoot)
-    return listBehaviourContexts({ workspaceRoot: workspace, contextRoot: workspace })
-  })
-  ipcMain.handle('os:behaviour:list', (event, workspaceRoot?: string, contextRoot?: string) => {
-    assertTrustedBehaviourSender(event)
-    const workspace = approvedBehaviourWorkspace(workspaceRoot)
-    const activeContext = contextRoot
-      ? guardString(contextRoot, 'behaviour.contextRoot')
-      : workspace
-    return behaviourManifest(workspace, activeContext)
-  })
-  ipcMain.handle(
-    'os:behaviour:read',
-    (event, id: string, workspaceRoot?: string, contextRoot?: string) => {
-      assertTrustedBehaviourSender(event)
-      const workspace = approvedBehaviourWorkspace(workspaceRoot)
-      return readBehaviourFile(guardString(id, 'behaviour.id'), {
-        workspaceRoot: workspace,
-        contextRoot: contextRoot ? guardString(contextRoot, 'behaviour.contextRoot') : workspace
-      })
-    }
-  )
-  ipcMain.handle(
-    'os:behaviour:proof',
-    async (event, workspaceRoot?: string, contextRoot?: string) => {
-      assertTrustedBehaviourSender(event)
-      const workspace = approvedBehaviourWorkspace(workspaceRoot)
-      const query = {
-        workspaceRoot: workspace,
-        contextRoot: contextRoot ? guardString(contextRoot, 'behaviour.contextRoot') : workspace
-      }
-      const files = await behaviourManifest(query.workspaceRoot, query.contextRoot)
-      const contents = new Map<string, string>()
-      const allowedRoots = [
-        workspace,
-        join(app.getPath('home'), '.codex'),
-        join(app.getPath('home'), '.claude')
-      ]
-      for (const file of files) {
-        if (file.engine !== 'autowin' || file.scope === 'skill') continue
-        try {
-          contents.set(file.id, readBoundedUtf8FileWithin(file.path, allowedRoots, 512_000))
-        } catch {
-          /* non prouvable */
-        }
-      }
-      return proveInjections(files, contents, loadNativeTraces())
-    }
-  )
-  ipcMain.handle('os:loop:run', (event, input: LoopRunInput) => {
-    assertTrustedRendererSender(event, 'Loop')
-    const events: import('./loop-runner').LoopEvent[] = []
-    const startedAt = new Date().toISOString()
-    return runSkillLoop(
-      input,
-      os.registry,
-      os.roles.getBinding('orchestrator').provider,
-      (loopEvent) => {
-        events.push(loopEvent)
-        event.sender.send('os:loop:event', loopEvent)
-      },
-      (question, context) => askModelQuestion(event.sender, 'loop', question, context)
-    ).then((result) => {
-      loopRuns.save({ ...result, startedAt, finishedAt: new Date().toISOString(), input, events })
-      return result
-    })
-  })
-  ipcMain.handle('os:loop:skills', (event) => {
-    assertTrustedRendererSender(event, 'Loop')
-    return listLoopSkills()
-  })
-  ipcMain.handle('os:loop:generate', async (event, objective: unknown) => {
-    assertTrustedRendererSender(event, 'Loop')
-    const goal = guardString(objective, 'loop.objective').trim()
-    if (!goal) throw new Error('Objectif requis.')
-    const skills = await listLoopSkills()
-    const binding = os.roles.getBinding('orchestrator')
-    const response = await os.registry.send(binding.provider, [{ role: 'user', content: goal }], {
-      model: binding.model,
-      reasoningEffort: binding.reasoningEffort,
-      system: `Tu es le planificateur de Loop Builder. Propose un workflow SPECIFIQUE a l'objectif utilisateur. Reponds UNIQUEMENT avec du JSON valide : {"steps":[{"id":"","skill":"","capabilities":[],"prompt":""}],"passes":1,"stopOnFailure":true,"carryOutput":true}. Catalogue autorise (id | role | description) : ${skills.map((skill) => `${skill.id} | ${skill.role} | ${skill.description}`).join(' ; ')}. Une skill est un mecanisme interne : ne decris jamais son fonctionnement dans prompt. Chaque prompt decrit une action concrete, un livrable mesurable et ses contraintes. Les skills role=capability vont dans capabilities sur la tache qui les utilise, jamais dans une etape artificielle. Les skills role=gate sont les validations finales. Si build est utilise, ajoute clean puis judge. Interdit : "cadre le besoin", "prepare le terrain", "execute le travail", "audite le resultat". Choisis seulement les skills necessaires; un workflow peut avoir 1 a 8 etapes.`
-    })
-    return parseGeneratedLoop(response.text, new Set(skills.map((skill) => skill.id)))
-  })
-  ipcMain.handle('os:loop:runs', (event) => {
-    assertTrustedRendererSender(event, 'Loop')
-    return loopRuns.list()
-  })
+
   ipcMain.handle('model:question:answer', (event, id: string, answer: unknown) => {
     const safeId = guardString(id, 'modelQuestion.id')
     const win = questionWindows.get(safeId)
@@ -712,21 +549,15 @@ function registerChatIpc(): void {
     return { ok: true }
   })
 
-  // --- Dashboards : données RÉELLES (plus de démo) ---
-  ipcMain.handle('os:budget', () => os.budget())
-  ipcMain.handle('os:costByRole', () => os.costByRole())
-  ipcMain.handle('os:trustRanking', () => os.trustRanking())
-  ipcMain.handle('os:runsWithGate', () => os.runsWithGate())
   // Usage RÉEL des outils (actions Codex/Claude observées) — distinct du catalogue natif décoratif.
   ipcMain.handle('os:toolUsage', () => aggregateToolUsage())
-  ipcMain.handle('os:kaizen', (_e, jsonl: string) => os.kaizenPatterns(guardString(jsonl, 'jsonl')))
 
   // --- Sas d'autorité (décisions AFK ouvertes par l'orchestrateur) ---
   ipcMain.handle('os:authority:pending', () => os.authority.pending())
   ipcMain.handle('os:authority:resolve', (_e, id: string, choice: unknown) =>
     bus.resolveDecision(id, choice)
   )
-  ipcMain.handle('os:authority:sweep', () => bus.sweepExpired())
+
 
   // --- Conversations catégorisées ---
   ipcMain.handle('os:conversations', () => os.conversations.list())
@@ -798,8 +629,7 @@ function registerChatIpc(): void {
     brainWorker.request('searchBrain', guardString(path, 'path'), guardString(query, 'query'))
   )
   ipcMain.handle('os:listRuns', () => os.listRuns())
-  // --- Harnais : projection lecture seule, bornée, SANS chemin ni mutation ---
-  ipcMain.handle('os:harness:snapshot', () => os.harnessSnapshot())
+
   // Ouvre le dossier contenant un fichier dans l'explorateur (vue Workflow).
   ipcMain.handle('os:openFolder', (_e, path: string) => {
     shell.showItemInFolder(guardString(path, 'path'))
@@ -1158,24 +988,7 @@ function registerChatIpc(): void {
     broadcast({ type: 'refresh', scope: 'directives' })
     return { ok: true }
   })
-  // Lire la file d'attente (directives non encore consommées) d'une conversation.
-  ipcMain.handle('os:pilotChat:pending', (_e, rawConversationId: string) => {
-    const conversationId = guardString(rawConversationId, 'conversationId')
-    return [...(pendingDirectives.get(conversationId) ?? [])]
-  })
-  // Retirer une directive en attente par index (avant qu'elle soit consommée).
-  ipcMain.handle('os:pilotChat:removeDirective', (_e, rawConversationId: string, rawIndex: unknown) => {
-    const conversationId = guardString(rawConversationId, 'conversationId')
-    const index = Number(rawIndex)
-    const queued = pendingDirectives.get(conversationId)
-    if (!queued || !Number.isInteger(index) || index < 0 || index >= queued.length)
-      return { ok: false }
-    queued.splice(index, 1)
-    if (queued.length) pendingDirectives.set(conversationId, queued)
-    else pendingDirectives.delete(conversationId)
-    broadcast({ type: 'refresh', scope: 'directives' })
-    return { ok: true }
-  })
+
   ipcMain.handle(
     'os:causalTrace:displayed',
     (_e, rawConversationId: string, rawContent: string) => {
@@ -1318,8 +1131,7 @@ function registerChatIpc(): void {
   // --- Observatoire d'activité : transcripts Claude Code (lecture seule) + ledger in-app ---
   ipcMain.handle('os:activity:sessions', () => listSessions(60))
   ipcMain.handle('os:activity:session', async (_e, meta) => parseSession(meta))
-  ipcMain.handle('os:activity:habits', () => aggregateHabits(20))
-  ipcMain.handle('os:activity:ledger', () => ledger.recent(300))
+
   // Affichage des screenshots consultés : whitelist extensions + cap taille, lecture seule.
   ipcMain.handle('os:activity:image', async (_e, path: string) => {
     const p = guardString(path, 'path')

@@ -28,22 +28,22 @@
     },
     {
       "path": "src/main/compute-fabric/control-plane.ts",
-      "why": "Pairing, refresh, état runtime et création de l’adaptateur",
+      "why": "Pairing, refresh sérialisé, état runtime et garde anti-adapter périmé",
       "mode": "full"
     },
     {
       "path": "src/main/compute-fabric/control-plane.test.ts",
-      "why": "Tests d’appairage, refresh et invalidation du control plane",
+      "why": "Tests d’appairage, anti-rollback concurrent, corruption keyring et invalidation runtime",
       "mode": "full"
     },
     {
       "path": "src/main/compute-fabric/resource-adapter.ts",
-      "why": "Wire chat SSE actuel et frontière supportsExecution=false",
+      "why": "Wire chat SSE annulable, garde de confiance et frontière supportsExecution=false",
       "mode": "full"
     },
     {
       "path": "src/main/compute-fabric/resource-adapter.test.ts",
-      "why": "Test du flux SSE et de la frontière d’exécution Fabric",
+      "why": "Tests du flux SSE, de son annulation et de l’invalidation avant réseau",
       "mode": "full"
     },
     {
@@ -63,7 +63,7 @@
     },
     {
       "path": "src/main/compute-fabric/manifest-client.test.ts",
-      "why": "Tests des bornes réseau et de la lecture du manifeste",
+      "why": "Tests des bornes réseau, annulation du body et lecture du manifeste",
       "mode": "full"
     },
     {
@@ -78,12 +78,12 @@
     },
     {
       "path": "src/main/compute-fabric/fabric-store.ts",
-      "why": "Persistance atomique et erreur fail-closed sur état existant invalide ou illisible",
+      "why": "Persistance atomique, validation Ed25519/fingerprint et erreur fail-closed",
       "mode": "full"
     },
     {
       "path": "src/main/compute-fabric/fabric-store.test.ts",
-      "why": "Tests de persistance atomique, rechargement et préservation fail-closed de la corruption",
+      "why": "Tests de persistance, clé/fingerprint, rechargement et préservation de la corruption",
       "mode": "full"
     },
     {
@@ -93,12 +93,12 @@
     },
     {
       "path": "src/main/providers/registry.ts",
-      "why": "Transport Fabric accepté et fallback d’exécution à isoler",
+      "why": "Hard-deny Fabric dans le bridge legacy et absence de fallback d’exécution Fabric",
       "mode": "full"
     },
     {
       "path": "src/main/providers/registry.test.ts",
-      "why": "Tests de sélection Fabric et de non-substitution d’exécuteur",
+      "why": "Tests du refus Fabric legacy et de non-substitution d’exécuteur",
       "mode": "full"
     },
     {

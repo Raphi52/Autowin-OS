@@ -1,33 +1,29 @@
-import { EventEmitter } from 'node:events'
-import type { ClientRequest, IncomingMessage } from 'node:http'
-import type { RequestOptions } from 'node:https'
-import { Readable } from 'node:stream'
-import { describe, expect, it } from 'vitest'
-import type { FabricHttpsRequest } from './fabric-http-client'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const fetchFabricTransport = vi.hoisted(() => vi.fn())
+vi.mock('./fabric-http-client', () => ({ fetchFabricTransport }))
+
 import type { FabricNodeTransportStore } from './node-transport-store'
 import { FabricResourceAdapter } from './resource-adapter'
 
-function sseRequest(
+function sseResponse(
   frames: unknown[],
-  observeOptions: (options: RequestOptions) => void,
-  observeBody: (body: string) => void
-): FabricHttpsRequest {
+  options: { close?: boolean; cancel?: () => void } = {}
+): Response {
   const body = frames.map((frame) => `data: ${JSON.stringify(frame)}\n\n`).join('')
-  return (options, onResponse) => {
-    observeOptions(options)
-    const request = new EventEmitter() as unknown as ClientRequest
-    request.end = ((requestBody?: unknown) => {
-      observeBody(typeof requestBody === 'string' ? requestBody : '')
-      const response = Readable.from([Buffer.from(body, 'utf8')]) as unknown as IncomingMessage
-      response.statusCode = 200
-      response.statusMessage = 'OK'
-      response.headers = { 'content-type': 'text/event-stream; charset=utf-8' }
-      onResponse(response)
-      return request
-    }) as ClientRequest['end']
-    return request
-  }
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(body))
+        if (options.close !== false) controller.close()
+      },
+      cancel: options.cancel
+    }),
+    { headers: { 'content-type': 'text/event-stream; charset=utf-8' } }
+  )
 }
+
+beforeEach(() => fetchFabricTransport.mockReset())
 
 async function consume(adapter: FabricResourceAdapter): Promise<{
   chunks: string[]
@@ -48,10 +44,8 @@ async function consume(adapter: FabricResourceAdapter): Promise<{
 
 describe('Compute Fabric local-tools resource adapter', () => {
   it('sends the stable Node request and consumes ordered SSE events', async () => {
-    let requestOptions: RequestOptions | undefined
-    let requestBody = ''
-    const requestFn = sseRequest(
-      [
+    fetchFabricTransport.mockResolvedValueOnce(
+      sseResponse([
         {
           schema: 'autowin.node-chat-event/v1',
           requestId: 'turn-01',
@@ -73,13 +67,7 @@ describe('Compute Fabric local-tools resource adapter', () => {
           type: 'completed',
           usage: { inputTokens: 12, outputTokens: 4 }
         }
-      ],
-      (value) => {
-        requestOptions = value
-      },
-      (value) => {
-        requestBody = value
-      }
+      ])
     )
     const transportStore: FabricNodeTransportStore = {
       get: () => ({
@@ -95,7 +83,7 @@ describe('Compute Fabric local-tools resource adapter', () => {
       resourceId: 'qwen3-32b',
       manifestDigest: 'b'.repeat(64),
       transportStore,
-      requestFn
+      trustGuard: () => undefined
     }
     const adapter = new FabricResourceAdapter(options)
 
@@ -110,15 +98,13 @@ describe('Compute Fabric local-tools resource adapter', () => {
         usage: { inputTokens: 12, outputTokens: 4 }
       })
     )
-    expect(requestOptions).toEqual(
-      expect.objectContaining({
-        hostname: 'node.internal',
-        path: '/v1/executions/chat',
-        method: 'POST',
-        rejectUnauthorized: true
-      })
+    expect(fetchFabricTransport).toHaveBeenCalledWith(
+      expect.objectContaining({ origin: 'https://node.internal:7443' }),
+      '/v1/executions/chat',
+      expect.objectContaining({ method: 'POST' })
     )
-    expect(requestOptions?.checkServerIdentity).toBeTypeOf('function')
+    const request = fetchFabricTransport.mock.calls[0]?.[2] as { body: string; headers: object }
+    const requestBody = request.body
     expect(JSON.parse(requestBody)).toEqual(
       expect.objectContaining({
         schema: 'autowin.node-chat-request/v1',
@@ -128,8 +114,71 @@ describe('Compute Fabric local-tools resource adapter', () => {
         mode: 'local-tools'
       })
     )
-    expect((requestOptions?.headers as Record<string, string>).authorization).toContain(
-      'secret-token'
+    expect(request.headers).toEqual(
+      expect.objectContaining({ authorization: 'Bearer secret-token' })
     )
+  })
+
+  it('rejects a stale trust generation before reading keyring or opening network', async () => {
+    const get = vi.fn(() => ({
+      origin: 'https://node.internal:7443',
+      tlsSpkiSha256: 'c'.repeat(64)
+    }))
+
+    const adapter = new FabricResourceAdapter({
+      nodeId: 'node-gpu-01',
+      resourceId: 'qwen3-32b',
+      manifestDigest: 'b'.repeat(64),
+      transportStore: { get, set: () => undefined, delete: () => false },
+      trustGuard: () => {
+        throw new Error('Adapter Compute Fabric périmé')
+      }
+    })
+
+    const generator = adapter.send([{ role: 'user', content: 'Bonjour' }])
+
+    await expect(generator.next()).rejects.toThrow(/périmé/i)
+    expect(get).not.toHaveBeenCalled()
+    expect(fetchFabricTransport).not.toHaveBeenCalled()
+  })
+
+  it('cancels the SSE body when its consumer stops before completion', async () => {
+    const cancel = vi.fn()
+    fetchFabricTransport.mockResolvedValueOnce(
+      sseResponse(
+        [
+          {
+            schema: 'autowin.node-chat-event/v1',
+            requestId: 'turn-cancel',
+            sequence: 1,
+            type: 'delta',
+            delta: 'partial'
+          }
+        ],
+        { close: false, cancel }
+      )
+    )
+    const adapter = new FabricResourceAdapter({
+      nodeId: 'node-gpu-01',
+      resourceId: 'qwen3-32b',
+      manifestDigest: 'b'.repeat(64),
+      transportStore: {
+        get: () => ({
+          origin: 'https://node.internal:7443',
+          tlsSpkiSha256: 'c'.repeat(64)
+        }),
+        set: () => undefined,
+        delete: () => false
+      },
+      trustGuard: () => undefined
+    })
+    const generator = adapter.send([{ role: 'user', content: 'Bonjour' }], {
+      requestId: 'turn-cancel'
+    })
+
+    await expect(generator.next()).resolves.toMatchObject({ value: { delta: 'partial' } })
+    await generator.return(undefined as never)
+
+    expect(cancel).toHaveBeenCalledWith('chat-stream-aborted')
   })
 })

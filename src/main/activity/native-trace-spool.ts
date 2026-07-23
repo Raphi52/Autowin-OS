@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
 import { PREFLIGHT_SCHEMA } from './native-preflight'
 import { redactTrace } from './trace-redact'
+import { NATIVE_TRACE_SOURCE, type NativePreflightWireV1 } from '../../shared/native-trace-contract'
 
 /**
  * SPOOL DE TRACES NATIF.
@@ -37,21 +38,25 @@ export interface NativeTraceInput {
 }
 
 /** Compose l'enregistrement au schéma preflight (le `system` devient un message role=system). */
-export function buildNativeTrace(input: NativeTraceInput): Record<string, unknown> {
+export function buildNativeTrace(input: NativeTraceInput): NativePreflightWireV1 {
   const messages = [
     ...(input.system ? [{ role: 'system', content: input.system }] : []),
     ...input.messages
   ]
   return {
     schema: PREFLIGHT_SCHEMA,
+    source: NATIVE_TRACE_SOURCE,
     timestamp: input.timestamp,
     session_id: input.conversationId ?? 'native',
     turn_id: input.turnId ?? 'native',
     api_request_id: `native:${input.timestamp}`,
     provider: input.provider,
     model: input.model ?? 'unknown',
-    conversation_id: input.conversationId,
-    request: redactTrace({ body: { messages, tools: input.tools ?? [] } }) as Record<string, unknown>
+    ...(input.conversationId ? { conversation_id: input.conversationId } : {}),
+    request: redactTrace({ body: { messages, tools: input.tools ?? [] } }) as Record<
+      string,
+      unknown
+    >
   }
 }
 

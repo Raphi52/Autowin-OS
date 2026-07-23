@@ -1,0 +1,108 @@
+.domain-shell {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.domain-tabs {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  /* Bord blanc arrondi, cohérent avec les conteneurs de vue. */
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-panel);
+  background: var(--surface-panel);
+}
+
+.domain-tabs button {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.domain-tabs button:hover,
+.domain-tabs button.is-active {
+  color: var(--text-primary);
+  border-color: var(--accent-soft);
+  background: var(--surface-card);
+}
+
+.domain-tabs button.is-active {
+  /* Sélection VISIBLE, calquée sur le menu de gauche (.nav-item.active) : fond rose + bord doré. */
+  color: var(--text-primary);
+  background: rgba(239, 63, 145, 0.09);
+  border-color: var(--gold);
+  box-shadow: none;
+}
+
+.domain-content {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.settings-preflight {
+  /* Remplit la vue en conteneur opaque (la classe .surface-panel fournit fond 95% + bord + radius),
+     comme les autres sections Settings — plus une boîte flottante insérée. */
+  height: 100%;
+  margin: 0;
+  padding: 20px;
+  overflow: auto;
+}
+
+.settings-preflight header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings-preflight h2 {
+  margin: 4px 0 0;
+}
+
+.domain-eyebrow {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.domain-ok {
+  color: var(--success);
+}
+
+.domain-warning {
+  color: var(--warning);
+}
+
+.settings-preflight-list {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-preflight-list li {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+}
+
+.settings-preflight-list li.is-ok strong {
+  color: var(--success);
+}
+
+.settings-preflight-list li.is-ko strong {
+  color: var(--danger);
+}

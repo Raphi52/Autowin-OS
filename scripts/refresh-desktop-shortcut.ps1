@@ -12,6 +12,16 @@ if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
 if (-not (Test-Path -LiteralPath $stableIcon -PathType Leaf)) {
   throw "Icône canonique introuvable : $stableIcon"
 }
+$executableItem = Get-Item -LiteralPath $executable
+$executableVersion = $executableItem.VersionInfo.ProductVersion
+if ([string]::IsNullOrWhiteSpace($executableVersion)) {
+  $executableVersion = $executableItem.VersionInfo.FileVersion
+}
+$identity = [pscustomobject]@{
+  executable = $executableItem.FullName
+  executableSha256 = (Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash.ToLowerInvariant()
+  executableVersion = $executableVersion
+}
 
 $desktop = [Environment]::GetFolderPath('Desktop')
 $shortcutPath = Join-Path $desktop 'Autowin OS.lnk'
@@ -29,3 +39,4 @@ if ($verified.TargetPath -ne $executable -or $verified.IconLocation -notlike "$s
 }
 
 Write-Output "Desktop shortcut updated: $shortcutPath -> $executable"
+$identity | ConvertTo-Json -Compress

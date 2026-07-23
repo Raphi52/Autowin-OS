@@ -1,15 +1,8 @@
 import { createHash, X509Certificate } from 'node:crypto'
-import { EventEmitter } from 'node:events'
-import type { ClientRequest, IncomingMessage, RequestOptions } from 'node:http'
-import { Readable } from 'node:stream'
 import { rootCertificates, type DetailedPeerCertificate } from 'node:tls'
 import { describe, expect, it } from 'vitest'
-import {
-  checkFabricServerIdentity,
-  createFabricTransportFetch,
-  createFabricHttpsRequestOptions
-} from './fabric-http-client'
-import type { FabricHttpsRequest } from './fabric-http-client'
+import * as fabricHttpClient from './fabric-http-client'
+import { checkFabricServerIdentity, createFabricHttpsRequestOptions } from './fabric-http-client'
 
 function certificateFor(hostname: string, certificateDer: Buffer): DetailedPeerCertificate {
   return {
@@ -30,6 +23,10 @@ function rootSpki(index: number): { certificateDer: Buffer; sha256: string } {
 }
 
 describe('Compute Fabric pinned HTTPS transport', () => {
+  it('does not expose a replaceable HTTPS request seam in the production API', () => {
+    expect(fabricHttpClient).not.toHaveProperty('createFabricTransportFetch')
+  })
+
   it('accepts the expected TLS SPKI after standard hostname verification', () => {
     const spki = rootSpki(0)
 
@@ -85,41 +82,6 @@ describe('Compute Fabric pinned HTTPS transport', () => {
         certificateFor('node.internal', presented.certificateDer)
       )
     ).toBeInstanceOf(Error)
-  })
-
-  it('performs the request through Node HTTPS and exposes a bounded-compatible Web response', async () => {
-    const expected = rootSpki(0)
-    let observedOptions: RequestOptions | undefined
-    const requestFn: FabricHttpsRequest = (options, onResponse) => {
-      observedOptions = options
-      const request = new EventEmitter() as unknown as ClientRequest
-      request.end = (() => {
-        const response = Readable.from([
-          Buffer.from('{"schema":"autowin.node-manifest/v1"}', 'utf8')
-        ]) as unknown as IncomingMessage
-        response.statusCode = 200
-        response.statusMessage = 'OK'
-        response.headers = { 'content-type': 'application/json' }
-        onResponse(response)
-        return request
-      }) as ClientRequest['end']
-      return request
-    }
-    const transportFetch = createFabricTransportFetch({ requestFn })
-
-    const response = await transportFetch(
-      {
-        origin: 'https://node.internal:7443',
-        tlsSpkiSha256: expected.sha256
-      },
-      '/v1/manifest',
-      { method: 'GET', headers: { accept: 'application/json' } }
-    )
-
-    await expect(response.json()).resolves.toEqual({ schema: 'autowin.node-manifest/v1' })
-    expect(observedOptions).toEqual(
-      expect.objectContaining({ hostname: 'node.internal', agent: false, rejectUnauthorized: true })
-    )
   })
 
   it('rejects a request path that could escape the paired Node origin', () => {

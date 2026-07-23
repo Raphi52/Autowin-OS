@@ -8,11 +8,7 @@ import type {
   StreamChunk,
   Usage
 } from '../providers/types'
-import {
-  createFabricTransportFetch,
-  type FabricHttpsRequest,
-  type FabricTransportFetch
-} from './fabric-http-client'
+import { fetchFabricTransport } from './fabric-http-client'
 import type { FabricNodeTransportStore } from './node-transport-store'
 
 const REQUEST_SCHEMA = 'autowin.node-chat-request/v1'
@@ -21,12 +17,20 @@ const MAX_REQUEST_BYTES = 8 * 1024 * 1024
 const MAX_STREAM_BYTES = 8 * 1024 * 1024
 const MAX_EVENT_BYTES = 256 * 1024
 
+async function cancelBody(response: Response, reason: string): Promise<void> {
+  try {
+    await response.body?.cancel(reason)
+  } catch {
+    // The original protocol error remains authoritative.
+  }
+}
+
 export interface FabricResourceAdapterOptions {
   nodeId: string
   resourceId: string
   manifestDigest: string
   transportStore: FabricNodeTransportStore
-  requestFn?: FabricHttpsRequest
+  trustGuard: () => void
   timeoutMs?: number
   requestId?: () => string
 }
@@ -120,21 +124,18 @@ function parseEvent(value: unknown): NodeChatEvent {
 export class FabricResourceAdapter implements ProviderAdapter {
   readonly id: string
   readonly supportsExecution = false
-  private readonly transportFetch: FabricTransportFetch
   private readonly timeoutMs: number
   private readonly requestId: () => string
 
   constructor(private readonly options: FabricResourceAdapterOptions) {
     this.id = `fabric:${options.nodeId}:${options.resourceId}`
-    this.transportFetch = createFabricTransportFetch(
-      options.requestFn ? { requestFn: options.requestFn } : {}
-    )
     this.timeoutMs = options.timeoutMs ?? 120_000
     this.requestId = options.requestId ?? randomUUID
   }
 
   async auth(): Promise<boolean> {
     try {
+      this.options.trustGuard()
       return this.options.transportStore.get() !== null
     } catch {
       return false
@@ -167,6 +168,7 @@ export class FabricResourceAdapter implements ProviderAdapter {
     if (opts.execution) {
       throw new Error('Une ressource local-tools ne peut pas recevoir une exécution distante')
     }
+    this.options.trustGuard()
     const transport = this.options.transportStore.get()
     if (!transport) throw new Error(`Transport du Node indisponible: ${this.options.nodeId}`)
     const requestId = opts.requestId ?? this.requestId()
@@ -190,7 +192,7 @@ export class FabricResourceAdapter implements ProviderAdapter {
       throw new Error('Requête Autowin Node trop volumineuse')
     }
     opts.observePrompt?.(this.describePrompt(messages, opts))
-    const response = await this.transportFetch(transport, '/v1/executions/chat', {
+    const response = await fetchFabricTransport(transport, '/v1/executions/chat', {
       method: 'POST',
       headers: {
         accept: 'text/event-stream',
@@ -202,8 +204,12 @@ export class FabricResourceAdapter implements ProviderAdapter {
       body: serialized,
       signal: composeSignal(opts.signal, this.timeoutMs)
     })
-    if (!response.ok) throw new Error(`Autowin Node HTTP ${response.status}`)
+    if (!response.ok) {
+      await cancelBody(response, 'chat-http-error')
+      throw new Error(`Autowin Node HTTP ${response.status}`)
+    }
     if (!(response.headers.get('content-type') ?? '').toLowerCase().includes('text/event-stream')) {
+      await cancelBody(response, 'chat-content-type')
       throw new Error('Autowin Node a renvoyé un type de flux invalide')
     }
     if (!response.body) throw new Error('Autowin Node a renvoyé un flux vide')
@@ -217,6 +223,7 @@ export class FabricResourceAdapter implements ProviderAdapter {
     let finalText = ''
     let usage: Usage | undefined
     let sessionId: string | undefined
+    let exhausted = false
 
     const parseFrame = (frame: string): NodeChatEvent[] => {
       const dataLines = frame
@@ -255,9 +262,12 @@ export class FabricResourceAdapter implements ProviderAdapter {
     }
 
     try {
-      for (;;) {
+      stream: for (;;) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done) {
+          exhausted = true
+          break
+        }
         received += value.byteLength
         if (received > MAX_STREAM_BYTES) {
           await reader.cancel('stream-too-large')
@@ -272,17 +282,27 @@ export class FabricResourceAdapter implements ProviderAdapter {
           for (const event of parseFrame(frame)) {
             const delta = applyEvent(event)
             if (delta) yield { delta }
+            if (completed) break stream
           }
         }
       }
-      buffer += decoder.decode()
-      if (buffer.trim()) {
-        for (const event of parseFrame(buffer)) {
-          const delta = applyEvent(event)
-          if (delta) yield { delta }
+      if (!completed) {
+        buffer += decoder.decode()
+        if (buffer.trim()) {
+          for (const event of parseFrame(buffer)) {
+            const delta = applyEvent(event)
+            if (delta) yield { delta }
+          }
         }
       }
     } finally {
+      if (!exhausted) {
+        try {
+          await reader.cancel('chat-stream-aborted')
+        } catch {
+          // The original stream/protocol error remains authoritative.
+        }
+      }
       reader.releaseLock()
     }
     if (!completed) throw new Error('Flux Autowin Node incomplet')

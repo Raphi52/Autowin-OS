@@ -37,3 +37,15 @@ describe('minimal conversation status lights', () => {
     )
   })
 })
+
+describe('model final summary', () => {
+  it('uses a scoped gold frame without backdrop blur', () => {
+    const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+    const summary = css.match(/\.md-final-summary\s*{([^}]*)}/s)?.[1]
+
+    expect(summary).toBeDefined()
+    expect(summary).toMatch(/border:\s*1px solid rgba\(229, 184, 91,/)
+    expect(summary).toContain('background: linear-gradient(')
+    expect(summary).not.toContain('backdrop-filter')
+  })
+})

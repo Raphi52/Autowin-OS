@@ -15,11 +15,6 @@ export interface BehaviourQuery {
   localAppDataRoot?: string
 }
 
-export interface BehaviourContext {
-  path: string
-  label: string
-  depth: number
-}
 
 export interface BehaviourFile {
   id: string
@@ -354,32 +349,6 @@ function autowinFiles(query: Required<BehaviourQuery>): BehaviourFile[] {
     selected = true
   }
   return files
-}
-
-export async function listBehaviourContexts(
-  query?: string | BehaviourQuery
-): Promise<BehaviourContext[]> {
-  const normalized = normalizeQuery(query)
-  const paths = new Set<string>([normalized.workspaceRoot])
-  for (const path of discover(
-    normalized.workspaceRoot,
-    new Set([
-      'AGENTS.md',
-      'AGENTS.override.md',
-      'CLAUDE.md',
-      'CLAUDE.local.md',
-      '.cursorrules'
-    ])
-  )) {
-    paths.add(dirname(path))
-  }
-  return [...paths]
-    .sort((a, b) => a.localeCompare(b))
-    .map((path) => ({
-      path,
-      label: relative(normalized.workspaceRoot, path) || basename(path),
-      depth: relative(normalized.workspaceRoot, path).split(sep).filter(Boolean).length
-    }))
 }
 
 export async function listBehaviourFiles(

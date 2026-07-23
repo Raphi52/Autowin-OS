@@ -467,7 +467,7 @@ export function ObservatoryView({
   }
 
   return (
-    <section className="observatory-view">
+    <section className="observatory-view" data-testid="observatory-view">
       <header className="observatory-head">
         <ModuleHeader eyebrow="Traçabilité des conversations" title="Observatory" />
         <div className="observatory-metrics">

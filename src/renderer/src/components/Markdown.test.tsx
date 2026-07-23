@@ -19,8 +19,8 @@ afterEach(() => {
   container.remove()
 })
 
-function render(text: string): void {
-  act(() => root.render(createElement(Markdown, { text })))
+function render(text: string, highlightFinalSummary = false): void {
+  act(() => root.render(createElement(Markdown, { text, highlightFinalSummary })))
 }
 
 describe('Markdown', () => {
@@ -51,5 +51,41 @@ describe('Markdown', () => {
     render('a `b` **c**')
     expect(container.querySelector('code')?.textContent).toBe('b')
     expect(container.querySelector('strong')?.textContent).toBe('c')
+  })
+
+  it('groups the model final summary in one dedicated region and absorbs its separator', () => {
+    render(
+      'Réponse détaillée.\n\n---\n\n✅ Fait\n1. Correctif appliqué.\n\n📍 Maintenant : vérifié.\n⏳ Reste à faire : rien.\n👉 Recommandé : tester.',
+      true
+    )
+
+    const summary = container.querySelector('.md-final-summary')
+    expect(summary).not.toBeNull()
+    expect(summary?.textContent).toContain('✅ Fait')
+    expect(summary?.textContent).toContain('👉 Recommandé : tester.')
+    expect(summary?.textContent).not.toContain('---')
+    expect(summary?.textContent).not.toContain('Réponse détaillée.')
+  })
+
+  it('requires all four final-summary labels in order before framing', () => {
+    const invalidSummaries = [
+      '✅ Fait\n1. Correctif appliqué.\n⏳ Reste à faire : rien.\n👉 Recommandé : tester.',
+      '✅ Fait\n1. Correctif appliqué.\n📍 Maintenant : vérifié.\n👉 Recommandé : tester.',
+      '✅ Fait\n1. Correctif appliqué.\n📍 Maintenant : vérifié.\n⏳ Reste à faire : rien.',
+      '✅ Fait\n1. Correctif appliqué.\n👉 Recommandé : tester.\n⏳ Reste à faire : rien.\n📍 Maintenant : vérifié.'
+    ]
+
+    for (const text of invalidSummaries) {
+      render(text, true)
+      expect(container.querySelector('.md-final-summary')).toBeNull()
+    }
+  })
+
+  it('does not frame an unmarked render or a marker inside fenced code', () => {
+    render('✅ Fait\n1. Texte utilisateur.')
+    expect(container.querySelector('.md-final-summary')).toBeNull()
+
+    render('```text\n✅ Fait\n```', true)
+    expect(container.querySelector('.md-final-summary')).toBeNull()
   })
 })

@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import { catalogPath, enablementPath } from './native-registry'
 
 // On teste la couche capability-controls contre un registre natif LOCAL (aucun sous-processus).
-// setCapabilitySelection est importé dynamiquement après avoir pointé le registre sur un base tmp.
 
 describe('capability-controls (source locale générique, sans Native)', () => {
   let base: string
@@ -29,10 +28,8 @@ describe('capability-controls (source locale générique, sans Native)', () => {
   })
   afterEach(() => rmSync(base, { recursive: true, force: true }))
 
-  it('setCapabilitySelection applique la cible (active/désactive le diff)', async () => {
+  it('le registre natif applique une sélection cible par diff', async () => {
     const { setNativeEnablement, listNativeRegistry } = await import('./native-registry')
-    // On rejoue la logique de sélection sur le base tmp (setCapabilitySelection utilise le base défaut,
-    // donc on valide ici l'invariant de diff via l'API native paramétrée par base).
     const target = new Set(['beta', 'gamma'])
     for (const item of listNativeRegistry('tools', base)) {
       if (item.enabled !== target.has(item.id)) setNativeEnablement('tools', item.id, target.has(item.id), base)

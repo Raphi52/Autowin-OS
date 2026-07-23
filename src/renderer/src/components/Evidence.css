@@ -1,0 +1,55 @@
+/* Rendu inline des preuves d'exécution dans le fil (diff + stdout/exit). Fichier séparé pour
+   éviter de toucher ChatView.css (zone de refonte concurrente). */
+.evidence-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+.evidence-item {
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+.evidence-item.failed {
+  border-color: #713641;
+}
+.evidence-item > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.evidence-item .evidence-exit {
+  margin-left: auto;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+.evidence-item .evidence-exit.st-ok {
+  color: #6be0aa;
+}
+.evidence-item .evidence-exit.st-err {
+  color: #ff8ea1;
+}
+.evidence-diff,
+.evidence-stdout {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 320px;
+  overflow: auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.evidence-diff .diff-add {
+  color: #6be0aa;
+  background: rgba(46, 160, 67, 0.12);
+}
+.evidence-diff .diff-del {
+  color: #ff8ea1;
+  background: rgba(248, 81, 73, 0.12);
+}

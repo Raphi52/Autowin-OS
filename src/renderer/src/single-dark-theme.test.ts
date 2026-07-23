@@ -18,7 +18,7 @@ describe('single Dark theme contract', () => {
     expect(app).toContain('className="shell cosmic-outline theme-serious"')
     expect(app).not.toMatch(/Mode glass|setVisualMode|visual-mode\.v1|ThemeIcon|GraphVisualMode/)
     expect(app).not.toMatch(/visualMode/)
-    expect(app).toContain('<GraphView onCleanMemory={openBrainwashConversation} />')
+    expect(app).toContain('<KnowledgeView onCleanMemory={openBrainwashConversation} />')
   })
 
   it('removes global Galaxy branches and theme switch styling', () => {

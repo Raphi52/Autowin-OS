@@ -1,81 +1,62 @@
-import { EventEmitter } from 'node:events'
-import type { ClientRequest, IncomingMessage } from 'node:http'
-import type { RequestOptions } from 'node:https'
-import { Readable } from 'node:stream'
-import { describe, expect, it } from 'vitest'
-import type { FabricHttpsRequest } from './fabric-http-client'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const fetchFabricTransport = vi.hoisted(() => vi.fn())
+vi.mock('./fabric-http-client', () => ({ fetchFabricTransport }))
+
 import { FetchFabricManifestClient } from './manifest-client'
 
-function requestReturning(
-  body: string,
-  headers: Record<string, string>,
-  observeOptions?: (options: RequestOptions) => void
-): FabricHttpsRequest {
-  return (options, onResponse) => {
-    observeOptions?.(options)
-    const request = new EventEmitter() as unknown as ClientRequest
-    request.end = (() => {
-      const response = Readable.from([Buffer.from(body, 'utf8')]) as unknown as IncomingMessage
-      response.statusCode = 200
-      response.statusMessage = 'OK'
-      response.headers = headers
-      onResponse(response)
-      return request
-    }) as ClientRequest['end']
-    return request
-  }
+const transport = {
+  origin: 'https://node.internal:7443',
+  tlsSpkiSha256: 'c'.repeat(64),
+  bearerToken: 'secret-token'
 }
+
+beforeEach(() => fetchFabricTransport.mockReset())
 
 describe('Compute Fabric manifest HTTP client', () => {
   it('fetches a bounded JSON manifest from the main-owned Node origin', async () => {
-    let requestOptions: RequestOptions | undefined
     const manifest = { schema: 'autowin.node-manifest/v1' }
-    const options = {
-      requestFn: requestReturning(
-        JSON.stringify(manifest),
-        { 'content-type': 'application/json' },
-        (value) => {
-          requestOptions = value
-        }
-      )
-    }
-    const client = new FetchFabricManifestClient(options)
-
-    await expect(
-      client.fetchManifest({
-        origin: 'https://node.internal:7443',
-        tlsSpkiSha256: 'c'.repeat(64),
-        bearerToken: 'secret-token'
-      })
-    ).resolves.toEqual(manifest)
-    expect(requestOptions).toEqual(
-      expect.objectContaining({
-        hostname: 'node.internal',
-        path: '/v1/manifest',
-        method: 'GET',
-        rejectUnauthorized: true
+    fetchFabricTransport.mockResolvedValueOnce(
+      new Response(JSON.stringify(manifest), {
+        headers: { 'content-type': 'application/json' }
       })
     )
-    expect(requestOptions?.checkServerIdentity).toBeTypeOf('function')
-    expect((requestOptions?.headers as Record<string, string>).authorization).toContain(
-      'secret-token'
+    const client = new FetchFabricManifestClient()
+
+    await expect(client.fetchManifest(transport)).resolves.toEqual(manifest)
+    expect(fetchFabricTransport).toHaveBeenCalledWith(
+      transport,
+      '/v1/manifest',
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({ authorization: 'Bearer secret-token' })
+      })
     )
   })
 
   it('rejects a manifest body declared above the one-megabyte boundary', async () => {
-    const options = {
-      requestFn: requestReturning('{}', {
-        'content-type': 'application/json',
-        'content-length': String(1024 * 1024 + 1)
+    fetchFabricTransport.mockResolvedValueOnce(
+      new Response('{}', {
+        headers: {
+          'content-type': 'application/json',
+          'content-length': String(1024 * 1024 + 1)
+        }
       })
-    }
-    const client = new FetchFabricManifestClient(options)
+    )
+    const client = new FetchFabricManifestClient()
 
-    await expect(
-      client.fetchManifest({
-        origin: 'https://node.internal:7443',
-        tlsSpkiSha256: 'c'.repeat(64)
-      })
-    ).rejects.toThrow(/trop volumineux/i)
+    await expect(client.fetchManifest(transport)).rejects.toThrow(/trop volumineux/i)
+  })
+
+  it('cancels the response body when the manifest content type is invalid', async () => {
+    const cancel = vi.fn()
+    const body = new ReadableStream<Uint8Array>({ cancel })
+    fetchFabricTransport.mockResolvedValueOnce(
+      new Response(body, { headers: { 'content-type': 'text/plain' } })
+    )
+    const client = new FetchFabricManifestClient()
+
+    await expect(client.fetchManifest(transport)).rejects.toThrow(/type de manifeste invalide/i)
+    expect(cancel).toHaveBeenCalledWith('manifest-content-type')
   })
 })

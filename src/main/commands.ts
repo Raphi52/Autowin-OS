@@ -16,6 +16,7 @@ import {
   decideConversationCapability,
   type ConversationAuthorityMode
 } from './conversation-capabilities'
+import { APP_DESTINATIONS, resolveAppLocation, type AppDestination } from '../shared/navigation'
 
 /**
  * Bus de commandes de l'app — le PLAN DE CONTRÔLE que les agents pilotent.
@@ -43,7 +44,7 @@ export interface CommandResult {
 
 /** Instantané de l'état que l'agent PEUT VOIR (ce qu'il pilote). */
 export interface AppSnapshot {
-  tab: string
+  tab: AppDestination
   activeConversationId?: string
   providers: string[]
   roles: Record<string, { provider: string; model?: string }>
@@ -74,9 +75,9 @@ const CATALOG: CommandSpec[] = [
   {
     name: 'navigate',
     description: 'Afficher une vue',
-    args: { tab: 'chat|memory|agents' },
+    args: { tab: APP_DESTINATIONS.map(({ id }) => id).join('|') },
     annotations: {
-      readOnlyHint: false,
+      readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
       openWorldHint: false
@@ -227,7 +228,7 @@ function approvalQuestion(name: string, args: Record<string, unknown>): string {
 }
 
 export class AppCommandBus {
-  private tab = 'chat'
+  private tab: AppDestination = 'chat'
   /** Hook de traçage (ledger) — chaque commande exécutée y laisse une ligne. */
   trace?: (name: string, args: Record<string, unknown>, ok: boolean) => void
   /** Conversation active (contexte posé par le chat) : les workflows créés s'y rattachent. */
@@ -426,9 +427,11 @@ export class AppCommandBus {
     const s = (k: string): string => String(a[k] ?? '')
     switch (name) {
       case 'navigate': {
-        this.tab = s('tab')
-        this.broadcast({ type: 'navigate', tab: this.tab })
-        return { tab: this.tab }
+        const requestedTab = s('tab')
+        const location = resolveAppLocation(requestedTab)
+        this.tab = location.destination
+        this.broadcast({ type: 'navigate', tab: requestedTab })
+        return { tab: location.destination, section: location.section }
       }
       case 'chat_send': {
         const text = this.onChat

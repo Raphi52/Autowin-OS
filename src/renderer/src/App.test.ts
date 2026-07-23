@@ -4,20 +4,28 @@ import { normalizeTab } from './tabs'
 describe('normalizeTab — mapping des vues canoniques et legacy', () => {
   it('conserve les vues canoniques', () => {
     expect(normalizeTab('chat')).toBe('chat')
-    expect(normalizeTab('memory')).toBe('memory')
-    expect(normalizeTab('agents')).toBe('agents')
+    expect(normalizeTab('agent-studio')).toBe('agent-studio')
+    expect(normalizeTab('knowledge')).toBe('knowledge')
     expect(normalizeTab('observatory')).toBe('observatory')
-    expect(normalizeTab('router')).toBe('router')
+    expect(normalizeTab('settings')).toBe('settings')
   })
 
-  it('mappe les alias OmniRoute sur Router', () => {
-    expect(normalizeTab('omniroute')).toBe('router')
-    expect(normalizeTab('routeur')).toBe('router')
+  it('fusionne Models, Topology et OmniRoute dans Agent Studio', () => {
+    for (const alias of ['agents', 'roles', 'models', 'router', 'omniroute', 'routeur']) {
+      expect(normalizeTab(alias)).toBe('agent-studio')
+    }
   })
 
-  it('mappe les onglets legacy du catalogue précédent', () => {
-    expect(normalizeTab('graph')).toBe('memory')
-    expect(normalizeTab('roles')).toBe('agents')
+  it('fusionne Memory, Brain et Graph dans Knowledge', () => {
+    for (const alias of ['memory', 'brain', 'graph']) {
+      expect(normalizeTab(alias)).toBe('knowledge')
+    }
+  })
+
+  it('fusionne Capabilities et Behaviour dans Settings', () => {
+    for (const alias of ['capabilities', 'skills', 'hooks', 'tools', 'behaviour', 'behavior']) {
+      expect(normalizeTab(alias)).toBe('settings')
+    }
   })
 
   it('fusionne tous les anciens accès Harnais et Prompt Load dans Observatoire', () => {

@@ -237,6 +237,21 @@ export type OrchStep = {
     options: Record<string, unknown>
     limitation: string
   }
+  /** Preuves d'exécution du tour (diff fichiers, stdout/exit commandes) — rendues inline. */
+  evidence?: EvidencePart[]
+}
+
+/** Preuve d'exécution telle qu'affichée dans le Chat (miroir renderer de ExecutionEvidence). */
+export type EvidencePart = {
+  type: string
+  kind: string
+  ok: boolean
+  summary: string
+  command?: string
+  exitCode?: number
+  stdout?: string
+  diff?: string
+  path?: string
 }
 
 /** Icône + libellé par type d'étape d'orchestration (affichage temps réel). */

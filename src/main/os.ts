@@ -35,11 +35,7 @@ import {
   type OrchestrationPhase
 } from './orchestrator'
 import { regimePhases } from './task-regime'
-import { composeHarnessSnapshot, type HarnessSnapshot } from './harness/snapshot'
-import { listCapabilities } from './capability-controls'
-import { listClaudeHooks } from './claude-hooks'
-import { defaultBehaviourWorkspace, listBehaviourFiles } from './behaviour-files'
-import { listSessions } from './activity/transcripts'
+import { defaultBehaviourWorkspace } from './behaviour-files'
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
@@ -69,30 +65,6 @@ export function resolveExecutionWorkspace(input: ExecutionWorkspaceInput = {}): 
   const executableWorkspace = gitWorkspaceFrom(dirname(input.execPath ?? process.execPath))
   if (executableWorkspace) return executableWorkspace
   return defaultBehaviourWorkspace()
-}
-
-/** Course bornée : rend `fallback` si la promesse dépasse `ms` (sonde jamais bloquante). */
-async function settleWithin<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const timeout = new Promise<T>((resolve) => {
-    timer = setTimeout(() => resolve(fallback), ms)
-  })
-  try {
-    return await Promise.race([promise, timeout])
-  } catch {
-    return fallback
-  } finally {
-    if (timer) clearTimeout(timer)
-  }
-}
-
-/** Lecture synchrone défensive : `fallback` si la source jette (partage hors ligne…). */
-function safeSync<T>(read: () => T, fallback: T): T {
-  try {
-    return read()
-  } catch {
-    return fallback
-  }
 }
 
 /** Un modèle membre d'un bloc de fan-out (topology → orchestrateur). */
@@ -253,71 +225,5 @@ export class AutowinOS {
   }
   listRuns(): RunEntry[] {
     return scanRuns()
-  }
-
-  /**
-   * Projection « Harnais » — lecture seule, bornée, sans chemin ni contenu.
-   * Récolte des inventaires réels déjà disponibles (compteurs/étiquettes), avec
-   * timeouts non bloquants ; les sources async indisponibles restent `unknown`.
-   */
-  async harnessSnapshot(): Promise<HarnessSnapshot> {
-    const orchestrator = this.roles.getBinding('orchestrator')
-    const soul = safeSync(() => loadKitSoul(), '')
-
-    const [skills, tools, behaviour] = await Promise.all([
-      settleWithin(listCapabilities('skills'), 3500, null),
-      settleWithin(listCapabilities('tools'), 3500, null),
-      settleWithin(listBehaviourFiles(), 3500, null)
-    ])
-
-    const hooks = safeSync(() => listClaudeHooks(), [])
-    const sessions = safeSync(() => listSessions(60), [])
-    const brains = safeSync(() => scanBrainGraphs(), [])
-    const runs = safeSync(() => scanRuns(), [])
-    const budget = this.cost.budgetStatus()
-
-    const behaviourByEngine = behaviour
-      ? {
-          codex: behaviour.filter((f) => f.engine === 'codex').length,
-          claude: behaviour.filter((f) => f.engine === 'claude').length,
-          autowin: behaviour.filter((f) => f.engine === 'autowin').length
-        }
-      : null
-
-    return composeHarnessSnapshot({
-      generatedAt: new Date().toISOString(),
-      roleBindings: this.roles.all(),
-      providers: this.registry.ids(),
-      activeModel: {
-        id: orchestrator.model ?? `${orchestrator.provider} · modèle par défaut`,
-        provider: orchestrator.provider
-      },
-      kit: { injected: soul.length > 0, size: soul.length },
-      counts: {
-        skills: skills ? skills.length : null,
-        tools: tools ? tools.length : null,
-        hooks: hooks.length,
-        behaviour: behaviour ? behaviour.length : null,
-        conversations: this.conversations.list().length,
-        sessions: sessions.length,
-        trustModels: this.trust.ranking().length
-      },
-      hookEvents: [...new Set(hooks.map((h) => h.event))].slice(0, 8),
-      behaviourByEngine,
-      brains: brains.map((b) => ({
-        id: b.id,
-        label: b.label,
-        kind: b.kind,
-        sizeMb: b.sizeMb,
-        themes: b.themes?.length ?? 0
-      })),
-      runs: {
-        total: runs.length,
-        blocked: runs.filter((r) => isBlocked(r.summary)).length,
-        open: runs.filter((r) => r.summary.status === 'open' || r.summary.status === 'red').length
-      },
-      budget: { spent: budget.spent, budget: budget.budget, alert: budget.alert },
-      pendingAuthority: this.authority.pending().length
-    })
   }
 }

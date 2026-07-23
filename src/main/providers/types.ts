@@ -95,6 +95,16 @@ export interface ExecutionEvidence {
   status: string
   ok: boolean
   summary: string
+  /** Commande exécutée (command_execution) — affichée telle quelle dans le Chat. */
+  command?: string
+  /** Code de sortie de la commande (command_execution). */
+  exitCode?: number
+  /** Sortie brute agrégée (stdout+stderr) — pour affichage lisible inline, plus large que `summary`. */
+  stdout?: string
+  /** Diff / changements d'un file_change, prêt à afficher. */
+  diff?: string
+  /** Chemin(s) du fichier touché (file_change). */
+  path?: string
 }
 
 /** Résultat final d'un tour, après consommation du stream. */

@@ -2,7 +2,7 @@ import { createHash, generateKeyPairSync, sign } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { canonicalJson } from './manifest'
 import { FabricStateCorruptionError } from './fabric-store'
 import {
@@ -10,7 +10,11 @@ import {
   type FabricManifestClient,
   type PairNodeRequest
 } from './control-plane'
-import type { FabricNodeTransport, FabricNodeTransportStore } from './node-transport-store'
+import {
+  FabricNodeTransportCorruptionError,
+  type FabricNodeTransport,
+  type FabricNodeTransportStore
+} from './node-transport-store'
 
 const NOW = new Date('2026-07-22T16:30:00.000Z')
 const directories: string[] = []
@@ -77,10 +81,12 @@ function signedPairingFixture(): {
 
 class MemoryTransportStore implements FabricNodeTransportStore {
   value: FabricNodeTransport | null = null
+  failure: Error | null = null
   set(value: FabricNodeTransport): void {
     this.value = structuredClone(value)
   }
   get(): FabricNodeTransport | null {
+    if (this.failure) throw this.failure
     return this.value ? structuredClone(this.value) : null
   }
   delete(): boolean {
@@ -88,6 +94,14 @@ class MemoryTransportStore implements FabricNodeTransportStore {
     this.value = null
     return existed
   }
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
 }
 
 afterEach(() => {
@@ -184,6 +198,38 @@ describe('Compute Fabric control plane', () => {
     expect(controlPlane.list()[0]).toEqual(refreshed)
   })
 
+  it('never rolls back the anti-replay checkpoint across concurrent refreshes', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'autowin-fabric-control-'))
+    directories.push(directory)
+    const fixture = signedPairingFixture()
+    const firstRefresh = deferred<unknown>()
+    const secondRefresh = deferred<unknown>()
+    let calls = 0
+    const controlPlane = new FabricControlPlane({
+      statePath: join(directory, 'fabric-state.json'),
+      manifestClient: {
+        fetchManifest: async () => {
+          calls += 1
+          if (calls === 1) return fixture.manifest
+          return calls === 2 ? firstRefresh.promise : secondRefresh.promise
+        }
+      },
+      transportStoreFactory: () => new MemoryTransportStore(),
+      now: () => NOW
+    })
+    await controlPlane.pair(fixture.request)
+
+    const newer = controlPlane.refresh('node-gpu-01')
+    const stale = controlPlane.refresh('node-gpu-01')
+    firstRefresh.resolve(fixture.manifestForSequence(9))
+    await expect(newer).resolves.toEqual(expect.objectContaining({ lastSequence: 9 }))
+    await vi.waitFor(() => expect(calls).toBe(3))
+    secondRefresh.resolve(fixture.manifestForSequence(8))
+
+    await expect(stale).rejects.toThrow(/séquence/i)
+    expect(controlPlane.list()[0]?.lastSequence).toBe(9)
+  })
+
   it('keeps the paired checkpoint and marks the Node offline after a network failure', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'autowin-fabric-control-'))
     directories.push(directory)
@@ -201,10 +247,39 @@ describe('Compute Fabric control plane', () => {
       now: () => NOW
     })
     const paired = await controlPlane.pair(fixture.request)
+    const adapter = controlPlane.createLocalToolsAdapter('node-gpu-01', 'qwen3-32b')
     online = false
 
     await expect(controlPlane.refresh('node-gpu-01')).rejects.toThrow('ECONNREFUSED')
 
+    expect(controlPlane.list()[0]).toEqual({
+      ...paired,
+      availability: 'offline',
+      resources: []
+    })
+    await expect(adapter.auth()).resolves.toBe(false)
+  })
+
+  it('marks the Node offline when its existing keyring transport is corrupt', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'autowin-fabric-control-'))
+    directories.push(directory)
+    const fixture = signedPairingFixture()
+    const transportStore = new MemoryTransportStore()
+    const controlPlane = new FabricControlPlane({
+      statePath: join(directory, 'fabric-state.json'),
+      manifestClient: { fetchManifest: async () => fixture.manifest },
+      transportStoreFactory: () => transportStore,
+      now: () => NOW
+    })
+    const paired = await controlPlane.pair(fixture.request)
+    transportStore.failure = new FabricNodeTransportCorruptionError(
+      'node-gpu-01',
+      new Error('legacy transport')
+    )
+
+    await expect(controlPlane.refresh('node-gpu-01')).rejects.toMatchObject({
+      code: 'FABRIC_TRANSPORT_CORRUPT'
+    })
     expect(controlPlane.list()[0]).toEqual({
       ...paired,
       availability: 'offline',

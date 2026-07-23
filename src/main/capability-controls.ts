@@ -31,26 +31,6 @@ export async function setCapabilityEnabled(
   return { items: setNativeEnablement(kind, id, enabled), restartRequired: true }
 }
 
-/** Applique une SÉLECTION cible (ensemble d'ids activés) : diff local, un enablement par élément. */
-export async function setCapabilitySelection(
-  kind: CapabilityKind,
-  targetEnabled: readonly string[]
-): Promise<{ items: CapabilityItem[]; restartRequired: true }> {
-  const known = listNativeRegistry(kind)
-  const knownIds = new Set(known.map((item) => item.id))
-  for (const id of targetEnabled) {
-    if (!knownIds.has(id)) throw new Error(`Capacité inconnue (${kind}): ${id}`)
-  }
-  const target = new Set(targetEnabled)
-  let items = known
-  for (const item of known) {
-    if (item.enabled !== target.has(item.id)) {
-      items = setNativeEnablement(kind, item.id, target.has(item.id))
-    }
-  }
-  return { items, restartRequired: true }
-}
-
 /** Amorçage opportuniste du cache/lecture (best-effort, ne jette jamais). */
 export async function warmCapabilities(): Promise<void> {
   try {

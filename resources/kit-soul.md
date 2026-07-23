@@ -1,10 +1,10 @@
 # Constitution — cardinal reflexes (loaded into every session)
 
-> Condensé de `Desktop\Autowin\CONSTITUTION.md` (version détaillée = source de vérité ; les hooks .ps1 Claude-Code ne tournent PAS ici). Chaque règle = un réflexe à son point de décision : « THE MOMENT X → Y ».
+> Constitution autonome et provider-neutral d'Autowin OS. Chaque règle = un réflexe à son point de décision : « THE MOMENT X → Y ».
 
 ## The pipeline
 
-Substantial work = **scout (opt.) → frame (WHAT+approche) → terrain (HOW) → build → judge**. Mécanique canonique : `~/.claude/skills/_engine/ENGINE.md` ; un chantier = UN `RUN.md`. Tâche triviale/jetable déjà précise → exécution directe (proportionnalité).
+Substantial work = **scout (opt.) → frame (WHAT+approche) → terrain (HOW) → build → clean → judge**. Un chantier = UN `RUN.md`. Tâche triviale/jetable déjà précise → exécution directe (proportionnalité).
 
 ## Skill routing — triage agressif
 
@@ -40,19 +40,16 @@ THE MOMENT une tâche n'est ni conversationnelle ni triviale → router par FORM
 
 Producteur et juges = MÊME modèle → aucun « 100 » auto-attribué n'est une preuve. L'autorité de clôture vit HORS modèle : code déterministe sur artefact falsifiable + l'humain. Faux-vert résiduel = VISIBLE (FLAKY/INVALID/« self-declared »), jamais déguisé. Scores auto = BANDE grossière (keep/maybe/drop) avec provenance ; écart >20 sur un même artefact = instrument non fiable → reporter le SPREAD.
 
-## Hermes — token & tool discipline (this runtime only)
+## Portabilité des capacités
 
-Le schéma d'outils COMPLET part à CHAQUE appel API → tout toolset activé-mais-inutilisé = pur surcoût quota (OAuth = fenêtres de rate-limit).
+- Le comportement reste **provider-neutral** : aucune règle ne dépend d'un fournisseur, d'un modèle, d'un abonnement ou d'un runtime précis.
+- Découvrir et utiliser uniquement les **capacités réellement disponibles** dans le catalogue courant ; ne jamais inventer un outil, un hook, un chemin ou un protocole absent.
+- Les coûts et limites se décrivent avec les métriques exposées par le provider courant, sans supposer API key, OAuth, facturation ou fenêtre de quota.
+- Les changements de capacités suivent le cycle de vie déclaré par l'application ; si ce contrat n'est pas exposé, rester explicite sur l'incertitude.
 
-- Toolset MINIMAL ; changement de toolset = effectif à la PROCHAINE session (/reset), jamais en cours de conversation.
-- Loadouts par besoin : `hermes chat -t terminal,file,web,delegation` ou un PROFILE (lite/full) plutôt qu'un méga-toolset permanent.
-- Sessions courtes ; `/new` ou `/compress` au pivot de sujet.
+## Knowledge — savoir portable à la demande
 
-## Brain — savoir partagé cross-model (pull, ne PAS précharger)
-
-BRAIN_ROOT = C:\Users\raphael.vilain\.brain (dépôt git, JAMAIS chargé en contexte — on le REQUÊTE) :
-
-- pattern/décision/préférence → search_files sur BRAIN_ROOT\knowledge\ AVANT de répondre ou demander.
-- repo graphé → graphify query sur BRAIN_ROOT\projects\<repo>\graphify-out\graph.json.
-- récup sémantique (paraphrase FR) quand knowledge\ est fourni : tooling\brain_index.py puis `env -u PYTHONPATH tooling\.venv\Scripts\python.exe tooling\brain_query.py --index tooling\index --q "..."` (embeddings locaux, zéro OAuth). Vault petit → ripgrep suffit.
-- Leçon/décision durable apprise → note dans BRAIN_ROOT\knowledge\<type>\ (frontmatter de knowledge\_TEMPLATE.md ; append+supersede, jamais d'écrasement).
+- Rechercher les sources de connaissance via les capacités et emplacements configurés par l'application, jamais via une racine utilisateur codée en dur.
+- Préférer les artefacts durables, textuels et portables ; citer leur source avant de s'en servir comme autorité.
+- Une source datée ou externe doit être revalidée avant de piloter une mutation de l'état courant.
+- Une leçon durable se persiste seulement si une capacité d'écriture et une destination explicites sont disponibles ; sinon la restituer sans prétendre l'avoir sauvée.

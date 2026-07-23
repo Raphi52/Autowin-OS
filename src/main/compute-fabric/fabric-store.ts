@@ -1,3 +1,4 @@
+import { createHash, createPublicKey, timingSafeEqual } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
@@ -93,6 +94,22 @@ function parseNode(value: unknown): FabricNodeRecord {
   ) {
     throw new Error('Clé publique Fabric invalide')
   }
+  const signingPublicKeyFingerprint = digest(
+    raw.signingPublicKeyFingerprint,
+    'fingerprint de clé publique'
+  )
+  try {
+    const publicKey = createPublicKey(raw.signingPublicKeyPem)
+    if (publicKey.asymmetricKeyType !== 'ed25519') throw new Error('Clé non Ed25519')
+    const publicDer = publicKey.export({ format: 'der', type: 'spki' })
+    const actual = createHash('sha256').update(publicDer).digest()
+    const expected = Buffer.from(signingPublicKeyFingerprint, 'hex')
+    if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+      throw new Error('Fingerprint de clé publique non concordant')
+    }
+  } catch (cause) {
+    throw new Error('Clé publique Fabric ou fingerprint invalide', { cause })
+  }
 
   const hasDigest = raw.lastManifestDigest !== undefined
   const hasVerifiedAt = raw.lastVerifiedAt !== undefined
@@ -108,10 +125,7 @@ function parseNode(value: unknown): FabricNodeRecord {
   return {
     nodeId: identifier(raw.nodeId, 'nodeId'),
     keyId: identifier(raw.keyId, 'keyId'),
-    signingPublicKeyFingerprint: digest(
-      raw.signingPublicKeyFingerprint,
-      'fingerprint de clé publique'
-    ),
+    signingPublicKeyFingerprint,
     signingPublicKeyPem: raw.signingPublicKeyPem,
     transportRef: identifier(raw.transportRef, 'transportRef'),
     trust: raw.trust,

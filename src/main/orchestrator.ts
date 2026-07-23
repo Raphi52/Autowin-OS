@@ -212,11 +212,11 @@ export class Orchestrator {
     // run (isMutationTask(task) fixe) → jamais de resume à travers un changement de sandbox.
     let prevSessionId: string | undefined
     for (const phase of execPhases) {
-      // FAN-OUT multi-modèles (scout/frame) : ≥2 modèles déposés dans le bloc topology de la phase
-      // → la phase s'exécute sur CHAQUE modèle en parallèle, puis l'orchestrateur SYNTHÉTISE
-      // (union dédupliquée). <2 ou absent → chemin mono-modèle ci-dessous (rétrocompat HARD).
+      // Panel scout/frame : ≥1 modèle déposé dans le bloc topology → la phase s'exécute sur
+      // CHAQUE membre. Avec un seul membre, sa sortie est réutilisée directement sans synthèse ;
+      // avec plusieurs, l'orchestrateur synthétise. Aucun membre → binding subagent rétrocompatible.
       const fanMembers = (this.deps.phaseFanOut?.(phase) ?? []).filter((m) => m && m.provider)
-      if (fanMembers.length >= 2) {
+      if (fanMembers.length >= 1) {
         // Le fan-out casse la chaîne de session (N sessions //). Chaque membre part du contexte complet.
         const fanMessages = [{ role: 'user' as const, content: phaseContext.join('\n\n') }]
         const parts = [
@@ -255,7 +255,7 @@ export class Orchestrator {
               )
               if (res.usage) {
                 cost.add({
-                  provider: member.provider,
+                  provider: res.provider ?? member.provider,
                   role: 'subagent',
                   model: member.model,
                   inputTokens: res.usage.inputTokens,
@@ -266,7 +266,7 @@ export class Orchestrator {
               }
               push({
                 step: 'exec',
-                provider: member.provider,
+                provider: res.provider ?? member.provider,
                 role: 'subagent',
                 model: member.model,
                 text: res.text,
@@ -368,7 +368,7 @@ export class Orchestrator {
         )
         if (synth.usage) {
           cost.add({
-            provider: orchBinding.provider,
+            provider: synth.provider ?? orchBinding.provider,
             role: 'orchestrator',
             model: orchBinding.model,
             inputTokens: synth.usage.inputTokens,
@@ -379,7 +379,7 @@ export class Orchestrator {
         }
         push({
           step: 'exec',
-          provider: orchBinding.provider,
+          provider: synth.provider ?? orchBinding.provider,
           role: 'orchestrator',
           model: orchBinding.model,
           text: synth.text,
@@ -472,7 +472,9 @@ export class Orchestrator {
       prevSessionId = phaseRes.sessionId ?? prevSessionId
       if (phaseRes.usage) {
         cost.add({
-          provider: subProvider,
+          // Provider RÉEL ayant répondu (le registre peut rerouter une exécution vers un executor
+          // local) — pas le demandé, sinon trace/coût mentent sur qui a vraiment tourné.
+          provider: phaseRes.provider ?? subProvider,
           role: 'subagent',
           inputTokens: phaseRes.usage.inputTokens,
           outputTokens: phaseRes.usage.outputTokens,
@@ -482,7 +484,7 @@ export class Orchestrator {
       }
       push({
         step: 'exec',
-        provider: subProvider,
+        provider: phaseRes.provider ?? subProvider,
         role: 'subagent',
         text: phaseRes.text,
         tokens: phaseRes.usage ? phaseRes.usage.inputTokens + phaseRes.usage.outputTokens : undefined,
@@ -616,7 +618,7 @@ export class Orchestrator {
               )
               if (r.usage) {
                 cost.add({
-                  provider: member.provider,
+                  provider: r.provider ?? member.provider,
                   role: 'judge',
                   model: member.model,
                   inputTokens: r.usage.inputTokens,
@@ -628,7 +630,7 @@ export class Orchestrator {
               const votesValide = /^\s*valide/i.test(r.text)
               push({
                 step: 'judge',
-                provider: member.provider,
+                provider: r.provider ?? member.provider,
                 role: 'judge',
                 model: member.model,
                 text: r.text.trim(),
@@ -696,7 +698,7 @@ export class Orchestrator {
         }
         if (verdict.usage) {
           cost.add({
-            provider: judgeProvider,
+            provider: verdict.provider ?? judgeProvider,
             role: 'judge',
             inputTokens: verdict.usage.inputTokens,
             outputTokens: verdict.usage.outputTokens,
@@ -710,7 +712,7 @@ export class Orchestrator {
       trust.record({ judgeModel: judgeProvider, verdict: ok ? 'green' : 'red' })
       push({
         step: 'judge',
-        provider: judgeProvider,
+        provider: verdict.provider ?? judgeProvider,
         role: 'judge',
         text: verdict.text.trim(),
         tokens: verdict.usage ? verdict.usage.inputTokens + verdict.usage.outputTokens : undefined,

@@ -21,6 +21,49 @@ import { join } from 'node:path'
  */
 const CODEX_RESPONSES_URL = 'https://chatgpt.com/backend-api/codex/responses'
 
+/** Élément d'exécution brut remonté par Codex (sous-ensemble typé utile à la preuve). */
+export interface CodexExecItem {
+  type?: string
+  command?: string
+  exit_code?: number
+  aggregated_output?: string
+  changes?: unknown
+}
+
+/**
+ * Extrait les champs STRUCTURÉS d'une preuve d'exécution (pour un rendu lisible inline dans le Chat :
+ * diff pour un file_change, stdout/exit pour une commande). Bornés pour ne pas gonfler le payload.
+ * Pur → testable isolément.
+ */
+export function structuredEvidenceFields(item: CodexExecItem): {
+  command?: string
+  exitCode?: number
+  stdout?: string
+  diff?: string
+  path?: string
+} {
+  if (item.type === 'command_execution') {
+    return {
+      command: item.command,
+      exitCode: item.exit_code,
+      stdout: (item.aggregated_output ?? '').slice(-20_000)
+    }
+  }
+  if (item.type === 'file_change') {
+    return {
+      diff: (typeof item.changes === 'string'
+        ? item.changes
+        : JSON.stringify(item.changes ?? {}, null, 2)
+      ).slice(0, 20_000),
+      path:
+        item.changes && typeof item.changes === 'object'
+          ? Object.keys(item.changes as Record<string, unknown>).join(', ')
+          : undefined
+    }
+  }
+  return {}
+}
+
 export interface CodexExecSpec {
   executable: string
   args: string[]
@@ -148,12 +191,15 @@ async function runCodexExec(
                 item.type === 'command_execution'
                   ? `${item.command ?? ''}\nexit=${item.exit_code ?? 'unknown'}\n${item.aggregated_output ?? ''}`
                   : JSON.stringify(item.changes ?? item)
+              // Champs STRUCTURÉS (diff + stdout/exit) en plus du `summary` conservé (rétrocompat).
+              const structured = structuredEvidenceFields(item)
               executionEvidence.push({
                 type: item.type,
                 kind,
                 status: item.status ?? 'completed',
                 ok,
-                summary: summary.slice(-4_000)
+                summary: summary.slice(-4_000),
+                ...structured
               })
               // Une commande atomique peut écrire puis vérifier (lecture + assertion).
               // Conserver les deux signaux évite que la mutation masque sa preuve.

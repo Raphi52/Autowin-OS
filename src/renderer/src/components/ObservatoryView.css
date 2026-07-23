@@ -674,6 +674,99 @@
   outline: 2px solid #59dcff;
   outline-offset: 2px;
 }
+
+/* Palette Noir de Models : surfaces neutres, or pour la sélection, couleur seulement sémantique. */
+.theme-serious .observatory-view {
+  --surface-selected: rgba(225, 193, 103, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
+  background: var(--surface-panel);
+  color: #f2f3f5;
+}
+
+.theme-serious .observatory-view .observatory-toolbar,
+.theme-serious .observatory-view .observatory-flightdeck,
+.theme-serious .observatory-view .observatory-native-diagnostics {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: var(--surface-panel);
+}
+
+.theme-serious .observatory-view .observatory-metrics > strong,
+.theme-serious .observatory-view .observatory-conversations > button,
+.theme-serious .observatory-view .observatory-calls button,
+.theme-serious .observatory-view .observatory-diagnostics button,
+.theme-serious .observatory-view .observatory-event,
+.theme-serious .observatory-view .observatory-causal-node-wrap > button,
+.theme-serious .observatory-view .rag-trace-card,
+.theme-serious .observatory-view .brain-nav-card {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: var(--surface-card);
+}
+
+.theme-serious .observatory-view .observatory-toolbar input,
+.theme-serious .observatory-view .observatory-toolbar select,
+.theme-serious .observatory-view .observatory-toolbar button,
+.theme-serious .observatory-view .observatory-view-switch,
+.theme-serious .observatory-view .observatory-event-detail button,
+.theme-serious .observatory-view .observatory-diff button {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: var(--surface-inset);
+  color: #e7e8eb;
+}
+
+.theme-serious .observatory-view .observatory-panel-title,
+.theme-serious .observatory-view .observatory-head p,
+.theme-serious .observatory-view .observatory-conversations small,
+.theme-serious .observatory-view .observatory-diagnostics span,
+.theme-serious .observatory-view .observatory-turn > header,
+.theme-serious .observatory-view .observatory-event p small {
+  color: #8b8f96;
+}
+
+.theme-serious .observatory-view .observatory-conversations > button:hover,
+.theme-serious .observatory-view .observatory-calls button:hover,
+.theme-serious .observatory-view .observatory-event:hover {
+  border-color: rgba(255, 255, 255, 0.34);
+  background: var(--surface-hover);
+}
+
+.theme-serious .observatory-view .observatory-conversations > button.is-active,
+.theme-serious .observatory-view .observatory-calls button.is-active,
+.theme-serious .observatory-view .observatory-event.is-selected {
+  border-color: rgba(225, 193, 103, 0.88);
+  background: var(--surface-selected);
+  color: #f2f3f5;
+}
+
+.theme-serious .observatory-view .observatory-view-switch button.is-active {
+  background: var(--surface-selected);
+  color: #ead18b;
+}
+
+.theme-serious .observatory-view .observatory-turn-focus {
+  border-color: rgba(225, 193, 103, 0.52);
+  background: var(--surface-selected);
+  color: #ead18b;
+}
+
+.theme-serious .observatory-view .observatory-rag-summary,
+.theme-serious .observatory-view .brain-nav-candidates > li,
+.theme-serious .observatory-view .brain-nav-candidates > li.is-retained {
+  background: var(--surface-card);
+}
+
+.theme-serious .observatory-view .observatory-event-detail {
+  border-color: rgba(225, 193, 103, 0.52);
+  background: var(--surface-card);
+}
+
+.theme-serious .observatory-view .observatory-event:focus-visible {
+  outline-color: rgba(225, 193, 103, 0.88);
+}
+
+.theme-serious .observatory-view .observatory-causal-node-wrap > button.is-selected {
+  outline: 1px solid rgba(225, 193, 103, 0.88);
+}
+
 @media (max-width: 1050px) {
   .observatory-view {
     padding: 18px;

@@ -3,6 +3,15 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 describe('ChatGPT constitution', () => {
+  it('reste portable entre providers et machines', () => {
+    const soul = readFileSync(join(process.cwd(), 'resources', 'kit-soul.md'), 'utf8')
+
+    expect(soul).not.toMatch(/[A-Z]:\\Users\\|\/Users\/|~\/[.]claude|[.]brain/i)
+    expect(soul).not.toMatch(/Hermes Agent|Claude Code/i)
+    expect(soul).toContain('provider-neutral')
+    expect(soul).toContain('capacités réellement disponibles')
+  })
+
   it('looks beyond the immediate request instead of stopping at minimum compliance', () => {
     const soul = readFileSync(join(process.cwd(), 'resources', 'kit-soul.md'), 'utf8')
 

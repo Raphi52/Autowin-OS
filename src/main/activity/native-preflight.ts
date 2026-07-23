@@ -1,6 +1,13 @@
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { redactTrace, recordOf } from './trace-redact'
+import {
+  NATIVE_PREFLIGHT_SCHEMA,
+  NATIVE_TRACE_BOUNDARY,
+  NATIVE_TRACE_FIDELITY,
+  NATIVE_TRACE_SOURCE,
+  assertNativePreflightWire
+} from '../../shared/native-trace-contract'
 
 /**
  * Traces de PRÉ-REQUÊTE NATIVES d'Autowin (schéma neutre, indépendant de toute source externe).
@@ -9,7 +16,7 @@ import { redactTrace, recordOf } from './trace-redact'
  * pour peupler l'Observatory (preuve d'injection + traçabilité RAG « Amitel Brain »). Aucun couplage
  * à un spool externe : le lecteur ne lit que le spool natif dont on lui passe la racine.
  */
-export const PREFLIGHT_SCHEMA = 'autowin.native-preflight/v1'
+export const PREFLIGHT_SCHEMA = NATIVE_PREFLIGHT_SCHEMA
 const SCHEMA = PREFLIGHT_SCHEMA
 const MAX_READ_BYTES = 4 * 1024 * 1024
 
@@ -23,15 +30,16 @@ export interface NativePreflightTrace {
   model: string
   apiMode?: string
   conversationId?: string
-  fidelity: 'exact-redacted'
-  boundary: 'native.pre_api_request'
-  source: 'native'
+  fidelity: typeof NATIVE_TRACE_FIDELITY
+  boundary: typeof NATIVE_TRACE_BOUNDARY
+  source: typeof NATIVE_TRACE_SOURCE
   messageCount: number
   toolCount: number
   request: Record<string, unknown>
 }
 
 export function normalizeNativePreflight(raw: unknown): NativePreflightTrace {
+  assertNativePreflightWire(raw)
   const source = recordOf(raw)
   const request = recordOf(source?.request)
   const body = recordOf(request?.body)
@@ -55,9 +63,9 @@ export function normalizeNativePreflight(raw: unknown): NativePreflightTrace {
     model: String(source.model ?? 'unknown'),
     ...(source.api_mode ? { apiMode: String(source.api_mode) } : {}),
     ...(source.conversation_id ? { conversationId: String(source.conversation_id) } : {}),
-    fidelity: 'exact-redacted',
-    boundary: 'native.pre_api_request',
-    source: 'native',
+    fidelity: NATIVE_TRACE_FIDELITY,
+    boundary: NATIVE_TRACE_BOUNDARY,
+    source: NATIVE_TRACE_SOURCE,
     messageCount: messages.length,
     toolCount: tools.length,
     request: redactTrace(request) as Record<string, unknown>

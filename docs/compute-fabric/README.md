@@ -101,10 +101,11 @@ Le serveur **propose** un appel ; le main process local **décide et exécute**.
 - canonicalisation JSON restreinte, signature Ed25519, TTL et anti-rejeu ;
 - transport HTTPS/bearer/pin `tlsSpkiSha256` séparé dans le keyring ;
 - pin TLS/SPKI réellement appliqué au manifeste et au chat, après validation CA/hostname ;
-- store de confiance atomique et fail-closed sur tout fichier existant illisible ou invalide ;
-- control plane pair/refresh/list et snapshot offline ;
-- adaptateur d’inférence SSE borné, séquencé, idempotent et `supportsExecution=false` ;
-- registre capable d’accepter un transport `fabric:*` déjà enregistré ;
+- transport de production non injectable : manifeste et chat utilisent l’unique primitive HTTPS pinnée ;
+- store de confiance atomique et fail-closed, avec import Ed25519 et fingerprint SPKI recalculé ;
+- control plane pair/refresh/list sérialisé par nœud, snapshot offline et invalidation des adapters périmés ;
+- adaptateur d’inférence SSE borné, séquencé, annulable et `supportsExecution=false` ;
+- hard-deny de toute route `fabric:*` dans le bridge provider legacy jusqu’à `autowin.tool-stream/v1` ;
 - boucle locale AgentPilot et décisions `plan|ask|auto` existantes.
 
 ### Présent mais incomplet ou dangereux pour les outils
@@ -112,7 +113,7 @@ Le serveur **propose** un appel ; le main process local **décide et exécute**.
 - `policyRef`, limites et capacités signées ne sont pas encore appliqués par le chemin d’exécution ;
 - les traces Pilot peuvent persister arguments et résultats bruts ;
 - `AppCommandBus.catalog()` contient `orchestrate`, qui peut demander `danger-full-access` ;
-- `ProviderRegistry` peut substituer un exécuteur local à un provider non-exécuteur.
+- le fallback historique du `ProviderRegistry` subsiste pour les providers legacy, mais les identifiants `fabric:*` sont refusés avant toute substitution.
 
 ### Non implémenté
 
@@ -195,7 +196,7 @@ Le fichier `context-sources.json` définit les documents, sources, plages et tes
 - `src/main/compute-fabric/control-plane.ts` — pairing/refresh/projection ;
 - `src/main/compute-fabric/resource-adapter.ts` — transport d’inférence actuel ;
 - `src/main/providers/types.ts` — frontière provider à étendre de façon additive ;
-- `src/main/providers/registry.ts` — routage et fallback à isoler ;
+- `src/main/providers/registry.ts` — hard-deny Fabric hors du bridge legacy ;
 - `src/main/agent-pilot.ts` — boucle locale existante ;
 - `src/main/commands.ts` — commandes applicatives, pas gateway machine ;
 - `src/main/conversation-capabilities.ts` — sémantique d’autorité à conserver ;

@@ -64,31 +64,8 @@ const api = {
   codexHooks: (): Promise<unknown[]> => ipcRenderer.invoke('codex:hooks:list'),
   setCapabilityTool: (name: string, enabled: boolean): Promise<unknown> =>
     ipcRenderer.invoke('os:capabilities:tools:set', name, enabled),
-  setCapabilityToolSelection: (names: string[]): Promise<unknown> =>
-    ipcRenderer.invoke('os:capabilities:tools:select', names),
-  setCapabilityPlugin: (name: string, enabled: boolean): Promise<unknown> =>
-    ipcRenderer.invoke('os:capabilities:plugins:set', name, enabled),
-  behaviourWorkspace: (): Promise<string> => ipcRenderer.invoke('os:behaviour:workspace'),
   chooseBehaviourWorkspace: (): Promise<string | null> =>
     ipcRenderer.invoke('os:behaviour:choose-workspace'),
-  behaviourContexts: (workspaceRoot: string): Promise<unknown> =>
-    ipcRenderer.invoke('os:behaviour:contexts', workspaceRoot),
-  behaviourFiles: (workspaceRoot?: string, contextRoot?: string): Promise<unknown> =>
-    ipcRenderer.invoke('os:behaviour:list', workspaceRoot, contextRoot),
-  readBehaviourFile: (id: string, workspaceRoot?: string, contextRoot?: string): Promise<string> =>
-    ipcRenderer.invoke('os:behaviour:read', id, workspaceRoot, contextRoot),
-  behaviourProof: (workspaceRoot?: string, contextRoot?: string): Promise<unknown> =>
-    ipcRenderer.invoke('os:behaviour:proof', workspaceRoot, contextRoot),
-  runSkillLoop: (input: unknown): Promise<unknown> => ipcRenderer.invoke('os:loop:run', input),
-  loopSkills: (): Promise<unknown[]> => ipcRenderer.invoke('os:loop:skills'),
-  generateLoopDraft: (objective: string): Promise<unknown> =>
-    ipcRenderer.invoke('os:loop:generate', objective),
-  loopRuns: (): Promise<unknown[]> => ipcRenderer.invoke('os:loop:runs'),
-  onSkillLoopEvent: (cb: (event: unknown) => void): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, loopEvent: unknown): void => cb(loopEvent)
-    ipcRenderer.on('os:loop:event', handler)
-    return () => ipcRenderer.removeListener('os:loop:event', handler)
-  },
   onModelQuestion: (cb: (question: unknown) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, question: unknown): void => cb(question)
     ipcRenderer.on('model:question', handler)
@@ -96,30 +73,13 @@ const api = {
   },
   answerModelQuestion: (id: string, answer: string): Promise<{ ok: true }> =>
     ipcRenderer.invoke('model:question:answer', id, answer),
-  // Dashboards réels
-  budget: (): Promise<{
-    spent: number
-    budget: number | null
-    ratio: number | null
-    alert: boolean
-  }> => ipcRenderer.invoke('os:budget'),
-  costByRole: (): Promise<Record<string, { costUsd: number; turns: number }>> =>
-    ipcRenderer.invoke('os:costByRole'),
-  trustRanking: (): Promise<Array<{ model: string; accuracy: number | null; confirmed: number }>> =>
-    ipcRenderer.invoke('os:trustRanking'),
-  runsWithGate: (): Promise<
-    Array<{ subject: string; summary: { status: string }; blocked: boolean }>
-  > => ipcRenderer.invoke('os:runsWithGate'),
   toolUsage: (): Promise<
     Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
   > => ipcRenderer.invoke('os:toolUsage'),
-  kaizen: (jsonl: string): Promise<Array<{ key: string; count: number }>> =>
-    ipcRenderer.invoke('os:kaizen', jsonl),
   // Sas d'autorité
   authorityPending: (): Promise<unknown[]> => ipcRenderer.invoke('os:authority:pending'),
   authorityResolve: (id: string, choice: unknown): Promise<unknown> =>
     ipcRenderer.invoke('os:authority:resolve', id, choice),
-  authoritySweep: (): Promise<unknown[]> => ipcRenderer.invoke('os:authority:sweep'),
   // Conversations
   conversations: (): Promise<
     Array<{ id: string; title: string; category: string; provider: string }>
@@ -169,10 +129,6 @@ const api = {
     ipcRenderer.invoke('os:orchestrate:cancel', conversationId),
   injectDirective: (conversationId: string, directive: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('os:pilotChat:inject', conversationId, directive),
-  pendingDirectives: (conversationId: string): Promise<string[]> =>
-    ipcRenderer.invoke('os:pilotChat:pending', conversationId),
-  removePendingDirective: (conversationId: string, index: number): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke('os:pilotChat:removeDirective', conversationId, index),
   markResponseDisplayed: (
     conversationId: string,
     content: string
@@ -202,8 +158,6 @@ const api = {
   activitySessions: (): Promise<unknown[]> => ipcRenderer.invoke('os:activity:sessions'),
   activitySession: (meta: unknown): Promise<unknown> =>
     ipcRenderer.invoke('os:activity:session', meta),
-  activityHabits: (): Promise<unknown> => ipcRenderer.invoke('os:activity:habits'),
-  activityLedger: (): Promise<unknown[]> => ipcRenderer.invoke('os:activity:ledger'),
   activityImage: (path: string): Promise<{ dataUrl: string }> =>
     ipcRenderer.invoke('os:activity:image', path),
   // Graphe brain 3D + workflow
@@ -247,8 +201,7 @@ const api = {
       }
     }>
   > => ipcRenderer.invoke('os:listRuns'),
-  // Harnais : projection lecture seule (typée dans index.d.ts)
-  harnessSnapshot: (): Promise<unknown> => ipcRenderer.invoke('os:harness:snapshot'),
+
   // Zoom app-wide (accessibilité) — agit sur tout le rendu comme un navigateur.
   getZoomFactor: (): number => webFrame.getZoomFactor(),
   setZoomFactor: (factor: number): void => webFrame.setZoomFactor(factor)

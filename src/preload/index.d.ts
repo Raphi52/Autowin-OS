@@ -72,19 +72,7 @@ interface SessionActivity {
   images: Array<{ path: string; ts?: string; exists: boolean }>
   totalToolCalls: number
 }
-interface ToolHabits {
-  sessionsScanned: number
-  totalToolCalls: number
-  tools: Array<{ tool: string; count: number }>
-  imagesConsulted: number
-}
-interface TraceEvent {
-  ts: string
-  source: 'bus' | 'pilot' | 'orchestrate'
-  name: string
-  detail?: string
-  ok?: boolean
-}
+
 interface ConvActivityEntry {
   ts: string
   kind: 'chat' | 'exec' | 'judge' | 'gate' | string
@@ -138,40 +126,6 @@ interface BehaviourFile {
   injectedInto: string
   active: boolean
   size: number
-}
-interface BehaviourContext {
-  path: string
-  label: string
-  depth: number
-}
-interface InjectionProof {
-  id: string
-  verdict: 'injected' | 'unproven'
-  observedAt?: string
-  reason: string
-}
-
-interface SkillLoopInput {
-  steps: Array<{
-    id: string
-    skill: string
-    capabilities?: string[]
-    prompt: string
-    requires?: string[]
-    produces?: string[]
-  }>
-  passes: number
-  stopOnFailure: boolean
-  carryOutput: boolean
-}
-
-interface SkillLoopEvent {
-  runId: string
-  kind: 'run-start' | 'step-start' | 'step-done' | 'step-error' | 'run-done'
-  stepId?: string
-  pass?: number
-  output?: string
-  error?: string
 }
 
 interface PendingModelQuestion {
@@ -350,63 +304,15 @@ interface ChatApi {
     name: string,
     enabled: boolean
   ) => Promise<{ items: CapabilityItem[]; restartRequired: true }>
-  setCapabilityToolSelection: (
-    names: string[]
-  ) => Promise<{ items: CapabilityItem[]; restartRequired: true }>
-  setCapabilityPlugin: (
-    name: string,
-    enabled: boolean
-  ) => Promise<{ items: CapabilityItem[]; restartRequired: true }>
-  behaviourWorkspace: () => Promise<string>
   chooseBehaviourWorkspace: () => Promise<string | null>
-  behaviourContexts: (workspaceRoot: string) => Promise<BehaviourContext[]>
-  behaviourFiles: (workspaceRoot?: string, contextRoot?: string) => Promise<BehaviourFile[]>
-  readBehaviourFile: (id: string, workspaceRoot?: string, contextRoot?: string) => Promise<string>
-  behaviourProof: (workspaceRoot?: string, contextRoot?: string) => Promise<InjectionProof[]>
-  runSkillLoop: (
-    input: SkillLoopInput
-  ) => Promise<{ runId: string; completed: number; failed: number }>
-  loopSkills: () => Promise<
-    Array<{
-      id: string
-      label: string
-      description: string
-      source: 'autowin' | 'global'
-      role: 'phase' | 'capability' | 'gate' | 'meta'
-    }>
-  >
-  generateLoopDraft: (objective: string) => Promise<SkillLoopInput>
-  loopRuns: () => Promise<
-    Array<{
-      runId: string
-      startedAt: string
-      finishedAt?: string
-      completed: number
-      failed: number
-      events: SkillLoopEvent[]
-    }>
-  >
-  onSkillLoopEvent: (cb: (event: SkillLoopEvent) => void) => () => void
   onModelQuestion: (cb: (question: PendingModelQuestion) => void) => () => void
   answerModelQuestion: (id: string, answer: string) => Promise<{ ok: true }>
-  budget: () => Promise<{
-    spent: number
-    budget: number | null
-    ratio: number | null
-    alert: boolean
-  }>
-  costByRole: () => Promise<Record<string, { costUsd: number; turns: number }>>
-  trustRanking: () => Promise<Array<{ model: string; accuracy: number | null; confirmed: number }>>
-  runsWithGate: () => Promise<
-    Array<{ subject: string; summary: { status: string }; blocked: boolean }>
-  >
   toolUsage: () => Promise<
     Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
   >
-  kaizen: (jsonl: string) => Promise<Array<{ key: string; count: number }>>
   authorityPending: () => Promise<Array<{ id: string; question: string }>>
   authorityResolve: (id: string, choice: unknown) => Promise<unknown>
-  authoritySweep: () => Promise<unknown[]>
+
   conversations: () => Promise<
     Array<{
       id: string
@@ -458,8 +364,7 @@ interface ChatApi {
   cancelPilotChat: (conversationId: string) => Promise<{ ok: boolean }>
   cancelOrchestration: (conversationId: string) => Promise<{ ok: boolean }>
   injectDirective: (conversationId: string, directive: string) => Promise<{ ok: boolean }>
-  pendingDirectives: (conversationId: string) => Promise<string[]>
-  removePendingDirective: (conversationId: string, index: number) => Promise<{ ok: boolean }>
+
   markResponseDisplayed: (
     conversationId: string,
     content: string
@@ -502,8 +407,7 @@ interface ChatApi {
   setActiveConversation: (convId: string | null) => Promise<unknown>
   activitySessions: () => Promise<SessionMeta[]>
   activitySession: (meta: SessionMeta) => Promise<SessionActivity>
-  activityHabits: () => Promise<ToolHabits>
-  activityLedger: () => Promise<TraceEvent[]>
+
   activityImage: (path: string) => Promise<{ dataUrl: string }>
   listBrains: () => Promise<
     Array<{
@@ -526,7 +430,7 @@ interface ChatApi {
     query: string
   ) => Promise<Array<{ id: string; label: string; file: string; themes: string[] }>>
   listRuns: () => Promise<RunEntry[]>
-  harnessSnapshot: () => Promise<import('../renderer/src/components/harness-model').HarnessSnapshot>
+
   getZoomFactor: () => number
   setZoomFactor: (factor: number) => void
 }

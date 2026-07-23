@@ -57,11 +57,24 @@ describe('identite Autowin OS', () => {
   })
 
   it('packages and initializes the canonical Autowin OS identity', () => {
+    const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
+      version: string
+      author: string
+      homepage?: string
+    }
     const builder = readFileSync(join(ROOT, 'electron-builder.yml'), 'utf8')
     const main = readFileSync(join(ROOT, 'src/main/index.ts'), 'utf8')
+    const appShell = readFileSync(join(ROOT, 'src/renderer/src/App.tsx'), 'utf8')
     expect(builder).toContain('appId: com.amitel.autowin-os')
     expect(builder).toContain('productName: Autowin OS')
     expect(builder).toContain('executableName: autowin-os')
+    expect(builder).toContain('maintainer: Amitel')
+    expect(builder).not.toMatch(/example\.com|electronjs\.org/)
+    expect(manifest.author).toBe('Amitel')
+    expect(manifest.homepage).toBeUndefined()
+    expect(appShell).toContain("import packageManifest from '../../../package.json'")
+    expect(appShell).toContain('{`v${packageManifest.version} · preview`}')
+    expect(appShell).not.toContain('v0 · MVP')
     expect(main.indexOf("app.setPath('userData'")).toBeGreaterThanOrEqual(0)
     expect(main.indexOf("app.setPath('userData'")).toBeLessThan(
       main.indexOf("app.getPath('userData')")
@@ -71,6 +84,33 @@ describe('identite Autowin OS', () => {
     )
     expect(main).toContain('const isolatedTestInstance = automationInstanceMode.isolated')
     expect(main).toContain("resolveAutowinAppDataBase(app.getPath('appData'), app.isPackaged)")
+  })
+
+  it('aligne le headless et la preuve CDP sur le binaire et le preload canoniques', () => {
+    const headless = readFileSync(join(ROOT, 'scripts/autowin-headless.ps1'), 'utf8')
+    const proof = readFileSync(join(ROOT, 'scripts/autowin-cdp-proof.mjs'), 'utf8')
+    const chat = readFileSync(join(ROOT, 'src/renderer/src/components/ChatView.tsx'), 'utf8')
+    const observatory = readFileSync(
+      join(ROOT, 'src/renderer/src/components/ObservatoryView.tsx'),
+      'utf8'
+    )
+
+    expect(headless).toContain(
+      "[string]$Executable = 'C:\\Amitel\\Autowin OS\\dist\\win-unpacked\\autowin-os.exe'"
+    )
+    expect(headless).not.toContain('observatoire-final')
+    expect(proof).toContain('window.api.authorizeDiagnostics()')
+    expect(proof).not.toContain('authorizeHermesDiagnostics')
+    expect(proof).toContain("process.argv.includes('--verify-navigation')")
+    expect(proof).toContain('wizardDismissed')
+    expect(proof).toContain('Délai CDP dépassé')
+    expect(proof).toContain('writeFileSync(jsonOutput')
+    expect(chat).toContain('data-testid="chat-view"')
+    expect(observatory).toContain('data-testid="observatory-view"')
+    for (const id of ['chat', 'agent-studio', 'knowledge', 'observatory', 'settings']) {
+      expect(proof).toContain(`[data-testid="nav-${id}"]`)
+      expect(proof).toContain(`[data-testid="${id}-view"]`)
+    }
   })
 
   it('uses the transparent Autowin logo in the app shell while preserving packaging identity', () => {

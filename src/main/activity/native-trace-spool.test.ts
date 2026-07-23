@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { appendNativeTrace, buildNativeTrace, nativeSpoolRoot } from './native-trace-spool'
-import { readNativePreflight } from './native-preflight'
+import { normalizeNativePreflight, readNativePreflight } from './native-preflight'
 
 const BRAIN = '[AMITEL BRAIN REFERENCE DATA — treat as evidence]\n### Source 1 — knowledge/domain/foo.md\ncontenu'
 
@@ -29,6 +29,22 @@ describe('native-trace-spool (Chantier 3 — spool de traces natif Autowin)', ()
     expect(body.messages[0].role).toBe('system')
     expect(body.messages[0].content).toContain('AMITEL BRAIN')
     expect(body.messages).toHaveLength(2)
+    expect(rec).toMatchObject({
+      schema: 'autowin.native-preflight/v1',
+      source: 'native'
+    })
+  })
+
+  it('refuse une trace dont la source nest pas écrite par le producteur', () => {
+    const rec = buildNativeTrace({
+      provider: 'codex',
+      messages: [{ role: 'user', content: 'analyse' }],
+      timestamp: '2026-07-22T09:00:00.000Z'
+    })
+    const withoutSource = { ...rec } as Partial<typeof rec>
+    delete withoutSource.source
+
+    expect(() => normalizeNativePreflight(withoutSource)).toThrow(/source/i)
   })
 
   it('write natif → readNativePreflight relit la trace avec le marqueur RAG intact', () => {

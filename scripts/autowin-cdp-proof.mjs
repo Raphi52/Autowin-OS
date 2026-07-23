@@ -6,12 +6,47 @@ const value = (name, fallback) => {
 }
 const port = Number(value('--port', '9240'))
 const output = value('--out', `C:/Amitel/Autowin OS/Audit/headless-instances/proof-${port}.png`)
+const jsonOutput = value('--json-out', output.replace(/\.png$/i, '') + '.json')
 const section = value('--section', '')
 const theme = value('--theme', '')
 const hoverTheme = value('--hover-theme', '')
 const verifyBehaviourFilters = process.argv.includes('--verify-behaviour-filters')
+const verifyCanonicalNavigation = process.argv.includes('--verify-navigation')
 const skipDialogs = process.argv.includes('--skip-dialogs')
+const skipScreenshot = process.argv.includes('--skip-screenshot')
 const collapseRail = process.argv.includes('--collapse-rail')
+const canonicalDestinations = [
+  {
+    id: 'chat',
+    navSelector: '[data-testid="nav-chat"]',
+    viewSelector: '[data-testid="chat-view"]',
+    expectedText: 'Conversations'
+  },
+  {
+    id: 'agent-studio',
+    navSelector: '[data-testid="nav-agent-studio"]',
+    viewSelector: '[data-testid="agent-studio-view"]',
+    expectedText: 'Modèles & topologie'
+  },
+  {
+    id: 'knowledge',
+    navSelector: '[data-testid="nav-knowledge"]',
+    viewSelector: '[data-testid="knowledge-view"]',
+    expectedText: 'Memory'
+  },
+  {
+    id: 'observatory',
+    navSelector: '[data-testid="nav-observatory"]',
+    viewSelector: '[data-testid="observatory-view"]',
+    expectedText: 'Observatory'
+  },
+  {
+    id: 'settings',
+    navSelector: '[data-testid="nav-settings"]',
+    viewSelector: '[data-testid="settings-view"]',
+    expectedText: 'Skills · Hooks · Tools'
+  }
+]
 const pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
 const page = pages.find((item) => item.type === 'page')
 if (!page) throw new Error(`Aucune page CDP sur le port ${port}`)
@@ -32,7 +67,20 @@ socket.onmessage = (event) => {
 const send = (method, params = {}) =>
   new Promise((resolve, reject) => {
     const callId = ++id
-    pending.set(callId, { resolve, reject })
+    const timeout = setTimeout(() => {
+      pending.delete(callId)
+      reject(new Error(`Délai CDP dépassé : ${method}`))
+    }, 15_000)
+    pending.set(callId, {
+      resolve: (result) => {
+        clearTimeout(timeout)
+        resolve(result)
+      },
+      reject: (error) => {
+        clearTimeout(timeout)
+        reject(error)
+      }
+    })
     socket.send(JSON.stringify({ id: callId, method, params }))
   })
 if (theme) {
@@ -89,6 +137,54 @@ if (collapseRail) {
   if (!collapsed.result.value?.collapsed) throw new Error('La barre latérale ne s’est pas repliée')
   console.log(JSON.stringify({ rail: collapsed.result.value }))
 }
+let navigationProof
+if (verifyCanonicalNavigation) {
+  const verification = await send('Runtime.evaluate', {
+    expression: `(async () => {
+      const destinations = ${JSON.stringify(canonicalDestinations)}
+      const wizard = document.querySelector('[data-testid="first-run-wizard"]')
+      wizard?.querySelector('.frw-primary')?.click()
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      const wizardDismissed = !document.querySelector('[data-testid="first-run-wizard"]')
+      const proof = []
+      for (const destination of destinations) {
+        const target = document.querySelector(destination.navSelector)
+        target?.click()
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        const activeTarget = document.querySelector(destination.navSelector)
+        const view = document.querySelector(destination.viewSelector)
+        const renderedText = view?.textContent?.replace(/\\s+/g, ' ').trim() ?? ''
+        proof.push({
+          id: destination.id,
+          found: Boolean(target),
+          active: activeTarget?.classList.contains('active') === true,
+          viewFound: Boolean(view),
+          contentVerified: renderedText.includes(destination.expectedText),
+          expectedText: destination.expectedText,
+          renderedText: renderedText.slice(0, 500)
+        })
+      }
+      return { wizardDismissed, destinations: proof }
+    })()`,
+    awaitPromise: true,
+    returnByValue: true
+  })
+  navigationProof = verification.result.value
+  if (
+    !navigationProof?.wizardDismissed ||
+    !Array.isArray(navigationProof.destinations) ||
+    navigationProof.destinations.length !== canonicalDestinations.length ||
+    navigationProof.destinations.some(
+      (destination) =>
+        !destination.found ||
+        !destination.active ||
+        !destination.viewFound ||
+        !destination.contentVerified
+    )
+  ) {
+    throw new Error(`Navigation canonique invalide : ${JSON.stringify(navigationProof)}`)
+  }
+}
 if (section) {
   const navigation = await send('Runtime.evaluate', {
     expression: `(() => {
@@ -142,28 +238,36 @@ const dialogs = skipDialogs
       expression: `(async () => {
     const [workspace, diagnostics] = await Promise.all([
       window.api.chooseBehaviourWorkspace(),
-      window.api.authorizeHermesDiagnostics()
+      window.api.authorizeDiagnostics()
     ])
     return { workspace, diagnostics, suppressed: workspace === null && diagnostics === null }
   })()`,
       awaitPromise: true,
       returnByValue: true
     })
-const screenshot = await send('Page.captureScreenshot', { format: 'png', fromSurface: true })
-writeFileSync(output, Buffer.from(screenshot.data, 'base64'))
+if (!skipScreenshot) {
+  const screenshot = await send('Page.captureScreenshot', { format: 'png', fromSurface: true })
+  writeFileSync(output, Buffer.from(screenshot.data, 'base64'))
+}
 socket.close()
 const result = {
   port,
-  screenshot: output,
+  screenshot: skipScreenshot ? null : output,
+  json: jsonOutput,
   ...inspected.result.value,
   nativeDialogs: dialogs.result.value,
+  ...(navigationProof ? { navigation: navigationProof } : {}),
   ...(behaviourFilters ? { behaviourFilters } : {})
 }
+writeFileSync(jsonOutput, `${JSON.stringify(result, null, 2)}\n`, 'utf8')
 console.log(JSON.stringify(result))
 if (
   !result.url ||
   result.bodyCharacters <= 0 ||
   !result.nativeDialogs?.suppressed ||
+  (verifyCanonicalNavigation &&
+    (!result.navigation?.wizardDismissed ||
+      result.navigation?.destinations?.length !== canonicalDestinations.length)) ||
   (verifyBehaviourFilters &&
     (!result.behaviourFilters?.sameVisibleFile || !result.behaviourFilters?.emptyConsistent))
 )

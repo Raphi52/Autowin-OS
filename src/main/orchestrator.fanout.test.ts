@@ -9,9 +9,10 @@ import { TrustLedger } from './trust/ledger'
 
 /** Provider qui enregistre chaque appel (options) et rend une réponse valide + un usage mesurable. */
 class RecordingProvider implements ProviderAdapter {
-  readonly id = 'capture'
   readonly supportsExecution = true
   readonly calls: SendOptions[] = []
+
+  constructor(readonly id = 'capture') {}
 
   async auth(): Promise<boolean> {
     return true
@@ -113,8 +114,41 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
     })
     const result = await orch.run('cadre les pistes du projet')
     expect(provider.calls).toHaveLength(2) // 1 exec + 1 juge (aucune synthèse)
+    expect(provider.calls.map((call) => call.model)).toEqual(['worker', 'judge'])
     expect(result.valid).toBe(true)
   })
+
+  it.each(['frame', 'scout'] as const)(
+    'utilise le binding du slot %s quand le panel contient exactement un membre',
+    async (phase) => {
+      const defaultProvider = new RecordingProvider('default-binding')
+      const slotProvider = new RecordingProvider('singleton-slot')
+      const registry = new ProviderRegistry().register(defaultProvider).register(slotProvider)
+      const roles = new RoleModelConfig({
+        subagent: { provider: defaultProvider.id, model: 'worker' },
+        judge: { provider: defaultProvider.id, model: 'judge' }
+      })
+      const orch = new Orchestrator({
+        registry,
+        roles,
+        cost: new CostAggregator(),
+        trust: new TrustLedger(),
+        authority: new AuthoritySas(),
+        executionWorkspace: 'C:\\ws',
+        execPhases: [phase],
+        phaseFanOut: (requestedPhase) =>
+          requestedPhase === phase
+            ? [{ provider: slotProvider.id, model: `${phase}-singleton` }]
+            : []
+      })
+
+      const result = await orch.run('cadre les pistes du projet')
+
+      expect(slotProvider.calls.map((call) => call.model)).toEqual([`${phase}-singleton`])
+      expect(defaultProvider.calls.map((call) => call.model)).toEqual(['judge'])
+      expect(result.valid).toBe(true)
+    }
+  )
 })
 
 describe('Orchestrator — fan-out juge (quorum de vote)', () => {

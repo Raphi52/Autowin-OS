@@ -5,21 +5,100 @@
  * Les liens ne sont créés que pour les schémas http/https (ouverts en externe par
  * le setWindowOpenHandler du main). Suffisant pour des réponses de chat.
  */
-export function Markdown({ text }: { text: string }): React.JSX.Element {
-  const blocks = text.split(/```/)
+type MarkdownProps = {
+  text: string
+  highlightFinalSummary?: boolean
+}
+
+type FinalSummaryParts = {
+  before: string
+  summary: string
+}
+
+const FINAL_SUMMARY_LABELS = [
+  /^✅\s+Fait(?:\s*:.*)?$/u,
+  /^📍\s+Maintenant(?:\s*:.*)?$/u,
+  /^⏳\s+Reste à faire(?:\s*:.*)?$/u,
+  /^👉\s+Recommandé(?:\s*:.*)?$/u
+]
+
+export function Markdown({
+  text,
+  highlightFinalSummary = false
+}: MarkdownProps): React.JSX.Element {
+  const finalSummary = highlightFinalSummary ? splitFinalSummary(text) : null
   return (
     <div className="md">
-      {blocks.map((block, i) =>
-        i % 2 === 1 ? (
-          <pre key={i} className="md-code">
-            <code>{block.replace(/^[a-zA-Z0-9]*\n/, '')}</code>
-          </pre>
-        ) : (
-          <span key={i}>{renderTextBlock(block)}</span>
-        )
+      {finalSummary ? (
+        <>
+          {finalSummary.before && renderMarkdownBlocks(finalSummary.before, 'before')}
+          <section className="md-final-summary" aria-label="Résumé final du modèle">
+            {renderMarkdownBlocks(finalSummary.summary, 'summary')}
+          </section>
+        </>
+      ) : (
+        renderMarkdownBlocks(text, 'body')
       )}
     </div>
   )
+}
+
+function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[] {
+  return text.split(/```/).map((block, i) =>
+    i % 2 === 1 ? (
+      <pre key={`${keyPrefix}-code-${i}`} className="md-code">
+        <code>{block.replace(/^[a-zA-Z0-9]*\n/, '')}</code>
+      </pre>
+    ) : (
+      <span key={`${keyPrefix}-text-${i}`}>{renderTextBlock(block)}</span>
+    )
+  )
+}
+
+function splitFinalSummary(text: string): FinalSummaryParts | null {
+  const lines = text.split('\n')
+  let inFence = false
+  let markerIndex = -1
+  let candidateIndex = -1
+  let nextLabelIndex = 0
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+    if (!inFence) {
+      const labelIndex = FINAL_SUMMARY_LABELS.findIndex((pattern) => pattern.test(line.trim()))
+      if (labelIndex === 0) {
+        candidateIndex = index
+        nextLabelIndex = 1
+      } else if (labelIndex >= 0 && candidateIndex >= 0) {
+        if (labelIndex === nextLabelIndex) {
+          nextLabelIndex += 1
+          if (nextLabelIndex === FINAL_SUMMARY_LABELS.length) {
+            markerIndex = candidateIndex
+            candidateIndex = -1
+            nextLabelIndex = 0
+          }
+        } else {
+          candidateIndex = -1
+          nextLabelIndex = 0
+        }
+      }
+    }
+
+    const fences = line.match(/```/g)?.length ?? 0
+    if (fences % 2 === 1) inFence = !inFence
+  }
+
+  if (markerIndex < 0) return null
+
+  let beforeEnd = markerIndex
+  let separatorIndex = markerIndex - 1
+  while (separatorIndex >= 0 && lines[separatorIndex].trim() === '') separatorIndex -= 1
+  if (separatorIndex >= 0 && lines[separatorIndex].trim() === '---') beforeEnd = separatorIndex
+
+  return {
+    before: lines.slice(0, beforeEnd).join('\n').replace(/\n+$/u, ''),
+    summary: lines.slice(markerIndex).join('\n')
+  }
 }
 
 /** Rend un bloc de texte en groupant les lignes de liste `- `/`* ` en `<ul>`. */

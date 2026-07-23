@@ -55,6 +55,7 @@ export class FabricControlPlane {
   private state: FabricState
   private readonly runtime = new Map<string, RuntimeNodeState>()
   private readonly transportStores = new Map<string, FabricNodeTransportStore>()
+  private readonly nodeOperations = new Map<string, Promise<void>>()
   private readonly now: () => Date
 
   constructor(private readonly options: FabricControlPlaneOptions) {
@@ -66,7 +67,11 @@ export class FabricControlPlane {
     return this.state.nodes.map((node) => this.summary(node))
   }
 
-  async pair(request: PairNodeRequest): Promise<FabricNodeSummary> {
+  pair(request: PairNodeRequest): Promise<FabricNodeSummary> {
+    return this.serializeNode(request.nodeId, () => this.pairNow(request))
+  }
+
+  private async pairNow(request: PairNodeRequest): Promise<FabricNodeSummary> {
     if (this.state.nodes.some((node) => node.nodeId === request.nodeId)) {
       throw new Error(`Nœud Compute Fabric déjà connu: ${request.nodeId}`)
     }
@@ -110,16 +115,17 @@ export class FabricControlPlane {
     return this.summary(node)
   }
 
-  async refresh(nodeId: string): Promise<FabricNodeSummary> {
+  refresh(nodeId: string): Promise<FabricNodeSummary> {
+    return this.serializeNode(nodeId, () => this.refreshNow(nodeId))
+  }
+
+  private async refreshNow(nodeId: string): Promise<FabricNodeSummary> {
     const current = this.state.nodes.find((node) => node.nodeId === nodeId)
     if (!current) throw new Error(`Nœud Compute Fabric inconnu: ${nodeId}`)
     if (current.trust !== 'paired') throw new Error(`Nœud Compute Fabric révoqué: ${nodeId}`)
-    const transport = this.transportStore(nodeId).get()
-    if (!transport) {
-      this.runtime.set(nodeId, { availability: 'offline', resources: [] })
-      throw new Error(`Transport du Node indisponible: ${nodeId}`)
-    }
     try {
+      const transport = this.transportStore(nodeId).get()
+      if (!transport) throw new Error(`Transport du Node indisponible: ${nodeId}`)
       const manifestValue = await this.options.manifestClient.fetchManifest(transport)
       const now = this.now()
       const verified = verifyNodeManifest(
@@ -168,7 +174,9 @@ export class FabricControlPlane {
       nodeId,
       resourceId,
       manifestDigest: node.lastManifestDigest,
-      transportStore: this.transportStore(nodeId)
+      transportStore: this.transportStore(nodeId),
+      trustGuard: () =>
+        this.assertResourceCurrent(nodeId, resourceId, node.lastManifestDigest as string)
     })
   }
 
@@ -178,6 +186,36 @@ export class FabricControlPlane {
     const created = this.options.transportStoreFactory(nodeId)
     this.transportStores.set(nodeId, created)
     return created
+  }
+
+  private serializeNode<T>(nodeId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.nodeOperations.get(nodeId) ?? Promise.resolve()
+    const result = previous.then(operation, operation)
+    const completion = result.then(
+      () => undefined,
+      () => undefined
+    )
+    this.nodeOperations.set(nodeId, completion)
+    void completion.finally(() => {
+      if (this.nodeOperations.get(nodeId) === completion) this.nodeOperations.delete(nodeId)
+    })
+    return result
+  }
+
+  private assertResourceCurrent(nodeId: string, resourceId: string, manifestDigest: string): void {
+    const node = this.state.nodes.find((candidate) => candidate.nodeId === nodeId)
+    const runtime = this.runtime.get(nodeId)
+    const resource = runtime?.resources.find((candidate) => candidate.id === resourceId)
+    if (
+      !node ||
+      node.trust !== 'paired' ||
+      node.lastManifestDigest !== manifestDigest ||
+      runtime?.availability !== 'online' ||
+      !resource ||
+      !resource.modes.includes('local-tools')
+    ) {
+      throw new Error(`Adapter Compute Fabric périmé: ${nodeId}/${resourceId}`)
+    }
   }
 
   private summary(node: FabricNodeRecord): FabricNodeSummary {

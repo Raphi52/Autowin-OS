@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react'
+import packageManifest from '../../../package.json'
 import { ChatView } from './components/ChatView'
 import { PreflightBanner } from './components/PreflightBanner'
 import { FirstRunWizard } from './components/FirstRunWizard'
-import { GraphView } from './components/GraphView'
 import { ObservatoryView } from './components/ObservatoryView'
-import { RolesView } from './components/RolesView'
-import { CapabilitiesView } from './components/CapabilitiesView'
-import { BehaviourView } from './components/BehaviourView'
+import { AgentStudioView } from './components/AgentStudioView'
+import { KnowledgeView } from './components/KnowledgeView'
+import { SettingsView } from './components/SettingsView'
 import { ModelQuestionPopup } from './components/ModelQuestionPopup'
-import { normalizeTab, type Tab } from './tabs'
+import {
+  APP_DESTINATIONS,
+  resolveAppLocation,
+  type AgentStudioSection,
+  type SettingsSection,
+  type Tab
+} from './tabs'
 import autowinLogo from './assets/autowin-logo-transparent.png'
 import './assets/app-shell.css'
 import './assets/cosmic-outline.css'
@@ -17,25 +23,7 @@ import './assets/ui-system.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
 import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'
 
-// Icônes de navigation : emoji, un par onglet.
-const TOY: Record<Tab, string> = {
-  chat: '💬',
-  memory: '🧠',
-  observatory: '🔭',
-  router: '🛰️',
-  agents: '🤖',
-  capabilities: '🧰',
-  behaviour: '🧬'
-}
-
-const NAV: Array<{ id: Tab; label: string }> = [
-  { id: 'chat', label: 'Chat' },
-  { id: 'memory', label: 'Memory' },
-  { id: 'observatory', label: 'Observatory' },
-  { id: 'agents', label: 'Models' },
-  { id: 'capabilities', label: 'Skills · Hooks · Tools' },
-  { id: 'behaviour', label: 'Behaviour' }
-]
+const NAV = APP_DESTINATIONS
 
 export function MainApp(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('chat')
@@ -47,6 +35,8 @@ export function MainApp(): React.JSX.Element {
   )
   const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set(['chat']))
   const [observatoryFocus, setObservatoryFocus] = useState<ObservatoryFocus | null>(null)
+  const [agentStudioSection, setAgentStudioSection] = useState<AgentStudioSection>('topology')
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>('capabilities')
 
   useEffect(() => {
     migrateAutowinStorage(localStorage)
@@ -130,8 +120,7 @@ export function MainApp(): React.JSX.Element {
       if (Number.isInteger(n) && n >= 1 && n <= NAV.length) {
         e.preventDefault()
         const id = NAV[n - 1].id
-        setTab(id)
-        setVisitedTabs((visited) => (visited.has(id) ? visited : new Set(visited).add(id)))
+        navigate(id)
       } else if (e.key.toLowerCase() === 'k') {
         const el = document.querySelector<HTMLInputElement>('input.conv-search, .conv-search input')
         if (el) {
@@ -152,6 +141,7 @@ export function MainApp(): React.JSX.Element {
       return next
     })
     setTab(nextTab)
+    void window.api.appCommand?.('navigate', { tab: nextTab })
   }
 
   function openBrainwashConversation(brainLabel: string): void {
@@ -178,7 +168,14 @@ export function MainApp(): React.JSX.Element {
     // le fil de chat en plein tour d'agent).
     const off = window.api.onAppEvent((e) => {
       if (e.type === 'navigate' && e.tab) {
-        const nextTab = normalizeTab(e.tab)
+        const location = resolveAppLocation(e.tab)
+        const nextTab = location.destination
+        if (nextTab === 'agent-studio' && location.section) {
+          setAgentStudioSection(location.section as AgentStudioSection)
+        }
+        if (nextTab === 'settings' && location.section) {
+          setSettingsSection(location.section as SettingsSection)
+        }
         setVisitedTabs((visited) => {
           if (visited.has(nextTab)) return visited
           const next = new Set(visited)
@@ -228,18 +225,19 @@ export function MainApp(): React.JSX.Element {
             {NAV.map((it) => (
               <button
                 key={it.id}
+                data-testid={`nav-${it.id}`}
                 className={`nav-item${tab === it.id ? ' active' : ''}`}
                 onClick={() => navigate(it.id)}
               >
                 <span className="space-toy-icon" aria-hidden="true">
-                  {TOY[it.id]}
+                  {it.icon}
                 </span>
                 <span>{it.label}</span>
               </button>
             ))}
           </div>
         </nav>
-        <div className="rail-foot c-faint">v0 · MVP</div>
+        <div className="rail-foot c-faint">{`v${packageManifest.version} · preview`}</div>
       </aside>
       <main className={`main${driven ? ' driven' : ''}`} data-driven={driven}>
         <PreflightBanner />
@@ -248,9 +246,18 @@ export function MainApp(): React.JSX.Element {
             <ChatView isActive={tab === 'chat'} onInspectTurn={inspectTurn} />
           </div>
         )}
-        {visitedTabs.has('memory') && (
-          <div className={`view-slot${tab === 'memory' ? ' is-active' : ''}`}>
-            <GraphView onCleanMemory={openBrainwashConversation} />
+        {visitedTabs.has('agent-studio') && (
+          <div className={`view-slot${tab === 'agent-studio' ? ' is-active' : ''}`}>
+            <AgentStudioView
+              active={tab === 'agent-studio'}
+              section={agentStudioSection}
+              onSectionChange={setAgentStudioSection}
+            />
+          </div>
+        )}
+        {visitedTabs.has('knowledge') && (
+          <div className={`view-slot${tab === 'knowledge' ? ' is-active' : ''}`}>
+            <KnowledgeView onCleanMemory={openBrainwashConversation} />
           </div>
         )}
         {visitedTabs.has('observatory') && (
@@ -258,23 +265,20 @@ export function MainApp(): React.JSX.Element {
             <ObservatoryView
               active={tab === 'observatory'}
               focus={observatoryFocus}
-              onOpenCapabilities={() => navigate('capabilities')}
+              onOpenCapabilities={() => {
+                setSettingsSection('capabilities')
+                navigate('settings')
+              }}
             />
           </div>
         )}
-        {visitedTabs.has('agents') && (
-          <div className={`view-slot${tab === 'agents' ? ' is-active' : ''}`}>
-            <RolesView />
-          </div>
-        )}
-        {visitedTabs.has('capabilities') && (
-          <div className={`view-slot${tab === 'capabilities' ? ' is-active' : ''}`}>
-            <CapabilitiesView active={tab === 'capabilities'} />
-          </div>
-        )}
-        {visitedTabs.has('behaviour') && (
-          <div className={`view-slot${tab === 'behaviour' ? ' is-active' : ''}`}>
-            <BehaviourView />
+        {visitedTabs.has('settings') && (
+          <div className={`view-slot${tab === 'settings' ? ' is-active' : ''}`}>
+            <SettingsView
+              active={tab === 'settings'}
+              section={settingsSection}
+              onSectionChange={setSettingsSection}
+            />
           </div>
         )}
       </main>
