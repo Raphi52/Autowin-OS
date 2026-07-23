@@ -75,6 +75,7 @@ function proofFixture(value: unknown): { source: TicketSourceProfile; page: Tick
       title: requiredText(item.title, 'title'),
       state: requiredText(item.state, 'state'),
       url: `https://dev.azure.com/AmitelGTC/RIG/_workitems/edit/${encodeURIComponent(id)}`,
+      createdAt: '2026-07-22T00:00:00.000Z',
       updatedAt: '2026-07-23T00:00:00.000Z',
       ...(typeof item.assignee === 'string' && item.assignee
         ? { assignee: item.assignee.slice(0, 500) }

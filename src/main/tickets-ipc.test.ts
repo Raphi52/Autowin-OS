@@ -94,7 +94,14 @@ describe('IPC Tickets', () => {
       { source: DEFAULT_TICKET_SOURCE, requestId: 'fixture-request' }
     )
     expect(page).toMatchObject({
-      items: [{ id: '1', sourceId: DEFAULT_TICKET_SOURCE.id, title: 'Fixture' }],
+      items: [
+        {
+          id: '1',
+          sourceId: DEFAULT_TICKET_SOURCE.id,
+          title: 'Fixture',
+          createdAt: '2026-07-22T00:00:00.000Z'
+        }
+      ],
       hasMore: false
     })
     expect(service.list).not.toHaveBeenCalled()
