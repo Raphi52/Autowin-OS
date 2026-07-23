@@ -41,12 +41,17 @@ export interface BrainNavigationCandidate {
   type: string
   denseCos: number
   retained: boolean
+  /** Tranche OCTETS (fichier brut) du chunk retenu — permet de surligner le passage réellement injecté. */
+  chunkByteStart?: number
+  chunkByteEnd?: number
 }
 
 /** Navigation interne du Brain pour une requête (parcouru → scoré → retenu). */
 export interface BrainNavigation {
   query: string
   minDense: number
+  /** Racine Brain absolue : le `path` des candidats est relatif à elle → le client résout l'absolu. */
+  root?: string
   candidates: BrainNavigationCandidate[]
 }
 
@@ -67,11 +72,14 @@ function parseNavigation(raw: unknown): BrainNavigation | undefined {
       path: String(c.path ?? ''),
       type: String(c.type ?? ''),
       denseCos: Number(c.denseCos ?? 0),
-      retained: Boolean(c.retained)
+      retained: Boolean(c.retained),
+      chunkByteStart: typeof c.chunkByteStart === 'number' ? c.chunkByteStart : undefined,
+      chunkByteEnd: typeof c.chunkByteEnd === 'number' ? c.chunkByteEnd : undefined
     }))
   return {
     query: String(nav.query ?? ''),
     minDense: Number(nav.minDense ?? 0),
+    root: typeof nav.root === 'string' ? nav.root : undefined,
     candidates
   }
 }

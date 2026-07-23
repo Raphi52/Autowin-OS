@@ -763,11 +763,18 @@
 .brain-nav-query { display: flex; gap: 8px; margin: 6px 0; font-size: .9em; }
 .brain-nav-query > b { opacity: .7; }
 .brain-nav-candidates { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.brain-nav-candidates > li { display: flex; align-items: center; gap: 8px; font-size: .85em; padding: 3px 6px; border-radius: 6px; background: rgba(255,255,255,.03); }
+.brain-nav-candidates > li { font-size: .85em; border-radius: 6px; background: rgba(255,255,255,.03); }
 .brain-nav-candidates > li.is-dropped { opacity: .55; }
 .brain-nav-candidates > li.is-retained { background: rgba(80,200,140,.10); }
+.brain-nav-candidates > li > details > summary { display: flex; align-items: center; gap: 8px; padding: 3px 6px; cursor: pointer; list-style: none; }
+.brain-nav-candidates > li > details > summary::-webkit-details-marker { display: none; }
+.brain-nav-candidates > li > details > summary::before { content: '▸'; opacity: .5; font-size: .8em; }
+.brain-nav-candidates > li > details[open] > summary::before { content: '▾'; }
 .brain-nav-rank { opacity: .6; font-variant-numeric: tabular-nums; }
-.brain-nav-candidates > li > strong { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.brain-nav-candidates > li > details > summary > strong { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .brain-nav-score { font-variant-numeric: tabular-nums; opacity: .8; }
 .brain-nav-badge { font-size: .8em; opacity: .8; }
 .brain-nav-candidates > li.is-retained .brain-nav-badge { color: var(--ok, #6ad39b); opacity: 1; }
+.brain-nav-note { margin: 4px 8px 8px; padding: 8px; max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-size: .92em; line-height: 1.4; background: rgba(0,0,0,.25); border-radius: 6px; }
+.brain-nav-note-status { margin: 4px 8px 8px; opacity: .7; font-style: italic; }
+.brain-nav-highlight { background: rgba(255,214,64,.35); color: inherit; border-radius: 2px; padding: 0 1px; }
