@@ -54,6 +54,22 @@
   background: rgba(248, 81, 73, 0.12);
 }
 
+/* Membres d'un fan-out rendus CÔTE À CÔTE (comparaison des N modèles d'une phase). */
+.fanout-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px;
+  padding: 6px;
+  border-left: 2px solid rgba(157, 121, 237, 0.4);
+}
+.fanout-grid > .subagent-step {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.1));
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
 /* Sous-agent en échec : doit se voir (pas confondu avec un step réussi). */
 .subagent-step.failed {
   border-left: 2px solid #ff8ea1;

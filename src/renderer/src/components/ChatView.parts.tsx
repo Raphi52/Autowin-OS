@@ -1,5 +1,11 @@
 import { HumanJson } from './HumanJson'
-import { STEP_META, type ChatActionPart, type EvidencePart, type OrchStep } from './chat-view-model'
+import {
+  STEP_META,
+  groupSubagentSteps,
+  type ChatActionPart,
+  type EvidencePart,
+  type OrchStep
+} from './chat-view-model'
 import './ChatView.css'
 import './Evidence.css'
 
@@ -16,62 +22,81 @@ const CMD_LABEL: Record<string, string> = {
   get_state: 'Lecture d’état'
 }
 
-/** Fil des sous-agents (exec/juge/gate) — réutilisé en direct et dans le détail d'un run. */
+/** Rendu d'UN step de sous-agent (prompt, raisonnement, echec, texte, preuves). */
+export function SubAgentStep({ step: s }: { step: OrchStep }): React.JSX.Element {
+  const meta = STEP_META[s.step] ?? { icon: '•', label: s.step }
+  return (
+    <div className={`subagent-step${s.status === 'failed' ? ' failed' : ''}`}>
+      <div className="row gap2" style={{ fontSize: 11 }}>
+        <span>{meta.icon}</span>
+        <span className="c-dim" style={{ fontWeight: 600 }}>
+          {meta.label}
+        </span>
+        {s.model ? (
+          <span className="mono c-accent">{s.model}</span>
+        ) : (
+          s.provider && <span className="mono c-accent">{s.provider}</span>
+        )}
+        {s.status === 'failed' && <span className="subagent-failed-pill">échec</span>}
+        {s.detail && <span className="c-faint">{s.detail}</span>}
+        {typeof s.costUsd === 'number' && (
+          <span className="c-faint tnum" style={{ marginLeft: 'auto' }}>
+            {s.costUsd.toFixed(4)} $
+          </span>
+        )}
+      </div>
+      {s.status === 'failed' && s.error && <div className="subagent-error">{s.error}</div>}
+      {s.thinking && (
+        <details className="subagent-thinking">
+          <summary>Raisonnement</summary>
+          <pre>{s.thinking}</pre>
+        </details>
+      )}
+      {s.text && <div className="subagent-text c-dim">{s.text}</div>}
+      {s.prompt && (
+        <details className="prompt-envelope">
+          <summary>Voir le prompt envoyé</summary>
+          <div className="prompt-envelope-meta">
+            <span>{s.prompt.provider}</span>
+            {s.prompt.model && <span>{s.prompt.model}</span>}
+            <span>{s.prompt.transport}</span>
+          </div>
+          <p className="prompt-envelope-limit">{s.prompt.limitation}</p>
+          <strong>Système · instructions + skills/contexte injectés</strong>
+          <pre>{s.prompt.system || 'Aucun bloc système.'}</pre>
+          <strong>Messages transmis</strong>
+          {s.prompt.messages.map((message, messageIndex) => (
+            <section key={`${message.role}-${messageIndex}`}>
+              <small>{message.role}</small>
+              <pre>{message.content}</pre>
+            </section>
+          ))}
+          <strong>Options de transport</strong>
+          <HumanJson value={s.prompt.options} />
+        </details>
+      )}
+      {s.evidence && s.evidence.length > 0 && <EvidenceList items={s.evidence} />}
+    </div>
+  )
+}
+
+/** Fil des sous-agents (exec/juge/gate) — réutilisé en direct et dans le détail d'un run.
+ *  Les membres d'un même fan-out (≥2 modèles d'une phase) sont rendus CÔTE À CÔTE pour comparaison. */
 export function StepThread({ steps }: { steps: OrchStep[] }): React.JSX.Element {
+  const groups = groupSubagentSteps(steps)
   return (
     <div className="col" style={{ gap: 'var(--s2)' }}>
-      {steps.map((s, i) => {
-        const meta = STEP_META[s.step] ?? { icon: '•', label: s.step }
-        return (
-          <div key={i} className={`subagent-step${s.status === 'failed' ? ' failed' : ''}`}>
-            <div className="row gap2" style={{ fontSize: 11 }}>
-              <span>{meta.icon}</span>
-              <span className="c-dim" style={{ fontWeight: 600 }}>
-                {meta.label}
-              </span>
-              {s.provider && <span className="mono c-accent">{s.provider}</span>}
-              {s.status === 'failed' && <span className="subagent-failed-pill">échec</span>}
-              {s.detail && <span className="c-faint">{s.detail}</span>}
-              {typeof s.costUsd === 'number' && (
-                <span className="c-faint tnum" style={{ marginLeft: 'auto' }}>
-                  {s.costUsd.toFixed(4)} $
-                </span>
-              )}
-            </div>
-            {s.status === 'failed' && s.error && <div className="subagent-error">{s.error}</div>}
-            {s.thinking && (
-              <details className="subagent-thinking">
-                <summary>Raisonnement</summary>
-                <pre>{s.thinking}</pre>
-              </details>
-            )}
-            {s.text && <div className="subagent-text c-dim">{s.text}</div>}
-            {s.prompt && (
-              <details className="prompt-envelope">
-                <summary>Voir le prompt envoyé</summary>
-                <div className="prompt-envelope-meta">
-                  <span>{s.prompt.provider}</span>
-                  {s.prompt.model && <span>{s.prompt.model}</span>}
-                  <span>{s.prompt.transport}</span>
-                </div>
-                <p className="prompt-envelope-limit">{s.prompt.limitation}</p>
-                <strong>Système · instructions + skills/contexte injectés</strong>
-                <pre>{s.prompt.system || 'Aucun bloc système.'}</pre>
-                <strong>Messages transmis</strong>
-                {s.prompt.messages.map((message, messageIndex) => (
-                  <section key={`${message.role}-${messageIndex}`}>
-                    <small>{message.role}</small>
-                    <pre>{message.content}</pre>
-                  </section>
-                ))}
-                <strong>Options de transport</strong>
-                <HumanJson value={s.prompt.options} />
-              </details>
-            )}
-            {s.evidence && s.evidence.length > 0 && <EvidenceList items={s.evidence} />}
+      {groups.map((g, i) =>
+        g.kind === 'fanout' ? (
+          <div key={i} className="fanout-grid" data-count={g.steps.length}>
+            {g.steps.map((s, j) => (
+              <SubAgentStep key={j} step={s} />
+            ))}
           </div>
+        ) : (
+          <SubAgentStep key={i} step={g.step} />
         )
-      })}
+      )}
     </div>
   )
 }

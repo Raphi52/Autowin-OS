@@ -225,6 +225,8 @@ export type OrchStep = {
   step: 'exec' | 'judge' | 'gate' | string
   provider?: string
   role?: string
+  /** Modèle concret du tour — distingue les N membres d'un fan-out (rendu côte à côte). */
+  model?: string
   text?: string
   detail?: string
   costUsd?: number
@@ -258,6 +260,53 @@ export type EvidencePart = {
   stdout?: string
   diff?: string
   path?: string
+}
+
+/** Un groupe de rendu : soit un step seul, soit un run de membres d'un même fan-out (à comparer). */
+export type StepGroup =
+  | { kind: 'single'; step: OrchStep }
+  | { kind: 'fanout'; key: string; steps: OrchStep[] }
+
+/**
+ * Clé de membre de fan-out : un step porteur d'un `model`, rattaché à sa phase (ou au juge).
+ * INVARIANT appelant (orchestrator.ts) : deux rounds de fan-out juge consécutifs sont TOUJOURS
+ * séparés par un step `gate` (clé nulle) → la clé constante 'judge' ne fusionne jamais deux rounds.
+ * Si cet invariant changeait, ajouter un désambiguateur de round à la clé juge.
+ */
+function fanoutMemberKey(s: OrchStep): string | null {
+  if (!s.model) return null // les steps mono (sans model) et synthèse/gate ne groupent pas
+  const phase = s.detail?.match(/phase (\w+)/)?.[1]
+  if (phase) return `${s.role ?? ''}:${phase}`
+  if (s.role === 'judge') return 'judge'
+  return null
+}
+
+/**
+ * Regroupe les membres CONSÉCUTIFS d'un même fan-out (≥2, même clé) pour un rendu côte à côte ;
+ * tout le reste (mono, synthèse, gate) reste un step seul. Pur → testable. La synthèse (rôle
+ * orchestrateur, clé nulle) sépare naturellement deux phases fan-outées successives.
+ */
+export function groupSubagentSteps(steps: OrchStep[]): StepGroup[] {
+  const out: StepGroup[] = []
+  let run: { key: string; steps: OrchStep[] } | null = null
+  const flush = (): void => {
+    if (!run) return
+    if (run.steps.length >= 2) out.push({ kind: 'fanout', key: run.key, steps: run.steps })
+    else out.push({ kind: 'single', step: run.steps[0] })
+    run = null
+  }
+  for (const s of steps) {
+    const key = fanoutMemberKey(s)
+    if (key && run && run.key === key) {
+      run.steps.push(s)
+      continue
+    }
+    flush()
+    if (key) run = { key, steps: [s] }
+    else out.push({ kind: 'single', step: s })
+  }
+  flush()
+  return out
 }
 
 /** Icône + libellé par type d'étape d'orchestration (affichage temps réel). */

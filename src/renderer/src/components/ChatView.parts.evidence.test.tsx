@@ -95,4 +95,36 @@ describe('StepThread — preuves d’exécution inline', () => {
     expect(details).not.toBeNull()
     expect((container.textContent ?? '')).toContain('je pèse A contre B')
   })
+
+  it('les membres d’un fan-out sont rendus en grille côte à côte (N colonnes)', () => {
+    render([
+      { step: 'exec', role: 'subagent', model: 'opus', detail: 'phase frame · modèle opus', text: 'idée A' },
+      { step: 'exec', role: 'subagent', model: 'codex', detail: 'phase frame · modèle codex', text: 'idée B' }
+    ])
+    const grid = container.querySelector('.fanout-grid')
+    expect(grid).not.toBeNull()
+    expect(grid?.getAttribute('data-count')).toBe('2')
+    expect(grid?.querySelectorAll('.subagent-step').length).toBe(2)
+    const txt = container.textContent ?? ''
+    expect(txt).toContain('idée A')
+    expect(txt).toContain('idée B')
+  })
+
+  it('un step mono n’est PAS mis en grille (rétrocompat)', () => {
+    render([{ step: 'exec', role: 'subagent', detail: 'phase build', text: 'seul' }])
+    expect(container.querySelector('.fanout-grid')).toBeNull()
+    expect(container.querySelector('.subagent-step')).not.toBeNull()
+  })
+
+  it('en-tête : le modèle prime sur le provider quand les deux sont présents (précédence figée)', () => {
+    render([{ step: 'exec', role: 'subagent', model: 'claude-opus-4-8', provider: 'claude', text: 'x' }])
+    const header = container.querySelector('.subagent-step .mono')
+    expect(header?.textContent).toBe('claude-opus-4-8')
+  })
+
+  it('en-tête : sans modèle, on retombe sur le provider (mono inchangé)', () => {
+    render([{ step: 'exec', role: 'subagent', provider: 'codex', text: 'x' }])
+    const header = container.querySelector('.subagent-step .mono')
+    expect(header?.textContent).toBe('codex')
+  })
 })
