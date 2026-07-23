@@ -58,6 +58,45 @@ describe('IPC Tickets', () => {
     await expect(pending).rejects.toBeDefined()
   })
 
+  it('isole les mêmes requestId entre deux senders', async () => {
+    const { handlers, service } = setup()
+    const signals: AbortSignal[] = []
+    service.list.mockImplementation(
+      (_request, signal?: AbortSignal) =>
+        new Promise((_resolve, reject) => {
+          if (!signal) return
+          signals.push(signal)
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+        })
+    )
+    const first = { sender: { id: 1 } }
+    const second = { sender: { id: 2 } }
+    const firstPending = Promise.resolve(
+      handlers.get('tickets:list')!(first, {
+        source: DEFAULT_TICKET_SOURCE,
+        requestId: 'shared-id'
+      })
+    )
+    const secondPending = Promise.resolve(
+      handlers.get('tickets:list')!(second, {
+        source: DEFAULT_TICKET_SOURCE,
+        requestId: 'shared-id'
+      })
+    )
+    const firstSettled = firstPending.catch(() => undefined)
+    const secondSettled = secondPending.catch(() => undefined)
+
+    const firstCancelled = await handlers.get('tickets:cancel')!(first, 'shared-id')
+    const secondStillActive = !signals[1].aborted
+    const secondCancelled = await handlers.get('tickets:cancel')!(second, 'shared-id')
+    await Promise.all([firstSettled, secondSettled])
+
+    expect(firstCancelled).toBe(true)
+    expect(secondStillActive).toBe(true)
+    expect(secondCancelled).toBe(true)
+    expect(signals.every(({ aborted }) => aborted)).toBe(true)
+  })
+
   it('n’expose jamais la fixture hors instance isolée', async () => {
     const { handlers } = setup(false)
     expect(() => handlers.get('app:test:tickets-fixture')!({}, { items: [] })).toThrow(

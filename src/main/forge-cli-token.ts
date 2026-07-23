@@ -29,25 +29,34 @@ function environmentToken(
 ): string | undefined {
   if (source.provider === 'github') {
     if (!source.apiBaseUrl) return environment.GH_TOKEN ?? environment.GITHUB_TOKEN
-    if (environment.GH_HOST === new URL(source.apiBaseUrl).hostname) {
+    if (configuredHost(environment.GH_HOST) === providerHost(source)) {
       return environment.GH_ENTERPRISE_TOKEN ?? environment.GITHUB_ENTERPRISE_TOKEN
     }
   }
   if (source.provider === 'gitlab') {
     if (!source.baseUrl) return environment.GITLAB_TOKEN ?? environment.GLAB_TOKEN
-    if (environment.GITLAB_HOST === new URL(source.baseUrl).hostname) {
+    if (configuredHost(environment.GITLAB_HOST) === providerHost(source)) {
       return environment.GITLAB_TOKEN ?? environment.GLAB_TOKEN
     }
   }
   return undefined
 }
 
+function configuredHost(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  try {
+    return new URL(value.includes('://') ? value : `https://${value}`).host
+  } catch {
+    return undefined
+  }
+}
+
 function providerHost(source: TicketSourceProfile): string {
   if (source.provider === 'github') {
-    return source.apiBaseUrl ? new URL(source.apiBaseUrl).hostname : 'github.com'
+    return source.apiBaseUrl ? new URL(source.apiBaseUrl).host : 'github.com'
   }
   if (source.provider === 'gitlab') {
-    return source.baseUrl ? new URL(source.baseUrl).hostname : 'gitlab.com'
+    return source.baseUrl ? new URL(source.baseUrl).host : 'gitlab.com'
   }
   throw new Error('Source forge requise')
 }

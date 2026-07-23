@@ -102,7 +102,6 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const [showSourceForm, setShowSourceForm] = useState(false)
   const [draft, setDraft] = useState<SourceDraft>(EMPTY_DRAFT)
   const requestGeneration = useRef(0)
-  const requestSequence = useRef(0)
   const activeRequestId = useRef<string | undefined>(undefined)
   const itemsRef = useRef(items)
 
@@ -121,7 +120,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         void window.api.cancelTickets(activeRequestId.current)
       }
       const generation = ++requestGeneration.current
-      const requestId = `tickets-${++requestSequence.current}`
+      const requestId = `tickets-${crypto.randomUUID()}`
       activeRequestId.current = requestId
       setLoading(true)
       setError(undefined)

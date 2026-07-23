@@ -100,7 +100,7 @@ export function registerTicketsIpc({
   isolated
 }: RegisterTicketsIpcOptions): void {
   let fixture: { source: TicketSourceProfile; page: TicketPage } | undefined
-  const active = new Map<string, { sender: unknown; controller: AbortController }>()
+  const active = new Map<unknown, Map<string, AbortController>>()
   const requestId = (value: unknown): string => {
     if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(value)) {
       throw new Error('Identifiant de requête Tickets invalide')
@@ -120,23 +120,30 @@ export function registerTicketsIpc({
     assertTrusted(event, 'Tickets')
     const id = requestId(request?.requestId)
     if (fixture && request?.source?.id === fixture.source.id) return fixture.page
-    const previous = active.get(id)
-    if (previous && previous.sender === event.sender) previous.controller.abort()
+    let senderRequests = active.get(event.sender)
+    if (!senderRequests) {
+      senderRequests = new Map()
+      active.set(event.sender, senderRequests)
+    }
+    senderRequests.get(id)?.abort()
     const controller = new AbortController()
-    active.set(id, { sender: event.sender, controller })
+    senderRequests.set(id, controller)
     try {
       return await service.list(request, controller.signal)
     } finally {
-      if (active.get(id)?.controller === controller) active.delete(id)
+      if (senderRequests.get(id) === controller) senderRequests.delete(id)
+      if (senderRequests.size === 0) active.delete(event.sender)
     }
   })
   ipc.handle('tickets:cancel', (event, value: unknown) => {
     assertTrusted(event, 'Tickets')
     const id = requestId(value)
-    const current = active.get(id)
-    if (!current || current.sender !== event.sender) return false
-    current.controller.abort()
-    active.delete(id)
+    const senderRequests = active.get(event.sender)
+    const current = senderRequests?.get(id)
+    if (!current) return false
+    current.abort()
+    senderRequests?.delete(id)
+    if (senderRequests?.size === 0) active.delete(event.sender)
     return true
   })
   ipc.handle('app:test:tickets-fixture', (event, value: unknown) => {

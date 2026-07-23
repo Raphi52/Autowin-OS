@@ -98,4 +98,38 @@ describe('credentials runtime des forges', () => {
     ).resolves.toMatchObject({ token: 'gitlab-enterprise-secret' })
     expect(runner).not.toHaveBeenCalled()
   })
+
+  it('considère deux ports du même hostname comme deux cibles distinctes', async () => {
+    const runner = vi.fn().mockRejectedValue(new Error('origin non authentifié'))
+    await expect(
+      loadForgeCliToken(
+        { ...github, apiBaseUrl: 'https://github.corp.example:8443/api/v3' },
+        runner,
+        {
+          GH_HOST: 'github.corp.example',
+          GH_ENTERPRISE_TOKEN: 'credential-for-default-port'
+        }
+      )
+    ).resolves.toBeNull()
+    await expect(
+      loadForgeCliToken({ ...gitlab, baseUrl: 'https://gitlab.corp.example:8443' }, runner, {
+        GITLAB_HOST: 'gitlab.corp.example',
+        GITLAB_TOKEN: 'credential-for-default-port'
+      })
+    ).resolves.toBeNull()
+    expect(runner).toHaveBeenNthCalledWith(1, 'gh', [
+      'auth',
+      'token',
+      '--hostname',
+      'github.corp.example:8443'
+    ])
+    expect(runner).toHaveBeenNthCalledWith(2, 'glab', [
+      'config',
+      'get',
+      'token',
+      '--host',
+      'gitlab.corp.example:8443',
+      '--global'
+    ])
+  })
 })
