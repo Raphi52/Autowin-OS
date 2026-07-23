@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Markdown, extractRecommendation } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
 import { ChatWorktreePanel } from './ChatWorktreePanel'
+import { WorktreePaneTab } from './WorktreePaneTab'
 import { ActivityPane } from './ActivityPane'
 import { ModuleHeader } from './ModuleHeader'
 import {
@@ -487,7 +488,7 @@ export function ChatView({
     const value = Number.isFinite(saved) && saved > 0 ? saved : 340
     return Math.min(CHAT_PANE_LIMITS.workflows.max, Math.max(CHAT_PANE_LIMITS.workflows.min, value))
   })
-  const [paneTab, setPaneTab] = useState<'runs' | 'activite'>('runs')
+  const [paneTab, setPaneTab] = useState<'runs' | 'activite' | 'worktrees'>('runs')
   const [runScope, setRunScope] = useState<'conv' | 'tous'>('conv')
   const [runs, setRuns] = useState<RunEntry[]>([])
   const [openRun, setOpenRun] = useState<{ path: string; content: string } | null>(null)
@@ -2000,6 +2001,12 @@ export function ChatView({
                 >
                   Activité
                 </button>
+                <button
+                  className={`btn btn-sm${paneTab === 'worktrees' ? ' btn-accent' : ''}`}
+                  onClick={() => setPaneTab('worktrees')}
+                >
+                  Worktrees
+                </button>
               </div>
               <div className="row gap2">
                 {paneTab === 'runs' && (
@@ -2013,6 +2020,7 @@ export function ChatView({
               </div>
             </div>
             {paneTab === 'activite' && <ActivityPane convId={activeId} />}
+            {paneTab === 'worktrees' && <WorktreePaneTab />}
             {paneTab === 'runs' && (
               <div className="row gap2" style={{ fontSize: 11 }}>
                 <button
