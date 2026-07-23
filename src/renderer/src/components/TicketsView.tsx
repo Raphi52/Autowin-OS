@@ -95,6 +95,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>()
+  const [sourceError, setSourceError] = useState<string>()
   const [stale, setStale] = useState(false)
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
@@ -153,7 +154,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const loadSources = useCallback(async (): Promise<void> => {
     const generation = ++requestGeneration.current
     setSourcesLoaded(false)
-    setError(undefined)
+    setSourceError(undefined)
     try {
       const summaries = (await window.api.ticketSources()) as TicketSourceSummary[]
       if (generation !== requestGeneration.current) return
@@ -172,7 +173,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     } catch (failure) {
       if (generation !== requestGeneration.current) return
       setLoading(false)
-      setError(errorMessage(failure))
+      setSourceError(errorMessage(failure))
       setSourcesLoaded(true)
     }
   }, [load])
@@ -260,7 +261,8 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     visibleItems.find((item) => `${item.sourceId}::${item.id}` === selectedId) ?? visibleItems[0]
 
   const retry = (): void => {
-    if (selectedSource) void load(selectedSource)
+    if (sourceError) void loadSources()
+    else if (selectedSource) void load(selectedSource)
     else void loadSources()
   }
   const initialLoading = active && !sourcesLoaded && !error
@@ -416,7 +418,15 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       </div>
 
       <div className="tickets-content">
-        {(loading || initialLoading) && items.length === 0 ? (
+        {sourceError ? (
+          <div className="tickets-error" role="alert">
+            <strong>Chargement des sources impossible</strong>
+            <span>{sourceError}</span>
+            <button data-testid="tickets-retry" type="button" onClick={retry}>
+              Réessayer
+            </button>
+          </div>
+        ) : (loading || initialLoading) && items.length === 0 ? (
           <div className="tickets-loading" role="status" aria-label="Chargement des tickets">
             <span className="tickets-spinner" aria-hidden="true" />
             <span>Synchronisation des tickets…</span>

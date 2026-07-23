@@ -2,7 +2,8 @@
  * COMPOSITION DU COMPORTEMENT (config statique) — la source de vérité de la vue « Behaviour ».
  *
  * Assemble, depuis les modules SOURCES réels, TOUT ce qui VA influer sur le comportement du chat
- * Autowin — et RIEN d'autre. Deux chemins DISTINCTS :
+ * Autowin — et RIEN d'autre. Trois chemins DISTINCTS :
+ *  - `cockpit` : le chat visible (AgentPilot) — pilotage, contexte projet et RAG Brain+Graphify.
  *  - `orchestrated` : le pipeline (os:orchestrate → Orchestrator.run) — phases, Brain, modèle/rôle,
  *    régime, garde-fous.
  *  - `direct` : os.chat — beaucoup plus simple (CONSTITUTION + binding de rôle, aucun garde-fou/phase).
@@ -62,7 +63,14 @@ export interface DirectBehaviour {
   modelSelection: InfluencerField[]
 }
 
+export interface CockpitBehaviour {
+  systemPrompt: InfluencerField[]
+  retrievedContext: InfluencerField[]
+  modelSelection: InfluencerField[]
+}
+
 export interface BehaviourComposition {
+  cockpit: CockpitBehaviour
   orchestrated: OrchestratedBehaviour
   direct: DirectBehaviour
 }
@@ -251,7 +259,40 @@ export function buildBehaviourComposition(
     ]
   }
 
+  const cockpit: CockpitBehaviour = {
+    systemPrompt: [
+      {
+        label: 'composition cockpit',
+        value:
+          "Le chat visible assemble CONSTITUTION + consigne de pilotage + style + contexte projet, puis ajoute le contexte RAG récupéré pour le dernier message utilisateur.",
+        source: 'src/main/agent-pilot.ts:245'
+      }
+    ],
+    retrievedContext: [
+      {
+        label: 'Amitel Brain signé',
+        value:
+          "Une récupération est lancée au début de chaque tour cockpit sur le dernier message utilisateur. La réponse Brain est vérifiée par signature, bornée, et une panne dégrade ce bloc à vide.",
+        source: 'src/main/agent-pilot.ts:216'
+      },
+      {
+        label: 'preuves Graphify',
+        value:
+          "Le même provider RAG interroge en parallèle Amitel Brain et Graphify. Graphify fournit jusqu'à 6 preuves structurelles marquées non fiables, avec timeout 1,5 s et cache du graphe 30 s ; chaque branche possède un fallback indépendant à vide.",
+        source: 'src/main/amitel-context.ts:175'
+      }
+    ],
+    modelSelection: [
+      {
+        label: 'binding orchestrator',
+        value: `Le cockpit utilise le binding orchestrator (${bindings.orchestrator.provider}/${bindings.orchestrator.model ?? 'défaut'}) puis peut piloter l'application par commandes.`,
+        source: 'src/main/agent-pilot.ts:211'
+      }
+    ]
+  }
+
   return {
+    cockpit,
     orchestrated: {
       systemPrompt: ORCHESTRATED_PHASES.map(phaseSystemPrompt),
       injectedContext,

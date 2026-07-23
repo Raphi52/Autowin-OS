@@ -6,6 +6,9 @@ const build = (env: NodeJS.ProcessEnv = {}): ReturnType<typeof buildBehaviourCom
   buildBehaviourComposition(new RoleModelConfig(), env)
 
 const allFields = (c: ReturnType<typeof buildBehaviourComposition>): InfluencerField[] => [
+  ...c.cockpit.systemPrompt,
+  ...c.cockpit.retrievedContext,
+  ...c.cockpit.modelSelection,
   ...c.orchestrated.systemPrompt.flatMap((p) => p.blocks),
   ...c.orchestrated.injectedContext,
   ...c.orchestrated.modelSelection,
@@ -47,6 +50,17 @@ describe('buildBehaviourComposition — COMPLÉTUDE', () => {
     expect(labels.some((l) => l.includes('régime') || l.includes('regime'))).toBe(true)
     expect(labels.some((l) => l.includes('circuit-breaker'))).toBe(true)
     expect(labels.some((l) => l.includes('constitution'))).toBe(true)
+    expect(labels.some((l) => l.includes('graphify'))).toBe(true)
+  })
+
+  it('décrit le RAG Brain + Graphify du chat cockpit visible', () => {
+    const cockpit = build().cockpit
+    expect(cockpit.retrievedContext.map(({ label }) => label)).toEqual([
+      'Amitel Brain signé',
+      'preuves Graphify'
+    ])
+    expect(JSON.stringify(cockpit)).toContain('dernier message utilisateur')
+    expect(JSON.stringify(cockpit)).toContain('fallback')
   })
 
   it('le juge n’injecte PAS la discipline de pipeline (fidèle à orchestrator.ts:527)', () => {
@@ -58,7 +72,7 @@ describe('buildBehaviourComposition — COMPLÉTUDE', () => {
 })
 
 describe('buildBehaviourComposition — EXCLUSIVITÉ (aucun non-influenceur)', () => {
-  const forbidden = ['capabilit', 'graphify', 'graph_report', 'listclaudehooks', 'hookevents']
+  const forbidden = ['capabilit', 'graph_report', 'listclaudehooks', 'hookevents']
 
   it('ne mentionne AUCUN non-influenceur connu', () => {
     const blob = JSON.stringify(build()).toLowerCase()

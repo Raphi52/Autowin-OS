@@ -9,6 +9,11 @@ async function render(): Promise<{ root: Root; container: HTMLElement }> {
     configurable: true,
     value: {
       behaviourComposition: vi.fn(async () => ({
+        cockpit: {
+          systemPrompt: [],
+          retrievedContext: [],
+          modelSelection: []
+        },
         orchestrated: {
           systemPrompt: [],
           injectedContext: [],
@@ -55,7 +60,7 @@ describe('vue Behaviour', () => {
     const { root, container } = await render()
 
     await act(async () => {
-      ;(container.querySelectorAll('[role="tab"]')[1] as HTMLButtonElement).click()
+      ;(container.querySelectorAll('[role="tab"]')[2] as HTMLButtonElement).click()
     })
 
     expect(container.textContent).toContain('CONSTITUTION')

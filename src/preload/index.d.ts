@@ -207,6 +207,11 @@ interface BehaviourPhaseSystemPrompt {
   blocks: BehaviourInfluencerField[]
 }
 interface BehaviourComposition {
+  cockpit: {
+    systemPrompt: BehaviourInfluencerField[]
+    retrievedContext: BehaviourInfluencerField[]
+    modelSelection: BehaviourInfluencerField[]
+  }
   orchestrated: {
     systemPrompt: BehaviourPhaseSystemPrompt[]
     injectedContext: BehaviourInfluencerField[]

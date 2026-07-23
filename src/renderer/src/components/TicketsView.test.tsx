@@ -240,6 +240,36 @@ describe('vue Tickets', () => {
     await act(async () => root.unmount())
   })
 
+  it('recharge les sources après une erreur de réactivation avec anciennes données', async () => {
+    const ticketSources = vi
+      .fn()
+      .mockResolvedValueOnce([{ profile: DEFAULT_TICKET_SOURCE, credentialConfigured: false }])
+      .mockRejectedValueOnce(new Error('Store de sources indisponible au retour.'))
+      .mockResolvedValueOnce([{ profile: DEFAULT_TICKET_SOURCE, credentialConfigured: false }])
+    api({ ticketSources })
+    const { root, container } = await render()
+
+    await act(async () => {
+      root.render(createElement(TicketsView, { active: false }))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      root.render(createElement(TicketsView, { active: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(container.textContent).toContain('Store de sources indisponible au retour')
+
+    await act(async () => {
+      ;(container.querySelector('[data-testid="tickets-retry"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(ticketSources).toHaveBeenCalledTimes(3)
+    expect(container.textContent).toContain('Ticket 1')
+    await act(async () => root.unmount())
+  })
+
   it('distingue aucune source, filtre localement et charge la page suivante', async () => {
     api({ ticketSources: vi.fn(async () => []) })
     const first = await render()
