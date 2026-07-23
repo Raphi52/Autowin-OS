@@ -29,8 +29,8 @@ function environmentToken(
 ): string | undefined {
   if (source.provider === 'github') {
     if (!source.apiBaseUrl) {
-      const boundHost = configuredHost(environment.GH_HOST)
-      if (!boundHost || boundHost === providerHost(source)) {
+      const hostBinding = environment.GH_HOST?.trim()
+      if (!hostBinding || configuredHost(hostBinding) === providerHost(source)) {
         return environment.GH_TOKEN ?? environment.GITHUB_TOKEN
       }
       return undefined
@@ -41,8 +41,8 @@ function environmentToken(
   }
   if (source.provider === 'gitlab') {
     if (!source.baseUrl) {
-      const boundHost = configuredHost(environment.GITLAB_HOST)
-      if (!boundHost || boundHost === providerHost(source)) {
+      const hostBinding = environment.GITLAB_HOST?.trim()
+      if (!hostBinding || configuredHost(hostBinding) === providerHost(source)) {
         return environment.GITLAB_TOKEN ?? environment.GLAB_TOKEN
       }
       return undefined

@@ -129,6 +129,23 @@ describe('credentials runtime des forges', () => {
     ])
   })
 
+  it('échoue fermé quand la liaison d’hôte est invalide', async () => {
+    const runner = vi.fn().mockRejectedValue(new Error('hôte public non authentifié'))
+    await expect(
+      loadForgeCliToken(github, runner, {
+        GH_HOST: 'not a valid host',
+        GH_TOKEN: 'github-unbound-secret'
+      })
+    ).resolves.toBeNull()
+    await expect(
+      loadForgeCliToken(gitlab, runner, {
+        GITLAB_HOST: 'not a valid host',
+        GITLAB_TOKEN: 'gitlab-unbound-secret'
+      })
+    ).resolves.toBeNull()
+    expect(runner).toHaveBeenCalledTimes(2)
+  })
+
   it('considère deux ports du même hostname comme deux cibles distinctes', async () => {
     const runner = vi.fn().mockRejectedValue(new Error('origin non authentifié'))
     await expect(

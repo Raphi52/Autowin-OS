@@ -337,8 +337,8 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
             />
           )}
           <input
-            aria-label="Dépôt"
-            placeholder="Dépôt"
+            aria-label={draft.provider === 'azure' ? 'Dépôt Azure de contexte' : 'Dépôt'}
+            placeholder={draft.provider === 'azure' ? 'Dépôt de contexte' : 'Dépôt'}
             value={draft.repository}
             onChange={(event) => setDraft({ ...draft, repository: event.target.value })}
           />
@@ -396,10 +396,12 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         </span>
         {selectedSource && (
           <span className="tickets-auth-mode">
-            {selectedSummary?.credentialConfigured
-              ? 'Coffre configuré'
-              : selectedSource.provider === 'azure'
-                ? 'Session Azure CLI'
+            {selectedSource.provider === 'azure'
+              ? `Tous les Work Items du projet ${selectedSource.project} · ${
+                  selectedSummary?.credentialConfigured ? 'Coffre configuré' : 'Session Azure CLI'
+                }`
+              : selectedSummary?.credentialConfigured
+                ? 'Coffre configuré'
                 : 'Public · session CLI/env si privée'}
           </span>
         )}

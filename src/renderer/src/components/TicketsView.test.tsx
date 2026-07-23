@@ -82,6 +82,7 @@ describe('vue Tickets', () => {
     expect(container.querySelector('[data-testid="tickets-source"]')?.textContent).toContain(
       'AmitelGTC / RIG / RigApplication'
     )
+    expect(container.textContent).toContain('Tous les Work Items du projet RIG')
     expect(container.querySelectorAll('[data-testid="ticket-row"]')).toHaveLength(3)
     expect(container.textContent).toContain('Bug')
     await act(async () => {
