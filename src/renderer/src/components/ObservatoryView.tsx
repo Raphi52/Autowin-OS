@@ -60,7 +60,7 @@ const LABEL: Record<HarnessTimelineEvent['kind'], string> = {
   retry: 'Retry',
   cancellation: 'Annulation',
   error: 'Erreur',
-  boundary: 'Frontière'
+  boundary: 'Sortant'
 }
 
 /** Sépare un préfixe libellé ("ÉTAT DE L'APP: {…}") du JSON qui suit, si le JSON parse. */
