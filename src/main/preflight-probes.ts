@@ -54,9 +54,13 @@ export function appPreflightProbes(): PreflightProbes {
 // wizard demandent le diagnostic à ~ms d'intervalle → un seul jeu de probes). Le bouton "Re-vérifier"
 // passe `force` pour ignorer le cache. (Conformer sobriété.)
 const PREFLIGHT_TTL_MS = 5000
-let preflightCache: { at: number; result: PreflightResult } | null = null
-let preflightInFlight: Promise<PreflightResult> | null = null
+let preflightCache: { key: string; at: number; result: PreflightResult } | null = null
+let preflightInFlight: { key: string; promise: Promise<PreflightResult> } | null = null
 let preflightGeneration = 0
+
+function preflightOptionsKey(options: PreflightOptions): string {
+  return [...new Set(options.standbyProviders ?? [])].sort().join(',')
+}
 
 export function getLastAppPreflightResult(): PreflightResult | null {
   return preflightCache?.result ?? null
@@ -67,21 +71,22 @@ export async function runAppPreflight(
   options: PreflightOptions = {}
 ): Promise<PreflightResult> {
   const now = Date.now()
-  if (!force && preflightCache && now - preflightCache.at < PREFLIGHT_TTL_MS) {
+  const key = preflightOptionsKey(options)
+  if (!force && preflightCache?.key === key && now - preflightCache.at < PREFLIGHT_TTL_MS) {
     return preflightCache.result
   }
-  if (!force && preflightInFlight) return preflightInFlight
+  if (!force && preflightInFlight?.key === key) return preflightInFlight.promise
 
   const generation = ++preflightGeneration
   const run = runPreflight(appPreflightProbes(), options).then((result) => {
     if (generation === preflightGeneration) {
-      preflightCache = { at: Date.now(), result }
+      preflightCache = { key, at: Date.now(), result }
     }
     return result
   })
   const tracked = run.finally(() => {
-    if (preflightInFlight === tracked) preflightInFlight = null
+    if (preflightInFlight?.promise === tracked) preflightInFlight = null
   })
-  preflightInFlight = tracked
+  preflightInFlight = { key, promise: tracked }
   return tracked
 }

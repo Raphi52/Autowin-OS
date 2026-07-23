@@ -150,7 +150,9 @@ function drainPendingDirectives(conversationId: string): string[] {
 }
 const questionWindows = new Map<string, BrowserWindow>()
 const diagnosticCapabilities = new DiagnosticCapabilities()
-const providerStateStore = new ProviderStateStore()
+const providerStateStore = new ProviderStateStore(
+  join(app.getPath('userData'), 'provider-state.json')
+)
 const routedProviders = ['codex', 'claude', 'kimi'] as const
 function preflightProviderOptions(): { standbyProviders: Array<(typeof routedProviders)[number]> } {
   return {
@@ -477,6 +479,10 @@ function registerChatIpc(): void {
   ipcMain.handle('worktree:activity', (event) => {
     assertTrustedRendererSender(event, 'WorktreeActivity')
     return os.getWorktreeActivity()
+  })
+  ipcMain.handle('worktree:status', (event) => {
+    assertTrustedRendererSender(event, 'WorktreeStatus')
+    return os.getWorktreeRuntimeStatus()
   })
   os.onWorktreeActivity((activity) => {
     for (const w of BrowserWindow.getAllWindows())

@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { ensureAutowinAppData } from './app-data'
+import { dirname } from 'node:path'
 import type { AuthStatus } from './provider-status'
 
 export type ProviderMode = 'active' | 'standby'
@@ -55,7 +54,12 @@ function sanitizeState(value: unknown): ProviderState | undefined {
 }
 
 export class ProviderStateStore {
-  constructor(private readonly path = join(ensureAutowinAppData(), 'provider-state.json')) {}
+  private readonly path: string
+
+  constructor(path?: string) {
+    if (!path) throw new Error('Chemin du store provider requis.')
+    this.path = path
+  }
 
   private read(): PersistedProviderStates {
     if (!existsSync(this.path)) return {}

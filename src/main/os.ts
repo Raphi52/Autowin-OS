@@ -39,7 +39,10 @@ import { regimePhases } from './task-regime'
 import { defaultBehaviourWorkspace } from './behaviour-files'
 import { WorktreeManager } from './store/worktree-manager'
 import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
-import type { WorktreeAgentActivity } from '../shared/worktree-activity-model'
+import type {
+  WorktreeAgentActivity,
+  WorktreeRuntimeStatus
+} from '../shared/worktree-activity-model'
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
@@ -88,6 +91,7 @@ export class AutowinOS {
   readonly conversations = new ConversationStore()
   readonly trust = new TrustLedger(join(ensureAutowinAppData(), 'trust.jsonl'))
   readonly orchestrator: Orchestrator
+  readonly executionWorkspace: string
   /**
    * Source LIVE du fan-out multi-modèles, alimentée par la topology (index.ts `syncRuntimeTopology`).
    * Les blocs scout/frame/judge de la topology y déposent leurs N modèles ; l'orchestrateur les lit
@@ -113,6 +117,7 @@ export class AutowinOS {
       .register(new CodexAdapter())
       .register(new KimiCliAdapter())
     const executionWorkspace = resolveExecutionWorkspace()
+    this.executionWorkspace = executionWorkspace
     // Garde : `git worktree` exige un vrai repo. Absent (.git manquant) → pas d'isolation (undefined).
     if (existsSync(join(executionWorkspace, '.git'))) {
       const manager = new WorktreeManager({
@@ -155,6 +160,10 @@ export class AutowinOS {
   /** Activité worktree courante (volet A) — snapshot pour l'IPC/renderer. */
   getWorktreeActivity(): WorktreeAgentActivity[] {
     return this.worktrees ? this.worktrees.activity() : []
+  }
+
+  getWorktreeRuntimeStatus(): WorktreeRuntimeStatus {
+    return { available: this.worktrees !== undefined }
   }
 
   /** Abonne l'IPC aux changements d'activité worktree (push live vers le cockpit). Idempotent. */

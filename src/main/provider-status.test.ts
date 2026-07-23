@@ -96,7 +96,7 @@ describe('buildProviderStatuses (chargement)', () => {
     })
 
     expect(statuses.find((item) => item.provider === 'claude')).toEqual(
-      expect.objectContaining({ status: 'authenticated', lastCheckedAt: NOW })
+      expect.objectContaining({ status: 'authenticated', testable: true, lastCheckedAt: NOW })
     )
     expect(statuses.find((item) => item.provider === 'kimi')).toEqual(
       expect.objectContaining({ status: 'standby', testable: false })

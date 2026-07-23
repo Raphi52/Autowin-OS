@@ -117,7 +117,7 @@ describe('RouterView — erreurs provider locales', () => {
           {
             provider: 'claude',
             status: 'authenticated',
-            testable: false,
+            testable: true,
             lastCheckedAt: Date.UTC(2026, 6, 23, 12, 0, 0)
           }
         ],
@@ -136,5 +136,6 @@ describe('RouterView — erreurs provider locales', () => {
     await flush()
 
     expect(container.querySelector('.router-badge')?.textContent).toBe('Dernier test : Authentifié')
+    expect(container.querySelector('[data-provider="claude"]')?.textContent).toContain('Tester')
   })
 })

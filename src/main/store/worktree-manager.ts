@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 
 /**
  * Moteur worktree "par défaut, sans intervention" (volet B du cockpit worktree).
@@ -50,6 +50,13 @@ export type FinalizeResult =
   | { outcome: 'merged'; agentId: string; committed: boolean }
   | { outcome: 'nothing'; agentId: string }
   | { outcome: 'conflict'; agentId: string; files: string[] }
+  | {
+      outcome: 'blocked'
+      agentId: string
+      files: string[]
+      reason: 'base-dirty' | 'base-in-progress' | 'merge-failed'
+      detail?: string
+    }
 
 export interface WorktreeManagerOptions {
   baseRepo: string
@@ -82,6 +89,39 @@ export class WorktreeManager {
     return join(this.worktreeRoot, `agent__${agentId}`)
   }
 
+  private baseOperationInProgress(): string[] | undefined {
+    const conflictOut = this.tryGitFn(this.baseRepo, [
+      'diff',
+      '--name-only',
+      '--diff-filter=U'
+    ])
+    const conflictFiles = conflictOut.stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+    const operationPaths = [
+      'MERGE_HEAD',
+      'CHERRY_PICK_HEAD',
+      'REVERT_HEAD',
+      'REBASE_HEAD',
+      'rebase-merge',
+      'rebase-apply'
+    ]
+    const hasOperation = operationPaths.some((name) => {
+      const gitPath = this.tryGitFn(this.baseRepo, ['rev-parse', '--git-path', name])
+      if (gitPath.code !== 0) return false
+      const candidate = gitPath.stdout.trim()
+      return candidate.length > 0 && existsSync(isAbsolute(candidate) ? candidate : resolve(this.baseRepo, candidate))
+    })
+    return conflictFiles.length > 0 || hasOperation ? conflictFiles : undefined
+  }
+
+  private refSha(ref: string): string | undefined {
+    const result = this.tryGitFn(this.baseRepo, ['rev-parse', '-q', '--verify', ref])
+    if (result.code !== 0) return undefined
+    return result.stdout.trim() || undefined
+  }
+
   /** Donne (ou réutilise) la copie isolée de l'agent. Idempotent. Ne touche pas le repo de base. */
   acquire(agentId: string): string {
     const path = this.pathFor(agentId)
@@ -107,11 +147,22 @@ export class WorktreeManager {
    * Full-auto : committe le travail de l'agent dans sa copie puis le fusionne dans le repo de base.
    * - Rien à fusionner → { outcome: 'nothing' }.
    * - Merge propre → { outcome: 'merged' } + copie supprimée.
-   * - Conflit → { outcome: 'conflict', files } : merge AVORTÉ, copie CONSERVÉE (merge assisté).
+   * - Conflit réel → { outcome: 'conflict', files } : merge AVORTÉ, copie CONSERVÉE.
+   * - Base sale/refus Git → { outcome: 'blocked', files } : aucun faux conflit, copie CONSERVÉE.
    */
   finalize(agentId: string): FinalizeResult {
     const path = this.pathFor(agentId)
     if (!existsSync(path)) return { outcome: 'nothing', agentId }
+
+    const existingOperationFiles = this.baseOperationInProgress()
+    if (existingOperationFiles) {
+      return {
+        outcome: 'blocked',
+        agentId,
+        files: existingOperationFiles,
+        reason: 'base-in-progress'
+      }
+    }
 
     const dirty = this.git(path, ['status', '--porcelain']).length > 0
     let committed = false
@@ -128,6 +179,25 @@ export class WorktreeManager {
       return { outcome: 'nothing', agentId }
     }
 
+    const agentFiles = this.git(this.baseRepo, ['diff', '--name-only', `${baseSha}...${sha}`])
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+    const baseDirtyFiles = this.git(this.baseRepo, ['status', '--porcelain'])
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => line.replace(/^\S+\s+/, ''))
+    const dirtyOverlap = agentFiles.filter((file) => baseDirtyFiles.includes(file))
+    if (dirtyOverlap.length > 0) {
+      return {
+        outcome: 'blocked',
+        agentId,
+        files: dirtyOverlap,
+        reason: 'base-dirty'
+      }
+    }
+
     const merge = this.tryGitFn(this.baseRepo, [
       '-c',
       'commit.gpgsign=false',
@@ -140,15 +210,49 @@ export class WorktreeManager {
       return { outcome: 'merged', agentId, committed }
     }
 
-    // Conflit : récupérer les fichiers en cause AVANT d'avorter, puis restaurer la base intacte.
-    const conflictOut = this.tryGitFn(this.baseRepo, ['diff', '--name-only', '--diff-filter=U'])
-    const files = conflictOut.stdout
-      .split('\n')
-      .map((l) => l.trim())
-      .filter(Boolean)
-    this.tryGitFn(this.baseRepo, ['merge', '--abort'])
-    // Copie CONSERVÉE (pas de remove) → merge assisté possible.
-    return { outcome: 'conflict', agentId, files: files.length ? files : ['(fichier inconnu)'] }
+    // L'échec peut avoir ouvert un merge sans produire de fichier U (ex. hook refusé). Une opération
+    // utilisateur peut toutefois démarrer après le préflight : ne jamais l'aborter par attribution.
+    const mergeOperationFiles = this.baseOperationInProgress()
+    const files = mergeOperationFiles ?? []
+    const mergeHead = this.refSha('MERGE_HEAD')
+    const ownsMergeOperation = mergeHead === sha
+    if (mergeOperationFiles && !ownsMergeOperation) {
+      return {
+        outcome: 'blocked',
+        agentId,
+        files,
+        reason: 'base-in-progress'
+      }
+    }
+    if (ownsMergeOperation) {
+      const abort = this.tryGitFn(this.baseRepo, ['merge', '--abort'])
+      if (abort.code !== 0) {
+        const mergeDetail = (merge.stderr || merge.stdout).trim()
+        const abortDetail = (abort.stderr || abort.stdout).trim()
+        return {
+          outcome: 'blocked',
+          agentId,
+          files: files.length > 0 ? files : agentFiles,
+          reason: 'merge-failed',
+          detail: [mergeDetail, `git merge --abort: ${abortDetail || 'échec inconnu'}`]
+            .filter(Boolean)
+            .join('\n')
+        }
+      }
+    }
+    if (files.length > 0) {
+      // Copie CONSERVÉE (pas de remove) → merge assisté possible.
+      return { outcome: 'conflict', agentId, files }
+    }
+
+    // Le merge a été avorté ou n'a pas commencé : ne pas inventer un conflit.
+    return {
+      outcome: 'blocked',
+      agentId,
+      files: agentFiles,
+      reason: 'merge-failed',
+      detail: (merge.stderr || merge.stdout).trim() || undefined
+    }
   }
 
   /** Supprime la copie de l'agent (idempotent). */

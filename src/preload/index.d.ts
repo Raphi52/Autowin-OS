@@ -1,5 +1,8 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import type { WorktreeAgentActivity } from '../shared/worktree-activity-model'
+import type {
+  WorktreeAgentActivity,
+  WorktreeRuntimeStatus
+} from '../shared/worktree-activity-model'
 
 interface ChatAttachment {
   name: string
@@ -277,6 +280,7 @@ interface ChatApi {
   getPreflight: () => Promise<PreflightResult | null>
   recheckPreflight: (force?: boolean) => Promise<PreflightResult>
   getWorktreeActivity: () => Promise<WorktreeAgentActivity[]>
+  getWorktreeStatus: () => Promise<WorktreeRuntimeStatus>
   onWorktreeActivity: (cb: (activity: WorktreeAgentActivity[]) => void) => () => void
   roles: () => Promise<
     Record<string, { provider: string; model?: string; reasoningEffort?: string }>

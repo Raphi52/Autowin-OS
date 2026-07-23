@@ -25,6 +25,7 @@ const api = {
   getPreflight: (): Promise<unknown> => ipcRenderer.invoke('preflight:current'),
   // Cockpit worktree (volet A) — activité des copies isolées par agent (frise + journal).
   getWorktreeActivity: (): Promise<unknown[]> => ipcRenderer.invoke('worktree:activity'),
+  getWorktreeStatus: (): Promise<unknown> => ipcRenderer.invoke('worktree:status'),
   onWorktreeActivity: (cb: (activity: unknown[]) => void): (() => void) => {
     const handler = (_e: unknown, activity: unknown[]): void => cb(activity)
     ipcRenderer.on('worktree:activity-changed', handler)

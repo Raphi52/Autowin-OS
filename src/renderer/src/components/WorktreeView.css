@@ -68,6 +68,41 @@
   text-align: right;
 }
 
+.worktree-view__body {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.worktree-view__loading {
+  margin: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-card);
+  background: var(--surface-card);
+  color: var(--text-dim);
+}
+
+.worktree-view__bridge-error,
+.worktree-view__unavailable {
+  margin: 0;
+  padding: 16px 18px;
+  border: 1px solid color-mix(in srgb, var(--warn) 48%, var(--container-border));
+  border-radius: var(--container-radius-card);
+  background: color-mix(in srgb, var(--warn) 9%, var(--surface-card));
+  color: var(--text);
+}
+
+.worktree-view__unavailable {
+  display: grid;
+  gap: 8px;
+  color: var(--text-dim);
+}
+
+.worktree-view__unavailable strong { color: var(--warn); }
+.worktree-view__unavailable code { color: var(--gold); }
+
 @media (max-width: 760px) {
   .worktree-page-head {
     align-items: flex-start;

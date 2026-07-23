@@ -33,10 +33,12 @@ interface Tracked {
   files: { path: string; kind: 'add' | 'mod' | 'del' }[]
   conflictWith?: string[]
   conflictFile?: string
+  attentionReason?: WorktreeAgentActivity['attentionReason']
 }
 
 function stateFromFinalize(res: FinalizeResult): WorktreeState {
   if (res.outcome === 'conflict') return 'conflict'
+  if (res.outcome === 'blocked') return 'blocked'
   return 'merged'
 }
 
@@ -89,6 +91,10 @@ export class RunWorktreeCoordinator {
       tracked.conflictFile = res.files[0]
       tracked.files = res.files.map((path) => ({ path, kind: 'mod' as const }))
     }
+    if (res.outcome === 'blocked') {
+      tracked.attentionReason = res.reason
+      tracked.files = res.files.map((path) => ({ path, kind: 'mod' as const }))
+    }
     this.emit()
     return res
   }
@@ -103,7 +109,8 @@ export class RunWorktreeCoordinator {
       startedAtMs: t.startedAtMs,
       endedAtMs: t.endedAtMs,
       conflictWith: t.conflictWith,
-      conflictFile: t.conflictFile
+      conflictFile: t.conflictFile,
+      attentionReason: t.attentionReason
     }))
   }
 

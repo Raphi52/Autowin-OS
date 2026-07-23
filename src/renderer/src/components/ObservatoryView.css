@@ -564,6 +564,21 @@
 .observatory-event.is-compared {
   box-shadow: inset 3px 0 #59dcff;
 }
+.observatory-event.is-error {
+  border-color: #8f3342;
+  background: rgba(111, 19, 34, 0.2);
+  box-shadow: inset 3px 0 #ff6078;
+}
+.observatory-event.is-error:hover,
+.observatory-event.is-error.is-selected {
+  border-color: #ff6078;
+  background: rgba(137, 22, 42, 0.28);
+}
+.observatory-event.is-error > i,
+.observatory-event.is-error > span:nth-child(2) b,
+.observatory-event.is-error p strong {
+  color: #ff758a;
+}
 .observatory-event > i {
   font-style: normal;
   font-weight: 800;

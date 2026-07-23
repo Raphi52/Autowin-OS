@@ -70,6 +70,17 @@ describe('runAppPreflight', () => {
     )
   })
 
+  it('ne réutilise pas un cache calculé pour une autre configuration standby', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(null, { status: 200 })) as typeof fetch
+    const { runAppPreflight } = await import('./preflight-probes')
+
+    await runAppPreflight(false, { standbyProviders: ['kimi'] })
+    expect(mocks.spawnSync).toHaveBeenCalledTimes(2)
+
+    await runAppPreflight(false, { standbyProviders: [] })
+    expect(mocks.spawnSync).toHaveBeenCalledTimes(5)
+  })
+
   it('refuse une session Codex dont l’expiration est dépassée', async () => {
     mocks.loadTokens.mockReturnValueOnce({
       accessToken: 'expired-access',

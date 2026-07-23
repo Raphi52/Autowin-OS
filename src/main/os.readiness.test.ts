@@ -33,3 +33,17 @@ describe('barrière de disponibilité des modèles', () => {
     expect(run).toHaveBeenCalledWith('cadrer le besoin', undefined, undefined, undefined, undefined)
   })
 })
+
+describe('statut runtime Worktree', () => {
+  it('ne transmet jamais le chemin absolu du workspace au renderer', () => {
+    const os = Object.create(AutowinOS.prototype) as AutowinOS
+    Object.defineProperty(os, 'executionWorkspace', {
+      value: 'C:\\Users\\alice\\Clients\\Projet-confidentiel'
+    })
+
+    const status = os.getWorktreeRuntimeStatus()
+
+    expect(status).toEqual({ available: false })
+    expect('workspace' in status).toBe(false)
+  })
+})

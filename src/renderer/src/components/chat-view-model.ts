@@ -335,7 +335,7 @@ export interface SlashCommand {
  * commande est branché côté composer (ex. `/btw` → parseBtw/submitBtw).
  */
 export const SLASH_COMMANDS: SlashCommand[] = [
-  { name: 'btw', hint: 'Au fait… — oriente le tour en cours sans l’interrompre', insert: '/btw ' }
+  { name: 'btw', hint: 'Au fait… — ajoute à la file d’attente (traité après le tour en cours)', insert: '/btw ' }
 ]
 
 /**

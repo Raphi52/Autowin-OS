@@ -52,6 +52,42 @@ describe('RunWorktreeCoordinator (flip live)', () => {
     expect(a.conflictFile).toBe('os.ts')
   })
 
+  it('end BLOQUÉ par la base sale → état d’attention distinct, jamais merged', () => {
+    const finalize = (id: string): FinalizeResult => ({
+      outcome: 'blocked',
+      agentId: id,
+      files: ['os.ts'],
+      reason: 'base-dirty'
+    })
+    const co = new RunWorktreeCoordinator({ manager: fakeManager({ finalize }), nowFn: () => 9 })
+    co.begin('run-1', 'Builder', true)
+
+    expect(co.end('run-1')?.outcome).toBe('blocked')
+    expect(co.activity()[0]).toMatchObject({
+      state: 'blocked',
+      files: [{ path: 'os.ts', kind: 'mod' }],
+      attentionReason: 'base-dirty'
+    })
+  })
+
+  it('préserve le motif d’une opération déjà en cours jusqu’à l’activité renderer', () => {
+    const finalize = (id: string): FinalizeResult => ({
+      outcome: 'blocked',
+      agentId: id,
+      files: ['a.txt'],
+      reason: 'base-in-progress'
+    })
+    const co = new RunWorktreeCoordinator({ manager: fakeManager({ finalize }), nowFn: () => 9 })
+    co.begin('run-1', 'Builder', true)
+
+    expect(co.end('run-1')?.outcome).toBe('blocked')
+    expect(co.activity()[0]).toMatchObject({
+      state: 'blocked',
+      files: [{ path: 'a.txt', kind: 'mod' }],
+      attentionReason: 'base-in-progress'
+    })
+  })
+
   it('notifie onActivity à chaque changement (pour l’IPC → renderer)', () => {
     const onActivity = vi.fn()
     const co = new RunWorktreeCoordinator({ manager: fakeManager(), nowFn: () => 1, onActivity })

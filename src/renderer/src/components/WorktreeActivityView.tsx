@@ -21,7 +21,7 @@ const PAD = 60 // marge gauche/droite pour que les courbes ne collent pas au bor
 
 function laneColor(outcome: FriezeLane['outcome']): string {
   if (outcome === 'merged') return 'var(--wt-ok)'
-  if (outcome === 'conflict') return 'var(--wt-warn)'
+  if (outcome === 'conflict' || outcome === 'blocked') return 'var(--wt-warn)'
   return 'var(--wt-accent)'
 }
 
@@ -77,7 +77,7 @@ function Frieze({ model }: { model: WorktreeActivityModel }): React.JSX.Element 
         {model.lanes.map((lane) => {
           const { d, endX, endY } = lanePath(lane)
           const color = laneColor(lane.outcome)
-          const dashed = lane.outcome === 'conflict'
+          const dashed = lane.outcome === 'conflict' || lane.outcome === 'blocked'
           return (
             <g key={lane.agentId} data-testid="wt-lane" data-outcome={lane.outcome}>
               <path
@@ -137,21 +137,37 @@ function JournalRow({
         <div className="wt-jmsg">{entry.message}</div>
         <FileChips files={entry.files} />
         {entry.kind === 'merged' && (
-          <span className="wt-badge wt-badge-merged">✓ Fusionné tout seul · copie rangée</span>
+          <span className="wt-badge wt-badge-merged">
+            {entry.files.length === 0
+              ? '✓ Aucun changement · copie rangée'
+              : '✓ Fusionné tout seul · copie rangée'}
+          </span>
         )}
         {entry.kind === 'conflict' && (
           <div className="wt-conflict-row">
             <span className="wt-badge wt-badge-conflict">
               ⚠ À toi de trancher{entry.conflictFile ? ` · ${entry.conflictFile}` : ''}
             </span>
-            <button
-              type="button"
-              className="wt-btn btn btn-sm"
-              onClick={() => onResolveConflict?.(entry.agentId)}
-            >
-              Voir les deux versions →
-            </button>
+            {onResolveConflict && (
+              <button
+                type="button"
+                className="wt-btn btn btn-sm"
+                onClick={() => onResolveConflict(entry.agentId)}
+              >
+                Voir les deux versions →
+              </button>
+            )}
           </div>
+        )}
+        {entry.kind === 'blocked' && (
+          <span className="wt-badge wt-badge-blocked">
+            ⚠ Copie conservée ·{' '}
+            {entry.attentionReason === 'base-dirty'
+              ? 'tes changements locaux passent d’abord'
+              : entry.attentionReason === 'base-in-progress'
+                ? 'ton travail en cours passe d’abord'
+                : 'ajout automatique bloqué'}
+          </span>
         )}
       </div>
     </div>

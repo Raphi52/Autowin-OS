@@ -1030,24 +1030,26 @@ export function ChatView({
   }
 
   /**
-   * Commande composer `/btw <texte>` — « au fait… » : oriente le tour EN COURS sans l'interrompre
-   * (alias clavier du bouton « btw »/steering via `injectDirective`). Idle (aucun tour) → envoi normal.
+   * Commande composer `/btw <texte>` — « au fait… », comme écrire pendant que Claude Code travaille :
+   * le message est MIS EN FILE D'ATTENTE et traité à la fin du tour courant (tour suivant normal),
+   * SANS interrompre ni s'imposer en priorité au tour en cours. Distinct du bouton « 🧭 Orienter »
+   * (lui injecte en priorité dans le tour courant). Idle (aucun tour) → envoi immédiat.
    */
   async function submitBtw(body: string): Promise<void> {
     const text = body.trim()
     if (!text) {
-      setDraftInput(composerDraftKeyRef.current, '') // "/btw" seul → rien à orienter, on nettoie
+      setDraftInput(composerDraftKeyRef.current, '') // "/btw" seul → rien à enfiler, on nettoie
       return
     }
-    // Le guard `id` ne borne QUE la branche busy (injectDirective en a besoin). En idle, send(text)
-    // gère lui-même la création de conversation si aucune n'est active → un /btw en 1er message marche.
+    // Le guard `id` ne borne QUE la branche busy (l'enfilage cible la conversation active). En idle,
+    // send(text) gère lui-même la création de conversation → un /btw en 1er message marche aussi.
     if (busy) {
       const id = activeRef.current
       if (!id) return
-      await window.api.injectDirective(id, text)
+      enqueueMessage(id, text) // → File d'attente, drainée en fin de tour (cf. effet busy→false)
       setDraftInput(composerDraftKeyRef.current, '')
     } else {
-      void send(text) // aucun tour à orienter → le texte part comme message normal
+      void send(text) // aucun tour en cours → le texte part comme message normal
     }
   }
   /** True (et déclenche submitBtw) si le composer commence par `/btw` ; sinon false (submit normal). */
@@ -1740,11 +1742,11 @@ export function ChatView({
                   <button
                     type="button"
                     className="directive-queue-steer"
-                    title="btw — injecter ce message comme orientation dans le tour en cours, sans l’interrompre (ou tape /btw dans le composer)"
-                    aria-label={`btw : orienter sans interrompre avec le message ${index + 1}`}
+                    title="Orienter maintenant — injecter ce message comme directive PRIORITAIRE dans le tour en cours, sans l’interrompre"
+                    aria-label={`Orienter le tour en cours avec le message ${index + 1}`}
                     onClick={() => void steerWithoutInterrupt(index, directive)}
                   >
-                    🧭 btw
+                    🧭 Orienter
                   </button>
                 )}
                 <button

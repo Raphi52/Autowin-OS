@@ -105,7 +105,8 @@ export function buildProviderStatuses(inputs: {
       return {
         provider,
         status: state.lastProbe.status,
-        testable: isTestable(state.lastProbe.status),
+        // Un probe persisté est une preuve datée, jamais un oracle courant : toujours retestable.
+        testable: true,
         lastCheckedAt: state.lastProbe.checkedAt
       }
     }

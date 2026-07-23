@@ -17,6 +17,10 @@ afterEach(() => {
 })
 
 describe('ProviderStateStore', () => {
+  it('refuse un chemin implicite pour ne jamais fuiter entre profils Electron', () => {
+    expect(() => new ProviderStateStore()).toThrow('Chemin du store provider requis.')
+  })
+
   it('met Kimi en standby par défaut sans masquer Claude ou Codex', () => {
     const { path } = fixture()
     const store = new ProviderStateStore(path)

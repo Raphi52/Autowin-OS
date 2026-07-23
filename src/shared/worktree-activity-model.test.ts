@@ -59,6 +59,52 @@ describe('worktree-activity-model', () => {
     expect(m.needsAttention).toBe(2)
   })
 
+  it('distingue un blocage par changements locaux d’un conflit entre agents', () => {
+    const m = buildWorktreeActivity([
+      agent({
+        agentId: 'b',
+        agentName: 'Builder',
+        state: 'blocked',
+        attentionReason: 'base-dirty',
+        files: [{ path: 'os.ts', kind: 'mod' }]
+      })
+    ])
+
+    expect(m.lanes[0].outcome).toBe('blocked')
+    expect(m.needsAttention).toBe(1)
+    expect(m.journal[0]).toMatchObject({ kind: 'blocked', attentionReason: 'base-dirty' })
+    expect(m.journal[0].message).toContain('changements locaux')
+    expect(m.journal[0].message).not.toMatch(/conflit|git|merge/i)
+  })
+
+  it('signale une opération déjà en cours sans l’attribuer à un conflit entre agents', () => {
+    const m = buildWorktreeActivity([
+      agent({
+        agentId: 'b',
+        agentName: 'Builder',
+        state: 'blocked',
+        attentionReason: 'base-in-progress',
+        files: [{ path: 'a.txt', kind: 'mod' }]
+      })
+    ])
+
+    expect(m.journal[0]).toMatchObject({ kind: 'blocked', attentionReason: 'base-in-progress' })
+    expect(m.journal[0].message).toContain('ta branche est déjà occupée')
+    expect(m.journal[0].message).toContain('sans y toucher')
+    expect(m.journal[0].message).not.toMatch(/conflit|git|merge/i)
+  })
+
+  it('ne prétend pas avoir ajouté du code quand la copie se termine sans changement', () => {
+    const m = buildWorktreeActivity([
+      agent({ agentName: 'Agent', state: 'merged', files: [] })
+    ])
+    const withChanges = buildWorktreeActivity([agent({ agentName: 'Agent', state: 'merged' })])
+
+    expect(m.journal[0].message).toContain('aucun changement à ajouter')
+    expect(m.journal[0].message).not.toContain('ajouté à ton code')
+    expect(withChanges.journal[0].message).toContain('ajouté à ton code')
+  })
+
   it('produit des messages HUMAINS sans jargon git', () => {
     const m = buildWorktreeActivity([
       agent({ agentId: 'a1', agentName: 'Scout', state: 'isolated', endedAtMs: undefined, startedAtMs: 100 }),
