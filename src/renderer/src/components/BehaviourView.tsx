@@ -161,7 +161,7 @@ export function BehaviourView(): React.JSX.Element {
           <Category
             title="Contexte du tour"
             hint="commandes, état, historique, pièces jointes, autorité et bornes réellement appliqués"
-            fields={cockpit.turnContext}
+            fields={cockpit.turnContext ?? []}
           />
           <Category
             title="Modèle / rôle"
@@ -213,7 +213,7 @@ export function BehaviourView(): React.JSX.Element {
           <Category
             title="C2 · Topologie / fan-out"
             hint="panels vivants scout, frame et judge, avec règle de quorum"
-            fields={orch.topology}
+            fields={orch.topology ?? []}
           />
           <Category
             title="D · Régime → phases"
