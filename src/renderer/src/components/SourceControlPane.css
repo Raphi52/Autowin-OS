@@ -1,0 +1,175 @@
+/* Source control (worktrees + git), design C : sections + barre de prompt. Linéaire sobre. */
+.sc-pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.sc-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.sc-repo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
+  border-bottom: 1px solid var(--line, #262b33);
+}
+.sc-repo-path {
+  flex: 1;
+  font-size: 11.5px;
+  color: var(--muted, #8b939f);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sc-repo-btn {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+.sc-sect {
+  border-bottom: 1px solid var(--line, #262b33);
+  padding: 8px 11px 11px;
+}
+.sc-h {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted, #8b939f);
+  margin-bottom: 7px;
+}
+.sc-branch-row {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-bottom: 8px;
+}
+.sc-branch {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--accent, #4b9fff);
+}
+.sc-ab {
+  font-size: 11px;
+  color: var(--muted, #8b939f);
+}
+.sc-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.sc-btn {
+  font-size: 11.5px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line2, #31373f);
+  background: var(--surface2, #191d23);
+  color: var(--text, #e6e9ee);
+  cursor: pointer;
+}
+.sc-btn:hover {
+  border-color: var(--accent, #4b9fff);
+}
+.sc-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.sc-prompt-badge {
+  font-size: 10px;
+  color: var(--accent, #4b9fff);
+  border: 1px dashed var(--accent, #4b9fff);
+  border-radius: 5px;
+  padding: 0 5px;
+  margin-left: 4px;
+}
+.sc-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  cursor: pointer;
+}
+.sc-file:hover {
+  color: var(--accent, #4b9fff);
+}
+.sc-file-open {
+  color: var(--accent, #4b9fff);
+}
+.sc-chev {
+  margin-left: auto;
+  color: var(--muted, #8b939f);
+  font-size: 10px;
+}
+.sc-diff-wrap {
+  margin: 2px 0 8px 20px;
+}
+.sc-m {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-weight: 700;
+  width: 12px;
+  text-align: center;
+}
+.sc-m-modified { color: var(--warn, #e8a33d); }
+.sc-m-added { color: var(--ok, #3ecb8f); }
+.sc-m-deleted { color: var(--danger, #e6635b); }
+.sc-m-renamed { color: var(--accent, #4b9fff); }
+.sc-m-untracked { color: var(--muted, #8b939f); }
+.sc-fn {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sc-clean,
+.sc-empty {
+  font-size: 12px;
+  color: var(--muted, #8b939f);
+  padding: 2px 0 4px;
+}
+.sc-commit {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+.sc-hash { color: var(--accent, #4b9fff); }
+.sc-subj {
+  color: var(--muted, #8b939f);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sc-promptbar {
+  border-top: 1px solid var(--accent, #4b9fff);
+  padding: 8px 11px 10px;
+  background: var(--surface2, #191d23);
+}
+.sc-promptbar-lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent, #4b9fff);
+  margin-bottom: 4px;
+}
+.sc-promptbar-input {
+  width: 100%;
+  min-height: 44px;
+  resize: vertical;
+  background: var(--surface, #14171c);
+  border: 1px solid var(--line2, #31373f);
+  border-radius: 8px;
+  color: var(--text, #e6e9ee);
+  font-size: 12px;
+  padding: 7px 9px;
+  font-family: inherit;
+}
+.sc-send {
+  margin-top: 6px;
+  width: 100%;
+}

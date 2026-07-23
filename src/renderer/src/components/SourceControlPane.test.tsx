@@ -1,0 +1,132 @@
+// @vitest-environment happy-dom
+import { act, createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { SourceControlPane } from './SourceControlPane'
+import type { GitReadResult } from '../../../shared/git-read'
+
+const GIT: GitReadResult = {
+  available: true,
+  state: {
+    branch: 'feat/source-control',
+    ahead: 1,
+    behind: 0,
+    changes: [
+      { path: 'src/main/index.ts', status: 'modified', staged: false },
+      { path: 'src/shared/git-read.ts', status: 'added', staged: true }
+    ]
+  },
+  history: [{ hash: 'a1b2c3d', subject: 'feat: git-read' }]
+}
+
+const calls: { repoArgs: (string | undefined)[]; pickReturns: (string | null)[] } = {
+  repoArgs: [],
+  pickReturns: []
+}
+function mockApi(git: GitReadResult, diff = 'diff --git a/x b/x\n@@ -1 +1 @@\n-old\n+new'): void {
+  calls.repoArgs = []
+  ;(window as unknown as { api: unknown }).api = {
+    getGitState: (repoPath?: string) => {
+      calls.repoArgs.push(repoPath)
+      return Promise.resolve(git)
+    },
+    getGitDiff: () => Promise.resolve({ available: true, diff }),
+    pickGitRepo: () => Promise.resolve(calls.pickReturns.shift() ?? null),
+    getWorktreeActivity: () => Promise.resolve([]),
+    onWorktreeActivity: () => () => {}
+  }
+}
+
+let container: HTMLDivElement
+let root: Root
+beforeEach(() => {
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+})
+afterEach(() => {
+  act(() => root.unmount())
+  container.remove()
+  localStorage.clear()
+})
+async function render(onSendPrompt?: (p: string) => void): Promise<void> {
+  await act(async () => {
+    root.render(createElement(SourceControlPane, { onSendPrompt }))
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+}
+const input = (): HTMLTextAreaElement =>
+  container.querySelector('[data-testid="sc-prompt-input"]') as HTMLTextAreaElement
+
+describe('SourceControlPane (prompt-first)', () => {
+  it('affiche branche, changements et historique (consultation)', async () => {
+    mockApi(GIT)
+    await render()
+    expect(container.textContent).toContain('feat/source-control')
+    expect(container.querySelectorAll('[data-testid="sc-file"]')).toHaveLength(2)
+    expect(container.textContent).toContain('a1b2c3d')
+  })
+
+  it('clic sur un fichier affiche son diff (consultation read-only)', async () => {
+    mockApi(GIT)
+    await render()
+    const file = container.querySelector('[data-testid="sc-file"]') as HTMLDivElement
+    await act(async () => {
+      file.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-testid="diff-view"]')).not.toBeNull()
+    expect(container.textContent).toContain('+new')
+  })
+
+  it('un bouton PRÉ-REMPLIT le prompt, il n’exécute pas de git', async () => {
+    mockApi(GIT)
+    const onSendPrompt = vi.fn()
+    await render(onSendPrompt)
+    const commit = [...container.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Commit')
+    ) as HTMLButtonElement
+    act(() => commit.click())
+    // Le prompt est pré-rempli dans la barre — RIEN n'est envoyé tant que l'utilisateur ne valide pas.
+    expect(input().value).toContain('commit')
+    expect(onSendPrompt).not.toHaveBeenCalled()
+  })
+
+  it('v3 : le dépôt persisté est passé à getGitState', async () => {
+    localStorage.setItem('autowin:sc-repo', 'C:/rig')
+    mockApi(GIT)
+    await render()
+    expect(calls.repoArgs).toContain('C:/rig')
+  })
+
+  it('v3 : « Changer de dépôt » recharge sur le nouveau dépôt + persiste', async () => {
+    mockApi(GIT)
+    calls.pickReturns = ['D:/autre-repo']
+    await render()
+    const pick = container.querySelector('[data-testid="sc-pick-repo"]') as HTMLButtonElement
+    await act(async () => {
+      pick.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(calls.repoArgs).toContain('D:/autre-repo')
+    expect(localStorage.getItem('autowin:sc-repo')).toBe('D:/autre-repo')
+  })
+
+  it('Envoyer transmet le prompt (pré-rempli par un bouton) à l’agent', async () => {
+    mockApi(GIT)
+    const onSendPrompt = vi.fn()
+    await render(onSendPrompt)
+    // flux réel : le bouton Push pré-remplit la barre (état React), puis Envoyer transmet.
+    const push = [...container.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Push')
+    ) as HTMLButtonElement
+    act(() => push.click())
+    expect(input().value).toContain('push')
+    const sendBtn = container.querySelector('[data-testid="sc-send"]') as HTMLButtonElement
+    act(() => sendBtn.click())
+    expect(onSendPrompt).toHaveBeenCalledWith('push la branche courante')
+  })
+})

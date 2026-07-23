@@ -1,0 +1,38 @@
+/* Diff read-only coloré — Linéaire sobre, fonds discrets (pas de halo). */
+.diff-view {
+  margin: 4px 0 2px;
+  padding: 6px 0;
+  border: 1px solid var(--line, #262b33);
+  border-radius: 8px;
+  background: var(--surface, #14171c);
+  overflow-x: auto;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre;
+}
+.diff-line {
+  padding: 0 10px;
+}
+.diff-add {
+  color: var(--ok, #3ecb8f);
+  background: color-mix(in srgb, var(--ok, #3ecb8f) 10%, transparent);
+}
+.diff-del {
+  color: var(--danger, #e6635b);
+  background: color-mix(in srgb, var(--danger, #e6635b) 10%, transparent);
+}
+.diff-hunk {
+  color: var(--accent, #4b9fff);
+}
+.diff-meta {
+  color: var(--muted, #8b939f);
+}
+.diff-context {
+  color: var(--text, #e6e9ee);
+}
+.diff-empty {
+  font-size: 11.5px;
+  color: var(--muted, #8b939f);
+  padding: 4px 0;
+}

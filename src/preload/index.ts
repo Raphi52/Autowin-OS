@@ -23,6 +23,11 @@ const api = {
     return () => ipcRenderer.removeListener('preflight:result', handler)
   },
   getPreflight: (): Promise<unknown> => ipcRenderer.invoke('preflight:current'),
+  // Source control — lecture git READ-ONLY (statut, branche, changements, historique). Aucune action git.
+  getGitState: (repoPath?: string): Promise<unknown> => ipcRenderer.invoke('git:read', repoPath),
+  getGitDiff: (path: string, repoPath?: string): Promise<unknown> =>
+    ipcRenderer.invoke('git:diff', path, repoPath),
+  pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),
   // Cockpit worktree (volet A) — activité des copies isolées par agent (frise + journal).
   getWorktreeActivity: (): Promise<unknown[]> => ipcRenderer.invoke('worktree:activity'),
   getWorktreeStatus: (): Promise<unknown> => ipcRenderer.invoke('worktree:status'),
