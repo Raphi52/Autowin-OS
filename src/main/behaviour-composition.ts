@@ -5,7 +5,7 @@
  * Autowin — et RIEN d'autre. Deux chemins DISTINCTS :
  *  - `orchestrated` : le pipeline (os:orchestrate → Orchestrator.run) — phases, Brain, modèle/rôle,
  *    régime, garde-fous.
- *  - `direct` : os.chat — beaucoup plus simple (kit SOUL + binding de rôle, aucun garde-fou/phase).
+ *  - `direct` : os.chat — beaucoup plus simple (CONSTITUTION + binding de rôle, aucun garde-fou/phase).
  *
  * INVARIANT (testé, pas jugé) :
  *  - COMPLÉTUDE : chaque catégorie A-E de l'orchestré est peuplée et tracée à sa source.
@@ -57,7 +57,7 @@ export interface OrchestratedBehaviour {
 }
 
 export interface DirectBehaviour {
-  /** Chat direct : system = kit SOUL seul (shadowé par un system explicite en orchestration). */
+  /** Chat direct : system = CONSTITUTION par défaut, partagé avec les phases orchestrées. */
   systemPrompt: InfluencerField[]
   modelSelection: InfluencerField[]
 }

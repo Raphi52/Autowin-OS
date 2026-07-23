@@ -5,7 +5,7 @@ import { ModuleHeader } from './ModuleHeader'
 /**
  * Vue « Behaviour » — miroir FIDÈLE (config statique) de TOUT ce qui influe sur le comportement du
  * chat Autowin, et RIEN d'autre. Organisée par ANATOMIE d'un tour (ordre réel du pipeline), avec un
- * toggle entre les 2 chemins : ORCHESTRÉ (pipeline riche) et DIRECT (os.chat, kit SOUL seul).
+ * toggle entre les 2 chemins : ORCHESTRÉ (pipeline riche) et DIRECT (os.chat, CONSTITUTION).
  * Source unique = `window.api.behaviourComposition()` (assemblé côté main depuis les modules réels ;
  * chaque champ porte sa citation file:line). Aucun non-influenceur (capabilities/hooks natifs) ici.
  */
@@ -180,11 +180,11 @@ export function BehaviourView(): React.JSX.Element {
         <div className="behaviour-anatomy">
           <p className="behaviour-path-note">
             Le chat direct (os.chat) : beaucoup plus simple — pas de phases, pas de Brain, pas de
-            garde-fous. Sa « personnalité » vient du seul kit SOUL.
+            garde-fous. Son system prompt par défaut vient de la CONSTITUTION.
           </p>
           <Category
             title="System prompt"
-            hint="kit SOUL (chat direct uniquement)"
+            hint="CONSTITUTION (source commune au chat direct et aux phases orchestrées)"
             fields={direct.systemPrompt}
           />
           <Category

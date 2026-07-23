@@ -111,8 +111,6 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
 
   const selectedSummary = sources.find(({ profile }) => profile.id === sourceId)
   const selectedSource = selectedSummary?.profile
-  const selectedItem =
-    items.find((item) => `${item.sourceId}::${item.id}` === selectedId) ?? items[0]
 
   const load = useCallback(
     async (source: TicketSourceProfile, nextCursor?: string, append = false): Promise<void> => {
@@ -259,6 +257,8 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         (!stateFilter || item.state === stateFilter)
     )
   }, [items, query, stateFilter, typeFilter])
+  const selectedItem =
+    visibleItems.find((item) => `${item.sourceId}::${item.id}` === selectedId) ?? visibleItems[0]
 
   const retry = (): void => {
     if (selectedSource) void load(selectedSource)

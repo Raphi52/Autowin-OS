@@ -96,6 +96,26 @@ describe('vue Tickets', () => {
     await act(async () => root.unmount())
   })
 
+  it('aligne le détail sur les tickets encore visibles après filtrage', async () => {
+    api()
+    const { root, container } = await render()
+    const state = container.querySelector('[aria-label="Filtrer par état"]') as HTMLSelectElement
+
+    await act(async () => {
+      state.value = 'Closed'
+      state.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    expect(container.querySelectorAll('[data-testid="ticket-row"]')).toHaveLength(1)
+    expect(container.querySelector('[data-testid="ticket-detail"]')?.textContent).toContain(
+      'Ticket 3'
+    )
+    expect(container.querySelector('[data-testid="ticket-detail"]')?.textContent).not.toContain(
+      'Ticket 1'
+    )
+    await act(async () => root.unmount())
+  })
+
   it('ne charge rien tant que la vue persistante est inactive', async () => {
     const ticketSources = vi.fn()
     api({ ticketSources })
