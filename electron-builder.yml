@@ -3,6 +3,7 @@ productName: Autowin OS
 directories:
   buildResources: build
 files:
+  - 'node_modules/@napi-rs/keyring-*/**'
   - '!dist/**'
   - '!dist-*/**'
   - '!Audit/**'
@@ -18,6 +19,7 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
   - resources/**
+  - node_modules/@napi-rs/keyring-*/**
 win:
   executableName: autowin-os
   icon: build/icon.ico
