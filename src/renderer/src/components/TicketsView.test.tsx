@@ -212,6 +212,25 @@ describe('vue Tickets', () => {
     await act(async () => root.unmount())
   })
 
+  it('permet de dépasser une page fournisseur vide mais encore paginable', async () => {
+    const listTickets = vi
+      .fn()
+      .mockResolvedValueOnce({ items: [], cursor: 'next', hasMore: true })
+      .mockResolvedValueOnce({ items: [item('4')], hasMore: false })
+    api({ listTickets })
+    const { root, container } = await render()
+
+    const loadMore = container.querySelector('.tickets-load-more') as HTMLButtonElement
+    expect(loadMore).not.toBeNull()
+    await act(async () => {
+      loadMore.click()
+      await Promise.resolve()
+    })
+    expect(container.textContent).toContain('Ticket 4')
+    expect(listTickets).toHaveBeenCalledTimes(2)
+    await act(async () => root.unmount())
+  })
+
   it('explique le raccordement privé sans demander de secret au renderer', async () => {
     api()
     const { root, container } = await render()

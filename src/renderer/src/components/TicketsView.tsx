@@ -420,12 +420,12 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
             <strong>Aucune source configurée</strong>
             <span>Ajoute une source Azure DevOps, GitHub ou GitLab.</span>
           </div>
-        ) : items.length === 0 ? (
+        ) : items.length === 0 && !hasMore ? (
           <div className="tickets-empty">
             <strong>Aucun ticket</strong>
             <span>Cette source ne renvoie aucun élément accessible.</span>
           </div>
-        ) : visibleItems.length === 0 ? (
+        ) : visibleItems.length === 0 && items.length > 0 ? (
           <div className="tickets-empty">
             <strong>Aucun résultat</strong>
             <span>Modifie la recherche ou les filtres.</span>
