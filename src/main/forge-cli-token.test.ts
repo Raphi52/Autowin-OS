@@ -99,6 +99,36 @@ describe('credentials runtime des forges', () => {
     expect(runner).not.toHaveBeenCalled()
   })
 
+  it('ne renvoie jamais un token entreprise vers la forge publique', async () => {
+    const runner = vi.fn().mockRejectedValue(new Error('hôte public non authentifié'))
+    await expect(
+      loadForgeCliToken(github, runner, {
+        GH_HOST: 'github.corp.example',
+        GH_TOKEN: 'github-enterprise-secret'
+      })
+    ).resolves.toBeNull()
+    await expect(
+      loadForgeCliToken(gitlab, runner, {
+        GITLAB_HOST: 'gitlab.corp.example',
+        GITLAB_TOKEN: 'gitlab-enterprise-secret'
+      })
+    ).resolves.toBeNull()
+    expect(runner).toHaveBeenNthCalledWith(1, 'gh', [
+      'auth',
+      'token',
+      '--hostname',
+      'github.com'
+    ])
+    expect(runner).toHaveBeenNthCalledWith(2, 'glab', [
+      'config',
+      'get',
+      'token',
+      '--host',
+      'gitlab.com',
+      '--global'
+    ])
+  })
+
   it('considère deux ports du même hostname comme deux cibles distinctes', async () => {
     const runner = vi.fn().mockRejectedValue(new Error('origin non authentifié'))
     await expect(

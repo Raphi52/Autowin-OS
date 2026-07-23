@@ -28,13 +28,25 @@ function environmentToken(
   environment: Readonly<Record<string, string | undefined>>
 ): string | undefined {
   if (source.provider === 'github') {
-    if (!source.apiBaseUrl) return environment.GH_TOKEN ?? environment.GITHUB_TOKEN
+    if (!source.apiBaseUrl) {
+      const boundHost = configuredHost(environment.GH_HOST)
+      if (!boundHost || boundHost === providerHost(source)) {
+        return environment.GH_TOKEN ?? environment.GITHUB_TOKEN
+      }
+      return undefined
+    }
     if (configuredHost(environment.GH_HOST) === providerHost(source)) {
       return environment.GH_ENTERPRISE_TOKEN ?? environment.GITHUB_ENTERPRISE_TOKEN
     }
   }
   if (source.provider === 'gitlab') {
-    if (!source.baseUrl) return environment.GITLAB_TOKEN ?? environment.GLAB_TOKEN
+    if (!source.baseUrl) {
+      const boundHost = configuredHost(environment.GITLAB_HOST)
+      if (!boundHost || boundHost === providerHost(source)) {
+        return environment.GITLAB_TOKEN ?? environment.GLAB_TOKEN
+      }
+      return undefined
+    }
     if (configuredHost(environment.GITLAB_HOST) === providerHost(source)) {
       return environment.GITLAB_TOKEN ?? environment.GLAB_TOKEN
     }

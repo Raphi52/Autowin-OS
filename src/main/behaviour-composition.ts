@@ -88,7 +88,7 @@ function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
     blocks.push({
       label: 'constitution',
       value: 'Constitution (13 réflexes + limite honnête) — source UNIQUE partagée, injectée aussi au chat cockpit et à os.chat.',
-      source: 'src/main/constitution.ts:16',
+      source: 'src/main/constitution.ts:14',
       excerpt: injectedText(CONSTITUTION)
     })
   }
@@ -96,7 +96,7 @@ function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
     {
       label: `consigne:${phase}`,
       value: brief ? 'Brief de phase purpose-built injecté en tête du system.' : 'Aucun brief (retombe sur la discipline générique).',
-      source: 'src/main/phase-briefs.ts:39',
+      source: 'src/main/phase-briefs.ts:10',
       excerpt: brief ? injectedText(brief) : undefined
     }
   )
@@ -119,7 +119,7 @@ function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
     {
       label: 'projectContext',
       value: `Chaîne premier-trouvé-gagne : ${PROJECT_CONTEXT_CHAIN.join(' → ')} (cap ${PROJECT_CONTEXT_MAX_BYTES.toLocaleString('fr-FR')} octets), lue par Autowin depuis le workspace d'exécution.`,
-      source: 'src/main/context-files.ts:76'
+      source: 'src/main/context-files.ts:77'
     }
   )
   return { phase, blocks }
@@ -195,7 +195,7 @@ export function buildBehaviourComposition(
     {
       label: 'exigence de preuve (mutation)',
       value: "Une tâche de MUTATION exige une preuve (evidence mutation+verification) avant le vert, et tourne en sandbox danger-full-access ; sinon read-only. isMutationTask (regex) pilote les deux.",
-      source: 'src/main/orchestrator.ts:132'
+      source: 'src/main/orchestrator.ts:177'
     },
     {
       label: 'gate de clôture',
@@ -205,7 +205,7 @@ export function buildBehaviourComposition(
     {
       label: 'réparation bornée',
       value: '2 tentatives pour une mutation (la 2e réinjecte les raisons du gate), 1 sinon.',
-      source: 'src/main/orchestrator.ts:709'
+      source: 'src/main/orchestrator.ts:1088'
     }
   ]
 
@@ -215,21 +215,21 @@ export function buildBehaviourComposition(
       value: 'Récupéré 1×/run (POST 127.0.0.1:8765/query, Bearer token), préfixé en tête du contexte + consigne « priorise le Brain ». Dégrade silencieusement à vide (timeout 5 s / pas de token / serveur absent).',
       source: 'src/main/brain-retrieval.ts:92'
     },
-    { label: 'TÂCHE', value: 'La demande brute, toujours présente en 1ʳᵉ phase.', source: 'src/main/orchestrator.ts:205' },
+    { label: 'TÂCHE', value: 'La demande brute, toujours présente en 1ʳᵉ phase.', source: 'src/main/orchestrator.ts:541' },
     {
       label: 'portage phase→phase',
       value: 'La sortie de chaque phase est portée à la suivante, tronquée à 2000 caractères.',
-      source: 'src/main/orchestrator.ts:116'
+      source: 'src/main/orchestrator.ts:844'
     },
     {
       label: 'session-resume chaîné',
       value: "Si le provider rend un sessionId, les phases suivantes n'envoient QUE leur consigne (le reste est déjà dans l'historique de session) — contenu réellement envoyé variable/opaque ; cassé dès un fan-out.",
-      source: 'src/main/orchestrator.ts:398'
+      source: 'src/main/orchestrator.ts:544'
     },
     {
       label: 'agrégat juge',
       value: 'Le juge reçoit la concaténation des sorties de phases, chaque bloc plafonné à 6000 caractères.',
-      source: 'src/main/orchestrator.ts:482'
+      source: 'src/main/orchestrator.ts:854'
     }
   ]
 
@@ -238,7 +238,7 @@ export function buildBehaviourComposition(
       {
         label: 'constitution',
         value: "os.chat (commande chat_send) utilise la CONSTITUTION comme system par défaut du registre. C'est désormais la MÊME source que les phases orchestrées et le chat cockpit — plus de doublon kit-soul.",
-        source: 'src/main/constitution.ts:16',
+        source: 'src/main/constitution.ts:14',
         excerpt: injectedText(CONSTITUTION)
       }
     ],
@@ -246,7 +246,7 @@ export function buildBehaviourComposition(
       {
         label: 'binding de rôle',
         value: `Le chat direct utilise le binding du rôle demandé (défaut orchestrator: ${bindings.orchestrator.provider}/${bindings.orchestrator.model ?? 'défaut'}). Aucune phase, aucun Brain, aucun garde-fou.`,
-        source: 'src/main/os.ts:166'
+        source: 'src/main/os.ts:116'
       }
     ]
   }
