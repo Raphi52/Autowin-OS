@@ -29,6 +29,11 @@ export interface GitLabTicketSource extends TicketSourceBase {
 
 export type TicketSourceProfile = AzureTicketSource | GitHubTicketSource | GitLabTicketSource
 
+export interface TicketSourceSummary {
+  profile: TicketSourceProfile
+  credentialConfigured: boolean
+}
+
 export interface TicketRelation {
   kind: string
   target: string

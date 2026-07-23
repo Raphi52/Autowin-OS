@@ -94,6 +94,15 @@ import { loadTokens } from './providers/codex-auth'
 
 import { createAmitelContextProvider } from './amitel-context'
 import { readGitState, readGitDiff } from './git-read-main'
+import { TicketSourceStore } from './ticket-source-store'
+import { createTicketCredentialStore } from './ticket-credential-store'
+import { TicketService } from './tickets-service'
+import { createTicketProviderRegistry } from './ticket-providers/provider-contract'
+import { azureTicketProvider } from './ticket-providers/azure'
+import { githubTicketProvider } from './ticket-providers/github'
+import { gitlabTicketProvider } from './ticket-providers/gitlab'
+import { loadAzureDevOpsCliToken } from './azure-cli-token'
+import { registerTicketsIpc } from './tickets-ipc'
 import {
   automationAppIdentity,
   presentAutomationWindow,
@@ -367,6 +376,21 @@ const ledger = new TraceLedger(join(app.getPath('userData'), 'trace'))
 const causalTrace = new TraceStore(join(app.getPath('userData'), 'causal-trace'))
 
 const profiles = new ProfileStore(join(app.getPath('userData'), 'profiles.json'))
+const ticketSources = new TicketSourceStore(join(app.getPath('userData'), 'ticket-sources.json'))
+const ticketCredentials = createTicketCredentialStore()
+const tickets = new TicketService({
+  sourceStore: ticketSources,
+  credentialStore: ticketCredentials,
+  registry: createTicketProviderRegistry([
+    azureTicketProvider,
+    githubTicketProvider,
+    gitlabTicketProvider
+  ]),
+  tokenFallback: async (source) =>
+    source.provider === 'azure'
+      ? { token: await loadAzureDevOpsCliToken(), authScheme: 'bearer' }
+      : null
+})
 bus.trace = (name, args, ok) =>
   ledger.append({ source: 'bus', name, detail: JSON.stringify(args).slice(0, 200), ok })
 
@@ -1476,6 +1500,12 @@ app.whenReady().then(async () => {
   }
   registerStorageMigrationIpc(legacyStorageValues, canWriteMigrationMarker)
   registerChatIpc()
+  registerTicketsIpc({
+    ipc: ipcMain,
+    service: tickets,
+    assertTrusted: assertTrustedRendererSender,
+    isolated: isolatedTestInstance
+  })
   // Validation d'auth réelle en arrière-plan à chaque démarrage. Le batch est lancé avant la fenêtre,
   // sans être attendu ici : l'ouverture reste immédiate, tandis que providerStatus attend le résultat.
   startupProviderChecks = runStartupProviderProbes(

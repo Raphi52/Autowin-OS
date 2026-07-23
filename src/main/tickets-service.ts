@@ -2,16 +2,12 @@ import {
   parseTicketSourceProfile,
   type TicketListRequest,
   type TicketPage,
+  type TicketSourceSummary,
   type TicketSourceProfile
 } from '../shared/tickets'
 import type { TicketCredentialStore } from './ticket-credential-store'
 import type { TicketProviderRegistry } from './ticket-providers/provider-contract'
 import type { TicketSourceStore } from './ticket-source-store'
-
-export interface TicketSourceSummary {
-  profile: TicketSourceProfile
-  credentialConfigured: boolean
-}
 
 export interface TicketRuntimeCredential {
   token: string

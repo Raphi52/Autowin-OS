@@ -1,0 +1,472 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type {
+  TicketItem,
+  TicketPage,
+  TicketProvider,
+  TicketSourceProfile
+} from '../../../shared/tickets'
+import { ModuleHeader } from './ModuleHeader'
+import './TicketsView.css'
+
+interface TicketSourceSummary {
+  profile: TicketSourceProfile
+  credentialConfigured: boolean
+}
+
+interface SourceDraft {
+  provider: TicketProvider
+  organization: string
+  project: string
+  owner: string
+  namespace: string
+  repository: string
+  baseUrl: string
+}
+
+const SOURCE_KEY = 'autowin-os.tickets.source.v1'
+const EMPTY_DRAFT: SourceDraft = {
+  provider: 'azure',
+  organization: '',
+  project: '',
+  owner: '',
+  namespace: '',
+  repository: '',
+  baseUrl: ''
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Impossible de charger les tickets.'
+}
+
+function plainText(value: string | undefined): string {
+  if (!value) return ''
+  const element = document.createElement('div')
+  element.innerHTML = value
+  return element.textContent?.trim() ?? ''
+}
+
+function sourceFromDraft(draft: SourceDraft): TicketSourceProfile | null {
+  const repository = draft.repository.trim()
+  if (!repository) return null
+  if (draft.provider === 'azure') {
+    const organization = draft.organization.trim()
+    const project = draft.project.trim()
+    if (!organization || !project) return null
+    return {
+      id: `azure:${organization}:${project}:${repository}`,
+      label: `${organization} / ${project} / ${repository}`,
+      provider: 'azure',
+      organization,
+      project,
+      repository
+    }
+  }
+  if (draft.provider === 'github') {
+    const owner = draft.owner.trim()
+    if (!owner) return null
+    return {
+      id: `github:${owner}:${repository}`,
+      label: `${owner} / ${repository}`,
+      provider: 'github',
+      owner,
+      repository,
+      ...(draft.baseUrl.trim() ? { apiBaseUrl: draft.baseUrl.trim() } : {})
+    }
+  }
+  const namespace = draft.namespace.trim()
+  if (!namespace) return null
+  return {
+    id: `gitlab:${namespace}:${repository}`,
+    label: `${namespace} / ${repository}`,
+    provider: 'gitlab',
+    namespace,
+    repository,
+    ...(draft.baseUrl.trim() ? { baseUrl: draft.baseUrl.trim() } : {})
+  }
+}
+
+export function TicketsView({ active }: { active: boolean }): React.JSX.Element {
+  const [sources, setSources] = useState<TicketSourceSummary[]>([])
+  const [sourceId, setSourceId] = useState(() => localStorage.getItem(SOURCE_KEY) ?? '')
+  const [items, setItems] = useState<TicketItem[]>([])
+  const [selectedId, setSelectedId] = useState<string>()
+  const [cursor, setCursor] = useState<string>()
+  const [hasMore, setHasMore] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string>()
+  const [query, setQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
+  const [stateFilter, setStateFilter] = useState('')
+  const [showSourceForm, setShowSourceForm] = useState(false)
+  const [draft, setDraft] = useState<SourceDraft>(EMPTY_DRAFT)
+  const requestGeneration = useRef(0)
+
+  const selectedSource = sources.find(({ profile }) => profile.id === sourceId)?.profile
+  const selectedItem =
+    items.find((item) => `${item.sourceId}::${item.id}` === selectedId) ?? items[0]
+
+  const load = useCallback(
+    async (source: TicketSourceProfile, nextCursor?: string, append = false): Promise<void> => {
+      const generation = ++requestGeneration.current
+      setLoading(true)
+      setError(undefined)
+      try {
+        const page = (await window.api.listTickets({
+          source,
+          ...(nextCursor ? { cursor: nextCursor } : {}),
+          pageSize: 50
+        })) as TicketPage
+        if (generation !== requestGeneration.current) return
+        setItems((current) => (append ? [...current, ...page.items] : page.items))
+        setCursor(page.cursor)
+        setHasMore(page.hasMore)
+        if (!append) setSelectedId(undefined)
+      } catch (failure) {
+        if (generation !== requestGeneration.current) return
+        if (!append) setItems([])
+        setError(errorMessage(failure))
+      } finally {
+        if (generation === requestGeneration.current) setLoading(false)
+      }
+    },
+    []
+  )
+
+  useEffect(() => {
+    if (!active || typeof window.api?.ticketSources !== 'function') return
+    let disposed = false
+    const generation = ++requestGeneration.current
+    setLoading(true)
+    void window.api.ticketSources().then(
+      (nextSources) => {
+        if (disposed || generation !== requestGeneration.current) return
+        const summaries = nextSources as TicketSourceSummary[]
+        setSources(summaries)
+        const saved = summaries.find(({ profile }) => profile.id === sourceId)?.profile
+        const source = saved ?? summaries[0]?.profile
+        if (!source) {
+          setLoading(false)
+          return
+        }
+        setSourceId(source.id)
+        localStorage.setItem(SOURCE_KEY, source.id)
+        void load(source)
+      },
+      (failure) => {
+        if (!disposed && generation === requestGeneration.current) {
+          setLoading(false)
+          setError(errorMessage(failure))
+        }
+      }
+    )
+    return () => {
+      disposed = true
+      requestGeneration.current += 1
+    }
+    // The selected source is resolved once from persisted state during activation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, load])
+
+  const changeSource = (nextId: string): void => {
+    const source = sources.find(({ profile }) => profile.id === nextId)?.profile
+    if (!source) return
+    setSourceId(nextId)
+    localStorage.setItem(SOURCE_KEY, nextId)
+    setQuery('')
+    setTypeFilter('')
+    setStateFilter('')
+    void load(source)
+  }
+
+  const saveSource = async (): Promise<void> => {
+    const profile = sourceFromDraft(draft)
+    if (!profile) {
+      setError('Complète les champs obligatoires de la source.')
+      return
+    }
+    try {
+      const nextSources = (await window.api.saveTicketSource(profile)) as TicketSourceSummary[]
+      setSources(nextSources)
+      setShowSourceForm(false)
+      setDraft(EMPTY_DRAFT)
+      changeSourceFrom(nextSources, profile.id)
+    } catch (failure) {
+      setError(errorMessage(failure))
+    }
+  }
+
+  const changeSourceFrom = (nextSources: TicketSourceSummary[], nextId: string): void => {
+    const source = nextSources.find(({ profile }) => profile.id === nextId)?.profile
+    if (!source) return
+    setSourceId(source.id)
+    localStorage.setItem(SOURCE_KEY, source.id)
+    void load(source)
+  }
+
+  const types = useMemo(
+    () => [...new Set(items.map(({ type }) => type))].sort((a, b) => a.localeCompare(b)),
+    [items]
+  )
+  const states = useMemo(
+    () => [...new Set(items.map(({ state }) => state))].sort((a, b) => a.localeCompare(b)),
+    [items]
+  )
+  const visibleItems = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase()
+    return items.filter(
+      (item) =>
+        (!needle ||
+          item.title.toLocaleLowerCase().includes(needle) ||
+          item.id.toLocaleLowerCase().includes(needle) ||
+          item.assignee?.toLocaleLowerCase().includes(needle)) &&
+        (!typeFilter || item.type === typeFilter) &&
+        (!stateFilter || item.state === stateFilter)
+    )
+  }, [items, query, stateFilter, typeFilter])
+
+  const retry = (): void => {
+    if (selectedSource) void load(selectedSource)
+  }
+
+  return (
+    <section className="tickets-view" data-testid="tickets-view" data-active={active}>
+      <header className="tickets-head">
+        <ModuleHeader eyebrow="Travail synchronisé" title="Tickets" />
+        <div className="tickets-source-controls">
+          <label>
+            <span>Source</span>
+            <select
+              aria-label="Source de tickets"
+              data-testid="tickets-source"
+              value={sourceId}
+              onChange={(event) => changeSource(event.target.value)}
+            >
+              {sources.map(({ profile }) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" onClick={() => setShowSourceForm((visible) => !visible)}>
+            {showSourceForm ? 'Fermer' : 'Ajouter une source'}
+          </button>
+        </div>
+      </header>
+
+      {showSourceForm && (
+        <div className="tickets-source-form">
+          <select
+            aria-label="Fournisseur"
+            value={draft.provider}
+            onChange={(event) =>
+              setDraft({ ...EMPTY_DRAFT, provider: event.target.value as TicketProvider })
+            }
+          >
+            <option value="azure">Azure DevOps</option>
+            <option value="github">GitHub</option>
+            <option value="gitlab">GitLab</option>
+          </select>
+          {draft.provider === 'azure' && (
+            <>
+              <input
+                aria-label="Organisation Azure"
+                placeholder="Organisation"
+                value={draft.organization}
+                onChange={(event) => setDraft({ ...draft, organization: event.target.value })}
+              />
+              <input
+                aria-label="Projet Azure"
+                placeholder="Projet"
+                value={draft.project}
+                onChange={(event) => setDraft({ ...draft, project: event.target.value })}
+              />
+            </>
+          )}
+          {draft.provider === 'github' && (
+            <input
+              aria-label="Propriétaire GitHub"
+              placeholder="Organisation ou propriétaire"
+              value={draft.owner}
+              onChange={(event) => setDraft({ ...draft, owner: event.target.value })}
+            />
+          )}
+          {draft.provider === 'gitlab' && (
+            <input
+              aria-label="Namespace GitLab"
+              placeholder="Groupe / sous-groupe"
+              value={draft.namespace}
+              onChange={(event) => setDraft({ ...draft, namespace: event.target.value })}
+            />
+          )}
+          <input
+            aria-label="Dépôt"
+            placeholder="Dépôt"
+            value={draft.repository}
+            onChange={(event) => setDraft({ ...draft, repository: event.target.value })}
+          />
+          {draft.provider !== 'azure' && (
+            <input
+              aria-label="URL personnalisée"
+              placeholder="URL personnalisée (optionnel)"
+              value={draft.baseUrl}
+              onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })}
+            />
+          )}
+          <button type="button" onClick={() => void saveSource()}>
+            Enregistrer
+          </button>
+        </div>
+      )}
+
+      <div className="tickets-toolbar">
+        <input
+          type="search"
+          aria-label="Rechercher les tickets"
+          placeholder="ID, titre ou assigné…"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <select
+          aria-label="Filtrer par type"
+          value={typeFilter}
+          onChange={(event) => setTypeFilter(event.target.value)}
+        >
+          <option value="">Tous les types</option>
+          {types.map((type) => (
+            <option key={type}>{type}</option>
+          ))}
+        </select>
+        <select
+          aria-label="Filtrer par état"
+          value={stateFilter}
+          onChange={(event) => setStateFilter(event.target.value)}
+        >
+          <option value="">Tous les états</option>
+          {states.map((state) => (
+            <option key={state}>{state}</option>
+          ))}
+        </select>
+        <span>
+          {visibleItems.length} affiché(s) · {items.length} chargé(s)
+        </span>
+      </div>
+
+      <div className="tickets-content">
+        {loading && items.length === 0 ? (
+          <div className="tickets-loading" role="status" aria-label="Chargement des tickets">
+            <span className="tickets-spinner" aria-hidden="true" />
+            <span>Synchronisation des tickets…</span>
+          </div>
+        ) : error ? (
+          <div className="tickets-error" role="alert">
+            <strong>Chargement impossible</strong>
+            <span>{error}</span>
+            <button data-testid="tickets-retry" type="button" onClick={retry}>
+              Réessayer
+            </button>
+          </div>
+        ) : items.length === 0 ? (
+          <div className="tickets-empty">
+            <strong>Aucun ticket</strong>
+            <span>Cette source ne renvoie aucun élément accessible.</span>
+          </div>
+        ) : visibleItems.length === 0 ? (
+          <div className="tickets-empty">
+            <strong>Aucun résultat</strong>
+            <span>Modifie la recherche ou les filtres.</span>
+          </div>
+        ) : (
+          <>
+            <div className="tickets-list" role="list" aria-label="Tickets">
+              {visibleItems.map((item) => {
+                const identity = `${item.sourceId}::${item.id}`
+                return (
+                  <button
+                    key={identity}
+                    type="button"
+                    role="listitem"
+                    data-testid="ticket-row"
+                    className={selectedItem === item ? 'is-selected' : ''}
+                    onClick={() => setSelectedId(identity)}
+                  >
+                    <span className="tickets-id">#{item.id}</span>
+                    <strong>{item.title}</strong>
+                    <span className="tickets-type">{item.type}</span>
+                    <span className="tickets-state">{item.state}</span>
+                    <span>{item.assignee || 'Non assigné'}</span>
+                  </button>
+                )
+              })}
+              {hasMore ? (
+                <button
+                  className="tickets-load-more"
+                  type="button"
+                  disabled={loading}
+                  onClick={() =>
+                    selectedSource && cursor ? void load(selectedSource, cursor, true) : undefined
+                  }
+                >
+                  {loading ? 'Chargement…' : 'Charger la suite'}
+                </button>
+              ) : (
+                <span data-testid="tickets-page-end" className="tickets-page-end">
+                  Fin de la liste
+                </span>
+              )}
+            </div>
+            {selectedItem && (
+              <article className="tickets-detail" data-testid="ticket-detail">
+                <div className="tickets-detail-title">
+                  <span>
+                    #{selectedItem.id} · {selectedItem.type}
+                  </span>
+                  <h2>{selectedItem.title}</h2>
+                </div>
+                <dl>
+                  <div>
+                    <dt>État</dt>
+                    <dd>{selectedItem.state}</dd>
+                  </div>
+                  <div>
+                    <dt>Assigné</dt>
+                    <dd>{selectedItem.assignee || 'Non assigné'}</dd>
+                  </div>
+                  <div>
+                    <dt>Priorité</dt>
+                    <dd>{selectedItem.priority ?? '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Mis à jour</dt>
+                    <dd>{selectedItem.updatedAt}</dd>
+                  </div>
+                </dl>
+                <section>
+                  <h3>Description</h3>
+                  <p>{plainText(selectedItem.description) || 'Aucune description.'}</p>
+                </section>
+                <section>
+                  <h3>Relations</h3>
+                  {selectedItem.relations?.length ? (
+                    <ul>
+                      {selectedItem.relations.map((relation, index) => (
+                        <li key={`${relation.kind}:${relation.target}:${index}`}>
+                          <span>{relation.kind}</span> <strong>#{relation.target}</strong>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>Aucune relation.</p>
+                  )}
+                </section>
+                <a href={selectedItem.url} target="_blank" rel="noreferrer">
+                  Ouvrir dans {selectedSource?.provider ?? 'la source'}
+                </a>
+              </article>
+            )}
+          </>
+        )}
+      </div>
+    </section>
+  )
+}

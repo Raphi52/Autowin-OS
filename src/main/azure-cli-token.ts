@@ -11,7 +11,10 @@ export type AzureCliRunner = (
 ) => Promise<{ stdout: string; stderr: string }>
 
 const defaultRunner: AzureCliRunner = async (executable, args) => {
-  const result = await execFileAsync(executable, args, {
+  const windowsCommand = process.platform === 'win32'
+  const target = windowsCommand ? (process.env.ComSpec ?? 'cmd.exe') : executable
+  const targetArgs = windowsCommand ? ['/d', '/s', '/c', executable, ...args] : args
+  const result = await execFileAsync(target, targetArgs, {
     timeout: 10_000,
     windowsHide: true,
     maxBuffer: 16_384,
