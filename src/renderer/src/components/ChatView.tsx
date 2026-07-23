@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Markdown, extractRecommendation } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
+import { ChatWorktreePanel } from './ChatWorktreePanel'
 import { ActivityPane } from './ActivityPane'
 import { ModuleHeader } from './ModuleHeader'
 import {
@@ -1638,6 +1639,8 @@ export function ChatView({
             })}
           </div>
         )}
+
+        <ChatWorktreePanel />
 
         <div
           className="chat-scroll scroll-y"

@@ -1,0 +1,39 @@
+/* Bande worktree intégrée au chat — Linéaire sobre, hairlines, zéro halo. */
+.chat-worktree {
+  margin: 4px 0 8px;
+  border: 1px solid var(--line2, #31373f);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface2, #191d23);
+}
+.cwt-strip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: var(--text, #e6e9ee);
+  text-align: left;
+  font-size: 12.5px;
+}
+.cwt-strip:hover {
+  background: var(--surface, #14171c);
+}
+.cwt-glyph {
+  font-size: 14px;
+}
+.cwt-label {
+  font-weight: 600;
+  flex: 1;
+}
+.cwt-chevron {
+  color: var(--muted, #8b939f);
+  font-size: 11px;
+}
+.cwt-body {
+  padding: 4px 12px 12px;
+  border-top: 1px solid var(--line, #262b33);
+}
