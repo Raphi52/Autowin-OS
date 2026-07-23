@@ -111,6 +111,19 @@ describe('AppCommandBus authority policy', () => {
     await expect(bus.snapshot()).resolves.toMatchObject({ tab: 'agent-studio' })
   })
 
+  it('snapshotForPrompt : projection minimale — pas de conversations inline, runs bloqués seulement', async () => {
+    const os = fakeOs()
+    const bus = new AppCommandBus(os, () => {})
+    const prompt = await bus.snapshotForPrompt()
+    // Le poids (liste des conversations) n'est PAS injecté : seul le count.
+    expect(prompt).not.toHaveProperty('conversations')
+    expect(typeof prompt.conversationsCount).toBe('number')
+    // Runs : uniquement les bloqués, et sans le champ `blocked` (redondant après filtre).
+    expect(prompt.runsBlocked.every((r) => 'subject' in r && !('blocked' in r))).toBe(true)
+    // Champs utiles conservés.
+    expect(prompt).toMatchObject({ tab: expect.any(String), providers: expect.any(Array) })
+  })
+
   it('enforces conversation Plan and Auto modes before any mutation', async () => {
     const os = fakeOs()
     const bus = new AppCommandBus(os, () => {})

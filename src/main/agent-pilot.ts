@@ -111,7 +111,7 @@ export class AgentPilot {
     const binding = this.roles.getBinding('orchestrator')
     const provider = binding.provider
     const catalog = this.bus.catalog()
-    const snapshot = await this.bus.snapshot()
+    const snapshot = await this.bus.snapshotForPrompt()
 
     const system =
       `Tu PILOTES l'application "Autowin OS" via des commandes. Objectif de l'utilisateur : "${goal}".\n` +
@@ -164,7 +164,7 @@ export class AgentPilot {
         results.push(`${c.name} → ${r.ok ? JSON.stringify(r.data) : 'ERREUR ' + r.error}`)
       }
 
-      const state = await this.bus.snapshot()
+      const state = await this.bus.snapshotForPrompt()
       convo.push(`TU AS ÉMIS: ${text}`)
       convo.push(`RÉSULTATS:\n${results.join('\n')}\n\nÉTAT MAINTENANT:\n${JSON.stringify(state)}`)
     }
@@ -197,7 +197,7 @@ export class AgentPilot {
     const binding = this.roles.getBinding('orchestrator')
     const provider = binding.provider
     const catalog = this.bus.catalog()
-    const snapshot = await this.bus.snapshot()
+    const snapshot = await this.bus.snapshotForPrompt()
 
     const latestUserMessage = [...history].reverse().find((message) => message.role === 'user')?.content
     const retrievedContext =
@@ -435,7 +435,7 @@ export class AgentPilot {
         tokenIndex += 1
       }
 
-      const state = await this.bus.snapshot()
+      const state = await this.bus.snapshotForPrompt()
       convo.push(`TU AS ÉMIS: ${text}`)
       convo.push(`RÉSULTATS:\n${results.join('\n')}\n\nÉTAT MAINTENANT:\n${JSON.stringify(state)}`)
     }

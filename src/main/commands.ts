@@ -54,8 +54,23 @@ export interface AppSnapshot {
   budgetUsd: number
 }
 
+/**
+ * Projection MINIMALE de l'état, injectée dans le PROMPT de l'agent à chaque tour
+ * (≠ `AppSnapshot`, destiné à l'UI complète via `os:appState`). On évite d'injecter les
+ * ~60 conversations et les runs non bloqués : c'était l'essentiel du poids. L'agent liste
+ * les conversations à la demande via une commande, il n'en a pas besoin inline.
+ */
+export interface PromptSnapshot {
+  tab: AppDestination
+  activeConversationId?: string
+  providers: string[]
+  pendingDecisions: Array<{ id: string; question: string }>
+  runsBlocked: Array<{ subject: string; status: string }>
+  conversationsCount: number
+}
+
 export type AppEvent =
-  | { type: 'navigate'; tab: string }
+  | { type: 'navigate'; tab: string; origin?: string }
   | { type: 'refresh'; scope: string }
   | { type: 'toast'; text: string }
   // Orchestration LIVE (statut temps réel + fil des sous-agents), diffusée par étape.
@@ -385,6 +400,21 @@ export class AppCommandBus {
     }
   }
 
+  /** Version réduite pour l'injection prompt — voir {@link PromptSnapshot}. */
+  async snapshotForPrompt(): Promise<PromptSnapshot> {
+    const full = await this.snapshot()
+    return {
+      tab: full.tab,
+      activeConversationId: full.activeConversationId,
+      providers: full.providers,
+      pendingDecisions: full.pendingDecisions,
+      runsBlocked: full.runs
+        .filter((r) => r.blocked)
+        .map((r) => ({ subject: r.subject, status: r.status })),
+      conversationsCount: full.conversations.length
+    }
+  }
+
   /** Exécute une commande nommée, mute l'app, diffuse le changement. */
   async exec(
     name: string,
@@ -430,7 +460,12 @@ export class AppCommandBus {
         const requestedTab = s('tab')
         const location = resolveAppLocation(requestedTab)
         this.tab = location.destination
-        this.broadcast({ type: 'navigate', tab: requestedTab })
+        const origin = typeof a.origin === 'string' ? a.origin : undefined
+        this.broadcast({
+          type: 'navigate',
+          tab: requestedTab,
+          ...(origin ? { origin } : {})
+        })
         return { tab: location.destination, section: location.section }
       }
       case 'chat_send': {
