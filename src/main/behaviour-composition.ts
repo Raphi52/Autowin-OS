@@ -66,10 +66,13 @@ export interface BehaviourComposition {
   direct: DirectBehaviour
 }
 
-/** Coupe un long texte injecté pour l'aperçu (le texte complet reste dans la source). */
-function excerpt(text: string, max = 240): string {
-  const t = text.trim().replace(/\s+/g, ' ')
-  return t.length > max ? `${t.slice(0, max)}…` : t
+/**
+ * Texte injecté COMPLET pour le panneau dépliable « texte injecté ». Le rendu est un <pre>
+ * qui scrolle (pre-wrap + max-height + overflow:auto) → on montre l'intégralité, retours à la
+ * ligne préservés (ne pas collapser les espaces : ce texte EST le prompt réellement injecté).
+ */
+function injectedText(text: string): string {
+  return text.trim()
 }
 
 /** Phases orchestrées dont on décrit la composition (le juge/synthèse/réparation dérivent de celles-ci). */
@@ -82,7 +85,7 @@ function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
       label: `consigne:${phase}`,
       value: brief ? 'Brief de phase purpose-built injecté en tête du system.' : 'Aucun brief (retombe sur la discipline générique).',
       source: 'src/main/phase-briefs.ts:39',
-      excerpt: brief ? excerpt(brief) : undefined
+      excerpt: brief ? injectedText(brief) : undefined
     }
   ]
   // La synthèse fan-out et le juge n'injectent PAS la discipline de pipeline (orchestrator.ts:306,527).
@@ -91,7 +94,7 @@ function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
       label: 'discipline',
       value: 'Discipline de pipeline (frame→terrain→build→judge) ajoutée au system.',
       source: 'src/main/pipeline-discipline.ts:6',
-      excerpt: excerpt(PIPELINE_DISCIPLINE_INSTRUCTION)
+      excerpt: injectedText(PIPELINE_DISCIPLINE_INSTRUCTION)
     })
   }
   blocks.push(
@@ -99,7 +102,7 @@ function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
       label: 'style',
       value: 'Profil de réponse concis-structuré.',
       source: 'src/main/response-style.ts:2',
-      excerpt: excerpt(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION)
+      excerpt: injectedText(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION)
     },
     {
       label: 'projectContext',

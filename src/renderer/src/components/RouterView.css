@@ -6,11 +6,13 @@
   flex-direction: column;
   padding: 28px 30px 24px;
   color: var(--text);
+  /* Conteneur de vue OPAQUE (noir 95%) + bord blanc arrondi, comme les autres vues
+     (cf. .capability-cockpit). En thème serious, --surface-page vaut `transparent` (backdrop de page) :
+     ICI on veut le panneau plein, donc --surface-panel (rgba(5,5,6,.95)). */
   border: 1px solid var(--container-border);
   border-radius: var(--container-radius-page);
-  background: var(--surface-page);
-  box-shadow: var(--container-shadow);
-  backdrop-filter: blur(var(--container-blur));
+  background: var(--surface-panel);
+  overflow-y: auto;
 }
 .router-head {
   min-height: 54px;
