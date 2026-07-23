@@ -7,6 +7,12 @@ import type {
   StreamChunk
 } from './types'
 
+function assertOutsideLegacyFabricBridge(providerId: string): void {
+  if (providerId.startsWith('fabric:')) {
+    throw new Error('Une ressource Fabric exige autowin.tool-stream/v1, hors bridge legacy')
+  }
+}
+
 /**
  * Routeur d'adaptateurs. Le seul point par lequel l'app envoie un tour :
  * choisit l'adaptateur par id, INJECTE le bloc système (kit condensé) de façon
@@ -43,10 +49,9 @@ export class ProviderRegistry {
     model: string
     reasoningEffort?: string
   }): void {
-    const adapter = this.get(route.provider)
-    const isFabricLocalTools =
-      route.provider.startsWith('fabric:') && adapter.supportsExecution !== true
-    if (route.provider !== 'omniroute' && !isFabricLocalTools) {
+    assertOutsideLegacyFabricBridge(route.provider)
+    this.get(route.provider)
+    if (route.provider !== 'omniroute') {
       throw new Error('Transport conversationnel non autorisé')
     }
     if (!route.model.trim()) throw new Error('Modèle de transport vide')
@@ -62,6 +67,7 @@ export class ProviderRegistry {
   }
 
   private resolve(id: string, opts: SendOptions): { id: string; opts: SendOptions } {
+    assertOutsideLegacyFabricBridge(id)
     if (opts.execution) {
       const requested = this.get(id)
       if (requested.supportsExecution === true) return { id, opts }
@@ -80,17 +86,12 @@ export class ProviderRegistry {
       }
       return { id, opts }
     }
-    if (!this.conversationTransport)
-      throw new Error('OmniRoute obligatoire : aucun transport conversationnel configuré')
-    return {
-      id: this.conversationTransport.provider,
-      opts: {
-        ...opts,
-        model: this.conversationTransport.model,
-        // L'effort choisi pour la route (UI) prime ; sinon on garde celui de la requête.
-        reasoningEffort: this.conversationTransport.reasoningEffort ?? opts.reasoningEffort
-      }
-    }
+    // Chat direct : route vers l'adaptateur du provider DEMANDÉ (le binding de rôle, ex. claude/
+    // codex/kimi) tel quel. Chaque adaptateur streame nativement en mode conversation (send =
+    // AsyncGenerator yield delta). Plus d'intermédiaire « transport » : le provider affiché EST
+    // celui qui répond (fin de la redirection OmniRoute silencieuse + du throw obligatoire).
+    this.get(id)
+    return { id, opts }
   }
 
   describePrompt(

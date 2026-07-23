@@ -5,33 +5,34 @@ import type { Message, StreamChunk } from './types'
 
 const conv: Message[] = [{ role: 'user', content: 'bonjour' }]
 
-function routedRegistry(system?: string): ProviderRegistry {
-  const registry = new ProviderRegistry(system).register(new MockProvider('omniroute'))
-  registry.setConversationTransport({ provider: 'omniroute', model: 'auto/coding' })
-  return registry
+/** Registre de chat direct : le provider demandé répond LUI-MÊME (plus d'intermédiaire OmniRoute). */
+function directRegistry(system?: string): ProviderRegistry {
+  return new ProviderRegistry(system)
+    .register(new MockProvider('claude'))
+    .register(new MockProvider('codex'))
 }
 
 describe('ProviderRegistry — contrat d’adaptateur', () => {
-  it('refuse une conversation tant qu’OmniRoute n’est pas configuré', async () => {
-    const reg = new ProviderRegistry()
-      .register(new MockProvider('claude'))
-      .register(new MockProvider('codex'))
+  it('route une conversation DIRECTEMENT vers le provider demandé (plus d’OmniRoute)', async () => {
+    const reg = directRegistry()
     expect(reg.ids().sort()).toEqual(['claude', 'codex'])
-    await expect(reg.send('codex', conv)).rejects.toThrow(/OmniRoute obligatoire/i)
+    const r = await reg.send('codex', conv)
+    expect(r.provider).toBe('codex')
+    expect(r.text).toContain('echo(codex): bonjour')
   })
 
   it('jette sur provider inconnu (contrat explicite)', async () => {
     const reg = new ProviderRegistry()
     expect(() => reg.get('inconnu')).toThrow(/Provider inconnu/)
+    await expect(reg.send('inconnu', conv)).rejects.toThrow(/Provider inconnu/)
   })
 
   it('streame des chunks PUIS retourne un résultat consolidé', async () => {
-    const reg = routedRegistry()
+    const reg = directRegistry()
     const chunks: StreamChunk[] = []
     const r = await reg.send('claude', conv, {}, (c) => chunks.push(c))
     expect(chunks.length).toBeGreaterThan(0)
-    expect(r.text).toContain('echo(omniroute): bonjour')
-    // le texte final = concaténation des deltas (cohérence stream/final)
+    expect(r.text).toContain('echo(claude): bonjour')
     expect(
       r.text.startsWith(
         chunks
@@ -44,15 +45,14 @@ describe('ProviderRegistry — contrat d’adaptateur', () => {
 
   it('INJECTE le bloc système du registre sur chaque tour (preuve d’injection)', async () => {
     const soul = 'REGLE 2: exiger un artefact vérifié avant « done ».\n(reste du kit…)'
-    const reg = routedRegistry(soul)
+    const reg = directRegistry(soul)
     const r = await reg.send('claude', conv)
     expect(r.systemInjected).toBe(true)
-    // le mock "cite" la 1re ligne du système → équivalent d'un modèle appliquant SOUL
     expect(r.text).toContain('REGLE 2')
   })
 
   it('sans bloc système → pas d’injection (contrôle négatif)', async () => {
-    const reg = routedRegistry()
+    const reg = directRegistry()
     const r = await reg.send('claude', conv)
     expect(r.systemInjected).toBe(false)
     expect(r.text).not.toContain('system-applied')
@@ -68,82 +68,59 @@ describe('ProviderRegistry — contrat d’adaptateur', () => {
   })
 
   it('opts.system surcharge le bloc par défaut du registre', async () => {
-    const reg = routedRegistry('DEFAUT')
+    const reg = directRegistry('DEFAUT')
     const r = await reg.send('claude', conv, { system: 'OVERRIDE-KIT' })
     expect(r.text).toContain('OVERRIDE-KIT')
     expect(r.text).not.toContain('DEFAUT')
   })
 
-  it('décrit sans troncature l’enveloppe réellement remise à l’adaptateur', () => {
+  it('décrit sans troncature l’enveloppe réellement remise à l’adaptateur (provider demandé)', () => {
     const system = `SOUL + SKILL\n${'instruction '.repeat(2_000)}`
-    const reg = routedRegistry(system)
-    const envelope = reg.describePrompt('claude', conv, {}, 'claude-sonnet')
+    const reg = directRegistry(system)
+    const envelope = reg.describePrompt('claude', conv, { model: 'claude-sonnet' })
     expect(envelope.system).toBe(system)
     expect(envelope.messages).toEqual(conv)
-    expect(envelope.provider).toBe('omniroute')
-    expect(envelope.model).toBe('auto/coding')
+    expect(envelope.provider).toBe('claude')
+    expect(envelope.model).toBe('claude-sonnet')
     expect(envelope.limitation).toMatch(/provider/i)
   })
 
-  it('remplace every conversational provider by OmniRoute when migration is active', async () => {
-    const direct = new MockProvider('claude')
-    const directSend = vi.spyOn(direct, 'send')
-    const omniRoute = new MockProvider('omniroute')
-    const reg = new ProviderRegistry().register(direct).register(omniRoute)
-    reg.setConversationTransport({ provider: 'omniroute', model: 'auto/coding' })
+  it('le provider demandé répond lui-même — aucune redirection silencieuse', async () => {
+    const claude = new MockProvider('claude')
+    const claudeSend = vi.spyOn(claude, 'send')
+    const codex = new MockProvider('codex')
+    const codexSend = vi.spyOn(codex, 'send')
+    const reg = new ProviderRegistry().register(claude).register(codex)
     const result = await reg.send('claude', conv, { model: 'claude-opus' })
-    expect(result.provider).toBe('omniroute')
-    expect(directSend).not.toHaveBeenCalled()
-    const prompt = reg.describePrompt('codex', conv, { model: 'gpt-direct' })
-    expect(prompt.provider).toBe('omniroute')
-    expect(prompt.model).toBe('auto/coding')
+    expect(result.provider).toBe('claude')
+    expect(claudeSend).toHaveBeenCalled()
+    expect(codexSend).not.toHaveBeenCalled()
   })
 
-  it('conserve l’exécution locale outillée sans ouvrir de transport conversationnel direct', async () => {
-    const direct = Object.assign(new MockProvider('codex'), { supportsExecution: true as const })
-    const omniRoute = new MockProvider('omniroute')
-    const reg = new ProviderRegistry().register(direct).register(omniRoute)
-    reg.setConversationTransport({ provider: 'omniroute', model: 'auto/coding' })
-    expect(
-      (
-        await reg.send('codex', conv, {
-          execution: { cwd: 'C:\\workspace', sandbox: 'read-only' }
-        })
-      ).provider
-    ).toBe('codex')
+  it('conserve l’exécution locale outillée (fallback codex) pour un provider non-exécuteur', async () => {
+    const codex = Object.assign(new MockProvider('codex'), { supportsExecution: true as const })
+    const chat = new MockProvider('kimi')
+    const reg = new ProviderRegistry().register(chat).register(codex)
+    const r = await reg.send('kimi', conv, {
+      execution: { cwd: 'C:\\workspace', sandbox: 'read-only' }
+    })
+    expect(r.provider).toBe('codex')
   })
 
-  it('autorise une ressource Fabric enregistrée comme transport conversationnel local-tools', async () => {
+  it('refuse toute substitution d’exécuteur pour une route Fabric', async () => {
     const fabricId = 'fabric:node-gpu-01:qwen3-32b'
     const fabric = new MockProvider(fabricId)
-    const reg = new ProviderRegistry().register(fabric)
+    const fabricSend = vi.spyOn(fabric, 'send')
+    const codex = Object.assign(new MockProvider('codex'), { supportsExecution: true as const })
+    const codexSend = vi.spyOn(codex, 'send')
+    const reg = new ProviderRegistry().register(fabric).register(codex)
 
-    reg.setConversationTransport({ provider: fabricId, model: 'qwen3-32b' })
-    const result = await reg.send('claude', conv)
-
-    expect(result.provider).toBe(fabricId)
-    expect(reg.getConversationTransport()).toEqual({ provider: fabricId, model: 'qwen3-32b' })
-  })
-
-  it('confie automatiquement une action OmniRoute au runner local outillé', async () => {
-    const direct = Object.assign(new MockProvider('codex'), { supportsExecution: true as const })
-    const directSend = vi.spyOn(direct, 'send')
-    const omniRoute = new MockProvider('omniroute')
-    const omniSend = vi.spyOn(omniRoute, 'send')
-    const reg = new ProviderRegistry().register(direct).register(omniRoute)
-    reg.setConversationTransport({ provider: 'omniroute', model: 'auto/coding' })
-
-    const result = await reg.send('omniroute', conv, {
-      model: 'auto/best-coding',
-      reasoningEffort: 'none',
-      execution: { cwd: 'C:\\workspace', sandbox: 'workspace-write' }
-    })
-
-    expect(result.provider).toBe('codex')
-    expect(directSend).toHaveBeenCalledWith(
-      conv,
-      expect.objectContaining({ model: undefined, reasoningEffort: undefined })
-    )
-    expect(omniSend).not.toHaveBeenCalled()
+    await expect(
+      reg.send(fabricId, conv, {
+        execution: { cwd: 'C:\\workspace', sandbox: 'workspace-write' }
+      })
+    ).rejects.toThrow(/tool-stream/i)
+    expect(fabricSend).not.toHaveBeenCalled()
+    expect(codexSend).not.toHaveBeenCalled()
   })
 })
