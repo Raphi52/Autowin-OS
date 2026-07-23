@@ -112,7 +112,7 @@ export const gitlabTicketProvider: TicketProviderAdapter = {
       fetchFn,
       headers: {
         accept: 'application/json',
-        authorization: `Bearer ${context.token}`
+        ...(context.token ? { authorization: `Bearer ${context.token}` } : {})
       }
     })
     if (!Array.isArray(payload)) {

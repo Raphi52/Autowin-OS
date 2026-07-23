@@ -163,6 +163,19 @@ describe('adaptateur Azure DevOps Tickets', () => {
     })
   })
 
+  it('transmet un jeton Azure CLI comme Bearer OAuth', async () => {
+    const fetchFn = vi.fn().mockResolvedValueOnce(json({ workItems: [] }))
+
+    await azureTicketProvider.list(
+      { source: DEFAULT_TICKET_SOURCE },
+      { token: 'oauth-secret', authScheme: 'bearer', fetchFn: fetchFn as typeof fetch }
+    )
+
+    expect(fetchFn.mock.calls[0][1]?.headers).toEqual(
+      expect.objectContaining({ authorization: 'Bearer oauth-secret' })
+    )
+  })
+
   it('classe une forme de réponse Azure invalide via le contrat fournisseur', async () => {
     const fetchFn = vi.fn().mockResolvedValueOnce(json({ workItems: 'incorrect' }))
 

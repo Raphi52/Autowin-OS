@@ -28,6 +28,7 @@ export class TicketProviderError extends Error {
 
 export interface TicketProviderContext {
   token: string
+  authScheme?: 'bearer' | 'pat'
   fetchFn?: typeof fetch
 }
 

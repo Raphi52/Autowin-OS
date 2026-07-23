@@ -93,13 +93,14 @@ describe('adaptateur GitLab Issues', () => {
           source: { ...source, baseUrl: 'https://gitlab.example.test/' },
           pageSize: 0
         },
-        { token: 'secret', fetchFn: fetchFn as typeof fetch }
+        { token: '', fetchFn: fetchFn as typeof fetch }
       )
     ).resolves.toEqual({ items: [], hasMore: false })
 
     expect(fetchFn.mock.calls[0][0]).toBe(
       'https://gitlab.example.test/api/v4/projects/group%2Fsubgroup%2Fproject/issues?scope=all&state=all&per_page=1&page=1'
     )
+    expect(fetchFn.mock.calls[0][1]?.headers).not.toHaveProperty('authorization')
   })
 
   it('rejette une charge utile qui ne contient pas une liste', async () => {

@@ -107,13 +107,14 @@ describe('adaptateur GitHub Issues', () => {
           source: { ...source, apiBaseUrl: 'https://github.example.test/api/v3/' },
           pageSize: 0
         },
-        { token: 'secret', fetchFn: fetchFn as typeof fetch }
+        { token: '', fetchFn: fetchFn as typeof fetch }
       )
     ).resolves.toEqual({ items: [], hasMore: false })
 
     expect(fetchFn.mock.calls[0][0]).toBe(
       'https://github.example.test/api/v3/repos/openai/codex/issues?state=all&per_page=1&page=1'
     )
+    expect(fetchFn.mock.calls[0][1]?.headers).not.toHaveProperty('authorization')
   })
 
   it('rejette une charge utile qui ne contient pas une liste', async () => {

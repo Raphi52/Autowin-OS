@@ -13,11 +13,16 @@ export interface TicketSourceSummary {
   credentialConfigured: boolean
 }
 
+export interface TicketRuntimeCredential {
+  token: string
+  authScheme: 'bearer' | 'pat'
+}
+
 export interface TicketServiceDependencies {
   sourceStore: TicketSourceStore
   credentialStore: TicketCredentialStore
   registry: TicketProviderRegistry
-  tokenFallback?: (source: TicketSourceProfile) => Promise<string | null>
+  tokenFallback?: (source: TicketSourceProfile) => Promise<TicketRuntimeCredential | null>
 }
 
 function sameProfile(left: TicketSourceProfile, right: TicketSourceProfile): boolean {
@@ -78,13 +83,16 @@ export class TicketService {
       storedCredential === null && this.dependencies.tokenFallback
         ? await this.dependencies.tokenFallback(source)
         : null
+    const credential: TicketRuntimeCredential = storedCredential
+      ? { token: storedCredential, authScheme: source.provider === 'azure' ? 'pat' : 'bearer' }
+      : (fallbackCredential ?? { token: '', authScheme: 'bearer' })
     return this.dependencies.registry.list(
       {
         source,
         ...(value.cursor ? { cursor: value.cursor } : {}),
         ...(value.pageSize ? { pageSize: value.pageSize } : {})
       },
-      { token: storedCredential ?? fallbackCredential ?? '' }
+      credential
     )
   }
 }

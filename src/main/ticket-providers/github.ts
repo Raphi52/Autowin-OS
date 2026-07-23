@@ -157,7 +157,7 @@ async function listGitHubIssues(
       fetchFn: captureFetch,
       headers: {
         accept: 'application/vnd.github+json',
-        authorization: `Bearer ${context.token}`,
+        ...(context.token ? { authorization: `Bearer ${context.token}` } : {}),
         'x-github-api-version': '2022-11-28'
       }
     }

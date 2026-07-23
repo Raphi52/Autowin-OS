@@ -60,11 +60,13 @@ function readCursor(cursor: string | undefined): number | undefined {
   return value
 }
 
-function authorizationHeader(token: string): string {
-  if (!token) {
+function authorizationHeader(context: TicketProviderContext): string {
+  if (!context.token) {
     throw new TicketProviderError('AUTH_REQUIRED', 'Authentification requise.')
   }
-  return `Basic ${Buffer.from(`:${token}`, 'utf8').toString('base64')}`
+  return context.authScheme === 'bearer'
+    ? `Bearer ${context.token}`
+    : `Basic ${Buffer.from(`:${context.token}`, 'utf8').toString('base64')}`
 }
 
 function assertWiqlResponse(value: unknown): asserts value is AzureWiqlResponse {
@@ -209,7 +211,7 @@ export const azureTicketProvider: TicketProviderAdapter = {
     const source = request.source
     const pageSize = readPageSize(request.pageSize)
     const cursor = readCursor(request.cursor)
-    const authorization = authorizationHeader(context.token)
+    const authorization = authorizationHeader(context)
     const organization = encodeURIComponent(source.organization)
     const project = encodeURIComponent(source.project)
     const baseUrl = `https://dev.azure.com/${organization}/${project}`

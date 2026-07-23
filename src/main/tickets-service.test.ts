@@ -37,7 +37,10 @@ describe('service Tickets côté main', () => {
 
   it('utilise le fallback Azure CLI sans exposer le credential', async () => {
     const deps = fixture()
-    const tokenFallback = vi.fn(async () => 'azure-cli-secret')
+    const tokenFallback = vi.fn(async () => ({
+      token: 'azure-cli-secret',
+      authScheme: 'bearer' as const
+    }))
     const service = new TicketService({ ...deps, tokenFallback })
 
     await service.list({ source: DEFAULT_TICKET_SOURCE, pageSize: 50 })
@@ -45,7 +48,7 @@ describe('service Tickets côté main', () => {
     expect(tokenFallback).toHaveBeenCalledWith(DEFAULT_TICKET_SOURCE)
     expect(deps.registry.list).toHaveBeenCalledWith(
       { source: DEFAULT_TICKET_SOURCE, pageSize: 50 },
-      { token: 'azure-cli-secret' }
+      { token: 'azure-cli-secret', authScheme: 'bearer' }
     )
   })
 
