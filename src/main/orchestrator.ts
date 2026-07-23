@@ -109,6 +109,21 @@ export interface OrchestratorDeps {
    * puis synthèse par QUORUM. <2 ou absent → un seul juge (rétrocompat).
    */
   judgeFanOut?: () => Array<{ provider: string; model?: string; reasoningEffort?: ReasoningEffort }>
+  /**
+   * Volet B "gestion worktree par défaut" (flip live). Si fourni, un run de MUTATION s'exécute dans
+   * une COPIE isolée (worktree) dont le cwd remplace `executionWorkspace` ; à la fin, le travail est
+   * fusionné en full-auto (ou conflit → merge assisté). Absent → comportement historique (workspace
+   * unique partagé). Injecté par AutowinOS ; les tests le laissent absent (rétrocompat HARD).
+   */
+  worktrees?: RunWorktrees
+}
+
+/** Contrat minimal du coordinateur worktree niveau run (implémenté par RunWorktreeCoordinator). */
+export interface RunWorktrees {
+  /** Renvoie le cwd isolé du run (mutation) ou undefined (non-mutation → base). */
+  begin(runId: string, agentName: string, isMutation: boolean): string | undefined
+  /** Fusionne (full-auto) ou bascule conflit ; appelé en fin de run, y compris sur erreur. */
+  end(runId: string): unknown
 }
 
 const MUTATION_TASK =
@@ -156,9 +171,35 @@ export function evidenceSatisfiesTask(task: string, evidence: ExecutionEvidence[
 export class Orchestrator {
   constructor(private readonly deps: OrchestratorDeps) {}
 
-  /** Exécute une tâche à travers le pipeline discipliné complet (appels réels). */
+  private runSeq = 0
+
+  /**
+   * Flip live worktree : enveloppe le pipeline. Un run de mutation reçoit une copie isolée (cwd),
+   * fusionnée en fin (full-auto / conflit) via le coordinateur. Sans coordinateur → cwd = base
+   * (comportement historique intact).
+   */
   async run(
     task: string,
+    onStep?: (s: OrchestrationStep) => void,
+    onPhase?: (p: OrchestrationPhase) => void,
+    onDelta?: (step: 'exec' | 'judge', delta: string) => void,
+    signal?: AbortSignal
+  ): Promise<OrchestrationResult> {
+    const runId = `run-${++this.runSeq}`
+    const isMut = isMutationTask(task)
+    const workCwd =
+      this.deps.worktrees?.begin(runId, 'Agent', isMut) ?? this.deps.executionWorkspace
+    try {
+      return await this.runInner(task, workCwd, onStep, onPhase, onDelta, signal)
+    } finally {
+      this.deps.worktrees?.end(runId)
+    }
+  }
+
+  /** Exécute une tâche à travers le pipeline discipliné complet (appels réels). */
+  private async runInner(
+    task: string,
+    workCwd: string,
     onStep?: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
@@ -239,7 +280,7 @@ export class Orchestrator {
               systemBlocks: fanSystemBlocks,
               model: member.model,
               reasoningEffort: member.reasoningEffort,
-              execution: { cwd: this.deps.executionWorkspace, sandbox },
+              execution: { cwd: workCwd, sandbox },
               signal
             }
             const startedAt = performance.now()
@@ -346,7 +387,7 @@ export class Orchestrator {
           systemBlocks: synthParts.filter((p) => p.text).map((p) => ({ name: p.name, chars: p.text.length })),
           model: orchBinding.model,
           reasoningEffort: orchBinding.reasoningEffort,
-          execution: { cwd: this.deps.executionWorkspace, sandbox: 'read-only' },
+          execution: { cwd: workCwd, sandbox: 'read-only' },
           signal
         }
         const synthMessages = [
@@ -431,7 +472,7 @@ export class Orchestrator {
         reasoningEffort: phaseBinding.reasoningEffort,
         resumeSessionId: prevSessionId,
         execution: {
-          cwd: this.deps.executionWorkspace,
+          cwd: workCwd,
           // B3 — une tâche NON-mutation (cadrage/analyse) n'a aucune raison d'écrire : sandbox
           // read-only → pas d'effet de bord (ex. RUN.md fantôme dans Audit/). Mutation → full access.
           sandbox: isMutationTask(task) ? 'danger-full-access' : 'read-only'
@@ -575,7 +616,7 @@ export class Orchestrator {
         systemBlocks: judgeBlocks,
         model: judgeBinding.model,
         reasoningEffort: judgeBinding.reasoningEffort,
-        execution: { cwd: this.deps.executionWorkspace, sandbox: 'read-only' },
+        execution: { cwd: workCwd, sandbox: 'read-only' },
         signal,
         observePrompt: (observed) => {
           observed.systemBlocks = judgeBlocks
@@ -774,7 +815,7 @@ export class Orchestrator {
             projectContext,
           model: subBinding.model,
           reasoningEffort: subBinding.reasoningEffort,
-          execution: { cwd: this.deps.executionWorkspace, sandbox: 'danger-full-access' },
+          execution: { cwd: workCwd, sandbox: 'danger-full-access' },
           signal,
           observePrompt: (observed) => {
             repairPrompt = observed

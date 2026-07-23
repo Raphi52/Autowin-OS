@@ -9,8 +9,9 @@ vi.mock('./OrchestratorModelSelector', () => ({
 
 import { RouterView } from './RouterView'
 
-;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true
+;(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true
 
 let container: HTMLDivElement
 let root: Root
@@ -61,5 +62,79 @@ describe('RouterView — erreurs provider locales', () => {
     expect(container.querySelector('[data-provider="kimi"]')?.textContent).toContain(
       'installer/authentifier Kimi'
     )
+  })
+
+  it('garde Kimi visible en standby sans test ni reconnexion automatique', async () => {
+    const setProviderMode = vi.fn(async () => ({ mode: 'active' }))
+    const providerTest = vi.fn()
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        models: async () => [
+          {
+            id: 'kimi/kimi-code/kimi-for-coding',
+            provider: 'kimi',
+            model: 'kimi-for-coding',
+            label: 'Kimi for Coding',
+            reasoningEfforts: []
+          }
+        ],
+        providerStatus: async () => [{ provider: 'kimi', status: 'standby', testable: false }],
+        roles: async () => ({}),
+        providerTest,
+        providerLogin: vi.fn(),
+        setProviderMode,
+        setRole: vi.fn()
+      }
+    })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => root.render(createElement(RouterView)))
+    await flush()
+
+    const kimi = container.querySelector<HTMLElement>('[data-provider="kimi"]')!
+    expect(kimi.textContent).toContain('Kimi for Coding')
+    expect(kimi.textContent).toContain('En standby')
+    expect(kimi.textContent).not.toContain('Tester')
+    expect(kimi.textContent).not.toContain('Se reconnecter')
+    expect(providerTest).not.toHaveBeenCalled()
+
+    const reactivate = Array.from(kimi.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Réactiver')
+    )
+    await act(async () => reactivate?.click())
+    expect(setProviderMode).toHaveBeenCalledWith('kimi', 'active')
+  })
+
+  it('présente un probe persisté comme un dernier test daté, pas comme un état courant', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        models: async () => [],
+        providerStatus: async () => [
+          {
+            provider: 'claude',
+            status: 'authenticated',
+            testable: false,
+            lastCheckedAt: Date.UTC(2026, 6, 23, 12, 0, 0)
+          }
+        ],
+        roles: async () => ({}),
+        setRole: vi.fn(),
+        providerTest: vi.fn(),
+        providerLogin: vi.fn(),
+        setProviderMode: vi.fn()
+      }
+    })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => root.render(createElement(RouterView)))
+    await flush()
+
+    expect(container.querySelector('.router-badge')?.textContent).toBe('Dernier test : Authentifié')
   })
 })

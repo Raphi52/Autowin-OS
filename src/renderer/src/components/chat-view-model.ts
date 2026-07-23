@@ -6,12 +6,14 @@ import {
   type PersistedChatPart,
   type PersistedChatTextPart
 } from '../../../shared/chat-turn'
+import { parseScoutSuggestions, type SuggestionGroup } from './scout-suggestions'
 
 export type ChatActionPart = PersistedChatActionPart
 export type ChatTextPart = PersistedChatTextPart
 export type ChatPart = PersistedChatPart
 export type ChatActivityBlock = { kind: 'activity'; actions: ChatActionPart[] }
-export type ChatRenderBlock = ChatTextPart | ChatActivityBlock
+export type ChatSuggestionsBlock = { kind: 'suggestions'; groups: SuggestionGroup[] }
+export type ChatRenderBlock = ChatTextPart | ChatActivityBlock | ChatSuggestionsBlock
 
 export interface HydratedAssistantMessage {
   role: 'assistant'
@@ -317,6 +319,36 @@ export function groupSubagentSteps(steps: OrchStep[]): StepGroup[] {
 export function parseBtw(text: string): { isBtw: boolean; body: string } {
   const m = /^\s*\/btw\b[ \t]*([\s\S]*)$/i.exec(text)
   return m ? { isBtw: true, body: m[1] ?? '' } : { isBtw: false, body: '' }
+}
+
+/** Une commande slash proposée dans la palette du composer. */
+export interface SlashCommand {
+  name: string
+  hint: string
+  /** Texte inséré dans le composer à la sélection (l'utilisateur complète le corps ensuite). */
+  insert: string
+}
+
+/**
+ * Registre des commandes `/` RÉELLES d'Autowin (pas celles de Claude Code). Extensible : ajouter
+ * une entrée ici la fait apparaître dans la palette + l'autocomplete. Le comportement de chaque
+ * commande est branché côté composer (ex. `/btw` → parseBtw/submitBtw).
+ */
+export const SLASH_COMMANDS: SlashCommand[] = [
+  { name: 'btw', hint: 'Au fait… — oriente le tour en cours sans l’interrompre', insert: '/btw ' }
+]
+
+/**
+ * Palette « / » : renvoie les commandes à proposer pour l'input courant. Ouverte UNIQUEMENT quand
+ * l'input est le TOKEN commande seul (`^/\w*$`, pas de corps) → filtré par préfixe (casse-insensible).
+ * Un corps déjà tapé (`/btw x`) ou un texte normal → [] (palette fermée, le parse prend le relais).
+ * Pur → testable.
+ */
+export function matchSlashCommands(input: string): SlashCommand[] {
+  const m = /^\/(\w*)$/.exec(input)
+  if (!m) return []
+  const prefix = m[1].toLowerCase()
+  return SLASH_COMMANDS.filter((c) => c.name.startsWith(prefix))
 }
 
 /**
@@ -699,7 +731,10 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
   const blocks: ChatRenderBlock[] = []
   for (const part of coalesceAssistantParts(parts)) {
     if (part.kind === 'text') {
-      blocks.push(part)
+      // Retour scout (suggestions groupées en markdown) → vrai array de chips cliquables.
+      const suggestions = parseScoutSuggestions(part.text)
+      if (suggestions) blocks.push({ kind: 'suggestions', groups: suggestions })
+      else blocks.push(part)
       continue
     }
     const previous = blocks.at(-1)

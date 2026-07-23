@@ -1,4 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
+import type { WorktreeAgentActivity } from '../shared/worktree-activity-model'
 
 interface ChatAttachment {
   name: string
@@ -184,11 +185,13 @@ interface PromptCallRecord {
 }
 
 type AuthStatus = 'authenticated' | 'expired' | 'installed-untested' | 'absent' | 'unknown'
+type ProviderDisplayStatus = AuthStatus | 'standby'
 interface ProviderStatus {
   provider: string
-  status: AuthStatus
+  status: ProviderDisplayStatus
   testable: boolean
   detail?: string
+  lastCheckedAt?: number
 }
 interface BehaviourInfluencerField {
   label: string
@@ -255,6 +258,7 @@ interface PreflightCheck {
   label: string
   ok: boolean
   detail?: string
+  standby?: boolean
 }
 interface PreflightResult {
   ok: boolean
@@ -272,6 +276,8 @@ interface ChatApi {
   onPreflight: (cb: (result: PreflightResult) => void) => () => void
   getPreflight: () => Promise<PreflightResult | null>
   recheckPreflight: (force?: boolean) => Promise<PreflightResult>
+  getWorktreeActivity: () => Promise<WorktreeAgentActivity[]>
+  onWorktreeActivity: (cb: (activity: WorktreeAgentActivity[]) => void) => () => void
   roles: () => Promise<
     Record<string, { provider: string; model?: string; reasoningEffort?: string }>
   >
@@ -304,7 +310,11 @@ interface ChatApi {
   brainTraces: (conversationId?: string) => Promise<BrainTrace[]>
   behaviourComposition: () => Promise<BehaviourComposition>
   providerStatus: () => Promise<ProviderStatus[]>
-  providerTest: (provider: string) => Promise<{ provider: string; status: AuthStatus }>
+  providerTest: (provider: string) => Promise<{ provider: string; status: ProviderDisplayStatus }>
+  setProviderMode: (
+    provider: string,
+    mode: 'active' | 'standby'
+  ) => Promise<{ mode: 'active' | 'standby' }>
   promptTraceSummary: () => Promise<NativePreflightTrace[]>
   authorizeDiagnostics: () => Promise<string | null>
   promptTracesGlobal: (capability: string) => Promise<NativePreflightTrace[]>

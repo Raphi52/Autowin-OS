@@ -41,6 +41,13 @@ const canonicalDestinations = [
     expectedText: 'Observatory'
   },
   {
+    id: 'worktree',
+    navSelector: '[data-testid="nav-worktree"]',
+    viewSelector: '.worktree-tab[data-active="true"]',
+    expectedText: 'Aucune copie en cours',
+    nestedSelector: '[data-testid="wt-view"]'
+  },
+  {
     id: 'settings',
     navSelector: '[data-testid="nav-settings"]',
     viewSelector: '[data-testid="settings-view"]',
@@ -57,10 +64,19 @@ await new Promise((resolve, reject) => {
 })
 let id = 0
 const pending = new Map()
+const runtimeIssues = []
 socket.onmessage = (event) => {
   const message = JSON.parse(event.data)
   const call = pending.get(message.id)
-  if (!call) return
+  if (!call) {
+    if (message.method === 'Runtime.exceptionThrown') {
+      runtimeIssues.push({ method: message.method, params: message.params })
+    }
+    if (message.method === 'Log.entryAdded' && message.params?.entry?.level === 'error') {
+      runtimeIssues.push({ method: message.method, params: message.params })
+    }
+    return
+  }
   pending.delete(message.id)
   message.error ? call.reject(new Error(message.error.message)) : call.resolve(message.result)
 }
@@ -139,6 +155,9 @@ if (collapseRail) {
 }
 let navigationProof
 if (verifyCanonicalNavigation) {
+  await send('Runtime.enable')
+  await send('Log.enable')
+  runtimeIssues.length = 0
   const verification = await send('Runtime.evaluate', {
     expression: `(async () => {
       const destinations = ${JSON.stringify(canonicalDestinations)}
@@ -153,6 +172,7 @@ if (verifyCanonicalNavigation) {
         await new Promise((resolve) => setTimeout(resolve, 200))
         const activeTarget = document.querySelector(destination.navSelector)
         const view = document.querySelector(destination.viewSelector)
+        const state = await window.api.appState()
         const renderedText = view?.textContent?.replace(/\\s+/g, ' ').trim() ?? ''
         proof.push({
           id: destination.id,
@@ -160,6 +180,10 @@ if (verifyCanonicalNavigation) {
           active: activeTarget?.classList.contains('active') === true,
           viewFound: Boolean(view),
           contentVerified: renderedText.includes(destination.expectedText),
+          stateVerified: state?.tab === destination.id,
+          nestedVerified: destination.nestedSelector
+            ? Boolean(view?.querySelector(destination.nestedSelector))
+            : true,
           expectedText: destination.expectedText,
           renderedText: renderedText.slice(0, 500)
         })
@@ -179,10 +203,16 @@ if (verifyCanonicalNavigation) {
         !destination.found ||
         !destination.active ||
         !destination.viewFound ||
-        !destination.contentVerified
+        !destination.contentVerified ||
+        !destination.stateVerified ||
+        !destination.nestedVerified
     )
   ) {
     throw new Error(`Navigation canonique invalide : ${JSON.stringify(navigationProof)}`)
+  }
+  await new Promise((resolve) => setTimeout(resolve, 100))
+  if (runtimeIssues.length > 0) {
+    throw new Error(`Erreurs renderer pendant la navigation : ${JSON.stringify(runtimeIssues)}`)
   }
 }
 if (section) {
@@ -256,6 +286,7 @@ const result = {
   json: jsonOutput,
   ...inspected.result.value,
   nativeDialogs: dialogs.result.value,
+  rendererIssues: runtimeIssues,
   ...(navigationProof ? { navigation: navigationProof } : {}),
   ...(behaviourFilters ? { behaviourFilters } : {})
 }

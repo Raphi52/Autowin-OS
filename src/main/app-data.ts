@@ -12,7 +12,13 @@ import { randomUUID } from 'node:crypto'
 import { dirname, isAbsolute, join } from 'node:path'
 import { AUTOWIN_APP_DATA_DIR, legacyAppDataDirName } from '../shared/app-identity'
 
-const FILE_STORES = ['auth.json', 'roles.json', 'conversations.json', 'agent-topology.json']
+const FILE_STORES = [
+  'auth.json',
+  'roles.json',
+  'conversations.json',
+  'agent-topology.json',
+  'provider-state.json'
+]
 const DIRECTORY_STORES = ['activity', 'runs', 'trace']
 const migratedBases = new Set<string>()
 

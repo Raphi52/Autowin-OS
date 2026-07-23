@@ -2,7 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { Markdown } from './Markdown'
+import { Markdown, extractRecommendation } from './Markdown'
 
 let container: HTMLDivElement
 let root: Root
@@ -87,5 +87,26 @@ describe('Markdown', () => {
 
     render('```text\n✅ Fait\n```', true)
     expect(container.querySelector('.md-final-summary')).toBeNull()
+  })
+})
+
+describe('extractRecommendation — ghost-text du composer', () => {
+  it('extrait la reco avec libellé en gras et deux-points', () => {
+    const txt = "blabla\n\n✅ Fait\n📍 Maintenant : x\n⏳ Reste : y\n👉 **Recommandé** : relance le build"
+    expect(extractRecommendation(txt)).toBe('relance le build')
+  })
+  it('gère le tiret — comme séparateur', () => {
+    expect(extractRecommendation('👉 Recommandé — teste la lecture')).toBe('teste la lecture')
+  })
+  it('ignore une ligne 👉 SANS « Recommandé » (déclenche seulement sur la vraie reco)', () => {
+    expect(extractRecommendation('👉 fais X maintenant')).toBeNull()
+  })
+  it('retire le gras et les backticks du texte', () => {
+    expect(extractRecommendation('👉 Recommandé : lance `npm run dev` et **vérifie**')).toBe(
+      'lance npm run dev et vérifie'
+    )
+  })
+  it('rend null si aucune ligne 👉', () => {
+    expect(extractRecommendation('juste du texte\nsans reco')).toBeNull()
   })
 })

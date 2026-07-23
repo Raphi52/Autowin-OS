@@ -23,6 +23,13 @@ const api = {
     return () => ipcRenderer.removeListener('preflight:result', handler)
   },
   getPreflight: (): Promise<unknown> => ipcRenderer.invoke('preflight:current'),
+  // Cockpit worktree (volet A) — activité des copies isolées par agent (frise + journal).
+  getWorktreeActivity: (): Promise<unknown[]> => ipcRenderer.invoke('worktree:activity'),
+  onWorktreeActivity: (cb: (activity: unknown[]) => void): (() => void) => {
+    const handler = (_e: unknown, activity: unknown[]): void => cb(activity)
+    ipcRenderer.on('worktree:activity-changed', handler)
+    return () => ipcRenderer.removeListener('worktree:activity-changed', handler)
+  },
   // #5 — le wizard first-run re-vérifie la config à la demande (force=true pour le bouton).
   recheckPreflight: (force?: boolean): Promise<unknown> =>
     ipcRenderer.invoke('preflight:recheck', force),
@@ -60,6 +67,8 @@ const api = {
   providerStatus: (): Promise<unknown[]> => ipcRenderer.invoke('os:providerStatus'),
   providerTest: (provider: string): Promise<unknown> =>
     ipcRenderer.invoke('os:providerTest', provider),
+  setProviderMode: (provider: string, mode: 'active' | 'standby'): Promise<unknown> =>
+    ipcRenderer.invoke('os:providerMode:set', provider, mode),
   promptTraceSummary: (): Promise<unknown[]> => ipcRenderer.invoke('os:promptTraceSummary'),
   authorizeDiagnostics: (): Promise<string | null> => ipcRenderer.invoke('os:authorizeDiagnostics'),
   promptTracesGlobal: (capability: string): Promise<unknown[]> =>

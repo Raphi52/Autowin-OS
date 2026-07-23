@@ -11,6 +11,7 @@ export interface PreflightCheck {
   label: string
   ok: boolean
   detail?: string
+  standby?: boolean
 }
 
 export interface PreflightResult {
@@ -31,8 +32,15 @@ export interface PreflightProbes {
   hasBrainToken: () => boolean
 }
 
+export interface PreflightOptions {
+  standbyProviders?: Array<'codex' | 'claude' | 'kimi'>
+}
+
 /** Lance les checks en parallèle et agrège. Ne throw jamais : un check qui casse = ko, pas un crash. */
-export async function runPreflight(probes: PreflightProbes): Promise<PreflightResult> {
+export async function runPreflight(
+  probes: PreflightProbes,
+  options: PreflightOptions = {}
+): Promise<PreflightResult> {
   const safe = async (fn: () => Promise<boolean>): Promise<boolean> => {
     try {
       return await fn()
@@ -40,11 +48,14 @@ export async function runPreflight(probes: PreflightProbes): Promise<PreflightRe
       return false
     }
   }
+  const standby = new Set(options.standbyProviders ?? [])
+  const providerProbe = (provider: 'codex' | 'claude' | 'kimi'): Promise<boolean> =>
+    standby.has(provider) ? Promise.resolve(true) : safe(() => probes.hasBin(provider))
   const [brain, codex, claude, kimi] = await Promise.all([
     safe(probes.pingBrain),
-    safe(() => probes.hasBin('codex')),
-    safe(() => probes.hasBin('claude')),
-    safe(() => probes.hasBin('kimi'))
+    providerProbe('codex'),
+    providerProbe('claude'),
+    providerProbe('kimi')
   ])
   let token = false
   let codexSession = false
@@ -53,23 +64,56 @@ export async function runPreflight(probes: PreflightProbes): Promise<PreflightRe
   } catch {
     token = false
   }
-  try {
-    codexSession = probes.hasCodexSession()
-  } catch {
-    codexSession = false
+  if (standby.has('codex')) {
+    codexSession = true
+  } else {
+    try {
+      codexSession = probes.hasCodexSession()
+    } catch {
+      codexSession = false
+    }
   }
+  const cliCheck = (
+    id: 'codex' | 'claude' | 'kimi',
+    label: string,
+    ok: boolean,
+    missing: string
+  ): PreflightCheck =>
+    standby.has(id)
+      ? { id, label, ok: true, standby: true, detail: 'standby — diagnostic ignoré' }
+      : { id, label, ok, detail: ok ? undefined : missing }
   const checks: PreflightCheck[] = [
-    { id: 'brain', label: 'brain_server (:8765)', ok: brain, detail: brain ? undefined : 'injoignable — RAG désactivé' },
-    { id: 'brain-token', label: 'token Brain', ok: token, detail: token ? undefined : 'absent — définir AMITEL_BRAIN_TOKEN' },
-    { id: 'codex', label: 'CLI codex', ok: codex, detail: codex ? undefined : 'introuvable — installer Codex CLI' },
     {
-      id: 'codex-session',
-      label: 'Session OAuth Codex',
-      ok: codexSession,
-      detail: codexSession ? undefined : 'session OAuth absente ou expirée — npm run codex:login'
+      id: 'brain',
+      label: 'brain_server (:8765)',
+      ok: brain,
+      detail: brain ? undefined : 'injoignable — RAG désactivé'
     },
-    { id: 'claude', label: 'CLI claude', ok: claude, detail: claude ? undefined : 'introuvable — installer/authentifier claude' },
-    { id: 'kimi', label: 'CLI kimi', ok: kimi, detail: kimi ? undefined : 'introuvable — installer/authentifier kimi' }
+    {
+      id: 'brain-token',
+      label: 'token Brain',
+      ok: token,
+      detail: token ? undefined : 'absent — définir AMITEL_BRAIN_TOKEN'
+    },
+    cliCheck('codex', 'CLI codex', codex, 'introuvable — installer Codex CLI'),
+    standby.has('codex')
+      ? {
+          id: 'codex-session',
+          label: 'Session OAuth Codex',
+          ok: true,
+          standby: true,
+          detail: 'standby — diagnostic ignoré'
+        }
+      : {
+          id: 'codex-session',
+          label: 'Session OAuth Codex',
+          ok: codexSession,
+          detail: codexSession
+            ? undefined
+            : 'session OAuth absente ou expirée — npm run codex:login'
+        },
+    cliCheck('claude', 'CLI claude', claude, 'introuvable — installer/authentifier claude'),
+    cliCheck('kimi', 'CLI kimi', kimi, 'introuvable — installer/authentifier kimi')
   ]
   const failed = checks.filter((c) => !c.ok)
   return {

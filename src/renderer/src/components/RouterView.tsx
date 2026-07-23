@@ -11,23 +11,29 @@ import type { RuntimeModel, OrchestratorModelOption } from './chat-view-model'
  * (codex expiry au chargement ; claude/kimi via le bouton « Tester »).
  */
 type AuthStatus = 'authenticated' | 'expired' | 'installed-untested' | 'absent' | 'unknown'
+type ProviderDisplayStatus = AuthStatus | 'standby'
 interface ProviderStatus {
   provider: string
-  status: AuthStatus
+  status: ProviderDisplayStatus
   testable: boolean
+  detail?: string
+  lastCheckedAt?: number
 }
 
-const STATUS_LABEL: Record<AuthStatus, string> = {
+const STATUS_LABEL: Record<ProviderDisplayStatus, string> = {
   authenticated: 'Authentifié',
   expired: 'Expiré · à reconnecter',
   'installed-untested': 'Installé · validité non testée',
   absent: 'Non connecté',
-  unknown: 'Indéterminé'
+  unknown: 'Indéterminé',
+  standby: 'En standby'
 }
 const PROVIDER_LABEL: Record<string, string> = { claude: 'Claude', codex: 'Codex', kimi: 'Kimi' }
 const RE_AUTH_HINT: Record<string, string> = {
-  claude: 'CLI Claude introuvable ou non authentifié — installer/authentifier Claude, puis relance « Tester ».',
-  codex: 'CLI Codex ou session OAuth indisponible — installer/reconnecter Codex, puis rouvre la page.',
+  claude:
+    'CLI Claude introuvable ou non authentifié — installer/authentifier Claude, puis relance « Tester ».',
+  codex:
+    'CLI Codex ou session OAuth indisponible — installer/reconnecter Codex, puis rouvre la page.',
   kimi: 'CLI Kimi introuvable — installer/authentifier Kimi, puis relance « Tester ».'
 }
 
@@ -43,6 +49,7 @@ export function RouterView(): React.JSX.Element {
   const [binding, setBinding] = useState<Binding | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [testing, setTesting] = useState<Record<string, boolean>>({})
+  const [modePending, setModePending] = useState<Record<string, boolean>>({})
   const [modelPending, setModelPending] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
 
@@ -102,6 +109,19 @@ export function RouterView(): React.JSX.Element {
     }
   }
 
+  const changeProviderMode = async (
+    provider: string,
+    mode: 'active' | 'standby'
+  ): Promise<void> => {
+    setModePending((pending) => ({ ...pending, [provider]: true }))
+    try {
+      await window.api.setProviderMode(provider, mode)
+      await loadStatuses()
+    } finally {
+      setModePending((pending) => ({ ...pending, [provider]: false }))
+    }
+  }
+
   const [launched, setLaunched] = useState<Record<string, boolean>>({})
   const reconnect = async (provider: string): Promise<void> => {
     try {
@@ -117,7 +137,12 @@ export function RouterView(): React.JSX.Element {
     setModelPending(true)
     setModelError(null)
     try {
-      await window.api.setRole('orchestrator', option.provider, option.model, option.reasoningEffort)
+      await window.api.setRole(
+        'orchestrator',
+        option.provider,
+        option.model,
+        option.reasoningEffort
+      )
       await refreshBinding()
     } catch (e) {
       setModelError(e instanceof Error ? e.message : String(e))
@@ -128,10 +153,7 @@ export function RouterView(): React.JSX.Element {
 
   return (
     <section className="router-view">
-      <ModuleHeader
-        eyebrow="Providers et modèles connectés"
-        title="Routeur"
-      />
+      <ModuleHeader eyebrow="Providers et modèles connectés" title="Routeur" />
 
       <section className="router-default">
         <header>
@@ -162,14 +184,22 @@ export function RouterView(): React.JSX.Element {
             >
               <header>
                 <strong>{PROVIDER_LABEL[provider] ?? provider}</strong>
-                <span className={`router-badge is-${st.status}`}>{STATUS_LABEL[st.status]}</span>
+                <span className={`router-badge is-${st.status}`}>
+                  {st.lastCheckedAt
+                    ? `Dernier test : ${STATUS_LABEL[st.status]}`
+                    : STATUS_LABEL[st.status]}
+                </span>
                 <span className="router-actions">
-                  {st.testable && (
-                    <button type="button" onClick={() => void test(provider)} disabled={testing[provider]}>
+                  {st.status !== 'standby' && st.testable && (
+                    <button
+                      type="button"
+                      onClick={() => void test(provider)}
+                      disabled={testing[provider]}
+                    >
                       {testing[provider] ? 'Test…' : 'Tester'}
                     </button>
                   )}
-                  {st.status !== 'authenticated' && (
+                  {st.status !== 'authenticated' && st.status !== 'standby' && (
                     <button
                       type="button"
                       className="router-reconnect"
@@ -178,15 +208,42 @@ export function RouterView(): React.JSX.Element {
                       Se reconnecter
                     </button>
                   )}
+                  <button
+                    type="button"
+                    className="router-standby"
+                    disabled={modePending[provider]}
+                    onClick={() =>
+                      void changeProviderMode(
+                        provider,
+                        st.status === 'standby' ? 'active' : 'standby'
+                      )
+                    }
+                  >
+                    {modePending[provider]
+                      ? 'Enregistrement…'
+                      : st.status === 'standby'
+                        ? 'Réactiver'
+                        : 'Mettre en standby'}
+                  </button>
                 </span>
               </header>
-              {launched[provider] ? (
+              {st.status === 'standby' ? (
+                <p className="router-hint">
+                  Aucun test ni login automatique. Les modèles restent disponibles dans le
+                  catalogue.
+                </p>
+              ) : launched[provider] ? (
                 <p className="router-hint">
                   Login lancé dans un terminal — termine l’authentification, puis clique « Tester ».
                 </p>
               ) : (
                 (st.status === 'expired' || st.status === 'absent') &&
                 RE_AUTH_HINT[provider] && <p className="router-hint">{RE_AUTH_HINT[provider]}</p>
+              )}
+              {st.status !== 'standby' && st.lastCheckedAt && (
+                <p className="router-hint">
+                  Dernier test réel : {new Date(st.lastCheckedAt).toLocaleString('fr-FR')}
+                </p>
               )}
               {list.length > 0 ? (
                 <ul className="router-models">

@@ -40,8 +40,9 @@ describe('runAppPreflight', () => {
     const fetchMock = vi.fn(() => fetchGate)
     globalThis.fetch = fetchMock as typeof fetch
 
-    const first = runAppPreflight(false)
-    const second = runAppPreflight(false)
+    const options = { standbyProviders: ['kimi'] as const }
+    const first = runAppPreflight(false, { standbyProviders: [...options.standbyProviders] })
+    const second = runAppPreflight(false, { standbyProviders: [...options.standbyProviders] })
     releaseFetch()
 
     const [firstResult, secondResult] = await Promise.all([first, second])
@@ -51,11 +52,22 @@ describe('runAppPreflight', () => {
     expect(mocks.loadTokens).toHaveBeenCalledTimes(1)
     expect(mocks.brainServiceToken).toHaveBeenCalledTimes(1)
 
-    await runAppPreflight(true)
+    await runAppPreflight(true, { standbyProviders: [...options.standbyProviders] })
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(mocks.spawnSync).toHaveBeenCalledTimes(4)
     expect(mocks.loadTokens).toHaveBeenCalledTimes(2)
     expect(mocks.brainServiceToken).toHaveBeenCalledTimes(2)
+  })
+
+  it('probe réellement le CLI Kimi lorsqu’il est explicitement actif', async () => {
+    const { appPreflightProbes } = await import('./preflight-probes')
+
+    expect(await appPreflightProbes().hasBin('kimi')).toBe(true)
+    expect(mocks.spawnSync).toHaveBeenCalledWith(
+      'kimi',
+      ['--version'],
+      expect.objectContaining({ timeout: 3000 })
+    )
   })
 
   it('refuse une session Codex dont l’expiration est dépassée', async () => {

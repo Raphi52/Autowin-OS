@@ -7,6 +7,7 @@ vi.mock('./components/ChatView', () => ({ ChatView: () => createElement('div') }
 vi.mock('./components/PreflightBanner', () => ({ PreflightBanner: () => null }))
 vi.mock('./components/FirstRunWizard', () => ({ FirstRunWizard: () => null }))
 vi.mock('./components/ObservatoryView', () => ({ ObservatoryView: () => null }))
+vi.mock('./components/WorktreeView', () => ({ WorktreeView: () => null }))
 vi.mock('./components/AgentStudioView', () => ({ AgentStudioView: () => null }))
 vi.mock('./components/KnowledgeView', () => ({ KnowledgeView: () => null }))
 vi.mock('./components/SettingsView', () => ({ SettingsView: () => null }))
@@ -32,6 +33,31 @@ describe('navigation humaine synchronisée avec le main', () => {
     localStorage.clear()
   })
 
+  it('affiche une branche Git vectorielle pour Worktrees', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        storageMigration: vi.fn().mockResolvedValue({}),
+        completeStorageMigration: vi.fn().mockResolvedValue(true),
+        appState: vi.fn(async () => ({ tab: 'chat' })),
+        onAppEvent: vi.fn(() => vi.fn())
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(createElement(MainApp))
+      await Promise.resolve()
+    })
+
+    const worktreeButton = container.querySelector('[data-testid="nav-worktree"]')
+    expect(worktreeButton?.querySelector('svg[data-icon="git-branch"]')).not.toBeNull()
+    expect(worktreeButton?.textContent).not.toContain('🌳')
+    await act(async () => root.unmount())
+  })
+
   it.each([
     {
       interaction: 'un clic rail',
@@ -49,7 +75,7 @@ describe('navigation humaine synchronisée avec le main', () => {
     },
     {
       interaction: 'le raccourci Cmd+5',
-      destination: 'settings',
+      destination: 'worktree',
       trigger: (_container: HTMLElement) =>
         window.dispatchEvent(
           new KeyboardEvent('keydown', { key: '5', metaKey: true, bubbles: true })

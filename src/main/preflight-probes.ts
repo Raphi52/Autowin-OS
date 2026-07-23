@@ -5,7 +5,12 @@
  */
 import { existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { runPreflight, type PreflightProbes, type PreflightResult } from './preflight'
+import {
+  runPreflight,
+  type PreflightOptions,
+  type PreflightProbes,
+  type PreflightResult
+} from './preflight'
 import { brainServiceToken } from './brain-retrieval'
 import { loadTokens } from './providers/codex-auth'
 import { codexTokenStatus } from './provider-status'
@@ -27,7 +32,7 @@ export function appPreflightProbes(): PreflightProbes {
     hasBin: async (which) => {
       // Whitelist runtime (défense en profondeur, pas seulement le typage TS) : ne jamais exécuter
       // un binaire arbitraire même si un futur appelant relayait une valeur non contrôlée. (Guardian.)
-      if (which !== 'codex' && which !== 'claude') return false
+      if (which !== 'codex' && which !== 'claude' && which !== 'kimi') return false
       const envBin = process.env[`${which.toUpperCase()}_BIN`]
       if (envBin) return existsSync(envBin)
       // shell:true sur Windows : codex/claude sont installés en shims `.cmd` par npm -g → un spawnSync
@@ -57,7 +62,10 @@ export function getLastAppPreflightResult(): PreflightResult | null {
   return preflightCache?.result ?? null
 }
 
-export async function runAppPreflight(force = false): Promise<PreflightResult> {
+export async function runAppPreflight(
+  force = false,
+  options: PreflightOptions = {}
+): Promise<PreflightResult> {
   const now = Date.now()
   if (!force && preflightCache && now - preflightCache.at < PREFLIGHT_TTL_MS) {
     return preflightCache.result
@@ -65,7 +73,7 @@ export async function runAppPreflight(force = false): Promise<PreflightResult> {
   if (!force && preflightInFlight) return preflightInFlight
 
   const generation = ++preflightGeneration
-  const run = runPreflight(appPreflightProbes()).then((result) => {
+  const run = runPreflight(appPreflightProbes(), options).then((result) => {
     if (generation === preflightGeneration) {
       preflightCache = { at: Date.now(), result }
     }

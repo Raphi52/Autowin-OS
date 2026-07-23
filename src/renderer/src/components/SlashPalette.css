@@ -1,0 +1,33 @@
+/* Palette de commandes « / » au-dessus du composer (autocomplete, alignée sur theme-serious). */
+.slash-palette {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 4px;
+  border: 1px solid var(--container-border, rgba(255, 255, 255, 0.14));
+  border-radius: 10px;
+  background: var(--surface-panel, rgba(12, 12, 14, 0.96));
+  max-height: 240px;
+  overflow-y: auto;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.4);
+}
+.slash-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.slash-item.is-selected,
+.slash-item:hover {
+  background: rgba(239, 63, 145, 0.12);
+}
+.slash-name {
+  color: var(--gold-bright, #e6c369);
+  font-size: 12px;
+  font-weight: 700;
+}
+.slash-hint {
+  color: var(--text-faint, #7f8fa1);
+  font-size: 11px;
+}

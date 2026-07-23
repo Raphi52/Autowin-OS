@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
+  buildProviderStatuses,
   codexTokenStatus,
   presenceStatus,
-  probeResultStatus,
-  buildProviderStatuses
+  probePresenceUnlessStandby,
+  probeResultStatus
 } from './provider-status'
 
 const NOW = 1_000_000_000_000
@@ -13,10 +14,14 @@ describe('codexTokenStatus (exact, cheap)', () => {
     expect(codexTokenStatus(null, NOW)).toBe('absent')
   })
   it('authenticated si non expiré', () => {
-    expect(codexTokenStatus({ obtainedAt: NOW - 1000, expiresInSec: 3600 }, NOW)).toBe('authenticated')
+    expect(codexTokenStatus({ obtainedAt: NOW - 1000, expiresInSec: 3600 }, NOW)).toBe(
+      'authenticated'
+    )
   })
   it('expired si dépassé', () => {
-    expect(codexTokenStatus({ obtainedAt: NOW - 7200_000, expiresInSec: 3600 }, NOW)).toBe('expired')
+    expect(codexTokenStatus({ obtainedAt: NOW - 7200_000, expiresInSec: 3600 }, NOW)).toBe(
+      'expired'
+    )
   })
   it('authenticated si aucune expiry déclarée', () => {
     expect(codexTokenStatus({ obtainedAt: NOW }, NOW)).toBe('authenticated')
@@ -35,10 +40,19 @@ describe('presenceStatus (claude/kimi au chargement — jamais authenticated)', 
   })
 })
 
+describe('standby provider', () => {
+  it('ne lance aucun probe pour un provider en standby', async () => {
+    const probe = vi.fn(async () => true)
+
+    expect(await probePresenceUnlessStandby({ mode: 'standby' }, probe)).toBe(false)
+    expect(probe).not.toHaveBeenCalled()
+  })
+})
+
 describe('probeResultStatus (test réel à la demande)', () => {
   it('CONTRÔLE NÉGATIF : un probe qui timeout/jette → unknown, JAMAIS authenticated', () => {
     expect(probeResultStatus({ errored: true })).toBe('unknown')
-    expect(probeResultStatus({ errored: true, ok: true })).toBe('unknown') // errored prime
+    expect(probeResultStatus({ errored: true, ok: true })).toBe('unknown')
   })
   it('expired si le probe révèle une expiration', () => {
     expect(probeResultStatus({ expired: true })).toBe('expired')
@@ -54,7 +68,7 @@ describe('probeResultStatus (test réel à la demande)', () => {
 describe('buildProviderStatuses (chargement)', () => {
   it('codex exact + claude/kimi présence, avec testable correct', () => {
     const out = buildProviderStatuses({
-      codexTokens: { obtainedAt: NOW - 7200_000, expiresInSec: 3600 }, // expiré
+      codexTokens: { obtainedAt: NOW - 7200_000, expiresInSec: 3600 },
       claudeResponds: true,
       kimiResponds: false,
       now: NOW
@@ -64,5 +78,28 @@ describe('buildProviderStatuses (chargement)', () => {
       { provider: 'claude', status: 'installed-untested', testable: true },
       { provider: 'kimi', status: 'absent', testable: false }
     ])
+  })
+
+  it('restaure le dernier probe réel et distingue Kimi standby d’une erreur', () => {
+    const statuses = buildProviderStatuses({
+      codexTokens: null,
+      claudeResponds: true,
+      kimiResponds: false,
+      now: NOW + 500,
+      states: {
+        claude: {
+          mode: 'active',
+          lastProbe: { status: 'authenticated', checkedAt: NOW }
+        },
+        kimi: { mode: 'standby' }
+      }
+    })
+
+    expect(statuses.find((item) => item.provider === 'claude')).toEqual(
+      expect.objectContaining({ status: 'authenticated', lastCheckedAt: NOW })
+    )
+    expect(statuses.find((item) => item.provider === 'kimi')).toEqual(
+      expect.objectContaining({ status: 'standby', testable: false })
+    )
   })
 })

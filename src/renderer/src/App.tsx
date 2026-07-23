@@ -4,6 +4,7 @@ import { ChatView } from './components/ChatView'
 import { PreflightBanner } from './components/PreflightBanner'
 import { FirstRunWizard } from './components/FirstRunWizard'
 import { ObservatoryView } from './components/ObservatoryView'
+import { WorktreeView } from './components/WorktreeView'
 import { AgentStudioView } from './components/AgentStudioView'
 import { KnowledgeView } from './components/KnowledgeView'
 import { SettingsView } from './components/SettingsView'
@@ -24,6 +25,28 @@ import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
 import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'
 
 const NAV = APP_DESTINATIONS
+
+function WorktreeIcon(): React.JSX.Element {
+  return (
+    <svg
+      data-icon="git-branch"
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="6" cy="3" r="2" />
+      <circle cx="18" cy="6" r="2" />
+      <circle cx="6" cy="21" r="2" />
+      <path d="M6 5v14M18 8a9 9 0 0 1-9 9H6" />
+    </svg>
+  )
+}
 
 export function MainApp(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('chat')
@@ -277,7 +300,7 @@ export function MainApp(): React.JSX.Element {
                 onClick={() => navigate(it.id)}
               >
                 <span className="space-toy-icon" aria-hidden="true">
-                  {it.icon}
+                  {it.id === 'worktree' ? <WorktreeIcon /> : it.icon}
                 </span>
                 <span>{it.label}</span>
               </button>
@@ -317,6 +340,11 @@ export function MainApp(): React.JSX.Element {
                 navigate('settings')
               }}
             />
+          </div>
+        )}
+        {visitedTabs.has('worktree') && (
+          <div className={`view-slot${tab === 'worktree' ? ' is-active' : ''}`}>
+            <WorktreeView active={tab === 'worktree'} />
           </div>
         )}
         {visitedTabs.has('settings') && (

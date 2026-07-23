@@ -1,4 +1,12 @@
-import { app, shell, BrowserWindow, dialog, ipcMain, Notification, type IpcMainInvokeEvent } from 'electron'
+import {
+  app,
+  shell,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Notification,
+  type IpcMainInvokeEvent
+} from 'electron'
 import { join } from 'path'
 import { randomUUID } from 'node:crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -37,11 +45,7 @@ import { persistOrchestrationStep } from './activity/orchestration-observability
 import { aggregateToolUsage } from './activity/tool-usage'
 
 import { ProfileStore, type AutowinProfile } from './profile-store'
-import {
-  listCapabilities,
-  setCapabilityEnabled,
-  warmCapabilities
-} from './capability-controls'
+import { listCapabilities, setCapabilityEnabled, warmCapabilities } from './capability-controls'
 import { defaultBehaviourWorkspace } from './behaviour-files'
 import { ApprovedBehaviourWorkspaces, isTrustedRendererUrl } from './behaviour-access'
 import { discoverConfiguredSkillRegistry } from './skill-registry'
@@ -75,7 +79,12 @@ import {
 import { nativeSpoolRoot, appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace, readBrainTraces } from './activity/brain-trace-spool'
 import { buildBehaviourComposition } from './behaviour-composition'
-import { buildProviderStatuses, probeResultStatus } from './provider-status'
+import {
+  buildProviderStatuses,
+  probePresenceUnlessStandby,
+  probeResultStatus
+} from './provider-status'
+import { ProviderStateStore, type ProviderMode } from './provider-state-store'
 import { loadTokens } from './providers/codex-auth'
 
 import { createAmitelContextProvider } from './amitel-context'
@@ -103,8 +112,7 @@ if (!explicitUserDataDir) app.setPath('userData', canonicalAppDataRoot)
 // En DEV, on n'enforce PAS le single-instance lock : un hot-restart electron-vite (ou un
 // process résiduel qui détient encore le lock) ne doit jamais laisser une instance PÉRIMÉE
 // à l'écran en tuant la nouvelle. Le lock n'est appliqué que sur le build packagé.
-const ownsInstanceLock =
-  isolatedTestInstance || !app.isPackaged || app.requestSingleInstanceLock()
+const ownsInstanceLock = isolatedTestInstance || !app.isPackaged || app.requestSingleInstanceLock()
 if (!ownsInstanceLock) app.quit()
 else ensureAutowinAppData(appDataRoot)
 let startupStorageMigration = false
@@ -142,17 +150,24 @@ function drainPendingDirectives(conversationId: string): string[] {
 }
 const questionWindows = new Map<string, BrowserWindow>()
 const diagnosticCapabilities = new DiagnosticCapabilities()
+const providerStateStore = new ProviderStateStore()
+const routedProviders = ['codex', 'claude', 'kimi'] as const
+function preflightProviderOptions(): { standbyProviders: Array<(typeof routedProviders)[number]> } {
+  return {
+    standbyProviders: routedProviders.filter(
+      (provider) => providerStateStore.get(provider).mode === 'standby'
+    )
+  }
+}
 let agentModels = DEFAULT_IMPORTED_MODELS
 const agentTopologyPath = join(app.getPath('userData'), 'agent-topology.json')
 let agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
-const agentModelsReady = discoverImportedModels(fetch).then(
-  (models) => {
-    agentModels = models
-    agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
-    syncRuntimeTopology(agentTopology)
-    return models
-  }
-)
+const agentModelsReady = discoverImportedModels(fetch).then((models) => {
+  agentModels = models
+  agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
+  syncRuntimeTopology(agentTopology)
+  return models
+})
 os.setTaskReadiness(agentModelsReady)
 
 function syncRuntimeTopology(topology: AgentTopology): void {
@@ -280,7 +295,6 @@ function assertTrustedBehaviourSender(event: IpcMainInvokeEvent): void {
   assertTrustedRendererSender(event, 'Behaviour')
 }
 
-
 function behaviourRendererOptions(): { devRendererUrl?: string; rendererHtmlPath: string } {
   return {
     devRendererUrl: is.dev ? process.env.ELECTRON_RENDERER_URL : undefined,
@@ -364,51 +378,57 @@ function registerChatIpc(): void {
     })
     try {
       const turnId = randomUUID()
-      const result = await os.runTask(guardString(task, 'task'), (step) => {
-        persistOrchestrationStep(
-          step,
-          {
-            conversationId,
-            turnId,
-            iteration: step.step === 'exec' ? 0 : 1
-          },
-          undefined,
-          causalTrace
-        )
-        ledger.append({
-          source: 'orchestrate',
-          name: step.step,
-          detail: `${step.role ?? ''} ${step.provider ?? ''} ${step.detail ?? ''}`.trim()
-        })
-        // Chantier 3 — trace native : capture l'envelope réel (system porte le RAG Brain + contexte).
-        if (step.prompt) {
-          appendNativeTrace({
-            provider: step.prompt.provider,
-            model: step.prompt.model,
-            conversationId,
-            turnId,
-            system: step.prompt.system,
-            messages: step.prompt.messages,
-            timestamp: new Date().toISOString()
+      const result = await os.runTask(
+        guardString(task, 'task'),
+        (step) => {
+          persistOrchestrationStep(
+            step,
+            {
+              conversationId,
+              turnId,
+              iteration: step.step === 'exec' ? 0 : 1
+            },
+            undefined,
+            causalTrace
+          )
+          ledger.append({
+            source: 'orchestrate',
+            name: step.step,
+            detail: `${step.role ?? ''} ${step.provider ?? ''} ${step.detail ?? ''}`.trim()
           })
-        }
-        event.sender.send('orchestrate:step', step)
-        // #3 — au franchissement du seuil : couper le run + prévenir l'utilisateur immédiatement.
-        const trip = breaker.observe(step)
-        if (trip) {
-          controller.abort()
-          try {
-            if (Notification.isSupported()) {
-              new Notification({
-                title: 'Autowin OS — run stoppé (budget)',
-                body: `Run coupé : ${trip.reason}.`
-              }).show()
-            }
-          } catch {
-            /* notif best-effort : ne jamais casser le run à cause d'un échec de notification */
+          // Chantier 3 — trace native : capture l'envelope réel (system porte le RAG Brain + contexte).
+          if (step.prompt) {
+            appendNativeTrace({
+              provider: step.prompt.provider,
+              model: step.prompt.model,
+              conversationId,
+              turnId,
+              system: step.prompt.system,
+              messages: step.prompt.messages,
+              timestamp: new Date().toISOString()
+            })
           }
-        }
-      }, undefined, undefined, controller.signal)
+          event.sender.send('orchestrate:step', step)
+          // #3 — au franchissement du seuil : couper le run + prévenir l'utilisateur immédiatement.
+          const trip = breaker.observe(step)
+          if (trip) {
+            controller.abort()
+            try {
+              if (Notification.isSupported()) {
+                new Notification({
+                  title: 'Autowin OS — run stoppé (budget)',
+                  body: `Run coupé : ${trip.reason}.`
+                }).show()
+              }
+            } catch {
+              /* notif best-effort : ne jamais casser le run à cause d'un échec de notification */
+            }
+          }
+        },
+        undefined,
+        undefined,
+        controller.signal
+      )
       // Trace Brain (observabilité Observatory) : requête réelle + navigation interne + injecté.
       if (result.brainNavigation || (result.brainInjectedChars ?? 0) > 0) {
         appendBrainTrace({
@@ -447,11 +467,20 @@ function registerChatIpc(): void {
   })
   ipcMain.handle('preflight:recheck', (event, force?: boolean) => {
     assertTrustedRendererSender(event, 'Preflight')
-    return runAppPreflight(force === true)
+    return runAppPreflight(force === true, preflightProviderOptions())
   })
   ipcMain.handle('preflight:current', (event) => {
     assertTrustedRendererSender(event, 'Preflight')
     return getLastAppPreflightResult()
+  })
+  // Cockpit worktree (volet A) : snapshot à la demande + push live des changements d'activité.
+  ipcMain.handle('worktree:activity', (event) => {
+    assertTrustedRendererSender(event, 'WorktreeActivity')
+    return os.getWorktreeActivity()
+  })
+  os.onWorktreeActivity((activity) => {
+    for (const w of BrowserWindow.getAllWindows())
+      w.webContents.send('worktree:activity-changed', activity)
   })
   ipcMain.handle('os:roles', () => os.roles.all())
   ipcMain.handle(
@@ -477,26 +506,46 @@ function registerChatIpc(): void {
         new Promise<boolean>((r) => setTimeout(() => r(false), 4000)) // sleep-ok: garde-timeout bornant auth() (spawn CLI), pas un délai flaky
       ])
     const responds = async (id: string): Promise<boolean> => {
-      try {
-        const adapter = os.registry.get(id) as { auth?: () => Promise<boolean> }
-        return adapter.auth ? await bounded(adapter.auth()) : false
-      } catch {
-        return false
-      }
+      const state = providerStateStore.get(id)
+      return probePresenceUnlessStandby(state, async () => {
+        try {
+          const adapter = os.registry.get(id) as { auth?: () => Promise<boolean> }
+          return adapter.auth ? await bounded(adapter.auth()) : false
+        } catch {
+          return false
+        }
+      })
     }
     const [claudeResponds, kimiResponds] = await Promise.all([responds('claude'), responds('kimi')])
     return buildProviderStatuses({
       codexTokens: loadTokens(),
       claudeResponds,
       kimiResponds,
-      now: Date.now()
+      now: Date.now(),
+      states: {
+        codex: providerStateStore.get('codex'),
+        claude: providerStateStore.get('claude'),
+        kimi: providerStateStore.get('kimi')
+      }
     })
+  })
+  ipcMain.handle('os:providerMode:set', (event, provider: unknown, mode: unknown) => {
+    assertTrustedRendererSender(event, 'Provider mode')
+    const id = guardString(provider, 'provider')
+    if (!routedProviders.includes(id as (typeof routedProviders)[number])) {
+      throw new Error('Provider non supporté.')
+    }
+    if (mode !== 'active' && mode !== 'standby') throw new Error('Mode provider invalide.')
+    return providerStateStore.setMode(id, mode as ProviderMode)
   })
   // Bouton « Tester » — probe RÉEL borné à la demande (claude/kimi) : un vrai mini-tour dont
   // l'erreur d'auth révèle l'expiration. Timeout/exception → unknown (jamais authenticated).
   ipcMain.handle('os:providerTest', async (event, provider: unknown) => {
     assertTrustedRendererSender(event, 'Provider test')
     const id = guardString(provider, 'provider')
+    if (providerStateStore.get(id).mode === 'standby') {
+      return { provider: id, status: 'standby' as const }
+    }
     try {
       const res = (await Promise.race([
         os.registry.send(id, [{ role: 'user', content: 'ping' }], {}),
@@ -506,12 +555,14 @@ function registerChatIpc(): void {
       const status = /authenticate|oauth|expired|not logged|login/.test(t)
         ? probeResultStatus({ expired: true })
         : probeResultStatus({ ok: true })
+      providerStateStore.recordProbe(id, status)
       return { provider: id, status }
     } catch (e) {
       const msg = (e instanceof Error ? e.message : String(e)).toLowerCase()
       const status = /authenticate|oauth|expired|not logged|login/.test(msg)
         ? probeResultStatus({ expired: true })
         : probeResultStatus({ errored: true })
+      providerStateStore.recordProbe(id, status)
       return { provider: id, status }
     }
   })
@@ -620,7 +671,6 @@ function registerChatIpc(): void {
   ipcMain.handle('os:authority:resolve', (_e, id: string, choice: unknown) =>
     bus.resolveDecision(id, choice)
   )
-
 
   // --- Conversations catégorisées ---
   ipcMain.handle('os:conversations', () => os.conversations.list())
@@ -747,8 +797,7 @@ function registerChatIpc(): void {
         let turnUsage: { inputTokens: number; outputTokens: number; costUsd?: number } | undefined
         let turnSessionId: string | undefined
         let turnPromptIdentity:
-          | { provider: string; model?: string; reasoningEffort?: string }
-          | undefined
+          { provider: string; model?: string; reasoningEffort?: string } | undefined
         const last = safe[safe.length - 1]
         if (conversationId && last?.role === 'user' && os.conversations.get(conversationId)) {
           const binding = os.roles.getBinding('orchestrator')
@@ -996,7 +1045,8 @@ function registerChatIpc(): void {
             label: last?.role === 'user' ? last.content : 'tour agent',
             provider: turnPromptIdentity?.provider ?? orchestratorBinding.provider,
             model: turnPromptIdentity?.model ?? orchestratorBinding.model,
-            reasoningEffort: turnPromptIdentity?.reasoningEffort ?? orchestratorBinding.reasoningEffort,
+            reasoningEffort:
+              turnPromptIdentity?.reasoningEffort ?? orchestratorBinding.reasoningEffort,
             inputTokens: turnUsage?.inputTokens,
             outputTokens: turnUsage?.outputTokens,
             costUsd: turnUsage?.costUsd,
@@ -1021,7 +1071,8 @@ function registerChatIpc(): void {
       } finally {
         if (conversationId) {
           activeChatTurns.delete(conversationId, controller)
-          if (pendingDirectives.delete(conversationId)) // directives non consommées = obsolètes
+          if (pendingDirectives.delete(conversationId))
+            // directives non consommées = obsolètes
             broadcast({ type: 'refresh', scope: 'directives' })
         }
         resolveCompletion()
@@ -1120,7 +1171,9 @@ function registerChatIpc(): void {
       // porte déjà sa propre frontière par appel. Les préflight legacy dupliqueraient la
       // même frontière dans la timeline → on ne les fusionne QUE pour les convs sans natif
       // (aucun appel natif). La vue dédiée (os:promptTraces) reste inchangée.
-      const preflightTraces = nativeCalls.length ? [] : filterNativePreflight(nativePreflight, conversationId)
+      const preflightTraces = nativeCalls.length
+        ? []
+        : filterNativePreflight(nativePreflight, conversationId)
       for (const trace of preflightTraces) {
         const id = `native:${trace.apiRequestId}`
         if (knownIds.has(id)) continue
@@ -1338,10 +1391,11 @@ app.whenReady().then(async () => {
   // #4 — diagnostic de démarrage (non bloquant) : on vérifie brain_server, CLI providers et token,
   // et on pousse le résultat au renderer (bannière) pour que l'utilisateur voie une config incomplète
   // AVANT de lancer un run, plutôt qu'un échec silencieux en plein run. Best-effort, jamais bloquant.
-  void runAppPreflight()
+  void runAppPreflight(false, preflightProviderOptions())
     .then((result) => {
       if (!result.ok) {
-        for (const w of BrowserWindow.getAllWindows()) w.webContents.send('preflight:result', result)
+        for (const w of BrowserWindow.getAllWindows())
+          w.webContents.send('preflight:result', result)
       }
     })
     .catch(() => {

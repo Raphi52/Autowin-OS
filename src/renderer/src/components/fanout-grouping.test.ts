@@ -1,5 +1,31 @@
 import { describe, it, expect } from 'vitest'
-import { groupSubagentSteps, costByModel, parseBtw, type OrchStep } from './chat-view-model'
+import {
+  groupSubagentSteps,
+  costByModel,
+  parseBtw,
+  matchSlashCommands,
+  type OrchStep
+} from './chat-view-model'
+
+describe('matchSlashCommands (palette /)', () => {
+  it('« / » seul → toutes les commandes', () => {
+    expect(matchSlashCommands('/').map((c) => c.name)).toContain('btw')
+  })
+  it('filtre par préfixe (casse-insensible)', () => {
+    expect(matchSlashCommands('/b').map((c) => c.name)).toEqual(['btw'])
+    expect(matchSlashCommands('/BT').map((c) => c.name)).toEqual(['btw'])
+  })
+  it('préfixe sans correspondance → []', () => {
+    expect(matchSlashCommands('/zzz')).toEqual([])
+  })
+  it('corps déjà tapé (/btw x) → palette fermée []', () => {
+    expect(matchSlashCommands('/btw x')).toEqual([])
+  })
+  it('texte normal (pas de /) → []', () => {
+    expect(matchSlashCommands('bonjour')).toEqual([])
+    expect(matchSlashCommands('au fait /btw')).toEqual([])
+  })
+})
 
 describe('parseBtw', () => {
   it('détecte /btw en préfixe + extrait le corps', () => {

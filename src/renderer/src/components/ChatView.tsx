@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Markdown } from './Markdown'
+import { Markdown, extractRecommendation } from './Markdown'
+import { SuggestionGrid } from './SuggestionGrid'
 import { ActivityPane } from './ActivityPane'
 import { ModuleHeader } from './ModuleHeader'
 import {
@@ -20,6 +21,8 @@ import {
   STEP_META,
   phaseLabel,
   parseBtw,
+  matchSlashCommands,
+  type SlashCommand,
   type OrchStep,
   type ChatPart,
   type HydratedAssistantMessage,
@@ -33,6 +36,7 @@ import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { StepThread, AssistantActivityGroup } from './ChatView.parts'
 import { reconstructBranchChain } from '../../../shared/conversation-branches'
 import './ChatView.css'
+import './SlashPalette.css'
 import type { InspectTurnTarget } from '../observatory-focus'
 
 /* ---------- Types ---------- */
@@ -278,13 +282,15 @@ const ChatMessageRow = memo(function ChatMessageRow({
   conversationId,
   onInspectTurn,
   onFork,
-  onOpenImage
+  onOpenImage,
+  onPickSuggestion
 }: {
   message: Msg
   conversationId: string | null
   onInspectTurn?: (target: InspectTurnTarget) => void
   onFork?: (messageId: string) => void
   onOpenImage?: (image: { src: string; name: string }) => void
+  onPickSuggestion?: (prompt: string) => void
 }): React.JSX.Element {
   if (message.role === 'user') {
     return (
@@ -355,6 +361,12 @@ const ChatMessageRow = memo(function ChatMessageRow({
             <div key={index} className="msg-body" dir="auto">
               <Markdown text={part.text} highlightFinalSummary />
             </div>
+          ) : part.kind === 'suggestions' ? (
+            <SuggestionGrid
+              key={index}
+              groups={part.groups}
+              onPick={(prompt) => onPickSuggestion?.(prompt)}
+            />
           ) : (
             <AssistantActivityGroup key={index} actions={part.actions} />
           )
@@ -386,7 +398,13 @@ const ChatMessageRow = memo(function ChatMessageRow({
       </div>
     </div>
   )
-})
+}, (prev, next) =>
+  // Comparateur DATA-ONLY : la ligne ne re-rend QUE si sa donnée change (message/conversation).
+  // Les props callbacks sont déjà stables (send via sendRef→pickSuggestion, fork/inspect via useCallback,
+  // setters useState) → les ignorer n'introduit aucun stale et immunise la ligne contre le churn du
+  // composer (frappe/ghost-text) : garantit l'invariant perf « composer change ≠ re-render des lignes ».
+  prev.message === next.message && prev.conversationId === next.conversationId
+)
 
 /* ---------- Vue ---------- */
 
@@ -407,6 +425,21 @@ export function ChatView({
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState('')
+  const [slashIndex, setSlashIndex] = useState(0)
+  const [slashDismissed, setSlashDismissed] = useState(false)
+  // Ghost-text (façon CLI) : la recommandation « 👉 Recommandé » du DERNIER message assistant,
+  // proposée en placeholder grisé quand le champ est vide et acceptée par Tab. null si aucune.
+  const ghostRecommendation = useMemo(() => {
+    const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant') as
+      | AsstMsg
+      | undefined
+    if (!lastAssistant) return null
+    const text = lastAssistant.parts
+      .filter((p): p is Extract<ChatPart, { kind: 'text' }> => p.kind === 'text')
+      .map((p) => p.text)
+      .join('\n')
+    return extractRecommendation(text)
+  }, [messages])
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [openImage, setOpenImage] = useState<{ src: string; name: string } | null>(null)
@@ -1024,6 +1057,12 @@ export function ChatView({
     void submitBtw(parsed.body)
     return true
   }
+  /** Palette « / » : insère la commande choisie dans le composer, l'utilisateur complète le corps. */
+  function acceptSlash(cmd: SlashCommand): void {
+    setDraftInput(composerDraftKeyRef.current, cmd.insert)
+    setSlashIndex(0)
+    requestAnimationFrame(() => composerInputRef.current?.focus())
+  }
   // À la libération de `busy` (render frais, busy=false), on draine la FILE D'ATTENTE — un message
   // par tour (chacun = sa propre paire Q/R). Vaut aussi bien pour l'auto-drain fin de tour que pour
   // une interruption manuelle (les deux passent par une transition busy→false).
@@ -1043,6 +1082,11 @@ export function ChatView({
   const forkRef = useRef(forkFromMessage)
   forkRef.current = forkFromMessage
   const handleFork = useCallback((messageId: string) => void forkRef.current(messageId), [])
+  // `send` est recréé à chaque render → une prop instable casserait le memo de ChatMessageRow.
+  // On la stabilise via un ref (même pattern que forkRef) → onPickSuggestion référentiellement stable.
+  const sendRef = useRef(send)
+  sendRef.current = send
+  const pickSuggestion = useCallback((prompt: string) => void sendRef.current(prompt), [])
 
   /* --- envoi --- */
 
@@ -1628,6 +1672,7 @@ export function ChatView({
 
           {messages.map((message, index) => (
             <ChatMessageRow
+              onPickSuggestion={pickSuggestion}
               key={messageKey(message, index)}
               message={message}
               conversationId={activeId}
@@ -1760,6 +1805,30 @@ export function ChatView({
               </div>
             )}
             {attachmentError && <div className="attachment-error">{attachmentError}</div>}
+            {(() => {
+              const items = matchSlashCommands(input)
+              if (slashDismissed || items.length === 0) return null
+              const sel = Math.min(slashIndex, items.length - 1)
+              return (
+                <ul className="slash-palette" role="listbox" aria-label="Commandes">
+                  {items.map((c, i) => (
+                    <li
+                      key={c.name}
+                      role="option"
+                      aria-selected={i === sel}
+                      className={`slash-item${i === sel ? ' is-selected' : ''}`}
+                      onMouseDown={(ev) => {
+                        ev.preventDefault() // garde le focus du composer
+                        acceptSlash(c)
+                      }}
+                    >
+                      <span className="slash-name mono">/{c.name}</span>
+                      <span className="slash-hint">{c.hint}</span>
+                    </li>
+                  ))}
+                </ul>
+              )
+            })()}
             <div className="composer-input-row">
               <button
                 type="button"
@@ -1802,8 +1871,42 @@ export function ChatView({
                 className="input grow"
                 rows={1}
                 value={input}
-                onChange={(e) => setDraftInput(composerDraftKeyRef.current, e.target.value)}
+                onChange={(e) => {
+                  setDraftInput(composerDraftKeyRef.current, e.target.value)
+                  setSlashDismissed(false)
+                  setSlashIndex(0)
+                }}
                 onKeyDown={(e) => {
+                  const items = matchSlashCommands(input)
+                  if (!slashDismissed && items.length > 0) {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault()
+                      setSlashIndex((i) => (i + 1) % items.length)
+                      return
+                    }
+                    if (e.key === 'ArrowUp') {
+                      e.preventDefault()
+                      setSlashIndex((i) => (i - 1 + items.length) % items.length)
+                      return
+                    }
+                    if (e.key === 'Enter' || e.key === 'Tab') {
+                      e.preventDefault()
+                      acceptSlash(items[Math.min(slashIndex, items.length - 1)])
+                      return
+                    }
+                    if (e.key === 'Escape') {
+                      e.preventDefault()
+                      setSlashDismissed(true)
+                      return
+                    }
+                  }
+                  // Ghost-text (CLI-like) : Tab accepte la recommandation quand le champ est vide
+                  // et qu'aucun menu slash n'est actif. Remplit l'input avec l'étape recommandée.
+                  if (e.key === 'Tab' && ghostRecommendation && input.trim() === '') {
+                    e.preventDefault()
+                    setDraftInput(composerDraftKeyRef.current, ghostRecommendation)
+                    return
+                  }
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
                     if (handleBtw()) return
@@ -1821,7 +1924,9 @@ export function ChatView({
                 placeholder={
                   busy && activeId !== null
                     ? 'Mettre en file… envoyé à la fin du tour (Entrée)'
-                    : 'Écrire à l’agent ou déposer des fichiers…'
+                    : ghostRecommendation
+                      ? `⇥ ${ghostRecommendation}`
+                      : 'Écrire à l’agent ou déposer des fichiers…'
                 }
               />
               <button

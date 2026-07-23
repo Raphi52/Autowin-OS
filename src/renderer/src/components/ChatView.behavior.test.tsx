@@ -9,7 +9,8 @@ vi.mock('./Markdown', () => ({
   Markdown: ({ text }: { text: string }) => {
     markdownRenderCount.value += 1
     return createElement('span', null, text)
-  }
+  },
+  extractRecommendation: (): string | null => null
 }))
 
 type Deferred<T> = {

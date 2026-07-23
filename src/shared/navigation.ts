@@ -3,6 +3,7 @@ export const APP_DESTINATIONS = [
   { id: 'agent-studio', label: 'Agent Studio', icon: '🤖' },
   { id: 'knowledge', label: 'Knowledge', icon: '🧠' },
   { id: 'observatory', label: 'Observatory', icon: '🔭' },
+  { id: 'worktree', label: 'Worktrees', icon: '🌳' },
   { id: 'settings', label: 'Settings', icon: '⚙️' }
 ] as const
 

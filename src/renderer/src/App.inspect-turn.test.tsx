@@ -68,7 +68,7 @@ describe('App inspect-turn navigation', () => {
     await act(async () => root.unmount())
   })
 
-  it('renders exactly the five canonical product destinations', async () => {
+  it('renders exactly the six canonical product destinations', async () => {
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -86,10 +86,10 @@ describe('App inspect-turn navigation', () => {
     })
 
     const navItems = [...container.querySelectorAll('.nav-item')]
-    const expectedLabels = ['Chat', 'Agent Studio', 'Knowledge', 'Observatory', 'Settings']
+    const expectedLabels = ['Chat', 'Agent Studio', 'Knowledge', 'Observatory', 'Worktrees', 'Settings']
     expect(navItems).toHaveLength(expectedLabels.length)
     expectedLabels.forEach((label, index) => expect(navItems[index].textContent).toContain(label))
-    for (const id of ['chat', 'agent-studio', 'knowledge', 'observatory', 'settings']) {
+    for (const id of ['chat', 'agent-studio', 'knowledge', 'observatory', 'worktree', 'settings']) {
       expect(container.querySelector(`[data-testid="nav-${id}"]`)).not.toBeNull()
     }
     await act(async () => root.unmount())

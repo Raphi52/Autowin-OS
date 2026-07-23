@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { runPreflight } from './preflight'
 
 describe('runPreflight', () => {
@@ -65,5 +65,24 @@ describe('runPreflight', () => {
     })
     expect(r.ok).toBe(false)
     expect(r.checks.every((c) => !c.ok)).toBe(true)
+  })
+
+  it('ignore un provider en standby sans l’essayer ni dégrader le diagnostic', async () => {
+    const hasBin = vi.fn(async () => true)
+    const r = await runPreflight(
+      {
+        pingBrain: async () => true,
+        hasBin,
+        hasCodexSession: () => true,
+        hasBrainToken: () => true
+      },
+      { standbyProviders: ['kimi'] }
+    )
+
+    expect(hasBin).not.toHaveBeenCalledWith('kimi')
+    expect(r.checks).toContainEqual(
+      expect.objectContaining({ id: 'kimi', ok: true, standby: true })
+    )
+    expect(r.ok).toBe(true)
   })
 })

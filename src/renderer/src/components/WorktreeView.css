@@ -1,0 +1,79 @@
+.worktree-tab {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 16px 18px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px;
+  border: 1px solid color-mix(in srgb, var(--rose) 34%, var(--container-border));
+  border-radius: var(--container-radius-page);
+  /* Conteneur de vue OPAQUE (comme les autres vues) : --surface-page vaut `transparent` en thème
+     serious → utiliser --surface-panel (noir ~95%). La ligne dégradée du haut est conservée. */
+  background:
+    linear-gradient(90deg, var(--rose), rgba(239, 63, 145, 0.14) 42%, rgba(233, 189, 78, 0.18) 72%, var(--gold)) top / 100% 1px no-repeat,
+    var(--surface-panel);
+  box-shadow: var(--container-shadow);
+  backdrop-filter: blur(var(--container-blur));
+}
+
+.worktree-tab::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0.58;
+  background-image:
+    radial-gradient(circle, rgba(255, 255, 255, 0.9) 0 1px, transparent 1.2px),
+    radial-gradient(circle, rgba(239, 63, 145, 0.88) 0 1px, transparent 1.2px),
+    radial-gradient(circle, rgba(233, 189, 78, 0.8) 0 1px, transparent 1.2px);
+  background-position: 9px 11px, 41px 27px, 74px 8px;
+  background-size: 83px 61px, 107px 79px, 137px 97px;
+  mask-image: linear-gradient(to bottom, #000 0, rgba(0, 0, 0, 0.78) 46px, transparent 150px);
+}
+
+.worktree-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 4px 8px 0;
+}
+
+.worktree-page-head .module-header > span { color: var(--gold); }
+
+.worktree-page-head .module-header > h1 { position: relative; }
+
+.worktree-page-head .module-header > h1::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -7px;
+  width: 68px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--rose), var(--gold));
+}
+
+.worktree-page-head p {
+  max-width: 460px;
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  text-align: right;
+}
+
+@media (max-width: 760px) {
+  .worktree-page-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .worktree-page-head p { text-align: left; }
+}

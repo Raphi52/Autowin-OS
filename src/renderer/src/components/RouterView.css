@@ -22,22 +22,116 @@
   padding: 12px 14px;
   background: var(--surface-panel);
 }
-.router-default > header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
-.router-default > header h3 { margin: 0; font-size: 1em; }
-.router-default > header small { opacity: .6; }
-.router-providers { display: flex; flex-direction: column; gap: 12px; }
-.router-provider > header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.router-provider > header > strong { font-size: 1.05em; }
-.router-badge { font-size: .8em; padding: 2px 8px; border-radius: 999px; border: 1px solid transparent; }
-.router-badge.is-authenticated { color: #6ad39b; border-color: rgba(106,211,155,.4); background: rgba(106,211,155,.12); }
-.router-badge.is-expired { color: #ff9b9b; border-color: rgba(255,155,155,.4); background: rgba(255,155,155,.12); }
-.router-badge.is-installed-untested { color: #e0cc86; border-color: rgba(217,196,122,.4); background: rgba(217,196,122,.10); }
-.router-badge.is-absent, .router-badge.is-unknown { opacity: .7; border-color: var(--container-border); }
-.router-actions { margin-left: auto; display: flex; gap: 6px; }
-.router-actions button { border: 1px solid var(--container-border); background: var(--surface-card); color: inherit; padding: 4px 10px; border-radius: 8px; cursor: pointer; font: inherit; font-size: .85em; }
-.router-actions button:disabled { opacity: .5; cursor: default; }
-.router-hint { margin: 6px 0 0; font-size: .85em; opacity: .8; }
-.router-models { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.router-models > li { display: flex; align-items: baseline; gap: 8px; font-size: .9em; padding: 4px 8px; border-radius: 6px; background: var(--surface-card); }
-.router-efforts { opacity: .6; font-size: .85em; margin-left: auto; }
-.router-empty { opacity: .6; font-size: .9em; }
+.router-default > header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.router-default > header h3 {
+  margin: 0;
+  font-size: 1em;
+}
+.router-default > header small {
+  opacity: 0.6;
+}
+.router-providers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.router-provider > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.router-provider > header > strong {
+  font-size: 1.05em;
+}
+.router-badge {
+  font-size: 0.8em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.router-badge.is-authenticated {
+  color: #6ad39b;
+  border-color: rgba(106, 211, 155, 0.4);
+  background: rgba(106, 211, 155, 0.12);
+}
+.router-badge.is-expired {
+  color: #ff9b9b;
+  border-color: rgba(255, 155, 155, 0.4);
+  background: rgba(255, 155, 155, 0.12);
+}
+.router-badge.is-installed-untested {
+  color: #e0cc86;
+  border-color: rgba(217, 196, 122, 0.4);
+  background: rgba(217, 196, 122, 0.1);
+}
+.router-badge.is-standby {
+  color: #9fc6e8;
+  border-color: rgba(126, 177, 219, 0.38);
+  background: rgba(91, 139, 181, 0.12);
+}
+.router-badge.is-absent,
+.router-badge.is-unknown {
+  opacity: 0.7;
+  border-color: var(--container-border);
+}
+.router-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+.router-actions button {
+  border: 1px solid var(--container-border);
+  background: var(--surface-card);
+  color: inherit;
+  padding: 4px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85em;
+}
+.router-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.router-actions .router-standby {
+  border-color: rgba(126, 177, 219, 0.32);
+  color: #c8def1;
+}
+.router-hint {
+  margin: 6px 0 0;
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+.router-models {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.router-models > li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 0.9em;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--surface-card);
+}
+.router-efforts {
+  opacity: 0.6;
+  font-size: 0.85em;
+  margin-left: auto;
+}
+.router-empty {
+  opacity: 0.6;
+  font-size: 0.9em;
+}

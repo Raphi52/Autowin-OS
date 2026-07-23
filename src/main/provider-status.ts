@@ -19,12 +19,28 @@ export type AuthStatus =
   | 'absent' // ni token ni CLI
   | 'unknown' // le check lui-même a échoué (timeout/erreur) — surtout PAS « authenticated »
 
+export type ProviderDisplayStatus = AuthStatus | 'standby'
+
 export interface ProviderStatus {
   provider: string
-  status: AuthStatus
+  status: ProviderDisplayStatus
   /** true si un bouton « Tester » (probe réel) a du sens pour ce provider dans cet état. */
   testable: boolean
   detail?: string
+  lastCheckedAt?: number
+}
+
+interface ProviderStateSnapshot {
+  mode: 'active' | 'standby'
+  lastProbe?: { status: AuthStatus; checkedAt: number }
+}
+
+/** Coupe le callback avant tout spawn/réseau lorsque le provider est volontairement en veille. */
+export async function probePresenceUnlessStandby(
+  state: Pick<ProviderStateSnapshot, 'mode'>,
+  probe: () => Promise<boolean>
+): Promise<boolean> {
+  return state.mode === 'standby' ? false : probe()
 }
 
 /** Statut codex depuis le token (cheap, exact) : expiry vs horloge. */
@@ -68,13 +84,32 @@ export function buildProviderStatuses(inputs: {
   claudeResponds: boolean
   kimiResponds: boolean
   now: number
+  states?: Partial<Record<'codex' | 'claude' | 'kimi', ProviderStateSnapshot>>
 }): ProviderStatus[] {
   const codex = codexTokenStatus(inputs.codexTokens, inputs.now)
   const claude = presenceStatus(inputs.claudeResponds)
   const kimi = presenceStatus(inputs.kimiResponds)
-  return [
-    { provider: 'codex', status: codex, testable: isTestable(codex) },
-    { provider: 'claude', status: claude, testable: isTestable(claude) },
-    { provider: 'kimi', status: kimi, testable: isTestable(kimi) }
-  ]
+  const display = (provider: 'codex' | 'claude' | 'kimi', fallback: AuthStatus): ProviderStatus => {
+    const state = inputs.states?.[provider]
+    if (state?.mode === 'standby') {
+      return {
+        provider,
+        status: 'standby',
+        testable: false,
+        detail: 'En standby — aucun probe ni reconnexion automatique.'
+      }
+    }
+    // Codex possède un oracle token local plus actuel. Pour les CLI opaques, le dernier mini-tour
+    // explicite est la meilleure preuve disponible et doit survivre au redémarrage.
+    if (provider !== 'codex' && state?.lastProbe) {
+      return {
+        provider,
+        status: state.lastProbe.status,
+        testable: isTestable(state.lastProbe.status),
+        lastCheckedAt: state.lastProbe.checkedAt
+      }
+    }
+    return { provider, status: fallback, testable: isTestable(fallback) }
+  }
+  return [display('codex', codex), display('claude', claude), display('kimi', kimi)]
 }

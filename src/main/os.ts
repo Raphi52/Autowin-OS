@@ -37,6 +37,9 @@ import {
 } from './orchestrator'
 import { regimePhases } from './task-regime'
 import { defaultBehaviourWorkspace } from './behaviour-files'
+import { WorktreeManager } from './store/worktree-manager'
+import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
+import type { WorktreeAgentActivity } from '../shared/worktree-activity-model'
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
@@ -96,19 +99,41 @@ export class AutowinOS {
     judge: FanMember[]
   } = { scout: [], frame: [], judge: [] }
   private taskReadiness: Promise<void> = Promise.resolve()
+  /**
+   * Coordinateur worktree (volet B) : donne à chaque run de mutation une copie isolée, fusionnée en
+   * full-auto (conflit → assisté). Présent seulement si le workspace est un repo git (sinon undefined
+   * → comportement historique, workspace partagé). Exposé pour l'IPC d'observabilité (volet A).
+   */
+  readonly worktrees?: RunWorktreeCoordinator
+  private worktreeActivityListener?: (a: WorktreeAgentActivity[]) => void
 
   constructor() {
     this.registry = new ProviderRegistry(loadKitSoul())
       .register(new ClaudeCliAdapter())
       .register(new CodexAdapter())
       .register(new KimiCliAdapter())
+    const executionWorkspace = resolveExecutionWorkspace()
+    // Garde : `git worktree` exige un vrai repo. Absent (.git manquant) → pas d'isolation (undefined).
+    if (existsSync(join(executionWorkspace, '.git'))) {
+      const manager = new WorktreeManager({
+        baseRepo: executionWorkspace,
+        worktreeRoot: join(ensureAutowinAppData(), 'worktrees')
+      })
+      this.worktrees = new RunWorktreeCoordinator({
+        manager,
+        onActivity: (a) => {
+          this.worktreeActivityListener?.(a)
+        }
+      })
+    }
     this.orchestrator = new Orchestrator({
       registry: this.registry,
       roles: this.roles,
       cost: this.cost,
       trust: this.trust,
       authority: this.authority,
-      executionWorkspace: resolveExecutionWorkspace(),
+      executionWorkspace,
+      worktrees: this.worktrees,
       // Pipeline ADAPTATIF (proportionnalité) : le régime de la tâche choisit le sous-ensemble de
       // phases (trivial → build seul ; standard → frame+build ; critical → les 5 scout→clean), puis
       // le juge (rôle distinct). Déterministe/générique (task-regime.ts). Économise tokens + latence
@@ -125,6 +150,16 @@ export class AutowinOS {
   /** Met à jour la source live du fan-out (appelé par la topology au boot et à chaque changement). */
   setFanOut(next: { scout: FanMember[]; frame: FanMember[]; judge: FanMember[] }): void {
     this.fanOut = next
+  }
+
+  /** Activité worktree courante (volet A) — snapshot pour l'IPC/renderer. */
+  getWorktreeActivity(): WorktreeAgentActivity[] {
+    return this.worktrees ? this.worktrees.activity() : []
+  }
+
+  /** Abonne l'IPC aux changements d'activité worktree (push live vers le cockpit). Idempotent. */
+  onWorktreeActivity(listener: (a: WorktreeAgentActivity[]) => void): void {
+    this.worktreeActivityListener = listener
   }
 
   /** Empêche tout run de lire la topology avant la fin de la découverte des modèles. */
