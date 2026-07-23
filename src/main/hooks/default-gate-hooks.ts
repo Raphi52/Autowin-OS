@@ -21,18 +21,26 @@ export function syncGateHooksHandler(ctx: HookContext): HookResult {
     : { block: false }
 }
 
+/** Cap du re-jeu de vérification (comme le stop-gate CC) : au-delà → kill → bloque. */
+const VERIFY_TIMEOUT_MS = 120_000
+
 /** Runner réel par défaut (verify-replay) : exécute la commande via le shell et rend son exit code. */
 const defaultVerifyRunner: VerifyRunner = (cmd, cwd) =>
   new Promise((resolve) => {
-    execFile(cmd, { cwd, shell: true, windowsHide: true }, (error) => {
-      const exitCode =
-        error && typeof (error as { code?: unknown }).code === 'number'
-          ? ((error as { code: number }).code as number)
-          : error
-            ? 1
-            : 0
-      resolve({ exitCode })
-    })
+    execFile(
+      cmd,
+      { cwd, shell: true, windowsHide: true, timeout: VERIFY_TIMEOUT_MS },
+      (error) => {
+        // timeout → error.killed=true → exitCode non-zéro → block (jamais un faux-vert sur dépassement).
+        const exitCode =
+          error && typeof (error as { code?: unknown }).code === 'number'
+            ? ((error as { code: number }).code as number)
+            : error
+              ? 1
+              : 0
+        resolve({ exitCode })
+      }
+    )
   })
 
 /**

@@ -8,6 +8,7 @@ import type { AuthoritySas } from './authority/sas'
 import { evaluateClosure } from './gates/stopgate'
 import { HookBus } from './hooks/hook-bus'
 import { createDefaultHookBus } from './hooks/default-gate-hooks'
+import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
 import { type PipelinePhase } from './skill-pipeline'
 import { phaseBrief } from './phase-briefs'
 import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
@@ -94,6 +95,14 @@ export interface OrchestratorDeps {
    * verify-replay) → enforcement identique à l'historique (rétrocompat HARD) + verify-replay en plus.
    */
   hooks?: HookBus
+  /**
+   * verify-replay : commande de vérification REJOUÉE au gate pour une mutation. `verifyCmd` explicite
+   * PRIME ; sinon si `autoVerify`, on résout la commande de test DÉCLARÉE du workspace (package.json).
+   * Absent/off → verify-replay dormant (comportement v1). Off par défaut (opt-in, évite de forcer un
+   * `npm test` coûteux/grossier sur chaque run).
+   */
+  verifyCmd?: string
+  autoVerify?: boolean
   /** Workspace borné remis au sous-agent outillé. Jamais transmis au juge ou au chat. */
   executionWorkspace: string
   /**
@@ -214,6 +223,12 @@ export class Orchestrator {
   /** Bus de hooks (fourni ou défaut). Uniforme pour TOUS les exécuteurs (claude/codex/omniroute). */
   private get hooks(): HookBus {
     return (this._hooks ??= this.deps.hooks ?? createDefaultHookBus())
+  }
+
+  /** Commande de vérif à rejouer (verify-replay) : explicite > convention workspace > aucune (dormant). */
+  private resolveVerifyCmd(): string | undefined {
+    if (this.deps.verifyCmd) return this.deps.verifyCmd
+    return this.deps.autoVerify ? resolveVerifyCmd(this.deps.executionWorkspace) : undefined
   }
 
   /**
@@ -486,6 +501,7 @@ export class Orchestrator {
     const hookOutcome = await this.hooks.run('pre-green', {
       task,
       cwd: this.deps.executionWorkspace,
+      verifyCmd: this.resolveVerifyCmd(),
       requireProof: isMutationTask(task),
       evidenceOkCount: evidence.filter((e) => e.ok).length,
       evidence
@@ -1085,6 +1101,7 @@ export class Orchestrator {
       const hookOutcome = await this.hooks.run('pre-green', {
         task,
         cwd: this.deps.executionWorkspace,
+        verifyCmd: this.resolveVerifyCmd(),
         requireProof: isMutationTask(task),
         evidenceOkCount: (exec.executionEvidence ?? []).filter((e) => e.ok).length,
         evidence: exec.executionEvidence

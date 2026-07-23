@@ -7,6 +7,8 @@ import { CostAggregator } from './dashboards/cost'
 import { TrustLedger } from './trust/ledger'
 import { AuthoritySas } from './authority/sas'
 import { HookBus } from './hooks/hook-bus'
+import { createDefaultHookBus } from './hooks/default-gate-hooks'
+import type { VerifyRunner } from './hooks/verify-replay-hook'
 
 /** Provider dont l'exec fournit mutation+verification ok et le juge répond VALIDE (gate vert par défaut). */
 class GreenProvider implements ProviderAdapter {
@@ -32,7 +34,7 @@ class GreenProvider implements ProviderAdapter {
   }
 }
 
-function makeOrchestrator(hooks?: HookBus): Orchestrator {
+function makeOrchestrator(extra: Partial<ConstructorParameters<typeof Orchestrator>[0]> = {}): Orchestrator {
   const provider = new GreenProvider()
   return new Orchestrator({
     registry: new ProviderRegistry().register(provider),
@@ -45,7 +47,7 @@ function makeOrchestrator(hooks?: HookBus): Orchestrator {
     authority: new AuthoritySas(),
     executionWorkspace: 'C:\\ws',
     classifyPhases: () => ['build'],
-    ...(hooks ? { hooks } : {})
+    ...extra
   })
 }
 
@@ -57,7 +59,31 @@ describe('HookBus branché dans l’orchestrateur (pre-green)', () => {
 
   it('un hook pre-green bloquant fait échouer le gate MÊME si preuve + juge OK', async () => {
     const bus = new HookBus().register('pre-green', () => ({ block: true, reason: 'verify-replay refusé' }))
-    const r = await makeOrchestrator(bus).run('corrige le bug')
+    const r = await makeOrchestrator({ hooks: bus }).run('corrige le bug')
     expect(r.gateBlocked).toBe(true)
+  })
+
+  it('v2 : verifyCmd fourni → verify-replay REJOUE la commande et BLOQUE si elle échoue', async () => {
+    const calls: string[] = []
+    const failing: VerifyRunner = async (cmd) => {
+      calls.push(cmd)
+      return { exitCode: 1 }
+    }
+    const r = await makeOrchestrator({
+      verifyCmd: 'npm test',
+      hooks: createDefaultHookBus(failing)
+    }).run('corrige le bug')
+    // Le gate a rejoué la commande (≥1× ; une mutation bloquée déclenche 1 réparation → re-gate → re-jeu).
+    expect(calls).toContain('npm test')
+    expect(r.gateBlocked).toBe(true) // échec du re-jeu → vert refusé, malgré preuve+juge OK
+  })
+
+  it('v2 : verifyCmd qui PASSE (exit 0) → gate vert', async () => {
+    const passing: VerifyRunner = async () => ({ exitCode: 0 })
+    const r = await makeOrchestrator({
+      verifyCmd: 'npm test',
+      hooks: createDefaultHookBus(passing)
+    }).run('corrige le bug')
+    expect(r.gateBlocked).toBe(false)
   })
 })
