@@ -6,6 +6,28 @@ import type { TicketRuntimeCredential } from './tickets-service'
 
 const execFileAsync = promisify(execFile)
 
+const FORGE_AUTH_ENVIRONMENT_KEYS = [
+  'GH_TOKEN',
+  'GITHUB_TOKEN',
+  'GH_ENTERPRISE_TOKEN',
+  'GITHUB_ENTERPRISE_TOKEN',
+  'GH_HOST',
+  'GITLAB_TOKEN',
+  'GITLAB_ACCESS_TOKEN',
+  'GLAB_TOKEN',
+  'GITLAB_HOST',
+  'OAUTH_TOKEN',
+  'CI_JOB_TOKEN'
+] as const
+
+export function forgeCliEnvironment(
+  environment: Readonly<NodeJS.ProcessEnv> = process.env
+): NodeJS.ProcessEnv {
+  const sanitized = { ...environment }
+  for (const key of FORGE_AUTH_ENVIRONMENT_KEYS) delete sanitized[key]
+  return sanitized
+}
+
 export type ForgeCliRunner = (
   executable: 'gh' | 'glab',
   args: readonly string[]
@@ -18,7 +40,8 @@ const defaultRunner: ForgeCliRunner = async (executable, args) => {
   const result = await execFileAsync(target, targetArgs, {
     timeout: 10_000,
     windowsHide: true,
-    maxBuffer: 16_384
+    maxBuffer: 16_384,
+    env: forgeCliEnvironment()
   })
   return { stdout: result.stdout }
 }

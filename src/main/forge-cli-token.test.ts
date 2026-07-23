@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GitHubTicketSource, GitLabTicketSource } from '../shared/tickets'
-import { loadForgeCliToken } from './forge-cli-token'
+import { forgeCliEnvironment, loadForgeCliToken } from './forge-cli-token'
 
 const github: GitHubTicketSource = {
   id: 'github:private:repo',
@@ -18,6 +18,25 @@ const gitlab: GitLabTicketSource = {
 }
 
 describe('credentials runtime des forges', () => {
+  it('ne transmet aucune variable de credential au sous-processus CLI', () => {
+    expect(
+      forgeCliEnvironment({
+        PATH: 'bin',
+        GH_TOKEN: 'gh-public',
+        GITHUB_TOKEN: 'github-public',
+        GH_ENTERPRISE_TOKEN: 'gh-enterprise',
+        GITHUB_ENTERPRISE_TOKEN: 'github-enterprise',
+        GH_HOST: 'github.corp.example',
+        GITLAB_TOKEN: 'gitlab-token',
+        GITLAB_ACCESS_TOKEN: 'gitlab-access-token',
+        GLAB_TOKEN: 'glab-token',
+        GITLAB_HOST: 'gitlab.corp.example',
+        OAUTH_TOKEN: 'oauth-token',
+        CI_JOB_TOKEN: 'ci-job-token'
+      })
+    ).toEqual({ PATH: 'bin' })
+  })
+
   it('préfère les variables main-only sans exposer le token', async () => {
     const runner = vi.fn()
     await expect(loadForgeCliToken(github, runner, { GH_TOKEN: 'gh-secret' })).resolves.toEqual({
