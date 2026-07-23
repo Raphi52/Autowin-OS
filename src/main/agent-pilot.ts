@@ -219,7 +219,13 @@ export class AgentPilot {
       `\nRègles : réponds normalement quand c'est une simple question ; n'utilise des commandes ` +
       `QUE si l'objectif demande d'agir sur l'app. Après une commande tu reçois le résultat + le ` +
       `nouvel état et tu peux continuer. Quand tu as fini d'agir, termine par ta réponse en clair ` +
-      `SANS commande.\n${MODEL_QUESTION_INSTRUCTION}` +
+      `SANS commande.\n` +
+      `DEMANDE OUVERTE (« scoute / trouve / propose / des options / qu'est-ce que je pourrais / ` +
+      `améliore X ») : NE renvoie PAS la question à l'utilisateur. DIVERGE toi-même — lance ` +
+      `\`orchestrate\` avec la demande complète (pipeline scout/frame) OU propose directement ` +
+      `plusieurs options concrètes et scorées, puis laisse l'utilisateur choisir. Demander à ` +
+      `l'utilisateur de faire le travail (ex. « donne-moi la liste ») est un DERNIER recours, ` +
+      `jamais le réflexe par défaut.\n${MODEL_QUESTION_INSTRUCTION}` +
       CONCISE_STRUCTURED_RESPONSE_INSTRUCTION +
       (retrievedContext ? `\n\n${retrievedContext}` : '')
 

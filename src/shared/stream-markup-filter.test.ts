@@ -30,4 +30,23 @@ describe('VisibleStreamFilter', () => {
     )
     expect(visible(['Visible <cm'])).toBe('Visible ')
   })
+
+  it('keeps an unclosed command tag mentioned in prose intact', () => {
+    const source = 'Pour agir, émets une commande comme <cmd> par exemple, sans la fermer.'
+    expect(visible([source])).toBe(source)
+    for (let split = 1; split < source.length; split += 1) {
+      expect(visible([source.slice(0, split), source.slice(split)])).toBe(source)
+    }
+  })
+
+  it('keeps a closed control block with invalid JSON as visible text', () => {
+    const source = 'Exemple littéral : <cmd>ceci n_est pas du JSON</cmd> voilà.'
+    expect(visible([source])).toBe(source)
+  })
+
+  it('still suppresses a complete valid command block', () => {
+    expect(visible(['Avant <cmd>{"name":"get_state","args":{}}</cmd> après.'])).toBe(
+      'Avant  après.'
+    )
+  })
 })
