@@ -1,6 +1,7 @@
 import type { ProviderRegistry } from './providers/registry'
-import type { RoleModelConfig } from './roles'
+import type { RoleModelConfig, ReasoningEffort } from './roles'
 import { resolvePhaseBinding } from './roles'
+import { defaultQuorumThreshold } from './quorum'
 import type { CostAggregator } from './dashboards/cost'
 import type { TrustLedger } from './trust/ledger'
 import type { AuthoritySas } from './authority/sas'
@@ -27,6 +28,8 @@ export interface OrchestrationStep {
   step: 'exec' | 'judge' | 'gate'
   provider?: string
   role?: string
+  /** Modèle concret du tour — distingue les N appels d'un fan-out multi-modèles dans la trace. */
+  model?: string
   text?: string
   tokens?: number
   costUsd?: number
@@ -90,6 +93,20 @@ export interface OrchestratorDeps {
    * task-regime.ts). Absent → `execPhases` statique (rétrocompat, tests).
    */
   classifyPhases?: (task: string) => PipelinePhase[]
+  /**
+   * Fan-out MULTI-MODÈLES d'une phase de DIVERGENCE (scout/frame) : renvoie les modèles déposés
+   * dans le bloc topology de cette phase. ≥2 → la phase s'exécute sur CHAQUE modèle en parallèle
+   * puis l'orchestrateur SYNTHÉTISE (union dédupliquée). <2 ou absent → mono-modèle (comportement
+   * actuel inchangé, rétrocompat HARD). Ne renvoyer des membres que pour scout/frame.
+   */
+  phaseFanOut?: (
+    phase: PipelinePhase
+  ) => Array<{ provider: string; model?: string; reasoningEffort?: ReasoningEffort }>
+  /**
+   * Fan-out MULTI-MODÈLES du JUGE : modèles déposés dans le bloc judge. ≥2 → N juges en parallèle
+   * puis synthèse par QUORUM. <2 ou absent → un seul juge (rétrocompat).
+   */
+  judgeFanOut?: () => Array<{ provider: string; model?: string; reasoningEffort?: ReasoningEffort }>
 }
 
 const MUTATION_TASK =
@@ -195,6 +212,195 @@ export class Orchestrator {
     // run (isMutationTask(task) fixe) → jamais de resume à travers un changement de sandbox.
     let prevSessionId: string | undefined
     for (const phase of execPhases) {
+      // FAN-OUT multi-modèles (scout/frame) : ≥2 modèles déposés dans le bloc topology de la phase
+      // → la phase s'exécute sur CHAQUE modèle en parallèle, puis l'orchestrateur SYNTHÉTISE
+      // (union dédupliquée). <2 ou absent → chemin mono-modèle ci-dessous (rétrocompat HARD).
+      const fanMembers = (this.deps.phaseFanOut?.(phase) ?? []).filter((m) => m && m.provider)
+      if (fanMembers.length >= 2) {
+        // Le fan-out casse la chaîne de session (N sessions //). Chaque membre part du contexte complet.
+        const fanMessages = [{ role: 'user' as const, content: phaseContext.join('\n\n') }]
+        const parts = [
+          { name: `consigne:${phase}`, text: phaseBrief(phase) },
+          { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
+          { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+          { name: 'projectContext', text: projectContext }
+        ]
+        const fanSystemBlocks = parts
+          .filter((p) => p.text)
+          .map((p) => ({ name: p.name, chars: p.text.length }))
+        const fanSystem = parts.map((p) => p.text).join('')
+        const sandbox = isMutationTask(task) ? 'danger-full-access' : 'read-only'
+        const memberOutputs = await Promise.all(
+          fanMembers.map(async (member) => {
+            const opts: SendOptions = {
+              system: fanSystem,
+              systemBlocks: fanSystemBlocks,
+              model: member.model,
+              reasoningEffort: member.reasoningEffort,
+              execution: { cwd: this.deps.executionWorkspace, sandbox },
+              signal
+            }
+            const startedAt = performance.now()
+            onPhase?.({
+              step: 'exec',
+              provider: member.provider,
+              role: 'subagent',
+              model: member.model,
+              reasoningEffort: member.reasoningEffort,
+              phase
+            })
+            try {
+              const res = await registry.send(member.provider, fanMessages, opts, (c) =>
+                onDelta?.('exec', c.delta)
+              )
+              if (res.usage) {
+                cost.add({
+                  provider: member.provider,
+                  role: 'subagent',
+                  model: member.model,
+                  inputTokens: res.usage.inputTokens,
+                  outputTokens: res.usage.outputTokens,
+                  cacheReadTokens: res.usage.cacheReadTokens,
+                  costUsd: res.usage.costUsd
+                })
+              }
+              push({
+                step: 'exec',
+                provider: member.provider,
+                role: 'subagent',
+                model: member.model,
+                text: res.text,
+                tokens: res.usage ? res.usage.inputTokens + res.usage.outputTokens : undefined,
+                costUsd: res.usage?.costUsd,
+                usage: res.usage,
+                status: 'completed',
+                durationMs: performance.now() - startedAt,
+                evidence: res.executionEvidence,
+                detail: `phase ${phase} · modèle ${member.model ?? member.provider}`
+              })
+              aggregatedEvidence.push(...(res.executionEvidence ?? []))
+              return { member, text: res.text, ok: true as const }
+            } catch (error) {
+              push({
+                step: 'exec',
+                provider: member.provider,
+                role: 'subagent',
+                model: member.model,
+                text: '',
+                status: 'failed',
+                error: error instanceof Error ? error.message : String(error),
+                durationMs: performance.now() - startedAt,
+                detail: `phase ${phase} · modèle ${member.model ?? member.provider}`
+              })
+              return { member, text: '', ok: false as const }
+            }
+          })
+        )
+        // SYNTHÈSE par l'orchestrateur (le rôle le + capable) : union dédupliquée, PAS de re-décision.
+        // Un modèle en échec (ok=false / texte vide) ne pollue pas la synthèse (filtré).
+        const good = memberOutputs.filter((o) => o.ok && o.text.trim())
+        if (good.length === 0) {
+          // Tous les modèles du fan-out ont échoué → échec de phase EXPLICITE (jamais une synthèse
+          // fantôme sur du vide qui se propagerait comme un résultat valide). Aligne le comportement
+          // sur le chemin mono-modèle (une exec en échec propage l'erreur).
+          push({
+            step: 'exec',
+            role: 'subagent',
+            text: '',
+            status: 'failed',
+            detail: `phase ${phase} : les ${fanMembers.length} modèles du fan-out ont échoué`,
+            durationMs: 0
+          })
+          throw new Error(
+            `Fan-out ${phase} : aucun modèle n'a produit de sortie (${fanMembers.length} échec(s))`
+          )
+        }
+        if (good.length === 1) {
+          // Un seul survivant → rien à agréger : on réutilise sa sortie directement, sans appel de
+          // synthèse (inutile + risque de reformulation d'un texte unique).
+          const solo = good[0].text
+          lastExecText = solo
+          phaseOutputs.push({ phase, text: solo })
+          const carriedSolo =
+            solo.length > PHASE_CONTEXT_CAP
+              ? `${solo.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
+              : solo
+          phaseContext.push(`[phase ${phase}] ${carriedSolo}`)
+          prevSessionId = undefined
+          continue
+        }
+        const orchBinding = roles.getBinding('orchestrator')
+        const labelled = good
+          .map((o, i) => `### Proposition ${i + 1} (modèle ${o.member.model ?? o.member.provider})\n${o.text}`)
+          .join('\n\n')
+        const synthParts = [
+          { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+          { name: 'projectContext', text: projectContext }
+        ]
+        const synthOptions: SendOptions = {
+          system: synthParts.map((p) => p.text).join(''),
+          systemBlocks: synthParts.filter((p) => p.text).map((p) => ({ name: p.name, chars: p.text.length })),
+          model: orchBinding.model,
+          reasoningEffort: orchBinding.reasoningEffort,
+          execution: { cwd: this.deps.executionWorkspace, sandbox: 'read-only' },
+          signal
+        }
+        const synthMessages = [
+          {
+            role: 'user' as const,
+            content:
+              `Phase « ${phase} » exécutée par ${good.length} modèle(s) indépendant(s). Fusionne leurs sorties en UNE seule : ` +
+              `UNION DÉDUPLIQUÉE — conserve tous les angles/idées/questions distincts, supprime uniquement les redites. ` +
+              `NE hiérarchise pas, NE tranche pas au-delà du regroupement (agréger ≠ re-décider).\n\n${labelled}`
+          }
+        ]
+        const synthStartedAt = performance.now()
+        onPhase?.({
+          step: 'exec',
+          provider: orchBinding.provider,
+          role: 'orchestrator',
+          model: orchBinding.model,
+          reasoningEffort: orchBinding.reasoningEffort,
+          phase
+        })
+        const synth = await registry.send(orchBinding.provider, synthMessages, synthOptions, (c) =>
+          onDelta?.('exec', c.delta)
+        )
+        if (synth.usage) {
+          cost.add({
+            provider: orchBinding.provider,
+            role: 'orchestrator',
+            model: orchBinding.model,
+            inputTokens: synth.usage.inputTokens,
+            outputTokens: synth.usage.outputTokens,
+            cacheReadTokens: synth.usage.cacheReadTokens,
+            costUsd: synth.usage.costUsd
+          })
+        }
+        push({
+          step: 'exec',
+          provider: orchBinding.provider,
+          role: 'orchestrator',
+          model: orchBinding.model,
+          text: synth.text,
+          tokens: synth.usage ? synth.usage.inputTokens + synth.usage.outputTokens : undefined,
+          costUsd: synth.usage?.costUsd,
+          usage: synth.usage,
+          status: 'completed',
+          durationMs: performance.now() - synthStartedAt,
+          detail: `synthèse ${phase} (${good.length} modèles)`
+        })
+        lastExecText = synth.text
+        lastUsage = synth.usage
+        phaseOutputs.push({ phase, text: synth.text })
+        const carried =
+          synth.text.length > PHASE_CONTEXT_CAP
+            ? `${synth.text.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
+            : synth.text
+        phaseContext.push(`[phase ${phase}] ${carried}`)
+        prevSessionId = undefined // fan-out : pas de session linéaire à chaîner
+        continue
+      }
       const resuming = Boolean(prevSessionId)
       const userContent = resuming
         ? `Phase suivante du pipeline : ${phase}. Continue À PARTIR de l'état de la session (tâche, connaissance Brain et acquis des phases précédentes déjà connus — ne les redemande pas). Applique la consigne de phase et enrichis le livrable existant.`
@@ -384,32 +590,120 @@ export class Orchestrator {
       })
       const judgeStartedAt = performance.now()
       let verdict
-      try {
-        verdict = await registry.send(judgeProvider, judgeMessages, judgeOptions, (c) =>
-          onDelta?.('judge', c.delta)
+      // FAN-OUT JUGE : ≥2 modèles dans le bloc topology judge → N juges en parallèle puis QUORUM
+      // de vote MÉCANIQUE (compter les VALIDE ; majorité = pass). Agréger ≠ re-décider : aucun juge
+      // supplémentaire ne tranche, on compte les voix. <2 ou absent → un seul juge (rétrocompat).
+      const judgeMembers = (this.deps.judgeFanOut?.() ?? []).filter((m) => m && m.provider)
+      if (judgeMembers.length >= 2) {
+        const results = await Promise.all(
+          judgeMembers.map(async (member) => {
+            const opts: SendOptions = {
+              ...judgeOptions,
+              model: member.model,
+              reasoningEffort: member.reasoningEffort
+            }
+            const startedAt = performance.now()
+            onPhase?.({
+              step: 'judge',
+              provider: member.provider,
+              role: 'judge',
+              model: member.model,
+              reasoningEffort: member.reasoningEffort
+            })
+            try {
+              const r = await registry.send(member.provider, judgeMessages, opts, (c) =>
+                onDelta?.('judge', c.delta)
+              )
+              if (r.usage) {
+                cost.add({
+                  provider: member.provider,
+                  role: 'judge',
+                  model: member.model,
+                  inputTokens: r.usage.inputTokens,
+                  outputTokens: r.usage.outputTokens,
+                  cacheReadTokens: r.usage.cacheReadTokens,
+                  costUsd: r.usage.costUsd
+                })
+              }
+              const votesValide = /^\s*valide/i.test(r.text)
+              push({
+                step: 'judge',
+                provider: member.provider,
+                role: 'judge',
+                model: member.model,
+                text: r.text.trim(),
+                tokens: r.usage ? r.usage.inputTokens + r.usage.outputTokens : undefined,
+                costUsd: r.usage?.costUsd,
+                usage: r.usage,
+                detail: votesValide ? 'vote: VALIDE' : 'vote: DEFAUT',
+                status: 'completed',
+                durationMs: performance.now() - startedAt
+              })
+              return { ok: votesValide, responded: true, text: r.text.trim() }
+            } catch (error) {
+              push({
+                step: 'judge',
+                provider: member.provider,
+                role: 'judge',
+                model: member.model,
+                text: '',
+                status: 'failed',
+                error: error instanceof Error ? error.message : String(error),
+                durationMs: performance.now() - startedAt
+              })
+              // Crashé : ne vote PAS et ne compte pas dans le dénominateur du quorum.
+              return { ok: false, responded: false, text: '' }
+            }
+          })
         )
-      } catch (error) {
-        push({
-          step: 'judge',
+        // Quorum sur les juges ayant RÉELLEMENT répondu (un juge crashé ne gonfle pas le dénominateur
+        // → sinon 2 crashes sur 3 feraient échouer un verdict que 100 % des répondants valident).
+        const responders = results.filter((r) => r.responded)
+        const votingN = responders.length
+        const valideVotes = responders.filter((r) => r.ok).length
+        const threshold = defaultQuorumThreshold(votingN)
+        const passes = votingN > 0 && valideVotes >= threshold
+        const reasons = responders.filter((r) => !r.ok && r.text).map((r) => r.text)
+        // Verdict AGRÉGÉ synthétique consommé par le gate ci-dessous. usage=undefined → le coût,
+        // déjà ajouté par juge ci-dessus, n'est pas re-compté.
+        verdict = {
+          text: passes
+            ? 'VALIDE'
+            : votingN === 0
+              ? 'DEFAUT: aucun juge n’a répondu (tous en échec)'
+              : `DEFAUT: quorum non atteint (${valideVotes}/${votingN} VALIDE, seuil ${threshold})${reasons.length ? ` — ${reasons.join(' | ')}` : ''}`,
           provider: judgeProvider,
-          role: 'judge',
-          text: '',
-          prompt: judgeEnvelope,
-          status: 'failed',
-          error: error instanceof Error ? error.message : String(error),
-          durationMs: performance.now() - judgeStartedAt
-        })
-        throw error
-      }
-      if (verdict.usage) {
-        cost.add({
-          provider: judgeProvider,
-          role: 'judge',
-          inputTokens: verdict.usage.inputTokens,
-          outputTokens: verdict.usage.outputTokens,
-          cacheReadTokens: verdict.usage.cacheReadTokens,
-          costUsd: verdict.usage.costUsd
-        })
+          systemInjected: true,
+          usage: undefined
+        }
+      } else {
+        try {
+          verdict = await registry.send(judgeProvider, judgeMessages, judgeOptions, (c) =>
+            onDelta?.('judge', c.delta)
+          )
+        } catch (error) {
+          push({
+            step: 'judge',
+            provider: judgeProvider,
+            role: 'judge',
+            text: '',
+            prompt: judgeEnvelope,
+            status: 'failed',
+            error: error instanceof Error ? error.message : String(error),
+            durationMs: performance.now() - judgeStartedAt
+          })
+          throw error
+        }
+        if (verdict.usage) {
+          cost.add({
+            provider: judgeProvider,
+            role: 'judge',
+            inputTokens: verdict.usage.inputTokens,
+            outputTokens: verdict.usage.outputTokens,
+            cacheReadTokens: verdict.usage.cacheReadTokens,
+            costUsd: verdict.usage.costUsd
+          })
+        }
       }
       const ok =
         evidenceSatisfiesTask(task, exec.executionEvidence) && /^\s*valide/i.test(verdict.text)

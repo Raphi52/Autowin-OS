@@ -1,11 +1,16 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { ImportedModel } from './models'
-import { assertTopology, createDefaultTopology, type AgentTopology } from './topology'
+import {
+  assertTopology,
+  createDefaultTopology,
+  migrateTopologyShape,
+  type AgentTopology
+} from './topology'
 
 export function loadAgentTopology(path: string, models: ImportedModel[]): AgentTopology {
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as AgentTopology
+    const parsed = migrateTopologyShape(JSON.parse(readFileSync(path, 'utf8'))) as AgentTopology
     return assertTopology(parsed, models)
   } catch {
     return createDefaultTopology(models)

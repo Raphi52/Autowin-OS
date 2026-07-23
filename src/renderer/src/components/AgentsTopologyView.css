@@ -262,6 +262,10 @@
   border-top-color: #9d79ed;
 }
 
+.topology-panel.is-amber {
+  border-top-color: #e0a13c;
+}
+
 .topology-panel.is-drop-target {
   border-color: #65d4ff;
   background: rgba(15, 45, 64, 0.84);

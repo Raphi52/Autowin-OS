@@ -18,6 +18,10 @@ export interface RoleBinding {
    * (scout/frame/terrain) peuvent tourner sur un petit modèle rapide, build/juge sur le gros.
    * Générique : référence des modèles du provider ACTIF, jamais un id figé. Absent pour une phase
    * → on retombe sur `model`/`reasoningEffort` du binding (rétrocompat → 0 régression).
+   *
+   * NB : mécanisme MONO-modèle par phase, DISTINCT du fan-out multi-modèles (scout/frame/judge) qui
+   * vit dans la topology (`AgentTopology.panels`) → `AutowinOS.fanOut`/`setFanOut` → deps orchestrateur
+   * `phaseFanOut`/`judgeFanOut`. `phaseModel` n'est PAS consommé par le fan-out topology.
    */
   phaseModel?: Partial<Record<PipelinePhase, { model?: string; reasoningEffort?: ReasoningEffort }>>
 }

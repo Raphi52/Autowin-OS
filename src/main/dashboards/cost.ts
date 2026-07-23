@@ -10,6 +10,8 @@ import { dirname } from 'node:path'
 export interface TurnCost {
   provider: string
   role?: string
+  /** Modèle concret du tour — nécessaire pour distinguer le coût des N modèles d'un fan-out. */
+  model?: string
   inputTokens: number
   outputTokens: number
   cacheReadTokens?: number

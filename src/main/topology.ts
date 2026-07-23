@@ -32,8 +32,8 @@ export interface SlotBinding {
   compute?: ComputeBinding
 }
 
-/** Les quatre cibles de la topologie. Orchestrateur = singleton. */
-export type PanelTarget = 'scout' | 'judge'
+/** Les cibles panel de la topologie (0..N slots, exécutés en parallèle). Orchestrateur = singleton. */
+export type PanelTarget = 'scout' | 'judge' | 'frame'
 export type SlotTarget = 'orchestrator' | 'subagents' | PanelTarget
 
 export interface AgentTopology {
@@ -43,7 +43,7 @@ export interface AgentTopology {
   /** 0..N. */
   subagents: SlotBinding[]
   /** 0..N chacun, exécutés en parallèle. */
-  panels: { scout: SlotBinding[]; judge: SlotBinding[] }
+  panels: { scout: SlotBinding[]; judge: SlotBinding[]; frame: SlotBinding[] }
 }
 
 /** Un binding résolu vers son transport (provider + model + effort concrets). */
@@ -107,7 +107,8 @@ export function assertTopology(topology: AgentTopology, models: ImportedModel[])
   const groups: Array<[string, SlotBinding[]]> = [
     ['subagents', topology.subagents],
     ['scout', topology.panels.scout],
-    ['judge', topology.panels.judge]
+    ['judge', topology.panels.judge],
+    ['frame', topology.panels.frame]
   ]
   for (const [name, slots] of groups) {
     if (!Array.isArray(slots)) throw new Error(`Cible « ${name} » : tableau attendu`)
@@ -178,6 +179,7 @@ export function resolveTopology(
   subagents: ResolvedSlot[]
   scout: ResolvedSlot[]
   judge: ResolvedSlot[]
+  frame: ResolvedSlot[]
 } {
   const resolve = (binding: SlotBinding, target: SlotTarget): ResolvedSlot => {
     const model = findModel(models, binding.modelId)
@@ -195,8 +197,28 @@ export function resolveTopology(
     orchestrator: resolve(topology.orchestrator, 'orchestrator'),
     subagents: topology.subagents.map((b) => resolve(b, 'subagents')),
     scout: topology.panels.scout.map((b) => resolve(b, 'scout')),
-    judge: topology.panels.judge.map((b) => resolve(b, 'judge'))
+    judge: topology.panels.judge.map((b) => resolve(b, 'judge')),
+    frame: topology.panels.frame.map((b) => resolve(b, 'frame'))
   }
+}
+
+/**
+ * Migration de FORME à l'ouverture : backfill les cibles panel absentes des fichiers
+ * antérieurs (ex. `frame`, ajouté après coup) à `[]`, AVANT toute validation. Sans ça,
+ * `assertTopology` jetterait sur un `panels.frame` undefined et réinitialiserait toute la
+ * config utilisateur. Idempotent et PUR : retourne un nouvel objet, ne mute pas l'argument.
+ */
+export function migrateTopologyShape(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object') return raw
+  const t = raw as { panels?: Record<string, unknown> }
+  if (!t.panels || typeof t.panels !== 'object') return raw
+  // Clone superficiel + panels cloné : aucune mutation de l'objet reçu (une référence externe
+  // à `raw`/`raw.panels` conservée par l'appelant reste intacte).
+  const panels = { ...(t.panels as Record<string, unknown>) }
+  for (const target of ['scout', 'judge', 'frame'] as const) {
+    if (!Array.isArray(panels[target])) panels[target] = []
+  }
+  return { ...t, panels }
 }
 
 /**
@@ -213,13 +235,15 @@ export function createDefaultTopology(models: ImportedModel[]): AgentTopology {
   const subagentModel = claude ?? models[0]
   const scoutModel = codex ?? claude ?? models[0]
   const judgeModel = claude ?? models[0]
+  const frameModel = claude ?? models[0]
   return {
     version: TOPOLOGY_VERSION,
     orchestrator: bindingForModel('orchestrator', orchestratorModel),
     subagents: [bindingForModel('subagent-1', subagentModel)],
     panels: {
       scout: [bindingForModel('scout-1', scoutModel)],
-      judge: [bindingForModel('judge-1', judgeModel)]
+      judge: [bindingForModel('judge-1', judgeModel)],
+      frame: [bindingForModel('frame-1', frameModel)]
     }
   }
 }

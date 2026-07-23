@@ -15,7 +15,7 @@ import {
 } from './credentials/omniroute-credential-store'
 import type { Message } from './providers/types'
 import { loadKitSoul } from './kit'
-import { RoleModelConfig, type Role, type RoleBinding } from './roles'
+import { RoleModelConfig, type Role, type RoleBinding, type ReasoningEffort } from './roles'
 import { loadRoleBindings, saveRoleBindings } from './role-store'
 // fix-ok: refonte qualité (demande user « refais comme en fable ») — purge du mort, pas un blind-fix.
 import { AuthoritySas } from './authority/sas'
@@ -100,6 +100,13 @@ function safeSync<T>(read: () => T, fallback: T): T {
   }
 }
 
+/** Un modèle membre d'un bloc de fan-out (topology → orchestrateur). */
+interface FanMember {
+  provider: string
+  model?: string
+  reasoningEffort?: ReasoningEffort
+}
+
 /** Noyau applicatif : une instance partagée, injectée dans les handlers IPC. */
 export class AutowinOS {
   private readonly brainGraphCache = new Map<string, ReturnType<typeof loadBrainGraph>>()
@@ -111,6 +118,16 @@ export class AutowinOS {
   readonly trust = new TrustLedger(join(ensureAutowinAppData(), 'trust.jsonl'))
   readonly orchestrator: Orchestrator
   readonly omniRouteCredentialStore: OmniRouteCredentialStore
+  /**
+   * Source LIVE du fan-out multi-modèles, alimentée par la topology (index.ts `syncRuntimeTopology`).
+   * Les blocs scout/frame/judge de la topology y déposent leurs N modèles ; l'orchestrateur les lit
+   * (deps `phaseFanOut`/`judgeFanOut`). Vide par défaut → mono-modèle (rétrocompat).
+   */
+  private fanOut: {
+    scout: FanMember[]
+    frame: FanMember[]
+    judge: FanMember[]
+  } = { scout: [], frame: [], judge: [] }
 
   constructor(options: { omniRouteCredentialStore?: OmniRouteCredentialStore } = {}) {
     this.omniRouteCredentialStore =
@@ -131,8 +148,18 @@ export class AutowinOS {
       // phases (trivial → build seul ; standard → frame+build ; critical → les 5 scout→clean), puis
       // le juge (rôle distinct). Déterministe/générique (task-regime.ts). Économise tokens + latence
       // sur les tâches simples sans jamais sous-traiter les complexes (doute → critical).
-      classifyPhases: regimePhases
+      classifyPhases: regimePhases,
+      // Fan-out multi-modèles : les blocs topology scout/frame → phases de divergence ; judge → juges.
+      // ≥2 modèles déposés → l'orchestrateur duplique + agrège (voir orchestrator.ts). Sinon mono.
+      phaseFanOut: (phase) =>
+        phase === 'scout' || phase === 'frame' ? this.fanOut[phase] : [],
+      judgeFanOut: () => this.fanOut.judge
     })
+  }
+
+  /** Met à jour la source live du fan-out (appelé par la topology au boot et à chaque changement). */
+  setFanOut(next: { scout: FanMember[]; frame: FanMember[]; judge: FanMember[] }): void {
+    this.fanOut = next
   }
 
   // --- Conversation directe (chat) : alimente le coût réel ---

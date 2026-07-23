@@ -203,9 +203,15 @@ function syncRuntimeTopology(topology: AgentTopology): void {
   ): Array<{ provider: string; model?: string; reasoningEffort?: ReasoningEffort }> =>
     slots.flatMap((b) => {
       const model = findModel(agentModels, b.modelId)
-      return model
-        ? [{ provider: b.provider, model: model.model, reasoningEffort: b.reasoningEffort }]
-        : []
+      if (!model) {
+        // Dégradation VISIBLE : un slot dont le modèle a disparu (désimporté) est retiré du fan-out.
+        // Sans ce log, un panel configuré à N modèles retomberait silencieusement en mono.
+        console.warn(
+          `[fan-out] slot ${b.slotId} ignoré : modèle introuvable « ${b.modelId} » (panel dégradé)`
+        )
+        return []
+      }
+      return [{ provider: b.provider, model: model.model, reasoningEffort: b.reasoningEffort }]
     })
   os.setFanOut({
     scout: toMembers(topology.panels.scout),

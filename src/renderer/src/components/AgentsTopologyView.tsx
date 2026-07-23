@@ -23,10 +23,13 @@ type AgentTopology = {
   version: number
   orchestrator: SlotBinding
   subagents: SlotBinding[]
-  panels: { scout: SlotBinding[]; judge: SlotBinding[] }
+  panels: { scout: SlotBinding[]; judge: SlotBinding[]; frame: SlotBinding[] }
 }
 
-type Target = 'orchestrator' | 'subagents' | 'scout' | 'judge'
+type Target = 'orchestrator' | 'subagents' | 'scout' | 'judge' | 'frame'
+
+/** Cibles dont le fan-out multi-modèles EST branché au runtime (≥2 slots → dupliqué + agrégé). */
+const FANOUT_ACTIVE: ReadonlySet<Target> = new Set<Target>(['scout', 'frame', 'judge'])
 type Profile = { id: string; name: string; updatedAt: string; topology: AgentTopology }
 type RoleBinding = { provider: string; model?: string; reasoningEffort?: string }
 
@@ -399,17 +402,25 @@ export function AgentsTopologyView(): React.JSX.Element {
                   </button>
                 )}
                 {index === 0 && <em>{target === 'orchestrator' ? 'actif' : 'rôle runtime'}</em>}
-                {/* #8 — le fan-out parallèle n'est pas branché au runtime : un slot >1 est cosmétique.
-                    On le marque explicitement "non actif" (pas seulement un encart texte en bas de page)
-                    pour ne pas laisser croire qu'une topologie parallèle est effective. */}
-                {index > 0 && (
-                  <em
-                    className="slot-inactive"
-                    title="Le fan-out parallèle n'est pas encore branché — ce slot n'est pas utilisé au runtime"
-                  >
-                    non actif
-                  </em>
-                )}
+                {/* Fan-out multi-modèles branché pour scout/frame/judge : un slot >1 est RÉELLEMENT
+                    exécuté en parallèle puis agrégé par l'orchestrateur. Pour subagents il ne l'est
+                    pas encore (seul le 1er slot alimente les phases d'exécution) → marqué non actif. */}
+                {index > 0 &&
+                  (FANOUT_ACTIVE.has(target) ? (
+                    <em
+                      className="slot-parallel"
+                      title="Exécuté en parallèle puis agrégé par l'orchestrateur (union pour scout/frame, quorum pour judge)"
+                    >
+                      parallèle · actif
+                    </em>
+                  ) : (
+                    <em
+                      className="slot-inactive"
+                      title="Le fan-out des sous-agents n'est pas encore branché — ce slot n'est pas utilisé au runtime"
+                    >
+                      non actif
+                    </em>
+                  ))}
               </article>
             )
           })}
@@ -535,7 +546,10 @@ export function AgentsTopologyView(): React.JSX.Element {
         <div className="topology-authority-note">
           <b>Autorité</b>
           <span>La configuration est validée et persistée par le main process.</span>
-          <span>Le premier slot de chaque groupe alimente le runtime actuel.</span>
+          <span>
+            Frame, Scouts et Judges : tous les modèles déposés s’exécutent (fan-out + agrégation).
+            Orchestrateur et Sous-agents : seul le premier slot alimente le runtime.
+          </span>
         </div>
       </aside>
 
@@ -563,6 +577,12 @@ export function AgentsTopologyView(): React.JSX.Element {
         </div>
         <div className="topology-parallel">
           {renderTargetPanel({
+            target: 'frame',
+            title: 'Frame',
+            description: 'Plusieurs modèles cadrent la même tâche ; angles fusionnés.',
+            accent: 'amber'
+          })}
+          {renderTargetPanel({
             target: 'scout',
             title: 'Scouts',
             description: 'Plusieurs lectures indépendantes du même front.',
@@ -578,9 +598,10 @@ export function AgentsTopologyView(): React.JSX.Element {
         <div className="topology-runtime-limit">
           <b>Runtime actuel</b>
           <span>
-            Le premier slot de chaque groupe est consommé par les rôles existants. Les slots
-            supplémentaires sont persistés comme topologie parallèle, mais leur fan-out automatique
-            n’est pas encore branché.
+            <b>Frame, Scouts et Judges</b> : déposez-y plusieurs modèles — ils s’exécutent en
+            parallèle puis l’orchestrateur agrège (union des angles pour Frame/Scouts, quorum de vote
+            pour Judges). <b>Orchestrateur et Sous-agents</b> : seul le premier slot alimente le
+            runtime (fan-out des sous-agents pas encore branché).
           </span>
         </div>
       </main>
