@@ -1,0 +1,10 @@
+/* Onglet "Worktrees" de la colonne droite du chat (vertical, colonne étroite). Linéaire sobre. */
+.worktree-pane {
+  padding: 8px 4px;
+}
+.worktree-pane-empty {
+  padding: 16px 14px;
+  color: var(--muted, #8b939f);
+  font-size: 12.5px;
+  line-height: 1.5;
+}

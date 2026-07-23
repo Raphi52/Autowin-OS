@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { WorktreeActivityView } from './WorktreeActivityView'
 import type { WorktreeAgentActivity } from '../../../shared/worktree-activity-model'
+import './WorktreePaneTab.css'
 
 /**
  * Onglet "Worktrees" de la colonne droite du chat (à côté de Runs / Activité) : rend l'activité

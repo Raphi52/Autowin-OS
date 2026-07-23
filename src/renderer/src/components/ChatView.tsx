@@ -2,7 +2,6 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Markdown, extractRecommendation } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
-import { ChatWorktreePanel } from './ChatWorktreePanel'
 import { WorktreePaneTab } from './WorktreePaneTab'
 import { ActivityPane } from './ActivityPane'
 import { ModuleHeader } from './ModuleHeader'
@@ -1640,8 +1639,6 @@ export function ChatView({
             })}
           </div>
         )}
-
-        <ChatWorktreePanel />
 
         <div
           className="chat-scroll scroll-y"
