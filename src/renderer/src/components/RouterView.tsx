@@ -26,8 +26,9 @@ const STATUS_LABEL: Record<AuthStatus, string> = {
 }
 const PROVIDER_LABEL: Record<string, string> = { claude: 'Claude', codex: 'Codex', kimi: 'Kimi' }
 const RE_AUTH_HINT: Record<string, string> = {
-  claude: 'Authentifie le CLI Claude dans un terminal, puis relance « Tester ».',
-  codex: 'Reconnecte Codex (npm run codex:login), puis rouvre la page.'
+  claude: 'CLI Claude introuvable ou non authentifié — installer/authentifier Claude, puis relance « Tester ».',
+  codex: 'CLI Codex ou session OAuth indisponible — installer/reconnecter Codex, puis rouvre la page.',
+  kimi: 'CLI Kimi introuvable — installer/authentifier Kimi, puis relance « Tester ».'
 }
 
 interface Binding {
@@ -101,8 +102,14 @@ export function RouterView(): React.JSX.Element {
     }
   }
 
-  const connectKimi = async (): Promise<void> => {
-    await window.api.kimiLogin().catch(() => undefined)
+  const [launched, setLaunched] = useState<Record<string, boolean>>({})
+  const reconnect = async (provider: string): Promise<void> => {
+    try {
+      await window.api.providerLogin(provider)
+      setLaunched((l) => ({ ...l, [provider]: true }))
+    } catch {
+      // le spawn du terminal a échoué → on n'affiche pas « lancé »
+    }
   }
 
   const changeDefaultModel = async (option: OrchestratorModelOption): Promise<void> => {
@@ -162,15 +169,24 @@ export function RouterView(): React.JSX.Element {
                       {testing[provider] ? 'Test…' : 'Tester'}
                     </button>
                   )}
-                  {provider === 'kimi' && st.status !== 'authenticated' && (
-                    <button type="button" onClick={() => void connectKimi()}>
-                      Se connecter
+                  {st.status !== 'authenticated' && (
+                    <button
+                      type="button"
+                      className="router-reconnect"
+                      onClick={() => void reconnect(provider)}
+                    >
+                      Se reconnecter
                     </button>
                   )}
                 </span>
               </header>
-              {(st.status === 'expired' || st.status === 'absent') && RE_AUTH_HINT[provider] && (
-                <p className="router-hint">{RE_AUTH_HINT[provider]}</p>
+              {launched[provider] ? (
+                <p className="router-hint">
+                  Login lancé dans un terminal — termine l’authentification, puis clique « Tester ».
+                </p>
+              ) : (
+                (st.status === 'expired' || st.status === 'absent') &&
+                RE_AUTH_HINT[provider] && <p className="router-hint">{RE_AUTH_HINT[provider]}</p>
               )}
               {list.length > 0 ? (
                 <ul className="router-models">

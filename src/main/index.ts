@@ -337,6 +337,11 @@ function registerChatIpc(): void {
     assertTrustedRendererSender(event, 'Skills')
     return discoverConfiguredSkillRegistry(join(app.getPath('userData'), 'skill-sources.json'))
   })
+  ipcMain.handle('os:providerLogin', (event, provider: unknown) => {
+    assertTrustedRendererSender(event, 'Provider login')
+    os.startProviderLogin(guardString(provider, 'provider'))
+    return { ok: true }
+  })
   ipcMain.handle('os:kimiLogin', () => {
     os.startKimiLogin()
     return { ok: true }

@@ -42,6 +42,8 @@ const api = {
     ipcRenderer.invoke('os:profiles:save', profile),
   applyProfile: (id: string): Promise<unknown> => ipcRenderer.invoke('os:profiles:apply', id),
   kimiLogin: (): Promise<{ ok: true }> => ipcRenderer.invoke('os:kimiLogin'),
+  providerLogin: (provider: string): Promise<{ ok: true }> =>
+    ipcRenderer.invoke('os:providerLogin', provider),
   topology: (): Promise<unknown> => ipcRenderer.invoke('os:topology:get'),
   setTopology: (topology: unknown): Promise<unknown> =>
     ipcRenderer.invoke('os:topology:set', topology),

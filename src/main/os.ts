@@ -10,6 +10,7 @@ import { CodexAdapter } from './providers/codex'
 import { KimiCliAdapter } from './providers/kimi'
 import type { Message } from './providers/types'
 import { loadKitSoul } from './kit'
+import { planProviderLogin, spawnLoginTerminal } from './provider-login'
 import { RoleModelConfig, type Role, type RoleBinding, type ReasoningEffort } from './roles'
 import { loadRoleBindings, saveRoleBindings } from './role-store'
 // fix-ok: refonte qualité (demande user « refais comme en fable ») — purge du mort, pas un blind-fix.
@@ -154,6 +155,20 @@ export class AutowinOS {
     const kimi = this.registry.get('kimi')
     if (!(kimi instanceof KimiCliAdapter)) throw new Error('Pont Kimi Code indisponible.')
     kimi.startLogin()
+  }
+
+  /**
+   * Lance le login OFFICIEL d'un provider (bouton « Se reconnecter » de la page Routeur).
+   * kimi → adapter (exe résolu) ; claude/codex → terminal. L'app ne capture aucun credential.
+   */
+  startProviderLogin(provider: string): void {
+    const plan = planProviderLogin(provider)
+    if (plan.kind === 'adapter') {
+      this.startKimiLogin()
+      return
+    }
+    // codex : `npm run codex:login` doit tourner à la racine du repo (dev) → cwd = process.cwd().
+    spawnLoginTerminal(plan.command, provider === 'codex' ? { cwd: process.cwd() } : {})
   }
 
   /** Change le binding d'un rôle ET persiste sur disque. */
