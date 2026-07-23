@@ -93,6 +93,108 @@ describe('runAppPreflight', () => {
     expect(await appPreflightProbes().hasCodexSession()).toBe(false)
   })
 
+  it('re-sonde avec backoff tant que brain échoue puis s’arrête à la récupération', async () => {
+    const { watchAppPreflight } = await import('./preflight-probes')
+    type R = import('./preflight').PreflightResult
+    const brainKo: R = { ok: false, summary: '', checks: [{ id: 'brain', label: 'b', ok: false }] }
+    const allOk: R = { ok: true, summary: '', checks: [{ id: 'brain', label: 'b', ok: true }] }
+    const results = [brainKo, brainKo, allOk]
+    const run = vi.fn(async () => results.shift() ?? allOk)
+    const queue: Array<() => void> = []
+    const schedule = (fn: () => void): { cancel: () => void } => {
+      queue.push(fn)
+      return { cancel: () => {} }
+    }
+    const flush = async (): Promise<void> => {
+      while (queue.length) {
+        queue.shift()!()
+        for (let i = 0; i < 4; i++) await Promise.resolve()
+      }
+    }
+    const seen: R[] = []
+    watchAppPreflight((r) => seen.push(r), { delaysMs: [10, 10, 10, 10] }, { run, schedule })
+    for (let i = 0; i < 4; i++) await Promise.resolve()
+
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(run).toHaveBeenNthCalledWith(1, false, expect.anything()) // 1ᵉʳ tour respecte le cache
+    await flush()
+
+    expect(run).toHaveBeenCalledTimes(3) // 2 échecs + 1 récupération
+    expect(run).toHaveBeenNthCalledWith(2, true, expect.anything()) // re-probes en force
+    expect(seen).toHaveLength(3)
+    expect(seen[2].ok).toBe(true)
+    expect(queue).toHaveLength(0) // arrêt net sur ok, aucun re-probe de trop
+  })
+
+  it('borne la boucle au cap de backoff si brain reste KO', async () => {
+    const { watchAppPreflight } = await import('./preflight-probes')
+    type R = import('./preflight').PreflightResult
+    const brainKo: R = { ok: false, summary: '', checks: [{ id: 'brain', label: 'b', ok: false }] }
+    const run = vi.fn(async () => brainKo)
+    const queue: Array<() => void> = []
+    const schedule = (fn: () => void): { cancel: () => void } => {
+      queue.push(fn)
+      return { cancel: () => {} }
+    }
+    const flush = async (): Promise<void> => {
+      while (queue.length) {
+        queue.shift()!()
+        for (let i = 0; i < 4; i++) await Promise.resolve()
+      }
+    }
+    watchAppPreflight(() => {}, { delaysMs: [10, 10] }, { run, schedule })
+    for (let i = 0; i < 4; i++) await Promise.resolve()
+    await flush()
+    // 1 tour initial + 2 re-probes (cap = delays.length) = 3, puis STOP.
+    expect(run).toHaveBeenCalledTimes(3)
+    expect(queue).toHaveLength(0)
+  })
+
+  it('ne s’acharne pas si le seul échec est non-récupérable (CLI/token, pas brain)', async () => {
+    const { watchAppPreflight } = await import('./preflight-probes')
+    type R = import('./preflight').PreflightResult
+    const brainOkCodexKo: R = {
+      ok: false,
+      summary: '',
+      checks: [
+        { id: 'brain', label: 'b', ok: true },
+        { id: 'codex', label: 'c', ok: false }
+      ]
+    }
+    const run = vi.fn(async () => brainOkCodexKo)
+    const queue: Array<() => void> = []
+    const schedule = (fn: () => void): { cancel: () => void } => {
+      queue.push(fn)
+      return { cancel: () => {} }
+    }
+    watchAppPreflight(() => {}, { delaysMs: [10, 10] }, { run, schedule })
+    for (let i = 0; i < 4; i++) await Promise.resolve()
+    expect(run).toHaveBeenCalledTimes(1) // brain ok → aucun re-probe, même si codex KO
+    expect(queue).toHaveLength(0)
+  })
+
+  it('stop() coupe la boucle en vol (pas de re-probe après arrêt)', async () => {
+    const { watchAppPreflight } = await import('./preflight-probes')
+    type R = import('./preflight').PreflightResult
+    const brainKo: R = { ok: false, summary: '', checks: [{ id: 'brain', label: 'b', ok: false }] }
+    const run = vi.fn(async () => brainKo)
+    const queue: Array<() => void> = []
+    let cancelled = 0
+    const schedule = (fn: () => void): { cancel: () => void } => {
+      queue.push(fn)
+      return { cancel: () => cancelled++ }
+    }
+    const handle = watchAppPreflight(() => {}, { delaysMs: [10, 10] }, { run, schedule })
+    for (let i = 0; i < 4; i++) await Promise.resolve()
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(queue).toHaveLength(1) // un re-probe planifié
+    handle.stop()
+    queue.shift()!() // même si le timer « tire », la boucle est stoppée
+    for (let i = 0; i < 4; i++) await Promise.resolve()
+    expect(run).toHaveBeenCalledTimes(1) // aucun re-probe après stop
+    expect(cancelled).toBe(1)
+  })
+
   it('conserve le résultat forcé récent quand un run normal plus ancien finit ensuite', async () => {
     let rejectFirst!: (reason: Error) => void
     const slowFailure = new Promise<Response>((_resolve, reject) => {

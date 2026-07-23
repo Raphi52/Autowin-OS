@@ -90,3 +90,84 @@ export async function runAppPreflight(
   preflightInFlight = { key, promise: tracked }
   return tracked
 }
+
+/** Handle de scheduler annulable (injectable en test pour piloter le temps sans vrai timer). */
+export interface PreflightSchedulerHandle {
+  cancel: () => void
+}
+
+export interface PreflightWatchDeps {
+  /** Planificateur injectable — défaut: setTimeout. Retourne un handle annulable. */
+  schedule?: (fn: () => void, ms: number) => PreflightSchedulerHandle
+  /** Exécuteur du preflight — défaut: runAppPreflight. Le 1ᵉʳ tour respecte le cache, les re-probes forcent. */
+  run?: (force: boolean, options: PreflightOptions) => Promise<PreflightResult>
+}
+
+export interface PreflightWatchOptions extends PreflightOptions {
+  /**
+   * Backoff (ms) entre re-probes TANT que le check `brain` échoue. Défaut ≈ 118 s cumulés (couvre le
+   * warm-up fastembed ~30-40 s sur SMB avec marge). La boucle s'arrête dès `brain` ok ou cap atteint.
+   */
+  delaysMs?: number[]
+}
+
+const DEFAULT_PREFLIGHT_BACKOFF_MS = [3000, 5000, 8000, 12000, 20000, 30000, 40000]
+
+const brainCheckFailing = (r: PreflightResult): boolean =>
+  r.checks.some((c) => c.id === 'brain' && !c.ok)
+
+/**
+ * Boucle de re-probe BORNÉE du diagnostic de démarrage. Motif : brain_server n'ouvre son port
+ * qu'APRÈS le warm-up de fastembed + index (constructeur `BrainRetriever` eager, prouvé côté serveur),
+ * donc « port répond ⟹ RAG prêt » — mais un ping unique au lancement échoue pendant les ~30-40 s de
+ * warm-up et RESTE figé. Ici on re-sonde en `force` (bypass cache) avec backoff tant que `brain`
+ * échoue, et on appelle `onResult` à CHAQUE résultat — y compris la récupération ok qui efface la
+ * bannière. On NE s'acharne PAS si le seul échec est non-récupérable (CLI/token, pas brain).
+ * Retourne `{ stop }` pour couper la boucle (fermeture fenêtre / quit).
+ */
+export function watchAppPreflight(
+  onResult: (r: PreflightResult) => void,
+  options: PreflightWatchOptions = {},
+  deps: PreflightWatchDeps = {}
+): { stop: () => void } {
+  const delays = options.delaysMs ?? DEFAULT_PREFLIGHT_BACKOFF_MS
+  const schedule =
+    deps.schedule ??
+    ((fn, ms): PreflightSchedulerHandle => {
+      const t = setTimeout(fn, ms)
+      if (typeof t === 'object' && 'unref' in t) t.unref() // ne pas retenir l'event loop à la fermeture
+      return { cancel: () => clearTimeout(t) }
+    })
+  const run = deps.run ?? runAppPreflight
+  const preflightOptions: PreflightOptions = { standbyProviders: options.standbyProviders }
+  let stopped = false
+  let pending: PreflightSchedulerHandle | null = null
+  let retries = 0
+
+  const tick = (): void => {
+    if (stopped) return
+    const isFirst = retries === 0
+    void run(!isFirst, preflightOptions)
+      .then((result) => {
+        if (stopped) return
+        onResult(result)
+        // On ne re-sonde QUE si `brain` est encore le problème et qu'il reste des essais.
+        if (result.ok || !brainCheckFailing(result) || retries >= delays.length) return
+        const delay = delays[Math.min(retries, delays.length - 1)]
+        retries += 1
+        pending = schedule(tick, delay)
+      })
+      .catch(() => {
+        // runAppPreflight ne throw pas (safe interne) ; par prudence, une erreur ne relance pas la boucle.
+      })
+  }
+
+  tick()
+  return {
+    stop: () => {
+      stopped = true
+      pending?.cancel()
+      pending = null
+    }
+  }
+}

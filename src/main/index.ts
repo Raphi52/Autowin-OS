@@ -17,7 +17,7 @@ import { ProviderRegistry } from './providers/registry'
 import { AutowinOS } from './os'
 import { installCrashHandlers } from './crash-handlers'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
-import { getLastAppPreflightResult, runAppPreflight } from './preflight-probes'
+import { getLastAppPreflightResult, runAppPreflight, watchAppPreflight } from './preflight-probes'
 import { RoleModelConfig, type ReasoningEffort, type Role } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
@@ -150,6 +150,8 @@ function drainPendingDirectives(conversationId: string): string[] {
 }
 const questionWindows = new Map<string, BrowserWindow>()
 const diagnosticCapabilities = new DiagnosticCapabilities()
+/** Boucle de re-probe du diagnostic de démarrage (#4) — arrêtée à la fermeture pour ne pas fuir de timer. */
+let preflightWatchHandle: { stop: () => void } | null = null
 const providerStateStore = new ProviderStateStore(
   join(app.getPath('userData'), 'provider-state.json')
 )
@@ -1397,16 +1399,25 @@ app.whenReady().then(async () => {
   // #4 — diagnostic de démarrage (non bloquant) : on vérifie brain_server, CLI providers et token,
   // et on pousse le résultat au renderer (bannière) pour que l'utilisateur voie une config incomplète
   // AVANT de lancer un run, plutôt qu'un échec silencieux en plein run. Best-effort, jamais bloquant.
-  void runAppPreflight(false, preflightProviderOptions())
-    .then((result) => {
-      if (!result.ok) {
-        for (const w of BrowserWindow.getAllWindows())
-          w.webContents.send('preflight:result', result)
-      }
-    })
-    .catch(() => {
-      /* preflight best-effort : ne jamais casser le démarrage */
-    })
+  //
+  // brain_server n'ouvre son port qu'APRÈS le warm-up fastembed (~30-40 s sur SMB), donc un ping unique
+  // au lancement échoue à tort et RESTE figé. `watchAppPreflight` re-sonde avec backoff tant que `brain`
+  // échoue et pousse CHAQUE transition — dont la récupération ok qui efface la bannière. On ne pousse
+  // que sur CHANGEMENT (ok-ness + set d'échecs) pour ne pas écraser un dismiss utilisateur inutilement.
+  let lastPreflightSignature: string | null = null
+  preflightWatchHandle = watchAppPreflight(
+    (result) => {
+      const signature = `${result.ok}|${result.checks
+        .filter((c) => !c.ok)
+        .map((c) => c.id)
+        .sort()
+        .join(',')}`
+      if (signature === lastPreflightSignature) return
+      lastPreflightSignature = signature
+      for (const w of BrowserWindow.getAllWindows()) w.webContents.send('preflight:result', result)
+    },
+    preflightProviderOptions()
+  )
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
@@ -1420,7 +1431,11 @@ app.whenReady().then(async () => {
 // explicitly with Cmd + Q.
 // Flush forcé avant la fermeture : ne pas perdre le dernier fragment de streaming
 // resté dans la fenêtre de debounce de 120 ms de la persistance.
-app.on('before-quit', () => flushConversations())
+app.on('before-quit', () => {
+  flushConversations()
+  preflightWatchHandle?.stop() // couper la boucle de re-probe démarrage (pas de timer résiduel)
+  preflightWatchHandle = null
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin' && !startupStorageMigration) {
