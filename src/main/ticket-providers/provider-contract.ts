@@ -47,6 +47,8 @@ export interface TicketProviderRegistry {
 interface FetchTicketJsonOptions {
   fetchFn?: typeof fetch
   headers?: Readonly<Record<string, string>>
+  method?: 'GET' | 'POST'
+  body?: Readonly<Record<string, unknown>>
   timeoutMs?: number
   maxBytes?: number
 }
@@ -81,11 +83,17 @@ export async function fetchTicketJson<T>(
   assertSafeUrl(url)
   const fetchFn = options.fetchFn ?? fetch
   const maxBytes = options.maxBytes ?? 2_000_000
+  const method = options.method ?? 'GET'
+  const headers = {
+    ...options.headers,
+    ...(method === 'POST' ? { 'content-type': 'application/json' } : {})
+  }
   let response: Response
   try {
     response = await fetchFn(url, {
-      method: 'GET',
-      headers: options.headers,
+      method,
+      headers,
+      ...(method === 'POST' ? { body: JSON.stringify(options.body ?? {}) } : {}),
       signal: AbortSignal.timeout(options.timeoutMs ?? 10_000)
     })
   } catch {

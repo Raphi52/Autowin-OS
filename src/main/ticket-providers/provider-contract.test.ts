@@ -22,6 +22,25 @@ describe('frontière HTTP des fournisseurs Tickets', () => {
     )
   })
 
+  it('autorise le POST de lecture requis pour une requête WIQL', async () => {
+    const fetchFn = vi.fn(async () => Response.json({ workItems: [] }))
+
+    await fetchTicketJson('https://dev.azure.com/org/project/_apis/wit/wiql', {
+      fetchFn: fetchFn as typeof fetch,
+      method: 'POST',
+      body: { query: 'SELECT [System.Id] FROM WorkItems' }
+    })
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      'https://dev.azure.com/org/project/_apis/wit/wiql',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ query: 'SELECT [System.Id] FROM WorkItems' }),
+        headers: expect.objectContaining({ 'content-type': 'application/json' })
+      })
+    )
+  })
+
   it.each([
     ['http://example.test/items', 'UNSAFE_URL'],
     ['https://user:secret@example.test/items', 'UNSAFE_URL']
