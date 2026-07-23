@@ -86,4 +86,31 @@ describe('HookBus branché dans l’orchestrateur (pre-green)', () => {
     }).run('corrige le bug')
     expect(r.gateBlocked).toBe(false)
   })
+
+  // Preuve RUNTIME : bus par défaut = VRAI runner (child_process, pas de mock) → exec réel + exit code réel.
+  it('runtime : le VRAI runner exécute la commande — « exit 1 » BLOQUE, « exit 0 » passe', async () => {
+    const cwd = process.cwd() // cwd RÉEL (existant) — sinon spawn ENOENT → fail-closed (bloque, à raison)
+    const blocked = await makeOrchestrator({
+      executionWorkspace: cwd,
+      verifyCmd: 'exit 1',
+      hooks: createDefaultHookBus()
+    }).run('corrige le bug')
+    expect(blocked.gateBlocked).toBe(true)
+
+    const green = await makeOrchestrator({
+      executionWorkspace: cwd,
+      verifyCmd: 'exit 0',
+      hooks: createDefaultHookBus()
+    }).run('corrige le bug')
+    expect(green.gateBlocked).toBe(false)
+  })
+
+  it('runtime : cwd inexistant → fail-closed (spawn échoue → BLOQUE, jamais un faux-vert)', async () => {
+    const r = await makeOrchestrator({
+      executionWorkspace: 'C:\\dossier-inexistant-xyz',
+      verifyCmd: 'exit 0',
+      hooks: createDefaultHookBus()
+    }).run('corrige le bug')
+    expect(r.gateBlocked).toBe(true)
+  })
 })
