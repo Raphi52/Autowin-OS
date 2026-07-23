@@ -27,6 +27,7 @@ class ReroutingProvider implements ProviderAdapter {
     return {
       text: 'VALIDE',
       provider: 'actual-executor',
+      model: 'actual-model',
       systemInjected: true,
       usage: { inputTokens: 8, outputTokens: 4, costUsd: 0.002 }
     }
@@ -62,5 +63,12 @@ describe('Orchestrator — identité provider réelle dans trace + coût', () =>
     // Le coût est agrégé sous le provider réel, jamais sous le demandé.
     expect(cost.byProvider()['actual-executor']).toBeDefined()
     expect(cost.byProvider()['requested']).toBeUndefined()
+
+    // #6 — la trace porte le MODÈLE réellement rapporté par le provider, pas le demandé.
+    const models = result.trace
+      .filter((s) => s.step === 'exec' || s.step === 'judge')
+      .map((s) => s.model)
+    expect(models).toContain('actual-model')
+    expect(models).not.toContain('worker')
   })
 })

@@ -242,6 +242,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     let buffer = ''
     let text = ''
     const reasoningFragments: string[] = []
+    let resolvedModel: string | undefined
     let sessionId: string | undefined
     let usage: SendResult['usage']
     const executionEvidence: ExecutionEvidence[] = []
@@ -261,6 +262,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       if (t === 'assistant') {
         const msg = o['message'] as
           | {
+              model?: string
               content?: Array<{
                 type: string
                 text?: string
@@ -271,6 +273,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
               }>
             }
           | undefined
+        if (msg?.model) resolvedModel = msg.model // modèle RÉEL rapporté par Claude
         for (const part of msg?.content ?? []) {
           if (part.type === 'text' && part.text) {
             text += part.text
@@ -395,7 +398,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       systemInjected,
       usage,
       executionEvidence: executionEvidence.length ? executionEvidence : undefined,
-      thinking: joinThinking(reasoningFragments)
+      thinking: joinThinking(reasoningFragments),
+      model: resolvedModel
     }
   }
 }

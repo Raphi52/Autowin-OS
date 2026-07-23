@@ -123,6 +123,8 @@ export interface SendResult {
   executionEvidence?: ExecutionEvidence[]
   /** Raisonnement/thinking du modèle (blocs reasoning/thinking du stream), conservé pour observation. */
   thinking?: string
+  /** Modèle RÉELLEMENT utilisé, tel que rapporté par le provider (peut différer du demandé sur reroute). */
+  model?: string
 }
 
 /**
