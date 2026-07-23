@@ -20,22 +20,26 @@ describe('planProviderLogin', () => {
 })
 
 describe('spawnLoginTerminal', () => {
-  it('spawn un terminal PowerShell détaché exécutant la commande, et unref', () => {
+  it('ouvre une fenêtre VISIBLE via cmd /c start + powershell, la commande après -Command, et unref', () => {
     const unref = vi.fn()
     const spawnFn = vi.fn(() => ({ unref })) as unknown as typeof import('node:child_process').spawn
     spawnLoginTerminal('claude auth login', { spawnFn })
-    expect(spawnFn).toHaveBeenCalledWith(
-      'powershell.exe',
-      ['-NoExit', '-Command', 'claude auth login'],
-      expect.objectContaining({ detached: true, stdio: 'ignore' })
+    expect(spawnFn).toHaveBeenCalledTimes(1)
+    const [exe, args, options] = (spawnFn as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]
+    expect(exe).toBe('cmd.exe')
+    // `start` crée une fenêtre visible ; ExecutionPolicy Bypass pour les shims .ps1 ; commande après -Command
+    expect(args).toEqual(
+      expect.arrayContaining(['/c', 'start', 'powershell', '-ExecutionPolicy', 'Bypass', '-NoExit', '-Command'])
     )
+    expect((args as string[])[(args as string[]).length - 1]).toBe('claude auth login')
+    expect(options).toMatchObject({ detached: true, stdio: 'ignore', windowsHide: false })
     expect(unref).toHaveBeenCalled()
   })
   it('passe cwd quand fourni (codex → racine repo pour npm run)', () => {
     const spawnFn = vi.fn(() => ({ unref: vi.fn() })) as unknown as typeof import('node:child_process').spawn
     spawnLoginTerminal('npm run codex:login', { spawnFn, cwd: 'C:\\Amitel\\Autowin OS' })
     expect(spawnFn).toHaveBeenCalledWith(
-      'powershell.exe',
+      'cmd.exe',
       expect.any(Array),
       expect.objectContaining({ cwd: 'C:\\Amitel\\Autowin OS' })
     )

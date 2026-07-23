@@ -33,10 +33,28 @@ export function planProviderLogin(provider: string): LoginPlan {
 
 type SpawnLike = typeof spawn
 
-/** Ouvre un terminal PowerShell détaché exécutant `command` (le CLI y gère l'auth). */
+/**
+ * Ouvre une NOUVELLE fenêtre console VISIBLE exécutant `command` (le CLI y gère l'auth).
+ * Via `cmd /c start` : le pattern `spawn('powershell', …, {detached, stdio:'ignore'})` seul ne crée
+ * PAS de fenêtre fiable sur Windows (DETACHED_PROCESS → invisible → « le bouton ne fait rien »).
+ * `start` alloue une console visible ; `-ExecutionPolicy Bypass` exécute les shims .ps1 (ex. claude.ps1).
+ * Les arguments de la commande passent APRÈS `-Command` (jamais concaténés dans le titre `start`).
+ */
 export function spawnLoginTerminal(command: string, opts: { spawnFn?: SpawnLike; cwd?: string } = {}): void {
   const spawnFn = opts.spawnFn ?? spawn
-  const child = spawnFn('powershell.exe', ['-NoExit', '-Command', command], {
+  const args = [
+    '/c',
+    'start',
+    '""', // titre de fenêtre (requis par `start` avant l'exécutable)
+    'powershell',
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-NoExit',
+    '-Command',
+    command
+  ]
+  const child = spawnFn('cmd.exe', args, {
     detached: true,
     stdio: 'ignore',
     windowsHide: false,
