@@ -218,6 +218,7 @@ if (verifyCanonicalNavigation) {
 if (section) {
   const navigation = await send('Runtime.evaluate', {
     expression: `(() => {
+      document.querySelector('[data-testid="first-run-wizard"] .frw-primary')?.click()
       const target = [...document.querySelectorAll('button')].find((button) =>
         button.textContent?.trim().includes(${JSON.stringify(section)})
       )
@@ -276,8 +277,13 @@ const dialogs = skipDialogs
       returnByValue: true
     })
 if (!skipScreenshot) {
-  const screenshot = await send('Page.captureScreenshot', { format: 'png', fromSurface: true })
-  writeFileSync(output, Buffer.from(screenshot.data, 'base64'))
+  const screenshot = await send('Runtime.evaluate', {
+    expression: 'window.api.captureTestPage()',
+    awaitPromise: true,
+    returnByValue: true
+  })
+  if (!screenshot.result.value) throw new Error('Capture renderer vide')
+  writeFileSync(output, Buffer.from(screenshot.result.value, 'base64'))
 }
 socket.close()
 const result = {
