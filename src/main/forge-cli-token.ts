@@ -3,33 +3,11 @@ import { promisify } from 'node:util'
 import { isSafeForgeHost, type TicketSourceProfile } from '../shared/tickets'
 import { parseTicketCredential } from './ticket-credential-store'
 import type { TicketRuntimeCredential } from './tickets-service'
+import { cliChildEnvironment } from './cli-child-environment'
 
 const execFileAsync = promisify(execFile)
 
-const FORGE_AUTH_ENVIRONMENT_KEYS = [
-  'GH_TOKEN',
-  'GITHUB_TOKEN',
-  'GH_ENTERPRISE_TOKEN',
-  'GITHUB_ENTERPRISE_TOKEN',
-  'GH_HOST',
-  'GITLAB_TOKEN',
-  'GITLAB_ACCESS_TOKEN',
-  'GLAB_TOKEN',
-  'GITLAB_HOST',
-  'OAUTH_TOKEN',
-  'CI_JOB_TOKEN'
-] as const
-const FORGE_AUTH_ENVIRONMENT_KEY_SET = new Set<string>(FORGE_AUTH_ENVIRONMENT_KEYS)
-
-export function forgeCliEnvironment(
-  environment: Readonly<NodeJS.ProcessEnv> = process.env
-): NodeJS.ProcessEnv {
-  const sanitized = { ...environment }
-  for (const key of Object.keys(sanitized)) {
-    if (FORGE_AUTH_ENVIRONMENT_KEY_SET.has(key.toUpperCase())) delete sanitized[key]
-  }
-  return sanitized
-}
+export const forgeCliEnvironment = cliChildEnvironment
 
 export type ForgeCliRunner = (
   executable: 'gh' | 'glab',

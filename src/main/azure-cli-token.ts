@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { parseTicketCredential } from './ticket-credential-store'
+import { cliChildEnvironment } from './cli-child-environment'
 
 const execFileAsync = promisify(execFile)
 const AZURE_DEVOPS_RESOURCE_ID = '499b84ac-1321-427f-aa17-267ca6975798'
@@ -18,7 +19,8 @@ const defaultRunner: AzureCliRunner = async (executable, args) => {
     timeout: 10_000,
     windowsHide: true,
     maxBuffer: 16_384,
-    encoding: 'utf8'
+    encoding: 'utf8',
+    env: cliChildEnvironment()
   })
   return { stdout: result.stdout, stderr: result.stderr }
 }
