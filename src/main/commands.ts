@@ -382,7 +382,7 @@ export class AppCommandBus {
   }
 
   async snapshot(): Promise<AppSnapshot> {
-    const runs = this.os.runsWithGate()
+    const runs = await this.os.runsWithGate()
     return {
       tab: this.tab,
       activeConversationId: this.activeConversationId,

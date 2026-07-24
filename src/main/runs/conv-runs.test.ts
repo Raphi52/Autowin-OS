@@ -15,28 +15,28 @@ const root = mkdtempSync(join(tmpdir(), 'aos-convruns-'))
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
 describe('conv-runs — RUN.md par conversation (format autowin)', () => {
-  it('createConvRun écrit un RUN open parseable, rattaché à la conversation', () => {
+  it('createConvRun écrit un RUN open parseable, rattaché à la conversation', async () => {
     const p = createConvRun('conv-9', 'Vérifier les écarts de facturation', root, () => 1000)
     const md = readFileSync(p, 'utf8')
     expect(md).toMatch(/^status: open/m)
     expect(md).toMatch(/^session: conv-9/m)
     expect(md).toContain('Vérifier les écarts de facturation')
-    const runs = listConvRuns('conv-9', [], root)
+    const runs = await listConvRuns('conv-9', [], root)
     expect(runs).toHaveLength(1)
     expect(runs[0].summary.status).toBe('open')
     expect(runs[0].summary.dodTotal).toBe(1)
   })
 
-  it('closeConvRun green coche le DoD + statut green ; red laisse le DoD ouvert', () => {
+  it('closeConvRun green coche le DoD + statut green ; red laisse le DoD ouvert', async () => {
     const g = createConvRun('conv-9', 'tâche verte', root, () => 2000)
     closeConvRun(g, true, 'Juge: validé.')
-    const green = listConvRuns('conv-9', [], root).find((r) => r.path === g)!
+    const green = (await listConvRuns('conv-9', [], root)).find((r) => r.path === g)!
     expect(green.summary.status).toBe('green')
     expect(green.summary.dodChecked).toBe(1)
 
     const r = createConvRun('conv-9', 'tâche rouge', root, () => 3000)
     closeConvRun(r, false, 'Gate BLOQUÉ: défaut.')
-    const red = listConvRuns('conv-9', [], root).find((x) => x.path === r)!
+    const red = (await listConvRuns('conv-9', [], root)).find((x) => x.path === r)!
     expect(red.summary.status).toBe('red')
     expect(readFileSync(r, 'utf8')).toContain('Gate BLOQUÉ')
   })
@@ -65,7 +65,7 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
     expect(loadConvRunTrace(noTrace)).toBeNull()
   })
 
-  it('scope strict par conversation + fusion des runs attachés', () => {
+  it('scope strict par conversation + fusion des runs attachés', async () => {
     createConvRun('conv-A', 'tâche de A', root, () => 6000)
     // un RUN.md « Claude Code » externe attaché à B
     const extDir = join(root, '..', 'ext-session', 'sujet-externe-workspace')
@@ -73,13 +73,13 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
     const ext = join(extDir, 'RUN.md')
     writeFileSync(ext, 'status: green\n\n## Besoin\nexterne\n', 'utf8')
 
-    const a = listConvRuns('conv-A', [], root)
+    const a = await listConvRuns('conv-A', [], root)
     expect(a.every((r) => r.session === 'conv-A')).toBe(true)
-    const b = listConvRuns('conv-B', [ext], root)
+    const b = await listConvRuns('conv-B', [ext], root)
     expect(b).toHaveLength(1)
     expect(b[0].session).toBe('attaché')
     expect(b[0].summary.status).toBe('green')
     // chemin attaché disparu → ignoré sans crash
-    expect(listConvRuns('conv-B', [join(root, 'nexiste', 'RUN.md')], root)).toHaveLength(0)
+    expect(await listConvRuns('conv-B', [join(root, 'nexiste', 'RUN.md')], root)).toHaveLength(0)
   })
 })

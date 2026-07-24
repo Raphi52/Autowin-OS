@@ -264,8 +264,8 @@ export class AutowinOS {
     return this.trust.ranking()
   }
   /** Gate déterministe évalué sur les VRAIS runs vivants (plus de démo hardcodée). */
-  runsWithGate(): Array<RunEntry & { blocked: boolean }> {
-    return this.listRuns().map((r) => ({ ...r, blocked: isBlocked(r.summary) }))
+  async runsWithGate(): Promise<Array<RunEntry & { blocked: boolean }>> {
+    return (await this.listRuns()).map((r) => ({ ...r, blocked: isBlocked(r.summary) }))
   }
   kaizenPatterns(jsonl: string): ReturnType<typeof recurrentPatterns> {
     return recurrentPatterns(parseJsonl(jsonl))
@@ -301,7 +301,7 @@ export class AutowinOS {
   searchBrain(path: string, query: string): ReturnType<typeof searchVaultBrainNotes> {
     return searchVaultBrainNotes(path, query)
   }
-  listRuns(): RunEntry[] {
+  listRuns(): Promise<RunEntry[]> {
     return scanRuns()
   }
 }

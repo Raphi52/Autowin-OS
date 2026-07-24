@@ -1,7 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  spawnSync: vi.fn(() => ({ status: 0 })),
+  spawn: vi.fn(() => {
+    const child = {
+      kill: vi.fn(),
+      on: vi.fn((event: string, listener: (code: number) => void) => {
+        if (event === 'close') setTimeout(() => listener(0), 0)
+        return child
+      }),
+      once: vi.fn((event: string, listener: (code: number) => void) => {
+        if (event === 'close') setTimeout(() => listener(0), 0)
+        return child
+      })
+    }
+    return child
+  }),
   brainServiceToken: vi.fn(() => 'brain-token'),
   loadTokens: vi.fn(() => ({
     accessToken: 'access',
@@ -11,7 +24,7 @@ const mocks = vi.hoisted(() => ({
   }))
 }))
 
-vi.mock('node:child_process', () => ({ spawnSync: mocks.spawnSync }))
+vi.mock('node:child_process', () => ({ spawn: mocks.spawn }))
 vi.mock('./brain-retrieval', () => ({ brainServiceToken: mocks.brainServiceToken }))
 vi.mock('./providers/codex-auth', () => ({ loadTokens: mocks.loadTokens }))
 
@@ -20,11 +33,30 @@ const originalFetch = globalThis.fetch
 describe('runAppPreflight', () => {
   beforeEach(() => {
     vi.resetModules()
-    mocks.spawnSync.mockClear()
+    mocks.spawn.mockClear()
     mocks.brainServiceToken.mockClear()
     mocks.loadTokens.mockClear()
     delete process.env.CODEX_BIN
     delete process.env.CLAUDE_BIN
+  })
+
+  it('laisse respirer la boucle d’événements pendant un probe CLI', async () => {
+    const { appPreflightProbes } = await import('./preflight-probes')
+    let timerFired = false
+    const timer = new Promise<'timer'>((resolve) => {
+      setTimeout(() => {
+        timerFired = true
+        resolve('timer')
+      }, 0)
+    })
+
+    const probe = appPreflightProbes()
+      .hasBin('codex')
+      .then(() => 'probe' as const)
+
+    expect(await Promise.race([timer, probe])).toBe('timer')
+    expect(timerFired).toBe(true)
+    expect(await probe).toBe('probe')
   })
 
   afterEach(() => {
@@ -48,13 +80,13 @@ describe('runAppPreflight', () => {
     const [firstResult, secondResult] = await Promise.all([first, second])
     expect(secondResult).toBe(firstResult)
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(mocks.spawnSync).toHaveBeenCalledTimes(2)
+    expect(mocks.spawn).toHaveBeenCalledTimes(2)
     expect(mocks.loadTokens).toHaveBeenCalledTimes(1)
     expect(mocks.brainServiceToken).toHaveBeenCalledTimes(1)
 
     await runAppPreflight(true, { standbyProviders: [...options.standbyProviders] })
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(mocks.spawnSync).toHaveBeenCalledTimes(4)
+    expect(mocks.spawn).toHaveBeenCalledTimes(4)
     expect(mocks.loadTokens).toHaveBeenCalledTimes(2)
     expect(mocks.brainServiceToken).toHaveBeenCalledTimes(2)
   })
@@ -63,10 +95,10 @@ describe('runAppPreflight', () => {
     const { appPreflightProbes } = await import('./preflight-probes')
 
     expect(await appPreflightProbes().hasBin('kimi')).toBe(true)
-    expect(mocks.spawnSync).toHaveBeenCalledWith(
+    expect(mocks.spawn).toHaveBeenCalledWith(
       'kimi',
       ['--version'],
-      expect.objectContaining({ timeout: 3000 })
+      expect.objectContaining({ windowsHide: true })
     )
   })
 
@@ -75,10 +107,10 @@ describe('runAppPreflight', () => {
     const { runAppPreflight } = await import('./preflight-probes')
 
     await runAppPreflight(false, { standbyProviders: ['kimi'] })
-    expect(mocks.spawnSync).toHaveBeenCalledTimes(2)
+    expect(mocks.spawn).toHaveBeenCalledTimes(2)
 
     await runAppPreflight(false, { standbyProviders: [] })
-    expect(mocks.spawnSync).toHaveBeenCalledTimes(5)
+    expect(mocks.spawn).toHaveBeenCalledTimes(5)
   })
 
   it('refuse une session Codex dont l’expiration est dépassée', async () => {

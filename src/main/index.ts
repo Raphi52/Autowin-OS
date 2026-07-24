@@ -78,6 +78,12 @@ import {
   type MigratedRendererStorage
 } from './renderer-storage-migration'
 import { guardAttachments, guardBoolean, guardString } from './ipc-guards'
+import {
+  DEFAULT_TICKET_SOURCE,
+  parseTicketSourceProfile,
+  type TicketListRequest,
+  type TicketSourceProfile
+} from '../shared/tickets'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
 import {
@@ -415,6 +421,54 @@ function registerStorageMigrationIpc(
 
 /** IPC : chat, orchestration, dashboards et graphe. */
 function registerChatIpc(): void {
+  const ticketSources: TicketSourceProfile[] = [DEFAULT_TICKET_SOURCE]
+  const ticketRequests = new Map<string, AbortController>()
+  const ticketRequestId = (value: unknown): string => {
+    if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(value)) {
+      throw new Error('Identifiant de requête Tickets invalide')
+    }
+    return value
+  }
+  ipcMain.handle('tickets:sources', (event) => {
+    assertTrustedRendererSender(event, 'Tickets')
+    return ticketSources.map((profile) => ({ profile, credentialConfigured: false }))
+  })
+  ipcMain.handle('tickets:source:save', (event, value: unknown) => {
+    assertTrustedRendererSender(event, 'Tickets')
+    const profile = parseTicketSourceProfile(value)
+    if (!profile) throw new Error('Profil Tickets invalide')
+    const current = ticketSources.findIndex((candidate) => candidate.id === profile.id)
+    if (current >= 0) ticketSources[current] = profile
+    else ticketSources.push(profile)
+    return ticketSources.map((source) => ({ profile: source, credentialConfigured: false }))
+  })
+  ipcMain.handle('tickets:list', async (event, request: TicketListRequest) => {
+    assertTrustedRendererSender(event, 'Tickets')
+    const requestId = ticketRequestId(request?.requestId)
+    const source = parseTicketSourceProfile(request?.source)
+    if (!source || !ticketSources.some((candidate) => candidate.id === source.id)) {
+      throw new Error('Profil Tickets non autorisé')
+    }
+    ticketRequests.get(requestId)?.abort()
+    const controller = new AbortController()
+    ticketRequests.set(requestId, controller)
+    try {
+      await Promise.resolve()
+      if (controller.signal.aborted) throw new Error('Requête Tickets annulée')
+      return { items: [], hasMore: false }
+    } finally {
+      if (ticketRequests.get(requestId) === controller) ticketRequests.delete(requestId)
+    }
+  })
+  ipcMain.handle('tickets:cancel', (event, value: unknown) => {
+    assertTrustedRendererSender(event, 'Tickets')
+    const requestId = ticketRequestId(value)
+    const controller = ticketRequests.get(requestId)
+    if (!controller) return false
+    controller.abort()
+    ticketRequests.delete(requestId)
+    return true
+  })
   ipcMain.handle('app:test:capture-page', async (event) => {
     assertTrustedRendererSender(event, 'Capture UI de test')
     if (!isolatedTestInstance)
