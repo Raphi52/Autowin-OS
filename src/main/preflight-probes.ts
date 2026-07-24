@@ -4,7 +4,7 @@
  * `preflight:recheck` du wizard first-run (#5) — une seule définition, pas de divergence.
  */
 import { existsSync } from 'node:fs'
-import { spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import {
   runPreflight,
   type PreflightOptions,
@@ -35,15 +35,28 @@ export function appPreflightProbes(): PreflightProbes {
       if (which !== 'codex' && which !== 'claude' && which !== 'kimi') return false
       const envBin = process.env[`${which.toUpperCase()}_BIN`]
       if (envBin) return existsSync(envBin)
-      // shell:true sur Windows : codex/claude sont installés en shims `.cmd` par npm -g → un spawnSync
-      // nu (sans shell) échoue en ENOENT et rapporterait "CLI introuvable" à tort. `which` est
+      // shell:true sur Windows : codex/claude sont installés en shims `.cmd` par npm -g → un spawn
+      // sans shell échoue en ENOENT et rapporterait "CLI introuvable" à tort. `which` est
       // whitelisté ci-dessus → shell:true ne peut pas injecter. (Faithful major.)
-      const probe = spawnSync(which, ['--version'], {
-        timeout: 3000,
-        windowsHide: true,
-        shell: process.platform === 'win32'
+      return await new Promise<boolean>((resolve) => {
+        const probe = spawn(which, ['--version'], {
+          windowsHide: true,
+          shell: process.platform === 'win32'
+        })
+        let settled = false
+        const finish = (available: boolean): void => {
+          if (settled) return
+          settled = true
+          clearTimeout(timeout)
+          resolve(available)
+        }
+        const timeout = setTimeout(() => {
+          probe.kill()
+          finish(false)
+        }, 3000)
+        probe.once('error', () => finish(false))
+        probe.once('close', (code) => finish(code === 0))
       })
-      return probe.status === 0
     },
     hasCodexSession: () => codexTokenStatus(loadTokens(), Date.now()) === 'authenticated',
     hasBrainToken: () => brainServiceToken().length > 0

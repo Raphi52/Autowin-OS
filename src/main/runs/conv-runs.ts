@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { parseRun } from '../dashboards/runs'
 import { scanRuns, type RunEntry } from '../dashboards/runs-scan'
@@ -185,27 +186,31 @@ export function listConvRuns(
   convId: string,
   attachedPaths: string[] = [],
   root = convRunsRoot()
-): RunEntry[] {
-  const own = scanRuns(join(root)).filter((r) => r.session === convId)
-  const attached: RunEntry[] = []
-  for (const p of attachedPaths) {
-    if (!existsSync(p)) continue
-    try {
-      const md = readFileSync(p, 'utf8')
-      const subject = dirname(p)
-        .split(/[\\/]/)
-        .pop()!
-        .replace(/-workspace$/, '')
-      attached.push({
-        subject,
-        session: 'attaché',
-        path: p,
-        mtime: statSync(p).mtimeMs,
-        summary: parseRun(md, subject)
-      })
-    } catch {
-      /* run attaché illisible — ignoré */
-    }
-  }
-  return [...own, ...attached].sort((a, b) => b.mtime - a.mtime)
+): Promise<RunEntry[]> {
+  return scanRuns(join(root)).then(async (runs) => {
+    const own = runs.filter((r) => r.session === convId)
+    const attached = (
+      await Promise.all(
+        attachedPaths.map(async (p): Promise<RunEntry | null> => {
+          try {
+            const [md, runStat] = await Promise.all([readFile(p, 'utf8'), stat(p)])
+            const subject = dirname(p)
+              .split(/[\\/]/)
+              .pop()!
+              .replace(/-workspace$/, '')
+            return {
+              subject,
+              session: 'attaché',
+              path: p,
+              mtime: runStat.mtimeMs,
+              summary: parseRun(md, subject)
+            }
+          } catch {
+            return null
+          }
+        })
+      )
+    ).filter((entry): entry is RunEntry => entry !== null)
+    return [...own, ...attached].sort((a, b) => b.mtime - a.mtime)
+  })
 }
