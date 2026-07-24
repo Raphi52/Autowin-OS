@@ -43,6 +43,17 @@ Trois idées directrices :
    garde-fous déterministes (dont un *verify-replay* qui **rejoue** réellement la vérification au lieu
    de croire l'agent sur parole) — uniforme quel que soit le fournisseur.
 
+## Aperçu
+
+### Chat — parler à l'agent (qui répond ET agit sur l'app)
+![Vue Chat d'Autowin OS](docs/screenshots/chat.png)
+
+### Observatory — traçabilité des conversations (sortant / réponse / thinking / échecs, coût par modèle)
+![Vue Observatory d'Autowin OS](docs/screenshots/observatory.png)
+
+### Settings — capacités connectées (Skills · Hooks · Tools)
+![Vue Settings d'Autowin OS](docs/screenshots/settings.png)
+
 ## Fonctionnalités clés
 
 - **Orchestration multi-agents** — décomposition, fan-out multi-modèles, dispatch greedy, réparation
