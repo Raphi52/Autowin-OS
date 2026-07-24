@@ -56,6 +56,7 @@ import { discoverConfiguredSkillRegistry } from './skill-registry'
 import { listClaudeHooks, listCodexHooks } from './claude-hooks'
 import { ModelQuestionHub, type ModelQuestion, type PendingModelQuestion } from './model-questions'
 import { DEFAULT_IMPORTED_MODELS, discoverImportedModels, findModel } from './models'
+import { buildModelQuotaSnapshot, getModelQuotaSnapshot } from './model-quotas'
 import { loadAgentTopology, saveAgentTopology } from './topology-disk'
 import { migrateTopologyShape } from './topology'
 import type { AgentTopology, SlotBinding } from './topology'
@@ -633,6 +634,60 @@ function registerChatIpc(): void {
     }
   )
   ipcMain.handle('os:models:list', () => agentModelsReady)
+  ipcMain.handle('os:models:quotas', async (event) => {
+    assertTrustedRendererSender(event, 'Model quotas')
+    const models = await agentModelsReady
+    if (isolatedTestInstance) {
+      const observedAt = new Date().toISOString()
+      const fiveHourResetsAt = new Date(Date.now() + 5 * 60 * 60_000).toISOString()
+      const sevenDayResetsAt = new Date(Date.now() + 7 * 24 * 60 * 60_000).toISOString()
+      return buildModelQuotaSnapshot(models, {
+        claude: {
+          status: 'available',
+          source: 'Fixture isolée Claude',
+          observedAt,
+          windows: [
+            {
+              id: 'five-hour',
+              label: '5 h',
+              usedPercent: 63,
+              remainingPercent: 37,
+              resetsAt: fiveHourResetsAt
+            },
+            {
+              id: 'seven-day',
+              label: '7 j',
+              usedPercent: 18,
+              remainingPercent: 82,
+              resetsAt: sevenDayResetsAt
+            }
+          ]
+        },
+        codex: {
+          status: 'available',
+          source: 'Fixture isolée Codex',
+          observedAt,
+          windows: [
+            {
+              id: 'five-hour',
+              label: '5 h',
+              usedPercent: 42,
+              remainingPercent: 58,
+              resetsAt: fiveHourResetsAt
+            },
+            {
+              id: 'seven-day',
+              label: '7 j',
+              usedPercent: 29,
+              remainingPercent: 71,
+              resetsAt: sevenDayResetsAt
+            }
+          ]
+        }
+      })
+    }
+    return getModelQuotaSnapshot(models)
+  })
   // Page Routeur — statut d'auth au CHARGEMENT (cheap/local) : codex exact (expiry token),
   // claude/kimi = présence CLI seulement (JAMAIS « authenticated » sans probe réel). Borné.
   ipcMain.handle('os:providerStatus', async (event) => {

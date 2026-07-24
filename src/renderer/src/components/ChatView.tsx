@@ -34,6 +34,7 @@ import {
 } from './chat-view-model'
 import { searchConversations } from './conversation-search'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
+import { ModelQuotaIndicator } from './ModelQuotaIndicator'
 import { StepThread, AssistantActivityGroup } from './ChatView.parts'
 import { reconstructBranchChain } from '../../../shared/conversation-branches'
 import './ChatView.css'
@@ -1958,15 +1959,18 @@ export function ChatView({
               <span className="composer-hint">
                 Entrée pour envoyer · Maj + Entrée pour une nouvelle ligne · 8 fichiers max
               </span>
-              <OrchestratorModelSelector
-                busy={busy}
-                catalogLoaded={modelCatalogLoaded}
-                models={modelCatalog}
-                binding={orchestratorBinding}
-                pending={modelChangePending}
-                error={modelChangeError}
-                onSelect={(option) => void changeOrchestratorModel(option)}
-              />
+              <div className="composer-meta-actions">
+                <OrchestratorModelSelector
+                  busy={busy}
+                  catalogLoaded={modelCatalogLoaded}
+                  models={modelCatalog}
+                  binding={orchestratorBinding}
+                  pending={modelChangePending}
+                  error={modelChangeError}
+                  onSelect={(option) => void changeOrchestratorModel(option)}
+                />
+                <ModelQuotaIndicator />
+              </div>
             </div>
           </div>
         </div>

@@ -3,6 +3,7 @@ import type {
   WorktreeAgentActivity,
   WorktreeRuntimeStatus
 } from '../shared/worktree-activity-model'
+import type { ModelQuotaSnapshot } from '../shared/model-quotas'
 
 interface ChatAttachment {
   name: string
@@ -312,6 +313,7 @@ interface ChatApi {
     reasoningEffort?: string
   ) => Promise<Record<string, { provider: string; model?: string; reasoningEffort?: string }>>
   models: () => Promise<ImportedModel[]>
+  modelQuotas: () => Promise<ModelQuotaSnapshot>
   profiles: () => Promise<
     Array<{
       id: string
