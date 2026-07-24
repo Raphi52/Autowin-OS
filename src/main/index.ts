@@ -577,8 +577,10 @@ function registerChatIpc(): void {
   })
 
   // --- Orchestration disciplinée (le cœur) : streame chaque étape ---
-  ipcMain.handle('os:orchestrate', async (event, task: string) => {
-    const conversationId = bus.activeConversationId ?? '__autonomous__'
+  ipcMain.handle('os:orchestrate', async (event, task: string, targetConversationId?: string) => {
+    // #6 — un conversationId explicite (ex. traitement ticket) lance la VRAIE pipeline scout→frame→
+    // build→judge SUR cette conversation ; sinon on retombe sur la conversation active (comportement historique).
+    const conversationId = targetConversationId ?? bus.activeConversationId ?? '__autonomous__'
     // #2 — run STOPPABLE : on enregistre un AbortController dans le registre du bus pour que
     // `os:orchestrate:cancel` → abortOrchestration(conversationId) le coupe réellement (sinon no-op).
     const controller = bus.registerOrchestration(conversationId)

@@ -274,7 +274,8 @@ interface ChatApi {
   storageMigration: () => Promise<Record<string, string>>
   completeStorageMigration: () => Promise<boolean>
   orchestrate: (
-    task: string
+    task: string,
+    conversationId?: string
   ) => Promise<{ ok: boolean; result?: OrchestrationResult; error?: string }>
   onOrchestrateStep: (cb: (step: OrchestrationStep) => void) => () => void
   onPreflight: (cb: (result: PreflightResult) => void) => () => void

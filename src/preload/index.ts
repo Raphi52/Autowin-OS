@@ -9,8 +9,11 @@ const api = {
   completeStorageMigration: (): Promise<boolean> =>
     ipcRenderer.invoke('app:storage-migration-complete'),
   // Orchestration disciplinée
-  orchestrate: (task: string): Promise<{ ok: boolean; result?: unknown; error?: string }> =>
-    ipcRenderer.invoke('os:orchestrate', task),
+  orchestrate: (
+    task: string,
+    conversationId?: string
+  ): Promise<{ ok: boolean; result?: unknown; error?: string }> =>
+    ipcRenderer.invoke('os:orchestrate', task, conversationId),
   onOrchestrateStep: (cb: (step: unknown) => void): (() => void) => {
     const handler = (_e: unknown, step: unknown): void => cb(step)
     ipcRenderer.on('orchestrate:step', handler)

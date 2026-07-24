@@ -464,9 +464,9 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       },
       promptConversation: async (conv, _item, prompt) => {
         try {
-          const r = (await window.api.pilotChat([{ role: 'user', content: prompt }], conv.id)) as {
-            ok?: boolean
-          }
+          // #6 — lance la VRAIE orchestration Autowin (scout→frame→build→judge) sur la conversation
+          // dédiée du ticket, pas un simple tour de chat.
+          const r = await window.api.orchestrate(prompt, conv.id)
           return { ok: r?.ok !== false }
         } catch {
           return { ok: false }

@@ -110,12 +110,12 @@ describe('vue Tickets', () => {
     const conversationsCreate = vi.fn(async ({ title }: { title: string }) => ({
       id: `conv-${title}`
     }))
-    const pilotChat = vi.fn(async () => ({ ok: true }))
+    const orchestrate = vi.fn(async () => ({ ok: true }))
     api({
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       conversationsCreate,
       conversationsSetAuthorityMode: vi.fn(async () => ({})),
-      pilotChat
+      orchestrate
     })
     const { root, container } = await render()
     const checks = container.querySelectorAll<HTMLInputElement>(
@@ -138,7 +138,9 @@ describe('vue Tickets', () => {
     expect(titles).toContain('1')
     expect(titles).toContain('3')
     expect(titles).not.toContain('Ticket 2')
-    expect(pilotChat).toHaveBeenCalledTimes(2)
+    expect(orchestrate).toHaveBeenCalledTimes(2)
+    // #6 — chaque ticket est orchestré sur SA conversation dédiée (pipeline réelle, pas pilotChat).
+    expect(orchestrate.mock.calls.every(([, convId]) => typeof convId === 'string')).toBe(true)
     expect(container.querySelector('[data-testid="tickets-batch-done"]')?.textContent).toContain(
       '2/2'
     )
