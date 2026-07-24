@@ -160,12 +160,16 @@ const pilot = new AgentPilot(
 const modelQuestions = new ModelQuestionHub()
 const activeChatTurns = new ActiveChatTurns()
 /** Directives utilisateur injectées PENDANT un tour, par conversation (drainées à chaque itération). */
-const pendingDirectives = new Map<string, string[]>()
+const pendingDirectives = new Map<
+  string,
+  Array<{ directive: string; resolve: (consumed: boolean) => void }>
+>()
 function drainPendingDirectives(conversationId: string): string[] {
   const queued = pendingDirectives.get(conversationId) ?? []
   pendingDirectives.delete(conversationId)
   if (queued.length) broadcast({ type: 'refresh', scope: 'directives' })
-  return queued
+  queued.forEach((entry) => entry.resolve(true))
+  return queued.map((entry) => entry.directive)
 }
 const questionWindows = new Map<string, BrowserWindow>()
 const diagnosticCapabilities = new DiagnosticCapabilities()
@@ -1233,9 +1237,12 @@ function registerChatIpc(): void {
       } finally {
         if (conversationId) {
           activeChatTurns.delete(conversationId, controller)
-          if (pendingDirectives.delete(conversationId))
+          const staleDirectives = pendingDirectives.get(conversationId) ?? []
+          if (pendingDirectives.delete(conversationId)) {
             // directives non consommées = obsolètes
             broadcast({ type: 'refresh', scope: 'directives' })
+            staleDirectives.forEach((entry) => entry.resolve(false))
+          }
         }
         resolveCompletion()
       }
@@ -1259,11 +1266,12 @@ function registerChatIpc(): void {
     const directive = guardString(rawDirective, 'directive').trim()
     if (!directive) return { ok: false }
     if (!activeChatTurns.get(conversationId)) return { ok: false }
-    const queued = pendingDirectives.get(conversationId) ?? []
-    queued.push(directive)
-    pendingDirectives.set(conversationId, queued)
-    broadcast({ type: 'refresh', scope: 'directives' })
-    return { ok: true }
+    return new Promise<{ ok: boolean }>((resolve) => {
+      const queued = pendingDirectives.get(conversationId) ?? []
+      queued.push({ directive, resolve: (consumed) => resolve({ ok: consumed }) })
+      pendingDirectives.set(conversationId, queued)
+      broadcast({ type: 'refresh', scope: 'directives' })
+    })
   })
 
   ipcMain.handle(
