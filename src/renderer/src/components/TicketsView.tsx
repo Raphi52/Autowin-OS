@@ -6,6 +6,11 @@ import type {
   TicketSourceProfile
 } from '../../../shared/tickets'
 import { ModuleHeader } from './ModuleHeader'
+import {
+  runTicketTreatmentBatch,
+  ticketConversationTitle,
+  type TicketTreatmentResult
+} from './ticket-treatment'
 import './TicketsView.css'
 
 interface TicketSourceSummary {
@@ -284,6 +289,75 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const selectedItem =
     visibleItems.find((item) => `${item.sourceId}::${item.id}` === selectedId) ?? visibleItems[0]
 
+  // Traitement par lot : chaque ticket VISIBLE (après recherche de ton nom/filtres) est prompté dans
+  // SA propre conversation dédiée. Concurrency bornée (moteur), annulable. ⚠️ lance N runs d'agent.
+  const batchActiveRef = useRef(false)
+  const batchGenRef = useRef(0)
+  const [batch, setBatch] = useState<(TicketTreatmentResult & { running: boolean }) | null>(null)
+
+  const treatAll = useCallback(async () => {
+    const snapshot = visibleItems
+    if (!snapshot.length || batchActiveRef.current) return
+    const generation = (batchGenRef.current += 1)
+    batchActiveRef.current = true
+    setBatch({
+      total: snapshot.length,
+      completed: 0,
+      succeeded: 0,
+      failed: 0,
+      conversationIds: [],
+      running: true
+    })
+    let provider: string | undefined
+    try {
+      const roleMap = await window.api.roles()
+      provider =
+        roleMap.orchestrator?.provider ??
+        roleMap.subagent?.provider ??
+        Object.values(roleMap)[0]?.provider
+    } catch {
+      provider = undefined
+    }
+    if (!provider) {
+      batchActiveRef.current = false
+      setBatch((b) => (b ? { ...b, running: false } : b))
+      return
+    }
+    const result = await runTicketTreatmentBatch(snapshot, {
+      shouldContinue: () => batchActiveRef.current && generation === batchGenRef.current,
+      createConversation: async (item) => {
+        const conv = await window.api.conversationsCreate({
+          title: ticketConversationTitle(item),
+          category: provider as string,
+          provider: provider as string
+        })
+        await window.api.conversationsSetAuthorityMode(conv.id, 'ask')
+        return { id: conv.id }
+      },
+      promptConversation: async (conv, _item, prompt) => {
+        try {
+          const r = (await window.api.pilotChat([{ role: 'user', content: prompt }], conv.id)) as {
+            ok?: boolean
+          }
+          return { ok: r?.ok !== false }
+        } catch {
+          return { ok: false }
+        }
+      },
+      onProgress: (p) => {
+        if (batchActiveRef.current && generation === batchGenRef.current)
+          setBatch({ ...p, running: p.completed < p.total })
+      }
+    })
+    batchActiveRef.current = false
+    if (generation === batchGenRef.current) setBatch({ ...result, running: false })
+  }, [visibleItems])
+
+  const cancelBatch = (): void => {
+    batchActiveRef.current = false
+    setBatch((b) => (b ? { ...b, running: false } : b))
+  }
+
   const retry = (): void => {
     if (sourceError) void loadSources()
     else if (selectedSource) void load(selectedSource)
@@ -439,6 +513,37 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         >
           Actualiser
         </button>
+        {batch?.running ? (
+          <>
+            <span className="tickets-batch-progress" data-testid="tickets-batch-progress">
+              Traitement {batch.completed}/{batch.total}…
+            </span>
+            <button
+              data-testid="tickets-treat-cancel"
+              type="button"
+              className="tickets-treat-cancel"
+              onClick={cancelBatch}
+            >
+              Arrêter
+            </button>
+          </>
+        ) : (
+          <button
+            data-testid="tickets-treat-all"
+            type="button"
+            className="tickets-treat-all"
+            disabled={visibleItems.length === 0}
+            title="Ouvre une conversation dédiée par ticket affiché et lance son traitement"
+            onClick={() => void treatAll()}
+          >
+            Traiter les tickets affichés ({visibleItems.length})
+          </button>
+        )}
+        {batch && !batch.running && batch.total > 0 && (
+          <span className="tickets-batch-done" data-testid="tickets-batch-done">
+            {batch.succeeded}/{batch.total} lancés{batch.failed ? ` · ${batch.failed} échec(s)` : ''}
+          </span>
+        )}
       </div>
 
       <div className="tickets-content">

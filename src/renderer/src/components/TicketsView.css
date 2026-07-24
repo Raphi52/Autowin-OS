@@ -387,3 +387,13 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Traitement par lot des tickets affichés */
+.tickets-treat-all {
+  border-color: var(--accent, #4b9fff);
+  color: var(--accent, #4b9fff);
+}
+.tickets-treat-all:disabled { opacity: 0.5; }
+.tickets-treat-cancel { border-color: var(--danger, #e6635b); color: var(--danger, #e6635b); }
+.tickets-batch-progress { font-size: 12px; color: var(--accent, #4b9fff); }
+.tickets-batch-done { font-size: 12px; color: var(--muted, #8b939f); }
