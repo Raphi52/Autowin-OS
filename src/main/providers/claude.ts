@@ -1,4 +1,10 @@
 import { joinThinking } from './thinking'
+import {
+  createStreamWatchdog,
+  killEscalate,
+  SUBAGENT_INACTIVITY_MS,
+  SUBAGENT_TOTAL_MS
+} from './watchdog'
 import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -165,7 +171,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
 
   constructor(opts: ClaudeAdapterOptions = {}) {
     this.bin = resolveClaudeBin(opts.bin)
-    this.timeoutMs = opts.timeoutMs ?? 120_000
+    this.timeoutMs = opts.timeoutMs ?? SUBAGENT_TOTAL_MS
   }
 
   /** L'auth vit dans le CLI (abonnement déjà loggé) — on vérifie qu'il répond. */
@@ -248,9 +254,6 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     opts.observePrompt?.(claudeTransportEnvelope(messages, opts, materialized, args))
 
     const child = spawn(this.bin, args, { shell: false, cwd: execution?.cwd })
-    opts.signal?.addEventListener('abort', () => child.kill())
-
-    const timer = setTimeout(() => child.kill(), this.timeoutMs)
     let buffer = ''
     let text = ''
     const reasoningFragments: string[] = []
@@ -268,6 +271,31 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       resolveWait?.()
       resolveWait = null
     }
+
+    // Anti-blocage : le pump ne dépend plus du seul event `close` (qui peut ne JAMAIS tirer sur un
+    // zombie). Un watchdog inactivité + cap total FORCE le réglage du generator (done+errored+wake)
+    // et tue le process en escalade SIGTERM→SIGKILL. L'abort utilisateur passe par le même chemin.
+    const forceSettle = (err: Error): void => {
+      if (!errored) errored = err
+      done = true
+      wake()
+    }
+    const watchdog = createStreamWatchdog({
+      inactivityMs: SUBAGENT_INACTIVITY_MS,
+      totalMs: this.timeoutMs,
+      onTrip: (reason) => {
+        killEscalate(child)
+        forceSettle(
+          new Error(
+            `claude CLI figé (${reason === 'inactivity' ? 'aucune sortie' : 'durée max'}) — tué par le watchdog`
+          )
+        )
+      }
+    })
+    opts.signal?.addEventListener('abort', () => {
+      killEscalate(child)
+      forceSettle(new Error('claude CLI annulé'))
+    })
 
     const handleEvent = (o: Record<string, unknown>): void => {
       const t = o['type']
@@ -365,15 +393,17 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           /* ligne non-JSON (bruit) — ignorée */
         }
       }
+      watchdog.beat() // activité observée → réarme le timer d'inactivité
       wake()
     })
     child.on('error', (e) => {
+      watchdog.dispose()
       errored = e
       done = true
       wake()
     })
     child.on('close', (code) => {
-      clearTimeout(timer)
+      watchdog.dispose()
       if (systemPromptDir) rmSync(systemPromptDir, { recursive: true, force: true })
       materialized?.cleanup()
       // Flush du reliquat : un dernier event JSON sans '\n' terminal ne serait

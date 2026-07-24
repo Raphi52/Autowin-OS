@@ -1,3 +1,9 @@
+import {
+  createStreamWatchdog,
+  killEscalate,
+  SUBAGENT_INACTIVITY_MS,
+  SUBAGENT_TOTAL_MS
+} from './watchdog'
 import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -108,7 +114,7 @@ export class KimiCliAdapter implements ProviderAdapter {
 
   constructor(opts: KimiCliAdapterOptions = {}) {
     this.command = resolveKimiCommand(opts.bin)
-    this.timeoutMs = opts.timeoutMs ?? 120_000
+    this.timeoutMs = opts.timeoutMs ?? SUBAGENT_TOTAL_MS
   }
 
   /** Vérifie uniquement la disponibilité du CLI. L'OAuth reste privé au CLI. */
@@ -170,9 +176,6 @@ export class KimiCliAdapter implements ProviderAdapter {
       shell: false,
       cwd: sandbox
     })
-    opts.signal?.addEventListener('abort', () => child.kill())
-
-    const timer = setTimeout(() => child.kill(), this.timeoutMs)
     let buffer = ''
     let text = ''
     let done = false
@@ -195,8 +198,32 @@ export class KimiCliAdapter implements ProviderAdapter {
       wake?.()
       wake = undefined
     }
+    // Anti-blocage : watchdog inactivité + cap total → force le réglage du generator (done+errored)
+    // + kill en escalade, sans dépendre de l'event `close` (zombie). Abort utilisateur = même chemin.
+    const forceSettle = (err: Error): void => {
+      if (!errored) errored = err
+      done = true
+      notify()
+    }
+    const watchdog = createStreamWatchdog({
+      inactivityMs: SUBAGENT_INACTIVITY_MS,
+      totalMs: this.timeoutMs,
+      onTrip: (reason) => {
+        killEscalate(child)
+        forceSettle(
+          new Error(
+            `Kimi Code figé (${reason === 'inactivity' ? 'aucune sortie' : 'durée max'}) — tué par le watchdog`
+          )
+        )
+      }
+    })
+    opts.signal?.addEventListener('abort', () => {
+      killEscalate(child)
+      forceSettle(new Error('Kimi Code annulé'))
+    })
 
     child.stdout.on('data', (chunk: Buffer) => {
+      watchdog.beat()
       buffer += chunk.toString('utf8')
       let newline: number
       while ((newline = buffer.indexOf('\n')) >= 0) {
@@ -207,12 +234,13 @@ export class KimiCliAdapter implements ProviderAdapter {
       notify()
     })
     child.on('error', (error) => {
+      watchdog.dispose()
       errored = error
       done = true
       notify()
     })
     child.on('close', (code) => {
-      clearTimeout(timer)
+      watchdog.dispose()
       const rest = buffer.trim()
       if (rest) emitLine(rest)
       if (code !== 0 && !errored) {

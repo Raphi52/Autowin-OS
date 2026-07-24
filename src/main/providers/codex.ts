@@ -9,6 +9,12 @@ import type {
 } from './types'
 import { loadTokens, refreshTokens, saveTokens, type FetchLike, type Tokens } from './codex-auth'
 import { joinThinking } from './thinking'
+import {
+  createStreamWatchdog,
+  killEscalate,
+  SUBAGENT_INACTIVITY_MS,
+  SUBAGENT_TOTAL_MS
+} from './watchdog'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -145,9 +151,26 @@ async function runCodexExec(
     let sessionId: string | undefined
     let usage: SendResult['usage']
     const executionEvidence: ExecutionEvidence[] = []
-    const timer = setTimeout(() => child.kill(), 30 * 60_000)
-    opts.signal?.addEventListener('abort', () => child.kill())
+    // Anti-blocage : watchdog inactivité + cap total → kill en escalade + REJET (idempotent) même si
+    // l'event `close` ne tire jamais (zombie). Remplace l'ancien kill-total-30min sans filet de rejet.
+    const watchdog = createStreamWatchdog({
+      inactivityMs: SUBAGENT_INACTIVITY_MS,
+      totalMs: SUBAGENT_TOTAL_MS,
+      onTrip: (reason) => {
+        killEscalate(child)
+        reject(
+          new Error(
+            `codex exec figé (${reason === 'inactivity' ? 'aucune sortie' : 'durée max'}) — tué par le watchdog`
+          )
+        )
+      }
+    })
+    opts.signal?.addEventListener('abort', () => {
+      killEscalate(child)
+      reject(new Error('codex exec annulé'))
+    })
     child.stdout.on('data', (chunk: Buffer) => {
+      watchdog.beat() // activité → réarme l'inactivité
       stdout += chunk.toString('utf8')
       const lines = stdout.split(/\r?\n/)
       stdout = lines.pop() ?? ''
@@ -245,11 +268,11 @@ async function runCodexExec(
       stderr += chunk.toString('utf8')
     })
     child.on('error', (error) => {
-      clearTimeout(timer)
+      watchdog.dispose()
       reject(error)
     })
     child.on('close', (code) => {
-      clearTimeout(timer)
+      watchdog.dispose()
       if (code !== 0) {
         reject(new Error(`codex exec échec (${code ?? 'signal'}): ${stderr.trim().slice(-800)}`))
         return

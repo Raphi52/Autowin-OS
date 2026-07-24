@@ -6,6 +6,19 @@ import type {
   SendResult,
   StreamChunk
 } from './types'
+import { withHardDeadline } from './watchdog'
+
+/**
+ * Plafond DUR de coordination : même si un adaptateur défaille (promesse jamais réglée, event `close`
+ * qui ne tire pas après un kill de zombie), `send` REJETTE au bout de ce délai → l'orchestrateur ne
+ * pend JAMAIS indéfiniment. Volontairement TRÈS large : c'est un ultime filet, pas le vrai plafond —
+ * l'inactivité/le cap total des adaptateurs (watchdog de flux) tranchent bien avant sur un vrai figé.
+ * Réglable via AUTOWIN_SUBAGENT_CEILING_MS.
+ */
+const COORDINATION_CEILING_MS = ((): number => {
+  const raw = Number(process.env.AUTOWIN_SUBAGENT_CEILING_MS)
+  return Number.isFinite(raw) && raw > 0 ? raw : 45 * 60_000
+})()
 
 function assertOutsideLegacyFabricBridge(providerId: string): void {
   if (providerId.startsWith('fabric:')) {
@@ -115,12 +128,22 @@ export class ProviderRegistry {
     const system = route.opts.system ?? this.systemBlock
     const gen = adapter.send(messages, { ...route.opts, system })
 
-    let step = await gen.next()
-    while (!step.done) {
-      onChunk?.(step.value)
-      step = await gen.next()
-    }
-    // Valeur de retour du generator = SendResult final.
-    return step.value
+    // Pompe du stream, enveloppée d'un PLAFOND DUR de coordination : si l'adaptateur ne rend jamais la
+    // main (zombie, `close` jamais émis), la course rejette au lieu de pendre à l'infini. Garantie que
+    // l'orchestrateur se règle TOUJOURS ; le watchdog de flux des adaptateurs tue le process bien avant.
+    const pump = (async (): Promise<SendResult> => {
+      let step = await gen.next()
+      while (!step.done) {
+        onChunk?.(step.value)
+        step = await gen.next()
+      }
+      // Valeur de retour du generator = SendResult final.
+      return step.value
+    })()
+    return withHardDeadline(
+      pump,
+      COORDINATION_CEILING_MS,
+      `Sous-agent ${route.id} sans réponse depuis ${Math.round(COORDINATION_CEILING_MS / 1000)}s (watchdog coordination) — abandonné pour ne pas bloquer le run.`
+    )
   }
 }

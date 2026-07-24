@@ -110,7 +110,7 @@ describe('vue Tickets', () => {
     const conversationsCreate = vi.fn(async ({ title }: { title: string }) => ({
       id: `conv-${title}`
     }))
-    const orchestrate = vi.fn(async () => ({ ok: true }))
+    const orchestrate = vi.fn(async (_task: string, _convId?: string) => ({ ok: true }))
     api({
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       conversationsCreate,
