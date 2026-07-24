@@ -19,6 +19,20 @@ describe('chat top bar surface', () => {
   })
 })
 
+describe('workflow sidebar header', () => {
+  it('keeps action buttons visible while truncating tabs at narrow widths', () => {
+    const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+
+    expect(css).toMatch(
+      /\.runs-pane > \.conv-head > \.row:first-child\s*{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden/s
+    )
+    expect(css).toMatch(/\.runs-pane > \.conv-head > \.row:last-child\s*{[^}]*flex:\s*none/s)
+    expect(css).toMatch(
+      /\.runs-pane > \.conv-head > \.row:first-child \.btn\s*{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis/s
+    )
+  })
+})
+
 describe('minimal conversation status lights', () => {
   it('keeps the Native-style dot compact and reserves animation for running work', () => {
     const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')

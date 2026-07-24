@@ -75,6 +75,25 @@
 .conv-head .btn {
   margin-left: auto;
 }
+.runs-pane > .conv-head {
+  min-width: 0;
+  gap: var(--s2);
+}
+.runs-pane > .conv-head > .row:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.runs-pane > .conv-head > .row:last-child {
+  flex: none;
+}
+.runs-pane > .conv-head > .row:first-child .btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 /* Inbox d'agents : conversations dont un agent travaille, en tête du pane. */
 .agent-inbox {
   display: flex;
