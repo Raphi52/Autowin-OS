@@ -24,7 +24,6 @@ import './assets/theme-modes.css'
 import './assets/ui-system.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
 import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'
-import type { TicketItem } from '../../shared/tickets'
 
 const NAV = APP_DESTINATIONS
 
@@ -214,25 +213,6 @@ export function MainApp(): React.JSX.Element {
     }, 0)
   }
 
-  function processTickets(tickets: TicketItem[]): void {
-    navigate('chat')
-    const ticketContext = tickets
-      .map(
-        (ticket) =>
-          `- ${ticket.sourceId} #${ticket.id} — ${ticket.title}\n  URL: ${ticket.url}\n  État: ${ticket.state}`
-      )
-      .join('\n')
-    window.setTimeout(() => {
-      window.dispatchEvent(
-        new CustomEvent('autowin:brainwash', {
-          detail: {
-            prompt: `Traite uniquement les tickets cochés ci-dessous, dans cet ordre. N’ajoute aucun autre ticket.\n\n${ticketContext}`
-          }
-        })
-      )
-    }, 0)
-  }
-
   function inspectTurn(target: InspectTurnTarget): void {
     setObservatoryFocus({ ...target, requestId: Date.now() })
     navigate('observatory')
@@ -370,7 +350,7 @@ export function MainApp(): React.JSX.Element {
         )}
         {visitedTabs.has('tickets') && (
           <div className={`view-slot${tab === 'tickets' ? ' is-active' : ''}`}>
-            <TicketsView active={tab === 'tickets'} onProcessTickets={processTickets} />
+            <TicketsView active={tab === 'tickets'} />
           </div>
         )}
         {visitedTabs.has('settings') && (

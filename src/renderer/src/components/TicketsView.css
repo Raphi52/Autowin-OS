@@ -4,8 +4,10 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  display: grid;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  /* Flex colonne (≠ grille à rangées fixes) : les sections CONDITIONNELLES (form source, bandeau
+     stats) apparaissent/disparaissent sans décaler la zone contenu, qui prend toujours le reste. */
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   padding: 16px 18px;
   border: 1px solid color-mix(in srgb, var(--rose) 36%, var(--container-border));
@@ -137,37 +139,78 @@
   padding: 7px 10px;
 }
 
-.tickets-process-controls {
+/* Bandeau STATS : total + répartition par état (chips cliquables = filtres) + sélection courante. */
+.tickets-stats {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-card);
+  background: color-mix(in srgb, var(--surface-card) 88%, transparent);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.tickets-stats-total strong {
+  color: var(--text);
+}
+.tickets-stats-states {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tickets-state-chip {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  white-space: nowrap;
+  border: 1px solid hsl(var(--chip-hue, 200) 60% 55% / 0.45);
+  color: hsl(var(--chip-hue, 200) 75% 72%);
+  background: hsl(var(--chip-hue, 200) 60% 50% / 0.09);
+}
+.tickets-state-chip b {
+  margin-left: 3px;
+  font-weight: 700;
+}
+.tickets-state-chip.is-active {
+  border-color: hsl(var(--chip-hue, 200) 80% 62%);
+  background: hsl(var(--chip-hue, 200) 62% 50% / 0.22);
+  color: hsl(var(--chip-hue, 200) 90% 80%);
+}
+.tickets-stats-selection {
+  margin-left: auto;
+  color: var(--gold);
+  font-weight: 600;
+}
+
+/* Barre d'ACTIONS : tout sélectionner + traiter la sélection (1 conversation par ticket). */
+.tickets-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 0 4px;
-  color: var(--text-dim);
   font-size: 11px;
+  color: var(--text-dim);
 }
-.tickets-process-controls label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.tickets-process-controls input {
-  width: 76px;
-  min-height: 34px;
-  padding: 7px 10px;
-}
-.tickets-process-controls button {
+.tickets-actions button {
   min-height: 34px;
   padding: 7px 14px;
 }
-.tickets-process-controls button:disabled {
+.tickets-actions button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
-.tickets-process-error {
-  color: var(--warn);
+.tickets-treat-selection {
+  border-color: color-mix(in srgb, var(--rose) 62%, var(--container-border));
+  color: var(--rose-bright, #ff5cab);
+  font-weight: 600;
 }
 
 .tickets-content {
+  flex: 1;
   min-width: 0;
   min-height: 0;
   display: grid;
@@ -265,11 +308,22 @@
   width: 100%;
   min-width: 0;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  /* 2 lignes : id · titre · date relative, puis badges + assigné en pleine largeur. */
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 5px 10px;
   padding: 10px;
   text-align: left;
+}
+.tickets-list .tickets-meta {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-dim);
+  font-size: 11px;
 }
 
 .ticket-select-row {
@@ -295,18 +349,12 @@
   white-space: nowrap;
 }
 
-.tickets-list [data-testid='ticket-row'] > span:last-child {
-  grid-column: 2 / -1;
-  color: var(--text-dim);
-  font-size: 11px;
-}
 
 .tickets-id {
   color: var(--gold);
   font-family: ui-monospace, monospace;
 }
-.tickets-type,
-.tickets-state {
+.tickets-badge {
   padding: 2px 7px;
   border: 1px solid var(--container-border);
   border-radius: 999px;
@@ -314,9 +362,82 @@
   font-size: 10px;
   white-space: nowrap;
 }
+/* État : teinte déterministe par libellé (--chip-hue posée inline) → distinct sans mapping manuel. */
 .tickets-state {
-  border-color: color-mix(in srgb, var(--rose) 34%, var(--container-border));
-  color: var(--rose);
+  border-color: hsl(var(--chip-hue, 330) 60% 55% / 0.5);
+  color: hsl(var(--chip-hue, 330) 80% 74%);
+  background: hsl(var(--chip-hue, 330) 60% 50% / 0.1);
+}
+/* Priorité : P1 rouge vif → P4 discret. */
+.tickets-priority.is-p1 {
+  border-color: rgba(255, 96, 120, 0.7);
+  color: #ff8fa2;
+  background: rgba(255, 96, 120, 0.12);
+}
+.tickets-priority.is-p2 {
+  border-color: rgba(255, 179, 71, 0.6);
+  color: #ffc76e;
+  background: rgba(255, 179, 71, 0.1);
+}
+.tickets-priority.is-p3,
+.tickets-priority.is-p4 {
+  color: var(--text-dim);
+}
+.tickets-assignee {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tickets-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--container-border));
+  background: color-mix(in srgb, var(--gold) 12%, var(--surface-card));
+  color: var(--gold);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.tickets-unassigned {
+  color: var(--text-faint);
+  font-style: italic;
+}
+.tickets-updated {
+  color: var(--text-faint);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.tickets-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+.tickets-tag {
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--gold) 35%, var(--container-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--gold) 7%, var(--surface-card));
+  color: var(--gold);
+  font-size: 10px;
+}
+.tickets-detail-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tickets-detail-id {
+  color: var(--gold);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
 }
 
 .tickets-load-more {
@@ -430,12 +551,7 @@
   }
 }
 
-/* Traitement par lot des tickets affichés */
-.tickets-treat-all {
-  border-color: var(--accent, #4b9fff);
-  color: var(--accent, #4b9fff);
-}
-.tickets-treat-all:disabled { opacity: 0.5; }
+/* Traitement par lot de la sélection */
 .tickets-treat-cancel { border-color: var(--danger, #e6635b); color: var(--danger, #e6635b); }
-.tickets-batch-progress { font-size: 12px; color: var(--accent, #4b9fff); }
+.tickets-batch-progress { font-size: 12px; color: var(--rose-bright, #ff5cab); }
 .tickets-batch-done { font-size: 12px; color: var(--muted, #8b939f); }

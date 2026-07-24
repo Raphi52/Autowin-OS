@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_TICKET_SOURCE } from '../../shared/tickets'
 import { TicketProviderError } from './provider-contract'
-import { azureTicketProvider } from './azure'
+import { azureTicketProvider, listAzurePeople } from './azure'
 
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status })
@@ -185,5 +185,50 @@ describe('adaptateur Azure DevOps Tickets', () => {
         { token: 'pat-secret', fetchFn: fetchFn as typeof fetch }
       )
     ).rejects.toEqual(new TicketProviderError('INVALID_RESPONSE', 'Réponse Azure DevOps invalide.'))
+  })
+})
+
+describe('annuaire des collaborateurs Azure (listAzurePeople)', () => {
+  it('agrège les membres des équipes du projet, dédupliqués et triés', async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(json({ value: [{ id: 'team-a' }, { id: 'team-b' }] }))
+      .mockResolvedValueOnce(
+        json({
+          value: [
+            { identity: { displayName: 'Zoé Bernard', uniqueName: 'zoe@amitel.fr' } },
+            { identity: { displayName: 'Alice Martin' } }
+          ]
+        })
+      )
+      .mockResolvedValueOnce(
+        json({
+          value: [
+            { identity: { displayName: 'Alice Martin' } }, // doublon inter-équipes
+            { identity: { uniqueName: 'sam@amitel.fr' } }, // pas de displayName → uniqueName
+            {} // membre sans identité → ignoré
+          ]
+        })
+      )
+
+    const people = await listAzurePeople(
+      { organization: 'AmitelGTC', project: 'RIG' },
+      { token: 't', authScheme: 'bearer', fetchFn: fetchFn as typeof fetch }
+    )
+
+    expect(people).toEqual(['Alice Martin', 'sam@amitel.fr', 'Zoé Bernard'])
+    expect(String(fetchFn.mock.calls[0][0])).toContain('/_apis/projects/RIG/teams?api-version=')
+    expect(String(fetchFn.mock.calls[1][0])).toContain('/teams/team-a/members')
+    expect(String(fetchFn.mock.calls[2][0])).toContain('/teams/team-b/members')
+  })
+
+  it('rejette une réponse invalide (le handler IPC dégrade en liste vide)', async () => {
+    const fetchFn = vi.fn().mockResolvedValueOnce(json({ nope: true }))
+    await expect(
+      listAzurePeople(
+        { organization: 'AmitelGTC', project: 'RIG' },
+        { token: 't', authScheme: 'bearer', fetchFn: fetchFn as typeof fetch }
+      )
+    ).rejects.toBeInstanceOf(TicketProviderError)
   })
 })

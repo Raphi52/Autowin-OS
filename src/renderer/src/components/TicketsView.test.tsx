@@ -48,20 +48,18 @@ function api(overrides: Record<string, unknown> = {}): void {
       })),
       saveTicketSource: vi.fn(),
       cancelTickets: vi.fn(async () => false),
+      listTicketPeople: vi.fn(async () => []),
       ...overrides
     }
   })
 }
 
-async function render(
-  active = true,
-  onProcessTickets?: (tickets: TicketItem[]) => void
-): Promise<{ root: Root; container: HTMLElement }> {
+async function render(active = true): Promise<{ root: Root; container: HTMLElement }> {
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
   await act(async () => {
-    root.render(createElement(TicketsView, { active, onProcessTickets }))
+    root.render(createElement(TicketsView, { active }))
     await Promise.resolve()
     await Promise.resolve()
   })
@@ -78,30 +76,48 @@ describe('vue Tickets', () => {
     vi.restoreAllMocks()
   })
 
-  it('refuse le traitement quand aucun ticket n’est coché', async () => {
+  it('désactive « Traiter la sélection » sans coche puis tout sélectionne/désélectionne', async () => {
     api()
-    const onProcessTickets = vi.fn()
-    const { root, container } = await render(true, onProcessTickets)
-    const process = container.querySelector('[data-testid="tickets-process"]') as HTMLButtonElement
+    const { root, container } = await render()
+    const treat = container.querySelector(
+      '[data-testid="tickets-treat-selection"]'
+    ) as HTMLButtonElement
+    const selectAll = container.querySelector(
+      '[data-testid="tickets-select-all"]'
+    ) as HTMLButtonElement
 
-    expect(process.disabled).toBe(true)
-    expect(container.querySelector('[data-testid="tickets-process-error"]')?.textContent).toContain(
-      'au moins un ticket'
+    expect(treat.disabled).toBe(true)
+    expect(selectAll.textContent).toContain('Tout sélectionner (3)')
+    await act(async () => selectAll.click())
+    const checks = container.querySelectorAll<HTMLInputElement>(
+      '[data-testid="ticket-process-checkbox"]'
     )
-    await act(async () => process.click())
-    expect(onProcessTickets).not.toHaveBeenCalled()
+    expect([...checks].every((box) => box.checked)).toBe(true)
+    expect(treat.disabled).toBe(false)
+    expect(treat.textContent).toContain('(3)')
+    expect(selectAll.textContent).toContain('Tout désélectionner')
+    expect(
+      container.querySelector('[data-testid="tickets-selection-count"]')?.textContent
+    ).toContain('3 sélectionné(s)')
+
+    await act(async () => selectAll.click())
+    expect([...checks].every((box) => !box.checked)).toBe(true)
+    expect(treat.disabled).toBe(true)
     await act(async () => root.unmount())
   })
 
-  it.each([
-    ['', 'obligatoire'],
-    ['0', 'supérieur à zéro'],
-    ['-1', 'supérieur à zéro'],
-    ['3', 'supérieur au nombre']
-  ])('refuse la limite %j avec un message explicite', async (value, expectedMessage) => {
-    api()
-    const onProcessTickets = vi.fn()
-    const { root, container } = await render(true, onProcessTickets)
+  it('traite UNIQUEMENT les tickets cochés : une conversation dédiée par ticket', async () => {
+    const conversationsCreate = vi.fn(async ({ title }: { title: string }) => ({
+      id: `conv-${title}`
+    }))
+    const pilotChat = vi.fn(async () => ({ ok: true }))
+    api({
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      conversationsCreate,
+      conversationsSetAuthorityMode: vi.fn(async () => ({})),
+      pilotChat
+    })
+    const { root, container } = await render()
     const checks = container.querySelectorAll<HTMLInputElement>(
       '[data-testid="ticket-process-checkbox"]'
     )
@@ -109,63 +125,65 @@ describe('vue Tickets', () => {
       checks[0].click()
       checks[2].click()
     })
-    const limit = container.querySelector(
-      '[aria-label="Nombre de tickets à traiter"]'
-    ) as HTMLInputElement
-    const process = container.querySelector('[data-testid="tickets-process"]') as HTMLButtonElement
-
+    const treat = container.querySelector(
+      '[data-testid="tickets-treat-selection"]'
+    ) as HTMLButtonElement
     await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(limit, value)
-      limit.dispatchEvent(new Event('input', { bubbles: true }))
+      treat.click()
+      for (let i = 0; i < 8; i++) await Promise.resolve()
     })
-    expect(process.disabled).toBe(true)
-    expect(container.querySelector('[data-testid="tickets-process-error"]')?.textContent).toContain(
-      expectedMessage
+
+    expect(conversationsCreate).toHaveBeenCalledTimes(2)
+    const titles = conversationsCreate.mock.calls.map(([p]) => p.title).join(' | ')
+    expect(titles).toContain('1')
+    expect(titles).toContain('3')
+    expect(titles).not.toContain('Ticket 2')
+    expect(pilotChat).toHaveBeenCalledTimes(2)
+    expect(container.querySelector('[data-testid="tickets-batch-done"]')?.textContent).toContain(
+      '2/2'
     )
-    await act(async () => process.click())
-    expect(onProcessTickets).not.toHaveBeenCalled()
     await act(async () => root.unmount())
   })
 
-  it('borne la sélection et transmet seulement les tickets cochés dans l’ordre visible', async () => {
-    api()
-    const onProcessTickets = vi.fn()
-    const { root, container } = await render(true, onProcessTickets)
-    const checks = container.querySelectorAll<HTMLInputElement>(
-      '[data-testid="ticket-process-checkbox"]'
-    )
-    await act(async () => {
-      checks[2].click()
-      checks[0].click()
-    })
-    const limit = container.querySelector(
-      '[aria-label="Nombre de tickets à traiter"]'
+  it('filtre par assigné avec autocomplete alimenté par l’annuaire Azure + les assignés chargés', async () => {
+    api({ listTicketPeople: vi.fn(async () => ['Alice Martin']) })
+    const { root, container } = await render()
+
+    const options = [
+      ...container.querySelectorAll('#tickets-people-list option')
+    ].map((option) => option.getAttribute('value'))
+    expect(options).toContain('Alice Martin') // annuaire Azure
+    expect(options).toContain('Équipe RIG') // assignés déjà chargés
+
+    const filter = container.querySelector(
+      '[data-testid="tickets-assignee-filter"]'
     ) as HTMLInputElement
-    const process = container.querySelector('[data-testid="tickets-process"]') as HTMLButtonElement
-    const setLimit = (value: string): void => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(limit, value)
-      limit.dispatchEvent(new Event('input', { bubbles: true }))
+    const setFilter = (value: string): void => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(filter, value)
+      filter.dispatchEvent(new Event('input', { bubbles: true }))
     }
+    await act(async () => setFilter('alice'))
+    expect(container.querySelectorAll('[data-testid="ticket-row"]')).toHaveLength(0)
+    await act(async () => setFilter('équipe'))
+    expect(container.querySelectorAll('[data-testid="ticket-row"]')).toHaveLength(3)
+    await act(async () => root.unmount())
+  })
 
-    await act(async () => {
-      setLimit('1')
-    })
-    expect(process.disabled).toBe(false)
-    await act(async () => process.click())
-    expect(onProcessTickets).toHaveBeenCalledWith([expect.objectContaining({ id: '1' })])
+  it('trie par défaut sur la mise à jour la plus récente', async () => {
+    const listTickets = vi.fn(async () => ({
+      items: [
+        item('1'),
+        { ...item('2'), updatedAt: '2026-07-23T18:00:00.000Z' },
+        item('3')
+      ],
+      hasMore: false
+    }))
+    api({ listTickets })
+    const { root, container } = await render()
 
-    await act(async () => {
-      setLimit('2')
-    })
-    expect(process.disabled).toBe(false)
-    await act(async () => process.click())
-    expect(onProcessTickets).toHaveBeenLastCalledWith([
-      expect.objectContaining({ id: '1' }),
-      expect.objectContaining({ id: '3' })
-    ])
-    expect(onProcessTickets.mock.calls.flatMap(([tickets]) => tickets)).not.toContainEqual(
-      expect.objectContaining({ id: '2' })
-    )
+    const firstRow = container.querySelector('[data-testid="ticket-row"]')
+    expect(firstRow?.textContent).toContain('#2')
+    expect(container.querySelector('[data-testid="tickets-sort"]')).not.toBeNull()
     await act(async () => root.unmount())
   })
 
@@ -176,7 +194,7 @@ describe('vue Tickets', () => {
     expect(container.querySelector('[data-testid="tickets-source"]')?.textContent).toContain(
       'AmitelGTC / RIG / RigApplication'
     )
-    expect(container.textContent).toContain('Tous les Work Items du projet RIG')
+    expect(container.textContent).toContain('Projet RIG')
     expect(container.querySelectorAll('[data-testid="ticket-row"]')).toHaveLength(3)
     expect(container.textContent).toContain('Bug')
     await act(async () => {

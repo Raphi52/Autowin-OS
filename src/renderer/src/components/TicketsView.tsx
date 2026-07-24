@@ -39,6 +39,8 @@ const EMPTY_DRAFT: SourceDraft = {
   baseUrl: ''
 }
 
+type SortKey = 'recent' | 'priority' | 'id' | 'title'
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Impossible de charger les tickets.'
 }
@@ -48,6 +50,57 @@ function plainText(value: string | undefined): string {
   const element = document.createElement('div')
   element.innerHTML = value
   return element.textContent?.trim() ?? ''
+}
+
+/** Initiales (2 lettres max) pour l'avatar d'assigné. */
+function initialsOf(name: string): string {
+  const words = name
+    .replace(/<[^>]+>/g, '')
+    .trim()
+    .split(/[\s._@-]+/)
+    .filter(Boolean)
+  if (!words.length) return '?'
+  const first = words[0][0] ?? ''
+  const second = words.length > 1 ? (words[1][0] ?? '') : (words[0][1] ?? '')
+  return (first + second).toLocaleUpperCase()
+}
+
+/** Teinte DÉTERMINISTE par libellé (état/type) : distinctes, stables entre rendus, sans mapping manuel. */
+function hueOf(label: string): number {
+  let hash = 0
+  for (let i = 0; i < label.length; i++) hash = (hash * 31 + label.charCodeAt(i)) | 0
+  return Math.abs(hash) % 360
+}
+
+/** Date relative courte (fr) — repère temporel plus lisible qu'un ISO brut dans la liste. */
+function relativeDate(iso: string | undefined): string {
+  if (!iso) return '—'
+  const then = Date.parse(iso)
+  if (Number.isNaN(then)) return iso
+  const deltaMs = Date.now() - then
+  const minutes = Math.floor(deltaMs / 60_000)
+  if (minutes < 1) return 'à l’instant'
+  if (minutes < 60) return `il y a ${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `il y a ${hours} h`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `il y a ${days} j`
+  return new Date(then).toLocaleDateString('fr-FR')
+}
+
+/** Tags Azure (`System.Tags`, séparés par « ; ») → liste propre. */
+function ticketTags(item: TicketItem): string[] {
+  const raw = item.fields?.['System.Tags']
+  if (typeof raw !== 'string' || !raw.trim()) return []
+  return raw
+    .split(';')
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+}
+
+function priorityRank(priority: TicketItem['priority']): number {
+  const value = Number(priority)
+  return Number.isFinite(value) && value > 0 ? value : 99
 }
 
 function sourceFromDraft(draft: SourceDraft): TicketSourceProfile | null {
@@ -90,20 +143,13 @@ function sourceFromDraft(draft: SourceDraft): TicketSourceProfile | null {
   }
 }
 
-export function TicketsView({
-  active,
-  onProcessTickets
-}: {
-  active: boolean
-  onProcessTickets?: (tickets: TicketItem[]) => void
-}): React.JSX.Element {
+export function TicketsView({ active }: { active: boolean }): React.JSX.Element {
   const [sources, setSources] = useState<TicketSourceSummary[]>([])
   const [sourcesLoaded, setSourcesLoaded] = useState(false)
   const [sourceId, setSourceId] = useState(() => localStorage.getItem(SOURCE_KEY) ?? '')
   const [items, setItems] = useState<TicketItem[]>([])
   const [selectedId, setSelectedId] = useState<string>()
   const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set())
-  const [processLimit, setProcessLimit] = useState('')
   const [cursor, setCursor] = useState<string>()
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -113,6 +159,9 @@ export function TicketsView({
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [stateFilter, setStateFilter] = useState('')
+  const [assigneeFilter, setAssigneeFilter] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>('recent')
+  const [people, setPeople] = useState<string[]>([])
   const [showSourceForm, setShowSourceForm] = useState(false)
   const [draft, setDraft] = useState<SourceDraft>(EMPTY_DRAFT)
   const requestGeneration = useRef(0)
@@ -129,6 +178,13 @@ export function TicketsView({
   const selectedSummary = sources.find(({ profile }) => profile.id === sourceId)
   const selectedSource = selectedSummary?.profile
 
+  const resetFilters = (): void => {
+    setQuery('')
+    setTypeFilter('')
+    setStateFilter('')
+    setAssigneeFilter('')
+  }
+
   const load = useCallback(
     async (source: TicketSourceProfile, nextCursor?: string, append = false): Promise<void> => {
       if (!activeRef.current) return
@@ -141,7 +197,6 @@ export function TicketsView({
         setItems([])
         setSelectedId(undefined)
         setCheckedIds(new Set())
-        setProcessLimit('')
         setCursor(undefined)
         setHasMore(false)
         setStale(false)
@@ -149,6 +204,7 @@ export function TicketsView({
         setQuery('')
         setTypeFilter('')
         setStateFilter('')
+        setAssigneeFilter('')
       }
       if (activeRequestId.current) {
         void window.api.cancelTickets(activeRequestId.current)
@@ -186,6 +242,18 @@ export function TicketsView({
     []
   )
 
+  // Annuaire des collaborateurs (autocomplete assigné) — best-effort : indisponible ⇒ on retombe
+  // sur les assignés déjà présents dans les tickets chargés. Jamais d'erreur bloquante.
+  const loadPeople = useCallback(async (source: TicketSourceProfile): Promise<void> => {
+    if (typeof window.api.listTicketPeople !== 'function') return
+    try {
+      const names = await window.api.listTicketPeople(source)
+      if (Array.isArray(names)) setPeople(names.filter((name) => typeof name === 'string'))
+    } catch {
+      setPeople([])
+    }
+  }, [])
+
   const loadSources = useCallback(async (): Promise<void> => {
     const generation = ++requestGeneration.current
     setSourcesLoaded(false)
@@ -204,6 +272,7 @@ export function TicketsView({
       }
       setSourceId(source.id)
       localStorage.setItem(SOURCE_KEY, source.id)
+      void loadPeople(source)
       await load(source)
     } catch (failure) {
       if (generation !== requestGeneration.current) return
@@ -211,7 +280,7 @@ export function TicketsView({
       setSourceError(errorMessage(failure))
       setSourcesLoaded(true)
     }
-  }, [load])
+  }, [load, loadPeople])
 
   useEffect(() => {
     if (!active || typeof window.api?.ticketSources !== 'function') return
@@ -229,7 +298,6 @@ export function TicketsView({
     setItems([])
     setSelectedId(undefined)
     setCheckedIds(new Set())
-    setProcessLimit('')
     setCursor(undefined)
     setHasMore(false)
     setStale(false)
@@ -242,9 +310,8 @@ export function TicketsView({
     clearSourceData()
     setSourceId(nextId)
     localStorage.setItem(SOURCE_KEY, nextId)
-    setQuery('')
-    setTypeFilter('')
-    setStateFilter('')
+    resetFilters()
+    void loadPeople(source)
     void load(source)
   }
 
@@ -274,6 +341,7 @@ export function TicketsView({
     clearSourceData()
     setSourceId(source.id)
     localStorage.setItem(SOURCE_KEY, source.id)
+    void loadPeople(source)
     void load(source)
   }
 
@@ -285,34 +353,50 @@ export function TicketsView({
     () => [...new Set(items.map(({ state }) => state))].sort((a, b) => a.localeCompare(b)),
     [items]
   )
+  /** Répartition par état (badges cliquables du bandeau stats). */
+  const stateCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const item of items) counts.set(item.state, (counts.get(item.state) ?? 0) + 1)
+    return [...counts.entries()].sort((a, b) => b[1] - a[1])
+  }, [items])
+  /** Options d'autocomplete assigné : annuaire Azure ∪ assignés déjà vus dans les tickets chargés. */
+  const peopleOptions = useMemo(() => {
+    const merged = new Set(people)
+    for (const item of items) if (item.assignee) merged.add(item.assignee)
+    return [...merged].sort((a, b) => a.localeCompare(b))
+  }, [people, items])
+
   const visibleItems = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase()
-    return items.filter(
+    const who = assigneeFilter.trim().toLocaleLowerCase()
+    const filtered = items.filter(
       (item) =>
         (!needle ||
           item.title.toLocaleLowerCase().includes(needle) ||
           item.id.toLocaleLowerCase().includes(needle) ||
           item.assignee?.toLocaleLowerCase().includes(needle)) &&
         (!typeFilter || item.type === typeFilter) &&
-        (!stateFilter || item.state === stateFilter)
+        (!stateFilter || item.state === stateFilter) &&
+        (!who || (item.assignee ?? '').toLocaleLowerCase().includes(who))
     )
-  }, [items, query, stateFilter, typeFilter])
+    const sorted = [...filtered]
+    if (sortKey === 'recent')
+      sorted.sort((a, b) => Date.parse(b.updatedAt ?? '') - Date.parse(a.updatedAt ?? ''))
+    else if (sortKey === 'priority')
+      sorted.sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority))
+    else if (sortKey === 'id') sorted.sort((a, b) => Number(a.id) - Number(b.id))
+    else if (sortKey === 'title') sorted.sort((a, b) => a.title.localeCompare(b.title))
+    return sorted
+  }, [items, query, stateFilter, typeFilter, assigneeFilter, sortKey])
+
   const selectedItem =
     visibleItems.find((item) => `${item.sourceId}::${item.id}` === selectedId) ?? visibleItems[0]
   const checkedVisibleItems = visibleItems.filter((item) =>
     checkedIds.has(`${item.sourceId}::${item.id}`)
   )
-  const parsedProcessLimit = Number(processLimit)
-  const processError =
-    checkedVisibleItems.length === 0
-      ? 'Coche au moins un ticket à traiter.'
-      : processLimit.trim() === ''
-        ? 'Le nombre de tickets à traiter est obligatoire.'
-        : !Number.isInteger(parsedProcessLimit) || parsedProcessLimit <= 0
-          ? 'Le nombre de tickets à traiter doit être un entier supérieur à zéro.'
-          : parsedProcessLimit > checkedVisibleItems.length
-            ? 'Le nombre demandé est supérieur au nombre de tickets cochés.'
-            : undefined
+  const allVisibleChecked =
+    visibleItems.length > 0 && checkedVisibleItems.length === visibleItems.length
+
   const toggleChecked = (identity: string): void => {
     setCheckedIds((current) => {
       const next = new Set(current)
@@ -321,19 +405,26 @@ export function TicketsView({
       return next
     })
   }
-  const processTickets = (): void => {
-    if (processError || !onProcessTickets) return
-    onProcessTickets(checkedVisibleItems.slice(0, parsedProcessLimit))
+
+  /** Tout sélectionner / tout désélectionner — porte sur les tickets VISIBLES (après filtres). */
+  const toggleAllVisible = (): void => {
+    setCheckedIds((current) => {
+      const next = new Set(current)
+      const identities = visibleItems.map((item) => `${item.sourceId}::${item.id}`)
+      if (allVisibleChecked) for (const identity of identities) next.delete(identity)
+      else for (const identity of identities) next.add(identity)
+      return next
+    })
   }
 
-  // Traitement par lot : chaque ticket VISIBLE (après recherche de ton nom/filtres) est prompté dans
-  // SA propre conversation dédiée. Concurrency bornée (moteur), annulable. ⚠️ lance N runs d'agent.
+  // Traitement par lot : chaque ticket SÉLECTIONNÉ est prompté dans SA propre conversation dédiée.
+  // Concurrency bornée (moteur), annulable. ⚠️ lance N runs d'agent.
   const batchActiveRef = useRef(false)
   const batchGenRef = useRef(0)
   const [batch, setBatch] = useState<(TicketTreatmentResult & { running: boolean }) | null>(null)
 
-  const treatAll = useCallback(async () => {
-    const snapshot = visibleItems
+  const treatSelection = useCallback(async () => {
+    const snapshot = checkedVisibleItems
     if (!snapshot.length || batchActiveRef.current) return
     const generation = (batchGenRef.current += 1)
     batchActiveRef.current = true
@@ -388,7 +479,7 @@ export function TicketsView({
     })
     batchActiveRef.current = false
     if (generation === batchGenRef.current) setBatch({ ...result, running: false })
-  }, [visibleItems])
+  }, [checkedVisibleItems])
 
   const cancelBatch = (): void => {
     batchActiveRef.current = false
@@ -500,6 +591,34 @@ export function TicketsView({
         </div>
       )}
 
+      {items.length > 0 && (
+        <div className="tickets-stats" data-testid="tickets-stats">
+          <span className="tickets-stats-total">
+            <strong>{items.length}</strong> chargé(s) · <strong>{visibleItems.length}</strong>{' '}
+            affiché(s)
+          </span>
+          <div className="tickets-stats-states" role="group" aria-label="Répartition par état">
+            {stateCounts.map(([state, count]) => (
+              <button
+                key={state}
+                type="button"
+                className={`tickets-state-chip${stateFilter === state ? ' is-active' : ''}`}
+                style={{ ['--chip-hue' as string]: hueOf(state) }}
+                title={`Filtrer sur « ${state} »`}
+                onClick={() => setStateFilter((current) => (current === state ? '' : state))}
+              >
+                {state} <b>{count}</b>
+              </button>
+            ))}
+          </div>
+          {checkedIds.size > 0 && (
+            <span className="tickets-stats-selection" data-testid="tickets-selection-count">
+              {checkedVisibleItems.length} sélectionné(s)
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="tickets-toolbar">
         <input
           type="search"
@@ -528,13 +647,34 @@ export function TicketsView({
             <option key={state}>{state}</option>
           ))}
         </select>
-        <span className="tickets-count">
-          {visibleItems.length} affiché(s) · {items.length} chargé(s)
-        </span>
+        <input
+          list="tickets-people-list"
+          aria-label="Filtrer par assigné"
+          data-testid="tickets-assignee-filter"
+          placeholder="Assigné…"
+          value={assigneeFilter}
+          onChange={(event) => setAssigneeFilter(event.target.value)}
+        />
+        <datalist id="tickets-people-list" data-testid="tickets-people-list">
+          {peopleOptions.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
+        <select
+          aria-label="Trier"
+          data-testid="tickets-sort"
+          value={sortKey}
+          onChange={(event) => setSortKey(event.target.value as SortKey)}
+        >
+          <option value="recent">Plus récents</option>
+          <option value="priority">Priorité</option>
+          <option value="id">ID croissant</option>
+          <option value="title">Titre A→Z</option>
+        </select>
         {selectedSource && (
           <span className="tickets-auth-mode">
             {selectedSource.provider === 'azure'
-              ? `Tous les Work Items du projet ${selectedSource.project} · ${
+              ? `Projet ${selectedSource.project} · ${
                   selectedSummary?.credentialConfigured ? 'Coffre configuré' : 'Session Azure CLI'
                 }`
               : selectedSummary?.credentialConfigured
@@ -549,6 +689,17 @@ export function TicketsView({
           onClick={() => selectedSource && void load(selectedSource)}
         >
           Actualiser
+        </button>
+      </div>
+
+      <div className="tickets-actions">
+        <button
+          data-testid="tickets-select-all"
+          type="button"
+          disabled={visibleItems.length === 0}
+          onClick={toggleAllVisible}
+        >
+          {allVisibleChecked ? 'Tout désélectionner' : `Tout sélectionner (${visibleItems.length})`}
         </button>
         {batch?.running ? (
           <>
@@ -566,51 +717,19 @@ export function TicketsView({
           </>
         ) : (
           <button
-            data-testid="tickets-treat-all"
+            data-testid="tickets-treat-selection"
             type="button"
-            className="tickets-treat-all"
-            disabled={visibleItems.length === 0}
-            title="Ouvre une conversation dédiée par ticket affiché et lance son traitement"
-            onClick={() => void treatAll()}
+            className="tickets-treat-selection"
+            disabled={checkedVisibleItems.length === 0}
+            title="Ouvre une conversation dédiée par ticket sélectionné et lance son traitement"
+            onClick={() => void treatSelection()}
           >
-            Traiter les tickets affichés ({visibleItems.length})
+            Traiter la sélection ({checkedVisibleItems.length})
           </button>
         )}
         {batch && !batch.running && batch.total > 0 && (
           <span className="tickets-batch-done" data-testid="tickets-batch-done">
             {batch.succeeded}/{batch.total} lancés{batch.failed ? ` · ${batch.failed} échec(s)` : ''}
-          </span>
-        )}
-      </div>
-
-      <div className="tickets-process-controls">
-        <label>
-          <span>Tickets à traiter</span>
-          <input
-            type="number"
-            min="1"
-            step="1"
-            aria-label="Nombre de tickets à traiter"
-            value={processLimit}
-            onChange={(event) => setProcessLimit(event.target.value)}
-          />
-        </label>
-        <span>{checkedVisibleItems.length} coché(s) visible(s)</span>
-        <button
-          data-testid="tickets-process"
-          type="button"
-          disabled={Boolean(processError) || !onProcessTickets}
-          onClick={processTickets}
-        >
-          Traiter
-        </button>
-        {processError && (
-          <span
-            className="tickets-process-error"
-            data-testid="tickets-process-error"
-            aria-live="polite"
-          >
-            {processError}
           </span>
         )}
       </div>
@@ -679,10 +798,38 @@ export function TicketsView({
                       onClick={() => setSelectedId(identity)}
                     >
                       <span className="tickets-id">#{item.id}</span>
-                      <strong>{item.title}</strong>
-                      <span className="tickets-type">{item.type}</span>
-                      <span className="tickets-state">{item.state}</span>
-                      <span>{item.assignee || 'Non assigné'}</span>
+                      <strong className="tickets-title">{item.title}</strong>
+                      <span className="tickets-updated" title={item.updatedAt}>
+                        {relativeDate(item.updatedAt)}
+                      </span>
+                      <span className="tickets-meta">
+                        <span className="tickets-badge tickets-type">{item.type}</span>
+                        <span
+                          className="tickets-badge tickets-state"
+                          style={{ ['--chip-hue' as string]: hueOf(item.state) }}
+                        >
+                          {item.state}
+                        </span>
+                        {priorityRank(item.priority) < 99 && (
+                          <span
+                            className={`tickets-badge tickets-priority is-p${priorityRank(item.priority)}`}
+                          >
+                            P{priorityRank(item.priority)}
+                          </span>
+                        )}
+                        <span className="tickets-assignee">
+                          {item.assignee ? (
+                            <>
+                              <span className="tickets-avatar" aria-hidden="true">
+                                {initialsOf(item.assignee)}
+                              </span>
+                              {item.assignee}
+                            </>
+                          ) : (
+                            <span className="tickets-unassigned">Non assigné</span>
+                          )}
+                        </span>
+                      </span>
                     </button>
                   </div>
                 )
@@ -707,23 +854,38 @@ export function TicketsView({
             {selectedItem && (
               <article className="tickets-detail" data-testid="ticket-detail">
                 <div className="tickets-detail-title">
-                  <span>
-                    #{selectedItem.id} · {selectedItem.type}
+                  <span className="tickets-detail-eyebrow">
+                    <span className="tickets-badge tickets-type">{selectedItem.type}</span>
+                    <span
+                      className="tickets-badge tickets-state"
+                      style={{ ['--chip-hue' as string]: hueOf(selectedItem.state) }}
+                    >
+                      {selectedItem.state}
+                    </span>
+                    {priorityRank(selectedItem.priority) < 99 && (
+                      <span
+                        className={`tickets-badge tickets-priority is-p${priorityRank(selectedItem.priority)}`}
+                      >
+                        P{priorityRank(selectedItem.priority)}
+                      </span>
+                    )}
+                    <span className="tickets-detail-id">#{selectedItem.id}</span>
                   </span>
                   <h2>{selectedItem.title}</h2>
                 </div>
-                <dl>
-                  <div>
-                    <dt>État</dt>
-                    <dd>{selectedItem.state}</dd>
+                {ticketTags(selectedItem).length > 0 && (
+                  <div className="tickets-tags" data-testid="ticket-tags">
+                    {ticketTags(selectedItem).map((tag) => (
+                      <span key={tag} className="tickets-tag">
+                        {tag}
+                      </span>
+                    ))}
                   </div>
+                )}
+                <dl>
                   <div>
                     <dt>Assigné</dt>
                     <dd>{selectedItem.assignee || 'Non assigné'}</dd>
-                  </div>
-                  <div>
-                    <dt>Priorité</dt>
-                    <dd>{selectedItem.priority ?? '—'}</dd>
                   </div>
                   <div>
                     <dt>Créé</dt>
@@ -731,7 +893,7 @@ export function TicketsView({
                   </div>
                   <div>
                     <dt>Mis à jour</dt>
-                    <dd>{selectedItem.updatedAt}</dd>
+                    <dd title={selectedItem.updatedAt}>{relativeDate(selectedItem.updatedAt)}</dd>
                   </div>
                 </dl>
                 <section>

@@ -84,7 +84,7 @@ import {
   type TicketListRequest,
   type TicketSourceProfile
 } from '../shared/tickets'
-import { azureTicketProvider } from './ticket-providers/azure'
+import { azureTicketProvider, listAzurePeople } from './ticket-providers/azure'
 import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
@@ -488,6 +488,26 @@ function registerChatIpc(): void {
       return page
     } finally {
       if (ticketRequests.get(requestId) === controller) ticketRequests.delete(requestId)
+    }
+  })
+  // Annuaire des collaborateurs (autocomplete assigné) : équipes du projet → membres, mêmes
+  // credentials que tickets:list. BEST-EFFORT : toute défaillance ⇒ [] (l'autocomplete dégrade
+  // sur les assignés déjà chargés, jamais d'erreur bloquante pour la vue).
+  ipcMain.handle('tickets:people', async (event, value: unknown) => {
+    assertTrustedRendererSender(event, 'Tickets')
+    const source = parseTicketSourceProfile(value)
+    if (!source || !ticketSources.some((candidate) => candidate.id === source.id)) {
+      throw new Error('Profil Tickets non autorisé')
+    }
+    if (source.provider !== 'azure') return []
+    try {
+      const pat = process.env.AUTOWIN_AZDO_PAT ?? ''
+      const token = pat || (await getAzureDevOpsAadToken()) || ''
+      if (!token) return []
+      const authScheme: 'bearer' | 'pat' = pat ? 'pat' : 'bearer'
+      return await listAzurePeople(source, { token, authScheme, fetchFn: fetch })
+    } catch {
+      return []
     }
   })
   ipcMain.handle('tickets:cancel', (event, value: unknown) => {

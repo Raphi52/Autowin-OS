@@ -62,4 +62,21 @@ describe('renderer chat IPC contract', () => {
     expect(turnCleanup).toBeGreaterThanOrEqual(0)
     expect(staleDirectiveCleanup).toBeGreaterThan(turnCleanup)
   })
+
+  it('acknowledges a live directive only after the pilot drains it', () => {
+    const { main } = readChatContractSources()
+    const drain = main.slice(
+      main.indexOf('function drainPendingDirectives'),
+      main.indexOf('const questionWindows')
+    )
+    const turnCleanup = main.slice(
+      main.indexOf('activeChatTurns.delete(conversationId, controller)'),
+      main.indexOf('resolveCompletion()')
+    )
+    const handler = main.slice(main.indexOf("ipcMain.handle('os:pilotChat:inject'"))
+
+    expect(drain).toMatch(/queued\.forEach\(\(entry\) => entry\.resolve\(true\)\)/)
+    expect(turnCleanup).toMatch(/staleDirectives\.forEach\(\(entry\) => entry\.resolve\(false\)\)/)
+    expect(handler).toMatch(/return new Promise<\{ ok: boolean \}>/)
+  })
 })

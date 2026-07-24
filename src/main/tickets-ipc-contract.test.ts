@@ -5,11 +5,12 @@ const TICKET_CHANNELS = [
   'tickets:sources',
   'tickets:source:save',
   'tickets:list',
-  'tickets:cancel'
+  'tickets:cancel',
+  'tickets:people'
 ] as const
 
 describe('Tickets IPC main contract', () => {
-  it('enregistre les quatre handlers consommés par le preload', () => {
+  it('enregistre les handlers consommés par le preload', () => {
     const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
 
     for (const channel of TICKET_CHANNELS) {

@@ -202,6 +202,68 @@ async function fetchWorkItems(
   return items
 }
 
+interface AzureTeamsResponse {
+  value: Array<{ id: string }>
+}
+
+interface AzureTeamMembersResponse {
+  value: Array<{ identity?: { displayName?: string; uniqueName?: string } }>
+}
+
+function assertTeamsResponse(value: unknown): asserts value is AzureTeamsResponse {
+  if (
+    !isRecord(value) ||
+    !Array.isArray(value.value) ||
+    value.value.some((team) => !isRecord(team) || typeof team.id !== 'string')
+  ) {
+    throw invalidResponse()
+  }
+}
+
+function assertTeamMembersResponse(value: unknown): asserts value is AzureTeamMembersResponse {
+  if (!isRecord(value) || !Array.isArray(value.value)) throw invalidResponse()
+}
+
+/** Borne le scan d'équipes (annuaire, pas exhaustivité) : un projet à N équipes ne déclenche pas N appels. */
+const TEAM_SCAN_CAP = 10
+
+/**
+ * COLLABORATEURS du projet (autocomplete assigné) : équipes du projet → membres, dédupliqués par nom
+ * affiché. Endpoint Core `_apis/projects/{project}/teams` + `/teams/{id}/members` (mêmes credentials
+ * que les work items). Best-effort côté appelant : une erreur ⇒ liste vide, jamais bloquant.
+ */
+export async function listAzurePeople(
+  source: { organization: string; project: string },
+  context: TicketProviderContext
+): Promise<string[]> {
+  const authorization = authorizationHeader(context)
+  const organization = encodeURIComponent(source.organization)
+  const project = encodeURIComponent(source.project)
+  const orgUrl = `https://dev.azure.com/${organization}`
+  const teamsResponse = await fetchTicketJson<unknown>(
+    `${orgUrl}/_apis/projects/${project}/teams?api-version=${API_VERSION}`,
+    { fetchFn: context.fetchFn, signal: context.signal, headers: { authorization } }
+  )
+  assertTeamsResponse(teamsResponse)
+  const people = new Set<string>()
+  for (const team of teamsResponse.value.slice(0, TEAM_SCAN_CAP)) {
+    const membersResponse = await fetchTicketJson<unknown>(
+      `${orgUrl}/_apis/projects/${project}/teams/${encodeURIComponent(team.id)}/members?api-version=${API_VERSION}`,
+      { fetchFn: context.fetchFn, signal: context.signal, headers: { authorization } }
+    )
+    assertTeamMembersResponse(membersResponse)
+    for (const member of membersResponse.value) {
+      const identity = member.identity
+      const name =
+        (typeof identity?.displayName === 'string' && identity.displayName) ||
+        (typeof identity?.uniqueName === 'string' && identity.uniqueName) ||
+        ''
+      if (name) people.add(name)
+    }
+  }
+  return [...people].sort((a, b) => a.localeCompare(b))
+}
+
 export const azureTicketProvider: TicketProviderAdapter = {
   provider: 'azure',
   async list(request, context) {
