@@ -377,7 +377,12 @@ interface ChatApi {
       updatedAt: number
     }>
   >
-  conversationsCreate: (p: { title: string; category: string; provider: string }) => Promise<{
+  conversationsCreate: (p: {
+    title: string
+    category: string
+    provider: string
+    authorityMode?: 'plan' | 'ask' | 'auto'
+  }) => Promise<{
     id: string
     title: string
     category: string

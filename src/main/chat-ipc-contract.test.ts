@@ -41,4 +41,20 @@ describe('renderer chat IPC contract', () => {
     expect(sources.main).toMatch(/ipcMain\.handle\(\s*'os:pilotChat'/)
     expect(findLegacyChatMarkers(sources)).toEqual([])
   })
+
+  it('propage l’autorité de création et rafraîchit la liste des conversations', () => {
+    const sources = readChatContractSources()
+
+    expect(sources.preload).toContain("authorityMode?: 'plan' | 'ask' | 'auto'")
+    expect(sources.preloadTypes).toContain("authorityMode?: 'plan' | 'ask' | 'auto'")
+    expect(sources.main).toMatch(
+      /'os:conversations:create'[\s\S]*?os\.conversations\.create\(p\)[\s\S]*?scope: 'conversations'/
+    )
+    expect(sources.main).toMatch(
+      /'os:conversations:remove'[\s\S]*?os\.conversations\.remove\(id\)[\s\S]*?scope: 'conversations'/
+    )
+    expect(sources.main).toMatch(
+      /activeChatTurns\.delete\(conversationId, controller\)[\s\S]*?scope: 'conversations'/
+    )
+  })
 })

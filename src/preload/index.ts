@@ -117,6 +117,7 @@ const api = {
     title: string
     category: string
     provider: string
+    authorityMode?: 'plan' | 'ask' | 'auto'
   }): Promise<{ id: string; title: string; category: string; provider: string }> =>
     ipcRenderer.invoke('os:conversations:create', p),
   conversationsRename: (id: string, title: string): Promise<unknown> =>

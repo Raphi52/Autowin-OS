@@ -48,6 +48,16 @@ function api(overrides: Record<string, unknown> = {}): void {
       })),
       saveTicketSource: vi.fn(),
       cancelTickets: vi.fn(async () => false),
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'codex' } })),
+      conversationsCreate: vi.fn(async ({ title }: { title: string }) => ({
+        id: `conv-${title}`,
+        title,
+        category: 'codex',
+        provider: 'codex'
+      })),
+      conversationsRemove: vi.fn(async () => true),
+      pilotChat: vi.fn(async () => ({ ok: true })),
+      cancelPilotChat: vi.fn(async () => ({ ok: true })),
       ...overrides
     }
   })
@@ -125,8 +135,218 @@ describe('vue Tickets', () => {
     await act(async () => root.unmount())
   })
 
+  it('Tout traiter crée et prompte une conversation par ticket visible uniquement', async () => {
+    const conversationsCreate = vi.fn(
+      async ({ title }: { title: string; authorityMode?: 'plan' | 'ask' | 'auto' }) => ({
+        id: `conv-${title}`,
+        title,
+        category: 'codex',
+        provider: 'codex'
+      })
+    )
+    const pilotChat = vi.fn(
+      async (_messages: Array<{ role: string; content: string }>, _conversationId: string) => ({
+        ok: true
+      })
+    )
+    api({ conversationsCreate, pilotChat })
+    const { root, container } = await render()
+    const state = container.querySelector('[aria-label="Filtrer par état"]') as HTMLSelectElement
+    await act(async () => {
+      state.value = 'Closed'
+      state.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    await act(async () => {
+      ;(container.querySelector('[data-testid="tickets-process-all"]') as HTMLButtonElement).click()
+      await vi.waitFor(() => expect(pilotChat).toHaveBeenCalledOnce())
+    })
+
+    expect(conversationsCreate).toHaveBeenCalledOnce()
+    expect(conversationsCreate.mock.calls[0][0].title).toContain('#3')
+    expect(conversationsCreate.mock.calls[0][0].authorityMode).toBe('ask')
+    expect(pilotChat.mock.calls[0][0][0].content).toContain('"id": "3"')
+    expect(pilotChat.mock.calls[0][0][0].content).toContain('DONNÉES NON FIABLES')
+    expect(container.querySelector('[data-testid="tickets-batch-status"]')?.textContent).toContain(
+      '1/1'
+    )
+    await act(async () => root.unmount())
+  })
+
+  it('verrouille un double clic synchrone sur Tout traiter', async () => {
+    let resolvePilot!: (result: { ok: boolean }) => void
+    const pilotChat = vi.fn(
+      () =>
+        new Promise<{ ok: boolean }>((resolve) => {
+          resolvePilot = resolve
+        })
+    )
+    api({
+      listTickets: vi.fn(async () => ({ items: [item('1')], hasMore: false })),
+      pilotChat
+    })
+    const { root, container } = await render()
+    const button = container.querySelector(
+      '[data-testid="tickets-process-all"]'
+    ) as HTMLButtonElement
+    await act(async () => {
+      button.click()
+      button.click()
+      await vi.waitFor(() => expect(pilotChat).toHaveBeenCalledOnce())
+    })
+    resolvePilot({ ok: true })
+    await act(async () => await Promise.resolve())
+    await act(async () => root.unmount())
+  })
+
+  it('ne crée aucune conversation si la vue devient inactive pendant la résolution du rôle', async () => {
+    let resolveRoles!: (roles: { orchestrator: { provider: string } }) => void
+    const roles = vi.fn(
+      () =>
+        new Promise<{ orchestrator: { provider: string } }>((resolve) => {
+          resolveRoles = resolve
+        })
+    )
+    const conversationsCreate = vi.fn()
+    api({
+      listTickets: vi.fn(async () => ({ items: [item('1')], hasMore: false })),
+      roles,
+      conversationsCreate
+    })
+    const { root, container } = await render()
+    await act(async () => {
+      ;(container.querySelector('[data-testid="tickets-process-all"]') as HTMLButtonElement).click()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      root.render(createElement(TicketsView, { active: false }))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      resolveRoles({ orchestrator: { provider: 'codex' } })
+      await Promise.resolve()
+    })
+    expect(conversationsCreate).not.toHaveBeenCalled()
+
+    await act(async () => {
+      root.render(createElement(TicketsView, { active: true }))
+      await Promise.resolve()
+    })
+    await vi.waitFor(() => {
+      const resumedButton = container.querySelector(
+        '[data-testid="tickets-process-all"]'
+      ) as HTMLButtonElement
+      expect(resumedButton.disabled).toBe(false)
+      expect(resumedButton.textContent).toBe('Tout traiter')
+    })
+
+    await act(async () => root.unmount())
+  })
+
+  it('annule le tour actif et abandonne une conversation créée après désactivation', async () => {
+    let resolveCreate!: (conversation: {
+      id: string
+      title: string
+      category: string
+      provider: string
+    }) => void
+    const conversationsCreate = vi.fn(
+      () =>
+        new Promise<{
+          id: string
+          title: string
+          category: string
+          provider: string
+        }>((resolve) => {
+          resolveCreate = resolve
+        })
+    )
+    const conversationsRemove = vi.fn(async () => true)
+    const pilotChat = vi.fn()
+    api({
+      listTickets: vi.fn(async () => ({ items: [item('1')], hasMore: false })),
+      conversationsCreate,
+      conversationsRemove,
+      pilotChat
+    })
+    const { root, container } = await render()
+    await act(async () => {
+      ;(container.querySelector('[data-testid="tickets-process-all"]') as HTMLButtonElement).click()
+      await vi.waitFor(() => expect(conversationsCreate).toHaveBeenCalledOnce())
+    })
+    await act(async () => {
+      root.render(createElement(TicketsView, { active: false }))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      resolveCreate({
+        id: 'conv-late',
+        title: '#1',
+        category: 'codex',
+        provider: 'codex'
+      })
+      await vi.waitFor(() => expect(conversationsRemove).toHaveBeenCalledWith('conv-late'))
+    })
+    expect(pilotChat).not.toHaveBeenCalled()
+    await act(async () => root.unmount())
+  })
+
+  it('interrompt le lot courant quand la source change', async () => {
+    let resolvePilot!: (result: { ok: boolean; cancelled: boolean }) => void
+    const pilotChat = vi.fn(
+      () =>
+        new Promise<{ ok: boolean; cancelled: boolean }>((resolve) => {
+          resolvePilot = resolve
+        })
+    )
+    const cancelPilotChat = vi.fn(async () => {
+      resolvePilot({ ok: false, cancelled: true })
+      return { ok: true }
+    })
+    api({
+      ticketSources: vi.fn(async () => [
+        { profile: DEFAULT_TICKET_SOURCE, credentialConfigured: false },
+        { profile: github, credentialConfigured: false }
+      ]),
+      listTickets: vi.fn(async ({ source }: { source: { id: string } }) => ({
+        items: [item(source.id === github.id ? '2' : '1', source.id)],
+        hasMore: false
+      })),
+      conversationsCreate: vi.fn(async () => ({
+        id: 'conv-source-a',
+        title: '#1',
+        category: 'codex',
+        provider: 'codex'
+      })),
+      pilotChat,
+      cancelPilotChat
+    })
+    const { root, container } = await render()
+    await act(async () => {
+      ;(container.querySelector('[data-testid="tickets-process-all"]') as HTMLButtonElement).click()
+      await vi.waitFor(() => expect(pilotChat).toHaveBeenCalledOnce())
+    })
+    await act(async () => {
+      const source = container.querySelector('[data-testid="tickets-source"]') as HTMLSelectElement
+      source.value = github.id
+      source.dispatchEvent(new Event('change', { bubbles: true }))
+      await vi.waitFor(() => expect(cancelPilotChat).toHaveBeenCalledWith('conv-source-a'))
+    })
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="tickets-source"]')?.textContent).toContain(
+        'openai / codex'
+      )
+      expect(
+        container.querySelector('[data-testid="tickets-batch-status"]')?.textContent
+      ).toContain('Lot interrompu')
+    })
+    await act(async () => root.unmount())
+  })
+
   it('ne relance pas de lecture si une sauvegarde se termine après désactivation', async () => {
-    let resolveSave!: (sources: Array<{ profile: GitHubTicketSource; credentialConfigured: boolean }>) => void
+    let resolveSave!: (
+      sources: Array<{ profile: GitHubTicketSource; credentialConfigured: boolean }>
+    ) => void
     const saveTicketSource = vi.fn(
       () =>
         new Promise<Array<{ profile: GitHubTicketSource; credentialConfigured: boolean }>>(
@@ -140,7 +360,7 @@ describe('vue Tickets', () => {
     const { root, container } = await render()
 
     await act(async () => {
-      ;(container.querySelector('button') as HTMLButtonElement)
+      container.querySelector('button') as HTMLButtonElement
       const add = [...container.querySelectorAll('button')].find(
         (button) => button.textContent === 'Ajouter une source'
       ) as HTMLButtonElement
@@ -152,7 +372,9 @@ describe('vue Tickets', () => {
       provider.dispatchEvent(new Event('change', { bubbles: true }))
     })
     await act(async () => {
-      const owner = container.querySelector('[aria-label="Propriétaire GitHub"]') as HTMLInputElement
+      const owner = container.querySelector(
+        '[aria-label="Propriétaire GitHub"]'
+      ) as HTMLInputElement
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
         owner,
         'openai'

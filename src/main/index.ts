@@ -796,7 +796,23 @@ function registerChatIpc(): void {
   ipcMain.handle('os:conversations', () => os.conversations.list())
   ipcMain.handle(
     'os:conversations:create',
-    (_e, p: { title: string; category: string; provider: string }) => os.conversations.create(p)
+    (
+      event,
+      p: {
+        title: string
+        category: string
+        provider: string
+        authorityMode?: 'plan' | 'ask' | 'auto'
+      }
+    ) => {
+      assertTrustedRendererSender(event, 'Conversation create')
+      if (p.authorityMode && !['plan', 'ask', 'auto'].includes(p.authorityMode)) {
+        throw new Error('Mode d’autorité invalide')
+      }
+      const conversation = os.conversations.create(p)
+      broadcast({ type: 'refresh', scope: 'conversations' })
+      return conversation
+    }
   )
   ipcMain.handle('os:conversations:rename', (_e, id: string, title: string) =>
     os.conversations.rename(id, guardString(title, 'title'))
@@ -827,6 +843,7 @@ function registerChatIpc(): void {
     if (removed) {
       causalTrace.deleteConversation(id)
       deletePromptCalls(id)
+      broadcast({ type: 'refresh', scope: 'conversations' })
     }
     return removed
   })
@@ -1062,10 +1079,19 @@ function registerChatIpc(): void {
         const delayedPilotFixture =
           isolatedTestInstance &&
           safe.at(-1)?.content.startsWith('[[autowin-fixture-delayed-pilot]]')
+        const ticketBatchFixture =
+          isolatedTestInstance &&
+          safe.at(-1)?.content.startsWith('[[autowin-fixture-ticket-batch]]')
         const durableStreamPrefix = '[[autowin-fixture-durable-stream]]'
         const durableStreamFixture =
           isolatedTestInstance && safe.at(-1)?.content.startsWith(durableStreamPrefix)
-        if (durableStreamFixture) {
+        if (ticketBatchFixture) {
+          handlePilotEvent({
+            kind: 'think',
+            text: 'Ticket reçu par la fixture de traitement isolée.'
+          })
+          handlePilotEvent({ kind: 'done', text: 'Traitement déterministe terminé.' })
+        } else if (durableStreamFixture) {
           const target = safe.at(-1)?.content.slice(durableStreamPrefix.length).trim() || 'fixture'
           let fixtureCall = 0
           const fixtureProvider: ProviderAdapter = {
@@ -1191,6 +1217,7 @@ function registerChatIpc(): void {
       } finally {
         if (conversationId) {
           activeChatTurns.delete(conversationId, controller)
+          broadcast({ type: 'refresh', scope: 'conversations' })
           if (pendingDirectives.delete(conversationId))
             // directives non consommées = obsolètes
             broadcast({ type: 'refresh', scope: 'directives' })

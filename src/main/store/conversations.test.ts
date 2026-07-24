@@ -121,6 +121,20 @@ describe('ConversationStore', () => {
     expect(persisted).toBe(1)
   })
 
+  it('crée atomiquement une conversation avec une autorité explicite', () => {
+    const store = new ConversationStore(makeClock())
+
+    const conv = store.create({
+      title: 'Ticket distant',
+      category: 'codex',
+      provider: 'codex',
+      authorityMode: 'ask'
+    })
+
+    expect(conv.authorityMode).toBe('ask')
+    expect(store.get(conv.id)?.authorityMode).toBe('ask')
+  })
+
   it("remove supprime la conversation et retourne true/false selon l'existence", () => {
     const store = new ConversationStore(makeClock())
     const conv = store.create({ title: 'A', category: 'native', provider: 'p' })

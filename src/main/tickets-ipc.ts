@@ -84,7 +84,7 @@ function proofFixture(value: unknown): { source: TicketSourceProfile; page: Tick
         ? { description: item.description.slice(0, 10_000) }
         : {}),
       relations,
-      fields: {}
+      fields: { __autowinTicketsProofFixture: true }
     }
   })
   return {

@@ -154,7 +154,12 @@ export class ConversationStore {
   }
 
   /** Crée une nouvelle conversation vide et la stocke. */
-  create(p: { title: string; category: Category; provider: string }): Conversation {
+  create(p: {
+    title: string
+    category: Category
+    provider: string
+    authorityMode?: ConversationAuthorityMode
+  }): Conversation {
     const ts = this.now()
     const id = `conv-${this.nextId++}`
     const rootBranchId = `branch-${id}-root`
@@ -169,7 +174,7 @@ export class ConversationStore {
       activeBranchId: rootBranchId,
       workspaceId: `workspace-${id}`,
       branches: [{ id: rootBranchId, createdAt: ts }],
-      authorityMode: 'auto',
+      authorityMode: p.authorityMode ?? 'auto',
       createdAt: ts,
       updatedAt: ts
     }

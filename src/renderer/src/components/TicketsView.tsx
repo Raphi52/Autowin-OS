@@ -6,6 +6,11 @@ import type {
   TicketSourceProfile
 } from '../../../shared/tickets'
 import { ModuleHeader } from './ModuleHeader'
+import {
+  runTicketTreatmentBatch,
+  ticketConversationTitle,
+  type TicketTreatmentResult
+} from './ticket-treatment'
 import './TicketsView.css'
 
 interface TicketSourceSummary {
@@ -102,7 +107,13 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const [stateFilter, setStateFilter] = useState('')
   const [showSourceForm, setShowSourceForm] = useState(false)
   const [draft, setDraft] = useState<SourceDraft>(EMPTY_DRAFT)
+  const [batchState, setBatchState] = useState<
+    TicketTreatmentResult & { running: boolean; interrupted?: boolean }
+  >({ total: 0, completed: 0, succeeded: 0, failed: 0, conversationIds: [], running: false })
   const requestGeneration = useRef(0)
+  const batchGeneration = useRef(0)
+  const batchRunRef = useRef(false)
+  const batchConversationIdsRef = useRef(new Set<string>())
   const activeRef = useRef(active)
   const activeRequestId = useRef<string | undefined>(undefined)
   const activeSourceRef = useRef<TicketSourceProfile | undefined>(undefined)
@@ -116,13 +127,18 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const selectedSummary = sources.find(({ profile }) => profile.id === sourceId)
   const selectedSource = selectedSummary?.profile
 
+  const cancelBatchTurns = useCallback((): void => {
+    for (const conversationId of batchConversationIdsRef.current) {
+      void window.api.cancelPilotChat(conversationId)
+    }
+  }, [])
+
   const load = useCallback(
     async (source: TicketSourceProfile, nextCursor?: string, append = false): Promise<void> => {
       if (!activeRef.current) return
       const previousSource = activeSourceRef.current
       const sourceChanged =
-        previousSource !== undefined &&
-        JSON.stringify(previousSource) !== JSON.stringify(source)
+        previousSource !== undefined && JSON.stringify(previousSource) !== JSON.stringify(source)
       activeSourceRef.current = source
       if (sourceChanged) {
         itemsRef.current = []
@@ -204,11 +220,21 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     void loadSources()
     return () => {
       requestGeneration.current += 1
+      batchGeneration.current += 1
+      cancelBatchTurns()
       const current = activeRequestId.current
       activeRequestId.current = undefined
       if (current) void window.api.cancelTickets(current)
     }
-  }, [active, loadSources])
+  }, [active, cancelBatchTurns, loadSources])
+
+  useEffect(() => {
+    if (active && batchState.running && !batchRunRef.current) {
+      setBatchState((current) =>
+        current.running ? { ...current, running: false, interrupted: true } : current
+      )
+    }
+  }, [active, batchState.running])
 
   const clearSourceData = (): void => {
     itemsRef.current = []
@@ -220,9 +246,17 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     setError(undefined)
   }
 
+  const interruptBatchForSourceChange = (): void => {
+    if (!batchRunRef.current) return
+    batchGeneration.current += 1
+    cancelBatchTurns()
+    setBatchState((current) => ({ ...current, interrupted: true }))
+  }
+
   const changeSource = (nextId: string): void => {
     const source = sources.find(({ profile }) => profile.id === nextId)?.profile
     if (!source) return
+    interruptBatchForSourceChange()
     clearSourceData()
     setSourceId(nextId)
     localStorage.setItem(SOURCE_KEY, nextId)
@@ -255,6 +289,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const changeSourceFrom = (nextSources: TicketSourceSummary[], nextId: string): void => {
     const source = nextSources.find(({ profile }) => profile.id === nextId)?.profile
     if (!source) return
+    interruptBatchForSourceChange()
     clearSourceData()
     setSourceId(source.id)
     localStorage.setItem(SOURCE_KEY, source.id)
@@ -283,6 +318,74 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   }, [items, query, stateFilter, typeFilter])
   const selectedItem =
     visibleItems.find((item) => `${item.sourceId}::${item.id}` === selectedId) ?? visibleItems[0]
+
+  const processAllVisible = async (): Promise<void> => {
+    if (batchRunRef.current || !activeRef.current || visibleItems.length === 0 || loading) return
+    batchRunRef.current = true
+    batchConversationIdsRef.current.clear()
+    const generation = ++batchGeneration.current
+    const snapshot = [...visibleItems]
+    setBatchState({
+      total: snapshot.length,
+      completed: 0,
+      succeeded: 0,
+      failed: 0,
+      conversationIds: [],
+      running: true
+    })
+    try {
+      const roles = (await window.api.roles()) as {
+        orchestrator?: { provider?: string }
+      }
+      if (!activeRef.current || generation !== batchGeneration.current) return
+      const provider = roles.orchestrator?.provider
+      if (!provider) throw new Error('Provider orchestrateur indisponible.')
+      const result = await runTicketTreatmentBatch(snapshot, {
+        shouldContinue: () => activeRef.current && generation === batchGeneration.current,
+        createConversation: (item) =>
+          window.api.conversationsCreate({
+            title: ticketConversationTitle(item),
+            category: provider,
+            provider,
+            authorityMode: 'ask'
+          }),
+        promptConversation: (conversation, _item, prompt) =>
+          window.api.pilotChat([{ role: 'user', content: prompt }], conversation.id),
+        onConversationCreated: (conversation) => {
+          batchConversationIdsRef.current.add(conversation.id)
+        },
+        abandonConversation: async (conversation) => {
+          await window.api.conversationsRemove(conversation.id)
+          batchConversationIdsRef.current.delete(conversation.id)
+        },
+        onProgress: (progress) => {
+          if (activeRef.current && generation === batchGeneration.current) {
+            setBatchState({ ...progress, running: progress.completed < progress.total })
+          }
+        }
+      })
+      if (activeRef.current && generation === batchGeneration.current) {
+        setBatchState({ ...result, running: false })
+      }
+    } catch {
+      if (activeRef.current && generation === batchGeneration.current) {
+        setBatchState((current) => ({
+          ...current,
+          failed: Math.max(current.failed, current.total - current.succeeded),
+          completed: current.total,
+          running: false
+        }))
+      }
+    } finally {
+      batchRunRef.current = false
+      batchConversationIdsRef.current.clear()
+      if (activeRef.current && generation !== batchGeneration.current) {
+        setBatchState((current) =>
+          current.running ? { ...current, running: false, interrupted: true } : current
+        )
+      }
+    }
+  }
 
   const retry = (): void => {
     if (sourceError) void loadSources()
@@ -417,6 +520,32 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
             <option key={state}>{state}</option>
           ))}
         </select>
+        <button
+          type="button"
+          className="tickets-process-all"
+          data-testid="tickets-process-all"
+          disabled={batchState.running || loading || visibleItems.length === 0}
+          onClick={() => void processAllVisible()}
+        >
+          {batchState.running
+            ? `Traitement ${batchState.completed}/${batchState.total}`
+            : 'Tout traiter'}
+        </button>
+        {batchState.total > 0 && (
+          <span
+            className={`tickets-batch-status${batchState.failed > 0 ? ' has-errors' : ''}`}
+            data-testid="tickets-batch-status"
+            role="status"
+          >
+            {batchState.running
+              ? batchState.interrupted
+                ? `Arrêt du lot… ${batchState.completed}/${batchState.total}`
+                : `${batchState.completed}/${batchState.total} traité(s)`
+              : batchState.interrupted
+                ? `Lot interrompu · ${batchState.succeeded}/${batchState.total} traité(s)`
+                : `${batchState.succeeded}/${batchState.total} traité(s)${batchState.failed ? ` · ${batchState.failed} en échec` : ''}`}
+          </span>
+        )}
         <span className="tickets-count">
           {visibleItems.length} affiché(s) · {items.length} chargé(s)
         </span>
