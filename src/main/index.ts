@@ -84,6 +84,7 @@ import {
   type TicketListRequest,
   type TicketSourceProfile
 } from '../shared/tickets'
+import { azureTicketProvider } from './ticket-providers/azure'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
 import {
@@ -431,7 +432,10 @@ function registerChatIpc(): void {
   }
   ipcMain.handle('tickets:sources', (event) => {
     assertTrustedRendererSender(event, 'Tickets')
-    return ticketSources.map((profile) => ({ profile, credentialConfigured: false }))
+    return ticketSources.map((profile) => ({
+      profile,
+      credentialConfigured: profile.provider === 'azure' && Boolean(process.env.AUTOWIN_AZDO_PAT)
+    }))
   })
   ipcMain.handle('tickets:source:save', (event, value: unknown) => {
     assertTrustedRendererSender(event, 'Tickets')
@@ -440,7 +444,10 @@ function registerChatIpc(): void {
     const current = ticketSources.findIndex((candidate) => candidate.id === profile.id)
     if (current >= 0) ticketSources[current] = profile
     else ticketSources.push(profile)
-    return ticketSources.map((source) => ({ profile: source, credentialConfigured: false }))
+    return ticketSources.map((source) => ({
+      profile: source,
+      credentialConfigured: source.provider === 'azure' && Boolean(process.env.AUTOWIN_AZDO_PAT)
+    }))
   })
   ipcMain.handle('tickets:list', async (event, request: TicketListRequest) => {
     assertTrustedRendererSender(event, 'Tickets')
@@ -453,9 +460,23 @@ function registerChatIpc(): void {
     const controller = new AbortController()
     ticketRequests.set(requestId, controller)
     try {
-      await Promise.resolve()
+      if (source.provider !== 'azure')
+        throw new Error('Fournisseur Tickets non supporté (azure uniquement pour l’instant)')
+      // PAT via env (chemin léger) : scope « Work Items → Read » sur AmitelGTC/RIG.
+      const token = process.env.AUTOWIN_AZDO_PAT ?? ''
+      if (!token)
+        throw new Error(
+          'PAT Azure DevOps manquant : définir AUTOWIN_AZDO_PAT (scope Work Items → Read).'
+        )
+      const page = await azureTicketProvider.list(
+        { source, requestId, cursor: request?.cursor, pageSize: request?.pageSize },
+        {
+          token,
+          fetchFn: (url, init) => fetch(url as string, { ...(init ?? {}), signal: controller.signal })
+        }
+      )
       if (controller.signal.aborted) throw new Error('Requête Tickets annulée')
-      return { items: [], hasMore: false }
+      return page
     } finally {
       if (ticketRequests.get(requestId) === controller) ticketRequests.delete(requestId)
     }
