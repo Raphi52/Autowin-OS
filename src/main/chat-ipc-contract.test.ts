@@ -42,11 +42,24 @@ describe('renderer chat IPC contract', () => {
     expect(findLegacyChatMarkers(sources)).toEqual([])
   })
 
-  it('refuses a live directive when its conversation has no active chat turn', () => {
+  it('does not let a live directive outlive the chat turn that accepted it', () => {
     const { main } = readChatContractSources()
-
-    expect(main).toMatch(
-      /os:pilotChat:inject[\s\S]*?if \(!activeChatTurns\.get\(conversationId\)\) return \{ ok: false \}/
+    const drain = main.slice(
+      main.indexOf('function drainPendingDirectives'),
+      main.indexOf('const questionWindows')
     )
+    const handler = main.slice(main.indexOf("ipcMain.handle('os:pilotChat:inject'"))
+    const activeTurnGuard = handler.indexOf('if (!activeChatTurns.get(conversationId))')
+    const pendingDirectiveWrite = handler.indexOf('pendingDirectives.set(conversationId, queued)')
+    const turnCleanup = main.indexOf('activeChatTurns.delete(conversationId, controller)')
+    const staleDirectiveCleanup = main.indexOf('pendingDirectives.delete(conversationId)', turnCleanup)
+
+    expect(drain).toMatch(
+      /pendingDirectives\.delete\(conversationId\)[\s\S]*?return queued/
+    )
+    expect(activeTurnGuard).toBeGreaterThanOrEqual(0)
+    expect(pendingDirectiveWrite).toBeGreaterThan(activeTurnGuard)
+    expect(turnCleanup).toBeGreaterThanOrEqual(0)
+    expect(staleDirectiveCleanup).toBeGreaterThan(turnCleanup)
   })
 })
