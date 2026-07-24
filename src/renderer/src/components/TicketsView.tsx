@@ -103,9 +103,11 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const [showSourceForm, setShowSourceForm] = useState(false)
   const [draft, setDraft] = useState<SourceDraft>(EMPTY_DRAFT)
   const requestGeneration = useRef(0)
+  const activeRef = useRef(active)
   const activeRequestId = useRef<string | undefined>(undefined)
   const activeSourceRef = useRef<TicketSourceProfile | undefined>(undefined)
   const itemsRef = useRef(items)
+  activeRef.current = active
 
   useEffect(() => {
     itemsRef.current = items
@@ -116,6 +118,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
 
   const load = useCallback(
     async (source: TicketSourceProfile, nextCursor?: string, append = false): Promise<void> => {
+      if (!activeRef.current) return
       const previousSource = activeSourceRef.current
       const sourceChanged =
         previousSource !== undefined &&
@@ -235,13 +238,16 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       setError('Complète les champs obligatoires de la source.')
       return
     }
+    const generation = requestGeneration.current
     try {
       const nextSources = (await window.api.saveTicketSource(profile)) as TicketSourceSummary[]
+      if (!activeRef.current || generation !== requestGeneration.current) return
       setSources(nextSources)
       setShowSourceForm(false)
       setDraft(EMPTY_DRAFT)
       changeSourceFrom(nextSources, profile.id)
     } catch (failure) {
+      if (!activeRef.current || generation !== requestGeneration.current) return
       setError(errorMessage(failure))
     }
   }

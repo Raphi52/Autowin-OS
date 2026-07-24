@@ -125,6 +125,70 @@ describe('vue Tickets', () => {
     await act(async () => root.unmount())
   })
 
+  it('ne relance pas de lecture si une sauvegarde se termine après désactivation', async () => {
+    let resolveSave!: (sources: Array<{ profile: GitHubTicketSource; credentialConfigured: boolean }>) => void
+    const saveTicketSource = vi.fn(
+      () =>
+        new Promise<Array<{ profile: GitHubTicketSource; credentialConfigured: boolean }>>(
+          (resolve) => {
+            resolveSave = resolve
+          }
+        )
+    )
+    const listTickets = vi.fn(async () => ({ items: [item('1')], hasMore: false }))
+    api({ saveTicketSource, listTickets })
+    const { root, container } = await render()
+
+    await act(async () => {
+      ;(container.querySelector('button') as HTMLButtonElement)
+      const add = [...container.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Ajouter une source'
+      ) as HTMLButtonElement
+      add.click()
+    })
+    await act(async () => {
+      const provider = container.querySelector('[aria-label="Fournisseur"]') as HTMLSelectElement
+      provider.value = 'github'
+      provider.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await act(async () => {
+      const owner = container.querySelector('[aria-label="Propriétaire GitHub"]') as HTMLInputElement
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+        owner,
+        'openai'
+      )
+      owner.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => {
+      const repository = container.querySelector('[aria-label="Dépôt"]') as HTMLInputElement
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+        repository,
+        'codex'
+      )
+      repository.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => {
+      const save = [...container.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Enregistrer'
+      ) as HTMLButtonElement
+      save.click()
+      await Promise.resolve()
+    })
+    expect(saveTicketSource).toHaveBeenCalledOnce()
+
+    await act(async () => {
+      root.render(createElement(TicketsView, { active: false }))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      resolveSave([{ profile: github, credentialConfigured: false }])
+      await Promise.resolve()
+    })
+
+    expect(listTickets).toHaveBeenCalledTimes(1)
+    await act(async () => root.unmount())
+  })
+
   it('ignore la réponse périmée quand la source change rapidement', async () => {
     let resolveAzure!: (page: TicketPage) => void
     const azurePage = new Promise<TicketPage>((resolve) => {
