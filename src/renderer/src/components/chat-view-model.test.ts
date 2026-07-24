@@ -8,6 +8,7 @@ import {
   isRunRequestCurrent,
   isChatNearBottom,
   hydrateStoredAssistant,
+  createLiveRunDeltaBatcher,
   reduceAssistantPilotEvent,
   reduceScopedLiveRuns,
   phaseLabel,
@@ -17,6 +18,73 @@ import {
   turnCostEq,
   costEqTier
 } from './chat-view-model'
+
+describe('live orchestration delta batching', () => {
+  it('coalesces a burst into one renderer update and preserves all text', () => {
+    const scheduled: Array<() => void> = []
+    const batches: string[][] = []
+    const batcher = createLiveRunDeltaBatcher<string>(
+      (batch) => batches.push(batch),
+      (flush) => {
+        scheduled.push(flush)
+        return scheduled.length
+      },
+      () => undefined
+    )
+
+    for (let index = 0; index < 5_000; index += 1) batcher.enqueue(String(index))
+
+    expect(scheduled).toHaveLength(1)
+    expect(batches).toHaveLength(0)
+    scheduled[0]()
+    expect(batches).toHaveLength(1)
+    expect(batches[0]).toHaveLength(5_000)
+    expect(batches[0].join('')).toContain('4999')
+  })
+
+  it('cancels pending work without applying stale deltas', () => {
+    const scheduled: Array<() => void> = []
+    const cancelled: number[] = []
+    const batches: string[][] = []
+    const batcher = createLiveRunDeltaBatcher<string>(
+      (batch) => batches.push(batch),
+      (flush) => {
+        scheduled.push(flush)
+        return 42
+      },
+      (handle) => cancelled.push(handle)
+    )
+
+    batcher.enqueue('stale')
+    batcher.cancel()
+    scheduled[0]()
+
+    expect(cancelled).toEqual([42])
+    expect(batches).toEqual([])
+  })
+
+  it('cancels the scheduled callback when an ordering event forces a flush', () => {
+    const scheduled: Array<() => void> = []
+    const cancelled: number[] = []
+    const batches: string[][] = []
+    const batcher = createLiveRunDeltaBatcher<string>(
+      (batch) => batches.push(batch),
+      (flush) => {
+        scheduled.push(flush)
+        return scheduled.length
+      },
+      (handle) => cancelled.push(handle)
+    )
+
+    batcher.enqueue('before-step')
+    batcher.flush()
+    batcher.enqueue('after-step')
+    scheduled[0]()
+
+    expect(cancelled).toEqual([1])
+    expect(batches).toEqual([['before-step']])
+  })
+})
 
 describe('conversation state indicator', () => {
   it('prioritizes a real live run over the persisted terminal state', () => {

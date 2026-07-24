@@ -98,8 +98,10 @@ function initialColumnWidths(): ColumnWidths {
 
 /** Observatoire 3D : thèmes en surbrillance, visibilité réglable et lecture du nœud. */
 export function GraphView({
+  active,
   onCleanMemory
 }: {
+  active: boolean
   onCleanMemory: (brainLabel: string) => void
 }): React.JSX.Element {
   // Mode visuel (sombre vs galaxy) : choisi via le toggle de la toolbar, persisté entre lancements.
@@ -381,7 +383,7 @@ export function GraphView({
   // Mode galaxy « vivant » : les étoiles scintillent (opacité + taille) — une boucle rAF module
   // les sprites marqués userData.twinkle. Coupée hors mode galaxy (zéro coût en mode sombre).
   useEffect(() => {
-    if (visualMode !== 'galaxy') return
+    if (!active || visualMode !== 'galaxy') return
     let frame = 0
     const animate = (time: number): void => {
       const scene = graphRef.current?.scene()
@@ -401,7 +403,7 @@ export function GraphView({
     }
     frame = requestAnimationFrame(animate)
     return () => cancelAnimationFrame(frame)
-  }, [visualMode])
+  }, [active, visualMode])
   const detailOpen = Boolean(node) || activeThemes.size > 0
   const visibleThemeLabelIds = useMemo(
     () => new Set(visibleThemeClusterIds(themeSummaries, activeThemes, node)),
@@ -515,7 +517,7 @@ export function GraphView({
   }, [syncThemeClusterLabels])
 
   useEffect(() => {
-    if (!showThemeClusterLabels) return
+    if (!active || !showThemeClusterLabels) return
     let frame = 0
     const followCamera = (): void => {
       syncThemeClusterLabels()
@@ -523,7 +525,7 @@ export function GraphView({
     }
     frame = requestAnimationFrame(followCamera)
     return () => cancelAnimationFrame(frame)
-  }, [showThemeClusterLabels, syncThemeClusterLabels])
+  }, [active, showThemeClusterLabels, syncThemeClusterLabels])
 
   useEffect(() => {
     if (resizingColumn) return

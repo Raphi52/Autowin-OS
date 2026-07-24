@@ -328,7 +328,7 @@ export function MainApp(): React.JSX.Element {
         )}
         {visitedTabs.has('knowledge') && (
           <div className={`view-slot${tab === 'knowledge' ? ' is-active' : ''}`}>
-            <KnowledgeView onCleanMemory={openBrainwashConversation} />
+            <KnowledgeView active={tab === 'knowledge'} onCleanMemory={openBrainwashConversation} />
           </div>
         )}
         {visitedTabs.has('observatory') && (

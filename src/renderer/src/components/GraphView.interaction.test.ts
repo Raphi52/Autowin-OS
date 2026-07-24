@@ -2,6 +2,19 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 describe('floating note labels', () => {
+  it('suspends continuous graph animation while the Knowledge tab is hidden', () => {
+    const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
+    const knowledge = readFileSync(new URL('./KnowledgeView.tsx', import.meta.url), 'utf8')
+    const graph = readFileSync(new URL('./GraphView.tsx', import.meta.url), 'utf8')
+
+    expect(app).toContain('<KnowledgeView active={tab === \'knowledge\'}')
+    expect(knowledge).toContain('active: boolean')
+    expect(knowledge).toContain('<GraphView active={active}')
+    expect(graph).toContain('active: boolean')
+    expect(graph).toContain("if (!active || visualMode !== 'galaxy') return")
+    expect(graph).toContain('if (!active || !showThemeClusterLabels) return')
+  })
+
   it('keeps label sprites in the graph raycast so their node can be opened', () => {
     const source = readFileSync(new URL('./GraphView.tsx', import.meta.url), 'utf8')
     expect(source).not.toContain('sprite.raycast = () => undefined')
