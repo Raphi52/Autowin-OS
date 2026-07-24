@@ -41,10 +41,42 @@ export function defaultAuthPath(): string {
   return join(ensureAutowinAppData(), 'auth.json')
 }
 
+/**
+ * Coffre OS Electron si dispo (chiffrement DPAPI/Keychain/libsecret). Chargé en LAZY (require) :
+ * hors Electron (tests, node pur) → null → repli JSON en clair (0o600). Jamais d'import top-level
+ * d'`electron` (casserait les tests unitaires du module).
+ */
+function safeStorageOrNull(): {
+  encryptString(s: string): Buffer
+  decryptString(b: Buffer): string
+} | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mod = require('electron') as { safeStorage?: { isEncryptionAvailable(): boolean; encryptString(s: string): Buffer; decryptString(b: Buffer): string } }
+    return mod.safeStorage?.isEncryptionAvailable?.() ? mod.safeStorage : null
+  } catch {
+    return null
+  }
+}
+
 export function loadTokens(path = defaultAuthPath()): Tokens | null {
   if (!existsSync(path)) return null
   try {
-    return JSON.parse(readFileSync(path, 'utf8')) as Tokens
+    const buf = readFileSync(path)
+    const text = buf.toString('utf8')
+    // Legacy : ancien fichier en clair (JSON) → lu puis RE-CHIFFRÉ à la volée (migration transparente).
+    if (text.trimStart().startsWith('{')) {
+      const legacy = JSON.parse(text) as Tokens
+      try {
+        saveTokens(legacy, path)
+      } catch {
+        /* migration best-effort */
+      }
+      return legacy
+    }
+    const ss = safeStorageOrNull()
+    if (!ss) return null // fichier chiffré mais coffre indispo → on ne peut pas déchiffrer
+    return JSON.parse(ss.decryptString(buf)) as Tokens
   } catch {
     return null
   }
@@ -52,7 +84,11 @@ export function loadTokens(path = defaultAuthPath()): Tokens | null {
 
 export function saveTokens(t: Tokens, path = defaultAuthPath()): void {
   mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, JSON.stringify(t, null, 2), 'utf8')
+  const json = JSON.stringify(t, null, 2)
+  const ss = safeStorageOrNull()
+  // Chiffré si le coffre OS est dispo (prod Electron) ; sinon repli clair mais permissions restreintes.
+  if (ss) writeFileSync(path, ss.encryptString(json), { mode: 0o600 })
+  else writeFileSync(path, json, { encoding: 'utf8', mode: 0o600 })
 }
 
 /** Étape 1 : demande un user_code. L'app doit afficher userCode + VERIFY_URL. */

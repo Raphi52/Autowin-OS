@@ -571,13 +571,15 @@ function registerChatIpc(): void {
     os.startProviderLogin(guardString(provider, 'provider'))
     return { ok: true }
   })
-  ipcMain.handle('os:kimiLogin', () => {
+  ipcMain.handle('os:kimiLogin', (event) => {
+    assertTrustedRendererSender(event, 'KimiLogin')
     os.startKimiLogin()
     return { ok: true }
   })
 
   // --- Orchestration disciplinée (le cœur) : streame chaque étape ---
   ipcMain.handle('os:orchestrate', async (event, task: string, targetConversationId?: string) => {
+    assertTrustedRendererSender(event, 'Orchestrate')
     // #6 — un conversationId explicite (ex. traitement ticket) lance la VRAIE pipeline scout→frame→
     // build→judge SUR cette conversation ; sinon on retombe sur la conversation active (comportement historique).
     const conversationId = targetConversationId ?? bus.activeConversationId ?? '__autonomous__'
@@ -985,6 +987,7 @@ function registerChatIpc(): void {
   )
   // Pilotage in-model : un agent conduit l'app, ses actions streamées au renderer.
   ipcMain.handle('os:pilot', async (event, goal: string) => {
+    assertTrustedRendererSender(event, 'Pilot')
     try {
       await pilot.run(guardString(goal, 'goal'), (e) => event.sender.send('pilot:event', e))
       return { ok: true }
@@ -1005,6 +1008,7 @@ function registerChatIpc(): void {
       }>,
       conversationId?: string
     ) => {
+      assertTrustedRendererSender(event, 'PilotChat')
       const controller = new AbortController()
       let resolveCompletion!: () => void
       const completion = new Promise<void>((resolve) => {
