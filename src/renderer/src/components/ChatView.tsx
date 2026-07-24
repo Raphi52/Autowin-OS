@@ -1284,6 +1284,7 @@ export function ChatView({
     })
   }, [convs, busyConversations, liveRuns])
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
+  const greenRunsCount = runs.filter((r) => r.summary.status === 'green').length
 
   return (
     <div
@@ -1547,6 +1548,7 @@ export function ChatView({
               title="Workflows (RUN.md)"
             >
               Workflows{openRunsCount > 0 ? ` · ${openRunsCount} open` : ''}
+              {greenRunsCount > 0 ? ` · ${greenRunsCount} green` : ''}
             </button>
           </div>
         </header>

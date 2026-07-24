@@ -247,6 +247,35 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(cancelPilotChat).not.toHaveBeenCalled()
   })
 
+  // fix-ok: targeted regression reproduction for the green workflow counter.
+  it('counts a green slash-palette run in the Workflows button', async () => {
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      conversationRuns: vi.fn().mockResolvedValue([
+        {
+          subject: 'slash-palette',
+          session: 'A',
+          path: 'A/slash-palette/RUN.md',
+          mtime: 1,
+          summary: {
+            status: 'green',
+            dodTotal: 1,
+            dodChecked: 1,
+            journalEvents: 1,
+            defauts: 0
+          }
+        }
+      ])
+    })
+
+    await mount(mockApi)
+    await click('.conv-pick')
+
+    expect(container!.querySelector('button[title="Workflows (RUN.md)"]')?.textContent).toContain(
+      '1 green'
+    )
+  })
+
   it('does not steal conversation B when creation from New resolves late', async () => {
     const creation = deferred<ReturnType<typeof conversation>>()
     const mockApi = api({
