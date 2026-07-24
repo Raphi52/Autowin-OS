@@ -10,6 +10,7 @@
 import type { ReasoningEffort } from './roles'
 import type { ComputeBinding } from '../shared/compute-fabric'
 import { loadTokens, type Tokens } from './providers/codex-auth'
+import { CODEX_VALID_EFFORTS } from './providers/codex'
 
 /** Un modèle importé, atomique et adressable par son `id` canonique. */
 export interface ImportedModel {
@@ -41,7 +42,7 @@ export const DEFAULT_IMPORTED_MODELS: ImportedModel[] = [
     provider: 'codex',
     model: 'gpt-5.6-terra',
     label: 'GPT-5.6 Terra · Codex',
-    reasoningEfforts: ['minimal', 'low', 'medium', 'high'],
+    reasoningEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
     defaultReasoningEffort: 'medium'
   },
   {
@@ -119,11 +120,15 @@ async function discoverCodexModels(
     const payload = (await response.json()) as { models?: CodexModelPayload[] }
     const discovered = (payload.models ?? []).flatMap<ImportedModel>((entry) => {
       if (typeof entry.slug !== 'string' || !/^[a-z0-9][a-z0-9.-]*$/.test(entry.slug)) return []
+      // Filtre au set RÉELLEMENT accepté par /responses codex (live 2026-07-24 : minimal & ultra → 400).
+      // Sinon l'UI proposerait un effort qui fait planter la requête (le bug ChatGPT HTTP 400).
       const efforts = (entry.supported_reasoning_levels ?? [])
         .map((level) => level.effort)
         .filter(
           (effort): effort is ReasoningEffort =>
-            typeof effort === 'string' && REASONING_EFFORTS.has(effort as ReasoningEffort)
+            typeof effort === 'string' &&
+            REASONING_EFFORTS.has(effort as ReasoningEffort) &&
+            CODEX_VALID_EFFORTS.has(effort)
         )
       if (efforts.length === 0) return []
       const requestedDefault = entry.default_reasoning_level

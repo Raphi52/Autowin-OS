@@ -6,7 +6,9 @@ import type { CostAggregator } from './dashboards/cost'
 import type { TrustLedger } from './trust/ledger'
 import type { AuthoritySas } from './authority/sas'
 import { evaluateClosure } from './gates/stopgate'
-import { runHooks } from './gates/hooks'
+import { HookBus } from './hooks/hook-bus'
+import { createDefaultHookBus } from './hooks/default-gate-hooks'
+import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
 import { type PipelinePhase } from './skill-pipeline'
 import { phaseBrief } from './phase-briefs'
 import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
@@ -90,6 +92,19 @@ export interface OrchestratorDeps {
   cost: CostAggregator
   trust: TrustLedger
   authority: AuthoritySas
+  /**
+   * Système de hooks INTERNE (cycle de vie). Absent → bus par défaut (hooks synchrones existants +
+   * verify-replay) → enforcement identique à l'historique (rétrocompat HARD) + verify-replay en plus.
+   */
+  hooks?: HookBus
+  /**
+   * verify-replay : commande de vérification REJOUÉE au gate pour une mutation. `verifyCmd` explicite
+   * PRIME ; sinon si `autoVerify`, on résout la commande de test DÉCLARÉE du workspace (package.json).
+   * Absent/off → verify-replay dormant (comportement v1). Off par défaut (opt-in, évite de forcer un
+   * `npm test` coûteux/grossier sur chaque run).
+   */
+  verifyCmd?: string
+  autoVerify?: boolean
   /** Workspace borné remis au sous-agent outillé. Jamais transmis au juge ou au chat. */
   executionWorkspace: string
   /**
@@ -206,6 +221,17 @@ export class Orchestrator {
   constructor(private readonly deps: OrchestratorDeps) {}
 
   private runSeq = 0
+  private _hooks?: HookBus
+  /** Bus de hooks (fourni ou défaut). Uniforme pour TOUS les exécuteurs (claude/codex/omniroute). */
+  private get hooks(): HookBus {
+    return (this._hooks ??= this.deps.hooks ?? createDefaultHookBus())
+  }
+
+  /** Commande de vérif à rejouer (verify-replay) : explicite > convention workspace > aucune (dormant). */
+  private resolveVerifyCmd(): string | undefined {
+    if (this.deps.verifyCmd) return this.deps.verifyCmd
+    return this.deps.autoVerify ? resolveVerifyCmd(this.deps.executionWorkspace) : undefined
+  }
 
   /**
    * Flip live worktree : enveloppe le pipeline. Un run de mutation reçoit une copie isolée (cwd),
@@ -483,18 +509,21 @@ export class Orchestrator {
       status: 'completed',
       durationMs: performance.now() - startedAt
     })
-    // GATE déterministe + hooks in-app reproduits (enforcement HORS-MODÈLE), comme le séquentiel.
-    const hookViolations = runHooks({
+    // GATE déterministe + HookBus interne (pre-green) : enforcement HORS-MODÈLE, uniforme tous exécuteurs.
+    const hookOutcome = await this.hooks.run('pre-green', {
+      task,
+      cwd: this.deps.executionWorkspace,
+      verifyCmd: this.resolveVerifyCmd(),
       requireProof: isMutationTask(task),
-      evidenceOkCount: evidence.filter((e) => e.ok).length
+      evidenceOkCount: evidence.filter((e) => e.ok).length,
+      evidence
     })
     onPhase?.({ step: 'gate' })
     const gate = evaluateClosure({
-      status: ok && hookViolations.length === 0 ? 'green' : 'red',
+      status: ok && !hookOutcome.blocked ? 'green' : 'red',
       dod: [{ checked: ok, hasContent: true }]
     })
-    if (hookViolations.length)
-      gate.reasons.push(...hookViolations.map((h) => `hook ${h.hook}: ${h.detail}`))
+    if (hookOutcome.blocked) gate.reasons.push(...hookOutcome.reasons)
     push({
       step: 'gate',
       detail: gate.blocked ? `BLOQUÉ: ${gate.reasons.join('; ')}` : 'clôture autorisée'
@@ -1099,18 +1128,21 @@ export class Orchestrator {
         durationMs: performance.now() - judgeStartedAt
       })
 
-      // GATE déterministe (model-agnostic) + hooks in-app reproduits (enforcement HORS-MODÈLE).
-      const hookViolations = runHooks({
+      // GATE déterministe (model-agnostic) + HookBus interne (pre-green) : enforcement HORS-MODÈLE.
+      const hookOutcome = await this.hooks.run('pre-green', {
+        task,
+        cwd: this.deps.executionWorkspace,
+        verifyCmd: this.resolveVerifyCmd(),
         requireProof: isMutationTask(task),
-        evidenceOkCount: (exec.executionEvidence ?? []).filter((e) => e.ok).length
+        evidenceOkCount: (exec.executionEvidence ?? []).filter((e) => e.ok).length,
+        evidence: exec.executionEvidence
       })
       onPhase?.({ step: 'gate' })
       const g = evaluateClosure({
-        status: ok && hookViolations.length === 0 ? 'green' : 'red',
+        status: ok && !hookOutcome.blocked ? 'green' : 'red',
         dod: [{ checked: ok, hasContent: true }]
       })
-      if (hookViolations.length)
-        g.reasons.push(...hookViolations.map((h) => `hook ${h.hook}: ${h.detail}`))
+      if (hookOutcome.blocked) g.reasons.push(...hookOutcome.reasons)
       push({
         step: 'gate',
         detail: g.blocked ? `BLOQUÉ: ${g.reasons.join('; ')}` : 'clôture autorisée'

@@ -1,7 +1,25 @@
 import { describe, it, expect, vi } from 'vitest'
-import { CodexAdapter, codexExecSpec } from './codex'
+import { CodexAdapter, codexExecSpec, codexApiEffort } from './codex'
 import { startDeviceLogin, pollForToken, refreshTokens, CODEX_CLIENT_ID } from './codex-auth'
 import type { Message } from './types'
+
+describe('codexApiEffort — clamp au set Responses réel (live 2026-07-24)', () => {
+  it('valides passés tels quels : low/medium/high/xhigh/max', () => {
+    for (const e of ['low', 'medium', 'high', 'xhigh', 'max']) expect(codexApiEffort(e)).toBe(e)
+  })
+  it('les deux 400 sont remappés : minimal→low, ultra→max', () => {
+    expect(codexApiEffort('minimal')).toBe('low')
+    expect(codexApiEffort('ultra')).toBe('max')
+  })
+  it('none/absent → undefined (on omet reasoning)', () => {
+    expect(codexApiEffort('none')).toBeUndefined()
+    expect(codexApiEffort(undefined)).toBeUndefined()
+    expect(codexApiEffort('')).toBeUndefined()
+  })
+  it('inconnu → high (valide par défaut)', () => {
+    expect(codexApiEffort('wat')).toBe('high')
+  })
+})
 
 /** Fabrique une Response-like minimale pour mocker fetch. */
 function jsonRes(status: number, body: unknown): Response {

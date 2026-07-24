@@ -209,7 +209,19 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const systemInjected = typeof system === 'string' && system.length > 0
 
     const execution = opts.execution
-    const args = ['-p', lastUser, '--output-format', 'stream-json', '--verbose', '--strict-mcp-config']
+    // Autowin = SOURCE UNIQUE : on lance le CLI « nu ». `--setting-sources ""` → aucun CLAUDE.md
+    // utilisateur/projet, ni skills, ni hooks CC, ni MCP hérités → zéro doublon avec les consignes
+    // qu'Autowin injecte (--system-prompt). L'enforcement vit alors dans le HookBus interne d'Autowin.
+    const args = [
+      '-p',
+      lastUser,
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--strict-mcp-config',
+      '--setting-sources',
+      ''
+    ]
     if (execution) {
       // B — mode exécuteur : outils activés + permission autonome, dans le cwd borné. A (générique) :
       // read-only ⇒ pas d'écriture/Bash-mutation ; workspace-write/danger ⇒ édition + Bash.
