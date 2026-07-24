@@ -1,0 +1,41 @@
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  background: color-mix(in srgb, var(--accent, #4b9fff) 14%, transparent);
+  border-bottom: 1px solid var(--accent, #4b9fff);
+  font-size: 12.5px;
+  color: var(--text, #e6e9ee);
+}
+.update-banner-msg code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color: var(--accent, #4b9fff);
+}
+.update-banner-error {
+  color: var(--danger, #e6635b);
+}
+.update-banner-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+.update-banner-apply,
+.update-banner-later {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line2, #31373f);
+  background: var(--surface2, #191d23);
+  color: var(--text, #e6e9ee);
+  cursor: pointer;
+}
+.update-banner-apply {
+  border-color: var(--accent, #4b9fff);
+  color: var(--accent, #4b9fff);
+}
+.update-banner-apply:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

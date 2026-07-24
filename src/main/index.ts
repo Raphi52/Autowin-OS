@@ -86,6 +86,7 @@ import {
 } from '../shared/tickets'
 import { azureTicketProvider, listAzurePeople } from './ticket-providers/azure'
 import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
+import { checkForUpdate, applyUpdate } from './git-update'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
 import {
@@ -518,6 +519,20 @@ function registerChatIpc(): void {
     controller.abort()
     ticketRequests.delete(requestId)
     return true
+  })
+  // Auto-update git : check au démarrage (non-bloquant) + application 1-clic (pull + relaunch).
+  ipcMain.handle('update:check', (event) => {
+    assertTrustedRendererSender(event, 'Update')
+    return checkForUpdate(process.cwd())
+  })
+  ipcMain.handle('update:apply', async (event) => {
+    assertTrustedRendererSender(event, 'Update')
+    const result = await applyUpdate(process.cwd())
+    if (result.ok && result.relaunch) {
+      app.relaunch()
+      app.quit()
+    }
+    return result
   })
   ipcMain.handle('app:test:capture-page', async (event) => {
     assertTrustedRendererSender(event, 'Capture UI de test')

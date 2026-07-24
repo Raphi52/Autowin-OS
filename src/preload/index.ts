@@ -29,6 +29,11 @@ const api = {
   getGitDiff: (path: string, repoPath?: string): Promise<unknown> =>
     ipcRenderer.invoke('git:diff', path, repoPath),
   pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),
+  // Auto-update git au démarrage.
+  checkUpdate: (): Promise<{ available: boolean; behind: number; branch?: string }> =>
+    ipcRenderer.invoke('update:check'),
+  applyUpdate: (): Promise<{ ok: boolean; relaunch?: boolean; npmInstalled?: boolean; error?: string }> =>
+    ipcRenderer.invoke('update:apply'),
   ticketSources: (): Promise<unknown[]> => ipcRenderer.invoke('tickets:sources'),
   saveTicketSource: (profile: unknown): Promise<unknown[]> =>
     ipcRenderer.invoke('tickets:source:save', profile),

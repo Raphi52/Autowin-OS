@@ -5,6 +5,7 @@ import { PreflightBanner } from './components/PreflightBanner'
 import { FirstRunWizard } from './components/FirstRunWizard'
 import { ObservatoryView } from './components/ObservatoryView'
 import { WorktreeView } from './components/WorktreeView'
+import { UpdateBanner } from './components/UpdateBanner'
 import { TicketsView } from './components/TicketsView'
 import { AgentStudioView } from './components/AgentStudioView'
 import { KnowledgeView } from './components/KnowledgeView'
@@ -263,6 +264,7 @@ export function MainApp(): React.JSX.Element {
 
   return (
     <div className="shell cosmic-outline theme-serious">
+      <UpdateBanner />
       <FirstRunWizard />
       <aside className={`rail${railCollapsed ? ' is-collapsed' : ''}`}>
         <div className="brand">

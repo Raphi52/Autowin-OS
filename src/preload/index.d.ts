@@ -287,6 +287,8 @@ interface ChatApi {
     repoPath?: string
   ) => Promise<import('../shared/git-read').GitDiffResult>
   pickGitRepo: () => Promise<string | null>
+  checkUpdate: () => Promise<{ available: boolean; behind: number; branch?: string; error?: string }>
+  applyUpdate: () => Promise<{ ok: boolean; relaunch?: boolean; npmInstalled?: boolean; error?: string }>
   ticketSources: () => Promise<import('../shared/tickets').TicketSourceSummary[]>
   saveTicketSource: (
     profile: import('../shared/tickets').TicketSourceProfile
