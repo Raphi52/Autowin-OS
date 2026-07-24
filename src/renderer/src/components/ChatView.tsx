@@ -1022,7 +1022,14 @@ export function ChatView({
   async function steerWithoutInterrupt(index: number, text: string): Promise<void> {
     const id = activeRef.current
     if (!id) return
-    await window.api.injectDirective(id, text)
+    const result = await window.api.injectDirective(id, text)
+    if (!result.ok) return
+    const nextMessages: Msg[] = [
+      ...(liveMessagesRef.current.get(id) ?? []),
+      { role: 'user', content: text }
+    ]
+    liveMessagesRef.current.set(id, nextMessages)
+    if (activeRef.current === id) setMessages(nextMessages)
     const q = queueRef.current.get(id) ?? []
     setConversationQueue(
       id,

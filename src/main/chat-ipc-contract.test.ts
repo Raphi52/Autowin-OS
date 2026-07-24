@@ -41,4 +41,16 @@ describe('renderer chat IPC contract', () => {
     expect(sources.main).toMatch(/ipcMain\.handle\(\s*'os:pilotChat'/)
     expect(findLegacyChatMarkers(sources)).toEqual([])
   })
+
+  it('persists an injected steering directive in the conversation', () => {
+    const { main } = readChatContractSources()
+    const injectHandler = main.slice(
+      main.indexOf("ipcMain.handle('os:pilotChat:inject'"),
+      main.indexOf("ipcMain.handle(\n    'os:causalTrace:displayed'")
+    )
+
+    expect(injectHandler).toContain(
+      "os.conversations.append(conversationId, { role: 'user', content: directive })"
+    )
+  })
 })

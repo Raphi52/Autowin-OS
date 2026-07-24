@@ -56,6 +56,7 @@ function api(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     pilotChat: vi.fn().mockResolvedValue({ ok: true }),
     markResponseDisplayed: vi.fn().mockResolvedValue(undefined),
     cancelPilotChat: vi.fn().mockResolvedValue(undefined),
+    injectDirective: vi.fn().mockResolvedValue({ ok: true }),
     ...overrides
   }
 }
@@ -180,6 +181,28 @@ describe('ChatView behavior under concurrent UI actions', () => {
     })
     // Tour fini → l'inbox se vide.
     expect(container!.querySelector('.agent-inbox')).toBeNull()
+  })
+
+  it('shows an oriented directive in the thread after removing it from the queue', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('initial work')
+    await click('.composer-send')
+    await type('visible directive')
+    await click('.composer-send')
+    expect(container!.querySelector('.directive-queue-text')?.textContent).toBe('visible directive')
+
+    await click('.directive-queue-steer')
+
+    expect(mockApi.injectDirective).toHaveBeenCalledWith('A', 'visible directive')
+    expect(container!.querySelector('.directive-queue-item')).toBeNull()
+    expect(container!.querySelector('.chat-scroll')?.textContent).toContain('visible directive')
+    await act(async () => pilot.resolve({ ok: true }))
   })
 
   it('does not steal conversation B when creation from New resolves late', async () => {
