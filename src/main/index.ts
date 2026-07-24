@@ -85,6 +85,7 @@ import {
   type TicketSourceProfile
 } from '../shared/tickets'
 import { azureTicketProvider } from './ticket-providers/azure'
+import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
 import {
@@ -161,12 +162,16 @@ const pilot = new AgentPilot(
 const modelQuestions = new ModelQuestionHub()
 const activeChatTurns = new ActiveChatTurns()
 /** Directives utilisateur injectées PENDANT un tour, par conversation (drainées à chaque itération). */
-const pendingDirectives = new Map<string, string[]>()
+const pendingDirectives = new Map<
+  string,
+  Array<{ directive: string; resolve: (consumed: boolean) => void }>
+>()
 function drainPendingDirectives(conversationId: string): string[] {
   const queued = pendingDirectives.get(conversationId) ?? []
   pendingDirectives.delete(conversationId)
   if (queued.length) broadcast({ type: 'refresh', scope: 'directives' })
-  return queued
+  queued.forEach((entry) => entry.resolve(true))
+  return queued.map((entry) => entry.directive)
 }
 const questionWindows = new Map<string, BrowserWindow>()
 const diagnosticCapabilities = new DiagnosticCapabilities()
@@ -430,23 +435,27 @@ function registerChatIpc(): void {
     }
     return value
   }
-  ipcMain.handle('tickets:sources', (event) => {
+  ipcMain.handle('tickets:sources', async (event) => {
     assertTrustedRendererSender(event, 'Tickets')
+    const hasAuth =
+      Boolean(process.env.AUTOWIN_AZDO_PAT) || Boolean(await getAzureDevOpsAadToken())
     return ticketSources.map((profile) => ({
       profile,
-      credentialConfigured: profile.provider === 'azure' && Boolean(process.env.AUTOWIN_AZDO_PAT)
+      credentialConfigured: profile.provider === 'azure' && hasAuth
     }))
   })
-  ipcMain.handle('tickets:source:save', (event, value: unknown) => {
+  ipcMain.handle('tickets:source:save', async (event, value: unknown) => {
     assertTrustedRendererSender(event, 'Tickets')
     const profile = parseTicketSourceProfile(value)
     if (!profile) throw new Error('Profil Tickets invalide')
     const current = ticketSources.findIndex((candidate) => candidate.id === profile.id)
     if (current >= 0) ticketSources[current] = profile
     else ticketSources.push(profile)
+    const hasAuth =
+      Boolean(process.env.AUTOWIN_AZDO_PAT) || Boolean(await getAzureDevOpsAadToken())
     return ticketSources.map((source) => ({
       profile: source,
-      credentialConfigured: source.provider === 'azure' && Boolean(process.env.AUTOWIN_AZDO_PAT)
+      credentialConfigured: source.provider === 'azure' && hasAuth
     }))
   })
   ipcMain.handle('tickets:list', async (event, request: TicketListRequest) => {
@@ -462,18 +471,18 @@ function registerChatIpc(): void {
     try {
       if (source.provider !== 'azure')
         throw new Error('Fournisseur Tickets non supporté (azure uniquement pour l’instant)')
-      // PAT via env (chemin léger) : scope « Work Items → Read » sur AmitelGTC/RIG.
-      const token = process.env.AUTOWIN_AZDO_PAT ?? ''
+      // Auth : PAT explicite (Basic) si fourni ; sinon token AAD via la session `az login` (Bearer,
+      // standard RIG, aucun secret à saisir). Aucun des deux → message actionnable.
+      const pat = process.env.AUTOWIN_AZDO_PAT ?? ''
+      const token = pat || (await getAzureDevOpsAadToken()) || ''
+      const authScheme: 'bearer' | 'pat' = pat ? 'pat' : 'bearer'
       if (!token)
         throw new Error(
-          'PAT Azure DevOps manquant : définir AUTOWIN_AZDO_PAT (scope Work Items → Read).'
+          'Auth Azure DevOps indisponible : lance « az login » (compte Amitel) ou définis AUTOWIN_AZDO_PAT (PAT scope Work Items → Read).'
         )
       const page = await azureTicketProvider.list(
         { source, requestId, cursor: request?.cursor, pageSize: request?.pageSize },
-        {
-          token,
-          fetchFn: (url, init) => fetch(url as string, { ...(init ?? {}), signal: controller.signal })
-        }
+        { token, authScheme, signal: controller.signal, fetchFn: fetch }
       )
       if (controller.signal.aborted) throw new Error('Requête Tickets annulée')
       return page
@@ -1254,9 +1263,12 @@ function registerChatIpc(): void {
       } finally {
         if (conversationId) {
           activeChatTurns.delete(conversationId, controller)
-          if (pendingDirectives.delete(conversationId))
+          const staleDirectives = pendingDirectives.get(conversationId) ?? []
+          if (pendingDirectives.delete(conversationId)) {
             // directives non consommées = obsolètes
             broadcast({ type: 'refresh', scope: 'directives' })
+            staleDirectives.forEach((entry) => entry.resolve(false))
+          }
         }
         resolveCompletion()
       }
@@ -1280,11 +1292,12 @@ function registerChatIpc(): void {
     const directive = guardString(rawDirective, 'directive').trim()
     if (!directive) return { ok: false }
     if (!activeChatTurns.get(conversationId)) return { ok: false }
-    const queued = pendingDirectives.get(conversationId) ?? []
-    queued.push(directive)
-    pendingDirectives.set(conversationId, queued)
-    broadcast({ type: 'refresh', scope: 'directives' })
-    return { ok: true }
+    return new Promise<{ ok: boolean }>((resolve) => {
+      const queued = pendingDirectives.get(conversationId) ?? []
+      queued.push({ directive, resolve: (consumed) => resolve({ ok: consumed }) })
+      pendingDirectives.set(conversationId, queued)
+      broadcast({ type: 'refresh', scope: 'directives' })
+    })
   })
 
   ipcMain.handle(
