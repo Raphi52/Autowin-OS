@@ -128,9 +128,7 @@ export function EvidenceList({ items }: { items: EvidencePart[] }): React.JSX.El
               <span className="mono">📝 {e.path || 'fichier modifié'}</span>
             ) : (
               <>
-                <span className="mono">
-                  {e.command ? `$ ${e.command}` : e.type}
-                </span>
+                <span className="mono">{e.command ? `$ ${e.command}` : e.type}</span>
                 {typeof e.exitCode === 'number' && (
                   <span className={`evidence-exit ${e.exitCode === 0 ? 'st-ok' : 'st-err'}`}>
                     exit {e.exitCode}
@@ -212,21 +210,25 @@ export function AssistantActivityGroup({
   actions: ChatActionPart[]
 }): React.JSX.Element {
   const failed = actions.some((action) => action.ok === false)
-  const running = actions.some((action) => action.ok === undefined)
+  const runningCount = actions.filter((action) => action.ok === undefined).length
+  const completedCount = actions.filter((action) => action.ok === true).length
+  const running = runningCount > 0
   const status = running
-    ? 'en cours'
+    ? completedCount > 0
+      ? `${completedCount} action${completedCount > 1 ? 's' : ''} terminée${
+          completedCount > 1 ? 's' : ''
+        } · ${runningCount} action${runningCount > 1 ? 's' : ''} en cours`
+      : `${actions.length} action${actions.length > 1 ? 's' : ''} en cours`
     : failed
-      ? 'avec erreur'
+      ? `${actions.length} action${actions.length > 1 ? 's' : ''} avec erreur`
       : actions.length > 1
-        ? 'terminées'
-        : 'terminée'
+        ? `${actions.length} actions terminées`
+        : '1 action terminée'
   return (
     <details className={`activity-group${failed ? ' failed' : ''}`}>
       <summary>
         <span className={`status-dot ${running ? 'st-info' : failed ? 'st-err' : 'st-ok'}`} />
-        <span className="activity-group-title">
-          {actions.length} action{actions.length > 1 ? 's' : ''} {status}
-        </span>
+        <span className="activity-group-title">{status}</span>
         <span className="activity-group-tools">
           {actions.map((action) => CMD_LABEL[action.name] ?? action.name).join(' · ')}
         </span>

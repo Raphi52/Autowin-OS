@@ -1,7 +1,14 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { createChatTurn, reduceChatTurn, type ChatTurnEvent } from '../../../shared/chat-turn'
 import { AssistantActionEvent, AssistantActivityGroup } from './ChatView.parts'
+
+function renderActivity(events: ChatTurnEvent[]): string {
+  const turn = events.reduce(reduceChatTurn, createChatTurn('turn-actions'))
+  const actions = turn.parts.filter((part) => part.kind === 'action')
+  return renderToStaticMarkup(createElement(AssistantActivityGroup, { actions }))
+}
 
 describe('AssistantActionEvent', () => {
   it('keeps a compact summary and inspectable input/result in semantic details', () => {
@@ -55,5 +62,43 @@ describe('AssistantActivityGroup', () => {
     expect(html.match(/class="action-event/g)).toHaveLength(2)
     expect(html).toContain('Entrée')
     expect(html).toContain('Résultat')
+  })
+
+  it('renders every resolved action as completed after a successful turn', () => {
+    const html = renderActivity([
+      { kind: 'command', actionId: 'navigate', name: 'navigate', args: { tab: 'memory' } },
+      { kind: 'result', actionId: 'navigate', name: 'navigate', ok: true },
+      { kind: 'command', actionId: 'state', name: 'get_state' },
+      { kind: 'result', actionId: 'state', name: 'get_state', ok: true },
+      { kind: 'done' }
+    ])
+
+    expect(html).toContain('2 actions terminées')
+    expect(html.match(/réussi/g)).toHaveLength(2)
+    expect(html).not.toContain('en cours')
+  })
+
+  it('keeps the pending action label visible while earlier actions are completed', () => {
+    const html = renderActivity([
+      { kind: 'command', actionId: 'navigate', name: 'navigate' },
+      { kind: 'result', actionId: 'navigate', name: 'navigate', ok: true },
+      { kind: 'command', actionId: 'state', name: 'get_state' }
+    ])
+
+    expect(html).toContain('1 action terminée · 1 action en cours')
+    expect(html).toContain('Lecture d’état')
+    expect(html).toContain('réussi')
+    expect(html).toContain('en cours')
+  })
+
+  it('renders a pending action as failed when the turn fails before its result', () => {
+    const html = renderActivity([
+      { kind: 'command', actionId: 'orchestrate', name: 'orchestrate' },
+      { kind: 'failed', error: 'annulation fournisseur' }
+    ])
+
+    expect(html).toContain('1 action avec erreur')
+    expect(html).toContain('échec')
+    expect(html).not.toContain('en cours')
   })
 })
