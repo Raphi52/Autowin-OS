@@ -144,7 +144,15 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
           }
         : {})
     }
-  if (event.kind === 'failed') return { ...state, status: 'failed', error: event.error }
+  if (event.kind === 'failed')
+    return {
+      ...state,
+      status: 'failed',
+      error: event.error,
+      parts: state.parts.map((part) =>
+        part.kind === 'action' && part.ok === undefined ? { ...part, ok: false } : part
+      )
+    }
   if (event.kind === 'cancelled') return { ...state, status: 'cancelled' }
   return { ...state, status: 'interrupted' }
 }
