@@ -262,4 +262,33 @@ describe('Observatory turn focus', () => {
     expect(container.textContent).toContain('Conversation ciblée indisponible')
     expect(container.textContent).toContain('conversations : catalogue hors ligne')
   })
+
+  it('preserves the Observatory view, open event, and scroll position across tab changes', async () => {
+    const mockApi = api([trace('turn-2', 'preuve persistante', 1)])
+    const view = await mount(mockApi)
+    const causalMode = [...view.querySelectorAll('.observatory-view-switch button')].find(
+      (button) => button.textContent === 'Chemin critique'
+    ) as HTMLButtonElement
+
+    await act(async () => causalMode.click())
+    const event = view.querySelector('.observatory-causal-node-wrap > button') as HTMLButtonElement
+    await act(async () => event.click())
+    const stream = view.querySelector('[data-testid="observatory-stream"]') as HTMLElement
+    stream.scrollTop = 240
+
+    await act(async () => {
+      root?.render(createElement(ObservatoryView, { active: false }))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      root?.render(createElement(ObservatoryView, { active: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(causalMode.classList.contains('is-active')).toBe(true)
+    expect(view.querySelector('.observatory-causal-detail')).not.toBeNull()
+    expect(stream.scrollTop).toBe(240)
+  })
 })
