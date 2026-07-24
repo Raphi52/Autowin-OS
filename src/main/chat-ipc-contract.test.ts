@@ -41,4 +41,12 @@ describe('renderer chat IPC contract', () => {
     expect(sources.main).toMatch(/ipcMain\.handle\(\s*'os:pilotChat'/)
     expect(findLegacyChatMarkers(sources)).toEqual([])
   })
+
+  it('refuses a live directive when its conversation has no active chat turn', () => {
+    const { main } = readChatContractSources()
+
+    expect(main).toMatch(
+      /os:pilotChat:inject[\s\S]*?if \(!activeChatTurns\.get\(conversationId\)\) return \{ ok: false \}/
+    )
+  })
 })

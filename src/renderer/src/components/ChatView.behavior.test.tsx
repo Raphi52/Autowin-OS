@@ -56,6 +56,7 @@ function api(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     pilotChat: vi.fn().mockResolvedValue({ ok: true }),
     markResponseDisplayed: vi.fn().mockResolvedValue(undefined),
     cancelPilotChat: vi.fn().mockResolvedValue(undefined),
+    injectDirective: vi.fn().mockResolvedValue({ ok: true }),
     cancelOrchestration: vi.fn().mockResolvedValue(undefined),
     ...overrides
   }
@@ -125,6 +126,60 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(mockApi.pilotChat).toHaveBeenCalledTimes(1)
     await act(async () => pilot.resolve({ ok: true }))
   })
+
+  it('removes the steered message by stable identity after the queue changes', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const injection = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise),
+      injectDirective: vi.fn(() => injection.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('long turn')
+    await click('.composer-send')
+    await type('A')
+    await click('.composer-send')
+    await type('B')
+    await click('.composer-send')
+
+    const steerButtons = container!.querySelectorAll('.directive-queue-steer')
+    await act(async () => (steerButtons[1] as HTMLElement).click())
+    const removeButtons = container!.querySelectorAll('.directive-queue-remove')
+    await act(async () => (removeButtons[0] as HTMLElement).click())
+    await act(async () => injection.resolve({ ok: true }))
+
+    expect(container!.querySelector('.directive-queue')).toBeNull()
+    await act(async () => pilot.resolve({ ok: true }))
+  })
+
+  it.each(['a refused injection', 'an injection error'])(
+    'keeps the queued message after %s',
+    async (testCase) => {
+      const pilot = deferred<{ ok: boolean }>()
+      const injectDirective =
+        testCase === 'a refused injection'
+          ? vi.fn().mockResolvedValue({ ok: false })
+          : vi.fn().mockRejectedValue(new Error('IPC unavailable'))
+      const mockApi = api({
+        conversations: vi.fn().mockResolvedValue([conversation('A')]),
+        pilotChat: vi.fn(() => pilot.promise),
+        injectDirective
+      })
+      await mount(mockApi)
+      await click('.conv-pick')
+      await type('long turn')
+      await click('.composer-send')
+      await type('keep me')
+      await click('.composer-send')
+
+      await click('.directive-queue-steer')
+
+      expect(container!.querySelector('.directive-queue-text')?.textContent).toBe('keep me')
+      await act(async () => pilot.resolve({ ok: true }))
+    }
+  )
 
   it('ne perd pas un événement pilote encore en vol quand le tour se termine', async () => {
     const pilot = deferred<{ ok: boolean }>()
