@@ -1,7 +1,26 @@
 import { describe, it, expect, vi } from 'vitest'
-import { CodexAdapter, codexExecSpec } from './codex'
+import { CodexAdapter, codexExecSpec, codexApiEffort } from './codex'
 import { startDeviceLogin, pollForToken, refreshTokens, CODEX_CLIENT_ID } from './codex-auth'
 import type { Message } from './types'
+
+describe('codexApiEffort — clamp au set Responses (évite le HTTP 400)', () => {
+  it('efforts maison (ultra/xhigh/max) → high (borne valide)', () => {
+    expect(codexApiEffort('ultra')).toBe('high')
+    expect(codexApiEffort('xhigh')).toBe('high')
+    expect(codexApiEffort('max')).toBe('high')
+    expect(codexApiEffort('high')).toBe('high')
+  })
+  it('minimal/low → low ; medium → medium', () => {
+    expect(codexApiEffort('minimal')).toBe('low')
+    expect(codexApiEffort('low')).toBe('low')
+    expect(codexApiEffort('medium')).toBe('medium')
+  })
+  it('none/absent → undefined (on omet reasoning)', () => {
+    expect(codexApiEffort('none')).toBeUndefined()
+    expect(codexApiEffort(undefined)).toBeUndefined()
+    expect(codexApiEffort('')).toBeUndefined()
+  })
+})
 
 /** Fabrique une Response-like minimale pour mocker fetch. */
 function jsonRes(status: number, body: unknown): Response {

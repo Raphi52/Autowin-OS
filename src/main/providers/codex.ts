@@ -276,6 +276,27 @@ function escapeAttribute(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;')
 }
 
+/**
+ * Clampe l'effort d'Autowin (none|minimal|low|medium|high|xhigh|max|ultra) vers le set accepté par la
+ * Responses API codex (low|medium|high). Un effort maison (ultra/xhigh/max) envoyé BRUT → HTTP 400.
+ * `none`/absent → undefined (on omet `reasoning`).
+ */
+export function codexApiEffort(effort: string | undefined): 'low' | 'medium' | 'high' | undefined {
+  switch (effort) {
+    case undefined:
+    case '':
+    case 'none':
+      return undefined
+    case 'minimal':
+    case 'low':
+      return 'low'
+    case 'medium':
+      return 'medium'
+    default: // high, xhigh, max, ultra, ou inconnu → borne haute VALIDE
+      return 'high'
+  }
+}
+
 export function codexContent(message: Message): Array<Record<string, string>> {
   const content: Array<Record<string, string>> = [{ type: 'input_text', text: message.content }]
   for (const attachment of message.attachments ?? []) {
@@ -391,13 +412,16 @@ export class CodexAdapter implements ProviderAdapter {
     // fix-ok: contrat live (auxiliary_client.py:748) — chatgpt.com/backend-api/codex
     // exige store:false + les headers originator/User-Agent/ChatGPT-Account-ID (sinon 400/403
     // Cloudflare). L'account-id est extrait du claim JWT chatgpt_account_id.
+    // L'effort DOIT être clampé au set Responses (low|medium|high) : un effort maison (ultra/xhigh/max)
+    // envoyé brut fait échouer la requête en HTTP 400.
+    const apiEffort = codexApiEffort(opts.reasoningEffort)
     const body = {
       model: opts.model ?? this.model,
       instructions: systemInjected ? system : undefined,
       input,
       store: false,
       stream: true,
-      reasoning: opts.reasoningEffort ? { effort: opts.reasoningEffort } : undefined
+      reasoning: apiEffort ? { effort: apiEffort } : undefined
     }
     const serializedBody = JSON.stringify(body)
     opts.observePrompt?.({
@@ -427,7 +451,11 @@ export class CodexAdapter implements ProviderAdapter {
       body: serializedBody,
       signal: opts.signal
     })
-    if (!res.ok || !res.body) throw new Error(`codex responses HTTP ${res.status}`)
+    if (!res.ok || !res.body) {
+      // Surface le CORPS du 4xx (l'API y nomme la raison exacte) — sinon le status seul est aveugle.
+      const detail = await res.text().catch(() => '')
+      throw new Error(`codex responses HTTP ${res.status}${detail ? ` — ${detail.slice(0, 600)}` : ''}`)
+    }
 
     // Parse le flux SSE : events `response.output_text.delta` (delta) + `response.completed`.
     const reader = res.body.getReader()
