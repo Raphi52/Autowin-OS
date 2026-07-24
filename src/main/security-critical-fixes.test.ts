@@ -41,10 +41,33 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     const block = source.slice(start, start + 1200)
     return /assertTrustedRendererSender\(\s*event/.test(block)
   }
-  it.each(['os:orchestrate', 'os:pilotChat', 'os:pilot', 'os:kimiLogin'])(
-    '%s appelle assertTrustedRendererSender',
-    (channel) => {
-      expect(guarded(channel)).toBe(true)
-    }
-  )
+  it.each([
+    // critiques
+    'os:orchestrate',
+    'os:pilotChat',
+    'os:pilot',
+    'os:kimiLogin',
+    // hautes/moyennes (audit #3) : config + lectures fichier + brain
+    'os:setRole',
+    'os:topology:set',
+    'os:profiles:apply',
+    'os:profiles:save',
+    'os:conversations:remove',
+    'os:runTrace',
+    'os:activity:image',
+    'os:loadBrainGraph',
+    'os:readNodeFile'
+  ])('%s appelle assertTrustedRendererSender', (channel) => {
+    expect(guarded(channel)).toBe(true)
+  })
+})
+
+describe('haute — loadBrainGraph confine la lecture fichier (audit #3)', () => {
+  it('un fichier graphe hors racine légitime est REFUSÉ', async () => {
+    const { loadBrainGraph } = await import('./viz/fs-brains')
+    const outside = join(mkdtempSync(join(tmpdir(), 'evil-')), 'graph.json')
+    writeFileSync(outside, JSON.stringify({ nodes: [{ id: 'x' }], links: [] }), 'utf8')
+    expect(() => loadBrainGraph(outside)).toThrow(/hors périmètre/)
+    rmSync(outside)
+  })
 })

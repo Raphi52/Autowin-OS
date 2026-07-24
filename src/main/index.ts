@@ -733,7 +733,8 @@ function registerChatIpc(): void {
   ipcMain.handle('os:roles', () => os.roles.all())
   ipcMain.handle(
     'os:setRole',
-    (_e, role: Role, provider: string, model?: string, reasoningEffort?: string) => {
+    (event, role: Role, provider: string, model?: string, reasoningEffort?: string) => {
+      assertTrustedRendererSender(event, 'SetRole')
       const binding = os.setRole(role, {
         provider,
         model,
@@ -798,7 +799,8 @@ function registerChatIpc(): void {
     return probeProviderConnection(id as RoutedProvider)
   })
   ipcMain.handle('os:profiles:list', () => profiles.list())
-  ipcMain.handle('os:profiles:save', async (_event, profile: AutowinProfile) => {
+  ipcMain.handle('os:profiles:save', async (event, profile: AutowinProfile) => {
+    assertTrustedRendererSender(event, 'Profiles')
     await agentModelsReady
     const safe = {
       ...profile,
@@ -808,7 +810,8 @@ function registerChatIpc(): void {
     }
     return profiles.save(safe)
   })
-  ipcMain.handle('os:profiles:apply', async (_event, id: string) => {
+  ipcMain.handle('os:profiles:apply', async (event, id: string) => {
+    assertTrustedRendererSender(event, 'Profiles')
     await agentModelsReady
     const profile = profiles.list().find((item) => item.id === guardString(id, 'profile.id'))
     if (!profile) throw new Error('Profil introuvable')
@@ -831,7 +834,8 @@ function registerChatIpc(): void {
     await agentModelsReady
     return agentTopology
   })
-  ipcMain.handle('os:topology:set', async (_event, topology: AgentTopology) => {
+  ipcMain.handle('os:topology:set', async (event, topology: AgentTopology) => {
+    assertTrustedRendererSender(event, 'Topology')
     await agentModelsReady
     guardString(JSON.stringify(topology), 'topology')
     agentTopology = saveAgentTopology(agentTopologyPath, topology, agentModels)
@@ -931,7 +935,8 @@ function registerChatIpc(): void {
       guardString(rawBranchId, 'branchId')
     )
   })
-  ipcMain.handle('os:conversations:remove', async (_e, rawId: string) => {
+  ipcMain.handle('os:conversations:remove', async (event, rawId: string) => {
+    assertTrustedRendererSender(event, 'Conversations')
     const id = guardString(rawId, 'id')
     await activeChatTurns.abortAndWait(id, 'conversation-deleted')
     const removed = os.conversations.remove(id)
@@ -944,31 +949,37 @@ function registerChatIpc(): void {
 
   // --- Graphe brain 3D (données réelles disque) + workflow ---
   ipcMain.handle('os:listBrains', () => brainWorker.request('listBrains'))
-  ipcMain.handle('os:loadBrainGraphPreview', (_e, path: string, lod?: number) =>
-    brainWorker.request('loadPreview', guardString(path, 'path'), lod)
-  )
-  ipcMain.handle('os:loadBrainThemes', (_e, path: string) =>
-    brainWorker.request('loadThemes', guardString(path, 'path'))
-  )
-  ipcMain.handle('os:loadBrainThemeNodes', (_e, path: string, rawThemeIds: unknown) => {
+  ipcMain.handle('os:loadBrainGraphPreview', (event, path: string, lod?: number) => {
+    assertTrustedRendererSender(event, 'Brain')
+    return brainWorker.request('loadPreview', guardString(path, 'path'), lod)
+  })
+  ipcMain.handle('os:loadBrainThemes', (event, path: string) => {
+    assertTrustedRendererSender(event, 'Brain')
+    return brainWorker.request('loadThemes', guardString(path, 'path'))
+  })
+  ipcMain.handle('os:loadBrainThemeNodes', (event, path: string, rawThemeIds: unknown) => {
+    assertTrustedRendererSender(event, 'Brain')
     if (!Array.isArray(rawThemeIds) || rawThemeIds.length > 100)
       throw new Error('IPC themeIds: tableau borné attendu')
     const themeIds = rawThemeIds.map((themeId, index) => guardString(themeId, `themeIds[${index}]`))
     return brainWorker.request('loadThemeNodes', guardString(path, 'path'), themeIds)
   })
-  ipcMain.handle('os:loadBrainGraph', (_e, path: string, lod?: number, community?: number) =>
-    brainWorker.request('loadGraph', guardString(path, 'path'), lod, community)
-  )
-  ipcMain.handle('os:loadBrainNeighborhood', (_e, path: string, nodeId: string) =>
-    brainWorker.request(
+  ipcMain.handle('os:loadBrainGraph', (event, path: string, lod?: number, community?: number) => {
+    assertTrustedRendererSender(event, 'Brain')
+    return brainWorker.request('loadGraph', guardString(path, 'path'), lod, community)
+  })
+  ipcMain.handle('os:loadBrainNeighborhood', (event, path: string, nodeId: string) => {
+    assertTrustedRendererSender(event, 'Brain')
+    return brainWorker.request(
       'loadNeighborhood',
       guardString(path, 'path'),
       guardString(nodeId, 'nodeId')
     )
-  )
-  ipcMain.handle('os:readNodeFile', (_e, path: string) =>
-    brainWorker.request('readNodeFile', guardString(path, 'path'))
-  )
+  })
+  ipcMain.handle('os:readNodeFile', (event, path: string) => {
+    assertTrustedRendererSender(event, 'Brain')
+    return brainWorker.request('readNodeFile', guardString(path, 'path'))
+  })
   ipcMain.handle('os:searchBrain', (_e, path: string, query: string) =>
     brainWorker.request('searchBrain', guardString(path, 'path'), guardString(query, 'query'))
   )
@@ -1368,7 +1379,10 @@ function registerChatIpc(): void {
     return listConvRuns(convId, c?.runPaths ?? [])
   })
   // Fil des sous-agents d'un run (exec/juge/gate avec contenu), pour l'affichage détaillé.
-  ipcMain.handle('os:runTrace', (_e, path: string) => loadConvRunTrace(guardString(path, 'path')))
+  ipcMain.handle('os:runTrace', (event, path: string) => {
+    assertTrustedRendererSender(event, 'RunTrace')
+    return loadConvRunTrace(guardString(path, 'path'))
+  })
   // L'UI signale la conversation active → les orchestrations lancées s'y rattachent.
   ipcMain.handle('os:setActiveConversation', (_e, convId: string | null) => {
     bus.activeConversationId = convId ?? undefined
@@ -1487,7 +1501,8 @@ function registerChatIpc(): void {
   ipcMain.handle('os:activity:session', async (_e, meta) => parseSession(meta))
 
   // Affichage des screenshots consultés : whitelist extensions + cap taille, lecture seule.
-  ipcMain.handle('os:activity:image', async (_e, path: string) => {
+  ipcMain.handle('os:activity:image', async (event, path: string) => {
+    assertTrustedRendererSender(event, 'ActivityImage')
     const p = guardString(path, 'path')
     if (!/\.(png|jpe?g|webp|gif|bmp)$/i.test(p)) throw new Error('extension non autorisée')
     const { statSync, readFileSync } = await import('node:fs')

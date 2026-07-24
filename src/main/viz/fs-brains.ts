@@ -132,6 +132,18 @@ export function loadBrainGraph(path: string, lod = 300, community?: number): Viz
     if (requestedRoot !== allowedRoot) throw new Error('brain vault hors périmètre autorisé')
     return loadVaultBrainGraph(path, lod)
   }
+  // Confinement (défense en profondeur, audit sécu #3) : un graphe FICHIER doit vivre sous une racine
+  // de graphes légitime (defaultBrainRoots) ou le vault — sinon lecture de fichier arbitraire via IPC.
+  const realFile = realpathSync(resolve(path))
+  const underAllowedGraphRoot = [...defaultBrainRoots(), AMITEL_BRAIN_ROOT].some((root) => {
+    try {
+      const rel = relative(realpathSync(resolve(root)), realFile)
+      return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+    } catch {
+      return false
+    }
+  })
+  if (!underAllowedGraphRoot) throw new Error('graphe hors périmètre autorisé')
   if (statSync(path).size > MAX_GRAPH_BYTES) throw new Error('graphe trop volumineux à charger')
   const raw = JSON.parse(readFileSync(path, 'utf8')) as RawGraph
   let g = normalize(raw)
