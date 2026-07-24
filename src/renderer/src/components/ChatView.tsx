@@ -1022,7 +1022,8 @@ export function ChatView({
   async function steerWithoutInterrupt(index: number, text: string): Promise<void> {
     const id = activeRef.current
     if (!id) return
-    await window.api.injectDirective(id, text)
+    const result = await window.api.injectDirective(id, text)
+    if (!result.ok) return
     const q = queueRef.current.get(id) ?? []
     setConversationQueue(
       id,

@@ -182,6 +182,40 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(container!.querySelector('.agent-inbox')).toBeNull()
   })
 
+  it('conserve un message queued si Orienter échoue puis le retire après injection réussie', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const injectDirective = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({ ok: true })
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise),
+      injectDirective
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('lance un truc long')
+    await click('.composer-send')
+    await type('/btw message à conserver')
+    await click('.composer-send')
+    expect(container!.textContent).toContain('message à conserver')
+
+    await click('.directive-queue-steer')
+
+    expect(injectDirective).toHaveBeenCalledWith('A', 'message à conserver')
+    expect(container!.textContent).toContain('message à conserver')
+    expect(container!.querySelector('.directive-queue-item')).toBeTruthy()
+
+    await click('.directive-queue-steer')
+
+    expect(injectDirective).toHaveBeenCalledTimes(2)
+    expect(injectDirective).toHaveBeenLastCalledWith('A', 'message à conserver')
+    expect(container!.textContent).not.toContain('message à conserver')
+    expect(container!.querySelector('.directive-queue-item')).toBeNull()
+    await act(async () => pilot.resolve({ ok: true }))
+  })
+
   it('does not steal conversation B when creation from New resolves late', async () => {
     const creation = deferred<ReturnType<typeof conversation>>()
     const mockApi = api({

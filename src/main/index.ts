@@ -1191,6 +1191,7 @@ function registerChatIpc(): void {
     const conversationId = guardString(rawConversationId, 'conversationId')
     const directive = guardString(rawDirective, 'directive').trim()
     if (!directive) return { ok: false }
+    if (!activeChatTurns.get(conversationId)) return { ok: false }
     const queued = pendingDirectives.get(conversationId) ?? []
     queued.push(directive)
     pendingDirectives.set(conversationId, queued)
