@@ -498,8 +498,15 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       <header className="tickets-head">
         <ModuleHeader eyebrow="Travail synchronisé" title="Tickets" />
         <div className="tickets-source-controls">
-          <label>
-            <span>Source</span>
+          <label className="tickets-source-pill">
+            <span className="tickets-source-eyebrow">Source</span>
+            <span className="tickets-source-provider" aria-hidden="true">
+              {selectedSource?.provider === 'github'
+                ? ''
+                : selectedSource?.provider === 'gitlab'
+                  ? '🦊'
+                  : '◆'}
+            </span>
             <select
               aria-label="Source de tickets"
               data-testid="tickets-source"
@@ -513,8 +520,15 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
               ))}
             </select>
           </label>
-          <button type="button" onClick={() => setShowSourceForm((visible) => !visible)}>
-            {showSourceForm ? 'Fermer' : 'Ajouter une source'}
+          <button
+            type="button"
+            className="tickets-source-add"
+            title={showSourceForm ? 'Fermer le formulaire' : 'Ajouter une source'}
+            aria-label={showSourceForm ? 'Fermer le formulaire' : 'Ajouter une source'}
+            aria-expanded={showSourceForm}
+            onClick={() => setShowSourceForm((visible) => !visible)}
+          >
+            {showSourceForm ? '✕' : '＋ Source'}
           </button>
         </div>
       </header>

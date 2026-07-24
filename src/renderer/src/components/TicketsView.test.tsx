@@ -255,8 +255,8 @@ describe('vue Tickets', () => {
 
     await act(async () => {
       container.querySelector('button') as HTMLButtonElement
-      const add = [...container.querySelectorAll('button')].find(
-        (button) => button.textContent === 'Ajouter une source'
+      const add = container.querySelector(
+        '[aria-label="Ajouter une source"]'
       ) as HTMLButtonElement
       add.click()
     })
@@ -584,8 +584,8 @@ describe('vue Tickets', () => {
     api()
     const { root, container } = await render()
     await act(async () => {
-      const add = [...container.querySelectorAll('button')].find(
-        (button) => button.textContent === 'Ajouter une source'
+      const add = container.querySelector(
+        '[aria-label="Ajouter une source"]'
       ) as HTMLButtonElement
       add.click()
     })

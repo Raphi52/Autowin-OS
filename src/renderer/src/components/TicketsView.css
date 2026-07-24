@@ -38,7 +38,6 @@
 }
 
 .tickets-source-controls,
-.tickets-source-controls label,
 .tickets-toolbar,
 .tickets-source-form {
   display: flex;
@@ -46,16 +45,55 @@
   gap: 8px;
 }
 
-.tickets-source-controls label {
-  align-items: flex-start;
-  flex-direction: column;
-  gap: 3px;
+/* Bloc source = UNE pilule intégrée (eyebrow + puce provider + select sans chrome), + bouton ghost. */
+.tickets-source-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 14px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--gold) 30%, var(--container-border));
+  background: color-mix(in srgb, var(--gold) 6%, var(--surface-card));
 }
-.tickets-source-controls label > span {
-  color: var(--text-dim);
-  font-size: 10px;
+.tickets-source-eyebrow {
+  color: var(--text-faint);
+  font-size: 9px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.11em;
+}
+.tickets-source-provider {
+  color: var(--gold);
+  font-size: 12px;
+  line-height: 1;
+}
+.tickets-source-pill select {
+  border: none;
+  background: transparent;
+  padding: 2px 4px;
+  min-height: 0;
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+.tickets-source-pill:focus-within {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 22%, transparent);
+}
+.tickets-source-pill select:focus-visible {
+  outline: none;
+}
+.tickets-source-add {
+  min-height: 34px;
+  padding: 7px 13px;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.tickets-source-add:hover {
+  color: var(--gold);
+  border-color: color-mix(in srgb, var(--gold) 55%, var(--container-border)) !important;
 }
 
 .tickets-view button,
