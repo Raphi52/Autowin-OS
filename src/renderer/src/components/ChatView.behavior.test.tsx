@@ -56,6 +56,7 @@ function api(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     pilotChat: vi.fn().mockResolvedValue({ ok: true }),
     markResponseDisplayed: vi.fn().mockResolvedValue(undefined),
     cancelPilotChat: vi.fn().mockResolvedValue(undefined),
+    cancelOrchestration: vi.fn().mockResolvedValue(undefined),
     ...overrides
   }
 }
@@ -180,6 +181,70 @@ describe('ChatView behavior under concurrent UI actions', () => {
     })
     // Tour fini → l'inbox se vide.
     expect(container!.querySelector('.agent-inbox')).toBeNull()
+  })
+
+  it('keeps B active when an orchestration starts on A and exposes A in the inbox', async () => {
+    let appHandler: ((event: Record<string, unknown>) => void) | undefined
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('B')]),
+      onAppEvent: vi.fn((cb: (event: Record<string, unknown>) => void) => {
+        appHandler = cb
+        return vi.fn()
+      })
+    })
+    await mount(mockApi)
+    const picks = container!.querySelectorAll('.conv-pick')
+    await act(async () => (picks[1] as HTMLElement).click())
+
+    await act(async () => {
+      appHandler?.({
+        type: 'orchestrate-start',
+        convId: 'A',
+        runPath: 'run-A',
+        task: 'travail A'
+      })
+    })
+
+    expect(
+      container!.querySelector('.chat-layout')?.getAttribute('data-active-conversation-id')
+    ).toBe('B')
+    expect(container!.querySelector('.agent-inbox')?.textContent).toContain('Conversation A')
+  })
+
+  it('stops from Workflows the orchestration belonging to the displayed conversation', async () => {
+    let appHandler: ((event: Record<string, unknown>) => void) | undefined
+    const cancelOrchestration = vi.fn().mockResolvedValue(undefined)
+    const cancelPilotChat = vi.fn().mockResolvedValue(undefined)
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('B')]),
+      cancelOrchestration,
+      cancelPilotChat,
+      onAppEvent: vi.fn((cb: (event: Record<string, unknown>) => void) => {
+        appHandler = cb
+        return vi.fn()
+      })
+    })
+    await mount(mockApi)
+    const picks = container!.querySelectorAll('.conv-pick')
+    await act(async () => (picks[1] as HTMLElement).click())
+    await act(async () => {
+      appHandler?.({
+        type: 'orchestrate-start',
+        convId: 'A',
+        runPath: 'run-A',
+        task: 'travail A'
+      })
+    })
+    await act(async () => {
+      ;(container!.querySelector('.agent-inbox-row') as HTMLButtonElement).click()
+    })
+    await click('button[title="Workflows (RUN.md)"]')
+
+    await click('button[title="Stopper le sous-agent en cours"]')
+
+    expect(cancelOrchestration).toHaveBeenCalledOnce()
+    expect(cancelOrchestration).toHaveBeenCalledWith('A')
+    expect(cancelPilotChat).not.toHaveBeenCalled()
   })
 
   it('does not steal conversation B when creation from New resolves late', async () => {
