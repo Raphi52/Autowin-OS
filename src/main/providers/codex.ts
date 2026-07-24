@@ -277,24 +277,27 @@ function escapeAttribute(value: string): string {
 }
 
 /**
- * Clampe l'effort d'Autowin (none|minimal|low|medium|high|xhigh|max|ultra) vers le set accepté par la
- * Responses API codex (low|medium|high). Un effort maison (ultra/xhigh/max) envoyé BRUT → HTTP 400.
- * `none`/absent → undefined (on omet `reasoning`).
+ * Efforts RÉELLEMENT acceptés par l'endpoint /responses codex — VÉRIFIÉ EN LIVE (2026-07-24) :
+ * low/medium/high/xhigh/max → 200 ; minimal & ultra → 400 ; none → omettre `reasoning`.
  */
-export function codexApiEffort(effort: string | undefined): 'low' | 'medium' | 'high' | undefined {
-  switch (effort) {
-    case undefined:
-    case '':
-    case 'none':
-      return undefined
-    case 'minimal':
-    case 'low':
-      return 'low'
-    case 'medium':
-      return 'medium'
-    default: // high, xhigh, max, ultra, ou inconnu → borne haute VALIDE
-      return 'high'
-  }
+export const CODEX_VALID_EFFORTS: ReadonlySet<string> = new Set([
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max'
+])
+
+/**
+ * Clampe l'effort d'Autowin vers le set accepté par la Responses API codex (cf. CODEX_VALID_EFFORTS).
+ * `minimal`→`low` et `ultra`→`max` (les deux seuls rejetés en 400 ; on prend le voisin valide le plus
+ * proche pour préserver l'intention). `none`/absent → undefined (on omet `reasoning`).
+ */
+export function codexApiEffort(effort: string | undefined): string | undefined {
+  if (!effort || effort === 'none') return undefined
+  if (effort === 'minimal') return 'low'
+  if (effort === 'ultra') return 'max'
+  return CODEX_VALID_EFFORTS.has(effort) ? effort : 'high'
 }
 
 export function codexContent(message: Message): Array<Record<string, string>> {

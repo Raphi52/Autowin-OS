@@ -94,10 +94,11 @@ describe('catalogue Agents dynamique', () => {
       'claude-fable-5',
       'kimi-code/kimi-for-coding'
     ])
+    // 'ultra' est filtré (400 sur /responses) → seul 'low' reste. Non-régression du fix HTTP 400.
     expect(models[0]).toMatchObject({
       id: 'codex/gpt-5.6-sol',
       label: 'GPT-5.6-Sol · ChatGPT',
-      reasoningEfforts: ['low', 'ultra'],
+      reasoningEfforts: ['low'],
       defaultReasoningEffort: 'low'
     })
   })
