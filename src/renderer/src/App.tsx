@@ -5,6 +5,7 @@ import { PreflightBanner } from './components/PreflightBanner'
 import { FirstRunWizard } from './components/FirstRunWizard'
 import { ObservatoryView } from './components/ObservatoryView'
 import { WorktreeView } from './components/WorktreeView'
+import { TicketsView } from './components/TicketsView'
 import { AgentStudioView } from './components/AgentStudioView'
 import { KnowledgeView } from './components/KnowledgeView'
 import { SettingsView } from './components/SettingsView'
@@ -172,7 +173,7 @@ export function MainApp(): React.JSX.Element {
     [activateTab, navigationOrigin]
   )
 
-  // #11 — raccourcis clavier : Ctrl/Cmd+1..6 changent d'onglet, Ctrl/Cmd+K focalise la recherche de
+  // #11 — raccourcis clavier : Ctrl/Cmd+1..7 changent d'onglet, Ctrl/Cmd+K focalise la recherche de
   // conversation (best-effort : ne fait rien si le champ n'est pas monté). N'interfère pas avec le
   // zoom (Ctrl+0/±) ni la saisie (on ignore Alt).
   useEffect(() => {
@@ -345,6 +346,11 @@ export function MainApp(): React.JSX.Element {
         {visitedTabs.has('worktree') && (
           <div className={`view-slot${tab === 'worktree' ? ' is-active' : ''}`}>
             <WorktreeView active={tab === 'worktree'} />
+          </div>
+        )}
+        {visitedTabs.has('tickets') && (
+          <div className={`view-slot${tab === 'tickets' ? ' is-active' : ''}`}>
+            <TicketsView active={tab === 'tickets'} />
           </div>
         )}
         {visitedTabs.has('settings') && (

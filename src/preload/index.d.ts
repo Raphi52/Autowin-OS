@@ -280,8 +280,20 @@ interface ChatApi {
   getPreflight: () => Promise<PreflightResult | null>
   recheckPreflight: (force?: boolean) => Promise<PreflightResult>
   getGitState: (repoPath?: string) => Promise<import('../shared/git-read').GitReadResult>
-  getGitDiff: (path: string, repoPath?: string) => Promise<import('../shared/git-read').GitDiffResult>
+  getGitDiff: (
+    path: string,
+    repoPath?: string
+  ) => Promise<import('../shared/git-read').GitDiffResult>
   pickGitRepo: () => Promise<string | null>
+  ticketSources: () => Promise<import('../shared/tickets').TicketSourceSummary[]>
+  saveTicketSource: (
+    profile: import('../shared/tickets').TicketSourceProfile
+  ) => Promise<import('../shared/tickets').TicketSourceSummary[]>
+  listTickets: (
+    request: import('../shared/tickets').TicketListRequest
+  ) => Promise<import('../shared/tickets').TicketPage>
+  cancelTickets: (requestId: string) => Promise<boolean>
+  installTicketsProofFixture: (fixture: unknown) => Promise<boolean>
   getWorktreeActivity: () => Promise<WorktreeAgentActivity[]>
   getWorktreeStatus: () => Promise<WorktreeRuntimeStatus>
   onWorktreeActivity: (cb: (activity: WorktreeAgentActivity[]) => void) => () => void
