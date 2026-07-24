@@ -18,6 +18,7 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
   - resources/**
+  - node_modules/@napi-rs/keyring-*/**
 win:
   executableName: autowin-os
   icon: build/icon.ico

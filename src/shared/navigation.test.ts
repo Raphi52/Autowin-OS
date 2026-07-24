@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { APP_DESTINATIONS, normalizeDestination, resolveAppLocation } from './navigation'
 
 describe('registre canonique des destinations Autowin', () => {
-  it('expose exactement les six domaines produit décidés', () => {
+  it('expose exactement les sept domaines produit décidés', () => {
     expect(APP_DESTINATIONS.map(({ id }) => id)).toEqual([
       'chat',
       'agent-studio',
       'knowledge',
       'observatory',
       'worktree',
+      'tickets',
       'settings'
     ])
   })
