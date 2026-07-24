@@ -59,6 +59,56 @@ class CapturingProvider implements ProviderAdapter {
 }
 
 describe('Orchestrator execution contract', () => {
+  it('transmet le signal du run parent au sous-agent et son abort interrompt son appel', async () => {
+    const controller = new AbortController()
+    let receivedSignal: AbortSignal | undefined
+    let subagentStarted!: () => void
+    const started = new Promise<void>((resolve) => {
+      subagentStarted = resolve
+    })
+    const provider: ProviderAdapter = {
+      id: 'abort-capture',
+      supportsExecution: true,
+      auth: async () => true,
+      async *send(_messages, options: SendOptions = {}) {
+        receivedSignal = options.signal
+        subagentStarted()
+        await new Promise<never>((_resolve, reject) => {
+          options.signal?.addEventListener('abort', () => reject(new Error('parent aborted')), {
+            once: true
+          })
+        })
+        throw new Error('unreachable')
+      }
+    }
+    const orchestrator = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      authority: new AuthoritySas(),
+      executionWorkspace: 'C:\\workspace'
+    })
+
+    const run = orchestrator.run(
+      'analyse le projet, ne modifie rien',
+      undefined,
+      undefined,
+      undefined,
+      controller.signal
+    )
+    await started
+    expect(receivedSignal).toBe(controller.signal)
+
+    controller.abort()
+
+    await expect(run).rejects.toThrow('parent aborted')
+    expect(receivedSignal?.aborted).toBe(true)
+  })
+
   it('donne l’écriture au sous-agent et une lecture outillée distincte au juge', async () => {
     const provider = new CapturingProvider()
     const registry = new ProviderRegistry().register(provider)

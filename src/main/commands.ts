@@ -602,7 +602,7 @@ export class AppCommandBus {
           this.broadcast({ type: 'refresh', scope: 'workflows' })
           throw e
         } finally {
-          this.activeOrchestrations.delete(convId)
+          this.clearOrchestration(convId, abortController)
         }
       }
       case 'create_conversation': {

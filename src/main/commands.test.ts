@@ -46,6 +46,60 @@ function fakeOs(): any {
 }
 
 describe('AppCommandBus orchestration cancel (#2)', () => {
+  it('le finally d’un ancien chemin bus ne désarme pas Stop pour le nouveau run', async () => {
+    type RunResult = {
+      gateBlocked: boolean
+      gateReasons: string[]
+      valid: boolean
+      costUsd: number
+      result: string
+      phaseOutputs: []
+    }
+    const deferred = () => {
+      let resolve!: (value: RunResult) => void
+      const promise = new Promise<RunResult>((done) => {
+        resolve = done
+      })
+      return { promise, resolve }
+    }
+    const first = deferred()
+    const second = deferred()
+    const signals: AbortSignal[] = []
+    const os = fakeOs()
+    os.runTask = (_task: string, ...args: unknown[]) => {
+      signals.push(args.at(-1) as AbortSignal)
+      return signals.length === 1 ? first.promise : second.promise
+    }
+    const bus = new AppCommandBus(os, () => {})
+
+    const oldRun = bus.exec('orchestrate', { task: 'ancien' }, 'conv-1', 'auto')
+    const newRun = bus.exec('orchestrate', { task: 'nouveau' }, 'conv-1', 'auto')
+    expect(signals).toHaveLength(2)
+
+    first.resolve({
+      gateBlocked: false,
+      gateReasons: [],
+      valid: true,
+      costUsd: 0,
+      result: '',
+      phaseOutputs: []
+    })
+    await oldRun
+
+    expect(bus.abortOrchestration('conv-1')).toBe(true)
+    expect(signals[1].aborted).toBe(true)
+
+    second.resolve({
+      gateBlocked: false,
+      gateReasons: [],
+      valid: true,
+      costUsd: 0,
+      result: '',
+      phaseOutputs: []
+    })
+    await newRun
+  })
+
   it('register → abort coupe le signal ; clear le retire (le chemin direct devient stoppable)', () => {
     const bus = new AppCommandBus(fakeOs(), () => {})
     // Avant : aucune orchestration → abort est un no-op honnête.
