@@ -2060,22 +2060,9 @@ export function ChatView({
                         {liveRuns[activeId].task}
                       </span>
                     </div>
-                    <div className="row gap2">
-                      <span className="badge">
-                        {liveRuns[activeId].status === 'running'
-                          ? 'en cours'
-                          : liveRuns[activeId].status}
-                      </span>
-                      {liveRuns[activeId].status === 'running' && (
-                        <button
-                          className="btn btn-sm btn-danger"
-                          title="Stopper le sous-agent en cours"
-                          onClick={() => void window.api.cancelOrchestration(activeId)}
-                        >
-                          ⏹ Stop
-                        </button>
-                      )}
-                    </div>
+                    {liveRuns[activeId].status !== 'running' && (
+                      <span className="badge">{liveRuns[activeId].status}</span>
+                    )}
                   </div>
                   <div style={{ marginTop: 'var(--s2)' }}>
                     <StepThread steps={liveRuns[activeId].steps} />
@@ -2104,15 +2091,34 @@ export function ChatView({
                           ? `${shortModel}${eff ? ` · ${eff}` : ''}`
                           : phase?.provider
                         return (
-                          <div className="c-faint" style={{ fontSize: 11, marginTop: 4 }}>
-                            <span className="spinner" /> {meta?.icon ?? '⏳'} {label}
-                            {detail && <span className="mono c-accent"> {detail}</span>} en cours…
+                          <div className="subagent-step live-subagent-step">
+                            <div
+                              className="row gap2"
+                              style={{ justifyContent: 'space-between', fontSize: 11 }}
+                            >
+                              <span className="c-faint">
+                                <span className="spinner" /> {meta?.icon ?? '⏳'} {label}
+                                {detail && <span className="mono c-accent"> {detail}</span>}
+                              </span>
+                              <span className="row gap2">
+                                <span className="badge">en cours</span>
+                                <button
+                                  className="btn btn-sm btn-danger"
+                                  title="Stopper le sous-agent en cours"
+                                  onClick={() => void window.api.cancelOrchestration(activeId)}
+                                >
+                                  ⏹ Stop
+                                </button>
+                              </span>
+                            </div>
+                            {liveRuns[activeId].liveText && (
+                              <pre className="subagent-live-text">
+                                {liveRuns[activeId].liveText}
+                              </pre>
+                            )}
                           </div>
                         )
                       })()}
-                    {liveRuns[activeId].status === 'running' && liveRuns[activeId].liveText && (
-                      <pre className="subagent-live-text">{liveRuns[activeId].liveText}</pre>
-                    )}
                   </div>
                 </div>
               )}

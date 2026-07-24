@@ -240,7 +240,12 @@ describe('ChatView behavior under concurrent UI actions', () => {
     })
     await click('button[title="Workflows (RUN.md)"]')
 
-    await click('button[title="Stopper le sous-agent en cours"]')
+    const liveSubagentCard = container!.querySelector('.live-run .subagent-step')
+    expect(liveSubagentCard?.textContent).toContain('en cours')
+    const stopButton = liveSubagentCard?.querySelector(
+      'button[title="Stopper le sous-agent en cours"]'
+    ) as HTMLButtonElement
+    await act(async () => stopButton.click())
 
     expect(cancelOrchestration).toHaveBeenCalledOnce()
     expect(cancelOrchestration).toHaveBeenCalledWith('A')
