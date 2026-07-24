@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import type { TicketSourceProfile } from '../shared/tickets'
+import { isSafeForgeHost, type TicketSourceProfile } from '../shared/tickets'
 import { parseTicketCredential } from './ticket-credential-store'
 import type { TicketRuntimeCredential } from './tickets-service'
 
@@ -90,13 +90,16 @@ function configuredHost(value: string | undefined): string | undefined {
 }
 
 function providerHost(source: TicketSourceProfile): string {
+  let host: string
   if (source.provider === 'github') {
-    return source.apiBaseUrl ? new URL(source.apiBaseUrl).host : 'github.com'
+    host = source.apiBaseUrl ? new URL(source.apiBaseUrl).host : 'github.com'
+  } else if (source.provider === 'gitlab') {
+    host = source.baseUrl ? new URL(source.baseUrl).host : 'gitlab.com'
+  } else {
+    throw new Error('Source forge requise')
   }
-  if (source.provider === 'gitlab') {
-    return source.baseUrl ? new URL(source.baseUrl).host : 'gitlab.com'
-  }
-  throw new Error('Source forge requise')
+  if (!isSafeForgeHost(host)) throw new Error('Hôte forge invalide')
+  return host
 }
 
 export async function loadForgeCliToken(
@@ -105,17 +108,17 @@ export async function loadForgeCliToken(
   environment: Readonly<Record<string, string | undefined>> = process.env
 ): Promise<TicketRuntimeCredential | null> {
   if (source.provider === 'azure') return null
-  const configured = environmentToken(source, environment)
-  if (configured) {
-    return { token: parseTicketCredential(configured), authScheme: 'bearer' }
-  }
-  const executable = source.provider === 'github' ? 'gh' : 'glab'
-  const hostname = providerHost(source)
-  const args =
-    source.provider === 'github'
-      ? ['auth', 'token', '--hostname', hostname]
-      : ['config', 'get', 'token', '--host', hostname, '--global']
   try {
+    const configured = environmentToken(source, environment)
+    if (configured) {
+      return { token: parseTicketCredential(configured), authScheme: 'bearer' }
+    }
+    const executable = source.provider === 'github' ? 'gh' : 'glab'
+    const hostname = providerHost(source)
+    const args =
+      source.provider === 'github'
+        ? ['auth', 'token', '--hostname', hostname]
+        : ['config', 'get', 'token', '--host', hostname, '--global']
     const result = await runner(executable, args)
     return { token: parseTicketCredential(result.stdout.trim()), authScheme: 'bearer' }
   } catch {

@@ -200,4 +200,15 @@ describe('credentials runtime des forges', () => {
       '--global'
     ])
   })
+
+  it('ne transmet jamais un hôte contenant des métacaractères au runner CLI', async () => {
+    const runner = vi.fn()
+    await expect(
+      loadForgeCliToken({ ...github, apiBaseUrl: 'https://foo&ver' }, runner, {})
+    ).resolves.toBeNull()
+    await expect(
+      loadForgeCliToken({ ...gitlab, baseUrl: 'https://foo|whoami' }, runner, {})
+    ).resolves.toBeNull()
+    expect(runner).not.toHaveBeenCalled()
+  })
 })

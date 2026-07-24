@@ -102,6 +102,29 @@ function isOptionalSafeText(value: unknown): value is string | undefined {
   return value === undefined || isSafeText(value)
 }
 
+/** Hôte sûr à transmettre comme argument aux CLI forge, port optionnel inclus. */
+export function isSafeForgeHost(host: string): boolean {
+  const ipv6 = host.match(/^\[([0-9a-f:.]+)\](?::(\d{1,5}))?$/i)
+  if (ipv6) {
+    return !ipv6[2] || Number(ipv6[2]) <= 65_535
+  }
+  const separator = host.lastIndexOf(':')
+  const hostname = separator === -1 ? host : host.slice(0, separator)
+  const port = separator === -1 ? undefined : host.slice(separator + 1)
+  if (port && (!/^\d{1,5}$/.test(port) || Number(port) > 65_535)) return false
+  const normalized = hostname.endsWith('.') ? hostname.slice(0, -1) : hostname
+  return (
+    normalized.length > 0 &&
+    normalized.length <= 253 &&
+    normalized.split('.').every(
+      (label) =>
+        label.length > 0 &&
+        label.length <= 63 &&
+        /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(label)
+    )
+  )
+}
+
 function isSafeHttpsUrl(value: unknown): value is string | undefined {
   if (value === undefined) return true
   if (!isSafeText(value, 2048)) return false
@@ -111,6 +134,7 @@ function isSafeHttpsUrl(value: unknown): value is string | undefined {
       parsed.protocol === 'https:' &&
       parsed.username === '' &&
       parsed.password === '' &&
+      isSafeForgeHost(parsed.host) &&
       parsed.search === '' &&
       parsed.hash === ''
     )

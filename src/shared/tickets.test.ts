@@ -68,6 +68,21 @@ describe('contrat partagé Tickets', () => {
     ).toBeNull()
   })
 
+  it('rejette les métacaractères de shell dans les hôtes de forge', () => {
+    for (const hostname of ['foo&ver', 'foo&&whoami', 'foo%PATH%', 'foo|whoami', 'foo^bar']) {
+      expect(
+        parseTicketSourceProfile({
+          id: `github:${hostname}`,
+          label: hostname,
+          provider: 'github',
+          owner: 'owner',
+          repository: 'repo',
+          apiBaseUrl: `https://${hostname}`
+        })
+      ).toBeNull()
+    }
+  })
+
   it('conserve les types et états distants sans allowlist', () => {
     const items: TicketItem[] = [
       {
