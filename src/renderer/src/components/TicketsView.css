@@ -5,7 +5,7 @@
   min-height: 0;
   overflow: hidden;
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
   gap: 12px;
   padding: 16px 18px;
   border: 1px solid color-mix(in srgb, var(--rose) 36%, var(--container-border));
@@ -137,6 +137,36 @@
   padding: 7px 10px;
 }
 
+.tickets-process-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.tickets-process-controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tickets-process-controls input {
+  width: 76px;
+  min-height: 34px;
+  padding: 7px 10px;
+}
+.tickets-process-controls button {
+  min-height: 34px;
+  padding: 7px 14px;
+}
+.tickets-process-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.tickets-process-error {
+  color: var(--warn);
+}
+
 .tickets-content {
   min-width: 0;
   min-height: 0;
@@ -240,6 +270,18 @@
   gap: 5px 10px;
   padding: 10px;
   text-align: left;
+}
+
+.ticket-select-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+.ticket-select-row > input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--rose);
 }
 
 .tickets-list [data-testid='ticket-row'].is-selected {

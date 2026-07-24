@@ -53,12 +53,15 @@ function api(overrides: Record<string, unknown> = {}): void {
   })
 }
 
-async function render(active = true): Promise<{ root: Root; container: HTMLElement }> {
+async function render(
+  active = true,
+  onProcessTickets?: (tickets: TicketItem[]) => void
+): Promise<{ root: Root; container: HTMLElement }> {
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
   await act(async () => {
-    root.render(createElement(TicketsView, { active }))
+    root.render(createElement(TicketsView, { active, onProcessTickets }))
     await Promise.resolve()
     await Promise.resolve()
   })
@@ -73,6 +76,97 @@ describe('vue Tickets', () => {
     document.body.replaceChildren()
     localStorage.clear()
     vi.restoreAllMocks()
+  })
+
+  it('refuse le traitement quand aucun ticket n’est coché', async () => {
+    api()
+    const onProcessTickets = vi.fn()
+    const { root, container } = await render(true, onProcessTickets)
+    const process = container.querySelector('[data-testid="tickets-process"]') as HTMLButtonElement
+
+    expect(process.disabled).toBe(true)
+    expect(container.querySelector('[data-testid="tickets-process-error"]')?.textContent).toContain(
+      'au moins un ticket'
+    )
+    await act(async () => process.click())
+    expect(onProcessTickets).not.toHaveBeenCalled()
+    await act(async () => root.unmount())
+  })
+
+  it.each([
+    ['', 'obligatoire'],
+    ['0', 'supérieur à zéro'],
+    ['-1', 'supérieur à zéro'],
+    ['3', 'supérieur au nombre']
+  ])('refuse la limite %j avec un message explicite', async (value, expectedMessage) => {
+    api()
+    const onProcessTickets = vi.fn()
+    const { root, container } = await render(true, onProcessTickets)
+    const checks = container.querySelectorAll<HTMLInputElement>(
+      '[data-testid="ticket-process-checkbox"]'
+    )
+    await act(async () => {
+      checks[0].click()
+      checks[2].click()
+    })
+    const limit = container.querySelector(
+      '[aria-label="Nombre de tickets à traiter"]'
+    ) as HTMLInputElement
+    const process = container.querySelector('[data-testid="tickets-process"]') as HTMLButtonElement
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(limit, value)
+      limit.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(process.disabled).toBe(true)
+    expect(container.querySelector('[data-testid="tickets-process-error"]')?.textContent).toContain(
+      expectedMessage
+    )
+    await act(async () => process.click())
+    expect(onProcessTickets).not.toHaveBeenCalled()
+    await act(async () => root.unmount())
+  })
+
+  it('borne la sélection et transmet seulement les tickets cochés dans l’ordre visible', async () => {
+    api()
+    const onProcessTickets = vi.fn()
+    const { root, container } = await render(true, onProcessTickets)
+    const checks = container.querySelectorAll<HTMLInputElement>(
+      '[data-testid="ticket-process-checkbox"]'
+    )
+    await act(async () => {
+      checks[2].click()
+      checks[0].click()
+    })
+    const limit = container.querySelector(
+      '[aria-label="Nombre de tickets à traiter"]'
+    ) as HTMLInputElement
+    const process = container.querySelector('[data-testid="tickets-process"]') as HTMLButtonElement
+    const setLimit = (value: string): void => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(limit, value)
+      limit.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+
+    await act(async () => {
+      setLimit('1')
+    })
+    expect(process.disabled).toBe(false)
+    await act(async () => process.click())
+    expect(onProcessTickets).toHaveBeenCalledWith([expect.objectContaining({ id: '1' })])
+
+    await act(async () => {
+      setLimit('2')
+    })
+    expect(process.disabled).toBe(false)
+    await act(async () => process.click())
+    expect(onProcessTickets).toHaveBeenLastCalledWith([
+      expect.objectContaining({ id: '1' }),
+      expect.objectContaining({ id: '3' })
+    ])
+    expect(onProcessTickets.mock.calls.flatMap(([tickets]) => tickets)).not.toContainEqual(
+      expect.objectContaining({ id: '2' })
+    )
+    await act(async () => root.unmount())
   })
 
   it('affiche RigApplication, tous les types et le détail sélectionné', async () => {
@@ -126,7 +220,9 @@ describe('vue Tickets', () => {
   })
 
   it('ne relance pas de lecture si une sauvegarde se termine après désactivation', async () => {
-    let resolveSave!: (sources: Array<{ profile: GitHubTicketSource; credentialConfigured: boolean }>) => void
+    let resolveSave!: (
+      sources: Array<{ profile: GitHubTicketSource; credentialConfigured: boolean }>
+    ) => void
     const saveTicketSource = vi.fn(
       () =>
         new Promise<Array<{ profile: GitHubTicketSource; credentialConfigured: boolean }>>(
@@ -140,7 +236,7 @@ describe('vue Tickets', () => {
     const { root, container } = await render()
 
     await act(async () => {
-      ;(container.querySelector('button') as HTMLButtonElement)
+      container.querySelector('button') as HTMLButtonElement
       const add = [...container.querySelectorAll('button')].find(
         (button) => button.textContent === 'Ajouter une source'
       ) as HTMLButtonElement
@@ -152,7 +248,9 @@ describe('vue Tickets', () => {
       provider.dispatchEvent(new Event('change', { bubbles: true }))
     })
     await act(async () => {
-      const owner = container.querySelector('[aria-label="Propriétaire GitHub"]') as HTMLInputElement
+      const owner = container.querySelector(
+        '[aria-label="Propriétaire GitHub"]'
+      ) as HTMLInputElement
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
         owner,
         'openai'

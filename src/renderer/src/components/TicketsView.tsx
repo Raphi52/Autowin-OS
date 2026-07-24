@@ -90,12 +90,20 @@ function sourceFromDraft(draft: SourceDraft): TicketSourceProfile | null {
   }
 }
 
-export function TicketsView({ active }: { active: boolean }): React.JSX.Element {
+export function TicketsView({
+  active,
+  onProcessTickets
+}: {
+  active: boolean
+  onProcessTickets?: (tickets: TicketItem[]) => void
+}): React.JSX.Element {
   const [sources, setSources] = useState<TicketSourceSummary[]>([])
   const [sourcesLoaded, setSourcesLoaded] = useState(false)
   const [sourceId, setSourceId] = useState(() => localStorage.getItem(SOURCE_KEY) ?? '')
   const [items, setItems] = useState<TicketItem[]>([])
   const [selectedId, setSelectedId] = useState<string>()
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set())
+  const [processLimit, setProcessLimit] = useState('')
   const [cursor, setCursor] = useState<string>()
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -126,13 +134,14 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       if (!activeRef.current) return
       const previousSource = activeSourceRef.current
       const sourceChanged =
-        previousSource !== undefined &&
-        JSON.stringify(previousSource) !== JSON.stringify(source)
+        previousSource !== undefined && JSON.stringify(previousSource) !== JSON.stringify(source)
       activeSourceRef.current = source
       if (sourceChanged) {
         itemsRef.current = []
         setItems([])
         setSelectedId(undefined)
+        setCheckedIds(new Set())
+        setProcessLimit('')
         setCursor(undefined)
         setHasMore(false)
         setStale(false)
@@ -219,6 +228,8 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     itemsRef.current = []
     setItems([])
     setSelectedId(undefined)
+    setCheckedIds(new Set())
+    setProcessLimit('')
     setCursor(undefined)
     setHasMore(false)
     setStale(false)
@@ -288,6 +299,32 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   }, [items, query, stateFilter, typeFilter])
   const selectedItem =
     visibleItems.find((item) => `${item.sourceId}::${item.id}` === selectedId) ?? visibleItems[0]
+  const checkedVisibleItems = visibleItems.filter((item) =>
+    checkedIds.has(`${item.sourceId}::${item.id}`)
+  )
+  const parsedProcessLimit = Number(processLimit)
+  const processError =
+    checkedVisibleItems.length === 0
+      ? 'Coche au moins un ticket à traiter.'
+      : processLimit.trim() === ''
+        ? 'Le nombre de tickets à traiter est obligatoire.'
+        : !Number.isInteger(parsedProcessLimit) || parsedProcessLimit <= 0
+          ? 'Le nombre de tickets à traiter doit être un entier supérieur à zéro.'
+          : parsedProcessLimit > checkedVisibleItems.length
+            ? 'Le nombre demandé est supérieur au nombre de tickets cochés.'
+            : undefined
+  const toggleChecked = (identity: string): void => {
+    setCheckedIds((current) => {
+      const next = new Set(current)
+      if (next.has(identity)) next.delete(identity)
+      else next.add(identity)
+      return next
+    })
+  }
+  const processTickets = (): void => {
+    if (processError || !onProcessTickets) return
+    onProcessTickets(checkedVisibleItems.slice(0, parsedProcessLimit))
+  }
 
   // Traitement par lot : chaque ticket VISIBLE (après recherche de ton nom/filtres) est prompté dans
   // SA propre conversation dédiée. Concurrency bornée (moteur), annulable. ⚠️ lance N runs d'agent.
@@ -546,6 +583,38 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         )}
       </div>
 
+      <div className="tickets-process-controls">
+        <label>
+          <span>Tickets à traiter</span>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            aria-label="Nombre de tickets à traiter"
+            value={processLimit}
+            onChange={(event) => setProcessLimit(event.target.value)}
+          />
+        </label>
+        <span>{checkedVisibleItems.length} coché(s) visible(s)</span>
+        <button
+          data-testid="tickets-process"
+          type="button"
+          disabled={Boolean(processError) || !onProcessTickets}
+          onClick={processTickets}
+        >
+          Traiter
+        </button>
+        {processError && (
+          <span
+            className="tickets-process-error"
+            data-testid="tickets-process-error"
+            aria-live="polite"
+          >
+            {processError}
+          </span>
+        )}
+      </div>
+
       <div className="tickets-content">
         {sourceError ? (
           <div className="tickets-error" role="alert">
@@ -595,20 +664,27 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
               {visibleItems.map((item) => {
                 const identity = `${item.sourceId}::${item.id}`
                 return (
-                  <button
-                    key={identity}
-                    type="button"
-                    role="listitem"
-                    data-testid="ticket-row"
-                    className={selectedItem === item ? 'is-selected' : ''}
-                    onClick={() => setSelectedId(identity)}
-                  >
-                    <span className="tickets-id">#{item.id}</span>
-                    <strong>{item.title}</strong>
-                    <span className="tickets-type">{item.type}</span>
-                    <span className="tickets-state">{item.state}</span>
-                    <span>{item.assignee || 'Non assigné'}</span>
-                  </button>
+                  <div className="ticket-select-row" key={identity} role="listitem">
+                    <input
+                      type="checkbox"
+                      data-testid="ticket-process-checkbox"
+                      aria-label={`Cocher le ticket ${item.id}`}
+                      checked={checkedIds.has(identity)}
+                      onChange={() => toggleChecked(identity)}
+                    />
+                    <button
+                      type="button"
+                      data-testid="ticket-row"
+                      className={selectedItem === item ? 'is-selected' : ''}
+                      onClick={() => setSelectedId(identity)}
+                    >
+                      <span className="tickets-id">#{item.id}</span>
+                      <strong>{item.title}</strong>
+                      <span className="tickets-type">{item.type}</span>
+                      <span className="tickets-state">{item.state}</span>
+                      <span>{item.assignee || 'Non assigné'}</span>
+                    </button>
+                  </div>
                 )
               })}
               {hasMore ? (
