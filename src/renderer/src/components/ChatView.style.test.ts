@@ -49,3 +49,22 @@ describe('model final summary', () => {
     expect(summary).not.toContain('backdrop-filter')
   })
 })
+
+describe('chat image containment', () => {
+  it('keeps thumbnails inside their chip and lightbox images inside the viewport', () => {
+    const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+    const thumb = css.match(/\.attachment-thumb\s*{([^}]*)}/s)?.[1]
+    const thumbButton = css.match(/\.attachment-chip \.attachment-thumb-button\s*{([^}]*)}/s)?.[1]
+    const lightboxImage = css.match(/\.image-lightbox-content img\s*{([^}]*)}/s)?.[1]
+
+    expect(thumb).toContain('max-width: 100%')
+    expect(thumb).toContain('max-height: 100%')
+    expect(thumb).toContain('object-fit: contain')
+    expect(thumbButton).toMatch(/width:\s*34px/)
+    expect(thumbButton).toMatch(/height:\s*34px/)
+    expect(thumbButton).toContain('overflow: hidden')
+    expect(lightboxImage).toContain('max-width: min(calc(100vw - 64px), 1800px)')
+    expect(lightboxImage).toContain('max-height: calc(100vh - 64px)')
+    expect(lightboxImage).toContain('object-fit: contain')
+  })
+})
