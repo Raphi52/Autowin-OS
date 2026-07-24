@@ -10,6 +10,29 @@ describe('chat wallpaper', () => {
   })
 })
 
+describe('chat message scrolling', () => {
+  it('does not pin user messages to the top of the conversation', () => {
+    const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+    const userMessage = css.match(/\.msg\.user\s*{([^}]*)}/s)?.[1]
+
+    expect(userMessage).toBeDefined()
+    expect(userMessage).not.toMatch(/position:\s*sticky/)
+    expect(userMessage).not.toMatch(/top:\s*0/)
+  })
+})
+
+describe('chat message image attachments', () => {
+  it('keeps image thumbnails proportional and contained in their message', () => {
+    const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+    const thumbnail = css.match(/\.attachment-thumb\s*{([^}]*)}/s)?.[1]
+
+    expect(thumbnail).toBeDefined()
+    expect(thumbnail).toMatch(/max-width:\s*100%/)
+    expect(thumbnail).toMatch(/object-fit:\s*contain/)
+    expect(css).not.toMatch(/\.attachment-chip button\s*{[^}]*width:\s*17px/s)
+  })
+})
+
 describe('chat top bar surface', () => {
   it('uses the page surface through a transparent header while keeping its separator', () => {
     const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
