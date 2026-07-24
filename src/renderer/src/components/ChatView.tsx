@@ -8,6 +8,7 @@ import { ModuleHeader } from './ModuleHeader'
 import {
   CHAT_PANE_LIMITS,
   clampConversationPaneWidth,
+  createLiveRunDeltaBatcher,
   deriveConversationState,
   groupAssistantActivity,
   hydrateStoredAssistant,
@@ -768,7 +769,29 @@ export function ChatView({
       void refreshRuntimeIdentity()
     })
     // Les mutations faites par l'agent (bus) rafraîchissent les listes SANS toucher le fil.
+    const deltaBatcher = createLiveRunDeltaBatcher<{
+      convId: string
+      runPath?: string
+      delta: string
+    }>(
+      (batch) =>
+        setLiveRuns((current) =>
+          batch.reduce(
+            (next, event) =>
+              reduceScopedLiveRuns(next, {
+                type: 'delta',
+                convId: event.convId,
+                runPath: event.runPath,
+                delta: event.delta
+              }),
+            current
+          )
+        ),
+      (flush) => window.setTimeout(flush, 50),
+      (handle) => window.clearTimeout(handle)
+    )
     const offApp = window.api.onAppEvent((e) => {
+      if (e.type !== 'orchestrate-delta') deltaBatcher.flush()
       if (e.type === 'refresh') {
         if (e.scope === 'conversations') refreshConvs()
         if (e.scope === 'decisions') refreshDecisions()
@@ -805,14 +828,7 @@ export function ChatView({
           })
         )
       } else if (e.type === 'orchestrate-delta' && typeof e.delta === 'string' && e.convId) {
-        setLiveRuns((current) =>
-          reduceScopedLiveRuns(current, {
-            type: 'delta',
-            convId: e.convId!,
-            runPath: e.runPath,
-            delta: e.delta as string
-          })
-        )
+        deltaBatcher.enqueue({ convId: e.convId, runPath: e.runPath, delta: e.delta })
       } else if (e.type === 'orchestrate-step' && e.step && e.convId) {
         const step = e.step as OrchStep
         setLiveRuns((current) =>
@@ -846,6 +862,7 @@ export function ChatView({
       }
     })
     return () => {
+      deltaBatcher.cancel()
       offApp()
     }
   }, [])

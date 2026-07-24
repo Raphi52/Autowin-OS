@@ -760,6 +760,57 @@ export function clampConversationPaneWidth(width: number): number {
   )
 }
 
+export function createLiveRunDeltaBatcher<T>(
+  apply: (batch: T[]) => void,
+  schedule: (flush: () => void) => number,
+  cancelScheduled: (handle: number) => void
+): {
+  enqueue: (event: T) => void
+  flush: () => void
+  cancel: () => void
+} {
+  let pending: T[] = []
+  let scheduled: number | null = null
+  let cancelled = false
+  let generation = 0
+
+  const applyPending = (): void => {
+    if (cancelled || pending.length === 0) return
+    const batch = pending
+    pending = []
+    apply(batch)
+  }
+  const flush = (): void => {
+    if (scheduled !== null) cancelScheduled(scheduled)
+    scheduled = null
+    generation += 1
+    applyPending()
+  }
+
+  return {
+    enqueue(event) {
+      if (cancelled) return
+      pending.push(event)
+      if (scheduled === null) {
+        const scheduledGeneration = ++generation
+        scheduled = schedule(() => {
+          if (scheduledGeneration !== generation) return
+          scheduled = null
+          applyPending()
+        })
+      }
+    },
+    flush,
+    cancel() {
+      cancelled = true
+      pending = []
+      generation += 1
+      if (scheduled !== null) cancelScheduled(scheduled)
+      scheduled = null
+    }
+  }
+}
+
 export function reduceScopedLiveRuns<TStep>(
   current: Record<string, ScopedLiveRun<TStep>>,
   event: ScopedLiveRunEvent<TStep>

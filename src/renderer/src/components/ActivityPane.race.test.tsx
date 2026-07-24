@@ -151,4 +151,35 @@ describe('ActivityPane request ordering', () => {
 
     expect(container.textContent).toContain('gateway')
   })
+
+  it('consolide la fin orchestration sur le refresh workflows qui la suit', async () => {
+    let emit: ((event: { type: string; scope?: string }) => void) | undefined
+    const conversationActivity = vi.fn(() => Promise.resolve([]))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        conversationActivity,
+        promptCalls: vi.fn(() => Promise.resolve([])),
+        promptTraces: vi.fn(() => Promise.resolve([])),
+        onAppEvent: vi.fn((listener) => {
+          emit = listener
+          return vi.fn()
+        })
+      }
+    })
+
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(ActivityPane, { convId: 'A' })))
+    expect(conversationActivity).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      emit?.({ type: 'orchestrate-end' })
+      emit?.({ type: 'refresh', scope: 'workflows' })
+      await Promise.resolve()
+    })
+
+    expect(conversationActivity).toHaveBeenCalledTimes(4)
+  })
 })

@@ -122,10 +122,7 @@ export function ActivityPane({ convId }: { convId: string | null }): React.JSX.E
     refresh()
     // Les orchestrations/tours de chat rafraîchissent l'activité de la conversation.
     const off = window.api.onAppEvent((e) => {
-      if (
-        (e.type === 'refresh' && (e.scope === 'workflows' || e.scope === 'chat')) ||
-        e.type === 'orchestrate-end'
-      ) {
+      if (e.type === 'refresh' && (e.scope === 'workflows' || e.scope === 'chat')) {
         refresh()
       }
     })
