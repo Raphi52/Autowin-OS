@@ -28,7 +28,7 @@ describe('workflow sidebar header', () => {
     )
     expect(css).toMatch(/\.runs-pane > \.conv-head > \.row:last-child\s*{[^}]*flex:\s*none/s)
     expect(css).toMatch(
-      /\.runs-pane > \.conv-head > \.row:first-child \.btn\s*{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis/s
+      /\.runs-pane > \.conv-head > \.row:first-child \.btn\s*{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap/s
     )
   })
 })
