@@ -8,6 +8,7 @@ import {
   saveConvRunTrace
 } from './runs/conv-runs'
 import { appendNativeTrace } from './activity/native-trace-spool'
+import { appendBrainTrace } from './activity/brain-trace-spool'
 import { appendConvActivity } from './activity/conv-activity'
 import type { OrchestrationStep, OrchestrationPhase } from './orchestrator'
 import { persistOrchestrationStep } from './activity/orchestration-observability'
@@ -534,7 +535,9 @@ export class AppCommandBus {
                 const livePhases = steps
                   .filter((s) => s.step === 'exec' && s.text)
                   .map((s) => ({
-                    phase: (s.detail ?? '').replace(/^phase /, '').replace(/ \(réparation\)$/, '') || 'build',
+                    phase:
+                      (s.detail ?? '').replace(/^phase /, '').replace(/ \(réparation\)$/, '') ||
+                      'build',
                     text: s.text as string
                   }))
                 populateConvRunSections(runPath, livePhases)
@@ -565,6 +568,16 @@ export class AppCommandBus {
             },
             abortController.signal
           )
+          if (r.brainNavigation || (r.brainInjectedChars ?? 0) > 0) {
+            appendBrainTrace({
+              timestamp: r.brainRetrievedAt ?? new Date().toISOString(),
+              conversationId: convId,
+              turnId: orchestrationTurnId,
+              query: r.brainQuery ?? '',
+              injectedChars: r.brainInjectedChars ?? 0,
+              navigation: r.brainNavigation
+            })
+          }
           if (runPath) {
             saveConvRunTrace(runPath, steps)
             populateConvRunSections(runPath, r.phaseOutputs) // J2 — RUN.md peuplé du vrai livrable

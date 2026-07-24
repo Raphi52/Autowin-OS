@@ -7,9 +7,16 @@ const STATUS = {
   unavailable: { label: 'Indisponible', tone: 'is-absent' }
 } as const
 
-export function RagTraceCard({ request }: { request: unknown }): React.JSX.Element {
+export function RagTraceCard({
+  request,
+  queryOverride
+}: {
+  request: unknown
+  queryOverride?: string | null
+}): React.JSX.Element {
   const rag = summarizeRagTrace(request)
   const status = STATUS[rag.status]
+  const query = queryOverride === undefined ? rag.query : (queryOverride ?? '')
 
   return (
     <section className={`rag-trace-card ${status.tone}`} data-rag-status={rag.status}>
@@ -28,10 +35,10 @@ export function RagTraceCard({ request }: { request: unknown }): React.JSX.Eleme
                 : 'Payload non disponible'}
         </small>
       </header>
-      {rag.query && (
+      {query && (
         <p>
           <b>Requête</b>
-          <span>{rag.query}</span>
+          <span>{query}</span>
         </p>
       )}
       {rag.sources.length > 0 && (

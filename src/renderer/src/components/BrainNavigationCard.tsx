@@ -18,6 +18,7 @@ interface BrainNavigation {
 export interface BrainTraceView {
   timestamp: string
   conversationId: string
+  turnId?: string
   query: string
   injectedChars: number
   navigation?: BrainNavigation

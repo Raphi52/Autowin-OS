@@ -25,9 +25,18 @@ const api = {
   getPreflight: (): Promise<unknown> => ipcRenderer.invoke('preflight:current'),
   // Source control — lecture git READ-ONLY (statut, branche, changements, historique). Aucune action git.
   getGitState: (repoPath?: string): Promise<unknown> => ipcRenderer.invoke('git:read', repoPath),
+  getGitGraph: (repoPath?: string): Promise<unknown> => ipcRenderer.invoke('git:graph', repoPath),
   getGitDiff: (path: string, repoPath?: string): Promise<unknown> =>
     ipcRenderer.invoke('git:diff', path, repoPath),
   pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),
+  ticketSources: (): Promise<unknown[]> => ipcRenderer.invoke('tickets:sources'),
+  saveTicketSource: (profile: unknown): Promise<unknown[]> =>
+    ipcRenderer.invoke('tickets:source:save', profile),
+  listTickets: (request: unknown): Promise<unknown> => ipcRenderer.invoke('tickets:list', request),
+  cancelTickets: (requestId: string): Promise<boolean> =>
+    ipcRenderer.invoke('tickets:cancel', requestId),
+  setTicketsFixture: (fixture: unknown): Promise<boolean> =>
+    ipcRenderer.invoke('app:test:tickets-fixture', fixture),
   // Cockpit worktree (volet A) — activité des copies isolées par agent (frise + journal).
   getWorktreeActivity: (): Promise<unknown[]> => ipcRenderer.invoke('worktree:activity'),
   getWorktreeStatus: (): Promise<unknown> => ipcRenderer.invoke('worktree:status'),

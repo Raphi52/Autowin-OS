@@ -1,114 +1,426 @@
 .worktree-tab {
-  position: relative;
-  isolation: isolate;
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
-  padding: 16px 18px;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 16px;
-  border: 1px solid color-mix(in srgb, var(--rose) 34%, var(--container-border));
+  padding: 18px 20px 20px;
+  border: 1px solid var(--container-border);
   border-radius: var(--container-radius-page);
-  /* Conteneur de vue OPAQUE (comme les autres vues) : --surface-page vaut `transparent` en thème
-     serious → utiliser --surface-panel (noir ~95%). La ligne dégradée du haut est conservée. */
-  background:
-    linear-gradient(90deg, var(--rose), rgba(239, 63, 145, 0.14) 42%, rgba(233, 189, 78, 0.18) 72%, var(--gold)) top / 100% 1px no-repeat,
-    var(--surface-panel);
+  overflow: hidden;
+  background: var(--surface-panel);
   box-shadow: var(--container-shadow);
-  backdrop-filter: blur(var(--container-blur));
+  color: var(--text);
 }
 
-.worktree-tab::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  opacity: 0.58;
-  background-image:
-    radial-gradient(circle, rgba(255, 255, 255, 0.9) 0 1px, transparent 1.2px),
-    radial-gradient(circle, rgba(239, 63, 145, 0.88) 0 1px, transparent 1.2px),
-    radial-gradient(circle, rgba(233, 189, 78, 0.8) 0 1px, transparent 1.2px);
-  background-position: 9px 11px, 41px 27px, 74px 8px;
-  background-size: 83px 61px, 107px 79px, 137px 97px;
-  mask-image: linear-gradient(to bottom, #000 0, rgba(0, 0, 0, 0.78) 46px, transparent 150px);
-}
-
-.worktree-page-head {
+.git-ledger__header {
+  min-width: 0;
+  min-height: 66px;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  padding: 4px 8px 0;
+  gap: 18px;
+  padding: 0 2px 14px;
 }
 
-.worktree-page-head .module-header > span { color: var(--gold); }
+.git-ledger__header > div:first-child { min-width: 0; }
 
-.worktree-page-head .module-header > h1 { position: relative; }
-
-.worktree-page-head .module-header > h1::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  bottom: -7px;
-  width: 68px;
-  height: 2px;
-  background: linear-gradient(90deg, var(--rose), var(--gold));
+.git-ledger__path {
+  display: block;
+  max-width: 620px;
+  margin-top: 7px;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.worktree-page-head p {
-  max-width: 460px;
-  margin: 0;
-  color: var(--text-dim);
-  font-size: 11px;
-  text-align: right;
-}
-
-.worktree-view__body {
-  min-height: 0;
+.git-ledger__metrics {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: stretch;
+  gap: 8px;
 }
 
-.worktree-view__loading {
-  margin: 0;
-  padding: 16px 18px;
+.git-ledger__metrics > span {
+  min-width: 70px;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  padding: 0 12px;
+  border-left: 1px solid var(--container-border);
+  color: var(--text-faint);
+  font-size: 7px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.git-ledger__metrics strong {
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+}
+
+.git-ledger__metrics button,
+.git-ledger__tabs button {
+  border: 1px solid var(--container-border-strong);
+  border-radius: var(--container-radius-card);
+  background: var(--surface-inset);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.git-ledger__metrics button {
+  padding: 0 12px;
+  font-size: 10px;
+}
+
+.git-ledger__metrics button:hover,
+.git-ledger__tabs button:hover {
+  border-color: var(--container-border-strong);
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.git-ledger__metrics button:disabled { opacity: 0.55; cursor: wait; }
+
+.git-ledger__shell {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(280px, 31%) minmax(430px, 1fr) minmax(230px, 24%);
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-panel);
+  overflow: hidden;
+  background: var(--surface-panel);
+}
+
+.git-ledger__ledger,
+.git-ledger__inspector {
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface-panel);
+}
+
+.git-ledger__ledger {
+  display: grid;
+  grid-template-rows: auto auto minmax(120px, 1fr) auto minmax(92px, auto);
+  border-right: 1px solid var(--container-border);
+  overflow: hidden;
+}
+
+.git-ledger__search {
+  display: grid;
+  gap: 5px;
+  padding: 14px 12px 10px;
+}
+
+.git-ledger__search > span,
+.git-ledger__eyebrow {
+  color: var(--text-faint);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.git-ledger__search input {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
   border: 1px solid var(--container-border);
   border-radius: var(--container-radius-card);
+  outline: none;
+  background: var(--surface-inset);
+  color: var(--text);
+  font-size: 10px;
+}
+
+.git-ledger__search input:focus { border-color: var(--gold); }
+
+.git-ledger__section-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px 48px;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--container-border);
+  border-bottom: 1px solid var(--container-border);
+  color: var(--text-faint);
+  font-size: 7px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.git-ledger__section-head.is-worktrees { grid-template-columns: minmax(0, 1fr) 92px 36px; }
+
+.git-ledger__rows,
+.git-ledger__worktrees {
+  min-height: 0;
+  overflow: auto;
+  scrollbar-color: var(--container-border-strong) var(--surface-inset);
+}
+
+.git-ledger__rows > button,
+.git-ledger__worktrees > button {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--container-border);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  text-align: left;
+}
+
+.git-ledger__rows > button {
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr) 58px 48px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.git-ledger__rows > button:hover,
+.git-ledger__worktrees > button:hover,
+.git-ledger__chronology > button:hover,
+.git-ledger__ref-catalog > button:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.git-ledger__rows > button.is-selected,
+.git-ledger__chronology > button.is-selected {
+  background: var(--surface-selected);
+  color: var(--text);
+}
+
+.git-ledger__rows strong {
+  display: block;
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-ledger__rows small {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-ledger__rows code,
+.git-ledger__worktrees code {
+  color: var(--text-dim);
+  font-size: 8px;
+}
+
+.git-ledger__rows em,
+.git-ledger__worktrees em {
+  color: var(--gold);
+  font-size: 7px;
+  font-style: normal;
+  font-weight: 700;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.git-ledger__dot {
+  width: 6px;
+  height: 6px;
+  display: inline-block;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.git-ledger__dot.is-local { background: var(--cyan); }
+.git-ledger__dot.is-remote { background: var(--violet); }
+.git-ledger__dot.is-tag { background: var(--gold); }
+
+.git-ledger__worktrees > button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px 36px;
+  gap: 8px;
+  padding: 9px 12px;
+  font-size: 8px;
+}
+
+.git-ledger__worktrees span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-ledger__worktrees code {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-ledger__center {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--surface-inset);
+}
+
+.git-ledger__tabs {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 10px;
+  border-bottom: 1px solid var(--container-border);
+  background: var(--surface-panel);
+}
+
+.git-ledger__tabs button {
+  padding: 7px 12px;
+  font-size: 9px;
+}
+
+.git-ledger__tabs button.is-active {
+  border-color: var(--gold);
+  background: var(--surface-selected);
+  color: var(--text);
+}
+
+.git-ledger__tabs small {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-size: 8px;
+}
+
+.git-ledger__graph-scroll {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-color: var(--container-border-strong) var(--surface-inset);
+}
+
+.git-ledger__graph { display: block; min-width: 100%; }
+.git-ledger__node { outline: none; cursor: pointer; }
+.git-ledger__node:focus circle { stroke: var(--gold); }
+.git-ledger__hash {
+  fill: var(--text);
+  font-family: var(--mono);
+  font-size: 9px;
+}
+.git-ledger__subject {
+  fill: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 9px;
+}
+.git-ledger__node.is-selected .git-ledger__subject { fill: var(--text); font-weight: 700; }
+
+.git-ledger__chronology,
+.git-ledger__ref-catalog {
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
+}
+
+.git-ledger__chronology > button,
+.git-ledger__ref-catalog > button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: 0;
+  border-bottom: 1px solid var(--container-border);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  text-align: left;
+}
+
+.git-ledger__chronology code,
+.git-ledger__ref-catalog code {
+  color: var(--cyan);
+  font-size: 9px;
+}
+
+.git-ledger__chronology span { min-width: 0; display: grid; gap: 3px; }
+.git-ledger__chronology strong { overflow: hidden; color: var(--text); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.git-ledger__chronology small { color: var(--text-faint); font-size: 8px; }
+.git-ledger__ref-catalog strong { min-width: 0; flex: 1; overflow: hidden; font-size: 10px; text-overflow: ellipsis; }
+
+.git-ledger__inspector {
+  padding: 18px;
+  border-left: 1px solid var(--container-border);
+  overflow: auto;
+}
+
+.git-ledger__selected-hash {
+  display: block;
+  margin-top: 6px;
+  color: var(--rose);
+  font-size: 10px;
+}
+
+.git-ledger__inspector h2 {
+  margin: 8px 0 20px;
+  color: var(--text);
+  font-family: var(--display);
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.git-ledger__inspector dl { margin: 0; }
+.git-ledger__inspector dl > div {
+  padding: 11px 0;
+  border-bottom: 1px solid var(--container-border);
+}
+.git-ledger__inspector dt {
+  margin-bottom: 5px;
+  color: var(--text-faint);
+  font-size: 7px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.git-ledger__inspector dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-dim);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.git-ledger__state {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-panel);
   background: var(--surface-card);
   color: var(--text-dim);
 }
 
-.worktree-view__bridge-error,
-.worktree-view__unavailable {
-  margin: 0;
-  padding: 16px 18px;
-  border: 1px solid color-mix(in srgb, var(--warn) 48%, var(--container-border));
-  border-radius: var(--container-radius-card);
-  background: color-mix(in srgb, var(--warn) 9%, var(--surface-card));
-  color: var(--text);
+.git-ledger__state.is-error strong { color: var(--warn); }
+.git-ledger__state code { max-width: 680px; color: var(--text-faint); font-size: 9px; }
+.git-ledger__empty { margin: 0; padding: 18px 12px; color: var(--text-faint); font-size: 9px; }
+
+@media (max-width: 1180px) {
+  .git-ledger__shell { grid-template-columns: 280px minmax(390px, 1fr); }
+  .git-ledger__inspector { display: none; }
+  .git-ledger__metrics > span { display: none; }
 }
 
-.worktree-view__unavailable {
-  display: grid;
-  gap: 8px;
-  color: var(--text-dim);
-}
-
-.worktree-view__unavailable strong { color: var(--warn); }
-.worktree-view__unavailable code { color: var(--gold); }
-
-@media (max-width: 760px) {
-  .worktree-page-head {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .worktree-page-head p { text-align: left; }
+@media (max-width: 820px) {
+  .git-ledger__header { align-items: flex-start; flex-direction: column; }
+  .git-ledger__shell { grid-template-columns: 240px minmax(360px, 1fr); }
+  .git-ledger__tabs button { padding-inline: 8px; }
 }

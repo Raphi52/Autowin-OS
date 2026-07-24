@@ -10,7 +10,7 @@ import { BrainMarkdown } from './BrainMarkdown'
 import { summarizeNativeTraces, type NativeTraceSummaryInput } from './native-trace-summary'
 import './ObservatoryView.css'
 import { ModuleHeader } from './ModuleHeader'
-import { RagObservabilitySummary, RagTraceCard } from './RagTraceCard'
+import { RagTraceCard } from './RagTraceCard'
 import { BrainNavigationCard, type BrainTraceView } from './BrainNavigationCard'
 import { summarizeRagTrace } from './rag-trace-model'
 import { LatestRequestGate, settleObservatorySources } from './observatory-reliability'
@@ -74,6 +74,29 @@ const ZONE_HINT: Record<'sortant' | 'reponse' | 'sousagent', string> = {
   reponse: 'ce que le modèle a produit et ce qui a été affiché',
   sousagent: 'délégation et jugements des sous-agents'
 }
+type QuickFilter = 'all' | 'errors' | 'tools' | 'prompt' | 'agents'
+type CausalScope = 'all' | 'critical' | 'signals'
+
+const QUICK_FILTERS: Array<{ value: QuickFilter; label: string }> = [
+  { value: 'errors', label: 'Erreurs' },
+  { value: 'tools', label: 'Outils' },
+  { value: 'prompt', label: 'Prompt / RAG' },
+  { value: 'agents', label: 'Sous-agents' }
+]
+
+function matchesQuickFilter(event: HarnessTimelineEvent, filter: QuickFilter): boolean {
+  if (filter === 'all') return true
+  if (filter === 'errors') return ['error', 'retry', 'cancellation'].includes(event.kind)
+  if (filter === 'tools') return ['tool-call', 'tool-result'].includes(event.kind)
+  if (filter === 'prompt') return ['injection', 'boundary'].includes(event.kind)
+  return ['handoff', 'verdict'].includes(event.kind)
+}
+
+function eventTurnId(event: HarnessTimelineEvent): string {
+  if (!event.raw || typeof event.raw !== 'object') return ''
+  const turnId = (event.raw as { turnId?: unknown }).turnId
+  return typeof turnId === 'string' ? turnId : ''
+}
 
 /** Sépare un préfixe libellé ("ÉTAT DE L'APP: {…}") du JSON qui suit, si le JSON parse. */
 function splitLabeledJson(content: string): { prefix: string; json: string } | null {
@@ -131,7 +154,8 @@ function humanEventPreview(kind: string, content: string, max = 140): string {
     const attempt = Number(data.attempt ?? data.attemptNumber ?? 0)
     const maxAttempts = Number(data.maxAttempts ?? data.max ?? 0)
     const reason = typeof data.reason === 'string' ? ` — ${data.reason}` : ''
-    if (attempt && maxAttempts) return `Nouvel essai · tentative ${attempt} sur ${maxAttempts}${reason}`
+    if (attempt && maxAttempts)
+      return `Nouvel essai · tentative ${attempt} sur ${maxAttempts}${reason}`
     return `Nouvel essai${reason}`
   }
   if (kind === 'boundary' && data) {
@@ -180,6 +204,20 @@ function lastUserMessagePreview(
   return userMsg ? extractHumanMessage(userMsg.content, max) : ''
 }
 
+/** Refuse les enveloppes provider : elles ne constituent pas une action humaine observable. */
+function trustworthyRagTrigger(content: string, max = 180): string {
+  const trimmed = content.trim()
+  if (
+    !trimmed ||
+    trimmed.length > 500 ||
+    /^[{[]/.test(trimmed) ||
+    /"(?:instructions|messages|model)"\s*:/.test(trimmed)
+  ) {
+    return ''
+  }
+  return extractHumanMessage(trimmed, max)
+}
+
 /** Rendu lisible d'un contenu de payload : JSON embarqué → arbre HumanJson ; sinon Markdown. */
 function PayloadContent({ content }: { content: string }): React.JSX.Element {
   const text = content || '(vide)'
@@ -220,7 +258,11 @@ export function ObservatoryView({
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [providerFilter, setProviderFilter] = useState('all')
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>('all')
+  const [causalScope, setCausalScope] = useState<CausalScope>('all')
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<number>()
   const [refreshKey, setRefreshKey] = useState(0)
   const [viewMode, setViewMode] = useState<'timeline' | 'causal'>('timeline')
   const [sourceErrors, setSourceErrors] = useState<Record<string, string>>({})
@@ -230,6 +272,7 @@ export function ObservatoryView({
   >(null)
   const [causalTracePartial, setCausalTracePartial] = useState(false)
   const causalRequestGate = useRef(new LatestRequestGate())
+  const refreshStartedAt = useRef(0)
 
   function updateSourceError(source: string, message?: string): void {
     setSourceErrors((current) => {
@@ -248,6 +291,7 @@ export function ObservatoryView({
       // Réinitialisation atomique requise avant le chargement asynchrone d'un focus externe.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setTurnFocus(focus)
+      resetConversationFilters()
       setFocusUnavailable('source')
       setCausalTracePartial(false)
       setConversationId('')
@@ -341,6 +385,7 @@ export function ObservatoryView({
     setSelectedCall(null)
     setCompare([])
     const requestId = causalRequestGate.current.begin()
+    let requestSucceeded = false
     void window.api
       .causalTrace(conversationId)
       .then((events) => {
@@ -348,14 +393,24 @@ export function ObservatoryView({
         const nextTimeline = buildHarnessTimelineFromTrace(events as HarnessTraceEvent[])
         setTimeline(nextTimeline)
         updateSourceError('causalTrace')
+        requestSucceeded = true
       })
       .catch((error: unknown) => {
         if (!causalRequestGate.current.isCurrent(requestId)) return
         setTimeline(EMPTY)
         updateSourceError('causalTrace', error instanceof Error ? error.message : String(error))
       })
-      .finally(() => {
-        if (causalRequestGate.current.isCurrent(requestId)) setLoading(false)
+      .finally(async () => {
+        const remainingBusyTime = refreshing
+          ? Math.max(0, 300 - (Date.now() - refreshStartedAt.current))
+          : 0
+        if (remainingBusyTime)
+          await new Promise((resolve) => setTimeout(resolve, remainingBusyTime))
+        if (causalRequestGate.current.isCurrent(requestId)) {
+          setLoading(false)
+          setRefreshing(false)
+          if (requestSucceeded) setLastRefreshedAt(Date.now())
+        }
       })
   }, [active, conversationId, refreshKey, turnFocus])
 
@@ -423,8 +478,10 @@ export function ObservatoryView({
   const convBrainTraces = brainTraces.filter((t) => t.conversationId === conversationId)
   const convNativeTraces = nativeTraces.filter((t) => t.conversationId === conversationId)
   const nativeSummary = summarizeNativeTraces(convNativeMetadata)
-  const ragSummaries = convNativeTraces.map((trace) => summarizeRagTrace(trace.request))
-  const ragInjected = ragSummaries.filter((summary) => summary.status === 'injected').length
+  const legacyBrainTraces = convBrainTraces.filter((trace) => !trace.turnId)
+  const unlinkedNativeTraces = nativeTraces.filter(
+    (trace) => !trace.conversationId || !trace.turnId || trace.turnId === 'unknown'
+  )
   const hasNativeTraces = convNativeTraces.length > 0 || nativeSummary.count > 0
   const typeOptions = [...new Set(allEvents.map((event) => event.kind))]
   const providerOptions = [
@@ -436,10 +493,11 @@ export function ObservatoryView({
       ...turn,
       events: turn.events.filter(
         (event) =>
+          matchesQuickFilter(event, quickFilter) &&
           (typeFilter === 'all' || event.kind === typeFilter) &&
           (providerFilter === 'all' || event.provider === providerFilter) &&
           (!needle ||
-            `${event.actor} ${event.label} ${event.content} ${event.detail}`
+            `${event.actor} ${event.label} ${event.content} ${event.detail} ${event.provider ?? ''} ${event.model ?? ''} ${event.status ?? ''}`
               .toLocaleLowerCase('fr')
               .includes(needle))
       )
@@ -450,26 +508,106 @@ export function ObservatoryView({
         (anomaly) => !focusUnavailable && anomaly.turnIds.includes(turnFocus.turnId)
       )
     : timeline.anomalies
+  const visibleEventCount = visibleTurns.reduce((sum, turn) => sum + turn.events.length, 0)
+  const activeFilterCount =
+    Number(Boolean(needle)) +
+    Number(typeFilter !== 'all') +
+    Number(providerFilter !== 'all') +
+    Number(quickFilter !== 'all')
+  const visibleCausalNodes = causalNodes.filter((node) => {
+    if (causalScope === 'critical') return node.onCriticalPath
+    if (causalScope === 'signals')
+      return node.isBottleneck || node.issues.length > 0 || node.event.kind === 'error'
+    return true
+  })
+
+  function resetTimelineFilters(): void {
+    setQuery('')
+    setTypeFilter('all')
+    setProviderFilter('all')
+    setQuickFilter('all')
+  }
+
+  function resetConversationFilters(): void {
+    resetTimelineFilters()
+    setCausalScope('all')
+  }
+
+  function selectConversation(nextConversationId: string): void {
+    setTurnFocus(null)
+    setFocusUnavailable(null)
+    setCausalTracePartial(false)
+    resetConversationFilters()
+    setSelected(null)
+    setSelectedCall(null)
+    setCompare([])
+    setConversationId(nextConversationId)
+  }
+
+  function refreshSources(): void {
+    refreshStartedAt.current = Date.now()
+    setRefreshing(true)
+    setRefreshKey((value) => value + 1)
+  }
 
   function openEvent(eventId: string): void {
     setQuery('')
     setTypeFilter('all')
     setProviderFilter('all')
+    setQuickFilter('all')
+    setCausalScope('all')
     setSelectedCall(null)
     setSelected(allEvents.find((event) => event.id === eventId) ?? null)
   }
 
-  async function exportTrace(): Promise<void> {
+  async function exportTrace(scope: 'view' | 'full'): Promise<void> {
     if (!conversationId) return
+    const visibleCausalIds = new Set(visibleCausalNodes.map((node) => node.id))
+    const exportedCausalSource =
+      scope === 'view' ? (viewMode === 'causal' ? visibleCausalNodes : []) : causalNodes
+    const exportedCausalIds = new Set(exportedCausalSource.map((node) => node.id))
+    const exportedCausalNodes = exportedCausalSource.map(({ children, ...node }) => ({
+      ...node,
+      childIds: children.map((child) => child.id).filter((id) => exportedCausalIds.has(id))
+    }))
+    const causalViewTimeline = {
+      ...timeline,
+      turns: timeline.turns
+        .map((turn) => ({
+          ...turn,
+          events: turn.events.filter((event) => visibleCausalIds.has(event.id))
+        }))
+        .filter((turn) => turn.events.length),
+      anomalies: visibleAnomalies
+    }
+    const exportedTimeline =
+      scope === 'view'
+        ? viewMode === 'causal'
+          ? causalViewTimeline
+          : { ...timeline, turns: visibleTurns, anomalies: visibleAnomalies }
+        : timeline
     const exported = buildObservatoryExport({
+      scope,
       exportedAt: new Date().toISOString(),
       conversationId,
-      filters: { query, type: typeFilter, provider: providerFilter },
+      filters:
+        scope === 'view'
+          ? { query, type: typeFilter, provider: providerFilter }
+          : { query: '', type: 'all', provider: 'all' },
+      view: {
+        mode: scope === 'view' ? viewMode : 'timeline',
+        quickFilter: scope === 'view' ? quickFilter : 'all',
+        causalScope: scope === 'view' ? causalScope : 'all'
+      },
       limitations: [
+        scope === 'view'
+          ? 'Cet export contient uniquement les événements visibles dans la vue filtrée.'
+          : 'Cet export contient la trace complète, indépendamment des filtres visibles.',
         'Les traces globales sans conversationId ne peuvent pas être attribuées à cette conversation.',
         'Les payloads exportés sont exact-redacted ; les secrets connus sont masqués à nouveau.'
       ],
-      timeline,
+      timeline: exportedTimeline,
+      causalNodes: exportedCausalNodes,
       promptCalls: currentCalls,
       nativeTraces
     })
@@ -478,18 +616,91 @@ export function ObservatoryView({
     )
     const link = document.createElement('a')
     link.href = href
-    link.download = `autowin-trace-${conversationId}.json`
+    link.download = `autowin-trace-${scope}-${conversationId}.json`
     link.click()
     URL.revokeObjectURL(href)
   }
 
   /** Rend une ligne d'event de la timeline (extrait pour permettre le regroupement « Sortant »). */
+  const renderRagCausalStep = (
+    event: HarnessTimelineEvent,
+    turnId: string
+  ): React.JSX.Element | null => {
+    if (event.kind !== 'injection') return null
+    const rag = summarizeRagTrace({ system: event.content })
+    if (rag.status !== 'injected' || rag.engine !== 'Amitel Brain') return null
+    const turn = scopedTurns.find((candidate) => candidate.id === turnId)
+    const firstRagEvent = turn?.events.find((candidate) => {
+      if (candidate.kind !== 'injection') return false
+      const summary = summarizeRagTrace({ system: candidate.content })
+      return summary.status === 'injected' && summary.engine === 'Amitel Brain'
+    })
+    const isFirstDelivery = firstRagEvent?.id === event.id
+    const call = currentCalls.find((candidate) => event.id.startsWith(`${candidate.id}:`))
+    const brainTrace = convBrainTraces.find((trace) => trace.turnId === turnId)
+    const callTrigger = call ? lastUserMessagePreview(call.messages, 500) : ''
+    const trigger = brainTrace?.query?.trim() || trustworthyRagTrigger(callTrigger)
+    const hasRetrievalTime = Boolean(isFirstDelivery && brainTrace?.timestamp)
+    const observedAt = hasRetrievalTime ? brainTrace!.timestamp : (event.timestamp ?? '')
+    const timeKind = hasRetrievalTime ? 'retrieval' : 'trace'
+    const provider = event.provider ?? event.recipient ?? call?.provider ?? 'provider non exposé'
+
+    return (
+      <section
+        className="observatory-rag-causal-step"
+        data-testid="observatory-rag-causal-step"
+        data-turn-id={turnId}
+        data-provider={provider}
+        data-observed-at={observedAt}
+        data-time-kind={timeKind}
+        data-evidence={isFirstDelivery && brainTrace ? 'retrieval' : 'injection'}
+      >
+        <header>
+          <span aria-hidden="true">↳</span>
+          <div>
+            <strong>
+              {isFirstDelivery && brainTrace
+                ? 'Autowin interroge Amitel Brain'
+                : 'Autowin remet le contexte Brain au modèle'}
+            </strong>
+            <small>
+              {hasRetrievalTime
+                ? `${new Date(observedAt).toLocaleTimeString('fr-FR')} · récupération terminée · remis à ${provider}`
+                : observedAt
+                  ? `${new Date(observedAt).toLocaleTimeString('fr-FR')} · heure de trace · remise non horodatée à ${provider}`
+                  : `heure et remise non exposées · destinataire ${provider}`}
+            </small>
+          </div>
+          <b>
+            {rag.sources.length} source{rag.sources.length > 1 ? 's' : ''} ·{' '}
+            {rag.injectedCharacters.toLocaleString('fr-FR')} caractères
+          </b>
+        </header>
+        <p>
+          <b>Déclenché par</b>
+          <span>{trigger ? `« ${trigger} »` : 'Action déclenchante non exposée'}</span>
+        </p>
+        <RagTraceCard
+          request={{ system: event.content }}
+          queryOverride={brainTrace?.query || trigger || null}
+        />
+        {isFirstDelivery && brainTrace?.navigation && <BrainNavigationCard trace={brainTrace} />}
+        <small className="observatory-rag-boundary">
+          Preuve observée à la frontière Autowin → provider · le fournisseur peut encore transformer
+          l’enveloppe.
+        </small>
+      </section>
+    )
+  }
+
   const renderEvent = (
     event: HarnessTimelineEvent,
     index: number,
-    diverges = false
+    diverges = false,
+    turnId = ''
   ): React.JSX.Element => (
     <div key={event.id} className="observatory-event-wrap">
+      {renderRagCausalStep(event, turnId)}
       <button
         className={`observatory-event is-${event.kind}${selected?.id === event.id ? ' is-selected' : ''}${compare.some((item) => item.id === event.id) ? ' is-compared' : ''}`}
         onClick={(click) => {
@@ -545,7 +756,8 @@ export function ObservatoryView({
             <div>
               <b>Payload exact</b>
               <small>
-                {event.channel} · {event.injector ?? event.actor} → {event.recipient ?? 'non exposé'}
+                {event.channel} · {event.injector ?? event.actor} →{' '}
+                {event.recipient ?? 'non exposé'}
               </small>
             </div>
             <button
@@ -608,7 +820,10 @@ export function ObservatoryView({
             // A1 — coût 0 alors que des tokens ont été consommés = usage sur abonnement forfaitaire
             // (ex. codex/sol via OAuth ChatGPT, non facturé au token). Ne pas afficher « $0.000 »
             // qui se lit comme une panne d'observabilité.
-            <strong data-metric="cost" title="Providers sur abonnement (OAuth) — non facturés au token">
+            <strong
+              data-metric="cost"
+              title="Providers sur abonnement (OAuth) — non facturés au token"
+            >
               forfait
               <small>abonnement</small>
             </strong>
@@ -622,9 +837,7 @@ export function ObservatoryView({
             data-metric="actions"
             title="Actions réelles exécutées par les sous-agents (commandes shell, patchs fichiers)"
           >
-            {allEvents
-              .filter((event) => event.kind === 'tool-call')
-              .length.toLocaleString('fr-FR')}
+            {allEvents.filter((event) => event.kind === 'tool-call').length.toLocaleString('fr-FR')}
             <small>actions réelles</small>
           </strong>
           {hasNativeTraces && (
@@ -636,61 +849,177 @@ export function ObservatoryView({
         </div>
       </header>
       <div className="observatory-toolbar">
-        {hasNativeTraces && nativeSummary.lastTimestamp && (
-          <span className="observatory-native-proof">
-            Dernière requête · {new Date(nativeSummary.lastTimestamp).toLocaleString('fr-FR')} ·{' '}
-            {nativeSummary.lastModel} · {nativeSummary.boundary} · exact-redacted
+        <div className="observatory-toolbar__scope" data-toolbar-zone="scope">
+          <span data-testid="observatory-result-count">
+            <strong>
+              {(viewMode === 'timeline'
+                ? visibleEventCount
+                : visibleCausalNodes.length
+              ).toLocaleString('fr-FR')}
+            </strong>
+            {' / '}
+            {(viewMode === 'timeline' ? allEvents.length : causalNodes.length).toLocaleString(
+              'fr-FR'
+            )}{' '}
+            {viewMode === 'timeline' ? 'événements' : 'étapes'}
           </span>
-        )}
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Rechercher dans le flux…"
-        />
-        <select
-          value={typeFilter}
-          onChange={(event) => setTypeFilter(event.target.value)}
-          aria-label="Type"
-        >
-          <option value="all">Tous les types</option>
-          {typeOptions.map((type) => (
-            <option key={type} value={type}>
-              {LABEL[type]}
-            </option>
-          ))}
-        </select>
-        <select
-          value={providerFilter}
-          onChange={(event) => setProviderFilter(event.target.value)}
-          aria-label="Provider"
-        >
-          <option value="all">Tous providers</option>
-          {providerOptions.map((provider) => (
-            <option key={provider}>{provider}</option>
-          ))}
-        </select>
-        <button
-          onClick={() => onOpenCapabilities?.()}
-          title="Éditer les capacités injectées dans le prompt (Skills · Hooks · Tools)"
-        >
-          Capacités du prompt →
-        </button>
-        <div className="observatory-view-switch" aria-label="Mode de visualisation">
-          <button
-            className={viewMode === 'timeline' ? 'is-active' : ''}
-            onClick={() => setViewMode('timeline')}
+          <small
+            data-testid="observatory-freshness"
+            data-refreshed-at={lastRefreshedAt ?? ''}
+            data-refresh-status={
+              lastRefreshedAt ? (Object.keys(sourceErrors).length ? 'partial' : 'complete') : 'idle'
+            }
           >
-            Chronologie
-          </button>
-          <button
-            className={viewMode === 'causal' ? 'is-active' : ''}
-            onClick={() => setViewMode('causal')}
-          >
-            Chemin critique
-          </button>
+            {lastRefreshedAt
+              ? `${Object.keys(sourceErrors).length ? 'Actualisation partielle' : 'Actualisé'} à ${new Date(lastRefreshedAt).toLocaleTimeString('fr-FR')}`
+              : 'En attente de données'}
+          </small>
+          {hasNativeTraces && nativeSummary.lastTimestamp && (
+            <small
+              className="observatory-native-proof"
+              title={`${nativeSummary.lastModel} · ${nativeSummary.boundary} · exact-redacted`}
+            >
+              Native exact-redacted
+            </small>
+          )}
         </div>
-        <button onClick={() => void exportTrace()}>Exporter JSON</button>
-        <button onClick={() => setRefreshKey((value) => value + 1)}>Actualiser</button>
+
+        <div className="observatory-toolbar__analysis" data-toolbar-zone="analysis">
+          <div className="observatory-view-switch" role="group" aria-label="Mode de visualisation">
+            <button
+              className={viewMode === 'timeline' ? 'is-active' : ''}
+              aria-pressed={viewMode === 'timeline'}
+              onClick={() => setViewMode('timeline')}
+            >
+              Chronologie
+            </button>
+            <button
+              className={viewMode === 'causal' ? 'is-active' : ''}
+              aria-pressed={viewMode === 'causal'}
+              onClick={() => setViewMode('causal')}
+            >
+              Chemin critique
+            </button>
+          </div>
+
+          {viewMode === 'timeline' ? (
+            <div className="observatory-toolbar__timeline" data-testid="timeline-controls">
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Rechercher acteur, modèle, contenu…"
+                aria-label="Rechercher dans la chronologie"
+              />
+              <div className="observatory-quick-filters" aria-label="Filtres rapides">
+                {QUICK_FILTERS.map((filter) => (
+                  <button
+                    type="button"
+                    key={filter.value}
+                    className={quickFilter === filter.value ? 'is-active' : ''}
+                    aria-pressed={quickFilter === filter.value}
+                    onClick={() =>
+                      setQuickFilter((current) => (current === filter.value ? 'all' : filter.value))
+                    }
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+              <details className="observatory-filter-menu">
+                <summary>Filtres{activeFilterCount ? ` · ${activeFilterCount}` : ''}</summary>
+                <div>
+                  <select
+                    value={typeFilter}
+                    onChange={(event) => setTypeFilter(event.target.value)}
+                    aria-label="Type"
+                  >
+                    <option value="all">Tous les types</option>
+                    {typeOptions.map((type) => (
+                      <option key={type} value={type}>
+                        {LABEL[type]}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={providerFilter}
+                    onChange={(event) => setProviderFilter(event.target.value)}
+                    aria-label="Provider"
+                  >
+                    <option value="all">Tous providers</option>
+                    {providerOptions.map((provider) => (
+                      <option key={provider}>{provider}</option>
+                    ))}
+                  </select>
+                </div>
+              </details>
+              <button
+                type="button"
+                className="observatory-reset"
+                onClick={resetTimelineFilters}
+                disabled={activeFilterCount === 0}
+              >
+                Réinitialiser
+              </button>
+            </div>
+          ) : (
+            <div className="observatory-causal-controls" data-testid="causal-controls">
+              {(
+                [
+                  ['all', 'Tous les liens'],
+                  ['critical', 'Critique seul'],
+                  ['signals', 'Signaux']
+                ] as Array<[CausalScope, string]>
+              ).map(([scope, label]) => (
+                <button
+                  type="button"
+                  key={scope}
+                  className={causalScope === scope ? 'is-active' : ''}
+                  aria-pressed={causalScope === scope}
+                  onClick={() => setCausalScope(scope)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="observatory-toolbar__actions" data-toolbar-zone="actions">
+          <button
+            type="button"
+            data-testid="observatory-refresh"
+            onClick={refreshSources}
+            disabled={refreshing}
+          >
+            {refreshing ? 'Actualisation…' : 'Actualiser'}
+          </button>
+          <details>
+            <summary>Actions</summary>
+            <div>
+              <button
+                type="button"
+                onClick={() => onOpenCapabilities?.()}
+                title="Éditer les capacités injectées dans le prompt (Skills · Hooks · Tools)"
+              >
+                Capacités du prompt
+              </button>
+              <button
+                type="button"
+                disabled={!conversationId}
+                onClick={() => void exportTrace('view')}
+              >
+                Exporter la vue
+              </button>
+              <button
+                type="button"
+                disabled={!conversationId}
+                onClick={() => void exportTrace('full')}
+              >
+                Exporter toute la trace
+              </button>
+            </div>
+          </details>
+        </div>
       </div>
       {turnFocus && (
         <aside className="observatory-turn-focus" role="status">
@@ -731,29 +1060,41 @@ export function ObservatoryView({
           <button onClick={() => setRefreshKey((value) => value + 1)}>Réessayer</button>
         </aside>
       )}
-      {hasNativeTraces && (
-        <RagObservabilitySummary requests={convNativeTraces.map((trace) => trace.request)} />
-      )}
-      {convBrainTraces.length > 0 && (
-        <div className="observatory-brain-nav">
-          {convBrainTraces.map((trace) => (
-            <BrainNavigationCard key={`${trace.timestamp}:${trace.conversationId}`} trace={trace} />
-          ))}
-        </div>
-      )}
-      {nativeTraces.length > 0 && (
+      {legacyBrainTraces.length > 0 && (
         <details className="observatory-native-diagnostics">
           <summary>
-            {nativeTraces.length} payload{nativeTraces.length > 1 ? 's' : ''} globaux · accès
-            autorisé · {ragInjected} injection{ragInjected > 1 ? 's' : ''} RAG prouvée
-            {ragInjected > 1 ? 's' : ''}
+            {legacyBrainTraces.length} ancienne{legacyBrainTraces.length > 1 ? 's' : ''} trace
+            {legacyBrainTraces.length > 1 ? 's' : ''} Brain · non rattachée
+            {legacyBrainTraces.length > 1 ? 's' : ''} à un tour
+          </summary>
+          <p>
+            Ces traces historiques n’ont pas de turnId. Observatory refuse de leur inventer une
+            position causale.
+          </p>
+          <div>
+            {legacyBrainTraces.map((trace) => (
+              <BrainNavigationCard
+                key={`${trace.timestamp}:${trace.conversationId}`}
+                trace={trace}
+              />
+            ))}
+          </div>
+        </details>
+      )}
+      {unlinkedNativeTraces.length > 0 && (
+        <details className="observatory-native-diagnostics">
+          <summary>
+            {unlinkedNativeTraces.length} payload
+            {unlinkedNativeTraces.length > 1 ? 's' : ''} brut
+            {unlinkedNativeTraces.length > 1 ? 's' : ''} · non rattaché
+            {unlinkedNativeTraces.length > 1 ? 's' : ''}
           </summary>
           <p>
             Ces requêtes ne sont attribuées à aucune conversation sans identifiant partagé. Secrets
             masqués.
           </p>
           <div>
-            {[...nativeTraces]
+            {[...unlinkedNativeTraces]
               .reverse()
               .slice(0, 20)
               .map((trace) => (
@@ -780,12 +1121,7 @@ export function ObservatoryView({
               <button
                 key={conversation.id}
                 className={conversation.id === conversationId ? 'is-active' : ''}
-                onClick={() => {
-                  setTurnFocus(null)
-                  setFocusUnavailable(null)
-                  setCausalTracePartial(false)
-                  setConversationId(conversation.id)
-                }}
+                onClick={() => selectConversation(conversation.id)}
               >
                 <strong>{conversation.title}</strong>
                 <small>{conversation.provider}</small>
@@ -858,7 +1194,13 @@ export function ObservatoryView({
           {!loading && viewMode === 'causal' && causalNodes.length === 0 && (
             <div className="observatory-empty">Aucun lien causal observable.</div>
           )}
-          {!loading && viewMode === 'causal' && causalNodes.length > 0 && (
+          {!loading &&
+            viewMode === 'causal' &&
+            causalNodes.length > 0 &&
+            visibleCausalNodes.length === 0 && (
+              <div className="observatory-empty">Aucun signal dans ce filtre.</div>
+            )}
+          {!loading && viewMode === 'causal' && visibleCausalNodes.length > 0 && (
             <section className="observatory-causal-path" aria-label="Chemin causal critique">
               <header>
                 <div>
@@ -874,7 +1216,7 @@ export function ObservatoryView({
                 <span>Inclusif / exclusif</span>
               </header>
               <div className="observatory-causal-tree">
-                {causalNodes.map((node) => (
+                {visibleCausalNodes.map((node) => (
                   <div className="observatory-causal-node-wrap" key={node.id}>
                     <button
                       className={`${node.onCriticalPath ? 'is-critical' : ''}${node.isBottleneck ? ' is-bottleneck' : ''}${selected?.id === node.id ? ' is-selected' : ''}`}
@@ -905,6 +1247,10 @@ export function ObservatoryView({
                         </small>
                       </span>
                       {node.issues.length > 0 && <em>{node.issues.join(' · ')}</em>}
+                      {node.event.kind === 'injection' &&
+                        summarizeRagTrace({ system: node.event.content }).status === 'injected' && (
+                          <em className="observatory-rag-node-badge">RAG injecté</em>
+                        )}
                     </button>
                     {selected?.id === node.id && (
                       <article
@@ -921,6 +1267,7 @@ export function ObservatoryView({
                           </div>
                           <button onClick={() => setSelected(null)}>Fermer</button>
                         </header>
+                        {renderRagCausalStep(node.event, eventTurnId(node.event))}
                         <PayloadContent content={node.event.content} />
                         <p>{node.event.detail}</p>
                         {node.event.payloads.length > 0 && (
@@ -1019,10 +1366,12 @@ export function ObservatoryView({
                           <b>{ZONE_LABEL[item.zone]}</b>
                           <small>{ZONE_HINT[item.zone]}</small>
                         </div>
-                        {item.events.map(({ event, diverges }) => renderEvent(event, n++, diverges))}
+                        {item.events.map(({ event, diverges }) =>
+                          renderEvent(event, n++, diverges, turn.id)
+                        )}
                       </div>
                     ) : (
-                      renderEvent(item.event, n++)
+                      renderEvent(item.event, n++, false, turn.id)
                     )
                   )
                 })()}

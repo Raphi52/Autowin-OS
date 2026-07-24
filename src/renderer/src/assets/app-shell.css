@@ -130,6 +130,9 @@
 .rail.is-collapsed .space-toy-icon {
   transform: translateX(-3px);
 }
+.rail.is-collapsed .nav-item[data-testid='nav-worktree'] .space-toy-icon {
+  transform: translateX(0);
+}
 .rail.is-collapsed .rail-toggle {
   margin-inline: auto;
 }

@@ -6,6 +6,12 @@ export interface ObservatoryExportFilters {
   provider: string
 }
 
+export interface ObservatoryExportView {
+  mode: 'timeline' | 'causal'
+  quickFilter: string
+  causalScope: string
+}
+
 export interface ObservatoryExportNativeTrace {
   apiRequestId: string
   timestamp: string
@@ -18,11 +24,14 @@ export interface ObservatoryExportNativeTrace {
 }
 
 export interface ObservatoryExportInput {
+  scope: 'view' | 'full'
   exportedAt: string
   conversationId: string
   filters: ObservatoryExportFilters
+  view: ObservatoryExportView
   limitations: string[]
   timeline: unknown
+  causalNodes: unknown[]
   promptCalls: unknown[]
   nativeTraces: ObservatoryExportNativeTrace[]
 }
@@ -34,11 +43,14 @@ export interface ObservatoryExportNativeRag extends Omit<ObservatoryExportNative
 
 export interface ObservatoryExportV1 {
   schema: 'autowin.observatory-export/v1'
+  scope: 'view' | 'full'
   exportedAt: string
   conversationId: string
   filters: ObservatoryExportFilters
+  view: ObservatoryExportView
   limitations: string[]
   timeline: unknown
+  causalNodes: unknown[]
   promptCalls: unknown[]
   nativeRag: ObservatoryExportNativeRag[]
 }
@@ -94,11 +106,14 @@ export function buildObservatoryExport(input: ObservatoryExportInput): Observato
 
   return {
     schema: 'autowin.observatory-export/v1',
+    scope: input.scope,
     exportedAt: input.exportedAt,
     conversationId: input.conversationId,
     filters: { ...input.filters },
+    view: { ...input.view },
     limitations: [...input.limitations],
     timeline: redact(input.timeline),
+    causalNodes: redact(input.causalNodes) as unknown[],
     promptCalls: redact(input.promptCalls) as unknown[],
     nativeRag
   }

@@ -21,7 +21,12 @@ import { projectContextBlock } from './context-files'
 import { ensureBrainServerStarted } from './brain-server-launch'
 import { installCrashHandlers } from './crash-handlers'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
-import { appPreflightProbes, getLastAppPreflightResult, runAppPreflight, watchAppPreflight } from './preflight-probes'
+import {
+  appPreflightProbes,
+  getLastAppPreflightResult,
+  runAppPreflight,
+  watchAppPreflight
+} from './preflight-probes'
 import { RoleModelConfig, type ReasoningEffort, type Role } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
@@ -94,6 +99,7 @@ import { loadTokens } from './providers/codex-auth'
 
 import { createAmitelContextProvider } from './amitel-context'
 import { readGitState, readGitDiff } from './git-read-main'
+import { readGitGraph } from './git-graph-main'
 import {
   automationAppIdentity,
   presentAutomationWindow,
@@ -521,8 +527,9 @@ function registerChatIpc(): void {
       // Trace Brain (observabilité Observatory) : requête réelle + navigation interne + injecté.
       if (result.brainNavigation || (result.brainInjectedChars ?? 0) > 0) {
         appendBrainTrace({
-          timestamp: new Date().toISOString(),
+          timestamp: result.brainRetrievedAt ?? new Date().toISOString(),
           conversationId,
+          turnId,
           query: result.brainQuery ?? '',
           injectedChars: result.brainInjectedChars ?? 0,
           navigation: result.brainNavigation
@@ -567,6 +574,12 @@ function registerChatIpc(): void {
   ipcMain.handle('git:read', (event, cwd?: string) => {
     assertTrustedRendererSender(event, 'GitRead')
     return readGitState(cwd && typeof cwd === 'string' ? cwd : process.cwd())
+  })
+  ipcMain.handle('git:graph', (event, cwd?: string) => {
+    assertTrustedRendererSender(event, 'GitGraph')
+    return readGitGraph(
+      cwd && typeof cwd === 'string' ? cwd : (process.env.AUTOWIN_OS_WORKSPACE ?? process.cwd())
+    )
   })
   ipcMain.handle('git:diff', (event, path: string, cwd?: string) => {
     assertTrustedRendererSender(event, 'GitDiff')
@@ -1495,27 +1508,24 @@ app.whenReady().then(async () => {
   // échoue et pousse CHAQUE transition — dont la récupération ok qui efface la bannière. On ne pousse
   // que sur CHANGEMENT (ok-ness + set d'échecs) pour ne pas écraser un dismiss utilisateur inutilement.
   let lastPreflightSignature: string | null = null
-  preflightWatchHandle = watchAppPreflight(
-    (result) => {
-      const signature = `${result.ok}|${result.checks
-        .filter((c) => !c.ok)
-        .map((c) => c.id)
-        .sort()
-        .join(',')}`
-      if (signature === lastPreflightSignature) return
-      lastPreflightSignature = signature
-      for (const w of BrowserWindow.getAllWindows()) w.webContents.send('preflight:result', result)
-      // #2 — un rouge « brain » → tenter de DÉMARRER le service local (garde anti-doublon + tentative
-      // unique par session dans ensureBrainServerStarted). Le backoff de watchAppPreflight re-sondera
-      // ensuite jusqu'à sa disponibilité (warm-up fastembed). Fire-and-forget : ne bloque pas le push.
-      if (result.checks.some((c) => c.id === 'brain' && !c.ok)) {
-        void ensureBrainServerStarted(() => appPreflightProbes().pingBrain()).then((r) =>
-          console.log('[brain-launch]', r.status, '—', r.detail)
-        )
-      }
-    },
-    preflightProviderOptions()
-  )
+  preflightWatchHandle = watchAppPreflight((result) => {
+    const signature = `${result.ok}|${result.checks
+      .filter((c) => !c.ok)
+      .map((c) => c.id)
+      .sort()
+      .join(',')}`
+    if (signature === lastPreflightSignature) return
+    lastPreflightSignature = signature
+    for (const w of BrowserWindow.getAllWindows()) w.webContents.send('preflight:result', result)
+    // #2 — un rouge « brain » → tenter de DÉMARRER le service local (garde anti-doublon + tentative
+    // unique par session dans ensureBrainServerStarted). Le backoff de watchAppPreflight re-sondera
+    // ensuite jusqu'à sa disponibilité (warm-up fastembed). Fire-and-forget : ne bloque pas le push.
+    if (result.checks.some((c) => c.id === 'brain' && !c.ok)) {
+      void ensureBrainServerStarted(() => appPreflightProbes().pingBrain()).then((r) =>
+        console.log('[brain-launch]', r.status, '—', r.detail)
+      )
+    }
+  }, preflightProviderOptions())
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the

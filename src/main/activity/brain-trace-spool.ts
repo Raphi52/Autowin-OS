@@ -15,6 +15,8 @@ const SPOOL_MAX_BYTES = 2 * 1024 * 1024
 export interface BrainTrace {
   timestamp: string
   conversationId: string
+  /** Absent uniquement sur les traces historiques antérieures à la corrélation par tour. */
+  turnId?: string
   query: string
   injectedChars: number
   navigation?: BrainNavigation

@@ -4,6 +4,7 @@ export const APP_DESTINATIONS = [
   { id: 'knowledge', label: 'Knowledge', icon: '🧠' },
   { id: 'observatory', label: 'Observatory', icon: '🔭' },
   { id: 'worktree', label: 'Worktrees', icon: '🌳' },
+  { id: 'tickets', label: 'Tickets', icon: '🎫' },
   { id: 'settings', label: 'Settings', icon: '⚙️' }
 ] as const
 

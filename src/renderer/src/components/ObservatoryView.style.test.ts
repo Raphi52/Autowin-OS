@@ -101,4 +101,13 @@ describe('Observatory visual contracts', () => {
 
     expect(selectedCausalRule).toMatch(/outline:\s*1px solid rgba\(225,\s*193,\s*103,\s*0\.88\)/)
   })
+
+  it('keeps the RAG badge out of the 12px causal icon column', () => {
+    const css = readCss()
+    const badgeRule = css.match(/\.observatory-rag-node-badge\s*{[^}]*}/s)?.[0]
+
+    expect(badgeRule).toMatch(/grid-column:\s*2\s*\/\s*-1/)
+    expect(badgeRule).toMatch(/justify-self:\s*start/)
+    expect(badgeRule).toMatch(/white-space:\s*nowrap/)
+  })
 })

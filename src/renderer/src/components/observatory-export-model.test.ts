@@ -4,11 +4,14 @@ import { buildObservatoryExport } from './observatory-export-model'
 describe('observatory export model', () => {
   it('exports every observability plane under a versioned schema', () => {
     const result = buildObservatoryExport({
+      scope: 'full',
       exportedAt: '2026-07-20T02:00:00.000Z',
       conversationId: 'conv-1',
       filters: { query: 'brain', type: 'injection', provider: 'native' },
+      view: { mode: 'timeline', quickFilter: 'all', causalScope: 'all' },
       limitations: ['Native global non rattaché'],
       timeline: { turns: [{ id: 'turn-1' }], anomalies: [] },
+      causalNodes: [],
       promptCalls: [{ id: 'call-1', provider: 'codex', limitation: 'usage estimé' }],
       nativeTraces: [
         {
@@ -36,8 +39,10 @@ describe('observatory export model', () => {
 
     expect(result).toMatchObject({
       schema: 'autowin.observatory-export/v1',
+      scope: 'full',
       conversationId: 'conv-1',
       filters: { query: 'brain', type: 'injection', provider: 'native' },
+      view: { mode: 'timeline', quickFilter: 'all', causalScope: 'all' },
       limitations: ['Native global non rattaché'],
       timeline: { turns: [{ id: 'turn-1' }] },
       promptCalls: [{ id: 'call-1' }],
@@ -58,11 +63,14 @@ describe('observatory export model', () => {
   it('rejects a Native payload whose fidelity is not exact-redacted', () => {
     expect(() =>
       buildObservatoryExport({
+        scope: 'full',
         exportedAt: '2026-07-20T02:00:00.000Z',
         conversationId: 'conv-1',
         filters: { query: '', type: 'all', provider: 'all' },
+        view: { mode: 'timeline', quickFilter: 'all', causalScope: 'all' },
         limitations: [],
         timeline: { turns: [] },
+        causalNodes: [],
         promptCalls: [],
         nativeTraces: [
           {

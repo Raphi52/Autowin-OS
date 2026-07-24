@@ -5,6 +5,7 @@ export interface NativeTraceSummaryInput {
   boundary: 'native.pre_api_request'
   source: 'plugin-hook' | 'request-dump'
   conversationId?: string
+  turnId?: string
 }
 
 export function summarizeNativeTraces(traces: NativeTraceSummaryInput[]): {
