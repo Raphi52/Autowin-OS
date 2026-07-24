@@ -83,6 +83,10 @@ describe('vue Tickets', () => {
       'AmitelGTC / RIG / RigApplication'
     )
     expect(container.textContent).toContain('Tous les Work Items du projet RIG')
+    expect(container.textContent).toContain(
+      'dépôt de contexte RigApplication, sans filtre direct par dépôt'
+    )
+    expect(container.textContent).toContain('Session Azure CLI')
     expect(container.querySelectorAll('[data-testid="ticket-row"]')).toHaveLength(3)
     expect(container.textContent).toContain('Bug')
     await act(async () => {

@@ -52,6 +52,29 @@ describe('service Tickets côté main', () => {
     )
   })
 
+  it('ignore tout credential Azure stocké et utilise exclusivement Azure CLI', async () => {
+    const deps = fixture()
+    vi.mocked(deps.credentialStore.get).mockReturnValue('legacy-pat')
+    vi.mocked(deps.credentialStore.has).mockReturnValue(true)
+    const tokenFallback = vi.fn(async () => ({
+      token: 'azure-cli-secret',
+      authScheme: 'bearer' as const
+    }))
+    const service = new TicketService({ ...deps, tokenFallback })
+
+    expect(service.sources()).toEqual([
+      { profile: DEFAULT_TICKET_SOURCE, credentialConfigured: false }
+    ])
+    await service.list({ source: DEFAULT_TICKET_SOURCE })
+
+    expect(deps.credentialStore.get).not.toHaveBeenCalled()
+    expect(tokenFallback).toHaveBeenCalledWith(DEFAULT_TICKET_SOURCE)
+    expect(deps.registry.list).toHaveBeenCalledWith(
+      { source: DEFAULT_TICKET_SOURCE },
+      { token: 'azure-cli-secret', authScheme: 'bearer' }
+    )
+  })
+
   it('refuse un profil forgé par le renderer même si son id existe', async () => {
     const deps = fixture()
     const service = new TicketService(deps)

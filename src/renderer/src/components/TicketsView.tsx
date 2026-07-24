@@ -423,9 +423,9 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         {selectedSource && (
           <span className="tickets-auth-mode">
             {selectedSource.provider === 'azure'
-              ? `Tous les Work Items du projet ${selectedSource.project} · ${
-                  selectedSummary?.credentialConfigured ? 'Coffre configuré' : 'Session Azure CLI'
-                }`
+              ? `Tous les Work Items du projet ${selectedSource.project} · dépôt de contexte ${
+                  selectedSource.repository ?? 'non renseigné'
+                }, sans filtre direct par dépôt · Session Azure CLI`
               : selectedSummary?.credentialConfigured
                 ? 'Coffre configuré'
                 : 'Public · session CLI/env si privée'}

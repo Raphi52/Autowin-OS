@@ -12,7 +12,7 @@ import type { TicketSourceStore } from './ticket-source-store'
 
 export interface TicketRuntimeCredential {
   token: string
-  authScheme: 'bearer' | 'pat'
+  authScheme: 'bearer'
 }
 
 export interface TicketServiceDependencies {
@@ -47,7 +47,9 @@ export class TicketService {
   sources(): TicketSourceSummary[] {
     return this.dependencies.sourceStore.list().map((profile) => ({
       profile,
-      credentialConfigured: this.dependencies.credentialStore.has(ticketCredentialKey(profile))
+      credentialConfigured:
+        profile.provider !== 'azure' &&
+        this.dependencies.credentialStore.has(ticketCredentialKey(profile))
     }))
   }
 
@@ -99,13 +101,16 @@ export class TicketService {
       throw new Error(`Fournisseur Tickets non supporté : ${source.provider}`)
     }
 
-    const storedCredential = this.dependencies.credentialStore.get(ticketCredentialKey(source))
+    const storedCredential =
+      source.provider === 'azure'
+        ? null
+        : this.dependencies.credentialStore.get(ticketCredentialKey(source))
     const fallbackCredential =
       storedCredential === null && this.dependencies.tokenFallback
         ? await this.dependencies.tokenFallback(source)
         : null
     const credential: TicketRuntimeCredential = storedCredential
-      ? { token: storedCredential, authScheme: source.provider === 'azure' ? 'pat' : 'bearer' }
+      ? { token: storedCredential, authScheme: 'bearer' }
       : (fallbackCredential ?? { token: '', authScheme: 'bearer' })
     return this.dependencies.registry.list(
       {

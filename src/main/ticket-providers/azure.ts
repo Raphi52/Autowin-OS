@@ -61,12 +61,10 @@ function readCursor(cursor: string | undefined): number | undefined {
 }
 
 function authorizationHeader(context: TicketProviderContext): string {
-  if (!context.token) {
+  if (!context.token || context.authScheme !== 'bearer') {
     throw new TicketProviderError('AUTH_REQUIRED', 'Authentification requise.')
   }
-  return context.authScheme === 'bearer'
-    ? `Bearer ${context.token}`
-    : `Basic ${Buffer.from(`:${context.token}`, 'utf8').toString('base64')}`
+  return `Bearer ${context.token}`
 }
 
 function assertWiqlResponse(value: unknown): asserts value is AzureWiqlResponse {

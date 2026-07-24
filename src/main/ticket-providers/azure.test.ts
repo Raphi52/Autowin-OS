@@ -45,7 +45,7 @@ describe('adaptateur Azure DevOps Tickets', () => {
 
     const page = await azureTicketProvider.list(
       { source: DEFAULT_TICKET_SOURCE, pageSize: 2 },
-      { token: 'pat-secret', fetchFn: fetchFn as typeof fetch }
+      { token: 'azure-cli-secret', authScheme: 'bearer', fetchFn: fetchFn as typeof fetch }
     )
 
     const [wiqlUrl, wiqlInit] = fetchFn.mock.calls[0]
@@ -56,7 +56,7 @@ describe('adaptateur Azure DevOps Tickets', () => {
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({
-          authorization: `Basic ${Buffer.from(':pat-secret').toString('base64')}`
+          authorization: 'Bearer azure-cli-secret'
         })
       })
     )
@@ -91,7 +91,7 @@ describe('adaptateur Azure DevOps Tickets', () => {
 
     const nextPage = await azureTicketProvider.list(
       { source: DEFAULT_TICKET_SOURCE, pageSize: 2, cursor: page.cursor },
-      { token: 'pat-secret', fetchFn: nextFetch as typeof fetch }
+      { token: 'azure-cli-secret', authScheme: 'bearer', fetchFn: nextFetch as typeof fetch }
     )
     const nextBody = JSON.parse(String(nextFetch.mock.calls[0][1]?.body)) as { query: string }
     expect(nextBody.query).toContain('[System.Id] > 12')
@@ -129,7 +129,7 @@ describe('adaptateur Azure DevOps Tickets', () => {
 
     const page = await azureTicketProvider.list(
       { source: DEFAULT_TICKET_SOURCE, pageSize: 202 },
-      { token: 'pat-secret', fetchFn: fetchFn as typeof fetch }
+      { token: 'azure-cli-secret', authScheme: 'bearer', fetchFn: fetchFn as typeof fetch }
     )
 
     const detailCalls = fetchFn.mock.calls.slice(1)
@@ -176,13 +176,22 @@ describe('adaptateur Azure DevOps Tickets', () => {
     )
   })
 
+  it('refuse une authentification Azure qui ne vient pas du flux Bearer Azure AD', async () => {
+    await expect(
+      azureTicketProvider.list(
+        { source: DEFAULT_TICKET_SOURCE },
+        { token: 'legacy-pat', authScheme: 'pat', fetchFn: vi.fn() as typeof fetch }
+      )
+    ).rejects.toEqual(new TicketProviderError('AUTH_REQUIRED', 'Authentification requise.'))
+  })
+
   it('classe une forme de réponse Azure invalide via le contrat fournisseur', async () => {
     const fetchFn = vi.fn().mockResolvedValueOnce(json({ workItems: 'incorrect' }))
 
     await expect(
       azureTicketProvider.list(
         { source: DEFAULT_TICKET_SOURCE },
-        { token: 'pat-secret', fetchFn: fetchFn as typeof fetch }
+        { token: 'azure-cli-secret', authScheme: 'bearer', fetchFn: fetchFn as typeof fetch }
       )
     ).rejects.toEqual(new TicketProviderError('INVALID_RESPONSE', 'Réponse Azure DevOps invalide.'))
   })
