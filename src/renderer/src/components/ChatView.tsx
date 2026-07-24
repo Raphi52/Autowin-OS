@@ -466,7 +466,9 @@ export function ChatView({
   // Menu ⋮ d'une conversation, rendu en position fixe (déborde du conteneur scrollable).
   const [convMenu, setConvMenu] = useState<{ conv: Conv; top: number; left: number } | null>(null)
   // File d'attente : directives injectées pendant le tour, pas encore consommées (conv active).
-  const [pendingDirectives, setPendingDirectives] = useState<string[]>([])
+  const [pendingDirectives, setPendingDirectives] = useState<
+    Array<{ id: number; text: string }>
+  >([])
   const [modelCatalog, setModelCatalog] = useState<RuntimeModel[]>([])
   const [orchestratorBinding, setOrchestratorBinding] = useState<{
     provider: string
@@ -696,14 +698,18 @@ export function ChatView({
   }
   // File d'attente LOCALE (renderer) : messages tapés pendant un tour, envoyés comme des tours
   // NORMAUX un par un à la fin du tour courant → chaque message = sa propre paire Q/R (rendu propre).
-  const queueRef = useRef<Map<string, string[]>>(new Map())
-  function setConversationQueue(id: string, next: string[]): void {
+  const nextQueueEntryIdRef = useRef(0)
+  const queueRef = useRef<Map<string, Array<{ id: number; text: string }>>>(new Map())
+  function setConversationQueue(id: string, next: Array<{ id: number; text: string }>): void {
     if (next.length) queueRef.current.set(id, next)
     else queueRef.current.delete(id)
     if (activeRef.current === id) setPendingDirectives(next)
   }
   function enqueueMessage(id: string, text: string): void {
-    setConversationQueue(id, [...(queueRef.current.get(id) ?? []), text])
+    setConversationQueue(id, [
+      ...(queueRef.current.get(id) ?? []),
+      { id: nextQueueEntryIdRef.current++, text }
+    ])
   }
   useEffect(() => {
     setPendingDirectives(queueRef.current.get(activeId ?? '') ?? [])
@@ -1019,14 +1025,20 @@ export function ChatView({
    * (drainée à l'itération suivante du pilote) sans l'annuler, puis le retire de la file.
    * Différent de « Interrompre et envoyer » qui coupe le tour.
    */
-  async function steerWithoutInterrupt(index: number, text: string): Promise<void> {
+  async function steerWithoutInterrupt(entry: { id: number; text: string }): Promise<void> {
     const id = activeRef.current
     if (!id) return
-    await window.api.injectDirective(id, text)
+    let result: { ok: boolean }
+    try {
+      result = await window.api.injectDirective(id, entry.text)
+    } catch {
+      return
+    }
+    if (!result.ok) return
     const q = queueRef.current.get(id) ?? []
     setConversationQueue(
       id,
-      q.filter((_, i) => i !== index)
+      q.filter((queued) => queued.id !== entry.id)
     )
   }
 
@@ -1077,7 +1089,7 @@ export function ChatView({
     if (!queued || queued.length === 0) return
     const [nextMessage, ...rest] = queued
     setConversationQueue(id, rest)
-    void send(nextMessage)
+    void send(nextMessage.text)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busy])
 
@@ -1725,10 +1737,10 @@ export function ChatView({
               )}
             </div>
             {pendingDirectives.map((directive, index) => (
-              <div className="directive-queue-item" key={`${index}-${directive.slice(0, 12)}`}>
+              <div className="directive-queue-item" key={directive.id}>
                 <span className="directive-queue-index">{index + 1}</span>
-                <span className="directive-queue-text" title={directive}>
-                  {directive}
+                <span className="directive-queue-text" title={directive.text}>
+                  {directive.text}
                 </span>
                 <button
                   type="button"
@@ -1745,7 +1757,7 @@ export function ChatView({
                     className="directive-queue-steer"
                     title="Orienter maintenant — injecter ce message comme directive PRIORITAIRE dans le tour en cours, sans l’interrompre"
                     aria-label={`Orienter le tour en cours avec le message ${index + 1}`}
-                    onClick={() => void steerWithoutInterrupt(index, directive)}
+                    onClick={() => void steerWithoutInterrupt(directive)}
                   >
                     🧭 Orienter
                   </button>
