@@ -7,6 +7,8 @@
 // reflète les voies vérifiées (catalogue du compte ChatGPT ; Claude CLI → alias
 // --model réels) et l'utilisateur peut importer/supprimer explicitement.
 
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import type { ReasoningEffort } from './roles'
 import type { ComputeBinding } from '../shared/compute-fabric'
 import { loadTokens, type Tokens } from './providers/codex-auth'
@@ -93,6 +95,51 @@ const REASONING_EFFORTS = new Set<ReasoningEffort>([
   'max',
   'ultra'
 ])
+const SUPPORTED_PROVIDERS = new Set(['claude', 'codex', 'kimi'])
+
+/** Rejects malformed cache entries before they can be offered to a topology. */
+export function isValidImportedModel(value: unknown): value is ImportedModel {
+  if (!value || typeof value !== 'object') return false
+  const model = value as Partial<ImportedModel>
+  return (
+    typeof model.provider === 'string' &&
+    SUPPORTED_PROVIDERS.has(model.provider) &&
+    typeof model.model === 'string' &&
+    model.model.length > 0 &&
+    typeof model.id === 'string' &&
+    model.id === `${model.provider}/${model.model}` &&
+    typeof model.label === 'string' &&
+    Array.isArray(model.reasoningEfforts) &&
+    model.reasoningEfforts.length > 0 &&
+    model.reasoningEfforts.every(
+      (effort): effort is ReasoningEffort =>
+        typeof effort === 'string' && REASONING_EFFORTS.has(effort as ReasoningEffort)
+    ) &&
+    typeof model.defaultReasoningEffort === 'string' &&
+    model.reasoningEfforts.includes(model.defaultReasoningEffort as ReasoningEffort)
+  )
+}
+
+function validModels(value: unknown): ImportedModel[] | undefined {
+  if (!Array.isArray(value) || value.length === 0 || !value.every(isValidImportedModel)) return undefined
+  return value
+}
+
+export function loadImportedModelsCache(path: string): ImportedModel[] {
+  try {
+    return validModels(JSON.parse(readFileSync(path, 'utf8'))) ?? []
+  } catch {
+    return []
+  }
+}
+
+export function saveImportedModelsCache(path: string, models: ImportedModel[]): void {
+  if (!validModels(models)) return
+  mkdirSync(dirname(path), { recursive: true })
+  const temporary = `${path}.${process.pid}.tmp`
+  writeFileSync(temporary, JSON.stringify(models, null, 2), 'utf8')
+  renameSync(temporary, path)
+}
 
 interface CodexModelPayload {
   slug?: unknown
@@ -106,7 +153,7 @@ async function discoverCodexModels(
   loadTokensFn: () => Tokens | null
 ): Promise<ImportedModel[]> {
   const tokens = loadTokensFn()
-  if (!tokens) return [DEFAULT_IMPORTED_MODELS[0]]
+  if (!tokens) return []
   try {
     const response = await fetchFn(CODEX_MODELS_URL, {
       headers: {
@@ -116,7 +163,7 @@ async function discoverCodexModels(
       },
       signal: AbortSignal.timeout(4_000)
     })
-    if (!response.ok) return [DEFAULT_IMPORTED_MODELS[0]]
+    if (!response.ok) return []
     const payload = (await response.json()) as { models?: CodexModelPayload[] }
     const discovered = (payload.models ?? []).flatMap<ImportedModel>((entry) => {
       if (typeof entry.slug !== 'string' || !/^[a-z0-9][a-z0-9.-]*$/.test(entry.slug)) return []
@@ -148,9 +195,9 @@ async function discoverCodexModels(
         }
       ]
     })
-    return discovered.length > 0 ? discovered : [DEFAULT_IMPORTED_MODELS[0]]
+    return validModels(discovered) ?? []
   } catch {
-    return [DEFAULT_IMPORTED_MODELS[0]]
+    return []
   }
 }
 
@@ -168,14 +215,16 @@ function labelClaudeModel(id: string): string {
  */
 export async function discoverImportedModels(
   fetchFn: typeof fetch = fetch,
-  loadTokensFn: () => Tokens | null = loadTokens
+  loadTokensFn: () => Tokens | null = loadTokens,
+  cachePath?: string
 ): Promise<ImportedModel[]> {
   const codexModels = await discoverCodexModels(fetchFn, loadTokensFn)
+  let claudeModels: ImportedModel[] = []
   try {
     const response = await fetchFn('http://127.0.0.1:8787/models', {
       signal: AbortSignal.timeout(2_000)
     })
-    if (!response.ok) return DEFAULT_IMPORTED_MODELS
+    if (!response.ok) throw new Error('Claude models listing unavailable')
     const payload = (await response.json()) as { data?: Array<{ id?: unknown }> }
     const discovered = (payload.data ?? [])
       .map((entry) => entry.id)
@@ -188,14 +237,18 @@ export async function discoverImportedModels(
         reasoningEfforts: [...CLAUDE_EFFORTS],
         defaultReasoningEffort: model.includes('haiku') ? 'medium' : 'high'
       }))
-    return [
-      ...codexModels,
-      ...discovered,
-      ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi')
-    ]
+    claudeModels = validModels(discovered) ?? []
   } catch {
-    return [...codexModels, ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider !== 'codex')]
+    claudeModels = []
   }
+
+  const cached = cachePath ? loadImportedModelsCache(cachePath) : []
+  const result = [
+    ...(codexModels.length > 0 ? codexModels : cached.filter((model) => model.provider === 'codex')),
+    ...(claudeModels.length > 0 ? claudeModels : cached.filter((model) => model.provider === 'claude'))
+  ]
+  if (validModels(result) && cachePath) saveImportedModelsCache(cachePath, result)
+  return result
 }
 
 /** Retrouve un modèle importé par son id canonique. */

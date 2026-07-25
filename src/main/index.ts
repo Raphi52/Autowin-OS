@@ -60,7 +60,7 @@ import { ApprovedBehaviourWorkspaces, isTrustedRendererUrl } from './behaviour-a
 import { discoverConfiguredSkillRegistry } from './skill-registry'
 import { listClaudeHooks, listCodexHooks } from './claude-hooks'
 import { ModelQuestionHub, type ModelQuestion, type PendingModelQuestion } from './model-questions'
-import { DEFAULT_IMPORTED_MODELS, discoverImportedModels, findModel } from './models'
+import { discoverImportedModels, findModel, type ImportedModel } from './models'
 import { loadAgentTopology, saveAgentTopology } from './topology-disk'
 import { migrateTopologyShape } from './topology'
 import type { AgentTopology, SlotBinding } from './topology'
@@ -267,16 +267,28 @@ function preflightProviderOptions(): { standbyProviders: Array<(typeof routedPro
     )
   }
 }
-let agentModels = DEFAULT_IMPORTED_MODELS
+let agentModels: ImportedModel[] = []
 const agentTopologyPath = join(app.getPath('userData'), 'agent-topology.json')
-let agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
-const agentModelsReady = discoverImportedModels(fetch).then((models) => {
+const agentModelsCachePath = join(app.getPath('userData'), 'imported-models.json')
+let agentTopology: AgentTopology | undefined
+const agentModelsReady = discoverImportedModels(fetch, undefined, agentModelsCachePath).then((models) => {
   agentModels = models
-  agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
-  syncRuntimeTopology(agentTopology)
+  if (models.length > 0) {
+    agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
+    syncRuntimeTopology(agentTopology)
+  } else {
+    console.warn('[models] aucun catalogue valide découvert ni mis en cache')
+  }
   return models
 })
 os.setTaskReadiness(agentModelsReady)
+
+function requireAgentTopology(): AgentTopology {
+  if (!agentTopology) {
+    throw new Error('Aucun catalogue de modèles valide n’est disponible.')
+  }
+  return agentTopology
+}
 
 function syncRuntimeTopology(topology: AgentTopology): void {
   const sync = (role: Role, binding: SlotBinding | undefined): void => {
@@ -804,7 +816,7 @@ function registerChatIpc(): void {
     await agentModelsReady
     const safe = {
       ...profile,
-      topology: agentTopology,
+      topology: requireAgentTopology(),
       roles: os.roles.all(),
       updatedAt: new Date().toISOString()
     }
@@ -813,6 +825,7 @@ function registerChatIpc(): void {
   ipcMain.handle('os:profiles:apply', async (event, id: string) => {
     assertTrustedRendererSender(event, 'Profiles')
     await agentModelsReady
+    requireAgentTopology()
     const profile = profiles.list().find((item) => item.id === guardString(id, 'profile.id'))
     if (!profile) throw new Error('Profil introuvable')
     // Rétrocompat : un profil sauvegardé AVANT le bloc `frame` n'a pas `panels.frame` → on migre
@@ -832,11 +845,12 @@ function registerChatIpc(): void {
   })
   ipcMain.handle('os:topology:get', async () => {
     await agentModelsReady
-    return agentTopology
+    return requireAgentTopology()
   })
   ipcMain.handle('os:topology:set', async (event, topology: AgentTopology) => {
     assertTrustedRendererSender(event, 'Topology')
     await agentModelsReady
+    requireAgentTopology()
     guardString(JSON.stringify(topology), 'topology')
     agentTopology = saveAgentTopology(agentTopologyPath, topology, agentModels)
     syncRuntimeTopology(agentTopology)
