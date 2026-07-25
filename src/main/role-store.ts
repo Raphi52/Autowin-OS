@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { Role, RoleBinding } from './roles'
+import { migrateRoleBindingsToAliases, type Role, type RoleBinding } from './roles'
 import { ensureAutowinAppData } from './app-data'
 
 /**
@@ -21,7 +21,12 @@ export function loadRoleBindings(): Partial<Record<Role, RoleBinding>> | undefin
   const p = rolesPath()
   if (!existsSync(p)) return undefined
   try {
-    return JSON.parse(readFileSync(p, 'utf8')) as Partial<Record<Role, RoleBinding>>
+    const raw = JSON.parse(readFileSync(p, 'utf8')) as Partial<Record<Role, RoleBinding>>
+    // Migration : les anciens ids concrets écrits en dur deviennent des alias
+    // stables (fable-latest, …). Réécrit le fichier UNIQUEMENT si ça change.
+    const migrated = migrateRoleBindingsToAliases(raw)
+    if (JSON.stringify(migrated) !== JSON.stringify(raw)) writeBindings(p, migrated)
+    return migrated
   } catch {
     return undefined
   }

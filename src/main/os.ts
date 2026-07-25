@@ -231,7 +231,8 @@ export class AutowinOS {
 
   /** Change le binding d'un rôle ET persiste sur disque. */
   setRole(role: Role, binding: RoleBinding): Record<Role, RoleBinding> {
-    const proposed = new RoleModelConfig(this.roles.all()).setBinding(role, binding).all()
+    // rawAll() : on persiste les ALIAS stables, pas leur résolution du moment.
+    const proposed = new RoleModelConfig(this.roles.rawAll()).setBinding(role, binding).rawAll()
     saveRoleBindings(proposed)
     this.roles.setBinding(role, proposed[role])
     return this.roles.all()

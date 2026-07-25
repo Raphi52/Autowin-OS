@@ -58,6 +58,7 @@ const api = {
     reasoningEffort?: string
   ): Promise<unknown> => ipcRenderer.invoke('os:setRole', role, provider, model, reasoningEffort),
   models: (): Promise<unknown[]> => ipcRenderer.invoke('os:models:list'),
+  refreshModels: (): Promise<unknown[]> => ipcRenderer.invoke('os:models:refresh'),
   profiles: (): Promise<unknown[]> => ipcRenderer.invoke('os:profiles:list'),
   saveProfile: (profile: unknown): Promise<unknown[]> =>
     ipcRenderer.invoke('os:profiles:save', profile),

@@ -93,6 +93,18 @@ const REASONING_EFFORTS = new Set<ReasoningEffort>([
   'ultra'
 ])
 
+/** Résultat d'une voie de découverte : liste + fraîcheur (live = venue de l'API, pas du repli). */
+interface ProviderDiscovery {
+  models: ImportedModel[]
+  live: boolean
+}
+
+/** Découverte complète : modèles fusionnés + liveness par voie (pilote la persistance du cache). */
+export interface ModelDiscovery {
+  models: ImportedModel[]
+  live: { codex: boolean; claude: boolean }
+}
+
 interface CodexModelPayload {
   slug?: unknown
   display_name?: unknown
@@ -100,12 +112,17 @@ interface CodexModelPayload {
   supported_reasoning_levels?: Array<{ effort?: unknown }>
 }
 
+const codexFallback = (): ProviderDiscovery => ({
+  models: [DEFAULT_IMPORTED_MODELS[0]],
+  live: false
+})
+
 async function discoverCodexModels(
   fetchFn: typeof fetch,
   loadTokensFn: () => Tokens | null
-): Promise<ImportedModel[]> {
+): Promise<ProviderDiscovery> {
   const tokens = loadTokensFn()
-  if (!tokens) return [DEFAULT_IMPORTED_MODELS[0]]
+  if (!tokens) return codexFallback()
   try {
     const response = await fetchFn(CODEX_MODELS_URL, {
       headers: {
@@ -115,7 +132,7 @@ async function discoverCodexModels(
       },
       signal: AbortSignal.timeout(4_000)
     })
-    if (!response.ok) return [DEFAULT_IMPORTED_MODELS[0]]
+    if (!response.ok) return codexFallback()
     const payload = (await response.json()) as { models?: CodexModelPayload[] }
     const discovered = (payload.models ?? []).flatMap<ImportedModel>((entry) => {
       if (typeof entry.slug !== 'string' || !/^[a-z0-9][a-z0-9.-]*$/.test(entry.slug)) return []
@@ -143,9 +160,9 @@ async function discoverCodexModels(
         }
       ]
     })
-    return discovered.length > 0 ? discovered : [DEFAULT_IMPORTED_MODELS[0]]
+    return discovered.length > 0 ? { models: discovered, live: true } : codexFallback()
   } catch {
-    return [DEFAULT_IMPORTED_MODELS[0]]
+    return codexFallback()
   }
 }
 
@@ -157,20 +174,17 @@ function labelClaudeModel(id: string): string {
   return `Claude ${name} ${major}${minor ? `.${minor}` : ''}${date ? ` (${date})` : ''} · CLI`
 }
 
-/**
- * Découvre indépendamment les catalogues ChatGPT et Claude/Fable réellement exposés.
- * Une indisponibilité d'une voie retombe sur son seed vérifié, sans inventer de noms.
- */
-export async function discoverImportedModels(
-  fetchFn: typeof fetch = fetch,
-  loadTokensFn: () => Tokens | null = loadTokens
-): Promise<ImportedModel[]> {
-  const codexModels = await discoverCodexModels(fetchFn, loadTokensFn)
+const claudeFallback = (): ProviderDiscovery => ({
+  models: DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'claude'),
+  live: false
+})
+
+async function discoverClaudeModels(fetchFn: typeof fetch): Promise<ProviderDiscovery> {
   try {
     const response = await fetchFn('http://127.0.0.1:8787/models', {
       signal: AbortSignal.timeout(2_000)
     })
-    if (!response.ok) return DEFAULT_IMPORTED_MODELS
+    if (!response.ok) return claudeFallback()
     const payload = (await response.json()) as { data?: Array<{ id?: unknown }> }
     const discovered = (payload.data ?? [])
       .map((entry) => entry.id)
@@ -183,14 +197,43 @@ export async function discoverImportedModels(
         reasoningEfforts: [...CLAUDE_EFFORTS],
         defaultReasoningEffort: model.includes('haiku') ? 'medium' : 'high'
       }))
-    return [
-      ...codexModels,
-      ...discovered,
-      ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi')
-    ]
+    return discovered.length > 0 ? { models: discovered, live: true } : claudeFallback()
   } catch {
-    return [...codexModels, ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider !== 'codex')]
+    return claudeFallback()
   }
+}
+
+/**
+ * Découverte détaillée : catalogues ChatGPT et Claude/Fable réellement exposés, avec
+ * liveness par voie. Kimi n'a AUCUNE voie de listing HTTP (provider CLI/OAuth) : son
+ * entrée reste le seed vérifié, jamais inventé. Une voie indisponible retombe sur son
+ * seed vérifié — le champ `live` permet à l'appelant de préférer un cache persisté.
+ */
+export async function discoverImportedModelsDetailed(
+  fetchFn: typeof fetch = fetch,
+  loadTokensFn: () => Tokens | null = loadTokens
+): Promise<ModelDiscovery> {
+  const codex = await discoverCodexModels(fetchFn, loadTokensFn)
+  const claude = await discoverClaudeModels(fetchFn)
+  return {
+    models: [
+      ...codex.models,
+      ...claude.models,
+      ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi')
+    ],
+    live: { codex: codex.live, claude: claude.live }
+  }
+}
+
+/**
+ * Découvre indépendamment les catalogues ChatGPT et Claude/Fable réellement exposés.
+ * Une indisponibilité d'une voie retombe sur son seed vérifié, sans inventer de noms.
+ */
+export async function discoverImportedModels(
+  fetchFn: typeof fetch = fetch,
+  loadTokensFn: () => Tokens | null = loadTokens
+): Promise<ImportedModel[]> {
+  return (await discoverImportedModelsDetailed(fetchFn, loadTokensFn)).models
 }
 
 /** Retrouve un modèle importé par son id canonique. */

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, it, expect } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { RoleModelConfig, ALL_ROLES, type Role } from './roles'
+import { RoleModelConfig, ALL_ROLES, type Role, type RoleBinding } from './roles'
 import { loadRoleBindings, saveRoleBindings } from './role-store'
 import { legacyAppDataRoot } from './app-data'
 import { DEFAULT_IMPORTED_MODELS } from './models'
@@ -96,6 +96,46 @@ describe('RoleModelConfig', () => {
     })
   })
 
+  it('stocke des ALIAS en brut mais expose des ids CONCRETS résolus', () => {
+    const cfg = new RoleModelConfig()
+    // Persistance : alias stables.
+    expect(cfg.rawAll().orchestrator.model).toBe('fable-latest')
+    expect(cfg.rawAll().scout.model).toBe('codex-latest')
+    // Adaptateurs/UI : ids concrets du catalogue (seed hors ligne par défaut).
+    expect(cfg.getBinding('orchestrator').model).toBe('claude-fable-5')
+    expect(cfg.getBinding('scout').model).toBe('gpt-5.6-terra')
+  })
+
+  it('setModelCatalog fait suivre un alias vers un modèle plus récent découvert', () => {
+    const cfg = new RoleModelConfig({ judge: { provider: 'claude', model: 'opus-latest' } })
+    expect(cfg.getBinding('judge').model).toBe('claude-opus-4-6') // seed
+    cfg.setModelCatalog([
+      { provider: 'claude', model: 'claude-opus-4-6' },
+      { provider: 'claude', model: 'claude-opus-5-0' }
+    ])
+    expect(cfg.getBinding('judge').model).toBe('claude-opus-5-0')
+    // Le brut reste l'alias : rien de figé n'est persisté.
+    expect(cfg.rawAll().judge.model).toBe('opus-latest')
+  })
+
+  it('setModelCatalog([]) est ignoré : fallback sur le catalogue persisté (seed)', () => {
+    const cfg = new RoleModelConfig({ judge: { provider: 'claude', model: 'opus-latest' } })
+    cfg.setModelCatalog([])
+    // Une découverte vide (provider down, cache absent) ne casse pas la résolution.
+    expect(cfg.getBinding('judge').model).toBe('claude-opus-4-6')
+    expect(cfg.rawAll().judge.model).toBe('opus-latest')
+  })
+
+  it('un alias irrésoluble reste visible tel quel (jamais un nom inventé)', () => {
+    const cfg = new RoleModelConfig({ judge: { provider: 'claude', model: 'sonnet-latest' } })
+    expect(cfg.getBinding('judge').model).toBe('sonnet-latest')
+  })
+
+  it('un modèle épinglé explicitement (non-alias) passe intact', () => {
+    const cfg = new RoleModelConfig({ judge: { provider: 'claude', model: 'claude-opus-4-5' } })
+    expect(cfg.getBinding('judge').model).toBe('claude-opus-4-5')
+  })
+
   it('controle negatif : getBinding leve sur un role invalide (garde runtime)', () => {
     const cfg = new RoleModelConfig()
     // Contournement du typage pour simuler un appel JS non type / une valeur corrompue.
@@ -129,6 +169,31 @@ describe('role-store Autowin OS', () => {
 
     expect(existsSync(join(appDataRoot, 'autowin-os', 'roles.json'))).toBe(true)
     expect(existsSync(join(legacyAppDataRoot(appDataRoot), 'roles.json'))).toBe(false)
+  })
+
+  it('migre les ids concrets historiques vers leurs alias et réécrit le fichier', () => {
+    saveRoleBindings({
+      orchestrator: { provider: 'claude', model: 'claude-fable-5', reasoningEffort: 'high' },
+      subagent: {
+        provider: 'claude',
+        model: 'claude-opus-4-6',
+        phaseModel: { scout: { model: 'claude-haiku-4-5-20251001' } }
+      },
+      judge: { provider: 'claude', model: 'mon-modele-epingle' }, // choix user : INTACT
+      scout: { provider: 'codex', model: 'gpt-5.6-terra' }
+    })
+
+    const loaded = loadRoleBindings()
+    expect(loaded?.orchestrator?.model).toBe('fable-latest')
+    expect(loaded?.subagent?.model).toBe('opus-latest')
+    expect(loaded?.subagent?.phaseModel?.scout?.model).toBe('haiku-latest')
+    expect(loaded?.judge?.model).toBe('mon-modele-epingle')
+    expect(loaded?.scout?.model).toBe('codex-latest')
+    // La migration est PERSISTÉE (le fichier ne re-migre pas à chaque boot).
+    const onDisk = JSON.parse(
+      readFileSync(join(appDataRoot, 'autowin-os', 'roles.json'), 'utf8')
+    ) as Partial<Record<Role, RoleBinding>>
+    expect(onDisk.orchestrator?.model).toBe('fable-latest')
   })
 
   it('migrates the legacy file without deleting it', () => {

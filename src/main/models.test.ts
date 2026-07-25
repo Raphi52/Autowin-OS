@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { DEFAULT_IMPORTED_MODELS, discoverImportedModels } from './models'
+import {
+  DEFAULT_IMPORTED_MODELS,
+  discoverImportedModels,
+  discoverImportedModelsDetailed
+} from './models'
 import { appendClaudeSelectionArgs } from './providers/claude'
 
 const noCodexAuth = (): null => null
@@ -54,6 +58,26 @@ describe('catalogue Agents dynamique', () => {
 
     expect(models.some((model) => model.model === 'gpt-5.6-terra')).toBe(true)
     expect(models.some((model) => model.model === 'claude-fable-5')).toBe(true)
+  })
+
+  it('signale la liveness par voie (live=false quand tout retombe sur le seed)', async () => {
+    const offline = vi.fn(async () => {
+      throw new Error('hors ligne')
+    })
+
+    const fallback = await discoverImportedModelsDetailed(
+      offline as unknown as typeof fetch,
+      noCodexAuth
+    )
+    expect(fallback.live).toEqual({ codex: false, claude: false })
+    expect(fallback.models).toEqual(DEFAULT_IMPORTED_MODELS)
+
+    const bridgeOnly = vi.fn(async () => Response.json({ data: [{ id: 'claude-fable-5' }] }))
+    const partial = await discoverImportedModelsDetailed(
+      bridgeOnly as unknown as typeof fetch,
+      noCodexAuth
+    )
+    expect(partial.live).toEqual({ codex: false, claude: true })
   })
 
   it('importe tous les modèles réellement exposés par le compte ChatGPT', async () => {

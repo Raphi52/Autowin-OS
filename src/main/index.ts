@@ -55,7 +55,13 @@ import { ApprovedBehaviourWorkspaces, isTrustedRendererUrl } from './behaviour-a
 import { discoverConfiguredSkillRegistry } from './skill-registry'
 import { listClaudeHooks, listCodexHooks } from './claude-hooks'
 import { ModelQuestionHub, type ModelQuestion, type PendingModelQuestion } from './model-questions'
-import { DEFAULT_IMPORTED_MODELS, discoverImportedModels, findModel } from './models'
+import {
+  DEFAULT_IMPORTED_MODELS,
+  discoverImportedModelsDetailed,
+  findModel,
+  type ImportedModel
+} from './models'
+import { loadModelCache, mergeDiscoveryWithCache, saveModelCache } from './model-cache'
 import { loadAgentTopology, saveAgentTopology } from './topology-disk'
 import { migrateTopologyShape } from './topology'
 import type { AgentTopology, SlotBinding } from './topology'
@@ -258,16 +264,40 @@ function preflightProviderOptions(): { standbyProviders: Array<(typeof routedPro
     )
   }
 }
-let agentModels = DEFAULT_IMPORTED_MODELS
+// Démarrage : dernière liste CONNUE (cache disque, écrit uniquement depuis une découverte
+// live) sinon seed vérifié — jamais un nom inventé. La découverte live raffraîchit ensuite.
+const bootModelCache = loadModelCache()
+let agentModels = bootModelCache ?? DEFAULT_IMPORTED_MODELS
 const agentTopologyPath = join(app.getPath('userData'), 'agent-topology.json')
 let agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
-const agentModelsReady = discoverImportedModels(fetch).then((models) => {
-  agentModels = models
+
+async function refreshAgentModels(): Promise<ImportedModel[]> {
+  const discovery = await discoverImportedModelsDetailed(fetch)
+  const merged = mergeDiscoveryWithCache(discovery, loadModelCache())
+  if (discovery.live.codex || discovery.live.claude) {
+    try {
+      saveModelCache(merged)
+    } catch (error) {
+      console.warn('[models] cache non persisté :', error instanceof Error ? error.message : error)
+    }
+  }
+  agentModels = merged
+  // Les alias de rôle (fable-latest, …) se résolvent contre la liste découverte/mergée.
+  os.roles.setModelCatalog(merged)
   agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
   syncRuntimeTopology(agentTopology)
-  return models
-})
+  return merged
+}
+// Avant la 1ʳᵉ découverte : résolution des alias contre le cache disque (sinon seed).
+os.roles.setModelCatalog(agentModels)
+let agentModelsReady = refreshAgentModels()
 os.setTaskReadiness(agentModelsReady)
+// Rafraîchissement périodique (les catalogues providers évoluent après le boot). unref :
+// ne retient pas le process. sleep-ok: cadence de refresh catalogue, pas une attente flaky.
+const MODELS_REFRESH_INTERVAL_MS = 15 * 60_000
+setInterval(() => {
+  agentModelsReady = refreshAgentModels()
+}, MODELS_REFRESH_INTERVAL_MS).unref()
 
 function syncRuntimeTopology(topology: AgentTopology): void {
   const sync = (role: Role, binding: SlotBinding | undefined): void => {
@@ -633,6 +663,13 @@ function registerChatIpc(): void {
     }
   )
   ipcMain.handle('os:models:list', () => agentModelsReady)
+  // Refresh MANUEL du catalogue (bouton renderer) : relance la découverte live et
+  // renvoie la liste fusionnée (live > cache > seed). Idempotent et borné (timeouts internes).
+  ipcMain.handle('os:models:refresh', (event) => {
+    assertTrustedRendererSender(event, 'ModelsRefresh')
+    agentModelsReady = refreshAgentModels()
+    return agentModelsReady
+  })
   // Page Routeur — statut d'auth au CHARGEMENT (cheap/local) : codex exact (expiry token),
   // claude/kimi = présence CLI seulement (JAMAIS « authenticated » sans probe réel). Borné.
   ipcMain.handle('os:providerStatus', async (event) => {

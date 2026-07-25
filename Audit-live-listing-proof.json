@@ -1,0 +1,142 @@
+{
+  "capturedAt": "2026-07-25T15:15:23.435Z",
+  "codexAuthPresent": false,
+  "live": {
+    "codex": false,
+    "claude": true
+  },
+  "kimi": "aucune voie de listing HTTP (OAuth/CLI) — seed vérifié only, conforme au design",
+  "discoveredModels": [
+    {
+      "id": "codex/gpt-5.6-terra",
+      "provider": "codex",
+      "model": "gpt-5.6-terra",
+      "label": "GPT-5.6 Terra · Codex"
+    },
+    {
+      "id": "claude/claude-fable-5",
+      "provider": "claude",
+      "model": "claude-fable-5",
+      "label": "Claude Fable 5 · CLI"
+    },
+    {
+      "id": "claude/claude-haiku-4-5-20251001",
+      "provider": "claude",
+      "model": "claude-haiku-4-5-20251001",
+      "label": "Claude Haiku 4.5 (20251001) · CLI"
+    },
+    {
+      "id": "claude/claude-opus-4-6",
+      "provider": "claude",
+      "model": "claude-opus-4-6",
+      "label": "Claude Opus 4.6 · CLI"
+    },
+    {
+      "id": "claude/claude-opus-4-7",
+      "provider": "claude",
+      "model": "claude-opus-4-7",
+      "label": "Claude Opus 4.7 · CLI"
+    },
+    {
+      "id": "claude/claude-opus-4-8",
+      "provider": "claude",
+      "model": "claude-opus-4-8",
+      "label": "Claude Opus 4.8 · CLI"
+    },
+    {
+      "id": "claude/claude-sonnet-4-6",
+      "provider": "claude",
+      "model": "claude-sonnet-4-6",
+      "label": "Claude Sonnet 4.6 · CLI"
+    },
+    {
+      "id": "claude/claude-sonnet-5",
+      "provider": "claude",
+      "model": "claude-sonnet-5",
+      "label": "Claude Sonnet 5 · CLI"
+    },
+    {
+      "id": "kimi/kimi-code/kimi-for-coding",
+      "provider": "kimi",
+      "model": "kimi-code/kimi-for-coding",
+      "label": "Kimi Code · compte OAuth"
+    }
+  ],
+  "aliasResolutions": [
+    {
+      "alias": "fable-latest",
+      "resolved": "claude-fable-5",
+      "presentInDiscovery": true
+    },
+    {
+      "alias": "opus-latest",
+      "resolved": "claude-opus-4-8",
+      "presentInDiscovery": true
+    },
+    {
+      "alias": "sonnet-latest",
+      "resolved": "claude-sonnet-5",
+      "presentInDiscovery": true
+    },
+    {
+      "alias": "haiku-latest",
+      "resolved": "claude-haiku-4-5-20251001",
+      "presentInDiscovery": true
+    },
+    {
+      "alias": "codex-latest",
+      "resolved": "gpt-5.6-terra",
+      "presentInDiscovery": true
+    },
+    {
+      "alias": "kimi-latest",
+      "resolved": "kimi-code/kimi-for-coding",
+      "presentInDiscovery": true
+    }
+  ],
+  "rawApiResponses": {
+    "http://127.0.0.1:8787/models": {
+      "status": 200,
+      "body": {
+        "object": "list",
+        "data": [
+          {
+            "id": "claude-fable-5",
+            "object": "model",
+            "owned_by": "anthropic"
+          },
+          {
+            "id": "claude-haiku-4-5-20251001",
+            "object": "model",
+            "owned_by": "anthropic"
+          },
+          {
+            "id": "claude-opus-4-6",
+            "object": "model",
+            "owned_by": "anthropic"
+          },
+          {
+            "id": "claude-opus-4-7",
+            "object": "model",
+            "owned_by": "anthropic"
+          },
+          {
+            "id": "claude-opus-4-8",
+            "object": "model",
+            "owned_by": "anthropic"
+          },
+          {
+            "id": "claude-sonnet-4-6",
+            "object": "model",
+            "owned_by": "anthropic"
+          },
+          {
+            "id": "claude-sonnet-5",
+            "object": "model",
+            "owned_by": "anthropic"
+          }
+        ]
+      }
+    }
+  }
+}
