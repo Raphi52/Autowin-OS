@@ -10,6 +10,8 @@
 import type { ReasoningEffort } from './roles'
 import type { ComputeBinding } from '../shared/compute-fabric'
 import { loadTokens, type Tokens } from './providers/codex-auth'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 
 /** Un modèle importé, atomique et adressable par son `id` canonique. */
 export interface ImportedModel {
@@ -100,12 +102,67 @@ interface CodexModelPayload {
   supported_reasoning_levels?: Array<{ effort?: unknown }>
 }
 
+/** Dernier catalogue valide : uniquement Codex/Claude, jamais les providers non concernés. */
+export interface ModelCatalogCache {
+  load(): ImportedModel[]
+  save(models: ImportedModel[]): void
+}
+
+export class DiskModelCatalogCache implements ModelCatalogCache {
+  constructor(private readonly path: string) {}
+
+  load(): ImportedModel[] {
+    if (!existsSync(this.path)) return []
+    try {
+      const parsed = JSON.parse(readFileSync(this.path, 'utf8')) as unknown
+      if (!Array.isArray(parsed)) return []
+      return parsed.filter(isCachedModel)
+    } catch {
+      return []
+    }
+  }
+
+  save(models: ImportedModel[]): void {
+    const safe = models.filter(isCachedModel)
+    mkdirSync(dirname(this.path), { recursive: true })
+    const temporary = `${this.path}.${process.pid}.tmp`
+    writeFileSync(temporary, JSON.stringify(safe, null, 2), 'utf8')
+    renameSync(temporary, this.path)
+  }
+}
+
+function isCachedModel(value: unknown): value is ImportedModel {
+  if (!value || typeof value !== 'object') return false
+  const model = value as Partial<ImportedModel>
+  return (
+    (model.provider === 'codex' || model.provider === 'claude') &&
+    typeof model.id === 'string' &&
+    model.id === `${model.provider}/${model.model}` &&
+    typeof model.model === 'string' &&
+    /^[a-z0-9][a-z0-9.-]*$/.test(model.model) &&
+    typeof model.label === 'string' &&
+    Array.isArray(model.reasoningEfforts) &&
+    model.reasoningEfforts.length > 0 &&
+    model.reasoningEfforts.every((effort) => REASONING_EFFORTS.has(effort)) &&
+    typeof model.defaultReasoningEffort === 'string' &&
+    model.reasoningEfforts.includes(model.defaultReasoningEffort)
+  )
+}
+
+function cachedOrSeed(provider: 'codex' | 'claude', cache: ModelCatalogCache): ImportedModel[] {
+  const cached = cache.load().filter((model) => model.provider === provider)
+  return cached.length > 0
+    ? cached
+    : DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === provider)
+}
+
 async function discoverCodexModels(
   fetchFn: typeof fetch,
-  loadTokensFn: () => Tokens | null
+  loadTokensFn: () => Tokens | null,
+  cache: ModelCatalogCache
 ): Promise<ImportedModel[]> {
   const tokens = loadTokensFn()
-  if (!tokens) return [DEFAULT_IMPORTED_MODELS[0]]
+  if (!tokens) return cachedOrSeed('codex', cache)
   try {
     const response = await fetchFn(CODEX_MODELS_URL, {
       headers: {
@@ -115,7 +172,7 @@ async function discoverCodexModels(
       },
       signal: AbortSignal.timeout(4_000)
     })
-    if (!response.ok) return [DEFAULT_IMPORTED_MODELS[0]]
+    if (!response.ok) return cachedOrSeed('codex', cache)
     const payload = (await response.json()) as { models?: CodexModelPayload[] }
     const discovered = (payload.models ?? []).flatMap<ImportedModel>((entry) => {
       if (typeof entry.slug !== 'string' || !/^[a-z0-9][a-z0-9.-]*$/.test(entry.slug)) return []
@@ -143,9 +200,9 @@ async function discoverCodexModels(
         }
       ]
     })
-    return discovered.length > 0 ? discovered : [DEFAULT_IMPORTED_MODELS[0]]
+    return discovered.length > 0 ? discovered : cachedOrSeed('codex', cache)
   } catch {
-    return [DEFAULT_IMPORTED_MODELS[0]]
+    return cachedOrSeed('codex', cache)
   }
 }
 
@@ -163,14 +220,19 @@ function labelClaudeModel(id: string): string {
  */
 export async function discoverImportedModels(
   fetchFn: typeof fetch = fetch,
-  loadTokensFn: () => Tokens | null = loadTokens
+  loadTokensFn: () => Tokens | null = loadTokens,
+  cache: ModelCatalogCache = { load: () => [], save: () => undefined }
 ): Promise<ImportedModel[]> {
-  const codexModels = await discoverCodexModels(fetchFn, loadTokensFn)
+  const codexModels = await discoverCodexModels(fetchFn, loadTokensFn, cache)
+  let claudeModels = cachedOrSeed('claude', cache)
   try {
     const response = await fetchFn('http://127.0.0.1:8787/models', {
       signal: AbortSignal.timeout(2_000)
     })
-    if (!response.ok) return DEFAULT_IMPORTED_MODELS
+    if (!response.ok) {
+      cache.save([...codexModels, ...claudeModels])
+      return withLatestAliases(codexModels, claudeModels)
+    }
     const payload = (await response.json()) as { data?: Array<{ id?: unknown }> }
     const discovered = (payload.data ?? [])
       .map((entry) => entry.id)
@@ -183,14 +245,48 @@ export async function discoverImportedModels(
         reasoningEfforts: [...CLAUDE_EFFORTS],
         defaultReasoningEffort: model.includes('haiku') ? 'medium' : 'high'
       }))
-    return [
-      ...codexModels,
-      ...discovered,
-      ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi')
-    ]
+    if (discovered.length > 0) claudeModels = discovered
   } catch {
-    return [...codexModels, ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider !== 'codex')]
+    // Le cache/seed par provider est d\u00e9j\u00e0 choisi ; aucun autre provider n'est modifi\u00e9.
   }
+  cache.save([...codexModels, ...claudeModels])
+  return withLatestAliases(codexModels, claudeModels)
+}
+
+function withLatestAliases(
+  codexModels: ImportedModel[],
+  claudeModels: ImportedModel[]
+): ImportedModel[] {
+  const aliases = [codexModels, claudeModels].flatMap((models) => {
+    const latest = models
+      .slice()
+      .sort((a, b) => compareVersion(a.model, b.model))
+      .at(-1)
+    return latest
+      ? [{ ...latest, id: `${latest.provider}/latest`, label: `${latest.label} · latest` }]
+      : []
+  })
+  return [
+    ...codexModels,
+    ...claudeModels,
+    ...aliases,
+    ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi')
+  ]
+}
+
+function compareVersion(left: string, right: string): number {
+  const leftParts = left.match(/\d+|[a-z]+/g) ?? []
+  const rightParts = right.match(/\d+|[a-z]+/g) ?? []
+  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
+    const a = leftParts[index] ?? ''
+    const b = rightParts[index] ?? ''
+    if (a === b) continue
+    const aNumber = /^\d+$/.test(a)
+    const bNumber = /^\d+$/.test(b)
+    if (aNumber && bNumber) return Number(a) - Number(b)
+    return a.localeCompare(b)
+  }
+  return 0
 }
 
 /** Retrouve un modèle importé par son id canonique. */

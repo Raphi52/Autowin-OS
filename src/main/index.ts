@@ -55,7 +55,12 @@ import { ApprovedBehaviourWorkspaces, isTrustedRendererUrl } from './behaviour-a
 import { discoverConfiguredSkillRegistry } from './skill-registry'
 import { listClaudeHooks, listCodexHooks } from './claude-hooks'
 import { ModelQuestionHub, type ModelQuestion, type PendingModelQuestion } from './model-questions'
-import { DEFAULT_IMPORTED_MODELS, discoverImportedModels, findModel } from './models'
+import {
+  DEFAULT_IMPORTED_MODELS,
+  DiskModelCatalogCache,
+  discoverImportedModels,
+  findModel
+} from './models'
 import { loadAgentTopology, saveAgentTopology } from './topology-disk'
 import { migrateTopologyShape } from './topology'
 import type { AgentTopology, SlotBinding } from './topology'
@@ -251,12 +256,17 @@ function preflightProviderOptions(): { standbyProviders: Array<(typeof routedPro
 let agentModels = DEFAULT_IMPORTED_MODELS
 const agentTopologyPath = join(app.getPath('userData'), 'agent-topology.json')
 let agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
-const agentModelsReady = discoverImportedModels(fetch).then((models) => {
-  agentModels = models
-  agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
-  syncRuntimeTopology(agentTopology)
-  return models
-})
+const modelCatalogCache = new DiskModelCatalogCache(
+  join(app.getPath('userData'), 'model-catalog.json')
+)
+const agentModelsReady = discoverImportedModels(fetch, loadTokens, modelCatalogCache).then(
+  (models) => {
+    agentModels = models
+    agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
+    syncRuntimeTopology(agentTopology)
+    return models
+  }
+)
 os.setTaskReadiness(agentModelsReady)
 
 function syncRuntimeTopology(topology: AgentTopology): void {
