@@ -29,6 +29,11 @@ export interface ImportedModel {
   compute?: ComputeBinding
 }
 
+export interface ImportedModelsCache {
+  load(): ImportedModel[] | null
+  save(models: ImportedModel[]): void
+}
+
 /**
  * Seed de repli — borné aux voies vérifiées, JAMAIS un modèle inventé.
  * - Codex : `gpt-5.6-terra` reste le repli hors ligne vérifié.
@@ -163,7 +168,8 @@ function labelClaudeModel(id: string): string {
  */
 export async function discoverImportedModels(
   fetchFn: typeof fetch = fetch,
-  loadTokensFn: () => Tokens | null = loadTokens
+  loadTokensFn: () => Tokens | null = loadTokens,
+  cache?: ImportedModelsCache
 ): Promise<ImportedModel[]> {
   const codexModels = await discoverCodexModels(fetchFn, loadTokensFn)
   try {
@@ -189,6 +195,8 @@ export async function discoverImportedModels(
       ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi')
     ]
   } catch {
+    const cachedModels = cache?.load()
+    if (cachedModels) return cachedModels
     return [...codexModels, ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider !== 'codex')]
   }
 }

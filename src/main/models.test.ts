@@ -49,11 +49,14 @@ describe('catalogue Agents dynamique', () => {
     const fetchFn = vi.fn(async () => {
       throw new Error('bridge hors ligne')
     })
+    const cachedModels = [DEFAULT_IMPORTED_MODELS[1]]
+    const cache = { load: vi.fn(() => cachedModels), save: vi.fn() }
 
-    const models = await discoverImportedModels(fetchFn as unknown as typeof fetch, noCodexAuth)
+    const models = await discoverImportedModels(fetchFn as unknown as typeof fetch, noCodexAuth, cache)
 
-    expect(models.some((model) => model.model === 'gpt-5.6-terra')).toBe(true)
-    expect(models.some((model) => model.model === 'claude-fable-5')).toBe(true)
+    expect(cache.load).toHaveBeenCalledOnce()
+    expect(models).toEqual(cachedModels)
+    expect(cache.save).not.toHaveBeenCalled()
   })
 
   it('importe tous les modèles réellement exposés par le compte ChatGPT', async () => {
