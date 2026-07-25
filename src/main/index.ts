@@ -22,7 +22,7 @@ import { ensureBrainServerStarted } from './brain-server-launch'
 import { installCrashHandlers } from './crash-handlers'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
 import { appPreflightProbes, getLastAppPreflightResult, runAppPreflight, watchAppPreflight } from './preflight-probes'
-import { RoleModelConfig, type ReasoningEffort, type Role } from './roles'
+import { RoleModelConfig, setRoleAliasResolver, type ReasoningEffort, type Role } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
@@ -55,7 +55,8 @@ import { ApprovedBehaviourWorkspaces, isTrustedRendererUrl } from './behaviour-a
 import { discoverConfiguredSkillRegistry } from './skill-registry'
 import { listClaudeHooks, listCodexHooks } from './claude-hooks'
 import { ModelQuestionHub, type ModelQuestion, type PendingModelQuestion } from './model-questions'
-import { DEFAULT_IMPORTED_MODELS, discoverImportedModels, findModel } from './models'
+import { findModel } from './models'
+import { ModelResolver } from './model-resolver'
 import { loadAgentTopology, saveAgentTopology } from './topology-disk'
 import { migrateTopologyShape } from './topology'
 import type { AgentTopology, SlotBinding } from './topology'
@@ -258,15 +259,22 @@ function preflightProviderOptions(): { standbyProviders: Array<(typeof routedPro
     )
   }
 }
-let agentModels = DEFAULT_IMPORTED_MODELS
 const agentTopologyPath = join(app.getPath('userData'), 'agent-topology.json')
-let agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
-const agentModelsReady = discoverImportedModels(fetch).then((models) => {
-  agentModels = models
-  agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
-  syncRuntimeTopology(agentTopology)
-  return models
+// Résolveur dynamique : discovery au démarrage + périodique, persistance du
+// dernier catalogue connu (fallback hors-ligne) et alias `*-latest`.
+const modelResolver = new ModelResolver({
+  onCatalog: (models) => {
+    agentModels = models
+    agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
+    syncRuntimeTopology(agentTopology)
+  }
 })
+// Les bindings de rôles sur alias (`*-latest`) suivent le catalogue LIVE du
+// résolveur (résolution au point de consommation, cf. roles.ts).
+setRoleAliasResolver((alias) => modelResolver.resolveAlias(alias))
+let agentModels = modelResolver.getModels()
+let agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
+const agentModelsReady = modelResolver.start()
 os.setTaskReadiness(agentModelsReady)
 
 function syncRuntimeTopology(topology: AgentTopology): void {

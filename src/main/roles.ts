@@ -4,6 +4,8 @@
 // est absent, le provider utilise son modele par defaut.
 
 import type { PipelinePhase } from './skill-pipeline'
+import { resolveFamilyAlias } from './model-resolver'
+import { DEFAULT_IMPORTED_MODELS } from './models'
 
 export type Role = 'orchestrator' | 'subagent' | 'judge' | 'scout'
 
@@ -26,6 +28,49 @@ export interface RoleBinding {
   phaseModel?: Partial<Record<PipelinePhase, { model?: string; reasoningEffort?: ReasoningEffort }>>
 }
 
+// ————— Alias stables (`*-latest`) dans les bindings de rôles —————
+//
+// Un binding peut référencer un ALIAS de famille (`claude/opus-latest`,
+// `codex/gpt-latest`) au lieu d'un id de transport figé. La résolution passe
+// par `resolveAlias` du ModelResolver (model-resolver.ts), injecté au boot via
+// `setRoleAliasResolver` ; avant injection (ou en test), on résout contre le
+// seed vérifié. Un alias IRRÉSOLUBLE est renvoyé tel quel (rien d'inventé :
+// l'adaptateur échouera VISIBLEMENT plutôt que sur un modèle deviné).
+
+export type RoleAliasResolver = (alias: string) => string | undefined
+
+let roleAliasResolver: RoleAliasResolver = (alias) =>
+  resolveFamilyAlias(DEFAULT_IMPORTED_MODELS, alias)?.model
+
+/** Injecte le résolveur dynamique (index.ts : `modelResolver.resolveAlias`). */
+export function setRoleAliasResolver(resolver: RoleAliasResolver): void {
+  roleAliasResolver = resolver
+}
+
+function isModelAlias(model: string): boolean {
+  return /-latest$/.test(model)
+}
+
+/** Alias `*-latest` → id de transport courant ; id concret = pass-through. */
+export function resolveBindingModel(model: string | undefined): string | undefined {
+  if (model === undefined || !isModelAlias(model)) return model
+  return roleAliasResolver(model) ?? model
+}
+
+/**
+ * Migration des bindings hérités : un modèle Opus figé (`claude-opus-4-5`,
+ * snapshot daté…) suit désormais l'alias de sa famille — le binding reste à
+ * jour à chaque refresh du catalogue au lieu de pointer un id périmé.
+ */
+const LEGACY_MODEL_TO_ALIAS: Array<{ test: RegExp; alias: string }> = [
+  { test: /^claude-opus-\d/, alias: 'claude/opus-latest' }
+]
+
+function migrateLegacyModel(model: string | undefined): string | undefined {
+  if (model === undefined) return undefined
+  return LEGACY_MODEL_TO_ALIAS.find((m) => m.test.test(model))?.alias ?? model
+}
+
 /** Résout le (modèle, effort) EFFECTIF d'une phase pour un binding (override phase → défaut binding). */
 export function resolvePhaseBinding(
   binding: RoleBinding,
@@ -33,7 +78,7 @@ export function resolvePhaseBinding(
 ): { model?: string; reasoningEffort?: ReasoningEffort } {
   const override = binding.phaseModel?.[phase]
   return {
-    model: override?.model ?? binding.model,
+    model: resolveBindingModel(override?.model ?? binding.model),
     reasoningEffort: override?.reasoningEffort ?? binding.reasoningEffort
   }
 }
@@ -42,18 +87,20 @@ const PROVIDER_DEFAULT_SELECTIONS: Record<
   string,
   { model: string; reasoningEffort: ReasoningEffort }
 > = {
-  claude: { model: 'claude-fable-5', reasoningEffort: 'high' },
-  codex: { model: 'gpt-5.6-terra', reasoningEffort: 'medium' },
-  kimi: { model: 'kimi-code/kimi-for-coding', reasoningEffort: 'none' }
+  // Alias de famille (pas d'id figé) : le défaut suit le catalogue dynamique.
+  claude: { model: 'claude/fable-latest', reasoningEffort: 'high' },
+  codex: { model: 'codex/gpt-latest', reasoningEffort: 'medium' },
+  kimi: { model: 'kimi/kimi-latest', reasoningEffort: 'none' }
 }
 
 /** Rend explicite ce que l'adaptateur utiliserait sinon implicitement. */
 export function normalizeRoleBinding(binding: RoleBinding): RoleBinding {
   const defaults = PROVIDER_DEFAULT_SELECTIONS[binding.provider]
-  if (!defaults) return { ...binding }
+  const migrated = migrateLegacyModel(binding.model)
+  if (!defaults) return { ...binding, model: migrated }
   return {
     ...binding,
-    model: binding.model ?? defaults.model,
+    model: migrated ?? defaults.model,
     reasoningEffort: binding.reasoningEffort ?? defaults.reasoningEffort
   }
 }
@@ -90,7 +137,11 @@ export class RoleModelConfig {
     if (!ALL_ROLES.includes(role)) {
       throw new Error(`Role inconnu: ${String(role)}`)
     }
-    return this.bindings[role]
+    // Résolution alias → id de transport au point de CONSOMMATION : le binding
+    // stocké garde l'alias (il suit le catalogue), le consommateur reçoit
+    // toujours un id envoyable à l'adaptateur.
+    const binding = this.bindings[role]
+    return { ...binding, model: resolveBindingModel(binding.model) }
   }
 
   setBinding(role: Role, b: RoleBinding): this {
@@ -102,6 +153,14 @@ export class RoleModelConfig {
   }
 
   all(): Record<Role, RoleBinding> {
+    const out = {} as Record<Role, RoleBinding>
+    for (const role of ALL_ROLES) out[role] = this.getBinding(role)
+    return out
+  }
+
+  /** Snapshot BRUT (alias préservés) — pour la persistance : un binding sur
+   *  alias reste sur alias dans roles.json et continue de suivre sa famille. */
+  raw(): Record<Role, RoleBinding> {
     return { ...this.bindings }
   }
 }

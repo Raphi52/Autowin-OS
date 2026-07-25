@@ -2,7 +2,14 @@ import { afterEach, beforeEach, describe, it, expect } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { RoleModelConfig, ALL_ROLES, type Role } from './roles'
+import {
+  RoleModelConfig,
+  ALL_ROLES,
+  resolveBindingModel,
+  setRoleAliasResolver,
+  type Role
+} from './roles'
+import { resolveFamilyAlias } from './model-resolver'
 import { loadRoleBindings, saveRoleBindings } from './role-store'
 import { legacyAppDataRoot } from './app-data'
 import { DEFAULT_IMPORTED_MODELS } from './models'
@@ -93,6 +100,43 @@ describe('RoleModelConfig', () => {
       provider: 'codex',
       model: 'gpt-5.6-terra',
       reasoningEffort: 'medium'
+    })
+  })
+
+  describe('alias stables dans les bindings', () => {
+    afterEach(() => {
+      // Restaure le résolveur par défaut (seed) pour ne pas polluer les autres tests.
+      setRoleAliasResolver((alias) => resolveFamilyAlias(DEFAULT_IMPORTED_MODELS, alias)?.model)
+    })
+
+    it('le binding stocké garde l\'alias (raw) mais getBinding livre l\'id de transport', () => {
+      const cfg = new RoleModelConfig()
+      expect(cfg.raw().orchestrator.model).toBe('claude/fable-latest')
+      expect(cfg.getBinding('orchestrator').model).toBe('claude-fable-5')
+    })
+
+    it('suit le résolveur dynamique injecté (catalogue rafraîchi → nouvel id)', () => {
+      setRoleAliasResolver((alias) =>
+        alias === 'claude/fable-latest' ? 'claude-fable-6' : undefined
+      )
+      const cfg = new RoleModelConfig()
+      expect(cfg.getBinding('orchestrator').model).toBe('claude-fable-6')
+    })
+
+    it('migre un binding hérité sur un Opus figé vers l\'alias de famille', () => {
+      const cfg = new RoleModelConfig({
+        judge: { provider: 'claude', model: 'claude-opus-4-5' }
+      })
+      expect(cfg.raw().judge.model).toBe('claude/opus-latest')
+      // Seed : le plus récent de la famille opus est 4-6.
+      expect(cfg.getBinding('judge').model).toBe('claude-opus-4-6')
+    })
+
+    it('alias irrésoluble = pass-through (rien d\'inventé), id concret intact', () => {
+      setRoleAliasResolver(() => undefined)
+      expect(resolveBindingModel('claude/opus-latest')).toBe('claude/opus-latest')
+      expect(resolveBindingModel('claude-fable-5')).toBe('claude-fable-5')
+      expect(resolveBindingModel(undefined)).toBeUndefined()
     })
   })
 

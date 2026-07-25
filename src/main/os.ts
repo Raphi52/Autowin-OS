@@ -231,7 +231,9 @@ export class AutowinOS {
 
   /** Change le binding d'un rôle ET persiste sur disque. */
   setRole(role: Role, binding: RoleBinding): Record<Role, RoleBinding> {
-    const proposed = new RoleModelConfig(this.roles.all()).setBinding(role, binding).all()
+    // raw() (alias préservés) : persister un binding sur `*-latest` ne doit pas
+    // le FIGER sur l'id résolu du jour — il continue de suivre sa famille.
+    const proposed = new RoleModelConfig(this.roles.raw()).setBinding(role, binding).raw()
     saveRoleBindings(proposed)
     this.roles.setBinding(role, proposed[role])
     return this.roles.all()
