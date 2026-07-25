@@ -251,7 +251,9 @@ function preflightProviderOptions(): { standbyProviders: Array<(typeof routedPro
 let agentModels = DEFAULT_IMPORTED_MODELS
 const agentTopologyPath = join(app.getPath('userData'), 'agent-topology.json')
 let agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
-const agentModelsReady = discoverImportedModels(fetch).then((models) => {
+const agentModelsReady = discoverImportedModels(fetch, loadTokens, {
+  claudeCachePath: join(app.getPath('userData'), 'claude-models.json')
+}).then((models) => {
   agentModels = models
   agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
   syncRuntimeTopology(agentTopology)

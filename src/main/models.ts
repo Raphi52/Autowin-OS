@@ -10,6 +10,8 @@
 import type { ReasoningEffort } from './roles'
 import type { ComputeBinding } from '../shared/compute-fabric'
 import { loadTokens, type Tokens } from './providers/codex-auth'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 
 /** Un modèle importé, atomique et adressable par son `id` canonique. */
 export interface ImportedModel {
@@ -81,6 +83,7 @@ export const DEFAULT_IMPORTED_MODELS: ImportedModel[] = [
 ]
 
 const CLAUDE_EFFORTS: ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
+const CLAUDE_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1_000
 const CODEX_MODELS_URL = 'https://chatgpt.com/backend-api/codex/models?client_version=0.0.0'
 const REASONING_EFFORTS = new Set<ReasoningEffort>([
   'none',
@@ -98,6 +101,71 @@ interface CodexModelPayload {
   display_name?: unknown
   default_reasoning_level?: unknown
   supported_reasoning_levels?: Array<{ effort?: unknown }>
+}
+
+interface ClaudeModelCache {
+  savedAt: number
+  models: string[]
+}
+
+interface DiscoverModelsOptions {
+  /** Cache local durable du catalogue Claude publié par le bridge. */
+  claudeCachePath?: string
+}
+
+function isClaudeModelId(value: unknown): value is string {
+  return typeof value === 'string' && /^claude-[a-z0-9-]+$/.test(value)
+}
+
+function importedClaudeModel(model: string): ImportedModel {
+  return {
+    id: `claude/${model}`,
+    provider: 'claude',
+    model,
+    label: labelClaudeModel(model),
+    reasoningEfforts: [...CLAUDE_EFFORTS],
+    defaultReasoningEffort: model.includes('haiku') ? 'medium' : 'high'
+  }
+}
+
+function fallbackClaudeModels(): ImportedModel[] {
+  return DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'claude')
+}
+
+function mergeClaudeModels(discovered: string[]): ImportedModel[] {
+  const seen = new Set<string>()
+  return [...fallbackClaudeModels(), ...discovered.map(importedClaudeModel)].filter((model) => {
+    if (seen.has(model.model)) return false
+    seen.add(model.model)
+    return true
+  })
+}
+
+async function readClaudeCache(cachePath?: string): Promise<string[]> {
+  if (!cachePath) return []
+  try {
+    const cache = JSON.parse(await readFile(cachePath, 'utf8')) as Partial<ClaudeModelCache>
+    if (
+      typeof cache.savedAt !== 'number' ||
+      Date.now() - cache.savedAt < 0 ||
+      Date.now() - cache.savedAt > CLAUDE_CACHE_MAX_AGE_MS ||
+      !Array.isArray(cache.models)
+    )
+      return []
+    return cache.models.filter(isClaudeModelId)
+  } catch {
+    return []
+  }
+}
+
+async function writeClaudeCache(cachePath: string | undefined, models: string[]): Promise<void> {
+  if (!cachePath) return
+  try {
+    await mkdir(dirname(cachePath), { recursive: true })
+    await writeFile(cachePath, JSON.stringify({ savedAt: Date.now(), models }), 'utf8')
+  } catch {
+    // Le cache accélère la résilience ; une erreur disque ne doit pas masquer le catalogue live.
+  }
 }
 
 async function discoverCodexModels(
@@ -163,33 +231,37 @@ function labelClaudeModel(id: string): string {
  */
 export async function discoverImportedModels(
   fetchFn: typeof fetch = fetch,
-  loadTokensFn: () => Tokens | null = loadTokens
+  loadTokensFn: () => Tokens | null = loadTokens,
+  options: DiscoverModelsOptions = {}
 ): Promise<ImportedModel[]> {
   const codexModels = await discoverCodexModels(fetchFn, loadTokensFn)
+  const cachedClaudeModels = await readClaudeCache(options.claudeCachePath)
   try {
     const response = await fetchFn('http://127.0.0.1:8787/models', {
       signal: AbortSignal.timeout(2_000)
     })
-    if (!response.ok) return DEFAULT_IMPORTED_MODELS
+    if (!response.ok)
+      return [
+        ...codexModels,
+        ...mergeClaudeModels(cachedClaudeModels),
+        ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi')
+      ]
     const payload = (await response.json()) as { data?: Array<{ id?: unknown }> }
     const discovered = (payload.data ?? [])
       .map((entry) => entry.id)
-      .filter((id): id is string => typeof id === 'string' && /^claude-[a-z0-9-]+$/.test(id))
-      .map<ImportedModel>((model) => ({
-        id: `claude/${model}`,
-        provider: 'claude',
-        model,
-        label: labelClaudeModel(model),
-        reasoningEfforts: [...CLAUDE_EFFORTS],
-        defaultReasoningEffort: model.includes('haiku') ? 'medium' : 'high'
-      }))
+      .filter(isClaudeModelId)
+    if (discovered.length > 0) await writeClaudeCache(options.claudeCachePath, discovered)
     return [
       ...codexModels,
-      ...discovered,
+      ...mergeClaudeModels(discovered.length > 0 ? discovered : cachedClaudeModels),
       ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi')
     ]
   } catch {
-    return [...codexModels, ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider !== 'codex')]
+    return [
+      ...codexModels,
+      ...mergeClaudeModels(cachedClaudeModels),
+      ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi')
+    ]
   }
 }
 

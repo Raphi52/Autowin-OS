@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { DEFAULT_IMPORTED_MODELS, discoverImportedModels } from './models'
 import { appendClaudeSelectionArgs } from './providers/claude'
 
@@ -27,6 +30,8 @@ describe('catalogue Agents dynamique', () => {
     expect(models.map((model) => model.model)).toEqual([
       'gpt-5.6-terra',
       'claude-fable-5',
+      'claude-haiku-4-5-20251001',
+      'claude-opus-4-6',
       'claude-opus-4-8',
       'kimi-code/kimi-for-coding'
     ])
@@ -54,6 +59,32 @@ describe('catalogue Agents dynamique', () => {
 
     expect(models.some((model) => model.model === 'gpt-5.6-terra')).toBe(true)
     expect(models.some((model) => model.model === 'claude-fable-5')).toBe(true)
+    expect(models.some((model) => model.model === 'claude-opus-4-6')).toBe(true)
+  })
+
+  it('réutilise le catalogue Claude découvert quand le bridge devient indisponible', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'autowin-models-'))
+    const cachePath = join(directory, 'claude-models.json')
+    try {
+      const discovered = await discoverImportedModels(
+        vi.fn(async () => Response.json({ data: [{ id: 'claude-opus-5' }] })) as unknown as typeof fetch,
+        noCodexAuth,
+        { claudeCachePath: cachePath }
+      )
+      expect(discovered.some((model) => model.model === 'claude-opus-5')).toBe(true)
+
+      const offline = await discoverImportedModels(
+        vi.fn(async () => {
+          throw new Error('bridge hors ligne')
+        }) as unknown as typeof fetch,
+        noCodexAuth,
+        { claudeCachePath: cachePath }
+      )
+      expect(offline.some((model) => model.model === 'claude-opus-5')).toBe(true)
+      expect(offline.some((model) => model.model === 'claude-opus-4-6')).toBe(true)
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
   })
 
   it('importe tous les modèles réellement exposés par le compte ChatGPT', async () => {
@@ -92,6 +123,8 @@ describe('catalogue Agents dynamique', () => {
       'gpt-5.6-sol',
       'gpt-5.4-mini',
       'claude-fable-5',
+      'claude-haiku-4-5-20251001',
+      'claude-opus-4-6',
       'kimi-code/kimi-for-coding'
     ])
     expect(models[0]).toMatchObject({
