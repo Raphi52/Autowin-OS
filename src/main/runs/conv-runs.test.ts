@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import {
   createConvRun,
+  reuseOrCreateConvRun,
   closeConvRun,
   listConvRuns,
   saveConvRunTrace,
@@ -45,6 +46,12 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
     const a = createConvRun('conv-9', 'même tâche', root, () => 4000)
     const b = createConvRun('conv-9', 'même tâche', root, () => 5000)
     expect(a).not.toBe(b)
+  })
+
+  it('réutilise un RUN ouvert identique au lieu de créer un doublon', () => {
+    const first = createConvRun('conv-reuse', 'continuer le même workflow', root, () => 8000)
+    const reused = reuseOrCreateConvRun('conv-reuse', 'continuer le même workflow', root, () => 9000)
+    expect(reused).toEqual({ path: first, reused: true })
   })
 
   it('saveConvRunTrace/loadConvRunTrace : le fil des sous-agents est persisté et relu', () => {

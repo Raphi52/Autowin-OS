@@ -215,7 +215,8 @@ export class Orchestrator {
     onStep?: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    collectedContext = ''
   ): Promise<OrchestrationResult> {
     const runId = `run-${++this.runSeq}`
     const isMut = isMutationTask(task)
@@ -228,10 +229,10 @@ export class Orchestrator {
       if (this.deps.decompose) {
         const plan = await this.deps.decompose(task)
         if (plan.length >= 2) {
-          return await this.runGreedyPipeline(task, plan, workCwd, onStep, onPhase, onDelta, signal)
+          return await this.runGreedyPipeline(task, plan, workCwd, onStep, onPhase, onDelta, signal, collectedContext)
         }
       }
-      return await this.runInner(task, workCwd, onStep, onPhase, onDelta, signal)
+      return await this.runInner(task, workCwd, onStep, onPhase, onDelta, signal, collectedContext)
     } finally {
       this.deps.worktrees?.end(runId)
     }
@@ -250,7 +251,8 @@ export class Orchestrator {
     onStep?: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    collectedContext = ''
   ): Promise<OrchestrationResult> {
     const { registry, roles, cost } = this.deps
     const projectContext = projectContextBlock(this.deps.executionWorkspace)
@@ -276,7 +278,7 @@ export class Orchestrator {
           .map(([id, r]) => `[dépendance ${id}]\n${r.text.slice(0, PHASE_CONTEXT_CAP)}`)
           .join('\n\n')
         const header = `[sous-tâche ${node.id}] ${node.prompt}`
-        const userContent = depContext ? `${depContext}\n\n${header}` : header
+        const userContent = [collectedContext, depContext, header].filter(Boolean).join('\n\n')
         const parts = [
           { name: 'constitution', text: CONSTITUTION },
           { name: 'consigne:build', text: phaseBrief('build') },
@@ -496,7 +498,8 @@ export class Orchestrator {
     onStep?: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    collectedContext = ''
   ): Promise<OrchestrationResult> {
     const { registry, roles, cost, trust, authority } = this.deps
     // Souveraineté contexte (décision PLIER) : Autowin lit LUI-MÊME le fichier projet gagnant de la
@@ -538,7 +541,8 @@ export class Orchestrator {
             `Sers-toi de la CONNAISSANCE (Brain) ci-dessus en priorité ; ne relis le dépôt que si strictement nécessaire.`
           ]
         : []),
-      `TÂCHE: ${task}`
+      `TÂCHE: ${task}`,
+      ...(collectedContext ? [collectedContext] : [])
     ]
     // Session-resume chaîné (levier coût) : on RÉUTILISE la session de l'exécuteur d'une phase à la
     // suivante quand le provider rend un sessionId. La tâche + le Brain + l'acquis des phases sont

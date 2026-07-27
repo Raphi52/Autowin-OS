@@ -3,7 +3,7 @@ import type { Message } from './providers/types'
 import type { Role } from './roles'
 import {
   closeConvRun,
-  createConvRun,
+  reuseOrCreateConvRun,
   populateConvRunSections,
   saveConvRunTrace
 } from './runs/conv-runs'
@@ -17,6 +17,8 @@ import {
   type ConversationAuthorityMode
 } from './conversation-capabilities'
 import { APP_DESTINATIONS, resolveAppLocation, type AppDestination } from '../shared/navigation'
+import { collectOrchestrationContext } from './orchestration-context'
+import { classifyRegime } from './task-regime'
 
 /**
  * Bus de commandes de l'app — le PLAN DE CONTRÔLE que les agents pilotent.
@@ -499,7 +501,31 @@ export class AppCommandBus {
           this.activeConversationId ||
           '__autonomous__'
         const task = s('task')
-        const runPath = createConvRun(convId, task)
+        const substantial = classifyRegime(task) !== 'trivial'
+        // Collecte obligatoire AVANT l'écriture d'un RUN et AVANT tout appel sous-agent.
+        // Chaque source est best-effort afin qu'un dashboard ou une conversation indisponible
+        // ne transforme pas une tâche exécutable en panne d'orchestration.
+        let collectedContext = ''
+        let unavailable: string[] = []
+        if (substantial) {
+          let app: Awaited<ReturnType<AppCommandBus['snapshot']>> | undefined
+          try {
+            app = await this.snapshot()
+          } catch {
+            unavailable.push('état application')
+          }
+          const conversation = this.os.conversations.get(convId)
+          if (!conversation) unavailable.push('conversation')
+          collectedContext = collectOrchestrationContext({
+            task,
+            conversation,
+            app: app && { tab: app.tab, pendingDecisions: app.pendingDecisions },
+            runs: app?.runs,
+            unavailable
+          })
+        }
+        const run = substantial ? reuseOrCreateConvRun(convId, task) : undefined
+        const runPath = run?.path
         const orchestrationTurnId = randomUUID()
         const steps: OrchestrationStep[] = []
         // Sous-agent STOPPABLE : un AbortController par conversation, coupé par abortOrchestration.
@@ -563,7 +589,8 @@ export class AppCommandBus {
             (step, delta) => {
               this.broadcast({ type: 'orchestrate-delta', convId, runPath, deltaStep: step, delta })
             },
-            abortController.signal
+            abortController.signal,
+            collectedContext
           )
           if (runPath) {
             saveConvRunTrace(runPath, steps)

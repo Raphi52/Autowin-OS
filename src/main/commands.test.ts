@@ -46,6 +46,24 @@ function fakeOs(): any {
 }
 
 describe('AppCommandBus orchestration cancel (#2)', () => {
+  it('collecte le contexte substantiel avant de déléguer au pipeline', async () => {
+    const os = fakeOs()
+    let collected = ''
+    os.runTask = async (...args: unknown[]) => {
+      collected = String(args.at(-1) ?? '')
+      return { gateBlocked: false, gateReasons: [], valid: true, costUsd: 0, result: '', phaseOutputs: [] }
+    }
+    const result = await new AppCommandBus(os, () => {}).exec(
+      'orchestrate',
+      { task: 'implémenter une évolution de workflow' },
+      'conv-1',
+      'auto'
+    )
+    expect(result.ok).toBe(true)
+    expect(collected).toMatch(/^\[COLLECTE DE CONTEXTE — effectuée avant RUN.md et délégation\]/)
+    expect(collected).toContain('Conversation: conv-1 — A garder')
+  })
+
   it('le finally d’un ancien chemin bus ne désarme pas Stop pour le nouveau run', async () => {
     type RunResult = {
       gateBlocked: boolean
@@ -67,13 +85,14 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     const signals: AbortSignal[] = []
     const os = fakeOs()
     os.runTask = (_task: string, ...args: unknown[]) => {
-      signals.push(args.at(-1) as AbortSignal)
+      signals.push(args.at(-2) as AbortSignal)
       return signals.length === 1 ? first.promise : second.promise
     }
     const bus = new AppCommandBus(os, () => {})
 
     const oldRun = bus.exec('orchestrate', { task: 'ancien' }, 'conv-1', 'auto')
     const newRun = bus.exec('orchestrate', { task: 'nouveau' }, 'conv-1', 'auto')
+    await new Promise((resolve) => setTimeout(resolve, 0))
     expect(signals).toHaveLength(2)
 
     first.resolve({
