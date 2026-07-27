@@ -22,6 +22,11 @@ import { ensureBrainServerStarted } from './brain-server-launch'
 import { installCrashHandlers } from './crash-handlers'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
 import {
+  costLimitsFromSettings,
+  loadOrchestrationBudget,
+  saveOrchestrationBudget
+} from './orchestration-budget'
+import {
   appPreflightProbes,
   getLastAppPreflightResult,
   runAppPreflight,
@@ -386,6 +391,7 @@ const ledger = new TraceLedger(join(app.getPath('userData'), 'trace'))
 const causalTrace = new TraceStore(join(app.getPath('userData'), 'causal-trace'))
 
 const profiles = new ProfileStore(join(app.getPath('userData'), 'profiles.json'))
+const orchestrationBudgetPath = join(app.getPath('userData'), 'orchestration-budget.json')
 bus.trace = (name, args, ok) =>
   ledger.append({ source: 'bus', name, detail: JSON.stringify(args).slice(0, 200), ok })
 
@@ -438,8 +444,7 @@ function registerChatIpc(): void {
   }
   ipcMain.handle('tickets:sources', async (event) => {
     assertTrustedRendererSender(event, 'Tickets')
-    const hasAuth =
-      Boolean(process.env.AUTOWIN_AZDO_PAT) || Boolean(await getAzureDevOpsAadToken())
+    const hasAuth = Boolean(process.env.AUTOWIN_AZDO_PAT) || Boolean(await getAzureDevOpsAadToken())
     return ticketSources.map((profile) => ({
       profile,
       credentialConfigured: profile.provider === 'azure' && hasAuth
@@ -452,8 +457,7 @@ function registerChatIpc(): void {
     const current = ticketSources.findIndex((candidate) => candidate.id === profile.id)
     if (current >= 0) ticketSources[current] = profile
     else ticketSources.push(profile)
-    const hasAuth =
-      Boolean(process.env.AUTOWIN_AZDO_PAT) || Boolean(await getAzureDevOpsAadToken())
+    const hasAuth = Boolean(process.env.AUTOWIN_AZDO_PAT) || Boolean(await getAzureDevOpsAadToken())
     return ticketSources.map((source) => ({
       profile: source,
       credentialConfigured: source.provider === 'azure' && hasAuth
@@ -586,14 +590,10 @@ function registerChatIpc(): void {
     // #2 — run STOPPABLE : on enregistre un AbortController dans le registre du bus pour que
     // `os:orchestrate:cancel` → abortOrchestration(conversationId) le coupe réellement (sinon no-op).
     const controller = bus.registerOrchestration(conversationId)
-    // #3 — circuit-breaker de coût : coupe + notifie AVANT dépassement d'un seuil déclaré (env
-    // AUTOWIN_RUN_USD_CAP / AUTOWIN_RUN_TOKEN_CAP), plutôt qu'une facture surprise en post-mortem.
-    const usdCap = Number(process.env.AUTOWIN_RUN_USD_CAP)
-    const tokenCap = Number(process.env.AUTOWIN_RUN_TOKEN_CAP)
-    const breaker = new CostCircuitBreaker({
-      maxUsd: Number.isFinite(usdCap) && usdCap > 0 ? usdCap : undefined,
-      maxTokens: Number.isFinite(tokenCap) && tokenCap > 0 ? tokenCap : undefined
-    })
+    // Circuit-breaker : la limite Settings est relue avant chaque run, sans redémarrage.
+    const breaker = new CostCircuitBreaker(
+      costLimitsFromSettings(loadOrchestrationBudget(orchestrationBudgetPath))
+    )
     try {
       const turnId = randomUUID()
       const result = await os.runTask(
@@ -676,7 +676,10 @@ function registerChatIpc(): void {
   // sans force (montage) le cache déduplique avec le run de démarrage.
   ipcMain.handle('os:behaviourComposition', (event) => {
     assertTrustedRendererSender(event, 'Behaviour composition')
-    return buildBehaviourComposition(os.roles)
+    return buildBehaviourComposition(
+      os.roles,
+      loadOrchestrationBudget(orchestrationBudgetPath).maxUsd
+    )
   })
   ipcMain.handle('os:brainTraces', (event, conversationId?: unknown) => {
     assertTrustedRendererSender(event, 'Brain traces')
@@ -731,6 +734,14 @@ function registerChatIpc(): void {
       w.webContents.send('worktree:activity-changed', activity)
   })
   ipcMain.handle('os:roles', () => os.roles.all())
+  ipcMain.handle('os:orchestrationBudget:get', (event) => {
+    assertTrustedRendererSender(event, 'Orchestration budget')
+    return loadOrchestrationBudget(orchestrationBudgetPath)
+  })
+  ipcMain.handle('os:orchestrationBudget:set', (event, value: unknown) => {
+    assertTrustedRendererSender(event, 'Orchestration budget')
+    return saveOrchestrationBudget(orchestrationBudgetPath, value)
+  })
   ipcMain.handle(
     'os:setRole',
     (event, role: Role, provider: string, model?: string, reasoningEffort?: string) => {

@@ -22,7 +22,13 @@ import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
 import { PROJECT_CONTEXT_CHAIN, PROJECT_CONTEXT_MAX_BYTES } from './context-files'
 import { phasesForRegime, type TaskRegime } from './task-regime'
-import { resolvePhaseBinding, ALL_ROLES, type Role, type RoleBinding, type RoleModelConfig } from './roles'
+import {
+  resolvePhaseBinding,
+  ALL_ROLES,
+  type Role,
+  type RoleBinding,
+  type RoleModelConfig
+} from './roles'
 import type { PipelinePhase } from './skill-pipeline'
 
 /** Un influenceur réel : ce qu'il fait, sa valeur/règle actuelle, et sa source dans le code. */
@@ -77,7 +83,14 @@ function injectedText(text: string): string {
 }
 
 /** Phases orchestrées dont on décrit la composition (le juge/synthèse/réparation dérivent de celles-ci). */
-const ORCHESTRATED_PHASES: PipelinePhase[] = ['scout', 'frame', 'terrain', 'build', 'clean', 'judge']
+const ORCHESTRATED_PHASES: PipelinePhase[] = [
+  'scout',
+  'frame',
+  'terrain',
+  'build',
+  'clean',
+  'judge'
+]
 
 function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
   const brief = PHASE_BRIEFS[phase] ?? ''
@@ -87,19 +100,20 @@ function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
   if (phase !== 'judge') {
     blocks.push({
       label: 'constitution',
-      value: 'Constitution (13 réflexes + limite honnête) — source UNIQUE partagée, injectée aussi au chat cockpit et à os.chat.',
+      value:
+        'Constitution (13 réflexes + limite honnête) — source UNIQUE partagée, injectée aussi au chat cockpit et à os.chat.',
       source: 'src/main/constitution.ts:16',
       excerpt: injectedText(CONSTITUTION)
     })
   }
-  blocks.push(
-    {
-      label: `consigne:${phase}`,
-      value: brief ? 'Brief de phase purpose-built injecté en tête du system.' : 'Aucun brief (retombe sur la discipline générique).',
-      source: 'src/main/phase-briefs.ts:39',
-      excerpt: brief ? injectedText(brief) : undefined
-    }
-  )
+  blocks.push({
+    label: `consigne:${phase}`,
+    value: brief
+      ? 'Brief de phase purpose-built injecté en tête du system.'
+      : 'Aucun brief (retombe sur la discipline générique).',
+    source: 'src/main/phase-briefs.ts:39',
+    excerpt: brief ? injectedText(brief) : undefined
+  })
   // La synthèse fan-out et le juge n'injectent PAS la discipline de pipeline (orchestrator.ts:306,527).
   if (phase !== 'judge') {
     blocks.push({
@@ -147,11 +161,11 @@ function roleField(role: Role, binding: RoleBinding): InfluencerField {
 
 /**
  * Construit la composition statique. `roles` = la config de rôles VIVANTE (reflète les bindings
- * réellement actifs) ; `env` = pour les caps du circuit-breaker (règle si non défini).
+ * réellement actifs) ; `budgetUsd` reflète le plafond persistant du circuit-breaker.
  */
 export function buildBehaviourComposition(
   roles: Pick<RoleModelConfig, 'all'>,
-  env: NodeJS.ProcessEnv = process.env
+  budgetUsd: number | null = null
 ): BehaviourComposition {
   const bindings = roles.all()
 
@@ -159,12 +173,14 @@ export function buildBehaviourComposition(
     ...ALL_ROLES.filter((r) => r !== 'scout').map((r) => roleField(r, bindings[r])),
     {
       label: 'redirection exécution',
-      value: "En exécution, si le provider ciblé ne supporte pas l'exécution, le registre REDIRIGE vers un exécuteur local outillé (codex prioritaire) en écrasant le modèle demandé — le rôle configuré n'est alors PAS celui qui exécute.",
+      value:
+        "En exécution, si le provider ciblé ne supporte pas l'exécution, le registre REDIRIGE vers un exécuteur local outillé (codex prioritaire) en écrasant le modèle demandé — le rôle configuré n'est alors PAS celui qui exécute.",
       source: 'src/main/providers/registry.ts:69'
     },
     {
       label: 'défauts provider',
-      value: 'claude→claude-fable-5/high · codex→gpt-5.6-terra/medium · kimi→…/none (appliqués si modèle/effort absents).',
+      value:
+        'claude→claude-fable-5/high · codex→gpt-5.6-terra/medium · kimi→…/none (appliqués si modèle/effort absents).',
       source: 'src/main/roles.ts:37'
     }
   ]
@@ -179,27 +195,28 @@ export function buildBehaviourComposition(
     },
     {
       label: 'signaux déclencheurs',
-      value: 'RegEx déterministe (aucun appel modèle) : signaux CRITICAL (architect/refactor/migrat/sécurité/pipeline/prod…) → critical ; signaux TRIVIAL (typo/rename/lint/format…) + tâche courte → trivial ; sinon standard.',
+      value:
+        'RegEx déterministe (aucun appel modèle) : signaux CRITICAL (architect/refactor/migrat/sécurité/pipeline/prod…) → critical ; signaux TRIVIAL (typo/rename/lint/format…) + tâche courte → trivial ; sinon standard.',
       source: 'src/main/task-regime.ts:25'
     }
   ]
 
-  const usdCap = env.AUTOWIN_RUN_USD_CAP
-  const tokenCap = env.AUTOWIN_RUN_TOKEN_CAP
   const guardrails: InfluencerField[] = [
     {
       label: 'circuit-breaker coût',
-      value: `Coupe le run (abort réel) au dépassement des caps. USD cap: ${usdCap ?? 'non défini (désactivé)'} · Token cap: ${tokenCap ?? 'non défini (désactivé)'} — lus par tour.`,
-      source: 'src/main/cost-circuit-breaker.ts:28'
+      value: `Coupe le run (abort réel) au dépassement du plafond cumulé. USD cap: ${budgetUsd === null ? 'aucune limite (désactivé)' : `$${budgetUsd.toFixed(2)}`} — relu au démarrage de chaque run.`,
+      source: 'src/main/orchestration-budget.ts:46'
     },
     {
       label: 'exigence de preuve (mutation)',
-      value: "Une tâche de MUTATION exige une preuve (evidence mutation+verification) avant le vert, et tourne en sandbox danger-full-access ; sinon read-only. isMutationTask (regex) pilote les deux.",
+      value:
+        'Une tâche de MUTATION exige une preuve (evidence mutation+verification) avant le vert, et tourne en sandbox danger-full-access ; sinon read-only. isMutationTask (regex) pilote les deux.',
       source: 'src/main/orchestrator.ts:132'
     },
     {
       label: 'gate de clôture',
-      value: 'evaluateClosure (pur, model-agnostic) bloque sur statut open/red, DoD non cochée, ou signal exit≠0 ; degraded-closed ne bloque jamais.',
+      value:
+        'evaluateClosure (pur, model-agnostic) bloque sur statut open/red, DoD non cochée, ou signal exit≠0 ; degraded-closed ne bloque jamais.',
       source: 'src/main/gates/stopgate.ts:31'
     },
     {
@@ -212,10 +229,15 @@ export function buildBehaviourComposition(
   const injectedContext: InfluencerField[] = [
     {
       label: 'RAG Brain',
-      value: 'Récupéré 1×/run (POST 127.0.0.1:8765/query, Bearer token), préfixé en tête du contexte + consigne « priorise le Brain ». Dégrade silencieusement à vide (timeout 5 s / pas de token / serveur absent).',
+      value:
+        'Récupéré 1×/run (POST 127.0.0.1:8765/query, Bearer token), préfixé en tête du contexte + consigne « priorise le Brain ». Dégrade silencieusement à vide (timeout 5 s / pas de token / serveur absent).',
       source: 'src/main/brain-retrieval.ts:92'
     },
-    { label: 'TÂCHE', value: 'La demande brute, toujours présente en 1ʳᵉ phase.', source: 'src/main/orchestrator.ts:205' },
+    {
+      label: 'TÂCHE',
+      value: 'La demande brute, toujours présente en 1ʳᵉ phase.',
+      source: 'src/main/orchestrator.ts:205'
+    },
     {
       label: 'portage phase→phase',
       value: 'La sortie de chaque phase est portée à la suivante, tronquée à 2000 caractères.',
@@ -223,12 +245,14 @@ export function buildBehaviourComposition(
     },
     {
       label: 'session-resume chaîné',
-      value: "Si le provider rend un sessionId, les phases suivantes n'envoient QUE leur consigne (le reste est déjà dans l'historique de session) — contenu réellement envoyé variable/opaque ; cassé dès un fan-out.",
+      value:
+        "Si le provider rend un sessionId, les phases suivantes n'envoient QUE leur consigne (le reste est déjà dans l'historique de session) — contenu réellement envoyé variable/opaque ; cassé dès un fan-out.",
       source: 'src/main/orchestrator.ts:398'
     },
     {
       label: 'agrégat juge',
-      value: 'Le juge reçoit la concaténation des sorties de phases, chaque bloc plafonné à 6000 caractères.',
+      value:
+        'Le juge reçoit la concaténation des sorties de phases, chaque bloc plafonné à 6000 caractères.',
       source: 'src/main/orchestrator.ts:482'
     }
   ]
@@ -237,7 +261,8 @@ export function buildBehaviourComposition(
     systemPrompt: [
       {
         label: 'constitution',
-        value: "os.chat (commande chat_send) utilise la CONSTITUTION comme system par défaut du registre. C'est désormais la MÊME source que les phases orchestrées et le chat cockpit — plus de doublon kit-soul.",
+        value:
+          "os.chat (commande chat_send) utilise la CONSTITUTION comme system par défaut du registre. C'est désormais la MÊME source que les phases orchestrées et le chat cockpit — plus de doublon kit-soul.",
         source: 'src/main/constitution.ts:16',
         excerpt: injectedText(CONSTITUTION)
       }

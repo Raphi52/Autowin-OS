@@ -281,6 +281,10 @@ interface ChatApi {
   onPreflight: (cb: (result: PreflightResult) => void) => () => void
   getPreflight: () => Promise<PreflightResult | null>
   recheckPreflight: (force?: boolean) => Promise<PreflightResult>
+  orchestrationBudget: () => Promise<{ maxUsd: number | null }>
+  setOrchestrationBudget: (settings: {
+    maxUsd: number | null
+  }) => Promise<{ maxUsd: number | null }>
   getGitState: (repoPath?: string) => Promise<import('../shared/git-read').GitReadResult>
   getGitGraph: (repoPath?: string) => Promise<import('../shared/git-graph').GitGraphSnapshot>
   getGitDiff: (
@@ -288,8 +292,18 @@ interface ChatApi {
     repoPath?: string
   ) => Promise<import('../shared/git-read').GitDiffResult>
   pickGitRepo: () => Promise<string | null>
-  checkUpdate: () => Promise<{ available: boolean; behind: number; branch?: string; error?: string }>
-  applyUpdate: () => Promise<{ ok: boolean; relaunch?: boolean; npmInstalled?: boolean; error?: string }>
+  checkUpdate: () => Promise<{
+    available: boolean
+    behind: number
+    branch?: string
+    error?: string
+  }>
+  applyUpdate: () => Promise<{
+    ok: boolean
+    relaunch?: boolean
+    npmInstalled?: boolean
+    error?: string
+  }>
   ticketSources: () => Promise<import('../shared/tickets').TicketSourceSummary[]>
   saveTicketSource: (
     profile: import('../shared/tickets').TicketSourceProfile

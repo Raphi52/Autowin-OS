@@ -35,8 +35,12 @@ const api = {
   // Auto-update git au démarrage.
   checkUpdate: (): Promise<{ available: boolean; behind: number; branch?: string }> =>
     ipcRenderer.invoke('update:check'),
-  applyUpdate: (): Promise<{ ok: boolean; relaunch?: boolean; npmInstalled?: boolean; error?: string }> =>
-    ipcRenderer.invoke('update:apply'),
+  applyUpdate: (): Promise<{
+    ok: boolean
+    relaunch?: boolean
+    npmInstalled?: boolean
+    error?: string
+  }> => ipcRenderer.invoke('update:apply'),
   ticketSources: (): Promise<unknown[]> => ipcRenderer.invoke('tickets:sources'),
   saveTicketSource: (profile: unknown): Promise<unknown[]> =>
     ipcRenderer.invoke('tickets:source:save', profile),
@@ -58,6 +62,12 @@ const api = {
   // #5 — le wizard first-run re-vérifie la config à la demande (force=true pour le bouton).
   recheckPreflight: (force?: boolean): Promise<unknown> =>
     ipcRenderer.invoke('preflight:recheck', force),
+  orchestrationBudget: (): Promise<{ maxUsd: number | null }> =>
+    ipcRenderer.invoke('os:orchestrationBudget:get'),
+  setOrchestrationBudget: (settings: {
+    maxUsd: number | null
+  }): Promise<{ maxUsd: number | null }> =>
+    ipcRenderer.invoke('os:orchestrationBudget:set', settings),
   // Config par rôle
   roles: (): Promise<
     Record<string, { provider: string; model?: string; reasoningEffort?: string }>

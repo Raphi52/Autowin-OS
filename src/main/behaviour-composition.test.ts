@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { buildBehaviourComposition, type InfluencerField } from './behaviour-composition'
 import { RoleModelConfig } from './roles'
 
-const build = (env: NodeJS.ProcessEnv = {}): ReturnType<typeof buildBehaviourComposition> =>
-  buildBehaviourComposition(new RoleModelConfig(), env)
+const build = (budgetUsd: number | null = null): ReturnType<typeof buildBehaviourComposition> =>
+  buildBehaviourComposition(new RoleModelConfig(), budgetUsd)
 
 const allFields = (c: ReturnType<typeof buildBehaviourComposition>): InfluencerField[] => [
   ...c.orchestrated.systemPrompt.flatMap((p) => p.blocks),
@@ -74,9 +74,9 @@ describe('buildBehaviourComposition — EXCLUSIVITÉ (aucun non-influenceur)', (
 })
 
 describe('buildBehaviourComposition — valeurs volatiles = RÈGLE, pas figées', () => {
-  it('caps circuit-breaker : « non défini » si env absent, valeur si présente', () => {
-    expect(JSON.stringify(build({}))).toContain('non défini')
-    const withCap = build({ AUTOWIN_RUN_USD_CAP: '5' } as NodeJS.ProcessEnv)
+  it('cap circuit-breaker : absence explicite ou valeur persistée', () => {
+    expect(JSON.stringify(build())).toContain('aucune limite')
+    const withCap = build(5)
     const cb = withCap.orchestrated.guardrails.find((f) => f.label === 'circuit-breaker coût')!
     expect(cb.value).toContain('5')
   })
