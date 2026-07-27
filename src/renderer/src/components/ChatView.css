@@ -579,13 +579,7 @@
 .msg.user {
   align-self: flex-end;
   align-items: flex-end;
-  /* Sticky scroll par paire : le prompt reste épinglé en haut du viewport pendant qu'on scrolle sa
-     réponse ; le prompt suivant (même top:0, plus loin dans le DOM) le recouvre à son tour → « remplace
-     par le précédent » en remontant. 100% CSS natif : ne touche ni au JS ni à la mémoïsation des rows. */
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  /* Marge de respiration au-dessus du prompt épinglé sans décoller la bulle du bord. */
+  /* Marge de respiration au-dessus du prompt sans décoller la bulle du bord. */
   padding-top: var(--s2);
 }
 .msg.user .msg-meta {

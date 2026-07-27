@@ -49,3 +49,15 @@ describe('model final summary', () => {
     expect(summary).not.toContain('backdrop-filter')
   })
 })
+
+describe('user messages', () => {
+  it('does not pin a prompt over scrolling content', () => {
+    const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+    const userMessage = css.match(/\.msg\.user\s*{([^}]*)}/s)?.[1]
+
+    expect(userMessage).toBeDefined()
+    expect(userMessage).not.toMatch(/position:\s*sticky/)
+    expect(userMessage).not.toMatch(/top:\s*0/)
+    expect(userMessage).not.toMatch(/z-index:\s*5/)
+  })
+})
