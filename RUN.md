@@ -1,4 +1,6 @@
 status: open
+CausalHypothesis: `ChatView.tsx` rend `openRun.content` dans un `<pre>` brut ; l'inspecteur doit réutiliser `BrainMarkdown` et exposer les sections et compteurs déjà disponibles.
+CausalHypothesis: `src/main/models.ts` réécrit un cache inchangé après indisponibilité ; la sauvegarde doit être conditionnée à une différence réelle.
 session: local-scout-2026-07-21
 regime: standard
 signal: un test de rendu Workflows couvre un RUN complet et un RUN incomplet ; `npm test` et `npm run typecheck` sortent à 0 ; une capture CDP fraîche montre le sommaire de sections, les compteurs Journal/Défauts et un contenu Markdown sans débordement horizontal.
@@ -36,7 +38,7 @@ Décision de cadrage : **#1, Inspecteur RUN structuré**, avec les compteurs de 
 - [ ] Un RUN.md contenant Besoin, Contraintes, Options, SOP, Journal, Défauts et Reprise s’ouvre dans Workflows avec une synthèse et une navigation de sections ; preuve : test de rendu ciblé vert.
 - [ ] La carte d’un run affiche statut, DoD, événements Journal et défauts sans dégrader les runs attachés ou sans trace ; preuve : test de composant avec les deux cas.
 - [ ] Le contenu Markdown reste lisible dans le panneau, sans débordement horizontal ; preuve : capture CDP fraîche relue et assertion DOM.
-- [ ] `npm test` et `npm run typecheck` sont verts après implémentation ; preuve : exit code 0.
+- [x] `npm test` et `npm run typecheck` sont verts après implémentation ; preuve : exit code 0 (2026-07-27).
 
 Hypothèses : le format de sections `##` reste la source de vérité ; les RUN.md externes peuvent omettre certaines sections et doivent alors recevoir un état vide explicite.
 
@@ -98,6 +100,10 @@ Décision : **A**. Elle répond au besoin réel avec les données et le renderer
 ## Défauts
 
 - Aucun défaut applicatif modifié : cette phase livre uniquement le cadrage.
+
+[2026-07-27] BUILD-VERIFIED : test rouge d'import `RunInspector` absent, puis `npx vitest run src/renderer/src/components/RunInspector.test.tsx` vert (3 tests) ; `npm run typecheck` et `npm run build` sortent 0.
+[2026-07-27] CLEAN-BLOCKED : le signal global `npm test && npm run typecheck` reste rouge hors périmètre : `src/main/models.test.ts` échoue isolément (cache offline) et `renderer-storage-migration.test.ts` ne démarre pas (Electron absent). Preuve CDP indisponible pour le même Electron absent.
+[2026-07-27] BUILD-VERIFIED : `src/main/models.ts` évite la réécriture du cache inchangé ; `npm rebuild electron` a restauré le binaire. `npm test && npm run typecheck` : exit code 0.
 
 ## Reprise
 

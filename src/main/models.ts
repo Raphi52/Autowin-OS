@@ -223,6 +223,7 @@ export async function discoverImportedModels(
   loadTokensFn: () => Tokens | null = loadTokens,
   cache: ModelCatalogCache = { load: () => [], save: () => undefined }
 ): Promise<ImportedModel[]> {
+  const cachedModels = cache.load()
   const codexModels = await discoverCodexModels(fetchFn, loadTokensFn, cache)
   let claudeModels = cachedOrSeed('claude', cache)
   try {
@@ -230,7 +231,7 @@ export async function discoverImportedModels(
       signal: AbortSignal.timeout(2_000)
     })
     if (!response.ok) {
-      cache.save([...codexModels, ...claudeModels])
+      saveCatalogIfChanged(cache, cachedModels, [...codexModels, ...claudeModels])
       return withLatestAliases(codexModels, claudeModels)
     }
     const payload = (await response.json()) as { data?: Array<{ id?: unknown }> }
@@ -249,8 +250,16 @@ export async function discoverImportedModels(
   } catch {
     // Le cache/seed par provider est d\u00e9j\u00e0 choisi ; aucun autre provider n'est modifi\u00e9.
   }
-  cache.save([...codexModels, ...claudeModels])
+  saveCatalogIfChanged(cache, cachedModels, [...codexModels, ...claudeModels])
   return withLatestAliases(codexModels, claudeModels)
+}
+
+function saveCatalogIfChanged(
+  cache: ModelCatalogCache,
+  cachedModels: ImportedModel[],
+  nextModels: ImportedModel[]
+): void {
+  if (JSON.stringify(cachedModels) !== JSON.stringify(nextModels)) cache.save(nextModels)
 }
 
 function withLatestAliases(

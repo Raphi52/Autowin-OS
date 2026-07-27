@@ -35,6 +35,7 @@ import {
 import { searchConversations } from './conversation-search'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { StepThread, AssistantActivityGroup } from './ChatView.parts'
+import { RunInspector } from './RunInspector'
 import { reconstructBranchChain } from '../../../shared/conversation-branches'
 import './ChatView.css'
 import './SlashPalette.css'
@@ -2165,6 +2166,10 @@ export function ChatView({
                           {r.summary.dodChecked}/{r.summary.dodTotal}
                         </span>
                       </div>
+                      <div className="row c-faint" style={{ marginTop: 6, gap: 'var(--s2)', fontSize: 10 }}>
+                        <span>Journal {r.summary.journalEvents}</span>
+                        <span>Défauts {r.summary.defauts}</span>
+                      </div>
                     </button>
                     {isOpen && (
                       <div className="run-detail-box fade-in">
@@ -2190,7 +2195,7 @@ export function ChatView({
                           <StepThread steps={openTrace} />
                         ) : (
                           openRun && (
-                            <pre className="run-detail mono scroll-y">{openRun.content}</pre>
+                            <RunInspector content={openRun.content} summary={r.summary} />
                           )
                         )}
                       </div>
