@@ -35,8 +35,12 @@ const api = {
   // Auto-update git au démarrage.
   checkUpdate: (): Promise<{ available: boolean; behind: number; branch?: string }> =>
     ipcRenderer.invoke('update:check'),
-  applyUpdate: (): Promise<{ ok: boolean; relaunch?: boolean; npmInstalled?: boolean; error?: string }> =>
-    ipcRenderer.invoke('update:apply'),
+  applyUpdate: (): Promise<{
+    ok: boolean
+    relaunch?: boolean
+    npmInstalled?: boolean
+    error?: string
+  }> => ipcRenderer.invoke('update:apply'),
   ticketSources: (): Promise<unknown[]> => ipcRenderer.invoke('tickets:sources'),
   saveTicketSource: (profile: unknown): Promise<unknown[]> =>
     ipcRenderer.invoke('tickets:source:save', profile),
@@ -68,7 +72,7 @@ const api = {
     model?: string,
     reasoningEffort?: string
   ): Promise<unknown> => ipcRenderer.invoke('os:setRole', role, provider, model, reasoningEffort),
-  models: (): Promise<unknown[]> => ipcRenderer.invoke('os:models:list'),
+  models: (force = false): Promise<unknown[]> => ipcRenderer.invoke('os:models:list', force),
   profiles: (): Promise<unknown[]> => ipcRenderer.invoke('os:profiles:list'),
   saveProfile: (profile: unknown): Promise<unknown[]> =>
     ipcRenderer.invoke('os:profiles:save', profile),
@@ -130,6 +134,18 @@ const api = {
     provider: string
   }): Promise<{ id: string; title: string; category: string; provider: string }> =>
     ipcRenderer.invoke('os:conversations:create', p),
+  routeConversationMessage: (
+    conversationId: string,
+    message: string,
+    attachmentNames: string[]
+  ): Promise<{
+    sourceConversationId: string
+    conversationId: string
+    routed: boolean
+    title?: string
+    decision: { route: 'current' | 'new'; confidence: number; reason: string }
+  }> =>
+    ipcRenderer.invoke('os:conversations:routeMessage', conversationId, message, attachmentNames),
   conversationsRename: (id: string, title: string): Promise<unknown> =>
     ipcRenderer.invoke('os:conversations:rename', id, title),
   conversationsSetAuthorityMode: (id: string, mode: 'plan' | 'ask' | 'auto'): Promise<unknown> =>

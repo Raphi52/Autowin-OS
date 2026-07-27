@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   buildOrchestratorModelGroups,
   type OrchestratorModelOption,
@@ -59,6 +59,23 @@ export function OrchestratorModelSelector({
     : models.length === 0
       ? 'Aucun modèle disponible'
       : (grouped.currentMissing?.label ?? currentOption?.label ?? 'Choisir une cible')
+
+  useEffect(() => {
+    const closeOnOutsidePointer = (event: PointerEvent): void => {
+      const dropdown = dropdownRef.current
+      if (
+        !dropdown?.open ||
+        !(event.target instanceof Node) ||
+        dropdown.contains(event.target)
+      ) {
+        return
+      }
+      dropdown.open = false
+      setExpandedModel(null)
+    }
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer)
+  }, [])
 
   return (
     <div className="model-select-shell">

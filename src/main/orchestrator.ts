@@ -540,7 +540,7 @@ export class Orchestrator {
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
     signal?: AbortSignal
   ): Promise<OrchestrationResult> {
-    const { registry, roles, cost, trust, authority } = this.deps
+    const { registry, roles, cost, trust } = this.deps
     // Souveraineté contexte (décision PLIER) : Autowin lit LUI-MÊME le fichier projet gagnant de la
     // chaîne de précédence et le plie dans chaque system → source unique, quel que soit le modèle.
     const projectContext = projectContextBlock(this.deps.executionWorkspace)
@@ -1238,25 +1238,12 @@ export class Orchestrator {
       if (!gate.blocked) break
     }
 
-    // 4. Gate BLOQUÉ → la décision remonte à l'humain via le sas d'autorité
-    // (rejouer/abandonner) ; défaut sûr = abandonner si personne ne répond (AFK).
-    let pendingDecisionId: string | undefined
-    if (gate.blocked) {
-      pendingDecisionId = authority.propose({
-        question: `Tâche "${task}" : le juge a rejeté le résultat. Rejouer ou abandonner ?`,
-        options: ['rejouer', 'abandonner'],
-        safeDefault: 'abandonner',
-        ttlMs: 10 * 60 * 1000
-      })
-    }
-
     return {
       task,
       result: exec.text,
       valid,
       gateBlocked: gate.blocked,
       gateReasons: gate.reasons,
-      pendingDecisionId,
       phaseOutputs,
       brainQuery: brain.navigation?.query ?? (brainContext ? task : undefined),
       brainRetrievedAt,

@@ -70,6 +70,136 @@ describe('AgentPilot turn contract', () => {
     expect(bus.exec).toHaveBeenCalledWith('remove_conversation', { id: 'conv-1' }, 'conv-1', 'plan')
   })
 
+  it('does not interrupt the user for a structured question without an admitted blocker', async () => {
+    const ask = vi.fn()
+    const events: PilotEvent[] = []
+    const responses = [
+      '<question>{"text":"Quel nom donner ?","options":["A","B"]}</question>',
+      'Je choisis un nom raisonnable et je poursuis.'
+    ]
+    const registry = {
+      send: vi
+        .fn()
+        .mockImplementation(async () => ({ text: responses.shift()!, provider: 'codex' })),
+      describePrompt: () => ({ provider: 'codex', transport: 'fixture', messages: [], options: {} })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'avance avec un nom raisonnable' }],
+      (event) => events.push(event),
+      ask,
+      2,
+      'conv-1'
+    )
+
+    expect(ask).not.toHaveBeenCalled()
+    expect(registry.send).toHaveBeenCalledTimes(2)
+    expect(events.at(-1)).toMatchObject({
+      kind: 'done',
+      text: 'Je choisis un nom raisonnable et je poursuis.'
+    })
+  })
+
+  it('keeps one bounded autonomous recovery when an invalid question uses the last iteration', async () => {
+    const ask = vi.fn()
+    const events: PilotEvent[] = []
+    const responses = [
+      '<question>{"text":"Quel nom donner ?","options":["A","B"],"reason":"material-ambiguity"}</question>',
+      'Je choisis A et je poursuis.'
+    ]
+    const registry = {
+      send: vi
+        .fn()
+        .mockImplementation(async () => ({ text: responses.shift()!, provider: 'codex' })),
+      describePrompt: () => ({ provider: 'codex', transport: 'fixture', messages: [], options: {} })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'choisis un nom raisonnable' }],
+      (event) => events.push(event),
+      ask,
+      1,
+      'conv-1'
+    )
+
+    expect(ask).not.toHaveBeenCalled()
+    expect(registry.send).toHaveBeenCalledTimes(2)
+    expect(events.at(-1)).toMatchObject({ kind: 'done', text: 'Je choisis A et je poursuis.' })
+  })
+
+  it('does not transport missing credentials through the observable chat channel', async () => {
+    const responses = [
+      '<question>{"text":"Le token sk-test-123 est-il correct ?","options":[],"reason":"secret-or-personal-data"}</question>',
+      'Configure le credential du provider dans les réglages, puis relance.'
+    ]
+    const ask = vi.fn().mockResolvedValue('secret-value')
+    const events: PilotEvent[] = []
+    const registry = {
+      send: vi
+        .fn()
+        .mockImplementation(async () => ({ text: responses.shift()!, provider: 'codex' })),
+      describePrompt: () => ({ provider: 'codex', transport: 'fixture', messages: [], options: {} })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'prépare le déploiement' }],
+      (event) => events.push(event),
+      ask,
+      1,
+      'conv-1'
+    )
+
+    expect(ask).not.toHaveBeenCalled()
+    expect(registry.send).toHaveBeenCalledTimes(2)
+    expect(events.find((event) => event.kind === 'prompt-call')?.response).not.toContain(
+      'sk-test-123'
+    )
+    expect(JSON.stringify(registry.send.mock.calls[1][1])).not.toContain('sk-test-123')
+    expect(JSON.stringify(registry.send.mock.calls[1][1])).toContain(
+      '[question modèle refusée et masquée]'
+    )
+  })
+
+  it('masks and recovers from an unclosed question before any observable event', async () => {
+    const responses = ['<question>sk-test-123', 'Je poursuis sans question.']
+    const registry = {
+      send: vi
+        .fn()
+        .mockImplementation(async () => ({ text: responses.shift()!, provider: 'codex' })),
+      describePrompt: () => ({ provider: 'codex', transport: 'fixture', messages: [], options: {} })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'continue' }],
+      (event) => events.push(event),
+      vi.fn(),
+      1,
+      'conv-1'
+    )
+
+    expect(registry.send).toHaveBeenCalledTimes(2)
+    expect(JSON.stringify(events)).not.toContain('sk-test-123')
+    expect(JSON.stringify(registry.send.mock.calls[1][1])).not.toContain('sk-test-123')
+    expect(events.at(-1)).toMatchObject({ kind: 'done', text: 'Je poursuis sans question.' })
+  })
+
   it('injecte une directive utilisateur au prochain point d’itération du tour', async () => {
     const responses = ['<cmd>{"name":"get_state","args":{}}</cmd>', 'Terminé']
     const send = vi
@@ -247,11 +377,11 @@ describe('AgentPilot turn contract', () => {
     expect(events.at(-1)?.text).toMatch(/^Cap d'.*\(1\).*sans r.*ponse finale$/)
     expect(events.some((event) => event.kind === 'done')).toBe(false)
   })
-  it('stops waiting for a model question when the turn is aborted', async () => {
+  it('never waits on the disabled model-question channel', async () => {
     const controller = new AbortController()
     const registry = {
       send: vi.fn().mockResolvedValue({
-        text: '<question>{"text":"Continuer ?","options":["Oui"]}</question>',
+        text: '<question>{"text":"Publier ?","options":["Oui"],"reason":"external-effect"}</question>',
         provider: 'codex'
       }),
       describePrompt: () => ({
@@ -266,10 +396,11 @@ describe('AgentPilot turn contract', () => {
       getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
     }
     const bus = { catalog: () => [], snapshotForPrompt }
+    const ask = vi.fn(() => new Promise<string>(() => undefined))
     const pending = new AgentPilot(registry as never, roles as never, bus as never).chat(
       [{ role: 'user', content: 'question' }],
       () => undefined,
-      () => new Promise<string>(() => undefined),
+      ask,
       6,
       'conv-1',
       controller.signal
@@ -283,6 +414,7 @@ describe('AgentPilot turn contract', () => {
       ),
       new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 30))
     ])
-    expect(result).toBe('rejected')
+    expect(result).toBe('resolved')
+    expect(ask).not.toHaveBeenCalled()
   })
 })

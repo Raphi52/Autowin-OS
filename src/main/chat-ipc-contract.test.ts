@@ -42,6 +42,39 @@ describe('renderer chat IPC contract', () => {
     expect(findLegacyChatMarkers(sources)).toEqual([])
   })
 
+  it('serves the cached model catalog immediately, then notifies the renderer after boot refresh', () => {
+    const sources = readChatContractSources()
+    const modelHandler = sources.main.slice(
+      sources.main.indexOf("ipcMain.handle('os:models:list'"),
+      sources.main.indexOf('// Page Routeur')
+    )
+    const catalogSetup = sources.main.slice(
+      sources.main.indexOf('const modelCatalog ='),
+      sources.main.indexOf('const agentModelsReady =')
+    )
+
+    expect(modelHandler).toContain('serveModelCatalog(modelCatalog, force)')
+    expect(sources.preload).toContain("ipcRenderer.invoke('os:models:list', force)")
+    expect(catalogSetup).toContain("broadcast({ type: 'refresh', scope: 'roles' })")
+  })
+
+  it('exposes a guarded conversation-routing preflight before pilotChat', () => {
+    const sources = readChatContractSources()
+
+    expect(sources.preload).toContain('routeConversationMessage: (')
+    expect(sources.preload).toMatch(/ipcRenderer\.invoke\(\s*'os:conversations:routeMessage'/)
+    expect(sources.preloadTypes).toContain('routeConversationMessage: (')
+    const handler = sources.main.slice(
+      sources.main.indexOf("'os:conversations:routeMessage'"),
+      sources.main.indexOf("'os:conversations:rename'")
+    )
+    expect(handler).toContain("assertTrustedRendererSender(event, 'Conversation route')")
+    expect(handler).toContain('conversationRouteCoordinator.route(')
+    expect(handler).toContain("kind: 'conversation-route'")
+    expect(handler).toContain('inputTokens: decision.usage?.inputTokens')
+    expect(handler).toContain("name: 'conversation_route'")
+  })
+
   it('does not let a live directive outlive the chat turn that accepted it', () => {
     const { main } = readChatContractSources()
     const drain = main.slice(
@@ -52,11 +85,12 @@ describe('renderer chat IPC contract', () => {
     const activeTurnGuard = handler.indexOf('if (!activeChatTurns.get(conversationId))')
     const pendingDirectiveWrite = handler.indexOf('pendingDirectives.set(conversationId, queued)')
     const turnCleanup = main.indexOf('activeChatTurns.delete(conversationId, controller)')
-    const staleDirectiveCleanup = main.indexOf('pendingDirectives.delete(conversationId)', turnCleanup)
-
-    expect(drain).toMatch(
-      /pendingDirectives\.delete\(conversationId\)[\s\S]*?return queued/
+    const staleDirectiveCleanup = main.indexOf(
+      'pendingDirectives.delete(conversationId)',
+      turnCleanup
     )
+
+    expect(drain).toMatch(/pendingDirectives\.delete\(conversationId\)[\s\S]*?return queued/)
     expect(activeTurnGuard).toBeGreaterThanOrEqual(0)
     expect(pendingDirectiveWrite).toBeGreaterThan(activeTurnGuard)
     expect(turnCleanup).toBeGreaterThanOrEqual(0)

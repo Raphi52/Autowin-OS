@@ -56,6 +56,22 @@ describe('workflow sidebar header', () => {
   })
 })
 
+describe('workflow header toggle', () => {
+  it('uses the approved linear-tab treatment without changing the workflow label', () => {
+    const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+    const source = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
+
+    expect(source).toMatch(/workflow-toggle\$\{showRuns \? ' is-active' : ''\}/)
+    expect(source).toContain('Workflows{openRunsCount > 0')
+    expect(css).toMatch(
+      /\.workflow-toggle\s*{[^}]*position:\s*relative;[^}]*border:\s*0;[^}]*background:\s*transparent/s
+    )
+    expect(css).toMatch(
+      /\.workflow-toggle\.is-active::after\s*{[^}]*height:\s*2px;[^}]*linear-gradient\(90deg,\s*#ff3cac,\s*#ffd45a\)/s
+    )
+  })
+})
+
 describe('minimal conversation status lights', () => {
   it('keeps the Native-style dot compact and reserves animation for running work', () => {
     const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')

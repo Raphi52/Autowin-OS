@@ -31,6 +31,16 @@ describe('VisibleStreamFilter', () => {
     expect(visible(['Visible <cm'])).toBe('Visible ')
   })
 
+  it('never exposes an unclosed model question, even when its payload is not JSON', () => {
+    for (const source of ['Visible <question>sk-test-123', 'Visible <QUESTION>sk-test-123']) {
+      for (let split = 1; split < source.length; split += 1) {
+        const output = visible([source.slice(0, split), source.slice(split)])
+        expect(output).toBe('Visible ')
+        expect(output).not.toContain('sk-test-123')
+      }
+    }
+  })
+
   it('keeps an unclosed command tag mentioned in prose intact', () => {
     const source = 'Pour agir, émets une commande comme <cmd> par exemple, sans la fermer.'
     expect(visible([source])).toBe(source)

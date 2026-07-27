@@ -54,6 +54,8 @@ export interface PilotEvent {
 
 const CMD_RE = /<cmd>\s*(\{[\s\S]*?\})\s*<\/cmd>/g
 const CONTROL_RE = /<(cmd|question)>\s*([\s\S]*?)\s*<\/\1>/g
+const REJECTED_QUESTION_RE = /<question>[\s\S]*?(?:<\/question>|$)/gi
+const REJECTED_QUESTION_MARKER = '[question modèle refusée et masquée]'
 
 type OrderedPilotToken =
   { kind: 'text'; text: string } | { kind: 'command'; name: string; args: Record<string, unknown> }
@@ -264,7 +266,9 @@ export class AgentPilot {
     // Coût cumulé du tour (toutes les itérations LLM du même message utilisateur).
     const usage = { inputTokens: 0, outputTokens: 0, costUsd: 0 }
 
-    for (let i = 0; i < maxIter; i++) {
+    let iterationLimit = maxIter
+    let invalidQuestionRecoveryAvailable = true
+    for (let i = 0; i < iterationLimit; i++) {
       // Pilotage continu : les directives envoyées PENDANT le tour entrent au prochain
       // point d'itération (priorité immédiate, sans attendre la fin du tour).
       for (const directive of drainDirectives?.() ?? []) {
@@ -369,7 +373,7 @@ export class AgentPilot {
         kind: 'prompt-call',
         iteration: i,
         prompt,
-        response: res.text,
+        response: res.text.replace(REJECTED_QUESTION_RE, REJECTED_QUESTION_MARKER),
         status: 'completed',
         callUsage: res.usage,
         callDurationMs: performance.now() - callStartedAt,
@@ -380,13 +384,28 @@ export class AgentPilot {
         usage.outputTokens += res.usage.outputTokens
         usage.costUsd += res.usage.costUsd ?? 0
       }
-      const text = res.text.trim()
+      const rejectedQuestion = /<question>/i.test(res.text)
+      const text = res.text.replace(REJECTED_QUESTION_RE, REJECTED_QUESTION_MARKER).trim()
       const question = parseModelQuestion(text)
       if (question && ask) {
         const answer = await waitForAnswer(ask(question), signal)
         convo.push(`TOI: ${text}`)
         convo.push(`UTILISATEUR: ${answer}`)
         continue
+      }
+      if (!question && rejectedQuestion) {
+        convo.push(`TOI: ${REJECTED_QUESTION_MARKER}`)
+        convo.push(
+          'SYSTÈME: question refusée — aucun motif de blocage autorisé et vérifiable. ' +
+            'Continue de façon autonome avec une hypothèse raisonnable, sans solliciter l’utilisateur.'
+        )
+        if (invalidQuestionRecoveryAvailable) {
+          iterationLimit += 1
+          invalidQuestionRecoveryAvailable = false
+          continue
+        }
+        onEvent({ kind: 'done', text: '', usage })
+        return
       }
 
       const ordered = parseOrderedPilotTokens(res.text)

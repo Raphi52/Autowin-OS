@@ -1212,6 +1212,56 @@
   margin-left: auto;
 }
 
+.workflow-toggle {
+  position: relative;
+  display: inline-flex;
+  height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: #a8b1ba;
+  font: 700 10px/1 var(--font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.workflow-toggle::after {
+  position: absolute;
+  right: 6px;
+  bottom: 0;
+  left: 6px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.24);
+  content: '';
+}
+
+.workflow-toggle:hover,
+.workflow-toggle:focus-visible,
+.workflow-toggle.is-active {
+  color: #f3f6f8;
+}
+
+.workflow-toggle:focus-visible {
+  outline: 1px solid rgba(255, 212, 90, 0.72);
+  outline-offset: 3px;
+}
+
+.workflow-toggle.is-active::after {
+  height: 2px;
+  background: linear-gradient(90deg, #ff3cac, #ffd45a);
+}
+
+.workflow-toggle svg {
+  flex: none;
+  color: #778696;
+}
+
+.workflow-toggle.is-active svg {
+  color: #ff4eae;
+}
+
 .model-select-shell {
   position: relative;
   display: inline-flex;

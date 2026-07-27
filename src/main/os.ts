@@ -235,7 +235,9 @@ export class AutowinOS {
 
   /** Change le binding d'un rôle ET persiste sur disque. */
   setRole(role: Role, binding: RoleBinding): Record<Role, RoleBinding> {
-    const proposed = new RoleModelConfig(this.roles.all()).setBinding(role, binding).all()
+    const proposed = new RoleModelConfig(this.roles.all(), this.roles.getCatalog())
+      .setBinding(role, binding)
+      .all()
     saveRoleBindings(proposed)
     this.roles.setBinding(role, proposed[role])
     return this.roles.all()

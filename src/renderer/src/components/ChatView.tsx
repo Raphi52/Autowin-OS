@@ -279,133 +279,135 @@ function InspectIcon(): React.JSX.Element {
   )
 }
 
-const ChatMessageRow = memo(function ChatMessageRow({
-  message,
-  conversationId,
-  onInspectTurn,
-  onFork,
-  onOpenImage,
-  onPickSuggestion
-}: {
-  message: Msg
-  conversationId: string | null
-  onInspectTurn?: (target: InspectTurnTarget) => void
-  onFork?: (messageId: string) => void
-  onOpenImage?: (image: { src: string; name: string }) => void
-  onPickSuggestion?: (prompt: string) => void
-}): React.JSX.Element {
-  if (message.role === 'user') {
-    return (
-      <div className="msg user fade-in">
-        <div className="msg-meta">
-          <span className="msg-role">Toi</span>
+const ChatMessageRow = memo(
+  function ChatMessageRow({
+    message,
+    conversationId,
+    onInspectTurn,
+    onFork,
+    onOpenImage,
+    onPickSuggestion
+  }: {
+    message: Msg
+    conversationId: string | null
+    onInspectTurn?: (target: InspectTurnTarget) => void
+    onFork?: (messageId: string) => void
+    onOpenImage?: (image: { src: string; name: string }) => void
+    onPickSuggestion?: (prompt: string) => void
+  }): React.JSX.Element {
+    if (message.role === 'user') {
+      return (
+        <div className="msg user fade-in">
+          <div className="msg-meta">
+            <span className="msg-role">Toi</span>
+          </div>
+          {message.content && (
+            <div className="msg-body" dir="auto">
+              {message.content}
+            </div>
+          )}
+          {message.attachments && message.attachments.length > 0 && (
+            <div className="attachment-list sent">
+              {message.attachments.map((file, fileIndex) => (
+                <span
+                  className={`attachment-chip${file.thumbnail ? ' has-thumb' : ''}`}
+                  key={`${file.name}-${fileIndex}`}
+                >
+                  {file.thumbnail ? (
+                    <button
+                      type="button"
+                      className="attachment-thumb-button"
+                      aria-label={`Agrandir ${file.name}`}
+                      onClick={() => onOpenImage?.({ src: file.thumbnail!, name: file.name })}
+                    >
+                      <img className="attachment-thumb" src={file.thumbnail} alt={file.name} />
+                    </button>
+                  ) : (
+                    <span aria-hidden="true">{file.mimeType.startsWith('image/') ? '▧' : '▤'}</span>
+                  )}
+                  <span className="attachment-name">{file.name}</span>
+                  <small>{formatFileSize(file.size)}</small>
+                </span>
+              ))}
+            </div>
+          )}
+          {message.messageId && onFork && (
+            <div className="msg-turn-actions">
+              {onFork && (
+                <button
+                  type="button"
+                  className="msg-turn-icon"
+                  title="Créer une branche à partir de ce message"
+                  aria-label="Créer une branche à partir de ce message"
+                  onClick={() => onFork(message.messageId!)}
+                >
+                  <ForkIcon />
+                </button>
+              )}
+            </div>
+          )}
         </div>
-        {message.content && (
-          <div className="msg-body" dir="auto">
-            {message.content}
-          </div>
-        )}
-        {message.attachments && message.attachments.length > 0 && (
-          <div className="attachment-list sent">
-            {message.attachments.map((file, fileIndex) => (
-              <span
-                className={`attachment-chip${file.thumbnail ? ' has-thumb' : ''}`}
-                key={`${file.name}-${fileIndex}`}
-              >
-                {file.thumbnail ? (
-                  <button
-                    type="button"
-                    className="attachment-thumb-button"
-                    aria-label={`Agrandir ${file.name}`}
-                    onClick={() => onOpenImage?.({ src: file.thumbnail!, name: file.name })}
-                  >
-                    <img className="attachment-thumb" src={file.thumbnail} alt={file.name} />
-                  </button>
-                ) : (
-                  <span aria-hidden="true">{file.mimeType.startsWith('image/') ? '▧' : '▤'}</span>
-                )}
-                <span className="attachment-name">{file.name}</span>
-                <small>{formatFileSize(file.size)}</small>
-              </span>
-            ))}
-          </div>
-        )}
-        {message.messageId && onFork && (
-          <div className="msg-turn-actions">
-            {onFork && (
-              <button
-                type="button"
-                className="msg-turn-icon"
-                title="Créer une branche à partir de ce message"
-                aria-label="Créer une branche à partir de ce message"
-                onClick={() => onFork(message.messageId!)}
-              >
-                <ForkIcon />
-              </button>
-            )}
-          </div>
-        )}
+      )
+    }
+    return (
+      <div className="msg assistant fade-in">
+        <div className="msg-meta">
+          <span className="msg-role">Agent</span>
+          {!message.done && <span className="spinner" />}
+        </div>
+        <div className="msg-turn">
+          {message.parts.length === 0 && !message.done && (
+            <div className="msg-body c-faint">réflexion…</div>
+          )}
+          {groupAssistantActivity(message.parts).map((part, index) =>
+            part.kind === 'text' ? (
+              <div key={index} className="msg-body" dir="auto">
+                <Markdown text={part.text} highlightFinalSummary />
+              </div>
+            ) : part.kind === 'suggestions' ? (
+              <SuggestionGrid
+                key={index}
+                groups={part.groups}
+                onPick={(prompt) => onPickSuggestion?.(prompt)}
+              />
+            ) : (
+              <AssistantActivityGroup key={index} actions={part.actions} />
+            )
+          )}
+        </div>
+        <div className="msg-turn-actions">
+          {message.turnId && message.turnId !== 'pending' && conversationId && onInspectTurn && (
+            <button
+              type="button"
+              className="msg-turn-icon"
+              title="Inspecter ce tour dans l'Observatory"
+              aria-label="Inspecter ce tour"
+              onClick={() => onInspectTurn({ conversationId, turnId: message.turnId! })}
+            >
+              <InspectIcon />
+            </button>
+          )}
+          {message.messageId && onFork && (
+            <button
+              type="button"
+              className="msg-turn-icon"
+              title="Créer une branche à partir de ce tour"
+              aria-label="Créer une branche à partir de ce tour"
+              onClick={() => onFork(message.messageId!)}
+            >
+              <ForkIcon />
+            </button>
+          )}
+        </div>
       </div>
     )
-  }
-  return (
-    <div className="msg assistant fade-in">
-      <div className="msg-meta">
-        <span className="msg-role">Agent</span>
-        {!message.done && <span className="spinner" />}
-      </div>
-      <div className="msg-turn">
-        {message.parts.length === 0 && !message.done && (
-          <div className="msg-body c-faint">réflexion…</div>
-        )}
-        {groupAssistantActivity(message.parts).map((part, index) =>
-          part.kind === 'text' ? (
-            <div key={index} className="msg-body" dir="auto">
-              <Markdown text={part.text} highlightFinalSummary />
-            </div>
-          ) : part.kind === 'suggestions' ? (
-            <SuggestionGrid
-              key={index}
-              groups={part.groups}
-              onPick={(prompt) => onPickSuggestion?.(prompt)}
-            />
-          ) : (
-            <AssistantActivityGroup key={index} actions={part.actions} />
-          )
-        )}
-      </div>
-      <div className="msg-turn-actions">
-        {message.turnId && message.turnId !== 'pending' && conversationId && onInspectTurn && (
-          <button
-            type="button"
-            className="msg-turn-icon"
-            title="Inspecter ce tour dans l'Observatory"
-            aria-label="Inspecter ce tour"
-            onClick={() => onInspectTurn({ conversationId, turnId: message.turnId! })}
-          >
-            <InspectIcon />
-          </button>
-        )}
-        {message.messageId && onFork && (
-          <button
-            type="button"
-            className="msg-turn-icon"
-            title="Créer une branche à partir de ce tour"
-            aria-label="Créer une branche à partir de ce tour"
-            onClick={() => onFork(message.messageId!)}
-          >
-            <ForkIcon />
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}, (prev, next) =>
-  // Comparateur DATA-ONLY : la ligne ne re-rend QUE si sa donnée change (message/conversation).
-  // Les props callbacks sont déjà stables (send via sendRef→pickSuggestion, fork/inspect via useCallback,
-  // setters useState) → les ignorer n'introduit aucun stale et immunise la ligne contre le churn du
-  // composer (frappe/ghost-text) : garantit l'invariant perf « composer change ≠ re-render des lignes ».
-  prev.message === next.message && prev.conversationId === next.conversationId
+  },
+  (prev, next) =>
+    // Comparateur DATA-ONLY : la ligne ne re-rend QUE si sa donnée change (message/conversation).
+    // Les props callbacks sont déjà stables (send via sendRef→pickSuggestion, fork/inspect via useCallback,
+    // setters useState) → les ignorer n'introduit aucun stale et immunise la ligne contre le churn du
+    // composer (frappe/ghost-text) : garantit l'invariant perf « composer change ≠ re-render des lignes ».
+    prev.message === next.message && prev.conversationId === next.conversationId
 )
 
 /* ---------- Vue ---------- */
@@ -433,8 +435,7 @@ export function ChatView({
   // proposée en placeholder grisé quand le champ est vide et acceptée par Tab. null si aucune.
   const ghostRecommendation = useMemo(() => {
     const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant') as
-      | AsstMsg
-      | undefined
+      AsstMsg | undefined
     if (!lastAssistant) return null
     const text = lastAssistant.parts
       .filter((p): p is Extract<ChatPart, { kind: 'text' }> => p.kind === 'text')
@@ -467,9 +468,9 @@ export function ChatView({
   // Menu ⋮ d'une conversation, rendu en position fixe (déborde du conteneur scrollable).
   const [convMenu, setConvMenu] = useState<{ conv: Conv; top: number; left: number } | null>(null)
   // File d'attente : directives injectées pendant le tour, pas encore consommées (conv active).
-  const [pendingDirectives, setPendingDirectives] = useState<
-    Array<{ id: number; text: string }>
-  >([])
+  const [pendingDirectives, setPendingDirectives] = useState<Array<{ id: number; text: string }>>(
+    []
+  )
   const [modelCatalog, setModelCatalog] = useState<RuntimeModel[]>([])
   const [orchestratorBinding, setOrchestratorBinding] = useState<{
     provider: string
@@ -591,9 +592,9 @@ export function ChatView({
     window.addEventListener('pointerup', onUp)
   }
 
-  async function refreshRuntimeIdentity(): Promise<ChatRuntimeIdentity> {
+  async function refreshRuntimeIdentity(forceModels = false): Promise<ChatRuntimeIdentity> {
     const generation = ++runtimeRefreshGenerationRef.current
-    const [models, roles] = await Promise.all([window.api.models(), window.api.roles()])
+    const [models, roles] = await Promise.all([window.api.models(forceModels), window.api.roles()])
     const catalog = models as RuntimeModel[]
     const binding = roles.orchestrator
     const resolved = resolveChatRuntimeIdentity(
@@ -870,7 +871,7 @@ export function ChatView({
   useEffect(() => {
     if (!isActive) return
     void Promise.resolve().then(refreshDecisions)
-    void Promise.resolve().then(refreshRuntimeIdentity)
+    void Promise.resolve().then(() => refreshRuntimeIdentity())
     const timer = setInterval(refreshDecisions, 8000)
     return () => clearInterval(timer)
   }, [isActive])
@@ -965,6 +966,7 @@ export function ChatView({
     setActiveId(null)
     setMessages([])
     switchComposerDraft(NEW_DRAFT_KEY)
+    void refreshRuntimeIdentity(true)
   }
 
   useEffect(() => {
@@ -1057,6 +1059,30 @@ export function ChatView({
       id,
       q.filter((queued) => queued.id !== entry.id)
     )
+  }
+
+  function restoreQueuedMessageToDraft(entry: { id: number; text: string }): void {
+    const id = activeRef.current
+    if (!id) return
+    const draftKey = composerDraftKeyRef.current
+    const draft = getComposerDraft(draftKey).input
+    setDraftInput(draftKey, draft ? `${draft}\n\n${entry.text}` : entry.text)
+    const q = queueRef.current.get(id) ?? []
+    setConversationQueue(
+      id,
+      q.filter((queued) => queued.id !== entry.id)
+    )
+  }
+
+  function moveQueuedMessageToBtw(entry: { id: number; text: string }): void {
+    const id = activeRef.current
+    if (!id) return
+    const q = queueRef.current.get(id) ?? []
+    setConversationQueue(
+      id,
+      q.filter((queued) => queued.id !== entry.id)
+    )
+    void submitBtw(entry.text)
   }
 
   /**
@@ -1152,6 +1178,39 @@ export function ChatView({
     let convId = activeId
     let messageCommitted = false
     try {
+      if (convId) {
+        const sourceConversationId = convId
+        const route = await window.api.routeConversationMessage(
+          sourceConversationId,
+          value,
+          outgoingAttachments.map((attachment) => attachment.name)
+        )
+        if (route.routed && route.conversationId !== sourceConversationId) {
+          convId = route.conversationId
+          sendLocksRef.current.add(convId)
+          composerDraftsRef.current.set(convId, outgoingDraft)
+          if (getComposerDraft(sourceConversationId) === outgoingDraft) {
+            composerDraftsRef.current.set(sourceConversationId, {
+              input: '',
+              attachments: [],
+              error: null
+            })
+          }
+          liveMessagesRef.current.set(convId, [])
+          const shouldAdoptRoutedConversation =
+            activeRef.current === sourceConversationId &&
+            composerDraftKeyRef.current === sendDraftKey &&
+            composerSelectionGenerationRef.current === sendSelectionGeneration
+          if (shouldAdoptRoutedConversation) {
+            activeRef.current = convId
+            setActiveId(convId)
+            setMessages([])
+            switchComposerDraft(convId)
+          }
+          void refreshConvs()
+        }
+      }
+
       // Pas de conversation active → on en crée une (titre = début du message).
       if (!convId) {
         const identity = await refreshRuntimeIdentity()
@@ -1181,7 +1240,8 @@ export function ChatView({
         void refreshConvs()
       }
 
-      const previousMessages = liveMessagesRef.current.get(convId) ?? messages
+      const previousMessages =
+        liveMessagesRef.current.get(convId) ?? (activeRef.current === convId ? messages : [])
       const history: Msg[] = [
         ...previousMessages,
         {
@@ -1572,10 +1632,12 @@ export function ChatView({
               </button>
             )}
             <button
-              className={`btn btn-sm${showRuns ? ' btn-accent' : ''}`}
+              type="button"
+              className={`workflow-toggle${showRuns ? ' is-active' : ''}`}
               onClick={() => setShowRuns((v) => !v)}
               title="Workflows (RUN.md)"
             >
+              <ForkIcon />
               Workflows{openRunsCount > 0 ? ` · ${openRunsCount} open` : ''}
               {greenRunsCount > 0 ? ` · ${greenRunsCount} green` : ''}
             </button>
@@ -1781,20 +1843,23 @@ export function ChatView({
                     🧭 Orienter
                   </button>
                 )}
+                {busy && (
+                  <button
+                    type="button"
+                    className="directive-queue-send directive-queue-btw"
+                    title="BTW — remettre ce message à la fin de la file sans interrompre le tour en cours"
+                    aria-label={`Remettre le message ${index + 1} en file via BTW`}
+                    onClick={() => moveQueuedMessageToBtw(directive)}
+                  >
+                    BTW
+                  </button>
+                )}
                 <button
                   type="button"
                   className="directive-queue-remove"
                   title="Retirer de la file"
                   aria-label={`Retirer le message ${index + 1}`}
-                  onClick={() => {
-                    const id = activeRef.current
-                    if (!id) return
-                    const q = queueRef.current.get(id) ?? []
-                    setConversationQueue(
-                      id,
-                      q.filter((_, i) => i !== index)
-                    )
-                  }}
+                  onClick={() => restoreQueuedMessageToDraft(directive)}
                 >
                   ✕
                 </button>

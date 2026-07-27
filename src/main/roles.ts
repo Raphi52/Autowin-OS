@@ -4,6 +4,8 @@
 // est absent, le provider utilise son modele par defaut.
 
 import type { PipelinePhase } from './skill-pipeline'
+import type { ImportedModel } from './models'
+import { resolveAlias } from './model-aliases'
 
 export type Role = 'orchestrator' | 'subagent' | 'judge' | 'scout'
 
@@ -38,22 +40,39 @@ export function resolvePhaseBinding(
   }
 }
 
+/**
+ * Sélections par défaut par provider. `alias` = alias de FAMILLE (model-aliases.ts)
+ * résolu au runtime contre le catalogue découvert → le défaut suit le modèle le plus
+ * frais de la famille. `model` = fallback figé (comportement historique), utilisé
+ * quand aucun catalogue n'est fourni ou que l'alias est insoluble. Kimi n'a pas de
+ * listing → pas d'alias, fallback direct.
+ */
 const PROVIDER_DEFAULT_SELECTIONS: Record<
   string,
-  { model: string; reasoningEffort: ReasoningEffort }
+  { alias?: string; model: string; reasoningEffort: ReasoningEffort }
 > = {
-  claude: { model: 'claude-fable-5', reasoningEffort: 'high' },
-  codex: { model: 'gpt-5.6-terra', reasoningEffort: 'medium' },
+  claude: { alias: 'claude/fable-latest', model: 'claude-fable-5', reasoningEffort: 'high' },
+  codex: { alias: 'codex/flagship', model: 'gpt-5.6-terra', reasoningEffort: 'medium' },
   kimi: { model: 'kimi-code/kimi-for-coding', reasoningEffort: 'none' }
 }
 
-/** Rend explicite ce que l'adaptateur utiliserait sinon implicitement. */
-export function normalizeRoleBinding(binding: RoleBinding): RoleBinding {
+/**
+ * Rend explicite ce que l'adaptateur utiliserait sinon implicitement.
+ * Avec `catalog`, un binding provider-only reçoit le modèle résolu par l'alias de
+ * famille du provider ; sans catalogue (ou alias insoluble), fallback figé = 0 régression.
+ * Un `binding.model` explicite reste TOUJOURS prioritaire (jamais réécrit).
+ */
+export function normalizeRoleBinding(
+  binding: RoleBinding,
+  catalog?: ImportedModel[]
+): RoleBinding {
   const defaults = PROVIDER_DEFAULT_SELECTIONS[binding.provider]
   if (!defaults) return { ...binding }
+  const aliasModel =
+    defaults.alias && catalog ? resolveAlias(defaults.alias, catalog)?.model : undefined
   return {
     ...binding,
-    model: binding.model ?? defaults.model,
+    model: binding.model ?? aliasModel ?? defaults.model,
     reasoningEffort: binding.reasoningEffort ?? defaults.reasoningEffort
   }
 }
@@ -68,8 +87,11 @@ const DEFAULT_BINDINGS: Record<Role, RoleBinding> = {
 
 export class RoleModelConfig {
   private bindings: Record<Role, RoleBinding>
+  /** Catalogue découvert (models.ts) — alimente la résolution d'alias des normalisations FUTURES. */
+  private catalog?: ImportedModel[]
 
-  constructor(defaults?: Partial<Record<Role, RoleBinding>>) {
+  constructor(defaults?: Partial<Record<Role, RoleBinding>>, catalog?: ImportedModel[]) {
+    this.catalog = catalog
     // Fusion superficielle : chaque role explicitement fourni remplace entierement
     // le binding par defaut correspondant (pas de merge partiel provider/model).
     this.bindings = { ...DEFAULT_BINDINGS }
@@ -77,10 +99,24 @@ export class RoleModelConfig {
       for (const role of ALL_ROLES) {
         const override = defaults[role]
         if (override) {
-          this.bindings[role] = normalizeRoleBinding(override)
+          this.bindings[role] = normalizeRoleBinding(override, catalog)
         }
       }
     }
+  }
+
+  /**
+   * Injecte le catalogue découvert (appelé post-discovery). N'altère AUCUN binding
+   * existant (déjà normalisés → modèle explicite) ; seules les normalisations
+   * ultérieures (setBinding provider-only) résolvent via les alias de famille.
+   */
+  setCatalog(catalog: ImportedModel[]): this {
+    this.catalog = catalog
+    return this
+  }
+
+  getCatalog(): ImportedModel[] | undefined {
+    return this.catalog
   }
 
   getBinding(role: Role): RoleBinding {
@@ -97,7 +133,7 @@ export class RoleModelConfig {
     if (!ALL_ROLES.includes(role)) {
       throw new Error(`Role inconnu: ${String(role)}`)
     }
-    this.bindings[role] = normalizeRoleBinding(b)
+    this.bindings[role] = normalizeRoleBinding(b, this.catalog)
     return this
   }
 

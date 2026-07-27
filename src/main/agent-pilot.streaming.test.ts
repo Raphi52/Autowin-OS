@@ -252,7 +252,13 @@ describe('AgentPilot chat streaming', () => {
     ).toBe(false)
   })
 
-  it.each(['<cm', '<cmd>{"name":"get_state"', '<question>{"question":"privé"'])(
+  it.each([
+    '<cm',
+    '<cmd>{"name":"get_state"',
+    '<question>{"question":"privé"',
+    '<question>sk-test-123',
+    '<QUESTION>sk-test-123'
+  ])(
     'never falls back to raw incomplete control markup: %s',
     async (response) => {
       const registry = {
@@ -285,6 +291,7 @@ describe('AgentPilot chat streaming', () => {
       )
 
       expect(events.filter((event) => ['delta', 'think'].includes(event.kind))).toEqual([])
+      expect(JSON.stringify(events)).not.toContain('sk-test-123')
     }
   )
 })

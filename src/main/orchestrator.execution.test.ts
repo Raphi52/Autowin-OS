@@ -94,6 +94,7 @@ describe('Orchestrator execution contract', () => {
   it('garde le gate rouge si le worker prétend réussir sans preuve d’outil', async () => {
     const provider = new CapturingProvider(false)
     const registry = new ProviderRegistry().register(provider)
+    const authority = new AuthoritySas()
     const roles = new RoleModelConfig({
       subagent: { provider: provider.id, model: 'worker' },
       judge: { provider: provider.id, model: 'judge' }
@@ -103,7 +104,7 @@ describe('Orchestrator execution contract', () => {
       roles,
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
+      authority,
       executionWorkspace: 'C:\\workspace'
     })
 
@@ -113,6 +114,8 @@ describe('Orchestrator execution contract', () => {
 
     expect(result.valid).toBe(false)
     expect(result.gateBlocked).toBe(true)
+    expect(result.pendingDecisionId).toBeUndefined()
+    expect(authority.pending()).toHaveLength(0)
   })
 
   it('B1 — une tâche NON-mutation sans preuve d’outil passe si le juge valide', async () => {

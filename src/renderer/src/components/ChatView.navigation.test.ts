@@ -60,6 +60,10 @@ describe('navigation pendant une reponse', () => {
     expect(fresh!.indexOf('activeRef.current = null')).toBeLessThan(
       fresh!.indexOf('setActiveId(null)')
     )
+    expect(fresh).toContain('void refreshRuntimeIdentity(true)')
+    expect(fresh!.indexOf('setActiveId(null)')).toBeLessThan(
+      fresh!.indexOf('refreshRuntimeIdentity(true)')
+    )
   })
 
   it('transforme le bouton principal en vrai Stop pendant la reflexion', () => {

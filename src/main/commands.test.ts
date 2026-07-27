@@ -94,6 +94,48 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
 })
 
 describe('AppCommandBus authority policy', () => {
+  it('launches ordinary orchestration immediately even when the conversation is in Ask mode', async () => {
+    const os = fakeOs()
+    const bus = new AppCommandBus(os, () => {})
+
+    const result = await bus.exec(
+      'orchestrate',
+      { task: 'corrige le clic extérieur puis teste' },
+      'conv-1',
+      'ask'
+    )
+
+    expect(result).toMatchObject({ ok: true })
+    expect(os.calls.runTask).toBe(1)
+    expect(os.authority.pending()).toHaveLength(0)
+  })
+
+  it('reuses the pending decision for an identical destructive action', async () => {
+    const os = fakeOs()
+    const bus = new AppCommandBus(os, () => {})
+
+    const first = await bus.exec('remove_conversation', { id: 'conv-1' })
+    const second = await bus.exec('remove_conversation', { id: 'conv-1' })
+
+    expect((second.data as { decisionId: string }).decisionId).toBe(
+      (first.data as { decisionId: string }).decisionId
+    )
+    expect(os.authority.pending()).toHaveLength(1)
+  })
+
+  it('does not merge destructive decisions whose targets differ', async () => {
+    const os = fakeOs()
+    const bus = new AppCommandBus(os, () => {})
+
+    const first = await bus.exec('remove_conversation', { id: 'conv-1' })
+    const second = await bus.exec('remove_conversation', { id: 'conv-2' })
+
+    expect((second.data as { decisionId: string }).decisionId).not.toBe(
+      (first.data as { decisionId: string }).decisionId
+    )
+    expect(os.authority.pending()).toHaveLength(2)
+  })
+
   it('publie les destinations canoniques et autorise la navigation en mode Plan', async () => {
     const events: Array<{ type: string; tab?: string }> = []
     const bus = new AppCommandBus(fakeOs(), (event) => events.push(event))
@@ -170,27 +212,19 @@ describe('AppCommandBus authority policy', () => {
     )
   })
 
-  it('waits for approval for role, RUN attachment and orchestration', async () => {
+  it('runs reversible actions immediately and reserves approval for deletion', async () => {
     const os = fakeOs()
     const bus = new AppCommandBus(os, () => {})
     bus.activeConversationId = 'conv-1'
-    const role = await bus.exec('set_role', { role: 'judge', provider: 'codex', model: 'gpt-5' })
-    const attached = await bus.exec('attach_run', { path: 'C:/private/RUN.md' })
-    const orchestration = await bus.exec('orchestrate', { task: 'use token=top-secret' })
+    await bus.exec('set_role', { role: 'judge', provider: 'codex', model: 'gpt-5' })
+    await bus.exec('attach_run', { path: 'C:/private/RUN.md' })
+    await bus.exec('orchestrate', { task: 'use token=top-secret' })
+    const deletion = await bus.exec('remove_conversation', { id: 'conv-1' })
 
-    expect(os.calls).toMatchObject({ setRole: 0, attachRun: 0, runTask: 0 })
-    const previews = os.authority
-      .pending()
-      .map((d: { question: string }) => d.question)
-      .join('\n')
-    expect(previews).toContain('judge')
-    expect(previews).toContain('RUN.md')
-    expect(previews).toContain('masquée')
-    expect(previews).not.toContain('top-secret')
-    await bus.resolveDecision((role.data as any).decisionId, 'approve')
-    await bus.resolveDecision((attached.data as any).decisionId, 'approve')
-    await bus.resolveDecision((orchestration.data as any).decisionId, 'cancel')
-    expect(os.calls).toMatchObject({ setRole: 1, attachRun: 1, runTask: 0 })
+    expect(os.calls).toMatchObject({ setRole: 1, attachRun: 1, runTask: 1 })
+    expect(os.authority.pending()).toHaveLength(1)
+    expect(deletion).toMatchObject({ ok: true, data: { pendingApproval: true } })
+    expect(os.conversations.get('conv-1')).toBeTruthy()
   })
 
   it('traces choice and redacted result, then cancels expiry without mutation', async () => {
@@ -200,16 +234,14 @@ describe('AppCommandBus authority policy', () => {
     const entries: Array<{ name: string; args: Record<string, unknown>; ok: boolean }> = []
     const bus = new AppCommandBus(os, () => {})
     bus.trace = (name, args, ok) => entries.push({ name, args, ok })
-    const requested = await bus.exec('orchestrate', { task: 'Bearer top-secret' })
-    await bus.resolveDecision((requested.data as any).decisionId, 'approve')
-
-    expect(entries).toContainEqual(expect.objectContaining({ name: 'authority_decision' }))
+    await bus.exec('orchestrate', { task: 'Bearer top-secret' })
     expect(entries).toContainEqual(
       expect.objectContaining({ name: 'orchestrate', args: { task: '[redacted]' }, ok: true })
     )
     const expired = await bus.exec('remove_conversation', { id: 'conv-1' })
     now = 15 * 60_000
     expect(bus.sweepExpired()).toHaveLength(1)
+    expect(entries).toContainEqual(expect.objectContaining({ name: 'authority_decision' }))
     await expect(bus.resolveDecision((expired.data as any).decisionId, 'approve')).rejects.toThrow()
     expect(os.conversations.get('conv-1')).toBeTruthy()
   })

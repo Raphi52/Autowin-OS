@@ -1,6 +1,17 @@
+export const MODEL_QUESTION_REASONS = [
+  'destructive',
+  'irreversible',
+  'secret-or-personal-data',
+  'external-effect',
+  'material-ambiguity'
+] as const
+
+export type ModelQuestionReason = (typeof MODEL_QUESTION_REASONS)[number]
+
 export interface ModelQuestion {
   text: string
   options: string[]
+  reason: ModelQuestionReason
 }
 
 export interface PendingModelQuestion extends ModelQuestion {
@@ -10,26 +21,29 @@ export interface PendingModelQuestion extends ModelQuestion {
 }
 
 const QUESTION_RE = /<question>\s*(\{[\s\S]*?\})\s*<\/question>/i
-
 export function parseModelQuestion(text: string): ModelQuestion | null {
   const match = QUESTION_RE.exec(text)
   if (!match) return null
   try {
-    const value = JSON.parse(match[1]) as { text?: unknown; options?: unknown }
-    if (typeof value.text !== 'string' || !value.text.trim()) return null
-    const options = Array.isArray(value.options)
-      ? value.options.filter((option): option is string => typeof option === 'string').slice(0, 8)
-      : []
-    return { text: value.text.trim().slice(0, 4_000), options }
+    JSON.parse(match[1])
+    // Disabled by default: the model cannot prove that a question is necessary,
+    // and chat answers are part of observable prompts. Destructive/external
+    // confirmations use the command authority layer; credentials are configured
+    // through provider UI, never requested or transported in chat.
+    return null
   } catch {
     return null
   }
 }
 
 export const MODEL_QUESTION_INSTRUCTION =
-  'Si une information humaine est indispensable pour continuer, réponds UNIQUEMENT avec ' +
-  '<question>{"text":"question précise","options":["option 1","option 2"]}</question>. ' +
-  'N’utilise pas ce format pour une question rhétorique ou facultative.'
+  'Avance de façon autonome : inspecte d’abord l’état disponible et choisis une hypothèse raisonnable ' +
+  'par défaut pour toute décision ordinaire et réversible. Ne pose une question que si aucune progression ' +
+  'sûre n’est possible faute d’une information indispensable, mais ne suspends pas le tour dans le chat. Les actions destructives ou à effet externe passent par le sas des commandes ; ' +
+  'une ambiguïté ordinaire reçoit un choix par défaut. Ne demande jamais un secret ou une donnée personnelle ' +
+  'dans le chat : indique en texte normal le provider ou réglage à configurer, sans valeur sensible. ' +
+  'N’émets aucune balise <question> : ce canal est désactivé tant que l’application ne peut pas prouver le ' +
+  'blocage et transporter la réponse hors des conversations et journaux.'
 
 export class ModelQuestionHub {
   private nextId = 1

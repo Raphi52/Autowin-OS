@@ -31,6 +31,7 @@ import { RoleModelConfig, type ReasoningEffort, type Role } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
+import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
 import type { ChatTurnEvent } from '../shared/chat-turn'
 import { TraceLedger } from './activity/ledger'
 import { listSessions, parseSession } from './activity/transcripts'
@@ -60,7 +61,8 @@ import { ApprovedBehaviourWorkspaces, isTrustedRendererUrl } from './behaviour-a
 import { discoverConfiguredSkillRegistry } from './skill-registry'
 import { listClaudeHooks, listCodexHooks } from './claude-hooks'
 import { ModelQuestionHub, type ModelQuestion, type PendingModelQuestion } from './model-questions'
-import { DEFAULT_IMPORTED_MODELS, discoverImportedModels, findModel } from './models'
+import { discoverImportedModels, findModel, loadCachedImportedModels } from './models'
+import { ModelCatalogRefresher, serveModelCatalog } from './model-refresh'
 import { loadAgentTopology, saveAgentTopology } from './topology-disk'
 import { migrateTopologyShape } from './topology'
 import type { AgentTopology, SlotBinding } from './topology'
@@ -87,6 +89,7 @@ import {
 import { azureTicketProvider, listAzurePeople } from './ticket-providers/azure'
 import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
 import { checkForUpdate, applyUpdate } from './git-update'
+import { restartApplication } from './app-restart'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
 import {
@@ -159,6 +162,10 @@ const pilot = new AgentPilot(
   }),
   // MÊME source de contexte projet que les phases orchestrées (fold du CLAUDE.md/AGENTS.md du workspace).
   () => projectContextBlock(os.executionWorkspace)
+)
+const conversationRouteCoordinator = new ConversationRouteCoordinator(
+  os.conversations,
+  new ConversationRouter(os.registry, os.roles)
 )
 const modelQuestions = new ModelQuestionHub()
 const activeChatTurns = new ActiveChatTurns()
@@ -267,15 +274,48 @@ function preflightProviderOptions(): { standbyProviders: Array<(typeof routedPro
     )
   }
 }
-let agentModels = DEFAULT_IMPORTED_MODELS
 const agentTopologyPath = join(app.getPath('userData'), 'agent-topology.json')
+const modelCatalogCachePath = join(app.getPath('userData'), 'model-catalog.json')
+// Le cache est chargé AVANT la topologie : un bridge momentanément incomplet ne rase pas les bindings existants.
+let agentModels = loadCachedImportedModels(modelCatalogCachePath)
 let agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
-const agentModelsReady = discoverImportedModels(fetch).then((models) => {
-  agentModels = models
-  agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
-  syncRuntimeTopology(agentTopology)
-  return models
-})
+const modelCatalog = new ModelCatalogRefresher(
+  agentModels,
+  () => discoverImportedModels(fetch, undefined, modelCatalogCachePath),
+  {
+    freshnessMs: 60_000,
+    reconcile: (current, models) => {
+      // Un modèle explicitement lié reste utilisable si la source live répond mais l'omet.
+      // Il provient du catalogue validé au boot (cache/seed), pas d'un id inventé.
+      const configuredModelIds = new Set(
+        [
+          agentTopology.orchestrator,
+          ...agentTopology.subagents,
+          ...agentTopology.panels.scout,
+          ...agentTopology.panels.judge,
+          ...agentTopology.panels.frame
+        ].map((binding) => binding.modelId)
+      )
+      return [
+        ...models,
+        ...current.filter(
+          (model) =>
+            configuredModelIds.has(model.id) && !models.some((live) => live.id === model.id)
+        )
+      ]
+    },
+    onApply: (models) => {
+      agentModels = models
+      // Les défauts de rôle (provider-only) se résolvent désormais par alias de famille
+      // contre le catalogue découvert ; les bindings existants (modèle explicite) restent intacts.
+      os.roles.setCatalog(agentModels)
+      agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
+      syncRuntimeTopology(agentTopology)
+      broadcast({ type: 'refresh', scope: 'roles' })
+    }
+  }
+)
+const agentModelsReady = modelCatalog.refresh(true)
 os.setTaskReadiness(agentModelsReady)
 
 function syncRuntimeTopology(topology: AgentTopology): void {
@@ -438,8 +478,7 @@ function registerChatIpc(): void {
   }
   ipcMain.handle('tickets:sources', async (event) => {
     assertTrustedRendererSender(event, 'Tickets')
-    const hasAuth =
-      Boolean(process.env.AUTOWIN_AZDO_PAT) || Boolean(await getAzureDevOpsAadToken())
+    const hasAuth = Boolean(process.env.AUTOWIN_AZDO_PAT) || Boolean(await getAzureDevOpsAadToken())
     return ticketSources.map((profile) => ({
       profile,
       credentialConfigured: profile.provider === 'azure' && hasAuth
@@ -452,8 +491,7 @@ function registerChatIpc(): void {
     const current = ticketSources.findIndex((candidate) => candidate.id === profile.id)
     if (current >= 0) ticketSources[current] = profile
     else ticketSources.push(profile)
-    const hasAuth =
-      Boolean(process.env.AUTOWIN_AZDO_PAT) || Boolean(await getAzureDevOpsAadToken())
+    const hasAuth = Boolean(process.env.AUTOWIN_AZDO_PAT) || Boolean(await getAzureDevOpsAadToken())
     return ticketSources.map((source) => ({
       profile: source,
       credentialConfigured: source.provider === 'azure' && hasAuth
@@ -529,8 +567,7 @@ function registerChatIpc(): void {
     assertTrustedRendererSender(event, 'Update')
     const result = await applyUpdate(process.cwd())
     if (result.ok && result.relaunch) {
-      app.relaunch()
-      app.quit()
+      restartApplication(app)
     }
     return result
   })
@@ -744,7 +781,11 @@ function registerChatIpc(): void {
       return binding
     }
   )
-  ipcMain.handle('os:models:list', () => agentModelsReady)
+  ipcMain.handle('os:models:list', (event, force = false) => {
+    assertTrustedRendererSender(event, 'Model catalog')
+    if (typeof force !== 'boolean') throw new Error('Option de rafraîchissement invalide')
+    return serveModelCatalog(modelCatalog, force)
+  })
   // Page Routeur — statut d'auth au CHARGEMENT (cheap/local) : codex exact (expiry token),
   // claude/kimi = présence CLI seulement (JAMAIS « authenticated » sans probe réel). Borné.
   ipcMain.handle('os:providerStatus', async (event) => {
@@ -912,6 +953,51 @@ function registerChatIpc(): void {
   ipcMain.handle(
     'os:conversations:create',
     (_e, p: { title: string; category: string; provider: string }) => os.conversations.create(p)
+  )
+  ipcMain.handle(
+    'os:conversations:routeMessage',
+    async (event, rawConversationId: unknown, rawMessage: unknown, rawAttachmentNames: unknown) => {
+      assertTrustedRendererSender(event, 'Conversation route')
+      const conversationId = guardString(rawConversationId, 'conversationId')
+      const message = guardString(rawMessage, 'message')
+      if (!Array.isArray(rawAttachmentNames) || rawAttachmentNames.length > 8) {
+        throw new Error('attachmentNames: tableau borné attendu')
+      }
+      const attachmentNames = rawAttachmentNames.map((name, index) =>
+        guardString(name, `attachmentNames[${index}]`)
+      )
+      const result = await conversationRouteCoordinator.route(
+        conversationId,
+        message,
+        attachmentNames
+      )
+      const decision = result.decision
+      appendConvActivity(conversationId, {
+        kind: 'conversation-route',
+        label: result.routed ? 'Nouveau contexte détecté' : 'Contexte courant conservé',
+        provider: decision.provider,
+        model: decision.model,
+        reasoningEffort: decision.reasoningEffort,
+        inputTokens: decision.usage?.inputTokens,
+        outputTokens: decision.usage?.outputTokens,
+        costUsd: decision.usage?.costUsd,
+        text: JSON.stringify({
+          route: decision.route,
+          confidence: decision.confidence,
+          reason: decision.reason,
+          sourceConversationId: result.sourceConversationId,
+          conversationId: result.conversationId
+        })
+      })
+      ledger.append({
+        source: 'pilot',
+        name: 'conversation_route',
+        detail: `${decision.route}:${decision.confidence.toFixed(2)}:${decision.reason}`,
+        ok: true
+      })
+      if (result.routed) broadcast({ type: 'refresh', scope: 'conversations' })
+      return result
+    }
   )
   ipcMain.handle('os:conversations:rename', (_e, id: string, title: string) =>
     os.conversations.rename(id, guardString(title, 'title'))

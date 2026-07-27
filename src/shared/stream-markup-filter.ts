@@ -11,7 +11,7 @@ export type VisibleStreamSegment =
 function longestTagPrefixSuffix(value: string, tags: readonly string[]): number {
   const limit = Math.min(value.length, Math.max(...tags.map((tag) => tag.length)) - 1)
   for (let length = limit; length > 0; length -= 1) {
-    const suffix = value.slice(-length)
+    const suffix = value.slice(-length).toLowerCase()
     if (tags.some((tag) => tag.startsWith(suffix))) return length
   }
   return 0
@@ -51,17 +51,19 @@ export class VisibleStreamFilter {
     while (this.buffer) {
       if (this.active) {
         const { open, close, control } = this.active
-        const end = this.buffer.indexOf(close)
+        const end = this.buffer.toLowerCase().indexOf(close)
         if (end < 0) break // pas encore fermé → on bufferise, on attend la suite
         const inner = this.buffer.slice(0, end)
-        if (isSuppressibleCommand(inner)) segments.push({ kind: 'control', control })
+        if (control === 'question' || isSuppressibleCommand(inner))
+          segments.push({ kind: 'control', control })
         else segments.push({ kind: 'text', text: open + inner + close })
         this.buffer = this.buffer.slice(end + close.length)
         this.active = null
         continue
       }
 
-      const candidates = CONTROL.map((spec) => ({ spec, index: this.buffer.indexOf(spec.open) }))
+      const lowerBuffer = this.buffer.toLowerCase()
+      const candidates = CONTROL.map((spec) => ({ spec, index: lowerBuffer.indexOf(spec.open) }))
         .filter((candidate) => candidate.index >= 0)
         .sort((a, b) => a.index - b.index)
       const next = candidates[0]
@@ -96,8 +98,11 @@ export class VisibleStreamFilter {
     const pending = this.buffer
     this.buffer = ''
     if (this.active) {
-      const { open } = this.active
+      const { open, control } = this.active
       this.active = null
+      // Les questions modèle sont désactivées et peuvent contenir des données
+      // sensibles : une ouverture suffit à rendre tout le bloc privé.
+      if (control === 'question') return []
       // Balise jamais fermée : si le contenu COMMENCE une charge JSON (`{`/`[`) ou est vide, c'est
       // une commande RÉELLE tronquée (stream coupé) → on la masque (jamais de markup brut exposé).
       // Sinon c'est une balise CITÉE en prose → on rend le texte intact.

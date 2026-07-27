@@ -12,7 +12,7 @@ import { appendBrainTrace } from './activity/brain-trace-spool'
 import { appendConvActivity } from './activity/conv-activity'
 import type { OrchestrationStep, OrchestrationPhase } from './orchestrator'
 import { persistOrchestrationStep } from './activity/orchestration-observability'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
   decideConversationCapability,
   type ConversationAuthorityMode
@@ -109,7 +109,6 @@ const CATALOG: CommandSpec[] = [
     description:
       'Lancer un agent de développement capable de lire, modifier et tester le code ou les fichiers du workspace',
     args: { task: 'la tâche' },
-    authority: 'sensitive',
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -159,7 +158,6 @@ const CATALOG: CommandSpec[] = [
       provider: 'claude|codex',
       model: 'modèle (optionnel)'
     },
-    authority: 'sensitive',
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -171,10 +169,9 @@ const CATALOG: CommandSpec[] = [
     name: 'attach_run',
     description: 'Attacher un RUN.md (workflow) existant à la conversation courante',
     args: { path: 'chemin du RUN.md', conversationId: 'id (optionnel, défaut = conv active)' },
-    authority: 'sensitive',
     annotations: {
       readOnlyHint: false,
-      destructiveHint: true,
+      destructiveHint: false,
       idempotentHint: true,
       openWorldHint: false
     }
@@ -201,6 +198,22 @@ const DEFAULT_COMMAND_ANNOTATIONS: NonNullable<CommandSpec['annotations']> = {
 }
 
 const SECRET_KEY = /(?:api[_-]?key|token|secret|password|credential|authorization)/i
+
+function canonicalValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalValue)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => [key, canonicalValue(item)])
+  )
+}
+
+function actionFingerprint(name: string, args: Record<string, unknown>): string {
+  return createHash('sha256')
+    .update(JSON.stringify(canonicalValue({ name, args })), 'utf8')
+    .digest('hex')
+}
 
 function redactedArgs(name: string, args: Record<string, unknown>): Record<string, unknown> {
   if (name === 'orchestrate') return { task: '[redacted]' }
@@ -251,8 +264,14 @@ export class AppCommandBus {
   activeConversationId?: string
   private readonly pendingActions = new Map<
     string,
-    { name: string; args: Record<string, unknown>; action: () => Promise<unknown> }
+    {
+      name: string
+      args: Record<string, unknown>
+      fingerprint: string
+      action: () => Promise<unknown>
+    }
   >()
+  private readonly pendingDecisionByFingerprint = new Map<string, string>()
   /** Orchestrations en vol, par conversation : permet de STOPPER le sous-agent. */
   private readonly activeOrchestrations = new Map<string, AbortController>()
 
@@ -331,6 +350,7 @@ export class AppCommandBus {
     const resolution = this.os.authority.resolve(id, choice)
     const pending = this.pendingActions.get(id)
     this.pendingActions.delete(id)
+    if (pending) this.pendingDecisionByFingerprint.delete(pending.fingerprint)
     this.trace?.(
       'authority_decision',
       { action: pending?.name ?? 'unknown', choice: String(choice), by: resolution.by },
@@ -355,6 +375,7 @@ export class AppCommandBus {
     for (const resolution of resolutions) {
       const pending = this.pendingActions.get(resolution.id)
       this.pendingActions.delete(resolution.id)
+      if (pending) this.pendingDecisionByFingerprint.delete(pending.fingerprint)
       this.trace?.(
         'authority_decision',
         { action: pending?.name ?? 'unknown', choice: 'cancel', by: resolution.by },
@@ -370,13 +391,29 @@ export class AppCommandBus {
     args: Record<string, unknown>,
     action: () => Promise<unknown>
   ): { pendingApproval: true; decisionId: string } {
+    const fingerprint = actionFingerprint(name, args)
+    const existingId = this.pendingDecisionByFingerprint.get(fingerprint)
+    if (
+      existingId &&
+      this.os.authority.pending().some((decision) => decision.id === existingId)
+    ) {
+      return { pendingApproval: true, decisionId: existingId }
+    }
+    if (existingId) this.pendingDecisionByFingerprint.delete(fingerprint)
+
     const decisionId = this.os.authority.propose({
       question: approvalQuestion(name, args),
       options: ['approve', 'cancel'],
       safeDefault: 'cancel',
       ttlMs: 15 * 60_000
     })
-    this.pendingActions.set(decisionId, { name, args: redactedArgs(name, args), action })
+    this.pendingActions.set(decisionId, {
+      name,
+      args: redactedArgs(name, args),
+      fingerprint,
+      action
+    })
+    this.pendingDecisionByFingerprint.set(fingerprint, decisionId)
     this.broadcast({ type: 'refresh', scope: 'decisions' })
     return { pendingApproval: true, decisionId }
   }

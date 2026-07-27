@@ -53,6 +53,14 @@ function api(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     onPilotEvent: vi.fn(() => vi.fn()),
     setActiveConversation: vi.fn(),
     conversationsCreate: vi.fn(),
+    routeConversationMessage: vi.fn(
+      async (conversationId: string) => ({
+        sourceConversationId: conversationId,
+        conversationId,
+        routed: false,
+        decision: { route: 'current', confidence: 1, reason: 'related' }
+      })
+    ),
     pilotChat: vi.fn().mockResolvedValue({ ok: true }),
     markResponseDisplayed: vi.fn().mockResolvedValue(undefined),
     cancelPilotChat: vi.fn().mockResolvedValue(undefined),
@@ -127,6 +135,70 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => pilot.resolve({ ok: true }))
   })
 
+  it('moves an unrelated message to a new active conversation before pilotChat', async () => {
+    const source = conversation('A', [
+      { role: 'user', content: 'Refais le graphe Git', ts: 1 }
+    ])
+    const target = conversation('B')
+    const conversations = vi
+      .fn()
+      .mockResolvedValueOnce([source])
+      .mockResolvedValue([source, target])
+    const routeConversationMessage = vi.fn().mockResolvedValue({
+      sourceConversationId: 'A',
+      conversationId: 'B',
+      routed: true,
+      title: 'Programme Mouse Move',
+      decision: { route: 'new', confidence: 0.97, reason: 'new-topic' }
+    })
+    const pilotChat = vi.fn().mockResolvedValue({ ok: true })
+    const mockApi = api({ conversations, routeConversationMessage, pilotChat })
+
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('Crée un exécutable qui bouge la souris')
+    const file = new File(['preuve'], 'preuve.txt', { type: 'text/plain' })
+    Object.defineProperty(file, 'text', {
+      configurable: true,
+      value: () => Promise.resolve('preuve')
+    })
+    const textarea = container!.querySelector('textarea') as HTMLTextAreaElement
+    const paste = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(paste, 'clipboardData', { configurable: true, value: { files: [file] } })
+    await act(async () => {
+      textarea.dispatchEvent(paste)
+      await Promise.resolve()
+    })
+    await click('.composer-send')
+    await act(async () => {
+      await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    })
+
+    expect(routeConversationMessage).toHaveBeenCalledWith(
+      'A',
+      'Crée un exécutable qui bouge la souris',
+      ['preuve.txt']
+    )
+    expect(pilotChat).toHaveBeenCalledTimes(1)
+    expect(pilotChat.mock.calls[0][1]).toBe('B')
+    expect(pilotChat.mock.calls[0][0]).toEqual([
+      expect.objectContaining({
+        role: 'user',
+        content: 'Crée un exécutable qui bouge la souris',
+        attachments: [
+          expect.objectContaining({
+            name: 'preuve.txt',
+            content: 'preuve'
+          })
+        ]
+      })
+    ])
+    expect(
+      container!.querySelector('.chat-layout')?.getAttribute('data-active-conversation-id')
+    ).toBe('B')
+  })
+
   it('removes the steered message by stable identity after the queue changes', async () => {
     const pilot = deferred<{ ok: boolean }>()
     const injection = deferred<{ ok: boolean }>()
@@ -151,6 +223,59 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => injection.resolve({ ok: true }))
 
     expect(container!.querySelector('.directive-queue')).toBeNull()
+    await act(async () => pilot.resolve({ ok: true }))
+  })
+
+  it('restores a removed queued message into the existing draft', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('long turn')
+    await click('.composer-send')
+    await type('queued message')
+    await click('.composer-send')
+    await type('existing draft')
+
+    await click('.directive-queue-remove')
+
+    expect((container!.querySelector('textarea') as HTMLTextAreaElement).value).toBe(
+      'existing draft\n\nqueued message'
+    )
+    expect(container!.querySelector('.directive-queue')).toBeNull()
+    await act(async () => pilot.resolve({ ok: true }))
+  })
+
+  it('moves a queued message to the end through BTW without interrupting', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('long turn')
+    await click('.composer-send')
+    await type('A')
+    await click('.composer-send')
+    await type('B')
+    await click('.composer-send')
+
+    await click('.directive-queue-btw')
+
+    expect(
+      Array.from(
+        container!.querySelector('.directive-queue-item')!.querySelectorAll('button'),
+        (element) => element.textContent
+      )
+    ).toEqual(['⏹ Interrompre et envoyer', '🧭 Orienter', 'BTW', '✕'])
+    expect(
+      Array.from(container!.querySelectorAll('.directive-queue-text'), (element) => element.textContent)
+    ).toEqual(['B', 'A'])
+    expect(mockApi.injectDirective).not.toHaveBeenCalled()
     await act(async () => pilot.resolve({ ok: true }))
   })
 
@@ -348,6 +473,49 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('.conv-pick')
     await type('draft B')
     await act(async () => creation.resolve(conversation('A')))
+    expect(
+      container!.querySelector('.chat-layout')?.getAttribute('data-active-conversation-id')
+    ).toBe('B')
+    expect((container!.querySelector('textarea') as HTMLTextAreaElement).value).toBe('draft B')
+  })
+
+  it('does not steal conversation B when routing from A resolves late', async () => {
+    const routing = deferred<{
+      sourceConversationId: string
+      conversationId: string
+      routed: boolean
+      decision: { route: 'current' | 'new'; confidence: number; reason: string }
+    }>()
+    const pilotChat = vi.fn().mockResolvedValue({ ok: true })
+    const mockApi = api({
+      conversations: vi
+        .fn()
+        .mockResolvedValueOnce([conversation('A'), conversation('B')])
+        .mockResolvedValue([conversation('A'), conversation('B'), conversation('C')]),
+      routeConversationMessage: vi.fn(() => routing.promise),
+      pilotChat
+    })
+    await mount(mockApi)
+    const picks = container!.querySelectorAll('.conv-pick')
+    await act(async () => (picks[0] as HTMLElement).click())
+    await type('nouveau sujet depuis A')
+    await click('.composer-send')
+    await act(async () => (picks[1] as HTMLElement).click())
+    await type('draft B')
+    await act(async () =>
+      routing.resolve({
+        sourceConversationId: 'A',
+        conversationId: 'C',
+        routed: true,
+        decision: { route: 'new', confidence: 0.97, reason: 'new-topic' }
+      })
+    )
+
+    expect(pilotChat).toHaveBeenCalledTimes(1)
+    expect(pilotChat.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ role: 'user', content: 'nouveau sujet depuis A' })
+    ])
+    expect(pilotChat.mock.calls[0][1]).toBe('C')
     expect(
       container!.querySelector('.chat-layout')?.getAttribute('data-active-conversation-id')
     ).toBe('B')

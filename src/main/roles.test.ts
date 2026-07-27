@@ -103,6 +103,71 @@ describe('RoleModelConfig', () => {
   })
 })
 
+describe('défauts de rôle par alias de famille (catalogue découvert)', () => {
+  const claude = (model: string) => ({
+    id: `claude/${model}`,
+    provider: 'claude',
+    model,
+    label: model,
+    reasoningEfforts: ['high' as const],
+    defaultReasoningEffort: 'high' as const
+  })
+  const codex = (model: string, priority?: number) => ({
+    id: `codex/${model}`,
+    provider: 'codex',
+    model,
+    label: model,
+    reasoningEfforts: ['medium' as const],
+    defaultReasoningEffort: 'medium' as const,
+    ...(priority !== undefined ? { priority, visibility: 'list' } : {})
+  })
+
+  it('un binding provider-only résout le plus frais de la famille via le catalogue', () => {
+    const catalog = [claude('claude-fable-5'), claude('claude-fable-6'), claude('claude-opus-4-6')]
+    const cfg = new RoleModelConfig({ orchestrator: { provider: 'claude' } }, catalog)
+    expect(cfg.getBinding('orchestrator').model).toBe('claude-fable-6')
+  })
+
+  it('codex provider-only résout le flagship (priority min) du catalogue', () => {
+    const catalog = [codex('gpt-5.6-terra', 2), codex('gpt-5.7-sol', 1)]
+    const cfg = new RoleModelConfig({ scout: { provider: 'codex' } }, catalog)
+    expect(cfg.getBinding('scout').model).toBe('gpt-5.7-sol')
+  })
+
+  it('sans catalogue → fallback figé historique (0 régression)', () => {
+    const cfg = new RoleModelConfig({ orchestrator: { provider: 'claude' } })
+    expect(cfg.getBinding('orchestrator').model).toBe('claude-fable-5')
+  })
+
+  it('alias insoluble (famille absente du catalogue) → fallback figé, jamais inventé', () => {
+    const catalog = [claude('claude-opus-4-6')]
+    // claude/fable-latest insoluble : aucun fable → fallback claude-fable-5.
+    const cfg = new RoleModelConfig({ orchestrator: { provider: 'claude' } }, catalog)
+    expect(cfg.getBinding('orchestrator').model).toBe('claude-fable-5')
+  })
+
+  it('un modèle EXPLICITE du binding reste prioritaire sur la résolution alias', () => {
+    const catalog = [claude('claude-fable-5'), claude('claude-fable-6')]
+    const cfg = new RoleModelConfig(
+      { orchestrator: { provider: 'claude', model: 'claude-fable-5' } },
+      catalog
+    )
+    expect(cfg.getBinding('orchestrator').model).toBe('claude-fable-5')
+  })
+
+  it('setCatalog alimente les normalisations ULTÉRIEURES sans toucher les bindings existants', () => {
+    const cfg = new RoleModelConfig({ judge: { provider: 'claude' } })
+    expect(cfg.getBinding('judge').model).toBe('claude-fable-5')
+    cfg.setCatalog([claude('claude-fable-6')])
+    // Binding existant intact (déjà normalisé → modèle explicite).
+    expect(cfg.getBinding('judge').model).toBe('claude-fable-5')
+    // Normalisation ultérieure provider-only → résolue via le catalogue injecté.
+    cfg.setBinding('judge', { provider: 'claude' })
+    expect(cfg.getBinding('judge').model).toBe('claude-fable-6')
+    expect(cfg.getCatalog()?.length).toBe(1)
+  })
+})
+
 describe('role-store Autowin OS', () => {
   let appDataRoot: string
   const originalAppData = process.env.APPDATA

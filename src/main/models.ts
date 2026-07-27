@@ -7,10 +7,13 @@
 // reflète les voies vérifiées (catalogue du compte ChatGPT ; Claude CLI → alias
 // --model réels) et l'utilisateur peut importer/supprimer explicitement.
 
+import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs'
+import { dirname } from 'node:path'
 import type { ReasoningEffort } from './roles'
 import type { ComputeBinding } from '../shared/compute-fabric'
-import { loadTokens, type Tokens } from './providers/codex-auth'
 import { CODEX_VALID_EFFORTS } from './providers/codex'
+import { isKnownAlias, parseClaudeVersion, resolveAlias } from './model-aliases'
+import { listCodexAppServerModels, type CodexAppServerModel } from './codex-model-source'
 
 /** Un modèle importé, atomique et adressable par son `id` canonique. */
 export interface ImportedModel {
@@ -28,6 +31,10 @@ export interface ImportedModel {
   defaultReasoningEffort: ReasoningEffort
   /** Contrat vérifié d'une ressource Fabric ; absent pour les providers locaux historiques. */
   compute?: ComputeBinding
+  /** Rang curé du catalogue codex (asc = flagship en premier) ; absent hors listing live. */
+  priority?: number
+  /** Visibilité codex ('list' | 'hide' | …) telle qu'exposée par le listing live. */
+  visibility?: string
 }
 
 /**
@@ -82,7 +89,6 @@ export const DEFAULT_IMPORTED_MODELS: ImportedModel[] = [
 ]
 
 const CLAUDE_EFFORTS: ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
-const CODEX_MODELS_URL = 'https://chatgpt.com/backend-api/codex/models?client_version=0.0.0'
 const REASONING_EFFORTS = new Set<ReasoningEffort>([
   'none',
   'minimal',
@@ -94,36 +100,24 @@ const REASONING_EFFORTS = new Set<ReasoningEffort>([
   'ultra'
 ])
 
-interface CodexModelPayload {
-  slug?: unknown
-  display_name?: unknown
-  default_reasoning_level?: unknown
-  supported_reasoning_levels?: Array<{ effort?: unknown }>
+/** Résultat par voie : `live` distingue un listing réussi d'un repli (cache/seed). */
+interface DiscoveryResult {
+  models: ImportedModel[]
+  live: boolean
 }
 
 async function discoverCodexModels(
-  fetchFn: typeof fetch,
-  loadTokensFn: () => Tokens | null
-): Promise<ImportedModel[]> {
-  const tokens = loadTokensFn()
-  if (!tokens) return [DEFAULT_IMPORTED_MODELS[0]]
+  listModelsFn: () => Promise<CodexAppServerModel[]>
+): Promise<DiscoveryResult> {
+  const fallback: DiscoveryResult = { models: [DEFAULT_IMPORTED_MODELS[0]], live: false }
   try {
-    const response = await fetchFn(CODEX_MODELS_URL, {
-      headers: {
-        authorization: `Bearer ${tokens.accessToken}`,
-        originator: 'codex_cli_rs',
-        'User-Agent': 'codex_cli_rs/0.0.0 (autowin-os)'
-      },
-      signal: AbortSignal.timeout(4_000)
-    })
-    if (!response.ok) return [DEFAULT_IMPORTED_MODELS[0]]
-    const payload = (await response.json()) as { models?: CodexModelPayload[] }
-    const discovered = (payload.models ?? []).flatMap<ImportedModel>((entry) => {
-      if (typeof entry.slug !== 'string' || !/^[a-z0-9][a-z0-9.-]*$/.test(entry.slug)) return []
+    const payload = await listModelsFn()
+    const discovered = payload.flatMap<ImportedModel>((entry, priority) => {
+      if (typeof entry.model !== 'string' || !/^[a-z0-9][a-z0-9.-]*$/.test(entry.model)) return []
       // Filtre au set RÉELLEMENT accepté par /responses codex (live 2026-07-24 : minimal & ultra → 400).
       // Sinon l'UI proposerait un effort qui fait planter la requête (le bug ChatGPT HTTP 400).
-      const efforts = (entry.supported_reasoning_levels ?? [])
-        .map((level) => level.effort)
+      const efforts = (entry.supportedReasoningEfforts ?? [])
+        .map((level) => level.reasoningEffort)
         .filter(
           (effort): effort is ReasoningEffort =>
             typeof effort === 'string' &&
@@ -131,7 +125,7 @@ async function discoverCodexModels(
             CODEX_VALID_EFFORTS.has(effort)
         )
       if (efforts.length === 0) return []
-      const requestedDefault = entry.default_reasoning_level
+      const requestedDefault = entry.defaultReasoningEffort
       const defaultReasoningEffort =
         typeof requestedDefault === 'string' &&
         efforts.includes(requestedDefault as ReasoningEffort)
@@ -139,43 +133,50 @@ async function discoverCodexModels(
           : efforts[0]
       return [
         {
-          id: `codex/${entry.slug}`,
+          id: `codex/${entry.model}`,
           provider: 'codex',
-          model: entry.slug,
-          label: `${typeof entry.display_name === 'string' ? entry.display_name : entry.slug} · ChatGPT`,
+          model: entry.model,
+          label: `${entry.displayName || entry.model} · ChatGPT`,
           reasoningEfforts: efforts,
-          defaultReasoningEffort
+          defaultReasoningEffort,
+          priority,
+          visibility: entry.hidden ? 'hide' : 'list'
         }
       ]
     })
-    return discovered.length > 0 ? discovered : [DEFAULT_IMPORTED_MODELS[0]]
+    return discovered.length > 0 ? { models: discovered, live: true } : fallback
   } catch {
-    return [DEFAULT_IMPORTED_MODELS[0]]
+    return fallback
   }
 }
 
 function labelClaudeModel(id: string): string {
-  const match = /^claude-(fable|haiku|opus|sonnet)-(\d+)(?:-(\d+))?(?:-(\d{8}))?$/.exec(id)
-  if (!match) return `${id} · CLI`
-  const [, family, major, minor, date] = match
-  const name = family.charAt(0).toUpperCase() + family.slice(1)
-  return `Claude ${name} ${major}${minor ? `.${minor}` : ''}${date ? ` (${date})` : ''} · CLI`
+  const version = parseClaudeVersion(id)
+  if (!version) return `${id} · CLI`
+  const name = version.family.charAt(0).toUpperCase() + version.family.slice(1)
+  return `Claude ${name} ${version.major}${version.minor ? `.${version.minor}` : ''}${version.date ? ` (${version.date})` : ''} · CLI`
 }
 
-/**
- * Découvre indépendamment les catalogues ChatGPT et Claude/Fable réellement exposés.
- * Une indisponibilité d'une voie retombe sur son seed vérifié, sans inventer de noms.
- */
-export async function discoverImportedModels(
-  fetchFn: typeof fetch = fetch,
-  loadTokensFn: () => Tokens | null = loadTokens
-): Promise<ImportedModel[]> {
-  const codexModels = await discoverCodexModels(fetchFn, loadTokensFn)
+/** Conserve les seeds vérifiés tout en ajoutant les modèles découverts, sans doublon. */
+function uniqueModels(discovered: ImportedModel[]): ImportedModel[] {
+  const seen = new Set<string>()
+  return discovered.filter((model) => {
+    if (seen.has(model.model)) return false
+    seen.add(model.model)
+    return true
+  })
+}
+
+async function discoverClaudeModels(fetchFn: typeof fetch): Promise<DiscoveryResult> {
+  const fallback: DiscoveryResult = {
+    models: DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'claude'),
+    live: false
+  }
   try {
     const response = await fetchFn('http://127.0.0.1:8787/models', {
       signal: AbortSignal.timeout(2_000)
     })
-    if (!response.ok) return DEFAULT_IMPORTED_MODELS
+    if (!response.ok) return fallback
     const payload = (await response.json()) as { data?: Array<{ id?: unknown }> }
     const discovered = (payload.data ?? [])
       .map((entry) => entry.id)
@@ -188,19 +189,153 @@ export async function discoverImportedModels(
         reasoningEfforts: [...CLAUDE_EFFORTS],
         defaultReasoningEffort: model.includes('haiku') ? 'medium' : 'high'
       }))
-    return [
-      ...codexModels,
-      ...discovered,
-      ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi')
-    ]
+    return discovered.length > 0 ? { models: discovered, live: true } : fallback
   } catch {
-    return [...codexModels, ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider !== 'codex')]
+    return fallback
   }
 }
 
-/** Retrouve un modèle importé par son id canonique. */
+/**
+ * Cache disque du DERNIER catalogue vu par voie — repli plus frais que le seed
+ * figé quand une API de listing est KO. Écrit à chaque listing RÉUSSI ; jamais
+ * écrit depuis un repli (le cache ne se pollue pas lui-même).
+ */
+interface ModelCatalogCache {
+  version: 1
+  discoveredAt: number
+  claude?: ImportedModel[]
+  codex?: ImportedModel[]
+}
+
+const MODEL_CATALOG_CACHE_VERSION = 1
+
+function isValidCachedModel(model: unknown, provider: 'claude' | 'codex'): model is ImportedModel {
+  if (!model || typeof model !== 'object') return false
+  const candidate = model as Partial<ImportedModel>
+  const validTransport =
+    provider === 'claude'
+      ? typeof candidate.model === 'string' && /^claude-[a-z0-9-]+$/.test(candidate.model)
+      : typeof candidate.model === 'string' && /^[a-z0-9][a-z0-9.-]*$/.test(candidate.model)
+  return (
+    candidate.provider === provider &&
+    validTransport &&
+    candidate.id === `${provider}/${candidate.model}` &&
+    typeof candidate.label === 'string' &&
+    candidate.label.trim().length > 0 &&
+    Array.isArray(candidate.reasoningEfforts) &&
+    candidate.reasoningEfforts.length > 0 &&
+    candidate.reasoningEfforts.every(
+      (effort) => typeof effort === 'string' && REASONING_EFFORTS.has(effort as ReasoningEffort)
+    ) &&
+    typeof candidate.defaultReasoningEffort === 'string' &&
+    candidate.reasoningEfforts.includes(candidate.defaultReasoningEffort as ReasoningEffort)
+  )
+}
+
+function readCatalogCache(
+  cachePath: string | undefined,
+  provider: 'claude' | 'codex'
+): ImportedModel[] | undefined {
+  if (!cachePath) return undefined
+  try {
+    const cache = JSON.parse(readFileSync(cachePath, 'utf8')) as ModelCatalogCache
+    if (cache.version !== MODEL_CATALOG_CACHE_VERSION || !Number.isFinite(cache.discoveredAt))
+      return undefined
+    const models = cache[provider]
+    if (!Array.isArray(models)) return undefined
+    // Garde d'intégrité minimale : on ne restitue que des entrées au contrat attendu.
+    if (!models.every((model) => isValidCachedModel(model, provider))) return undefined
+    return uniqueModels(models)
+  } catch {
+    return undefined
+  }
+}
+
+function writeCatalogCache(
+  cachePath: string | undefined,
+  updates: Partial<ModelCatalogCache>
+): void {
+  if (!cachePath || Object.keys(updates).length === 0) return
+  try {
+    let existing: Partial<ModelCatalogCache> = {}
+    try {
+      const parsed = JSON.parse(readFileSync(cachePath, 'utf8')) as ModelCatalogCache
+      if (parsed.version === MODEL_CATALOG_CACHE_VERSION && Number.isFinite(parsed.discoveredAt))
+        existing = parsed
+    } catch {
+      // Pas de cache antérieur lisible : on repart d'un objet vide.
+    }
+    mkdirSync(dirname(cachePath), { recursive: true })
+    const next: ModelCatalogCache = {
+      ...existing,
+      ...updates,
+      version: MODEL_CATALOG_CACHE_VERSION,
+      discoveredAt: Date.now()
+    }
+    const temporary = `${cachePath}.${process.pid}.tmp`
+    writeFileSync(temporary, JSON.stringify(next, null, 2), 'utf8')
+    renameSync(temporary, cachePath)
+  } catch {
+    // Le cache est un confort : son échec d'écriture ne doit jamais casser la découverte.
+  }
+}
+
+/** Catalogue disponible avant le réseau : cache valide, sinon seed vérifié. */
+export function loadCachedImportedModels(cachePath: string): ImportedModel[] {
+  const codex = readCatalogCache(cachePath, 'codex') ?? [DEFAULT_IMPORTED_MODELS[0]]
+  const claude =
+    readCatalogCache(cachePath, 'claude') ??
+    DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'claude')
+  return [
+    ...codex,
+    ...claude,
+    ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi')
+  ]
+}
+
+/**
+ * Découvre indépendamment les catalogues ChatGPT et Claude/Fable réellement exposés.
+ * Chaque listing réussi est persisté dans `cachePath` ; une voie KO retombe sur le
+ * dernier catalogue vu (cache), puis sur son seed vérifié — sans inventer de noms.
+ */
+export async function discoverImportedModels(
+  fetchFn: typeof fetch = fetch,
+  _legacyLoadTokensFn?: () => unknown,
+  cachePath?: string,
+  listCodexModelsFn: () => Promise<CodexAppServerModel[]> = listCodexAppServerModels
+): Promise<ImportedModel[]> {
+  const [codex, claude] = await Promise.all([
+    discoverCodexModels(listCodexModelsFn),
+    discoverClaudeModels(fetchFn)
+  ])
+  const cacheUpdates: Partial<ModelCatalogCache> = {}
+  if (codex.live) cacheUpdates.codex = codex.models
+  if (claude.live) cacheUpdates.claude = claude.models
+  writeCatalogCache(cachePath, cacheUpdates)
+  const codexModels = codex.live
+    ? codex.models
+    : (readCatalogCache(cachePath, 'codex') ?? codex.models)
+  const discoveredClaudeModels = claude.live
+    ? claude.models
+    : (readCatalogCache(cachePath, 'claude') ?? claude.models)
+  return [
+    ...codexModels,
+    ...uniqueModels(discoveredClaudeModels),
+    ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi')
+  ]
+}
+
+/**
+ * Retrouve un modèle importé par son id canonique, OU résout un alias de famille
+ * (`claude/opus-latest`, `codex/flagship`) contre le catalogue courant. Migration
+ * douce : les bindings existants (ids concrets) matchent en priorité et restent
+ * intacts ; un binding alias se résout au runtime sans jamais inventer de modèle.
+ */
 export function findModel(models: ImportedModel[], id: string): ImportedModel | undefined {
-  return models.find((m) => m.id === id)
+  const exact = models.find((m) => m.id === id)
+  if (exact) return exact
+  if (isKnownAlias(id)) return resolveAlias(id, models)
+  return undefined
 }
 
 /** Premier modèle importé d'un provider donné (pour une migration/défaut sûr). */
