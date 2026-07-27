@@ -160,17 +160,24 @@ export function seedRegistrySnapshot(
   snapshot: Partial<Record<RegistryKind, RegistryItem[]>>,
   base = ensureAutowinAppData()
 ): void {
-  if (existsSync(enablementPath(base))) return // déjà amorcé → ne pas écraser l'état local
-  const enablement: Enablement = {}
+  const enablementFile = enablementPath(base)
+  const catalogFile = catalogPath(base)
+  const existingEnablement = readJson<Enablement>(enablementFile, {})
+  const enablement: Enablement = { ...existingEnablement }
   const catalog: Catalog = {}
   for (const kind of ['skills', 'tools', 'plugins', 'hooks'] as RegistryKind[]) {
     const items = snapshot[kind]
     if (!items) continue
-    enablement[kind] = Object.fromEntries(items.map((i) => [i.id, i.enabled]))
+    enablement[kind] = {
+      ...Object.fromEntries(items.map((i) => [i.id, i.enabled])),
+      ...(existingEnablement[kind] ?? {})
+    }
     if (kind !== 'skills') {
       catalog[kind] = items.map(({ enabled: _enabled, ...rest }) => rest)
     }
   }
-  writeFileSync(catalogPath(base), JSON.stringify(catalog, null, 2), 'utf8')
-  writeFileSync(enablementPath(base), JSON.stringify(enablement, null, 2), 'utf8')
+  // Un toggle peut créer enablement.v1.json avant que le catalogue soit amorcé :
+  // chaque fichier est donc initialisé indépendamment, sans écraser l'état déjà choisi.
+  if (!existsSync(catalogFile)) writeFileSync(catalogFile, JSON.stringify(catalog, null, 2), 'utf8')
+  writeFileSync(enablementFile, JSON.stringify(enablement, null, 2), 'utf8')
 }
