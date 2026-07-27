@@ -67,6 +67,15 @@ describe('Markdown', () => {
     expect(summary?.textContent).not.toContain('Réponse détaillée.')
   })
 
+  it('groups final-summary labels written as Markdown headings', () => {
+    render(
+      '## ✅ Fait\nCorrectif appliqué.\n\n## 📍 Maintenant\nVérifié.\n\n## ⏳ Reste à faire\nRien.\n\n## 👉 Recommandé\nTester.',
+      true
+    )
+
+    expect(container.querySelector('.md-final-summary')).not.toBeNull()
+  })
+
   it('requires all four final-summary labels in order before framing', () => {
     const invalidSummaries = [
       '✅ Fait\n1. Correctif appliqué.\n⏳ Reste à faire : rien.\n👉 Recommandé : tester.',
