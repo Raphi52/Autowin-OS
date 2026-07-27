@@ -139,6 +139,40 @@ describe('Orchestrator execution contract', () => {
     })
     expect(provider.calls[0].system).toContain(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION)
     expect(provider.calls[1].system).toContain(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION)
+    expect(provider.calls[1].systemBlocks).toContainEqual(
+      expect.objectContaining({ name: 'constitution' })
+    )
+  })
+
+  it('transmet la Constitution à chaque juge du fan-out', async () => {
+    const provider = new CapturingProvider(false)
+    const orchestrator = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      authority: new AuthoritySas(),
+      executionWorkspace: 'C:\\workspace',
+      judgeFanOut: () => [
+        { provider: provider.id, model: 'judge-a' },
+        { provider: provider.id, model: 'judge-b' }
+      ]
+    })
+
+    await orchestrator.run('analyse le projet, ne modifie rien')
+
+    const judgeCalls = provider.calls.filter((options) =>
+      options.systemBlocks?.some((block) => block.name === 'skill:judge')
+    )
+    expect(judgeCalls.length).toBeGreaterThanOrEqual(2)
+    for (const options of judgeCalls) {
+      expect(options.systemBlocks).toContainEqual(
+        expect.objectContaining({ name: 'constitution' })
+      )
+    }
   })
 
   it('garde le gate rouge si le worker prétend réussir sans preuve d’outil', async () => {

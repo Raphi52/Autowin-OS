@@ -904,6 +904,7 @@ export class Orchestrator {
       let judgeEnvelope
       // A2 — le juge charge le SKILL.md judge du kit ; F6 — blocs nommés pour l'observabilité.
       const judgeParts = [
+        { name: 'constitution', text: CONSTITUTION },
         { name: 'skill:judge', text: phaseBrief('judge') },
         { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
         { name: 'projectContext', text: projectContext }
