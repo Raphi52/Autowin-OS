@@ -110,6 +110,35 @@ describe('selecteur orchestrateur Chat', () => {
     )
   })
 
+  it('closes on an outside click without blocking internal interactions', async () => {
+    const dom = await renderSelector({
+      models: [
+        {
+          id: 'c1',
+          provider: 'codex',
+          model: 'gpt-5.6-terra',
+          label: 'GPT-5.6 Terra',
+          reasoningEfforts: ['low']
+        }
+      ]
+    })
+    const selector = dom.querySelector<HTMLDetailsElement>(
+      '[data-testid="chat-orchestrator-model"]'
+    )!
+    selector.setAttribute('open', '')
+
+    await act(async () => {
+      selector.querySelector<HTMLButtonElement>('[role="option"]')?.click()
+    })
+    expect(selector.open).toBe(true)
+    expect(dom.querySelector('.model-effort-menu')).not.toBeNull()
+
+    await act(async () => {
+      document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(selector.open).toBe(false)
+  })
+
   it('ne présente pas l’absence d’effort comme un niveau Défaut', async () => {
     const onSelect = vi.fn()
     const dom = await renderSelector({

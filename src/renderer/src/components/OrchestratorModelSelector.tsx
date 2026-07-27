@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   buildOrchestratorModelGroups,
   type OrchestratorModelOption,
@@ -35,6 +35,17 @@ export function OrchestratorModelSelector({
 }): React.JSX.Element {
   const dropdownRef = useRef<HTMLDetailsElement>(null)
   const [expandedModel, setExpandedModel] = useState<string | null>(null)
+  useEffect(() => {
+    const closeOnOutsideClick = (event: MouseEvent): void => {
+      const dropdown = dropdownRef.current
+      if (dropdown?.open && event.target instanceof Node && !dropdown.contains(event.target)) {
+        dropdown.removeAttribute('open')
+        setExpandedModel(null)
+      }
+    }
+    document.addEventListener('click', closeOnOutsideClick)
+    return () => document.removeEventListener('click', closeOnOutsideClick)
+  }, [])
   const grouped = useMemo(
     () => buildOrchestratorModelGroups(models, binding ?? undefined),
     [models, binding]

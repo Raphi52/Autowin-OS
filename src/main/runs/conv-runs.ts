@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { parseRun } from '../dashboards/runs'
 import { scanRuns, type RunEntry } from '../dashboards/runs-scan'
@@ -27,12 +28,19 @@ function slugify(task: string): string {
   return s || 'tache'
 }
 
+/** Empreinte stable : même demande normalisée dans la même portée = même travail. */
+export function orchestrationFingerprint(task: string, scope: string): string {
+  const normalizedTask = task.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase()
+  return createHash('sha256').update(`${scope}\n${normalizedTask}`, 'utf8').digest('hex')
+}
+
 /** Crée le RUN.md (status: open) d'une tâche lancée depuis une conversation. */
 export function createConvRun(
   convId: string,
   task: string,
   root = convRunsRoot(),
-  now: () => number = () => Date.now()
+  now: () => number = () => Date.now(),
+  requestFingerprint?: string
 ): string {
   // suffixe horodaté → pas de collision si la même tâche est relancée
   const dir = join(root, convId, `${slugify(task)}-${now().toString(36)}-workspace`)
@@ -43,6 +51,7 @@ export function createConvRun(
     path,
     `status: open
 session: ${convId}
+${requestFingerprint ? `request_fingerprint: ${requestFingerprint}\n` : ''}
 regime: standard
 signal: verdict du juge + gate déterministe (orchestration in-app)
 
@@ -80,6 +89,28 @@ Blockers:
     'utf8'
   )
   return path
+}
+
+/** Retrouve le RUN déjà créé pour la même empreinte dans cette conversation. */
+export function findConvRunByFingerprint(
+  convId: string,
+  requestFingerprint: string,
+  root = convRunsRoot()
+): string | undefined {
+  const conversationRoot = join(root, convId)
+  try {
+    for (const entry of readdirSync(conversationRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      const runPath = join(conversationRoot, entry.name, 'RUN.md')
+      if (!existsSync(runPath)) continue
+      if (readFileSync(runPath, 'utf8').match(/^request_fingerprint:\s*(\S+)\s*$/m)?.[1] === requestFingerprint) {
+        return runPath
+      }
+    }
+  } catch {
+    /* conversation absente ou RUN illisible : aucun travail réutilisable */
+  }
+  return undefined
 }
 
 /** Extrait le contenu d'une section `## Nom` d'un markdown (jusqu'à la prochaine `## ` ou la fin). */

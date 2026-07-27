@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { AppCommandBus } from './commands'
 import { AuthoritySas } from './authority/sas'
 import { APP_DESTINATIONS } from '../shared/navigation'
@@ -41,6 +44,7 @@ function fakeOs(): any {
       return { gateBlocked: false, valid: true, costUsd: 0, result: '' }
     },
     chat: async () => ({ text: '', provider: 'claude', systemInjected: false }),
+    executionWorkspace: 'C:\\workspace',
     calls
   }
 }
@@ -148,12 +152,23 @@ describe('AppCommandBus authority policy', () => {
     expect(os.conversations.get('conv-1')).toBeTruthy()
     await bus.resolveDecision(decisionId, 'approve')
     expect(os.conversations.get('conv-1')).toBeUndefined()
-    await expect(bus.resolveDecision(decisionId, 'approve')).rejects.toThrow()
+    await expect(bus.resolveDecision(decisionId, 'approve')).resolves.toMatchObject({
+      choice: 'approve',
+      executed: true
+    })
   })
 
-  it('does not expose decision resolution to the model and annotates risk', () => {
+  it('exposes only authorised decision actions and annotates risk', () => {
     const catalogue = new AppCommandBus(fakeOs(), () => {}).catalog()
-    expect(catalogue.some((tool) => tool.name === 'resolve_decision')).toBe(false)
+    expect(catalogue.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining(['list_decisions', 'approve_decision', 'refuse_decision', 'cancel_decision'])
+    )
+    expect(catalogue.find((tool) => tool.name === 'approve_decision')?.authority).toBe('destructive')
+    expect(catalogue.find((tool) => tool.name === 'refuse_decision')?.annotations).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true
+    })
     expect(
       catalogue.find((tool) => tool.name === 'remove_conversation')?.annotations
     ).toMatchObject({
@@ -170,13 +185,12 @@ describe('AppCommandBus authority policy', () => {
     )
   })
 
-  it('waits for approval for role, RUN attachment and orchestration', async () => {
+  it('waits for approval for role and RUN attachment', async () => {
     const os = fakeOs()
     const bus = new AppCommandBus(os, () => {})
     bus.activeConversationId = 'conv-1'
     const role = await bus.exec('set_role', { role: 'judge', provider: 'codex', model: 'gpt-5' })
     const attached = await bus.exec('attach_run', { path: 'C:/private/RUN.md' })
-    const orchestration = await bus.exec('orchestrate', { task: 'use token=top-secret' })
 
     expect(os.calls).toMatchObject({ setRole: 0, attachRun: 0, runTask: 0 })
     const previews = os.authority
@@ -185,12 +199,35 @@ describe('AppCommandBus authority policy', () => {
       .join('\n')
     expect(previews).toContain('judge')
     expect(previews).toContain('RUN.md')
-    expect(previews).toContain('masquée')
-    expect(previews).not.toContain('top-secret')
     await bus.resolveDecision((role.data as any).decisionId, 'approve')
     await bus.resolveDecision((attached.data as any).decisionId, 'approve')
-    await bus.resolveDecision((orchestration.data as any).decisionId, 'cancel')
     expect(os.calls).toMatchObject({ setRole: 1, attachRun: 1, runTask: 0 })
+  })
+
+  it('démarre immédiatement une orchestration ordinaire et réutilise le RUN de même demande+portée', async () => {
+    const previousAppData = process.env.APPDATA
+    const appData = mkdtempSync(join(tmpdir(), 'aos-commands-'))
+    process.env.APPDATA = appData
+    try {
+      const os = fakeOs()
+      const bus = new AppCommandBus(os, () => {})
+      bus.activeConversationId = 'conv-1'
+
+      const first = await bus.exec('orchestrate', { task: 'corrige le test du workspace' })
+      expect(first).toMatchObject({ ok: true, data: { runPath: expect.any(String) } })
+      expect(os.calls.runTask).toBe(1)
+      expect(os.authority.pending()).toHaveLength(0)
+
+      const second = await bus.exec('orchestrate', { task: '  CORRIGE le test du workspace  ' })
+      expect(second).toMatchObject({ ok: true, data: { reused: true } })
+      expect(os.calls.runTask).toBe(1)
+      expect((second.data as { runPath: string }).runPath).toBe(
+        (first.data as { runPath: string }).runPath
+      )
+    } finally {
+      process.env.APPDATA = previousAppData
+      rmSync(appData, { recursive: true, force: true })
+    }
   })
 
   it('traces choice and redacted result, then cancels expiry without mutation', async () => {
@@ -201,16 +238,29 @@ describe('AppCommandBus authority policy', () => {
     const bus = new AppCommandBus(os, () => {})
     bus.trace = (name, args, ok) => entries.push({ name, args, ok })
     const requested = await bus.exec('orchestrate', { task: 'Bearer top-secret' })
-    await bus.resolveDecision((requested.data as any).decisionId, 'approve')
 
-    expect(entries).toContainEqual(expect.objectContaining({ name: 'authority_decision' }))
+    expect(requested).toMatchObject({ ok: true, data: { runPath: expect.any(String) } })
+    expect(entries).not.toContainEqual(expect.objectContaining({ name: 'authority_decision' }))
     expect(entries).toContainEqual(
       expect.objectContaining({ name: 'orchestrate', args: { task: '[redacted]' }, ok: true })
     )
     const expired = await bus.exec('remove_conversation', { id: 'conv-1' })
     now = 15 * 60_000
     expect(bus.sweepExpired()).toHaveLength(1)
-    await expect(bus.resolveDecision((expired.data as any).decisionId, 'approve')).rejects.toThrow()
+    await expect(bus.resolveDecision((expired.data as any).decisionId, 'approve')).resolves.toMatchObject({
+      choice: 'cancel'
+    })
+    expect(os.conversations.get('conv-1')).toBeTruthy()
+  })
+
+  it('refusing a destructive action leaves it untouched', async () => {
+    const os = fakeOs()
+    const bus = new AppCommandBus(os, () => {})
+    const requested = await bus.exec('remove_conversation', { id: 'conv-1' })
+    const decisionId = (requested.data as { decisionId: string }).decisionId
+
+    const result = await bus.exec('refuse_decision', { decisionId })
+    expect(result).toMatchObject({ ok: true, data: { choice: 'refuse' } })
     expect(os.conversations.get('conv-1')).toBeTruthy()
   })
 })

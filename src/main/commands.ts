@@ -4,6 +4,8 @@ import type { Role } from './roles'
 import {
   closeConvRun,
   createConvRun,
+  findConvRunByFingerprint,
+  orchestrationFingerprint,
   populateConvRunSections,
   saveConvRunTrace
 } from './runs/conv-runs'
@@ -108,11 +110,11 @@ const CATALOG: CommandSpec[] = [
     description:
       'Lancer un agent de développement capable de lire, modifier et tester le code ou les fichiers du workspace',
     args: { task: 'la tâche' },
-    authority: 'sensitive',
+    authority: 'automatic',
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
-      idempotentHint: false,
+      idempotentHint: true,
       openWorldHint: true
     }
   },
@@ -189,6 +191,51 @@ const CATALOG: CommandSpec[] = [
       openWorldHint: false
     }
   },
+  {
+    name: 'list_decisions',
+    description: 'Lister les décisions d’autorité en attente',
+    args: {},
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'approve_decision',
+    description: 'Demander l’approbation humaine d’une décision à haut risque',
+    args: { decisionId: 'id de décision' },
+    authority: 'destructive',
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'refuse_decision',
+    description: 'Refuser une décision à haut risque sans exécuter l’action',
+    args: { decisionId: 'id de décision' },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
+    name: 'cancel_decision',
+    description: 'Annuler une décision à haut risque sans exécuter l’action',
+    args: { decisionId: 'id de décision' },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
   { name: 'get_state', description: 'Relire l’état courant de l’app', args: {} }
 ]
 
@@ -252,6 +299,7 @@ export class AppCommandBus {
     string,
     { name: string; args: Record<string, unknown>; action: () => Promise<unknown> }
   >()
+  private readonly resolvedDecisionResults = new Map<string, Promise<unknown>>()
   /** Orchestrations en vol, par conversation : permet de STOPPER le sous-agent. */
   private readonly activeOrchestrations = new Map<string, AbortController>()
 
@@ -327,6 +375,14 @@ export class AppCommandBus {
 
   /** Consomme une approbation UI ; elle n'est volontairement pas exposée au modèle. */
   async resolveDecision(id: string, choice: unknown): Promise<unknown> {
+    const existing = this.resolvedDecisionResults.get(id)
+    if (existing) return existing
+    const result = this.resolveDecisionOnce(id, choice)
+    this.resolvedDecisionResults.set(id, result)
+    return result
+  }
+
+  private async resolveDecisionOnce(id: string, choice: unknown): Promise<unknown> {
     const resolution = this.os.authority.resolve(id, choice)
     const pending = this.pendingActions.get(id)
     this.pendingActions.delete(id)
@@ -371,7 +427,7 @@ export class AppCommandBus {
   ): { pendingApproval: true; decisionId: string } {
     const decisionId = this.os.authority.propose({
       question: approvalQuestion(name, args),
-      options: ['approve', 'cancel'],
+      options: ['approve', 'refuse', 'cancel'],
       safeDefault: 'cancel',
       ttlMs: 15 * 60_000
     })
@@ -468,6 +524,14 @@ export class AppCommandBus {
         })
         return { tab: location.destination, section: location.section }
       }
+      case 'list_decisions':
+        return this.os.authority.pending()
+      case 'approve_decision':
+        return this.resolveDecision(s('decisionId'), 'approve')
+      case 'refuse_decision':
+        return this.resolveDecision(s('decisionId'), 'refuse')
+      case 'cancel_decision':
+        return this.resolveDecision(s('decisionId'), 'cancel')
       case 'chat_send': {
         const text = this.onChat
           ? await this.onChat(
@@ -499,7 +563,13 @@ export class AppCommandBus {
           this.activeConversationId ||
           '__autonomous__'
         const task = s('task')
-        const runPath = createConvRun(convId, task)
+        const fingerprint = orchestrationFingerprint(
+          task,
+          `conversation:${convId}\nworkspace:${this.os.executionWorkspace}`
+        )
+        const reusableRun = findConvRunByFingerprint(convId, fingerprint)
+        if (reusableRun) return { runPath: reusableRun, reused: true }
+        const runPath = createConvRun(convId, task, undefined, undefined, fingerprint)
         const orchestrationTurnId = randomUUID()
         const steps: OrchestrationStep[] = []
         // Sous-agent STOPPABLE : un AbortController par conversation, coupé par abortOrchestration.

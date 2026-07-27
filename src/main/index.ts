@@ -508,6 +508,11 @@ function registerChatIpc(): void {
 
   // --- Orchestration disciplinée (le cœur) : streame chaque étape ---
   ipcMain.handle('os:orchestrate', async (event, task: string) => {
+    // Le chemin IPC rejoint le bus : même RUN traçable et même déduplication que les commandes agent.
+    if (process.env.AUTOWIN_LEGACY_DIRECT_ORCHESTRATE !== '1') {
+      return bus.exec('orchestrate', { task }, bus.activeConversationId, 'auto')
+    }
+
     const conversationId = bus.activeConversationId ?? '__autonomous__'
     // #2 — run STOPPABLE : on enregistre un AbortController dans le registre du bus pour que
     // `os:orchestrate:cancel` → abortOrchestration(conversationId) le coupe réellement (sinon no-op).
