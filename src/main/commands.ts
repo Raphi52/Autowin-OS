@@ -108,11 +108,11 @@ const CATALOG: CommandSpec[] = [
     description:
       'Lancer un agent de développement capable de lire, modifier et tester le code ou les fichiers du workspace',
     args: { task: 'la tâche' },
-    authority: 'sensitive',
+    authority: 'automatic',
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
-      idempotentHint: false,
+      idempotentHint: true,
       openWorldHint: true
     }
   },
@@ -158,7 +158,7 @@ const CATALOG: CommandSpec[] = [
       provider: 'claude|codex',
       model: 'modèle (optionnel)'
     },
-    authority: 'sensitive',
+    authority: 'automatic',
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -362,6 +362,12 @@ export class AppCommandBus {
     }
     if (resolutions.length) this.broadcast({ type: 'refresh', scope: 'decisions' })
     return resolutions
+  }
+
+  /** Lecture UI : expire aussi les approbations jamais exécutées et libère leur closure. */
+  pendingDecisions(): unknown[] {
+    this.sweepExpired()
+    return this.os.authority.pending()
   }
 
   private deferSensitiveAction(

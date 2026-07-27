@@ -170,27 +170,49 @@ describe('AppCommandBus authority policy', () => {
     )
   })
 
-  it('waits for approval for role, RUN attachment and orchestration', async () => {
+  it('starts ordinary orchestration immediately but retains justified confirmations', async () => {
     const os = fakeOs()
     const bus = new AppCommandBus(os, () => {})
     bus.activeConversationId = 'conv-1'
-    const role = await bus.exec('set_role', { role: 'judge', provider: 'codex', model: 'gpt-5' })
+    await bus.exec('set_role', { role: 'judge', provider: 'codex', model: 'gpt-5' })
     const attached = await bus.exec('attach_run', { path: 'C:/private/RUN.md' })
     const orchestration = await bus.exec('orchestrate', { task: 'use token=top-secret' })
 
-    expect(os.calls).toMatchObject({ setRole: 0, attachRun: 0, runTask: 0 })
+    expect(os.calls).toMatchObject({ setRole: 1, attachRun: 0, runTask: 1 })
     const previews = os.authority
       .pending()
       .map((d: { question: string }) => d.question)
       .join('\n')
-    expect(previews).toContain('judge')
     expect(previews).toContain('RUN.md')
-    expect(previews).toContain('masquée')
     expect(previews).not.toContain('top-secret')
-    await bus.resolveDecision((role.data as any).decisionId, 'approve')
+    expect(orchestration).toMatchObject({ ok: true, data: { valid: true, gateBlocked: false } })
     await bus.resolveDecision((attached.data as any).decisionId, 'approve')
-    await bus.resolveDecision((orchestration.data as any).decisionId, 'cancel')
-    expect(os.calls).toMatchObject({ setRole: 1, attachRun: 1, runTask: 0 })
+    expect(os.calls).toMatchObject({ setRole: 1, attachRun: 1, runTask: 1 })
+  })
+
+  it('does not create approval prompts for ordinary automatic commands in Ask mode', async () => {
+    const os = fakeOs()
+    const bus = new AppCommandBus(os, () => {})
+    bus.activeConversationId = 'conv-1'
+
+    const role = await bus.exec('set_role', { role: 'judge', provider: 'codex' }, undefined, 'ask')
+    const orchestration = await bus.exec('orchestrate', { task: 'Tester la relance' }, undefined, 'ask')
+
+    expect(role).toMatchObject({ ok: true, data: {} })
+    expect(orchestration).toMatchObject({ ok: true, data: { valid: true, gateBlocked: false } })
+    expect(os.calls).toMatchObject({ setRole: 1, runTask: 1 })
+    expect(bus.pendingDecisions()).toEqual([])
+  })
+
+  it('keeps high-risk commands behind approval even in Auto mode', async () => {
+    const os = fakeOs()
+    const bus = new AppCommandBus(os, () => {})
+
+    const deletion = await bus.exec('remove_conversation', { id: 'conv-1' }, 'conv-1', 'auto')
+
+    expect(deletion).toMatchObject({ ok: true, data: { pendingApproval: true } })
+    expect(os.conversations.get('conv-1')).toBeTruthy()
+    expect(bus.pendingDecisions()).toHaveLength(1)
   })
 
   it('traces choice and redacted result, then cancels expiry without mutation', async () => {
@@ -200,10 +222,8 @@ describe('AppCommandBus authority policy', () => {
     const entries: Array<{ name: string; args: Record<string, unknown>; ok: boolean }> = []
     const bus = new AppCommandBus(os, () => {})
     bus.trace = (name, args, ok) => entries.push({ name, args, ok })
-    const requested = await bus.exec('orchestrate', { task: 'Bearer top-secret' })
-    await bus.resolveDecision((requested.data as any).decisionId, 'approve')
+    await bus.exec('orchestrate', { task: 'Bearer top-secret' })
 
-    expect(entries).toContainEqual(expect.objectContaining({ name: 'authority_decision' }))
     expect(entries).toContainEqual(
       expect.objectContaining({ name: 'orchestrate', args: { task: '[redacted]' }, ok: true })
     )
@@ -211,6 +231,20 @@ describe('AppCommandBus authority policy', () => {
     now = 15 * 60_000
     expect(bus.sweepExpired()).toHaveLength(1)
     await expect(bus.resolveDecision((expired.data as any).decisionId, 'approve')).rejects.toThrow()
+    expect(os.conversations.get('conv-1')).toBeTruthy()
+  })
+
+  it('purges an expired unexecuted approval before exposing pending decisions', async () => {
+    let now = 0
+    const os = fakeOs()
+    os.authority = new AuthoritySas(() => now)
+    const bus = new AppCommandBus(os, () => {})
+    const requested = await bus.exec('remove_conversation', { id: 'conv-1' })
+
+    now = 15 * 60_000
+
+    expect(bus.pendingDecisions()).toEqual([])
+    await expect(bus.resolveDecision((requested.data as any).decisionId, 'approve')).rejects.toThrow()
     expect(os.conversations.get('conv-1')).toBeTruthy()
   })
 })

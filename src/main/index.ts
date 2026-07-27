@@ -795,7 +795,7 @@ function registerChatIpc(): void {
   ipcMain.handle('os:toolUsage', () => aggregateToolUsage())
 
   // --- Sas d'autorité (décisions AFK ouvertes par l'orchestrateur) ---
-  ipcMain.handle('os:authority:pending', () => os.authority.pending())
+  ipcMain.handle('os:authority:pending', () => bus.pendingDecisions())
   ipcMain.handle('os:authority:resolve', (_e, id: string, choice: unknown) =>
     bus.resolveDecision(id, choice)
   )

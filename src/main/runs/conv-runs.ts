@@ -34,10 +34,20 @@ export function createConvRun(
   root = convRunsRoot(),
   now: () => number = () => Date.now()
 ): string {
-  // suffixe horodaté → pas de collision si la même tâche est relancée
-  const dir = join(root, convId, `${slugify(task)}-${now().toString(36)}-workspace`)
+  // Une relance de la même tâche reprend son RUN au lieu de créer un doublon horodaté.
+  // Le scope conversation + slug reste déterministe et local à la conversation.
+  const dir = join(root, convId, `${slugify(task)}-workspace`)
   mkdirSync(dir, { recursive: true })
   const path = join(dir, 'RUN.md')
+  if (existsSync(path)) {
+    const date = new Date(now()).toISOString().slice(0, 10)
+    let md = readFileSync(path, 'utf8')
+    md = md.replace(/^status: (?:green|red)$/m, 'status: open')
+    md = md.replace(/^ {2}- \[x\] (le juge valide.*)$/m, '  - [ ] $1')
+    md = md.replace(/(## Journal\n)/, `$1[${date}] Orchestration relancée depuis la conversation ${convId}.\n`)
+    writeFileSync(path, md, 'utf8')
+    return path
+  }
   const date = new Date(now()).toISOString().slice(0, 10)
   writeFileSync(
     path,

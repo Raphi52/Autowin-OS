@@ -41,10 +41,25 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
     expect(readFileSync(r, 'utf8')).toContain('Gate BLOQUÉ')
   })
 
-  it('pas de collision quand la même tâche est relancée (suffixe horodaté)', () => {
+  it('réutilise le même RUN quand la même tâche est relancée', () => {
     const a = createConvRun('conv-9', 'même tâche', root, () => 4000)
+    closeConvRun(a, true, 'Premier verdict.')
     const b = createConvRun('conv-9', 'même tâche', root, () => 5000)
-    expect(a).not.toBe(b)
+    expect(a).toBe(b)
+    expect(listConvRuns('conv-9', [], root).filter((r) => r.path === a)).toHaveLength(1)
+    expect(readFileSync(b, 'utf8')).toMatch(/^status: open/m)
+    expect(readFileSync(b, 'utf8')).toContain('Orchestration relancée')
+  })
+
+  it('réouvre un RUN rouge sans créer de doublon lors de la relance', () => {
+    const a = createConvRun('conv-relance', 'tâche interrompue', root, () => 8000)
+    closeConvRun(a, false, 'Orchestration en échec.')
+
+    const b = createConvRun('conv-relance', 'tâche interrompue', root, () => 9000)
+
+    expect(b).toBe(a)
+    expect(listConvRuns('conv-relance', [], root)).toHaveLength(1)
+    expect(readFileSync(b, 'utf8')).toMatch(/^status: open/m)
   })
 
   it('saveConvRunTrace/loadConvRunTrace : le fil des sous-agents est persisté et relu', () => {

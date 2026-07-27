@@ -182,6 +182,26 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(container!.querySelector('.agent-inbox')).toBeNull()
   })
 
+  it('renders a running workflow indicator as soon as orchestration starts', async () => {
+    let appHandler: ((event: any) => void) | undefined
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      onAppEvent: vi.fn((cb: (event: any) => void) => {
+        appHandler = cb
+        return vi.fn()
+      })
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+
+    await act(async () => {
+      appHandler?.({ type: 'orchestrate-start', convId: 'A', runPath: 'A/RUN.md', task: 'Réparer' })
+    })
+
+    expect(container!.textContent).toContain('Workflows · 1 en cours')
+    expect(container!.textContent).toContain('Réparer')
+  })
+
   it('does not steal conversation B when creation from New resolves late', async () => {
     const creation = deferred<ReturnType<typeof conversation>>()
     const mockApi = api({
