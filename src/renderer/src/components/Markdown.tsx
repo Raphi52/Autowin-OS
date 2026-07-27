@@ -16,10 +16,10 @@ type FinalSummaryParts = {
 }
 
 const FINAL_SUMMARY_LABELS = [
-  /^✅\s+Fait(?:\s*:.*)?$/u,
-  /^📍\s+Maintenant(?:\s*:.*)?$/u,
-  /^⏳\s+Reste à faire(?:\s*:.*)?$/u,
-  /^👉\s+Recommandé(?:\s*:.*)?$/u
+  /^✅\s+(?:Fait|\*\*Fait\*\*)(?:\s*:.*)?$/u,
+  /^📍\s+(?:Maintenant|\*\*Maintenant\*\*)(?:\s*:.*)?$/u,
+  /^⏳\s+(?:Reste à faire|\*\*Reste à faire\*\*)(?:\s*:.*)?$/u,
+  /^👉\s+(?:Recommandé|\*\*Recommandé\*\*)(?:\s*:.*)?$/u
 ]
 
 /**
