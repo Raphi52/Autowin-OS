@@ -275,6 +275,10 @@ interface ChatApi {
   orchestrate: (
     task: string
   ) => Promise<{ ok: boolean; result?: OrchestrationResult; error?: string }>
+  parallelChat: (
+    conversationId: string,
+    text: string
+  ) => Promise<{ ok: boolean; result?: string; error?: string }>
   onOrchestrateStep: (cb: (step: OrchestrationStep) => void) => () => void
   onPreflight: (cb: (result: PreflightResult) => void) => () => void
   getPreflight: () => Promise<PreflightResult | null>

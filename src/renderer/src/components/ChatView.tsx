@@ -1038,10 +1038,9 @@ export function ChatView({
   }
 
   /**
-   * Commande composer `/btw <texte>` — « au fait… », comme écrire pendant que Claude Code travaille :
-   * le message est MIS EN FILE D'ATTENTE et traité à la fin du tour courant (tour suivant normal),
-   * SANS interrompre ni s'imposer en priorité au tour en cours. Distinct du bouton « 🧭 Orienter »
-   * (lui injecte en priorité dans le tour courant). Idle (aucun tour) → envoi immédiat.
+   * Commande composer `/btw <texte>` — « au fait… » : pendant un tour, lance une orchestration
+   * indépendante qui publie son résultat dans la conversation, sans interrompre ni orienter le pilote.
+   * Distinct du bouton « 🧭 Orienter » (directive prioritaire dans le tour courant). Idle → envoi normal.
    */
   async function submitBtw(body: string): Promise<void> {
     const text = body.trim()
@@ -1054,8 +1053,16 @@ export function ChatView({
     if (busy) {
       const id = activeRef.current
       if (!id) return
-      enqueueMessage(id, text) // → File d'attente, drainée en fin de tour (cf. effet busy→false)
       setDraftInput(composerDraftKeyRef.current, '')
+      const result = await window.api.parallelChat(id, text)
+      if (!result.ok) return
+      const nextMessages: Msg[] = [
+        ...(liveMessagesRef.current.get(id) ?? []),
+        { role: 'user', content: text },
+        hydrateStoredAssistant({ content: result.result ?? '', status: 'completed' })
+      ]
+      liveMessagesRef.current.set(id, nextMessages)
+      if (activeRef.current === id) setMessages(nextMessages)
     } else {
       void send(text) // aucun tour en cours → le texte part comme message normal
     }

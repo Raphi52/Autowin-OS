@@ -205,6 +205,34 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => pilot.resolve({ ok: true }))
   })
 
+  it('lance /btw en parallèle sans interrompre ni mettre le message en file', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const parallel = deferred<{ ok: boolean; result?: string }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise),
+      parallelChat: vi.fn(() => parallel.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('travail principal')
+    await click('.composer-send')
+
+    await type('/btw traite ce point à part')
+    await click('.composer-send')
+
+    expect(mockApi.pilotChat).toHaveBeenCalledTimes(1)
+    expect(mockApi.parallelChat).toHaveBeenCalledWith('A', 'traite ce point à part')
+    expect(container!.querySelector('.directive-queue-item')).toBeNull()
+    expect((container!.querySelector('textarea') as HTMLTextAreaElement).value).toBe('')
+
+    await act(async () => {
+      parallel.resolve({ ok: true, result: 'réponse BTW' })
+      pilot.resolve({ ok: true })
+    })
+    expect(container!.querySelector('.chat-scroll')?.textContent).toContain('réponse BTW')
+  })
+
   it('does not steal conversation B when creation from New resolves late', async () => {
     const creation = deferred<ReturnType<typeof conversation>>()
     const mockApi = api({

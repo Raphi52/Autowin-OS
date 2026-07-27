@@ -599,6 +599,25 @@ function registerChatIpc(): void {
   // --- Config par rôle (orchestrateur / sous-agent / juge / scout) ---
   // #5 — le wizard first-run re-vérifie la config à la demande. `force` (bouton) ignore le cache TTL ;
   // sans force (montage) le cache déduplique avec le run de démarrage.
+  // `/btw` : sous-demande indépendante du pilote actif. Elle ne passe pas par le registre
+  // d'annulation des orchestrations de la conversation : un BTW ne doit jamais couper le run principal.
+  ipcMain.handle('os:parallelChat', async (event, rawConversationId: string, rawText: string) => {
+    assertTrustedRendererSender(event, 'Message BTW')
+    const conversationId = guardString(rawConversationId, 'conversationId')
+    const text = guardString(rawText, 'text').trim()
+    if (!text || !os.conversations.get(conversationId))
+      return { ok: false, error: 'Conversation introuvable' }
+    os.conversations.append(conversationId, { role: 'user', content: text })
+    try {
+      const result = await os.runTask(text)
+      os.conversations.append(conversationId, { role: 'assistant', content: result.result })
+      broadcast({ type: 'refresh', scope: 'conversations' })
+      return { ok: true, result: result.result }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
   ipcMain.handle('os:behaviourComposition', (event) => {
     assertTrustedRendererSender(event, 'Behaviour composition')
     return buildBehaviourComposition(os.roles)

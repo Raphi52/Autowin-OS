@@ -11,6 +11,11 @@ const api = {
   // Orchestration disciplinée
   orchestrate: (task: string): Promise<{ ok: boolean; result?: unknown; error?: string }> =>
     ipcRenderer.invoke('os:orchestrate', task),
+  parallelChat: (
+    conversationId: string,
+    text: string
+  ): Promise<{ ok: boolean; result?: string; error?: string }> =>
+    ipcRenderer.invoke('os:parallelChat', conversationId, text),
   onOrchestrateStep: (cb: (step: unknown) => void): (() => void) => {
     const handler = (_e: unknown, step: unknown): void => cb(step)
     ipcRenderer.on('orchestrate:step', handler)
