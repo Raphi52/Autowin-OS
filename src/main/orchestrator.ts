@@ -925,8 +925,18 @@ export class Orchestrator {
         continue
       }
       const resuming = Boolean(prevSessionId)
+      // Le CADRAGE (phase frame) est le socle du prompt remis aux sous-agents : on le ré-injecte
+      // TOUJOURS explicitement, même en resume. Se fier à l'historique de session (opaque, variable
+      // par provider, cassé par un fan-out) faisait perdre le besoin cadré exactement au moment où
+      // la phase suivante en a le plus besoin → prompt de sous-agent dégradé.
+      const framed = phaseContext.find((entry) => entry.startsWith('[phase frame]')) ?? ''
       const userContent = resuming
-        ? `Phase suivante du pipeline : ${phase}. Continue À PARTIR de l'état de la session (tâche, connaissance Brain et acquis des phases précédentes déjà connus — ne les redemande pas). Applique la consigne de phase et enrichis le livrable existant.`
+        ? [
+            `Phase suivante du pipeline : ${phase}. Continue À PARTIR de l'état de la session (tâche, connaissance Brain et acquis des phases précédentes déjà connus — ne les redemande pas). Applique la consigne de phase et enrichis le livrable existant.`,
+            framed && `RAPPEL DU CADRAGE — c'est LA référence du livrable :\n${framed}`
+          ]
+            .filter(Boolean)
+            .join('\n\n')
         : phaseContext.join('\n\n')
       const phaseMessages = [{ role: 'user' as const, content: userContent }]
       // F6 — le system est composé de blocs NOMMÉS : on garde leur décomposition (nom + taille)

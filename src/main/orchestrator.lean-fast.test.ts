@@ -112,6 +112,10 @@ describe('#3 session-resume chaîné', () => {
     expect(provider.calls[1].resumeSessionId).toBe('sess-1')
     expect(provider.userMessages[1]).toContain('Continue À PARTIR de l')
     expect(provider.userMessages[1]).not.toContain('TÂCHE:')
+    // …MAIS le CADRAGE reste TOUJOURS ré-injecté explicitement : c'est le socle du prompt remis au
+    // sous-agent, on ne le confie jamais au seul historique de session (opaque, variable, cassé par un fan-out).
+    expect(provider.userMessages[1]).toContain('RAPPEL DU CADRAGE')
+    expect(provider.userMessages[1]).toContain('[phase frame]')
   })
 
   it('dégradation gracieuse : provider sans sessionId → pas de resume, message complet', async () => {
