@@ -1,46 +1,75 @@
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RunInspector } from './RunInspector'
 
+let container: HTMLDivElement
+let root: Root
+const originalScrollIntoView = Element.prototype.scrollIntoView
+
+beforeEach(() => {
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+})
+
+afterEach(() => {
+  act(() => root.unmount())
+  container.remove()
+  Object.defineProperty(Element.prototype, 'scrollIntoView', {
+    value: originalScrollIntoView,
+    configurable: true
+  })
+})
+
 describe('RunInspector', () => {
-  let root: Root | null = null
-  let container: HTMLDivElement | null = null
-
-  beforeAll(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  })
-
-  afterEach(async () => {
-    await act(async () => root?.unmount())
-    container?.remove()
-    root = null
-    container = null
-  })
-
-  it('renders health counters, section navigation and explicit missing sections', async () => {
-    container = document.createElement('div')
-    document.body.append(container)
-    root = createRoot(container)
-    await act(async () => {
-      root?.render(
+  it('rend la synthèse, les sections navigables et le Markdown d’un RUN complet', () => {
+    act(() =>
+      root.render(
         createElement(RunInspector, {
-          source: '## Besoin\n\n- [x] Une preuve.\n\n## Journal\n\n[2026-07-21] Vérifié.',
-          status: 'open',
-          regime: 'standard',
-          dodChecked: 1,
-          dodTotal: 1,
-          journalEvents: 1,
-          defauts: 0
+          content: `status: open\nregime: standard\n\n## Besoin\n- [x] Déjà fait\n- [ ] À faire\n\n## Contraintes\nTexte\n\n## Options\n| Option | Choix |\n| - | - |\n| A | oui |\n\n## SOP\n1. Vérifier\n\n## Journal\n[2026-07-21] événement\n\n## Défauts\n- Aucun\n\n## Reprise\nContinuer`,
+          summary: { status: 'open', regime: 'standard', dodChecked: 1, dodTotal: 2, journalEvents: 1, defauts: 1 }
         })
       )
-    })
+    )
 
-    expect(container.textContent).toContain('DoD 1/1')
-    expect(container.textContent).toContain('Journal 1')
-    expect(container.textContent).toContain('Défauts 0')
-    expect(container.querySelector('a[href="#run-section-journal"]')).not.toBeNull()
-    expect(container.textContent).toContain('Section absente.')
+    expect(container.querySelector('[data-testid="run-summary"]')?.textContent).toContain('1/2')
+    expect(container.querySelectorAll('[data-testid="run-section-nav"] button')).toHaveLength(7)
+    expect(container.querySelector('.brain-markdown')).not.toBeNull()
+    expect(container.textContent).toContain('À faire')
+  })
+
+  it('navigue vers la bonne section même si une section précédente est absente', () => {
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { value: scrollIntoView, configurable: true })
+    act(() =>
+      root.render(
+        createElement(RunInspector, {
+          content: '## Besoin\nTexte\n\n## Journal\n[2026-07-21] événement',
+          summary: { status: 'open', dodChecked: 0, dodTotal: 0, journalEvents: 1, defauts: 0 }
+        })
+      )
+    )
+
+    const buttons = [...container.querySelectorAll<HTMLButtonElement>('[data-testid="run-section-nav"] button')]
+    act(() => buttons.find((button) => button.textContent === 'Journal')?.click())
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+  })
+
+  it('signale explicitement les sections absentes sans casser le rendu Markdown', () => {
+    act(() =>
+      root.render(
+        createElement(RunInspector, {
+          content: 'status: green\n\n## Besoin\n- [x] Terminé',
+          summary: { status: 'green', dodChecked: 1, dodTotal: 1, journalEvents: 0, defauts: 0 }
+        })
+      )
+    )
+
+    expect(container.textContent).toContain('Journal absent')
+    expect(container.textContent).toContain('Défauts absent')
+    expect(container.querySelector('.brain-markdown')).not.toBeNull()
   })
 })

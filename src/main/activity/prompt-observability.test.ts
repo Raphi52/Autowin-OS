@@ -67,6 +67,27 @@ describe('prompt observability', () => {
     ])
   })
 
+  it('restaure les ponctuations UTF-8 altérées avant la frontière Observatory', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-prompt-observability-utf8-'))
+    try {
+      appendPromptCall(
+        {
+          ...call,
+          messages: [{ role: 'user', content: 'Titre â€” citation â€˜ouvranteâ€™' }]
+        },
+        root,
+        () => 1_700_000_000_000,
+        () => 'call-utf8'
+      )
+
+      expect(loadPromptCalls('conv-42', root)[0]?.messages).toEqual([
+        { role: 'user', content: 'Titre — citation ‘ouvrante’' }
+      ])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('supprime explicitement le journal exact d une conversation', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-prompt-delete-'))
     appendPromptCall(

@@ -2490,7 +2490,7 @@ export function ChatView({
                         {openTrace && (runDetailTab === 'trace' || !openRun) ? (
                           <StepThread steps={openTrace} />
                         ) : (
-                          openRun && <RunInspector source={openRun.content} {...r.summary} />
+                          openRun && <RunInspector content={openRun.content} summary={r.summary} />
                         )}
                       </div>
                     )}
