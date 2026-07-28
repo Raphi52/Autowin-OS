@@ -33,6 +33,8 @@ const api = {
     ipcRenderer.invoke('git:diff', path, repoPath),
   pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),
   brainRepoPath: (): Promise<string> => ipcRenderer.invoke('git:brainRoot'),
+  getAutoClose: (): Promise<unknown> => ipcRenderer.invoke('run:autoClose:get'),
+  setAutoClose: (enabled: boolean): Promise<unknown> => ipcRenderer.invoke('run:autoClose:set', enabled),
   // Survie niveau 2 : tours restés inachevés (app fermée pendant l'exécution) + leur journal.
   unfinishedTurns: (): Promise<
     Array<{ conversationId: string; turnId: string; events: number; updatedAt: number }>

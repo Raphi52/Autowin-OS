@@ -199,6 +199,12 @@ function drainPendingDirectives(conversationId: string): string[] {
   return queued
 }
 const questionWindows = new Map<string, BrowserWindow>()
+/**
+ * Relayout forcé de la fenêtre principale (correctif desync fenêtre↔viewport, cf. createWindow).
+ * Exposé au niveau module pour être rejoué depuis les chemins déclenchés PAR LE MODÈLE (fermeture
+ * d'une fenêtre de question `alwaysOnTop` enfant), pas seulement sur les transitions utilisateur.
+ */
+let relayoutMainWindow: (() => void) | null = null
 const diagnosticCapabilities = new DiagnosticCapabilities()
 /** Boucle de re-probe du diagnostic de démarrage (#4) — arrêtée à la fermeture pour ne pas fuir de timer. */
 let preflightWatchHandle: { stop: () => void } | null = null
@@ -395,6 +401,10 @@ function openQuestionWindow(parent: BrowserWindow | null, question: PendingModel
   })
   questionWindows.set(question.id, win)
   win.on('closed', () => {
+    // Une fenêtre enfant `alwaysOnTop` qui apparaît/disparaît peut laisser la fenêtre parente avec
+    // des métriques périmées (contenu rogné). C'est un chemin déclenché PAR LE MODÈLE, pas par
+    // l'utilisateur → on force le relayout du parent à sa fermeture.
+    relayoutMainWindow?.()
     if (!questionWindows.delete(question.id)) return
     try {
       modelQuestions.resolve(question.id, 'attend pour l’instant')
@@ -747,6 +757,13 @@ function registerChatIpc(): void {
   })
   // Racine du Brain partagé : permet à Source control de basculer sur SON dépôt git en un clic
   // (les notes du Brain sont versionnées comme le code). Lecture seule, aucun secret exposé.
+  // Clôture automatique d'un run vert (commit + push sur branche dédiée). OFF par défaut.
+  ipcMain.handle('run:autoClose:get', () => os.getAutoClose())
+  ipcMain.handle('run:autoClose:set', (event, enabled: unknown) => {
+    assertTrustedRendererSender(event, 'AutoClose')
+    os.setAutoClose(enabled === true)
+    return os.getAutoClose()
+  })
   ipcMain.handle('git:brainRoot', (event) => {
     assertTrustedRendererSender(event, 'GitBrainRoot')
     return amitelBrainRoot()
@@ -1741,6 +1758,42 @@ function createWindow(): void {
   }
   mainWindow.webContents.on('will-navigate', blockUntrustedNavigation)
   mainWindow.webContents.on('will-redirect', blockUntrustedNavigation)
+
+  // Desync fenêtre↔viewport (vécu) : le contenu reste parfois rendu à ses ANCIENNES métriques —
+  // rogné en haut à gauche, le reste noir — jusqu'à ce qu'un vrai resize force un relayout, d'où le
+  // « minimiser puis réagrandir » qui répare. Terrain propice ici : zoomFactor persistant
+  // (webFrame.setZoomFactor au montage), `maximize()` juste avant `show()`, titleBarOverlay, et un
+  // écran à DPI ≠ 100 %. On ne devine pas lequel déclenche : on force un recalcul COMPLET des
+  // métriques sur chaque transition à risque. enableDeviceEmulation/disable recalcule layout ET
+  // scale (invalidate() ne fait qu'un repaint) et ne dé-maximise pas la fenêtre.
+  const forceRelayout = (): void => {
+    const wc = mainWindow.webContents
+    if (wc.isDestroyed()) return
+    try {
+      wc.enableDeviceEmulation({
+        screenPosition: 'desktop',
+        screenSize: { width: 0, height: 0 },
+        viewPosition: { x: 0, y: 0 },
+        viewSize: { width: 0, height: 0 },
+        deviceScaleFactor: 0,
+        scale: 1
+      })
+      wc.disableDeviceEmulation()
+    } catch {
+      // API indisponible sur un futur Electron → repli best-effort, jamais casser l'affichage.
+      try {
+        wc.invalidate()
+      } catch {
+        /* rien de mieux à faire : on laisse la fenêtre telle quelle */
+      }
+    }
+  }
+  // `on` est surchargé par nom d'event → on branche explicitement (une boucle sur une union ne typecheck pas).
+  mainWindow.on('show', forceRelayout)
+  mainWindow.on('restore', forceRelayout)
+  mainWindow.on('maximize', forceRelayout)
+  mainWindow.on('unmaximize', forceRelayout)
+  relayoutMainWindow = forceRelayout
 
   mainWindow.on('ready-to-show', () => {
     presentAutomationWindow(mainWindow, headlessTestInstance, { maximize: true })

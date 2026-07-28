@@ -141,6 +141,11 @@ export interface OrchestratorDeps {
    */
   worktrees?: RunWorktrees
   /**
+   * Clôture automatique appelée UNIQUEMENT sur un run vert, APRÈS la fusion du worktree (le travail
+   * est alors dans la base). Best-effort : son échec ne change pas le verdict du run.
+   */
+  closeGreenRun?: RunCloser
+  /**
    * MODE d'orchestration. `sequential` (défaut, rétrocompat HARD) = pipeline phase-par-phase actuel.
    * `greedy` = dispatch completion-driven d'un DAG de sous-tâches (traite chaque sous-agent DÈS son
    * arrivée, enchaîne les avals sans barrière). N'a d'effet que si `decompose` fournit ≥2 sous-tâches ;
@@ -191,6 +196,13 @@ export interface RunWorktrees {
   /** Transfert atomique de l'intention vers le PID enfant. */
   spawned?(runId: string, token: string, pid: number): void
 }
+
+/** Clôture d'un run VERT (commit + publication). Injectée par AutowinOS ; absente ⇒ rien d'automatique. */
+export type RunCloser = (context: {
+  runId: string
+  task: string
+  workCwd: string
+}) => Promise<void>
 
 const MUTATION_TASK =
   /\b(ajout|ajouter|add|modifi|change|corrig|fix|cr[eé]|create|impl[eé]ment|refactor|supprim|remove|renomm|update|build)\w*/i
@@ -358,6 +370,13 @@ export class Orchestrator {
       // garde sa copie isolée (l'exception saute le `green = true` ci-dessus) : on ne ramène plus
       // automatiquement dans la base un travail jugé raté.
       this.deps.worktrees?.end(runId, { merge: green })
+      // Clôture auto APRÈS la fusion (le travail est dans la base) et seulement si vert.
+      // `void` + catch : publier est un service rendu, jamais une raison de faire échouer le run.
+      if (green && this.deps.closeGreenRun) {
+        void this.deps
+          .closeGreenRun({ runId, task, workCwd: this.deps.executionWorkspace })
+          .catch(() => undefined)
+      }
     }
   }
 

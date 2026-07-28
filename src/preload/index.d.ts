@@ -294,6 +294,8 @@ interface ChatApi {
   ) => Promise<import('../shared/git-read').GitDiffResult>
   pickGitRepo: () => Promise<string | null>
   brainRepoPath: () => Promise<string>
+  getAutoClose: () => Promise<{ enabled: boolean; last?: unknown }>
+  setAutoClose: (enabled: boolean) => Promise<{ enabled: boolean; last?: unknown }>
   unfinishedTurns: () => Promise<
     Array<{ conversationId: string; turnId: string; events: number; updatedAt: number }>
   >

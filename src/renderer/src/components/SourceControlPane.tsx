@@ -73,6 +73,28 @@ export function SourceControlPane({
     setRefreshTick((n) => n + 1)
   }
 
+  // Clôture automatique d'un run vert (commit + push sur branche dédiée). OFF par défaut, côté main.
+  const [autoClose, setAutoClose] = useState<{ enabled: boolean; last?: unknown } | null>(null)
+  useEffect(() => {
+    let alive = true
+    void window.api.getAutoClose?.().then((s) => {
+      if (alive) setAutoClose(s as { enabled: boolean })
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+  const toggleAutoClose = async (): Promise<void> => {
+    const next = !(autoClose?.enabled ?? false)
+    setAutoClose({ enabled: next }) // optimiste
+    try {
+      const applied = await window.api.setAutoClose(next)
+      setAutoClose(applied as { enabled: boolean })
+    } catch {
+      setAutoClose({ enabled: !next })
+    }
+  }
+
   // Le Brain partagé est versionné comme le code : on y bascule en un clic pour voir SES diffs.
   const [brainPath, setBrainPath] = useState<string>('')
   useEffect(() => {
@@ -156,6 +178,15 @@ export function SourceControlPane({
               )}
             </div>
             <div className="sc-btns">
+              {/* Quand un run passe au vert : commit + push automatique sur auto/<run>, jamais main. */}
+              <button
+                className={`sc-btn${autoClose?.enabled ? ' is-active' : ''}`}
+                data-testid="sc-autoclose"
+                title="À chaque run VERT : commit + push sur une branche dédiée (projet + Brain). Jamais sur main."
+                onClick={() => void toggleAutoClose()}
+              >
+                Clôture auto {autoClose?.enabled ? '· ON' : '· OFF'}
+              </button>
               <button className="sc-btn" onClick={() => propose('change de branche vers : ')}>
                 Changer de branche
               </button>
