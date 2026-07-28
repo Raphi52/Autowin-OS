@@ -368,7 +368,8 @@ export function ObservatoryView({
   }, [active, refreshKey])
 
   useEffect(() => {
-    if (!active || !conversationId) {
+    if (!active) return
+    if (!conversationId) {
       causalRequestGate.current.begin()
       // Évite d'afficher la timeline de la conversation précédente hors contexte.
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -412,7 +413,9 @@ export function ObservatoryView({
           if (requestSucceeded) setLastRefreshedAt(Date.now())
         }
       })
-  }, [active, conversationId, refreshKey, turnFocus])
+    // A tab change must not reload or clear Observatory's local state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, refreshKey, turnFocus])
 
   useEffect(() => {
     if (

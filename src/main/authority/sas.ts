@@ -39,7 +39,7 @@ export class AuthoritySas {
   private readonly now: () => number
   private nextId = 1
   private readonly decisions = new Map<string, Decision<unknown>>()
-  private readonly resolved = new Set<string>()
+  private readonly resolutions = new Map<string, Resolution<unknown>>()
   private readonly journalLog: Resolution<unknown>[] = []
 
   constructor(now: () => number = () => Date.now()) {
@@ -67,7 +67,7 @@ export class AuthoritySas {
     const t = this.now()
     const result: Decision<unknown>[] = []
     for (const [id, decision] of this.decisions) {
-      if (this.resolved.has(id)) continue
+      if (this.resolutions.has(id)) continue
       if (decision.createdAt + decision.ttlMs <= t) continue
       result.push(decision)
     }
@@ -80,19 +80,18 @@ export class AuthoritySas {
     if (!decision) {
       throw new Error(`AuthoritySas.resolve: id inconnu "${id}"`)
     }
-    if (this.resolved.has(id)) {
-      throw new Error(`AuthoritySas.resolve: id "${id}" déjà résolu`)
-    }
+    const existing = this.resolutions.get(id)
+    if (existing) return existing
     if (!decision.options.includes(choice)) {
       throw new Error(`AuthoritySas.resolve: choix invalide pour "${id}"`)
     }
-    this.resolved.add(id)
     const resolution: Resolution<unknown> = {
       id,
       choice,
       by: 'user',
       at: this.now()
     }
+    this.resolutions.set(id, resolution)
     this.journalLog.push(resolution)
     return resolution
   }
@@ -106,15 +105,15 @@ export class AuthoritySas {
     const t = this.now()
     const produced: Resolution<unknown>[] = []
     for (const [id, decision] of this.decisions) {
-      if (this.resolved.has(id)) continue
+      if (this.resolutions.has(id)) continue
       if (decision.createdAt + decision.ttlMs > t) continue
-      this.resolved.add(id)
       const resolution: Resolution<unknown> = {
         id,
         choice: decision.safeDefault,
         by: 'timeout-default',
         at: t
       }
+      this.resolutions.set(id, resolution)
       this.journalLog.push(resolution)
       produced.push(resolution)
     }
