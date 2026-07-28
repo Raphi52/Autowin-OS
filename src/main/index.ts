@@ -1206,6 +1206,17 @@ function registerChatIpc(): void {
         resolveCompletion = resolve
       })
       const turnId = randomUUID()
+      /**
+       * Plafond d'un TOUR de chat. Réutilise le circuit-breaker déjà éprouvé sur l'orchestration
+       * (module pur, testé) avec un seuil PROPRE au chat : un tour conversationnel n'a pas le même
+       * ordre de grandeur qu'un run complet. Réglable via AUTOWIN_CHAT_USD_CAP ; défaut généreux
+       * (2 $) — assez haut pour ne jamais gêner un tour légitime, assez bas pour arrêter une boucle
+       * (le pire tour mesuré coûtait 2,109 $).
+       */
+      const chatUsdCap = Number(process.env.AUTOWIN_CHAT_USD_CAP)
+      const chatBreaker = new CostCircuitBreaker({
+        maxUsd: Number.isFinite(chatUsdCap) && chatUsdCap > 0 ? chatUsdCap : 2
+      })
       if (conversationId) activeChatTurns.set(conversationId, controller, completion)
       try {
         const safe = (Array.isArray(messages) ? messages : []).slice(-40).map((m) => ({
@@ -1303,6 +1314,25 @@ function registerChatIpc(): void {
           if (pilotEvent.kind === 'command' && pilotEvent.name)
             spoken.push(`[a exécuté ${pilotEvent.name}]`)
           if (pilotEvent.kind === 'done' && pilotEvent.usage) turnUsage = pilotEvent.usage
+          // Budget du TOUR de chat : le circuit-breaker de coût ne protégeait que les runs
+          // orchestrés. Mesuré le 2026-07-28 : un seul tour a coûté 2,109 $ (40 itérations d'outils)
+          // sans qu'aucune borne n'existe côté chat. On compte chaque appel et on COUPE au seuil.
+          if (pilotEvent.kind === 'prompt-call' && pilotEvent.callUsage) {
+            const tripped = chatBreaker.observe({
+              step: 'exec',
+              detail: 'chat',
+              costUsd: pilotEvent.callUsage.costUsd,
+              tokens: pilotEvent.callUsage.inputTokens + pilotEvent.callUsage.outputTokens
+            } as Parameters<typeof chatBreaker.observe>[0])
+            if (tripped) {
+              ledger.append({
+                source: 'orchestrate',
+                name: 'chat-budget',
+                detail: `tour coupé — ${tripped.reason}`
+              })
+              controller.abort(`budget du tour dépassé : ${tripped.reason}`)
+            }
+          }
           if (pilotEvent.kind === 'prompt-call' && pilotEvent.sessionId)
             turnSessionId = pilotEvent.sessionId
           if (pilotEvent.kind === 'prompt-call' && pilotEvent.prompt) {
