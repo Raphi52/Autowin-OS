@@ -1,0 +1,50 @@
+#!/bin/sh
+# Garde-fou anti-collision : INTERDIT le push direct sur la branche par défaut.
+#
+# Contexte : plusieurs devs/agents travaillant sur `main` dans le même checkout ont produit des
+# changements entremêlés, des fichiers supprimés sous les pieds d'une autre session et un HEAD
+# incohérent. Règle de l'équipe (ONBOARDING.md §7) : 1 branche par sujet + Pull Request.
+#
+# Ce hook est DÉTERMINISTE et hors-modèle : il refuse le push, il ne conseille pas.
+# Activation (une fois par machine) : git config core.hooksPath .githooks
+# Échappatoire explicite et tracée : ALLOW_MAIN_PUSH=1 git push
+PROTECTED="main master"
+
+# Branche par défaut du remote si connue (sinon on garde la liste ci-dessus).
+remote_head=$(git symbolic-ref --quiet --short "refs/remotes/$1/HEAD" 2>/dev/null | sed "s|^$1/||")
+[ -n "$remote_head" ] && PROTECTED="$PROTECTED $remote_head"
+
+blocked=""
+while read -r _local_ref local_sha remote_ref _remote_sha; do
+  # Suppression de branche (local_sha tout à zéro) : hors périmètre de ce garde-fou.
+  case "$local_sha" in *[!0]*) ;; *) continue ;; esac
+  target=$(printf '%s' "$remote_ref" | sed 's|^refs/heads/||')
+  for p in $PROTECTED; do
+    [ "$target" = "$p" ] && blocked="$blocked $target"
+  done
+done
+
+# Dédoublonne (un même ref peut matcher via la liste + le HEAD distant).
+blocked=$(printf '%s\n' $blocked | sort -u | tr '\n' ' ' | sed 's/ *$//')
+
+if [ -n "$blocked" ] && [ "$ALLOW_MAIN_PUSH" != "1" ]; then
+  current=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+  cat >&2 <<EOF
+
+  ⛔ Push direct refusé sur : $blocked
+
+  Règle d'équipe : 1 branche par sujet + Pull Request (ONBOARDING.md §7).
+  Pousser tous sur la même branche = changements entremêlés et travail écrasé.
+
+  Marche à suivre depuis ta branche courante ($current) :
+
+    git switch -c feat/<sujet>       # si tu es encore sur $blocked
+    git push -u origin feat/<sujet>
+    # puis ouvrir la Pull Request vers $blocked
+
+  Exception assumée et tracée (hotfix) :  ALLOW_MAIN_PUSH=1 git push
+
+EOF
+  exit 1
+fi
+exit 0

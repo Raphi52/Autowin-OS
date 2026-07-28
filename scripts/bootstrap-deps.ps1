@@ -38,6 +38,29 @@ Step "Prérequis"
 if (-not (Have 'node')) { throw "node/npm requis (installer Node.js d'abord)." }
 Ok "node $(node --version)"
 
+# --- Garde-fou git partagé (anti-collision : push direct sur main refusé) ---
+Step "Hooks git partagés (.githooks)"
+if (Have 'git') {
+  if ((git config --get core.hooksPath) -eq '.githooks') { Ok "core.hooksPath déjà sur .githooks" }
+  else {
+    git config core.hooksPath .githooks
+    if ($LASTEXITCODE -eq 0) { Ok "core.hooksPath = .githooks (push direct sur main refusé)" }
+    else { Warn "échec — le faire à la main : git config core.hooksPath .githooks" }
+  }
+} else { Warn "git absent — hooks partagés non activés." }
+
+# --- Garde-fou git partagé (anti-collision) ---
+Step "Hooks git partagés (.githooks)"
+if (Have 'git') {
+  $current = (git config --get core.hooksPath) 2>$null
+  if ($current -eq '.githooks') { Ok "core.hooksPath déjà sur .githooks" }
+  else {
+    git config core.hooksPath .githooks
+    if ($LASTEXITCODE -eq 0) { Ok "core.hooksPath = .githooks (push direct sur main refusé)" }
+    else { Warn "échec git config core.hooksPath — le faire à la main : git config core.hooksPath .githooks" }
+  }
+} else { Warn "git absent — impossible d'activer les hooks partagés." }
+
 # --- CLI providers ---
 if (-not $SkipCli) {
   Step "CLI providers (npm global)"

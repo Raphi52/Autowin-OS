@@ -62,15 +62,34 @@ npm run lint
 
 ## 7. Workflow de contribution (IMPORTANT — collaboration multi-devs)
 
+**Activation obligatoire, une fois par clone** (garde-fou déterministe, pas un conseil) :
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Le hook `pre-push` **refuse** alors tout push direct sur `main` et rappelle la marche à suivre.
+Exception hotfix, explicite et tracée : `ALLOW_MAIN_PUSH=1 git push`. (`npm run bootstrap:deps`
+l'active automatiquement.)
+
 Ne travaillez **jamais tous sur la même branche** : le working tree se retrouve avec des changements
-entremêlés impossibles à committer proprement. Règle :
+entremêlés impossibles à committer proprement — vécu sur ce repo (fichiers supprimés sous une autre
+session, HEAD incohérent). Règle :
 
 1. Partir de `main` à jour : `git checkout main && git pull`.
 2. Créer **sa** branche : `git checkout -b feat/<sujet>` (ou `fix/<sujet>`).
 3. Committer par petits pas vérifiés (typecheck + tests verts avant chaque commit).
 4. Pousser : `git push -u origin feat/<sujet>`.
-5. Ouvrir une **Pull Request** vers `main` ; faire relire, puis merger.
+5. Ouvrir une **Pull Request** vers `main` (le gabarit `.github/pull_request_template.md` se
+   pré-remplit : ce que ça change, la **preuve de vérification**, le périmètre) ; faire relire, puis merger.
 6. Une branche = un sujet. Ne pas mélanger deux features dans le même working tree.
+
+**Deux personnes ou deux agents en parallèle ?** N'utilisez jamais le même checkout — donnez à chacun
+son propre working tree, sinon vos fichiers se marchent dessus (vécu ici) :
+
+```bash
+git worktree add ../autowin-<sujet> -b feat/<sujet>
+```
 
 ## 8. Repères de structure
 
