@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Markdown, extractRecommendation } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
 import { SourceControlPane } from './SourceControlPane'
+import { ScoutTable } from './ScoutTable'
 import { ModuleHeader } from './ModuleHeader'
 import { pickTurnToResume, type UnfinishedTurn } from './resume-unfinished'
 import {
@@ -379,6 +380,12 @@ const ChatMessageRow = memo(
               <SuggestionGrid
                 key={index}
                 groups={part.groups}
+                onPick={(prompt) => onPickSuggestion?.(prompt)}
+              />
+            ) : part.kind === 'scout-table' ? (
+              <ScoutTable
+                key={index}
+                rows={part.rows}
                 onPick={(prompt) => onPickSuggestion?.(prompt)}
               />
             ) : (
