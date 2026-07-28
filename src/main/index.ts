@@ -37,6 +37,12 @@ import { TraceLedger } from './activity/ledger'
 import { listSessions, parseSession } from './activity/transcripts'
 import { persistConversations } from './store/conversations-disk'
 import { listConvRuns, loadConvRunTrace } from './runs/conv-runs'
+import {
+  appendTurnEvent,
+  listUnfinishedTurns,
+  pruneFinishedTurnJournals,
+  readTurnJournal
+} from './runs/turn-journal'
 import { appendConvActivity, loadConvActivity } from './activity/conv-activity'
 import {
   appendPromptCall,
@@ -138,7 +144,7 @@ if (!explicitUserDataDir) app.setPath('userData', canonicalAppDataRoot)
 // à l'écran en tuant la nouvelle. Le lock n'est appliqué que sur le build packagé.
 const ownsInstanceLock = isolatedTestInstance || !app.isPackaged || app.requestSingleInstanceLock()
 if (!ownsInstanceLock) app.quit()
-else ensureAutowinAppData(appDataRoot)
+else configureTurnTiming(ensureAutowinAppData(appDataRoot))
 
 /** Noyau applicatif unique (P0-P4 câblés) : kit SOUL injecté, 2 voies, modules. */
 const os = new AutowinOS()
@@ -170,16 +176,12 @@ const conversationRouteCoordinator = new ConversationRouteCoordinator(
 const modelQuestions = new ModelQuestionHub()
 const activeChatTurns = new ActiveChatTurns()
 /** Directives utilisateur injectées PENDANT un tour, par conversation (drainées à chaque itération). */
-const pendingDirectives = new Map<
-  string,
-  Array<{ directive: string; resolve: (consumed: boolean) => void }>
->()
+const pendingDirectives = new Map<string, string[]>()
 function drainPendingDirectives(conversationId: string): string[] {
   const queued = pendingDirectives.get(conversationId) ?? []
   pendingDirectives.delete(conversationId)
   if (queued.length) broadcast({ type: 'refresh', scope: 'directives' })
-  queued.forEach((entry) => entry.resolve(true))
-  return queued.map((entry) => entry.directive)
+  return queued
 }
 const questionWindows = new Map<string, BrowserWindow>()
 const diagnosticCapabilities = new DiagnosticCapabilities()
@@ -422,6 +424,8 @@ function askModelQuestion(
   })
 }
 /** Ledger d'activité in-app : chaque action d'agent laisse une trace consultable. */
+/** Journaux de tour (survie niveau 2 : rejeu/reprise après fermeture complète de l'app). */
+const turnJournalRoot = join(app.getPath('userData'), 'turn-journals')
 const ledger = new TraceLedger(join(app.getPath('userData'), 'trace'))
 const causalTrace = new TraceStore(join(app.getPath('userData'), 'causal-trace'))
 
@@ -557,6 +561,25 @@ function registerChatIpc(): void {
     controller.abort()
     ticketRequests.delete(requestId)
     return true
+  })
+  // Survie niveau 2 : au démarrage, le renderer demande les tours restés INACHEVÉS (app fermée en
+  // pleine exécution) pour les rejouer/afficher. GC des journaux terminés au passage.
+  ipcMain.handle('runs:unfinishedTurns', (event) => {
+    assertTrustedRendererSender(event, 'UnfinishedTurns')
+    try {
+      pruneFinishedTurnJournals(turnJournalRoot)
+    } catch {
+      /* GC best-effort */
+    }
+    return listUnfinishedTurns(turnJournalRoot)
+  })
+  ipcMain.handle('runs:turnJournal', (event, conversationId: string, turnId: string) => {
+    assertTrustedRendererSender(event, 'TurnJournal')
+    return readTurnJournal(
+      turnJournalRoot,
+      guardString(conversationId, 'conversationId'),
+      guardString(turnId, 'turnId')
+    )
   })
   // Auto-update git : check au démarrage (non-bloquant) + application 1-clic (pull + relaunch).
   ipcMain.handle('update:check', (event) => {
@@ -1189,7 +1212,19 @@ function registerChatIpc(): void {
           else if (pilotEvent.kind === 'done')
             durableEvent = { kind: 'done', sessionId: turnSessionId }
           else if (pilotEvent.kind === 'cancellation') durableEvent = { kind: 'cancelled' }
-          if (durableEvent) os.conversations.applyTurnEvent(conversationId, turnId, durableEvent)
+          if (durableEvent) {
+            os.conversations.applyTurnEvent(conversationId, turnId, durableEvent)
+            // Survie niveau 2 : le même événement va AUSSI dans le journal fichier du tour, pour
+            // pouvoir repérer/rejouer un tour resté inachevé après une fermeture complète de l'app.
+            try {
+              appendTurnEvent(turnJournalRoot, conversationId, turnId, {
+                ...durableEvent,
+                at: Date.now()
+              })
+            } catch {
+              /* journal best-effort : ne jamais casser un tour pour une écriture de trace */
+            }
+          }
         }
         const handlePilotEvent = (pilotEvent: PilotEvent): void => {
           if (pilotEvent.kind === 'delta' && pilotEvent.text) streamedSpoken += pilotEvent.text
@@ -1401,11 +1436,9 @@ function registerChatIpc(): void {
       } finally {
         if (conversationId) {
           activeChatTurns.delete(conversationId, controller)
-          const staleDirectives = pendingDirectives.get(conversationId) ?? []
           if (pendingDirectives.delete(conversationId)) {
             // directives non consommées = obsolètes
             broadcast({ type: 'refresh', scope: 'directives' })
-            staleDirectives.forEach((entry) => entry.resolve(false))
           }
         }
         resolveCompletion()
@@ -1430,12 +1463,11 @@ function registerChatIpc(): void {
     const directive = guardString(rawDirective, 'directive').trim()
     if (!directive) return { ok: false }
     if (!activeChatTurns.get(conversationId)) return { ok: false }
-    return new Promise<{ ok: boolean }>((resolve) => {
-      const queued = pendingDirectives.get(conversationId) ?? []
-      queued.push({ directive, resolve: (consumed) => resolve({ ok: consumed }) })
-      pendingDirectives.set(conversationId, queued)
-      broadcast({ type: 'refresh', scope: 'directives' })
-    })
+    const queued = pendingDirectives.get(conversationId) ?? []
+    queued.push(directive)
+    pendingDirectives.set(conversationId, queued)
+    broadcast({ type: 'refresh', scope: 'directives' })
+    return { ok: true }
   })
 
   ipcMain.handle(

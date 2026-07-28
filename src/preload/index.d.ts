@@ -288,6 +288,10 @@ interface ChatApi {
     repoPath?: string
   ) => Promise<import('../shared/git-read').GitDiffResult>
   pickGitRepo: () => Promise<string | null>
+  unfinishedTurns: () => Promise<
+    Array<{ conversationId: string; turnId: string; events: number; updatedAt: number }>
+  >
+  turnJournal: (conversationId: string, turnId: string) => Promise<Array<Record<string, unknown>>>
   checkUpdate: () => Promise<{
     available: boolean
     behind: number
