@@ -28,6 +28,41 @@
   color: var(--gold, #e9bd4e);
   font-size: 10px;
 }
+
+/* Interrupteur de clôture auto : l'état doit se lire d'un coup d'œil (couleur + pastille + mot),
+   pas seulement à la nuance de bordure — ON signifie « ça publiera tout seul », ça ne se devine pas. */
+.sc-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sc-toggle-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.sc-toggle-state {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.sc-toggle.is-on {
+  border-color: rgba(104, 238, 183, 0.75);
+  color: #68eeb7;
+  background: rgba(104, 238, 183, 0.14);
+}
+.sc-toggle.is-on .sc-toggle-dot {
+  box-shadow: 0 0 6px rgba(104, 238, 183, 0.9);
+}
+.sc-toggle.is-off {
+  border-color: var(--line, #262b33);
+  color: var(--text-faint, #6b727c);
+  background: transparent;
+}
+.sc-toggle.is-off .sc-toggle-dot {
+  background: var(--text-faint, #6b727c);
+  opacity: 0.6;
+}
 .sc-repo-path {
   flex: 1;
   font-size: 11.5px;

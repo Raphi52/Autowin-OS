@@ -180,12 +180,19 @@ export function SourceControlPane({
             <div className="sc-btns">
               {/* Quand un run passe au vert : commit + push automatique sur auto/<run>, jamais main. */}
               <button
-                className={`sc-btn${autoClose?.enabled ? ' is-active' : ''}`}
+                className={`sc-btn sc-toggle ${autoClose?.enabled ? 'is-on' : 'is-off'}`}
                 data-testid="sc-autoclose"
-                title="À chaque run VERT : commit + push sur une branche dédiée (projet + Brain). Jamais sur main."
+                aria-pressed={autoClose?.enabled ?? false}
+                title={
+                  autoClose?.enabled
+                    ? 'ACTIVÉE — chaque run vert sera commité et poussé sur une branche dédiée (jamais main). Clic : désactiver.'
+                    : 'DÉSACTIVÉE — rien n’est publié automatiquement. Clic : activer.'
+                }
                 onClick={() => void toggleAutoClose()}
               >
-                Clôture auto {autoClose?.enabled ? '· ON' : '· OFF'}
+                <span className="sc-toggle-dot" aria-hidden="true" />
+                Clôture auto
+                <b className="sc-toggle-state">{autoClose?.enabled ? 'ON' : 'OFF'}</b>
               </button>
               <button className="sc-btn" onClick={() => propose('change de branche vers : ')}>
                 Changer de branche
