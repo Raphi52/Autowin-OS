@@ -74,6 +74,47 @@ export const DEFAULT_IMPORTED_MODELS: ImportedModel[] = [
     label: 'Kimi Code · compte OAuth',
     reasoningEfforts: ['none'],
     defaultReasoningEffort: 'none'
+  },
+  {
+    // Modèles réellement exposés par Antigravity 1.1.4 au compte Google local.
+    id: 'gemini/Gemini 3.5 Flash (Low)',
+    provider: 'gemini',
+    model: 'Gemini 3.5 Flash (Low)',
+    label: 'Gemini 3.5 Flash · Low',
+    reasoningEfforts: ['none'],
+    defaultReasoningEffort: 'none'
+  },
+  {
+    id: 'gemini/Gemini 3.5 Flash (Medium)',
+    provider: 'gemini',
+    model: 'Gemini 3.5 Flash (Medium)',
+    label: 'Gemini 3.5 Flash · Medium',
+    reasoningEfforts: ['none'],
+    defaultReasoningEffort: 'none'
+  },
+  {
+    id: 'gemini/Gemini 3.5 Flash (High)',
+    provider: 'gemini',
+    model: 'Gemini 3.5 Flash (High)',
+    label: 'Gemini 3.5 Flash · High',
+    reasoningEfforts: ['none'],
+    defaultReasoningEffort: 'none'
+  },
+  {
+    id: 'gemini/Gemini 3.1 Pro (Low)',
+    provider: 'gemini',
+    model: 'Gemini 3.1 Pro (Low)',
+    label: 'Gemini 3.1 Pro · Low',
+    reasoningEfforts: ['none'],
+    defaultReasoningEffort: 'none'
+  },
+  {
+    id: 'gemini/Gemini 3.1 Pro (High)',
+    provider: 'gemini',
+    model: 'Gemini 3.1 Pro (High)',
+    label: 'Gemini 3.1 Pro · High',
+    reasoningEfforts: ['none'],
+    defaultReasoningEffort: 'none'
   }
 ]
 
@@ -183,7 +224,9 @@ export async function discoverImportedModels(
     return [
       ...codexModels,
       ...discovered,
-      ...DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'kimi')
+      ...DEFAULT_IMPORTED_MODELS.filter(
+        (model) => model.provider === 'kimi' || model.provider === 'gemini'
+      )
     ]
   } catch {
     return [

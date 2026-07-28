@@ -300,7 +300,7 @@ interface ChatApi {
   >
   saveProfile: (profile: unknown) => Promise<unknown[]>
   applyProfile: (id: string) => Promise<{ topology: AgentTopology }>
-  kimiLogin: () => Promise<{ ok: true }>
+  providerLogin: (provider: string) => Promise<{ ok: true }>
   topology: () => Promise<AgentTopology>
   setTopology: (topology: AgentTopology) => Promise<AgentTopology>
   capabilityProfiles: () => Promise<CapabilityProfileState>

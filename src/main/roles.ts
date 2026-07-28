@@ -20,7 +20,8 @@ const PROVIDER_DEFAULT_SELECTIONS: Record<
 > = {
   claude: { model: 'claude-fable-5', reasoningEffort: 'high' },
   codex: { model: 'gpt-5.6-terra', reasoningEffort: 'medium' },
-  kimi: { model: 'kimi-code/kimi-for-coding', reasoningEffort: 'none' }
+  kimi: { model: 'kimi-code/kimi-for-coding', reasoningEffort: 'none' },
+  gemini: { model: 'Gemini 3.5 Flash (Low)', reasoningEffort: 'none' }
 }
 
 /** Rend explicite ce que l'adaptateur utiliserait sinon implicitement. */

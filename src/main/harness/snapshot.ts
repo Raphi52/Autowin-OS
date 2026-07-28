@@ -814,6 +814,35 @@ export function composeHarnessSnapshot(input: HarnessSnapshotInput): HarnessSnap
     })
   ]
 
+  // Les providers peuvent être ajoutés par configuration : le Harnais ne doit pas
+  // nécessiter un nouveau bloc codé en dur pour les rendre observables.
+  const existingProviderIds = new Set(
+    nodes.filter((node) => node.kind === 'provider').map((node) => node.provider)
+  )
+  for (const [index, provider] of [...new Set(input.providers)].sort().entries()) {
+    if (existingProviderIds.has(provider)) continue
+    nodes.push(
+      makeNode({
+        id: `provider-${provider}`,
+        kind: 'provider',
+        label: `Provider · ${provider}`,
+        layer: 'runtime',
+        source: 'provider-boundary',
+        state: 'unknown',
+        runtime: 'provider',
+        level: 'expert',
+        provider,
+        flows: ['chat', 'orchestration'],
+        order: 8 + index,
+        evidence: { source: 'provider-boundary', ref: `main/providers/${provider}.ts` },
+        roleDesc: `Adaptateur ${provider} enregistré dans le routeur de modèles.`,
+        observed: 'Le routage, la consigne remise à l’adaptateur et les métriques remontées.',
+        notObserved: 'La liveness distante : aucune sonde auth() n’est lancée depuis cette vue.',
+        references: [`main/providers/${provider}.ts`, 'main/providers/registry.ts']
+      })
+    )
+  }
+
   const edges: HarnessEdge[] = [
     // Chat — récit débutant : Vous → Autowin → modèle → (résultat)
     edge('you', 'autowin', 'invokes', ['chat', 'pilotage'], 'both', 'demande'),
@@ -870,6 +899,28 @@ export function composeHarnessSnapshot(input: HarnessSnapshotInput): HarnessSnap
     edge('kaizen', 'hooks', 'observes', ['observability'], 'expert'),
     edge('orchestrator', 'runs', 'persists', ['observability'], 'both', 'attache RUN.md')
   ]
+
+  const edgeIds = new Set(edges.map((item) => item.id))
+  const addEdge = (item: HarnessEdge): void => {
+    if (!edgeIds.has(item.id)) {
+      edges.push(item)
+      edgeIds.add(item.id)
+    }
+  }
+  const roleProviders = [
+    ['orchestrator', orchestratorProvider],
+    ['subagent', subagentProvider],
+    ['scout', scoutProvider],
+    ['judge', judgeProvider]
+  ] as const
+  for (const [role, provider] of roleProviders) {
+    addEdge(edge(role, `provider-${provider}`, 'routes', ['orchestration'], 'expert'))
+  }
+  for (const provider of [...new Set(input.providers)]) {
+    addEdge(
+      edge(`provider-${provider}`, 'model', 'executes', ['chat', 'orchestration'], 'expert')
+    )
+  }
 
   // Caps stricts + payload borné.
   const cappedNodes = nodes.slice(0, MAX_HARNESS_NODES)

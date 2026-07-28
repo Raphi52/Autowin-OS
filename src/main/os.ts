@@ -8,6 +8,7 @@ import { ProviderRegistry } from './providers/registry'
 import { ClaudeCliAdapter } from './providers/claude'
 import { CodexAdapter } from './providers/codex'
 import { KimiCliAdapter } from './providers/kimi'
+import { GeminiCliAdapter } from './providers/gemini'
 import type { Message } from './providers/types'
 import { loadKitSoul } from './kit'
 import { RoleModelConfig, type Role, type RoleBinding } from './roles'
@@ -75,6 +76,7 @@ export class AutowinOS {
       .register(new ClaudeCliAdapter())
       .register(new CodexAdapter())
       .register(new KimiCliAdapter())
+      .register(new GeminiCliAdapter())
     this.orchestrator = new Orchestrator({
       registry: this.registry,
       roles: this.roles,
@@ -109,10 +111,10 @@ export class AutowinOS {
     return { text: r.text, provider: r.provider, systemInjected: r.systemInjected }
   }
 
-  startKimiLogin(): void {
-    const kimi = this.registry.get('kimi')
-    if (!(kimi instanceof KimiCliAdapter)) throw new Error('Pont Kimi Code indisponible.')
-    kimi.startLogin()
+  startProviderLogin(provider: string): void {
+    const adapter = this.registry.get(provider)
+    if (!adapter.startLogin) throw new Error(`Le provider ${provider} n'expose pas de connexion interactive.`)
+    adapter.startLogin()
   }
 
   /** Change le binding d'un rôle ET persiste sur disque. */

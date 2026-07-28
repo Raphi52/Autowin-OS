@@ -5,6 +5,16 @@ import { appendClaudeSelectionArgs } from './providers/claude'
 const noCodexAuth = (): null => null
 
 describe('catalogue Agents dynamique', () => {
+  it('expose Gemini via le compte Google du CLI officiel, sans clé API', () => {
+    expect(DEFAULT_IMPORTED_MODELS).toContainEqual(
+      expect.objectContaining({
+        id: 'gemini/Gemini 3.5 Flash (Low)',
+        provider: 'gemini',
+        model: 'Gemini 3.5 Flash (Low)'
+      })
+    )
+  })
+
   it('expose Kimi Code compte comme modèle sélectionnable, sans API key', () => {
     expect(DEFAULT_IMPORTED_MODELS).toContainEqual(
       expect.objectContaining({
@@ -28,7 +38,12 @@ describe('catalogue Agents dynamique', () => {
       'gpt-5.6-terra',
       'claude-fable-5',
       'claude-opus-4-8',
-      'kimi-code/kimi-for-coding'
+      'kimi-code/kimi-for-coding',
+      'Gemini 3.5 Flash (Low)',
+      'Gemini 3.5 Flash (Medium)',
+      'Gemini 3.5 Flash (High)',
+      'Gemini 3.1 Pro (Low)',
+      'Gemini 3.1 Pro (High)'
     ])
     expect(models.find((model) => model.model === 'claude-fable-5')?.reasoningEfforts).toEqual([
       'low',
@@ -92,7 +107,12 @@ describe('catalogue Agents dynamique', () => {
       'gpt-5.6-sol',
       'gpt-5.4-mini',
       'claude-fable-5',
-      'kimi-code/kimi-for-coding'
+      'kimi-code/kimi-for-coding',
+      'Gemini 3.5 Flash (Low)',
+      'Gemini 3.5 Flash (Medium)',
+      'Gemini 3.5 Flash (High)',
+      'Gemini 3.1 Pro (Low)',
+      'Gemini 3.1 Pro (High)'
     ])
     expect(models[0]).toMatchObject({
       id: 'codex/gpt-5.6-sol',

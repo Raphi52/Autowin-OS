@@ -16,7 +16,7 @@ function baseInput(overrides: Partial<HarnessSnapshotInput> = {}): HarnessSnapsh
       judge: { provider: 'claude' },
       scout: { provider: 'codex' }
     },
-    providers: ['claude', 'codex'],
+    providers: ['claude', 'codex', 'gemini'],
     activeModel: { id: 'claude-opus', provider: 'claude' },
     kit: { injected: true, size: 4096 },
     counts: {
@@ -103,6 +103,28 @@ describe('composeHarnessSnapshot — honnêteté des statuts', () => {
     for (const node of snap.nodes.filter((n) => n.kind === 'model' || n.kind === 'provider')) {
       expect(node.state).toBe('unknown')
     }
+  })
+
+  it('ajoute dynamiquement les providers et leurs routes sans liste codée en dur', () => {
+    const snap = composeHarnessSnapshot(
+      baseInput({
+        providers: ['claude', 'codex', 'gemini', 'futur'],
+        roleBindings: {
+          orchestrator: { provider: 'gemini' },
+          subagent: { provider: 'futur' },
+          judge: { provider: 'claude' },
+          scout: { provider: 'codex' }
+        }
+      })
+    )
+    expect(snap.nodes.find((node) => node.id === 'provider-gemini')?.provider).toBe('gemini')
+    expect(snap.nodes.find((node) => node.id === 'provider-futur')?.provider).toBe('futur')
+    expect(snap.edges).toContainEqual(
+      expect.objectContaining({ from: 'orchestrator', to: 'provider-gemini', kind: 'routes' })
+    )
+    expect(snap.edges).toContainEqual(
+      expect.objectContaining({ from: 'provider-futur', to: 'model', kind: 'executes' })
+    )
   })
 
   it('maps a null inventory count to unknown, an empty one to inactive', () => {
