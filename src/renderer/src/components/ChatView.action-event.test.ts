@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { createChatTurn, reduceChatTurn, type ChatTurnEvent } from '../../../shared/chat-turn'
 import { AssistantActionEvent, AssistantActivityGroup } from './ChatView.parts'
+import { hydrateStoredAssistant, reduceAssistantPilotEvent } from './chat-view-model'
 
 function renderActivity(events: ChatTurnEvent[]): string {
   const turn = events.reduce(reduceChatTurn, createChatTurn('turn-actions'))
@@ -100,5 +101,52 @@ describe('AssistantActivityGroup', () => {
     expect(html).toContain('1 action avec erreur')
     expect(html).toContain('échec')
     expect(html).not.toContain('en cours')
+  })
+})
+
+describe('réconciliation des actions jamais résolues', () => {
+  it('un tour CLOS ne laisse aucune action « en cours » (bug de l’indicateur collé)', () => {
+    const message = [
+      { kind: 'command' as const, actionId: 'orch', name: 'orchestrate' },
+      { kind: 'done' as const }
+    ].reduce(
+      (m, event) => reduceAssistantPilotEvent(m, event as never),
+      hydrateStoredAssistant({ content: '', parts: [], status: 'streaming' })
+    )
+    const actions = message.parts.filter((part) => part.kind === 'action')
+
+    expect(message.done).toBe(true)
+    expect(actions[0]).toMatchObject({ interrupted: true })
+    const html = renderToStaticMarkup(createElement(AssistantActivityGroup, { actions }))
+    expect(html).not.toContain('en cours')
+    expect(html).toContain('interrompue')
+  })
+
+  it('une conversation RECHARGÉE après fermeture ne montre plus d’action en cours', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: '',
+      status: 'completed',
+      parts: [{ kind: 'action', actionId: 'orch', name: 'orchestrate' }]
+    })
+    const actions = hydrated.parts.filter((part) => part.kind === 'action')
+
+    expect(actions[0]).toMatchObject({ interrupted: true })
+    expect(renderToStaticMarkup(createElement(AssistantActivityGroup, { actions }))).not.toContain(
+      'en cours'
+    )
+  })
+
+  it('n’altère PAS une action réellement en cours (tour encore en streaming)', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: '',
+      status: 'streaming',
+      parts: [{ kind: 'action', actionId: 'orch', name: 'orchestrate' }]
+    })
+    const actions = hydrated.parts.filter((part) => part.kind === 'action')
+
+    expect(actions[0]).not.toHaveProperty('interrupted')
+    expect(renderToStaticMarkup(createElement(AssistantActivityGroup, { actions }))).toContain(
+      'en cours'
+    )
   })
 })

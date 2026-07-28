@@ -13,6 +13,13 @@ export interface PersistedChatActionPart {
   args?: unknown
   ok?: boolean
   data?: unknown
+  /**
+   * Le tour s'est clos sans que le résultat de cette action arrive (fermeture de l'app, annulation,
+   * erreur) : on ne saura JAMAIS son issue. Distinct de `ok: false` (échec constaté) et de
+   * `ok === undefined` seul, qui signifierait « encore en cours » — et laissait l'indicateur
+   * « N action en cours » collé indéfiniment.
+   */
+  interrupted?: boolean
 }
 
 export type PersistedChatPart = PersistedChatTextPart | PersistedChatActionPart

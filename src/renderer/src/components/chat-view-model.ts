@@ -125,16 +125,34 @@ export interface AssistantPilotEvent {
   data?: unknown
 }
 
+/**
+ * Réconcilie l'état DÉRIVÉ des actions d'un tour terminé : une action sans résultat n'est pas
+ * « en cours », elle est INTERROMPUE (le tour est clos, son issue ne viendra jamais). Sans ça,
+ * l'indicateur « N action en cours » restait collé indéfiniment — y compris après un redémarrage.
+ */
+export function settleUnresolvedActions(parts: ChatPart[]): ChatPart[] {
+  let changed = false
+  const settled = parts.map((part) => {
+    if (part.kind !== 'action' || part.ok !== undefined || part.interrupted) return part
+    changed = true
+    return { ...part, interrupted: true }
+  })
+  return changed ? settled : parts
+}
+
 export function hydrateStoredAssistant(message: StoredAssistantMessage): HydratedAssistantMessage {
   const status = message.status ?? 'completed'
+  const done = status !== 'streaming'
+  const parts =
+    message.parts?.map((part) => ({ ...part })) ??
+    (message.content ? [{ kind: 'text' as const, text: message.content }] : [])
   return {
     role: 'assistant',
     ...(message.turnId ? { turnId: message.turnId } : {}),
-    parts:
-      message.parts?.map((part) => ({ ...part })) ??
-      (message.content ? [{ kind: 'text', text: message.content }] : []),
+    // Tour déjà clos à la relecture (dont : app fermée en plein run) → plus rien « en cours ».
+    parts: done ? settleUnresolvedActions(parts) : parts,
     status,
-    done: status !== 'streaming',
+    done,
     ...(message.error ? { error: message.error } : {})
   }
 }
@@ -204,12 +222,14 @@ export function reduceAssistantPilotEvent(
     },
     turnEvent
   )
+  const done = next.status !== 'streaming'
   return {
     role: 'assistant',
     turnId,
-    parts: next.parts,
+    // Le tour se clôt (done / erreur / annulation) → aucune action ne peut rester « en cours ».
+    parts: done ? settleUnresolvedActions(next.parts) : next.parts,
     status: next.status,
-    done: next.status !== 'streaming',
+    done,
     ...(next.error ? { error: next.error } : {})
   }
 }

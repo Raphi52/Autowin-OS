@@ -167,9 +167,17 @@ export function AssistantActionEvent({ part }: { part: ChatActionPart }): React.
   return (
     <details className={`action-event${part.ok === false ? ' failed' : ''}`}>
       <summary>
+        {/* Une action interrompue n'est ni en cours (pas de spinner) ni en échec : état terminal
+            honnête « issue inconnue », sinon l'indicateur tourne pour toujours. */}
         <span
           className={`status-dot ${
-            part.ok === undefined ? 'st-info' : part.ok ? 'st-ok' : 'st-err'
+            part.interrupted
+              ? 'st-warn'
+              : part.ok === undefined
+                ? 'st-info'
+                : part.ok
+                  ? 'st-ok'
+                  : 'st-err'
           }`}
         />
         <span className="action-name">{CMD_LABEL[part.name] ?? part.name}</span>
@@ -177,9 +185,15 @@ export function AssistantActionEvent({ part }: { part: ChatActionPart }): React.
           <span className="action-args mono">{JSON.stringify(part.args).slice(0, 96)}</span>
         )}
         <span className="action-status">
-          {part.ok === undefined ? 'en cours' : part.ok ? 'réussi' : 'échec'}
+          {part.interrupted
+            ? 'interrompue'
+            : part.ok === undefined
+              ? 'en cours'
+              : part.ok
+                ? 'réussi'
+                : 'échec'}
         </span>
-        {part.ok === undefined && <span className="spinner" />}
+        {part.ok === undefined && !part.interrupted && <span className="spinner" />}
       </summary>
       <div className="action-detail">
         {part.args != null && (
@@ -196,7 +210,11 @@ export function AssistantActionEvent({ part }: { part: ChatActionPart }): React.
         )}
         {part.args == null && part.data == null && (
           <span className="c-faint">
-            {part.ok === undefined ? 'Action en cours…' : 'Aucun détail supplémentaire.'}
+            {part.interrupted
+              ? 'Action interrompue — son résultat n’est jamais revenu.'
+              : part.ok === undefined
+                ? 'Action en cours…'
+                : 'Aucun détail supplémentaire.'}
           </span>
         )}
       </div>
@@ -212,24 +230,36 @@ export function AssistantActivityGroup({
   onOpenLiveAction?: () => void
 }): React.JSX.Element {
   const failed = actions.some((action) => action.ok === false)
-  const runningCount = actions.filter((action) => action.ok === undefined).length
+  // « En cours » = sans résultat ET non interrompue. Une action interrompue (tour clos sans son
+  // résultat) n'est PAS en cours : c'est ce qui laissait l'indicateur tourner indéfiniment.
+  const runningCount = actions.filter(
+    (action) => action.ok === undefined && !action.interrupted
+  ).length
+  const interruptedCount = actions.filter((action) => action.interrupted).length
   const completedCount = actions.filter((action) => action.ok === true).length
   const running = runningCount > 0
+  const plural = (n: number, word: string): string => `${n} ${word}${n > 1 ? 's' : ''}`
   const status = running
     ? completedCount > 0
-      ? `${completedCount} action${completedCount > 1 ? 's' : ''} terminée${
-          completedCount > 1 ? 's' : ''
-        } · ${runningCount} action${runningCount > 1 ? 's' : ''} en cours`
-      : `${actions.length} action${actions.length > 1 ? 's' : ''} en cours`
+      ? `${plural(completedCount, 'action')} terminée${completedCount > 1 ? 's' : ''} · ${plural(runningCount, 'action')} en cours`
+      : `${plural(actions.length, 'action')} en cours`
     : failed
-      ? `${actions.length} action${actions.length > 1 ? 's' : ''} avec erreur`
-      : actions.length > 1
-        ? `${actions.length} actions terminées`
-        : '1 action terminée'
+      ? `${plural(actions.length, 'action')} avec erreur`
+      : interruptedCount > 0
+        ? completedCount > 0
+          ? `${plural(completedCount, 'action')} terminée${completedCount > 1 ? 's' : ''} · ${plural(interruptedCount, 'action')} interrompue${interruptedCount > 1 ? 's' : ''}`
+          : `${plural(interruptedCount, 'action')} interrompue${interruptedCount > 1 ? 's' : ''}`
+        : actions.length > 1
+          ? `${actions.length} actions terminées`
+          : '1 action terminée'
   return (
     <details className={`activity-group${failed ? ' failed' : ''}`}>
       <summary>
-        <span className={`status-dot ${running ? 'st-info' : failed ? 'st-err' : 'st-ok'}`} />
+        <span
+          className={`status-dot ${
+            running ? 'st-info' : failed ? 'st-err' : interruptedCount > 0 ? 'st-warn' : 'st-ok'
+          }`}
+        />
         {running && onOpenLiveAction ? (
           // Indicateur « action en cours » cliquable → ouvre Workflows sur le run/step actif.
           <button
