@@ -652,4 +652,46 @@ describe('vue Tickets', () => {
     expect(container.querySelector('input[type="password"]')).toBeNull()
     await act(async () => root.unmount())
   })
+
+  it('MODE AUTO : cocher n’engage RIEN sur les tickets déjà affichés (amorce)', async () => {
+    const orchestrate = vi.fn(async () => ({ ok: true }))
+    api({
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      conversationsCreate: vi.fn(async () => ({ id: 'c' })),
+      conversationsSetAuthorityMode: vi.fn(async () => ({})),
+      orchestrate
+    })
+    const { root, container } = await render()
+    const auto = container.querySelector(
+      '[data-testid="tickets-mode-auto"] input'
+    ) as HTMLInputElement
+    await act(async () => {
+      auto.click()
+      for (let i = 0; i < 10; i++) await Promise.resolve()
+    })
+    // Les 3 tickets deja presents ne doivent DECLENCHER AUCUN run.
+    expect(orchestrate).not.toHaveBeenCalled()
+    expect(container.querySelector('[data-testid="tickets-auto-status"]')?.textContent).toContain(
+      'déjà présents ignorés'
+    )
+    await act(async () => root.unmount())
+  })
+
+  it('MODE AUTO : l’état de la case survit au remontage (persisté)', async () => {
+    api()
+    const first = await render()
+    const auto = first.container.querySelector(
+      '[data-testid="tickets-mode-auto"] input'
+    ) as HTMLInputElement
+    await act(async () => auto.click())
+    await act(async () => first.root.unmount())
+
+    api()
+    const second = await render()
+    const restored = second.container.querySelector(
+      '[data-testid="tickets-mode-auto"] input'
+    ) as HTMLInputElement
+    expect(restored.checked).toBe(true)
+    await act(async () => second.root.unmount())
+  })
 })

@@ -6,7 +6,18 @@ import type {
   TicketSourceProfile
 } from '../../../shared/tickets'
 import { ModuleHeader } from './ModuleHeader'
-import { formatTicketSelectionPrompt, ticketSelectionTitle } from './ticket-treatment'
+import {
+  formatTicketSelectionPrompt,
+  runTicketTreatmentBatch,
+  ticketConversationTitle,
+  ticketSelectionTitle
+} from './ticket-treatment'
+import {
+  loadSeen,
+  pickIncomingTickets,
+  primeSeen,
+  saveSeen
+} from './ticket-auto-mode'
 import './TicketsView.css'
 
 interface TicketSourceSummary {
@@ -387,6 +398,9 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
 
   const selectedItem =
     visibleItems.find((item) => `${item.sourceId}::${item.id}` === selectedId) ?? visibleItems[0]
+  /** Miroir stable des tickets FILTRES : le mode auto lit le perimetre courant sans se re-abonner. */
+  const visibleItemsRef = useRef<TicketItem[]>([])
+  visibleItemsRef.current = visibleItems
   const checkedVisibleItems = visibleItems.filter((item) =>
     checkedIds.has(`${item.sourceId}::${item.id}`)
   )
@@ -430,6 +444,95 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   useEffect(() => {
     localStorage.setItem('autowin:tickets-send-directly', sendDirectly ? '1' : '0')
   }, [sendDirectly])
+
+  /**
+   * MODE AUTO — traite les tickets ENTRANTS du filtre courant, sans intervention.
+   *
+   * Le perimetre est exactement ce que l'utilisateur voit (les filtres actifs sont le garde-fou).
+   * A l'activation, l'existant est AMORCE (marque vu, non traite) : cocher la case ne declenche
+   * jamais un run par ticket deja affiche. Chaque cycle est borne (AUTO_MODE_CAP_PER_CYCLE) et les
+   * tickets retenus sont marques AVANT traitement, pour qu'un echec ne les rejoue pas.
+   */
+  const [autoMode, setAutoMode] = useState(
+    () => localStorage.getItem('autowin:tickets-auto-mode') === '1'
+  )
+  const seenRef = useRef<Set<string>>(loadSeen(localStorage))
+  const autoBusyRef = useRef(false)
+  const [autoStatus, setAutoStatus] = useState<string>()
+
+  const setAutoModeChecked = (checked: boolean): void => {
+    localStorage.setItem('autowin:tickets-auto-mode', checked ? '1' : '0')
+    setAutoMode(checked)
+    if (checked) {
+      // AMORCE : l'existant devient « connu » sans etre traite.
+      for (const key of primeSeen(visibleItemsRef.current)) seenRef.current.add(key)
+      saveSeen(localStorage, seenRef.current)
+      setAutoStatus(
+        `en veille · ${visibleItemsRef.current.length} ticket(s) déjà présents ignorés`
+      )
+    } else setAutoStatus(undefined)
+  }
+
+  const treatIncoming = useCallback(async () => {
+    if (!autoMode || autoBusyRef.current) return
+    const selection = pickIncomingTickets(visibleItemsRef.current, seenRef.current)
+    if (!selection.toTreat.length) return
+    // Marquage AVANT traitement (garde-fou 2) : un echec ne doit pas relancer le meme ticket.
+    for (const key of selection.seenAdditions) seenRef.current.add(key)
+    saveSeen(localStorage, seenRef.current)
+    autoBusyRef.current = true
+    setAutoStatus(
+      `traitement de ${selection.toTreat.length} entrant(s)${
+        selection.deferred ? ` · ${selection.deferred} reporté(s)` : ''
+      }`
+    )
+    let provider: string | undefined
+    try {
+      const roleMap = await window.api.roles()
+      provider =
+        roleMap.orchestrator?.provider ??
+        roleMap.subagent?.provider ??
+        Object.values(roleMap)[0]?.provider
+    } catch {
+      provider = undefined
+    }
+    if (!provider) {
+      autoBusyRef.current = false
+      setAutoStatus('en veille · aucun rôle configuré')
+      return
+    }
+    const result = await runTicketTreatmentBatch(selection.toTreat, {
+      shouldContinue: () => autoBusyRef.current,
+      createConversation: async (item) => {
+        const conv = await window.api.conversationsCreate({
+          title: ticketConversationTitle(item),
+          category: provider as string,
+          provider: provider as string
+        })
+        await window.api.conversationsSetAuthorityMode(conv.id, 'ask')
+        return { id: conv.id }
+      },
+      promptConversation: async (conv, _item, prompt) => {
+        try {
+          const r = await window.api.orchestrate(prompt, conv.id)
+          return { ok: r?.ok !== false }
+        } catch {
+          return { ok: false }
+        }
+      }
+    })
+    autoBusyRef.current = false
+    setAutoStatus(
+      `en veille · ${result.succeeded}/${result.total} lancés${
+        result.failed ? ` · ${result.failed} échec(s)` : ''
+      }`
+    )
+  }, [autoMode])
+
+  // Chaque rafraichissement de la liste est un cycle de veille : les nouveaux arrives passent.
+  useEffect(() => {
+    if (autoMode) void treatIncoming()
+  }, [items, autoMode, treatIncoming])
 
   const openSelectionConversation = useCallback(async () => {
     const selection = checkedVisibleItems
@@ -723,6 +826,21 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
           />
           Traiter réellement (envoi immédiat)
         </label>
+        {/* Mode auto : la veille porte sur le FILTRE COURANT — ce que l'utilisateur voit est le
+            périmètre. L'existant est ignoré à l'activation ; seuls les entrants sont traités. */}
+        <label className="tickets-mode" data-testid="tickets-mode-auto">
+          <input
+            type="checkbox"
+            checked={autoMode}
+            onChange={(e) => setAutoModeChecked(e.target.checked)}
+          />
+          Mode auto (traite les entrants du filtre)
+        </label>
+        {autoMode && autoStatus && (
+          <span className="tickets-auto-status" data-testid="tickets-auto-status">
+            {autoStatus}
+          </span>
+        )}
       </div>
 
       <div className="tickets-content">

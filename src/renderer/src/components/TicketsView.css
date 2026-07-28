@@ -608,3 +608,11 @@
 .tickets-mode input {
   cursor: pointer;
 }
+
+/* Statut de veille du mode auto : discret mais TOUJOURS visible quand la veille tourne — un
+   traitement automatique qui ne se voit pas est un traitement qu'on ne peut pas arrêter. */
+.tickets-auto-status {
+  font-size: 11.5px;
+  color: var(--warn, #e8a33d);
+  white-space: nowrap;
+}
