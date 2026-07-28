@@ -75,9 +75,11 @@ import type { AgentTopology, SlotBinding } from './topology'
 import {
   createAutowinAppDataRoot,
   ensureAutowinAppData,
+
   legacyAppDataRoot,
   resolveAutowinAppDataBase
 } from './app-data'
+import { configureTurnTiming } from './turn-timing'
 import { AUTOWIN_APP_ID, AUTOWIN_DISPLAY_NAME } from '../shared/app-identity'
 import {
   isRendererStorageMigrationComplete,
@@ -426,6 +428,9 @@ function askModelQuestion(
 /** Ledger d'activité in-app : chaque action d'agent laisse une trace consultable. */
 /** Journaux de tour (survie niveau 2 : rejeu/reprise après fermeture complète de l'app). */
 const turnJournalRoot = join(app.getPath('userData'), 'turn-journals')
+// Racine des journaux de SORTIE BRUTE des CLI (mode détaché opt-in AUTOWIN_DETACHED_RUNS=1) :
+// transmise aux providers par l'environnement, pour qu'ils n'aient pas à connaître Electron.
+process.env.AUTOWIN_RUN_JOURNAL_ROOT ??= join(app.getPath('userData'), 'run-stdout')
 const ledger = new TraceLedger(join(app.getPath('userData'), 'trace'))
 const causalTrace = new TraceStore(join(app.getPath('userData'), 'causal-trace'))
 

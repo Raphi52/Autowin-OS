@@ -12,6 +12,8 @@ import type { ConversationAuthorityMode } from './conversation-capabilities'
 import { randomUUID } from 'node:crypto'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
+import { routeSkillRequest } from './skill-routing'
+import { startTurnTimer } from './turn-timing'
 
 /**
  * Boucle de PILOTAGE : un agent LLM conduit l'app lui-même.
@@ -139,13 +141,22 @@ export class AgentPilot {
       { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION }
     ]
     const system = systemParts.map((p) => p.text).join('')
-    const systemBlocks = systemParts.filter((p) => p.text).map((p) => ({ name: p.name, chars: p.text.length }))
+    const systemBlocks = systemParts
+      .filter((p) => p.text)
+      .map((p) => ({ name: p.name, chars: p.text.length }))
 
     const convo: string[] = [`ÉTAT INITIAL:\n${JSON.stringify(snapshot)}`]
 
     for (let i = 0; i < maxIter; i++) {
-      const messages = [{ role: 'user' as const, content: `${convo.join('\n\n')}\n\nProchaine action ?` }]
-      const prompt = this.registry.describePrompt(provider, messages, { system, systemBlocks }, binding.model)
+      const messages = [
+        { role: 'user' as const, content: `${convo.join('\n\n')}\n\nProchaine action ?` }
+      ]
+      const prompt = this.registry.describePrompt(
+        provider,
+        messages,
+        { system, systemBlocks },
+        binding.model
+      )
       prompt.systemBlocks = systemBlocks
       onEvent({ kind: 'prompt-call', iteration: i, prompt })
       const res = await this.registry.send(provider, messages, { system, systemBlocks })
@@ -210,16 +221,74 @@ export class AgentPilot {
     /** Directives injectées par l'utilisateur PENDANT le tour — drainées à chaque itération. */
     drainDirectives?: () => string[]
   ): Promise<void> {
+    // Chronométrage des jalons jusqu'au PREMIER token : c'est la latence réellement perçue au clic.
+    const timer = startTurnTimer('chat')
+    let timingWritten = false
     const binding = this.roles.getBinding('orchestrator')
     const provider = binding.provider
     const catalog = this.bus.catalog()
     const snapshot = await this.bus.snapshotForPrompt()
+    timer.mark('snapshot')
 
-    const latestUserMessage = [...history].reverse().find((message) => message.role === 'user')?.content
+    const latestUserMessage = [...history]
+      .reverse()
+      .find((message) => message.role === 'user')?.content
+    const directRoute = latestUserMessage ? routeSkillRequest(latestUserMessage) : undefined
+    if (directRoute) {
+      const actionId = 'route:0'
+      const args = { task: directRoute.task }
+      onEvent({ kind: 'command', actionId, name: 'orchestrate', args })
+      signal?.throwIfAborted()
+      const result = await this.bus.exec('orchestrate', args, conversationId, authorityMode)
+      onEvent({
+        kind: 'result',
+        actionId,
+        name: 'orchestrate',
+        ok: result.ok,
+        data: result.ok ? result.data : result.error
+      })
+      // Une orientation peut arriver pendant l'orchestration longue. On vide la file jusqu'à un
+      // point stable avant de clore le tour : aucune directive déjà acquittée ne peut être perdue.
+      let followUpIndex = 0
+      for (;;) {
+        const directives = drainDirectives?.() ?? []
+        if (!directives.length) break
+        for (const directive of directives) {
+          const followUpActionId = `route:follow-up:${followUpIndex++}`
+          const followUpArgs = { task: directive }
+          onEvent({
+            kind: 'command',
+            actionId: followUpActionId,
+            name: 'orchestrate',
+            args: followUpArgs
+          })
+          const followUp = await this.bus.exec(
+            'orchestrate',
+            followUpArgs,
+            conversationId,
+            authorityMode
+          )
+          onEvent({
+            kind: 'result',
+            actionId: followUpActionId,
+            name: 'orchestrate',
+            ok: followUp.ok,
+            data: followUp.ok ? followUp.data : followUp.error
+          })
+        }
+      }
+      onEvent({
+        kind: 'done',
+        text: result.ok ? 'Workflow Autowin exécuté.' : `Échec du workflow : ${result.error}`,
+        usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 }
+      })
+      return
+    }
     const retrievedContext =
       this.retrieveContext && latestUserMessage
         ? await this.retrieveContext(latestUserMessage).catch(() => '')
         : ''
+    timer.mark('ragBrain')
 
     // MÊME config que les phases orchestrées : la CONSTITUTION (soul/réflexes) est la source
     // UNIQUE partagée ; le chat y ajoute seulement ce qui lui est propre (pilotage par commandes).
@@ -330,9 +399,20 @@ export class AgentPilot {
         }
         try {
           callStartedAt = performance.now()
+          timer.mark(`send${i}:start`)
+          let sawFirstChunk = false
           res = await this.registry.send(provider, messages, options, (chunk) => {
+            if (!sawFirstChunk) {
+              sawFirstChunk = true
+              timer.mark(`send${i}:firstToken`) // ← fin de la latence PERÇUE
+              if (!timingWritten) {
+                timingWritten = true
+                timer.end({ provider, model: binding.model }) // persiste les jalons du 1er token
+              }
+            }
             emitVisiblePrefix(visibleFilter.pushSegments(chunk.delta))
           })
+          timer.mark(`send${i}:done`)
           emitVisiblePrefix(visibleFilter.finishSegments())
           successfulStreamedPrefix = attemptStreamedPrefix
           successfulAttempt = attempt
@@ -383,6 +463,23 @@ export class AgentPilot {
         usage.inputTokens += res.usage.inputTokens
         usage.outputTokens += res.usage.outputTokens
         usage.costUsd += res.usage.costUsd ?? 0
+      }
+      // Dernière barrière avant d'interpréter/clore la réponse : une directive arrivée pendant
+      // l'appel provider invalide cette réponse devenue obsolète. On la réinjecte dans un nouvel
+      // appel du MÊME tour. Entre ce drain vide et les branches synchrones ci-dessous, aucun IPC ne
+      // peut s'intercaler : l'ACK immédiat reste donc sans fenêtre de perte en fin de tour.
+      const lateDirectives = drainDirectives?.() ?? []
+      if (lateDirectives.length) {
+        for (const directive of lateDirectives) {
+          convo.push(
+            `UTILISATEUR (DIRECTIVE INJECTÉE EN COURS DE TOUR — PRIORITAIRE): ${directive}`
+          )
+        }
+        if (successfulStreamedPrefix) {
+          onEvent({ kind: 'stream-reset', streamId: `${i}:${successfulAttempt}`, iteration: i })
+        }
+        iterationLimit += 1
+        continue
       }
       const rejectedQuestion = /<question>/i.test(res.text)
       const text = res.text.replace(REJECTED_QUESTION_RE, REJECTED_QUESTION_MARKER).trim()
