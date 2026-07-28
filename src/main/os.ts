@@ -8,6 +8,7 @@ import { ProviderRegistry } from './providers/registry'
 import { ClaudeCliAdapter } from './providers/claude'
 import { CodexAdapter } from './providers/codex'
 import { KimiCliAdapter } from './providers/kimi'
+import { GeminiCliAdapter } from './providers/gemini'
 import type { Message } from './providers/types'
 import { CONSTITUTION } from './constitution'
 import { planProviderLogin, spawnLoginTerminal } from './provider-login'
@@ -118,6 +119,7 @@ export class AutowinOS {
       .register(new ClaudeCliAdapter())
       .register(new CodexAdapter())
       .register(new KimiCliAdapter())
+      .register(new GeminiCliAdapter())
     const executionWorkspace = resolveExecutionWorkspace()
     this.executionWorkspace = executionWorkspace
     // Garde : `git worktree` exige un vrai repo. Absent (.git manquant) → pas d'isolation (undefined).
@@ -213,24 +215,25 @@ export class AutowinOS {
     return { text: r.text, provider: r.provider, systemInjected: r.systemInjected }
   }
 
-  startKimiLogin(): void {
-    const kimi = this.registry.get('kimi')
-    if (!(kimi instanceof KimiCliAdapter)) throw new Error('Pont Kimi Code indisponible.')
-    kimi.startLogin()
-  }
-
   /**
    * Lance le login OFFICIEL d'un provider (bouton « Se reconnecter » de la page Routeur).
-   * kimi → adapter (exe résolu) ; claude/codex → terminal. L'app ne capture aucun credential.
+   * Les adapters qui exposent `startLogin` gèrent leur connexion ; claude/codex passent par un terminal.
    */
   startProviderLogin(provider: string): void {
-    const plan = planProviderLogin(provider)
-    if (plan.kind === 'adapter') {
-      this.startKimiLogin()
+    const adapter = this.registry.get(provider)
+    if (adapter.startLogin) {
+      adapter.startLogin()
       return
     }
+    const plan = planProviderLogin(provider)
+    if (plan.kind === 'adapter')
+      throw new Error(`Le provider ${provider} n'expose pas de connexion interactive.`)
     // codex : `npm run codex:login` doit tourner à la racine du repo (dev) → cwd = process.cwd().
     spawnLoginTerminal(plan.command, provider === 'codex' ? { cwd: process.cwd() } : {})
+  }
+
+  startKimiLogin(): void {
+    this.startProviderLogin('kimi')
   }
 
   /** Change le binding d'un rôle ET persiste sur disque. */

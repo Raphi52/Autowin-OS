@@ -53,7 +53,8 @@ const PROVIDER_DEFAULT_SELECTIONS: Record<
 > = {
   claude: { alias: 'claude/fable-latest', model: 'claude-fable-5', reasoningEffort: 'high' },
   codex: { alias: 'codex/flagship', model: 'gpt-5.6-terra', reasoningEffort: 'medium' },
-  kimi: { model: 'kimi-code/kimi-for-coding', reasoningEffort: 'none' }
+  kimi: { model: 'kimi-code/kimi-for-coding', reasoningEffort: 'none' },
+  gemini: { model: 'Gemini 3.5 Flash (Low)', reasoningEffort: 'none' }
 }
 
 /**

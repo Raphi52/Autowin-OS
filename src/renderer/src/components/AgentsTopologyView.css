@@ -116,6 +116,21 @@
   scrollbar-width: thin;
 }
 
+.topology-provider-login {
+  width: 100%;
+  margin: 8px 0 12px;
+  padding: 9px 12px;
+  color: #fff;
+  border: 1px solid rgba(126, 164, 255, 0.55);
+  border-radius: 10px;
+  background: rgba(88, 105, 214, 0.22);
+  cursor: pointer;
+}
+
+.topology-provider-login:hover {
+  background: rgba(88, 105, 214, 0.36);
+}
+
 .topology-library > p {
   margin: 7px 0 15px;
   color: #66798c;

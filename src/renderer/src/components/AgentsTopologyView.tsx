@@ -457,6 +457,15 @@ export function AgentsTopologyView(): React.JSX.Element {
       <aside className="topology-library">
         <span className="topology-eyebrow">Modèles importés</span>
         <p>Glissez un modèle sur un slot ou sélectionnez-le puis utilisez Ajouter.</p>
+        {models.some((model) => model.provider === 'gemini') && (
+          <button
+            type="button"
+            className="topology-provider-login"
+            onClick={() => void window.api.providerLogin('gemini')}
+          >
+            Connecter Gemini avec Google
+          </button>
+        )}
         <div className="topology-models">
           {sortedModels.map((model) => (
             <button

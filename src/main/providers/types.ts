@@ -156,6 +156,8 @@ export interface ProviderAdapter {
    * Retourne true si prêt à servir des complétions.
    */
   auth(): Promise<boolean>
+  /** Ouvre, si disponible, le flux de connexion interactif officiel du provider. */
+  startLogin?(): void
 
   /**
    * Envoie une conversation et streame la réponse.

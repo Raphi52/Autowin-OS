@@ -15,6 +15,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import devIcon from '../../resources/autowin-os-dev.png?asset'
 import type { Message, ProviderAdapter, SendResult, StreamChunk } from './providers/types'
+import { guardBrokenProcessPipes } from './process-stream-guards'
 import { ProviderRegistry } from './providers/registry'
 import { AutowinOS } from './os'
 import { projectContextBlock } from './context-files'
@@ -125,6 +126,8 @@ import {
   presentAutomationWindow,
   resolveAutomationInstanceMode
 } from './headless-instance'
+
+guardBrokenProcessPipes(process.stdout, process.stderr)
 
 const automationInstanceMode = resolveAutomationInstanceMode(
   process.argv,
@@ -631,6 +634,7 @@ function registerChatIpc(): void {
     assertTrustedRendererSender(event, 'Skills')
     return discoverConfiguredSkillRegistry(join(app.getPath('userData'), 'skill-sources.json'))
   })
+  ipcMain.handle('chat:providers', () => os.registry.ids())
   ipcMain.handle('os:providerLogin', (event, provider: unknown) => {
     assertTrustedRendererSender(event, 'Provider login')
     os.startProviderLogin(guardString(provider, 'provider'))
