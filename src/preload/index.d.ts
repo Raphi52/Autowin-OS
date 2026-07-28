@@ -3,6 +3,7 @@ import type {
   WorktreeAgentActivity,
   WorktreeRuntimeStatus
 } from '../shared/worktree-activity-model'
+import type { ModelQuotaSnapshot } from '../shared/model-quotas'
 
 interface ChatAttachment {
   name: string
@@ -314,6 +315,7 @@ interface ChatApi {
   cancelTickets: (requestId: string) => Promise<boolean>
   listTicketPeople: (source: unknown) => Promise<string[]>
   setTicketsFixture: (fixture: unknown) => Promise<boolean>
+  installTicketsProofFixture: (fixture: unknown) => Promise<boolean>
   getWorktreeActivity: () => Promise<WorktreeAgentActivity[]>
   getWorktreeStatus: () => Promise<WorktreeRuntimeStatus>
   onWorktreeActivity: (cb: (activity: WorktreeAgentActivity[]) => void) => () => void
@@ -327,6 +329,7 @@ interface ChatApi {
     reasoningEffort?: string
   ) => Promise<Record<string, { provider: string; model?: string; reasoningEffort?: string }>>
   models: (force?: boolean) => Promise<ImportedModel[]>
+  modelQuotas: () => Promise<ModelQuotaSnapshot>
   profiles: () => Promise<
     Array<{
       id: string
@@ -392,7 +395,12 @@ interface ChatApi {
       updatedAt: number
     }>
   >
-  conversationsCreate: (p: { title: string; category: string; provider: string }) => Promise<{
+  conversationsCreate: (p: {
+    title: string
+    category: string
+    provider: string
+    authorityMode?: 'plan' | 'ask' | 'auto'
+  }) => Promise<{
     id: string
     title: string
     category: string

@@ -5,7 +5,7 @@ import { ModuleHeader } from './ModuleHeader'
 /**
  * Vue « Behaviour » — miroir FIDÈLE (config statique) de TOUT ce qui influe sur le comportement du
  * chat Autowin, et RIEN d'autre. Organisée par ANATOMIE d'un tour (ordre réel du pipeline), avec un
- * toggle entre les 2 chemins : ORCHESTRÉ (pipeline riche) et DIRECT (os.chat, kit SOUL seul).
+ * distingue les 3 chemins réels : COCKPIT (AgentPilot + RAG), ORCHESTRÉ et DIRECT (os.chat).
  * Source unique = `window.api.behaviourComposition()` (assemblé côté main depuis les modules réels ;
  * chaque champ porte sa citation file:line). Aucun non-influenceur (capabilities/hooks natifs) ici.
  */
@@ -20,10 +20,17 @@ interface PhaseSystemPrompt {
   blocks: InfluencerField[]
 }
 interface BehaviourComposition {
+  cockpit: {
+    systemPrompt: InfluencerField[]
+    retrievedContext: InfluencerField[]
+    turnContext: InfluencerField[]
+    modelSelection: InfluencerField[]
+  }
   orchestrated: {
     systemPrompt: PhaseSystemPrompt[]
     injectedContext: InfluencerField[]
     modelSelection: InfluencerField[]
+    topology: InfluencerField[]
     regime: InfluencerField[]
     guardrails: InfluencerField[]
   }
@@ -79,7 +86,7 @@ function Category({
 
 export function BehaviourView(): React.JSX.Element {
   const [composition, setComposition] = useState<BehaviourComposition | null>(null)
-  const [path, setPath] = useState<'orchestrated' | 'direct'>('orchestrated')
+  const [path, setPath] = useState<'cockpit' | 'orchestrated' | 'direct'>('cockpit')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -91,6 +98,7 @@ export function BehaviourView(): React.JSX.Element {
 
   const orch = composition?.orchestrated
   const direct = composition?.direct
+  const cockpit = composition?.cockpit
 
   return (
     <section className="behaviour-view">
@@ -100,6 +108,15 @@ export function BehaviourView(): React.JSX.Element {
           title="Behaviour"
         />
         <div className="behaviour-path-toggle" role="tablist" aria-label="Chemin de chat">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={path === 'cockpit'}
+            className={path === 'cockpit' ? 'active' : ''}
+            onClick={() => setPath('cockpit')}
+          >
+            Cockpit <small>(chat visible)</small>
+          </button>
           <button
             type="button"
             role="tab"
@@ -123,6 +140,36 @@ export function BehaviourView(): React.JSX.Element {
 
       {error && <div className="behaviour-error">{error}</div>}
       {!composition && !error && <p className="behaviour-empty">Chargement de la composition…</p>}
+
+      {cockpit && path === 'cockpit' && (
+        <div className="behaviour-anatomy">
+          <p className="behaviour-path-note">
+            Le chat principal visible passe par AgentPilot : il reçoit la CONSTITUTION, le contexte
+            projet et un RAG dynamique Amitel Brain + preuves Graphify avant de pouvoir piloter
+            l’application.
+          </p>
+          <Category
+            title="System prompt"
+            hint="composition réellement envoyée au modèle du cockpit"
+            fields={cockpit.systemPrompt}
+          />
+          <Category
+            title="RAG dynamique"
+            hint="récupéré pour le dernier message utilisateur, avec fallbacks indépendants"
+            fields={cockpit.retrievedContext}
+          />
+          <Category
+            title="Contexte du tour"
+            hint="commandes, état, historique, pièces jointes, autorité et bornes réellement appliqués"
+            fields={cockpit.turnContext ?? []}
+          />
+          <Category
+            title="Modèle / rôle"
+            hint="binding utilisé par AgentPilot"
+            fields={cockpit.modelSelection}
+          />
+        </div>
+      )}
 
       {orch && path === 'orchestrated' && (
         <div className="behaviour-anatomy">
@@ -164,6 +211,11 @@ export function BehaviourView(): React.JSX.Element {
             fields={orch.modelSelection}
           />
           <Category
+            title="C2 · Topologie / fan-out"
+            hint="panels vivants scout, frame et judge, avec règle de quorum"
+            fields={orch.topology ?? []}
+          />
+          <Category
             title="D · Régime → phases"
             hint="quelles phases tournent selon la tâche (heuristique déterministe)"
             fields={orch.regime}
@@ -180,16 +232,16 @@ export function BehaviourView(): React.JSX.Element {
         <div className="behaviour-anatomy">
           <p className="behaviour-path-note">
             Le chat direct (os.chat) : beaucoup plus simple — pas de phases, pas de Brain, pas de
-            garde-fous. Sa « personnalité » vient du seul kit SOUL.
+            garde-fous. Son system prompt par défaut vient de la CONSTITUTION.
           </p>
           <Category
             title="System prompt"
-            hint="kit SOUL (chat direct uniquement)"
+            hint="CONSTITUTION (source commune au chat direct et aux phases orchestrées)"
             fields={direct.systemPrompt}
           />
           <Category
             title="Modèle / rôle"
-            hint="binding du rôle demandé, sans pipeline"
+            hint="binding du rôle si aucun provider explicite ; sinon override provider seul"
             fields={direct.modelSelection}
           />
         </div>

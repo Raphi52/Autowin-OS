@@ -2,10 +2,11 @@
  * COMPOSITION DU COMPORTEMENT (config statique) — la source de vérité de la vue « Behaviour ».
  *
  * Assemble, depuis les modules SOURCES réels, TOUT ce qui VA influer sur le comportement du chat
- * Autowin — et RIEN d'autre. Deux chemins DISTINCTS :
+ * Autowin — et RIEN d'autre. Trois chemins DISTINCTS :
+ *  - `cockpit` : le chat visible (AgentPilot) — pilotage, contexte projet et RAG Brain+Graphify.
  *  - `orchestrated` : le pipeline (os:orchestrate → Orchestrator.run) — phases, Brain, modèle/rôle,
  *    régime, garde-fous.
- *  - `direct` : os.chat — beaucoup plus simple (kit SOUL + binding de rôle, aucun garde-fou/phase).
+ *  - `direct` : os.chat — beaucoup plus simple (CONSTITUTION + binding de rôle, aucun garde-fou/phase).
  *
  * INVARIANT (testé, pas jugé) :
  *  - COMPLÉTUDE : chaque catégorie A-E de l'orchestré est peuplée et tracée à sa source.
@@ -24,6 +25,7 @@ import { PROJECT_CONTEXT_CHAIN, PROJECT_CONTEXT_MAX_BYTES } from './context-file
 import { phasesForRegime, type TaskRegime } from './task-regime'
 import { resolvePhaseBinding, ALL_ROLES, type Role, type RoleBinding, type RoleModelConfig } from './roles'
 import type { PipelinePhase } from './skill-pipeline'
+import type { AgentTopology } from './topology'
 
 /** Un influenceur réel : ce qu'il fait, sa valeur/règle actuelle, et sa source dans le code. */
 export interface InfluencerField {
@@ -50,6 +52,8 @@ export interface OrchestratedBehaviour {
   injectedContext: InfluencerField[]
   /** C — sélection modèle / rôle / effort (qui répond, avec quoi). */
   modelSelection: InfluencerField[]
+  /** C2 — fan-out vivant issu de la topologie. */
+  topology: InfluencerField[]
   /** D — régime → sous-ensemble de phases joué. */
   regime: InfluencerField[]
   /** E — garde-fous déterministes. */
@@ -57,12 +61,20 @@ export interface OrchestratedBehaviour {
 }
 
 export interface DirectBehaviour {
-  /** Chat direct : system = kit SOUL seul (shadowé par un system explicite en orchestration). */
+  /** Chat direct : system = CONSTITUTION par défaut, partagé avec les phases orchestrées. */
   systemPrompt: InfluencerField[]
   modelSelection: InfluencerField[]
 }
 
+export interface CockpitBehaviour {
+  systemPrompt: InfluencerField[]
+  retrievedContext: InfluencerField[]
+  turnContext: InfluencerField[]
+  modelSelection: InfluencerField[]
+}
+
 export interface BehaviourComposition {
+  cockpit: CockpitBehaviour
   orchestrated: OrchestratedBehaviour
   direct: DirectBehaviour
 }
@@ -96,7 +108,7 @@ function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
     blocks.push({
       label: 'constitution',
       value: 'Constitution (13 réflexes + limite honnête) — source UNIQUE partagée, injectée aussi au chat cockpit et à os.chat.',
-      source: 'src/main/constitution.ts:16',
+      source: 'src/main/constitution.ts:14',
       excerpt: injectedText(CONSTITUTION)
     })
   }
@@ -104,7 +116,7 @@ function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
     {
       label: `consigne:${phase}`,
       value: brief ? 'Brief de phase purpose-built injecté en tête du system.' : 'Aucun brief (retombe sur la discipline générique).',
-      source: 'src/main/phase-briefs.ts:39',
+      source: 'src/main/phase-briefs.ts:10',
       excerpt: brief ? injectedText(brief) : undefined
     }
   )
@@ -127,7 +139,7 @@ function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
     {
       label: 'projectContext',
       value: `Chaîne premier-trouvé-gagne : ${PROJECT_CONTEXT_CHAIN.join(' → ')} (cap ${PROJECT_CONTEXT_MAX_BYTES.toLocaleString('fr-FR')} octets), lue par Autowin depuis le workspace d'exécution.`,
-      source: 'src/main/context-files.ts:76'
+      source: 'src/main/context-files.ts:77'
     }
   )
   return { phase, blocks }
@@ -159,7 +171,8 @@ function roleField(role: Role, binding: RoleBinding): InfluencerField {
  */
 export function buildBehaviourComposition(
   roles: Pick<RoleModelConfig, 'all'>,
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  topology?: Pick<AgentTopology, 'panels'>
 ): BehaviourComposition {
   const bindings = roles.all()
 
@@ -203,7 +216,7 @@ export function buildBehaviourComposition(
     {
       label: 'exigence de preuve (mutation)',
       value: "Une tâche de MUTATION exige une preuve (evidence mutation+verification) avant le vert, et tourne en sandbox danger-full-access ; sinon read-only. isMutationTask (regex) pilote les deux.",
-      source: 'src/main/orchestrator.ts:132'
+      source: 'src/main/orchestrator.ts:177'
     },
     {
       label: 'gate de clôture',
@@ -213,7 +226,7 @@ export function buildBehaviourComposition(
     {
       label: 'réparation bornée',
       value: '2 tentatives pour une mutation (la 2e réinjecte les raisons du gate), 1 sinon.',
-      source: 'src/main/orchestrator.ts:709'
+      source: 'src/main/orchestrator.ts:1088'
     }
   ]
 
@@ -223,21 +236,47 @@ export function buildBehaviourComposition(
       value: 'Récupéré 1×/run (POST 127.0.0.1:8765/query, Bearer token), préfixé en tête du contexte + consigne « priorise le Brain ». Dégrade silencieusement à vide (timeout 5 s / pas de token / serveur absent).',
       source: 'src/main/brain-retrieval.ts:92'
     },
-    { label: 'TÂCHE', value: 'La demande brute, toujours présente en 1ʳᵉ phase.', source: 'src/main/orchestrator.ts:205' },
+    { label: 'TÂCHE', value: 'La demande brute, toujours présente en 1ʳᵉ phase.', source: 'src/main/orchestrator.ts:541' },
     {
       label: 'portage phase→phase',
       value: 'La sortie de chaque phase est portée à la suivante, tronquée à 2000 caractères.',
-      source: 'src/main/orchestrator.ts:116'
+      source: 'src/main/orchestrator.ts:844'
     },
     {
       label: 'session-resume chaîné',
       value: "Si le provider rend un sessionId, les phases suivantes n'envoient QUE leur consigne (le reste est déjà dans l'historique de session) — contenu réellement envoyé variable/opaque ; cassé dès un fan-out.",
-      source: 'src/main/orchestrator.ts:398'
+      source: 'src/main/orchestrator.ts:544'
     },
     {
       label: 'agrégat juge',
       value: 'Le juge reçoit la concaténation des sorties de phases, chaque bloc plafonné à 6000 caractères.',
-      source: 'src/main/orchestrator.ts:482'
+      source: 'src/main/orchestrator.ts:854'
+    }
+  ]
+
+  const panelValue = (target: 'scout' | 'frame' | 'judge'): string => {
+    const members = topology?.panels[target]
+    if (!members) return 'Topologie non transmise.'
+    if (members.length === 0) return '0 membre : exécution mono-modèle.'
+    return `${members.length} membre(s) : ${members
+      .map((member) => `${member.provider}/${member.modelId}/${member.reasoningEffort}`)
+      .join(' · ')}`
+  }
+  const topologyFields: InfluencerField[] = [
+    {
+      label: 'panel scout',
+      value: `${panelValue('scout')} À partir de 2 membres, divergence parallèle puis synthèse.`,
+      source: 'src/main/orchestrator.ts:554'
+    },
+    {
+      label: 'panel frame',
+      value: `${panelValue('frame')} À partir de 2 membres, divergence parallèle puis synthèse.`,
+      source: 'src/main/orchestrator.ts:554'
+    },
+    {
+      label: 'panel judge + quorum',
+      value: `${panelValue('judge')} Les votes valides sont agrégés ; le seuil de quorum est calculé sur le nombre de votants valides.`,
+      source: 'src/main/orchestrator.ts:941'
     }
   ]
 
@@ -246,24 +285,78 @@ export function buildBehaviourComposition(
       {
         label: 'constitution',
         value: "os.chat (commande chat_send) utilise la CONSTITUTION comme system par défaut du registre. C'est désormais la MÊME source que les phases orchestrées et le chat cockpit — plus de doublon kit-soul.",
-        source: 'src/main/constitution.ts:16',
+        source: 'src/main/constitution.ts:14',
         excerpt: injectedText(CONSTITUTION)
       }
     ],
     modelSelection: [
       {
-        label: 'binding de rôle',
-        value: `Le chat direct utilise le binding du rôle demandé (défaut orchestrator: ${bindings.orchestrator.provider}/${bindings.orchestrator.model ?? 'défaut'}). Aucune phase, aucun Brain, aucun garde-fou.`,
-        source: 'src/main/os.ts:166'
+        label: 'provider explicite ou binding de rôle',
+        value: `Sans provider explicite, le chat direct utilise provider, modèle et effort du rôle demandé (défaut orchestrator: ${bindings.orchestrator.provider}/${bindings.orchestrator.model ?? 'défaut'}). Avec un provider explicite, il remplace le provider et envoie les options modèle/effort vides : le binding du rôle est alors ignoré. Aucune phase, aucun Brain, aucun garde-fou.`,
+        source: 'src/main/os.ts:184'
+      }
+    ]
+  }
+
+  const cockpit: CockpitBehaviour = {
+    systemPrompt: [
+      {
+        label: 'composition cockpit',
+        value:
+          "Le chat visible assemble CONSTITUTION + consigne de pilotage + style + contexte projet, puis ajoute le contexte RAG récupéré pour le dernier message utilisateur.",
+        source: 'src/main/agent-pilot.ts:245'
+      }
+    ],
+    retrievedContext: [
+      {
+        label: 'Amitel Brain signé',
+        value:
+          "Une récupération est lancée au début de chaque tour cockpit sur le dernier message utilisateur. La réponse Brain est vérifiée par signature, bornée, et une panne dégrade ce bloc à vide.",
+        source: 'src/main/agent-pilot.ts:216'
+      },
+      {
+        label: 'preuves Graphify',
+        value:
+          "Le même provider RAG interroge en parallèle Amitel Brain et Graphify. Graphify fournit jusqu'à 6 preuves structurelles marquées non fiables, avec timeout 1,5 s et cache du graphe 30 s ; chaque branche possède un fallback indépendant à vide.",
+        source: 'src/main/amitel-context.ts:175'
+      }
+    ],
+    turnContext: [
+      {
+        label: 'catalogue de commandes + état courant',
+        value:
+          "À chaque tour, le system prompt reçoit le catalogue vivant des commandes ; le message reçoit un snapshot courant de l'application.",
+        source: 'src/main/agent-pilot.ts:213'
+      },
+      {
+        label: 'historique + pièces jointes',
+        value:
+          "L'historique complet est reconstruit dans le message. Les pièces jointes du dernier message sont envoyées uniquement à la première itération.",
+        source: 'src/main/agent-pilot.ts:257'
+      },
+      {
+        label: "autorité + directives + cap d'itérations",
+        value:
+          "Le mode d'autorité de la conversation gouverne l'exécution des commandes. Les directives reçues pendant le tour sont drainées avant l'itération suivante. Le cockpit est borné à 6 itérations et termine en erreur explicite si le cap est atteint.",
+        source: 'src/main/agent-pilot.ts:267'
+      }
+    ],
+    modelSelection: [
+      {
+        label: 'binding orchestrator',
+        value: `Le cockpit utilise le binding orchestrator (${bindings.orchestrator.provider}/${bindings.orchestrator.model ?? 'défaut'}) puis peut piloter l'application par commandes.`,
+        source: 'src/main/agent-pilot.ts:211'
       }
     ]
   }
 
   return {
+    cockpit,
     orchestrated: {
       systemPrompt: ORCHESTRATED_PHASES.map(phaseSystemPrompt),
       injectedContext,
       modelSelection,
+      topology: topologyFields,
       regime,
       guardrails
     },

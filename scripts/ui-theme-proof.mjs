@@ -82,6 +82,7 @@ const views = [
   { route: 'memory', nav: 'Memory', title: 'Memory', root: '.graph-observatory' },
   { route: 'observatory', nav: 'Observatory', title: 'Observatory', root: '.observatory-view' },
   { route: 'agents', nav: 'Models', title: 'Models', root: '.agents-topology' },
+  { route: 'tickets', nav: 'Tickets', title: 'Tickets', root: '.tickets-view' },
   {
     route: 'capabilities',
     nav: 'Skills · Hooks · Tools',
@@ -180,7 +181,7 @@ try {
     join(outputDir, 'manifest.json'),
     JSON.stringify({ fingerprint, count: manifest.length, captures: manifest }, null, 2)
   )
-  if (manifest.length !== 6) throw new Error(`Preuve incomplète: ${manifest.length}/6`)
+  if (manifest.length !== 7) throw new Error(`Preuve incomplète: ${manifest.length}/7`)
   if (verifyNegativeControl) {
     let rejected = false
     try {

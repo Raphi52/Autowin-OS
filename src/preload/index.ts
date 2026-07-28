@@ -57,6 +57,8 @@ const api = {
     ipcRenderer.invoke('tickets:people', source),
   setTicketsFixture: (fixture: unknown): Promise<boolean> =>
     ipcRenderer.invoke('app:test:tickets-fixture', fixture),
+  installTicketsProofFixture: (fixture: unknown): Promise<boolean> =>
+    ipcRenderer.invoke('app:test:tickets-fixture', fixture),
   // Cockpit worktree (volet A) — activité des copies isolées par agent (frise + journal).
   getWorktreeActivity: (): Promise<unknown[]> => ipcRenderer.invoke('worktree:activity'),
   getWorktreeStatus: (): Promise<unknown> => ipcRenderer.invoke('worktree:status'),
@@ -79,6 +81,7 @@ const api = {
     reasoningEffort?: string
   ): Promise<unknown> => ipcRenderer.invoke('os:setRole', role, provider, model, reasoningEffort),
   models: (force = false): Promise<unknown[]> => ipcRenderer.invoke('os:models:list', force),
+  modelQuotas: (): Promise<unknown> => ipcRenderer.invoke('os:models:quotas'),
   profiles: (): Promise<unknown[]> => ipcRenderer.invoke('os:profiles:list'),
   saveProfile: (profile: unknown): Promise<unknown[]> =>
     ipcRenderer.invoke('os:profiles:save', profile),
@@ -138,6 +141,7 @@ const api = {
     title: string
     category: string
     provider: string
+    authorityMode?: 'plan' | 'ask' | 'auto'
   }): Promise<{ id: string; title: string; category: string; provider: string }> =>
     ipcRenderer.invoke('os:conversations:create', p),
   routeConversationMessage: (

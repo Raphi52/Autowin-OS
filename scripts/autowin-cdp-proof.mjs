@@ -48,6 +48,12 @@ const canonicalDestinations = [
     nestedSelector: '[data-testid="wt-view"]'
   },
   {
+    id: 'tickets',
+    navSelector: '[data-testid="nav-tickets"]',
+    viewSelector: '[data-testid="tickets-view"]',
+    expectedText: 'Tickets'
+  },
+  {
     id: 'settings',
     navSelector: '[data-testid="nav-settings"]',
     viewSelector: '[data-testid="settings-view"]',

@@ -70,6 +70,7 @@ import { listClaudeHooks, listCodexHooks } from './claude-hooks'
 import { ModelQuestionHub, type ModelQuestion, type PendingModelQuestion } from './model-questions'
 import { discoverImportedModels, findModel, loadCachedImportedModels } from './models'
 import { ModelCatalogRefresher, serveModelCatalog } from './model-refresh'
+import { buildModelQuotaSnapshot, getModelQuotaSnapshot } from './model-quotas'
 import { loadAgentTopology, saveAgentTopology } from './topology-disk'
 import { migrateTopologyShape } from './topology'
 import type { AgentTopology, SlotBinding } from './topology'
@@ -89,14 +90,18 @@ import {
   type MigratedRendererStorage
 } from './renderer-storage-migration'
 import { guardAttachments, guardBoolean, guardString } from './ipc-guards'
-import {
-  DEFAULT_TICKET_SOURCE,
-  parseTicketSourceProfile,
-  type TicketListRequest,
-  type TicketSourceProfile
-} from '../shared/tickets'
+import { parseTicketSourceProfile } from '../shared/tickets'
 import { azureTicketProvider, listAzurePeople } from './ticket-providers/azure'
 import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
+import { TicketSourceStore } from './ticket-source-store'
+import { createTicketCredentialStore } from './ticket-credential-store'
+import { TicketService } from './tickets-service'
+import { createTicketProviderRegistry } from './ticket-providers/provider-contract'
+import { githubTicketProvider } from './ticket-providers/github'
+import { gitlabTicketProvider } from './ticket-providers/gitlab'
+import { loadAzureDevOpsCliToken } from './azure-cli-token'
+import { loadForgeCliToken } from './forge-cli-token'
+import { registerTicketsIpc } from './tickets-ipc'
 import { checkForUpdate, applyUpdate } from './git-update'
 import { restartApplication } from './app-restart'
 
@@ -438,6 +443,21 @@ const ledger = new TraceLedger(join(app.getPath('userData'), 'trace'))
 const causalTrace = new TraceStore(join(app.getPath('userData'), 'causal-trace'))
 
 const profiles = new ProfileStore(join(app.getPath('userData'), 'profiles.json'))
+const ticketSources = new TicketSourceStore(join(app.getPath('userData'), 'ticket-sources.json'))
+const ticketCredentials = createTicketCredentialStore()
+const tickets = new TicketService({
+  sourceStore: ticketSources,
+  credentialStore: ticketCredentials,
+  registry: createTicketProviderRegistry([
+    azureTicketProvider,
+    githubTicketProvider,
+    gitlabTicketProvider
+  ]),
+  tokenFallback: async (source) =>
+    source.provider === 'azure'
+      ? { token: await loadAzureDevOpsCliToken(), authScheme: 'bearer' }
+      : loadForgeCliToken(source)
+})
 bus.trace = (name, args, ok) =>
   ledger.append({ source: 'bus', name, detail: JSON.stringify(args).slice(0, 200), ok })
 
@@ -480,74 +500,13 @@ function registerStorageMigrationIpc(
 
 /** IPC : chat, orchestration, dashboards et graphe. */
 function registerChatIpc(): void {
-  const ticketSources: TicketSourceProfile[] = [DEFAULT_TICKET_SOURCE]
-  const ticketRequests = new Map<string, AbortController>()
-  const ticketRequestId = (value: unknown): string => {
-    if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(value)) {
-      throw new Error('Identifiant de requête Tickets invalide')
-    }
-    return value
-  }
-  ipcMain.handle('tickets:sources', async (event) => {
-    assertTrustedRendererSender(event, 'Tickets')
-    const hasAuth = Boolean(process.env.AUTOWIN_AZDO_PAT) || Boolean(await getAzureDevOpsAadToken())
-    return ticketSources.map((profile) => ({
-      profile,
-      credentialConfigured: profile.provider === 'azure' && hasAuth
-    }))
-  })
-  ipcMain.handle('tickets:source:save', async (event, value: unknown) => {
-    assertTrustedRendererSender(event, 'Tickets')
-    const profile = parseTicketSourceProfile(value)
-    if (!profile) throw new Error('Profil Tickets invalide')
-    const current = ticketSources.findIndex((candidate) => candidate.id === profile.id)
-    if (current >= 0) ticketSources[current] = profile
-    else ticketSources.push(profile)
-    const hasAuth = Boolean(process.env.AUTOWIN_AZDO_PAT) || Boolean(await getAzureDevOpsAadToken())
-    return ticketSources.map((source) => ({
-      profile: source,
-      credentialConfigured: source.provider === 'azure' && hasAuth
-    }))
-  })
-  ipcMain.handle('tickets:list', async (event, request: TicketListRequest) => {
-    assertTrustedRendererSender(event, 'Tickets')
-    const requestId = ticketRequestId(request?.requestId)
-    const source = parseTicketSourceProfile(request?.source)
-    if (!source || !ticketSources.some((candidate) => candidate.id === source.id)) {
-      throw new Error('Profil Tickets non autorisé')
-    }
-    ticketRequests.get(requestId)?.abort()
-    const controller = new AbortController()
-    ticketRequests.set(requestId, controller)
-    try {
-      if (source.provider !== 'azure')
-        throw new Error('Fournisseur Tickets non supporté (azure uniquement pour l’instant)')
-      // Auth : PAT explicite (Basic) si fourni ; sinon token AAD via la session `az login` (Bearer,
-      // standard RIG, aucun secret à saisir). Aucun des deux → message actionnable.
-      const pat = process.env.AUTOWIN_AZDO_PAT ?? ''
-      const token = pat || (await getAzureDevOpsAadToken()) || ''
-      const authScheme: 'bearer' | 'pat' = pat ? 'pat' : 'bearer'
-      if (!token)
-        throw new Error(
-          'Auth Azure DevOps indisponible : lance « az login » (compte Amitel) ou définis AUTOWIN_AZDO_PAT (PAT scope Work Items → Read).'
-        )
-      const page = await azureTicketProvider.list(
-        { source, requestId, cursor: request?.cursor, pageSize: request?.pageSize },
-        { token, authScheme, signal: controller.signal, fetchFn: fetch }
-      )
-      if (controller.signal.aborted) throw new Error('Requête Tickets annulée')
-      return page
-    } finally {
-      if (ticketRequests.get(requestId) === controller) ticketRequests.delete(requestId)
-    }
-  })
   // Annuaire des collaborateurs (autocomplete assigné) : équipes du projet → membres, mêmes
   // credentials que tickets:list. BEST-EFFORT : toute défaillance ⇒ [] (l'autocomplete dégrade
   // sur les assignés déjà chargés, jamais d'erreur bloquante pour la vue).
   ipcMain.handle('tickets:people', async (event, value: unknown) => {
     assertTrustedRendererSender(event, 'Tickets')
     const source = parseTicketSourceProfile(value)
-    if (!source || !ticketSources.some((candidate) => candidate.id === source.id)) {
+    if (!source || !ticketSources.list().some((candidate) => candidate.id === source.id)) {
       throw new Error('Profil Tickets non autorisé')
     }
     if (source.provider !== 'azure') return []
@@ -560,15 +519,6 @@ function registerChatIpc(): void {
     } catch {
       return []
     }
-  })
-  ipcMain.handle('tickets:cancel', (event, value: unknown) => {
-    assertTrustedRendererSender(event, 'Tickets')
-    const requestId = ticketRequestId(value)
-    const controller = ticketRequests.get(requestId)
-    if (!controller) return false
-    controller.abort()
-    ticketRequests.delete(requestId)
-    return true
   })
   // Survie niveau 2 : au démarrage, le renderer demande les tours restés INACHEVÉS (app fermée en
   // pleine exécution) pour les rejouer/afficher. GC des journaux terminés au passage.
@@ -634,7 +584,6 @@ function registerChatIpc(): void {
     assertTrustedRendererSender(event, 'Skills')
     return discoverConfiguredSkillRegistry(join(app.getPath('userData'), 'skill-sources.json'))
   })
-  ipcMain.handle('chat:providers', () => os.registry.ids())
   ipcMain.handle('os:providerLogin', (event, provider: unknown) => {
     assertTrustedRendererSender(event, 'Provider login')
     os.startProviderLogin(guardString(provider, 'provider'))
@@ -745,7 +694,7 @@ function registerChatIpc(): void {
   // sans force (montage) le cache déduplique avec le run de démarrage.
   ipcMain.handle('os:behaviourComposition', (event) => {
     assertTrustedRendererSender(event, 'Behaviour composition')
-    return buildBehaviourComposition(os.roles)
+    return buildBehaviourComposition(os.roles, process.env, agentTopology)
   })
   ipcMain.handle('os:brainTraces', (event, conversationId?: unknown) => {
     assertTrustedRendererSender(event, 'Brain traces')
@@ -817,6 +766,60 @@ function registerChatIpc(): void {
     assertTrustedRendererSender(event, 'Model catalog')
     if (typeof force !== 'boolean') throw new Error('Option de rafraîchissement invalide')
     return serveModelCatalog(modelCatalog, force)
+  })
+  ipcMain.handle('os:models:quotas', async (event) => {
+    assertTrustedRendererSender(event, 'Model quotas')
+    const models = modelCatalog.current()
+    if (isolatedTestInstance) {
+      const observedAt = new Date().toISOString()
+      const fiveHourResetsAt = new Date(Date.now() + 5 * 60 * 60_000).toISOString()
+      const sevenDayResetsAt = new Date(Date.now() + 7 * 24 * 60 * 60_000).toISOString()
+      return buildModelQuotaSnapshot(models, {
+        claude: {
+          status: 'available',
+          source: 'Fixture isolée Claude',
+          observedAt,
+          windows: [
+            {
+              id: 'five-hour',
+              label: '5 h',
+              usedPercent: 63,
+              remainingPercent: 37,
+              resetsAt: fiveHourResetsAt
+            },
+            {
+              id: 'seven-day',
+              label: '7 j',
+              usedPercent: 18,
+              remainingPercent: 82,
+              resetsAt: sevenDayResetsAt
+            }
+          ]
+        },
+        codex: {
+          status: 'available',
+          source: 'Fixture isolée Codex',
+          observedAt,
+          windows: [
+            {
+              id: 'five-hour',
+              label: '5 h',
+              usedPercent: 42,
+              remainingPercent: 58,
+              resetsAt: fiveHourResetsAt
+            },
+            {
+              id: 'seven-day',
+              label: '7 j',
+              usedPercent: 29,
+              remainingPercent: 71,
+              resetsAt: sevenDayResetsAt
+            }
+          ]
+        }
+      })
+    }
+    return getModelQuotaSnapshot(models)
   })
   // Page Routeur — statut d'auth au CHARGEMENT (cheap/local) : codex exact (expiry token),
   // claude/kimi = présence CLI seulement (JAMAIS « authenticated » sans probe réel). Borné.
@@ -984,7 +987,23 @@ function registerChatIpc(): void {
   ipcMain.handle('os:conversations', () => os.conversations.list())
   ipcMain.handle(
     'os:conversations:create',
-    (_e, p: { title: string; category: string; provider: string }) => os.conversations.create(p)
+    (
+      event,
+      p: {
+        title: string
+        category: string
+        provider: string
+        authorityMode?: 'plan' | 'ask' | 'auto'
+      }
+    ) => {
+      assertTrustedRendererSender(event, 'Conversation create')
+      if (p.authorityMode && !['plan', 'ask', 'auto'].includes(p.authorityMode)) {
+        throw new Error('Mode d’autorité invalide')
+      }
+      const conversation = os.conversations.create(p)
+      broadcast({ type: 'refresh', scope: 'conversations' })
+      return conversation
+    }
   )
   ipcMain.handle(
     'os:conversations:routeMessage',
@@ -1061,6 +1080,7 @@ function registerChatIpc(): void {
     if (removed) {
       causalTrace.deleteConversation(id)
       deletePromptCalls(id)
+      broadcast({ type: 'refresh', scope: 'conversations' })
     }
     return removed
   })
@@ -1445,6 +1465,7 @@ function registerChatIpc(): void {
       } finally {
         if (conversationId) {
           activeChatTurns.delete(conversationId, controller)
+          broadcast({ type: 'refresh', scope: 'conversations' })
           if (pendingDirectives.delete(conversationId)) {
             // directives non consommées = obsolètes
             broadcast({ type: 'refresh', scope: 'directives' })
@@ -1761,6 +1782,12 @@ app.whenReady().then(async () => {
   }
   registerStorageMigrationIpc(legacyStorageValues, canWriteMigrationMarker)
   registerChatIpc()
+  registerTicketsIpc({
+    ipc: ipcMain,
+    service: tickets,
+    assertTrusted: assertTrustedRendererSender,
+    isolated: isolatedTestInstance
+  })
   // Validation d'auth réelle en arrière-plan à chaque démarrage. Le batch est lancé avant la fenêtre,
   // sans être attendu ici : l'ouverture reste immédiate, tandis que providerStatus attend le résultat.
   startupProviderChecks = runStartupProviderProbes(
