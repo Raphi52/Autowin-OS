@@ -10,7 +10,7 @@ export const APP_DESTINATIONS = [
 
 export type AppDestination = (typeof APP_DESTINATIONS)[number]['id']
 export type AgentStudioSection = 'topology' | 'routing'
-export type SettingsSection = 'capabilities' | 'behaviour' | 'preflight'
+export type SettingsSection = 'capabilities' | 'budget' | 'behaviour' | 'preflight'
 
 export interface AppLocation {
   destination: AppDestination
@@ -53,6 +53,7 @@ const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {
   skills: { destination: 'settings', section: 'capabilities' },
   hooks: { destination: 'settings', section: 'capabilities' },
   tools: { destination: 'settings', section: 'capabilities' },
+  budget: { destination: 'settings', section: 'budget' },
   behaviour: { destination: 'settings', section: 'behaviour' },
   behavior: { destination: 'settings', section: 'behaviour' }
 }

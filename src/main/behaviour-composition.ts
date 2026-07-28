@@ -172,7 +172,8 @@ function roleField(role: Role, binding: RoleBinding): InfluencerField {
 export function buildBehaviourComposition(
   roles: Pick<RoleModelConfig, 'all'>,
   env: NodeJS.ProcessEnv = process.env,
-  topology?: Pick<AgentTopology, 'panels'>
+  topology?: Pick<AgentTopology, 'panels'>,
+  budgetUsd: number | null = null
 ): BehaviourComposition {
   const bindings = roles.all()
 
@@ -205,13 +206,12 @@ export function buildBehaviourComposition(
     }
   ]
 
-  const usdCap = env.AUTOWIN_RUN_USD_CAP
   const tokenCap = env.AUTOWIN_RUN_TOKEN_CAP
   const guardrails: InfluencerField[] = [
     {
       label: 'circuit-breaker coût',
-      value: `Coupe le run (abort réel) au dépassement des caps. USD cap: ${usdCap ?? 'non défini (désactivé)'} · Token cap: ${tokenCap ?? 'non défini (désactivé)'} — lus par tour.`,
-      source: 'src/main/cost-circuit-breaker.ts:28'
+      value: `Coupe le run (abort réel) au dépassement des caps. USD cap: ${budgetUsd === null ? 'aucune limite (désactivé)' : `$${budgetUsd.toFixed(2)}`} · Token cap: ${tokenCap ?? 'non défini (désactivé)'} — relus avant chaque run.`,
+      source: 'src/main/orchestration-budget.ts:46'
     },
     {
       label: 'exigence de preuve (mutation)',

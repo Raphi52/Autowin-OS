@@ -94,4 +94,27 @@ describe('indicateur de quotas modèles', () => {
     expect(container.querySelector('[data-testid="model-quota-popover"]')).toBeNull()
     await act(async () => root.unmount())
   })
+
+  it('ne reste pas en lecture lorsque le preload chargé ne fournit pas les quotas', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {}
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(ModelQuotaIndicator))
+    })
+
+    const trigger = container.querySelector(
+      '[data-testid="model-quota-trigger"]'
+    ) as HTMLButtonElement
+    await act(async () => trigger.click())
+
+    const popover = container.querySelector('[data-testid="model-quota-popover"]')
+    expect(popover?.textContent).toContain('Redémarrage requis')
+    expect(popover?.textContent).not.toContain('Lecture en cours')
+    await act(async () => root.unmount())
+  })
 })

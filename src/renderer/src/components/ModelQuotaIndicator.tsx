@@ -35,7 +35,7 @@ export function ModelQuotaIndicator(): React.JSX.Element {
 
   const refresh = useCallback(async (): Promise<void> => {
     if (typeof window.api?.modelQuotas !== 'function') {
-      setError('Quotas indisponibles')
+      setError('Redémarrage requis pour activer les quotas')
       return
     }
     setLoading(true)
@@ -115,12 +115,14 @@ export function ModelQuotaIndicator(): React.JSX.Element {
             <div>
               <strong>Quotas modèles</strong>
               <small>
-                {snapshot
-                  ? `Actualisé ${new Date(snapshot.observedAt).toLocaleTimeString('fr-FR', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}`
-                  : 'Lecture en cours'}
+                {error
+                  ? 'Indisponible'
+                  : snapshot
+                    ? `Actualisé ${new Date(snapshot.observedAt).toLocaleTimeString('fr-FR', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}`
+                    : 'Lecture en cours'}
               </small>
             </div>
             <button

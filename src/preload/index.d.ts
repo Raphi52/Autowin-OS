@@ -282,6 +282,10 @@ interface ChatApi {
   onPreflight: (cb: (result: PreflightResult) => void) => () => void
   getPreflight: () => Promise<PreflightResult | null>
   recheckPreflight: (force?: boolean) => Promise<PreflightResult>
+  orchestrationBudget: () => Promise<{ maxUsd: number | null }>
+  setOrchestrationBudget: (settings: {
+    maxUsd: number | null
+  }) => Promise<{ maxUsd: number | null }>
   getGitState: (repoPath?: string) => Promise<import('../shared/git-read').GitReadResult>
   getGitGraph: (repoPath?: string) => Promise<import('../shared/git-graph').GitGraphSnapshot>
   getGitDiff: (

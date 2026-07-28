@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import type { SettingsSection } from '../tabs'
 import { BehaviourView } from './BehaviourView'
 import { CapabilitiesView } from './CapabilitiesView'
+import { OrchestrationBudgetSettings } from './OrchestrationBudgetSettings'
 import './DomainShell.css'
 
 type PreflightResult = Awaited<ReturnType<typeof window.api.recheckPreflight>>
@@ -32,6 +33,14 @@ export function SettingsView({
       <nav className="domain-tabs" aria-label="Sections Settings">
         <button
           type="button"
+          className={section === 'budget' ? 'is-active' : ''}
+          aria-pressed={section === 'budget'}
+          onClick={() => onSectionChange('budget')}
+        >
+          Budget
+        </button>
+        <button
+          type="button"
           className={section === 'capabilities' ? 'is-active' : ''}
           aria-pressed={section === 'capabilities'}
           onClick={() => onSectionChange('capabilities')}
@@ -57,9 +66,13 @@ export function SettingsView({
       </nav>
       <div className="domain-content">
         {section === 'capabilities' && <CapabilitiesView active={active} />}
+        {section === 'budget' && <OrchestrationBudgetSettings />}
         {section === 'behaviour' && <BehaviourView />}
         {section === 'preflight' && (
-          <section className="settings-preflight surface-panel" aria-label="Diagnostic de configuration">
+          <section
+            className="settings-preflight surface-panel"
+            aria-label="Diagnostic de configuration"
+          >
             <header>
               <div>
                 <span className="domain-eyebrow">Configuration locale</span>
@@ -77,7 +90,9 @@ export function SettingsView({
                 <ul className="settings-preflight-list">
                   {preflight.checks.map((check) => (
                     <li key={check.id} className={check.ok ? 'is-ok' : 'is-ko'}>
-                      <strong>{check.ok ? '✓' : '✗'} {check.label}</strong>
+                      <strong>
+                        {check.ok ? '✓' : '✗'} {check.label}
+                      </strong>
                       {check.detail && <span>{check.detail}</span>}
                     </li>
                   ))}

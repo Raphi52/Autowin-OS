@@ -5,11 +5,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./CapabilitiesView', () => ({ CapabilitiesView: () => null }))
 vi.mock('./BehaviourView', () => ({ BehaviourView: () => null }))
+vi.mock('./OrchestrationBudgetSettings', () => ({ OrchestrationBudgetSettings: () => null }))
 
 import { SettingsView } from './SettingsView'
 
-;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true
+;(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true
 
 const mounted: Array<{ root: ReturnType<typeof createRoot>; container: HTMLDivElement }> = []
 
@@ -59,5 +61,20 @@ describe('SettingsView diagnostic', () => {
     expect(recheckPreflight).toHaveBeenCalledWith(true)
     expect(container.textContent).toContain('Session OAuth Codex')
     expect(container.querySelector('.settings-preflight-list li')?.className).toContain('is-ok')
+  })
+
+  it('expose le réglage de budget', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    mounted.push({ root, container })
+    await act(async () => {
+      root.render(
+        createElement(SettingsView, { active: true, section: 'budget', onSectionChange: vi.fn() })
+      )
+    })
+    expect(
+      [...container.querySelectorAll('button')].some((button) => button.textContent === 'Budget')
+    ).toBe(true)
   })
 })

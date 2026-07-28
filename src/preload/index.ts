@@ -70,6 +70,12 @@ const api = {
   // #5 — le wizard first-run re-vérifie la config à la demande (force=true pour le bouton).
   recheckPreflight: (force?: boolean): Promise<unknown> =>
     ipcRenderer.invoke('preflight:recheck', force),
+  orchestrationBudget: (): Promise<{ maxUsd: number | null }> =>
+    ipcRenderer.invoke('os:orchestrationBudget:get'),
+  setOrchestrationBudget: (settings: {
+    maxUsd: number | null
+  }): Promise<{ maxUsd: number | null }> =>
+    ipcRenderer.invoke('os:orchestrationBudget:set', settings),
   // Config par rôle
   roles: (): Promise<
     Record<string, { provider: string; model?: string; reasoningEffort?: string }>
