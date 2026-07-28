@@ -70,6 +70,23 @@ function api(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   }
 }
 
+/**
+ * Parité Claude Code : envoyer pendant un tour INJECTE dans le tour courant ; la FILE d'attente
+ * n'est plus qu'un REPLI (injection impossible). Ce mock fait échouer les `failures` premières
+ * injections (celles du composer → remplissent la file, ce que ces tests exercent) puis délègue à
+ * `then` (utilisé par le bouton « 🧭 Orienter »).
+ */
+function injectFailingThen(
+  failures: number,
+  then: () => Promise<{ ok: boolean }> = async () => ({ ok: true })
+): ReturnType<typeof vi.fn> {
+  let seen = 0
+  return vi.fn(() => {
+    seen += 1
+    return seen <= failures ? Promise.reject(new Error('injection indisponible')) : then()
+  })
+}
+
 describe('ChatView behavior under concurrent UI actions', () => {
   beforeAll(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -133,6 +150,67 @@ describe('ChatView behavior under concurrent UI actions', () => {
     })
     expect(mockApi.pilotChat).toHaveBeenCalledTimes(1)
     await act(async () => pilot.resolve({ ok: true }))
+  })
+
+  it('affiche et vide le prompt immédiatement avant la fin du routage', async () => {
+    const routing = deferred<{
+      sourceConversationId: string
+      conversationId: string
+      routed: boolean
+      decision: { route: 'current'; confidence: number; reason: string }
+    }>()
+    const pilot = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      routeConversationMessage: vi.fn(() => routing.promise),
+      pilotChat: vi.fn(() => pilot.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('prompt instantané')
+
+    const textarea = container!.querySelector('textarea') as HTMLTextAreaElement
+    await act(async () => {
+      textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(textarea.value).toBe('')
+    expect(container!.querySelector('.chat-scroll')?.textContent).toContain('prompt instantané')
+    expect(mockApi.pilotChat).not.toHaveBeenCalled()
+
+    await act(async () =>
+      routing.resolve({
+        sourceConversationId: 'A',
+        conversationId: 'A',
+        routed: false,
+        decision: { route: 'current', confidence: 1, reason: 'related' }
+      })
+    )
+    await act(async () => pilot.resolve({ ok: true }))
+  })
+
+  it('restaure le brouillon si le routage échoue après le commit optimiste', async () => {
+    const routing = deferred<never>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      routeConversationMessage: vi.fn(() => routing.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('prompt à restaurer')
+    await click('.composer-send')
+    expect((container!.querySelector('textarea') as HTMLTextAreaElement).value).toBe('')
+
+    await act(async () => routing.reject(new Error('routeur indisponible')))
+
+    expect((container!.querySelector('textarea') as HTMLTextAreaElement).value).toBe(
+      'prompt à restaurer'
+    )
+    expect(container!.querySelector('.chat-scroll')?.textContent).not.toContain(
+      'prompt à restaurer'
+    )
+    expect(container!.textContent).toContain('routeur indisponible')
   })
 
   it('moves an unrelated message to a new active conversation before pilotChat', async () => {
@@ -199,13 +277,36 @@ describe('ChatView behavior under concurrent UI actions', () => {
     ).toBe('B')
   })
 
+  it('parité Claude Code : envoyer pendant un tour INJECTE dans le tour courant (pas de file)', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise),
+      injectDirective: vi.fn().mockResolvedValue({ ok: true })
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('long turn')
+    await click('.composer-send')
+    await type('au fait, ajoute un test')
+    await click('.composer-send')
+
+    expect(mockApi.injectDirective).toHaveBeenCalledWith(
+      expect.any(String),
+      'au fait, ajoute un test'
+    )
+    // Injection réussie → RIEN en file d'attente (contrairement à l'ancien comportement).
+    expect(container!.querySelector('.directive-queue')).toBeNull()
+    await act(async () => pilot.resolve({ ok: true }))
+  })
+
   it('removes the steered message by stable identity after the queue changes', async () => {
     const pilot = deferred<{ ok: boolean }>()
     const injection = deferred<{ ok: boolean }>()
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A')]),
       pilotChat: vi.fn(() => pilot.promise),
-      injectDirective: vi.fn(() => injection.promise)
+      injectDirective: injectFailingThen(2, () => injection.promise)
     })
     await mount(mockApi)
     await click('.conv-pick')
@@ -226,11 +327,68 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => pilot.resolve({ ok: true }))
   })
 
+  it('retire immédiatement une orientation sans attendre la réponse IPC', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const injection = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise),
+      injectDirective: injectFailingThen(1, () => injection.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('long turn')
+    await click('.composer-send')
+    await type('orientation instantanée')
+    await click('.composer-send')
+
+    const steer = container!.querySelector('.directive-queue-steer') as HTMLElement
+    await act(async () => {
+      steer.click()
+      await Promise.resolve()
+    })
+
+    // 1 appel du composer (échec → repli file) + 1 appel du bouton « Orienter ».
+    expect(mockApi.injectDirective).toHaveBeenCalledTimes(2)
+    expect(container!.querySelector('.directive-queue')).toBeNull()
+    await act(async () => injection.resolve({ ok: true }))
+    await act(async () => pilot.resolve({ ok: true }))
+  })
+
+  it('affiche immédiatement l’interruption sans attendre la réponse IPC', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const cancellation = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise),
+      cancelPilotChat: vi.fn(() => cancellation.promise),
+      injectDirective: injectFailingThen(1)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('long turn')
+    await click('.composer-send')
+    await type('message urgent')
+    await click('.composer-send')
+
+    const interrupt = container!.querySelector('.directive-queue-send') as HTMLElement
+    await act(async () => {
+      interrupt.click()
+      await Promise.resolve()
+    })
+
+    expect(mockApi.cancelPilotChat).toHaveBeenCalledOnce()
+    expect(container!.querySelector('.directive-queue-send')?.textContent).toContain('Interruption')
+    await act(async () => cancellation.resolve({ ok: true }))
+    await act(async () => pilot.resolve({ ok: true }))
+  })
+
   it('restores a removed queued message into the existing draft', async () => {
     const pilot = deferred<{ ok: boolean }>()
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A')]),
-      pilotChat: vi.fn(() => pilot.promise)
+      pilotChat: vi.fn(() => pilot.promise),
+      injectDirective: injectFailingThen(1)
     })
     await mount(mockApi)
     await click('.conv-pick')
@@ -253,7 +411,8 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const pilot = deferred<{ ok: boolean }>()
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A')]),
-      pilotChat: vi.fn(() => pilot.promise)
+      pilotChat: vi.fn(() => pilot.promise),
+      injectDirective: injectFailingThen(2)
     })
     await mount(mockApi)
     await click('.conv-pick')
@@ -264,6 +423,8 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await type('B')
     await click('.composer-send')
 
+    const injectionsBeforeBtw = (mockApi.injectDirective as ReturnType<typeof vi.fn>).mock.calls
+      .length
     await click('.directive-queue-btw')
 
     expect(
@@ -275,7 +436,38 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(
       Array.from(container!.querySelectorAll('.directive-queue-text'), (element) => element.textContent)
     ).toEqual(['B', 'A'])
-    expect(mockApi.injectDirective).not.toHaveBeenCalled()
+    // BTW réordonne la file SANS injecter : aucun appel supplémentaire depuis le clic.
+    expect((mockApi.injectDirective as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
+      injectionsBeforeBtw
+    )
+    await act(async () => pilot.resolve({ ok: true }))
+  })
+
+  it('confirme visiblement BTW même avec un seul message en file', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise),
+      injectDirective: injectFailingThen(1)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('long turn')
+    await click('.composer-send')
+    await type('message différé')
+    await click('.composer-send')
+
+    const injectionsBeforeBtw = (mockApi.injectDirective as ReturnType<typeof vi.fn>).mock.calls
+      .length
+    await click('.directive-queue-btw')
+
+    const button = container!.querySelector('.directive-queue-btw') as HTMLButtonElement
+    expect(button.textContent).toContain('✓ BTW')
+    expect(button.disabled).toBe(true)
+    expect(container!.querySelector('.directive-queue-text')?.textContent).toBe('message différé')
+    expect((mockApi.injectDirective as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
+      injectionsBeforeBtw
+    )
     await act(async () => pilot.resolve({ ok: true }))
   })
 
@@ -552,6 +744,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await type('à conserver')
     await click('.composer-send')
     expect((container!.querySelector('textarea') as HTMLTextAreaElement).value).toBe('à conserver')
+    expect(container!.querySelector('.chat-scroll')?.textContent).not.toContain('à conserver')
     expect(container!.textContent).toContain('bootstrap indisponible')
     await click('.composer-send')
     expect(create).toHaveBeenCalledTimes(1)

@@ -136,6 +136,7 @@ type RunEntry = {
 type Decision = { id: string; question: string; options?: unknown[]; safeDefault?: unknown }
 
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
+type QueuedDirective = { id: number; text: string; mode?: 'btw' }
 
 /* ---------- Constantes ---------- */
 
@@ -468,8 +469,9 @@ export function ChatView({
   // Menu ⋮ d'une conversation, rendu en position fixe (déborde du conteneur scrollable).
   const [convMenu, setConvMenu] = useState<{ conv: Conv; top: number; left: number } | null>(null)
   // File d'attente : directives injectées pendant le tour, pas encore consommées (conv active).
-  const [pendingDirectives, setPendingDirectives] = useState<Array<{ id: number; text: string }>>(
-    []
+  const [pendingDirectives, setPendingDirectives] = useState<QueuedDirective[]>([])
+  const [interruptingConversations, setInterruptingConversations] = useState<Set<string>>(
+    () => new Set()
   )
   const [modelCatalog, setModelCatalog] = useState<RuntimeModel[]>([])
   const [orchestratorBinding, setOrchestratorBinding] = useState<{
@@ -508,6 +510,7 @@ export function ChatView({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const liveMessagesRef = useRef(new Map<string, Msg[]>())
   const busyConversationsRef = useRef(new Set<string>())
+  const interruptingConversationsRef = useRef(new Set<string>())
   const sendLocksRef = useRef(new Set<string>())
   const composerDraftKeyRef = useRef(NEW_DRAFT_KEY)
   const composerSelectionGenerationRef = useRef(0)
@@ -653,6 +656,11 @@ export function ChatView({
     else busyConversationsRef.current.delete(id)
     setBusyConversations(new Set(busyConversationsRef.current))
   }
+  function setConversationInterrupting(id: string, value: boolean): void {
+    if (value) interruptingConversationsRef.current.add(id)
+    else interruptingConversationsRef.current.delete(id)
+    setInterruptingConversations(new Set(interruptingConversationsRef.current))
+  }
 
   async function addFiles(files: FileList | File[]): Promise<void> {
     if (busy) return
@@ -701,16 +709,16 @@ export function ChatView({
   // File d'attente LOCALE (renderer) : messages tapés pendant un tour, envoyés comme des tours
   // NORMAUX un par un à la fin du tour courant → chaque message = sa propre paire Q/R (rendu propre).
   const nextQueueEntryIdRef = useRef(0)
-  const queueRef = useRef<Map<string, Array<{ id: number; text: string }>>>(new Map())
-  function setConversationQueue(id: string, next: Array<{ id: number; text: string }>): void {
+  const queueRef = useRef<Map<string, QueuedDirective[]>>(new Map())
+  function setConversationQueue(id: string, next: QueuedDirective[]): void {
     if (next.length) queueRef.current.set(id, next)
     else queueRef.current.delete(id)
     if (activeRef.current === id) setPendingDirectives(next)
   }
-  function enqueueMessage(id: string, text: string): void {
+  function enqueueMessage(id: string, text: string, mode?: QueuedDirective['mode']): void {
     setConversationQueue(id, [
       ...(queueRef.current.get(id) ?? []),
-      { id: nextQueueEntryIdRef.current++, text }
+      { id: nextQueueEntryIdRef.current++, text, mode }
     ])
   }
   useEffect(() => {
@@ -1020,12 +1028,24 @@ export function ChatView({
     await reloadActiveFromStore(activeId)
   }
   /** Met le message en FILE D'ATTENTE (envoyé comme tour normal à la fin du tour courant). */
+  /**
+   * Envoi pendant un tour = parité CLAUDE CODE : le message est LIVRÉ AU TOUR EN COURS (injection
+   * directe, l'agent en tient compte à l'itération suivante), pas empilé pour plus tard.
+   * Repli : injection impossible → file d'attente (drainée en fin de tour), rien n'est perdu.
+   */
   async function injectCurrentDirective(): Promise<void> {
     if (!activeId) return
     const text = input.trim()
     if (!text) return
-    enqueueMessage(activeId, text)
-    setDraftInput(activeId, '')
+    const id = activeId
+    setDraftInput(id, '')
+    let injected = false
+    try {
+      injected = (await window.api.injectDirective(id, text))?.ok === true
+    } catch {
+      injected = false
+    }
+    if (!injected) enqueueMessage(id, text)
   }
 
   /**
@@ -1033,10 +1053,16 @@ export function ChatView({
    * (le message choisi + ses antérieurs partent d'abord ; les postérieurs suivent en auto-drain).
    * Sert au bouton « Interrompre et envoyer tout » (en tête de file) ET aux boutons par-message.
    */
-  async function interruptAndFlushQueue(): Promise<void> {
+  function interruptAndFlushQueue(): void {
     const id = activeRef.current
-    if (!id) return
-    await window.api.cancelPilotChat(id)
+    if (!id || interruptingConversationsRef.current.has(id)) return
+    setConversationInterrupting(id, true)
+    void window.api
+      .cancelPilotChat(id)
+      .then((result) => {
+        if (result?.ok === false) setConversationInterrupting(id, false)
+      })
+      .catch(() => setConversationInterrupting(id, false))
   }
 
   /**
@@ -1044,24 +1070,34 @@ export function ChatView({
    * (drainée à l'itération suivante du pilote) sans l'annuler, puis le retire de la file.
    * Différent de « Interrompre et envoyer » qui coupe le tour.
    */
-  async function steerWithoutInterrupt(entry: { id: number; text: string }): Promise<void> {
+  async function steerWithoutInterrupt(entry: QueuedDirective): Promise<void> {
     const id = activeRef.current
     if (!id) return
+    const original = queueRef.current.get(id) ?? []
+    const originalIndex = original.findIndex((queued) => queued.id === entry.id)
+    if (originalIndex < 0) return
+    setConversationQueue(
+      id,
+      original.filter((queued) => queued.id !== entry.id)
+    )
+    const restore = (): void => {
+      const current = queueRef.current.get(id) ?? []
+      if (current.some((queued) => queued.id === entry.id)) return
+      const next = current.slice()
+      next.splice(Math.min(originalIndex, next.length), 0, entry)
+      setConversationQueue(id, next)
+    }
     let result: { ok: boolean }
     try {
       result = await window.api.injectDirective(id, entry.text)
     } catch {
+      restore()
       return
     }
-    if (!result.ok) return
-    const q = queueRef.current.get(id) ?? []
-    setConversationQueue(
-      id,
-      q.filter((queued) => queued.id !== entry.id)
-    )
+    if (!result.ok) restore()
   }
 
-  function restoreQueuedMessageToDraft(entry: { id: number; text: string }): void {
+  function restoreQueuedMessageToDraft(entry: QueuedDirective): void {
     const id = activeRef.current
     if (!id) return
     const draftKey = composerDraftKeyRef.current
@@ -1074,39 +1110,45 @@ export function ChatView({
     )
   }
 
-  function moveQueuedMessageToBtw(entry: { id: number; text: string }): void {
+  function moveQueuedMessageToBtw(entry: QueuedDirective): void {
     const id = activeRef.current
     if (!id) return
     const q = queueRef.current.get(id) ?? []
+    if (!q.some((queued) => queued.id === entry.id)) return
     setConversationQueue(
       id,
-      q.filter((queued) => queued.id !== entry.id)
+      q.filter((queued) => queued.id !== entry.id).concat({ ...entry, mode: 'btw' })
     )
-    void submitBtw(entry.text)
   }
 
   /**
-   * Commande composer `/btw <texte>` — « au fait… », comme écrire pendant que Claude Code travaille :
-   * le message est MIS EN FILE D'ATTENTE et traité à la fin du tour courant (tour suivant normal),
-   * SANS interrompre ni s'imposer en priorité au tour en cours. Distinct du bouton « 🧭 Orienter »
-   * (lui injecte en priorité dans le tour courant). Idle (aucun tour) → envoi immédiat.
+   * `/btw <texte>` — parité CLAUDE CODE : écrire pendant que l'agent travaille LIVRE le message
+   * DANS LE TOUR EN COURS (drainé à l'itération suivante du pilote), sans l'interrompre. Ce n'est
+   * donc PAS une mise en file : l'agent en tient compte immédiatement.
+   * Repli : si l'injection échoue (tour non injectable), on enfile pour ne rien perdre.
+   * Idle (aucun tour) → envoi normal.
    */
   async function submitBtw(body: string): Promise<void> {
     const text = body.trim()
     if (!text) {
-      setDraftInput(composerDraftKeyRef.current, '') // "/btw" seul → rien à enfiler, on nettoie
+      setDraftInput(composerDraftKeyRef.current, '') // "/btw" seul → rien à injecter, on nettoie
       return
     }
-    // Le guard `id` ne borne QUE la branche busy (l'enfilage cible la conversation active). En idle,
-    // send(text) gère lui-même la création de conversation → un /btw en 1er message marche aussi.
-    if (busy) {
-      const id = activeRef.current
-      if (!id) return
-      enqueueMessage(id, text) // → File d'attente, drainée en fin de tour (cf. effet busy→false)
-      setDraftInput(composerDraftKeyRef.current, '')
-    } else {
+    if (!busy) {
       void send(text) // aucun tour en cours → le texte part comme message normal
+      return
     }
+    const id = activeRef.current
+    if (!id) return
+    setDraftInput(composerDraftKeyRef.current, '')
+    let injected = false
+    try {
+      injected = (await window.api.injectDirective(id, text))?.ok === true
+    } catch {
+      injected = false
+    }
+    // Repli explicite : l'injection a échoué → file d'attente (drainée en fin de tour), rien n'est perdu.
+    if (!injected) enqueueMessage(id, text, 'btw')
   }
   /** True (et déclenche submitBtw) si le composer commence par `/btw` ; sinon false (submit normal). */
   function handleBtw(): boolean {
@@ -1125,9 +1167,10 @@ export function ChatView({
   // par tour (chacun = sa propre paire Q/R). Vaut aussi bien pour l'auto-drain fin de tour que pour
   // une interruption manuelle (les deux passent par une transition busy→false).
   useEffect(() => {
-    if (busy) return
     const id = activeRef.current
     if (!id) return
+    if (busy) return
+    if (interruptingConversationsRef.current.has(id)) setConversationInterrupting(id, false)
     const queued = queueRef.current.get(id)
     if (!queued || queued.length === 0) return
     const [nextMessage, ...rest] = queued
@@ -1177,34 +1220,57 @@ export function ChatView({
 
     let convId = activeId
     let messageCommitted = false
+    const sourceConversationId = activeId
+    const sourcePreviousMessages =
+      (sourceConversationId ? liveMessagesRef.current.get(sourceConversationId) : undefined) ??
+      messages
+    let previousMessagesForTarget = sourcePreviousMessages
+    const optimisticHistory: Msg[] = [
+      ...sourcePreviousMessages,
+      {
+        role: 'user',
+        content: value,
+        attachments: outgoingAttachments.map(({ name, mimeType, size, thumbnail }) => ({
+          name,
+          mimeType,
+          size,
+          ...(thumbnail && { thumbnail })
+        }))
+      },
+      hydrateStoredAssistant({ content: '', parts: [], status: 'streaming' })
+    ]
+
+    // Commit VISUEL avant tout await : Entrée vide le composer et affiche le prompt sans exposer
+    // la latence du classifieur de routage. Ce commit reste local jusqu'à pilotChat.
+    if (sourceConversationId) liveMessagesRef.current.set(sourceConversationId, optimisticHistory)
+    if (activeRef.current === sourceConversationId) setMessages(optimisticHistory)
+    setDraftInput(sendDraftKey, '')
+    setDraftAttachments(sendDraftKey, () => [])
+    setDraftError(sendDraftKey, null)
+    followTailRef.current = true
+    if (sourceConversationId) setConversationBusy(sourceConversationId, true)
+
     try {
       if (convId) {
-        const sourceConversationId = convId
+        const sourceId = convId
         const route = await window.api.routeConversationMessage(
-          sourceConversationId,
+          sourceId,
           value,
           outgoingAttachments.map((attachment) => attachment.name)
         )
-        if (route.routed && route.conversationId !== sourceConversationId) {
+        if (route.routed && route.conversationId !== sourceId) {
           convId = route.conversationId
           sendLocksRef.current.add(convId)
-          composerDraftsRef.current.set(convId, outgoingDraft)
-          if (getComposerDraft(sourceConversationId) === outgoingDraft) {
-            composerDraftsRef.current.set(sourceConversationId, {
-              input: '',
-              attachments: [],
-              error: null
-            })
-          }
-          liveMessagesRef.current.set(convId, [])
+          liveMessagesRef.current.set(sourceId, sourcePreviousMessages)
+          setConversationBusy(sourceId, false)
+          previousMessagesForTarget = liveMessagesRef.current.get(convId) ?? []
           const shouldAdoptRoutedConversation =
-            activeRef.current === sourceConversationId &&
+            activeRef.current === sourceId &&
             composerDraftKeyRef.current === sendDraftKey &&
             composerSelectionGenerationRef.current === sendSelectionGeneration
           if (shouldAdoptRoutedConversation) {
             activeRef.current = convId
             setActiveId(convId)
-            setMessages([])
             switchComposerDraft(convId)
           }
           void refreshConvs()
@@ -1228,22 +1294,18 @@ export function ChatView({
           composerSelectionGenerationRef.current === sendSelectionGeneration
         sendLocksRef.current.add(convId)
         sendLocksRef.current.delete(sendLockKey)
-        composerDraftsRef.current.set(c.id, outgoingDraft)
-        if (getComposerDraft(NEW_DRAFT_KEY) === outgoingDraft) {
-          composerDraftsRef.current.set(NEW_DRAFT_KEY, { input: '', attachments: [], error: null })
-        }
+        previousMessagesForTarget = liveMessagesRef.current.get(convId) ?? []
         if (shouldAdoptCreatedConversation) {
           activeRef.current = c.id
           setActiveId(c.id)
           composerDraftKeyRef.current = c.id
+          composerDraftsRef.current.set(c.id, { input: '', attachments: [], error: null })
         }
         void refreshConvs()
       }
 
-      const previousMessages =
-        liveMessagesRef.current.get(convId) ?? (activeRef.current === convId ? messages : [])
       const history: Msg[] = [
-        ...previousMessages,
+        ...previousMessagesForTarget,
         {
           role: 'user',
           content: value,
@@ -1258,10 +1320,6 @@ export function ChatView({
       ]
       liveMessagesRef.current.set(convId, history)
       if (activeRef.current === convId) setMessages(history)
-      setDraftInput(convId, '')
-      setDraftAttachments(convId, () => [])
-      setDraftError(convId, null)
-      followTailRef.current = true
       setConversationBusy(convId, true)
       messageCommitted = true
       const payload: Array<{
@@ -1279,6 +1337,17 @@ export function ChatView({
         })
     } catch (error) {
       if (!messageCommitted) {
+        if (sourceConversationId) {
+          liveMessagesRef.current.set(sourceConversationId, sourcePreviousMessages)
+          setConversationBusy(sourceConversationId, false)
+        }
+        if (convId && convId !== sourceConversationId) {
+          liveMessagesRef.current.delete(convId)
+          setConversationBusy(convId, false)
+        }
+        if (activeRef.current === sourceConversationId) setMessages(sourcePreviousMessages)
+        setDraftInput(sendDraftKey, value)
+        setDraftAttachments(sendDraftKey, () => outgoingAttachments)
         setDraftError(
           sendDraftKey,
           `Envoi impossible : ${error instanceof Error ? error.message : String(error)}`
@@ -1811,9 +1880,12 @@ export function ChatView({
                   className="directive-queue-send directive-queue-send-all"
                   title="Interrompre le tour en cours et envoyer tous les messages en file maintenant"
                   aria-label="Interrompre et envoyer tout"
-                  onClick={() => void interruptAndFlushQueue()}
+                  disabled={interruptingConversations.has(activeId ?? '')}
+                  onClick={interruptAndFlushQueue}
                 >
-                  ⏹ Interrompre et envoyer tout
+                  {interruptingConversations.has(activeId ?? '')
+                    ? '⏳ Interruption…'
+                    : '⏹ Interrompre et envoyer tout'}
                 </button>
               )}
             </div>
@@ -1828,9 +1900,12 @@ export function ChatView({
                   className="directive-queue-send"
                   title="Interrompre le tour et envoyer ce message + ses antérieurs maintenant"
                   aria-label={`Interrompre et envoyer jusqu’au message ${index + 1}`}
-                  onClick={() => void interruptAndFlushQueue()}
+                  disabled={interruptingConversations.has(activeId ?? '')}
+                  onClick={interruptAndFlushQueue}
                 >
-                  ⏹ Interrompre et envoyer
+                  {interruptingConversations.has(activeId ?? '')
+                    ? '⏳ Interruption…'
+                    : '⏹ Interrompre et envoyer'}
                 </button>
                 {busy && (
                   <button
@@ -1847,11 +1922,16 @@ export function ChatView({
                   <button
                     type="button"
                     className="directive-queue-send directive-queue-btw"
-                    title="BTW — remettre ce message à la fin de la file sans interrompre le tour en cours"
+                    title={
+                      directive.mode === 'btw'
+                        ? 'BTW confirmé — ce message sera envoyé à la fin du tour en cours'
+                        : 'BTW — remettre ce message à la fin de la file sans interrompre le tour en cours'
+                    }
                     aria-label={`Remettre le message ${index + 1} en file via BTW`}
+                    disabled={directive.mode === 'btw'}
                     onClick={() => moveQueuedMessageToBtw(directive)}
                   >
-                    BTW
+                    {directive.mode === 'btw' ? '✓ BTW' : 'BTW'}
                   </button>
                 )}
                 <button
