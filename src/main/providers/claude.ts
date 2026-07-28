@@ -218,9 +218,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     // Autowin = SOURCE UNIQUE : on lance le CLI « nu ». `--setting-sources ""` → aucun CLAUDE.md
     // utilisateur/projet, ni skills, ni hooks CC, ni MCP hérités → zéro doublon avec les consignes
     // qu'Autowin injecte (--system-prompt). L'enforcement vit alors dans le HookBus interne d'Autowin.
+    // Le PROMPT n'est PLUS passé en argv (`-p <prompt>`) : une longue conversation dépassait la limite
+    // de ligne de commande Windows (~32 ko) → `spawn ENAMETOOLONG`, tout le run cassait. Claude Code lit
+    // le prompt sur STDIN quand `-p` n'a pas de valeur positionnelle → on l'y écrit (cf. child.stdin plus bas).
     const args = [
       '-p',
-      lastUser,
       '--output-format',
       'stream-json',
       '--verbose',
@@ -253,7 +255,17 @@ export class ClaudeCliAdapter implements ProviderAdapter {
 
     opts.observePrompt?.(claudeTransportEnvelope(messages, opts, materialized, args))
 
+    const spawnToken = randomUUID()
+    execution?.onSpawnIntent?.(spawnToken, true)
     const child = spawn(this.bin, args, { shell: false, cwd: execution?.cwd })
+    const childPid = child.pid
+    if (childPid) {
+      if (execution?.onSpawned) execution.onSpawned(spawnToken, childPid)
+      else {
+        execution?.onProcess?.(childPid, true)
+        execution?.onSpawnIntent?.(spawnToken, false)
+      }
+    }
     let buffer = ''
     let text = ''
     const reasoningFragments: string[] = []
@@ -398,12 +410,14 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     })
     child.on('error', (e) => {
       watchdog.dispose()
+      if (!childPid) execution?.onSpawnIntent?.(spawnToken, false)
       errored = e
       done = true
       wake()
     })
     child.on('close', (code) => {
       watchdog.dispose()
+      if (childPid) execution?.onProcess?.(childPid, false)
       if (systemPromptDir) rmSync(systemPromptDir, { recursive: true, force: true })
       materialized?.cleanup()
       // Flush du reliquat : un dernier event JSON sans '\n' terminal ne serait
@@ -421,6 +435,14 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       done = true
       wake()
     })
+
+    // Prompt remis sur STDIN (et non en argv) → aucune limite de longueur de ligne de commande.
+    // Best-effort : un stdin fermé (process déjà mort) ne doit pas jeter hors du flux normal.
+    try {
+      child.stdin.end(lastUser)
+    } catch {
+      /* stdin indisponible (process mort avant écriture) → close/error prendront le relais */
+    }
 
     // pompe : yield les chunks au fil de l'eau
     while (!done || queue.length > 0) {
@@ -445,3 +467,4 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     }
   }
 }
+import { randomUUID } from 'node:crypto'
