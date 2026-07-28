@@ -1,3 +1,4 @@
+import { failedActionRunId } from './run-trace-target'
 import { HumanJson } from './HumanJson'
 import {
   STEP_META,
@@ -169,7 +170,7 @@ export function AssistantActivityGroup({
 }: {
   actions: ChatActionPart[]
   /** Ouvre Workflows : `live` = carte du run en cours, `history` = activité passée. */
-  onOpenLiveAction?: (mode: 'live' | 'history') => void
+  onOpenLiveAction?: (mode: 'live' | 'history', runId?: string) => void
 }): React.JSX.Element {
   const failed = actions.some((action) => action.ok === false)
   // « En cours » = sans résultat ET non interrompue. Une action interrompue (tour clos sans son
@@ -208,7 +209,9 @@ export function AssistantActivityGroup({
           ? 'Ouvrir cette action en cours dans Workflows'
           : 'Voir le détail de cette action dans Workflows'
       }
-      onClick={() => onOpenLiveAction?.(running ? 'live' : 'history')}
+      // On transmet le run FAUTIF : sans lui, un clic sur « avec erreur » n'ouvrait que la liste
+      // des runs de la conversation, laissant l'utilisateur chercher lequel regarder.
+      onClick={() => onOpenLiveAction?.(running ? 'live' : 'history', failedActionRunId(actions))}
     >
       <span
         className={`status-dot ${

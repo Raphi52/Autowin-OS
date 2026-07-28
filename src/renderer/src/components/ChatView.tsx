@@ -6,6 +6,7 @@ import { SourceControlPane } from './SourceControlPane'
 import { ScoutTable } from './ScoutTable'
 import { ModuleHeader } from './ModuleHeader'
 import { pickTurnToResume, type UnfinishedTurn } from './resume-unfinished'
+import { pickRunForTrace } from './run-trace-target'
 import {
   CHAT_PANE_LIMITS,
   clampConversationPaneWidth,
@@ -522,6 +523,9 @@ export function ChatView({
   const [paneTab, setPaneTab] = useState<'runs' | 'worktrees'>('runs')
   const [runScope, setRunScope] = useState<'conv' | 'tous'>('conv')
   const [runs, setRuns] = useState<RunEntry[]>([])
+  /** Miroir stable : `revealLiveAction` lit la liste courante sans se recreer a chaque chargement. */
+  const runsRef = useRef<RunEntry[]>([])
+  runsRef.current = runs
   const [openRun, setOpenRun] = useState<{ path: string; content: string } | null>(null)
   const [openTrace, setOpenTrace] = useState<OrchStep[] | null>(null)
   // Détail d'un run : bascule entre le fil des sous-agents (trace) et le RUN.md brut.
@@ -533,13 +537,17 @@ export function ChatView({
   // Clic sur le bloc d'activité d'un message → Workflows, à l'endroit qui montre RÉELLEMENT ce qui
   // s'est passé : la carte du run pour une action en cours, l'onglet Activité (historique) pour une
   // action déjà terminée ou interrompue — sa carte live n'existe plus.
-  const revealLiveAction = useCallback((mode: 'live' | 'history' = 'live') => {
+  const revealLiveAction = useCallback((mode: 'live' | 'history' = 'live', runId?: string) => {
     setShowRuns(true)
     setPaneTab('runs')
     if (mode === 'history') {
-      // Action déjà terminée/interrompue : sa carte live n'existe plus → on cadre la LISTE des runs
-      // de cette conversation, où le run concerné (et ce qui s'y est passé) reste consultable.
+      // Action déjà terminée/interrompue : sa carte live n'existe plus. On OUVRE LA TRACE du run
+      // concerné — cadrer la seule liste laissait l'utilisateur chercher lequel regarder.
+      // `pickRunForTrace` dégrade proprement : chemin portant le runId → sinon le plus récent →
+      // sinon rien, et dans ce dernier cas on retombe sur le cadrage d'origine (aucune régression).
       setRunScope('conv')
+      const target = pickRunForTrace(runsRef.current, runId)
+      if (target) void viewRun(target)
       return
     }
     requestAnimationFrame(() =>
@@ -1633,13 +1641,6 @@ export function ChatView({
                     <span className="agent-inbox-name">{agent.title}</span>
                     <span className="agent-inbox-state">{agent.state}</span>
                   </span>
-                </button>
-                <button
-                  className="agent-inbox-stop"
-                  aria-label={`Arrêter ${agent.title}`}
-                  onClick={() => void window.api.cancelPilotChat(agent.id)}
-                >
-                  ■
                 </button>
               </div>
             ))}
