@@ -33,12 +33,21 @@ export function SourceControlPane({
   const [repoPath, setRepoPath] = useState<string>(
     () => localStorage.getItem('autowin:sc-repo') ?? ''
   )
+  // Compteur de rafraîchissement : recliquer le dépôt DÉJÀ actif réécrivait un state identique →
+  // React ne re-rendait rien → « le bouton ne fait rien ». Désormais chaque clic relit le dépôt.
+  const [refreshTick, setRefreshTick] = useState(0)
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     let alive = true
-    setGit(null)
+    // On NE VIDE PLUS l'affichage pendant le rafraîchissement (avant : écran blanc → « on dirait que
+    // rien ne se passe »). L'ancienne liste reste visible, un indicateur signale le chargement.
+    setLoading(true)
     void window.api.getGitState?.(repoPath || undefined).then((g) => {
-      if (alive) setGit(g as GitReadResult)
+      if (alive) {
+        setGit(g as GitReadResult)
+        setLoading(false)
+      }
     })
     void window.api.getWorktreeActivity?.().then((a) => {
       if (alive) setWorktrees(a)
@@ -48,13 +57,14 @@ export function SourceControlPane({
       alive = false
       off?.()
     }
-  }, [repoPath])
+  }, [repoPath, refreshTick])
 
   const selectRepo = (path: string): void => {
     localStorage.setItem('autowin:sc-repo', path)
     setOpenFile(null)
     setDiff(null)
     setRepoPath(path)
+    setRefreshTick((n) => n + 1)
   }
 
   const pickRepo = async (): Promise<void> => {
@@ -99,6 +109,13 @@ export function SourceControlPane({
         <div className="sc-repo" data-testid="sc-repo">
           <span className="sc-repo-path" title={repoPath || 'Dépôt courant (app)'}>
             📁 {repoPath ? repoPath.replace(/^.*[\\/]/, '') : 'Dépôt courant'}
+            {/* Retour visible à CHAQUE clic : sans lui, un rafraîchissement rapide passe inaperçu. */}
+            {loading && (
+              <span className="sc-loading" data-testid="sc-loading">
+                {' '}
+                · lecture…
+              </span>
+            )}
           </span>
           {/* Bascule directe entre le dépôt du projet et celui du Brain (tous deux versionnés). */}
           <button

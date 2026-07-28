@@ -10,12 +10,23 @@
   overflow-y: auto;
   min-height: 0;
 }
+/* Barre de dépôt COLLÉE en haut : le contenu dépasse largement la hauteur du panneau (des dizaines
+   de fichiers + un diff déplié), et sans sticky les boutons Projet/Brain sortaient de l'écran dès
+   qu'on faisait défiler — donnant l'impression qu'ils ne répondaient plus. */
 .sc-repo {
+  position: sticky;
+  top: 0;
+  z-index: 4;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 11px;
   border-bottom: 1px solid var(--line, #262b33);
+  background: var(--surface-panel, #0e1116);
+}
+.sc-loading {
+  color: var(--gold, #e9bd4e);
+  font-size: 10px;
 }
 .sc-repo-path {
   flex: 1;
