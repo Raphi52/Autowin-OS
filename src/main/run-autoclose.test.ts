@@ -14,6 +14,9 @@ import {
   type GitRunner
 } from './run-autoclose'
 
+/** Vrais dépôts git en tmp : sous charge parallèle, le budget vitest par défaut (5 s) est trop court. */
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
+
 const run = promisify(execFile)
 /** Vrai git (pas un mock) : c'est le comportement de git qu'on veut prouver, pas notre idée de git. */
 const realGit: GitRunner = async (args, cwd) => (await run('git', args, { cwd })).stdout

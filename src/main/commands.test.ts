@@ -138,17 +138,21 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     }
     const first = deferred()
     const second = deferred()
-    const signals: AbortSignal[] = []
+    // Indexé par TÂCHE, pas par ordre d'appel : `exec` peut atteindre `runTask` dans l'ordre
+    // inverse. Avec un appariement positionnel, les deux promesses différées s'intervertissaient et
+    // le test s'interbloquait (`await oldRun` attendant une promesse résolue plus bas) — c'était la
+    // cause du rouge aléatoire, pas la lenteur.
+    const signals = new Map<string, AbortSignal>()
     const os = fakeOs()
-    os.runTask = (_task: string, ...args: unknown[]) => {
-      signals.push(args.at(-2) as AbortSignal)
-      return signals.length === 1 ? first.promise : second.promise
+    os.runTask = (task: string, ...args: unknown[]) => {
+      signals.set(task, args.at(-2) as AbortSignal)
+      return task === 'ancien' ? first.promise : second.promise
     }
     const bus = new AppCommandBus(os, () => {})
 
     const oldRun = bus.exec('orchestrate', { task: 'ancien' }, 'conv-1', 'auto')
     const newRun = bus.exec('orchestrate', { task: 'nouveau' }, 'conv-1', 'auto')
-    await vi.waitFor(() => expect(signals).toHaveLength(2))
+    await vi.waitFor(() => expect(signals.size).toBe(2))
 
     first.resolve({
       gateBlocked: false,
@@ -161,7 +165,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     await oldRun
 
     expect(bus.abortOrchestration('conv-1')).toBe(true)
-    expect(signals[1].aborted).toBe(true)
+    expect(signals.get('nouveau')!.aborted).toBe(true)
 
     second.resolve({
       gateBlocked: false,

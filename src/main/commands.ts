@@ -280,6 +280,22 @@ export class AppCommandBus {
   private readonly pendingDecisionByFingerprint = new Map<string, string>()
   /** Orchestrations en vol, par conversation : permet de STOPPER le sous-agent. */
   private readonly activeOrchestrations = new Map<string, AbortController>()
+  /**
+   * Rang d'appel des orchestrations, par conversation. L'AbortController n'est armé qu'APRÈS un
+   * préambule asynchrone : deux lancements rapprochés sur la même conversation peuvent l'atteindre
+   * dans l'ordre INVERSE de leur appel. Sans ce rang, le run le plus ANCIEN écrasait l'entrée du
+   * plus récent, puis la supprimait dans son `finally` (la garde d'identité ne voit rien : l'entrée
+   * courante est bien la sienne) → le bouton Stop du run en cours devenait un no-op silencieux.
+   */
+  private orchestrationRank = 0
+  private readonly orchestrationRankByConv = new Map<string, number>()
+
+  /** Arme le Stop pour ce run — sauf si un lancement PLUS RÉCENT a déjà pris la place. */
+  private claimOrchestration(convId: string, rank: number, controller: AbortController): void {
+    if ((this.orchestrationRankByConv.get(convId) ?? 0) > rank) return
+    this.orchestrationRankByConv.set(convId, rank)
+    this.activeOrchestrations.set(convId, controller)
+  }
   /** Déduplique un même lancement tant que son orchestration est encore en vol. */
   private readonly activeOrchestrationByFingerprint = new Map<
     string,
@@ -309,6 +325,7 @@ export class AppCommandBus {
       }
     }
     this.activeOrchestrations.clear()
+    this.orchestrationRankByConv.clear()
     this.activeOrchestrationByFingerprint.clear()
   }
 
@@ -323,7 +340,7 @@ export class AppCommandBus {
     // Coupe une orchestration précédente laissée pendante sur la même conversation avant d'en armer une.
     this.activeOrchestrations.get(convId)?.abort()
     const controller = new AbortController()
-    this.activeOrchestrations.set(convId, controller)
+    this.claimOrchestration(convId, ++this.orchestrationRank, controller)
     return controller
   }
 
@@ -335,6 +352,7 @@ export class AppCommandBus {
   clearOrchestration(convId: string, controller?: AbortController): void {
     if (controller && this.activeOrchestrations.get(convId) !== controller) return
     this.activeOrchestrations.delete(convId)
+    this.orchestrationRankByConv.delete(convId)
   }
   constructor(
     private readonly os: AutowinOS,
@@ -548,6 +566,9 @@ export class AppCommandBus {
           conversationId ||
           this.activeConversationId ||
           '__autonomous__'
+        // Rang pris ICI, dans le préfixe synchrone de `exec` : c'est le seul point qui reflète
+        // l'ordre d'APPEL. Plus loin, le préambule asynchrone peut réordonner les lancements.
+        const orchestrationRank = ++this.orchestrationRank
         const requestedTask = s('task')
         const conversation = this.os.conversations.get(convId)
         const task =
@@ -605,7 +626,7 @@ export class AppCommandBus {
         const steps: OrchestrationStep[] = []
         // Sous-agent STOPPABLE : un AbortController par conversation, coupé par abortOrchestration.
         const abortController = new AbortController()
-        this.activeOrchestrations.set(convId, abortController)
+        this.claimOrchestration(convId, orchestrationRank, abortController)
         this.broadcast({ type: 'orchestrate-start', convId, runPath, task: requestedTask })
         try {
           const r = await this.os.runTask(

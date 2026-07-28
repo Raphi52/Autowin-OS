@@ -1,4 +1,12 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+/**
+ * Tests joués contre de VRAIS dépôts git en tmp (init, worktree, merge) : sous la charge parallèle
+ * de la suite complète, ces I/O dépassent le budget vitest par défaut (5 s) — d'où des rouges
+ * aléatoires alors que le code est bon. Budget explicite, assez large pour la contention, assez
+ * serré pour attraper un vrai blocage.
+ */
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
   chmodSync,

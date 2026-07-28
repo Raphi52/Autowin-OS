@@ -12,7 +12,15 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+/**
+ * Ces tests copient un vrai exécutable (~100 Mo) puis lancent PowerShell dessus. Sous la charge
+ * parallèle de la suite complète, ces I/O dépassent le budget vitest par défaut (5 s) alors que le
+ * code testé va très bien — c'était la source d'échecs aléatoires. Budget explicite : on veut
+ * toujours détecter un vrai blocage, mais pas transformer une lenteur disque en faux rouge.
+ */
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
 
 const ROOT = process.cwd()
 const IDENTITY_FIELDS = ['executable', 'executableSha256', 'executableVersion'] as const
