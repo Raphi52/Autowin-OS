@@ -7,7 +7,7 @@ import {
   SUBAGENT_TOTAL_MS
 } from './watchdog'
 import { spawn } from 'node:child_process'
-import { closeSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import {
   openStdoutJournal,
   tailJsonLines,
@@ -470,6 +470,16 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       watchdog.dispose()
       if (childPid) execution?.onProcess?.(childPid, false)
       if (systemPromptDir) rmSync(systemPromptDir, { recursive: true, force: true })
+      // Journal de sortie resté VIDE = le CLI n'a rien écrit (échec de lancement, appel avorté). Il
+      // n'apporte rien à une reprise et fait croire à un run existant : mesuré 3 journaux vides sur 7
+      // spawns lors d'un test réel, et 20 spawns en erreur sur 114 en usage réel. On le supprime.
+      if (journal) {
+        try {
+          if (statSync(journal.path).size === 0) rmSync(journal.path, { force: true })
+        } catch {
+          /* déjà absent ou inaccessible : rien à nettoyer */
+        }
+      }
       materialized?.cleanup()
       // Flush du reliquat : un dernier event JSON sans '\n' terminal ne serait
       // jamais parsé (result/session_id perdus silencieusement) — on le traite ici.
