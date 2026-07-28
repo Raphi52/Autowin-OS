@@ -54,9 +54,9 @@ function Frieze({ model }: { model: WorktreeActivityModel }): React.JSX.Element 
     <div className="wt-frieze" data-testid="wt-frieze">
       <div className="wt-frieze-label">LE FLUX D’UN COUP D’ŒIL</div>
       <svg
-        viewBox={`0 0 ${VW} 130`}
+        viewBox={`0 0 ${VW} 176`}
         width="100%"
-        height="130"
+        height="176"
         preserveAspectRatio="xMidYMid meet"
         fill="none"
         role="img"
@@ -74,10 +74,16 @@ function Frieze({ model }: { model: WorktreeActivityModel }): React.JSX.Element 
         <text x={PAD - 40} y={MAIN_Y - 16} fill="var(--wt-muted)" fontSize={12}>
           ton code principal
         </text>
-        {model.lanes.map((lane) => {
+        {model.lanes.map((lane, i) => {
           const { d, endX, endY } = lanePath(lane)
           const color = laneColor(lane.outcome)
           const dashed = lane.outcome === 'conflict' || lane.outcome === 'blocked'
+          // Label CENTRÉ sur le milieu de la lane + ÉTAGÉ sur 3 rangées : sans ça, des copies proches
+          // écrasent leurs libellés sur une même ligne (illisible). 3 rangées décalées évitent le chevauchement.
+          const usable = VW - PAD * 2
+          const startX = PAD + lane.startOffset * usable
+          const labelX = Math.round((startX + endX) / 2)
+          const labelY = LANE_Y + 22 + (i % 3) * 16
           return (
             <g key={lane.agentId} data-testid="wt-lane" data-outcome={lane.outcome}>
               <path
@@ -88,11 +94,22 @@ function Frieze({ model }: { model: WorktreeActivityModel }): React.JSX.Element 
                 strokeDasharray={dashed ? '6 5' : undefined}
               />
               <circle cx={endX} cy={endY} r={lane.endOffset == null ? 6 : 7} fill={color} />
+              <line
+                x1={labelX}
+                y1={LANE_Y + 6}
+                x2={labelX}
+                y2={labelY - 9}
+                stroke="var(--wt-muted)"
+                strokeWidth={1}
+                strokeDasharray="2 3"
+                opacity={0.5}
+              />
               <text
-                x={PAD + lane.startOffset * (VW - PAD * 2) + 30}
-                y={LANE_Y + 22}
+                x={labelX}
+                y={labelY}
                 fill="var(--wt-muted)"
                 fontSize={12}
+                textAnchor="middle"
               >
                 {lane.agentName} · {lane.fileCount} fichier{lane.fileCount > 1 ? 's' : ''}
               </text>
