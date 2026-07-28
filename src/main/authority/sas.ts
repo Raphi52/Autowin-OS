@@ -81,7 +81,10 @@ export class AuthoritySas {
       throw new Error(`AuthoritySas.resolve: id inconnu "${id}"`)
     }
     const existing = this.resolutions.get(id)
-    if (existing) return existing
+    if (existing) {
+      if (existing.choice === choice) return existing
+      throw new Error(`AuthoritySas.resolve: id "${id}" déjà résolu avec un autre choix`)
+    }
     if (!decision.options.includes(choice)) {
       throw new Error(`AuthoritySas.resolve: choix invalide pour "${id}"`)
     }

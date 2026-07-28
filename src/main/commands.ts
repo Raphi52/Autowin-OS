@@ -280,6 +280,11 @@ export class AppCommandBus {
   private readonly pendingDecisionByFingerprint = new Map<string, string>()
   /** Orchestrations en vol, par conversation : permet de STOPPER le sous-agent. */
   private readonly activeOrchestrations = new Map<string, AbortController>()
+  /** Déduplique un même lancement tant que son orchestration est encore en vol. */
+  private readonly activeOrchestrationByFingerprint = new Map<
+    string,
+    Promise<{ path: string; reused: boolean } | undefined>
+  >()
 
   /** Abort l'orchestration (sous-agent/juge) en cours pour une conversation. */
   abortOrchestration(convId: string): boolean {
@@ -304,6 +309,7 @@ export class AppCommandBus {
       }
     }
     this.activeOrchestrations.clear()
+    this.activeOrchestrationByFingerprint.clear()
   }
 
   /**
@@ -551,6 +557,17 @@ export class AppCommandBus {
                 collectAutowinKaizenEvidence(conversation)
               )
             : requestedTask
+        const fingerprint = actionFingerprint('orchestrate', { convId, task })
+        const existingRun = this.activeOrchestrationByFingerprint.get(fingerprint)
+        if (existingRun) {
+          const existing = await existingRun
+          return {
+            runId: existing?.path,
+            runPath: existing?.path,
+            status: 'running',
+            reused: true
+          }
+        }
         const substantial = classifyRegime(task) !== 'trivial'
         let collectedContext = ''
         const unavailable: string[] = []
@@ -570,7 +587,19 @@ export class AppCommandBus {
             unavailable
           })
         }
-        const run = substantial ? await reuseOrCreateConvRun(convId, requestedTask) : undefined
+        const runReady = substantial
+          ? reuseOrCreateConvRun(convId, requestedTask)
+          : Promise.resolve(undefined)
+        this.activeOrchestrationByFingerprint.set(fingerprint, runReady)
+        let run: { path: string; reused: boolean } | undefined
+        try {
+          run = await runReady
+        } catch (error) {
+          if (this.activeOrchestrationByFingerprint.get(fingerprint) === runReady) {
+            this.activeOrchestrationByFingerprint.delete(fingerprint)
+          }
+          throw error
+        }
         const runPath = run?.path
         const orchestrationTurnId = randomUUID()
         const steps: OrchestrationStep[] = []
@@ -676,7 +705,10 @@ export class AppCommandBus {
             gateBlocked: r.gateBlocked,
             costUsd: r.costUsd,
             result: r.result,
-            runPath
+            runId: runPath,
+            runPath,
+            status: r.gateBlocked ? 'failed' : 'succeeded',
+            reused: run?.reused ?? false
           }
         } catch (e) {
           if (runPath) {
@@ -688,6 +720,9 @@ export class AppCommandBus {
           throw e
         } finally {
           this.clearOrchestration(convId, abortController)
+          if (this.activeOrchestrationByFingerprint.get(fingerprint) === runReady) {
+            this.activeOrchestrationByFingerprint.delete(fingerprint)
+          }
         }
       }
       case 'create_conversation': {

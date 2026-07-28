@@ -81,6 +81,45 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     expect(collected).toContain('Conversation: conv-1 — A garder')
   })
 
+  it('réutilise une orchestration équivalente déjà en cours', async () => {
+    const os = fakeOs()
+    let release!: (value: {
+      gateBlocked: boolean
+      gateReasons: string[]
+      valid: boolean
+      costUsd: number
+      result: string
+      phaseOutputs: []
+    }) => void
+    os.runTask = () =>
+      new Promise((resolve) => {
+        os.calls.runTask += 1
+        release = resolve
+      })
+    const bus = new AppCommandBus(os, () => {})
+    const first = bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1', 'auto')
+    await vi.waitFor(() => expect(os.calls.runTask).toBe(1))
+
+    const second = await bus.exec(
+      'orchestrate',
+      { task: 'corrige puis teste' },
+      'conv-1',
+      'auto'
+    )
+
+    expect(second).toMatchObject({ ok: true, data: { reused: true, status: 'running' } })
+    expect(os.calls.runTask).toBe(1)
+    release({
+      gateBlocked: false,
+      gateReasons: [],
+      valid: true,
+      costUsd: 0,
+      result: '',
+      phaseOutputs: []
+    })
+    await first
+  })
+
   it('le finally d’un ancien chemin bus ne désarme pas Stop pour le nouveau run', async () => {
     type RunResult = {
       gateBlocked: boolean
@@ -299,7 +338,10 @@ describe('AppCommandBus authority policy', () => {
     expect(os.conversations.get('conv-1')).toBeTruthy()
     await bus.resolveDecision(decisionId, 'approve')
     expect(os.conversations.get('conv-1')).toBeUndefined()
-    await expect(bus.resolveDecision(decisionId, 'approve')).rejects.toThrow()
+    await expect(bus.resolveDecision(decisionId, 'approve')).resolves.toMatchObject({
+      id: decisionId,
+      choice: 'approve'
+    })
   })
 
   it('does not expose decision resolution to the model and annotates risk', () => {

@@ -33,14 +33,15 @@ describe('AuthoritySas', () => {
     expect(() => sas.resolve('dec-999', 'a')).toThrow()
   })
 
-  it('resolve deux fois sur le même id retourne la résolution initiale', () => {
+  it('resolve est idempotent pour le même choix et refuse un choix contradictoire', () => {
     const t = 0
     const sas = new AuthoritySas(() => t)
     const id = sas.propose({ question: 'Q1', options: ['a', 'b'], safeDefault: 'a', ttlMs: 1000 })
     const first = sas.resolve(id, 'a')
-    const second = sas.resolve(id, 'b')
+    const second = sas.resolve(id, 'a')
     expect(second).toEqual(first)
     expect(sas.journal()).toEqual([first])
+    expect(() => sas.resolve(id, 'b')).toThrow(/autre choix/)
   })
 
   it('sweepExpired applique le safeDefault après dépassement du TTL', () => {
