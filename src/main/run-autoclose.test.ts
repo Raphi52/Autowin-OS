@@ -186,6 +186,77 @@ describe('périmètre du run (ce qui traînait AVANT n’est pas publié)', () =
   })
 })
 
+describe('travail DÉJÀ COMMITÉ par la fusion du worktree (arbre propre)', () => {
+  /** Rejoue la vraie séquence : la fusion committe le travail de l'agent, l'arbre reste propre. */
+  async function mergedByWorktree(repo: string, runId: string, file = 'du-run.ts'): Promise<void> {
+    writeFileSync(join(repo, file), 'export const y = 2\n')
+    await run('git', ['add', '-A'], { cwd: repo })
+    await run('git', ['commit', '-m', `agent ${runId}-1`], { cwd: repo })
+  }
+
+  it('publie le run alors que `git status` ne montre RIEN (le trou observé en réel)', async () => {
+    const { repo, remote } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+    await mergedByWorktree(repo, 'run-77')
+
+    // L'arbre est propre : c'est précisément l'état qui faisait sortir la clôture en « no-changes ».
+    expect((await run('git', ['status', '--porcelain'], { cwd: repo })).stdout.trim()).toBe('')
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-77',
+      task: 'ajoute un fichier',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({ status: 'pushed', branch: 'auto/run-77', files: 1 })
+    expect((await run('git', ['branch'], { cwd: remote })).stdout).toContain('auto/run-77')
+  })
+
+  it('s’abstient si l’historique contient le commit d’une AUTRE session', async () => {
+    const { repo, remote } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+    await mergedByWorktree(repo, 'run-88')
+    // Une autre session committe sur la même base pendant le run.
+    writeFileSync(join(repo, 'autrui.ts'), 'const autre = 1\n')
+    await run('git', ['add', '-A'], { cwd: repo })
+    await run('git', ['commit', '-m', 'travail d_une autre session'], { cwd: repo })
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-88',
+      task: 'ajoute un fichier',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({ status: 'skipped', reason: 'concurrent-commits' })
+    expect((await run('git', ['branch'], { cwd: remote })).stdout).not.toContain('auto/run-88')
+  })
+
+  it('un run vert qui n’a produit AUCUN commit ne publie rien', async () => {
+    const { repo } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-99',
+      task: 'ne touche rien',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({ status: 'skipped', reason: 'no-changes' })
+  })
+})
+
 describe('helpers', () => {
   it('detectSecret repère les motifs sensibles usuels', () => {
     expect(detectSecret('rien de spécial')).toBeUndefined()

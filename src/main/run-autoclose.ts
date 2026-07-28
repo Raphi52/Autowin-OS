@@ -33,7 +33,17 @@ export interface AutoCloseInput {
 export type AutoCloseResult =
   | { status: 'pushed'; branch: string; files: number }
   | { status: 'committed'; files: number }
-  | { status: 'skipped'; reason: 'no-changes' | 'protected-branch' | 'secret-detected' | 'no-remote'; detail?: string }
+  | {
+      status: 'skipped'
+      reason:
+        | 'no-changes'
+        | 'protected-branch'
+        | 'secret-detected'
+        | 'no-remote'
+        /** L'historique à publier contient un commit qui n'appartient pas à ce run. */
+        | 'concurrent-commits'
+      detail?: string
+    }
   | { status: 'failed'; error: string }
 
 const PROTECTED = /^(main|master|HEAD)$/i
@@ -101,6 +111,56 @@ export async function autoCloseRun(input: AutoCloseInput): Promise<AutoCloseResu
   }
 }
 
+/**
+ * Publie le travail du run DÉJÀ COMMITÉ dans la base.
+ *
+ * Observé sur un run vert réel : la fusion du worktree committe le travail de l'agent
+ * (`agent <runId>-N`), si bien que l'arbre est PROPRE au moment de la clôture. Le chemin « fichiers
+ * modifiés » n'y voit alors rien et sortait en `no-changes` — la publication ne se déclenchait
+ * jamais. C'est ce trou-là que cette fonction ferme.
+ *
+ * Garde : si l'historique à publier contient un commit étranger au run (autre session travaillant
+ * sur la même base), on s'abstient plutôt que d'emporter le travail d'autrui sur une branche.
+ */
+export async function publishRunCommits(input: {
+  repo: string
+  /** HEAD de la base au démarrage du run. Absent ⇒ rien à comparer, on s'abstient. */
+  baseHead: string | undefined
+  runId: string
+  branch: string
+  runGit: GitRunner
+}): Promise<AutoCloseResult> {
+  const { repo, baseHead, runId, branch, runGit } = input
+  if (PROTECTED.test(branch.trim())) {
+    return { status: 'skipped', reason: 'protected-branch', detail: branch }
+  }
+  if (!baseHead) return { status: 'skipped', reason: 'no-changes' }
+  try {
+    const range = `${baseHead}..HEAD`
+    const subjects = (await runGit(['log', '--format=%s', range], repo))
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+    if (subjects.length === 0) return { status: 'skipped', reason: 'no-changes' }
+    const foreign = subjects.find((subject) => !subject.includes(runId))
+    if (foreign) return { status: 'skipped', reason: 'concurrent-commits', detail: foreign }
+
+    const files = (await runGit(['diff', '--name-only', range], repo))
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+    const secret = detectSecret(await runGit(['diff', range], repo))
+    if (secret) return { status: 'skipped', reason: 'secret-detected', detail: secret }
+
+    const remotes = (await runGit(['remote'], repo)).trim()
+    if (!remotes) return { status: 'skipped', reason: 'no-remote' }
+    await runGit(['push', 'origin', `HEAD:refs/heads/${branch}`], repo)
+    return { status: 'pushed', branch, files: files.length }
+  } catch (error) {
+    return { status: 'failed', error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 /** Nom de branche de publication d'un run — stable, lisible, jamais protégé. */
 export function autoCloseBranch(runId: string): string {
   return `auto/${runId.replace(/[^A-Za-z0-9._-]+/g, '-')}`
@@ -125,18 +185,38 @@ export function pathsFromRun(before: readonly string[], after: readonly string[]
   return after.filter((path) => !preexisting.has(path))
 }
 
+/** SHA de HEAD, ou undefined si le dépôt n'a pas d'historique lisible. */
+async function headSha(repo: string, runGit: GitRunner): Promise<string | undefined> {
+  try {
+    return (await runGit(['rev-parse', 'HEAD'], repo)).trim() || undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Photo d'un dépôt au démarrage : ce qui traînait déjà, ET où en était l'historique. */
+export interface CloseBaseline {
+  project: string[]
+  brain: string[]
+  /** HEAD au démarrage : sert à isoler les commits produits PAR le run (fusion du worktree). */
+  projectHead?: string
+  brainHead?: string
+}
+
 /** Photographie les deux dépôts au démarrage d'un run (best-effort, jamais bloquant). */
 export async function captureCloseBaseline(
   projectRepo: string,
   brainRepo: string,
   runGit?: GitRunner
-): Promise<{ project: string[]; brain: string[] }> {
+): Promise<CloseBaseline> {
   const git = runGit ?? (await defaultGitRunner())
-  const [project, brain] = await Promise.all([
+  const [project, brain, projectHead, brainHead] = await Promise.all([
     snapshotChangedPaths(projectRepo, git),
-    snapshotChangedPaths(brainRepo, git)
+    snapshotChangedPaths(brainRepo, git),
+    headSha(projectRepo, git),
+    headSha(brainRepo, git)
   ])
-  return { project, brain }
+  return { project, brain, projectHead, brainHead }
 }
 
 async function defaultGitRunner(): Promise<GitRunner> {
@@ -171,7 +251,7 @@ export async function closeGreenRunOnDisk(input: {
   projectRepo: string
   brainRepo: string
   /** Fichiers déjà modifiés AVANT le run, par dépôt : ils sont exclus de la publication. */
-  baseline?: { project: readonly string[]; brain: readonly string[] }
+  baseline?: Readonly<CloseBaseline>
   runGit?: GitRunner
 }): Promise<AutoCloseReport> {
   const runGit: GitRunner = input.runGit ?? (await defaultGitRunner())
@@ -180,11 +260,18 @@ export async function closeGreenRunOnDisk(input: {
   const message = autoCloseMessage(input.task, input.runId)
 
   /** Publie un dépôt en n'y prenant QUE ce que le run a produit (delta vs baseline). */
-  const closeScoped = async (repo: string, before: readonly string[]): Promise<AutoCloseResult> => {
+  const closeScoped = async (
+    repo: string,
+    before: readonly string[],
+    baseHead: string | undefined
+  ): Promise<AutoCloseResult> => {
     try {
       const after = parsePorcelainPaths(await runGit(['status', '--porcelain'], repo))
       const mine = pathsFromRun(before, after)
-      if (mine.length === 0) return { status: 'skipped', reason: 'no-changes' }
+      // Arbre propre : le travail du run a pu être DÉJÀ commité par la fusion du worktree.
+      if (mine.length === 0) {
+        return await publishRunCommits({ repo, baseHead, runId: input.runId, branch, runGit })
+      }
       return await autoCloseRun({ repo, branch, message, paths: mine, runGit })
     } catch (error) {
       return { status: 'failed', error: error instanceof Error ? error.message : String(error) }
@@ -193,8 +280,16 @@ export async function closeGreenRunOnDisk(input: {
 
   // Les DEUX dépôts sont traités au périmètre du run : côté projet aussi, un `add -A` emporterait le
   // travail en cours d'une autre session partageant l'arbre.
-  const project = await closeScoped(input.projectRepo, input.baseline?.project ?? [])
-  const brain = await closeScoped(input.brainRepo, input.baseline?.brain ?? [])
+  const project = await closeScoped(
+    input.projectRepo,
+    input.baseline?.project ?? [],
+    input.baseline?.projectHead
+  )
+  const brain = await closeScoped(
+    input.brainRepo,
+    input.baseline?.brain ?? [],
+    input.baseline?.brainHead
+  )
 
   return { runId: input.runId, branch, project, brain, at: new Date().toISOString() }
 }
