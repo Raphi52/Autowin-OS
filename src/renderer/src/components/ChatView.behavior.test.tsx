@@ -134,6 +134,10 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => element.click())
   }
 
+  async function flushAnimationFrames(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+
   it('blocks a synchronous double Enter with one pilot request', async () => {
     const pilot = deferred<{ ok: boolean }>()
     const mockApi = api({
@@ -150,6 +154,48 @@ describe('ChatView behavior under concurrent UI actions', () => {
     })
     expect(mockApi.pilotChat).toHaveBeenCalledTimes(1)
     await act(async () => pilot.resolve({ ok: true }))
+  })
+
+  it('drains queued messages in order after stopping the active turn', async () => {
+    const firstTurn = deferred<{ ok: boolean; cancelled?: boolean }>()
+    const secondTurn = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi
+        .fn()
+        .mockImplementationOnce(() => firstTurn.promise)
+        .mockImplementationOnce(() => secondTurn.promise)
+        .mockResolvedValue({ ok: true })
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('tour actif')
+    await click('.composer-send')
+    await type('A')
+    await click('.composer-send')
+    await type('B')
+    await click('.composer-send')
+
+    await click('.directive-queue-send-all')
+    expect(mockApi.cancelPilotChat).toHaveBeenCalledWith('A')
+
+    await act(async () => {
+      firstTurn.resolve({ ok: true, cancelled: true })
+      await flushAnimationFrames()
+    })
+    expect(mockApi.pilotChat).toHaveBeenCalledTimes(2)
+    expect((mockApi.pilotChat as ReturnType<typeof vi.fn>).mock.calls[1][0]).toEqual(
+      expect.arrayContaining([expect.objectContaining({ role: 'user', content: 'A' })])
+    )
+
+    await act(async () => {
+      secondTurn.resolve({ ok: true })
+      await flushAnimationFrames()
+    })
+    expect(mockApi.pilotChat).toHaveBeenCalledTimes(3)
+    expect((mockApi.pilotChat as ReturnType<typeof vi.fn>).mock.calls[2][0]).toEqual(
+      expect.arrayContaining([expect.objectContaining({ role: 'user', content: 'B' })])
+    )
   })
 
   it('affiche et vide le prompt immédiatement avant la fin du routage', async () => {
