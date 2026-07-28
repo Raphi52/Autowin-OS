@@ -142,7 +142,7 @@ export function ModelQuotaIndicator(): React.JSX.Element {
         type="button"
         className={`model-quota-trigger is-${level}`}
         data-testid="model-quota-trigger"
-        style={{ '--quota-angle': `${remaining ?? 0}%` } as CSSProperties}
+        style={{ '--quota-angle': `${remaining ?? 0}` } as CSSProperties}
         aria-label={
           remaining === undefined
             ? 'Afficher les quotas fournisseurs'
@@ -156,6 +156,10 @@ export function ModelQuotaIndicator(): React.JSX.Element {
           if (next) void refresh()
         }}
       >
+        <svg className="model-quota-wheel" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+          <circle className="model-quota-wheel-track" cx="16" cy="16" r="12.5" pathLength="100" />
+          <circle className="model-quota-wheel-value" cx="16" cy="16" r="12.5" pathLength="100" />
+        </svg>
         <span>{remaining === undefined ? '···' : Math.round(remaining)}</span>
       </button>
       {open && (

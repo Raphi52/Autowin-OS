@@ -45,6 +45,14 @@ import {
 } from './run-autoclose'
 import { amitelBrainRoot } from './amitel-context'
 import { regimePhases } from './task-regime'
+import type { PipelinePhase } from './skill-pipeline'
+import {
+  clearOrchestrationState,
+  loadOrchestrationStates,
+  pickOrchestrationToResume,
+  saveOrchestrationState,
+  type OrchestrationRunState
+} from './runs/orchestration-state'
 import { defaultBehaviourWorkspace } from './behaviour-files'
 import { WorktreeManager } from './store/worktree-manager'
 import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
@@ -119,6 +127,9 @@ export class AutowinOS {
    */
   readonly worktrees?: RunWorktreeCoordinator
   private worktreeActivityListener?: (a: WorktreeAgentActivity[]) => void
+  /** Dossier des états d'orchestration reprenables (survie niveau 3). */
+  private readonly orchestrationStateRoot = join(ensureAutowinAppData(), 'run-state')
+  private readonly orchestrationStartedAt = new Map<string, number>()
 
   constructor() {
     this.registry = new ProviderRegistry(CONSTITUTION)
@@ -157,6 +168,20 @@ export class AutowinOS {
       // le juge (rôle distinct). Déterministe/générique (task-regime.ts). Économise tokens + latence
       // sur les tâches simples sans jamais sous-traiter les complexes (doute → critical).
       classifyPhases: regimePhases,
+      // SURVIE NIVEAU 3 : après CHAQUE phase, on persiste l'acquis du run ; à la clôture on l'efface.
+      // Un kill du process main laisse donc un état reprenable → `resumableOrchestration()`.
+      onPhaseCompleted: ({ runId, task, phaseOutputs }) =>
+        saveOrchestrationState(this.orchestrationStateRoot, {
+          runId,
+          task,
+          phaseOutputs,
+          startedAt: this.orchestrationStartedAt.get(runId) ?? Date.now(),
+          updatedAt: Date.now()
+        }),
+      onRunSettled: (runId) => {
+        this.orchestrationStartedAt.delete(runId)
+        clearOrchestrationState(this.orchestrationStateRoot, runId)
+      },
       // Fan-out multi-modèles : les blocs topology scout/frame → phases de divergence ; judge → juges.
       // ≥2 modèles déposés → l'orchestrateur duplique + agrège (voir orchestrator.ts). Sinon mono.
       phaseFanOut: (phase) =>
@@ -297,10 +322,34 @@ export class AutowinOS {
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
     signal?: AbortSignal,
-    collectedContext?: string
+    collectedContext?: string,
+    /** SURVIE NIVEAU 3 : acquis d'un run interrompu → reprise à la phase suivante. */
+    resumeOutputs?: { phase: PipelinePhase; text: string }[]
   ): Promise<OrchestrationResult> {
     await this.taskReadiness
-    return this.orchestrator.run(task, onStep, onPhase, onDelta, signal, collectedContext)
+    return this.orchestrator.run(
+      task,
+      onStep,
+      onPhase,
+      onDelta,
+      signal,
+      collectedContext,
+      resumeOutputs
+    )
+  }
+
+  /**
+   * SURVIE NIVEAU 3 — run d'orchestration interrompu par la mort du process, s'il en reste un.
+   * `null` = rien à reprendre (cas normal). Lecture seule : c'est l'appelant (démarrage de l'app)
+   * qui décide de relancer, via `runTask(..., state.phaseOutputs)`.
+   */
+  resumableOrchestration(): OrchestrationRunState | null {
+    return pickOrchestrationToResume(loadOrchestrationStates(this.orchestrationStateRoot))
+  }
+
+  /** Abandonne explicitement un état reprenable (l'utilisateur ne veut pas le reprendre). */
+  forgetResumableOrchestration(runId: string): void {
+    clearOrchestrationState(this.orchestrationStateRoot, runId)
   }
 
   // --- Dashboards : données RÉELLES ---

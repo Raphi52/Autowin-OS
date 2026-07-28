@@ -30,7 +30,16 @@ describe('barrière de disponibilité des modèles', () => {
     await pending
 
     expect(run).toHaveBeenCalledTimes(1)
-    expect(run).toHaveBeenCalledWith('cadrer le besoin', undefined, undefined, undefined, undefined, undefined)
+    // Le 7ᵉ argument est l'acquis de reprise (survie niveau 3) : absent hors reprise.
+    expect(run).toHaveBeenCalledWith(
+      'cadrer le besoin',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined
+    )
   })
 })
 

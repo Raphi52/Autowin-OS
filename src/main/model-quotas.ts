@@ -181,13 +181,18 @@ export function buildModelQuotaSnapshot(
       ...(quota.error ? { error: quota.error } : {})
     }
   })
-  const remaining = output
+  // Fenêtres RÉSUMABLES : uniquement les vrais quotas. Une fenêtre sans plafond officiel
+  // (mesure locale, `limitKnown: false`) n'a pas de « restant » → l'inclure afficherait un faux
+  // « 100 % restant / healthy ».
+  const summarizable = output
     .filter((model) => model.status === 'available')
-    // Une fenêtre SANS plafond officiel (mesure locale) n'a pas de « restant » → l'inclure
-    // afficherait un faux « 100 % restant / healthy ». On ne résume que les vrais quotas.
-    .flatMap((model) =>
-      model.windows.filter((entry) => entry.limitKnown !== false).map((entry) => entry.remainingPercent)
-    )
+    .flatMap((model) => model.windows.filter((entry) => entry.limitKnown !== false))
+  // La wheel résume la fenêtre COURTE (5 h) : c'est elle qui bloque l'utilisateur MAINTENANT. Un
+  // weekly plus bas ne doit pas alarmer sur une capacité immédiate qui, elle, est disponible.
+  // Aucune fenêtre courte connue → on retombe sur le minimum (comportement historique prudent).
+  const shortWindows = summarizable.filter((entry) => entry.id === 'five-hour')
+  const pool = shortWindows.length > 0 ? shortWindows : summarizable
+  const remaining = pool.map((entry) => entry.remainingPercent)
   const minimum = remaining.length > 0 ? Math.min(...remaining) : undefined
   return {
     observedAt,

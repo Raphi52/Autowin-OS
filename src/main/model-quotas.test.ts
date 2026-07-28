@@ -190,6 +190,31 @@ describe('quotas modèles', () => {
     expect(snapshot.summary).toEqual({ remainingPercent: 28, status: 'warning' })
   })
 
+  it('résume la fenêtre courte dans la wheel même si le weekly est plus bas', () => {
+    const snapshot = buildModelQuotaSnapshot(models, {
+      claude: {
+        status: 'available',
+        source: 'Claude /usage',
+        windows: [
+          {
+            id: 'five-hour',
+            label: '5 h',
+            usedPercent: 36,
+            remainingPercent: 64
+          },
+          {
+            id: 'seven-day',
+            label: '7 j',
+            usedPercent: 82,
+            remainingPercent: 18
+          }
+        ]
+      }
+    })
+
+    expect(snapshot.summary).toEqual({ remainingPercent: 64, status: 'healthy' })
+  })
+
   it('n’applique une future fenêtre Claude spécifique qu’à sa famille de modèle', () => {
     const windows = parseClaudeUsage({
       five_hour: { utilization: 10, resets_at: '2026-07-24T05:00:00Z' },

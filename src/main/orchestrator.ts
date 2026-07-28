@@ -141,6 +141,19 @@ export interface OrchestratorDeps {
    */
   worktrees?: RunWorktrees
   /**
+   * SURVIE NIVEAU 3 — notifié APRÈS chaque phase terminée, avec l'acquis complet du run. L'appelant
+   * y persiste de quoi reprendre à la phase suivante si le process main meurt (la boucle
+   * d'orchestration vit ici, elle ne survit pas à un kill : sans ça, les phases restantes étaient
+   * perdues). Best-effort : une erreur de persistance ne doit JAMAIS casser le run.
+   */
+  onPhaseCompleted?: (info: {
+    runId: string
+    task: string
+    phaseOutputs: { phase: PipelinePhase; text: string }[]
+  }) => void
+  /** Notifié quand le run atteint sa fin (vert, rouge ou abandon) → l'appelant efface l'état repris. */
+  onRunSettled?: (runId: string) => void
+  /**
    * Clôture automatique appelée UNIQUEMENT sur un run vert, APRÈS la fusion du worktree (le travail
    * est alors dans la base). Best-effort : son échec ne change pas le verdict du run.
    */
@@ -311,7 +324,13 @@ export class Orchestrator {
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
     signal?: AbortSignal,
-    collectedContext = ''
+    collectedContext = '',
+    /**
+     * SURVIE NIVEAU 3 : reprise d'un run interrompu par la mort du process. Les phases présentes ici
+     * ne sont PAS rejouées au modèle — leur livrable est réinjecté tel quel et l'exécution redémarre
+     * à la phase suivante (aucun token regaspillé).
+     */
+    resumeOutputs: { phase: PipelinePhase; text: string }[] = []
   ): Promise<OrchestrationResult> {
     const runId = `run-${this.runNamespace}-${++this.runSeq}`
     const isMut = isMutationTask(task)
@@ -365,11 +384,20 @@ export class Orchestrator {
         onDelta,
         signal,
         greedyPlan,
-        collectedContext
+        collectedContext,
+        runId,
+        resumeOutputs
       )
       green = !result.gateBlocked
       return result
     } finally {
+      // SURVIE NIVEAU 3 : le run a atteint sa fin (vert, rouge ou exception) → l'état de reprise
+      // n'a plus de raison d'être. Best-effort : ne jamais masquer l'erreur d'origine du `finally`.
+      try {
+        this.deps.onRunSettled?.(runId)
+      } catch {
+        /* effacement best-effort */
+      }
       this.processObservers.delete(workCwd)
       // Le travail n'est fusionné dans la base QUE si le run est vert. Un run rouge, annulé ou planté
       // garde sa copie isolée (l'exception saute le `green = true` ci-dessus) : on ne ramène plus
@@ -708,7 +736,10 @@ export class Orchestrator {
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
     signal?: AbortSignal,
     greedyPlan?: GreedyTaskNode[],
-    collectedContext = ''
+    collectedContext = '',
+    runId = '',
+    /** SURVIE NIVEAU 3 : acquis d'un run interrompu → ces phases sont REJOUÉES, pas refaites. */
+    resumeOutputs: { phase: PipelinePhase; text: string }[] = []
   ): Promise<OrchestrationResult> {
     const { registry, roles, cost, trust } = this.deps
     // Souveraineté contexte (décision PLIER) : Autowin lit LUI-MÊME le fichier projet gagnant de la
@@ -733,7 +764,22 @@ export class Orchestrator {
     let lastExecText = ''
     let lastUsage: Usage | undefined
     const aggregatedEvidence: ExecutionEvidence[] = []
-    const phaseOutputs: { phase: PipelinePhase; text: string }[] = []
+    // SURVIE NIVEAU 3 : on repart de l'acquis persisté (phases déjà terminées avant le kill).
+    // Une phase dont le livrable est VIDE n'est PAS un acquis : la sauter perdrait le travail
+    // (constaté en réel — un run interrompu avait persisté `frame` avec 0 caractère). On ne reprend
+    // donc que les phases porteuses de contenu ; les autres seront rejouées normalement.
+    const usableResume = resumeOutputs.filter((output) => output.text.trim().length > 0)
+    const phaseOutputs: { phase: PipelinePhase; text: string }[] = [...usableResume]
+    const resumedPhases = new Set(usableResume.map((output) => output.phase))
+    /** Enregistre une phase terminée ET notifie l'appelant pour qu'il persiste l'acquis. */
+    const recordPhase = (phase: PipelinePhase, text: string): void => {
+      phaseOutputs.push({ phase, text })
+      try {
+        this.deps.onPhaseCompleted?.({ runId, task, phaseOutputs: [...phaseOutputs] })
+      } catch {
+        /* best-effort : une panne de persistance ne casse jamais le run en cours */
+      }
+    }
     let failedTasks: string[] | undefined
     let skippedTasks: string[] | undefined
     // RAG Brain : 1×/run, on récupère du cerveau Amitel la connaissance pertinente (retriever
@@ -763,7 +809,19 @@ export class Orchestrator {
     // → on retombe sur la re-injection complète (comportement actuel). Le sandbox est constant sur un
     // run (isMutationTask(task) fixe) → jamais de resume à travers un changement de sandbox.
     let prevSessionId: string | undefined
+    // Réinjecte l'acquis d'un run repris pour que la phase suivante l'ait dans son contexte.
+    for (const output of usableResume) {
+      const carried =
+        output.text.length > PHASE_CONTEXT_CAP
+          ? `${output.text.slice(0, PHASE_CONTEXT_CAP)}
+…[tronqué — voir le fil des sous-agents]`
+          : output.text
+      phaseContext.push(`[phase ${output.phase}] ${carried}`)
+      lastExecText = output.text
+    }
     for (const phase of execPhases) {
+      // SURVIE NIVEAU 3 : phase déjà terminée avant l'interruption → on ne la refait pas.
+      if (resumedPhases.has(phase)) continue
       // DECOUPAGE DE TOUTE PHASE (et non du seul `build`). Mesure du 2026-07-28 sur conv-75 : une
       // phase d'exploration monolithique a coute 10,90 $ en 11 min, quand le meme travail decoupe en
       // 5 sous-taches ciblees revenait a ~0,8 $ et ~1 min chacune. Rien ne justifiait de reserver ce
@@ -785,7 +843,7 @@ export class Orchestrator {
         )
         aggregatedEvidence.push(...greedy.evidence)
         lastExecText = greedy.aggregate
-        phaseOutputs.push({ phase, text: greedy.aggregate })
+        recordPhase(phase, greedy.aggregate)
         const carried =
           greedy.aggregate.length > PHASE_CONTEXT_CAP
             ? `${greedy.aggregate.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
@@ -907,7 +965,7 @@ export class Orchestrator {
           // synthèse (inutile + risque de reformulation d'un texte unique).
           const solo = good[0].text
           lastExecText = solo
-          phaseOutputs.push({ phase, text: solo })
+          recordPhase(phase, solo)
           const carriedSolo =
             solo.length > PHASE_CONTEXT_CAP
               ? `${solo.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
@@ -985,7 +1043,7 @@ export class Orchestrator {
         })
         lastExecText = synth.text
         lastUsage = synth.usage
-        phaseOutputs.push({ phase, text: synth.text })
+        recordPhase(phase, synth.text)
         const carried =
           synth.text.length > PHASE_CONTEXT_CAP
             ? `${synth.text.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
@@ -1123,7 +1181,7 @@ export class Orchestrator {
       aggregatedEvidence.push(...(phaseRes.executionEvidence ?? []))
       lastExecText = phaseRes.text
       lastUsage = phaseRes.usage
-      phaseOutputs.push({ phase, text: phaseRes.text })
+      recordPhase(phase, phaseRes.text)
       // B4 — le contexte PORTÉ à la phase suivante est borné (la sortie complète reste dans
       // phaseOutputs + la trace) : évite une croissance quadratique du prompt sur les chaînes longues.
       const carried =

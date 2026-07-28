@@ -45,6 +45,12 @@ function makeOrchestrator(
   opts: {
     classifyPhases?: (t: string) => PipelinePhase[]
     subagent?: Parameters<RoleModelConfig['setBinding']>[1]
+    onPhaseCompleted?: (info: {
+      runId: string
+      task: string
+      phaseOutputs: { phase: PipelinePhase; text: string }[]
+    }) => void
+    onRunSettled?: (runId: string) => void
   } = {}
 ): Orchestrator {
   return new Orchestrator({
@@ -57,7 +63,9 @@ function makeOrchestrator(
     trust: new TrustLedger(),
     authority: new AuthoritySas(),
     executionWorkspace: 'C:\\ws',
-    classifyPhases: opts.classifyPhases
+    classifyPhases: opts.classifyPhases,
+    onPhaseCompleted: opts.onPhaseCompleted,
+    onRunSettled: opts.onRunSettled
   })
 }
 
@@ -125,5 +133,49 @@ describe('#3 session-resume chaîné', () => {
     expect(provider.calls[0].resumeSessionId).toBeUndefined()
     expect(provider.calls[1].resumeSessionId).toBeUndefined()
     expect(provider.userMessages[1]).toContain('[phase frame]') // re-injection complète (fallback)
+  })
+})
+
+describe('survie niveau 3 — reprise d’un run interrompu', () => {
+  it('ne REFAIT pas une phase déjà acquise et réinjecte son livrable', async () => {
+    const provider = new RecordingProvider()
+    const orch = makeOrchestrator(provider, { classifyPhases: () => ['frame', 'build'] })
+    // `frame` a déjà été produite avant le kill → seule `build` doit appeler le modèle (+ le juge).
+    await orch.run('ajoute une fonctionnalité', undefined, undefined, undefined, undefined, '', [
+      { phase: 'frame', text: 'BESOIN CADRÉ AVANT LE KILL' }
+    ])
+    const execCalls = provider.userMessages.filter((m) => m.includes('BESOIN CADRÉ AVANT LE KILL'))
+    // La phase reprise est REJOUÉE dans le contexte, jamais re-exécutée.
+    expect(execCalls.length).toBeGreaterThan(0)
+    expect(provider.userMessages[0]).toContain('[phase frame] BESOIN CADRÉ AVANT LE KILL')
+  })
+
+  it('notifie l’acquis après chaque phase puis la clôture (persistance + effacement)', async () => {
+    const provider = new RecordingProvider()
+    const completed: { runId: string; phases: string[] }[] = []
+    const settled: string[] = []
+    const orch = makeOrchestrator(provider, {
+      classifyPhases: () => ['frame', 'build'],
+      onPhaseCompleted: ({ runId, phaseOutputs }) =>
+        completed.push({ runId, phases: phaseOutputs.map((o) => o.phase) }),
+      onRunSettled: (runId) => settled.push(runId)
+    })
+    await orch.run('ajoute une fonctionnalité')
+    expect(completed.map((c) => c.phases)).toEqual([['frame'], ['frame', 'build']])
+    expect(settled).toEqual([completed[0].runId])
+  })
+})
+
+describe('survie niveau 3 — garde-fou acquis vide', () => {
+  it('REJOUE une phase dont le livrable repris est vide (ne la saute pas)', async () => {
+    const provider = new RecordingProvider()
+    const orch = makeOrchestrator(provider, { classifyPhases: () => ['frame', 'build'] })
+    // `frame` persistée sans livrable (cas réel) → elle DOIT être rejouée, sinon son travail est perdu.
+    await orch.run('ajoute une fonctionnalité', undefined, undefined, undefined, undefined, '', [
+      { phase: 'frame', text: '   ' }
+    ])
+    // frame + build + juge = 3 appels ; si frame avait été sautée à tort, il n'y en aurait que 2.
+    expect(provider.calls).toHaveLength(3)
+    expect(provider.userMessages[0]).toContain('TÂCHE')
   })
 })
