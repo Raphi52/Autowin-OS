@@ -237,3 +237,137 @@ export function summarizeCostBy(
   }
   return [...rows.values()].sort((a, b) => b.costUsd - a.costUsd)
 }
+
+/**
+ * Echantillon de cout NORMALISE, quelle que soit sa source.
+ *
+ * Necessaire car le cout d'une conversation vit dans DEUX journaux : `prompt-observability` (les
+ * appels traces finement) et le journal d'activite (`kind: 'exec'`, ou atterrissent les sous-agents).
+ * Mesure du 2026-07-28 sur conv-75 : le breakdown base sur les seuls prompt-calls annonçait 2,83 $
+ * alors que la conversation avait coute ~20,70 $ — les deux appels dominants (10,90 $ et 5,72 $)
+ * n'existaient que dans l'activite. Une mesure de cout incomplete est pire qu'aucune mesure : elle
+ * fait prendre des decisions fausses avec l'air d'etre fondee.
+ */
+export interface CostSample {
+  actor: string
+  provider: string
+  model?: string
+  costUsd: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+}
+
+function sampleFromCall(call: PromptCallRecord): CostSample {
+  return {
+    actor: call.actor || '(inconnu)',
+    provider: call.provider || '(inconnu)',
+    ...(call.model ? { model: call.model } : {}),
+    costUsd: call.usage?.costUsd ?? 0,
+    inputTokens: call.usage?.inputTokens ?? 0,
+    outputTokens: call.usage?.outputTokens ?? 0,
+    cacheReadTokens: call.usage?.cacheReadTokens ?? 0
+  }
+}
+
+/** Entree d'activite minimale exploitable pour le cout (sous-ensemble de ConvActivityEntry). */
+export interface ActivityCostEntry {
+  kind?: string
+  label?: string
+  provider?: string
+  model?: string
+  costUsd?: number
+  inputTokens?: number
+  outputTokens?: number
+}
+
+/**
+ * Role porte par une entree d'activite. Le `kind` DECIDE, jamais le `label` seul : sur une entree
+ * `chat`, `label` contient le TEXTE du message de l'utilisateur — s'y fier faisait apparaitre
+ * « reprend pardon » comme un acteur dans la repartition (constate sur les donnees reelles de
+ * conv-75). Seul le kind `exec` porte un role exploitable dans son label ('subagent'/'orchestrator').
+ */
+function activityActor(entry: ActivityCostEntry): string {
+  switch (entry.kind) {
+    case 'exec':
+      return entry.label || 'subagent'
+    case 'judge':
+      return 'judge'
+    case 'conversation-route':
+      return 'router'
+    case 'chat':
+      return 'orchestrator'
+    default:
+      return entry.kind || '(inconnu)'
+  }
+}
+
+function sampleFromActivity(entry: ActivityCostEntry): CostSample {
+  return {
+    actor: activityActor(entry),
+    provider: entry.provider || '(inconnu)',
+    ...(entry.model ? { model: entry.model } : {}),
+    costUsd: entry.costUsd ?? 0,
+    inputTokens: entry.inputTokens ?? 0,
+    outputTokens: entry.outputTokens ?? 0,
+    cacheReadTokens: 0
+  }
+}
+
+/**
+ * Empreinte de DEDUPLICATION : un meme appel est souvent present dans les deux journaux. Deux
+ * appels distincts partageant exactement le modele, le cout au dix-millieme ET le nombre de tokens
+ * de sortie sont hautement improbables ; ce triplet suffit donc a les reconcilier, alors qu'un
+ * rapprochement par horodatage echouerait (les deux journaux n'ecrivent pas au meme instant).
+ */
+function sampleFingerprint(sample: CostSample): string {
+  return `${sample.model ?? ''}|${sample.costUsd.toFixed(4)}|${sample.outputTokens}`
+}
+
+/**
+ * Reconcilie les deux journaux en une seule liste d'echantillons, SANS double comptage. Les entrees
+ * sans cout ni tokens sont ecartees : elles n'apportent rien a une repartition de cout.
+ */
+export function costSamplesFrom(
+  calls: readonly PromptCallRecord[],
+  activity: readonly ActivityCostEntry[] = []
+): CostSample[] {
+  const samples: CostSample[] = []
+  const seen = new Set<string>()
+  const add = (sample: CostSample): void => {
+    if (sample.costUsd === 0 && sample.outputTokens === 0) return
+    const fingerprint = sampleFingerprint(sample)
+    if (seen.has(fingerprint)) return
+    seen.add(fingerprint)
+    samples.push(sample)
+  }
+  // Les prompt-calls d'abord : ils portent le cacheReadTokens, absent de l'activite.
+  for (const call of calls) add(sampleFromCall(call))
+  for (const entry of activity) add(sampleFromActivity(entry))
+  return samples
+}
+
+/** Repartition du cout a partir d'echantillons NORMALISES (les deux journaux reunis). */
+export function summarizeCostSamples(
+  samples: readonly CostSample[],
+  dimension: 'actor' | 'model' | 'provider' = 'actor'
+): CostBreakdownRow[] {
+  const rows = new Map<string, CostBreakdownRow>()
+  for (const sample of samples) {
+    const key = (dimension === 'actor' ? sample.actor : sample[dimension]) || '(inconnu)'
+    const row =
+      rows.get(key) ??
+      { key, calls: 0, costUsd: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheHitRatio: 0 }
+    row.calls += 1
+    row.costUsd += sample.costUsd
+    row.inputTokens += sample.inputTokens
+    row.outputTokens += sample.outputTokens
+    row.cacheReadTokens += sample.cacheReadTokens
+    rows.set(key, row)
+  }
+  for (const row of rows.values()) {
+    const contextTotal = row.inputTokens + row.cacheReadTokens
+    row.cacheHitRatio = contextTotal > 0 ? row.cacheReadTokens / contextTotal : 0
+  }
+  return [...rows.values()].sort((a, b) => b.costUsd - a.costUsd)
+}

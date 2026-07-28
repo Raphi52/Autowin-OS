@@ -55,7 +55,8 @@ import {
   deletePromptCalls,
   loadAllPromptCalls,
   loadPromptCalls,
-  summarizeCostBy
+  costSamplesFrom,
+  summarizeCostSamples
 } from './activity/prompt-observability'
 import { promptConfigChange } from './activity/prompt-config-change'
 import { appendPromptConfigActivity } from './activity/prompt-config-store'
@@ -1625,10 +1626,14 @@ function registerChatIpc(): void {
   ipcMain.handle(
     'os:costBreakdown',
     (_e, dimension?: 'actor' | 'model' | 'provider', convId?: string) => {
-      const calls = convId ? loadPromptCalls(guardString(convId, 'convId')) : loadAllPromptCalls()
       const allowed = ['actor', 'model', 'provider'] as const
       const dim = allowed.includes(dimension as (typeof allowed)[number]) ? dimension : 'actor'
-      return summarizeCostBy(calls, dim as (typeof allowed)[number])
+      const id = convId ? guardString(convId, 'convId') : undefined
+      const calls = id ? loadPromptCalls(id) : loadAllPromptCalls()
+      // LES DEUX journaux : les sous-agents les plus couteux n'existent que dans l'activite
+      // (mesure conv-75 : 2,83 $ vus contre ~20,70 $ reels). costSamplesFrom deduplique.
+      const activity = id ? loadConvActivity(id) : []
+      return summarizeCostSamples(costSamplesFrom(calls, activity), dim as (typeof allowed)[number])
     }
   )
   const loadNativeTraces = (): ReturnType<typeof readNativePreflight> => {
