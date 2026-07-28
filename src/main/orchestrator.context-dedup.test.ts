@@ -60,8 +60,8 @@ describe('#2 anti-perte-de-contexte : pas de ré-injection discipline/projectCon
     expect(provider.calls[1].resumeSessionId).toBe('sess-1')
     expect(names(provider.calls[1])).not.toContain('discipline')
     expect(names(provider.calls[1])).not.toContain('projectContext')
-    // La consigne de phase (qui CHANGE) et le style restent, eux.
-    expect(names(provider.calls[1])).toContain('consigne:build')
+    // Le skill de phase installé (qui CHANGE) et le style restent, eux.
+    expect(names(provider.calls[1])).toContain('skill:build')
     expect(names(provider.calls[1])).toContain('style')
 
     // Conséquence mesurable : le system de la phase resume est STRICTEMENT plus court.
