@@ -30,9 +30,11 @@ describe('barrière de disponibilité des modèles', () => {
     await pending
 
     expect(run).toHaveBeenCalledTimes(1)
-    // Le 7ᵉ argument est l'acquis de reprise (survie niveau 3) : absent hors reprise.
+    // Les 7ᵉ/8ᵉ arguments sont l'acquis de reprise et la conversation (survie niveau 3) : absents
+    // hors reprise → un démarrage normal appelle l'orchestrateur exactement comme avant.
     expect(run).toHaveBeenCalledWith(
       'cadrer le besoin',
+      undefined,
       undefined,
       undefined,
       undefined,

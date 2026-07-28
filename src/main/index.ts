@@ -40,7 +40,6 @@ import { ActiveChatTurns } from './active-chat-turns'
 import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
 import type { ChatTurnEvent } from '../shared/chat-turn'
 import { TraceLedger } from './activity/ledger'
-import { listSessions, parseSession } from './activity/transcripts'
 import { persistConversations } from './store/conversations-disk'
 import { listConvRuns, loadConvRunTrace } from './runs/conv-runs'
 import {
@@ -1178,16 +1177,6 @@ function registerChatIpc(): void {
   ipcMain.handle('os:appCommand', (_e, name: string, args?: Record<string, unknown>) =>
     bus.exec(guardString(name, 'name'), args)
   )
-  // Pilotage in-model : un agent conduit l'app, ses actions streamées au renderer.
-  ipcMain.handle('os:pilot', async (event, goal: string) => {
-    assertTrustedRendererSender(event, 'Pilot')
-    try {
-      await pilot.run(guardString(goal, 'goal'), (e) => event.sender.send('pilot:event', e))
-      return { ok: true }
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) }
-    }
-  })
   // Chat transparent : l'agent converse ET pilote l'app dans le même tour.
   // conversationId (optionnel) → le tour est PERSISTÉ dans la conversation (fil rechargeable).
   ipcMain.handle(
@@ -1737,26 +1726,6 @@ function registerChatIpc(): void {
     return causalTrace.readConversation(conversationId)
   })
 
-  // --- Observatoire d'activité : transcripts Claude Code (lecture seule) + ledger in-app ---
-  ipcMain.handle('os:activity:sessions', () => listSessions(60))
-  ipcMain.handle('os:activity:session', async (_e, meta) => parseSession(meta))
-
-  // Affichage des screenshots consultés : whitelist extensions + cap taille, lecture seule.
-  ipcMain.handle('os:activity:image', async (event, path: string) => {
-    assertTrustedRendererSender(event, 'ActivityImage')
-    const p = guardString(path, 'path')
-    if (!/\.(png|jpe?g|webp|gif|bmp)$/i.test(p)) throw new Error('extension non autorisée')
-    const { statSync, readFileSync } = await import('node:fs')
-    if (statSync(p).size > 8_000_000) throw new Error('image trop volumineuse')
-    const ext = p.split('.').pop()!.toLowerCase()
-    const mime =
-      ext === 'png'
-        ? 'image/png'
-        : ext === 'webp'
-          ? 'image/webp'
-          : `image/${ext === 'jpg' ? 'jpeg' : ext}`
-    return { dataUrl: `data:${mime};base64,${readFileSync(p).toString('base64')}` }
-  })
 }
 
 function rendererLocation(): { devRendererUrl?: string; rendererHtmlPath: string } {
@@ -1936,6 +1905,49 @@ app.whenReady().then(async () => {
   // échoue et pousse CHAQUE transition — dont la récupération ok qui efface la bannière. On ne pousse
   // que sur CHANGEMENT (ok-ness + set d'échecs) pour ne pas écraser un dismiss utilisateur inutilement.
   let lastPreflightSignature: string | null = null
+  // SURVIE NIVEAU 3 — reprise AUTOMATIQUE au démarrage (choix explicite de l'utilisateur : pas de
+  // bouton, pas de question). Un run d'orchestration tué avec la mort du process main laisse son
+  // acquis persisté ; on relance ICI à la phase suivante, en réinjectant les livrables déjà produits
+  // (aucune phase refaite). Rien à reprendre → aucun effet (démarrage normal strictement inchangé).
+  const resumableRun = os.resumableOrchestration()
+  if (resumableRun) {
+    const conversationId = resumableRun.conversationId ?? '__autonomous__'
+    const resumeTurnId = randomUUID()
+    console.log(
+      '[resume-orchestration]',
+      resumableRun.runId,
+      '→ phases déjà acquises :',
+      resumableRun.phaseOutputs.map((output) => output.phase).join(', ')
+    )
+    // ATTENTION (bug attrapé en vérifiant) : le run REPRIS reçoit un NOUVEAU runId et persiste son
+    // propre état ; `onRunSettled` n'effacerait donc jamais l'ancien fichier, et l'app rejouerait la
+    // même reprise à CHAQUE démarrage. On oublie l'ancien état dès que la reprise est lancée : son
+    // acquis est déjà passé dans `resumeOutputs`, et le nouveau run a sa propre persistance.
+    os.forgetResumableOrchestration(resumableRun.runId)
+    void os
+      .runTask(
+        resumableRun.task,
+        (step) => {
+          persistOrchestrationStep(
+            step,
+            { conversationId, turnId: resumeTurnId, iteration: step.step === 'exec' ? 0 : 1 },
+            undefined,
+            causalTrace
+          )
+          for (const w of BrowserWindow.getAllWindows()) w.webContents.send('orchestrate:step', step)
+        },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        resumableRun.phaseOutputs,
+        resumableRun.conversationId
+      )
+      .catch((error: unknown) => {
+        console.warn('[resume-orchestration] échec de la reprise :', error)
+      })
+  }
+
   preflightWatchHandle = watchAppPreflight((result) => {
     const signature = `${result.ok}|${result.checks
       .filter((c) => !c.ok)

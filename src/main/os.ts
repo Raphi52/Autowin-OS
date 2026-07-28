@@ -40,6 +40,7 @@ import { resolveVerifyReplayConfig } from './hooks/verify-replay-config'
 import { buildOrchestratorDecomposer } from './greedy-decompose'
 import {
   captureCloseBaseline,
+  type CloseBaseline,
   closeGreenRunOnDisk,
   type AutoCloseReport
 } from './run-autoclose'
@@ -170,10 +171,11 @@ export class AutowinOS {
       classifyPhases: regimePhases,
       // SURVIE NIVEAU 3 : après CHAQUE phase, on persiste l'acquis du run ; à la clôture on l'efface.
       // Un kill du process main laisse donc un état reprenable → `resumableOrchestration()`.
-      onPhaseCompleted: ({ runId, task, phaseOutputs }) =>
+      onPhaseCompleted: ({ runId, task, conversationId, phaseOutputs }) =>
         saveOrchestrationState(this.orchestrationStateRoot, {
           runId,
           task,
+          ...(conversationId ? { conversationId } : {}),
           phaseOutputs,
           startedAt: this.orchestrationStartedAt.get(runId) ?? Date.now(),
           updatedAt: Date.now()
@@ -221,10 +223,7 @@ export class AutowinOS {
   /** Clôture automatique d'un run vert (commit + push sur branche dédiée). OFF par défaut. */
   private autoClose = false
   /** Photo de l'arbre par run en cours (projet + Brain), prise au démarrage. */
-  private readonly closeBaselines = new Map<
-    string,
-    Promise<{ project: string[]; brain: string[] }>
-  >()
+  private readonly closeBaselines = new Map<string, Promise<CloseBaseline>>()
   /** Dernier résultat de clôture — remonté à l'UI pour dire ce qui a réellement été publié. */
   private lastAutoClose: AutoCloseReport | undefined
 
@@ -324,7 +323,9 @@ export class AutowinOS {
     signal?: AbortSignal,
     collectedContext?: string,
     /** SURVIE NIVEAU 3 : acquis d'un run interrompu → reprise à la phase suivante. */
-    resumeOutputs?: { phase: PipelinePhase; text: string }[]
+    resumeOutputs?: { phase: PipelinePhase; text: string }[],
+    /** Conversation d'origine : persistée avec l'acquis pour qu'une reprise s'affiche au bon endroit. */
+    conversationId?: string
   ): Promise<OrchestrationResult> {
     await this.taskReadiness
     return this.orchestrator.run(
@@ -334,7 +335,8 @@ export class AutowinOS {
       onDelta,
       signal,
       collectedContext,
-      resumeOutputs
+      resumeOutputs,
+      conversationId
     )
   }
 

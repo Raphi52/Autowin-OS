@@ -149,6 +149,8 @@ export interface OrchestratorDeps {
   onPhaseCompleted?: (info: {
     runId: string
     task: string
+    /** Conversation d'origine — sans elle, une reprise ne saurait pas où s'afficher. */
+    conversationId?: string
     phaseOutputs: { phase: PipelinePhase; text: string }[]
   }) => void
   /** Notifié quand le run atteint sa fin (vert, rouge ou abandon) → l'appelant efface l'état repris. */
@@ -330,7 +332,9 @@ export class Orchestrator {
      * ne sont PAS rejouées au modèle — leur livrable est réinjecté tel quel et l'exécution redémarre
      * à la phase suivante (aucun token regaspillé).
      */
-    resumeOutputs: { phase: PipelinePhase; text: string }[] = []
+    resumeOutputs: { phase: PipelinePhase; text: string }[] = [],
+    /** Conversation d'origine, persistée avec l'acquis pour qu'une reprise s'affiche au bon endroit. */
+    conversationId?: string
   ): Promise<OrchestrationResult> {
     const runId = `run-${this.runNamespace}-${++this.runSeq}`
     const isMut = isMutationTask(task)
@@ -386,7 +390,8 @@ export class Orchestrator {
         greedyPlan,
         collectedContext,
         runId,
-        resumeOutputs
+        resumeOutputs,
+        conversationId
       )
       green = !result.gateBlocked
       return result
@@ -739,7 +744,8 @@ export class Orchestrator {
     collectedContext = '',
     runId = '',
     /** SURVIE NIVEAU 3 : acquis d'un run interrompu → ces phases sont REJOUÉES, pas refaites. */
-    resumeOutputs: { phase: PipelinePhase; text: string }[] = []
+    resumeOutputs: { phase: PipelinePhase; text: string }[] = [],
+    conversationId?: string
   ): Promise<OrchestrationResult> {
     const { registry, roles, cost, trust } = this.deps
     // Souveraineté contexte (décision PLIER) : Autowin lit LUI-MÊME le fichier projet gagnant de la
@@ -775,7 +781,7 @@ export class Orchestrator {
     const recordPhase = (phase: PipelinePhase, text: string): void => {
       phaseOutputs.push({ phase, text })
       try {
-        this.deps.onPhaseCompleted?.({ runId, task, phaseOutputs: [...phaseOutputs] })
+        this.deps.onPhaseCompleted?.({ runId, task, conversationId, phaseOutputs: [...phaseOutputs] })
       } catch {
         /* best-effort : une panne de persistance ne casse jamais le run en cours */
       }
