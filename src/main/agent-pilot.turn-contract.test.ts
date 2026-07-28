@@ -413,9 +413,16 @@ describe('AgentPilot turn contract', () => {
 
     expect(retrieveContext).toHaveBeenCalledOnce()
     expect(retrieveContext).toHaveBeenCalledWith('Explique AgentPilot')
+    // La connaissance récupérée doit ARRIVER au modèle — c'est l'invariant. Elle voyage désormais
+    // dans le MESSAGE et non dans le `system` : le contexte Brain dépend de la question, donc le
+    // laisser dans le system rendait le préfixe différent à chaque tour et interdisait tout cache
+    // (mesuré le 2026-07-28 : cache_read = 0 sur 100 % des appels, ~16 k réécrits par tour).
     const system = send.mock.calls[0][2].system as string
-    expect(system).toContain('[AMITEL BRAIN REFERENCE DATA]')
-    expect(system).toContain('[GRAPHIFY CODE EVIDENCE]')
+    const userContent = (send.mock.calls[0][1] as Array<{ content: string }>).at(-1)?.content ?? ''
+    expect(userContent).toContain('[AMITEL BRAIN REFERENCE DATA]')
+    expect(userContent).toContain('[GRAPHIFY CODE EVIDENCE]')
+    // Le préfixe system ne doit PLUS porter de contenu dépendant de la question.
+    expect(system).not.toContain('[AMITEL BRAIN REFERENCE DATA]')
   })
 
   it('reports the iteration cap as an error terminal event, never as done', async () => {

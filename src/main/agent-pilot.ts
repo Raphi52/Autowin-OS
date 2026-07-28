@@ -305,12 +305,20 @@ export class AgentPilot {
     // MÊME config que les phases orchestrées : la CONSTITUTION (soul/réflexes) est la source
     // UNIQUE partagée ; le chat y ajoute seulement ce qui lui est propre (pilotage par commandes).
     const pilotage = buildChatPilotagePrompt(catalog)
+    /**
+     * PRÉFIXE SYSTEM STABLE = condition du cache (mesure 2026-07-28 : cache_read = 0 sur 100 % des
+     * appels, ~16 k de cache_write REÉCRITS à chaque tour, ~0,32 $ pour répondre une phrase).
+     *
+     * Le contexte Brain est un résultat de recherche qui DÉPEND du message de l'utilisateur : tant
+     * qu'il était concaténé ici, le system prompt changeait à chaque tour et aucun préfixe ne pouvait
+     * être réutilisé. Il est désormais passé dans le MESSAGE (voir `convo`) : même information remise
+     * au modèle, mais le system redevient identique d'un tour à l'autre, donc cachable.
+     */
     const systemParts = [
       { name: 'constitution', text: CONSTITUTION },
       { name: 'pilotage', text: pilotage },
       { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
-      { name: 'projectContext', text: this.projectContext() },
-      { name: 'brainContext', text: retrievedContext ? `\n\n${retrievedContext}` : '' }
+      { name: 'projectContext', text: this.projectContext() }
     ]
     const system = systemParts.map((p) => p.text).join('')
     const systemBlocks = systemParts
@@ -325,16 +333,24 @@ export class AgentPilot {
     const known = conversationId ? this.chatSessions.get(conversationId) : undefined
     const resumeSessionId = known?.key === sessionKey ? known.sessionId : undefined
     const lastUserMessage = [...history].reverse().find((m) => m.role === 'user')
+    // Le contexte Brain vit ICI (et non dans le system) pour ne pas casser le préfixe cachable.
+    const brainContext = retrievedContext ? `CONNAISSANCE RÉCUPÉRÉE:\n${retrievedContext}` : ''
     const convo: string[] = resumeSessionId
       ? [
           `ÉTAT DE L'APP:\n${JSON.stringify(snapshot)}`,
+          brainContext,
           `Suite de NOTRE conversation en cours (tu en connais déjà l'historique par ta session : ne le redemande pas).`,
           `UTILISATEUR: ${lastUserMessage?.content ?? ''}`
         ]
       : [
           `ÉTAT DE L'APP:\n${JSON.stringify(snapshot)}`,
+          brainContext,
           ...history.map((m) => `${m.role === 'user' ? 'UTILISATEUR' : 'TOI'}: ${m.content}`)
         ]
+    // Une entrée vide (pas de contexte Brain récupéré) ne doit pas laisser de trou dans le prompt.
+    const convoFiltered = convo.filter((entry) => entry.trim().length > 0)
+    convo.length = 0
+    convo.push(...convoFiltered)
     const currentAttachments = history.at(-1)?.attachments
 
     // Coût cumulé du tour (toutes les itérations LLM du même message utilisateur).
