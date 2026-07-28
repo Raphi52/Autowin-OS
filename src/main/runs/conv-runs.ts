@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { readFile, stat } from 'node:fs/promises'
+import { readFile, readdir, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { parseRun } from '../dashboards/runs'
 import { scanRuns, type RunEntry } from '../dashboards/runs-scan'
@@ -91,13 +91,20 @@ export async function reuseOrCreateConvRun(
   now: () => number = () => Date.now()
 ): Promise<{ path: string; reused: boolean }> {
   try {
-    const candidate = (await scanRuns(root)).find(
-      (run) =>
-        run.session === convId &&
-        run.summary.status === 'open' &&
-        readFileSync(run.path, 'utf8').includes(`## Besoin\n${task}`)
-    )
-    if (candidate) return { path: candidate.path, reused: true }
+    // Les RUN d'une conversation vivent sous leur propre dossier : borner le scan ici évite
+    // de relire tout l'historique Autowin avant chaque envoi.
+    const conversationRoot = join(root, convId)
+    for (const workspace of await readdir(conversationRoot)) {
+      const path = join(conversationRoot, workspace, 'RUN.md')
+      try {
+        const md = await readFile(path, 'utf8')
+        if (parseRun(md).status === 'open' && md.includes(`## Besoin\n${task}`)) {
+          return { path, reused: true }
+        }
+      } catch {
+        // Un RUN isolé illisible ne masque pas les autres workflows de la conversation.
+      }
+    }
   } catch {
     // La recherche de workflow est une optimisation : une source illisible ne bloque pas le run.
   }
