@@ -1,6 +1,42 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
-import type { ModelQuotaSnapshot, ModelQuotaWindow } from '../../../shared/model-quotas'
+import type { ModelQuota, ModelQuotaSnapshot, ModelQuotaWindow } from '../../../shared/model-quotas'
 import './ModelQuotaIndicator.css'
+
+const providerLabels: Record<string, string> = {
+  claude: 'Claude',
+  codex: 'ChatGPT',
+  gemini: 'Gemini',
+  kimi: 'Kimi'
+}
+
+function windowKey(window: ModelQuotaWindow): string {
+  return `${window.id}\0${window.modelFamily ?? ''}`
+}
+
+function quotasByProvider(models: readonly ModelQuota[]): ModelQuota[] {
+  const providers = new Map<string, ModelQuota>()
+  for (const model of models) {
+    const current = providers.get(model.provider)
+    if (!current) {
+      providers.set(model.provider, {
+        ...model,
+        modelId: model.provider,
+        label: providerLabels[model.provider] ?? model.provider,
+        windows: [...model.windows]
+      })
+      continue
+    }
+    const knownWindows = new Set(current.windows.map(windowKey))
+    for (const window of model.windows) {
+      const key = windowKey(window)
+      if (!knownWindows.has(key)) {
+        current.windows.push(window)
+        knownWindows.add(key)
+      }
+    }
+  }
+  return [...providers.values()]
+}
 
 function resetLabel(window: ModelQuotaWindow): string {
   if (!window.resetsAt) return 'reset non exposé'
@@ -32,36 +68,52 @@ export function ModelQuotaIndicator(): React.JSX.Element {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>()
   const rootRef = useRef<HTMLDivElement>(null)
+  const requestSequenceRef = useRef(0)
 
   const refresh = useCallback(async (): Promise<void> => {
     if (typeof window.api?.modelQuotas !== 'function') {
       setError('Redémarrage requis pour activer les quotas')
       return
     }
+    const requestSequence = ++requestSequenceRef.current
     setLoading(true)
     setError(undefined)
     try {
-      setSnapshot(await window.api.modelQuotas())
+      const value = await window.api.modelQuotas(true)
+      if (requestSequence === requestSequenceRef.current) setSnapshot(value)
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'Quotas indisponibles')
+      if (requestSequence === requestSequenceRef.current) {
+        setError(failure instanceof Error ? failure.message : 'Quotas indisponibles')
+      }
     } finally {
-      setLoading(false)
+      if (requestSequence === requestSequenceRef.current) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
     let active = true
     if (typeof window.api?.modelQuotas !== 'function') return
-    void window.api
-      .modelQuotas()
-      .then((value) => {
-        if (active) setSnapshot(value)
-      })
-      .catch((failure: unknown) => {
-        if (active) setError(failure instanceof Error ? failure.message : 'Quotas indisponibles')
-      })
+    const load = (): void => {
+      const requestSequence = ++requestSequenceRef.current
+      void window.api
+        .modelQuotas()
+        .then((value) => {
+          if (active && requestSequence === requestSequenceRef.current) {
+            setSnapshot(value)
+            setError(undefined)
+          }
+        })
+        .catch((failure: unknown) => {
+          if (active && requestSequence === requestSequenceRef.current) {
+            setError(failure instanceof Error ? failure.message : 'Quotas indisponibles')
+          }
+        })
+    }
+    load()
+    const timer = window.setInterval(load, 60_000)
     return () => {
       active = false
+      window.clearInterval(timer)
     }
   }, [])
 
@@ -83,6 +135,7 @@ export function ModelQuotaIndicator(): React.JSX.Element {
 
   const remaining = snapshot?.summary.remainingPercent
   const level = snapshot?.summary.status ?? 'unknown'
+  const providerQuotas = quotasByProvider(snapshot?.models ?? [])
   return (
     <div className="model-quota" ref={rootRef}>
       <button
@@ -92,11 +145,11 @@ export function ModelQuotaIndicator(): React.JSX.Element {
         style={{ '--quota-angle': `${remaining ?? 0}%` } as CSSProperties}
         aria-label={
           remaining === undefined
-            ? 'Afficher les quotas modèles'
-            : `Afficher les quotas modèles, ${Math.round(remaining)} % minimum restant`
+            ? 'Afficher les quotas fournisseurs'
+            : `Afficher les quotas fournisseurs, ${Math.round(remaining)} % minimum restant`
         }
         aria-expanded={open}
-        title="Quotas de tous les modèles"
+        title="Quotas par fournisseur"
         onClick={() => {
           const next = !open
           setOpen(next)
@@ -109,11 +162,11 @@ export function ModelQuotaIndicator(): React.JSX.Element {
         <section
           className="model-quota-popover"
           data-testid="model-quota-popover"
-          aria-label="Quotas de tous les modèles"
+          aria-label="Quotas par fournisseur"
         >
           <header>
             <div>
-              <strong>Quotas modèles</strong>
+              <strong>Quotas fournisseurs</strong>
               <small>
                 {error
                   ? 'Indisponible'
@@ -137,13 +190,13 @@ export function ModelQuotaIndicator(): React.JSX.Element {
           </header>
           {error && <p className="model-quota-error">{error}</p>}
           <div className="model-quota-list">
-            {(snapshot?.models ?? []).map((model) => (
+            {providerQuotas.map((model) => (
               <article key={model.modelId} className="model-quota-row">
                 <div className="model-quota-name">
                   <span>
                     <strong>{model.label}</strong>
                     <small>
-                      {model.provider}
+                      {model.source}
                       {model.observedAt
                         ? ` · ${observedLabel(model.observedAt, model.status === 'stale')}`
                         : ''}
@@ -157,7 +210,7 @@ export function ModelQuotaIndicator(): React.JSX.Element {
                   </div>
                 ) : (
                   model.windows.map((window) => (
-                    <div className="model-quota-window" key={window.id}>
+                    <div className="model-quota-window" key={windowKey(window)}>
                       <span>
                         <b>
                           {window.label}
@@ -169,20 +222,33 @@ export function ModelQuotaIndicator(): React.JSX.Element {
                         </b>
                         <small>{resetLabel(window)}</small>
                       </span>
-                      <div className="model-quota-meter" aria-hidden="true">
-                        <i style={{ width: `${window.remainingPercent}%` }} />
-                      </div>
-                      <strong className="model-quota-values">
-                        <span>{Math.round(window.remainingPercent)} % restant</span>
-                        <small>{Math.round(window.usedPercent)} % utilisé</small>
-                      </strong>
+                      {window.limitKnown === false ? (
+                        // Aucun plafond officiel exposé (mesure locale) : afficher les tokens
+                        // CONSOMMÉS, jamais une jauge de « restant » qui serait inventée.
+                        <strong className="model-quota-values">
+                          <span>
+                            {(window.usedTokens ?? 0).toLocaleString('fr-FR')} tokens consommés
+                          </span>
+                          <small>plafond non exposé par le fournisseur</small>
+                        </strong>
+                      ) : (
+                        <>
+                          <div className="model-quota-meter" aria-hidden="true">
+                            <i style={{ width: `${window.remainingPercent}%` }} />
+                          </div>
+                          <strong className="model-quota-values">
+                            <span>{Math.round(window.remainingPercent)} % restant</span>
+                            <small>{Math.round(window.usedPercent)} % utilisé</small>
+                          </strong>
+                        </>
+                      )}
                     </div>
                   ))
                 )}
               </article>
             ))}
           </div>
-          <footer>Capacité restante · quotas de compte partagés selon le provider</footer>
+          <footer>Capacité restante · un quota de compte par fournisseur</footer>
         </section>
       )}
     </div>

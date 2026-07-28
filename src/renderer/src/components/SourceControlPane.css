@@ -8,7 +8,9 @@
 .sc-scroll {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   min-height: 0;
+  min-width: 0;
 }
 /* Barre de dépôt COLLÉE en haut : le contenu dépasse largement la hauteur du panneau (des dizaines
    de fichiers + un diff déplié), et sans sticky les boutons Projet/Brain sortaient de l'écran dès
@@ -84,6 +86,7 @@
 .sc-sect {
   border-bottom: 1px solid var(--line, #262b33);
   padding: 8px 11px 11px;
+  min-width: 0;
 }
 .sc-h {
   font-size: 11px;
@@ -157,7 +160,63 @@
   font-size: 10px;
 }
 .sc-diff-wrap {
-  margin: 2px 0 8px 20px;
+  margin: 4px 0 10px 20px;
+  min-width: 0;
+  max-width: calc(100% - 20px);
+}
+.sc-diff-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line2, #31373f);
+  border-radius: 9px;
+  background: var(--surface, #14171c);
+}
+.sc-diff-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line, #262b33);
+  background: var(--surface2, #191d23);
+}
+.sc-diff-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text, #e6e9ee);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+.sc-diff-wrap-mode {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 1px solid var(--line2, #31373f);
+  border-radius: 999px;
+  color: var(--muted, #8b939f);
+  font-size: 9px;
+}
+.sc-diff-content {
+  min-width: 0;
+}
+.sc-diff-card .diff-view {
+  max-height: min(55vh, 520px);
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  overflow-y: auto;
+}
+.sc-diff-actions {
+  padding: 8px 10px;
+  border-top: 1px solid var(--line, #262b33);
+  background: var(--surface2, #191d23);
+}
+.sc-diff-action {
+  width: 100%;
+  white-space: normal;
 }
 .sc-m {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;

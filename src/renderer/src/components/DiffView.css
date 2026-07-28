@@ -5,25 +5,32 @@
   border: 1px solid var(--line, #262b33);
   border-radius: 8px;
   background: var(--surface, #14171c);
-  overflow-x: auto;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 11px;
   line-height: 1.5;
-  white-space: pre;
+  white-space: normal;
 }
 /* Gouttière de numéros (avant | après) + code : la gouttière reste figée à gauche pendant le
    défilement horizontal, sinon les numéros disparaissent sur les lignes longues. */
 .diff-line {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  padding: 0 10px 0 0;
+  grid-template-columns: 58px minmax(0, 1fr);
+  min-width: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line, #262b33) 55%, transparent);
+}
+.diff-line:last-child {
+  border-bottom: 0;
 }
 .diff-gutter {
   position: sticky;
   left: 0;
   display: inline-flex;
-  gap: 6px;
-  padding: 0 8px;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 2px 4px;
   border-right: 1px solid var(--line, #262b33);
   background: inherit;
   color: var(--text-faint, #6b727c);
@@ -31,13 +38,21 @@
 }
 .diff-lineno {
   display: inline-block;
-  min-width: 2.6em;
+  min-width: 2.1em;
   font-style: normal;
   text-align: right;
 }
 .diff-code {
-  padding-left: 8px;
+  min-width: 0;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
   font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .diff-add {
   color: var(--ok, #3ecb8f);

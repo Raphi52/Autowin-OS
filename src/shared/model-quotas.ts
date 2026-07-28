@@ -5,6 +5,17 @@ export interface ModelQuotaWindow {
   remainingPercent: number
   resetsAt?: string
   modelFamily?: string
+  /**
+   * Tokens réellement CONSOMMÉS sur la fenêtre, quand ils sont mesurés (source locale).
+   * Présent sans `limitKnown` ⇒ on connaît la consommation mais pas le plafond.
+   */
+  usedTokens?: number
+  /**
+   * `false` = aucun plafond officiel connu → `usedPercent`/`remainingPercent` ne veulent RIEN dire
+   * et NE DOIVENT PAS être affichés comme un quota (honnêteté : on montre les tokens consommés).
+   * Absent/`true` = quota officiel exposé par le provider.
+   */
+  limitKnown?: boolean
 }
 
 export type ModelQuotaAvailability = 'available' | 'stale' | 'unavailable'

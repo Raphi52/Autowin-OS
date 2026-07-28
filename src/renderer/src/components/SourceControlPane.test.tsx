@@ -95,6 +95,9 @@ describe('SourceControlPane (prompt-first)', () => {
       await Promise.resolve()
     })
     expect(container.querySelector('[data-testid="diff-view"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="sc-diff-card"]')).not.toBeNull()
+    expect(container.querySelector('.sc-diff-title')?.textContent).toBe('src/main/index.ts')
+    expect(container.querySelector('.sc-diff-wrap-mode')?.textContent).toContain('Retour ligne')
     expect(container.textContent).toContain('+new')
   })
 

@@ -225,22 +225,34 @@ export function SourceControlPane({
                     </div>
                     {openFile === c.path && (
                       <div className="sc-diff-wrap">
-                        {diff === null ? (
-                          <div className="sc-clean">Chargement du diff…</div>
-                        ) : diff.available ? (
-                          <DiffView diff={diff.diff ?? ''} />
-                        ) : (
-                          <div className="sc-clean">Diff indisponible.</div>
-                        )}
-                        <button
-                          className="sc-btn"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            propose(`explique ce qui a changé dans ${c.path} et propose un commit`)
-                          }}
-                        >
-                          Expliquer / committer ce fichier
-                        </button>
+                        <div className="sc-diff-card" data-testid="sc-diff-card">
+                          <div className="sc-diff-head">
+                            <span className="sc-diff-title" title={c.path}>
+                              {c.path}
+                            </span>
+                            <span className="sc-diff-wrap-mode">Retour ligne</span>
+                          </div>
+                          <div className="sc-diff-content">
+                            {diff === null ? (
+                              <div className="sc-clean">Chargement du diff…</div>
+                            ) : diff.available ? (
+                              <DiffView diff={diff.diff ?? ''} />
+                            ) : (
+                              <div className="sc-clean">Diff indisponible.</div>
+                            )}
+                          </div>
+                          <div className="sc-diff-actions">
+                            <button
+                              className="sc-btn sc-diff-action"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                propose(`explique ce qui a changé dans ${c.path} et propose un commit`)
+                              }}
+                            >
+                              Expliquer / committer ce fichier
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
