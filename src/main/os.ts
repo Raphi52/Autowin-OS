@@ -64,6 +64,7 @@ import type {
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
+import { loadAutoClose, saveAutoClose } from './autoclose-store'
 import { AUTOWIN_WORKSPACE_ENV } from '../shared/app-identity'
 
 interface ExecutionWorkspaceInput {
@@ -220,8 +221,12 @@ export class AutowinOS {
     })
   }
 
-  /** Clôture automatique d'un run vert (commit + push sur branche dédiée). OFF par défaut. */
-  private autoClose = false
+  /**
+   * Clôture automatique d'un run vert (commit + push sur branche dédiée). OFF par défaut, et
+   * RESTAURÉE du disque : sans ça le réglage retombait à OFF à chaque lancement, obligeant à le
+   * réarmer à la main — l'étape manuelle que la fonctionnalité doit justement supprimer.
+   */
+  private autoClose = loadAutoClose()
   /** Photo de l'arbre par run en cours (projet + Brain), prise au démarrage. */
   private readonly closeBaselines = new Map<string, Promise<CloseBaseline>>()
   /** Dernier résultat de clôture — remonté à l'UI pour dire ce qui a réellement été publié. */
@@ -229,6 +234,7 @@ export class AutowinOS {
 
   setAutoClose(enabled: boolean): void {
     this.autoClose = enabled
+    saveAutoClose(enabled)
   }
   getAutoClose(): { enabled: boolean; last?: AutoCloseReport } {
     return { enabled: this.autoClose, ...(this.lastAutoClose ? { last: this.lastAutoClose } : {}) }
