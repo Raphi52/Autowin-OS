@@ -296,7 +296,7 @@ const ChatMessageRow = memo(
     onFork?: (messageId: string) => void
     onOpenImage?: (image: { src: string; name: string }) => void
     onPickSuggestion?: (prompt: string) => void
-    onOpenLiveAction?: () => void
+    onOpenLiveAction?: (mode: 'live' | 'history') => void
   }): React.JSX.Element {
     if (message.role === 'user') {
       return (
@@ -521,9 +521,18 @@ export function ChatView({
   // Carte de l'orchestration EN COURS dans le panneau Workflows : cible du clic sur
   // l'indicateur « action en cours » d'un message (ouvre le panneau + cadre le run/step actif).
   const liveRunCardRef = useRef<HTMLDivElement>(null)
-  const revealLiveAction = useCallback(() => {
+  // Clic sur le bloc d'activité d'un message → Workflows, à l'endroit qui montre RÉELLEMENT ce qui
+  // s'est passé : la carte du run pour une action en cours, l'onglet Activité (historique) pour une
+  // action déjà terminée ou interrompue — sa carte live n'existe plus.
+  const revealLiveAction = useCallback((mode: 'live' | 'history' = 'live') => {
     setShowRuns(true)
     setPaneTab('runs')
+    if (mode === 'history') {
+      // Action déjà terminée/interrompue : sa carte live n'existe plus → on cadre la LISTE des runs
+      // de cette conversation, où le run concerné (et ce qui s'y est passé) reste consultable.
+      setRunScope('conv')
+      return
+    }
     requestAnimationFrame(() =>
       liveRunCardRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     )

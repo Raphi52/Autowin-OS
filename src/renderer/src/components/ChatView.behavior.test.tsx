@@ -674,8 +674,10 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('.runs-pane .conv-head button.btn-ghost')
     expect(container!.querySelector('.live-run')).toBeNull()
 
+    // Le bloc d'activité EST le bouton (plus de bloc dépliable dans le fil) : cliquer dessus
+    // renvoie vers Workflows, où vit le détail.
     const indicator = container!.querySelector(
-      '.activity-group-live-link'
+      '[data-testid="activity-group"]'
     ) as HTMLButtonElement | null
     expect(indicator?.textContent).toContain('en cours')
     await act(async () => indicator!.click())

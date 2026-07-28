@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { createChatTurn, reduceChatTurn, type ChatTurnEvent } from '../../../shared/chat-turn'
-import { AssistantActionEvent, AssistantActivityGroup } from './ChatView.parts'
+import { AssistantActivityGroup } from './ChatView.parts'
 import { hydrateStoredAssistant, reduceAssistantPilotEvent } from './chat-view-model'
 
 function renderActivity(events: ChatTurnEvent[]): string {
@@ -11,43 +11,8 @@ function renderActivity(events: ChatTurnEvent[]): string {
   return renderToStaticMarkup(createElement(AssistantActivityGroup, { actions }))
 }
 
-describe('AssistantActionEvent', () => {
-  it('keeps a compact summary and inspectable input/result in semantic details', () => {
-    const html = renderToStaticMarkup(
-      createElement(AssistantActionEvent, {
-        part: {
-          kind: 'action',
-          name: 'navigate',
-          args: { tab: 'memory' },
-          ok: true,
-          data: { activeTab: 'memory' }
-        }
-      })
-    )
-
-    expect(html).toContain('<details class="action-event">')
-    expect(html).toContain('Navigation')
-    expect(html).toContain('réussi')
-    expect(html).toContain('Entrée')
-    expect(html).toContain('Résultat')
-    expect(html).toContain('activeTab')
-  })
-
-  it('makes failures explicit without hiding their details', () => {
-    const html = renderToStaticMarkup(
-      createElement(AssistantActionEvent, {
-        part: { kind: 'action', name: 'orchestrate', ok: false, data: { error: 'boom' } }
-      })
-    )
-
-    expect(html).toContain('action-event failed')
-    expect(html).toContain('échec')
-    expect(html).toContain('boom')
-  })
-})
-
 describe('AssistantActivityGroup', () => {
-  it('collapses consecutive actions behind a compact inspectable summary', () => {
+  it('est un BOUTON vers Workflows, jamais un bloc dépliable dans le fil', () => {
     const html = renderToStaticMarkup(
       createElement(AssistantActivityGroup, {
         actions: [
@@ -57,12 +22,28 @@ describe('AssistantActivityGroup', () => {
       })
     )
 
-    expect(html).toContain('<details class="activity-group failed">')
+    // Le détail (prompt du sous-agent, résultats) vit dans Workflows, pas au milieu du chat.
+    expect(html).toContain('<button')
+    expect(html).not.toContain('<details')
+    expect(html).not.toContain('action-event')
+    expect(html).not.toContain('Entrée')
+    expect(html).not.toContain('Résultat')
+    // Le résumé cliquable reste informatif.
     expect(html).toContain('2 actions avec erreur')
     expect(html).toContain('Navigation · Lecture d’état')
-    expect(html.match(/class="action-event/g)).toHaveLength(2)
-    expect(html).toContain('Entrée')
-    expect(html).toContain('Résultat')
+  })
+
+  it('appelle onOpenLiveAction en mode history quand plus rien ne tourne', () => {
+    const modes: string[] = []
+    const html = renderToStaticMarkup(
+      createElement(AssistantActivityGroup, {
+        actions: [{ kind: 'action', name: 'orchestrate', interrupted: true }],
+        onOpenLiveAction: (mode) => modes.push(mode)
+      })
+    )
+    // Le rendu statique ne clique pas : on vérifie le contrat d'intention affiché.
+    expect(html).toContain('Voir le détail de cette action dans Workflows')
+    expect(modes).toEqual([])
   })
 
   it('renders every resolved action as completed after a successful turn', () => {
@@ -75,7 +56,6 @@ describe('AssistantActivityGroup', () => {
     ])
 
     expect(html).toContain('2 actions terminées')
-    expect(html.match(/réussi/g)).toHaveLength(2)
     expect(html).not.toContain('en cours')
   })
 
@@ -88,8 +68,6 @@ describe('AssistantActivityGroup', () => {
 
     expect(html).toContain('1 action terminée · 1 action en cours')
     expect(html).toContain('Lecture d’état')
-    expect(html).toContain('réussi')
-    expect(html).toContain('en cours')
   })
 
   it('renders a pending action as failed when the turn fails before its result', () => {
@@ -99,7 +77,6 @@ describe('AssistantActivityGroup', () => {
     ])
 
     expect(html).toContain('1 action avec erreur')
-    expect(html).toContain('échec')
     expect(html).not.toContain('en cours')
   })
 })

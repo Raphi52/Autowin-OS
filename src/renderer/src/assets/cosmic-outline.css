@@ -524,40 +524,35 @@
 
 .cosmic-outline .activity-group {
   width: min(100%, 720px);
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-left: 2px solid #5ecaf0;
   border-radius: 7px;
   background: rgba(0, 0, 0, 0.3);
   color: #9caab5;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.cosmic-outline .activity-group:hover {
+  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(0, 0, 0, 0.45);
 }
 
 .cosmic-outline .activity-group.failed {
   border-left-color: #ff6d8f;
 }
 
-.cosmic-outline .activity-group > summary {
-  display: flex;
-  min-height: 38px;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 11px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.cosmic-outline .activity-group > summary::-webkit-details-marker {
-  display: none;
-}
-
-.cosmic-outline .activity-group > summary::after {
+.cosmic-outline .activity-group-go {
+  margin-left: auto;
   color: #61707d;
-  content: '⌄';
-  font-size: 12px;
-}
-
-.cosmic-outline .activity-group[open] > summary::after {
-  transform: rotate(180deg);
+  font-size: 11px;
 }
 
 .cosmic-outline .activity-group-title {
@@ -566,6 +561,7 @@
   font-weight: 700;
   white-space: nowrap;
 }
+
 
 .cosmic-outline .activity-group-tools {
   flex: 1;
@@ -576,17 +572,7 @@
   white-space: nowrap;
 }
 
-.cosmic-outline .activity-group-list {
-  display: grid;
-  gap: 6px;
-  padding: 0 10px 10px 24px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
 
-.cosmic-outline .activity-group-list .action-event {
-  width: 100%;
-  margin-top: 8px;
-}
 
 .cosmic-outline .action-event.failed {
   border-left-color: #ff6d8f;

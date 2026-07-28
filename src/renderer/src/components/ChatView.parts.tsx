@@ -163,71 +163,13 @@ export function EvidenceList({ items }: { items: EvidencePart[] }): React.JSX.El
   )
 }
 
-export function AssistantActionEvent({ part }: { part: ChatActionPart }): React.JSX.Element {
-  return (
-    <details className={`action-event${part.ok === false ? ' failed' : ''}`}>
-      <summary>
-        {/* Une action interrompue n'est ni en cours (pas de spinner) ni en échec : état terminal
-            honnête « issue inconnue », sinon l'indicateur tourne pour toujours. */}
-        <span
-          className={`status-dot ${
-            part.interrupted
-              ? 'st-warn'
-              : part.ok === undefined
-                ? 'st-info'
-                : part.ok
-                  ? 'st-ok'
-                  : 'st-err'
-          }`}
-        />
-        <span className="action-name">{CMD_LABEL[part.name] ?? part.name}</span>
-        {part.args != null && (
-          <span className="action-args mono">{JSON.stringify(part.args).slice(0, 96)}</span>
-        )}
-        <span className="action-status">
-          {part.interrupted
-            ? 'interrompue'
-            : part.ok === undefined
-              ? 'en cours'
-              : part.ok
-                ? 'réussi'
-                : 'échec'}
-        </span>
-        {part.ok === undefined && !part.interrupted && <span className="spinner" />}
-      </summary>
-      <div className="action-detail">
-        {part.args != null && (
-          <section>
-            <small>Entrée</small>
-            <HumanJson value={part.args} />
-          </section>
-        )}
-        {part.data != null && (
-          <section>
-            <small>Résultat</small>
-            <HumanJson value={part.data} />
-          </section>
-        )}
-        {part.args == null && part.data == null && (
-          <span className="c-faint">
-            {part.interrupted
-              ? 'Action interrompue — son résultat n’est jamais revenu.'
-              : part.ok === undefined
-                ? 'Action en cours…'
-                : 'Aucun détail supplémentaire.'}
-          </span>
-        )}
-      </div>
-    </details>
-  )
-}
-
 export function AssistantActivityGroup({
   actions,
   onOpenLiveAction
 }: {
   actions: ChatActionPart[]
-  onOpenLiveAction?: () => void
+  /** Ouvre Workflows : `live` = carte du run en cours, `history` = activité passée. */
+  onOpenLiveAction?: (mode: 'live' | 'history') => void
 }): React.JSX.Element {
   const failed = actions.some((action) => action.ok === false)
   // « En cours » = sans résultat ET non interrompue. Une action interrompue (tour clos sans son
@@ -252,41 +194,33 @@ export function AssistantActivityGroup({
         : actions.length > 1
           ? `${actions.length} actions terminées`
           : '1 action terminée'
+  // Bloc NON dépliable : le détail (prompt envoyé au sous-agent, résultats, trace) vit dans
+  // Workflows, pas au milieu du fil. Le bloc est donc un simple bouton qui y renvoie — vers la
+  // carte du run si ça tourne, vers l'historique d'activité si c'est déjà terminé/interrompu.
+  const tools = actions.map((action) => CMD_LABEL[action.name] ?? action.name).join(' · ')
   return (
-    <details className={`activity-group${failed ? ' failed' : ''}`}>
-      <summary>
-        <span
-          className={`status-dot ${
-            running ? 'st-info' : failed ? 'st-err' : interruptedCount > 0 ? 'st-warn' : 'st-ok'
-          }`}
-        />
-        {running && onOpenLiveAction ? (
-          // Indicateur « action en cours » cliquable → ouvre Workflows sur le run/step actif.
-          <button
-            type="button"
-            className="activity-group-title activity-group-live-link"
-            title="Ouvrir cette action en cours dans Workflows"
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              onOpenLiveAction()
-            }}
-          >
-            {status}
-          </button>
-        ) : (
-          <span className="activity-group-title">{status}</span>
-        )}
-        <span className="activity-group-tools">
-          {actions.map((action) => CMD_LABEL[action.name] ?? action.name).join(' · ')}
-        </span>
-        {running && <span className="spinner" />}
-      </summary>
-      <div className="activity-group-list">
-        {actions.map((action, index) => (
-          <AssistantActionEvent key={action.actionId ?? `${action.name}-${index}`} part={action} />
-        ))}
-      </div>
-    </details>
+    <button
+      type="button"
+      className={`activity-group${failed ? ' failed' : ''}`}
+      data-testid="activity-group"
+      title={
+        running
+          ? 'Ouvrir cette action en cours dans Workflows'
+          : 'Voir le détail de cette action dans Workflows'
+      }
+      onClick={() => onOpenLiveAction?.(running ? 'live' : 'history')}
+    >
+      <span
+        className={`status-dot ${
+          running ? 'st-info' : failed ? 'st-err' : interruptedCount > 0 ? 'st-warn' : 'st-ok'
+        }`}
+      />
+      <span className="activity-group-title">{status}</span>
+      <span className="activity-group-tools">{tools}</span>
+      {running && <span className="spinner" />}
+      <span className="activity-group-go" aria-hidden="true">
+        ↗
+      </span>
+    </button>
   )
 }
