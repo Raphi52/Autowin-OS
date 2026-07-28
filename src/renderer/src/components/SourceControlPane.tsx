@@ -26,7 +26,6 @@ export function SourceControlPane({
 }): React.JSX.Element {
   const [git, setGit] = useState<GitReadResult | null>(null)
   const [worktrees, setWorktrees] = useState<WorktreeAgentActivity[]>([])
-  const [prompt, setPrompt] = useState('')
   const [openFile, setOpenFile] = useState<string | null>(null)
   const [diff, setDiff] = useState<GitDiffResult | null>(null)
   // v3 — dépôt configurable (multi-repo), persisté ; '' = cwd de l'app par défaut.
@@ -87,7 +86,9 @@ export function SourceControlPane({
   }, [])
   const onBrain = Boolean(brainPath) && repoPath === brainPath
 
-  const propose = (text: string): void => setPrompt(text)
+  // Les boutons envoient DIRECTEMENT la demande à l'agent (plus de barre de prompt intermédiaire :
+  // le détour « relis puis envoie » n'apportait rien, l'agent reste de toute façon le seul à agir).
+  const propose = (text: string): void => onSendPrompt?.(text)
   const toggleDiff = (path: string): void => {
     if (openFile === path) {
       setOpenFile(null)
@@ -96,11 +97,6 @@ export function SourceControlPane({
     setOpenFile(path)
     setDiff(null)
     void window.api.getGitDiff?.(path, repoPath || undefined).then((d) => setDiff(d as GitDiffResult))
-  }
-  const send = (): void => {
-    const t = prompt.trim()
-    if (t) onSendPrompt?.(t)
-    setPrompt('')
   }
 
   const changes = git?.state?.changes ?? []
@@ -161,10 +157,10 @@ export function SourceControlPane({
             </div>
             <div className="sc-btns">
               <button className="sc-btn" onClick={() => propose('change de branche vers : ')}>
-                Changer de branche <span className="sc-prompt-badge">→ prompt</span>
+                Changer de branche
               </button>
               <button className="sc-btn" onClick={() => propose('push la branche courante')}>
-                Push <span className="sc-prompt-badge">→ prompt</span>
+                Push
               </button>
             </div>
           </section>
@@ -205,7 +201,7 @@ export function SourceControlPane({
                             propose(`explique ce qui a changé dans ${c.path} et propose un commit`)
                           }}
                         >
-                          Expliquer / committer ce fichier <span className="sc-prompt-badge">→ prompt</span>
+                          Expliquer / committer ce fichier
                         </button>
                       </div>
                     )}
@@ -218,7 +214,7 @@ export function SourceControlPane({
                       propose('commit tous les changements avec un message clair, puis push')
                     }
                   >
-                    Commit <span className="sc-prompt-badge">→ prompt</span>
+                    Commit
                   </button>
                 </div>
               </>
@@ -255,25 +251,6 @@ export function SourceControlPane({
         )}
       </div>
 
-      <div className="sc-promptbar">
-        <div className="sc-promptbar-lbl">Prompt git (éditable) → agent</div>
-        <textarea
-          className="sc-promptbar-input"
-          data-testid="sc-prompt-input"
-          value={prompt}
-          placeholder="Un bouton propose un prompt ici ; relis/édite, puis envoie."
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              send()
-            }
-          }}
-        />
-        <button className="sc-btn sc-send" data-testid="sc-send" disabled={!prompt.trim()} onClick={send}>
-          Envoyer à l’agent
-        </button>
-      </div>
     </div>
   )
 }

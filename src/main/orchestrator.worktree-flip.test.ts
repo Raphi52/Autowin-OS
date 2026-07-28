@@ -127,5 +127,54 @@ describe('Orchestrator — flip live worktree', () => {
 
     await expect(orch.run('modifie le projet')).rejects.toBeTruthy()
     expect(end).toHaveBeenCalledTimes(1)
+    // Un run PLANTÉ ne ramène pas son travail dans la base.
+    expect(end.mock.calls[0][1]).toMatchObject({ merge: false })
+  })
+
+  describe('le travail ne remonte dans la base QUE si le run est vert', () => {
+    it('run VERT → end({ merge: true })', async () => {
+      const end = vi.fn()
+      const { orch } = makeOrchestrator({ begin: () => 'C:\\wt\\run-1', end })
+
+      const result = await orch.run('modifie le projet')
+
+      expect(result.gateBlocked).toBe(false)
+      expect(end.mock.calls[0][1]).toMatchObject({ merge: true })
+    })
+
+    it('run ROUGE (juge en défaut) → end({ merge: false }) : la copie reste isolée', async () => {
+      // Le juge répond DEFAUT → gate bloqué → le travail ne doit PAS être fusionné.
+      class RedJudgeProvider extends CapturingProvider {
+        async *send(
+          m: Message[],
+          options: SendOptions = {}
+        ): AsyncGenerator<StreamChunk, SendResult, void> {
+          const first = this.calls.length === 0
+          const base = super.send(m, options)
+          let step = await base.next()
+          while (!step.done) step = await base.next()
+          return first ? step.value : { ...step.value, text: 'DEFAUT: preuve insuffisante' }
+        }
+      }
+      const provider = new RedJudgeProvider()
+      const end = vi.fn()
+      const orch = new Orchestrator({
+        registry: new ProviderRegistry().register(provider),
+        roles: new RoleModelConfig({
+          subagent: { provider: provider.id, model: 'worker' },
+          judge: { provider: provider.id, model: 'judge' }
+        }),
+        cost: new CostAggregator(),
+        trust: new TrustLedger(),
+        authority: new AuthoritySas(),
+        executionWorkspace: 'C:\\base',
+        worktrees: { begin: () => 'C:\\wt\\run-1', end }
+      })
+
+      const result = await orch.run('modifie le projet')
+
+      expect(result.gateBlocked).toBe(true)
+      expect(end.mock.calls[0][1]).toMatchObject({ merge: false })
+    })
   })
 })

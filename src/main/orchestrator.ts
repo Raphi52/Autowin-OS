@@ -179,8 +179,11 @@ interface PhasePromptBlock {
 export interface RunWorktrees {
   /** Renvoie le cwd isolé du run (mutation) ou undefined (non-mutation → base). */
   begin(runId: string, agentName: string, isMutation: boolean): string | undefined
-  /** Fusionne (full-auto) ou bascule conflit ; appelé en fin de run, y compris sur erreur. */
-  end(runId: string): unknown
+  /**
+   * Clôt le run ; appelé en fin de run, y compris sur erreur. `merge: false` (run non vert) ⇒ le
+   * travail N'EST PAS fusionné dans la base et la copie isolée est conservée pour décision humaine.
+   */
+  end(runId: string, options?: { merge?: boolean }): unknown
   /** Attache/détache un processus CLI réel au lease durable du run. */
   process?(runId: string, pid: number, active: boolean): void
   /** Barrière durable couvrant l'intervalle avant que spawn fournisse un PID. */
@@ -297,6 +300,8 @@ export class Orchestrator {
   ): Promise<OrchestrationResult> {
     const runId = `run-${this.runNamespace}-${++this.runSeq}`
     const isMut = isMutationTask(task)
+    // Verdict du run, lu dans le `finally` : seul un run VERT ramène son travail dans la base.
+    let green = false
     const workCwd =
       this.deps.worktrees?.begin(runId, 'Agent', isMut) ?? this.deps.executionWorkspace
     if (isMut && this.deps.worktrees) {
@@ -320,7 +325,7 @@ export class Orchestrator {
           if (phases.length !== 1 || phases[0] !== 'build') {
             greedyPlan = plan
           } else {
-            return await this.runGreedyPipeline(
+            const greedyResult = await this.runGreedyPipeline(
               task,
               plan,
               workCwd,
@@ -330,10 +335,12 @@ export class Orchestrator {
               signal,
               collectedContext
             )
+            green = !greedyResult.gateBlocked
+            return greedyResult
           }
         }
       }
-      return await this.runInner(
+      const result = await this.runInner(
         task,
         workCwd,
         onStep,
@@ -343,9 +350,14 @@ export class Orchestrator {
         greedyPlan,
         collectedContext
       )
+      green = !result.gateBlocked
+      return result
     } finally {
       this.processObservers.delete(workCwd)
-      this.deps.worktrees?.end(runId)
+      // Le travail n'est fusionné dans la base QUE si le run est vert. Un run rouge, annulé ou planté
+      // garde sa copie isolée (l'exception saute le `green = true` ci-dessus) : on ne ramène plus
+      // automatiquement dans la base un travail jugé raté.
+      this.deps.worktrees?.end(runId, { merge: green })
     }
   }
 

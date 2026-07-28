@@ -89,9 +89,22 @@ export class RunWorktreeCoordinator {
   }
 
   /** Termine un run : fusionne (full-auto) ou bascule conflit. No-op si run inconnu/non-mutation. */
-  end(runId: string): FinalizeResult | undefined {
+  /**
+   * Clôt un run. `merge: false` ⇒ le travail n'est PAS fusionné dans la base et la copie isolée est
+   * CONSERVÉE : c'est le cas d'un run non vert (jugé rouge, annulé, planté). Avant, `end()` fusionnait
+   * dans tous les cas (appelé depuis un `finally`), donc un run RATÉ atterrissait quand même dans la
+   * base. Défaut `true` = comportement historique (rétrocompat des appelants existants).
+   */
+  end(runId: string, options: { merge?: boolean } = {}): FinalizeResult | undefined {
     const tracked = this.runs.get(runId)
     if (!tracked) return undefined
+    if (options.merge === false) {
+      tracked.endedAtMs = this.now()
+      // 'ready' = travail terminé, isolé, en attente d'une décision humaine (ni fusionné, ni perdu).
+      tracked.state = tracked.isMutation ? 'ready' : 'merged'
+      this.emit()
+      return undefined
+    }
     if (!tracked.isMutation) {
       tracked.endedAtMs = this.now()
       tracked.state = 'merged'

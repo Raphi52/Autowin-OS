@@ -57,9 +57,6 @@ async function render(onSendPrompt?: (p: string) => void): Promise<void> {
     await Promise.resolve()
   })
 }
-const input = (): HTMLTextAreaElement =>
-  container.querySelector('[data-testid="sc-prompt-input"]') as HTMLTextAreaElement
-
 describe('SourceControlPane (prompt-first)', () => {
   /** Bascule sur la vue « Worktree » (branche, copies d'agents, historique). */
   async function openWorktreeView(): Promise<void> {
@@ -101,7 +98,7 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(container.textContent).toContain('+new')
   })
 
-  it('un bouton PRÉ-REMPLIT le prompt, il n’exécute pas de git', async () => {
+  it('un bouton envoie la demande à l’agent (le renderer n’exécute aucun git)', async () => {
     mockApi(GIT)
     const onSendPrompt = vi.fn()
     await render(onSendPrompt)
@@ -109,9 +106,11 @@ describe('SourceControlPane (prompt-first)', () => {
       b.textContent?.includes('Commit')
     ) as HTMLButtonElement
     act(() => commit.click())
-    // Le prompt est pré-rempli dans la barre — RIEN n'est envoyé tant que l'utilisateur ne valide pas.
-    expect(input().value).toContain('commit')
-    expect(onSendPrompt).not.toHaveBeenCalled()
+    // La barre de prompt intermédiaire a été retirée : le clic transmet directement à l'agent,
+    // qui reste le SEUL à exécuter git (le renderer ne fait que de la lecture).
+    expect(onSendPrompt).toHaveBeenCalledTimes(1)
+    expect(String(onSendPrompt.mock.calls[0][0])).toContain('commit')
+    expect(container.querySelector('[data-testid="sc-prompt-input"]')).toBeNull()
   })
 
   it('v3 : le dépôt persisté est passé à getGitState', async () => {
@@ -135,19 +134,15 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(localStorage.getItem('autowin:sc-repo')).toContain('Amitel Brain')
   })
 
-  it('Envoyer transmet le prompt (pré-rempli par un bouton) à l’agent', async () => {
+  it('le bouton Push (vue Worktree) transmet directement la demande à l’agent', async () => {
     mockApi(GIT)
     const onSendPrompt = vi.fn()
     await render(onSendPrompt)
-    // flux réel : le bouton Push (vue Worktree) pré-remplit la barre, puis Envoyer transmet.
     await openWorktreeView()
     const push = [...container.querySelectorAll('button')].find((b) =>
       b.textContent?.includes('Push')
     ) as HTMLButtonElement
     act(() => push.click())
-    expect(input().value).toContain('push')
-    const sendBtn = container.querySelector('[data-testid="sc-send"]') as HTMLButtonElement
-    act(() => sendBtn.click())
     expect(onSendPrompt).toHaveBeenCalledWith('push la branche courante')
   })
 })
