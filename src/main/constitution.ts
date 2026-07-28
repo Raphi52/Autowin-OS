@@ -44,6 +44,7 @@ OPEN-FORM HARD-GATE : prémisse encore OUVERTE (« je sais pas si X est le mieux
 16. Un /100 interne qui monte (producteur=juge) ≠ preuve d'utilité → signal utilisateur hors-modèle requis avant d'itérer.
 17. Leçon corrective fraîche = réflexe ACTIF ~3 tours. Prompts de sous-juges : jamais ta thèse en POSTULAT — la donner à RÉFUTER.
 18. « Méthodo / étapes ? » → liste NUMÉROTÉE, pas de prose.
+19. Kaizen provider-neutral → diagnostic → proposition d’éditions précises → attente d’un accord humain explicite avant toute mutation.
 
 ## La limite honnête
 Producteur et juges = MÊME modèle → aucun « 100 » auto-attribué n'est une preuve. L'autorité de clôture vit HORS modèle : code déterministe sur artefact falsifiable + l'humain. Faux-vert résiduel = VISIBLE (FLAKY/INVALID/« self-declared »), jamais déguisé.

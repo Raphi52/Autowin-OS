@@ -3,7 +3,7 @@ import type { Message } from './providers/types'
 import type { Role } from './roles'
 import {
   closeConvRun,
-  createConvRun,
+  reuseOrCreateConvRun,
   populateConvRunSections,
   saveConvRunTrace
 } from './runs/conv-runs'
@@ -22,6 +22,8 @@ import {
   type ConversationAuthorityMode
 } from './conversation-capabilities'
 import { APP_DESTINATIONS, resolveAppLocation, type AppDestination } from '../shared/navigation'
+import { collectOrchestrationContext } from './orchestration-context'
+import { classifyRegime } from './task-regime'
 
 /**
  * Bus de commandes de l'app — le PLAN DE CONTRÔLE que les agents pilotent.
@@ -549,7 +551,27 @@ export class AppCommandBus {
                 collectAutowinKaizenEvidence(conversation)
               )
             : requestedTask
-        const runPath = createConvRun(convId, requestedTask)
+        const substantial = classifyRegime(task) !== 'trivial'
+        let collectedContext = ''
+        const unavailable: string[] = []
+        if (substantial) {
+          let app: Awaited<ReturnType<AppCommandBus['snapshot']>> | undefined
+          try {
+            app = await this.snapshot()
+          } catch {
+            unavailable.push('état application')
+          }
+          if (!conversation) unavailable.push('conversation')
+          collectedContext = collectOrchestrationContext({
+            task,
+            conversation,
+            app: app && { tab: app.tab, pendingDecisions: app.pendingDecisions },
+            runs: app?.runs,
+            unavailable
+          })
+        }
+        const run = substantial ? await reuseOrCreateConvRun(convId, requestedTask) : undefined
+        const runPath = run?.path
         const orchestrationTurnId = randomUUID()
         const steps: OrchestrationStep[] = []
         // Sous-agent STOPPABLE : un AbortController par conversation, coupé par abortOrchestration.
@@ -615,7 +637,8 @@ export class AppCommandBus {
             (step, delta) => {
               this.broadcast({ type: 'orchestrate-delta', convId, runPath, deltaStep: step, delta })
             },
-            abortController.signal
+            abortController.signal,
+            collectedContext
           )
           if (r.brainNavigation || (r.brainInjectedChars ?? 0) > 0) {
             appendBrainTrace({
@@ -664,7 +687,7 @@ export class AppCommandBus {
           this.broadcast({ type: 'refresh', scope: 'workflows' })
           throw e
         } finally {
-          this.activeOrchestrations.delete(convId)
+          this.clearOrchestration(convId, abortController)
         }
       }
       case 'create_conversation': {

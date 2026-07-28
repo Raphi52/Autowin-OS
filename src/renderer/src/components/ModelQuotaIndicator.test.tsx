@@ -117,4 +117,67 @@ describe('indicateur de quotas modèles', () => {
     expect(popover?.textContent).not.toContain('Lecture en cours')
     await act(async () => root.unmount())
   })
+
+  it('sort de l’erreur lorsque le provider répond au rafraîchissement suivant', async () => {
+    const snapshot = {
+      observedAt: '2026-07-28T10:00:00.000Z',
+      summary: { remainingPercent: 64, status: 'healthy' as const },
+      models: [
+        {
+          modelId: 'codex/terra',
+          model: 'terra',
+          label: 'GPT Terra',
+          provider: 'codex',
+          shared: false,
+          status: 'available' as const,
+          source: 'Codex local',
+          windows: [
+            {
+              id: 'five-hour',
+              label: '5 h',
+              usedPercent: 36,
+              remainingPercent: 64
+            }
+          ]
+        }
+      ]
+    }
+    const modelQuotas = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Provider temporairement indisponible'))
+      .mockRejectedValueOnce(new Error('Provider temporairement indisponible'))
+      .mockResolvedValue(snapshot)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { modelQuotas }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(ModelQuotaIndicator))
+      await Promise.resolve()
+    })
+
+    const trigger = container.querySelector(
+      '[data-testid="model-quota-trigger"]'
+    ) as HTMLButtonElement
+    await act(async () => trigger.click())
+
+    const popover = container.querySelector('[data-testid="model-quota-popover"]')
+    expect(popover?.textContent).toContain('Indisponible')
+    expect(popover?.textContent).toContain('Provider temporairement indisponible')
+    expect(popover?.textContent).not.toContain('Lecture en cours')
+    const refresh = popover?.querySelector(
+      'button[aria-label="Actualiser les quotas"]'
+    ) as HTMLButtonElement
+    expect(refresh.getAttribute('aria-busy')).toBe('false')
+
+    await act(async () => refresh.click())
+    expect(popover?.textContent).toContain('Actualisé')
+    expect(popover?.textContent).toContain('GPT Terra')
+    expect(popover?.querySelector('.model-quota-error')).toBeNull()
+    expect(modelQuotas).toHaveBeenCalledTimes(3)
+    await act(async () => root.unmount())
+  })
 })

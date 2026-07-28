@@ -292,7 +292,8 @@ export class Orchestrator {
     onStep?: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    collectedContext = ''
   ): Promise<OrchestrationResult> {
     const runId = `run-${this.runNamespace}-${++this.runSeq}`
     const isMut = isMutationTask(task)
@@ -326,12 +327,22 @@ export class Orchestrator {
               onStep,
               onPhase,
               onDelta,
-              signal
+              signal,
+              collectedContext
             )
           }
         }
       }
-      return await this.runInner(task, workCwd, onStep, onPhase, onDelta, signal, greedyPlan)
+      return await this.runInner(
+        task,
+        workCwd,
+        onStep,
+        onPhase,
+        onDelta,
+        signal,
+        greedyPlan,
+        collectedContext
+      )
     } finally {
       this.processObservers.delete(workCwd)
       this.deps.worktrees?.end(runId)
@@ -351,7 +362,8 @@ export class Orchestrator {
     onStep?: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    collectedContext = ''
   ): Promise<OrchestrationResult> {
     const { cost } = this.deps
     const trace: OrchestrationStep[] = []
@@ -363,7 +375,7 @@ export class Orchestrator {
       task,
       plan,
       workCwd,
-      '',
+      collectedContext,
       true,
       push,
       onPhase,
@@ -646,7 +658,8 @@ export class Orchestrator {
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
     signal?: AbortSignal,
-    greedyPlan?: GreedyTaskNode[]
+    greedyPlan?: GreedyTaskNode[],
+    collectedContext = ''
   ): Promise<OrchestrationResult> {
     const { registry, roles, cost, trust } = this.deps
     // Souveraineté contexte (décision PLIER) : Autowin lit LUI-MÊME le fichier projet gagnant de la
@@ -691,7 +704,8 @@ export class Orchestrator {
             `Sers-toi de la CONNAISSANCE (Brain) ci-dessus en priorité ; ne relis le dépôt que si strictement nécessaire.`
           ]
         : []),
-      `TÂCHE: ${task}`
+      `TÂCHE: ${task}`,
+      ...(collectedContext ? [collectedContext] : [])
     ]
     // Session-resume chaîné (levier coût) : on RÉUTILISE la session de l'exécuteur d'une phase à la
     // suivante quand le provider rend un sessionId. La tâche + le Brain + l'acquis des phases sont

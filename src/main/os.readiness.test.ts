@@ -30,7 +30,7 @@ describe('barrière de disponibilité des modèles', () => {
     await pending
 
     expect(run).toHaveBeenCalledTimes(1)
-    expect(run).toHaveBeenCalledWith('cadrer le besoin', undefined, undefined, undefined, undefined)
+    expect(run).toHaveBeenCalledWith('cadrer le besoin', undefined, undefined, undefined, undefined, undefined)
   })
 })
 

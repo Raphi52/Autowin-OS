@@ -126,8 +126,14 @@
   background: rgba(103, 225, 178, 0.2);
   font-size: 9px;
 }
+.agent-inbox-item {
+  display: flex;
+  align-items: stretch;
+}
 .agent-inbox-row {
   display: flex;
+  flex: 1;
+  min-width: 0;
   align-items: center;
   gap: 8px;
   padding: 6px 7px;
@@ -137,6 +143,17 @@
   color: var(--text-dim);
   cursor: pointer;
   text-align: left;
+}
+.agent-inbox-stop {
+  width: 28px;
+  border: 0;
+  border-radius: var(--r1);
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+}
+.agent-inbox-stop:hover {
+  background: var(--bg-2);
 }
 .agent-inbox-row:hover,
 .agent-inbox-row.active {

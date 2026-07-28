@@ -252,10 +252,11 @@ export class AutowinOS {
     onStep?: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    collectedContext?: string
   ): Promise<OrchestrationResult> {
     await this.taskReadiness
-    return this.orchestrator.run(task, onStep, onPhase, onDelta, signal)
+    return this.orchestrator.run(task, onStep, onPhase, onDelta, signal, collectedContext)
   }
 
   // --- Dashboards : données RÉELLES ---

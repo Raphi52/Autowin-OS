@@ -83,6 +83,27 @@ Blockers:
   return path
 }
 
+/** Réutilise un workflow ouvert de la même conversation/tâche, sinon en crée un. */
+export async function reuseOrCreateConvRun(
+  convId: string,
+  task: string,
+  root = convRunsRoot(),
+  now: () => number = () => Date.now()
+): Promise<{ path: string; reused: boolean }> {
+  try {
+    const candidate = (await scanRuns(root)).find(
+      (run) =>
+        run.session === convId &&
+        run.summary.status === 'open' &&
+        readFileSync(run.path, 'utf8').includes(`## Besoin\n${task}`)
+    )
+    if (candidate) return { path: candidate.path, reused: true }
+  } catch {
+    // La recherche de workflow est une optimisation : une source illisible ne bloque pas le run.
+  }
+  return { path: createConvRun(convId, task, root, now), reused: false }
+}
+
 /** Extrait le contenu d'une section `## Nom` d'un markdown (jusqu'à la prochaine `## ` ou la fin). */
 function extractSection(md: string, name: string): string {
   const re = new RegExp(`(?:^|\\n)##\\s+${name}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|$)`, 'i')

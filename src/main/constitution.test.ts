@@ -27,6 +27,10 @@ describe('CONSTITUTION (source unique du soul)', () => {
     expect(CONSTITUTION).toContain('La limite honnête')
   })
 
+  it('rend Kaizen explicite et soumis à un accord humain avant mutation', () => {
+    expect(CONSTITUTION).toContain('diagnostic → proposition d’éditions précises → attente d’un accord humain explicite avant toute mutation')
+  })
+
   it('se termine par un saut de ligne (contrat : concat sûre en tête de pilotage run())', () => {
     expect(CONSTITUTION.endsWith('\n')).toBe(true)
   })

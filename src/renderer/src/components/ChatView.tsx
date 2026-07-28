@@ -1562,6 +1562,12 @@ export function ChatView({
   }, [convs, busyConversations, liveRuns])
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
   const greenRunsCount = runs.filter((r) => r.summary.status === 'green').length
+  const visibleLiveRuns: Array<[string, ScopedLiveRun<OrchStep>]> =
+    runScope === 'tous'
+      ? Object.entries(liveRuns)
+      : activeId && liveRuns[activeId]
+        ? [[activeId, liveRuns[activeId]]]
+        : []
 
   return (
     <div
@@ -1580,21 +1586,29 @@ export function ChatView({
               Agents actifs<span className="agent-inbox-count">{activeAgents.length}</span>
             </span>
             {activeAgents.map((agent) => (
-              <button
-                key={agent.id}
-                className={`agent-inbox-row${agent.id === activeId ? ' active' : ''}`}
-                onClick={() => {
-                  const target = convs.find((c) => c.id === agent.id)
-                  if (target) loadConv(target)
-                }}
-                title={agent.task ?? agent.title}
-              >
-                <span className="agent-inbox-pulse" aria-hidden="true" />
-                <span className="agent-inbox-copy">
-                  <span className="agent-inbox-name">{agent.title}</span>
-                  <span className="agent-inbox-state">{agent.state}</span>
-                </span>
-              </button>
+              <div className="agent-inbox-item" key={agent.id}>
+                <button
+                  className={`agent-inbox-row${agent.id === activeId ? ' active' : ''}`}
+                  onClick={() => {
+                    const target = convs.find((c) => c.id === agent.id)
+                    if (target) loadConv(target)
+                  }}
+                  title={agent.task ?? agent.title}
+                >
+                  <span className="agent-inbox-pulse" aria-hidden="true" />
+                  <span className="agent-inbox-copy">
+                    <span className="agent-inbox-name">{agent.title}</span>
+                    <span className="agent-inbox-state">{agent.state}</span>
+                  </span>
+                </button>
+                <button
+                  className="agent-inbox-stop"
+                  aria-label={`Arrêter ${agent.title}`}
+                  onClick={() => void window.api.cancelPilotChat(agent.id)}
+                >
+                  ■
+                </button>
+              </div>
             ))}
           </section>
         )}
@@ -2337,30 +2351,46 @@ export function ChatView({
               }}
             >
               {/* Orchestration EN COURS : statut temps réel + sous-agents qui se remplissent. */}
-              {activeId && liveRuns[activeId] && (
-                <div ref={liveRunCardRef} className={`card live-run stripe stripe-accent fade-in`}>
+              {visibleLiveRuns.map(([conversationId, liveRun]) => (
+                <div
+                  key={conversationId}
+                  ref={conversationId === activeId ? liveRunCardRef : undefined}
+                  className={`card live-run stripe stripe-accent fade-in`}
+                  data-live-run-conversation-id={conversationId}
+                >
                   <div className="row" style={{ justifyContent: 'space-between' }}>
                     <div className="row gap2" style={{ minWidth: 0 }}>
-                      {liveRuns[activeId].status === 'running' ? (
+                      {liveRun.status === 'running' ? (
                         <span className="spinner" />
                       ) : (
                         <span
-                          className={`status-dot ${liveRuns[activeId].status === 'green' ? 'st-ok' : 'st-err'}`}
+                          className={`status-dot ${liveRun.status === 'green' ? 'st-ok' : 'st-err'}`}
                         />
                       )}
-                      <span className="run-subject live-subject" title={liveRuns[activeId].task}>
-                        {liveRuns[activeId].task}
+                      <span className="run-subject live-subject" title={liveRun.task}>
+                        {liveRun.task}
                       </span>
                     </div>
-                    {liveRuns[activeId].status !== 'running' && (
-                      <span className="badge">{liveRuns[activeId].status}</span>
-                    )}
+                    <div className="row gap2">
+                      <span className="badge">
+                        {liveRun.status === 'running' ? 'en cours' : liveRun.status}
+                      </span>
+                      {liveRun.status === 'running' && (
+                        <button
+                          className="btn btn-sm btn-danger live-run-stop"
+                          title="Stopper le sous-agent en cours"
+                          onClick={() => void window.api.cancelOrchestration(conversationId)}
+                        >
+                          ⏹ Stop
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div style={{ marginTop: 'var(--s2)' }}>
-                    <StepThread steps={liveRuns[activeId].steps} />
-                    {liveRuns[activeId].status === 'running' &&
+                    <StepThread steps={liveRun.steps} />
+                    {liveRun.status === 'running' &&
                       (() => {
-                        const phase = liveRuns[activeId].phase
+                        const phase = liveRun.phase
                         const meta = phase ? STEP_META[phase.step] : undefined
                         const label = phase ? phaseLabel(phase) : 'sous-agent'
                         // Modèle réel (ex "cc/claude-opus-4-8" → "claude-opus-4-8") + effort en clair.
@@ -2397,23 +2427,21 @@ export function ChatView({
                                 <button
                                   className="btn btn-sm btn-danger"
                                   title="Stopper le sous-agent en cours"
-                                  onClick={() => void window.api.cancelOrchestration(activeId)}
+                                  onClick={() => void window.api.cancelOrchestration(conversationId)}
                                 >
                                   ⏹ Stop
                                 </button>
                               </span>
                             </div>
-                            {liveRuns[activeId].liveText && (
-                              <pre className="subagent-live-text">
-                                {liveRuns[activeId].liveText}
-                              </pre>
+                            {liveRun.liveText && (
+                              <pre className="subagent-live-text">{liveRun.liveText}</pre>
                             )}
                           </div>
                         )
                       })()}
                   </div>
                 </div>
-              )}
+              ))}
               {runs.length === 0 && (!activeId || !liveRuns[activeId]) && (
                 <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
                   {runScope === 'conv'
