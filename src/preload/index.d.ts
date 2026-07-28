@@ -355,6 +355,20 @@ interface ChatApi {
   capabilityControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins') => Promise<CapabilityItem[]>
   skills: () => Promise<SkillRegistryItem[]>
   promptCalls: (conversationId?: string) => Promise<PromptCallRecord[]>
+  costBreakdown: (
+    dimension?: 'actor' | 'model' | 'provider',
+    conversationId?: string
+  ) => Promise<
+    Array<{
+      key: string
+      calls: number
+      costUsd: number
+      inputTokens: number
+      outputTokens: number
+      cacheReadTokens: number
+      cacheHitRatio: number
+    }>
+  >
   promptTraces: (conversationId: string) => Promise<NativePreflightTrace[]>
   brainTraces: (conversationId?: string) => Promise<BrainTrace[]>
   behaviourComposition: () => Promise<BehaviourComposition>

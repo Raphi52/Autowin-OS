@@ -107,6 +107,11 @@ const api = {
   skills: (): Promise<unknown[]> => ipcRenderer.invoke('skills:registry:list'),
   promptCalls: (conversationId?: string): Promise<unknown[]> =>
     ipcRenderer.invoke('os:promptCalls', conversationId),
+  /** Repartition du cout par role/modele/provider, triee par cout decroissant. */
+  costBreakdown: (
+    dimension?: 'actor' | 'model' | 'provider',
+    conversationId?: string
+  ): Promise<unknown[]> => ipcRenderer.invoke('os:costBreakdown', dimension, conversationId),
   promptTraces: (conversationId: string): Promise<unknown[]> =>
     ipcRenderer.invoke('os:promptTraces', conversationId),
   brainTraces: (conversationId?: string): Promise<unknown[]> =>

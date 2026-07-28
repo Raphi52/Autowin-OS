@@ -54,7 +54,8 @@ import {
   appendPromptCall,
   deletePromptCalls,
   loadAllPromptCalls,
-  loadPromptCalls
+  loadPromptCalls,
+  summarizeCostBy
 } from './activity/prompt-observability'
 import { promptConfigChange } from './activity/prompt-config-change'
 import { appendPromptConfigActivity } from './activity/prompt-config-store'
@@ -1614,6 +1615,21 @@ function registerChatIpc(): void {
   )
   ipcMain.handle('os:promptCalls', (_e, convId?: string) =>
     convId ? loadPromptCalls(guardString(convId, 'convId')) : loadAllPromptCalls()
+  )
+  /**
+   * « Ou est passe l'argent ? » sans ecrire de script. Repartition du cout par role, modele ou
+   * provider, triee par cout decroissant, avec le cacheHitRatio (un ratio proche de 0 signale un
+   * contexte REECRIT au lieu d'etre relu — c'est ce symptome qui a mene a la cause racine du
+   * 2026-07-28, ou 114 fichiers .jsonl avaient du etre parses a la main).
+   */
+  ipcMain.handle(
+    'os:costBreakdown',
+    (_e, dimension?: 'actor' | 'model' | 'provider', convId?: string) => {
+      const calls = convId ? loadPromptCalls(guardString(convId, 'convId')) : loadAllPromptCalls()
+      const allowed = ['actor', 'model', 'provider'] as const
+      const dim = allowed.includes(dimension as (typeof allowed)[number]) ? dimension : 'actor'
+      return summarizeCostBy(calls, dim as (typeof allowed)[number])
+    }
   )
   const loadNativeTraces = (): ReturnType<typeof readNativePreflight> => {
     // Spool NATIF Autowin : les traces sont écrites par Autowin lui-même (native-trace-spool) →

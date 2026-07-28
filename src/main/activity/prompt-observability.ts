@@ -190,3 +190,50 @@ export function promptLoadBreakdown(calls: ReadonlyArray<Omit<PromptCallRecord, 
     ]
   }
 }
+
+/** Ligne de coût agrégée pour un acteur (rôle) ou un modèle. */
+export interface CostBreakdownRow {
+  key: string
+  calls: number
+  costUsd: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  /** Part du contexte RELUE plutôt que réécrite : proche de 0 ⇒ le cache ne sert pas. */
+  cacheHitRatio: number
+}
+
+/**
+ * « Où est passé l'argent ? » — répond SANS écrire de script.
+ *
+ * Motivation (2026-07-28) : pour savoir d'où venaient 26,65 $/h il a fallu parser 114 fichiers
+ * `.jsonl` à la main, alors que chaque appel porte déjà son acteur, son modèle et son coût. Cette
+ * agrégation rend la donnée exploitable directement, ce qui est la condition pour piloter le coût
+ * au lieu de le deviner (c'est cette mesure qui a révélé un juge à 1,5 $ pour 89 tokens de verdict,
+ * et un `cacheHitRatio` de 0 qui a mené à la cause racine).
+ *
+ * Fonction PURE et triée par coût décroissant : le premier poste est le premier levier.
+ */
+export function summarizeCostBy(
+  calls: PromptCallRecord[],
+  dimension: 'actor' | 'model' | 'provider' = 'actor'
+): CostBreakdownRow[] {
+  const rows = new Map<string, CostBreakdownRow>()
+  for (const call of calls) {
+    const key = (dimension === 'actor' ? call.actor : call[dimension]) || '(inconnu)'
+    const row =
+      rows.get(key) ??
+      { key, calls: 0, costUsd: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheHitRatio: 0 }
+    row.calls += 1
+    row.costUsd += call.usage?.costUsd ?? 0
+    row.inputTokens += call.usage?.inputTokens ?? 0
+    row.outputTokens += call.usage?.outputTokens ?? 0
+    row.cacheReadTokens += call.usage?.cacheReadTokens ?? 0
+    rows.set(key, row)
+  }
+  for (const row of rows.values()) {
+    const contextTotal = row.inputTokens + row.cacheReadTokens
+    row.cacheHitRatio = contextTotal > 0 ? row.cacheReadTokens / contextTotal : 0
+  }
+  return [...rows.values()].sort((a, b) => b.costUsd - a.costUsd)
+}
