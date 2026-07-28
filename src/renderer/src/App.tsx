@@ -213,16 +213,10 @@ export function MainApp(): React.JSX.Element {
       .unfinishedTurns?.()
       .then((turns) => {
         if (!alive) return
-        const target = pickTurnToResume(turns)
-        if (!target) return
-        navigate('chat')
-        window.setTimeout(() => {
-          window.dispatchEvent(
-            new CustomEvent('autowin:open-conversation', {
-              detail: { conversationId: target.conversationId }
-            })
-          )
-        }, 60)
+        // Seule responsabilité d'App : AMENER l'utilisateur sur le Chat. L'ouverture de la
+        // conversation + le rejeu du journal sont faits par ChatView, qui sait quand ses
+        // conversations sont chargées (un dispatch temporisé ratait la reprise — vu en essai réel).
+        if (pickTurnToResume(turns)) navigate('chat')
       })
       .catch(() => {
         /* pas de journal / IPC indisponible → démarrage normal */

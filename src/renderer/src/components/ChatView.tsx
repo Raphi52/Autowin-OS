@@ -4,6 +4,7 @@ import { Markdown, extractRecommendation } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
 import { SourceControlPane } from './SourceControlPane'
 import { ModuleHeader } from './ModuleHeader'
+import { pickTurnToResume, type UnfinishedTurn } from './resume-unfinished'
 import {
   CHAT_PANE_LIMITS,
   clampConversationPaneWidth,
@@ -730,7 +731,33 @@ export function ChatView({
   /* --- données latérales --- */
 
   async function refreshConvs(): Promise<void> {
-    setConvs((await window.api.conversations()) as Conv[])
+    const loaded = (await window.api.conversations()) as Conv[]
+    convsRef.current = loaded // dispo IMMÉDIATEMENT pour la reprise auto (sans attendre le render)
+    setConvs(loaded)
+    void autoResumeOnce(loaded)
+  }
+
+  /**
+   * Survie niveau 2 — REPRISE AUTOMATIQUE, déclenchée ICI (et pas dans App) parce que c'est ChatView
+   * qui sait quand les conversations sont réellement chargées : dispatcher à l'aveugle après un délai
+   * ratait la reprise (course au démarrage, constatée en essai réel). Une seule fois par session.
+   */
+  const autoResumeDoneRef = useRef(false)
+  async function autoResumeOnce(loaded: Conv[]): Promise<void> {
+    if (autoResumeDoneRef.current) return
+    autoResumeDoneRef.current = true
+    let turns: UnfinishedTurn[] = []
+    try {
+      turns = ((await window.api.unfinishedTurns?.()) ?? []) as UnfinishedTurn[]
+    } catch {
+      return
+    }
+    const target = pickTurnToResume(turns)
+    if (!target) return
+    const conversation = loaded.find((candidate) => candidate.id === target.conversationId)
+    if (!conversation) return
+    loadConv(conversation)
+    await replayTurnJournal(target.conversationId, target.turnId)
   }
   // File d'attente LOCALE (renderer) : messages tapés pendant un tour, envoyés comme des tours
   // NORMAUX un par un à la fin du tour courant → chaque message = sa propre paire Q/R (rendu propre).
@@ -1015,14 +1042,54 @@ export function ChatView({
     return () => window.removeEventListener('autowin:brainwash', openBrainwash)
   }, [])
 
+  /**
+   * Survie niveau 2 — REJEU : reconstruit, depuis le journal fichier du tour, ce que le CLI a produit
+   * pendant que l'app était fermée (le store de conversation, lui, n'a rien reçu), puis l'affiche
+   * comme réponse assistant. N'ajoute rien si le contenu est déjà présent (pas de doublon).
+   */
+  async function replayTurnJournal(conversationId: string, turnId: string): Promise<void> {
+    let events: Array<Record<string, unknown>> = []
+    try {
+      events = (await window.api.turnJournal?.(conversationId, turnId)) ?? []
+    } catch {
+      return
+    }
+    const replayed = events
+      .filter((event) => event.kind === 'delta' && typeof event.text === 'string')
+      .map((event) => event.text as string)
+      .join('')
+    if (!replayed.trim()) return
+    const current = liveMessagesRef.current.get(conversationId) ?? []
+    const already = current.some((message) =>
+      JSON.stringify(message).includes(replayed.trim().slice(0, 80))
+    )
+    if (already) return
+    const next: Msg[] = [
+      ...current,
+      // `parts` EXPLICITE : un tableau vide passerait le `??` de hydrateStoredAssistant et donnerait
+      // un message sans aucune part → invisible (cause du rejeu muet constatée en essai réel).
+      hydrateStoredAssistant({
+        content: replayed,
+        parts: [{ kind: 'text', text: replayed }],
+        status: 'completed'
+      })
+    ]
+    liveMessagesRef.current.set(conversationId, next)
+    if (activeRef.current === conversationId) setMessages(next)
+  }
+
   // Survie niveau 2 : « Reprendre » depuis le bandeau de démarrage ouvre la conversation dont le
   // tour a été interrompu par la fermeture de l'app (son fil est rechargé depuis le store).
   useEffect(() => {
     const openConversation = (event: Event): void => {
-      const id = (event as CustomEvent<{ conversationId?: string }>).detail?.conversationId
+      const detail = (event as CustomEvent<{ conversationId?: string; turnId?: string }>).detail
+      const id = detail?.conversationId
       if (!id) return
       const target = convsRef.current.find((conversation) => conversation.id === id)
       if (target) loadConv(target)
+      // REJEU du journal : l'app était fermée pendant le tour → le store n'a pas reçu ces événements,
+      // seul le journal fichier les contient. On reconstruit le texte produit et on l'affiche.
+      if (detail?.turnId) void replayTurnJournal(id, detail.turnId)
     }
     window.addEventListener('autowin:open-conversation', openConversation)
     return () => window.removeEventListener('autowin:open-conversation', openConversation)
