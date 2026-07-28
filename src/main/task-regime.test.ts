@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { classifyRegime, regimePhases, phasesForRegime } from './task-regime'
+import {
+  classifyRegime,
+  regimePhases,
+  phasesForRegime,
+  matchExplicitPhase
+} from './task-regime'
 
 describe('classifyRegime', () => {
   it('classe une micro-édition ciblée et courte en trivial', () => {
@@ -54,6 +59,48 @@ describe('regimePhases', () => {
       'build',
       'clean'
     ])
+  })
+})
+
+describe('matchExplicitPhase (phase demandée explicitement)', () => {
+  it('élit la phase scout sur les 4 formulations', () => {
+    expect(matchExplicitPhase('scout')).toBe('scout')
+    expect(matchExplicitPhase('scout le routing')).toBe('scout')
+    expect(matchExplicitPhase('scoute-moi des candidats')).toBe('scout')
+    expect(matchExplicitPhase('scout: trouve des candidats')).toBe('scout')
+  })
+
+  it('élit les autres phases du pipeline', () => {
+    expect(matchExplicitPhase('frame ce besoin')).toBe('frame')
+    expect(matchExplicitPhase('terrain: écris le SOP')).toBe('terrain')
+    expect(matchExplicitPhase('build la feature')).toBe('build')
+    expect(matchExplicitPhase('clean le dossier')).toBe('clean')
+    expect(matchExplicitPhase('judge le livrable')).toBe('judge')
+  })
+
+  it('ne matche que le DÉBUT du message, et pas un mot qui englobe la phase', () => {
+    expect(matchExplicitPhase('refactor le framework de build')).toBeNull()
+    expect(matchExplicitPhase('cleanup du cache')).toBeNull()
+    expect(matchExplicitPhase('ajoute un scout plus tard')).toBeNull()
+    expect(matchExplicitPhase('')).toBeNull()
+  })
+})
+
+describe('regimePhases — phase explicite court-circuite le régime', () => {
+  it('phase scout élue directement (au lieu du pipeline de régime)', () => {
+    expect(regimePhases('scout')).toEqual(['scout'])
+    expect(regimePhases('scout le routing')).toEqual(['scout'])
+    expect(regimePhases('scoute-moi des candidats')).toEqual(['scout'])
+    expect(regimePhases('scout: trouve des candidats')).toEqual(['scout'])
+  })
+
+  it('gagne même sur un signal critical (la demande explicite est autoritaire)', () => {
+    expect(classifyRegime('scout le pipeline architecture')).toBe('critical')
+    expect(regimePhases('scout le pipeline architecture')).toEqual(['scout'])
+  })
+
+  it('sans phase explicite, le régime reste inchangé', () => {
+    expect(regimePhases('ajoute un bouton export')).toEqual(['frame', 'build'])
   })
 })
 

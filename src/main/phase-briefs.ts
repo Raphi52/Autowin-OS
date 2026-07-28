@@ -9,7 +9,7 @@ import type { PipelinePhase } from './skill-pipeline'
 
 export const PHASE_BRIEFS: Record<PipelinePhase, string> = {
   scout: `Tu es en phase SCOUT. Objectif : sur la CIBLE donnée, faire émerger une SHORTLIST de candidats d'amélioration concrets et priorisés — pas les réaliser.
-Livrable : un tableau classé (colonnes : Type 🔧fix/🆕feature · What · Why · How), chaque ligne assez précise pour être choisie (un fix porte un file:line + un signal de "fait" mesurable ; une feature porte son 1er pas concret).
+Livrable : un tableau classé aux colonnes EXACTES \`Score | Type | What | Why | How\` (Type = 🔧fix/🆕feature), trié par Score DÉCROISSANT. Score = une note agrégée /100 (valeur × faisabilité), un seul nombre par ligne. Chaque ligne assez précise pour être choisie (un fix porte un file:line + un signal de "fait" mesurable ; une feature porte son 1er pas concret).
 Cherche plusieurs angles : dette/TODO/code mort, bugs/fragilités, UX inachevée, perf/tests manquants, ET 1-2 idées qui cassent une prémisse (pas seulement "finir le prévu").
 Gardes : lecture seule (tu proposes, tu ne modifies rien) ; exclus le legacy/généré ; dédoublonne par idée ; ne rends pas un mur de texte, un tableau scannable.`,
 

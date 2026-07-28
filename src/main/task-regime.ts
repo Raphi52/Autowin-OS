@@ -46,9 +46,40 @@ export function classifyRegime(task: string): TaskRegime {
   return 'standard'
 }
 
-/** Sous-ensemble de phases pour une tâche (via son régime). */
+/**
+ * Phases demandées EXPLICITEMENT en tête de message. Une demande nommée est autoritaire : quand
+ * l'utilisateur écrit « scout le routing », il veut la phase scout — pas le pipeline complet déduit
+ * d'un signal de complexité. Variantes tolérées : suffixe verbal FR (`scoute`, `scouter`, `framez`)
+ * et séparateur (`scout:`, `scout-moi`, `scout — …`).
+ */
+const PHASE_KEYWORDS: Record<string, PipelinePhase> = {
+  scout: 'scout',
+  frame: 'frame',
+  terrain: 'terrain',
+  build: 'build',
+  clean: 'clean',
+  judge: 'judge'
+}
+
+/**
+ * `\b` après le suffixe optionnel garantit qu'on ne matche PAS un mot qui englobe la phase
+ * (`framework`, `cleanup`, `building`) ; l'ancre `^` garantit le DÉBUT du message (une phase citée
+ * au milieu d'une phrase n'est pas une demande de phase).
+ */
+const PHASE_PREFIX = new RegExp(`^(${Object.keys(PHASE_KEYWORDS).join('|')})(e|es|er|ez)?\\b`, 'i')
+
+/** Phase demandée explicitement en tête de message, sinon `null`. */
+export function matchExplicitPhase(task: string): PipelinePhase | null {
+  const m = PHASE_PREFIX.exec(task.trim())
+  return m ? PHASE_KEYWORDS[m[1].toLowerCase()] : null
+}
+
+/**
+ * Sous-ensemble de phases pour une tâche. Une phase NOMMÉE en tête court-circuite le régime
+ * (consultée AVANT `classifyRegime`) ; sinon on retombe sur l'heuristique de proportionnalité.
+ */
 export function regimePhases(task: string): PipelinePhase[] {
-  const explicitPhase = routeSkillRequest(task)?.explicitPhase
+  const explicitPhase = routeSkillRequest(task)?.explicitPhase ?? matchExplicitPhase(task) ?? undefined
   // `judge` est la closure externe permanente de l'orchestrateur, pas une phase worker.
   // Une commande /judge saute donc les phases d'exécution et lance ce juge une seule fois.
   if (explicitPhase === 'judge') return []

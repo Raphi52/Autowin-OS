@@ -12,6 +12,16 @@ describe('phase-briefs (consignes courtes in-app)', () => {
       expect(b.length, phase).toBeLessThan(3000)
     }
   })
+  it('le brief scout impose la colonne Score (table Score | Type | What | Why | How, tri décroissant)', () => {
+    const scout = PHASE_BRIEFS.scout
+    expect(scout).toContain('Score')
+    // Colonnes dans l'ordre attendu, Score en tête.
+    expect(scout).toMatch(/Score\b[^\n]*Type[^\n]*What[^\n]*Why[^\n]*How/)
+    // Score agrégé /100 + tri décroissant explicites.
+    expect(scout).toMatch(/\/100/)
+    expect(scout).toMatch(/d[ée]croissant/i)
+  })
+
   it('phaseBrief enveloppe la consigne avec un en-tête de phase', () => {
     expect(phaseBrief('scout')).toContain('=== CONSIGNE SCOUT ===')
     expect(phaseBrief('scout')).toContain('SCOUT')
