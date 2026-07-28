@@ -106,6 +106,46 @@ export function autoCloseBranch(runId: string): string {
   return `auto/${runId.replace(/[^A-Za-z0-9._-]+/g, '-')}`
 }
 
+/**
+ * Empreinte des fichiers DÉJÀ modifiés dans un dépôt avant que le run ne commence. Sans elle, une
+ * clôture emporte tout ce qui traînait dans l'arbre (mesuré : 44 `.md` préexistants côté Brain, du
+ * travail concurrent côté projet) — soit exactement le « changements entremêlés » qu'on veut éviter.
+ */
+export async function snapshotChangedPaths(repo: string, runGit: GitRunner): Promise<string[]> {
+  try {
+    return parsePorcelainPaths(await runGit(['status', '--porcelain'], repo))
+  } catch {
+    return [] // dépôt illisible → aucune baseline ; le filtrage se comporte comme avant
+  }
+}
+
+/** Chemins réellement imputables au run = modifiés maintenant, mais pas déjà modifiés avant. */
+export function pathsFromRun(before: readonly string[], after: readonly string[]): string[] {
+  const preexisting = new Set(before)
+  return after.filter((path) => !preexisting.has(path))
+}
+
+/** Photographie les deux dépôts au démarrage d'un run (best-effort, jamais bloquant). */
+export async function captureCloseBaseline(
+  projectRepo: string,
+  brainRepo: string,
+  runGit?: GitRunner
+): Promise<{ project: string[]; brain: string[] }> {
+  const git = runGit ?? (await defaultGitRunner())
+  const [project, brain] = await Promise.all([
+    snapshotChangedPaths(projectRepo, git),
+    snapshotChangedPaths(brainRepo, git)
+  ])
+  return { project, brain }
+}
+
+async function defaultGitRunner(): Promise<GitRunner> {
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const exec = promisify(execFile)
+  return async (args, cwd) => (await exec('git', args, { cwd })).stdout
+}
+
 export interface AutoCloseReport {
   runId: string
   branch: string
@@ -130,35 +170,31 @@ export async function closeGreenRunOnDisk(input: {
   task: string
   projectRepo: string
   brainRepo: string
+  /** Fichiers déjà modifiés AVANT le run, par dépôt : ils sont exclus de la publication. */
+  baseline?: { project: readonly string[]; brain: readonly string[] }
   runGit?: GitRunner
 }): Promise<AutoCloseReport> {
-  const { execFile } = await import('node:child_process')
-  const { promisify } = await import('node:util')
-  const exec = promisify(execFile)
-  const runGit: GitRunner =
-    input.runGit ?? (async (args, cwd) => (await exec('git', args, { cwd })).stdout)
+  const runGit: GitRunner = input.runGit ?? (await defaultGitRunner())
 
   const branch = autoCloseBranch(input.runId)
   const message = autoCloseMessage(input.task, input.runId)
-  const project = await autoCloseRun({ repo: input.projectRepo, branch, message, runGit })
 
-  // Brain : périmètre STRICT aux fichiers déjà modifiés dans son arbre au moment de la clôture.
-  // (Un `add -A` emporterait le travail non relu d'autrui sur un dépôt partagé.)
-  let brain: AutoCloseResult
-  try {
-    const changed = parsePorcelainPaths(await runGit(['status', '--porcelain'], input.brainRepo))
-    brain = changed.length
-      ? await autoCloseRun({
-          repo: input.brainRepo,
-          branch,
-          message,
-          paths: changed,
-          runGit
-        })
-      : { status: 'skipped', reason: 'no-changes' }
-  } catch (error) {
-    brain = { status: 'failed', error: error instanceof Error ? error.message : String(error) }
+  /** Publie un dépôt en n'y prenant QUE ce que le run a produit (delta vs baseline). */
+  const closeScoped = async (repo: string, before: readonly string[]): Promise<AutoCloseResult> => {
+    try {
+      const after = parsePorcelainPaths(await runGit(['status', '--porcelain'], repo))
+      const mine = pathsFromRun(before, after)
+      if (mine.length === 0) return { status: 'skipped', reason: 'no-changes' }
+      return await autoCloseRun({ repo, branch, message, paths: mine, runGit })
+    } catch (error) {
+      return { status: 'failed', error: error instanceof Error ? error.message : String(error) }
+    }
   }
+
+  // Les DEUX dépôts sont traités au périmètre du run : côté projet aussi, un `add -A` emporterait le
+  // travail en cours d'une autre session partageant l'arbre.
+  const project = await closeScoped(input.projectRepo, input.baseline?.project ?? [])
+  const brain = await closeScoped(input.brainRepo, input.baseline?.brain ?? [])
 
   return { runId: input.runId, branch, project, brain, at: new Date().toISOString() }
 }

@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   autoCloseBranch,
   autoCloseRun,
+  captureCloseBaseline,
+  closeGreenRunOnDisk,
   detectSecret,
   parsePorcelainPaths,
   type GitRunner
@@ -120,6 +122,64 @@ describe('autoCloseRun — publication d’un run vert', () => {
       runGit: realGit
     })
     expect(res.status).toBe('failed')
+  })
+})
+
+describe('périmètre du run (ce qui traînait AVANT n’est pas publié)', () => {
+  it('ne commite que le delta produit par le run, pas les modifications préexistantes', async () => {
+    const { repo } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    // Travail d'une AUTRE session, déjà en cours avant le run, dans les deux dépôts.
+    writeFileSync(join(repo, 'travail-concurrent.ts'), 'const autre = 1\n')
+    writeFileSync(join(brain, 'note-en-attente.md'), '# pas de ce run\n')
+
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+    expect(baseline.project).toContain('travail-concurrent.ts')
+    expect(baseline.brain).toContain('note-en-attente.md')
+
+    // Puis le run produit SES fichiers.
+    writeFileSync(join(repo, 'du-run.ts'), 'export const y = 2\n')
+    writeFileSync(join(brain, 'du-run.md'), '# produit par le run\n')
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-77',
+      task: 'ajoute deux fichiers',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({ status: 'pushed', files: 1 })
+    expect(report.brain).toMatchObject({ status: 'pushed', files: 1 })
+    for (const [dir, mine, autrui] of [
+      [repo, 'du-run.ts', 'travail-concurrent.ts'],
+      [brain, 'du-run.md', 'note-en-attente.md']
+    ] as const) {
+      const committed = (await run('git', ['show', '--name-only', '--format=', 'HEAD'], { cwd: dir }))
+        .stdout
+      expect(committed).toContain(mine)
+      expect(committed).not.toContain(autrui) // le travail d'autrui reste non commité
+    }
+  })
+
+  it('sans delta (le run n’a rien produit), rien n’est publié', async () => {
+    const { repo } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    writeFileSync(join(repo, 'preexistant.ts'), 'x\n')
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-78',
+      task: 'ne touche rien',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({ status: 'skipped', reason: 'no-changes' })
+    expect(report.brain).toMatchObject({ status: 'skipped', reason: 'no-changes' })
   })
 })
 

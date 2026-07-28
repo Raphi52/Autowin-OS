@@ -38,7 +38,11 @@ import {
 } from './orchestrator'
 import { resolveVerifyReplayConfig } from './hooks/verify-replay-config'
 import { buildOrchestratorDecomposer } from './greedy-decompose'
-import { closeGreenRunOnDisk, type AutoCloseReport } from './run-autoclose'
+import {
+  captureCloseBaseline,
+  closeGreenRunOnDisk,
+  type AutoCloseReport
+} from './run-autoclose'
 import { amitelBrainRoot } from './amitel-context'
 import { regimePhases } from './task-regime'
 import { defaultBehaviourWorkspace } from './behaviour-files'
@@ -167,20 +171,35 @@ export class AutowinOS {
       }),
       // Clôture d'un run VERT : publication sur une branche dédiée (jamais main), côté projet puis
       // Brain. OFF par défaut — tant que l'utilisateur ne l'a pas activée, rien n'est publié tout seul.
-      closeGreenRun: async ({ runId, task }) => {
-        if (!this.autoClose) return
-        this.lastAutoClose = await closeGreenRunOnDisk({
-          runId,
-          task,
-          projectRepo: executionWorkspace,
-          brainRepo: amitelBrainRoot()
-        })
+      closeGreenRun: {
+        // Photo de l'arbre au démarrage : tout ce qui était déjà modifié n'appartient pas au run.
+        begin: (runId) => {
+          if (!this.autoClose) return
+          this.closeBaselines.set(runId, captureCloseBaseline(executionWorkspace, amitelBrainRoot()))
+        },
+        close: async ({ runId, task }) => {
+          const baselinePromise = this.closeBaselines.get(runId)
+          this.closeBaselines.delete(runId)
+          if (!this.autoClose || !baselinePromise) return
+          this.lastAutoClose = await closeGreenRunOnDisk({
+            runId,
+            task,
+            projectRepo: executionWorkspace,
+            brainRepo: amitelBrainRoot(),
+            baseline: await baselinePromise
+          })
+        }
       }
     })
   }
 
   /** Clôture automatique d'un run vert (commit + push sur branche dédiée). OFF par défaut. */
   private autoClose = false
+  /** Photo de l'arbre par run en cours (projet + Brain), prise au démarrage. */
+  private readonly closeBaselines = new Map<
+    string,
+    Promise<{ project: string[]; brain: string[] }>
+  >()
   /** Dernier résultat de clôture — remonté à l'UI pour dire ce qui a réellement été publié. */
   private lastAutoClose: AutoCloseReport | undefined
 

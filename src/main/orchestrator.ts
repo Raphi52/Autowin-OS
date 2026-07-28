@@ -197,12 +197,15 @@ export interface RunWorktrees {
   spawned?(runId: string, token: string, pid: number): void
 }
 
-/** Clôture d'un run VERT (commit + publication). Injectée par AutowinOS ; absente ⇒ rien d'automatique. */
-export type RunCloser = (context: {
-  runId: string
-  task: string
-  workCwd: string
-}) => Promise<void>
+/**
+ * Clôture d'un run VERT (commit + publication). Injectée par AutowinOS ; absente ⇒ rien d'automatique.
+ * `begin` est appelé au DÉMARRAGE pour photographier l'arbre : sans cette photo, la clôture publierait
+ * aussi ce qui traînait avant le run (travail d'une autre session, notes en attente).
+ */
+export interface RunCloser {
+  begin(runId: string): void
+  close(context: { runId: string; task: string; workCwd: string }): Promise<void>
+}
 
 const MUTATION_TASK =
   /\b(ajout|ajouter|add|modifi|change|corrig|fix|cr[eé]|create|impl[eé]ment|refactor|supprim|remove|renomm|update|build)\w*/i
@@ -314,6 +317,8 @@ export class Orchestrator {
     const isMut = isMutationTask(task)
     // Verdict du run, lu dans le `finally` : seul un run VERT ramène son travail dans la base.
     let green = false
+    // Photo de l'arbre AVANT le run → la clôture ne publiera que le delta produit par ce run.
+    this.deps.closeGreenRun?.begin(runId)
     const workCwd =
       this.deps.worktrees?.begin(runId, 'Agent', isMut) ?? this.deps.executionWorkspace
     if (isMut && this.deps.worktrees) {
@@ -373,8 +378,8 @@ export class Orchestrator {
       // Clôture auto APRÈS la fusion (le travail est dans la base) et seulement si vert.
       // `void` + catch : publier est un service rendu, jamais une raison de faire échouer le run.
       if (green && this.deps.closeGreenRun) {
-        void this.deps
-          .closeGreenRun({ runId, task, workCwd: this.deps.executionWorkspace })
+        void this.deps.closeGreenRun
+          .close({ runId, task, workCwd: this.deps.executionWorkspace })
           .catch(() => undefined)
       }
     }
