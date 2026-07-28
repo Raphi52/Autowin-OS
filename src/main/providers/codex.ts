@@ -10,6 +10,7 @@ import type {
 import { loadTokens, refreshTokens, saveTokens, type FetchLike, type Tokens } from './codex-auth'
 import { joinThinking } from './thinking'
 import {
+  assertArgvWithinLimit,
   createStreamWatchdog,
   killEscalate,
   SUBAGENT_INACTIVITY_MS,
@@ -137,13 +138,24 @@ async function runCodexExec(
     limitation:
       'Arguments exacts remis au CLI Codex ; ses instructions internes ne sont pas exposées.'
   })
+  assertArgvWithinLimit('codex exec', spec.args) // le prompt part sur stdin ; garde anti-régression
   return await new Promise((resolvePromise, reject) => {
+    const spawnToken = randomUUID()
+    execution.onSpawnIntent?.(spawnToken, true)
     const child = spawn(spec.executable, spec.args, {
       cwd: spec.cwd,
       shell: false,
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe']
     })
+    const childPid = child.pid
+    if (childPid) {
+      if (execution.onSpawned) execution.onSpawned(spawnToken, childPid)
+      else {
+        execution.onProcess?.(childPid, true)
+        execution.onSpawnIntent?.(spawnToken, false)
+      }
+    }
     let stdout = ''
     let stderr = ''
     let finalText = ''
@@ -269,10 +281,12 @@ async function runCodexExec(
     })
     child.on('error', (error) => {
       watchdog.dispose()
+      if (!childPid) execution.onSpawnIntent?.(spawnToken, false)
       reject(error)
     })
     child.on('close', (code) => {
       watchdog.dispose()
+      if (childPid) execution.onProcess?.(childPid, false)
       if (code !== 0) {
         reject(new Error(`codex exec échec (${code ?? 'signal'}): ${stderr.trim().slice(-800)}`))
         return
@@ -559,3 +573,4 @@ export class CodexAdapter implements ProviderAdapter {
     return { text, provider: this.id, sessionId: responseId, systemInjected, usage }
   }
 }
+import { randomUUID } from 'node:crypto'

@@ -53,6 +53,29 @@ export function killEscalate(child: {
   unref(grace)
 }
 
+/**
+ * Limite pratique de la ligne de commande Windows (~32 ko). On garde une marge pour l'exécutable,
+ * l'environnement et le quoting : au-delà, `spawn` échoue avec un `ENAMETOOLONG` opaque.
+ */
+const ARGV_BUDGET = 28_000
+
+/**
+ * GARDE anti-`spawn ENAMETOOLONG` : refuse un argv trop volumineux AVANT le spawn, avec une erreur
+ * qui NOMME l'argument coupable (tronqué) au lieu du code système illisible. Un contenu de taille non
+ * bornée (prompt, contexte, historique) ne doit JAMAIS transiter par argv — utiliser stdin ou un
+ * fichier temporaire. Cette garde attrape les régressions et les chemins non encore migrés.
+ */
+export function assertArgvWithinLimit(label: string, args: readonly string[]): void {
+  const total = args.reduce((sum, arg) => sum + arg.length + 3, 0)
+  if (total <= ARGV_BUDGET) return
+  const biggest = [...args].sort((a, b) => b.length - a.length)[0] ?? ''
+  throw new Error(
+    `${label}: ligne de commande trop longue (${total} caractères, limite ~${ARGV_BUDGET}). ` +
+      `Le plus gros argument fait ${biggest.length} caractères et commence par « ${biggest.slice(0, 80)}… ». ` +
+      `Un contenu de taille non bornée doit passer par stdin ou un fichier, jamais en argument.`
+  )
+}
+
 function unref(timer: ReturnType<typeof setTimeout>): void {
   const maybe = timer as unknown as { unref?: () => void }
   if (typeof maybe.unref === 'function') maybe.unref()

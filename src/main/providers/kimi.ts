@@ -1,4 +1,5 @@
 import {
+  assertArgvWithinLimit,
   createStreamWatchdog,
   killEscalate,
   SUBAGENT_INACTIVITY_MS,
@@ -172,10 +173,23 @@ export class KimiCliAdapter implements ProviderAdapter {
       sandbox
     ]
     if (opts.model) args.push('--model', opts.model)
+    // Kimi passe encore la consigne complète via `--prompt` en argv (son CLI n'expose pas stdin) :
+    // la garde transforme un `ENAMETOOLONG` opaque en erreur explicite nommant le coupable.
+    assertArgvWithinLimit('Kimi Code CLI', [...this.command.prefix, ...args])
+    const spawnToken = randomUUID()
+    opts.execution?.onSpawnIntent?.(spawnToken, true)
     const child = spawn(this.command.executable, [...this.command.prefix, ...args], {
       shell: false,
       cwd: sandbox
     })
+    const childPid = child.pid
+    if (childPid) {
+      if (opts.execution?.onSpawned) opts.execution.onSpawned(spawnToken, childPid)
+      else {
+        opts.execution?.onProcess?.(childPid, true)
+        opts.execution?.onSpawnIntent?.(spawnToken, false)
+      }
+    }
     let buffer = ''
     let text = ''
     let done = false
@@ -235,12 +249,14 @@ export class KimiCliAdapter implements ProviderAdapter {
     })
     child.on('error', (error) => {
       watchdog.dispose()
+      if (!childPid) opts.execution?.onSpawnIntent?.(spawnToken, false)
       errored = error
       done = true
       notify()
     })
     child.on('close', (code) => {
       watchdog.dispose()
+      if (childPid) opts.execution?.onProcess?.(childPid, false)
       const rest = buffer.trim()
       if (rest) emitLine(rest)
       if (code !== 0 && !errored) {
@@ -264,3 +280,4 @@ export class KimiCliAdapter implements ProviderAdapter {
     return { text, provider: this.id, systemInjected }
   }
 }
+import { randomUUID } from 'node:crypto'

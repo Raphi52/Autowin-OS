@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createStreamWatchdog, withHardDeadline } from './watchdog'
+import { assertArgvWithinLimit, createStreamWatchdog, withHardDeadline } from './watchdog'
 
 const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
@@ -65,5 +65,23 @@ describe('createStreamWatchdog', () => {
     wd.dispose()
     await wait(30)
     expect(onTrip).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('assertArgvWithinLimit (anti spawn ENAMETOOLONG)', () => {
+  it('laisse passer un argv normal', () => {
+    expect(() => assertArgvWithinLimit('cli', ['-p', '--model', 'opus'])).not.toThrow()
+  })
+
+  it('refuse un argv trop long AVANT le spawn, en nommant le coupable', () => {
+    const huge = 'z'.repeat(40_000)
+    expect(() => assertArgvWithinLimit('claude CLI', ['-p', huge])).toThrow(
+      /claude CLI.*trop longue/s
+    )
+  })
+
+  it('compte le CUMUL des arguments, pas seulement le plus gros', () => {
+    const args = Array.from({ length: 30 }, () => 'x'.repeat(1_000)) // 30 × 1k > budget
+    expect(() => assertArgvWithinLimit('cli', args)).toThrow(/trop longue/)
   })
 })

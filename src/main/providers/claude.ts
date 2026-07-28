@@ -1,5 +1,6 @@
 import { joinThinking } from './thinking'
 import {
+  assertArgvWithinLimit,
   createStreamWatchdog,
   killEscalate,
   SUBAGENT_INACTIVITY_MS,
@@ -255,6 +256,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
 
     opts.observePrompt?.(claudeTransportEnvelope(messages, opts, materialized, args))
 
+    assertArgvWithinLimit('claude CLI', args) // anti-ENAMETOOLONG : le prompt passe par stdin
     const spawnToken = randomUUID()
     execution?.onSpawnIntent?.(spawnToken, true)
     const child = spawn(this.bin, args, { shell: false, cwd: execution?.cwd })
