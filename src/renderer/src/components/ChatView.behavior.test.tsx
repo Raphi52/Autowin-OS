@@ -277,7 +277,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     ).toBe('B')
   })
 
-  it('parité Claude Code : envoyer pendant un tour INJECTE dans le tour courant (pas de file)', async () => {
+  it('en état busy, le message est MIS EN FILE et les deux boutons de choix sont rendus', async () => {
     const pilot = deferred<{ ok: boolean }>()
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A')]),
@@ -291,13 +291,39 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await type('au fait, ajoute un test')
     await click('.composer-send')
 
-    expect(mockApi.injectDirective).toHaveBeenCalledWith(
-      expect.any(String),
+    // AUCUNE action appliquée sans choix explicite de l'utilisateur.
+    expect(mockApi.injectDirective).not.toHaveBeenCalled()
+    // Le message est en file, avec le bloc de CHOIX (Orienter / Interrompre & envoyer).
+    expect(container!.querySelector('.directive-queue')).not.toBeNull()
+    expect(container!.querySelector('.directive-queue-text')?.textContent).toBe(
       'au fait, ajoute un test'
     )
-    // Injection réussie → RIEN en file d'attente (contrairement à l'ancien comportement).
-    expect(container!.querySelector('.directive-queue')).toBeNull()
+    expect(container!.querySelector('.directive-queue-steer')).not.toBeNull()
+    expect(container!.querySelector('.directive-queue-item .directive-queue-send')).not.toBeNull()
     await act(async () => pilot.resolve({ ok: true }))
+  })
+
+  it('choisir « Orienter » injecte sans interrompre et ne relance pas un send() au drain', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise),
+      injectDirective: vi.fn().mockResolvedValue({ ok: true })
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('long turn')
+    await click('.composer-send')
+    await type('oriente vers X')
+    await click('.composer-send')
+    await click('.directive-queue-steer')
+
+    expect(mockApi.injectDirective).toHaveBeenCalledWith(expect.any(String), 'oriente vers X')
+    expect(mockApi.cancelPilotChat).not.toHaveBeenCalled()
+    expect(container!.querySelector('.directive-queue')).toBeNull()
+    // Fin du tour : le drain ne doit PAS renvoyer le message déjà orienté.
+    await act(async () => pilot.resolve({ ok: true }))
+    expect((mockApi.pilotChat as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1)
   })
 
   it('removes the steered message by stable identity after the queue changes', async () => {
@@ -306,7 +332,8 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A')]),
       pilotChat: vi.fn(() => pilot.promise),
-      injectDirective: injectFailingThen(2, () => injection.promise)
+      // Le composer n'injecte plus (mise en file + choix) : seuls les clics « Orienter » injectent.
+      injectDirective: injectFailingThen(0, () => injection.promise)
     })
     await mount(mockApi)
     await click('.conv-pick')
@@ -333,7 +360,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A')]),
       pilotChat: vi.fn(() => pilot.promise),
-      injectDirective: injectFailingThen(1, () => injection.promise)
+      injectDirective: injectFailingThen(0, () => injection.promise)
     })
     await mount(mockApi)
     await click('.conv-pick')
@@ -348,8 +375,8 @@ describe('ChatView behavior under concurrent UI actions', () => {
       await Promise.resolve()
     })
 
-    // 1 appel du composer (échec → repli file) + 1 appel du bouton « Orienter ».
-    expect(mockApi.injectDirective).toHaveBeenCalledTimes(2)
+    // Le composer met en FILE (0 injection) ; seul le bouton « Orienter » injecte.
+    expect(mockApi.injectDirective).toHaveBeenCalledTimes(1)
     expect(container!.querySelector('.directive-queue')).toBeNull()
     await act(async () => injection.resolve({ ok: true }))
     await act(async () => pilot.resolve({ ok: true }))

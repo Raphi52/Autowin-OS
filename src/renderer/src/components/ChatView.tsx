@@ -1143,25 +1143,19 @@ export function ChatView({
     await window.api.conversationsSwitchBranch(activeId, branchId)
     await reloadActiveFromStore(activeId)
   }
-  /** Met le message en FILE D'ATTENTE (envoyé comme tour normal à la fin du tour courant). */
   /**
-   * Envoi pendant un tour = parité CLAUDE CODE : le message est LIVRÉ AU TOUR EN COURS (injection
-   * directe, l'agent en tient compte à l'itération suivante), pas empilé pour plus tard.
-   * Repli : injection impossible → file d'attente (drainée en fin de tour), rien n'est perdu.
+   * CHOIX EXPLICITE (tour en cours) : le message tapé pendant un run est MIS EN FILE, jamais
+   * appliqué automatiquement. Le bloc de file affiche alors les deux actions — 🧭 Orienter
+   * (injecte dans le tour sans l'interrompre) et ⏹ Interrompre et envoyer. Le raccourci `/btw`
+   * reste, lui, une injection explicite immédiate.
    */
-  async function injectCurrentDirective(): Promise<void> {
+  function queueCurrentMessage(): void {
     if (!activeId) return
     const text = input.trim()
     if (!text) return
     const id = activeId
     setDraftInput(id, '')
-    let injected = false
-    try {
-      injected = (await window.api.injectDirective(id, text))?.ok === true
-    } catch {
-      injected = false
-    }
-    if (!injected) enqueueMessage(id, text)
+    enqueueMessage(id, text)
   }
 
   /**
@@ -2206,7 +2200,7 @@ export function ChatView({
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
                     if (handleBtw()) return
-                    if (busy && activeId) void injectCurrentDirective()
+                    if (busy && activeId) queueCurrentMessage()
                     else send()
                   }
                 }}
@@ -2231,7 +2225,7 @@ export function ChatView({
                   if (handleBtw()) return
                   busy && activeId
                     ? input.trim()
-                      ? void injectCurrentDirective()
+                      ? queueCurrentMessage()
                       : void window.api.cancelPilotChat(activeId)
                     : send()
                 }}
