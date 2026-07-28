@@ -272,7 +272,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
      */
     const journalRoot = process.env.AUTOWIN_RUN_JOURNAL_ROOT
     let journal: StdoutJournalHandle | undefined
-    if (process.env.AUTOWIN_DETACHED_RUNS === '1' && journalRoot) {
+    // ACTIVÉ PAR DÉFAUT dès que l'app fournit une racine de journaux (les tests, qui n'en fournissent
+    // pas, restent sur le pipe). Survie prouvée en réel : parent tué → l'enfant détaché continue
+    // d'écrire dans le journal. Porte de sortie : AUTOWIN_DETACHED_RUNS=0 → pipe historique.
+    if (process.env.AUTOWIN_DETACHED_RUNS !== '0' && journalRoot) {
       try {
         journal = openStdoutJournal(journalRoot, spawnToken)
       } catch {
@@ -448,7 +451,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         /* déjà fermé */
       }
       void tailJsonLines(journal.path, (line) => consumeText(`${line}\n`), {
-        pollMs: 80,
+        // 40ms : le streaming passe par un poll de fichier (et non un pipe instantané) — granularité
+        // assez fine pour que le chat reste fluide, sans brûler du CPU.
+        pollMs: 40,
         isComplete: () => done
       })
     } else {

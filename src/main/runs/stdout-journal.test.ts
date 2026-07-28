@@ -136,6 +136,48 @@ describe('tailJsonLines — suit un fichier qui grossit', () => {
     expect(seen.map((l) => JSON.parse(l).kind)).toEqual(['delta', 'done'])
   }, 20_000)
 
+  it('SURVIE : le process détaché continue d’écrire APRÈS la mort de son parent', async () => {
+    const { spawn } = await import('node:child_process')
+    const { writeFileSync: write } = await import('node:fs')
+    // Enfant qui écrit sur ~1,2s (le parent, lui, meurt tout de suite).
+    const childScript = join(root, 'child.mjs')
+    write(
+      childScript,
+      "let n=0;const t=setInterval(()=>{n+=1;process.stdout.write(JSON.stringify({n})+'\\n');" +
+        'if(n>=4){clearInterval(t);process.exit(0)}},250)',
+      'utf8'
+    )
+    // Parent qui spawne l'enfant DÉTACHÉ sur le journal puis se termine immédiatement.
+    const parentScript = join(root, 'parent.mjs')
+    const journal = join(root, 'survivor.jsonl')
+    write(
+      parentScript,
+      "import { spawn } from 'node:child_process';import { openSync } from 'node:fs';" +
+        `const fd = openSync(${JSON.stringify(journal)}, 'a');` +
+        `const c = spawn(process.execPath, [${JSON.stringify(childScript)}], { detached: true, stdio: ['ignore', fd, fd] });` +
+        'c.unref();process.exit(0)',
+      'utf8'
+    )
+    await new Promise<void>((resolve) => {
+      const parent = spawn(process.execPath, [parentScript], { stdio: 'ignore' })
+      parent.on('close', () => resolve())
+    })
+    // Le parent est MORT ici : tout ce qui arrive ensuite prouve la survie de l'enfant.
+    const seen: string[] = []
+    const started = readChunkFrom(journal, 0)
+    let waited = 0
+    while (seen.length < 4 && waited < 8000) {
+      const { lines } = splitCompleteLines(readChunkFrom(journal, 0).text)
+      seen.length = 0
+      seen.push(...lines)
+      if (seen.length >= 4) break
+      await new Promise((r) => setTimeout(r, 100)) // sleep-ok: poll de condition borné
+      waited += 100
+    }
+    expect(started.text).not.toContain('"n":4') // rien n'était fini quand le parent est mort
+    expect(seen.map((l) => JSON.parse(l).n)).toEqual([1, 2, 3, 4])
+  }, 25_000)
+
   it('abort → arrêt immédiat, offset rendu', async () => {
     const path = join(root, 'abort.jsonl')
     writeFileSync(path, '{"n":1}\n', 'utf8')
