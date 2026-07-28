@@ -205,9 +205,11 @@ export function AssistantActionEvent({ part }: { part: ChatActionPart }): React.
 }
 
 export function AssistantActivityGroup({
-  actions
+  actions,
+  onOpenLiveAction
 }: {
   actions: ChatActionPart[]
+  onOpenLiveAction?: () => void
 }): React.JSX.Element {
   const failed = actions.some((action) => action.ok === false)
   const runningCount = actions.filter((action) => action.ok === undefined).length
@@ -228,7 +230,23 @@ export function AssistantActivityGroup({
     <details className={`activity-group${failed ? ' failed' : ''}`}>
       <summary>
         <span className={`status-dot ${running ? 'st-info' : failed ? 'st-err' : 'st-ok'}`} />
-        <span className="activity-group-title">{status}</span>
+        {running && onOpenLiveAction ? (
+          // Indicateur « action en cours » cliquable → ouvre Workflows sur le run/step actif.
+          <button
+            type="button"
+            className="activity-group-title activity-group-live-link"
+            title="Ouvrir cette action en cours dans Workflows"
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              onOpenLiveAction()
+            }}
+          >
+            {status}
+          </button>
+        ) : (
+          <span className="activity-group-title">{status}</span>
+        )}
         <span className="activity-group-tools">
           {actions.map((action) => CMD_LABEL[action.name] ?? action.name).join(' · ')}
         </span>

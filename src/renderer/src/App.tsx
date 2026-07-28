@@ -6,7 +6,7 @@ import { FirstRunWizard } from './components/FirstRunWizard'
 import { ObservatoryView } from './components/ObservatoryView'
 import { WorktreeView } from './components/WorktreeView'
 import { UpdateBanner } from './components/UpdateBanner'
-import { ResumedTurnsBanner } from './components/ResumedTurnsBanner'
+import { pickTurnToResume } from './components/resume-unfinished'
 import { TicketsView } from './components/TicketsView'
 import { AgentStudioView } from './components/AgentStudioView'
 import { KnowledgeView } from './components/KnowledgeView'
@@ -202,6 +202,37 @@ export function MainApp(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKey)
   }, [navigate])
 
+  /**
+   * Survie niveau 2 — REPRISE AUTOMATIQUE, sans popup : au démarrage, si un tour a été interrompu
+   * par la fermeture de l'app, on rouvre DIRECTEMENT sa conversation (la plus récemment active) pour
+   * y retrouver ce que le CLI a produit. Rien à reprendre → démarrage normal, inchangé.
+   */
+  useEffect(() => {
+    let alive = true
+    void window.api
+      .unfinishedTurns?.()
+      .then((turns) => {
+        if (!alive) return
+        const target = pickTurnToResume(turns)
+        if (!target) return
+        navigate('chat')
+        window.setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent('autowin:open-conversation', {
+              detail: { conversationId: target.conversationId }
+            })
+          )
+        }, 60)
+      })
+      .catch(() => {
+        /* pas de journal / IPC indisponible → démarrage normal */
+      })
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   function openBrainwashConversation(brainLabel: string): void {
     navigate('chat')
     window.setTimeout(() => {
@@ -266,16 +297,6 @@ export function MainApp(): React.JSX.Element {
   return (
     <div className="shell cosmic-outline theme-serious">
       <UpdateBanner />
-      <ResumedTurnsBanner
-        onResume={(conversationId) => {
-          navigate('chat')
-          window.setTimeout(() => {
-            window.dispatchEvent(
-              new CustomEvent('autowin:open-conversation', { detail: { conversationId } })
-            )
-          }, 60)
-        }}
-      />
       <FirstRunWizard />
       <aside className={`rail${railCollapsed ? ' is-collapsed' : ''}`}>
         <div className="brand">

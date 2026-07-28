@@ -624,6 +624,69 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(cancelPilotChat).not.toHaveBeenCalled()
   })
 
+  it('expose Workflows sans onglet Activité', async () => {
+    const mockApi = api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await click('button[title="Workflows (RUN.md)"]')
+
+    const pane = container!.querySelector('.runs-pane')
+    expect(pane).toBeTruthy()
+    const tabs = [...pane!.querySelectorAll('.conv-head button')].map((b) => b.textContent?.trim())
+    expect(tabs).toContain('Runs')
+    expect(tabs).toContain('Source control')
+    expect(tabs).not.toContain('Activité')
+    expect(pane!.className).not.toContain('wide')
+  })
+
+  it('ouvre Workflows sur l’action en cours au clic sur l’indicateur du message', async () => {
+    let appHandler: ((event: Record<string, unknown>) => void) | undefined
+    let pilotHandler: ((event: Record<string, unknown>) => void) | undefined
+    const pilot = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise),
+      onAppEvent: vi.fn((cb: (event: Record<string, unknown>) => void) => {
+        appHandler = cb
+        return vi.fn()
+      }),
+      onPilotEvent: vi.fn((cb: (event: Record<string, unknown>) => void) => {
+        pilotHandler = cb
+        return vi.fn()
+      })
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('lance un truc long')
+    await click('.composer-send')
+    await act(async () => {
+      appHandler?.({ type: 'orchestrate-start', convId: 'A', runPath: 'run-A', task: 'travail A' })
+    })
+    await act(async () => {
+      pilotHandler?.({
+        kind: 'command',
+        conversationId: 'A',
+        actionId: 'orchestrate',
+        name: 'orchestrate'
+      })
+    })
+    // On repart panneau FERMÉ : seul le clic sur l'indicateur doit le rouvrir.
+    await click('.runs-pane .conv-head button.btn-ghost')
+    expect(container!.querySelector('.live-run')).toBeNull()
+
+    const indicator = container!.querySelector(
+      '.activity-group-live-link'
+    ) as HTMLButtonElement | null
+    expect(indicator?.textContent).toContain('en cours')
+    await act(async () => indicator!.click())
+
+    // Panneau Workflows ouvert, onglet Runs, cadré sur le run/step actif.
+    expect(container!.querySelector('.runs-pane')).toBeTruthy()
+    expect(container!.querySelector('.live-run')?.textContent).toContain('travail A')
+    expect(container!.querySelector('.live-run .subagent-step')?.textContent).toContain('en cours')
+    await act(async () => pilot.resolve({ ok: true }))
+  })
+
   // fix-ok: targeted regression reproduction for the green workflow counter.
   it('counts a green slash-palette run in the Workflows button', async () => {
     const mockApi = api({
