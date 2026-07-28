@@ -73,15 +73,29 @@ export type DiffLineKind = 'add' | 'del' | 'context' | 'hunk' | 'meta'
 export interface DiffLine {
   kind: DiffLineKind
   text: string
+  /** Numéro de ligne AVANT modification (absent pour un ajout / une ligne meta). */
+  oldLine?: number
+  /** Numéro de ligne APRÈS modification (absent pour une suppression / une ligne meta). */
+  newLine?: number
 }
 
 /** Parse un diff unifié (`git diff --no-color`) en lignes typées pour un rendu coloré read-only. */
 export function parseUnifiedDiff(text: string): DiffLine[] {
   const lines: DiffLine[] = []
+  // Compteurs de position tenus depuis l'en-tête de hunk `@@ -old,n +new,m @@` : c'est ce qui permet
+  // de dire QUELLE ligne du fichier a changé, au lieu d'un simple +/- sans repère.
+  let oldCursor = 0
+  let newCursor = 0
   for (const raw of text.split('\n')) {
     const line = raw.replace(/\r$/, '')
-    if (line.startsWith('@@')) lines.push({ kind: 'hunk', text: line })
-    else if (
+    if (line.startsWith('@@')) {
+      const header = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line)
+      if (header) {
+        oldCursor = Number(header[1])
+        newCursor = Number(header[2])
+      }
+      lines.push({ kind: 'hunk', text: line })
+    } else if (
       line.startsWith('diff ') ||
       line.startsWith('index ') ||
       line.startsWith('--- ') ||
@@ -92,9 +106,9 @@ export function parseUnifiedDiff(text: string): DiffLine[] {
       line.startsWith('rename ')
     )
       lines.push({ kind: 'meta', text: line })
-    else if (line.startsWith('+')) lines.push({ kind: 'add', text: line })
-    else if (line.startsWith('-')) lines.push({ kind: 'del', text: line })
-    else lines.push({ kind: 'context', text: line })
+    else if (line.startsWith('+')) lines.push({ kind: 'add', text: line, newLine: newCursor++ })
+    else if (line.startsWith('-')) lines.push({ kind: 'del', text: line, oldLine: oldCursor++ })
+    else lines.push({ kind: 'context', text: line, oldLine: oldCursor++, newLine: newCursor++ })
   }
   // supprime une éventuelle dernière ligne vide (split trailing \n)
   if (lines.length && lines[lines.length - 1].text === '') lines.pop()

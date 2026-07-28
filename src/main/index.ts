@@ -128,7 +128,7 @@ import {
 import { ProviderStateStore, type ProviderMode } from './provider-state-store'
 import { loadTokens } from './providers/codex-auth'
 
-import { createAmitelContextProvider } from './amitel-context'
+import { amitelBrainRoot, createAmitelContextProvider } from './amitel-context'
 import { readGitState, readGitDiff } from './git-read-main'
 import { readGitGraph } from './git-graph-main'
 import {
@@ -745,6 +745,12 @@ function registerChatIpc(): void {
       : dialog.showOpenDialog({ properties: ['openDirectory'] }))
     return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]
   })
+  // Racine du Brain partagé : permet à Source control de basculer sur SON dépôt git en un clic
+  // (les notes du Brain sont versionnées comme le code). Lecture seule, aucun secret exposé.
+  ipcMain.handle('git:brainRoot', (event) => {
+    assertTrustedRendererSender(event, 'GitBrainRoot')
+    return amitelBrainRoot()
+  })
   // Cockpit worktree (volet A) : snapshot à la demande + push live des changements d'activité.
   ipcMain.handle('worktree:activity', (event) => {
     assertTrustedRendererSender(event, 'WorktreeActivity')
@@ -785,8 +791,9 @@ function registerChatIpc(): void {
     if (typeof force !== 'boolean') throw new Error('Option de rafraîchissement invalide')
     return serveModelCatalog(modelCatalog, force)
   })
-  ipcMain.handle('os:models:quotas', async (event) => {
+  ipcMain.handle('os:models:quotas', async (event, force = false) => {
     assertTrustedRendererSender(event, 'Model quotas')
+    if (typeof force !== 'boolean') throw new Error('Option de rafraîchissement invalide')
     const models = modelCatalog.current()
     if (isolatedTestInstance) {
       const observedAt = new Date().toISOString()
@@ -837,7 +844,7 @@ function registerChatIpc(): void {
         }
       })
     }
-    return getModelQuotaSnapshot(models)
+    return getModelQuotaSnapshot(models, { force })
   })
   // Page Routeur — statut d'auth au CHARGEMENT (cheap/local) : codex exact (expiry token),
   // claude/kimi = présence CLI seulement (JAMAIS « authenticated » sans probe réel). Borné.

@@ -50,14 +50,30 @@ export function SourceControlPane({
     }
   }, [repoPath])
 
+  const selectRepo = (path: string): void => {
+    localStorage.setItem('autowin:sc-repo', path)
+    setOpenFile(null)
+    setDiff(null)
+    setRepoPath(path)
+  }
+
   const pickRepo = async (): Promise<void> => {
     const chosen = await window.api.pickGitRepo?.()
-    if (chosen) {
-      localStorage.setItem('autowin:sc-repo', chosen)
-      setOpenFile(null)
-      setRepoPath(chosen)
-    }
+    if (chosen) selectRepo(chosen)
   }
+
+  // Le Brain partagé est versionné comme le code : on y bascule en un clic pour voir SES diffs.
+  const [brainPath, setBrainPath] = useState<string>('')
+  useEffect(() => {
+    let alive = true
+    void window.api.brainRepoPath?.().then((p) => {
+      if (alive && typeof p === 'string') setBrainPath(p)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+  const onBrain = Boolean(brainPath) && repoPath === brainPath
 
   const propose = (text: string): void => setPrompt(text)
   const toggleDiff = (path: string): void => {
@@ -84,8 +100,27 @@ export function SourceControlPane({
           <span className="sc-repo-path" title={repoPath || 'Dépôt courant (app)'}>
             📁 {repoPath ? repoPath.replace(/^.*[\\/]/, '') : 'Dépôt courant'}
           </span>
+          {/* Bascule directe entre le dépôt du projet et celui du Brain (tous deux versionnés). */}
+          <button
+            className={`sc-btn sc-repo-btn${!repoPath ? ' is-active' : ''}`}
+            data-testid="sc-repo-project"
+            title="Voir les diffs du dépôt du projet"
+            onClick={() => selectRepo('')}
+          >
+            Projet
+          </button>
+          {brainPath && (
+            <button
+              className={`sc-btn sc-repo-btn${onBrain ? ' is-active' : ''}`}
+              data-testid="sc-repo-brain"
+              title={`Voir les diffs du Brain — ${brainPath}`}
+              onClick={() => selectRepo(brainPath)}
+            >
+              Brain
+            </button>
+          )}
           <button className="sc-btn sc-repo-btn" data-testid="sc-pick-repo" onClick={() => void pickRepo()}>
-            Changer de dépôt
+            Autre…
           </button>
         </div>
         {git && !git.available && (

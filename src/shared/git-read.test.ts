@@ -75,3 +75,38 @@ describe('parseUnifiedDiff', () => {
     expect(parseUnifiedDiff('')).toEqual([])
   })
 })
+
+describe('parseUnifiedDiff — numéros de ligne', () => {
+  it('numérote chaque ligne (avant/après) depuis les en-têtes de hunk', () => {
+    const lines = parseUnifiedDiff(
+      [
+        'diff --git a/x.ts b/x.ts',
+        '@@ -10,3 +10,4 @@',
+        ' contexte',
+        '-supprimee',
+        '+ajoutee',
+        '+ajoutee2',
+        ' fin'
+      ].join('\n')
+    )
+    const at = (k: string): (typeof lines)[number][] => lines.filter((l) => l.kind === k)
+
+    expect(at('meta')[0]).not.toHaveProperty('oldLine')
+    expect(at('meta')[0]).not.toHaveProperty('newLine')
+    // Le contexte avance les DEUX compteurs, à partir du hunk (10 / 10).
+    expect(at('context')[0]).toMatchObject({ oldLine: 10, newLine: 10 })
+    // Une suppression n'existe que dans l'ancien fichier, un ajout que dans le nouveau.
+    expect(at('del')[0]).toMatchObject({ oldLine: 11 })
+    expect(at('del')[0]).not.toHaveProperty('newLine')
+    expect(at('add').map((l) => l.newLine)).toEqual([11, 12])
+    // Après 1 suppression et 2 ajouts, les compteurs sont désynchronisés — c'est le comportement réel.
+    expect(at('context')[1]).toMatchObject({ oldLine: 12, newLine: 13 })
+  })
+
+  it('repart des bons numéros à chaque nouveau hunk', () => {
+    const lines = parseUnifiedDiff(['@@ -1,1 +1,1 @@', '+a', '@@ -50,1 +60,1 @@', '+b'].join('\n'))
+    const adds = lines.filter((l) => l.kind === 'add')
+    expect(adds[0].newLine).toBe(1)
+    expect(adds[1].newLine).toBe(60)
+  })
+})

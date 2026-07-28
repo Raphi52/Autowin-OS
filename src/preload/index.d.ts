@@ -293,6 +293,7 @@ interface ChatApi {
     repoPath?: string
   ) => Promise<import('../shared/git-read').GitDiffResult>
   pickGitRepo: () => Promise<string | null>
+  brainRepoPath: () => Promise<string>
   unfinishedTurns: () => Promise<
     Array<{ conversationId: string; turnId: string; events: number; updatedAt: number }>
   >
@@ -333,7 +334,7 @@ interface ChatApi {
     reasoningEffort?: string
   ) => Promise<Record<string, { provider: string; model?: string; reasoningEffort?: string }>>
   models: (force?: boolean) => Promise<ImportedModel[]>
-  modelQuotas: () => Promise<ModelQuotaSnapshot>
+  modelQuotas: (force?: boolean) => Promise<ModelQuotaSnapshot>
   profiles: () => Promise<
     Array<{
       id: string

@@ -29,6 +29,12 @@
   font-size: 11px;
   padding: 3px 8px;
 }
+/* Dépôt actuellement affiché (Projet / Brain) — repère immédiat de ce qu'on regarde. */
+.sc-repo-btn.is-active {
+  border-color: var(--gold, #e9bd4e);
+  color: var(--gold, #e9bd4e);
+  background: color-mix(in srgb, var(--gold, #e9bd4e) 12%, transparent);
+}
 .sc-sect {
   border-bottom: 1px solid var(--line, #262b33);
   padding: 8px 11px 11px;

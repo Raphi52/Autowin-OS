@@ -32,6 +32,7 @@ const api = {
   getGitDiff: (path: string, repoPath?: string): Promise<unknown> =>
     ipcRenderer.invoke('git:diff', path, repoPath),
   pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),
+  brainRepoPath: (): Promise<string> => ipcRenderer.invoke('git:brainRoot'),
   // Survie niveau 2 : tours restés inachevés (app fermée pendant l'exécution) + leur journal.
   unfinishedTurns: (): Promise<
     Array<{ conversationId: string; turnId: string; events: number; updatedAt: number }>
@@ -87,7 +88,8 @@ const api = {
     reasoningEffort?: string
   ): Promise<unknown> => ipcRenderer.invoke('os:setRole', role, provider, model, reasoningEffort),
   models: (force = false): Promise<unknown[]> => ipcRenderer.invoke('os:models:list', force),
-  modelQuotas: (): Promise<unknown> => ipcRenderer.invoke('os:models:quotas'),
+  modelQuotas: (force = false): Promise<unknown> =>
+    ipcRenderer.invoke('os:models:quotas', force),
   profiles: (): Promise<unknown[]> => ipcRenderer.invoke('os:profiles:list'),
   saveProfile: (profile: unknown): Promise<unknown[]> =>
     ipcRenderer.invoke('os:profiles:save', profile),
