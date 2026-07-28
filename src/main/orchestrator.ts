@@ -413,6 +413,7 @@ export class Orchestrator {
       workCwd,
       collectedContext,
       true,
+      'build',
       push,
       onPhase,
       onDelta,
@@ -550,12 +551,24 @@ export class Orchestrator {
   }
 
   /** Exécute une tâche à travers le pipeline discipliné complet (appels réels). */
+  /**
+   * Execute UNE phase en la DECOUPANT en sous-taches parallelisees (DAG completion-driven).
+   *
+   * Anciennement reservee a `build` : toute autre phase tournait en un seul sous-agent monolithique.
+   * Mesure du 2026-07-28 (conv-75) : une phase d'exploration non decoupee a coute 10,90 $ en 11 min,
+   * alors que le MEME travail, decoupe en 5 sous-audits cibles, a coute ~0,8 $ et ~1 min chacun.
+   * Le decoupage n'est donc pas une specificite du build : c'est le levier de cout de TOUTE phase.
+   *
+   * `phase` est desormais un parametre : sans lui, les sous-agents d'un scout recevaient la consigne
+   * de phase « build » (construis/modifie) au lieu de celle de leur phase reelle.
+   */
   private async runGreedyBuildPhase(
     task: string,
     plan: GreedyTaskNode[],
     workCwd: string,
     phaseContext: string,
     withFoundation: boolean,
+    phase: PipelinePhase,
     push: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
@@ -571,7 +584,7 @@ export class Orchestrator {
     const projectContext = projectContextBlock(this.deps.executionWorkspace)
     const subBinding = roles.getBinding('subagent')
     const subProvider = subBinding.provider
-    const phaseBinding = resolvePhaseBinding(subBinding, 'build')
+    const phaseBinding = resolvePhaseBinding(subBinding, phase)
     const sandbox = isMutationTask(task) ? 'danger-full-access' : 'read-only'
     const evidence: ExecutionEvidence[] = []
     const outputs: { id: string; text: string }[] = []
@@ -588,7 +601,7 @@ export class Orchestrator {
             .join('\n\n')
           const parts = [
             { name: 'constitution', text: CONSTITUTION },
-            this.phasePrompt('build', withFoundation),
+            this.phasePrompt(phase, withFoundation),
             { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
             { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
             { name: 'projectContext', text: projectContext }
@@ -618,7 +631,7 @@ export class Orchestrator {
             role: 'subagent',
             model: phaseBinding.model,
             reasoningEffort: phaseBinding.reasoningEffort,
-            phase: 'build'
+            phase
           })
           const startedAt = performance.now()
           const result = await registry.send(subProvider, messages, options, (chunk) =>
@@ -751,13 +764,20 @@ export class Orchestrator {
     // run (isMutationTask(task) fixe) → jamais de resume à travers un changement de sandbox.
     let prevSessionId: string | undefined
     for (const phase of execPhases) {
-      if (phase === 'build' && greedyPlan && greedyPlan.length >= 2) {
+      // DECOUPAGE DE TOUTE PHASE (et non du seul `build`). Mesure du 2026-07-28 sur conv-75 : une
+      // phase d'exploration monolithique a coute 10,90 $ en 11 min, quand le meme travail decoupe en
+      // 5 sous-taches ciblees revenait a ~0,8 $ et ~1 min chacune. Rien ne justifiait de reserver ce
+      // levier au build : une phase longue est presque toujours plusieurs travaux qui s'ignorent.
+      // Le garde-fou reste le decomposeur lui-meme : sans au moins 2 sous-taches, on retombe sur le
+      // chemin sequentiel d'origine. Les droits ne changent pas (ils viennent de isMutationTask).
+      if (greedyPlan && greedyPlan.length >= 2) {
         const greedy = await this.runGreedyBuildPhase(
           task,
           greedyPlan,
           workCwd,
           phaseContext.join('\n\n'),
           true,
+          phase,
           push,
           onPhase,
           onDelta,
@@ -765,12 +785,12 @@ export class Orchestrator {
         )
         aggregatedEvidence.push(...greedy.evidence)
         lastExecText = greedy.aggregate
-        phaseOutputs.push({ phase: 'build', text: greedy.aggregate })
+        phaseOutputs.push({ phase, text: greedy.aggregate })
         const carried =
           greedy.aggregate.length > PHASE_CONTEXT_CAP
             ? `${greedy.aggregate.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
             : greedy.aggregate
-        phaseContext.push(`[phase build] ${carried}`)
+        phaseContext.push(`[phase ${phase}] ${carried}`)
         failedTasks = greedy.failed
         skippedTasks = greedy.skipped
         prevSessionId = undefined

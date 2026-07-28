@@ -123,9 +123,53 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
       }
     )
 
-    expect(phases).toEqual(['frame', 'build', 'build', 'judge'])
+    // TOUTE phase est desormais decoupee, pas seulement `build` : `frame` s'execute en 2 sous-agents
+    // paralleles (2 evenements) au lieu d'un seul appel monolithique. C'est le gain visee — mesure du
+    // 2026-07-28 : une phase non decoupee a coute 10,90 $ / 11 min quand le meme travail decoupe
+    // revenait a ~0,8 $ / ~1 min par sous-tache.
+    expect(phases).toEqual(['frame', 'frame', 'build', 'build', 'judge'])
+    // Un seul AGREGAT par phase : le decoupage change l'execution, pas la structure du livrable.
     expect(result.phaseOutputs.map((output) => output.phase)).toEqual(['frame', 'build'])
-    expect(result.trace.filter((step) => /sous-tâche/.test(step.detail ?? ''))).toHaveLength(2)
+    // 2 phases x 2 sous-taches = 4 sous-agents. Avant, seul `build` etait decoupe (2).
+    expect(result.trace.filter((step) => /sous-tâche/.test(step.detail ?? ''))).toHaveLength(4)
+    // L'attribution a la bonne phase est prouvee par les evenements onPhase ci-dessus
+    // (['frame','frame','build','build','judge']) : les steps de trace ne portent pas de phase.
+  })
+
+  it('DECOUPE TOUTE phase, pas seulement build (levier de cout generalise)', async () => {
+    const provider = new GreedyProvider()
+    const phases: string[] = []
+    const orchestrator = makeGreedy(
+      provider,
+      async () => [
+        { id: 'A', deps: [], prompt: 'volet A' },
+        { id: 'B', deps: [], prompt: 'volet B' },
+        { id: 'C', deps: [], prompt: 'volet C' }
+      ],
+      () => ['scout', 'build']
+    )
+    await orchestrator.run('audit large en plusieurs volets', undefined, (event) => {
+      if (event.phase) phases.push(event.phase)
+    })
+    // 3 sous-taches x 2 phases : le scout n'est PLUS un appel monolithique.
+    expect(phases.filter((phase) => phase === 'scout')).toHaveLength(3)
+    expect(phases.filter((phase) => phase === 'build')).toHaveLength(3)
+  })
+
+  it('sans plan exploitable (<2 sous-taches), retombe sur le chemin sequentiel d’origine', async () => {
+    const provider = new GreedyProvider()
+    const phases: string[] = []
+    const orchestrator = makeGreedy(
+      provider,
+      async () => [{ id: 'A', deps: [], prompt: 'seul volet' }],
+      () => ['scout', 'build']
+    )
+    await orchestrator.run('tache atomique', undefined, (event) => {
+      if (event.phase) phases.push(event.phase)
+    })
+    // Un seul appel par phase : le garde-fou reste le decomposeur lui-meme.
+    expect(phases.filter((phase) => phase === 'scout')).toHaveLength(1)
+    expect(phases.filter((phase) => phase === 'build')).toHaveLength(1)
   })
 
   it('conserve scout, frame, terrain et clean autour du build greedy critique', async () => {
