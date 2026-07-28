@@ -631,7 +631,7 @@ export interface ScopedLiveRun<TStep = unknown> {
   runPath?: string
   task: string
   steps: TStep[]
-  status: 'running' | 'green' | 'red'
+  status: 'running' | 'succeeded' | 'failed'
   /** Phase active (sous-agent/juge/gate) tant qu'elle n'a pas produit son étape. */
   phase?: LiveRunPhase
   /** Texte streamé de la phase en cours (réinitialisé à chaque nouvelle phase/étape). */
@@ -643,7 +643,7 @@ export type ScopedLiveRunEvent<TStep = unknown> =
   | { type: 'phase'; convId: string; runPath?: string; phase: LiveRunPhase }
   | { type: 'delta'; convId: string; runPath?: string; delta: string }
   | { type: 'step'; convId: string; runPath?: string; step: TStep }
-  | { type: 'end'; convId: string; runPath?: string; status: 'green' | 'red' }
+  | { type: 'end'; convId: string; runPath?: string; status: 'succeeded' | 'failed' }
   | { type: 'clear'; convId: string; runPath?: string }
 
 export interface RunRequestIdentity {

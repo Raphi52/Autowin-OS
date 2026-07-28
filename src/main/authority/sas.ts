@@ -40,6 +40,7 @@ export class AuthoritySas {
   private nextId = 1
   private readonly decisions = new Map<string, Decision<unknown>>()
   private readonly resolved = new Set<string>()
+  private readonly resolutions = new Map<string, Resolution<unknown>>()
   private readonly journalLog: Resolution<unknown>[] = []
 
   constructor(now: () => number = () => Date.now()) {
@@ -81,7 +82,9 @@ export class AuthoritySas {
       throw new Error(`AuthoritySas.resolve: id inconnu "${id}"`)
     }
     if (this.resolved.has(id)) {
-      throw new Error(`AuthoritySas.resolve: id "${id}" déjà résolu`)
+      const existing = this.resolutions.get(id)
+      if (existing && existing.choice === choice) return existing
+      throw new Error(`AuthoritySas.resolve: id "${id}" déjà résolu avec un autre choix`)
     }
     if (!decision.options.includes(choice)) {
       throw new Error(`AuthoritySas.resolve: choix invalide pour "${id}"`)
@@ -94,6 +97,7 @@ export class AuthoritySas {
       at: this.now()
     }
     this.journalLog.push(resolution)
+    this.resolutions.set(id, resolution)
     return resolution
   }
 
@@ -116,6 +120,7 @@ export class AuthoritySas {
         at: t
       }
       this.journalLog.push(resolution)
+      this.resolutions.set(id, resolution)
       produced.push(resolution)
     }
     return produced

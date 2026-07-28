@@ -110,6 +110,25 @@ describe('AppCommandBus authority policy', () => {
     expect(os.authority.pending()).toHaveLength(0)
   })
 
+  it('reuses an equivalent orchestration already running instead of creating another RUN', async () => {
+    const os = fakeOs()
+    let release!: (value: any) => void
+    os.runTask = () => {
+      os.calls.runTask += 1
+      return new Promise((resolve) => {
+        release = resolve
+      })
+    }
+    const bus = new AppCommandBus(os, () => {})
+    const first = bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1', 'ask')
+    await Promise.resolve()
+    const second = await bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1', 'ask')
+    expect(second).toMatchObject({ ok: true, data: { reused: true, status: 'running' } })
+    expect(os.calls.runTask).toBe(1)
+    release({ gateBlocked: false, valid: true, costUsd: 0, result: '', phaseOutputs: [] })
+    await first
+  })
+
   it('reuses the pending decision for an identical destructive action', async () => {
     const os = fakeOs()
     const bus = new AppCommandBus(os, () => {})
@@ -153,15 +172,26 @@ describe('AppCommandBus authority policy', () => {
     await expect(bus.snapshot()).resolves.toMatchObject({ tab: 'agent-studio' })
   })
 
-  it('snapshotForPrompt : projection minimale — pas de conversations inline, runs bloqués seulement', async () => {
+  it('snapshotForPrompt exposes active RUNs with their observable identifiers', async () => {
     const os = fakeOs()
+    os.runsWithGate = () => [
+      {
+        path: 'C:/runs/active/RUN.md',
+        subject: 'corriger le chat',
+        summary: { status: 'running' },
+        blocked: false
+      }
+    ]
     const bus = new AppCommandBus(os, () => {})
     const prompt = await bus.snapshotForPrompt()
     // Le poids (liste des conversations) n'est PAS injecté : seul le count.
     expect(prompt).not.toHaveProperty('conversations')
     expect(typeof prompt.conversationsCount).toBe('number')
-    // Runs : uniquement les bloqués, et sans le champ `blocked` (redondant après filtre).
+    // Runs bloqués restent distincts des RUNs actifs, directement lisibles par l'agent.
     expect(prompt.runsBlocked.every((r) => 'subject' in r && !('blocked' in r))).toBe(true)
+    expect(prompt.runsActive).toEqual([
+      { runId: 'C:/runs/active/RUN.md', subject: 'corriger le chat', status: 'running' }
+    ])
     // Champs utiles conservés.
     expect(prompt).toMatchObject({ tab: expect.any(String), providers: expect.any(Array) })
   })
@@ -190,7 +220,7 @@ describe('AppCommandBus authority policy', () => {
     expect(os.conversations.get('conv-1')).toBeTruthy()
     await bus.resolveDecision(decisionId, 'approve')
     expect(os.conversations.get('conv-1')).toBeUndefined()
-    await expect(bus.resolveDecision(decisionId, 'approve')).rejects.toThrow()
+    await expect(bus.resolveDecision(decisionId, 'approve')).resolves.toMatchObject({ by: 'user' })
   })
 
   it('does not expose decision resolution to the model and annotates risk', () => {

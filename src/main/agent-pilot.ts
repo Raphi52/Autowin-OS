@@ -238,6 +238,10 @@ export class AgentPilot {
       `QUE si l'objectif demande d'agir sur l'app. Après une commande tu reçois le résultat + le ` +
       `nouvel état et tu peux continuer. Quand tu as fini d'agir, termine par ta réponse en clair ` +
       `SANS commande.\n` +
+      `Pour une action, émets la commande AVANT tout texte visible. N'annonce jamais un lancement, ` +
+      `un succès ou une clôture avant son résultat observable : reused:true signifie réutilisation, ` +
+      `running/pending signifie « en cours » avec runId, failed signifie échec. Ne dis « fait », ` +
+      `« terminé » ou « vert » pour un travail orchestré qu'après succeeded avec son runId.\n` +
       `DEMANDE OUVERTE (« scoute / trouve / propose / des options / qu'est-ce que je pourrais / ` +
       `améliore X ») : NE renvoie PAS la question à l'utilisateur. DIVERGE toi-même — lance ` +
       `\`orchestrate\` avec la demande complète (pipeline scout/frame) OU propose directement ` +
@@ -324,8 +328,9 @@ export class AgentPilot {
               continue
             }
             if (commandBoundarySeen || !segment.text) continue
+            // Le texte est retenu jusqu'à connaître la présence d'une commande. Ainsi une
+            // annonce ne peut pas précéder l'événement résultat qui l'atteste.
             attemptStreamedPrefix += segment.text
-            onEvent({ kind: 'delta', streamId, text: segment.text, iteration: i })
           }
         }
         try {
@@ -420,57 +425,24 @@ export class AgentPilot {
 
       if (!hasCommand) {
         if (!successfulStreamedPrefix && spoken) onEvent({ kind: 'think', text: spoken })
-        else if (successfulStreamedPrefix) {
-          const visible = ordered
-            .filter(
-              (token): token is Extract<OrderedPilotToken, { kind: 'text' }> =>
-                token.kind === 'text'
-            )
-            .map((token) => token.text)
-            .join('')
-          const remainder = visible.startsWith(successfulStreamedPrefix)
-            ? visible.slice(successfulStreamedPrefix.length)
-            : ''
-          if (remainder)
-            onEvent({
-              kind: 'delta',
-              streamId: `${i}:${successfulAttempt}:remainder`,
-              text: remainder,
-              iteration: i
-            })
-        }
+        else if (spoken)
+          onEvent({
+            kind: 'delta',
+            streamId: `${i}:${successfulAttempt}:complete`,
+            text: spoken,
+            iteration: i
+          })
         onEvent({ kind: 'done', text: spoken, usage })
         return
       }
 
       const results: string[] = []
       let commandIndex = 0
-      let tokenIndex = 0
-      let streamedPrefixRemaining = successfulStreamedPrefix
+      const deferredText: string[] = []
       for (const token of ordered) {
         signal?.throwIfAborted()
         if (token.kind === 'text') {
-          let visible = token.text
-          if (streamedPrefixRemaining) {
-            if (streamedPrefixRemaining.startsWith(visible)) {
-              streamedPrefixRemaining = streamedPrefixRemaining.slice(visible.length)
-              visible = ''
-            } else if (visible.startsWith(streamedPrefixRemaining)) {
-              visible = visible.slice(streamedPrefixRemaining.length)
-              streamedPrefixRemaining = ''
-            } else {
-              visible = ''
-              streamedPrefixRemaining = ''
-            }
-          }
-          if (visible)
-            onEvent({
-              kind: 'delta',
-              streamId: `${i}:${successfulAttempt}:ordered:${tokenIndex}`,
-              text: visible,
-              iteration: i
-            })
-          tokenIndex += 1
+          if (token.text) deferredText.push(token.text)
           continue
         }
 
@@ -486,8 +458,14 @@ export class AgentPilot {
           data: r.ok ? r.data : r.error
         })
         results.push(`${token.name} → ${r.ok ? JSON.stringify(r.data) : 'ERREUR ' + r.error}`)
-        tokenIndex += 1
       }
+      for (const [textIndex, visible] of deferredText.entries())
+        onEvent({
+          kind: 'delta',
+          streamId: `${i}:${successfulAttempt}:after-results:${textIndex}`,
+          text: visible,
+          iteration: i
+        })
 
       const state = await this.bus.snapshotForPrompt()
       convo.push(`TU AS ÉMIS: ${text}`)

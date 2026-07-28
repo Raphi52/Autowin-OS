@@ -147,6 +147,10 @@ const SUGGESTIONS = [
 ]
 
 const RUN_DOT: Record<string, string> = {
+  succeeded: 'st-ok',
+  failed: 'st-err',
+  pending: 'st-warn',
+  running: 'st-warn',
   green: 'st-ok',
   open: 'st-warn',
   red: 'st-err',
@@ -848,7 +852,7 @@ export function ChatView({
             type: 'end',
             convId,
             runPath,
-            status: (e.status as 'green' | 'red') ?? 'green'
+            status: e.status as 'succeeded' | 'failed'
           })
         )
         void refreshRuns()
@@ -2149,7 +2153,7 @@ export function ChatView({
                         <span className="spinner" />
                       ) : (
                         <span
-                          className={`status-dot ${liveRuns[activeId].status === 'green' ? 'st-ok' : 'st-err'}`}
+                          className={`status-dot ${liveRuns[activeId].status === 'succeeded' ? 'st-ok' : 'st-err'}`}
                         />
                       )}
                       <span className="run-subject live-subject" title={liveRuns[activeId].task}>

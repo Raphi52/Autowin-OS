@@ -5,7 +5,8 @@ import {
   closeConvRun,
   createConvRun,
   populateConvRunSections,
-  saveConvRunTrace
+  saveConvRunTrace,
+  setConvRunStatus
 } from './runs/conv-runs'
 import { appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace } from './activity/brain-trace-spool'
@@ -51,15 +52,15 @@ export interface AppSnapshot {
   roles: Record<string, { provider: string; model?: string }>
   conversations: Array<{ id: string; title: string; category: string }>
   pendingDecisions: Array<{ id: string; question: string }>
-  runs: Array<{ subject: string; status: string; blocked: boolean }>
+  runs: Array<{ runId: string; subject: string; status: string; blocked: boolean }>
   budgetUsd: number
 }
 
 /**
  * Projection MINIMALE de l'état, injectée dans le PROMPT de l'agent à chaque tour
  * (≠ `AppSnapshot`, destiné à l'UI complète via `os:appState`). On évite d'injecter les
- * ~60 conversations et les runs non bloqués : c'était l'essentiel du poids. L'agent liste
- * les conversations à la demande via une commande, il n'en a pas besoin inline.
+ * ~60 conversations : c'était l'essentiel du poids. Les RUN actifs restent injectés afin que
+ * l'agent ne puisse pas annoncer un lancement ou une clôture sans identifiant et état observables.
  */
 export interface PromptSnapshot {
   tab: AppDestination
@@ -67,6 +68,7 @@ export interface PromptSnapshot {
   providers: string[]
   pendingDecisions: Array<{ id: string; question: string }>
   runsBlocked: Array<{ subject: string; status: string }>
+  runsActive: Array<{ runId: string; subject: string; status: 'pending' | 'running' }>
   conversationsCount: number
 }
 
@@ -85,7 +87,7 @@ export type AppEvent =
       delta: string
     }
   | { type: 'orchestrate-step'; convId?: string; runPath?: string; step: OrchestrationStep }
-  | { type: 'orchestrate-end'; convId?: string; runPath?: string; status: 'green' | 'red' }
+  | { type: 'orchestrate-end'; convId?: string; runPath?: string; status: 'succeeded' | 'failed' }
 
 const CATALOG: CommandSpec[] = [
   {
@@ -274,6 +276,7 @@ export class AppCommandBus {
   private readonly pendingDecisionByFingerprint = new Map<string, string>()
   /** Orchestrations en vol, par conversation : permet de STOPPER le sous-agent. */
   private readonly activeOrchestrations = new Map<string, AbortController>()
+  private readonly activeOrchestrationByFingerprint = new Map<string, { runPath: string }>()
 
   /** Abort l'orchestration (sous-agent/juge) en cours pour une conversation. */
   abortOrchestration(convId: string): boolean {
@@ -298,6 +301,7 @@ export class AppCommandBus {
       }
     }
     this.activeOrchestrations.clear()
+    this.activeOrchestrationByFingerprint.clear()
   }
 
   /**
@@ -393,10 +397,7 @@ export class AppCommandBus {
   ): { pendingApproval: true; decisionId: string } {
     const fingerprint = actionFingerprint(name, args)
     const existingId = this.pendingDecisionByFingerprint.get(fingerprint)
-    if (
-      existingId &&
-      this.os.authority.pending().some((decision) => decision.id === existingId)
-    ) {
+    if (existingId && this.os.authority.pending().some((decision) => decision.id === existingId)) {
       return { pendingApproval: true, decisionId: existingId }
     }
     if (existingId) this.pendingDecisionByFingerprint.delete(fingerprint)
@@ -433,7 +434,12 @@ export class AppCommandBus {
       ).map((d) => ({ id: d.id, question: d.question })),
       runs: runs
         .slice(0, 12)
-        .map((r) => ({ subject: r.subject, status: r.summary.status, blocked: r.blocked })),
+        .map((r) => ({
+          runId: r.path,
+          subject: r.subject,
+          status: r.summary.status,
+          blocked: r.blocked
+        })),
       budgetUsd: this.os.budget().spent
     }
   }
@@ -449,6 +455,12 @@ export class AppCommandBus {
       runsBlocked: full.runs
         .filter((r) => r.blocked)
         .map((r) => ({ subject: r.subject, status: r.status })),
+      runsActive: full.runs
+        .filter(
+          (r): r is typeof r & { status: 'pending' | 'running' } =>
+            r.status === 'pending' || r.status === 'running'
+        )
+        .map((r) => ({ runId: r.runId, subject: r.subject, status: r.status })),
       conversationsCount: full.conversations.length
     }
   }
@@ -537,12 +549,24 @@ export class AppCommandBus {
           this.activeConversationId ||
           '__autonomous__'
         const task = s('task')
+        const fingerprint = actionFingerprint('orchestrate', { convId, task })
+        const existing = this.activeOrchestrationByFingerprint.get(fingerprint)
+        if (existing) {
+          return {
+            runId: existing.runPath,
+            runPath: existing.runPath,
+            status: 'running',
+            reused: true
+          }
+        }
         const runPath = createConvRun(convId, task)
+        this.activeOrchestrationByFingerprint.set(fingerprint, { runPath })
         const orchestrationTurnId = randomUUID()
         const steps: OrchestrationStep[] = []
         // Sous-agent STOPPABLE : un AbortController par conversation, coupé par abortOrchestration.
         const abortController = new AbortController()
         this.activeOrchestrations.set(convId, abortController)
+        setConvRunStatus(runPath, 'running')
         this.broadcast({ type: 'orchestrate-start', convId, runPath, task })
         try {
           const r = await this.os.runTask(
@@ -630,7 +654,7 @@ export class AppCommandBus {
             type: 'orchestrate-end',
             convId,
             runPath,
-            status: r.gateBlocked ? 'red' : 'green'
+            status: r.gateBlocked ? 'failed' : 'succeeded'
           })
           this.broadcast({ type: 'refresh', scope: 'workflows' })
           this.broadcast({ type: 'refresh', scope: 'orchestration' })
@@ -641,18 +665,22 @@ export class AppCommandBus {
             gateBlocked: r.gateBlocked,
             costUsd: r.costUsd,
             result: r.result,
-            runPath
+            runId: runPath,
+            runPath,
+            status: r.gateBlocked ? 'failed' : 'succeeded',
+            reused: false
           }
         } catch (e) {
           if (runPath) {
             saveConvRunTrace(runPath, steps)
             closeConvRun(runPath, false, `Orchestration en échec: ${String(e).slice(0, 120)}`)
           }
-          this.broadcast({ type: 'orchestrate-end', convId, runPath, status: 'red' })
+          this.broadcast({ type: 'orchestrate-end', convId, runPath, status: 'failed' })
           this.broadcast({ type: 'refresh', scope: 'workflows' })
           throw e
         } finally {
           this.activeOrchestrations.delete(convId)
+          this.activeOrchestrationByFingerprint.delete(fingerprint)
         }
       }
       case 'create_conversation': {

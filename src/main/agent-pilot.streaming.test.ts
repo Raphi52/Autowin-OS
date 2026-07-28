@@ -8,6 +8,7 @@ const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
   providers: [],
   pendingDecisions: [],
   runsBlocked: [],
+  runsActive: [],
   conversationsCount: 0
 })
 
@@ -67,7 +68,7 @@ describe('AgentPilot chat streaming', () => {
     )
 
     const deltas = events.filter((event) => event.kind === 'delta')
-    expect(deltas.length).toBeGreaterThanOrEqual(4)
+    expect(deltas.length).toBeGreaterThanOrEqual(3)
     expect(deltas.map((event) => event.text).join('')).toBe(
       'Je réponds.  Après action.Tout est bon.'
     )
@@ -84,6 +85,7 @@ describe('AgentPilot chat streaming', () => {
     expect(result?.actionId).toBe(command?.actionId)
     expect(commandIndex).toBeLessThan(resultIndex)
     expect(resultIndex).toBeLessThan(trailingTextIndex)
+    expect(events.findIndex((event) => event.kind === 'delta')).toBeGreaterThan(resultIndex)
   })
 
   it('produces durable text-action-text parts through the real pilot event path', async () => {
@@ -155,15 +157,15 @@ describe('AgentPilot chat streaming', () => {
     }
 
     expect(turn.status).toBe('completed')
-    expect(turn.parts.map((part) => part.kind)).toEqual(['text', 'action', 'text'])
-    expect(turn.parts[0]).toMatchObject({ kind: 'text', text: 'Avant.' })
-    expect(turn.parts[1]).toMatchObject({
+    expect(turn.parts.map((part) => part.kind)).toEqual(['action', 'text', 'text'])
+    expect(turn.parts[0]).toMatchObject({
       kind: 'action',
       name: 'get_state',
       args: { token: '[masqué]' },
       ok: true,
       data: { source: 'fixture' }
     })
+    expect(turn.parts[1]).toMatchObject({ kind: 'text', text: 'Avant.' })
     expect(turn.parts[2]).toMatchObject({ kind: 'text', text: ' Après.' })
   })
 
@@ -203,7 +205,7 @@ describe('AgentPilot chat streaming', () => {
     expect(events.map((event) => event.kind)).toContain('stream-reset')
     const failedStream = events.find((event) => event.kind === 'stream-reset')?.streamId
     expect(events.some((event) => event.kind === 'delta' && event.streamId === failedStream)).toBe(
-      true
+      false
     )
     expect(events.filter((event) => event.kind === 'delta').at(-1)?.text).toBe('Texte valide')
   })
@@ -243,13 +245,7 @@ describe('AgentPilot chat streaming', () => {
     ).rejects.toThrow('échec 2')
 
     expect(events.filter((event) => event.kind === 'stream-reset')).toHaveLength(1)
-    const finalDelta = events.filter((event) => event.kind === 'delta').at(-1)
-    expect(finalDelta?.text).toBe('Dernier partiel')
-    expect(
-      events.some(
-        (event) => event.kind === 'stream-reset' && event.streamId === finalDelta?.streamId
-      )
-    ).toBe(false)
+    expect(events.some((event) => event.kind === 'delta')).toBe(false)
   })
 
   it.each([

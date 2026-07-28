@@ -33,11 +33,12 @@ describe('AuthoritySas', () => {
     expect(() => sas.resolve('dec-999', 'a')).toThrow()
   })
 
-  it('resolve deux fois sur le même id jette', () => {
+  it('resolve deux fois avec le même choix est idempotent', () => {
     const t = 0
     const sas = new AuthoritySas(() => t)
     const id = sas.propose({ question: 'Q1', options: ['a', 'b'], safeDefault: 'a', ttlMs: 1000 })
-    sas.resolve(id, 'a')
+    const first = sas.resolve(id, 'a')
+    expect(sas.resolve(id, 'a')).toEqual(first)
     expect(() => sas.resolve(id, 'b')).toThrow()
   })
 

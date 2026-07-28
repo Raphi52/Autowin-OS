@@ -474,6 +474,25 @@ describe('conversation-scoped workflow state', () => {
     expect(stepped['c']?.liveText).toBeUndefined()
   })
 
+  it('preserves the persisted terminal status instead of renaming it', () => {
+    const started = reduceScopedLiveRuns({}, { type: 'start', convId: 'c', runPath: 'r', task: 't' })
+    const succeeded = reduceScopedLiveRuns(started, {
+      type: 'end',
+      convId: 'c',
+      runPath: 'r',
+      status: 'succeeded'
+    })
+    const failed = reduceScopedLiveRuns(succeeded, {
+      type: 'end',
+      convId: 'c',
+      runPath: 'r',
+      status: 'failed'
+    })
+
+    expect(succeeded.c?.status).toBe('succeeded')
+    expect(failed.c?.status).toBe('failed')
+  })
+
   it('rejects a runs response when its conversation or scope is no longer current', () => {
     const requested = { id: 4, scope: 'conv' as const, convId: 'conversation-a' }
 

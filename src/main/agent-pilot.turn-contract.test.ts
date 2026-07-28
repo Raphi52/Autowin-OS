@@ -10,6 +10,7 @@ const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
   providers: [],
   pendingDecisions: [],
   runsBlocked: [],
+  runsActive: [],
   conversationsCount: 0
 })
 
@@ -287,6 +288,8 @@ describe('AgentPilot turn contract', () => {
       expect(call[0]).toBe('codex')
       expect(call[2]).toMatchObject({ model: 'gpt-initial', reasoningEffort: 'low' })
       expect(call[2].system).toMatch(/ne dis jamais que tu ne peux pas modifier le code/i)
+      expect(call[2].system).toMatch(/reused:true signifie réutilisation/i)
+      expect(call[2].system).toMatch(/après succeeded avec son runId/i)
       expect(call[2].system).toContain(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION)
     }
     for (const call of describePrompt.mock.calls) {

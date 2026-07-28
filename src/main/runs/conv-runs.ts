@@ -28,7 +28,7 @@ function slugify(task: string): string {
   return s || 'tache'
 }
 
-/** Crée le RUN.md (status: open) d'une tâche lancée depuis une conversation. */
+/** Crée le RUN.md (status: pending) d'une tâche lancée depuis une conversation. */
 export function createConvRun(
   convId: string,
   task: string,
@@ -42,7 +42,7 @@ export function createConvRun(
   const date = new Date(now()).toISOString().slice(0, 10)
   writeFileSync(
     path,
-    `status: open
+    `status: pending
 session: ${convId}
 regime: standard
 signal: verdict du juge + gate déterministe (orchestration in-app)
@@ -63,7 +63,7 @@ ${task}
 <!-- terrain : procédure opératoire spécifique à la tâche — action -> commande/outil -> signal attendu -> fallback/arrêt -->
 
 ## Journal
-[${date}] Orchestration lancée depuis la conversation ${convId}.
+[${date}] Orchestration créée depuis la conversation ${convId} (pending).
 
 ## Défauts
 
@@ -81,6 +81,17 @@ Blockers:
     'utf8'
   )
   return path
+}
+
+/** Transition durable et lisible d'un RUN, sans annoncer un état non persisté. */
+export function setConvRunStatus(path: string, status: 'running' | 'succeeded' | 'failed'): void {
+  let md = readFileSync(path, 'utf8')
+  md = md.replace(/^status: \S+/m, `status: ${status}`)
+  md = md.replace(
+    /(## Journal\n)/,
+    `$1[${new Date().toISOString()}] État observable : ${status}.\n`
+  )
+  writeFileSync(path, md, 'utf8')
 }
 
 /** Extrait le contenu d'une section `## Nom` d'un markdown (jusqu'à la prochaine `## ` ou la fin). */
@@ -133,7 +144,7 @@ export function populateConvRunSections(
 export function closeConvRun(path: string, green: boolean, journalLine: string): void {
   try {
     let md = readFileSync(path, 'utf8')
-    md = md.replace(/^status: open/m, `status: ${green ? 'green' : 'red'}`)
+    md = md.replace(/^status: \S+/m, `status: ${green ? 'succeeded' : 'failed'}`)
     if (green) md = md.replace(/^ {2}- \[ \] (le juge valide.*)$/m, '  - [x] $1')
     md = md.replace(/^## Journal$/m, `## Journal`)
     md = md.replace(

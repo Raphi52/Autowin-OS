@@ -2,7 +2,16 @@
 
 /** Résumé normalisé d'un RUN.md pour affichage dashboard. */
 export type RunSummary = {
-  status: 'open' | 'red' | 'green' | 'degraded-closed' | 'unknown'
+  status:
+    | 'pending'
+    | 'running'
+    | 'succeeded'
+    | 'failed'
+    | 'open'
+    | 'red'
+    | 'green'
+    | 'degraded-closed'
+    | 'unknown'
   regime?: string
   dodTotal: number
   dodChecked: number
@@ -11,7 +20,16 @@ export type RunSummary = {
   subject?: string
 }
 
-const STATUSES = new Set(['open', 'red', 'green', 'degraded-closed'])
+const STATUSES = new Set([
+  'pending',
+  'running',
+  'succeeded',
+  'failed',
+  'open',
+  'red',
+  'green',
+  'degraded-closed'
+])
 
 /**
  * Extrait les lignes d'une section `## Heading` jusqu'au prochain heading `## `
@@ -95,5 +113,7 @@ export function parseRun(md: string, subject?: string): RunSummary {
 
 /** True si le run est bloqué : status open/red, ou DoD incomplète. */
 export function isBlocked(s: RunSummary): boolean {
-  return s.status === 'open' || s.status === 'red' || s.dodChecked < s.dodTotal
+  return (
+    ['pending', 'running', 'open', 'failed', 'red'].includes(s.status) || s.dodChecked < s.dodTotal
+  )
 }

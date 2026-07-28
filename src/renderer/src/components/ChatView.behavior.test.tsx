@@ -53,14 +53,12 @@ function api(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     onPilotEvent: vi.fn(() => vi.fn()),
     setActiveConversation: vi.fn(),
     conversationsCreate: vi.fn(),
-    routeConversationMessage: vi.fn(
-      async (conversationId: string) => ({
-        sourceConversationId: conversationId,
-        conversationId,
-        routed: false,
-        decision: { route: 'current', confidence: 1, reason: 'related' }
-      })
-    ),
+    routeConversationMessage: vi.fn(async (conversationId: string) => ({
+      sourceConversationId: conversationId,
+      conversationId,
+      routed: false,
+      decision: { route: 'current', confidence: 1, reason: 'related' }
+    })),
     pilotChat: vi.fn().mockResolvedValue({ ok: true }),
     markResponseDisplayed: vi.fn().mockResolvedValue(undefined),
     cancelPilotChat: vi.fn().mockResolvedValue(undefined),
@@ -135,10 +133,23 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => pilot.resolve({ ok: true }))
   })
 
+  it('closes the destructive confirmation dialog on an outside click', async () => {
+    await mount(api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) }))
+    await act(async () => {
+      ;(container!.querySelector('.conv-menu-trigger') as HTMLButtonElement).click()
+    })
+    await act(async () => {
+      ;(document.body.querySelector('[role="menuitem"].c-err') as HTMLButtonElement).click()
+    })
+    expect(container!.querySelector('.delete-confirm-layer')).toBeTruthy()
+    await act(async () => {
+      ;(container!.querySelector('.delete-confirm-layer') as HTMLElement).click()
+    })
+    expect(container!.querySelector('.delete-confirm-layer')).toBeNull()
+  })
+
   it('moves an unrelated message to a new active conversation before pilotChat', async () => {
-    const source = conversation('A', [
-      { role: 'user', content: 'Refais le graphe Git', ts: 1 }
-    ])
+    const source = conversation('A', [{ role: 'user', content: 'Refais le graphe Git', ts: 1 }])
     const target = conversation('B')
     const conversations = vi
       .fn()
@@ -273,7 +284,10 @@ describe('ChatView behavior under concurrent UI actions', () => {
       )
     ).toEqual(['⏹ Interrompre et envoyer', '🧭 Orienter', 'BTW', '✕'])
     expect(
-      Array.from(container!.querySelectorAll('.directive-queue-text'), (element) => element.textContent)
+      Array.from(
+        container!.querySelectorAll('.directive-queue-text'),
+        (element) => element.textContent
+      )
     ).toEqual(['B', 'A'])
     expect(mockApi.injectDirective).not.toHaveBeenCalled()
     await act(async () => pilot.resolve({ ok: true }))
@@ -542,9 +556,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
   it('preserves a failed bootstrap draft and retries it', async () => {
     const models = vi
       .fn()
-      .mockResolvedValue([
-        { id: 'codex/gpt-5.6-terra', provider: 'codex', model: 'gpt-5.6-terra' }
-      ])
+      .mockResolvedValue([{ id: 'codex/gpt-5.6-terra', provider: 'codex', model: 'gpt-5.6-terra' }])
     const create = vi.fn().mockResolvedValue(conversation('A'))
     const mockApi = api({ models, conversationsCreate: create })
     await mount(mockApi)

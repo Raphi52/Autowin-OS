@@ -7,6 +7,7 @@ const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
   providers: [],
   pendingDecisions: [],
   runsBlocked: [],
+  runsActive: [],
   conversationsCount: 0
 })
 
@@ -123,6 +124,6 @@ describe('AgentPilot retry observable', () => {
     await chunkWasSent
     controller.abort('user')
     await expect(pending).rejects.toThrow('aborted')
-    expect(events.map((event) => event.kind)).toEqual(['delta', 'cancellation'])
+    expect(events.map((event) => event.kind)).toEqual(['cancellation'])
   })
 })
