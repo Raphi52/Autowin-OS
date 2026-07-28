@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest'
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -75,5 +75,30 @@ describe('native-registry (Chantier 1 — souveraineté inventaire)', () => {
     // 2e amorçage ignoré (état local préservé)
     seedRegistrySnapshot({ tools: [] }, base)
     expect(listNativeRegistry('tools', base)).toHaveLength(1)
+  })
+
+  it('réhydrate le catalogue après un toggle précoce et persiste ses mises à jour', async () => {
+    setNativeEnablement('tools', 't1', false, base)
+
+    // Simule la recréation du store entre le toggle et l'amorçage du catalogue.
+    vi.resetModules()
+    const reloaded = await import('./native-registry')
+    reloaded.seedRegistrySnapshot(
+      {
+        tools: [{ id: 't1', label: 't1', description: 'outil', enabled: true, mutable: true }]
+      },
+      base
+    )
+
+    expect(reloaded.listNativeRegistry('tools', base)).toEqual([
+      { id: 't1', label: 't1', description: 'outil', enabled: false, mutable: true }
+    ])
+
+    reloaded.setNativeEnablement('tools', 't1', true, base)
+    vi.resetModules()
+    const afterUpdate = await import('./native-registry')
+    expect(afterUpdate.listNativeRegistry('tools', base)).toEqual([
+      { id: 't1', label: 't1', description: 'outil', enabled: true, mutable: true }
+    ])
   })
 })
