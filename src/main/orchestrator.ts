@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { ProviderRegistry } from './providers/registry'
 import type { RoleModelConfig, ReasoningEffort } from './roles'
 import { resolvePhaseBinding } from './roles'
@@ -9,7 +10,7 @@ import { evaluateClosure } from './gates/stopgate'
 import { HookBus } from './hooks/hook-bus'
 import { createDefaultHookBus } from './hooks/default-gate-hooks'
 import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
-import { type PipelinePhase } from './skill-pipeline'
+import { phaseInstruction, type PipelinePhase } from './skill-pipeline'
 import { phaseBrief } from './phase-briefs'
 import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
 import { projectContextBlock } from './context-files'
@@ -156,6 +157,8 @@ export interface OrchestratorDeps {
   decompose?: (task: string) => Promise<GreedyTaskNode[]>
   /** Plafond de sous-agents simultanés en mode greedy (défaut 4). */
   greedyConcurrency?: number
+  /** Injection substituable pour les tests ; en production charge le vrai kit via skill-pipeline. */
+  skillInstruction?: (phase: PipelinePhase, opts: { withFoundation: boolean }) => string
 }
 
 /** Un nœud du plan greedy : une sous-tâche + les ids dont elle dépend (doivent réussir avant). */
@@ -167,12 +170,23 @@ export interface GreedyTaskNode {
   deps: string[]
 }
 
+interface PhasePromptBlock {
+  name: string
+  text: string
+}
+
 /** Contrat minimal du coordinateur worktree niveau run (implémenté par RunWorktreeCoordinator). */
 export interface RunWorktrees {
   /** Renvoie le cwd isolé du run (mutation) ou undefined (non-mutation → base). */
   begin(runId: string, agentName: string, isMutation: boolean): string | undefined
   /** Fusionne (full-auto) ou bascule conflit ; appelé en fin de run, y compris sur erreur. */
   end(runId: string): unknown
+  /** Attache/détache un processus CLI réel au lease durable du run. */
+  process?(runId: string, pid: number, active: boolean): void
+  /** Barrière durable couvrant l'intervalle avant que spawn fournisse un PID. */
+  spawnIntent?(runId: string, token: string, active: boolean): void
+  /** Transfert atomique de l'intention vers le PID enfant. */
+  spawned?(runId: string, token: string, pid: number): void
 }
 
 const MUTATION_TASK =
@@ -196,6 +210,9 @@ const JUDGE_PHASE_CAP = 6000
  * On neutralise les clauses négatives « ne … pas » / « n'… pas » avant de tester.
  */
 export function isMutationTask(task: string): boolean {
+  // Kaizen est contractuellement un audit natif en lecture seule, quel que soit le vocabulaire
+  // cité dans sa cible (ex. « pourquoi le modèle a voulu modifier X »).
+  if (/^\/kaizen(?=\s|$)/i.test(task.trim())) return false
   const withoutNegations = task.replace(/\bn[e']\s*\w+(?:\s+\w+){0,2}?\s+pas\b/gi, ' ')
   return MUTATION_TASK.test(withoutNegations)
 }
@@ -220,7 +237,25 @@ export function evidenceSatisfiesTask(task: string, evidence: ExecutionEvidence[
 export class Orchestrator {
   constructor(private readonly deps: OrchestratorDeps) {}
 
+  private phasePrompt(phase: PipelinePhase, withFoundation: boolean): PhasePromptBlock {
+    const installed =
+      this.deps.skillInstruction?.(phase, { withFoundation }) ??
+      phaseInstruction(phase, undefined, { withFoundation })
+    return installed
+      ? { name: `skill:${phase}`, text: installed }
+      : { name: `consigne:${phase}`, text: phaseBrief(phase) }
+  }
+
+  private readonly runNamespace = randomUUID().replace(/-/g, '').slice(0, 12)
   private runSeq = 0
+  private readonly processObservers = new Map<
+    string,
+    {
+      process: (pid: number, active: boolean) => void
+      spawnIntent: (token: string, active: boolean) => void
+      spawned: (token: string, pid: number) => void
+    }
+  >()
   private _hooks?: HookBus
   /** Bus de hooks (fourni ou défaut). Uniforme pour TOUS les exécuteurs (claude/codex/omniroute). */
   private get hooks(): HookBus {
@@ -231,6 +266,20 @@ export class Orchestrator {
   private resolveVerifyCmd(): string | undefined {
     if (this.deps.verifyCmd) return this.deps.verifyCmd
     return this.deps.autoVerify ? resolveVerifyCmd(this.deps.executionWorkspace) : undefined
+  }
+
+  private executionOptions(
+    cwd: string,
+    sandbox: NonNullable<SendOptions['execution']>['sandbox']
+  ): NonNullable<SendOptions['execution']> {
+    const observers = this.processObservers.get(cwd)
+    return {
+      cwd,
+      sandbox,
+      onProcess: observers?.process,
+      onSpawnIntent: observers?.spawnIntent,
+      onSpawned: observers?.spawned
+    }
   }
 
   /**
@@ -245,22 +294,46 @@ export class Orchestrator {
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
     signal?: AbortSignal
   ): Promise<OrchestrationResult> {
-    const runId = `run-${++this.runSeq}`
+    const runId = `run-${this.runNamespace}-${++this.runSeq}`
     const isMut = isMutationTask(task)
     const workCwd =
       this.deps.worktrees?.begin(runId, 'Agent', isMut) ?? this.deps.executionWorkspace
+    if (isMut && this.deps.worktrees) {
+      this.processObservers.set(workCwd, {
+        process: (pid, active) => this.deps.worktrees?.process?.(runId, pid, active),
+        spawnIntent: (token, active) => this.deps.worktrees?.spawnIntent?.(runId, token, active),
+        spawned: (token, pid) => this.deps.worktrees?.spawned?.(runId, token, pid)
+      })
+    }
     try {
       // Fonctionnement NORMAL : on tente TOUJOURS de décomposer (le modèle orchestrateur juge s'il
       // peut). ≥2 sous-tâches → dispatch completion-driven (DAG). Tâche atomique (plan <2) ou pas de
       // décomposeur → pipeline séquentiel classique (fallback naturel, aucun « mode » à basculer).
-      if (this.deps.decompose) {
+      let greedyPlan: GreedyTaskNode[] | undefined
+      const phases = this.deps.classifyPhases
+        ? this.deps.classifyPhases(task)
+        : (this.deps.execPhases ?? ['build'])
+      if (this.deps.decompose && phases.includes('build')) {
         const plan = await this.deps.decompose(task)
         if (plan.length >= 2) {
-          return await this.runGreedyPipeline(task, plan, workCwd, onStep, onPhase, onDelta, signal)
+          if (phases.length !== 1 || phases[0] !== 'build') {
+            greedyPlan = plan
+          } else {
+            return await this.runGreedyPipeline(
+              task,
+              plan,
+              workCwd,
+              onStep,
+              onPhase,
+              onDelta,
+              signal
+            )
+          }
         }
       }
-      return await this.runInner(task, workCwd, onStep, onPhase, onDelta, signal)
+      return await this.runInner(task, workCwd, onStep, onPhase, onDelta, signal, greedyPlan)
     } finally {
+      this.processObservers.delete(workCwd)
       this.deps.worktrees?.end(runId)
     }
   }
@@ -280,134 +353,28 @@ export class Orchestrator {
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
     signal?: AbortSignal
   ): Promise<OrchestrationResult> {
-    const { registry, roles, cost } = this.deps
-    const projectContext = projectContextBlock(this.deps.executionWorkspace)
+    const { cost } = this.deps
     const trace: OrchestrationStep[] = []
     const push = (s: OrchestrationStep): void => {
       trace.push(s)
       onStep?.(s)
     }
-    const subBinding = roles.getBinding('subagent')
-    const subProvider = subBinding.provider
-    const phaseBinding = resolvePhaseBinding(subBinding, 'build')
-    const sandbox = isMutationTask(task) ? 'danger-full-access' : 'read-only'
-    const aggregatedEvidence: ExecutionEvidence[] = []
-    const outputs: { id: string; text: string }[] = []
-
-    // Un nœud du DAG = exécuter une sous-tâche en sous-agent build. Reçoit les livrables de ses
-    // dépendances (déjà arrivées) pour les porter en contexte.
-    const nodes: GreedyNode<{ text: string; evidence: ExecutionEvidence[] }>[] = plan.map(
-      (node) => ({
-        id: node.id,
-        deps: node.deps,
-        run: async (depResults) => {
-          const depContext = Object.entries(depResults)
-            .map(([id, r]) => `[dépendance ${id}]\n${r.text.slice(0, PHASE_CONTEXT_CAP)}`)
-            .join('\n\n')
-          const header = `[sous-tâche ${node.id}] ${node.prompt}`
-          const userContent = depContext ? `${depContext}\n\n${header}` : header
-          const parts = [
-            { name: 'constitution', text: CONSTITUTION },
-            { name: 'consigne:build', text: phaseBrief('build') },
-            { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
-            { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
-            { name: 'projectContext', text: projectContext }
-          ]
-          const systemBlocks = parts
-            .filter((p) => p.text)
-            .map((p) => ({ name: p.name, chars: p.text.length }))
-          let envelope: PromptEnvelope | undefined
-          const messages = [{ role: 'user' as const, content: userContent }]
-          const opts: SendOptions = {
-            system: parts.map((p) => p.text).join(''),
-            systemBlocks,
-            model: phaseBinding.model,
-            reasoningEffort: phaseBinding.reasoningEffort,
-            execution: { cwd: workCwd, sandbox },
-            signal,
-            observePrompt: (observed) => {
-              observed.systemBlocks = systemBlocks
-              envelope = observed
-            }
-          }
-          envelope = registry.describePrompt(subProvider, messages, opts, phaseBinding.model)
-          envelope.systemBlocks = systemBlocks
-          onPhase?.({
-            step: 'exec',
-            provider: subProvider,
-            role: 'subagent',
-            model: phaseBinding.model,
-            reasoningEffort: phaseBinding.reasoningEffort,
-            phase: 'build'
-          })
-          const startedAt = performance.now()
-          const res = await registry.send(subProvider, messages, opts, (c) =>
-            onDelta?.('exec', c.delta)
-          )
-          if (res.usage) {
-            cost.add({
-              provider: res.provider ?? subProvider,
-              role: 'subagent',
-              model: phaseBinding.model,
-              inputTokens: res.usage.inputTokens,
-              outputTokens: res.usage.outputTokens,
-              cacheReadTokens: res.usage.cacheReadTokens,
-              costUsd: res.usage.costUsd
-            })
-          }
-          // Le step est poussé DANS le run() du nœud → il apparaît à l'ARRIVÉE (ordre completion-driven),
-          // pas à l'ordre de dispatch. C'est exactement le « traite le premier revenu ».
-          push({
-            step: 'exec',
-            provider: res.provider ?? subProvider,
-            role: 'subagent',
-            model: res.model ?? phaseBinding.model,
-            text: res.text,
-            thinking: res.thinking,
-            tokens: res.usage ? res.usage.inputTokens + res.usage.outputTokens : undefined,
-            costUsd: res.usage?.costUsd,
-            usage: res.usage,
-            prompt: envelope,
-            status: 'completed',
-            durationMs: performance.now() - startedAt,
-            evidence: res.executionEvidence,
-            detail: `sous-tâche ${node.id}`
-          })
-          const evidence = res.executionEvidence ?? []
-          aggregatedEvidence.push(...evidence)
-          outputs.push({ id: node.id, text: res.text })
-          return { text: res.text, evidence }
-        }
-      })
+    const greedy = await this.runGreedyBuildPhase(
+      task,
+      plan,
+      workCwd,
+      '',
+      true,
+      push,
+      onPhase,
+      onDelta,
+      signal
     )
-
-    const run = await runGreedy(nodes, {
-      concurrency: this.deps.greedyConcurrency ?? 4,
-      onSettled: (ev) => {
-        if (ev.skipped) {
-          push({
-            step: 'exec',
-            provider: subProvider,
-            role: 'subagent',
-            text: '',
-            status: 'failed',
-            error: `sous-tâche ${ev.id} sautée (dépendance en échec)`,
-            detail: `sous-tâche ${ev.id}`
-          })
-        }
-      }
-    })
-
-    // Agrégat des livrables (ordre du plan pour la lisibilité) → remis au juge.
-    const orderedOutputs = plan
-      .map((n) => outputs.find((o) => o.id === n.id))
-      .filter((o): o is { id: string; text: string } => Boolean(o))
-    const aggregate = orderedOutputs.map((o) => `[sous-tâche ${o.id}]\n${o.text}`).join('\n\n')
 
     const { valid, gate } = await this.greedyJudgeAndGate(
       task,
-      aggregate,
-      aggregatedEvidence,
+      greedy.aggregate,
+      greedy.evidence,
       workCwd,
       push,
       onPhase,
@@ -417,15 +384,18 @@ export class Orchestrator {
 
     return {
       task,
-      result: aggregate,
+      result: greedy.aggregate,
       valid,
       gateBlocked: gate.blocked,
       gateReasons: gate.reasons,
       costUsd: cost.totalUsd(),
-      phaseOutputs: orderedOutputs.map((o) => ({ phase: 'build' as PipelinePhase, text: o.text })),
+      phaseOutputs: greedy.orderedOutputs.map((output) => ({
+        phase: 'build' as PipelinePhase,
+        text: output.text
+      })),
       trace,
-      failedTasks: run.failed,
-      skippedTasks: run.skipped
+      failedTasks: greedy.failed,
+      skippedTasks: greedy.skipped
     }
   }
 
@@ -452,7 +422,7 @@ export class Orchestrator {
       `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
     const messages = [{ role: 'user' as const, content: judgePrompt }]
     const parts = [
-      { name: 'skill:judge', text: phaseBrief('judge') },
+      this.phasePrompt('judge', true),
       { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
       { name: 'projectContext', text: projectContext }
     ]
@@ -465,7 +435,7 @@ export class Orchestrator {
       systemBlocks,
       model: judgeBinding.model,
       reasoningEffort: judgeBinding.reasoningEffort,
-      execution: { cwd: workCwd, sandbox: 'read-only' },
+      execution: this.executionOptions(workCwd, 'read-only'),
       signal,
       observePrompt: (observed) => {
         observed.systemBlocks = systemBlocks
@@ -532,13 +502,151 @@ export class Orchestrator {
   }
 
   /** Exécute une tâche à travers le pipeline discipliné complet (appels réels). */
+  private async runGreedyBuildPhase(
+    task: string,
+    plan: GreedyTaskNode[],
+    workCwd: string,
+    phaseContext: string,
+    withFoundation: boolean,
+    push: (s: OrchestrationStep) => void,
+    onPhase?: (p: OrchestrationPhase) => void,
+    onDelta?: (step: 'exec' | 'judge', delta: string) => void,
+    signal?: AbortSignal
+  ): Promise<{
+    aggregate: string
+    orderedOutputs: { id: string; text: string }[]
+    evidence: ExecutionEvidence[]
+    failed: string[]
+    skipped: string[]
+  }> {
+    const { registry, roles, cost } = this.deps
+    const projectContext = projectContextBlock(this.deps.executionWorkspace)
+    const subBinding = roles.getBinding('subagent')
+    const subProvider = subBinding.provider
+    const phaseBinding = resolvePhaseBinding(subBinding, 'build')
+    const sandbox = isMutationTask(task) ? 'danger-full-access' : 'read-only'
+    const evidence: ExecutionEvidence[] = []
+    const outputs: { id: string; text: string }[] = []
+    const nodes: GreedyNode<{ text: string; evidence: ExecutionEvidence[] }>[] = plan.map(
+      (node) => ({
+        id: node.id,
+        deps: node.deps,
+        run: async (depResults) => {
+          const depContext = Object.entries(depResults)
+            .map(([id, result]) => `[dépendance ${id}]\n${result.text.slice(0, PHASE_CONTEXT_CAP)}`)
+            .join('\n\n')
+          const userContent = [phaseContext, depContext, `[sous-tâche ${node.id}] ${node.prompt}`]
+            .filter(Boolean)
+            .join('\n\n')
+          const parts = [
+            { name: 'constitution', text: CONSTITUTION },
+            this.phasePrompt('build', withFoundation),
+            { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
+            { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+            { name: 'projectContext', text: projectContext }
+          ]
+          const systemBlocks = parts
+            .filter((part) => part.text)
+            .map((part) => ({ name: part.name, chars: part.text.length }))
+          let envelope: PromptEnvelope | undefined
+          const messages = [{ role: 'user' as const, content: userContent }]
+          const options: SendOptions = {
+            system: parts.map((part) => part.text).join(''),
+            systemBlocks,
+            model: phaseBinding.model,
+            reasoningEffort: phaseBinding.reasoningEffort,
+            execution: this.executionOptions(workCwd, sandbox),
+            signal,
+            observePrompt: (observed) => {
+              observed.systemBlocks = systemBlocks
+              envelope = observed
+            }
+          }
+          envelope = registry.describePrompt(subProvider, messages, options, phaseBinding.model)
+          envelope.systemBlocks = systemBlocks
+          onPhase?.({
+            step: 'exec',
+            provider: subProvider,
+            role: 'subagent',
+            model: phaseBinding.model,
+            reasoningEffort: phaseBinding.reasoningEffort,
+            phase: 'build'
+          })
+          const startedAt = performance.now()
+          const result = await registry.send(subProvider, messages, options, (chunk) =>
+            onDelta?.('exec', chunk.delta)
+          )
+          if (result.usage) {
+            cost.add({
+              provider: result.provider ?? subProvider,
+              role: 'subagent',
+              model: phaseBinding.model,
+              inputTokens: result.usage.inputTokens,
+              outputTokens: result.usage.outputTokens,
+              cacheReadTokens: result.usage.cacheReadTokens,
+              costUsd: result.usage.costUsd
+            })
+          }
+          push({
+            step: 'exec',
+            provider: result.provider ?? subProvider,
+            role: 'subagent',
+            model: result.model ?? phaseBinding.model,
+            text: result.text,
+            thinking: result.thinking,
+            tokens: result.usage ? result.usage.inputTokens + result.usage.outputTokens : undefined,
+            costUsd: result.usage?.costUsd,
+            usage: result.usage,
+            prompt: envelope,
+            status: 'completed',
+            durationMs: performance.now() - startedAt,
+            evidence: result.executionEvidence,
+            detail: `sous-tâche ${node.id}`
+          })
+          const nodeEvidence = result.executionEvidence ?? []
+          evidence.push(...nodeEvidence)
+          outputs.push({ id: node.id, text: result.text })
+          return { text: result.text, evidence: nodeEvidence }
+        }
+      })
+    )
+    const run = await runGreedy(nodes, {
+      concurrency: this.deps.greedyConcurrency ?? 4,
+      onSettled: (event) => {
+        if (!event.skipped) return
+        push({
+          step: 'exec',
+          provider: subProvider,
+          role: 'subagent',
+          text: '',
+          status: 'failed',
+          error: `sous-tâche ${event.id} sautée (dépendance en échec)`,
+          detail: `sous-tâche ${event.id}`
+        })
+      }
+    })
+    const orderedOutputs = plan
+      .map((node) => outputs.find((output) => output.id === node.id))
+      .filter((output): output is { id: string; text: string } => Boolean(output))
+    return {
+      aggregate: orderedOutputs
+        .map((output) => `[sous-tâche ${output.id}]\n${output.text}`)
+        .join('\n\n'),
+      orderedOutputs,
+      evidence,
+      failed: run.failed,
+      skipped: run.skipped
+    }
+  }
+
   private async runInner(
     task: string,
     workCwd: string,
     onStep?: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    greedyPlan?: GreedyTaskNode[]
   ): Promise<OrchestrationResult> {
     const { registry, roles, cost, trust } = this.deps
     // Souveraineté contexte (décision PLIER) : Autowin lit LUI-MÊME le fichier projet gagnant de la
@@ -564,6 +672,8 @@ export class Orchestrator {
     let lastUsage: Usage | undefined
     const aggregatedEvidence: ExecutionEvidence[] = []
     const phaseOutputs: { phase: PipelinePhase; text: string }[] = []
+    let failedTasks: string[] | undefined
+    let skippedTasks: string[] | undefined
     // RAG Brain : 1×/run, on récupère du cerveau Amitel la connaissance pertinente (retriever
     // hybride chaud du brain_server) et on l'injecte en tête de contexte. Le sous-agent part du
     // savoir CURÉ au lieu de brute-forcer le repo. Dégrade à '' si le serveur est absent.
@@ -591,6 +701,31 @@ export class Orchestrator {
     // run (isMutationTask(task) fixe) → jamais de resume à travers un changement de sandbox.
     let prevSessionId: string | undefined
     for (const phase of execPhases) {
+      if (phase === 'build' && greedyPlan && greedyPlan.length >= 2) {
+        const greedy = await this.runGreedyBuildPhase(
+          task,
+          greedyPlan,
+          workCwd,
+          phaseContext.join('\n\n'),
+          true,
+          push,
+          onPhase,
+          onDelta,
+          signal
+        )
+        aggregatedEvidence.push(...greedy.evidence)
+        lastExecText = greedy.aggregate
+        phaseOutputs.push({ phase: 'build', text: greedy.aggregate })
+        const carried =
+          greedy.aggregate.length > PHASE_CONTEXT_CAP
+            ? `${greedy.aggregate.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
+            : greedy.aggregate
+        phaseContext.push(`[phase build] ${carried}`)
+        failedTasks = greedy.failed
+        skippedTasks = greedy.skipped
+        prevSessionId = undefined
+        continue
+      }
       // Panel scout/frame : ≥1 modèle déposé dans le bloc topology → la phase s'exécute sur
       // CHAQUE membre. Avec un seul membre, sa sortie est réutilisée directement sans synthèse ;
       // avec plusieurs, l'orchestrateur synthétise. Aucun membre → binding subagent rétrocompatible.
@@ -600,7 +735,7 @@ export class Orchestrator {
         const fanMessages = [{ role: 'user' as const, content: phaseContext.join('\n\n') }]
         const parts = [
           { name: 'constitution', text: CONSTITUTION },
-          { name: `consigne:${phase}`, text: phaseBrief(phase) },
+          this.phasePrompt(phase, true),
           { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
           { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
           { name: 'projectContext', text: projectContext }
@@ -617,7 +752,7 @@ export class Orchestrator {
               systemBlocks: fanSystemBlocks,
               model: member.model,
               reasoningEffort: member.reasoningEffort,
-              execution: { cwd: workCwd, sandbox },
+              execution: this.executionOptions(workCwd, sandbox),
               signal
             }
             const startedAt = performance.now()
@@ -730,7 +865,7 @@ export class Orchestrator {
             .map((p) => ({ name: p.name, chars: p.text.length })),
           model: orchBinding.model,
           reasoningEffort: orchBinding.reasoningEffort,
-          execution: { cwd: workCwd, sandbox: 'read-only' },
+          execution: this.executionOptions(workCwd, 'read-only'),
           signal
         }
         const synthMessages = [
@@ -803,7 +938,7 @@ export class Orchestrator {
       const phaseBinding = resolvePhaseBinding(subBinding, phase)
       const parts = [
         { name: 'constitution', text: CONSTITUTION },
-        { name: `consigne:${phase}`, text: phaseBrief(phase) },
+        this.phasePrompt(phase, !resuming),
         { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
         { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
         { name: 'projectContext', text: projectContext }
@@ -817,12 +952,12 @@ export class Orchestrator {
         model: phaseBinding.model,
         reasoningEffort: phaseBinding.reasoningEffort,
         resumeSessionId: prevSessionId,
-        execution: {
-          cwd: workCwd,
+        execution: this.executionOptions(
+          workCwd,
           // B3 — une tâche NON-mutation (cadrage/analyse) n'a aucune raison d'écrire : sandbox
           // read-only → pas d'effet de bord (ex. RUN.md fantôme dans Audit/). Mutation → full access.
-          sandbox: isMutationTask(task) ? 'danger-full-access' : 'read-only'
-        },
+          isMutationTask(task) ? 'danger-full-access' : 'read-only'
+        ),
         signal,
         observePrompt: (observed) => {
           observed.systemBlocks = systemBlocks
@@ -934,6 +1069,7 @@ export class Orchestrator {
       executionEvidence: aggregatedEvidence
     })
     let exec = buildExec()
+    let lastJudgeText = ''
 
     // 2. Un JUGE (autre rôle → potentiellement autre modèle) évalue le résultat.
     const judgeBinding = roles.getBinding('judge')
@@ -961,7 +1097,7 @@ export class Orchestrator {
       let judgeEnvelope
       // A2 — le juge charge le SKILL.md judge du kit ; F6 — blocs nommés pour l'observabilité.
       const judgeParts = [
-        { name: 'skill:judge', text: phaseBrief('judge') },
+        this.phasePrompt('judge', true),
         { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
         { name: 'projectContext', text: projectContext }
       ]
@@ -973,7 +1109,7 @@ export class Orchestrator {
         systemBlocks: judgeBlocks,
         model: judgeBinding.model,
         reasoningEffort: judgeBinding.reasoningEffort,
-        execution: { cwd: workCwd, sandbox: 'read-only' },
+        execution: this.executionOptions(workCwd, 'read-only'),
         signal,
         observePrompt: (observed) => {
           observed.systemBlocks = judgeBlocks
@@ -1113,6 +1249,7 @@ export class Orchestrator {
       }
       const ok =
         evidenceSatisfiesTask(task, exec.executionEvidence) && /^\s*valide/i.test(verdict.text)
+      lastJudgeText = verdict.text.trim()
       trust.record({ judgeModel: judgeProvider, verdict: ok ? 'green' : 'red' })
       push({
         step: 'judge',
@@ -1170,13 +1307,13 @@ export class Orchestrator {
         let repairPrompt
         const repairOptions: SendOptions = {
           system:
-            phaseBrief('build') +
+            this.phasePrompt('build', true).text +
             PIPELINE_DISCIPLINE_INSTRUCTION +
             CONCISE_STRUCTURED_RESPONSE_INSTRUCTION +
             projectContext,
           model: subBinding.model,
           reasoningEffort: subBinding.reasoningEffort,
-          execution: { cwd: workCwd, sandbox: 'danger-full-access' },
+          execution: this.executionOptions(workCwd, 'danger-full-access'),
           signal,
           observePrompt: (observed) => {
             repairPrompt = observed
@@ -1240,7 +1377,7 @@ export class Orchestrator {
 
     return {
       task,
-      result: exec.text,
+      result: phaseOutputs.length > 0 ? exec.text : lastJudgeText,
       valid,
       gateBlocked: gate.blocked,
       gateReasons: gate.reasons,
@@ -1250,7 +1387,9 @@ export class Orchestrator {
       brainNavigation: brain.navigation,
       brainInjectedChars: brainContext.length,
       costUsd: cost.totalUsd(),
-      trace
+      trace,
+      failedTasks,
+      skippedTasks
     }
   }
 }

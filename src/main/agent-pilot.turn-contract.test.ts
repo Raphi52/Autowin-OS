@@ -14,6 +14,39 @@ const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
 })
 
 describe('AgentPilot turn contract', () => {
+  it('route un /skill vers orchestrate avant tout appel au modèle conversationnel', async () => {
+    const registry = {
+      send: vi.fn(),
+      describePrompt: vi.fn()
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = {
+      catalog: () => [],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { valid: true } })
+    }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: '/scout trouve les risques du repo' }],
+      (event) => events.push(event),
+      undefined,
+      2,
+      'conv-1'
+    )
+
+    expect(registry.send).not.toHaveBeenCalled()
+    expect(bus.exec).toHaveBeenCalledWith(
+      'orchestrate',
+      { task: '/scout trouve les risques du repo' },
+      'conv-1',
+      'ask'
+    )
+    expect(events.map((event) => event.kind)).toEqual(['command', 'result', 'done'])
+  })
+
   it('passes the persisted authority mode from the real pilotChat IPC path', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     expect(source).toMatch(
@@ -243,6 +276,43 @@ describe('AgentPilot turn contract', () => {
     expect(secondPrompt).toContain('priorise le module X')
   })
 
+  it('ne perd pas une directive arrivée pendant la réponse finale', async () => {
+    const queue: string[] = []
+    const send = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        queue.push('corrige aussi le module Y')
+        return { text: 'Réponse devenue obsolète', provider: 'codex' }
+      })
+      .mockResolvedValueOnce({ text: 'Réponse orientée', provider: 'codex' })
+    const registry = {
+      send,
+      describePrompt: () => ({ provider: 'codex', transport: 'fixture', messages: [], options: {} })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+    const events: Array<{ kind: string; text?: string }> = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'go' }],
+      (event) => events.push(event as { kind: string; text?: string }),
+      undefined,
+      6,
+      'conv-1',
+      undefined,
+      'ask',
+      () => queue.splice(0, queue.length)
+    )
+
+    expect(send).toHaveBeenCalledTimes(2)
+    expect((send.mock.calls[1][1] as Array<{ content: string }>)[0].content).toContain(
+      'corrige aussi le module Y'
+    )
+    expect(events.at(-1)).toMatchObject({ kind: 'done', text: 'Réponse orientée' })
+  })
+
   it('keeps the provider and model binding immutable for the whole chat turn', async () => {
     const responses = ['<cmd>{"name":"get_state","args":{}}</cmd>', 'RÃ©ponse finale']
     const send = vi.fn().mockImplementation(async () => ({
@@ -294,7 +364,15 @@ describe('AgentPilot turn contract', () => {
     }
 
     const runSend = vi.fn().mockResolvedValue({ text: 'DONE: ok', provider: 'codex' })
-    const runDescribe = vi.fn().mockReturnValue({ provider: 'codex', transport: 'fixture', messages: [], options: {}, limitation: 'test' })
+    const runDescribe = vi
+      .fn()
+      .mockReturnValue({
+        provider: 'codex',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
     await new AgentPilot(
       { send: runSend, describePrompt: runDescribe } as never,
       { getBinding: () => initialBinding } as never,
@@ -321,17 +399,17 @@ describe('AgentPilot turn contract', () => {
       getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
     }
     const bus = { catalog: () => [], snapshotForPrompt }
-    const retrieveContext = vi.fn().mockResolvedValue(
-      '[AMITEL BRAIN REFERENCE DATA]\nknowledge evidence\n\n' +
-        '[GRAPHIFY CODE EVIDENCE]\nstructural evidence'
-    )
+    const retrieveContext = vi
+      .fn()
+      .mockResolvedValue(
+        '[AMITEL BRAIN REFERENCE DATA]\nknowledge evidence\n\n' +
+          '[GRAPHIFY CODE EVIDENCE]\nstructural evidence'
+      )
 
-    await new AgentPilot(
-      registry as never,
-      roles as never,
-      bus as never,
-      retrieveContext
-    ).chat([{ role: 'user', content: 'Explique AgentPilot' }], () => undefined)
+    await new AgentPilot(registry as never, roles as never, bus as never, retrieveContext).chat(
+      [{ role: 'user', content: 'Explique AgentPilot' }],
+      () => undefined
+    )
 
     expect(retrieveContext).toHaveBeenCalledOnce()
     expect(retrieveContext).toHaveBeenCalledWith('Explique AgentPilot')

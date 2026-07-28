@@ -97,7 +97,7 @@ describe('renderer chat IPC contract', () => {
     expect(staleDirectiveCleanup).toBeGreaterThan(turnCleanup)
   })
 
-  it('acknowledges a live directive only after the pilot drains it', () => {
+  it('acknowledges a live directive immediately after enqueueing it', () => {
     const { main } = readChatContractSources()
     const drain = main.slice(
       main.indexOf('function drainPendingDirectives'),
@@ -109,8 +109,11 @@ describe('renderer chat IPC contract', () => {
     )
     const handler = main.slice(main.indexOf("ipcMain.handle('os:pilotChat:inject'"))
 
-    expect(drain).toMatch(/queued\.forEach\(\(entry\) => entry\.resolve\(true\)\)/)
-    expect(turnCleanup).toMatch(/staleDirectives\.forEach\(\(entry\) => entry\.resolve\(false\)\)/)
-    expect(handler).toMatch(/return new Promise<\{ ok: boolean \}>/)
+    expect(drain).not.toContain('.resolve(')
+    expect(turnCleanup).not.toContain('.resolve(')
+    expect(handler).toMatch(
+      /pendingDirectives\.set\(conversationId, queued\)[\s\S]*?return \{ ok: true \}/
+    )
+    expect(handler).not.toContain('return new Promise')
   })
 })

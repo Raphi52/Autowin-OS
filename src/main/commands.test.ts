@@ -2,18 +2,34 @@ import { describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
 import { AuthoritySas } from './authority/sas'
 import { APP_DESTINATIONS } from '../shared/navigation'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 function fakeOs(): any {
   const conversations = new Map<
     string,
-    { id: string; title: string; category: string; provider: string }
+    {
+      id: string
+      title: string
+      category: string
+      provider: string
+      messages: Array<{ role: 'user' | 'assistant'; content: string; ts: number }>
+      runPaths: string[]
+    }
   >()
-  const calls = { setRole: 0, attachRun: 0, runTask: 0 }
+  const calls: { setRole: number; attachRun: number; runTask: number; lastTask?: string } = {
+    setRole: 0,
+    attachRun: 0,
+    runTask: 0
+  }
   conversations.set('conv-1', {
     id: 'conv-1',
     title: 'A garder',
     category: 'claude',
-    provider: 'claude'
+    provider: 'claude',
+    messages: [{ role: 'user', content: 'le worktree est resté ouvert', ts: 1 }],
+    runPaths: []
   })
   return {
     conversations: {
@@ -36,8 +52,9 @@ function fakeOs(): any {
     },
     listBrains: () => [],
     loadBrainGraph: () => ({ nodes: [], links: [] }),
-    runTask: async () => {
+    runTask: async (task: string) => {
       calls.runTask += 1
+      calls.lastTask = task
       return { gateBlocked: false, valid: true, costUsd: 0, result: '' }
     },
     chat: async () => ({ text: '', provider: 'claude', systemInjected: false }),
@@ -94,6 +111,26 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
 })
 
 describe('AppCommandBus authority policy', () => {
+  it('alimente /kaizen avec le dossier Autowin de la conversation ciblée', async () => {
+    const previousAppData = process.env.APPDATA
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-kaizen-command-'))
+    process.env.APPDATA = appData
+    try {
+      const os = fakeOs()
+      const bus = new AppCommandBus(os, () => {})
+      const result = await bus.exec('orchestrate', { task: '/kaizen' }, 'conv-1')
+
+      expect(result).toMatchObject({ ok: true })
+      expect(os.calls.lastTask).toContain('DOSSIER DE PREUVE AUTOWIN OS')
+      expect(os.calls.lastTask).toContain('le worktree est resté ouvert')
+      expect(os.calls.lastTask).toContain('"source":"autowin-os"')
+    } finally {
+      if (previousAppData === undefined) delete process.env.APPDATA
+      else process.env.APPDATA = previousAppData
+      rmSync(appData, { recursive: true, force: true })
+    }
+  })
+
   it('launches ordinary orchestration immediately even when the conversation is in Ask mode', async () => {
     const os = fakeOs()
     const bus = new AppCommandBus(os, () => {})

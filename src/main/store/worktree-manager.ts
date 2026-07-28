@@ -1,6 +1,17 @@
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  readlinkSync,
+  renameSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
+import { platform } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 
 /**
@@ -77,6 +88,44 @@ export interface WorktreeManagerOptions {
   tryGitFn?: typeof tryGit
   /** Suppression disque injectable pour simuler les verrous Windows dans les tests. */
   removeDirFn?: (path: string) => void
+  /** Identité stable du processus (démarrage + exécutable), injectable pour les tests. */
+  processIdentityFn?: (pid: number) => string | undefined
+}
+
+const UNVERIFIED_LEASE_MAX_AGE_MS = 12 * 60 * 60 * 1_000
+
+function defaultProcessIdentity(pid: number): string | undefined {
+  try {
+    if (platform() === 'win32') {
+      const command =
+        `$p = Get-Process -Id ${pid} -ErrorAction Stop; ` +
+        `$path = ''; try { $path = $p.Path } catch {}; ` +
+        `Write-Output ($p.StartTime.ToUniversalTime().Ticks.ToString() + '|' + $path)`
+      return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
+        encoding: 'utf8',
+        timeout: 3_000,
+        windowsHide: true
+      }).trim()
+    }
+    if (platform() === 'linux') {
+      const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+      const fieldsAfterName = stat.slice(stat.lastIndexOf(')') + 2).split(/\s+/)
+      const startedAt = fieldsAfterName[19]
+      let executable = ''
+      try {
+        executable = readlinkSync(`/proc/${pid}/exe`)
+      } catch {
+        // L'heure de démarrage reste suffisante pour distinguer un PID recyclé.
+      }
+      return `${startedAt}|${executable}`
+    }
+    return execFileSync('ps', ['-p', String(pid), '-o', 'lstart=', '-o', 'comm='], {
+      encoding: 'utf8',
+      timeout: 3_000
+    }).trim()
+  } catch {
+    return undefined
+  }
 }
 
 export class WorktreeManager {
@@ -86,6 +135,7 @@ export class WorktreeManager {
   private readonly tryGitFn: typeof tryGit
   private readonly removeDirFn: (path: string) => void
   private readonly baseBranch: string
+  private readonly processIdentity: (pid: number) => string | undefined
 
   constructor(opts: WorktreeManagerOptions) {
     this.baseRepo = opts.baseRepo
@@ -96,11 +146,142 @@ export class WorktreeManager {
       opts.removeDirFn ?? ((path) => rmSync(path, { recursive: true, force: true }))
     this.baseBranch =
       opts.baseBranch ?? this.git(this.baseRepo, ['rev-parse', '--abbrev-ref', 'HEAD'])
+    this.processIdentity = opts.processIdentityFn ?? defaultProcessIdentity
   }
 
   private pathFor(agentId: string): string {
     assertSafeId(agentId, 'agentId')
     return join(this.worktreeRoot, `agent__${agentId}`)
+  }
+
+  /** Inventorie les copies Autowin récupérables après un arrêt du processus. */
+  listAgentIds(): string[] {
+    const directories = existsSync(this.worktreeRoot)
+      ? readdirSync(this.worktreeRoot, { withFileTypes: true })
+          .filter((entry) => entry.isDirectory() && entry.name.startsWith('agent__'))
+          .map((entry) => entry.name.slice('agent__'.length))
+          .filter((agentId) => SAFE_ID.test(agentId))
+      : []
+    const recoveryRefs = this.git(this.baseRepo, [
+      'for-each-ref',
+      '--format=%(refname:strip=4)',
+      'refs/heads/autowin/recovery/'
+    ])
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((agentId) => SAFE_ID.test(agentId))
+    return [...new Set([...directories, ...recoveryRefs])].sort()
+  }
+
+  /** Lease durable par PID : empêche une autre instance de récupérer une copie encore utilisée. */
+  markProcess(agentId: string, pid: number, active: boolean): void {
+    assertSafeId(agentId, 'agentId')
+    if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error(`pid invalide: ${pid}`)
+    const leaseDir = join(this.worktreeRoot, '.leases', agentId)
+    const leasePath = join(leaseDir, String(pid))
+    if (active) {
+      mkdirSync(leaseDir, { recursive: true })
+      writeFileSync(
+        leasePath,
+        JSON.stringify({ identity: this.processIdentity(pid) ?? null, recordedAt: Date.now() })
+      )
+      return
+    }
+    rmSync(leasePath, { force: true })
+    if (existsSync(leaseDir) && readdirSync(leaseDir).length === 0) {
+      rmSync(leaseDir, { recursive: true, force: true })
+    }
+  }
+
+  /** Barrière pré-spawn : un crash entre l'intention et le PID ne déclenche jamais un cleanup. */
+  markSpawnIntent(agentId: string, token: string, active: boolean): void {
+    assertSafeId(agentId, 'agentId')
+    assertSafeId(token, 'spawn token')
+    const leaseDir = join(this.worktreeRoot, '.leases', agentId)
+    const intentPath = join(leaseDir, `spawn-pending-${token}`)
+    if (active) {
+      mkdirSync(leaseDir, { recursive: true })
+      writeFileSync(intentPath, String(Date.now()))
+      return
+    }
+    rmSync(intentPath, { force: true })
+  }
+
+  /** Transfert atomique intention → PID : aucun crash ne peut laisser une fenêtre sans lease. */
+  confirmSpawn(agentId: string, token: string, pid: number): void {
+    assertSafeId(agentId, 'agentId')
+    assertSafeId(token, 'spawn token')
+    if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error(`pid invalide: ${pid}`)
+    const leaseDir = join(this.worktreeRoot, '.leases', agentId)
+    const intentPath = join(leaseDir, `spawn-pending-${token}`)
+    const leasePath = join(leaseDir, String(pid))
+    renameSync(intentPath, leasePath)
+    writeFileSync(
+      leasePath,
+      JSON.stringify({ identity: this.processIdentity(pid) ?? null, recordedAt: Date.now() })
+    )
+  }
+
+  /** Nettoie les leases de PID morts et indique si un CLI vivant possède encore la copie. */
+  hasActiveProcesses(agentId: string): boolean {
+    assertSafeId(agentId, 'agentId')
+    const leaseDir = join(this.worktreeRoot, '.leases', agentId)
+    if (!existsSync(leaseDir)) return false
+    let active = false
+    for (const entry of readdirSync(leaseDir, { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.startsWith('spawn-pending-')) {
+        active = true
+        continue
+      }
+      const pid = Number(entry.name)
+      if (!entry.isFile() || !Number.isSafeInteger(pid) || pid <= 0) {
+        rmSync(join(leaseDir, entry.name), { recursive: entry.isDirectory(), force: true })
+        continue
+      }
+      const leasePath = join(leaseDir, entry.name)
+      let lease: { identity: string | null; recordedAt: number }
+      try {
+        const raw = readFileSync(leasePath, 'utf8')
+        const parsed = JSON.parse(raw) as Partial<typeof lease>
+        lease = {
+          identity: typeof parsed.identity === 'string' ? parsed.identity : null,
+          recordedAt: typeof parsed.recordedAt === 'number' ? parsed.recordedAt : Number(raw)
+        }
+      } catch {
+        lease = { identity: null, recordedAt: 0 }
+      }
+      const currentIdentity = this.processIdentity(pid)
+      if (lease.identity && currentIdentity && lease.identity !== currentIdentity) {
+        rmSync(leasePath, { force: true })
+        continue
+      }
+      const identityMatches =
+        Boolean(lease.identity) && Boolean(currentIdentity) && lease.identity === currentIdentity
+      const fallbackStillFresh =
+        (!lease.identity || !currentIdentity) &&
+        Date.now() - lease.recordedAt < UNVERIFIED_LEASE_MAX_AGE_MS
+      try {
+        process.kill(pid, 0)
+        if (identityMatches || fallbackStillFresh) {
+          active = true
+        } else {
+          rmSync(leasePath, { force: true })
+        }
+      } catch (error) {
+        if (
+          (error as NodeJS.ErrnoException).code === 'EPERM' &&
+          (identityMatches || fallbackStillFresh)
+        ) {
+          active = true
+        } else {
+          rmSync(leasePath, { force: true })
+        }
+      }
+    }
+    if (!active && existsSync(leaseDir) && readdirSync(leaseDir).length === 0) {
+      rmSync(leaseDir, { recursive: true, force: true })
+    }
+    return active
   }
 
   private operationInProgress(repo = this.baseRepo): string[] | undefined {
@@ -151,6 +332,130 @@ export class WorktreeManager {
       .filter(Boolean)
     const dirtyOverlap = agentFiles.filter((file) => dirtyFiles.includes(file))
     return [...new Set([...stagedFiles, ...dirtyOverlap])]
+  }
+
+  private headAdvance(
+    path: string,
+    expectedSha: string
+  ): { advanced: boolean; files: string[] } {
+    const currentSha = this.git(path, ['rev-parse', 'HEAD'])
+    if (currentSha === expectedSha) return { advanced: false, files: [] }
+    const files = this.git(path, ['diff', '--name-only', `${expectedSha}..${currentSha}`])
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+    return { advanced: true, files }
+  }
+
+  /**
+   * Attache HEAD à une branche durable avant suppression. Tout commit concurrent avance alors
+   * cette référence Git ; après le remove, on peut restaurer la copie au lieu de perdre le commit.
+   */
+  private cleanupAgentWorktree(
+    agentId: string,
+    path: string,
+    expectedSha: string
+  ): { ok: boolean; advanced: boolean; files: string[] } {
+    const branch = `autowin/recovery/${agentId}`
+    const attach = this.tryGitFn(path, ['switch', '-C', branch])
+    if (attach.code !== 0) return { ok: false, advanced: false, files: [] }
+
+    const beforeCleanup = this.headAdvance(path, expectedSha)
+    if (beforeCleanup.advanced) {
+      return { ok: false, advanced: true, files: beforeCleanup.files }
+    }
+
+    const quarantineRoot = join(this.worktreeRoot, '.quarantine')
+    const quarantinePath = join(quarantineRoot, `${agentId}__${randomUUID()}`)
+    mkdirSync(quarantineRoot, { recursive: true })
+    try {
+      renameSync(path, quarantinePath)
+    } catch {
+      return { ok: false, advanced: false, files: this.unpublishedFiles(path) }
+    }
+    const restore = (): void => {
+      if (!existsSync(path) && existsSync(quarantinePath)) renameSync(quarantinePath, path)
+      this.tryGitFn(this.baseRepo, ['worktree', 'repair', path])
+    }
+    const repair = this.tryGitFn(this.baseRepo, ['worktree', 'repair', quarantinePath])
+    if (repair.code !== 0) {
+      restore()
+      return { ok: false, advanced: false, files: this.unpublishedFiles(path) }
+    }
+
+    const quarantinedAdvance = this.headAdvance(quarantinePath, expectedSha)
+    const quarantinedFiles = this.unpublishedFiles(quarantinePath)
+    if (quarantinedAdvance.advanced || quarantinedFiles.length > 0) {
+      restore()
+      return {
+        ok: false,
+        advanced: quarantinedAdvance.advanced,
+        files: [...new Set([...quarantinedAdvance.files, ...quarantinedFiles])]
+      }
+    }
+
+    const cleanup = this.cleanupWorktree(quarantinePath, false)
+    if (!cleanup.ok) {
+      restore()
+      return {
+        ok: false,
+        advanced: false,
+        files: this.unpublishedFiles(path)
+      }
+    }
+
+    const durableSha = this.git(this.baseRepo, ['rev-parse', branch])
+    if (durableSha !== expectedSha) {
+      const files = this.git(this.baseRepo, ['diff', '--name-only', `${expectedSha}..${durableSha}`])
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+      this.tryGitFn(this.baseRepo, ['worktree', 'add', path, branch])
+      return { ok: false, advanced: true, files }
+    }
+
+    const deleteRef = this.tryGitFn(this.baseRepo, ['branch', '-D', branch])
+    return { ok: deleteRef.code === 0, advanced: false, files: [] }
+  }
+
+  /**
+   * Fichiers ignorés qui peuvent être de vrais livrables locaux. Les dépendances, caches et sorties
+   * de build explicitement bornés sont régénérables ; tout autre fichier ignoré bloque le nettoyage.
+   */
+  private preservedIgnoredFiles(repo: string): string[] {
+    const out = this.git(repo, [
+      'ls-files',
+      '--others',
+      '--ignored',
+      '--exclude-standard',
+      '--',
+      '.',
+      ':(exclude,glob)**/node_modules/**',
+      ':(exclude,glob)**/__pycache__/**',
+      ':(exclude,glob)out/**',
+      ':(exclude,glob)dist/**',
+      ':(exclude,glob)dist-*/**',
+      ':(exclude,glob)graphify-out/**',
+      ':(exclude,glob)**/.eslintcache',
+      ':(exclude,glob)**/.DS_Store'
+    ])
+    return out
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+  }
+
+  private workingTreeFiles(repo: string): string[] {
+    return this.git(repo, ['status', '--porcelain', '--untracked-files=all'])
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => line.replace(/^\S+\s+/, ''))
+  }
+
+  /** Dernière barrière avant suppression : inclut les écritures suivies et ignorées arrivées tard. */
+  private unpublishedFiles(repo: string): string[] {
+    return [...new Set([...this.workingTreeFiles(repo), ...this.preservedIgnoredFiles(repo)])]
   }
 
   private isExpectedBaseBranch(): boolean {
@@ -256,9 +561,17 @@ ${chainReferenceHook}exit 0
     return hooksPath
   }
 
-  private cleanupWorktree(path: string): { ok: boolean; detail?: string } {
-    const remove = this.tryGitFn(this.baseRepo, ['worktree', 'remove', '--force', path])
+  private cleanupWorktree(path: string, force = true): { ok: boolean; detail?: string } {
+    const remove = this.tryGitFn(this.baseRepo, [
+      'worktree',
+      'remove',
+      ...(force ? ['--force'] : []),
+      path
+    ])
     if (remove.code === 0) return { ok: true }
+    if (!force) {
+      return { ok: false, detail: (remove.stderr || remove.stdout).trim() || undefined }
+    }
 
     let filesystemDetail = ''
     try {
@@ -294,12 +607,7 @@ ${chainReferenceHook}exit 0
   changedFiles(agentId: string): string[] {
     const path = this.pathFor(agentId)
     if (!existsSync(path)) return []
-    const out = this.git(path, ['status', '--porcelain', '--untracked-files=all'])
-    return out
-      .split('\n')
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .map((l) => l.replace(/^\S+\s+/, ''))
+    return this.workingTreeFiles(path)
   }
 
   /**
@@ -311,7 +619,21 @@ ${chainReferenceHook}exit 0
    */
   finalize(agentId: string): FinalizeResult {
     const path = this.pathFor(agentId)
-    if (!existsSync(path)) return { outcome: 'nothing', agentId }
+    if (!existsSync(path)) {
+      const branch = `autowin/recovery/${agentId}`
+      const ref = this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', branch])
+      if (ref.code !== 0) return { outcome: 'nothing', agentId }
+      const restore = this.tryGitFn(this.baseRepo, ['worktree', 'add', path, branch])
+      if (restore.code !== 0) {
+        return {
+          outcome: 'blocked',
+          agentId,
+          files: [],
+          reason: 'merge-failed',
+          detail: 'La référence de récupération existe mais sa copie n’a pas pu être restaurée.'
+        }
+      }
+    }
 
     const existingOperationFiles = this.operationInProgress()
     if (existingOperationFiles) {
@@ -320,6 +642,17 @@ ${chainReferenceHook}exit 0
         agentId,
         files: existingOperationFiles,
         reason: 'base-in-progress'
+      }
+    }
+
+    const ignoredFiles = this.preservedIgnoredFiles(path)
+    if (ignoredFiles.length > 0) {
+      return {
+        outcome: 'blocked',
+        agentId,
+        files: ignoredFiles,
+        reason: 'merge-failed',
+        detail: 'La copie contient des fichiers ignorés non régénérables.'
       }
     }
 
@@ -333,13 +666,42 @@ ${chainReferenceHook}exit 0
     const sha = this.git(path, ['rev-parse', 'HEAD'])
     const baseSha = this.git(this.baseRepo, ['rev-parse', 'HEAD'])
     if (sha === baseSha) {
+      const lateCommit = this.headAdvance(path, sha)
+      if (lateCommit.advanced) {
+        return {
+          outcome: 'blocked',
+          agentId,
+          files: lateCommit.files,
+          reason: 'merge-failed',
+          detail: 'La copie a reçu un nouveau commit avant son nettoyage.'
+        }
+      }
+      const unpublishedFiles = this.unpublishedFiles(path)
+      if (unpublishedFiles.length > 0) {
+        return {
+          outcome: 'blocked',
+          agentId,
+          files: unpublishedFiles,
+          reason: 'merge-failed',
+          detail: 'La copie a reçu de nouveaux fichiers avant son nettoyage.'
+        }
+      }
       // La copie n'a rien apporté au-delà de la base → rien à fusionner ; on range.
-      const agentCleanup = this.cleanupWorktree(path)
+      const agentCleanup = this.cleanupAgentWorktree(agentId, path, sha)
+      if (agentCleanup.advanced) {
+        return {
+          outcome: 'blocked',
+          agentId,
+          files: agentCleanup.files,
+          reason: 'merge-failed',
+          detail: 'La copie a reçu un nouveau commit pendant son nettoyage.'
+        }
+      }
       if (!agentCleanup.ok) {
         return {
           outcome: 'blocked',
           agentId,
-          files: [],
+          files: agentCleanup.files,
           reason: 'merge-failed',
           detail: 'La copie agent sans changement n’a pas pu être nettoyée.'
         }
@@ -540,12 +902,41 @@ ${chainReferenceHook}exit 0
     }
 
     if (integrationResult.outcome === 'merged') {
-      const agentCleanup = this.cleanupWorktree(path)
+      const lateCommit = this.headAdvance(path, sha)
+      if (lateCommit.advanced) {
+        return {
+          outcome: 'blocked',
+          agentId,
+          files: lateCommit.files,
+          reason: 'merge-failed',
+          detail: 'La copie a reçu un nouveau commit pendant sa publication.'
+        }
+      }
+      const unpublishedFiles = this.unpublishedFiles(path)
+      if (unpublishedFiles.length > 0) {
+        return {
+          outcome: 'blocked',
+          agentId,
+          files: unpublishedFiles,
+          reason: 'merge-failed',
+          detail: 'La copie a reçu de nouveaux fichiers pendant sa publication.'
+        }
+      }
+      const agentCleanup = this.cleanupAgentWorktree(agentId, path, sha)
+      if (agentCleanup.advanced) {
+        return {
+          outcome: 'blocked',
+          agentId,
+          files: agentCleanup.files,
+          reason: 'merge-failed',
+          detail: 'La copie a reçu un nouveau commit pendant son nettoyage.'
+        }
+      }
       if (!agentCleanup.ok) {
         return {
           outcome: 'blocked',
           agentId,
-          files: agentFiles,
+          files: agentCleanup.files.length > 0 ? agentCleanup.files : agentFiles,
           reason: 'merge-failed',
           detail: 'La base est publiée, mais la copie agent n’a pas pu être nettoyée.'
         }
@@ -558,6 +949,13 @@ ${chainReferenceHook}exit 0
   remove(agentId: string): void {
     const path = this.pathFor(agentId)
     if (!existsSync(path)) return
-    this.git(this.baseRepo, ['worktree', 'remove', '--force', path])
+    if (this.hasActiveProcesses(agentId)) {
+      throw new Error(`La copie ${agentId} est encore utilisée par un CLI actif.`)
+    }
+    const expectedSha = this.git(path, ['rev-parse', 'HEAD'])
+    const result = this.cleanupAgentWorktree(agentId, path, expectedSha)
+    if (!result.ok) {
+      throw new Error(`La copie ${agentId} contient encore du travail et a été conservée.`)
+    }
   }
 }

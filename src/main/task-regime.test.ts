@@ -31,6 +31,13 @@ describe('classifyRegime', () => {
 })
 
 describe('regimePhases', () => {
+  it('respecte une commande de skill explicite sans la remplacer par le régime', () => {
+    expect(regimePhases('/scout trouve les risques du repo')).toEqual(['scout'])
+    expect(regimePhases('/clean')).toEqual(['clean'])
+    expect(regimePhases('/judge audite le résultat')).toEqual([])
+    expect(regimePhases('/kaizen')).toEqual(['kaizen'])
+  })
+
   it('trivial → build seul', () => {
     expect(regimePhases('corrige la typo')).toEqual(['build'])
   })

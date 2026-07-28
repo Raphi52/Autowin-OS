@@ -1,0 +1,87 @@
+import type { PipelinePhase } from './skill-pipeline'
+
+export interface SkillRoute {
+  task: string
+  explicitPhase?: PipelinePhase
+  reason: 'explicit-skill' | 'workspace-action'
+}
+
+const PHASE_COMMAND = /^\/(scout|frame|terrain|build|clean|judge|kaizen)(?=\s|$)(?:\s+([\s\S]*))?$/i
+const WORKSPACE_TARGET =
+  /(?<![\p{L}\p{N}_])(?:code|repo|d[eé]p[oô]t|fichier|classe|fonction|module|tests?|bug|ui|interface|page|vue|bouton|modal(?:e)?|barre|ic[oô]ne|css|style|workflow|skill|pipeline|worktree|git|application|app|observatory|chat|provider|model|mod[eè]le|feature|message|texte|liste|contenu|[eé]cran|conversation|[eé]tat|api)(?![\p{L}\p{N}_])|[\w.-]+\.(?:json|md|tsx?|jsx?|css|scss|html|ya?ml|toml)\b/iu
+const ACTION_VERB =
+  '(?:corrig(?:e|er|ez)|fix(?:e|er)?|ajout(?:e|er|ez)|modifi(?:e|er|ez)|impl[eé]ment(?:e|er|ez)|cr[eé](?:e|er|ez)|supprim(?:e|er|ez)|retir(?:e|er|ez)|enl[eè]v(?:e|er|ez)|remplac(?:e|er|ez)|chang(?:e|er|ez)|ferm(?:e|er|ez)|ouvr(?:e|ir|ez)|d[eé]cal(?:e|er|ez)|actualis(?:e|er|ez)|affich(?:e|er|ez)|refactor(?:e|er|ez)?|renomm(?:e|er|ez)|d[eé]plac(?:e|er|ez)|int[eè]gr(?:e|er|ez)|branche|connecte|r[eé]pare|refonte|refais|rends?|mets?|mettre|fais|faire|scout(?:e|er)?|analyse|audite|teste|v[eé]rifie|lance|documente)'
+const DIRECT_ACTION = new RegExp(`^\\s*${ACTION_VERB}\\b`, 'i')
+const POLITE_ACTION = new RegExp(
+  `^\\s*(?:peux-tu|est-ce que tu peux|tu peux)\\s+${ACTION_VERB}\\b`,
+  'i'
+)
+const OBLIGATION_ACTION = new RegExp(
+  `^\\s*(?:il faut|faut|ça doit|ca doit)\\s+(?:(?:la|le|les|l')\\s*)?${ACTION_VERB}\\b`,
+  'i'
+)
+const IMPLIED_DEFECT =
+  /\b(d[eé]passe(?:nt)?|ne (?:marche|fonctionne) pas|reste sticky|se remet|est cass[eé]e?|manque)\b/i
+const EXPLANATION_REQUEST =
+  /^\s*(?:explique|je (?:voudrais|veux|souhaite) comprendre|aide-moi [àa] comprendre|dis-moi comment|montre-moi comment|comment\b|pourquoi\b|pk\b)/i
+const QUESTION_PREFIX =
+  /^\s*(?:est-ce que|quel(?:le)?s?\b|(?:ou|où)(?:\s|$)|qui\b|quoi\b|quand\b|combien\b)/i
+
+function isActionClause(text: string): boolean {
+  return DIRECT_ACTION.test(text) || POLITE_ACTION.test(text) || OBLIGATION_ACTION.test(text)
+}
+
+/** Route les demandes d'action claires, sans transformer une question en orchestration coûteuse. */
+export function routeSkillRequest(message: string): SkillRoute | undefined {
+  const text = message.trim()
+  if (!text) return undefined
+
+  const explicit = PHASE_COMMAND.exec(text)
+  if (explicit) {
+    const phase = explicit[1].toLowerCase() as PipelinePhase
+    const body = explicit[2]?.trim()
+    return {
+      task: body ? `/${phase} ${body}` : `/${phase}`,
+      explicitPhase: phase,
+      reason: 'explicit-skill'
+    }
+  }
+
+  const target = WORKSPACE_TARGET.test(text) || /^corriger[.!]?$/.test(text)
+  const questionEnd = text.indexOf('?')
+  if (questionEnd >= 0) {
+    const actionAfterQuestion = text.slice(questionEnd + 1).trim()
+    if (actionAfterQuestion && isActionClause(actionAfterQuestion) && target) {
+      return { task: text, reason: 'workspace-action' }
+    }
+    if ((DIRECT_ACTION.test(text) || POLITE_ACTION.test(text)) && target) {
+      return { task: text, reason: 'workspace-action' }
+    }
+    return undefined
+  }
+  if (EXPLANATION_REQUEST.test(text)) return undefined
+  if (POLITE_ACTION.test(text) && target) {
+    return { task: text, reason: 'workspace-action' }
+  }
+  if (QUESTION_PREFIX.test(text)) {
+    if (/^\s*quand\b/i.test(text)) {
+      const clauseEnd = text.search(/[,;]/)
+      const obligation = text.search(/\b(?:ça doit|ca doit)\b/i)
+      const suffix =
+        clauseEnd >= 0
+          ? text.slice(clauseEnd + 1).trim()
+          : obligation >= 0
+            ? text.slice(obligation).trim()
+            : ''
+      if (suffix && isActionClause(suffix) && target) {
+        return { task: text, reason: 'workspace-action' }
+      }
+    }
+    return undefined
+  }
+  const actionable = isActionClause(text) || IMPLIED_DEFECT.test(text)
+  if (actionable && target) {
+    return { task: text, reason: 'workspace-action' }
+  }
+  return undefined
+}

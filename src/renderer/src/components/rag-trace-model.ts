@@ -7,6 +7,8 @@ export interface RagSourceTrace {
   scope: string
   author: string
   date: string
+  /** Texte EXACT lu pour cette source (corps injecté), pour le dépliage « voir ce qui a été lu ». */
+  text: string
 }
 
 export interface RagTraceSummary {
@@ -15,6 +17,8 @@ export interface RagTraceSummary {
   query: string
   injectedCharacters: number
   sources: RagSourceTrace[]
+  /** Bloc de contexte injecté COMPLET (texte exact remis au modèle) — dépliable dans l'UI. */
+  injectedText: string
 }
 
 const MARKER = '[AMITEL BRAIN REFERENCE DATA'
@@ -40,7 +44,8 @@ function empty(status: RagTraceStatus, engine: RagTraceSummary['engine'] = 'Amit
     engine,
     query: '',
     injectedCharacters: 0,
-    sources: []
+    sources: [],
+    injectedText: ''
   }
 }
 
@@ -61,7 +66,8 @@ function summarizeProjectContext(request: object): RagTraceSummary | null {
     engine: 'Contexte projet',
     query: '',
     injectedCharacters: block.length,
-    sources: [{ rank: 1, path: file, type: 'contexte projet', scope: '', author: '', date: '' }]
+    sources: [{ rank: 1, path: file, type: 'contexte projet', scope: '', author: '', date: '', text: block }],
+    injectedText: block
   }
 }
 
@@ -99,7 +105,8 @@ export function summarizeRagTrace(request: unknown): RagTraceSummary {
       type,
       scope,
       author,
-      date
+      date,
+      text: segment.trim()
     }
   })
   const seen = new Set<string>()
@@ -116,6 +123,7 @@ export function summarizeRagTrace(request: unknown): RagTraceSummary {
     engine: 'Amitel Brain',
     query,
     injectedCharacters: context.length,
-    sources
+    sources,
+    injectedText: context
   }
 }

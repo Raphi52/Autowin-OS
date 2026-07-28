@@ -23,30 +23,34 @@ describe('RAG trace summary', () => {
       }
     })
 
-    expect(summary).toEqual({
+    expect(summary).toMatchObject({
       status: 'injected',
       engine: 'Amitel Brain',
       query: 'Comment fonctionne le RAG ?',
       injectedCharacters: brainContext.length,
       sources: [
-        {
+        expect.objectContaining({
           rank: 1,
           path: 'knowledge/domain/autowin-os.md',
           type: 'domain',
           scope: 'autowin-os',
           author: 'codex',
           date: '2026-07-19'
-        },
-        {
+        }),
+        expect.objectContaining({
           rank: 2,
           path: 'knowledge/decisions/rag.md',
           type: 'decision',
           scope: 'global',
           author: 'claude',
           date: '2026-07-18'
-        }
+        })
       ]
     })
+    // Nouveau : le texte EXACT lu est exposé (dépliage UI « voir ce qui a été lu »).
+    expect(summary.injectedText).toContain('[AMITEL BRAIN REFERENCE DATA')
+    expect(summary.sources[0].text).toContain('Contenu utile.')
+    expect(summary.sources[1].text).toContain('Autre contenu.')
   })
 
   it('distinguishes a request without RAG from an unavailable trace', () => {
@@ -71,8 +75,10 @@ describe('RAG trace summary', () => {
     expect(summary.status).toBe('injected')
     expect(summary.engine).toBe('Contexte projet')
     expect(summary.sources).toEqual([
-      { rank: 1, path: 'CLAUDE.md', type: 'contexte projet', scope: '', author: '', date: '' }
+      expect.objectContaining({ rank: 1, path: 'CLAUDE.md', type: 'contexte projet' })
     ])
+    expect(summary.sources[0].text).toContain('Règles projet.')
+    expect(summary.injectedText).toContain('Règles projet.')
   })
 
   it('borne le compte au bloc contexte, sans gonfler avec un bloc suivant', () => {

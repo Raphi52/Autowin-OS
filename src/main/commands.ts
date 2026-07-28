@@ -10,6 +10,10 @@ import {
 import { appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace } from './activity/brain-trace-spool'
 import { appendConvActivity } from './activity/conv-activity'
+import {
+  buildAutowinKaizenTask,
+  collectAutowinKaizenEvidence
+} from './autowin-kaizen-context'
 import type { OrchestrationStep, OrchestrationPhase } from './orchestrator'
 import { persistOrchestrationStep } from './activity/orchestration-observability'
 import { createHash, randomUUID } from 'node:crypto'
@@ -536,14 +540,22 @@ export class AppCommandBus {
           conversationId ||
           this.activeConversationId ||
           '__autonomous__'
-        const task = s('task')
-        const runPath = createConvRun(convId, task)
+        const requestedTask = s('task')
+        const conversation = this.os.conversations.get(convId)
+        const task =
+          /^\/kaizen(?=\s|$)/i.test(requestedTask) && conversation
+            ? buildAutowinKaizenTask(
+                requestedTask,
+                collectAutowinKaizenEvidence(conversation)
+              )
+            : requestedTask
+        const runPath = createConvRun(convId, requestedTask)
         const orchestrationTurnId = randomUUID()
         const steps: OrchestrationStep[] = []
         // Sous-agent STOPPABLE : un AbortController par conversation, coupé par abortOrchestration.
         const abortController = new AbortController()
         this.activeOrchestrations.set(convId, abortController)
-        this.broadcast({ type: 'orchestrate-start', convId, runPath, task })
+        this.broadcast({ type: 'orchestrate-start', convId, runPath, task: requestedTask })
         try {
           const r = await this.os.runTask(
             task,

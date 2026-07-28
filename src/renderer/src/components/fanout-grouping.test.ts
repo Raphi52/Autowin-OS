@@ -9,14 +9,30 @@ import {
 
 describe('matchSlashCommands (palette /)', () => {
   it('« / » seul → toutes les commandes', () => {
-    expect(matchSlashCommands('/').map((c) => c.name)).toContain('btw')
+    expect(matchSlashCommands('/').map((c) => c.name)).toEqual([
+      'btw',
+      'scout',
+      'frame',
+      'terrain',
+      'build',
+      'clean',
+      'judge',
+      'kaizen'
+    ])
   })
   it('filtre par préfixe (casse-insensible)', () => {
-    expect(matchSlashCommands('/b').map((c) => c.name)).toEqual(['btw'])
+    expect(matchSlashCommands('/b').map((c) => c.name)).toEqual(['btw', 'build'])
     expect(matchSlashCommands('/BT').map((c) => c.name)).toEqual(['btw'])
   })
   it('préfixe sans correspondance → []', () => {
     expect(matchSlashCommands('/zzz')).toEqual([])
+  })
+  it('filtre les workflows par préfixe et insère un espace pour la consigne', () => {
+    expect(matchSlashCommands('/sc')).toEqual([
+      expect.objectContaining({ name: 'scout', insert: '/scout ' })
+    ])
+    expect(matchSlashCommands('/j').map((c) => c.name)).toEqual(['judge'])
+    expect(matchSlashCommands('/k').map((c) => c.name)).toEqual(['kaizen'])
   })
   it('corps déjà tapé (/btw x) → palette fermée []', () => {
     expect(matchSlashCommands('/btw x')).toEqual([])
@@ -29,7 +45,10 @@ describe('matchSlashCommands (palette /)', () => {
 
 describe('parseBtw', () => {
   it('détecte /btw en préfixe + extrait le corps', () => {
-    expect(parseBtw('/btw pense aussi aux tests')).toEqual({ isBtw: true, body: 'pense aussi aux tests' })
+    expect(parseBtw('/btw pense aussi aux tests')).toEqual({
+      isBtw: true,
+      body: 'pense aussi aux tests'
+    })
   })
   it('insensible à la casse + espaces/tab avant le corps', () => {
     expect(parseBtw('  /BTW\t oriente ainsi').isBtw).toBe(true)
@@ -66,7 +85,9 @@ describe('groupSubagentSteps', () => {
   })
 
   it('un step mono (sans model) reste seul', () => {
-    const g = groupSubagentSteps([{ step: 'exec', role: 'subagent', detail: 'phase build', text: 'ok' }])
+    const g = groupSubagentSteps([
+      { step: 'exec', role: 'subagent', detail: 'phase build', text: 'ok' }
+    ])
     expect(g).toHaveLength(1)
     expect(g[0].kind).toBe('single')
   })
@@ -76,7 +97,12 @@ describe('groupSubagentSteps', () => {
   })
 
   it('la synthèse (rôle orchestrateur) sépare deux phases fan-outées', () => {
-    const synth: OrchStep = { step: 'exec', role: 'orchestrator', model: 'orch', detail: 'synthèse frame (2 modèles)' }
+    const synth: OrchStep = {
+      step: 'exec',
+      role: 'orchestrator',
+      model: 'orch',
+      detail: 'synthèse frame (2 modèles)'
+    }
     const g = groupSubagentSteps([
       member('frame', 'opus'),
       member('frame', 'codex'),
@@ -89,7 +115,11 @@ describe('groupSubagentSteps', () => {
   })
 
   it('N juges consécutifs → groupe fan-out juge', () => {
-    const g = groupSubagentSteps([member('', 'j1', 'judge'), member('', 'j2', 'judge'), member('', 'j3', 'judge')])
+    const g = groupSubagentSteps([
+      member('', 'j1', 'judge'),
+      member('', 'j2', 'judge'),
+      member('', 'j3', 'judge')
+    ])
     expect(g).toHaveLength(1)
     expect(g[0].kind).toBe('fanout')
     if (g[0].kind === 'fanout') expect(g[0].steps).toHaveLength(3)
@@ -114,10 +144,15 @@ describe('costByModel', () => {
     expect(r[1]).toEqual({ model: 'codex', costUsd: 0.05, count: 1 })
   })
   it('ignore les steps sans model', () => {
-    const r = costByModel([{ step: 'gate', costUsd: 1 }, { step: 'exec', model: 'm', costUsd: 0.1 }])
+    const r = costByModel([
+      { step: 'gate', costUsd: 1 },
+      { step: 'exec', model: 'm', costUsd: 0.1 }
+    ])
     expect(r).toEqual([{ model: 'm', costUsd: 0.1, count: 1 }])
   })
   it('coût absent → 0 (pas de crash)', () => {
-    expect(costByModel([{ step: 'exec', model: 'm' }])).toEqual([{ model: 'm', costUsd: 0, count: 1 }])
+    expect(costByModel([{ step: 'exec', model: 'm' }])).toEqual([
+      { model: 'm', costUsd: 0, count: 1 }
+    ])
   })
 })

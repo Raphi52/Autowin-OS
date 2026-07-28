@@ -11,6 +11,7 @@
  * clairement superflu pour le régime.
  */
 import type { PipelinePhase } from './skill-pipeline'
+import { routeSkillRequest } from './skill-routing'
 
 export type TaskRegime = 'trivial' | 'standard' | 'critical'
 
@@ -47,6 +48,11 @@ export function classifyRegime(task: string): TaskRegime {
 
 /** Sous-ensemble de phases pour une tâche (via son régime). */
 export function regimePhases(task: string): PipelinePhase[] {
+  const explicitPhase = routeSkillRequest(task)?.explicitPhase
+  // `judge` est la closure externe permanente de l'orchestrateur, pas une phase worker.
+  // Une commande /judge saute donc les phases d'exécution et lance ce juge une seule fois.
+  if (explicitPhase === 'judge') return []
+  if (explicitPhase) return [explicitPhase]
   return [...REGIME_PHASES[classifyRegime(task)]]
 }
 

@@ -9,7 +9,14 @@ import { join } from 'node:path'
  * packagée chez un autre), chaque loader renvoie '' → l'orchestration retombe sur la discipline
  * condensée intégrée (pipeline-discipline.ts). Aucune dépendance dure au home du dev.
  */
-export type PipelinePhase = 'scout' | 'frame' | 'terrain' | 'build' | 'clean' | 'judge'
+export type PipelinePhase =
+  | 'scout'
+  | 'frame'
+  | 'terrain'
+  | 'build'
+  | 'clean'
+  | 'judge'
+  | 'kaizen'
 
 export const PIPELINE_PHASES: PipelinePhase[] = [
   'scout',
@@ -17,7 +24,8 @@ export const PIPELINE_PHASES: PipelinePhase[] = [
   'terrain',
   'build',
   'clean',
-  'judge'
+  'judge',
+  'kaizen'
 ]
 
 export function skillsRoot(root = join(homedir(), '.claude', 'skills')): string {
@@ -69,7 +77,8 @@ const PHASE_ENGINE_CHAPTER: Record<PipelinePhase, 'Ch.1' | 'Ch.2' | 'Ch.3' | 'Ch
   terrain: 'Ch.3',
   build: 'Ch.4',
   clean: 'Ch.4',
-  judge: 'Ch.2'
+  judge: 'Ch.2',
+  kaizen: null
 }
 
 function engineSection(full: string, headingPattern: string, stop: string): string {
@@ -108,6 +117,9 @@ export function phaseInstruction(
   root = skillsRoot(),
   opts: { withFoundation?: boolean } = {}
 ): string {
+  // Kaizen est un workflow NATIF Autowin : aucun fichier ~/.claude n'est lu ou injecté.
+  // Son contrat purpose-built vit dans phase-briefs.ts et sa preuve dans autowin-kaizen-context.ts.
+  if (phase === 'kaizen') return ''
   // Défaut true : un appel ISOLÉ (chat, phase unique) garde la fondation. L'orchestrateur multi-phases
   // passe false sur les phases ≥2 pour n'injecter la fondation qu'UNE fois par run.
   const withFoundation = opts.withFoundation ?? true

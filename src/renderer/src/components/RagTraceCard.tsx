@@ -45,15 +45,37 @@ export function RagTraceCard({
         <ol>
           {rag.sources.map((source) => (
             <li key={`${source.rank}:${source.path}`}>
-              <strong>{source.path}</strong>
-              <small>
-                {[source.type, source.scope, source.author, source.date]
-                  .filter(Boolean)
-                  .join(' · ') || 'Provenance non renseignée'}
-              </small>
+              {source.text ? (
+                <details className="rag-source-text">
+                  <summary>
+                    <strong>{source.path}</strong>
+                    <small>
+                      {[source.type, source.scope, source.author, source.date]
+                        .filter(Boolean)
+                        .join(' · ') || 'Provenance non renseignée'}
+                    </small>
+                  </summary>
+                  <pre>{source.text}</pre>
+                </details>
+              ) : (
+                <>
+                  <strong>{source.path}</strong>
+                  <small>
+                    {[source.type, source.scope, source.author, source.date]
+                      .filter(Boolean)
+                      .join(' · ') || 'Provenance non renseignée'}
+                  </small>
+                </>
+              )}
             </li>
           ))}
         </ol>
+      )}
+      {rag.status === 'injected' && rag.injectedText && (
+        <details className="rag-injected-full">
+          <summary>Voir le texte exact lu ({rag.injectedCharacters.toLocaleString('fr-FR')} caractères)</summary>
+          <pre>{rag.injectedText}</pre>
+        </details>
       )}
     </section>
   )

@@ -59,6 +59,66 @@ class CapturingProvider implements ProviderAdapter {
 }
 
 describe('Orchestrator execution contract', () => {
+  it('injecte le vrai skill de chaque phase et nomme les blocs observables', async () => {
+    const provider = new CapturingProvider()
+    const foundations: Array<{ phase: string; withFoundation: boolean }> = []
+    const orchestrator = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      authority: new AuthoritySas(),
+      executionWorkspace: 'C:\\workspace',
+      execPhases: ['frame', 'build'],
+      skillInstruction: (phase, options) => {
+        foundations.push({ phase, withFoundation: options.withFoundation })
+        return `INSTRUCTION_RÉELLE_${phase.toUpperCase()}`
+      }
+    })
+
+    await orchestrator.run('modifie le bouton')
+
+    expect(provider.calls[0].system).toContain('INSTRUCTION_RÉELLE_FRAME')
+    expect(provider.calls[1].system).toContain('INSTRUCTION_RÉELLE_BUILD')
+    expect(provider.calls[2].system).toContain('INSTRUCTION_RÉELLE_JUDGE')
+    expect(provider.calls[0].systemBlocks?.some((block) => block.name === 'skill:frame')).toBe(true)
+    expect(provider.calls[1].systemBlocks?.some((block) => block.name === 'skill:build')).toBe(true)
+    expect(provider.calls[2].systemBlocks?.some((block) => block.name === 'skill:judge')).toBe(true)
+    expect(foundations).toEqual([
+      { phase: 'frame', withFoundation: true },
+      { phase: 'build', withFoundation: true },
+      { phase: 'judge', withFoundation: true }
+    ])
+  })
+
+  it('retombe sur la consigne embarquée lorsque le kit est absent', async () => {
+    const provider = new CapturingProvider()
+    const orchestrator = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      authority: new AuthoritySas(),
+      executionWorkspace: 'C:\\workspace',
+      skillInstruction: () => ''
+    })
+
+    await orchestrator.run('analyse le bouton sans le modifier')
+
+    expect(provider.calls[0].systemBlocks?.some((block) => block.name === 'consigne:build')).toBe(
+      true
+    )
+    expect(provider.calls[1].systemBlocks?.some((block) => block.name === 'consigne:judge')).toBe(
+      true
+    )
+  })
+
   it('donne l’écriture au sous-agent et une lecture outillée distincte au juge', async () => {
     const provider = new CapturingProvider()
     const registry = new ProviderRegistry().register(provider)
@@ -233,7 +293,13 @@ describe('Orchestrator execution contract', () => {
           systemInjected: false,
           executionEvidence: secondExec
             ? [
-                { type: 'file_change', kind: 'mutation', status: 'completed', ok: true, summary: 'fix' },
+                {
+                  type: 'file_change',
+                  kind: 'mutation',
+                  status: 'completed',
+                  ok: true,
+                  summary: 'fix'
+                },
                 {
                   type: 'command_execution',
                   kind: 'verification',
@@ -268,7 +334,13 @@ describe('Orchestrator execution contract', () => {
 
   it('F3 (strict) — une mutation exige une VÉRIFICATION, pas une simple inspection', async () => {
     const { evidenceSatisfiesTask } = await import('./orchestrator')
-    const mut = { type: 'file_change', kind: 'mutation' as const, status: 'done', ok: true, summary: 'add' }
+    const mut = {
+      type: 'file_change',
+      kind: 'mutation' as const,
+      status: 'done',
+      ok: true,
+      summary: 'add'
+    }
     const inspection = {
       type: 'command_execution',
       kind: 'inspection' as const,

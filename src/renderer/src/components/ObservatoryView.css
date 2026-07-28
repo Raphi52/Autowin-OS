@@ -1390,3 +1390,30 @@
   border-radius: 2px;
   padding: 0 1px;
 }
+
+/* Dépliage « texte exact lu » de la carte RAG : corps par source + bloc complet. Scroll borné,
+   retour à la ligne préservé — ne jamais faire déborder la timeline. */
+.rag-trace-card details.rag-source-text,
+.rag-trace-card details.rag-injected-full {
+  margin-top: 6px;
+}
+.rag-trace-card details.rag-source-text > summary,
+.rag-trace-card details.rag-injected-full > summary {
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.85;
+}
+.rag-trace-card details.rag-source-text pre,
+.rag-trace-card details.rag-injected-full pre {
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 6px 0 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}

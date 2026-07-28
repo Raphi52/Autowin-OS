@@ -16,6 +16,15 @@ describe('phase-briefs (consignes courtes in-app)', () => {
     expect(phaseBrief('scout')).toContain('=== CONSIGNE SCOUT ===')
     expect(phaseBrief('scout')).toContain('SCOUT')
   })
+
+  it('kaizen couvre les mécanismes propres à Autowin et reste en proposition', () => {
+    const brief = phaseBrief('kaizen')
+    expect(brief).toContain('conversation')
+    expect(brief).toContain('worktree')
+    expect(brief).toContain('RAG')
+    expect(brief).toContain('coût')
+    expect(brief).toMatch(/ne modifie|lecture seule/i)
+  })
   it('ne contient pas de renvois kit qui pendouillent (ENGINE Ch., [[fiche]], → autre-skill)', () => {
     for (const phase of PIPELINE_PHASES) {
       expect(PHASE_BRIEFS[phase], phase).not.toMatch(/ENGINE Ch\.|\[\[|→ `\w+`/)

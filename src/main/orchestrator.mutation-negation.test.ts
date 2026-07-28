@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { isMutationTask } from './orchestrator'
 
 describe('isMutationTask (J3 — négation)', () => {
+  it('force toujours /kaizen en lecture seule, même si la cible cite une mutation', () => {
+    expect(isMutationTask('/kaizen analyse pourquoi il a modifié le fichier')).toBe(false)
+  })
+
   it('ne classe PAS une tâche de cadrage niée comme mutation', () => {
     expect(isMutationTask('produis le cadrage. Ne modifie pas de code applicatif.')).toBe(false)
     expect(isMutationTask("n'ajoute pas de fichier, documente seulement")).toBe(false)

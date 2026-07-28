@@ -53,6 +53,12 @@ export interface SendOptions {
   execution?: {
     cwd: string
     sandbox: 'read-only' | 'workspace-write' | 'danger-full-access'
+    /** Lease interne du processus CLI ; jamais transmis au fournisseur. */
+    onProcess?: (pid: number, active: boolean) => void
+    /** Barrière durable posée avant spawn, levée seulement après enregistrement du PID enfant. */
+    onSpawnIntent?: (token: string, active: boolean) => void
+    /** Remplace atomiquement l'intention par le lease du PID créé. */
+    onSpawned?: (token: string, pid: number) => void
   }
 }
 

@@ -16,6 +16,8 @@ class CapturingProvider implements ProviderAdapter {
   }
   async *send(_m: Message[], options: SendOptions = {}): AsyncGenerator<StreamChunk, SendResult, void> {
     this.calls.push(options)
+    options.execution?.onProcess?.(4242, true)
+    options.execution?.onProcess?.(4242, false)
     return {
       text: this.calls.length === 1 ? 'travail' : 'VALIDE',
       provider: this.id,
@@ -51,6 +53,40 @@ function makeOrchestrator(worktrees?: RunWorktrees): { orch: Orchestrator; provi
 }
 
 describe('Orchestrator — flip live worktree', () => {
+  it('ne réutilise pas un identifiant de run après recréation de l’orchestrateur', async () => {
+    const ids: string[] = []
+    for (let instance = 0; instance < 2; instance++) {
+      const { orch } = makeOrchestrator({
+        begin: (id) => {
+          ids.push(id)
+          return 'C:\\wt\\current'
+        },
+        end: () => undefined
+      })
+      await orch.run('modifie le projet')
+    }
+
+    expect(ids).toHaveLength(2)
+    expect(ids[0]).not.toBe(ids[1])
+  })
+
+  it('propage le cycle de vie du CLI au lease du worktree', async () => {
+    const process = vi.fn()
+    const { orch } = makeOrchestrator({
+      begin: () => 'C:\\wt\\leased',
+      end: () => undefined,
+      process
+    })
+
+    await orch.run('modifie le projet')
+
+    expect(process).toHaveBeenCalled()
+    expect(process.mock.calls.every(([, pid]) => pid === 4242)).toBe(true)
+    expect(process.mock.calls.some(([, , active]) => active === true)).toBe(true)
+    expect(process.mock.calls.some(([, , active]) => active === false)).toBe(true)
+    expect(new Set(process.mock.calls.map(([runId]) => runId)).size).toBe(1)
+  })
+
   it('run de MUTATION : begin() route le cwd worktree dans les exécutions, end() est appelé', async () => {
     const begin = vi.fn((_id: string, _n: string, isMut: boolean) => (isMut ? 'C:\\wt\\run-1' : undefined))
     const end = vi.fn()

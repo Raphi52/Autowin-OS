@@ -1,9 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
 import { Orchestrator, type GreedyTaskNode } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
-import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk } from './providers/types'
+import type {
+  Message,
+  ProviderAdapter,
+  SendOptions,
+  SendResult,
+  StreamChunk
+} from './providers/types'
 import { RoleModelConfig } from './roles'
 import { TrustLedger } from './trust/ledger'
 
@@ -45,7 +51,8 @@ class GreedyProvider implements ProviderAdapter {
 
 function makeGreedy(
   provider: GreedyProvider,
-  decompose: (task: string) => Promise<GreedyTaskNode[]>
+  decompose: (task: string) => Promise<GreedyTaskNode[]>,
+  classifyPhases?: () => Array<'scout' | 'frame' | 'terrain' | 'build' | 'clean'>
 ): Orchestrator {
   const registry = new ProviderRegistry().register(provider)
   const roles = new RoleModelConfig({
@@ -61,11 +68,88 @@ function makeGreedy(
     authority: new AuthoritySas(),
     executionWorkspace: 'C:\\ws',
     greedyConcurrency: 4,
-    decompose
+    decompose,
+    classifyPhases
   })
 }
 
 describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonctionnement normal)', () => {
+  it('ne décompose pas un workflow explicite sans build', async () => {
+    const provider = new GreedyProvider()
+    const decompose = vi.fn().mockResolvedValue([
+      { id: 'A', deps: [], prompt: 'fais A' },
+      { id: 'B', deps: [], prompt: 'fais B' }
+    ])
+    const result = await makeGreedy(provider, decompose, () => ['scout']).run(
+      '/scout audite le repo'
+    )
+
+    expect(decompose).not.toHaveBeenCalled()
+    expect(result.phaseOutputs.map((output) => output.phase)).toEqual(['scout'])
+  })
+
+  it('/judge lance uniquement le juge de closure', async () => {
+    const provider = new GreedyProvider()
+    const decompose = vi.fn().mockResolvedValue([
+      { id: 'A', deps: [], prompt: 'fais A' },
+      { id: 'B', deps: [], prompt: 'fais B' }
+    ])
+    const result = await makeGreedy(provider, decompose, () => []).run('/judge audite le repo')
+
+    expect(decompose).not.toHaveBeenCalled()
+    expect(provider.contents).toHaveLength(1)
+    expect(result.result).toBe('VALIDE')
+    expect(result.phaseOutputs).toEqual([])
+  })
+
+  it('conserve les phases standard autour de la frontière build parallélisée', async () => {
+    const provider = new GreedyProvider()
+    const phases: string[] = []
+    const orchestrator = makeGreedy(
+      provider,
+      async () => [
+        { id: 'A', deps: [], prompt: 'fais A' },
+        { id: 'B', deps: [], prompt: 'fais B' }
+      ],
+      () => ['frame', 'build']
+    )
+
+    const result = await orchestrator.run(
+      'analyse le projet en plusieurs volets',
+      undefined,
+      (event) => {
+        if (event.phase) phases.push(event.phase)
+        else if (event.step === 'judge') phases.push('judge')
+      }
+    )
+
+    expect(phases).toEqual(['frame', 'build', 'build', 'judge'])
+    expect(result.phaseOutputs.map((output) => output.phase)).toEqual(['frame', 'build'])
+    expect(result.trace.filter((step) => /sous-tâche/.test(step.detail ?? ''))).toHaveLength(2)
+  })
+
+  it('conserve scout, frame, terrain et clean autour du build greedy critique', async () => {
+    const provider = new GreedyProvider()
+    const orchestrator = makeGreedy(
+      provider,
+      async () => [
+        { id: 'A', deps: [], prompt: 'fais A' },
+        { id: 'B', deps: [], prompt: 'fais B' }
+      ],
+      () => ['scout', 'frame', 'terrain', 'build', 'clean']
+    )
+
+    const result = await orchestrator.run('analyse architecture complète en lecture seule')
+
+    expect(result.phaseOutputs.map((output) => output.phase)).toEqual([
+      'scout',
+      'frame',
+      'terrain',
+      'build',
+      'clean'
+    ])
+  })
+
   it('exécute un DAG de sous-tâches et PORTE le livrable d’une dépendance vers son aval', async () => {
     const provider = new GreedyProvider()
     const plan: GreedyTaskNode[] = [
@@ -73,7 +157,9 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
       { id: 'B', deps: [], prompt: 'fais B' },
       { id: 'C', deps: ['A'], prompt: 'fais C' } // dépend de A
     ]
-    const result = await makeGreedy(provider, async () => plan).run('analyse le projet en plusieurs volets')
+    const result = await makeGreedy(provider, async () => plan).run(
+      'analyse le projet en plusieurs volets'
+    )
 
     // 3 sous-agents + 1 juge.
     const execSteps = result.trace.filter((s) => s.step === 'exec' && s.status === 'completed')
@@ -111,7 +197,9 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
     // C n'a JAMAIS été envoyé au provider.
     expect(provider.contents.some((c) => /\[sous-tâche C\]/.test(c))).toBe(false)
     // Une trace de saut est présente.
-    expect(result.trace.some((s) => s.status === 'failed' && /sautée/.test(s.error ?? ''))).toBe(true)
+    expect(result.trace.some((s) => s.status === 'failed' && /sautée/.test(s.error ?? ''))).toBe(
+      true
+    )
   })
 
   it('fallback : un plan <2 sous-tâches retombe sur le pipeline séquentiel (rétrocompat)', async () => {

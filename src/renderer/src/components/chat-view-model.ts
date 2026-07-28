@@ -266,8 +266,7 @@ export type EvidencePart = {
 
 /** Un groupe de rendu : soit un step seul, soit un run de membres d'un même fan-out (à comparer). */
 export type StepGroup =
-  | { kind: 'single'; step: OrchStep }
-  | { kind: 'fanout'; key: string; steps: OrchStep[] }
+  { kind: 'single'; step: OrchStep } | { kind: 'fanout'; key: string; steps: OrchStep[] }
 
 /**
  * Clé de membre de fan-out : un step porteur d'un `model`, rattaché à sa phase (ou au juge).
@@ -335,7 +334,26 @@ export interface SlashCommand {
  * commande est branché côté composer (ex. `/btw` → parseBtw/submitBtw).
  */
 export const SLASH_COMMANDS: SlashCommand[] = [
-  { name: 'btw', hint: 'Au fait… — ajoute à la file d’attente (traité après le tour en cours)', insert: '/btw ' }
+  {
+    name: 'btw',
+    hint: 'Au fait… — ajoute à la file d’attente (traité après le tour en cours)',
+    insert: '/btw '
+  },
+  { name: 'scout', hint: 'Chercher et classer les meilleures pistes', insert: '/scout ' },
+  { name: 'frame', hint: 'Cadrer précisément le besoin', insert: '/frame ' },
+  {
+    name: 'terrain',
+    hint: 'Préparer le terrain et les preuves de vérification',
+    insert: '/terrain '
+  },
+  { name: 'build', hint: 'Implémenter ou corriger avec preuve rouge → vert', insert: '/build ' },
+  { name: 'clean', hint: 'Nettoyer les résidus avant validation', insert: '/clean ' },
+  { name: 'judge', hint: 'Auditer le résultat avec un regard externe', insert: '/judge ' },
+  {
+    name: 'kaizen',
+    hint: 'Rétrospective Autowin : traces, agents, Git, RAG, coûts et mémoire',
+    insert: '/kaizen '
+  }
 ]
 
 /**
@@ -355,7 +373,9 @@ export function matchSlashCommands(input: string): SlashCommand[] {
  * Récap coût PAR MODÈLE d'un run : somme `costUsd` + nombre d'appels par `model` (steps sans model
  * ignorés), trié coût décroissant. Pur → testable. Sert à voir « Opus vs Codex vs Kimi » dans un run.
  */
-export function costByModel(steps: OrchStep[]): Array<{ model: string; costUsd: number; count: number }> {
+export function costByModel(
+  steps: OrchStep[]
+): Array<{ model: string; costUsd: number; count: number }> {
   const map = new Map<string, { costUsd: number; count: number }>()
   for (const s of steps) {
     if (!s.model) continue

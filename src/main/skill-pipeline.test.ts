@@ -39,8 +39,28 @@ describe('skill-pipeline — chargement du kit au runtime', () => {
     expect(phaseInstruction('build', root)).toBe('')
   })
 
-  it('expose les 6 phases de la pipeline dans l’ordre', () => {
-    expect(PIPELINE_PHASES).toEqual(['scout', 'frame', 'terrain', 'build', 'clean', 'judge'])
+  it('expose les 7 phases de la pipeline dans l’ordre', () => {
+    expect(PIPELINE_PHASES).toEqual([
+      'scout',
+      'frame',
+      'terrain',
+      'build',
+      'clean',
+      'judge',
+      'kaizen'
+    ])
+    expect(phaseInstruction('kaizen')).toBe('')
+  })
+
+  it('n’injecte jamais un fichier de skill Claude pour kaizen, même s’il existe', () => {
+    const root = mkdtempSync(join(tmpdir(), 'skills-kaizen-'))
+    try {
+      mkdirSync(join(root, 'kaizen'), { recursive: true })
+      writeFileSync(join(root, 'kaizen', 'SKILL.md'), 'INSTRUCTION CLAUDE INTERDITE')
+      expect(phaseInstruction('kaizen', root)).toBe('')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('retire la frontmatter de routing avant injection, garde le corps', () => {

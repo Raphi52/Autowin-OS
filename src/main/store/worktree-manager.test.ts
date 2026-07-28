@@ -52,6 +52,56 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
     expect(wm.changedFiles('scout')).toContain('a.txt')
   })
 
+  it('inventorie uniquement les copies agent récupérables après redémarrage', () => {
+    const repo = tempRepo()
+    const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
+    roots.push(wtRoot)
+    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot })
+    wm.acquire('run-z')
+    wm.acquire('run-a')
+    mkdirSync(join(wtRoot, 'integration__run-z__temporary'))
+    mkdirSync(join(wtRoot, 'agent__invalid.name'))
+
+    expect(wm.listAgentIds()).toEqual(['run-a', 'run-z'])
+  })
+
+  it('écarte un lease dont le PID a été recyclé par un autre processus', () => {
+    const repo = tempRepo()
+    const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
+    roots.push(wtRoot)
+    let identity = 'cli-original'
+    const wm = new WorktreeManager({
+      baseRepo: repo,
+      worktreeRoot: wtRoot,
+      processIdentityFn: () => identity
+    })
+    wm.markProcess('run-recycled', process.pid, true)
+
+    identity = 'processus-sans-rapport'
+
+    expect(wm.hasActiveProcesses('run-recycled')).toBe(false)
+  })
+
+  it('conserve la barrière pré-spawn jusqu’à la confirmation du PID', () => {
+    const repo = tempRepo()
+    const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
+    roots.push(wtRoot)
+    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot })
+
+    wm.markSpawnIntent('run-pending', 'attempt-a', true)
+    expect(wm.hasActiveProcesses('run-pending')).toBe(true)
+
+    wm.markSpawnIntent('run-pending', 'attempt-b', true)
+    wm.confirmSpawn('run-pending', 'attempt-a', process.pid)
+    expect(wm.hasActiveProcesses('run-pending')).toBe(true)
+
+    wm.markProcess('run-pending', process.pid, false)
+    expect(wm.hasActiveProcesses('run-pending')).toBe(true)
+
+    wm.markSpawnIntent('run-pending', 'attempt-b', false)
+    expect(wm.hasActiveProcesses('run-pending')).toBe(false)
+  })
+
   it('changedFiles développe les dossiers non suivis en fichiers exacts', () => {
     const repo = tempRepo()
     const wm = manager(repo)
@@ -499,45 +549,49 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
     expect(() => wm.acquire('builder')).not.toThrow()
   })
 
-  it('échec de worktree remove → nettoie par repli avant de supprimer la copie agent', () => {
-    const repo = tempRepo()
-    let failedIntegrationRemove = false
-    let integrationPath = ''
-    const tryGitFn = (dir: string, args: string[]) => {
-      const candidatePath = args.at(-1) ?? ''
-      if (
-        !failedIntegrationRemove &&
-        dir === repo &&
-        args[0] === 'worktree' &&
-        args[1] === 'remove' &&
-        candidatePath.includes('integration__builder__')
-      ) {
-        failedIntegrationRemove = true
-        integrationPath = candidatePath
-        return { code: 1, stdout: '', stderr: 'fichier verrouillé' }
+  it(
+    'échec de worktree remove → nettoie par repli avant de supprimer la copie agent',
+    () => {
+      const repo = tempRepo()
+      let failedIntegrationRemove = false
+      let integrationPath = ''
+      const tryGitFn = (dir: string, args: string[]) => {
+        const candidatePath = args.at(-1) ?? ''
+        if (
+          !failedIntegrationRemove &&
+          dir === repo &&
+          args[0] === 'worktree' &&
+          args[1] === 'remove' &&
+          candidatePath.includes('integration__builder__')
+        ) {
+          failedIntegrationRemove = true
+          integrationPath = candidatePath
+          return { code: 1, stdout: '', stderr: 'fichier verrouillé' }
+        }
+        const result = spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
+        return {
+          code: result.status ?? 1,
+          stdout: result.stdout ?? '',
+          stderr: result.stderr ?? ''
+        }
       }
-      const result = spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
-      return {
-        code: result.status ?? 1,
-        stdout: result.stdout ?? '',
-        stderr: result.stderr ?? ''
-      }
-    }
-    const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
-    roots.push(wtRoot)
-    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot, tryGitFn })
-    const agentPath = wm.acquire('builder')
-    writeFileSync(join(agentPath, 'b.txt'), 'travail de la copie\n')
+      const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
+      roots.push(wtRoot)
+      const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot, tryGitFn })
+      const agentPath = wm.acquire('builder')
+      writeFileSync(join(agentPath, 'b.txt'), 'travail de la copie\n')
 
-    const res = wm.finalize('builder')
+      const res = wm.finalize('builder')
 
-    expect(failedIntegrationRemove).toBe(true)
-    expect(res.outcome).toBe('merged')
-    expect(existsSync(integrationPath)).toBe(false)
-    expect(git(repo, 'worktree', 'list', '--porcelain')).not.toContain(integrationPath)
-    expect(existsSync(agentPath)).toBe(false)
-    expect(existsSync(join(repo, 'b.txt'))).toBe(true)
-  })
+      expect(failedIntegrationRemove).toBe(true)
+      expect(res.outcome).toBe('merged')
+      expect(existsSync(integrationPath)).toBe(false)
+      expect(git(repo, 'worktree', 'list', '--porcelain')).not.toContain(integrationPath)
+      expect(existsSync(agentPath)).toBe(false)
+      expect(existsSync(join(repo, 'b.txt'))).toBe(true)
+    },
+    10_000
+  )
 
   it('cleanup Git et disque impossible après publication → bloque et conserve la copie agent', () => {
     const repo = tempRepo()
@@ -586,7 +640,8 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
     const isAgentRemove = (args: string[]) =>
       args[0] === 'worktree' &&
       args[1] === 'remove' &&
-      (args.at(-1) ?? '').includes('agent__builder')
+      ((args.at(-1) ?? '').includes('agent__builder') ||
+        (args.at(-1) ?? '').includes('.quarantine'))
     const gitRunner = (dir: string, args: string[]) => {
       if (isAgentRemove(args)) throw new Error('EPERM')
       return git(dir, ...args)

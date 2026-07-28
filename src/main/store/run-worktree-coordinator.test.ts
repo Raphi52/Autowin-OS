@@ -7,12 +7,22 @@ function fakeManager(over: Partial<{
   finalize: (id: string) => FinalizeResult
   changedFiles: (id: string) => string[]
   remove: (id: string) => void
+  listAgentIds: () => string[]
+  markProcess: (id: string, pid: number, active: boolean) => void
+  markSpawnIntent: (id: string, token: string, active: boolean) => void
+  confirmSpawn: (id: string, token: string, pid: number) => void
+  hasActiveProcesses: (id: string) => boolean
 }> = {}) {
   return {
     acquire: over.acquire ?? ((id: string) => `/wt/${id}`),
     finalize: over.finalize ?? ((id: string) => ({ outcome: 'merged', agentId: id, committed: true } as FinalizeResult)),
     changedFiles: over.changedFiles ?? (() => ['os.ts']),
-    remove: over.remove ?? (() => {})
+    remove: over.remove ?? (() => {}),
+    listAgentIds: over.listAgentIds ?? (() => []),
+    markProcess: over.markProcess ?? (() => {}),
+    markSpawnIntent: over.markSpawnIntent ?? (() => {}),
+    confirmSpawn: over.confirmSpawn ?? (() => {}),
+    hasActiveProcesses: over.hasActiveProcesses ?? (() => false)
   }
 }
 
@@ -38,6 +48,27 @@ describe('RunWorktreeCoordinator (flip live)', () => {
     co.begin('run-1', 'Builder', true)
     const res = co.end('run-1')
     expect(res?.outcome).toBe('merged')
+    expect(co.activity()[0]).toMatchObject({ state: 'merged', endedAtMs: 5 })
+  })
+
+  it('end attend le CLI encore vivant avant de fusionner et supprimer sa copie', () => {
+    let active = true
+    const finalize = vi.fn(
+      (id: string): FinalizeResult => ({ outcome: 'merged', agentId: id, committed: true })
+    )
+    const co = new RunWorktreeCoordinator({
+      manager: fakeManager({ finalize, hasActiveProcesses: () => active }),
+      nowFn: () => 5
+    })
+    co.begin('run-1', 'Builder', true)
+
+    expect(co.end('run-1')).toBeUndefined()
+    expect(finalize).not.toHaveBeenCalled()
+    expect(co.activity()[0]).toMatchObject({ state: 'working', endedAtMs: undefined })
+
+    active = false
+    co.retryRecovery()
+    expect(finalize).toHaveBeenCalledWith('run-1')
     expect(co.activity()[0]).toMatchObject({ state: 'merged', endedAtMs: 5 })
   })
 
@@ -102,5 +133,40 @@ describe('RunWorktreeCoordinator (flip live)', () => {
   it('end sur run inconnu → undefined, ne jette pas', () => {
     const co = new RunWorktreeCoordinator({ manager: fakeManager() })
     expect(co.end('nope')).toBeUndefined()
+  })
+
+  it('réconcilie au démarrage les copies orphelines sans masquer un blocage réel', () => {
+    const finalize = vi
+      .fn<(id: string) => FinalizeResult>()
+      .mockReturnValueOnce({ outcome: 'nothing', agentId: 'run-old' })
+      .mockReturnValueOnce({
+        outcome: 'blocked',
+        agentId: 'run-conflict',
+        files: ['src/main/os.ts'],
+        reason: 'base-dirty'
+      })
+    const co = new RunWorktreeCoordinator({
+      manager: fakeManager({
+        listAgentIds: () => ['run-old', 'run-conflict'],
+        finalize,
+        changedFiles: (id) => (id === 'run-conflict' ? ['src/main/os.ts'] : [])
+      }),
+      nowFn: () => 42
+    })
+
+    expect(finalize.mock.calls).toEqual([['run-old'], ['run-conflict']])
+    expect(co.activity()).toEqual([
+      expect.objectContaining({
+        agentId: 'run-old',
+        state: 'merged',
+        endedAtMs: 42
+      }),
+      expect.objectContaining({
+        agentId: 'run-conflict',
+        state: 'blocked',
+        files: [{ path: 'src/main/os.ts', kind: 'mod' }],
+        attentionReason: 'base-dirty'
+      })
+    ])
   })
 })

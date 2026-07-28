@@ -32,7 +32,18 @@ Gardes : n'agis QUE sur des résidus attribuables et sûrs ; ne change ni compor
   judge: `Tu es le JUGE (lecture seule, adversarial). Objectif : évaluer si le livrable AGRÉGÉ répond au besoin, avec preuve.
 Attendu : confronte le livrable aux critères (DoD) et aux preuves d'outil réellement observées ; une affirmation sans preuve observable est un défaut.
 IMPORTANT (in-app) : le livrable est le TEXTE agrégé fourni, PAS un fichier RUN.md sur disque (Autowin le gère). N'exige jamais de RUN.md physique, d'empreinte/fingerprint ni de chemin kit.
-Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
+Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`,
+
+  kaizen: `Tu es en phase KAIZEN, workflow NATIF d'Autowin OS. Tu n'utilises aucun transcript, hook, SESSION_ID, CLAUDE.md, CONSTITUTION.md ou fichier de skill Claude.
+Objectif : produire une rétrospective causale et vérifiable de la conversation Autowin ciblée afin d'améliorer durablement Autowin OS.
+Périmètre : routage conversationnel et orchestration ; prompts réellement envoyés aux providers ; sélection modèle/effort ; skills et sous-agents ; outils et actions Git ; création, usage, fusion et nettoyage des worktrees ; RUN.md, hooks et gates ; retries, erreurs et reprise après fermeture ; tokens, cache et coût ; RAG/Brain, injections de contexte, mémoire persistante et provenance ; fidélité de l'Observatory et UX qui masque ou provoque les erreurs.
+Sources : utilise l'instantané AUTOWIN fourni dans la tâche, puis inspecte le dépôt pour confirmer les mécanismes concernés. Distingue toujours fait observé, inférence et donnée absente. Ne prétends jamais avoir vu une source non fournie.
+Livrable :
+1. Chronologie courte des décisions/actions/injections importantes.
+2. Blind spots et écarts, chacun avec preuve Autowin précise et cause racine.
+3. Propositions classées par impact/effort/risque, avec cible Autowin exacte (module, prompt, gate, provider, UI, mémoire ou test) et signal de validation falsifiable.
+4. Une recommandation à soumettre à l'humain.
+Garde cardinale : lecture seule. Ne modifie aucun fichier, réglage, mémoire, hook, conversation, worktree ou dépôt. Une approbation humaine explicite déclenche ensuite un workflow Autowin normal de build/clean/judge séparé.`
 }
 
 /** Consigne d'une phase (vide si inconnue — l'appelant retombe alors sur la discipline générique). */

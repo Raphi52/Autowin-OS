@@ -16,10 +16,10 @@ const allFields = (c: ReturnType<typeof buildBehaviourComposition>): InfluencerF
 ]
 
 describe('buildBehaviourComposition — COMPLÉTUDE', () => {
-  it('couvre les 6 phases orchestrées, chacune avec ≥1 bloc de system prompt', () => {
+  it('couvre les 7 phases orchestrées, chacune avec ≥1 bloc de system prompt', () => {
     const c = build()
     const phases = c.orchestrated.systemPrompt.map((p) => p.phase)
-    expect(phases).toEqual(['scout', 'frame', 'terrain', 'build', 'clean', 'judge'])
+    expect(phases).toEqual(['scout', 'frame', 'terrain', 'build', 'clean', 'judge', 'kaizen'])
     for (const p of c.orchestrated.systemPrompt) expect(p.blocks.length).toBeGreaterThan(0)
   })
 

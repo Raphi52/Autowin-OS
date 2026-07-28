@@ -77,7 +77,15 @@ function injectedText(text: string): string {
 }
 
 /** Phases orchestrées dont on décrit la composition (le juge/synthèse/réparation dérivent de celles-ci). */
-const ORCHESTRATED_PHASES: PipelinePhase[] = ['scout', 'frame', 'terrain', 'build', 'clean', 'judge']
+const ORCHESTRATED_PHASES: PipelinePhase[] = [
+  'scout',
+  'frame',
+  'terrain',
+  'build',
+  'clean',
+  'judge',
+  'kaizen'
+]
 
 function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
   const brief = PHASE_BRIEFS[phase] ?? ''
