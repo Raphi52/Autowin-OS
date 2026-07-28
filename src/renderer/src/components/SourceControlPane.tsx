@@ -37,6 +37,12 @@ export function SourceControlPane({
   // React ne re-rendait rien → « le bouton ne fait rien ». Désormais chaque clic relit le dépôt.
   const [refreshTick, setRefreshTick] = useState(0)
   const [loading, setLoading] = useState(false)
+  /**
+   * Vue affichée. `changes` = UNIQUEMENT les fichiers modifiés du dépôt choisi (Projet ou Brain),
+   * pour aller droit au « qu'est-ce qui a changé ». `worktree` = tout le reste (branche, copies
+   * d'agents, historique), qui noyait la liste des changements quand tout s'empilait.
+   */
+  const [view, setView] = useState<'changes' | 'worktree'>('changes')
 
   useEffect(() => {
     let alive = true
@@ -64,12 +70,8 @@ export function SourceControlPane({
     setOpenFile(null)
     setDiff(null)
     setRepoPath(path)
+    setView('changes')
     setRefreshTick((n) => n + 1)
-  }
-
-  const pickRepo = async (): Promise<void> => {
-    const chosen = await window.api.pickGitRepo?.()
-    if (chosen) selectRepo(chosen)
   }
 
   // Le Brain partagé est versionné comme le code : on y bascule en un clic pour voir SES diffs.
@@ -117,33 +119,38 @@ export function SourceControlPane({
               </span>
             )}
           </span>
-          {/* Bascule directe entre le dépôt du projet et celui du Brain (tous deux versionnés). */}
+          {/* Projet / Brain = les CHANGEMENTS du dépôt choisi. Worktree = tout le reste. */}
           <button
-            className={`sc-btn sc-repo-btn${!repoPath ? ' is-active' : ''}`}
+            className={`sc-btn sc-repo-btn${view === 'changes' && !repoPath ? ' is-active' : ''}`}
             data-testid="sc-repo-project"
-            title="Voir les diffs du dépôt du projet"
+            title="Fichiers modifiés du dépôt du projet"
             onClick={() => selectRepo('')}
           >
             Projet
           </button>
           {brainPath && (
             <button
-              className={`sc-btn sc-repo-btn${onBrain ? ' is-active' : ''}`}
+              className={`sc-btn sc-repo-btn${view === 'changes' && onBrain ? ' is-active' : ''}`}
               data-testid="sc-repo-brain"
-              title={`Voir les diffs du Brain — ${brainPath}`}
+              title={`Fichiers .md modifiés du Brain — ${brainPath}`}
               onClick={() => selectRepo(brainPath)}
             >
               Brain
             </button>
           )}
-          <button className="sc-btn sc-repo-btn" data-testid="sc-pick-repo" onClick={() => void pickRepo()}>
-            Autre…
+          <button
+            className={`sc-btn sc-repo-btn${view === 'worktree' ? ' is-active' : ''}`}
+            data-testid="sc-view-worktree"
+            title="Branche, copies d’agents et historique"
+            onClick={() => setView('worktree')}
+          >
+            Worktree
           </button>
         </div>
         {git && !git.available && (
           <div className="sc-empty">Dépôt git introuvable ici (lecture indisponible).</div>
         )}
-        {git?.state && (
+        {view === 'worktree' && git?.state && (
           <section className="sc-sect">
             <header className="sc-h">Branche</header>
             <div className="sc-branch-row">
@@ -163,7 +170,7 @@ export function SourceControlPane({
           </section>
         )}
 
-        {git?.state && (
+        {view === 'changes' && git?.state && (
           <section className="sc-sect">
             <header className="sc-h">Changements · {changes.length}</header>
             {changes.length === 0 ? (
@@ -219,6 +226,7 @@ export function SourceControlPane({
           </section>
         )}
 
+        {view === 'worktree' && (
         <section className="sc-sect">
           <header className="sc-h">Worktrees{worktrees.length ? ` · ${worktrees.length}` : ''}</header>
           {worktrees.length === 0 ? (
@@ -232,8 +240,9 @@ export function SourceControlPane({
             />
           )}
         </section>
+        )}
 
-        {git?.history && git.history.length > 0 && (
+        {view === 'worktree' && git?.history && git.history.length > 0 && (
           <section className="sc-sect">
             <header className="sc-h">Historique</header>
             {git.history.map((c) => (

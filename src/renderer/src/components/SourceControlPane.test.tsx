@@ -31,6 +31,7 @@ function mockApi(git: GitReadResult, diff = 'diff --git a/x b/x\n@@ -1 +1 @@\n-o
       return Promise.resolve(git)
     },
     getGitDiff: () => Promise.resolve({ available: true, diff }),
+    brainRepoPath: () => Promise.resolve('//ged2/rig/Projets IA/Amitel Brain'),
     pickGitRepo: () => Promise.resolve(calls.pickReturns.shift() ?? null),
     getWorktreeActivity: () => Promise.resolve([]),
     onWorktreeActivity: () => () => {}
@@ -60,12 +61,31 @@ const input = (): HTMLTextAreaElement =>
   container.querySelector('[data-testid="sc-prompt-input"]') as HTMLTextAreaElement
 
 describe('SourceControlPane (prompt-first)', () => {
-  it('affiche branche, changements et historique (consultation)', async () => {
+  /** Bascule sur la vue « Worktree » (branche, copies d'agents, historique). */
+  async function openWorktreeView(): Promise<void> {
+    const tab = container.querySelector('[data-testid="sc-view-worktree"]') as HTMLButtonElement
+    await act(async () => {
+      tab.click()
+      await Promise.resolve()
+    })
+  }
+
+  it('vue par défaut : UNIQUEMENT les changements (ni branche ni historique)', async () => {
     mockApi(GIT)
     await render()
-    expect(container.textContent).toContain('feat/source-control')
     expect(container.querySelectorAll('[data-testid="sc-file"]')).toHaveLength(2)
+    // Branche et historique vivent désormais derrière « Worktree » — la liste reste lisible.
+    expect(container.textContent).not.toContain('feat/source-control')
+    expect(container.textContent).not.toContain('a1b2c3d')
+  })
+
+  it('vue Worktree : branche, copies d’agents et historique (pas la liste des changements)', async () => {
+    mockApi(GIT)
+    await render()
+    await openWorktreeView()
+    expect(container.textContent).toContain('feat/source-control')
     expect(container.textContent).toContain('a1b2c3d')
+    expect(container.querySelectorAll('[data-testid="sc-file"]')).toHaveLength(0)
   })
 
   it('clic sur un fichier affiche son diff (consultation read-only)', async () => {
@@ -101,25 +121,26 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(calls.repoArgs).toContain('C:/rig')
   })
 
-  it('v3 : « Changer de dépôt » recharge sur le nouveau dépôt + persiste', async () => {
+  it('« Brain » recharge sur le dépôt du Brain + persiste le choix', async () => {
     mockApi(GIT)
-    calls.pickReturns = ['D:/autre-repo']
     await render()
-    const pick = container.querySelector('[data-testid="sc-pick-repo"]') as HTMLButtonElement
+    const brain = container.querySelector('[data-testid="sc-repo-brain"]') as HTMLButtonElement
+    expect(brain).not.toBeNull()
     await act(async () => {
-      pick.click()
+      brain.click()
       await Promise.resolve()
       await Promise.resolve()
     })
-    expect(calls.repoArgs).toContain('D:/autre-repo')
-    expect(localStorage.getItem('autowin:sc-repo')).toBe('D:/autre-repo')
+    expect(calls.repoArgs.some((p) => String(p).includes('Amitel Brain'))).toBe(true)
+    expect(localStorage.getItem('autowin:sc-repo')).toContain('Amitel Brain')
   })
 
   it('Envoyer transmet le prompt (pré-rempli par un bouton) à l’agent', async () => {
     mockApi(GIT)
     const onSendPrompt = vi.fn()
     await render(onSendPrompt)
-    // flux réel : le bouton Push pré-remplit la barre (état React), puis Envoyer transmet.
+    // flux réel : le bouton Push (vue Worktree) pré-remplit la barre, puis Envoyer transmet.
+    await openWorktreeView()
     const push = [...container.querySelectorAll('button')].find((b) =>
       b.textContent?.includes('Push')
     ) as HTMLButtonElement
