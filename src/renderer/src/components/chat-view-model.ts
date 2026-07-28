@@ -22,6 +22,11 @@ export interface HydratedAssistantMessage {
   status: ChatTurnStatus
   done: boolean
   error?: string
+  /**
+   * Raisonnement LIVE du modèle pendant qu'il réfléchit — TRANSITOIRE : jamais persisté, jamais
+   * mêlé à la réponse. Sert à montrer l'activité durant les secondes précédant le premier mot.
+   */
+  reasoning?: string
 }
 
 export interface StoredAssistantMessage {
@@ -103,6 +108,7 @@ export interface AssistantPilotEvent {
     | 'delta'
     | 'stream-reset'
     | 'think'
+    | 'reasoning'
     | 'command'
     | 'result'
     | 'done'
@@ -140,6 +146,12 @@ export function reduceAssistantPilotEvent(
   if (message.done && !message.turnId) return message
   if (message.turnId && event.turnId && message.turnId !== event.turnId) return message
   const turnId = message.turnId ?? event.turnId ?? 'pending'
+  // Raisonnement live : accumulé HORS parts (transitoire, non persisté) et borné pour ne pas
+  // gonfler indéfiniment sur un long raisonnement — on garde la fin, la plus informative.
+  if (event.kind === 'reasoning' && event.text) {
+    const merged = `${message.reasoning ?? ''}${event.text}`
+    return { ...message, turnId, reasoning: merged.slice(-4_000) }
+  }
   let turnEvent: ChatTurnEvent | undefined
   if (event.kind === 'delta' && event.text && event.streamId)
     turnEvent = { kind: 'delta', streamId: event.streamId, text: event.text }

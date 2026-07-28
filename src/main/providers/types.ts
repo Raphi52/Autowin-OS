@@ -83,8 +83,15 @@ export interface PromptEnvelope {
 
 /** Fragment de réponse streamée. */
 export interface StreamChunk {
-  /** Texte incrémental. */
+  /** Texte incrémental de la RÉPONSE (ce que l'utilisateur lit). */
   delta: string
+  /**
+   * Raisonnement incrémental du modèle (blocs `thinking`), à afficher EN DIRECT pendant qu'il
+   * réfléchit. Distinct de `delta` : ne fait pas partie de la réponse et n'est jamais persisté
+   * dans le message — sans quoi l'utilisateur attend devant un écran figé (mesuré : 6 à 13 s
+   * de réflexion avant le premier mot avec un gros modèle).
+   */
+  reasoning?: string
 }
 
 /** Consommation réelle d'un tour, telle que remontée par le provider. */

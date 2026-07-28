@@ -1933,3 +1933,30 @@
   background: rgba(239, 63, 63, 0.16);
   color: var(--err, #ef5c5c);
 }
+
+/* Réflexion live du modèle : visible pendant l'attente du premier mot, discrète (ce n'est pas la
+   réponse), défilement borné pour ne jamais pousser la conversation. */
+.msg-reasoning {
+  display: grid;
+  gap: 4px;
+  max-height: 140px;
+  overflow: auto;
+  padding: 8px 11px;
+  border: 1px dashed color-mix(in srgb, var(--text-faint) 45%, transparent);
+  border-radius: var(--r3);
+  background: color-mix(in srgb, var(--bg-2) 70%, transparent);
+}
+.msg-reasoning-label {
+  color: var(--text-faint);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.msg-reasoning p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  opacity: 0.85;
+}

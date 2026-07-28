@@ -28,6 +28,8 @@ export interface PilotEvent {
     | 'delta'
     | 'stream-reset'
     | 'think'
+    /** Raisonnement LIVE du modèle pendant qu'il réfléchit — affiché, jamais persisté dans le message. */
+    | 'reasoning'
     | 'command'
     | 'result'
     | 'done'
@@ -402,6 +404,11 @@ export class AgentPilot {
           timer.mark(`send${i}:start`)
           let sawFirstChunk = false
           res = await this.registry.send(provider, messages, options, (chunk) => {
+            // Raisonnement : canal SÉPARÉ, diffusé en direct, hors du texte de la réponse.
+            if (chunk.reasoning) {
+              onEvent({ kind: 'reasoning', text: chunk.reasoning, iteration: i })
+              return
+            }
             if (!sawFirstChunk) {
               sawFirstChunk = true
               timer.mark(`send${i}:firstToken`) // ← fin de la latence PERÇUE

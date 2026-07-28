@@ -358,8 +358,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             text += part.text
             queue.push({ delta: part.text })
           } else if (part.type === 'thinking' && part.thinking) {
-            // Raisonnement CONSERVÉ (plus ignoré) pour l'observation post-mortem.
+            // Raisonnement CONSERVÉ pour l'observation post-mortem ET streamé en direct : c'est la
+            // seule chose qui se passe pendant les secondes d'attente avant le premier mot.
             reasoningFragments.push(part.thinking)
+            queue.push({ delta: '', reasoning: part.thinking })
           } else if (part.type === 'tool_use' && part.id && part.name) {
             // B — mémorise l'appel outil ; la preuve (ok/échec) arrive dans le tool_result associé.
             const filePath = String(part.input?.file_path ?? '')
