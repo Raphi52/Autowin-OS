@@ -7,7 +7,12 @@ import {
   SUBAGENT_TOTAL_MS
 } from './watchdog'
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  openStdoutJournal,
+  tailJsonLines,
+  type StdoutJournalHandle
+} from '../runs/stdout-journal'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type {
@@ -259,7 +264,27 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     assertArgvWithinLimit('claude CLI', args) // anti-ENAMETOOLONG : le prompt passe par stdin
     const spawnToken = randomUUID()
     execution?.onSpawnIntent?.(spawnToken, true)
-    const child = spawn(this.bin, args, { shell: false, cwd: execution?.cwd })
+    /**
+     * Survie niveau 2 (opt-in `AUTOWIN_DETACHED_RUNS=1` + racine de journaux fournie) : le CLI est
+     * spawné DÉTACHÉ et sa sortie va dans un FICHIER au lieu d'un pipe → il continue de produire même
+     * si l'app se ferme, et tout est relisible au redémarrage. Sans le flag : pipe, comportement
+     * historique strictement inchangé (rétrocompat).
+     */
+    const journalRoot = process.env.AUTOWIN_RUN_JOURNAL_ROOT
+    let journal: StdoutJournalHandle | undefined
+    if (process.env.AUTOWIN_DETACHED_RUNS === '1' && journalRoot) {
+      try {
+        journal = openStdoutJournal(journalRoot, spawnToken)
+      } catch {
+        journal = undefined // journal impossible → on retombe sur le pipe plutôt que d'échouer
+      }
+    }
+    const child = spawn(this.bin, args, {
+      shell: false,
+      cwd: execution?.cwd,
+      ...(journal ? { detached: true, stdio: ['pipe', journal.fd, journal.fd] as const } : {})
+    })
+    if (journal) child.unref() // l'app peut mourir sans emporter le CLI
     const childPid = child.pid
     if (childPid) {
       if (execution?.onSpawned) execution.onSpawned(spawnToken, childPid)
@@ -394,8 +419,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       }
     }
 
-    child.stdout.on('data', (chunk: Buffer) => {
-      buffer += chunk.toString('utf8')
+    /** Consomme du texte brut du CLI : découpe en lignes complètes puis parse chaque event. */
+    const consumeText = (text: string): void => {
+      buffer += text
       let nl: number
       while ((nl = buffer.indexOf('\n')) >= 0) {
         const line = buffer.slice(0, nl).trim()
@@ -409,7 +435,23 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       }
       watchdog.beat() // activité observée → réarme le timer d'inactivité
       wake()
-    })
+    }
+
+    if (journal) {
+      // Mode DÉTACHÉ : la sortie est dans un FICHIER (elle survit à la mort de l'app) et on la SUIT.
+      // Le fd parent est fermé (l'enfant garde le sien) ; le tail lit par chemin.
+      try {
+        closeSync(journal.fd)
+      } catch {
+        /* déjà fermé */
+      }
+      void tailJsonLines(journal.path, (line) => consumeText(`${line}\n`), {
+        pollMs: 80,
+        isComplete: () => done
+      })
+    } else {
+      child.stdout?.on('data', (chunk: Buffer) => consumeText(chunk.toString('utf8')))
+    }
     child.on('error', (e) => {
       watchdog.dispose()
       if (!childPid) execution?.onSpawnIntent?.(spawnToken, false)
@@ -441,7 +483,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     // Prompt remis sur STDIN (et non en argv) → aucune limite de longueur de ligne de commande.
     // Best-effort : un stdin fermé (process déjà mort) ne doit pas jeter hors du flux normal.
     try {
-      child.stdin.end(lastUser)
+      child.stdin?.end(lastUser)
     } catch {
       /* stdin indisponible (process mort avant écriture) → close/error prendront le relais */
     }
