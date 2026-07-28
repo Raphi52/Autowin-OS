@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom'
 import { Markdown, extractRecommendation } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
 import { SourceControlPane } from './SourceControlPane'
-import { ActivityPane } from './ActivityPane'
 import { ModuleHeader } from './ModuleHeader'
 import {
   CHAT_PANE_LIMITS,
@@ -287,7 +286,8 @@ const ChatMessageRow = memo(
     onInspectTurn,
     onFork,
     onOpenImage,
-    onPickSuggestion
+    onPickSuggestion,
+    onOpenLiveAction
   }: {
     message: Msg
     conversationId: string | null
@@ -295,6 +295,7 @@ const ChatMessageRow = memo(
     onFork?: (messageId: string) => void
     onOpenImage?: (image: { src: string; name: string }) => void
     onPickSuggestion?: (prompt: string) => void
+    onOpenLiveAction?: () => void
   }): React.JSX.Element {
     if (message.role === 'user') {
       return (
@@ -372,7 +373,11 @@ const ChatMessageRow = memo(
                 onPick={(prompt) => onPickSuggestion?.(prompt)}
               />
             ) : (
-              <AssistantActivityGroup key={index} actions={part.actions} />
+              <AssistantActivityGroup
+                key={index}
+                actions={part.actions}
+                onOpenLiveAction={onOpenLiveAction}
+              />
             )
           )}
         </div>
@@ -426,6 +431,9 @@ export function ChatView({
   onInspectTurn?: (target: InspectTurnTarget) => void
 }): React.JSX.Element {
   const [convs, setConvs] = useState<Conv[]>([])
+  /** Miroir stable de `convs` pour les écouteurs d'événements (pas de re-abonnement à chaque render). */
+  const convsRef = useRef<Conv[]>([])
+  convsRef.current = convs
   const [convQuery, setConvQuery] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Msg[]>([])
@@ -493,7 +501,7 @@ export function ChatView({
     const value = Number.isFinite(saved) && saved > 0 ? saved : 340
     return Math.min(CHAT_PANE_LIMITS.workflows.max, Math.max(CHAT_PANE_LIMITS.workflows.min, value))
   })
-  const [paneTab, setPaneTab] = useState<'runs' | 'activite' | 'worktrees'>('runs')
+  const [paneTab, setPaneTab] = useState<'runs' | 'worktrees'>('runs')
   const [runScope, setRunScope] = useState<'conv' | 'tous'>('conv')
   const [runs, setRuns] = useState<RunEntry[]>([])
   const [openRun, setOpenRun] = useState<{ path: string; content: string } | null>(null)
@@ -501,6 +509,16 @@ export function ChatView({
   // Détail d'un run : bascule entre le fil des sous-agents (trace) et le RUN.md brut.
   const [runDetailTab, setRunDetailTab] = useState<'trace' | 'runmd'>('trace')
   const [liveRuns, setLiveRuns] = useState<Record<string, ScopedLiveRun<OrchStep>>>({})
+  // Carte de l'orchestration EN COURS dans le panneau Workflows : cible du clic sur
+  // l'indicateur « action en cours » d'un message (ouvre le panneau + cadre le run/step actif).
+  const liveRunCardRef = useRef<HTMLDivElement>(null)
+  const revealLiveAction = useCallback(() => {
+    setShowRuns(true)
+    setPaneTab('runs')
+    requestAnimationFrame(() =>
+      liveRunCardRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    )
+  }, [])
   const [decisions, setDecisions] = useState<Decision[]>([])
   const [showDecisions, setShowDecisions] = useState(false)
   const [decisionError, setDecisionError] = useState<string | null>(null)
@@ -987,6 +1005,20 @@ export function ChatView({
     }
     window.addEventListener('autowin:brainwash', openBrainwash)
     return () => window.removeEventListener('autowin:brainwash', openBrainwash)
+  }, [])
+
+  // Survie niveau 2 : « Reprendre » depuis le bandeau de démarrage ouvre la conversation dont le
+  // tour a été interrompu par la fermeture de l'app (son fil est rechargé depuis le store).
+  useEffect(() => {
+    const openConversation = (event: Event): void => {
+      const id = (event as CustomEvent<{ conversationId?: string }>).detail?.conversationId
+      if (!id) return
+      const target = convsRef.current.find((conversation) => conversation.id === id)
+      if (target) loadConv(target)
+    }
+    window.addEventListener('autowin:open-conversation', openConversation)
+    return () => window.removeEventListener('autowin:open-conversation', openConversation)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function renameConv(c: Conv): Promise<void> {
@@ -1844,6 +1876,7 @@ export function ChatView({
               onInspectTurn={onInspectTurn}
               onFork={handleFork}
               onOpenImage={setOpenImage}
+              onOpenLiveAction={revealLiveAction}
             />
           ))}
         </div>
@@ -2159,7 +2192,7 @@ export function ChatView({
             onPointerDown={beginRunsResize}
           />
           <aside
-            className={`runs-pane fade-in${paneTab === 'activite' ? ' wide' : ''}`}
+            className="runs-pane fade-in"
             style={{ width: `${runsPaneWidth}px` }}
           >
             <div className="conv-head">
@@ -2169,12 +2202,6 @@ export function ChatView({
                   onClick={() => setPaneTab('runs')}
                 >
                   Runs
-                </button>
-                <button
-                  className={`btn btn-sm${paneTab === 'activite' ? ' btn-accent' : ''}`}
-                  onClick={() => setPaneTab('activite')}
-                >
-                  Activité
                 </button>
                 <button
                   className={`btn btn-sm${paneTab === 'worktrees' ? ' btn-accent' : ''}`}
@@ -2194,7 +2221,6 @@ export function ChatView({
                 </button>
               </div>
             </div>
-            {paneTab === 'activite' && <ActivityPane convId={activeId} />}
             {paneTab === 'worktrees' && <SourceControlPane onSendPrompt={send} />}
             {paneTab === 'runs' && (
               <div className="row gap2" style={{ fontSize: 11 }}>
@@ -2222,7 +2248,7 @@ export function ChatView({
             >
               {/* Orchestration EN COURS : statut temps réel + sous-agents qui se remplissent. */}
               {activeId && liveRuns[activeId] && (
-                <div className={`card live-run stripe stripe-accent fade-in`}>
+                <div ref={liveRunCardRef} className={`card live-run stripe stripe-accent fade-in`}>
                   <div className="row" style={{ justifyContent: 'space-between' }}>
                     <div className="row gap2" style={{ minWidth: 0 }}>
                       {liveRuns[activeId].status === 'running' ? (

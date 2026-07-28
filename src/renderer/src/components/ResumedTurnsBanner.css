@@ -1,0 +1,31 @@
+/* Bandeau « tours interrompus » (survie niveau 2) — même grammaire que la bannière de mise à jour. */
+.resumed-turns {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  background: color-mix(in srgb, var(--warn, #e8a33d) 14%, transparent);
+  border-bottom: 1px solid var(--warn, #e8a33d);
+  font-size: 12.5px;
+  color: var(--text, #e6e9ee);
+}
+.resumed-turns-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+.resumed-turns-open,
+.resumed-turns-later {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line2, #31373f);
+  background: var(--surface2, #191d23);
+  color: var(--text, #e6e9ee);
+  cursor: pointer;
+}
+.resumed-turns-open {
+  border-color: var(--warn, #e8a33d);
+  color: var(--warn, #e8a33d);
+}
