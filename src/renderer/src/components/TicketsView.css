@@ -593,3 +593,18 @@
 .tickets-treat-cancel { border-color: var(--danger, #e6635b); color: var(--danger, #e6635b); }
 .tickets-batch-progress { font-size: 12px; color: var(--rose-bright, #ff5cab); }
 .tickets-batch-done { font-size: 12px; color: var(--muted, #8b939f); }
+
+/* Case « Traiter réellement » : discrète à côté du bouton, elle change la NATURE du geste
+   (préparer vs envoyer) — donc lisible d'un coup d'œil, jamais un réglage caché. */
+.tickets-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted, #9aa4b2);
+  cursor: pointer;
+  user-select: none;
+}
+.tickets-mode input {
+  cursor: pointer;
+}

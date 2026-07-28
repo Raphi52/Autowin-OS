@@ -106,17 +106,24 @@ describe('vue Tickets', () => {
     await act(async () => root.unmount())
   })
 
-  it('traite UNIQUEMENT les tickets cochés : une conversation dédiée par ticket', async () => {
+  it('PROMPT-FIRST : ouvre UNE conversation pour la sélection et pré-remplit sans envoyer', async () => {
     const conversationsCreate = vi.fn(async ({ title }: { title: string }) => ({
       id: `conv-${title}`
     }))
-    const orchestrate = vi.fn(async (_task: string, _convId?: string) => ({ ok: true }))
+    const orchestrate = vi.fn(async () => ({ ok: true }))
+    const appCommand = vi.fn(async () => ({ ok: true }))
     api({
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       conversationsCreate,
       conversationsSetAuthorityMode: vi.fn(async () => ({})),
-      orchestrate
+      orchestrate,
+      appCommand
     })
+    const prefills: Array<{ conversationId?: string; prompt?: string; send?: boolean }> = []
+    const listener = (e: Event): void => {
+      prefills.push((e as CustomEvent).detail)
+    }
+    window.addEventListener('autowin:prefill-conversation', listener)
     const { root, container } = await render()
     const checks = container.querySelectorAll<HTMLInputElement>(
       '[data-testid="ticket-process-checkbox"]'
@@ -128,22 +135,59 @@ describe('vue Tickets', () => {
     const treat = container.querySelector(
       '[data-testid="tickets-treat-selection"]'
     ) as HTMLButtonElement
+    expect(treat.textContent).toContain('Préparer le prompt')
     await act(async () => {
       treat.click()
-      for (let i = 0; i < 8; i++) await Promise.resolve()
+      for (let i = 0; i < 10; i++) await Promise.resolve()
     })
 
-    expect(conversationsCreate).toHaveBeenCalledTimes(2)
-    const titles = conversationsCreate.mock.calls.map(([p]) => p.title).join(' | ')
-    expect(titles).toContain('1')
-    expect(titles).toContain('3')
-    expect(titles).not.toContain('Ticket 2')
-    expect(orchestrate).toHaveBeenCalledTimes(2)
-    // #6 — chaque ticket est orchestré sur SA conversation dédiée (pipeline réelle, pas pilotChat).
-    expect(orchestrate.mock.calls.every(([, convId]) => typeof convId === 'string')).toBe(true)
-    expect(container.querySelector('[data-testid="tickets-batch-done"]')?.textContent).toContain(
-      '2/2'
+    // UNE seule conversation pour la selection (avant : une par ticket).
+    expect(conversationsCreate).toHaveBeenCalledTimes(1)
+    // AUCUNE orchestration lancee : le geste par defaut PREPARE, il n'execute pas.
+    expect(orchestrate).not.toHaveBeenCalled()
+    expect(prefills).toHaveLength(1)
+    expect(prefills[0].send).toBe(false)
+    expect(prefills[0].prompt).toContain('#1')
+    expect(prefills[0].prompt).toContain('#3')
+    expect(prefills[0].prompt).not.toContain('Ticket 2')
+    // L'utilisateur est amene sur le Chat, sinon le prompt prepare resterait invisible.
+    expect(appCommand).toHaveBeenCalledWith('navigate', { tab: 'chat' })
+    window.removeEventListener('autowin:prefill-conversation', listener)
+    await act(async () => root.unmount())
+  })
+
+  it('mode « Traiter réellement » coché : le prompt est ENVOYE directement', async () => {
+    api({
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      conversationsCreate: vi.fn(async () => ({ id: 'conv-1' })),
+      conversationsSetAuthorityMode: vi.fn(async () => ({})),
+      appCommand: vi.fn(async () => ({ ok: true }))
+    })
+    const prefills: Array<{ send?: boolean }> = []
+    const listener = (e: Event): void => {
+      prefills.push((e as CustomEvent).detail)
+    }
+    window.addEventListener('autowin:prefill-conversation', listener)
+    const { root, container } = await render()
+    const mode = container.querySelector(
+      '[data-testid="tickets-mode-send"] input'
+    ) as HTMLInputElement
+    await act(async () => mode.click())
+    const treat = container.querySelector(
+      '[data-testid="tickets-treat-selection"]'
+    ) as HTMLButtonElement
+    expect(treat.textContent).toContain('Traiter la sélection')
+    const checks = container.querySelectorAll<HTMLInputElement>(
+      '[data-testid="ticket-process-checkbox"]'
     )
+    await act(async () => checks[0].click())
+    await act(async () => {
+      treat.click()
+      for (let i = 0; i < 10; i++) await Promise.resolve()
+    })
+    expect(prefills).toHaveLength(1)
+    expect(prefills[0].send).toBe(true)
+    window.removeEventListener('autowin:prefill-conversation', listener)
     await act(async () => root.unmount())
   })
 

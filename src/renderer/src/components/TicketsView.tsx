@@ -6,11 +6,7 @@ import type {
   TicketSourceProfile
 } from '../../../shared/tickets'
 import { ModuleHeader } from './ModuleHeader'
-import {
-  runTicketTreatmentBatch,
-  ticketConversationTitle,
-  type TicketTreatmentResult
-} from './ticket-treatment'
+import { formatTicketSelectionPrompt, ticketSelectionTitle } from './ticket-treatment'
 import './TicketsView.css'
 
 interface TicketSourceSummary {
@@ -419,23 +415,27 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
 
   // Traitement par lot : chaque ticket SÉLECTIONNÉ est prompté dans SA propre conversation dédiée.
   // Concurrency bornée (moteur), annulable. ⚠️ lance N runs d'agent.
-  const batchActiveRef = useRef(false)
-  const batchGenRef = useRef(0)
-  const [batch, setBatch] = useState<(TicketTreatmentResult & { running: boolean }) | null>(null)
 
-  const treatSelection = useCallback(async () => {
-    const snapshot = checkedVisibleItems
-    if (!snapshot.length || batchActiveRef.current) return
-    const generation = (batchGenRef.current += 1)
-    batchActiveRef.current = true
-    setBatch({
-      total: snapshot.length,
-      completed: 0,
-      succeeded: 0,
-      failed: 0,
-      conversationIds: [],
-      running: true
-    })
+  /**
+   * Geste PAR DÉFAUT de la sélection (refonte du 2026-07-28).
+   *
+   * Avant : « Traiter la sélection » ouvrait une conversation PAR ticket et lançait aussitôt une
+   * orchestration complète sur chacune — l'utilisateur ne voyait jamais le prompt et récoltait N
+   * runs simultanés. Désormais PROMPT-FIRST, comme le Source control : UNE conversation, le prompt
+   * pré-rempli dedans, et l'envoi seulement si « Traiter réellement » est coché.
+   */
+  const [sendDirectly, setSendDirectly] = useState(
+    () => localStorage.getItem('autowin:tickets-send-directly') === '1'
+  )
+  useEffect(() => {
+    localStorage.setItem('autowin:tickets-send-directly', sendDirectly ? '1' : '0')
+  }, [sendDirectly])
+
+  const openSelectionConversation = useCallback(async () => {
+    const selection = checkedVisibleItems
+    if (!selection.length) return
+    const prompt = formatTicketSelectionPrompt(selection)
+    if (!prompt) return
     let provider: string | undefined
     try {
       const roleMap = await window.api.roles()
@@ -446,45 +446,27 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     } catch {
       provider = undefined
     }
-    if (!provider) {
-      batchActiveRef.current = false
-      setBatch((b) => (b ? { ...b, running: false } : b))
-      return
-    }
-    const result = await runTicketTreatmentBatch(snapshot, {
-      shouldContinue: () => batchActiveRef.current && generation === batchGenRef.current,
-      createConversation: async (item) => {
-        const conv = await window.api.conversationsCreate({
-          title: ticketConversationTitle(item),
-          category: provider as string,
-          provider: provider as string
-        })
-        await window.api.conversationsSetAuthorityMode(conv.id, 'ask')
-        return { id: conv.id }
-      },
-      promptConversation: async (conv, _item, prompt) => {
-        try {
-          // #6 — lance la VRAIE orchestration Autowin (scout→frame→build→judge) sur la conversation
-          // dédiée du ticket, pas un simple tour de chat.
-          const r = await window.api.orchestrate(prompt, conv.id)
-          return { ok: r?.ok !== false }
-        } catch {
-          return { ok: false }
-        }
-      },
-      onProgress: (p) => {
-        if (batchActiveRef.current && generation === batchGenRef.current)
-          setBatch({ ...p, running: p.completed < p.total })
-      }
+    if (!provider) return
+    const conv = await window.api.conversationsCreate({
+      title: ticketSelectionTitle(selection),
+      category: provider,
+      provider
     })
-    batchActiveRef.current = false
-    if (generation === batchGenRef.current) setBatch({ ...result, running: false })
-  }, [checkedVisibleItems])
+    await window.api.conversationsSetAuthorityMode(conv.id, 'ask')
+    // On amène l'utilisateur SUR le Chat : préparer un prompt qu'il ne voit pas serait inutile.
+    // Le main reste l'autorité de navigation (même chemin que la rail), puis le Chat pré-remplit.
+    try {
+      await window.api.appCommand?.('navigate', { tab: 'chat' })
+    } catch {
+      /* navigation refusée : le prompt est quand même préparé dans la conversation */
+    }
+    window.dispatchEvent(
+      new CustomEvent('autowin:prefill-conversation', {
+        detail: { conversationId: conv.id, prompt, send: sendDirectly }
+      })
+    )
+  }, [checkedVisibleItems, sendDirectly])
 
-  const cancelBatch = (): void => {
-    batchActiveRef.current = false
-    setBatch((b) => (b ? { ...b, running: false } : b))
-  }
 
   const retry = (): void => {
     if (sourceError) void loadSources()
@@ -715,37 +697,32 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         >
           {allVisibleChecked ? 'Tout désélectionner' : `Tout sélectionner (${visibleItems.length})`}
         </button>
-        {batch?.running ? (
-          <>
-            <span className="tickets-batch-progress" data-testid="tickets-batch-progress">
-              Traitement {batch.completed}/{batch.total}…
-            </span>
-            <button
-              data-testid="tickets-treat-cancel"
-              type="button"
-              className="tickets-treat-cancel"
-              onClick={cancelBatch}
-            >
-              Arrêter
-            </button>
-          </>
-        ) : (
-          <button
-            data-testid="tickets-treat-selection"
-            type="button"
-            className="tickets-treat-selection"
-            disabled={checkedVisibleItems.length === 0}
-            title="Ouvre une conversation dédiée par ticket sélectionné et lance son traitement"
-            onClick={() => void treatSelection()}
-          >
-            Traiter la sélection ({checkedVisibleItems.length})
-          </button>
-        )}
-        {batch && !batch.running && batch.total > 0 && (
-          <span className="tickets-batch-done" data-testid="tickets-batch-done">
-            {batch.succeeded}/{batch.total} lancés{batch.failed ? ` · ${batch.failed} échec(s)` : ''}
-          </span>
-        )}
+        <button
+          data-testid="tickets-treat-selection"
+          type="button"
+          className="tickets-treat-selection"
+          disabled={checkedVisibleItems.length === 0}
+          title={
+            sendDirectly
+              ? 'Ouvre UNE conversation pour la sélection et ENVOIE le prompt'
+              : 'Ouvre UNE conversation pour la sélection et y pré-remplit le prompt, sans l’envoyer'
+          }
+          onClick={() => void openSelectionConversation()}
+        >
+          {sendDirectly
+            ? `Traiter la sélection (${checkedVisibleItems.length})`
+            : `Préparer le prompt (${checkedVisibleItems.length})`}
+        </button>
+        {/* Le geste par défaut PRÉPARE (prompt-first, comme le Source control) : c'est
+            l'utilisateur qui décide d'envoyer. Cocher cette case rend l'envoi immédiat. */}
+        <label className="tickets-mode" data-testid="tickets-mode-send">
+          <input
+            type="checkbox"
+            checked={sendDirectly}
+            onChange={(e) => setSendDirectly(e.target.checked)}
+          />
+          Traiter réellement (envoi immédiat)
+        </label>
       </div>
 
       <div className="tickets-content">

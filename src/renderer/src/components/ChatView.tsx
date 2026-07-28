@@ -1056,8 +1056,41 @@ export function ChatView({
       setDraftInput(NEW_DRAFT_KEY, prompt)
       requestAnimationFrame(() => composerInputRef.current?.focus())
     }
+    /**
+     * Tickets → Chat (refonte du 2026-07-28). Ouvre la conversation de la sélection et y PRÉ-REMPLIT
+     * le prompt sans l'envoyer : c'est l'utilisateur qui déclenche. `send: true` (case « Traiter
+     * réellement ») envoie immédiatement. Avant, la vue Tickets lançait N orchestrations sans que le
+     * prompt soit jamais visible.
+     */
+    const prefill = (event: Event): void => {
+      const detail = (event as CustomEvent<{
+        conversationId?: string
+        prompt?: string
+        send?: boolean
+      }>).detail
+      if (!detail?.prompt) return
+      const id = detail.conversationId
+      if (id) {
+        const target = convsRef.current.find((conversation) => conversation.id === id)
+        if (target) loadConv(target)
+        else {
+          activeRef.current = id
+          setActiveId(id)
+          setMessages([])
+        }
+      }
+      const draftKey = id ?? NEW_DRAFT_KEY
+      switchComposerDraft(draftKey)
+      setDraftInput(draftKey, detail.prompt)
+      if (detail.send) void send(detail.prompt)
+      else requestAnimationFrame(() => composerInputRef.current?.focus())
+    }
+    window.addEventListener('autowin:prefill-conversation', prefill)
     window.addEventListener('autowin:brainwash', openBrainwash)
-    return () => window.removeEventListener('autowin:brainwash', openBrainwash)
+    return () => {
+      window.removeEventListener('autowin:prefill-conversation', prefill)
+      window.removeEventListener('autowin:brainwash', openBrainwash)
+    }
   }, [])
 
   /**
