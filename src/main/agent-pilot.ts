@@ -2,17 +2,14 @@ import type { ProviderRegistry } from './providers/registry'
 import type { RoleModelConfig } from './roles'
 import type { AppCommandBus } from './commands'
 import type { Message, PromptEnvelope, SendOptions, Usage } from './providers/types'
-import {
-  MODEL_QUESTION_INSTRUCTION,
-  parseModelQuestion,
-  type ModelQuestion
-} from './model-questions'
+import { parseModelQuestion, type ModelQuestion } from './model-questions'
 import { VisibleStreamFilter } from '../shared/stream-markup-filter'
 import type { ConversationAuthorityMode } from './conversation-capabilities'
 import { randomUUID } from 'node:crypto'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
 import { routeSkillRequest } from './skill-routing'
+import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { startTurnTimer } from './turn-timing'
 
 /**
@@ -118,6 +115,19 @@ export class AgentPilot {
      */
     private readonly projectContext: () => string = () => ''
   ) {}
+
+  /**
+   * Sessions CLI du CHAT, par conversation (levier coût — mesure 2026-07-28 : 1,85 M de tokens de
+   * cache_write en 1h, ~79 k de contexte re-payé à chaque tour). Même levier que le session-resume
+   * chaîné de l'orchestrateur : quand le provider rend un sessionId, le tour suivant REPREND cette
+   * session — l'historique est déjà connu du CLI, on n'envoie donc que le nouveau message.
+   *
+   * La clé inclut provider+modèle : un changement de binding INVALIDE la session (reprendre une
+   * session ouverte avec un autre modèle n'a pas de sens). Cache mémoire volontairement : le gain
+   * visé est intra-session d'app (les tours consécutifs), et une session CLI ne survit de toute
+   * façon pas indéfiniment — pas de sessionId réutilisable ⇒ retour au comportement actuel.
+   */
+  private readonly chatSessions = new Map<string, { key: string; sessionId: string }>()
 
   async run(goal: string, onEvent: (e: PilotEvent) => void, maxIter = 6): Promise<void> {
     const binding = this.roles.getBinding('orchestrator')
@@ -294,50 +304,7 @@ export class AgentPilot {
 
     // MÊME config que les phases orchestrées : la CONSTITUTION (soul/réflexes) est la source
     // UNIQUE partagée ; le chat y ajoute seulement ce qui lui est propre (pilotage par commandes).
-    const pilotage =
-      `Tu es l'agent d'"Autowin OS", un cockpit d'orchestration d'agents. Tu CONVERSES avec ` +
-      `l'utilisateur en français, naturellement, ET tu peux PILOTER l'application toi-même.\n` +
-      `Pour agir sur l'app, émets une ou plusieurs commandes AU FORMAT EXACT : ` +
-      `<cmd>{"name":"...","args":{...}}</cmd>. Tout texte HORS commande est ta réponse parlée à ` +
-      `l'utilisateur (il la voit dans le chat). L'UI se met à jour EN DIRECT quand tu agis.\n` +
-      // GATE CONVERSATIONNEL (mesure 2026-07-28 : 114 spawns CLI / 26,65 $ en 1h d'usage reel, dont
-      // un juge a 1,5 $ pour 89 tokens de verdict). La cause n'etait pas la mecanique mais CE prompt:
-      // trois consignes poussaient vers `orchestrate` et ecrasaient la seule ligne autorisant la
-      // reponse directe. Ce bloc passe DEVANT et fait de la reponse directe le comportement DEFAUT.
-      `RÈGLE PREMIÈRE — RÉPONDS TOI-MÊME. Par défaut tu réponds directement, avec AUCUNE commande. ` +
-      `Une question sur l'état de l'app, sur du code ou un fichier déjà lu, une demande d'avis, ` +
-      `d'explication, de chiffre, de comparaison, de méthode ou de diagnostic = tu réponds ` +
-      `DIRECTEMENT, ZÉRO commande, même si la réponse est longue ou technique. Le pipeline coûte ` +
-      `plusieurs appels de modèle : ne l'engage QUE si la demande exige de MODIFIER le workspace ` +
-      `(écrire, corriger, refactorer du code, créer un fichier) ou de lancer une vérification ` +
-      `outillée (tests, build, capture). En doute entre répondre et orchestrer : RÉPONDS — ` +
-      `l'utilisateur relancera s'il voulait une action. Cette règle PRIME sur la constitution ` +
-      `ci-dessus, dont le « en doute, traite comme substantiel » ne vaut que pour du travail DÉJÀ ` +
-      `orchestré, pas pour décider s'il faut orchestrer.\n` +
-      `Tu peux faire modifier le code du workspace par la commande orchestrate. Ne dis jamais que tu ne peux pas modifier le code lorsque cette commande est disponible : utilise-la avec la demande complète de l'utilisateur — mais SEULEMENT quand la demande porte vraiment sur une modification, jamais pour répondre à une question.\n` +
-      `Commandes disponibles :\n` +
-      catalog
-        .map((c) => `- ${c.name}(${Object.keys(c.args).join(', ')}) : ${c.description}`)
-        .join('\n') +
-      `\nRègles : réponds normalement quand c'est une simple question ; n'utilise des commandes ` +
-      `QUE si l'objectif demande d'agir sur l'app. Après une commande tu reçois le résultat + le ` +
-      `nouvel état et tu peux continuer. Quand tu as fini d'agir, termine par ta réponse en clair ` +
-      `SANS commande.\n` +
-      `Pour une action, émets la commande AVANT tout texte visible. N'annonce jamais un lancement, ` +
-      `un succès ou une clôture avant son résultat observable : reused:true signifie réutilisation, ` +
-      `running signifie « en cours » avec runId, failed signifie échec. Ne dis « fait », ` +
-      `« terminé » ou « vert » pour un travail orchestré qu'après succeeded avec son runId.\n` +
-      // BORNÉ au code/workspace : « propose » ou « des options » suffisait à déclencher un pipeline
-      // scout complet sur une simple demande d'avis. La divergence reste obligatoire (on ne renvoie
-      // pas la question à l'utilisateur), mais elle se fait EN RÉPONDANT quand rien n'est à modifier.
-      `DEMANDE OUVERTE : ne renvoie JAMAIS la question à l'utilisateur, diverge toi-même. Si elle ` +
-      `porte sur le CODE ou le WORKSPACE et suppose d'y travailler (« scoute le repo », « trouve ` +
-      `une tâche dans X », « améliore le module Y »), lance \`orchestrate\` avec la demande ` +
-      `complète (pipeline scout/frame). Si elle est CONVERSATIONNELLE (un avis, des options, une ` +
-      `méthode, « qu'est-ce que tu en penses », « par quoi commencer ») : propose TOI-MÊME ` +
-      `plusieurs options concrètes et scorées dans ta réponse, SANS aucune commande. Demander à ` +
-      `l'utilisateur de faire le travail (ex. « donne-moi la liste ») est un DERNIER recours, ` +
-      `jamais le réflexe par défaut.\n${MODEL_QUESTION_INSTRUCTION}`
+    const pilotage = buildChatPilotagePrompt(catalog)
     const systemParts = [
       { name: 'constitution', text: CONSTITUTION },
       { name: 'pilotage', text: pilotage },
@@ -351,10 +318,23 @@ export class AgentPilot {
       .map((p) => ({ name: p.name, chars: p.text.length }))
 
     // Reconstruit le fil : historique de la conversation + état courant de l'app.
-    const convo: string[] = [
-      `ÉTAT DE L'APP:\n${JSON.stringify(snapshot)}`,
-      ...history.map((m) => `${m.role === 'user' ? 'UTILISATEUR' : 'TOI'}: ${m.content}`)
-    ]
+    // Session-resume du CHAT (levier coût) : si la conversation a déjà une session CLI ouverte avec
+    // le MÊME binding, on la reprend — l'historique y est déjà, on n'envoie donc que le dernier
+    // message + l'état courant de l'app (qui, lui, a pu changer). Sinon : fil complet, inchangé.
+    const sessionKey = `${provider}:${binding.model ?? ''}`
+    const known = conversationId ? this.chatSessions.get(conversationId) : undefined
+    const resumeSessionId = known?.key === sessionKey ? known.sessionId : undefined
+    const lastUserMessage = [...history].reverse().find((m) => m.role === 'user')
+    const convo: string[] = resumeSessionId
+      ? [
+          `ÉTAT DE L'APP:\n${JSON.stringify(snapshot)}`,
+          `Suite de NOTRE conversation en cours (tu en connais déjà l'historique par ta session : ne le redemande pas).`,
+          `UTILISATEUR: ${lastUserMessage?.content ?? ''}`
+        ]
+      : [
+          `ÉTAT DE L'APP:\n${JSON.stringify(snapshot)}`,
+          ...history.map((m) => `${m.role === 'user' ? 'UTILISATEUR' : 'TOI'}: ${m.content}`)
+        ]
     const currentAttachments = history.at(-1)?.attachments
 
     // Coût cumulé du tour (toutes les itérations LLM du même message utilisateur).
@@ -392,6 +372,9 @@ export class AgentPilot {
         systemBlocks,
         model: binding.model,
         reasoningEffort: binding.reasoningEffort,
+        // Repris seulement au PREMIER appel du tour : les itérations suivantes chaînent déjà sur la
+        // session que ce tour vient d'ouvrir (voir la mémorisation après réception).
+        ...(resumeSessionId && i === 0 ? { resumeSessionId } : {}),
         observePrompt: (observed) => {
           observed.systemBlocks = systemBlocks
           prompt = observed
@@ -489,6 +472,10 @@ export class AgentPilot {
         callDurationMs: performance.now() - callStartedAt,
         sessionId: res.sessionId
       })
+      // Mémorise la session pour que le PROCHAIN tour la reprenne au lieu de re-payer l'historique.
+      if (conversationId && res.sessionId) {
+        this.chatSessions.set(conversationId, { key: sessionKey, sessionId: res.sessionId })
+      }
       if (res.usage) {
         usage.inputTokens += res.usage.inputTokens
         usage.outputTokens += res.usage.outputTokens
