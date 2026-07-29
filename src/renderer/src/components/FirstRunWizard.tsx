@@ -23,6 +23,10 @@ interface PreflightResult {
   checks: Check[]
 }
 
+/** Cadence de re-sonde pendant un démarrage, et patience au-delà de laquelle on cesse d'attendre. */
+const STARTUP_PROBE_MS = 3000
+const STARTUP_PATIENCE_MS = 120_000
+
 export function FirstRunWizard(): React.JSX.Element | null {
   const [open, setOpen] = useState(false)
   const [result, setResult] = useState<PreflightResult | null>(null)
@@ -32,6 +36,13 @@ export function FirstRunWizard(): React.JSX.Element | null {
   // JAMAIS que le prérequis est réparé : il dit ce qui a été lancé, le re-diagnostic tranche.
   const [repairing, setRepairing] = useState<string | null>(null)
   const [repairNotes, setRepairNotes] = useState<Record<string, string>>({})
+  /**
+   * Prérequis dont le démarrage est LANCÉ mais pas encore effectif. `repairing` ne couvre que
+   * l'appel lui-même (quelques millisecondes) : le brain_server, lui, chauffe ~30-40 s. Sans cet
+   * état, la ligne repassait aussitôt à « ✗ injoignable » alors que le démarrage était en cours.
+   * Effacé dès que le prérequis passe au vert (ou au bout du délai de patience).
+   */
+  const [starting, setStarting] = useState<Record<string, boolean>>({})
   // Fermé manuellement par l'utilisateur malgré un rouge → on ne ré-ouvre pas en boucle tant que
   // l'état reste rouge ; un retour au vert efface ce drapeau (prochain rouge ré-ouvrira).
   const dismissedRef = useRef(false)
@@ -43,6 +54,18 @@ export function FirstRunWizard(): React.JSX.Element | null {
   // Applique un résultat de preflight : GREEN → jamais/plus affiché ; ROUGE → affiché (sauf dismiss).
   const applyResult = useCallback((r: PreflightResult) => {
     setResult(r)
+    // Un prérequis passé au vert n'est plus « en démarrage » : on éteint son indicateur.
+    setStarting((s) => {
+      const next = { ...s }
+      let changed = false
+      for (const check of r.checks) {
+        if (check.ok && next[check.id]) {
+          delete next[check.id]
+          changed = true
+        }
+      }
+      return changed ? next : s
+    })
     if (r.ok) {
       dismissedRef.current = false
       setOpen(false)
@@ -74,6 +97,15 @@ export function FirstRunWizard(): React.JSX.Element | null {
     }
   }, [applyResult])
 
+  const clearStarting = useCallback((checkId: string) => {
+    setStarting((s) => {
+      if (!s[checkId]) return s
+      const next = { ...s }
+      delete next[checkId]
+      return next
+    })
+  }, [])
+
   const repair = useCallback(
     async (checkId: string) => {
       if (!window.api?.repairPreflight) {
@@ -81,6 +113,7 @@ export function FirstRunWizard(): React.JSX.Element | null {
         return
       }
       setRepairing(checkId)
+      setStarting((s) => ({ ...s, [checkId]: true }))
       try {
         const outcome = await window.api.repairPreflight(checkId)
         const detail =
@@ -88,8 +121,12 @@ export function FirstRunWizard(): React.JSX.Element | null {
             ? outcome.detail
             : 'Action lancée.'
         setRepairNotes((n) => ({ ...n, [checkId]: detail }))
+        // Un lancement qui a ÉCHOUÉ n'est pas « en cours » : on éteint l'indicateur tout de suite,
+        // sinon la ligne tournerait jusqu'au bout de la patience sur un service qui ne viendra pas.
+        if (outcome && outcome.started === false) clearStarting(checkId)
       } catch {
         setRepairNotes((n) => ({ ...n, [checkId]: 'La réparation a échoué. Voir la commande ci-dessus.' }))
+        clearStarting(checkId)
       } finally {
         setRepairing(null)
         // Le login est INTERACTIF et le brain met ~30-40 s : on re-sonde pour rafraîchir l'affichage,
@@ -97,7 +134,7 @@ export function FirstRunWizard(): React.JSX.Element | null {
         void recheck(true)
       }
     },
-    [recheck]
+    [recheck, clearStarting]
   )
 
   useEffect(() => {
@@ -107,6 +144,22 @@ export function FirstRunWizard(): React.JSX.Element | null {
     const off = window.api?.onPreflight?.((r) => applyResult(r as PreflightResult))
     return () => off?.()
   }, [recheck, applyResult])
+
+  useEffect(() => {
+    // Tant qu'un prérequis démarre, on re-sonde : c'est ce qui fait disparaître la fenêtre d'elle-même
+    // dès que le service répond, sans que l'utilisateur ait à cliquer « Re-vérifier ». Borné : au-delà
+    // de la patience, on éteint l'indicateur plutôt que de tourner indéfiniment sur un démarrage raté.
+    if (Object.keys(starting).length === 0) return
+    const deadline = Date.now() + STARTUP_PATIENCE_MS
+    const timer = setInterval(() => {
+      if (Date.now() > deadline) {
+        setStarting({})
+        return
+      }
+      void recheck(true)
+    }, STARTUP_PROBE_MS)
+    return () => clearInterval(timer)
+  }, [starting, recheck])
 
   useEffect(() => {
     if (!open) return
@@ -157,11 +210,26 @@ export function FirstRunWizard(): React.JSX.Element | null {
           configurent une seule fois, ici.
         </p>
         <ul className="frw-checks">
-          {(result?.checks ?? []).map((c) => (
-            <li key={c.id} className={c.ok ? 'ok' : 'ko'} data-testid={`frw-check-${c.id}`}>
-              <span className="frw-icon">{c.ok ? '✓' : '✗'}</span>
+          {(result?.checks ?? []).map((c) => {
+            // « En démarrage » n'est ni vert ni rouge : le service a été lancé, il chauffe.
+            const pending = !c.ok && starting[c.id] === true
+            return (
+            <li
+              key={c.id}
+              className={c.ok ? 'ok' : pending ? 'pending' : 'ko'}
+              data-testid={`frw-check-${c.id}`}
+            >
+              <span className="frw-icon">
+                {c.ok ? '✓' : pending ? <span className="frw-spinner" data-testid={`frw-spinner-${c.id}`} aria-hidden="true" /> : '✗'}
+              </span>
               <span className="frw-label">{c.label}</span>
-              {!c.ok && c.detail ? <span className="frw-detail">{c.detail}</span> : null}
+              {pending ? (
+                <span className="frw-detail" role="status">
+                  en cours… la fenêtre se ferme dès que c’est prêt
+                </span>
+              ) : !c.ok && c.detail ? (
+                <span className="frw-detail">{c.detail}</span>
+              ) : null}
               {!c.ok && repairAffordance(c.id) ? (
                 <button
                   type="button"
@@ -169,9 +237,9 @@ export function FirstRunWizard(): React.JSX.Element | null {
                   data-testid={`frw-repair-${c.id}`}
                   title={repairAffordance(c.id)?.note}
                   onClick={() => void repair(c.id)}
-                  disabled={repairing !== null || checking}
+                  disabled={repairing !== null || checking || pending}
                 >
-                  {repairing === c.id ? 'En cours…' : repairAffordance(c.id)?.label}
+                  {repairing === c.id || pending ? 'En cours…' : repairAffordance(c.id)?.label}
                 </button>
               ) : null}
               {repairNotes[c.id] ? (
@@ -180,7 +248,8 @@ export function FirstRunWizard(): React.JSX.Element | null {
                 </span>
               ) : null}
             </li>
-          ))}
+            )
+          })}
           {error ? (
             <li className="frw-error" role="alert">
               {error}

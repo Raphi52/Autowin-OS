@@ -262,6 +262,45 @@ describe('réparer un prérequis rouge depuis la popup', () => {
     ).toContain('échoué')
   })
 
+  it('un service qui DÉMARRE affiche un indicateur, puis la fenêtre se ferme seule quand il répond', async () => {
+    // Le brain_server chauffe ~30-40 s : sans état « en démarrage », la ligne repassait aussitôt à
+    // « ✗ injoignable » et l'utilisateur devait cliquer « Re-vérifier » pour voir le résultat.
+    const brainKo = [
+      { id: 'brain', label: 'brain_server (:8765)', ok: false, detail: 'injoignable' }
+    ]
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    let up = false
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      recheckPreflight: async () => ({
+        ok: up,
+        summary: up ? 'complète' : 'incomplète',
+        checks: [{ ...brainKo[0], ok: up, detail: up ? undefined : 'injoignable' }]
+      }),
+      repairPreflight: async () => ({ started: true, detail: 'brain_server lancé' })
+    }
+    await render()
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="frw-repair-brain"]')?.click()
+    )
+    await flush()
+
+    // Pendant la chauffe : indicateur visible, plus de croix, et on ne prétend pas que c'est prêt.
+    expect(container.querySelector('[data-testid="frw-spinner-brain"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="frw-check-brain"]')?.className).toContain(
+      'pending'
+    )
+    expect(container.querySelector('[data-testid="first-run-wizard"]')).toBeTruthy()
+
+    // Le service répond → la fenêtre disparaît d'elle-même, sans clic.
+    up = true
+    await act(async () => {
+      vi.advanceTimersByTime(3500)
+    })
+    await flush()
+    expect(container.querySelector('[data-testid="first-run-wizard"]')).toBeNull()
+    vi.useRealTimers()
+  })
+
   it('sans canal de réparation, le bouton le DIT au lieu de ne rien faire', async () => {
     ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
       recheckPreflight: async () => ({ ok: false, summary: 'incomplète', checks: codexKo })

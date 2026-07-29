@@ -49,6 +49,33 @@
 .frw-checks li.ko .frw-icon {
   color: var(--warning, #f4cc68);
 }
+/* En démarrage : ni vert ni rouge — un service lancé qui chauffe. */
+.frw-checks li.pending .frw-icon {
+  color: var(--accent, #7aa2f7);
+}
+.frw-spinner {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: frw-spin 0.7s linear infinite;
+  vertical-align: -1px;
+}
+@keyframes frw-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Respecte le réglage système : pas d'animation imposée à qui n'en veut pas. */
+@media (prefers-reduced-motion: reduce) {
+  .frw-spinner {
+    animation: none;
+    border-top-color: currentColor;
+    opacity: 0.6;
+  }
+}
 .frw-detail {
   width: 100%;
   padding-left: 24px;
