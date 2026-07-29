@@ -144,17 +144,6 @@
   cursor: pointer;
   text-align: left;
 }
-.agent-inbox-stop {
-  width: 28px;
-  border: 0;
-  border-radius: var(--r1);
-  background: transparent;
-  color: var(--danger);
-  cursor: pointer;
-}
-.agent-inbox-stop:hover {
-  background: var(--bg-2);
-}
 .agent-inbox-row:hover,
 .agent-inbox-row.active {
   background: var(--bg-2);
@@ -478,23 +467,6 @@
 }
 /* La bibliothèque reste la boussole du chat, y compris quand l'inspecteur est ouvert. */
 /* Étape d'activité (conversation) : icône + provider + coût tokens */
-.act-step {
-  padding: var(--s2);
-  border: 1px solid var(--line);
-  border-radius: var(--r2);
-  background: var(--bg-1);
-}
-.act-cost {
-  font-size: 11px;
-  color: var(--text-dim);
-}
-.act-step-label {
-  font-size: 11px;
-  margin-top: 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 /* Orchestration live + fil des sous-agents */
 .live-run {
@@ -571,18 +543,6 @@
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--text);
-}
-.run-detail {
-  margin: 0;
-  padding: var(--s2) var(--s3);
-  font-size: 10px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  max-height: 320px;
-  border: 1px solid var(--line);
-  border-top: none;
-  border-radius: 0 0 var(--r2) var(--r2);
-  background: var(--bg-inset);
 }
 
 .chat {
@@ -662,18 +622,6 @@
   gap: var(--s2);
   min-width: 0;
   max-width: 100%;
-}
-.action-name {
-  font-weight: 600;
-  color: var(--text);
-}
-.action-args {
-  font-size: 11px;
-  color: var(--text-faint);
-  max-width: 380px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .chat-welcome {
   margin: auto 0;
@@ -1012,6 +960,65 @@
   min-width: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
+}
+/* Tableaux GFM du chat : entêtes, bordures et zébrage discrets, colonnes alignées. */
+.md-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: var(--s2) 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r2);
+}
+.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  /* fix-ok: les colonnes doivent rester alignées, pas se replier sur le contenu. */
+  table-layout: auto;
+}
+.md-table th,
+.md-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.md-table tr:last-child td {
+  border-bottom: 0;
+}
+.md-table th {
+  background: var(--bg-inset);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.md-table tbody tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.025);
+}
+.md-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.md-badge-good {
+  color: #7ee2a8;
+  border-color: rgba(126, 226, 168, 0.35);
+  background: rgba(126, 226, 168, 0.12);
+}
+.md-badge-warn {
+  color: #f0c274;
+  border-color: rgba(240, 194, 116, 0.35);
+  background: rgba(240, 194, 116, 0.12);
+}
+.md-badge-bad {
+  color: #f38b8b;
+  border-color: rgba(243, 139, 139, 0.35);
+  background: rgba(243, 139, 139, 0.12);
 }
 .prompt-envelope {
   margin-top: 8px;
@@ -1720,35 +1727,6 @@
   width: min(480px, 42vw);
 }
 
-.proof-lightbox {
-  position: fixed;
-  z-index: 1000;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 28px;
-  background: rgba(0, 0, 0, 0.72);
-}
-
-.proof-card {
-  display: grid;
-  gap: 10px;
-  width: min(980px, 94vw);
-  max-height: 90vh;
-  padding: 14px;
-  border: 1px solid rgba(135, 220, 255, 0.45);
-  border-radius: 12px;
-  background: rgba(4, 8, 14, 0.96);
-}
-
-.proof-card img {
-  display: block;
-  max-width: 100%;
-  max-height: calc(90vh - 72px);
-  margin: auto;
-  object-fit: contain;
-}
-
 @media (max-width: 1050px) {
   .cosmic-outline .conv-pane {
     width: 242px;
@@ -1985,4 +1963,27 @@
   line-height: 1.5;
   white-space: pre-wrap;
   opacity: 0.85;
+}
+
+/* Verdict d'une vérification, affiché dans le bloc d'activité. La preuve doit se lire sans quitter
+   le fil : un exit code non nul se voit, un refus aussi (rien n'a tourné). */
+.activity-outcome {
+  font-size: 11px;
+  font-family: var(--mono, ui-monospace, monospace);
+  padding: 1px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.activity-outcome.st-ok {
+  color: var(--ok, #4ec9a5);
+  border-color: color-mix(in srgb, var(--ok, #4ec9a5) 35%, transparent);
+}
+.activity-outcome.st-failed {
+  color: var(--err, #ef6b6b);
+  border-color: color-mix(in srgb, var(--err, #ef6b6b) 45%, transparent);
+}
+.activity-outcome.st-refused {
+  color: var(--warn, #e8a33d);
+  border-color: color-mix(in srgb, var(--warn, #e8a33d) 40%, transparent);
 }

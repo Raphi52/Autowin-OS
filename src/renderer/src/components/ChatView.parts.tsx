@@ -1,3 +1,4 @@
+import { groupOutcomeSummary } from './action-outcome-summary'
 import { failedActionRunId } from './run-trace-target'
 import { HumanJson } from './HumanJson'
 import {
@@ -199,6 +200,13 @@ export function AssistantActivityGroup({
   // Workflows, pas au milieu du fil. Le bloc est donc un simple bouton qui y renvoie — vers la
   // carte du run si ça tourne, vers l'historique d'activité si c'est déjà terminé/interrompu.
   const tools = actions.map((action) => CMD_LABEL[action.name] ?? action.name).join(' · ')
+  /**
+   * Verdict d'une VERIFICATION, lisible sans quitter le fil. Sur conv-76, `verify` a tourne trois
+   * fois et seul « 1 action terminee verify » s'affichait : l'exit code — la seule chose qui prouve —
+   * restait invisible. On n'ouvre rien de plus (le detail vit toujours dans Workflows), on montre la
+   * ligne qui porte le verdict. Un echec passe devant une reussite.
+   */
+  const outcome = groupOutcomeSummary(actions)
   return (
     <button
       type="button"
@@ -220,6 +228,15 @@ export function AssistantActivityGroup({
       />
       <span className="activity-group-title">{status}</span>
       <span className="activity-group-tools">{tools}</span>
+      {outcome && (
+        <span
+          className={`activity-outcome st-${outcome.state}`}
+          data-testid="activity-outcome"
+          title={outcome.label}
+        >
+          {outcome.label}
+        </span>
+      )}
       {running && <span className="spinner" />}
       <span className="activity-group-go" aria-hidden="true">
         ↗
