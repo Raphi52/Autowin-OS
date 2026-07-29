@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
+  callsLabel,
   formatUsd,
   sharePercent,
   spendingRows,
@@ -112,6 +113,14 @@ describe('summarizeConversationCost — le total, et le poste qui l’explique',
     ])
     expect(summary.totalUsd).toBe(2)
     expect(summary.topKey).toBe('ok')
+  })
+})
+
+describe('callsLabel — vu a l’ecran en « 1 appels »', () => {
+  it('singulier a 1, pluriel au-dela, et zero au pluriel (« 0 appels »)', () => {
+    expect(callsLabel(1)).toBe('1 appel')
+    expect(callsLabel(3)).toBe('3 appels')
+    expect(callsLabel(0)).toBe('0 appel')
   })
 })
 

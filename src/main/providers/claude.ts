@@ -99,22 +99,57 @@ export function materializeClaudeAttachments(attachments: Attachment[]): Materia
 export function resolveClaudeBin(explicit?: string): string {
   if (explicit) return explicit
   if (process.env.CLAUDE_BIN) return process.env.CLAUDE_BIN
-  if (process.platform === 'win32') {
-    const appdata = process.env.APPDATA
-    if (appdata) {
-      const p = join(
-        appdata,
-        'npm',
-        'node_modules',
-        '@anthropic-ai',
-        'claude-code',
-        'bin',
-        'claude.exe'
-      )
-      if (existsSync(p)) return p
+  const found = findClaudeExecutable()
+  return found ?? 'claude'
+}
+
+/** Sous-chemin du binaire natif dans le paquet npm `@anthropic-ai/claude-code`. */
+const CLAUDE_PACKAGE_BIN = join('node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe')
+
+export interface ClaudeBinLookupDeps {
+  platform?: string
+  env?: NodeJS.ProcessEnv
+  exists?: (path: string) => boolean
+}
+
+/**
+ * Cherche le binaire NATIF `claude.exe`, dans l'ordre : le préfixe npm par défaut
+ * (`%APPDATA%\npm`), puis CHAQUE dossier du PATH — soit un `claude.exe` posé là, soit le paquet npm
+ * installé sous ce dossier.
+ *
+ * Pourquoi ne pas se contenter du chemin par défaut : REPRODUIT le 2026-07-29 sur cette machine, le
+ * PATH n'expose QUE des shims (`claude.cmd`, `claude.ps1`, `claude` sans extension). Le repli
+ * `spawn('claude', …, { shell: false })` échoue alors en `spawn claude ENOENT` — CreateProcess
+ * n'ajoute que `.exe`, il n'exécute pas un `.cmd`. Un poste dont le préfixe npm n'est pas exactement
+ * `%APPDATA%\npm` (npm prefix configuré, pnpm, volta, install machine) tombait donc systématiquement
+ * dans ce repli mort. Le passage à `shell: true` est EXCLU : `shell: false` est ce qui garantit
+ * l'absence d'injection d'arguments et un `--system-prompt` à espaces/accents intact.
+ *
+ * Rend `undefined` si rien n'est trouvé — l'appelant garde son repli `'claude'`, qui reste correct sur
+ * un poste où un vrai `claude.exe` est dans le PATH (Unix, ou install non-npm).
+ */
+export function findClaudeExecutable(deps: ClaudeBinLookupDeps = {}): string | undefined {
+  const platform = deps.platform ?? process.platform
+  if (platform !== 'win32') return undefined
+  const env = deps.env ?? process.env
+  const exists = deps.exists ?? existsSync
+  const candidates: string[] = []
+  const appdata = env.APPDATA
+  if (appdata) candidates.push(join(appdata, 'npm', CLAUDE_PACKAGE_BIN))
+  for (const entry of (env.PATH ?? env.Path ?? '').split(';')) {
+    const dir = entry.trim().replace(/^"|"$/g, '')
+    if (!dir) continue
+    // Un vrai .exe pose dans ce dossier gagne ; sinon le paquet npm installe sous ce prefixe.
+    candidates.push(join(dir, 'claude.exe'), join(dir, CLAUDE_PACKAGE_BIN))
+  }
+  for (const candidate of candidates) {
+    try {
+      if (exists(candidate)) return candidate
+    } catch {
+      // Un dossier du PATH illisible ne doit pas interrompre la recherche.
     }
   }
-  return 'claude'
+  return undefined
 }
 
 /**
@@ -363,7 +398,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       cwd: execution?.cwd ?? readOnlyCwd,
       ...(journal ? { detached: true, stdio: ['pipe', journal.fd, journal.fd] as const } : {})
     })
-    if (journal) child.unref() // l'app peut mourir sans emporter le CLI
+    // `unref` n'existe que sur un vrai ChildProcess (doubles de test / stubs peuvent l'omettre).
+    if (journal && typeof child.unref === 'function') child.unref() // l'app peut mourir sans emporter le CLI
     const childPid = child.pid
     if (childPid) {
       if (execution?.onSpawned) execution.onSpawned(spawnToken, childPid)

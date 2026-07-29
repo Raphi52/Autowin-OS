@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  callsLabel,
   formatUsd,
   sharePercent,
   spendingRows,
@@ -69,8 +70,8 @@ export function ConversationCostIndicator({ conversationId, busy }: Props): Reac
         onClick={() => setOpen((v) => !v)}
         title={
           summary.rewritingContext
-            ? `${summary.calls} appels · cache ${Math.round(summary.cacheHitRatio * 100)} % — le contexte est réécrit au lieu d’être relu`
-            : `${summary.calls} appels · cache ${Math.round(summary.cacheHitRatio * 100)} % · cliquer pour le détail`
+            ? `${callsLabel(summary.calls)} · cache ${Math.round(summary.cacheHitRatio * 100)} % — le contexte est réécrit au lieu d’être relu`
+            : `${callsLabel(summary.calls)} · cache ${Math.round(summary.cacheHitRatio * 100)} % · cliquer pour le détail`
         }
       >
         {summary.label}
@@ -80,7 +81,7 @@ export function ConversationCostIndicator({ conversationId, busy }: Props): Reac
         <div className="conv-cost-panel" data-testid="conversation-cost-panel">
           <div className="conv-cost-head">
             <span>
-              {summary.calls} appels · cache {Math.round(summary.cacheHitRatio * 100)} %
+              {callsLabel(summary.calls)} · cache {Math.round(summary.cacheHitRatio * 100)} %
             </span>
             <button
               type="button"

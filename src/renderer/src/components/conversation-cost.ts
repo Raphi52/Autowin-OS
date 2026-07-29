@@ -102,6 +102,11 @@ export function spendingRows(rows: readonly CostRow[]): CostRow[] {
     .sort((a, b) => b.costUsd - a.costUsd)
 }
 
+/** « 1 appel » / « 3 appels » — vu a l'ecran le 2026-07-29 en « 1 appels ». */
+export function callsLabel(calls: number): string {
+  return `${calls} appel${calls > 1 ? 's' : ''}`
+}
+
 /** Part d'une ligne dans le total, en pourcentage entier (pour une barre de proportion). */
 export function sharePercent(row: CostRow, totalUsd: number): number {
   if (!(totalUsd > 0)) return 0
