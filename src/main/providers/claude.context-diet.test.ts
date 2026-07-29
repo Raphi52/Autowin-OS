@@ -62,6 +62,31 @@ describe('spawn CLI — regime de contexte', () => {
     expect(source).toMatch(/if \(settingsDir\) rmSync\(settingsDir/)
   })
 
+
+  it('donne la LECTURE SEULE au tour de chat (il n’est plus aveugle)', () => {
+    // Avant : `--disallowedTools '*'` -> l'agent ne pouvait rien lire, donc toute question factuelle
+    // exigeait une orchestration (conv-75 : 38,68 $). Verifie en reel : sans outils il repond « Je
+    // dois verifier le fichier » ; avec Read/Grep/Glob il repond juste, pour ~0,12 $.
+    const chatBranch = source.slice(source.indexOf('} else {'), source.indexOf('let settingsDir'))
+    expect(chatBranch).toContain("'Read,Grep,Glob'")
+    expect(chatBranch).toContain("'--add-dir'")
+    // JAMAIS d'ecriture ni de shell sur un tour de chat : un dialogue ne mute rien. On inspecte les
+    // LISTES d'outils reellement passees (les commentaires du code citent ces noms, pas le contrat).
+    const toolLists = [...chatBranch.matchAll(/'([A-Z][A-Za-z]*(?:,[A-Z][A-Za-z]*)*)'/g)].map((m) => m[1])
+    expect(toolLists.length).toBeGreaterThan(0)
+    for (const list of toolLists) {
+      for (const mutating of ['Write', 'Edit', 'MultiEdit', 'Bash', 'NotebookEdit']) {
+        expect(list.split(',')).not.toContain(mutating)
+      }
+    }
+  })
+
+  it('sans workspace resolu, garde le comportement d’origine (aucun dossier devine)', () => {
+    const chatBranch = source.slice(source.indexOf('} else {'), source.indexOf('let settingsDir'))
+    expect(chatBranch).toContain("'--disallowedTools', '*'")
+    expect(chatBranch).toContain('existsSync(')
+  })
+
   it('n’utilise PAS --bare : il couperait l’auto-memory mais aussi l’auth par abonnement', () => {
     // La doc : « Anthropic auth is strictly ANTHROPIC_API_KEY … OAuth and keychain are never read ».
     // Autowin passe par le CLI justement pour utiliser l'abonnement — le flag serait un piege de

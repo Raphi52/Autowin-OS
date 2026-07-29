@@ -141,6 +141,10 @@ export class AutowinOS {
       .register(new GeminiCliAdapter())
     const executionWorkspace = resolveExecutionWorkspace()
     this.executionWorkspace = executionWorkspace
+    // Le workspace resolu est republie dans l'environnement pour que le TRANSPORT y ait acces sans
+    // nouvelle dependance : c'est ce qui permet au tour de chat de LIRE le projet (Read/Grep/Glob en
+    // lecture seule) au lieu d'etre aveugle et de devoir orchestrer pour repondre a une question.
+    process.env[AUTOWIN_WORKSPACE_ENV] = executionWorkspace
     // Garde : `git worktree` exige un vrai repo. Absent (.git manquant) → pas d'isolation (undefined).
     if (existsSync(join(executionWorkspace, '.git'))) {
       const manager = new WorktreeManager({

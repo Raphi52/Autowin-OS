@@ -13,6 +13,7 @@ import {
   tailJsonLines,
   type StdoutJournalHandle
 } from '../runs/stdout-journal'
+import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type {
@@ -241,6 +242,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // pas. Elles etaient donc payees a chaque appel sans jamais etre utilisees.
       '--disable-slash-commands'
     ]
+    // Cwd du spawn : celui de l'execution, ou le workspace en lecture seule pour un tour de chat.
+    let readOnlyCwd: string | undefined
     if (execution) {
       // B — mode exécuteur : outils activés + permission autonome, dans le cwd borné. A (générique) :
       // read-only ⇒ pas d'écriture/Bash-mutation ; workspace-write/danger ⇒ édition + Bash.
@@ -265,7 +268,34 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     } else if (materialized) {
       args.push('--tools', 'Read', '--allowedTools', 'Read')
     } else {
-      args.push('--disallowedTools', '*')
+      /**
+       * TOUR DE CHAT : lecture seule du workspace, au lieu d'etre AVEUGLE.
+       *
+       * Avant, le chat partait avec `--disallowedTools '*'` : l'agent ne pouvait rien lire, donc
+       * toute question factuelle (« que fait ce fichier ? ») exigeait une ORCHESTRATION complete.
+       * Mesure du 2026-07-28 sur conv-75 : 38,68 $ pour un travail qu'une lecture de deux fichiers
+       * aurait couvert. Le gate conversationnel livre le meme jour autorise la reponse directe —
+       * encore faut-il que l'agent ait de quoi la fonder.
+       *
+       * STRICTEMENT lecture : ni Write/Edit, ni Bash (qui rouvrirait les effets de bord par `cat`,
+       * `rm`, `git`…). `--tools` restreint ce qui est CHARGE, `--allowedTools` ce qui est AUTORISE :
+       * les deux, sinon on paie 34 definitions pour 3 outils utiles.
+       */
+      const readOnlyWorkspace = process.env[AUTOWIN_WORKSPACE_ENV]
+      if (readOnlyWorkspace && existsSync(readOnlyWorkspace)) {
+        readOnlyCwd = readOnlyWorkspace
+        args.push(
+          '--add-dir',
+          readOnlyWorkspace,
+          '--tools',
+          'Read,Grep,Glob',
+          '--allowedTools',
+          'Read,Grep,Glob'
+        )
+      } else {
+        // Aucun workspace resolu : on garde le comportement d'origine plutot que de deviner un dossier.
+        args.push('--disallowedTools', '*')
+      }
     }
     /**
      * MEMOIRE AUTO du CLI — on la ramene au PROJET COURANT.
@@ -330,7 +360,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     }
     const child = spawn(this.bin, args, {
       shell: false,
-      cwd: execution?.cwd,
+      cwd: execution?.cwd ?? readOnlyCwd,
       ...(journal ? { detached: true, stdio: ['pipe', journal.fd, journal.fd] as const } : {})
     })
     if (journal) child.unref() // l'app peut mourir sans emporter le CLI
