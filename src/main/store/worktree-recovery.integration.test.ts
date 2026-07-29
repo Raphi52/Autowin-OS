@@ -61,8 +61,7 @@ describe('récupération des worktrees après redémarrage', () => {
       expect(coordinator.activity()).toEqual([
         expect.objectContaining({ agentId: 'run-crashed', state: 'merged' })
       ])
-    },
-    10_000
+    }
   )
 
   it('conserve une copie contenant un fichier ignoré non jetable', () => {
@@ -139,8 +138,7 @@ describe('récupération des worktrees après redémarrage', () => {
           files: [{ path: 'late.tmp', kind: 'mod' }]
         })
       ])
-    },
-    10_000
+    }
   )
 
   it(
@@ -169,8 +167,7 @@ describe('récupération des worktrees après redémarrage', () => {
 
       expect(readFileSync(join(repo, 'active.txt'), 'utf8')).toContain('encore en cours')
       expect(restartedManager.listAgentIds()).toEqual([])
-    },
-    10_000
+    }
   )
 
   it(
@@ -221,8 +218,7 @@ describe('récupération des worktrees après redémarrage', () => {
           files: [{ path: 'late-commit.txt', kind: 'mod' }]
         })
       ])
-    },
-    10_000
+    }
   )
 
   it('nettoie une copie qui ne contient que des sorties régénérables', () => {

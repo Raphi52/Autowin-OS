@@ -4,8 +4,7 @@ import { join } from 'node:path'
 /**
  * Ledger d'activité des agents IN-APP — append-only JSONL, un fichier par jour
  * (`trace-YYYY-MM-DD.jsonl`). Chaque commande bus / événement pilote / étape
- * d'orchestration y laisse une ligne : c'est la moitié « agents d'Autowin OS »
- * de l'observatoire (l'autre = les transcripts Claude Code, transcripts.ts).
+ * d'orchestration y laisse une ligne pour le diagnostic durable des actions in-app.
  */
 
 export interface TraceEvent {

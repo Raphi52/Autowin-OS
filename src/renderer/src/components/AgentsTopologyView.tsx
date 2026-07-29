@@ -69,7 +69,11 @@ function withOrchestratorRole(
   }
 }
 
-export function AgentsTopologyView(): React.JSX.Element {
+export function AgentsTopologyView({
+  active = true
+}: {
+  active?: boolean
+} = {}): React.JSX.Element {
   const [models, setModels] = useState<ImportedModel[]>([])
   const [topology, setTopology] = useState<AgentTopology | null>(null)
   const [selectedModelId, setSelectedModelId] = useState('')
@@ -92,6 +96,7 @@ export function AgentsTopologyView(): React.JSX.Element {
       })
   }, [])
   useEffect(() => {
+    if (!active) return
     const off = window.api.onAppEvent((event) => {
       if (event.type === 'refresh' && event.scope === 'roles') {
         void window.api.roles().then((roles) => {
@@ -102,7 +107,7 @@ export function AgentsTopologyView(): React.JSX.Element {
       }
     })
     return off
-  }, [models])
+  }, [active, models])
   useEffect(() => {
     window.api
       .profiles()

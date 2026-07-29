@@ -45,7 +45,6 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     // critiques
     'os:orchestrate',
     'os:pilotChat',
-    'os:pilot',
     'os:kimiLogin',
     // hautes/moyennes (audit #3) : config + lectures fichier + brain
     'os:setRole',
@@ -54,7 +53,6 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     'os:profiles:save',
     'os:conversations:remove',
     'os:runTrace',
-    'os:activity:image',
     'os:loadBrainGraph',
     'os:readNodeFile'
   ])('%s appelle assertTrustedRendererSender', (channel) => {

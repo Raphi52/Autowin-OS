@@ -101,6 +101,44 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(container.textContent).toContain('+new')
   })
 
+  it('ignore un diff obsolète si un autre fichier est ouvert entre-temps', async () => {
+    mockApi(GIT)
+    let resolveFirst!: (value: { available: true; diff: string }) => void
+    let resolveSecond!: (value: { available: true; diff: string }) => void
+    const first = new Promise<{ available: true; diff: string }>((resolve) => {
+      resolveFirst = resolve
+    })
+    const second = new Promise<{ available: true; diff: string }>((resolve) => {
+      resolveSecond = resolve
+    })
+    ;(
+      window as unknown as {
+        api: { getGitDiff: (path: string) => Promise<{ available: true; diff: string }> }
+      }
+    ).api.getGitDiff = (path) => (path === 'src/main/index.ts' ? first : second)
+
+    await render()
+    const files = container.querySelectorAll('[data-testid="sc-file"]')
+    act(() => {
+      ;(files[0] as HTMLDivElement).click()
+      ;(files[1] as HTMLDivElement).click()
+    })
+    await act(async () => {
+      resolveSecond({ available: true, diff: '@@ -1 +1 @@\n-old-second\n+new-second' })
+      await second
+    })
+    expect(container.querySelector('.sc-diff-title')?.textContent).toBe('src/shared/git-read.ts')
+    expect(container.textContent).toContain('+new-second')
+
+    await act(async () => {
+      resolveFirst({ available: true, diff: '@@ -1 +1 @@\n-old-first\n+new-first' })
+      await first
+    })
+    expect(container.querySelector('.sc-diff-title')?.textContent).toBe('src/shared/git-read.ts')
+    expect(container.textContent).toContain('+new-second')
+    expect(container.textContent).not.toContain('+new-first')
+  })
+
   it('un bouton envoie la demande à l’agent (le renderer n’exécute aucun git)', async () => {
     mockApi(GIT)
     const onSendPrompt = vi.fn()

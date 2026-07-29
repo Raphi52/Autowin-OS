@@ -149,6 +149,13 @@ export function GraphView({
 
   useEffect(() => () => disposeGraphTextures(), [])
 
+  useEffect(() => {
+    const graphApi = graphRef.current
+    if (!graphApi) return
+    if (active) graphApi.resumeAnimation()
+    else graphApi.pauseAnimation()
+  }, [active])
+
   // Persiste les largeurs détail (par mode) à chaque changement.
   useEffect(() => {
     saveMemoryDetailWidths(localStorage, detailWidths)

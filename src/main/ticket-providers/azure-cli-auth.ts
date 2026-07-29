@@ -38,8 +38,3 @@ export async function getAzureDevOpsAadToken(now: number = Date.now()): Promise<
     return null
   }
 }
-
-/** Réinitialise le cache (tests / après un `az login` frais). */
-export function resetAadTokenCache(): void {
-  cached = null
-}

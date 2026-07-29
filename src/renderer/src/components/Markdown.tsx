@@ -1,7 +1,8 @@
 /**
  * Rendu markdown LÉGER sans dépendance (sûr : pas de HTML injecté, on ne produit
  * que des éléments React). Gère : blocs ``` ```, `code` inline, **gras**, liens
- * `[texte](http…)` + auto-liens http(s), listes `- `/`* `, et sauts de ligne.
+ * `[texte](http…)` + auto-liens http(s), listes `- `/`* `, tableaux GFM
+ * (`| a | b |` + ligne séparatrice, alignement par `:`), et sauts de ligne.
  * Les liens ne sont créés que pour les schémas http/https (ouverts en externe par
  * le setWindowOpenHandler du main). Suffisant pour des réponses de chat.
  */
@@ -120,7 +121,92 @@ function splitFinalSummary(text: string): FinalSummaryParts | null {
   }
 }
 
-/** Rend un bloc de texte en groupant les lignes de liste `- `/`* ` en `<ul>`. */
+type Align = 'left' | 'center' | 'right'
+
+const TABLE_ROW = /^\s*\|.*\|\s*$/
+const TABLE_SEPARATOR = /^\s*\|(?:\s*:?-{1,}:?\s*\|)+\s*$/
+
+/** Découpe une ligne `| a | b |` en cellules (les `\|` échappés restent littéraux). */
+function splitRow(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split(/(?<!\\)\|/)
+    .map((cell) => cell.replace(/\\\|/g, '|').trim())
+}
+
+function parseAlignments(separator: string): Align[] {
+  return splitRow(separator).map((spec) => {
+    const left = spec.startsWith(':')
+    const right = spec.endsWith(':')
+    if (left && right) return 'center'
+    if (right) return 'right'
+    return 'left'
+  })
+}
+
+/**
+ * Niveau d'une valeur de cellule pour la pastille : score numérique (`88`, `88/100`,
+ * `88 %`) sur seuils 70/40, ou statut connu. `null` = pas de pastille.
+ */
+function badgeLevel(value: string): 'good' | 'warn' | 'bad' | null {
+  const score = /^(\d{1,3})(?:\s*\/\s*100|\s*%)?$/.exec(value)
+  if (score) {
+    const n = Number(score[1])
+    if (n > 100) return null
+    return n >= 70 ? 'good' : n >= 40 ? 'warn' : 'bad'
+  }
+  const status = value.toUpperCase().replace(/[✅⚠️⛔🟢🟠🔴\s.]/gu, '')
+  if (!status) return null
+  if (['GREEN', 'VERT', 'OK', 'PASS', 'FAIT', 'DONE'].includes(status)) return 'good'
+  if (['WARN', 'ORANGE', 'DEGRADED', 'DEGRADE', 'PARTIEL', 'ENCOURS', 'FLAKY'].includes(status))
+    return 'warn'
+  if (['RED', 'ROUGE', 'FAIL', 'KO', 'BLOQUE', 'BLOQUÉ', 'INVALID'].includes(status)) return 'bad'
+  return null
+}
+
+function renderCell(value: string): React.ReactNode {
+  const level = badgeLevel(value)
+  if (!level) return inline(value)
+  return <span className={`md-badge md-badge-${level}`}>{value}</span>
+}
+
+/** Rend un tableau GFM (entête + séparateur + lignes) en `<table>`. */
+function renderTable(rows: string[], keyPrefix: string): React.ReactNode {
+  const headers = splitRow(rows[0])
+  const aligns = parseAlignments(rows[1])
+  const body = rows.slice(2).map(splitRow)
+  const alignOf = (i: number): Align => aligns[i] ?? 'left'
+  return (
+    <div className="md-table-wrap" key={keyPrefix}>
+      <table className="md-table">
+        <thead>
+          <tr>
+            {headers.map((cell, i) => (
+              <th key={`th-${i}`} style={{ textAlign: alignOf(i) }}>
+                {inline(cell)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {body.map((cells, r) => (
+            <tr key={`tr-${r}`}>
+              {headers.map((_, i) => (
+                <td key={`td-${r}-${i}`} style={{ textAlign: alignOf(i) }}>
+                  {renderCell(cells[i] ?? '')}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/** Rend un bloc de texte en groupant les listes `- `/`* ` en `<ul>` et les tableaux GFM. */
 function renderTextBlock(block: string): React.ReactNode[] {
   const out: React.ReactNode[] = []
   let list: React.ReactNode[] | null = null
@@ -138,7 +224,39 @@ function renderTextBlock(block: string): React.ReactNode[] {
     }
   }
 
-  for (const line of block.split('\n')) {
+  const lines = block.split('\n')
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+
+    // Tableau GFM : ligne d'entête + ligne séparatrice obligatoires.
+    if (TABLE_ROW.test(line) && index + 1 < lines.length && TABLE_SEPARATOR.test(lines[index + 1])) {
+      flushList()
+      const rows = [line, lines[index + 1]]
+      let next = index + 2
+      while (next < lines.length && TABLE_ROW.test(lines[next])) {
+        rows.push(lines[next])
+        next += 1
+      }
+      out.push(renderTable(rows, `tbl-${key++}`))
+      lastWasText = false
+      index = next - 1
+      continue
+    }
+
+    // Titres markdown `#`…`######`.
+    const heading = /^(#{1,6})\s+(.*)$/.exec(line)
+    if (heading) {
+      flushList()
+      const Tag = `h${heading[1].length}` as 'h1'
+      out.push(
+        <Tag key={`h-${key++}`} className="md-h">
+          {inline(heading[2])}
+        </Tag>
+      )
+      lastWasText = false
+      continue
+    }
+
     const item = /^\s*[-*]\s+(.*)$/.exec(line)
     if (item) {
       lastWasText = false

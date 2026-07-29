@@ -50,19 +50,12 @@
   background: transparent;
 }
 
-.graph-toolbar__title span,
 .graph-stage__heading span {
   display: block;
   color: #68788b;
   font-size: 9px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-}
-
-.graph-toolbar__title strong {
-  display: block;
-  margin-top: 2px;
-  font-size: 13px;
 }
 
 .graph-toolbar select,
@@ -555,26 +548,6 @@
   box-shadow: 0 0 7px var(--theme-color);
 }
 
-.graph-canvas .float-tooltip-kap {
-  z-index: 8;
-  max-width: min(360px, calc(100% - 24px));
-  padding: 7px 10px;
-  border: 1px solid rgba(117, 215, 255, 0.42);
-  border-radius: 6px;
-  background: rgba(5, 11, 18, 0.94);
-  box-shadow:
-    0 8px 24px rgba(0, 0, 0, 0.42),
-    0 0 14px rgba(76, 189, 239, 0.16);
-  color: #f2f8ff;
-  font:
-    600 11px/1.35 Inter,
-    system-ui,
-    sans-serif;
-  letter-spacing: 0.01em;
-  overflow-wrap: anywhere;
-  backdrop-filter: blur(8px);
-}
-
 .graph-stage__heading {
   position: absolute;
   z-index: 2;
@@ -810,32 +783,6 @@
   overflow: auto;
 }
 
-.panel-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  height: 44px;
-  border-bottom: 1px solid #202936;
-}
-
-.panel-tabs button {
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: #68788b;
-  cursor: pointer;
-  font-size: 10px;
-}
-
-.panel-tabs button.is-active {
-  border-bottom-color: #75d7ff;
-  color: #e4edf5;
-}
-
-.panel-tabs button:disabled {
-  cursor: default;
-  opacity: 0.45;
-}
-
 .visibility-settings,
 .node-panel {
   padding: 15px;
@@ -916,29 +863,6 @@
   height: 3px;
   margin-top: 8px;
   accent-color: #5bbcdf;
-}
-
-.lod-presets {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 5px;
-  margin-top: 11px;
-}
-
-.lod-presets button {
-  padding: 6px;
-  border: 1px solid #283440;
-  border-radius: 5px;
-  background: rgba(12, 19, 27, 0.95);
-  color: #68788b;
-  cursor: pointer;
-  font-size: 9px;
-}
-
-.lod-presets button.is-active {
-  border-color: #356a82;
-  background: #102430;
-  color: #bcecff;
 }
 
 .setting-help {
@@ -1066,11 +990,6 @@
   white-space: pre-wrap;
 }
 
-.node-panel--empty {
-  color: #657588;
-  font-size: 10px;
-}
-
 .graph-observatory--galaxy {
   border-color: #38306b;
   background: #040510;
@@ -1084,7 +1003,6 @@
   background: linear-gradient(90deg, rgba(16, 9, 35, 0.98), rgba(8, 10, 28, 0.98)), #080a18;
 }
 
-.graph-observatory--galaxy .graph-toolbar__title span,
 .graph-observatory--galaxy .graph-stage__heading span,
 .graph-observatory--galaxy .sidebar-heading,
 .graph-observatory--galaxy .settings-section__heading {
@@ -1115,16 +1033,6 @@
 .graph-observatory--galaxy .graph-canvas canvas {
   filter: saturate(1.7) contrast(1.1) drop-shadow(0 0 3px rgba(71, 238, 255, 0.72))
     drop-shadow(0 0 8px rgba(255, 66, 211, 0.42)) drop-shadow(0 0 14px rgba(126, 91, 255, 0.24));
-}
-
-.graph-observatory--galaxy .graph-canvas .float-tooltip-kap {
-  border-color: rgba(255, 102, 225, 0.62);
-  background: rgba(9, 4, 22, 0.94);
-  box-shadow:
-    0 8px 28px rgba(0, 0, 0, 0.52),
-    0 0 18px rgba(255, 79, 216, 0.32),
-    0 0 8px rgba(86, 243, 255, 0.24);
-  color: #fff6ff;
 }
 
 .graph-observatory--galaxy .graph-canvas::after {
@@ -1166,12 +1074,6 @@
   border-color: #654995;
   background: linear-gradient(90deg, rgba(82, 42, 132, 0.5), rgba(24, 33, 73, 0.58));
   box-shadow: inset 2px 0 #d263ff;
-}
-
-.graph-observatory--galaxy .panel-tabs button.is-active {
-  border-bottom-color: #d263ff;
-  color: #fff0ff;
-  text-shadow: 0 0 14px rgba(210, 99, 255, 0.75);
 }
 
 .graph-observatory--galaxy .toggle-row input:checked + i {
@@ -1221,10 +1123,6 @@
   .graph-observatory {
     --theme-column-width: 190px;
     --visibility-column-width: 220px;
-  }
-
-  .graph-toolbar__title {
-    display: none;
   }
 
   .graph-toolbar__stats {
@@ -1336,7 +1234,6 @@
   background: var(--bg-1);
   color: var(--text);
 }
-.graph-toolbar__title span,
 .graph-stage__heading span,
 .sidebar-heading,
 .settings-section__heading,

@@ -12,13 +12,38 @@ if (-not $requestedRoot.Equals($canonicalRoot, [StringComparison]::OrdinalIgnore
 $ProjectRoot = $canonicalRoot
 $root = $canonicalRoot + '\'
 $targets = @(
-  (Join-Path $ProjectRoot 'attachment-button-check.png')
+  (Join-Path $ProjectRoot 'attachment-button-check.png'),
+  (Join-Path $ProjectRoot 'agent-studio-frames.png'),
+  (Join-Path $ProjectRoot 'agent-studio-matrix.png'),
+  (Join-Path $ProjectRoot 'codex-login.out'),
+  (Join-Path $ProjectRoot 'tmp')
 )
 $targets += @(Get-ChildItem -LiteralPath $ProjectRoot -File -Filter 'harness-timeline-*.png' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
 $targets += @(Get-ChildItem -LiteralPath $ProjectRoot -Directory -Filter 'dist-*' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
+$distRoot = Join-Path $ProjectRoot 'dist'
+if (Test-Path -LiteralPath $distRoot) {
+  $legacyPackagePattern = '(^desktop-current$|^hooks-verify$|^safe-tool-verified$|-(proof|verified|test|check|final)(-|$))'
+  $targets += @(
+    Get-ChildItem -LiteralPath $distRoot -Directory -ErrorAction SilentlyContinue |
+      Where-Object { $_.Name -match $legacyPackagePattern } |
+      Select-Object -ExpandProperty FullName
+  )
+}
 $sketchRoot = Join-Path $ProjectRoot 'sketches'
 if (Test-Path -LiteralPath $sketchRoot) {
   $targets += @(Get-ChildItem -LiteralPath $sketchRoot -Directory -Filter '*-converge' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
+}
+$auditRoot = Join-Path $ProjectRoot 'Audit'
+if (Test-Path -LiteralPath $auditRoot) {
+  $auditPackages = Get-ChildItem -LiteralPath $auditRoot -Directory -Filter 'package-*' -Recurse -ErrorAction SilentlyContinue
+  foreach ($auditPackage in $auditPackages) {
+    $containsProofSource = Get-ChildItem -LiteralPath $auditPackage.FullName -File -Recurse -ErrorAction SilentlyContinue |
+      Where-Object { $_.Name -eq 'RUN.md' -or $_.Extension -in @('.ps1', '.mjs') } |
+      Select-Object -First 1
+    if (-not $containsProofSource) {
+      $targets += $auditPackage.FullName
+    }
+  }
 }
 $integrationRoot = Join-Path $ProjectRoot 'integrations'
 if (Test-Path -LiteralPath $integrationRoot) {

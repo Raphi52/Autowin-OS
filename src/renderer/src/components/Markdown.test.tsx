@@ -53,6 +53,66 @@ describe('Markdown', () => {
     expect(container.querySelector('strong')?.textContent).toBe('c')
   })
 
+  it('renders markdown headings as real heading elements', () => {
+    render('# Titre\n## Sous-titre **fort**\ntexte')
+    const h1 = container.querySelector('h1.md-h')
+    const h2 = container.querySelector('h2.md-h')
+    expect(h1?.textContent).toBe('Titre')
+    expect(h2?.textContent).toBe('Sous-titre fort')
+    expect(h2?.querySelector('strong')?.textContent).toBe('fort')
+    expect(container.textContent).not.toContain('#')
+  })
+
+  it('renders a GFM table as a real <table> with <th>/<td>', () => {
+    render('| Score | Quoi |\n| --- | --- |\n| 88 | a |\n| 12 | b |')
+    const table = container.querySelector('table.md-table')
+    expect(table).not.toBeNull()
+    const th = table!.querySelectorAll('thead th')
+    expect(th.length).toBe(2)
+    expect(th[0].textContent).toBe('Score')
+    const rows = table!.querySelectorAll('tbody tr')
+    expect(rows.length).toBe(2)
+    expect(rows[0].querySelectorAll('td').length).toBe(2)
+    expect(rows[1].querySelectorAll('td')[1].textContent).toBe('b')
+    // pas de pipes bruts laissés dans le DOM
+    expect(container.textContent).not.toContain('|')
+  })
+
+  it('honours column alignment from the separator row', () => {
+    render('| a | b | c |\n| :--- | :---: | ---: |\n| 1 | 2 | 3 |')
+    const cells = container.querySelectorAll('tbody td')
+    expect((cells[0] as HTMLElement).style.textAlign).toBe('left')
+    expect((cells[1] as HTMLElement).style.textAlign).toBe('center')
+    expect((cells[2] as HTMLElement).style.textAlign).toBe('right')
+  })
+
+  it('badges numeric scores and statuses by threshold', () => {
+    render('| Score | Etat |\n| --- | --- |\n| 88 | OK |\n| 55 | partiel |\n| 10 | KO |')
+    const badges = container.querySelectorAll('.md-badge')
+    expect(badges.length).toBe(6)
+    expect(badges[0].className).toContain('md-badge-good')
+    expect(badges[1].className).toContain('md-badge-good')
+    expect(badges[2].className).toContain('md-badge-warn')
+    expect(badges[3].className).toContain('md-badge-warn')
+    expect(badges[4].className).toContain('md-badge-bad')
+    expect(badges[5].className).toContain('md-badge-bad')
+  })
+
+  it('leaves prose and non-score cells unbadged, and needs a separator row', () => {
+    render('| a |\n| --- |\n| juste du texte |')
+    expect(container.querySelector('.md-badge')).toBeNull()
+
+    render('| a | b |\n| c | d |')
+    expect(container.querySelector('table')).toBeNull()
+    expect(container.textContent).toContain('| a | b |')
+  })
+
+  it('does not turn a table inside fenced code into a <table>', () => {
+    render('```\n| a |\n| --- |\n| 1 |\n```')
+    expect(container.querySelector('table')).toBeNull()
+    expect(container.querySelector('pre code')?.textContent).toContain('| a |')
+  })
+
   it('groups the model final summary in one dedicated region and absorbs its separator', () => {
     render(
       'Réponse détaillée.\n\n---\n\n✅ Fait\n1. Correctif appliqué.\n\n📍 Maintenant : vérifié.\n⏳ Reste à faire : rien.\n👉 Recommandé : tester.',

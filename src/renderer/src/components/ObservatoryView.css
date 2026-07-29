@@ -221,23 +221,6 @@
   margin: 6px 0;
   color: var(--text-faint);
 }
-.observatory-rag-summary {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 4px 12px;
-  margin: 8px 0;
-  padding: 9px 11px;
-  border: 1px solid rgba(104, 238, 183, 0.36);
-  border-radius: 8px;
-  background: rgba(23, 106, 78, 0.12);
-}
-.observatory-rag-summary strong {
-  color: #68eeb7;
-}
-.observatory-rag-summary small {
-  grid-column: 1 / -1;
-  color: var(--text-faint);
-}
 .observatory-rag-causal-step {
   display: grid;
   gap: 8px;
@@ -1135,7 +1118,6 @@
   color: #ead18b;
 }
 
-.theme-serious .observatory-view .observatory-rag-summary,
 .theme-serious .observatory-view .observatory-rag-causal-step,
 .theme-serious .observatory-view .brain-nav-candidates > li,
 .theme-serious .observatory-view .brain-nav-candidates > li.is-retained {
@@ -1260,21 +1242,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.observatory-call-sent {
-  margin: 4px 0 2px;
-  padding: 8px 10px;
-  border-left: 2px solid var(--accent, #ef3f91);
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.03);
-}
-.observatory-call-sent p {
-  margin: 3px 0 0;
-  color: var(--text, #e8edf4);
-  line-height: 1.4;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
 .brain-nav-card {
   border: 1px solid var(--stroke, rgba(255, 255, 255, 0.12));
   border-radius: 10px;

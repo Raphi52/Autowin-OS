@@ -31,7 +31,7 @@ describe('CONSTITUTION (source unique du soul)', () => {
     expect(CONSTITUTION).toContain('diagnostic → proposition d’éditions précises → attente d’un accord humain explicite avant toute mutation')
   })
 
-  it('se termine par un saut de ligne (contrat : concat sûre en tête de pilotage run())', () => {
+  it('se termine par un saut de ligne pour une concaténation sûre dans les prompts système', () => {
     expect(CONSTITUTION.endsWith('\n')).toBe(true)
   })
 })

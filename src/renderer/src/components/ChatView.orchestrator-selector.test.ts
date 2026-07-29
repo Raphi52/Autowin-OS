@@ -311,6 +311,7 @@ describe('selecteur orchestrateur Chat', () => {
     expect(source).toContain('option.model,')
     expect(source).toContain('option.reasoningEffort')
     expect(source).toContain('generation === runtimeRefreshGenerationRef.current')
+    expect(source).toContain('<ModelQuotaIndicator provider={runtimeIdentity?.provider} />')
     // Rendu du sélecteur : extrait dans OrchestratorModelSelector.
     expect(selectorSource).toContain('const disabled = busy || pending || models.length === 0')
     expect(selectorSource).toContain('className="model-select-menu"')

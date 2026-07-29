@@ -13,8 +13,7 @@
   line-height: 1.5;
   white-space: normal;
 }
-/* Gouttière de numéros (avant | après) + code : la gouttière reste figée à gauche pendant le
-   défilement horizontal, sinon les numéros disparaissent sur les lignes longues. */
+/* Gouttière compacte (avant | après) ; le code revient à la ligne dans l'espace restant. */
 .diff-line {
   display: grid;
   grid-template-columns: 58px minmax(0, 1fr);

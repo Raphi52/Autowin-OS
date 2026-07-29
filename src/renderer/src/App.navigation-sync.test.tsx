@@ -4,7 +4,6 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./components/ChatView', () => ({ ChatView: () => createElement('div') }))
-vi.mock('./components/PreflightBanner', () => ({ PreflightBanner: () => null }))
 vi.mock('./components/FirstRunWizard', () => ({ FirstRunWizard: () => null }))
 vi.mock('./components/ObservatoryView', () => ({ ObservatoryView: () => null }))
 vi.mock('./components/WorktreeView', () => ({ WorktreeView: () => null }))

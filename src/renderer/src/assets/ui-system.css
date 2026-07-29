@@ -61,9 +61,3 @@
   background: var(--surface-panel);
   box-shadow: none;
 }
-.surface-card {
-  border: 1px solid var(--container-border);
-  border-radius: var(--container-radius-card);
-  background: var(--surface-card);
-  box-shadow: none;
-}

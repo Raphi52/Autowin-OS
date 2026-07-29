@@ -183,8 +183,7 @@
 
 .git-ledger__rows > button:hover,
 .git-ledger__worktrees > button:hover,
-.git-ledger__chronology > button:hover,
-.git-ledger__ref-catalog > button:hover {
+.git-ledger__chronology > button:hover {
   background: var(--surface-hover);
   color: var(--text);
 }
@@ -324,15 +323,13 @@
 }
 .git-ledger__node.is-selected .git-ledger__subject { fill: var(--text); font-weight: 700; }
 
-.git-ledger__chronology,
-.git-ledger__ref-catalog {
+.git-ledger__chronology {
   min-height: 0;
   overflow: auto;
   padding: 10px;
 }
 
-.git-ledger__chronology > button,
-.git-ledger__ref-catalog > button {
+.git-ledger__chronology > button {
   width: 100%;
   display: flex;
   align-items: center;
@@ -346,8 +343,7 @@
   text-align: left;
 }
 
-.git-ledger__chronology code,
-.git-ledger__ref-catalog code {
+.git-ledger__chronology code {
   color: var(--cyan);
   font-size: 9px;
 }
@@ -355,8 +351,6 @@
 .git-ledger__chronology span { min-width: 0; display: grid; gap: 3px; }
 .git-ledger__chronology strong { overflow: hidden; color: var(--text); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .git-ledger__chronology small { color: var(--text-faint); font-size: 8px; }
-.git-ledger__ref-catalog strong { min-width: 0; flex: 1; overflow: hidden; font-size: 10px; text-overflow: ellipsis; }
-
 .git-ledger__inspector {
   padding: 18px;
   border-left: 1px solid var(--container-border);

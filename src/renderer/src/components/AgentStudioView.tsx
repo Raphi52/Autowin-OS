@@ -4,6 +4,7 @@ import { RouterView } from './RouterView'
 import './DomainShell.css'
 
 export function AgentStudioView({
+  active,
   section,
   onSectionChange
 }: {
@@ -32,7 +33,7 @@ export function AgentStudioView({
         </button>
       </nav>
       <div className="domain-content">
-        {section === 'routing' ? <RouterView /> : <RolesView />}
+        {section === 'routing' ? <RouterView /> : <RolesView active={active} />}
       </div>
     </section>
   )

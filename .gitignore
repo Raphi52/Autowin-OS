@@ -4,6 +4,7 @@ out
 .DS_Store
 .eslintcache
 *.log*
+*.tsbuildinfo
 codex-login.out
 Audit/
 artifacts/

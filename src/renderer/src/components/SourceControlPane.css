@@ -133,14 +133,6 @@
   opacity: 0.5;
   cursor: default;
 }
-.sc-prompt-badge {
-  font-size: 10px;
-  color: var(--accent, #4b9fff);
-  border: 1px dashed var(--accent, #4b9fff);
-  border-radius: 5px;
-  padding: 0 5px;
-  margin-left: 4px;
-}
 .sc-file {
   display: flex;
   align-items: center;
@@ -255,32 +247,4 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.sc-promptbar {
-  border-top: 1px solid var(--accent, #4b9fff);
-  padding: 8px 11px 10px;
-  background: var(--surface2, #191d23);
-}
-.sc-promptbar-lbl {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--accent, #4b9fff);
-  margin-bottom: 4px;
-}
-.sc-promptbar-input {
-  width: 100%;
-  min-height: 44px;
-  resize: vertical;
-  background: var(--surface, #14171c);
-  border: 1px solid var(--line2, #31373f);
-  border-radius: 8px;
-  color: var(--text, #e6e9ee);
-  font-size: 12px;
-  padding: 7px 9px;
-  font-family: inherit;
-}
-.sc-send {
-  margin-top: 6px;
-  width: 100%;
 }

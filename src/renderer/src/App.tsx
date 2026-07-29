@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import packageManifest from '../../../package.json'
 import { ChatView } from './components/ChatView'
-import { PreflightBanner } from './components/PreflightBanner'
 import { FirstRunWizard } from './components/FirstRunWizard'
 import { ObservatoryView } from './components/ObservatoryView'
 import { WorktreeView } from './components/WorktreeView'
@@ -339,7 +338,6 @@ export function MainApp(): React.JSX.Element {
         <div className="rail-foot c-faint">{`v${packageManifest.version} · preview`}</div>
       </aside>
       <main className={`main${driven ? ' driven' : ''}`} data-driven={driven}>
-        <PreflightBanner />
         {visitedTabs.has('chat') && (
           <div className={`view-slot${tab === 'chat' ? ' is-active' : ''}`}>
             <ChatView isActive={tab === 'chat'} onInspectTurn={inspectTurn} />

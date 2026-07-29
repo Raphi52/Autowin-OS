@@ -112,7 +112,7 @@ function GitTopology({
 }
 
 export function WorktreeView({ active }: { active: boolean }): React.JSX.Element {
-  return <WorktreeViewSession key={active ? 'active' : 'inactive'} active={active} />
+  return <WorktreeViewSession active={active} />
 }
 
 function WorktreeViewSession({ active }: { active: boolean }): React.JSX.Element {

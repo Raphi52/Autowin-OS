@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { WorktreeActivityView } from './WorktreeActivityView'
 import { DiffView } from './DiffView'
 import type { WorktreeAgentActivity } from '../../../shared/worktree-activity-model'
@@ -28,6 +28,7 @@ export function SourceControlPane({
   const [worktrees, setWorktrees] = useState<WorktreeAgentActivity[]>([])
   const [openFile, setOpenFile] = useState<string | null>(null)
   const [diff, setDiff] = useState<GitDiffResult | null>(null)
+  const diffRequestRef = useRef(0)
   // v3 — dépôt configurable (multi-repo), persisté ; '' = cwd de l'app par défaut.
   const [repoPath, setRepoPath] = useState<string>(
     () => localStorage.getItem('autowin:sc-repo') ?? ''
@@ -65,6 +66,7 @@ export function SourceControlPane({
   }, [repoPath, refreshTick])
 
   const selectRepo = (path: string): void => {
+    diffRequestRef.current += 1
     localStorage.setItem('autowin:sc-repo', path)
     setOpenFile(null)
     setDiff(null)
@@ -113,12 +115,16 @@ export function SourceControlPane({
   const propose = (text: string): void => onSendPrompt?.(text)
   const toggleDiff = (path: string): void => {
     if (openFile === path) {
+      diffRequestRef.current += 1
       setOpenFile(null)
       return
     }
+    const requestId = ++diffRequestRef.current
     setOpenFile(path)
     setDiff(null)
-    void window.api.getGitDiff?.(path, repoPath || undefined).then((d) => setDiff(d as GitDiffResult))
+    void window.api.getGitDiff?.(path, repoPath || undefined).then((d) => {
+      if (diffRequestRef.current === requestId) setDiff(d as GitDiffResult)
+    })
   }
 
   const changes = git?.state?.changes ?? []
