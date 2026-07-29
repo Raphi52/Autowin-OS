@@ -1244,6 +1244,9 @@ function registerChatIpc(): void {
       conversationId?: string
     ) => {
       assertTrustedRendererSender(event, 'PilotChat')
+      // Duree du tour : MESUREE de bout en bout, pour repondre a « qu'est-ce qui est lent ? » et pas
+      // seulement a « qu'est-ce qui coute ? » (les deux ne coincident pas forcement).
+      const turnStartedAtMs = performance.now()
       const controller = new AbortController()
       let resolveCompletion!: () => void
       const completion = new Promise<void>((resolve) => {
@@ -1583,7 +1586,8 @@ function registerChatIpc(): void {
             conversationId ? (os.conversations.get(conversationId)?.authorityMode ?? 'ask') : 'ask',
             conversationId ? () => drainPendingDirectives(conversationId) : undefined
           )
-        // Journal d'activité de la conversation : le tour de chat, avec son coût en tokens.
+        // Journal d'activité de la conversation : le tour de chat, avec son coût ET sa durée.
+        const turnDurationMs = Math.round(performance.now() - turnStartedAtMs)
         if (conversationId) {
           const last = safe[safe.length - 1]
           const orchestratorBinding = os.roles.getBinding('orchestrator')
@@ -1597,6 +1601,7 @@ function registerChatIpc(): void {
             inputTokens: turnUsage?.inputTokens,
             outputTokens: turnUsage?.outputTokens,
             costUsd: turnUsage?.costUsd,
+            durationMs: turnDurationMs,
             text: (streamedSpoken || spoken.join('\n')).slice(0, 600)
           })
         }

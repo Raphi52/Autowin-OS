@@ -21,6 +21,8 @@ export interface CostRow {
   cacheReadTokens: number
   /** Part du contexte RELUE depuis le cache. Proche de 0 = contexte réécrit à chaque appel. */
   cacheHitRatio: number
+  /** Temps cumulé des appels de cette ligne (0 = non mesuré par la source). */
+  durationMs?: number
 }
 
 export interface CostSummary
@@ -33,6 +35,8 @@ export interface CostSummary
     topKey?: string
     /** Ratio de cache global, pondéré par les tokens (pas une moyenne des ratios). */
     cacheHitRatio: number
+    /** Temps cumulé de la conversation. 0 = aucune source ne l'a mesuré. */
+    durationMs: number
     /**
      * Le contexte est RÉÉCRIT au lieu d'être relu — c'est ce symptôme qui a mené à la cause racine du
      * 2026-07-28. Jugé sur le VOLUME de contexte, pas sur le nombre d'appels : trois appels qui
@@ -68,6 +72,7 @@ export function summarizeConversationCost(rows: readonly CostRow[]): CostSummary
   let calls = 0
   let cacheRead = 0
   let input = 0
+  let durationMs = 0
   let topKey: string | undefined
   let topCost = 0
   for (const row of rows) {
@@ -76,6 +81,7 @@ export function summarizeConversationCost(rows: readonly CostRow[]): CostSummary
     totalUsd += cost
     calls += typeof row?.calls === 'number' && row.calls > 0 ? row.calls : 0
     cacheRead += typeof row?.cacheReadTokens === 'number' ? Math.max(0, row.cacheReadTokens) : 0
+    durationMs += typeof row?.durationMs === 'number' && row.durationMs > 0 ? row.durationMs : 0
     input += typeof row?.inputTokens === 'number' ? Math.max(0, row.inputTokens) : 0
     if (cost > topCost) {
       topCost = cost
@@ -88,6 +94,7 @@ export function summarizeConversationCost(rows: readonly CostRow[]): CostSummary
     totalUsd,
     calls,
     label: formatUsd(totalUsd),
+    durationMs,
     ...(topKey !== undefined ? { topKey } : {}),
     cacheHitRatio,
     rewritingContext:
@@ -111,4 +118,27 @@ export function callsLabel(calls: number): string {
 export function sharePercent(row: CostRow, totalUsd: number): number {
   if (!(totalUsd > 0)) return 0
   return Math.round((row.costUsd / totalUsd) * 100)
+}
+
+/**
+ * Duree lisible : « 4,2 s », « 3 min 12 s », « 1 h 05 ». Rend `undefined` quand rien n'a ete mesure —
+ * afficher « 0 s » ferait croire a une operation instantanee au lieu d'une absence de mesure.
+ */
+export function formatDuration(ms: number): string | undefined {
+  if (!Number.isFinite(ms) || ms <= 0) return undefined
+  if (ms < 1000) return `${Math.round(ms)} ms`
+  const seconds = ms / 1000
+  if (seconds < 60) return `${seconds.toFixed(1).replace('.', ',')} s`
+  const minutes = Math.floor(seconds / 60)
+  const rest = Math.round(seconds - minutes * 60)
+  if (minutes < 60) return rest > 0 ? `${minutes} min ${rest} s` : `${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  const restMin = minutes - hours * 60
+  return `${hours} h ${String(restMin).padStart(2, '0')}`
+}
+
+/** Part du TEMPS d'une ligne, en pourcentage entier. Le poste le plus lent n'est pas le plus cher. */
+export function timeSharePercent(row: CostRow, totalDurationMs: number): number {
+  if (!(totalDurationMs > 0) || !row.durationMs || row.durationMs <= 0) return 0
+  return Math.round((row.durationMs / totalDurationMs) * 100)
 }

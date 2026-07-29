@@ -175,6 +175,8 @@ export interface CostBreakdownRow {
   cacheReadTokens: number
   /** Part du contexte RELUE plutôt que réécrite : proche de 0 ⇒ le cache ne sert pas. */
   cacheHitRatio: number
+  /** Temps cumule des appels de cette ligne. 0 = aucune source ne l'a enregistre, jamais devine. */
+  durationMs: number
 }
 
 /**
@@ -195,6 +197,8 @@ export interface CostSample {
   inputTokens: number
   outputTokens: number
   cacheReadTokens: number
+  /** Duree de l'appel ; 0 quand la source ne la connait pas. */
+  durationMs: number
 }
 
 function sampleFromCall(call: PromptCallRecord): CostSample {
@@ -205,7 +209,8 @@ function sampleFromCall(call: PromptCallRecord): CostSample {
     costUsd: call.usage?.costUsd ?? 0,
     inputTokens: call.usage?.inputTokens ?? 0,
     outputTokens: call.usage?.outputTokens ?? 0,
-    cacheReadTokens: call.usage?.cacheReadTokens ?? 0
+    cacheReadTokens: call.usage?.cacheReadTokens ?? 0,
+    durationMs: typeof call.durationMs === 'number' && call.durationMs > 0 ? call.durationMs : 0
   }
 }
 
@@ -218,6 +223,7 @@ export interface ActivityCostEntry {
   costUsd?: number
   inputTokens?: number
   outputTokens?: number
+  durationMs?: number
 }
 
 /**
@@ -249,7 +255,8 @@ function sampleFromActivity(entry: ActivityCostEntry): CostSample {
     costUsd: entry.costUsd ?? 0,
     inputTokens: entry.inputTokens ?? 0,
     outputTokens: entry.outputTokens ?? 0,
-    cacheReadTokens: 0
+    cacheReadTokens: 0,
+    durationMs: typeof entry.durationMs === 'number' && entry.durationMs > 0 ? entry.durationMs : 0
   }
 }
 
@@ -319,12 +326,22 @@ export function summarizeCostSamples(
     const key = (dimension === 'actor' ? sample.actor : sample[dimension]) || '(inconnu)'
     const row =
       rows.get(key) ??
-      { key, calls: 0, costUsd: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheHitRatio: 0 }
+      {
+        key,
+        calls: 0,
+        costUsd: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheHitRatio: 0,
+        durationMs: 0
+      }
     row.calls += 1
     row.costUsd += sample.costUsd
     row.inputTokens += sample.inputTokens
     row.outputTokens += sample.outputTokens
     row.cacheReadTokens += sample.cacheReadTokens
+    row.durationMs += sample.durationMs
     rows.set(key, row)
   }
   for (const row of rows.values()) {

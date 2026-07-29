@@ -18,6 +18,13 @@ export interface ConvActivityEntry {
   inputTokens?: number
   outputTokens?: number
   costUsd?: number
+  /**
+   * Duree de l'operation. ABSENTE jusqu'au 2026-07-29 : ce journal porte les sous-agents les plus
+   * couteux (mesure conv-75 : 2,83 $ vus cote appels contre ~20,70 $ reels), donc on ne pouvait pas
+   * repondre a « quelle phase prend le TEMPS », seulement a « laquelle prend l'argent » — les deux ne
+   * coincident pas forcement.
+   */
+  durationMs?: number
   text?: string
   screenshots?: string[]
 }

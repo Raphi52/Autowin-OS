@@ -69,7 +69,7 @@
 }
 .conv-cost-rows li {
   display: grid;
-  grid-template-columns: 1fr 60px auto;
+  grid-template-columns: 1fr 44px auto auto;
   align-items: center;
   gap: 8px;
 }
@@ -100,4 +100,11 @@
   margin: 8px 0 0;
   color: var(--text-faint, #536b80);
   line-height: 1.4;
+}
+
+/* Temps d'un poste, a cote de son cout : le plus LENT n'est pas forcement le plus cher. */
+.conv-cost-time {
+  color: var(--text-faint, #6d879c);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }

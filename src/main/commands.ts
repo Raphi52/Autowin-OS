@@ -733,6 +733,9 @@ export class AppCommandBus {
                   inputTokens: s.inputTokens,
                   outputTokens: s.outputTokens ?? step.tokens,
                   costUsd: step.costUsd,
+                  // La duree etait DEJA mesuree par l'orchestrateur et jetee ici : sans elle, on ne
+                  // pouvait repondre qu'a « quelle phase coute », pas a « quelle phase est LENTE ».
+                  durationMs: step.durationMs,
                   text: step.text ?? step.detail
                 })
               }

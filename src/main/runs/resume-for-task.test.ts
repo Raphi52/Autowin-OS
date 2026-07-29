@@ -152,8 +152,13 @@ describe('câblage — la commande du chat reprend et rattache la conversation',
   })
 
   it('elle passe enfin `conversationId` — il manquait aussi', () => {
-    const call = source.slice(source.indexOf('const r = await this.os.runTask('))
-    expect(call.slice(0, 3000)).toContain('convId\n          )')
+    // Délimite l'appel par sa PARENTHÈSE fermante, pas par un budget de caractères : un budget cassait
+    // dès qu'une ligne était ajoutée dans le corps de l'appel (arrivé en ajoutant `durationMs`).
+    const start = source.indexOf('const r = await this.os.runTask(')
+    expect(start).toBeGreaterThan(0)
+    const call = source.slice(start, source.indexOf('\n          )', start))
+    expect(call).toContain('convId')
+    expect(call).toContain('resumeOutputs')
   })
 
   it('elle OUBLIE l’acquis repris (sinon il serait rejoué à chaque relance)', () => {

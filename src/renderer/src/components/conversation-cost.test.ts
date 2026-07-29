@@ -3,10 +3,12 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   callsLabel,
+  formatDuration,
   formatUsd,
   sharePercent,
   spendingRows,
   summarizeConversationCost,
+  timeSharePercent,
   type CostRow
 } from './conversation-cost'
 
@@ -167,5 +169,101 @@ describe('câblage — l’indicateur est réellement monté dans le composeur',
     expect(read('ConversationCostIndicator.tsx')).toContain(
       'if (summary.totalUsd <= 0) return null'
     )
+  })
+})
+
+/**
+ * LE TEMPS, pas seulement l'argent.
+ *
+ * Demande du 2026-07-29 : « je trouve que les operations dans autowin OS sont lentes, j'aimerais
+ * maximiser la vitesse, mais d'abord faut pouvoir mesurer. » Le poste le plus LENT n'est pas forcement
+ * le plus cher — un seul des deux etait mesure.
+ */
+describe('formatDuration — lisible, et honnete sur l’absence de mesure', () => {
+  it('sous la seconde en ms, puis en secondes a une decimale', () => {
+    expect(formatDuration(430)).toBe('430 ms')
+    expect(formatDuration(4200)).toBe('4,2 s')
+  })
+
+  it('au-dela d’une minute, en minutes et secondes', () => {
+    expect(formatDuration(192_000)).toBe('3 min 12 s')
+    expect(formatDuration(180_000)).toBe('3 min')
+  })
+
+  it('au-dela d’une heure, en heures et minutes', () => {
+    expect(formatDuration(3_900_000)).toBe('1 h 05')
+  })
+
+  it('RIEN de mesure -> undefined, jamais « 0 s » (qui ferait croire a l’instantane)', () => {
+    expect(formatDuration(0)).toBeUndefined()
+    expect(formatDuration(-5)).toBeUndefined()
+    expect(formatDuration(Number.NaN)).toBeUndefined()
+  })
+})
+
+describe('durée agrégée — le poste le plus lent peut ne pas être le plus cher', () => {
+  it('somme les durées des lignes', () => {
+    const summary = summarizeConversationCost([
+      row({ key: 'subagent', costUsd: 9, durationMs: 120_000 }),
+      row({ key: 'judge', costUsd: 1, durationMs: 5_000 })
+    ])
+    expect(summary.durationMs).toBe(125_000)
+  })
+
+  it('une durée absente ou aberrante ne fausse pas le total', () => {
+    const summary = summarizeConversationCost([
+      row({ key: 'a', costUsd: 1, durationMs: 1000 }),
+      row({ key: 'b', costUsd: 1 }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      row({ key: 'c', costUsd: 1, durationMs: 'lent' as any }),
+      row({ key: 'd', costUsd: 1, durationMs: -50 })
+    ])
+    expect(summary.durationMs).toBe(1000)
+  })
+
+  it('part du TEMPS distincte de la part du COÛT — le cas qui motive la mesure', () => {
+    // Le juge coute 10 % de la facture mais prend 60 % du temps : invisible jusqu'ici.
+    const cheapButSlow = row({ key: 'judge', costUsd: 1, durationMs: 60_000 })
+    const dearButFast = row({ key: 'subagent', costUsd: 9, durationMs: 40_000 })
+    const summary = summarizeConversationCost([cheapButSlow, dearButFast])
+    expect(sharePercent(cheapButSlow, summary.totalUsd)).toBe(10)
+    expect(timeSharePercent(cheapButSlow, summary.durationMs)).toBe(60)
+  })
+
+  it('sans aucune durée mesurée, le total est 0 et rien ne sera affiché', () => {
+    const summary = summarizeConversationCost([row({ key: 'a', costUsd: 1 })])
+    expect(summary.durationMs).toBe(0)
+    expect(formatDuration(summary.durationMs)).toBeUndefined()
+  })
+
+  it('part du temps : division par zéro impossible', () => {
+    expect(timeSharePercent(row({ key: 'a', durationMs: 10 }), 0)).toBe(0)
+    expect(timeSharePercent(row({ key: 'a' }), 100)).toBe(0)
+  })
+})
+
+describe('câblage — la durée est écrite ET affichée', () => {
+  const read2 = (rel: string): string => readFileSync(join(__dirname, rel), 'utf8')
+
+  it('le journal d’activité porte la durée de l’étape d’orchestration', () => {
+    expect(read2('../../../main/commands.ts')).toContain('durationMs: step.durationMs')
+  })
+
+  it('le tour de chat est mesuré de bout en bout', () => {
+    const main = read2('../../../main/index.ts')
+    expect(main).toContain('const turnStartedAtMs = performance.now()')
+    expect(main).toContain('durationMs: turnDurationMs')
+  })
+
+  it('l’agrégation additionne la durée des deux journaux', () => {
+    expect(read2('../../../main/activity/prompt-observability.ts')).toContain(
+      'row.durationMs += sample.durationMs'
+    )
+  })
+
+  it('le panneau affiche le temps par poste', () => {
+    const panel = read2('ConversationCostIndicator.tsx')
+    expect(panel).toContain('data-testid={`conversation-time-${row.key}`}')
+    expect(panel).toContain('timeSharePercent(row, summary.durationMs)')
   })
 })

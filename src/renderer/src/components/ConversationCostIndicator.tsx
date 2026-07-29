@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   callsLabel,
+  formatDuration,
   formatUsd,
   sharePercent,
   spendingRows,
   summarizeConversationCost,
+  timeSharePercent,
   type CostRow
 } from './conversation-cost'
 import './ConversationCostIndicator.css'
@@ -59,6 +61,7 @@ export function ConversationCostIndicator({ conversationId, busy }: Props): Reac
   // qu'un journal vide.
   if (summary.totalUsd <= 0) return null
   const detail = spendingRows(rows)
+  const totalDuration = formatDuration(summary.durationMs)
 
   return (
     <div className="conv-cost" data-testid="conversation-cost">
@@ -82,6 +85,7 @@ export function ConversationCostIndicator({ conversationId, busy }: Props): Reac
           <div className="conv-cost-head">
             <span>
               {callsLabel(summary.calls)} · cache {Math.round(summary.cacheHitRatio * 100)} %
+              {totalDuration ? ` · ${totalDuration}` : ''}
             </span>
             <button
               type="button"
@@ -106,11 +110,19 @@ export function ConversationCostIndicator({ conversationId, busy }: Props): Reac
                   <span style={{ width: `${sharePercent(row, summary.totalUsd)}%` }} />
                 </span>
                 <span className="conv-cost-amount">{formatUsd(row.costUsd)}</span>
+                {/* Le poste le plus LENT n'est pas forcement le plus cher : les deux sont montres. */}
+                <span className="conv-cost-time" data-testid={`conversation-time-${row.key}`}>
+                  {formatDuration(row.durationMs ?? 0) ?? '—'}
+                  {summary.durationMs > 0 && row.durationMs
+                    ? ` · ${timeSharePercent(row, summary.durationMs)} %`
+                    : ''}
+                </span>
               </li>
             ))}
           </ul>
           <p className="conv-cost-note">
-            Mesuré sur les journaux d’appels de cette conversation, sous-agents inclus.
+            Mesuré sur les journaux d’appels de cette conversation, sous-agents inclus. « — » = durée
+            non enregistrée par la source, pas une opération instantanée.
           </p>
         </div>
       )}
