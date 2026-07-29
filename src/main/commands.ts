@@ -1,3 +1,5 @@
+import { applyEdit, decideEdit, editDiff } from './edit-file-command'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { buildBrainOutcome, decideBrainQuery, type BrainQueryOutcome } from './brain-query-command'
 import { retrieveBrainContext } from './brain-retrieval'
 import { spawn } from 'node:child_process'
@@ -212,6 +214,17 @@ const CATALOG: CommandSpec[] = [
       'Interroger le savoir curé du Brain (décisions, leçons, contraintes déjà établies) — à préférer à une exploration du repo quand la question porte sur un acquis',
     args: { question: 'la question, en langage naturel' },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+  },
+  {
+    name: 'edit_file',
+    description:
+      'Remplacer un extrait UNIQUE dans un fichier du workspace (petite correction ciblée, sans lancer le pipeline) — puis utiliser « verify » pour prouver que ça tient',
+    args: {
+      path: 'chemin du fichier, relatif au workspace',
+      oldText: 'extrait exact à remplacer (doit être unique dans le fichier)',
+      newText: 'texte de remplacement'
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }
   }
 ]
 
@@ -814,6 +827,8 @@ export class AppCommandBus {
         return await this.runVerify()
       case 'brain_query':
         return await this.runBrainQuery(a.question)
+      case 'edit_file':
+        return this.runEditFile({ path: a.path, oldText: a.oldText, newText: a.newText })
       default:
         throw new Error(`commande inconnue: ${name}`)
     }
@@ -838,6 +853,40 @@ export class AppCommandBus {
    * et `buildBrainOutcome` distingue « rien trouve » d'une panne — l'agent ne doit pas transformer un
    * silence en reponse negative.
    */
+
+  /**
+   * Petite edition ciblee — le « chemin du milieu » entre parler et orchestrer.
+   *
+   * C'est le SEUL point qui donne le droit d'ecrire hors pipeline. Il ne l'est que parce que l'agent
+   * peut desormais PROUVER (`verify`) ce qu'il vient de changer. Toutes les bornes vivent dans
+   * `decideEdit` (module pur, 16 tests de refus : traversee de chemin, .git, secrets, correspondance
+   * ambigue, creation de fichier) — jamais dans un outil du CLI, dont les patterns d'autorisation ont
+   * ete mesures inoperants le meme jour.
+   */
+  private runEditFile(input: { path: unknown; oldText: unknown; newText: unknown }): {
+    allowed: boolean
+    reason?: string
+    path?: string
+    diff?: string
+  } {
+    const decision = decideEdit(input, this.os.executionWorkspace, (absolutePath) =>
+      existsSync(absolutePath) ? readFileSync(absolutePath, 'utf8') : null
+    )
+    if (!decision.allowed) return { allowed: false, reason: decision.reason }
+    const content = readFileSync(decision.absolutePath, 'utf8')
+    writeFileSync(
+      decision.absolutePath,
+      applyEdit(content, decision.oldText, decision.newText),
+      'utf8'
+    )
+    this.broadcast({ type: 'refresh', scope: 'conversations' })
+    return {
+      allowed: true,
+      path: decision.relativePath,
+      diff: editDiff(decision.oldText, decision.newText)
+    }
+  }
+
   private async runBrainQuery(question: unknown): Promise<BrainQueryOutcome & { allowed: boolean; reason?: string }> {
     const decision = decideBrainQuery(question)
     if (!decision.allowed) {
