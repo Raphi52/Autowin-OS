@@ -1387,53 +1387,33 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(container!.textContent).toContain('colle.txt')
   })
 
-  const branched = (activeBranchId: string): Record<string, unknown> => ({
+  // Forker cree desormais une conversation A PART : plus de branches internes, donc plus de
+  // parametre de branche active ni de barre d'onglets.
+  const branched = (): Record<string, unknown> => ({
     id: 'A',
     title: 'A',
     category: 'codex',
     provider: 'codex',
     updatedAt: 1,
-    rootBranchId: 'branch-A-root',
-    activeBranchId,
-    branches: [
-      { id: 'branch-A-root' },
-      { id: 'branch-A-2', parentBranchId: 'branch-A-root', forkedFromMessageId: 'm2' }
-    ],
     messages: [
-      { role: 'user', content: 'u1', ts: 1, messageId: 'm1', branchId: 'branch-A-root' },
+      { role: 'user', content: 'u1', ts: 1, messageId: 'm1' },
       {
         role: 'assistant',
         content: 'a1',
         ts: 1,
         messageId: 'm2',
-        branchId: 'branch-A-root',
         parentMessageId: 'm1',
         turnId: 't1',
         status: 'completed',
         parts: [{ kind: 'text', text: 'a1' }]
       },
-      {
-        role: 'user',
-        content: 'u2',
-        ts: 2,
-        messageId: 'm3',
-        branchId: 'branch-A-root',
-        parentMessageId: 'm2'
-      },
-      {
-        role: 'user',
-        content: 'alt',
-        ts: 3,
-        messageId: 'm5',
-        branchId: 'branch-A-2',
-        parentMessageId: 'm2'
-      }
+      { role: 'user', content: 'u2', ts: 2, messageId: 'm3', parentMessageId: 'm2' }
     ]
   })
 
   it('forke depuis un tour assistant persistant en appelant conversationsFork', async () => {
     const fork = vi.fn().mockResolvedValue(undefined)
-    const conv = branched('branch-A-root')
+    const conv = branched()
     await mount(api({ conversations: vi.fn().mockResolvedValue([conv]), conversationsFork: fork }))
     await click('.conv-pick')
     const assistantRow = container!.querySelector('.msg.assistant') as HTMLElement
@@ -1445,35 +1425,44 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(fork).toHaveBeenCalledWith('A', 'm2')
   })
 
-  it('affiche les branches et bascule via conversationsSwitchBranch', async () => {
-    const sw = vi.fn().mockResolvedValue(undefined)
+  it('forker OUVRE la conversation créée — on continue dans la copie', async () => {
+    // Le geste attendu (celui de Claude) : le fork est une conversation à part, et c'est elle qu'on
+    // ouvre. Avant, il fallait une barre d'onglets pour atteindre une branche interne invisible.
+    const copie = {
+      id: 'A-fork',
+      title: 'A (fork)',
+      category: 'codex',
+      provider: 'codex',
+      updatedAt: 2,
+      messages: [{ role: 'user', content: 'u1', ts: 1, messageId: 'f1' }]
+    }
+    const conversations = vi
+      .fn()
+      .mockResolvedValueOnce([branched()])
+      .mockResolvedValue([branched(), copie])
     await mount(
-      api({
-        conversations: vi.fn().mockResolvedValue([branched('branch-A-root')]),
-        conversationsSwitchBranch: sw
-      })
+      api({ conversations, conversationsFork: vi.fn().mockResolvedValue(copie) })
     )
     await click('.conv-pick')
-    const chips = container!.querySelectorAll('.branch-chip')
-    expect(chips.length).toBe(2)
-    await act(async () => (chips[1] as HTMLElement).click())
-    expect(sw).toHaveBeenCalledWith('A', 'branch-A-2')
-  })
+    const assistantRow = container!.querySelector('.msg.assistant') as HTMLElement
+    const forkBtn = [...assistantRow.querySelectorAll('button')].find((b) =>
+      /branche/i.test(b.getAttribute('aria-label') ?? '')
+    )
+    await act(async () => (forkBtn as HTMLButtonElement).click())
 
-  it('ne rend que la chaîne de la branche active', async () => {
-    await mount(api({ conversations: vi.fn().mockResolvedValue([branched('branch-A-2')]) }))
-    await click('.conv-pick')
+    // Le fil affiche la copie (u1 seul), pas l'original (qui contient aussi u2).
     const body = container!.querySelector('.chat-scroll')!.textContent ?? ''
     expect(body).toContain('u1')
-    expect(body).toContain('alt')
-    expect(body).not.toContain('u2') // message postérieur au fork sur la branche parente
+    expect(body).not.toContain('u2')
   })
+
+
 
   it('offre le bouton forker aussi sur un message utilisateur (avec messageId)', async () => {
     const fork = vi.fn().mockResolvedValue(undefined)
     await mount(
       api({
-        conversations: vi.fn().mockResolvedValue([branched('branch-A-root')]),
+        conversations: vi.fn().mockResolvedValue([branched()]),
         conversationsFork: fork
       })
     )
@@ -1487,20 +1476,4 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(fork).toHaveBeenCalledWith('A', 'm1') // forke depuis le 1er message user
   })
 
-  it('invalide le cache live et re-rend la bonne branche APRÈS un switch réel', async () => {
-    const conversations = vi
-      .fn()
-      .mockResolvedValueOnce([branched('branch-A-root')]) // montage : branche racine active
-      .mockResolvedValue([branched('branch-A-2')]) // après switch : branche 2 active
-    await mount(
-      api({ conversations, conversationsSwitchBranch: vi.fn().mockResolvedValue(undefined) })
-    )
-    await click('.conv-pick')
-    expect(container!.querySelector('.chat-scroll')!.textContent).toContain('u2') // racine
-    const chips = container!.querySelectorAll('.branch-chip')
-    await act(async () => (chips[1] as HTMLElement).click())
-    const body = container!.querySelector('.chat-scroll')!.textContent ?? ''
-    expect(body).toContain('alt')
-    expect(body).not.toContain('u2') // cache live invalidé → chaîne de la branche 2
-  })
 })

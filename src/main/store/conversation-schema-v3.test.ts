@@ -23,19 +23,15 @@ describe('conversation schema v3', () => {
 
     expect(migrated).toMatchObject({
       schemaVersion: 3,
-      rootBranchId: 'branch-conv-7-root',
-      activeBranchId: 'branch-conv-7-root',
       workspaceId: 'workspace-conv-7',
       authorityMode: 'auto'
     })
-    expect(migrated.branches).toEqual([{ id: 'branch-conv-7-root', createdAt: 9 }])
+    // Les champs de branche ne sont plus portes : forker cree une conversation a part.
+    expect('branches' in migrated).toBe(false)
+    expect('rootBranchId' in migrated).toBe(false)
     expect(migrated.messages.map((message) => message.messageId)).toEqual([
       'message-conv-7-1',
       'message-conv-7-2'
-    ])
-    expect(migrated.messages.map((message) => message.branchId)).toEqual([
-      'branch-conv-7-root',
-      'branch-conv-7-root'
     ])
     expect(migrated.messages[1].parentMessageId).toBe('message-conv-7-1')
 
@@ -52,15 +48,10 @@ describe('conversation schema v3', () => {
 
     expect(conversation.schemaVersion).toBe(3)
     expect(conversation.authorityMode).toBe('auto')
-    expect(conversation.branches).toHaveLength(1)
-    expect(conversation.messages[0]).toMatchObject({
-      messageId: 'message-conv-1-1',
-      branchId: conversation.rootBranchId
-    })
+    expect(conversation.messages[0]).toMatchObject({ messageId: 'message-conv-1-1' })
     expect(conversation.messages[1]).toMatchObject({
       messageId: 'message-conv-1-2',
       parentMessageId: 'message-conv-1-1',
-      branchId: conversation.rootBranchId,
       turnId: 'turn-new'
     })
   })

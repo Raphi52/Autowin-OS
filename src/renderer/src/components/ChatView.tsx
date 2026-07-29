@@ -41,7 +41,6 @@ import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
 import { StepThread, AssistantActivityGroup } from './ChatView.parts'
 import { RunInspector } from './RunInspector'
-import { reconstructBranchChain } from '../../../shared/conversation-branches'
 import './ChatView.css'
 import './SlashPalette.css'
 import type { InspectTurnTarget } from '../observatory-focus'
@@ -98,22 +97,17 @@ interface PilotEvent {
   usage?: { inputTokens?: number; outputTokens?: number; costUsd?: number }
 }
 
-type ConvBranch = { id: string; parentBranchId?: string; forkedFromMessageId?: string }
 type Conv = {
   id: string
   title: string
   category: string
   provider: string
-  rootBranchId?: string
-  activeBranchId?: string
-  branches?: ConvBranch[]
   messages: Array<{
     role: 'user' | 'assistant'
     content: string
     ts: number
     attachments?: AttachmentMeta[]
     messageId?: string
-    branchId?: string
     parentMessageId?: string
     turnId?: string
     status?: 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
@@ -1049,10 +1043,7 @@ export function ChatView({
     setHasNewActivity(false)
     activeRef.current = c.id
     setActiveId(c.id)
-    const activeBranch = c.activeBranchId ?? c.rootBranchId
-    const branchMessages = activeBranch
-      ? reconstructBranchChain(c.messages, c.branches, activeBranch)
-      : c.messages
+    const branchMessages = c.messages
     const stored =
       liveMessagesRef.current.get(c.id) ??
       branchMessages.map((m) =>
@@ -1210,15 +1201,19 @@ export function ChatView({
     const updated = fresh.find((c) => c.id === id)
     if (updated) loadConv(updated)
   }
+  /**
+   * Forker ouvre la conversation CRÉÉE — c'est le geste attendu : on continue dans la copie, pas
+   * dans l'originale. L'ancienne version rechargeait la conversation courante, parce que le fork
+   * n'était qu'une branche interne à laquelle il fallait une barre d'onglets pour accéder.
+   */
   async function forkFromMessage(messageId: string): Promise<void> {
     if (!activeId) return
-    await window.api.conversationsFork(activeId, messageId)
-    await reloadActiveFromStore(activeId)
-  }
-  async function switchBranch(branchId: string): Promise<void> {
-    if (!activeId) return
-    await window.api.conversationsSwitchBranch(activeId, branchId)
-    await reloadActiveFromStore(activeId)
+    const forked = (await window.api.conversationsFork(activeId, messageId)) as Conv | undefined
+    const fresh = (await window.api.conversations()) as Conv[]
+    setConvs(fresh)
+    const target = (forked?.id && fresh.find((c) => c.id === forked.id)) || undefined
+    if (target) loadConv(target)
+    else await reloadActiveFromStore(activeId) // fork refusé : on reste où on est
   }
   /**
    * CHOIX EXPLICITE (tour en cours) : le message tapé pendant un run est MIS EN FILE, jamais
@@ -1738,10 +1733,7 @@ export function ChatView({
             <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
           )}
           {conversationHits.map(({ conversation: c, snippet }) => {
-            const activeBranch = c.activeBranchId ?? c.rootBranchId
-            const branchMessages = activeBranch
-              ? reconstructBranchChain(c.messages, c.branches, activeBranch)
-              : c.messages
+            const branchMessages = c.messages
             const lastAssistant = [...branchMessages]
               .reverse()
               .find((message) => message.role === 'assistant')
@@ -2003,26 +1995,6 @@ export function ChatView({
                 </button>
               </div>
             </section>
-          </div>
-        )}
-
-        {active && (active.branches?.length ?? 0) > 1 && (
-          <div className="branch-bar" role="tablist" aria-label="Branches de la conversation">
-            {active.branches!.map((b, i) => {
-              const current = b.id === (active.activeBranchId ?? active.rootBranchId)
-              return (
-                <button
-                  key={b.id}
-                  role="tab"
-                  aria-selected={current}
-                  className={`branch-chip${current ? ' active' : ''}`}
-                  title="Revenir à cette branche"
-                  onClick={() => void switchBranch(b.id)}
-                >
-                  {b.id === active.rootBranchId ? 'Principale' : `Branche ${i}`}
-                </button>
-              )
-            })}
           </div>
         )}
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ConversationStore } from './conversations'
+import { ConversationStore, forkTitle } from './conversations'
 
 function seed(): { store: ConversationStore; id: string; ids: string[] } {
   const store = new ConversationStore(() => 1)
@@ -12,95 +12,84 @@ function seed(): { store: ConversationStore; id: string; ids: string[] } {
   return { store, id: conv.id, ids }
 }
 
-describe('ConversationStore — branchement', () => {
-  it('fork crée une nouvelle branche active ancrée sur un message', () => {
+/**
+ * Forker crée une CONVERSATION À PART (comportement attendu, celui de Claude). L'ancienne version
+ * empilait des branches DANS une conversation — invisibles depuis la liste, d'où la barre d'onglets
+ * qu'il fallait pour s'y retrouver. Cette barre n'existe plus, et le modèle non plus.
+ */
+describe('ConversationStore — fork', () => {
+  it('crée une conversation distincte, copie de l’historique jusqu’au point de fork', () => {
     const { store, id, ids } = seed()
-    const before = store.get(id)!.branches!.length
-    const conv = store.fork(id, ids[1]) // fork depuis a1
-    expect(conv.branches!.length).toBe(before + 1)
-    const newBranch = conv.branches!.at(-1)!
-    expect(conv.activeBranchId).toBe(newBranch.id)
-    expect(newBranch.parentBranchId).toBe(conv.rootBranchId)
-    expect(newBranch.forkedFromMessageId).toBe(ids[1])
+    const forked = store.fork(id, ids[1]) // depuis a1
+
+    expect(forked.id).not.toBe(id)
+    expect(forked.messages.map((m) => m.content)).toEqual(['u1', 'a1']) // u2/a2 exclus
+    expect(forked.forkedFrom).toEqual({ conversationId: id, messageId: ids[1] })
   })
 
-  it('après fork, un nouvel append chaîne sur le point de fork et exclut la suite du parent', () => {
+  it('n’altère PAS la conversation d’origine', () => {
     const { store, id, ids } = seed()
-    store.fork(id, ids[1]) // depuis a1 (index 1)
-    store.append(id, { role: 'assistant', content: 'alt' })
-    const chain = store.branchMessages(id).map((m) => m.content)
-    expect(chain).toEqual(['u1', 'a1', 'alt']) // u2/a2 exclus
-    const alt = store.branchMessages(id).at(-1)!
-    expect(alt.parentMessageId).toBe(ids[1])
-  })
-
-  it('switchBranch revient à la branche racine avec sa chaîne linéaire originale', () => {
-    const { store, id, ids } = seed()
-    const root = store.get(id)!.rootBranchId!
     store.fork(id, ids[1])
-    store.append(id, { role: 'assistant', content: 'alt' })
-    const conv = store.switchBranch(id, root)
-    expect(conv.activeBranchId).toBe(root)
-    expect(store.branchMessages(id).map((m) => m.content)).toEqual(['u1', 'a1', 'u2', 'a2'])
+    expect(store.get(id)!.messages.map((m) => m.content)).toEqual(['u1', 'a1', 'u2', 'a2'])
   })
 
-  it('branchMessages(branchId explicite) reconstruit la chaîne de cette branche', () => {
+  it('apparaît dans la liste des conversations — c’est tout l’intérêt', () => {
     const { store, id, ids } = seed()
-    const conv = store.fork(id, ids[1])
-    store.append(id, { role: 'assistant', content: 'alt' })
-    expect(store.branchMessages(id, conv.rootBranchId).map((m) => m.content)).toEqual([
-      'u1',
-      'a1',
-      'u2',
-      'a2'
-    ])
-    expect(store.branchMessages(id, conv.activeBranchId).map((m) => m.content)).toEqual([
-      'u1',
-      'a1',
-      'alt'
-    ])
+    const before = store.list().length
+    const forked = store.fork(id, ids[1])
+    expect(store.list().length).toBe(before + 1)
+    expect(store.list().some((c) => c.id === forked.id)).toBe(true)
   })
 
-  it('rejette un fork sur une conversation ou un message inconnus', () => {
+  it('les messages copiés reçoivent de NOUVEAUX identifiants', () => {
+    const { store, id, ids } = seed()
+    const forked = store.fork(id, ids[1])
+    // Deux conversations partageant un messageId : un fork ultérieur viserait les deux à la fois.
+    for (const message of forked.messages) expect(ids).not.toContain(message.messageId)
+  })
+
+  it('écrire dans le fork n’écrit pas dans l’original', () => {
+    const { store, id, ids } = seed()
+    const forked = store.fork(id, ids[1])
+    store.append(forked.id, { role: 'assistant', content: 'suite du fork' })
+
+    expect(store.get(forked.id)!.messages.map((m) => m.content)).toEqual([
+      'u1',
+      'a1',
+      'suite du fork'
+    ])
+    expect(store.get(id)!.messages.map((m) => m.content)).toEqual(['u1', 'a1', 'u2', 'a2'])
+  })
+
+  it('reprend la catégorie, le provider et le mode d’autorité de la source', () => {
+    const store = new ConversationStore(() => 1)
+    const source = store.create({
+      title: 'T',
+      category: 'claude',
+      provider: 'claude',
+      authorityMode: 'manuel' as never
+    })
+    store.append(source.id, { role: 'user', content: 'u1' })
+    const forked = store.fork(source.id, store.get(source.id)!.messages[0].messageId!)
+    expect(forked.category).toBe('claude')
+    expect(forked.provider).toBe('claude')
+    expect(forked.authorityMode).toBe('manuel')
+  })
+
+  it('forker un fork n’empile pas les suffixes dans le titre', () => {
+    expect(forkTitle('Analyse RIG')).toBe('Analyse RIG (fork)')
+    expect(forkTitle('Analyse RIG (fork)')).toBe('Analyse RIG (fork)')
+    expect(forkTitle('   ')).toBe('Conversation (fork)')
+  })
+
+  it('rejette une conversation ou un message inconnus', () => {
     const { store, id } = seed()
     expect(() => store.fork('conv-inconnue', 'x')).toThrow()
     expect(() => store.fork(id, 'message-inconnu')).toThrow()
   })
 
-  it('rejette un switchBranch vers une branche inexistante', () => {
-    const { store, id } = seed()
-    expect(() => store.switchBranch(id, 'branch-fantome')).toThrow()
-  })
-
-  it('rejette un fork avec un anchor vide (évite le match d’un message legacy sans id)', () => {
+  it('rejette un ancrage vide (évite de matcher un message legacy sans id)', () => {
     const { store, id } = seed()
     expect(() => store.fork(id, '')).toThrow()
-  })
-
-  it('reconstruit correctement un branchement à 3 niveaux', () => {
-    const { store, id, ids } = seed()
-    store.fork(id, ids[1]) // branche B depuis a1
-    store.append(id, { role: 'assistant', content: 'altB' })
-    const altBId = store.branchMessages(id).at(-1)!.messageId!
-    store.fork(id, altBId) // branche C depuis altB
-    store.append(id, { role: 'assistant', content: 'altC' })
-    expect(store.branchMessages(id).map((m) => m.content)).toEqual(['u1', 'a1', 'altB', 'altC'])
-  })
-
-  it('forke depuis un message NON-tip et tronque la suite du parent', () => {
-    const { store, id, ids } = seed()
-    store.fork(id, ids[0]) // depuis u1 (u2/a1/a2 après sur le parent)
-    store.append(id, { role: 'assistant', content: 'altU' })
-    expect(store.branchMessages(id).map((m) => m.content)).toEqual(['u1', 'altU'])
-  })
-
-  it('rejette un fork depuis un message d’une branche sœur (hors branche active)', () => {
-    const { store, id, ids } = seed()
-    const root = store.get(id)!.rootBranchId!
-    store.fork(id, ids[1]) // branche B active
-    store.append(id, { role: 'assistant', content: 'altB' })
-    const altBId = store.branchMessages(id).at(-1)!.messageId!
-    store.switchBranch(id, root) // retour sur racine : altB n'est PAS dans sa chaîne
-    expect(() => store.fork(id, altBId)).toThrow(/hors de la branche active/)
   })
 })

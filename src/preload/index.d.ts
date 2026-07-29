@@ -50,34 +50,6 @@ interface Brain3d {
   links: Array<{ source: string; target: string; weight: number; relation?: string }>
   totalNodes?: number
 }
-interface SessionMeta {
-  id: string
-  project: string
-  path: string
-  sizeMb: number
-  mtime: number
-}
-interface ToolCall {
-  tool: string
-  detail?: string
-  ts?: string
-  sidechain?: boolean
-}
-interface TurnEntry {
-  kind: 'user' | 'assistant'
-  ts?: string
-  text: string
-  tools: ToolCall[]
-  sidechain?: boolean
-}
-interface SessionActivity {
-  meta: SessionMeta
-  turns: TurnEntry[]
-  toolCounts: Record<string, number>
-  images: Array<{ path: string; ts?: string; exists: boolean }>
-  totalToolCalls: number
-}
-
 interface ConvActivityEntry {
   ts: string
   kind: 'chat' | 'exec' | 'judge' | 'gate' | string
@@ -323,7 +295,6 @@ interface ChatApi {
   cancelTickets: (requestId: string) => Promise<boolean>
   listTicketPeople: (source: unknown) => Promise<string[]>
   setTicketsFixture: (fixture: unknown) => Promise<boolean>
-  installTicketsProofFixture: (fixture: unknown) => Promise<boolean>
   getWorktreeActivity: () => Promise<WorktreeAgentActivity[]>
   getWorktreeStatus: () => Promise<WorktreeRuntimeStatus>
   onWorktreeActivity: (cb: (activity: WorktreeAgentActivity[]) => void) => () => void
@@ -442,7 +413,6 @@ interface ChatApi {
   conversationsRename: (id: string, title: string) => Promise<unknown>
   conversationsSetAuthorityMode: (id: string, mode: 'plan' | 'ask' | 'auto') => Promise<unknown>
   conversationsFork: (id: string, messageId: string) => Promise<unknown>
-  conversationsSwitchBranch: (id: string, branchId: string) => Promise<unknown>
   conversationsRemove: (id: string) => Promise<boolean>
   openFolder: (path: string) => Promise<void>
   appState: () => Promise<unknown>
@@ -453,7 +423,6 @@ interface ChatApi {
     name: string,
     args?: Record<string, unknown>
   ) => Promise<{ ok: boolean; data?: unknown; error?: string }>
-  pilot: (goal: string) => Promise<{ ok: boolean; error?: string }>
   pilotChat: (
     messages: Array<{
       role: 'user' | 'assistant'
@@ -507,10 +476,6 @@ interface ChatApi {
   conversationActivity: (convId: string) => Promise<ConvActivityEntry[]>
   runTrace: (path: string) => Promise<OrchestrationStep[] | null>
   setActiveConversation: (convId: string | null) => Promise<unknown>
-  activitySessions: () => Promise<SessionMeta[]>
-  activitySession: (meta: SessionMeta) => Promise<SessionActivity>
-
-  activityImage: (path: string) => Promise<{ dataUrl: string }>
   listBrains: () => Promise<
     Array<{
       id: string

@@ -60,8 +60,6 @@ const api = {
     ipcRenderer.invoke('tickets:people', source),
   setTicketsFixture: (fixture: unknown): Promise<boolean> =>
     ipcRenderer.invoke('app:test:tickets-fixture', fixture),
-  installTicketsProofFixture: (fixture: unknown): Promise<boolean> =>
-    ipcRenderer.invoke('app:test:tickets-fixture', fixture),
   // Cockpit worktree (volet A) — activité des copies isolées par agent (frise + journal).
   getWorktreeActivity: (): Promise<unknown[]> => ipcRenderer.invoke('worktree:activity'),
   getWorktreeStatus: (): Promise<unknown> => ipcRenderer.invoke('worktree:status'),
@@ -179,8 +177,6 @@ const api = {
     ipcRenderer.invoke('os:conversations:authorityMode', id, mode),
   conversationsFork: (id: string, messageId: string): Promise<unknown> =>
     ipcRenderer.invoke('os:conversations:fork', id, messageId),
-  conversationsSwitchBranch: (id: string, branchId: string): Promise<unknown> =>
-    ipcRenderer.invoke('os:conversations:switchBranch', id, branchId),
   conversationsRemove: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:remove', id),
   openFolder: (path: string): Promise<void> => ipcRenderer.invoke('os:openFolder', path),
@@ -189,8 +185,6 @@ const api = {
   appCatalog: (): Promise<unknown> => ipcRenderer.invoke('os:appCatalog'),
   appCommand: (name: string, args?: Record<string, unknown>): Promise<unknown> =>
     ipcRenderer.invoke('os:appCommand', name, args),
-  pilot: (goal: string): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('os:pilot', goal),
   pilotChat: (
     messages: Array<{
       role: 'user' | 'assistant'
@@ -237,12 +231,6 @@ const api = {
   runTrace: (path: string): Promise<unknown[] | null> => ipcRenderer.invoke('os:runTrace', path),
   setActiveConversation: (convId: string | null): Promise<unknown> =>
     ipcRenderer.invoke('os:setActiveConversation', convId),
-  // Observatoire d'activité (transcripts Claude Code + ledger in-app)
-  activitySessions: (): Promise<unknown[]> => ipcRenderer.invoke('os:activity:sessions'),
-  activitySession: (meta: unknown): Promise<unknown> =>
-    ipcRenderer.invoke('os:activity:session', meta),
-  activityImage: (path: string): Promise<{ dataUrl: string }> =>
-    ipcRenderer.invoke('os:activity:image', path),
   // Graphe brain 3D + workflow
   listBrains: (): Promise<
     Array<{

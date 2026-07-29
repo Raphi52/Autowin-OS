@@ -961,6 +961,27 @@
   max-width: 100%;
   overflow-wrap: anywhere;
 }
+/* Titres markdown du chat : hiérarchie lisible, sans marges excessives. */
+.md-h {
+  margin: var(--s2) 0 var(--s1);
+  font-weight: 600;
+  line-height: 1.25;
+}
+h1.md-h {
+  font-size: 17px;
+}
+h2.md-h {
+  font-size: 15px;
+}
+h3.md-h {
+  font-size: 13px;
+}
+h4.md-h,
+h5.md-h,
+h6.md-h {
+  font-size: 12px;
+  color: #a9c2d1;
+}
 /* Tableaux GFM du chat : entêtes, bordures et zébrage discrets, colonnes alignées. */
 .md-table-wrap {
   max-width: 100%;
@@ -1714,28 +1735,6 @@
   color: var(--cyan);
   border-color: var(--cyan);
   background: var(--bg-2);
-}
-
-/* Barre de branches d'une conversation (fork / rewind) */
-.branch-bar {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  padding: 6px var(--s2);
-  border-bottom: 1px solid var(--line);
-}
-.branch-chip {
-  padding: 3px 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--c-faint, inherit);
-  font-size: 10px;
-  cursor: pointer;
-}
-.branch-chip.active {
-  border-color: var(--cyan);
-  color: var(--cyan);
 }
 
 .cosmic-outline .composer-field textarea {

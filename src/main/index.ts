@@ -1189,13 +1189,6 @@ function registerChatIpc(): void {
     assertTrustedRendererSender(event, 'Conversation fork')
     return os.conversations.fork(guardString(rawId, 'id'), guardString(rawMessageId, 'messageId'))
   })
-  ipcMain.handle('os:conversations:switchBranch', (event, rawId: string, rawBranchId: string) => {
-    assertTrustedRendererSender(event, 'Conversation branch')
-    return os.conversations.switchBranch(
-      guardString(rawId, 'id'),
-      guardString(rawBranchId, 'branchId')
-    )
-  })
   ipcMain.handle('os:conversations:remove', async (event, rawId: string) => {
     assertTrustedRendererSender(event, 'Conversations')
     const id = guardString(rawId, 'id')

@@ -8,7 +8,6 @@ import {
   type PersistedChatPart
 } from '../../shared/chat-turn'
 import type { ConversationAuthorityMode } from '../conversation-capabilities'
-import { reconstructBranchChain } from '../../shared/conversation-branches'
 
 // Store en mémoire pour les conversations catégorisées (candidat type claude/codex).
 // Interface pensée pour être remplacée plus tard par un backend sqlite sans changer l'appelant.
@@ -27,7 +26,6 @@ export interface AttachmentMeta {
 /** Un message échangé dans une conversation. */
 export interface Msg {
   messageId?: string
-  branchId?: string
   parentMessageId?: string
   role: 'user' | 'assistant'
   content: string
@@ -40,12 +38,16 @@ export interface Msg {
   error?: string
 }
 
-export interface ConversationBranch {
-  id: string
-  parentBranchId?: string
-  forkedFromTurnId?: string
-  forkedFromMessageId?: string
-  createdAt: number
+/** D'où vient une conversation créée par un fork — trace d'origine, sans lien vivant. */
+export interface ForkOrigin {
+  conversationId: string
+  messageId: string
+}
+
+/** Titre d'un fork : lisible dans la liste, et jamais empilé à l'infini sur des forks de forks. */
+export function forkTitle(sourceTitle: string): string {
+  const base = sourceTitle.replace(/\s*\(fork(?: \d+)?\)\s*$/i, '').trim()
+  return `${base || 'Conversation'} (fork)`
 }
 
 /** Une conversation, regroupée par catégorie et rattachée à un provider. */
@@ -56,10 +58,9 @@ export interface Conversation {
   category: Category
   provider: string
   messages: Msg[]
-  rootBranchId?: string
-  activeBranchId?: string
   workspaceId?: string
-  branches?: ConversationBranch[]
+  /** Renseigné si la conversation est née d'un fork. Purement informatif. */
+  forkedFrom?: ForkOrigin
   authorityMode?: ConversationAuthorityMode
   /** RUN.md externes (Claude Code) attachés à cette conversation. */
   runPaths?: string[]
@@ -85,23 +86,16 @@ export class ConversationStore {
     let max = 0
     let migrated = false
     for (const c of saved) {
-      const rootBranchId = c.rootBranchId ?? `branch-${c.id}-root`
       let previousMessageId: string | undefined
       const messages = c.messages.map((sourceMessage, index) => {
         let message = sourceMessage
         const messageId = message.messageId ?? `message-${c.id}-${index + 1}`
-        const branchId = message.branchId ?? rootBranchId
         const parentMessageId = message.parentMessageId ?? previousMessageId
-        if (
-          !message.messageId ||
-          !message.branchId ||
-          message.parentMessageId !== parentMessageId
-        ) {
+        if (!message.messageId || message.parentMessageId !== parentMessageId) {
           migrated = true
           message = {
             ...message,
             messageId,
-            branchId,
             ...(parentMessageId ? { parentMessageId } : {})
           }
         }
@@ -121,24 +115,25 @@ export class ConversationStore {
         }
         return { ...message, status: message.status ?? ('completed' as const) }
       })
-      const hydrated = {
-        ...c,
+      // Les anciens champs de branche (`rootBranchId`, `activeBranchId`, `branches`, `branchId`)
+      // sont ABANDONNÉS ici : forker crée désormais une conversation à part. On ne les recopie pas,
+      // et une conversation ancienne qui en portait affiche simplement tous ses messages à la suite.
+      const legacy = c as Conversation & Record<string, unknown>
+      const hadBranches = legacy.rootBranchId !== undefined || legacy.branches !== undefined
+      const {
+        rootBranchId: _root,
+        activeBranchId: _active,
+        branches: _branches,
+        ...rest
+      } = legacy
+      const hydrated: Conversation = {
+        ...(rest as Conversation),
         schemaVersion: 3 as const,
-        rootBranchId,
-        activeBranchId: c.activeBranchId ?? rootBranchId,
         workspaceId: c.workspaceId ?? `workspace-${c.id}`,
-        branches: c.branches ?? [{ id: rootBranchId, createdAt: c.createdAt }],
         authorityMode: c.authorityMode ?? 'auto',
         messages
       }
-      if (
-        c.schemaVersion !== 3 ||
-        !c.rootBranchId ||
-        !c.activeBranchId ||
-        !c.workspaceId ||
-        !c.branches ||
-        !c.authorityMode
-      ) {
+      if (c.schemaVersion !== 3 || !c.workspaceId || !c.authorityMode || hadBranches) {
         migrated = true
       }
       this.conversations.set(c.id, hydrated)
@@ -162,7 +157,6 @@ export class ConversationStore {
   }): Conversation {
     const ts = this.now()
     const id = `conv-${this.nextId++}`
-    const rootBranchId = `branch-${id}-root`
     const conversation: Conversation = {
       schemaVersion: 3,
       id,
@@ -170,10 +164,7 @@ export class ConversationStore {
       category: p.category,
       provider: p.provider,
       messages: [],
-      rootBranchId,
-      activeBranchId: rootBranchId,
       workspaceId: `workspace-${id}`,
-      branches: [{ id: rootBranchId, createdAt: ts }],
       authorityMode: p.authorityMode ?? 'auto',
       createdAt: ts,
       updatedAt: ts
@@ -193,13 +184,9 @@ export class ConversationStore {
       throw new Error(`Conversation inconnue: ${id}`)
     }
     const ts = this.now()
-    const previous = this.branchTip(
-      conversation,
-      conversation.activeBranchId ?? conversation.rootBranchId!
-    )
+    const previous = conversation.messages.at(-1)
     conversation.messages.push({
       messageId: `message-${conversation.id}-${conversation.messages.length + 1}`,
-      branchId: conversation.activeBranchId ?? conversation.rootBranchId,
       ...(previous?.messageId ? { parentMessageId: previous.messageId } : {}),
       role: m.role,
       content: m.content,
@@ -220,14 +207,10 @@ export class ConversationStore {
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const ts = this.now()
-    const previous = this.branchTip(
-      conversation,
-      conversation.activeBranchId ?? conversation.rootBranchId!
-    )
+    const previous = conversation.messages.at(-1)
     const userMessageId = `message-${conversation.id}-${conversation.messages.length + 1}`
     conversation.messages.push({
       messageId: userMessageId,
-      branchId: conversation.activeBranchId ?? conversation.rootBranchId,
       ...(previous?.messageId ? { parentMessageId: previous.messageId } : {}),
       role: 'user',
       content: user.content,
@@ -237,7 +220,6 @@ export class ConversationStore {
     const turn = createChatTurn(assistant.turnId, assistant.runtime)
     conversation.messages.push({
       messageId: `message-${conversation.id}-${conversation.messages.length + 1}`,
-      branchId: conversation.activeBranchId ?? conversation.rootBranchId,
       parentMessageId: userMessageId,
       role: 'assistant',
       content: '',
@@ -333,69 +315,44 @@ export class ConversationStore {
     return conversation
   }
 
-  /** Message « tip » (dernier) d'une branche, ou son point de fork si la branche est vide. */
-  private branchTip(c: Conversation, branchId: string): Msg | undefined {
-    for (let i = c.messages.length - 1; i >= 0; i--) {
-      if (c.messages[i].branchId === branchId) return c.messages[i]
-    }
-    const branch = c.branches?.find((b) => b.id === branchId)
-    if (branch?.forkedFromMessageId) {
-      return c.messages.find((m) => m.messageId === branch.forkedFromMessageId)
-    }
-    return undefined
-  }
-
-  /** Chaîne de messages visible pour une branche (helper PARTAGÉ, source unique). */
-  private chainFor(c: Conversation, branchId: string): Msg[] {
-    return reconstructBranchChain(c.messages, c.branches, branchId)
-  }
-
-  /** Messages visibles pour une branche (défaut : la branche active). Jette si l'id est inconnu. */
-  branchMessages(id: string, branchId?: string): Msg[] {
+  /** Messages d'une conversation, dans l'ordre. Jette si l'id est inconnu. */
+  messagesOf(id: string): Msg[] {
     const c = this.conversations.get(id)
     if (!c) throw new Error(`Conversation inconnue: ${id}`)
-    return this.chainFor(c, branchId ?? c.activeBranchId ?? c.rootBranchId!)
+    return c.messages
   }
 
-  /** Forke une conversation depuis un message : nouvelle branche rendue active. */
+  /**
+   * Forke depuis un message : crée une CONVERSATION À PART, copie de l'historique jusqu'à ce
+   * message inclus. C'est le geste attendu (même comportement que Claude) — l'ancienne version
+   * empilait des branches À L'INTÉRIEUR d'une conversation, ce qui obligeait à une barre d'onglets
+   * pour naviguer entre des histoires invisibles depuis la liste des conversations.
+   *
+   * L'originale n'est pas touchée : forker n'enlève rien à ce qui existait.
+   */
   fork(id: string, fromMessageId: string): Conversation {
-    const c = this.conversations.get(id)
-    if (!c) throw new Error(`Conversation inconnue: ${id}`)
+    const source = this.conversations.get(id)
+    if (!source) throw new Error(`Conversation inconnue: ${id}`)
     if (!fromMessageId) throw new Error('fromMessageId requis') // sinon matche un message legacy sans id
-    const anchor = c.messages.find((m) => m.messageId === fromMessageId)
-    if (!anchor) throw new Error(`Message inconnu: ${fromMessageId}`)
-    // Le point de fork doit appartenir à la chaîne de la branche ACTIVE (pas une
-    // branche sœur non-ancêtre) — sinon la reconstruction mélangerait deux histoires.
-    const activeChain = this.chainFor(c, c.activeBranchId ?? c.rootBranchId!)
-    if (!activeChain.some((m) => m.messageId === fromMessageId)) {
-      throw new Error(`Message hors de la branche active: ${fromMessageId}`)
-    }
-    const ts = this.now()
-    c.branches ??= []
-    const branch: ConversationBranch = {
-      id: `branch-${c.id}-${c.branches.length + 1}`,
-      parentBranchId: c.activeBranchId ?? c.rootBranchId,
-      forkedFromMessageId: fromMessageId,
-      ...(anchor.turnId ? { forkedFromTurnId: anchor.turnId } : {}),
-      createdAt: ts
-    }
-    c.branches.push(branch)
-    c.activeBranchId = branch.id
-    c.updatedAt = ts
-    this.changed()
-    return c
-  }
+    const cut = source.messages.findIndex((m) => m.messageId === fromMessageId)
+    if (cut < 0) throw new Error(`Message inconnu: ${fromMessageId}`)
 
-  /** Change la branche active. Jette si la conversation ou la branche est inconnue. */
-  switchBranch(id: string, branchId: string): Conversation {
-    const c = this.conversations.get(id)
-    if (!c) throw new Error(`Conversation inconnue: ${id}`)
-    if (!c.branches?.some((b) => b.id === branchId))
-      throw new Error(`Branche inconnue: ${branchId}`)
-    c.activeBranchId = branchId
-    c.updatedAt = this.now()
+    const forked = this.create({
+      title: forkTitle(source.title),
+      category: source.category,
+      provider: source.provider,
+      authorityMode: source.authorityMode
+    })
+    // Copie jusqu'au point de fork INCLUS. Les identifiants de message sont régénérés : deux
+    // conversations ne doivent jamais partager un messageId (le fork suivant viserait les deux).
+    forked.messages = source.messages.slice(0, cut + 1).map((message) => ({
+      ...message,
+      messageId: `msg-${this.nextId++}`
+    }))
+    forked.forkedFrom = { conversationId: source.id, messageId: fromMessageId }
+    forked.updatedAt = this.now()
     this.changed()
-    return c
+    return forked
   }
 
   /** Supprime une conversation. Retourne true si elle existait. */

@@ -25,10 +25,7 @@ describe('conversation persistence recovery', () => {
           category: 'codex',
           provider: 'codex',
           messages: [],
-          rootBranchId: 'branch-conv-1-root',
-          activeBranchId: 'branch-conv-1-root',
           workspaceId: 'workspace-conv-1',
-          branches: [{ id: 'branch-conv-1-root', createdAt: 1 }],
           createdAt: 1,
           updatedAt: 1
         }

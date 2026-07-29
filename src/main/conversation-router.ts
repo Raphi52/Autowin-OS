@@ -173,7 +173,7 @@ export class ConversationRouteCoordinator {
     if (!source) throw new Error(`Conversation inconnue: ${sourceConversationId}`)
     const visibleSource = {
       ...source,
-      messages: this.conversations.branchMessages(sourceConversationId)
+      messages: this.conversations.messagesOf(sourceConversationId)
     }
     const decision = await this.router.decide(
       visibleSource,
