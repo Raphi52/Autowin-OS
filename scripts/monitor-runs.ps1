@@ -23,18 +23,11 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 $stdoutRoot = Join-Path $UserData 'run-stdout'
 $turnRoot = Join-Path $UserData 'turn-journals'
 if (-not $LogPath) { $LogPath = Join-Path $UserData 'monitor-runs.log' }
-
-function Write-Line([string] $Message) {
-  $line = "[{0}] {1}" -f (Get-Date -Format 'HH:mm:ss'), $Message
-  Write-Output $line
-  Add-Content -Path $LogPath -Value $line -Encoding utf8
-}
+. "$PSScriptRoot\monitor-common.ps1"
 
 function Get-StdoutSizes {
-  if (-not (Test-Path $stdoutRoot)) { return @{} }
   $map = @{}
-  Get-ChildItem -Path $stdoutRoot -Filter '*.stdout.jsonl' -File -ErrorAction SilentlyContinue |
-    ForEach-Object { $map[$_.Name] = $_.Length }
+  Get-StdoutFiles $stdoutRoot | ForEach-Object { $map[$_.Name] = $_.Length }
   return $map
 }
 

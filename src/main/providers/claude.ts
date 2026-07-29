@@ -127,6 +127,13 @@ export interface ClaudeBinLookupDeps {
  *
  * Rend `undefined` si rien n'est trouvé — l'appelant garde son repli `'claude'`, correct sur un poste
  * où un vrai `claude.exe` est dans le PATH (Unix, ou install non-npm).
+ *
+ * SÉCURITÉ : ce chemin est spawné avec le prompt système ET le contenu de la conversation. Le PATH
+ * étant hérité (un CLI enfant ou un script peut l'avoir modifié), `npm-global-resolve` refuse les
+ * entrées non absolues, les racines de volume, le cwd et `%TEMP%`, et n'élit un `claude.exe` posé à
+ * plat que dans un dossier portant un `node_modules/` (signature d'un vrai préfixe `npm -g`). Sans
+ * cela, un tiers écrivant dans un dossier du PATH — ou un dépôt cloné, via une entrée `.` — se
+ * ferait livrer tous les prompts.
  */
 export function findClaudeExecutable(deps: ClaudeBinLookupDeps = {}): string | undefined {
   const platform = deps.platform ?? process.platform

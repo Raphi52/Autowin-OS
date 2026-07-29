@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
-import type { ModelQuota, ModelQuotaSnapshot, ModelQuotaWindow } from '../../../shared/model-quotas'
+import type {
+  ModelQuota,
+  ModelQuotaLevel,
+  ModelQuotaSnapshot,
+  ModelQuotaWindow
+} from '../../../shared/model-quotas'
 import './ModelQuotaIndicator.css'
 
 const providerLabels: Record<string, string> = {
@@ -53,16 +58,57 @@ export function summaryWindowId(provider: string | undefined): string {
   return provider === 'codex' ? 'seven-day' : 'five-hour'
 }
 
-/** Libellé court de la fenêtre résumée — la wheel doit DIRE ce qu'elle mesure, sinon 43 % est ambigu. */
-export function summaryWindowLabel(provider: string | undefined): string {
-  return summaryWindowId(provider) === 'seven-day' ? '7 j' : '5 h'
+/**
+ * Libellé court d'une fenêtre, dérivé de son ID — PAS du provider.
+ *
+ * Cause du bug corrigé : l'ancien `summaryWindowLabel(provider)` annonçait « 7 j » dès que le provider
+ * était `codex`, alors que `summaryForProvider` a un REPLI vers la fenêtre courte quand la 7 j n'est pas
+ * exposée (déclencheur constaté : compte ChatGPT dont l'échantillon n'expose que `five-hour` — premiers
+ * événements d'une session, ou offre sans weekly). La wheel montrait donc 37 % de la 5 h en affirmant
+ * « 7 j » : l'utilisateur calibrait sa SEMAINE sur un chiffre qui se recharge en une demi-journée.
+ * Le libellé doit venir de la fenêtre RETENUE, jamais de l'intention.
+ */
+export function windowIdLabel(windowId: string | undefined): string {
+  if (windowId === 'seven-day') return '7 j'
+  if (windowId === 'five-hour') return '5 h'
+  return windowId ?? 'fenêtre inconnue'
+}
+
+/**
+ * Nom NEUTRE de la fenêtre voulue, pour signaler un repli sans jamais écrire « 7 j » à côté d'un
+ * chiffre qui n'est pas le weekly : un lecteur pressé (ou une capture) ne retiendrait que « 7 j ».
+ */
+function wantedWindowName(windowId: string): string {
+  return windowId === 'seven-day' ? 'hebdo' : 'court terme'
+}
+
+function levelOf(remainingPercent: number): ModelQuotaLevel {
+  return remainingPercent <= 10 ? 'critical' : remainingPercent <= 30 ? 'warning' : 'healthy'
+}
+
+/**
+ * Résumé destiné à la wheel : la VALEUR (fenêtre voulue) est dissociée du STATUT d'alerte.
+ * `windowLabel` décrit ce qui est réellement mesuré ; `statusWindowLabel` nomme la fenêtre qui dicte
+ * la couleur quand ce n'est pas celle affichée.
+ */
+export interface QuotaWheelSummary {
+  remainingPercent?: number
+  status: ModelQuotaLevel
+  /** Fenêtre réellement RETENUE pour le chiffre affiché (déjà libellée). */
+  windowLabel: string
+  /** Renseignée seulement si une AUTRE fenêtre est plus sévère que celle affichée. */
+  statusWindowLabel?: string
 }
 
 export function summaryForProvider(
   snapshot: ModelQuotaSnapshot | undefined,
   provider: string | undefined
-): ModelQuotaSnapshot['summary'] | undefined {
-  if (!snapshot || !provider) return snapshot?.summary
+): QuotaWheelSummary | undefined {
+  const wantedId = summaryWindowId(provider)
+  if (!snapshot || !provider) {
+    if (!snapshot?.summary) return undefined
+    return { ...snapshot.summary, windowLabel: windowIdLabel(wantedId) }
+  }
   // `stale` compte AUSSI : chez ChatGPT (codex) le quota vient d'un fichier local ecrit par la CLI,
   // donc il depasse les 15 min de fraicheur des qu'on n'utilise pas Codex — l'exclure laissait la
   // wheel GRISE (`unknown`) alors que le popover affichait bien le 7 j. Seul `unavailable` (aucune
@@ -72,20 +118,43 @@ export function summaryForProvider(
     .flatMap((model) => model.windows.filter((window) => window.limitKnown !== false))
   // Repli assume : la fenetre voulue absente (provider qui ne l'expose pas encore) -> minimum de ce
   // qui est connu, comportement historique prudent plutot qu'une wheel vide.
-  const preferred = summarizable.filter((window) => window.id === summaryWindowId(provider))
-  const pool = preferred.length > 0 ? preferred : summarizable
-  const minimum =
-    pool.length > 0 ? Math.min(...pool.map((window) => window.remainingPercent)) : undefined
+  const preferred = summarizable.filter((window) => window.id === wantedId)
+  const fellBack = preferred.length === 0
+  const pool = fellBack ? summarizable : preferred
+  if (pool.length === 0) return { status: 'unknown', windowLabel: windowIdLabel(wantedId) }
+  // La fenêtre RETENUE est celle qui porte le minimum : c'est elle que le chiffre décrit, donc c'est
+  // elle qui doit être libellée (cf. `windowIdLabel`).
+  const retained = pool.reduce((low, window) =>
+    window.remainingPercent < low.remainingPercent ? window : low
+  )
+  const minimum = retained.remainingPercent
+  // Statut DISSOCIÉ de la valeur : sur le chemin nominal codex la wheel affiche le 7 j (voulu), mais
+  // une 5 h à 2 % bloque l'utilisateur MAINTENANT — la couleur ne doit pas rassurer pendant ce temps.
+  //
+  // MAIS on n'agrège PAS toutes les fenêtres : un weekly bas ne bloque rien dans l'immédiat, et faire
+  // rougir la wheel pour lui contredirait la justification d'origine (cf. `summaryWindowId` : « un
+  // weekly plus bas ne doit pas alarmer sur une capacité immédiate disponible »). Une première version
+  // de ce correctif prenait le minimum de TOUTES les fenêtres et rendait donc la wheel Claude rouge
+  // sur un 7 j bas — régression silencieuse contre une décision assumée.
+  //
+  // On retient donc exactement deux fenêtres : celle AFFICHÉE (le chiffre doit être cohérent avec sa
+  // couleur) et la fenêtre COURTE (la seule qui bloque MAINTENANT).
+  const blocking = summarizable.filter(
+    (window) => window.id === retained.id || window.id === 'five-hour'
+  )
+  const severest = blocking.reduce((low, window) =>
+    window.remainingPercent < low.remainingPercent ? window : low
+  )
+  const windowLabel = fellBack
+    ? `${windowIdLabel(retained.id)} — ${wantedWindowName(wantedId)} non exposée`
+    : windowIdLabel(retained.id)
   return {
-    ...(minimum !== undefined ? { remainingPercent: minimum } : {}),
-    status:
-      minimum === undefined
-        ? 'unknown'
-        : minimum <= 10
-          ? 'critical'
-          : minimum <= 30
-            ? 'warning'
-            : 'healthy'
+    remainingPercent: minimum,
+    status: levelOf(severest.remainingPercent),
+    windowLabel,
+    ...(severest.id !== retained.id && levelOf(severest.remainingPercent) !== levelOf(minimum)
+      ? { statusWindowLabel: windowIdLabel(severest.id) }
+      : {})
   }
 }
 
@@ -191,6 +260,9 @@ export function ModelQuotaIndicator({
   const summary = summaryForProvider(snapshot, provider)
   const remaining = summary?.remainingPercent
   const level = summary?.status ?? 'unknown'
+  // Le libellé vient du résumé (fenêtre RETENUE), jamais du provider : au repli il dit « 5 h ».
+  const windowLabel = summary?.windowLabel ?? windowIdLabel(summaryWindowId(provider))
+  const alert = summary?.statusWindowLabel ? ` · ${summary.statusWindowLabel} plus contrainte` : ''
   const providerQuotas = quotasByProvider(snapshot?.models ?? [])
   return (
     <div className="model-quota" ref={rootRef}>
@@ -202,10 +274,10 @@ export function ModelQuotaIndicator({
         aria-label={
           remaining === undefined
             ? 'Afficher les quotas fournisseurs'
-            : `Afficher les quotas fournisseurs, ${Math.round(remaining)} % restant sur ${summaryWindowLabel(provider)}`
+            : `Afficher les quotas fournisseurs, ${Math.round(remaining)} % restant sur ${windowLabel}${alert}`
         }
         aria-expanded={open}
-        title={`Quotas par fournisseur — wheel sur ${summaryWindowLabel(provider)}`}
+        title={`Quotas par fournisseur — wheel sur ${windowLabel}${alert}`}
         onClick={() => {
           const next = !open
           setOpen(next)

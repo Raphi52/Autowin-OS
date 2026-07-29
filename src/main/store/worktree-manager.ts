@@ -7,6 +7,7 @@ import {
   readFileSync,
   readdirSync,
   readlinkSync,
+  realpathSync,
   renameSync,
   rmSync,
   writeFileSync
@@ -30,6 +31,23 @@ import { isAbsolute, join, resolve } from 'node:path'
 const SAFE_ID = /^[A-Za-z0-9_-]+$/
 function assertSafeId(value: string, label: string): void {
   if (!SAFE_ID.test(value)) throw new Error(`${label} invalide (caractères non autorisés): ${value}`)
+}
+
+/**
+ * Forme COMPARABLE d'un chemin : résolue (jonctions/symlinks Windows, `C:\Users` vs `C:\USERS`,
+ * chemins UNC), séparateurs unifiés, casse neutralisée, slash final retiré. Sans cette
+ * normalisation, deux écritures du MÊME `.git` (une jonction, une casse différente) se comparent
+ * comme différentes → la garde « copie étrangère » bloquerait une copie parfaitement légitime.
+ * Si le chemin n'existe pas (encore), on retombe sur la forme brute normalisée.
+ */
+function canonicalPath(path: string): string {
+  let resolved = path
+  try {
+    resolved = realpathSync.native ? realpathSync.native(path) : realpathSync(path)
+  } catch {
+    resolved = path
+  }
+  return resolve(resolved).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
 }
 
 function shellPath(path: string): string {
@@ -158,6 +176,33 @@ export class WorktreeManager {
   private revisionExists(rev: string): boolean {
     if (!rev) return false
     return this.tryGitFn(this.baseRepo, ['cat-file', '-e', `${rev}^{commit}`]).code === 0
+  }
+
+  /** Répertoire git PARTAGÉ (`--git-common-dir`) d'un dépôt, en absolu ; undefined si indéterminable. */
+  private gitCommonDir(repo: string): string | undefined {
+    const probe = this.tryGitFn(repo, ['rev-parse', '--git-common-dir'])
+    if (probe.code !== 0) return undefined
+    const raw = probe.stdout.trim()
+    if (!raw) return undefined
+    return isAbsolute(raw) ? raw : resolve(repo, raw)
+  }
+
+  /**
+   * La copie appartient-elle bien à CE dépôt de base ? Un worktree légitime partage l'object-store
+   * de la base : son `--git-common-dir` résout vers le MÊME `.git`. Une copie laissée par un autre
+   * workspace (le dossier de copies est partagé) a son propre `.git` — écrire dedans muterait
+   * l'index et le HEAD d'un dépôt tiers, aspirant au passage le travail non commité d'un
+   * développeur dans un commit `agent <id>` sur un HEAD détaché. Vérification d'IDENTITÉ et non de
+   * révision : `cat-file -e` ne se déclenche qu'APRÈS le commit, donc trop tard.
+   * Indéterminable (git muet, chemin absent) → on NE bloque pas : les gardes suivantes prennent le
+   * relais, on ne casse pas le cas légitime sur un doute d'outillage.
+   */
+  private foreignCopyDetail(path: string): string | undefined {
+    const baseCommon = this.gitCommonDir(this.baseRepo)
+    const copyCommon = this.gitCommonDir(path)
+    if (!baseCommon || !copyCommon) return undefined
+    if (canonicalPath(baseCommon) === canonicalPath(copyCommon)) return undefined
+    return `La copie appartient à un autre dépôt (${copyCommon}) que la base (${baseCommon}) : aucune écriture n’y est faite.`
   }
 
   /** Inventorie les copies Autowin récupérables après un arrêt du processus. */
@@ -639,6 +684,15 @@ ${chainReferenceHook}exit 0
           detail: 'La référence de récupération existe mais sa copie n’a pas pu être restaurée.'
         }
       }
+    }
+
+    // AVANT toute écriture : si la copie n'appartient pas à cette base, on sort sans `add` ni
+    // `commit`. Déclencheur réel : au démarrage, `finalize` passe sur une copie laissée par un
+    // autre workspace, où un développeur a du travail non commité — le commit `agent <id>` le
+    // happait sur un HEAD détaché d'un dépôt tiers avant que la garde d'après ne dise « étrangère ».
+    const foreign = this.foreignCopyDetail(path)
+    if (foreign) {
+      return { outcome: 'blocked', agentId, files: [], reason: 'merge-failed', detail: foreign }
     }
 
     const existingOperationFiles = this.operationInProgress()

@@ -719,4 +719,52 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
     // Et rien n'a été fusionné dans la base.
     expect(git(repo, 'log', '--oneline')).not.toContain('venu-d-ailleurs')
   })
+
+  it('une copie d’un AUTRE dépôt n’est PAS écrite : travail non commité et HEAD intacts', () => {
+    // Discriminant du test précédent, qui ne regardait QUE la base : la garde révisionnelle
+    // (`cat-file -e`) arrivait APRÈS `git add -A` + `git commit -m "agent <id>"`. Le travail non
+    // commité d'un développeur était donc happé dans un commit sur le HEAD détaché de SON dépôt,
+    // sans consentement, avant qu'Autowin ne conclue « copie étrangère ». On vérifie ici l'absence
+    // d'écriture dans la copie, pas seulement l'absence de fusion.
+    const repo = tempRepo()
+    const wm = manager(repo)
+    const copie = wm.acquire('etranger-intact')
+    rmSync(copie, { recursive: true, force: true })
+    mkdirSync(copie, { recursive: true })
+    git(copie, 'init', '-q', '-b', 'main')
+    git(copie, 'config', 'user.email', 't@t')
+    git(copie, 'config', 'user.name', 'T')
+    git(copie, 'config', 'commit.gpgsign', 'false')
+    writeFileSync(join(copie, 'suivi.txt'), 'commité\n')
+    git(copie, 'add', '-A')
+    git(copie, 'commit', '-q', '-m', 'travail du développeur')
+    // Travail NON commité du développeur, présent au moment où Autowin passe.
+    writeFileSync(join(copie, 'suivi.txt'), 'modifié, pas encore commité\n')
+    writeFileSync(join(copie, 'brouillon.txt'), 'nouveau fichier non suivi\n')
+    const headAvant = git(copie, 'rev-parse', 'HEAD')
+    const statusAvant = git(copie, 'status', '--porcelain')
+    expect(statusAvant).not.toBe('')
+
+    const result = wm.finalize('etranger-intact')
+
+    expect(result).toMatchObject({ outcome: 'blocked', reason: 'merge-failed' })
+    expect(git(copie, 'status', '--porcelain')).toBe(statusAvant)
+    expect(git(copie, 'rev-parse', 'HEAD')).toBe(headAvant)
+    expect(git(copie, 'log', '--oneline')).not.toContain('agent etranger-intact')
+  })
+
+  it('une copie appartenant BIEN à la base est finalisée normalement (garde non sur-bloquante)', () => {
+    // Risque n°1 du correctif : une comparaison de chemins trop stricte (jonction, casse, slash
+    // final) prendrait un worktree légitime pour un dépôt étranger et bloquerait tout.
+    const repo = tempRepo()
+    const wm = manager(repo)
+    const path = wm.acquire('legitime')
+    writeFileSync(join(path, 'a.txt'), 'travail de l’agent\n')
+
+    const result = wm.finalize('legitime')
+
+    expect(result).toMatchObject({ outcome: 'merged', committed: true })
+    // `core.autocrlf` du poste peut réécrire les fins de ligne : on compare le contenu, pas l'EOL.
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8').trim()).toBe('travail de l’agent')
+  })
 })

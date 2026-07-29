@@ -24,12 +24,7 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 if (-not $LogPath) { $LogPath = Join-Path $UserData 'monitor-crash.log' }
 $stdoutRoot = Join-Path $UserData 'run-stdout'
 $conversations = Join-Path $UserData 'conversations.json'
-
-function Write-Line([string] $Message) {
-  $line = "[{0}] {1}" -f (Get-Date -Format 'HH:mm:ss'), $Message
-  Write-Output $line
-  Add-Content -Path $LogPath -Value $line -Encoding utf8
-}
+. "$PSScriptRoot\monitor-common.ps1"
 
 function Get-AppProcesses {
   @(Get-Process -Name 'autowin-os' -ErrorAction SilentlyContinue)
@@ -56,8 +51,7 @@ function Get-LastTurn {
 }
 
 function Get-StdoutState {
-  if (-not (Test-Path $stdoutRoot)) { return @{ Count = 0; Newest = ''; Errors = 0 } }
-  $files = @(Get-ChildItem -Path $stdoutRoot -Filter '*.stdout.jsonl' -File -ErrorAction SilentlyContinue)
+  $files = Get-StdoutFiles $stdoutRoot
   $newest = $files | Sort-Object LastWriteTime -Descending | Select-Object -First 1
   $errors = 0
   if ($newest) {

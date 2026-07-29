@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
+  buildBrainLaunchCommand,
   ensureBrainServerStarted,
   resetBrainLaunchAttempt,
   resolveBrainTooling
@@ -43,7 +44,12 @@ describe('ensureBrainServerStarted', () => {
     expect(spawnFn).not.toHaveBeenCalled()
   })
 
-  it('spawn détaché, cwd=tooling, PYTHONPATH retiré, argv=[brain_server.py]', async () => {
+  // Ce test figeait `argv=['/c','start','','/b',python,'brain_server.py']` : deux bugs gelés.
+  // (1) le script relatif était résolu contre le cwd RÉEL (C:\Windows dès que le tooling est UNC,
+  // cmd.exe refusant un cwd UNC) → python sortait en erreur, avalé par stdio:'ignore'.
+  // (2) pas de `/d` → les AutoRun du registre s'exécutaient dans notre cmd.
+  // Réécrit sur le contrat corrigé (script ABSOLU + /d), pas assoupli.
+  it('spawn détaché, PYTHONPATH retiré, script en chemin ABSOLU', async () => {
     makeValidTooling()
     const child = { unref: vi.fn() }
     const spawnFn = vi.fn().mockReturnValue(child)
@@ -56,15 +62,17 @@ describe('ensureBrainServerStarted', () => {
     expect(spawnFn).toHaveBeenCalledOnce()
     const [bin, args, opts] = spawnFn.mock.calls[0]
     const python = join(tooling, '.venv', 'Scripts', 'python.exe')
+    const script = join(tooling, 'brain_server.py')
     if (process.platform === 'win32') {
       // Lanceur intermédiaire OBLIGATOIRE sous Windows : sans lui, le python hérite du socket
       // d'écoute DevTools et garde le port 9223 après la mort de l'app.
       expect(bin).toBe('cmd.exe')
-      expect(args).toEqual(['/c', 'start', '', '/b', python, 'brain_server.py'])
+      expect(args).toEqual(['/d', '/c', 'start', '', '/b', python, script])
     } else {
       expect(bin).toBe(python)
-      expect(args).toEqual(['brain_server.py'])
+      expect(args).toEqual([script])
     }
+    // Le script étant absolu, aucun cwd n'est nécessaire ; un tooling local reste passé tel quel.
     expect(opts.cwd).toBe(tooling)
     expect(opts.detached).toBe(true)
     expect('PYTHONPATH' in opts.env).toBe(false)
@@ -79,6 +87,45 @@ describe('ensureBrainServerStarted', () => {
     expect(first.status).toBe('starting')
     expect(second.status).toBe('unavailable')
     expect(spawnFn).toHaveBeenCalledOnce()
+  })
+
+  // Le tooling par défaut est un partage RÉSEAU écrivable par des collègues : un dossier nommé
+  // `Brain & calc` suffisait à couper la ligne cmd.exe et à faire exécuter la suite AU DÉMARRAGE
+  // de l'app (le preflight appelle ce lanceur, aucun clic requis). On refuse, on ne spawn pas.
+  it('refuse un tooling contenant un métacaractère cmd.exe (aucun spawn)', async () => {
+    const piege = join(tooling, 'Brain & calc')
+    mkdirSync(join(piege, '.venv', 'Scripts'), { recursive: true })
+    writeFileSync(join(piege, '.venv', 'Scripts', 'python.exe'), '')
+    writeFileSync(join(piege, 'brain_server.py'), '')
+    const spawnFn = vi.fn().mockReturnValue({ unref: vi.fn() })
+    const r = await ensureBrainServerStarted(
+      async () => false,
+      { AUTOWIN_BRAIN_TOOLING: piege },
+      spawnFn as never
+    )
+    if (process.platform === 'win32') {
+      expect(r.status).toBe('unavailable')
+      expect(spawnFn).not.toHaveBeenCalled()
+    } else {
+      // Hors Windows il n'y a pas de shell dans la chaîne : le `&` est un caractère de chemin banal.
+      expect(r.status).toBe('starting')
+    }
+  })
+
+  it('buildBrainLaunchCommand : fail-closed sur métacaractère, cwd UNC non imposé', () => {
+    expect(buildBrainLaunchCommand('C:\\t & x', 'C:\\t & x\\python.exe', 'C:\\t & x\\s.py', 'win32')).toBeNull()
+    // cmd.exe REFUSE un cwd UNC (« UNC paths are not supported. Defaulting to Windows directory ») :
+    // on n'en impose aucun, et le script absolu rend le cwd inutile.
+    const unc = buildBrainLaunchCommand(
+      '\\\\ged2\\rig\\tooling',
+      '\\\\ged2\\rig\\tooling\\python.exe',
+      '\\\\ged2\\rig\\tooling\\brain_server.py',
+      'win32'
+    )
+    expect(unc).not.toBeNull()
+    expect(unc?.cwd).toBeUndefined()
+    expect(unc?.args.at(-1)).toBe('\\\\ged2\\rig\\tooling\\brain_server.py')
+    expect(unc?.args).toContain('/d')
   })
 
   it('resolveBrainTooling : env override sinon défaut Amitel', () => {

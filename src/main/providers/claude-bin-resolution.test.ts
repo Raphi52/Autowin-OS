@@ -41,10 +41,47 @@ describe('findClaudeExecutable — trouver le vrai .exe, pas un shim', () => {
     ).toBe(target)
   })
 
-  it('un vrai claude.exe posé dans un dossier du PATH gagne sur le paquet npm', () => {
+  /**
+   * RÉÉCRIT (audit adverse) : la version précédente exigeait qu'un `claude.exe` posé à plat dans
+   * N'IMPORTE QUEL dossier du PATH soit élu. Elle figeait le défaut — ce chemin est spawné avec le
+   * prompt système et la conversation, donc quiconque écrit dans un dossier du PATH (`C:\tools`, un
+   * partage réseau d'entreprise) se faisait livrer tous les prompts. Le contrat corrigé : un exe à
+   * plat n'est élu que si le dossier est vraiment un préfixe npm (il porte un `node_modules/`).
+   */
+  it('un claude.exe à plat gagne sur le paquet — mais SEULEMENT dans un vrai préfixe npm', () => {
     const dir = 'C:\\outils'
     const exe = join(dir, 'claude.exe')
-    expect(lookup([exe, join(dir, PKG)], { PATH: dir })).toBe(exe)
+    expect(lookup([exe, join(dir, 'node_modules'), join(dir, PKG)], { PATH: dir })).toBe(exe)
+  })
+
+  it('DÉTOURNEMENT : un claude.exe seul dans un dossier du PATH n’est PAS élu', () => {
+    // `C:\tools` écrivable par un tiers, aucun node_modules : ce n'est pas une install npm.
+    const exe = 'C:\\tools\\claude.exe'
+    expect(lookup([exe], { PATH: 'C:\\tools' })).toBeUndefined()
+  })
+
+  it('DÉTOURNEMENT : une entrée `.` dans le PATH ne rend RIEN (cwd = dépôt cloné)', () => {
+    // `join('.', 'claude.exe')` s'évaluerait depuis le cwd du process : un dépôt cloné suffirait.
+    expect(lookup(['claude.exe', join('.', 'claude.exe'), 'node_modules'], { PATH: '.' })).toBeUndefined()
+    expect(lookup([join('bin', 'claude.exe'), join('bin', PKG)], { PATH: 'bin' })).toBeUndefined()
+  })
+
+  it('DÉTOURNEMENT : la racine d’un volume n’est pas un préfixe (ACL laxistes par défaut)', () => {
+    expect(
+      lookup(['C:\\claude.exe', 'C:\\node_modules', join('C:\\', PKG)], { PATH: 'C:\\' })
+    ).toBeUndefined()
+  })
+
+  it('DÉTOURNEMENT : %TEMP% et le cwd sont refusés comme préfixes', () => {
+    const temp = 'C:\\Users\\x\\AppData\\Local\\Temp'
+    expect(
+      lookup([join(temp, 'claude.exe'), join(temp, 'node_modules'), join(temp, PKG)], {
+        TEMP: temp,
+        PATH: `${temp};${join(temp, 'sous')}`
+      })
+    ).toBeUndefined()
+    const cwd = process.cwd()
+    expect(lookup([join(cwd, 'claude.exe'), join(cwd, 'node_modules')], { PATH: cwd })).toBeUndefined()
   })
 
   it('le préfixe par défaut PRIME sur le PATH (ordre stable, aucune surprise)', () => {

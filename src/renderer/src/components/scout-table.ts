@@ -27,12 +27,35 @@ function band(cell: string): Band {
   if (cell.includes('🔴')) return 'r'
   return null
 }
-/** Score /100 (format « Score | Type | What | Why | How ») → pastille : ≥70 vert, ≥40 jaune, sinon rouge. */
-function scoreBand(cell: string): Band {
-  const m = cell.match(/\d+/)
-  if (!m) return null
-  const n = Number(m[0])
-  return n >= 70 ? 'g' : n >= 40 ? 'y' : 'r'
+/**
+ * Score → pastille : ≥70 vert, ≥40 jaune, sinon rouge — mais SEULEMENT si le score est interprétable
+ * sur une échelle /100.
+ *
+ * Cause du bug corrigé : `cell.match(/\d+/)` prenait le PREMIER entier sans regarder l'échelle.
+ * Déclencheurs constatés : « 8/10 » → 8 → pastille ROUGE alors que c'est excellent ; « #3 — 82 » → 3 →
+ * rouge aussi. Une pastille fausse est pire qu'aucune pastille → `null` dès que ce n'est pas lisible.
+ */
+export function scoreBand(cell: string): Band {
+  // Un rang « #3 » n'est pas un score : on le retire avant toute lecture de nombre.
+  const cleaned = cell.replace(/#\s*\d+/g, ' ')
+  const ratio = cleaned.match(/(\d+(?:[.,]\d+)?)\s*(?:\/|\bsur\b)\s*(\d+(?:[.,]\d+)?)/i)
+  const num = (raw: string): number => Number(raw.replace(',', '.'))
+  let score: number | undefined
+  if (ratio) {
+    const base = num(ratio[2])
+    if (base <= 0) return null
+    score = (num(ratio[1]) / base) * 100
+  } else {
+    const found = cleaned.match(/\d+(?:[.,]\d+)?/g)
+    // Plusieurs nombres sans échelle explicite (« 82 (cf. 3 refs) ») = ambigu : on ne devine pas.
+    if (!found || found.length !== 1) return null
+    const value = num(found[0])
+    // Un nombre nu ≤ 10 peut aussi bien être un /10 qu'un très mauvais /100 → non interprétable.
+    if (value <= 10 && !/%/.test(cleaned)) return null
+    score = value
+  }
+  if (!Number.isFinite(score) || score < 0 || score > 100) return null
+  return score >= 70 ? 'g' : score >= 40 ? 'y' : 'r'
 }
 function scoutType(cell: string): ScoutType {
   if (cell.includes('🆕') || /\bnew\b/i.test(cell)) return 'new'
@@ -51,16 +74,42 @@ function colOf(headers: string[], keywords: string[]): number {
   return headers.findIndex((h) => keywords.some((k) => h.toLowerCase().includes(k)))
 }
 
+/**
+ * Un en-tête n'est retenu que s'il est SUIVI d'un séparateur ET s'il porte réellement les colonnes
+ * qu'on projette.
+ *
+ * Deux bugs corrigés ici :
+ * 1. on ne prenait que le PREMIER candidat et on rendait `null` si son i+1 n'était pas un séparateur —
+ *    une petite table de légende placée avant la vraie shortlist faisait perdre TOUT le rendu ;
+ * 2. inversement, un tableau ÉTRANGER (« | Dimension | Score | Type | Note | ») était capturé à tort :
+ *    `what`/`why`/`how` absents → toutes les colonnes sauf la 2ᵉ étaient silencieusement JETÉES et le
+ *    contenu re-présenté comme une shortlist avec des pastilles inventées. D'où l'exigence de `what`
+ *    PLUS l'une de `why`/`how`.
+ */
+function isScoutHeader(headers: string[]): boolean {
+  const joined = headers.join(' | ')
+  const shape =
+    (/impact/i.test(joined) && /effort|eff\./i.test(joined)) ||
+    (/score/i.test(joined) && /what|type/i.test(joined))
+  if (!shape) return false
+  const hasWhat = colOf(headers, ['what', 'manquement', 'quoi', 'candidat']) >= 0
+  const hasWhy = colOf(headers, ['why', 'pourquoi', 'valeur']) >= 0
+  const hasHow = colOf(headers, ['how', '1er pas', 'premier', 'first']) >= 0
+  return hasWhat && (hasWhy || hasHow)
+}
+
 export function parseScoutTable(text: string): ScoutRow[] | null {
   const lines = text.split('\n')
-  const headerIdx = lines.findIndex(
-    (l) =>
-      isTableRow(l) &&
-      ((/impact/i.test(l) && /effort|eff\./i.test(l)) || (/score/i.test(l) && /what|type/i.test(l)))
-  )
+  let headerIdx = -1
+  for (let i = 0; i < lines.length; i++) {
+    if (!isTableRow(lines[i])) continue
+    if (!isSeparator(lines[i + 1] ?? '')) continue
+    if (!isScoutHeader(cells(lines[i]))) continue
+    headerIdx = i
+    break
+  }
   if (headerIdx < 0) return null
   const headers = cells(lines[headerIdx])
-  if (!isSeparator(lines[headerIdx + 1] ?? '')) return null
 
   const iNum = colOf(headers, ['#', 'num'])
   const iImpact = colOf(headers, ['impact', 'imp.'])
@@ -81,7 +130,8 @@ export function parseScoutTable(text: string): ScoutRow[] | null {
       impact: iImpact >= 0 ? band(at(iImpact)) : scoreBand(at(iScore)),
       effort: iEffort >= 0 ? band(at(iEffort)) : null,
       type: scoutType(at(iType)),
-      what: at(iWhat, c[iWhat >= 0 ? iWhat : 1] ?? ''),
+      // `iWhat` est garanti présent par `isScoutHeader` : plus de repli sur la colonne 1 « au hasard ».
+      what: at(iWhat),
       why: at(iWhy),
       how: at(iHow)
     })

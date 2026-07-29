@@ -195,7 +195,9 @@ describe('indicateur de quotas modèles', () => {
       await Promise.resolve()
     })
     expect(modelQuotas).toHaveBeenCalledTimes(2)
-    expect(container.querySelector('[data-testid="model-quota-trigger"]')?.textContent).toContain('0')
+    expect(container.querySelector('[data-testid="model-quota-trigger"]')?.textContent).toContain(
+      '0'
+    )
     await act(async () => root.unmount())
     vi.useRealTimers()
   })
@@ -295,10 +297,7 @@ describe('indicateur de quotas modèles', () => {
     const refresh = new Promise((resolve) => {
       resolveRefresh = resolve
     })
-    const modelQuotas = vi
-      .fn()
-      .mockReturnValueOnce(initial)
-      .mockReturnValueOnce(refresh)
+    const modelQuotas = vi.fn().mockReturnValueOnce(initial).mockReturnValueOnce(refresh)
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { modelQuotas }
@@ -334,6 +333,72 @@ describe('indicateur de quotas modèles', () => {
     })
     expect(trigger.textContent).toContain('0')
     expect(trigger.textContent).not.toContain('89')
+    await act(async () => root.unmount())
+  })
+
+  it('met à jour la wheel lorsque le fournisseur du modèle sélectionné change', async () => {
+    const modelQuotas = vi.fn(async () => ({
+      observedAt: '2026-07-29T08:00:00.000Z',
+      summary: { remainingPercent: 25, status: 'warning' as const },
+      models: [
+        {
+          modelId: 'claude/opus',
+          model: 'opus',
+          label: 'Claude Opus',
+          provider: 'claude',
+          shared: false,
+          status: 'available' as const,
+          source: 'Claude /usage',
+          windows: [
+            {
+              id: 'five-hour',
+              label: '5 h',
+              usedPercent: 75,
+              remainingPercent: 25
+            }
+          ]
+        },
+        {
+          modelId: 'codex/terra',
+          model: 'terra',
+          label: 'GPT Terra',
+          provider: 'codex',
+          shared: false,
+          status: 'available' as const,
+          source: 'Codex /usage',
+          windows: [
+            {
+              id: 'five-hour',
+              label: '5 h',
+              usedPercent: 30,
+              remainingPercent: 70
+            }
+          ]
+        }
+      ]
+    }))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { modelQuotas }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(createElement(ModelQuotaIndicator, { provider: 'claude' }))
+      await Promise.resolve()
+    })
+    const trigger = container.querySelector(
+      '[data-testid="model-quota-trigger"]'
+    ) as HTMLButtonElement
+    expect(trigger.textContent).toContain('25')
+
+    await act(async () => {
+      root.render(createElement(ModelQuotaIndicator, { provider: 'codex' }))
+    })
+    expect(trigger.textContent).toContain('70')
+    expect(modelQuotas).toHaveBeenCalledTimes(1)
     await act(async () => root.unmount())
   })
 })

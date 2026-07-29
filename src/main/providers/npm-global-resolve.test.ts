@@ -34,6 +34,27 @@ describe('npmPrefixCandidates — ordre stable, sans doublon', () => {
     expect(npmPrefixCandidates({ Path: 'D:\\alt' })).toEqual(['D:\\alt'])
     expect(npmPrefixCandidates({})).toEqual([])
   })
+
+  /**
+   * SÉCURITÉ — le PATH est HÉRITÉ (un CLI enfant, un script, ont pu le modifier) et le fichier élu
+   * sous ces préfixes est spawné AVEC le prompt système et la conversation. Toute entrée dont le
+   * contenu ne dépend pas du seul utilisateur est donc écartée avant même de regarder les fichiers.
+   */
+  it('une entrée NON ABSOLUE est refusée (`.`, `bin`, un %VAR% non expansé)', () => {
+    expect(npmPrefixCandidates({ PATH: '.;bin;..\\outils;%NPM_HOME%\\bin' })).toEqual([])
+  })
+
+  it('une RACINE de volume est refusée (créer un fichier y est ouvert par défaut)', () => {
+    expect(npmPrefixCandidates({ PATH: 'C:\\;D:\\;C:\\ok' })).toEqual(['C:\\ok'])
+  })
+
+  it('le cwd et %TEMP% (et leurs sous-dossiers) sont refusés', () => {
+    const temp = 'C:\\Users\\x\\AppData\\Local\\Temp'
+    expect(
+      npmPrefixCandidates({ TEMP: temp, PATH: `${temp};${temp}\\npm-x;D:\\ok` })
+    ).toEqual(['D:\\ok'])
+    expect(npmPrefixCandidates({ PATH: `${process.cwd()};D:\\ok` })).toEqual(['D:\\ok'])
+  })
 })
 
 describe('findNpmGlobalFile — le paquet est trouvé où qu’il soit installé', () => {
@@ -62,10 +83,28 @@ describe('findNpmGlobalFile — le paquet est trouvé où qu’il soit installé
     expect(
       findNpmGlobalFile(rel, {
         env: { PATH: dir },
-        exists: (p) => p === direct || p === join(dir, rel),
+        // `node_modules/` present : c'est bien un prefixe npm, l'exe a plat est legitime.
+        exists: (p) => [direct, join(dir, 'node_modules'), join(dir, rel)].includes(p),
         directNames: ['cli.exe']
       })
     ).toBe(direct)
+  })
+
+  /**
+   * RÉÉCRIT/AJOUTÉ (audit adverse) : élire n'importe quel exécutable posé à plat dans une entrée du
+   * PATH offrait l'exécution — avec le prompt système et la conversation — à quiconque écrit dans un
+   * dossier du PATH. Un exe à plat n'est légitime que dans un vrai préfixe `npm -g`, reconnaissable
+   * à son `node_modules/`.
+   */
+  it('un exe SEUL dans un dossier sans node_modules n’est PAS élu', () => {
+    const direct = 'C:\\tools\\cli.exe'
+    expect(
+      findNpmGlobalFile(rel, {
+        env: { PATH: 'C:\\tools' },
+        exists: (p) => p === direct,
+        directNames: ['cli.exe']
+      })
+    ).toBeUndefined()
   })
 
   it('rien trouvé → undefined (l’appelant décide quoi dire)', () => {

@@ -19,9 +19,12 @@
  */
 import { spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join, parse } from 'node:path'
 import { ensureBrainServerStarted } from './brain-server-launch'
 import { spawnLoginTerminal } from './provider-login'
+
+/** Nom du package du dépôt Autowin OS : l'IDENTITÉ exigée d'un candidat, pas juste un script. */
+export const AUTOWIN_PACKAGE_NAME = 'autowin-os'
 
 /**
  * Où lancer `npm run codex:login`. Le script vit dans le package.json du REPO : lancé ailleurs, npm
@@ -29,6 +32,13 @@ import { spawnLoginTerminal } from './provider-login'
  * EMPAQUETÉE, elle, démarre depuis n'importe où (raccourci bureau), donc on ne suppose pas : on
  * CHERCHE le premier dossier qui déclare réellement le script, en remontant les parents.
  * `undefined` si aucun ne le déclare → on le dit, plutôt que d'ouvrir une console qui va échouer.
+ *
+ * SÉCURITÉ — pourquoi « déclare le script » ne suffit PAS : la remontée finit par atteindre `C:\`,
+ * dont la racine autorise par défaut la création de fichiers aux utilisateurs authentifiés. Un
+ * `C:\package.json` planté avec `{"scripts":{"codex:login":"<payload>"}}` serait adopté comme « le
+ * repo Autowin OS », puis exécuté (`npm run`, via `powershell -ExecutionPolicy Bypass`). On exige
+ * donc l'IDENTITÉ du dépôt (`name: autowin-os`), on refuse les candidats non absolus, et on
+ * n'inspecte jamais une racine de volume.
  */
 export function resolveCodexLoginCwd(
   candidates: readonly string[],
@@ -37,14 +47,21 @@ export function resolveCodexLoginCwd(
 ): string | undefined {
   for (const candidate of candidates) {
     if (!candidate) continue
+    // Un candidat relatif se résoudrait depuis le cwd du process : indéterminé, donc refusé.
+    if (!isAbsolute(candidate)) continue
     let dir = candidate
     // Remontée bornée : un chemin Windows profond reste sous ~12 niveaux.
     for (let depth = 0; depth < 12; depth++) {
+      // Racine de volume : ACL laxistes par défaut, jamais un dépôt. On s'arrête AVANT de la lire.
+      if (dir === parse(dir).root) break
       const manifest = join(dir, 'package.json')
       if (exists(manifest)) {
         try {
-          const parsed = JSON.parse(read(manifest)) as { scripts?: Record<string, string> }
-          if (parsed.scripts?.['codex:login']) return dir
+          const parsed = JSON.parse(read(manifest)) as {
+            name?: unknown
+            scripts?: Record<string, string>
+          }
+          if (parsed.name === AUTOWIN_PACKAGE_NAME && parsed.scripts?.['codex:login']) return dir
         } catch {
           /* manifeste illisible → ce n'est pas le bon, on continue de remonter */
         }

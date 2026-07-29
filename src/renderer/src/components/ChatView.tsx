@@ -807,11 +807,25 @@ export function ChatView({
     else queueRef.current.delete(id)
     if (activeRef.current === id) setPendingDirectives(next)
   }
+  /**
+   * `mode: 'btw'` = « celui-la passe EN DERNIER ». Il ne suffit pas de deplacer l'entree une fois :
+   * sans cette insertion, le message suivant tape par l'utilisateur atterrissait APRES le message
+   * marque BTW, ce qui defaisait silencieusement la promesse du bouton (« remettre a la fin ») —
+   * `mode` n'etait alors lu que pour l'affichage, donc le clic n'avait aucun effet durable.
+   * Un nouvel envoi BTW, lui, se range derriere les BTW deja presents (ordre d'arrivee conserve).
+   */
   function enqueueMessage(id: string, text: string, mode?: QueuedDirective['mode']): void {
-    setConversationQueue(id, [
-      ...(queueRef.current.get(id) ?? []),
-      { id: nextQueueEntryIdRef.current++, text, mode }
-    ])
+    const current = queueRef.current.get(id) ?? []
+    const entry = { id: nextQueueEntryIdRef.current++, text, mode }
+    if (mode === 'btw') {
+      setConversationQueue(id, [...current, entry])
+      return
+    }
+    let insertAt = current.length
+    while (insertAt > 0 && current[insertAt - 1].mode === 'btw') insertAt -= 1
+    const next = current.slice()
+    next.splice(insertAt, 0, entry)
+    setConversationQueue(id, next)
   }
   useEffect(() => {
     setPendingDirectives(queueRef.current.get(activeId ?? '') ?? [])
@@ -2138,7 +2152,7 @@ export function ChatView({
                     className="directive-queue-send directive-queue-btw"
                     title={
                       directive.mode === 'btw'
-                        ? 'BTW confirmé — ce message sera envoyé à la fin du tour en cours'
+                        ? 'BTW confirmé — ce message reste en dernier : il partira après les autres messages en file, y compris ceux tapés ensuite'
                         : 'BTW — remettre ce message à la fin de la file sans interrompre le tour en cours'
                     }
                     aria-label={`Remettre le message ${index + 1} en file via BTW`}
