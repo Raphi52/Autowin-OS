@@ -188,6 +188,12 @@ const pilot = new AgentPilot(
     // PORTEE PAR WORKSPACE (O3) : le Brain est a 99 % de la doc RIG, donc une question Autowin ramenait
     // majoritairement des sources d'un AUTRE projet. Le corpus autorise se DERIVE du workspace, il n'est
     // pas ecrit en dur : dans un workspace RIG, la doc RIG est exactement ce qu'il faut.
+    // Le chat ne POUSSE plus que le graphe de code. MESURE 2026-07-29 : l'appel Brain coute ~430 ms de
+    // mediane a chaque tour (jusqu'a 1 500 ms, son timeout) alors que 73 % des tours n'en ont tire
+    // AUCUNE source utile ; le graphe coute 7 ms. Le Brain reste atteignable A LA DEMANDE, par la
+    // commande `brain_query` que le prompt recommande deja — on passe d'un contexte pousse a une
+    // capacite disponible.
+    sources: ['graph'],
     workspace: () => os.executionWorkspace,
     onScope: ({ kept, dropped, corpus }) => {
       if (dropped > 0) {

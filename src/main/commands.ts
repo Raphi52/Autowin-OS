@@ -1,5 +1,6 @@
 import { applyEdit, decideEdit, editDiff } from './edit-file-command'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { brainCorpusForWorkspace, scopeBrainBlock } from './brain-corpus-scope'
 import { buildBrainOutcome, decideBrainQuery, type BrainQueryOutcome } from './brain-query-command'
 import { retrieveBrainContext } from './brain-retrieval'
 import { spawn } from 'node:child_process'
@@ -924,7 +925,11 @@ export class AppCommandBus {
       return { allowed: false, reason: decision.reason, found: false, query: '', knowledge: '' }
     }
     const { context } = await retrieveBrainContext(decision.query)
-    return { allowed: true, ...buildBrainOutcome(decision.query, context) }
+    // MEME PORTEE que la voie poussee : `brain_query` passe par un autre module
+    // (`brain-retrieval`), donc sans ce filtre la portee par workspace serait MORTE sur le chemin a la
+    // demande — exactement le defaut qu'on corrige (un module atteignable mais jamais applique).
+    const scoped = scopeBrainBlock(context, brainCorpusForWorkspace(this.os.executionWorkspace))
+    return { allowed: true, ...buildBrainOutcome(decision.query, scoped.block) }
   }
 
   private async runVerify(): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {

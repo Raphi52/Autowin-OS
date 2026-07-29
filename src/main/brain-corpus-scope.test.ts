@@ -153,3 +153,44 @@ describe('câblage — la portée est appliquée et tracée', () => {
     expect(read('index.ts')).toContain('[brain-scope]')
   })
 })
+
+/**
+ * O4 — RÉCUPÉRATION À LA DEMANDE plutôt que poussée à chaque tour.
+ *
+ * MESURE 2026-07-29 : sur 41 tours de chat réels, 30 (73 %) n'ont tiré AUCUNE source Autowin, et
+ * l'appel Brain coûte ~430 ms de médiane (jusqu'à 1 500 ms, son timeout) contre 7 ms pour le graphe de
+ * code. La capacité à la demande existait DÉJÀ (`brain_query`, recommandée par le prompt) : il ne
+ * restait qu'à couper la poussée.
+ */
+describe('câblage O4 — le chat ne pousse plus le Brain, mais y accède', () => {
+  const read = (rel: string): string => readFileSync(join(__dirname, rel), 'utf8')
+
+  it('le chat ne POUSSE que le graphe de code', () => {
+    expect(read('index.ts')).toContain("sources: ['graph']")
+  })
+
+  it('la poussée du Brain est réellement conditionnée (pas seulement déclarée)', () => {
+    const source = read('amitel-context.ts')
+    expect(source).toContain("const pushBrain = sources.includes('brain')")
+    expect(source).toContain('pushBrain ? retrieveBrain(boundedQuery) : Promise.resolve()'.replace('()', "('')"))
+  })
+
+  it('DÉFAUT rétro-compatible : sans option, les DEUX sources sont poussées', () => {
+    expect(read('amitel-context.ts')).toContain("options.sources ?? (['brain', 'graph'] as const)")
+  })
+
+  it('le graphe reste poussé — sa valeur n’a PAS été mesurée, on ne retire pas ce qu’on ignore', () => {
+    const source = read('amitel-context.ts')
+    expect(source).toContain('retrieveGraph(boundedQuery)')
+  })
+
+  /**
+   * LA GARDE QUI COMPTE : `brain_query` passe par `brain-retrieval`, un AUTRE module. Sans ce filtre,
+   * la portée par workspace deviendrait morte sur le chemin à la demande — le défaut même qu'on corrige.
+   */
+  it('le chemin À LA DEMANDE applique la MÊME portée par workspace', () => {
+    const source = read('commands.ts')
+    expect(source).toContain('scopeBrainBlock(context, brainCorpusForWorkspace(this.os.executionWorkspace))')
+    expect(source).toContain('buildBrainOutcome(decision.query, scoped.block)')
+  })
+})

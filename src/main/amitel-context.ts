@@ -54,6 +54,11 @@ type AmitelContextOptions = {
   maxGraphBytes?: number
   maxBrainContextChars?: number
   /**
+   * Sources POUSSEES a chaque appel. Defaut : les deux (comportement historique). Le chat ne pousse
+   * plus que le graphe ; le Brain y est atteignable A LA DEMANDE via la commande `brain_query`.
+   */
+  sources?: readonly ('brain' | 'graph')[]
+  /**
    * Workspace courant : sert a DERIVER le corpus Brain autorise (option O3 du cadrage
    * `rag-brain-pertinence`). Absent, ou workspace sans corpus declare -> aucun filtrage.
    */
@@ -204,6 +209,7 @@ export function createAmitelContextProvider(
   const graphCacheTtlMs = options.graphCacheTtlMs ?? 30_000
   const maxGraphBytes = options.maxGraphBytes ?? 16 * 1024 * 1024
   const maxBrainContextChars = options.maxBrainContextChars ?? 4_000
+  const sources = options.sources ?? (['brain', 'graph'] as const)
   const now = options.now ?? Date.now
   const graphLoader =
     options.graphLoader ??
@@ -279,8 +285,13 @@ export function createAmitelContextProvider(
   return async (query: string): Promise<string> => {
     const boundedQuery = query.trim().slice(0, 8_000)
     if (!boundedQuery) return ''
+    // SOURCES POUSSEES : par defaut les deux (comportement historique). Le chat, lui, ne pousse plus
+    // que le graphe — MESURE du 2026-07-29 : l'appel Brain coute ~430 ms de MEDIANE a chaque tour (et
+    // jusqu'a 1 500 ms, son timeout) alors que 73 % des tours n'en ont tire AUCUNE source utile. Le
+    // graphe, lui, coute 7 ms. Le Brain reste atteignable A LA DEMANDE via la commande `brain_query`.
+    const pushBrain = sources.includes('brain')
     const [brain, graph] = await Promise.allSettled([
-      retrieveBrain(boundedQuery),
+      pushBrain ? retrieveBrain(boundedQuery) : Promise.resolve(''),
       retrieveGraph(boundedQuery)
     ])
     // PORTÉE PAR WORKSPACE : le Brain est à 99 % de la doc RIG (mesure 2026-07-29), donc une question
