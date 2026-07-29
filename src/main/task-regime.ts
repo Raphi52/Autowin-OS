@@ -11,6 +11,7 @@
  * clairement superflu pour le régime.
  */
 import type { PipelinePhase } from './skill-pipeline'
+import { matchIntentPhase } from './intent-phase-routing'
 import { routeSkillRequest } from './skill-routing'
 
 export type TaskRegime = 'trivial' | 'standard' | 'critical'
@@ -79,7 +80,14 @@ export function matchExplicitPhase(task: string): PipelinePhase | null {
  * (consultée AVANT `classifyRegime`) ; sinon on retombe sur l'heuristique de proportionnalité.
  */
 export function regimePhases(task: string): PipelinePhase[] {
-  const explicitPhase = routeSkillRequest(task)?.explicitPhase ?? matchExplicitPhase(task) ?? undefined
+  // Ordre : une phase NOMMEE prime (autorite maximale), puis l'INTENTION en langage naturel. Cette
+  // derniere ne fait que RESTREINDRE les phases d'une tache deja partie en orchestration — elle ne
+  // decide jamais d'orchestrer, precisement pour ne pas rejouer la regression du 2026-07-28.
+  const explicitPhase =
+    routeSkillRequest(task)?.explicitPhase ??
+    matchExplicitPhase(task) ??
+    matchIntentPhase(task)?.phase ??
+    undefined
   // `judge` est la closure externe permanente de l'orchestrateur, pas une phase worker.
   // Une commande /judge saute donc les phases d'exécution et lance ce juge une seule fois.
   if (explicitPhase === 'judge') return []
