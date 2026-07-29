@@ -267,6 +267,32 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     } else {
       args.push('--disallowedTools', '*')
     }
+    /**
+     * MEMOIRE AUTO du CLI — on la ramene au PROJET COURANT.
+     *
+     * Mesure du 2026-07-28 : `~/.claude/settings.json` de l'utilisateur porte
+     * `autoMemoryDirectory: "~/.claude/projects/C--Code-RIG/memory"` (552 Ko de fiches), chargee a
+     * CHAQUE appel — la memoire d'un AUTRE projet que celui sur lequel Autowin travaille. Cout
+     * mesure sur un appel minimal : 10 272 tokens contre 1 072 sans, soit ~9 200 tokens par appel.
+     *
+     * `--setting-sources ''` ne la couvre pas (ce n'est pas une source de reglages au sens du flag).
+     * On passe donc un settings PROPRE a Autowin ou `autoMemoryDirectory` est vide, ce qui ramene le
+     * CLI au dossier de memoire du projet COURANT (verifie empiriquement : la valeur vide reinitialise
+     * au defaut, elle ne desactive pas). Deux consequences voulues : plus aucune fiche hors-sujet, et
+     * si l'utilisateur cree une memoire POUR ce projet, elle sera bien prise en compte.
+     *
+     * Le fichier vit dans un dossier temporaire nettoye a la fermeture du process : on ne modifie
+     * JAMAIS le settings.json de l'utilisateur, qui reste son kit.
+     */
+    let settingsDir: string | undefined
+    try {
+      settingsDir = mkdtempSync(join(tmpdir(), 'autowin-os-settings-'))
+      const settingsFile = join(settingsDir, 'settings.json')
+      writeFileSync(settingsFile, JSON.stringify({ autoMemoryDirectory: '' }), 'utf8')
+      args.push('--settings', settingsFile)
+    } catch {
+      settingsDir = undefined // impossible d'ecrire : on garde le comportement d'origine
+    }
     let systemPromptDir: string | undefined
     if (systemInjected && system!.length > 4_000) {
       systemPromptDir = mkdtempSync(join(tmpdir(), 'autowin-os-system-'))
@@ -490,6 +516,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       watchdog.dispose()
       if (childPid) execution?.onProcess?.(childPid, false)
       if (systemPromptDir) rmSync(systemPromptDir, { recursive: true, force: true })
+      // Meme hygiene que le system prompt : un dossier temporaire par appel ne doit pas s'accumuler
+      // (c'est exactement la fuite disque constatee ce jour sur run-stdout/).
+      if (settingsDir) rmSync(settingsDir, { recursive: true, force: true })
       // Journal de sortie resté VIDE = le CLI n'a rien écrit (échec de lancement, appel avorté). Il
       // n'apporte rien à une reprise et fait croire à un run existant : mesuré 3 journaux vides sur 7
       // spawns lors d'un test réel, et 20 spawns en erreur sur 114 en usage réel. On le supprime.

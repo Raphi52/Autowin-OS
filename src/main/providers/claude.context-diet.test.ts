@@ -42,6 +42,26 @@ describe('spawn CLI — regime de contexte', () => {
     expect(source).not.toContain('append-system-prompt')
   })
 
+
+  it('ramene la memoire auto au PROJET COURANT (et non celle d’un autre projet)', () => {
+    // Mesure du 2026-07-28 : le settings.json de l'utilisateur pointait autoMemoryDirectory sur
+    // ~/.claude/projects/C--Code-RIG/memory (552 Ko) — chargee a chaque appel alors qu'Autowin
+    // travaille ailleurs. Cout mesure : 10 272 tokens contre 1 072 sans, soit ~9 200 par appel.
+    expect(source).toContain("'--settings'")
+    expect(source).toContain('autoMemoryDirectory')
+  })
+
+  it('n’ecrit JAMAIS dans le settings.json de l’utilisateur (fichier temporaire dedie)', () => {
+    const block = source.slice(source.indexOf('let settingsDir'), source.indexOf('let systemPromptDir'))
+    expect(block).toContain('mkdtempSync(')
+    // Le kit de l'utilisateur ne doit pas etre modifie pour economiser des tokens.
+    expect(block).not.toContain('.claude')
+  })
+
+  it('nettoie le dossier temporaire de reglages (pas de fuite disque)', () => {
+    expect(source).toMatch(/if \(settingsDir\) rmSync\(settingsDir/)
+  })
+
   it('n’utilise PAS --bare : il couperait l’auto-memory mais aussi l’auth par abonnement', () => {
     // La doc : « Anthropic auth is strictly ANTHROPIC_API_KEY … OAuth and keychain are never read ».
     // Autowin passe par le CLI justement pour utiliser l'abonnement — le flag serait un piege de
