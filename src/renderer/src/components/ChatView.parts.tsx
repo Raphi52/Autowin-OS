@@ -2,6 +2,7 @@ import { groupOutcomeSummary } from './action-outcome-summary'
 import { failedActionRunId } from './run-trace-target'
 import { hasConsultableRun, localActionDetails } from './action-detail-target'
 import { HumanJson } from './HumanJson'
+import { BrainMarkdown } from './BrainMarkdown'
 import {
   STEP_META,
   groupSubagentSteps,
@@ -67,7 +68,9 @@ export function SubAgentStep({ step: s }: { step: OrchStep }): React.JSX.Element
           </div>
           <p className="prompt-envelope-limit">{s.prompt.limitation}</p>
           <strong>Système · instructions + skills/contexte injectés</strong>
-          <pre>{s.prompt.system || 'Aucun bloc système.'}</pre>
+          <div className="prompt-envelope-system" data-testid="prompt-system-md">
+            <BrainMarkdown source={s.prompt.system || 'Aucun bloc système.'} />
+          </div>
           <strong>Messages transmis</strong>
           {s.prompt.messages.map((message, messageIndex) => (
             <section key={`${message.role}-${messageIndex}`}>

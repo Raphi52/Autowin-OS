@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { StepThread } from './ChatView.parts'
 import type { OrchStep } from './chat-view-model'
@@ -144,5 +145,60 @@ describe('StepThread — preuves d’exécution inline', () => {
   it('pas de récap coût pour un run mono-modèle (rétrocompat)', () => {
     render([{ step: 'exec', role: 'subagent', provider: 'codex', text: 'x' }])
     expect(container.querySelector('[data-testid="run-cost-recap"]')).toBeNull()
+  })
+})
+
+describe('StepThread — prompt système rendu en Markdown', () => {
+  const step: OrchStep = {
+    step: 'exec',
+    prompt: {
+      provider: 'claude',
+      transport: 'sdk',
+      limitation: 'Reconstitution fidèle',
+      system: '# Titre\n\n- item **gras**\n\n```ts\nconst a = 1\n```',
+      messages: [{ role: 'user', content: '# pas un titre' }],
+      options: {}
+    }
+  } as unknown as OrchStep
+
+  it('rend titres, gras et listes en HTML (plus de dump brut monospace)', () => {
+    render([step])
+    const zone = container.querySelector('[data-testid="prompt-system-md"]')
+    expect(zone).not.toBeNull()
+    expect(zone?.querySelector('h1')?.textContent).toBe('Titre')
+    expect(zone?.querySelector('li strong')?.textContent).toBe('gras')
+    expect(zone?.textContent ?? '').not.toContain('# Titre')
+  })
+
+  it('conserve les blocs de code en monospace (pre > code) et le conteneur scrollable', () => {
+    render([step])
+    const zone = container.querySelector('[data-testid="prompt-system-md"]')
+    expect(zone?.querySelector('pre code')?.textContent).toContain('const a = 1')
+    expect(zone?.className).toContain('prompt-envelope-system')
+  })
+
+  it('les messages transmis restent en texte brut (aucun autre panneau modifié)', () => {
+    render([step])
+    const pres = Array.from(container.querySelectorAll('.prompt-envelope > section pre'))
+    expect(pres.some((p) => p.textContent === '# pas un titre')).toBe(true)
+  })
+
+  it('le comportement dépliable est inchangé : la zone reste dans le <details> replié', () => {
+    render([step])
+    const details = container.querySelector('details.prompt-envelope') as HTMLDetailsElement | null
+    expect(details).not.toBeNull()
+    expect(details?.open).toBe(false) // replié par défaut, comme avant
+    expect(details?.querySelector('summary')?.textContent).toContain('Voir le prompt envoyé')
+    expect(details?.querySelector('[data-testid="prompt-system-md"]')).not.toBeNull()
+  })
+
+  it('scroll et largeur conservés : la zone garde les bornes de l’ancien <pre>', () => {
+    // happy-dom : import.meta.url n'est pas de schéma file → chemin depuis la racine du repo
+    const css = readFileSync('src/renderer/src/components/ChatView.css', 'utf8')
+    const block = css.slice(css.indexOf('.prompt-envelope-system {'))
+    const rule = block.slice(0, block.indexOf('}'))
+    expect(rule).toContain('max-height: 320px')
+    expect(rule).toContain('overflow: auto')
+    expect(rule).toContain('margin: 0 10px')
   })
 })
