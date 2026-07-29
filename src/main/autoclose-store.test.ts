@@ -39,6 +39,14 @@ describe('persistance de l’interrupteur de clôture automatique', () => {
     expect(loadAutoClose(path)).toBe(false)
   })
 
+  it('un fichier écrit avec un BOM reste lisible (Notepad, PowerShell)', () => {
+    const path = tempFile()
+    // Constaté en vrai : le réglage était bon, le BOM faisait échouer JSON.parse, et l'app
+    // retombait silencieusement à OFF.
+    writeFileSync(path, '﻿' + JSON.stringify({ enabled: true }), 'utf8')
+    expect(loadAutoClose(path)).toBe(true)
+  })
+
   it('un contenu inattendu ne vaut pas « activé »', () => {
     const path = tempFile()
     writeFileSync(path, JSON.stringify({ enabled: 'oui' }))
