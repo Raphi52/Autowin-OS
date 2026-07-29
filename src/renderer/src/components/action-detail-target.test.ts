@@ -35,12 +35,21 @@ describe('localActionDetails — ce qui s’affiche SUR PLACE faute de run', () 
     expect(detail.text).toContain('+ b')
   })
 
-  it('montre exit code ET sortie d’une verification', () => {
+  it('une verification qui PASSE ne montre que son verdict', () => {
+    // La sortie d'un succes est du bruit : des milliers de lignes d'outil, tronquees a leur queue,
+    // sous un « exit 0 » qui disait deja tout. Personne ne les lit.
     const [detail] = localActionDetails([
       { name: 'verify', ok: true, data: { allowed: true, exitCode: 0, output: '1 test pass' } }
     ])
-    expect(detail.text).toContain('exit 0')
-    expect(detail.text).toContain('1 test pass')
+    expect(detail.text).toBe('exit 0')
+  })
+
+  it('une verification qui ECHOUE montre sa sortie — c’est la qu’on la lit', () => {
+    const [detail] = localActionDetails([
+      { name: 'verify', ok: true, data: { allowed: true, exitCode: 1, output: 'assertion failed' } }
+    ])
+    expect(detail.text).toContain('exit 1')
+    expect(detail.text).toContain('assertion failed')
   })
 
   it('un REFUS montre sa raison, et est marque non-ok', () => {

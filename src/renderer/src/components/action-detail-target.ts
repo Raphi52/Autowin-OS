@@ -62,11 +62,23 @@ export function localActionDetails(actions: readonly ActionLike[]): LocalActionD
     const output = typeof data.output === 'string' ? data.output : undefined
     const exitCode = typeof data.exitCode === 'number' ? data.exitCode : undefined
     const knowledge = typeof data.knowledge === 'string' ? data.knowledge : undefined
+    /**
+     * Une vérification qui PASSE n'a rien à raconter : son verdict est « exit 0 », et le reste est
+     * la sortie de l'outil — souvent des milliers de lignes de bruit (avertissements git, worktrees
+     * préparés) tronquées à leur queue la moins parlante. On ne montre donc la sortie que lorsqu'elle
+     * sert : quand ça a ÉCHOUÉ. Constaté en usage : un pavé de 68 000 caractères sous un « exit 0 ».
+     */
+    const succeeded = ok && exitCode === 0
     const text =
       reason ??
       diff ??
       (output !== undefined || exitCode !== undefined
-        ? [exitCode !== undefined ? `exit ${exitCode}` : '', output ?? ''].filter(Boolean).join('\n')
+        ? [
+            exitCode !== undefined ? `exit ${exitCode}` : '',
+            succeeded ? '' : (output ?? '')
+          ]
+            .filter(Boolean)
+            .join('\n')
         : undefined) ??
       knowledge
     if (!text || !text.trim()) continue
