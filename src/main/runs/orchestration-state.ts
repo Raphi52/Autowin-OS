@@ -113,3 +113,55 @@ export function pickOrchestrationToResume(
   if (usable.length === 0) return null
   return usable.reduce((best, state) => (state.updatedAt > best.updatedAt ? state : best))
 }
+
+/** Normalise un libelle de tache pour comparer « la meme tache » ecrite a l'espace pres. */
+export function normalizeTaskKey(task: string): string {
+  return task.trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+export interface ResumeLookup {
+  task: string
+  /** Conversation d'origine ; un acquis d'une AUTRE conversation n'est jamais repris. */
+  conversationId?: string
+  nowMs: number
+  /** Au-dela, l'acquis est trop vieux pour etre reinjecte sans surprendre (defaut 24 h). */
+  maxAgeMs?: number
+}
+
+const DEFAULT_RESUME_MAX_AGE_MS = 24 * 60 * 60 * 1_000
+
+/**
+ * Acquis reutilisable pour une tache RELANCEE depuis le chat.
+ *
+ * Le chemin de reprise n'existait qu'au REDEMARRAGE de l'app : quand l'utilisateur ecrit « reprend »
+ * dans une conversation, la commande `orchestrate` relancait de zero et repayait les phases deja
+ * produites (constate le 2026-07-29). Ce selecteur repond a « ai-je deja paye une partie de CETTE
+ * tache, dans CETTE conversation, recemment ? ».
+ *
+ * Conditions CUMULATIVES, volontairement strictes — reinjecter un acquis fait SAUTER des phases, donc
+ * un faux positif produit un livrable base sur du travail etranger :
+ *  - meme tache (a la normalisation d'espaces pres) ;
+ *  - meme conversation (un acquis sans conversation n'est pas repris ici : il appartient au demarrage) ;
+ *  - au moins un livrable NON VIDE (sinon on sauterait une phase sans avoir son travail) ;
+ *  - moins de `maxAgeMs`.
+ * Plusieurs candidats -> le plus recent.
+ */
+export function pickResumeForTask(
+  states: readonly OrchestrationRunState[],
+  lookup: ResumeLookup
+): OrchestrationRunState | null {
+  if (!lookup.conversationId) return null
+  const wanted = normalizeTaskKey(lookup.task)
+  if (!wanted) return null
+  const maxAge = lookup.maxAgeMs ?? DEFAULT_RESUME_MAX_AGE_MS
+  const usable = states.filter(
+    (state) =>
+      state.conversationId === lookup.conversationId &&
+      normalizeTaskKey(state.task) === wanted &&
+      lookup.nowMs - state.updatedAt <= maxAge &&
+      lookup.nowMs >= state.updatedAt &&
+      state.phaseOutputs.some((output) => typeof output.text === 'string' && output.text.trim())
+  )
+  if (usable.length === 0) return null
+  return usable.reduce((best, state) => (state.updatedAt > best.updatedAt ? state : best))
+}

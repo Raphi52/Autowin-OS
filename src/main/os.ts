@@ -51,6 +51,7 @@ import {
   clearOrchestrationState,
   loadOrchestrationStates,
   pickOrchestrationToResume,
+  pickResumeForTask,
   saveOrchestrationState,
   type OrchestrationRunState
 } from './runs/orchestration-state'
@@ -357,6 +358,23 @@ export class AutowinOS {
    */
   resumableOrchestration(): OrchestrationRunState | null {
     return pickOrchestrationToResume(loadOrchestrationStates(this.orchestrationStateRoot))
+  }
+
+  /**
+   * Acquis reutilisable pour une tache RELANCEE dans une conversation (« reprend »). Le chemin de
+   * reprise n'existait qu'au redemarrage de l'app : relancer depuis le chat repayait les phases deja
+   * produites (constate le 2026-07-29). Lecture seule ; l'appelant decide.
+   */
+  resumableOrchestrationForTask(
+    task: string,
+    conversationId: string | undefined,
+    nowMs = Date.now()
+  ): OrchestrationRunState | null {
+    return pickResumeForTask(loadOrchestrationStates(this.orchestrationStateRoot), {
+      task,
+      conversationId,
+      nowMs
+    })
   }
 
   /** Abandonne explicitement un état reprenable (l'utilisateur ne veut pas le reprendre). */

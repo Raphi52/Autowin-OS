@@ -67,7 +67,9 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     const os = fakeOs()
     let collected = ''
     os.runTask = async (...args: unknown[]) => {
-      collected = String(args.at(-1) ?? '')
+      // args inclut `task` -> collectedContext est en args[5] (cf. AutowinOS.runTask). Lire depuis
+      // la FIN cassait des que la signature s'etendait — arrive avec resumeOutputs + conversationId.
+      collected = String(args[5] ?? '')
       return { gateBlocked: false, gateReasons: [], valid: true, costUsd: 0, result: '', phaseOutputs: [] }
     }
     const result = await new AppCommandBus(os, () => {}).exec(
@@ -145,7 +147,8 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     const signals = new Map<string, AbortSignal>()
     const os = fakeOs()
     os.runTask = (task: string, ...args: unknown[]) => {
-      signals.set(task, args.at(-2) as AbortSignal)
+      // 5e argument = signal (cf. AutowinOS.runTask), indexe par RANG et non depuis la fin.
+      signals.set(task, args[3] as AbortSignal)
       return task === 'ancien' ? first.promise : second.promise
     }
     const bus = new AppCommandBus(os, () => {})

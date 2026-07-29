@@ -659,6 +659,30 @@ export class AppCommandBus {
         // Sous-agent STOPPABLE : un AbortController par conversation, coupé par abortOrchestration.
         const abortController = new AbortController()
         this.claimOrchestration(convId, orchestrationRank, abortController)
+        // REPRISE depuis le chat : le chemin de reprise n'existait qu'au REDEMARRAGE de l'app, donc
+        // « reprend » relancait de zero et REPAYAIT les phases deja produites (2026-07-29). On cherche
+        // un acquis de la MEME tache dans LA MEME conversation, recent et non vide.
+        const resumable = this.os.resumableOrchestrationForTask?.(task, convId) ?? null
+        const resumeOutputs = resumable?.phaseOutputs ?? []
+        if (resumable) {
+          // Le run repris a son PROPRE etat persiste : sans cet oubli, le meme acquis serait rejoue a
+          // chaque relance (bug deja attrape sur le chemin de demarrage).
+          this.os.forgetResumableOrchestration(resumable.runId)
+          const reused = resumeOutputs.map((output) => output.phase).join(', ')
+          // VISIBLE : sauter des phases deja payees ne doit jamais etre silencieux.
+          this.broadcast({
+            type: 'orchestrate-step',
+            convId,
+            runPath,
+            step: {
+              step: 'exec',
+              role: 'subagent',
+              text: '',
+              status: 'completed',
+              detail: `reprise : phases deja acquises reutilisees (${reused})`
+            } as OrchestrationStep
+          })
+        }
         this.broadcast({ type: 'orchestrate-start', convId, runPath, task: requestedTask })
         try {
           const r = await this.os.runTask(
@@ -720,7 +744,11 @@ export class AppCommandBus {
               this.broadcast({ type: 'orchestrate-delta', convId, runPath, deltaStep: step, delta })
             },
             abortController.signal,
-            collectedContext
+            collectedContext,
+            resumeOutputs,
+            // `conversationId` MANQUAIT aussi : sans lui, l'acquis persiste sans conversation et une
+            // reprise ne peut plus etre rattachee a son fil.
+            convId
           )
           if (r.brainNavigation || (r.brainInjectedChars ?? 0) > 0) {
             appendBrainTrace({
