@@ -6,8 +6,9 @@ import {
   SUBAGENT_TOTAL_MS
 } from './watchdog'
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { findNpmGlobalFile } from './npm-global-resolve'
 import { join } from 'node:path'
 import type {
   Message,
@@ -17,6 +18,9 @@ import type {
   SendResult,
   StreamChunk
 } from './types'
+
+/** Sous-chemin de l'entrypoint ESM du paquet npm `@moonshot-ai/kimi-code`. */
+export const KIMI_PACKAGE_ENTRY = join('node_modules', '@moonshot-ai', 'kimi-code', 'dist', 'main.mjs')
 
 /** Résolution sans shell : le CLI Kimi Code officiel appartient au compte local. */
 export type KimiCommand = { executable: string; prefix: string[] }
@@ -32,17 +36,13 @@ export function resolveKimiCommand(
       throw new Error('KIMI_BIN doit viser un executable, pas le shim kimi.cmd.')
     return { executable: configured, prefix: [] }
   }
-  if (process.platform === 'win32' && environment.APPDATA) {
-    const entrypoint = join(
-      environment.APPDATA,
-      'npm',
-      'node_modules',
-      '@moonshot-ai',
-      'kimi-code',
-      'dist',
-      'main.mjs'
-    )
-    if (existsSync(entrypoint)) return { executable: process.execPath, prefix: [entrypoint] }
+  if (process.platform === 'win32') {
+    // Le prefixe npm n'est PAS toujours celui de %APPDATA% (npm prefix configure, pnpm, volta) : on
+    // cherche aussi dans le PATH. Le repli `'kimi'` ci-dessous est MORT sous Windows — npm -g n'y pose
+    // qu'un shim `kimi.cmd`, que `spawn(shell:false)` ne peut pas executer (prouve sur claude le
+    // 2026-07-29 : `spawn claude ENOENT`).
+    const entrypoint = findNpmGlobalFile(KIMI_PACKAGE_ENTRY, { env: environment })
+    if (entrypoint) return { executable: process.execPath, prefix: [entrypoint] }
   }
   return { executable: 'kimi', prefix: [] }
 }

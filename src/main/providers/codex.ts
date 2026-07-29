@@ -17,6 +17,7 @@ import {
   SUBAGENT_TOTAL_MS
 } from './watchdog'
 import { spawn } from 'node:child_process'
+import { findNpmGlobalFile } from './npm-global-resolve'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -78,6 +79,9 @@ export interface CodexExecSpec {
   cwd: string
 }
 
+/** Sous-chemin de l'entrypoint Node du paquet npm `@openai/codex`. */
+export const CODEX_PACKAGE_ENTRY = join('node_modules', '@openai', 'codex', 'bin', 'codex.js')
+
 export function codexExecSpec(
   cwd: string,
   model: string,
@@ -108,9 +112,18 @@ export function codexExecSpec(
   if (explicitBinary) {
     return { executable: explicitBinary, cwd, args: commonArgs }
   }
-  if (!appData) throw new Error('APPDATA indisponible : impossible de localiser Codex CLI')
-  const entrypoint = join(appData, 'npm', 'node_modules', '@openai', 'codex', 'bin', 'codex.js')
-  if (!entrypointExists(entrypoint)) throw new Error(`Codex CLI introuvable: ${entrypoint}`)
+  // Le prefixe npm n'est PAS toujours celui de %APPDATA% (npm prefix configure, pnpm, volta, install
+  // machine) : chercher aussi dans le PATH. Un chemin en dur unique faisait echouer le fan-out scout
+  // avec « Codex CLI introuvable » (observe le 2026-07-29) alors que le CLI etait bien installe.
+  const env: NodeJS.ProcessEnv = { ...process.env }
+  if (appData) env.APPDATA = appData
+  else delete env.APPDATA
+  const entrypoint = findNpmGlobalFile(CODEX_PACKAGE_ENTRY, { env, exists: entrypointExists })
+  if (!entrypoint) {
+    throw new Error(
+      `Codex CLI introuvable : ni sous le dossier npm de %APPDATA%, ni dans le PATH (${CODEX_PACKAGE_ENTRY}). Definis CODEX_BIN pour le designer explicitement.`
+    )
+  }
   return { executable: 'node', cwd, args: [entrypoint, ...commonArgs] }
 }
 

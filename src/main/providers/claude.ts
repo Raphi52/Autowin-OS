@@ -14,6 +14,7 @@ import {
   type StdoutJournalHandle
 } from '../runs/stdout-journal'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
+import { findNpmGlobalFile } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type {
@@ -113,43 +114,28 @@ export interface ClaudeBinLookupDeps {
 }
 
 /**
- * Cherche le binaire NATIF `claude.exe`, dans l'ordre : le préfixe npm par défaut
- * (`%APPDATA%\npm`), puis CHAQUE dossier du PATH — soit un `claude.exe` posé là, soit le paquet npm
- * installé sous ce dossier.
+ * Cherche le binaire NATIF `claude.exe` : préfixe npm par défaut d'abord, puis chaque dossier du PATH
+ * — soit un `claude.exe` posé là, soit le paquet npm installé sous ce préfixe (`findNpmGlobalFile`).
  *
- * Pourquoi ne pas se contenter du chemin par défaut : REPRODUIT le 2026-07-29 sur cette machine, le
- * PATH n'expose QUE des shims (`claude.cmd`, `claude.ps1`, `claude` sans extension). Le repli
- * `spawn('claude', …, { shell: false })` échoue alors en `spawn claude ENOENT` — CreateProcess
- * n'ajoute que `.exe`, il n'exécute pas un `.cmd`. Un poste dont le préfixe npm n'est pas exactement
- * `%APPDATA%\npm` (npm prefix configuré, pnpm, volta, install machine) tombait donc systématiquement
- * dans ce repli mort. Le passage à `shell: true` est EXCLU : `shell: false` est ce qui garantit
- * l'absence d'injection d'arguments et un `--system-prompt` à espaces/accents intact.
+ * Pourquoi : REPRODUIT le 2026-07-29, le PATH n'expose QUE des shims (`claude.cmd`, `claude.ps1`,
+ * `claude` sans extension). Le repli `spawn('claude', …, { shell: false })` échoue en
+ * `spawn claude ENOENT` — CreateProcess n'ajoute que `.exe`, il n'exécute pas un `.cmd`. Un poste dont
+ * le préfixe npm n'est pas exactement le dossier npm de `%APPDATA%` tombait dans ce repli mort.
+ * `shell: true`
+ * est EXCLU : `shell: false` est ce qui garantit l'absence d'injection d'arguments et un
+ * `--system-prompt` à espaces/accents intact.
  *
- * Rend `undefined` si rien n'est trouvé — l'appelant garde son repli `'claude'`, qui reste correct sur
- * un poste où un vrai `claude.exe` est dans le PATH (Unix, ou install non-npm).
+ * Rend `undefined` si rien n'est trouvé — l'appelant garde son repli `'claude'`, correct sur un poste
+ * où un vrai `claude.exe` est dans le PATH (Unix, ou install non-npm).
  */
 export function findClaudeExecutable(deps: ClaudeBinLookupDeps = {}): string | undefined {
   const platform = deps.platform ?? process.platform
   if (platform !== 'win32') return undefined
-  const env = deps.env ?? process.env
-  const exists = deps.exists ?? existsSync
-  const candidates: string[] = []
-  const appdata = env.APPDATA
-  if (appdata) candidates.push(join(appdata, 'npm', CLAUDE_PACKAGE_BIN))
-  for (const entry of (env.PATH ?? env.Path ?? '').split(';')) {
-    const dir = entry.trim().replace(/^"|"$/g, '')
-    if (!dir) continue
-    // Un vrai .exe pose dans ce dossier gagne ; sinon le paquet npm installe sous ce prefixe.
-    candidates.push(join(dir, 'claude.exe'), join(dir, CLAUDE_PACKAGE_BIN))
-  }
-  for (const candidate of candidates) {
-    try {
-      if (exists(candidate)) return candidate
-    } catch {
-      // Un dossier du PATH illisible ne doit pas interrompre la recherche.
-    }
-  }
-  return undefined
+  return findNpmGlobalFile(CLAUDE_PACKAGE_BIN, {
+    ...(deps.env ? { env: deps.env } : {}),
+    ...(deps.exists ? { exists: deps.exists } : {}),
+    directNames: ['claude.exe']
+  })
 }
 
 /**
