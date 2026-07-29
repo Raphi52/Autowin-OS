@@ -18,8 +18,16 @@ export interface HookViolation {
  */
 export function detectRawSleep(diff: string): HookViolation[] {
   const out: HookViolation[] = []
-  const added = diff.split(/\r?\n/).filter((l) => l.startsWith('+') && !l.startsWith('+++'))
-  added.forEach((raw, i) => {
+  // L'index d'ORIGINE est capturé AVANT le filtrage : sinon le numéro rapporté est celui du tableau
+  // filtré, qui ne désigne aucune ligne du diff dès qu'il contient du contexte, des suppressions ou
+  // un en-tête — c'est-à-dire tout diff unifié réel. Un pointeur de violation qui envoie au mauvais
+  // endroit est pire qu'une absence de pointeur.
+  const added = diff
+    .split(/\r?\n/)
+    .map((text, index) => ({ text, index }))
+    .filter(({ text }) => text.startsWith('+') && !text.startsWith('+++'))
+  added.forEach(({ text: raw, index }) => {
+    const i = index
     const line = raw.slice(1)
     if (/sleep-ok:/i.test(line)) return
     const startSleepSecs = /Start-Sleep\s+(?:-Seconds|-s\b)?\s*(\d+)/i.exec(line)

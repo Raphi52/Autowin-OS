@@ -44,3 +44,31 @@ describe('hooks déterministes in-app (repro kit)', () => {
     expect(runHooks({ requireProof: true, evidenceOkCount: 0 })).toHaveLength(1)
   })
 })
+
+/**
+ * REGRESSION trouvee par un SCOUT de l'agent Autowin (2026-07-28), verifiee avant correction.
+ *
+ * `detectRawSleep` filtrait d'abord les lignes ajoutees, PUIS numerotait avec l'index du tableau
+ * FILTRE. Des qu'un diff contient du contexte, des suppressions ou un en-tete — c'est-a-dire tout
+ * diff unifie reel — le numero rapporte ne designe AUCUNE ligne du diff. Le pointeur de violation
+ * envoie donc l'utilisateur au mauvais endroit, ce qui est pire qu'une absence de numero.
+ */
+describe('detectRawSleep — le numero de ligne doit designer le VRAI diff', () => {
+  it('compte les lignes de contexte qui precedent', () => {
+    const diff = ['--- a/x.ps1', '+++ b/x.ps1', ' inchangee', '+Start-Sleep 5'].join('\n')
+    const [violation] = detectRawSleep(diff)
+    expect(violation).toBeDefined()
+    // La ligne fautive est la 4e du diff, pas la 1re des lignes ajoutees.
+    expect(violation.line).toBe(4)
+  })
+
+  it('compte aussi les SUPPRESSIONS', () => {
+    const diff = [' contexte', '-ancienne', '+Thread.Sleep(5000)'].join('\n')
+    expect(detectRawSleep(diff)[0].line).toBe(3)
+  })
+
+  it('reste juste avec plusieurs violations dispersees', () => {
+    const diff = [' a', '+Start-Sleep 3', ' b', ' c', '+Task.Delay(9999)'].join('\n')
+    expect(detectRawSleep(diff).map((v) => v.line)).toEqual([2, 5])
+  })
+})
