@@ -38,6 +38,53 @@ function quotasByProvider(models: readonly ModelQuota[]): ModelQuota[] {
   return [...providers.values()]
 }
 
+/**
+ * Fenêtre que la wheel doit RÉSUMER pour un provider donné.
+ *
+ * Par défaut la fenêtre courte (5 h) : c'est elle qui bloque l'utilisateur MAINTENANT, et un weekly
+ * plus bas ne doit pas alarmer sur une capacité immédiate disponible.
+ *
+ * ChatGPT (codex) est l'exception : sur ces offres, c'est le quota HEBDOMADAIRE qui contraint
+ * réellement l'usage — la 5 h se recharge dans la demi-journée alors que le 7 j, lui, dicte ce qui
+ * reste utilisable sur la semaine. Afficher la 5 h y donnait une wheel rassurante et sans rapport
+ * avec la limite qu'on atteint vraiment.
+ */
+export function summaryWindowId(provider: string | undefined): string {
+  return provider === 'codex' ? 'seven-day' : 'five-hour'
+}
+
+/** Libellé court de la fenêtre résumée — la wheel doit DIRE ce qu'elle mesure, sinon 43 % est ambigu. */
+export function summaryWindowLabel(provider: string | undefined): string {
+  return summaryWindowId(provider) === 'seven-day' ? '7 j' : '5 h'
+}
+
+export function summaryForProvider(
+  snapshot: ModelQuotaSnapshot | undefined,
+  provider: string | undefined
+): ModelQuotaSnapshot['summary'] | undefined {
+  if (!snapshot || !provider) return snapshot?.summary
+  const summarizable = snapshot.models
+    .filter((model) => model.provider === provider && model.status === 'available')
+    .flatMap((model) => model.windows.filter((window) => window.limitKnown !== false))
+  // Repli assume : la fenetre voulue absente (provider qui ne l'expose pas encore) -> minimum de ce
+  // qui est connu, comportement historique prudent plutot qu'une wheel vide.
+  const preferred = summarizable.filter((window) => window.id === summaryWindowId(provider))
+  const pool = preferred.length > 0 ? preferred : summarizable
+  const minimum =
+    pool.length > 0 ? Math.min(...pool.map((window) => window.remainingPercent)) : undefined
+  return {
+    ...(minimum !== undefined ? { remainingPercent: minimum } : {}),
+    status:
+      minimum === undefined
+        ? 'unknown'
+        : minimum <= 10
+          ? 'critical'
+          : minimum <= 30
+            ? 'warning'
+            : 'healthy'
+  }
+}
+
 function resetLabel(window: ModelQuotaWindow): string {
   if (!window.resetsAt) return 'reset non exposé'
   const date = new Date(window.resetsAt)
@@ -62,7 +109,11 @@ function observedLabel(observedAt: string | undefined, stale: boolean): string {
   })}`
 }
 
-export function ModelQuotaIndicator(): React.JSX.Element {
+export function ModelQuotaIndicator({
+  provider
+}: {
+  provider?: string
+}): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<ModelQuotaSnapshot>()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -133,8 +184,9 @@ export function ModelQuotaIndicator(): React.JSX.Element {
     }
   }, [open])
 
-  const remaining = snapshot?.summary.remainingPercent
-  const level = snapshot?.summary.status ?? 'unknown'
+  const summary = summaryForProvider(snapshot, provider)
+  const remaining = summary?.remainingPercent
+  const level = summary?.status ?? 'unknown'
   const providerQuotas = quotasByProvider(snapshot?.models ?? [])
   return (
     <div className="model-quota" ref={rootRef}>
@@ -146,10 +198,10 @@ export function ModelQuotaIndicator(): React.JSX.Element {
         aria-label={
           remaining === undefined
             ? 'Afficher les quotas fournisseurs'
-            : `Afficher les quotas fournisseurs, ${Math.round(remaining)} % minimum restant`
+            : `Afficher les quotas fournisseurs, ${Math.round(remaining)} % restant sur ${summaryWindowLabel(provider)}`
         }
         aria-expanded={open}
-        title="Quotas par fournisseur"
+        title={`Quotas par fournisseur — wheel sur ${summaryWindowLabel(provider)}`}
         onClick={() => {
           const next = !open
           setOpen(next)
