@@ -54,6 +54,24 @@ export function verifyOutcomeSummary(action: ActionLike): OutcomeSummary | undef
 }
 
 /**
+ * Résumé d'une ORCHESTRATION : c'est là que part l'essentiel de l'argent (conv-76 : 10,05 $ sur
+ * 10,94 $) et le fil n'en montrait rien. On affiche le verdict et le coût, jamais un succès prétendu :
+ * un gate bloqué ou un juge qui refuse compte comme un échec de livraison.
+ */
+export function orchestrateOutcomeSummary(action: ActionLike): OutcomeSummary | undefined {
+  if (action.name !== 'orchestrate') return undefined
+  const data = asRecord(action.data)
+  if (!data) return undefined
+  const cost = typeof data.costUsd === 'number' && Number.isFinite(data.costUsd) ? data.costUsd : undefined
+  const suffix = cost !== undefined ? ` · ${cost.toFixed(2)} $` : ''
+  if (data.gateBlocked === true) return { label: `bloqué par le gate${suffix}`, state: 'failed' }
+  if (data.valid === false) return { label: `livrable refusé${suffix}`, state: 'failed' }
+  if (data.reused === true) return { label: `run réutilisé${suffix}`, state: 'refused' }
+  const status = typeof data.status === 'string' && data.status ? data.status : 'terminé'
+  return { label: `${status}${suffix}`, state: 'ok' }
+}
+
+/**
  * Premier résumé de preuve d'un groupe d'actions. Une vérification en ÉCHEC est prioritaire sur une
  * réussie : c'est elle qu'il faut voir quand un tour en contient plusieurs.
  */
@@ -61,7 +79,7 @@ export function groupOutcomeSummary(
   actions: readonly ActionLike[]
 ): OutcomeSummary | undefined {
   const summaries = actions
-    .map((action) => verifyOutcomeSummary(action))
+    .map((action) => verifyOutcomeSummary(action) ?? orchestrateOutcomeSummary(action))
     .filter((summary): summary is OutcomeSummary => summary !== undefined)
   return (
     summaries.find((summary) => summary.state === 'failed') ??

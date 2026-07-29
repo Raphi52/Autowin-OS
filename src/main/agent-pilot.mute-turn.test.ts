@@ -95,7 +95,14 @@ describe('contrat de code — la relance est mécanique et bornée', () => {
 
   it('elle exige qu’une action ait REELLEMENT eu lieu', () => {
     expect(source).toContain('anyActionExecuted = true')
-    expect(source).toMatch(/!spoken && anyActionExecuted && conclusionRecoveryAvailable/)
+    expect(source).toMatch(/!anySpokenText && anyActionExecuted && conclusionRecoveryAvailable/)
+  })
+
+  it('le silence est juge sur le TOUR ENTIER, pas sur la derniere iteration', () => {
+    // Bug attrape par agent-pilot.streaming.test.ts : un tour « Avant. <action> Apres. » suivi d'une
+    // reponse vide a deja tout dit. Le relancer serait du bavardage paye.
+    expect(source).toContain('if (spoken) anySpokenText = true')
+    expect(source).not.toMatch(/!spoken && anyActionExecuted/)
   })
 
   it('la consigne de relance demande les preuves observées, pas une formule', () => {

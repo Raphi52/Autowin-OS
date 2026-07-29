@@ -11,6 +11,10 @@ import { CONSTITUTION } from './constitution'
 import { routeSkillRequest } from './skill-routing'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { startTurnTimer } from './turn-timing'
+import {
+  formatOrchestrationOutcome,
+  type OrchestrationOutcome
+} from '../shared/orchestration-outcome'
 
 /**
  * Boucle de PILOTAGE : un agent LLM conduit l'app lui-même.
@@ -221,7 +225,14 @@ export class AgentPilot {
       }
       onEvent({
         kind: 'done',
-        text: result.ok ? 'Workflow Autowin exécuté.' : `Échec du workflow : ${result.error}`,
+        // Les FAITS, pas une formule : statut, validite, blocage de gate, cout, run et resultat sont
+        // tous rendus par l'orchestrateur et etaient jetes (conv-76 : 18 sous-agents, 10,05 $, le fil
+        // n'affichait que « Workflow Autowin execute. »).
+        text: formatOrchestrationOutcome(
+          result.ok,
+          result.ok ? (result.data as OrchestrationOutcome | undefined) : undefined,
+          result.ok ? undefined : String(result.error ?? '')
+        ),
         usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 }
       })
       return
@@ -299,6 +310,12 @@ export class AgentPilot {
      * redemande explicitement la conclusion. Une seule fois, comme la reprise de question invalide.
      */
     let anyActionExecuted = false
+    /**
+     * A-t-il parle A UN MOMENT du tour ? La question porte sur le TOUR ENTIER, pas sur la derniere
+     * iteration : un tour « Avant. <action> Apres. » suivi d'une reponse vide a deja tout dit, le
+     * relancer serait du bavardage paye. (Bug attrape par agent-pilot.streaming.test.ts.)
+     */
+    let anySpokenText = false
     let conclusionRecoveryAvailable = true
     for (let i = 0; i < iterationLimit; i++) {
       // Pilotage continu : les directives envoyées PENDANT le tour entrent au prochain
@@ -488,6 +505,7 @@ export class AgentPilot {
         .map((token) => token.text)
         .join('')
         .trim()
+      if (spoken) anySpokenText = true
       const hasCommand = ordered.some((token) => token.kind === 'command')
 
       if (!hasCommand) {
@@ -513,7 +531,7 @@ export class AgentPilot {
         }
         // Le tour a AGI mais n'a rien dit : on redemande la conclusion plutot que de livrer des
         // etiquettes nues. Borne a une relance pour ne jamais boucler.
-        if (!spoken && anyActionExecuted && conclusionRecoveryAvailable) {
+        if (!anySpokenText && anyActionExecuted && conclusionRecoveryAvailable) {
           conclusionRecoveryAvailable = false
           iterationLimit += 1
           convo.push(

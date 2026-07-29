@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { groupOutcomeSummary, verifyOutcomeSummary } from './action-outcome-summary'
+import {
+  groupOutcomeSummary,
+  orchestrateOutcomeSummary,
+  verifyOutcomeSummary
+} from './action-outcome-summary'
 
 /**
  * La PREUVE doit être lisible dans le fil.
@@ -70,6 +74,56 @@ describe('groupOutcomeSummary — l’ÉCHEC passe devant', () => {
   it('aucune vérification dans le groupe → aucun résumé', () => {
     expect(groupOutcomeSummary([{ name: 'edit_file', data: {} }])).toBeUndefined()
     expect(groupOutcomeSummary([])).toBeUndefined()
+  })
+})
+
+
+describe('orchestrateOutcomeSummary — 92 % de la depense devient visible', () => {
+  it('succes : statut et cout', () => {
+    expect(
+      orchestrateOutcomeSummary({ name: 'orchestrate', data: { status: 'succeeded', costUsd: 10.05 } })
+    ).toEqual({ label: 'succeeded · 10.05 $', state: 'ok' })
+  })
+
+  it('gate BLOQUE = echec de livraison, pas un detail', () => {
+    const summary = orchestrateOutcomeSummary({
+      name: 'orchestrate',
+      data: { status: 'failed', gateBlocked: true, costUsd: 3 }
+    })
+    expect(summary).toEqual({ label: 'bloqué par le gate · 3.00 $', state: 'failed' })
+  })
+
+  it('livrable REFUSE par le juge = echec, meme si l’appel a reussi', () => {
+    expect(
+      orchestrateOutcomeSummary({ name: 'orchestrate', data: { status: 'succeeded', valid: false } })?.state
+    ).toBe('failed')
+  })
+
+  it('run REUTILISE est signale (aucun nouveau travail lance)', () => {
+    expect(
+      orchestrateOutcomeSummary({ name: 'orchestrate', data: { reused: true } })?.state
+    ).toBe('refused')
+  })
+
+  it('cout de mauvais type ignore au lieu d’etre affiche', () => {
+    expect(
+      orchestrateOutcomeSummary({ name: 'orchestrate', data: { status: 'succeeded', costUsd: 'cher' } })?.label
+    ).toBe('succeeded')
+  })
+
+  it('une autre action ne produit rien', () => {
+    expect(orchestrateOutcomeSummary({ name: 'verify', data: {} })).toBeUndefined()
+  })
+})
+
+describe('groupOutcomeSummary — verify ET orchestrate', () => {
+  it('un gate bloque passe devant une verification reussie', () => {
+    const summary = groupOutcomeSummary([
+      { name: 'verify', data: { command: 'npm test', exitCode: 0, ok: true } },
+      { name: 'orchestrate', data: { gateBlocked: true, costUsd: 8 } }
+    ])
+    expect(summary?.state).toBe('failed')
+    expect(summary?.label).toContain('gate')
   })
 })
 
