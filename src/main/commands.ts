@@ -1,3 +1,5 @@
+import { buildBrainOutcome, decideBrainQuery, type BrainQueryOutcome } from './brain-query-command'
+import { retrieveBrainContext } from './brain-retrieval'
 import { spawn } from 'node:child_process'
 import { capVerifyOutput, decideVerifyCommand, type VerifyOutcome } from './verify-command'
 import type { AutowinOS } from './os'
@@ -203,6 +205,13 @@ const CATALOG: CommandSpec[] = [
       'Rejouer la vérification déclarée par le projet (script « test ») et rendre son exit code — la seule façon de prouver « vert »',
     args: {},
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+  },
+  {
+    name: 'brain_query',
+    description:
+      'Interroger le savoir curé du Brain (décisions, leçons, contraintes déjà établies) — à préférer à une exploration du repo quand la question porte sur un acquis',
+    args: { question: 'la question, en langage naturel' },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
   }
 ]
 
@@ -803,6 +812,8 @@ export class AppCommandBus {
         return await this.snapshot()
       case 'verify':
         return await this.runVerify()
+      case 'brain_query':
+        return await this.runBrainQuery(a.question)
       default:
         throw new Error(`commande inconnue: ${name}`)
     }
@@ -820,6 +831,22 @@ export class AppCommandBus {
    * `shell: false` + argv separes : aucune interpolation, donc aucune injection possible meme si la
    * liste blanche evoluait.
    */
+
+  /**
+   * Interrogation du Brain a la demande. Lecture seule : aucun effet de bord possible.
+   * `retrieveBrainContext` degrade deja proprement (pas de token, serveur absent, timeout 5s → ''),
+   * et `buildBrainOutcome` distingue « rien trouve » d'une panne — l'agent ne doit pas transformer un
+   * silence en reponse negative.
+   */
+  private async runBrainQuery(question: unknown): Promise<BrainQueryOutcome & { allowed: boolean; reason?: string }> {
+    const decision = decideBrainQuery(question)
+    if (!decision.allowed) {
+      return { allowed: false, reason: decision.reason, found: false, query: '', knowledge: '' }
+    }
+    const { context } = await retrieveBrainContext(decision.query)
+    return { allowed: true, ...buildBrainOutcome(decision.query, context) }
+  }
+
   private async runVerify(): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
     const decision = decideVerifyCommand(this.os.executionWorkspace)
     if (!decision.allowed) {
