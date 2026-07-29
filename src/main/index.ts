@@ -671,6 +671,10 @@ function registerChatIpc(): void {
     })
     try {
       const turnId = randomUUID()
+      // Acquis d'un run interrompu portant la MÊME tâche dans CETTE conversation. Oublié aussitôt :
+      // le run repris persiste le sien, sinon le même acquis serait rejoué à chaque relance.
+      const resumedAcquis = os.resumableOrchestrationForTask?.(guardString(task, 'task'), conversationId) ?? null
+      if (resumedAcquis) os.forgetResumableOrchestration(resumedAcquis.runId)
       const result = await os.runTask(
         guardString(task, 'task'),
         (step) => {
@@ -723,7 +727,14 @@ function registerChatIpc(): void {
         },
         undefined,
         undefined,
-        controller.signal
+        controller.signal,
+        undefined,
+        // REPRISE : ce chemin DIRECT (bouton « Reprendre », pilotage programmatique) repartait de
+        // zéro et repayait les phases déjà produites — seul le chemin par le chat cherchait l'acquis.
+        // On le cherche ici aussi : relancer la MÊME tâche dans la MÊME conversation doit continuer,
+        // pas recommencer.
+        resumedAcquis?.phaseOutputs ?? [],
+        conversationId
       )
       // Trace Brain (observabilité Observatory) : requête réelle + navigation interne + injecté.
       if (result.brainNavigation || (result.brainInjectedChars ?? 0) > 0) {

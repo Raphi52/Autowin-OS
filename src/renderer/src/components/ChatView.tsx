@@ -397,9 +397,10 @@ const ChatMessageRow = memo(
                 key={index}
                 actions={part.actions}
                 onOpenLiveAction={onOpenLiveAction}
-                // Reprendre = renvoyer la tâche d'origine : le main y retrouve l'acquis persisté du
-                // run mort et repart à la phase suivante. Même canal qu'une saisie, sans la saisie.
-                onResume={(task) => onPickSuggestion?.(task)}
+                // Reprendre passe par le canal d'orchestration DIRECT : le main y retrouve l'acquis
+                // persisté et repart à la phase suivante, sans écrire dans le fil un message que
+                // l'utilisateur n'a pas tapé (le renvoi par le composer fabriquait un faux tour).
+                onResume={(task) => void window.api?.orchestrate?.(task, conversationId ?? undefined)}
               />
             )
           )}

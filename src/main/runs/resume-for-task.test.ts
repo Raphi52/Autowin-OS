@@ -169,3 +169,30 @@ describe('câblage — la commande du chat reprend et rattache la conversation',
     expect(source).toContain('reprise : phases deja acquises reutilisees')
   })
 })
+
+/**
+ * Le bouton « Reprendre » n'emprunte PAS le chat : il appelle l'orchestration directe, pour ne pas
+ * fabriquer dans le fil un message que l'utilisateur n'a jamais tapé. Ce chemin-là repartait de zéro
+ * — la recherche d'acquis n'existait que côté chat, donc reprendre repayait tout.
+ */
+describe('câblage — le chemin DIRECT reprend lui aussi', () => {
+  const source = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+  const handler = source.slice(source.indexOf("ipcMain.handle('os:orchestrate',"))
+
+  it('il cherche un acquis pour cette tâche et cette conversation', () => {
+    expect(handler).toContain('os.resumableOrchestrationForTask?.(')
+  })
+
+  it('il passe l’acquis ET la conversation à runTask', () => {
+    const call = handler.slice(
+      handler.indexOf('const result = await os.runTask('),
+      handler.indexOf('\n      )')
+    )
+    expect(call).toContain('resumedAcquis?.phaseOutputs')
+    expect(call).toContain('conversationId')
+  })
+
+  it('il OUBLIE l’acquis repris (sinon rejoué à chaque relance)', () => {
+    expect(handler).toContain('os.forgetResumableOrchestration(resumedAcquis.runId)')
+  })
+})
