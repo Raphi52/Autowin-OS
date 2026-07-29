@@ -288,6 +288,18 @@ export class AgentPilot {
 
     let iterationLimit = maxIter
     let invalidQuestionRecoveryAvailable = true
+    /**
+     * TOUR MUET — un tour qui n'a produit que des etiquettes d'action est inexploitable.
+     *
+     * Constate sur conv-76 (2026-07-29) : trois messages assistant de 40 a 64 caracteres, contenant
+     * uniquement « [a execute edit_file] [a execute verify] ». L'utilisateur ne pouvait pas savoir ce
+     * qui avait ete fait — il a cru que les sous-agents ne se lançaient plus alors que 18 appels
+     * avaient tourne pour 10,05 $. Le prompt demande deja de conclure ; le modele ne le fait pas
+     * toujours. On le rend donc MECANIQUE : si le tour se termine sans un mot alors qu'il a AGI, on
+     * redemande explicitement la conclusion. Une seule fois, comme la reprise de question invalide.
+     */
+    let anyActionExecuted = false
+    let conclusionRecoveryAvailable = true
     for (let i = 0; i < iterationLimit; i++) {
       // Pilotage continu : les directives envoyées PENDANT le tour entrent au prochain
       // point d'itération (priorité immédiate, sans attendre la fin du tour).
@@ -499,6 +511,19 @@ export class AgentPilot {
               iteration: i
             })
         }
+        // Le tour a AGI mais n'a rien dit : on redemande la conclusion plutot que de livrer des
+        // etiquettes nues. Borne a une relance pour ne jamais boucler.
+        if (!spoken && anyActionExecuted && conclusionRecoveryAvailable) {
+          conclusionRecoveryAvailable = false
+          iterationLimit += 1
+          convo.push(
+            'SYSTÈME: tu as agi mais tu n’as rien dit — l’utilisateur ne voit que des étiquettes ' +
+              'd’action, il ne peut pas savoir ce qui a été fait. Conclus MAINTENANT en clair, SANS ' +
+              'aucune commande : ce que tu as fait, ce que cela a produit (résultats/exit codes ' +
+              'observés), et ce qui reste. Si une action a échoué, dis-le explicitement.'
+          )
+          continue
+        }
         onEvent({ kind: 'done', text: spoken, usage })
         return
       }
@@ -560,6 +585,7 @@ export class AgentPilot {
         }
 
         const actionId = `${i}:${commandIndex++}`
+        anyActionExecuted = true
         onEvent({ kind: 'command', actionId, name: token.name, args: token.args })
         signal?.throwIfAborted()
         const r = await this.bus.exec(token.name, token.args, conversationId, authorityMode)
