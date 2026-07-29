@@ -101,6 +101,16 @@ describe('cablage de la commande verify', () => {
     expect(commands()).toContain('decideVerifyCommand(')
   })
 
+  it('sous Windows, passe par cmd.exe /c avec des ARGV SEPARES (spawn EINVAL sinon)', () => {
+    // Constate en essai reel : Node refuse de spawner un `.cmd` sans shell depuis CVE-2024-27980.
+    // L'agent recevait « spawn EINVAL » alors que sa correction etait bonne.
+    const impl = commands().slice(commands().indexOf('private async runVerify'))
+    expect(impl).toContain("'cmd.exe'")
+    expect(impl).toContain("'/c'")
+    // Toujours pas de shell : les arguments restent separes, aucune chaine interpolee.
+    expect(impl).not.toContain('shell: true')
+  })
+
   it('execute SANS shell (aucune interpolation, donc aucune injection)', () => {
     const source = commands()
     const impl = source.slice(source.indexOf('private async runVerify'))

@@ -903,10 +903,15 @@ export class AppCommandBus {
     }
     const [file, ...rest] = decision.command.split(' ')
     return await new Promise((resolve) => {
-      const child = spawn(process.platform === 'win32' ? `${file}.cmd` : file, rest, {
-        shell: false,
-        cwd: decision.cwd
-      })
+      // Windows : depuis le correctif CVE-2024-27980, Node REFUSE de spawner un `.cmd` sans shell
+      // (`spawn EINVAL`) — constate en essai reel, l'agent recevait un echec d'environnement alors
+      // que sa correction etait bonne. On passe donc par `cmd.exe /c` avec des ARGV SEPARES : pas de
+      // chaine interpolee, donc aucune surface d'injection — et de toute façon la commande vient
+      // d'une liste blanche, le modele ne la choisit jamais.
+      const child =
+        process.platform === 'win32'
+          ? spawn('cmd.exe', ['/c', file, ...rest], { shell: false, cwd: decision.cwd })
+          : spawn(file, rest, { shell: false, cwd: decision.cwd })
       let output = ''
       const collect = (chunk: Buffer): void => {
         output += chunk.toString('utf8')
