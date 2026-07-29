@@ -82,6 +82,21 @@ describe('ConversationStore — fork', () => {
     expect(forkTitle('   ')).toBe('Conversation (fork)')
   })
 
+  it('n’emporte pas le turnId : le journal d’un tour appartient à SA conversation', () => {
+    // Constaté en usage : la loupe d'un message copié cherchait un tour introuvable sous le fork
+    // et retombait sur un run sans rapport. Sans turnId, le bouton ne s'affiche même pas.
+    const store = new ConversationStore(() => 1)
+    const source = store.create({ title: 'T', category: 'codex', provider: 'codex' })
+    store.beginTurn(source.id, { content: 'u1' }, { turnId: 'turn-origine' })
+    const messages = store.get(source.id)!.messages
+    expect(messages.some((m) => m.turnId === 'turn-origine')).toBe(true)
+
+    const forked = store.fork(source.id, messages.at(-1)!.messageId!)
+    expect(forked.messages.every((m) => m.turnId === undefined)).toBe(true)
+    // L'originale garde évidemment le sien.
+    expect(store.get(source.id)!.messages.some((m) => m.turnId === 'turn-origine')).toBe(true)
+  })
+
   it('rejette une conversation ou un message inconnus', () => {
     const { store, id } = seed()
     expect(() => store.fork('conv-inconnue', 'x')).toThrow()

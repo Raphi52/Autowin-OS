@@ -345,10 +345,14 @@ export class ConversationStore {
     })
     // Copie jusqu'au point de fork INCLUS. Les identifiants de message sont régénérés : deux
     // conversations ne doivent jamais partager un messageId (le fork suivant viserait les deux).
-    forked.messages = source.messages.slice(0, cut + 1).map((message) => ({
-      ...message,
-      messageId: `msg-${this.nextId++}`
-    }))
+    forked.messages = source.messages.slice(0, cut + 1).map((message) => {
+      // `turnId` est ABANDONNÉ : le journal d'un tour est rangé PAR CONVERSATION, donc celui d'un
+      // message copié n'existe pas sous le fork. Le conserver faisait apparaître la loupe, qui
+      // cherchait un tour introuvable et retombait sur un run sans rapport. Pas de tour ici : pas
+      // de bouton qui promet ce qu'il ne peut pas tenir (le tour reste lisible dans l'originale).
+      const { turnId: _abandonne, ...copie } = message
+      return { ...copie, messageId: `msg-${this.nextId++}` }
+    })
     forked.forkedFrom = { conversationId: source.id, messageId: fromMessageId }
     forked.updatedAt = this.now()
     this.changed()
