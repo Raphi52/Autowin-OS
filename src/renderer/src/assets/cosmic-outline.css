@@ -508,19 +508,34 @@
 }
 
 
+/* Conteneur de la barre : porte le cadre et le fond ; les actions vivent DEDANS. */
 .cosmic-outline .activity-group {
   width: min(100%, 720px);
   display: flex;
   min-height: 38px;
   align-items: center;
   gap: 8px;
-  padding: 8px 11px;
+  padding-right: 8px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-left: 2px solid #5ecaf0;
   border-radius: 7px;
   background: rgba(0, 0, 0, 0.3);
   color: #9caab5;
+}
+
+/* « Voir » occupe toute la place restante — la barre entière reste cliquable. */
+.cosmic-outline .activity-group-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 8px 11px;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: inherit;
   cursor: pointer;
   text-align: left;
   font: inherit;
@@ -535,10 +550,11 @@
   border-left-color: #ff6d8f;
 }
 
-/* Reprendre une action interrompue : action distincte du bloc, discrète mais atteignable. */
+/* Reprendre : posé À DROITE dans la barre, compact — il ne doit pas concurrencer le bloc. */
 .cosmic-outline .activity-resume {
-  margin: 6px 0 0;
-  padding: 5px 11px;
+  flex: none;
+  white-space: nowrap;
+  padding: 4px 10px;
   border: 1px solid rgba(94, 202, 240, 0.4);
   border-radius: 7px;
   background: rgba(94, 202, 240, 0.08);

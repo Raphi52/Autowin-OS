@@ -43,6 +43,15 @@ describe('reprendre une action interrompue sans la retaper', () => {
     expect(resumed).toEqual(['trouve le composant concerné'])
   })
 
+  it('le bouton vit DANS la barre, à droite — pas en pleine largeur en dessous', () => {
+    render([interrompue('une tâche')], () => undefined)
+    const barre = container.querySelector('.activity-group')
+    const bouton = container.querySelector('[data-testid="activity-resume"]')
+    expect(barre?.contains(bouton ?? null)).toBe(true)
+    // Il vient APRÈS la zone « voir », donc à droite dans une barre en flex.
+    expect(bouton?.previousElementSibling?.getAttribute('data-testid')).toBe('activity-group')
+  })
+
   it('aucun bouton si rien n’est interrompu', () => {
     const finie = { kind: 'action', name: 'orchestrate', ok: true } as ChatActionPart
     render([finie], () => undefined)

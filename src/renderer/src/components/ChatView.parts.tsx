@@ -241,9 +241,12 @@ export function AssistantActivityGroup({
   const resumable = interruptedCount > 0 && onResume ? interruptedTask(actions) : undefined
   return (
     <>
+    {/* La barre est un CONTENEUR : « voir » et « reprendre » y cohabitent sans s'imbriquer
+        (un bouton dans un bouton est invalide, et rendrait un clic « voir » ambigu). */}
+    <div className={`activity-group${failed ? ' failed' : ''}`}>
     <button
       type="button"
-      className={`activity-group${failed ? ' failed' : ''}`}
+      className="activity-group-main"
       data-testid="activity-group"
       title={
         !runConsultable
@@ -284,8 +287,6 @@ export function AssistantActivityGroup({
       )}
     </button>
     {resumable && (
-      // Bouton SÉPARÉ du bloc : celui-ci ouvre Workflows, reprendre est une action distincte —
-      // les imbriquer ferait d'un clic « voir » un clic « relancer ».
       <button
         type="button"
         className="activity-resume"
@@ -296,6 +297,7 @@ export function AssistantActivityGroup({
         ↻ Reprendre
       </button>
     )}
+    </div>
     {details.length > 0 && (
       <div className="activity-local-details" data-testid="activity-local-details">
         {details.map((detail, index) => (
