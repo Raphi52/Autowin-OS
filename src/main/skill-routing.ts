@@ -9,8 +9,24 @@ export interface SkillRoute {
 const PHASE_COMMAND = /^\/(scout|frame|terrain|build|clean|judge|kaizen)(?=\s|$)(?:\s+([\s\S]*))?$/i
 const WORKSPACE_TARGET =
   /(?<![\p{L}\p{N}_])(?:code|repo|d[eé]p[oô]t|fichier|classe|fonction|module|tests?|bug|ui|interface|page|vue|bouton|modal(?:e)?|barre|ic[oô]ne|css|style|workflow|skill|pipeline|worktree|git|application|app|observatory|chat|provider|model|mod[eè]le|feature|message|texte|liste|contenu|[eé]cran|conversation|[eé]tat|api)(?![\p{L}\p{N}_])|[\w.-]+\.(?:json|md|tsx?|jsx?|css|scss|html|ya?ml|toml)\b/iu
+/**
+ * Verbes qui declenchent une ORCHESTRATION sans passer par le modele (court-circuit deterministe).
+ *
+ * Retires le 2026-07-28 : `scout`, `analyse`, `audite` — et EUX SEULS. Constate en
+ * essai reel — sur « Scout LECTURE SEULE dans src/main/ », l'agent lançait un pipeline (qui echouait)
+ * SANS que le modele soit consulte : ce routage court-circuite `chat()` en amont, donc AUCUNE regle
+ * de prompt ne pouvait le corriger (deux tentatives infructueuses avant d'identifier la cause ici).
+ *
+ * Ces trois verbes designent une ANALYSE PURE. Depuis que le chat dispose de Read/Grep/Glob et de
+ * `verify`, analyser ne demande plus de pipeline : l'agent le fait lui-meme, pour une fraction du
+ * cout.
+ *
+ * `teste`, `verifie` et `documente` ont ete CONSERVES apres verification : un test existant rappelle
+ * que « Documente l'API dans README.md » ECRIT un fichier — c'est une modification, pas une lecture.
+ * Idem pour ecrire des tests. Une premiere passe les avait retires a tort.
+ */
 const ACTION_VERB =
-  '(?:corrig(?:e|er|ez)|fix(?:e|er)?|ajout(?:e|er|ez)|modifi(?:e|er|ez)|impl[eé]ment(?:e|er|ez)|cr[eé](?:e|er|ez)|supprim(?:e|er|ez)|retir(?:e|er|ez)|enl[eè]v(?:e|er|ez)|remplac(?:e|er|ez)|chang(?:e|er|ez)|ferm(?:e|er|ez)|ouvr(?:e|ir|ez)|d[eé]cal(?:e|er|ez)|actualis(?:e|er|ez)|affich(?:e|er|ez)|refactor(?:e|er|ez)?|renomm(?:e|er|ez)|d[eé]plac(?:e|er|ez)|int[eè]gr(?:e|er|ez)|branche|connecte|r[eé]pare|refonte|refais|rends?|mets?|mettre|fais|faire|scout(?:e|er)?|analyse|audite|teste|v[eé]rifie|lance|documente)'
+  '(?:corrig(?:e|er|ez)|fix(?:e|er)?|ajout(?:e|er|ez)|modifi(?:e|er|ez)|impl[eé]ment(?:e|er|ez)|cr[eé](?:e|er|ez)|supprim(?:e|er|ez)|retir(?:e|er|ez)|enl[eè]v(?:e|er|ez)|remplac(?:e|er|ez)|chang(?:e|er|ez)|ferm(?:e|er|ez)|ouvr(?:e|ir|ez)|d[eé]cal(?:e|er|ez)|actualis(?:e|er|ez)|affich(?:e|er|ez)|refactor(?:e|er|ez)?|renomm(?:e|er|ez)|d[eé]plac(?:e|er|ez)|int[eè]gr(?:e|er|ez)|branche|connecte|r[eé]pare|refonte|refais|rends?|mets?|mettre|fais|faire|teste|v[eé]rifie|lance|documente)'
 const DIRECT_ACTION = new RegExp(`^\\s*${ACTION_VERB}\\b`, 'i')
 const POLITE_ACTION = new RegExp(
   `^\\s*(?:peux-tu|est-ce que tu peux|tu peux)\\s+${ACTION_VERB}\\b`,

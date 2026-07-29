@@ -80,4 +80,30 @@ describe('routeSkillRequest', () => {
       'workspace-action'
     )
   })
+
+  it('n’orchestre PLUS une demande d’ANALYSE (le chat sait lire depuis 2026-07-28)', () => {
+    // Constate en essai reel : « Scout LECTURE SEULE dans src/main/ » lançait un pipeline SANS que le
+    // modele soit consulte — ce routage court-circuite chat() en amont, donc aucune regle de prompt ne
+    // pouvait le corriger. Analyser se fait maintenant avec Read/Grep/Glob.
+    for (const analysis of [
+      'Scout LECTURE SEULE : dans src/main/, trouve 2 ameliorations',
+      'scoute le repo et dis-moi quoi ameliorer',
+      'analyse le module de chat',
+      'audite la securite du provider'
+    ]) {
+      expect(routeSkillRequest(analysis)).toBeUndefined()
+    }
+  })
+
+  it('continue d’orchestrer ce qui MODIFIE vraiment', () => {
+    // Garde-fou du garde-fou : la correction ne doit pas avoir desarme le routage utile.
+    for (const modification of [
+      'corrige le bouton workflows dans la page chat',
+      "Documente l'API dans README.md",
+      'Lance les tests',
+      'refactore le module de chat'
+    ]) {
+      expect(routeSkillRequest(modification)?.reason).toBe('workspace-action')
+    }
+  })
 })
