@@ -234,14 +234,34 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       '--verbose',
       '--strict-mcp-config',
       '--setting-sources',
-      ''
+      '',
+      // Les slash-commands et skills du CLI ne servent JAMAIS ici : Autowin pilote par prompt et
+      // injecte lui-meme ses consignes de phase (blocs `skill:*` du system prompt). Mesure du
+      // 2026-07-28 : le CLI en declarait 45 et 18 malgre `--setting-sources ''`, qui ne les couvre
+      // pas. Elles etaient donc payees a chaque appel sans jamais etre utilisees.
+      '--disable-slash-commands'
     ]
     if (execution) {
       // B — mode exécuteur : outils activés + permission autonome, dans le cwd borné. A (générique) :
       // read-only ⇒ pas d'écriture/Bash-mutation ; workspace-write/danger ⇒ édition + Bash.
       const write = execution.sandbox !== 'read-only'
       const tools = write ? 'Read,Grep,Glob,Bash,Edit,Write,MultiEdit' : 'Read,Grep,Glob'
-      args.push('--permission-mode', 'bypassPermissions', '--add-dir', execution.cwd, '--allowedTools', tools)
+      // `--tools` EN PLUS de `--allowedTools` : mesure du 2026-07-28 sur les journaux reels — 34
+      // outils etaient DECLARES alors que 3 seulement etaient autorises en read-only. La doc du CLI
+      // les distingue : `--tools` = « the list of available tools from the built-in set » (restreint
+      // ce qui est CHARGE, donc paye dans le contexte), `--allowedTools` = « tool names to allow »
+      // (autorise l'usage). On passe la MEME liste aux deux : rien de fonctionnel ne change, seules
+      // les definitions inutiles disparaissent du prompt.
+      args.push(
+        '--permission-mode',
+        'bypassPermissions',
+        '--add-dir',
+        execution.cwd,
+        '--tools',
+        tools,
+        '--allowedTools',
+        tools
+      )
     } else if (materialized) {
       args.push('--tools', 'Read', '--allowedTools', 'Read')
     } else {
