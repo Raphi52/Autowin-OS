@@ -1,3 +1,5 @@
+import { spawn } from 'node:child_process'
+import { capVerifyOutput, decideVerifyCommand, type VerifyOutcome } from './verify-command'
 import type { AutowinOS } from './os'
 import type { Message } from './providers/types'
 import type { Role } from './roles'
@@ -193,7 +195,15 @@ const CATALOG: CommandSpec[] = [
       openWorldHint: false
     }
   },
-  { name: 'get_state', description: 'Relire l’état courant de l’app', args: {} }
+  { name: 'get_state', description: 'Relire l’état courant de l’app', args: {} },
+  {
+    name: 'verify',
+    // Aucun argument : le modele demande « verifie », il ne choisit JAMAIS la commande.
+    description:
+      'Rejouer la vérification déclarée par le projet (script « test ») et rendre son exit code — la seule façon de prouver « vert »',
+    args: {},
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+  }
 ]
 
 const DEFAULT_COMMAND_ANNOTATIONS: NonNullable<CommandSpec['annotations']> = {
@@ -791,8 +801,60 @@ export class AppCommandBus {
       }
       case 'get_state':
         return await this.snapshot()
+      case 'verify':
+        return await this.runVerify()
       default:
         throw new Error(`commande inconnue: ${name}`)
     }
+  }
+
+  /**
+   * VERIFICATION — le seul point d'execution ouvert a la demande d'un modele.
+   *
+   * Le modele ne transmet AUCUN argument : il demande « verifie », et `decideVerifyCommand` choisit
+   * (ou refuse) a partir du script `test` declare par le projet. La voie alternative — donner Bash au
+   * CLI avec `--allowedTools "Bash(npm test)"` — a ete testee sur le vrai binaire et INVALIDEE : le
+   * pattern ne restreint rien (`echo BONJOUR` passait, avec et sans bypassPermissions). C'est donc
+   * ici, et seulement ici, que la frontiere est tenue.
+   *
+   * `shell: false` + argv separes : aucune interpolation, donc aucune injection possible meme si la
+   * liste blanche evoluait.
+   */
+  private async runVerify(): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
+    const decision = decideVerifyCommand(this.os.executionWorkspace)
+    if (!decision.allowed) {
+      return { allowed: false, reason: decision.reason, ok: false, exitCode: null, command: '', output: '' }
+    }
+    const [file, ...rest] = decision.command.split(' ')
+    return await new Promise((resolve) => {
+      const child = spawn(process.platform === 'win32' ? `${file}.cmd` : file, rest, {
+        shell: false,
+        cwd: decision.cwd
+      })
+      let output = ''
+      const collect = (chunk: Buffer): void => {
+        output += chunk.toString('utf8')
+      }
+      child.stdout?.on('data', collect)
+      child.stderr?.on('data', collect)
+      child.on('error', (error) =>
+        resolve({
+          allowed: true,
+          ok: false,
+          exitCode: null,
+          command: decision.command,
+          output: capVerifyOutput(`lancement impossible : ${String(error)}`)
+        })
+      )
+      child.on('close', (code) =>
+        resolve({
+          allowed: true,
+          ok: code === 0,
+          exitCode: code,
+          command: decision.command,
+          output: capVerifyOutput(output)
+        })
+      )
+    })
   }
 }
