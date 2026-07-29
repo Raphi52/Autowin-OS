@@ -15,8 +15,6 @@ import {
   highlightedNodeIdsForThemes,
   floatingNodeIdsForThemeHighlight,
   isLinkAttachedToNode,
-  isCurrentGraphFitRequest,
-  isHighlightedLink,
   linkedNodesFor,
   mergeGraphDelta,
   searchGraphCatalog,
@@ -32,7 +30,6 @@ import {
   nodeSelectionEmphasis,
   nodesForThemesAlphabetically,
   normalizeGraphNodeSpacing,
-  nextGraphFitRequest,
   type GraphLink,
   type GraphNode
 } from './graph-view-model'
@@ -111,16 +108,6 @@ describe('graph view presentation model', () => {
     expect(normalizeGraphNodeSpacing('invalid')).toBe(72)
     expect(normalizeGraphNodeSpacing(null)).toBe(72)
     expect(graphForcesForSpacing(120)).toEqual({ linkDistance: 120, chargeStrength: -240 })
-  })
-
-  it('invalidates a deferred graph fit when spacing changes before the timeout', () => {
-    const scheduledRequest = nextGraphFitRequest(0)
-    const requestAfterSpacingChange = nextGraphFitRequest(scheduledRequest)
-
-    expect(isCurrentGraphFitRequest(scheduledRequest, requestAfterSpacingChange)).toBe(false)
-    expect(isCurrentGraphFitRequest(requestAfterSpacingChange, requestAfterSpacingChange)).toBe(
-      true
-    )
   })
 
   it('searches both themes and node labels or paths with a bounded result set', () => {
@@ -423,17 +410,6 @@ describe('graph view presentation model', () => {
   it('enlarges highlighted nodes only', () => {
     expect(nodeValueForTheme(nodes[0], new Set(['theme/rig']), 1.5)).toBe(3)
     expect(nodeValueForTheme(nodes[2], new Set(['theme/rig']), 1.5)).toBe(1.5)
-  })
-
-  it('highlights links contained in an active theme', () => {
-    const byId = new Map(nodes.map((node) => [node.id, node]))
-    expect(isHighlightedLink(links[0], new Set(['theme/rig']), byId)).toBe(true)
-    expect(isHighlightedLink(links[1], new Set(['theme/rig']), byId)).toBe(false)
-  })
-
-  it('accepts object endpoints after ForceGraph mutates the link', () => {
-    const link = { source: nodes[0], target: nodes[1], weight: 1 }
-    expect(isHighlightedLink(link, new Set(['theme/rig']), new Map())).toBe(true)
   })
 
   it('builds deterministic neighbour navigation with incoming and outgoing relations', () => {

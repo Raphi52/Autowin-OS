@@ -6,7 +6,6 @@ import {
   appendPromptCall,
   deletePromptCalls,
   loadPromptCalls,
-  promptLoadBreakdown,
   type PromptCallRecord
 } from './prompt-observability'
 
@@ -50,21 +49,6 @@ describe('prompt observability', () => {
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
-  })
-
-  it('sépare charge mesurée et volume textuel observable sans fausse attribution', () => {
-    const summary = promptLoadBreakdown([call])
-    expect(summary).toMatchObject({
-      calls: 1,
-      measuredInputTokens: 120,
-      measuredOutputTokens: 30,
-      cacheReadTokens: 20,
-      observedCharacters: expect.any(Number)
-    })
-    expect(summary.sources).toEqual([
-      { kind: 'system', characters: 12 },
-      { kind: 'messages', characters: 15 }
-    ])
   })
 
   it('restaure les ponctuations UTF-8 altérées avant la frontière Observatory', () => {

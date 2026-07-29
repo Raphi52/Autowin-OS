@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_IMPORTED_MODELS, discoverImportedModels, findModel } from './models'
 import { appendClaudeSelectionArgs } from './providers/claude'
 
-const noCodexAuth = (): null => null
 const noCodexModels = async (): Promise<[]> => []
 
 describe('catalogue Agents dynamique', () => {
@@ -38,7 +37,6 @@ describe('catalogue Agents dynamique', () => {
 
     const models = await discoverImportedModels(
       fetchFn as unknown as typeof fetch,
-      noCodexAuth,
       undefined,
       noCodexModels
     )
@@ -76,7 +74,6 @@ describe('catalogue Agents dynamique', () => {
 
     const models = await discoverImportedModels(
       fetchFn as unknown as typeof fetch,
-      noCodexAuth,
       undefined,
       noCodexModels
     )
@@ -120,7 +117,6 @@ describe('catalogue Agents dynamique', () => {
 
     const models = await discoverImportedModels(
       fetchFn as unknown as typeof fetch,
-      noCodexAuth,
       undefined,
       listCodexModels
     )
@@ -171,7 +167,6 @@ describe('cache disque du dernier catalogue vu', () => {
 
     const live = await discoverImportedModels(
       liveClaudeFetch as unknown as typeof fetch,
-      noCodexAuth,
       cachePath,
       noCodexModels
     )
@@ -186,7 +181,6 @@ describe('cache disque du dernier catalogue vu', () => {
     // API KO → dernier catalogue vu (cache), PAS le seed figé (qui n'a pas opus-4-8).
     const offline = await discoverImportedModels(
       deadFetch as unknown as typeof fetch,
-      noCodexAuth,
       cachePath,
       noCodexModels
     )
@@ -199,7 +193,6 @@ describe('cache disque du dernier catalogue vu', () => {
   it('API KO sans cache → seed vérifié, sans inventer de noms', async () => {
     const offline = await discoverImportedModels(
       deadFetch as unknown as typeof fetch,
-      noCodexAuth,
       makeCachePath(),
       noCodexModels
     )

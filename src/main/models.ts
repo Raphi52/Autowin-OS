@@ -343,7 +343,6 @@ export function loadCachedImportedModels(cachePath: string): ImportedModel[] {
  */
 export async function discoverImportedModels(
   fetchFn: typeof fetch = fetch,
-  _legacyLoadTokensFn?: () => unknown,
   cachePath?: string,
   listCodexModelsFn: () => Promise<CodexAppServerModel[]> = listCodexAppServerModels
 ): Promise<ImportedModel[]> {

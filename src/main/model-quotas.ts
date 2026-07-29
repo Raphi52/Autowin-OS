@@ -71,40 +71,6 @@ function window(
   }
 }
 
-export function parseClaudeUsage(value: unknown): ModelQuotaWindow[] {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return []
-  const payload = value as Record<string, unknown>
-  const labels: Record<string, string> = {
-    five_hour: '5 h',
-    seven_day: '7 j',
-    seven_day_opus: 'Opus · 7 j',
-    seven_day_sonnet: 'Sonnet · 7 j'
-  }
-  return Object.entries(payload)
-    .map(([key, raw]) => {
-      if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !('resets_at' in raw)) {
-        return undefined
-      }
-      const id = key.replaceAll('_', '-')
-      const modelFamily = ['opus', 'sonnet', 'haiku', 'fable'].find((family) =>
-        key.toLocaleLowerCase('en-US').includes(family)
-      )
-      const fallbackLabel = key
-        .replaceAll('_', ' ')
-        .replace(/^./, (letter) => letter.toLocaleUpperCase('fr-FR'))
-      const parsed = window(
-        id,
-        labels[key] ??
-          (modelFamily && key.startsWith('seven_day_')
-            ? `${modelFamily[0].toLocaleUpperCase('fr-FR')}${modelFamily.slice(1)} · 7 j`
-            : fallbackLabel),
-        raw
-      )
-      return parsed && modelFamily ? { ...parsed, modelFamily } : parsed
-    })
-    .filter((entry): entry is ModelQuotaWindow => entry !== undefined)
-}
-
 function codexWindow(raw: unknown): ModelQuotaWindow | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
   const record = raw as Record<string, unknown>
@@ -140,10 +106,6 @@ export function parseLatestCodexRateLimitSample(jsonl: string): {
     }
   }
   return { windows: [] }
-}
-
-export function parseLatestCodexRateLimits(jsonl: string): ModelQuotaWindow[] {
-  return parseLatestCodexRateLimitSample(jsonl).windows
 }
 
 function windowsForModel(model: ImportedModel, quota: ProviderQuota): ModelQuotaWindow[] {

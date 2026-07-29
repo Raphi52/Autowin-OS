@@ -5,8 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildModelQuotaSnapshot,
   getModelQuotaSnapshot,
-  parseClaudeUsage,
-  parseLatestCodexRateLimits,
   parseLatestCodexRateLimitSample, aggregateClaudeLocalUsage, parseClaudeRateLimitHeaders, parseClaudePlanUsageHistory } from './model-quotas'
 
 const temporaryHomes: string[] = []
@@ -52,57 +50,6 @@ const models = [
 ]
 
 describe('quotas modèles', () => {
-  it('normalise les fenêtres Claude réellement exposées', () => {
-    expect(
-      parseClaudeUsage({
-        five_hour: { utilization: 72, resets_at: '2026-07-24T05:00:00Z' },
-        seven_day: { utilization: 31, resets_at: '2026-07-28T00:00:00Z' },
-        seven_day_opus: { utilization: 84, resets_at: '2026-07-27T00:00:00Z' },
-        seven_day_haiku: { utilization: 44, resets_at: '2026-07-29T00:00:00Z' },
-        workspace_monthly: { utilization: 91, resets_at: '2026-08-01T00:00:00Z' },
-        extra_usage: { utilization: 4, monthly_limit: 100 }
-      })
-    ).toEqual([
-      {
-        id: 'five-hour',
-        label: '5 h',
-        usedPercent: 72,
-        remainingPercent: 28,
-        resetsAt: '2026-07-24T05:00:00.000Z'
-      },
-      {
-        id: 'seven-day',
-        label: '7 j',
-        usedPercent: 31,
-        remainingPercent: 69,
-        resetsAt: '2026-07-28T00:00:00.000Z'
-      },
-      {
-        id: 'seven-day-opus',
-        label: 'Opus · 7 j',
-        usedPercent: 84,
-        remainingPercent: 16,
-        resetsAt: '2026-07-27T00:00:00.000Z',
-        modelFamily: 'opus'
-      },
-      {
-        id: 'seven-day-haiku',
-        label: 'Haiku · 7 j',
-        usedPercent: 44,
-        remainingPercent: 56,
-        resetsAt: '2026-07-29T00:00:00.000Z',
-        modelFamily: 'haiku'
-      },
-      {
-        id: 'workspace-monthly',
-        label: 'Workspace monthly',
-        usedPercent: 91,
-        remainingPercent: 9,
-        resetsAt: '2026-08-01T00:00:00.000Z'
-      }
-    ])
-  })
-
   it('prend le dernier événement Codex non nul et classe ses fenêtres', () => {
     const jsonl = [
       JSON.stringify({
@@ -122,7 +69,7 @@ describe('quotas modèles', () => {
       })
     ].join('\n')
 
-    expect(parseLatestCodexRateLimits(jsonl)).toEqual([
+    expect(parseLatestCodexRateLimitSample(jsonl).windows).toEqual([
       expect.objectContaining({ id: 'five-hour', label: '5 h', remainingPercent: 88 }),
       expect.objectContaining({ id: 'seven-day', label: '7 j', remainingPercent: 53 })
     ])
@@ -215,13 +162,27 @@ describe('quotas modèles', () => {
     expect(snapshot.summary).toEqual({ remainingPercent: 64, status: 'healthy' })
   })
 
-  it('n’applique une future fenêtre Claude spécifique qu’à sa famille de modèle', () => {
-    const windows = parseClaudeUsage({
-      five_hour: { utilization: 10, resets_at: '2026-07-24T05:00:00Z' },
-      seven_day_haiku: { utilization: 90, resets_at: '2026-07-29T00:00:00Z' }
-    })
+  it('n’applique une fenêtre Claude spécifique qu’à sa famille de modèle', () => {
     const snapshot = buildModelQuotaSnapshot(models, {
-      claude: { status: 'available', source: 'Claude /usage', windows }
+      claude: {
+        status: 'available',
+        source: 'fixture',
+        windows: [
+          {
+            id: 'five-hour',
+            label: '5 h',
+            usedPercent: 10,
+            remainingPercent: 90
+          },
+          {
+            id: 'seven-day-haiku',
+            label: 'Haiku · 7 j',
+            usedPercent: 90,
+            remainingPercent: 10,
+            modelFamily: 'haiku'
+          }
+        ]
+      }
     })
 
     expect(snapshot.models.find((model) => model.model === 'haiku')?.windows).toHaveLength(2)

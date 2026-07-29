@@ -93,17 +93,6 @@ export function graphForcesForSpacing(value: unknown): {
   return { linkDistance: spacing, chargeStrength: -spacing * 2 }
 }
 
-export function nextGraphFitRequest(currentRequest: number): number {
-  return currentRequest + 1
-}
-
-export function isCurrentGraphFitRequest(
-  scheduledRequest: number,
-  currentRequest: number
-): boolean {
-  return scheduledRequest === currentRequest
-}
-
 const GRAPH_VISUAL_PROFILES: Record<GraphVisualMode, GraphVisualProfile> = {
   serious: {
     modeClass: 'graph-observatory--serious',
@@ -362,22 +351,6 @@ export function nodeValueForTheme(
   return size * highlightMultiplier
 }
 
-export function isHighlightedLink(
-  link: GraphLink,
-  activeThemes: ReadonlySet<string>,
-  nodesById: ReadonlyMap<string, GraphNode>
-): boolean {
-  if (activeThemes.size === 0) return false
-  const source = endpointNode(link.source, nodesById)
-  const target = endpointNode(link.target, nodesById)
-  return Boolean(
-    source &&
-    target &&
-    nodeThemeIds(source).some((theme) => activeThemes.has(theme)) &&
-    nodeThemeIds(target).some((theme) => activeThemes.has(theme))
-  )
-}
-
 export function nodeThemeIds(node: GraphNode): string[] {
   return node.themes?.length ? node.themes : [`community/${node.group}`]
 }
@@ -495,13 +468,6 @@ function themeLabel(id: string): string {
     return value.charAt(0).toUpperCase() + value.slice(1)
   }
   return `Thème ${id.slice('community/'.length)}`
-}
-
-function endpointNode(
-  endpoint: string | GraphNode,
-  nodesById: ReadonlyMap<string, GraphNode>
-): GraphNode | undefined {
-  return typeof endpoint === 'string' ? nodesById.get(endpoint) : endpoint
 }
 
 function endpointId(endpoint: string | GraphNode): string {

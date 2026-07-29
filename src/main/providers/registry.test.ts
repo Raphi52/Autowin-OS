@@ -1,7 +1,53 @@
 import { describe, it, expect, vi } from 'vitest'
 import { ProviderRegistry } from './registry'
-import { MockProvider } from './mock'
-import type { Message, StreamChunk } from './types'
+import type {
+  Message,
+  ProviderAdapter,
+  SendOptions,
+  SendResult,
+  StreamChunk
+} from './types'
+
+class MockProvider implements ProviderAdapter {
+  readonly id: string
+
+  constructor(id = 'mock') {
+    this.id = id
+  }
+
+  async auth(): Promise<boolean> {
+    return true
+  }
+
+  async *send(
+    messages: Message[],
+    opts: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const systemInjected = typeof opts.system === 'string' && opts.system.length > 0
+    const lastUser = [...messages].reverse().find((message) => message.role === 'user')?.content ?? ''
+    const firstSystemLine = systemInjected ? opts.system!.split('\n')[0].trim() : ''
+    const replyPieces = [
+      `echo(${this.id}): ${lastUser}`,
+      systemInjected ? ` [system-applied: ${firstSystemLine}]` : ''
+    ]
+
+    let text = ''
+    for (const piece of replyPieces) {
+      if (!piece) continue
+      for (const word of piece.split(/(\s+)/)) {
+        text += word
+        if (word.trim()) yield { delta: word }
+      }
+    }
+
+    return {
+      text,
+      provider: this.id,
+      sessionId: opts.resumeSessionId ?? `${this.id}-session-1`,
+      systemInjected
+    }
+  }
+}
 
 const conv: Message[] = [{ role: 'user', content: 'bonjour' }]
 
