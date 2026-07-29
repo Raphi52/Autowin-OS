@@ -40,7 +40,11 @@ export class ActiveChatTurns {
         const active = [...this.turns.get(conversationId)!.values()]
         for (const turn of active) turn.controller.abort(reason)
         aborted = true
-        await Promise.all(active.map((turn) => turn.completion))
+        // `allSettled`, PAS `all` : un tour aborté peut terminer en erreur, et `all` rejetterait —
+        // abandonnant la boucle, laissant les tours restants en place, et faisant échouer la
+        // suppression de conversation côté appelant (« conversation-deleted »). Ici on veut attendre
+        // la FIN de chacun, pas leur succès : l'échec d'un tour qu'on vient d'abandonner est normal.
+        await Promise.allSettled(active.map((turn) => turn.completion))
         for (const turn of active) this.delete(conversationId, turn.controller)
       }
       return aborted
