@@ -1359,7 +1359,8 @@ export function ChatView({
     if (!queued || queued.length === 0) return
     const [nextMessage, ...rest] = queued
     setConversationQueue(id, rest)
-    void send(nextMessage.text)
+    // Le drain n'est PAS un geste de l'utilisateur : il ne doit rien prendre au composer.
+    void send(nextMessage.text, { keepComposerDraft: true })
     // `activeId` AUTANT que `busy` : une file remplie pendant le tour de A survit à un aller-retour
     // vers une autre conversation. Le tour de A se terminant PENDANT l'absence, la transition
     // busy→false ne concerne plus A — sans `activeId` la file restait échouée là, et il fallait
@@ -1392,11 +1393,19 @@ export function ChatView({
     })
   }
 
-  async function send(text?: string): Promise<void> {
+  /**
+   * `keepComposerDraft` — envoi qui N'EMPRUNTE RIEN au composer : ni son texte en cours de frappe, ni
+   * ses pièces jointes, et qui ne le vide pas. Indispensable pour le drain de la file d'attente : il
+   * part sur une transition (fin de tour, retour sur la conversation) et non sur un geste de l'utilisateur.
+   * Sans cette porte, le drain effaçait un brouillon jamais envoyé et accrochait ses pièces jointes en
+   * attente au message de la FILE — deux pertes silencieuses, aucune reliée à une action visible.
+   */
+  async function send(text?: string, options?: { keepComposerDraft?: boolean }): Promise<void> {
     const value = (text ?? input).trim()
     const sendDraftKey = composerDraftKeyRef.current
+    const keepComposerDraft = options?.keepComposerDraft === true
     const outgoingDraft = getComposerDraft(sendDraftKey)
-    const outgoingAttachments = outgoingDraft.attachments
+    const outgoingAttachments = keepComposerDraft ? [] : outgoingDraft.attachments
     const sendSelectionGeneration = composerSelectionGenerationRef.current
     const sendLockKey = activeId ?? NEW_DRAFT_KEY
     if (
@@ -1433,9 +1442,11 @@ export function ChatView({
     // la latence du classifieur de routage. Ce commit reste local jusqu'à pilotChat.
     if (sourceConversationId) liveMessagesRef.current.set(sourceConversationId, optimisticHistory)
     if (activeRef.current === sourceConversationId) setMessages(optimisticHistory)
-    setDraftInput(sendDraftKey, '')
-    setDraftAttachments(sendDraftKey, () => [])
-    setDraftError(sendDraftKey, null)
+    if (!keepComposerDraft) {
+      setDraftInput(sendDraftKey, '')
+      setDraftAttachments(sendDraftKey, () => [])
+      setDraftError(sendDraftKey, null)
+    }
     followTailRef.current = true
     if (sourceConversationId) setConversationBusy(sourceConversationId, true)
 

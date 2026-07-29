@@ -6,7 +6,9 @@ const source = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
 describe('ChatView composer resilience', () => {
   it('acquires a synchronous send lock before the first bootstrap await', () => {
     const send = source.match(
-      /async function send\(text\?: string\): Promise<void> \{[\s\S]*?\n {2}\}/
+      // Signature elargie : `send` accepte desormais des options (`keepComposerDraft`), le contrat
+      // verifie ici — verrou avant le premier await, brouillon preserve — est inchange.
+      /async function send\(text\?: string(?:,[^)]*)?\): Promise<void> \{[\s\S]*?\n {2}\}/
     )?.[0]
     expect(send).toBeDefined()
     expect(send).toContain('sendLocksRef.current.add(sendLockKey)')
@@ -17,7 +19,9 @@ describe('ChatView composer resilience', () => {
 
   it('keeps bootstrap failures inside the send try and preserves the draft', () => {
     const send = source.match(
-      /async function send\(text\?: string\): Promise<void> \{[\s\S]*?\n {2}\}/
+      // Signature elargie : `send` accepte desormais des options (`keepComposerDraft`), le contrat
+      // verifie ici — verrou avant le premier await, brouillon preserve — est inchange.
+      /async function send\(text\?: string(?:,[^)]*)?\): Promise<void> \{[\s\S]*?\n {2}\}/
     )?.[0]
     expect(send).toBeDefined()
     expect(send).toContain('let messageCommitted = false')

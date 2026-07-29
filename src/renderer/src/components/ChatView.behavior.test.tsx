@@ -566,6 +566,52 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => drained.resolve({ ok: true }))
   })
 
+  /**
+   * PERTE DE DONNEES trouvee par l'audit adverse du 2026-07-29 : le drain appelait `send()`, qui
+   * consomme le brouillon du composer — texte ET pieces jointes — puis le VIDE. Un utilisateur qui
+   * tapait un message suivant pendant qu'un tour tournait le voyait disparaitre a la fin du tour, sans
+   * l'avoir envoye, et ses pieces jointes en attente partaient accrochees au message de la FILE.
+   */
+  it('le drain n’EFFACE PAS le brouillon en cours de frappe', async () => {
+    const turn = deferred<{ ok: boolean }>()
+    const drained = deferred<{ ok: boolean }>()
+    const pilotChat = vi
+      .fn()
+      .mockImplementationOnce(() => turn.promise)
+      .mockImplementationOnce(() => drained.promise)
+      .mockResolvedValue({ ok: true })
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('tour actif')
+    await click('.composer-send')
+    await type('message en file')
+    await click('.composer-send')
+
+    // L'utilisateur tape la SUITE sans l'envoyer, pendant que le tour tourne.
+    await type('BROUILLON JAMAIS ENVOYE')
+    const textarea = (): HTMLTextAreaElement =>
+      container!.querySelector('textarea') as HTMLTextAreaElement
+    expect(textarea().value).toBe('BROUILLON JAMAIS ENVOYE')
+
+    // Fin du tour → le drain part.
+    await act(async () => {
+      turn.resolve({ ok: true })
+      await flushAnimationFrames()
+    })
+
+    expect(pilotChat).toHaveBeenCalledTimes(2)
+    expect(pilotChat.mock.calls[1][0]).toEqual(
+      expect.arrayContaining([expect.objectContaining({ role: 'user', content: 'message en file' })])
+    )
+    // LE point : le brouillon a survecu au drain.
+    expect(textarea().value).toBe('BROUILLON JAMAIS ENVOYE')
+    await act(async () => drained.resolve({ ok: true }))
+  })
+
   it('removes the steered message by stable identity after the queue changes', async () => {
     const pilot = deferred<{ ok: boolean }>()
     const injection = deferred<{ ok: boolean }>()

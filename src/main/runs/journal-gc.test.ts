@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
   collectStdoutJournals,
+  DEFAULT_ASSUME_DEAD_MS,
   DEFAULT_MAX_AGE_MS,
   DEFAULT_MIN_IDLE_MS,
   planJournalGc,
@@ -38,13 +39,59 @@ describe('planJournalGc — la garde qui compte', () => {
   })
 })
 
-describe('planJournalGc — politique', () => {
-  it('supprime les journaux vides (aucune valeur de diagnostic)', () => {
-    const plan = planJournalGc(
-      [entry('/j/vide.stdout.jsonl', { size: 0 }), entry('/j/plein.stdout.jsonl')],
-      { nowMs: NOW }
+/**
+ * LE defaut trouve par l'audit adverse du 2026-07-29, avec sa sequence exacte. La regle « un ecrivain
+ * actif est un fichier recemment modifie » etait FAUSSE : mtime d'un journal fraichement cree est
+ * l'instant de CREATION, et un raisonnement long n'ecrit rien pendant des minutes.
+ */
+describe('planJournalGc — un run VIVANT n’est jamais sacrifie', () => {
+  it('un journal VIDE inactif 11 min (run detache en cours) n’est PAS condamne', () => {
+    const vivant = entry('/j/run-vivant.stdout.jsonl', {
+      size: 0,
+      modifiedMs: NOW - DEFAULT_MIN_IDLE_MS - 60_000
+    })
+    expect(planJournalGc([vivant], { nowMs: NOW })).toEqual([])
+  })
+
+  it('un journal AVEC sortie inactif 20 min n’est pas sacrifie par le plafond', () => {
+    // Variante reproduite par l'audit : meme un run qui A deja ecrit perdait son journal.
+    const vivant = entry('/j/ecrit.stdout.jsonl', { modifiedMs: NOW - 20 * 60_000 })
+    const jeunes = Array.from({ length: 3 }, (_, i) =>
+      entry(`/j/jeune-${i}.stdout.jsonl`, { modifiedMs: NOW - 1000 })
     )
+    expect(planJournalGc([vivant, ...jeunes], { nowMs: NOW, maxFiles: 3 })).toEqual([])
+  })
+
+  it('au-dela du seuil de mort presumee, le plafond sacrifie d’abord les journaux VIDES', () => {
+    const mort = (name: string, over: Partial<JournalEntry>): JournalEntry =>
+      entry(name, { modifiedMs: NOW - DEFAULT_ASSUME_DEAD_MS - 1000, ...over })
+    const plan = planJournalGc(
+      [
+        mort('/j/plein-ancien.stdout.jsonl', { size: 900, modifiedMs: NOW - DEFAULT_ASSUME_DEAD_MS - 9000 }),
+        mort('/j/vide.stdout.jsonl', { size: 0 }),
+        mort('/j/plein.stdout.jsonl', { size: 500 })
+      ],
+      { nowMs: NOW, maxFiles: 2 }
+    )
+    // A age comparable, le vide part le premier : il ne porte aucun diagnostic.
     expect(plan).toEqual(['/j/vide.stdout.jsonl'])
+  })
+})
+
+describe('planJournalGc — politique', () => {
+  it('supprime un journal vide UNE FOIS hors fenetre, jamais sur sa seule inactivite', () => {
+    // Contrat CORRIGE : la version d'origine condamnait un journal vide des 10 min d'inactivite, ce
+    // qui tuait des runs vivants. Il faut desormais qu'il soit AUSSI sorti de la fenetre.
+    const videJeune = entry('/j/vide-jeune.stdout.jsonl', { size: 0 })
+    expect(planJournalGc([videJeune], { nowMs: NOW })).toEqual([])
+
+    const videVieux = entry('/j/vide-vieux.stdout.jsonl', {
+      size: 0,
+      modifiedMs: NOW - DEFAULT_MAX_AGE_MS - 1
+    })
+    expect(planJournalGc([videVieux, entry('/j/plein.stdout.jsonl')], { nowMs: NOW })).toEqual([
+      '/j/vide-vieux.stdout.jsonl'
+    ])
   })
 
   it('supprime au-dela de la fenetre de diagnostic, garde en dessous', () => {
@@ -53,12 +100,13 @@ describe('planJournalGc — politique', () => {
     expect(planJournalGc([vieux, recent], { nowMs: NOW })).toEqual(['/j/vieux.stdout.jsonl'])
   })
 
-  it('applique le plafond en sacrifiant les PLUS ANCIENS', () => {
+  it('applique le plafond en sacrifiant les PLUS ANCIENS parmi les presumes morts', () => {
+    // Ages au-dela du seuil de mort presumee : sans cela, aucun n'est touchable (garde run vivant).
+    const base = NOW - DEFAULT_ASSUME_DEAD_MS - 60_000
     const entries = Array.from({ length: 5 }, (_, i) =>
-      entry(`/j/n${i}.stdout.jsonl`, { modifiedMs: OLD_ENOUGH - (5 - i) * 1000 })
+      entry(`/j/n${i}.stdout.jsonl`, { modifiedMs: base - (5 - i) * 1000 })
     )
     const plan = planJournalGc(entries, { nowMs: NOW, maxFiles: 2 })
-    // n0 et n1 sont les plus anciens ; n2 est aussi sacrifie pour tenir le plafond de 2.
     expect(plan.sort()).toEqual(['/j/n0.stdout.jsonl', '/j/n1.stdout.jsonl', '/j/n2.stdout.jsonl'])
     expect(plan).not.toContain('/j/n4.stdout.jsonl')
   })
