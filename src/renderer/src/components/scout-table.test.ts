@@ -32,6 +32,29 @@ describe('parseScoutTable', () => {
     expect(rows[2]).toMatchObject({ impact: 'y', effort: 'g', type: 'new' })
   })
 
+  it('reconnaît le format « Score | Type | What | Why | How » du brief scout', () => {
+    const md = `Shortlist :
+
+| Score | Type | What | Why | How |
+|-------|------|------|-----|-----|
+| 85 | 🔧 fix | Reprise de run coupé | crash → on refait tout | commands.ts:598 |
+| 55 | 🆕 new | Mémoire de findings | fan-out aveugle | orchestrator.ts:241 |
+| 20 | 🔧 fix | Nettoyage logs | bruit | logger.ts:12 |
+`
+    const rows = parseScoutTable(md)!
+    expect(rows).toHaveLength(3)
+    expect(rows[0]).toMatchObject({
+      num: '1',
+      impact: 'g',
+      effort: null,
+      type: 'fix',
+      what: 'Reprise de run coupé',
+      how: 'commands.ts:598'
+    })
+    expect(rows[1].impact).toBe('y')
+    expect(rows[2].impact).toBe('r')
+  })
+
   it('un tableau markdown SANS colonnes impact/effort → null (pas un scout)', () => {
     const md = '| Nom | Valeur |\n|---|---|\n| a | 1 |'
     expect(parseScoutTable(md)).toBeNull()
