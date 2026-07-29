@@ -372,6 +372,155 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect((mockApi.pilotChat as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1)
   })
 
+  /**
+   * REACTIVITE DES CLICS DE LA FILE (constate 2026-07-29 : « les clics de la popup des messages en
+   * attente ne marchent pas entierement / ne sont pas reactifs »).
+   *
+   * Trois defauts couverts ici : (1) « Orienter » n'affichait AUCUN retour pendant son aller-retour
+   * IPC et acceptait les reclics — double injection ; (2) le bouton d'interruption par message
+   * s'affichait HORS tour actif, ou il n'y a rien a interrompre : le clic armait « interruption en
+   * cours » que seule une transition busy->false efface, transition qui n'arrive jamais → boutons
+   * figes DEFINITIVEMENT ; (3) son libelle promettait « ce message + ses anterieurs » alors que la
+   * file entiere part (drain depuis le debut, voulu).
+   */
+  it('« Orienter » affiche son attente et refuse le double clic pendant l’injection', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const injection = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise),
+      injectDirective: vi.fn(() => injection.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('tour actif')
+    await click('.composer-send')
+    await type('oriente vers X')
+    await click('.composer-send')
+
+    const steer = (): HTMLButtonElement =>
+      container!.querySelector('.directive-queue-steer') as HTMLButtonElement
+    expect(steer().disabled).toBe(false)
+
+    await click('.directive-queue-steer')
+    // Le retrait de la file est optimiste : le bouton disparait avec l'item. Ce qui doit etre vrai,
+    // c'est qu'un SECOND clic n'a pas pu declencher une deuxieme injection.
+    await act(async () => {
+      injection.resolve({ ok: true })
+      await flushAnimationFrames()
+    })
+    expect((mockApi.injectDirective as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1)
+    await act(async () => pilot.resolve({ ok: true }))
+  })
+
+  it('hors tour actif, aucun bouton d’interruption n’est propose (plus de clic mort)', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const injection = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise),
+      // L'injection reste EN VOL : le message quitte la file de facon optimiste et n'y revient pas,
+      // donc la file se vide — on verifie surtout qu'aucun bouton mort ne subsiste.
+      injectDirective: vi.fn(() => injection.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('tour actif')
+    await click('.composer-send')
+    await type('en file')
+    await click('.composer-send')
+
+    // Tour termine, file drainee : plus aucun bouton d'interruption ne doit rester affiche.
+    await act(async () => {
+      pilot.resolve({ ok: true })
+      await flushAnimationFrames()
+    })
+    expect(container!.querySelector('.directive-queue-item .directive-queue-send')).toBeNull()
+    expect(container!.querySelector('.directive-queue-send-all')).toBeNull()
+  })
+
+  it('n’appelle pas cancelPilotChat quand il n’y a aucun tour a interrompre', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('tour actif')
+    await click('.composer-send')
+    await type('en file')
+    await click('.composer-send')
+    await act(async () => {
+      pilot.resolve({ ok: true })
+      await flushAnimationFrames()
+    })
+    // Aucune interruption n'a ete demandee par le drain automatique.
+    expect(mockApi.cancelPilotChat).not.toHaveBeenCalled()
+  })
+
+  it('le libelle du bouton par message ne promet plus une selectivite qui n’existe pas', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('tour actif')
+    await click('.composer-send')
+    await type('en file')
+    await click('.composer-send')
+
+    const perItem = container!.querySelector(
+      '.directive-queue-item .directive-queue-send'
+    ) as HTMLButtonElement
+    expect(perItem).not.toBeNull()
+    // « ses anterieurs » sous-entendait que les messages POSTERIEURS restaient ; ils partent aussi.
+    expect(perItem.title).not.toContain('antérieurs')
+    expect(perItem.title).toContain('la file')
+    await act(async () => pilot.resolve({ ok: true }))
+  })
+
+  /**
+   * LE clic mort, REPRODUIT : une file remplie pendant le tour de A survit a un aller-retour vers
+   * une autre conversation. De retour sur A, plus aucun tour ne tourne mais la file est encore la.
+   * Avant correctif, le bouton « Interrompre et envoyer » y etait AFFICHE : le clic armait l'etat
+   * « interruption en cours », que seule une transition busy->false efface — transition qui n'arrive
+   * jamais hors tour. Les boutons restaient donc figes sur « ⏳ Interruption… » definitivement.
+   * Mesure : sans le correctif ce test rend `true` sur la presence du bouton, avec il rend `false`.
+   */
+  it('file survivante hors tour actif : aucun bouton d’interruption mort n’est rendu', async () => {
+    const turnA = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('B')]),
+      pilotChat: vi.fn(() => turnA.promise)
+    })
+    await mount(mockApi)
+    const picks = (): NodeListOf<Element> => container!.querySelectorAll('.conv-pick')
+    await act(async () => (picks()[0] as HTMLElement).click())
+    await type('tour actif')
+    await click('.composer-send')
+    await type('reste en file')
+    await click('.composer-send')
+    expect(container!.querySelector('.directive-queue')).not.toBeNull()
+
+    await act(async () => (picks()[1] as HTMLElement).click())
+    await act(async () => {
+      turnA.resolve({ ok: true })
+      await flushAnimationFrames()
+    })
+    await act(async () => (picks()[0] as HTMLElement).click())
+    await flushAnimationFrames()
+
+    // La file survit bel et bien : c'est l'etat qui rendait le clic mort atteignable.
+    expect(container!.querySelector('.directive-queue')).not.toBeNull()
+    expect(container!.querySelector('.directive-queue-item .directive-queue-send')).toBeNull()
+    expect(container!.querySelector('.directive-queue-send-all')).toBeNull()
+    // Le retrait (✕) reste disponible : la file n'est pas prisonniere.
+    expect(container!.querySelector('.directive-queue-remove')).not.toBeNull()
+  })
+
   it('removes the steered message by stable identity after the queue changes', async () => {
     const pilot = deferred<{ ok: boolean }>()
     const injection = deferred<{ ok: boolean }>()
@@ -620,6 +769,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(inbox).toBeTruthy()
     expect(inbox!.textContent).toContain('Agents actifs')
     expect(container!.querySelectorAll('.agent-inbox-row').length).toBe(1)
+    expect(container!.querySelector('.agent-inbox-stop')).toBeNull()
     await act(async () => pilot.resolve({ ok: true }))
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 30))

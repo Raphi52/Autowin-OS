@@ -498,6 +498,7 @@ export function ChatView({
   const [convMenu, setConvMenu] = useState<{ conv: Conv; top: number; left: number } | null>(null)
   // File d'attente : directives injectées pendant le tour, pas encore consommées (conv active).
   const [pendingDirectives, setPendingDirectives] = useState<QueuedDirective[]>([])
+  const [steeringDirectives, setSteeringDirectives] = useState<Set<number>>(() => new Set())
   const [interruptingConversations, setInterruptingConversations] = useState<Set<string>>(
     () => new Set()
   )
@@ -565,6 +566,7 @@ export function ChatView({
   const liveMessagesRef = useRef(new Map<string, Msg[]>())
   const busyConversationsRef = useRef(new Set<string>())
   const interruptingConversationsRef = useRef(new Set<string>())
+  const steeringRef = useRef(new Set<number>())
   const sendLocksRef = useRef(new Set<string>())
   const composerDraftKeyRef = useRef(NEW_DRAFT_KEY)
   const composerSelectionGenerationRef = useRef(0)
@@ -714,6 +716,12 @@ export function ChatView({
     if (value) interruptingConversationsRef.current.add(id)
     else interruptingConversationsRef.current.delete(id)
     setInterruptingConversations(new Set(interruptingConversationsRef.current))
+  }
+  /** Injection « Orienter » en vol, par DIRECTIVE (deux messages peuvent être orientés de suite). */
+  function setDirectiveSteering(directiveId: number, value: boolean): void {
+    if (value) steeringRef.current.add(directiveId)
+    else steeringRef.current.delete(directiveId)
+    setSteeringDirectives(new Set(steeringRef.current))
   }
 
   async function addFiles(files: FileList | File[]): Promise<void> {
@@ -1217,6 +1225,11 @@ export function ChatView({
   function interruptAndFlushQueue(): void {
     const id = activeRef.current
     if (!id || interruptingConversationsRef.current.has(id)) return
+    // Rien à interrompre → ne PAS armer l'état « interruption en cours ». Sans cette garde, le
+    // drapeau n'est remis à false que par la transition `busy→false` de l'effet de drain : hors tour
+    // actif, cette transition n'arrive jamais et les boutons restent figés sur « ⏳ Interruption… »
+    // pour toujours, file bloquée. Constaté sur une file survivante à un changement de conversation.
+    if (!busyConversationsRef.current.has(id)) return
     setConversationInterrupting(id, true)
     void window.api
       .cancelPilotChat(id)
@@ -1237,6 +1250,11 @@ export function ChatView({
     const original = queueRef.current.get(id) ?? []
     const originalIndex = original.findIndex((queued) => queued.id === entry.id)
     if (originalIndex < 0) return
+    // L'injection est un aller-retour IPC : sans état d'attente, le clic ne rend RIEN de visible et
+    // rien n'empêche de recliquer (double injection de la même directive dans le tour).
+    if (steeringRef.current.has(entry.id)) return
+    setDirectiveSteering(entry.id, true)
+    const settle = (): void => setDirectiveSteering(entry.id, false)
     setConversationQueue(
       id,
       original.filter((queued) => queued.id !== entry.id)
@@ -1253,9 +1271,11 @@ export function ChatView({
       result = await window.api.injectDirective(id, entry.text)
     } catch {
       restore()
+      settle()
       return
     }
     if (!result.ok) restore()
+    settle()
   }
 
   function restoreQueuedMessageToDraft(entry: QueuedDirective): void {
@@ -2064,27 +2084,32 @@ export function ChatView({
                 <span className="directive-queue-text" title={directive.text}>
                   {directive.text}
                 </span>
-                <button
-                  type="button"
-                  className="directive-queue-send"
-                  title="Interrompre le tour et envoyer ce message + ses antérieurs maintenant"
-                  aria-label={`Interrompre et envoyer jusqu’au message ${index + 1}`}
-                  disabled={interruptingConversations.has(activeId ?? '')}
-                  onClick={interruptAndFlushQueue}
-                >
-                  {interruptingConversations.has(activeId ?? '')
-                    ? '⏳ Interruption…'
-                    : '⏹ Interrompre et envoyer'}
-                </button>
+                {/* Hors tour actif il n'y a RIEN à interrompre : afficher le bouton donnait un clic
+                    mort qui figeait la file sur « ⏳ Interruption… ». La file se draine alors seule. */}
+                {busy && (
+                  <button
+                    type="button"
+                    className="directive-queue-send"
+                    title="Interrompre le tour en cours et envoyer la file maintenant, en commençant par ce message"
+                    aria-label={`Interrompre et envoyer à partir du message ${index + 1}`}
+                    disabled={interruptingConversations.has(activeId ?? '')}
+                    onClick={interruptAndFlushQueue}
+                  >
+                    {interruptingConversations.has(activeId ?? '')
+                      ? '⏳ Interruption…'
+                      : '⏹ Interrompre et envoyer'}
+                  </button>
+                )}
                 {busy && (
                   <button
                     type="button"
                     className="directive-queue-steer"
                     title="Orienter maintenant — injecter ce message comme directive PRIORITAIRE dans le tour en cours, sans l’interrompre"
                     aria-label={`Orienter le tour en cours avec le message ${index + 1}`}
+                    disabled={steeringDirectives.has(directive.id)}
                     onClick={() => void steerWithoutInterrupt(directive)}
                   >
-                    🧭 Orienter
+                    {steeringDirectives.has(directive.id) ? '⏳ Orientation…' : '🧭 Orienter'}
                   </button>
                 )}
                 {busy && (
@@ -2317,7 +2342,7 @@ export function ChatView({
                   conversationId={activeId ?? undefined}
                   busy={busy}
                 />
-                <ModelQuotaIndicator />
+                <ModelQuotaIndicator provider={runtimeIdentity?.provider} />
               </div>
             </div>
           </div>
