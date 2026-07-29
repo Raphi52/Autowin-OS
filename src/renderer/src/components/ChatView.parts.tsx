@@ -1,5 +1,6 @@
 import { groupOutcomeSummary } from './action-outcome-summary'
 import { failedActionRunId } from './run-trace-target'
+import { hasConsultableRun, localActionDetails } from './action-detail-target'
 import { HumanJson } from './HumanJson'
 import {
   STEP_META,
@@ -207,19 +208,34 @@ export function AssistantActivityGroup({
    * ligne qui porte le verdict. Un echec passe devant une reussite.
    */
   const outcome = groupOutcomeSummary(actions)
+  /**
+   * Ne PROMETTRE Workflows que s'il y a un run a y voir. Constate en usage reel : sur
+   * « edit_file · verify », le clic ne faisait RIEN — ces commandes locales ne creent aucun run, donc
+   * le scroll visait une carte inexistante. Un bouton qui promet ce qu'il ne peut pas tenir laisse
+   * l'utilisateur sans savoir si c'est casse ou si c'est lui ; on montre donc le detail SUR PLACE.
+   */
+  const runConsultable = hasConsultableRun(actions)
+  const details = runConsultable ? [] : localActionDetails(actions)
   return (
+    <>
     <button
       type="button"
       className={`activity-group${failed ? ' failed' : ''}`}
       data-testid="activity-group"
       title={
-        running
-          ? 'Ouvrir cette action en cours dans Workflows'
-          : 'Voir le détail de cette action dans Workflows'
+        !runConsultable
+          ? 'Action locale : son détail est affiché ici même (aucun run à ouvrir)'
+          : running
+            ? 'Ouvrir cette action en cours dans Workflows'
+            : 'Voir le détail de cette action dans Workflows'
       }
+      aria-disabled={!runConsultable}
       // On transmet le run FAUTIF : sans lui, un clic sur « avec erreur » n'ouvrait que la liste
       // des runs de la conversation, laissant l'utilisateur chercher lequel regarder.
-      onClick={() => onOpenLiveAction?.(running ? 'live' : 'history', failedActionRunId(actions))}
+      onClick={() => {
+        if (!runConsultable) return
+        onOpenLiveAction?.(running ? 'live' : 'history', failedActionRunId(actions))
+      }}
     >
       <span
         className={`status-dot ${
@@ -238,9 +254,25 @@ export function AssistantActivityGroup({
         </span>
       )}
       {running && <span className="spinner" />}
-      <span className="activity-group-go" aria-hidden="true">
-        ↗
-      </span>
+      {runConsultable && (
+        <span className="activity-group-go" aria-hidden="true">
+          ↗
+        </span>
+      )}
     </button>
+    {details.length > 0 && (
+      <div className="activity-local-details" data-testid="activity-local-details">
+        {details.map((detail, index) => (
+          <details key={`${detail.name}-${index}`} className={detail.ok ? '' : 'failed'} open={!detail.ok}>
+            <summary>
+              <span className={`status-dot ${detail.ok ? 'st-ok' : 'st-err'}`} />
+              {CMD_LABEL[detail.name] ?? detail.name}
+            </summary>
+            <pre>{detail.text}</pre>
+          </details>
+        ))}
+      </div>
+    )}
+    </>
   )
 }

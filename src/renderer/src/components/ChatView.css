@@ -1987,3 +1987,41 @@
   color: var(--warn, #e8a33d);
   border-color: color-mix(in srgb, var(--warn, #e8a33d) 40%, transparent);
 }
+
+/* Détail d'une action LOCALE (edit_file/verify/brain_query) : ces commandes ne créent aucun run,
+   donc leur résultat n'a nulle part où aller dans Workflows — il se lit ici. Un échec est déplié
+   d'office : c'est ce qu'on veut voir sans cliquer. */
+.activity-local-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 6px 18px;
+}
+.activity-local-details summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--muted, #9aa4b2);
+}
+.activity-local-details pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  max-height: 220px;
+  overflow: auto;
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--surface2, #191d23);
+  border: 1px solid var(--line2, #31373f);
+  border-radius: 7px;
+}
+.activity-local-details details.failed pre {
+  border-color: var(--err, #e5484d);
+}
+/* Le bloc n'ouvre rien quand il n'y a pas de run : le curseur ne doit pas promettre un clic utile. */
+.activity-group[aria-disabled='true'] {
+  cursor: default;
+}
