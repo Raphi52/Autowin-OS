@@ -43,30 +43,30 @@ const INTENT_PATTERNS: ReadonlyArray<{ phase: PipelinePhase; pattern: RegExp }> 
     // JUGER un livrable existant. « audi » couvre les troncatures (audit, audite, auditer, audi…).
     phase: 'judge',
     pattern:
-      /^(?:audit\w*|audi|juge\w*|judge|evalue\w*|review\w*|relis\w*|critique\w*|(?:est-ce que )?c'?est (?:bon|bien|correct|ok)|(?:c'?est )?vraiment (?:fini|fait|bon)|verifie la qualite|check the quality|assess\w*)\b/
+      /^(?:audit\w*|audi|juge\w*|judge|evalue\w*|review\w*|relis\w*|critique\w*|(?:est-ce que )c'?est (?:bon|bien|correct|ok)|c'?est (?:bon|bien|correct|ok)\s*[?]|(?:c'?est )?vraiment (?:fini|fait|bon)|verifie la qualite|check the quality|assess\w*)(?![A-Za-z0-9_])/
   },
   {
     // CHERCHER quoi faire : aucune tâche n'est encore choisie.
     phase: 'scout',
     pattern:
-      /^(?:cherche\w*|trouve\w*|scout\w*|explore\w*|repere\w*|inspecte\w*|(?:qu'?)?est-ce (?:qu'?)?(?:on|je) (?:peut|pourrais?) (?:ameliorer|faire)|(?:quoi|que) (?:ameliorer|faire)|(?:par )?ou (?:est-ce qu'?on |on )?(?:commence|demarre|commencer|demarrer)|find|look for|search for|what (?:could|should) (?:we|i)|where (?:do|should) (?:we|i) start|any (?:ideas|opportunit\w*))\b/
+      /^(?:cherche\w*|trouve\w*|scout\w*|explore\w*|repere\w*|inspecte\w*|(?:qu'?)?est-ce (?:qu'?)?(?:on|je) (?:peut|pourrais?) (?:ameliorer|faire)|(?:quoi|que) (?:ameliorer|faire)|(?:par )?ou (?:est-ce qu'?on |on )?(?:commence|demarre|commencer|demarrer)|find|look for|search for|what (?:could|should) (?:we|i)|where (?:do|should) (?:we|i) start|any (?:ideas|opportunit\w*))(?![A-Za-z0-9_])/
   },
   {
     // CADRER un besoin : l'utilisateur exprime une volonté, pas une commande d'exécution.
     phase: 'frame',
     pattern:
-      /^(?:frame(?:s|r|z|e|es|ez)?|cadr(?:e|ag|er|ez)\w*|je (?:veux|voudrais|souhaite|desire)|j'?(?:aimerais|voudrais|veux)|on (?:veut|voudrait|devrait|aimerait)|il (?:faut|faudrait)|faudrait|ca doit|ca devrait|(?:j'?ai |on a )?besoin (?:de|d'?)|ce (?:qu'?il )?(?:me |nous )?faut|i (?:want|need|would like)|we (?:want|need|should)|it should|there should)\b/
+      /^(?:frame(?:s|r|z|e|es|ez)?|cadr(?:e|ag|er|ez)\w*|je (?:veux|voudrais|souhaite|desire)|j'?(?:aimerais|voudrais|veux)|on (?:veut|voudrait|devrait|aimerait)|il (?:faut|faudrait)|faudrait|ca doit|ca devrait|(?:j'?ai |on a )?besoin (?:de|d'?)|ce (?:qu'?il )?(?:me |nous )?faut|i (?:want|need|would like)|we (?:want|need|should)|it should|there should)(?![A-Za-z0-9_])/
   },
   {
     // PRÉPARER le terrain d'une boucle autonome.
     phase: 'terrain',
     pattern:
-      /^(?:terrain\w*|prepare\w* (?:le |la )?(?:terrain|harnais|boucle|observabilite)|set ?up the (?:harness|loop))\b/
+      /^(?:terrain\w*|prepare\w* (?:le |la )?(?:terrain|harnais|boucle|observabilite)|set ?up the (?:harness|loop))(?![A-Za-z0-9_])/
   },
   {
     // NETTOYER avant validation.
     phase: 'clean',
-    pattern: /^(?:clean(?:s|ed|ing)?|cleanup|nettoie\w*|fais le menage|tidy|cleanup)\b/
+    pattern: /^(?:clean(?:s|ed|ing)?|cleanup|nettoie\w*|fais le menage|tidy|cleanup)(?![A-Za-z0-9_])/
   }
 ]
 

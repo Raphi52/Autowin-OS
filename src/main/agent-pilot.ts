@@ -188,7 +188,15 @@ export class AgentPilot {
       .reverse()
       .find((message) => message.role === 'user')?.content
     const directRoute = latestUserMessage ? routeSkillRequest(latestUserMessage) : undefined
-    if (directRoute) {
+    // COURT-CIRCUIT reserve a la demande EXPLICITE (« /scout … », « /build … »).
+    //
+    // L'ancienne branche heuristique (`workspace-action`, deduite d'un verbe + une cible) est RETIREE.
+    // MESURE sur 251 messages reels : elle se declenchait 8 fois, dont 6 a tort — precision 25 %,
+    // rappel 2 % — alors que le MODELE a decide correctement dans 101 cas. Deviner dans le code
+    // court-circuitait `chat()` AVANT le modele, donc aucune consigne de prompt ne pouvait corriger
+    // l'erreur : c'est le mecanisme exact de la regression du 2026-07-28, qui etait toujours arme.
+    // Une commande explicite, elle, ne devine RIEN : l'utilisateur a nomme la phase.
+    if (directRoute?.reason === 'explicit-skill') {
       const actionId = 'route:0'
       const args = { task: directRoute.task }
       onEvent({ kind: 'command', actionId, name: 'orchestrate', args })

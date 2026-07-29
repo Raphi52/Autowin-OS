@@ -121,7 +121,15 @@ const CATALOG: CommandSpec[] = [
     name: 'orchestrate',
     description:
       'Lancer un agent de développement capable de lire, modifier et tester le code ou les fichiers du workspace',
-    args: { task: 'la tâche' },
+    args: {
+      task: 'la tâche',
+      // Le modèle DÉCIDE déjà (mesuré : 101 orchestrations sur 103 viennent de lui, contre 2 du
+      // routage déterministe). Il ne pouvait pourtant PAS nommer la phase : il devait espérer que
+      // l'heuristique de régime devine. Ce paramètre lui donne la capacité — même mouvement que
+      // `verify` et `brain_query`, et sa décision devient TRAÇABLE au lieu d'être implicite.
+      phase:
+        'facultatif — la seule phase à jouer : « scout » (chercher quoi faire), « frame » (cadrer un besoin), « terrain », « build » (exécuter), « clean », « judge » (auditer un livrable existant). Omettre pour laisser le pipeline choisir.'
+    },
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -294,6 +302,13 @@ function approvalQuestion(name: string, args: Record<string, unknown>): string {
       return 'Autoriser cette action sensible ?'
   }
 }
+
+/**
+ * Phases qu'un MODÈLE peut demander. Liste FERMÉE : une valeur hors liste est ignorée plutôt que
+ * transmise, sinon un modèle pourrait préfixer la tâche de n'importe quoi. `kaizen` est volontairement
+ * absent — il a son propre chemin de construction de tâche, plus bas dans ce même `case`.
+ */
+const ORCHESTRATE_PHASES = new Set(['scout', 'frame', 'terrain', 'build', 'clean', 'judge'])
 
 export class AppCommandBus {
   private tab: AppDestination = 'chat'
@@ -602,7 +617,13 @@ export class AppCommandBus {
         // Rang pris ICI, dans le préfixe synchrone de `exec` : c'est le seul point qui reflète
         // l'ordre d'APPEL. Plus loin, le préambule asynchrone peut réordonner les lancements.
         const orchestrationRank = ++this.orchestrationRank
-        const requestedTask = s('task')
+        // PHASE demandée par le modèle : préfixée à la tâche sous la forme `/<phase> …`, exactement la
+        // forme qu'une commande explicite de l'utilisateur produit. On réutilise donc la machinerie
+        // éprouvée (`matchExplicitPhase` → `regimePhases`) au lieu d'ouvrir un second chemin.
+        // Une valeur inconnue est IGNORÉE : le modèle ne doit pas pouvoir inventer une phase.
+        const requestedPhase = typeof a.phase === 'string' ? a.phase.trim().toLowerCase() : ''
+        const phasePrefix = ORCHESTRATE_PHASES.has(requestedPhase) ? `/${requestedPhase} ` : ''
+        const requestedTask = `${phasePrefix}${s('task')}`
         const conversation = this.os.conversations.get(convId)
         const task =
           /^\/kaizen(?=\s|$)/i.test(requestedTask) && conversation

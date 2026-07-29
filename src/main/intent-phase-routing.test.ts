@@ -184,3 +184,94 @@ describe('câblage — le routage est branché là où les phases se décident',
     expect(intent).toBeGreaterThan(named)
   })
 })
+
+/**
+ * DÉFAUT QUE J'AI INTRODUIT LE MÊME JOUR, trouvé en mesurant le routeur sur 251 messages réels.
+ *
+ * « c'est bon ca marche, nouvelle demande je veux renderer le .md ici » était classé `judge` : le motif
+ * attrapait une SATISFACTION au lieu d'une demande d'audit. Conséquence réelle : phases `[]` → seul le
+ * juge tournait, au lieu de construire la nouvelle demande.
+ */
+describe('« c’est bon » n’est un audit que sous forme INTERROGATIVE', () => {
+  it('LE CAS RÉEL : une satisfaction suivie d’une demande n’est PAS un audit', () => {
+    expect(
+      matchIntentPhase("c'est bon ca marche, nouvelle demande je veux renderer le.md ici")?.phase
+    ).not.toBe('judge')
+  })
+
+  it('un simple remerciement n’est pas un audit', () => {
+    expect(matchIntentPhase("c'est bon merci")).toBeNull()
+    expect(matchIntentPhase("c'est bon ca marche")).toBeNull()
+  })
+
+  it('la forme INTERROGATIVE reste un audit', () => {
+    expect(matchIntentPhase("c'est bon ?")?.phase).toBe('judge')
+    expect(matchIntentPhase("est-ce que c'est bon")?.phase).toBe('judge')
+    expect(matchIntentPhase("c'est correct ?")?.phase).toBe('judge')
+  })
+
+  it('les autres formulations d’audit sont intactes', () => {
+    expect(matchIntentPhase('audite le module')?.phase).toBe('judge')
+    expect(matchIntentPhase('review this change')?.phase).toBe('judge')
+  })
+})
+
+/**
+ * LIGNE 2 du scout — le court-circuit déterministe ne garde que la demande EXPLICITE.
+ * MESURE sur 251 messages : la branche heuristique se déclenchait 8 fois, dont 6 à tort (précision
+ * 25 %, rappel 2 %), alors que le modèle décidait correctement 101 fois.
+ */
+describe('câblage — le code ne DEVINE plus qu’il faut orchestrer', () => {
+  const source = readFileSync(join(__dirname, 'agent-pilot.ts'), 'utf8')
+
+  it('le court-circuit exige une demande EXPLICITE', () => {
+    expect(source).toContain("directRoute?.reason === 'explicit-skill'")
+  })
+
+  it('l’ancienne condition fourre-tout a disparu', () => {
+    // `if (directRoute) {` acceptait AUSSI la deduction heuristique `workspace-action`.
+    expect(source).not.toMatch(/if \(directRoute\) \{/)
+  })
+})
+
+/**
+ * LIGNE 1 du scout — la phase devient une CAPACITÉ du modèle. Il décidait déjà (101 fois sur 103) mais
+ * ne pouvait pas nommer la phase : il devait espérer que l'heuristique devine.
+ */
+describe('câblage — le modèle peut NOMMER la phase', () => {
+  const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
+
+  it('la commande orchestrate expose un argument `phase`', () => {
+    expect(source).toMatch(/args: \{\s*task: 'la tâche',/)
+    expect(source).toContain('phase:')
+  })
+
+  it('la liste des phases acceptées est FERMÉE (un modèle ne peut rien inventer)', () => {
+    expect(source).toContain(
+      "const ORCHESTRATE_PHASES = new Set(['scout', 'frame', 'terrain', 'build', 'clean', 'judge'])"
+    )
+    expect(source).toContain('ORCHESTRATE_PHASES.has(requestedPhase)')
+  })
+
+  it('la phase est transmise sous la forme DÉJÀ éprouvée `/<phase> …`', () => {
+    // Reutilise `matchExplicitPhase` -> `regimePhases` au lieu d'ouvrir un second chemin.
+    expect(source).toContain('`/${requestedPhase} `')
+  })
+})
+
+/**
+ * L'EFFET COMPLET : une phase nommée par le modèle doit réellement restreindre les phases jouées.
+ */
+describe('effet — une phase demandée par le modèle restreint le pipeline', () => {
+  it('« /scout … » ne joue que le scout', () => {
+    expect(regimePhases('/scout des améliorations au chat')).toEqual(['scout'])
+  })
+
+  it('« /judge … » saute les phases d’exécution', () => {
+    expect(regimePhases('/judge le module de portée')).toEqual([])
+  })
+
+  it('sans préfixe, le régime décide comme avant', () => {
+    expect(regimePhases('modifie la popup pour ajouter un bouton')).toEqual(['frame', 'build'])
+  })
+})
