@@ -178,3 +178,105 @@ describe('Orchestrator — flip live worktree', () => {
     })
   })
 })
+
+/**
+ * LES CHEMINS DU RAPPORT — constaté le 2026-07-29, dit par l'agent en fin de run réel : « Le rapport
+ * pointe vers un worktree qui n'existe plus. » Le run écrit dans la copie isolée, rédige son rapport
+ * avec ces chemins, puis `end()` fusionne et SUPPRIME la copie. Preuve COMPORTEMENTALE : on fait dire
+ * au provider un chemin de worktree et on lit le rapport rendu.
+ */
+class PathReportingProvider implements ProviderAdapter {
+  readonly id = 'paths'
+  readonly supportsExecution = true
+  private calls = 0
+  constructor(private readonly worktreeCwd: string) {}
+  async auth(): Promise<boolean> {
+    return true
+  }
+  async *send(
+    _m: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    this.calls += 1
+    const first = this.calls === 1
+    return {
+      text: first ? `Module créé : ${this.worktreeCwd}\src\shared\duree.ts` : 'VALIDE',
+      provider: this.id,
+      systemInjected: Boolean(options.system),
+      executionEvidence: first
+        ? [
+            { type: 'file_change', kind: 'mutation', status: 'completed', ok: true, summary: 'm' },
+            {
+              type: 'command_execution',
+              kind: 'verification',
+              status: 'completed',
+              ok: true,
+              summary: 'v'
+            }
+          ]
+        : undefined
+    }
+  }
+}
+
+function orchestratorReportingPaths(
+  worktreeCwd: string,
+  worktrees: RunWorktrees
+): Orchestrator {
+  const provider = new PathReportingProvider(worktreeCwd)
+  return new Orchestrator({
+    registry: new ProviderRegistry().register(provider),
+    roles: new RoleModelConfig({
+      subagent: { provider: provider.id, model: 'worker' },
+      judge: { provider: provider.id, model: 'judge' }
+    }),
+    cost: new CostAggregator(),
+    trust: new TrustLedger(),
+    authority: new AuthoritySas(),
+    executionWorkspace: 'C:\base',
+    worktrees
+  })
+}
+
+describe('le rapport ne pointe pas vers une copie supprimée', () => {
+  const WT = 'C:\wt\run-1'
+
+  it('FUSIONNÉ : le chemin cité devient celui du workspace de base', async () => {
+    const orch = orchestratorReportingPaths(WT, {
+      begin: () => WT,
+      // `end` rend le verdict REEL de la fusion — c'est lui qui decide, pas `green`.
+      end: () => ({ outcome: 'merged' as const, agentId: 'a1', committed: true })
+    })
+
+    const result = await orch.run('modifie le projet')
+
+    expect(result.result).toContain('C:\base\src\shared\duree.ts')
+    // Le chemin mort ne doit plus apparaitre : c'est tout le defaut.
+    expect(result.result).not.toContain(WT)
+  })
+
+  it('CONFLIT malgré un run vert : le chemin de la copie est GARDÉ et signalé', async () => {
+    const orch = orchestratorReportingPaths(WT, {
+      begin: () => WT,
+      end: () => ({ outcome: 'conflict' as const, agentId: 'a1', files: ['src/a.ts'] })
+    })
+
+    const result = await orch.run('modifie le projet')
+
+    // Reecrire ici serait un MENSONGE : les fichiers sont restes dans la copie.
+    expect(result.result).toContain(WT)
+    expect(result.result).toContain('NON fusionné')
+  })
+
+  it('run SANS copie isolée : le rapport est rendu tel quel', async () => {
+    const orch = orchestratorReportingPaths('C:\base', {
+      begin: () => undefined,
+      end: () => undefined
+    })
+
+    const result = await orch.run('modifie le projet')
+
+    expect(result.result).toContain('C:\base\src\shared\duree.ts')
+    expect(result.result).not.toContain('NON fusionné')
+  })
+})

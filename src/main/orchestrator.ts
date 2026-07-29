@@ -19,6 +19,7 @@ import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
 import { describeFanoutFailure, explainRoleFailure } from './provider-failure-diagnosis'
+import { alignReportWithDisk } from './worktree-path-rewrite'
 import { runGreedy, type GreedyNode } from './greedy-scheduler'
 
 /**
@@ -341,6 +342,10 @@ export class Orchestrator {
     const isMut = isMutationTask(task)
     // Verdict du run, lu dans le `finally` : seul un run VERT ramène son travail dans la base.
     let green = false
+    // Reference du rapport rendu : le `finally` doit pouvoir aligner ses chemins APRES avoir su ce que
+    // la fusion a fait de la copie isolee. Muter l'objet rendu fonctionne (la valeur de retour est
+    // cette reference), reassigner la variable ne fonctionnerait PAS.
+    let produced: OrchestrationResult | undefined
     // Photo de l'arbre AVANT le run → la clôture ne publiera que le delta produit par ce run.
     this.deps.closeGreenRun?.begin(runId)
     const workCwd =
@@ -377,6 +382,7 @@ export class Orchestrator {
               collectedContext
             )
             green = !greedyResult.gateBlocked
+            produced = greedyResult
             return greedyResult
           }
         }
@@ -395,6 +401,7 @@ export class Orchestrator {
         conversationId
       )
       green = !result.gateBlocked
+      produced = result
       return result
     } finally {
       // SURVIE NIVEAU 3 : le run a atteint sa fin (vert, rouge ou exception) → l'état de reprise
@@ -408,7 +415,24 @@ export class Orchestrator {
       // Le travail n'est fusionné dans la base QUE si le run est vert. Un run rouge, annulé ou planté
       // garde sa copie isolée (l'exception saute le `green = true` ci-dessus) : on ne ramène plus
       // automatiquement dans la base un travail jugé raté.
-      this.deps.worktrees?.end(runId, { merge: green })
+      const finalized = this.deps.worktrees?.end(runId, { merge: green })
+      // Le rapport a ete redige DANS la copie isolee ; la ligne ci-dessus vient de la fusionner puis de
+      // la supprimer. Sans cet alignement, chaque chemin cite est mort — constate le 2026-07-29, dit
+      // par l'agent lui-meme : « le rapport pointe vers un worktree qui n'existe plus ».
+      if (produced && workCwd !== this.deps.executionWorkspace) {
+        const merged =
+          typeof finalized === 'object' &&
+          finalized !== null &&
+          (finalized as { outcome?: string }).outcome === 'merged'
+        const aligned = alignReportWithDisk(
+          { result: produced.result, phaseOutputs: produced.phaseOutputs },
+          workCwd,
+          this.deps.executionWorkspace,
+          merged ? 'merged' : 'kept'
+        )
+        produced.result = aligned.result
+        produced.phaseOutputs = aligned.phaseOutputs ?? produced.phaseOutputs
+      }
       // Clôture auto APRÈS la fusion (le travail est dans la base) et seulement si vert.
       // `void` + catch : publier est un service rendu, jamais une raison de faire échouer le run.
       if (green && this.deps.closeGreenRun) {
