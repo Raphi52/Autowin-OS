@@ -21,6 +21,8 @@ export type ChatRenderBlock =
 export interface HydratedAssistantMessage {
   role: 'assistant'
   turnId?: string
+  /** Conversation qui possede le journal de ce tour (message copie par un fork). */
+  turnConversationId?: string
   parts: ChatPart[]
   status: ChatTurnStatus
   done: boolean
@@ -35,6 +37,7 @@ export interface HydratedAssistantMessage {
 export interface StoredAssistantMessage {
   content: string
   turnId?: string
+  turnConversationId?: string
   parts?: ChatPart[]
   status?: ChatTurnStatus
   error?: string
@@ -152,6 +155,9 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
   return {
     role: 'assistant',
     ...(message.turnId ? { turnId: message.turnId } : {}),
+    // Transporte le proprietaire du journal : sans lui, la loupe d'un message copie chercherait
+    // le tour sous le fork, ou il n'existe pas.
+    ...(message.turnConversationId ? { turnConversationId: message.turnConversationId } : {}),
     // Tour déjà clos à la relecture (dont : app fermée en plein run) → plus rien « en cours ».
     parts: done ? settleUnresolvedActions(parts) : parts,
     status,

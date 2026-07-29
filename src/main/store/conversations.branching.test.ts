@@ -82,19 +82,36 @@ describe('ConversationStore — fork', () => {
     expect(forkTitle('   ')).toBe('Conversation (fork)')
   })
 
-  it('n’emporte pas le turnId : le journal d’un tour appartient à SA conversation', () => {
-    // Constaté en usage : la loupe d'un message copié cherchait un tour introuvable sous le fork
-    // et retombait sur un run sans rapport. Sans turnId, le bouton ne s'affiche même pas.
+  it('garde le tour ET note QUI le possède, pour que la loupe aille au bon endroit', () => {
+    // Constaté en usage : la loupe d'un message copié cherchait le tour SOUS le fork — le journal
+    // étant rangé par conversation, elle ne trouvait rien et retombait sur un run étranger.
     const store = new ConversationStore(() => 1)
     const source = store.create({ title: 'T', category: 'codex', provider: 'codex' })
     store.beginTurn(source.id, { content: 'u1' }, { turnId: 'turn-origine' })
     const messages = store.get(source.id)!.messages
-    expect(messages.some((m) => m.turnId === 'turn-origine')).toBe(true)
 
     const forked = store.fork(source.id, messages.at(-1)!.messageId!)
-    expect(forked.messages.every((m) => m.turnId === undefined)).toBe(true)
-    // L'originale garde évidemment le sien.
-    expect(store.get(source.id)!.messages.some((m) => m.turnId === 'turn-origine')).toBe(true)
+    const copie = forked.messages.find((m) => m.turnId === 'turn-origine')
+    expect(copie).toBeDefined() // le tour reste consultable
+    expect(copie!.turnConversationId).toBe(source.id) // …mais dans la conversation qui le possède
+
+    // Dans l'originale, aucun renvoi : le tour est chez elle.
+    expect(store.get(source.id)!.messages.every((m) => m.turnConversationId === undefined)).toBe(
+      true
+    )
+  })
+
+  it('un fork de fork renvoie vers le propriétaire D’ORIGINE, pas vers l’intermédiaire', () => {
+    const store = new ConversationStore(() => 1)
+    const source = store.create({ title: 'T', category: 'codex', provider: 'codex' })
+    store.beginTurn(source.id, { content: 'u1' }, { turnId: 'turn-origine' })
+
+    const premier = store.fork(source.id, store.get(source.id)!.messages.at(-1)!.messageId!)
+    const second = store.fork(premier.id, premier.messages.at(-1)!.messageId!)
+
+    expect(second.messages.find((m) => m.turnId === 'turn-origine')!.turnConversationId).toBe(
+      source.id
+    )
   })
 
   it('rejette une conversation ou un message inconnus', () => {

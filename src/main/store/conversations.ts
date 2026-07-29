@@ -32,6 +32,11 @@ export interface Msg {
   ts: number
   attachments?: AttachmentMeta[]
   turnId?: string
+  /**
+   * Conversation qui POSSÈDE le journal de ce tour, quand ce n'est pas celle qui porte le message
+   * (message copié par un fork). Absent = le tour appartient à la conversation courante.
+   */
+  turnConversationId?: string
   status?: ChatTurnStatus
   parts?: PersistedChatPart[]
   runtime?: ChatTurnRuntime
@@ -345,14 +350,17 @@ export class ConversationStore {
     })
     // Copie jusqu'au point de fork INCLUS. Les identifiants de message sont régénérés : deux
     // conversations ne doivent jamais partager un messageId (le fork suivant viserait les deux).
-    forked.messages = source.messages.slice(0, cut + 1).map((message) => {
-      // `turnId` est ABANDONNÉ : le journal d'un tour est rangé PAR CONVERSATION, donc celui d'un
-      // message copié n'existe pas sous le fork. Le conserver faisait apparaître la loupe, qui
-      // cherchait un tour introuvable et retombait sur un run sans rapport. Pas de tour ici : pas
-      // de bouton qui promet ce qu'il ne peut pas tenir (le tour reste lisible dans l'originale).
-      const { turnId: _abandonne, ...copie } = message
-      return { ...copie, messageId: `msg-${this.nextId++}` }
-    })
+    forked.messages = source.messages.slice(0, cut + 1).map((message) => ({
+      ...message,
+      messageId: `msg-${this.nextId++}`,
+      // Le journal d'un tour est rangé PAR CONVERSATION : celui d'un message copié n'existe pas
+      // sous le fork. On note donc QUI le possède, pour que la loupe aille le lire au bon endroit
+      // au lieu de chercher sous le fork et de retomber sur un run étranger.
+      // Un fork de fork propage le propriétaire D'ORIGINE, pas l'intermédiaire.
+      ...(message.turnId
+        ? { turnConversationId: message.turnConversationId ?? source.id }
+        : {})
+    }))
     forked.forkedFrom = { conversationId: source.id, messageId: fromMessageId }
     forked.updatedAt = this.now()
     this.changed()

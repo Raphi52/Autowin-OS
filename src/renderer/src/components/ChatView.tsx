@@ -110,6 +110,7 @@ type Conv = {
     messageId?: string
     parentMessageId?: string
     turnId?: string
+    turnConversationId?: string
     status?: 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
     parts?: Part[]
     error?: string
@@ -406,7 +407,14 @@ const ChatMessageRow = memo(
               className="msg-turn-icon"
               title="Inspecter ce tour dans l'Observatory"
               aria-label="Inspecter ce tour"
-              onClick={() => onInspectTurn({ conversationId, turnId: message.turnId! })}
+              // Un message COPIE par un fork garde son tour, mais le journal de ce tour vit dans
+              // la conversation d'origine : on l'ouvre LA-BAS plutot que de chercher sous le fork.
+              onClick={() =>
+                onInspectTurn({
+                  conversationId: message.turnConversationId ?? conversationId,
+                  turnId: message.turnId!
+                })
+              }
             >
               <InspectIcon />
             </button>

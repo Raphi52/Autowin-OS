@@ -107,13 +107,16 @@ describe('ChatView behavior under concurrent UI actions', () => {
     vi.restoreAllMocks()
   })
 
-  async function mount(mockApi: Record<string, unknown>): Promise<HTMLDivElement> {
+  async function mount(
+    mockApi: Record<string, unknown>,
+    props: Record<string, unknown> = {}
+  ): Promise<HTMLDivElement> {
     Object.defineProperty(window, 'api', { configurable: true, value: mockApi })
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
     await act(async () => {
-      root?.render(createElement(ChatView))
+      root?.render(createElement(ChatView, props))
       await Promise.resolve()
       await Promise.resolve()
     })
@@ -1423,6 +1426,40 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(forkBtn).toBeTruthy()
     await act(async () => (forkBtn as HTMLButtonElement).click())
     expect(fork).toHaveBeenCalledWith('A', 'm2')
+  })
+
+  it('la loupe d’un message COPIÉ vise la conversation qui possède le tour', async () => {
+    // Le journal d'un tour est range par conversation : chercher sous le fork ne trouvait rien et
+    // renvoyait vers un run etranger. Le message copie porte donc son proprietaire.
+    const inspect = vi.fn()
+    const copie = {
+      id: 'A-fork',
+      title: 'A (fork)',
+      category: 'codex',
+      provider: 'codex',
+      updatedAt: 2,
+      messages: [
+        {
+          role: 'assistant',
+          content: 'a1',
+          ts: 1,
+          messageId: 'f2',
+          turnId: 't1',
+          turnConversationId: 'A',
+          status: 'completed',
+          parts: [{ kind: 'text', text: 'a1' }]
+        }
+      ]
+    }
+    await mount(api({ conversations: vi.fn().mockResolvedValue([copie]) }), {
+      onInspectTurn: inspect
+    })
+    await click('.conv-pick')
+    const loupe = container!.querySelector('.msg-turn-icon') as HTMLButtonElement
+    expect(loupe).toBeTruthy()
+    await act(async () => loupe.click())
+
+    expect(inspect).toHaveBeenCalledWith({ conversationId: 'A', turnId: 't1' })
   })
 
   it('forker OUVRE la conversation créée — on continue dans la copie', async () => {
