@@ -41,6 +41,7 @@ import { ActiveChatTurns } from './active-chat-turns'
 import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
 import type { ChatTurnEvent } from '../shared/chat-turn'
 import { TraceLedger } from './activity/ledger'
+import { listSessions, parseSession } from './activity/transcripts'
 import { persistConversations } from './store/conversations-disk'
 import { listConvRuns, loadConvRunTrace } from './runs/conv-runs'
 import {
@@ -1776,6 +1777,26 @@ function registerChatIpc(): void {
     return causalTrace.readConversation(conversationId)
   })
 
+  // --- Observatoire d'activité : transcripts Claude Code (lecture seule) + ledger in-app ---
+  ipcMain.handle('os:activity:sessions', () => listSessions(60))
+  ipcMain.handle('os:activity:session', async (_e, meta) => parseSession(meta))
+
+  // Affichage des screenshots consultés : whitelist extensions + cap taille, lecture seule.
+  ipcMain.handle('os:activity:image', async (event, path: string) => {
+    assertTrustedRendererSender(event, 'ActivityImage')
+    const p = guardString(path, 'path')
+    if (!/\.(png|jpe?g|webp|gif|bmp)$/i.test(p)) throw new Error('extension non autorisée')
+    const { statSync, readFileSync } = await import('node:fs')
+    if (statSync(p).size > 8_000_000) throw new Error('image trop volumineuse')
+    const ext = p.split('.').pop()!.toLowerCase()
+    const mime =
+      ext === 'png'
+        ? 'image/png'
+        : ext === 'webp'
+          ? 'image/webp'
+          : `image/${ext === 'jpg' ? 'jpeg' : ext}`
+    return { dataUrl: `data:${mime};base64,${readFileSync(p).toString('base64')}` }
+  })
 }
 
 function rendererLocation(): { devRendererUrl?: string; rendererHtmlPath: string } {
