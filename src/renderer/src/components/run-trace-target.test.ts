@@ -103,3 +103,50 @@ describe('cablage du clic « action avec erreur » → trace', () => {
     expect(chat).toContain('setRunScope(\'conv\')')
   })
 })
+
+/**
+ * CAS REEL du contrat `orchestrate` : commands.ts retourne `{ runId: runPath, runPath }` — la
+ * reference remise au chat EST le chemin du RUN.md. Le ciblage est donc deterministe, et ces cas
+ * l'attestent (une premiere analyse supposait a tort deux identites distinctes).
+ */
+describe('contrat reel orchestrate — la reference EST un chemin', () => {
+  const RUN_PATH = 'C:\\Users\\x\\.claude\\runs\\sess-1\\audit-workspace\\RUN.md'
+
+  it('cible EXACTEMENT le run dont le chemin est retourne, meme s’il n’est pas le plus recent', () => {
+    const runs = [
+      { path: 'C:/Users/x/.claude/runs/sess-1/autre-workspace/RUN.md', mtime: 9_999 },
+      { path: 'C:/Users/x/.claude/runs/sess-1/audit-workspace/RUN.md', mtime: 1 }
+    ]
+    const runId = failedActionRunId([{ ok: false, data: { runId: RUN_PATH, runPath: RUN_PATH } }])
+    expect(pickRunForTrace(runs, runId)?.mtime).toBe(1)
+  })
+
+  it('prefere `runPath` a `runId` (champ explicite du contrat)', () => {
+    expect(runIdFromActionData({ runId: 'ancien', runPath: 'chemin/attendu' })).toBe('chemin/attendu')
+    // `runId` reste accepte seul (retro-compat du champ historique).
+    expect(runIdFromActionData({ runId: 'seulement-runid' })).toBe('seulement-runid')
+  })
+
+  it('un run PURGE (chemin plus liste) retombe sur le plus recent, sans jamais rien ouvrir de faux', () => {
+    const runs = [{ path: 'C:/runs/encore-la/RUN.md', mtime: 5 }]
+    const runId = failedActionRunId([{ interrupted: true, data: { runPath: 'C:/runs/disparu/RUN.md' } }])
+    expect(pickRunForTrace(runs, runId)?.path).toBe('C:/runs/encore-la/RUN.md')
+  })
+})
+
+describe('contrat cote main — orchestrate expose bien le chemin du run', () => {
+  it('retourne runPath (et runId aligne dessus)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('node:fs') as typeof import('node:fs')
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require('node:path') as typeof import('node:path')
+    const commands = fs.readFileSync(
+      path.join(__dirname, '..', '..', '..', 'main', 'commands.ts'),
+      'utf8'
+    )
+    // Si ce contrat disparait, le clic perd sa cible exacte et retombe silencieusement sur
+    // « le plus recent » — d'ou cette assertion.
+    expect(commands).toContain('runPath')
+    expect(commands).toMatch(/runId:\s*runPath/)
+  })
+})
