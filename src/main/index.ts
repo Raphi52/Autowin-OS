@@ -44,6 +44,7 @@ import type { ChatTurnEvent } from '../shared/chat-turn'
 import { TraceLedger } from './activity/ledger'
 import { listSessions, parseSession } from './activity/transcripts'
 import { persistConversations } from './store/conversations-disk'
+import { collectStdoutJournals } from './runs/journal-gc'
 import { listConvRuns, loadConvRunTrace } from './runs/conv-runs'
 import {
   appendTurnEvent,
@@ -482,6 +483,19 @@ const turnJournalRoot = join(app.getPath('userData'), 'turn-journals')
 // Racine des journaux de SORTIE BRUTE des CLI (mode détaché opt-in AUTOWIN_DETACHED_RUNS=1) :
 // transmise aux providers par l'environnement, pour qu'ils n'aient pas à connaître Electron.
 process.env.AUTOWIN_RUN_JOURNAL_ROOT ??= join(app.getPath('userData'), 'run-stdout')
+// Un journal est ecrit a CHAQUE spawn de CLI et rien ne les supprimait : 435 fichiers / 10,6 Mo
+// mesures en 2 jours d'usage. Passe au demarrage (les runs detaches en cours sont proteges par la
+// garde d'inactivite du GC), best-effort : un echec de menage ne doit jamais retarder l'app.
+try {
+  const collected = collectStdoutJournals(process.env.AUTOWIN_RUN_JOURNAL_ROOT)
+  if (collected.removed > 0) {
+    console.log(
+      `[run-stdout] ${collected.removed} journaux purges (${Math.round(collected.freedBytes / 1024)} Ko)`
+    )
+  }
+} catch {
+  /* menage best-effort : jamais bloquant au demarrage */
+}
 const ledger = new TraceLedger(join(app.getPath('userData'), 'trace'))
 const causalTrace = new TraceStore(join(app.getPath('userData'), 'causal-trace'))
 
