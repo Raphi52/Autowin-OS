@@ -1,3 +1,4 @@
+import { emitToLiveWindows } from './renderer-emit'
 import {
   app,
   shell,
@@ -305,7 +306,7 @@ let agentModels = loadCachedImportedModels(modelCatalogCachePath)
 let agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
 const modelCatalog = new ModelCatalogRefresher(
   agentModels,
-  () => discoverImportedModels(fetch, undefined, modelCatalogCachePath),
+  () => discoverImportedModels(fetch, modelCatalogCachePath),
   {
     freshnessMs: 60_000,
     reconcile: (current, models) => {
@@ -660,7 +661,10 @@ function registerChatIpc(): void {
               timestamp: new Date().toISOString()
             })
           }
-          event.sender.send('orchestrate:step', step)
+          // Diffusion aux fenetres VIVANTES, jamais au WebContents capture : fermer la fenetre en
+          // cours de run ne doit ni jeter (« Object has been destroyed ») ni empecher la reprise
+          // d'affichage quand on la rouvre. Le run, lui, continue en tray.
+          emitToLiveWindows(BrowserWindow.getAllWindows(), 'orchestrate:step', step)
           // #3 — au franchissement du seuil : couper le run + prévenir l'utilisateur immédiatement.
           const trip = breaker.observe(step)
           if (trip) {
@@ -1394,7 +1398,13 @@ function registerChatIpc(): void {
             causalTrace.append(action)
             traceParentId = action.id
           }
-          event.sender.send('pilot:event', { ...pilotEvent, conversationId, turnId })
+          // Idem pour le flux de chat : une fenetre fermee est un non-evenement, pas une erreur du
+          // tour en cours (qui est deja paye et persiste).
+          emitToLiveWindows(BrowserWindow.getAllWindows(), 'pilot:event', {
+            ...pilotEvent,
+            conversationId,
+            turnId
+          })
         }
         const delayedPilotFixture =
           isolatedTestInstance &&
