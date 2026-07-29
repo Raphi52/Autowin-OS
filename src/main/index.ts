@@ -1311,8 +1311,39 @@ function registerChatIpc(): void {
               ok: pilotEvent.ok,
               data: pilotEvent.data
             }
-          else if (pilotEvent.kind === 'done')
+          else if (pilotEvent.kind === 'done') {
+            /**
+             * Le TEXTE du `done` doit atterrir dans le message quand rien n'a ete streame.
+             *
+             * Constate en essai reel (2026-07-29) : le chemin direct `orchestrate` emet sa carte de
+             * livraison (statut, cout, run, resultat) UNIQUEMENT dans le `done` — aucun delta. Comme
+             * seul `sessionId` etait persiste, la carte etait calculee puis JETEE, et le fil ne gardait
+             * que « [a execute orchestrate] ». Meme patron que le cout jete : produire l'information
+             * puis la perdre a la frontiere de persistance.
+             *
+             * Condition stricte pour ne JAMAIS dupliquer : on ne persiste ce texte que si aucun delta
+             * n'a ete emis pendant le tour (sinon le texte du `done` reprend ce qui a deja ete dit).
+             */
+            const closing = pilotEvent.text?.trim()
+            if (closing && !streamedSpoken.trim()) {
+              os.conversations.applyTurnEvent(conversationId, turnId, {
+                kind: 'delta',
+                // Flux dedie : ce texte de cloture n'appartient a aucun stream deja ouvert.
+                streamId: `${turnId}:closing`,
+                text: closing
+              })
+              try {
+                appendTurnEvent(turnJournalRoot, conversationId, turnId, {
+                  kind: 'delta',
+                  text: closing,
+                  at: Date.now()
+                })
+              } catch {
+                /* journal best-effort */
+              }
+            }
             durableEvent = { kind: 'done', sessionId: turnSessionId }
+          }
           else if (pilotEvent.kind === 'cancellation') durableEvent = { kind: 'cancelled' }
           if (durableEvent) {
             os.conversations.applyTurnEvent(conversationId, turnId, durableEvent)

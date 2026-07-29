@@ -91,3 +91,37 @@ describe('câblage — le catch de pilotChat écrit l’état terminal au journa
     expect(catchBlock).toContain("kind: 'failed'")
   })
 })
+
+/**
+ * TEXTE DE CLOTURE — produire l'information puis la perdre a la frontiere de persistance.
+ *
+ * Constate en essai reel (2026-07-29) : le chemin direct `orchestrate` emet sa carte de livraison
+ * (statut, cout, run, resultat) UNIQUEMENT dans le `done`. Comme seul `sessionId` etait persiste, la
+ * carte etait calculee puis JETEE et le fil ne gardait que « [a execute orchestrate] ». Le meme
+ * patron que le cout jete : l'information existe, elle n'arrive jamais a l'utilisateur.
+ */
+describe('cablage — le texte du `done` atterrit dans le message', () => {
+  const main = (): string => readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+
+  it('persiste le texte de cloture quand rien n’a ete streame', () => {
+    const source = main()
+    const branch = source.slice(source.indexOf("else if (pilotEvent.kind === 'done')"))
+    expect(branch).toContain('const closing = pilotEvent.text?.trim()')
+    expect(branch).toContain("kind: 'delta'")
+  })
+
+  it('ne duplique JAMAIS un texte deja diffuse en streaming', () => {
+    const source = main()
+    const branch = source.slice(source.indexOf("else if (pilotEvent.kind === 'done')"))
+    // La condition doit exiger l'ABSENCE de streaming, sinon le message contiendrait deux fois le texte.
+    expect(branch).toMatch(/if \(closing && !streamedSpoken\.trim\(\)\)/)
+  })
+
+  it('ecrit aussi au journal du tour (une reprise doit retrouver la conclusion)', () => {
+    const source = main()
+    const branch = source.slice(source.indexOf('const closing = pilotEvent.text?.trim()'))
+    expect(branch.slice(0, branch.indexOf("durableEvent = { kind: 'done'"))).toContain(
+      'appendTurnEvent(turnJournalRoot'
+    )
+  })
+})
