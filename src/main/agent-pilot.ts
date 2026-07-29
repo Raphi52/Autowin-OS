@@ -53,20 +53,27 @@ export interface PilotEvent {
   usage?: { inputTokens: number; outputTokens: number; costUsd?: number }
 }
 
-const CMD_RE = /<cmd>\s*(\{[\s\S]*?\})\s*<\/cmd>/g
 const CONTROL_RE = /<(cmd|question)>\s*([\s\S]*?)\s*<\/\1>/g
 const REJECTED_QUESTION_RE = /<question>[\s\S]*?(?:<\/question>|$)/gi
 const REJECTED_QUESTION_MARKER = '[question modèle refusée et masquée]'
 
-type OrderedPilotToken =
-  { kind: 'text'; text: string } | { kind: 'command'; name: string; args: Record<string, unknown> }
+export type OrderedPilotToken =
+  | { kind: 'text'; text: string }
+  | { kind: 'command'; name: string; args: Record<string, unknown> }
+  /**
+   * Bloc `<cmd>` PRESENT mais inexploitable (JSON invalide, ou valide sans `name`). Avant, ces deux
+   * cas etaient avales silencieusement : le modele croyait avoir agi, l'utilisateur recevait une
+   * conclusion, et AUCUNE action n'avait eu lieu. Un faux « c'est fait » est le pire defaut possible
+   * pour un agent — l'echec doit etre visible et corrigible.
+   */
+  | { kind: 'invalid'; raw: string; reason: string }
 
 function filterVisibleText(raw: string): string {
   const filter = new VisibleStreamFilter()
   return filter.push(raw) + filter.finish()
 }
 
-function parseOrderedPilotTokens(raw: string): OrderedPilotToken[] {
+export function parseOrderedPilotTokens(raw: string): OrderedPilotToken[] {
   const tokens: OrderedPilotToken[] = []
   let cursor = 0
   CONTROL_RE.lastIndex = 0
@@ -75,15 +82,24 @@ function parseOrderedPilotTokens(raw: string): OrderedPilotToken[] {
     const visible = filterVisibleText(raw.slice(cursor, match.index))
     if (visible) tokens.push({ kind: 'text', text: visible })
     if (match[1] === 'cmd') {
+      const rawBlock = match[2]
       try {
-        const parsed = JSON.parse(match[2]) as {
+        const parsed = JSON.parse(rawBlock) as {
           name?: string
           args?: Record<string, unknown>
         }
-        if (parsed.name)
+        if (parsed.name) {
           tokens.push({ kind: 'command', name: parsed.name, args: parsed.args ?? {} })
-      } catch {
-        /* bloc de commande invalide : supprimé du texte visible, jamais exécuté */
+        } else {
+          // JSON valide mais sans `name` : deuxieme trou silencieux du parseur d'origine.
+          tokens.push({ kind: 'invalid', raw: rawBlock, reason: 'champ « name » absent' })
+        }
+      } catch (error) {
+        tokens.push({
+          kind: 'invalid',
+          raw: rawBlock,
+          reason: `JSON illisible : ${error instanceof Error ? error.message : String(error)}`
+        })
       }
     }
     cursor = match.index + match[0].length
@@ -128,92 +144,6 @@ export class AgentPilot {
    * façon pas indéfiniment — pas de sessionId réutilisable ⇒ retour au comportement actuel.
    */
   private readonly chatSessions = new Map<string, { key: string; sessionId: string }>()
-
-  async run(goal: string, onEvent: (e: PilotEvent) => void, maxIter = 6): Promise<void> {
-    const binding = this.roles.getBinding('orchestrator')
-    const provider = binding.provider
-    const catalog = this.bus.catalog()
-    const snapshot = await this.bus.snapshotForPrompt()
-
-    // MÊME pattern nommé que chat() : la CONSTITUTION est la source UNIQUE partagée ; run() n'ajoute
-    // que son pilotage-goal. systemBlocks → l'injection est traçable dans Observatory (parité chat).
-    const pilotage =
-      `Tu PILOTES l'application "Autowin OS" via des commandes. Objectif de l'utilisateur : "${goal}".\n` +
-      `Pour agir, émets une ou plusieurs commandes AU FORMAT EXACT : <cmd>{"name":"...","args":{...}}</cmd>.\n` +
-      `Tu peux faire modifier le code du workspace par la commande orchestrate. Ne dis jamais que tu ne peux pas modifier le code lorsque cette commande est disponible : utilise-la avec la demande complète de l'utilisateur.\n` +
-      `Commandes disponibles :\n` +
-      catalog
-        .map((c) => `- ${c.name}(${Object.keys(c.args).join(', ')}) : ${c.description}`)
-        .join('\n') +
-      `\nRègles : agis par petits pas, une ou deux commandes par tour. Après exécution tu recevras le résultat + l'état. ` +
-      `Quand l'objectif est atteint, réponds UNIQUEMENT "DONE: <résumé>" sans commande.`
-    const systemParts = [
-      { name: 'constitution', text: CONSTITUTION },
-      { name: 'pilotage', text: `\n${pilotage}` },
-      { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION }
-    ]
-    const system = systemParts.map((p) => p.text).join('')
-    const systemBlocks = systemParts
-      .filter((p) => p.text)
-      .map((p) => ({ name: p.name, chars: p.text.length }))
-
-    const convo: string[] = [`ÉTAT INITIAL:\n${JSON.stringify(snapshot)}`]
-
-    for (let i = 0; i < maxIter; i++) {
-      const messages = [
-        { role: 'user' as const, content: `${convo.join('\n\n')}\n\nProchaine action ?` }
-      ]
-      const prompt = this.registry.describePrompt(
-        provider,
-        messages,
-        { system, systemBlocks },
-        binding.model
-      )
-      prompt.systemBlocks = systemBlocks
-      onEvent({ kind: 'prompt-call', iteration: i, prompt })
-      const res = await this.registry.send(provider, messages, { system, systemBlocks })
-      const text = res.text.trim()
-
-      // Extraire les commandes émises par le modèle.
-      const cmds: Array<{ name: string; args: Record<string, unknown> }> = []
-      let m: RegExpExecArray | null
-      CMD_RE.lastIndex = 0
-      while ((m = CMD_RE.exec(text)) !== null) {
-        try {
-          const parsed = JSON.parse(m[1]) as { name: string; args?: Record<string, unknown> }
-          if (parsed.name) cmds.push({ name: parsed.name, args: parsed.args ?? {} })
-        } catch {
-          /* JSON de commande invalide — ignoré */
-        }
-      }
-
-      const thought = text.replace(CMD_RE, '').trim()
-      if (thought) onEvent({ kind: 'think', text: thought })
-
-      if (cmds.length === 0) {
-        onEvent({ kind: 'done', text: thought || 'terminé' })
-        return
-      }
-
-      const results: string[] = []
-      for (const c of cmds) {
-        onEvent({ kind: 'command', name: c.name, args: c.args })
-        const r = await this.bus.exec(c.name, c.args) // MUTE l'app + broadcast (UI live)
-        onEvent({ kind: 'result', name: c.name, ok: r.ok, data: r.ok ? r.data : r.error })
-        results.push(`${c.name} → ${r.ok ? JSON.stringify(r.data) : 'ERREUR ' + r.error}`)
-      }
-
-      const state = await this.bus.snapshotForPrompt()
-      convo.push(`TU AS ÉMIS: ${text}`)
-      convo.push(`RÉSULTATS:\n${results.join('\n')}\n\nÉTAT MAINTENANT:\n${JSON.stringify(state)}`)
-    }
-    const capError = `Cap d'itérations (${maxIter}) atteint sans réponse finale`
-    onEvent({
-      kind: 'error',
-      text: capError
-    })
-    throw new Error(capError)
-  }
 
   /**
    * Mode CONVERSATION (chat transparent) : l'agent parle À l'utilisateur ET peut
@@ -600,6 +530,31 @@ export class AgentPilot {
               text: visible,
               iteration: i
             })
+          tokenIndex += 1
+          continue
+        }
+
+        if (token.kind === 'invalid') {
+          /**
+           * Bloc `<cmd>` inexploitable. Avant, il disparaissait sans trace : le modele croyait avoir
+           * agi, l'utilisateur lisait une conclusion, et rien ne s'etait produit. Desormais l'echec
+           * est (a) VISIBLE dans le fil et (b) REINJECTE au modele pour qu'il corrige au tour
+           * suivant. Aucune action n'est inventee : on signale, on ne devine pas l'intention.
+           */
+          const actionId = `${i}:${commandIndex++}`
+          onEvent({ kind: 'command', actionId, name: 'commande illisible', args: {} })
+          onEvent({
+            kind: 'result',
+            actionId,
+            name: 'commande illisible',
+            ok: false,
+            data: `${token.reason} — aucune action n'a été exécutée`
+          })
+          results.push(
+            `COMMANDE ILLISIBLE (${token.reason}) — AUCUNE action executee. Bloc recu : ` +
+              `${token.raw.slice(0, 300)}. Re-emets une commande VALIDE au format exact ` +
+              `<cmd>{"name":"...","args":{...}}</cmd>, ou reponds sans commande.`
+          )
           tokenIndex += 1
           continue
         }
