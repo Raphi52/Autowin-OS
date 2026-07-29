@@ -1,6 +1,6 @@
 /* Reference: sketches/autowin-galaxy-combo/05-black-cosmic-outline.png */
 
-.cosmic-outline :where(.conv-pane, .runs-pane, .control-row, .behaviour-reader) {
+.cosmic-outline :where(.conv-pane, .runs-pane, .control-row) {
   background: rgba(0, 0, 7, 0.88);
   border-color: var(--line-strong);
   box-shadow: none;
@@ -82,7 +82,6 @@
 
 /* Chat, Controls, Behaviour */
 .chat-layout,
-.capability-controls,
 .behaviour-view {
   /* Page uniforme (--surface-panel), comme Models : cosmique seulement au contour (.main). */
   background: var(--surface-panel);
@@ -90,22 +89,19 @@
 
 .conv-pane,
 .runs-pane,
-.control-list,
-.behaviour-reader {
+.control-list {
   border-color: var(--line-strong);
 }
 
 .conv-item,
 .run-row,
-.control-row,
-.behaviour-engine-group > button {
+.control-row {
   background: #020203;
   border-color: var(--line);
 }
 
 .conv-item.active,
-.run-row.active,
-.behaviour-engine-group > button.active {
+.run-row.active {
   background: rgba(239, 63, 145, 0.09);
   border-color: var(--rose-bright);
 }
@@ -136,7 +132,7 @@
   background: var(--surface-page);
 }
 
-.cosmic-outline :where(.conv-pane, .runs-pane, .control-list, .control-row, .behaviour-reader) {
+.cosmic-outline :where(.conv-pane, .runs-pane, .control-list, .control-row) {
   background: var(--surface-panel);
   box-shadow: none;
 }
@@ -149,7 +145,6 @@
     .node-search-result,
     .settings-section,
     .node-links button,
-    .behaviour-engine-group > button,
     .model-question-options button
   ) {
   background: var(--surface-card);
@@ -512,15 +507,6 @@
   line-height: 1.62;
 }
 
-.cosmic-outline .action-event {
-  width: min(100%, 720px);
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-left: 2px solid #5ecaf0;
-  border-radius: 7px;
-  background: rgba(0, 0, 0, 0.3);
-  color: #9caab5;
-}
 
 .cosmic-outline .activity-group {
   width: min(100%, 720px);
@@ -549,6 +535,25 @@
   border-left-color: #ff6d8f;
 }
 
+/* Reprendre une action interrompue : action distincte du bloc, discrète mais atteignable. */
+.cosmic-outline .activity-resume {
+  margin: 6px 0 0;
+  padding: 5px 11px;
+  border: 1px solid rgba(94, 202, 240, 0.4);
+  border-radius: 7px;
+  background: rgba(94, 202, 240, 0.08);
+  color: #9fd8ef;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.cosmic-outline .activity-resume:hover {
+  border-color: rgba(94, 202, 240, 0.75);
+  background: rgba(94, 202, 240, 0.16);
+  color: #d6f0fb;
+}
+
 .cosmic-outline .activity-group-go {
   margin-left: auto;
   color: #61707d;
@@ -573,77 +578,6 @@
 }
 
 
-
-.cosmic-outline .action-event.failed {
-  border-left-color: #ff6d8f;
-}
-
-.cosmic-outline .action-event summary {
-  display: flex;
-  min-height: 36px;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.cosmic-outline .action-event summary::-webkit-details-marker {
-  display: none;
-}
-
-.cosmic-outline .action-event summary::after {
-  margin-left: 2px;
-  color: #61707d;
-  content: '⌄';
-  font-size: 12px;
-}
-
-.cosmic-outline .action-event[open] summary::after {
-  transform: rotate(180deg);
-}
-
-.cosmic-outline .action-event .action-name {
-  color: #dbe4ea;
-  font-size: 11px;
-}
-
-.cosmic-outline .action-event .action-args {
-  flex: 1;
-  max-width: none;
-  color: #657481;
-  font-size: 9px;
-}
-
-.cosmic-outline .action-status {
-  margin-left: auto;
-  color: #74828e;
-  font-size: 8px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.cosmic-outline .action-detail {
-  display: grid;
-  gap: 10px;
-  padding: 10px 12px 12px 28px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.22);
-}
-
-.cosmic-outline .action-detail section {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-}
-
-.cosmic-outline .action-detail small {
-  color: #7e8d99;
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
 
 .cosmic-outline .chat-jump-latest {
   position: absolute;

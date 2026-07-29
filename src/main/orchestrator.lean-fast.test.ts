@@ -150,7 +150,7 @@ describe('survie niveau 3 — reprise d’un run interrompu', () => {
     expect(provider.userMessages[0]).toContain('[phase frame] BESOIN CADRÉ AVANT LE KILL')
   })
 
-  it('notifie l’acquis après chaque phase puis la clôture (persistance + effacement)', async () => {
+  it('notifie l’acquis DÈS LE DÉMARRAGE puis après chaque phase (persistance + effacement)', async () => {
     const provider = new RecordingProvider()
     const completed: { runId: string; phases: string[] }[] = []
     const settled: string[] = []
@@ -161,7 +161,9 @@ describe('survie niveau 3 — reprise d’un run interrompu', () => {
       onRunSettled: (runId) => settled.push(runId)
     })
     await orch.run('ajoute une fonctionnalité')
-    expect(completed.map((c) => c.phases)).toEqual([['frame'], ['frame', 'build']])
+    // Le PREMIER acquis est vide, enregistré avant toute phase : c'est lui qui rend reprenable un run
+    // tué pendant sa première phase (la plus longue). Sans lui, la tâche était simplement perdue.
+    expect(completed.map((c) => c.phases)).toEqual([[], ['frame'], ['frame', 'build']])
     expect(settled).toEqual([completed[0].runId])
   })
 })

@@ -169,13 +169,30 @@ export function EvidenceList({ items }: { items: EvidencePart[] }): React.JSX.El
   )
 }
 
+/**
+ * Tâche d'une action interrompue, si on peut la retrouver. C'est elle qui permet de REPRENDRE d'un
+ * clic : relancée à l'identique, elle retombe sur l'acquis persisté du run mort et repart à la phase
+ * suivante — au lieu d'obliger l'utilisateur à retaper sa demande.
+ */
+export function interruptedTask(actions: ChatActionPart[]): string | undefined {
+  for (const action of actions) {
+    if (!action.interrupted) continue
+    const task = (action.args as { task?: unknown } | undefined)?.task
+    if (typeof task === 'string' && task.trim()) return task.trim()
+  }
+  return undefined
+}
+
 export function AssistantActivityGroup({
   actions,
-  onOpenLiveAction
+  onOpenLiveAction,
+  onResume
 }: {
   actions: ChatActionPart[]
   /** Ouvre Workflows : `live` = carte du run en cours, `history` = activité passée. */
   onOpenLiveAction?: (mode: 'live' | 'history', runId?: string) => void
+  /** Relance la tâche interrompue (reprise sur l'acquis persisté), sans la retaper. */
+  onResume?: (task: string) => void
 }): React.JSX.Element {
   const failed = actions.some((action) => action.ok === false)
   // « En cours » = sans résultat ET non interrompue. Une action interrompue (tour clos sans son
@@ -219,6 +236,9 @@ export function AssistantActivityGroup({
    */
   const runConsultable = hasConsultableRun(actions)
   const details = runConsultable ? [] : localActionDetails(actions)
+  // Reprise proposée seulement s'il y a VRAIMENT quelque chose à relancer : une action interrompue
+  // dont on connaît la tâche, et un canal pour la relancer.
+  const resumable = interruptedCount > 0 && onResume ? interruptedTask(actions) : undefined
   return (
     <>
     <button
@@ -263,6 +283,19 @@ export function AssistantActivityGroup({
         </span>
       )}
     </button>
+    {resumable && (
+      // Bouton SÉPARÉ du bloc : celui-ci ouvre Workflows, reprendre est une action distincte —
+      // les imbriquer ferait d'un clic « voir » un clic « relancer ».
+      <button
+        type="button"
+        className="activity-resume"
+        data-testid="activity-resume"
+        title={`Reprendre : ${resumable}`}
+        onClick={() => onResume?.(resumable)}
+      >
+        ↻ Reprendre
+      </button>
+    )}
     {details.length > 0 && (
       <div className="activity-local-details" data-testid="activity-local-details">
         {details.map((detail, index) => (

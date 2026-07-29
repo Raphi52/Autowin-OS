@@ -397,6 +397,9 @@ const ChatMessageRow = memo(
                 key={index}
                 actions={part.actions}
                 onOpenLiveAction={onOpenLiveAction}
+                // Reprendre = renvoyer la tâche d'origine : le main y retrouve l'acquis persisté du
+                // run mort et repart à la phase suivante. Même canal qu'une saisie, sans la saisie.
+                onResume={(task) => onPickSuggestion?.(task)}
               />
             )
           )}

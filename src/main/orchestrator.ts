@@ -148,6 +148,11 @@ export interface OrchestratorDeps {
    * d'orchestration vit ici, elle ne survit pas à un kill : sans ça, les phases restantes étaient
    * perdues). Best-effort : une erreur de persistance ne doit JAMAIS casser le run.
    */
+  /**
+   * Point de sauvegarde de l'acquis reprenable. Appelé au DÉMARRAGE du run (acquis vide) puis après
+   * CHAQUE phase. Le premier appel est ce qui rend un run tué très tôt encore reprenable : sans lui,
+   * une mort avant la fin de la première phase perdait la tâche entière.
+   */
   onPhaseCompleted?: (info: {
     runId: string
     task: string
@@ -348,6 +353,11 @@ export class Orchestrator {
     let produced: OrchestrationResult | undefined
     // Photo de l'arbre AVANT le run → la clôture ne publiera que le delta produit par ce run.
     this.deps.closeGreenRun?.begin(runId)
+    // SURVIE : l'acquis n'était persisté qu'à la FIN d'une phase. Un run tué avant la première (le cas
+    // le plus courant : la phase 1 est longue) ne laissait donc RIEN, et la reprise automatique au
+    // démarrage n'avait aucune prise — l'utilisateur devait relancer la tâche à la main. On enregistre
+    // dès maintenant, acquis vide : la reprise repart de zéro plutôt que de perdre la tâche.
+    this.deps.onPhaseCompleted?.({ runId, task, conversationId, phaseOutputs: [...resumeOutputs] })
     const workCwd =
       this.deps.worktrees?.begin(runId, 'Agent', isMut) ?? this.deps.executionWorkspace
     if (isMut && this.deps.worktrees) {

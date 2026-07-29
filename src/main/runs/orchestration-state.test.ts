@@ -80,6 +80,20 @@ describe('garde-fou acquis vide (constaté en réel)', () => {
     expect(pickOrchestrationToResume([empty])).toBeNull()
   })
 
+  it('un run mort AVANT sa première phase reste reprenable (sinon la tâche est perdue)', () => {
+    // Cas constaté : le run est tué pendant la phase 1 — la plus longue. Rien n'était persisté, donc
+    // la reprise automatique n'avait aucune prise et il fallait retaper la demande. Aucune phase
+    // enregistrée = rien à sauter : on relance simplement depuis le début.
+    const neuf: OrchestrationRunState = {
+      runId: 'run-tue-tot',
+      task: 'trouve le composant concerné',
+      phaseOutputs: [],
+      startedAt: 1,
+      updatedAt: 2
+    }
+    expect(pickOrchestrationToResume([neuf])?.runId).toBe('run-tue-tot')
+  })
+
   it('reprend dès qu’au moins une phase porte un livrable réel', () => {
     const mixed: OrchestrationRunState = {
       runId: 'run-mixte-1',

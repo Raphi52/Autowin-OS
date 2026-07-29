@@ -105,13 +105,23 @@ export function loadOrchestrationStates(root: string): OrchestrationRunState[] {
 export function pickOrchestrationToResume(
   states: readonly OrchestrationRunState[]
 ): OrchestrationRunState | null {
-  // Un acquis VIDE (phase persistée sans livrable — vu en réel) n'est pas un acquis : le reprendre
-  // ferait SAUTER la phase sans avoir son travail. On exige au moins un livrable porteur de contenu.
-  const usable = states.filter((state) =>
+  // Deux situations à ne pas confondre :
+  //  - AUCUNE phase enregistrée : le run est mort avant d'avoir produit quoi que ce soit. Il n'y a
+  //    rien à sauter, donc rien à risquer : on le relance depuis le début plutôt que de PERDRE la
+  //    tâche (c'est le cas le plus courant, la première phase étant la plus longue).
+  //  - Des phases enregistrées mais TOUTES sans livrable (vu en réel) : les reprendre les ferait
+  //    sauter sans avoir leur travail → pire que tout rejouer. Celui-là reste écarté.
+  const mostRecent = (candidates: readonly OrchestrationRunState[]): OrchestrationRunState | null =>
+    candidates.length === 0
+      ? null
+      : candidates.reduce((best, state) => (state.updatedAt > best.updatedAt ? state : best))
+
+  // Priorité au travail DÉJÀ PAYÉ : un run porteur d'un livrable réel passe devant un run plus
+  // récent qui n'a rien produit — le reprendre économise les phases déjà faites.
+  const withWork = states.filter((state) =>
     state.phaseOutputs.some((output) => typeof output.text === 'string' && output.text.trim())
   )
-  if (usable.length === 0) return null
-  return usable.reduce((best, state) => (state.updatedAt > best.updatedAt ? state : best))
+  return mostRecent(withWork) ?? mostRecent(states.filter((state) => state.phaseOutputs.length === 0))
 }
 
 /** Normalise un libelle de tache pour comparer « la meme tache » ecrite a l'espace pres. */
