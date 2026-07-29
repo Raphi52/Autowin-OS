@@ -1357,8 +1357,13 @@ export function ChatView({
     const [nextMessage, ...rest] = queued
     setConversationQueue(id, rest)
     void send(nextMessage.text)
+    // `activeId` AUTANT que `busy` : une file remplie pendant le tour de A survit à un aller-retour
+    // vers une autre conversation. Le tour de A se terminant PENDANT l'absence, la transition
+    // busy→false ne concerne plus A — sans `activeId` la file restait échouée là, et il fallait
+    // renvoyer les messages à la main. Sûr par construction : les files vivent dans un `useRef` (rien
+    // sur disque), donc un redémarrage ne peut pas ressusciter une file oubliée et envoyer à l'insu.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busy])
+  }, [busy, activeId])
 
   // Callback STABLE (le row est memo'd — une ref inline casserait la mémoïsation).
   const forkRef = useRef(forkFromMessage)

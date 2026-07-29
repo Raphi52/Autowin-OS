@@ -490,7 +490,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
    * jamais hors tour. Les boutons restaient donc figes sur « ⏳ Interruption… » definitivement.
    * Mesure : sans le correctif ce test rend `true` sur la presence du bouton, avec il rend `false`.
    */
-  it('file survivante hors tour actif : aucun bouton d’interruption mort n’est rendu', async () => {
+  it('au retour sur la conversation, aucun bouton d’interruption mort ne subsiste', async () => {
     const turnA = deferred<{ ok: boolean }>()
     const mockApi = api({
       conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('B')]),
@@ -513,12 +513,57 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => (picks()[0] as HTMLElement).click())
     await flushAnimationFrames()
 
-    // La file survit bel et bien : c'est l'etat qui rendait le clic mort atteignable.
-    expect(container!.querySelector('.directive-queue')).not.toBeNull()
+    // Depuis le drain sur `activeId`, l'etat « file echouee hors tour » se referme de lui-meme : la
+    // file est partie. Ce qui est verifie ici, c'est qu'AUCUN bouton mort ne subsiste au retour —
+    // ni par message, ni global (c'est ce couple qui figeait la file sur « ⏳ Interruption… »).
     expect(container!.querySelector('.directive-queue-item .directive-queue-send')).toBeNull()
     expect(container!.querySelector('.directive-queue-send-all')).toBeNull()
-    // Le retrait (✕) reste disponible : la file n'est pas prisonniere.
-    expect(container!.querySelector('.directive-queue-remove')).not.toBeNull()
+    expect(container!.querySelector('.directive-queue')).toBeNull()
+  })
+
+  /**
+   * SUITE du clic mort : une fois le bouton mort supprime, la file survivante restait EN PLAN — il
+   * fallait relancer ses messages a la main. L'effet de drain ne dependait que de `busy`, or la
+   * transition busy->false du tour de A survient pendant qu'on regarde B : elle ne concerne plus A.
+   * De retour sur A, le drain doit repartir tout seul.
+   */
+  it('de retour sur la conversation, la file survivante se draine SEULE', async () => {
+    const turnA = deferred<{ ok: boolean }>()
+    const drained = deferred<{ ok: boolean }>()
+    const pilotChat = vi
+      .fn()
+      .mockImplementationOnce(() => turnA.promise)
+      .mockImplementationOnce(() => drained.promise)
+      .mockResolvedValue({ ok: true })
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('B')]),
+      pilotChat
+    })
+    await mount(mockApi)
+    const picks = (): NodeListOf<Element> => container!.querySelectorAll('.conv-pick')
+    await act(async () => (picks()[0] as HTMLElement).click())
+    await type('tour actif')
+    await click('.composer-send')
+    await type('message oublie')
+    await click('.composer-send')
+    expect(pilotChat).toHaveBeenCalledTimes(1)
+
+    // On part sur B, le tour de A finit pendant l'absence, puis on revient sur A.
+    await act(async () => (picks()[1] as HTMLElement).click())
+    await act(async () => {
+      turnA.resolve({ ok: true })
+      await flushAnimationFrames()
+    })
+    await act(async () => (picks()[0] as HTMLElement).click())
+    await flushAnimationFrames()
+
+    // Le message en file est PARTI de lui-meme, sans intervention.
+    expect(pilotChat).toHaveBeenCalledTimes(2)
+    expect(pilotChat.mock.calls[1][0]).toEqual(
+      expect.arrayContaining([expect.objectContaining({ role: 'user', content: 'message oublie' })])
+    )
+    expect(container!.querySelector('.directive-queue')).toBeNull()
+    await act(async () => drained.resolve({ ok: true }))
   })
 
   it('removes the steered message by stable identity after the queue changes', async () => {
