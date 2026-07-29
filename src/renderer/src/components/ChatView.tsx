@@ -37,6 +37,7 @@ import {
 } from './chat-view-model'
 import { searchConversations } from './conversation-search'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
+import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
 import { StepThread, AssistantActivityGroup } from './ChatView.parts'
 import { RunInspector } from './RunInspector'
@@ -2311,6 +2312,10 @@ export function ChatView({
                   pending={modelChangePending}
                   error={modelChangeError}
                   onSelect={(option) => void changeOrchestratorModel(option)}
+                />
+                <ConversationCostIndicator
+                  conversationId={activeId ?? undefined}
+                  busy={busy}
                 />
                 <ModelQuotaIndicator />
               </div>

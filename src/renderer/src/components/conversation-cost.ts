@@ -1,0 +1,109 @@
+/**
+ * COMBIEN COÛTE CETTE CONVERSATION — la question la plus fréquente, et la seule à laquelle l'app ne
+ * répondait pas.
+ *
+ * Le canal `os:costBreakdown` existait déjà (main + preload + son test de contrat), il réconciliait
+ * les DEUX journaux, et AUCUN appelant côté renderer ne l'utilisait. Un module atteignable mais jamais
+ * appelé est du théâtre : la mesure du 2026-07-28 (114 fichiers .jsonl parsés à la main pour trouver
+ * 26,65 $/h) n'aurait jamais dû demander un script.
+ *
+ * Ce module ne fait que RÉSUMER les lignes déjà calculées par le main. Il ne recalcule aucun coût :
+ * un deuxième calcul de coût dans le renderer serait une deuxième vérité.
+ */
+
+export interface CostRow {
+  /** Acteur, modèle ou provider selon la dimension demandée. */
+  key: string
+  calls: number
+  costUsd: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  /** Part du contexte RELUE depuis le cache. Proche de 0 = contexte réécrit à chaque appel. */
+  cacheHitRatio: number
+}
+
+export interface CostSummary
+  extends Readonly<{
+    totalUsd: number
+    calls: number
+    /** Libellé compact pour l'indicateur (ex. « 1,23 $ »). */
+    label: string
+    /** Poste le plus cher, ou `undefined` si rien n'a été dépensé. */
+    topKey?: string
+    /** Ratio de cache global, pondéré par les tokens (pas une moyenne des ratios). */
+    cacheHitRatio: number
+    /**
+     * Le contexte est RÉÉCRIT au lieu d'être relu — c'est ce symptôme qui a mené à la cause racine du
+     * 2026-07-28. Jugé sur le VOLUME de contexte, pas sur le nombre d'appels : trois appels qui
+     * réécrivent 900 k tokens sont un problème, deux appels de 5 k tokens ne prouvent rien.
+     */
+    rewritingContext: boolean
+  }> {}
+
+/** Montant en euros-style français, arrondi au centime. Les micro-coûts restent visibles. */
+export function formatUsd(amount: number): string {
+  if (!Number.isFinite(amount)) return '—'
+  if (amount === 0) return '0 $'
+  // Sous le centime, arrondir à 0,00 $ effacerait une dépense réelle → 3 décimales.
+  const decimals = amount < 0.01 ? 3 : 2
+  return `${amount.toFixed(decimals).replace('.', ',')} $`
+}
+
+/**
+ * Le verdict de cache se juge au VOLUME de contexte, pas au nombre d'appels. Constate a l'ecran le
+ * 2026-07-29 : 3 appels, 900 000 tokens reecrits, cache a 5 % — et aucune alerte, parce que le garde
+ * exigeait 5 appels. Trois appels qui reecrivent 900 k tokens ne sont PAS un petit echantillon ; deux
+ * appels de 5 k tokens, si.
+ */
+const MIN_CONTEXT_TOKENS_FOR_CACHE_VERDICT = 20_000
+const POOR_CACHE_RATIO = 0.3
+
+/**
+ * Résumé affichable des lignes de coût. Les lignes non numériques ou négatives sont IGNORÉES plutôt
+ * que sommées : un journal corrompu ne doit pas produire un total faux qui a l'air crédible.
+ */
+export function summarizeConversationCost(rows: readonly CostRow[]): CostSummary {
+  let totalUsd = 0
+  let calls = 0
+  let cacheRead = 0
+  let input = 0
+  let topKey: string | undefined
+  let topCost = 0
+  for (const row of rows) {
+    const cost = typeof row?.costUsd === 'number' && Number.isFinite(row.costUsd) ? row.costUsd : 0
+    if (cost < 0) continue
+    totalUsd += cost
+    calls += typeof row?.calls === 'number' && row.calls > 0 ? row.calls : 0
+    cacheRead += typeof row?.cacheReadTokens === 'number' ? Math.max(0, row.cacheReadTokens) : 0
+    input += typeof row?.inputTokens === 'number' ? Math.max(0, row.inputTokens) : 0
+    if (cost > topCost) {
+      topCost = cost
+      topKey = row.key
+    }
+  }
+  const contextTotal = cacheRead + input
+  const cacheHitRatio = contextTotal > 0 ? cacheRead / contextTotal : 0
+  return {
+    totalUsd,
+    calls,
+    label: formatUsd(totalUsd),
+    ...(topKey !== undefined ? { topKey } : {}),
+    cacheHitRatio,
+    rewritingContext:
+      contextTotal >= MIN_CONTEXT_TOKENS_FOR_CACHE_VERDICT && cacheHitRatio < POOR_CACHE_RATIO
+  }
+}
+
+/** Lignes triées par coût décroissant, sans les lignes à 0 $ (elles n'expliquent aucune dépense). */
+export function spendingRows(rows: readonly CostRow[]): CostRow[] {
+  return rows
+    .filter((row) => typeof row?.costUsd === 'number' && row.costUsd > 0)
+    .sort((a, b) => b.costUsd - a.costUsd)
+}
+
+/** Part d'une ligne dans le total, en pourcentage entier (pour une barre de proportion). */
+export function sharePercent(row: CostRow, totalUsd: number): number {
+  if (!(totalUsd > 0)) return 0
+  return Math.round((row.costUsd / totalUsd) * 100)
+}
