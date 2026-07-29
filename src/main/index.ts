@@ -184,7 +184,18 @@ const pilot = new AgentPilot(
   bus,
   createAmitelContextProvider({
     graphEvidence: (raw, query, limit) =>
-      brainWorker.request<string>('graphifyEvidence', raw, query, limit)
+      brainWorker.request<string>('graphifyEvidence', raw, query, limit),
+    // PORTEE PAR WORKSPACE (O3) : le Brain est a 99 % de la doc RIG, donc une question Autowin ramenait
+    // majoritairement des sources d'un AUTRE projet. Le corpus autorise se DERIVE du workspace, il n'est
+    // pas ecrit en dur : dans un workspace RIG, la doc RIG est exactement ce qu'il faut.
+    workspace: () => os.executionWorkspace,
+    onScope: ({ kept, dropped, corpus }) => {
+      if (dropped > 0) {
+        console.info(
+          `[brain-scope] corpus ${corpus.join('|')} : ${kept} source(s) gardee(s), ${dropped} hors corpus ecartee(s)`
+        )
+      }
+    }
   }),
   // MÊME source de contexte projet que les phases orchestrées (fold du CLAUDE.md/AGENTS.md du workspace).
   () => projectContextBlock(os.executionWorkspace)

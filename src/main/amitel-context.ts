@@ -1,3 +1,4 @@
+import { brainCorpusForWorkspace, scopeBrainBlock } from './brain-corpus-scope'
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 import { open, readFile, realpath } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
@@ -52,6 +53,13 @@ type AmitelContextOptions = {
   graphCacheTtlMs?: number
   maxGraphBytes?: number
   maxBrainContextChars?: number
+  /**
+   * Workspace courant : sert a DERIVER le corpus Brain autorise (option O3 du cadrage
+   * `rag-brain-pertinence`). Absent, ou workspace sans corpus declare -> aucun filtrage.
+   */
+  workspace?: () => string | undefined
+  /** Journalise le filtrage : couper des sources en silence est indefendable. */
+  onScope?: (info: { kept: number; dropped: number; corpus: readonly string[] }) => void
   now?: () => number
 }
 
@@ -275,7 +283,17 @@ export function createAmitelContextProvider(
       retrieveBrain(boundedQuery),
       retrieveGraph(boundedQuery)
     ])
-    return [brain.status === 'fulfilled' ? brain.value : '', graph.status === 'fulfilled' ? graph.value : '']
+    // PORTÉE PAR WORKSPACE : le Brain est à 99 % de la doc RIG (mesure 2026-07-29), donc une question
+    // Autowin ramène majoritairement des sources d'un AUTRE projet. On restreint au corpus du
+    // workspace ; un workspace sans corpus déclaré n'est PAS filtré (on ne coupe que là où on sait quoi
+    // garder). Le graphe de code, lui, est déjà scopé : il n'est jamais filtré ici.
+    const rawBrain = brain.status === 'fulfilled' ? brain.value : ''
+    const corpus = brainCorpusForWorkspace(options.workspace?.())
+    const scoped = scopeBrainBlock(rawBrain, corpus)
+    if (corpus && (scoped.dropped > 0 || scoped.kept > 0)) {
+      options.onScope?.({ kept: scoped.kept, dropped: scoped.dropped, corpus })
+    }
+    return [scoped.block, graph.status === 'fulfilled' ? graph.value : '']
       .filter(Boolean)
       .join('\n\n')
   }
