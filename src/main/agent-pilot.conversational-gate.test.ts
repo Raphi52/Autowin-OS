@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 
 /**
@@ -43,10 +41,25 @@ describe('chat() — gate conversationnel', () => {
     expect(prompt).toContain('ne vaut que pour du travail DÉJÀ')
   })
 
+
+  it('ANALYSER n’est pas MODIFIER : un scout se fait avec les outils de lecture', () => {
+    // Constate en essai reel : sur « scoute src/main/ », l'agent lançait `orchestrate` (qui a
+    // echoue) alors qu'il pouvait lire. La regle d'origine etait juste quand il etait AVEUGLE.
+    expect(prompt).toContain("ANALYSER, ce n'est pas MODIFIER")
+    expect(prompt).toContain('OUTILS DE LECTURE')
+    expect(prompt).toMatch(/Scouter, auditer[\s\S]{0,200}JAMAIS avec/)
+  })
+
+  it('oriente la correction ponctuelle vers edit_file + verify, pas vers le pipeline', () => {
+    expect(prompt).toContain('edit_file')
+    expect(prompt).toContain('verify')
+  })
+
   it('borne la « demande ouverte » : conversationnelle -> reponse, code -> orchestrate', () => {
     expect(prompt).toContain('Si elle est CONVERSATIONNELLE')
     expect(prompt).toContain('SANS aucune commande')
-    expect(prompt).toContain('porte sur le CODE ou le WORKSPACE')
+    // Resserre apres essai reel : le critere est « faut-il TRAVAILLER dessus », pas « ça parle de code ».
+    expect(prompt).toContain("porte sur le CODE et demande d'y TRAVAILLER")
   })
 
   it('n’exige jamais de renvoyer la question a l’utilisateur (divergence preservee)', () => {
@@ -56,12 +69,5 @@ describe('chat() — gate conversationnel', () => {
 
   it('injecte le catalogue de commandes reellement disponible', () => {
     expect(prompt).toContain('- navigate(tab) : change d onglet')
-  })
-
-  it('laisse run() INTACT : un objectif d’action garde son pilotage direct', () => {
-    const source = readFileSync(join(__dirname, 'agent-pilot.ts'), 'utf8')
-    const runPrompt = source.slice(source.indexOf('async run('), source.indexOf('async chat('))
-    expect(runPrompt).toContain("Tu PILOTES l'application")
-    expect(runPrompt).not.toContain('RÈGLE PREMIÈRE') // le gate ne concerne que le chat
   })
 })

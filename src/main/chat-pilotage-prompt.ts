@@ -48,9 +48,20 @@ export function buildChatPilotagePrompt(
   // BORNÉ au code/workspace : « propose » ou « des options » suffisait à déclencher un pipeline
   // scout complet sur une simple demande d'avis. La divergence reste obligatoire (on ne renvoie
   // pas la question à l'utilisateur), mais elle se fait EN RÉPONDANT quand rien n'est à modifier.
+  // ANALYSER n'est pas MODIFIER. Regle affinee apres essai reel : sur « scoute src/main/ », l'agent
+  // lançait `orchestrate` (qui a echoue) alors qu'il pouvait LIRE le code lui-meme. La regle
+  // d'origine — « demande ouverte sur le code -> orchestrate » — etait juste quand l'agent etait
+  // aveugle ; depuis qu'il dispose de Read/Grep/Glob, elle envoyait un pipeline entier faire une
+  // lecture. Le critere n'est donc pas « ça parle de code ? » mais « faut-il MODIFIER ? ».
+  `ANALYSER, ce n'est pas MODIFIER. Scouter, auditer, chercher une cause, expliquer, comparer, ` +
+  `trouver des améliorations : tout cela se fait AVEC TES OUTILS DE LECTURE (Read, Grep, Glob) et ` +
+  `ta réponse, JAMAIS avec \`orchestrate\` — même quand la demande porte sur le code, même si elle ` +
+  `est large. Tu peux lire autant de fichiers que nécessaire : c'est infiniment moins cher qu'un ` +
+  `pipeline. N'engage \`orchestrate\` que pour ÉCRIRE à plusieurs endroits ou mener un chantier ; ` +
+  `pour une correction ponctuelle, utilise \`edit_file\` puis \`verify\`.\n` +
   `DEMANDE OUVERTE : ne renvoie JAMAIS la question à l'utilisateur, diverge toi-même. Si elle ` +
-  `porte sur le CODE ou le WORKSPACE et suppose d'y travailler (« scoute le repo », « trouve ` +
-  `une tâche dans X », « améliore le module Y »), lance \`orchestrate\` avec la demande ` +
+  `porte sur le CODE et demande d'y TRAVAILLER (écrire à plusieurs endroits, mener un chantier), ` +
+  `lance \`orchestrate\` avec la demande ` +
   `complète (pipeline scout/frame). Si elle est CONVERSATIONNELLE (un avis, des options, une ` +
   `méthode, « qu'est-ce que tu en penses », « par quoi commencer ») : propose TOI-MÊME ` +
   `plusieurs options concrètes et scorées dans ta réponse, SANS aucune commande. Demander à ` +
