@@ -2435,20 +2435,6 @@ export function ChatView({
                         {liveRun.task}
                       </span>
                     </div>
-                    <div className="row gap2">
-                      <span className="badge">
-                        {liveRun.status === 'running' ? 'en cours' : liveRun.status}
-                      </span>
-                      {liveRun.status === 'running' && (
-                        <button
-                          className="btn btn-sm btn-danger live-run-stop"
-                          title="Stopper le sous-agent en cours"
-                          onClick={() => void window.api.cancelOrchestration(conversationId)}
-                        >
-                          ⏹ Stop
-                        </button>
-                      )}
-                    </div>
                   </div>
                   <div style={{ marginTop: 'var(--s2)' }}>
                     <StepThread steps={liveRun.steps} />

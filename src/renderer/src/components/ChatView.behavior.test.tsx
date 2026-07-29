@@ -845,6 +845,17 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(cancelOrchestration).toHaveBeenCalledOnce()
     expect(cancelOrchestration).toHaveBeenCalledWith('A')
     expect(cancelPilotChat).not.toHaveBeenCalled()
+
+    // Anti-doublon : les contrôles d'état (badge « en cours » + Stop) n'existent QU'UNE fois
+    // dans la carte live — la paire flottante à droite du texte de tâche a été supprimée.
+    const liveCard = container!.querySelector('.live-run')!
+    expect(liveCard.querySelectorAll('button[title="Stopper le sous-agent en cours"]').length).toBe(
+      1
+    )
+    expect(
+      [...liveCard.querySelectorAll('.badge')].filter((b) => b.textContent?.trim() === 'en cours')
+        .length
+    ).toBe(1)
   })
 
   it('expose Workflows sans onglet Activité', async () => {
