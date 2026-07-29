@@ -78,6 +78,28 @@ describe('fenetre resumee par la wheel', () => {
     expect(summaryForProvider(snap, 'codex')?.status).toBe('critical')
   })
 
+  it('ChatGPT avec mesure ANCIENNE (stale) → wheel chiffree, pas grise', () => {
+    // Discriminant du bug : le quota codex vient d'un fichier local, donc `stale` des qu'on
+    // n'utilise pas la CLI. Avant le fix, `status === 'available'` seul → summary `unknown` (grise).
+    const snap = snapshot(
+      [
+        { id: 'five-hour', remainingPercent: 12 },
+        { id: 'seven-day', remainingPercent: 41 }
+      ],
+      'codex'
+    )
+    snap.models[0].status = 'stale'
+    const summary = summaryForProvider(snap, 'codex')
+    expect(summary?.remainingPercent).toBe(41)
+    expect(summary?.status).not.toBe('unknown')
+  })
+
+  it('ChatGPT sans mesure du tout (unavailable) → reste inconnu', () => {
+    const snap = snapshot([{ id: 'seven-day', remainingPercent: 41 }], 'codex')
+    snap.models[0].status = 'unavailable'
+    expect(summaryForProvider(snap, 'codex')?.status).toBe('unknown')
+  })
+
   it('ChatGPT sans fenetre 7 j exposee → repli sur ce qui est connu, pas de wheel vide', () => {
     const snap = snapshot([{ id: 'five-hour', remainingPercent: 37 }], 'codex')
     expect(summaryForProvider(snap, 'codex')?.remainingPercent).toBe(37)

@@ -63,8 +63,12 @@ export function summaryForProvider(
   provider: string | undefined
 ): ModelQuotaSnapshot['summary'] | undefined {
   if (!snapshot || !provider) return snapshot?.summary
+  // `stale` compte AUSSI : chez ChatGPT (codex) le quota vient d'un fichier local ecrit par la CLI,
+  // donc il depasse les 15 min de fraicheur des qu'on n'utilise pas Codex — l'exclure laissait la
+  // wheel GRISE (`unknown`) alors que le popover affichait bien le 7 j. Seul `unavailable` (aucune
+  // mesure) reste hors du resume.
   const summarizable = snapshot.models
-    .filter((model) => model.provider === provider && model.status === 'available')
+    .filter((model) => model.provider === provider && model.status !== 'unavailable')
     .flatMap((model) => model.windows.filter((window) => window.limitKnown !== false))
   // Repli assume : la fenetre voulue absente (provider qui ne l'expose pas encore) -> minimum de ce
   // qui est connu, comportement historique prudent plutot qu'une wheel vide.
