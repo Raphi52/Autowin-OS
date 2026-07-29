@@ -257,6 +257,39 @@ describe('travail DÉJÀ COMMITÉ par la fusion du worktree (arbre propre)', () 
   })
 })
 
+describe('dossier NON SUIVI (le cas Brain : notes déposées dans inbox/)', () => {
+  it('publie la note du run sans emporter le brouillon d’une autre session', async () => {
+    const { repo } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    // `inbox/` n'est pas suivi : git le replie en `?? inbox/` sans -uall, ce qui rendait le delta
+    // vide (rien publié) — et un add du dossier aurait emporté le brouillon voisin.
+    mkdirSync(join(brain, 'inbox'))
+    writeFileSync(join(brain, 'inbox', 'autrui-en-cours.md'), '# brouillon d_une autre session\n')
+
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+    writeFileSync(join(brain, 'inbox', 'note-du-run.md'), '# produit par le run\n')
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-brain-1',
+      task: 'dépose une note',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      runGit: realGit
+    })
+
+    expect(report.brain).toMatchObject({ status: 'pushed', files: 1 })
+    const committed = (await run('git', ['show', '--name-only', '--format=', 'HEAD'], { cwd: brain }))
+      .stdout
+    expect(committed).toContain('note-du-run.md')
+    expect(committed).not.toContain('autrui-en-cours.md')
+    // Le brouillon d'autrui reste non suivi, intact.
+    expect((await run('git', ['status', '--porcelain', '-uall'], { cwd: brain })).stdout).toContain(
+      'autrui-en-cours.md'
+    )
+  })
+})
+
 describe('helpers', () => {
   it('detectSecret repère les motifs sensibles usuels', () => {
     expect(detectSecret('rien de spécial')).toBeUndefined()

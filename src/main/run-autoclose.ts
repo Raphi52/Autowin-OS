@@ -65,7 +65,14 @@ export function detectSecret(text: string): string | undefined {
   return SECRET_PATTERNS.find(({ re }) => re.test(text))?.name
 }
 
-/** Lignes de `git status --porcelain` → chemins (gère le renommage `a -> b`). */
+/**
+ * Lignes de `git status --porcelain` → chemins (gère le renommage `a -> b`).
+ *
+ * NB : tous les appels passent `-uall`. Sans lui, git REPLIE un dossier non suivi en une seule
+ * entrée (`?? inbox/`) : un fichier ajouté dans un dossier déjà non suivi devient alors invisible
+ * au delta (rien n'est publié), et à l'inverse un `add -- inbox/` emporterait TOUT le dossier, y
+ * compris le travail d'autrui. Constaté en vrai sur le Brain.
+ */
 export function parsePorcelainPaths(stdout: string): string[] {
   return stdout
     .split('\n')
@@ -89,7 +96,7 @@ export async function autoCloseRun(input: AutoCloseInput): Promise<AutoCloseResu
   }
   try {
     const scope = paths?.length ? ['--', ...paths] : []
-    const changed = parsePorcelainPaths(await runGit(['status', '--porcelain', ...scope], repo))
+    const changed = parsePorcelainPaths(await runGit(['status', '--porcelain', '-uall', ...scope], repo))
     if (changed.length === 0) return { status: 'skipped', reason: 'no-changes' }
 
     // Dernier filet anti-secret : on inspecte ce qu'on s'apprête à publier, pas l'arbre entier.
@@ -173,7 +180,7 @@ export function autoCloseBranch(runId: string): string {
  */
 export async function snapshotChangedPaths(repo: string, runGit: GitRunner): Promise<string[]> {
   try {
-    return parsePorcelainPaths(await runGit(['status', '--porcelain'], repo))
+    return parsePorcelainPaths(await runGit(['status', '--porcelain', '-uall'], repo))
   } catch {
     return [] // dépôt illisible → aucune baseline ; le filtrage se comporte comme avant
   }
@@ -266,7 +273,7 @@ export async function closeGreenRunOnDisk(input: {
     baseHead: string | undefined
   ): Promise<AutoCloseResult> => {
     try {
-      const after = parsePorcelainPaths(await runGit(['status', '--porcelain'], repo))
+      const after = parsePorcelainPaths(await runGit(['status', '--porcelain', '-uall'], repo))
       const mine = pathsFromRun(before, after)
       // Arbre propre : le travail du run a pu être DÉJÀ commité par la fusion du worktree.
       if (mine.length === 0) {
