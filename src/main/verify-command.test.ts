@@ -41,8 +41,20 @@ describe('decideVerifyCommand — REFUS (le modele ne choisit jamais la commande
     expect(decideVerifyCommand('   ').allowed).toBe(false)
   })
 
-  it('la liste blanche reste MINUSCULE (ce n’est pas un shell)', () => {
-    expect([...ALLOWED_COMMANDS]).toEqual(['npm test'])
+  it('la liste blanche reste MINUSCULE et ne contient QUE des lanceurs de tests', () => {
+    const allowed = [...ALLOWED_COMMANDS]
+    expect(allowed.length).toBeLessThanOrEqual(5) // ce n'est pas un shell
+    // Chaque entree est un script npm de TESTS : aucun verbe libre, aucun enchainement.
+    for (const command of allowed) {
+      expect(command).toMatch(/^npm (test|run (test|tests)[\w:-]*)$/)
+      expect(command).not.toMatch(/[&|;><]/)
+    }
+  })
+
+  it('accepte les scripts de tests PURS (verify doit pouvoir conclure)', () => {
+    // `npm test` peut inclure typecheck+lint : un lint rouge sur des warnings preexistants rendait
+    // `verify` structurellement incapable d'etre vert.
+    expect(decideVerifyCommand('C:/projet', () => 'npm run test:unit').allowed).toBe(true)
   })
 })
 

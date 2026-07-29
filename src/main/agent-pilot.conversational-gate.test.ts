@@ -55,6 +55,25 @@ describe('chat() — gate conversationnel', () => {
     expect(prompt).toContain('verify')
   })
 
+
+  it('NE REVIENT PAS BREDOUILLE : cherche, essaie, nettoie, puis parle', () => {
+    // Constate en usage reel (2026-07-29) : 4 `edit_file` rates, verify impossible a mettre au vert,
+    // cap atteint -> « je n'y arrive pas » ET un workspace a moitie modifie.
+    expect(prompt).toContain('FACE A UN BLOCAGE')
+    expect(prompt).toContain('NETTOIE AVANT DE PARLER')
+    expect(prompt).toMatch(/echoue deux fois[\s\S]{0,80}Arrete-la/)
+    // Un echec doit NOMMER ce qui a ete essaye et ce qui manque.
+    expect(prompt).toContain('NOMMANT ce que tu as essaye')
+  })
+
+  it('distingue son propre echec du BRUIT ambiant (lint preexistant, etc.)', () => {
+    expect(prompt).toContain('SANS RAPPORT avec ton changement')
+  })
+
+  it('oriente vers la LECTURE avant l’ecriture (cause n°1 des edit_file rates)', () => {
+    expect(prompt).toContain("LIS avant d'ecrire")
+  })
+
   it('borne la « demande ouverte » : conversationnelle -> reponse, code -> orchestrate', () => {
     expect(prompt).toContain('Si elle est CONVERSATIONNELLE')
     expect(prompt).toContain('SANS aucune commande')

@@ -97,12 +97,24 @@ export function decideEdit(
   }
   const occurrences = content.split(input.oldText).length - 1
   if (occurrences === 0) {
-    return { allowed: false, reason: 'texte à remplacer introuvable dans le fichier' }
+    // Un refus doit ENSEIGNER, pas seulement interdire. Constate en usage reel (2026-07-29) :
+    // « introuvable » a fait enchainer QUATRE tentatives a l'aveugle, l'agent devinant l'extrait de
+    // memoire sans jamais apprendre ce que le fichier contient vraiment. On lui rend donc les lignes
+    // REELLES les plus proches : il corrige au coup suivant au lieu de tatonner.
+    const hints = nearestLines(content, input.oldText)
+    return {
+      allowed: false,
+      reason: hints
+        ? `texte à remplacer introuvable. Lignes réelles les plus proches :\n${hints}`
+        : 'texte à remplacer introuvable dans le fichier (relis-le avant de réessayer)'
+    }
   }
   if (occurrences > 1) {
     return {
       allowed: false,
-      reason: `texte présent ${occurrences} fois — ambigu, précise un extrait unique`
+      reason:
+        `texte présent ${occurrences} fois — ambigu, précise un extrait unique. Occurrences :\n` +
+        occurrenceLines(content, input.oldText)
     }
   }
 
@@ -113,6 +125,53 @@ export function decideEdit(
     oldText: input.oldText,
     newText: input.newText
   }
+}
+
+
+/** Premiere ligne non vide d'un extrait — la plus discriminante pour retrouver la zone visee. */
+function anchorLine(text: string): string {
+  return text.split(/\r?\n/).find((line) => line.trim().length > 0)?.trim() ?? ''
+}
+
+/** Longueur du plus long prefixe commun : mesure de proximite suffisante, sans dependance. */
+function commonPrefix(a: string, b: string): number {
+  let i = 0
+  while (i < a.length && i < b.length && a[i] === b[i]) i += 1
+  return i
+}
+
+/**
+ * Rend les lignes du fichier les plus PROCHES de l'extrait demande, avec leur numero. C'est ce qui
+ * transforme un refus en information exploitable : l'agent voit l'ecart exact (un espace, une
+ * apostrophe, un renommage) au lieu de re-deviner.
+ */
+export function nearestLines(content: string, wanted: string, limit = 3): string {
+  const anchor = anchorLine(wanted)
+  if (!anchor) return ''
+  const needle = anchor.replace(/\s+/g, ' ').toLowerCase()
+  const scored = content.split(/\r?\n/).map((line, index) => {
+    const normalized = line.replace(/\s+/g, ' ').trim().toLowerCase()
+    // Une ligne qui CONTIENT l'ancre est le meilleur indice ; sinon on classe par prefixe commun.
+    const score = normalized.includes(needle) ? 10_000 : commonPrefix(normalized, needle)
+    return { line, index, score }
+  })
+  const best = scored.filter((entry) => entry.score >= 8).sort((a, b) => b.score - a.score).slice(0, limit)
+  if (best.length === 0) return ''
+  return best
+    .sort((a, b) => a.index - b.index)
+    .map((entry) => `  ${entry.index + 1}: ${entry.line.trim().slice(0, 160)}`)
+    .join('\n')
+}
+
+/** Numeros de ligne des occurrences d'un extrait ambigu — pour choisir laquelle viser. */
+export function occurrenceLines(content: string, wanted: string, limit = 5): string {
+  const anchor = anchorLine(wanted)
+  const lines = content.split(/\r?\n/)
+  const found: string[] = []
+  for (let i = 0; i < lines.length && found.length < limit; i += 1) {
+    if (anchor && lines[i].includes(anchor)) found.push(`  ${i + 1}: ${lines[i].trim().slice(0, 160)}`)
+  }
+  return found.join('\n')
 }
 
 /** Diff minimal, lisible dans le fil : ce qui part, ce qui arrive. */

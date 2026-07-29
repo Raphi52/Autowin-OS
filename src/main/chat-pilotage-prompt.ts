@@ -53,6 +53,35 @@ export function buildChatPilotagePrompt(
   // d'origine — « demande ouverte sur le code -> orchestrate » — etait juste quand l'agent etait
   // aveugle ; depuis qu'il dispose de Read/Grep/Glob, elle envoyait un pipeline entier faire une
   // lecture. Le critere n'est donc pas « ça parle de code ? » mais « faut-il MODIFIER ? ».
+  // NE PAS REVENIR BREDOUILLE. Constate en usage reel (2026-07-29) : sur un blocage, l'agent
+  // enchainait 4 `edit_file` rates, ne pouvait pas prouver (verify rouge sur du lint preexistant),
+  // atteignait le cap d'iterations et rendait « je n'y arrive pas » — en laissant des mutations
+  // partielles derriere lui. Un echec annonce sans avoir cherche d'autre voie, et sans avoir nettoye,
+  // est le pire livrable possible : l'utilisateur recupere un workspace sale ET aucune reponse.
+  `FACE A UN BLOCAGE — CHERCHE, ESSAIE, NETTOIE, PUIS SEULEMENT PARLE.
+` +
+  `1. La MEME approche qui echoue deux fois ne marchera pas la troisieme. Arrete-la.
+` +
+  `2. CHERCHE d'autres voies avant de conclure : relis le fichier concerne (l'extrait exact que tu ` +
+  `crois connaitre a peut-etre change), interroge le savoir deja acquis avec \`brain_query\`, ` +
+  `cherche un appelant ou un test qui documente le comportement reel. Une hypothese non verifiee ` +
+  `sur le contenu d'un fichier est la premiere cause de tes echecs : LIS avant d'ecrire.
+` +
+  `3. ESSAIE la meilleure voie trouvee. Deux tentatives DIFFERENTES valent mieux que quatre fois ` +
+  `la meme.
+` +
+  `4. NETTOIE AVANT DE PARLER : toute modification que tu as faite et qui ne sert plus doit etre ` +
+  `annulee AVANT ton message final. Ne laisse jamais un workspace a moitie modifie ; ne demande pas ` +
+  `a l'utilisateur de reverter a ta place.
+` +
+  `5. Si tu ne peux vraiment pas conclure, dis-le en NOMMANT ce que tu as essaye, ce que chaque ` +
+  `tentative a produit, et ce qui te manque precisement pour avancer (un acces, une decision, une ` +
+  `information). « Je n'y arrive pas » sans cela n'est pas une reponse.
+` +
+  `Distingue toujours TON echec du bruit ambiant : si une verification echoue sur des problemes ` +
+  `SANS RAPPORT avec ton changement, dis-le et cible ta preuve, au lieu d'en conclure que ton ` +
+  `travail est casse.
+` +
   `ANALYSER, ce n'est pas MODIFIER. Scouter, auditer, chercher une cause, expliquer, comparer, ` +
   `trouver des améliorations : tout cela se fait AVEC TES OUTILS DE LECTURE (Read, Grep, Glob) et ` +
   `ta réponse, JAMAIS avec \`orchestrate\` — même quand la demande porte sur le code, même si elle ` +

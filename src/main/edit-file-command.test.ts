@@ -187,3 +187,53 @@ describe('cablage de edit_file', () => {
     expect(impl).toContain('diff:')
   })
 })
+
+/**
+ * UN REFUS DOIT ENSEIGNER. Constate en usage reel (2026-07-29) : « texte introuvable » a fait
+ * enchainer QUATRE tentatives a l'aveugle — l'agent devinait l'extrait de memoire et n'apprenait rien
+ * de son echec. Ici, l'echec doit rendre les lignes REELLES pour qu'il corrige au coup suivant.
+ */
+describe('refus INSTRUCTIF (ce qui evite les 4 tentatives a l’aveugle)', () => {
+  const CONTENT = [
+    'export interface ScoutRow {',
+    "  impact: string",
+    "  effort: string",
+    '}'
+  ].join('\n')
+
+  it('un extrait presque juste rend la LIGNE REELLE avec son numero', () => {
+    // L'agent croit se souvenir de « impact: number » alors que le fichier dit « string ».
+    const decision = decideEdit(
+      { path: 'a.ts', oldText: '  impact: number', newText: '  impact: string' },
+      WORKSPACE,
+      () => CONTENT
+    )
+    expect(decision.allowed).toBe(false)
+    if (!decision.allowed) {
+      expect(decision.reason).toContain('plus proches')
+      expect(decision.reason).toContain('impact: string')
+      expect(decision.reason).toMatch(/\d+:/) // un numero de ligne exploitable
+    }
+  })
+
+  it('un extrait totalement etranger reste un refus SIMPLE (pas de bruit inutile)', () => {
+    const decision = decideEdit(
+      { path: 'a.ts', oldText: 'ZZZZ_totalement_absent', newText: 'x' },
+      WORKSPACE,
+      () => CONTENT
+    )
+    expect(decision.allowed).toBe(false)
+    if (!decision.allowed) expect(decision.reason).toContain('relis-le')
+  })
+
+  it('un extrait AMBIGU liste les occurrences avec leurs numeros', () => {
+    const twice = 'let x = 1\nautre\nlet x = 1\n'
+    const decision = decideEdit({ path: 'a.ts', oldText: 'let x = 1', newText: 'let y = 1' }, WORKSPACE, () => twice)
+    expect(decision.allowed).toBe(false)
+    if (!decision.allowed) {
+      expect(decision.reason).toContain('2 fois')
+      expect(decision.reason).toContain('1: let x = 1')
+      expect(decision.reason).toContain('3: let x = 1')
+    }
+  })
+})

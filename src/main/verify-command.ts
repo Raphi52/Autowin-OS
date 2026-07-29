@@ -49,7 +49,14 @@ export function decideVerifyCommand(
  * Liste blanche EXHAUSTIVE des commandes que ce point d'entree peut lancer. Toute autre valeur est
  * refusee, quelle qu'en soit la provenance. Volontairement minuscule : ce n'est pas un shell.
  */
-export const ALLOWED_COMMANDS: ReadonlySet<string> = new Set(['npm test'])
+export const ALLOWED_COMMANDS: ReadonlySet<string> = new Set([
+  'npm test',
+  // Scripts de tests PURS, preferes par resolveVerifyCmd : `npm test` peut inclure typecheck+lint,
+  // et un lint rouge sur des warnings preexistants rendait `verify` incapable de conclure.
+  'npm run test:unit',
+  'npm run test:run',
+  'npm run tests'
+])
 
 /** Sortie d'une verification, telle qu'elle est rendue a l'agent. */
 export interface VerifyOutcome {

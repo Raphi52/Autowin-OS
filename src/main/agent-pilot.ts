@@ -160,7 +160,15 @@ export class AgentPilot {
     history: Message[],
     onEvent: (e: PilotEvent) => void,
     ask?: (question: ModelQuestion) => Promise<string>,
-    maxIter = 6,
+    /**
+     * Cap d'iterations d'un tour. Releve de 6 a 12 le 2026-07-29 : sur un blocage reel, l'agent avait
+     * consomme 4 iterations en `edit_file` rates avant meme de pouvoir chercher une autre voie, puis
+     * s'est arrete sur « cap atteint sans reponse finale » — en laissant des mutations partielles.
+     * La regle anti-abandon lui demande desormais de CHERCHER, ESSAYER puis NETTOYER : il faut de quoi
+     * le faire. Le cout reste borne par le budget du tour (AUTOWIN_CHAT_USD_CAP), qui coupe sur la
+     * depense reelle plutot que sur un compteur aveugle.
+     */
+    maxIter = 12,
     conversationId?: string,
     signal?: AbortSignal,
     authorityMode: ConversationAuthorityMode = 'ask',
