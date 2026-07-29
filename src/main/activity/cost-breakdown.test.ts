@@ -173,3 +173,76 @@ describe('acteur d’une entree d’activite — le kind decide, jamais le label
     expect(rows[0].key).toBe('subagent')
   })
 })
+
+/**
+ * DOUBLE COMPTAGE — constate a l'ecran le 2026-07-29 sur un orchestrate reel : le journal portait
+ * 16 appels / 11,00 $ et l'indicateur affichait 32 appels / 21,99 $, soit tout compte DEUX FOIS.
+ *
+ * L'ancienne empreinte `modele|cout|tokensSortie` echouait sur deux de ses trois composants : les
+ * entrees d'activite n'ecrivent AUCUN modele, et les deux journaux ne comptent pas les tokens de
+ * sortie pareil (1444 contre 1436 sur le meme appel). Seul le cout concorde exactement.
+ */
+describe('reconciliation des deux journaux — ni double comptage, ni perte', () => {
+  // Valeurs EXACTES relevees dans les deux journaux de l'instance orch3 (meme appel).
+  const cout1 = 0.5715929999999999
+  const cout2 = 0.810577
+
+  it('LE CAS REEL : modele absent et tokens differents → l’appel est compte UNE fois', () => {
+    const calls = [callFixture('subagent', cout1, 1436), callFixture('subagent', cout2, 4454)]
+    const activity = [
+      { kind: 'exec', label: 'subagent', provider: 'claude', costUsd: cout1, outputTokens: 1444 },
+      { kind: 'exec', label: 'subagent', provider: 'claude', costUsd: cout2, outputTokens: 4464 }
+    ]
+    const samples = costSamplesFrom(calls, activity)
+    expect(samples).toHaveLength(2)
+    const rows = summarizeCostSamples(samples, 'actor')
+    expect(rows[0].calls).toBe(2)
+    expect(rows[0].costUsd).toBeCloseTo(cout1 + cout2, 6)
+  })
+
+  it('DEUX appels DISTINCTS au meme cout restent DEUX (l’appariement est un-pour-un)', () => {
+    // Un dedoublonnage par ensemble ecrasait ce cas et SOUS-comptait la facture.
+    const calls = [callFixture('subagent', 0.25, 100), callFixture('subagent', 0.25, 100)]
+    const samples = costSamplesFrom(calls, [])
+    expect(samples).toHaveLength(2)
+    expect(summarizeCostSamples(samples, 'actor')[0].costUsd).toBeCloseTo(0.5, 6)
+  })
+
+  it('une entree d’activite SANS equivalent est CONSERVEE (le sous-agent invisible)', () => {
+    // Mesure conv-75 : 2,83 $ vus cote prompt-calls contre ~20,70 $ reels — l'activite porte le reste.
+    const samples = costSamplesFrom(
+      [callFixture('orchestrator', 0.1, 50)],
+      [{ kind: 'exec', label: 'subagent', provider: 'claude', costUsd: 9.9, outputTokens: 3000 }]
+    )
+    expect(samples).toHaveLength(2)
+    const total = summarizeCostSamples(samples, 'actor').reduce((sum, r) => sum + r.costUsd, 0)
+    expect(total).toBeCloseTo(10, 6)
+  })
+
+  it('un appariement ne consomme qu’UNE fois : 1 prompt-call + 2 activites au meme cout → 2', () => {
+    const samples = costSamplesFrom(
+      [callFixture('subagent', 0.4, 200)],
+      [
+        { kind: 'exec', label: 'subagent', provider: 'claude', costUsd: 0.4, outputTokens: 210 },
+        { kind: 'exec', label: 'subagent', provider: 'claude', costUsd: 0.4, outputTokens: 210 }
+      ]
+    )
+    expect(samples).toHaveLength(2)
+  })
+
+  it('des providers DIFFERENTS au meme cout ne s’apparient pas', () => {
+    const samples = costSamplesFrom(
+      [callFixture('subagent', 0.3, 100)],
+      [{ kind: 'exec', label: 'subagent', provider: 'codex', costUsd: 0.3, outputTokens: 100 }]
+    )
+    expect(samples).toHaveLength(2)
+  })
+
+  it('une entree sans cout ni tokens de sortie est ecartee', () => {
+    const samples = costSamplesFrom(
+      [],
+      [{ kind: 'exec', label: 'subagent', provider: 'claude', costUsd: 0, outputTokens: 0 }]
+    )
+    expect(samples).toHaveLength(0)
+  })
+})

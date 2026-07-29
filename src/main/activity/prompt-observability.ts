@@ -254,35 +254,58 @@ function sampleFromActivity(entry: ActivityCostEntry): CostSample {
 }
 
 /**
- * Empreinte de DEDUPLICATION : un meme appel est souvent present dans les deux journaux. Deux
- * appels distincts partageant exactement le modele, le cout au dix-millieme ET le nombre de tokens
- * de sortie sont hautement improbables ; ce triplet suffit donc a les reconcilier, alors qu'un
- * rapprochement par horodatage echouerait (les deux journaux n'ecrivent pas au meme instant).
+ * Cle d'APPARIEMENT entre les deux journaux. Le cout est la SEULE grandeur sur laquelle ils
+ * s'accordent exactement.
+ *
+ * Constate a l'ecran le 2026-07-29 : le journal portait 16 appels / 11,00 $ et l'indicateur affichait
+ * 32 appels / 21,99 $ — le double, tout compte deux fois. L'ancienne empreinte
+ * `modele|cout|tokensSortie` echouait sur DEUX de ses trois composants : l'activite n'ecrit AUCUN
+ * modele (`undefined`), et les deux journaux ne comptent pas les tokens de sortie pareil (1444 contre
+ * 1436 sur le meme appel — l'activite inclut vraisemblablement le raisonnement). Le cout, lui, etait
+ * identique au dix-millionieme (0,571592999... des deux cotes).
  */
-function sampleFingerprint(sample: CostSample): string {
-  return `${sample.model ?? ''}|${sample.costUsd.toFixed(4)}|${sample.outputTokens}`
+function costMatchKey(sample: CostSample): string {
+  return `${sample.provider}|${sample.costUsd.toFixed(6)}`
+}
+
+/** Un echantillon sans cout NI tokens de sortie n'apporte rien a une repartition de cout. */
+function hasSpend(sample: CostSample): boolean {
+  return sample.costUsd !== 0 || sample.outputTokens !== 0
 }
 
 /**
- * Reconcilie les deux journaux en une seule liste d'echantillons, SANS double comptage. Les entrees
- * sans cout ni tokens sont ecartees : elles n'apportent rien a une repartition de cout.
+ * Reconcilie les deux journaux en une seule liste, SANS double comptage et SANS perte.
+ *
+ * APPARIEMENT UN-POUR-UN, pas un `Set` d'empreintes : chaque entree d'activite consomme AU PLUS un
+ * prompt-call de meme cout. C'est ce qui distingue « le meme appel vu deux fois » (a compter une
+ * fois) de « deux appels distincts au meme cout » (a compter deux fois) — un dedoublonnage par
+ * ensemble ecrasait le second cas et SOUS-comptait. Les prompt-calls sont la source preferee : eux
+ * seuls portent le `cacheReadTokens` et le modele. Une entree d'activite non appariee est CONSERVEE :
+ * les sous-agents les plus couteux n'existent que la (mesure conv-75 : 2,83 $ vus contre ~20,70 $ reels).
  */
 export function costSamplesFrom(
   calls: readonly PromptCallRecord[],
   activity: readonly ActivityCostEntry[] = []
 ): CostSample[] {
-  const samples: CostSample[] = []
-  const seen = new Set<string>()
-  const add = (sample: CostSample): void => {
-    if (sample.costUsd === 0 && sample.outputTokens === 0) return
-    const fingerprint = sampleFingerprint(sample)
-    if (seen.has(fingerprint)) return
-    seen.add(fingerprint)
+  const samples = calls.map(sampleFromCall).filter(hasSpend)
+  // Multiset des prompt-calls encore appariables, par cle de cout.
+  const unmatched = new Map<string, number>()
+  for (const sample of samples) {
+    const key = costMatchKey(sample)
+    unmatched.set(key, (unmatched.get(key) ?? 0) + 1)
+  }
+  for (const entry of activity) {
+    const sample = sampleFromActivity(entry)
+    if (!hasSpend(sample)) continue
+    const key = costMatchKey(sample)
+    const remaining = unmatched.get(key) ?? 0
+    if (remaining > 0) {
+      // Deja compte cote prompt-calls : on consomme l'appariement et on n'ajoute rien.
+      unmatched.set(key, remaining - 1)
+      continue
+    }
     samples.push(sample)
   }
-  // Les prompt-calls d'abord : ils portent le cacheReadTokens, absent de l'activite.
-  for (const call of calls) add(sampleFromCall(call))
-  for (const entry of activity) add(sampleFromActivity(entry))
   return samples
 }
 
