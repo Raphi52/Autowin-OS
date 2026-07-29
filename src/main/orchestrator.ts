@@ -18,6 +18,7 @@ import type { ExecutionEvidence, PromptEnvelope, SendOptions, Usage } from './pr
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
+import { describeFanoutFailure, explainRoleFailure } from './provider-failure-diagnosis'
 import { runGreedy, type GreedyNode } from './greedy-scheduler'
 
 /**
@@ -528,8 +529,12 @@ export class Orchestrator {
     envelope.systemBlocks = systemBlocks
     onPhase?.({ step: 'judge', provider: judgeProvider, role: 'judge', model: judgeBinding.model })
     const startedAt = performance.now()
-    const res = await registry.send(judgeProvider, messages, opts, (c) =>
-      onDelta?.('judge', c.delta)
+    const res = await this.sendWithRoleContext(
+      'jugement',
+      'judge',
+      judgeProvider,
+      opts.model,
+      () => registry.send(judgeProvider, messages, opts, (c) => onDelta?.('judge', c.delta))
     )
     if (res.usage) {
       cost.add({
@@ -667,9 +672,32 @@ export class Orchestrator {
             phase
           })
           const startedAt = performance.now()
-          const result = await registry.send(subProvider, messages, options, (chunk) =>
-            onDelta?.('exec', chunk.delta)
-          )
+          let result
+          try {
+            result = await registry.send(subProvider, messages, options, (chunk) =>
+              onDelta?.('exec', chunk.delta)
+            )
+          } catch (error) {
+            // Ce site n'avait AUCUN catch : l'erreur brute (`spawn … ENOENT`) remontait sans dire quel
+            // role l'avait subie. Constate a l'ecran le 2026-07-29 sur un run reel.
+            const explained = explainRoleFailure(`sous-tâche ${node.id}`, 'subagent', {
+              provider: subProvider,
+              ...(phaseBinding.model ? { model: phaseBinding.model } : {}),
+              message: error instanceof Error ? error.message : String(error)
+            })
+            push({
+              step: 'exec',
+              provider: subProvider,
+              role: 'subagent',
+              model: phaseBinding.model,
+              text: '',
+              status: 'failed',
+              error: explained,
+              durationMs: performance.now() - startedAt,
+              detail: `sous-tâche ${node.id}`
+            })
+            throw new Error(explained)
+          }
           if (result.usage) {
             cost.add({
               provider: result.provider ?? subProvider,
@@ -730,6 +758,33 @@ export class Orchestrator {
       evidence,
       failed: run.failed,
       skipped: run.skipped
+    }
+  }
+
+  /**
+   * Enrichit l'erreur d'un `registry.send` avec le ROLE et son binding. Les erreurs brutes des
+   * adaptateurs disent la cause (« codex non authentifié — … », « spawn … ENOENT ») mais jamais quel
+   * role l'a subie : constate a l'ecran le 2026-07-29, l'utilisateur voyait `spawn … ENOENT` sans
+   * savoir quel role pointait sur un provider indisponible. On enveloppe au plus pres de l'appel : les
+   * `catch` existants en amont recoivent alors le message enrichi et le journalisent tel quel.
+   */
+  private async sendWithRoleContext<T>(
+    label: string,
+    role: string,
+    provider: string,
+    model: string | undefined,
+    send: () => Promise<T>
+  ): Promise<T> {
+    try {
+      return await send()
+    } catch (error) {
+      throw new Error(
+        explainRoleFailure(label, role, {
+          provider,
+          ...(model ? { model } : {}),
+          message: error instanceof Error ? error.message : String(error)
+        })
+      )
     }
   }
 
@@ -929,7 +984,7 @@ export class Orchestrator {
                 detail: `phase ${phase} · modèle ${member.model ?? member.provider}`
               })
               aggregatedEvidence.push(...(res.executionEvidence ?? []))
-              return { member, text: res.text, ok: true as const }
+              return { member, text: res.text, ok: true as const, cause: undefined }
             } catch (error) {
               push({
                 step: 'exec',
@@ -942,7 +997,13 @@ export class Orchestrator {
                 durationMs: performance.now() - startedAt,
                 detail: `phase ${phase} · modèle ${member.model ?? member.provider}`
               })
-              return { member, text: '', ok: false as const }
+              return {
+                member,
+                text: '',
+                ok: false as const,
+                // La cause est CONSERVEE : c'est elle qui manquait a l'utilisateur (2026-07-29).
+                cause: error instanceof Error ? error.message : String(error)
+              }
             }
           })
         )
@@ -953,18 +1014,26 @@ export class Orchestrator {
           // Tous les modèles du fan-out ont échoué → échec de phase EXPLICITE (jamais une synthèse
           // fantôme sur du vide qui se propagerait comme un résultat valide). Aligne le comportement
           // sur le chemin mono-modèle (une exec en échec propage l'erreur).
+          // Les causes etaient DEJA connues ici et etaient jetees en remontant : « aucun modele n'a
+          // produit de sortie » ne disait pas que le role etait binde sur un provider non connecte.
+          const causes = memberOutputs
+            .filter((o) => !o.ok)
+            .map((o) => ({
+              provider: o.member.provider,
+              ...(o.member.model ? { model: o.member.model } : {}),
+              message: o.cause ?? 'échec sans message'
+            }))
+          const explained = describeFanoutFailure(phase, 'subagent', causes)
           push({
             step: 'exec',
             role: 'subagent',
             text: '',
             status: 'failed',
-            error: `Les ${fanMembers.length} modèles du fan-out ${phase} ont échoué`,
+            error: explained,
             detail: `phase ${phase} : les ${fanMembers.length} modèles du fan-out ont échoué`,
             durationMs: 0
           })
-          throw new Error(
-            `Fan-out ${phase} : aucun modèle n'a produit de sortie (${fanMembers.length} échec(s))`
-          )
+          throw new Error(explained)
         }
         if (good.length === 1) {
           // Un seul survivant → rien à agréger : on réutilise sa sortie directement, sans appel de
@@ -1020,8 +1089,15 @@ export class Orchestrator {
           reasoningEffort: orchBinding.reasoningEffort,
           phase
         })
-        const synth = await registry.send(orchBinding.provider, synthMessages, synthOptions, (c) =>
-          onDelta?.('exec', c.delta)
+        const synth = await this.sendWithRoleContext(
+          `synthèse ${phase}`,
+          'orchestrator',
+          orchBinding.provider,
+          orchBinding.model,
+          () =>
+            registry.send(orchBinding.provider, synthMessages, synthOptions, (c) =>
+              onDelta?.('exec', c.delta)
+            )
         )
         if (synth.usage) {
           cost.add({
@@ -1139,6 +1215,12 @@ export class Orchestrator {
           onDelta?.('exec', c.delta)
         )
       } catch (error) {
+        // L'erreur brute dit la cause mais pas QUEL role l'a subie ni son binding : on prefixe.
+        const explained = explainRoleFailure(`Phase ${phase}`, 'subagent', {
+          provider: subProvider,
+          ...(subOptions.model ? { model: subOptions.model } : {}),
+          message: error instanceof Error ? error.message : String(error)
+        })
         push({
           step: 'exec',
           provider: subProvider,
@@ -1146,10 +1228,10 @@ export class Orchestrator {
           text: '',
           prompt: execPrompt,
           status: 'failed',
-          error: error instanceof Error ? error.message : String(error),
+          error: explained,
           durationMs: performance.now() - phaseStartedAt
         })
-        throw error
+        throw new Error(explained)
       }
       // Chaîne la session pour la phase suivante (fallback : garde l'ancien id si le provider n'en
       // rend pas de nouveau — un resume claude conserve le même id et y APPEND les tours).
@@ -1306,8 +1388,15 @@ export class Orchestrator {
               reasoningEffort: member.reasoningEffort
             })
             try {
-              const r = await registry.send(member.provider, judgeMessages, opts, (c) =>
-                onDelta?.('judge', c.delta)
+              const r = await this.sendWithRoleContext(
+                'jugement (panel)',
+                'judge',
+                member.provider,
+                member.model,
+                () =>
+                  registry.send(member.provider, judgeMessages, opts, (c) =>
+                    onDelta?.('judge', c.delta)
+                  )
               )
               if (r.usage) {
                 cost.add({
@@ -1373,8 +1462,15 @@ export class Orchestrator {
         }
       } else {
         try {
-          verdict = await registry.send(judgeProvider, judgeMessages, judgeOptions, (c) =>
-            onDelta?.('judge', c.delta)
+          verdict = await this.sendWithRoleContext(
+            'verdict',
+            'judge',
+            judgeProvider,
+            judgeOptions.model,
+            () =>
+              registry.send(judgeProvider, judgeMessages, judgeOptions, (c) =>
+                onDelta?.('judge', c.delta)
+              )
           )
         } catch (error) {
           push({
@@ -1487,8 +1583,15 @@ export class Orchestrator {
           phase: 'build'
         })
         const repairStartedAt = performance.now()
-        const repairRes = await registry.send(subProvider, repairMessages, repairOptions, (c) =>
-          onDelta?.('exec', c.delta)
+        const repairRes = await this.sendWithRoleContext(
+          'réparation',
+          'subagent',
+          subProvider,
+          repairOptions.model,
+          () =>
+            registry.send(subProvider, repairMessages, repairOptions, (c) =>
+              onDelta?.('exec', c.delta)
+            )
         )
         if (repairRes.usage) {
           cost.add({
