@@ -1547,14 +1547,30 @@ function registerChatIpc(): void {
         broadcast({ type: 'refresh', scope: 'workflows' })
         return { ok: true, cancelled: false }
       } catch (e) {
+        /**
+         * ETAT TERMINAL, journal COMPRIS. Ce catch n'ecrivait que dans le store : le journal FICHIER
+         * du tour ne recevait ni `done` ni `failed`, donc le tour restait « inacheve » pour toujours
+         * et la reprise automatique le rejouait a chaque demarrage — un tour ZOMBIE.
+         *
+         * Constate en reel le 2026-07-29 : une erreur d'API repetee (filtre de contenu) fait jeter le
+         * pilote apres 2 tentatives ; le journal du tour s'arretait sur ['delta','stream-reset',
+         * 'delta'] sans aucun evenement terminal. Un tour qui echoue doit se CONCLURE, pas disparaitre.
+         */
+        const terminal = controller.signal.aborted
+          ? ({ kind: 'cancelled' } as const)
+          : ({ kind: 'failed', error: e instanceof Error ? e.message : String(e) } as const)
         if (conversationId && os.conversations.get(conversationId)) {
-          os.conversations.applyTurnEvent(
-            conversationId,
-            turnId,
-            controller.signal.aborted
-              ? { kind: 'cancelled' }
-              : { kind: 'failed', error: e instanceof Error ? e.message : String(e) }
-          )
+          os.conversations.applyTurnEvent(conversationId, turnId, terminal)
+        }
+        if (conversationId) {
+          try {
+            appendTurnEvent(turnJournalRoot, conversationId, turnId, {
+              ...terminal,
+              at: Date.now()
+            })
+          } catch {
+            /* journal best-effort : ne jamais masquer l'erreur d'origine pour une ecriture de trace */
+          }
         }
         broadcast({ type: 'refresh', scope: 'workflows' })
         if (controller.signal.aborted) return { ok: true, cancelled: true }

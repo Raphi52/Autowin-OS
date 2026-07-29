@@ -24,8 +24,15 @@ export interface UnfinishedTurn {
   updatedAt: number
 }
 
-/** Événements qui CLÔTURENT un tour : leur présence signifie « rien à reprendre ». */
-const TERMINAL_KINDS = new Set(['done', 'cancelled', 'error'])
+/**
+ * Événements qui CLÔTURENT un tour : leur présence signifie « rien à reprendre ».
+ *
+ * `failed` est le vocabulaire du STORE (`applyTurnEvent`), `error` celui du flux d'événements du
+ * pilote. Les deux doivent figurer ici : un tour échoué dont le journal porte `failed` restait sinon
+ * « inachevé » à jamais et la reprise automatique le rejouait à chaque démarrage — un tour ZOMBIE
+ * (constaté en réel le 2026-07-29 sur une erreur d'API répétée).
+ */
+const TERMINAL_KINDS = new Set(['done', 'cancelled', 'error', 'failed'])
 
 /** Nom de fichier sûr (un id de conversation/tour ne doit jamais s'échapper du dossier). */
 function safeSegment(value: string): string {
