@@ -89,3 +89,31 @@
   opacity: 0.5;
   cursor: default;
 }
+
+/* Bouton « réparer » d'un prérequis rouge : l'action est à portée de la ligne qui signale le manque,
+   plutôt qu'une commande à recopier ailleurs. Discret — le geste principal reste « Continuer ». */
+.frw-repair {
+  margin-left: auto;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text, #cfe3f4);
+  background: transparent;
+  border: 1px solid var(--warning, #f4cc68);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.frw-repair:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--warning, #f4cc68) 16%, transparent);
+}
+.frw-repair:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* Compte-rendu de la réparation LANCÉE (jamais « réparé » : le re-diagnostic tranche). */
+.frw-repair-note {
+  width: 100%;
+  padding-left: 24px;
+  font-size: 11px;
+  color: var(--text-faint, #7d97ad);
+}

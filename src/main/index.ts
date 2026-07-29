@@ -34,6 +34,7 @@ import {
   runAppPreflight,
   watchAppPreflight
 } from './preflight-probes'
+import { repairPreflightCheck } from './preflight-repair'
 import { RoleModelConfig, type ReasoningEffort, type Role } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
@@ -751,6 +752,15 @@ function registerChatIpc(): void {
     return readBrainTraces(
       typeof conversationId === 'string' ? guardString(conversationId, 'conversationId') : undefined
     )
+  })
+  // RÉPARER un prérequis rouge d'un clic (login OAuth, démarrage brain_server) au lieu de faire
+  // recopier une commande. Renvoie ce qui a été LANCÉ — le verdict reste au re-diagnostic.
+  ipcMain.handle('preflight:repair', (event, checkId?: unknown) => {
+    assertTrustedRendererSender(event, 'Preflight')
+    if (typeof checkId !== 'string') {
+      return { started: false, detail: 'Prérequis inconnu.' }
+    }
+    return repairPreflightCheck(checkId, { pingBrain: () => appPreflightProbes().pingBrain() })
   })
   ipcMain.handle('preflight:recheck', (event, force?: boolean) => {
     assertTrustedRendererSender(event, 'Preflight')

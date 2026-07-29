@@ -281,6 +281,7 @@ interface ChatApi {
   onOrchestrateStep: (cb: (step: OrchestrationStep) => void) => () => void
   onPreflight: (cb: (result: PreflightResult) => void) => () => void
   getPreflight: () => Promise<PreflightResult | null>
+  repairPreflight: (checkId: string) => Promise<{ started: boolean; detail: string }>
   recheckPreflight: (force?: boolean) => Promise<PreflightResult>
   orchestrationBudget: () => Promise<{ maxUsd: number | null }>
   setOrchestrationBudget: (settings: {

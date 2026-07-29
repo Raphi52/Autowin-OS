@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import './FirstRunWizard.css'
+import { repairAffordance } from './preflight-repair-affordance'
 
 /**
  * #5 — Wizard first-run. L'installeur NSIS installe l'APP, mais ne peut pas tout automatiser (OAuth
@@ -27,6 +28,10 @@ export function FirstRunWizard(): React.JSX.Element | null {
   const [result, setResult] = useState<PreflightResult | null>(null)
   const [checking, setChecking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Réparation en cours (id du check) et dernier compte-rendu par check. Un compte-rendu n'affirme
+  // JAMAIS que le prérequis est réparé : il dit ce qui a été lancé, le re-diagnostic tranche.
+  const [repairing, setRepairing] = useState<string | null>(null)
+  const [repairNotes, setRepairNotes] = useState<Record<string, string>>({})
   // Fermé manuellement par l'utilisateur malgré un rouge → on ne ré-ouvre pas en boucle tant que
   // l'état reste rouge ; un retour au vert efface ce drapeau (prochain rouge ré-ouvrira).
   const dismissedRef = useRef(false)
@@ -68,6 +73,32 @@ export function FirstRunWizard(): React.JSX.Element | null {
       if (req === reqRef.current) setChecking(false)
     }
   }, [applyResult])
+
+  const repair = useCallback(
+    async (checkId: string) => {
+      if (!window.api?.repairPreflight) {
+        setRepairNotes((n) => ({ ...n, [checkId]: 'Réparation indisponible dans cette version.' }))
+        return
+      }
+      setRepairing(checkId)
+      try {
+        const outcome = await window.api.repairPreflight(checkId)
+        const detail =
+          outcome && typeof outcome.detail === 'string' && outcome.detail
+            ? outcome.detail
+            : 'Action lancée.'
+        setRepairNotes((n) => ({ ...n, [checkId]: detail }))
+      } catch {
+        setRepairNotes((n) => ({ ...n, [checkId]: 'La réparation a échoué. Voir la commande ci-dessus.' }))
+      } finally {
+        setRepairing(null)
+        // Le login est INTERACTIF et le brain met ~30-40 s : on re-sonde pour rafraîchir l'affichage,
+        // sans prétendre que le prérequis est réglé (un rouge qui reste rouge reste rouge).
+        void recheck(true)
+      }
+    },
+    [recheck]
+  )
 
   useEffect(() => {
     // Montage : diagnostic initial (sans force → partage le cache du run de démarrage) + abonnement
@@ -131,6 +162,23 @@ export function FirstRunWizard(): React.JSX.Element | null {
               <span className="frw-icon">{c.ok ? '✓' : '✗'}</span>
               <span className="frw-label">{c.label}</span>
               {!c.ok && c.detail ? <span className="frw-detail">{c.detail}</span> : null}
+              {!c.ok && repairAffordance(c.id) ? (
+                <button
+                  type="button"
+                  className="frw-repair"
+                  data-testid={`frw-repair-${c.id}`}
+                  title={repairAffordance(c.id)?.note}
+                  onClick={() => void repair(c.id)}
+                  disabled={repairing !== null || checking}
+                >
+                  {repairing === c.id ? 'En cours…' : repairAffordance(c.id)?.label}
+                </button>
+              ) : null}
+              {repairNotes[c.id] ? (
+                <span className="frw-repair-note" data-testid={`frw-repair-note-${c.id}`}>
+                  {repairNotes[c.id]}
+                </span>
+              ) : null}
             </li>
           ))}
           {error ? (

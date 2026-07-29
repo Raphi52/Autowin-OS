@@ -71,6 +71,8 @@ const api = {
     return () => ipcRenderer.removeListener('worktree:activity-changed', handler)
   },
   // #5 — le wizard first-run re-vérifie la config à la demande (force=true pour le bouton).
+  repairPreflight: (checkId: string): Promise<unknown> =>
+    ipcRenderer.invoke('preflight:repair', checkId),
   recheckPreflight: (force?: boolean): Promise<unknown> =>
     ipcRenderer.invoke('preflight:recheck', force),
   orchestrationBudget: (): Promise<{ maxUsd: number | null }> =>

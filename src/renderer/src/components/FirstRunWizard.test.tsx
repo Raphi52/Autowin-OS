@@ -173,3 +173,108 @@ describe('FirstRunWizard (#5)', () => {
     expect(document.activeElement).toBe(outsideButton)
   })
 })
+
+/**
+ * BOUTON « RÉPARER » — constaté en réel (2026-07-29) : la popup affichait « ✗ Session OAuth Codex —
+ * npm run codex:login » et rien de plus, alors que l'app sait lancer ce login. On vérifie ici que le
+ * bouton EXISTE, qu'il APPELLE le main, et qu'il ne mente pas sur ce qu'il a fait.
+ */
+describe('réparer un prérequis rouge depuis la popup', () => {
+  const withChecks = (
+    checks: Array<{ id: string; label: string; ok: boolean; detail?: string }>,
+    repair?: (id: string) => Promise<{ started: boolean; detail: string }>
+  ): { repairCalls: string[] } => {
+    const repairCalls: string[] = []
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      recheckPreflight: async () => ({ ok: false, summary: 'incomplète', checks }),
+      repairPreflight: async (id: string) => {
+        repairCalls.push(id)
+        return repair
+          ? await repair(id)
+          : { started: true, detail: 'Console de connexion ouverte. Termine le login, puis re-vérifie.' }
+      }
+    }
+    return { repairCalls }
+  }
+
+  const codexKo = [
+    { id: 'codex-session', label: 'Session OAuth Codex', ok: false, detail: 'npm run codex:login' },
+    { id: 'brain-token', label: 'token Brain', ok: false, detail: 'absent' },
+    { id: 'claude', label: 'CLI claude', ok: true }
+  ]
+
+  it('un rouge RÉPARABLE porte un bouton ; un rouge NON réparable n’en a pas', async () => {
+    withChecks(codexKo)
+    await render()
+    expect(container.querySelector('[data-testid="frw-repair-codex-session"]')).not.toBeNull()
+    // Le token est un SECRET : proposer un bouton serait une promesse intenable.
+    expect(container.querySelector('[data-testid="frw-repair-brain-token"]')).toBeNull()
+    // Un check VERT n'a aucun bouton.
+    expect(container.querySelector('[data-testid="frw-repair-claude"]')).toBeNull()
+  })
+
+  it('cliquer LANCE la réparation et affiche son compte-rendu, sans dire « réparé »', async () => {
+    const { repairCalls } = withChecks(codexKo)
+    await render()
+    const button = container.querySelector<HTMLButtonElement>(
+      '[data-testid="frw-repair-codex-session"]'
+    )
+    await act(async () => button?.click())
+    await flush()
+    expect(repairCalls).toEqual(['codex-session'])
+    const note = container.querySelector('[data-testid="frw-repair-note-codex-session"]')
+    expect(note?.textContent).toContain('Console de connexion ouverte')
+    expect(note?.textContent).not.toMatch(/réparé|résolu/i)
+  })
+
+  it('une réparation qui ÉCHOUE le dit — le rouge reste rouge', async () => {
+    withChecks(codexKo, async () => ({ started: false, detail: 'venv Python introuvable' }))
+    await render()
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="frw-repair-codex-session"]')
+        ?.click()
+    )
+    await flush()
+    expect(
+      container.querySelector('[data-testid="frw-repair-note-codex-session"]')?.textContent
+    ).toContain('venv Python introuvable')
+    // Le check est toujours affiché en rouge : aucune fausse guérison.
+    expect(
+      container.querySelector('[data-testid="frw-check-codex-session"]')?.className
+    ).toContain('ko')
+  })
+
+  it('un main qui JETTE ne casse pas la popup', async () => {
+    withChecks(codexKo, async () => {
+      throw new Error('IPC coupé')
+    })
+    await render()
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="frw-repair-codex-session"]')
+        ?.click()
+    )
+    await flush()
+    expect(container.querySelector('[data-testid="first-run-wizard"]')).not.toBeNull()
+    expect(
+      container.querySelector('[data-testid="frw-repair-note-codex-session"]')?.textContent
+    ).toContain('échoué')
+  })
+
+  it('sans canal de réparation, le bouton le DIT au lieu de ne rien faire', async () => {
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      recheckPreflight: async () => ({ ok: false, summary: 'incomplète', checks: codexKo })
+    }
+    await render()
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="frw-repair-codex-session"]')
+        ?.click()
+    )
+    await flush()
+    expect(
+      container.querySelector('[data-testid="frw-repair-note-codex-session"]')?.textContent
+    ).toContain('indisponible')
+  })
+})
