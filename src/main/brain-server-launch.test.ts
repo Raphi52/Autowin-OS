@@ -55,8 +55,16 @@ describe('ensureBrainServerStarted', () => {
     expect(r.status).toBe('starting')
     expect(spawnFn).toHaveBeenCalledOnce()
     const [bin, args, opts] = spawnFn.mock.calls[0]
-    expect(bin).toBe(join(tooling, '.venv', 'Scripts', 'python.exe'))
-    expect(args).toEqual(['brain_server.py'])
+    const python = join(tooling, '.venv', 'Scripts', 'python.exe')
+    if (process.platform === 'win32') {
+      // Lanceur intermédiaire OBLIGATOIRE sous Windows : sans lui, le python hérite du socket
+      // d'écoute DevTools et garde le port 9223 après la mort de l'app.
+      expect(bin).toBe('cmd.exe')
+      expect(args).toEqual(['/c', 'start', '', '/b', python, 'brain_server.py'])
+    } else {
+      expect(bin).toBe(python)
+      expect(args).toEqual(['brain_server.py'])
+    }
     expect(opts.cwd).toBe(tooling)
     expect(opts.detached).toBe(true)
     expect('PYTHONPATH' in opts.env).toBe(false)

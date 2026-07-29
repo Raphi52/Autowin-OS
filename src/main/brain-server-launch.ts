@@ -68,7 +68,19 @@ export async function ensureBrainServerStarted(
   delete childEnv.PYTHONPATH
   // cwd = tooling ; brain_server fait os.chdir(AMITEL_BRAIN_ROOT=parent) lui-même. Détaché + unref :
   // survit à l'app, stdio ignoré (pas de pipe qui bloque). windowsHide : pas de console qui pop.
-  const child = spawnFn(python, ['brain_server.py'], {
+  // Sous Windows, `detached` + `stdio:'ignore'` + `unref()` ne suffisent PAS : libuv appelle
+  // CreateProcess avec bInheritHandles=TRUE, donc l'enfant hérite des handles héritables du parent
+  // — y compris le SOCKET D'ÉCOUTE DevTools d'Electron. À la mort de l'app, ce python survivant
+  // gardait le port 9223 en otage : le serveur DevTools ne redémarrait plus jamais (« Cannot start
+  // http server for devtools »), et tout pilotage CDP devenait impossible. Constaté deux fois.
+  //
+  // On passe donc par un lanceur intermédiaire qui, LUI, crée le python sans transmettre de
+  // handles, puis sort immédiatement en relâchant ceux qu'il avait hérités.
+  const viaLauncher = process.platform === 'win32'
+  const [bin, args] = viaLauncher
+    ? (['cmd.exe', ['/c', 'start', '', '/b', python, 'brain_server.py']] as const)
+    : ([python, ['brain_server.py']] as const)
+  const child = spawnFn(bin, [...args], {
     cwd: tooling,
     env: childEnv,
     detached: true,
