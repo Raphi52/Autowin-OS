@@ -19,6 +19,7 @@ vi.mock('node:child_process', () => ({
       }
     }
     child.kill = (): boolean => true
+    child.unref = (): void => {} // le vrai ChildProcess en expose un (spawn détaché)
     child.exitCode = null
     // Émet un `result` minimal puis ferme proprement (le générateur se règle).
     setTimeout(() => {
