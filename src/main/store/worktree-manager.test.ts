@@ -166,8 +166,7 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
     // Garde-fou : la copie du judge est CONSERVÉE (merge assisté possible).
     expect(wm.changedFiles('judge').length >= 0).toBe(true)
       expect(() => wm.acquire('judge')).not.toThrow() // le worktree existe toujours
-    },
-    10_000
+    }
   )
 
   it('base sale sur le même fichier → bloque proprement sans inventer un conflit d’agents', () => {
@@ -597,8 +596,7 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
       expect(git(repo, 'worktree', 'list', '--porcelain')).not.toContain(integrationPath)
       expect(existsSync(agentPath)).toBe(false)
       expect(existsSync(join(repo, 'b.txt'))).toBe(true)
-    },
-    10_000
+    }
   )
 
   it('cleanup Git et disque impossible après publication → bloque et conserve la copie agent', () => {
@@ -694,5 +692,31 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
     const repo = tempRepo()
     const wm = manager(repo)
     expect(() => wm.acquire('../evil')).toThrow()
+  })
+
+  it('une copie appartenant à un AUTRE dépôt est bloquée, pas fusionnée', () => {
+    // Le dossier de copies est partagé entre workspaces : on y retrouve des copies dont le commit
+    // est inconnu de la base courante. `git diff a...b` échouait alors (« Invalid symmetric
+    // difference »), la liste de fichiers repartait VIDE — donc plus rien ne bloquait et la fusion
+    // s'enchaînait quand même. Observé au démarrage de l'app.
+    const repo = tempRepo()
+    const wm = manager(repo)
+    const copie = wm.acquire('etranger')
+    // On remplace la copie par un dépôt INDÉPENDANT : son HEAD n'existe pas dans la base.
+    rmSync(copie, { recursive: true, force: true })
+    mkdirSync(copie, { recursive: true })
+    git(copie, 'init', '-q', '-b', 'main')
+    git(copie, 'config', 'user.email', 't@t')
+    git(copie, 'config', 'user.name', 'T')
+    git(copie, 'config', 'commit.gpgsign', 'false')
+    writeFileSync(join(copie, 'venu-d-ailleurs.txt'), 'contenu\n')
+    git(copie, 'add', '-A')
+    git(copie, 'commit', '-q', '-m', 'commit inconnu de la base')
+
+    const result = wm.finalize('etranger')
+
+    expect(result).toMatchObject({ outcome: 'blocked', reason: 'merge-failed' })
+    // Et rien n'a été fusionné dans la base.
+    expect(git(repo, 'log', '--oneline')).not.toContain('venu-d-ailleurs')
   })
 })

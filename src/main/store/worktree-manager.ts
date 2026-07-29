@@ -154,6 +154,12 @@ export class WorktreeManager {
     return join(this.worktreeRoot, `agent__${agentId}`)
   }
 
+  /** Ce commit est-il connu de la base ? (sans jamais lever : `tryGitFn` rend un code.) */
+  private revisionExists(rev: string): boolean {
+    if (!rev) return false
+    return this.tryGitFn(this.baseRepo, ['cat-file', '-e', `${rev}^{commit}`]).code === 0
+  }
+
   /** Inventorie les copies Autowin récupérables après un arrêt du processus. */
   listAgentIds(): string[] {
     const directories = existsSync(this.worktreeRoot)
@@ -707,6 +713,22 @@ ${chainReferenceHook}exit 0
         }
       }
       return { outcome: 'nothing', agentId }
+    }
+
+    // Une copie dont le commit est INCONNU de cette base ne peut pas y être fusionnée : copie
+    // laissée par un autre dépôt (le dossier de copies est partagé entre workspaces), ou objets
+    // élagués. Sans cette garde, `git diff a...b` échouait en « Invalid symmetric difference
+    // expression » — bruyant au démarrage, mais surtout la liste de fichiers repartait VIDE, donc
+    // plus rien ne bloquait et la fusion s'enchaînait sur une copie étrangère.
+    const unknown = [baseSha, sha].find((rev) => !this.revisionExists(rev))
+    if (unknown) {
+      return {
+        outcome: 'blocked',
+        agentId,
+        files: [],
+        reason: 'merge-failed',
+        detail: `Le commit ${unknown.slice(0, 8)} n’existe pas dans ce dépôt : copie étrangère ou objets élagués.`
+      }
     }
 
     const agentFiles = this.git(this.baseRepo, ['diff', '--name-only', `${baseSha}...${sha}`])
