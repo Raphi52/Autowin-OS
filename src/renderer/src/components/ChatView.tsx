@@ -35,6 +35,12 @@ import {
   type RunRequestIdentity,
   type ScopedLiveRun
 } from './chat-view-model'
+import {
+  WORKFLOW_PANEL_SECTIONS,
+  sectionUsesScope,
+  visibleScopedRuns,
+  type WorkflowPanelSection
+} from './workflows-panel-sections'
 import { searchConversations } from './conversation-search'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
@@ -528,7 +534,9 @@ export function ChatView({
     const value = Number.isFinite(saved) && saved > 0 ? saved : 340
     return Math.min(CHAT_PANE_LIMITS.workflows.max, Math.max(CHAT_PANE_LIMITS.workflows.min, value))
   })
-  const [paneTab, setPaneTab] = useState<'runs' | 'worktrees'>('runs')
+  // Trois sections : Sous-agents · Run · Source control. Défaut = Sous-agents, la section qu'on regarde
+  // pendant une orchestration — garder « Run » par défaut aurait retiré les sous-agents de la vue.
+  const [paneTab, setPaneTab] = useState<WorkflowPanelSection>('subagents')
   const [runScope, setRunScope] = useState<'conv' | 'tous'>('conv')
   const [runs, setRuns] = useState<RunEntry[]>([])
   /** Miroir stable : `revealLiveAction` lit la liste courante sans se recreer a chaque chargement. */
@@ -543,11 +551,11 @@ export function ChatView({
   // l'indicateur « action en cours » d'un message (ouvre le panneau + cadre le run/step actif).
   const liveRunCardRef = useRef<HTMLDivElement>(null)
   // Clic sur le bloc d'activité d'un message → Workflows, à l'endroit qui montre RÉELLEMENT ce qui
-  // s'est passé : la carte du run pour une action en cours, l'onglet Activité (historique) pour une
-  // action déjà terminée ou interrompue — sa carte live n'existe plus.
+  // s'est passé : la section Sous-agents pour le fil du run, l'onglet Activité (historique) quand on
+  // veut la trace d'un run précis (elle survit au redémarrage, l'écho de session non).
   const revealLiveAction = useCallback((mode: 'live' | 'history' = 'live', runId?: string) => {
     setShowRuns(true)
-    setPaneTab('runs')
+    setPaneTab('subagents')
     if (mode === 'history') {
       // Action déjà terminée/interrompue : sa carte live n'existe plus. On OUVRE LA TRACE du run
       // concerné — cadrer la seule liste laissait l'utilisateur chercher lequel regarder.
@@ -565,6 +573,10 @@ export function ChatView({
   const [decisions, setDecisions] = useState<Decision[]>([])
   const [showDecisions, setShowDecisions] = useState(false)
   const [decisionError, setDecisionError] = useState<string | null>(null)
+  // Watchdog « tour dormant » : dernière activité observée par conversation (event orchestrate OU
+  // changement du message streamé) + copie ref de liveRuns lisible dans l'intervalle sans stale.
+  const lastActivityRef = useRef<Record<string, number>>({})
+  const liveRunsRef = useRef<Record<string, ScopedLiveRun<OrchStep>>>({})
   const [deleteCandidate, setDeleteCandidate] = useState<Conv | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const composerInputRef = useRef<HTMLTextAreaElement>(null)
@@ -711,6 +723,44 @@ export function ChatView({
   useEffect(() => {
     activeRef.current = activeId
   }, [activeId])
+
+  // --- Watchdog « tour dormant » -------------------------------------------------------------
+  // Un tour peut rester bloqué en « action en cours » indéfiniment si son attente ne résout jamais
+  // (orchestration crashée sans event terminal, appel provider qui pend, gate d'autorité jamais
+  // approuvé). Le `finally` de send() ne s'exécute alors jamais → la bulle reste `streaming`. Ce
+  // watchdog finalise proprement un tour SANS activité depuis 90 s, à condition qu'AUCUN sous-agent
+  // ne tourne (liveRun `running`) et qu'AUCUNE décision d'autorité n'attende l'utilisateur (attentes
+  // légitimes). L'activité = event orchestrate OU changement du message streamé (couvre le stream
+  // conversationnel pur, sans event orchestrate) → jamais de faux positif sur un tour qui produit.
+  useEffect(() => {
+    liveRunsRef.current = liveRuns
+  }, [liveRuns])
+  useEffect(() => {
+    if (activeId) lastActivityRef.current[activeId] = Date.now()
+  }, [messages, activeId])
+  useEffect(() => {
+    const DORMANT_MS = 90_000
+    const timer = window.setInterval(() => {
+      if (decisions.length > 0) return // décision d'autorité en attente = attente légitime
+      for (const convId of Array.from(busyConversationsRef.current)) {
+        if (liveRunsRef.current[convId]?.status === 'running') continue // sous-agent actif
+        const last = lastActivityRef.current[convId] ?? 0
+        if (Date.now() - last <= DORMANT_MS) continue
+        patchLast(convId, (m) => {
+          if (m.status === 'streaming') m.status = 'interrupted'
+          m.done = true
+          m.parts.push({
+            kind: 'text',
+            text: '⚠️ Tour interrompu — aucune activité depuis 90 s (tour dormant). Relance si besoin.'
+          })
+        })
+        setConversationBusy(convId, false)
+        void window.api.cancelOrchestration(convId)
+        delete lastActivityRef.current[convId]
+      }
+    }, 15_000)
+    return () => window.clearInterval(timer)
+  }, [decisions.length])
 
   const busy = activeId ? busyConversations.has(activeId) : false
   function setConversationBusy(id: string, value: boolean): void {
@@ -908,6 +958,10 @@ export function ChatView({
       (handle) => window.clearTimeout(handle)
     )
     const offApp = window.api.onAppEvent((e) => {
+      // Watchdog dormant : tout event orchestrate porteur d'un convId = activité observée.
+      if ('convId' in e && typeof e.convId === 'string' && e.type.startsWith('orchestrate')) {
+        lastActivityRef.current[e.convId] = Date.now()
+      }
       if (e.type !== 'orchestrate-delta') deltaBatcher.flush()
       if (e.type === 'refresh') {
         if (e.scope === 'conversations') refreshConvs()
@@ -926,7 +980,8 @@ export function ChatView({
         )
         if (e.convId === activeRef.current) {
           setShowRuns(true)
-          setPaneTab('runs')
+          // Une orchestration démarre → on ouvre la section qui montre ses sous-agents.
+          setPaneTab('subagents')
         }
       } else if (e.type === 'orchestrate-phase' && e.phase && e.convId) {
         setLiveRuns((current) =>
@@ -968,14 +1023,12 @@ export function ChatView({
           })
         )
         void refreshRuns()
-        // Laisse le run terminé visible ~4 s en tant que « live », puis il rejoint la liste.
-        setTimeout(
-          () =>
-            setLiveRuns((current) =>
-              reduceScopedLiveRuns(current, { type: 'clear', convId, runPath })
-            ),
-          4000
-        )
+        // Le run terminé RESTE dans la section Sous-agents avec son fil.
+        //
+        // Il y avait ici un `setTimeout(4000)` qui dispatchait `clear`, au motif que le run « rejoignait
+        // la liste » : c'était faux pour le FIL, car `RunSummary` ne porte aucun step. Le fil était donc
+        // détruit et rien ne le reprenait — alors qu'il est précisément la preuve de ce qui a été fait.
+        // L'entrée est remplacée au prochain `start` de la même conversation : rien ne s'accumule.
       }
     })
     return () => {
@@ -1661,12 +1714,7 @@ export function ChatView({
   }, [convs, busyConversations, liveRuns])
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
   const greenRunsCount = runs.filter((r) => r.summary.status === 'green').length
-  const visibleLiveRuns: Array<[string, ScopedLiveRun<OrchStep>]> =
-    runScope === 'tous'
-      ? Object.entries(liveRuns)
-      : activeId && liveRuns[activeId]
-        ? [[activeId, liveRuns[activeId]]]
-        : []
+  const visibleLiveRuns = visibleScopedRuns<OrchStep>(liveRuns, activeId ?? undefined, runScope)
 
   return (
     <div
@@ -2379,21 +2427,18 @@ export function ChatView({
           >
             <div className="conv-head">
               <div className="row gap2">
-                <button
-                  className={`btn btn-sm${paneTab === 'runs' ? ' btn-accent' : ''}`}
-                  onClick={() => setPaneTab('runs')}
-                >
-                  Runs
-                </button>
-                <button
-                  className={`btn btn-sm${paneTab === 'worktrees' ? ' btn-accent' : ''}`}
-                  onClick={() => setPaneTab('worktrees')}
-                >
-                  Source control
-                </button>
+                {WORKFLOW_PANEL_SECTIONS.map((section) => (
+                  <button
+                    key={section.id}
+                    className={`btn btn-sm${paneTab === section.id ? ' btn-accent' : ''}`}
+                    onClick={() => setPaneTab(section.id)}
+                  >
+                    {section.label}
+                  </button>
+                ))}
               </div>
               <div className="row gap2">
-                {paneTab === 'runs' && (
+                {paneTab === 'run' && (
                   <button className="btn btn-sm" onClick={refreshRuns} title="Rafraîchir">
                     ⟳
                   </button>
@@ -2403,8 +2448,8 @@ export function ChatView({
                 </button>
               </div>
             </div>
-            {paneTab === 'worktrees' && <SourceControlPane onSendPrompt={send} />}
-            {paneTab === 'runs' && (
+            {paneTab === 'source-control' && <SourceControlPane onSendPrompt={send} />}
+            {sectionUsesScope(paneTab) && (
               <div className="row gap2" style={{ fontSize: 11 }}>
                 <button
                   className={`btn btn-sm${runScope === 'conv' ? ' btn-accent' : ''}`}
@@ -2425,11 +2470,19 @@ export function ChatView({
               style={{
                 gap: 'var(--s2)',
                 minHeight: 0,
-                display: paneTab === 'runs' ? undefined : 'none'
+                display: sectionUsesScope(paneTab) ? undefined : 'none'
               }}
             >
-              {/* Orchestration EN COURS : statut temps réel + sous-agents qui se remplissent. */}
-              {visibleLiveRuns.map(([conversationId, liveRun]) => (
+              {/* SECTION SOUS-AGENTS : le fil d'une orchestration, en cours ou TERMINÉE. */}
+              {paneTab === 'subagents' && visibleLiveRuns.length === 0 && (
+                <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
+                  {activeId
+                    ? 'Aucune orchestration dans cette conversation — le fil des sous-agents apparaît ici dès qu’une tâche est lancée, et il y RESTE une fois terminée.'
+                    : 'Sélectionne une conversation pour voir le fil de ses sous-agents.'}
+                </div>
+              )}
+              {paneTab === 'subagents' &&
+                visibleLiveRuns.map(([conversationId, liveRun]) => (
                 <div
                   key={conversationId}
                   ref={conversationId === activeId ? liveRunCardRef : undefined}
@@ -2506,16 +2559,18 @@ export function ChatView({
                   </div>
                 </div>
               ))}
-              {runs.length === 0 && (!activeId || !liveRuns[activeId]) && (
+              {/* SECTION RUN : les RUN.md eux-mêmes (statut, DoD, journal, défauts). */}
+              {paneTab === 'run' && runs.length === 0 && (
                 <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
                   {runScope === 'conv'
                     ? activeId
-                      ? 'Aucun workflow pour cette conversation — lance une tâche (orchestration) ou attache un RUN.md.'
-                      : 'Sélectionne ou démarre une conversation pour voir ses workflows.'
+                      ? 'Aucun RUN.md pour cette conversation — lance une tâche (orchestration) ou attache un RUN.md.'
+                      : 'Sélectionne ou démarre une conversation pour voir ses RUN.md.'
                     : 'Aucun run.'}
                 </div>
               )}
-              {runs.map((r) => {
+              {paneTab === 'run' &&
+                runs.map((r) => {
                 const pct =
                   r.summary.dodTotal > 0
                     ? Math.round((r.summary.dodChecked / r.summary.dodTotal) * 100)

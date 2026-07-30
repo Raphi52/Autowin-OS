@@ -927,6 +927,18 @@ export function reduceScopedLiveRuns<TStep>(
       [event.convId]: { ...existing, status: event.status, phase: undefined, liveText: undefined }
     }
   }
+  /**
+   * `clear` n'efface QUE ce qui tourne encore.
+   *
+   * Un run TERMINÉ porte le fil de ses sous-agents, et ce fil est la preuve de ce qui a été fait : rien
+   * d'autre ne le tient côté UI — `RunSummary` (`main/dashboards/runs.ts`) n'a pas de steps. Le chat
+   * planifiait un `clear` 4 s après la fin, en croyant que le run « rejoignait la liste » : il
+   * disparaissait. Le site de dispatch a été supprimé, et cette garde rend l'invariant STRUCTUREL plutôt
+   * que dépendant de la promesse de ne plus appeler la fonction.
+   * Un nouveau run dans la même conversation remplace l'entrée par `start` — la mémoire ne grossit pas.
+   */
+  const existant = current[event.convId]
+  if (existant && existant.status !== 'running') return current
   const next = { ...current }
   delete next[event.convId]
   return next
