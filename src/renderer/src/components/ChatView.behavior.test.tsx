@@ -1167,6 +1167,39 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect((container!.querySelector('textarea') as HTMLTextAreaElement).value).toBe('draft B')
   })
 
+  it('sends a targeted prefill through that conversation without creating another one', async () => {
+    const routeConversationMessage = vi.fn(async (conversationId: string) => ({
+      sourceConversationId: conversationId,
+      conversationId,
+      routed: false,
+      decision: { route: 'current' as const, confidence: 1, reason: 'related' }
+    }))
+    const conversationsCreate = vi.fn().mockResolvedValue(conversation('C'))
+    const pilotChat = vi.fn().mockResolvedValue({ ok: true })
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('B')]),
+      routeConversationMessage,
+      conversationsCreate,
+      pilotChat
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent('autowin:prefill-conversation', {
+          detail: { conversationId: 'B', prompt: 'Traite B', send: true }
+        })
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(routeConversationMessage).toHaveBeenCalledWith('B', 'Traite B', [])
+    expect(pilotChat).toHaveBeenCalledWith(expect.any(Array), 'B')
+    expect(conversationsCreate).not.toHaveBeenCalled()
+  })
+
   it('does not steal conversation B when routing from A resolves late', async () => {
     const routing = deferred<{
       sourceConversationId: string
