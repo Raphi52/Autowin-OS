@@ -4,6 +4,7 @@
  * `preflight:recheck` du wizard first-run (#5) — une seule définition, pas de divergence.
  */
 import { existsSync } from 'node:fs'
+import { delimiter, join } from 'node:path'
 import { spawn } from 'node:child_process'
 import {
   runPreflight,
@@ -14,6 +15,37 @@ import {
 import { brainServiceToken } from './brain-retrieval'
 import { loadTokens } from './providers/codex-auth'
 import { codexTokenStatus } from './provider-status'
+
+/**
+ * Resout un executable sur le PATH, SANS l'executer — comme `where`, en pur Node.
+ *
+ * POURQUOI (bug constate 2026-07-30) : la presence d'un CLI etait testee en LANCANT `<cli> --version`
+ * avec un timeout de 3 s. Au demarrage (Electron + Vite + antivirus, plusieurs spawns en parallele) le
+ * timeout etait depasse et le wizard annoncait « CLI introuvable » a tort ; un clic sur « Re-verifier »,
+ * machine calmee, repassait tout vert — d'ou la popup qui s'affichait toujours puis disparaissait.
+ *
+ * La presence d'un binaire est une question de SYSTEME DE FICHIERS : y repondre par un lancement de
+ * process est a la fois lent et faux sous charge. On lit le PATH (+ PATHEXT sous Windows, ou vivent les
+ * shims `.cmd` poses par `npm -g`). Pur et injectable -> testable sans disque.
+ */
+export function resolveBinOnPath(
+  which: string,
+  env: NodeJS.ProcessEnv = process.env,
+  exists: (path: string) => boolean = existsSync
+): string | null {
+  const raw = env.PATH ?? env.Path ?? ''
+  const extensions =
+    process.platform === 'win32'
+      ? ['', ...(env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)]
+      : ['']
+  for (const dir of raw.split(delimiter).filter(Boolean)) {
+    for (const extension of extensions) {
+      const candidate = join(dir, `${which}${extension}`)
+      if (exists(candidate)) return candidate
+    }
+  }
+  return null
+}
 
 export function appPreflightProbes(): PreflightProbes {
   return {
@@ -52,10 +84,21 @@ export function appPreflightProbes(): PreflightProbes {
         }
         const timeout = setTimeout(() => {
           probe.kill()
-          finish(false)
-        }, 3000)
-        probe.once('error', () => finish(false))
-        probe.once('close', (code) => finish(code === 0))
+          // Un timeout ne PROUVE PAS l'absence : au demarrage (Electron + Vite + antivirus, plusieurs
+          // spawns en parallele) le CLI repond trop tard et on annoncait « introuvable » a tort — d'ou
+          // la popup du wizard qui disparaissait des qu'on cliquait « Re-verifier », machine calmee.
+          // On tranche alors sur le SYSTEME DE FICHIERS, qui ne depend pas de la charge.
+          finish(resolveBinOnPath(which) !== null)
+        }, 8000)
+        // Idem pour un echec de lancement (shim illisible, shell indisponible) : le disque decide.
+        probe.once('error', () => finish(resolveBinOnPath(which) !== null))
+        probe.once('close', (code) => {
+          // Le libelle de ce controle est « CLI introuvable » : il repond « est-ce INSTALLE ? ».
+          // Un `--version` qui sort en code non nul (verrou transitoire, shim capricieux au boot)
+          // signale un CLI en mauvais etat, PAS un CLI absent — l'authentification a son propre
+          // controle. On ne declare donc « absent » que si le disque ne le trouve pas non plus.
+          finish(code === 0 || resolveBinOnPath(which) !== null)
+        })
       })
     },
     hasCodexSession: () => codexTokenStatus(loadTokens(), Date.now()) === 'authenticated',
