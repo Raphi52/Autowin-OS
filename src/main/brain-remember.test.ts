@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { decideRemember, rememberFact } from './brain-remember'
+import { decideRemember, rememberFact, sourceLocatorProblem } from './brain-remember'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 
 /**
@@ -17,7 +17,8 @@ const FAIT_VALIDE = {
   fact: "Sur Windows le PATH n'expose que des shims .cmd ; il faut résoudre le vrai claude.exe.",
   type: 'lesson',
   scope: 'autowin-os',
-  source: 'file:src/main/providers/npm-global-resolve.ts'
+  // Forme VERIFIABLE, imposee par le serveur vivant : un chemin de depot relatif est refuse.
+  source: 'git:src/main/providers/npm-global-resolve.ts@9218eaf'
 }
 
 describe('decideRemember — refuser TÔT, et en disant pourquoi', () => {
@@ -91,7 +92,7 @@ describe('decideRemember — refuser TÔT, et en disant pourquoi', () => {
 describe('rememberFact — ce qui est DÉPOSÉ, jamais « mémorisé »', () => {
   it('envoie le candidat sur /ingest avec le jeton', async () => {
     const fetchFn = vi.fn(async () =>
-      new Response(JSON.stringify({ ok: true, note: '2026-07-29-cli.md' }), { status: 200 })
+      new Response(JSON.stringify({ context: 'C:/brain/inbox/2026-07-29-cli.md' }), { status: 200 })
     ) as unknown as typeof fetch
     const outcome = await rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn })
     expect(outcome.stored).toBe(true)
@@ -102,7 +103,7 @@ describe('rememberFact — ce qui est DÉPOSÉ, jamais « mémorisé »', () => 
   })
 
   it('le compte-rendu dit CANDIDAT, la promotion humaine et la réindexation', async () => {
-    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 })) as
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ context: 'inbox/x.md' }), { status: 200 })) as
       unknown as typeof fetch
     const outcome = await rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn })
     expect(outcome.detail).toMatch(/candidat/i)
@@ -185,5 +186,96 @@ describe('câblage — la commande existe et le prompt enseigne quand l’employ
     const prompt = buildChatPilotagePrompt([])
     expect(prompt).toContain('brain_query')
     expect(read('commands.ts')).toContain("name: 'brain_query'")
+  })
+})
+
+/**
+ * ═══ CONTRAT RÉEL DU BRAIN, découvert par un essai LIVE ═══
+ *
+ * Ma première version avait été écrite en lisant la copie de la GED. Or le service qui TOURNE est une
+ * copie locale (`%LOCALAPPDATA%\AmitelBrain\tooling`), plus avancée. Deux écarts, tous deux invisibles
+ * à la lecture et fatals à l'usage :
+ *  1. le succès répond un CONTEXTE SIGNÉ (`{context: <chemin>}`), pas `{ok: true}` — ma condition aurait
+ *     annoncé « refusé » sur CHAQUE succès ;
+ *  2. un 409 « near-duplicate » existe : le Brain sait déjà, ce n'est pas une panne.
+ * Plus une validation de source bien plus stricte qu'un préfixe.
+ */
+describe('contrat réel — la réponse de succès est un contexte signé', () => {
+  const reponse = (body: unknown, status = 200): typeof fetch =>
+    vi.fn(async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch
+
+  it('un 200 avec `context` est un SUCCÈS, et le nom de la note en est extrait', async () => {
+    const outcome = await rememberFact(FAIT_VALIDE, {
+      token: 'jeton',
+      fetchFn: reponse({
+        service: 'amitel-brain',
+        protocol: 1,
+        context: 'C:/brain/inbox/20260730-le-fait.md',
+        signature: 'x'
+      })
+    })
+    expect(outcome.stored).toBe(true)
+    expect(outcome.note).toBe('20260730-le-fait.md')
+  })
+
+  it('un 409 quasi-doublon n’est PAS une erreur — le Brain sait déjà', async () => {
+    const outcome = await rememberFact(FAIT_VALIDE, {
+      token: 'jeton',
+      fetchFn: reponse({ status: 'near-duplicate' }, 409)
+    })
+    expect(outcome.stored).toBe(false)
+    expect(outcome.detail).toMatch(/d[ée]j[àa] connu/i)
+    // Surtout : ne pas ressembler a une panne, sinon un agent reessaie en boucle.
+    expect(outcome.detail).not.toMatch(/erreur|échec|injoignable/i)
+  })
+
+  it('un 200 SANS contexte reste un refus (aucun succès présumé)', async () => {
+    const outcome = await rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn: reponse({}) })
+    expect(outcome.stored).toBe(false)
+  })
+})
+
+describe('sourceLocatorProblem — le refus ENSEIGNE la forme attendue', () => {
+  it('un chemin de dépôt RELATIF est refusé avant le réseau, et git: est suggéré', () => {
+    // LE CAS REEL : `file:src/main/...` a ete refuse par le serveur vivant (il cherche le fichier
+    // depuis SA racine). Autant le dire tout de suite, avec la bonne forme.
+    const probleme = sourceLocatorProblem('file:src/main/providers/npm-global-resolve.ts')
+    expect(probleme).toBeDefined()
+    expect(probleme).toContain('git:')
+  })
+
+  it('la forme git: chemin@sha est acceptée', () => {
+    expect(sourceLocatorProblem('git:src/main/x.ts@9218eaf')).toBeUndefined()
+  })
+
+  it('un sha trop court est refusé', () => {
+    expect(sourceLocatorProblem('git:src/main/x.ts@abc')).toBeDefined()
+  })
+
+  it('les autres schémas sont vérifiés sur leur FORME, pas leur préfixe', () => {
+    expect(sourceLocatorProblem('ticket:ABC-123')).toBeUndefined()
+    expect(sourceLocatorProblem('ticket:abc-123')).toBeDefined() // minuscules refusées côté Brain
+    expect(sourceLocatorProblem('url:https://exemple.fr/a')).toBeUndefined()
+    expect(sourceLocatorProblem('url:exemple.fr')).toBeDefined()
+    expect(sourceLocatorProblem('meeting:2026-07-30')).toBeUndefined()
+    expect(sourceLocatorProblem('email:qui@exemple.fr')).toBeUndefined()
+  })
+
+  it('un schéma inconnu est nommé, avec la liste des schémas valides', () => {
+    const probleme = sourceLocatorProblem('memoire:je me souviens')
+    expect(probleme).toContain('memoire')
+    expect(probleme).toContain('git')
+  })
+
+  it('une source sans deux-points est refusée', () => {
+    expect(sourceLocatorProblem('je me souviens')).toBeDefined()
+  })
+})
+
+describe('câblage — la description dit les FORMES au modèle', () => {
+  it('le catalogue montre git:<chemin>@<sha>, pas un simple préfixe', () => {
+    const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
+    expect(source).toContain('git:<chemin>@<sha>')
+    expect(source).toContain('ticket:ABC-123')
   })
 })

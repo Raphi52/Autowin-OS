@@ -40,6 +40,78 @@ export const REMEMBER_SOURCE_SCHEMES = [
 export const REMEMBER_TITLE_MAX = 200
 export const REMEMBER_BODY_MAX = 4_000
 
+/**
+ * FORME de chaque locator, alignée sur la validation RÉELLE du Brain (`brain_propose._valid_source`).
+ *
+ * Découvert par un essai LIVE, pas par lecture : le serveur ne vérifie pas un préfixe, il vérifie que le
+ * locator est VÉRIFIABLE. `file:` exige un fichier qui existe CÔTÉ SERVEUR (chemin absolu, le service
+ * tourne depuis la racine du Brain) — un chemin relatif de dépôt est donc refusé. Pour un fait de code,
+ * la bonne forme est `git:<chemin>@<sha>`.
+ *
+ * Devancer ces règles ici sert à une chose : que le REFUS enseigne la forme attendue au lieu de faire
+ * deviner l'agent après un aller-retour réseau.
+ */
+const LOCATOR_RULES: Array<{
+  scheme: (typeof REMEMBER_SOURCE_SCHEMES)[number]
+  test: (locator: string) => boolean
+  expected: string
+}> = [
+  {
+    scheme: 'git',
+    test: (l) => /.+@[0-9a-fA-F]{7,64}$/.test(l),
+    expected: 'git:<chemin>@<sha> (ex. git:src/main/x.ts@9218eaf)'
+  },
+  {
+    scheme: 'url',
+    test: (l) => /^https?:\/\/[^\s/]+/.test(l),
+    expected: 'url:https://…'
+  },
+  {
+    scheme: 'ticket',
+    test: (l) => /^[A-Z][A-Z0-9]{1,15}-\d{1,12}$/.test(l),
+    expected: 'ticket:ABC-123 (préfixe en MAJUSCULES)'
+  },
+  {
+    scheme: 'session',
+    test: (l) => /^[A-Za-z0-9][A-Za-z0-9._:-]{5,127}$/.test(l),
+    expected: 'session:<identifiant de 6 caractères au moins>'
+  },
+  {
+    scheme: 'email',
+    test: (l) => /^<?[^<>\s@]+@[^<>\s@]+>?$/.test(l),
+    expected: 'email:qui@exemple.fr'
+  },
+  {
+    scheme: 'meeting',
+    test: (l) => /^\d{4}-\d{2}-\d{2}/.test(l),
+    expected: 'meeting:AAAA-MM-JJ'
+  },
+  {
+    // Le serveur exige un fichier EXISTANT depuis SA racine : on ne peut pas le verifier d'ici, mais on
+    // peut refuser tout de suite un chemin relatif, qui echouera a coup sur.
+    scheme: 'file',
+    test: (l) => /^([A-Za-z]:[\\/]|[\\/]{1,2}|~)/.test(l),
+    expected: 'file:<chemin ABSOLU existant côté serveur> — pour un fichier de dépôt, préférer git:<chemin>@<sha>'
+  }
+]
+
+/** Décrit le problème du locator, ou `undefined` s'il est conforme. */
+export function sourceLocatorProblem(source: string): string | undefined {
+  const separator = source.indexOf(':')
+  if (separator <= 0) {
+    return `source non traçable — préfixe attendu : ${REMEMBER_SOURCE_SCHEMES.map((s) => `${s}:`).join(' ')}`
+  }
+  const scheme = source.slice(0, separator).toLowerCase()
+  const locator = source.slice(separator + 1).trim()
+  const rule = LOCATOR_RULES.find((candidate) => candidate.scheme === scheme)
+  if (!rule) {
+    return `schéma « ${scheme} » inconnu — attendu : ${REMEMBER_SOURCE_SCHEMES.join(', ')}`
+  }
+  if (!locator) return `locator vide après « ${scheme}: » — attendu ${rule.expected}`
+  if (!rule.test(locator)) return `locator non vérifiable — attendu ${rule.expected}`
+  return undefined
+}
+
 export type RememberDecision =
   | {
       allowed: true
@@ -83,13 +155,8 @@ export function decideRemember(args: Record<string, unknown>): RememberDecision 
   }
 
   const source = text(args.source)
-  const scheme = source.split(':')[0]?.toLowerCase() ?? ''
-  if (!source || !(REMEMBER_SOURCE_SCHEMES as readonly string[]).includes(scheme)) {
-    return {
-      allowed: false,
-      reason: `source non traçable — préfixe attendu : ${REMEMBER_SOURCE_SCHEMES.map((s) => `${s}:`).join(' ')}`
-    }
-  }
+  const sourceProblem = sourceLocatorProblem(source)
+  if (sourceProblem) return { allowed: false, reason: sourceProblem }
 
   const scope = text(args.scope)
   if (!scope) {
@@ -166,24 +233,41 @@ export async function rememberFact(
       })
     })
     const payload = (await response.json().catch(() => ({}))) as {
-      ok?: boolean
-      note?: string
+      /** Succès : le serveur rend un CONTEXTE SIGNÉ dont `context` porte le chemin de la note. */
+      context?: string
+      /** 409 : le Brain sait déjà — refus délibéré, pas une erreur. */
+      status?: string
       error?: string
     }
-    if (!response.ok || payload.ok !== true) {
-      // Le motif du refus vient du serveur : on le rend TEL QUEL, sans le reformuler en succès.
+    /**
+     * QUASI-DOUBLON — garde anti-bruit du Brain (seuil de similarité 0,82). Ce n'est PAS un échec :
+     * c'est le Brain qui dit « je le sais déjà ». Le distinguer d'une erreur évite de faire croire à
+     * une panne, et évite qu'un agent réessaie en boucle.
+     */
+    if (response.status === 409 || payload.status === 'near-duplicate') {
       return {
         allowed: true,
         stored: false,
-        detail: `refusé par le Brain : ${payload.error ?? `HTTP ${response.status}`}`
+        detail: 'déjà connu du Brain (quasi-doublon) — rien n’a été ajouté, et c’est voulu'
       }
     }
+    // SUCCÈS : le serveur répond 200 avec un contexte SIGNÉ (`{service, protocol, context, signature}`),
+    // PAS un `{ok:true}`. Défaut trouvé par un essai LIVE : ma première version exigeait `ok === true` et
+    // aurait donc annoncé « refusé » sur CHAQUE succès. Aucune lecture de code ne l'avait montré.
+    if (response.ok && typeof payload.context === 'string' && payload.context) {
+      return {
+        allowed: true,
+        stored: true,
+        note: payload.context.split(/[\\/]/).pop() ?? payload.context,
+        detail:
+          'retenu comme CANDIDAT dans la boîte de réception du Brain — un humain le promeut, et il ne sera relisible qu’après réindexation'
+      }
+    }
+    // Le motif du refus vient du serveur : on le rend TEL QUEL, sans le reformuler en succès.
     return {
       allowed: true,
-      stored: true,
-      ...(payload.note ? { note: payload.note } : {}),
-      detail:
-        'retenu comme CANDIDAT dans la boîte de réception du Brain — un humain le promeut, et il ne sera relisible qu’après réindexation'
+      stored: false,
+      detail: `refusé par le Brain : ${payload.error ?? `HTTP ${response.status}`}`
     }
   } catch (error) {
     return {

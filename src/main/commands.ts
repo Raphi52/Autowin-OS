@@ -228,8 +228,12 @@ const CATALOG: CommandSpec[] = [
       fact: 'le fait, autoporté — compréhensible dans 3 mois sans cette conversation',
       type: 'lesson | decision | preference | domain',
       scope: 'le projet concerné, ou « global »',
+      // Les FORMES viennent de la validation reelle du Brain, decouverte par un essai live : le serveur
+      // ne verifie pas un prefixe, il verifie que le locator est VERIFIABLE. Sans ces formes, le modele
+      // produisait des candidats refuses (`file:src/…` relatif -> refuse, le serveur cherche le fichier
+      // depuis SA racine).
       source:
-        'sa provenance TRAÇABLE, préfixée : file:… | git:… | url:… | ticket:… | session:… | email:… | meeting:…',
+        'sa provenance VÉRIFIABLE. Pour un fait de code : git:<chemin>@<sha> (ex. git:src/main/x.ts@9218eaf). Autres formes : url:https://… | ticket:ABC-123 | session:<id> | email:qui@ex.fr | meeting:AAAA-MM-JJ | file:<chemin ABSOLU existant>',
       tags: 'facultatif — quelques mots-clés',
       confidence: 'facultatif — low | medium | high'
     },
