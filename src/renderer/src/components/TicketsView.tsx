@@ -458,12 +458,14 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const [autoMode, setAutoMode] = useState(
     () => localStorage.getItem('autowin:tickets-auto-mode') === '1'
   )
+  const autoModeEnabledRef = useRef(autoMode)
   const seenRef = useRef<Set<string>>(loadSeen(localStorage))
   const autoBusyRef = useRef(false)
   const [autoStatus, setAutoStatus] = useState<string>()
 
   const setAutoModeChecked = (checked: boolean): void => {
     localStorage.setItem('autowin:tickets-auto-mode', checked ? '1' : '0')
+    autoModeEnabledRef.current = checked
     setAutoMode(checked)
     if (checked) {
       // AMORCE : l'existant devient « connu » sans etre traite.
@@ -528,7 +530,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       succeeded += result.succeeded
       failed += result.failed
       total += result.total
-      if (!selection.deferred || !autoBusyRef.current) break
+      if (!selection.deferred || !autoBusyRef.current || !autoModeEnabledRef.current) break
       selection = pickIncomingTickets(visibleItemsRef.current, seenRef.current)
       if (!selection.toTreat.length) break
       for (const key of selection.seenAdditions) seenRef.current.add(key)

@@ -719,4 +719,46 @@ describe('vue Tickets — lots automatiques différés', () => {
     expect(conversationsCreate).toHaveBeenCalledTimes(5)
     await act(async () => root.unmount())
   })
+
+  it('termine le lot courant mais ne lance pas le lot différé après désactivation', async () => {
+    localStorage.setItem('autowin:tickets-auto-mode', '1')
+    const pending: Array<(value: { ok: boolean }) => void> = []
+    const orchestrate = vi.fn(
+      () =>
+        new Promise<{ ok: boolean }>((resolve) => {
+          pending.push(resolve)
+        })
+    )
+    const conversationsCreate = vi.fn(async ({ title }: { title: string }) => ({
+      id: `conv-${title}`
+    }))
+    api({
+      listTickets: vi.fn(async () => ({
+        items: [item('1'), item('2'), item('3'), item('4'), item('5')],
+        hasMore: false
+      })),
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      conversationsCreate,
+      conversationsSetAuthorityMode: vi.fn(async () => ({})),
+      orchestrate
+    })
+
+    const { root, container } = await render()
+    await act(async () => {
+      for (let index = 0; index < 10; index += 1) await Promise.resolve()
+    })
+    expect(conversationsCreate).toHaveBeenCalledTimes(3)
+
+    const auto = container.querySelector(
+      '[data-testid="tickets-mode-auto"] input'
+    ) as HTMLInputElement
+    await act(async () => auto.click())
+    await act(async () => {
+      pending.splice(0).forEach((resolve) => resolve({ ok: true }))
+      for (let index = 0; index < 10; index += 1) await Promise.resolve()
+    })
+
+    expect(conversationsCreate).toHaveBeenCalledTimes(3)
+    await act(async () => root.unmount())
+  })
 })
