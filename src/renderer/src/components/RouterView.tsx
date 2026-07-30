@@ -6,7 +6,7 @@ import type { RuntimeModel, OrchestratorModelOption } from './chat-view-model'
 
 /**
  * Page « Routeur » — voir les providers/modèles connectés + leur statut d'auth RÉEL, (ré)authentifier,
- * et choisir le modèle par défaut du chat. Remplace l'ancienne page OmniRoute (supprimée).
+ * et choisir le modèle par défaut du chat.
  * Invariant : un badge ne ment jamais — « authentifié » n'apparaît que sur preuve réelle
  * (codex expiry au chargement ; claude/kimi via le bouton « Tester »).
  */

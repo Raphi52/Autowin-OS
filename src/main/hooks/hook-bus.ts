@@ -2,7 +2,7 @@ import type { ExecutionEvidence } from '../providers/types'
 
 /**
  * Système de hooks INTERNE à Autowin : enforcement déterministe, uniforme pour TOUS les exécuteurs
- * (claude/codex/omniroute), indépendant des hooks Claude Code (désactivés quand on lance le CLI « nu »
+ * (claude/codex/kimi), indépendant des hooks Claude Code (désactivés quand on lance le CLI « nu »
  * via --setting-sources ""). Handlers TypeScript enregistrés in-repo (pas de shell arbitraire).
  */
 export type HookEvent = 'pre-exec' | 'post-exec' | 'pre-green' | 'run-stop'

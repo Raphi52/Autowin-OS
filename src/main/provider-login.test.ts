@@ -14,7 +14,7 @@ describe('planProviderLogin', () => {
     expect(planProviderLogin('kimi')).toEqual({ kind: 'adapter', provider: 'kimi' })
   })
   it('provider inconnu → throw', () => {
-    expect(() => planProviderLogin('omniroute')).toThrow(/Aucun login connu/)
+    expect(() => planProviderLogin('provider-inconnu')).toThrow(/Aucun login connu/)
     expect(() => planProviderLogin('')).toThrow()
   })
 })

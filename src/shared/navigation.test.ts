@@ -23,7 +23,6 @@ describe('registre canonique des destinations Autowin', () => {
     ['roles', 'agent-studio'],
     ['models', 'agent-studio'],
     ['router', 'agent-studio'],
-    ['omniroute', 'agent-studio'],
     ['capabilities', 'settings'],
     ['skills', 'settings'],
     ['hooks', 'settings'],
@@ -42,7 +41,6 @@ describe('registre canonique des destinations Autowin', () => {
 
   it.each([
     ['router', { destination: 'agent-studio', section: 'routing' }],
-    ['omniroute', { destination: 'agent-studio', section: 'routing' }],
     ['models', { destination: 'agent-studio', section: 'topology' }],
     ['capabilities', { destination: 'settings', section: 'capabilities' }],
     ['behaviour', { destination: 'settings', section: 'behaviour' }]

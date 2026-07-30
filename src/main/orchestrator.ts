@@ -297,7 +297,7 @@ export class Orchestrator {
     }
   >()
   private _hooks?: HookBus
-  /** Bus de hooks (fourni ou défaut). Uniforme pour TOUS les exécuteurs (claude/codex/omniroute). */
+  /** Bus de hooks (fourni ou défaut). Uniforme pour TOUS les exécuteurs. */
   private get hooks(): HookBus {
     return (this._hooks ??= this.deps.hooks ?? createDefaultHookBus())
   }

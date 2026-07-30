@@ -10,8 +10,8 @@ describe('normalizeTab — mapping des vues canoniques et legacy', () => {
     expect(normalizeTab('settings')).toBe('settings')
   })
 
-  it('fusionne Models, Topology et OmniRoute dans Agent Studio', () => {
-    for (const alias of ['agents', 'roles', 'models', 'router', 'omniroute', 'routeur']) {
+  it('fusionne Models, Topology et Routage dans Agent Studio', () => {
+    for (const alias of ['agents', 'roles', 'models', 'router', 'routeur']) {
       expect(normalizeTab(alias)).toBe('agent-studio')
     }
   })
