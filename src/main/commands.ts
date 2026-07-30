@@ -34,6 +34,11 @@ import { rememberFact } from './brain-remember'
 import { noteRemembered } from './session-memory-echo'
 import { brainServiceToken } from './brain-retrieval'
 import { classifyRegime } from './task-regime'
+import {
+  runGraphify,
+  type GraphifyCommandInput,
+  type GraphifyCommandResult
+} from './graphify-command'
 
 /**
  * Bus de commandes de l'app — le PLAN DE CONTRÔLE que les agents pilotent.
@@ -253,6 +258,20 @@ const CATALOG: CommandSpec[] = [
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
   },
   {
+    name: 'graphify',
+    description:
+      "Créer le graphe Graphify d'une codebase du workspace, ou le mettre à jour s'il existe déjà, avant une exploration large",
+    args: {
+      path: 'facultatif — chemin relatif de la codebase dans le workspace ; défaut = workspace entier'
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
+  },
+  {
     name: 'edit_file',
     description:
       'Remplacer un extrait UNIQUE dans un fichier du workspace (petite correction ciblée, sans lancer le pipeline) — puis utiliser « verify » pour prouver que ça tient',
@@ -437,7 +456,10 @@ export class AppCommandBus {
       provider: string | undefined,
       role: string | undefined,
       msg: string
-    ) => Promise<string>
+    ) => Promise<string>,
+    private readonly graphify: (
+      input: GraphifyCommandInput
+    ) => Promise<GraphifyCommandResult> = runGraphify
   ) {}
 
   catalog(): CommandSpec[] {
@@ -921,6 +943,11 @@ export class AppCommandBus {
         return await this.runVerify()
       case 'brain_query':
         return await this.runBrainQuery(a.question)
+      case 'graphify':
+        return await this.graphify({
+          workspaceRoot: this.os.executionWorkspace,
+          ...(typeof a.path === 'string' && a.path.trim() ? { path: a.path.trim() } : {})
+        })
       case 'remember': {
         const outcome = await rememberFact(a, {
           token: brainServiceToken(),

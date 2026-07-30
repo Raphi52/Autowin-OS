@@ -85,7 +85,10 @@ export function buildChatPilotagePrompt(
   `ANALYSER, ce n'est pas MODIFIER. Scouter, auditer, chercher une cause, expliquer, comparer, ` +
   `trouver des améliorations : tout cela se fait AVEC TES OUTILS DE LECTURE (Read, Grep, Glob) et ` +
   `ta réponse, JAMAIS avec \`orchestrate\` — même quand la demande porte sur le code, même si elle ` +
-  `est large. Tu peux lire autant de fichiers que nécessaire : c'est infiniment moins cher qu'un ` +
+  `est large. AVANT une exploration large d'une codebase, appelle \`graphify\` : il crée ou met à ` +
+  `jour son graphe local et te rend le chemin, les nœuds et les liens réellement produits. Ne le ` +
+  `lance pas pour une simple question ou un fichier déjà connu. Tu peux ensuite lire les fichiers ` +
+  `nécessaires : c'est infiniment moins cher qu'un ` +
   `pipeline. N'engage \`orchestrate\` que pour ÉCRIRE à plusieurs endroits ou mener un chantier ; ` +
   `pour une correction ponctuelle, utilise \`edit_file\` puis \`verify\`.\n` +
   // QUAND tu orchestres, NOMME la phase. Ce bloc ne donne AUCUNE raison de plus d'orchestrer — la

@@ -32,6 +32,7 @@ function fakeOs(): any {
     runPaths: []
   })
   return {
+    executionWorkspace: process.cwd(),
     conversations: {
       get: (id: string) => conversations.get(id),
       remove: (id: string) => conversations.delete(id),
@@ -306,6 +307,39 @@ describe('AppCommandBus authority policy', () => {
     })
     expect(events).toContainEqual({ type: 'navigate', tab: 'router' })
     await expect(bus.snapshot()).resolves.toMatchObject({ tab: 'agent-studio' })
+  })
+
+  it('publie et exécute le tool Graphify avec un chemin borné au workspace', async () => {
+    const graphify = vi.fn(async () => ({
+      action: 'updated' as const,
+      target: 'packages/api',
+      graph: 'packages/api/graphify-out/graph.json',
+      nodes: 42,
+      links: 84,
+      durationMs: 120
+    }))
+    const bus = new AppCommandBus(fakeOs(), () => {}, undefined, graphify)
+    const specification = bus.catalog().find((tool) => tool.name === 'graphify')
+
+    expect(specification).toMatchObject({
+      args: { path: expect.stringContaining('facultatif') },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    })
+    await expect(
+      bus.exec('graphify', { path: 'packages/api' }, undefined, 'auto')
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { action: 'updated', nodes: 42, links: 84 }
+    })
+    expect(graphify).toHaveBeenCalledWith({
+      workspaceRoot: process.cwd(),
+      path: 'packages/api'
+    })
   })
 
   it('snapshotForPrompt : projection minimale — pas de conversations inline, runs bloqués seulement', async () => {
