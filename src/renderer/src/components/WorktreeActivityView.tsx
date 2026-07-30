@@ -99,6 +99,39 @@ function requiresAttention(agent: WorktreeAgentActivity): boolean {
   return agent.state === 'blocked' && agent.attentionReason !== 'base-in-progress'
 }
 
+function routeCopy(agent: WorktreeAgentActivity): { label: string; tone: string; glyph: string } {
+  if (agent.publication === 'published') {
+    return {
+      label:
+        agent.attentionReason === 'post-publish-change'
+          ? 'Revenu dans ton workspace · suite protégée'
+          : 'Revenu dans ton workspace',
+      tone: 'returned',
+      glyph: '↵'
+    }
+  }
+  if (agent.publication === 'cleanup-pending') {
+    return {
+      label:
+        agent.attentionReason === 'retry-exhausted'
+          ? 'Revenu dans ton workspace · rangement à vérifier'
+          : 'Revenu dans ton workspace · rangement en cours',
+      tone: agent.attentionReason === 'retry-exhausted' ? 'attention' : 'returned',
+      glyph: '↵'
+    }
+  }
+  if (agent.state === 'merged') {
+    return { label: 'Revenu dans ton workspace', tone: 'returned', glyph: '↵' }
+  }
+  if (requiresAttention(agent)) {
+    return { label: 'Retour suspendu · ton avis', tone: 'attention', glyph: '↳' }
+  }
+  if (agent.state === 'ready') {
+    return { label: 'Conservé dans ce bureau', tone: 'waiting', glyph: '→' }
+  }
+  return { label: 'Travaille dans ce bureau séparé', tone: 'working', glyph: '→' }
+}
+
 function FileList({ agent }: { agent: WorktreeAgentActivity }): React.JSX.Element {
   if (agent.files.length === 0) {
     return <div className="wt-office-empty">Aucun fichier signalé</div>
@@ -127,77 +160,84 @@ function AgentOffice({
   onRetryOffice?: (agentId: string) => void
 }): React.JSX.Element {
   const copy = stateCopy(agent)
+  const route = routeCopy(agent)
   return (
-    <article
-      className={`wt-agent-office is-${copy.tone}`}
-      data-testid="wt-agent-office"
-      data-state={agent.state}
-      data-recovered={agent.recovered ? 'true' : 'false'}
-    >
-      <div className="wt-office-rail" aria-hidden />
-      <div className="wt-office-body">
-        <header className="wt-office-head">
-          <div className="wt-office-person">
-            <span className="wt-office-avatar">{agent.agentName.slice(0, 1).toUpperCase()}</span>
-            <div>
-              <strong>{agent.agentName}</strong>
-              <span>{agent.role ? `Rôle · ${agent.role}` : 'Bureau agent'}</span>
+    <div className="wt-office-branch" data-testid="wt-office-branch">
+      <article
+        className={`wt-agent-office is-${copy.tone}`}
+        data-testid="wt-agent-office"
+        data-state={agent.state}
+        data-recovered={agent.recovered ? 'true' : 'false'}
+      >
+        <div className="wt-office-rail" aria-hidden />
+        <div className="wt-office-body">
+          <header className="wt-office-head">
+            <div className="wt-office-person">
+              <span className="wt-office-avatar">{agent.agentName.slice(0, 1).toUpperCase()}</span>
+              <div>
+                <strong>{agent.agentName}</strong>
+                <span>{agent.role ? `Rôle · ${agent.role}` : 'Bureau agent'}</span>
+              </div>
             </div>
+            <span className={`wt-office-state is-${copy.tone}`}>
+              <i aria-hidden />
+              {copy.label}
+            </span>
+          </header>
+
+          <div className="wt-office-task">{agent.task ?? 'Tâche récupérée'}</div>
+          {agent.worktreePath && (
+            <code className="wt-office-path" title={agent.worktreePath}>
+              {agent.worktreePath}
+            </code>
+          )}
+          {agent.recovered && <span className="wt-recovered">↻ Récupéré après redémarrage</span>}
+          <FileList agent={agent} />
+          <div className="wt-office-outcome">{copy.outcome}</div>
+          <div className={`wt-office-route is-${route.tone}`}>
+            <span aria-hidden>{route.glyph}</span>
+            {route.label}
           </div>
-          <span className={`wt-office-state is-${copy.tone}`}>
-            <i aria-hidden />
-            {copy.label}
-          </span>
-        </header>
 
-        <div className="wt-office-task">{agent.task ?? 'Tâche récupérée'}</div>
-        {agent.worktreePath && (
-          <code className="wt-office-path" title={agent.worktreePath}>
-            {agent.worktreePath}
-          </code>
-        )}
-        {agent.recovered && <span className="wt-recovered">↻ Récupéré après redémarrage</span>}
-        <FileList agent={agent} />
-        <div className="wt-office-outcome">{copy.outcome}</div>
-
-        {agent.state === 'conflict' && onResolveConflict && (
-          <button
-            type="button"
-            className="wt-resolve btn btn-sm"
-            data-testid="wt-resolve-conflict"
-            onClick={() => onResolveConflict(agent.agentId)}
-          >
-            Comparer les deux versions
-          </button>
-        )}
-        {agent.state !== 'conflict' &&
-          requiresAttention(agent) &&
-          agent.worktreePath &&
-          agent.worktreeAvailable !== false &&
-          onOpenOffice && (
+          {agent.state === 'conflict' && onResolveConflict && (
             <button
               type="button"
               className="wt-resolve btn btn-sm"
-              data-testid="wt-open-office"
-              onClick={() => onOpenOffice(agent.worktreePath!)}
+              data-testid="wt-resolve-conflict"
+              onClick={() => onResolveConflict(agent.agentId)}
             >
-              Ouvrir le bureau protégé
+              Comparer les deux versions
             </button>
           )}
-        {agent.attentionReason === 'retry-exhausted' && onRetryOffice && (
-          <button
-            type="button"
-            className="wt-resolve btn btn-sm"
-            data-testid="wt-retry-office"
-            onClick={() => onRetryOffice(agent.agentId)}
-          >
-            {agent.worktreeAvailable === false
-              ? 'Réessayer de recréer le bureau'
-              : 'Réessayer maintenant'}
-          </button>
-        )}
-      </div>
-    </article>
+          {agent.state !== 'conflict' &&
+            requiresAttention(agent) &&
+            agent.worktreePath &&
+            agent.worktreeAvailable !== false &&
+            onOpenOffice && (
+              <button
+                type="button"
+                className="wt-resolve btn btn-sm"
+                data-testid="wt-open-office"
+                onClick={() => onOpenOffice(agent.worktreePath!)}
+              >
+                Ouvrir le bureau protégé
+              </button>
+            )}
+          {agent.attentionReason === 'retry-exhausted' && onRetryOffice && (
+            <button
+              type="button"
+              className="wt-resolve btn btn-sm"
+              data-testid="wt-retry-office"
+              onClick={() => onRetryOffice(agent.agentId)}
+            >
+              {agent.worktreeAvailable === false
+                ? 'Réessayer de recréer le bureau'
+                : 'Réessayer maintenant'}
+            </button>
+          )}
+        </div>
+      </article>
+    </div>
   )
 }
 
@@ -225,8 +265,10 @@ export function WorktreeActivityView({
     <div className={`wt-view ${className ?? ''}`} data-testid="wt-view">
       <header className="wt-hub-head">
         <div>
-          <span className="wt-kicker">A2 HUB</span>
-          <h3>Les bureaux Autowin</h3>
+          <span className="wt-kicker">TON PROJET</span>
+          <h3>
+            Un workspace, {agents.length} bureau{agents.length > 1 ? 'x' : ''}
+          </h3>
         </div>
         <span className="wt-hub-count">
           {active} actif{active > 1 ? 's' : ''}
@@ -241,11 +283,11 @@ export function WorktreeActivityView({
           ⌂
         </div>
         <div className="wt-main-copy">
-          <span>TON WORKSPACE</span>
+          <span>TON WORKSPACE · PRINCIPAL</span>
           <strong>{status.workspacePath || 'Workspace non identifié'}</strong>
           <p>
             {status.available
-              ? 'Protégé · les agents travaillent dans des bureaux séparés'
+              ? 'Disponible · les agents travaillent dans des bureaux séparés'
               : 'Protection indisponible · les mutations sont bloquées'}
           </p>
         </div>
@@ -254,30 +296,35 @@ export function WorktreeActivityView({
         </span>
       </section>
 
-      <div className="wt-connector" aria-hidden>
+      <div className="wt-flow-label" aria-hidden>
         <span />
-        <b>{agents.length ? 'BUREAUX SÉPARÉS' : 'PRÊT POUR LES AGENTS'}</b>
+        <b>{agents.length ? 'WORKTREES · BUREAUX SÉPARÉS' : 'PRÊT POUR LES AGENTS'}</b>
         <span />
       </div>
 
-      <section className="wt-offices" aria-label="Bureaux agents">
-        {agents.length === 0 ? (
-          <div className="wt-no-offices">
-            <span aria-hidden>◇</span>
-            <strong>Aucun bureau agent ouvert</strong>
-            <p>Ton workspace reste le seul bureau actif.</p>
-          </div>
-        ) : (
-          agents.map((agent) => (
-            <AgentOffice
-              key={agent.agentId}
-              agent={agent}
-              onResolveConflict={onResolveConflict}
-              onOpenOffice={onOpenOffice}
-              onRetryOffice={onRetryOffice}
-            />
-          ))
-        )}
+      <section
+        className={`wt-office-flow${agents.length ? '' : ' is-empty'}`}
+        data-testid="wt-office-flow"
+      >
+        <div className="wt-offices" aria-label="Bureaux agents">
+          {agents.length === 0 ? (
+            <div className="wt-no-offices">
+              <span aria-hidden>◇</span>
+              <strong>Aucun bureau agent ouvert</strong>
+              <p>Ton workspace reste le seul bureau actif.</p>
+            </div>
+          ) : (
+            agents.map((agent) => (
+              <AgentOffice
+                key={agent.agentId}
+                agent={agent}
+                onResolveConflict={onResolveConflict}
+                onOpenOffice={onOpenOffice}
+                onRetryOffice={onRetryOffice}
+              />
+            ))
+          )}
+        </div>
       </section>
 
       <section className="wt-inbox" data-testid="wt-inbox">
