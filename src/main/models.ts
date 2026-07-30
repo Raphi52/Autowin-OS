@@ -44,6 +44,8 @@ export interface ImportedModel {
   priority?: number
   /** Visibilité codex ('list' | 'hide' | …) telle qu'exposée par le listing live. */
   visibility?: string
+  /** Vrai uniquement quand l'entrée provient d'un catalogue découvert à l'exécution. */
+  dynamicallyLoaded?: boolean
 }
 
 /**
@@ -175,7 +177,8 @@ async function discoverCodexModels(
           reasoningEfforts: efforts,
           defaultReasoningEffort,
           priority,
-          visibility: entry.hidden ? 'hide' : 'list'
+          visibility: entry.hidden ? 'hide' : 'list',
+          dynamicallyLoaded: true
         }
       ]
     })
@@ -259,7 +262,8 @@ async function discoverClaudeModels(
     model,
     label: labelClaudeModel(model),
     reasoningEfforts: [...CLAUDE_EFFORTS],
-    defaultReasoningEffort: model.includes('haiku') ? 'medium' : 'high'
+    defaultReasoningEffort: model.includes('haiku') ? 'medium' : 'high',
+    dynamicallyLoaded: true
   }))
   try {
     const response = await fetchFn('http://127.0.0.1:8787/models', {
@@ -276,7 +280,8 @@ async function discoverClaudeModels(
         model,
         label: labelClaudeModel(model),
         reasoningEfforts: [...CLAUDE_EFFORTS],
-        defaultReasoningEffort: model.includes('haiku') ? 'medium' : 'high'
+        defaultReasoningEffort: model.includes('haiku') ? 'medium' : 'high',
+        dynamicallyLoaded: true
       }))
     // Alias, puis modeles NOMMES du CLI installe, puis versions d'un service local. `uniqueModels` en
     // aval dedoublonne : un id present a la fois dans le binaire et dans le service ne sort qu'une fois.
@@ -339,7 +344,9 @@ function readCatalogCache(
     if (!Array.isArray(models)) return undefined
     // Garde d'intégrité minimale : on ne restitue que des entrées au contrat attendu.
     if (!models.every((model) => isValidCachedModel(model, provider))) return undefined
-    return uniqueModels(models)
+    // Tout ce qui entre dans ce cache vient d'un listing dynamique antérieur. Ce marquage migre
+    // aussi les caches créés avant l'ajout explicite de cette provenance.
+    return uniqueModels(models.map((model) => ({ ...model, dynamicallyLoaded: true })))
   } catch {
     return undefined
   }

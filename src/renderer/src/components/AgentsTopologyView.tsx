@@ -10,6 +10,7 @@ type ImportedModel = {
   label: string
   reasoningEfforts: string[]
   defaultReasoningEffort: string
+  dynamicallyLoaded?: boolean
 }
 
 type SlotBinding = {
@@ -95,7 +96,7 @@ export function AgentsTopologyView({
       .then(([catalog, current, roles]) => {
         setModels(catalog)
         replaceTopology(withOrchestratorRole(current, catalog, roles.orchestrator))
-        setSelectedModelId(catalog[0]?.id ?? '')
+        setSelectedModelId(catalog.find((model) => model.dynamicallyLoaded)?.id ?? '')
         setState('ready')
       })
       .catch((reason) => {
@@ -153,6 +154,10 @@ export function AgentsTopologyView({
   }
 
   const modelsById = useMemo(() => new Map(models.map((model) => [model.id, model])), [models])
+  const libraryModels = useMemo(
+    () => models.filter((model) => model.dynamicallyLoaded === true),
+    [models]
+  )
   // Colonne gauche : les DERNIERES versions de ChatGPT et d'Anthropic en premier, entrelacees
   // (le plus recent de CHAQUE vendeur d'abord : GPT-5.6, Fable 5, Opus 4.8, ...), les autres
   // vendeurs ensuite. Evite d'enfouir Opus 4.8 sous 16 entrees ChatGPT. Cles de tri = celles du Chat.
@@ -165,8 +170,8 @@ export function AgentsTopologyView({
     }
     // Rang de recence PAR vendeur (0 = le plus recent de ce vendeur).
     const perVendorIndex = new Map<string, number>()
-    const groups = new Map<string, typeof models>()
-    for (const model of models) {
+    const groups = new Map<string, typeof libraryModels>()
+    for (const model of libraryModels) {
       const key = vendorKey(model.id)
       groups.set(key, [...(groups.get(key) ?? []), model])
     }
@@ -174,7 +179,7 @@ export function AgentsTopologyView({
       arr.sort((a, b) => rec(b.id) - rec(a.id) || a.label.localeCompare(b.label))
       arr.forEach((model, index) => perVendorIndex.set(model.id, index))
     }
-    return [...models].sort((a, b) => {
+    return [...libraryModels].sort((a, b) => {
       const pa = isPriority(vendorKey(a.id))
       const pb = isPriority(vendorKey(b.id))
       if (pa !== pb) return pa ? -1 : 1
@@ -190,7 +195,7 @@ export function AgentsTopologyView({
       if (ra !== rb) return rb - ra
       return a.label.localeCompare(b.label)
     })
-  }, [models])
+  }, [libraryModels])
   const selectedModel = modelsById.get(selectedModelId)
 
   async function persist(next: AgentTopology): Promise<void> {
@@ -490,7 +495,7 @@ export function AgentsTopologyView({
       <aside className="topology-library">
         <span className="topology-eyebrow">Modèles importés</span>
         <p>Glissez un modèle sur un slot ou sélectionnez-le puis utilisez Ajouter.</p>
-        {models.some((model) => model.provider === 'gemini') && (
+        {libraryModels.some((model) => model.provider === 'gemini') && (
           <button
             type="button"
             className="topology-provider-login"

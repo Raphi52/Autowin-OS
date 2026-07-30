@@ -69,6 +69,47 @@ afterEach(() => {
 })
 
 describe('AgentsTopologyView concurrent persistence', () => {
+  it('shows only dynamically loaded models in the Agent Studio library', async () => {
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      models: async () => [
+        {
+          ...models[0],
+          id: 'dynamic-gpt',
+          model: 'dynamic-gpt',
+          label: 'Dynamic GPT',
+          dynamicallyLoaded: true
+        },
+        {
+          ...models[0],
+          id: 'declared-gemini',
+          provider: 'gemini',
+          model: 'declared-gemini',
+          label: 'Declared Gemini'
+        },
+        {
+          ...models[0],
+          id: 'claude/opus',
+          provider: 'claude',
+          model: 'opus',
+          label: 'Claude Opus alias',
+          dynamicallyLoaded: false
+        }
+      ],
+      topology: async () => topology,
+      roles: async () => ({ orchestrator: { provider: 'openai', model: 'dynamic-gpt' } }),
+      profiles: async () => [],
+      onAppEvent: () => () => undefined
+    }
+
+    await act(async () => root.render(createElement(AgentsTopologyView)))
+    await flush()
+
+    const labels = [...container.querySelectorAll('.topology-models .topology-model strong')].map(
+      (element) => element.textContent
+    )
+    expect(labels).toEqual(['Dynamic GPT'])
+  })
+
   it('serializes rapid edits and builds the second save from the first optimistic snapshot', async () => {
     const saves: Array<Deferred<typeof topology>> = []
     const setTopology = vi.fn((_next: typeof topology) => {

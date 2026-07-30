@@ -120,6 +120,7 @@ interface ImportedModel {
   label: string
   reasoningEfforts: string[]
   defaultReasoningEffort: string
+  dynamicallyLoaded?: boolean
 }
 
 interface SlotBinding {
