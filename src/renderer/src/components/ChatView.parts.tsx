@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { groupOutcomeSummary } from './action-outcome-summary'
 import { failedActionRunId } from './run-trace-target'
 import { hasConsultableRun, localActionDetails } from './action-detail-target'
@@ -191,9 +192,17 @@ export function AssistantActivityGroup({
   actions: ChatActionPart[]
   /** Ouvre Workflows : `live` = carte du run en cours, `history` = activité passée. */
   onOpenLiveAction?: (mode: 'live' | 'history', runId?: string) => void
-  /** Relance la tâche interrompue (reprise sur l'acquis persisté), sans la retaper. */
-  onResume?: (task: string) => void
+  /**
+   * Relance la tâche interrompue (reprise sur l'acquis persisté), sans la retaper.
+   * Peut renvoyer une promesse : le bouton l'ATTEND (état de chargement) et affiche
+   * l'échec au lieu de le laisser disparaître dans le vide.
+   */
+  onResume?: (task: string) => void | Promise<{ ok?: boolean; error?: string } | void>
 }): React.JSX.Element {
+  // État LOCAL au bouton : le clic n'a sinon aucun retour visible tant que le tour persisté
+  // n'est pas revenu du main, et un second clic relançait la même tâche en double.
+  const [resumePending, setResumePending] = useState(false)
+  const [resumeError, setResumeError] = useState<string | null>(null)
   const failed = actions.some((action) => action.ok === false)
   // « En cours » = sans résultat ET non interrompue. Une action interrompue (tour clos sans son
   // résultat) n'est PAS en cours : c'est ce qui laissait l'indicateur tourner indéfiniment.
@@ -289,12 +298,35 @@ export function AssistantActivityGroup({
     {resumable && (
       <button
         type="button"
-        className="activity-resume"
+        className={`activity-resume${resumeError ? ' failed' : ''}`}
         data-testid="activity-resume"
-        title={`Reprendre : ${resumable}`}
-        onClick={() => onResume?.(resumable)}
+        disabled={resumePending}
+        aria-busy={resumePending}
+        {...(resumeError ? { 'data-resume-error': resumeError } : {})}
+        title={
+          resumePending
+            ? `Reprise en cours : ${resumable}`
+            : resumeError
+              ? `Reprise échouée : ${resumeError} — cliquer pour réessayer`
+              : `Reprendre : ${resumable}`
+        }
+        onClick={async () => {
+          if (resumePending) return
+          setResumePending(true)
+          setResumeError(null)
+          try {
+            const outcome = await onResume?.(resumable)
+            if (outcome && outcome.ok === false) {
+              setResumeError(outcome.error || 'reprise refusée')
+            }
+          } catch (error) {
+            setResumeError(error instanceof Error ? error.message : String(error))
+          } finally {
+            setResumePending(false)
+          }
+        }}
       >
-        ↻ Reprendre
+        {resumePending ? '↻ Reprise…' : resumeError ? '↻ Réessayer' : '↻ Reprendre'}
       </button>
     )}
     </div>
