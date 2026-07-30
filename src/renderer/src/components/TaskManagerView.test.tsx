@@ -169,7 +169,7 @@ describe('TaskManagerView', () => {
     })
 
     const provider = [...container.querySelectorAll('label')]
-      .find((label) => label.textContent?.includes('Provider'))
+      .find((label) => label.textContent?.includes('Modèle'))
       ?.querySelector('select')
     expect([...provider!.options].map((option) => option.value)).toEqual([
       'claude',
@@ -191,10 +191,10 @@ describe('TaskManagerView', () => {
     await act(async () => newButton?.click())
 
     const provider = [...container.querySelectorAll('label')]
-      .find((label) => label.textContent?.includes('Provider'))
+      .find((label) => label.textContent?.includes('Modèle'))
       ?.querySelector('select')
     expect(provider?.disabled).toBe(true)
-    expect(provider?.textContent).toContain('Aucun provider chargé dans Agent Studio')
+    expect(provider?.textContent).toContain('Aucun modèle chargé dans Agent Studio')
 
     const title = container.querySelector<HTMLInputElement>('input[name="title"]')!
     const prompt = container.querySelector<HTMLTextAreaElement>('textarea[name="prompt"]')!
@@ -257,7 +257,7 @@ describe('TaskManagerView', () => {
       destination?.dispatchEvent(new Event('change', { bubbles: true }))
     })
     const provider = [...container.querySelectorAll('label')]
-      .find((label) => label.textContent?.includes('Provider'))
+      .find((label) => label.textContent?.includes('Modèle'))
       ?.querySelector('select')
 
     expect([...provider!.options].map((option) => option.value)).toEqual(['ollama'])
@@ -291,7 +291,7 @@ describe('TaskManagerView', () => {
       destination?.dispatchEvent(new Event('change', { bubbles: true }))
     })
     const provider = [...container.querySelectorAll('label')]
-      .find((label) => label.textContent?.includes('Provider'))
+      .find((label) => label.textContent?.includes('Modèle'))
       ?.querySelector('select')
     const save = [...container.querySelectorAll('button')].find(
       (button) => button.textContent === 'Créer la tâche'

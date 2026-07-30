@@ -260,7 +260,7 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
       draft.destination.kind === 'new' &&
       (!providerCatalogReady || !providers.includes(draft.destination.provider))
     ) {
-      setError('Aucun provider chargé dans Agent Studio ne peut recevoir cette tâche.')
+      setError('Aucun modèle chargé dans Agent Studio ne peut recevoir cette tâche.')
       return
     }
     setSaving(true)
@@ -568,7 +568,7 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                       />
                     </label>
                     <label className="task-manager-field">
-                      <span>Provider</span>
+                      <span>Modèle</span>
                       <select
                         value={draft.destination.provider}
                         disabled={!providerCatalogReady || providers.length === 0}
@@ -595,7 +595,7 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                             </option>
                           )}
                         {providers.length === 0 && !draft.destination.provider && (
-                          <option value="">Aucun provider chargé dans Agent Studio</option>
+                          <option value="">Aucun modèle chargé dans Agent Studio</option>
                         )}
                         {providers.map((provider) => (
                           <option key={provider} value={provider}>
