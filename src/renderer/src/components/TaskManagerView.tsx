@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ModuleHeader } from './ModuleHeader'
 import type { RuntimeModel } from './chat-view-model'
-import { agentStudioProviderIds, type ProviderCatalogEntry } from './provider-catalog'
 import './TaskManagerView.css'
 
 type ExecutionMode = 'windows' | 'active-only'
@@ -16,12 +15,20 @@ interface TaskSchedule {
 }
 
 type TaskDestination =
-  | { kind: 'existing'; conversationId: string }
+  | {
+      kind: 'existing'
+      conversationId: string
+      provider?: string
+      model?: string
+      reasoningEffort?: string
+    }
   | {
       kind: 'new'
       title: string
       category: string
       provider: string
+      model?: string
+      reasoningEffort?: string
       authorityMode?: 'plan' | 'ask' | 'auto'
       conversationId?: string
     }
@@ -102,7 +109,7 @@ function localInputParts(date = new Date(Date.now() + 5 * 60_000)): {
   return { date: `${year}-${month}-${day}`, time: `${hour}:${minute}` }
 }
 
-function defaultDraft(conversations: ConversationSummary[], provider: string): TaskDraft {
+function defaultDraft(conversations: ConversationSummary[], selectedModel?: RuntimeModel): TaskDraft {
   const now = localInputParts()
   return {
     title: '',
@@ -110,12 +117,28 @@ function defaultDraft(conversations: ConversationSummary[], provider: string): T
     enabled: true,
     mode: 'active-only',
     destination: conversations[0]
-      ? { kind: 'existing', conversationId: conversations[0].id }
+      ? {
+          kind: 'existing',
+          conversationId: conversations[0].id,
+          ...(selectedModel
+            ? {
+                provider: selectedModel.provider,
+                model: selectedModel.model,
+                reasoningEffort: selectedModel.defaultReasoningEffort
+              }
+            : {})
+        }
       : {
           kind: 'new',
           title: 'Tâche planifiée',
-          category: provider,
-          provider,
+          category: selectedModel?.provider ?? '',
+          provider: selectedModel?.provider ?? '',
+          ...(selectedModel
+            ? {
+                model: selectedModel.model,
+                reasoningEffort: selectedModel.defaultReasoningEffort
+              }
+            : {}),
           authorityMode: 'auto'
         },
     schedule: {
@@ -152,6 +175,13 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : 'Opération impossible.'
 }
 
+function hasLoadedModel(destination: TaskDestination, models: RuntimeModel[]): boolean {
+  return models.some(
+    (candidate) =>
+      candidate.provider === destination.provider && candidate.model === destination.model
+  )
+}
+
 export function TaskManagerView({ active }: { active: boolean }): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<Snapshot>({
     tasks: [],
@@ -160,7 +190,7 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
     scheduler: { running: false, nextWakeAt: null, relayAvailable: false }
   })
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
-  const [providers, setProviders] = useState<string[]>([])
+  const [models, setModels] = useState<RuntimeModel[]>([])
   const [selectedId, setSelectedId] = useState<string>()
   const [draft, setDraft] = useState<TaskDraft>()
   const [editingId, setEditingId] = useState<string>()
@@ -170,7 +200,7 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
   const [catalogActive, setCatalogActive] = useState(active)
   const [catalogReady, setCatalogReady] = useState(false)
   const loadGenerationRef = useRef(0)
-  const providerCatalogReady = active && catalogReady && !loading
+  const modelCatalogReady = active && catalogReady && !loading
 
   if (catalogActive !== active) {
     setCatalogActive(active)
@@ -182,22 +212,19 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
     setLoading(true)
     setCatalogReady(false)
     setError(undefined)
-    setProviders([])
+    setModels([])
     try {
-      const [rawSnapshot, rawConversations, rawModels, rawStatuses] = await Promise.all([
+      const [rawSnapshot, rawConversations, rawModels] = await Promise.all([
         window.api.taskManagerSnapshot(),
         window.api.conversations(),
-        window.api.models().catch(() => []),
-        window.api.providerStatus().catch(() => [])
+        window.api.models().catch(() => [])
       ])
       if (generation !== loadGenerationRef.current) return
       const nextSnapshot = rawSnapshot as unknown as Snapshot
       const nextConversations = rawConversations as ConversationSummary[]
       setSnapshot(nextSnapshot)
       setConversations(nextConversations)
-      setProviders(
-        agentStudioProviderIds(rawModels as RuntimeModel[], rawStatuses as ProviderCatalogEntry[])
-      )
+      setModels(rawModels as RuntimeModel[])
       setCatalogReady(true)
       setSelectedId((current) =>
         current && nextSnapshot.tasks.some(({ id }) => id === current)
@@ -206,7 +233,7 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
       )
     } catch (failure) {
       if (generation !== loadGenerationRef.current) return
-      setProviders([])
+      setModels([])
       setCatalogReady(false)
       setError(errorText(failure))
     } finally {
@@ -228,16 +255,34 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
   }, [active, load])
 
   const selected = snapshot.tasks.find(({ id }) => id === selectedId)
+  const selectableModels = useMemo(
+    () =>
+      [...models].sort(
+        (left, right) =>
+          left.provider.localeCompare(right.provider) ||
+          (left.label ?? left.model).localeCompare(right.label ?? right.model)
+      ),
+    [models]
+  )
   const occurrences = useMemo(
     () => snapshot.occurrences.filter(({ taskId }) => taskId === selectedId),
     [selectedId, snapshot.occurrences]
   )
   const openAlerts = snapshot.alerts.filter(({ acknowledgedAt }) => !acknowledgedAt)
   const selectedAlerts = snapshot.alerts.filter(({ taskId }) => taskId === selectedId)
+  const draftDestination = draft?.destination
+  const draftModelId =
+    draftDestination
+      ? (selectableModels.find(
+          (candidate) =>
+            candidate.provider === draftDestination.provider &&
+            candidate.model === draftDestination.model
+        )?.id ?? '')
+      : ''
 
   const openCreate = (): void => {
     setEditingId(undefined)
-    setDraft(defaultDraft(conversations, providers[0] ?? ''))
+    setDraft(defaultDraft(conversations, selectableModels[0]))
   }
 
   const openEdit = (task: ScheduledTask): void => {
@@ -257,10 +302,10 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
       return
     }
     if (
-      draft.destination.kind === 'new' &&
-      (!providerCatalogReady || !providers.includes(draft.destination.provider))
+      !modelCatalogReady ||
+      !hasLoadedModel(draft.destination, selectableModels)
     ) {
-      setError('Aucun modèle chargé dans Agent Studio ne peut recevoir cette tâche.')
+      setError('Choisis un modèle chargé dans Agent Studio pour cette tâche.')
       return
     }
     setSaving(true)
@@ -502,13 +547,28 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                                 kind === 'existing' && conversations[0]
                                   ? {
                                       kind: 'existing',
-                                      conversationId: conversations[0].id
+                                      conversationId: conversations[0].id,
+                                      ...(selectableModels[0]
+                                        ? {
+                                            provider: selectableModels[0].provider,
+                                            model: selectableModels[0].model,
+                                            reasoningEffort:
+                                              selectableModels[0].defaultReasoningEffort
+                                          }
+                                        : {})
                                     }
                                   : {
                                       kind: 'new',
                                       title: current.title || 'Tâche planifiée',
-                                      category: providers[0] ?? '',
-                                      provider: providers[0] ?? '',
+                                      category: selectableModels[0]?.provider ?? '',
+                                      provider: selectableModels[0]?.provider ?? '',
+                                      ...(selectableModels[0]
+                                        ? {
+                                            model: selectableModels[0].model,
+                                            reasoningEffort:
+                                              selectableModels[0].defaultReasoningEffort
+                                          }
+                                        : {}),
                                       authorityMode: 'auto'
                                     }
                             }
@@ -517,7 +577,10 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                     }}
                   >
                     <option value="existing">Conversation existante</option>
-                    <option value="new" disabled={!providerCatalogReady || providers.length === 0}>
+                    <option
+                      value="new"
+                      disabled={!modelCatalogReady || selectableModels.length === 0}
+                    >
                       Nouvelle conversation dédiée
                     </option>
                   </select>
@@ -529,11 +592,11 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                       value={draft.destination.conversationId}
                       onChange={(event) =>
                         setDraft((current) =>
-                          current
+                          current?.destination.kind === 'existing'
                             ? {
                                 ...current,
                                 destination: {
-                                  kind: 'existing',
+                                  ...current.destination,
                                   conversationId: event.target.value
                                 }
                               }
@@ -549,63 +612,80 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                     </select>
                   </label>
                 ) : (
-                  <>
-                    <label className="task-manager-field">
-                      <span>Nom de la conversation</span>
-                      <input
-                        value={draft.destination.title}
-                        onChange={(event) => {
-                          const title = event.target.value
-                          setDraft((current) =>
-                            current?.destination.kind === 'new'
-                              ? {
-                                  ...current,
-                                  destination: { ...current.destination, title }
-                                }
-                              : current
-                          )
-                        }}
-                      />
-                    </label>
-                    <label className="task-manager-field">
-                      <span>Modèle</span>
-                      <select
-                        value={draft.destination.provider}
-                        disabled={!providerCatalogReady || providers.length === 0}
-                        onChange={(event) => {
-                          const provider = event.target.value
-                          setDraft((current) =>
-                            current?.destination.kind === 'new'
-                              ? {
-                                  ...current,
-                                  destination: {
-                                    ...current.destination,
-                                    provider,
-                                    category: provider
-                                  }
-                                }
-                              : current
-                          )
-                        }}
-                      >
-                        {!providers.includes(draft.destination.provider) &&
-                          draft.destination.provider && (
-                            <option value={draft.destination.provider} disabled>
-                              {draft.destination.provider} · indisponible
-                            </option>
-                          )}
-                        {providers.length === 0 && !draft.destination.provider && (
-                          <option value="">Aucun modèle chargé dans Agent Studio</option>
-                        )}
-                        {providers.map((provider) => (
-                          <option key={provider} value={provider}>
-                            {provider}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </>
+                  <label className="task-manager-field">
+                    <span>Nom de la conversation</span>
+                    <input
+                      value={draft.destination.title}
+                      onChange={(event) => {
+                        const title = event.target.value
+                        setDraft((current) =>
+                          current?.destination.kind === 'new'
+                            ? {
+                                ...current,
+                                destination: { ...current.destination, title }
+                              }
+                            : current
+                        )
+                      }}
+                    />
+                  </label>
                 )}
+                <label className="task-manager-field">
+                  <span>Modèle</span>
+                  <select
+                    value={draftModelId}
+                    disabled={!modelCatalogReady || selectableModels.length === 0}
+                    onChange={(event) => {
+                      const selectedModel = selectableModels.find(
+                        (candidate) => candidate.id === event.target.value
+                      )
+                      if (!selectedModel) return
+                      setDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              destination:
+                                current.destination.kind === 'new'
+                                  ? {
+                                      ...current.destination,
+                                      provider: selectedModel.provider,
+                                      category: selectedModel.provider,
+                                      model: selectedModel.model,
+                                      reasoningEffort: selectedModel.defaultReasoningEffort
+                                    }
+                                  : {
+                                      ...current.destination,
+                                      provider: selectedModel.provider,
+                                      model: selectedModel.model,
+                                      reasoningEffort: selectedModel.defaultReasoningEffort
+                                    }
+                            }
+                          : current
+                      )
+                    }}
+                  >
+                    {!draftModelId && draft.destination.model && (
+                      <option value="" disabled>
+                        {draft.destination.model} · indisponible
+                      </option>
+                    )}
+                    {!draftModelId &&
+                      !draft.destination.model &&
+                      selectableModels.length > 0 && (
+                        <option value="" disabled>
+                          Choisir un modèle
+                        </option>
+                      )}
+                    {selectableModels.length === 0 && !draft.destination.model && (
+                      <option value="">Aucun modèle chargé dans Agent Studio</option>
+                    )}
+                    {selectableModels.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.label ?? model.model} · {model.provider}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <label className="task-manager-field">
                   <span>Date de départ</span>
                   <input
@@ -713,8 +793,8 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                   className="task-manager-primary"
                   disabled={
                     saving ||
-                    (draft.destination.kind === 'new' &&
-                      (!providerCatalogReady || !providers.includes(draft.destination.provider)))
+                    !modelCatalogReady ||
+                    !hasLoadedModel(draft.destination, selectableModels)
                   }
                   onClick={() => void save()}
                 >

@@ -1,14 +1,25 @@
 import type { StructuredSchedule } from './schedule'
+import type { ReasoningEffort } from '../roles'
 
 export type TaskExecutionMode = 'windows' | 'active-only'
 
 export type TaskDestination =
-  | { kind: 'existing'; conversationId: string }
+  | {
+      kind: 'existing'
+      conversationId: string
+      /** Modèle explicite de la tâche; absent sur les tâches historiques. */
+      provider?: string
+      model?: string
+      reasoningEffort?: ReasoningEffort
+    }
   | {
       kind: 'new'
       title: string
       category: string
       provider: string
+      /** Modèle explicite de la tâche; absent sur les tâches historiques. */
+      model?: string
+      reasoningEffort?: ReasoningEffort
       authorityMode?: 'plan' | 'ask' | 'auto'
       /** Conversation dédiée créée au premier déclenchement, puis réutilisée. */
       conversationId?: string

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { ProviderRegistry } from './providers/registry'
-import type { RoleModelConfig, ReasoningEffort } from './roles'
+import type { RoleBinding, RoleModelConfig, ReasoningEffort } from './roles'
 import { resolvePhaseBinding } from './roles'
 import { defaultQuorumThreshold } from './quorum'
 import type { CostAggregator } from './dashboards/cost'
@@ -158,6 +158,7 @@ export interface OrchestratorDeps {
     task: string
     /** Conversation d'origine — sans elle, une reprise ne saurait pas où s'afficher. */
     conversationId?: string
+    bindingOverride?: RoleBinding
     phaseOutputs: { phase: PipelinePhase; text: string }[]
   }) => void
   /** Notifié quand le run atteint sa fin (vert, rouge ou abandon) → l'appelant efface l'état repris. */
@@ -341,7 +342,9 @@ export class Orchestrator {
      */
     resumeOutputs: { phase: PipelinePhase; text: string }[] = [],
     /** Conversation d'origine, persistée avec l'acquis pour qu'une reprise s'affiche au bon endroit. */
-    conversationId?: string
+    conversationId?: string,
+    /** Binding figé pour ce run, prioritaire sur tous les rôles et panels de la topologie. */
+    bindingOverride?: RoleBinding
   ): Promise<OrchestrationResult> {
     const runId = `run-${this.runNamespace}-${++this.runSeq}`
     const isMut = isMutationTask(task)
@@ -357,7 +360,13 @@ export class Orchestrator {
     // le plus courant : la phase 1 est longue) ne laissait donc RIEN, et la reprise automatique au
     // démarrage n'avait aucune prise — l'utilisateur devait relancer la tâche à la main. On enregistre
     // dès maintenant, acquis vide : la reprise repart de zéro plutôt que de perdre la tâche.
-    this.deps.onPhaseCompleted?.({ runId, task, conversationId, phaseOutputs: [...resumeOutputs] })
+    this.deps.onPhaseCompleted?.({
+      runId,
+      task,
+      conversationId,
+      bindingOverride,
+      phaseOutputs: [...resumeOutputs]
+    })
     const workCwd =
       this.deps.worktrees?.begin(runId, 'Agent', isMut) ?? this.deps.executionWorkspace
     if (isMut && this.deps.worktrees) {
@@ -375,7 +384,9 @@ export class Orchestrator {
       const phases = this.deps.classifyPhases
         ? this.deps.classifyPhases(task)
         : (this.deps.execPhases ?? ['build'])
-      if (this.deps.decompose && phases.includes('build')) {
+      // Un modèle explicitement choisi pour la tâche doit rester l'unique décideur du run :
+      // le décomposeur est lié au rôle orchestrateur global et casserait cet invariant.
+      if (!bindingOverride && this.deps.decompose && phases.includes('build')) {
         const plan = await this.deps.decompose(task)
         if (plan.length >= 2) {
           if (phases.length !== 1 || phases[0] !== 'build') {
@@ -389,7 +400,8 @@ export class Orchestrator {
               onPhase,
               onDelta,
               signal,
-              collectedContext
+              collectedContext,
+              bindingOverride
             )
             green = !greedyResult.gateBlocked
             produced = greedyResult
@@ -408,7 +420,8 @@ export class Orchestrator {
         collectedContext,
         runId,
         resumeOutputs,
-        conversationId
+        conversationId,
+        bindingOverride
       )
       green = !result.gateBlocked
       produced = result
@@ -467,7 +480,8 @@ export class Orchestrator {
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
     signal?: AbortSignal,
-    collectedContext = ''
+    collectedContext = '',
+    bindingOverride?: RoleBinding
   ): Promise<OrchestrationResult> {
     const { cost } = this.deps
     const trace: OrchestrationStep[] = []
@@ -485,7 +499,8 @@ export class Orchestrator {
       push,
       onPhase,
       onDelta,
-      signal
+      signal,
+      bindingOverride
     )
 
     const { valid, gate } = await this.greedyJudgeAndGate(
@@ -496,7 +511,8 @@ export class Orchestrator {
       push,
       onPhase,
       onDelta,
-      signal
+      signal,
+      bindingOverride
     )
 
     return {
@@ -525,11 +541,12 @@ export class Orchestrator {
     push: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    bindingOverride?: RoleBinding
   ): Promise<{ valid: boolean; gate: ReturnType<typeof evaluateClosure> }> {
     const { registry, roles, cost, trust } = this.deps
     const projectContext = projectContextBlock(this.deps.executionWorkspace)
-    const judgeBinding = roles.getBinding('judge')
+    const judgeBinding = bindingOverride ?? roles.getBinding('judge')
     const judgeProvider = judgeBinding.provider
     const judgePrompt =
       `Tu es un juge outillé en lecture seule. Confronte le livrable aux preuves d'outil. ` +
@@ -644,7 +661,8 @@ export class Orchestrator {
     push: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    bindingOverride?: RoleBinding
   ): Promise<{
     aggregate: string
     orderedOutputs: { id: string; text: string }[]
@@ -654,7 +672,7 @@ export class Orchestrator {
   }> {
     const { registry, roles, cost } = this.deps
     const projectContext = projectContextBlock(this.deps.executionWorkspace)
-    const subBinding = roles.getBinding('subagent')
+    const subBinding = bindingOverride ?? roles.getBinding('subagent')
     const subProvider = subBinding.provider
     const phaseBinding = resolvePhaseBinding(subBinding, phase)
     const sandbox = isMutationTask(task) ? 'danger-full-access' : 'read-only'
@@ -834,7 +852,8 @@ export class Orchestrator {
     runId = '',
     /** SURVIE NIVEAU 3 : acquis d'un run interrompu → ces phases sont REJOUÉES, pas refaites. */
     resumeOutputs: { phase: PipelinePhase; text: string }[] = [],
-    conversationId?: string
+    conversationId?: string,
+    bindingOverride?: RoleBinding
   ): Promise<OrchestrationResult> {
     const { registry, roles, cost, trust } = this.deps
     // Souveraineté contexte (décision PLIER) : Autowin lit LUI-MÊME le fichier projet gagnant de la
@@ -848,7 +867,7 @@ export class Orchestrator {
 
     // 1. Le sous-agent EXÉCUTE la tâche via la PIPELINE de phases (1 skill du kit par phase,
     //    provider-agnostique). Défaut ['build'] = exec simple ; prod = ['frame','build'] etc.
-    const subBinding = roles.getBinding('subagent')
+    const subBinding = bindingOverride ?? roles.getBinding('subagent')
     const subProvider = subBinding.provider
     // Sélection ADAPTATIVE (proportionnalité) : `classifyPhases(task)` prime si fourni — une tâche
     // triviale ne joue pas les 5 phases. Fallback `execPhases` statique (rétrocompat/tests).
@@ -870,7 +889,13 @@ export class Orchestrator {
     const recordPhase = (phase: PipelinePhase, text: string): void => {
       phaseOutputs.push({ phase, text })
       try {
-        this.deps.onPhaseCompleted?.({ runId, task, conversationId, phaseOutputs: [...phaseOutputs] })
+        this.deps.onPhaseCompleted?.({
+          runId,
+          task,
+          conversationId,
+          bindingOverride,
+          phaseOutputs: [...phaseOutputs]
+        })
       } catch {
         /* best-effort : une panne de persistance ne casse jamais le run en cours */
       }
@@ -934,7 +959,8 @@ export class Orchestrator {
           push,
           onPhase,
           onDelta,
-          signal
+          signal,
+          bindingOverride
         )
         aggregatedEvidence.push(...greedy.evidence)
         lastExecText = greedy.aggregate
@@ -952,7 +978,9 @@ export class Orchestrator {
       // Panel scout/frame : ≥1 modèle déposé dans le bloc topology → la phase s'exécute sur
       // CHAQUE membre. Avec un seul membre, sa sortie est réutilisée directement sans synthèse ;
       // avec plusieurs, l'orchestrateur synthétise. Aucun membre → binding subagent rétrocompatible.
-      const fanMembers = (this.deps.phaseFanOut?.(phase) ?? []).filter((m) => m && m.provider)
+      const fanMembers = bindingOverride
+        ? []
+        : (this.deps.phaseFanOut?.(phase) ?? []).filter((m) => m && m.provider)
       if (fanMembers.length >= 1) {
         // Le fan-out casse la chaîne de session (N sessions //). Chaque membre part du contexte complet.
         const fanMessages = [{ role: 'user' as const, content: phaseContext.join('\n\n') }]
@@ -1083,7 +1111,7 @@ export class Orchestrator {
           prevSessionId = undefined
           continue
         }
-        const orchBinding = roles.getBinding('orchestrator')
+        const orchBinding = bindingOverride ?? roles.getBinding('orchestrator')
         const labelled = good
           .map(
             (o, i) =>
@@ -1341,7 +1369,7 @@ export class Orchestrator {
     let lastJudgeText = ''
 
     // 2. Un JUGE (autre rôle → potentiellement autre modèle) évalue le résultat.
-    const judgeBinding = roles.getBinding('judge')
+    const judgeBinding = bindingOverride ?? roles.getBinding('judge')
     const judgeProvider = judgeBinding.provider
 
     // Une passe JUGE (autre rôle → décorrélation) + GATE déterministe sur l'état COURANT de `exec`.
@@ -1404,7 +1432,9 @@ export class Orchestrator {
       // FAN-OUT JUGE : ≥2 modèles dans le bloc topology judge → N juges en parallèle puis QUORUM
       // de vote MÉCANIQUE (compter les VALIDE ; majorité = pass). Agréger ≠ re-décider : aucun juge
       // supplémentaire ne tranche, on compte les voix. <2 ou absent → un seul juge (rétrocompat).
-      const judgeMembers = (this.deps.judgeFanOut?.() ?? []).filter((m) => m && m.provider)
+      const judgeMembers = bindingOverride
+        ? []
+        : (this.deps.judgeFanOut?.() ?? []).filter((m) => m && m.provider)
       if (judgeMembers.length >= 2) {
         const results = await Promise.all(
           judgeMembers.map(async (member) => {

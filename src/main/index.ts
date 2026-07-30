@@ -8,7 +8,8 @@ import {
   Menu,
   Notification,
   Tray,
-  type IpcMainInvokeEvent
+  type IpcMainInvokeEvent,
+  type WebContents
 } from 'electron'
 import { join } from 'path'
 import { randomUUID } from 'node:crypto'
@@ -37,7 +38,7 @@ import {
   watchAppPreflight
 } from './preflight-probes'
 import { repairPreflightCheck } from './preflight-repair'
-import { RoleModelConfig, type ReasoningEffort, type Role } from './roles'
+import { RoleModelConfig, type ReasoningEffort, type Role, type RoleBinding } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
@@ -1339,20 +1340,20 @@ function registerChatIpc(): void {
   // Chat transparent : l'agent converse ET pilote l'app dans le même tour.
   // conversationId (optionnel) → le tour est PERSISTÉ dans la conversation (fil rechargeable).
   const runPilotChat = async (
-    event: IpcMainInvokeEvent | undefined,
+    sender: WebContents | undefined,
     messages: Array<{
       role: 'user' | 'assistant'
       content: string
       attachments?: Message['attachments']
     }>,
-    conversationId?: string
+    conversationId?: string,
+    bindingOverride?: RoleBinding
   ): Promise<{
     ok: boolean
     cancelled: boolean
     turnId: string
     error?: string
   }> => {
-      if (event) assertTrustedRendererSender(event, 'PilotChat')
       // Duree du tour : MESUREE de bout en bout, pour repondre a « qu'est-ce qui est lent ? » et pas
       // seulement a « qu'est-ce qui coute ? » (les deux ne coincident pas forcement).
       const turnStartedAtMs = performance.now()
@@ -1391,7 +1392,7 @@ function registerChatIpc(): void {
           { provider: string; model?: string; reasoningEffort?: string } | undefined
         const last = safe[safe.length - 1]
         if (conversationId && last?.role === 'user' && os.conversations.get(conversationId)) {
-          const binding = os.roles.getBinding('orchestrator')
+          const binding = bindingOverride ?? os.roles.getBinding('orchestrator')
           os.conversations.beginTurn(
             conversationId,
             {
@@ -1689,8 +1690,8 @@ function registerChatIpc(): void {
             safe,
             handlePilotEvent,
             (question) =>
-              event
-                ? askModelQuestion(event.sender, 'chat', question, 'Chat', controller.signal)
+              sender
+                ? askModelQuestion(sender, 'chat', question, 'Chat', controller.signal)
                 : Promise.reject(
                     new Error(
                       'Une tâche planifiée ne peut pas répondre à une question interactive du modèle.'
@@ -1700,13 +1701,14 @@ function registerChatIpc(): void {
             conversationId,
             controller.signal,
             conversationId ? (os.conversations.get(conversationId)?.authorityMode ?? 'ask') : 'ask',
-            conversationId ? () => drainPendingDirectives(conversationId) : undefined
+            conversationId ? () => drainPendingDirectives(conversationId) : undefined,
+            bindingOverride
           )
         // Journal d'activité de la conversation : le tour de chat, avec son coût ET sa durée.
         const turnDurationMs = Math.round(performance.now() - turnStartedAtMs)
         if (conversationId) {
           const last = safe[safe.length - 1]
-          const orchestratorBinding = os.roles.getBinding('orchestrator')
+          const orchestratorBinding = bindingOverride ?? os.roles.getBinding('orchestrator')
           appendConvActivity(conversationId, {
             kind: 'chat',
             label: last?.role === 'user' ? last.content : 'tour agent',
@@ -1769,9 +1771,10 @@ function registerChatIpc(): void {
         resolveCompletion()
       }
     }
-  ipcMain.handle('os:pilotChat', (event, messages, conversationId) =>
-    runPilotChat(event, messages, conversationId)
-  )
+  ipcMain.handle('os:pilotChat', (event, messages, conversationId) => {
+    assertTrustedRendererSender(event, 'PilotChat')
+    return runPilotChat(event.sender, messages, conversationId)
+  })
 
   const relayScriptPath = app.isPackaged
     ? join(process.resourcesPath, 'app.asar.unpacked', 'resources', 'autowin-task-relay.ps1')
@@ -1785,8 +1788,8 @@ function registerChatIpc(): void {
     isConversationBusy: (conversationId) => Boolean(activeChatTurns.get(conversationId)),
     interruptAndWait: (conversationId, reason) =>
       activeChatTurns.abortAndWait(conversationId, reason),
-    runPrompt: (conversationId, prompt) =>
-      runPilotChat(undefined, [{ role: 'user', content: prompt }], conversationId)
+    runPrompt: (conversationId, prompt, binding) =>
+      runPilotChat(undefined, [{ role: 'user', content: prompt }], conversationId, binding)
   })
   const relay = new PowerShellWindowsRelay({
     scriptPath: relayScriptPath,
@@ -2252,7 +2255,8 @@ app.whenReady().then(async () => {
         undefined,
         undefined,
         resumableRun.phaseOutputs,
-        resumableRun.conversationId
+        resumableRun.conversationId,
+        resumableRun.bindingOverride
       )
       .catch((error: unknown) => {
         console.warn('[resume-orchestration] échec de la reprise :', error)

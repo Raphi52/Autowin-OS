@@ -112,6 +112,24 @@ describe('TaskManagerView', () => {
     expect(container.querySelector('[data-testid="task-manager-view"]')).not.toBeNull()
   })
 
+  it('permet de choisir le modèle pour une conversation existante', async () => {
+    const { container } = await mount()
+    const newButton = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Nouvelle tâche')
+    )
+    await act(async () => newButton?.click())
+
+    const model = [...container.querySelectorAll('label')]
+      .find((label) => label.textContent?.includes('Modèle'))
+      ?.querySelector('select')
+
+    expect(model).not.toBeNull()
+    expect([...model!.options].map((option) => option.value)).toEqual([
+      'claude:sonnet',
+      'ollama:qwen'
+    ])
+  })
+
   it('crée une tâche depuis des champs structurés', async () => {
     const { container, mockApi } = await mount()
     const newButton = [...container.querySelectorAll('button')].find((button) =>
@@ -133,6 +151,26 @@ describe('TaskManagerView', () => {
       )
       prompt.dispatchEvent(new Event('input', { bubbles: true }))
     })
+    const destination = [...container.querySelectorAll('label')]
+      .find((label) => label.textContent?.includes('Destination'))
+      ?.querySelector('select')
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set?.call(
+        destination,
+        'new'
+      )
+      destination?.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const model = [...container.querySelectorAll('label')]
+      .find((label) => label.textContent?.includes('Modèle'))
+      ?.querySelector('select')
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set?.call(
+        model,
+        'claude:sonnet'
+      )
+      model?.dispatchEvent(new Event('change', { bubbles: true }))
+    })
     const save = [...container.querySelectorAll('button')].find(
       (button) => button.textContent === 'Créer la tâche'
     )
@@ -142,6 +180,11 @@ describe('TaskManagerView', () => {
       expect.objectContaining({
         title: 'Veille quotidienne',
         prompt: 'Fais la veille.',
+        destination: expect.objectContaining({
+          kind: 'new',
+          provider: 'claude',
+          model: 'claude-sonnet'
+        }),
         schedule: expect.objectContaining({
           startDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
           time: expect.stringMatching(/^\d{2}:\d{2}$/)
@@ -172,9 +215,8 @@ describe('TaskManagerView', () => {
       .find((label) => label.textContent?.includes('Modèle'))
       ?.querySelector('select')
     expect([...provider!.options].map((option) => option.value)).toEqual([
-      'claude',
-      'kimi',
-      'ollama'
+      'claude:sonnet',
+      'ollama:qwen'
     ])
     expect(mockApi.roles).not.toHaveBeenCalled()
   })
@@ -260,7 +302,7 @@ describe('TaskManagerView', () => {
       .find((label) => label.textContent?.includes('Modèle'))
       ?.querySelector('select')
 
-    expect([...provider!.options].map((option) => option.value)).toEqual(['ollama'])
+    expect([...provider!.options].map((option) => option.value)).toEqual(['ollama:qwen'])
   })
 
   it('ne permet pas une nouvelle destination avec la liste périmée pendant une réactivation', async () => {

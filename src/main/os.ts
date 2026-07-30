@@ -177,11 +177,12 @@ export class AutowinOS {
       classifyPhases: regimePhases,
       // SURVIE NIVEAU 3 : après CHAQUE phase, on persiste l'acquis du run ; à la clôture on l'efface.
       // Un kill du process main laisse donc un état reprenable → `resumableOrchestration()`.
-      onPhaseCompleted: ({ runId, task, conversationId, phaseOutputs }) =>
+      onPhaseCompleted: ({ runId, task, conversationId, bindingOverride, phaseOutputs }) =>
         saveOrchestrationState(this.orchestrationStateRoot, {
           runId,
           task,
           ...(conversationId ? { conversationId } : {}),
+          ...(bindingOverride ? { bindingOverride } : {}),
           phaseOutputs,
           startedAt: this.orchestrationStartedAt.get(runId) ?? Date.now(),
           updatedAt: Date.now()
@@ -336,7 +337,9 @@ export class AutowinOS {
     /** SURVIE NIVEAU 3 : acquis d'un run interrompu → reprise à la phase suivante. */
     resumeOutputs?: { phase: PipelinePhase; text: string }[],
     /** Conversation d'origine : persistée avec l'acquis pour qu'une reprise s'affiche au bon endroit. */
-    conversationId?: string
+    conversationId?: string,
+    /** Modèle figé pour ce run uniquement, sans mutation de la topologie globale. */
+    bindingOverride?: RoleBinding
   ): Promise<OrchestrationResult> {
     await this.taskReadiness
     return this.orchestrator.run(
@@ -347,7 +350,8 @@ export class AutowinOS {
       signal,
       collectedContext,
       resumeOutputs,
-      conversationId
+      conversationId,
+      bindingOverride
     )
   }
 
@@ -368,12 +372,14 @@ export class AutowinOS {
   resumableOrchestrationForTask(
     task: string,
     conversationId: string | undefined,
-    nowMs = Date.now()
+    nowMs = Date.now(),
+    bindingOverride?: RoleBinding
   ): OrchestrationRunState | null {
     return pickResumeForTask(loadOrchestrationStates(this.orchestrationStateRoot), {
       task,
       conversationId,
-      nowMs
+      nowMs,
+      bindingOverride
     })
   }
 

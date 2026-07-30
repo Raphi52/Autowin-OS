@@ -9,6 +9,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import type { PipelinePhase } from '../skill-pipeline'
+import type { RoleBinding } from '../roles'
 
 /**
  * SURVIE NIVEAU 3 — état reprenable d'une ORCHESTRATION.
@@ -35,6 +36,8 @@ export interface OrchestrationRunState {
   runId: string
   task: string
   conversationId?: string
+  /** Binding figé du run; absent sur les états historiques. */
+  bindingOverride?: RoleBinding
   /** Livrables des phases DÉJÀ terminées, dans l'ordre — rejoués tels quels à la reprise. */
   phaseOutputs: OrchestrationPhaseOutput[]
   startedAt: number
@@ -133,12 +136,27 @@ export interface ResumeLookup {
   task: string
   /** Conversation d'origine ; un acquis d'une AUTRE conversation n'est jamais repris. */
   conversationId?: string
+  /** Empêche de rejouer des phases produites par un autre modèle. */
+  bindingOverride?: RoleBinding
   nowMs: number
   /** Au-dela, l'acquis est trop vieux pour etre reinjecte sans surprendre (defaut 24 h). */
   maxAgeMs?: number
 }
 
 const DEFAULT_RESUME_MAX_AGE_MS = 24 * 60 * 60 * 1_000
+
+function bindingIdentity(binding: RoleBinding | undefined): string {
+  if (!binding) return ''
+  const phaseModel = Object.fromEntries(
+    Object.entries(binding.phaseModel ?? {}).sort(([left], [right]) => left.localeCompare(right))
+  )
+  return JSON.stringify({
+    provider: binding.provider,
+    model: binding.model,
+    reasoningEffort: binding.reasoningEffort,
+    phaseModel
+  })
+}
 
 /**
  * Acquis reutilisable pour une tache RELANCEE depuis le chat.
@@ -167,6 +185,7 @@ export function pickResumeForTask(
   const usable = states.filter(
     (state) =>
       state.conversationId === lookup.conversationId &&
+      bindingIdentity(state.bindingOverride) === bindingIdentity(lookup.bindingOverride) &&
       normalizeTaskKey(state.task) === wanted &&
       lookup.nowMs - state.updatedAt <= maxAge &&
       lookup.nowMs >= state.updatedAt &&

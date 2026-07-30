@@ -58,6 +58,30 @@ describe('Task Manager — dispatch par le vrai Chat', () => {
     })
   })
 
+  it('applique le modèle choisi à une conversation existante', async () => {
+    const target = runtime()
+    const dispatcher = new ScheduledChatDispatcher(target)
+
+    await dispatcher.run(
+      task({
+        destination: {
+          kind: 'existing',
+          conversationId: 'conv-1',
+          provider: 'claude',
+          model: 'claude-sonnet',
+          reasoningEffort: 'high'
+        }
+      }),
+      occurrence
+    )
+
+    expect(target.runPrompt).toHaveBeenCalledWith('conv-1', 'Prépare le rapport.', {
+      provider: 'claude',
+      model: 'claude-sonnet',
+      reasoningEffort: 'high'
+    })
+  })
+
   it('interrompt immédiatement un tour occupé puis crée un nouveau tour visible', async () => {
     const target = runtime({
       isConversationBusy: vi.fn(() => true),
@@ -83,6 +107,7 @@ describe('Task Manager — dispatch par le vrai Chat', () => {
         title: 'Rapport planifié',
         category: 'codex',
         provider: 'codex',
+        model: 'gpt-5.6-sol',
         authorityMode: 'auto'
       }
     })
@@ -94,6 +119,7 @@ describe('Task Manager — dispatch par le vrai Chat', () => {
         title: 'Rapport planifié',
         category: 'codex',
         provider: 'codex',
+        model: 'gpt-5.6-sol',
         authorityMode: 'auto',
         conversationId: 'conv-new'
       }
@@ -106,8 +132,14 @@ describe('Task Manager — dispatch par le vrai Chat', () => {
 
     expect(target.createConversation).toHaveBeenCalledTimes(1)
     expect(target.bindConversation).toHaveBeenCalledWith('task-1', 'conv-new')
-    expect(target.runPrompt).toHaveBeenNthCalledWith(1, 'conv-new', 'Prépare le rapport.')
-    expect(target.runPrompt).toHaveBeenNthCalledWith(2, 'conv-new', 'Prépare le rapport.')
+    expect(target.runPrompt).toHaveBeenNthCalledWith(1, 'conv-new', 'Prépare le rapport.', {
+      provider: 'codex',
+      model: 'gpt-5.6-sol'
+    })
+    expect(target.runPrompt).toHaveBeenNthCalledWith(2, 'conv-new', 'Prépare le rapport.', {
+      provider: 'codex',
+      model: 'gpt-5.6-sol'
+    })
     expect(first.conversationId).toBe('conv-new')
     expect(second.conversationId).toBe('conv-new')
   })

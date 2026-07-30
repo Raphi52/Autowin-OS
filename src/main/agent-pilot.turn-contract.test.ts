@@ -47,6 +47,43 @@ describe('AgentPilot turn contract', () => {
     expect(events.map((event) => event.kind)).toEqual(['command', 'result', 'done'])
   })
 
+  it('propage le binding par tour à un /skill explicite', async () => {
+    const bus = {
+      catalog: () => [],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { valid: true } })
+    }
+    const binding = {
+      provider: 'claude',
+      model: 'claude-sonnet',
+      reasoningEffort: 'high' as const
+    }
+
+    await new AgentPilot(
+      { send: vi.fn(), describePrompt: vi.fn() } as never,
+      { getBinding: vi.fn() } as never,
+      bus as never
+    ).chat(
+      [{ role: 'user', content: '/build corrige puis teste' }],
+      () => undefined,
+      undefined,
+      1,
+      'conv-task',
+      undefined,
+      'auto',
+      undefined,
+      binding
+    )
+
+    expect(bus.exec).toHaveBeenCalledWith(
+      'orchestrate',
+      { task: '/build corrige puis teste' },
+      'conv-task',
+      'auto',
+      binding
+    )
+  })
+
   it('passes the persisted authority mode from the real pilotChat IPC path', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     expect(source).toMatch(
@@ -363,6 +400,55 @@ describe('AgentPilot turn contract', () => {
       expect(call[3]).toBe('gpt-initial')
     }
 
+  })
+
+  it('uses a per-turn binding without mutating the orchestrator role', async () => {
+    const send = vi.fn().mockResolvedValue({ text: 'Réponse finale', provider: 'claude' })
+    const describePrompt = vi.fn().mockReturnValue({
+      provider: 'claude',
+      transport: 'fixture',
+      messages: [],
+      options: {},
+      limitation: 'test'
+    })
+    const roles = {
+      getBinding: vi.fn(() => ({
+        provider: 'codex',
+        model: 'gpt-global',
+        reasoningEffort: 'medium'
+      }))
+    }
+    const bus = {
+      catalog: () => [],
+      snapshotForPrompt,
+      exec: vi.fn()
+    }
+
+    await new AgentPilot({ send, describePrompt } as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'test planifié' }],
+      () => undefined,
+      undefined,
+      1,
+      'conv-task',
+      undefined,
+      'auto',
+      undefined,
+      { provider: 'claude', model: 'claude-sonnet', reasoningEffort: 'high' }
+    )
+
+    expect(roles.getBinding).not.toHaveBeenCalled()
+    expect(send).toHaveBeenCalledWith(
+      'claude',
+      expect.any(Array),
+      expect.objectContaining({ model: 'claude-sonnet', reasoningEffort: 'high' }),
+      expect.any(Function)
+    )
+    expect(describePrompt).toHaveBeenCalledWith(
+      'claude',
+      expect.any(Array),
+      expect.objectContaining({ model: 'claude-sonnet', reasoningEffort: 'high' }),
+      'claude-sonnet'
+    )
   })
 
   it('injects Amitel Brain and Graphify evidence into the exact provider prompt', async () => {

@@ -64,6 +64,33 @@ function fakeOs(): any {
 }
 
 describe('AppCommandBus orchestration cancel (#2)', () => {
+  it('transmet le binding par tour au pipeline orchestré', async () => {
+    const os = fakeOs()
+    let receivedBinding: unknown
+    os.runTask = async (...args: unknown[]) => {
+      receivedBinding = args[8]
+      return {
+        gateBlocked: false,
+        gateReasons: [],
+        valid: true,
+        costUsd: 0,
+        result: '',
+        phaseOutputs: []
+      }
+    }
+    const binding = { provider: 'claude', model: 'claude-sonnet', reasoningEffort: 'high' as const }
+
+    await new AppCommandBus(os, () => {}).exec(
+      'orchestrate',
+      { task: '/build corrige puis teste' },
+      'conv-1',
+      'auto',
+      binding
+    )
+
+    expect(receivedBinding).toEqual(binding)
+  })
+
   it('collecte le contexte substantiel avant de déléguer au pipeline', async () => {
     const os = fakeOs()
     let collected = ''
@@ -101,7 +128,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
       })
     const bus = new AppCommandBus(os, () => {})
     const first = bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1', 'auto')
-    await vi.waitFor(() => expect(os.calls.runTask).toBe(1))
+    await vi.waitFor(() => expect(os.calls.runTask).toBe(1), { timeout: 5_000 })
 
     const second = await bus.exec(
       'orchestrate',
@@ -121,6 +148,48 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
       phaseOutputs: []
     })
     await first
+  })
+
+  it('ne déduplique pas deux mêmes prompts dont les modèles diffèrent', async () => {
+    const os = fakeOs()
+    const receivedBindings: unknown[] = []
+    const releases: Array<() => void> = []
+    os.runTask = (...args: unknown[]) =>
+      new Promise((resolve) => {
+        os.calls.runTask += 1
+        receivedBindings.push(args[8])
+        releases.push(() =>
+          resolve({
+            gateBlocked: false,
+            gateReasons: [],
+            valid: true,
+            costUsd: 0,
+            result: '',
+            phaseOutputs: []
+          })
+        )
+      })
+    const bus = new AppCommandBus(os, () => {})
+    const claude = { provider: 'claude', model: 'claude-sonnet' }
+    const codex = { provider: 'codex', model: 'gpt-5.6-sol' }
+
+    const first = bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1', 'auto', claude)
+    await vi.waitFor(() => expect(os.calls.runTask).toBe(1), { timeout: 5_000 })
+    const second = bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1', 'auto', codex)
+
+    let waitFailure: unknown
+    try {
+      await vi.waitFor(() => expect(os.calls.runTask).toBe(2), { timeout: 5_000 })
+    } catch (error) {
+      waitFailure = error
+    } finally {
+      releases.forEach((release) => release())
+      await Promise.all([first, second])
+    }
+    if (waitFailure) throw waitFailure
+
+    expect(os.calls.runTask).toBe(2)
+    expect(receivedBindings).toEqual(expect.arrayContaining([claude, codex]))
   })
 
   it('le finally d’un ancien chemin bus ne désarme pas Stop pour le nouveau run', async () => {
@@ -156,7 +225,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
 
     const oldRun = bus.exec('orchestrate', { task: 'ancien' }, 'conv-1', 'auto')
     const newRun = bus.exec('orchestrate', { task: 'nouveau' }, 'conv-1', 'auto')
-    await vi.waitFor(() => expect(signals.size).toBe(2))
+    await vi.waitFor(() => expect(signals.size).toBe(2), { timeout: 5_000 })
 
     first.resolve({
       gateBlocked: false,

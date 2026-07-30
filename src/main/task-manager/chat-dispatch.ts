@@ -1,5 +1,6 @@
 import type { DispatchResult, TaskDispatcher } from './task-scheduler'
 import type { ScheduledTask, TaskOccurrence } from './types'
+import type { ReasoningEffort } from '../roles'
 
 export interface ScheduledChatRuntime {
   hasConversation(conversationId: string): boolean
@@ -14,7 +15,8 @@ export interface ScheduledChatRuntime {
   interruptAndWait(conversationId: string, reason: string): Promise<boolean>
   runPrompt(
     conversationId: string,
-    prompt: string
+    prompt: string,
+    binding?: { provider: string; model: string; reasoningEffort?: ReasoningEffort }
   ): Promise<{ ok: boolean; cancelled?: boolean; turnId?: string; error?: string }>
 }
 
@@ -37,7 +39,19 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
       await this.runtime.interruptAndWait(conversationId, 'scheduled-task')
     }
 
-    const result = await this.runtime.runPrompt(conversationId, task.prompt)
+    const binding =
+      task.destination.provider && task.destination.model
+        ? {
+            provider: task.destination.provider,
+            model: task.destination.model,
+            ...(task.destination.reasoningEffort
+              ? { reasoningEffort: task.destination.reasoningEffort }
+              : {})
+          }
+        : undefined
+    const result = binding
+      ? await this.runtime.runPrompt(conversationId, task.prompt, binding)
+      : await this.runtime.runPrompt(conversationId, task.prompt)
     if (result.cancelled) {
       return {
         status: 'cancelled',

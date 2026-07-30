@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync, readdirSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
   clearOrchestrationState,
   loadOrchestrationStates,
+  pickResumeForTask,
   pickOrchestrationToResume,
   saveOrchestrationState,
   type OrchestrationRunState
@@ -32,6 +33,26 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
     expect(loadOrchestrationStates(root).map((s) => s.runId)).toEqual(['run-a-1'])
     clearOrchestrationState(root, 'run-a-1')
     expect(loadOrchestrationStates(root)).toEqual([])
+  })
+
+  it('persiste le modèle figé et le restaure au redémarrage', () => {
+    saveOrchestrationState(root, {
+      ...state('run-bound', 1000, ['frame']),
+      bindingOverride: {
+        provider: 'claude',
+        model: 'claude-sonnet',
+        reasoningEffort: 'high'
+      }
+    })
+
+    expect(loadOrchestrationStates(root)[0].bindingOverride).toEqual({
+      provider: 'claude',
+      model: 'claude-sonnet',
+      reasoningEffort: 'high'
+    })
+    expect(readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')).toContain(
+      'resumableRun.bindingOverride'
+    )
   })
 
   it('n’écrit pas de fichier temporaire résiduel (écriture atomique)', () => {
@@ -106,5 +127,24 @@ describe('garde-fou acquis vide (constaté en réel)', () => {
       updatedAt: 2
     }
     expect(pickOrchestrationToResume([mixed])?.runId).toBe('run-mixte-1')
+  })
+})
+
+describe('identité du modèle lors d’une reprise de conversation', () => {
+  it('ne réutilise pas un acquis produit par un autre modèle', () => {
+    const saved: OrchestrationRunState = {
+      ...state('run-claude', 1000, ['frame']),
+      conversationId: 'conv-1',
+      bindingOverride: { provider: 'claude', model: 'claude-sonnet' }
+    }
+
+    expect(
+      pickResumeForTask([saved], {
+        task: saved.task,
+        conversationId: 'conv-1',
+        nowMs: 1500,
+        bindingOverride: { provider: 'codex', model: 'gpt-5.6-sol' }
+      })
+    ).toBeNull()
   })
 })

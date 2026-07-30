@@ -1,5 +1,5 @@
 import type { ProviderRegistry } from './providers/registry'
-import type { RoleModelConfig } from './roles'
+import type { RoleBinding, RoleModelConfig } from './roles'
 import type { AppCommandBus } from './commands'
 import type { Message, PromptEnvelope, SendOptions, Usage } from './providers/types'
 import { parseModelQuestion, type ModelQuestion } from './model-questions'
@@ -175,12 +175,18 @@ export class AgentPilot {
     signal?: AbortSignal,
     authorityMode: ConversationAuthorityMode = 'ask',
     /** Directives injectées par l'utilisateur PENDANT le tour — drainées à chaque itération. */
-    drainDirectives?: () => string[]
+    drainDirectives?: () => string[],
+    /** Binding figé pour ce tour uniquement (ex. tâche planifiée), sans mutation du rôle global. */
+    bindingOverride?: RoleBinding
   ): Promise<void> {
     // Chronométrage des jalons jusqu'au PREMIER token : c'est la latence réellement perçue au clic.
     const timer = startTurnTimer('chat')
     let timingWritten = false
-    const binding = this.roles.getBinding('orchestrator')
+    const binding = bindingOverride ?? this.roles.getBinding('orchestrator')
+    const execCommand = (name: string, args: Record<string, unknown>) =>
+      bindingOverride
+        ? this.bus.exec(name, args, conversationId, authorityMode, bindingOverride)
+        : this.bus.exec(name, args, conversationId, authorityMode)
     const provider = binding.provider
     const catalog = this.bus.catalog()
     const snapshot = await this.bus.snapshotForPrompt()
@@ -203,7 +209,7 @@ export class AgentPilot {
       const args = { task: directRoute.task }
       onEvent({ kind: 'command', actionId, name: 'orchestrate', args })
       signal?.throwIfAborted()
-      const result = await this.bus.exec('orchestrate', args, conversationId, authorityMode)
+      const result = await execCommand('orchestrate', args)
       onEvent({
         kind: 'result',
         actionId,
@@ -226,12 +232,7 @@ export class AgentPilot {
             name: 'orchestrate',
             args: followUpArgs
           })
-          const followUp = await this.bus.exec(
-            'orchestrate',
-            followUpArgs,
-            conversationId,
-            authorityMode
-          )
+          const followUp = await execCommand('orchestrate', followUpArgs)
           onEvent({
             kind: 'result',
             actionId: followUpActionId,
@@ -627,7 +628,7 @@ export class AgentPilot {
         anyActionExecuted = true
         onEvent({ kind: 'command', actionId, name: token.name, args: token.args })
         signal?.throwIfAborted()
-        const r = await this.bus.exec(token.name, token.args, conversationId, authorityMode)
+        const r = await execCommand(token.name, token.args)
         onEvent({
           kind: 'result',
           actionId,

@@ -80,6 +80,26 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
     expect(result.valid).toBe(true)
   })
 
+  it('fige un modèle planifié sur tous les appels du run sans muter la topologie', async () => {
+    const provider = new RecordingProvider()
+    const cost = new CostAggregator()
+
+    await makeOrchestrator(provider, cost).run(
+      'cadre les pistes du projet',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { provider: provider.id, model: 'scheduled', reasoningEffort: 'high' }
+    )
+
+    expect(provider.calls.map((call) => call.model)).toEqual(['scheduled', 'scheduled'])
+    expect(provider.calls.map((call) => call.reasoningEffort)).toEqual(['high', 'high'])
+  })
+
   it('rend le coût par modèle VISIBLE dans la trace (chaque step de fan-out porte model + costUsd)', async () => {
     const provider = new RecordingProvider()
     const cost = new CostAggregator()

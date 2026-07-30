@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process'
 import { capVerifyOutput, decideVerifyCommand, type VerifyOutcome } from './verify-command'
 import type { AutowinOS } from './os'
 import type { Message } from './providers/types'
-import type { Role } from './roles'
+import type { Role, RoleBinding } from './roles'
 import {
   closeConvRun,
   reuseOrCreateConvRun,
@@ -586,7 +586,8 @@ export class AppCommandBus {
     name: string,
     args: Record<string, unknown> = {},
     conversationId?: string,
-    authorityMode: ConversationAuthorityMode = 'ask'
+    authorityMode: ConversationAuthorityMode = 'ask',
+    bindingOverride?: RoleBinding
   ): Promise<CommandResult> {
     try {
       const specification = this.catalog().find((command) => command.name === name)
@@ -602,11 +603,11 @@ export class AppCommandBus {
       }
       if (decision === 'confirm') {
         const pending = this.deferSensitiveAction(name, args, () =>
-          this.run(name, args, conversationId)
+          this.run(name, args, conversationId, bindingOverride)
         )
         return { ok: true, data: pending }
       }
-      const data = await this.run(name, args, conversationId)
+      const data = await this.run(name, args, conversationId, bindingOverride)
       this.trace?.(name, redactedArgs(name, args), true)
       return { ok: true, data }
     } catch (e) {
@@ -618,7 +619,8 @@ export class AppCommandBus {
   private async run(
     name: string,
     a: Record<string, unknown>,
-    conversationId?: string
+    conversationId?: string,
+    bindingOverride?: RoleBinding
   ): Promise<unknown> {
     const s = (k: string): string => String(a[k] ?? '')
     switch (name) {
@@ -695,7 +697,7 @@ export class AppCommandBus {
                 collectAutowinKaizenEvidence(conversation)
               )
             : requestedTask
-        const fingerprint = actionFingerprint('orchestrate', { convId, task })
+        const fingerprint = actionFingerprint('orchestrate', { convId, task, bindingOverride })
         const existingRun = this.activeOrchestrationByFingerprint.get(fingerprint)
         if (existingRun) {
           const existing = await existingRun
@@ -747,7 +749,8 @@ export class AppCommandBus {
         // REPRISE depuis le chat : le chemin de reprise n'existait qu'au REDEMARRAGE de l'app, donc
         // « reprend » relancait de zero et REPAYAIT les phases deja produites (2026-07-29). On cherche
         // un acquis de la MEME tache dans LA MEME conversation, recent et non vide.
-        const resumable = this.os.resumableOrchestrationForTask?.(task, convId) ?? null
+        const resumable =
+          this.os.resumableOrchestrationForTask?.(task, convId, Date.now(), bindingOverride) ?? null
         const resumeOutputs = resumable?.phaseOutputs ?? []
         if (resumable) {
           // Le run repris a son PROPRE etat persiste : sans cet oubli, le meme acquis serait rejoue a
@@ -836,7 +839,8 @@ export class AppCommandBus {
             resumeOutputs,
             // `conversationId` MANQUAIT aussi : sans lui, l'acquis persiste sans conversation et une
             // reprise ne peut plus etre rattachee a son fil.
-            convId
+            convId,
+            bindingOverride
           )
           if (r.brainNavigation || (r.brainInjectedChars ?? 0) > 0) {
             appendBrainTrace({

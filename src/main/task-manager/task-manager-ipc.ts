@@ -99,7 +99,16 @@ function destination(raw: unknown): TaskDestination {
   if (value.kind === 'existing') {
     return {
       kind: 'existing',
-      conversationId: requiredString(value.conversationId, 'conversationId')
+      conversationId: requiredString(value.conversationId, 'conversationId'),
+      ...(typeof value.provider === 'string' && value.provider.trim()
+        ? { provider: value.provider.trim() }
+        : {}),
+      ...(typeof value.model === 'string' && value.model.trim()
+        ? { model: value.model.trim() }
+        : {}),
+      ...(value.reasoningEffort === undefined
+        ? {}
+        : { reasoningEffort: reasoningEffort(value.reasoningEffort) })
     }
   }
   if (value.kind === 'new') {
@@ -110,6 +119,12 @@ function destination(raw: unknown): TaskDestination {
       title: requiredString(value.title, 'destination.title'),
       category: requiredString(value.category, 'destination.category'),
       provider: requiredString(value.provider, 'destination.provider'),
+      ...(typeof value.model === 'string' && value.model.trim()
+        ? { model: value.model.trim() }
+        : {}),
+      ...(value.reasoningEffort === undefined
+        ? {}
+        : { reasoningEffort: reasoningEffort(value.reasoningEffort) }),
       ...(authorityMode ? { authorityMode } : {}),
       ...(typeof value.conversationId === 'string' && value.conversationId.trim()
         ? { conversationId: value.conversationId.trim() }
@@ -180,4 +195,17 @@ function authority(value: unknown): 'plan' | 'ask' | 'auto' {
     throw new Error('Mode d’autorité invalide')
   }
   return value
+}
+
+function reasoningEffort(
+  value: unknown
+): 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra' {
+  if (
+    !['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'].includes(
+      String(value)
+    )
+  ) {
+    throw new Error('Effort de raisonnement invalide')
+  }
+  return value as 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
 }
