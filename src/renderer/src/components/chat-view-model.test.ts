@@ -417,6 +417,52 @@ describe('conversation-scoped workflow state', () => {
     expect(stepped['conversation-b']).toBeUndefined()
   })
 
+  it('garde le fil des sous-agents une fois le run TERMINÉ — c’est la preuve de ce qui a été fait', () => {
+    // Séquence exacte que le chat exécutait : start → step → end, puis un `clear` planifié 4 s plus tard
+    // (ChatView.tsx, `orchestrate-end`). Le `clear` faisait `delete next[convId]` : l'entrée partait avec
+    // ses `steps`, et rien ne les reprenait — `RunSummary` ne porte aucun step.
+    const started = reduceScopedLiveRuns(
+      {},
+      { type: 'start', convId: 'conversation-a', runPath: 'run-a', task: 'audit A' }
+    )
+    const stepped = reduceScopedLiveRuns(started, {
+      type: 'step',
+      convId: 'conversation-a',
+      runPath: 'run-a',
+      step: { type: 'exec', label: 'worker A' }
+    })
+    const ended = reduceScopedLiveRuns(stepped, {
+      type: 'end',
+      convId: 'conversation-a',
+      runPath: 'run-a',
+      status: 'green'
+    })
+    expect(ended['conversation-a']?.steps).toHaveLength(1)
+
+    // Même si un `clear` arrive quand même, un run TERMINÉ ne doit plus pouvoir être détruit : la garde
+    // est structurelle, pas une promesse de ne plus appeler la fonction.
+    const afterStrayClear = reduceScopedLiveRuns(ended, {
+      type: 'clear',
+      convId: 'conversation-a',
+      runPath: 'run-a'
+    })
+    expect(afterStrayClear['conversation-a']?.steps).toHaveLength(1)
+    expect(afterStrayClear['conversation-a']?.status).toBe('green')
+  })
+
+  it('un run ENCORE EN COURS reste effaçable — la garde doit DISCRIMINER', () => {
+    const started = reduceScopedLiveRuns(
+      {},
+      { type: 'start', convId: 'conversation-a', runPath: 'run-a', task: 'audit A' }
+    )
+    const cleared = reduceScopedLiveRuns(started, {
+      type: 'clear',
+      convId: 'conversation-a',
+      runPath: 'run-a'
+    })
+    expect(cleared['conversation-a']).toBeUndefined()
+  })
+
   it('tracks the active phase then clears it when the step is recorded', () => {
     const started = reduceScopedLiveRuns(
       {},

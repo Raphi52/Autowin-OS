@@ -1051,7 +1051,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     ).toBe(1)
   })
 
-  it('expose Workflows sans onglet Activité', async () => {
+  it('expose les TROIS sections de Workflows, et toujours pas d’onglet Activité', async () => {
     const mockApi = api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) })
     await mount(mockApi)
     await click('.conv-pick')
@@ -1060,8 +1060,12 @@ describe('ChatView behavior under concurrent UI actions', () => {
     const pane = container!.querySelector('.runs-pane')
     expect(pane).toBeTruthy()
     const tabs = [...pane!.querySelectorAll('.conv-head button')].map((b) => b.textContent?.trim())
-    expect(tabs).toContain('Runs')
+    // L'onglet unique « Runs » melangeait le fil des sous-agents et la liste des RUN.md : il est
+    // remplace par DEUX sections distinctes, a la demande explicite de l'utilisateur.
+    expect(tabs).toContain('Sous-agents')
+    expect(tabs).toContain('Run')
     expect(tabs).toContain('Source control')
+    expect(tabs).not.toContain('Runs')
     expect(tabs).not.toContain('Activité')
     expect(pane!.className).not.toContain('wide')
   })
