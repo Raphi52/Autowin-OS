@@ -80,7 +80,7 @@ describe('famille JUDGE — examiner un livrable qui existe déjà', () => {
     'relis mon commit',
     "est-ce que c'est bon ?",
     'review this change',
-    'assess the retrieval design',
+
     'vérifie la qualité du rendu'
   ]
   it.each(cases)('« %s » → judge', (message) => {
@@ -273,5 +273,199 @@ describe('effet — une phase demandée par le modèle restreint le pipeline', (
 
   it('sans préfixe, le régime décide comme avant', () => {
     expect(regimePhases('modifie la popup pour ajouter un bouton')).toEqual(['frame', 'build'])
+  })
+})
+
+/**
+ * ═══ LES CAS DE L'AUDIT DU 2026-07-29 ═══
+ *
+ * Ces phrases viennent d'un juge EXTERNE qui a exécuté le code, pas de mon imagination. Mes 74 tests
+ * étaient verts et ne couvraient que ce que j'avais prévu — c'est le défaut de méthode que ces cas
+ * verrouillent.
+ */
+describe('MAJEUR 1 — la négation ne route PAS comme l’affirmation', () => {
+  const nies = [
+    'je veux pas de framework',
+    'je ne veux pas de cadrage',
+    'faudrait pas nettoyer',
+    'il ne faut pas nettoyer',
+    'on devrait pas faire ça',
+    'on ne devrait pas toucher à ça',
+    "j'ai pas besoin d'un indicateur",
+    'pas besoin de nettoyer',
+    "i don't want a new button",
+    'we should not clean this up',
+    'no need to audit that'
+  ]
+  it.each(nies)('« %s » → aucune route', (message) => {
+    expect(matchIntentPhase(message)).toBeNull()
+  })
+
+  it('IMPACT PROUVÉ : la demande de correction n’est plus perdue', () => {
+    // AVANT : ['frame'] sans build -> le bug demande n'etait JAMAIS corrige.
+    expect(regimePhases('je veux pas de framework, corrige le bug dans auth.ts')).toContain('build')
+  })
+
+  it('l’affirmation, elle, route toujours', () => {
+    expect(matchIntentPhase('je veux un bouton réparer')?.phase).toBe('frame')
+    expect(matchIntentPhase('nettoie avant de finir')?.phase).toBe('clean')
+  })
+})
+
+describe('MAJEUR 2 — un verbe d’examen exige un COMPLÉMENT', () => {
+  const generaux = [
+    'reviewer un article scientifique',
+    'assess the situation please',
+    'evaluer une variable',
+    'relis-toi stp',
+    'critique de cinéma',
+    'jugement dernier'
+  ]
+  it.each(generaux)('« %s » → aucune route', (message) => {
+    expect(matchIntentPhase(message)).toBeNull()
+  })
+
+  it('IMPACT PROUVÉ : la correction demandée n’est plus perdue', () => {
+    // AVANT : [] -> seul le juge tournait, sur rien.
+    expect(
+      regimePhases('reviewer un article scientifique, corrige le bug dans auth.ts')
+    ).not.toEqual([])
+  })
+
+  const vraies = [
+    'review this change',
+
+    'évalue ce que ça vaut',
+    'relis mon commit',
+    'audite ce livrable',
+    'audi le module de coût',
+    'juge la qualité du filtre'
+  ]
+  it.each(vraies)('« %s » reste un audit', (message) => {
+    expect(matchIntentPhase(message)?.phase).toBe('judge')
+  })
+})
+
+describe('MAJEUR 3 — les politesses et connecteurs en tête sont tolérés', () => {
+  const cases: Array<[string, string]> = [
+    ['peux-tu chercher ce qui cloche dans le routage', 'scout'],
+    ['pourrais-tu auditer ce module', 'judge'],
+    ['stp cherche des améliorations', 'scout'],
+    ['stp, cherche des idées sur le chat', 'scout'],
+    ['svp nettoie le dossier', 'clean'],
+    ['merci de chercher les bugs', 'scout'],
+    ['bon, il faut revoir la barre latérale', 'frame'],
+    ['alors, je veux un bouton', 'frame'],
+    ['du coup il faudrait un test', 'frame'],
+    ['hey, trouve moi une piste', 'scout'],
+    ['please clean up the old script', 'clean'],
+    ['can you find issues in the router', 'scout'],
+    ['could you look for improvements', 'scout'],
+    ['tu peux chercher ce qui manque', 'scout'],
+    ['est-ce que tu peux auditer ce livrable', 'judge']
+  ]
+  it.each(cases)('« %s » → %s', (message, phase) => {
+    expect(matchIntentPhase(message)?.phase).toBe(phase)
+  })
+
+  it('deux préambules empilés sont tolérés', () => {
+    expect(matchIntentPhase('bon, stp cherche des idées')?.phase).toBe('scout')
+  })
+
+  it('un préambule SEUL ne route rien', () => {
+    expect(matchIntentPhase('stp')).toBeNull()
+    expect(matchIntentPhase('bon, alors')).toBeNull()
+  })
+})
+
+describe('MAJEUR 4 — deux intentions : on refuse de router plutôt que d’amputer', () => {
+  it('« audite ça et corrige ce que tu trouves » ne perd PLUS la correction', () => {
+    // AVANT : judge -> phases [] -> la correction disparaissait sans un mot.
+    expect(matchIntentPhase('audite ça et corrige ce que tu trouves')).toBeNull()
+    expect(regimePhases('audite ça et corrige ce que tu trouves')).toContain('build')
+  })
+
+  const composes = [
+    'regarde le module et nettoie ce qui traîne',
+    'cherche les doublons puis supprime-les',
+    'review this and fix the bug',
+    'je veux un bouton, et ajoute un test'
+  ]
+  it.each(composes)('« %s » → aucune route (le régime reprend la main)', (message) => {
+    expect(matchIntentPhase(message)).toBeNull()
+  })
+
+  it('une intention SEULE route toujours', () => {
+    expect(matchIntentPhase('audite ce livrable')?.phase).toBe('judge')
+  })
+})
+
+describe('MAJEUR 5 — une tâche CRITIQUE n’est plus amputée par une intention', () => {
+  it('LE CAS RÉEL : « il faut refactorer toute l’architecture » garde ses cinq phases', () => {
+    // AVANT : ['frame'] — « il faut » amputait un refactor d'architecture.
+    expect(regimePhases("il faut refactorer toute l'architecture")).toEqual([
+      'scout',
+      'frame',
+      'terrain',
+      'build',
+      'clean'
+    ])
+  })
+
+  it('même chose sur un signal de sécurité', () => {
+    expect(regimePhases("je veux revoir la sécurité de l'authentification")).toHaveLength(5)
+  })
+
+  it('une phase NOMMÉE garde le droit de réduire une tâche critique (décision explicite)', () => {
+    expect(regimePhases("/frame refactorer toute l'architecture")).toEqual(['frame'])
+  })
+
+  it('une tâche NON critique se restreint toujours', () => {
+    expect(regimePhases('je veux un bouton réparer dans la popup')).toEqual(['frame'])
+  })
+})
+
+describe('MINEURS de l’audit', () => {
+  it('l’anglais informel est couvert', () => {
+    expect(matchIntentPhase('take a look at the router')?.phase).toBe('scout')
+    expect(matchIntentPhase("what's wrong with the cache")?.phase).toBe('scout')
+    expect(matchIntentPhase('brainstorm ideas for the observatory')?.phase).toBe('scout')
+    expect(matchIntentPhase('help me decide between the two')?.phase).toBe('scout')
+  })
+
+  it('la voix passive ambiguë va au NETTOYAGE, pas au cadrage', () => {
+    expect(matchIntentPhase('ça devrait être nettoyé')?.phase).toBe('clean')
+  })
+
+  it('les faux positifs anglais hors contexte logiciel ne routent plus', () => {
+    expect(matchIntentPhase('terrain de foot')).toBeNull()
+  })
+
+  it('LIMITE ASSUMÉE : une faute de frappe au milieu du mot n’est pas rattrapée', () => {
+    // Tolerance revendiquee = troncature, PAS distance d'edition. Documente au lieu d'etre tu.
+    expect(matchIntentPhase('auddit le module')).toBeNull()
+  })
+})
+
+/**
+ * RENONCEMENT ASSUMÉ, issu de l'audit — écrit noir sur blanc plutôt que tu.
+ *
+ * `assess` et `terrain` NUS sont abandonnés. Raison : aucune règle de complément ne sépare
+ * « assess the situation » de « assess the retrieval design » — même déterminant. Et l'audit a prouvé
+ * qu'un faux positif `judge` rend des phases VIDES, donc fait PERDRE une demande de correction.
+ * Perdre un peu de rappel vaut mieux que perdre du travail demandé.
+ */
+describe('renoncements assumés — rappel sacrifié pour éviter un faux positif coûteux', () => {
+  it('« assess … » ne route plus, même sur un vrai livrable', () => {
+    expect(matchIntentPhase('assess the retrieval design')).toBeNull()
+    // La formulation univoque, elle, marche toujours.
+    expect(matchIntentPhase('review this design')?.phase).toBe('judge')
+    expect(matchIntentPhase('audite ce design')?.phase).toBe('judge')
+  })
+
+  it('« terrain » nu ne route plus — la phase se NOMME (`/terrain`)', () => {
+    expect(matchIntentPhase('terrain de foot')).toBeNull()
+    expect(matchIntentPhase('prépare le terrain pour la boucle')?.phase).toBe('terrain')
+    expect(regimePhases('/terrain prépare la boucle')).toEqual(['terrain'])
   })
 })

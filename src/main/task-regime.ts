@@ -83,16 +83,26 @@ export function regimePhases(task: string): PipelinePhase[] {
   // Ordre : une phase NOMMEE prime (autorite maximale), puis l'INTENTION en langage naturel. Cette
   // derniere ne fait que RESTREINDRE les phases d'une tache deja partie en orchestration — elle ne
   // decide jamais d'orchestrer, precisement pour ne pas rejouer la regression du 2026-07-28.
-  const explicitPhase =
-    routeSkillRequest(task)?.explicitPhase ??
-    matchExplicitPhase(task) ??
-    matchIntentPhase(task)?.phase ??
-    undefined
-  // `judge` est la closure externe permanente de l'orchestrateur, pas une phase worker.
-  // Une commande /judge saute donc les phases d'exécution et lance ce juge une seule fois.
-  if (explicitPhase === 'judge') return []
-  if (explicitPhase) return [explicitPhase]
-  return [...REGIME_PHASES[classifyRegime(task)]]
+  // Une phase NOMMÉE est AUTORITAIRE : l'utilisateur (ou le modèle) l'a désignée, on ne discute pas.
+  const namedPhase = routeSkillRequest(task)?.explicitPhase ?? matchExplicitPhase(task) ?? undefined
+  if (namedPhase === 'judge') return []
+  if (namedPhase) return [namedPhase]
+
+  const regime = classifyRegime(task)
+  // AMPUTATION D'UN RÉGIME CRITIQUE — défaut relevé par l'audit du 2026-07-29 :
+  // `regimePhases("il faut refactorer toute l'architecture")` rendait `['frame']` au lieu des cinq
+  // phases, parce que « il faut » déclenche l'intention `frame`. Une INTENTION est un indice de
+  // registre, pas une autorisation de réduire une tâche à risque. Mon test anti-régression passait à
+  // côté : il exerçait une tâche critique SANS intention en tête.
+  // Une phase NOMMÉE, elle, garde le droit de réduire (au-dessus) : c'est une décision explicite.
+  if (regime === 'critical') return [...REGIME_PHASES[regime]]
+
+  const intentPhase = matchIntentPhase(task)?.phase
+  // `judge` est la closure externe permanente de l'orchestrateur, pas une phase worker : une demande
+  // d'audit saute donc les phases d'exécution et lance ce juge une seule fois.
+  if (intentPhase === 'judge') return []
+  if (intentPhase) return [intentPhase]
+  return [...REGIME_PHASES[regime]]
 }
 
 /** Exposé pour test/observabilité : phases d'un régime donné. */
