@@ -20,6 +20,8 @@ import { guardBrokenProcessPipes } from './process-stream-guards'
 import { ProviderRegistry } from './providers/registry'
 import { AutowinOS } from './os'
 import { projectContextBlock } from './context-files'
+import { DEFAULT_CDP_PORT, listeningPorts, resolveCdpPort } from './cdp-port'
+import { execFileSync } from 'node:child_process'
 import { ensureBrainServerStarted } from './brain-server-launch'
 import { installCrashHandlers } from './crash-handlers'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
@@ -155,9 +157,23 @@ const headlessTestInstance = automationInstanceMode.headless
 const appDataRoot = resolveAutowinAppDataBase(app.getPath('appData'), app.isPackaged)
 app.setName(isolatedTestInstance ? `${AUTOWIN_DISPLAY_NAME} Test` : AUTOWIN_DISPLAY_NAME)
 const explicitUserDataDir = process.argv.some((argument) => argument.startsWith('--user-data-dir'))
-// En DEV uniquement : ouvre le port CDP pour piloter/inspecter le renderer réel (localhost:9223).
-// Jamais en packagé (surface de debug). Doit être posé avant app ready.
-if (is.dev) app.commandLine.appendSwitch('remote-debugging-port', '9223')
+// En DEV uniquement : ouvre le port CDP pour piloter/inspecter le renderer réel. Jamais en packagé
+// (surface de debug). Doit être posé avant app ready — d'où la sonde SYNCHRONE du port.
+// Un enfant de l'app peut hériter du socket d'écoute et garder le port après la mort de l'app (vécu,
+// PID orphelin en LISTENING) : on prend alors le suivant libre au lieu de perdre le CDP.
+if (is.dev) {
+  const cdp = resolveCdpPort(() =>
+    listeningPorts(
+      execFileSync('netstat', ['-ano'], { encoding: 'utf8', windowsHide: true, timeout: 5_000 })
+    )
+  )
+  app.commandLine.appendSwitch('remote-debugging-port', String(cdp.port))
+  // Toujours annoncer le port EFFECTIF : sans ça, un port déplacé rendrait tout pilotage muet.
+  console.log(
+    `[cdp] port ${cdp.port}${cdp.forced ? ' (forcé par AUTOWIN_CDP_PORT)' : ''}` +
+      (cdp.moved ? ` — ${DEFAULT_CDP_PORT} était occupé` : '')
+  )
+}
 const canonicalAppDataRoot = createAutowinAppDataRoot(appDataRoot)
 if (!explicitUserDataDir) app.setPath('userData', canonicalAppDataRoot)
 // En DEV, on n'enforce PAS le single-instance lock : un hot-restart electron-vite (ou un
