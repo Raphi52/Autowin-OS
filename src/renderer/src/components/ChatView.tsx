@@ -573,10 +573,6 @@ export function ChatView({
   const [decisions, setDecisions] = useState<Decision[]>([])
   const [showDecisions, setShowDecisions] = useState(false)
   const [decisionError, setDecisionError] = useState<string | null>(null)
-  // Watchdog « tour dormant » : dernière activité observée par conversation (event orchestrate OU
-  // changement du message streamé) + copie ref de liveRuns lisible dans l'intervalle sans stale.
-  const lastActivityRef = useRef<Record<string, number>>({})
-  const liveRunsRef = useRef<Record<string, ScopedLiveRun<OrchStep>>>({})
   const [deleteCandidate, setDeleteCandidate] = useState<Conv | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const composerInputRef = useRef<HTMLTextAreaElement>(null)
@@ -723,44 +719,6 @@ export function ChatView({
   useEffect(() => {
     activeRef.current = activeId
   }, [activeId])
-
-  // --- Watchdog « tour dormant » -------------------------------------------------------------
-  // Un tour peut rester bloqué en « action en cours » indéfiniment si son attente ne résout jamais
-  // (orchestration crashée sans event terminal, appel provider qui pend, gate d'autorité jamais
-  // approuvé). Le `finally` de send() ne s'exécute alors jamais → la bulle reste `streaming`. Ce
-  // watchdog finalise proprement un tour SANS activité depuis 90 s, à condition qu'AUCUN sous-agent
-  // ne tourne (liveRun `running`) et qu'AUCUNE décision d'autorité n'attende l'utilisateur (attentes
-  // légitimes). L'activité = event orchestrate OU changement du message streamé (couvre le stream
-  // conversationnel pur, sans event orchestrate) → jamais de faux positif sur un tour qui produit.
-  useEffect(() => {
-    liveRunsRef.current = liveRuns
-  }, [liveRuns])
-  useEffect(() => {
-    if (activeId) lastActivityRef.current[activeId] = Date.now()
-  }, [messages, activeId])
-  useEffect(() => {
-    const DORMANT_MS = 90_000
-    const timer = window.setInterval(() => {
-      if (decisions.length > 0) return // décision d'autorité en attente = attente légitime
-      for (const convId of Array.from(busyConversationsRef.current)) {
-        if (liveRunsRef.current[convId]?.status === 'running') continue // sous-agent actif
-        const last = lastActivityRef.current[convId] ?? 0
-        if (Date.now() - last <= DORMANT_MS) continue
-        patchLast(convId, (m) => {
-          if (m.status === 'streaming') m.status = 'interrupted'
-          m.done = true
-          m.parts.push({
-            kind: 'text',
-            text: '⚠️ Tour interrompu — aucune activité depuis 90 s (tour dormant). Relance si besoin.'
-          })
-        })
-        setConversationBusy(convId, false)
-        void window.api.cancelOrchestration(convId)
-        delete lastActivityRef.current[convId]
-      }
-    }, 15_000)
-    return () => window.clearInterval(timer)
-  }, [decisions.length])
 
   const busy = activeId ? busyConversations.has(activeId) : false
   function setConversationBusy(id: string, value: boolean): void {
@@ -958,10 +916,6 @@ export function ChatView({
       (handle) => window.clearTimeout(handle)
     )
     const offApp = window.api.onAppEvent((e) => {
-      // Watchdog dormant : tout event orchestrate porteur d'un convId = activité observée.
-      if ('convId' in e && typeof e.convId === 'string' && e.type.startsWith('orchestrate')) {
-        lastActivityRef.current[e.convId] = Date.now()
-      }
       if (e.type !== 'orchestrate-delta') deltaBatcher.flush()
       if (e.type === 'refresh') {
         if (e.scope === 'conversations') refreshConvs()
