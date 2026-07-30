@@ -289,8 +289,17 @@ if (process.contextIsolated) {
     console.error(error)
   }
 } else {
-  // @ts-ignore (define in dts)
-  window.electron = electronAPI
-  // @ts-ignore (define in dts)
-  window.api = api
+  // FAIL-CLOSED sur la frontiere de securite. Ce reste du gabarit @electron-toolkit exposait `api` et
+  // `electron` en assignant DIRECTEMENT sur `window`, donc SANS `contextBridge` : n'importe quel script
+  // de la page aurait eu la surface IPC complete, y compris les commandes qui ecrivent sur le disque.
+  //
+  // La branche est aujourd'hui INATTEIGNABLE — les trois sites de creation de fenetre posent
+  // `contextIsolation: true` (`main/index.ts` x2, `renderer-storage-migration.ts`). Mais du code mort
+  // sur une frontiere de securite est un piege qui attend : le jour ou une fenetre oublie le reglage,
+  // l'ancienne version aurait degrade EN SILENCE vers le mode non isole. On echoue bruyamment a la
+  // place, pour que l'oubli se voie au lancement au lieu de s'exposer.
+  throw new Error(
+    "preload: contextIsolation est desactive. Refus d'exposer l'API sans contextBridge — " +
+      'poser `contextIsolation: true` dans les webPreferences de la fenetre.'
+  )
 }
