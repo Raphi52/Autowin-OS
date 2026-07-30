@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { DEFAULT_IMPORTED_MODELS } from './models'
+import { TEST_MODEL_CATALOG } from './models.fixture'
 import { createDefaultTopology, setSlot, bindingForModel } from './topology'
 import { loadAgentTopology, saveAgentTopology } from './topology-disk'
 
@@ -21,18 +21,18 @@ afterEach(() => {
 describe('agent topology disk persistence', () => {
   it('round-trips the validated topology atomically', () => {
     const path = temporaryFile()
-    const base = createDefaultTopology(DEFAULT_IMPORTED_MODELS)
-    const codex = DEFAULT_IMPORTED_MODELS.find((model) => model.provider === 'codex')!
+    const base = createDefaultTopology(TEST_MODEL_CATALOG)
+    const codex = TEST_MODEL_CATALOG.find((model) => model.provider === 'codex')!
     const changed = setSlot(
       base,
       'judge',
       bindingForModel('judge-2', codex),
-      DEFAULT_IMPORTED_MODELS
+      TEST_MODEL_CATALOG
     )
 
-    saveAgentTopology(path, changed, DEFAULT_IMPORTED_MODELS)
+    saveAgentTopology(path, changed, TEST_MODEL_CATALOG)
 
-    expect(loadAgentTopology(path, DEFAULT_IMPORTED_MODELS)).toEqual(changed)
+    expect(loadAgentTopology(path, TEST_MODEL_CATALOG)).toEqual(changed)
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(changed)
   })
 
@@ -40,15 +40,15 @@ describe('agent topology disk persistence', () => {
     const path = temporaryFile()
     writeFileSync(path, '{broken', 'utf8')
 
-    expect(loadAgentTopology(path, DEFAULT_IMPORTED_MODELS)).toEqual(
-      createDefaultTopology(DEFAULT_IMPORTED_MODELS)
+    expect(loadAgentTopology(path, TEST_MODEL_CATALOG)).toEqual(
+      createDefaultTopology(TEST_MODEL_CATALOG)
     )
   })
 
   it('rejects an unbounded panel before persistence', () => {
     const path = temporaryFile()
-    const base = createDefaultTopology(DEFAULT_IMPORTED_MODELS)
-    const model = DEFAULT_IMPORTED_MODELS[0]
+    const base = createDefaultTopology(TEST_MODEL_CATALOG)
+    const model = TEST_MODEL_CATALOG[0]
     const oversized = {
       ...base,
       subagents: Array.from({ length: 17 }, (_, index) =>
@@ -56,7 +56,7 @@ describe('agent topology disk persistence', () => {
       )
     }
 
-    expect(() => saveAgentTopology(path, oversized, DEFAULT_IMPORTED_MODELS)).toThrow(
+    expect(() => saveAgentTopology(path, oversized, TEST_MODEL_CATALOG)).toThrow(
       '16 slots maximum'
     )
   })

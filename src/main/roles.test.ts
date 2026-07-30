@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { RoleModelConfig, ALL_ROLES, type Role } from './roles'
 import { loadRoleBindings, saveRoleBindings } from './role-store'
 import { legacyAppDataRoot } from './app-data'
-import { DEFAULT_IMPORTED_MODELS } from './models'
+import { TEST_MODEL_CATALOG } from './models.fixture'
 import {
   bindingForModel,
   createDefaultTopology,
@@ -239,23 +239,23 @@ describe('AgentTopology', () => {
   })
 
   it('stores model and effort independently for Scout and Judge slots', () => {
-    const base = createDefaultTopology(DEFAULT_IMPORTED_MODELS)
-    const codex = DEFAULT_IMPORTED_MODELS.find((model) => model.provider === 'codex')!
-    const claude = DEFAULT_IMPORTED_MODELS.find((model) => model.provider === 'claude')!
+    const base = createDefaultTopology(TEST_MODEL_CATALOG)
+    const codex = TEST_MODEL_CATALOG.find((model) => model.provider === 'codex')!
+    const claude = TEST_MODEL_CATALOG.find((model) => model.provider === 'claude')!
     const withScout = setSlot(
       base,
       'scout',
       { ...bindingForModel('exploration', codex), reasoningEffort: 'high' },
-      DEFAULT_IMPORTED_MODELS
+      TEST_MODEL_CATALOG
     )
     const topology = setSlot(
       withScout,
       'judge',
       bindingForModel('security', claude),
-      DEFAULT_IMPORTED_MODELS
+      TEST_MODEL_CATALOG
     )
 
-    expect(resolveTopology(topology, DEFAULT_IMPORTED_MODELS).scout).toEqual(
+    expect(resolveTopology(topology, TEST_MODEL_CATALOG).scout).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           slotId: 'exploration',
@@ -264,13 +264,13 @@ describe('AgentTopology', () => {
         })
       ])
     )
-    expect(resolveTopology(topology, DEFAULT_IMPORTED_MODELS).judge).toEqual(
+    expect(resolveTopology(topology, TEST_MODEL_CATALOG).judge).toEqual(
       expect.arrayContaining([expect.objectContaining({ slotId: 'security', model: claude.model })])
     )
   })
 
   it('rejects unknown models and unsupported effort levels', () => {
-    const base = createDefaultTopology(DEFAULT_IMPORTED_MODELS)
+    const base = createDefaultTopology(TEST_MODEL_CATALOG)
     expect(() =>
       setSlot(
         base,
@@ -281,29 +281,29 @@ describe('AgentTopology', () => {
           modelId: 'codex/unknown',
           reasoningEffort: 'low'
         },
-        DEFAULT_IMPORTED_MODELS
+        TEST_MODEL_CATALOG
       )
     ).toThrow('Modèle inconnu')
 
-    const claude = DEFAULT_IMPORTED_MODELS.find((model) => model.provider === 'claude')!
+    const claude = TEST_MODEL_CATALOG.find((model) => model.provider === 'claude')!
     expect(() =>
       setSlot(
         base,
         'judge',
         { ...bindingForModel('security', claude), reasoningEffort: 'ultra' },
-        DEFAULT_IMPORTED_MODELS
+        TEST_MODEL_CATALOG
       )
     ).toThrow('Effort')
   })
 
   it('creates and removes independent slots without mutating the source topology', () => {
-    const base = createDefaultTopology(DEFAULT_IMPORTED_MODELS)
-    const codex = DEFAULT_IMPORTED_MODELS.find((model) => model.provider === 'codex')!
+    const base = createDefaultTopology(TEST_MODEL_CATALOG)
+    const codex = TEST_MODEL_CATALOG.find((model) => model.provider === 'codex')!
     const added = setSlot(
       base,
       'scout',
       bindingForModel('contracts', codex),
-      DEFAULT_IMPORTED_MODELS
+      TEST_MODEL_CATALOG
     )
     const removed = removeSlot(added, 'scout', 'contracts')
 

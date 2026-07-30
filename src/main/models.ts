@@ -3,9 +3,12 @@
 // Un « modèle importé » est un objet de première classe : c'est LUI qu'on
 // glisse sur un slot de topologie (orchestrateur / sous-agent / scout / judge).
 // La liste est BORNÉE par ce que les adaptateurs providers savent réellement
-// piloter — on n'invente jamais un modèle qui n'existe pas. Le seed par défaut
-// reflète les voies vérifiées (catalogue du compte ChatGPT ; Claude CLI → alias
-// --model réels) et l'utilisateur peut importer/supprimer explicitement.
+// piloter — on n'invente jamais un modèle qui n'existe pas.
+//
+// D'où viennent les modèles, depuis le 2026-07-30 : UNIQUEMENT d'une source vivante ou d'un cache
+// RÉELLEMENT observé sur cette machine. Plus aucun catalogue figé dans le code pour `claude` et
+// `codex` — il devenait faux à chaque publication de modèle et l'affirmait en silence. Si la source
+// ne répond pas, la liste est VIDE : une liste vide se voit et se répare, une liste périmée se croit.
 
 import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -38,44 +41,19 @@ export interface ImportedModel {
 }
 
 /**
- * Seed de repli — borné aux voies vérifiées, JAMAIS un modèle inventé.
- * - Codex : `gpt-5.6-terra` reste le repli hors ligne vérifié.
- * - Claude : modèles exposés par le bridge local `/models`. Le CLI installé expose
- *   `--effort low|medium|high|xhigh|max` et accepte les identifiants complets.
+ * Déclarations de capacité des adaptateurs SANS source dynamique. Ce n'est PAS un repli.
+ *
+ * `kimi` et `gemini` n'ont aucun listing distant : ces entrées décrivent ce que
+ * `providers/kimi.ts` et `providers/gemini.ts` savent réellement piloter. Il n'existe donc aucun
+ * catalogue dont elles pourraient dériver, rien qui puisse mentir.
+ *
+ * `claude` et `codex` n'ont PLUS d'entrée ici, volontairement. Ils ont, eux, une source vivante
+ * (service de modèles local pour Claude, App Server pour codex) — et une copie figée dans le code
+ * devient fausse dès qu'un modèle est publié, en l'affirmant sans le moindre signal. Constaté le
+ * 2026-07-30 : sur un poste sans le service, Agent Studio annonçait `opus-4-6` comme meilleur opus
+ * alors que le service en exposait onze, dont `claude-opus-5`.
  */
 export const DEFAULT_IMPORTED_MODELS: ImportedModel[] = [
-  {
-    id: 'codex/gpt-5.6-terra',
-    provider: 'codex',
-    model: 'gpt-5.6-terra',
-    label: 'GPT-5.6 Terra · Codex',
-    reasoningEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
-    defaultReasoningEffort: 'medium'
-  },
-  {
-    id: 'claude/claude-fable-5',
-    provider: 'claude',
-    model: 'claude-fable-5',
-    label: 'Claude Fable 5 · CLI',
-    reasoningEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
-    defaultReasoningEffort: 'high'
-  },
-  {
-    id: 'claude/claude-haiku-4-5-20251001',
-    provider: 'claude',
-    model: 'claude-haiku-4-5-20251001',
-    label: 'Claude Haiku 4.5 · CLI',
-    reasoningEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
-    defaultReasoningEffort: 'medium'
-  },
-  {
-    id: 'claude/claude-opus-4-6',
-    provider: 'claude',
-    model: 'claude-opus-4-6',
-    label: 'Claude Opus 4.6 · CLI',
-    reasoningEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
-    defaultReasoningEffort: 'high'
-  },
   {
     // Alias officiel Kimi Code pour les comptes OAuth (pas une clé API).
     // Le CLI sélectionne ensuite le modèle effectivement autorisé par le compte.
@@ -150,7 +128,10 @@ interface DiscoveryResult {
 async function discoverCodexModels(
   listModelsFn: () => Promise<CodexAppServerModel[]>
 ): Promise<DiscoveryResult> {
-  const fallback: DiscoveryResult = { models: [DEFAULT_IMPORTED_MODELS[0]], live: false }
+  // Meme regle que pour Claude : aucun modele codex INVENTE quand le listing live ne repond pas. Le
+  // repli precedent (`DEFAULT_IMPORTED_MODELS[0]`) proposait UN modele fige, donc un id qui pouvait
+  // avoir disparu du compte — l'UI le presentait comme utilisable et la requete echouait plus tard.
+  const fallback: DiscoveryResult = { models: [], live: false }
   try {
     const payload = await listModelsFn()
     const discovered = payload.flatMap<ImportedModel>((entry, priority) => {
@@ -209,10 +190,13 @@ function uniqueModels(discovered: ImportedModel[]): ImportedModel[] {
 }
 
 async function discoverClaudeModels(fetchFn: typeof fetch): Promise<DiscoveryResult> {
-  const fallback: DiscoveryResult = {
-    models: DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'claude'),
-    live: false
-  }
+  // PLUS DE REPLI STATIQUE. La liste Claude vit dans le service de modeles ; une copie figee dans le
+  // code MENT des qu'Anthropic publie un modele. Constate le 2026-07-30 : sur un poste sans ce service,
+  // Agent Studio affichait `opus-4-6` comme etant le meilleur opus disponible, alors que le service
+  // en expose ONZE dont `claude-opus-5`. L'utilisateur ne voyait aucune erreur — juste une liste fausse
+  // presentee comme la verite. Rendre la liste VIDE et l'indisponibilite VISIBLE est moins nuisible
+  // qu'un mensonge silencieux : au moins on sait qu'il faut demarrer le service.
+  const fallback: DiscoveryResult = { models: [], live: false }
   try {
     const response = await fetchFn('http://127.0.0.1:8787/models', {
       signal: AbortSignal.timeout(2_000)
@@ -321,12 +305,22 @@ function writeCatalogCache(
   }
 }
 
-/** Catalogue disponible avant le réseau : cache valide, sinon seed vérifié. */
+/**
+ * Catalogue disponible AVANT le réseau : uniquement ce qui a été RÉELLEMENT observé sur cette machine.
+ *
+ * Le cache est une source légitime — il contient un listing live d'une session précédente, pas une
+ * liste inventée. En son absence on ne rend RIEN pour codex et claude : un seed figé dans le code
+ * devient faux dès qu'un modèle est publié, et il l'affirme sans le moindre signal (constaté le
+ * 2026-07-30 : `opus-4-6` presenté comme le meilleur opus alors que le service en expose `opus-5`).
+ *
+ * `kimi` et `gemini` restent, et ce n'est PAS la même chose : aucune source dynamique n'existe pour
+ * eux, leurs entrées sont la DÉCLARATION DE CAPACITÉ de leur adaptateur (`providers/kimi.ts`,
+ * `providers/gemini.ts`) — il n'y a pas de catalogue distant dont elles pourraient dériver, donc rien
+ * qui puisse mentir. Les retirer supprimerait deux providers fonctionnels.
+ */
 export function loadCachedImportedModels(cachePath: string): ImportedModel[] {
-  const codex = readCatalogCache(cachePath, 'codex') ?? [DEFAULT_IMPORTED_MODELS[0]]
-  const claude =
-    readCatalogCache(cachePath, 'claude') ??
-    DEFAULT_IMPORTED_MODELS.filter((model) => model.provider === 'claude')
+  const codex = readCatalogCache(cachePath, 'codex') ?? []
+  const claude = readCatalogCache(cachePath, 'claude') ?? []
   return [
     ...codex,
     ...claude,

@@ -41,8 +41,10 @@ describe('catalogue Agents dynamique', () => {
       noCodexModels
     )
 
+    // `gpt-5.6-terra` a disparu de cette liste : le seed statique codex n'existe plus, et ce test ne
+    // fournit AUCUN modele codex (`noCodexModels`). Ne restent que le live claude + les declarations
+    // de capacite kimi/gemini, qui n'ont pas de source dynamique.
     expect(models.map((model) => model.model)).toEqual([
-      'gpt-5.6-terra',
       'claude-fable-5',
       'claude-opus-4-8',
       'kimi-code/kimi-for-coding',
@@ -67,7 +69,11 @@ describe('catalogue Agents dynamique', () => {
     )
   })
 
-  it('retombe sur le catalogue vérifié si le bridge est indisponible', async () => {
+  it('bridge indisponible → AUCUN modèle claude inventé (plus de repli statique)', async () => {
+    // Contrat INVERSÉ le 2026-07-30, et c'est le but. L'ancien repli affichait `opus-4-6` comme
+    // meilleur opus disponible sur un poste sans le service, alors que celui-ci expose `opus-5` :
+    // une liste périmée présentée comme la vérité, sans le moindre signal. Une liste VIDE se voit et
+    // se répare ; une liste fausse se croit.
     const fetchFn = vi.fn(async () => {
       throw new Error('bridge hors ligne')
     })
@@ -78,9 +84,12 @@ describe('catalogue Agents dynamique', () => {
       noCodexModels
     )
 
-    expect(models.some((model) => model.model === 'gpt-5.6-terra')).toBe(true)
-    expect(models.some((model) => model.model === 'claude-fable-5')).toBe(true)
-    expect(models.some((model) => model.model === 'claude-opus-4-6')).toBe(true)
+    expect(models.some((model) => model.provider === 'claude')).toBe(false)
+    expect(models.some((model) => model.provider === 'codex')).toBe(false)
+    // Les providers SANS source dynamique restent : leurs entrées sont la capacité de l'adaptateur,
+    // pas une copie d'un catalogue distant qui pourrait avoir bougé.
+    expect(models.some((model) => model.provider === 'kimi')).toBe(true)
+    expect(models.some((model) => model.provider === 'gemini')).toBe(true)
   })
 
   it('importe tous les modèles réellement exposés par le compte ChatGPT', async () => {
@@ -190,23 +199,54 @@ describe('cache disque du dernier catalogue vu', () => {
     expect(JSON.parse(readFileSync(cachePath, 'utf8')).claude).toHaveLength(2)
   })
 
-  it('API KO sans cache → seed vérifié, sans inventer de noms', async () => {
+  it('API KO et cache VIDE → aucun modèle claude/codex, rien d’inventé', async () => {
+    // Le cas de ton collegue : premiere ouverture sur une machine ou le service de modeles ne tourne
+    // pas. Avant, il recevait le seed (`opus-4-6`) presente comme le catalogue reel. Desormais il
+    // recoit RIEN pour ces deux voies — l'absence est la seule reponse honnete.
     const offline = await discoverImportedModels(
       deadFetch as unknown as typeof fetch,
       makeCachePath(),
       noCodexModels
     )
-    expect(offline.some((m) => m.model === 'gpt-5.6-terra')).toBe(true)
-    expect(offline.some((m) => m.model === 'claude-fable-5')).toBe(true)
-    expect(offline.some((m) => m.model === 'claude-opus-4-8')).toBe(false)
+    expect(offline.filter((m) => m.provider === 'claude')).toEqual([])
+    expect(offline.filter((m) => m.provider === 'codex')).toEqual([])
+    expect(offline.some((m) => m.provider === 'gemini')).toBe(true)
   })
 })
 
 describe('résolution des alias par famille via findModel', () => {
   it('id concret prioritaire, alias résolu au runtime, alias insoluble → undefined', () => {
-    const catalog = DEFAULT_IMPORTED_MODELS
+    // Le catalogue ne vient plus d'un seed pour claude/codex : on construit ici un catalogue
+    // DECOUVERT, tel que le service en rendrait un. C'est aussi plus fidele — la resolution d'alias
+    // doit fonctionner sur ce que la machine expose reellement, pas sur une liste figee.
+    const claude = (model: string): (typeof DEFAULT_IMPORTED_MODELS)[number] => ({
+      id: `claude/${model}`,
+      provider: 'claude',
+      model,
+      label: `${model} · CLI`,
+      reasoningEfforts: ['high'],
+      defaultReasoningEffort: 'high'
+    })
+    const catalog = [
+      ...DEFAULT_IMPORTED_MODELS,
+      claude('claude-opus-4-6'),
+      claude('claude-opus-5'),
+      claude('claude-fable-5'),
+      {
+        id: 'codex/gpt-5.6-terra',
+        provider: 'codex',
+        model: 'gpt-5.6-terra',
+        label: 'GPT-5.6 Terra · ChatGPT',
+        reasoningEfforts: ['medium' as const],
+        defaultReasoningEffort: 'medium' as const,
+        priority: 0,
+        visibility: 'list'
+      }
+    ]
     expect(findModel(catalog, 'claude/claude-opus-4-6')?.model).toBe('claude-opus-4-6')
-    expect(findModel(catalog, 'claude/opus-latest')?.model).toBe('claude-opus-4-6')
+    // `opus-latest` doit suivre le catalogue REEL : opus-5 y est, donc c'est lui — exactement le bug
+    // que le seed statique produisait (il figeait `opus-latest` sur opus-4-6).
+    expect(findModel(catalog, 'claude/opus-latest')?.model).toBe('claude-opus-5')
     expect(findModel(catalog, 'claude/fable-latest')?.model).toBe('claude-fable-5')
     expect(findModel(catalog, 'codex/flagship')?.model).toBe('gpt-5.6-terra')
     expect(findModel(catalog, 'claude/sonnet-latest')).toBeUndefined()
