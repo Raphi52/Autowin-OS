@@ -4,7 +4,10 @@ import './UpdateBanner.css'
 interface UpdateInfo {
   available: boolean
   behind: number
+  /** Branche SORTIE — n'est PAS ce qui est comparé (cf. `reference`). */
   branch?: string
+  /** Référence réellement comparée (`origin/main`, ou l'upstream en repli). */
+  reference?: string
 }
 
 /**
@@ -45,7 +48,12 @@ export function UpdateBanner({ collapsed = false }: { collapsed?: boolean }): Re
     }
   }
 
-  const detail = `${info.behind} commit(s) sur ${info.branch ?? 'la branche'}`
+  // Nommer la RÉFÉRENCE comparée, pas la branche sortie : le compte vient de `origin/main`, donc
+  // afficher « N commits sur feat/x » était faux. Si l'utilisateur n'est pas sur main, on le dit —
+  // le bouton refusera de muter sa branche, autant qu'il le sache avant de cliquer.
+  const reference = info.reference ?? 'origin/main'
+  const elsewhere = info.branch && info.branch !== 'main' ? ` · tu es sur ${info.branch}` : ''
+  const detail = `${info.behind} commit(s) à récupérer depuis ${reference}${elsewhere}`
   return (
     <div className="rail-update" data-testid="update-banner">
       <button
