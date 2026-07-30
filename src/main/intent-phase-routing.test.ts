@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { matchIntentPhase, normalizeIntent } from './intent-phase-routing'
-import { regimePhases } from './task-regime'
+import { classifyRegime, phasesForRegime, regimePhases } from './task-regime'
 
 /**
  * ROUTER L'INTENTION VERS UNE PHASE.
@@ -467,5 +467,106 @@ describe('renoncements assumés — rappel sacrifié pour éviter un faux positi
     expect(matchIntentPhase('terrain de foot')).toBeNull()
     expect(matchIntentPhase('prépare le terrain pour la boucle')?.phase).toBe('terrain')
     expect(regimePhases('/terrain prépare la boucle')).toEqual(['terrain'])
+  })
+})
+
+/**
+ * Mineur du cycle 2 de l'audit : le REFUS de router (négation, double intention) faisait retomber sur
+ * `classifyRegime` — comportement voulu, mais aucun test ne le couvrait au niveau de `regimePhases`.
+ * Le juge a vérifié que le repli fonctionne ; ce test le verrouille pour qu'il le reste.
+ */
+describe('le REFUS de router retombe bien sur le régime complet', () => {
+  it('double intention → le pipeline du régime reprend la main', () => {
+    const phases = regimePhases('audite ça et corrige ce que tu trouves')
+    expect(phases).toContain('build')
+    expect(phases).not.toEqual([])
+  })
+
+  it('intention niée → le pipeline du régime reprend la main', () => {
+    expect(regimePhases('je veux pas de framework, corrige le bug dans auth.ts')).toContain('build')
+  })
+
+  it('les phases rendues sont bien celles du régime, pas une liste inventée', () => {
+    expect(regimePhases('audite ça et corrige ce que tu trouves')).toEqual(
+      phasesForRegime(classifyRegime('audite ça et corrige ce que tu trouves'))
+    )
+  })
+})
+
+/**
+ * ═══ BALAYAGE INDÉPENDANT — cycle 2 de l'audit ═══
+ *
+ * Le juge a relevé que mes 58 tests précédents reprenaient SES phrases : le défaut de calibrage était
+ * déplacé du corpus d'un utilisateur vers les exemples d'un juge, pas corrigé. Ces cas sont donc
+ * GÉNÉRÉS par combinaison (tête d'intention × adverbe de degré), pas recopiés d'un rapport.
+ *
+ * Ce balayage a trouvé un bug DANS MA PROPRE CORRECTION : sans borne de mot, le « ne » de « NEttoie »
+ * et de « NEed » était pris pour une négation.
+ */
+describe('balayage généré — adverbes de degré et quantificateurs ne bloquent pas le routage', () => {
+  const tetes: Array<[string, string]> = [
+    ['je veux', 'frame'],
+    ["j'aimerais", 'frame'],
+    ['il faut', 'frame'],
+    ['il faudrait', 'frame'],
+    ['on devrait', 'frame'],
+    ['ça doit', 'frame'],
+    ['i want', 'frame'],
+    ['we need', 'frame'],
+    ['cherche', 'scout'],
+    ['trouve', 'scout'],
+    ['explore', 'scout'],
+    ['find', 'scout'],
+    ['audite', 'judge'],
+    ['juge', 'judge'],
+    ['nettoie', 'clean']
+  ]
+  const degres = [
+    '',
+    'plus de ',
+    'moins de ',
+    'très ',
+    'vraiment ',
+    'un peu ',
+    'encore ',
+    'aussi ',
+    'beaucoup de ',
+    'trop de '
+  ]
+  const cas = tetes.flatMap(([tete, phase]) =>
+    degres.map((degre) => [`${tete} ${degre}tests dans le module`, phase] as [string, string])
+  )
+  it.each(cas)('« %s » → %s', (message, phase) => {
+    expect(matchIntentPhase(message)?.phase).toBe(phase)
+  })
+})
+
+describe('MAJEUR cycle 2 — « plus » est un quantificateur, pas une négation', () => {
+  it('LE CAS RÉEL : « je veux plus de tests » route (c’est l’exemple canonique du besoin)', () => {
+    expect(matchIntentPhase('je veux plus de tests')?.phase).toBe('frame')
+    expect(matchIntentPhase('il faudrait plus de tests unitaires')?.phase).toBe('frame')
+  })
+
+  it('IMPACT PROUVÉ : le module restreint à nouveau au lieu d’imposer le pipeline complet', () => {
+    // AVANT : ['frame','build'] — echec SILENCIEUX a restreindre, donc le pipeline payant.
+    expect(regimePhases('je veux plus de details sur le rendu')).toEqual(['frame'])
+  })
+
+  it('« ne … plus » reste une VRAIE négation et bloque', () => {
+    expect(matchIntentPhase('on ne devrait plus tester ça')).toBeNull()
+    expect(matchIntentPhase("je n'ai plus besoin de ce module")).toBeNull()
+    expect(matchIntentPhase('ça ne doit plus arriver')).toBeNull()
+  })
+
+  it('le « ne » à l’INTÉRIEUR d’un mot n’est pas une négation', () => {
+    // Bug de MA correction, attrape par mon balayage : « NEttoie », « NEed ».
+    expect(matchIntentPhase('nettoie plus de fichiers')?.phase).toBe('clean')
+    expect(matchIntentPhase('we need plus context')?.phase).toBe('frame')
+  })
+
+  it('une négation dans une SUBORDONNÉE ne bloque pas la demande', () => {
+    expect(matchIntentPhase('cherche pourquoi ça ne marche pas')?.phase).toBe('scout')
+    expect(matchIntentPhase('je veux que ça ne casse plus')?.phase).toBe('frame')
+    expect(matchIntentPhase('nettoie ce qui ne sert plus')?.phase).toBe('clean')
   })
 })

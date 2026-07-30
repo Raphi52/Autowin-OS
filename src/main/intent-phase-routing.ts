@@ -11,8 +11,12 @@
  * modèle a dû être retiré. Restreindre ne peut que rendre une tâche MOINS chère ; déclencher peut la
  * créer à tort.
  *
- * GÉNÉRIQUE, PAS AJUSTÉ À UNE PERSONNE : familles FR et EN, conjugaisons, apostrophes, troncatures, et
- * les PRÉAMBULES DE POLITESSE, qui sont le registre le plus courant entre collègues.
+ * PORTÉE DE COUVERTURE, dite pour ce qu'elle est : familles FR et EN, conjugaisons, apostrophes,
+ * troncatures, préambules de politesse, adverbes de degré. C'est ce qui est MESURÉ par les tests — pas
+ * une propriété de généricité prouvée. L'audit du 2026-07-29 a montré deux fois que « générique » était
+ * une affirmation trop large : d'abord calibrée sur le corpus d'un seul utilisateur, puis sur les
+ * phrases d'un seul juge. Toute extension doit venir d'un balayage INDÉPENDANT, pas des exemples déjà
+ * cités par celui qui a signalé le défaut précédent.
  *
  * ═══ CE QUE L'AUDIT DU 2026-07-29 A CASSÉ, ET QUI EST RÉPARÉ ICI ═══
  * Quatre défauts MAJEURS, tous prouvés par exécution sur la version précédente :
@@ -71,9 +75,29 @@ function stripPreamble(text: string): string {
  */
 const NEGATED_INTENT = new RegExp(
   '^(?:' +
-    // FR : « je (ne) veux pas », « faudrait pas », « on devrait pas », « j'ai pas besoin »
-    "(?:je|on|tu|il|ca|c'|nous|vous)\\s*(?:ne\\s+)?\\w*\\s*(?:pas|jamais|plus)\\b" +
+    /**
+     * FR : « je (ne) veux pas », « faudrait pas », « on devrait pas », « j'ai pas besoin ».
+     *
+     * « PLUS » EST EXCLU de cette liste — défaut MAJEUR du cycle 2 de l'audit. « plus » est le plus
+     * souvent un QUANTIFICATEUR, pas une négation : « je veux plus de tests » ne route plus rien alors
+     * que « je veux » est l'exemple canonique du besoin. Prouvé en aval :
+     * `regimePhases("je veux plus de details, corrige le bug")` rendait `['frame','build']`, donc le
+     * module échouait SILENCIEUSEMENT à restreindre — le pipeline complet payant, sans aucun signal.
+     * « plus » ne compte donc comme négation qu'avec un « ne »/« n' » explicite (traité plus bas).
+     *
+     * AMBIGUÏTÉ ASSUMÉE : « on devrait plus tester » veut dire « ne plus tester » OU « tester plus »
+     * selon l'intonation. On choisit de ROUTER (donc la phase la moins chère) plutôt que de refuser :
+     * un cadrage inutile coûte moins qu'un pipeline complet imposé en silence.
+     */
+    "(?:je|on|tu|il|ca|c'|nous|vous)\\s*(?:ne\\s+)?\\w*\\s*(?:pas|jamais)\\b" +
     "|(?:ne\\s+)?\\w+\\s+(?:pas|jamais)\\b" +
+    /**
+     * « ne … plus » / « n'… plus » : là, « plus » EST une négation.
+     * `\bne\b` et NON `n(?:e|')` : sans la borne de mot, le « ne » de « NEttoie » et le « ne » de
+     * « NEed » matchaient, donc « nettoie plus de tests » et « we need plus de tests » étaient pris
+     * pour des négations. Attrapé par mon propre balayage indépendant, pas par un juge.
+     */
+    "|(?:\\w+\\s+)?(?:\\bne\\b|\\bn')\\s*\\w+\\s+plus\\b" +
     '|pas\\s+(?:besoin|la\\s+peine|de)\\b' +
     // EN : tout auxiliaire suivi de « not » (« we should not », « it will not »), plus les contractions.
     '|(?:\\w+\\s+)?(?:should|shall|must|will|would|can|could|do|does|did|is|are|was|were|have|has|had)\\s+not\\b' +
