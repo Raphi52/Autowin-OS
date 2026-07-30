@@ -48,6 +48,9 @@ export function FirstRunWizard(): React.JSX.Element | null {
   const dismissedRef = useRef(false)
 
   const reqRef = useRef(0)
+  // Ref vers `recheck` : `markOptional` déclenche un re-diagnostic sans dépendre de l'ordre de
+  // déclaration (recheck est défini plus bas et dépend d'applyResult).
+  const recheckRef = useRef<((force?: boolean) => Promise<void>) | null>(null)
   const initialActionRef = useRef<HTMLButtonElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
 
@@ -74,6 +77,29 @@ export function FirstRunWizard(): React.JSX.Element | null {
     }
   }, [])
 
+  /**
+   * Provider concerné par un check, pour l'affordance « Facultatif ». Un provider mis en STANDBY est
+   * exclu du diagnostic (ses checks passent `standby`) et le réglage est PERSISTANT côté main → la
+   * popup ne réclame plus ce provider. Rend null pour les checks non liés à un provider (brain…).
+   */
+  const checkProvider = (id: string): 'codex' | 'claude' | 'kimi' | null => {
+    if (id === 'codex' || id === 'codex-session') return 'codex'
+    if (id === 'claude') return 'claude'
+    if (id === 'kimi') return 'kimi'
+    return null
+  }
+  /** Marque le provider du check comme FACULTATIF (standby, mémorisé) puis re-diagnostique. */
+  const markOptional = useCallback(async (checkId: string) => {
+    const provider = checkProvider(checkId)
+    if (!provider || !window.api?.setProviderMode) return
+    try {
+      await window.api.setProviderMode(provider, 'standby')
+      await recheckRef.current?.(true)
+    } catch {
+      setError('Impossible de marquer ce prérequis comme facultatif.')
+    }
+  }, [])
+
   const recheck = useCallback(async (force = false) => {
     if (!window.api?.recheckPreflight) {
       setError('Le diagnostic est indisponible. Réessayez après le redémarrage de l’application.')
@@ -96,6 +122,7 @@ export function FirstRunWizard(): React.JSX.Element | null {
       if (req === reqRef.current) setChecking(false)
     }
   }, [applyResult])
+  recheckRef.current = recheck
 
   const clearStarting = useCallback((checkId: string) => {
     setStarting((s) => {
@@ -240,6 +267,20 @@ export function FirstRunWizard(): React.JSX.Element | null {
                   disabled={repairing !== null || checking || pending}
                 >
                   {repairing === c.id || pending ? 'En cours…' : repairAffordance(c.id)?.label}
+                </button>
+              ) : null}
+              {/* Prérequis d'un provider en échec = FACULTATIF possible : le passer en standby
+                  (mémorisé) l'exclut du diagnostic → la popup ne le réclamera plus. */}
+              {!c.ok && checkProvider(c.id) ? (
+                <button
+                  type="button"
+                  className="frw-optional"
+                  data-testid={`frw-optional-${c.id}`}
+                  title={`Marquer ${checkProvider(c.id)} comme facultatif : il sera ignoré au démarrage (réactivable dans Models).`}
+                  onClick={() => void markOptional(c.id)}
+                  disabled={repairing !== null || checking || pending}
+                >
+                  Facultatif — ne plus demander
                 </button>
               ) : null}
               {repairNotes[c.id] ? (
