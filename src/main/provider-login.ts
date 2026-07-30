@@ -17,13 +17,27 @@ export type LoginPlan =
   | { kind: 'adapter'; provider: 'kimi' }
   | { kind: 'terminal'; command: string }
 
-/** Plan de login par provider (pur, testable). Throw si le provider n'a pas de login connu. */
-export function planProviderLogin(provider: string): LoginPlan {
+/**
+ * Plan de login par provider (pur, testable). Throw si le provider n'a pas de login connu.
+ *
+ * `bin` — chemin ABSOLU du binaire à authentifier, quand l'appelant sait lequel le run utilisera.
+ * Motif (audit 2026-07-30) : la sonde de session résout son binaire par `resolveClaudeBin` (donc
+ * `CLAUDE_BIN`, puis le `claude.exe` natif du préfixe npm) tandis que le login lançait le NOM NU,
+ * résolu par le PATH du terminal. Sur un poste à deux installations aux stores d'auth distincts — cas
+ * mesuré — l'utilisateur authentifiait l'installation B pendant qu'on sondait l'installation A : login
+ * réussi, check qui reste rouge, aucune explication. On authentifie donc le binaire SONDÉ.
+ * L'opérateur d'appel `&` et les guillemets sont obligatoires : ces chemins traversent
+ * `Program Files` / `AppData`.
+ */
+export function planProviderLogin(provider: string, bin?: string): LoginPlan {
   switch (provider) {
     case 'kimi':
       return { kind: 'adapter', provider: 'kimi' }
     case 'claude':
-      return { kind: 'terminal', command: 'claude auth login' }
+      return {
+        kind: 'terminal',
+        command: bin ? `& "${bin}" auth login` : 'claude auth login'
+      }
     case 'codex':
       return { kind: 'terminal', command: 'npm run codex:login' }
     default:

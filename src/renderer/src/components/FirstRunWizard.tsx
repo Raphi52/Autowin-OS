@@ -33,7 +33,7 @@ const STARTUP_PATIENCE_MS = 120_000
  */
 function checkProvider(id: string): 'codex' | 'claude' | 'kimi' | null {
   if (id === 'codex' || id === 'codex-session') return 'codex'
-  if (id === 'claude') return 'claude'
+  if (id === 'claude' || id === 'claude-session') return 'claude'
   if (id === 'kimi') return 'kimi'
   return null
 }

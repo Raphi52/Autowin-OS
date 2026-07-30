@@ -203,6 +203,30 @@ describe('réparer un prérequis rouge depuis la popup', () => {
     { id: 'claude', label: 'CLI claude', ok: true }
   ]
 
+  /**
+   * TROU FERMÉ (audit du 2026-07-30) : `checkProvider` mappait `codex-session → codex` mais avait
+   * oublié `claude-session → claude`. Conséquence : sur la ligne rouge « Session claude », le bouton
+   * « Facultatif — ne plus demander » n'apparaissait PAS (il exige un provider ET `!c.ok`), et la
+   * ligne « CLI claude » étant VERTE n'affichait pas le sien non plus. L'utilisateur qui ne veut pas
+   * se logguer à claude n'avait donc AUCUNE sortie in-app : le wizard se réclamait à chaque
+   * démarrage — alors que Codex, lui, offrait l'échappatoire.
+   *
+   * La règle verrouillée ici : tout check `<provider>-session` doit résoudre le MÊME provider que
+   * `<provider>`, sinon l'affordance « Facultatif » disparaît en silence.
+   */
+  it('un check « <provider>-session » rouge offre la même sortie « Facultatif » que son provider', async () => {
+    withChecks([
+      { id: 'claude', label: 'CLI claude', ok: true },
+      { id: 'claude-session', label: 'Session claude', ok: false, detail: 'claude auth login' },
+      { id: 'codex-session', label: 'Session OAuth Codex', ok: false, detail: 'npm run codex:login' }
+    ])
+    await render()
+
+    expect(container.querySelector('[data-testid="frw-optional-claude-session"]')).not.toBeNull()
+    // Le pendant Codex, qui marchait déjà : la symétrie est le contrat.
+    expect(container.querySelector('[data-testid="frw-optional-codex-session"]')).not.toBeNull()
+  })
+
   it('un rouge RÉPARABLE porte un bouton ; un rouge NON réparable n’en a pas', async () => {
     withChecks(codexKo)
     await render()

@@ -6,8 +6,10 @@
  * Module PUR (checks injectables) → testable sans Electron ni réseau réel. L'appelant (index.ts)
  * exécute les checks au démarrage et pousse le résultat au renderer comme bannière.
  */
+import type { ClaudeSessionState } from './claude-session'
+
 export interface PreflightCheck {
-  id: 'brain' | 'codex' | 'codex-session' | 'claude' | 'kimi' | 'brain-token'
+  id: 'brain' | 'codex' | 'codex-session' | 'claude' | 'claude-session' | 'kimi' | 'brain-token'
   label: string
   ok: boolean
   detail?: string
@@ -28,12 +30,35 @@ export interface PreflightProbes {
   hasBin: (which: 'codex' | 'claude' | 'kimi') => Promise<boolean>
   /** Une session OAuth Codex est enregistrée dans le store utilisé par le runtime. */
   hasCodexSession: () => boolean
+  /**
+   * État de la session du CLI claude. Tri-état volontaire : `unknown` (sonde ratée) ne doit ni
+   * passer pour un vert, ni pour une session prouvée absente.
+   */
+  claudeSession: () => ClaudeSessionState | Promise<ClaudeSessionState>
   /** Token Brain présent (env ou fichier). */
   hasBrainToken: () => boolean
 }
 
 export interface PreflightOptions {
   standbyProviders?: Array<'codex' | 'claude' | 'kimi'>
+}
+
+/**
+ * Détail affiché sous « Session claude ».
+ *
+ * Le cas `binaire absent` mérite son propre message : prescrire « claude auth login » quand le CLI
+ * n'est pas installé envoie l'utilisateur ouvrir une console qui répondra « claude : terme non
+ * reconnu ». On le renvoie donc vers le check qui porte la vraie cause.
+ */
+function claudeSessionDetail(state: ClaudeSessionState, binPresent: boolean): string | undefined {
+  if (state === 'authenticated') return undefined
+  if (!binPresent) return 'CLI absent — voir « CLI claude » ci-dessus'
+  // `unknown` couvre DEUX causes qu'on ne sait pas distinguer ici : un `auth status` muet, et un
+  // binaire que le run ne sait pas résoudre (PATH n'exposant que des shims). Le message ne doit donc
+  // pas affirmer la première — il enverrait diagnostiquer l'auth alors que c'est l'installation.
+  return state === 'absent'
+    ? 'session absente — claude auth login'
+    : 'état de session indéterminé — le CLI claude n’a pas répondu (session ou installation)'
 }
 
 /** Lance les checks en parallèle et agrège. Ne throw jamais : un check qui casse = ko, pas un crash. */
@@ -71,6 +96,21 @@ export async function runPreflight(
       codexSession = probes.hasCodexSession()
     } catch {
       codexSession = false
+    }
+  }
+  // Symétrique de codexSession : un provider en standby n'est pas diagnostiqué. Une sonde qui jette
+  // vaut `unknown`, jamais `authenticated` — on ne ment pas sur une session qu'on n'a pas pu lire.
+  let claudeSession: ClaudeSessionState = 'unknown'
+  if (standby.has('claude')) {
+    claudeSession = 'authenticated'
+  } else if (!claude) {
+    // Binaire absent : inutile de sonder une session, et le rouge « CLI claude » porte déjà le motif.
+    claudeSession = 'absent'
+  } else {
+    try {
+      claudeSession = await probes.claudeSession()
+    } catch {
+      claudeSession = 'unknown'
     }
   }
   const cliCheck = (
@@ -112,7 +152,21 @@ export async function runPreflight(
             ? undefined
             : 'session OAuth absente ou expirée — npm run codex:login'
         },
-    cliCheck('claude', 'CLI claude', claude, 'introuvable — installer/authentifier claude'),
+    cliCheck('claude', 'CLI claude', claude, 'introuvable — installer claude'),
+    standby.has('claude')
+      ? {
+          id: 'claude-session',
+          label: 'Session claude',
+          ok: true,
+          standby: true,
+          detail: 'standby — diagnostic ignoré'
+        }
+      : {
+          id: 'claude-session',
+          label: 'Session claude',
+          ok: claudeSession === 'authenticated',
+          detail: claudeSessionDetail(claudeSession, claude)
+        },
     cliCheck('kimi', 'CLI kimi', kimi, 'introuvable — installer/authentifier kimi')
   ]
   const failed = checks.filter((c) => !c.ok)

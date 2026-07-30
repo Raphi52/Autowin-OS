@@ -80,13 +80,14 @@ describe('runAppPreflight', () => {
     const [firstResult, secondResult] = await Promise.all([first, second])
     expect(secondResult).toBe(firstResult)
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(mocks.spawn).toHaveBeenCalledTimes(2)
+    // 3 spawns : `codex --version`, `claude --version`, `claude auth status` (kimi en standby).
+    expect(mocks.spawn).toHaveBeenCalledTimes(3)
     expect(mocks.loadTokens).toHaveBeenCalledTimes(1)
     expect(mocks.brainServiceToken).toHaveBeenCalledTimes(1)
 
     await runAppPreflight(true, { standbyProviders: [...options.standbyProviders] })
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(mocks.spawn).toHaveBeenCalledTimes(4)
+    expect(mocks.spawn).toHaveBeenCalledTimes(6)
     expect(mocks.loadTokens).toHaveBeenCalledTimes(2)
     expect(mocks.brainServiceToken).toHaveBeenCalledTimes(2)
   })
@@ -107,10 +108,12 @@ describe('runAppPreflight', () => {
     const { runAppPreflight } = await import('./preflight-probes')
 
     await runAppPreflight(false, { standbyProviders: ['kimi'] })
-    expect(mocks.spawn).toHaveBeenCalledTimes(2)
+    // codex + claude (--version) + `claude auth status`
+    expect(mocks.spawn).toHaveBeenCalledTimes(3)
 
     await runAppPreflight(false, { standbyProviders: [] })
-    expect(mocks.spawn).toHaveBeenCalledTimes(5)
+    // + codex, claude, kimi (--version) + `claude auth status`
+    expect(mocks.spawn).toHaveBeenCalledTimes(7)
   })
 
   it('refuse une session Codex dont l’expiration est dépassée', async () => {
