@@ -1,11 +1,17 @@
 #!/bin/sh
-# Garde-fou anti-collision : INTERDIT le push direct sur la branche par défaut.
+# Garde-fou anti-collision : interdit le push direct sur la branche par défaut — AUX AGENTS.
 #
-# Contexte : plusieurs devs/agents travaillant sur `main` dans le même checkout ont produit des
-# changements entremêlés, des fichiers supprimés sous les pieds d'une autre session et un HEAD
+# Contexte d'origine : plusieurs devs/agents travaillant sur `main` dans le même checkout ont produit
+# des changements entremêlés, des fichiers supprimés sous les pieds d'une autre session et un HEAD
 # incohérent. Règle de l'équipe (ONBOARDING.md §7) : 1 branche par sujet + Pull Request.
 #
-# Ce hook est DÉTERMINISTE et hors-modèle : il refuse le push, il ne conseille pas.
+# CORRIGÉ le 2026-07-29 — l'intention et l'implémentation divergeaient. La règle visait les AGENTS
+# autonomes d'Autowin OS, mais le hook bloquait TOUT push sur `main`, humain compris. Conséquence
+# observée : un humain qui consolide ses branches devait enjamber sa propre garde à chaque fois avec
+# `ALLOW_MAIN_PUSH=1`. Une garde qu'on contourne systématiquement ne protège rien et brouille le signal
+# (cicatrice mesurée : 60 commits poussés droit sur main en un jour, hook échappé chaque fois).
+#
+# Le hook reste DÉTERMINISTE et hors-modèle : il refuse, il ne conseille pas.
 # Activation (une fois par machine) : git config core.hooksPath .githooks
 # Échappatoire explicite et tracée : ALLOW_MAIN_PUSH=1 git push
 PROTECTED="main master"
@@ -13,6 +19,22 @@ PROTECTED="main master"
 # Branche par défaut du remote si connue (sinon on garde la liste ci-dessus).
 remote_head=$(git symbolic-ref --quiet --short "refs/remotes/$1/HEAD" 2>/dev/null | sed "s|^$1/||")
 [ -n "$remote_head" ] && PROTECTED="$PROTECTED $remote_head"
+
+# ─── QUI POUSSE ? ────────────────────────────────────────────────────────────────────────────────
+# Deux signaux POSITIFS d'un contexte agent, tous deux posés par Autowin OS lui-même :
+#   1. `AUTOWIN_OS_WORKSPACE` — la variable que l'app injecte dans l'environnement de chaque CLI
+#      qu'elle lance (cf. `src/shared/app-identity.ts`). Un humain dans son terminal ne l'a pas.
+#   2. Le chemin de l'arbre de travail : les agents opèrent dans des worktrees nommés `agent__<id>` ou
+#      `integration__<id>__<uuid>` (cf. `src/main/store/worktree-manager.ts`). Un humain travaille
+#      dans le checkout principal.
+# On bloque sur détection POSITIVE. En cas de doute (aucun signal), on laisse passer : la garde vise
+# l'automate, et un faux blocage de l'humain était précisément le défaut corrigé.
+is_agent=0
+[ -n "$AUTOWIN_OS_WORKSPACE" ] && is_agent=1
+worktree=$(git rev-parse --show-toplevel 2>/dev/null)
+case "$worktree" in
+  */agent__* | */integration__* | */.quarantine/*) is_agent=1 ;;
+esac
 
 blocked=""
 while read -r _local_ref local_sha remote_ref _remote_sha; do
@@ -27,22 +49,22 @@ done
 # Dédoublonne (un même ref peut matcher via la liste + le HEAD distant).
 blocked=$(printf '%s\n' $blocked | sort -u | tr '\n' ' ' | sed 's/ *$//')
 
-if [ -n "$blocked" ] && [ "$ALLOW_MAIN_PUSH" != "1" ]; then
+if [ -n "$blocked" ] && [ "$is_agent" = "1" ] && [ "$ALLOW_MAIN_PUSH" != "1" ]; then
   current=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
   cat >&2 <<EOF
 
   ⛔ Push direct refusé sur : $blocked
 
-  Règle d'équipe : 1 branche par sujet + Pull Request (ONBOARDING.md §7).
-  Pousser tous sur la même branche = changements entremêlés et travail écrasé.
+  Ce push vient d'un contexte AGENT (Autowin OS). Règle d'équipe : 1 branche par sujet + Pull
+  Request (ONBOARDING.md §7) — un agent ne publie pas sur la branche par défaut sans revue.
 
-  Marche à suivre depuis ta branche courante ($current) :
+  Marche à suivre depuis la branche courante ($current) :
 
-    git switch -c feat/<sujet>       # si tu es encore sur $blocked
+    git switch -c feat/<sujet>
     git push -u origin feat/<sujet>
     # puis ouvrir la Pull Request vers $blocked
 
-  Exception assumée et tracée (hotfix) :  ALLOW_MAIN_PUSH=1 git push
+  Exception assumée et tracée :  ALLOW_MAIN_PUSH=1 git push
 
 EOF
   exit 1

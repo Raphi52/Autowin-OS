@@ -68,9 +68,18 @@ npm run lint
 git config core.hooksPath .githooks
 ```
 
-Le hook `pre-push` **refuse** alors tout push direct sur `main` et rappelle la marche à suivre.
-Exception hotfix, explicite et tracée : `ALLOW_MAIN_PUSH=1 git push`. (`npm run bootstrap:deps`
-l'active automatiquement.)
+Le hook `pre-push` **refuse** alors le push direct sur `main` **quand il vient d'un agent** — c'est-à-dire
+quand la variable `AUTOWIN_OS_WORKSPACE` est présente (l'app l'injecte dans chaque CLI qu'elle lance) ou
+quand le push part d'un worktree d'agent (`agent__…`, `integration__…`). Un **humain** dans son checkout
+passe : la règle vise l'automate, pas vous.
+
+Exception explicite et tracée, dans les deux cas : `ALLOW_MAIN_PUSH=1 git push`. (`npm run bootstrap:deps`
+active le hook automatiquement.)
+
+> Pourquoi cette distinction (2026-07-29) : le hook bloquait d'abord **tout** push sur `main`, humain
+> compris. Résultat, celui qui consolidait ses propres branches enjambait sa garde à chaque fois — et une
+> garde qu'on contourne systématiquement ne protège plus rien. La revue par Pull Request reste la règle
+> pour le travail à plusieurs ; le hook, lui, n'empêche plus que ce qu'aucun humain ne relit.
 
 Ne travaillez **jamais tous sur la même branche** : le working tree se retrouve avec des changements
 entremêlés impossibles à committer proprement — vécu sur ce repo (fichiers supprimés sous une autre
