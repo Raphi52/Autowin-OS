@@ -92,6 +92,22 @@ export function buildChatPilotagePrompt(
   // decision reste la regle ci-dessus. Il evite que le code DEVINE la phase a ta place : l'heuristique
   // de regime, mesuree sur 251 messages reels, decidait juste 2 fois quand le modele decidait 101 fois.
   // Nommer la phase joue CETTE phase SEULE, donc moins cher et plus previsible qu'un pipeline complet.
+  // MÉMOIRE : la seule régression mécanique face a claude.exe etait l'ECRITURE. La lecture a la
+  // demande existait deja (`brain_query`) ; l'injection automatique des fiches a ete coupee (552 Ko,
+  // ~9 200 tokens par appel). `remember` ferme le trou — mais une capacite sans mode d'emploi est une
+  // facade, defaut rencontre trois fois le 2026-07-29. D'ou ce bloc, et sa PARTIE HONNETE : ce qui est
+  // retenu n'est PAS relu au tour suivant, contrairement a claude.exe.
+  `MÉMOIRE : tu peux RETENIR un fait avec \`remember\`, et RELIRE l'acquis avec \`brain_query\`. ` +
+  `Retiens quand tu viens d'établir quelque chose de DURABLE et de partageable : une cause racine ` +
+  `vérifiée, une décision technique tranchée, une contrainte d'un système, un chiffre mesuré. ` +
+  `Ne retiens PAS une règle de comportement te concernant, ni ce qui ne vaut que ce tour-ci, ni une ` +
+  `hypothèse non vérifiée. Le fait doit être AUTOPORTÉ (relisible dans 3 mois sans cette ` +
+  `conversation) et porter une source traçable (\`file:…\`, \`git:…\`, \`ticket:…\`, \`url:…\`). ` +
+  `Si l'utilisateur te demande de retenir quelque chose, fais-le sans réclamer les détails : ` +
+  `déduis le titre, le type et la portée de la conversation.\n` +
+  `À DIRE HONNÊTEMENT quand tu retiens : le fait part comme CANDIDAT, un humain le promeut, et il ne ` +
+  `sera relisible qu'après réindexation — donc pas au tour suivant. Ne promets jamais « je m'en ` +
+  `souviendrai » comme si c'était immédiat.\n` +
   `PHASE : quand tu lances \`orchestrate\`, tu peux passer \`phase\` pour ne jouer QUE celle-là — ` +
   `c'est moins cher et plus prévisible que le pipeline entier, et ça évite que l'app devine à ta ` +
   `place. Choisis d'après l'intention réelle de l'utilisateur, quelle que soit sa formulation ou sa ` +

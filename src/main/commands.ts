@@ -30,6 +30,8 @@ import {
 } from './conversation-capabilities'
 import { APP_DESTINATIONS, resolveAppLocation, type AppDestination } from '../shared/navigation'
 import { collectOrchestrationContext } from './orchestration-context'
+import { rememberFact } from './brain-remember'
+import { brainServiceToken } from './brain-retrieval'
 import { classifyRegime } from './task-regime'
 
 /**
@@ -216,6 +218,27 @@ const CATALOG: CommandSpec[] = [
       'Rejouer la vérification déclarée par le projet (script « test ») et rendre son exit code — la seule façon de prouver « vert »',
     args: {},
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+  },
+  {
+    name: 'remember',
+    description:
+      'Retenir DURABLEMENT un fait vérifié (cause racine, décision technique, contrainte d’un système) — dépose un candidat dans la boîte de réception du Brain, qu’un humain promeut. Pas pour une règle de comportement, ni pour ce qui ne vaut que ce tour-ci',
+    args: {
+      title: 'titre court et retrouvable',
+      fact: 'le fait, autoporté — compréhensible dans 3 mois sans cette conversation',
+      type: 'lesson | decision | preference | domain',
+      scope: 'le projet concerné, ou « global »',
+      source:
+        'sa provenance TRAÇABLE, préfixée : file:… | git:… | url:… | ticket:… | session:… | email:… | meeting:…',
+      tags: 'facultatif — quelques mots-clés',
+      confidence: 'facultatif — low | medium | high'
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true
+    }
   },
   {
     name: 'brain_query',
@@ -893,6 +916,12 @@ export class AppCommandBus {
         return await this.runVerify()
       case 'brain_query':
         return await this.runBrainQuery(a.question)
+      case 'remember':
+        return await rememberFact(a, {
+          token: brainServiceToken(),
+          authorAgent: 'autowin-os',
+          model: this.os.roles.getBinding('orchestrator').model ?? 'autowin'
+        })
       case 'edit_file':
         return this.runEditFile({ path: a.path, oldText: a.oldText, newText: a.newText })
       default:
