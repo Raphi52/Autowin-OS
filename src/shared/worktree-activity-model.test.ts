@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildWorktreeActivity,
-  type WorktreeAgentActivity
-} from './worktree-activity-model'
+import { buildWorktreeActivity, type WorktreeAgentActivity } from './worktree-activity-model'
 
 function agent(over: Partial<WorktreeAgentActivity> = {}): WorktreeAgentActivity {
   return {
@@ -26,10 +23,19 @@ describe('worktree-activity-model', () => {
   })
 
   it('normalise les offsets de frise entre 0 et 1', () => {
-    const m = buildWorktreeActivity([
-      agent({ agentId: 'a1', startedAtMs: 1000, endedAtMs: 2000 }),
-      agent({ agentId: 'a2', agentName: 'Builder', state: 'working', startedAtMs: 3000, endedAtMs: undefined })
-    ], 5000)
+    const m = buildWorktreeActivity(
+      [
+        agent({ agentId: 'a1', startedAtMs: 1000, endedAtMs: 2000 }),
+        agent({
+          agentId: 'a2',
+          agentName: 'Builder',
+          state: 'working',
+          startedAtMs: 3000,
+          endedAtMs: undefined
+        })
+      ],
+      5000
+    )
     const l1 = m.lanes.find((l) => l.agentId === 'a1')!
     expect(l1.startOffset).toBeCloseTo(0) // t0
     expect(l1.endOffset).toBeCloseTo(0.25) // (2000-1000)/(5000-1000)
@@ -95,9 +101,7 @@ describe('worktree-activity-model', () => {
   })
 
   it('ne prétend pas avoir ajouté du code quand la copie se termine sans changement', () => {
-    const m = buildWorktreeActivity([
-      agent({ agentName: 'Agent', state: 'merged', files: [] })
-    ])
+    const m = buildWorktreeActivity([agent({ agentName: 'Agent', state: 'merged', files: [] })])
     const withChanges = buildWorktreeActivity([agent({ agentName: 'Agent', state: 'merged' })])
 
     expect(m.journal[0].message).toContain('aucun changement à ajouter')
@@ -105,10 +109,40 @@ describe('worktree-activity-model', () => {
     expect(withChanges.journal[0].message).toContain('ajouté à ton code')
   })
 
+  it('distingue le travail publié des nouveautés tardives encore protégées', () => {
+    const m = buildWorktreeActivity([
+      agent({
+        state: 'ready',
+        publication: 'published',
+        attentionReason: 'post-publish-change',
+        files: [{ path: 'late.tmp', kind: 'mod' }]
+      })
+    ])
+
+    expect(m.journal[0].kind).toBe('merged')
+    expect(m.journal[0].message).toContain('changements vérifiés')
+    expect(m.journal[0].message).toContain('plus récent reste protégé')
+    expect(m.journal[0].message).not.toContain('n’a pas pu')
+  })
+
   it('produit des messages HUMAINS sans jargon git', () => {
     const m = buildWorktreeActivity([
-      agent({ agentId: 'a1', agentName: 'Scout', state: 'isolated', endedAtMs: undefined, startedAtMs: 100 }),
-      agent({ agentId: 'a2', agentName: 'Judge', state: 'conflict', conflictWith: ['Builder'], conflictFile: 'os.ts', startedAtMs: 200, endedAtMs: 300 })
+      agent({
+        agentId: 'a1',
+        agentName: 'Scout',
+        state: 'isolated',
+        endedAtMs: undefined,
+        startedAtMs: 100
+      }),
+      agent({
+        agentId: 'a2',
+        agentName: 'Judge',
+        state: 'conflict',
+        conflictWith: ['Builder'],
+        conflictFile: 'os.ts',
+        startedAtMs: 200,
+        endedAtMs: 300
+      })
     ])
     const all = m.journal.map((j) => j.message).join(' ')
     expect(all).not.toMatch(/HEAD|detached|rebase|merge --|checkout/i)

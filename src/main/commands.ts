@@ -1,5 +1,6 @@
 import { applyEdit, decideEdit, editDiff } from './edit-file-command'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { delimiter, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { brainCorpusForWorkspace, scopeBrainBlock } from './brain-corpus-scope'
 import { buildBrainOutcome, decideBrainQuery, type BrainQueryOutcome } from './brain-query-command'
 import { retrieveBrainContext } from './brain-retrieval'
@@ -17,10 +18,7 @@ import {
 import { appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace } from './activity/brain-trace-spool'
 import { appendConvActivity } from './activity/conv-activity'
-import {
-  buildAutowinKaizenTask,
-  collectAutowinKaizenEvidence
-} from './autowin-kaizen-context'
+import { buildAutowinKaizenTask, collectAutowinKaizenEvidence } from './autowin-kaizen-context'
 import type { OrchestrationStep, OrchestrationPhase } from './orchestrator'
 import { persistOrchestrationStep } from './activity/orchestration-observability'
 import { createHash, randomUUID } from 'node:crypto'
@@ -39,6 +37,7 @@ import {
   type GraphifyCommandInput,
   type GraphifyCommandResult
 } from './graphify-command'
+import { ensureAutowinAppData } from './app-data'
 
 /**
  * Bus de commandes de l'app — le PLAN DE CONTRÔLE que les agents pilotent.
@@ -223,7 +222,12 @@ const CATALOG: CommandSpec[] = [
     description:
       'Rejouer la vérification déclarée par le projet (script « test ») et rendre son exit code — la seule façon de prouver « vert »',
     args: {},
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
   },
   {
     name: 'remember',
@@ -255,7 +259,12 @@ const CATALOG: CommandSpec[] = [
     description:
       'Interroger le savoir curé du Brain (décisions, leçons, contraintes déjà établies) — à préférer à une exploration du repo quand la question porte sur un acquis',
     args: { question: 'la question, en langage naturel' },
-    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    }
   },
   {
     name: 'graphify',
@@ -274,13 +283,18 @@ const CATALOG: CommandSpec[] = [
   {
     name: 'edit_file',
     description:
-      'Remplacer un extrait UNIQUE dans un fichier du workspace (petite correction ciblée, sans lancer le pipeline) — puis utiliser « verify » pour prouver que ça tient',
+      'Remplacer un extrait UNIQUE dans un bureau isolé, vérifier ce bureau automatiquement, puis publier seulement si le test passe',
     args: {
       path: 'chemin du fichier, relatif au workspace',
       oldText: 'extrait exact à remplacer (doit être unique dans le fichier)',
       newText: 'texte de remplacement'
     },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false
+    }
   }
 ]
 
@@ -521,10 +535,7 @@ export class AppCommandBus {
   ): { pendingApproval: true; decisionId: string } {
     const fingerprint = actionFingerprint(name, args)
     const existingId = this.pendingDecisionByFingerprint.get(fingerprint)
-    if (
-      existingId &&
-      this.os.authority.pending().some((decision) => decision.id === existingId)
-    ) {
+    if (existingId && this.os.authority.pending().some((decision) => decision.id === existingId)) {
       return { pendingApproval: true, decisionId: existingId }
     }
     if (existingId) this.pendingDecisionByFingerprint.delete(fingerprint)
@@ -690,10 +701,7 @@ export class AppCommandBus {
         const conversation = this.os.conversations.get(convId)
         const task =
           /^\/kaizen(?=\s|$)/i.test(requestedTask) && conversation
-            ? buildAutowinKaizenTask(
-                requestedTask,
-                collectAutowinKaizenEvidence(conversation)
-              )
+            ? buildAutowinKaizenTask(requestedTask, collectAutowinKaizenEvidence(conversation))
             : requestedTask
         const fingerprint = actionFingerprint('orchestrate', { convId, task })
         const existingRun = this.activeOrchestrationByFingerprint.get(fingerprint)
@@ -944,10 +952,17 @@ export class AppCommandBus {
       case 'brain_query':
         return await this.runBrainQuery(a.question)
       case 'graphify':
-        return await this.graphify({
-          workspaceRoot: this.os.executionWorkspace,
-          ...(typeof a.path === 'string' && a.path.trim() ? { path: a.path.trim() } : {})
-        })
+        return await this.withIsolatedMutation(
+          'graphify',
+          conversationId,
+          async (workspaceRoot) => {
+            const result = await this.graphify({
+              workspaceRoot,
+              ...(typeof a.path === 'string' && a.path.trim() ? { path: a.path.trim() } : {})
+            })
+            return this.retainGraphifyResult(workspaceRoot, result)
+          }
+        )
       case 'remember': {
         const outcome = await rememberFact(a, {
           token: brainServiceToken(),
@@ -967,7 +982,7 @@ export class AppCommandBus {
          * Le contenu vient de `outcome.fact` — ce qui a été VALIDÉ — et jamais de `a.*`.
          */
         if (outcome.fact) {
-          const convId = (conversationId ?? this.activeConversationId) ?? ''
+          const convId = conversationId ?? this.activeConversationId ?? ''
           const attache = noteRemembered(convId, {
             title: outcome.fact.title,
             body: outcome.fact.body,
@@ -976,13 +991,18 @@ export class AppCommandBus {
           })
           // Sans conversation, l'écho ne peut pas s'attacher : le DIRE plutôt que le perdre en silence.
           if (!attache) {
-            return { ...outcome, detail: `${outcome.detail} (non rattaché à ce fil : aucune conversation active)` }
+            return {
+              ...outcome,
+              detail: `${outcome.detail} (non rattaché à ce fil : aucune conversation active)`
+            }
           }
         }
         return outcome
       }
       case 'edit_file':
-        return this.runEditFile({ path: a.path, oldText: a.oldText, newText: a.newText })
+        return await this.withIsolatedMutation('edit_file', conversationId, (workspaceRoot) =>
+          this.runEditFile({ path: a.path, oldText: a.oldText, newText: a.newText }, workspaceRoot)
+        )
       default:
         throw new Error(`commande inconnue: ${name}`)
     }
@@ -1017,13 +1037,88 @@ export class AppCommandBus {
    * ambigue, creation de fichier) — jamais dans un outil du CLI, dont les patterns d'autorisation ont
    * ete mesures inoperants le meme jour.
    */
-  private runEditFile(input: { path: unknown; oldText: unknown; newText: unknown }): {
+  private async withIsolatedMutation<T>(
+    command: 'edit_file' | 'graphify',
+    conversationId: string | undefined,
+    action: (workspaceRoot: string) => T | Promise<T>
+  ): Promise<T> {
+    if (!this.os.worktrees) {
+      throw new Error(`isolation workspace indisponible : ${command} refusé`)
+    }
+    const runId = `command-${command === 'edit_file' ? 'edit' : 'graphify'}-${randomUUID()}`
+    const workspaceRoot = this.os.worktrees.begin(runId, `Commande ${command}`, true, {
+      task: command,
+      role: 'command',
+      ...(conversationId ? { conversationId } : {})
+    })
+    if (!workspaceRoot) throw new Error(`isolation workspace indisponible : ${command} refusé`)
+    let completed = false
+    try {
+      const result = await action(workspaceRoot)
+      if (command === 'edit_file') {
+        const verification = await this.runVerifyAt(workspaceRoot)
+        if (!verification.allowed) {
+          throw new Error(`Vérification du bureau impossible : ${verification.reason}`)
+        }
+        if (!verification.ok) {
+          throw new Error(
+            `Vérification du bureau échouée (${verification.command}) : ${verification.output}`
+          )
+        }
+      }
+      const finalized = this.os.worktrees.end(runId, { merge: true })
+      completed = true
+      if (
+        finalized?.outcome !== 'merged' &&
+        finalized?.outcome !== 'nothing' &&
+        finalized?.outcome !== 'cleanup-pending' &&
+        finalized?.outcome !== 'published-residue'
+      ) {
+        throw new Error(`Le bureau ${command} a été conservé : publication automatique incomplète`)
+      }
+      return result
+    } catch (error) {
+      if (!completed) this.os.worktrees.end(runId, { merge: false })
+      throw error
+    }
+  }
+
+  /**
+   * Graphify écrit un cache régénérable. Il travaille dans le bureau isolé, puis le seul artefact
+   * utile est copié dans l'AppData Autowin avant que le bureau soit rangé. Le repo principal n'est
+   * donc jamais utilisé comme dossier de cache.
+   */
+  private retainGraphifyResult(
+    workspaceRoot: string,
+    result: GraphifyCommandResult
+  ): GraphifyCommandResult {
+    if (isAbsolute(result.graph)) throw new Error('Chemin Graphify absolu refusé')
+    const source = resolve(workspaceRoot, result.graph)
+    const rel = relative(workspaceRoot, source)
+    if (!rel || rel.startsWith('..') || isAbsolute(rel)) {
+      throw new Error('Chemin Graphify hors du bureau isolé')
+    }
+    if (!existsSync(source)) return result
+    const repoKey = createHash('sha256')
+      .update(resolve(this.os.executionWorkspace).toLowerCase())
+      .digest('hex')
+      .slice(0, 20)
+    const destination = join(ensureAutowinAppData(), 'graphify-cache', repoKey, rel)
+    mkdirSync(dirname(destination), { recursive: true })
+    copyFileSync(source, destination)
+    return { ...result, graph: destination }
+  }
+
+  private runEditFile(
+    input: { path: unknown; oldText: unknown; newText: unknown },
+    workspaceRoot: string
+  ): {
     allowed: boolean
     reason?: string
     path?: string
     diff?: string
   } {
-    const decision = decideEdit(input, this.os.executionWorkspace, (absolutePath) =>
+    const decision = decideEdit(input, workspaceRoot, (absolutePath) =>
       existsSync(absolutePath) ? readFileSync(absolutePath, 'utf8') : null
     )
     if (!decision.allowed) return { allowed: false, reason: decision.reason }
@@ -1041,7 +1136,9 @@ export class AppCommandBus {
     }
   }
 
-  private async runBrainQuery(question: unknown): Promise<BrainQueryOutcome & { allowed: boolean; reason?: string }> {
+  private async runBrainQuery(
+    question: unknown
+  ): Promise<BrainQueryOutcome & { allowed: boolean; reason?: string }> {
     const decision = decideBrainQuery(question)
     if (!decision.allowed) {
       return { allowed: false, reason: decision.reason, found: false, query: '', knowledge: '' }
@@ -1055,11 +1152,34 @@ export class AppCommandBus {
   }
 
   private async runVerify(): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
-    const decision = decideVerifyCommand(this.os.executionWorkspace)
+    return this.runVerifyAt(this.os.executionWorkspace)
+  }
+
+  private async runVerifyAt(
+    workspaceRoot: string | undefined
+  ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
+    const decision = decideVerifyCommand(workspaceRoot)
     if (!decision.allowed) {
-      return { allowed: false, reason: decision.reason, ok: false, exitCode: null, command: '', output: '' }
+      return {
+        allowed: false,
+        reason: decision.reason,
+        ok: false,
+        exitCode: null,
+        command: '',
+        output: ''
+      }
     }
     const [file, ...rest] = decision.command.split(' ')
+    const sharedBin = this.os.executionWorkspace
+      ? join(this.os.executionWorkspace, 'node_modules', '.bin')
+      : undefined
+    const env =
+      sharedBin && existsSync(sharedBin)
+        ? {
+            ...process.env,
+            PATH: `${sharedBin}${delimiter}${process.env.PATH ?? ''}`
+          }
+        : process.env
     return await new Promise((resolve) => {
       // Windows : depuis le correctif CVE-2024-27980, Node REFUSE de spawner un `.cmd` sans shell
       // (`spawn EINVAL`) — constate en essai reel, l'agent recevait un echec d'environnement alors
@@ -1068,8 +1188,12 @@ export class AppCommandBus {
       // d'une liste blanche, le modele ne la choisit jamais.
       const child =
         process.platform === 'win32'
-          ? spawn('cmd.exe', ['/c', file, ...rest], { shell: false, cwd: decision.cwd })
-          : spawn(file, rest, { shell: false, cwd: decision.cwd })
+          ? spawn('cmd.exe', ['/c', file, ...rest], {
+              shell: false,
+              cwd: decision.cwd,
+              env
+            })
+          : spawn(file, rest, { shell: false, cwd: decision.cwd, env })
       let output = ''
       const collect = (chunk: Buffer): void => {
         output += chunk.toString('utf8')

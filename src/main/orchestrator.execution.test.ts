@@ -14,6 +14,7 @@ import type {
 import { RoleModelConfig } from './roles'
 import { TrustLedger } from './trust/ledger'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
+import { makeTestWorktrees } from './orchestrator.test-helpers'
 
 class CapturingProvider implements ProviderAdapter {
   readonly id = 'capture'
@@ -72,6 +73,7 @@ describe('Orchestrator execution contract', () => {
       trust: new TrustLedger(),
       authority: new AuthoritySas(),
       executionWorkspace: 'C:\\workspace',
+      worktrees: makeTestWorktrees('C:\\workspace'),
       execPhases: ['frame', 'build'],
       skillInstruction: (phase, options) => {
         foundations.push({ phase, withFoundation: options.withFoundation })
@@ -106,6 +108,7 @@ describe('Orchestrator execution contract', () => {
       trust: new TrustLedger(),
       authority: new AuthoritySas(),
       executionWorkspace: 'C:\\workspace',
+      worktrees: makeTestWorktrees('C:\\workspace'),
       skillInstruction: () => ''
     })
 
@@ -132,18 +135,19 @@ describe('Orchestrator execution contract', () => {
       cost: new CostAggregator(),
       trust: new TrustLedger(),
       authority: new AuthoritySas(),
-      executionWorkspace: 'C:\\workspace'
+      executionWorkspace: 'C:\\workspace',
+      worktrees: makeTestWorktrees('C:\\workspace')
     })
 
     const result = await orchestrator.run('modifie le projet')
 
     expect(result.valid).toBe(true)
     expect(provider.calls).toHaveLength(2)
-    expect(provider.calls[0].execution).toEqual({
+    expect(provider.calls[0].execution).toMatchObject({
       cwd: 'C:\\workspace',
       sandbox: 'danger-full-access'
     })
-    expect(provider.calls[1].execution).toEqual({
+    expect(provider.calls[1].execution).toMatchObject({
       cwd: 'C:\\workspace',
       sandbox: 'read-only'
     })
@@ -165,7 +169,8 @@ describe('Orchestrator execution contract', () => {
       cost: new CostAggregator(),
       trust: new TrustLedger(),
       authority,
-      executionWorkspace: 'C:\\workspace'
+      executionWorkspace: 'C:\\workspace',
+      worktrees: makeTestWorktrees('C:\\workspace')
     })
 
     // Tâche de MUTATION revendiquée sans aucune preuve d'outil → le gate déterministe bloque
@@ -189,7 +194,8 @@ describe('Orchestrator execution contract', () => {
       cost: new CostAggregator(),
       trust: new TrustLedger(),
       authority: new AuthoritySas(),
-      executionWorkspace: 'C:\\workspace'
+      executionWorkspace: 'C:\\workspace',
+      worktrees: makeTestWorktrees('C:\\workspace')
     })
 
     const result = await orchestrator.run('analyse et cadre les pistes, ne modifie pas de code')
@@ -239,7 +245,8 @@ describe('Orchestrator execution contract', () => {
         cost: new CostAggregator(),
         trust: new TrustLedger(),
         authority: new AuthoritySas(),
-        executionWorkspace: 'C:\\workspace'
+        executionWorkspace: 'C:\\workspace',
+        worktrees: makeTestWorktrees('C:\\workspace')
       })
       const result = await orchestrator.run('ajoute un sélecteur')
       expect(result.valid).toBe(false)
@@ -264,7 +271,8 @@ describe('Orchestrator execution contract', () => {
         cost: new CostAggregator(),
         trust: new TrustLedger(),
         authority: new AuthoritySas(),
-        executionWorkspace: ws
+        executionWorkspace: ws,
+        worktrees: makeTestWorktrees(ws)
       })
       await orchestrator.run('analyse le projet, ne modifie rien')
       // exec (calls[0]) ET juge (calls[1]) reçoivent le bloc contexte, étiqueté par le fichier gagnant
@@ -322,7 +330,8 @@ describe('Orchestrator execution contract', () => {
       cost: new CostAggregator(),
       trust: new TrustLedger(),
       authority: new AuthoritySas(),
-      executionWorkspace: 'C:\\workspace'
+      executionWorkspace: 'C:\\workspace',
+      worktrees: makeTestWorktrees('C:\\workspace')
     })
 
     const result = await orchestrator.run('corrige le bug du sélecteur')

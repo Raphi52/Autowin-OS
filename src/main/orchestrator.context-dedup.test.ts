@@ -13,6 +13,7 @@ import { CostAggregator } from './dashboards/cost'
 import { TrustLedger } from './trust/ledger'
 import { AuthoritySas } from './authority/sas'
 import type { PipelinePhase } from './skill-pipeline'
+import { makeTestWorktrees } from './orchestrator.test-helpers'
 
 /** Provider qui enregistre chaque appel + rend un sessionId (pour déclencher le session-resume). */
 class RecordingProvider implements ProviderAdapter {
@@ -52,6 +53,7 @@ function makeOrchestrator(
     trust: new TrustLedger(),
     authority: new AuthoritySas(),
     executionWorkspace: 'C:\\ws',
+    worktrees: makeTestWorktrees('C:\\ws'),
     classifyPhases
   })
 }

@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { WorktreeActivityView } from './WorktreeActivityView'
 import { DiffView } from './DiffView'
-import type { WorktreeAgentActivity } from '../../../shared/worktree-activity-model'
+import type {
+  WorktreeAgentActivity,
+  WorktreeConflictDiffResult,
+  WorktreeRuntimeStatus
+} from '../../../shared/worktree-activity-model'
 import type { GitReadResult, GitChange, GitDiffResult } from '../../../shared/git-read'
 import './SourceControlPane.css'
 
@@ -26,9 +30,13 @@ export function SourceControlPane({
 }): React.JSX.Element {
   const [git, setGit] = useState<GitReadResult | null>(null)
   const [worktrees, setWorktrees] = useState<WorktreeAgentActivity[]>([])
+  const [worktreeStatus, setWorktreeStatus] = useState<WorktreeRuntimeStatus | null>(null)
   const [openFile, setOpenFile] = useState<string | null>(null)
   const [diff, setDiff] = useState<GitDiffResult | null>(null)
   const diffRequestRef = useRef(0)
+  const [conflictAgentId, setConflictAgentId] = useState<string | null>(null)
+  const [conflictDiff, setConflictDiff] = useState<WorktreeConflictDiffResult | null>(null)
+  const conflictRequestRef = useRef(0)
   // v3 — dépôt configurable (multi-repo), persisté ; '' = cwd de l'app par défaut.
   const [repoPath, setRepoPath] = useState<string>(
     () => localStorage.getItem('autowin:sc-repo') ?? ''
@@ -59,6 +67,9 @@ export function SourceControlPane({
     })
     void window.api.getWorktreeActivity?.().then((a) => {
       if (alive) setWorktrees(a)
+    })
+    void window.api.getWorktreeStatus?.().then((status) => {
+      if (alive) setWorktreeStatus(status)
     })
     const off = window.api.onWorktreeActivity?.((a) => setWorktrees(a))
     return () => {
@@ -126,6 +137,17 @@ export function SourceControlPane({
     setDiff(null)
     void window.api.getGitDiff?.(path, repoPath || undefined).then((d) => {
       if (diffRequestRef.current === requestId) setDiff(d as GitDiffResult)
+    })
+  }
+
+  const openConflictDiff = (agentId: string): void => {
+    const requestId = ++conflictRequestRef.current
+    setConflictAgentId(agentId)
+    setConflictDiff(null)
+    void window.api.getWorktreeConflictDiff?.(agentId).then((result) => {
+      if (conflictRequestRef.current === requestId) {
+        setConflictDiff(result as WorktreeConflictDiffResult)
+      }
     })
   }
 
@@ -287,19 +309,45 @@ export function SourceControlPane({
         {view === 'worktree' && (
           <section className="sc-sect">
             <header className="sc-h">
-              Worktrees{worktrees.length ? ` · ${worktrees.length}` : ''}
+              Hub des bureaux{worktrees.length ? ` · ${worktrees.length}` : ''}
             </header>
-            {worktrees.length === 0 ? (
-              <div className="sc-clean">Aucune copie d’agent en cours.</div>
-            ) : (
-              <WorktreeActivityView
-                agents={worktrees}
-                onResolveConflict={(id) =>
-                  propose(
-                    `montre-moi les deux versions en conflit du worktree ${id} et aide-moi à trancher`
-                  )
+            <WorktreeActivityView
+              agents={worktrees}
+              status={
+                worktreeStatus ?? {
+                  available: false,
+                  workspacePath: '',
+                  reason: 'identity-unavailable'
                 }
-              />
+              }
+              onResolveConflict={openConflictDiff}
+              onOpenOffice={(path) => void window.api.openFolder(path)}
+              onRetryOffice={(agentId) => void window.api.retryWorktreeRecovery(agentId)}
+            />
+            {conflictAgentId && (
+              <div className="sc-diff-wrap" data-testid="wt-conflict-diff">
+                <div className="sc-diff-card">
+                  <div className="sc-diff-head">
+                    <span className="sc-diff-title">
+                      {conflictDiff?.available
+                        ? conflictDiff.paths.join(', ')
+                        : 'Comparaison du bureau'}
+                    </span>
+                    <span className="sc-diff-wrap-mode">Lecture seule</span>
+                  </div>
+                  <div className="sc-diff-content">
+                    {conflictDiff === null ? (
+                      <div className="sc-clean">Préparation des deux versions…</div>
+                    ) : conflictDiff.available ? (
+                      <DiffView diff={conflictDiff.diff} />
+                    ) : (
+                      <div className="sc-clean">
+                        Comparaison indisponible : le bureau reste conservé.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             )}
           </section>
         )}

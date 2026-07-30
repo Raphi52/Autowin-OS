@@ -46,7 +46,7 @@ describe('barrière de disponibilité des modèles', () => {
 })
 
 describe('statut runtime Worktree', () => {
-  it('ne transmet jamais le chemin absolu du workspace au renderer', () => {
+  it('expose le workspace réel et la raison quand le moteur est indisponible', () => {
     const os = Object.create(AutowinOS.prototype) as AutowinOS
     Object.defineProperty(os, 'executionWorkspace', {
       value: 'C:\\Users\\alice\\Clients\\Projet-confidentiel'
@@ -54,7 +54,10 @@ describe('statut runtime Worktree', () => {
 
     const status = os.getWorktreeRuntimeStatus()
 
-    expect(status).toEqual({ available: false })
-    expect('workspace' in status).toBe(false)
+    expect(status).toEqual({
+      available: false,
+      workspacePath: 'C:\\Users\\alice\\Clients\\Projet-confidentiel',
+      reason: 'identity-unavailable'
+    })
   })
 })

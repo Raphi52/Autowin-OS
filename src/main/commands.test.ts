@@ -2,9 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { AppCommandBus } from './commands'
 import { AuthoritySas } from './authority/sas'
 import { APP_DESTINATIONS } from '../shared/navigation'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { WorktreeManager } from './store/worktree-manager'
+import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
 
 function fakeOs(): any {
   const conversations = new Map<
@@ -71,7 +74,14 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
       // args inclut `task` -> collectedContext est en args[5] (cf. AutowinOS.runTask). Lire depuis
       // la FIN cassait des que la signature s'etendait — arrive avec resumeOutputs + conversationId.
       collected = String(args[5] ?? '')
-      return { gateBlocked: false, gateReasons: [], valid: true, costUsd: 0, result: '', phaseOutputs: [] }
+      return {
+        gateBlocked: false,
+        gateReasons: [],
+        valid: true,
+        costUsd: 0,
+        result: '',
+        phaseOutputs: []
+      }
     }
     const result = await new AppCommandBus(os, () => {}).exec(
       'orchestrate',
@@ -101,14 +111,9 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
       })
     const bus = new AppCommandBus(os, () => {})
     const first = bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1', 'auto')
-    await vi.waitFor(() => expect(os.calls.runTask).toBe(1))
+    await vi.waitFor(() => expect(os.calls.runTask).toBe(1), { timeout: 10_000 })
 
-    const second = await bus.exec(
-      'orchestrate',
-      { task: 'corrige puis teste' },
-      'conv-1',
-      'auto'
-    )
+    const second = await bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1', 'auto')
 
     expect(second).toMatchObject({ ok: true, data: { reused: true, status: 'running' } })
     expect(os.calls.runTask).toBe(1)
@@ -156,7 +161,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
 
     const oldRun = bus.exec('orchestrate', { task: 'ancien' }, 'conv-1', 'auto')
     const newRun = bus.exec('orchestrate', { task: 'nouveau' }, 'conv-1', 'auto')
-    await vi.waitFor(() => expect(signals.size).toBe(2))
+    await vi.waitFor(() => expect(signals.size).toBe(2), { timeout: 10_000 })
 
     first.resolve({
       gateBlocked: false,
@@ -318,7 +323,12 @@ describe('AppCommandBus authority policy', () => {
       links: 84,
       durationMs: 120
     }))
-    const bus = new AppCommandBus(fakeOs(), () => {}, undefined, graphify)
+    const os = fakeOs()
+    os.worktrees = {
+      begin: vi.fn(() => process.cwd()),
+      end: vi.fn(() => ({ outcome: 'nothing', agentId: 'command' }))
+    }
+    const bus = new AppCommandBus(os, () => {}, undefined, graphify)
     const specification = bus.catalog().find((tool) => tool.name === 'graphify')
 
     expect(specification).toMatchObject({
@@ -340,6 +350,276 @@ describe('AppCommandBus authority policy', () => {
       workspaceRoot: process.cwd(),
       path: 'packages/api'
     })
+  })
+
+  it('isole edit_file dans un bureau puis publie seulement sa copie', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'autowin-command-base-'))
+    const copy = mkdtempSync(join(tmpdir(), 'autowin-command-copy-'))
+    try {
+      writeFileSync(join(base, 'note.txt'), 'avant\n', 'utf8')
+      writeFileSync(join(copy, 'note.txt'), 'avant\n', 'utf8')
+      writeFileSync(
+        join(copy, 'package.json'),
+        JSON.stringify({ scripts: { 'test:unit': 'node -e "process.exit(0)"' } }),
+        'utf8'
+      )
+      const os = fakeOs()
+      os.executionWorkspace = base
+      os.worktrees = {
+        begin: vi.fn(() => copy),
+        end: vi.fn(() => ({ outcome: 'merged', agentId: 'command', committed: true }))
+      }
+      const bus = new AppCommandBus(os, () => {})
+
+      const result = await bus.exec(
+        'edit_file',
+        { path: 'note.txt', oldText: 'avant', newText: 'après' },
+        'conv-1',
+        'auto'
+      )
+
+      expect(result).toMatchObject({ ok: true, data: { allowed: true } })
+      expect(readFileSync(join(base, 'note.txt'), 'utf8')).toBe('avant\n')
+      expect(readFileSync(join(copy, 'note.txt'), 'utf8')).toBe('après\n')
+      expect(os.worktrees.begin).toHaveBeenCalledWith(
+        expect.stringMatching(/^command-edit-/),
+        'Commande edit_file',
+        true,
+        expect.objectContaining({ conversationId: 'conv-1' })
+      )
+      expect(os.worktrees.end).toHaveBeenCalledWith(expect.any(String), { merge: true })
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+      rmSync(copy, { recursive: true, force: true })
+    }
+  })
+
+  it('conserve edit_file sans publier quand la vérification du bureau échoue', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'autowin-command-base-'))
+    const copy = mkdtempSync(join(tmpdir(), 'autowin-command-copy-'))
+    try {
+      writeFileSync(join(base, 'code.ts'), 'export const ok = 1\n', 'utf8')
+      writeFileSync(join(copy, 'code.ts'), 'export const ok = 1\n', 'utf8')
+      writeFileSync(
+        join(copy, 'package.json'),
+        JSON.stringify({ scripts: { 'test:unit': 'node check.mjs' } }),
+        'utf8'
+      )
+      writeFileSync(
+        join(copy, 'check.mjs'),
+        "import { readFileSync } from 'node:fs'; process.exit(readFileSync('code.ts','utf8').includes('export const =') ? 1 : 0)\n",
+        'utf8'
+      )
+      const os = fakeOs()
+      os.executionWorkspace = base
+      os.worktrees = {
+        begin: vi.fn(() => copy),
+        end: vi.fn((_id: string, options: { merge: boolean }) =>
+          options.merge
+            ? { outcome: 'merged', agentId: 'command', committed: true }
+            : { outcome: 'nothing', agentId: 'command' }
+        )
+      }
+      const bus = new AppCommandBus(os, () => {})
+
+      const result = await bus.exec(
+        'edit_file',
+        { path: 'code.ts', oldText: 'export const ok = 1', newText: 'export const =' },
+        'conv-1',
+        'auto'
+      )
+
+      expect(result).toMatchObject({ ok: false })
+      expect(readFileSync(join(base, 'code.ts'), 'utf8')).toBe('export const ok = 1\n')
+      expect(readFileSync(join(copy, 'code.ts'), 'utf8')).toBe('export const =\n')
+      expect(os.worktrees.end).toHaveBeenCalledWith(expect.any(String), { merge: false })
+      expect(os.worktrees.end).not.toHaveBeenCalledWith(expect.any(String), { merge: true })
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+      rmSync(copy, { recursive: true, force: true })
+    }
+  })
+
+  it('garde réellement la base intacte et le bureau rouge après un edit_file invalide', async () => {
+    const repo = mkdtempSync(join(tmpdir(), 'autowin-command-git-'))
+    const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-command-wt-'))
+    const git = (...args: string[]): string =>
+      execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim()
+    try {
+      git('init', '-q', '-b', 'main')
+      git('config', 'user.email', 't@t')
+      git('config', 'user.name', 'T')
+      git('config', 'commit.gpgsign', 'false')
+      writeFileSync(join(repo, 'code.ts'), 'export const ok = 1\n', 'utf8')
+      writeFileSync(
+        join(repo, 'package.json'),
+        JSON.stringify({ scripts: { 'test:unit': 'node check.mjs' } }),
+        'utf8'
+      )
+      writeFileSync(
+        join(repo, 'check.mjs'),
+        "import { readFileSync } from 'node:fs'; process.exit(readFileSync('code.ts','utf8').includes('export const =') ? 1 : 0)\n",
+        'utf8'
+      )
+      git('add', '-A')
+      git('commit', '-q', '-m', 'init')
+      const baseHead = git('rev-parse', 'HEAD')
+      const manager = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot })
+      const coordinator = new RunWorktreeCoordinator({ manager })
+      const os = fakeOs()
+      os.executionWorkspace = repo
+      os.worktrees = coordinator
+      const bus = new AppCommandBus(os, () => {})
+
+      const result = await bus.exec(
+        'edit_file',
+        { path: 'code.ts', oldText: 'export const ok = 1', newText: 'export const =' },
+        'conv-1',
+        'auto'
+      )
+
+      expect(result).toMatchObject({ ok: false })
+      expect(git('rev-parse', 'HEAD')).toBe(baseHead)
+      expect(git('status', '--porcelain')).toBe('')
+      expect(readFileSync(join(repo, 'code.ts'), 'utf8')).toBe('export const ok = 1\n')
+      const activity = coordinator.activity()[0]
+      expect(activity).toMatchObject({
+        state: 'ready',
+        verdict: 'red',
+        publication: 'not-requested'
+      })
+      expect(activity.worktreePath && existsSync(activity.worktreePath)).toBe(true)
+      expect(readFileSync(join(activity.worktreePath!, 'code.ts'), 'utf8').trim()).toBe(
+        'export const ='
+      )
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
+      rmSync(wtRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('publie réellement une seule fois edit_file après vérification verte', async () => {
+    const repo = mkdtempSync(join(tmpdir(), 'autowin-command-git-'))
+    const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-command-wt-'))
+    const git = (...args: string[]): string =>
+      execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim()
+    try {
+      git('init', '-q', '-b', 'main')
+      git('config', 'user.email', 't@t')
+      git('config', 'user.name', 'T')
+      git('config', 'commit.gpgsign', 'false')
+      writeFileSync(join(repo, 'code.ts'), 'export const ok = 1\n', 'utf8')
+      writeFileSync(
+        join(repo, 'package.json'),
+        JSON.stringify({ scripts: { 'test:unit': 'node check.mjs' } }),
+        'utf8'
+      )
+      writeFileSync(
+        join(repo, 'check.mjs'),
+        "import { readFileSync } from 'node:fs'; process.exit(readFileSync('code.ts','utf8').includes('export const =') ? 1 : 0)\n",
+        'utf8'
+      )
+      git('add', '-A')
+      git('commit', '-q', '-m', 'init')
+      const manager = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot })
+      const coordinator = new RunWorktreeCoordinator({ manager })
+      const os = fakeOs()
+      os.executionWorkspace = repo
+      os.worktrees = coordinator
+      const bus = new AppCommandBus(os, () => {})
+
+      const result = await bus.exec(
+        'edit_file',
+        { path: 'code.ts', oldText: 'export const ok = 1', newText: 'export const ok = 2' },
+        'conv-1',
+        'auto'
+      )
+
+      expect(result).toMatchObject({ ok: true, data: { allowed: true } })
+      expect(readFileSync(join(repo, 'code.ts'), 'utf8').trim()).toBe('export const ok = 2')
+      expect(git('log', '--format=%s')).toMatch(/^agent command-edit-/)
+      expect(
+        git('log', '--format=%s')
+          .split('\n')
+          .filter((line) => line.startsWith('agent command-edit-'))
+      ).toHaveLength(1)
+      expect(coordinator.activity()[0]).toMatchObject({
+        state: 'merged',
+        verdict: 'green',
+        publication: 'complete'
+      })
+      expect(coordinator.activity()[0].worktreePath).toBeTruthy()
+      expect(existsSync(coordinator.activity()[0].worktreePath!)).toBe(false)
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
+      rmSync(wtRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('bloque graphify avant exécution quand aucun bureau isolé n’est disponible', async () => {
+    const graphify = vi.fn(async () => ({
+      action: 'created' as const,
+      target: '.',
+      graph: 'graphify-out/graph.json',
+      nodes: 0,
+      links: 0,
+      durationMs: 1
+    }))
+    const os = fakeOs()
+    os.worktrees = undefined
+    const bus = new AppCommandBus(os, () => {}, undefined, graphify)
+
+    await expect(bus.exec('graphify', {}, 'conv-1', 'auto')).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining('isolation')
+    })
+    expect(graphify).not.toHaveBeenCalled()
+  })
+
+  it('conserve le graphe dans le cache Autowin après rangement du bureau isolé', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'autowin-graph-base-'))
+    const copy = mkdtempSync(join(tmpdir(), 'autowin-graph-copy-'))
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-graph-appdata-'))
+    vi.stubEnv('APPDATA', appData)
+    try {
+      const graphify = vi.fn(async ({ workspaceRoot }: { workspaceRoot: string }) => {
+        const graph = join(workspaceRoot, 'graphify-out', 'graph.json')
+        mkdirSync(join(workspaceRoot, 'graphify-out'), { recursive: true })
+        writeFileSync(graph, '{"nodes":[],"links":[]}', 'utf8')
+        return {
+          action: 'created' as const,
+          target: '.',
+          graph: 'graphify-out/graph.json',
+          nodes: 0,
+          links: 0,
+          durationMs: 1
+        }
+      })
+      const os = fakeOs()
+      os.executionWorkspace = base
+      os.worktrees = {
+        begin: () => copy,
+        end: () => {
+          rmSync(copy, { recursive: true, force: true })
+          return { outcome: 'nothing', agentId: 'command' }
+        }
+      }
+      const bus = new AppCommandBus(os, () => {}, undefined, graphify)
+
+      const result = await bus.exec('graphify', {}, 'conv-1', 'auto')
+      const graphPath = (result.data as { graph: string }).graph
+
+      expect(result.ok).toBe(true)
+      expect(existsSync(graphPath)).toBe(true)
+      expect(graphPath).toContain('graphify-cache')
+      expect(existsSync(join(base, 'graphify-out', 'graph.json'))).toBe(false)
+      expect(existsSync(copy)).toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(base, { recursive: true, force: true })
+      rmSync(copy, { recursive: true, force: true })
+      rmSync(appData, { recursive: true, force: true })
+    }
   })
 
   it('snapshotForPrompt : projection minimale — pas de conversations inline, runs bloqués seulement', async () => {

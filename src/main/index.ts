@@ -90,7 +90,6 @@ import type { AgentTopology, SlotBinding } from './topology'
 import {
   createAutowinAppDataRoot,
   ensureAutowinAppData,
-
   legacyAppDataRoot,
   resolveAutowinAppDataBase
 } from './app-data'
@@ -741,7 +740,8 @@ function registerChatIpc(): void {
       durableTurn.begin(guardString(task, 'task'))
       // Acquis d'un run interrompu portant la MÊME tâche dans CETTE conversation. Oublié aussitôt :
       // le run repris persiste le sien, sinon le même acquis serait rejoué à chaque relance.
-      const resumedAcquis = os.resumableOrchestrationForTask?.(guardString(task, 'task'), conversationId) ?? null
+      const resumedAcquis =
+        os.resumableOrchestrationForTask?.(guardString(task, 'task'), conversationId) ?? null
       if (resumedAcquis) os.forgetResumableOrchestration(resumedAcquis.runId)
       const result = await os.runTask(
         guardString(task, 'task'),
@@ -905,13 +905,45 @@ function registerChatIpc(): void {
     return amitelBrainRoot()
   })
   // Cockpit worktree (volet A) : snapshot à la demande + push live des changements d'activité.
+  let worktreeFixture:
+    | {
+        activity: ReturnType<typeof os.getWorktreeActivity>
+        status: ReturnType<typeof os.getWorktreeRuntimeStatus>
+      }
+    | undefined
   ipcMain.handle('worktree:activity', (event) => {
     assertTrustedRendererSender(event, 'WorktreeActivity')
-    return os.getWorktreeActivity()
+    return worktreeFixture?.activity ?? os.getWorktreeActivity()
   })
   ipcMain.handle('worktree:status', (event) => {
     assertTrustedRendererSender(event, 'WorktreeStatus')
-    return os.getWorktreeRuntimeStatus()
+    return worktreeFixture?.status ?? os.getWorktreeRuntimeStatus()
+  })
+  ipcMain.handle('worktree:conflict-diff', (event, agentId: unknown) => {
+    assertTrustedRendererSender(event, 'WorktreeConflictDiff')
+    return os.getWorktreeConflictDiff(typeof agentId === 'string' ? agentId : '')
+  })
+  ipcMain.handle('worktree:retry-recovery', (event, agentId: unknown) => {
+    assertTrustedRendererSender(event, 'WorktreeRetryRecovery')
+    if (typeof agentId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(agentId)) {
+      throw new Error('Identifiant de bureau invalide')
+    }
+    return os.retryWorktreeRecovery(agentId)
+  })
+  ipcMain.handle('app:test:worktree-fixture', (event, value: unknown) => {
+    assertTrustedRendererSender(event, 'Fixture worktree')
+    if (!isolatedTestInstance) throw new Error('Fixture worktree indisponible hors instance isolée')
+    if (!value || typeof value !== 'object') throw new Error('Fixture worktree invalide')
+    const fixture = value as Record<string, unknown>
+    if (!Array.isArray(fixture.activity) || !fixture.status || typeof fixture.status !== 'object') {
+      throw new Error('Fixture worktree incomplète')
+    }
+    const nextFixture = fixture as NonNullable<typeof worktreeFixture>
+    worktreeFixture = nextFixture
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send('worktree:activity-changed', nextFixture.activity)
+    }
+    return true
   })
   os.onWorktreeActivity((activity) => {
     for (const w of BrowserWindow.getAllWindows())
@@ -1445,8 +1477,7 @@ function registerChatIpc(): void {
               }
             }
             durableEvent = { kind: 'done', sessionId: turnSessionId }
-          }
-          else if (pilotEvent.kind === 'cancellation') durableEvent = { kind: 'cancelled' }
+          } else if (pilotEvent.kind === 'cancellation') durableEvent = { kind: 'cancelled' }
           if (durableEvent) {
             os.conversations.applyTurnEvent(conversationId, turnId, durableEvent)
             // Survie niveau 2 : le même événement va AUSSI dans le journal fichier du tour, pour
@@ -2140,7 +2171,8 @@ app.whenReady().then(async () => {
             undefined,
             causalTrace
           )
-          for (const w of BrowserWindow.getAllWindows()) w.webContents.send('orchestrate:step', step)
+          for (const w of BrowserWindow.getAllWindows())
+            w.webContents.send('orchestrate:step', step)
         },
         undefined,
         undefined,
