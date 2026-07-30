@@ -22,6 +22,14 @@ const flush = (): Promise<void> =>
     await Promise.resolve()
   })
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
 afterEach(() => {
   act(() => root?.unmount())
   container?.remove()
@@ -42,6 +50,7 @@ describe('RouterView — erreurs provider locales', () => {
         roles: async () => ({}),
         providerTest: vi.fn(),
         kimiLogin: vi.fn(),
+        onAppEvent: vi.fn(() => () => undefined),
         setRole: vi.fn()
       }
     })
@@ -49,7 +58,7 @@ describe('RouterView — erreurs provider locales', () => {
     document.body.appendChild(container)
     root = createRoot(container)
 
-    await act(async () => root.render(createElement(RouterView)))
+    await act(async () => root.render(createElement(RouterView, {})))
     await flush()
 
     const defaultModel = container.querySelector<HTMLElement>('.router-default')!
@@ -83,6 +92,7 @@ describe('RouterView — erreurs provider locales', () => {
         roles: async () => ({}),
         providerTest,
         providerLogin: vi.fn(),
+        onAppEvent: vi.fn(() => () => undefined),
         setProviderMode,
         setRole: vi.fn()
       }
@@ -91,7 +101,7 @@ describe('RouterView — erreurs provider locales', () => {
     document.body.appendChild(container)
     root = createRoot(container)
 
-    await act(async () => root.render(createElement(RouterView)))
+    await act(async () => root.render(createElement(RouterView, {})))
     await flush()
 
     const kimi = container.querySelector<HTMLElement>('[data-provider="kimi"]')!
@@ -125,6 +135,7 @@ describe('RouterView — erreurs provider locales', () => {
         setRole: vi.fn(),
         providerTest: vi.fn(),
         providerLogin: vi.fn(),
+        onAppEvent: vi.fn(() => () => undefined),
         setProviderMode: vi.fn()
       }
     })
@@ -132,10 +143,106 @@ describe('RouterView — erreurs provider locales', () => {
     document.body.appendChild(container)
     root = createRoot(container)
 
-    await act(async () => root.render(createElement(RouterView)))
+    await act(async () => root.render(createElement(RouterView, {})))
     await flush()
 
     expect(container.querySelector('.router-badge')?.textContent).toBe('Dernier test : Authentifié')
     expect(container.querySelector('[data-provider="claude"]')?.textContent).toContain('Tester')
+  })
+
+  it('recharge le catalogue quand Agent Studio redevient actif', async () => {
+    let models = [
+      {
+        id: 'claude:sonnet',
+        provider: 'claude',
+        model: 'claude-sonnet',
+        label: 'Claude Sonnet'
+      }
+    ]
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        models: vi.fn(async () => models),
+        providerStatus: async () => [],
+        roles: async () => ({}),
+        providerTest: vi.fn(),
+        providerLogin: vi.fn(),
+        setProviderMode: vi.fn(),
+        onAppEvent: vi.fn(() => () => undefined),
+        setRole: vi.fn()
+      }
+    })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => root.render(createElement(RouterView, { active: true })))
+    await flush()
+    expect(container.querySelector('[data-provider="claude"]')).not.toBeNull()
+
+    models = [
+      {
+        id: 'ollama:qwen',
+        provider: 'ollama',
+        model: 'qwen',
+        label: 'Qwen local'
+      }
+    ]
+    await act(async () => root.render(createElement(RouterView, { active: false })))
+    await act(async () => root.render(createElement(RouterView, { active: true })))
+    await flush()
+
+    expect(container.querySelector('[data-provider="claude"]')).toBeNull()
+    expect(container.querySelector('[data-provider="ollama"]')).not.toBeNull()
+  })
+
+  it('ignore une ancienne réponse de catalogue qui termine après la plus récente', async () => {
+    type Model = { id: string; provider: string; model: string; label: string }
+    let appEvent: ((event: { type: string; scope?: string }) => void) | undefined
+    const stale = deferred<Model[]>()
+    const fresh = deferred<Model[]>()
+    const models = vi
+      .fn<() => Promise<Model[]>>()
+      .mockResolvedValueOnce([
+        { id: 'claude:sonnet', provider: 'claude', model: 'claude-sonnet', label: 'Claude' }
+      ])
+      .mockImplementationOnce(() => stale.promise)
+      .mockImplementationOnce(() => fresh.promise)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        models,
+        providerStatus: async () => [],
+        roles: async () => ({}),
+        providerTest: vi.fn(),
+        providerLogin: vi.fn(),
+        setProviderMode: vi.fn(),
+        onAppEvent: vi.fn((listener) => {
+          appEvent = listener
+          return () => undefined
+        }),
+        setRole: vi.fn()
+      }
+    })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => root.render(createElement(RouterView, { active: true })))
+    await flush()
+
+    act(() => appEvent?.({ type: 'refresh', scope: 'roles' }))
+    act(() => appEvent?.({ type: 'refresh', scope: 'roles' }))
+    await act(async () =>
+      fresh.resolve([{ id: 'ollama:qwen', provider: 'ollama', model: 'qwen', label: 'Qwen local' }])
+    )
+    await act(async () =>
+      stale.resolve([
+        { id: 'claude:sonnet', provider: 'claude', model: 'claude-sonnet', label: 'Claude' }
+      ])
+    )
+    await flush()
+
+    expect(container.querySelector('[data-provider="claude"]')).toBeNull()
+    expect(container.querySelector('[data-provider="ollama"]')).not.toBeNull()
   })
 })

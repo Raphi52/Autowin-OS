@@ -16,6 +16,7 @@ const FILE_STORES = [
   'auth.json',
   'roles.json',
   'conversations.json',
+  'scheduled-tasks.json',
   'agent-topology.json',
   'provider-state.json'
 ]

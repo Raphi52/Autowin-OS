@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   automationAppIdentity,
   presentAutomationWindow,
-  resolveAutomationInstanceMode
+  resolveAutomationInstanceMode,
+  resolveExplicitUserDataDir
 } from './headless-instance'
 
 describe('mode instance automatisée', () => {
@@ -52,5 +53,20 @@ describe('mode instance automatisée', () => {
     expect(automationAppIdentity('com.amitel.autowin-os', { isolated: true, headless: true })).toBe(
       'com.amitel.autowin-os.test'
     )
+  })
+
+  it('résout le profil explicite utilisé comme identité du verrou Electron', () => {
+    expect(
+      resolveExplicitUserDataDir([
+        'autowin-os.exe',
+        '--user-data-dir=C:\\Autowin Test\\user-data'
+      ])
+    ).toBe('C:\\Autowin Test\\user-data')
+    expect(
+      resolveExplicitUserDataDir([
+        'autowin-os.exe',
+        '--user-data-dir=C:\\profil --isolated-test-instance'
+      ])
+    ).toBeUndefined()
   })
 })

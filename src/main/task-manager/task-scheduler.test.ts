@@ -1,0 +1,173 @@
+import { describe, expect, it, vi } from 'vitest'
+import { TaskStore } from './task-store'
+import {
+  TaskScheduler,
+  type SchedulerClock,
+  type TaskDispatcher,
+  type WindowsRelay
+} from './task-scheduler'
+import type { ScheduledTaskInput } from './types'
+
+function input(
+  mode: ScheduledTaskInput['mode'],
+  overrides: Partial<ScheduledTaskInput> = {}
+): ScheduledTaskInput {
+  return {
+    title: `Tâche ${mode}`,
+    prompt: 'Exécute ce prompt.',
+    enabled: true,
+    mode,
+    destination: { kind: 'existing', conversationId: 'conv-1' },
+    schedule: {
+      startDate: '2026-08-03',
+      time: '09:30',
+      timeZone: 'Europe/Paris',
+      recurrence: { unit: 'day', interval: 1 }
+    },
+    ...overrides
+  }
+}
+
+function harness(now: number): {
+  store: TaskStore
+  clock: SchedulerClock
+  advanceTo: (value: number) => Promise<void>
+  dispatch: TaskDispatcher
+  relay: WindowsRelay
+  dispatched: string[]
+  relayCalls: Array<{ scheduledFor: number | null; occurrenceId: string | null }>
+} {
+  let current = now
+  let timer:
+    | {
+        at: number
+        callback: () => void
+      }
+    | undefined
+  const dispatched: string[] = []
+  const relayCalls: Array<{ scheduledFor: number | null; occurrenceId: string | null }> = []
+  const store = new TaskStore({
+    now: () => current,
+    id: (() => {
+      let sequence = 0
+      return () => `id-${++sequence}`
+    })()
+  })
+  return {
+    store,
+    clock: {
+      now: () => current,
+      setTimer: (callback, delayMs) => {
+        timer = { at: current + delayMs, callback }
+        return timer
+      },
+      clearTimer: (handle) => {
+        if (timer === handle) timer = undefined
+      }
+    },
+    advanceTo: async (value) => {
+      current = value
+      if (timer && timer.at <= current) {
+        const callback = timer.callback
+        timer = undefined
+        callback()
+        await vi.waitFor(() =>
+          expect(timer?.at ?? Number.POSITIVE_INFINITY).toBeGreaterThan(current)
+        )
+      }
+    },
+    dispatch: {
+      run: async (_task, occurrence) => {
+        dispatched.push(occurrence.id)
+        return { status: 'completed', conversationId: 'conv-1', turnId: 'turn-1' }
+      }
+    },
+    relay: {
+      arm: async (scheduledFor, occurrenceId) => {
+        relayCalls.push({ scheduledFor, occurrenceId })
+        return {
+          available: true,
+          scheduledFor,
+          wakeToRun: true,
+          startWhenAvailable: false,
+          multipleInstances: 'IgnoreNew'
+        }
+      }
+    },
+    dispatched,
+    relayCalls
+  }
+}
+
+describe('Task Manager — ordonnanceur durable', () => {
+  it('exécute une échéance live une seule fois puis programme la suivante', async () => {
+    const due = Date.parse('2026-08-03T07:30:00.000Z')
+    const h = harness(due - 60_000)
+    const task = h.store.create(input('active-only'))
+    const scheduler = new TaskScheduler(h.store, h.dispatch, h.relay, h.clock)
+
+    await scheduler.start()
+    await h.advanceTo(due)
+
+    expect(h.dispatched).toEqual([`${task.id}@${due}`])
+    expect(h.store.getOccurrence(`${task.id}@${due}`)).toMatchObject({ status: 'completed' })
+    expect(h.store.getTask(task.id)?.nextRunAt).toBe(Date.parse('2026-08-04T07:30:00.000Z'))
+
+    await scheduler.processLiveDue()
+    expect(h.dispatched).toHaveLength(1)
+  })
+
+  it('marque au démarrage chaque échéance passée sans la rattraper', async () => {
+    const firstDue = Date.parse('2026-08-03T07:30:00.000Z')
+    const h = harness(Date.parse('2026-08-05T08:00:00.000Z'))
+    const task = h.store.create(input('active-only'))
+    const scheduler = new TaskScheduler(h.store, h.dispatch, h.relay, h.clock)
+
+    await scheduler.start()
+
+    expect(h.dispatched).toEqual([])
+    expect(h.store.listOccurrences(task.id).map((entry) => entry.status)).toEqual([
+      'missed',
+      'missed',
+      'missed'
+    ])
+    expect(h.store.listAlerts()).toHaveLength(3)
+    expect(h.store.getOccurrence(`${task.id}@${firstDue}`)?.status).toBe('missed')
+    expect(h.store.getTask(task.id)?.nextRunAt).toBe(Date.parse('2026-08-06T07:30:00.000Z'))
+  })
+
+  it('honore l’occurrence demandée par le relais Windows puis refuse son doublon', async () => {
+    const due = Date.parse('2026-08-03T07:30:00.000Z')
+    const h = harness(due + 5_000)
+    const task = h.store.create(input('windows'))
+    const occurrenceId = `${task.id}@${due}`
+    const scheduler = new TaskScheduler(h.store, h.dispatch, h.relay, h.clock)
+
+    await scheduler.start(occurrenceId)
+    await scheduler.runOccurrence(occurrenceId)
+
+    expect(h.dispatched).toEqual([occurrenceId])
+    expect(h.store.getOccurrence(occurrenceId)?.status).toBe('completed')
+    expect(h.relayCalls.at(-1)).toEqual({
+      scheduledFor: Date.parse('2026-08-04T07:30:00.000Z'),
+      occurrenceId: `${task.id}@${Date.parse('2026-08-04T07:30:00.000Z')}`
+    })
+  })
+
+  it('réserve les tâches Windows au relais et ne les exécute pas avec le timer interne', async () => {
+    const due = Date.parse('2026-08-03T07:30:00.000Z')
+    const h = harness(due - 60_000)
+    const task = h.store.create(input('windows'))
+    const occurrenceId = `${task.id}@${due}`
+    const scheduler = new TaskScheduler(h.store, h.dispatch, h.relay, h.clock)
+
+    await scheduler.start()
+    await h.advanceTo(due)
+
+    expect(h.dispatched).toEqual([])
+    expect(h.store.getTask(task.id)?.nextRunAt).toBe(due)
+
+    await scheduler.runOccurrence(occurrenceId)
+    expect(h.dispatched).toEqual([occurrenceId])
+  })
+})

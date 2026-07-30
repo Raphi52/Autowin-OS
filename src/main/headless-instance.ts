@@ -38,3 +38,13 @@ export function resolveAutomationInstanceMode(
     argv.includes('--isolated-test-instance')
   return { isolated, headless: isolated && argv.includes('--headless-test-instance') }
 }
+
+export function resolveExplicitUserDataDir(argv: readonly string[]): string | undefined {
+  const flag = '--user-data-dir'
+  const inline = argv.find((argument) => argument.startsWith(`${flag}=`))
+  const flagIndex = argv.indexOf(flag)
+  const raw = inline?.slice(flag.length + 1) ?? (flagIndex >= 0 ? argv[flagIndex + 1] : undefined)
+  const value = raw?.trim()
+  if (!value || /\s--[a-z0-9-]+/i.test(value) || value.includes('\0')) return undefined
+  return value
+}

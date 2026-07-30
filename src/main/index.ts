@@ -142,21 +142,41 @@ import { readGitGraph } from './git-graph-main'
 import {
   automationAppIdentity,
   presentAutomationWindow,
-  resolveAutomationInstanceMode
+  resolveAutomationInstanceMode,
+  resolveExplicitUserDataDir
 } from './headless-instance'
+import { TaskStore } from './task-manager/task-store'
+import { persistTaskStore } from './task-manager/task-store-disk'
+import { TaskScheduler } from './task-manager/task-scheduler'
+import { ScheduledChatDispatcher } from './task-manager/chat-dispatch'
+import {
+  isolatedRelayLaunchArguments,
+  PowerShellWindowsRelay,
+  taskOccurrenceFromAdditionalData,
+  taskOccurrenceFromArgs
+} from './task-manager/windows-relay'
+import { registerTaskManagerIpc } from './task-manager/task-manager-ipc'
 
 guardBrokenProcessPipes(process.stdout, process.stderr)
 
-const automationInstanceMode = resolveAutomationInstanceMode(
+const scheduledTaskDispatch = process.argv.includes('--autowin-task-dispatch')
+const startupTaskOccurrence = taskOccurrenceFromArgs(process.argv)
+const resolvedAutomationInstanceMode = resolveAutomationInstanceMode(
   process.argv,
   process.env,
   app.isPackaged
 )
+const automationInstanceMode = {
+  ...resolvedAutomationInstanceMode,
+  headless: resolvedAutomationInstanceMode.headless || scheduledTaskDispatch
+}
 const isolatedTestInstance = automationInstanceMode.isolated
 const headlessTestInstance = automationInstanceMode.headless
 const appDataRoot = resolveAutowinAppDataBase(app.getPath('appData'), app.isPackaged)
 app.setName(isolatedTestInstance ? `${AUTOWIN_DISPLAY_NAME} Test` : AUTOWIN_DISPLAY_NAME)
-const explicitUserDataDir = process.argv.some((argument) => argument.startsWith('--user-data-dir'))
+const explicitUserDataPath = resolveExplicitUserDataDir(process.argv)
+const explicitUserDataDir = explicitUserDataPath !== undefined
+if (explicitUserDataPath) app.setPath('userData', explicitUserDataPath)
 // En DEV uniquement : ouvre le port CDP pour piloter/inspecter le renderer réel. Jamais en packagé
 // (surface de debug). Doit être posé avant app ready — d'où la sonde SYNCHRONE du port.
 // Un enfant de l'app peut hériter du socket d'écoute et garder le port après la mort de l'app (vécu,
@@ -179,7 +199,14 @@ if (!explicitUserDataDir) app.setPath('userData', canonicalAppDataRoot)
 // En DEV, on n'enforce PAS le single-instance lock : un hot-restart electron-vite (ou un
 // process résiduel qui détient encore le lock) ne doit jamais laisser une instance PÉRIMÉE
 // à l'écran en tuant la nouvelle. Le lock n'est appliqué que sur le build packagé.
-const ownsInstanceLock = isolatedTestInstance || !app.isPackaged || app.requestSingleInstanceLock()
+// Le verrou Electron est rattaché au `userData` : deux instances de test isolées avec deux racines
+// restent indépendantes, tandis qu'un second lancement sur la MÊME racine peut réveiller la fenêtre
+// du process tray (preuve Task Manager fermeture X → réouverture).
+const ownsInstanceLock =
+  !app.isPackaged ||
+  app.requestSingleInstanceLock(
+    startupTaskOccurrence ? { autowinTaskOccurrence: startupTaskOccurrence } : {}
+  )
 if (!ownsInstanceLock) app.quit()
 else configureTurnTiming(ensureAutowinAppData(appDataRoot))
 
@@ -188,6 +215,10 @@ const os = new AutowinOS()
 const brainWorker = new BrainWorkerClient(join(__dirname, 'brain-worker.js'))
 // Conversations persistées sur disque : rechargées au démarrage, sauvées à chaque mutation.
 const flushConversations = persistConversations(os.conversations)
+const scheduledTasks = new TaskStore()
+const flushScheduledTasks = persistTaskStore(scheduledTasks)
+let scheduledTaskScheduler: TaskScheduler | undefined
+const pendingScheduledOccurrences = new Set<string>()
 
 /** Diffuse un événement d'app à toutes les fenêtres (UI live quand un agent pilote). */
 function broadcast(e: AppEvent): void {
@@ -1307,18 +1338,21 @@ function registerChatIpc(): void {
   )
   // Chat transparent : l'agent converse ET pilote l'app dans le même tour.
   // conversationId (optionnel) → le tour est PERSISTÉ dans la conversation (fil rechargeable).
-  ipcMain.handle(
-    'os:pilotChat',
-    async (
-      event,
-      messages: Array<{
-        role: 'user' | 'assistant'
-        content: string
-        attachments?: Message['attachments']
-      }>,
-      conversationId?: string
-    ) => {
-      assertTrustedRendererSender(event, 'PilotChat')
+  const runPilotChat = async (
+    event: IpcMainInvokeEvent | undefined,
+    messages: Array<{
+      role: 'user' | 'assistant'
+      content: string
+      attachments?: Message['attachments']
+    }>,
+    conversationId?: string
+  ): Promise<{
+    ok: boolean
+    cancelled: boolean
+    turnId: string
+    error?: string
+  }> => {
+      if (event) assertTrustedRendererSender(event, 'PilotChat')
       // Duree du tour : MESUREE de bout en bout, pour repondre a « qu'est-ce qui est lent ? » et pas
       // seulement a « qu'est-ce qui coute ? » (les deux ne coincident pas forcement).
       const turnStartedAtMs = performance.now()
@@ -1612,6 +1646,7 @@ function registerChatIpc(): void {
           const fixtureBus = {
             catalog: () => bus.catalog(),
             snapshot: () => bus.snapshot(),
+            snapshotForPrompt: () => bus.snapshotForPrompt(),
             exec: async (name: string, args: Record<string, unknown>) =>
               name === 'get_state'
                 ? { ok: true, data: { source: 'durable-fixture', target: args.target } }
@@ -1654,7 +1689,13 @@ function registerChatIpc(): void {
             safe,
             handlePilotEvent,
             (question) =>
-              askModelQuestion(event.sender, 'chat', question, 'Chat', controller.signal),
+              event
+                ? askModelQuestion(event.sender, 'chat', question, 'Chat', controller.signal)
+                : Promise.reject(
+                    new Error(
+                      'Une tâche planifiée ne peut pas répondre à une question interactive du modèle.'
+                    )
+                  ),
             6,
             conversationId,
             controller.signal,
@@ -1681,7 +1722,7 @@ function registerChatIpc(): void {
           })
         }
         broadcast({ type: 'refresh', scope: 'workflows' })
-        return { ok: true, cancelled: false }
+        return { ok: true, cancelled: false, turnId }
       } catch (e) {
         /**
          * ETAT TERMINAL, journal COMPRIS. Ce catch n'ecrivait que dans le store : le journal FICHIER
@@ -1709,8 +1750,13 @@ function registerChatIpc(): void {
           }
         }
         broadcast({ type: 'refresh', scope: 'workflows' })
-        if (controller.signal.aborted) return { ok: true, cancelled: true }
-        return { ok: false, cancelled: false, error: e instanceof Error ? e.message : String(e) }
+        if (controller.signal.aborted) return { ok: true, cancelled: true, turnId }
+        return {
+          ok: false,
+          cancelled: false,
+          turnId,
+          error: e instanceof Error ? e.message : String(e)
+        }
       } finally {
         if (conversationId) {
           activeChatTurns.delete(conversationId, controller)
@@ -1723,7 +1769,56 @@ function registerChatIpc(): void {
         resolveCompletion()
       }
     }
+  ipcMain.handle('os:pilotChat', (event, messages, conversationId) =>
+    runPilotChat(event, messages, conversationId)
   )
+
+  const relayScriptPath = app.isPackaged
+    ? join(process.resourcesPath, 'app.asar.unpacked', 'resources', 'autowin-task-relay.ps1')
+    : join(app.getAppPath(), 'resources', 'autowin-task-relay.ps1')
+  const taskDispatcher = new ScheduledChatDispatcher({
+    hasConversation: (conversationId) => Boolean(os.conversations.get(conversationId)),
+    createConversation: (input) => os.conversations.create(input),
+    bindConversation: (taskId, conversationId) => {
+      scheduledTasks.bindConversation(taskId, conversationId)
+    },
+    isConversationBusy: (conversationId) => Boolean(activeChatTurns.get(conversationId)),
+    interruptAndWait: (conversationId, reason) =>
+      activeChatTurns.abortAndWait(conversationId, reason),
+    runPrompt: (conversationId, prompt) =>
+      runPilotChat(undefined, [{ role: 'user', content: prompt }], conversationId)
+  })
+  const relay = new PowerShellWindowsRelay({
+    scriptPath: relayScriptPath,
+    executablePath: process.execPath,
+    launchArguments: isolatedRelayLaunchArguments({
+      isolated: isolatedTestInstance,
+      remoteDebuggingPort: app.commandLine.getSwitchValue('remote-debugging-port'),
+      userDataPath: app.getPath('userData')
+    })
+  })
+  scheduledTaskScheduler = new TaskScheduler(scheduledTasks, taskDispatcher, relay)
+  registerTaskManagerIpc({
+    ipc: ipcMain,
+    store: scheduledTasks,
+    scheduler: scheduledTaskScheduler,
+    assertTrusted: assertTrustedRendererSender,
+    onChanged: () => broadcast({ type: 'refresh', scope: 'task-manager' })
+  })
+  void scheduledTaskScheduler
+    .start(startupTaskOccurrence)
+    .then(async () => {
+      for (const occurrenceId of pendingScheduledOccurrences) {
+        await scheduledTaskScheduler?.runOccurrence(occurrenceId)
+      }
+      pendingScheduledOccurrences.clear()
+      broadcast({ type: 'refresh', scope: 'task-manager' })
+    })
+    .catch((error) => {
+      console.error('[task-manager] démarrage du scheduler impossible', error)
+      broadcast({ type: 'refresh', scope: 'task-manager' })
+    })
+
   ipcMain.handle('os:pilotChat:cancel', (_e, rawConversationId: string) => {
     const conversationId = guardString(rawConversationId, 'conversationId')
     // Stoppe le tour pilote ET le sous-agent en vol rattaché à cette conversation.
@@ -2022,7 +2117,7 @@ function createWindow(): void {
   relayoutMainWindow = forceRelayout
 
   mainWindow.on('ready-to-show', () => {
-    presentAutomationWindow(mainWindow, headlessTestInstance, { maximize: true })
+    presentAutomationWindow(mainWindow, automationInstanceMode.headless, { maximize: true })
     setTimeout(() => void warmCapabilities(), 250)
   })
 
@@ -2037,11 +2132,21 @@ function createWindow(): void {
 // UNE seule instance : deux apps concurrentes sur le même conversations.json se marchent
 // dessus (vécu : conv « disparue » car l'user regardait une 2e instance au main plus vieux).
 // Un 2e lancement remet la fenêtre existante au premier plan.
-if (!isolatedTestInstance && ownsInstanceLock) {
-  app.on('second-instance', () => {
+if (ownsInstanceLock) {
+  app.on('second-instance', (_event, commandLine, _workingDirectory, additionalData) => {
+    const scheduledOccurrence =
+      taskOccurrenceFromAdditionalData(additionalData) ?? taskOccurrenceFromArgs(commandLine)
+    if (scheduledOccurrence) {
+      if (scheduledTaskScheduler) void scheduledTaskScheduler.runOccurrence(scheduledOccurrence)
+      else pendingScheduledOccurrences.add(scheduledOccurrence)
+      return
+    }
     const w = BrowserWindow.getAllWindows()[0]
-    if (w) {
+    if (!w) {
+      createWindow()
+    } else {
       if (w.isMinimized()) w.restore()
+      w.show()
       w.focus()
     }
   })
@@ -2187,6 +2292,7 @@ app.whenReady().then(async () => {
 // resté dans la fenêtre de debounce de 120 ms de la persistance.
 app.on('before-quit', () => {
   flushConversations()
+  flushScheduledTasks()
   preflightWatchHandle?.stop() // couper la boucle de re-probe démarrage (pas de timer résiduel)
   preflightWatchHandle = null
 })

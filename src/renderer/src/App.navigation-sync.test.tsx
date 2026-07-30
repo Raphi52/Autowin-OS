@@ -58,6 +58,34 @@ describe('navigation humaine synchronisée avec le main', () => {
     await act(async () => root.unmount())
   })
 
+  it('affiche une icône Task Manager vectorielle et colorée', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        storageMigration: vi.fn().mockResolvedValue({}),
+        completeStorageMigration: vi.fn().mockResolvedValue(true),
+        appState: vi.fn(async () => ({ tab: 'chat' })),
+        onAppEvent: vi.fn(() => vi.fn())
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(createElement(MainApp))
+      await Promise.resolve()
+    })
+
+    const icon = container.querySelector(
+      '[data-testid="nav-task-manager"] svg[data-icon="task-manager"]'
+    )
+    expect(icon?.querySelector('linearGradient stop[stop-color="#36e6ff"]')).not.toBeNull()
+    expect(icon?.querySelector('path[stroke="#fb7185"]')).not.toBeNull()
+    expect(icon?.querySelector('circle[fill="#34d399"]')).not.toBeNull()
+    await act(async () => root.unmount())
+  })
+
   it.each([
     {
       interaction: 'un clic rail',
@@ -74,11 +102,11 @@ describe('navigation humaine synchronisée avec le main', () => {
         )
     },
     {
-      interaction: 'le raccourci Cmd+5',
+      interaction: 'le raccourci Cmd+6',
       destination: 'worktree',
       trigger: (_container: HTMLElement) =>
         window.dispatchEvent(
-          new KeyboardEvent('keydown', { key: '5', metaKey: true, bubbles: true })
+          new KeyboardEvent('keydown', { key: '6', metaKey: true, bubbles: true })
         )
     }
   ])(

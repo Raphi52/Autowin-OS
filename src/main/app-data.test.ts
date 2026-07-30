@@ -64,6 +64,7 @@ describe('migration APPDATA Autowin OS', () => {
       'roles.json': '{"orchestrator":{"provider":"claude"}}',
       'auth.json': '{"accessToken":"fixture-only"}',
       'conversations.json': '[{"id":"conv-1"}]',
+      'scheduled-tasks.json': '{"schemaVersion":1,"tasks":[],"occurrences":[],"alerts":[]}',
       'agent-topology.json': '{"version":1}',
       'activity/conv-1.jsonl': '{"kind":"chat"}\n',
       'runs/conv-1/task-workspace/RUN.md': 'status: green\n',

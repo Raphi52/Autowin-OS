@@ -1,0 +1,73 @@
+import { describe, expect, it } from 'vitest'
+import {
+  occurrenceIdFor,
+  resolveFirstOccurrence,
+  resolveNextOccurrence,
+  type StructuredSchedule
+} from './schedule'
+
+const PARIS = 'Europe/Paris'
+
+function schedule(overrides: Partial<StructuredSchedule> = {}): StructuredSchedule {
+  return {
+    startDate: '2026-08-03',
+    time: '09:30',
+    timeZone: PARIS,
+    recurrence: { unit: 'none', interval: 1 },
+    ...overrides
+  }
+}
+
+describe('Task Manager — planification structurée', () => {
+  it('convertit une échéance locale non ambiguë vers un instant UTC', () => {
+    expect(resolveFirstOccurrence(schedule())).toBe(Date.parse('2026-08-03T07:30:00.000Z'))
+  })
+
+  it('calcule une récurrence quotidienne avec intervalle utilisateur', () => {
+    const everyTwoDays = schedule({ recurrence: { unit: 'day', interval: 2 } })
+    const first = resolveFirstOccurrence(everyTwoDays)
+    expect(resolveNextOccurrence(everyTwoDays, first)).toBe(Date.parse('2026-08-05T07:30:00.000Z'))
+  })
+
+  it('respecte les jours choisis pour une récurrence hebdomadaire', () => {
+    const mondayAndWednesday = schedule({
+      recurrence: { unit: 'week', interval: 1, weekDays: [1, 3] }
+    })
+    const monday = resolveFirstOccurrence(mondayAndWednesday)
+    const wednesday = resolveNextOccurrence(mondayAndWednesday, monday)
+    const nextMonday = resolveNextOccurrence(mondayAndWednesday, wednesday!)
+
+    expect(wednesday).toBe(Date.parse('2026-08-05T07:30:00.000Z'))
+    expect(nextMonday).toBe(Date.parse('2026-08-10T07:30:00.000Z'))
+  })
+
+  it('conserve l’heure murale lors du passage à l’heure d’hiver', () => {
+    const daily = schedule({
+      startDate: '2026-10-24',
+      recurrence: { unit: 'day', interval: 1 }
+    })
+    const saturday = resolveFirstOccurrence(daily)
+    const sunday = resolveNextOccurrence(daily, saturday)
+    const monday = resolveNextOccurrence(daily, sunday!)
+
+    expect(saturday).toBe(Date.parse('2026-10-24T07:30:00.000Z'))
+    expect(sunday).toBe(Date.parse('2026-10-25T08:30:00.000Z'))
+    expect(monday).toBe(Date.parse('2026-10-26T08:30:00.000Z'))
+  })
+
+  it('refuse une heure locale inexistante au changement d’heure', () => {
+    expect(() =>
+      resolveFirstOccurrence(
+        schedule({
+          startDate: '2026-03-29',
+          time: '02:30'
+        })
+      )
+    ).toThrow(/heure locale inexistante/i)
+  })
+
+  it('génère une clé d’occurrence stable et indépendante de l’heure de traitement', () => {
+    const scheduledFor = Date.parse('2026-08-03T07:30:00.000Z')
+    expect(occurrenceIdFor('task-7', scheduledFor)).toBe('task-7@1785742200000')
+  })
+})

@@ -7,6 +7,7 @@ import { WorktreeView } from './components/WorktreeView'
 import { UpdateBanner } from './components/UpdateBanner'
 import { pickTurnToResume } from './components/resume-unfinished'
 import { TicketsView } from './components/TicketsView'
+import { TaskManagerView } from './components/TaskManagerView'
 import { AgentStudioView } from './components/AgentStudioView'
 import { KnowledgeView } from './components/KnowledgeView'
 import { SettingsView } from './components/SettingsView'
@@ -46,6 +47,50 @@ function WorktreeIcon(): React.JSX.Element {
       <circle cx="18" cy="6" r="2" />
       <circle cx="6" cy="21" r="2" />
       <path d="M6 5v14M18 8a9 9 0 0 1-9 9H6" />
+    </svg>
+  )
+}
+
+function TaskManagerIcon(): React.JSX.Element {
+  return (
+    <svg
+      data-icon="task-manager"
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id="task-manager-calendar-gradient" x1="3" y1="5" x2="21" y2="21">
+          <stop stopColor="#36e6ff" />
+          <stop offset="1" stopColor="#a855f7" />
+        </linearGradient>
+      </defs>
+      <rect
+        x="2.75"
+        y="4.75"
+        width="18.5"
+        height="16.5"
+        rx="3"
+        fill="rgba(54, 230, 255, 0.1)"
+        stroke="url(#task-manager-calendar-gradient)"
+        strokeWidth="1.5"
+      />
+      <path d="M7.5 3v4M16.5 3v4M3 9.75h18" stroke="#fb7185" strokeWidth="1.7" />
+      <circle
+        cx="14.5"
+        cy="15.25"
+        r="3.75"
+        fill="#f59e0b"
+        fillOpacity="0.18"
+        stroke="#fbbf24"
+        strokeWidth="1.4"
+      />
+      <path d="M14.5 13.25v2.25l1.7 1" stroke="#fde68a" strokeWidth="1.35" />
+      <circle cx="7.5" cy="14" r="1.15" fill="#34d399" />
     </svg>
   )
 }
@@ -174,7 +219,7 @@ export function MainApp(): React.JSX.Element {
     [activateTab, navigationOrigin]
   )
 
-  // #11 — raccourcis clavier : Ctrl/Cmd+1..7 changent d'onglet, Ctrl/Cmd+K focalise la recherche de
+  // #11 — raccourcis clavier : Ctrl/Cmd+1..N changent d'onglet, Ctrl/Cmd+K focalise la recherche de
   // conversation (best-effort : ne fait rien si le champ n'est pas monté). N'interfère pas avec le
   // zoom (Ctrl+0/±) ni la saisie (on ignore Alt).
   useEffect(() => {
@@ -327,7 +372,13 @@ export function MainApp(): React.JSX.Element {
                 onClick={() => navigate(it.id)}
               >
                 <span className="space-toy-icon" aria-hidden="true">
-                  {it.id === 'worktree' ? <WorktreeIcon /> : it.icon}
+                  {it.id === 'worktree' ? (
+                    <WorktreeIcon />
+                  ) : it.id === 'task-manager' ? (
+                    <TaskManagerIcon />
+                  ) : (
+                    it.icon
+                  )}
                 </span>
                 <span>{it.label}</span>
               </button>
@@ -372,6 +423,11 @@ export function MainApp(): React.JSX.Element {
         {visitedTabs.has('worktree') && (
           <div className={`view-slot${tab === 'worktree' ? ' is-active' : ''}`}>
             <WorktreeView active={tab === 'worktree'} />
+          </div>
+        )}
+        {visitedTabs.has('task-manager') && (
+          <div className={`view-slot${tab === 'task-manager' ? ' is-active' : ''}`}>
+            <TaskManagerView active={tab === 'task-manager'} />
           </div>
         )}
         {visitedTabs.has('tickets') && (

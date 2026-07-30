@@ -6,6 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $sourceRoots = @(
   (Join-Path $Root 'src'),
+  (Join-Path $Root 'resources'),
   (Join-Path $Root 'package.json'),
   (Join-Path $Root 'electron.vite.config.ts'),
   (Join-Path $Root 'electron-builder.yml')

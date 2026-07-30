@@ -243,6 +243,18 @@ interface PreflightResult {
   summary: string
   checks: PreflightCheck[]
 }
+interface TaskManagerSnapshot {
+  schemaVersion: 1
+  tasks: Array<Record<string, unknown>>
+  occurrences: Array<Record<string, unknown>>
+  alerts: Array<Record<string, unknown>>
+  scheduler: {
+    running: boolean
+    nextWakeAt: number | null
+    relayAvailable: boolean
+    relayError?: string
+  }
+}
 interface ChatApi {
   captureTestPage: () => Promise<string>
   storageMigration: () => Promise<Record<string, string>>
@@ -415,6 +427,12 @@ interface ChatApi {
   conversationsSetAuthorityMode: (id: string, mode: 'plan' | 'ask' | 'auto') => Promise<unknown>
   conversationsFork: (id: string, messageId: string) => Promise<unknown>
   conversationsRemove: (id: string) => Promise<boolean>
+  taskManagerSnapshot: () => Promise<TaskManagerSnapshot>
+  taskManagerCreate: (task: unknown) => Promise<Record<string, unknown>>
+  taskManagerUpdate: (id: string, task: unknown) => Promise<Record<string, unknown>>
+  taskManagerRemove: (id: string) => Promise<boolean>
+  taskManagerAcknowledge: (alertId: string) => Promise<boolean>
+  taskManagerRunNow: (id: string) => Promise<{ started: boolean }>
   openFolder: (path: string) => Promise<void>
   appState: () => Promise<unknown>
   appCatalog: () => Promise<

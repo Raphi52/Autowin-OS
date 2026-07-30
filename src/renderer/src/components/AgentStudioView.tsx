@@ -36,7 +36,11 @@ export function AgentStudioView({
         </button>
       </nav>
       <div className="domain-content">
-        {section === 'routing' ? <RouterView /> : <AgentsTopologyView active={active} />}
+        {section === 'routing' ? (
+          <RouterView active={active} />
+        ) : (
+          <AgentsTopologyView active={active} />
+        )}
       </div>
     </section>
   )

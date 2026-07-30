@@ -179,6 +179,17 @@ const api = {
     ipcRenderer.invoke('os:conversations:fork', id, messageId),
   conversationsRemove: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:remove', id),
+  taskManagerSnapshot: (): Promise<unknown> => ipcRenderer.invoke('task-manager:snapshot'),
+  taskManagerCreate: (task: unknown): Promise<unknown> =>
+    ipcRenderer.invoke('task-manager:create', task),
+  taskManagerUpdate: (id: string, task: unknown): Promise<unknown> =>
+    ipcRenderer.invoke('task-manager:update', id, task),
+  taskManagerRemove: (id: string): Promise<boolean> =>
+    ipcRenderer.invoke('task-manager:remove', id),
+  taskManagerAcknowledge: (alertId: string): Promise<boolean> =>
+    ipcRenderer.invoke('task-manager:acknowledge', alertId),
+  taskManagerRunNow: (id: string): Promise<{ started: boolean }> =>
+    ipcRenderer.invoke('task-manager:run-now', id),
   openFolder: (path: string): Promise<void> => ipcRenderer.invoke('os:openFolder', path),
   // Plan de contrôle (app pilotable par les agents) + pilotage in-model
   appState: (): Promise<unknown> => ipcRenderer.invoke('os:appState'),

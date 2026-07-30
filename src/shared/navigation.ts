@@ -3,6 +3,7 @@ export const APP_DESTINATIONS = [
   { id: 'agent-studio', label: 'Agent Studio', icon: '🤖' },
   { id: 'knowledge', label: 'Knowledge', icon: '🧠' },
   { id: 'observatory', label: 'Observatory', icon: '🔭' },
+  { id: 'task-manager', label: 'Task Manager', icon: '◷' },
   { id: 'worktree', label: 'Worktrees', icon: '🌳' },
   { id: 'tickets', label: 'Tickets', icon: '🎫' },
   { id: 'settings', label: 'Settings', icon: '⚙️' }
@@ -38,7 +39,10 @@ const LEGACY_DESTINATIONS: Readonly<Record<string, AppDestination>> = {
   harness: 'observatory',
   harnais: 'observatory',
   prompt: 'observatory',
-  'prompt-load': 'observatory'
+  'prompt-load': 'observatory',
+  tasks: 'task-manager',
+  scheduler: 'task-manager',
+  planning: 'task-manager'
 }
 
 const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {

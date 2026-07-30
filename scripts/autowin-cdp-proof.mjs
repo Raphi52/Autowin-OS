@@ -41,6 +41,12 @@ const canonicalDestinations = [
     expectedText: 'Observatory'
   },
   {
+    id: 'task-manager',
+    navSelector: '[data-testid="nav-task-manager"]',
+    viewSelector: '[data-testid="task-manager-view"]',
+    expectedText: 'Task Manager'
+  },
+  {
     id: 'worktree',
     navSelector: '[data-testid="nav-worktree"]',
     viewSelector: '.worktree-tab[data-active="true"]',

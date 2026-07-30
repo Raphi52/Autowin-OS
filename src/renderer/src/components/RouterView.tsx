@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './RouterView.css'
 import { ModuleHeader } from './ModuleHeader'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import type { RuntimeModel, OrchestratorModelOption } from './chat-view-model'
+import { agentStudioProviderIds } from './provider-catalog'
 
 /**
  * Page « Routeur » — voir les providers/modèles connectés + leur statut d'auth RÉEL, (ré)authentifier,
@@ -43,7 +44,7 @@ interface Binding {
   reasoningEffort?: string
 }
 
-export function RouterView(): React.JSX.Element {
+export function RouterView({ active = true }: { active?: boolean }): React.JSX.Element {
   const [models, setModels] = useState<RuntimeModel[]>([])
   const [statuses, setStatuses] = useState<ProviderStatus[]>([])
   const [binding, setBinding] = useState<Binding | null>(null)
@@ -52,24 +53,54 @@ export function RouterView(): React.JSX.Element {
   const [modePending, setModePending] = useState<Record<string, boolean>>({})
   const [modelPending, setModelPending] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
+  const [catalogActive, setCatalogActive] = useState(active)
+  const reloadGenerationRef = useRef(0)
 
-  const loadStatuses = async (): Promise<void> => {
-    const s = (await window.api.providerStatus().catch(() => [])) as ProviderStatus[]
-    setStatuses(s)
+  if (catalogActive !== active) {
+    setCatalogActive(active)
+    setModels([])
+    setStatuses([])
+    setLoaded(false)
   }
-  const refreshBinding = async (): Promise<void> => {
+
+  const reloadCatalog = useCallback(async (): Promise<void> => {
+    const generation = ++reloadGenerationRef.current
+    setModels([])
+    setStatuses([])
+    setLoaded(false)
+    const [nextModels, nextStatuses, roles] = await Promise.all([
+      window.api.models().catch(() => []),
+      window.api.providerStatus().catch(() => []),
+      window.api.roles().catch(() => ({}))
+    ])
+    if (generation !== reloadGenerationRef.current) return
+    setModels(nextModels as RuntimeModel[])
+    setStatuses(nextStatuses as ProviderStatus[])
+    const nextRoles = roles as Record<string, Binding>
+    setBinding(nextRoles.orchestrator ?? null)
+    setLoaded(true)
+  }, [])
+
+  const invalidatePendingReloads = (): void => {
+    reloadGenerationRef.current += 1
+  }
+
+  const refreshBinding = useCallback(async (): Promise<void> => {
     const roles = (await window.api.roles().catch(() => ({}))) as Record<string, Binding>
     setBinding(roles.orchestrator ?? null)
-  }
+  }, [])
 
   useEffect(() => {
-    void (async () => {
-      const m = (await window.api.models().catch(() => [])) as RuntimeModel[]
-      setModels(m)
-      await Promise.all([loadStatuses(), refreshBinding()])
-      setLoaded(true)
-    })()
-  }, [])
+    if (!active) return
+    void Promise.resolve().then(reloadCatalog)
+    const off = window.api.onAppEvent((event) => {
+      if (event.type === 'refresh' && event.scope === 'roles') void reloadCatalog()
+    })
+    return () => {
+      invalidatePendingReloads()
+      off()
+    }
+  }, [active, reloadCatalog])
 
   const byProvider = useMemo(() => {
     const map = new Map<string, RuntimeModel[]>()
@@ -82,9 +113,8 @@ export function RouterView(): React.JSX.Element {
   }, [models])
 
   const providers = useMemo(() => {
-    const ids = new Set<string>([...byProvider.keys(), ...statuses.map((s) => s.provider)])
-    return [...ids].sort()
-  }, [byProvider, statuses])
+    return agentStudioProviderIds(models, statuses)
+  }, [models, statuses])
 
   const statusOf = (provider: string): ProviderStatus =>
     statuses.find((s) => s.provider === provider) ?? {
@@ -116,7 +146,7 @@ export function RouterView(): React.JSX.Element {
     setModePending((pending) => ({ ...pending, [provider]: true }))
     try {
       await window.api.setProviderMode(provider, mode)
-      await loadStatuses()
+      await reloadCatalog()
     } finally {
       setModePending((pending) => ({ ...pending, [provider]: false }))
     }
