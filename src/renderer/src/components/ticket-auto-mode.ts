@@ -25,7 +25,7 @@ export const AUTO_MODE_CAP_PER_CYCLE = 3
 export interface IncomingSelection {
   /** Tickets a traiter MAINTENANT (bornes par le cap). */
   toTreat: TicketItem[]
-  /** Cles a enregistrer comme vues : celles retenues ET celles reportees (elles ne sont plus neuves). */
+  /** Cles a enregistrer comme vues : uniquement celles retenues pour ce cycle. */
   seenAdditions: string[]
   /** Nombre de tickets neufs reportes au prochain cycle a cause du cap. */
   deferred: number
@@ -45,9 +45,9 @@ export function pickIncomingTickets(
   const toTreat = fresh.slice(0, limit)
   return {
     toTreat,
-    // On marque TOUS les neufs, y compris les reportes : ils ne doivent pas etre comptes
-    // « entrants » a chaque cycle suivant, sinon le cap les rejouerait indefiniment.
-    seenAdditions: fresh.map(ticketSeenKey),
+    // Les tickets reportes doivent rester neufs afin d'etre retenus au cycle suivant.
+    // Seuls les tickets effectivement retenus sont marques avant leur traitement.
+    seenAdditions: toTreat.map(ticketSeenKey),
     deferred: fresh.length - toTreat.length
   }
 }

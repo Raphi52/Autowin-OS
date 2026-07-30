@@ -71,6 +71,7 @@ interface ComposerDraft {
   attachments: ChatAttachment[]
   error: string | null
 }
+type SendOptions = { keepComposerDraft?: boolean; targetConversationId?: string }
 interface UserMsg {
   role: 'user'
   content: string
@@ -1128,7 +1129,7 @@ export function ChatView({
       const draftKey = id ?? NEW_DRAFT_KEY
       switchComposerDraft(draftKey)
       setDraftInput(draftKey, detail.prompt)
-      if (detail.send) void send(detail.prompt)
+      if (detail.send) void send(detail.prompt, { targetConversationId: id })
       else requestAnimationFrame(() => composerInputRef.current?.focus())
     }
     window.addEventListener('autowin:prefill-conversation', prefill)
@@ -1430,28 +1431,28 @@ export function ChatView({
    * Sans cette porte, le drain effaçait un brouillon jamais envoyé et accrochait ses pièces jointes en
    * attente au message de la FILE — deux pertes silencieuses, aucune reliée à une action visible.
    */
-  async function send(text?: string, options?: { keepComposerDraft?: boolean }): Promise<void> {
+  async function send(text?: string, options?: SendOptions): Promise<void> {
     const value = (text ?? input).trim()
-    const sendDraftKey = composerDraftKeyRef.current
+    const sourceConversationId = options?.targetConversationId ?? activeId
+    const sendDraftKey = options?.targetConversationId ?? composerDraftKeyRef.current
     const keepComposerDraft = options?.keepComposerDraft === true
     const outgoingDraft = getComposerDraft(sendDraftKey)
     const outgoingAttachments = keepComposerDraft ? [] : outgoingDraft.attachments
     const sendSelectionGeneration = composerSelectionGenerationRef.current
-    const sendLockKey = activeId ?? NEW_DRAFT_KEY
+    const sendLockKey = sourceConversationId ?? NEW_DRAFT_KEY
     if (
       (!value && outgoingAttachments.length === 0) ||
-      busy ||
+      (sourceConversationId ? busyConversationsRef.current.has(sourceConversationId) : busy) ||
       sendLocksRef.current.has(sendLockKey)
     )
       return
     sendLocksRef.current.add(sendLockKey)
 
-    let convId = activeId
+    let convId = sourceConversationId
     let messageCommitted = false
-    const sourceConversationId = activeId
-    const sourcePreviousMessages =
-      (sourceConversationId ? liveMessagesRef.current.get(sourceConversationId) : undefined) ??
-      messages
+    const sourcePreviousMessages = sourceConversationId
+      ? (liveMessagesRef.current.get(sourceConversationId) ?? [])
+      : messages
     let previousMessagesForTarget = sourcePreviousMessages
     const optimisticHistory: Msg[] = [
       ...sourcePreviousMessages,
