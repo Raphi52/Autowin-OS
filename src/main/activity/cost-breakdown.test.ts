@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   costSamplesFrom,
   summarizeCostSamples,
@@ -38,11 +40,7 @@ const callFixture = (actor: string, costUsd: number, outputTokens: number): Prom
  */
 describe('os:costBreakdown — chaine IPC complete', () => {
   const read = (p: string): string =>
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    (require('node:fs') as typeof import('node:fs')).readFileSync(
-      (require('node:path') as typeof import('node:path')).join(__dirname, '..', '..', p),
-      'utf8'
-    )
+    readFileSync(join(__dirname, '..', '..', p), 'utf8')
 
   it('le main enregistre le handler et borne la dimension recue', () => {
     const main = read('main/index.ts')
@@ -53,7 +51,7 @@ describe('os:costBreakdown — chaine IPC complete', () => {
     expect(main).toContain('costSamplesFrom(')
     expect(main).toContain('loadConvActivity(')
     // Une dimension arbitraire venue du renderer ne doit pas etre passee telle quelle.
-    expect(main).toContain("allowed.includes(")
+    expect(main).toContain('allowed.includes(')
   })
 
   it('le preload l’expose et les types le declarent', () => {
@@ -113,7 +111,12 @@ describe('costSamplesFrom — les deux journaux, sans double comptage', () => {
       activity('subagent', 1.1095, 9003),
       activity('subagent', 0.3684, 2834), // doublon des prompt-calls
       activity('subagent', 0.6686, 4138), // doublon
-      { kind: 'conversation-route', label: 'Contexte courant conservé', costUsd: 0.099, outputTokens: 31 }
+      {
+        kind: 'conversation-route',
+        label: 'Contexte courant conservé',
+        costUsd: 0.099,
+        outputTokens: 31
+      }
     ]
     const rows = summarizeCostSamples(costSamplesFrom(calls, acts), 'actor')
     const total = rows.reduce((sum, row) => sum + row.costUsd, 0)
@@ -124,16 +127,22 @@ describe('costSamplesFrom — les deux journaux, sans double comptage', () => {
   })
 
   it('ecarte les entrees sans cout NI tokens (bruit du journal)', () => {
-    const samples = costSamplesFrom([], [
-      { kind: 'exec', label: 'subagent' },
-      { kind: 'gate', label: 'gate', costUsd: 0, outputTokens: 0 }
-    ])
+    const samples = costSamplesFrom(
+      [],
+      [
+        { kind: 'exec', label: 'subagent' },
+        { kind: 'gate', label: 'gate', costUsd: 0, outputTokens: 0 }
+      ]
+    )
     expect(samples).toEqual([])
   })
 
   it('attribue le routage a un acteur « router » distinct', () => {
     const rows = summarizeCostSamples(
-      costSamplesFrom([], [{ kind: 'conversation-route', label: 'route', costUsd: 0.099, outputTokens: 31 }])
+      costSamplesFrom(
+        [],
+        [{ kind: 'conversation-route', label: 'route', costUsd: 0.099, outputTokens: 31 }]
+      )
     )
     expect(rows[0].key).toBe('router')
   })
@@ -148,9 +157,10 @@ describe('acteur d’une entree d’activite — le kind decide, jamais le label
   it('une entree `chat` ne transforme PAS le texte du message en acteur', () => {
     // Cas reel (conv-75) : le label valait « reprend pardon » et apparaissait comme un acteur.
     const rows = summarizeCostSamples(
-      costSamplesFrom([], [
-        { kind: 'chat', label: 'reprend pardon', costUsd: 0.34, outputTokens: 120 }
-      ])
+      costSamplesFrom(
+        [],
+        [{ kind: 'chat', label: 'reprend pardon', costUsd: 0.34, outputTokens: 120 }]
+      )
     )
     expect(rows.map((r) => r.key)).not.toContain('reprend pardon')
     expect(rows[0].key).toBe('orchestrator')
@@ -158,18 +168,23 @@ describe('acteur d’une entree d’activite — le kind decide, jamais le label
 
   it('mappe chaque kind vers son role', () => {
     const rows = summarizeCostSamples(
-      costSamplesFrom([], [
-        { kind: 'exec', label: 'subagent', costUsd: 5, outputTokens: 10 },
-        { kind: 'judge', label: 'peu importe', costUsd: 3, outputTokens: 11 },
-        { kind: 'conversation-route', label: 'Contexte conservé', costUsd: 1, outputTokens: 12 },
-        { kind: 'chat', label: 'un message quelconque', costUsd: 0.5, outputTokens: 13 }
-      ])
+      costSamplesFrom(
+        [],
+        [
+          { kind: 'exec', label: 'subagent', costUsd: 5, outputTokens: 10 },
+          { kind: 'judge', label: 'peu importe', costUsd: 3, outputTokens: 11 },
+          { kind: 'conversation-route', label: 'Contexte conservé', costUsd: 1, outputTokens: 12 },
+          { kind: 'chat', label: 'un message quelconque', costUsd: 0.5, outputTokens: 13 }
+        ]
+      )
     )
     expect(rows.map((r) => r.key)).toEqual(['subagent', 'judge', 'router', 'orchestrator'])
   })
 
   it('une entree `exec` sans label reste un subagent (defaut sur), pas « (inconnu) »', () => {
-    const rows = summarizeCostSamples(costSamplesFrom([], [{ kind: 'exec', costUsd: 2, outputTokens: 5 }]))
+    const rows = summarizeCostSamples(
+      costSamplesFrom([], [{ kind: 'exec', costUsd: 2, outputTokens: 5 }])
+    )
     expect(rows[0].key).toBe('subagent')
   })
 })

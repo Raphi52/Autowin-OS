@@ -175,6 +175,7 @@ export function EvidenceList({ items }: { items: EvidencePart[] }): React.JSX.El
  * clic : relancée à l'identique, elle retombe sur l'acquis persisté du run mort et repart à la phase
  * suivante — au lieu d'obliger l'utilisateur à retaper sa demande.
  */
+// eslint-disable-next-line react-refresh/only-export-components -- helper pur testé avec ce renderer
 export function interruptedTask(actions: ChatActionPart[]): string | undefined {
   for (const action of actions) {
     if (!action.interrupted) continue
@@ -250,99 +251,103 @@ export function AssistantActivityGroup({
   const resumable = interruptedCount > 0 && onResume ? interruptedTask(actions) : undefined
   return (
     <>
-    {/* La barre est un CONTENEUR : « voir » et « reprendre » y cohabitent sans s'imbriquer
+      {/* La barre est un CONTENEUR : « voir » et « reprendre » y cohabitent sans s'imbriquer
         (un bouton dans un bouton est invalide, et rendrait un clic « voir » ambigu). */}
-    <div className={`activity-group${failed ? ' failed' : ''}`}>
-    <button
-      type="button"
-      className="activity-group-main"
-      data-testid="activity-group"
-      title={
-        !runConsultable
-          ? 'Action locale : son détail est affiché ici même (aucun run à ouvrir)'
-          : running
-            ? 'Ouvrir cette action en cours dans Workflows'
-            : 'Voir le détail de cette action dans Workflows'
-      }
-      aria-disabled={!runConsultable}
-      // On transmet le run FAUTIF : sans lui, un clic sur « avec erreur » n'ouvrait que la liste
-      // des runs de la conversation, laissant l'utilisateur chercher lequel regarder.
-      onClick={() => {
-        if (!runConsultable) return
-        onOpenLiveAction?.(running ? 'live' : 'history', failedActionRunId(actions))
-      }}
-    >
-      <span
-        className={`status-dot ${
-          running ? 'st-info' : failed ? 'st-err' : interruptedCount > 0 ? 'st-warn' : 'st-ok'
-        }`}
-      />
-      <span className="activity-group-title">{status}</span>
-      <span className="activity-group-tools">{tools}</span>
-      {outcome && (
-        <span
-          className={`activity-outcome st-${outcome.state}`}
-          data-testid="activity-outcome"
-          title={outcome.label}
-        >
-          {outcome.label}
-        </span>
-      )}
-      {running && <span className="spinner" />}
-      {runConsultable && (
-        <span className="activity-group-go" aria-hidden="true">
-          ↗
-        </span>
-      )}
-    </button>
-    {resumable && (
-      <button
-        type="button"
-        className={`activity-resume${resumeError ? ' failed' : ''}`}
-        data-testid="activity-resume"
-        disabled={resumePending}
-        aria-busy={resumePending}
-        {...(resumeError ? { 'data-resume-error': resumeError } : {})}
-        title={
-          resumePending
-            ? `Reprise en cours : ${resumable}`
-            : resumeError
-              ? `Reprise échouée : ${resumeError} — cliquer pour réessayer`
-              : `Reprendre : ${resumable}`
-        }
-        onClick={async () => {
-          if (resumePending) return
-          setResumePending(true)
-          setResumeError(null)
-          try {
-            const outcome = await onResume?.(resumable)
-            if (outcome && outcome.ok === false) {
-              setResumeError(outcome.error || 'reprise refusée')
-            }
-          } catch (error) {
-            setResumeError(error instanceof Error ? error.message : String(error))
-          } finally {
-            setResumePending(false)
+      <div className={`activity-group${failed ? ' failed' : ''}`}>
+        <button
+          type="button"
+          className="activity-group-main"
+          data-testid="activity-group"
+          title={
+            !runConsultable
+              ? 'Action locale : son détail est affiché ici même (aucun run à ouvrir)'
+              : running
+                ? 'Ouvrir cette action en cours dans Workflows'
+                : 'Voir le détail de cette action dans Workflows'
           }
-        }}
-      >
-        {resumePending ? '↻ Reprise…' : resumeError ? '↻ Réessayer' : '↻ Reprendre'}
-      </button>
-    )}
-    </div>
-    {details.length > 0 && (
-      <div className="activity-local-details" data-testid="activity-local-details">
-        {details.map((detail, index) => (
-          <details key={`${detail.name}-${index}`} className={detail.ok ? '' : 'failed'} open={!detail.ok}>
-            <summary>
-              <span className={`status-dot ${detail.ok ? 'st-ok' : 'st-err'}`} />
-              {CMD_LABEL[detail.name] ?? detail.name}
-            </summary>
-            <pre>{detail.text}</pre>
-          </details>
-        ))}
+          aria-disabled={!runConsultable}
+          // On transmet le run FAUTIF : sans lui, un clic sur « avec erreur » n'ouvrait que la liste
+          // des runs de la conversation, laissant l'utilisateur chercher lequel regarder.
+          onClick={() => {
+            if (!runConsultable) return
+            onOpenLiveAction?.(running ? 'live' : 'history', failedActionRunId(actions))
+          }}
+        >
+          <span
+            className={`status-dot ${
+              running ? 'st-info' : failed ? 'st-err' : interruptedCount > 0 ? 'st-warn' : 'st-ok'
+            }`}
+          />
+          <span className="activity-group-title">{status}</span>
+          <span className="activity-group-tools">{tools}</span>
+          {outcome && (
+            <span
+              className={`activity-outcome st-${outcome.state}`}
+              data-testid="activity-outcome"
+              title={outcome.label}
+            >
+              {outcome.label}
+            </span>
+          )}
+          {running && <span className="spinner" />}
+          {runConsultable && (
+            <span className="activity-group-go" aria-hidden="true">
+              ↗
+            </span>
+          )}
+        </button>
+        {resumable && (
+          <button
+            type="button"
+            className={`activity-resume${resumeError ? ' failed' : ''}`}
+            data-testid="activity-resume"
+            disabled={resumePending}
+            aria-busy={resumePending}
+            {...(resumeError ? { 'data-resume-error': resumeError } : {})}
+            title={
+              resumePending
+                ? `Reprise en cours : ${resumable}`
+                : resumeError
+                  ? `Reprise échouée : ${resumeError} — cliquer pour réessayer`
+                  : `Reprendre : ${resumable}`
+            }
+            onClick={async () => {
+              if (resumePending) return
+              setResumePending(true)
+              setResumeError(null)
+              try {
+                const outcome = await onResume?.(resumable)
+                if (outcome && outcome.ok === false) {
+                  setResumeError(outcome.error || 'reprise refusée')
+                }
+              } catch (error) {
+                setResumeError(error instanceof Error ? error.message : String(error))
+              } finally {
+                setResumePending(false)
+              }
+            }}
+          >
+            {resumePending ? '↻ Reprise…' : resumeError ? '↻ Réessayer' : '↻ Reprendre'}
+          </button>
+        )}
       </div>
-    )}
+      {details.length > 0 && (
+        <div className="activity-local-details" data-testid="activity-local-details">
+          {details.map((detail, index) => (
+            <details
+              key={`${detail.name}-${index}`}
+              className={detail.ok ? '' : 'failed'}
+              open={!detail.ok}
+            >
+              <summary>
+                <span className={`status-dot ${detail.ok ? 'st-ok' : 'st-err'}`} />
+                {CMD_LABEL[detail.name] ?? detail.name}
+              </summary>
+              <pre>{detail.text}</pre>
+            </details>
+          ))}
+        </div>
+      )}
     </>
   )
 }

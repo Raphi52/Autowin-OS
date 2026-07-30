@@ -48,6 +48,8 @@ export function SourceControlPane({
     let alive = true
     // On NE VIDE PLUS l'affichage pendant le rafraîchissement (avant : écran blanc → « on dirait que
     // rien ne se passe »). L'ancienne liste reste visible, un indicateur signale le chargement.
+    // Le changement de dépôt lance immédiatement une nouvelle requête externe.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     void window.api.getGitState?.(repoPath || undefined).then((g) => {
       if (alive) {
@@ -180,7 +182,9 @@ export function SourceControlPane({
             <div className="sc-branch-row">
               <span className="sc-branch">{git.state.branch || '—'}</span>
               {(git.state.ahead > 0 || git.state.behind > 0) && (
-                <span className="sc-ab">↑{git.state.ahead} ↓{git.state.behind}</span>
+                <span className="sc-ab">
+                  ↑{git.state.ahead} ↓{git.state.behind}
+                </span>
               )}
             </div>
             <div className="sc-btns">
@@ -252,7 +256,9 @@ export function SourceControlPane({
                               className="sc-btn sc-diff-action"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                propose(`explique ce qui a changé dans ${c.path} et propose un commit`)
+                                propose(
+                                  `explique ce qui a changé dans ${c.path} et propose un commit`
+                                )
                               }}
                             >
                               Expliquer / committer ce fichier
@@ -279,19 +285,23 @@ export function SourceControlPane({
         )}
 
         {view === 'worktree' && (
-        <section className="sc-sect">
-          <header className="sc-h">Worktrees{worktrees.length ? ` · ${worktrees.length}` : ''}</header>
-          {worktrees.length === 0 ? (
-            <div className="sc-clean">Aucune copie d’agent en cours.</div>
-          ) : (
-            <WorktreeActivityView
-              agents={worktrees}
-              onResolveConflict={(id) =>
-                propose(`montre-moi les deux versions en conflit du worktree ${id} et aide-moi à trancher`)
-              }
-            />
-          )}
-        </section>
+          <section className="sc-sect">
+            <header className="sc-h">
+              Worktrees{worktrees.length ? ` · ${worktrees.length}` : ''}
+            </header>
+            {worktrees.length === 0 ? (
+              <div className="sc-clean">Aucune copie d’agent en cours.</div>
+            ) : (
+              <WorktreeActivityView
+                agents={worktrees}
+                onResolveConflict={(id) =>
+                  propose(
+                    `montre-moi les deux versions en conflit du worktree ${id} et aide-moi à trancher`
+                  )
+                }
+              />
+            )}
+          </section>
         )}
 
         {view === 'worktree' && git?.history && git.history.length > 0 && (
@@ -306,7 +316,6 @@ export function SourceControlPane({
           </section>
         )}
       </div>
-
     </div>
   )
 }

@@ -9,14 +9,7 @@ import { join } from 'node:path'
  * packagée chez un autre), chaque loader renvoie '' → l'orchestration retombe sur la discipline
  * condensée intégrée (pipeline-discipline.ts). Aucune dépendance dure au home du dev.
  */
-export type PipelinePhase =
-  | 'scout'
-  | 'frame'
-  | 'terrain'
-  | 'build'
-  | 'clean'
-  | 'judge'
-  | 'kaizen'
+export type PipelinePhase = 'scout' | 'frame' | 'terrain' | 'build' | 'clean' | 'judge' | 'kaizen'
 
 export const PIPELINE_PHASES: PipelinePhase[] = [
   'scout',
@@ -62,7 +55,7 @@ export function kitAvailable(root = skillsRoot()): boolean {
  * (tokens gaspillés + risque de confusion). On ne garde que le CORPS (les vraies instructions).
  */
 export function stripSkillFrontmatter(text: string): string {
-  const m = /^﻿?---\r?\n[\s\S]*?\r?\n---\r?\n?/.exec(text)
+  const m = /^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/.exec(text)
   return m ? text.slice(m[0].length).replace(/^\s+/, '') : text
 }
 
@@ -99,10 +92,16 @@ export function engineForPhase(
   if (!full) return ''
   // La FONDATION (7 concepts) est identique à chaque phase → réinjectée 5× sur un run = gaspillage.
   // `withFoundation=false` la coupe : l'orchestrateur ne la fournit qu'à la 1ʳᵉ phase (1×/run).
-  const foundation = withFoundation ? engineSection(full, '## ⚡ THE FOUNDATION', '\\n# REFERENCE') : ''
+  const foundation = withFoundation
+    ? engineSection(full, '## ⚡ THE FOUNDATION', '\\n# REFERENCE')
+    : ''
   const chap = PHASE_ENGINE_CHAPTER[phase]
   const chapter = chap
-    ? engineSection(full, `## ${chap.replace('.', '\\.')}`, '\\n## (?:Ch\\.\\d|Telemetry|Roadmap)|$')
+    ? engineSection(
+        full,
+        `## ${chap.replace('.', '\\.')}`,
+        '\\n## (?:Ch\\.\\d|Telemetry|Roadmap)|$'
+      )
     : ''
   const body = [foundation, chapter].filter(Boolean).join('\n\n')
   return body ? `\n=== ENGINE (mécanique partagée du kit) ===\n${body}\n` : ''

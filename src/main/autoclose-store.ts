@@ -23,7 +23,7 @@ export function loadAutoClose(path = autoClosePath()): boolean {
     // Le BOM est retiré AVANT le parse : sous Windows, presque tout ce qui écrit un fichier à la
     // main (Notepad, `Set-Content`, redirection PowerShell) en ajoute un, et `JSON.parse` le refuse.
     // Sans ça, un réglage parfaitement valide retombait silencieusement à OFF. Constaté en vrai.
-    const raw = readFileSync(path, 'utf8').replace(/^﻿/, '')
+    const raw = readFileSync(path, 'utf8').replace(/^\uFEFF/, '')
     return (JSON.parse(raw) as { enabled?: unknown }).enabled === true
   } catch {
     return false // fichier corrompu : on retombe sur le défaut sûr, jamais sur « publie »

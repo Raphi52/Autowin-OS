@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -38,7 +38,7 @@ describe('native-registry (Chantier 1 — souveraineté inventaire)', () => {
     expect(items).toEqual([]) // pas de catalogue → tools vide (natif, pas d'erreur)
     // relecture de l'état skills
     setNativeEnablement('skills', 'build', true, base)
-    const raw = JSON.parse(require('node:fs').readFileSync(enablementPath(base), 'utf8'))
+    const raw = JSON.parse(readFileSync(enablementPath(base), 'utf8'))
     expect(raw.skills.frame).toBe(false)
     expect(raw.skills.build).toBe(true)
   })
@@ -52,7 +52,7 @@ describe('native-registry (Chantier 1 — souveraineté inventaire)', () => {
     // scanne une racine custom via nativeSkills ? nativeSkills utilise skillRoots() (réelles) —
     // on teste plutôt la règle enabled-par-défaut sur l'état :
     setNativeEnablement('skills', 'frame', false, base)
-    const enablement = JSON.parse(require('node:fs').readFileSync(enablementPath(base), 'utf8'))
+    const enablement = JSON.parse(readFileSync(enablementPath(base), 'utf8'))
     expect(enablement.skills.frame).toBe(false)
     // nativeSkills lit les vraies racines du poste : on vérifie juste qu'il rend un tableau
     expect(Array.isArray(nativeSkills(base))).toBe(true)

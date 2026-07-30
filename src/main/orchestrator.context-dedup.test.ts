@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { Orchestrator } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
-import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk } from './providers/types'
+import type {
+  Message,
+  ProviderAdapter,
+  SendOptions,
+  SendResult,
+  StreamChunk
+} from './providers/types'
 import { RoleModelConfig } from './roles'
 import { CostAggregator } from './dashboards/cost'
 import { TrustLedger } from './trust/ledger'
@@ -16,7 +22,10 @@ class RecordingProvider implements ProviderAdapter {
   async auth(): Promise<boolean> {
     return true
   }
-  async *send(messages: Message[], options: SendOptions = {}): AsyncGenerator<StreamChunk, SendResult, void> {
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
     void messages
     this.calls.push(options)
     const isJudge = options.execution?.sandbox === 'read-only'
@@ -29,7 +38,10 @@ class RecordingProvider implements ProviderAdapter {
   }
 }
 
-function makeOrchestrator(provider: ProviderAdapter, classifyPhases: (t: string) => PipelinePhase[]): Orchestrator {
+function makeOrchestrator(
+  provider: ProviderAdapter,
+  classifyPhases: (t: string) => PipelinePhase[]
+): Orchestrator {
   return new Orchestrator({
     registry: new ProviderRegistry().register(provider),
     roles: new RoleModelConfig({
@@ -65,6 +77,8 @@ describe('#2 anti-perte-de-contexte : pas de ré-injection discipline/projectCon
     expect(names(provider.calls[1])).toContain('style')
 
     // Conséquence mesurable : le system de la phase resume est STRICTEMENT plus court.
-    expect((provider.calls[1].system ?? '').length).toBeLessThan((provider.calls[0].system ?? '').length)
+    expect((provider.calls[1].system ?? '').length).toBeLessThan(
+      (provider.calls[0].system ?? '').length
+    )
   })
 })

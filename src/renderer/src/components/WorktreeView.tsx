@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type {
-  GitGraphCommit,
-  GitGraphRefKind,
-  GitGraphSnapshot
-} from '../../../shared/git-graph'
+import type { GitGraphCommit, GitGraphRefKind, GitGraphSnapshot } from '../../../shared/git-graph'
 import { ModuleHeader } from './ModuleHeader'
 import { commitsReachableFromRefs, layoutGitGraph } from './GitGraphLayout'
 import './WorktreeView.css'
@@ -122,9 +118,7 @@ function WorktreeViewSession({ active }: { active: boolean }): React.JSX.Element
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const requestId = useRef(0)
-  const [repoPath, setRepoPath] = useState(
-    () => localStorage.getItem('autowin:sc-repo') ?? ''
-  )
+  const [repoPath, setRepoPath] = useState(() => localStorage.getItem('autowin:sc-repo') ?? '')
 
   const load = useCallback(async (): Promise<void> => {
     const id = ++requestId.current
@@ -160,6 +154,8 @@ function WorktreeViewSession({ active }: { active: boolean }): React.JSX.Element
   }, [repoPath])
 
   useEffect(() => {
+    // Charge le graphe Git externe dès l'activation de la vue.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (active) void load()
     return () => {
       requestId.current += 1
@@ -264,7 +260,11 @@ function WorktreeViewSession({ active }: { active: boolean }): React.JSX.Element
                   <span className={`git-ledger__dot is-${ref.kind}`} />
                   <span title={ref.fullName}>
                     <strong>{ref.name}</strong>
-                    <small>{ref.kind === 'local' ? ref.fullName.replace('refs/heads/', '') : ref.fullName}</small>
+                    <small>
+                      {ref.kind === 'local'
+                        ? ref.fullName.replace('refs/heads/', '')
+                        : ref.fullName}
+                    </small>
                   </span>
                   <code>{ref.hash.slice(0, 7)}</code>
                   <em>{ref.isHead ? 'HEAD' : kindLabel[ref.kind]}</em>
@@ -290,9 +290,7 @@ function WorktreeViewSession({ active }: { active: boolean }): React.JSX.Element
                   }}
                 >
                   <code title={worktree.path}>{worktree.path}</code>
-                  <span title={worktree.branch ?? 'detached'}>
-                    {worktree.branch ?? 'detached'}
-                  </span>
+                  <span title={worktree.branch ?? 'detached'}>{worktree.branch ?? 'detached'}</span>
                   <em>{worktree.locked ? 'lock' : 'rw'}</em>
                 </button>
               ))}
@@ -318,7 +316,9 @@ function WorktreeViewSession({ active }: { active: boolean }): React.JSX.Element
                   {label}
                 </button>
               ))}
-              {snapshot?.truncated && <small>Historique récent borné · références anciennes incluses</small>}
+              {snapshot?.truncated && (
+                <small>Historique récent borné · références anciennes incluses</small>
+              )}
             </nav>
             {mode === 'topology' ? (
               <GitTopology
@@ -338,7 +338,9 @@ function WorktreeViewSession({ active }: { active: boolean }): React.JSX.Element
                     <code>{commit.shortHash}</code>
                     <span>
                       <strong>{commit.subject}</strong>
-                      <small>{commit.author} · {formatDate(commit.date)}</small>
+                      <small>
+                        {commit.author} · {formatDate(commit.date)}
+                      </small>
                     </span>
                   </button>
                 ))}

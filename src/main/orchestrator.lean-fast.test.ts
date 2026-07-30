@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { Orchestrator } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
-import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk } from './providers/types'
+import type {
+  Message,
+  ProviderAdapter,
+  SendOptions,
+  SendResult,
+  StreamChunk
+} from './providers/types'
 import { RoleModelConfig } from './roles'
 import { CostAggregator } from './dashboards/cost'
 import { TrustLedger } from './trust/ledger'
@@ -19,7 +25,10 @@ class RecordingProvider implements ProviderAdapter {
   async auth(): Promise<boolean> {
     return true
   }
-  async *send(messages: Message[], options: SendOptions = {}): AsyncGenerator<StreamChunk, SendResult, void> {
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
     this.calls.push(options)
     this.userMessages.push(String(messages[messages.length - 1]?.content ?? ''))
     const isExec = options.execution?.sandbox === 'danger-full-access'
@@ -33,7 +42,13 @@ class RecordingProvider implements ProviderAdapter {
       executionEvidence: isExec
         ? [
             { type: 'file_change', kind: 'mutation', status: 'done', ok: true, summary: 'edit' },
-            { type: 'command_execution', kind: 'verification', status: 'done', ok: true, summary: 'test exit=0' }
+            {
+              type: 'command_execution',
+              kind: 'verification',
+              status: 'done',
+              ok: true,
+              summary: 'test exit=0'
+            }
           ]
         : undefined
     }

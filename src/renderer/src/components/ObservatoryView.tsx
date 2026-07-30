@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   buildHarnessTimelineFromTrace,
   type HarnessTraceEvent,
@@ -283,6 +283,18 @@ export function ObservatoryView({
     })
   }
 
+  const resetTimelineFilters = useCallback((): void => {
+    setQuery('')
+    setTypeFilter('all')
+    setProviderFilter('all')
+    setQuickFilter('all')
+  }, [])
+
+  const resetConversationFilters = useCallback((): void => {
+    resetTimelineFilters()
+    setCausalScope('all')
+  }, [resetTimelineFilters])
+
   useEffect(() => {
     if (!active) return
     let disposed = false
@@ -342,7 +354,7 @@ export function ObservatoryView({
     return () => {
       disposed = true
     }
-  }, [active, refreshKey, focus])
+  }, [active, refreshKey, focus, resetConversationFilters])
 
   useEffect(() => {
     if (!active) return
@@ -523,18 +535,6 @@ export function ObservatoryView({
       return node.isBottleneck || node.issues.length > 0 || node.event.kind === 'error'
     return true
   })
-
-  function resetTimelineFilters(): void {
-    setQuery('')
-    setTypeFilter('all')
-    setProviderFilter('all')
-    setQuickFilter('all')
-  }
-
-  function resetConversationFilters(): void {
-    resetTimelineFilters()
-    setCausalScope('all')
-  }
 
   function selectConversation(nextConversationId: string): void {
     setTurnFocus(null)

@@ -27,16 +27,20 @@ interface Props {
   busy?: boolean
 }
 
-export function ConversationCostIndicator({ conversationId, busy }: Props): React.JSX.Element | null {
+export function ConversationCostIndicator({
+  conversationId,
+  busy
+}: Props): React.JSX.Element | null {
   const [rows, setRows] = useState<CostRow[]>([])
-  const [open, setOpen] = useState(false)
+  const [openConversationId, setOpenConversationId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   const refresh = useCallback(async () => {
     if (!conversationId || !window.api?.costBreakdown) return
     setLoading(true)
     try {
-      const result = (await window.api.costBreakdown('actor', conversationId)) as CostRow[] | undefined
+      const result = (await window.api.costBreakdown('actor', conversationId)) as
+        CostRow[] | undefined
       setRows(Array.isArray(result) ? result : [])
     } catch {
       // Un journal illisible ne doit pas casser le composeur : on garde le dernier total connu.
@@ -49,13 +53,12 @@ export function ConversationCostIndicator({ conversationId, busy }: Props): Reac
   // le journal contient la dépense du tour.
   useEffect(() => {
     if (busy) return
+    // Chargement asynchrone déclenché par l'état externe du journal, pas état dérivé du rendu.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh()
   }, [refresh, busy])
 
-  useEffect(() => {
-    setOpen(false)
-  }, [conversationId])
-
+  const open = openConversationId === conversationId
   const summary = summarizeConversationCost(rows)
   // Rien dépensé = rien à dire. Afficher « 0 $ » laisserait croire à une mesure là où il n'y a
   // qu'un journal vide.
@@ -70,7 +73,9 @@ export function ConversationCostIndicator({ conversationId, busy }: Props): Reac
         className={`conv-cost-btn${summary.rewritingContext ? ' warn' : ''}`}
         data-testid="conversation-cost-total"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() =>
+          setOpenConversationId((id) => (id === conversationId ? null : (conversationId ?? null)))
+        }
         title={
           summary.rewritingContext
             ? `${callsLabel(summary.calls)} · cache ${Math.round(summary.cacheHitRatio * 100)} % — le contexte est réécrit au lieu d’être relu`
@@ -98,8 +103,8 @@ export function ConversationCostIndicator({ conversationId, busy }: Props): Reac
           </div>
           {summary.rewritingContext && (
             <p className="conv-cost-warn" data-testid="conversation-cost-warning">
-              Le contexte est réécrit à chaque appel au lieu d’être relu depuis le cache — c’est ce qui
-              fait grimper la facture.
+              Le contexte est réécrit à chaque appel au lieu d’être relu depuis le cache — c’est ce
+              qui fait grimper la facture.
             </p>
           )}
           <ul className="conv-cost-rows">
@@ -121,8 +126,8 @@ export function ConversationCostIndicator({ conversationId, busy }: Props): Reac
             ))}
           </ul>
           <p className="conv-cost-note">
-            Mesuré sur les journaux d’appels de cette conversation, sous-agents inclus. « — » = durée
-            non enregistrée par la source, pas une opération instantanée.
+            Mesuré sur les journaux d’appels de cette conversation, sous-agents inclus. « — » =
+            durée non enregistrée par la source, pas une opération instantanée.
           </p>
         </div>
       )}

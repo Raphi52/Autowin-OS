@@ -3,7 +3,13 @@ import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
 import { Orchestrator, type RunWorktrees } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
-import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk } from './providers/types'
+import type {
+  Message,
+  ProviderAdapter,
+  SendOptions,
+  SendResult,
+  StreamChunk
+} from './providers/types'
 import { RoleModelConfig } from './roles'
 import { TrustLedger } from './trust/ledger'
 
@@ -14,7 +20,10 @@ class CapturingProvider implements ProviderAdapter {
   async auth(): Promise<boolean> {
     return true
   }
-  async *send(_m: Message[], options: SendOptions = {}): AsyncGenerator<StreamChunk, SendResult, void> {
+  async *send(
+    _m: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
     this.calls.push(options)
     options.execution?.onProcess?.(4242, true)
     options.execution?.onProcess?.(4242, false)
@@ -25,15 +34,30 @@ class CapturingProvider implements ProviderAdapter {
       executionEvidence:
         this.calls.length === 1
           ? [
-              { type: 'file_change', kind: 'mutation', status: 'completed', ok: true, summary: 'm' },
-              { type: 'command_execution', kind: 'verification', status: 'completed', ok: true, summary: 'v' }
+              {
+                type: 'file_change',
+                kind: 'mutation',
+                status: 'completed',
+                ok: true,
+                summary: 'm'
+              },
+              {
+                type: 'command_execution',
+                kind: 'verification',
+                status: 'completed',
+                ok: true,
+                summary: 'v'
+              }
             ]
           : undefined
     }
   }
 }
 
-function makeOrchestrator(worktrees?: RunWorktrees): { orch: Orchestrator; provider: CapturingProvider } {
+function makeOrchestrator(worktrees?: RunWorktrees): {
+  orch: Orchestrator
+  provider: CapturingProvider
+} {
   const provider = new CapturingProvider()
   const registry = new ProviderRegistry().register(provider)
   const roles = new RoleModelConfig({
@@ -88,7 +112,9 @@ describe('Orchestrator — flip live worktree', () => {
   })
 
   it('run de MUTATION : begin() route le cwd worktree dans les exécutions, end() est appelé', async () => {
-    const begin = vi.fn((_id: string, _n: string, isMut: boolean) => (isMut ? 'C:\\wt\\run-1' : undefined))
+    const begin = vi.fn((_id: string, _n: string, isMut: boolean) =>
+      isMut ? 'C:\\wt\\run-1' : undefined
+    )
     const end = vi.fn()
     const { orch, provider } = makeOrchestrator({ begin, end })
 
@@ -117,7 +143,10 @@ describe('Orchestrator — flip live worktree', () => {
     const failing = new ProviderRegistry() // aucun provider 'capture' → send jette
     const orch = new Orchestrator({
       registry: failing,
-      roles: new RoleModelConfig({ subagent: { provider: 'capture', model: 'w' }, judge: { provider: 'capture', model: 'j' } }),
+      roles: new RoleModelConfig({
+        subagent: { provider: 'capture', model: 'w' },
+        judge: { provider: 'capture', model: 'j' }
+      }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
       authority: new AuthoritySas(),
@@ -200,7 +229,7 @@ class PathReportingProvider implements ProviderAdapter {
     this.calls += 1
     const first = this.calls === 1
     return {
-      text: first ? `Module créé : ${this.worktreeCwd}\src\shared\duree.ts` : 'VALIDE',
+      text: first ? `Module créé : ${this.worktreeCwd}\\src\\shared\\duree.ts` : 'VALIDE',
       provider: this.id,
       systemInjected: Boolean(options.system),
       executionEvidence: first
@@ -219,10 +248,7 @@ class PathReportingProvider implements ProviderAdapter {
   }
 }
 
-function orchestratorReportingPaths(
-  worktreeCwd: string,
-  worktrees: RunWorktrees
-): Orchestrator {
+function orchestratorReportingPaths(worktreeCwd: string, worktrees: RunWorktrees): Orchestrator {
   const provider = new PathReportingProvider(worktreeCwd)
   return new Orchestrator({
     registry: new ProviderRegistry().register(provider),
@@ -233,13 +259,13 @@ function orchestratorReportingPaths(
     cost: new CostAggregator(),
     trust: new TrustLedger(),
     authority: new AuthoritySas(),
-    executionWorkspace: 'C:\base',
+    executionWorkspace: 'C:\\base',
     worktrees
   })
 }
 
 describe('le rapport ne pointe pas vers une copie supprimée', () => {
-  const WT = 'C:\wt\run-1'
+  const WT = 'C:\\wt\\run-1'
 
   it('FUSIONNÉ : le chemin cité devient celui du workspace de base', async () => {
     const orch = orchestratorReportingPaths(WT, {
@@ -250,7 +276,7 @@ describe('le rapport ne pointe pas vers une copie supprimée', () => {
 
     const result = await orch.run('modifie le projet')
 
-    expect(result.result).toContain('C:\base\src\shared\duree.ts')
+    expect(result.result).toContain('C:\\base\\src\\shared\\duree.ts')
     // Le chemin mort ne doit plus apparaitre : c'est tout le defaut.
     expect(result.result).not.toContain(WT)
   })
@@ -269,14 +295,14 @@ describe('le rapport ne pointe pas vers une copie supprimée', () => {
   })
 
   it('run SANS copie isolée : le rapport est rendu tel quel', async () => {
-    const orch = orchestratorReportingPaths('C:\base', {
+    const orch = orchestratorReportingPaths('C:\\base', {
       begin: () => undefined,
       end: () => undefined
     })
 
     const result = await orch.run('modifie le projet')
 
-    expect(result.result).toContain('C:\base\src\shared\duree.ts')
+    expect(result.result).toContain('C:\\base\\src\\shared\\duree.ts')
     expect(result.result).not.toContain('NON fusionné')
   })
 })
