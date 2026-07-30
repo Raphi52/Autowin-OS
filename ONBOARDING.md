@@ -12,14 +12,15 @@ Autowin OS = cockpit **Electron + React + TypeScript** d'orchestration d'agents.
 1. **Node.js** (LTS récent) — vérifier : `node --version`.
 2. **Git**.
 3. **uv** (gestionnaire de venv Python, pour le brain_server) — https://docs.astral.sh/uv/.
-4. Un **accès en écriture** au repo GitHub `Raphi52/Autowin-OS` (demander à être ajouté comme
-   collaborateur, ou cloner ta fork).
+4. Un **accès en écriture** au repo Azure DevOps `AmitelGTC/AutoWinOS` (demander à être ajouté à
+   l'équipe). L'accès passe par `az login` — voir la procédure Azure DevOps interne si ton poste
+   n'est pas encore configuré.
 
 ## 2. Récupérer et installer
 
 ```bash
-git clone https://github.com/Raphi52/Autowin-OS.git
-cd "Autowin-OS"
+git clone https://dev.azure.com/AmitelGTC/AutoWinOS/_git/AutoWinOS
+cd "AutoWinOS"
 npm install
 ```
 

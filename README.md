@@ -91,8 +91,8 @@ avec un `CLAUDE.md` externe).
 > Setup développeur complet (prérequis, CLI providers, brain_server, login) : **[ONBOARDING.md](ONBOARDING.md)**.
 
 ```bash
-git clone https://github.com/Raphi52/Autowin-OS.git
-cd "Autowin-OS"
+git clone https://dev.azure.com/AmitelGTC/AutoWinOS/_git/AutoWinOS
+cd "AutoWinOS"
 npm install
 npm run bootstrap:deps   # installe les CLI providers + le venv brain_server (idempotent)
 ```
