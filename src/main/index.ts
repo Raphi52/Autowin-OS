@@ -46,6 +46,7 @@ import { listSessions, parseSession } from './activity/transcripts'
 import { persistConversations } from './store/conversations-disk'
 import { collectStdoutJournals } from './runs/journal-gc'
 import { listConvRuns, loadConvRunTrace } from './runs/conv-runs'
+import { createOrchestrateTurnPersistence } from './runs/orchestrate-turn-persistence'
 import {
   appendTurnEvent,
   listUnfinishedTurns,
@@ -686,8 +687,27 @@ function registerChatIpc(): void {
       ...costLimitsFromSettings(loadOrchestrationBudget(orchestrationBudgetPath)),
       maxTokens: Number.isFinite(tokenCap) && tokenCap > 0 ? tokenCap : undefined
     })
+    const turnId = randomUUID()
+    // FRONTIÈRE DE PERSISTANCE : le run direct n'écrivait que le ledger et `orchestrate:step` (canal
+    // sans aucun abonné renderer) — le fil restait VIDE, échec compris. On persiste donc le tour
+    // comme le fait `os:pilotChat` : ouverture, une carte par étape, état terminal systématique.
+    const durableTurn = createOrchestrateTurnPersistence({
+      conversations: os.conversations,
+      conversationId,
+      turnId,
+      runtime: {
+        provider: os.roles.getBinding('orchestrator').provider,
+        model: os.roles.getBinding('orchestrator').model,
+        reasoningEffort: os.roles.getBinding('orchestrator').reasoningEffort
+      },
+      journal: (durableEvent) =>
+        appendTurnEvent(turnJournalRoot, conversationId, turnId, {
+          ...durableEvent,
+          at: Date.now()
+        })
+    })
     try {
-      const turnId = randomUUID()
+      durableTurn.begin(guardString(task, 'task'))
       // Acquis d'un run interrompu portant la MÊME tâche dans CETTE conversation. Oublié aussitôt :
       // le run repris persiste le sien, sinon le même acquis serait rejoué à chaque relance.
       const resumedAcquis = os.resumableOrchestrationForTask?.(guardString(task, 'task'), conversationId) ?? null
@@ -710,6 +730,8 @@ function registerChatIpc(): void {
             name: step.step,
             detail: `${step.role ?? ''} ${step.provider ?? ''} ${step.detail ?? ''}`.trim()
           })
+          // Le fil : une carte d'action par étape, PERSISTÉE (survit au rechargement).
+          durableTurn.step(step)
           // Chantier 3 — trace native : capture l'envelope réel (system porte le RAG Brain + contexte).
           if (step.prompt) {
             appendNativeTrace({
@@ -764,14 +786,15 @@ function registerChatIpc(): void {
           navigation: result.brainNavigation
         })
       }
+      durableTurn.succeed(result)
       return { ok: true, result }
     } catch (e) {
       const aborted = controller.signal.aborted
-      return {
-        ok: false,
-        error: aborted ? 'Run annulé' : e instanceof Error ? e.message : String(e),
-        aborted
-      }
+      const error = aborted ? 'Run annulé' : e instanceof Error ? e.message : String(e)
+      // Un échec doit se CONCLURE dans le fil : le renderer jette la promesse (`void`), donc sans ce
+      // tour terminal l'erreur disparaissait entièrement.
+      durableTurn.fail(error, aborted)
+      return { ok: false, error, aborted }
     } finally {
       bus.clearOrchestration(conversationId, controller)
     }
