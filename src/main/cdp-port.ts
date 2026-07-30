@@ -3,10 +3,18 @@
  *
  * PROBLÈME CONSTATÉ (chez un collègue, 2026-07-30) : `npm run dev` sortait
  * `bind() ... (0x2740)` + `Cannot start http server for devtools`, parce que le port 9223 était
- * déjà tenu. Vérifié sur cette machine : `netstat` montrait `127.0.0.1:9223 LISTENING <pid>` avec un
- * PID QUI N'EXISTAIT PLUS — un process enfant lancé par l'app avait hérité du socket d'écoute
- * DevTools et le gardait après la mort de l'app. Le port restait donc bloqué jusqu'au reboot, et le
- * seul recours était de chasser le process à la main.
+ * déjà tenu. Reproduit sur cette machine : après la mort de l'app, `netstat` montrait
+ * `127.0.0.1:9223 LISTENING <pid>` avec un PID QUI N'EXISTAIT PLUS.
+ *
+ * CAUSE RACINE : NON ÉTABLIE — et l'explication intuitive est RÉFUTÉE par la mesure. On soupçonnait
+ * un enfant lancé par l'app héritant du socket d'écoute DevTools ; test isolé (un parent qui écoute,
+ * un enfant détaché en `pipe`, en `ignore`, puis via `cmd start`, parent tué) : le port est libéré
+ * dans les TROIS cas → `spawn` ne fuit PAS un socket d'écoute. Ni les CLI providers ni le
+ * brain_server ne sont donc en cause : ne pas « corriger » ces spawns sur cette base.
+ * Piste restante, non prouvée : un helper Chromium survivant quelques instants (son lanceur n'a pas
+ * les mêmes règles d'héritage que `spawn`) — le port s'est d'ailleurs libéré seul plus tard.
+ *
+ * On traite donc par l'AVAL : quoi qu'il tienne le port, on n'attend pas.
  *
  * Le symptôme n'est pas fatal (l'app démarre, seul le pilotage à distance manque), mais il est
  * inexplicable pour un nouveau venu. On le rend AUTO-RÉPARANT : si le port préféré est occupé, on
