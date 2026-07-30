@@ -1,5 +1,8 @@
 import type { AgentStudioSection } from '../tabs'
-import { RolesView } from './RolesView'
+// Importe DIRECTEMENT le composant : `RolesView` n'etait qu'un alias d'une ligne re-exportant
+// `AgentsTopologyView`, avec ce fichier pour unique appelant. Deux noms pour un seul composant, c'est
+// un renommage laisse a moitie fait — et un lecteur qui cherche `RolesView` ne trouve pas le code.
+import { AgentsTopologyView } from './AgentsTopologyView'
 import { RouterView } from './RouterView'
 import './DomainShell.css'
 
@@ -33,7 +36,7 @@ export function AgentStudioView({
         </button>
       </nav>
       <div className="domain-content">
-        {section === 'routing' ? <RouterView /> : <RolesView active={active} />}
+        {section === 'routing' ? <RouterView /> : <AgentsTopologyView active={active} />}
       </div>
     </section>
   )
