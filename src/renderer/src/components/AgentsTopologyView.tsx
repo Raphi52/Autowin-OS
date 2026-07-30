@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './AgentsTopologyView.css'
 import { ModuleHeader } from './ModuleHeader'
 import { modelRecencyKey, modelVendor } from './chat-view-model'
@@ -81,12 +81,20 @@ export function AgentsTopologyView({
   const [state, setState] = useState<'loading' | 'ready' | 'saving' | 'error'>('loading')
   const [error, setError] = useState('')
   const [profiles, setProfiles] = useState<Profile[]>([])
+  const topologyRef = useRef<AgentTopology | null>(null)
+  const persistQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const persistVersionRef = useRef(0)
+
+  function replaceTopology(next: AgentTopology): void {
+    topologyRef.current = next
+    setTopology(next)
+  }
 
   useEffect(() => {
     Promise.all([window.api.models(), window.api.topology(), window.api.roles()])
       .then(([catalog, current, roles]) => {
         setModels(catalog)
-        setTopology(withOrchestratorRole(current, catalog, roles.orchestrator))
+        replaceTopology(withOrchestratorRole(current, catalog, roles.orchestrator))
         setSelectedModelId(catalog[0]?.id ?? '')
         setState('ready')
       })
@@ -101,7 +109,13 @@ export function AgentsTopologyView({
       if (event.type === 'refresh' && event.scope === 'roles') {
         void window.api.roles().then((roles) => {
           setTopology((current) =>
-            current ? withOrchestratorRole(current, models, roles.orchestrator) : current
+            current
+              ? (() => {
+                  const next = withOrchestratorRole(current, models, roles.orchestrator)
+                  topologyRef.current = next
+                  return next
+                })()
+              : current
           )
         })
       }
@@ -135,7 +149,7 @@ export function AgentsTopologyView({
   async function applyProfile(id: string): Promise<void> {
     const applied = await window.api.applyProfile(id)
     const roles = await window.api.roles()
-    setTopology(withOrchestratorRole(applied.topology, models, roles.orchestrator))
+    replaceTopology(withOrchestratorRole(applied.topology, models, roles.orchestrator))
   }
 
   const modelsById = useMemo(() => new Map(models.map((model) => [model.id, model])), [models])
@@ -180,15 +194,26 @@ export function AgentsTopologyView({
   const selectedModel = modelsById.get(selectedModelId)
 
   async function persist(next: AgentTopology): Promise<void> {
+    const version = ++persistVersionRef.current
+    replaceTopology(next)
     setState('saving')
     setError('')
+    const request = persistQueueRef.current.then(() => window.api.setTopology(next))
+    persistQueueRef.current = request.then(
+      () => undefined,
+      () => undefined
+    )
     try {
-      const saved = await window.api.setTopology(next)
-      setTopology(saved)
-      setState('ready')
+      const saved = await request
+      if (version === persistVersionRef.current) {
+        replaceTopology(saved)
+        setState('ready')
+      }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason))
-      setState('error')
+      if (version === persistVersionRef.current) {
+        setError(reason instanceof Error ? reason.message : String(reason))
+        setState('error')
+      }
     }
   }
 
@@ -227,19 +252,20 @@ export function AgentsTopologyView({
   }
 
   function assign(model: ImportedModel | undefined, target: Target, slotId?: string): void {
-    if (!model || !topology) return
-    const id = target === 'orchestrator' ? 'orchestrator' : (slotId ?? nextSlotId(target, topology))
+    const current = topologyRef.current
+    if (!model || !current) return
+    const id = target === 'orchestrator' ? 'orchestrator' : (slotId ?? nextSlotId(target, current))
     const binding = bindingFor(model, id)
     const next =
       target === 'orchestrator'
-        ? { ...topology, orchestrator: binding }
+        ? { ...current, orchestrator: binding }
         : target === 'subagents'
-          ? { ...topology, subagents: replaceOrAppend(topology.subagents, binding) }
+          ? { ...current, subagents: replaceOrAppend(current.subagents, binding) }
           : {
-              ...topology,
+              ...current,
               panels: {
-                ...topology.panels,
-                [target]: replaceOrAppend(topology.panels[target], binding)
+                ...current.panels,
+                [target]: replaceOrAppend(current.panels[target], binding)
               }
             }
     if (target === 'orchestrator') void persistOrchestrator(binding)
@@ -253,32 +279,34 @@ export function AgentsTopologyView({
   }
 
   function updateSlot(target: Target, slotId: string, patch: Partial<SlotBinding>): void {
-    if (!topology) return
+    const current = topologyRef.current
+    if (!current) return
     const update = (slot: SlotBinding): SlotBinding =>
       slot.slotId === slotId ? { ...slot, ...patch } : slot
     const next =
       target === 'orchestrator'
-        ? { ...topology, orchestrator: update(topology.orchestrator) }
+        ? { ...current, orchestrator: update(current.orchestrator) }
         : target === 'subagents'
-          ? { ...topology, subagents: topology.subagents.map(update) }
+          ? { ...current, subagents: current.subagents.map(update) }
           : {
-              ...topology,
-              panels: { ...topology.panels, [target]: topology.panels[target].map(update) }
+              ...current,
+              panels: { ...current.panels, [target]: current.panels[target].map(update) }
             }
     if (target === 'orchestrator') void persistOrchestrator(next.orchestrator)
     else void persist(next)
   }
 
   function remove(target: Exclude<Target, 'orchestrator'>, slotId: string): void {
-    if (!topology) return
+    const current = topologyRef.current
+    if (!current) return
     const next =
       target === 'subagents'
-        ? { ...topology, subagents: topology.subagents.filter((slot) => slot.slotId !== slotId) }
+        ? { ...current, subagents: current.subagents.filter((slot) => slot.slotId !== slotId) }
         : {
-            ...topology,
+            ...current,
             panels: {
-              ...topology.panels,
-              [target]: topology.panels[target].filter((slot) => slot.slotId !== slotId)
+              ...current.panels,
+              [target]: current.panels[target].filter((slot) => slot.slotId !== slotId)
             }
           }
     void persist(next)
