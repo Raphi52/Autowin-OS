@@ -32,13 +32,13 @@ const interrompue = (task?: string): ChatActionPart =>
   }) as ChatActionPart
 
 describe('reprendre une action interrompue sans la retaper', () => {
-  it('propose « Reprendre » et renvoie la TÂCHE D’ORIGINE, pas le mot « reprend »', () => {
+  it('propose « Reprendre » et renvoie la TÂCHE D’ORIGINE, pas le mot « reprend »', async () => {
     const resumed: string[] = []
     render([interrompue('trouve le composant concerné')], (task) => resumed.push(task))
 
     const button = container.querySelector<HTMLButtonElement>('[data-testid="activity-resume"]')
     expect(button).not.toBeNull()
-    act(() => void button?.click())
+    await act(async () => button?.click())
     // C'est la tâche d'origine qui repart : elle seule retombe sur l'acquis persisté du run mort.
     expect(resumed).toEqual(['trouve le composant concerné'])
   })
