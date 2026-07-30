@@ -92,10 +92,14 @@ describe('persistance du tour pour le run direct os:orchestrate', () => {
 
   it('le handler os:orchestrate câble bien cette persistance (ouverture, étapes, terminal)', () => {
     const source = readFileSync(new URL('../index.ts', import.meta.url), 'utf8')
-    const handler = source.slice(
-      source.indexOf("ipcMain.handle('os:orchestrate'"),
-      source.indexOf("ipcMain.handle('os:behaviourComposition'")
-    )
+    const start = source.indexOf("ipcMain.handle('os:orchestrate'")
+    expect(start, 'handler os:orchestrate introuvable').toBeGreaterThan(-1)
+    // Borne = le PROCHAIN handler, quel qu'il soit. Ancrer sur un voisin NOMME
+    // (`os:behaviourComposition`) etait un faux vert en attente : le jour ou ce voisin est renomme ou
+    // deplace, `indexOf` rend -1, `slice(start, -1)` avale TOUT LE RESTE du fichier, et les assertions
+    // passent en trouvant ces chaines ailleurs — le cablage ne serait plus verifie du tout.
+    const next = source.indexOf('ipcMain.handle(', start + 20)
+    const handler = source.slice(start, next > -1 ? next : undefined)
     expect(handler).toContain('createOrchestrateTurnPersistence(')
     expect(handler).toContain('durableTurn.begin(')
     expect(handler).toContain('durableTurn.step(step)')
