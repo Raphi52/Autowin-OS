@@ -111,6 +111,7 @@ export function GraphView({
   const [brains, setBrains] = useState<Brain[]>([])
   const [selected, setSelected] = useState('')
   const [graph, setGraph] = useState<GraphData>({ nodes: [], links: [] })
+  const [graphReload, setGraphReload] = useState(0)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
   const [themeQuery, setThemeQuery] = useState('')
@@ -170,6 +171,16 @@ export function GraphView({
       })
       .catch((error) => setErr(String(error)))
   }, [])
+
+  const refreshGraph = useCallback((): void => {
+    if (selected) {
+      graphCacheRef.current.delete(`${selected}\u0000${settings.lod}`)
+      dynamicGraphKeyRef.current = ''
+      dynamicGraphRef.current = { nodes: [], links: [] }
+      setGraphReload((request) => request + 1)
+    }
+    refreshBrains()
+  }, [refreshBrains, selected, settings.lod])
 
   useEffect(() => {
     refreshBrains()
@@ -253,7 +264,7 @@ export function GraphView({
     return () => {
       current = false
     }
-  }, [selected, settings.lod])
+  }, [graphReload, selected, settings.lod])
 
   useEffect(() => {
     const element = wrap.current
@@ -889,7 +900,7 @@ export function GraphView({
         <button
           type="button"
           className="graph-refresh"
-          onClick={refreshBrains}
+          onClick={refreshGraph}
           disabled={loading}
           aria-label="Rafraîchir les graphes"
           title="Rafraîchir les graphes"
