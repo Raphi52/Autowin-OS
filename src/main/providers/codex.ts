@@ -16,7 +16,7 @@ import {
   SUBAGENT_INACTIVITY_MS,
   SUBAGENT_TOTAL_MS
 } from './watchdog'
-import { spawn } from 'node:child_process'
+import { spawnSurvivable } from '../runs/survivable-spawn'
 import { findNpmGlobalFile } from './npm-global-resolve'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -155,12 +155,15 @@ async function runCodexExec(
   return await new Promise((resolvePromise, reject) => {
     const spawnToken = randomUUID()
     execution.onSpawnIntent?.(spawnToken, true)
-    const child = spawn(spec.executable, spec.args, {
+    // Lancement par la couche COMMUNE : sortie vers un journal fichier, processus detache. Avant,
+    // codex lancait en pipes non detaches — son travail mourait avec l'app, contrairement a claude.
+    const run = spawnSurvivable({
+      bin: spec.executable,
+      args: spec.args,
       cwd: spec.cwd,
-      shell: false,
-      windowsHide: true,
-      stdio: ['pipe', 'pipe', 'pipe']
+      runId: spawnToken
     })
+    const child = run.child
     const childPid = child.pid
     if (childPid) {
       if (execution.onSpawned) execution.onSpawned(spawnToken, childPid)
@@ -169,7 +172,6 @@ async function runCodexExec(
         execution.onSpawnIntent?.(spawnToken, false)
       }
     }
-    let stdout = ''
     let stderr = ''
     let finalText = ''
     const reasoningFragments: string[] = []
@@ -194,12 +196,11 @@ async function runCodexExec(
       killEscalate(child)
       reject(new Error('codex exec annulé'))
     })
-    child.stdout.on('data', (chunk: Buffer) => {
+    // La couche commune livre des lignes COMPLÈTES (elle garde en tampon une ligne partielle) :
+    // le découpage manuel disparaît, le traitement par ligne reste identique.
+    const handleLine = (line: string): void => {
       watchdog.beat() // activité → réarme l'inactivité
-      stdout += chunk.toString('utf8')
-      const lines = stdout.split(/\r?\n/)
-      stdout = lines.pop() ?? ''
-      for (const line of lines) {
+      {
         try {
           const event = JSON.parse(line) as Record<string, unknown>
           if (event.type === 'thread.started' && typeof event.thread_id === 'string')
@@ -285,19 +286,24 @@ async function runCodexExec(
             }
           }
         } catch {
-          // Le CLI peut écrire une ligne informative non JSON ; stderr garde le diagnostic fatal.
+          // Ligne non JSON : le journal melange stdout et stderr, donc c'est ICI qu'arrive le
+          // diagnostic fatal du CLI. On la conserve, sinon un echec deviendrait muet.
+          stderr += `${line}\n`
         }
       }
-    })
-    child.stderr.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString('utf8')
-    })
+    }
+    let closed = false
+    void run
+      .tail(handleLine, { isComplete: () => closed, signal: opts.signal })
+      .catch(() => undefined)
     child.on('error', (error) => {
       watchdog.dispose()
       if (!childPid) execution.onSpawnIntent?.(spawnToken, false)
       reject(error)
     })
     child.on('close', (code) => {
+      closed = true // le tail draine ce qui reste puis s'arrête
+      run.release()
       watchdog.dispose()
       if (childPid) execution.onProcess?.(childPid, false)
       if (code !== 0) {
@@ -318,7 +324,8 @@ async function runCodexExec(
         thinking: joinThinking(reasoningFragments)
       })
     })
-    child.stdin.end(prompt)
+    // stdin reste un pipe même en mode détaché (seules stdout/stderr vont au journal).
+    child.stdin?.end(prompt)
   })
 }
 
