@@ -1,6 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
+
+const nodeRequire = createRequire(__filename)
 
 /**
  * Auth OAuth « abonnement ChatGPT/Codex » — device-code + PKCE (le verifier est
@@ -51,8 +54,13 @@ function safeStorageOrNull(): {
   decryptString(b: Buffer): string
 } | null {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const mod = require('electron') as { safeStorage?: { isEncryptionAvailable(): boolean; encryptString(s: string): Buffer; decryptString(b: Buffer): string } }
+    const mod = nodeRequire('electron') as {
+      safeStorage?: {
+        isEncryptionAvailable(): boolean
+        encryptString(s: string): Buffer
+        decryptString(b: Buffer): string
+      }
+    }
     return mod.safeStorage?.isEncryptionAvailable?.() ? mod.safeStorage : null
   } catch {
     return null

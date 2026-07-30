@@ -125,14 +125,12 @@ export class ConversationStore {
       // et une conversation ancienne qui en portait affiche simplement tous ses messages à la suite.
       const legacy = c as Conversation & Record<string, unknown>
       const hadBranches = legacy.rootBranchId !== undefined || legacy.branches !== undefined
-      const {
-        rootBranchId: _root,
-        activeBranchId: _active,
-        branches: _branches,
-        ...rest
-      } = legacy
+      const rest: Record<string, unknown> = { ...legacy }
+      delete rest.rootBranchId
+      delete rest.activeBranchId
+      delete rest.branches
       const hydrated: Conversation = {
-        ...(rest as Conversation),
+        ...(rest as unknown as Conversation),
         schemaVersion: 3 as const,
         workspaceId: c.workspaceId ?? `workspace-${c.id}`,
         authorityMode: c.authorityMode ?? 'auto',
@@ -357,9 +355,7 @@ export class ConversationStore {
       // sous le fork. On note donc QUI le possède, pour que la loupe aille le lire au bon endroit
       // au lieu de chercher sous le fork et de retomber sur un run étranger.
       // Un fork de fork propage le propriétaire D'ORIGINE, pas l'intermédiaire.
-      ...(message.turnId
-        ? { turnConversationId: message.turnConversationId ?? source.id }
-        : {})
+      ...(message.turnId ? { turnConversationId: message.turnConversationId ?? source.id } : {})
     }))
     forked.forkedFrom = { conversationId: source.id, messageId: fromMessageId }
     forked.updatedAt = this.now()

@@ -205,7 +205,12 @@ interface PhasePromptBlock {
 /** Contrat minimal du coordinateur worktree niveau run (implémenté par RunWorktreeCoordinator). */
 export interface RunWorktrees {
   /** Renvoie le cwd isolé du run (mutation) ou undefined (non-mutation → base). */
-  begin(runId: string, agentName: string, isMutation: boolean): string | undefined
+  begin(
+    runId: string,
+    agentName: string,
+    isMutation: boolean,
+    metadata?: { task?: string; role?: string; conversationId?: string }
+  ): string | undefined
   /**
    * Clôt le run ; appelé en fin de run, y compris sur erreur. `merge: false` (run non vert) ⇒ le
    * travail N'EST PAS fusionné dans la base et la copie isolée est conservée pour décision humaine.
@@ -229,8 +234,13 @@ export interface RunCloser {
   close(context: { runId: string; task: string; workCwd: string }): Promise<void>
 }
 
-const MUTATION_TASK =
-  /\b(ajout|ajouter|add|modifi|change|corrig|fix|cr[eé]|create|impl[eé]ment|refactor|supprim|remove|renomm|update|build)\w*/i
+const MUTATION_STEM =
+  'ajout|add|modifi|chang|corrig|fix|cre|create|implement|refactor|supprim|remove|renomm|rename|update|build|ger|ecri|write|edit|patch|apply|delete|move|remplac|configur|repar|nettoi|deplac|mets|met|fai'
+const MUTATION_TASK = new RegExp(`\\b(?:${MUTATION_STEM})\\w*`, 'i')
+const NEGATED_MUTATION = new RegExp(
+  `\\b(?:sans(?:\\s+rien)?\\s+(?:\\w+\\s+){0,2}|n['e]?\\s*(?:\\w+\\s+){0,2})(?:${MUTATION_STEM})\\w*(?:\\s+pas)?`,
+  'gi'
+)
 
 /** B4 — plafond du texte d'une phase RÉINJECTÉ dans le contexte de la phase suivante. */
 const PHASE_CONTEXT_CAP = 2000
@@ -253,8 +263,23 @@ export function isMutationTask(task: string): boolean {
   // Kaizen est contractuellement un audit natif en lecture seule, quel que soit le vocabulaire
   // cité dans sa cible (ex. « pourquoi le modèle a voulu modifier X »).
   if (/^\/kaizen(?=\s|$)/i.test(task.trim())) return false
-  const withoutNegations = task.replace(/\bn[e']\s*\w+(?:\s+\w+){0,2}?\s+pas\b/gi, ' ')
-  return MUTATION_TASK.test(withoutNegations)
+  if (/^\/(?:scout|frame|judge)(?=\s|$)/i.test(task.trim())) return false
+  const normalized = task
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+  const withoutNegations = normalized.replace(NEGATED_MUTATION, ' ')
+  if (MUTATION_TASK.test(withoutNegations)) return true
+  // Fail-closed : le langage naturel ne peut pas fournir une liste exhaustive des façons de
+  // demander une écriture ("write", "patch", "apply", "fais…"). Seule une négation explicite
+  // ET un contrat de lecture identifiable autorisent le chemin partagé ; une négation mêlée à un
+  // ordre positif inconnu reste donc isolée.
+  const explicitReadOnly =
+    withoutNegations !== normalized &&
+    /\b(?:analys|audit|cadr|document|expliqu|inspect|lecture seule|review)\w*/i.test(normalized)
+  const simpleReadOnly =
+    /^(?:analys|audit|expliqu|inspect|review|cadr|document|resume|decri)\w*\b/i.test(normalized)
+  return !(explicitReadOnly || simpleReadOnly)
 }
 
 export function evidenceSatisfiesTask(task: string, evidence: ExecutionEvidence[] = []): boolean {
@@ -303,9 +328,9 @@ export class Orchestrator {
   }
 
   /** Commande de vérif à rejouer (verify-replay) : explicite > convention workspace > aucune (dormant). */
-  private resolveVerifyCmd(): string | undefined {
+  private resolveVerifyCmd(cwd = this.deps.executionWorkspace): string | undefined {
     if (this.deps.verifyCmd) return this.deps.verifyCmd
-    return this.deps.autoVerify ? resolveVerifyCmd(this.deps.executionWorkspace) : undefined
+    return this.deps.autoVerify ? resolveVerifyCmd(cwd) : undefined
   }
 
   private executionOptions(
@@ -345,6 +370,11 @@ export class Orchestrator {
   ): Promise<OrchestrationResult> {
     const runId = `run-${this.runNamespace}-${++this.runSeq}`
     const isMut = isMutationTask(task)
+    if (isMut && !this.deps.worktrees) {
+      throw new Error(
+        'Mutation bloquée : le moteur d’isolation workspace est indisponible pour ce projet.'
+      )
+    }
     // Verdict du run, lu dans le `finally` : seul un run VERT ramène son travail dans la base.
     let green = false
     // Reference du rapport rendu : le `finally` doit pouvoir aligner ses chemins APRES avoir su ce que
@@ -358,8 +388,15 @@ export class Orchestrator {
     // démarrage n'avait aucune prise — l'utilisateur devait relancer la tâche à la main. On enregistre
     // dès maintenant, acquis vide : la reprise repart de zéro plutôt que de perdre la tâche.
     this.deps.onPhaseCompleted?.({ runId, task, conversationId, phaseOutputs: [...resumeOutputs] })
-    const workCwd =
-      this.deps.worktrees?.begin(runId, 'Agent', isMut) ?? this.deps.executionWorkspace
+    const isolatedCwd = this.deps.worktrees?.begin(runId, 'Agent', isMut, {
+      task,
+      role: 'build',
+      conversationId
+    })
+    if (isMut && !isolatedCwd) {
+      throw new Error('Mutation bloquée : Autowin n’a pas pu créer un bureau agent isolé.')
+    }
+    const workCwd = isolatedCwd ?? this.deps.executionWorkspace
     if (isMut && this.deps.worktrees) {
       this.processObservers.set(workCwd, {
         process: (pid, active) => this.deps.worktrees?.process?.(runId, pid, active),
@@ -414,41 +451,56 @@ export class Orchestrator {
       produced = result
       return result
     } finally {
-      // SURVIE NIVEAU 3 : le run a atteint sa fin (vert, rouge ou exception) → l'état de reprise
-      // n'a plus de raison d'être. Best-effort : ne jamais masquer l'erreur d'origine du `finally`.
-      try {
-        this.deps.onRunSettled?.(runId)
-      } catch {
-        /* effacement best-effort */
-      }
       this.processObservers.delete(workCwd)
       // Le travail n'est fusionné dans la base QUE si le run est vert. Un run rouge, annulé ou planté
       // garde sa copie isolée (l'exception saute le `green = true` ci-dessus) : on ne ramène plus
       // automatiquement dans la base un travail jugé raté.
       const finalized = this.deps.worktrees?.end(runId, { merge: green })
+      const finalizeOutcome =
+        typeof finalized === 'object' && finalized !== null
+          ? (finalized as { outcome?: string }).outcome
+          : undefined
+      const integrated =
+        !isMut ||
+        finalizeOutcome === 'merged' ||
+        finalizeOutcome === 'nothing' ||
+        finalizeOutcome === 'cleanup-pending' ||
+        finalizeOutcome === 'published-residue'
+      if (green && !integrated && produced) {
+        produced.valid = false
+        produced.gateBlocked = true
+        if (!produced.gateReasons.includes('intégration locale non terminée')) {
+          produced.gateReasons.push('intégration locale non terminée')
+        }
+      }
       // Le rapport a ete redige DANS la copie isolee ; la ligne ci-dessus vient de la fusionner puis de
       // la supprimer. Sans cet alignement, chaque chemin cite est mort — constate le 2026-07-29, dit
       // par l'agent lui-meme : « le rapport pointe vers un worktree qui n'existe plus ».
       if (produced && workCwd !== this.deps.executionWorkspace) {
-        const merged =
-          typeof finalized === 'object' &&
-          finalized !== null &&
-          (finalized as { outcome?: string }).outcome === 'merged'
         const aligned = alignReportWithDisk(
           { result: produced.result, phaseOutputs: produced.phaseOutputs },
           workCwd,
           this.deps.executionWorkspace,
-          merged ? 'merged' : 'kept'
+          integrated ? 'merged' : 'kept'
         )
         produced.result = aligned.result
         produced.phaseOutputs = aligned.phaseOutputs ?? produced.phaseOutputs
       }
       // Clôture auto APRÈS la fusion (le travail est dans la base) et seulement si vert.
       // `void` + catch : publier est un service rendu, jamais une raison de faire échouer le run.
-      if (green && this.deps.closeGreenRun) {
+      if (green && integrated && this.deps.closeGreenRun) {
         void this.deps.closeGreenRun
           .close({ runId, task, workCwd: this.deps.executionWorkspace })
           .catch(() => undefined)
+      }
+      // Un vert dont l'intégration n'est pas terminée reste reprenable. Tous les autres runs ont
+      // réellement atteint un état terminal : leur acquis de phase peut alors être rangé.
+      if (!green || integrated) {
+        try {
+          this.deps.onRunSettled?.(runId)
+        } catch {
+          /* effacement best-effort */
+        }
       }
     }
   }
@@ -563,12 +615,8 @@ export class Orchestrator {
     envelope.systemBlocks = systemBlocks
     onPhase?.({ step: 'judge', provider: judgeProvider, role: 'judge', model: judgeBinding.model })
     const startedAt = performance.now()
-    const res = await this.sendWithRoleContext(
-      'jugement',
-      'judge',
-      judgeProvider,
-      opts.model,
-      () => registry.send(judgeProvider, messages, opts, (c) => onDelta?.('judge', c.delta))
+    const res = await this.sendWithRoleContext('jugement', 'judge', judgeProvider, opts.model, () =>
+      registry.send(judgeProvider, messages, opts, (c) => onDelta?.('judge', c.delta))
     )
     if (res.usage) {
       cost.add({
@@ -603,8 +651,8 @@ export class Orchestrator {
     // GATE déterministe + HookBus interne (pre-green) : enforcement HORS-MODÈLE, uniforme tous exécuteurs.
     const hookOutcome = await this.hooks.run('pre-green', {
       task,
-      cwd: this.deps.executionWorkspace,
-      verifyCmd: this.resolveVerifyCmd(),
+      cwd: workCwd,
+      verifyCmd: this.resolveVerifyCmd(workCwd),
       requireProof: isMutationTask(task),
       evidenceOkCount: evidence.filter((e) => e.ok).length,
       evidence
@@ -870,7 +918,12 @@ export class Orchestrator {
     const recordPhase = (phase: PipelinePhase, text: string): void => {
       phaseOutputs.push({ phase, text })
       try {
-        this.deps.onPhaseCompleted?.({ runId, task, conversationId, phaseOutputs: [...phaseOutputs] })
+        this.deps.onPhaseCompleted?.({
+          runId,
+          task,
+          conversationId,
+          phaseOutputs: [...phaseOutputs]
+        })
       } catch {
         /* best-effort : une panne de persistance ne casse jamais le run en cours */
       }
@@ -1551,8 +1604,8 @@ export class Orchestrator {
       // GATE déterministe (model-agnostic) + HookBus interne (pre-green) : enforcement HORS-MODÈLE.
       const hookOutcome = await this.hooks.run('pre-green', {
         task,
-        cwd: this.deps.executionWorkspace,
-        verifyCmd: this.resolveVerifyCmd(),
+        cwd: workCwd,
+        verifyCmd: this.resolveVerifyCmd(workCwd),
         requireProof: isMutationTask(task),
         evidenceOkCount: (exec.executionEvidence ?? []).filter((e) => e.ok).length,
         evidence: exec.executionEvidence

@@ -28,6 +28,7 @@ const FINAL_SUMMARY_LABELS = [
  * Rend le texte de l'étape recommandée (sans le libellé, sans le gras markdown), ou null.
  * Sert de ghost-text pré-rempli dans le composer du chat (accepté par Tab).
  */
+// eslint-disable-next-line react-refresh/only-export-components -- helper pur testé avec ce renderer
 export function extractRecommendation(text: string): string | null {
   for (const raw of text.split('\n')) {
     const line = raw.trim()
@@ -157,7 +158,10 @@ function badgeLevel(value: string): 'good' | 'warn' | 'bad' | null {
     if (n > 100) return null
     return n >= 70 ? 'good' : n >= 40 ? 'warn' : 'bad'
   }
-  const status = value.toUpperCase().replace(/[✅⚠️⛔🟢🟠🔴\s.]/gu, '')
+  const status = value
+    .toUpperCase()
+    .replace(/[✅⚠⛔🟢🟠🔴\s.]/gu, '')
+    .replace(/\uFE0F/gu, '')
   if (!status) return null
   if (['GREEN', 'VERT', 'OK', 'PASS', 'FAIT', 'DONE'].includes(status)) return 'good'
   if (['WARN', 'ORANGE', 'DEGRADED', 'DEGRADE', 'PARTIEL', 'ENCOURS', 'FLAKY'].includes(status))
@@ -229,7 +233,11 @@ function renderTextBlock(block: string): React.ReactNode[] {
     const line = lines[index]
 
     // Tableau GFM : ligne d'entête + ligne séparatrice obligatoires.
-    if (TABLE_ROW.test(line) && index + 1 < lines.length && TABLE_SEPARATOR.test(lines[index + 1])) {
+    if (
+      TABLE_ROW.test(line) &&
+      index + 1 < lines.length &&
+      TABLE_SEPARATOR.test(lines[index + 1])
+    ) {
       flushList()
       const rows = [line, lines[index + 1]]
       let next = index + 2

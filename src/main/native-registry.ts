@@ -126,7 +126,10 @@ export function nativeSkills(base = ensureAutowinAppData()): RegistryItem[] {
   return items
 }
 
-function catalogControls(kind: 'tools' | 'plugins' | 'hooks', base = ensureAutowinAppData()): RegistryItem[] {
+function catalogControls(
+  kind: 'tools' | 'plugins' | 'hooks',
+  base = ensureAutowinAppData()
+): RegistryItem[] {
   const catalog = readJson<Catalog>(catalogPath(base), {})
   const decls = catalog[kind] ?? []
   const enablement = readJson<Enablement>(enablementPath(base), {})[kind] ?? {}
@@ -134,7 +137,10 @@ function catalogControls(kind: 'tools' | 'plugins' | 'hooks', base = ensureAutow
 }
 
 /** Inventaire natif d'un type de capacité (source locale, sans sous-processus). */
-export function listNativeRegistry(kind: RegistryKind, base = ensureAutowinAppData()): RegistryItem[] {
+export function listNativeRegistry(
+  kind: RegistryKind,
+  base = ensureAutowinAppData()
+): RegistryItem[] {
   if (kind === 'skills') return nativeSkills(base)
   return catalogControls(kind, base)
 }
@@ -173,7 +179,13 @@ export function seedRegistrySnapshot(
       ...(existingEnablement[kind] ?? {})
     }
     if (kind !== 'skills') {
-      catalog[kind] = items.map(({ enabled: _enabled, ...rest }) => rest)
+      catalog[kind] = items.map(({ id, label, description, mutable, source }) => ({
+        id,
+        label,
+        description,
+        mutable,
+        source
+      }))
     }
   }
   // Un toggle peut créer enablement.v1.json avant que le catalogue soit amorcé :

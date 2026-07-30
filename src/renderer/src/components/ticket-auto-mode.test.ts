@@ -69,13 +69,16 @@ describe('CAP PAR CYCLE (garde-fou 3) — un afflux ne devient pas une rafale', 
     expect(result.deferred).toBe(20 - AUTO_MODE_CAP_PER_CYCLE)
   })
 
-  it('les reportes sont marques vus : le cap ne les rejoue pas indefiniment', () => {
-    const many = Array.from({ length: 10 }, (_, i) => ticket(String(i)))
+  it('traite les reportes au cycle suivant sans rejouer les tickets deja retenus', () => {
+    const many = Array.from({ length: 5 }, (_, i) => ticket(String(i)))
     const seen = new Set<string>()
     const first = pickIncomingTickets(many, seen)
     for (const key of first.seenAdditions) seen.add(key)
-    // Cycle suivant : plus rien de neuf, malgre les 7 non traites.
-    expect(pickIncomingTickets(many, seen).toTreat).toEqual([])
+    const second = pickIncomingTickets(many, seen)
+
+    expect(first.toTreat.map((item) => item.id)).toEqual(['0', '1', '2'])
+    expect(second.toTreat.map((item) => item.id)).toEqual(['3', '4'])
+    expect(new Set([...first.toTreat, ...second.toTreat].map(ticketSeenKey)).size).toBe(5)
   })
 
   it('un cap a 0 ou negatif ne traite rien (jamais d’emballement par mauvaise config)', () => {

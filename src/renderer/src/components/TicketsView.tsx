@@ -12,12 +12,7 @@ import {
   ticketConversationTitle,
   ticketSelectionTitle
 } from './ticket-treatment'
-import {
-  loadSeen,
-  pickIncomingTickets,
-  primeSeen,
-  saveSeen
-} from './ticket-auto-mode'
+import { loadSeen, pickIncomingTickets, primeSeen, saveSeen } from './ticket-auto-mode'
 import './TicketsView.css'
 
 interface TicketSourceSummary {
@@ -176,7 +171,10 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const activeRequestId = useRef<string | undefined>(undefined)
   const activeSourceRef = useRef<TicketSourceProfile | undefined>(undefined)
   const itemsRef = useRef(items)
-  activeRef.current = active
+
+  useEffect(() => {
+    activeRef.current = active
+  }, [active])
 
   useEffect(() => {
     itemsRef.current = items
@@ -291,6 +289,8 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
 
   useEffect(() => {
     if (!active || typeof window.api?.ticketSources !== 'function') return
+    // Charge la source externe dès l'activation de la vue.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadSources()
     return () => {
       requestGeneration.current += 1
@@ -400,7 +400,9 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     visibleItems.find((item) => `${item.sourceId}::${item.id}` === selectedId) ?? visibleItems[0]
   /** Miroir stable des tickets FILTRES : le mode auto lit le perimetre courant sans se re-abonner. */
   const visibleItemsRef = useRef<TicketItem[]>([])
-  visibleItemsRef.current = visibleItems
+  useEffect(() => {
+    visibleItemsRef.current = visibleItems
+  }, [visibleItems])
   const checkedVisibleItems = visibleItems.filter((item) =>
     checkedIds.has(`${item.sourceId}::${item.id}`)
   )
@@ -467,9 +469,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       // AMORCE : l'existant devient « connu » sans etre traite.
       for (const key of primeSeen(visibleItemsRef.current)) seenRef.current.add(key)
       saveSeen(localStorage, seenRef.current)
-      setAutoStatus(
-        `en veille · ${visibleItemsRef.current.length} ticket(s) déjà présents ignorés`
-      )
+      setAutoStatus(`en veille · ${visibleItemsRef.current.length} ticket(s) déjà présents ignorés`)
     } else setAutoStatus(undefined)
   }
 
@@ -569,7 +569,6 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       })
     )
   }, [checkedVisibleItems, sendDirectly])
-
 
   const retry = (): void => {
     if (sourceError) void loadSources()

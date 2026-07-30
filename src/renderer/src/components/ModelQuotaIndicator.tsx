@@ -54,6 +54,7 @@ function quotasByProvider(models: readonly ModelQuota[]): ModelQuota[] {
  * reste utilisable sur la semaine. Afficher la 5 h y donnait une wheel rassurante et sans rapport
  * avec la limite qu'on atteint vraiment.
  */
+// eslint-disable-next-line react-refresh/only-export-components -- helper pur testé avec cet indicateur
 export function summaryWindowId(provider: string | undefined): string {
   return provider === 'codex' ? 'seven-day' : 'five-hour'
 }
@@ -68,6 +69,7 @@ export function summaryWindowId(provider: string | undefined): string {
  * « 7 j » : l'utilisateur calibrait sa SEMAINE sur un chiffre qui se recharge en une demi-journée.
  * Le libellé doit venir de la fenêtre RETENUE, jamais de l'intention.
  */
+// eslint-disable-next-line react-refresh/only-export-components -- helper pur testé avec cet indicateur
 export function windowIdLabel(windowId: string | undefined): string {
   if (windowId === 'seven-day') return '7 j'
   if (windowId === 'five-hour') return '5 h'
@@ -100,6 +102,7 @@ export interface QuotaWheelSummary {
   statusWindowLabel?: string
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- helper pur testé avec cet indicateur
 export function summaryForProvider(
   snapshot: ModelQuotaSnapshot | undefined,
   provider: string | undefined
@@ -182,11 +185,7 @@ function observedLabel(observedAt: string | undefined, stale: boolean): string {
   })}`
 }
 
-export function ModelQuotaIndicator({
-  provider
-}: {
-  provider?: string
-}): React.JSX.Element {
+export function ModelQuotaIndicator({ provider }: { provider?: string }): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<ModelQuotaSnapshot>()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)

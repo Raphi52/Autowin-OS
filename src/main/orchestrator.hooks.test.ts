@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { Orchestrator } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
-import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk } from './providers/types'
+import type {
+  Message,
+  ProviderAdapter,
+  SendOptions,
+  SendResult,
+  StreamChunk
+} from './providers/types'
 import { RoleModelConfig } from './roles'
 import { CostAggregator } from './dashboards/cost'
 import { TrustLedger } from './trust/ledger'
@@ -9,6 +15,7 @@ import { AuthoritySas } from './authority/sas'
 import { HookBus } from './hooks/hook-bus'
 import { createDefaultHookBus } from './hooks/default-gate-hooks'
 import type { VerifyRunner } from './hooks/verify-replay-hook'
+import { makeTestWorktrees } from './orchestrator.test-helpers'
 
 /** Provider dont l'exec fournit mutation+verification ok et le juge répond VALIDE (gate vert par défaut). */
 class GreenProvider implements ProviderAdapter {
@@ -17,7 +24,10 @@ class GreenProvider implements ProviderAdapter {
   async auth(): Promise<boolean> {
     return true
   }
-  async *send(_m: Message[], options: SendOptions = {}): AsyncGenerator<StreamChunk, SendResult, void> {
+  async *send(
+    _m: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
     const isExec = options.execution?.sandbox === 'danger-full-access'
     const isJudge = options.execution?.sandbox === 'read-only'
     return {
@@ -27,14 +37,22 @@ class GreenProvider implements ProviderAdapter {
       executionEvidence: isExec
         ? [
             { type: 'file_change', kind: 'mutation', status: 'done', ok: true, summary: 'edit' },
-            { type: 'command_execution', kind: 'verification', status: 'done', ok: true, summary: 'test exit=0' }
+            {
+              type: 'command_execution',
+              kind: 'verification',
+              status: 'done',
+              ok: true,
+              summary: 'test exit=0'
+            }
           ]
         : undefined
     }
   }
 }
 
-function makeOrchestrator(extra: Partial<ConstructorParameters<typeof Orchestrator>[0]> = {}): Orchestrator {
+function makeOrchestrator(
+  extra: Partial<ConstructorParameters<typeof Orchestrator>[0]> = {}
+): Orchestrator {
   const provider = new GreenProvider()
   return new Orchestrator({
     registry: new ProviderRegistry().register(provider),
@@ -46,6 +64,7 @@ function makeOrchestrator(extra: Partial<ConstructorParameters<typeof Orchestrat
     trust: new TrustLedger(),
     authority: new AuthoritySas(),
     executionWorkspace: 'C:\\ws',
+    worktrees: makeTestWorktrees(extra.executionWorkspace ?? 'C:\\ws'),
     classifyPhases: () => ['build'],
     ...extra
   })
@@ -58,7 +77,10 @@ describe('HookBus branché dans l’orchestrateur (pre-green)', () => {
   })
 
   it('un hook pre-green bloquant fait échouer le gate MÊME si preuve + juge OK', async () => {
-    const bus = new HookBus().register('pre-green', () => ({ block: true, reason: 'verify-replay refusé' }))
+    const bus = new HookBus().register('pre-green', () => ({
+      block: true,
+      reason: 'verify-replay refusé'
+    }))
     const r = await makeOrchestrator({ hooks: bus }).run('corrige le bug')
     expect(r.gateBlocked).toBe(true)
   })

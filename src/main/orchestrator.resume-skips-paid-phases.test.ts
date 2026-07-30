@@ -12,6 +12,7 @@ import type {
 } from './providers/types'
 import { RoleModelConfig } from './roles'
 import { TrustLedger } from './trust/ledger'
+import { makeTestWorktrees } from './orchestrator.test-helpers'
 
 /**
  * REPRENDRE NE DOIT PAS REPAYER.
@@ -68,6 +69,7 @@ function orchestrator(): { orch: Orchestrator; provider: CountingProvider } {
     trust: new TrustLedger(),
     authority: new AuthoritySas(),
     executionWorkspace: 'C:\\base',
+    worktrees: makeTestWorktrees('C:\\base'),
     execPhases: ['scout', 'build']
   })
   return { orch, provider }

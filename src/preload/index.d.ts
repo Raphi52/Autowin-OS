@@ -1,6 +1,7 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type {
   WorktreeAgentActivity,
+  WorktreeConflictDiffResult,
   WorktreeRuntimeStatus
 } from '../shared/worktree-activity-model'
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
@@ -120,6 +121,7 @@ interface ImportedModel {
   label: string
   reasoningEfforts: string[]
   defaultReasoningEffort: string
+  dynamicallyLoaded?: boolean
 }
 
 interface SlotBinding {
@@ -297,6 +299,12 @@ interface ChatApi {
   setTicketsFixture: (fixture: unknown) => Promise<boolean>
   getWorktreeActivity: () => Promise<WorktreeAgentActivity[]>
   getWorktreeStatus: () => Promise<WorktreeRuntimeStatus>
+  getWorktreeConflictDiff: (agentId: string) => Promise<WorktreeConflictDiffResult>
+  retryWorktreeRecovery: (agentId: string) => Promise<WorktreeAgentActivity | undefined>
+  setWorktreeFixture: (fixture: {
+    activity: WorktreeAgentActivity[]
+    status: WorktreeRuntimeStatus
+  }) => Promise<boolean>
   onWorktreeActivity: (cb: (activity: WorktreeAgentActivity[]) => void) => () => void
   roles: () => Promise<
     Record<string, { provider: string; model?: string; reasoningEffort?: string }>

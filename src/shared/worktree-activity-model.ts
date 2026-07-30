@@ -13,7 +13,23 @@ export type FileChangeKind = 'add' | 'mod' | 'del'
 
 export interface WorktreeRuntimeStatus {
   available: boolean
+  workspacePath: string
+  repoId?: string
+  reason?: 'not-git' | 'identity-unavailable'
 }
+
+export type WorktreeConflictDiffResult =
+  | { available: true; agentId: string; paths: string[]; diff: string }
+  | {
+      available: false
+      reason:
+        | 'invalid-agent'
+        | 'not-conflict'
+        | 'ownership-unproven'
+        | 'invalid-path'
+        | 'revision-unavailable'
+        | 'read-failed'
+    }
 
 export interface WorktreeFileChange {
   path: string
@@ -35,7 +51,29 @@ export interface WorktreeAgentActivity {
   /** Fichier en cause du conflit (affiché à l'utilisateur). */
   conflictFile?: string
   /** Pourquoi la copie attend sans être un conflit entre agents. */
-  attentionReason?: 'base-dirty' | 'base-in-progress' | 'merge-failed'
+  attentionReason?:
+    'base-dirty' | 'base-in-progress' | 'merge-failed' | 'post-publish-change' | 'retry-exhausted'
+  /** Contexte durable du bureau, affiché par le Hub A2. */
+  task?: string
+  worktreePath?: string
+  /** Faux quand la ref est protégée mais que le dossier doit encore être rematérialisé. */
+  worktreeAvailable?: boolean
+  workspacePath?: string
+  baseBranch?: string
+  baseSha?: string
+  publishedSha?: string
+  verdict?: 'unknown' | 'running' | 'green' | 'red' | 'cancelled' | 'interrupted'
+  publication?:
+    | 'not-requested'
+    | 'pending'
+    | 'integrating'
+    | 'published'
+    | 'cleanup-pending'
+    | 'complete'
+    | 'blocked'
+  recovered?: boolean
+  detail?: string
+  retryCount?: number
 }
 
 /** Une copie qui part de la ligne principale et (peut-être) y revient — géométrie normalisée 0..1. */
@@ -101,7 +139,10 @@ function messageFor(a: WorktreeAgentActivity): { kind: JournalKind; message: str
     case 'conflict': {
       const others = joinNames(a.conflictWith ?? [])
       const who = others ? `${a.agentName} et ${others}` : a.agentName
-      return { kind: 'conflict', message: `${who} ont modifié le même fichier — à toi de trancher.` }
+      return {
+        kind: 'conflict',
+        message: `${who} ont modifié le même fichier — à toi de trancher.`
+      }
     }
     case 'blocked':
       if (a.attentionReason === 'base-dirty') {
@@ -123,10 +164,25 @@ function messageFor(a: WorktreeAgentActivity): { kind: JournalKind; message: str
     case 'working':
       return { kind: 'working', message: `${a.agentName} travaille en ce moment sur sa copie.` }
     case 'ready':
+      if (a.attentionReason === 'retry-exhausted') {
+        return {
+          kind: 'blocked',
+          message: `${a.agentName} reste protégé après six essais automatiques ; le rangement demande une vérification.`
+        }
+      }
+      if (a.publication === 'published') {
+        return {
+          kind: 'merged',
+          message: `${a.agentName} a rendu ses changements vérifiés ; du travail plus récent reste protégé dans sa copie.`
+        }
+      }
       return { kind: 'working', message: `${a.agentName} a fini sa copie, prête à être rangée.` }
     case 'isolated':
     default:
-      return { kind: 'started', message: `${a.agentName} a pris une copie du projet — ton code principal reste intact.` }
+      return {
+        kind: 'started',
+        message: `${a.agentName} a pris une copie du projet — ton code principal reste intact.`
+      }
   }
 }
 
@@ -179,7 +235,9 @@ export function buildWorktreeActivity(
     })
     .sort((x, y) => x.atMs - y.atMs)
 
-  const needsAttention = agents.filter((a) => a.state === 'conflict' || a.state === 'blocked').length
+  const needsAttention = agents.filter(
+    (a) => a.state === 'conflict' || a.state === 'blocked'
+  ).length
 
   return { lanes, journal, agentsTotal: agents.length, needsAttention }
 }

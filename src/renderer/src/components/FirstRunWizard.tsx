@@ -85,28 +85,31 @@ export function FirstRunWizard(): React.JSX.Element | null {
     }
   }, [])
 
-  const recheck = useCallback(async (force = false) => {
-    if (!window.api?.recheckPreflight) {
-      setError('Le diagnostic est indisponible. Réessayez après le redémarrage de l’application.')
-      return
-    }
-    const req = ++reqRef.current
-    setChecking(true)
-    setError(null)
-    try {
-      const r = (await window.api.recheckPreflight(force)) as PreflightResult
-      // Anti-race (Corrector) : ignorer une réponse périmée si un appel plus récent a démarré.
-      if (req === reqRef.current) applyResult(r)
-    } catch {
-      if (req === reqRef.current) {
-        setError('Le diagnostic a échoué. Vérifiez la configuration puis réessayez.')
-        // Un échec de diagnostic EST un problème → ouvrir le wizard (sauf dismiss de session).
-        if (!dismissedRef.current) setOpen(true)
+  const recheck = useCallback(
+    async (force = false) => {
+      if (!window.api?.recheckPreflight) {
+        setError('Le diagnostic est indisponible. Réessayez après le redémarrage de l’application.')
+        return
       }
-    } finally {
-      if (req === reqRef.current) setChecking(false)
-    }
-  }, [applyResult])
+      const req = ++reqRef.current
+      setChecking(true)
+      setError(null)
+      try {
+        const r = (await window.api.recheckPreflight(force)) as PreflightResult
+        // Anti-race (Corrector) : ignorer une réponse périmée si un appel plus récent a démarré.
+        if (req === reqRef.current) applyResult(r)
+      } catch {
+        if (req === reqRef.current) {
+          setError('Le diagnostic a échoué. Vérifiez la configuration puis réessayez.')
+          // Un échec de diagnostic EST un problème → ouvrir le wizard (sauf dismiss de session).
+          if (!dismissedRef.current) setOpen(true)
+        }
+      } finally {
+        if (req === reqRef.current) setChecking(false)
+      }
+    },
+    [applyResult]
+  )
 
   /**
    * Un provider mis en STANDBY est exclu du diagnostic (ses checks passent `standby`) et le réglage
@@ -154,7 +157,10 @@ export function FirstRunWizard(): React.JSX.Element | null {
         // sinon la ligne tournerait jusqu'au bout de la patience sur un service qui ne viendra pas.
         if (outcome && outcome.started === false) clearStarting(checkId)
       } catch {
-        setRepairNotes((n) => ({ ...n, [checkId]: 'La réparation a échoué. Voir la commande ci-dessus.' }))
+        setRepairNotes((n) => ({
+          ...n,
+          [checkId]: 'La réparation a échoué. Voir la commande ci-dessus.'
+        }))
         clearStarting(checkId)
       } finally {
         setRepairing(null)
@@ -169,6 +175,8 @@ export function FirstRunWizard(): React.JSX.Element | null {
   useEffect(() => {
     // Montage : diagnostic initial (sans force → partage le cache du run de démarrage) + abonnement
     // aux pushs live (watchAppPreflight) → la fenêtre s'ouvre/ferme au gré de l'état réel.
+    // Synchronise immédiatement la modale avec le diagnostic externe au montage.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void recheck(false)
     const off = window.api?.onPreflight?.((r) => applyResult(r as PreflightResult))
     return () => off?.()
@@ -192,7 +200,8 @@ export function FirstRunWizard(): React.JSX.Element | null {
 
   useEffect(() => {
     if (!open) return
-    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
     initialActionRef.current?.focus()
     return () => {
       previousFocusRef.current?.focus()
@@ -235,62 +244,72 @@ export function FirstRunWizard(): React.JSX.Element | null {
       <div className="frw-card">
         <h2 id="first-run-wizard-title">Bienvenue dans Autowin OS</h2>
         <p className="frw-sub">
-          Vérification des dépendances externes. L'installeur a posé l'app ; certaines dépendances se
-          configurent une seule fois, ici.
+          Vérification des dépendances externes. L’installeur a posé l’app ; certaines dépendances
+          se configurent une seule fois, ici.
         </p>
         <ul className="frw-checks">
           {(result?.checks ?? []).map((c) => {
             // « En démarrage » n'est ni vert ni rouge : le service a été lancé, il chauffe.
             const pending = !c.ok && starting[c.id] === true
             return (
-            <li
-              key={c.id}
-              className={c.ok ? 'ok' : pending ? 'pending' : 'ko'}
-              data-testid={`frw-check-${c.id}`}
-            >
-              <span className="frw-icon">
-                {c.ok ? '✓' : pending ? <span className="frw-spinner" data-testid={`frw-spinner-${c.id}`} aria-hidden="true" /> : '✗'}
-              </span>
-              <span className="frw-label">{c.label}</span>
-              {pending ? (
-                <span className="frw-detail" role="status">
-                  en cours… la fenêtre se ferme dès que c’est prêt
+              <li
+                key={c.id}
+                className={c.ok ? 'ok' : pending ? 'pending' : 'ko'}
+                data-testid={`frw-check-${c.id}`}
+              >
+                <span className="frw-icon">
+                  {c.ok ? (
+                    '✓'
+                  ) : pending ? (
+                    <span
+                      className="frw-spinner"
+                      data-testid={`frw-spinner-${c.id}`}
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    '✗'
+                  )}
                 </span>
-              ) : !c.ok && c.detail ? (
-                <span className="frw-detail">{c.detail}</span>
-              ) : null}
-              {!c.ok && repairAffordance(c.id) ? (
-                <button
-                  type="button"
-                  className="frw-repair"
-                  data-testid={`frw-repair-${c.id}`}
-                  title={repairAffordance(c.id)?.note}
-                  onClick={() => void repair(c.id)}
-                  disabled={repairing !== null || checking || pending}
-                >
-                  {repairing === c.id || pending ? 'En cours…' : repairAffordance(c.id)?.label}
-                </button>
-              ) : null}
-              {/* Prérequis d'un provider en échec = FACULTATIF possible : le passer en standby
+                <span className="frw-label">{c.label}</span>
+                {pending ? (
+                  <span className="frw-detail" role="status">
+                    en cours… la fenêtre se ferme dès que c’est prêt
+                  </span>
+                ) : !c.ok && c.detail ? (
+                  <span className="frw-detail">{c.detail}</span>
+                ) : null}
+                {!c.ok && repairAffordance(c.id) ? (
+                  <button
+                    type="button"
+                    className="frw-repair"
+                    data-testid={`frw-repair-${c.id}`}
+                    title={repairAffordance(c.id)?.note}
+                    onClick={() => void repair(c.id)}
+                    disabled={repairing !== null || checking || pending}
+                  >
+                    {repairing === c.id || pending ? 'En cours…' : repairAffordance(c.id)?.label}
+                  </button>
+                ) : null}
+                {/* Prérequis d'un provider en échec = FACULTATIF possible : le passer en standby
                   (mémorisé) l'exclut du diagnostic → la popup ne le réclamera plus. */}
-              {!c.ok && checkProvider(c.id) ? (
-                <button
-                  type="button"
-                  className="frw-optional"
-                  data-testid={`frw-optional-${c.id}`}
-                  title={`Marquer ${checkProvider(c.id)} comme facultatif : il sera ignoré au démarrage (réactivable dans Models).`}
-                  onClick={() => void markOptional(c.id)}
-                  disabled={repairing !== null || checking || pending}
-                >
-                  Facultatif — ne plus demander
-                </button>
-              ) : null}
-              {repairNotes[c.id] ? (
-                <span className="frw-repair-note" data-testid={`frw-repair-note-${c.id}`}>
-                  {repairNotes[c.id]}
-                </span>
-              ) : null}
-            </li>
+                {!c.ok && checkProvider(c.id) ? (
+                  <button
+                    type="button"
+                    className="frw-optional"
+                    data-testid={`frw-optional-${c.id}`}
+                    title={`Marquer ${checkProvider(c.id)} comme facultatif : il sera ignoré au démarrage (réactivable dans Models).`}
+                    onClick={() => void markOptional(c.id)}
+                    disabled={repairing !== null || checking || pending}
+                  >
+                    Facultatif — ne plus demander
+                  </button>
+                ) : null}
+                {repairNotes[c.id] ? (
+                  <span className="frw-repair-note" data-testid={`frw-repair-note-${c.id}`}>
+                    {repairNotes[c.id]}
+                  </span>
+                ) : null}
+              </li>
             )
           })}
           {error ? (

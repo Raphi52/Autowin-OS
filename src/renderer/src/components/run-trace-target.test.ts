@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { failedActionRunId, pickRunForTrace, runIdFromActionData } from './run-trace-target'
 
 const run = (path: string, mtime: number) => ({ path, mtime })
@@ -47,7 +49,10 @@ describe('failedActionRunId — cible l’action FAUTIVE, pas une reussie', () =
 
 describe('pickRunForTrace — degradation successive, jamais de pari', () => {
   it('1. correspondance EXACTE par le chemin qui porte le runId', () => {
-    const runs = [run('C:/runs/sess/autre-workspace/RUN.md', 500), run('C:/runs/sess/run-a-1-workspace/RUN.md', 100)]
+    const runs = [
+      run('C:/runs/sess/autre-workspace/RUN.md', 500),
+      run('C:/runs/sess/run-a-1-workspace/RUN.md', 100)
+    ]
     expect(pickRunForTrace(runs, 'run-a-1')?.path).toContain('run-a-1')
   })
 
@@ -83,11 +88,7 @@ describe('pickRunForTrace — degradation successive, jamais de pari', () => {
  */
 describe('cablage du clic « action avec erreur » → trace', () => {
   const read = (file: string): string =>
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    (require('node:fs') as typeof import('node:fs')).readFileSync(
-      (require('node:path') as typeof import('node:path')).join(__dirname, file),
-      'utf8'
-    )
+    readFileSync(join(__dirname, file), 'utf8')
 
   it('le bloc d’activite transmet le run FAUTIF au clic', () => {
     const parts = read('ChatView.parts.tsx')
@@ -100,7 +101,7 @@ describe('cablage du clic « action avec erreur » → trace', () => {
     expect(chat).toContain('pickRunForTrace(runsRef.current, runId)')
     expect(chat).toContain('void viewRun(target)')
     // Degradation preservee : sans run resolu, on garde le cadrage d'origine.
-    expect(chat).toContain('setRunScope(\'conv\')')
+    expect(chat).toContain("setRunScope('conv')")
   })
 })
 
@@ -122,28 +123,25 @@ describe('contrat reel orchestrate — la reference EST un chemin', () => {
   })
 
   it('prefere `runPath` a `runId` (champ explicite du contrat)', () => {
-    expect(runIdFromActionData({ runId: 'ancien', runPath: 'chemin/attendu' })).toBe('chemin/attendu')
+    expect(runIdFromActionData({ runId: 'ancien', runPath: 'chemin/attendu' })).toBe(
+      'chemin/attendu'
+    )
     // `runId` reste accepte seul (retro-compat du champ historique).
     expect(runIdFromActionData({ runId: 'seulement-runid' })).toBe('seulement-runid')
   })
 
   it('un run PURGE (chemin plus liste) retombe sur le plus recent, sans jamais rien ouvrir de faux', () => {
     const runs = [{ path: 'C:/runs/encore-la/RUN.md', mtime: 5 }]
-    const runId = failedActionRunId([{ interrupted: true, data: { runPath: 'C:/runs/disparu/RUN.md' } }])
+    const runId = failedActionRunId([
+      { interrupted: true, data: { runPath: 'C:/runs/disparu/RUN.md' } }
+    ])
     expect(pickRunForTrace(runs, runId)?.path).toBe('C:/runs/encore-la/RUN.md')
   })
 })
 
 describe('contrat cote main — orchestrate expose bien le chemin du run', () => {
   it('retourne runPath (et runId aligne dessus)', () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require('node:fs') as typeof import('node:fs')
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const path = require('node:path') as typeof import('node:path')
-    const commands = fs.readFileSync(
-      path.join(__dirname, '..', '..', '..', 'main', 'commands.ts'),
-      'utf8'
-    )
+    const commands = readFileSync(join(__dirname, '..', '..', '..', 'main', 'commands.ts'), 'utf8')
     // Si ce contrat disparait, le clic perd sa cible exacte et retombe silencieusement sur
     // « le plus recent » — d'ou cette assertion.
     expect(commands).toContain('runPath')

@@ -53,7 +53,7 @@ export default defineConfig(
   },
   {
     // Doubles de flux asynchrones volontairement vides pour tester les branches sans événement.
-    files: ['src/main/orchestrator.execution.test.ts'],
+    files: ['src/main/orchestrator*.test.ts'],
     rules: { 'require-yield': 'off' }
   },
   eslintConfigPrettier

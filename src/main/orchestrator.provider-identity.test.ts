@@ -3,9 +3,16 @@ import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
 import { Orchestrator } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
-import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk } from './providers/types'
+import type {
+  Message,
+  ProviderAdapter,
+  SendOptions,
+  SendResult,
+  StreamChunk
+} from './providers/types'
 import { RoleModelConfig } from './roles'
 import { TrustLedger } from './trust/ledger'
+import { makeTestWorktrees } from './orchestrator.test-helpers'
 
 /**
  * Provider enregistré sous `requested` mais qui, dans sa réponse, se déclare `actual-executor`
@@ -50,6 +57,7 @@ describe('Orchestrator — identité provider réelle dans trace + coût', () =>
       trust: new TrustLedger(),
       authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
+      worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['build']
     }).run('cadre les pistes du projet')
 

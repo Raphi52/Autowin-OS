@@ -16,6 +16,13 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 const prompt = buildChatPilotagePrompt([
   { name: 'navigate', args: { tab: '' }, description: 'change d onglet' }
 ])
+const graphifyPrompt = buildChatPilotagePrompt([
+  {
+    name: 'graphify',
+    args: { path: '' },
+    description: 'crée ou met à jour le graphe de code'
+  }
+])
 
 describe('chat() — gate conversationnel', () => {
   it('fait de la reponse DIRECTE le comportement par defaut', () => {
@@ -88,5 +95,11 @@ describe('chat() — gate conversationnel', () => {
 
   it('injecte le catalogue de commandes reellement disponible', () => {
     expect(prompt).toContain('- navigate(tab) : change d onglet')
+  })
+
+  it('demande un graphe frais avant une exploration large sans changer le gate conversationnel', () => {
+    expect(graphifyPrompt).toContain('- graphify(path) : crée ou met à jour le graphe de code')
+    expect(graphifyPrompt).toMatch(/AVANT une exploration large[\s\S]{0,160}graphify/)
+    expect(graphifyPrompt).toContain('simple question')
   })
 })
