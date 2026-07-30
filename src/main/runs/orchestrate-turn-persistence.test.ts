@@ -99,7 +99,14 @@ describe('persistance du tour pour le run direct os:orchestrate', () => {
     // deplace, `indexOf` rend -1, `slice(start, -1)` avale TOUT LE RESTE du fichier, et les assertions
     // passent en trouvant ces chaines ailleurs — le cablage ne serait plus verifie du tout.
     const next = source.indexOf('ipcMain.handle(', start + 20)
-    const handler = source.slice(start, next > -1 ? next : undefined)
+    // Contrôle négatif joué : commenter les 4 appels laissait le test VERT (les chaînes
+    // survivaient dans le commentaire). On retire donc les lignes de commentaire avant d'asserter,
+    // sinon l'oracle certifie du code mort.
+    const handler = source
+      .slice(start, next > -1 ? next : undefined)
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('//'))
+      .join('\n')
     expect(handler).toContain('createOrchestrateTurnPersistence(')
     expect(handler).toContain('durableTurn.begin(')
     expect(handler).toContain('durableTurn.step(step)')

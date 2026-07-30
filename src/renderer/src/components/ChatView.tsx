@@ -401,7 +401,12 @@ const ChatMessageRow = memo(
                 // Reprendre passe par le canal d'orchestration DIRECT : le main y retrouve l'acquis
                 // persisté et repart à la phase suivante, sans écrire dans le fil un message que
                 // l'utilisateur n'a pas tapé (le renvoi par le composer fabriquait un faux tour).
-                onResume={(task) => void window.api?.orchestrate?.(task, conversationId ?? undefined)}
+                // Le résultat est RENVOYÉ au bouton (plus de `void`) : il porte l'état de
+                // chargement et rend visible un `{ok:false, error}` au lieu de le jeter.
+                onResume={(task) =>
+                  window.api?.orchestrate?.(task, conversationId ?? undefined) ??
+                  Promise.resolve({ ok: false, error: 'orchestration indisponible' })
+                }
               />
             )
           )}
