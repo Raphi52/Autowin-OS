@@ -282,6 +282,13 @@ const routedProviders = ['codex', 'claude', 'kimi'] as const
 type RoutedProvider = (typeof routedProviders)[number]
 let startupProviderChecks: Promise<void> = Promise.resolve()
 
+/**
+ * Borne du probe de connexion d'un provider. 20 s : c'est un VRAI appel (spawn de CLI + aller-retour
+ * réseau), donc largement au-dessus d'une latence normale — la valeur n'est pas là pour accélérer un
+ * échec mais pour empêcher un hang de bloquer le préflight indéfiniment.
+ */
+const PROVIDER_PROBE_TIMEOUT_MS = 20_000
+
 async function probeProviderConnection(
   id: RoutedProvider
 ): Promise<{ provider: RoutedProvider; status: ReturnType<typeof probeResultStatus> | 'standby' }> {
@@ -293,7 +300,15 @@ async function probeProviderConnection(
       // Probe minimal : aucun kit système injecté, pour éviter de facturer le contexte applicatif.
       os.registry.send(id, [{ role: 'user', content: 'ping' }], { system: '' }),
       new Promise<never>((_resolve, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 20000)
+        setTimeout(
+          // Le message NOMME le provider et le délai. Avant, un `Error('timeout')` nu rendait un hang
+          // provider indistinguable d'une borne arbitraire : impossible de savoir QUI n'a pas répondu,
+          // ni après combien, alors que c'est la seule information utile quand ça arrive.
+          // Aucun des mots `authenticate|oauth|expired|not logged|login` ici : le `catch` en aval
+          // classe sur ce message, et l'un d'eux ferait passer un timeout pour une session expirée.
+          () => reject(new Error(`pas de reponse de ${id} apres ${PROVIDER_PROBE_TIMEOUT_MS} ms`)),
+          PROVIDER_PROBE_TIMEOUT_MS
+        )
       ) // sleep-ok: garde-timeout bornant un vrai appel provider (réseau/CLI)
     ])) as { text?: string }
     const text = (result?.text ?? '').toLowerCase()
