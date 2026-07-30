@@ -5,10 +5,14 @@
 // La liste est BORNÉE par ce que les adaptateurs providers savent réellement
 // piloter — on n'invente jamais un modèle qui n'existe pas.
 //
-// D'où viennent les modèles, depuis le 2026-07-30 : UNIQUEMENT d'une source vivante ou d'un cache
-// RÉELLEMENT observé sur cette machine. Plus aucun catalogue figé dans le code pour `claude` et
-// `codex` — il devenait faux à chaque publication de modèle et l'affirmait en silence. Si la source
-// ne répond pas, la liste est VIDE : une liste vide se voit et se répare, une liste périmée se croit.
+// D'où viennent les modèles, depuis le 2026-07-30 : JAMAIS d'une liste figée dans le code pour
+// `claude` et `codex` — elle devenait fausse à chaque publication de modèle et l'affirmait en silence
+// (un poste tiers voyait `opus-4-6` annoncé comme le meilleur opus, alors qu'Opus 5 existait).
+//   claude → les alias du CLI (`opus`, `sonnet`…, résolus côté serveur) + les modèles NOMMÉS lus dans
+//            le binaire du CLI installé + les versions d'un service local s'il y en a un.
+//   codex  → le listing de l'App Server, sinon le dernier catalogue vu en cache, sinon rien.
+// Le CLI est présent par construction : l'app le spawne pour tout appel Claude. C'est donc la source
+// à la fois portable et exacte — aucun service tiers, aucun appel payé, jamais périmée.
 
 import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -17,6 +21,8 @@ import type { ComputeBinding } from '../shared/compute-fabric'
 import { CODEX_VALID_EFFORTS } from './providers/codex'
 import { isKnownAlias, parseClaudeVersion, resolveAlias } from './model-aliases'
 import { listCodexAppServerModels, type CodexAppServerModel } from './codex-model-source'
+import { claudeCliModelIds } from './claude-cli-catalog'
+import { resolveClaudeBin } from './providers/claude'
 
 /** Un modèle importé, atomique et adressable par son `id` canonique. */
 export interface ImportedModel {
@@ -123,6 +129,13 @@ const REASONING_EFFORTS = new Set<ReasoningEffort>([
 interface DiscoveryResult {
   models: ImportedModel[]
   live: boolean
+  /**
+   * Sous-ensemble a METTRE EN CACHE. Distinct de `models` parce que tout n'a pas a l'etre : les alias
+   * du CLI et les ids lus dans son binaire sont disponibles LOCALEMENT en permanence, les cacher
+   * n'apporte rien. Seul ce qui vient d'une source qui peut se taire (service local, App Server) merite
+   * d'etre memorise pour survivre a son absence. Absent = `models` fait office.
+   */
+  cacheable?: ImportedModel[]
 }
 
 async function discoverCodexModels(
@@ -219,16 +232,40 @@ function claudeAliasModels(): ImportedModel[] {
   }))
 }
 
-async function discoverClaudeModels(fetchFn: typeof fetch): Promise<DiscoveryResult> {
-  // SOCLE PORTABLE : les alias du CLI, toujours la. Plus aucun repli sur une liste figee dans le code
-  // (elle mentait des qu'un modele etait publie), et plus de dependance a un service personnel pour
-  // avoir simplement acces au dernier Opus.
+/** Ids de modeles du CLI installe — injectable pour que les tests ne dependent PAS de la machine. */
+export type ClaudeCliModelIdsFn = () => string[]
+
+const realClaudeCliModelIds: ClaudeCliModelIdsFn = () => claudeCliModelIds(resolveClaudeBin())
+
+async function discoverClaudeModels(
+  fetchFn: typeof fetch,
+  cliModelIds: ClaudeCliModelIdsFn = realClaudeCliModelIds
+): Promise<DiscoveryResult> {
+  // fix-ok: evolution demandee explicitement par l'utilisateur (« ca peut pas recuperer opus 5
+  // dynamiquement ? »), sur une cause MESUREE et non supposee : le binaire du CLI installe contient
+  // bien `claude-opus-5` (scan reel du 2026-07-30, 24 ids retenus en 300 ms). Ce n'est pas un fix
+  // aveugle : la source de verite change, elle passe d'un service personnel au CLI lui-meme.
+  //
+  // TROIS COUCHES, de la plus portable a la plus optionnelle :
+  //  1. les ALIAS du CLI — toujours la, resolus cote serveur vers le dernier modele ;
+  //  2. les modeles NOMMES lus dans le binaire du CLI installe — c'est ce qui permet d'AFFICHER
+  //     « Claude Opus 5 » au lieu d'un vague « dernier », sans service tiers ni appel paye. Le CLI est
+  //     present par construction : l'app le spawne pour tout appel Claude ;
+  //  3. les versions d'un service local s'il y en a un (facultatif, pour epingler).
   const aliases = claudeAliasModels()
+  const fromCli = cliModelIds().map<ImportedModel>((model) => ({
+    id: `claude/${model}`,
+    provider: 'claude',
+    model,
+    label: labelClaudeModel(model),
+    reasoningEfforts: [...CLAUDE_EFFORTS],
+    defaultReasoningEffort: model.includes('haiku') ? 'medium' : 'high'
+  }))
   try {
     const response = await fetchFn('http://127.0.0.1:8787/models', {
       signal: AbortSignal.timeout(2_000)
     })
-    if (!response.ok) return { models: aliases, live: true }
+    if (!response.ok) return { models: [...aliases, ...fromCli], live: true, cacheable: [] }
     const payload = (await response.json()) as { data?: Array<{ id?: unknown }> }
     const discovered = (payload.data ?? [])
       .map((entry) => entry.id)
@@ -241,14 +278,14 @@ async function discoverClaudeModels(fetchFn: typeof fetch): Promise<DiscoveryRes
         reasoningEfforts: [...CLAUDE_EFFORTS],
         defaultReasoningEffort: model.includes('haiku') ? 'medium' : 'high'
       }))
-    // Les alias d'abord (ils suivent les publications), puis les versions EXACTES d'un service local
-    // s'il y en a un — utile pour EPINGLER une version precise, jamais requis pour avoir le dernier
-    // modele. `live` est toujours vrai : les alias sont le contrat DOCUMENTE du CLI, pas une supposition.
-    return { models: [...aliases, ...discovered], live: true }
+    // Alias, puis modeles NOMMES du CLI installe, puis versions d'un service local. `uniqueModels` en
+    // aval dedoublonne : un id present a la fois dans le binaire et dans le service ne sort qu'une fois.
+    // `live` est toujours vrai : alias et binaire sont le CLI lui-meme, pas une supposition.
+    return { models: [...aliases, ...fromCli, ...discovered], live: true, cacheable: discovered }
   } catch {
-    // Service absent = cas NORMAL sur un poste qui n'a pas ce projet personnel. Les alias suffisent,
-    // et c'est exactement ce qui manquait au collegue qui ne voyait pas Opus 5.
-    return { models: aliases, live: true }
+    // Service local absent = cas NORMAL (c'etait un projet personnel). Les alias + le binaire du CLI
+    // suffisent, et c'est exactement ce qui manquait au collegue qui ne voyait pas Opus 5.
+    return { models: [...aliases, ...fromCli], live: true, cacheable: [] }
   }
 }
 
@@ -370,21 +407,20 @@ export function loadCachedImportedModels(cachePath: string): ImportedModel[] {
 export async function discoverImportedModels(
   fetchFn: typeof fetch = fetch,
   cachePath?: string,
-  listCodexModelsFn: () => Promise<CodexAppServerModel[]> = listCodexAppServerModels
+  listCodexModelsFn: () => Promise<CodexAppServerModel[]> = listCodexAppServerModels,
+  cliModelIds: ClaudeCliModelIdsFn = realClaudeCliModelIds
 ): Promise<ImportedModel[]> {
   const [codex, claude] = await Promise.all([
     discoverCodexModels(listCodexModelsFn),
-    discoverClaudeModels(fetchFn)
+    discoverClaudeModels(fetchFn, cliModelIds)
   ])
   const cacheUpdates: Partial<ModelCatalogCache> = {}
   if (codex.live) cacheUpdates.codex = codex.models
   // On ne met en cache que les VERSIONS reellement decouvertes, jamais les alias du CLI : ceux-ci sont
   // disponibles en permanence (contrat du CLI), les cacher n'apporte rien et polluerait le cache d'ids
   // qui ne sont pas des modeles mais des pointeurs vers « le dernier ».
-  const discoveredClaudeVersions = claude.models.filter((model) => model.model.startsWith('claude-'))
-  if (claude.live && discoveredClaudeVersions.length > 0) {
-    cacheUpdates.claude = discoveredClaudeVersions
-  }
+  const claudeToCache = claude.cacheable ?? claude.models
+  if (claude.live && claudeToCache.length > 0) cacheUpdates.claude = claudeToCache
   writeCatalogCache(cachePath, cacheUpdates)
   const codexModels = codex.live
     ? codex.models
@@ -393,12 +429,12 @@ export async function discoverImportedModels(
   // jamais caches) et les versions EXACTES (live si un service repond, sinon le dernier catalogue vu).
   // Sans cette separation, `claude.live` etant desormais toujours vrai, le cache n'aurait plus jamais
   // ete relu — on aurait perdu les versions epinglees des qu'un service se taisait.
-  const claudeAliases = claude.models.filter((model) => !model.model.startsWith('claude-'))
-  const claudeVersions =
-    discoveredClaudeVersions.length > 0
-      ? discoveredClaudeVersions
-      : (readCatalogCache(cachePath, 'claude') ?? [])
-  const discoveredClaudeModels = [...claudeAliases, ...claudeVersions]
+  // Ce que le CLI fournit (alias + binaire) est TOUJOURS la ; on n'y ajoute le cache que si la source
+  // cachable s'est taue, sinon on dupliquerait ce que le service vient de rendre.
+  const discoveredClaudeModels =
+    claudeToCache.length > 0
+      ? claude.models
+      : [...claude.models, ...(readCatalogCache(cachePath, 'claude') ?? [])]
   return [
     ...codexModels,
     ...uniqueModels(discoveredClaudeModels),

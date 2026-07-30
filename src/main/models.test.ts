@@ -6,6 +6,14 @@ import { DEFAULT_IMPORTED_MODELS, discoverImportedModels, findModel } from './mo
 import { appendClaudeSelectionArgs } from './providers/claude'
 
 const noCodexModels = async (): Promise<[]> => []
+/**
+ * Le catalogue Claude lit desormais les ids du BINAIRE du CLI installe. Sans stub, ces tests
+ * dependraient de la machine qui les execute (et changeraient a chaque mise a jour du CLI). On injecte
+ * donc une liste fixe : `claude-opus-5` y figure parce que c'est LE cas qui a motive le changement.
+ */
+const cliIds = (): string[] => ['claude-opus-5', 'claude-sonnet-4-6']
+/** Un CLI introuvable rend une liste vide — cas d'un poste sans CLI installe (teste plus bas). */
+const noCliIds = (): string[] => []
 
 describe('catalogue Agents dynamique', () => {
   it('expose Gemini via le compte Google du CLI officiel, sans clé API', () => {
@@ -38,7 +46,8 @@ describe('catalogue Agents dynamique', () => {
     const models = await discoverImportedModels(
       fetchFn as unknown as typeof fetch,
       undefined,
-      noCodexModels
+      noCodexModels,
+      cliIds
     )
 
     // Ordre du catalogue : codex (aucun ici, `noCodexModels`), puis les ALIAS du CLI — le socle
@@ -49,6 +58,10 @@ describe('catalogue Agents dynamique', () => {
       'sonnet',
       'haiku',
       'fable',
+      // Lus dans le BINAIRE du CLI installe : c'est ce qui permet d'afficher « Claude Opus 5 » par son
+      // nom, sans service tiers. Le stub `cliIds` les fournit.
+      'claude-opus-5',
+      'claude-sonnet-4-6',
       'claude-fable-5',
       'claude-opus-4-8',
       'kimi-code/kimi-for-coding',
@@ -87,13 +100,14 @@ describe('catalogue Agents dynamique', () => {
     const models = await discoverImportedModels(
       fetchFn as unknown as typeof fetch,
       undefined,
-      noCodexModels
+      noCodexModels,
+      cliIds
     )
 
     const claude = models.filter((model) => model.provider === 'claude').map((model) => model.model)
-    expect(claude).toEqual(['opus', 'sonnet', 'haiku', 'fable'])
-    // Aucun id VERSIONNE n'est invente : on ne pretend pas savoir quelle version le CLI choisira.
-    expect(claude.some((model) => /^claude-/.test(model))).toBe(false)
+    // LE point : Opus 5 est la, NOMME, sans aucun service tiers — lu dans le binaire du CLI.
+    expect(claude).toContain('claude-opus-5')
+    expect(claude).toEqual(['opus', 'sonnet', 'haiku', 'fable', 'claude-opus-5', 'claude-sonnet-4-6'])
     // Codex n'a pas d'alias equivalent : sans listing, aucun modele codex.
     expect(models.some((model) => model.provider === 'codex')).toBe(false)
     // Les providers SANS source dynamique restent : leurs entrées sont la capacité de l'adaptateur,
@@ -137,7 +151,8 @@ describe('catalogue Agents dynamique', () => {
     const models = await discoverImportedModels(
       fetchFn as unknown as typeof fetch,
       undefined,
-      listCodexModels
+      listCodexModels,
+      cliIds
     )
 
     expect(models.map((model) => model.model)).toEqual([
@@ -148,6 +163,8 @@ describe('catalogue Agents dynamique', () => {
       'sonnet',
       'haiku',
       'fable',
+      'claude-opus-5',
+      'claude-sonnet-4-6',
       'claude-fable-5',
       'kimi-code/kimi-for-coding',
       'Gemini 3.5 Flash (Low)',
@@ -192,7 +209,8 @@ describe('cache disque du dernier catalogue vu', () => {
     const live = await discoverImportedModels(
       liveClaudeFetch as unknown as typeof fetch,
       cachePath,
-      noCodexModels
+      noCodexModels,
+      cliIds
     )
     expect(live.some((m) => m.model === 'claude-opus-4-8')).toBe(true)
     const written = JSON.parse(readFileSync(cachePath, 'utf8'))
@@ -206,7 +224,8 @@ describe('cache disque du dernier catalogue vu', () => {
     const offline = await discoverImportedModels(
       deadFetch as unknown as typeof fetch,
       cachePath,
-      noCodexModels
+      noCodexModels,
+      cliIds
     )
     expect(offline.some((m) => m.model === 'claude-opus-4-8')).toBe(true)
     expect(offline.some((m) => m.model === 'claude-opus-4-6')).toBe(false)
@@ -214,7 +233,7 @@ describe('cache disque du dernier catalogue vu', () => {
     expect(JSON.parse(readFileSync(cachePath, 'utf8')).claude).toHaveLength(2)
   })
 
-  it('API KO et cache VIDE → les alias du CLI, et AUCUN id versionne invente', async () => {
+  it('CLI absent ET service absent → seuls les alias, aucun id versionne invente', async () => {
     // Machine vierge, aucun service local, aucun cache : exactement le poste du collegue. Il obtient
     // desormais `opus` — qui resout vers le dernier Opus cote serveur — au lieu d'un `opus-4-6` fige
     // que personne n'avait choisi. Et aucun id VERSIONNE n'est fabrique : on ne pretend pas savoir
@@ -222,9 +241,13 @@ describe('cache disque du dernier catalogue vu', () => {
     const offline = await discoverImportedModels(
       deadFetch as unknown as typeof fetch,
       makeCachePath(),
-      noCodexModels
+      noCodexModels,
+      noCliIds
     )
     const claude = offline.filter((m) => m.provider === 'claude').map((m) => m.model)
+    // Poste SANS CLI installe (`noCliIds`) et sans service local : il ne reste que les alias, et
+    // AUCUN id versionne n'est fabrique. C'est la seule situation ou l'on ne peut pas nommer le modele
+    // — et elle est honnete, contrairement a l'ancien seed qui affirmait `opus-4-6`.
     expect(claude).toEqual(['opus', 'sonnet', 'haiku', 'fable'])
     expect(claude.some((model) => /^claude-/.test(model))).toBe(false)
     // Codex n'a pas d'alias equivalent cote CLI : sans listing ni cache, aucun modele codex.
