@@ -218,22 +218,35 @@ export function AgentsTopologyView({
   }
 
   async function persistOrchestrator(binding: SlotBinding): Promise<void> {
+    const version = ++persistVersionRef.current
+    const current = topologyRef.current
+    if (current) replaceTopology({ ...current, orchestrator: binding })
     setState('saving')
     setError('')
-    try {
-      const roles = await window.api.setRole(
+    const request = persistQueueRef.current.then(() =>
+      window.api.setRole(
         'orchestrator',
         binding.provider,
         modelsById.get(binding.modelId)?.model ?? binding.modelId,
         binding.reasoningEffort
       )
-      setTopology((current) =>
-        current ? withOrchestratorRole(current, models, roles.orchestrator) : current
-      )
-      setState('ready')
+    )
+    persistQueueRef.current = request.then(
+      () => undefined,
+      () => undefined
+    )
+    try {
+      const roles = await request
+      if (version === persistVersionRef.current) {
+        const latest = topologyRef.current
+        if (latest) replaceTopology(withOrchestratorRole(latest, models, roles.orchestrator))
+        setState('ready')
+      }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason))
-      setState('error')
+      if (version === persistVersionRef.current) {
+        setError(reason instanceof Error ? reason.message : String(reason))
+        setState('error')
+      }
     }
   }
 
@@ -584,9 +597,9 @@ export function AgentsTopologyView({
           <b>Runtime actuel</b>
           <span>
             <b>Frame, Scouts et Judges</b> : déposez-y plusieurs modèles — ils s’exécutent en
-            parallèle puis l’orchestrateur agrège (union des angles pour Frame/Scouts, quorum de vote
-            pour Judges). <b>Orchestrateur et Sous-agents</b> : seul le premier slot alimente le
-            runtime (fan-out des sous-agents pas encore branché).
+            parallèle puis l’orchestrateur agrège (union des angles pour Frame/Scouts, quorum de
+            vote pour Judges). <b>Orchestrateur et Sous-agents</b> : seul le premier slot alimente
+            le runtime (fan-out des sous-agents pas encore branché).
           </span>
         </div>
       </main>
