@@ -622,7 +622,20 @@ export class AppCommandBus {
         // éprouvée (`matchExplicitPhase` → `regimePhases`) au lieu d'ouvrir un second chemin.
         // Une valeur inconnue est IGNORÉE : le modèle ne doit pas pouvoir inventer une phase.
         const requestedPhase = typeof a.phase === 'string' ? a.phase.trim().toLowerCase() : ''
-        const phasePrefix = ORCHESTRATE_PHASES.has(requestedPhase) ? `/${requestedPhase} ` : ''
+        /**
+         * UNE PHASE CHOISIE PAR LE MODÈLE N'AMPUTE PAS UNE TÂCHE À RISQUE.
+         *
+         * Défaut que j'ai failli livrer : une phase NOMMÉE écrase le régime, y compris `critical` —
+         * vérifié, `regimePhases('/frame refactorer toute l'architecture de securite')` rend
+         * `['frame']` au lieu des cinq phases. Venant de l'UTILISATEUR (`/frame …` tapé dans le chat)
+         * c'est une décision explicite, donc légitime. Venant du MODÈLE, ce serait une réduction
+         * silencieuse d'un chantier d'architecture ou de sécurité — exactement ce que l'audit du
+         * 2026-07-29 a fait corriger sur le routage par intention. Les deux chemins sont
+         * indistinguables en aval (même préfixe `/<phase> `), donc la garde est posée ICI, à l'entrée.
+         */
+        const modelPhaseAllowed =
+          ORCHESTRATE_PHASES.has(requestedPhase) && classifyRegime(s('task')) !== 'critical'
+        const phasePrefix = modelPhaseAllowed ? `/${requestedPhase} ` : ''
         const requestedTask = `${phasePrefix}${s('task')}`
         const conversation = this.os.conversations.get(convId)
         const task =

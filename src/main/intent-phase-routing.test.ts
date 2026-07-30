@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { matchIntentPhase, normalizeIntent } from './intent-phase-routing'
+import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { classifyRegime, phasesForRegime, regimePhases } from './task-regime'
 
 /**
@@ -568,5 +569,62 @@ describe('MAJEUR cycle 2 — « plus » est un quantificateur, pas une négation
     expect(matchIntentPhase('cherche pourquoi ça ne marche pas')?.phase).toBe('scout')
     expect(matchIntentPhase('je veux que ça ne casse plus')?.phase).toBe('frame')
     expect(matchIntentPhase('nettoie ce qui ne sert plus')?.phase).toBe('clean')
+  })
+})
+
+/**
+ * LE PROMPT DE PILOTAGE doit APPRENDRE au modèle quand nommer une phase — c'est le mécanisme de
+ * claude.exe transposé : là-bas, une skill se déclenche parce que sa DESCRIPTION dit quand l'employer,
+ * et c'est le modèle qui décide. Mesuré ici : le modèle décide 101 fois sur 103, le code 2 fois. Lui
+ * donner la capacité sans lui dire quand l'employer, c'est livrer une façade.
+ */
+describe('le prompt enseigne le choix de phase, sans pousser vers l’orchestration', () => {
+  const prompt = buildChatPilotagePrompt([])
+
+  it('les six phases sont décrites avec leur cas d’emploi', () => {
+    for (const phase of ['scout', 'frame', 'terrain', 'build', 'clean', 'judge']) {
+      expect(prompt).toContain(`\`${phase}\``)
+    }
+    expect(prompt).toMatch(/aucune tache|aucune t.che/i)
+    expect(prompt).toContain('CADRER')
+  })
+
+  it('il dit d’OMETTRE la phase en cas de doute (pas de choix forcé)', () => {
+    expect(prompt).toMatch(/omets `phase` si tu n.es pas s.r/i)
+  })
+
+  it('il avertit que `judge` ne joue AUCUNE phase d’exécution', () => {
+    expect(prompt).toMatch(/ne joue aucune phase d.ex.cution/i)
+  })
+
+  it('la garde anti-biais reste INTACTE — ce bloc ne doit pas pousser à orchestrer', () => {
+    // Le biais mesure le 2026-07-28 : trois consignes poussaient vers `orchestrate` (114 spawns,
+    // 26,65 $/h). Ce test echoue si la regle de retenue disparait.
+    expect(prompt).toContain("ANALYSER, ce n'est pas MODIFIER")
+    expect(prompt).toMatch(/JAMAIS avec `orchestrate`/)
+  })
+})
+
+/**
+ * GARDE DE SÛRETÉ : une phase choisie par le MODÈLE ne doit pas amputer une tâche à risque.
+ * Défaut que j'ai failli livrer — vérifié : `regimePhases('/frame refactorer toute l'architecture de
+ * securite')` rend `['frame']` au lieu des cinq phases. Légitime venant de l'utilisateur (décision
+ * explicite), inacceptable venant du modèle.
+ */
+describe('câblage — le modèle ne peut pas réduire une tâche critique', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const fs = require('node:fs') as typeof import('node:fs')
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const path = require('node:path') as typeof import('node:path')
+  const source = fs.readFileSync(path.join(__dirname, 'commands.ts'), 'utf8')
+
+  it('la phase du modèle est refusée sur un régime critique', () => {
+    expect(source).toContain("classifyRegime(s('task')) !== 'critical'")
+  })
+
+  it('une phase NOMMÉE par l’utilisateur garde son pouvoir de réduire', () => {
+    // La distinction est le coeur de la garde : l'humain decide, le modele propose.
+    expect(regimePhases("/frame refactorer toute l'architecture de securite")).toEqual(['frame'])
+    expect(regimePhases("refactorer toute l'architecture de securite")).toHaveLength(5)
   })
 })

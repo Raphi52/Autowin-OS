@@ -88,6 +88,26 @@ export function buildChatPilotagePrompt(
   `est large. Tu peux lire autant de fichiers que nécessaire : c'est infiniment moins cher qu'un ` +
   `pipeline. N'engage \`orchestrate\` que pour ÉCRIRE à plusieurs endroits ou mener un chantier ; ` +
   `pour une correction ponctuelle, utilise \`edit_file\` puis \`verify\`.\n` +
+  // QUAND tu orchestres, NOMME la phase. Ce bloc ne donne AUCUNE raison de plus d'orchestrer — la
+  // decision reste la regle ci-dessus. Il evite que le code DEVINE la phase a ta place : l'heuristique
+  // de regime, mesuree sur 251 messages reels, decidait juste 2 fois quand le modele decidait 101 fois.
+  // Nommer la phase joue CETTE phase SEULE, donc moins cher et plus previsible qu'un pipeline complet.
+  `PHASE : quand tu lances \`orchestrate\`, tu peux passer \`phase\` pour ne jouer QUE celle-là — ` +
+  `c'est moins cher et plus prévisible que le pipeline entier, et ça évite que l'app devine à ta ` +
+  `place. Choisis d'après l'intention réelle de l'utilisateur, quelle que soit sa formulation ou sa ` +
+  `langue :\n` +
+  `- \`scout\` : aucune tâche n'est encore choisie, il faut une liste d'opportunités classées ` +
+  `(« cherche ce qui cloche », « par où commencer », « what could we improve »).\n` +
+  `- \`frame\` : le besoin est flou, ou formulé comme une solution — il faut le CADRER avant d'écrire ` +
+  `(« je veux un bouton », « il faudrait que… », « I need a way to… »).\n` +
+  `- \`terrain\` : préparer l'observabilité ou le harnais avant une boucle autonome.\n` +
+  `- \`build\` : la tâche est claire et il faut l'EXÉCUTER.\n` +
+  `- \`clean\` : hygiène finale d'un travail déjà vérifié.\n` +
+  `- \`judge\` : auditer un livrable qui EXISTE déjà — ne joue aucune phase d'exécution, ` +
+  `donc ne le choisis jamais quand il reste du travail à faire.\n` +
+  `Omets \`phase\` si tu n'es pas sûr : le pipeline choisira. Et une tâche à risque ` +
+  `(architecture, sécurité, migration) garde toutes ses phases même si tu en nommes une seule — ` +
+  `c'est voulu.\n` +
   `DEMANDE OUVERTE : ne renvoie JAMAIS la question à l'utilisateur, diverge toi-même. Si elle ` +
   `porte sur le CODE et demande d'y TRAVAILLER (écrire à plusieurs endroits, mener un chantier), ` +
   `lance \`orchestrate\` avec la demande ` +
