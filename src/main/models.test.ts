@@ -50,6 +50,12 @@ describe('catalogue Agents dynamique', () => {
       cliIds
     )
 
+    expect(models.find((model) => model.model === 'opus')?.label).toBe('Claude Opus 5 · CLI')
+    expect(models.find((model) => model.model === 'sonnet')?.label).toBe(
+      'Claude Sonnet 4.6 · CLI'
+    )
+    expect(models.find((model) => model.model === 'fable')?.label).toBe('Claude Fable 5 · CLI')
+
     // Ordre du catalogue : codex (aucun ici, `noCodexModels`), puis les ALIAS du CLI — le socle
     // portable, present sur toute machine qui a le CLI —, puis les versions EXACTES qu'un service
     // local expose (pour epingler), puis kimi/gemini qui n'ont pas de source dynamique.
@@ -233,6 +239,28 @@ describe('cache disque du dernier catalogue vu', () => {
     expect(JSON.parse(readFileSync(cachePath, 'utf8')).claude).toHaveLength(2)
   })
 
+  it('étiquette l’alias avec la meilleure version du catalogue final, cache inclus', async () => {
+    const cachePath = makeCachePath()
+    const oldCliIds = (): string[] => ['claude-opus-4-8']
+    const opus5Fetch = vi.fn(async () => Response.json({ data: [{ id: 'claude-opus-5' }] }))
+
+    await discoverImportedModels(
+      opus5Fetch as unknown as typeof fetch,
+      cachePath,
+      noCodexModels,
+      oldCliIds
+    )
+    const offline = await discoverImportedModels(
+      deadFetch as unknown as typeof fetch,
+      cachePath,
+      noCodexModels,
+      oldCliIds
+    )
+    const alias = offline.find((model) => model.model === 'opus')
+
+    expect(alias).toMatchObject({ model: 'opus', label: 'Claude Opus 5 · CLI' })
+  })
+
   it('CLI absent ET service absent → seuls les alias, aucun id versionne invente', async () => {
     // Machine vierge, aucun service local, aucun cache : exactement le poste du collegue. Il obtient
     // desormais `opus` — qui resout vers le dernier Opus cote serveur — au lieu d'un `opus-4-6` fige
@@ -250,6 +278,7 @@ describe('cache disque du dernier catalogue vu', () => {
     // — et elle est honnete, contrairement a l'ancien seed qui affirmait `opus-4-6`.
     expect(claude).toEqual(['opus', 'sonnet', 'haiku', 'fable'])
     expect(claude.some((model) => /^claude-/.test(model))).toBe(false)
+    expect(offline.find((model) => model.model === 'opus')?.label).toBe('Claude Opus · CLI')
     // Codex n'a pas d'alias equivalent cote CLI : sans listing ni cache, aucun modele codex.
     expect(offline.filter((m) => m.provider === 'codex')).toEqual([])
     expect(offline.some((m) => m.provider === 'gemini')).toBe(true)

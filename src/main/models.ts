@@ -19,7 +19,12 @@ import { dirname } from 'node:path'
 import type { ReasoningEffort } from './roles'
 import type { ComputeBinding } from '../shared/compute-fabric'
 import { CODEX_VALID_EFFORTS } from './providers/codex'
-import { isKnownAlias, parseClaudeVersion, resolveAlias } from './model-aliases'
+import {
+  compareClaudeVersions,
+  isKnownAlias,
+  parseClaudeVersion,
+  resolveAlias
+} from './model-aliases'
 import { listCodexAppServerModels, type CodexAppServerModel } from './codex-model-source'
 import { claudeCliModelIds } from './claude-cli-catalog'
 import { resolveClaudeBin } from './providers/claude'
@@ -224,15 +229,35 @@ function uniqueModels(discovered: ImportedModel[]): ImportedModel[] {
  */
 const CLAUDE_CLI_ALIASES = ['opus', 'sonnet', 'haiku', 'fable'] as const
 
-function claudeAliasModels(): ImportedModel[] {
+function claudeAliasModels(candidates: ImportedModel[]): ImportedModel[] {
   return CLAUDE_CLI_ALIASES.map((family) => ({
     id: `claude/${family}`,
     provider: 'claude',
     model: family,
-    label: `Claude ${family.charAt(0).toUpperCase()}${family.slice(1)} (dernier) · CLI`,
+    label:
+      candidates.reduce<ImportedModel | undefined>((latest, candidate) => {
+        const version = parseClaudeVersion(candidate.model)
+        if (!version || version.family !== family) return latest
+        if (!latest) return candidate
+        const latestVersion = parseClaudeVersion(latest.model)
+        return latestVersion && compareClaudeVersions(version, latestVersion) <= 0
+          ? latest
+          : candidate
+      }, undefined)?.label ??
+      `Claude ${family.charAt(0).toUpperCase()}${family.slice(1)} · CLI`,
     reasoningEfforts: [...CLAUDE_EFFORTS],
     defaultReasoningEffort: family === 'haiku' ? 'medium' : 'high'
   }))
+}
+
+function resolveClaudeAliasLabels(models: ImportedModel[]): ImportedModel[] {
+  const labels = new Map(
+    claudeAliasModels(models).map((alias) => [alias.model, alias.label] as const)
+  )
+  return models.map((model) => {
+    const label = model.provider === 'claude' ? labels.get(model.model) : undefined
+    return label ? { ...model, label } : model
+  })
 }
 
 /** Ids de modeles du CLI installe — injectable pour que les tests ne dependent PAS de la machine. */
@@ -255,7 +280,6 @@ async function discoverClaudeModels(
   //     « Claude Opus 5 » au lieu d'un vague « dernier », sans service tiers ni appel paye. Le CLI est
   //     present par construction : l'app le spawne pour tout appel Claude ;
   //  3. les versions d'un service local s'il y en a un (facultatif, pour epingler).
-  const aliases = claudeAliasModels()
   const fromCli = cliModelIds().map<ImportedModel>((model) => ({
     id: `claude/${model}`,
     provider: 'claude',
@@ -265,6 +289,7 @@ async function discoverClaudeModels(
     defaultReasoningEffort: model.includes('haiku') ? 'medium' : 'high',
     dynamicallyLoaded: true
   }))
+  const aliases = claudeAliasModels(fromCli)
   try {
     const response = await fetchFn('http://127.0.0.1:8787/models', {
       signal: AbortSignal.timeout(2_000)
@@ -286,7 +311,12 @@ async function discoverClaudeModels(
     // Alias, puis modeles NOMMES du CLI installe, puis versions d'un service local. `uniqueModels` en
     // aval dedoublonne : un id present a la fois dans le binaire et dans le service ne sort qu'une fois.
     // `live` est toujours vrai : alias et binaire sont le CLI lui-meme, pas une supposition.
-    return { models: [...aliases, ...fromCli, ...discovered], live: true, cacheable: discovered }
+    const discoveredAliases = claudeAliasModels([...fromCli, ...discovered])
+    return {
+      models: [...discoveredAliases, ...fromCli, ...discovered],
+      live: true,
+      cacheable: discovered
+    }
   } catch {
     // Service local absent = cas NORMAL (c'etait un projet personnel). Les alias + le binaire du CLI
     // suffisent, et c'est exactement ce qui manquait au collegue qui ne voyait pas Opus 5.
@@ -442,9 +472,10 @@ export async function discoverImportedModels(
     claudeToCache.length > 0
       ? claude.models
       : [...claude.models, ...(readCatalogCache(cachePath, 'claude') ?? [])]
+  const resolvedClaudeModels = resolveClaudeAliasLabels(uniqueModels(discoveredClaudeModels))
   return [
     ...codexModels,
-    ...uniqueModels(discoveredClaudeModels),
+    ...resolvedClaudeModels,
     ...DEFAULT_IMPORTED_MODELS.filter(
       (model) => model.provider === 'kimi' || model.provider === 'gemini'
     )
