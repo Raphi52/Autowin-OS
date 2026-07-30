@@ -1,4 +1,5 @@
 import { writeFileSync } from 'node:fs'
+import { assertModelCatalogProof } from './cdp-proof-validation.mjs'
 
 const targets = await (await fetch('http://127.0.0.1:9223/json')).json()
 const page = targets.find((target) => target.type === 'page')
@@ -59,6 +60,7 @@ const spacing = await evaluate(`(() => {
     scrollbarGutter: getComputedStyle(library).scrollbarGutter
   }
 })()`)
+assertModelCatalogProof({ labels })
 const screenshot = await send('Page.captureScreenshot', { format: 'png' })
 const output = 'C:/Amitel/Autowin OS/artifacts/model-catalog.png'
 writeFileSync(output, Buffer.from(screenshot.data, 'base64'))

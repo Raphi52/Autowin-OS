@@ -2,6 +2,7 @@
 // Prérequis : app lancée avec --remote-debugging-port=9223. Navigue vers Models, inspecte le
 // DOM du bloc frame + les marqueurs, capture un PNG.
 import { writeFileSync } from 'node:fs'
+import { assertFrameBlockProof } from './cdp-proof-validation.mjs'
 
 const targets = await (await fetch('http://127.0.0.1:9223/json')).json()
 const page = targets.find((t) => t.type === 'page')
@@ -25,7 +26,11 @@ const send = (method, params = {}) =>
     socket.send(JSON.stringify({ id, method, params }))
   })
 const evaluate = async (expression) => {
-  const res = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+  const res = await send('Runtime.evaluate', {
+    expression,
+    returnByValue: true,
+    awaitPromise: true
+  })
   if (res.exceptionDetails) throw new Error(`DOM eval: ${res.exceptionDetails.text ?? 'échec'}`)
   return res.result?.value
 }
@@ -52,6 +57,7 @@ const dom = await evaluate(`(() => {
   const authorityNote = document.querySelector('.topology-authority-note')?.textContent?.trim() || null
   return { panels, frame, frameBorder, note, authorityNote }
 })()`)
+assertFrameBlockProof(dom)
 
 const screenshot = await send('Page.captureScreenshot', { format: 'png' })
 const output = 'C:/Amitel/Autowin OS/artifacts/frame-block-proof.png'

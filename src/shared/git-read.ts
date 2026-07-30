@@ -59,7 +59,10 @@ export function parseGitStatus(porcelain: string): GitState {
       const fields = line.split(' ')
       const xy = fields[1] ?? '..'
       const rest = line.startsWith('2 ') ? (line.split('\t')[0] ?? '') : line
-      const path = rest.split(' ').slice(8).join(' ').trim() || (line.split('\t')[0]?.split(' ').slice(8).join(' ') ?? '')
+      const pathFieldIndex = line.startsWith('2 ') ? 9 : 8
+      const path =
+        rest.split(' ').slice(pathFieldIndex).join(' ').trim() ||
+        (line.split('\t')[0]?.split(' ').slice(pathFieldIndex).join(' ') ?? '')
       const staged = xy[0] !== '.'
       state.changes.push({ path, status: classify(xy), staged })
     } else if (line.startsWith('? ')) {

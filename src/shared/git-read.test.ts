@@ -35,6 +35,14 @@ describe('parseGitStatus (porcelain v2 --branch)', () => {
     expect(s.branch).toBe('main')
     expect(s.changes).toHaveLength(0)
   })
+
+  it('extrait seulement le nouveau chemin d’un renommage porcelain v2', () => {
+    const s = parseGitStatus(
+      '2 R. N... 100644 100644 100644 aaa bbb R100 src/new name.ts\tsrc/old name.ts'
+    )
+
+    expect(s.changes).toEqual([{ path: 'src/new name.ts', status: 'renamed', staged: true }])
+  })
 })
 
 describe('parseGitLog', () => {
