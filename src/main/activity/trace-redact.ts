@@ -20,10 +20,15 @@ const SHAPES = String.raw`\b(?:sk-(?:proj-)?|gh[pousr]_)[A-Za-z0-9_-]{8,}|xox[ba
 const SECRET_VALUE = new RegExp(`${KEYED}|${SHAPES}`, 'gi')
 
 /**
- * Les formes de jetons à faible faux-positif, SANS le drapeau `g` : utilisable par un garde de décision
- * sans partager d'état `lastIndex` avec la rédaction.
+ * Les formes de jetons à faible faux-positif, exposées en SOURCE pour qu'un consommateur choisisse sa
+ * sensibilité à la casse.
+ *
+ * Encore la distinction « rédiger ≠ décider » : la rédaction reste insensible à la casse (sur-rédiger est
+ * gratuit), mais un garde de DÉCISION doit être sensible — sinon `SK-10023847`, une référence article, se
+ * fait refuser comme un jeton `sk-` (faux refus mesuré le 2026-07-30). Les préfixes de tous ces formats
+ * sont imposés par leurs éditeurs : `ghp_`, `xoxb-`, `sk-`, `eyJ`, `AKIA`, `AIza`.
  */
-export const SECRET_TOKEN_SHAPES = new RegExp(SHAPES, 'i')
+export const SECRET_SHAPES_SOURCE = SHAPES
 
 function secretKey(key: string): boolean {
   const normalized = key.replace(/[^a-z0-9]/gi, '').toLowerCase()

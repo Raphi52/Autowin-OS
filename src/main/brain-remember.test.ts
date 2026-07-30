@@ -514,6 +514,63 @@ describe('audit 2026-07-30 cycle 2 — les faux refus que j’avais créés', ()
     expect(likelySecretShape('password: Hunter2Hunter2Hunter2x9')).toBeDefined()
   })
 
+  it('la forme CANONIQUE d’un secret — la variable d’environnement en MAJUSCULES — est vue', () => {
+    // Trou mesuré le 2026-07-30 : le garde était sensible à la casse sur le NOM de la clé, or c'est
+    // justement en majuscules qu'un secret s'écrit. Il partait donc dans un corpus partagé.
+    expect(likelySecretShape('AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENGbPxRfiCYEXAMPLEKEY')).toBeDefined()
+    expect(likelySecretShape('TOKEN=aB3dEfGhIjKlMnOpQ12')).toBeDefined()
+    expect(likelySecretShape('Password: aB3dEfGhIjKlMnOpQ12')).toBeDefined()
+    // Mot-cle en DEBUT de chaine, sans prefixe : la regle exigeait un caractere avant.
+    expect(likelySecretShape('secret_key=aB3dEfGhIjKlMnOpQ12')).toBeDefined()
+  })
+
+  it('un CHEMIN ou une RÉFÉRENCE ne sont pas des secrets — les faux refus du cycle 4', () => {
+    // Les 4 entrées nommées par les juges. Un faux refus bloque une mémoire valide, et c'est le sens
+    // coûteux ici puisqu'un second garde tourne derrière.
+    for (const legitime of [
+      'auth_token_endpoint: /api/v2/oauth/token/refresh',
+      'refresh_token_path: /var/lib/rig/session2/token.json',
+      'reference du lot SK-10023847 chez le fournisseur',
+      'token_url: https://exemple.fr/oauth/token2'
+    ]) {
+      expect(likelySecretShape(legitime)).toBeUndefined()
+      expect(decideRemember({ ...FAIT_VALIDE, fact: legitime }).allowed).toBe(true)
+    }
+  })
+
+  it('le fait RÉELLEMENT déposé remonte à l’appelant, pas les arguments bruts', async () => {
+    // Sans ça, l'écho s'alimentait de `a.fact ?? a.body` : `{fact:'', body:'…'}` déposait au Brain et
+    // échoait une chaîne vide, silencieusement rejetée — « retenu » promis, rien au tour suivant.
+    const outcome = await rememberFact(
+      { ...FAIT_VALIDE, fact: '', body: 'le vrai contenu du fait' },
+      {
+        token: 'jeton',
+        fetchFn: vi.fn(
+          async () => new Response(JSON.stringify({ context: 'C:/brain/inbox/x.md' }), { status: 200 })
+        ) as unknown as typeof fetch,
+        deposited: new Map()
+      }
+    )
+    expect(outcome.stored).toBe(true)
+    expect(outcome.fact?.body).toBe('le vrai contenu du fait')
+    expect(outcome.fact?.title).toBe(FAIT_VALIDE.title)
+  })
+
+  it('le fait remonte MÊME quand le Brain est injoignable — sinon rien n’est retenu du tout', async () => {
+    const mort: typeof fetch = vi.fn(async () => {
+      throw new Error('connect ECONNREFUSED 127.0.0.1:8765')
+    }) as unknown as typeof fetch
+    const outcome = await rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn: mort, deposited: new Map() })
+    expect(outcome.stored).toBe(false)
+    expect(outcome.fact?.body).toContain('shims')
+  })
+
+  it('un fait IRRECEVABLE ne remonte AUCUN contenu — le signal doit DISCRIMINER', async () => {
+    const outcome = await rememberFact({ ...FAIT_VALIDE, type: 'inconnu' }, { token: 'jeton' })
+    expect(outcome.allowed).toBe(false)
+    expect(outcome.fact).toBeUndefined()
+  })
+
   it('les formes de jetons connues sont couvertes — sans les recopier ici', () => {
     // Réutilise `SECRET_VALUE` de trace-redact.ts au lieu de dupliquer ses motifs (défaut « dup »).
     //
@@ -528,7 +585,9 @@ describe('audit 2026-07-30 cycle 2 — les faux refus que j’avais créés', ()
       'sk-proj-EXEMPLE-NON-VALIDE-0000',
       // Celle-ci est l'exemple officiel de la documentation AWS, donc sans ambiguïté.
       'clé AKIAIOSFODNN7EXAMPLE trouvée dans le fichier',
-      'aws_secret_access_key=exemple0non0valide0a0ne0pas0utiliser'
+      // Casse MIXTE : le garde exige désormais minuscule + MAJUSCULE + chiffre dans la valeur, pour ne
+      // plus refuser `RIG_DB_PASSWORD` ni `/api/v2/oauth/token`. Le placeholder doit donc en porter.
+      'aws_secret_access_key=Exemple0NonValide0ANePasUtiliser'
     ]) {
       expect(likelySecretShape(fuite)).toBeDefined()
     }

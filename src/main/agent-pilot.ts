@@ -3,7 +3,7 @@ import type { RoleModelConfig } from './roles'
 import type { AppCommandBus } from './commands'
 import type { Message, PromptEnvelope, SendOptions, Usage } from './providers/types'
 import { parseModelQuestion, type ModelQuestion } from './model-questions'
-import { rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
+import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
 import { buildTurnMessages } from './chat-turn-messages'
 import { VisibleStreamFilter } from '../shared/stream-markup-filter'
 import type { ConversationAuthorityMode } from './conversation-capabilities'
@@ -298,7 +298,11 @@ export class AgentPilot {
     // dans CE fil lui est remis. Ici et non dans le system, pour la même raison que le contexte Brain :
     // un contenu variable dans le préfixe tue le cache. Plafonné à ~1 500 car. — la lecture automatique
     // des fiches avait été coupée parce qu'elle pesait 552 Ko par appel.
-    const memoryEcho = sessionMemoryBlock(rememberedFacts(conversationId))
+    const memoryEcho = sessionMemoryBlock(
+      rememberedFacts(conversationId),
+      undefined,
+      evictedCount(conversationId)
+    )
     // L'assemblage vit dans `chat-turn-messages.ts` pour être testable sur sa SORTIE plutôt que grepable
     // dans ce fichier. Le tableau reste mutable : la boucle d'itérations y ajoute les tours suivants.
     const convo: string[] = buildTurnMessages({

@@ -117,12 +117,15 @@ export function buildChatPilotagePrompt(
   `a-t-on choisi X ? », « quelle contrainte a Y ? ») ; pour l'état du code courant, lis les fichiers. ` +
   `Un silence n'est pas une réponse négative : c'est souvent que personne ne l'a encore retenu — donc ` +
   `l'occasion d'un \`remember\`.\n` +
-  `À DIRE HONNÊTEMENT quand tu retiens, en distinguant les deux portées : DANS CETTE CONVERSATION, le ` +
-  `fait te sera remis aux tours suivants (tu le retrouveras sous « CE QUE TU AS RETENU DANS CETTE ` +
-  `CONVERSATION ») — tu peux donc dire que tu t'en souviendras ICI. Mais POUR LES AUTRES, il part comme ` +
-  `CANDIDAT : un humain le promeut, et il ne devient trouvable par \`brain_query\` qu'après ` +
-  `réindexation. Ne promets donc jamais une mémoire partagée immédiate ; et n'oublie pas que l'écho de ` +
-  `cette conversation est local et disparaît si l'application redémarre.\n` +
+  `À DIRE HONNÊTEMENT quand tu retiens, en distinguant les deux portées, et en te fiant au COMPTE-RENDU ` +
+  `de la commande plutôt qu'à une supposition. DANS CETTE CONVERSATION : le fait te sera remis aux tours ` +
+  `suivants (tu le retrouveras sous « CE QUE TU AS RETENU DANS CETTE CONVERSATION »), donc tu peux dire ` +
+  `que tu t'en souviendras ICI — sauf si le compte-rendu signale un refus, car alors rien n'a été ` +
+  `retenu. POUR LES AUTRES : le fait part comme CANDIDAT, un humain le promeut, et il ne devient ` +
+  `trouvable par \`brain_query\` qu'après réindexation ; ne promets donc jamais une mémoire partagée ` +
+  `immédiate. Trois limites à ne pas cacher : l'écho est local et disparaît si l'application redémarre ; ` +
+  `il ne garde que la douzaine de faits les plus récents du fil (au-delà, il te dit combien il a écarté) ; ` +
+  `et un fait marqué « non déposé au Brain » n'existe QUE dans ce fil — redis-le plus tard si ça compte.\n` +
   `PHASE : quand tu lances \`orchestrate\`, tu peux passer \`phase\` pour ne jouer QUE celle-là — ` +
   `c'est moins cher et plus prévisible que le pipeline entier, et ça évite que l'app devine à ta ` +
   `place. Choisis d'après l'intention réelle de l'utilisateur, quelle que soit sa formulation ou sa ` +

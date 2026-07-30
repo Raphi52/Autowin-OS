@@ -2,12 +2,15 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
+  ECHO_MAX_BLOCK_CHARS,
   ECHO_MAX_BODY_CHARS,
   ECHO_MAX_FACTS,
+  evictedCount,
   forgetEcho,
   noteRemembered,
   rememberedFacts,
-  sessionMemoryBlock
+  sessionMemoryBlock,
+  type RememberedFact
 } from './session-memory-echo'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { buildTurnMessages } from './chat-turn-messages'
@@ -102,12 +105,104 @@ describe('l’écho reste PLAFONNÉ — le robinet de 552 Ko ne se rouvre pas', 
   })
 })
 
+/**
+ * CYCLE 4 DE L'AUDIT — les défauts que deux juges ont trouvés indépendamment, chacun reproduit sur les
+ * modules réels avant correction (sorties citées dans le RUN, section CausalHypothesis).
+ */
+describe('audit cycle 4 — les pertes silencieuses de l’écho', () => {
+  it('un fait TROP GROS n’efface pas les autres — il est omis, et l’omission est DITE', () => {
+    // Reproduit avant correctif : 7 faits retenus, bloc de longueur 0. Le `break` sautait la boucle, et
+    // comme on itere du plus recent au plus ancien, un fait recent hors gabarit effacait tout.
+    for (let n = 1; n <= 6; n += 1) noteRemembered('conv-1', fait(n))
+    noteRemembered('conv-1', { title: 'T'.repeat(1_600), body: 'corps récent' })
+    const bloc = sessionMemoryBlock(rememberedFacts('conv-1'))
+    expect(rememberedFacts('conv-1')).toHaveLength(7)
+    expect(bloc).not.toBe('')
+    expect(bloc).toContain('Fait 1')
+    expect(bloc).toContain('Fait 6')
+  })
+
+  it('quand RIEN ne tient dans le budget, le bloc le dit au lieu de disparaître', () => {
+    noteRemembered('conv-1', { title: 'T'.repeat(500), body: 'x'.repeat(500) })
+    const bloc = sessionMemoryBlock(rememberedFacts('conv-1'), 200)
+    expect(bloc).toMatch(/non repris/i)
+  })
+
+  it('le budget est respecté PIED COMPRIS', () => {
+    for (let n = 1; n <= ECHO_MAX_FACTS; n += 1) {
+      noteRemembered('conv-1', { title: `Fait ${n}`, body: 'x'.repeat(200) })
+    }
+    // Assertion DURCIE : elle concédait « <= 700 » pour un budget de 600, donc elle ne pouvait pas voir
+    // le depassement de ~61 caracteres du pied.
+    for (const budget of [300, 600, 1_500]) {
+      expect(sessionMemoryBlock(rememberedFacts('conv-1'), budget).length).toBeLessThanOrEqual(budget)
+    }
+  })
+
+  it('les faits évincés par le plafond sont COMPTÉS, pas oubliés', () => {
+    for (let n = 1; n <= ECHO_MAX_FACTS + 3; n += 1) noteRemembered('conv-1', fait(n))
+    expect(evictedCount('conv-1')).toBe(3)
+    const bloc = sessionMemoryBlock(rememberedFacts('conv-1'), ECHO_MAX_BLOCK_CHARS, evictedCount('conv-1'))
+    expect(bloc).toMatch(/3 fait\(s\) non repris/)
+  })
+
+  it('l’éviction de conversations garde l’ACTIVE et jette les mortes', () => {
+    // Reproduit avant correctif : `set` sur une cle existante ne change pas sa position dans une Map JS,
+    // donc la conversation la plus active — inseree en premier — etait evincee avant 49 fils morts.
+    noteRemembered('conv-active', fait(1))
+    for (let n = 0; n < 49; n += 1) noteRemembered(`mort-${n}`, fait(n))
+    noteRemembered('conv-active', fait(2)) // elle vit toujours
+    noteRemembered('conv-nouvelle', fait(3)) // 51ᵉ → une éviction
+    expect(rememberedFacts('conv-active').length).toBeGreaterThan(0)
+    expect(rememberedFacts('mort-0')).toHaveLength(0)
+  })
+
+  it('deux faits de MÊME TITRE : le récent REMPLACE le périmé', () => {
+    noteRemembered('conv-1', { title: 'Décision', body: 'on part sur A' })
+    noteRemembered('conv-1', { title: 'Décision', body: 'finalement B — A est abandonné' })
+    const facts = rememberedFacts('conv-1')
+    expect(facts).toHaveLength(1)
+    expect(facts[0]?.body).toContain('finalement B')
+  })
+
+  it('un fait NON déposé au Brain est retenu ici, et signalé comme tel', () => {
+    // Le cas courant : le service Brain est un partage SMB avec 30-40 s de préchauffage. Avant correctif,
+    // « retiens ça » avec le serveur eteint ne retenait RIEN — ni durablement, ni dans le fil.
+    noteRemembered('conv-1', { title: 'Fait local', body: 'établi ici', state: 'local' })
+    const bloc = sessionMemoryBlock(rememberedFacts('conv-1'))
+    expect(bloc).toContain('Fait local')
+    expect(bloc).toMatch(/non déposé au Brain/)
+  })
+
+  it('un fait DÉPOSÉ ne porte pas cette mention — le signal doit DISCRIMINER', () => {
+    noteRemembered('conv-1', { title: 'Fait durable', body: 'parti au Brain', state: 'depose' })
+    expect(sessionMemoryBlock(rememberedFacts('conv-1'))).not.toMatch(/non déposé/)
+  })
+
+  it('la liste rendue est une COPIE — un appelant ne peut pas muter l’écho', () => {
+    noteRemembered('conv-1', fait(1))
+    const facts = rememberedFacts('conv-1') as RememberedFact[]
+    facts.push({ title: 'intrus', body: 'injecté' })
+    expect(rememberedFacts('conv-1')).toHaveLength(1)
+  })
+
+  it('noteRemembered DIT s’il a pu rattacher le fait', () => {
+    expect(noteRemembered('conv-1', fait(1))).toBe(true)
+    // Sans conversation, l'appelant doit pouvoir le SAVOIR au lieu de perdre le fait en silence.
+    expect(noteRemembered('', fait(2))).toBe(false)
+  })
+})
+
 describe('câblage — l’écho est réellement alimenté et réellement relu', () => {
-  it('la commande remember alimente l’écho, et SEULEMENT sur un dépôt réel', () => {
+  it('la commande remember alimente l’écho depuis le fait VALIDÉ, pas les args bruts', () => {
     const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
     expect(source).toContain('noteRemembered')
-    // La garde qui compte : un refus ne doit pas entrer dans l'echo.
-    expect(source).toMatch(/if \(outcome\.stored\)/)
+    // La garde a CHANGÉ au cycle 4 : `outcome.stored` perdait le fait quand le Brain ne répondait pas.
+    // La bonne condition est « le fait est RECEVABLE », l'état du dépôt voyageant avec lui.
+    expect(source).toMatch(/if \(outcome\.fact\)/)
+    expect(source).toContain('outcome.fact.body')
+    // Et surtout : plus jamais les arguments bruts.
+    expect(source).not.toMatch(/body: String\(a\.fact/)
   })
 
   it('le tour de chat PORTE réellement l’écho dans son message', () => {

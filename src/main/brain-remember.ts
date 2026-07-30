@@ -19,7 +19,7 @@
  * Ce module est PUR côté décision (validation, forme du candidat) ; l'appel réseau est injectable.
  */
 
-import { SECRET_TOKEN_SHAPES } from './activity/trace-redact'
+import { SECRET_SHAPES_SOURCE } from './activity/trace-redact'
 
 /** Types acceptés par le garde du Brain (`brain_propose.ALLOWED_TYPES`). Liste FERMÉE. */
 export const REMEMBER_TYPES = ['lesson', 'decision', 'preference', 'domain'] as const
@@ -68,28 +68,53 @@ export const REMEMBER_TAG_MAX = 40
  * plus cher que l'inverse ici puisqu'un second garde tourne derrière).
  * Pas de drapeau `i` : les lookaheads distingueraient sinon plus la casse.
  */
-const VALEUR_A_FORME_DE_SECRET = String.raw`["']?(?=[A-Za-z0-9_./+=-]{16,})(?=[A-Za-z0-9_./+=-]*[a-z])(?=[A-Za-z0-9_./+=-]*[0-9])`
-
-/** `aws_secret_access_key=…` : le mot-clé n'est collé ni au début du mot, ni au `=`. */
-const SNAKE_CASE_SECRET = new RegExp(
-  String.raw`[A-Za-z0-9]_(?:secret|token|password|passwd|api_?key)[a-z0-9_]*\s*[:=]\s*` + VALEUR_A_FORME_DE_SECRET
-)
-/** `token=…` : mot-clé nu, mais la VALEUR doit ressembler à un secret, pas à une phrase. */
-const KEYED_SECRET = new RegExp(
-  String.raw`\b(?:api[_-]?key|token|secret|password|passwd)\s*[:=]\s*` + VALEUR_A_FORME_DE_SECRET
-)
+/** Formes de jetons, en SENSIBLE à la casse : `SK-10023847` est une référence article, pas un `sk-`. */
+const TOKEN_SHAPES = new RegExp(SECRET_SHAPES_SOURCE)
 
 /**
- * Décrit le secret repéré localement, ou `undefined`. Complète les gardes existants sans les dupliquer.
+ * Repère un `<clé> = <valeur>` dont la CLÉ évoque un secret. Insensible à la casse — la forme canonique
+ * est justement la variable d'environnement en MAJUSCULES (`AWS_SECRET_ACCESS_KEY=…`), et une version
+ * sensible à la casse la laissait passer : trou mesuré le 2026-07-30 sur le module réel.
+ * Le préfixe et le suffixe du nom sont libres : `aws_secret_access_key` comme `secret_key` en début de
+ * chaîne doivent mordre.
+ */
+const KEYED_CANDIDATE =
+  /(?:^|[^A-Za-z0-9])[A-Za-z0-9_.-]*(?:secret|token|password|passwd|api[_-]?key)[A-Za-z0-9_.-]*\s*[:=]\s*["']?([^\s"',]+)/gi
+
+/**
+ * La valeur ressemble-t-elle à un SECRET, ou à une donnée technique légitime ?
  *
- * Les formes de jetons viennent de `SECRET_TOKEN_SHAPES` (trace-redact.ts), déjà écrit et testé. On
- * n'importe QUE cette moitié : la moitié « mot-clé = valeur » du motif de rédaction accepte n'importe
- * quelle valeur, ce qui est sans risque pour rédiger mais refuserait ici « le champ token: obligatoire ».
- * Pour ce cas on garde donc un motif local qui exige une valeur À FORME de secret.
+ * Séparée de la détection de la clé pour deux raisons : la casse de la clé et celle de la valeur ne
+ * s'arbitrent pas ensemble (un seul drapeau `i` pour toute une expression, c'est l'un ou l'autre), et
+ * cette liste d'exclusions est un JUGEMENT qui mérite d'être lu.
+ *
+ * Chaque exclusion vient d'un faux refus RÉEL relevé par l'audit du 2026-07-30 — et un faux refus est le
+ * sens coûteux ici : il bloque une mémoire valide alors qu'un second garde tourne derrière.
+ */
+export function valueLooksLikeSecret(value: string): boolean {
+  // Trop court pour être un secret utile : « X-CSRF-Token », « 3600000000 ».
+  if (value.length < 16) return false
+  // Un CHEMIN ou une URL n'est pas un secret : « /api/v2/oauth/token/refresh »,
+  // « /var/lib/rig/session2/token.json », « C:\… », « https://… ».
+  if (/^(\.{0,2}[\\/]|~[\\/]|[A-Za-z]:[\\/])/.test(value) || value.includes('://')) return false
+  // Un secret réel mélange les casses ET les chiffres. Un identifiant ne le fait pas :
+  // « RIG_DB_PASSWORD » (pas de minuscule), « exemple0non0valide » (pas de majuscule).
+  return /[a-z]/.test(value) && /[A-Z]/.test(value) && /[0-9]/.test(value)
+}
+
+/**
+ * Décrit le secret repéré localement, ou `undefined`. Complète les gardes existants sans les dupliquer :
+ * les formes de jetons viennent de `trace-redact.ts`, déjà écrit et testé.
+ *
+ * Ce qui reste LOCAL est le cas « mot-clé = valeur », parce que la moitié correspondante du motif de
+ * rédaction accepte n'importe quelle valeur : sans danger pour rédiger, inacceptable pour un accept/refus
+ * (elle refuserait « le champ token: obligatoire »).
  */
 export function likelySecretShape(text: string): string | undefined {
-  if (SECRET_TOKEN_SHAPES.test(text)) return 'un jeton ou une clé'
-  if (SNAKE_CASE_SECRET.test(text) || KEYED_SECRET.test(text)) return 'un secret nommé par sa clé'
+  if (TOKEN_SHAPES.test(text)) return 'un jeton ou une clé'
+  for (const match of text.matchAll(KEYED_CANDIDATE)) {
+    if (valueLooksLikeSecret(match[1] ?? '')) return 'un secret nommé par sa clé'
+  }
   return undefined
 }
 
@@ -305,6 +330,11 @@ export interface RememberOutcome {
    * serveur ne dédoublonne PAS contre `inbox/` (voir le commentaire du 409).
    */
   unknown?: boolean
+  /**
+   * Ce qui a réellement été validé et envoyé. Présent dès que la demande est recevable, même si le dépôt
+   * a échoué : c'est ce qui permet de retenir le fait DANS le fil quand le Brain ne répond pas.
+   */
+  fact?: { title: string; body: string; truncated: boolean }
 }
 
 /**
@@ -354,6 +384,22 @@ export async function rememberFact(
   if (!decision.allowed) {
     return { allowed: false, reason: decision.reason, stored: false, detail: decision.reason }
   }
+  // fix-ok: refactorisation assumée, pas un correctif aveugle — cause MESURÉE et citée dans le RUN de la
+  // session (CausalHypothesis, cycle 4). L'appelant alimentait l'écho avec `a.fact ?? a.body`, les
+  // arguments BRUTS : `{fact:'', body:'le vrai fait'}` déposait au Brain et échoait une chaîne vide, que
+  // l'écho rejette en silence. On fait donc remonter ce qui a été RÉELLEMENT validé.
+  const outcome = await depositCandidate(decision, deps)
+  return {
+    ...outcome,
+    allowed: true,
+    fact: { title: decision.title, body: decision.body, truncated: decision.truncated }
+  }
+}
+
+async function depositCandidate(
+  decision: Extract<RememberDecision, { allowed: true }>,
+  deps: RememberDeps
+): Promise<RememberOutcome & { allowed: boolean }> {
   const token = deps.token ?? ''
   if (!token) {
     return {

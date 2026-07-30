@@ -927,15 +927,30 @@ export class AppCommandBus {
           authorAgent: 'autowin-os',
           model: this.os.roles.getBinding('orchestrator').model ?? 'autowin'
         })
-        // ÉCHO : sans ça, le modèle écrit sans jamais relire — la moitié manquante de la mécanique de
-        // claude.exe. On n'alimente l'écho QUE sur un dépôt réel, jamais sur un refus.
-        if (outcome.stored) {
+        /**
+         * ÉCHO : sans ça, le modèle écrit sans jamais relire — la moitié manquante de la mécanique de
+         * claude.exe.
+         *
+         * On alimente dès que le fait est RECEVABLE (`outcome.fact` présent), et pas seulement sur un
+         * dépôt réussi. Défaut relevé le 2026-07-30 : quand le Brain ne répond pas — service SMB partagé,
+         * préchauffage de 30-40 s, donc cas courant — le fait n'était retenu NI durablement NI dans le
+         * fil. Zéro mémoire, soit exactement la régression que l'écho existe pour fermer. L'état du dépôt
+         * voyage avec le fait pour que rien ne soit présenté comme partagé alors qu'il ne l'est pas.
+         *
+         * Le contenu vient de `outcome.fact` — ce qui a été VALIDÉ — et jamais de `a.*`.
+         */
+        if (outcome.fact) {
           const convId = (conversationId ?? this.activeConversationId) ?? ''
-          noteRemembered(convId, {
-            title: String(a.title ?? ''),
-            body: String(a.fact ?? a.body ?? ''),
-            note: outcome.note
+          const attache = noteRemembered(convId, {
+            title: outcome.fact.title,
+            body: outcome.fact.body,
+            note: outcome.note,
+            state: outcome.stored ? 'depose' : outcome.unknown ? 'inconnu' : 'local'
           })
+          // Sans conversation, l'écho ne peut pas s'attacher : le DIRE plutôt que le perdre en silence.
+          if (!attache) {
+            return { ...outcome, detail: `${outcome.detail} (non rattaché à ce fil : aucune conversation active)` }
+          }
         }
         return outcome
       }
