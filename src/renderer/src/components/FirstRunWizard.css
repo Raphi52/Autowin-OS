@@ -137,6 +137,24 @@
   opacity: 0.5;
   cursor: default;
 }
+/* « Facultatif — ne plus demander » : discret (action secondaire, pas une réparation). */
+.frw-optional {
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--text-dim, #9fb4c6);
+  background: transparent;
+  border: 1px solid var(--line-strong, #34424f);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.frw-optional:hover:not(:disabled) {
+  color: var(--text, #cfe3f4);
+  background: rgba(255, 255, 255, 0.06);
+}
+.frw-optional:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 /* Compte-rendu de la réparation LANCÉE (jamais « réparé » : le re-diagnostic tranche). */
 .frw-repair-note {
   width: 100%;

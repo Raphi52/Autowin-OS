@@ -32,13 +32,13 @@ const interrompue = (task?: string): ChatActionPart =>
   }) as ChatActionPart
 
 describe('reprendre une action interrompue sans la retaper', () => {
-  it('propose « Reprendre » et renvoie la TÂCHE D’ORIGINE, pas le mot « reprend »', () => {
+  it('propose « Reprendre » et renvoie la TÂCHE D’ORIGINE, pas le mot « reprend »', async () => {
     const resumed: string[] = []
     render([interrompue('trouve le composant concerné')], (task) => resumed.push(task))
 
     const button = container.querySelector<HTMLButtonElement>('[data-testid="activity-resume"]')
     expect(button).not.toBeNull()
-    act(() => button?.click())
+    await act(async () => button?.click())
     // C'est la tâche d'origine qui repart : elle seule retombe sur l'acquis persisté du run mort.
     expect(resumed).toEqual(['trouve le composant concerné'])
   })
@@ -76,9 +76,54 @@ describe('reprendre une action interrompue sans la retaper', () => {
   })
 })
 
+describe('le clic a un retour visible et l’échec ne disparaît plus', () => {
+  const bouton = (): HTMLButtonElement =>
+    container.querySelector<HTMLButtonElement>('[data-testid="activity-resume"]')!
+
+  it('pendant la reprise le bouton est occupé et non recliquable', async () => {
+    let release: (v: { ok: boolean }) => void = () => {}
+    const calls: string[] = []
+    render([interrompue('une tâche')], (task) => {
+      calls.push(task)
+      return new Promise((resolve) => {
+        release = resolve
+      })
+    })
+
+    await act(async () => bouton().click())
+    expect(bouton().disabled).toBe(true)
+    expect(bouton().textContent).toContain('Reprise')
+    // Un second clic ne relance PAS la même tâche en double.
+    await act(async () => bouton().click())
+    expect(calls).toEqual(['une tâche'])
+
+    await act(async () => {
+      release({ ok: true })
+    })
+    expect(bouton().disabled).toBe(false)
+    expect(bouton().getAttribute('data-resume-error')).toBeNull()
+  })
+
+  it('un {ok:false, error} devient VISIBLE sur le bouton', async () => {
+    render([interrompue('une tâche')], () =>
+      Promise.resolve({ ok: false, error: 'pipeline indisponible' })
+    )
+    await act(async () => bouton().click())
+    expect(bouton().getAttribute('data-resume-error')).toBe('pipeline indisponible')
+    expect(bouton().title).toContain('pipeline indisponible')
+    expect(bouton().disabled).toBe(false)
+  })
+
+  it('un rejet n’est plus silencieux', async () => {
+    render([interrompue('une tâche')], () => Promise.reject(new Error('IPC coupé')))
+    await act(async () => bouton().click())
+    expect(bouton().getAttribute('data-resume-error')).toBe('IPC coupé')
+  })
+})
+
 // Le bloc lui-même ouvre Workflows : reprendre ne doit pas déclencher cette ouverture.
 describe('reprendre n’est pas « voir »', () => {
-  it('cliquer Reprendre n’ouvre pas Workflows', () => {
+  it('cliquer Reprendre n’ouvre pas Workflows', async () => {
     const opened = vi.fn()
     act(() =>
       root.render(
@@ -89,7 +134,9 @@ describe('reprendre n’est pas « voir »', () => {
         })
       )
     )
-    act(() => container.querySelector<HTMLButtonElement>('[data-testid="activity-resume"]')?.click())
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="activity-resume"]')?.click()
+    )
     expect(opened).not.toHaveBeenCalled()
   })
 })

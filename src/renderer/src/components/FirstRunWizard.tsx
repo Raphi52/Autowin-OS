@@ -27,6 +27,17 @@ interface PreflightResult {
 const STARTUP_PROBE_MS = 3000
 const STARTUP_PATIENCE_MS = 120_000
 
+/**
+ * Provider concerné par un check, pour l'affordance « Facultatif ». Rend null pour les checks non
+ * liés à un provider (brain…).
+ */
+function checkProvider(id: string): 'codex' | 'claude' | 'kimi' | null {
+  if (id === 'codex' || id === 'codex-session') return 'codex'
+  if (id === 'claude') return 'claude'
+  if (id === 'kimi') return 'kimi'
+  return null
+}
+
 export function FirstRunWizard(): React.JSX.Element | null {
   const [open, setOpen] = useState(false)
   const [result, setResult] = useState<PreflightResult | null>(null)
@@ -96,6 +107,24 @@ export function FirstRunWizard(): React.JSX.Element | null {
       if (req === reqRef.current) setChecking(false)
     }
   }, [applyResult])
+
+  /**
+   * Un provider mis en STANDBY est exclu du diagnostic (ses checks passent `standby`) et le réglage
+   * est persistant côté main : la popup ne le réclame plus.
+   */
+  const markOptional = useCallback(
+    async (checkId: string) => {
+      const provider = checkProvider(checkId)
+      if (!provider || !window.api?.setProviderMode) return
+      try {
+        await window.api.setProviderMode(provider, 'standby')
+        await recheck(true)
+      } catch {
+        setError('Impossible de marquer ce prérequis comme facultatif.')
+      }
+    },
+    [recheck]
+  )
 
   const clearStarting = useCallback((checkId: string) => {
     setStarting((s) => {
@@ -240,6 +269,20 @@ export function FirstRunWizard(): React.JSX.Element | null {
                   disabled={repairing !== null || checking || pending}
                 >
                   {repairing === c.id || pending ? 'En cours…' : repairAffordance(c.id)?.label}
+                </button>
+              ) : null}
+              {/* Prérequis d'un provider en échec = FACULTATIF possible : le passer en standby
+                  (mémorisé) l'exclut du diagnostic → la popup ne le réclamera plus. */}
+              {!c.ok && checkProvider(c.id) ? (
+                <button
+                  type="button"
+                  className="frw-optional"
+                  data-testid={`frw-optional-${c.id}`}
+                  title={`Marquer ${checkProvider(c.id)} comme facultatif : il sera ignoré au démarrage (réactivable dans Models).`}
+                  onClick={() => void markOptional(c.id)}
+                  disabled={repairing !== null || checking || pending}
+                >
+                  Facultatif — ne plus demander
                 </button>
               ) : null}
               {repairNotes[c.id] ? (
