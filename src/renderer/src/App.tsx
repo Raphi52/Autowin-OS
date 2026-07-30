@@ -289,7 +289,6 @@ export function MainApp(): React.JSX.Element {
 
   return (
     <div className="shell cosmic-outline theme-serious">
-      <UpdateBanner />
       <FirstRunWizard />
       <aside className={`rail${railCollapsed ? ' is-collapsed' : ''}`}>
         <div className="brand">
@@ -335,6 +334,7 @@ export function MainApp(): React.JSX.Element {
             ))}
           </div>
         </nav>
+        <UpdateBanner collapsed={railCollapsed} />
         <div className="rail-foot c-faint">{`v${packageManifest.version} · preview`}</div>
       </aside>
       <main className={`main${driven ? ' driven' : ''}`} data-driven={driven}>

@@ -1,41 +1,66 @@
-.update-banner {
+/*
+ * Mise à jour disponible : un bouton au bas du rail, pas une bannière.
+ * L'ancienne version occupait toute la largeur en tête d'application pour une information qui
+ * n'est jamais urgente. Ici, elle attend son clic sans rien réclamer.
+ */
+.rail-update {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 8px 6px;
+}
+
+.rail-update-btn {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 8px 14px;
-  background: color-mix(in srgb, var(--accent, #4b9fff) 14%, transparent);
-  border-bottom: 1px solid var(--accent, #4b9fff);
-  font-size: 12.5px;
-  color: var(--text, #e6e9ee);
-}
-.update-banner-msg code {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  color: var(--accent, #4b9fff);
-}
-.update-banner-error {
-  color: var(--danger, #e6635b);
-}
-.update-banner-actions {
-  margin-left: auto;
-  display: flex;
   gap: 8px;
-}
-.update-banner-apply,
-.update-banner-later {
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 7px;
-  border: 1px solid var(--line2, #31373f);
-  background: var(--surface2, #191d23);
-  color: var(--text, #e6e9ee);
-  cursor: pointer;
-}
-.update-banner-apply {
-  border-color: var(--accent, #4b9fff);
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent, #4b9fff) 45%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent, #4b9fff) 10%, transparent);
   color: var(--accent, #4b9fff);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
 }
-.update-banner-apply:disabled {
+
+.rail-update-btn:hover:not(:disabled) {
+  border-color: var(--accent, #4b9fff);
+  background: color-mix(in srgb, var(--accent, #4b9fff) 18%, transparent);
+}
+
+.rail-update-btn:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.rail-update-icon {
+  flex: none;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.rail-update-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+/* Le nombre de commits en retard : présent, mais jamais au premier plan. */
+.rail-update-count {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent, #4b9fff) 22%, transparent);
+  font-size: 10.5px;
+}
+
+.rail-update-error {
+  padding: 0 2px;
+  color: var(--danger, #e6635b);
+  font-size: 11px;
 }
