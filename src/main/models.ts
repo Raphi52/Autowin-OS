@@ -189,19 +189,46 @@ function uniqueModels(discovered: ImportedModel[]): ImportedModel[] {
   })
 }
 
+/**
+ * Alias OFFICIELS du CLI Claude. `claude --help` : « Provide an alias for the latest model (e.g.
+ * 'fable', 'opus', or 'sonnet') ». Chacun resout COTE SERVEUR vers le dernier modele de sa famille.
+ *
+ * C'est la seule source a la fois portable et increvable, et c'est ce qui repare le cas constate le
+ * 2026-07-30 : Agent Studio n'affichait pas Opus 5 sur un poste tiers. La cause n'etait pas qu'Opus 5
+ * y etait indisponible — il l'etait parfaitement — mais que la liste venait d'un service PERSONNEL
+ * (`claude-bridge/bridge.py` de Hermes, sur 127.0.0.1:8787, dans le %LOCALAPPDATA% d'UN utilisateur).
+ * Un collegue sans ce projet perso ne pouvait rien voir de recent.
+ *
+ * MESURE (appel reel, 2026-07-30) : `claude -p --model opus --output-format json` rend
+ * `modelUsage: { 'claude-opus-5': ... }`. L'alias suit donc les publications sans qu'on touche au code.
+ *
+ * Ce n'est pas « inventer un modele » : c'est declarer l'interface documentee du CLI, exactement comme
+ * les entrees `kimi`/`gemini` declarent ce que leur adaptateur sait piloter. Si le CLI est absent,
+ * aucun modele Claude ne fonctionne de toute facon — le catalogue n'est pas ce qui le dira.
+ */
+const CLAUDE_CLI_ALIASES = ['opus', 'sonnet', 'haiku', 'fable'] as const
+
+function claudeAliasModels(): ImportedModel[] {
+  return CLAUDE_CLI_ALIASES.map((family) => ({
+    id: `claude/${family}`,
+    provider: 'claude',
+    model: family,
+    label: `Claude ${family.charAt(0).toUpperCase()}${family.slice(1)} (dernier) · CLI`,
+    reasoningEfforts: [...CLAUDE_EFFORTS],
+    defaultReasoningEffort: family === 'haiku' ? 'medium' : 'high'
+  }))
+}
+
 async function discoverClaudeModels(fetchFn: typeof fetch): Promise<DiscoveryResult> {
-  // PLUS DE REPLI STATIQUE. La liste Claude vit dans le service de modeles ; une copie figee dans le
-  // code MENT des qu'Anthropic publie un modele. Constate le 2026-07-30 : sur un poste sans ce service,
-  // Agent Studio affichait `opus-4-6` comme etant le meilleur opus disponible, alors que le service
-  // en expose ONZE dont `claude-opus-5`. L'utilisateur ne voyait aucune erreur — juste une liste fausse
-  // presentee comme la verite. Rendre la liste VIDE et l'indisponibilite VISIBLE est moins nuisible
-  // qu'un mensonge silencieux : au moins on sait qu'il faut demarrer le service.
-  const fallback: DiscoveryResult = { models: [], live: false }
+  // SOCLE PORTABLE : les alias du CLI, toujours la. Plus aucun repli sur une liste figee dans le code
+  // (elle mentait des qu'un modele etait publie), et plus de dependance a un service personnel pour
+  // avoir simplement acces au dernier Opus.
+  const aliases = claudeAliasModels()
   try {
     const response = await fetchFn('http://127.0.0.1:8787/models', {
       signal: AbortSignal.timeout(2_000)
     })
-    if (!response.ok) return fallback
+    if (!response.ok) return { models: aliases, live: true }
     const payload = (await response.json()) as { data?: Array<{ id?: unknown }> }
     const discovered = (payload.data ?? [])
       .map((entry) => entry.id)
@@ -214,9 +241,14 @@ async function discoverClaudeModels(fetchFn: typeof fetch): Promise<DiscoveryRes
         reasoningEfforts: [...CLAUDE_EFFORTS],
         defaultReasoningEffort: model.includes('haiku') ? 'medium' : 'high'
       }))
-    return discovered.length > 0 ? { models: discovered, live: true } : fallback
+    // Les alias d'abord (ils suivent les publications), puis les versions EXACTES d'un service local
+    // s'il y en a un — utile pour EPINGLER une version precise, jamais requis pour avoir le dernier
+    // modele. `live` est toujours vrai : les alias sont le contrat DOCUMENTE du CLI, pas une supposition.
+    return { models: [...aliases, ...discovered], live: true }
   } catch {
-    return fallback
+    // Service absent = cas NORMAL sur un poste qui n'a pas ce projet personnel. Les alias suffisent,
+    // et c'est exactement ce qui manquait au collegue qui ne voyait pas Opus 5.
+    return { models: aliases, live: true }
   }
 }
 
@@ -346,14 +378,27 @@ export async function discoverImportedModels(
   ])
   const cacheUpdates: Partial<ModelCatalogCache> = {}
   if (codex.live) cacheUpdates.codex = codex.models
-  if (claude.live) cacheUpdates.claude = claude.models
+  // On ne met en cache que les VERSIONS reellement decouvertes, jamais les alias du CLI : ceux-ci sont
+  // disponibles en permanence (contrat du CLI), les cacher n'apporte rien et polluerait le cache d'ids
+  // qui ne sont pas des modeles mais des pointeurs vers « le dernier ».
+  const discoveredClaudeVersions = claude.models.filter((model) => model.model.startsWith('claude-'))
+  if (claude.live && discoveredClaudeVersions.length > 0) {
+    cacheUpdates.claude = discoveredClaudeVersions
+  }
   writeCatalogCache(cachePath, cacheUpdates)
   const codexModels = codex.live
     ? codex.models
     : (readCatalogCache(cachePath, 'codex') ?? codex.models)
-  const discoveredClaudeModels = claude.live
-    ? claude.models
-    : (readCatalogCache(cachePath, 'claude') ?? claude.models)
+  // Claude se compose en DEUX couches, et il fallait les separer : les alias du CLI (socle permanent,
+  // jamais caches) et les versions EXACTES (live si un service repond, sinon le dernier catalogue vu).
+  // Sans cette separation, `claude.live` etant desormais toujours vrai, le cache n'aurait plus jamais
+  // ete relu — on aurait perdu les versions epinglees des qu'un service se taisait.
+  const claudeAliases = claude.models.filter((model) => !model.model.startsWith('claude-'))
+  const claudeVersions =
+    discoveredClaudeVersions.length > 0
+      ? discoveredClaudeVersions
+      : (readCatalogCache(cachePath, 'claude') ?? [])
+  const discoveredClaudeModels = [...claudeAliases, ...claudeVersions]
   return [
     ...codexModels,
     ...uniqueModels(discoveredClaudeModels),

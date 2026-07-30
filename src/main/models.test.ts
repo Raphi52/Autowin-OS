@@ -41,10 +41,14 @@ describe('catalogue Agents dynamique', () => {
       noCodexModels
     )
 
-    // `gpt-5.6-terra` a disparu de cette liste : le seed statique codex n'existe plus, et ce test ne
-    // fournit AUCUN modele codex (`noCodexModels`). Ne restent que le live claude + les declarations
-    // de capacite kimi/gemini, qui n'ont pas de source dynamique.
+    // Ordre du catalogue : codex (aucun ici, `noCodexModels`), puis les ALIAS du CLI — le socle
+    // portable, present sur toute machine qui a le CLI —, puis les versions EXACTES qu'un service
+    // local expose (pour epingler), puis kimi/gemini qui n'ont pas de source dynamique.
     expect(models.map((model) => model.model)).toEqual([
+      'opus',
+      'sonnet',
+      'haiku',
+      'fable',
       'claude-fable-5',
       'claude-opus-4-8',
       'kimi-code/kimi-for-coding',
@@ -69,13 +73,15 @@ describe('catalogue Agents dynamique', () => {
     )
   })
 
-  it('bridge indisponible → AUCUN modèle claude inventé (plus de repli statique)', async () => {
-    // Contrat INVERSÉ le 2026-07-30, et c'est le but. L'ancien repli affichait `opus-4-6` comme
-    // meilleur opus disponible sur un poste sans le service, alors que celui-ci expose `opus-5` :
-    // une liste périmée présentée comme la vérité, sans le moindre signal. Une liste VIDE se voit et
-    // se répare ; une liste fausse se croit.
+  it('service local absent → les ALIAS du CLI restent : le dernier Opus est accessible partout', async () => {
+    // LE cas du collegue (2026-07-30) : il ne voyait pas Opus 5. La cause n'etait pas qu'Opus 5 lui
+    // etait indisponible — il l'etait parfaitement via son CLI — mais que la liste venait d'un service
+    // PERSONNEL (`claude-bridge` de Hermes, dans le %LOCALAPPDATA% d'un seul poste). Sans ce projet
+    // perso, l'ancien code retombait sur un seed fige a `opus-4-6`.
+    // Les alias du CLI (`--model opus`) resolvent COTE SERVEUR vers le dernier modele : MESURE reelle,
+    // `--model opus` a rendu `claude-opus-5`. Aucun service tiers requis.
     const fetchFn = vi.fn(async () => {
-      throw new Error('bridge hors ligne')
+      throw new Error('service local absent')
     })
 
     const models = await discoverImportedModels(
@@ -84,7 +90,11 @@ describe('catalogue Agents dynamique', () => {
       noCodexModels
     )
 
-    expect(models.some((model) => model.provider === 'claude')).toBe(false)
+    const claude = models.filter((model) => model.provider === 'claude').map((model) => model.model)
+    expect(claude).toEqual(['opus', 'sonnet', 'haiku', 'fable'])
+    // Aucun id VERSIONNE n'est invente : on ne pretend pas savoir quelle version le CLI choisira.
+    expect(claude.some((model) => /^claude-/.test(model))).toBe(false)
+    // Codex n'a pas d'alias equivalent : sans listing, aucun modele codex.
     expect(models.some((model) => model.provider === 'codex')).toBe(false)
     // Les providers SANS source dynamique restent : leurs entrées sont la capacité de l'adaptateur,
     // pas une copie d'un catalogue distant qui pourrait avoir bougé.
@@ -133,6 +143,11 @@ describe('catalogue Agents dynamique', () => {
     expect(models.map((model) => model.model)).toEqual([
       'gpt-5.6-sol',
       'gpt-5.4-mini',
+      // Les alias du CLI Claude sont le socle portable : presents quoi que rende le service local.
+      'opus',
+      'sonnet',
+      'haiku',
+      'fable',
       'claude-fable-5',
       'kimi-code/kimi-for-coding',
       'Gemini 3.5 Flash (Low)',
@@ -199,16 +214,20 @@ describe('cache disque du dernier catalogue vu', () => {
     expect(JSON.parse(readFileSync(cachePath, 'utf8')).claude).toHaveLength(2)
   })
 
-  it('API KO et cache VIDE → aucun modèle claude/codex, rien d’inventé', async () => {
-    // Le cas de ton collegue : premiere ouverture sur une machine ou le service de modeles ne tourne
-    // pas. Avant, il recevait le seed (`opus-4-6`) presente comme le catalogue reel. Desormais il
-    // recoit RIEN pour ces deux voies — l'absence est la seule reponse honnete.
+  it('API KO et cache VIDE → les alias du CLI, et AUCUN id versionne invente', async () => {
+    // Machine vierge, aucun service local, aucun cache : exactement le poste du collegue. Il obtient
+    // desormais `opus` — qui resout vers le dernier Opus cote serveur — au lieu d'un `opus-4-6` fige
+    // que personne n'avait choisi. Et aucun id VERSIONNE n'est fabrique : on ne pretend pas savoir
+    // quelle version le CLI retiendra.
     const offline = await discoverImportedModels(
       deadFetch as unknown as typeof fetch,
       makeCachePath(),
       noCodexModels
     )
-    expect(offline.filter((m) => m.provider === 'claude')).toEqual([])
+    const claude = offline.filter((m) => m.provider === 'claude').map((m) => m.model)
+    expect(claude).toEqual(['opus', 'sonnet', 'haiku', 'fable'])
+    expect(claude.some((model) => /^claude-/.test(model))).toBe(false)
+    // Codex n'a pas d'alias equivalent cote CLI : sans listing ni cache, aucun modele codex.
     expect(offline.filter((m) => m.provider === 'codex')).toEqual([])
     expect(offline.some((m) => m.provider === 'gemini')).toBe(true)
   })
