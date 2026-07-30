@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
+import { amitelBrainRoot, amitelWorkspaces } from '../amitel-paths'
 import {
   normalize,
   topByDegree,
@@ -39,7 +40,8 @@ export interface BrainNoteSearchResult {
   themes: string[]
 }
 
-export const AMITEL_BRAIN_ROOT = '\\\\ged2\\rig\\Projets IA\\Amitel Brain'
+/** Racine du Brain — SOURCE UNIQUE dans `amitel-paths.ts`, surchargeable par `AMITEL_BRAIN_ROOT`. */
+export const AMITEL_BRAIN_ROOT = amitelBrainRoot()
 export const AMITEL_BRAIN_THEMES: BrainTheme[] = [
   { id: 'category/brain', label: 'Brain' },
   { id: 'category/rig', label: 'Comprendre RIG' },
@@ -577,14 +579,16 @@ function resolveWikiTarget(
 function allowedReadRoots(): string[] {
   const home = process.env.USERPROFILE ?? '.'
   const appData = process.env.APPDATA ?? join(home, 'AppData', 'Roaming')
+  // `C:\Nouveau dossier` a ete RETIRE de cette liste le 2026-07-29. Ce n'etait pas un simple residu
+  // de bricolage : c'est une liste blanche ANTI-TRAVERSAL, donc un nom de dossier generique y offrait
+  // un droit de LECTURE sur tout ce que quiconque y deposerait. Les racines d'entreprise viennent
+  // maintenant de la source unique `amitel-paths.ts`, surchargeable par environnement.
   return [
-    '\\\\ged2\\rig\\Projets IA\\Amitel Brain',
+    amitelBrainRoot(),
     join(home, '.graphify'),
     join(home, '.claude', 'runs'), // RUN.md du pipeline (vue Workflow)
     join(appData, 'autowin-os', 'runs'), // RUN.md créés par les conversations Autowin
-    'C:\\Nouveau dossier',
-    'C:\\Amitel',
-    'C:\\Code RIG'
+    ...amitelWorkspaces()
   ].map((p) => p.toLowerCase())
 }
 

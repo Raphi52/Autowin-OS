@@ -12,9 +12,11 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { amitelBrainTooling } from './amitel-paths'
 
-/** Défaut d'intégration Amitel (surclassable par AUTOWIN_BRAIN_TOOLING). */
-const DEFAULT_BRAIN_TOOLING = '\\\\ged2\\rig\\Projets IA\\Amitel Brain\\tooling'
+// Le chemin du tooling vient de la SOURCE UNIQUE `amitel-paths.ts`, ou il est DERIVE de la racine du
+// Brain. Avant, les deux litteraux etaient independants : surcharger la racine laissait le tooling
+// pointer ailleurs, et rien ne signalait la divergence.
 
 export interface BrainLaunchResult {
   status: 'already-up' | 'starting' | 'unavailable'
@@ -71,7 +73,7 @@ export function buildBrainLaunchCommand(
 let attempted = false
 
 export function resolveBrainTooling(env: NodeJS.ProcessEnv = process.env): string {
-  return env.AUTOWIN_BRAIN_TOOLING || DEFAULT_BRAIN_TOOLING
+  return amitelBrainTooling(env)
 }
 
 /** Réarme la tentative (ex. brain repassé up puis re-tombé, ou déclenchement manuel explicite). */

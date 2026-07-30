@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { readBoundedUtf8FileWithin } from './bounded-file-read'
 import { AUTOWIN_WORKSPACE_ENV, legacyWorkspaceEnvName } from '../shared/app-identity'
+import { amitelWorkspaces } from './amitel-paths'
 
 export type BehaviourEngine = 'codex' | 'claude' | 'autowin'
 export type BehaviourState = 'active' | 'conditional' | 'shadowed' | 'declared' | 'injected'
@@ -54,8 +55,11 @@ const EXCLUDED_DIRECTORIES = new Set([
 export function defaultBehaviourWorkspace(): string {
   const configured = process.env[AUTOWIN_WORKSPACE_ENV] ?? process.env[legacyWorkspaceEnvName()]
   if (configured && existsSync(configured)) return resolve(configured)
-  const amitelWorkspace = 'C:\\Code RIG'
-  return existsSync(amitelWorkspace) ? amitelWorkspace : process.cwd()
+  // Repli d'entreprise : le PREMIER workspace connu qui existe reellement sur cette machine. La liste
+  // vient de la source unique `amitel-paths.ts` (surchargeable) — avant, `C:\Code RIG` etait ecrit en
+  // dur ici, donc l'app n'avait aucun repli utilisable ailleurs qu'a Amitel.
+  const amitelWorkspace = amitelWorkspaces().find((candidate) => existsSync(candidate))
+  return amitelWorkspace ?? process.cwd()
 }
 
 function normalizeQuery(query?: string | BehaviourQuery): Required<BehaviourQuery> {
