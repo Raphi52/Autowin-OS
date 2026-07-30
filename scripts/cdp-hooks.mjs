@@ -1,4 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
+import { assertHooksProof } from './cdp-proof-validation.mjs'
 
 const port = process.env.AUTOWIN_CDP_PORT || '9223'
 const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json()
@@ -72,13 +73,12 @@ const state = await evaluate(`({
   hookCount: document.querySelectorAll('.capability-cockpit .control-list .control-row').length,
   text: document.querySelector('.capability-cockpit')?.innerText
 })`)
-if (!state.selectedTab?.startsWith('Hooks') || state.selectedSource !== 'Codex') {
-  throw new Error(`État Hooks inattendu: ${JSON.stringify(state)}`)
-}
+assertHooksProof(state)
 
 const screenshot = await send('Page.captureScreenshot', { format: 'png' })
 mkdirSync('C:/Amitel/Autowin OS/artifacts', { recursive: true })
-const output = process.env.AUTOWIN_HOOKS_SCREENSHOT || 'C:/Amitel/Autowin OS/artifacts/hooks-codex.png'
+const output =
+  process.env.AUTOWIN_HOOKS_SCREENSHOT || 'C:/Amitel/Autowin OS/artifacts/hooks-codex.png'
 writeFileSync(output, Buffer.from(screenshot.data, 'base64'))
 console.log(JSON.stringify({ state, output }, null, 2))
 socket.close()
