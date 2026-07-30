@@ -31,6 +31,7 @@ import {
 import { APP_DESTINATIONS, resolveAppLocation, type AppDestination } from '../shared/navigation'
 import { collectOrchestrationContext } from './orchestration-context'
 import { rememberFact } from './brain-remember'
+import { noteRemembered } from './session-memory-echo'
 import { brainServiceToken } from './brain-retrieval'
 import { classifyRegime } from './task-regime'
 
@@ -920,12 +921,24 @@ export class AppCommandBus {
         return await this.runVerify()
       case 'brain_query':
         return await this.runBrainQuery(a.question)
-      case 'remember':
-        return await rememberFact(a, {
+      case 'remember': {
+        const outcome = await rememberFact(a, {
           token: brainServiceToken(),
           authorAgent: 'autowin-os',
           model: this.os.roles.getBinding('orchestrator').model ?? 'autowin'
         })
+        // ÉCHO : sans ça, le modèle écrit sans jamais relire — la moitié manquante de la mécanique de
+        // claude.exe. On n'alimente l'écho QUE sur un dépôt réel, jamais sur un refus.
+        if (outcome.stored) {
+          const convId = (conversationId ?? this.activeConversationId) ?? ''
+          noteRemembered(convId, {
+            title: String(a.title ?? ''),
+            body: String(a.fact ?? a.body ?? ''),
+            note: outcome.note
+          })
+        }
+        return outcome
+      }
       case 'edit_file':
         return this.runEditFile({ path: a.path, oldText: a.oldText, newText: a.newText })
       default:

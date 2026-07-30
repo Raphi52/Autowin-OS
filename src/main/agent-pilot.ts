@@ -3,6 +3,8 @@ import type { RoleModelConfig } from './roles'
 import type { AppCommandBus } from './commands'
 import type { Message, PromptEnvelope, SendOptions, Usage } from './providers/types'
 import { parseModelQuestion, type ModelQuestion } from './model-questions'
+import { rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
+import { buildTurnMessages } from './chat-turn-messages'
 import { VisibleStreamFilter } from '../shared/stream-markup-filter'
 import type { ConversationAuthorityMode } from './conversation-capabilities'
 import { randomUUID } from 'node:crypto'
@@ -292,22 +294,21 @@ export class AgentPilot {
     const lastUserMessage = [...history].reverse().find((m) => m.role === 'user')
     // Le contexte Brain vit ICI (et non dans le system) pour ne pas casser le préfixe cachable.
     const brainContext = retrievedContext ? `CONNAISSANCE RÉCUPÉRÉE:\n${retrievedContext}` : ''
-    const convo: string[] = resumeSessionId
-      ? [
-          `ÉTAT DE L'APP:\n${JSON.stringify(snapshot)}`,
-          brainContext,
-          `Suite de NOTRE conversation en cours (tu en connais déjà l'historique par ta session : ne le redemande pas).`,
-          `UTILISATEUR: ${lastUserMessage?.content ?? ''}`
-        ]
-      : [
-          `ÉTAT DE L'APP:\n${JSON.stringify(snapshot)}`,
-          brainContext,
-          ...history.map((m) => `${m.role === 'user' ? 'UTILISATEUR' : 'TOI'}: ${m.content}`)
-        ]
-    // Une entrée vide (pas de contexte Brain récupéré) ne doit pas laisser de trou dans le prompt.
-    const convoFiltered = convo.filter((entry) => entry.trim().length > 0)
-    convo.length = 0
-    convo.push(...convoFiltered)
+    // ÉCHO DE MÉMOIRE — la moitié manquante de la mécanique de claude.exe : ce que le modèle a retenu
+    // dans CE fil lui est remis. Ici et non dans le system, pour la même raison que le contexte Brain :
+    // un contenu variable dans le préfixe tue le cache. Plafonné à ~1 500 car. — la lecture automatique
+    // des fiches avait été coupée parce qu'elle pesait 552 Ko par appel.
+    const memoryEcho = sessionMemoryBlock(rememberedFacts(conversationId))
+    // L'assemblage vit dans `chat-turn-messages.ts` pour être testable sur sa SORTIE plutôt que grepable
+    // dans ce fichier. Le tableau reste mutable : la boucle d'itérations y ajoute les tours suivants.
+    const convo: string[] = buildTurnMessages({
+      snapshot,
+      brainContext,
+      memoryEcho,
+      history,
+      resumeSessionId,
+      lastUserMessage: lastUserMessage?.content
+    })
     const currentAttachments = history.at(-1)?.attachments
 
     // Coût cumulé du tour (toutes les itérations LLM du même message utilisateur).

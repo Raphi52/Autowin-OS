@@ -1,7 +1,18 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { decideRemember, rememberFact, sourceLocatorProblem } from './brain-remember'
+import {
+  REMEMBER_BODY_MAX,
+  REMEMBER_SCOPE_MAX,
+  REMEMBER_SOURCE_SCHEMES,
+  REMEMBER_TAG_MAX,
+  decideRemember,
+  forgetSessionDeposits,
+  likelySecretShape,
+  rememberFact,
+  sourceLocatorProblem,
+  truncateFact
+} from './brain-remember'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 
 /**
@@ -20,6 +31,11 @@ const FAIT_VALIDE = {
   // Forme VERIFIABLE, imposee par le serveur vivant : un chemin de depot relatif est refuse.
   source: 'git:src/main/providers/npm-global-resolve.ts@9218eaf'
 }
+
+// L'anti-doublon de session vit dans le module : sans ce reset, un dépôt réussi dans un test rendrait
+// « déjà déposé » dans le suivant. Constaté pour de vrai en ajoutant la garde (6 tests cassés d'un coup) —
+// c'est la preuve qu'elle mord, et la raison pour laquelle la production peut compter dessus.
+beforeEach(forgetSessionDeposits)
 
 describe('decideRemember — refuser TÔT, et en disant pourquoi', () => {
   it('un fait complet est accepté et normalisé', () => {
@@ -179,7 +195,12 @@ describe('câblage — la commande existe et le prompt enseigne quand l’employ
     const prompt = buildChatPilotagePrompt([])
     expect(prompt).toMatch(/candidat/i)
     expect(prompt).toMatch(/r.indexation/i)
-    expect(prompt).toMatch(/pas au tour suivant/i)
+    // fix-ok: cette assertion exigeait « pas au tour suivant ». C'ETAIT vrai, et ce ne l'est plus : l'echo
+    // de session (fonctionnalite livree apres l'audit du 2026-07-30, defaut D9) rend le fait relisible
+    // DANS CE FIL. L'exigence ne baisse pas — le prompt doit toujours dire la mecanique reelle — mais
+    // celle-ci a desormais DEUX portees, et c'est la confusion entre les deux qui serait le mensonge.
+    expect(prompt).toMatch(/DANS CETTE CONVERSATION/)
+    expect(prompt).toMatch(/POUR LES AUTRES/)
   })
 
   it('la LECTURE reste couverte par `brain_query` — pas de régression', () => {
@@ -229,9 +250,14 @@ describe('contrat réel — la réponse de succès est un contexte signé', () =
     expect(outcome.detail).not.toMatch(/erreur|échec|injoignable/i)
   })
 
-  it('un 200 SANS contexte reste un refus (aucun succès présumé)', async () => {
+  it('un 200 SANS contexte n’est ni un succès ni un refus — état INCONNU', async () => {
     const outcome = await rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn: reponse({}) })
     expect(outcome.stored).toBe(false)
+    // Le defaut corrige : c'etait annonce « refuse par le Brain : HTTP 200 ». Un 200 peut avoir ECRIT ;
+    // dire « refuse » pousse a retenter, et le serveur ne dedoublonne pas inbox/.
+    expect(outcome.unknown).toBe(true)
+    expect(outcome.detail).not.toMatch(/refus/i)
+    expect(outcome.detail).toMatch(/inconnu/i)
   })
 })
 
@@ -277,5 +303,339 @@ describe('câblage — la description dit les FORMES au modèle', () => {
     const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
     expect(source).toContain('git:<chemin>@<sha>')
     expect(source).toContain('ticket:ABC-123')
+  })
+})
+
+/**
+ * DÉFAUTS DE L'AUDIT DU 2026-07-30 — chacun avait un scénario d'échec SILENCIEUX.
+ *
+ * Deux ont été établis en confrontant le serveur VIVANT, pas en relisant le code :
+ *  - `inbox/` n'est PAS indexé, donc le garde anti-doublon du serveur (`NEAR_DUP_DENSE = 0.82`, comparé
+ *    au savoir CANONIQUE) ne voit pas les candidats en attente → deux dépôts identiques passent tous les
+ *    deux. Corroboré par deux fiches jumelles réelles déposées à 09:47 et 09:48 le 2026-07-30.
+ *  - le garde secrets du serveur borne ses mots-clés par `\b`, et `_` est un caractère de mot :
+ *    `aws_secret_access_key=…` lui échappe.
+ */
+describe('audit 2026-07-30 — les échecs silencieux', () => {
+  const contexteSigne = (chemin: string): typeof fetch =>
+    vi.fn(async () => new Response(JSON.stringify({ context: chemin }), { status: 200 })) as unknown as typeof fetch
+
+  it('un fait TRONQUÉ le dit — sinon le candidat peut affirmer l’inverse du fait voulu', async () => {
+    // La negation tombe APRES la borne : une coupe muette publierait le contraire.
+    const fait = `${'Le verrou tient. '.repeat(260)}Mais il ne doit PAS être posé avant la migration.`
+    expect(fait.length).toBeGreaterThan(REMEMBER_BODY_MAX)
+    const decision = decideRemember({ ...FAIT_VALIDE, fact: fait })
+    expect(decision.allowed).toBe(true)
+    if (!decision.allowed) return
+    expect(decision.truncated).toBe(true)
+    const outcome = await rememberFact(
+      { ...FAIT_VALIDE, fact: fait },
+      { token: 'jeton', fetchFn: contexteSigne('C:/brain/inbox/x.md'), deposited: new Map() }
+    )
+    expect(outcome.stored).toBe(true)
+    expect(outcome.detail).toMatch(/tronqu/i)
+  })
+
+  it('un fait COURT ne prétend pas être tronqué', () => {
+    const decision = decideRemember(FAIT_VALIDE)
+    expect(decision.allowed).toBe(true)
+    if (!decision.allowed) return
+    expect(decision.truncated).toBe(false)
+  })
+
+  it('la troncature coupe à une frontière, pas au milieu d’un mot', () => {
+    const { body, truncated } = truncateFact(`${'phrase entière ici. '.repeat(300)}fin`, 200)
+    expect(truncated).toBe(true)
+    expect(body).toMatch(/\[…tronqué\]$/)
+    expect(body).not.toMatch(/enti [[]/)
+  })
+
+  it('un `fact` vide bascule sur `body` au lieu de refuser un contenu qui existe', () => {
+    const decision = decideRemember({ ...FAIT_VALIDE, fact: '', body: 'le vrai contenu du fait' })
+    expect(decision.allowed).toBe(true)
+    if (!decision.allowed) return
+    expect(decision.body).toBe('le vrai contenu du fait')
+  })
+
+  it('un délai dépassé n’est PAS « injoignable » — le serveur a peut-être écrit', async () => {
+    // Un VRAI abort : on attend que la borne déclenche le signal, comme en production. Ma première version
+    // jetait une AbortError sans jamais abandonner le signal — elle validait donc une fiction, et c'est
+    // elle qui est tombée quand la détection est passée du texte du message à l'état réel du signal.
+    const abort: typeof fetch = vi.fn(
+      (_url: unknown, init: { signal: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener('abort', () => {
+            const erreur = new Error('The operation was aborted')
+            erreur.name = 'AbortError'
+            reject(erreur)
+          })
+        })
+    ) as unknown as typeof fetch
+    const outcome = await rememberFact(FAIT_VALIDE, {
+      token: 'jeton',
+      fetchFn: abort,
+      timeoutMs: 5,
+      deposited: new Map()
+    })
+    expect(outcome.unknown).toBe(true)
+    expect(outcome.detail).not.toMatch(/injoignable/i)
+    expect(outcome.detail).toMatch(/inconnu/i)
+  })
+
+  it('une vraie panne réseau reste « injoignable » — la distinction doit DISCRIMINER', async () => {
+    const mort: typeof fetch = vi.fn(async () => {
+      throw new Error('connect ECONNREFUSED 127.0.0.1:8765')
+    }) as unknown as typeof fetch
+    const outcome = await rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn: mort, deposited: new Map() })
+    expect(outcome.unknown).toBeFalsy()
+    expect(outcome.detail).toMatch(/injoignable/i)
+  })
+
+  it('le MÊME fait déposé deux fois ne part qu’une fois — le serveur ne dédoublonne pas inbox/', async () => {
+    const memoire = new Map<string, string>()
+    const fetchFn = contexteSigne('C:/brain/inbox/20260730-fait.md')
+    const premier = await rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn, deposited: memoire })
+    const second = await rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn, deposited: memoire })
+    expect(premier.stored).toBe(true)
+    expect(second.stored).toBe(false)
+    expect(second.detail).toMatch(/d[ée]j[àa] d[ée]pos/i)
+    // Discriminant : le reseau n'a ete appele QU'UNE fois.
+    expect((fetchFn as unknown as { mock: { calls: unknown[] } }).mock.calls).toHaveLength(1)
+  })
+
+  it('un fait DIFFÉRENT part bien, même après un dépôt — l’anti-doublon ne bloque pas tout', async () => {
+    const memoire = new Map<string, string>()
+    const fetchFn = contexteSigne('C:/brain/inbox/a.md')
+    await rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn, deposited: memoire })
+    const autre = await rememberFact(
+      { ...FAIT_VALIDE, title: 'Un tout autre fait', fact: 'un contenu sans rapport' },
+      { token: 'jeton', fetchFn, deposited: memoire }
+    )
+    expect(autre.stored).toBe(true)
+  })
+
+  it('un secret que le garde DISTANT laisse passer est refusé ICI', () => {
+    // Verifie sur le serveur vivant : `\bsecret\b` ne matche pas au travers d'un underscore, et une cle
+    // d'acces nue ne matche aucun motif. Un essai live avait fait ACCEPTER un tel corps.
+    for (const fuite of [
+      'la config contient aws_secret_access_key=wJalrXUtnFEMI/K7MDENGbPxRfiCYEXAMPLEKEY',
+      'clé trouvée : AKIAIOSFODNN7EXAMPLE',
+      // Signature réaliste : le motif partagé exige ≥8 caractères par segment. Ma fixture d'origine
+      // s'arrêtait à « abc » — elle n'aurait jamais ressemblé à un vrai jeton.
+      'jeton eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27u'
+    ]) {
+      expect(likelySecretShape(fuite)).toBeDefined()
+      expect(decideRemember({ ...FAIT_VALIDE, fact: fuite }).allowed).toBe(false)
+    }
+  })
+
+  it('un fait ORDINAIRE n’est pas pris pour un secret — le garde doit DISCRIMINER', () => {
+    expect(likelySecretShape(FAIT_VALIDE.fact)).toBeUndefined()
+    expect(likelySecretShape('le token de session expire au bout de 30 minutes')).toBeUndefined()
+    expect(decideRemember(FAIT_VALIDE).allowed).toBe(true)
+  })
+
+  it('`scope` et chaque tag sont bornés comme le titre l’est déjà', () => {
+    const decision = decideRemember({
+      ...FAIT_VALIDE,
+      scope: 'x'.repeat(500),
+      tags: ['y'.repeat(500), 'court']
+    })
+    expect(decision.allowed).toBe(true)
+    if (!decision.allowed) return
+    expect(decision.scope.length).toBe(REMEMBER_SCOPE_MAX)
+    expect(decision.tags[0]?.length).toBe(REMEMBER_TAG_MAX)
+  })
+
+  it('la forme meeting est STRICTE — du texte en trop ne passe plus', () => {
+    expect(sourceLocatorProblem('meeting:2026-07-30')).toBeUndefined()
+    expect(sourceLocatorProblem('meeting:2026-07-30 et n’importe quoi ensuite')).toBeDefined()
+  })
+
+  it('un chemin Windows SANS préfixe dit qu’il manque le préfixe, pas « schéma c inconnu »', () => {
+    const probleme = sourceLocatorProblem('C:\\Users\\moi\\fichier.ts')
+    expect(probleme).toBeDefined()
+    expect(probleme).not.toMatch(/sch[ée]ma/i)
+    expect(probleme).toMatch(/pr[ée]fixe/i)
+    expect(sourceLocatorProblem('\\\\ged2\\rig\\note.md')).toMatch(/pr[ée]fixe/i)
+  })
+})
+
+/**
+ * CYCLE 2 DE L'AUDIT — les régressions que MES correctifs avaient introduites.
+ *
+ * Deux d'entre elles étaient des FAUX REFUS : le pire des deux sens ici, puisqu'un second garde tourne
+ * derrière et qu'un refus injustifié empêche de retenir un fait valide.
+ */
+describe('audit 2026-07-30 cycle 2 — les faux refus que j’avais créés', () => {
+  it('un chemin de dépôt AVEC UN ESPACE est accepté par git: — ce dépôt s’appelle « Autowin OS »', () => {
+    // Mon premier ancrage (`^[^\s]+@`) interdisait l'espace : le cas le plus courant de cette machine
+    // devenait un refus, et aucun test ne l'attrapait puisqu'ils utilisaient tous un chemin sans espace.
+    expect(sourceLocatorProblem('git:C:/Amitel/Autowin OS/src/main/brain-remember.ts@ce4a595')).toBeUndefined()
+    // L'ancrage doit tout de même mordre : un sha trop court reste refusé.
+    expect(sourceLocatorProblem('git:src/main/x.ts@abc')).toBeDefined()
+    // Et un locator multiligne ne doit pas passer par sa seule dernière ligne.
+    expect(sourceLocatorProblem('git:bidon\nsrc/x.ts@9218eaf')).toBeDefined()
+  })
+
+  it('un fait technique légitime nommant une clé n’est PAS pris pour un secret', () => {
+    // Les 3 entrées nommées par l'audit : un en-tête, un nom de variable d'environnement, un TTL.
+    for (const legitime of [
+      'csrf_token_header: X-CSRF-Token',
+      'db_password_env: RIG_DB_PASSWORD',
+      'refresh_token_ttl = 3600000000'
+    ]) {
+      expect(likelySecretShape(legitime)).toBeUndefined()
+      expect(decideRemember({ ...FAIT_VALIDE, fact: legitime }).allowed).toBe(true)
+    }
+  })
+
+  it('un fait qui NOMME une clé sans en donner la valeur est ACCEPTÉ', () => {
+    // La classe de faux refus qui a récidivé DEUX fois : c'est le cœur de ce que la fonctionnalité doit
+    // pouvoir retenir (documenter un en-tête, un nom de variable, un comportement). Ces 8 entrées viennent
+    // du cycle 3 de l'audit, où elles étaient toutes refusées.
+    for (const legitime of [
+      "le champ token: obligatoire dans l'entête de /ingest",
+      "api_key: a demander a l'administrateur du Brain",
+      'password: stocke dans Keepass, jamais dans le depot',
+      'secret: nom du champ, pas sa valeur',
+      'token = null quand la session expire',
+      'config: token=<TON_JETON>',
+      'AMITEL_BRAIN_TOKEN=... (valeur a definir)',
+      'Bearer suivi du jeton, dans l’en-tête Authorization'
+    ]) {
+      expect(likelySecretShape(legitime)).toBeUndefined()
+      expect(decideRemember({ ...FAIT_VALIDE, fact: legitime }).allowed).toBe(true)
+    }
+  })
+
+  it('mais un mot-clé suivi d’une VRAIE valeur est refusé — le garde doit DISCRIMINER', () => {
+    expect(likelySecretShape('token=aB3xKq9ZmR7tPw2LnV5c')).toBeDefined()
+    expect(likelySecretShape('password: Hunter2Hunter2Hunter2x9')).toBeDefined()
+  })
+
+  it('les formes de jetons connues sont couvertes — sans les recopier ici', () => {
+    // Réutilise `SECRET_VALUE` de trace-redact.ts au lieu de dupliquer ses motifs (défaut « dup »).
+    //
+    // Les fixtures sont des PLACEHOLDERS explicites, jamais des jetons d'apparence réelle : ma première
+    // version en portait qui en avaient l'air, et l'analyse de secrets de GitHub a REFUSÉ la poussée
+    // (GH013, « Slack API Token », le 2026-07-30). Un détecteur de secrets attrapé par un détecteur de
+    // secrets. La bonne réponse n'était pas d'autoriser l'exception mais de rendre la fixture
+    // manifestement factice : elle doit exercer NOTRE motif, pas ressembler à un identifiant.
+    for (const fuite of [
+      'ghp_EXEMPLE_NON_VALIDE_A_NE_PAS_UTILISER_0000',
+      'xoxb-EXEMPLE-NON-VALIDE-0000',
+      'sk-proj-EXEMPLE-NON-VALIDE-0000',
+      // Celle-ci est l'exemple officiel de la documentation AWS, donc sans ambiguïté.
+      'clé AKIAIOSFODNN7EXAMPLE trouvée dans le fichier',
+      'aws_secret_access_key=exemple0non0valide0a0ne0pas0utiliser'
+    ]) {
+      expect(likelySecretShape(fuite)).toBeDefined()
+    }
+  })
+
+  it('le garde de secret ne garde pas d’état entre deux appels', () => {
+    // `SECRET_VALUE` porte le drapeau `g` : sans remise à zéro de `lastIndex`, un appel sur deux échouait.
+    const fuite = 'clé AKIAIOSFODNN7EXAMPLE trouvée'
+    expect(likelySecretShape(fuite)).toBeDefined()
+    expect(likelySecretShape(fuite)).toBeDefined()
+    expect(likelySecretShape(fuite)).toBeDefined()
+  })
+
+  it('une panne réseau qui contient « abort » reste une panne, pas un délai dépassé', async () => {
+    // `read ECONNABORTED` contient « abort » : décider sur le TEXTE le classait « délai dépassé » et
+    // dissuadait un retry légitime. La décision porte désormais sur l'état réel du signal.
+    const abortee: typeof fetch = vi.fn(async () => {
+      throw new Error('read ECONNABORTED 127.0.0.1:8765')
+    }) as unknown as typeof fetch
+    const outcome = await rememberFact(FAIT_VALIDE, {
+      token: 'jeton',
+      fetchFn: abortee,
+      deposited: new Map()
+    })
+    expect(outcome.unknown).toBeFalsy()
+    expect(outcome.detail).toMatch(/injoignable/i)
+  })
+
+  it('la troncature RESPECTE la borne, marque comprise', () => {
+    for (const cas of ['A'.repeat(5_000), `${'mot '.repeat(1_500)}fin`, `Court. ${'x'.repeat(5_000)}`]) {
+      const { body, truncated } = truncateFact(cas)
+      expect(truncated).toBe(true)
+      expect(body.length).toBeLessThanOrEqual(REMEMBER_BODY_MAX)
+    }
+    // Les bornes exactes : 4 000 passe intact, 4 001 est tronqué.
+    expect(truncateFact('x'.repeat(REMEMBER_BODY_MAX)).truncated).toBe(false)
+    expect(truncateFact('x'.repeat(REMEMBER_BODY_MAX + 1)).truncated).toBe(true)
+    // Et sous la longueur de la marque, la marque ne doit pas faire dépasser la borne.
+    for (const petit of [0, 5, 11, 12]) {
+      expect(truncateFact('x'.repeat(100), petit).body.length).toBeLessThanOrEqual(petit)
+    }
+  })
+
+  it('au-delà de 8 étiquettes, l’amputation est signalée', () => {
+    const decision = decideRemember({
+      ...FAIT_VALIDE,
+      tags: Array.from({ length: 12 }, (_v, i) => `tag${i}`)
+    })
+    expect(decision.allowed).toBe(true)
+    if (!decision.allowed) return
+    expect(decision.tags).toHaveLength(8)
+    expect(decision.truncated).toBe(true)
+  })
+
+  it('une UNC sans préfixe enseigne le préfixe dans LES DEUX écritures', () => {
+    // Une UNC ne contient aucun deux-points : le garde devait passer AVANT ce test, sinon il ne servait à rien.
+    expect(sourceLocatorProblem('//ged2/rig/Projets IA/note.md')).toMatch(/pr[ée]fixe manquant/i)
+    expect(sourceLocatorProblem('\\\\ged2\\rig\\note.md')).toMatch(/pr[ée]fixe manquant/i)
+    // Contre-controle : une url legitime n'est pas affectee.
+    expect(sourceLocatorProblem('url:https://exemple.fr/x')).toBeUndefined()
+  })
+
+  it('une fin de phrase TRÈS tôt ne fait pas jeter l’essentiel du fait', () => {
+    // Justifie le seuil de moitié, que l'audit soupçonnait d'être un réglage arbitraire : sans lui, on
+    // couperait à « Bref. » et on perdrait tout le reste.
+    const { body } = truncateFact(`Bref. ${'du contenu qui compte '.repeat(50)}`, 200)
+    expect(body.length).toBeGreaterThan(100)
+  })
+
+  it('un TITRE ou une étiquette amputés sont signalés, pas coupés en silence', () => {
+    const titreLong = decideRemember({ ...FAIT_VALIDE, title: 'T'.repeat(300) })
+    expect(titreLong.allowed).toBe(true)
+    if (titreLong.allowed) expect(titreLong.truncated).toBe(true)
+    const tagLong = decideRemember({ ...FAIT_VALIDE, tags: ['y'.repeat(300)] })
+    expect(tagLong.allowed).toBe(true)
+    if (tagLong.allowed) expect(tagLong.truncated).toBe(true)
+    // Contre-controle : rien de trop long, rien de signale.
+    const normal = decideRemember({ ...FAIT_VALIDE, tags: ['cli'] })
+    if (normal.allowed) expect(normal.truncated).toBe(false)
+  })
+
+  it('une UNC en slashes sans préfixe enseigne le préfixe — c’est la forme de la GED ici', () => {
+    expect(sourceLocatorProblem('//ged2/rig/Projets IA/note.md')).toMatch(/pr[ée]fixe/i)
+  })
+})
+
+describe('câblage — le prompt enseigne toutes les formes, dont le repli session:', () => {
+  const prompt = (): string => buildChatPilotagePrompt([])
+
+  it('le repli `session:` est ENSEIGNÉ — c’est le cas de « retiens ça » sans artefact', () => {
+    // Defaut trouve INDEPENDAMMENT par les deux lentilles de fidelite : le prompt n'offrait aucune forme
+    // valide pour un fait dit a l'oral, donc le seul cas litteral de la demande echouait avant le reseau.
+    expect(prompt()).toContain('session:')
+  })
+
+  it('les 7 formes acceptées par le code sont toutes dans le prompt', () => {
+    const texte = prompt()
+    for (const schema of REMEMBER_SOURCE_SCHEMES) expect(texte).toContain(`${schema}:`)
+  })
+
+  it('`file:` porte sa contrainte (absolu) et renvoie vers git: — la forme refusée en live', () => {
+    const texte = prompt()
+    expect(texte).toMatch(/file:<chemin ABSOLU/)
+    expect(texte).toMatch(/relatif est\s+REFUS/i)
+  })
+
+  it('le prompt dit QUAND relire avec brain_query, pas seulement qu’il existe', () => {
+    expect(prompt()).toMatch(/POUR RELIRE/)
   })
 })
