@@ -16,3 +16,6 @@ agent-studio-*.png
 /sketches/*-converge/
 **/__pycache__/
 /graphify-out/
+
+# Reglages LOCAUX de Claude Code (par machine) : jamais partages.
+.claude/settings.local.json
