@@ -42,6 +42,10 @@ function api(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     conversations: vi.fn().mockResolvedValue([]),
     conversationRuns: vi.fn().mockResolvedValue([]),
+    deleteConversationRun: vi.fn().mockResolvedValue({ ok: true, kind: 'deleted' }),
+    deleteRun: vi.fn().mockResolvedValue({ ok: true }),
+    runTrace: vi.fn().mockResolvedValue(null),
+    readNodeFile: vi.fn(async (path: string) => ({ path, content: 'status: green' })),
     listRuns: vi.fn().mockResolvedValue([]),
     authorityPending: vi.fn().mockResolvedValue([]),
     topology: vi.fn().mockResolvedValue({
@@ -53,14 +57,12 @@ function api(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     onPilotEvent: vi.fn(() => vi.fn()),
     setActiveConversation: vi.fn(),
     conversationsCreate: vi.fn(),
-    routeConversationMessage: vi.fn(
-      async (conversationId: string) => ({
-        sourceConversationId: conversationId,
-        conversationId,
-        routed: false,
-        decision: { route: 'current', confidence: 1, reason: 'related' }
-      })
-    ),
+    routeConversationMessage: vi.fn(async (conversationId: string) => ({
+      sourceConversationId: conversationId,
+      conversationId,
+      routed: false,
+      decision: { route: 'current', confidence: 1, reason: 'related' }
+    })),
     pilotChat: vi.fn().mockResolvedValue({ ok: true }),
     markResponseDisplayed: vi.fn().mockResolvedValue(undefined),
     cancelPilotChat: vi.fn().mockResolvedValue(undefined),
@@ -105,6 +107,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     root = null
     container = null
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   async function mount(
@@ -263,9 +266,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
   })
 
   it('moves an unrelated message to a new active conversation before pilotChat', async () => {
-    const source = conversation('A', [
-      { role: 'user', content: 'Refais le graphe Git', ts: 1 }
-    ])
+    const source = conversation('A', [{ role: 'user', content: 'Refais le graphe Git', ts: 1 }])
     const target = conversation('B')
     const conversations = vi
       .fn()
@@ -373,6 +374,203 @@ describe('ChatView behavior under concurrent UI actions', () => {
     // Fin du tour : le drain ne doit PAS renvoyer le message déjà orienté.
     await act(async () => pilot.resolve({ ok: true }))
     expect((mockApi.pilotChat as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1)
+  })
+
+  it('affiche dans le fil le message orienté avec son état sending puis sent', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const injection = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise),
+      injectDirective: vi.fn(() => injection.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('tour actif')
+    await click('.composer-send')
+    await type('garde cette contrainte')
+    await click('.composer-send')
+    await click('.directive-queue-steer')
+
+    const receipt = container!.querySelector('.directive-receipt')
+    expect(receipt?.querySelector('.msg-body')?.textContent).toBe('garde cette contrainte')
+    expect(receipt?.querySelector('.directive-receipt-status')?.textContent).toContain(
+      'Orientation'
+    )
+
+    await act(async () => {
+      injection.resolve({ ok: true })
+      await Promise.resolve()
+    })
+    expect(
+      container!.querySelector('.directive-receipt .directive-receipt-status')?.textContent
+    ).toContain('Orienté')
+
+    await act(async () => pilot.resolve({ ok: true }))
+  })
+
+  it('ramène immédiatement dans le viewport le reçu orienté quand le fil était remonté', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const injection = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise),
+      injectDirective: vi.fn(() => injection.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('tour actif')
+    await click('.composer-send')
+    await type('rends ceci visible')
+    await click('.composer-send')
+
+    const scroll = container!.querySelector('.chat-scroll') as HTMLDivElement
+    Object.defineProperties(scroll, {
+      scrollHeight: { configurable: true, value: 1000 },
+      clientHeight: { configurable: true, value: 100 },
+      scrollTop: { configurable: true, writable: true, value: 0 }
+    })
+    const scrollTo = vi.fn()
+    scroll.scrollTo = scrollTo
+    scroll.dispatchEvent(new Event('scroll', { bubbles: true }))
+
+    await click('.directive-queue-steer')
+    await act(async () => flushAnimationFrames())
+
+    expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: 'smooth' })
+    await act(async () => injection.resolve({ ok: true }))
+    await act(async () => pilot.resolve({ ok: true }))
+  })
+
+  it('conserve tous les reçus orientés de la session sans évincer les plus anciens', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise),
+      injectDirective: vi.fn().mockResolvedValue({ ok: true })
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('tour actif')
+    await click('.composer-send')
+
+    for (let index = 0; index < 21; index += 1) {
+      await type(`directive-${index}`)
+      await click('.composer-send')
+      await click('.directive-queue-steer')
+    }
+
+    const receipts = container!.querySelectorAll('.directive-receipt')
+    expect(receipts).toHaveLength(21)
+    expect(receipts[0].querySelector('.msg-body')?.textContent).toBe('directive-0')
+    await act(async () => pilot.resolve({ ok: true }))
+  })
+
+  it('place le reçu entre la réponse déjà vue et la continuation qui suit l’orientation', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    let pilotHandler: ((event: unknown) => void) | undefined
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise),
+      injectDirective: vi.fn().mockResolvedValue({ ok: true }),
+      onPilotEvent: vi.fn((callback: (event: unknown) => void) => {
+        pilotHandler = callback
+        return vi.fn()
+      })
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('tour actif')
+    await click('.composer-send')
+    await act(async () =>
+      pilotHandler?.({
+        conversationId: 'A',
+        turnId: 'turn-chronologie',
+        kind: 'delta',
+        streamId: '0:0',
+        text: 'avant-orientation'
+      })
+    )
+    await type('contrainte chronologique')
+    await click('.composer-send')
+    await click('.directive-queue-steer')
+    await act(async () =>
+      pilotHandler?.({
+        conversationId: 'A',
+        turnId: 'turn-chronologie',
+        kind: 'delta',
+        streamId: '0:0',
+        text: ' après-orientation'
+      })
+    )
+
+    const receipt = container!.querySelector('.directive-receipt') as HTMLElement
+    const bodies = [...container!.querySelectorAll<HTMLElement>('.msg.assistant .msg-body')]
+    const before = bodies.find((body) => body.textContent?.includes('avant-orientation'))!
+    const after = bodies.find((body) => body.textContent?.includes('après-orientation'))!
+    expect(before).not.toBe(after)
+    expect(before.compareDocumentPosition(receipt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(receipt.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(mockApi.pilotChat).toHaveBeenCalledTimes(1)
+    expect(mockApi.cancelPilotChat).not.toHaveBeenCalled()
+    await act(async () => pilot.resolve({ ok: true }))
+  })
+
+  it('garde le reçu avant le flux de remplacement après un stream-reset', async () => {
+    const pilot = deferred<{ ok: boolean }>()
+    let pilotHandler: ((event: unknown) => void) | undefined
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => pilot.promise),
+      injectDirective: vi.fn().mockResolvedValue({ ok: true }),
+      onPilotEvent: vi.fn((callback: (event: unknown) => void) => {
+        pilotHandler = callback
+        return vi.fn()
+      })
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('tour actif')
+    await click('.composer-send')
+    await act(async () =>
+      pilotHandler?.({
+        conversationId: 'A',
+        turnId: 'turn-reset',
+        kind: 'delta',
+        streamId: 'ancien-flux',
+        text: 'réponse obsolète'
+      })
+    )
+    await type('nouvelle contrainte')
+    await click('.composer-send')
+    await click('.directive-queue-steer')
+    await act(async () => {
+      pilotHandler?.({
+        conversationId: 'A',
+        turnId: 'turn-reset',
+        kind: 'stream-reset',
+        streamId: 'ancien-flux'
+      })
+      pilotHandler?.({
+        conversationId: 'A',
+        turnId: 'turn-reset',
+        kind: 'delta',
+        streamId: 'nouveau-flux',
+        text: 'réponse recalculée'
+      })
+    })
+
+    const receipt = container!.querySelector('.directive-receipt') as HTMLElement
+    const replacement = [
+      ...container!.querySelectorAll<HTMLElement>('.msg.assistant .msg-body')
+    ].find((body) => !body.closest('.directive-receipt') && body.textContent?.includes('réponse'))!
+    expect(container!.textContent).not.toContain('réponse obsolète')
+    expect(
+      receipt.compareDocumentPosition(replacement) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+    expect(mockApi.pilotChat).toHaveBeenCalledTimes(1)
+    expect(mockApi.cancelPilotChat).not.toHaveBeenCalled()
+    await act(async () => pilot.resolve({ ok: true }))
   })
 
   /**
@@ -652,7 +850,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
 
     expect(pilotChat).toHaveBeenCalledTimes(2)
     expect(pilotChat.mock.calls[1][0]).toEqual(
-      expect.arrayContaining([expect.objectContaining({ role: 'user', content: 'message en file' })])
+      expect.arrayContaining([
+        expect.objectContaining({ role: 'user', content: 'message en file' })
+      ])
     )
     // LE point : le brouillon a survecu au drain.
     expect(textarea().value).toBe('BROUILLON JAMAIS ENVOYE')
@@ -794,7 +994,10 @@ describe('ChatView behavior under concurrent UI actions', () => {
       )
     ).toEqual(['⏹ Interrompre et envoyer', '🧭 Orienter', 'BTW', '✕'])
     expect(
-      Array.from(container!.querySelectorAll('.directive-queue-text'), (element) => element.textContent)
+      Array.from(
+        container!.querySelectorAll('.directive-queue-text'),
+        (element) => element.textContent
+      )
     ).toEqual(['B', 'A'])
     // BTW réordonne la file SANS injecter : aucun appel supplémentaire depuis le clic.
     expect((mockApi.injectDirective as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
@@ -909,6 +1112,8 @@ describe('ChatView behavior under concurrent UI actions', () => {
       await click('.directive-queue-steer')
 
       expect(container!.querySelector('.directive-queue-text')?.textContent).toBe('keep me')
+      expect(container!.querySelector('.directive-receipt .msg-body')?.textContent).toBe('keep me')
+      expect(container!.querySelector('.directive-receipt-status')?.textContent).toContain('Échec')
       await act(async () => pilot.resolve({ ok: true }))
     }
   )
@@ -1083,7 +1288,163 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(pane!.className).not.toContain('wide')
   })
 
-  it('charge le graphe causal uniquement à l’ouverture de sa section pour la conversation active', async () => {
+  it('confirme puis supprime le RUN sélectionné et rafraîchit la liste', async () => {
+    const run = {
+      subject: 'ancien-run',
+      session: 'A',
+      path: 'A/ancien-run-workspace/RUN.md',
+      mtime: 1,
+      summary: {
+        status: 'green',
+        dodTotal: 1,
+        dodChecked: 1,
+        journalEvents: 1,
+        defauts: 0
+      }
+    }
+    let currentRuns = [run]
+    const conversationRuns = vi.fn(async () => currentRuns)
+    const deleteConversationRun = vi.fn(async () => {
+      currentRuns = []
+      return { ok: true, kind: 'deleted' }
+    })
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      conversationRuns,
+      deleteConversationRun
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await click('button[title="Workflows (RUN.md)"]')
+    const runTab = [...container!.querySelectorAll('.workflow-section-tabs button')].find(
+      (button) => button.textContent?.trim() === 'Run'
+    ) as HTMLButtonElement
+    await act(async () => runTab.click())
+
+    const deleteButton = container!.querySelector(
+      'button[aria-label="Supprimer le run ancien-run"]'
+    ) as HTMLButtonElement
+    expect(deleteButton).toBeTruthy()
+    await click('.run-row')
+    expect(container!.querySelector('.run-detail-box')).toBeTruthy()
+    await act(async () => deleteButton.click())
+    expect(container!.querySelector('[role="dialog"]')?.textContent).toContain('ancien-run')
+
+    await click('.run-delete-cancel')
+    expect(deleteConversationRun).not.toHaveBeenCalled()
+
+    await act(async () => deleteButton.click())
+    await click('.run-delete-confirm')
+
+    expect(deleteConversationRun).toHaveBeenCalledOnce()
+    expect(deleteConversationRun).toHaveBeenCalledWith('A', run.path)
+    expect(container!.querySelector('.run-row')).toBeNull()
+    expect(container!.querySelector('.run-detail-box')).toBeNull()
+  })
+
+  it('affiche et exécute aussi la suppression dans le scope tous', async () => {
+    const run = {
+      subject: 'run-global',
+      session: 'session-globale',
+      path: 'session-globale/run-global-workspace/RUN.md',
+      mtime: 1,
+      summary: {
+        status: 'green',
+        dodTotal: 1,
+        dodChecked: 1,
+        journalEvents: 1,
+        defauts: 0
+      }
+    }
+    let globalRuns = [run]
+    const listRuns = vi.fn(async () => globalRuns)
+    const deleteRun = vi.fn(async () => {
+      globalRuns = []
+      return { ok: true }
+    })
+    const deleteConversationRun = vi.fn()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      listRuns,
+      deleteRun,
+      deleteConversationRun
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await click('button[title="Workflows (RUN.md)"]')
+    const runTab = [...container!.querySelectorAll('.workflow-section-tabs button')].find(
+      (button) => button.textContent?.trim() === 'Run'
+    ) as HTMLButtonElement
+    await act(async () => runTab.click())
+    const allScope = [...container!.querySelectorAll('.runs-pane button')].find(
+      (button) => button.textContent?.trim() === 'tous'
+    ) as HTMLButtonElement
+    await act(async () => {
+      allScope.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const deleteButton = container!.querySelector(
+      'button[aria-label="Supprimer le run run-global"]'
+    ) as HTMLButtonElement
+    expect(deleteButton).toBeTruthy()
+    await act(async () => deleteButton.click())
+    await click('.run-delete-confirm')
+
+    expect(deleteRun).toHaveBeenCalledOnce()
+    expect(deleteRun).toHaveBeenCalledWith(run.path)
+    expect(deleteConversationRun).not.toHaveBeenCalled()
+    expect(container!.querySelector('.run-row')).toBeNull()
+  })
+
+  it('le fil des sous-agents se REMPLIT depuis la trace persistée, sans run en mémoire', async () => {
+    // Le défaut : « Aucune orchestration dans cette conversation » sur une conversation qui en avait
+    // pourtant lancé — le fil ne vivait qu'en mémoire, alors que le graphe, lui, restait rempli.
+    const causalTrace = vi.fn().mockResolvedValue([
+      {
+        id: 'event-req',
+        conversationId: 'A',
+        turnId: 'turn-A',
+        timestamp: '2026-07-30T12:00:00.000Z',
+        sequence: 1,
+        type: 'message',
+        status: 'completed',
+        channel: 'chat',
+        actor: { id: 'user', kind: 'user', label: 'Utilisateur' },
+        payloads: [{ kind: 'message', content: 'ajoute un module' }],
+        observation: { boundary: 'orchestrator', fidelity: 'exact' }
+      },
+      {
+        id: 'event-agent',
+        conversationId: 'A',
+        turnId: 'turn-A',
+        timestamp: '2026-07-30T12:00:05.000Z',
+        sequence: 2,
+        type: 'model-response',
+        status: 'completed',
+        channel: 'model',
+        actor: { id: 'builder', kind: 'agent', label: 'Builder' },
+        payloads: [{ kind: 'model-response', content: 'travail fait' }],
+        observation: { boundary: 'orchestrator', fidelity: 'exact' }
+      }
+    ])
+    await mount(api({ conversations: vi.fn().mockResolvedValue([conversation('A')]), causalTrace }))
+    await click('.conv-pick')
+    await click('button[title="Workflows (RUN.md)"]')
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container!.textContent).not.toContain('Aucune orchestration dans cette conversation')
+    expect(container!.querySelector('.live-run')).not.toBeNull()
+  })
+
+  // CONTRAT ÉLARGI (2026-07-31) : la trace causale alimente désormais DEUX sections — le graphe et le
+  // fil des sous-agents, qui sans elle affichait « Aucune orchestration » sur une conversation qui en
+  // avait pourtant lancé. Elle reste PARESSEUSE : rien n'est lu tant que le panneau Workflows est fermé.
+  it('ne lit la trace causale qu’à l’ouverture du panneau, jamais au montage du chat', async () => {
     const causalTrace = vi.fn().mockResolvedValue([
       {
         id: 'event-A',
@@ -1105,9 +1466,10 @@ describe('ChatView behavior under concurrent UI actions', () => {
     })
     await mount(mockApi)
     await click('.conv-pick')
-    await click('button[title="Workflows (RUN.md)"]')
-
+    // Montage + sélection de conversation : rien n'est lu tant que le panneau reste fermé.
     expect(causalTrace).not.toHaveBeenCalled()
+
+    await click('button[title="Workflows (RUN.md)"]')
     const graphTab = [...container!.querySelectorAll('.workflow-section-tabs button')].find(
       (button) => button.textContent?.trim() === 'Graphe'
     ) as HTMLButtonElement
@@ -1118,9 +1480,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
     })
 
     expect(causalTrace).toHaveBeenCalledWith('A')
-    expect(container!.querySelector('.workflow-execution-graph')?.getAttribute('data-conversation-id')).toBe(
-      'A'
-    )
+    expect(
+      container!.querySelector('.workflow-execution-graph')?.getAttribute('data-conversation-id')
+    ).toBe('A')
     expect(container!.querySelector('[data-execution-node="event-A"]')).not.toBeNull()
   })
 
@@ -1317,9 +1679,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
   it('preserves a failed bootstrap draft and retries it', async () => {
     const models = vi
       .fn()
-      .mockResolvedValue([
-        { id: 'codex/gpt-5.6-terra', provider: 'codex', model: 'gpt-5.6-terra' }
-      ])
+      .mockResolvedValue([{ id: 'codex/gpt-5.6-terra', provider: 'codex', model: 'gpt-5.6-terra' }])
     const create = vi.fn().mockResolvedValue(conversation('A'))
     const mockApi = api({ models, conversationsCreate: create })
     await mount(mockApi)
@@ -1423,7 +1783,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(scroll?.getAttribute('aria-live')).toBe('polite')
   })
 
-  it('opens an image thumbnail in a dismissible fullscreen lightbox', async () => {
+  it('renders a sent image as an artifact card and opens it in a dismissible lightbox', async () => {
+    vi.stubGlobal('IntersectionObserver', undefined)
+    const fullImage = 'data:image/png;base64,b3JpZ2luYWw='
     const history = [
       {
         role: 'user',
@@ -1434,7 +1796,89 @@ describe('ChatView behavior under concurrent UI actions', () => {
             name: 'preuve.png',
             mimeType: 'image/png',
             size: 42,
-            thumbnail: 'data:image/png;base64,cHJldXZl'
+            thumbnail: 'data:image/jpeg;base64,bWluaWF0dXJl',
+            turnId: 'turn-user-image',
+            artifact: {
+              id: 'user-image-1',
+              name: 'preuve.png',
+              mimeType: 'image/png',
+              kind: 'image',
+              size: 42,
+              createdAt: 1,
+              path: 'chat-artifacts/proof.png',
+              source: { provider: 'user' }
+            }
+          }
+        ]
+      }
+    ]
+    const readChatArtifact = vi.fn().mockResolvedValue({
+      ok: true,
+      encoding: 'base64',
+      content: 'b3JpZ2luYWw='
+    })
+    await mount(
+      api({
+        conversations: vi.fn().mockResolvedValue([conversation('A', history)]),
+        readChatArtifact
+      })
+    )
+    await click('.conv-pick')
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    const sentImage = container!.querySelector('.msg.user .artifact-preview')
+    expect(sentImage).toBeTruthy()
+    expect(sentImage?.querySelector('.artifact-preview__header strong')?.textContent).toBe(
+      'image envoyée'
+    )
+    expect(sentImage?.querySelector('.artifact-preview__footer')?.textContent).toContain('Envoyée')
+    expect(sentImage?.querySelector('.artifact-preview__footer')?.textContent).toContain(
+      'image/png'
+    )
+    expect(container!.querySelector('.msg.user .attachment-chip')).toBeNull()
+    expect(sentImage?.querySelector('img')?.getAttribute('src')).toBe(fullImage)
+    expect(readChatArtifact).toHaveBeenCalledWith('A', 'turn-user-image', 'user-image-1')
+
+    await click('.msg.user .artifact-preview__image')
+    expect(
+      document.body.querySelector('[role="dialog"][aria-label="Aperçu de preuve.png"]')
+    ).toBeTruthy()
+    expect(document.body.querySelector('.image-lightbox img')?.getAttribute('src')).toBe(fullImage)
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(document.body.querySelector('.image-lightbox')).toBeNull()
+
+    await click('.msg.user .artifact-preview__image')
+    await act(async () => {
+      ;(document.body.querySelector('.image-lightbox-close') as HTMLButtonElement).click()
+    })
+    expect(document.body.querySelector('.image-lightbox')).toBeNull()
+
+    await click('.msg.user .artifact-preview__image')
+    await act(async () => {
+      ;(document.body.querySelector('.image-lightbox') as HTMLElement).click()
+    })
+    expect(document.body.querySelector('.image-lightbox')).toBeNull()
+  })
+
+  it('does not disguise a thumbnail as the original when durable storage failed', async () => {
+    const history = [
+      {
+        role: 'user',
+        content: '',
+        ts: 1,
+        attachments: [
+          {
+            name: 'preuve.png',
+            mimeType: 'image/png',
+            size: 42,
+            thumbnail: 'data:image/jpeg;base64,bWluaWF0dXJl',
+            turnId: 'turn-user-image',
+            originalUnavailable: true
           }
         ]
       }
@@ -1442,27 +1886,13 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await mount(api({ conversations: vi.fn().mockResolvedValue([conversation('A', history)]) }))
     await click('.conv-pick')
 
-    await click('.attachment-thumb')
-    expect(
-      document.body.querySelector('[role="dialog"][aria-label="Aperçu de preuve.png"]')
-    ).toBeTruthy()
-
-    await act(async () => {
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-    })
-    expect(document.body.querySelector('.image-lightbox')).toBeNull()
-
-    await click('.attachment-thumb')
-    await act(async () => {
-      ;(document.body.querySelector('.image-lightbox-close') as HTMLButtonElement).click()
-    })
-    expect(document.body.querySelector('.image-lightbox')).toBeNull()
-
-    await click('.attachment-thumb')
-    await act(async () => {
-      ;(document.body.querySelector('.image-lightbox') as HTMLElement).click()
-    })
-    expect(document.body.querySelector('.image-lightbox')).toBeNull()
+    const sentImage = container!.querySelector('.msg.user .artifact-preview')
+    expect(sentImage).toBeTruthy()
+    expect(sentImage?.querySelector('.artifact-preview__blocked')?.textContent).toBe(
+      'Image originale non conservée · stockage indisponible'
+    )
+    expect(sentImage?.querySelector('img')).toBeNull()
+    expect(container!.querySelector('.msg.user .attachment-chip')).toBeNull()
   })
 
   it('renders a persisted model artifact as an inline chat preview', async () => {
@@ -1602,9 +2032,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
       .fn()
       .mockResolvedValueOnce([branched()])
       .mockResolvedValue([branched(), copie])
-    await mount(
-      api({ conversations, conversationsFork: vi.fn().mockResolvedValue(copie) })
-    )
+    await mount(api({ conversations, conversationsFork: vi.fn().mockResolvedValue(copie) }))
     await click('.conv-pick')
     const assistantRow = container!.querySelector('.msg.assistant') as HTMLElement
     const forkBtn = [...assistantRow.querySelectorAll('button')].find((b) =>
@@ -1617,8 +2045,6 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(body).toContain('u1')
     expect(body).not.toContain('u2')
   })
-
-
 
   it('offre le bouton forker aussi sur un message utilisateur (avec messageId)', async () => {
     const fork = vi.fn().mockResolvedValue(undefined)
@@ -1637,5 +2063,4 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => (forkBtn as HTMLButtonElement).click())
     expect(fork).toHaveBeenCalledWith('A', 'm1') // forke depuis le 1er message user
   })
-
 })

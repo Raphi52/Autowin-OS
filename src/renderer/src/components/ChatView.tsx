@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Markdown, extractRecommendation } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
@@ -50,6 +50,8 @@ import { StepThread, AssistantActivityGroup } from './ChatView.parts'
 import { RunInspector } from './RunInspector'
 import { WorkflowExecutionGraph } from './WorkflowExecutionGraph'
 import { ArtifactPreview } from './ArtifactPreview'
+import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
+import { mergeLiveAndPersisted, scopedRunsFromTimeline } from './subagent-thread-from-trace'
 import './ChatView.css'
 import './SlashPalette.css'
 import type { InspectTurnTarget } from '../observatory-focus'
@@ -65,6 +67,13 @@ interface AttachmentMeta {
   size: number
   /** Miniature downscalée (data URL) pour les images — persistée, affichée dans le fil. */
   thumbnail?: string
+  /** Original gardé uniquement dans le fil live, avant rechargement depuis le store. */
+  content?: string
+  /** Original durable matérialisé côté main après l’envoi. */
+  artifact?: ChatArtifact
+  turnId?: string
+  /** L’écriture durable a échoué ; la miniature ne doit pas usurper l’original. */
+  originalUnavailable?: boolean
 }
 interface ChatAttachment extends AttachmentMeta {
   kind: 'text' | 'image' | 'file'
@@ -150,6 +159,101 @@ type Decision = { id: string; question: string; options?: unknown[]; safeDefault
 
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 type QueuedDirective = { id: number; text: string; mode?: 'btw' }
+type DirectiveReceipt = {
+  id: number
+  text: string
+  status: 'sending' | 'sent' | 'failed'
+  afterMessageIndex: number
+  afterPartIndex: number
+  afterTextOffset?: number
+}
+
+function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }): React.JSX.Element {
+  return (
+    <div className={`msg user directive-receipt is-${receipt.status}`}>
+      <div className="msg-meta">
+        <span className="msg-role">Toi</span>
+        <span className="directive-receipt-status" role="status">
+          {receipt.status === 'sending'
+            ? '⏳ Orientation…'
+            : receipt.status === 'sent'
+              ? '✓ Orienté'
+              : '⚠ Échec — remis en file'}
+        </span>
+      </div>
+      <div className="msg-body" dir="auto">
+        {receipt.text}
+      </div>
+    </div>
+  )
+}
+
+type AssistantTimelineItem =
+  { kind: 'parts'; parts: ChatPart[] } | { kind: 'receipt'; receipt: DirectiveReceipt }
+
+function splitAssistantTimeline(
+  parts: ChatPart[],
+  receipts: DirectiveReceipt[]
+): AssistantTimelineItem[] {
+  if (receipts.length === 0) return [{ kind: 'parts', parts }]
+  const ordered = receipts
+    .slice()
+    .sort(
+      (left, right) =>
+        left.afterPartIndex - right.afterPartIndex ||
+        (left.afterTextOffset ?? Number.MAX_SAFE_INTEGER) -
+          (right.afterTextOffset ?? Number.MAX_SAFE_INTEGER) ||
+        left.id - right.id
+    )
+  const timeline: AssistantTimelineItem[] = []
+  let pendingParts: ChatPart[] = []
+  let receiptIndex = 0
+  const flushParts = (): void => {
+    if (pendingParts.length === 0) return
+    timeline.push({ kind: 'parts', parts: pendingParts })
+    pendingParts = []
+  }
+  const appendReceipt = (receipt: DirectiveReceipt): void => {
+    flushParts()
+    timeline.push({ kind: 'receipt', receipt })
+  }
+
+  while (ordered[receiptIndex]?.afterPartIndex < 0) {
+    appendReceipt(ordered[receiptIndex])
+    receiptIndex += 1
+  }
+  parts.forEach((part, partIndex) => {
+    if (part.kind === 'text') {
+      let textOffset = 0
+      while (ordered[receiptIndex]?.afterPartIndex === partIndex) {
+        const receipt = ordered[receiptIndex]
+        const receiptOffset = Math.max(
+          textOffset,
+          Math.min(part.text.length, receipt.afterTextOffset ?? part.text.length)
+        )
+        if (receiptOffset > textOffset)
+          pendingParts.push({ ...part, text: part.text.slice(textOffset, receiptOffset) })
+        appendReceipt(receipt)
+        textOffset = receiptOffset
+        receiptIndex += 1
+      }
+      if (textOffset < part.text.length)
+        pendingParts.push({ ...part, text: part.text.slice(textOffset) })
+      return
+    }
+    pendingParts.push(part)
+    while (ordered[receiptIndex]?.afterPartIndex === partIndex) {
+      appendReceipt(ordered[receiptIndex])
+      receiptIndex += 1
+    }
+  })
+  while (receiptIndex < ordered.length) {
+    appendReceipt(ordered[receiptIndex])
+    receiptIndex += 1
+  }
+  flushParts()
+  return timeline
+}
 
 /* ---------- Constantes ---------- */
 
@@ -264,6 +368,44 @@ async function encodeAttachment(file: File): Promise<ChatAttachment> {
 
 function messageKey(message: Msg, index: number): string {
   return `${message.role}:${index}`
+}
+
+function sentImageArtifact(file: AttachmentMeta, index: number): ChatArtifact | undefined {
+  if (!file.mimeType.startsWith('image/')) return undefined
+  if (file.artifact?.kind === 'image') return file.artifact
+  if (file.content)
+    return {
+      id: `sent-image-${index}-${file.name}-${file.size}`,
+      name: file.name,
+      mimeType: file.mimeType,
+      kind: 'image',
+      size: file.size,
+      createdAt: 0,
+      encoding: 'base64',
+      content: file.content,
+      source: { provider: 'user' }
+    }
+  if (file.originalUnavailable)
+    return {
+      id: `sent-image-unavailable-${index}-${file.name}-${file.size}`,
+      name: file.name,
+      mimeType: file.mimeType,
+      kind: 'image',
+      size: file.size,
+      createdAt: 0,
+      source: { provider: 'user' }
+    }
+  if (!file.thumbnail?.startsWith('data:image/')) return undefined
+  return {
+    id: `sent-image-${index}-${file.name}-${file.size}`,
+    name: file.name,
+    mimeType: file.mimeType,
+    kind: 'image',
+    size: file.size,
+    createdAt: 0,
+    url: file.thumbnail,
+    source: { provider: 'utilisateur' }
+  }
 }
 
 /** Icône « brancher » (fork) — deux nœuds reliés, monochrome via currentColor. */
@@ -384,6 +526,20 @@ function WorkflowCloseIcon(): React.JSX.Element {
   )
 }
 
+function RunTrashIcon(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M3.5 4.5h9M6 4.5V3.2h4v1.3m-5.5 0 .6 8.3h5.8l.6-8.3M6.7 6.5v4.2m2.6-4.2v4.2"
+        stroke="currentColor"
+        strokeWidth="1.25"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 const ChatMessageRow = memo(
   function ChatMessageRow({
     message,
@@ -392,7 +548,8 @@ const ChatMessageRow = memo(
     onFork,
     onOpenImage,
     onPickSuggestion,
-    onOpenLiveAction
+    onOpenLiveAction,
+    directiveReceipts
   }: {
     message: Msg
     conversationId: string | null
@@ -401,6 +558,7 @@ const ChatMessageRow = memo(
     onOpenImage?: (image: { src: string; name: string }) => void
     onPickSuggestion?: (prompt: string) => void
     onOpenLiveAction?: (mode: 'live' | 'history') => void
+    directiveReceipts?: DirectiveReceipt[]
   }): React.JSX.Element {
     if (message.role === 'user') {
       return (
@@ -414,28 +572,36 @@ const ChatMessageRow = memo(
             </div>
           )}
           {message.attachments && message.attachments.length > 0 && (
-            <div className="attachment-list sent">
-              {message.attachments.map((file, fileIndex) => (
-                <span
-                  className={`attachment-chip${file.thumbnail ? ' has-thumb' : ''}`}
-                  key={`${file.name}-${fileIndex}`}
-                >
-                  {file.thumbnail ? (
-                    <button
-                      type="button"
-                      className="attachment-thumb-button"
-                      aria-label={`Agrandir ${file.name}`}
-                      onClick={() => onOpenImage?.({ src: file.thumbnail!, name: file.name })}
-                    >
-                      <img className="attachment-thumb" src={file.thumbnail} alt={file.name} />
-                    </button>
-                  ) : (
+            <div
+              className={`attachment-list sent${
+                message.attachments.some((file) => sentImageArtifact(file, 0)) ? ' has-preview' : ''
+              }`}
+            >
+              {message.attachments.map((file, fileIndex) => {
+                const artifact = sentImageArtifact(file, fileIndex)
+                return artifact ? (
+                  <ArtifactPreview
+                    key={`${file.name}-${fileIndex}`}
+                    artifact={artifact}
+                    displayName="image envoyée"
+                    sourceLabel={`Envoyée · ${file.name}`}
+                    previewError={
+                      file.originalUnavailable
+                        ? 'Image originale non conservée · stockage indisponible'
+                        : undefined
+                    }
+                    conversationId={conversationId}
+                    turnId={file.turnId}
+                    onOpenImage={onOpenImage}
+                  />
+                ) : (
+                  <span className="attachment-chip" key={`${file.name}-${fileIndex}`}>
                     <span aria-hidden="true">{file.mimeType.startsWith('image/') ? '▧' : '▤'}</span>
-                  )}
-                  <span className="attachment-name">{file.name}</span>
-                  <small>{formatFileSize(file.size)}</small>
-                </span>
-              ))}
+                    <span className="attachment-name">{file.name}</span>
+                    <small>{formatFileSize(file.size)}</small>
+                  </span>
+                )
+              })}
             </div>
           )}
           {message.messageId && onFork && (
@@ -474,47 +640,59 @@ const ChatMessageRow = memo(
           {message.parts.length === 0 && !message.done && (
             <div className="msg-body c-faint">réflexion…</div>
           )}
-          {groupAssistantActivity(message.parts).map((part, index) =>
-            part.kind === 'text' ? (
-              <div key={index} className="msg-body" dir="auto">
-                <Markdown text={part.text} highlightFinalSummary />
-              </div>
-            ) : part.kind === 'suggestions' ? (
-              <SuggestionGrid
-                key={index}
-                groups={part.groups}
-                onPick={(prompt) => onPickSuggestion?.(prompt)}
-              />
-            ) : part.kind === 'scout-table' ? (
-              <ScoutTable
-                key={index}
-                rows={part.rows}
-                onPick={(prompt) => onPickSuggestion?.(prompt)}
-              />
-            ) : part.kind === 'artifact' ? (
-              <ArtifactPreview
-                key={part.artifact.id}
-                artifact={part.artifact}
-                conversationId={conversationId}
-                turnId={message.turnId}
-                onOpenImage={onOpenImage}
-              />
-            ) : (
-              <AssistantActivityGroup
-                key={index}
-                actions={part.actions}
-                onOpenLiveAction={onOpenLiveAction}
-                // Reprendre passe par le canal d'orchestration DIRECT : le main y retrouve l'acquis
-                // persisté et repart à la phase suivante, sans écrire dans le fil un message que
-                // l'utilisateur n'a pas tapé (le renvoi par le composer fabriquait un faux tour).
-                // Le résultat est RENVOYÉ au bouton (plus de `void`) : il porte l'état de
-                // chargement et rend visible un `{ok:false, error}` au lieu de le jeter.
-                onResume={(task) =>
-                  window.api?.orchestrate?.(task, conversationId ?? undefined) ??
-                  Promise.resolve({ ok: false, error: 'orchestration indisponible' })
-                }
-              />
-            )
+          {splitAssistantTimeline(message.parts, directiveReceipts ?? []).map(
+            (timelineItem, timelineIndex) =>
+              timelineItem.kind === 'receipt' ? (
+                <DirectiveReceiptRow
+                  key={`receipt-${timelineItem.receipt.id}`}
+                  receipt={timelineItem.receipt}
+                />
+              ) : (
+                <Fragment key={`parts-${timelineIndex}`}>
+                  {groupAssistantActivity(timelineItem.parts).map((part, index) =>
+                    part.kind === 'text' ? (
+                      <div key={index} className="msg-body" dir="auto">
+                        <Markdown text={part.text} highlightFinalSummary />
+                      </div>
+                    ) : part.kind === 'suggestions' ? (
+                      <SuggestionGrid
+                        key={index}
+                        groups={part.groups}
+                        onPick={(prompt) => onPickSuggestion?.(prompt)}
+                      />
+                    ) : part.kind === 'scout-table' ? (
+                      <ScoutTable
+                        key={index}
+                        rows={part.rows}
+                        onPick={(prompt) => onPickSuggestion?.(prompt)}
+                      />
+                    ) : part.kind === 'artifact' ? (
+                      <ArtifactPreview
+                        key={part.artifact.id}
+                        artifact={part.artifact}
+                        conversationId={conversationId}
+                        turnId={message.turnId}
+                        onOpenImage={onOpenImage}
+                      />
+                    ) : (
+                      <AssistantActivityGroup
+                        key={index}
+                        actions={part.actions}
+                        onOpenLiveAction={onOpenLiveAction}
+                        // Reprendre passe par le canal d'orchestration DIRECT : le main y retrouve l'acquis
+                        // persisté et repart à la phase suivante, sans écrire dans le fil un message que
+                        // l'utilisateur n'a pas tapé (le renvoi par le composer fabriquait un faux tour).
+                        // Le résultat est RENVOYÉ au bouton (plus de `void`) : il porte l'état de
+                        // chargement et rend visible un `{ok:false, error}` au lieu de le jeter.
+                        onResume={(task) =>
+                          window.api?.orchestrate?.(task, conversationId ?? undefined) ??
+                          Promise.resolve({ ok: false, error: 'orchestration indisponible' })
+                        }
+                      />
+                    )
+                  )}
+                </Fragment>
+              )
           )}
         </div>
         <div className="msg-turn-actions">
@@ -552,11 +730,13 @@ const ChatMessageRow = memo(
     )
   },
   (prev, next) =>
-    // Comparateur DATA-ONLY : la ligne ne re-rend QUE si sa donnée change (message/conversation).
+    // Comparateur DATA-ONLY : la ligne ne re-rend QUE si sa donnée change (message/conversation/reçus).
     // Les props callbacks sont déjà stables (send via sendRef→pickSuggestion, fork/inspect via useCallback,
     // setters useState) → les ignorer n'introduit aucun stale et immunise la ligne contre le churn du
     // composer (frappe/ghost-text) : garantit l'invariant perf « composer change ≠ re-render des lignes ».
-    prev.message === next.message && prev.conversationId === next.conversationId
+    prev.message === next.message &&
+    prev.conversationId === next.conversationId &&
+    prev.directiveReceipts === next.directiveReceipts
 )
 
 /* ---------- Vue ---------- */
@@ -622,6 +802,20 @@ export function ChatView({
   // File d'attente : directives injectées pendant le tour, pas encore consommées (conv active).
   const [pendingDirectives, setPendingDirectives] = useState<QueuedDirective[]>([])
   const [steeringDirectives, setSteeringDirectives] = useState<Set<number>>(() => new Set())
+  const [directiveReceipts, setDirectiveReceipts] = useState<Record<string, DirectiveReceipt[]>>({})
+  const activeDirectiveReceipts = useMemo(
+    () => (activeId ? (directiveReceipts[activeId] ?? []) : []),
+    [activeId, directiveReceipts]
+  )
+  const activeDirectiveReceiptsByMessage = useMemo(() => {
+    const byMessage = new Map<number, DirectiveReceipt[]>()
+    for (const receipt of activeDirectiveReceipts) {
+      if (receipt.afterMessageIndex < 0) continue
+      const current = byMessage.get(receipt.afterMessageIndex) ?? []
+      byMessage.set(receipt.afterMessageIndex, [...current, receipt])
+    }
+    return byMessage
+  }, [activeDirectiveReceipts])
   const [interruptingConversations, setInterruptingConversations] = useState<Set<string>>(
     () => new Set()
   )
@@ -685,6 +879,13 @@ export function ChatView({
   const [showDecisions, setShowDecisions] = useState(false)
   const [decisionError, setDecisionError] = useState<string | null>(null)
   const [deleteCandidate, setDeleteCandidate] = useState<Conv | null>(null)
+  const [deleteRunCandidate, setDeleteRunCandidate] = useState<{
+    run: RunEntry
+    scope: 'conv' | 'tous'
+    conversationId?: string
+  } | null>(null)
+  const [runDeletePending, setRunDeletePending] = useState(false)
+  const [runDeleteError, setRunDeleteError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const composerInputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -847,6 +1048,68 @@ export function ChatView({
     if (value) steeringRef.current.add(directiveId)
     else steeringRef.current.delete(directiveId)
     setSteeringDirectives(new Set(steeringRef.current))
+  }
+  function setDirectiveReceipt(
+    conversationId: string,
+    entry: QueuedDirective,
+    status: DirectiveReceipt['status']
+  ): void {
+    const liveMessages = liveMessagesRef.current.get(conversationId) ?? []
+    const afterMessageIndex = liveMessages.length - 1
+    const anchorMessage = liveMessages[afterMessageIndex]
+    const afterPartIndex = anchorMessage?.role === 'assistant' ? anchorMessage.parts.length - 1 : -1
+    const anchorPart =
+      anchorMessage?.role === 'assistant' && afterPartIndex >= 0
+        ? anchorMessage.parts[afterPartIndex]
+        : undefined
+    setDirectiveReceipts((current) => {
+      const receipts = current[conversationId] ?? []
+      const existing = receipts.findIndex((receipt) => receipt.id === entry.id)
+      const next =
+        existing >= 0
+          ? receipts.map((receipt, index) =>
+              index === existing ? { ...receipt, status } : receipt
+            )
+          : [
+              ...receipts,
+              {
+                id: entry.id,
+                text: entry.text,
+                status,
+                afterMessageIndex,
+                afterPartIndex,
+                ...(anchorPart?.kind === 'text' ? { afterTextOffset: anchorPart.text.length } : {})
+              }
+            ]
+      return { ...current, [conversationId]: next }
+    })
+  }
+  function rebaseDirectiveReceiptsAfterStreamReset(conversationId: string, streamId: string): void {
+    const liveMessages = liveMessagesRef.current.get(conversationId) ?? []
+    setDirectiveReceipts((current) => {
+      const receipts = current[conversationId]
+      if (!receipts?.length) return current
+      let changed = false
+      const next = receipts.map((receipt) => {
+        if (receipt.afterPartIndex < 0) return receipt
+        const anchorMessage = liveMessages[receipt.afterMessageIndex]
+        if (anchorMessage?.role !== 'assistant') return receipt
+        const partsBeforeAnchor = anchorMessage.parts.slice(0, receipt.afterPartIndex)
+        const removedBefore = partsBeforeAnchor.filter(
+          (part) => part.kind === 'text' && part.streamId === streamId
+        ).length
+        const anchorPart = anchorMessage.parts[receipt.afterPartIndex]
+        const anchorRemoved = anchorPart?.kind === 'text' && anchorPart.streamId === streamId
+        if (removedBefore === 0 && !anchorRemoved) return receipt
+        changed = true
+        return {
+          ...receipt,
+          afterPartIndex: receipt.afterPartIndex - removedBefore - (anchorRemoved ? 1 : 0),
+          ...(anchorRemoved ? { afterTextOffset: undefined } : {})
+        }
+      })
+      return changed ? { ...current, [conversationId]: next } : current
+    })
   }
 
   async function addFiles(files: FileList | File[]): Promise<void> {
@@ -1139,6 +1402,8 @@ export function ChatView({
         const cost = turnCostEq(e.usage)
         setLastTurnCost((current) => ({ ...current, [conversationId]: cost }))
       }
+      if (e.kind === 'stream-reset' && e.streamId)
+        rebaseDirectiveReceiptsAfterStreamReset(conversationId, e.streamId)
       patchLast(conversationId, (message) =>
         Object.assign(message, reduceAssistantPilotEvent(message, e))
       )
@@ -1157,7 +1422,7 @@ export function ChatView({
       scroll.scrollTo({ top: scroll.scrollHeight, behavior: 'smooth' })
       setHasNewActivity(false)
     })
-  }, [messages])
+  }, [messages, activeDirectiveReceipts])
 
   useEffect(() => {
     const inputElement = composerInputRef.current
@@ -1325,6 +1590,43 @@ export function ChatView({
     await refreshConvs()
   }
 
+  function requestDeleteRun(run: RunEntry): void {
+    const scope = runScopeRef.current
+    if (scope === 'conv' && !activeId) return
+    setRunDeleteError(null)
+    setDeleteRunCandidate({
+      run,
+      scope,
+      ...(scope === 'conv' && activeId ? { conversationId: activeId } : {})
+    })
+  }
+
+  async function confirmDeleteRun(): Promise<void> {
+    const candidate = deleteRunCandidate
+    if (!candidate || runDeletePending) return
+    setRunDeletePending(true)
+    setRunDeleteError(null)
+    try {
+      if (candidate.scope === 'tous') {
+        await window.api.deleteRun(candidate.run.path)
+      } else if (candidate.conversationId) {
+        await window.api.deleteConversationRun(candidate.conversationId, candidate.run.path)
+      } else {
+        throw new Error('Conversation introuvable pour ce RUN')
+      }
+      if (openRun?.path === candidate.run.path) {
+        setOpenRun(null)
+        setOpenTrace(null)
+      }
+      setDeleteRunCandidate(null)
+      await refreshRuns()
+    } catch (error) {
+      setRunDeleteError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setRunDeletePending(false)
+    }
+  }
+
   /** Recharge la conversation active depuis le store à jour (invalide le cache live). */
   async function reloadActiveFromStore(id: string): Promise<void> {
     liveMessagesRef.current.delete(id)
@@ -1399,6 +1701,9 @@ export function ChatView({
     // rien n'empêche de recliquer (double injection de la même directive dans le tour).
     if (steeringRef.current.has(entry.id)) return
     setDirectiveSteering(entry.id, true)
+    followTailRef.current = true
+    setHasNewActivity(false)
+    setDirectiveReceipt(id, entry, 'sending')
     const settle = (): void => setDirectiveSteering(entry.id, false)
     setConversationQueue(
       id,
@@ -1416,10 +1721,16 @@ export function ChatView({
       result = await window.api.injectDirective(id, entry.text)
     } catch {
       restore()
+      setDirectiveReceipt(id, entry, 'failed')
       settle()
       return
     }
-    if (!result.ok) restore()
+    if (!result.ok) {
+      restore()
+      setDirectiveReceipt(id, entry, 'failed')
+    } else {
+      setDirectiveReceipt(id, entry, 'sent')
+    }
     settle()
   }
 
@@ -1572,12 +1883,15 @@ export function ChatView({
       {
         role: 'user',
         content: value,
-        attachments: outgoingAttachments.map(({ name, mimeType, size, thumbnail }) => ({
-          name,
-          mimeType,
-          size,
-          ...(thumbnail && { thumbnail })
-        }))
+        attachments: outgoingAttachments.map(
+          ({ name, mimeType, size, kind, content, thumbnail }) => ({
+            name,
+            mimeType,
+            size,
+            ...(kind === 'image' && { content }),
+            ...(thumbnail && { thumbnail })
+          })
+        )
       },
       hydrateStoredAssistant({ content: '', parts: [], status: 'streaming' })
     ]
@@ -1653,12 +1967,15 @@ export function ChatView({
         {
           role: 'user',
           content: value,
-          attachments: outgoingAttachments.map(({ name, mimeType, size, thumbnail }) => ({
-            name,
-            mimeType,
-            size,
-            ...(thumbnail && { thumbnail })
-          }))
+          attachments: outgoingAttachments.map(
+            ({ name, mimeType, size, kind, content, thumbnail }) => ({
+              name,
+              mimeType,
+              size,
+              ...(kind === 'image' && { content }),
+              ...(thumbnail && { thumbnail })
+            })
+          )
         },
         hydrateStoredAssistant({ content: '', parts: [], status: 'streaming' })
       ]
@@ -1787,7 +2104,36 @@ export function ChatView({
   }, [convs, busyConversations, liveRuns])
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
   const greenRunsCount = runs.filter((r) => r.summary.status === 'green').length
-  const visibleLiveRuns = visibleScopedRuns<OrchStep>(liveRuns, activeId ?? undefined, runScope)
+  /**
+   * Fils de sous-agents RELUS depuis la trace persistée — la même source que le graphe. Sans eux, le
+   * panneau affichait « Aucune orchestration » dès que la vue se remontait, alors que son propre
+   * message vide promet que le fil RESTE une fois la tâche terminée.
+   */
+  const [persistedRuns, setPersistedRuns] = useState<ScopedLiveRun<OrchStep>[]>([])
+  useEffect(() => {
+    // Chargement PARESSEUX : la trace n'est lue qu'a l'ouverture de la section (garde testee).
+    if (!isActive || !activeId || !showRuns || paneTab !== 'subagents') return
+    let alive = true
+    void (async () => {
+      try {
+        const trace = (await window.api.causalTrace?.(activeId)) as HarnessTraceEvent[] | undefined
+        if (!alive || !trace) return
+        setPersistedRuns(
+          scopedRunsFromTimeline(buildHarnessTimelineFromTrace(trace), activeId) as ScopedLiveRun<OrchStep>[]
+        )
+      } catch {
+        /* trace illisible : on garde le direct, jamais d'écran vide à cause de la relecture */
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [isActive, activeId, showRuns, paneTab, liveRuns])
+
+  const visibleLiveRuns = mergeLiveAndPersisted<OrchStep>(
+    visibleScopedRuns<OrchStep>(liveRuns, activeId ?? undefined, runScope),
+    runScope === 'tous' ? persistedRuns : persistedRuns.filter((run) => run.convId === activeId)
+  )
 
   return (
     <div
@@ -2127,6 +2473,67 @@ export function ChatView({
           </div>
         )}
 
+        {deleteRunCandidate && (
+          <div
+            className="delete-confirm-layer"
+            role="presentation"
+            onClick={() => {
+              if (!runDeletePending) setDeleteRunCandidate(null)
+            }}
+          >
+            <section
+              className="delete-confirm-card"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="run-delete-confirm-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="delete-confirm-orbit" aria-hidden="true">
+                ✦
+              </div>
+              <span className="delete-confirm-kicker">
+                {deleteRunCandidate.scope === 'conv' && deleteRunCandidate.run.session === 'attaché'
+                  ? 'PIÈCE JOINTE EXTERNE'
+                  : 'ACTION IRRÉVERSIBLE'}
+              </span>
+              <h2 id="run-delete-confirm-title">
+                {deleteRunCandidate.scope === 'conv' && deleteRunCandidate.run.session === 'attaché'
+                  ? 'Détacher ce RUN ?'
+                  : 'Supprimer ce RUN ?'}
+              </h2>
+              <p>
+                <strong>« {deleteRunCandidate.run.subject} »</strong>{' '}
+                {deleteRunCandidate.scope === 'conv' && deleteRunCandidate.run.session === 'attaché'
+                  ? 'sera retiré de cette conversation. Son fichier externe restera intact.'
+                  : 'et sa trace locale seront supprimés de cet appareil.'}
+              </p>
+              {runDeleteError && <div className="attachment-error">⚠️ {runDeleteError}</div>}
+              <div className="delete-confirm-actions">
+                <button
+                  className="btn delete-confirm-cancel run-delete-cancel"
+                  onClick={() => setDeleteRunCandidate(null)}
+                  disabled={runDeletePending}
+                  autoFocus
+                >
+                  Annuler
+                </button>
+                <button
+                  className="btn delete-confirm-danger run-delete-confirm"
+                  onClick={() => void confirmDeleteRun()}
+                  disabled={runDeletePending}
+                >
+                  {runDeletePending
+                    ? 'Traitement…'
+                    : deleteRunCandidate.scope === 'conv' &&
+                        deleteRunCandidate.run.session === 'attaché'
+                      ? 'Détacher'
+                      : 'Supprimer définitivement'}
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+
         <div
           className="chat-scroll scroll-y"
           ref={scrollRef}
@@ -2158,17 +2565,33 @@ export function ChatView({
             </div>
           )}
 
+          {activeDirectiveReceipts
+            .filter((receipt) => receipt.afterMessageIndex < 0)
+            .map((receipt) => (
+              <DirectiveReceiptRow key={`directive-receipt-${receipt.id}`} receipt={receipt} />
+            ))}
+
           {messages.map((message, index) => (
-            <ChatMessageRow
-              onPickSuggestion={pickSuggestion}
-              key={messageKey(message, index)}
-              message={message}
-              conversationId={activeId}
-              onInspectTurn={onInspectTurn}
-              onFork={handleFork}
-              onOpenImage={setOpenImage}
-              onOpenLiveAction={revealLiveAction}
-            />
+            <Fragment key={messageKey(message, index)}>
+              <ChatMessageRow
+                onPickSuggestion={pickSuggestion}
+                message={message}
+                conversationId={activeId}
+                onInspectTurn={onInspectTurn}
+                onFork={handleFork}
+                onOpenImage={setOpenImage}
+                onOpenLiveAction={revealLiveAction}
+                directiveReceipts={
+                  message.role === 'assistant'
+                    ? activeDirectiveReceiptsByMessage.get(index)
+                    : undefined
+                }
+              />
+              {message.role === 'user' &&
+                (activeDirectiveReceiptsByMessage.get(index) ?? []).map((receipt) => (
+                  <DirectiveReceiptRow key={`directive-receipt-${receipt.id}`} receipt={receipt} />
+                ))}
+            </Fragment>
           ))}
         </div>
 
@@ -2579,12 +3002,12 @@ export function ChatView({
                 </div>
               )}
               {paneTab === 'subagents' &&
-                visibleLiveRuns.map(([conversationId, liveRun]) => (
+                visibleLiveRuns.map(([runKey, liveRun]) => (
                   <div
-                    key={conversationId}
-                    ref={conversationId === activeId ? liveRunCardRef : undefined}
+                    key={runKey}
+                    ref={liveRun.convId === activeId ? liveRunCardRef : undefined}
                     className={`card live-run stripe stripe-accent fade-in`}
-                    data-live-run-conversation-id={conversationId}
+                    data-live-run-conversation-id={liveRun.convId}
                   >
                     <div className="row" style={{ justifyContent: 'space-between' }}>
                       <div className="row gap2" style={{ minWidth: 0 }}>
@@ -2642,7 +3065,7 @@ export function ChatView({
                                     className="btn btn-sm btn-danger"
                                     title="Stopper le sous-agent en cours"
                                     onClick={() =>
-                                      void window.api.cancelOrchestration(conversationId)
+                                      void window.api.cancelOrchestration(liveRun.convId)
                                     }
                                   >
                                     ⏹ Stop
@@ -2677,42 +3100,55 @@ export function ChatView({
                   const isOpen = openRun?.path === r.path
                   return (
                     <div key={r.path} className="col" style={{ gap: 0 }}>
-                      <button
-                        className="card run-row"
-                        onClick={() => {
-                          if (isOpen) {
-                            setOpenRun(null)
-                            setOpenTrace(null)
-                          } else {
-                            viewRun(r)
-                          }
-                        }}
-                      >
-                        <div className="row" style={{ justifyContent: 'space-between' }}>
-                          <div className="row gap2" style={{ minWidth: 0 }}>
-                            <span className={`status-dot ${RUN_DOT[r.summary.status] ?? ''}`} />
-                            <span className="run-subject">{r.subject}</span>
+                      <div className="run-card-shell">
+                        <button
+                          className="card run-row"
+                          onClick={() => {
+                            if (isOpen) {
+                              setOpenRun(null)
+                              setOpenTrace(null)
+                            } else {
+                              viewRun(r)
+                            }
+                          }}
+                        >
+                          <div className="row" style={{ justifyContent: 'space-between' }}>
+                            <div className="row gap2" style={{ minWidth: 0 }}>
+                              <span className={`status-dot ${RUN_DOT[r.summary.status] ?? ''}`} />
+                              <span className="run-subject">{r.subject}</span>
+                            </div>
+                            <span className="badge">{r.summary.status}</span>
                           </div>
-                          <span className="badge">{r.summary.status}</span>
-                        </div>
-                        <div className="row" style={{ marginTop: 6, gap: 'var(--s2)' }}>
-                          <div className="meter grow">
-                            <span
-                              style={{
-                                width: `${pct}%`,
-                                background:
-                                  r.summary.status === 'green' ? 'var(--ok)' : 'var(--accent)'
-                              }}
-                            />
+                          <div className="row" style={{ marginTop: 6, gap: 'var(--s2)' }}>
+                            <div className="meter grow">
+                              <span
+                                style={{
+                                  width: `${pct}%`,
+                                  background:
+                                    r.summary.status === 'green' ? 'var(--ok)' : 'var(--accent)'
+                                }}
+                              />
+                            </div>
+                            <span className="c-faint tnum" style={{ fontSize: 10 }}>
+                              {r.summary.dodChecked}/{r.summary.dodTotal}
+                            </span>
+                            <span className="c-faint tnum" style={{ fontSize: 10 }}>
+                              J {r.summary.journalEvents} · D {r.summary.defauts}
+                            </span>
                           </div>
-                          <span className="c-faint tnum" style={{ fontSize: 10 }}>
-                            {r.summary.dodChecked}/{r.summary.dodTotal}
-                          </span>
-                          <span className="c-faint tnum" style={{ fontSize: 10 }}>
-                            J {r.summary.journalEvents} · D {r.summary.defauts}
-                          </span>
-                        </div>
-                      </button>
+                        </button>
+                        {(runScope === 'tous' || activeId) && (
+                          <button
+                            type="button"
+                            className="run-delete-button"
+                            aria-label={`Supprimer le run ${r.subject}`}
+                            title={r.session === 'attaché' ? 'Détacher ce RUN' : 'Supprimer ce RUN'}
+                            onClick={() => requestDeleteRun(r)}
+                          >
+                            <RunTrashIcon />
+                          </button>
+                        )}
+                      </div>
                       {isOpen && (
                         <div className="run-detail-box fade-in">
                           {openTrace && openRun && (
