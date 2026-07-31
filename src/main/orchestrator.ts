@@ -34,6 +34,15 @@ import type { WorktreeAgentActivity } from '../shared/worktree-activity-model'
  * réel + le ledger de confiance des juges. Rien de simulé : ce sont de vrais appels
  * provider, de vrais tokens, un vrai verdict.
  */
+/** Un agent CLI lancé par un run : de quoi le retrouver vivant et relire ce qu'il a écrit. */
+export interface RunAgentRef {
+  token: string
+  pid?: number
+  journalPath?: string
+  /** Octets déjà lus dans le journal — une reprise repart de là, sans rien réafficher deux fois. */
+  offset?: number
+}
+
 export interface OrchestrationStep {
   step: 'exec' | 'judge' | 'gate'
   provider?: string
@@ -187,6 +196,8 @@ export interface OrchestratorDeps {
     turnId?: string
     bindingOverride?: RoleBinding
     phaseOutputs: { phase: PipelinePhase; text: string }[]
+    /** Agents CLI du run : ce qui permettra de s'y RATTACHER après un redémarrage. */
+    agents?: RunAgentRef[]
   }) => void
   /** Notifié quand le run atteint sa fin (vert, rouge ou abandon) → l'appelant efface l'état repris. */
   onRunSettled?: (runId: string) => void
@@ -349,8 +360,27 @@ export class Orchestrator {
       process: (pid: number, active: boolean) => void
       spawnIntent: (token: string, active: boolean) => void
       spawned: (token: string, pid: number) => void
+      journal: (token: string, journalPath: string) => void
     }
   >()
+  /**
+   * Agents lancés par run : jeton, pid, journal. C'est ce qui rend un run RATTACHABLE — sans ces
+   * trois informations, une app qui redémarre ne sait ni si l'agent vit encore, ni où lire ce qu'il
+   * a produit pendant son absence.
+   */
+  private readonly runAgents = new Map<string, Map<string, RunAgentRef>>()
+
+  private rememberAgent(runId: string, token: string, patch: Partial<RunAgentRef>): void {
+    const byToken = this.runAgents.get(runId) ?? new Map<string, RunAgentRef>()
+    byToken.set(token, { ...(byToken.get(token) ?? { token }), ...patch, token })
+    this.runAgents.set(runId, byToken)
+  }
+
+  /** Agents connus d'un run, pour la persistance de reprise. */
+  private agentsOf(runId: string): RunAgentRef[] {
+    return [...(this.runAgents.get(runId)?.values() ?? [])]
+  }
+
   private _hooks?: HookBus
   /** Bus de hooks (fourni ou défaut). Uniforme pour TOUS les exécuteurs. */
   private get hooks(): HookBus {
@@ -374,7 +404,8 @@ export class Orchestrator {
       ...(cwd !== this.deps.executionWorkspace ? { causallyIsolated: true } : {}),
       onProcess: observers?.process,
       onSpawnIntent: observers?.spawnIntent,
-      onSpawned: observers?.spawned
+      onSpawned: observers?.spawned,
+      onJournal: observers?.journal
     }
   }
 
@@ -442,7 +473,8 @@ export class Orchestrator {
       conversationId,
       turnId,
       bindingOverride,
-      phaseOutputs: [...resumeOutputs]
+      phaseOutputs: [...resumeOutputs],
+      agents: this.agentsOf(runId)
     })
     const isolatedCwd = this.deps.worktrees?.begin(runId, 'Agent', isMut, {
       task,
@@ -472,13 +504,22 @@ export class Orchestrator {
       timestampMs: runStartedAtMs,
       closure: { status: 'open', totalDurationMs: 0, totalCostUsd: 0 }
     })
-    if (isMut && this.deps.worktrees) {
-      this.processObservers.set(workCwd, {
-        process: (pid, active) => this.deps.worktrees?.process?.(runId, pid, active),
-        spawnIntent: (token, active) => this.deps.worktrees?.spawnIntent?.(runId, token, active),
-        spawned: (token, pid) => this.deps.worktrees?.spawned?.(runId, token, pid)
-      })
-    }
+    // Les observateurs sont posés pour TOUT run, pas seulement les mutations : le rattachement a
+    // besoin du journal même quand aucune copie isolée n'est en jeu. Les rappels worktree, eux,
+    // restent conditionnels — sans copie, il n'y a pas de bail à tenir.
+    this.processObservers.set(workCwd, {
+      process: (pid, active) => {
+        if (isMut) this.deps.worktrees?.process?.(runId, pid, active)
+      },
+      spawnIntent: (token, active) => {
+        if (isMut) this.deps.worktrees?.spawnIntent?.(runId, token, active)
+      },
+      spawned: (token, pid) => {
+        this.rememberAgent(runId, token, { pid })
+        if (isMut) this.deps.worktrees?.spawned?.(runId, token, pid)
+      },
+      journal: (token, journalPath) => this.rememberAgent(runId, token, { journalPath })
+    })
     try {
       // Fonctionnement NORMAL : on tente TOUJOURS de décomposer (le modèle orchestrateur juge s'il
       // peut). ≥2 sous-tâches → dispatch completion-driven (DAG). Tâche atomique (plan <2) ou pas de
@@ -1231,7 +1272,8 @@ export class Orchestrator {
           conversationId,
           turnId,
           bindingOverride,
-          phaseOutputs: [...phaseOutputs]
+          phaseOutputs: [...phaseOutputs],
+          agents: this.agentsOf(runId)
         })
       } catch {
         /* best-effort : une panne de persistance ne casse jamais le run en cours */

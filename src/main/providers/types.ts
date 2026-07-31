@@ -63,6 +63,15 @@ export interface SendOptions {
     onSpawnIntent?: (token: string, active: boolean) => void
     /** Remplace atomiquement l'intention par le lease du PID créé. */
     onSpawned?: (token: string, pid: number) => void
+    /**
+     * Journal de sortie du CLI lancé, quand le provider en ouvre un.
+     *
+     * C'est le chaînon qui manquait pour se RATTACHER : le processus survit à la mort de l'app et
+     * continue d'écrire, mais sans ce chemin l'app qui revient ne sait pas où lire. L'état persisté
+     * du run le porte, et une instance ultérieure reprend la lecture à l'offset atteint — au lieu de
+     * relancer un travail déjà fait, ou de demander un clic.
+     */
+    onJournal?: (token: string, journalPath: string) => void
   }
 }
 

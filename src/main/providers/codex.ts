@@ -184,6 +184,8 @@ async function runCodexExec(
     })
     const child = run.child
     const childPid = child.pid
+    // Le journal est le point de rattachement : sans lui, une app qui revient ne sait pas ou lire.
+    if (run.journalPath) execution.onJournal?.(spawnToken, run.journalPath)
     if (childPid) {
       if (execution.onSpawned) execution.onSpawned(spawnToken, childPid)
       else {

@@ -164,3 +164,37 @@ describe('identité du modèle lors d’une reprise de conversation', () => {
     ).toBeNull()
   })
 })
+
+/**
+ * RATTACHEMENT. Un CLI détaché survit à la mort de l'app et continue d'écrire dans son journal.
+ * Sans ces références persistées, l'app qui revient ne sait ni s'il vit encore, ni où lire ce qu'il
+ * a produit pendant son absence — elle relance donc un travail déjà fait, ou attend un clic.
+ */
+describe('références d’agents — ce qui rend un run rattachable', () => {
+  it('persiste jeton, pid, journal et offset, et les relit à l’identique', () => {
+    saveOrchestrationState(root, {
+      runId: 'run-attach',
+      task: 'longue tâche',
+      phaseOutputs: [],
+      agents: [{ token: 'tok-1', pid: 4242, journalPath: 'C:/j/tok-1.stdout.jsonl', offset: 128 }],
+      startedAt: 1,
+      updatedAt: 2
+    })
+
+    const [relu] = loadOrchestrationStates(root)
+    expect(relu.agents).toEqual([
+      { token: 'tok-1', pid: 4242, journalPath: 'C:/j/tok-1.stdout.jsonl', offset: 128 }
+    ])
+  })
+
+  it('un run sans agent reste valide — tout run n’en lance pas', () => {
+    saveOrchestrationState(root, {
+      runId: 'run-sans-agent',
+      task: 'tâche',
+      phaseOutputs: [],
+      startedAt: 1,
+      updatedAt: 2
+    })
+    expect(loadOrchestrationStates(root)[0].agents).toBeUndefined()
+  })
+})

@@ -198,3 +198,38 @@ describe('survie niveau 3 — garde-fou acquis vide', () => {
     expect(provider.userMessages[0]).toContain('TÂCHE')
   })
 })
+
+/**
+ * RATTACHEMENT. Un CLI détaché survit à la mort de l'app et continue d'écrire dans son journal.
+ * Pour s'y rebrancher au redémarrage — au lieu de tout relancer ou de demander un clic — l'état
+ * persisté doit porter le jeton, le pid et le CHEMIN DU JOURNAL de chaque agent lancé.
+ */
+class JournalingProvider extends RecordingProvider {
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    // Ce que fait un vrai provider survivable : il annonce son journal, puis son pid.
+    options.execution?.onJournal?.('tok-1', 'C:/journaux/tok-1.stdout.jsonl')
+    options.execution?.onSpawned?.('tok-1', 4242)
+    return yield* super.send(messages, options)
+  }
+}
+
+describe('rattachement — l’état persisté porte les agents lancés', () => {
+  it('le journal et le pid annoncés par le provider arrivent jusqu’au point de sauvegarde', async () => {
+    const provider = new JournalingProvider()
+    const saved: Array<{ agents?: Array<{ token: string; pid?: number; journalPath?: string }> }> = []
+    const orch = makeOrchestrator(provider, {
+      classifyPhases: () => ['build'],
+      onPhaseCompleted: (info) => saved.push({ agents: info.agents })
+    })
+
+    await orch.run('modifie un fichier')
+
+    const dernier = saved.at(-1)
+    expect(dernier?.agents).toEqual([
+      { token: 'tok-1', pid: 4242, journalPath: 'C:/journaux/tok-1.stdout.jsonl' }
+    ])
+  })
+})

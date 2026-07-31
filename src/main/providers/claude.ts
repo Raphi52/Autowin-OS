@@ -7,6 +7,7 @@ import {
   SUBAGENT_TOTAL_MS
 } from './watchdog'
 import { spawn } from 'node:child_process'
+import { createHash, randomUUID } from 'node:crypto'
 import { closeSync, existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { openStdoutJournal, tailJsonLines, type StdoutJournalHandle } from '../runs/stdout-journal'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
@@ -451,6 +452,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     // `unref` n'existe que sur un vrai ChildProcess (doubles de test / stubs peuvent l'omettre).
     if (journal && typeof child.unref === 'function') child.unref() // l'app peut mourir sans emporter le CLI
     const childPid = child.pid
+    // Le journal est le point de rattachement : sans lui, une app qui revient ne sait pas où lire.
+    if (journal) execution?.onJournal?.(spawnToken, journal.path)
     if (childPid) {
       if (execution?.onSpawned) execution.onSpawned(spawnToken, childPid)
       else {
@@ -466,6 +469,22 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     let usage: SendResult['usage']
     const executionEvidence: ExecutionEvidence[] = []
     const artifactCandidates: ProviderArtifactCandidate[] = []
+    const inputImageFingerprints = new Set(
+      (lastUserMessage?.attachments ?? [])
+        .filter((attachment) => attachment.kind === 'image')
+        .map((attachment) => base64Fingerprint(attachment.content))
+    )
+    const collectArtifacts = (content: unknown, tool?: string): void => {
+      artifactCandidates.push(
+        ...claudeContentArtifacts(content, tool).filter(
+          (artifact) =>
+            !artifact.mimeType?.startsWith('image/') ||
+            artifact.encoding !== 'base64' ||
+            artifact.content === undefined ||
+            !inputImageFingerprints.has(base64Fingerprint(artifact.content))
+        )
+      )
+    }
     const pendingTools = new Map<string, { name: string; command: string; filePath: string }>()
     const queue: StreamChunk[] = []
     let done = false
@@ -521,7 +540,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             }
           | undefined
         if (msg?.model) resolvedModel = msg.model // modèle RÉEL rapporté par Claude
-        artifactCandidates.push(...claudeContentArtifacts(msg?.content))
+        collectArtifacts(msg?.content)
         for (const part of msg?.content ?? []) {
           if (part.type === 'text' && part.text) {
             text += part.text
@@ -557,7 +576,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           pendingTools.delete(part.tool_use_id)
           // Contenu réel du résultat d'outil (stdout / retour d'édition), pour un rendu inline lisible.
           const output = claudeToolResultText(part.content).slice(-20_000)
-          artifactCandidates.push(...claudeContentArtifacts(part.content, call.name))
+          collectArtifacts(part.content, call.name)
           const isFile = Boolean(call.filePath)
           executionEvidence.push({
             type: call.name,
@@ -722,4 +741,6 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     }
   }
 }
-import { randomUUID } from 'node:crypto'
+function base64Fingerprint(content: string): string {
+  return createHash('sha256').update(Buffer.from(content, 'base64')).digest('hex')
+}

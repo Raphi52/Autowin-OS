@@ -214,7 +214,15 @@ export class AutowinOS {
       classifyPhases: regimePhases,
       // SURVIE NIVEAU 3 : après CHAQUE phase, on persiste l'acquis du run ; à la clôture on l'efface.
       // Un kill du process main laisse donc un état reprenable → `resumableOrchestration()`.
-      onPhaseCompleted: ({ runId, task, conversationId, turnId, bindingOverride, phaseOutputs }) =>
+      onPhaseCompleted: ({
+        runId,
+        task,
+        conversationId,
+        turnId,
+        bindingOverride,
+        phaseOutputs,
+        agents
+      }) =>
         saveOrchestrationState(this.orchestrationStateRoot, {
           runId,
           task,
@@ -222,6 +230,9 @@ export class AutowinOS {
           ...(turnId ? { turnId } : {}),
           ...(bindingOverride ? { bindingOverride } : {}),
           phaseOutputs,
+          // Les agents CLI du run : un processus detache survit a l'app, ces references sont ce qui
+          // permettra de le retrouver vivant et de relire sa sortie au lieu de tout relancer.
+          ...(agents && agents.length ? { agents } : {}),
           startedAt: this.orchestrationStartedAt.get(runId) ?? Date.now(),
           updatedAt: Date.now()
         }),
