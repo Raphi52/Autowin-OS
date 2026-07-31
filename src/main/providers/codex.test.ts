@@ -138,6 +138,32 @@ describe('CodexAdapter — inférence + injection (mocké, hors-ligne)', () => {
     expect(step.value.systemInjected).toBe(true)
   })
 
+  it('normalise une image générée du flux Responses en artefact', async () => {
+    const fetchFn = vi.fn(async () =>
+      sseRes([
+        'data: {"type":"response.output_item.done","item":{"id":"img_1","type":"image_generation_call","result":"YWJj"}}\n',
+        'data: {"type":"response.completed","response":{"id":"resp_image"}}\n'
+      ])
+    )
+    const adapter = new CodexAdapter({
+      fetchFn: fetchFn as unknown as typeof fetch,
+      loadTokensFn: () => tokens
+    })
+    const gen = adapter.send(conv, { model: 'gpt-image-test' })
+    let step = await gen.next()
+    while (!step.done) step = await gen.next()
+
+    expect(step.value.artifacts).toEqual([
+      expect.objectContaining({
+        id: 'img_1',
+        kind: 'image',
+        mimeType: 'image/png',
+        content: 'YWJj',
+        source: { provider: 'codex', model: 'gpt-image-test' }
+      })
+    ])
+  })
+
   it('INJECTE le système dans le champ natif `instructions` (preuve)', async () => {
     let captured: Record<string, unknown> = {}
     const fetchFn = vi.fn(async (_url: string, init: RequestInit) => {

@@ -2,7 +2,11 @@ import { EventEmitter } from 'node:events'
 import { existsSync, readFileSync } from 'node:fs'
 import { basename } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { claudeTransportEnvelope, materializeClaudeAttachments } from './claude'
+import {
+  claudeContentArtifacts,
+  claudeTransportEnvelope,
+  materializeClaudeAttachments
+} from './claude'
 
 // Capture le spawn : args réels + ce qui est écrit sur stdin, pour prouver l'anti-ENAMETOOLONG.
 const spawnCapture = vi.hoisted(() => ({ args: [] as string[], stdin: '' }))
@@ -37,6 +41,29 @@ vi.mock('node:child_process', async (importOriginal) => ({
 }))
 
 describe('ClaudeCliAdapter — pièces jointes', () => {
+  it('convertit les blocs image/document Claude en artefacts supplier-agnostic', () => {
+    expect(
+      claudeContentArtifacts(
+        [
+          {
+            type: 'image',
+            name: 'capture.png',
+            source: { type: 'base64', media_type: 'image/png', data: 'YWJj' }
+          }
+        ],
+        'Screenshot'
+      )
+    ).toEqual([
+      {
+        name: 'capture.png',
+        mimeType: 'image/png',
+        encoding: 'base64',
+        content: 'YWJj',
+        tool: 'Screenshot'
+      }
+    ])
+  })
+
   it('matérialise uniquement les fichiers déposés puis les nettoie', () => {
     const materialized = materializeClaudeAttachments([
       {

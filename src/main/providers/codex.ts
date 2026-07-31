@@ -25,6 +25,8 @@ import { spawnSurvivable } from '../runs/survivable-spawn'
 import { findNpmGlobalFile } from './npm-global-resolve'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import type { ProviderArtifactCandidate } from '../../shared/artifacts'
+import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 
 /**
  * Adaptateur voie Codex — abonnement ChatGPT via OAuth device-code (cf. codex-auth).
@@ -49,7 +51,10 @@ export interface CodexExecItem {
  * diff pour un file_change, stdout/exit pour une commande). Bornés pour ne pas gonfler le payload.
  * Pur → testable isolément.
  */
-export function structuredEvidenceFields(item: CodexExecItem, executionCwd?: string): {
+export function structuredEvidenceFields(
+  item: CodexExecItem,
+  executionCwd?: string
+): {
   command?: string
   exitCode?: number
   stdout?: string
@@ -331,6 +336,11 @@ async function runCodexExec(
       if (mutationBefore) {
         await appendWorkspaceMutationEvidence(mutationBefore, spec.cwd, executionEvidence)
       }
+      const artifacts = artifactsFromExecutionEvidence(executionEvidence, {
+        provider: 'codex',
+        model,
+        workspaceRoot: spec.cwd
+      })
       resolvePromise({
         text: finalText,
         provider: 'codex',
@@ -338,7 +348,8 @@ async function runCodexExec(
         systemInjected: Boolean(opts.system),
         usage,
         executionEvidence,
-        thinking: joinThinking(reasoningFragments)
+        thinking: joinThinking(reasoningFragments),
+        artifacts: artifacts.length ? artifacts : undefined
       })
     })
     // stdin reste un pipe même en mode détaché (seules stdout/stderr vont au journal).
@@ -531,7 +542,9 @@ export class CodexAdapter implements ProviderAdapter {
     if (!res.ok || !res.body) {
       // Surface le CORPS du 4xx (l'API y nomme la raison exacte) — sinon le status seul est aveugle.
       const detail = await res.text().catch(() => '')
-      throw new Error(`codex responses HTTP ${res.status}${detail ? ` — ${detail.slice(0, 600)}` : ''}`)
+      throw new Error(
+        `codex responses HTTP ${res.status}${detail ? ` — ${detail.slice(0, 600)}` : ''}`
+      )
     }
 
     // Parse le flux SSE : events `response.output_text.delta` (delta) + `response.completed`.
@@ -541,6 +554,7 @@ export class CodexAdapter implements ProviderAdapter {
     let text = ''
     let responseId: string | undefined
     let usage: SendResult['usage']
+    const artifactCandidates: ProviderArtifactCandidate[] = []
 
     // Traite une ligne SSE ; retourne un delta éventuel à yield (ou null).
     const parseLine = (raw: string): string | null => {
@@ -560,6 +574,18 @@ export class CodexAdapter implements ProviderAdapter {
               input_tokens_details?: { cached_tokens?: number }
             }
           }
+          item?: {
+            type?: string
+            result?: string
+            id?: string
+            content?: Array<{
+              type?: string
+              image_url?: string
+              file_data?: string
+              filename?: string
+              mime_type?: string
+            }>
+          }
         }
         if (ev.type === 'response.output_text.delta' && typeof ev.delta === 'string')
           return ev.delta
@@ -574,6 +600,38 @@ export class CodexAdapter implements ProviderAdapter {
               inputTokens: measured.input_tokens ?? 0,
               outputTokens: measured.output_tokens ?? 0,
               cacheReadTokens: measured.input_tokens_details?.cached_tokens
+            }
+          }
+        }
+        if (ev.type === 'response.output_item.done' && ev.item) {
+          if (ev.item.type === 'image_generation_call' && typeof ev.item.result === 'string') {
+            artifactCandidates.push({
+              id: ev.item.id,
+              name: `${ev.item.id ?? 'image'}-generated.png`,
+              mimeType: 'image/png',
+              encoding: 'base64',
+              content: ev.item.result
+            })
+          }
+          for (const part of ev.item.content ?? []) {
+            if (part.type === 'output_image' && part.image_url?.startsWith('data:')) {
+              const match = /^data:([^;,]+);base64,(.+)$/s.exec(part.image_url)
+              if (match)
+                artifactCandidates.push({
+                  name: 'image-generated',
+                  mimeType: match[1],
+                  encoding: 'base64',
+                  content: match[2]
+                })
+            } else if (part.type === 'output_file' && part.file_data?.startsWith('data:')) {
+              const match = /^data:([^;,]+);base64,(.+)$/s.exec(part.file_data)
+              if (match)
+                artifactCandidates.push({
+                  name: part.filename ?? 'fichier-généré',
+                  mimeType: part.mime_type ?? match[1],
+                  encoding: 'base64',
+                  content: match[2]
+                })
             }
           }
         }
@@ -607,7 +665,18 @@ export class CodexAdapter implements ProviderAdapter {
       }
     }
 
-    return { text, provider: this.id, sessionId: responseId, systemInjected, usage }
+    const artifacts = normalizeProviderArtifacts(artifactCandidates, {
+      provider: this.id,
+      model: opts.model ?? this.model
+    })
+    return {
+      text,
+      provider: this.id,
+      sessionId: responseId,
+      systemInjected,
+      usage,
+      artifacts: artifacts.length ? artifacts : undefined
+    }
   }
 }
 import { randomUUID } from 'node:crypto'

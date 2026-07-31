@@ -8,11 +8,7 @@ import {
 } from './watchdog'
 import { spawn } from 'node:child_process'
 import { closeSync, existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import {
-  openStdoutJournal,
-  tailJsonLines,
-  type StdoutJournalHandle
-} from '../runs/stdout-journal'
+import { openStdoutJournal, tailJsonLines, type StdoutJournalHandle } from '../runs/stdout-journal'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 import { findNpmGlobalFile } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
@@ -32,6 +28,8 @@ import type {
   SendResult,
   StreamChunk
 } from './types'
+import type { ProviderArtifactCandidate } from '../../shared/artifacts'
+import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 
 /**
  * Mappe un outil Claude (tool_use) vers le type de preuve d'exécution commun (mutation / vérification
@@ -66,6 +64,52 @@ export function claudeToolResultText(content: unknown): string {
       .join('\n')
   }
   return ''
+}
+
+/** Images/documents structurés éventuellement remontés par Claude ou un résultat d'outil. */
+export function claudeContentArtifacts(
+  content: unknown,
+  tool?: string
+): ProviderArtifactCandidate[] {
+  if (!Array.isArray(content)) return []
+  const artifacts: ProviderArtifactCandidate[] = []
+  for (const entry of content) {
+    if (!entry || typeof entry !== 'object') continue
+    const block = entry as {
+      type?: string
+      name?: string
+      filename?: string
+      source?: { type?: string; media_type?: string; data?: string }
+      file?: { name?: string; media_type?: string; data?: string }
+    }
+    if (
+      (block.type === 'image' || block.type === 'document' || block.type === 'file') &&
+      block.source?.type === 'base64' &&
+      typeof block.source.data === 'string'
+    ) {
+      artifacts.push({
+        name:
+          block.name ??
+          block.filename ??
+          (block.type === 'image' ? 'image-générée' : 'document-généré'),
+        mimeType:
+          block.source.media_type ??
+          (block.type === 'image' ? 'image/png' : 'application/octet-stream'),
+        encoding: 'base64',
+        content: block.source.data,
+        tool
+      })
+    } else if (block.file && typeof block.file.data === 'string') {
+      artifacts.push({
+        name: block.file.name ?? 'fichier-généré',
+        mimeType: block.file.media_type ?? 'application/octet-stream',
+        encoding: 'base64',
+        content: block.file.data,
+        tool
+      })
+    }
+  }
+  return artifacts
 }
 
 export interface MaterializedAttachments {
@@ -421,6 +465,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     let sessionId: string | undefined
     let usage: SendResult['usage']
     const executionEvidence: ExecutionEvidence[] = []
+    const artifactCandidates: ProviderArtifactCandidate[] = []
     const pendingTools = new Map<string, { name: string; command: string; filePath: string }>()
     const queue: StreamChunk[] = []
     let done = false
@@ -470,10 +515,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
                 id?: string
                 name?: string
                 input?: Record<string, unknown>
+                source?: { type?: string; media_type?: string; data?: string }
+                file?: { name?: string; media_type?: string; data?: string }
               }>
             }
           | undefined
         if (msg?.model) resolvedModel = msg.model // modèle RÉEL rapporté par Claude
+        artifactCandidates.push(...claudeContentArtifacts(msg?.content))
         for (const part of msg?.content ?? []) {
           if (part.type === 'text' && part.text) {
             text += part.text
@@ -509,6 +557,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           pendingTools.delete(part.tool_use_id)
           // Contenu réel du résultat d'outil (stdout / retour d'édition), pour un rendu inline lisible.
           const output = claudeToolResultText(part.content).slice(-20_000)
+          artifactCandidates.push(...claudeContentArtifacts(part.content, call.name))
           const isFile = Boolean(call.filePath)
           executionEvidence.push({
             type: call.name,
@@ -647,6 +696,19 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     if (mutationBefore && execution) {
       await appendWorkspaceMutationEvidence(mutationBefore, execution.cwd, executionEvidence)
     }
+    const inlineArtifacts = normalizeProviderArtifacts(artifactCandidates, {
+      provider: this.id,
+      model: resolvedModel,
+      workspaceRoot: execution?.cwd
+    })
+    const fileArtifacts = artifactsFromExecutionEvidence(executionEvidence, {
+      provider: this.id,
+      model: resolvedModel,
+      workspaceRoot: execution?.cwd
+    })
+    const artifacts = [...inlineArtifacts, ...fileArtifacts].filter(
+      (artifact, index, all) => all.findIndex((candidate) => candidate.id === artifact.id) === index
+    )
     return {
       text,
       provider: this.id,
@@ -655,7 +717,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       usage,
       executionEvidence: executionEvidence.length ? executionEvidence : undefined,
       thinking: joinThinking(reasoningFragments),
-      model: resolvedModel
+      model: resolvedModel,
+      artifacts: artifacts.length ? artifacts : undefined
     }
   }
 }

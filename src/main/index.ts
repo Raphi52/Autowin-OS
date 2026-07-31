@@ -1536,6 +1536,8 @@ function registerChatIpc(): void {
             ok: pilotEvent.ok,
             data: pilotEvent.data
           }
+        else if (pilotEvent.kind === 'artifact' && pilotEvent.artifact)
+          durableEvent = { kind: 'artifact', artifact: pilotEvent.artifact }
         else if (pilotEvent.kind === 'done') {
           /**
            * Le TEXTE du `done` doit atterrir dans le message quand rien n'a ete streame.

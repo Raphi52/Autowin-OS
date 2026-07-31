@@ -17,6 +17,7 @@ import {
   formatOrchestrationOutcome,
   type OrchestrationOutcome
 } from '../shared/orchestration-outcome'
+import type { ChatArtifact } from '../shared/artifacts'
 
 /**
  * Boucle de PILOTAGE : un agent LLM conduit l'app lui-même.
@@ -40,6 +41,7 @@ export interface PilotEvent {
     | 'retry'
     | 'cancellation'
     | 'prompt-call'
+    | 'artifact'
   text?: string
   name?: string
   args?: unknown
@@ -55,6 +57,7 @@ export interface PilotEvent {
   sessionId?: string
   streamId?: string
   actionId?: string
+  artifact?: ChatArtifact
   /** Coût cumulé du tour (surfacé sur l'event 'done') → journal d'activité par conversation. */
   usage?: { inputTokens: number; outputTokens: number; costUsd?: number }
 }
@@ -185,10 +188,7 @@ export class AgentPilot {
     const timer = startTurnTimer('chat')
     let timingWritten = false
     const binding = bindingOverride ?? this.roles.getBinding('orchestrator')
-    const execCommand = (
-      name: string,
-      args: Record<string, unknown>
-    ): Promise<CommandResult> => {
+    const execCommand = (name: string, args: Record<string, unknown>): Promise<CommandResult> => {
       if (bindingOverride) {
         return turnId
           ? this.bus.exec(name, args, conversationId, authorityMode, bindingOverride, turnId)
@@ -505,6 +505,9 @@ export class AgentPilot {
         }
         iterationLimit += 1
         continue
+      }
+      for (const artifact of res.artifacts ?? []) {
+        onEvent({ kind: 'artifact', artifact, iteration: i })
       }
       const rejectedQuestion = /<question>/i.test(res.text)
       const text = res.text.replace(REJECTED_QUESTION_RE, REJECTED_QUESTION_MARKER).trim()

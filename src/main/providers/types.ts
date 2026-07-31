@@ -1,3 +1,5 @@
+import type { ChatArtifact } from '../../shared/artifacts'
+
 /**
  * Contrat d'adaptateur provider — l'interface interne STABLE d'Autowin OS.
  *
@@ -94,6 +96,8 @@ export interface StreamChunk {
    * de réflexion avant le premier mot avec un gros modèle).
    */
   reasoning?: string
+  /** Artefacts structurés disponibles avant la fin du flux, si le supplier les émet ainsi. */
+  artifacts?: ChatArtifact[]
 }
 
 /** Consommation réelle d'un tour, telle que remontée par le provider. */
@@ -152,6 +156,8 @@ export interface SendResult {
   thinking?: string
   /** Modèle RÉELLEMENT utilisé, tel que rapporté par le provider (peut différer du demandé sur reroute). */
   model?: string
+  /** Images/fichiers produits pendant ce tour, normalisés indépendamment du supplier. */
+  artifacts?: ChatArtifact[]
 }
 
 /**

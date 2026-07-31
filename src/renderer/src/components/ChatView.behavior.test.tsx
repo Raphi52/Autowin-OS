@@ -1465,6 +1465,40 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(document.body.querySelector('.image-lightbox')).toBeNull()
   })
 
+  it('renders a persisted model artifact as an inline chat preview', async () => {
+    const history = [
+      {
+        role: 'assistant',
+        content: '[artefact capture.png]',
+        ts: 1,
+        turnId: 'turn-artifact',
+        status: 'completed',
+        parts: [
+          {
+            kind: 'artifact',
+            artifact: {
+              id: 'artifact-capture',
+              name: 'capture.png',
+              mimeType: 'image/png',
+              kind: 'image',
+              size: 3,
+              createdAt: 1,
+              encoding: 'base64',
+              content: 'YWJj',
+              source: { provider: 'codex', model: 'gpt-test' }
+            }
+          }
+        ]
+      }
+    ]
+    await mount(api({ conversations: vi.fn().mockResolvedValue([conversation('A', history)]) }))
+    await click('.conv-pick')
+
+    expect(container!.querySelector('[data-artifact-kind="image"]')).not.toBeNull()
+    expect(container!.querySelector('img.artifact-preview__image')).not.toBeNull()
+    expect(container!.textContent).toContain('gpt-test')
+  })
+
   it('adds a pasted file to the composer draft via onPaste', async () => {
     const encoded = deferred<string>()
     await mount(api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) }))

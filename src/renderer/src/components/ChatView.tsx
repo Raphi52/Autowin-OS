@@ -48,9 +48,11 @@ import { ModelQuotaIndicator } from './ModelQuotaIndicator'
 import { StepThread, AssistantActivityGroup } from './ChatView.parts'
 import { RunInspector } from './RunInspector'
 import { WorkflowExecutionGraph } from './WorkflowExecutionGraph'
+import { ArtifactPreview } from './ArtifactPreview'
 import './ChatView.css'
 import './SlashPalette.css'
 import type { InspectTurnTarget } from '../observatory-focus'
+import type { ChatArtifact } from '../../../shared/artifacts'
 
 /* ---------- Types ---------- */
 
@@ -94,6 +96,7 @@ interface PilotEvent {
     | 'error'
     | 'retry'
     | 'cancellation'
+    | 'artifact'
   text?: string
   streamId?: string
   actionId?: string
@@ -102,6 +105,7 @@ interface PilotEvent {
   args?: unknown
   ok?: boolean
   data?: unknown
+  artifact?: ChatArtifact
   usage?: { inputTokens?: number; outputTokens?: number; costUsd?: number }
 }
 
@@ -486,6 +490,8 @@ const ChatMessageRow = memo(
                 rows={part.rows}
                 onPick={(prompt) => onPickSuggestion?.(prompt)}
               />
+            ) : part.kind === 'artifact' ? (
+              <ArtifactPreview key={part.artifact.id} artifact={part.artifact} />
             ) : (
               <AssistantActivityGroup
                 key={index}
@@ -1202,11 +1208,13 @@ export function ChatView({
      * prompt soit jamais visible.
      */
     const prefill = (event: Event): void => {
-      const detail = (event as CustomEvent<{
-        conversationId?: string
-        prompt?: string
-        send?: boolean
-      }>).detail
+      const detail = (
+        event as CustomEvent<{
+          conversationId?: string
+          prompt?: string
+          send?: boolean
+        }>
+      ).detail
       if (!detail?.prompt) return
       const id = detail.conversationId
       if (id) {
@@ -1508,9 +1516,11 @@ export function ChatView({
     return msgs.map((m) => {
       if (m.role === 'user') return { role: 'user' as const, content: m.content }
       const content = m.parts
-        .map((p) =>
-          p.kind === 'text' ? p.text : `[a exécuté ${p.name}${p.ok === false ? ' (échec)' : ''}]`
-        )
+        .map((p) => {
+          if (p.kind === 'text') return p.text
+          if (p.kind === 'artifact') return `[artefact ${p.artifact.name}]`
+          return `[a exécuté ${p.name}${p.ok === false ? ' (échec)' : ''}]`
+        })
         .join('\n')
       return { role: 'assistant' as const, content }
     })
@@ -2452,10 +2462,7 @@ export function ChatView({
                   error={modelChangeError}
                   onSelect={(option) => void changeOrchestratorModel(option)}
                 />
-                <ConversationCostIndicator
-                  conversationId={activeId ?? undefined}
-                  busy={busy}
-                />
+                <ConversationCostIndicator conversationId={activeId ?? undefined} busy={busy} />
                 <ModelQuotaIndicator provider={runtimeIdentity?.provider} />
               </div>
             </div>
@@ -2473,10 +2480,7 @@ export function ChatView({
             aria-orientation="vertical"
             onPointerDown={beginRunsResize}
           />
-          <aside
-            className="runs-pane fade-in"
-            style={{ width: `${runsPaneWidth}px` }}
-          >
+          <aside className="runs-pane fade-in" style={{ width: `${runsPaneWidth}px` }}>
             <div className="workflow-panel-head">
               <div className="workflow-section-tabs" role="tablist" aria-label="Vues Workflows">
                 {WORKFLOW_PANEL_SECTIONS.map((section) => (
@@ -2522,7 +2526,9 @@ export function ChatView({
               <WorkflowExecutionGraph
                 conversationId={activeId ?? undefined}
                 active={isActive}
-                requestLabel={[...messages].reverse().find((message) => message.role === 'user')?.content}
+                requestLabel={
+                  [...messages].reverse().find((message) => message.role === 'user')?.content
+                }
                 live={
                   Boolean(activeId && busyConversations.has(activeId)) ||
                   liveRuns[activeId ?? '']?.status === 'running'
@@ -2563,82 +2569,84 @@ export function ChatView({
               )}
               {paneTab === 'subagents' &&
                 visibleLiveRuns.map(([conversationId, liveRun]) => (
-                <div
-                  key={conversationId}
-                  ref={conversationId === activeId ? liveRunCardRef : undefined}
-                  className={`card live-run stripe stripe-accent fade-in`}
-                  data-live-run-conversation-id={conversationId}
-                >
-                  <div className="row" style={{ justifyContent: 'space-between' }}>
-                    <div className="row gap2" style={{ minWidth: 0 }}>
-                      {liveRun.status === 'running' ? (
-                        <span className="spinner" />
-                      ) : (
-                        <span
-                          className={`status-dot ${liveRun.status === 'green' ? 'st-ok' : 'st-err'}`}
-                        />
-                      )}
-                      <span className="run-subject live-subject" title={liveRun.task}>
-                        {liveRun.task}
-                      </span>
+                  <div
+                    key={conversationId}
+                    ref={conversationId === activeId ? liveRunCardRef : undefined}
+                    className={`card live-run stripe stripe-accent fade-in`}
+                    data-live-run-conversation-id={conversationId}
+                  >
+                    <div className="row" style={{ justifyContent: 'space-between' }}>
+                      <div className="row gap2" style={{ minWidth: 0 }}>
+                        {liveRun.status === 'running' ? (
+                          <span className="spinner" />
+                        ) : (
+                          <span
+                            className={`status-dot ${liveRun.status === 'green' ? 'st-ok' : 'st-err'}`}
+                          />
+                        )}
+                        <span className="run-subject live-subject" title={liveRun.task}>
+                          {liveRun.task}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ marginTop: 'var(--s2)' }}>
+                      <StepThread steps={liveRun.steps} />
+                      {liveRun.status === 'running' &&
+                        (() => {
+                          const phase = liveRun.phase
+                          const meta = phase ? STEP_META[phase.step] : undefined
+                          const label = phase ? phaseLabel(phase) : 'sous-agent'
+                          // Modèle réel (ex "cc/claude-opus-4-8" → "claude-opus-4-8") + effort en clair.
+                          const EFFORT_FR: Record<string, string> = {
+                            low: 'faible',
+                            medium: 'moyen',
+                            high: 'élevé',
+                            xhigh: 'très élevé',
+                            max: 'max',
+                            ultra: 'ultra'
+                          }
+                          const shortModel = phase?.model?.split('/').pop()
+                          const eff =
+                            phase?.reasoningEffort &&
+                            phase.reasoningEffort !== 'none' &&
+                            phase.reasoningEffort !== 'auto'
+                              ? (EFFORT_FR[phase.reasoningEffort] ?? phase.reasoningEffort)
+                              : undefined
+                          const detail = shortModel
+                            ? `${shortModel}${eff ? ` · ${eff}` : ''}`
+                            : phase?.provider
+                          return (
+                            <div className="subagent-step live-subagent-step">
+                              <div
+                                className="row gap2"
+                                style={{ justifyContent: 'space-between', fontSize: 11 }}
+                              >
+                                <span className="c-faint">
+                                  <span className="spinner" /> {meta?.icon ?? '⏳'} {label}
+                                  {detail && <span className="mono c-accent"> {detail}</span>}
+                                </span>
+                                <span className="row gap2">
+                                  <span className="badge">en cours</span>
+                                  <button
+                                    className="btn btn-sm btn-danger"
+                                    title="Stopper le sous-agent en cours"
+                                    onClick={() =>
+                                      void window.api.cancelOrchestration(conversationId)
+                                    }
+                                  >
+                                    ⏹ Stop
+                                  </button>
+                                </span>
+                              </div>
+                              {liveRun.liveText && (
+                                <pre className="subagent-live-text">{liveRun.liveText}</pre>
+                              )}
+                            </div>
+                          )
+                        })()}
                     </div>
                   </div>
-                  <div style={{ marginTop: 'var(--s2)' }}>
-                    <StepThread steps={liveRun.steps} />
-                    {liveRun.status === 'running' &&
-                      (() => {
-                        const phase = liveRun.phase
-                        const meta = phase ? STEP_META[phase.step] : undefined
-                        const label = phase ? phaseLabel(phase) : 'sous-agent'
-                        // Modèle réel (ex "cc/claude-opus-4-8" → "claude-opus-4-8") + effort en clair.
-                        const EFFORT_FR: Record<string, string> = {
-                          low: 'faible',
-                          medium: 'moyen',
-                          high: 'élevé',
-                          xhigh: 'très élevé',
-                          max: 'max',
-                          ultra: 'ultra'
-                        }
-                        const shortModel = phase?.model?.split('/').pop()
-                        const eff =
-                          phase?.reasoningEffort &&
-                          phase.reasoningEffort !== 'none' &&
-                          phase.reasoningEffort !== 'auto'
-                            ? (EFFORT_FR[phase.reasoningEffort] ?? phase.reasoningEffort)
-                            : undefined
-                        const detail = shortModel
-                          ? `${shortModel}${eff ? ` · ${eff}` : ''}`
-                          : phase?.provider
-                        return (
-                          <div className="subagent-step live-subagent-step">
-                            <div
-                              className="row gap2"
-                              style={{ justifyContent: 'space-between', fontSize: 11 }}
-                            >
-                              <span className="c-faint">
-                                <span className="spinner" /> {meta?.icon ?? '⏳'} {label}
-                                {detail && <span className="mono c-accent"> {detail}</span>}
-                              </span>
-                              <span className="row gap2">
-                                <span className="badge">en cours</span>
-                                <button
-                                  className="btn btn-sm btn-danger"
-                                  title="Stopper le sous-agent en cours"
-                                  onClick={() => void window.api.cancelOrchestration(conversationId)}
-                                >
-                                  ⏹ Stop
-                                </button>
-                              </span>
-                            </div>
-                            {liveRun.liveText && (
-                              <pre className="subagent-live-text">{liveRun.liveText}</pre>
-                            )}
-                          </div>
-                        )
-                      })()}
-                  </div>
-                </div>
-              ))}
+                ))}
               {/* SECTION RUN : les RUN.md eux-mêmes (statut, DoD, journal, défauts). */}
               {paneTab === 'run' && runs.length === 0 && (
                 <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
@@ -2651,79 +2659,81 @@ export function ChatView({
               )}
               {paneTab === 'run' &&
                 runs.map((r) => {
-                const pct =
-                  r.summary.dodTotal > 0
-                    ? Math.round((r.summary.dodChecked / r.summary.dodTotal) * 100)
-                    : 0
-                const isOpen = openRun?.path === r.path
-                return (
-                  <div key={r.path} className="col" style={{ gap: 0 }}>
-                    <button
-                      className="card run-row"
-                      onClick={() => {
-                        if (isOpen) {
-                          setOpenRun(null)
-                          setOpenTrace(null)
-                        } else {
-                          viewRun(r)
-                        }
-                      }}
-                    >
-                      <div className="row" style={{ justifyContent: 'space-between' }}>
-                        <div className="row gap2" style={{ minWidth: 0 }}>
-                          <span className={`status-dot ${RUN_DOT[r.summary.status] ?? ''}`} />
-                          <span className="run-subject">{r.subject}</span>
-                        </div>
-                        <span className="badge">{r.summary.status}</span>
-                      </div>
-                      <div className="row" style={{ marginTop: 6, gap: 'var(--s2)' }}>
-                        <div className="meter grow">
-                          <span
-                            style={{
-                              width: `${pct}%`,
-                              background:
-                                r.summary.status === 'green' ? 'var(--ok)' : 'var(--accent)'
-                            }}
-                          />
-                        </div>
-                        <span className="c-faint tnum" style={{ fontSize: 10 }}>
-                          {r.summary.dodChecked}/{r.summary.dodTotal}
-                        </span>
-                        <span className="c-faint tnum" style={{ fontSize: 10 }}>
-                          J {r.summary.journalEvents} · D {r.summary.defauts}
-                        </span>
-                      </div>
-                    </button>
-                    {isOpen && (
-                      <div className="run-detail-box fade-in">
-                        {openTrace && openRun && (
-                          <div className="run-detail-tabs">
-                            <button
-                              type="button"
-                              className={`run-detail-tab${runDetailTab === 'trace' ? ' is-active' : ''}`}
-                              onClick={() => setRunDetailTab('trace')}
-                            >
-                              Fil des sous-agents
-                            </button>
-                            <button
-                              type="button"
-                              className={`run-detail-tab${runDetailTab === 'runmd' ? ' is-active' : ''}`}
-                              onClick={() => setRunDetailTab('runmd')}
-                            >
-                              RUN.md
-                            </button>
+                  const pct =
+                    r.summary.dodTotal > 0
+                      ? Math.round((r.summary.dodChecked / r.summary.dodTotal) * 100)
+                      : 0
+                  const isOpen = openRun?.path === r.path
+                  return (
+                    <div key={r.path} className="col" style={{ gap: 0 }}>
+                      <button
+                        className="card run-row"
+                        onClick={() => {
+                          if (isOpen) {
+                            setOpenRun(null)
+                            setOpenTrace(null)
+                          } else {
+                            viewRun(r)
+                          }
+                        }}
+                      >
+                        <div className="row" style={{ justifyContent: 'space-between' }}>
+                          <div className="row gap2" style={{ minWidth: 0 }}>
+                            <span className={`status-dot ${RUN_DOT[r.summary.status] ?? ''}`} />
+                            <span className="run-subject">{r.subject}</span>
                           </div>
-                        )}
-                        {openTrace && (runDetailTab === 'trace' || !openRun) ? (
-                          <StepThread steps={openTrace} />
-                        ) : (
-                          openRun && <RunInspector content={openRun.content} summary={r.summary} />
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+                          <span className="badge">{r.summary.status}</span>
+                        </div>
+                        <div className="row" style={{ marginTop: 6, gap: 'var(--s2)' }}>
+                          <div className="meter grow">
+                            <span
+                              style={{
+                                width: `${pct}%`,
+                                background:
+                                  r.summary.status === 'green' ? 'var(--ok)' : 'var(--accent)'
+                              }}
+                            />
+                          </div>
+                          <span className="c-faint tnum" style={{ fontSize: 10 }}>
+                            {r.summary.dodChecked}/{r.summary.dodTotal}
+                          </span>
+                          <span className="c-faint tnum" style={{ fontSize: 10 }}>
+                            J {r.summary.journalEvents} · D {r.summary.defauts}
+                          </span>
+                        </div>
+                      </button>
+                      {isOpen && (
+                        <div className="run-detail-box fade-in">
+                          {openTrace && openRun && (
+                            <div className="run-detail-tabs">
+                              <button
+                                type="button"
+                                className={`run-detail-tab${runDetailTab === 'trace' ? ' is-active' : ''}`}
+                                onClick={() => setRunDetailTab('trace')}
+                              >
+                                Fil des sous-agents
+                              </button>
+                              <button
+                                type="button"
+                                className={`run-detail-tab${runDetailTab === 'runmd' ? ' is-active' : ''}`}
+                                onClick={() => setRunDetailTab('runmd')}
+                              >
+                                RUN.md
+                              </button>
+                            </div>
+                          )}
+                          {openTrace && (runDetailTab === 'trace' || !openRun) ? (
+                            <StepThread steps={openTrace} />
+                          ) : (
+                            openRun && (
+                              <RunInspector content={openRun.content} summary={r.summary} />
+                            )
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
             </div>
           </aside>
         </>

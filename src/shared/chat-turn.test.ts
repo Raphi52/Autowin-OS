@@ -66,4 +66,26 @@ describe('chat turn reducer', () => {
       sanitizePersistedValue({ target: 'chat', token: 'secret', nested: { password: 'hidden' } })
     ).toEqual({ target: 'chat', token: '[masqué]', nested: { password: '[masqué]' } })
   })
+
+  it('persists generated artifacts as first-class turn parts and deduplicates retries', () => {
+    const artifact = {
+      id: 'artifact-capture',
+      name: 'capture.png',
+      mimeType: 'image/png',
+      kind: 'image' as const,
+      size: 3,
+      createdAt: 123,
+      encoding: 'base64' as const,
+      content: 'YWJj',
+      source: { provider: 'codex' }
+    }
+    const withArtifact = reduceChatTurn(createChatTurn('turn-artifact'), {
+      kind: 'artifact',
+      artifact
+    })
+    const retried = reduceChatTurn(withArtifact, { kind: 'artifact', artifact })
+
+    expect(retried.parts).toEqual([{ kind: 'artifact', artifact }])
+    expect(flattenChatParts(retried.parts)).toBe('[artefact capture.png]')
+  })
 })

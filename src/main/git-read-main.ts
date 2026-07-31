@@ -7,8 +7,6 @@ import {
   type GitDiffResult
 } from '../shared/git-read'
 
-const run = promisify(execFile)
-
 /** stdout d'une erreur execFile (git renvoie exit≠0 avec un diff valide sur --no-index). */
 function stdoutOf(error: unknown): string {
   return error && typeof error === 'object' && 'stdout' in error
@@ -21,6 +19,7 @@ function stdoutOf(error: unknown): string {
  * QUE `git diff` (aucune mutation). Le path vient du renderer → passé en argv (jamais un shell) + `--`.
  */
 export async function readGitDiff(cwd: string, path: string): Promise<GitDiffResult> {
+  const run = promisify(execFile)
   try {
     const r = await run('git', ['diff', '--no-color', 'HEAD', '--', path], {
       cwd,
@@ -52,6 +51,7 @@ export async function readGitDiff(cwd: string, path: string): Promise<GitDiffRes
  * Dégrade proprement (repo absent / git indispo) → { available:false } sans jamais throw vers l'IPC.
  */
 export async function readGitState(cwd: string, historyLimit = 20): Promise<GitReadResult> {
+  const run = promisify(execFile)
   try {
     const [statusResult, logResult] = await Promise.allSettled([
       run('git', ['status', '--porcelain=v2', '--branch'], { cwd, windowsHide: true }),

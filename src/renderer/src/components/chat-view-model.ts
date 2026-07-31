@@ -3,6 +3,7 @@ import {
   type ChatTurnEvent,
   type ChatTurnStatus,
   type PersistedChatActionPart,
+  type PersistedChatArtifactPart,
   type PersistedChatPart,
   type PersistedChatTextPart
 } from '../../../shared/chat-turn'
@@ -10,13 +11,14 @@ import { parseScoutSuggestions, type SuggestionGroup } from './scout-suggestions
 import { parseScoutTable, type ScoutRow } from './scout-table'
 
 export type ChatActionPart = PersistedChatActionPart
+export type ChatArtifactPart = PersistedChatArtifactPart
 export type ChatTextPart = PersistedChatTextPart
 export type ChatPart = PersistedChatPart
 export type ChatActivityBlock = { kind: 'activity'; actions: ChatActionPart[] }
 export type ChatSuggestionsBlock = { kind: 'suggestions'; groups: SuggestionGroup[] }
 export type ChatScoutTableBlock = { kind: 'scout-table'; rows: ScoutRow[] }
 export type ChatRenderBlock =
-  ChatTextPart | ChatActivityBlock | ChatSuggestionsBlock | ChatScoutTableBlock
+  ChatTextPart | ChatArtifactPart | ChatActivityBlock | ChatSuggestionsBlock | ChatScoutTableBlock
 
 export interface HydratedAssistantMessage {
   role: 'assistant'
@@ -121,6 +123,7 @@ export interface AssistantPilotEvent {
     | 'error'
     | 'retry'
     | 'cancellation'
+    | 'artifact'
   streamId?: string
   actionId?: string
   iteration?: number
@@ -129,6 +132,7 @@ export interface AssistantPilotEvent {
   args?: unknown
   ok?: boolean
   data?: unknown
+  artifact?: PersistedChatArtifactPart['artifact']
 }
 
 /**
@@ -216,7 +220,9 @@ export function reduceAssistantPilotEvent(
       ok: event.ok,
       data: event.data
     }
-  } else if (event.kind === 'done') turnEvent = { kind: 'done' }
+  } else if (event.kind === 'artifact' && event.artifact)
+    turnEvent = { kind: 'artifact', artifact: event.artifact }
+  else if (event.kind === 'done') turnEvent = { kind: 'done' }
   else if (event.kind === 'error')
     turnEvent = { kind: 'failed', error: event.text ?? 'Erreur inconnue' }
   else if (event.kind === 'cancellation') turnEvent = { kind: 'cancelled' }
@@ -777,7 +783,7 @@ export function coalesceAssistantParts(parts: ChatPart[]): ChatPart[] {
     pendingText = []
   }
   for (const part of parts) {
-    if (part.kind === 'action') {
+    if (part.kind !== 'text') {
       flushText()
       compact.push(part)
       continue
@@ -802,6 +808,10 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
       const suggestions = parseScoutSuggestions(part.text)
       if (suggestions) blocks.push({ kind: 'suggestions', groups: suggestions })
       else blocks.push(part)
+      continue
+    }
+    if (part.kind === 'artifact') {
+      blocks.push(part)
       continue
     }
     const previous = blocks.at(-1)

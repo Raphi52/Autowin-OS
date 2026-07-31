@@ -1,3 +1,5 @@
+import type { ChatArtifact } from './artifacts'
+
 export type ChatTurnStatus = 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
 
 export interface PersistedChatTextPart {
@@ -22,7 +24,13 @@ export interface PersistedChatActionPart {
   interrupted?: boolean
 }
 
-export type PersistedChatPart = PersistedChatTextPart | PersistedChatActionPart
+export interface PersistedChatArtifactPart {
+  kind: 'artifact'
+  artifact: ChatArtifact
+}
+
+export type PersistedChatPart =
+  PersistedChatTextPart | PersistedChatActionPart | PersistedChatArtifactPart
 
 export interface ChatTurnRuntime {
   provider: string
@@ -44,6 +52,7 @@ export type ChatTurnEvent =
   | { kind: 'stream-reset'; streamId: string }
   | { kind: 'command'; actionId: string; name: string; args?: unknown }
   | { kind: 'result'; actionId: string; name: string; ok?: boolean; data?: unknown }
+  | { kind: 'artifact'; artifact: ChatArtifact }
   | { kind: 'done'; sessionId?: string }
   | { kind: 'failed'; error: string }
   | { kind: 'cancelled' }
@@ -137,6 +146,20 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
     return { ...state, parts }
   }
 
+  if (event.kind === 'artifact') {
+    const existing = state.parts.findIndex(
+      (part) => part.kind === 'artifact' && part.artifact.id === event.artifact.id
+    )
+    if (existing < 0)
+      return {
+        ...state,
+        parts: [...state.parts, { kind: 'artifact', artifact: event.artifact }]
+      }
+    const parts = state.parts.slice()
+    parts[existing] = { kind: 'artifact', artifact: event.artifact }
+    return { ...state, parts }
+  }
+
   if (event.kind === 'done')
     return {
       ...state,
@@ -166,11 +189,11 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
 
 export function flattenChatParts(parts: PersistedChatPart[]): string {
   return parts
-    .map((part) =>
-      part.kind === 'text'
-        ? part.text
-        : `[a exécuté ${part.name}${part.ok === false ? ' (échec)' : ''}]`
-    )
+    .map((part) => {
+      if (part.kind === 'text') return part.text
+      if (part.kind === 'artifact') return `[artefact ${part.artifact.name}]`
+      return `[a exécuté ${part.name}${part.ok === false ? ' (échec)' : ''}]`
+    })
     .filter(Boolean)
     .join('\n')
 }
