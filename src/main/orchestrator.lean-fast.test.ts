@@ -65,8 +65,10 @@ function makeOrchestrator(
       runId: string
       task: string
       phaseOutputs: { phase: PipelinePhase; text: string }[]
+      agents?: Array<{ token: string; pid?: number; identity?: string; journalPath?: string }>
     }) => void
     onRunSettled?: (runId: string) => void
+    processIdentity?: (pid: number) => string | undefined
   } = {}
 ): Orchestrator {
   return new Orchestrator({
@@ -82,6 +84,7 @@ function makeOrchestrator(
     worktrees: makeTestWorktrees('C:\\ws'),
     classifyPhases: opts.classifyPhases,
     onPhaseCompleted: opts.onPhaseCompleted,
+    ...(opts.processIdentity ? { processIdentity: opts.processIdentity } : {}),
     onRunSettled: opts.onRunSettled
   })
 }

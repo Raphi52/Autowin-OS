@@ -49,7 +49,14 @@ export interface OrchestrationRunState {
    * son journal ; sans ces références, l'app qui revient ne sait ni s'il vit encore, ni où lire ce
    * qu'il a produit pendant son absence — elle relance donc un travail déjà fait.
    */
-  agents?: Array<{ token: string; pid?: number; journalPath?: string; offset?: number }>
+  agents?: Array<{
+    token: string
+    pid?: number
+    /** Empreinte du processus au lancement — distingue notre agent d'un pid recyclé. */
+    identity?: string
+    journalPath?: string
+    offset?: number
+  }>
 }
 
 /** Un `runId` est un nom de fichier : on refuse tout ce qui pourrait sortir du dossier. */

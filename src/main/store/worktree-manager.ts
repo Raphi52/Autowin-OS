@@ -139,7 +139,12 @@ export interface WorktreeManagerOptions {
 
 const SPAWN_INTENT_MAX_AGE_MS = 2 * 60 * 1_000
 
-function defaultProcessIdentity(pid: number): string | undefined {
+/**
+ * Empreinte d'un processus : heure de démarrage + chemin. Deux processus peuvent porter le MÊME pid
+ * à quelques minutes d'écart (recyclage) ; cette empreinte distingue « toujours le nôtre » de
+ * « quelqu'un d'autre a hérité du numéro ». Exportée : le rattachement d'un run en a besoin aussi.
+ */
+export function defaultProcessIdentity(pid: number): string | undefined {
   try {
     if (platform() === 'win32') {
       const command =

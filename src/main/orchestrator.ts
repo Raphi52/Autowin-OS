@@ -38,6 +38,8 @@ import type { WorktreeAgentActivity } from '../shared/worktree-activity-model'
 export interface RunAgentRef {
   token: string
   pid?: number
+  /** Empreinte du processus au lancement (heure de démarrage + chemin) — anti pid recyclé. */
+  identity?: string
   journalPath?: string
   /** Octets déjà lus dans le journal — une reprise repart de là, sans rien réafficher deux fois. */
   offset?: number
@@ -201,6 +203,8 @@ export interface OrchestratorDeps {
   }) => void
   /** Notifié quand le run atteint sa fin (vert, rouge ou abandon) → l'appelant efface l'état repris. */
   onRunSettled?: (runId: string) => void
+  /** Empreinte d'un processus vivant — sert à savoir, au redémarrage, si un agent travaille encore. */
+  processIdentity?: (pid: number) => string | undefined
   /**
    * Clôture automatique appelée UNIQUEMENT sur un run vert, APRÈS la fusion du worktree (le travail
    * est alors dans la base). Best-effort : son échec ne change pas le verdict du run.
@@ -515,7 +519,10 @@ export class Orchestrator {
         if (isMut) this.deps.worktrees?.spawnIntent?.(runId, token, active)
       },
       spawned: (token, pid) => {
-        this.rememberAgent(runId, token, { pid })
+        // Empreinte capturée MAINTENANT : au redémarrage, elle distingue notre agent d'un processus
+        // étranger ayant hérité du même numéro de pid.
+        const identity = this.deps.processIdentity?.(pid)
+        this.rememberAgent(runId, token, { pid, ...(identity ? { identity } : {}) })
         if (isMut) this.deps.worktrees?.spawned?.(runId, token, pid)
       },
       journal: (token, journalPath) => this.rememberAgent(runId, token, { journalPath })

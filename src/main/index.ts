@@ -48,7 +48,8 @@ import { TraceLedger } from './activity/ledger'
 import { listSessions, parseSession } from './activity/transcripts'
 import { persistConversations } from './store/conversations-disk'
 import { collectStdoutJournals } from './runs/journal-gc'
-import { listConvRuns, loadConvRunTrace } from './runs/conv-runs'
+import { deleteConvRun, listConvRuns, loadConvRunTrace } from './runs/conv-runs'
+import { deleteListedRun } from './dashboards/runs-scan'
 import { createOrchestrateTurnPersistence } from './runs/orchestrate-turn-persistence'
 import {
   appendTurnEvent,
@@ -126,6 +127,7 @@ import {
   ChatArtifactPreviewBudget,
   MAX_ARTIFACT_PREVIEW_BYTES,
   materializeChatArtifact,
+  materializeUserImageArtifact,
   readConversationArtifact,
   removeConversationArtifacts,
   revealableConversationArtifactPath
@@ -139,6 +141,8 @@ import {
 } from './activity/native-preflight'
 import { nativeSpoolRoot, appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace, readBrainTraces } from './activity/brain-trace-spool'
+import { resumeActionFor } from './runs/run-reattach'
+import { defaultProcessIdentity } from './store/worktree-manager'
 import {
   appendConversationFileTrace,
   appendExecutionEvidenceFileTrace,
@@ -1633,6 +1637,11 @@ function registerChatIpc(): void {
     brainWorker.request('searchBrain', guardString(path, 'path'), guardString(query, 'query'))
   )
   ipcMain.handle('os:listRuns', () => os.listRuns())
+  ipcMain.handle('os:runs:delete', async (event, rawPath: string) => {
+    assertTrustedRendererSender(event, 'DeleteRun')
+    await deleteListedRun(guardString(rawPath, 'path'))
+    return { ok: true }
+  })
 
   // Ouvre le dossier contenant un fichier dans l'explorateur (vue Workflow).
   ipcMain.handle('os:openFolder', (_e, path: string) => {
@@ -1705,12 +1714,34 @@ function registerChatIpc(): void {
           conversationId,
           {
             content: last.content,
-            attachments: last.attachments?.map(({ name, mimeType, size, thumbnail }) => ({
-              name,
-              mimeType,
-              size,
-              ...(thumbnail && { thumbnail })
-            }))
+            attachments: last.attachments?.map(
+              ({ name, mimeType, size, kind, content, thumbnail }) => {
+                const metadata = {
+                  name,
+                  mimeType,
+                  size,
+                  ...(thumbnail && { thumbnail })
+                }
+                if (kind !== 'image') return metadata
+                try {
+                  return {
+                    ...metadata,
+                    turnId,
+                    artifact: materializeUserImageArtifact(
+                      { name, mimeType, size, content },
+                      conversationId,
+                      turnId
+                    )
+                  }
+                } catch {
+                  return {
+                    ...metadata,
+                    turnId,
+                    originalUnavailable: true
+                  }
+                }
+              }
+            )
           },
           {
             turnId,
@@ -2217,6 +2248,19 @@ function registerChatIpc(): void {
     const c = os.conversations.get(guardString(convId, 'convId'))
     return listConvRuns(convId, c?.runPaths ?? [])
   })
+  ipcMain.handle(
+    'os:conversationRuns:delete',
+    async (event, rawConvId: string, rawPath: string) => {
+      assertTrustedRendererSender(event, 'DeleteConversationRun')
+      const convId = guardString(rawConvId, 'convId')
+      const path = guardString(rawPath, 'path')
+      const conversation = os.conversations.get(convId)
+      if (!conversation) throw new Error(`Conversation inconnue: ${convId}`)
+      const result = await deleteConvRun(convId, path, conversation.runPaths ?? [])
+      if (result.kind === 'detached') os.conversations.detachRun(convId, result.attachedPath)
+      return { ok: true, kind: result.kind }
+    }
+  )
   // Fil des sous-agents d'un run (exec/juge/gate avec contenu), pour l'affichage détaillé.
   ipcMain.handle('os:runTrace', (event, path: string) => {
     assertTrustedRendererSender(event, 'RunTrace')
@@ -2568,7 +2612,18 @@ app.whenReady().then(async () => {
   // acquis persisté ; on relance ICI à la phase suivante, en réinjectant les livrables déjà produits
   // (aucune phase refaite). Rien à reprendre → aucun effet (démarrage normal strictement inchangé).
   const resumableRun = os.resumableOrchestration()
-  if (resumableRun) {
+  // GARDE DE VIVACITÉ : les CLI sont détachés, donc un agent du run précédent peut ÊTRE ENCORE EN
+  // TRAIN DE TRAVAILLER. Relancer par-dessus mettrait deux agents sur la même copie, à s'écraser
+  // l'un l'autre. On vérifie avant de relancer — et on l'écrit, pour que ce silence soit lisible.
+  const reprise = resumeActionFor(resumableRun, defaultProcessIdentity)
+  if (reprise === 'rattacher') {
+    console.log(
+      '[resume-orchestration]',
+      resumableRun?.runId,
+      '→ un agent travaille ENCORE : aucune relance. Son journal reste la source de vérité.'
+    )
+  }
+  if (resumableRun && reprise === 'relancer') {
     const conversationId = resumableRun.conversationId ?? '__autonomous__'
     const resumeTurnId = resumableRun.turnId ?? randomUUID()
     const legacyResumeTurn = resumableRun.turnId
