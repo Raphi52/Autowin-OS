@@ -458,12 +458,14 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const [autoMode, setAutoMode] = useState(
     () => localStorage.getItem('autowin:tickets-auto-mode') === '1'
   )
+  const autoModeEnabledRef = useRef(autoMode)
   const seenRef = useRef<Set<string>>(loadSeen(localStorage))
   const autoBusyRef = useRef(false)
   const [autoStatus, setAutoStatus] = useState<string>()
 
   const setAutoModeChecked = (checked: boolean): void => {
     localStorage.setItem('autowin:tickets-auto-mode', checked ? '1' : '0')
+    autoModeEnabledRef.current = checked
     setAutoMode(checked)
     if (checked) {
       // AMORCE : l'existant devient « connu » sans etre traite.
@@ -475,7 +477,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
 
   const treatIncoming = useCallback(async () => {
     if (!autoMode || autoBusyRef.current) return
-    const selection = pickIncomingTickets(visibleItemsRef.current, seenRef.current)
+    let selection = pickIncomingTickets(visibleItemsRef.current, seenRef.current)
     if (!selection.toTreat.length) return
     // Marquage AVANT traitement (garde-fou 2) : un echec ne doit pas relancer le meme ticket.
     for (const key of selection.seenAdditions) seenRef.current.add(key)
@@ -501,31 +503,42 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       setAutoStatus('en veille · aucun rôle configuré')
       return
     }
-    const result = await runTicketTreatmentBatch(selection.toTreat, {
-      shouldContinue: () => autoBusyRef.current,
-      createConversation: async (item) => {
-        const conv = await window.api.conversationsCreate({
-          title: ticketConversationTitle(item),
-          category: provider as string,
-          provider: provider as string
-        })
-        await window.api.conversationsSetAuthorityMode(conv.id, 'ask')
-        return { id: conv.id }
-      },
-      promptConversation: async (conv, _item, prompt) => {
-        try {
-          const r = await window.api.orchestrate(prompt, conv.id)
-          return { ok: r?.ok !== false }
-        } catch {
-          return { ok: false }
+    let succeeded = 0
+    let failed = 0
+    let total = 0
+    while (selection.toTreat.length) {
+      const result = await runTicketTreatmentBatch(selection.toTreat, {
+        shouldContinue: () => autoBusyRef.current,
+        createConversation: async (item) => {
+          const conv = await window.api.conversationsCreate({
+            title: ticketConversationTitle(item),
+            category: provider as string,
+            provider: provider as string
+          })
+          await window.api.conversationsSetAuthorityMode(conv.id, 'ask')
+          return { id: conv.id }
+        },
+        promptConversation: async (conv, _item, prompt) => {
+          try {
+            const r = await window.api.orchestrate(prompt, conv.id)
+            return { ok: r?.ok !== false }
+          } catch {
+            return { ok: false }
+          }
         }
-      }
-    })
+      })
+      succeeded += result.succeeded
+      failed += result.failed
+      total += result.total
+      if (!selection.deferred || !autoBusyRef.current || !autoModeEnabledRef.current) break
+      selection = pickIncomingTickets(visibleItemsRef.current, seenRef.current)
+      if (!selection.toTreat.length) break
+      for (const key of selection.seenAdditions) seenRef.current.add(key)
+      saveSeen(localStorage, seenRef.current)
+    }
     autoBusyRef.current = false
     setAutoStatus(
-      `en veille · ${result.succeeded}/${result.total} lancés${
-        result.failed ? ` · ${result.failed} échec(s)` : ''
-      }`
+      `en veille · ${succeeded}/${total} lancés${failed ? ` · ${failed} échec(s)` : ''}`
     )
   }, [autoMode])
 

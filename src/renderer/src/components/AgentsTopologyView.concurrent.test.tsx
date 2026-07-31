@@ -62,6 +62,63 @@ beforeEach(() => {
   root = createRoot(container)
 })
 
+describe('AgentsTopologyView orchestrator persistence', () => {
+  it('serializes rapid orchestrator edits and keeps the latest reasoning effort', async () => {
+    type RoleResult = {
+      orchestrator: { provider: string; model: string; reasoningEffort: string }
+    }
+    const roleSaves: Array<Deferred<RoleResult>> = []
+    const setRole = vi.fn(
+      (_role: string, _provider: string, _model: string, _reasoningEffort: string) => {
+        const request = deferred<RoleResult>()
+        roleSaves.push(request)
+        return request.promise
+      }
+    )
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      models: async () => models,
+      topology: async () => topology,
+      roles: async () => ({ orchestrator: { provider: 'openai', model: 'gpt' } }),
+      profiles: async () => [],
+      onAppEvent: () => () => undefined,
+      setRole
+    }
+
+    await act(async () => root.render(createElement(AgentsTopologyView)))
+    await flush()
+
+    const effort = container.querySelector<HTMLSelectElement>(
+      '[data-target="orchestrator"] .topology-slot select'
+    )
+    expect(effort).not.toBeNull()
+
+    await act(async () => {
+      effort!.value = 'high'
+      effort!.dispatchEvent(new Event('change', { bubbles: true }))
+      effort!.value = 'low'
+      effort!.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    expect(setRole).toHaveBeenCalledTimes(1)
+    roleSaves[0].resolve({
+      orchestrator: {
+        provider: 'openai',
+        model: 'gpt',
+        reasoningEffort: setRole.mock.calls[0][3]
+      }
+    })
+    await flush()
+
+    expect(setRole).toHaveBeenCalledTimes(2)
+    expect(setRole.mock.calls[1][3]).toBe('low')
+    roleSaves[1].resolve({
+      orchestrator: { provider: 'openai', model: 'gpt', reasoningEffort: 'low' }
+    })
+    await flush()
+    expect(effort!.value).toBe('low')
+  })
+})
+
 afterEach(() => {
   act(() => root.unmount())
   container.remove()

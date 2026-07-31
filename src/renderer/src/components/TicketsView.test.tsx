@@ -195,9 +195,9 @@ describe('vue Tickets', () => {
     api({ listTicketPeople: vi.fn(async () => ['Alice Martin']) })
     const { root, container } = await render()
 
-    const options = [
-      ...container.querySelectorAll('#tickets-people-list option')
-    ].map((option) => option.getAttribute('value'))
+    const options = [...container.querySelectorAll('#tickets-people-list option')].map((option) =>
+      option.getAttribute('value')
+    )
     expect(options).toContain('Alice Martin') // annuaire Azure
     expect(options).toContain('Équipe RIG') // assignés déjà chargés
 
@@ -217,11 +217,7 @@ describe('vue Tickets', () => {
 
   it('trie par défaut sur la mise à jour la plus récente', async () => {
     const listTickets = vi.fn(async () => ({
-      items: [
-        item('1'),
-        { ...item('2'), updatedAt: '2026-07-23T18:00:00.000Z' },
-        item('3')
-      ],
+      items: [item('1'), { ...item('2'), updatedAt: '2026-07-23T18:00:00.000Z' }, item('3')],
       hasMore: false
     }))
     api({ listTickets })
@@ -301,9 +297,7 @@ describe('vue Tickets', () => {
 
     await act(async () => {
       container.querySelector('button') as HTMLButtonElement
-      const add = container.querySelector(
-        '[aria-label="Ajouter une source"]'
-      ) as HTMLButtonElement
+      const add = container.querySelector('[aria-label="Ajouter une source"]') as HTMLButtonElement
       add.click()
     })
     await act(async () => {
@@ -630,9 +624,7 @@ describe('vue Tickets', () => {
     api()
     const { root, container } = await render()
     await act(async () => {
-      const add = container.querySelector(
-        '[aria-label="Ajouter une source"]'
-      ) as HTMLButtonElement
+      const add = container.querySelector('[aria-label="Ajouter une source"]') as HTMLButtonElement
       add.click()
     })
     const provider = container.querySelector('[aria-label="Fournisseur"]') as HTMLSelectElement
@@ -693,5 +685,80 @@ describe('vue Tickets', () => {
     ) as HTMLInputElement
     expect(restored.checked).toBe(true)
     await act(async () => second.root.unmount())
+  })
+})
+
+describe('vue Tickets — lots automatiques différés', () => {
+  afterEach(() => {
+    document.body.replaceChildren()
+    localStorage.clear()
+    vi.restoreAllMocks()
+  })
+
+  it('traite 5 entrants en deux lots successifs de 3 puis 2 sans rafraîchissement', async () => {
+    localStorage.setItem('autowin:tickets-auto-mode', '1')
+    const conversationsCreate = vi.fn(async ({ title }: { title: string }) => ({
+      id: `conv-${title}`
+    }))
+    api({
+      listTickets: vi.fn(async () => ({
+        items: [item('1'), item('2'), item('3'), item('4'), item('5')],
+        hasMore: false
+      })),
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      conversationsCreate,
+      conversationsSetAuthorityMode: vi.fn(async () => ({})),
+      orchestrate: vi.fn(async () => ({ ok: true }))
+    })
+
+    const { root } = await render()
+    await act(async () => {
+      for (let index = 0; index < 20; index += 1) await Promise.resolve()
+    })
+
+    expect(conversationsCreate).toHaveBeenCalledTimes(5)
+    await act(async () => root.unmount())
+  })
+
+  it('termine le lot courant mais ne lance pas le lot différé après désactivation', async () => {
+    localStorage.setItem('autowin:tickets-auto-mode', '1')
+    const pending: Array<(value: { ok: boolean }) => void> = []
+    const orchestrate = vi.fn(
+      () =>
+        new Promise<{ ok: boolean }>((resolve) => {
+          pending.push(resolve)
+        })
+    )
+    const conversationsCreate = vi.fn(async ({ title }: { title: string }) => ({
+      id: `conv-${title}`
+    }))
+    api({
+      listTickets: vi.fn(async () => ({
+        items: [item('1'), item('2'), item('3'), item('4'), item('5')],
+        hasMore: false
+      })),
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      conversationsCreate,
+      conversationsSetAuthorityMode: vi.fn(async () => ({})),
+      orchestrate
+    })
+
+    const { root, container } = await render()
+    await act(async () => {
+      for (let index = 0; index < 10; index += 1) await Promise.resolve()
+    })
+    expect(conversationsCreate).toHaveBeenCalledTimes(3)
+
+    const auto = container.querySelector(
+      '[data-testid="tickets-mode-auto"] input'
+    ) as HTMLInputElement
+    await act(async () => auto.click())
+    await act(async () => {
+      pending.splice(0).forEach((resolve) => resolve({ ok: true }))
+      for (let index = 0; index < 10; index += 1) await Promise.resolve()
+    })
+
+    expect(conversationsCreate).toHaveBeenCalledTimes(3)
+    await act(async () => root.unmount())
   })
 })
