@@ -69,10 +69,14 @@ import { promptConfigChange } from './activity/prompt-config-change'
 import { appendPromptConfigActivity } from './activity/prompt-config-store'
 import { promptCallToTraceEvents } from './activity/prompt-call-trace'
 import { pilotActionToTraceEvent } from './activity/pilot-action-trace'
-import { TraceStore } from './activity/trace-store'
+import { rebaseTraceSequence, TraceStore } from './activity/trace-store'
 import { DiagnosticCapabilities } from './activity/diagnostic-capability'
 import { responseDisplayedTrace } from './activity/response-displayed-trace'
-import { persistOrchestrationStep } from './activity/orchestration-observability'
+import {
+  persistOrchestrationPhaseStart,
+  persistOrchestrationStep,
+  persistRunLifecycle
+} from './activity/orchestration-observability'
 import { aggregateToolUsage } from './activity/tool-usage'
 
 import { ProfileStore, type AutowinProfile } from './profile-store'
@@ -609,6 +613,7 @@ try {
 }
 const ledger = new TraceLedger(join(app.getPath('userData'), 'trace'))
 const causalTrace = new TraceStore(join(app.getPath('userData'), 'causal-trace'))
+bus.setTraceStore(causalTrace)
 
 const profiles = new ProfileStore(join(app.getPath('userData'), 'profiles.json'))
 const orchestrationBudgetPath = join(app.getPath('userData'), 'orchestration-budget.json')
@@ -928,6 +933,8 @@ function registerChatIpc(): void {
         })
     })
     const emittedArtifactIds = new Set<string>()
+    let currentRunId: string | undefined
+    let phaseStartIteration = 0
     try {
       durableTurn.begin(guardString(task, 'task'))
       // Acquis d'un run interrompu portant la MÊME tâche dans CETTE conversation. Oublié aussitôt :
@@ -943,7 +950,8 @@ function registerChatIpc(): void {
             {
               conversationId,
               turnId,
-              iteration: step.step === 'exec' ? 0 : 1
+              iteration: step.step === 'exec' ? 0 : 1,
+              runId: currentRunId
             },
             undefined,
             causalTrace
@@ -1016,7 +1024,19 @@ function registerChatIpc(): void {
             }
           }
         },
-        undefined,
+        (phase) => {
+          if (!currentRunId) return
+          persistOrchestrationPhaseStart(
+            phase,
+            {
+              conversationId,
+              turnId,
+              iteration: phaseStartIteration++,
+              runId: currentRunId
+            },
+            causalTrace
+          )
+        },
         undefined,
         controller.signal,
         undefined,
@@ -1034,7 +1054,11 @@ function registerChatIpc(): void {
             turnId,
             kind: 'automatic'
           }),
-        turnId
+        turnId,
+        (lifecycle) => {
+          currentRunId = lifecycle.runId
+          persistRunLifecycle(lifecycle, { conversationId, turnId }, causalTrace)
+        }
       )
       durableTurn.succeed(result)
       return { ok: true, result }
@@ -1823,6 +1847,7 @@ function registerChatIpc(): void {
         }
         applyDurableEvent(pilotEvent)
         if (conversationId && pilotEvent.kind === 'prompt-call' && pilotEvent.prompt) {
+          traceSequence = rebaseTraceSequence(causalTrace, conversationId, traceSequence)
           const promptCall = appendPromptCall({
             conversationId,
             turnId,
@@ -1861,6 +1886,7 @@ function registerChatIpc(): void {
             pilotEvent.kind === 'retry' ||
             pilotEvent.kind === 'cancellation')
         ) {
+          traceSequence = rebaseTraceSequence(causalTrace, conversationId, traceSequence)
           const actionSequence = traceActionIndex++
           const stableActionId = pilotEvent.actionId?.replaceAll(':', '-') ?? `${actionSequence}`
           const action = pilotActionToTraceEvent({
@@ -2542,6 +2568,8 @@ app.whenReady().then(async () => {
           turnId: resumeTurnId
         })
     const resumedArtifactIds = new Set<string>()
+    let resumedCurrentRunId: string | undefined
+    let resumedPhaseStartIteration = 0
     legacyResumeTurn?.begin(`[Reprise automatique] ${resumableRun.task}`)
     console.log(
       '[resume-orchestration]',
@@ -2561,7 +2589,12 @@ app.whenReady().then(async () => {
           legacyResumeTurn?.step(step)
           persistOrchestrationStep(
             step,
-            { conversationId, turnId: resumeTurnId, iteration: step.step === 'exec' ? 0 : 1 },
+            {
+              conversationId,
+              turnId: resumeTurnId,
+              iteration: step.step === 'exec' ? 0 : 1,
+              runId: resumedCurrentRunId
+            },
             undefined,
             causalTrace
           )
@@ -2602,7 +2635,19 @@ app.whenReady().then(async () => {
           for (const w of BrowserWindow.getAllWindows())
             w.webContents.send('orchestrate:step', step)
         },
-        undefined,
+        (phase) => {
+          if (!resumedCurrentRunId) return
+          persistOrchestrationPhaseStart(
+            phase,
+            {
+              conversationId,
+              turnId: resumeTurnId,
+              iteration: resumedPhaseStartIteration++,
+              runId: resumedCurrentRunId
+            },
+            causalTrace
+          )
+        },
         undefined,
         undefined,
         undefined,
@@ -2616,7 +2661,11 @@ app.whenReady().then(async () => {
             ...(resumeTurnId ? { turnId: resumeTurnId } : {}),
             kind: 'automatic'
           }),
-        resumeTurnId
+        resumeTurnId,
+        (lifecycle) => {
+          resumedCurrentRunId = lifecycle.runId
+          persistRunLifecycle(lifecycle, { conversationId, turnId: resumeTurnId }, causalTrace)
+        }
       )
       .then((result) => {
         legacyResumeTurn?.succeed(result)

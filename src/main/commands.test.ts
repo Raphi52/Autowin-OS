@@ -13,6 +13,7 @@ import {
 import { readBrainTraces } from './activity/brain-trace-spool'
 import { WorktreeManager } from './store/worktree-manager'
 import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
+import { TraceStore } from './activity/trace-store'
 
 function fakeOs(): any {
   const conversations = new Map<
@@ -72,6 +73,62 @@ function fakeOs(): any {
 }
 
 describe('AppCommandBus orchestration cancel (#2)', () => {
+  it('persiste lifecycle et démarrage live dans le TraceStore de cette instance', async () => {
+    const os = fakeOs()
+    const root = mkdtempSync(join(tmpdir(), 'autowin-command-trace-'))
+    const traceStore = new TraceStore(root)
+    os.runTask = async (...args: unknown[]) => {
+      const onStep = args[1] as (step: unknown) => void
+      const onPhase = args[2] as (phase: unknown) => void
+      const onLifecycle = args[11] as (event: unknown) => void
+      onLifecycle({
+        runId: 'run-live',
+        timestampMs: 1,
+        stage: 'workspace',
+        workspace: { mode: 'base', repositoryPath: 'C:\\repo', path: 'C:\\repo' }
+      })
+      const execution = {
+        phase: 'build',
+        agentId: 'builder',
+        taskId: 'task-build',
+        groupId: 'build:single',
+        dependencyIds: [],
+        attemptId: 'attempt-live'
+      }
+      onPhase({ step: 'exec', role: 'subagent', provider: 'codex', execution })
+      onStep({ step: 'exec', role: 'subagent', provider: 'codex', status: 'completed', execution })
+      onLifecycle({
+        runId: 'run-live',
+        timestampMs: 2,
+        stage: 'closure',
+        closure: { status: 'green', totalDurationMs: 1, totalCostUsd: 0 }
+      })
+      return {
+        gateBlocked: false,
+        gateReasons: [],
+        valid: true,
+        costUsd: 0,
+        result: '',
+        phaseOutputs: []
+      }
+    }
+    const bus = new AppCommandBus(os, () => {})
+    try {
+      bus.setTraceStore(traceStore)
+      await bus.exec('orchestrate', { task: '/build corrige la typo' }, 'conv-1', 'auto')
+      const events = traceStore.readConversation('conv-1')
+      expect(events.some((event) => event.run?.stage === 'workspace')).toBe(true)
+      expect(
+        events.some(
+          (event) => event.status === 'running' && event.execution?.attemptId === 'attempt-live'
+        )
+      ).toBe(true)
+      expect(events.some((event) => event.run?.stage === 'closure')).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('transmet le binding par tour au pipeline orchestré', async () => {
     const os = fakeOs()
     let receivedBinding: unknown

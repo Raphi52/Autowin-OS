@@ -34,7 +34,11 @@ import {
 import { appendConvActivity } from './activity/conv-activity'
 import { buildAutowinKaizenTask, collectAutowinKaizenEvidence } from './autowin-kaizen-context'
 import type { OrchestrationStep, OrchestrationPhase } from './orchestrator'
-import { persistOrchestrationStep } from './activity/orchestration-observability'
+import {
+  persistOrchestrationPhaseStart,
+  persistOrchestrationStep,
+  persistRunLifecycle
+} from './activity/orchestration-observability'
 import { createHash, randomUUID } from 'node:crypto'
 import {
   decideConversationCapability,
@@ -52,6 +56,7 @@ import {
   type GraphifyCommandResult
 } from './graphify-command'
 import { ensureAutowinAppData } from './app-data'
+import type { TraceStore } from './activity/trace-store'
 
 /**
  * Bus de commandes de l'app — le PLAN DE CONTRÔLE que les agents pilotent.
@@ -387,6 +392,7 @@ const ORCHESTRATE_PHASES = new Set(['scout', 'frame', 'terrain', 'build', 'clean
 
 export class AppCommandBus {
   private tab: AppDestination = 'chat'
+  private traceStore?: TraceStore
   /** Hook de traçage (ledger) — chaque commande exécutée y laisse une ligne. */
   trace?: (name: string, args: Record<string, unknown>, ok: boolean) => void
   /** Conversation active (contexte posé par le chat) : les workflows créés s'y rattachent. */
@@ -479,6 +485,11 @@ export class AppCommandBus {
     this.activeOrchestrations.delete(convId)
     this.orchestrationRankByConv.delete(convId)
   }
+
+  setTraceStore(traceStore: TraceStore): void {
+    this.traceStore = traceStore
+  }
+
   constructor(
     private readonly os: AutowinOS,
     private readonly broadcast: (e: AppEvent) => void,
@@ -798,16 +809,24 @@ export class AppCommandBus {
           })
         }
         this.broadcast({ type: 'orchestrate-start', convId, runPath, task: requestedTask })
+        let currentRunId: string | undefined
+        let phaseStartIteration = 0
         try {
           const r = await this.os.runTask(
             task,
             (step) => {
               steps.push(step)
-              persistOrchestrationStep(step, {
-                conversationId: convId,
-                turnId: orchestrationTurnId,
-                iteration: step.step === 'exec' ? 0 : 1
-              })
+              persistOrchestrationStep(
+                step,
+                {
+                  conversationId: convId,
+                  turnId: orchestrationTurnId,
+                  iteration: step.step === 'exec' ? 0 : 1,
+                  runId: currentRunId
+                },
+                undefined,
+                this.traceStore
+              )
               appendExecutionEvidenceFileTrace(step.evidence, {
                 conversationId: convId,
                 turnId: orchestrationTurnId,
@@ -860,6 +879,18 @@ export class AppCommandBus {
               }
             },
             (phase) => {
+              if (currentRunId) {
+                persistOrchestrationPhaseStart(
+                  phase,
+                  {
+                    conversationId: convId,
+                    turnId: orchestrationTurnId,
+                    iteration: phaseStartIteration++,
+                    runId: currentRunId
+                  },
+                  this.traceStore
+                )
+              }
               this.broadcast({ type: 'orchestrate-phase', convId, runPath, phase })
             },
             (step, delta) => {
@@ -879,7 +910,18 @@ export class AppCommandBus {
                 turnId: orchestrationTurnId,
                 kind: 'automatic'
               }),
-            orchestrationTurnId
+            orchestrationTurnId,
+            (lifecycle) => {
+              currentRunId = lifecycle.runId
+              persistRunLifecycle(
+                lifecycle,
+                {
+                  conversationId: convId,
+                  turnId: orchestrationTurnId
+                },
+                this.traceStore
+              )
+            }
           )
           if (runPath) {
             saveConvRunTrace(runPath, steps)

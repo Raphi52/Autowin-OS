@@ -1,33 +1,148 @@
-import type { OrchestrationStep } from '../orchestrator'
+import type { OrchestrationPhase, OrchestrationStep } from '../orchestrator'
 import { join } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
 import { appendPromptCall, promptObservabilityRoot } from './prompt-observability'
 import { promptCallToTraceEvents } from './prompt-call-trace'
 import { TraceStore } from './trace-store'
 import { assertTraceEvent, type TraceEventV1 } from './trace-event'
+import type { RunLifecycleEvent } from '../../shared/run-execution'
+
+interface OrchestrationTraceContext {
+  conversationId: string
+  turnId: string
+  iteration: number
+  runId?: string
+}
+
+export function persistRunLifecycle(
+  lifecycle: RunLifecycleEvent,
+  context: { conversationId: string; turnId: string },
+  traceStore = new TraceStore(join(ensureAutowinAppData(), 'causal-trace'))
+): void {
+  const currentTurn = traceStore
+    .readConversation(context.conversationId)
+    .filter((event) => event.turnId === context.turnId)
+  const runEvents = currentTurn.filter(
+    (event) => event.run?.runId === lifecycle.runId || event.execution?.runId === lifecycle.runId
+  )
+  const sequence = traceStore.nextSequence(context.conversationId)
+  const label =
+    lifecycle.stage === 'workspace'
+      ? lifecycle.workspace.path
+      : lifecycle.stage === 'git'
+        ? lifecycle.git.outcome
+        : lifecycle.closure.status
+  traceStore.append(
+    assertTraceEvent({
+      schema: 'autowin.trace/v1',
+      id: `${context.turnId}:run:${lifecycle.runId}:${lifecycle.stage}:${sequence}`,
+      conversationId: context.conversationId,
+      turnId: context.turnId,
+      parentId: runEvents.at(-1)?.id,
+      timestamp: new Date(lifecycle.timestampMs).toISOString(),
+      sequence,
+      type: lifecycle.stage === 'closure' ? 'gate' : 'boundary',
+      status:
+        lifecycle.stage === 'closure'
+          ? lifecycle.closure.status === 'open'
+            ? 'running'
+            : lifecycle.closure.status === 'red'
+              ? 'failed'
+              : 'completed'
+          : lifecycle.stage === 'workspace'
+            ? 'running'
+            : lifecycle.git.outcome === 'conflict' || lifecycle.git.outcome === 'blocked'
+              ? 'failed'
+              : 'completed',
+      actor: { id: 'autowin-run', kind: 'system', label: 'Autowin OS' },
+      recipient: { id: 'orchestrator', kind: 'agent', label: 'orchestrator' },
+      channel: 'internal',
+      payloads: [{ kind: 'app-state', content: label }],
+      observation: { boundary: `Autowin run ${lifecycle.stage}`, fidelity: 'exact' },
+      execution: { runId: lifecycle.runId },
+      run: lifecycle,
+      metrics:
+        lifecycle.stage === 'closure'
+          ? {
+              durationMs: lifecycle.closure.totalDurationMs,
+              costUsd: lifecycle.closure.totalCostUsd
+            }
+          : undefined
+    })
+  )
+}
+
+export function persistOrchestrationPhaseStart(
+  phase: OrchestrationPhase,
+  context: OrchestrationTraceContext,
+  traceStore = new TraceStore(join(ensureAutowinAppData(), 'causal-trace'))
+): void {
+  if (!phase.execution?.attemptId || (phase.step !== 'exec' && phase.step !== 'judge')) return
+  const currentTurn = traceStore
+    .readConversation(context.conversationId)
+    .filter((event) => event.turnId === context.turnId)
+  const runTurn = context.runId
+    ? currentTurn.filter(
+        (event) => event.execution?.runId === context.runId || event.run?.runId === context.runId
+      )
+    : currentTurn
+  const groupEvents = phase.execution.groupId
+    ? runTurn.filter((event) => event.execution?.groupId === phase.execution?.groupId)
+    : []
+  const parentId = groupEvents.length > 0 ? groupEvents[0].parentId : runTurn.at(-1)?.id
+  const sequence = traceStore.nextSequence(context.conversationId)
+  traceStore.append(
+    assertTraceEvent({
+      schema: 'autowin.trace/v1',
+      id: `${context.turnId}:running:${phase.execution.attemptId}:${sequence}`,
+      conversationId: context.conversationId,
+      turnId: context.turnId,
+      parentId,
+      timestamp: new Date().toISOString(),
+      sequence,
+      type: phase.step === 'judge' ? 'verdict' : 'handoff',
+      status: 'running',
+      actor: {
+        id: phase.execution.agentId ?? phase.role ?? phase.step,
+        kind: phase.provider ? 'agent' : 'system',
+        label: phase.role ?? phase.execution.agentId ?? phase.step
+      },
+      recipient: { id: 'orchestrator', kind: 'agent', label: 'orchestrator' },
+      channel: 'internal',
+      payloads: [{ kind: 'app-state', content: `${phase.step} démarré` }],
+      observation: { boundary: `Autowin orchestration ${phase.step} start`, fidelity: 'exact' },
+      execution: { ...phase.execution, runId: context.runId ?? phase.execution.runId },
+      provider: phase.provider ? { id: phase.provider, model: phase.model } : undefined
+    })
+  )
+}
 
 export function persistOrchestrationStep(
   step: OrchestrationStep,
-  context: { conversationId: string; turnId: string; iteration: number },
+  context: OrchestrationTraceContext,
   promptRoot = promptObservabilityRoot(),
   traceStore = new TraceStore(join(ensureAutowinAppData(), 'causal-trace'))
 ): void {
   const existing = traceStore.readConversation(context.conversationId)
   const currentTurn = existing.filter((event) => event.turnId === context.turnId)
+  const runTurn = context.runId
+    ? currentTurn.filter(
+        (event) => event.execution?.runId === context.runId || event.run?.runId === context.runId
+      )
+    : currentTurn
   const groupEvents = step.execution?.groupId
-    ? currentTurn.filter((event) => event.execution?.groupId === step.execution?.groupId)
+    ? runTurn.filter((event) => event.execution?.groupId === step.execution?.groupId)
     : []
   const dependencyParent = [...(step.execution?.dependencyIds ?? [])]
     .reverse()
     .map((dependencyId) =>
-      [...currentTurn]
+      [...runTurn]
         .reverse()
         .find((event) => event.execution?.taskId === dependencyId && event.type === 'handoff')
     )
     .find(Boolean)
   let parentId =
-    dependencyParent?.id ??
-    (groupEvents.length > 0 ? groupEvents[0].parentId : currentTurn.at(-1)?.id)
+    dependencyParent?.id ?? (groupEvents.length > 0 ? groupEvents[0].parentId : runTurn.at(-1)?.id)
   let sequence = traceStore.nextSequence(context.conversationId)
   const structuralType: TraceEventV1['type'] =
     step.step === 'exec' ? 'handoff' : step.step === 'judge' ? 'verdict' : 'gate'
@@ -56,7 +171,7 @@ export function persistOrchestrationStep(
         }
       ],
       observation: { boundary: `Autowin orchestration ${step.step}`, fidelity: 'exact' },
-      execution: step.execution,
+      execution: { ...step.execution, runId: context.runId ?? step.execution?.runId },
       provider: step.provider ? { id: step.provider, model: step.model } : undefined,
       metrics: {
         durationMs: step.durationMs,
@@ -90,7 +205,7 @@ export function persistOrchestrationStep(
         channel: 'tool',
         payloads: [{ kind: 'tool-call', content: item.summary || item.type }],
         observation: { boundary: `Autowin exec ${item.type}`, fidelity: 'exact' },
-        execution: step.execution
+        execution: { ...step.execution, runId: context.runId ?? step.execution?.runId }
       })
       traceStore.append(toolEvent)
       parentId = toolEvent.id
@@ -123,7 +238,7 @@ export function persistOrchestrationStep(
   )
   const providerEvents = promptCallToTraceEvents(call, sequence, parentId).map((event) => ({
     ...event,
-    execution: step.execution
+    execution: { ...step.execution, runId: context.runId ?? step.execution?.runId }
   }))
   for (const event of providerEvents) traceStore.append(event)
   sequence += providerEvents.length

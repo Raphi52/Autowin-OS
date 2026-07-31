@@ -56,6 +56,8 @@ export interface TraceExecutionContext {
   taskId?: string
   groupId?: string
   dependencyIds?: string[]
+  runId?: string
+  attemptId?: string
 }
 
 export interface TraceEventV1 {
@@ -75,6 +77,7 @@ export interface TraceEventV1 {
   payloads: TracePayload[]
   observation: TraceObservation
   execution?: TraceExecutionContext
+  run?: RunLifecycleEvent
   provider?: {
     id: string
     model?: string
@@ -180,5 +183,13 @@ export function assertTraceEvent(event: TraceEventV1): TraceEventV1 {
     if (value !== undefined && (!Number.isFinite(value) || value < 0))
       throw new Error('TraceEvent: métrique invalide')
   }
+  if (event.run) {
+    nonEmpty(event.run.runId, 'run.runId')
+    if (!Number.isFinite(event.run.timestampMs) || event.run.timestampMs < 0)
+      throw new Error('TraceEvent: run.timestampMs invalide')
+    if (!['workspace', 'git', 'closure'].includes(event.run.stage))
+      throw new Error('TraceEvent: run.stage invalide')
+  }
   return event
 }
+import type { RunLifecycleEvent } from '../../shared/run-execution'

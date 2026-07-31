@@ -1,3 +1,10 @@
+import type {
+  RunClosureObservation,
+  RunGitObservation,
+  RunLifecycleEvent,
+  RunWorkspaceObservation
+} from '../../../shared/run-execution'
+
 export type HarnessTimelineEventKind =
   | 'message'
   | 'injection'
@@ -44,16 +51,26 @@ export interface HarnessTimelineEvent {
     taskId?: string
     groupId?: string
     dependencyIds?: string[]
+    runId?: string
+    attemptId?: string
   }
   display?: {
-    kind: 'request' | 'phase' | 'agent' | 'tool' | 'event'
+    kind:
+      'workspace' | 'skill' | 'agent' | 'git' | 'closure' | 'request' | 'phase' | 'tool' | 'event'
     title: string
     observedEventIds?: string[]
     dependencyIds?: string[]
     limitation?: string
     workflow?: 'autowin' | 'direct'
     skillName?: string
+    skillIdentity?: 'phase-alias'
+    runId?: string
+    attemptId?: string
+    workspace?: RunWorkspaceObservation & { root?: boolean }
+    git?: RunGitObservation
+    closure?: RunClosureObservation
   }
+  run?: RunLifecycleEvent
   payloads: Array<{ kind: string; content: string; name?: string; mediaType?: string }>
 }
 export interface HarnessTimelineTurn {
@@ -105,7 +122,10 @@ export interface HarnessTraceEvent {
     taskId?: string
     groupId?: string
     dependencyIds?: string[]
+    runId?: string
+    attemptId?: string
   }
+  run?: RunLifecycleEvent
   provider?: {
     id: string
     model?: string
@@ -171,6 +191,7 @@ export function buildHarnessTimelineFromTrace(events: HarnessTraceEvent[]): Harn
                 dependencyIds: [...(event.execution.dependencyIds ?? [])]
               }
             : undefined,
+          run: event.run,
           payloads: event.payloads.map((payload) => ({ ...payload })),
           raw: event
         }

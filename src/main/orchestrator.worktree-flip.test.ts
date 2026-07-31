@@ -13,6 +13,7 @@ import type {
 import { RoleModelConfig } from './roles'
 import { TrustLedger } from './trust/ledger'
 import { HookBus } from './hooks/hook-bus'
+import type { RunLifecycleEvent } from '../shared/run-execution'
 
 class CapturingProvider implements ProviderAdapter {
   readonly id = 'capture'
@@ -77,7 +78,107 @@ function makeOrchestrator(worktrees?: RunWorktrees): {
   return { orch, provider }
 }
 
+function runWithLifecycle(
+  orch: Orchestrator,
+  task: string,
+  onLifecycle: (event: RunLifecycleEvent) => void
+) {
+  return orch.run(
+    task,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    onLifecycle
+  )
+}
+
 describe('Orchestrator — flip live worktree', () => {
+  it('observe workspace, clôture open, Git réel puis clôture verte sur une mutation', async () => {
+    const lifecycle: RunLifecycleEvent[] = []
+    let currentRunId = ''
+    const worktrees: RunWorktrees = {
+      begin: (runId) => {
+        currentRunId = runId
+        return 'C:\\wt\\run-1'
+      },
+      end: () => ({ outcome: 'merged' as const, agentId: 'run-1', committed: true }),
+      activity: () => [
+        {
+          agentId: currentRunId,
+          agentName: 'Agent',
+          state: 'merged' as const,
+          files: [{ path: 'src/a.ts', kind: 'mod' as const }],
+          startedAtMs: 100,
+          endedAtMs: 200,
+          workspacePath: 'C:\\base',
+          worktreePath: 'C:\\wt\\run-1',
+          baseBranch: 'main',
+          baseSha: 'abc123',
+          publishedSha: 'def456'
+        }
+      ]
+    }
+    const { orch } = makeOrchestrator(worktrees)
+
+    await runWithLifecycle(orch, 'modifie le projet', (event) => lifecycle.push(event))
+
+    expect(lifecycle.map((event) => event.stage)).toEqual([
+      'workspace',
+      'closure',
+      'git',
+      'closure'
+    ])
+    expect(lifecycle[0]).toMatchObject({
+      stage: 'workspace',
+      workspace: {
+        mode: 'worktree',
+        repositoryPath: 'C:\\base',
+        path: 'C:\\wt\\run-1',
+        baseBranch: 'main'
+      }
+    })
+    expect(lifecycle[1]).toMatchObject({ stage: 'closure', closure: { status: 'open' } })
+    expect(lifecycle[2]).toMatchObject({
+      stage: 'git',
+      git: {
+        outcome: 'merged',
+        rawOutcome: 'merged',
+        commitSha: 'def456',
+        baseBranch: 'main'
+      }
+    })
+    expect(lifecycle[3]).toMatchObject({
+      stage: 'closure',
+      closure: { status: 'green' }
+    })
+  })
+
+  it('N1 — observe le dépôt de base et la clôture, sans événement Git', async () => {
+    const lifecycle: RunLifecycleEvent[] = []
+    const { orch } = makeOrchestrator({ begin: () => undefined, end: () => undefined })
+
+    await runWithLifecycle(orch, 'analyse le projet sans rien changer', (event) =>
+      lifecycle.push(event)
+    )
+
+    expect(lifecycle[0]).toMatchObject({
+      stage: 'workspace',
+      workspace: { mode: 'base', repositoryPath: 'C:\\base', path: 'C:\\base' }
+    })
+    expect(lifecycle.filter((event) => event.stage === 'git')).toHaveLength(0)
+    expect(lifecycle.at(-1)).toMatchObject({
+      stage: 'closure',
+      closure: { status: 'green' }
+    })
+  })
+
   it('bloque une mutation si le moteur d’isolation est indisponible', async () => {
     const { orch, provider } = makeOrchestrator()
 

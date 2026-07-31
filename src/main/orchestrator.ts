@@ -22,6 +22,8 @@ import { describeFanoutFailure, explainRoleFailure } from './provider-failure-di
 import { alignReportWithDisk } from './worktree-path-rewrite'
 import { runGreedy, type GreedyNode } from './greedy-scheduler'
 import type { ChatArtifact } from '../shared/artifacts'
+import type { RunLifecycleEvent } from '../shared/run-execution'
+import type { WorktreeAgentActivity } from '../shared/worktree-activity-model'
 
 /**
  * Boucle d'orchestration DISCIPLINÉE — le cœur d'Autowin OS.
@@ -59,6 +61,9 @@ export interface OrchestrationStep {
     taskId?: string
     groupId?: string
     dependencyIds?: string[]
+    runId?: string
+    /** Identité durable de la tentative ; le start live et sa terminaison partagent cette valeur. */
+    attemptId?: string
   }
 }
 
@@ -72,6 +77,7 @@ export interface OrchestrationPhase {
   reasoningEffort?: string
   /** A4 — phase du pipeline en cours (scout/frame/…) pour un libellé live précis (pas « sous-agent »). */
   phase?: PipelinePhase
+  execution?: OrchestrationStep['execution']
 }
 
 export interface OrchestrationResult {
@@ -238,6 +244,8 @@ export interface RunWorktrees {
    * travail N'EST PAS fusionné dans la base et la copie isolée est conservée pour décision humaine.
    */
   end(runId: string, options?: { merge?: boolean }): unknown
+  /** Snapshot d'observation du coordinateur ; ne pilote jamais la finalisation. */
+  activity?(): WorktreeAgentActivity[]
   /** Attache/détache un processus CLI réel au lease durable du run. */
   process?(runId: string, pid: number, active: boolean): void
   /** Barrière durable couvrant l'intervalle avant que spawn fournisse un PID. */
@@ -395,9 +403,21 @@ export class Orchestrator {
     /** Émis dès la récupération Brain, avant toute phase susceptible d'échouer. */
     onBrainRetrieved?: (event: BrainRetrievalEvent) => void,
     /** Tour Chat causal, persisté avec l'état reprenable. */
-    turnId?: string
+    turnId?: string,
+    onRunLifecycle?: (event: RunLifecycleEvent) => void
   ): Promise<OrchestrationResult> {
     const runId = `run-${this.runNamespace}-${++this.runSeq}`
+    const runStartedAtMs = Date.now()
+    const runCostStartUsd = this.deps.cost.totalUsd()
+    const emitLifecycle = (event: RunLifecycleEvent): void => {
+      try {
+        onRunLifecycle?.(event)
+      } catch {
+        /* observabilité best-effort : elle ne casse jamais le run */
+      }
+    }
+    const activityForRun = (): WorktreeAgentActivity | undefined =>
+      this.deps.worktrees?.activity?.().find((activity) => activity.agentId === runId)
     const isMut = isMutationTask(task)
     if (isMut && !this.deps.worktrees) {
       throw new Error(
@@ -433,6 +453,25 @@ export class Orchestrator {
       throw new Error('Mutation bloquée : Autowin n’a pas pu créer un bureau agent isolé.')
     }
     const workCwd = isolatedCwd ?? this.deps.executionWorkspace
+    const initialActivity = activityForRun()
+    emitLifecycle({
+      stage: 'workspace',
+      runId,
+      timestampMs: runStartedAtMs,
+      workspace: {
+        mode: isolatedCwd ? 'worktree' : 'base',
+        repositoryPath: initialActivity?.workspacePath ?? this.deps.executionWorkspace,
+        path: workCwd,
+        baseBranch: initialActivity?.baseBranch,
+        baseSha: initialActivity?.baseSha
+      }
+    })
+    emitLifecycle({
+      stage: 'closure',
+      runId,
+      timestampMs: runStartedAtMs,
+      closure: { status: 'open', totalDurationMs: 0, totalCostUsd: 0 }
+    })
     if (isMut && this.deps.worktrees) {
       this.processObservers.set(workCwd, {
         process: (pid, active) => this.deps.worktrees?.process?.(runId, pid, active),
@@ -508,6 +547,39 @@ export class Orchestrator {
         finalizeOutcome === 'nothing' ||
         finalizeOutcome === 'cleanup-pending' ||
         finalizeOutcome === 'published-residue'
+      const finalActivity = activityForRun()
+      if (isMut && finalized && typeof finalized === 'object' && finalizeOutcome) {
+        const result = finalized as {
+          outcome: string
+          files?: string[]
+          reason?: string
+          detail?: string
+          publishedSha?: string
+          agentSha?: string
+        }
+        const outcome =
+          result.outcome === 'merged' ||
+          result.outcome === 'nothing' ||
+          result.outcome === 'conflict' ||
+          result.outcome === 'blocked'
+            ? result.outcome
+            : 'kept'
+        emitLifecycle({
+          stage: 'git',
+          runId,
+          timestampMs: Date.now(),
+          git: {
+            outcome,
+            rawOutcome: result.outcome,
+            commitSha: result.publishedSha ?? result.agentSha ?? finalActivity?.publishedSha,
+            baseBranch: finalActivity?.baseBranch,
+            worktreePath: finalActivity?.worktreePath ?? isolatedCwd,
+            files: result.files ?? finalActivity?.files.map((file) => file.path),
+            reason: result.reason,
+            detail: result.detail ?? finalActivity?.detail
+          }
+        })
+      }
       if (green && !integrated && produced) {
         produced.valid = false
         produced.gateBlocked = true
@@ -544,6 +616,18 @@ export class Orchestrator {
           /* effacement best-effort */
         }
       }
+      emitLifecycle({
+        stage: 'closure',
+        runId,
+        timestampMs: Date.now(),
+        closure: {
+          status: green && integrated ? 'green' : 'red',
+          totalDurationMs: Math.max(0, Date.now() - runStartedAtMs),
+          totalCostUsd: Math.max(0, this.deps.cost.totalUsd() - runCostStartUsd),
+          gateReasons: produced?.gateReasons,
+          integrationOutcome: finalizeOutcome
+        }
+      })
     }
   }
 
@@ -659,7 +743,21 @@ export class Orchestrator {
     }
     envelope = registry.describePrompt(judgeProvider, messages, opts, judgeBinding.model)
     envelope.systemBlocks = systemBlocks
-    onPhase?.({ step: 'judge', provider: judgeProvider, role: 'judge', model: judgeBinding.model })
+    const judgeExecution = {
+      phase: 'judge' as const,
+      agentId: 'judge:greedy',
+      taskId: 'judge:greedy',
+      groupId: 'judge:single',
+      dependencyIds: [] as string[],
+      attemptId: randomUUID()
+    }
+    onPhase?.({
+      step: 'judge',
+      provider: judgeProvider,
+      role: 'judge',
+      model: judgeBinding.model,
+      execution: judgeExecution
+    })
     const startedAt = performance.now()
     const res = await this.sendWithRoleContext('jugement', 'judge', judgeProvider, opts.model, () =>
       registry.send(judgeProvider, messages, opts, (c) => onDelta?.('judge', c.delta))
@@ -693,13 +791,7 @@ export class Orchestrator {
       detail: ok ? 'validé' : 'défaut',
       status: 'completed',
       durationMs: performance.now() - startedAt,
-      execution: {
-        phase: 'judge',
-        agentId: 'judge:greedy',
-        taskId: 'judge:greedy',
-        groupId: 'judge:single',
-        dependencyIds: []
-      }
+      execution: judgeExecution
     })
     // GATE déterministe + HookBus interne (pre-green) : enforcement HORS-MODÈLE, uniforme tous exécuteurs.
     const hookOutcome = await this.hooks.run('pre-green', {
@@ -800,13 +892,22 @@ export class Orchestrator {
           }
           envelope = registry.describePrompt(subProvider, messages, options, phaseBinding.model)
           envelope.systemBlocks = systemBlocks
+          const execution = {
+            phase,
+            agentId: `${phase}:${node.id}`,
+            taskId: node.id,
+            groupId: `${phase}:greedy`,
+            dependencyIds: [...node.deps],
+            attemptId: randomUUID()
+          }
           onPhase?.({
             step: 'exec',
             provider: subProvider,
             role: 'subagent',
             model: phaseBinding.model,
             reasoningEffort: phaseBinding.reasoningEffort,
-            phase
+            phase,
+            execution
           })
           const startedAt = performance.now()
           let result
@@ -832,13 +933,7 @@ export class Orchestrator {
               error: explained,
               durationMs: performance.now() - startedAt,
               detail: `sous-tâche ${node.id}`,
-              execution: {
-                phase,
-                agentId: `${phase}:${node.id}`,
-                taskId: node.id,
-                groupId: `${phase}:greedy`,
-                dependencyIds: [...node.deps]
-              }
+              execution
             })
             throw new Error(explained)
           }
@@ -869,13 +964,7 @@ export class Orchestrator {
             evidence: result.executionEvidence,
             artifacts: result.artifacts,
             detail: `sous-tâche ${node.id}`,
-            execution: {
-              phase,
-              agentId: `${phase}:${node.id}`,
-              taskId: node.id,
-              groupId: `${phase}:greedy`,
-              dependencyIds: [...node.deps]
-            }
+            execution
           })
           const nodeEvidence = result.executionEvidence ?? []
           evidence.push(...nodeEvidence)
@@ -1127,7 +1216,8 @@ export class Orchestrator {
               agentId: `${phase}:${member.model ?? member.provider}`,
               taskId: `${phase}:${member.model ?? member.provider}`,
               groupId: `${phase}:fanout`,
-              dependencyIds: [] as string[]
+              dependencyIds: [] as string[],
+              attemptId: randomUUID()
             }
             const opts: SendOptions = {
               system: fanSystem,
@@ -1144,7 +1234,8 @@ export class Orchestrator {
               role: 'subagent',
               model: member.model,
               reasoningEffort: member.reasoningEffort,
-              phase
+              phase,
+              execution
             })
             try {
               const res = await registry.send(member.provider, fanMessages, opts, (c) =>
@@ -1277,13 +1368,22 @@ export class Orchestrator {
           }
         ]
         const synthStartedAt = performance.now()
+        const synthExecution = {
+          phase,
+          agentId: `${phase}:synthesis`,
+          taskId: `${phase}:synthesis`,
+          groupId: `${phase}:synthesis`,
+          dependencyIds: good.map(({ member }) => `${phase}:${member.model ?? member.provider}`),
+          attemptId: randomUUID()
+        }
         onPhase?.({
           step: 'exec',
           provider: orchBinding.provider,
           role: 'orchestrator',
           model: orchBinding.model,
           reasoningEffort: orchBinding.reasoningEffort,
-          phase
+          phase,
+          execution: synthExecution
         })
         const synth = await this.sendWithRoleContext(
           `synthèse ${phase}`,
@@ -1318,13 +1418,7 @@ export class Orchestrator {
           status: 'completed',
           durationMs: performance.now() - synthStartedAt,
           detail: `synthèse ${phase} (${good.length} modèles)`,
-          execution: {
-            phase,
-            agentId: `${phase}:synthesis`,
-            taskId: `${phase}:synthesis`,
-            groupId: `${phase}:synthesis`,
-            dependencyIds: good.map(({ member }) => `${phase}:${member.model ?? member.provider}`)
-          }
+          execution: synthExecution
         })
         lastExecText = synth.text
         lastUsage = synth.usage
@@ -1403,13 +1497,22 @@ export class Orchestrator {
         phaseBinding.model
       )
       execPrompt.systemBlocks = systemBlocks
+      const execution = {
+        phase,
+        agentId: `${phase}:subagent`,
+        taskId: `${phase}:exec`,
+        groupId: `${phase}:sequential`,
+        dependencyIds: [] as string[],
+        attemptId: randomUUID()
+      }
       onPhase?.({
         step: 'exec',
         provider: subProvider,
         role: 'subagent',
         model: phaseBinding.model,
         reasoningEffort: phaseBinding.reasoningEffort,
-        phase
+        phase,
+        execution
       })
       const phaseStartedAt = performance.now()
       let phaseRes
@@ -1433,13 +1536,7 @@ export class Orchestrator {
           status: 'failed',
           error: explained,
           durationMs: performance.now() - phaseStartedAt,
-          execution: {
-            phase,
-            agentId: `${phase}:subagent`,
-            taskId: `${phase}:exec`,
-            groupId: `${phase}:sequential`,
-            dependencyIds: []
-          }
+          execution
         })
         throw new Error(explained)
       }
@@ -1476,13 +1573,7 @@ export class Orchestrator {
         evidence: phaseRes.executionEvidence,
         artifacts: phaseRes.artifacts,
         detail: execPhases.length > 1 ? `phase ${phase}` : undefined,
-        execution: {
-          phase,
-          agentId: `${phase}:subagent`,
-          taskId: `${phase}:exec`,
-          groupId: `${phase}:sequential`,
-          dependencyIds: []
-        }
+        execution
       })
       aggregatedEvidence.push(...(phaseRes.executionEvidence ?? []))
       lastExecText = phaseRes.text
@@ -1576,21 +1667,32 @@ export class Orchestrator {
         judgeBinding.model
       )
       judgeEnvelope.systemBlocks = judgeBlocks
-      onPhase?.({
-        step: 'judge',
-        provider: judgeProvider,
-        role: 'judge',
-        model: judgeBinding.model,
-        reasoningEffort: judgeBinding.reasoningEffort
-      })
+      const judgeMembers = bindingOverride
+        ? []
+        : (this.deps.judgeFanOut?.() ?? []).filter((m) => m && m.provider)
+      const singleJudgeExecution = {
+        phase: 'judge' as const,
+        agentId: 'judge:single',
+        taskId: 'judge:single',
+        groupId: 'judge:single',
+        dependencyIds: [] as string[],
+        attemptId: randomUUID()
+      }
+      if (judgeMembers.length < 2) {
+        onPhase?.({
+          step: 'judge',
+          provider: judgeProvider,
+          role: 'judge',
+          model: judgeBinding.model,
+          reasoningEffort: judgeBinding.reasoningEffort,
+          execution: singleJudgeExecution
+        })
+      }
       const judgeStartedAt = performance.now()
       let verdict
       // FAN-OUT JUGE : ≥2 modèles dans le bloc topology judge → N juges en parallèle puis QUORUM
       // de vote MÉCANIQUE (compter les VALIDE ; majorité = pass). Agréger ≠ re-décider : aucun juge
       // supplémentaire ne tranche, on compte les voix. <2 ou absent → un seul juge (rétrocompat).
-      const judgeMembers = bindingOverride
-        ? []
-        : (this.deps.judgeFanOut?.() ?? []).filter((m) => m && m.provider)
       if (judgeMembers.length >= 2) {
         const results = await Promise.all(
           judgeMembers.map(async (member) => {
@@ -1599,7 +1701,8 @@ export class Orchestrator {
               agentId: `judge:${member.model ?? member.provider}`,
               taskId: `judge:${member.model ?? member.provider}`,
               groupId: 'judge:fanout',
-              dependencyIds: [] as string[]
+              dependencyIds: [] as string[],
+              attemptId: randomUUID()
             }
             const opts: SendOptions = {
               ...judgeOptions,
@@ -1612,7 +1715,8 @@ export class Orchestrator {
               provider: member.provider,
               role: 'judge',
               model: member.model,
-              reasoningEffort: member.reasoningEffort
+              reasoningEffort: member.reasoningEffort,
+              execution
             })
             try {
               const r = await this.sendWithRoleContext(
@@ -1712,13 +1816,7 @@ export class Orchestrator {
             status: 'failed',
             error: error instanceof Error ? error.message : String(error),
             durationMs: performance.now() - judgeStartedAt,
-            execution: {
-              phase: 'judge',
-              agentId: 'judge:single',
-              taskId: 'judge:single',
-              groupId: 'judge:single',
-              dependencyIds: []
-            }
+            execution: singleJudgeExecution
           })
           throw error
         }
@@ -1761,13 +1859,7 @@ export class Orchestrator {
                   (member) => `judge:${member.model ?? member.provider}`
                 )
               }
-            : {
-                phase: 'judge',
-                agentId: 'judge:single',
-                taskId: 'judge:single',
-                groupId: 'judge:single',
-                dependencyIds: []
-              }
+            : singleJudgeExecution
       })
 
       // GATE déterministe (model-agnostic) + HookBus interne (pre-green) : enforcement HORS-MODÈLE.
@@ -1831,13 +1923,22 @@ export class Orchestrator {
           repairOptions,
           subBinding.model
         )
+        const repairExecution = {
+          phase: 'build' as const,
+          agentId: 'build:repair',
+          taskId: 'build:repair',
+          groupId: 'build:repair',
+          dependencyIds: [] as string[],
+          attemptId: randomUUID()
+        }
         onPhase?.({
           step: 'exec',
           provider: subProvider,
           role: 'subagent',
           model: subBinding.model,
           reasoningEffort: subBinding.reasoningEffort,
-          phase: 'build'
+          phase: 'build',
+          execution: repairExecution
         })
         const repairStartedAt = performance.now()
         const repairRes = await this.sendWithRoleContext(
@@ -1877,13 +1978,7 @@ export class Orchestrator {
           evidence: repairRes.executionEvidence,
           artifacts: repairRes.artifacts,
           detail: 'phase build (réparation)',
-          execution: {
-            phase: 'build',
-            agentId: 'build:repair',
-            taskId: 'build:repair',
-            groupId: 'build:repair',
-            dependencyIds: []
-          }
+          execution: repairExecution
         })
         aggregatedEvidence.push(...(repairRes.executionEvidence ?? []))
         lastExecText = repairRes.text

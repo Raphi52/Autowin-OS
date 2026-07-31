@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
-import { Orchestrator } from './orchestrator'
+import { Orchestrator, type OrchestrationPhase } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
 import type {
   Message,
@@ -72,6 +72,24 @@ function makeOrchestrator(provider: RecordingProvider, cost: CostAggregator): Or
 }
 
 describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
+  it('attribue un attemptId stable à chacun des N agents dès son démarrage live', async () => {
+    const provider = new RecordingProvider()
+    const starts: OrchestrationPhase[] = []
+    const result = await makeOrchestrator(provider, new CostAggregator()).run(
+      'cadre les pistes du projet',
+      undefined,
+      (phase) => starts.push(phase)
+    )
+
+    const fanoutStarts = starts.filter((phase) => phase.execution?.groupId === 'frame:fanout')
+    const fanoutSteps = result.trace.filter((step) => step.execution?.groupId === 'frame:fanout')
+    expect(fanoutStarts).toHaveLength(2)
+    expect(new Set(fanoutStarts.map((phase) => phase.execution?.attemptId)).size).toBe(2)
+    expect(fanoutStarts.map((phase) => phase.execution?.attemptId).sort()).toEqual(
+      fanoutSteps.map((step) => step.execution?.attemptId).sort()
+    )
+  })
+
   it('exécute la phase sur les N modèles puis synthétise via l’orchestrateur', async () => {
     const provider = new RecordingProvider()
     const cost = new CostAggregator()
@@ -120,9 +138,7 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
     expect(execModels).toContain('orch') // la synthèse
     const m1Step = result.trace.find((s) => s.model === 'm1')
     expect(m1Step?.costUsd).toBeGreaterThan(0)
-    const panelSteps = result.trace.filter(
-      (step) => step.execution?.groupId === 'frame:fanout'
-    )
+    const panelSteps = result.trace.filter((step) => step.execution?.groupId === 'frame:fanout')
     expect(panelSteps).toHaveLength(2)
     expect(panelSteps.map((step) => step.execution?.phase)).toEqual(['frame', 'frame'])
     expect(new Set(panelSteps.map((step) => step.execution?.agentId))).toEqual(
@@ -210,17 +226,25 @@ describe('Orchestrator — fan-out juge (quorum de vote)', () => {
 
   it('majorité VALIDE (2/3) → validé', async () => {
     const provider = new RecordingProvider()
+    const starts: OrchestrationPhase[] = []
     // 2 juges votent VALIDE, 1 vote DEFAUT ('j-no') → seuil ⌈3/2⌉=2 atteint.
-    const result = await makeJudgePanel(provider, ['j-a', 'j-b', 'j-no']).run('cadre les pistes')
+    const result = await makeJudgePanel(provider, ['j-a', 'j-b', 'j-no']).run(
+      'cadre les pistes',
+      undefined,
+      (phase) => starts.push(phase)
+    )
     expect(result.valid).toBe(true)
     // 1 exec (mono, pas de phaseFanOut) + 3 juges = 4 appels.
     expect(provider.calls).toHaveLength(4)
-    const judgeSteps = result.trace.filter(
-      (step) => step.execution?.groupId === 'judge:fanout'
-    )
+    const judgeSteps = result.trace.filter((step) => step.execution?.groupId === 'judge:fanout')
     expect(judgeSteps).toHaveLength(3)
     expect(new Set(judgeSteps.map((step) => step.execution?.agentId))).toEqual(
       new Set(['judge:j-a', 'judge:j-b', 'judge:j-no'])
+    )
+    const judgeStarts = starts.filter((phase) => phase.execution?.groupId === 'judge:fanout')
+    expect(judgeStarts).toHaveLength(3)
+    expect(judgeStarts.map((phase) => phase.execution?.attemptId).sort()).toEqual(
+      judgeSteps.map((step) => step.execution?.attemptId).sort()
     )
     expect(result.trace.find((step) => step.execution?.agentId === 'judge:quorum')).toMatchObject({
       role: 'orchestrator',

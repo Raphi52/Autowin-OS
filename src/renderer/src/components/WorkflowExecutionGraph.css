@@ -127,6 +127,52 @@
   background: color-mix(in srgb, var(--accent-soft) 42%, var(--bg-1));
 }
 
+.workflow-execution-node.is-workspace,
+.workflow-execution-node.is-skill,
+.workflow-execution-node.is-agent,
+.workflow-execution-node.is-git,
+.workflow-execution-node.is-closure {
+  border-color: color-mix(in srgb, var(--execution-kind-color) 46%, var(--line));
+  background:
+    linear-gradient(
+      100deg,
+      color-mix(in srgb, var(--execution-kind-color) 10%, transparent),
+      transparent 70%
+    ),
+    color-mix(in srgb, var(--bg-1) 94%, transparent);
+  box-shadow: inset 3px 0 0 var(--execution-kind-color);
+}
+
+.workflow-execution-node.is-workspace {
+  --execution-kind-color: var(--gold);
+}
+
+.workflow-execution-node.is-skill {
+  --execution-kind-color: var(--violet);
+  border-style: dashed;
+}
+
+.workflow-execution-node.is-agent {
+  --execution-kind-color: var(--rose);
+}
+
+.workflow-execution-node.is-git {
+  --execution-kind-color: var(--cyan);
+}
+
+.workflow-execution-node.is-closure {
+  --execution-kind-color: var(--ok);
+}
+
+.workflow-execution-node.is-workspace .workflow-execution-dot,
+.workflow-execution-node.is-skill .workflow-execution-dot,
+.workflow-execution-node.is-agent .workflow-execution-dot,
+.workflow-execution-node.is-git .workflow-execution-dot,
+.workflow-execution-node.is-closure .workflow-execution-dot {
+  background: var(--execution-kind-color);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--execution-kind-color) 52%, transparent);
+}
+
 .workflow-execution-node.is-request .workflow-execution-dot {
   width: 10px;
   height: 10px;

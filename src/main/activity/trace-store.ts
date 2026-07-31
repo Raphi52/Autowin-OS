@@ -97,3 +97,15 @@ export class TraceStore {
     appendFileSync(this.path('conv-1'), line, 'utf8')
   }
 }
+
+/**
+ * Resynchronise un producteur qui a pu attendre pendant qu'un run imbrique écrivait dans la même
+ * conversation. La séquence proposée reste valable si aucun autre producteur ne l'a dépassée.
+ */
+export function rebaseTraceSequence(
+  store: TraceStore,
+  conversationId: string,
+  proposedSequence: number
+): number {
+  return Math.max(proposedSequence, store.nextSequence(conversationId))
+}

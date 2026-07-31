@@ -3,10 +3,188 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { loadPromptCalls } from './prompt-observability'
-import { persistOrchestrationStep } from './orchestration-observability'
+import {
+  persistOrchestrationPhaseStart,
+  persistOrchestrationStep,
+  persistRunLifecycle
+} from './orchestration-observability'
 import { TraceStore } from './trace-store'
 
 describe('observabilite orchestration', () => {
+  it('persiste le workspace, le sort Git et la clôture d’un run sans perdre son identité', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-orchestration-run-lifecycle-'))
+    const trace = new TraceStore(join(root, 'trace'))
+    const context = { conversationId: 'conv-run', turnId: 'turn-run' }
+
+    persistRunLifecycle(
+      {
+        stage: 'workspace',
+        runId: 'run-1',
+        timestampMs: 100,
+        workspace: {
+          mode: 'worktree',
+          repositoryPath: 'C:\\repo',
+          path: 'C:\\worktrees\\run-1',
+          baseBranch: 'main',
+          baseSha: 'abc123'
+        }
+      },
+      context,
+      trace
+    )
+    persistRunLifecycle(
+      {
+        stage: 'closure',
+        runId: 'run-1',
+        timestampMs: 100,
+        closure: { status: 'open', totalDurationMs: 0, totalCostUsd: 0 }
+      },
+      context,
+      trace
+    )
+    persistRunLifecycle(
+      {
+        stage: 'git',
+        runId: 'run-1',
+        timestampMs: 220,
+        git: {
+          outcome: 'merged',
+          rawOutcome: 'merged',
+          commitSha: 'def456',
+          baseBranch: 'main',
+          worktreePath: 'C:\\worktrees\\run-1'
+        }
+      },
+      context,
+      trace
+    )
+    persistRunLifecycle(
+      {
+        stage: 'closure',
+        runId: 'run-1',
+        timestampMs: 240,
+        closure: { status: 'green', totalDurationMs: 140, totalCostUsd: 0.42 }
+      },
+      context,
+      trace
+    )
+
+    expect(trace.readConversation('conv-run').map((event) => event.run)).toEqual([
+      expect.objectContaining({ runId: 'run-1', stage: 'workspace' }),
+      expect.objectContaining({
+        runId: 'run-1',
+        stage: 'closure',
+        closure: expect.objectContaining({ status: 'open' })
+      }),
+      expect.objectContaining({
+        runId: 'run-1',
+        stage: 'git',
+        git: expect.objectContaining({ outcome: 'merged', commitSha: 'def456' })
+      }),
+      expect.objectContaining({
+        runId: 'run-1',
+        stage: 'closure',
+        closure: expect.objectContaining({
+          status: 'green',
+          totalDurationMs: 140,
+          totalCostUsd: 0.42
+        })
+      })
+    ])
+  })
+
+  it('injecte le runId et la tentative dans chaque étape persistée', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-orchestration-run-step-'))
+    const trace = new TraceStore(join(root, 'trace'))
+    persistOrchestrationStep(
+      {
+        step: 'exec',
+        role: 'subagent',
+        provider: 'codex',
+        text: 'fait',
+        execution: {
+          phase: 'build',
+          agentId: 'builder',
+          taskId: 'task-1',
+          groupId: 'build',
+          attemptId: 'attempt-1'
+        }
+      },
+      {
+        conversationId: 'conv-run',
+        turnId: 'turn-run',
+        iteration: 0,
+        runId: 'run-1'
+      },
+      join(root, 'prompts'),
+      trace
+    )
+
+    expect(trace.readConversation('conv-run')[0].execution).toMatchObject({
+      runId: 'run-1',
+      attemptId: 'attempt-1',
+      agentId: 'builder'
+    })
+  })
+
+  it('persiste le démarrage running puis la terminaison sur le même attemptId', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-orchestration-running-step-'))
+    const trace = new TraceStore(join(root, 'trace'))
+    const execution = {
+      phase: 'build' as const,
+      agentId: 'builder',
+      taskId: 'task-1',
+      groupId: 'build',
+      attemptId: 'attempt-live'
+    }
+    const context = {
+      conversationId: 'conv-run',
+      turnId: 'turn-run',
+      iteration: 0,
+      runId: 'run-1'
+    }
+
+    persistOrchestrationPhaseStart(
+      {
+        step: 'exec',
+        role: 'subagent',
+        provider: 'codex',
+        model: 'gpt-5.6',
+        phase: 'build',
+        execution
+      },
+      context,
+      trace
+    )
+    persistOrchestrationStep(
+      {
+        step: 'exec',
+        role: 'subagent',
+        provider: 'codex',
+        model: 'gpt-5.6',
+        text: 'fait',
+        status: 'completed',
+        execution
+      },
+      context,
+      join(root, 'prompts'),
+      trace
+    )
+
+    expect(trace.readConversation('conv-run')).toMatchObject([
+      {
+        type: 'handoff',
+        status: 'running',
+        execution: { runId: 'run-1', attemptId: 'attempt-live' }
+      },
+      {
+        type: 'handoff',
+        status: 'completed',
+        execution: { runId: 'run-1', attemptId: 'attempt-live' }
+      }
+    ])
+  })
+
   it('persiste les appels sous-agent et juge dans le journal causal', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-orchestration-'))
     const trace = new TraceStore(join(root, 'trace'))
@@ -86,10 +264,9 @@ describe('observabilite orchestration', () => {
     const events = traceStore.readConversation('conv-fanout')
     expect(events).toHaveLength(2)
     expect(events.map((event) => event.parentId)).toEqual([undefined, undefined])
-    expect(events.map((event) => `${event.actor.id}:${event.provider?.id}:${event.provider?.model}`)).toEqual([
-      'scout-a:codex:gpt-5.6-codex',
-      'scout-b:claude:claude-opus-4-8'
-    ])
+    expect(
+      events.map((event) => `${event.actor.id}:${event.provider?.id}:${event.provider?.model}`)
+    ).toEqual(['scout-a:codex:gpt-5.6-codex', 'scout-b:claude:claude-opus-4-8'])
   })
   it('F6 — persiste la décomposition du system (systemBlocks) dans le record', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-orchestration-blocks-'))
@@ -139,8 +316,20 @@ describe('observabilite orchestration', () => {
           limitation: 'opaque'
         },
         evidence: [
-          { type: 'command_execution', kind: 'verification', status: 'completed', ok: true, summary: 'npm test\nexit=0' },
-          { type: 'file_change', kind: 'mutation', status: 'completed', ok: true, summary: 'apply_patch' }
+          {
+            type: 'command_execution',
+            kind: 'verification',
+            status: 'completed',
+            ok: true,
+            summary: 'npm test\nexit=0'
+          },
+          {
+            type: 'file_change',
+            kind: 'mutation',
+            status: 'completed',
+            ok: true,
+            summary: 'apply_patch'
+          }
         ]
       },
       { conversationId: 'conv-tools', turnId: 'turn-1', iteration: 0 },

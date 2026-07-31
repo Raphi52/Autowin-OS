@@ -39,6 +39,11 @@ function durationLabel(durationMs: number | undefined): string {
   return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(durationMs / 1000)} s`
 }
 
+function costLabel(costUsd: number | undefined): string {
+  if (costUsd == null) return 'coût inconnu'
+  return `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 4 }).format(costUsd)} $`
+}
+
 function statusLabel(status: string | undefined): string {
   if (status === 'running') return 'en cours'
   if (status === 'failed') return 'échec'
@@ -52,6 +57,190 @@ function skillLabel(event: HarnessTimelineEvent): string | undefined {
   if (event.display?.workflow === 'autowin') return 'skill non tracée'
   if (event.display?.workflow === 'direct') return 'aucune skill'
   return undefined
+}
+
+function gitOutcomeLabel(outcome: string | undefined): string {
+  if (outcome === 'merged') return 'Fusionnée'
+  if (outcome === 'nothing') return 'Aucun changement'
+  if (outcome === 'conflict') return 'Conflit'
+  if (outcome === 'blocked') return 'Bloquée'
+  if (outcome === 'kept') return 'Copie conservée'
+  return 'Inconnu'
+}
+
+function closureStatusLabel(status: string | undefined): string {
+  if (status === 'green') return 'Green'
+  if (status === 'degraded-closed') return 'Dégradé clos'
+  if (status === 'red') return 'Red'
+  return 'Ouvert'
+}
+
+function workspaceModeLabel(mode: string | undefined): string {
+  return mode === 'worktree' ? 'Copie isolée' : 'Dépôt de travail'
+}
+
+function ExecutionNodeMeta({ event }: { event: HarnessTimelineEvent }): React.JSX.Element {
+  const display = event.display
+  if (display?.kind === 'workspace') {
+    return (
+      <>
+        <span>{workspaceModeLabel(display.workspace?.mode)}</span>
+        <span aria-hidden="true">·</span>
+        <span>{display.workspace?.path}</span>
+      </>
+    )
+  }
+  if (display?.kind === 'skill') {
+    return (
+      <>
+        <span className="workflow-execution-skill">phase · {display.skillName}</span>
+        <span aria-hidden="true">·</span>
+        <span>alias observé</span>
+      </>
+    )
+  }
+  if (display?.kind === 'git') {
+    return (
+      <>
+        <span>{gitOutcomeLabel(display.git?.outcome)}</span>
+        {display.git?.commitSha && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span>{display.git.commitSha.slice(0, 8)}</span>
+          </>
+        )}
+      </>
+    )
+  }
+  if (display?.kind === 'closure') {
+    return (
+      <>
+        <span>{closureStatusLabel(display.closure?.status)}</span>
+        <span aria-hidden="true">·</span>
+        <span>{durationLabel(display.closure?.totalDurationMs)}</span>
+        <span aria-hidden="true">·</span>
+        <span>{costLabel(display.closure?.totalCostUsd)}</span>
+      </>
+    )
+  }
+  if (display?.kind === 'request') {
+    return <span className="workflow-execution-request-label">{event.label}</span>
+  }
+  if (display?.kind === 'phase') return <span>Phase Autowin</span>
+  return (
+    <>
+      {skillLabel(event) && (
+        <>
+          <span className="workflow-execution-skill">{skillLabel(event)}</span>
+          {event.display?.workflow === 'direct' && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>chat direct</span>
+            </>
+          )}
+          <span aria-hidden="true">·</span>
+        </>
+      )}
+      <span className="workflow-execution-agent">{event.actor}</span>
+      <span aria-hidden="true">·</span>
+      <span>{durationLabel(event.durationMs)}</span>
+    </>
+  )
+}
+
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }): React.JSX.Element {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  )
+}
+
+function ExecutionNodeDetail({ event }: { event: HarnessTimelineEvent }): React.JSX.Element {
+  const display = event.display
+  if (display?.kind === 'workspace') {
+    const workspace = display.workspace
+    return (
+      <dl>
+        <DetailRow label="Chemin effectif" value={workspace?.path ?? 'Non exposé'} />
+        <DetailRow label="Mode" value={workspaceModeLabel(workspace?.mode)} />
+        <DetailRow label="Dépôt source" value={workspace?.repositoryPath ?? 'Non exposé'} />
+        {workspace?.baseBranch && (
+          <DetailRow label="Branche de base" value={workspace.baseBranch} />
+        )}
+        {workspace?.baseSha && <DetailRow label="Révision de base" value={workspace.baseSha} />}
+      </dl>
+    )
+  }
+  if (display?.kind === 'skill') {
+    return (
+      <dl>
+        <DetailRow label="Phase observée" value={display.skillName ?? 'Non exposée'} />
+        <DetailRow label="Identité" value="Alias de phase" />
+        <DetailRow label="Run" value={display.runId ?? 'Non exposé'} />
+      </dl>
+    )
+  }
+  if (display?.kind === 'agent') {
+    return (
+      <dl>
+        <DetailRow label="Agent" value={event.execution?.agentId ?? event.actor} />
+        <DetailRow
+          label="Attempt"
+          value={display.attemptId ?? event.execution?.attemptId ?? 'Non exposé'}
+        />
+        <DetailRow label="Skill" value={display.skillName ?? 'Non exposée'} />
+        <DetailRow label="Durée" value={durationLabel(event.durationMs)} />
+        {event.provider && <DetailRow label="Provider" value={event.provider} />}
+        {event.model && <DetailRow label="Modèle" value={event.model} />}
+        {(display.dependencyIds?.length ?? 0) > 0 && (
+          <DetailRow label="Dépend de" value={display.dependencyIds?.join(', ')} />
+        )}
+      </dl>
+    )
+  }
+  if (display?.kind === 'git') {
+    const git = display.git
+    return (
+      <dl>
+        <DetailRow label="Sort Git" value={gitOutcomeLabel(git?.outcome)} />
+        <DetailRow label="Révision" value={git?.commitSha ?? 'Aucun commit'} />
+        <DetailRow label="Branche de base" value={git?.baseBranch ?? 'Non exposée'} />
+        {git?.worktreePath && <DetailRow label="Worktree" value={git.worktreePath} />}
+        {(git?.files?.length ?? 0) > 0 && (
+          <DetailRow label="Fichiers" value={git?.files?.join(', ')} />
+        )}
+        {git?.reason && <DetailRow label="Cause" value={git.reason} />}
+      </dl>
+    )
+  }
+  if (display?.kind === 'closure') {
+    const closure = display.closure
+    return (
+      <dl>
+        <DetailRow label="État de clôture" value={closureStatusLabel(closure?.status)} />
+        <DetailRow label="Temps total" value={durationLabel(closure?.totalDurationMs)} />
+        <DetailRow label="Coût total" value={costLabel(closure?.totalCostUsd)} />
+        {closure?.integrationOutcome && (
+          <DetailRow label="Intégration" value={gitOutcomeLabel(closure.integrationOutcome)} />
+        )}
+        {(closure?.gateReasons?.length ?? 0) > 0 && (
+          <DetailRow label="Raisons" value={closure?.gateReasons?.join(' · ')} />
+        )}
+      </dl>
+    )
+  }
+  return (
+    <dl>
+      <DetailRow label="Acteur" value={event.actor} />
+      <DetailRow label="Durée" value={durationLabel(event.durationMs)} />
+      {skillLabel(event) && <DetailRow label="Skill" value={skillLabel(event)} />}
+      {event.provider && <DetailRow label="Provider" value={event.provider} />}
+      {event.model && <DetailRow label="Modèle" value={event.model} />}
+      <DetailRow label="Observation" value={event.detail} />
+    </dl>
+  )
 }
 
 export function WorkflowExecutionGraph({
@@ -134,6 +323,11 @@ export function WorkflowExecutionGraph({
   const graph = useMemo(() => buildCausalPath(events), [events])
   const nodes = useMemo(() => flattenCausalNodes(graph.roots), [graph.roots])
   const selected = selectedId ? graph.byId.get(selectedId) : undefined
+  const runCount = new Set(
+    nodes
+      .map((node) => node.event.display?.runId)
+      .filter((runId): runId is string => Boolean(runId))
+  ).size
 
   if (!conversationId) {
     return (
@@ -155,6 +349,12 @@ export function WorkflowExecutionGraph({
         <div>
           <strong>Traitement de la demande</strong>
           <span>
+            {runCount > 0 && (
+              <>
+                {runCount} run{runCount > 1 ? 's' : ''}
+                {' · '}
+              </>
+            )}
             {nodes.filter((node) => node.event.display?.kind === 'agent').length} agent
             {nodes.filter((node) => node.event.display?.kind === 'agent').length > 1 ? 's' : ''}
             {' · '}
@@ -219,6 +419,7 @@ export function WorkflowExecutionGraph({
                 data-execution-provider={node.event.provider}
                 data-execution-model={node.event.model}
                 data-execution-skill={node.event.display?.skillName}
+                data-execution-run={node.event.display?.runId}
                 data-depth={node.depth}
                 onClick={() => setSelectedId((current) => (current === node.id ? null : node.id))}
               >
@@ -229,31 +430,7 @@ export function WorkflowExecutionGraph({
                     <em>{statusLabel(node.event.status)}</em>
                   </span>
                   <span className="workflow-execution-node-meta">
-                    {node.event.display?.kind === 'request' ? (
-                      <span className="workflow-execution-request-label">{node.event.label}</span>
-                    ) : node.event.display?.kind === 'phase' ? (
-                      <span>Phase Autowin</span>
-                    ) : (
-                      <>
-                        {skillLabel(node.event) && (
-                          <>
-                            <span className="workflow-execution-skill">
-                              {skillLabel(node.event)}
-                            </span>
-                            {node.event.display?.workflow === 'direct' && (
-                              <>
-                                <span aria-hidden="true">·</span>
-                                <span>chat direct</span>
-                              </>
-                            )}
-                            <span aria-hidden="true">·</span>
-                          </>
-                        )}
-                        <span className="workflow-execution-agent">{node.event.actor}</span>
-                        <span aria-hidden="true">·</span>
-                        <span>{durationLabel(node.event.durationMs)}</span>
-                      </>
-                    )}
+                    <ExecutionNodeMeta event={node.event} />
                   </span>
                 </span>
               </button>
@@ -268,44 +445,7 @@ export function WorkflowExecutionGraph({
             <strong>{selected.event.display?.title ?? EVENT_LABEL[selected.event.kind]}</strong>
             <span>{statusLabel(selected.event.status)}</span>
           </header>
-          <dl>
-            <div>
-              <dt>{selected.event.display?.kind === 'agent' ? 'Agent' : 'Acteur'}</dt>
-              <dd>{selected.event.actor}</dd>
-            </div>
-            <div>
-              <dt>Durée</dt>
-              <dd>{durationLabel(selected.event.durationMs)}</dd>
-            </div>
-            {skillLabel(selected.event) && (
-              <div>
-                <dt>Skill</dt>
-                <dd>{skillLabel(selected.event)}</dd>
-              </div>
-            )}
-            {selected.event.provider && (
-              <div>
-                <dt>Provider</dt>
-                <dd>{selected.event.provider}</dd>
-              </div>
-            )}
-            {selected.event.model && (
-              <div>
-                <dt>Modèle</dt>
-                <dd>{selected.event.model}</dd>
-              </div>
-            )}
-            {(selected.event.display?.dependencyIds?.length ?? 0) > 0 && (
-              <div>
-                <dt>Dépend de</dt>
-                <dd>{selected.event.display?.dependencyIds?.join(', ')}</dd>
-              </div>
-            )}
-            <div>
-              <dt>Observation</dt>
-              <dd>{selected.event.detail}</dd>
-            </div>
-          </dl>
+          <ExecutionNodeDetail event={selected.event} />
           {selected.issues.length > 0 && (
             <p className="workflow-execution-warning">
               Trace partielle · {selected.issues.join(', ')}

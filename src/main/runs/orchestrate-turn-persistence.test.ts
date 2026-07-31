@@ -146,5 +146,8 @@ describe('persistance du tour pour le run direct os:orchestrate', () => {
     expect(handler).toContain('durableTurn.artifact(stored)')
     expect(handler).toContain('durableTurn.succeed(result)')
     expect(handler).toContain('durableTurn.fail(error, aborted)')
+    expect(handler).toContain('persistRunLifecycle(lifecycle')
+    expect(handler).toMatch(/persistOrchestrationPhaseStart\(\s*phase,/)
+    expect(handler).toContain('runId: currentRunId')
   })
 })

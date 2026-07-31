@@ -6,6 +6,7 @@ import type {
 
 export interface RequestExecutionProjection {
   turnId?: string
+  runIds?: string[]
   events: HarnessTimelineEvent[]
 }
 
@@ -135,10 +136,312 @@ function agentTitle(event: HarnessTimelineEvent): string {
     : role
 }
 
+function eventOrder(a: HarnessTimelineEvent, b: HarnessTimelineEvent): number {
+  const byTime = (a.timestamp ?? '').localeCompare(b.timestamp ?? '')
+  if (byTime !== 0) return byTime
+  const aSequence = (a.raw as { sequence?: number } | undefined)?.sequence ?? 0
+  const bSequence = (b.raw as { sequence?: number } | undefined)?.sequence ?? 0
+  return aSequence - bSequence
+}
+
+function workspaceId(path: string): string {
+  return `workspace:base:${encodeURIComponent(path.toLowerCase())}`
+}
+
+function executionStatus(events: HarnessTimelineEvent[]): string {
+  const latestByAttempt = new Map<string, HarnessTimelineEvent>()
+  for (const event of [...events].sort(eventOrder)) {
+    latestByAttempt.set(event.execution?.attemptId ?? event.id, event)
+  }
+  const latest = [...latestByAttempt.values()]
+  if (latest.some((event) => event.status === 'running')) return 'running'
+  if (latest.some((event) => event.status === 'completed')) return 'completed'
+  if (latest.some((event) => event.status === 'failed')) return 'failed'
+  return latest.at(-1)?.status ?? 'pending'
+}
+
+/**
+ * Projection conversationnelle des nouveaux faits de run. Les anciennes traces sans lifecycle
+ * continuent de passer dans le projecteur historique situé sous cette fonction.
+ */
+function projectRunExecutions(timeline: HarnessTimeline): RequestExecutionProjection | undefined {
+  const allEvents = timeline.turns.flatMap((turn) => turn.events).sort(eventOrder)
+  const workspaceFacts = allEvents.filter((event) => event.run?.stage === 'workspace')
+  if (workspaceFacts.length === 0) return undefined
+
+  const runIds = [
+    ...new Set(workspaceFacts.map((event) => event.run?.runId).filter(Boolean))
+  ] as string[]
+  const events: HarnessTimelineEvent[] = []
+  const baseRoots = new Map<string, HarnessTimelineEvent>()
+  const terminalClosureByRun = new Map<string, HarnessTimelineEvent>()
+
+  for (const runId of runIds) {
+    const closureFacts = allEvents
+      .filter((event) => event.run?.runId === runId && event.run.stage === 'closure')
+      .sort(eventOrder)
+    const terminal = [...closureFacts]
+      .reverse()
+      .find((event) => event.run?.stage === 'closure' && event.run.closure.status !== 'open')
+    if (terminal) terminalClosureByRun.set(runId, terminal)
+  }
+
+  for (const fact of workspaceFacts) {
+    if (fact.run?.stage !== 'workspace') continue
+    const workspace = fact.run.workspace
+    if (baseRoots.has(workspace.repositoryPath)) continue
+    const relatedRunIds = runIds.filter((runId) =>
+      workspaceFacts.some(
+        (candidate) =>
+          candidate.run?.runId === runId &&
+          candidate.run.stage === 'workspace' &&
+          candidate.run.workspace.repositoryPath === workspace.repositoryPath
+      )
+    )
+    const running = relatedRunIds.some((runId) => !terminalClosureByRun.has(runId))
+    const root: HarnessTimelineEvent = {
+      id: workspaceId(workspace.repositoryPath),
+      kind: 'boundary',
+      actor: 'Autowin OS',
+      label: workspace.repositoryPath,
+      content: '',
+      detail: `Dépôt commun · ${workspace.repositoryPath}`,
+      timestamp: fact.timestamp,
+      status: running ? 'running' : 'completed',
+      durationMs: 0,
+      payloads: [],
+      display: {
+        kind: 'workspace',
+        title: 'Dépôt de travail',
+        observedEventIds: relatedRunIds.flatMap((runId) =>
+          workspaceFacts
+            .filter((candidate) => candidate.run?.runId === runId)
+            .map((candidate) => candidate.id)
+        ),
+        workspace: {
+          mode: 'base',
+          repositoryPath: workspace.repositoryPath,
+          path: workspace.repositoryPath,
+          root: true
+        }
+      }
+    }
+    baseRoots.set(workspace.repositoryPath, root)
+    events.push(root)
+  }
+
+  for (const runId of runIds) {
+    const runEvents = allEvents
+      .filter((event) => event.run?.runId === runId || event.execution?.runId === runId)
+      .sort(eventOrder)
+    const workspaceFact = runEvents.find((event) => event.run?.stage === 'workspace')
+    if (workspaceFact?.run?.stage !== 'workspace') continue
+    const workspace = workspaceFact.run.workspace
+    const baseRoot = baseRoots.get(workspace.repositoryPath)
+    if (!baseRoot) continue
+
+    let runWorkspaceId = baseRoot.id
+    if (workspace.mode === 'worktree') {
+      const isolated: HarnessTimelineEvent = {
+        id: `workspace:run:${runId}`,
+        parentId: baseRoot.id,
+        kind: 'boundary',
+        actor: 'Autowin OS',
+        label: workspace.path,
+        content: '',
+        detail: `Copie isolée du run ${runId}`,
+        timestamp: workspaceFact.timestamp,
+        status: terminalClosureByRun.has(runId) ? 'completed' : 'running',
+        durationMs: 0,
+        payloads: [],
+        execution: { runId },
+        display: {
+          kind: 'workspace',
+          title: 'Workspace isolé',
+          runId,
+          observedEventIds: [workspaceFact.id],
+          workspace
+        }
+      }
+      events.push(isolated)
+      runWorkspaceId = isolated.id
+    }
+
+    const structural = runEvents.filter(
+      (event) =>
+        (event.kind === 'handoff' || event.kind === 'verdict') && Boolean(event.execution?.agentId)
+    )
+    const childrenByParent = new Map<string, HarnessTimelineEvent[]>()
+    for (const event of runEvents) {
+      if (!event.parentId) continue
+      childrenByParent.set(event.parentId, [...(childrenByParent.get(event.parentId) ?? []), event])
+    }
+    const attempts = new Map<string, HarnessTimelineEvent[]>()
+    for (const event of structural) {
+      const key = event.execution?.attemptId ?? event.id
+      attempts.set(key, [...(attempts.get(key) ?? []), event])
+    }
+    const phases = [
+      ...new Set(
+        [...attempts.values()].map((attempt) => attempt.at(-1)?.execution?.phase).filter(Boolean)
+      )
+    ] as string[]
+    const skillByPhase = new Map<string, HarnessTimelineEvent>()
+    for (const phase of phases) {
+      const phaseAttempts = [...attempts.values()]
+        .flat()
+        .filter((event) => event.execution?.phase === phase)
+      const skill: HarnessTimelineEvent = {
+        id: `skill:${runId}:${phase}`,
+        parentId: runWorkspaceId,
+        kind: 'decision',
+        actor: 'Autowin OS',
+        label: phase,
+        content: '',
+        detail: `Phase ${phase} utilisée comme alias de skill ; le nom réel du kit n'est pas transporté.`,
+        timestamp: phaseAttempts[0]?.timestamp,
+        status: executionStatus(phaseAttempts),
+        durationMs: 0,
+        payloads: [],
+        execution: { phase, runId },
+        display: {
+          kind: 'skill',
+          title: `skill · ${phase}`,
+          runId,
+          skillName: phase,
+          skillIdentity: 'phase-alias',
+          workflow: 'autowin',
+          limitation: 'Le runtime transporte la phase, pas le nom réel de la skill du kit.',
+          observedEventIds: phaseAttempts.map((event) => event.id)
+        }
+      }
+      skillByPhase.set(phase, skill)
+      events.push(skill)
+    }
+
+    const projectedAgents: HarnessTimelineEvent[] = []
+    for (const [attemptId, attemptEvents] of attempts) {
+      const ordered = [...attemptEvents].sort(eventOrder)
+      const latest = ordered.at(-1)
+      if (!latest) continue
+      const grouped = ordered.flatMap((event) => technicalDescendants(event, childrenByParent))
+      const terminal = [...grouped]
+        .reverse()
+        .find((candidate) => candidate.kind === 'model-response' || candidate.kind === 'error')
+      const phase = latest.execution?.phase
+      const agent: HarnessTimelineEvent = {
+        ...latest,
+        id: `agent:${runId}:${attemptId}`,
+        parentId: skillByPhase.get(phase ?? '')?.id ?? runWorkspaceId,
+        provider: terminal?.provider ?? latest.provider,
+        model: terminal?.model ?? latest.model,
+        status: terminal?.status ?? latest.status,
+        durationMs: terminal?.durationMs ?? latest.durationMs,
+        costUsd: terminal?.costUsd ?? latest.costUsd,
+        payloads: [],
+        execution: { ...latest.execution, runId, attemptId },
+        display: {
+          kind: 'agent',
+          title: agentTitle(latest),
+          runId,
+          attemptId,
+          observedEventIds: [
+            ...new Set([...ordered.map((event) => event.id), ...grouped.map((event) => event.id)])
+          ],
+          dependencyIds: [...(latest.execution?.dependencyIds ?? [])],
+          workflow: 'autowin',
+          skillName: phase
+        }
+      }
+      projectedAgents.push(agent)
+      events.push(agent)
+    }
+
+    const gitFact = [...runEvents].reverse().find((event) => event.run?.stage === 'git')
+    let gitNode: HarnessTimelineEvent | undefined
+    if (gitFact?.run?.stage === 'git' && workspace.mode === 'worktree') {
+      const completedAgents = projectedAgents.filter((event) => event.status === 'completed')
+      const fallbackSkill = [...skillByPhase.values()].at(-1)
+      const parentId =
+        completedAgents.length === 1 ? completedAgents[0].id : (fallbackSkill?.id ?? runWorkspaceId)
+      const git = gitFact.run.git
+      gitNode = {
+        id: `git:${runId}`,
+        parentId,
+        kind: 'boundary',
+        actor: 'Git',
+        label: git.outcome,
+        content: '',
+        detail: git.detail ?? `Finalisation Git du run ${runId}`,
+        timestamp: gitFact.timestamp,
+        status: git.outcome === 'conflict' || git.outcome === 'blocked' ? 'failed' : 'completed',
+        durationMs: 0,
+        payloads: [],
+        execution: { runId },
+        display: {
+          kind: 'git',
+          title: 'Git du run',
+          runId,
+          git,
+          observedEventIds: [gitFact.id],
+          dependencyIds: completedAgents.map((event) => event.id)
+        }
+      }
+      events.push(gitNode)
+    }
+
+    const closureFacts = runEvents.filter((event) => event.run?.stage === 'closure')
+    const closureFact =
+      [...closureFacts]
+        .reverse()
+        .find((event) => event.run?.stage === 'closure' && event.run.closure.status !== 'open') ??
+      closureFacts.at(-1)
+    const closure =
+      closureFact?.run?.stage === 'closure'
+        ? closureFact.run.closure
+        : { status: 'open' as const, totalDurationMs: 0, totalCostUsd: 0 }
+    const fallbackSkill = [...skillByPhase.values()].at(-1)
+    const closureParent =
+      gitNode?.id ??
+      (projectedAgents.length === 1 ? projectedAgents[0].id : (fallbackSkill?.id ?? runWorkspaceId))
+    events.push({
+      id: `closure:${runId}`,
+      parentId: closureParent,
+      kind: 'gate',
+      actor: 'Autowin OS',
+      label: closure.status,
+      content: '',
+      detail: `Clôture du run ${runId}`,
+      timestamp: closureFact?.timestamp ?? workspaceFact.timestamp,
+      status:
+        closure.status === 'open' ? 'running' : closure.status === 'red' ? 'failed' : 'completed',
+      durationMs: closure.totalDurationMs,
+      costUsd: closure.totalCostUsd,
+      payloads: [],
+      execution: { runId },
+      display: {
+        kind: 'closure',
+        title: 'Clôture du run',
+        runId,
+        closure,
+        observedEventIds: closureFacts.map((event) => event.id)
+      }
+    })
+  }
+
+  return {
+    turnId: timeline.turns[0]?.id,
+    runIds,
+    events
+  }
+}
+
 export function projectLatestRequestExecution(
   timeline: HarnessTimeline,
   options: ProjectionOptions = {}
 ): RequestExecutionProjection {
+  const runProjection = projectRunExecutions(timeline)
+  if (runProjection) return runProjection
   const turn = timeline.turns[0]
   if (!turn) return { events: [] }
 
@@ -263,7 +566,11 @@ export function projectLatestRequestExecution(
       display: {
         kind: event.kind.startsWith('tool-') ? 'tool' : 'event',
         title:
-          event.kind === 'tool-call' ? 'Outil' : event.kind === 'tool-result' ? 'Résultat' : 'Étape',
+          event.kind === 'tool-call'
+            ? 'Outil'
+            : event.kind === 'tool-result'
+              ? 'Résultat'
+              : 'Étape',
         observedEventIds: [event.id],
         workflow,
         skillName

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { describe, expect, it } from 'vitest'
-import { TraceStore } from './trace-store'
+import { rebaseTraceSequence, TraceStore } from './trace-store'
 import type { TraceEventV1 } from './trace-event'
 
 function event(id: string, sequence: number, content = id): TraceEventV1 {
@@ -118,5 +118,22 @@ describe('TraceStore append-only', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-trace-next-'))
     new TraceStore(root).append({ ...event('evt-0', 7), parentId: undefined })
     expect(new TraceStore(root).nextSequence('conv-1')).toBe(8)
+  })
+
+  it('rebase un producteur reste en attente pendant qu un run imbrique avance la trace', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-rebase-'))
+    const chatWriter = new TraceStore(root)
+    const runWriter = new TraceStore(root)
+
+    chatWriter.append(event('evt-0', 0))
+    let chatSequence = 1
+    runWriter.append(event('evt-1', 1)).append(event('evt-2', 2))
+
+    chatSequence = rebaseTraceSequence(chatWriter, 'conv-1', chatSequence)
+
+    expect(chatSequence).toBe(3)
+    expect(() =>
+      chatWriter.append({ ...event('evt-3', chatSequence), parentId: 'evt-0' })
+    ).not.toThrow()
   })
 })

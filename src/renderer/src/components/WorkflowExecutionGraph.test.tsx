@@ -39,6 +39,94 @@ function trace(
   }
 }
 
+function executionRunTrace(
+  options: {
+    agent?: 'running' | 'completed'
+    closed?: boolean
+  } = {}
+): HarnessTraceEvent[] {
+  const events: HarnessTraceEvent[] = [
+    trace('run-workspace', 1, {
+      type: 'boundary',
+      run: {
+        runId: 'run-1',
+        timestampMs: 1,
+        stage: 'workspace',
+        workspace: {
+          mode: 'worktree',
+          repositoryPath: 'C:\\repo',
+          path: 'C:\\repo-run-1',
+          baseBranch: 'main',
+          baseSha: 'abc123'
+        }
+      }
+    }),
+    trace('run-open', 2, {
+      type: 'gate',
+      status: 'running',
+      run: {
+        runId: 'run-1',
+        timestampMs: 2,
+        stage: 'closure',
+        closure: { status: 'open', totalDurationMs: 0, totalCostUsd: 0 }
+      }
+    })
+  ]
+  if (options.agent) {
+    events.push(
+      trace(`run-agent-${options.agent}`, 3, {
+        type: 'handoff',
+        status: options.agent,
+        actor: { id: 'subagent', kind: 'agent', label: 'Sous-agent' },
+        provider: { id: 'codex', model: 'gpt-5.6-codex' },
+        execution: {
+          phase: 'build',
+          agentId: 'builder-1',
+          taskId: 'task-build',
+          groupId: 'build:fanout',
+          dependencyIds: [],
+          runId: 'run-1',
+          attemptId: 'attempt-1'
+        }
+      })
+    )
+  }
+  if (options.closed) {
+    events.push(
+      trace('run-git', 4, {
+        type: 'boundary',
+        run: {
+          runId: 'run-1',
+          timestampMs: 4,
+          stage: 'git',
+          git: {
+            outcome: 'merged',
+            commitSha: 'def456',
+            baseBranch: 'main',
+            worktreePath: 'C:\\repo-run-1',
+            files: ['src/app.ts']
+          }
+        }
+      }),
+      trace('run-green', 5, {
+        type: 'gate',
+        run: {
+          runId: 'run-1',
+          timestampMs: 5,
+          stage: 'closure',
+          closure: {
+            status: 'green',
+            totalDurationMs: 12_500,
+            totalCostUsd: 0.042,
+            integrationOutcome: 'merged'
+          }
+        }
+      })
+    )
+  }
+  return events
+}
+
 describe('WorkflowExecutionGraph', () => {
   beforeAll(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -141,9 +229,47 @@ describe('WorkflowExecutionGraph', () => {
 
     await act(async () => agentNode?.click())
     expect(view.querySelector('.workflow-execution-detail')?.textContent).toContain('codex')
-    expect(view.querySelector('.workflow-execution-detail')?.textContent).toContain(
-      'gpt-5.6-codex'
-    )
+    expect(view.querySelector('.workflow-execution-detail')?.textContent).toContain('gpt-5.6-codex')
+  })
+
+  it('ouvre un détail propre à chacun des cinq types du run', async () => {
+    const causalTrace = vi
+      .fn()
+      .mockResolvedValue(executionRunTrace({ agent: 'completed', closed: true }))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { causalTrace }
+    })
+    const view = await render({ conversationId: 'conv-a', active: true })
+
+    const cases = [
+      ['workspace:run:run-1', ['Chemin effectif', 'C:\\repo-run-1', 'Mode', 'Copie isolée']],
+      ['skill:run-1:build', ['Phase observée', 'build', 'Identité', 'Alias de phase']],
+      [
+        'agent:run-1:attempt-1',
+        ['Agent', 'builder-1', 'Attempt', 'attempt-1', 'Provider', 'codex', 'Modèle']
+      ],
+      ['git:run-1', ['Sort Git', 'Fusionnée', 'Révision', 'def456', 'Branche de base', 'main']],
+      [
+        'closure:run-1',
+        ['État de clôture', 'Green', 'Temps total', '12,5 s', 'Coût total', '0,042 $']
+      ]
+    ] as const
+
+    expect(
+      new Set(
+        [...view.querySelectorAll('[data-execution-kind]')].map((node) =>
+          node.getAttribute('data-execution-kind')
+        )
+      )
+    ).toEqual(new Set(['workspace', 'skill', 'agent', 'git', 'closure']))
+    for (const [id, labels] of cases) {
+      await act(async () =>
+        view.querySelector<HTMLButtonElement>(`[data-execution-node="${id}"]`)?.click()
+      )
+      const detail = view.querySelector('.workflow-execution-detail')?.textContent ?? ''
+      for (const label of labels) expect(detail).toContain(label)
+    }
   })
 
   it('qualifie une orchestration historique sans inventer de phase', async () => {
@@ -262,6 +388,36 @@ describe('WorkflowExecutionGraph', () => {
 
     expect(causalTrace).toHaveBeenCalledTimes(2)
     expect(container?.querySelector('[data-execution-node="next"]')).not.toBeNull()
+  })
+
+  it('fait apparaître puis termine les nœuds du même run sans rechargement', async () => {
+    vi.useFakeTimers()
+    const causalTrace = vi
+      .fn()
+      .mockResolvedValueOnce(executionRunTrace())
+      .mockResolvedValueOnce(executionRunTrace({ agent: 'running' }))
+      .mockResolvedValueOnce(executionRunTrace({ agent: 'completed', closed: true }))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { causalTrace }
+    })
+    const view = await render({ conversationId: 'conv-a', active: true, live: true })
+
+    expect(view.querySelector('[data-execution-node="closure:run-1"]')?.className).toContain(
+      'is-running'
+    )
+    expect(view.querySelector('[data-execution-kind="agent"]')).toBeNull()
+
+    await act(async () => vi.advanceTimersByTimeAsync(1000))
+    expect(view.querySelector('[data-execution-kind="agent"]')?.className).toContain('is-running')
+    expect(view.querySelector('[data-execution-kind="git"]')).toBeNull()
+
+    await act(async () => vi.advanceTimersByTimeAsync(1000))
+    expect(view.querySelector('[data-execution-kind="git"]')).not.toBeNull()
+    expect(view.querySelector('[data-execution-node="closure:run-1"]')?.className).toContain(
+      'is-completed'
+    )
+    expect(causalTrace).toHaveBeenCalledTimes(3)
   })
 
   it('fait un dernier rafraîchissement quand l’exécution live se termine', async () => {

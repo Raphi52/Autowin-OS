@@ -59,6 +59,7 @@ import {
 import { defaultBehaviourWorkspace } from './behaviour-files'
 import { WorktreeManager } from './store/worktree-manager'
 import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
+import type { RunLifecycleEvent } from '../shared/run-execution'
 import { WorktreeRunStateStore } from './store/worktree-run-state'
 import { repositoryWorktreeIdentity } from './store/worktree-repository'
 import type {
@@ -393,10 +394,11 @@ export class AutowinOS {
     bindingOverride?: RoleBinding,
     /** Trace immédiate de la récupération Brain, y compris si le run échoue ensuite. */
     onBrainRetrieved?: (event: BrainRetrievalEvent) => void,
-    turnId?: string
+    turnId?: string,
+    onRunLifecycle?: (event: RunLifecycleEvent) => void
   ): Promise<OrchestrationResult> {
     await this.taskReadiness
-    if (!onBrainRetrieved && !turnId) {
+    if (!onBrainRetrieved && !turnId && !onRunLifecycle) {
       return this.orchestrator.run(
         task,
         onStep,
@@ -420,7 +422,8 @@ export class AutowinOS {
       conversationId,
       bindingOverride,
       onBrainRetrieved,
-      turnId
+      turnId,
+      onRunLifecycle
     )
   }
 
