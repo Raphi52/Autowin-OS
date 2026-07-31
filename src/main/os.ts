@@ -100,10 +100,21 @@ export function resolveExecutionWorkspace(input: ExecutionWorkspaceInput = {}): 
 }
 
 /** Un modèle membre d'un bloc de fan-out (topology → orchestrateur). */
-interface FanMember {
+export interface FanMember {
   provider: string
   model?: string
   reasoningEffort?: ReasoningEffort
+}
+
+export interface FanOutTopology {
+  scout: FanMember[]
+  frame: FanMember[]
+  terrain: FanMember[]
+  judge: FanMember[]
+}
+
+export function selectPhaseFanOut(fanOut: FanOutTopology, phase: PipelinePhase): FanMember[] {
+  return phase === 'scout' || phase === 'frame' || phase === 'terrain' ? fanOut[phase] : []
 }
 
 /** Noyau applicatif : une instance partagée, injectée dans les handlers IPC. */
@@ -119,14 +130,10 @@ export class AutowinOS {
   readonly executionWorkspace: string
   /**
    * Source LIVE du fan-out multi-modèles, alimentée par la topology (index.ts `syncRuntimeTopology`).
-   * Les blocs scout/frame/judge de la topology y déposent leurs N modèles ; l'orchestrateur les lit
+   * Les blocs scout/frame/terrain/judge de la topology y déposent leurs N modèles ; l'orchestrateur les lit
    * (deps `phaseFanOut`/`judgeFanOut`). Vide par défaut → mono-modèle (rétrocompat).
    */
-  private fanOut: {
-    scout: FanMember[]
-    frame: FanMember[]
-    judge: FanMember[]
-  } = { scout: [], frame: [], judge: [] }
+  private fanOut: FanOutTopology = { scout: [], frame: [], terrain: [], judge: [] }
   private taskReadiness: Promise<void> = Promise.resolve()
   /**
    * Coordinateur worktree (volet B) : donne à chaque run de mutation une copie isolée, fusionnée en
@@ -222,9 +229,9 @@ export class AutowinOS {
         this.orchestrationStartedAt.delete(runId)
         clearOrchestrationState(this.orchestrationStateRoot, runId)
       },
-      // Fan-out multi-modèles : les blocs topology scout/frame → phases de divergence ; judge → juges.
+      // Fan-out multi-modèles : les blocs topology scout/frame/terrain → phases composées ; judge → juges.
       // ≥2 modèles déposés → l'orchestrateur duplique + agrège (voir orchestrator.ts). Sinon mono.
-      phaseFanOut: (phase) => (phase === 'scout' || phase === 'frame' ? this.fanOut[phase] : []),
+      phaseFanOut: (phase) => selectPhaseFanOut(this.fanOut, phase),
       judgeFanOut: () => this.fanOut.judge,
       // Fonctionnement NORMAL : on décompose systématiquement via le modèle orchestrateur (best-effort
       // → [] pour une tâche atomique = fallback séquentiel naturel). Pas de « mode » à activer.
@@ -280,7 +287,7 @@ export class AutowinOS {
   }
 
   /** Met à jour la source live du fan-out (appelé par la topology au boot et à chaque changement). */
-  setFanOut(next: { scout: FanMember[]; frame: FanMember[]; judge: FanMember[] }): void {
+  setFanOut(next: FanOutTopology): void {
     this.fanOut = next
   }
 

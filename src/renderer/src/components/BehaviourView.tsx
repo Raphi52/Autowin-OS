@@ -175,7 +175,8 @@ export function BehaviourView(): React.JSX.Element {
         <div className="behaviour-anatomy">
           <p className="behaviour-path-note">
             Le vrai pipeline (os:orchestrate) : le system prompt VARIE par phase, du contexte est
-            injecté, le modèle/rôle est choisi, le régime décide des phases, des garde-fous encadrent.
+            injecté, le modèle/rôle est choisi, le régime décide des phases, des garde-fous
+            encadrent.
           </p>
 
           <section className="behaviour-category">
@@ -187,9 +188,7 @@ export function BehaviourView(): React.JSX.Element {
               <details key={p.phase} className="behaviour-phase">
                 <summary>
                   <span className="behaviour-phase-name">{p.phase}</span>
-                  <small>
-                    {p.blocks.map((b) => b.label).join(' + ')}
-                  </small>
+                  <small>{p.blocks.map((b) => b.label).join(' + ')}</small>
                 </summary>
                 <ul>
                   {p.blocks.map((b) => (
@@ -212,7 +211,7 @@ export function BehaviourView(): React.JSX.Element {
           />
           <Category
             title="C2 · Topologie / fan-out"
-            hint="panels vivants scout, frame et judge, avec règle de quorum"
+            hint="panels vivants scout, frame, terrain et judge, avec règle de quorum"
             fields={orch.topology ?? []}
           />
           <Category

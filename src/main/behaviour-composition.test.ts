@@ -82,35 +82,48 @@ describe('buildBehaviourComposition — COMPLÉTUDE', () => {
   })
 
   it('reflète les panels vivants et la règle de quorum', () => {
-    const c = buildBehaviourComposition(new RoleModelConfig(), {}, {
-      panels: {
-        scout: [
-          {
-            slotId: 's1',
-            provider: 'codex',
-            modelId: 'codex:gpt-5.6',
-            reasoningEffort: 'high'
-          }
-        ],
-        frame: [],
-        judge: [
-          {
-            slotId: 'j1',
-            provider: 'claude',
-            modelId: 'claude:opus',
-            reasoningEffort: 'high'
-          },
-          {
-            slotId: 'j2',
-            provider: 'codex',
-            modelId: 'codex:gpt-5.6',
-            reasoningEffort: 'medium'
-          }
-        ]
+    const c = buildBehaviourComposition(
+      new RoleModelConfig(),
+      {},
+      {
+        panels: {
+          scout: [
+            {
+              slotId: 's1',
+              provider: 'codex',
+              modelId: 'codex:gpt-5.6',
+              reasoningEffort: 'high'
+            }
+          ],
+          frame: [],
+          terrain: [
+            {
+              slotId: 't1',
+              provider: 'claude',
+              modelId: 'claude:sonnet',
+              reasoningEffort: 'medium'
+            }
+          ],
+          judge: [
+            {
+              slotId: 'j1',
+              provider: 'claude',
+              modelId: 'claude:opus',
+              reasoningEffort: 'high'
+            },
+            {
+              slotId: 'j2',
+              provider: 'codex',
+              modelId: 'codex:gpt-5.6',
+              reasoningEffort: 'medium'
+            }
+          ]
+        }
       }
-    })
+    )
     const blob = JSON.stringify(c.orchestrated.topology)
     expect(blob).toContain('codex/codex:gpt-5.6/high')
+    expect(blob).toContain('claude/claude:sonnet/medium')
     expect(blob).toContain('claude/claude:opus/high')
     expect(blob).toContain('quorum')
   })

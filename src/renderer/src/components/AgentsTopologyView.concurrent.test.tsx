@@ -33,7 +33,7 @@ const topology = {
     { slotId: 'subagent-1', provider: 'openai', modelId: 'gpt', reasoningEffort: 'low' },
     { slotId: 'subagent-2', provider: 'openai', modelId: 'gpt', reasoningEffort: 'high' }
   ],
-  panels: { scout: [], judge: [], frame: [] }
+  panels: { scout: [], frame: [], terrain: [], judge: [] }
 }
 
 const models = [
@@ -126,6 +126,25 @@ afterEach(() => {
 })
 
 describe('AgentsTopologyView concurrent persistence', () => {
+  it('ordonne les quatre panels Scout, Frame, Terrain, Judge dans la grille 2×2', async () => {
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      models: async () => models,
+      topology: async () => topology,
+      roles: async () => ({ orchestrator: { provider: 'openai', model: 'gpt' } }),
+      profiles: async () => [],
+      onAppEvent: () => () => undefined
+    }
+
+    await act(async () => root.render(createElement(AgentsTopologyView)))
+    await flush()
+
+    const targets = [...container.querySelectorAll('.topology-parallel > .topology-panel')].map(
+      (panel) => panel.getAttribute('data-target')
+    )
+    expect(targets).toEqual(['scout', 'frame', 'terrain', 'judge'])
+    expect(container.querySelector('[data-target="terrain"] h3')?.textContent).toBe('Terrain')
+  })
+
   it('shows only dynamically loaded models in the Agent Studio library', async () => {
     ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
       models: async () => [

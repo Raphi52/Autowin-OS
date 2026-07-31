@@ -148,10 +148,10 @@ export interface OrchestratorDeps {
    */
   classifyPhases?: (task: string) => PipelinePhase[]
   /**
-   * Fan-out MULTI-MODÈLES d'une phase de DIVERGENCE (scout/frame) : renvoie les modèles déposés
-   * dans le bloc topology de cette phase. ≥2 → la phase s'exécute sur CHAQUE modèle en parallèle
-   * puis l'orchestrateur SYNTHÉTISE (union dédupliquée). <2 ou absent → mono-modèle (comportement
-   * actuel inchangé, rétrocompat HARD). Ne renvoyer des membres que pour scout/frame.
+   * Fan-out MULTI-MODÈLES d'une phase composée (scout/frame/terrain) : renvoie les modèles déposés
+   * dans le bloc topology de cette phase. ≥1 → la phase (ou chaque sous-tâche greedy) s'exécute sur
+   * CHAQUE modèle en parallèle ; plusieurs sorties sont SYNTHÉTISÉES en union dédupliquée. Aucun
+   * membre → binding subagent historique. Ne renvoyer des membres que pour scout/frame/terrain.
    */
   phaseFanOut?: (
     phase: PipelinePhase
@@ -849,9 +849,16 @@ export class Orchestrator {
   }> {
     const { registry, roles, cost } = this.deps
     const projectContext = projectContextBlock(this.deps.executionWorkspace)
-    const subBinding = bindingOverride ?? roles.getBinding('subagent')
-    const subProvider = subBinding.provider
-    const phaseBinding = resolvePhaseBinding(subBinding, phase)
+    // Une phase décomposée ne doit pas contourner son panel : chaque sous-tâche est exécutée par
+    // tous les membres configurés, puis leurs sorties sont fusionnées. Sans panel (build/refine ou
+    // topologie legacy vide), on conserve exactement le binding subagent historique. Un override de
+    // tâche reste autoritaire et désactive le fan-out, comme dans le chemin non décomposé.
+    const configuredBindings: RoleBinding[] = bindingOverride
+      ? [bindingOverride]
+      : (this.deps.phaseFanOut?.(phase) ?? []).filter((member) => member && member.provider)
+    const subBindings =
+      configuredBindings.length > 0 ? configuredBindings : [roles.getBinding('subagent')]
+    const fallbackProvider = subBindings[0].provider
     const sandbox = isMutationTask(task) ? 'danger-full-access' : 'read-only'
     const evidence: ExecutionEvidence[] = []
     const outputs: { id: string; text: string }[] = []
@@ -876,100 +883,230 @@ export class Orchestrator {
           const systemBlocks = parts
             .filter((part) => part.text)
             .map((part) => ({ name: part.name, chars: part.text.length }))
-          let envelope: PromptEnvelope | undefined
           const messages = [{ role: 'user' as const, content: userContent }]
-          const options: SendOptions = {
-            system: parts.map((part) => part.text).join(''),
-            systemBlocks,
-            model: phaseBinding.model,
-            reasoningEffort: phaseBinding.reasoningEffort,
-            execution: this.executionOptions(workCwd, sandbox),
-            signal,
-            observePrompt: (observed) => {
-              observed.systemBlocks = systemBlocks
-              envelope = observed
+          const members = await Promise.all(
+            subBindings.map(async (subBinding) => {
+              const subProvider = subBinding.provider
+              const phaseBinding = resolvePhaseBinding(subBinding, phase)
+              const memberKey = phaseBinding.model ?? subProvider
+              let envelope: PromptEnvelope | undefined
+              const options: SendOptions = {
+                system: parts.map((part) => part.text).join(''),
+                systemBlocks,
+                model: phaseBinding.model,
+                reasoningEffort: phaseBinding.reasoningEffort,
+                execution: this.executionOptions(workCwd, sandbox),
+                signal,
+                observePrompt: (observed) => {
+                  observed.systemBlocks = systemBlocks
+                  envelope = observed
+                }
+              }
+              envelope = registry.describePrompt(subProvider, messages, options, phaseBinding.model)
+              envelope.systemBlocks = systemBlocks
+              const execution = {
+                phase,
+                agentId:
+                  subBindings.length === 1
+                    ? `${phase}:${node.id}`
+                    : `${phase}:${node.id}:${memberKey}`,
+                taskId: node.id,
+                groupId: `${phase}:greedy`,
+                dependencyIds: [...node.deps],
+                attemptId: randomUUID()
+              }
+              onPhase?.({
+                step: 'exec',
+                provider: subProvider,
+                role: 'subagent',
+                model: phaseBinding.model,
+                reasoningEffort: phaseBinding.reasoningEffort,
+                phase,
+                execution
+              })
+              const startedAt = performance.now()
+              try {
+                const result = await registry.send(subProvider, messages, options, (chunk) =>
+                  onDelta?.('exec', chunk.delta)
+                )
+                if (result.usage) {
+                  cost.add({
+                    provider: result.provider ?? subProvider,
+                    role: 'subagent',
+                    model: phaseBinding.model,
+                    inputTokens: result.usage.inputTokens,
+                    outputTokens: result.usage.outputTokens,
+                    cacheReadTokens: result.usage.cacheReadTokens,
+                    costUsd: result.usage.costUsd
+                  })
+                }
+                push({
+                  step: 'exec',
+                  provider: result.provider ?? subProvider,
+                  role: 'subagent',
+                  model: result.model ?? phaseBinding.model,
+                  text: result.text,
+                  thinking: result.thinking,
+                  tokens: result.usage
+                    ? result.usage.inputTokens + result.usage.outputTokens
+                    : undefined,
+                  costUsd: result.usage?.costUsd,
+                  usage: result.usage,
+                  prompt: envelope,
+                  status: 'completed',
+                  durationMs: performance.now() - startedAt,
+                  evidence: result.executionEvidence,
+                  artifacts: result.artifacts,
+                  detail:
+                    subBindings.length === 1
+                      ? `sous-tâche ${node.id}`
+                      : `sous-tâche ${node.id} · modèle ${memberKey}`,
+                  execution
+                })
+                return {
+                  ok: true as const,
+                  provider: result.provider ?? subProvider,
+                  model: result.model ?? phaseBinding.model,
+                  text: result.text,
+                  evidence: result.executionEvidence ?? [],
+                  agentId: execution.agentId,
+                  cause: undefined
+                }
+              } catch (error) {
+                const explained = explainRoleFailure(`sous-tâche ${node.id}`, 'subagent', {
+                  provider: subProvider,
+                  ...(phaseBinding.model ? { model: phaseBinding.model } : {}),
+                  message: error instanceof Error ? error.message : String(error)
+                })
+                push({
+                  step: 'exec',
+                  provider: subProvider,
+                  role: 'subagent',
+                  model: phaseBinding.model,
+                  text: '',
+                  status: 'failed',
+                  error: explained,
+                  durationMs: performance.now() - startedAt,
+                  detail:
+                    subBindings.length === 1
+                      ? `sous-tâche ${node.id}`
+                      : `sous-tâche ${node.id} · modèle ${memberKey}`,
+                  execution
+                })
+                return {
+                  ok: false as const,
+                  provider: subProvider,
+                  model: phaseBinding.model,
+                  text: '',
+                  evidence: [] as ExecutionEvidence[],
+                  agentId: execution.agentId,
+                  cause: explained
+                }
+              }
+            })
+          )
+          const good = members.filter((member) => member.ok && member.text.trim())
+          if (good.length === 0) {
+            if (subBindings.length === 1 && configuredBindings.length === 0) {
+              throw new Error(members[0].cause ?? `sous-tâche ${node.id} en échec`)
             }
-          }
-          envelope = registry.describePrompt(subProvider, messages, options, phaseBinding.model)
-          envelope.systemBlocks = systemBlocks
-          const execution = {
-            phase,
-            agentId: `${phase}:${node.id}`,
-            taskId: node.id,
-            groupId: `${phase}:greedy`,
-            dependencyIds: [...node.deps],
-            attemptId: randomUUID()
-          }
-          onPhase?.({
-            step: 'exec',
-            provider: subProvider,
-            role: 'subagent',
-            model: phaseBinding.model,
-            reasoningEffort: phaseBinding.reasoningEffort,
-            phase,
-            execution
-          })
-          const startedAt = performance.now()
-          let result
-          try {
-            result = await registry.send(subProvider, messages, options, (chunk) =>
-              onDelta?.('exec', chunk.delta)
+            const explained = describeFanoutFailure(
+              phase,
+              'subagent',
+              members.map((member) => ({
+                provider: member.provider,
+                ...(member.model ? { model: member.model } : {}),
+                message: member.cause ?? 'sortie vide'
+              }))
             )
-          } catch (error) {
-            // Ce site n'avait AUCUN catch : l'erreur brute (`spawn … ENOENT`) remontait sans dire quel
-            // role l'avait subie. Constate a l'ecran le 2026-07-29 sur un run reel.
-            const explained = explainRoleFailure(`sous-tâche ${node.id}`, 'subagent', {
-              provider: subProvider,
-              ...(phaseBinding.model ? { model: phaseBinding.model } : {}),
-              message: error instanceof Error ? error.message : String(error)
-            })
-            push({
-              step: 'exec',
-              provider: subProvider,
-              role: 'subagent',
-              model: phaseBinding.model,
-              text: '',
-              status: 'failed',
-              error: explained,
-              durationMs: performance.now() - startedAt,
-              detail: `sous-tâche ${node.id}`,
-              execution
-            })
             throw new Error(explained)
           }
-          if (result.usage) {
-            cost.add({
-              provider: result.provider ?? subProvider,
-              role: 'subagent',
-              model: phaseBinding.model,
-              inputTokens: result.usage.inputTokens,
-              outputTokens: result.usage.outputTokens,
-              cacheReadTokens: result.usage.cacheReadTokens,
-              costUsd: result.usage.costUsd
+          const nodeEvidence = good.flatMap((member) => member.evidence)
+          let nodeText = good[0].text
+          if (good.length > 1) {
+            const orchBinding = roles.getBinding('orchestrator')
+            const labelled = good
+              .map(
+                (member, index) =>
+                  `### Proposition ${index + 1} (modèle ${member.model ?? member.provider})\n${member.text}`
+              )
+              .join('\n\n')
+            const synthMessages = [
+              {
+                role: 'user' as const,
+                content:
+                  `Sous-tâche « ${node.id} » exécutée par ${good.length} modèle(s). ` +
+                  `Fusionne leurs sorties en une UNION DÉDUPLIQUÉE, sans perdre d'angle distinct ni re-décider.\n\n${labelled}`
+              }
+            ]
+            const synthOptions: SendOptions = {
+              system: CONSTITUTION + CONCISE_STRUCTURED_RESPONSE_INSTRUCTION + projectContext,
+              model: orchBinding.model,
+              reasoningEffort: orchBinding.reasoningEffort,
+              execution: this.executionOptions(workCwd, 'read-only'),
+              signal
+            }
+            const synthExecution = {
+              phase,
+              agentId: `${phase}:${node.id}:synthesis`,
+              taskId: `${node.id}:synthesis`,
+              groupId: `${phase}:greedy-synthesis`,
+              dependencyIds: good.map((member) => member.agentId),
+              attemptId: randomUUID()
+            }
+            onPhase?.({
+              step: 'exec',
+              provider: orchBinding.provider,
+              role: 'orchestrator',
+              model: orchBinding.model,
+              reasoningEffort: orchBinding.reasoningEffort,
+              phase,
+              execution: synthExecution
             })
+            const synthStartedAt = performance.now()
+            const synth = await this.sendWithRoleContext(
+              `synthèse sous-tâche ${node.id}`,
+              'orchestrator',
+              orchBinding.provider,
+              orchBinding.model,
+              () =>
+                registry.send(orchBinding.provider, synthMessages, synthOptions, (chunk) =>
+                  onDelta?.('exec', chunk.delta)
+                )
+            )
+            if (synth.usage) {
+              cost.add({
+                provider: synth.provider ?? orchBinding.provider,
+                role: 'orchestrator',
+                model: orchBinding.model,
+                inputTokens: synth.usage.inputTokens,
+                outputTokens: synth.usage.outputTokens,
+                cacheReadTokens: synth.usage.cacheReadTokens,
+                costUsd: synth.usage.costUsd
+              })
+            }
+            push({
+              step: 'exec',
+              provider: synth.provider ?? orchBinding.provider,
+              role: 'orchestrator',
+              model: synth.model ?? orchBinding.model,
+              text: synth.text,
+              thinking: synth.thinking,
+              tokens: synth.usage ? synth.usage.inputTokens + synth.usage.outputTokens : undefined,
+              costUsd: synth.usage?.costUsd,
+              usage: synth.usage,
+              status: 'completed',
+              durationMs: performance.now() - synthStartedAt,
+              evidence: synth.executionEvidence,
+              artifacts: synth.artifacts,
+              detail: `synthèse sous-tâche ${node.id}`,
+              execution: synthExecution
+            })
+            nodeText = synth.text
           }
-          push({
-            step: 'exec',
-            provider: result.provider ?? subProvider,
-            role: 'subagent',
-            model: result.model ?? phaseBinding.model,
-            text: result.text,
-            thinking: result.thinking,
-            tokens: result.usage ? result.usage.inputTokens + result.usage.outputTokens : undefined,
-            costUsd: result.usage?.costUsd,
-            usage: result.usage,
-            prompt: envelope,
-            status: 'completed',
-            durationMs: performance.now() - startedAt,
-            evidence: result.executionEvidence,
-            artifacts: result.artifacts,
-            detail: `sous-tâche ${node.id}`,
-            execution
-          })
-          const nodeEvidence = result.executionEvidence ?? []
           evidence.push(...nodeEvidence)
-          outputs.push({ id: node.id, text: result.text })
-          return { text: result.text, evidence: nodeEvidence }
+          outputs.push({ id: node.id, text: nodeText })
+          return { text: nodeText, evidence: nodeEvidence }
         }
       })
     )
@@ -980,7 +1117,7 @@ export class Orchestrator {
         const skippedNode = plan.find((node) => node.id === event.id)
         push({
           step: 'exec',
-          provider: subProvider,
+          provider: fallbackProvider,
           role: 'subagent',
           text: '',
           status: 'failed',
@@ -1183,12 +1320,14 @@ export class Orchestrator {
             ? `${greedy.aggregate.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
             : greedy.aggregate
         phaseContext.push(`[phase ${phase}] ${carried}`)
-        failedTasks = greedy.failed
-        skippedTasks = greedy.skipped
+        // Plusieurs phases peuvent réutiliser le même DAG. Une phase suivante réussie ne doit pas
+        // effacer les échecs/skips déjà observés (sinon un Terrain rouge disparaît après Build).
+        failedTasks = [...new Set([...(failedTasks ?? []), ...greedy.failed])]
+        skippedTasks = [...new Set([...(skippedTasks ?? []), ...greedy.skipped])]
         prevSessionId = undefined
         continue
       }
-      // Panel scout/frame : ≥1 modèle déposé dans le bloc topology → la phase s'exécute sur
+      // Panel scout/frame/terrain : ≥1 modèle déposé dans le bloc topology → la phase s'exécute sur
       // CHAQUE membre. Avec un seul membre, sa sortie est réutilisée directement sans synthèse ;
       // avec plusieurs, l'orchestrateur synthétise. Aucun membre → binding subagent rétrocompatible.
       const fanMembers = bindingOverride

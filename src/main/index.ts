@@ -435,8 +435,9 @@ const modelCatalog = new ModelCatalogRefresher(
           agentTopology.orchestrator,
           ...agentTopology.subagents,
           ...agentTopology.panels.scout,
-          ...agentTopology.panels.judge,
-          ...agentTopology.panels.frame
+          ...agentTopology.panels.frame,
+          ...agentTopology.panels.terrain,
+          ...agentTopology.panels.judge
         ].map((binding) => binding.modelId)
       )
       return [
@@ -497,6 +498,7 @@ function syncRuntimeTopology(topology: AgentTopology): void {
   os.setFanOut({
     scout: toMembers(topology.panels.scout),
     frame: toMembers(topology.panels.frame),
+    terrain: toMembers(topology.panels.terrain),
     judge: toMembers(topology.panels.judge)
   })
 }
@@ -1327,7 +1329,12 @@ function registerChatIpc(): void {
     }
     return probeProviderConnection(id as RoutedProvider)
   })
-  ipcMain.handle('os:profiles:list', () => profiles.list())
+  ipcMain.handle('os:profiles:list', () =>
+    profiles.list().map((profile) => ({
+      ...profile,
+      topology: migrateTopologyShape(profile.topology) as AgentTopology
+    }))
+  )
   ipcMain.handle('os:profiles:save', async (event, profile: AutowinProfile) => {
     assertTrustedRendererSender(event, 'Profiles')
     await agentModelsReady
@@ -1344,7 +1351,7 @@ function registerChatIpc(): void {
     await agentModelsReady
     const profile = profiles.list().find((item) => item.id === guardString(id, 'profile.id'))
     if (!profile) throw new Error('Profil introuvable')
-    // Rétrocompat : un profil sauvegardé AVANT le bloc `frame` n'a pas `panels.frame` → on migre
+    // Rétrocompat : un profil sauvegardé avant un panel récent peut ne pas l'avoir → on migre
     // la forme avant validation (sinon assertTopology jetterait « Profil introuvable/incohérent »).
     agentTopology = saveAgentTopology(
       agentTopologyPath,
@@ -1357,7 +1364,7 @@ function registerChatIpc(): void {
     >)
       os.setRole(role, binding)
     broadcast({ type: 'refresh', scope: 'roles' })
-    return profile
+    return { ...profile, topology: agentTopology }
   })
   ipcMain.handle('os:topology:get', async () => {
     await agentModelsReady
@@ -1367,7 +1374,11 @@ function registerChatIpc(): void {
     assertTrustedRendererSender(event, 'Topology')
     await agentModelsReady
     guardString(JSON.stringify(topology), 'topology')
-    agentTopology = saveAgentTopology(agentTopologyPath, topology, agentModels)
+    agentTopology = saveAgentTopology(
+      agentTopologyPath,
+      migrateTopologyShape(topology) as AgentTopology,
+      agentModels
+    )
     syncRuntimeTopology(agentTopology)
     broadcast({ type: 'refresh', scope: 'roles' })
     return agentTopology

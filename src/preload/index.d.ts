@@ -137,7 +137,12 @@ interface AgentTopology {
   version: number
   orchestrator: SlotBinding
   subagents: SlotBinding[]
-  panels: { scout: SlotBinding[]; judge: SlotBinding[]; frame: SlotBinding[] }
+  panels: {
+    scout: SlotBinding[]
+    frame: SlotBinding[]
+    terrain: SlotBinding[]
+    judge: SlotBinding[]
+  }
 }
 
 interface PromptCallRecord {
@@ -284,7 +289,9 @@ interface ChatApi {
     maxUsd: number | null
   }) => Promise<{ maxUsd: number | null }>
   getGitState: (repoPath?: string) => Promise<import('../shared/git-read').GitReadResult>
-  conversationGitState: (conversationId: string) => Promise<import('../shared/git-read').GitReadResult>
+  conversationGitState: (
+    conversationId: string
+  ) => Promise<import('../shared/git-read').GitReadResult>
   conversationGitDiff: (
     conversationId: string,
     path: string,

@@ -23,12 +23,7 @@ describe('agent topology disk persistence', () => {
     const path = temporaryFile()
     const base = createDefaultTopology(TEST_MODEL_CATALOG)
     const codex = TEST_MODEL_CATALOG.find((model) => model.provider === 'codex')!
-    const changed = setSlot(
-      base,
-      'judge',
-      bindingForModel('judge-2', codex),
-      TEST_MODEL_CATALOG
-    )
+    const changed = setSlot(base, 'judge', bindingForModel('judge-2', codex), TEST_MODEL_CATALOG)
 
     saveAgentTopology(path, changed, TEST_MODEL_CATALOG)
 
@@ -45,6 +40,27 @@ describe('agent topology disk persistence', () => {
     )
   })
 
+  it('charge une topologie legacy sans Terrain sans réinitialiser ses autres panels', () => {
+    const path = temporaryFile()
+    const current = createDefaultTopology(TEST_MODEL_CATALOG)
+    const legacy = {
+      ...current,
+      panels: {
+        scout: current.panels.scout,
+        frame: current.panels.frame,
+        judge: current.panels.judge
+      }
+    }
+    writeFileSync(path, JSON.stringify(legacy), 'utf8')
+
+    const loaded = loadAgentTopology(path, TEST_MODEL_CATALOG)
+
+    expect(loaded.panels.terrain).toEqual([])
+    expect(loaded.panels.scout).toEqual(legacy.panels.scout)
+    expect(loaded.panels.frame).toEqual(legacy.panels.frame)
+    expect(loaded.panels.judge).toEqual(legacy.panels.judge)
+  })
+
   it('rejects an unbounded panel before persistence', () => {
     const path = temporaryFile()
     const base = createDefaultTopology(TEST_MODEL_CATALOG)
@@ -56,8 +72,6 @@ describe('agent topology disk persistence', () => {
       )
     }
 
-    expect(() => saveAgentTopology(path, oversized, TEST_MODEL_CATALOG)).toThrow(
-      '16 slots maximum'
-    )
+    expect(() => saveAgentTopology(path, oversized, TEST_MODEL_CATALOG)).toThrow('16 slots maximum')
   })
 })

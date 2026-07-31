@@ -45,7 +45,11 @@ class RecordingProvider implements ProviderAdapter {
   }
 }
 
-function makeOrchestrator(provider: RecordingProvider, cost: CostAggregator): Orchestrator {
+function makeOrchestrator(
+  provider: RecordingProvider,
+  cost: CostAggregator,
+  phase: 'frame' | 'terrain' = 'frame'
+): Orchestrator {
   const registry = new ProviderRegistry().register(provider)
   const roles = new RoleModelConfig({
     orchestrator: { provider: provider.id, model: 'orch' },
@@ -60,9 +64,9 @@ function makeOrchestrator(provider: RecordingProvider, cost: CostAggregator): Or
     authority: new AuthoritySas(),
     executionWorkspace: 'C:\\ws',
     worktrees: makeTestWorktrees('C:\\ws'),
-    execPhases: ['frame'],
-    phaseFanOut: (phase) =>
-      phase === 'frame'
+    execPhases: [phase],
+    phaseFanOut: (requestedPhase) =>
+      requestedPhase === phase
         ? [
             { provider: provider.id, model: 'm1' },
             { provider: provider.id, model: 'm2' }
@@ -72,6 +76,103 @@ function makeOrchestrator(provider: RecordingProvider, cost: CostAggregator): Or
 }
 
 describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
+  it('exécute deux membres Terrain et les rattache au groupe terrain:fanout', async () => {
+    const provider = new RecordingProvider()
+    const result = await makeOrchestrator(provider, new CostAggregator(), 'terrain').run(
+      'prépare le terrain de vérification'
+    )
+
+    expect(provider.calls.map((call) => call.model).slice(0, 4)).toEqual([
+      'm1',
+      'm2',
+      'orch',
+      'judge'
+    ])
+    const terrainSteps = result.trace.filter((step) => step.execution?.groupId === 'terrain:fanout')
+    expect(terrainSteps).toHaveLength(2)
+    expect(terrainSteps.map((step) => step.execution?.phase)).toEqual(['terrain', 'terrain'])
+    expect(new Set(terrainSteps.map((step) => step.execution?.agentId))).toEqual(
+      new Set(['terrain:m1', 'terrain:m2'])
+    )
+  })
+
+  it('conserve les membres Terrain quand la phase est décomposée en sous-tâches greedy', async () => {
+    const provider = new RecordingProvider()
+    const registry = new ProviderRegistry().register(provider)
+    const roles = new RoleModelConfig({
+      orchestrator: { provider: provider.id, model: 'orch' },
+      subagent: { provider: provider.id, model: 'worker' },
+      judge: { provider: provider.id, model: 'judge' }
+    })
+    const orch = new Orchestrator({
+      registry,
+      roles,
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      authority: new AuthoritySas(),
+      executionWorkspace: 'C:\\ws',
+      worktrees: makeTestWorktrees('C:\\ws'),
+      execPhases: ['terrain', 'build'],
+      decompose: async () => [
+        { id: 'observe', prompt: 'observe le projet', deps: [] },
+        { id: 'prepare', prompt: 'prépare les contrôles', deps: [] }
+      ],
+      phaseFanOut: (phase) =>
+        phase === 'terrain'
+          ? [
+              { provider: provider.id, model: 'm1' },
+              { provider: provider.id, model: 'm2' }
+            ]
+          : []
+    })
+
+    const result = await orch.run('prépare puis construis la modification')
+
+    const terrainAgents = result.trace.filter(
+      (step) => step.role === 'subagent' && step.execution?.phase === 'terrain'
+    )
+    expect(terrainAgents).toHaveLength(4)
+    expect(new Set(terrainAgents.map((step) => step.model))).toEqual(new Set(['m1', 'm2']))
+    expect(terrainAgents.some((step) => step.model === 'worker')).toBe(false)
+  })
+
+  it('conserve les échecs Terrain si une phase greedy suivante réussit', async () => {
+    const provider = new RecordingProvider()
+    const registry = new ProviderRegistry().register(provider)
+    const roles = new RoleModelConfig({
+      orchestrator: { provider: provider.id, model: 'orch' },
+      subagent: { provider: provider.id, model: 'worker' },
+      judge: { provider: provider.id, model: 'judge' }
+    })
+    const orch = new Orchestrator({
+      registry,
+      roles,
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      authority: new AuthoritySas(),
+      executionWorkspace: 'C:\\ws',
+      worktrees: makeTestWorktrees('C:\\ws'),
+      execPhases: ['terrain', 'build'],
+      decompose: async () => [
+        { id: 'observe', prompt: 'observe le projet', deps: [] },
+        { id: 'prepare', prompt: 'prépare les contrôles', deps: ['observe'] }
+      ],
+      phaseFanOut: (phase) =>
+        phase === 'terrain'
+          ? [
+              { provider: provider.id, model: 'crash-m1' },
+              { provider: provider.id, model: 'crash-m2' }
+            ]
+          : []
+    })
+
+    const result = await orch.run('prépare puis construis la modification')
+
+    expect(result.failedTasks).toContain('observe')
+    expect(result.skippedTasks).toContain('prepare')
+    expect(provider.calls.some((call) => call.model === 'worker')).toBe(true)
+  })
+
   it('attribue un attemptId stable à chacun des N agents dès son démarrage live', async () => {
     const provider = new RecordingProvider()
     const starts: OrchestrationPhase[] = []
@@ -170,7 +271,7 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
     expect(result.valid).toBe(true)
   })
 
-  it.each(['frame', 'scout'] as const)(
+  it.each(['frame', 'scout', 'terrain'] as const)(
     'utilise le binding du slot %s quand le panel contient exactement un membre',
     async (phase) => {
       const defaultProvider = new RecordingProvider('default-binding')

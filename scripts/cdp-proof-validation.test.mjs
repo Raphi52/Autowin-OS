@@ -3,7 +3,8 @@ import { readdirSync, readFileSync } from 'node:fs'
 import {
   assertFrameBlockProof,
   assertHooksProof,
-  assertModelCatalogProof
+  assertModelCatalogProof,
+  assertTerrainPanelProof
 } from './cdp-proof-validation.mjs'
 
 describe('CDP proof validation', () => {
@@ -27,6 +28,38 @@ describe('CDP proof validation', () => {
     ).not.toThrow()
   })
 
+  it('rejette un panel Terrain absent, vide ou placé dans le mauvais ordre', () => {
+    expect(() =>
+      assertTerrainPanelProof({
+        panels: [
+          { target: 'frame', slots: 1 },
+          { target: 'scout', slots: 1 },
+          { target: 'judge', slots: 1 }
+        ]
+      })
+    ).toThrow(/ordre|terrain/i)
+    expect(() =>
+      assertTerrainPanelProof({
+        panels: [
+          { target: 'scout', slots: 1 },
+          { target: 'frame', slots: 1 },
+          { target: 'terrain', slots: 0 },
+          { target: 'judge', slots: 1 }
+        ]
+      })
+    ).toThrow(/terrain.*sans slot/i)
+    expect(() =>
+      assertTerrainPanelProof({
+        panels: [
+          { target: 'scout', slots: 1 },
+          { target: 'frame', slots: 1 },
+          { target: 'terrain', slots: 1 },
+          { target: 'judge', slots: 1 }
+        ]
+      })
+    ).not.toThrow()
+  })
+
   it('rejects zero hooks and accepts a selected non-empty Hooks view', () => {
     expect(() =>
       assertHooksProof({ selectedTab: 'Hooks · 0', selectedSource: 'Codex', hookCount: 0 })
@@ -38,7 +71,7 @@ describe('CDP proof validation', () => {
 
   it.each([
     ['cdp-model-catalog.mjs', 'assertModelCatalogProof({ labels })'],
-    ['cdp-frame-block-proof.mjs', 'assertFrameBlockProof(dom)'],
+    ['cdp-frame-block-proof.mjs', 'assertTerrainPanelProof(dom)'],
     ['cdp-hooks.mjs', 'assertHooksProof(state)']
   ])('%s invokes its non-vacuity validator before reporting success', (script, call) => {
     const source = readFileSync(new URL(script, import.meta.url), 'utf8')

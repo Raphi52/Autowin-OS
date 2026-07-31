@@ -24,13 +24,18 @@ type AgentTopology = {
   version: number
   orchestrator: SlotBinding
   subagents: SlotBinding[]
-  panels: { scout: SlotBinding[]; judge: SlotBinding[]; frame: SlotBinding[] }
+  panels: {
+    scout: SlotBinding[]
+    frame: SlotBinding[]
+    terrain: SlotBinding[]
+    judge: SlotBinding[]
+  }
 }
 
-type Target = 'orchestrator' | 'subagents' | 'scout' | 'judge' | 'frame'
+type Target = 'orchestrator' | 'subagents' | 'scout' | 'frame' | 'terrain' | 'judge'
 
 /** Cibles dont le fan-out multi-modèles EST branché au runtime (≥2 slots → dupliqué + agrégé). */
-const FANOUT_ACTIVE: ReadonlySet<Target> = new Set<Target>(['scout', 'frame', 'judge'])
+const FANOUT_ACTIVE: ReadonlySet<Target> = new Set<Target>(['scout', 'frame', 'terrain', 'judge'])
 type Profile = { id: string; name: string; updatedAt: string; topology: AgentTopology }
 type RoleBinding = { provider: string; model?: string; reasoningEffort?: string }
 
@@ -158,10 +163,7 @@ export function AgentsTopologyView({
     () => models.filter((model) => model.dynamicallyLoaded === true),
     [models]
   )
-  const sortedModels = useMemo(
-    () => [...libraryModels].sort(compareModelsByName),
-    [libraryModels]
-  )
+  const sortedModels = useMemo(() => [...libraryModels].sort(compareModelsByName), [libraryModels])
   const selectedModel = modelsById.get(selectedModelId)
 
   async function persist(next: AgentTopology): Promise<void> {
@@ -516,8 +518,8 @@ export function AgentsTopologyView({
           <b>Autorité</b>
           <span>La configuration est validée et persistée par le main process.</span>
           <span>
-            Frame, Scouts et Judges : tous les modèles déposés s’exécutent (fan-out + agrégation).
-            Orchestrateur et Sous-agents : seul le premier slot alimente le runtime.
+            Scouts, Frame, Terrain et Judges : tous les modèles déposés s’exécutent (fan-out +
+            agrégation). Orchestrateur et Sous-agents : seul le premier slot alimente le runtime.
           </span>
         </div>
       </aside>
@@ -546,16 +548,23 @@ export function AgentsTopologyView({
         </div>
         <div className="topology-parallel">
           {renderTargetPanel({
+            target: 'scout',
+            title: 'Scouts',
+            description: 'Plusieurs lectures indépendantes du même front.',
+            accent: 'pink'
+          })}
+          {renderTargetPanel({
             target: 'frame',
             title: 'Frame',
             description: 'Plusieurs modèles cadrent la même tâche ; angles fusionnés.',
             accent: 'amber'
           })}
           {renderTargetPanel({
-            target: 'scout',
-            title: 'Scouts',
-            description: 'Plusieurs lectures indépendantes du même front.',
-            accent: 'pink'
+            target: 'terrain',
+            title: 'Terrain',
+            description:
+              'Plusieurs modèles préparent le harnais et les preuves ; sorties fusionnées.',
+            accent: 'cyan'
           })}
           {renderTargetPanel({
             target: 'judge',
@@ -567,10 +576,10 @@ export function AgentsTopologyView({
         <div className="topology-runtime-limit">
           <b>Runtime actuel</b>
           <span>
-            <b>Frame, Scouts et Judges</b> : déposez-y plusieurs modèles — ils s’exécutent en
-            parallèle puis l’orchestrateur agrège (union des angles pour Frame/Scouts, quorum de
-            vote pour Judges). <b>Orchestrateur et Sous-agents</b> : seul le premier slot alimente
-            le runtime (fan-out des sous-agents pas encore branché).
+            <b>Scouts, Frame, Terrain et Judges</b> : déposez-y plusieurs modèles — ils s’exécutent
+            en parallèle puis l’orchestrateur agrège (union des sorties pour Scouts/Frame/Terrain,
+            quorum de vote pour Judges). <b>Orchestrateur et Sous-agents</b> : seul le premier slot
+            alimente le runtime (fan-out des sous-agents pas encore branché).
           </span>
         </div>
       </main>

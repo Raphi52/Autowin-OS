@@ -6,7 +6,7 @@
 // versionnée, persistée côté main (autorité durable = main, pas le renderer) :
 //   - exactement 1 slot orchestrator ;
 //   - 0..N slots subagents ;
-//   - panels.scout 0..N slots exécutés EN PARALLÈLE ;
+//   - panels.scout/frame/terrain 0..N slots exécutés EN PARALLÈLE ;
 //   - panels.judge 0..N slots exécutés EN PARALLÈLE ;
 //   - chaque binding atomique = provider + model + effort.
 // Aucun axe « métier / persona ».
@@ -33,7 +33,7 @@ export interface SlotBinding {
 }
 
 /** Les cibles panel de la topologie (0..N slots, exécutés en parallèle). Orchestrateur = singleton. */
-export type PanelTarget = 'scout' | 'judge' | 'frame'
+export type PanelTarget = 'scout' | 'frame' | 'terrain' | 'judge'
 export type SlotTarget = 'orchestrator' | 'subagents' | PanelTarget
 
 export interface AgentTopology {
@@ -43,7 +43,12 @@ export interface AgentTopology {
   /** 0..N. */
   subagents: SlotBinding[]
   /** 0..N chacun, exécutés en parallèle. */
-  panels: { scout: SlotBinding[]; judge: SlotBinding[]; frame: SlotBinding[] }
+  panels: {
+    scout: SlotBinding[]
+    frame: SlotBinding[]
+    terrain: SlotBinding[]
+    judge: SlotBinding[]
+  }
 }
 
 /** Un binding résolu vers son transport (provider + model + effort concrets). */
@@ -107,8 +112,9 @@ export function assertTopology(topology: AgentTopology, models: ImportedModel[])
   const groups: Array<[string, SlotBinding[]]> = [
     ['subagents', topology.subagents],
     ['scout', topology.panels.scout],
-    ['judge', topology.panels.judge],
-    ['frame', topology.panels.frame]
+    ['frame', topology.panels.frame],
+    ['terrain', topology.panels.terrain],
+    ['judge', topology.panels.judge]
   ]
   for (const [name, slots] of groups) {
     if (!Array.isArray(slots)) throw new Error(`Cible « ${name} » : tableau attendu`)
@@ -178,8 +184,9 @@ export function resolveTopology(
   orchestrator: ResolvedSlot
   subagents: ResolvedSlot[]
   scout: ResolvedSlot[]
-  judge: ResolvedSlot[]
   frame: ResolvedSlot[]
+  terrain: ResolvedSlot[]
+  judge: ResolvedSlot[]
 } {
   const resolve = (binding: SlotBinding, target: SlotTarget): ResolvedSlot => {
     const model = findModel(models, binding.modelId)
@@ -197,8 +204,9 @@ export function resolveTopology(
     orchestrator: resolve(topology.orchestrator, 'orchestrator'),
     subagents: topology.subagents.map((b) => resolve(b, 'subagents')),
     scout: topology.panels.scout.map((b) => resolve(b, 'scout')),
-    judge: topology.panels.judge.map((b) => resolve(b, 'judge')),
-    frame: topology.panels.frame.map((b) => resolve(b, 'frame'))
+    frame: topology.panels.frame.map((b) => resolve(b, 'frame')),
+    terrain: topology.panels.terrain.map((b) => resolve(b, 'terrain')),
+    judge: topology.panels.judge.map((b) => resolve(b, 'judge'))
   }
 }
 
@@ -215,7 +223,7 @@ export function migrateTopologyShape(raw: unknown): unknown {
   // Clone superficiel + panels cloné : aucune mutation de l'objet reçu (une référence externe
   // à `raw`/`raw.panels` conservée par l'appelant reste intacte).
   const panels = { ...(t.panels as Record<string, unknown>) }
-  for (const target of ['scout', 'judge', 'frame'] as const) {
+  for (const target of ['scout', 'frame', 'terrain', 'judge'] as const) {
     if (!Array.isArray(panels[target])) panels[target] = []
   }
   return { ...t, panels }
@@ -236,14 +244,16 @@ export function createDefaultTopology(models: ImportedModel[]): AgentTopology {
   const scoutModel = codex ?? claude ?? models[0]
   const judgeModel = claude ?? models[0]
   const frameModel = claude ?? models[0]
+  const terrainModel = claude ?? models[0]
   return {
     version: TOPOLOGY_VERSION,
     orchestrator: bindingForModel('orchestrator', orchestratorModel),
     subagents: [bindingForModel('subagent-1', subagentModel)],
     panels: {
       scout: [bindingForModel('scout-1', scoutModel)],
-      judge: [bindingForModel('judge-1', judgeModel)],
-      frame: [bindingForModel('frame-1', frameModel)]
+      frame: [bindingForModel('frame-1', frameModel)],
+      terrain: [bindingForModel('terrain-1', terrainModel)],
+      judge: [bindingForModel('judge-1', judgeModel)]
     }
   }
 }

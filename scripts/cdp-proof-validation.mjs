@@ -11,6 +11,23 @@ export function assertFrameBlockProof({ frame }) {
   }
 }
 
+export function assertTerrainPanelProof({ panels }) {
+  const expectedOrder = ['scout', 'frame', 'terrain', 'judge']
+  const composed = Array.isArray(panels)
+    ? panels.filter((panel) => expectedOrder.includes(panel.target))
+    : []
+  const actualOrder = composed.map((panel) => panel.target)
+  if (actualOrder.join(',') !== expectedOrder.join(',')) {
+    throw new Error(
+      `Preuve CDP invalide : ordre des panels ${actualOrder.join(' → ') || 'absent'} au lieu de ${expectedOrder.join(' → ')}`
+    )
+  }
+  const terrain = composed.find((panel) => panel.target === 'terrain')
+  if (!terrain || !Number.isInteger(terrain.slots) || terrain.slots <= 0) {
+    throw new Error('Preuve CDP invalide : bloc Terrain sans slot')
+  }
+}
+
 export function assertHooksProof({ selectedTab, selectedSource, hookCount }) {
   if (!selectedTab?.startsWith('Hooks') || selectedSource !== 'Codex') {
     throw new Error(
@@ -49,6 +66,7 @@ export function assertWorkflowRequestGraphProof(state) {
   if (state.overflow || !state.paneVisible || !state.narrowWidth || state.whiteBorder) {
     throw new Error(`Preuve CDP invalide : géométrie du panneau (${JSON.stringify(state)})`)
   }
-  if (state.wizardVisible) throw new Error('Preuve CDP invalide : assistant de démarrage encore visible')
+  if (state.wizardVisible)
+    throw new Error('Preuve CDP invalide : assistant de démarrage encore visible')
   if (state.error) throw new Error(`Preuve CDP invalide : ${state.error}`)
 }
