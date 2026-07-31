@@ -32,6 +32,8 @@ export interface BrainRetrievalOptions {
   port?: number
   fetchFn?: FetchLike
   env?: NodeJS.ProcessEnv
+  /** Horloge injectable — les tests font expirer la mémoire courte sans attendre. */
+  now?: () => number
 }
 
 /** Un candidat parcouru par le retriever : rang fusionné, chemin, score dense, retenu ou écarté. */
@@ -86,9 +88,32 @@ function parseNavigation(raw: unknown): BrainNavigation | undefined {
 }
 
 /**
+ * Mémoire courte des récupérations : même requête, même corpus ⇒ même résultat.
+ *
+ * Mesuré sur un journal réel : 15 appels pour 4 requêtes distinctes sur une seule conversation, et
+ * 24 appels redondants sur 51 au total — ~26 800 caractères réinjectés pour rien, plus ~500 ms
+ * d'attente à chaque fois. Relancer une tâche est légitime ; réinterroger le Brain avec la MÊME
+ * question dans la foulée n'apprend rien.
+ *
+ * Volontairement COURT : le Brain est un corpus vivant (le hook d'ingestion y écrit). Un cache long
+ * servirait du savoir périmé — ce serait pire que le gâchis qu'il évite.
+ */
+const RETRIEVAL_CACHE_TTL_MS = 5 * 60 * 1000
+const RETRIEVAL_CACHE_MAX = 32
+const retrievalCache = new Map<string, { at: number; result: BrainRetrievalResult }>()
+
+/** Vide la mémoire courte — pour les tests, et pour un rechargement explicite du corpus. */
+export function clearBrainRetrievalCache(): void {
+  retrievalCache.clear()
+}
+
+/**
  * Récupère le contexte Brain pertinent pour `query` (borné) + sa navigation interne si le serveur
  * l'expose. `{ context: '' }` si indisponible (jamais throw). Dégrade proprement : un serveur ancien
  * sans champ `navigation` → `navigation` undefined, le run continue.
+ *
+ * Une requête identique servie il y a moins de {@link RETRIEVAL_CACHE_TTL_MS} est rendue depuis la
+ * mémoire courte, sans appel réseau.
  */
 export async function retrieveBrainContext(
   query: string,
@@ -99,6 +124,11 @@ export async function retrieveBrainContext(
   if (process.env.VITEST && !opts.fetchFn) return { context: '', status: 'unavailable' }
   const token = brainServiceToken(opts.env)
   if (!token || !query.trim()) return { context: '', status: 'unavailable' }
+  // Mémoire courte AVANT le réseau : une question déjà posée ne se repose pas.
+  const now = opts.now?.() ?? Date.now()
+  const cacheKey = `${opts.port ?? 8765}|${query.trim()}`
+  const cached = retrievalCache.get(cacheKey)
+  if (cached && now - cached.at < RETRIEVAL_CACHE_TTL_MS) return cached.result
   const doFetch = opts.fetchFn ?? fetch
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 5000)
@@ -112,11 +142,18 @@ export async function retrieveBrainContext(
     if (!res.ok) return { context: '', status: 'unavailable' }
     const data = (await res.json()) as { context?: unknown; navigation?: unknown }
     const context = typeof data.context === 'string' ? data.context : ''
-    return {
+    const result: BrainRetrievalResult = {
       context,
       navigation: parseNavigation(data.navigation),
       status: context ? 'found' : 'empty'
     }
+    // On ne mémorise QUE les réponses servies : un serveur indisponible ne doit pas figer un vide.
+    retrievalCache.set(cacheKey, { at: now, result })
+    if (retrievalCache.size > RETRIEVAL_CACHE_MAX) {
+      const oldest = retrievalCache.keys().next().value
+      if (oldest) retrievalCache.delete(oldest)
+    }
+    return result
   } catch {
     return { context: '', status: 'unavailable' } // serveur down / timeout / réseau
   } finally {
