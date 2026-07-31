@@ -127,6 +127,15 @@ import {
 } from './activity/native-preflight'
 import { nativeSpoolRoot, appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace, readBrainTraces } from './activity/brain-trace-spool'
+import {
+  appendConversationFileTrace,
+  appendExecutionEvidenceFileTrace,
+  workspaceTracePathKey
+} from './activity/conversation-file-trace-spool'
+import {
+  readConversationGitDiff,
+  readConversationGitState
+} from './activity/conversation-git-state'
 import { buildBehaviourComposition } from './behaviour-composition'
 import {
   buildProviderStatuses,
@@ -139,6 +148,10 @@ import { loadTokens } from './providers/codex-auth'
 
 import { amitelBrainRoot, createAmitelContextProvider } from './amitel-context'
 import { readGitState, readGitDiff } from './git-read-main'
+import {
+  captureWorkspaceMutationSnapshot,
+  captureWorkspacePathGenerationMarker
+} from './providers/workspace-mutation-evidence'
 import { readGitGraph } from './git-graph-main'
 import {
   automationAppIdentity,
@@ -697,6 +710,46 @@ function registerChatIpc(): void {
       throw new Error('Capture UI de test indisponible hors instance isolée')
     return (await event.sender.capturePage()).toPNG().toString('base64')
   })
+  ipcMain.handle(
+    'app:test:seed-conversation-scope',
+    async (event, conversationId: unknown, variant: unknown) => {
+      assertTrustedRendererSender(event, 'Fixture conversation source scope')
+      if (!isolatedTestInstance) throw new Error('Fixture indisponible hors instance isolée')
+      const safeConversationId = guardString(conversationId, 'conversationId')
+      if (variant !== 'a' && variant !== 'b') throw new Error('Variante de fixture invalide')
+      const path =
+        variant === 'a'
+          ? 'src/renderer/src/components/SourceControlPane.tsx'
+          : 'src/renderer/src/components/SourceControlPane.css'
+      const fingerprint = [
+        ...(await captureWorkspaceMutationSnapshot(os.executionWorkspace))
+      ].find(([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path))?.[1]
+      const generationMarker = await captureWorkspacePathGenerationMarker(
+        os.executionWorkspace,
+        path
+      )
+      appendConversationFileTrace({
+        timestamp: new Date().toISOString(),
+        conversationId: safeConversationId,
+        turnId: `fixture-turn-${variant}`,
+        workspaceRoot: os.executionWorkspace,
+        source: 'subagent',
+        paths: [path],
+        ...(fingerprint ? { pathFingerprints: { [path]: fingerprint } } : {}),
+        pathGenerationMarkers: { [path]: generationMarker }
+      })
+      appendBrainTrace({
+        timestamp: new Date().toISOString(),
+        conversationId: safeConversationId,
+        turnId: `fixture-turn-${variant}`,
+        kind: 'query',
+        query: variant === 'a' ? 'fixture brain conversation A' : 'fixture brain conversation B',
+        found: true,
+        injectedChars: variant === 'a' ? 321 : 654
+      })
+      return { conversationId: safeConversationId, path, variant }
+    }
+  )
   ipcMain.handle('app:test:emit-event', (event, payload: unknown) => {
     assertTrustedRendererSender(event, 'Fixture UI')
     if (!isolatedTestInstance) throw new Error('Émission de test indisponible hors instance isolée')
@@ -788,6 +841,11 @@ function registerChatIpc(): void {
             undefined,
             causalTrace
           )
+          appendExecutionEvidenceFileTrace(step.evidence, {
+            conversationId,
+            turnId,
+            workspaceRoot: os.executionWorkspace
+          })
           ledger.append({
             source: 'orchestrate',
             name: step.step,
@@ -836,19 +894,17 @@ function registerChatIpc(): void {
         // On le cherche ici aussi : relancer la MÊME tâche dans la MÊME conversation doit continuer,
         // pas recommencer.
         resumedAcquis?.phaseOutputs ?? [],
-        conversationId
+        conversationId,
+        undefined,
+        (brain) =>
+          appendBrainTrace({
+            ...brain,
+            conversationId,
+            turnId,
+            kind: 'automatic'
+          }),
+        turnId
       )
-      // Trace Brain (observabilité Observatory) : requête réelle + navigation interne + injecté.
-      if (result.brainNavigation || (result.brainInjectedChars ?? 0) > 0) {
-        appendBrainTrace({
-          timestamp: result.brainRetrievedAt ?? new Date().toISOString(),
-          conversationId,
-          turnId,
-          query: result.brainQuery ?? '',
-          injectedChars: result.brainInjectedChars ?? 0,
-          navigation: result.brainNavigation
-        })
-      }
       durableTurn.succeed(result)
       return { ok: true, result }
     } catch (e) {
@@ -1702,7 +1758,8 @@ function registerChatIpc(): void {
             controller.signal,
             conversationId ? (os.conversations.get(conversationId)?.authorityMode ?? 'ask') : 'ask',
             conversationId ? () => drainPendingDirectives(conversationId) : undefined,
-            bindingOverride
+            bindingOverride,
+            turnId
           )
         // Journal d'activité de la conversation : le tour de chat, avec son coût ET sa durée.
         const turnDurationMs = Math.round(performance.now() - turnStartedAtMs)
@@ -1775,6 +1832,26 @@ function registerChatIpc(): void {
     assertTrustedRendererSender(event, 'PilotChat')
     return runPilotChat(event.sender, messages, conversationId)
   })
+  ipcMain.handle('git:conversationRead', async (event, conversationId: unknown) => {
+    assertTrustedRendererSender(event, 'ConversationGitRead')
+    const safeConversationId = guardString(conversationId, 'conversationId')
+    return readConversationGitState(safeConversationId, os.executionWorkspace)
+  })
+  ipcMain.handle(
+    'git:conversationDiff',
+    async (
+      event,
+      conversationId: unknown,
+      rawPath: unknown,
+      rawWorkspaceRoot: unknown
+    ) => {
+      assertTrustedRendererSender(event, 'ConversationGitDiff')
+      const safeConversationId = guardString(conversationId, 'conversationId')
+      const path = guardString(rawPath, 'path').replaceAll('\\', '/').replace(/^\.\/+/, '')
+      const requestedRoot = guardString(rawWorkspaceRoot, 'workspaceRoot')
+      return readConversationGitDiff(safeConversationId, path, requestedRoot)
+    }
+  )
 
   const relayScriptPath = app.isPackaged
     ? join(process.resourcesPath, 'app.asar.unpacked', 'resources', 'autowin-task-relay.ps1')
@@ -2226,7 +2303,15 @@ app.whenReady().then(async () => {
   const resumableRun = os.resumableOrchestration()
   if (resumableRun) {
     const conversationId = resumableRun.conversationId ?? '__autonomous__'
-    const resumeTurnId = randomUUID()
+    const resumeTurnId = resumableRun.turnId ?? randomUUID()
+    const legacyResumeTurn = resumableRun.turnId
+      ? null
+      : createOrchestrateTurnPersistence({
+          conversations: os.conversations,
+          conversationId,
+          turnId: resumeTurnId
+        })
+    legacyResumeTurn?.begin(`[Reprise automatique] ${resumableRun.task}`)
     console.log(
       '[resume-orchestration]',
       resumableRun.runId,
@@ -2242,12 +2327,18 @@ app.whenReady().then(async () => {
       .runTask(
         resumableRun.task,
         (step) => {
+          legacyResumeTurn?.step(step)
           persistOrchestrationStep(
             step,
             { conversationId, turnId: resumeTurnId, iteration: step.step === 'exec' ? 0 : 1 },
             undefined,
             causalTrace
           )
+          appendExecutionEvidenceFileTrace(step.evidence, {
+            conversationId,
+            turnId: resumeTurnId,
+            workspaceRoot: os.executionWorkspace
+          })
           for (const w of BrowserWindow.getAllWindows()) w.webContents.send('orchestrate:step', step)
         },
         undefined,
@@ -2256,9 +2347,22 @@ app.whenReady().then(async () => {
         undefined,
         resumableRun.phaseOutputs,
         resumableRun.conversationId,
-        resumableRun.bindingOverride
+        resumableRun.bindingOverride,
+        (brain) =>
+          appendBrainTrace({
+            ...brain,
+            conversationId,
+            ...(resumeTurnId ? { turnId: resumeTurnId } : {}),
+            kind: 'automatic'
+          }),
+        resumeTurnId
       )
+      .then((result) => {
+        legacyResumeTurn?.succeed(result)
+        return result
+      })
       .catch((error: unknown) => {
+        legacyResumeTurn?.fail(error instanceof Error ? error.message : String(error), false)
         console.warn('[resume-orchestration] échec de la reprise :', error)
       })
   }

@@ -48,7 +48,27 @@ function api() {
           updatedAt: 1
         }
       ],
-      occurrences: [],
+      occurrences: [
+        {
+          id: 'task-1@1',
+          taskId: 'task-1',
+          scheduledFor: 1,
+          status: 'missed',
+          mode: 'active-only',
+          claimedAt: 1,
+          finishedAt: 1,
+          error: 'Autowin était arrêté.'
+        },
+        {
+          id: 'task-1@0',
+          taskId: 'task-1',
+          scheduledFor: 0,
+          status: 'completed',
+          mode: 'legacy-unknown',
+          claimedAt: 0,
+          finishedAt: 0
+        }
+      ],
       alerts: [
         {
           id: 'alert-1',
@@ -110,6 +130,22 @@ describe('TaskManagerView', () => {
     expect(container.textContent).toContain('Autonome Windows')
     expect(container.textContent).toContain('Autowin était arrêté.')
     expect(container.querySelector('[data-testid="task-manager-view"]')).not.toBeNull()
+  })
+
+  it("affiche le mode figé sur chaque ligne d'historique", async () => {
+    const { container } = await mount()
+    const occurrence = container.querySelector('.task-manager-occurrence')
+
+    expect(occurrence?.textContent).toContain('Autowin actif uniquement')
+  })
+
+  it("n'invente pas la garantie d'une ancienne occurrence sans mode archivé", async () => {
+    const { container } = await mount()
+    const history = [...container.querySelectorAll('.task-manager-occurrence')]
+
+    expect(history.some((occurrence) => occurrence.textContent?.includes('Mode non archivé'))).toBe(
+      true
+    )
   })
 
   it('permet de choisir le modèle pour une conversation existante', async () => {

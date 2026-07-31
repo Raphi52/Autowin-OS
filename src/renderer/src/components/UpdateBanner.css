@@ -7,39 +7,62 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 0 8px 6px;
+  padding: 0 4px 6px;
 }
 
 .rail-update-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   width: 100%;
-  padding: 6px 10px;
-  border: 1px solid color-mix(in srgb, var(--accent, #4b9fff) 45%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--accent, #4b9fff) 10%, transparent);
-  color: var(--accent, #4b9fff);
+  min-height: 37px;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--gold, #e9bd4e) 48%, var(--line));
+  border-radius: 0;
+  background: transparent;
+  color: var(--gold, #e9bd4e);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
   text-align: left;
+  transition:
+    border-color var(--dur) var(--ease),
+    background var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
 }
 
 .rail-update-btn:hover:not(:disabled) {
-  border-color: var(--accent, #4b9fff);
-  background: color-mix(in srgb, var(--accent, #4b9fff) 18%, transparent);
+  border-color: var(--violet, #8f7cff);
+  background: color-mix(in srgb, var(--gold, #e9bd4e) 5%, transparent);
+  box-shadow: inset 0 -1px var(--violet, #8f7cff);
+}
+
+.rail-update-btn:focus-visible {
+  outline: 1px solid var(--violet, #8f7cff);
+  outline-offset: 2px;
+  border-color: var(--violet, #8f7cff);
 }
 
 .rail-update-btn:disabled {
-  opacity: 0.6;
+  opacity: 0.72;
   cursor: default;
 }
 
 .rail-update-icon {
+  display: grid;
+  width: 17px;
+  height: 17px;
   flex: none;
-  font-size: 13px;
-  line-height: 1;
+  place-items: center;
+}
+
+.rail-update-btn.is-applying .rail-update-icon {
+  animation: rail-update-spin 900ms linear infinite;
+}
+
+.rail-update-btn.is-error {
+  border-color: var(--danger, #e6635b);
+  color: var(--danger, #e6635b);
 }
 
 .rail-update-label {
@@ -48,19 +71,54 @@
   gap: 6px;
   min-width: 0;
   flex: 1;
+  color: var(--text);
 }
 
 /* Le nombre de commits en retard : présent, mais jamais au premier plan. */
 .rail-update-count {
   margin-left: auto;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent, #4b9fff) 22%, transparent);
+  color: var(--gold, #e9bd4e);
+  font-family: var(--mono);
   font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
 }
 
 .rail-update-error {
   padding: 0 2px;
   color: var(--danger, #e6635b);
   font-size: 11px;
+}
+
+.rail-update-error.is-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.rail.is-collapsed .rail-update {
+  padding-inline: 0;
+}
+
+.rail.is-collapsed .rail-update-btn {
+  width: 36px;
+  justify-content: center;
+  padding-inline: 0;
+}
+
+@keyframes rail-update-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-update-btn.is-applying .rail-update-icon {
+    animation: none;
+  }
 }

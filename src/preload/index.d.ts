@@ -209,7 +209,10 @@ interface BrainTrace {
   timestamp: string
   conversationId: string
   turnId?: string
+  kind?: 'automatic' | 'query'
   query: string
+  found?: boolean
+  status?: 'found' | 'empty' | 'unavailable'
   injectedChars: number
   navigation?: BrainNavigation
 }
@@ -257,6 +260,10 @@ interface TaskManagerSnapshot {
 }
 interface ChatApi {
   captureTestPage: () => Promise<string>
+  seedConversationScopeTest: (
+    conversationId: string,
+    variant: 'a' | 'b'
+  ) => Promise<{ conversationId: string; path: string; variant: 'a' | 'b' }>
   storageMigration: () => Promise<Record<string, string>>
   completeStorageMigration: () => Promise<boolean>
   orchestrate: (
@@ -273,6 +280,12 @@ interface ChatApi {
     maxUsd: number | null
   }) => Promise<{ maxUsd: number | null }>
   getGitState: (repoPath?: string) => Promise<import('../shared/git-read').GitReadResult>
+  conversationGitState: (conversationId: string) => Promise<import('../shared/git-read').GitReadResult>
+  conversationGitDiff: (
+    conversationId: string,
+    path: string,
+    workspaceRoot: string
+  ) => Promise<import('../shared/git-read').GitDiffResult>
   getGitGraph: (repoPath?: string) => Promise<import('../shared/git-graph').GitGraphSnapshot>
   getGitDiff: (
     path: string,

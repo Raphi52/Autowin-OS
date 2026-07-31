@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -58,5 +58,87 @@ describe('brain trace spool causal identity', () => {
     )
 
     expect(readBrainTraces('conv-legacy', root)[0]).not.toHaveProperty('turnId')
+  })
+
+  it('isole les appels automatiques et explicites par conversation', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-brain-trace-scope-'))
+    roots.push(root)
+    appendBrainTrace(
+      {
+        timestamp: '2026-07-30T10:00:00.000Z',
+        conversationId: 'conv-a',
+        turnId: 'turn-1',
+        kind: 'automatic',
+        query: 'contexte automatique',
+        found: true,
+        injectedChars: 120
+      },
+      root
+    )
+    appendBrainTrace(
+      {
+        timestamp: '2026-07-30T10:01:00.000Z',
+        conversationId: 'conv-a',
+        kind: 'query',
+        query: 'question explicite',
+        found: false,
+        injectedChars: 0
+      },
+      root
+    )
+    appendBrainTrace(
+      {
+        timestamp: '2026-07-30T10:02:00.000Z',
+        conversationId: 'conv-b',
+        kind: 'query',
+        query: 'étranger',
+        found: true,
+        injectedChars: 42
+      },
+      root
+    )
+
+    expect(readBrainTraces('conv-a', root).map(({ kind, query }) => ({ kind, query }))).toEqual([
+      { kind: 'query', query: 'question explicite' },
+      { kind: 'automatic', query: 'contexte automatique' }
+    ])
+  })
+
+  it('conserve un appel Brain après trois rotations', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-brain-rotations-'))
+    roots.push(root)
+    appendBrainTrace(
+      {
+        timestamp: '2026-07-30T10:00:00.000Z',
+        conversationId: 'conv-durable',
+        turnId: 'turn-durable',
+        kind: 'automatic',
+        query: 'appel durable',
+        found: false,
+        status: 'empty',
+        injectedChars: 0
+      },
+      root
+    )
+    const current = join(brainSpoolRoot(root), 'events.jsonl')
+    for (let index = 0; index < 3; index += 1) {
+      appendFileSync(current, `${'x'.repeat(2 * 1024 * 1024 + 1)}\n`, 'utf8')
+      appendBrainTrace(
+        {
+          timestamp: `2026-07-30T10:0${index + 1}:00.000Z`,
+          conversationId: `conv-rotation-${index}`,
+          kind: 'query',
+          query: `rotation ${index}`,
+          found: false,
+          status: 'empty',
+          injectedChars: 0
+        },
+        root
+      )
+    }
+
+    expect(readBrainTraces('conv-durable', root)).toEqual([
+      expect.objectContaining({ turnId: 'turn-durable', query: 'appel durable' })
+    ])
   })
 })

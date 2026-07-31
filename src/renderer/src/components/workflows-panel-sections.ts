@@ -14,6 +14,7 @@ import type { ScopedLiveRun } from './chat-view-model'
 export const WORKFLOW_PANEL_SECTIONS = [
   { id: 'subagents', label: 'Sous-agents' },
   { id: 'run', label: 'Run' },
+  { id: 'graph', label: 'Graphe' },
   { id: 'source-control', label: 'Source control' }
 ] as const
 

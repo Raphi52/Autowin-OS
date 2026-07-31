@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   brainCorpusForWorkspace,
+  brainSourcePathAllowed,
   scopeBrainBlock,
   workspaceSlug
 } from './brain-corpus-scope'
@@ -120,6 +121,14 @@ describe('scopeBrainBlock — sur le bloc RÉEL de conv-81', () => {
     expect(scopeBrainBlock(upper, corpus).kept).toBe(1)
   })
 
+  it('applique la même portée aux candidats de navigation', () => {
+    const corpus = ['autowin-os', 'autowin']
+    expect(brainSourcePathAllowed('knowledge/domain/autowin-os/note.md', corpus)).toBe(true)
+    expect(
+      brainSourcePathAllowed('knowledge/domain/rigapplication-documentation/note.md', corpus)
+    ).toBe(false)
+  })
+
   it('le corps d’une source conservée n’est pas tronqué', () => {
     const result = scopeBrainBlock(REAL_BLOCK, corpus)
     expect(result.block).toContain('Le cockpit Autowin OS')
@@ -190,7 +199,9 @@ describe('câblage O4 — le chat ne pousse plus le Brain, mais y accède', () =
    */
   it('le chemin À LA DEMANDE applique la MÊME portée par workspace', () => {
     const source = read('commands.ts')
-    expect(source).toContain('scopeBrainBlock(context, brainCorpusForWorkspace(this.os.executionWorkspace))')
+    expect(source).toContain('const corpus = brainCorpusForWorkspace(this.os.executionWorkspace)')
+    expect(source).toContain('scopeBrainBlock(context, corpus)')
+    expect(source).toContain('brainSourcePathAllowed(candidate.path, corpus)')
     expect(source).toContain('buildBrainOutcome(decision.query, scoped.block)')
   })
 })

@@ -55,6 +55,22 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
     )
   })
 
+  it('persiste le vrai tour Chat pour la reprise', () => {
+    saveOrchestrationState(root, {
+      ...state('run-turn', 1000, ['frame']),
+      conversationId: 'conv-1',
+      turnId: 'turn-chat-originel'
+    })
+
+    expect(loadOrchestrationStates(root)[0]).toMatchObject({
+      conversationId: 'conv-1',
+      turnId: 'turn-chat-originel'
+    })
+    const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    expect(indexSource).toContain('resumableRun.turnId ?? randomUUID()')
+    expect(indexSource).toContain('legacyResumeTurn?.begin(')
+  })
+
   it('n’écrit pas de fichier temporaire résiduel (écriture atomique)', () => {
     saveOrchestrationState(root, state('run-a-1', 1000, ['frame']))
     saveOrchestrationState(root, state('run-a-1', 2000, ['frame', 'terrain']))

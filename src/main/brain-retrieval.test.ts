@@ -44,6 +44,7 @@ describe('retrieveBrainContext', () => {
       fetchFn: okFetch({ context: '[BRAIN] note pertinente' })
     })
     expect(res.context).toBe('[BRAIN] note pertinente')
+    expect(res.status).toBe('found')
   })
   it('capture la navigation quand le serveur l’expose', async () => {
     const res = await retrieveBrainContext('autowin', {
@@ -73,9 +74,11 @@ describe('retrieveBrainContext', () => {
     expect(res.navigation).toBeUndefined()
   })
   it('dégrade à vide si pas de token', async () => {
-    expect(
-      (await retrieveBrainContext('q', { env: {} as NodeJS.ProcessEnv, fetchFn: okFetch({ context: 'x' }) })).context
-    ).toBe('')
+    const res = await retrieveBrainContext('q', {
+      env: {} as NodeJS.ProcessEnv,
+      fetchFn: okFetch({ context: 'x' })
+    })
+    expect(res).toMatchObject({ context: '', status: 'unavailable' })
   })
   it('dégrade à vide si le fetch throw (serveur down)', async () => {
     const boom = (async () => { throw new Error('ECONNREFUSED') }) as unknown as typeof fetch
@@ -83,7 +86,14 @@ describe('retrieveBrainContext', () => {
       env: { AMITEL_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
       fetchFn: boom
     })
-    expect(res.context).toBe('')
+    expect(res).toMatchObject({ context: '', status: 'unavailable' })
+  })
+  it('distingue une réponse valide vide d’un service indisponible', async () => {
+    const res = await retrieveBrainContext('q', {
+      env: { AMITEL_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv,
+      fetchFn: okFetch({ context: '' })
+    })
+    expect(res).toMatchObject({ context: '', status: 'empty' })
   })
   it('brainServiceToken lit AMITEL_BRAIN_TOKEN en priorité', () => {
     expect(brainServiceToken({ AMITEL_BRAIN_TOKEN: 'tok' } as NodeJS.ProcessEnv)).toBe('tok')

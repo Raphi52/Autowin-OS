@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto'
-import { resolveFirstOccurrence } from './schedule'
+import {
+  occurrenceIdFor,
+  resolveFirstOccurrence,
+  resolveFirstOccurrenceAtOrAfter,
+  resolveNextOccurrence
+} from './schedule'
 import type {
   ScheduledTask,
   ScheduledTaskInput,
@@ -37,7 +42,11 @@ export class TaskStore {
     this.alerts.clear()
     for (const task of snapshot.tasks) this.tasks.set(task.id, structuredClone(task))
     for (const occurrence of snapshot.occurrences) {
-      this.occurrences.set(occurrence.id, structuredClone(occurrence))
+      const hydrated = structuredClone(occurrence)
+      if (hydrated.mode !== 'windows' && hydrated.mode !== 'active-only') {
+        hydrated.mode = 'legacy-unknown'
+      }
+      this.occurrences.set(hydrated.id, hydrated)
     }
     for (const alert of snapshot.alerts) this.alerts.set(alert.id, structuredClone(alert))
   }
@@ -88,10 +97,11 @@ export class TaskStore {
   create(input: ScheduledTaskInput): ScheduledTask {
     validateTaskInput(input)
     const timestamp = this.now()
+    const nextRunAt = input.enabled ? requireUpcomingOccurrence(input.schedule, timestamp) : null
     const task: ScheduledTask = {
       ...structuredClone(input),
       id: this.makeId(),
-      nextRunAt: input.enabled ? resolveFirstOccurrence(input.schedule) : null,
+      nextRunAt,
       createdAt: timestamp,
       updatedAt: timestamp
     }
@@ -113,11 +123,22 @@ export class TaskStore {
       schedule: structuredClone(patch.schedule ?? current.schedule)
     }
     validateTaskInput(input)
+    const timestamp = this.now()
+    const scheduleChanged =
+      patch.schedule !== undefined &&
+      JSON.stringify(patch.schedule) !== JSON.stringify(current.schedule)
+    const plannedNextRunAt = !input.enabled
+      ? null
+      : !current.enabled || scheduleChanged
+        ? requireUpcomingOccurrence(input.schedule, timestamp)
+        : undefined
+    this.reconcilePastDueBeforeUpdate(current, timestamp)
+    const nextRunAt = plannedNextRunAt === undefined ? current.nextRunAt : plannedNextRunAt
     const task: ScheduledTask = {
       ...current,
       ...input,
-      nextRunAt: input.enabled ? resolveFirstOccurrence(input.schedule) : null,
-      updatedAt: this.now()
+      nextRunAt,
+      updatedAt: timestamp
     }
     this.tasks.set(id, task)
     this.changed()
@@ -171,6 +192,7 @@ export class TaskStore {
       id: occurrenceId,
       taskId,
       scheduledFor,
+      mode: task.mode,
       status: 'claimed',
       claimedAt: this.now()
     }
@@ -209,11 +231,13 @@ export class TaskStore {
   ): TaskOccurrence {
     const existing = this.occurrences.get(occurrenceId)
     if (existing) return structuredClone(existing)
-    if (!this.tasks.has(taskId)) throw new Error(`Tâche inconnue: ${taskId}`)
+    const task = this.tasks.get(taskId)
+    if (!task) throw new Error(`Tâche inconnue: ${taskId}`)
     const occurrence: TaskOccurrence = {
       id: occurrenceId,
       taskId,
       scheduledFor,
+      mode: task.mode,
       status: 'missed',
       claimedAt: this.now(),
       finishedAt: this.now(),
@@ -249,6 +273,29 @@ export class TaskStore {
     return recovered
   }
 
+  private reconcilePastDueBeforeUpdate(task: ScheduledTask, timestamp: number): void {
+    while (task.enabled && task.nextRunAt !== null && task.nextRunAt <= timestamp) {
+      const scheduledFor = task.nextRunAt
+      const occurrenceId = occurrenceIdFor(task.id, scheduledFor)
+      if (!this.occurrences.has(occurrenceId)) {
+        const reason = 'Échéance dépassée avant la mise à jour de la tâche.'
+        const occurrence: TaskOccurrence = {
+          id: occurrenceId,
+          taskId: task.id,
+          scheduledFor,
+          mode: task.mode,
+          status: 'missed',
+          claimedAt: timestamp,
+          finishedAt: timestamp,
+          error: reason
+        }
+        this.occurrences.set(occurrenceId, occurrence)
+        this.createAlertOnce(occurrence, 'missed', reason, false)
+      }
+      task.nextRunAt = resolveNextOccurrence(task.schedule, scheduledFor)
+    }
+  }
+
   private updateOccurrence(
     occurrenceId: string,
     status: TaskOccurrenceStatus,
@@ -280,6 +327,17 @@ export class TaskStore {
     this.alerts.set(alert.id, alert)
     if (notify) this.changed()
   }
+}
+
+function requireUpcomingOccurrence(
+  schedule: ScheduledTaskInput['schedule'],
+  threshold: number
+): number {
+  const nextRunAt = resolveFirstOccurrenceAtOrAfter(schedule, threshold)
+  if (nextRunAt === null) {
+    throw new Error('La planification ne contient aucune échéance future.')
+  }
+  return nextRunAt
 }
 
 function validateTaskInput(input: ScheduledTaskInput): void {

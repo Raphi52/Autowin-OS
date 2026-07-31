@@ -49,6 +49,14 @@ export interface OrchestrationStep {
   evidence?: ExecutionEvidence[]
   /** Raisonnement/thinking du sous-agent (si le provider le remonte), conservé pour observation. */
   thinking?: string
+  /** Provenance causale stable utilisée par le graphe demande → phases → agents. */
+  execution?: {
+    phase?: PipelinePhase
+    agentId?: string
+    taskId?: string
+    groupId?: string
+    dependencyIds?: string[]
+  }
 }
 
 /** Signal « phase démarrée » émis AVANT l'appel bloquant, pour l'avancement live. */
@@ -87,6 +95,15 @@ export interface OrchestrationResult {
   failedTasks?: string[]
   /** Mode greedy : ids des sous-tâches jamais lancées car une dépendance a échoué (cascade). */
   skippedTasks?: string[]
+}
+
+export interface BrainRetrievalEvent {
+  timestamp: string
+  query: string
+  found: boolean
+  status: 'found' | 'empty' | 'unavailable'
+  injectedChars: number
+  navigation?: BrainNavigation
 }
 
 export interface OrchestratorDeps {
@@ -158,6 +175,7 @@ export interface OrchestratorDeps {
     task: string
     /** Conversation d'origine — sans elle, une reprise ne saurait pas où s'afficher. */
     conversationId?: string
+    turnId?: string
     bindingOverride?: RoleBinding
     phaseOutputs: { phase: PipelinePhase; text: string }[]
   }) => void
@@ -317,6 +335,7 @@ export class Orchestrator {
     return {
       cwd,
       sandbox,
+      ...(cwd !== this.deps.executionWorkspace ? { causallyIsolated: true } : {}),
       onProcess: observers?.process,
       onSpawnIntent: observers?.spawnIntent,
       onSpawned: observers?.spawned
@@ -344,7 +363,11 @@ export class Orchestrator {
     /** Conversation d'origine, persistée avec l'acquis pour qu'une reprise s'affiche au bon endroit. */
     conversationId?: string,
     /** Binding figé pour ce run, prioritaire sur tous les rôles et panels de la topologie. */
-    bindingOverride?: RoleBinding
+    bindingOverride?: RoleBinding,
+    /** Émis dès la récupération Brain, avant toute phase susceptible d'échouer. */
+    onBrainRetrieved?: (event: BrainRetrievalEvent) => void,
+    /** Tour Chat causal, persisté avec l'état reprenable. */
+    turnId?: string
   ): Promise<OrchestrationResult> {
     const runId = `run-${this.runNamespace}-${++this.runSeq}`
     const isMut = isMutationTask(task)
@@ -364,6 +387,7 @@ export class Orchestrator {
       runId,
       task,
       conversationId,
+      turnId,
       bindingOverride,
       phaseOutputs: [...resumeOutputs]
     })
@@ -421,7 +445,9 @@ export class Orchestrator {
         runId,
         resumeOutputs,
         conversationId,
-        bindingOverride
+        bindingOverride,
+        onBrainRetrieved,
+        turnId
       )
       green = !result.gateBlocked
       produced = result
@@ -615,7 +641,14 @@ export class Orchestrator {
       prompt: envelope,
       detail: ok ? 'validé' : 'défaut',
       status: 'completed',
-      durationMs: performance.now() - startedAt
+      durationMs: performance.now() - startedAt,
+      execution: {
+        phase: 'judge',
+        agentId: 'judge:greedy',
+        taskId: 'judge:greedy',
+        groupId: 'judge:single',
+        dependencyIds: []
+      }
     })
     // GATE déterministe + HookBus interne (pre-green) : enforcement HORS-MODÈLE, uniforme tous exécuteurs.
     const hookOutcome = await this.hooks.run('pre-green', {
@@ -632,9 +665,10 @@ export class Orchestrator {
       dod: [{ checked: ok, hasContent: true }]
     })
     if (hookOutcome.blocked) gate.reasons.push(...hookOutcome.reasons)
-    push({
-      step: 'gate',
-      detail: gate.blocked ? `BLOQUÉ: ${gate.reasons.join('; ')}` : 'clôture autorisée'
+      push({
+        step: 'gate',
+        role: 'gate',
+        detail: gate.blocked ? `BLOQUÉ: ${gate.reasons.join('; ')}` : 'clôture autorisée'
     })
     return { valid: ok, gate }
   }
@@ -746,7 +780,14 @@ export class Orchestrator {
               status: 'failed',
               error: explained,
               durationMs: performance.now() - startedAt,
-              detail: `sous-tâche ${node.id}`
+              detail: `sous-tâche ${node.id}`,
+              execution: {
+                phase,
+                agentId: `${phase}:${node.id}`,
+                taskId: node.id,
+                groupId: `${phase}:greedy`,
+                dependencyIds: [...node.deps]
+              }
             })
             throw new Error(explained)
           }
@@ -775,7 +816,14 @@ export class Orchestrator {
             status: 'completed',
             durationMs: performance.now() - startedAt,
             evidence: result.executionEvidence,
-            detail: `sous-tâche ${node.id}`
+            detail: `sous-tâche ${node.id}`,
+            execution: {
+              phase,
+              agentId: `${phase}:${node.id}`,
+              taskId: node.id,
+              groupId: `${phase}:greedy`,
+              dependencyIds: [...node.deps]
+            }
           })
           const nodeEvidence = result.executionEvidence ?? []
           evidence.push(...nodeEvidence)
@@ -788,6 +836,7 @@ export class Orchestrator {
       concurrency: this.deps.greedyConcurrency ?? 4,
       onSettled: (event) => {
         if (!event.skipped) return
+        const skippedNode = plan.find((node) => node.id === event.id)
         push({
           step: 'exec',
           provider: subProvider,
@@ -795,7 +844,14 @@ export class Orchestrator {
           text: '',
           status: 'failed',
           error: `sous-tâche ${event.id} sautée (dépendance en échec)`,
-          detail: `sous-tâche ${event.id}`
+          detail: `sous-tâche ${event.id}`,
+          execution: {
+            phase,
+            agentId: `${phase}:${event.id}`,
+            taskId: event.id,
+            groupId: `${phase}:greedy`,
+            dependencyIds: [...(skippedNode?.deps ?? [])]
+          }
         })
       }
     })
@@ -853,7 +909,9 @@ export class Orchestrator {
     /** SURVIE NIVEAU 3 : acquis d'un run interrompu → ces phases sont REJOUÉES, pas refaites. */
     resumeOutputs: { phase: PipelinePhase; text: string }[] = [],
     conversationId?: string,
-    bindingOverride?: RoleBinding
+    bindingOverride?: RoleBinding,
+    onBrainRetrieved?: (event: BrainRetrievalEvent) => void,
+    turnId?: string
   ): Promise<OrchestrationResult> {
     const { registry, roles, cost, trust } = this.deps
     // Souveraineté contexte (décision PLIER) : Autowin lit LUI-MÊME le fichier projet gagnant de la
@@ -893,6 +951,7 @@ export class Orchestrator {
           runId,
           task,
           conversationId,
+          turnId,
           bindingOverride,
           phaseOutputs: [...phaseOutputs]
         })
@@ -908,6 +967,19 @@ export class Orchestrator {
     const brain = await retrieveBrainContext(task)
     const brainRetrievedAt = new Date().toISOString()
     const brainContext = brain.context
+    const brainQuery = brain.navigation?.query || task
+    try {
+      onBrainRetrieved?.({
+        timestamp: brainRetrievedAt,
+        query: brainQuery,
+        found: brainContext.length > 0,
+        status: brain.status,
+        injectedChars: brainContext.length,
+        navigation: brain.navigation
+      })
+    } catch {
+      // L'observabilité Brain ne doit jamais faire échouer le run.
+    }
     // #1 repo-map graphify RÉFUTÉ par mesure A/B (2026-07-22) : injecter GRAPH_REPORT.md (28k) à
     // chaque phase coûtait +206k tokens (ON 573k vs OFF 367k) SANS réduire la lecture agentique du
     // sous-agent → contre-productif (piège du soft-steer saturé). Levier retiré. Cf. harnais
@@ -998,6 +1070,13 @@ export class Orchestrator {
         const sandbox = isMutationTask(task) ? 'danger-full-access' : 'read-only'
         const memberOutputs = await Promise.all(
           fanMembers.map(async (member) => {
+            const execution = {
+              phase,
+              agentId: `${phase}:${member.model ?? member.provider}`,
+              taskId: `${phase}:${member.model ?? member.provider}`,
+              groupId: `${phase}:fanout`,
+              dependencyIds: [] as string[]
+            }
             const opts: SendOptions = {
               system: fanSystem,
               systemBlocks: fanSystemBlocks,
@@ -1043,7 +1122,8 @@ export class Orchestrator {
                 status: 'completed',
                 durationMs: performance.now() - startedAt,
                 evidence: res.executionEvidence,
-                detail: `phase ${phase} · modèle ${member.model ?? member.provider}`
+                detail: `phase ${phase} · modèle ${member.model ?? member.provider}`,
+                execution
               })
               aggregatedEvidence.push(...(res.executionEvidence ?? []))
               return { member, text: res.text, ok: true as const, cause: undefined }
@@ -1057,7 +1137,8 @@ export class Orchestrator {
                 status: 'failed',
                 error: error instanceof Error ? error.message : String(error),
                 durationMs: performance.now() - startedAt,
-                detail: `phase ${phase} · modèle ${member.model ?? member.provider}`
+                detail: `phase ${phase} · modèle ${member.model ?? member.provider}`,
+                execution
               })
               return {
                 member,
@@ -1183,7 +1264,16 @@ export class Orchestrator {
           usage: synth.usage,
           status: 'completed',
           durationMs: performance.now() - synthStartedAt,
-          detail: `synthèse ${phase} (${good.length} modèles)`
+          detail: `synthèse ${phase} (${good.length} modèles)`,
+          execution: {
+            phase,
+            agentId: `${phase}:synthesis`,
+            taskId: `${phase}:synthesis`,
+            groupId: `${phase}:synthesis`,
+            dependencyIds: good.map(
+              ({ member }) => `${phase}:${member.model ?? member.provider}`
+            )
+          }
         })
         lastExecText = synth.text
         lastUsage = synth.usage
@@ -1291,7 +1381,14 @@ export class Orchestrator {
           prompt: execPrompt,
           status: 'failed',
           error: explained,
-          durationMs: performance.now() - phaseStartedAt
+          durationMs: performance.now() - phaseStartedAt,
+          execution: {
+            phase,
+            agentId: `${phase}:subagent`,
+            taskId: `${phase}:exec`,
+            groupId: `${phase}:sequential`,
+            dependencyIds: []
+          }
         })
         throw new Error(explained)
       }
@@ -1326,7 +1423,14 @@ export class Orchestrator {
         status: 'completed',
         durationMs: performance.now() - phaseStartedAt,
         evidence: phaseRes.executionEvidence,
-        detail: execPhases.length > 1 ? `phase ${phase}` : undefined
+        detail: execPhases.length > 1 ? `phase ${phase}` : undefined,
+        execution: {
+          phase,
+          agentId: `${phase}:subagent`,
+          taskId: `${phase}:exec`,
+          groupId: `${phase}:sequential`,
+          dependencyIds: []
+        }
       })
       aggregatedEvidence.push(...(phaseRes.executionEvidence ?? []))
       lastExecText = phaseRes.text
@@ -1438,6 +1542,13 @@ export class Orchestrator {
       if (judgeMembers.length >= 2) {
         const results = await Promise.all(
           judgeMembers.map(async (member) => {
+            const execution = {
+              phase: 'judge' as const,
+              agentId: `judge:${member.model ?? member.provider}`,
+              taskId: `judge:${member.model ?? member.provider}`,
+              groupId: 'judge:fanout',
+              dependencyIds: [] as string[]
+            }
             const opts: SendOptions = {
               ...judgeOptions,
               model: member.model,
@@ -1485,7 +1596,8 @@ export class Orchestrator {
                 usage: r.usage,
                 detail: votesValide ? 'vote: VALIDE' : 'vote: DEFAUT',
                 status: 'completed',
-                durationMs: performance.now() - startedAt
+                durationMs: performance.now() - startedAt,
+                execution
               })
               return { ok: votesValide, responded: true, text: r.text.trim() }
             } catch (error) {
@@ -1497,7 +1609,8 @@ export class Orchestrator {
                 text: '',
                 status: 'failed',
                 error: error instanceof Error ? error.message : String(error),
-                durationMs: performance.now() - startedAt
+                durationMs: performance.now() - startedAt,
+                execution
               })
               // Crashé : ne vote PAS et ne compte pas dans le dénominateur du quorum.
               return { ok: false, responded: false, text: '' }
@@ -1520,7 +1633,7 @@ export class Orchestrator {
             : votingN === 0
               ? 'DEFAUT: aucun juge n’a répondu (tous en échec)'
               : `DEFAUT: quorum non atteint (${valideVotes}/${votingN} VALIDE, seuil ${threshold})${reasons.length ? ` — ${reasons.join(' | ')}` : ''}`,
-          provider: judgeProvider,
+          provider: undefined,
           systemInjected: true,
           usage: undefined
         }
@@ -1541,11 +1654,19 @@ export class Orchestrator {
             step: 'judge',
             provider: judgeProvider,
             role: 'judge',
+            model: judgeBinding.model,
             text: '',
             prompt: judgeEnvelope,
             status: 'failed',
             error: error instanceof Error ? error.message : String(error),
-            durationMs: performance.now() - judgeStartedAt
+            durationMs: performance.now() - judgeStartedAt,
+            execution: {
+              phase: 'judge',
+              agentId: 'judge:single',
+              taskId: 'judge:single',
+              groupId: 'judge:single',
+              dependencyIds: []
+            }
           })
           throw error
         }
@@ -1566,16 +1687,37 @@ export class Orchestrator {
       trust.record({ judgeModel: judgeProvider, verdict: ok ? 'green' : 'red' })
       push({
         step: 'judge',
-        provider: verdict.provider ?? judgeProvider,
-        role: 'judge',
+        provider:
+          judgeMembers.length >= 2 ? undefined : (verdict.provider ?? judgeProvider),
+        role: judgeMembers.length >= 2 ? 'orchestrator' : 'judge',
+        model:
+          judgeMembers.length >= 2 ? undefined : (verdict.model ?? judgeBinding.model),
         text: verdict.text.trim(),
         tokens: verdict.usage ? verdict.usage.inputTokens + verdict.usage.outputTokens : undefined,
         costUsd: verdict.usage?.costUsd,
         usage: verdict.usage,
         detail: ok ? 'validé' : 'défaut',
-        prompt: judgeEnvelope,
+        prompt: judgeMembers.length >= 2 ? undefined : judgeEnvelope,
         status: 'completed',
-        durationMs: performance.now() - judgeStartedAt
+        durationMs: performance.now() - judgeStartedAt,
+        execution:
+          judgeMembers.length >= 2
+            ? {
+                phase: 'judge',
+                agentId: 'judge:quorum',
+                taskId: 'judge:quorum',
+                groupId: 'judge:quorum',
+                dependencyIds: judgeMembers.map(
+                  (member) => `judge:${member.model ?? member.provider}`
+                )
+              }
+            : {
+                phase: 'judge',
+                agentId: 'judge:single',
+                taskId: 'judge:single',
+                groupId: 'judge:single',
+                dependencyIds: []
+              }
       })
 
       // GATE déterministe (model-agnostic) + HookBus interne (pre-green) : enforcement HORS-MODÈLE.
@@ -1595,6 +1737,7 @@ export class Orchestrator {
       if (hookOutcome.blocked) g.reasons.push(...hookOutcome.reasons)
       push({
         step: 'gate',
+        role: 'gate',
         detail: g.blocked ? `BLOQUÉ: ${g.reasons.join('; ')}` : 'clôture autorisée'
       })
       return { valid: ok, gate: g }
@@ -1669,8 +1812,9 @@ export class Orchestrator {
         }
         push({
           step: 'exec',
-          provider: subProvider,
+          provider: repairRes.provider ?? subProvider,
           role: 'subagent',
+          model: repairRes.model ?? subBinding.model,
           text: repairRes.text,
           tokens: repairRes.usage
             ? repairRes.usage.inputTokens + repairRes.usage.outputTokens
@@ -1681,7 +1825,14 @@ export class Orchestrator {
           status: 'completed',
           durationMs: performance.now() - repairStartedAt,
           evidence: repairRes.executionEvidence,
-          detail: 'phase build (réparation)'
+          detail: 'phase build (réparation)',
+          execution: {
+            phase: 'build',
+            agentId: 'build:repair',
+            taskId: 'build:repair',
+            groupId: 'build:repair',
+            dependencyIds: []
+          }
         })
         aggregatedEvidence.push(...(repairRes.executionEvidence ?? []))
         lastExecText = repairRes.text
@@ -1702,7 +1853,7 @@ export class Orchestrator {
       gateBlocked: gate.blocked,
       gateReasons: gate.reasons,
       phaseOutputs,
-      brainQuery: brain.navigation?.query ?? (brainContext ? task : undefined),
+      brainQuery,
       brainRetrievedAt,
       brainNavigation: brain.navigation,
       brainInjectedChars: brainContext.length,

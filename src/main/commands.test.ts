@@ -1,10 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
+import { execFileSync } from 'node:child_process'
 import { AppCommandBus } from './commands'
 import { AuthoritySas } from './authority/sas'
 import { APP_DESTINATIONS } from '../shared/navigation'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import {
+  readConversationFilePaths,
+  readCurrentConversationPathOwnership
+} from './activity/conversation-file-trace-spool'
+import { readBrainTraces } from './activity/brain-trace-spool'
 
 function fakeOs(): any {
   const conversations = new Map<
@@ -299,6 +305,209 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
 })
 
 describe('AppCommandBus authority policy', () => {
+  it('trace aussi une recherche Brain automatique sans résultat', async () => {
+    const previousAppData = process.env.APPDATA
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-empty-brain-trace-'))
+    process.env.APPDATA = appData
+    try {
+      const os = fakeOs()
+      os.runTask = async (...args: unknown[]) => {
+        const onBrainRetrieved = args[9] as
+          | ((event: {
+              timestamp: string
+              query: string
+              found: boolean
+              injectedChars: number
+            }) => void)
+          | undefined
+        onBrainRetrieved?.({
+          timestamp: '2026-07-30T21:00:00.000Z',
+          query: '',
+          found: false,
+          injectedChars: 0
+        })
+        return {
+          gateBlocked: false,
+          gateReasons: [],
+          valid: true,
+          costUsd: 0,
+          result: '',
+          phaseOutputs: []
+        }
+      }
+      await new AppCommandBus(os, () => {}).exec(
+        'orchestrate',
+        { task: 'ping' },
+        'conv-1',
+        'auto'
+      )
+
+      expect(readBrainTraces('conv-1')).toEqual([
+        expect.objectContaining({
+          conversationId: 'conv-1',
+          kind: 'automatic',
+          found: false,
+          injectedChars: 0
+        })
+      ])
+    } finally {
+      if (previousAppData === undefined) delete process.env.APPDATA
+      else process.env.APPDATA = previousAppData
+      rmSync(appData, { recursive: true, force: true })
+    }
+  })
+
+  it('conserve la trace Brain si une phase échoue après la récupération', async () => {
+    const previousAppData = process.env.APPDATA
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-failed-brain-trace-'))
+    process.env.APPDATA = appData
+    try {
+      const os = fakeOs()
+      os.runTask = async (...args: unknown[]) => {
+        const onBrainRetrieved = args[9] as
+          | ((event: {
+              timestamp: string
+              query: string
+              found: boolean
+              injectedChars: number
+            }) => void)
+          | undefined
+        onBrainRetrieved?.({
+          timestamp: '2026-07-30T21:10:00.000Z',
+          query: 'contexte avant échec',
+          found: true,
+          injectedChars: 42
+        })
+        throw new Error('phase injectée en échec')
+      }
+
+      const result = await new AppCommandBus(os, () => {}).exec(
+        'orchestrate',
+        { task: 'ping' },
+        'conv-1',
+        'auto',
+        undefined,
+        'turn-failed'
+      )
+
+      expect(result.ok).toBe(false)
+      expect(readBrainTraces('conv-1')).toEqual([
+        expect.objectContaining({
+          turnId: 'turn-failed',
+          query: 'contexte avant échec',
+          injectedChars: 42
+        })
+      ])
+    } finally {
+      if (previousAppData === undefined) delete process.env.APPDATA
+      else process.env.APPDATA = previousAppData
+      rmSync(appData, { recursive: true, force: true })
+    }
+  })
+
+  it('attribue edit_file et brain_query uniquement à la conversation qui les exécute', async () => {
+    const previousAppData = process.env.APPDATA
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-conversation-scope-'))
+    const workspace = mkdtempSync(join(tmpdir(), 'autowin-conversation-workspace-'))
+    process.env.APPDATA = appData
+    try {
+      writeFileSync(join(workspace, 'target.txt'), 'avant\n', 'utf8')
+      const os = fakeOs()
+      os.executionWorkspace = workspace
+      const bus = new AppCommandBus(os, () => {})
+
+      const edit = await bus.exec(
+        'edit_file',
+        { path: 'target.txt', oldText: 'avant', newText: 'après' },
+        'conv-1',
+        'auto',
+        undefined,
+        'turn-1'
+      )
+      const brain = await bus.exec(
+        'brain_query',
+        { question: 'quelle décision ?' },
+        'conv-1',
+        'ask',
+        undefined,
+        'turn-1'
+      )
+
+      expect(edit).toMatchObject({ ok: true, data: { allowed: true, path: 'target.txt' } })
+      expect(readFileSync(join(workspace, 'target.txt'), 'utf8')).toContain('après')
+      expect(readConversationFilePaths('conv-1')).toEqual(['target.txt'])
+      expect(readConversationFilePaths('conv-2')).toEqual([])
+      expect(brain).toMatchObject({ ok: true, data: { allowed: true, found: false } })
+      expect(readBrainTraces('conv-1')).toEqual([
+        expect.objectContaining({
+          conversationId: 'conv-1',
+          turnId: 'turn-1',
+          kind: 'query',
+          query: 'quelle décision ?',
+          found: false
+        })
+      ])
+      expect(readBrainTraces('conv-2')).toEqual([])
+    } finally {
+      if (previousAppData === undefined) delete process.env.APPDATA
+      else process.env.APPDATA = previousAppData
+      rmSync(appData, { recursive: true, force: true })
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
+  it('sérialise deux edit_file réellement concurrents et conserve leur chaîne causale', async () => {
+    const previousAppData = process.env.APPDATA
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-concurrent-edit-scope-'))
+    const workspace = mkdtempSync(join(tmpdir(), 'autowin-concurrent-edit-workspace-'))
+    process.env.APPDATA = appData
+    try {
+      writeFileSync(join(workspace, 'target.txt'), 'zéro\n', 'utf8')
+      execFileSync('git', ['init'], { cwd: workspace })
+      execFileSync('git', ['config', 'user.email', 'test@autowin.local'], { cwd: workspace })
+      execFileSync('git', ['config', 'user.name', 'Autowin Test'], { cwd: workspace })
+      execFileSync('git', ['add', '.'], { cwd: workspace })
+      execFileSync('git', ['commit', '-m', 'initial'], { cwd: workspace })
+      const os = fakeOs()
+      os.executionWorkspace = workspace
+      const bus = new AppCommandBus(os, () => {})
+
+      const [first, second] = await Promise.all([
+        bus.exec(
+          'edit_file',
+          { path: 'target.txt', oldText: 'zéro', newText: 'un' },
+          'conv-1',
+          'auto',
+          undefined,
+          'turn-1'
+        ),
+        bus.exec(
+          'edit_file',
+          { path: 'target.txt', oldText: 'un', newText: 'deux' },
+          'conv-2',
+          'auto',
+          undefined,
+          'turn-2'
+        )
+      ])
+
+      expect(first).toMatchObject({ ok: true, data: { allowed: true } })
+      expect(second).toMatchObject({ ok: true, data: { allowed: true } })
+      expect(readFileSync(join(workspace, 'target.txt'), 'utf8')).toBe('deux\n')
+      expect(readCurrentConversationPathOwnership('conv-1')).toEqual([
+        expect.objectContaining({ conversationId: 'conv-1', path: 'target.txt' })
+      ])
+      expect(readCurrentConversationPathOwnership('conv-2')).toEqual([
+        expect.objectContaining({ conversationId: 'conv-2', path: 'target.txt' })
+      ])
+    } finally {
+      if (previousAppData === undefined) delete process.env.APPDATA
+      else process.env.APPDATA = previousAppData
+      rmSync(appData, { recursive: true, force: true })
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
   it('alimente /kaizen avec le dossier Autowin de la conversation ciblée', async () => {
     const previousAppData = process.env.APPDATA
     const appData = mkdtempSync(join(tmpdir(), 'autowin-kaizen-command-'))

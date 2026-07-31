@@ -45,17 +45,22 @@ export async function readGitDiff(cwd: string, path: string): Promise<GitDiffRes
  */
 export async function readGitState(cwd: string, historyLimit = 20): Promise<GitReadResult> {
   try {
-    const [status, log] = await Promise.all([
+    const [statusResult, logResult] = await Promise.allSettled([
       run('git', ['status', '--porcelain=v2', '--branch'], { cwd, windowsHide: true }),
       run('git', ['log', '--pretty=format:%h%x09%s', '-n', String(historyLimit)], {
         cwd,
         windowsHide: true
       })
     ])
+    if (statusResult.status === 'rejected' || logResult.status === 'rejected') {
+      const error =
+        statusResult.status === 'rejected' ? statusResult.reason : logResult.reason
+      return { available: false, error: error instanceof Error ? error.message : String(error) }
+    }
     return {
       available: true,
-      state: parseGitStatus(status.stdout),
-      history: parseGitLog(log.stdout)
+      state: parseGitStatus(statusResult.value.stdout),
+      history: parseGitLog(logResult.value.stdout)
     }
   } catch (error) {
     return { available: false, error: error instanceof Error ? error.message : String(error) }

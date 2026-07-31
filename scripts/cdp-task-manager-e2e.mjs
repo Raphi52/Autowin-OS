@@ -1,12 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process'
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 
 function argument(name, fallback) {
@@ -21,6 +14,7 @@ const instanceRoot = resolve(
 const executable = resolve(argument('--exe', 'dist/win-unpacked/autowin-os.exe'))
 const outputDir = resolve(argument('--out-dir', join(instanceRoot, 'proof')))
 const runId = `TASK-E2E-${Date.now()}`
+const capturedAt = new Date(Date.now() - 100).toISOString()
 const sentinel = `sentinel-${runId}`
 const screenshotPath = join(outputDir, `${runId}.png`)
 const proofPath = join(outputDir, `${runId}.json`)
@@ -136,11 +130,15 @@ function relaySettings() {
     `[ordered]@{wakeToRun=[bool]$task.Settings.WakeToRun;startWhenAvailable=[bool]$task.Settings.StartWhenAvailable;multipleInstances=[string]$task.Settings.MultipleInstances;arguments=[string]$task.Actions[0].Arguments}|ConvertTo-Json -Compress`
   ].join(';')
   return JSON.parse(
-    execFileSync('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], {
-      encoding: 'utf8',
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe']
-    }).trim()
+    execFileSync(
+      'powershell.exe',
+      ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script],
+      {
+        encoding: 'utf8',
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe']
+      }
+    ).trim()
   )
 }
 
@@ -172,7 +170,7 @@ try {
 
   // Marge suffisante pour relire Task Scheduler AVANT que l'occurrence one-shot ne se termine
   // et que le scheduler désarme légitimement le relais.
-  const due = new Date(Date.now() + 150_000)
+  const due = new Date(Date.now() + 90_000)
   const date = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(
     due.getDate()
   ).padStart(2, '0')}`
@@ -253,7 +251,7 @@ try {
           candidate.taskId === ${JSON.stringify(created.task.id)} && candidate.status === 'completed')
         return occurrence ? { task, occurrence } : null
       })()`),
-    180_000,
+    120_000,
     'occurrence planifiée terminée'
   )
 
@@ -261,7 +259,9 @@ try {
   const conversationStorePath = join(instanceRoot, 'appdata', 'autowin-os', 'conversations.json')
   const taskStore = readJson(taskStorePath)
   const conversations = readJson(conversationStorePath)
-  const conversation = conversations.find((candidate) => candidate.id === completed.occurrence.conversationId)
+  const conversation = conversations.find(
+    (candidate) => candidate.id === completed.occurrence.conversationId
+  )
   if (!conversation) throw new Error('Conversation dédiée absente du store')
   const persistedUsers = conversation.messages.filter(
     (message) => message.role === 'user' && message.content.includes(sentinel)
@@ -272,16 +272,43 @@ try {
       message.turnId === completed.occurrence.turnId &&
       ['completed', 'failed', 'cancelled'].includes(message.status)
   )
-  const actionCount = persistedAssistants.flatMap((message) => message.parts ?? []).filter(
-    (part) => part.kind === 'action'
-  ).length
+  const actionCount = persistedAssistants
+    .flatMap((message) => message.parts ?? [])
+    .filter((part) => part.kind === 'action').length
   const occurrenceMatches = taskStore.occurrences.filter(
     (candidate) => candidate.id === completed.occurrence.id
   )
 
+  await initial.evaluate(`(() => {
+    document.querySelector('[data-testid="nav-chat"]')?.click()
+    return true
+  })()`)
+  await waitFor(
+    () =>
+      initial.evaluate(`(() => {
+        const labels = [...document.querySelectorAll('.conv-item')]
+        const target = labels.find((item) => item.querySelector('.conv-label')?.textContent === ${JSON.stringify(conversation.title)})
+        if (target && !target.classList.contains('active')) target.querySelector('.conv-pick')?.click()
+        const users = [...document.querySelectorAll('.msg.user .msg-body')]
+          .filter((message) => message.textContent?.includes(${JSON.stringify(sentinel)})).length
+        const assistants = [...document.querySelectorAll('.msg.assistant')]
+          .filter((message) => message.textContent?.includes('progressivement')).length
+        return users === 1 && assistants === 1 ? true : null
+      })()`),
+    15_000,
+    'tour Chat visible avant fermeture'
+  )
+  await sleep(500)
+  const visibleScreenshot = await initial.send('Page.captureScreenshot', { format: 'png' })
+  writeFileSync(screenshotPath, Buffer.from(visibleScreenshot.data, 'base64'))
+
   await initial.evaluate('window.close()')
   initial.socket.close()
-  await waitFor(async () => ((await pages()).some((candidate) => candidate.type === 'page') ? null : true), 10_000, 'fermeture renderer')
+  await waitFor(
+    async () => ((await pages()).some((candidate) => candidate.type === 'page') ? null : true),
+    10_000,
+    'fermeture renderer'
+  )
 
   const instanceState = readJson(join(instanceRoot, 'instance.json'))
   let processSurvivedWindowClose = true
@@ -290,7 +317,8 @@ try {
   } catch {
     processSurvivedWindowClose = false
   }
-  if (!processSurvivedWindowClose) throw new Error('Le process principal est mort après window.close()')
+  if (!processSurvivedWindowClose)
+    throw new Error('Le process principal est mort après window.close()')
 
   const child = spawn(
     executable,
@@ -306,15 +334,18 @@ try {
 
   const reopened = await connect()
   await reopened.evaluate(`(() => {
-    document.querySelector('[data-testid="first-run-wizard"] .frw-primary')?.click()
     document.querySelector('[data-testid="nav-chat"]')?.click()
     return true
   })()`)
+  const wizardDeadline = Date.now() + 8_000
+  while (Date.now() < wizardDeadline) {
+    await reopened.evaluate(
+      `document.querySelector('[data-testid="first-run-wizard"] .frw-primary')?.click()`
+    )
+    await sleep(250)
+  }
   await waitFor(
-    () =>
-      reopened.evaluate(
-        `!document.querySelector('[data-testid="first-run-wizard"]')`
-      ),
+    () => reopened.evaluate(`!document.querySelector('[data-testid="first-run-wizard"]')`),
     10_000,
     'fermeture de l’assistant de démarrage'
   )
@@ -323,7 +354,7 @@ try {
       reopened.evaluate(`(() => {
         const labels = [...document.querySelectorAll('.conv-item')]
         const target = labels.find((item) => item.querySelector('.conv-label')?.textContent === ${JSON.stringify(conversation.title)})
-        target?.querySelector('.conv-pick')?.click()
+        if (target && !target.classList.contains('active')) target.querySelector('.conv-pick')?.click()
         const users = [...document.querySelectorAll('.msg.user .msg-body')]
           .filter((message) => message.textContent?.includes(${JSON.stringify(sentinel)})).length
         const assistants = [...document.querySelectorAll('.msg.assistant')]
@@ -333,14 +364,12 @@ try {
     15_000,
     'tour Chat restauré dans le DOM'
   )
-  const screenshot = await reopened.send('Page.captureScreenshot', { format: 'png' })
-  writeFileSync(screenshotPath, Buffer.from(screenshot.data, 'base64'))
+  await sleep(500)
   reopened.socket.close()
 
   const packagePath = resolve('dist/win-unpacked/resources/app.asar')
   const packageFresh =
     existsSync(packagePath) && statSync(packagePath).mtimeMs >= latestMtime(resolve('.'))
-  const capturedAt = new Date(Date.now() - 100).toISOString()
   const proof = {
     runId,
     capturedAt,

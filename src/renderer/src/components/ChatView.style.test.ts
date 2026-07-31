@@ -43,16 +43,20 @@ describe('chat top bar surface', () => {
 })
 
 describe('workflow sidebar header', () => {
-  it('keeps action buttons visible while truncating tabs at narrow widths', () => {
+  it('keeps four icon tabs on one line with one separator each and fixed actions', () => {
     const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
 
     expect(css).toMatch(
-      /\.runs-pane > \.conv-head > \.row:first-child\s*{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden/s
+      /\.workflow-panel-head\s*{[^}]*display:\s*flex;[^}]*min-width:\s*0;[^}]*height:\s*46px/s
     )
-    expect(css).toMatch(/\.runs-pane > \.conv-head > \.row:last-child\s*{[^}]*flex:\s*none/s)
     expect(css).toMatch(
-      /\.runs-pane > \.conv-head > \.row:first-child \.btn\s*{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap/s
+      /\.workflow-section-tabs\s*{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*1\.15fr\)[^}]*minmax\(0,\s*1\.39fr\)/s
     )
+    expect(css).toMatch(
+      /\.workflow-section-tab\s*{[^}]*display:\s*flex;[^}]*white-space:\s*nowrap/s
+    )
+    expect(css).toMatch(/\.workflow-section-separator\s*{[^}]*right:\s*0;[^}]*width:\s*1px/s)
+    expect(css).toMatch(/\.workflow-panel-actions\s*{[^}]*width:\s*56px;[^}]*flex:\s*none/s)
   })
 })
 

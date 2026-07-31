@@ -15,6 +15,13 @@ describe('observabilite orchestration', () => {
         step: 'exec',
         role: 'subagent',
         provider: 'codex',
+        model: 'gpt-5.6-codex',
+        execution: {
+          phase: 'build',
+          agentId: 'builder-1',
+          taskId: 'task-a',
+          groupId: 'build-panel'
+        },
         text: 'fait',
         prompt: {
           provider: 'codex',
@@ -36,6 +43,52 @@ describe('observabilite orchestration', () => {
       'injection',
       'boundary',
       'model-response'
+    ])
+    expect(trace.readConversation('conv-1')[0]).toMatchObject({
+      provider: { id: 'codex', model: 'gpt-5.6-codex' },
+      execution: {
+        phase: 'build',
+        agentId: 'builder-1',
+        taskId: 'task-a',
+        groupId: 'build-panel'
+      }
+    })
+  })
+
+  it('ne transforme pas deux membres d’un fan-out en chaîne causale', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-orchestration-fanout-'))
+    const traceStore = new TraceStore(join(root, 'trace'))
+    const context = { conversationId: 'conv-fanout', turnId: 'turn-1', iteration: 0 }
+    for (const [agentId, provider, model] of [
+      ['scout-a', 'codex', 'gpt-5.6-codex'],
+      ['scout-b', 'claude', 'claude-opus-4-8']
+    ] as const) {
+      persistOrchestrationStep(
+        {
+          step: 'exec',
+          role: 'subagent',
+          provider,
+          model,
+          text: `${agentId} terminé`,
+          execution: {
+            phase: 'scout',
+            agentId,
+            taskId: agentId,
+            groupId: 'scout-panel'
+          }
+        },
+        context,
+        join(root, 'prompts'),
+        traceStore
+      )
+    }
+
+    const events = traceStore.readConversation('conv-fanout')
+    expect(events).toHaveLength(2)
+    expect(events.map((event) => event.parentId)).toEqual([undefined, undefined])
+    expect(events.map((event) => `${event.actor.id}:${event.provider?.id}:${event.provider?.model}`)).toEqual([
+      'scout-a:codex:gpt-5.6-codex',
+      'scout-b:claude:claude-opus-4-8'
     ])
   })
   it('F6 — persiste la décomposition du system (systemBlocks) dans le record', () => {
@@ -138,6 +191,34 @@ describe('observabilite orchestration', () => {
       'gate'
     ])
     expect(events.at(-1)?.parentId).toBe(events.at(-2)?.id)
+  })
+  it('identifie une agrégation locale sans lui inventer de provider ni de modèle', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-orchestration-local-quorum-'))
+    const trace = new TraceStore(join(root, 'trace'))
+    persistOrchestrationStep(
+      {
+        step: 'judge',
+        role: 'orchestrator',
+        text: 'VALIDE',
+        execution: {
+          phase: 'judge',
+          agentId: 'judge:quorum',
+          taskId: 'judge:quorum',
+          groupId: 'judge:quorum',
+          dependencyIds: ['judge:a', 'judge:b']
+        }
+      },
+      { conversationId: 'conv-quorum', turnId: 'turn-1', iteration: 0 },
+      join(root, 'prompts'),
+      trace
+    )
+
+    const event = trace.readConversation('conv-quorum')[0]
+    expect(event).toMatchObject({
+      type: 'verdict',
+      actor: { id: 'judge:quorum', kind: 'system', label: 'orchestrator' }
+    })
+    expect(event.provider).toBeUndefined()
   })
   it('persiste une tentative provider echouee', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-orchestration-failed-'))

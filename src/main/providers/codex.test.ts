@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { CodexAdapter, codexExecSpec, codexApiEffort } from './codex'
+import { CodexAdapter, codexExecSpec, codexApiEffort, structuredEvidenceFields } from './codex'
 import { startDeviceLogin, pollForToken, refreshTokens, CODEX_CLIENT_ID } from './codex-auth'
 import type { Message } from './types'
 
@@ -302,5 +302,21 @@ describe('CodexAdapter — exécution agentique locale', () => {
     expect(() =>
       codexExecSpec('C:\\repo', 'gpt-5.6-sol', 'workspace-write', 'low', 'C:\\Missing', () => false)
     ).toThrow(/Codex CLI introuvable/)
+  })
+})
+
+describe('CodexAdapter — attribution des fichiers', () => {
+  it('normalise les chemins absolus du worktree avant attribution', () => {
+    expect(
+      structuredEvidenceFields(
+        {
+          type: 'file_change',
+          changes: {
+            'C:\\repo\\.claude\\worktrees\\run-1\\src\\feature.ts': { type: 'update' }
+          }
+        },
+        'C:\\repo\\.claude\\worktrees\\run-1'
+      ).paths
+    ).toEqual(['src/feature.ts'])
   })
 })

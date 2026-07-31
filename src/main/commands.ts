@@ -1,6 +1,10 @@
 import { applyEdit, decideEdit, editDiff } from './edit-file-command'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { brainCorpusForWorkspace, scopeBrainBlock } from './brain-corpus-scope'
+import {
+  brainCorpusForWorkspace,
+  brainSourcePathAllowed,
+  scopeBrainBlock
+} from './brain-corpus-scope'
 import { buildBrainOutcome, decideBrainQuery, type BrainQueryOutcome } from './brain-query-command'
 import { retrieveBrainContext } from './brain-retrieval'
 import { spawn } from 'node:child_process'
@@ -16,6 +20,16 @@ import {
 } from './runs/conv-runs'
 import { appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace } from './activity/brain-trace-spool'
+import {
+  appendConversationFileTrace,
+  appendExecutionEvidenceFileTrace,
+  normalizeWorkspaceTracePath,
+  workspaceTracePathKey
+} from './activity/conversation-file-trace-spool'
+import {
+  captureWorkspaceMutationSnapshot,
+  captureWorkspacePathGenerationMarker
+} from './providers/workspace-mutation-evidence'
 import { appendConvActivity } from './activity/conv-activity'
 import {
   buildAutowinKaizenTask,
@@ -396,6 +410,8 @@ export class AppCommandBus {
     string,
     Promise<{ path: string; reused: boolean } | undefined>
   >()
+  /** Sérialise écriture → snapshot → journal : aucune autre conversation ne peut s'intercaler. */
+  private editFileTail: Promise<void> = Promise.resolve()
 
   /** Abort l'orchestration (sous-agent/juge) en cours pour une conversation. */
   abortOrchestration(convId: string): boolean {
@@ -587,7 +603,8 @@ export class AppCommandBus {
     args: Record<string, unknown> = {},
     conversationId?: string,
     authorityMode: ConversationAuthorityMode = 'ask',
-    bindingOverride?: RoleBinding
+    bindingOverride?: RoleBinding,
+    turnId?: string
   ): Promise<CommandResult> {
     try {
       const specification = this.catalog().find((command) => command.name === name)
@@ -603,11 +620,11 @@ export class AppCommandBus {
       }
       if (decision === 'confirm') {
         const pending = this.deferSensitiveAction(name, args, () =>
-          this.run(name, args, conversationId, bindingOverride)
+          this.run(name, args, conversationId, bindingOverride, turnId)
         )
         return { ok: true, data: pending }
       }
-      const data = await this.run(name, args, conversationId, bindingOverride)
+      const data = await this.run(name, args, conversationId, bindingOverride, turnId)
       this.trace?.(name, redactedArgs(name, args), true)
       return { ok: true, data }
     } catch (e) {
@@ -620,7 +637,8 @@ export class AppCommandBus {
     name: string,
     a: Record<string, unknown>,
     conversationId?: string,
-    bindingOverride?: RoleBinding
+    bindingOverride?: RoleBinding,
+    turnId?: string
   ): Promise<unknown> {
     const s = (k: string): string => String(a[k] ?? '')
     switch (name) {
@@ -741,7 +759,7 @@ export class AppCommandBus {
           throw error
         }
         const runPath = run?.path
-        const orchestrationTurnId = randomUUID()
+        const orchestrationTurnId = turnId ?? randomUUID()
         const steps: OrchestrationStep[] = []
         // Sous-agent STOPPABLE : un AbortController par conversation, coupé par abortOrchestration.
         const abortController = new AbortController()
@@ -781,6 +799,11 @@ export class AppCommandBus {
                 conversationId: convId,
                 turnId: orchestrationTurnId,
                 iteration: step.step === 'exec' ? 0 : 1
+              })
+              appendExecutionEvidenceFileTrace(step.evidence, {
+                conversationId: convId,
+                turnId: orchestrationTurnId,
+                workspaceRoot: this.os.executionWorkspace
               })
               // A3 — peuplement LIVE du RUN.md : à chaque phase exec terminée, on réécrit le
               // livrable dans le RUN.md que Workflows affiche (au lieu d'un template vide 7 min).
@@ -840,18 +863,16 @@ export class AppCommandBus {
             // `conversationId` MANQUAIT aussi : sans lui, l'acquis persiste sans conversation et une
             // reprise ne peut plus etre rattachee a son fil.
             convId,
-            bindingOverride
+            bindingOverride,
+            (brain) =>
+              appendBrainTrace({
+                ...brain,
+                conversationId: convId,
+                turnId: orchestrationTurnId,
+                kind: 'automatic'
+              }),
+            orchestrationTurnId
           )
-          if (r.brainNavigation || (r.brainInjectedChars ?? 0) > 0) {
-            appendBrainTrace({
-              timestamp: r.brainRetrievedAt ?? new Date().toISOString(),
-              conversationId: convId,
-              turnId: orchestrationTurnId,
-              query: r.brainQuery ?? '',
-              injectedChars: r.brainInjectedChars ?? 0,
-              navigation: r.brainNavigation
-            })
-          }
           if (runPath) {
             saveConvRunTrace(runPath, steps)
             populateConvRunSections(runPath, r.phaseOutputs) // J2 — RUN.md peuplé du vrai livrable
@@ -946,7 +967,7 @@ export class AppCommandBus {
       case 'verify':
         return await this.runVerify()
       case 'brain_query':
-        return await this.runBrainQuery(a.question)
+        return await this.runBrainQuery(a.question, conversationId, turnId)
       case 'graphify':
         return await this.graphify({
           workspaceRoot: this.os.executionWorkspace,
@@ -985,8 +1006,13 @@ export class AppCommandBus {
         }
         return outcome
       }
-      case 'edit_file':
-        return this.runEditFile({ path: a.path, oldText: a.oldText, newText: a.newText })
+      case 'edit_file': {
+        return await this.runTracedEditFile(
+          { path: a.path, oldText: a.oldText, newText: a.newText },
+          conversationId,
+          turnId
+        )
+      }
       default:
         throw new Error(`commande inconnue: ${name}`)
     }
@@ -1045,17 +1071,100 @@ export class AppCommandBus {
     }
   }
 
-  private async runBrainQuery(question: unknown): Promise<BrainQueryOutcome & { allowed: boolean; reason?: string }> {
+  private async runTracedEditFile(
+    input: { path: unknown; oldText: unknown; newText: unknown },
+    conversationId?: string,
+    turnId?: string
+  ): Promise<{ allowed: boolean; reason?: string; path?: string; diff?: string }> {
+    const previous = this.editFileTail
+    let release!: () => void
+    const current = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    this.editFileTail = previous.then(() => current)
+    await previous
+    try {
+      const before = await captureWorkspaceMutationSnapshot(this.os.executionWorkspace)
+      const outcome = this.runEditFile(input)
+      const path =
+        outcome.allowed && outcome.path
+          ? normalizeWorkspaceTracePath(outcome.path, this.os.executionWorkspace)
+          : null
+      if (conversationId && path) {
+        const after = await captureWorkspaceMutationSnapshot(this.os.executionWorkspace)
+        const key = workspaceTracePathKey(path)
+        const fingerprint = [...after].find(
+          ([candidate]) => workspaceTracePathKey(candidate) === key
+        )?.[1]
+        const baseFingerprint = [...before].find(
+          ([candidate]) => workspaceTracePathKey(candidate) === key
+        )?.[1]
+        const baseGenerationMarker = [...before.generationMarkers].find(
+          ([candidate]) => workspaceTracePathKey(candidate) === key
+        )?.[1]
+        const generationMarker = await captureWorkspacePathGenerationMarker(
+          this.os.executionWorkspace,
+          path
+        )
+        appendConversationFileTrace({
+          timestamp: new Date().toISOString(),
+          conversationId,
+          ...(turnId ? { turnId } : {}),
+          workspaceRoot: this.os.executionWorkspace,
+          source: 'edit_file',
+          paths: [path],
+          ...(fingerprint ? { pathFingerprints: { [path]: fingerprint } } : {}),
+          pathBaseFingerprints: { [path]: baseFingerprint ?? null },
+          pathGenerationMarkers: { [path]: generationMarker },
+          pathBaseGenerationMarkers: { [path]: baseGenerationMarker ?? null }
+        })
+      }
+      return outcome
+    } finally {
+      release()
+    }
+  }
+
+  private async runBrainQuery(
+    question: unknown,
+    conversationId?: string,
+    turnId?: string
+  ): Promise<BrainQueryOutcome & { allowed: boolean; reason?: string }> {
     const decision = decideBrainQuery(question)
     if (!decision.allowed) {
       return { allowed: false, reason: decision.reason, found: false, query: '', knowledge: '' }
     }
-    const { context } = await retrieveBrainContext(decision.query)
+    const brain = await retrieveBrainContext(decision.query)
+    const { context, navigation } = brain
     // MEME PORTEE que la voie poussee : `brain_query` passe par un autre module
     // (`brain-retrieval`), donc sans ce filtre la portee par workspace serait MORTE sur le chemin a la
     // demande — exactement le defaut qu'on corrige (un module atteignable mais jamais applique).
-    const scoped = scopeBrainBlock(context, brainCorpusForWorkspace(this.os.executionWorkspace))
-    return { allowed: true, ...buildBrainOutcome(decision.query, scoped.block) }
+    const corpus = brainCorpusForWorkspace(this.os.executionWorkspace)
+    const scoped = scopeBrainBlock(context, corpus)
+    const outcome = buildBrainOutcome(decision.query, scoped.block)
+    const scopedNavigation = navigation
+      ? {
+          ...navigation,
+          candidates: navigation.candidates.map((candidate) => ({
+            ...candidate,
+            retained: candidate.retained && brainSourcePathAllowed(candidate.path, corpus)
+          }))
+        }
+      : undefined
+    if (conversationId) {
+      appendBrainTrace({
+        timestamp: new Date().toISOString(),
+        conversationId,
+        ...(turnId ? { turnId } : {}),
+        kind: 'query',
+        query: decision.query,
+        found: outcome.found,
+        status: context ? 'found' : brain.status,
+        injectedChars: outcome.knowledge.length,
+        navigation: scopedNavigation
+      })
+    }
+    return { allowed: true, ...outcome }
   }
 
   private async runVerify(): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {

@@ -91,6 +91,7 @@ describe('App inspect-turn navigation', () => {
       'Agent Studio',
       'Knowledge',
       'Observatory',
+      'Task Manager',
       'Worktrees',
       'Tickets',
       'Settings'
@@ -102,6 +103,7 @@ describe('App inspect-turn navigation', () => {
       'agent-studio',
       'knowledge',
       'observatory',
+      'task-manager',
       'worktree',
       'tickets',
       'settings'

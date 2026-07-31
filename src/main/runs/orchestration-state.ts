@@ -36,6 +36,8 @@ export interface OrchestrationRunState {
   runId: string
   task: string
   conversationId?: string
+  /** Tour Chat d'origine ; absent seulement sur les états historiques. */
+  turnId?: string
   /** Binding figé du run; absent sur les états historiques. */
   bindingOverride?: RoleBinding
   /** Livrables des phases DÉJÀ terminées, dans l'ordre — rejoués tels quels à la reprise. */

@@ -144,7 +144,9 @@ describe('câblage — la commande du chat reprend et rattache la conversation',
   const source = readFileSync(join(__dirname, '..', 'commands.ts'), 'utf8')
 
   it('elle cherche un acquis pour CETTE tâche et CETTE conversation', () => {
-    expect(source).toContain('resumableOrchestrationForTask?.(task, convId)')
+    expect(source).toMatch(
+      /resumableOrchestrationForTask\?\.\(\s*task,\s*convId,\s*Date\.now\(\),\s*bindingOverride\s*\)/
+    )
   })
 
   it('elle passe l’acquis À runTask (sinon la recherche ne sert à rien)', () => {

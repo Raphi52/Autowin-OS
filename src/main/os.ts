@@ -32,6 +32,7 @@ import { ConversationStore } from './store/conversations'
 import { TrustLedger } from './trust/ledger'
 import {
   Orchestrator,
+  type BrainRetrievalEvent,
   type OrchestrationResult,
   type OrchestrationStep,
   type OrchestrationPhase
@@ -177,11 +178,12 @@ export class AutowinOS {
       classifyPhases: regimePhases,
       // SURVIE NIVEAU 3 : après CHAQUE phase, on persiste l'acquis du run ; à la clôture on l'efface.
       // Un kill du process main laisse donc un état reprenable → `resumableOrchestration()`.
-      onPhaseCompleted: ({ runId, task, conversationId, bindingOverride, phaseOutputs }) =>
+      onPhaseCompleted: ({ runId, task, conversationId, turnId, bindingOverride, phaseOutputs }) =>
         saveOrchestrationState(this.orchestrationStateRoot, {
           runId,
           task,
           ...(conversationId ? { conversationId } : {}),
+          ...(turnId ? { turnId } : {}),
           ...(bindingOverride ? { bindingOverride } : {}),
           phaseOutputs,
           startedAt: this.orchestrationStartedAt.get(runId) ?? Date.now(),
@@ -339,9 +341,25 @@ export class AutowinOS {
     /** Conversation d'origine : persistée avec l'acquis pour qu'une reprise s'affiche au bon endroit. */
     conversationId?: string,
     /** Modèle figé pour ce run uniquement, sans mutation de la topologie globale. */
-    bindingOverride?: RoleBinding
+    bindingOverride?: RoleBinding,
+    /** Trace immédiate de la récupération Brain, y compris si le run échoue ensuite. */
+    onBrainRetrieved?: (event: BrainRetrievalEvent) => void,
+    turnId?: string
   ): Promise<OrchestrationResult> {
     await this.taskReadiness
+    if (!onBrainRetrieved && !turnId) {
+      return this.orchestrator.run(
+        task,
+        onStep,
+        onPhase,
+        onDelta,
+        signal,
+        collectedContext,
+        resumeOutputs,
+        conversationId,
+        bindingOverride
+      )
+    }
     return this.orchestrator.run(
       task,
       onStep,
@@ -351,7 +369,9 @@ export class AutowinOS {
       collectedContext,
       resumeOutputs,
       conversationId,
-      bindingOverride
+      bindingOverride,
+      onBrainRetrieved,
+      turnId
     )
   }
 

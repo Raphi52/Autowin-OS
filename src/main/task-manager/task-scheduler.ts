@@ -42,6 +42,8 @@ const systemClock: SchedulerClock = {
   clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>)
 }
 
+export const WINDOWS_RELAY_GRACE_MS = 5 * 60_000
+
 export class TaskScheduler {
   private timer: unknown
   private running = false
@@ -121,6 +123,17 @@ export class TaskScheduler {
       task.nextRunAt !== parsed.scheduledFor ||
       parsed.scheduledFor > this.clock.now()
     ) {
+      return false
+    }
+    if (this.clock.now() - parsed.scheduledFor > WINDOWS_RELAY_GRACE_MS) {
+      this.store.markMissed(
+        task.id,
+        occurrenceId,
+        parsed.scheduledFor,
+        'Le relais Windows a démarré trop tard ; le prompt n’a pas été rattrapé.'
+      )
+      this.advanceTask(task, parsed.scheduledFor)
+      if (this.running) await this.plan()
       return false
     }
     const claim = this.store.claim(task.id, occurrenceId, parsed.scheduledFor)

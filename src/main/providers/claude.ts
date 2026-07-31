@@ -17,6 +17,11 @@ import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 import { findNpmGlobalFile } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { executionEvidencePath } from './execution-evidence-path'
+import {
+  appendWorkspaceMutationEvidence,
+  captureWorkspaceMutationSnapshot
+} from './workspace-mutation-evidence'
 import type {
   Attachment,
   ExecutionEvidence,
@@ -38,6 +43,10 @@ export function claudeToolEvidenceKind(name: string, command: string): Execution
     /\b(vitest|jest|pytest|cargo\s+test|dotnet\s+test|go\s+test|tsc|eslint|npm(?:\.cmd)?\s+(?:test|run\s+(?:test|typecheck|build|lint))|pnpm\s+(?:test|run)|node\s+-e)\b/i
   if (/^Bash$/i.test(name)) return verify.test(command) ? 'verification' : 'inspection'
   return 'inspection'
+}
+
+export function claudeEvidencePath(filePath: string, cwd: string): string {
+  return executionEvidencePath(filePath, cwd)
 }
 
 /**
@@ -250,6 +259,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const systemInjected = typeof system === 'string' && system.length > 0
 
     const execution = opts.execution
+    const mutationBefore =
+      execution?.causallyIsolated && execution.sandbox !== 'read-only'
+        ? await captureWorkspaceMutationSnapshot(execution.cwd)
+        : undefined
     // Autowin = SOURCE UNIQUE : on lance le CLI « nu ». `--setting-sources ""` → aucun CLAUDE.md
     // utilisateur/projet, ni skills, ni hooks CC, ni MCP hérités → zéro doublon avec les consignes
     // qu'Autowin injecte (--system-prompt). L'enforcement vit alors dans le HookBus interne d'Autowin.
@@ -504,7 +517,14 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             ok: part.is_error !== true,
             summary: `${call.name} ${call.command}`.trim(),
             // Champs STRUCTURÉS (parité avec Codex) : chemin pour une édition, commande + stdout sinon.
-            ...(isFile ? { path: call.filePath } : call.command ? { command: call.command } : {}),
+            ...(isFile
+              ? {
+                  path: call.filePath,
+                  paths: [claudeEvidencePath(call.filePath, execution?.cwd ?? process.cwd())]
+                }
+              : call.command
+                ? { command: call.command }
+                : {}),
             ...(output ? { stdout: output } : {})
           })
         }
@@ -624,6 +644,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     }
 
     if (errored) throw errored
+    if (mutationBefore && execution) {
+      await appendWorkspaceMutationEvidence(mutationBefore, execution.cwd, executionEvidence)
+    }
     return {
       text,
       provider: this.id,

@@ -13,7 +13,10 @@ $sourceRoots = @(
 )
 $files = foreach ($candidate in $sourceRoots) {
   if (Test-Path -LiteralPath $candidate -PathType Container) {
-    Get-ChildItem -LiteralPath $candidate -Recurse -File
+    Get-ChildItem -LiteralPath $candidate -Recurse -File | Where-Object {
+      $_.Name -notmatch '\.(test|spec)\.[^.]+$' -and
+      $_.FullName -notmatch '[\\/]__tests__[\\/]'
+    }
   } elseif (Test-Path -LiteralPath $candidate -PathType Leaf) {
     Get-Item -LiteralPath $candidate
   }

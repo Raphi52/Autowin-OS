@@ -7,6 +7,11 @@ import type {
   StreamChunk,
   ExecutionEvidence
 } from './types'
+import { executionEvidencePath } from './execution-evidence-path'
+import {
+  appendWorkspaceMutationEvidence,
+  captureWorkspaceMutationSnapshot
+} from './workspace-mutation-evidence'
 import { loadTokens, refreshTokens, saveTokens, type FetchLike, type Tokens } from './codex-auth'
 import { joinThinking } from './thinking'
 import {
@@ -44,12 +49,13 @@ export interface CodexExecItem {
  * diff pour un file_change, stdout/exit pour une commande). Bornés pour ne pas gonfler le payload.
  * Pur → testable isolément.
  */
-export function structuredEvidenceFields(item: CodexExecItem): {
+export function structuredEvidenceFields(item: CodexExecItem, executionCwd?: string): {
   command?: string
   exitCode?: number
   stdout?: string
   diff?: string
   path?: string
+  paths?: string[]
 } {
   if (item.type === 'command_execution') {
     return {
@@ -59,15 +65,19 @@ export function structuredEvidenceFields(item: CodexExecItem): {
     }
   }
   if (item.type === 'file_change') {
+    const paths =
+      item.changes && typeof item.changes === 'object'
+        ? Object.keys(item.changes as Record<string, unknown>).map((path) =>
+            executionEvidencePath(path, executionCwd)
+          )
+        : []
     return {
       diff: (typeof item.changes === 'string'
         ? item.changes
         : JSON.stringify(item.changes ?? {}, null, 2)
       ).slice(0, 20_000),
-      path:
-        item.changes && typeof item.changes === 'object'
-          ? Object.keys(item.changes as Record<string, unknown>).join(', ')
-          : undefined
+      path: paths.join(', ') || undefined,
+      paths: paths.length ? paths : undefined
     }
   }
   return {}
@@ -135,6 +145,10 @@ async function runCodexExec(
   const execution = opts.execution
   if (!execution) throw new Error('Contrat d’exécution Codex absent')
   const spec = codexExecSpec(execution.cwd, model, execution.sandbox, opts.reasoningEffort)
+  const mutationBefore =
+    execution.causallyIsolated && execution.sandbox !== 'read-only'
+      ? await captureWorkspaceMutationSnapshot(spec.cwd)
+      : undefined
   const prompt = [
     opts.system,
     ...messages.filter((message) => message.role !== 'system').map((m) => m.content)
@@ -246,7 +260,7 @@ async function runCodexExec(
                   ? `${item.command ?? ''}\nexit=${item.exit_code ?? 'unknown'}\n${item.aggregated_output ?? ''}`
                   : JSON.stringify(item.changes ?? item)
               // Champs STRUCTURÉS (diff + stdout/exit) en plus du `summary` conservé (rétrocompat).
-              const structured = structuredEvidenceFields(item)
+              const structured = structuredEvidenceFields(item, spec.cwd)
               executionEvidence.push({
                 type: item.type,
                 kind,
@@ -301,7 +315,7 @@ async function runCodexExec(
       if (!childPid) execution.onSpawnIntent?.(spawnToken, false)
       reject(error)
     })
-    child.on('close', (code) => {
+    child.on('close', async (code) => {
       closed = true // le tail draine ce qui reste puis s'arrête
       run.release()
       watchdog.dispose()
@@ -313,6 +327,9 @@ async function runCodexExec(
       if (!finalText.trim()) {
         reject(new Error('codex exec terminé sans message final'))
         return
+      }
+      if (mutationBefore) {
+        await appendWorkspaceMutationEvidence(mutationBefore, spec.cwd, executionEvidence)
       }
       resolvePromise({
         text: finalText,

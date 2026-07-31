@@ -1,6 +1,6 @@
 import type { ProviderRegistry } from './providers/registry'
 import type { RoleBinding, RoleModelConfig } from './roles'
-import type { AppCommandBus } from './commands'
+import type { AppCommandBus, CommandResult } from './commands'
 import type { Message, PromptEnvelope, SendOptions, Usage } from './providers/types'
 import { parseModelQuestion, type ModelQuestion } from './model-questions'
 import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
@@ -177,16 +177,27 @@ export class AgentPilot {
     /** Directives injectées par l'utilisateur PENDANT le tour — drainées à chaque itération. */
     drainDirectives?: () => string[],
     /** Binding figé pour ce tour uniquement (ex. tâche planifiée), sans mutation du rôle global. */
-    bindingOverride?: RoleBinding
+    bindingOverride?: RoleBinding,
+    /** Identité causale du tour créée par le contrôleur de chat. */
+    turnId?: string
   ): Promise<void> {
     // Chronométrage des jalons jusqu'au PREMIER token : c'est la latence réellement perçue au clic.
     const timer = startTurnTimer('chat')
     let timingWritten = false
     const binding = bindingOverride ?? this.roles.getBinding('orchestrator')
-    const execCommand = (name: string, args: Record<string, unknown>) =>
-      bindingOverride
-        ? this.bus.exec(name, args, conversationId, authorityMode, bindingOverride)
+    const execCommand = (
+      name: string,
+      args: Record<string, unknown>
+    ): Promise<CommandResult> => {
+      if (bindingOverride) {
+        return turnId
+          ? this.bus.exec(name, args, conversationId, authorityMode, bindingOverride, turnId)
+          : this.bus.exec(name, args, conversationId, authorityMode, bindingOverride)
+      }
+      return turnId
+        ? this.bus.exec(name, args, conversationId, authorityMode, undefined, turnId)
         : this.bus.exec(name, args, conversationId, authorityMode)
+    }
     const provider = binding.provider
     const catalog = this.bus.catalog()
     const snapshot = await this.bus.snapshotForPrompt()

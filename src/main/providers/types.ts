@@ -53,6 +53,8 @@ export interface SendOptions {
   execution?: {
     cwd: string
     sandbox: 'read-only' | 'workspace-write' | 'danger-full-access'
+    /** Vrai uniquement quand ce cwd appartient exclusivement à ce run/conversation. */
+    causallyIsolated?: boolean
     /** Lease interne du processus CLI ; jamais transmis au fournisseur. */
     onProcess?: (pid: number, active: boolean) => void
     /** Barrière durable posée avant spawn, levée seulement après enregistrement du PID enfant. */
@@ -118,6 +120,18 @@ export interface ExecutionEvidence {
   diff?: string
   /** Chemin(s) du fichier touché (file_change). */
   path?: string
+  /** Chemins structurés exacts, utilisés pour l'attribution causale par conversation. */
+  paths?: string[]
+  /** Workspace où la mutation a réellement eu lieu (base ou worktree isolé). */
+  workspaceRoot?: string
+  /** Empreinte du diff Git juste après la mutation, indexée par chemin normalisé. */
+  pathFingerprints?: Record<string, string>
+  /** Empreinte avant mutation ; `null` signifie que le chemin était Git-clean. */
+  pathBaseFingerprints?: Record<string, string | null>
+  /** Génération filesystem après mutation, pour détecter une réécriture externe à l'identique. */
+  pathGenerationMarkers?: Record<string, string>
+  /** Génération filesystem avant mutation ; complète le hash de base pour chaîner causalement. */
+  pathBaseGenerationMarkers?: Record<string, string | null>
 }
 
 /** Résultat final d'un tour, après consommation du stream. */

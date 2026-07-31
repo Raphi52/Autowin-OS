@@ -212,6 +212,16 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
       'sous-tâche B',
       'sous-tâche C'
     ])
+    expect(execSteps.find((step) => step.detail === 'sous-tâche A')?.execution).toMatchObject({
+      phase: 'build',
+      taskId: 'A',
+      dependencyIds: []
+    })
+    expect(execSteps.find((step) => step.detail === 'sous-tâche C')?.execution).toMatchObject({
+      phase: 'build',
+      taskId: 'C',
+      dependencyIds: ['A']
+    })
     // Le prompt de C contient le livrable de A (contexte de dépendance porté).
     const cPrompt = provider.contents.find((c) => /\[sous-tâche C\]/.test(c))
     expect(cPrompt).toMatch(/dépendance A/)

@@ -97,4 +97,17 @@ describe('mise à jour disponible — un bouton, pas une bannière', () => {
     // L'information reste accessible, dans l'infobulle.
     expect(button.getAttribute('title')).toContain('5 commit(s)')
   })
+
+  it('rail replié : un échec reste perceptible et permet de réessayer', async () => {
+    api({ applyUpdate: vi.fn().mockResolvedValue({ ok: false, error: 'pull refusé' }) })
+    await render(true)
+    const button = container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!
+
+    await act(async () => button.click())
+
+    expect(button.disabled).toBe(false)
+    expect(button.classList.contains('is-error')).toBe(true)
+    expect(button.getAttribute('title')).toContain('pull refusé')
+    expect(button.getAttribute('aria-label')).toContain('pull refusé')
+  })
 })

@@ -119,10 +119,11 @@ describe('Task Manager — ordonnanceur durable', () => {
 
   it('marque au démarrage chaque échéance passée sans la rattraper', async () => {
     const firstDue = Date.parse('2026-08-03T07:30:00.000Z')
-    const h = harness(Date.parse('2026-08-05T08:00:00.000Z'))
+    const h = harness(Date.parse('2026-08-03T07:00:00.000Z'))
     const task = h.store.create(input('active-only'))
     const scheduler = new TaskScheduler(h.store, h.dispatch, h.relay, h.clock)
 
+    await h.advanceTo(Date.parse('2026-08-05T08:00:00.000Z'))
     await scheduler.start()
 
     expect(h.dispatched).toEqual([])
@@ -136,13 +137,59 @@ describe('Task Manager — ordonnanceur durable', () => {
     expect(h.store.getTask(task.id)?.nextRunAt).toBe(Date.parse('2026-08-06T07:30:00.000Z'))
   })
 
+  it("ne rattrape pas les échéances d'une tâche réactivée après plusieurs jours", async () => {
+    const now = Date.parse('2026-08-05T08:00:00.000Z')
+    const h = harness(now)
+    const task = h.store.create(input('active-only', { enabled: false }))
+    const scheduler = new TaskScheduler(h.store, h.dispatch, h.relay, h.clock)
+
+    await scheduler.start()
+    h.store.update(task.id, { enabled: true })
+    await scheduler.refresh()
+    await h.advanceTo(now)
+
+    expect(h.dispatched).toEqual([])
+    expect(h.store.listOccurrences(task.id)).toEqual([])
+    expect(h.store.getTask(task.id)?.nextRunAt).toBe(Date.parse('2026-08-06T07:30:00.000Z'))
+  })
+
+  it('programme une nouvelle tâche récurrente passée à sa première échéance future', () => {
+    const h = harness(Date.parse('2026-08-05T08:00:00.000Z'))
+    const task = h.store.create(input('active-only'))
+
+    expect(task.nextRunAt).toBe(Date.parse('2026-08-06T07:30:00.000Z'))
+  })
+
+  it("marque l'échéance Windows dépassée avant un passage en actif uniquement", async () => {
+    const due = Date.parse('2026-08-03T07:30:00.000Z')
+    const now = Date.parse('2026-08-03T08:00:00.000Z')
+    const h = harness(due - 60_000)
+    const task = h.store.create(input('windows'))
+    const scheduler = new TaskScheduler(h.store, h.dispatch, h.relay, h.clock)
+
+    await scheduler.start()
+    await h.advanceTo(now)
+    h.store.update(task.id, { mode: 'active-only' })
+    await scheduler.refresh()
+    await h.advanceTo(now)
+
+    expect(h.dispatched).toEqual([])
+    expect(h.store.getOccurrence(`${task.id}@${due}`)).toMatchObject({
+      mode: 'windows',
+      status: 'missed'
+    })
+    expect(h.store.listAlerts()).toHaveLength(1)
+    expect(h.store.getTask(task.id)?.nextRunAt).toBe(Date.parse('2026-08-04T07:30:00.000Z'))
+  })
+
   it('honore l’occurrence demandée par le relais Windows puis refuse son doublon', async () => {
     const due = Date.parse('2026-08-03T07:30:00.000Z')
-    const h = harness(due + 5_000)
+    const h = harness(due - 60_000)
     const task = h.store.create(input('windows'))
     const occurrenceId = `${task.id}@${due}`
     const scheduler = new TaskScheduler(h.store, h.dispatch, h.relay, h.clock)
 
+    await h.advanceTo(due + 5_000)
     await scheduler.start(occurrenceId)
     await scheduler.runOccurrence(occurrenceId)
 
@@ -152,6 +199,25 @@ describe('Task Manager — ordonnanceur durable', () => {
       scheduledFor: Date.parse('2026-08-04T07:30:00.000Z'),
       occurrenceId: `${task.id}@${Date.parse('2026-08-04T07:30:00.000Z')}`
     })
+  })
+
+  it('refuse un relais Windows reçu trop tard et alerte sans envoyer le prompt', async () => {
+    const due = Date.parse('2026-08-03T07:30:00.000Z')
+    const h = harness(due - 60_000)
+    const task = h.store.create(input('windows'))
+    const occurrenceId = `${task.id}@${due}`
+    const scheduler = new TaskScheduler(h.store, h.dispatch, h.relay, h.clock)
+
+    await h.advanceTo(due + 6 * 60_000)
+    await scheduler.start(occurrenceId)
+
+    expect(h.dispatched).toEqual([])
+    expect(h.store.getOccurrence(occurrenceId)).toMatchObject({
+      mode: 'windows',
+      status: 'missed'
+    })
+    expect(h.store.listAlerts()).toHaveLength(1)
+    expect(h.store.getTask(task.id)?.nextRunAt).toBe(Date.parse('2026-08-04T07:30:00.000Z'))
   })
 
   it('réserve les tâches Windows au relais et ne les exécute pas avec le timer interne', async () => {

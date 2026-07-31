@@ -1051,7 +1051,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     ).toBe(1)
   })
 
-  it('expose les TROIS sections de Workflows, et toujours pas d’onglet Activité', async () => {
+  it('expose les QUATRE sections de Workflows, dont le graphe, et toujours pas d’onglet Activité', async () => {
     const mockApi = api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) })
     await mount(mockApi)
     await click('.conv-pick')
@@ -1059,15 +1059,69 @@ describe('ChatView behavior under concurrent UI actions', () => {
 
     const pane = container!.querySelector('.runs-pane')
     expect(pane).toBeTruthy()
-    const tabs = [...pane!.querySelectorAll('.conv-head button')].map((b) => b.textContent?.trim())
+    const tablist = pane!.querySelector('.workflow-section-tabs[role="tablist"]')
+    const tabButtons = [...(tablist?.querySelectorAll('button[role="tab"]') ?? [])]
+    const tabs = tabButtons.map((button) => button.textContent?.trim())
     // L'onglet unique « Runs » melangeait le fil des sous-agents et la liste des RUN.md : il est
     // remplace par DEUX sections distinctes, a la demande explicite de l'utilisateur.
     expect(tabs).toContain('Sous-agents')
     expect(tabs).toContain('Run')
+    expect(tabs).toContain('Graphe')
     expect(tabs).toContain('Source control')
     expect(tabs).not.toContain('Runs')
     expect(tabs).not.toContain('Activité')
+    expect(tabButtons).toHaveLength(4)
+    expect(tabButtons.every((button) => button.querySelector('svg.workflow-section-icon'))).toBe(
+      true
+    )
+    expect(tabButtons.every((button) => button.querySelector('.workflow-section-separator'))).toBe(
+      true
+    )
+    expect(
+      tabButtons.filter((button) => button.getAttribute('aria-selected') === 'true')
+    ).toHaveLength(1)
     expect(pane!.className).not.toContain('wide')
+  })
+
+  it('charge le graphe causal uniquement à l’ouverture de sa section pour la conversation active', async () => {
+    const causalTrace = vi.fn().mockResolvedValue([
+      {
+        id: 'event-A',
+        conversationId: 'A',
+        turnId: 'turn-A',
+        timestamp: '2026-07-30T12:00:00.000Z',
+        sequence: 1,
+        type: 'tool-call',
+        status: 'completed',
+        channel: 'tool',
+        actor: { id: 'builder', kind: 'agent', label: 'Builder' },
+        payloads: [{ kind: 'tool-call', content: 'secret' }],
+        observation: { boundary: 'orchestrator', fidelity: 'exact' }
+      }
+    ])
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      causalTrace
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await click('button[title="Workflows (RUN.md)"]')
+
+    expect(causalTrace).not.toHaveBeenCalled()
+    const graphTab = [...container!.querySelectorAll('.workflow-section-tabs button')].find(
+      (button) => button.textContent?.trim() === 'Graphe'
+    ) as HTMLButtonElement
+    await act(async () => {
+      graphTab.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(causalTrace).toHaveBeenCalledWith('A')
+    expect(container!.querySelector('.workflow-execution-graph')?.getAttribute('data-conversation-id')).toBe(
+      'A'
+    )
+    expect(container!.querySelector('[data-execution-node="event-A"]')).not.toBeNull()
   })
 
   it('ouvre Workflows sur l’action en cours au clic sur l’indicateur du message', async () => {
@@ -1102,7 +1156,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
       })
     })
     // On repart panneau FERMÉ : seul le clic sur l'indicateur doit le rouvrir.
-    await click('.runs-pane .conv-head button.btn-ghost')
+    await click('.runs-pane .workflow-panel-close')
     expect(container!.querySelector('.live-run')).toBeNull()
 
     // Le bloc d'activité EST le bouton (plus de bloc dépliable dans le fil) : cliquer dessus

@@ -646,8 +646,11 @@
 }
 
 .cosmic-outline .runs-pane {
+  --runs-pane-pad-top: 18px;
+  --runs-pane-pad-x: 15px;
+
   gap: 14px;
-  padding: 18px 15px;
+  padding: var(--runs-pane-pad-top) var(--runs-pane-pad-x);
 }
 
 @media (max-width: 1120px) {

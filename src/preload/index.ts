@@ -4,6 +4,11 @@ import { electronAPI } from '@electron-toolkit/preload'
 /** API exposée au renderer — chaque méthode a un handler main réel. */
 const api = {
   captureTestPage: (): Promise<string> => ipcRenderer.invoke('app:test:capture-page'),
+  seedConversationScopeTest: (
+    conversationId: string,
+    variant: 'a' | 'b'
+  ): Promise<unknown> =>
+    ipcRenderer.invoke('app:test:seed-conversation-scope', conversationId, variant),
   storageMigration: (): Promise<Record<string, string>> =>
     ipcRenderer.invoke('app:storage-migration'),
   completeStorageMigration: (): Promise<boolean> =>
@@ -28,6 +33,14 @@ const api = {
   getPreflight: (): Promise<unknown> => ipcRenderer.invoke('preflight:current'),
   // Source control — lecture git READ-ONLY (statut, branche, changements, historique). Aucune action git.
   getGitState: (repoPath?: string): Promise<unknown> => ipcRenderer.invoke('git:read', repoPath),
+  conversationGitState: (conversationId: string): Promise<unknown> =>
+    ipcRenderer.invoke('git:conversationRead', conversationId),
+  conversationGitDiff: (
+    conversationId: string,
+    path: string,
+    workspaceRoot: string
+  ): Promise<unknown> =>
+    ipcRenderer.invoke('git:conversationDiff', conversationId, path, workspaceRoot),
   getGitGraph: (repoPath?: string): Promise<unknown> => ipcRenderer.invoke('git:graph', repoPath),
   getGitDiff: (path: string, repoPath?: string): Promise<unknown> =>
     ipcRenderer.invoke('git:diff', path, repoPath),

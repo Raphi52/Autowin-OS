@@ -1,4 +1,12 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync
+} from 'node:fs'
 import { join } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
 import { redactTrace } from './trace-redact'
@@ -17,7 +25,11 @@ export interface BrainTrace {
   conversationId: string
   /** Absent uniquement sur les traces historiques antérieures à la corrélation par tour. */
   turnId?: string
+  /** `automatic` = contexte préchargé par un run ; `query` = commande explicite du modèle. */
+  kind?: 'automatic' | 'query'
   query: string
+  found?: boolean
+  status?: 'found' | 'empty' | 'unavailable'
   injectedChars: number
   navigation?: BrainNavigation
 }
@@ -35,7 +47,12 @@ export function appendBrainTrace(trace: BrainTrace, base = ensureAutowinAppData(
     const root = brainSpoolRoot(base)
     const path = join(root, 'events.jsonl')
     if (existsSync(path) && statSync(path).size > SPOOL_MAX_BYTES) {
-      renameSync(path, join(root, 'events.previous.jsonl'))
+      const previous = join(root, 'events.previous.jsonl')
+      if (existsSync(previous)) {
+        appendFileSync(join(root, 'events.archive.jsonl'), readFileSync(previous))
+        rmSync(previous, { force: true })
+      }
+      renameSync(path, previous)
     }
     appendFileSync(path, `${JSON.stringify(redacted)}\n`, 'utf8')
   } catch {
@@ -64,6 +81,7 @@ export function readBrainTraces(
 ): BrainTrace[] {
   const root = brainSpoolRoot(base)
   const all = [
+    ...readFileTraces(join(root, 'events.archive.jsonl')),
     ...readFileTraces(join(root, 'events.previous.jsonl')),
     ...readFileTraces(join(root, 'events.jsonl'))
   ]

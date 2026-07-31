@@ -47,6 +47,7 @@ import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
 import { StepThread, AssistantActivityGroup } from './ChatView.parts'
 import { RunInspector } from './RunInspector'
+import { WorkflowExecutionGraph } from './WorkflowExecutionGraph'
 import './ChatView.css'
 import './SlashPalette.css'
 import type { InspectTurnTarget } from '../observatory-focus'
@@ -283,6 +284,97 @@ function InspectIcon(): React.JSX.Element {
     <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
       <circle cx="7" cy="7" r="4.2" stroke="currentColor" strokeWidth="1.3" />
       <path d="M10.2 10.2 14 14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function WorkflowSectionIcon({ section }: { section: WorkflowPanelSection }): React.JSX.Element {
+  const common = {
+    className: 'workflow-section-icon',
+    viewBox: '0 0 16 16',
+    fill: 'none',
+    'aria-hidden': true,
+    focusable: false
+  } as const
+
+  if (section === 'subagents') {
+    return (
+      <svg {...common}>
+        <circle cx="8" cy="3" r="1.75" stroke="currentColor" strokeWidth="1.25" />
+        <circle cx="3.5" cy="12.5" r="1.75" stroke="currentColor" strokeWidth="1.25" />
+        <circle cx="12.5" cy="12.5" r="1.75" stroke="currentColor" strokeWidth="1.25" />
+        <path
+          d="M8 4.8v2.1M3.5 10.7V9.5A2.5 2.5 0 0 1 6 7h4a2.5 2.5 0 0 1 2.5 2.5v1.2"
+          stroke="currentColor"
+          strokeWidth="1.25"
+          strokeLinecap="round"
+        />
+      </svg>
+    )
+  }
+
+  if (section === 'run') {
+    return (
+      <svg {...common}>
+        <circle cx="8" cy="8" r="5.6" stroke="currentColor" strokeWidth="1.2" />
+        <path d="m6.7 5.5 4 2.5-4 2.5z" fill="currentColor" />
+      </svg>
+    )
+  }
+
+  if (section === 'graph') {
+    return (
+      <svg {...common}>
+        <path
+          d="m5 5 5.7 1.3M5.2 6.1l2 5M10.5 7.5 8.7 11"
+          stroke="currentColor"
+          strokeWidth="1.2"
+        />
+        <circle cx="3.7" cy="4.7" r="1.8" stroke="currentColor" strokeWidth="1.2" />
+        <circle cx="12.2" cy="6.6" r="1.8" stroke="currentColor" strokeWidth="1.2" />
+        <circle cx="8" cy="12.2" r="1.8" stroke="currentColor" strokeWidth="1.2" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg {...common}>
+      <circle cx="4" cy="3" r="1.7" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="4" cy="13" r="1.7" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="12" cy="6" r="1.7" stroke="currentColor" strokeWidth="1.2" />
+      <path
+        d="M4 4.7v6.6M4 8h4.3A2.2 2.2 0 0 0 10.5 5.8"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function WorkflowRefreshIcon(): React.JSX.Element {
+  return (
+    <svg className="workflow-action-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M13.2 5.2A5.6 5.6 0 1 0 13 11M13.2 2.5v2.8h-2.8"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function WorkflowCloseIcon(): React.JSX.Element {
+  return (
+    <svg className="workflow-action-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="m4.2 4.2 7.6 7.6m0-7.6-7.6 7.6"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
     </svg>
   )
 }
@@ -540,7 +632,7 @@ export function ChatView({
     const value = Number.isFinite(saved) && saved > 0 ? saved : 340
     return Math.min(CHAT_PANE_LIMITS.workflows.max, Math.max(CHAT_PANE_LIMITS.workflows.min, value))
   })
-  // Trois sections : Sous-agents · Run · Source control. Défaut = Sous-agents, la section qu'on regarde
+  // Quatre sections : Sous-agents · Run · Graphe · Source control. Défaut = Sous-agents, la section qu'on regarde
   // pendant une orchestration — garder « Run » par défaut aurait retiré les sous-agents de la vue.
   const [paneTab, setPaneTab] = useState<WorkflowPanelSection>('subagents')
   const [runScope, setRunScope] = useState<'conv' | 'tous'>('conv')
@@ -2385,30 +2477,58 @@ export function ChatView({
             className="runs-pane fade-in"
             style={{ width: `${runsPaneWidth}px` }}
           >
-            <div className="conv-head">
-              <div className="row gap2">
+            <div className="workflow-panel-head">
+              <div className="workflow-section-tabs" role="tablist" aria-label="Vues Workflows">
                 {WORKFLOW_PANEL_SECTIONS.map((section) => (
                   <button
                     key={section.id}
-                    className={`btn btn-sm${paneTab === section.id ? ' btn-accent' : ''}`}
+                    className={`workflow-section-tab${paneTab === section.id ? ' active' : ''}`}
+                    role="tab"
+                    aria-selected={paneTab === section.id}
                     onClick={() => setPaneTab(section.id)}
                   >
-                    {section.label}
+                    <WorkflowSectionIcon section={section.id} />
+                    <span className="workflow-section-label">{section.label}</span>
+                    <span className="workflow-section-separator" aria-hidden="true" />
                   </button>
                 ))}
               </div>
-              <div className="row gap2">
-                {paneTab === 'run' && (
-                  <button className="btn btn-sm" onClick={refreshRuns} title="Rafraîchir">
-                    ⟳
-                  </button>
-                )}
-                <button className="btn btn-sm btn-ghost" onClick={() => setShowRuns(false)}>
-                  ✕
+              <div className="workflow-panel-actions">
+                <button
+                  className={`workflow-panel-action workflow-panel-refresh${paneTab === 'run' ? '' : ' is-placeholder'}`}
+                  onClick={refreshRuns}
+                  title={paneTab === 'run' ? 'Rafraîchir' : undefined}
+                  aria-label="Rafraîchir les runs"
+                  aria-hidden={paneTab !== 'run'}
+                  tabIndex={paneTab === 'run' ? 0 : -1}
+                  disabled={paneTab !== 'run'}
+                >
+                  <WorkflowRefreshIcon />
+                </button>
+                <button
+                  className="workflow-panel-action workflow-panel-close"
+                  onClick={() => setShowRuns(false)}
+                  title="Fermer Workflows"
+                  aria-label="Fermer Workflows"
+                >
+                  <WorkflowCloseIcon />
                 </button>
               </div>
             </div>
-            {paneTab === 'source-control' && <SourceControlPane onSendPrompt={send} />}
+            {paneTab === 'source-control' && (
+              <SourceControlPane conversationId={activeId ?? undefined} onSendPrompt={send} />
+            )}
+            {paneTab === 'graph' && (
+              <WorkflowExecutionGraph
+                conversationId={activeId ?? undefined}
+                active={isActive}
+                requestLabel={[...messages].reverse().find((message) => message.role === 'user')?.content}
+                live={
+                  Boolean(activeId && busyConversations.has(activeId)) ||
+                  liveRuns[activeId ?? '']?.status === 'running'
+                }
+              />
+            )}
             {sectionUsesScope(paneTab) && (
               <div className="row gap2" style={{ fontSize: 11 }}>
                 <button

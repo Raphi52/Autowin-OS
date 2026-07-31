@@ -38,6 +38,22 @@ export interface HarnessTimelineEvent {
   reasoningEffort?: string
   transport?: string
   sessionId?: string
+  execution?: {
+    phase?: string
+    agentId?: string
+    taskId?: string
+    groupId?: string
+    dependencyIds?: string[]
+  }
+  display?: {
+    kind: 'request' | 'phase' | 'agent' | 'tool' | 'event'
+    title: string
+    observedEventIds?: string[]
+    dependencyIds?: string[]
+    limitation?: string
+    workflow?: 'autowin' | 'direct'
+    skillName?: string
+  }
   payloads: Array<{ kind: string; content: string; name?: string; mediaType?: string }>
 }
 export interface HarnessTimelineTurn {
@@ -83,6 +99,13 @@ export interface HarnessTraceEvent {
   recipient?: { id: string; kind: string; label: string }
   payloads: Array<{ kind: string; content: string; name?: string; mediaType?: string }>
   observation: { boundary: string; fidelity: string; limitation?: string }
+  execution?: {
+    phase?: string
+    agentId?: string
+    taskId?: string
+    groupId?: string
+    dependencyIds?: string[]
+  }
   provider?: {
     id: string
     model?: string
@@ -142,6 +165,12 @@ export function buildHarnessTimelineFromTrace(events: HarnessTraceEvent[]): Harn
           reasoningEffort: event.provider?.reasoningEffort,
           transport: event.provider?.transport,
           sessionId: event.provider?.sessionId,
+          execution: event.execution
+            ? {
+                ...event.execution,
+                dependencyIds: [...(event.execution.dependencyIds ?? [])]
+              }
+            : undefined,
           payloads: event.payloads.map((payload) => ({ ...payload })),
           raw: event
         }

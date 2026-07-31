@@ -58,7 +58,54 @@ class CapturingProvider implements ProviderAdapter {
   }
 }
 
+class FailingProvider implements ProviderAdapter {
+  readonly id = 'failing'
+  readonly supportsExecution = true
+
+  async auth(): Promise<boolean> {
+    return true
+  }
+
+  async *send(): AsyncGenerator<StreamChunk, SendResult, void> {
+    throw new Error('échec provider après récupération Brain')
+  }
+}
+
 describe('Orchestrator execution contract', () => {
+  it('notifie la récupération Brain avant une erreur ultérieure du provider', async () => {
+    const provider = new FailingProvider()
+    const brainEvents: Array<{ query: string; injectedChars: number }> = []
+    const orchestrator = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      authority: new AuthoritySas(),
+      executionWorkspace: process.cwd()
+    })
+
+    await expect(
+      orchestrator.run(
+        'analyse le projet sans le modifier',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        '',
+        [],
+        'conv-brain-failure',
+        undefined,
+        (event) => brainEvents.push(event)
+      )
+    ).rejects.toThrow('échec provider après récupération Brain')
+
+    expect(brainEvents).toHaveLength(1)
+    expect(brainEvents[0].injectedChars).toBeGreaterThanOrEqual(0)
+  })
+
   it('injecte le vrai skill de chaque phase et nomme les blocs observables', async () => {
     const provider = new CapturingProvider()
     const foundations: Array<{ phase: string; withFoundation: boolean }> = []

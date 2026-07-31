@@ -294,7 +294,9 @@ async function discoverClaudeModels(
     const response = await fetchFn('http://127.0.0.1:8787/models', {
       signal: AbortSignal.timeout(2_000)
     })
-    if (!response.ok) return { models: [...aliases, ...fromCli], live: true, cacheable: [] }
+    if (!response.ok) {
+      return { models: [...aliases, ...fromCli], live: true, cacheable: [] }
+    }
     const payload = (await response.json()) as { data?: Array<{ id?: unknown }> }
     const discovered = (payload.data ?? [])
       .map((entry) => entry.id)

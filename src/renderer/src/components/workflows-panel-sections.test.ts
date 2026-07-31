@@ -10,23 +10,28 @@ import {
 import type { ScopedLiveRun } from './chat-view-model'
 
 /**
- * Demande de l'utilisateur, mot pour mot : « il faut une section sous agents une section run et une
- * section source control ». Le panneau n'en avait que deux, et la première mélangeait le fil des
- * sous-agents avec la liste des RUN.md.
+ * Le panneau sépare les fils, les RUN.md, le graphe d'exécution de la conversation et le dépôt.
  */
-describe('les trois sections du panneau Workflows', () => {
-  it('expose EXACTEMENT les trois sections demandées, dans cet ordre', () => {
-    expect(WORKFLOW_PANEL_SECTIONS.map((s) => s.id)).toEqual(['subagents', 'run', 'source-control'])
+describe('les quatre sections du panneau Workflows', () => {
+  it('expose les quatre sections dans un ordre orienté exécution', () => {
+    expect(WORKFLOW_PANEL_SECTIONS.map((s) => s.id)).toEqual([
+      'subagents',
+      'run',
+      'graph',
+      'source-control'
+    ])
     expect(WORKFLOW_PANEL_SECTIONS.map((s) => s.label)).toEqual([
       'Sous-agents',
       'Run',
+      'Graphe',
       'Source control'
     ])
   })
 
-  it('la portée gouverne les sous-agents et les runs, jamais Source control', () => {
+  it('la portée gouverne les sous-agents et les runs, jamais le graphe conversationnel ni Source control', () => {
     expect(sectionUsesScope('subagents')).toBe(true)
     expect(sectionUsesScope('run')).toBe(true)
+    expect(sectionUsesScope('graph')).toBe(false)
     expect(sectionUsesScope('source-control')).toBe(false)
   })
 })

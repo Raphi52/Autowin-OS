@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { ScheduledTaskInput } from './types'
+import type { ScheduledTaskInput, TaskOccurrence } from './types'
 import { TaskStore } from './task-store'
 import { persistTaskStore } from './task-store-disk'
 
@@ -153,5 +153,48 @@ describe('Task Manager — store durable', () => {
       expect.objectContaining({ id: 'alert-crash', occurrenceId, kind: 'failed' })
     ])
     expect(store.claim(task.id, occurrenceId, task.nextRunAt!)).toMatchObject({ claimed: false })
+  })
+
+  it('fige le mode de chaque occurrence même si la tâche change ensuite', () => {
+    const ids = ['task-1', 'task-2', 'alert-1']
+    const store = new TaskStore({ now: () => 5000, id: () => ids.shift() ?? 'unused' })
+    const claimedTask = store.create(input({ mode: 'active-only' }))
+    const claimedId = `${claimedTask.id}@${claimedTask.nextRunAt}`
+
+    store.claim(claimedTask.id, claimedId, claimedTask.nextRunAt!)
+    store.finish(claimedId, 'completed')
+    store.update(claimedTask.id, { mode: 'windows' })
+
+    expect(store.getOccurrence(claimedId)).toMatchObject({ mode: 'active-only' })
+
+    const missedTask = store.create(input({ mode: 'windows', title: 'Relais Windows' }))
+    const missedId = `${missedTask.id}@${missedTask.nextRunAt}`
+    store.markMissed(missedTask.id, missedId, missedTask.nextRunAt!, 'Relais indisponible')
+    store.update(missedTask.id, { mode: 'active-only' })
+
+    expect(store.getOccurrence(missedId)).toMatchObject({ mode: 'windows' })
+  })
+
+  it("marque le mode d'une ancienne occurrence comme inconnu au lieu de l'inventer", () => {
+    const source = new TaskStore({ now: () => 5000, id: () => 'task-1' })
+    const task = source.create(input({ mode: 'windows' }))
+    const legacyOccurrence = {
+      id: `${task.id}@${task.nextRunAt}`,
+      taskId: task.id,
+      scheduledFor: task.nextRunAt!,
+      status: 'completed',
+      claimedAt: 4000,
+      finishedAt: 5000
+    } as unknown as TaskOccurrence
+    const restarted = new TaskStore()
+
+    restarted.hydrate({
+      ...source.snapshot(),
+      occurrences: [legacyOccurrence]
+    })
+
+    expect(restarted.getOccurrence(legacyOccurrence.id)).toMatchObject({
+      mode: 'legacy-unknown'
+    })
   })
 })

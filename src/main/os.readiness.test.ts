@@ -40,6 +40,7 @@ describe('barrière de disponibilité des modèles', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       undefined
     )
   })

@@ -27,6 +27,9 @@
   max-width: 100%;
 }
 .runs-pane {
+  --runs-pane-pad-top: var(--s3);
+  --runs-pane-pad-x: var(--s3);
+
   width: 300px;
   flex: none;
   display: flex;
@@ -34,10 +37,11 @@
   gap: var(--s2);
   border: 1px solid var(--container-border);
   border-radius: var(--container-radius-panel);
-  padding: var(--s3);
+  padding: var(--runs-pane-pad-top) var(--runs-pane-pad-x);
   min-height: 0;
   overflow: hidden;
   background: var(--surface-panel);
+  container-type: inline-size;
 }
 .conv-pane-resizer,
 .runs-pane-resizer {
@@ -75,27 +79,31 @@
 .conv-head .btn {
   margin-left: auto;
 }
-.runs-pane > .conv-head {
-  min-width: 0;
-  gap: var(--s2);
-}
-.runs-pane > .conv-head > .row:first-child {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-}
-.runs-pane > .conv-head > .row:last-child {
-  flex: none;
-}
-.runs-pane > .conv-head > .row:first-child .btn {
-  flex: 1 1 auto;
-  min-width: 0;
-  margin-left: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 /* Inbox d'agents : conversations dont un agent travaille, en tête du pane. */
+/* À la taille de fenêtre de démarrage (900 px), trois colonnes fixes plaçaient Workflows hors écran.
+   Le panneau devient un tiroir dans le cadre du chat ; la conversation reste dessous et revient intacte
+   à la fermeture. */
+@media (max-width: 1180px) {
+  .chat-layout {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .runs-pane-resizer {
+    display: none;
+  }
+
+  .runs-pane {
+    position: absolute;
+    z-index: 8;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(420px, calc(100% - var(--s2))) !important;
+    box-shadow: -18px 0 42px rgba(0, 0, 0, 0.55);
+  }
+}
+
 .agent-inbox {
   display: flex;
   flex-direction: column;
@@ -442,6 +450,179 @@
   color: var(--text-dim);
 }
 /* Workflows */
+.workflow-panel-head {
+  display: flex;
+  min-width: 0;
+  height: 46px;
+  flex: none;
+  align-items: stretch;
+  margin:
+    calc(var(--runs-pane-pad-top) * -1)
+    calc(var(--runs-pane-pad-x) * -1)
+    0;
+  padding-left: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(3, 7, 11, 0.96);
+}
+
+.workflow-section-tabs {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  grid-template-columns:
+    minmax(0, 1.15fr) minmax(0, 0.68fr) minmax(0, 0.78fr)
+    minmax(0, 1.39fr);
+}
+
+.workflow-section-tab {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: #7c8997;
+  font: 650 9px/1 var(--font);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+
+.workflow-section-tab:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #dce5ef;
+}
+
+.workflow-section-tab.active {
+  background: rgba(255, 60, 172, 0.055);
+  color: var(--text);
+  box-shadow: inset 0 -2px var(--accent);
+}
+
+.workflow-section-tab:focus-visible {
+  z-index: 1;
+  outline: 0;
+  box-shadow:
+    inset 0 0 0 1px var(--gold),
+    inset 0 -2px var(--accent);
+}
+
+.workflow-section-icon {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  color: #6f8495;
+}
+
+.workflow-section-tab:hover .workflow-section-icon {
+  color: var(--gold);
+}
+
+.workflow-section-tab.active .workflow-section-icon {
+  color: var(--accent);
+}
+
+.workflow-section-label {
+  min-width: 0;
+}
+
+.workflow-section-separator {
+  position: absolute;
+  top: 11px;
+  right: 0;
+  bottom: 11px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+}
+
+.workflow-section-tab:last-child .workflow-section-separator {
+  background: rgba(255, 212, 90, 0.38);
+}
+
+.workflow-panel-actions {
+  display: grid;
+  width: 56px;
+  flex: none;
+  grid-template-columns: repeat(2, 28px);
+}
+
+.workflow-panel-action {
+  display: grid;
+  width: 28px;
+  height: 100%;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #6f7986;
+  cursor: pointer;
+  transition:
+    color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+
+.workflow-panel-action:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--gold);
+}
+
+.workflow-panel-action:focus-visible {
+  outline: 0;
+  box-shadow: inset 0 0 0 1px var(--gold);
+}
+
+.workflow-panel-refresh.is-placeholder {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.workflow-panel-close:hover {
+  color: #ff7187;
+}
+
+.workflow-action-icon {
+  width: 15px;
+  height: 15px;
+}
+
+@container (max-width: 270px) {
+  .workflow-panel-head {
+    padding-left: 4px;
+  }
+
+  .workflow-section-tab {
+    gap: 2px;
+    padding-inline: 2px;
+    font-size: 7.5px;
+  }
+
+  .workflow-section-icon {
+    width: 11px;
+    height: 11px;
+  }
+
+  .workflow-panel-actions {
+    width: 48px;
+    grid-template-columns: repeat(2, 24px);
+  }
+
+  .workflow-panel-action {
+    width: 24px;
+  }
+
+  .workflow-action-icon {
+    width: 13px;
+    height: 13px;
+  }
+}
+
 .run-row {
   width: 100%;
   text-align: left;
@@ -1761,9 +1942,12 @@ h6.md-h {
 }
 
 .cosmic-outline .runs-pane {
+  --runs-pane-pad-top: 18px;
+  --runs-pane-pad-x: 14px;
+
   width: 340px;
   gap: 12px;
-  padding: 18px 14px;
+  padding: var(--runs-pane-pad-top) var(--runs-pane-pad-x);
   border-left: 1px solid rgba(212, 225, 239, 0.18);
   background: rgba(3, 7, 11, 0.97);
 }

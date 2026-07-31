@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import {
   assertFrameBlockProof,
   assertHooksProof,
@@ -44,5 +44,20 @@ describe('CDP proof validation', () => {
     const source = readFileSync(new URL(script, import.meta.url), 'utf8')
     expect(source).toContain(call)
     expect(source.indexOf(call)).toBeLessThan(source.indexOf('Page.captureScreenshot'))
+  })
+
+  it('routes every maintained viewport override through the restoring lease', () => {
+    const scriptsDir = new URL('.', import.meta.url)
+    const offenders = readdirSync(scriptsDir)
+      .filter((name) => name.endsWith('.mjs') && !name.endsWith('.test.mjs'))
+      .filter((name) => {
+        const source = readFileSync(new URL(name, scriptsDir), 'utf8')
+        return (
+          source.includes('Emulation.setDeviceMetricsOverride') &&
+          !source.includes('withDeviceMetricsOverride')
+        )
+      })
+
+    expect(offenders).toEqual([])
   })
 })

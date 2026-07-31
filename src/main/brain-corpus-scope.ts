@@ -81,6 +81,16 @@ function sourceAllowed(section: string, fragments: readonly string[]): boolean {
   return fragments.some((fragment) => path.includes(fragment))
 }
 
+/** Même règle que le filtrage du bloc, appliquée à un chemin de navigation observé. */
+export function brainSourcePathAllowed(
+  path: string,
+  fragments: readonly string[] | undefined
+): boolean {
+  if (!fragments || fragments.length === 0) return true
+  const normalized = path.toLowerCase()
+  return fragments.some((fragment) => normalized.includes(fragment))
+}
+
 export interface BrainScopeResult {
   /** Bloc filtré, prêt à injecter. Vide si aucune source du corpus n'a survécu. */
   block: string

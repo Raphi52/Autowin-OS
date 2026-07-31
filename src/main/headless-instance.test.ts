@@ -57,10 +57,7 @@ describe('mode instance automatisée', () => {
 
   it('résout le profil explicite utilisé comme identité du verrou Electron', () => {
     expect(
-      resolveExplicitUserDataDir([
-        'autowin-os.exe',
-        '--user-data-dir=C:\\Autowin Test\\user-data'
-      ])
+      resolveExplicitUserDataDir(['autowin-os.exe', '--user-data-dir=C:\\Autowin Test\\user-data'])
     ).toBe('C:\\Autowin Test\\user-data')
     expect(
       resolveExplicitUserDataDir([

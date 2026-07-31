@@ -59,6 +59,7 @@ export interface BrainNavigation {
 export interface BrainRetrievalResult {
   context: string
   navigation?: BrainNavigation
+  status: 'found' | 'empty' | 'unavailable'
 }
 
 function parseNavigation(raw: unknown): BrainNavigation | undefined {
@@ -95,9 +96,9 @@ export async function retrieveBrainContext(
 ): Promise<BrainRetrievalResult> {
   // Hygiène test : sous Vitest on ne touche jamais le réseau (le serveur peut être live sur la
   // machine de dev → appels réels lents/non déterministes). Les tests injectent un fetchFn explicite.
-  if (process.env.VITEST && !opts.fetchFn) return { context: '' }
+  if (process.env.VITEST && !opts.fetchFn) return { context: '', status: 'unavailable' }
   const token = brainServiceToken(opts.env)
-  if (!token || !query.trim()) return { context: '' }
+  if (!token || !query.trim()) return { context: '', status: 'unavailable' }
   const doFetch = opts.fetchFn ?? fetch
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 5000)
@@ -108,14 +109,16 @@ export async function retrieveBrainContext(
       body: JSON.stringify({ query: query.slice(0, 8000) }),
       signal: controller.signal
     })
-    if (!res.ok) return { context: '' }
+    if (!res.ok) return { context: '', status: 'unavailable' }
     const data = (await res.json()) as { context?: unknown; navigation?: unknown }
+    const context = typeof data.context === 'string' ? data.context : ''
     return {
-      context: typeof data.context === 'string' ? data.context : '',
-      navigation: parseNavigation(data.navigation)
+      context,
+      navigation: parseNavigation(data.navigation),
+      status: context ? 'found' : 'empty'
     }
   } catch {
-    return { context: '' } // serveur down / timeout / réseau → dégrade, run continue sans RAG
+    return { context: '', status: 'unavailable' } // serveur down / timeout / réseau
   } finally {
     clearTimeout(timer)
   }

@@ -215,6 +215,20 @@ export function resolveFirstOccurrence(schedule: StructuredSchedule): number {
   return wallToEpoch(first, schedule.timeZone)
 }
 
+export function resolveFirstOccurrenceAtOrAfter(
+  schedule: StructuredSchedule,
+  threshold: number
+): number | null {
+  if (!Number.isFinite(threshold)) throw new Error('Seuil temporel invalide')
+  let occurrence: number | null = resolveFirstOccurrence(schedule)
+  for (let scanned = 0; occurrence !== null && scanned < 200_000; scanned += 1) {
+    if (occurrence >= threshold) return occurrence
+    occurrence = resolveNextOccurrence(schedule, occurrence)
+  }
+  if (occurrence === null) return null
+  throw new Error('Première échéance future introuvable')
+}
+
 export function resolveNextOccurrence(
   schedule: StructuredSchedule,
   currentOccurrence: number

@@ -24,3 +24,31 @@ export function assertHooksProof({ selectedTab, selectedSource, hookCount }) {
     throw new Error('Preuve CDP invalide : aucun hook Codex visible')
   }
 }
+
+export function assertWorkflowRequestGraphProof(state) {
+  if (state.graphTurnId !== state.expectedTurnId) {
+    throw new Error(
+      `Preuve CDP invalide : mauvais tour (${state.graphTurnId ?? 'absent'} au lieu de ${state.expectedTurnId ?? 'absent'})`
+    )
+  }
+  if (state.requestRootCount !== 1) {
+    throw new Error('Preuve CDP invalide : racine Demande utilisateur absente ou dupliquée')
+  }
+  if (state.previousTurnLeaks !== 0) {
+    throw new Error('Preuve CDP invalide : le tour précédent fuit dans le graphe')
+  }
+  if (!Number.isInteger(state.identityCount) || state.identityCount < 1) {
+    throw new Error('Preuve CDP invalide : aucun agent avec provider et modèle visibles')
+  }
+  if (!Number.isInteger(state.edgeCount) || state.edgeCount < 1) {
+    throw new Error('Preuve CDP invalide : aucune arête causale visible')
+  }
+  if (!state.detailVisible || !state.keyboardNodeId || !state.keyboardSelected) {
+    throw new Error('Preuve CDP invalide : sélection clavier ou détail de nœud absent')
+  }
+  if (state.overflow || !state.paneVisible || !state.narrowWidth || state.whiteBorder) {
+    throw new Error(`Preuve CDP invalide : géométrie du panneau (${JSON.stringify(state)})`)
+  }
+  if (state.wizardVisible) throw new Error('Preuve CDP invalide : assistant de démarrage encore visible')
+  if (state.error) throw new Error(`Preuve CDP invalide : ${state.error}`)
+}

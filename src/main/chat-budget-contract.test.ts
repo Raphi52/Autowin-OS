@@ -12,30 +12,30 @@ import type { OrchestrationStep } from './orchestrator'
  * session facturee 26,65 $/h. Ces assertions garantissent que le tour de chat est borne ET coupe.
  */
 const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
-const chatHandler = source.slice(
-  source.indexOf("'os:pilotChat'"),
-  source.indexOf("'os:pilotChat:inject'")
+const chatRunner = source.slice(
+  source.indexOf('const runPilotChat'),
+  source.indexOf("ipcMain.handle('os:pilotChat'")
 )
 
 describe('tour de chat — budget applique', () => {
-  it('instancie un breaker DANS le handler du tour de chat', () => {
-    expect(chatHandler).toContain('new CostCircuitBreaker(')
-    expect(chatHandler).toContain('AUTOWIN_CHAT_USD_CAP')
+  it('instancie un breaker dans le runner partagé du tour de chat', () => {
+    expect(chatRunner).toContain('new CostCircuitBreaker(')
+    expect(chatRunner).toContain('AUTOWIN_CHAT_USD_CAP')
   })
 
   it('compte CHAQUE appel du tour (et pas seulement le total final)', () => {
-    expect(chatHandler).toContain('chatBreaker.observe(')
-    expect(chatHandler).toMatch(/prompt-call.*callUsage|callUsage[\s\S]{0,200}chatBreaker\.observe/)
+    expect(chatRunner).toContain('chatBreaker.observe(')
+    expect(chatRunner).toMatch(/prompt-call.*callUsage|callUsage[\s\S]{0,200}chatBreaker\.observe/)
   })
 
   it('COUPE reellement le tour au depassement (abort, pas un simple log)', () => {
-    const tripBlock = chatHandler.slice(chatHandler.indexOf('chatBreaker.observe('))
+    const tripBlock = chatRunner.slice(chatRunner.indexOf('chatBreaker.observe('))
     expect(tripBlock).toContain('controller.abort(')
   })
 
   it('a un plafond par DEFAUT (une variable d’env absente ne desarme pas la garde)', () => {
     // Le defaut doit etre un nombre positif : sans lui, un poste sans env serait sans protection.
-    expect(chatHandler).toMatch(/maxUsd:[\s\S]{0,120}:\s*\d+(\.\d+)?\s*\n?\s*\}/)
+    expect(chatRunner).toMatch(/maxUsd:[\s\S]{0,120}:\s*\d+(\.\d+)?\s*\n?\s*\}/)
   })
 })
 

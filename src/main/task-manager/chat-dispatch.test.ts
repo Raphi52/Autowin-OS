@@ -27,6 +27,7 @@ const occurrence: TaskOccurrence = {
   id: 'task-1@1785742200000',
   taskId: 'task-1',
   scheduledFor: 1785742200000,
+  mode: 'active-only',
   status: 'claimed',
   claimedAt: 1
 }

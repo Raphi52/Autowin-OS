@@ -48,6 +48,7 @@ export interface TaskOccurrence {
   id: string
   taskId: string
   scheduledFor: number
+  mode: TaskExecutionMode | 'legacy-unknown'
   status: TaskOccurrenceStatus
   claimedAt: number
   startedAt?: number

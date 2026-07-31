@@ -6,7 +6,8 @@ import { claudeTransportEnvelope, materializeClaudeAttachments } from './claude'
 
 // Capture le spawn : args réels + ce qui est écrit sur stdin, pour prouver l'anti-ENAMETOOLONG.
 const spawnCapture = vi.hoisted(() => ({ args: [] as string[], stdin: '' }))
-vi.mock('node:child_process', () => ({
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:child_process')>()),
   spawn: (_bin: string, args: string[]) => {
     spawnCapture.args = args
     const child = new EventEmitter() as EventEmitter & Record<string, unknown>
@@ -111,6 +112,17 @@ describe('B — Claude exécuteur', () => {
     expect(claudeToolEvidenceKind('Bash', 'ls -la')).toBe('inspection')
     expect(claudeToolEvidenceKind('Read', 'x')).toBe('inspection')
     expect(claudeToolEvidenceKind('Grep', 'foo')).toBe('inspection')
+  })
+
+  it('normalise un fichier absolu du worktree en chemin relatif attribuable', async () => {
+    const { claudeEvidencePath } = await import('./claude')
+    expect(
+      claudeEvidencePath(
+        'C:\\repo\\.claude\\worktrees\\run-1\\src\\feature.ts',
+        'C:\\repo\\.claude\\worktrees\\run-1'
+      )
+    ).toBe('src/feature.ts')
+    expect(claudeEvidencePath('src/relative.ts', 'C:\\repo')).toBe('src/relative.ts')
   })
 })
 

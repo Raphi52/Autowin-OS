@@ -11,6 +11,8 @@ export interface GitChange {
   path: string
   status: GitFileStatus
   staged: boolean
+  /** Présent uniquement dans la vue Projet agrégée quand le diff vit dans un worktree. */
+  workspaceRoot?: string
 }
 export interface GitState {
   branch: string

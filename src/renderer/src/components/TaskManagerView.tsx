@@ -37,7 +37,7 @@ interface TaskDraft {
   title: string
   prompt: string
   enabled: boolean
-  mode: ExecutionMode
+  mode: ExecutionMode | 'legacy-unknown'
   destination: TaskDestination
   schedule: TaskSchedule
 }
@@ -53,6 +53,7 @@ interface TaskOccurrence {
   id: string
   taskId: string
   scheduledFor: number
+  mode: ExecutionMode
   status: string
   conversationId?: string
   error?: string
@@ -167,7 +168,8 @@ function recurrenceLabel(schedule: TaskSchedule): string {
   return `${interval === 1 ? 'Chaque semaine' : `Toutes les ${interval} semaines`} · ${days}`
 }
 
-function modeLabel(mode: ExecutionMode): string {
+function modeLabel(mode: ExecutionMode | 'legacy-unknown'): string {
+  if (mode === 'legacy-unknown') return 'Mode non archivé'
   return mode === 'windows' ? 'Autonome Windows' : 'Autowin actif uniquement'
 }
 
@@ -902,7 +904,9 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                   occurrences.map((occurrence) => (
                     <div className="task-manager-occurrence" key={occurrence.id}>
                       <span className={`status-${occurrence.status}`}>{occurrence.status}</span>
-                      <strong>{formatDateTime(occurrence.scheduledFor)}</strong>
+                      <strong>
+                        {formatDateTime(occurrence.scheduledFor)} · {modeLabel(occurrence.mode)}
+                      </strong>
                       <small>{occurrence.error ?? occurrence.conversationId ?? 'Tour Chat'}</small>
                     </div>
                   ))

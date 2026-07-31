@@ -45,10 +45,7 @@ describe('Task Manager — relais Windows unique', () => {
     const relay = new PowerShellWindowsRelay({
       scriptPath: 'C:\\Autowin\\resources\\autowin-task-relay.ps1',
       executablePath: 'C:\\Autowin\\autowin-os.exe',
-      launchArguments: [
-        '--user-data-dir=C:\\Autowin Test\\user-data',
-        '--isolated-test-instance'
-      ],
+      launchArguments: ['--user-data-dir=C:\\Autowin Test\\user-data', '--isolated-test-instance'],
       run
     })
 
@@ -68,10 +65,7 @@ describe('Task Manager — relais Windows unique', () => {
     expect(launchArgumentsIndex).toBeGreaterThan(0)
     expect(
       JSON.parse(Buffer.from(args[launchArgumentsIndex + 1], 'base64url').toString('utf8'))
-    ).toEqual([
-      '--user-data-dir=C:\\Autowin Test\\user-data',
-      '--isolated-test-instance'
-    ])
+    ).toEqual(['--user-data-dir=C:\\Autowin Test\\user-data', '--isolated-test-instance'])
   })
 
   it('désarme le relais lorsqu’aucune tâche Windows ne reste', async () => {

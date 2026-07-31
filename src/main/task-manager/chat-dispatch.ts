@@ -23,7 +23,8 @@ export interface ScheduledChatRuntime {
 export class ScheduledChatDispatcher implements TaskDispatcher {
   constructor(private readonly runtime: ScheduledChatRuntime) {}
 
-  async run(task: ScheduledTask, _occurrence: TaskOccurrence): Promise<DispatchResult> {
+  async run(task: ScheduledTask, occurrence: TaskOccurrence): Promise<DispatchResult> {
+    void occurrence
     const conversationId = this.resolveConversation(task)
     if (!conversationId) {
       return {

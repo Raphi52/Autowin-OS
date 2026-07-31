@@ -50,6 +50,14 @@ export interface TraceObservation {
   limitation?: string
 }
 
+export interface TraceExecutionContext {
+  phase?: string
+  agentId?: string
+  taskId?: string
+  groupId?: string
+  dependencyIds?: string[]
+}
+
 export interface TraceEventV1 {
   schema: 'autowin.trace/v1'
   id: string
@@ -66,6 +74,7 @@ export interface TraceEventV1 {
   channel: TraceChannel
   payloads: TracePayload[]
   observation: TraceObservation
+  execution?: TraceExecutionContext
   provider?: {
     id: string
     model?: string

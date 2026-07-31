@@ -54,28 +54,53 @@ export function UpdateBanner({ collapsed = false }: { collapsed?: boolean }): Re
   const reference = info.reference ?? 'origin/main'
   const elsewhere = info.branch && info.branch !== 'main' ? ` · tu es sur ${info.branch}` : ''
   const detail = `${info.behind} commit(s) à récupérer depuis ${reference}${elsewhere}`
+  const buttonState = applying ? ' is-applying' : error ? ' is-error' : ''
+  const actionLabel = applying
+    ? 'Mise à jour en cours'
+    : error
+      ? `Échec de la mise à jour : ${error}. Réessayer`
+      : `Mettre à jour — ${detail}, puis redémarrer`
   return (
     <div className="rail-update" data-testid="update-banner">
       <button
         type="button"
-        className="rail-update-btn"
+        className={`rail-update-btn${buttonState}`}
         data-testid="update-apply"
         disabled={applying}
-        title={applying ? 'Mise à jour en cours…' : `Mettre à jour — ${detail}, puis redémarrer`}
+        aria-label={actionLabel}
+        title={actionLabel}
         onClick={() => void apply()}
       >
         <span className="rail-update-icon" aria-hidden="true">
-          ⟳
+          <svg
+            viewBox="0 0 24 24"
+            width="17"
+            height="17"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M4.5 9A8 8 0 0 1 18 5.5" />
+            <path d="M18 2.5v3h-3.5" />
+            <path d="M19.5 15A8 8 0 0 1 6 18.5" />
+            <path d="M6 21.5v-3h3.5" />
+          </svg>
         </span>
         {!collapsed && (
           <span className="rail-update-label">
             {applying ? 'Mise à jour…' : 'Mettre à jour'}
-            <span className="rail-update-count">{info.behind}</span>
+            <span className="rail-update-count">+{info.behind}</span>
           </span>
         )}
       </button>
-      {error && !collapsed && (
-        <span className="rail-update-error" data-testid="update-error" role="status">
+      {error && (
+        <span
+          className={`rail-update-error${collapsed ? ' is-visually-hidden' : ''}`}
+          data-testid="update-error"
+          role="status"
+        >
           {error}
         </span>
       )}

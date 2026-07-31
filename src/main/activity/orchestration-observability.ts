@@ -13,7 +13,21 @@ export function persistOrchestrationStep(
   traceStore = new TraceStore(join(ensureAutowinAppData(), 'causal-trace'))
 ): void {
   const existing = traceStore.readConversation(context.conversationId)
-  let parentId = existing.at(-1)?.id
+  const currentTurn = existing.filter((event) => event.turnId === context.turnId)
+  const groupEvents = step.execution?.groupId
+    ? currentTurn.filter((event) => event.execution?.groupId === step.execution?.groupId)
+    : []
+  const dependencyParent = [...(step.execution?.dependencyIds ?? [])]
+    .reverse()
+    .map((dependencyId) =>
+      [...currentTurn]
+        .reverse()
+        .find((event) => event.execution?.taskId === dependencyId && event.type === 'handoff')
+    )
+    .find(Boolean)
+  let parentId =
+    dependencyParent?.id ??
+    (groupEvents.length > 0 ? groupEvents[0].parentId : currentTurn.at(-1)?.id)
   let sequence = traceStore.nextSequence(context.conversationId)
   const structuralType: TraceEventV1['type'] =
     step.step === 'exec' ? 'handoff' : step.step === 'judge' ? 'verdict' : 'gate'
@@ -29,9 +43,9 @@ export function persistOrchestrationStep(
       type: structuralType,
       status: step.status ?? 'completed',
       actor: {
-        id: step.role ?? step.step,
-        kind: step.step === 'gate' ? 'system' : 'agent',
-        label: step.role ?? step.step
+        id: step.execution?.agentId ?? step.role ?? step.step,
+        kind: step.step === 'gate' || !step.provider ? 'system' : 'agent',
+        label: step.role ?? step.execution?.agentId ?? step.step
       },
       recipient: { id: 'orchestrator', kind: 'agent', label: 'orchestrator' },
       channel: 'internal',
@@ -41,7 +55,16 @@ export function persistOrchestrationStep(
           content: step.error ?? step.text ?? step.detail ?? ''
         }
       ],
-      observation: { boundary: `Autowin orchestration ${step.step}`, fidelity: 'exact' }
+      observation: { boundary: `Autowin orchestration ${step.step}`, fidelity: 'exact' },
+      execution: step.execution,
+      provider: step.provider ? { id: step.provider, model: step.model } : undefined,
+      metrics: {
+        durationMs: step.durationMs,
+        inputTokens: step.usage?.inputTokens,
+        outputTokens: step.usage?.outputTokens,
+        cacheReadTokens: step.usage?.cacheReadTokens,
+        costUsd: step.costUsd ?? step.usage?.costUsd
+      }
     })
 
   if (step.step === 'exec') {
@@ -66,7 +89,8 @@ export function persistOrchestrationStep(
         recipient: { id: step.role ?? 'subagent', kind: 'agent', label: step.role ?? 'subagent' },
         channel: 'tool',
         payloads: [{ kind: 'tool-call', content: item.summary || item.type }],
-        observation: { boundary: `Autowin exec ${item.type}`, fidelity: 'exact' }
+        observation: { boundary: `Autowin exec ${item.type}`, fidelity: 'exact' },
+        execution: step.execution
       })
       traceStore.append(toolEvent)
       parentId = toolEvent.id
@@ -97,7 +121,10 @@ export function persistOrchestrationStep(
     },
     promptRoot
   )
-  const providerEvents = promptCallToTraceEvents(call, sequence, parentId)
+  const providerEvents = promptCallToTraceEvents(call, sequence, parentId).map((event) => ({
+    ...event,
+    execution: step.execution
+  }))
   for (const event of providerEvents) traceStore.append(event)
   sequence += providerEvents.length
   parentId = providerEvents.at(-1)?.id

@@ -114,6 +114,14 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
     expect(execModels).toContain('orch') // la synthèse
     const m1Step = result.trace.find((s) => s.model === 'm1')
     expect(m1Step?.costUsd).toBeGreaterThan(0)
+    const panelSteps = result.trace.filter(
+      (step) => step.execution?.groupId === 'frame:fanout'
+    )
+    expect(panelSteps).toHaveLength(2)
+    expect(panelSteps.map((step) => step.execution?.phase)).toEqual(['frame', 'frame'])
+    expect(new Set(panelSteps.map((step) => step.execution?.agentId))).toEqual(
+      new Set(['frame:m1', 'frame:m2'])
+    )
   })
 
   it('mono-modèle (aucun phaseFanOut) : comportement inchangé, 1 exec + 1 juge', async () => {
@@ -198,6 +206,19 @@ describe('Orchestrator — fan-out juge (quorum de vote)', () => {
     expect(result.valid).toBe(true)
     // 1 exec (mono, pas de phaseFanOut) + 3 juges = 4 appels.
     expect(provider.calls).toHaveLength(4)
+    const judgeSteps = result.trace.filter(
+      (step) => step.execution?.groupId === 'judge:fanout'
+    )
+    expect(judgeSteps).toHaveLength(3)
+    expect(new Set(judgeSteps.map((step) => step.execution?.agentId))).toEqual(
+      new Set(['judge:j-a', 'judge:j-b', 'judge:j-no'])
+    )
+    expect(result.trace.find((step) => step.execution?.agentId === 'judge:quorum')).toMatchObject({
+      role: 'orchestrator',
+      provider: undefined,
+      model: undefined,
+      prompt: undefined
+    })
   })
 
   it('minorité VALIDE (1/3) → défaut (quorum non atteint)', async () => {
