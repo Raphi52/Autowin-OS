@@ -212,6 +212,30 @@ describe('TaskManagerView', () => {
     expect(options.map((option) => option.value)).toContain('gateway:opus-5')
   })
 
+  it('trie les modèles alphabétiquement par nom affiché avant le provider', async () => {
+    const mockApi = api()
+    mockApi.models.mockResolvedValue([
+      { id: 'alpha:zulu', provider: 'alpha', model: 'zulu', label: 'Zulu 10' },
+      { id: 'zeta:alpha', provider: 'zeta', model: 'alpha', label: 'alpha 2' },
+      { id: 'middle:eclair', provider: 'middle', model: 'eclair', label: 'Éclair 3' }
+    ])
+    const { container } = await mount(mockApi)
+    const newButton = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Nouvelle tâche')
+    )
+    await act(async () => newButton?.click())
+
+    const model = [...container.querySelectorAll('label')]
+      .find((label) => label.textContent?.includes('Modèle'))
+      ?.querySelector('select')
+
+    expect([...model!.options].map((option) => option.textContent)).toEqual([
+      'alpha 2 · zeta',
+      'Éclair 3 · middle',
+      'Zulu 10 · alpha'
+    ])
+  })
+
   it('crée une tâche depuis des champs structurés', async () => {
     const { container, mockApi } = await mount()
     const newButton = [...container.querySelectorAll('button')].find((button) =>

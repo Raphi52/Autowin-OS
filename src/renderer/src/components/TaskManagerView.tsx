@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ModuleHeader } from './ModuleHeader'
 import type { RuntimeModel } from './chat-view-model'
+import { compareModelsByName, displayedModelName } from './model-name-order'
 import './TaskManagerView.css'
 
 type ExecutionMode = 'windows' | 'active-only'
@@ -185,7 +186,7 @@ function hasLoadedModel(destination: TaskDestination, models: RuntimeModel[]): b
 }
 
 function modelDisplayKey(model: RuntimeModel): string {
-  return `${model.provider}\u0000${model.label ?? model.model}`
+  return `${model.provider}\u0000${displayedModelName(model)}`
 }
 
 function uniqueModelsForPicker(models: RuntimeModel[]): RuntimeModel[] {
@@ -272,12 +273,7 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
 
   const selected = snapshot.tasks.find(({ id }) => id === selectedId)
   const selectableModels = useMemo(
-    () =>
-      uniqueModelsForPicker(models).sort(
-        (left, right) =>
-          left.provider.localeCompare(right.provider) ||
-          (left.label ?? left.model).localeCompare(right.label ?? right.model)
-      ),
+    () => uniqueModelsForPicker(models).sort(compareModelsByName),
     [models]
   )
   const occurrences = useMemo(

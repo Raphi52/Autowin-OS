@@ -167,6 +167,49 @@ describe('AgentsTopologyView concurrent persistence', () => {
     expect(labels).toEqual(['Dynamic GPT'])
   })
 
+  it('trie la bibliothèque alphabétiquement par nom affiché', async () => {
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      models: async () => [
+        {
+          ...models[0],
+          id: 'codex/gpt-5.6',
+          provider: 'codex',
+          model: 'gpt-5.6',
+          label: 'Zulu 10',
+          dynamicallyLoaded: true
+        },
+        {
+          ...models[0],
+          id: 'claude/fable-5',
+          provider: 'claude',
+          model: 'claude-fable-5',
+          label: 'alpha 2',
+          dynamicallyLoaded: true
+        },
+        {
+          ...models[0],
+          id: 'ollama/eclair-3',
+          provider: 'ollama',
+          model: 'eclair-3',
+          label: 'Éclair 3',
+          dynamicallyLoaded: true
+        }
+      ],
+      topology: async () => topology,
+      roles: async () => ({ orchestrator: { provider: 'codex', model: 'gpt-5.6' } }),
+      profiles: async () => [],
+      onAppEvent: () => () => undefined
+    }
+
+    await act(async () => root.render(createElement(AgentsTopologyView)))
+    await flush()
+
+    const labels = [...container.querySelectorAll('.topology-models .topology-model strong')].map(
+      (element) => element.textContent
+    )
+    expect(labels).toEqual(['alpha 2', 'Éclair 3', 'Zulu 10'])
+  })
+
   it('serializes rapid edits and builds the second save from the first optimistic snapshot', async () => {
     const saves: Array<Deferred<typeof topology>> = []
     const setTopology = vi.fn((_next: typeof topology) => {

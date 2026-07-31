@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './AgentsTopologyView.css'
 import { ModuleHeader } from './ModuleHeader'
-import { modelRecencyKey, modelVendor } from './chat-view-model'
+import { compareModelsByName } from './model-name-order'
 
 type ImportedModel = {
   id: string
@@ -158,44 +158,10 @@ export function AgentsTopologyView({
     () => models.filter((model) => model.dynamicallyLoaded === true),
     [models]
   )
-  // Colonne gauche : les DERNIERES versions de ChatGPT et d'Anthropic en premier, entrelacees
-  // (le plus recent de CHAQUE vendeur d'abord : GPT-5.6, Fable 5, Opus 4.8, ...), les autres
-  // vendeurs ensuite. Evite d'enfouir Opus 4.8 sous 16 entrees ChatGPT. Cles de tri = celles du Chat.
-  const sortedModels = useMemo(() => {
-    const vendorKey = (id: string): string => modelVendor(id).key
-    const isPriority = (k: string): boolean => k === 'openai' || k === 'anthropic'
-    const rec = (id: string): number => {
-      const [family, version] = modelRecencyKey(id)
-      return family * 10000 + version
-    }
-    // Rang de recence PAR vendeur (0 = le plus recent de ce vendeur).
-    const perVendorIndex = new Map<string, number>()
-    const groups = new Map<string, typeof libraryModels>()
-    for (const model of libraryModels) {
-      const key = vendorKey(model.id)
-      groups.set(key, [...(groups.get(key) ?? []), model])
-    }
-    for (const arr of groups.values()) {
-      arr.sort((a, b) => rec(b.id) - rec(a.id) || a.label.localeCompare(b.label))
-      arr.forEach((model, index) => perVendorIndex.set(model.id, index))
-    }
-    return [...libraryModels].sort((a, b) => {
-      const pa = isPriority(vendorKey(a.id))
-      const pb = isPriority(vendorKey(b.id))
-      if (pa !== pb) return pa ? -1 : 1
-      if (pa && pb) {
-        const ia = perVendorIndex.get(a.id) ?? 999
-        const ib = perVendorIndex.get(b.id) ?? 999
-        if (ia !== ib) return ia - ib // plus recent de chaque vendeur d'abord (entrelace)
-        // egalite de rang : ChatGPT avant Anthropic
-        return (vendorKey(a.id) === 'openai' ? 0 : 1) - (vendorKey(b.id) === 'openai' ? 0 : 1)
-      }
-      const ra = rec(a.id)
-      const rb = rec(b.id)
-      if (ra !== rb) return rb - ra
-      return a.label.localeCompare(b.label)
-    })
-  }, [libraryModels])
+  const sortedModels = useMemo(
+    () => [...libraryModels].sort(compareModelsByName),
+    [libraryModels]
+  )
   const selectedModel = modelsById.get(selectedModelId)
 
   async function persist(next: AgentTopology): Promise<void> {
