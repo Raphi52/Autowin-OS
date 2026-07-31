@@ -473,6 +473,21 @@ export class AutowinOS {
     })
   }
 
+  /**
+   * Repersiste les offsets de journal atteints après un rattachement : ce qui vient d'être montré à
+   * l'utilisateur ne doit pas lui être remontré au prochain démarrage.
+   */
+  rememberAgentOffsets(
+    runId: string,
+    agents: Array<{ token: string; pid?: number; identity?: string; journalPath?: string; offset?: number }>
+  ): void {
+    const state = loadOrchestrationStates(this.orchestrationStateRoot).find(
+      (candidate) => candidate.runId === runId
+    )
+    if (!state) return
+    saveOrchestrationState(this.orchestrationStateRoot, { ...state, agents, updatedAt: Date.now() })
+  }
+
   /** Abandonne explicitement un état reprenable (l'utilisateur ne veut pas le reprendre). */
   forgetResumableOrchestration(runId: string): void {
     clearOrchestrationState(this.orchestrationStateRoot, runId)

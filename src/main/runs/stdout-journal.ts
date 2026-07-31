@@ -111,3 +111,23 @@ export async function tailJsonLines(
     await new Promise((resolve) => setTimeout(resolve, pollMs)) // sleep-ok: poll borné ≤500ms
   }
 }
+
+/**
+ * Lit d'un seul coup ce qui est DÉJÀ écrit depuis `from`, sans attendre la suite.
+ *
+ * `tailJsonLines` suit un fichier vivant ; au redémarrage on veut l'inverse : rattraper l'existant
+ * puis rendre la main. Sépare le rattrapage du suivi, qui n'ont pas la même fin.
+ */
+export function tailJournalOnce(
+  path: string,
+  from: number,
+  onLine: (line: string) => void
+): { offset: number; lines: number } {
+  const { text, next } = readChunkFrom(path, from)
+  if (!text) return { offset: next, lines: 0 }
+  const { lines, rest } = splitCompleteLines(text)
+  for (const line of lines) onLine(line)
+  // La ligne partielle n'est PAS consommée : son offset reste devant elle, pour que la prochaine
+  // lecture la reprenne entière plutôt que coupée en deux.
+  return { offset: next - Buffer.byteLength(rest, 'utf8'), lines: lines.length }
+}

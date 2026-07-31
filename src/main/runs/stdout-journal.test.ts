@@ -7,6 +7,7 @@ import {
   readChunkFrom,
   splitCompleteLines,
   stdoutJournalPath,
+  tailJournalOnce,
   tailJsonLines
 } from './stdout-journal'
 
@@ -185,5 +186,41 @@ describe('tailJsonLines — suit un fichier qui grossit', () => {
     controller.abort()
     const result = await tailJsonLines(path, () => {}, { signal: controller.signal, pollMs: 20 })
     expect(result.stopped).toBe(true)
+  })
+})
+
+/**
+ * RATTRAPAGE au redémarrage : lire ce qui est DÉJÀ écrit depuis l'offset, sans attendre la suite.
+ * L'enjeu est de ne rien remontrer deux fois — un récapitulatif qui répète est pire qu'aucun.
+ */
+describe('tailJournalOnce — rattraper sans attendre', () => {
+  it('rend les lignes complètes et l’offset atteint', () => {
+    const path = join(root, 'j.jsonl')
+    writeFileSync(path, '{"a":1}\n{"a":2}\n')
+
+    const lues: string[] = []
+    const { offset, lines } = tailJournalOnce(path, 0, (l) => lues.push(l))
+    expect(lues).toEqual(['{"a":1}', '{"a":2}'])
+    expect(lines).toBe(2)
+
+    // Relire depuis cet offset ne redonne RIEN : c'est ce qui empêche le doublon.
+    const encore: string[] = []
+    tailJournalOnce(path, offset, (l) => encore.push(l))
+    expect(encore).toEqual([])
+  })
+
+  it('une ligne PARTIELLE n’est pas consommée — elle sera relue entière', () => {
+    const path = join(root, 'j.jsonl')
+    writeFileSync(path, '{"a":1}\n{"inco')
+
+    const lues: string[] = []
+    const { offset } = tailJournalOnce(path, 0, (l) => lues.push(l))
+    expect(lues).toEqual(['{"a":1}'])
+
+    // L'agent finit sa ligne : la relecture la rend ENTIÈRE, pas coupée en deux.
+    appendFileSync(path, 'mplet":2}\n')
+    const suite: string[] = []
+    tailJournalOnce(path, offset, (l) => suite.push(l))
+    expect(suite).toEqual(['{"incomplet":2}'])
   })
 })

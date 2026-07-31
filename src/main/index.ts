@@ -142,6 +142,8 @@ import {
 import { nativeSpoolRoot, appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace, readBrainTraces } from './activity/brain-trace-spool'
 import { resumeActionFor } from './runs/run-reattach'
+import { recapMessage, summarizeJournal } from './runs/journal-replay'
+import { tailJournalOnce } from './runs/stdout-journal'
 import { defaultProcessIdentity } from './store/worktree-manager'
 import {
   appendConversationFileTrace,
@@ -2616,12 +2618,35 @@ app.whenReady().then(async () => {
   // TRAIN DE TRAVAILLER. Relancer par-dessus mettrait deux agents sur la même copie, à s'écraser
   // l'un l'autre. On vérifie avant de relancer — et on l'écrit, pour que ce silence soit lisible.
   const reprise = resumeActionFor(resumableRun, defaultProcessIdentity)
-  if (reprise === 'rattacher') {
+  if (reprise === 'rattacher' && resumableRun) {
     console.log(
       '[resume-orchestration]',
-      resumableRun?.runId,
+      resumableRun.runId,
       '→ un agent travaille ENCORE : aucune relance. Son journal reste la source de vérité.'
     )
+    // RATTACHEMENT : on relit ce que l'agent a produit PENDANT l'absence de l'app, depuis l'offset
+    // déjà lu, et on le remet dans la conversation. Sans ça le travail existait sur le disque mais
+    // restait invisible — donc réputé perdu, donc relancé.
+    try {
+      const conversationId = resumableRun.conversationId
+      const lignes: string[] = []
+      const agentsApres = (resumableRun.agents ?? []).map((agent) => {
+        if (!agent.journalPath) return agent
+        const { offset } = tailJournalOnce(agent.journalPath, agent.offset ?? 0, (ligne) =>
+          lignes.push(ligne)
+        )
+        return { ...agent, offset }
+      })
+      const message = recapMessage(summarizeJournal(lignes), true)
+      if (conversationId && message) {
+        os.conversations.append(conversationId, { role: 'assistant', content: message })
+        broadcast({ type: 'refresh', scope: 'chat' })
+      }
+      // L'offset atteint est repersisté : ce qui vient d'être montré ne sera pas remontré.
+      os.rememberAgentOffsets(resumableRun.runId, agentsApres)
+    } catch (error) {
+      console.warn('[resume-orchestration] rattachement impossible :', error)
+    }
   }
   if (resumableRun && reprise === 'relancer') {
     const conversationId = resumableRun.conversationId ?? '__autonomous__'

@@ -94,3 +94,28 @@ describe('câblage — le démarrage consulte la garde avant de relancer', () =>
     expect(source).toContain("un agent travaille ENCORE")
   })
 })
+
+/**
+ * CÂBLAGE DU REJEU. Détecter l'agent vivant ne suffit pas : sans relecture de son journal, le
+ * travail produit pendant l'absence reste invisible — donc réputé perdu, donc relancé à la main.
+ */
+describe('câblage — le démarrage rejoue le journal et mémorise où il s’est arrêté', () => {
+  const source = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+  const bloc = source.slice(source.indexOf("if (reprise === 'rattacher'"))
+
+  it('il relit chaque journal DEPUIS l’offset déjà lu', () => {
+    expect(bloc).toContain('tailJournalOnce(agent.journalPath, agent.offset ?? 0')
+  })
+
+  it('il remet le récapitulatif dans la conversation', () => {
+    expect(bloc).toContain('os.conversations.append(conversationId')
+  })
+
+  it('il repersiste l’offset atteint — sinon le même texte serait remontré', () => {
+    expect(bloc).toContain('os.rememberAgentOffsets(resumableRun.runId, agentsApres)')
+  })
+
+  it('un échec de rattachement ne casse pas le démarrage', () => {
+    expect(bloc).toContain('rattachement impossible')
+  })
+})
