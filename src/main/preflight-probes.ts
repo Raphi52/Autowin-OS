@@ -13,6 +13,7 @@ import {
   type PreflightResult
 } from './preflight'
 import { brainServiceToken } from './brain-retrieval'
+import { probeClaudeSession } from './claude-session'
 import { loadTokens } from './providers/codex-auth'
 import { codexTokenStatus } from './provider-status'
 
@@ -102,6 +103,8 @@ export function appPreflightProbes(): PreflightProbes {
       })
     },
     hasCodexSession: () => codexTokenStatus(loadTokens(), Date.now()) === 'authenticated',
+    // `claude auth status` est l'autorité : le store de credentials du CLI n'est pas contractuel.
+    claudeSession: () => probeClaudeSession(),
     hasBrainToken: () => brainServiceToken().length > 0
   }
 }

@@ -17,6 +17,10 @@ export const PREFLIGHT_REPAIRS: Record<string, RepairAffordance> = {
     label: 'Se connecter',
     note: 'Une console s’ouvre : le login OAuth s’y fait. Rien n’est saisi dans Autowin.'
   },
+  'claude-session': {
+    label: 'Se connecter',
+    note: 'Une console s’ouvre : le login Anthropic s’y fait. Rien n’est saisi dans Autowin.'
+  },
   brain: {
     label: 'Démarrer',
     note: 'Tente de lancer le brain_server local (le port s’ouvre après ~30-40 s de préchauffage).'

@@ -21,7 +21,9 @@ import { spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, parse } from 'node:path'
 import { ensureBrainServerStarted } from './brain-server-launch'
-import { spawnLoginTerminal } from './provider-login'
+import { resolveBinOnPath } from './preflight-probes'
+import { resolveClaudeBin } from './providers/claude'
+import { planProviderLogin, spawnLoginTerminal } from './provider-login'
 
 /** Nom du package du dépôt Autowin OS : l'IDENTITÉ exigée d'un candidat, pas juste un script. */
 export const AUTOWIN_PACKAGE_NAME = 'autowin-os'
@@ -75,16 +77,11 @@ export function resolveCodexLoginCwd(
 }
 
 export type PreflightCheckId =
-  | 'brain'
-  | 'codex'
-  | 'codex-session'
-  | 'claude'
-  | 'kimi'
-  | 'brain-token'
+  'brain' | 'codex' | 'codex-session' | 'claude' | 'claude-session' | 'kimi' | 'brain-token'
 
 export type PreflightRepairPlan =
   /** Ouvre une console où le CLI mène son propre flow d'authentification. */
-  | { kind: 'login'; provider: 'codex'; label: string; note: string }
+  | { kind: 'login'; provider: 'codex' | 'claude'; label: string; note: string }
   /** Tente un démarrage local du brain_server (jamais un kill/restart : instance par machine). */
   | { kind: 'brain-start'; label: string; note: string }
 
@@ -107,6 +104,13 @@ export function planPreflightRepair(checkId: string): PreflightRepairPlan | unde
         provider: 'codex',
         label: 'Se connecter',
         note: 'Une console s’ouvre : le login OAuth s’y fait. Rien n’est saisi dans Autowin.'
+      }
+    case 'claude-session':
+      return {
+        kind: 'login',
+        provider: 'claude',
+        label: 'Se connecter',
+        note: 'Une console s’ouvre : le login Anthropic s’y fait. Rien n’est saisi dans Autowin.'
       }
     case 'brain':
       return {
@@ -131,6 +135,12 @@ export interface PreflightRepairDeps {
   cwdCandidates?: readonly string[]
   resolveLoginCwd?: (candidates: readonly string[]) => string | undefined
   spawnFn?: typeof spawn
+  /** Injectable en test. Défaut : la MÊME résolution que la sonde de session et que le run. */
+  resolveClaudeBin?: () => string
+  /** Injectable en test. Défaut : `existsSync`. */
+  exists?: (path: string) => boolean
+  /** Injectable en test. Défaut : `resolveBinOnPath` (lecture du PATH, sans exécuter). */
+  resolveOnPath?: (which: string) => string | null
 }
 
 /**
@@ -146,6 +156,55 @@ export async function repairPreflightCheck(
     return { started: false, detail: 'Aucune réparation automatique connue pour ce prérequis.' }
   }
   try {
+    if (plan.kind === 'login' && plan.provider === 'claude') {
+      // `claude auth login` s'adresse au CLI GLOBAL : contrairement à `npm run codex:login`, il ne
+      // dépend d'aucun script du repo, donc aucun cwd à résoudre — en exiger un ferait échouer le
+      // bouton sur l'app empaquetée, qui démarre depuis n'importe où.
+      const open =
+        deps.openLoginTerminal ??
+        ((command, opts): void => spawnLoginTerminal(command, { ...opts, spawnFn: deps.spawnFn }))
+      // ON AUTHENTIFIE LE BINAIRE SONDÉ (audit 2026-07-30). La sonde de session résout par
+      // `resolveClaudeBin` ; lancer le NOM NU laissait le PATH du terminal élire une AUTRE
+      // installation. Sur un poste à deux installations aux stores d'auth distincts — cas mesuré —
+      // le login réussissait et le check restait rouge, sans explication.
+      const resolveBin = deps.resolveClaudeBin ?? ((): string => resolveClaudeBin())
+      const exists = deps.exists ?? existsSync
+      const onPath = deps.resolveOnPath ?? resolveBinOnPath
+      const bin = resolveBin()
+      // `resolveClaudeBin` rend `'claude'` UNIQUEMENT en dernier recours ; toute autre valeur vient de
+      // `CLAUDE_BIN` ou du binaire natif trouvé, et doit être authentifiée TELLE QUELLE — y compris un
+      // nom nu (`CLAUDE_BIN=claude-next` pour une seconde installation), que `isAbsolute` ne voit pas.
+      const designated = bin !== 'claude'
+      if (designated) {
+        // Un binaire DÉSIGNÉ qui n'existe pas : ouvrir une console serait un faux fix — elle
+        // échouerait sous les yeux de l'utilisateur. Absolu → le disque tranche ; sinon → le PATH.
+        const reachable = isAbsolute(bin) ? exists(bin) : onPath(bin) !== null
+        if (!reachable) {
+          return {
+            started: false,
+            detail: `Binaire claude introuvable (${bin}) : corrige CLAUDE_BIN ou réinstalle le CLI.`
+          }
+        }
+      } else if (onPath('claude') === null) {
+        // Aucun binaire désigné ET rien dans le PATH : le CLI n'est pas installé. Le geste utile est
+        // une INSTALLATION, pas un login.
+        return {
+          started: false,
+          detail: 'CLI claude absent : installe-le (npm i -g @anthropic-ai/claude-code), puis re-vérifie.'
+        }
+      }
+      // Source unique de la commande de login (provider-login.ts) : pas de littéral dupliqué ici,
+      // qui divergerait le jour où le CLI renomme sa sous-commande.
+      const loginPlan = planProviderLogin('claude', designated ? bin : undefined)
+      if (loginPlan.kind !== 'terminal') {
+        return { started: false, detail: 'Le login claude ne passe pas par une console.' }
+      }
+      open(loginPlan.command, {})
+      return {
+        started: true,
+        detail: 'Console de connexion ouverte. Termine le login, puis re-vérifie.'
+      }
+    }
     if (plan.kind === 'login') {
       // `npm run codex:login` peuple le store LU par l'app → doit tourner dans le repo qui déclare
       // le script. On le RÉSOUT : ouvrir une console qui répond « Missing script » serait un faux fix.

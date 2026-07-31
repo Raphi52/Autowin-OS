@@ -57,6 +57,115 @@ describe('repairPreflightCheck — ce qui est LANCÉ, jamais « réparé »', ()
     expect(outcome.detail).not.toMatch(/réparé|résolu/i)
   })
 
+  /**
+   * DÉFAUT BLOQUANT FERMÉ (audit 2026-07-30) : le bouton lançait le NOM NU `claude auth login`,
+   * résolu par le PATH du terminal, alors que la sonde de session interroge le binaire de
+   * `resolveClaudeBin` (donc `CLAUDE_BIN`, puis le `claude.exe` natif du préfixe npm). Sur un poste à
+   * DEUX installations aux stores d'auth distincts — cas mesuré — l'utilisateur authentifiait
+   * l'installation B pendant qu'on sondait l'installation A : login réussi, check qui reste rouge,
+   * aucune explication, et pour seule issue « Facultatif — ne plus demander ».
+   */
+  describe('session claude — on authentifie le binaire SONDÉ, pas un homonyme du PATH', () => {
+    it('binaire résolu en chemin absolu → la console cible CE chemin, quoté', async () => {
+      const openLoginTerminal = vi.fn()
+      const bin = 'C:\\Users\\x\\AppData\\Roaming\\npm\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe'
+      const outcome = await repairPreflightCheck('claude-session', {
+        openLoginTerminal,
+        resolveClaudeBin: () => bin,
+        exists: () => true
+      })
+
+      expect(openLoginTerminal).toHaveBeenCalledWith(`& "${bin}" auth login`, {})
+      expect(outcome.started).toBe(true)
+      expect(outcome.detail).toContain('re-vérifie')
+    })
+
+    it('un chemin à ESPACES reste une seule cible (quotes obligatoires)', async () => {
+      const openLoginTerminal = vi.fn()
+      await repairPreflightCheck('claude-session', {
+        openLoginTerminal,
+        resolveClaudeBin: () => 'C:\\Program Files\\claude\\claude.exe',
+        exists: () => true
+      })
+
+      expect(openLoginTerminal).toHaveBeenCalledWith(
+        '& "C:\\Program Files\\claude\\claude.exe" auth login',
+        {}
+      )
+    })
+
+    it('CLAUDE_BIN qui pointe dans le vide → on REFUSE, au lieu d’ouvrir une console vouée à l’échec', async () => {
+      const openLoginTerminal = vi.fn()
+      const outcome = await repairPreflightCheck('claude-session', {
+        openLoginTerminal,
+        resolveClaudeBin: () => 'C:\\nexiste\\pas\\claude.exe',
+        exists: () => false
+      })
+
+      expect(openLoginTerminal).not.toHaveBeenCalled()
+      expect(outcome.started).toBe(false)
+      expect(outcome.detail).toMatch(/CLAUDE_BIN|introuvable/i)
+    })
+
+    it('CLI absent du PATH → le geste proposé est l’INSTALLATION, pas un login impossible', async () => {
+      const openLoginTerminal = vi.fn()
+      const outcome = await repairPreflightCheck('claude-session', {
+        openLoginTerminal,
+        resolveClaudeBin: () => 'claude',
+        resolveOnPath: () => null
+      })
+
+      expect(openLoginTerminal).not.toHaveBeenCalled()
+      expect(outcome.started).toBe(false)
+      expect(outcome.detail).toMatch(/installe/i)
+      expect(outcome.detail).not.toMatch(/auth login/i)
+    })
+
+    /**
+     * `CLAUDE_BIN` n'est pas forcément un chemin : `CLAUDE_BIN=claude-next` désigne une seconde
+     * installation par son nom. Conditionner le passage du binaire à `isAbsolute` faisait retomber ce
+     * cas sur le nom nu `claude` — la divergence sonde/login rouverte, en silence.
+     */
+    it('CLAUDE_BIN en nom NU → la console cible CE nom, pas « claude »', async () => {
+      const openLoginTerminal = vi.fn()
+      const outcome = await repairPreflightCheck('claude-session', {
+        openLoginTerminal,
+        resolveClaudeBin: () => 'claude-next',
+        resolveOnPath: (which) => (which === 'claude-next' ? '/usr/bin/claude-next' : null)
+      })
+
+      expect(openLoginTerminal).toHaveBeenCalledWith('& "claude-next" auth login', {})
+      expect(outcome.started).toBe(true)
+    })
+
+    it('CLAUDE_BIN en nom NU introuvable → refus qui NOMME CLAUDE_BIN, pas « installe le CLI »', async () => {
+      const openLoginTerminal = vi.fn()
+      const outcome = await repairPreflightCheck('claude-session', {
+        openLoginTerminal,
+        resolveClaudeBin: () => 'claude-typo',
+        // Un `claude` traîne dans le PATH : le garde-fou ne doit PAS s'en satisfaire.
+        resolveOnPath: (which) => (which === 'claude' ? '/usr/bin/claude' : null)
+      })
+
+      expect(openLoginTerminal).not.toHaveBeenCalled()
+      expect(outcome.started).toBe(false)
+      expect(outcome.detail).toContain('claude-typo')
+      expect(outcome.detail).toMatch(/CLAUDE_BIN/)
+    })
+
+    it('pas de binaire désigné mais un claude dans le PATH → repli sur le nom nu (Unix, install non-npm)', async () => {
+      const openLoginTerminal = vi.fn()
+      const outcome = await repairPreflightCheck('claude-session', {
+        openLoginTerminal,
+        resolveClaudeBin: () => 'claude',
+        resolveOnPath: () => '/usr/local/bin/claude'
+      })
+
+      expect(openLoginTerminal).toHaveBeenCalledWith('claude auth login', {})
+      expect(outcome.started).toBe(true)
+    })
+  })
+
   it('brain démarré → started, et le détail du démarrage remonte tel quel', async () => {
     const outcome = await repairPreflightCheck('brain', {
       startBrain: async () => ({ status: 'starting', detail: 'brain_server lancé (pid 42)' })
@@ -216,7 +325,7 @@ describe('resolveCodexLoginCwd — on cherche le repo, on ne le suppose pas', ()
 describe('contrat — les deux listes de réparables sont identiques', () => {
   it('même ensemble d’ids, mêmes libellés, mêmes notes', () => {
     const rendererIds = Object.keys(PREFLIGHT_REPAIRS).sort()
-    expect(rendererIds).toEqual(['brain', 'codex-session'])
+    expect(rendererIds).toEqual(['brain', 'claude-session', 'codex-session'])
     for (const id of rendererIds) {
       const plan = planPreflightRepair(id)
       expect(plan, `le renderer propose « ${id} » que le main refuse`).toBeDefined()
@@ -226,7 +335,15 @@ describe('contrat — les deux listes de réparables sont identiques', () => {
   })
 
   it('aucun réparable du main n’est absent du renderer (bouton manquant)', () => {
-    const allIds = ['brain', 'brain-token', 'codex', 'codex-session', 'claude', 'kimi']
+    const allIds = [
+      'brain',
+      'brain-token',
+      'codex',
+      'codex-session',
+      'claude',
+      'claude-session',
+      'kimi'
+    ]
     const mainRepairable = allIds.filter((id) => planPreflightRepair(id) !== undefined).sort()
     expect(Object.keys(PREFLIGHT_REPAIRS).sort()).toEqual(mainRepairable)
   })
