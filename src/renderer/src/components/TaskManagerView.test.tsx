@@ -130,6 +130,52 @@ describe('TaskManagerView', () => {
     ])
   })
 
+  it('ne propose qu’une entrée quand un alias et sa version exacte ont le même libellé', async () => {
+    const mockApi = api()
+    mockApi.models.mockResolvedValue([
+      {
+        id: 'claude:opus',
+        provider: 'claude',
+        model: 'opus',
+        label: 'Claude Opus 5 · CLI'
+      },
+      {
+        id: 'claude:opus-5',
+        provider: 'claude',
+        model: 'claude-opus-5',
+        label: 'Claude Opus 5 · CLI'
+      },
+      {
+        id: 'claude:opus-4-8',
+        provider: 'claude',
+        model: 'claude-opus-4-8',
+        label: 'Claude Opus 4.8 · CLI'
+      },
+      {
+        id: 'gateway:opus-5',
+        provider: 'gateway',
+        model: 'opus-5',
+        label: 'Claude Opus 5 · CLI'
+      }
+    ])
+    const { container } = await mount(mockApi)
+    const newButton = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Nouvelle tâche')
+    )
+    await act(async () => newButton?.click())
+
+    const model = [...container.querySelectorAll('label')]
+      .find((label) => label.textContent?.includes('Modèle'))
+      ?.querySelector('select')
+    const options = [...model!.options]
+
+    expect(options.filter((option) => option.textContent === 'Claude Opus 5 · CLI · claude')).toHaveLength(1)
+    expect(options.map((option) => option.value)).toContain('claude:opus')
+    expect(options.map((option) => option.value)).not.toContain('claude:opus-5')
+    expect(options.map((option) => option.value)).toContain('claude:opus-4-8')
+    expect(options.map((option) => option.value)).toContain('gateway:opus-5')
+  })
+
   it('crée une tâche depuis des champs structurés', async () => {
     const { container, mockApi } = await mount()
     const newButton = [...container.querySelectorAll('button')].find((button) =>

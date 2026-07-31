@@ -182,6 +182,20 @@ function hasLoadedModel(destination: TaskDestination, models: RuntimeModel[]): b
   )
 }
 
+function modelDisplayKey(model: RuntimeModel): string {
+  return `${model.provider}\u0000${model.label ?? model.model}`
+}
+
+function uniqueModelsForPicker(models: RuntimeModel[]): RuntimeModel[] {
+  const seen = new Set<string>()
+  return models.filter((model) => {
+    const key = modelDisplayKey(model)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 export function TaskManagerView({ active }: { active: boolean }): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<Snapshot>({
     tasks: [],
@@ -257,7 +271,7 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
   const selected = snapshot.tasks.find(({ id }) => id === selectedId)
   const selectableModels = useMemo(
     () =>
-      [...models].sort(
+      uniqueModelsForPicker(models).sort(
         (left, right) =>
           left.provider.localeCompare(right.provider) ||
           (left.label ?? left.model).localeCompare(right.label ?? right.model)
@@ -273,11 +287,19 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
   const draftDestination = draft?.destination
   const draftModelId =
     draftDestination
-      ? (selectableModels.find(
-          (candidate) =>
-            candidate.provider === draftDestination.provider &&
-            candidate.model === draftDestination.model
-        )?.id ?? '')
+      ? (() => {
+          const loaded = models.find(
+            (candidate) =>
+              candidate.provider === draftDestination.provider &&
+              candidate.model === draftDestination.model
+          )
+          if (!loaded) return ''
+          return (
+            selectableModels.find(
+              (candidate) => modelDisplayKey(candidate) === modelDisplayKey(loaded)
+            )?.id ?? ''
+          )
+        })()
       : ''
 
   const openCreate = (): void => {
@@ -303,7 +325,7 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
     }
     if (
       !modelCatalogReady ||
-      !hasLoadedModel(draft.destination, selectableModels)
+      !hasLoadedModel(draft.destination, models)
     ) {
       setError('Choisis un modèle chargé dans Agent Studio pour cette tâche.')
       return
@@ -794,7 +816,7 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                   disabled={
                     saving ||
                     !modelCatalogReady ||
-                    !hasLoadedModel(draft.destination, selectableModels)
+                    !hasLoadedModel(draft.destination, models)
                   }
                   onClick={() => void save()}
                 >
