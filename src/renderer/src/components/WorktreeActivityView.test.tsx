@@ -103,6 +103,29 @@ describe('WorktreeActivityView — A2 Hub', () => {
     expect(container.textContent).toContain('agent__a1')
   })
 
+  it('relie visuellement chaque worktree au workspace et explique son trajet', () => {
+    render([
+      offices[0],
+      {
+        ...offices[0],
+        agentId: 'a4',
+        agentName: 'Cleaner',
+        state: 'merged',
+        verdict: 'green',
+        publication: 'published',
+        endedAtMs: 6
+      },
+      offices[1]
+    ])
+
+    expect(container.querySelector('[data-testid="wt-office-flow"]')).toBeTruthy()
+    expect(container.querySelectorAll('[data-testid="wt-office-branch"]')).toHaveLength(3)
+    expect(container.textContent).toContain('BUREAUX SÉPARÉS')
+    expect(container.textContent).toContain('Travaille dans ce bureau séparé')
+    expect(container.textContent).toContain('Revenu dans ton workspace')
+    expect(container.textContent).toContain('Retour suspendu')
+  })
+
   it('rend working, conflict et recovered sans jargon Git', () => {
     render(offices)
 
@@ -185,6 +208,12 @@ describe('WorktreeActivityView — A2 Hub', () => {
     expect(container.textContent).toContain('Changements ajoutés')
     expect(container.textContent).toContain('déjà dans ton workspace')
     expect(container.textContent).toContain('plus récent reste protégé')
+    expect(container.querySelector('.wt-office-route')?.textContent).toContain(
+      'Revenu dans ton workspace · suite protégée'
+    )
+    expect(container.querySelector('.wt-office-route')?.textContent).not.toContain(
+      'Retour suspendu'
+    )
     expect(container.textContent).not.toContain('Aucun fichier local n’a été touché')
   })
 
@@ -208,6 +237,9 @@ describe('WorktreeActivityView — A2 Hub', () => {
 
     expect(container.textContent).toContain('rangement à vérifier')
     expect(container.textContent).toContain('Après six essais')
+    expect(container.querySelector('.wt-office-route')?.textContent).toContain(
+      'Revenu dans ton workspace · rangement à vérifier'
+    )
     expect(container.textContent).not.toContain('termine le rangement seul')
     expect(container.textContent).not.toContain('Les retours verts sont rangés automatiquement')
     expect(container.textContent).toContain('1 bureau à vérifier')

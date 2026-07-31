@@ -20,4 +20,10 @@ describe('WorktreeActivityView A2 responsive', () => {
     expect(css).toMatch(/\.wt-agent-office/)
     expect(css).toMatch(/\.wt-inbox/)
   })
+
+  it('dessine un tronc vertical et une branche par bureau sans grosse frise', () => {
+    expect(css).toMatch(/\.wt-office-flow::before/)
+    expect(css).toMatch(/\.wt-office-branch::before/)
+    expect(css).toMatch(/writing-mode\s*:\s*vertical-rl/)
+  })
 })
