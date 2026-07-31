@@ -18,6 +18,7 @@ import {
   isChatNearBottom,
   reduceScopedLiveRuns,
   reduceAssistantPilotEvent,
+  settleIfDone,
   resolveChatRuntimeIdentity,
   modelCostTier,
   turnCostEq,
@@ -1117,7 +1118,11 @@ export function ChatView({
       if (next[i].role !== 'assistant') continue
       const copy: AsstMsg = { ...(next[i] as AsstMsg), parts: (next[i] as AsstMsg).parts.slice() }
       fn(copy)
-      next[i] = copy
+      // Invariant impose ICI, dans l'entonnoir UNIQUE de mutation, et non aux trois sites qui closent
+      // un tour (annule / echoue / termine) : un quatrieme site futur l'oublierait. Un tour `done` ne
+      // laisse aucune action « en cours » — sinon l'indicateur tourne indefiniment et le bouton
+      // « Reprendre » n'apparait qu'apres un redemarrage de l'app.
+      next[i] = settleIfDone(copy) as AsstMsg
       break
     }
     liveMessagesRef.current.set(conversationId, next)

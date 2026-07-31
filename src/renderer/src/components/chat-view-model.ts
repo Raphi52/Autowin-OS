@@ -150,6 +150,24 @@ export function settleUnresolvedActions(parts: ChatPart[]): ChatPart[] {
   return changed ? settled : parts
 }
 
+/**
+ * Impose l'invariant « un tour `done` n'a plus rien en cours » sur un message VIVANT.
+ *
+ * `hydrateStoredAssistant` le faisait deja a la relecture disque, mais pas la session vivante : les
+ * trois sites qui closent un tour (annule, echoue, termine) posaient `done = true` en laissant les
+ * actions sans resultat. Consequences constatees le 2026-07-30 : l'indicateur « N action en cours »
+ * restait colle, et le bouton « Reprendre » n'apparaissait qu'apres un REDEMARRAGE de l'app — alors
+ * que c'est precisement le moment ou l'on veut relancer.
+ *
+ * Rend le message TEL QUEL quand rien ne change : `patchLast` ecrit dans un etat React, une nouvelle
+ * reference a chaque passe declencherait des rendus inutiles.
+ */
+export function settleIfDone(message: HydratedAssistantMessage): HydratedAssistantMessage {
+  if (!message.done) return message
+  const parts = settleUnresolvedActions(message.parts)
+  return parts === message.parts ? message : { ...message, parts }
+}
+
 export function hydrateStoredAssistant(message: StoredAssistantMessage): HydratedAssistantMessage {
   const status = message.status ?? 'completed'
   const done = status !== 'streaming'

@@ -63,6 +63,14 @@ export function createOrchestrateTurnPersistence(
   let opened = false
   let closed = false
   let streamedText = ''
+  /**
+   * Tache du tour, retenue pour etre RECOPIEE sur chaque carte d'etape. Sans elle, le bouton
+   * « Reprendre » du fil ne s'affichait jamais : il lit la tache dans `args.task` de l'action
+   * interrompue, et la tache n'existait que dans le message utilisateur — auquel le composant n'a pas
+   * acces. Cette chaine est la CLE de reprise (`resumableOrchestrationForTask`), donc elle voyage
+   * telle quelle, sans troncature.
+   */
+  let openedTask = ''
   let actionIndex = 0
 
   const live = (): boolean => targeted && Boolean(conversations.get(conversationId))
@@ -83,6 +91,7 @@ export function createOrchestrateTurnPersistence(
     },
     begin(task) {
       if (opened || !live()) return
+      openedTask = task
       conversations.beginTurn(
         conversationId,
         { content: task },
@@ -98,7 +107,12 @@ export function createOrchestrateTurnPersistence(
         kind: 'command',
         actionId,
         name: step.step,
-        args: { ...(label && { agent: label }), ...(step.detail && { detail: step.detail }) }
+        // `task` d'abord : c'est ce que le bouton « Reprendre » cherche pour relancer sans retaper.
+        args: {
+          ...(openedTask && { task: openedTask }),
+          ...(label && { agent: label }),
+          ...(step.detail && { detail: step.detail })
+        }
       })
       emit({
         kind: 'result',

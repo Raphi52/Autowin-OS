@@ -31,7 +31,36 @@ const interrompue = (task?: string): ChatActionPart =>
     ...(task ? { args: { task } } : {})
   }) as ChatActionPart
 
+/**
+ * Action telle que la PRODUCTION l'ecrit reellement (`runs/orchestrate-turn-persistence.ts`) : nom de
+ * phase, `agent`, `detail` — et la tache.
+ *
+ * Pourquoi ce fixture existe : celui du dessus fabrique `args: { task }` a la main. Cette forme
+ * n'existait PAS en production (les cartes n'emportaient que `agent`/`detail`), donc toute cette suite
+ * restait verte alors que le bouton ne s'affichait jamais dans l'app. Un fixture invente ne prouve que
+ * le fixture. On teste desormais aussi la forme reelle.
+ */
+const interrompueReelle = (task: string): ChatActionPart =>
+  ({
+    kind: 'action',
+    name: 'exec',
+    interrupted: true,
+    args: { task, agent: 'scout · codex · gpt-test', detail: 'phase 1' }
+  }) as ChatActionPart
+
 describe('reprendre une action interrompue sans la retaper', () => {
+  it('s’affiche sur la forme REELLE des cartes d’étape (le fixture inventé masquait le bug)', async () => {
+    const relance: string[] = []
+    const task = 'Auditer les paiements en double'
+    render([interrompueReelle(task)], (t) => relance.push(t))
+    const bouton = container.querySelector<HTMLButtonElement>('[data-testid="activity-resume"]')
+    expect(bouton).not.toBeNull()
+    await act(async () => bouton?.click())
+    // La tache repart TELLE QUELLE : c'est la cle de reprise cote main
+    // (`resumableOrchestrationForTask`), donc la moindre alteration perdrait l'acquis.
+    expect(relance).toEqual([task])
+  })
+
   it('propose « Reprendre » et renvoie la TÂCHE D’ORIGINE, pas le mot « reprend »', async () => {
     const resumed: string[] = []
     render([interrompue('trouve le composant concerné')], (task) => resumed.push(task))
