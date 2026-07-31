@@ -4,11 +4,10 @@ import { electronAPI } from '@electron-toolkit/preload'
 /** API exposée au renderer — chaque méthode a un handler main réel. */
 const api = {
   captureTestPage: (): Promise<string> => ipcRenderer.invoke('app:test:capture-page'),
-  seedConversationScopeTest: (
-    conversationId: string,
-    variant: 'a' | 'b'
-  ): Promise<unknown> =>
+  seedConversationScopeTest: (conversationId: string, variant: 'a' | 'b'): Promise<unknown> =>
     ipcRenderer.invoke('app:test:seed-conversation-scope', conversationId, variant),
+  seedArtifactPreviewsTest: (): Promise<{ conversationId: string; turnId: string }> =>
+    ipcRenderer.invoke('app:test:seed-artifact-previews'),
   storageMigration: (): Promise<Record<string, string>> =>
     ipcRenderer.invoke('app:storage-migration'),
   completeStorageMigration: (): Promise<boolean> =>
@@ -198,6 +197,18 @@ const api = {
     ipcRenderer.invoke('os:conversations:fork', id, messageId),
   conversationsRemove: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:remove', id),
+  readChatArtifact: (
+    conversationId: string,
+    turnId: string,
+    artifactId: string
+  ): Promise<unknown> =>
+    ipcRenderer.invoke('os:chatArtifact:read', conversationId, turnId, artifactId),
+  revealChatArtifact: (
+    conversationId: string,
+    turnId: string,
+    artifactId: string
+  ): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('os:chatArtifact:reveal', conversationId, turnId, artifactId),
   taskManagerSnapshot: (): Promise<unknown> => ipcRenderer.invoke('task-manager:snapshot'),
   taskManagerCreate: (task: unknown): Promise<unknown> =>
     ipcRenderer.invoke('task-manager:create', task),

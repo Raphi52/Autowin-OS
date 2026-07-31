@@ -164,6 +164,32 @@ describe('CodexAdapter — inférence + injection (mocké, hors-ligne)', () => {
     ])
   })
 
+  it('normalise un output_file complet du flux Responses en artefact', async () => {
+    const fetchFn = vi.fn(async () =>
+      sseRes([
+        'data: {"type":"response.output_item.done","item":{"id":"file_1","type":"message","content":[{"type":"output_file","filename":"rapport.md","mime_type":"text/markdown","file_data":"data:text/markdown;base64,IyBSYXBwb3J0"}]}}\n',
+        'data: {"type":"response.completed","response":{"id":"resp_file"}}\n'
+      ])
+    )
+    const adapter = new CodexAdapter({
+      fetchFn: fetchFn as unknown as typeof fetch,
+      loadTokensFn: () => tokens
+    })
+    const gen = adapter.send(conv, { model: 'gpt-file-test' })
+    let step = await gen.next()
+    while (!step.done) step = await gen.next()
+
+    expect(step.value.artifacts).toEqual([
+      expect.objectContaining({
+        name: 'rapport.md',
+        kind: 'markdown',
+        mimeType: 'text/markdown',
+        content: 'IyBSYXBwb3J0',
+        source: { provider: 'codex', model: 'gpt-file-test' }
+      })
+    ])
+  })
+
   it('INJECTE le système dans le champ natif `instructions` (preuve)', async () => {
     let captured: Record<string, unknown> = {}
     const fetchFn = vi.fn(async (_url: string, init: RequestInit) => {

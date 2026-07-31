@@ -21,6 +21,7 @@ import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
 import { describeFanoutFailure, explainRoleFailure } from './provider-failure-diagnosis'
 import { alignReportWithDisk } from './worktree-path-rewrite'
 import { runGreedy, type GreedyNode } from './greedy-scheduler'
+import type { ChatArtifact } from '../shared/artifacts'
 
 /**
  * Boucle d'orchestration DISCIPLINÉE — le cœur d'Autowin OS.
@@ -47,6 +48,8 @@ export interface OrchestrationStep {
   error?: string
   durationMs?: number
   evidence?: ExecutionEvidence[]
+  /** Fichiers/objets produits par le provider pendant cette étape. */
+  artifacts?: ChatArtifact[]
   /** Raisonnement/thinking du sous-agent (si le provider le remonte), conservé pour observation. */
   thinking?: string
   /** Provenance causale stable utilisée par le graphe demande → phases → agents. */
@@ -864,6 +867,7 @@ export class Orchestrator {
             status: 'completed',
             durationMs: performance.now() - startedAt,
             evidence: result.executionEvidence,
+            artifacts: result.artifacts,
             detail: `sous-tâche ${node.id}`,
             execution: {
               phase,
@@ -1170,6 +1174,7 @@ export class Orchestrator {
                 status: 'completed',
                 durationMs: performance.now() - startedAt,
                 evidence: res.executionEvidence,
+                artifacts: res.artifacts,
                 detail: `phase ${phase} · modèle ${member.model ?? member.provider}`,
                 execution
               })
@@ -1469,6 +1474,7 @@ export class Orchestrator {
         status: 'completed',
         durationMs: performance.now() - phaseStartedAt,
         evidence: phaseRes.executionEvidence,
+        artifacts: phaseRes.artifacts,
         detail: execPhases.length > 1 ? `phase ${phase}` : undefined,
         execution: {
           phase,
@@ -1869,6 +1875,7 @@ export class Orchestrator {
           status: 'completed',
           durationMs: performance.now() - repairStartedAt,
           evidence: repairRes.executionEvidence,
+          artifacts: repairRes.artifacts,
           detail: 'phase build (réparation)',
           execution: {
             phase: 'build',

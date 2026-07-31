@@ -491,7 +491,13 @@ const ChatMessageRow = memo(
                 onPick={(prompt) => onPickSuggestion?.(prompt)}
               />
             ) : part.kind === 'artifact' ? (
-              <ArtifactPreview key={part.artifact.id} artifact={part.artifact} />
+              <ArtifactPreview
+                key={part.artifact.id}
+                artifact={part.artifact}
+                conversationId={conversationId}
+                turnId={message.turnId}
+                onOpenImage={onOpenImage}
+              />
             ) : (
               <AssistantActivityGroup
                 key={index}

@@ -1,3 +1,5 @@
+import { join } from 'node:path'
+
 export interface AutomationInstanceMode {
   isolated: boolean
   headless: boolean
@@ -47,4 +49,16 @@ export function resolveExplicitUserDataDir(argv: readonly string[]): string | un
   const value = raw?.trim()
   if (!value || /\s--[a-z0-9-]+/i.test(value) || value.includes('\0')) return undefined
   return value
+}
+
+/**
+ * Une instance marquée isolée avec un user-data explicite doit aussi déplacer les stores Autowin.
+ * Sinon Chromium est isolé mais conversations/artefacts continuent d’écrire dans le profil réel.
+ */
+export function resolveIsolatedAppDataBase(
+  defaultBase: string,
+  isolated: boolean,
+  explicitUserDataPath: string | undefined
+): string {
+  return isolated && explicitUserDataPath ? join(explicitUserDataPath, 'app-data') : defaultBase
 }

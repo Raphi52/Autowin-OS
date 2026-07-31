@@ -5,6 +5,7 @@ import type {
   WorktreeRuntimeStatus
 } from '../shared/worktree-activity-model'
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
+import type { ChatArtifact, ArtifactEncoding } from '../shared/artifacts'
 
 interface ChatAttachment {
   name: string
@@ -28,6 +29,7 @@ type StoredChatPart =
       ok?: boolean
       data?: unknown
     }
+  | { kind: 'artifact'; artifact: ChatArtifact }
 interface OrchestrationStep {
   step: 'exec' | 'judge' | 'gate'
   provider?: string
@@ -265,6 +267,7 @@ interface ChatApi {
     conversationId: string,
     variant: 'a' | 'b'
   ) => Promise<{ conversationId: string; path: string; variant: 'a' | 'b' }>
+  seedArtifactPreviewsTest: () => Promise<{ conversationId: string; turnId: string }>
   storageMigration: () => Promise<Record<string, string>>
   completeStorageMigration: () => Promise<boolean>
   orchestrate: (
@@ -447,6 +450,22 @@ interface ChatApi {
   conversationsSetAuthorityMode: (id: string, mode: 'plan' | 'ask' | 'auto') => Promise<unknown>
   conversationsFork: (id: string, messageId: string) => Promise<unknown>
   conversationsRemove: (id: string) => Promise<boolean>
+  readChatArtifact: (
+    conversationId: string,
+    turnId: string,
+    artifactId: string
+  ) => Promise<{
+    ok: boolean
+    artifact?: ChatArtifact
+    encoding?: ArtifactEncoding
+    content?: string
+    error?: string
+  }>
+  revealChatArtifact: (
+    conversationId: string,
+    turnId: string,
+    artifactId: string
+  ) => Promise<{ ok: boolean; error?: string }>
   taskManagerSnapshot: () => Promise<TaskManagerSnapshot>
   taskManagerCreate: (task: unknown) => Promise<Record<string, unknown>>
   taskManagerUpdate: (id: string, task: unknown) => Promise<Record<string, unknown>>

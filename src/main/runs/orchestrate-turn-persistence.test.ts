@@ -76,6 +76,37 @@ describe('persistance du tour pour le run direct os:orchestrate', () => {
     expect(content.match(/texte déjà dit/g) ?? []).toHaveLength(0)
   })
 
+  it('persiste les fichiers produits comme artefacts du même tour', () => {
+    const { store, id } = storeWithConversation()
+    const turn = createOrchestrateTurnPersistence({
+      conversations: store,
+      conversationId: id,
+      turnId: 'turn-artifact'
+    })
+    turn.begin('génère une image')
+    turn.artifact({
+      id: 'image-1',
+      name: 'résultat.png',
+      mimeType: 'image/png',
+      kind: 'image',
+      size: 4,
+      createdAt: 1,
+      encoding: 'base64',
+      content: 'iVBORw==',
+      source: { provider: 'codex' }
+    })
+    turn.succeed()
+
+    expect(store.get(id)!.messages[1].parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'artifact',
+          artifact: expect.objectContaining({ id: 'image-1' })
+        })
+      ])
+    )
+  })
+
   it('reste totalement inerte pour un run autonome (aucune conversation ciblée)', () => {
     const { store, id } = storeWithConversation()
     const turn = createOrchestrateTurnPersistence({
@@ -110,6 +141,9 @@ describe('persistance du tour pour le run direct os:orchestrate', () => {
     expect(handler).toContain('createOrchestrateTurnPersistence(')
     expect(handler).toContain('durableTurn.begin(')
     expect(handler).toContain('durableTurn.step(step)')
+    expect(handler).toContain('...(step.artifacts ?? [])')
+    expect(handler).toContain('materializeChatArtifact(')
+    expect(handler).toContain('durableTurn.artifact(stored)')
     expect(handler).toContain('durableTurn.succeed(result)')
     expect(handler).toContain('durableTurn.fail(error, aborted)')
   })

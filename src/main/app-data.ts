@@ -22,6 +22,7 @@ const FILE_STORES = [
 ]
 const DIRECTORY_STORES = ['activity', 'runs', 'trace']
 const migratedBases = new Set<string>()
+let configuredBase: string | undefined
 
 export type MigrationStatus = 'copied' | 'source-missing' | 'target-kept' | 'failed'
 
@@ -37,7 +38,16 @@ export interface MigrationReport {
 }
 
 function appDataBase(): string {
-  return process.env.APPDATA ?? join(process.env.USERPROFILE ?? '.', 'AppData', 'Roaming')
+  return (
+    configuredBase ??
+    process.env.APPDATA ??
+    join(process.env.USERPROFILE ?? '.', 'AppData', 'Roaming')
+  )
+}
+
+/** Fixe la racine de TOUS les stores du processus (conversation, artefacts, traces, tâches…). */
+export function configureAutowinAppDataBase(base: string | undefined): void {
+  configuredBase = base
 }
 
 export function autowinAppDataRoot(base = appDataBase()): string {

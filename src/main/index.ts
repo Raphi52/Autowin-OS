@@ -89,6 +89,7 @@ import { loadAgentTopology, saveAgentTopology } from './topology-disk'
 import { migrateTopologyShape } from './topology'
 import type { AgentTopology, SlotBinding } from './topology'
 import {
+  configureAutowinAppDataBase,
   createAutowinAppDataRoot,
   ensureAutowinAppData,
   legacyAppDataRoot,
@@ -117,6 +118,14 @@ import { loadForgeCliToken } from './forge-cli-token'
 import { registerTicketsIpc } from './tickets-ipc'
 import { checkForUpdate, applyUpdate } from './git-update'
 import { restartApplication } from './app-restart'
+import {
+  ChatArtifactPreviewBudget,
+  MAX_ARTIFACT_PREVIEW_BYTES,
+  materializeChatArtifact,
+  readConversationArtifact,
+  removeConversationArtifacts,
+  revealableConversationArtifactPath
+} from './store/chat-artifact-store'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
 import {
@@ -144,6 +153,7 @@ import {
 } from './provider-status'
 import { ProviderStateStore, type ProviderMode } from './provider-state-store'
 import { loadTokens } from './providers/codex-auth'
+import { artifactsFromExecutionEvidence } from './providers/artifacts'
 
 import { amitelBrainRoot, createAmitelContextProvider } from './amitel-context'
 import { readGitState, readGitDiff } from './git-read-main'
@@ -156,7 +166,8 @@ import {
   automationAppIdentity,
   presentAutomationWindow,
   resolveAutomationInstanceMode,
-  resolveExplicitUserDataDir
+  resolveExplicitUserDataDir,
+  resolveIsolatedAppDataBase
 } from './headless-instance'
 import { TaskStore } from './task-manager/task-store'
 import { persistTaskStore } from './task-manager/task-store-disk'
@@ -185,9 +196,13 @@ const automationInstanceMode = {
 }
 const isolatedTestInstance = automationInstanceMode.isolated
 const headlessTestInstance = automationInstanceMode.headless
-const appDataRoot = resolveAutowinAppDataBase(app.getPath('appData'), app.isPackaged)
-app.setName(isolatedTestInstance ? `${AUTOWIN_DISPLAY_NAME} Test` : AUTOWIN_DISPLAY_NAME)
 const explicitUserDataPath = resolveExplicitUserDataDir(process.argv)
+const appDataRoot = resolveIsolatedAppDataBase(
+  resolveAutowinAppDataBase(app.getPath('appData'), app.isPackaged),
+  isolatedTestInstance,
+  explicitUserDataPath
+)
+app.setName(isolatedTestInstance ? `${AUTOWIN_DISPLAY_NAME} Test` : AUTOWIN_DISPLAY_NAME)
 const explicitUserDataDir = explicitUserDataPath !== undefined
 if (explicitUserDataPath) app.setPath('userData', explicitUserDataPath)
 // En DEV uniquement : ouvre le port CDP pour piloter/inspecter le renderer réel. Jamais en packagé
@@ -207,6 +222,7 @@ if (is.dev) {
       (cdp.moved ? ` — ${DEFAULT_CDP_PORT} était occupé` : '')
   )
 }
+configureAutowinAppDataBase(appDataRoot)
 const canonicalAppDataRoot = createAutowinAppDataRoot(appDataRoot)
 if (!explicitUserDataDir) app.setPath('userData', canonicalAppDataRoot)
 // En DEV, on n'enforce PAS le single-instance lock : un hot-restart electron-vite (ou un
@@ -232,6 +248,8 @@ const scheduledTasks = new TaskStore()
 const flushScheduledTasks = persistTaskStore(scheduledTasks)
 let scheduledTaskScheduler: TaskScheduler | undefined
 const pendingScheduledOccurrences = new Set<string>()
+const chatArtifactPreviewBudget = new ChatArtifactPreviewBudget()
+const budgetedArtifactRenderers = new Set<number>()
 
 /** Diffuse un événement d'app à toutes les fenêtres (UI live quand un agent pilote). */
 function broadcast(e: AppEvent): void {
@@ -749,6 +767,94 @@ function registerChatIpc(): void {
       return { conversationId: safeConversationId, path, variant }
     }
   )
+  ipcMain.handle('app:test:seed-artifact-previews', (event) => {
+    assertTrustedRendererSender(event, 'Fixture artifact previews')
+    if (!isolatedTestInstance) throw new Error('Fixture indisponible hors instance isolée')
+    const conversation = os.conversations.create({
+      title: 'Galerie · artefacts modèles',
+      category: 'codex',
+      provider: 'codex'
+    })
+    const previewTurnId = `artifact-preview-${Date.now()}`
+    os.conversations.beginTurn(
+      conversation.id,
+      { content: 'Génère des livrables visuels pour la galerie de validation.' },
+      {
+        turnId: previewTurnId,
+        runtime: { provider: 'codex', model: 'gpt-artifact-fixture' }
+      }
+    )
+    const fixtureArtifacts = [
+      {
+        id: 'fixture-image',
+        name: 'architecture.svg',
+        mimeType: 'image/svg+xml',
+        kind: 'vector' as const,
+        encoding: 'base64' as const,
+        content: Buffer.from(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="900" height="280"><defs><linearGradient id="g"><stop stop-color="#f2c94c"/><stop offset="1" stop-color="#5a83ff"/></linearGradient></defs><rect width="900" height="280" rx="28" fill="#0c0e14"/><circle cx="150" cy="140" r="72" fill="url(#g)"/><rect x="330" y="66" width="220" height="148" rx="22" fill="#171b25" stroke="#f2c94c"/><rect x="680" y="86" width="150" height="108" rx="18" fill="#171b25" stroke="#5a83ff"/><path d="M222 140h108m220 0h130" stroke="#d9dce6" stroke-width="5"/><text x="440" y="145" fill="white" font-family="sans-serif" font-size="25" text-anchor="middle">AUTOWIN OS</text></svg>'
+        ).toString('base64'),
+        size: 0,
+        createdAt: Date.now(),
+        source: { provider: 'codex', model: 'gpt-artifact-fixture' }
+      },
+      {
+        id: 'fixture-markdown',
+        name: 'RUN.md',
+        mimeType: 'text/markdown',
+        kind: 'markdown' as const,
+        encoding: 'utf8' as const,
+        content:
+          '## Livraison vérifiée\n\n- **Claude.exe** et **Codex** partagent le même contrat\n- Les fichiers restent liés au tour qui les a produits\n\n> Aperçu Markdown rendu dans le chat.',
+        size: 180,
+        createdAt: Date.now(),
+        source: { provider: 'claude', model: 'opus-fixture' }
+      },
+      {
+        id: 'fixture-diagram',
+        name: 'pipeline.mmd',
+        mimeType: 'text/x-mermaid',
+        kind: 'diagram' as const,
+        encoding: 'utf8' as const,
+        content:
+          'flowchart LR\n  A[Modèle] --> B[Artefact]\n  B --> C[Stockage durable]\n  C --> D[Aperçu sécurisé]',
+        size: 96,
+        createdAt: Date.now(),
+        source: { provider: 'codex', model: 'gpt-artifact-fixture' }
+      },
+      {
+        id: 'fixture-table',
+        name: 'mesures.csv',
+        mimeType: 'text/csv',
+        kind: 'table' as const,
+        encoding: 'utf8' as const,
+        content: 'provider,artefacts,statut\nClaude,12,visible\nCodex,15,visible',
+        size: 64,
+        createdAt: Date.now(),
+        source: { provider: 'claude', model: 'opus-fixture' }
+      },
+      {
+        id: 'fixture-model3d',
+        name: 'triangle.obj',
+        mimeType: 'model/obj',
+        kind: 'model3d' as const,
+        encoding: 'utf8' as const,
+        content: 'o Triangle\nv -1 -0.8 0\nv 1 -0.8 0\nv 0 1 0\nvn 0 0 1\nf 1//1 2//1 3//1',
+        size: 76,
+        createdAt: Date.now(),
+        source: { provider: 'codex', model: 'gpt-artifact-fixture' }
+      }
+    ]
+    for (const artifact of fixtureArtifacts) {
+      const stored = materializeChatArtifact(artifact, conversation.id, previewTurnId)
+      os.conversations.applyTurnEvent(conversation.id, previewTurnId, {
+        kind: 'artifact',
+        artifact: stored
+      })
+    }
+    os.conversations.applyTurnEvent(conversation.id, previewTurnId, { kind: 'done' })
+    return { conversationId: conversation.id, turnId: previewTurnId }
+  })
   ipcMain.handle('app:test:emit-event', (event, payload: unknown) => {
     assertTrustedRendererSender(event, 'Fixture UI')
     if (!isolatedTestInstance) throw new Error('Émission de test indisponible hors instance isolée')
@@ -821,6 +927,7 @@ function registerChatIpc(): void {
           at: Date.now()
         })
     })
+    const emittedArtifactIds = new Set<string>()
     try {
       durableTurn.begin(guardString(task, 'task'))
       // Acquis d'un run interrompu portant la MÊME tâche dans CETTE conversation. Oublié aussitôt :
@@ -846,6 +953,30 @@ function registerChatIpc(): void {
             turnId,
             workspaceRoot: os.executionWorkspace
           })
+          const stepArtifacts = [
+            ...(step.artifacts ?? []),
+            ...artifactsFromExecutionEvidence(step.evidence ?? [], {
+              provider: step.provider ?? 'orchestrator',
+              model: step.model,
+              workspaceRoot: os.executionWorkspace
+            })
+          ]
+          for (const artifact of stepArtifacts) {
+            if (emittedArtifactIds.has(artifact.id)) continue
+            emittedArtifactIds.add(artifact.id)
+            try {
+              const stored = materializeChatArtifact(artifact, conversationId, turnId)
+              durableTurn.artifact(stored)
+              emitToLiveWindows(BrowserWindow.getAllWindows(), 'pilot:event', {
+                kind: 'artifact',
+                artifact: stored,
+                conversationId,
+                turnId
+              })
+            } catch {
+              /* une sortie illisible ne doit jamais interrompre l’orchestration */
+            }
+          }
           ledger.append({
             source: 'orchestrate',
             name: step.step,
@@ -1284,6 +1415,59 @@ function registerChatIpc(): void {
   // --- Conversations catégorisées ---
   ipcMain.handle('os:conversations', () => os.conversations.list())
   ipcMain.handle(
+    'os:chatArtifact:read',
+    (event, rawConversationId: unknown, rawTurnId: unknown, rawArtifactId: unknown) => {
+      assertTrustedRendererSender(event, 'Chat artifact')
+      const conversationId = guardString(rawConversationId, 'conversationId')
+      const turnId = guardString(rawTurnId, 'turnId')
+      const artifactId = guardString(rawArtifactId, 'artifactId')
+      if (!budgetedArtifactRenderers.has(event.sender.id)) {
+        budgetedArtifactRenderers.add(event.sender.id)
+        event.sender.once('destroyed', () => {
+          chatArtifactPreviewBudget.clearRenderer(event.sender.id)
+          budgetedArtifactRenderers.delete(event.sender.id)
+        })
+      }
+      const scope = `${event.sender.id}:${conversationId}`
+      const artifactBudgetId = `${turnId}\u0000${artifactId}`
+      const remaining = Math.min(
+        MAX_ARTIFACT_PREVIEW_BYTES,
+        chatArtifactPreviewBudget.remaining(scope, artifactBudgetId)
+      )
+      const result = readConversationArtifact(
+        os.conversations.get(conversationId),
+        turnId,
+        artifactId,
+        undefined,
+        remaining
+      )
+      if (
+        result.ok &&
+        !chatArtifactPreviewBudget.reserve(scope, artifactBudgetId, result.artifact?.size ?? 0)
+      ) {
+        return { ok: false, artifact: result.artifact, error: 'Budget cumulé des aperçus atteint' }
+      }
+      return result
+    }
+  )
+  ipcMain.handle(
+    'os:chatArtifact:reveal',
+    (event, rawConversationId: unknown, rawTurnId: unknown, rawArtifactId: unknown) => {
+      assertTrustedRendererSender(event, 'Chat artifact')
+      const conversationId = guardString(rawConversationId, 'conversationId')
+      const turnId = guardString(rawTurnId, 'turnId')
+      const artifactId = guardString(rawArtifactId, 'artifactId')
+      const path = revealableConversationArtifactPath(
+        os.conversations.get(conversationId),
+        turnId,
+        artifactId
+      )
+      if (!path) return { ok: false, error: 'Artefact introuvable' }
+      shell.showItemInFolder(path)
+      return { ok: true }
+    }
+  )
+  ipcMain.handle(
     'os:conversations:create',
     (
       event,
@@ -1369,6 +1553,7 @@ function registerChatIpc(): void {
     await activeChatTurns.abortAndWait(id, 'conversation-deleted')
     const removed = os.conversations.remove(id)
     if (removed) {
+      removeConversationArtifacts(id)
       causalTrace.deleteConversation(id)
       deletePromptCalls(id)
       broadcast({ type: 'refresh', scope: 'conversations' })
@@ -1585,7 +1770,23 @@ function registerChatIpc(): void {
           }
         }
       }
-      const handlePilotEvent = (pilotEvent: PilotEvent): void => {
+      const handlePilotEvent = (incomingPilotEvent: PilotEvent): void => {
+        let pilotEvent = incomingPilotEvent
+        if (conversationId && pilotEvent.kind === 'artifact' && pilotEvent.artifact) {
+          try {
+            pilotEvent = {
+              ...pilotEvent,
+              artifact: materializeChatArtifact(pilotEvent.artifact, conversationId, turnId)
+            }
+          } catch (error) {
+            pilotEvent = {
+              kind: 'error',
+              text:
+                error instanceof Error ? error.message : 'Conservation de l’artefact impossible',
+              iteration: pilotEvent.iteration
+            }
+          }
+        }
         if (pilotEvent.kind === 'delta' && pilotEvent.text) streamedSpoken += pilotEvent.text
         if (pilotEvent.kind === 'think' && pilotEvent.text) spoken.push(pilotEvent.text)
         if (pilotEvent.kind === 'command' && pilotEvent.name)
@@ -2340,6 +2541,7 @@ app.whenReady().then(async () => {
           conversationId,
           turnId: resumeTurnId
         })
+    const resumedArtifactIds = new Set<string>()
     legacyResumeTurn?.begin(`[Reprise automatique] ${resumableRun.task}`)
     console.log(
       '[resume-orchestration]',
@@ -2368,6 +2570,35 @@ app.whenReady().then(async () => {
             turnId: resumeTurnId,
             workspaceRoot: os.executionWorkspace
           })
+          const stepArtifacts = [
+            ...(step.artifacts ?? []),
+            ...artifactsFromExecutionEvidence(step.evidence ?? [], {
+              provider: step.provider ?? 'orchestrator',
+              model: step.model,
+              workspaceRoot: os.executionWorkspace
+            })
+          ]
+          for (const artifact of stepArtifacts) {
+            if (resumedArtifactIds.has(artifact.id)) continue
+            resumedArtifactIds.add(artifact.id)
+            try {
+              const stored = materializeChatArtifact(artifact, conversationId, resumeTurnId)
+              if (legacyResumeTurn) legacyResumeTurn.artifact(stored)
+              else if (os.conversations.get(conversationId))
+                os.conversations.applyTurnEvent(conversationId, resumeTurnId, {
+                  kind: 'artifact',
+                  artifact: stored
+                })
+              emitToLiveWindows(BrowserWindow.getAllWindows(), 'pilot:event', {
+                kind: 'artifact',
+                artifact: stored,
+                conversationId,
+                turnId: resumeTurnId
+              })
+            } catch {
+              /* artefact best-effort pendant la reprise */
+            }
+          }
           for (const w of BrowserWindow.getAllWindows())
             w.webContents.send('orchestrate:step', step)
         },

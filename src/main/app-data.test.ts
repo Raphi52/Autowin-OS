@@ -13,6 +13,7 @@ import { join, relative } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   autowinAppDataRoot,
+  configureAutowinAppDataBase,
   ensureAutowinAppData,
   legacyAppDataRoot,
   migrateLegacyAppData,
@@ -167,5 +168,15 @@ describe('migration APPDATA Autowin OS', () => {
       'C:\\real-appdata'
     )
     expect(resolveAutowinAppDataBase('C:\\real-appdata', false, environment)).toBe(isolated)
+  })
+
+  it('applique la base configurée aux stores qui utilisent la valeur par défaut', () => {
+    const isolated = fixtureRoot()
+    configureAutowinAppDataBase(isolated)
+    try {
+      expect(ensureAutowinAppData()).toBe(autowinAppDataRoot(isolated))
+    } finally {
+      configureAutowinAppDataBase(undefined)
+    }
   })
 })

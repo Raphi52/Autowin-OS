@@ -67,6 +67,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   gltf: 'model/gltf+json',
   obj: 'model/obj',
   stl: 'model/stl',
+  ply: 'model/ply',
   ttf: 'font/ttf',
   otf: 'font/otf',
   woff: 'font/woff',
@@ -163,7 +164,8 @@ export function artifactKindFor(name: string, suppliedMimeType = ''): ArtifactKi
     mime.includes('7z')
   )
     return 'archive'
-  if (mime.startsWith('model/') || ['glb', 'gltf', 'obj', 'stl'].includes(ext)) return 'model3d'
+  if (mime.startsWith('model/') || ['glb', 'gltf', 'obj', 'stl', 'ply'].includes(ext))
+    return 'model3d'
   if (mime.startsWith('font/') || ['ttf', 'otf', 'woff', 'woff2'].includes(ext)) return 'font'
   if (
     mime.includes('msdownload') ||

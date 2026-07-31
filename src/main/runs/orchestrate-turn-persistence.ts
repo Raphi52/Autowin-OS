@@ -1,6 +1,7 @@
 import type { ChatTurnEvent, ChatTurnRuntime } from '../../shared/chat-turn'
 import type { Conversation } from '../store/conversations'
 import type { OrchestrationStep } from '../orchestrator'
+import type { ChatArtifact } from '../../shared/artifacts'
 
 /**
  * PERSISTANCE DU TOUR pour le chemin DIRECT `os:orchestrate` (bouton « Reprendre », pilotage
@@ -44,6 +45,8 @@ export interface OrchestrateTurnPersistence {
   begin(task: string): void
   /** Une étape de pipeline (exec/judge/gate) → carte d'action visible dans le fil. */
   step(step: OrchestrationStep): void
+  /** Résultat de fichier produit pendant l’étape, affiché comme tel dans le même tour. */
+  artifact(artifact: ChatArtifact): void
   /** Clôture NOMINALE : texte de livraison (si rien n'a été streamé) puis `done`. */
   succeed(result?: { result?: string }): void
   /** Clôture d'ÉCHEC/ANNULATION : une erreur devient VISIBLE au lieu d'être jetée par le `void`. */
@@ -113,6 +116,10 @@ export function createOrchestrateTurnPersistence(
       // « déjà dit » pour ne JAMAIS le dupliquer dans le texte de clôture (condition stricte du
       // patron pilotChat).
       if (step.text) streamedText += step.text
+    },
+    artifact(artifact) {
+      if (!opened || closed) return
+      emit({ kind: 'artifact', artifact })
     },
     succeed(result) {
       if (!opened || closed) return

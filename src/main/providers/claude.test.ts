@@ -1,15 +1,22 @@
 import { EventEmitter } from 'node:events'
-import { existsSync, readFileSync } from 'node:fs'
-import { basename } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { basename, join } from 'node:path'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   claudeContentArtifacts,
   claudeTransportEnvelope,
   materializeClaudeAttachments
 } from './claude'
+import { materializeChatArtifact, readConversationArtifact } from '../store/chat-artifact-store'
+import { ConversationStore } from '../store/conversations'
 
 // Capture le spawn : args réels + ce qui est écrit sur stdin, pour prouver l'anti-ENAMETOOLONG.
-const spawnCapture = vi.hoisted(() => ({ args: [] as string[], stdin: '' }))
+const spawnCapture = vi.hoisted(() => ({
+  args: [] as string[],
+  stdin: '',
+  stdoutEvents: [] as Array<Record<string, unknown>>
+}))
 vi.mock('node:child_process', async (importOriginal) => ({
   ...(await importOriginal<typeof import('node:child_process')>()),
   spawn: (_bin: string, args: string[]) => {
@@ -26,19 +33,21 @@ vi.mock('node:child_process', async (importOriginal) => ({
     child.kill = (): boolean => true
     child.unref = (): void => {} // le vrai ChildProcess en expose un (spawn détaché)
     child.exitCode = null
-    // Émet un `result` minimal puis ferme proprement (le générateur se règle).
+    // Émet les événements demandés par le test, ou un `result` minimal par défaut.
     setTimeout(() => {
-      stdout.emit(
-        'data',
-        Buffer.from(
-          JSON.stringify({ type: 'result', result: 'ok', session_id: 's', is_error: false }) + '\n'
-        )
-      )
+      const events = spawnCapture.stdoutEvents.splice(0)
+      if (!events.length)
+        events.push({ type: 'result', result: 'ok', session_id: 's', is_error: false })
+      for (const event of events) stdout.emit('data', Buffer.from(`${JSON.stringify(event)}\n`))
       child.emit('close', 0)
     }, 0)
     return child
   }
 }))
+
+beforeEach(() => {
+  spawnCapture.stdoutEvents = []
+})
 
 describe('ClaudeCliAdapter — pièces jointes', () => {
   it('convertit les blocs image/document Claude en artefacts supplier-agnostic', () => {
@@ -123,6 +132,59 @@ describe('ClaudeCliAdapter — pièces jointes', () => {
       'Read'
     ])
     materialized.cleanup()
+  })
+})
+
+describe('ClaudeCliAdapter — sorties artefact stream-json', () => {
+  it('transporte un bloc image assistant complet jusqu’au résultat supplier-agnostic', async () => {
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'assistant',
+        message: {
+          model: 'claude-opus-test',
+          content: [
+            {
+              type: 'image',
+              name: 'capture.png',
+              source: { type: 'base64', media_type: 'image/png', data: 'YWJj' }
+            }
+          ]
+        }
+      },
+      { type: 'result', result: 'Image prête', session_id: 'artifact-session', is_error: false }
+    ]
+    const { ClaudeCliAdapter } = await import('./claude')
+    const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([{ role: 'user', content: 'Image' }])
+    let step = await gen.next()
+    while (!step.done) step = await gen.next()
+
+    expect(step.value.artifacts).toEqual([
+      expect.objectContaining({
+        name: 'capture.png',
+        kind: 'image',
+        mimeType: 'image/png',
+        content: 'YWJj',
+        source: { provider: 'claude', model: 'claude-opus-test' }
+      })
+    ])
+
+    const base = mkdtempSync(join(tmpdir(), 'autowin-claude-artifact-'))
+    const store = new ConversationStore(() => 1)
+    const conversation = store.create({ title: 'Claude', category: 'claude', provider: 'claude' })
+    store.beginTurn(conversation.id, { content: 'Image' }, { turnId: 'turn-claude' })
+    const stored = materializeChatArtifact(
+      step.value.artifacts![0],
+      conversation.id,
+      'turn-claude',
+      base
+    )
+    store.applyTurnEvent(conversation.id, 'turn-claude', { kind: 'artifact', artifact: stored })
+    store.applyTurnEvent(conversation.id, 'turn-claude', { kind: 'done' })
+    const reloaded = new ConversationStore(() => 2)
+    reloaded.hydrate(JSON.parse(JSON.stringify(store.list())))
+    expect(
+      readConversationArtifact(reloaded.get(conversation.id), 'turn-claude', stored.id, base)
+    ).toMatchObject({ ok: true, encoding: 'base64', content: 'YWJj' })
   })
 })
 

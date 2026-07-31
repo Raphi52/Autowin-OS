@@ -1,6 +1,10 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ArtifactKind, ChatArtifact } from '../../../shared/artifacts'
 import { BrainMarkdown } from './BrainMarkdown'
+import { ArtifactArchivePreview } from './ArtifactArchivePreview'
+import { ArtifactDiagramPreview } from './ArtifactDiagramPreview'
+import { ArtifactFontPreview } from './ArtifactFontPreview'
+import { ArtifactModel3dPreview } from './ArtifactModel3dPreview'
 import './ArtifactPreview.css'
 
 const LABELS: Record<ArtifactKind, string> = {
@@ -94,7 +98,15 @@ function NotebookPreview({ text }: { text: string }): React.JSX.Element {
   const notebook = useMemo(() => {
     try {
       return JSON.parse(text) as {
-        cells?: Array<{ cell_type?: string; source?: string[] | string }>
+        cells?: Array<{
+          cell_type?: string
+          source?: string[] | string
+          outputs?: Array<{
+            output_type?: string
+            text?: string[] | string
+            data?: Record<string, string[] | string>
+          }>
+        }>
       }
     } catch {
       return null
@@ -110,18 +122,52 @@ function NotebookPreview({ text }: { text: string }): React.JSX.Element {
         >
           <span>{cell.cell_type ?? 'cellule'}</span>
           <pre>{Array.isArray(cell.source) ? cell.source.join('') : (cell.source ?? '')}</pre>
+          {(cell.outputs ?? []).slice(0, 12).map((output, outputIndex) => {
+            const outputText =
+              output.text ?? output.data?.['text/plain'] ?? output.data?.['text/markdown']
+            const image = output.data?.['image/png'] ?? output.data?.['image/jpeg']
+            const normalizedText = Array.isArray(outputText) ? outputText.join('') : outputText
+            const normalizedImage = Array.isArray(image) ? image.join('') : image
+            return normalizedImage ? (
+              <img
+                className="artifact-notebook__output-image"
+                key={outputIndex}
+                src={`data:${output.data?.['image/png'] ? 'image/png' : 'image/jpeg'};base64,${normalizedImage}`}
+                alt={`Sortie ${outputIndex + 1}`}
+              />
+            ) : normalizedText ? (
+              <pre className="artifact-notebook__output" key={outputIndex}>
+                {normalizedText}
+              </pre>
+            ) : null
+          })}
         </section>
       ))}
     </div>
   )
 }
 
-function ArtifactBody({ artifact }: { artifact: ChatArtifact }): React.JSX.Element {
+function ArtifactBody({
+  artifact,
+  onOpenImage
+}: {
+  artifact: ChatArtifact
+  onOpenImage?: (image: { src: string; name: string }) => void
+}): React.JSX.Element {
   const text = inlineText(artifact)
   const dataUrl = inlineDataUrl(artifact)
 
   if ((artifact.kind === 'image' || artifact.kind === 'vector') && dataUrl)
-    return <img className="artifact-preview__image" src={dataUrl} alt={artifact.name} />
+    return (
+      <button
+        type="button"
+        className="artifact-preview__image-button"
+        aria-label={`Agrandir ${artifact.name}`}
+        onClick={() => onOpenImage?.({ src: dataUrl, name: artifact.name })}
+      >
+        <img className="artifact-preview__image" src={dataUrl} alt={artifact.name} />
+      </button>
+    )
   if (artifact.kind === 'markdown' && text !== undefined) return <BrainMarkdown source={text} />
   if (artifact.kind === 'table' && text !== undefined) {
     const rows = parseDelimited(text, artifact.mimeType.includes('tab-separated') ? '\t' : ',')
@@ -174,23 +220,15 @@ function ArtifactBody({ artifact }: { artifact: ChatArtifact }): React.JSX.Eleme
   if (artifact.kind === 'video' && dataUrl)
     return <video className="artifact-preview__video" controls src={dataUrl} />
   if (
-    (artifact.kind === 'code' ||
-      artifact.kind === 'diff' ||
-      artifact.kind === 'text' ||
-      artifact.kind === 'diagram') &&
+    (artifact.kind === 'code' || artifact.kind === 'diff' || artifact.kind === 'text') &&
     text !== undefined
   )
     return <pre className={`artifact-preview__source is-${artifact.kind}`}>{text}</pre>
-  if (artifact.kind === 'font')
-    return <div className="artifact-preview__font">Aa Bb Cc · 0123456789</div>
-  if (artifact.kind === 'model3d')
-    return <div className="artifact-preview__placeholder">Scène 3D · aperçu interactif</div>
-  if (artifact.kind === 'archive')
-    return (
-      <div className="artifact-preview__placeholder">
-        Archive · contenu inspectable sans exécution
-      </div>
-    )
+  if (artifact.kind === 'diagram' && text !== undefined)
+    return <ArtifactDiagramPreview source={text} />
+  if (artifact.kind === 'font') return <ArtifactFontPreview artifact={artifact} />
+  if (artifact.kind === 'model3d') return <ArtifactModel3dPreview artifact={artifact} />
+  if (artifact.kind === 'archive') return <ArtifactArchivePreview artifact={artifact} />
   if (artifact.kind === 'executable')
     return (
       <div className="artifact-preview__blocked">Exécution interdite · métadonnées uniquement</div>
@@ -204,11 +242,7 @@ function ArtifactBody({ artifact }: { artifact: ChatArtifact }): React.JSX.Eleme
     artifact.kind === 'presentation' ||
     artifact.kind === 'spreadsheet'
   )
-    return (
-      <div className="artifact-preview__placeholder">
-        {LABELS[artifact.kind]} · aperçu du fichier
-      </div>
-    )
+    return <ArtifactArchivePreview artifact={artifact} />
   return (
     <div className="artifact-preview__placeholder">
       {artifact.path ? 'Fichier conservé sur le disque' : 'Aperçu indisponible'}
@@ -216,23 +250,121 @@ function ArtifactBody({ artifact }: { artifact: ChatArtifact }): React.JSX.Eleme
   )
 }
 
-export function ArtifactPreview({ artifact }: { artifact: ChatArtifact }): React.JSX.Element {
+export function ArtifactPreview({
+  artifact,
+  conversationId,
+  turnId,
+  onOpenImage
+}: {
+  artifact: ChatArtifact
+  conversationId?: string | null
+  turnId?: string
+  onOpenImage?: (image: { src: string; name: string }) => void
+}): React.JSX.Element {
+  const cardRef = useRef<HTMLElement>(null)
+  const [loadState, setLoadState] = useState<{
+    key: string
+    artifact?: ChatArtifact
+    error?: string
+  }>()
+  const mustLoad =
+    artifact.content === undefined &&
+    Boolean(artifact.path) &&
+    artifact.kind !== 'executable' &&
+    artifact.kind !== 'binary'
+  const [isNearViewport, setIsNearViewport] = useState(
+    () => !mustLoad || typeof IntersectionObserver === 'undefined'
+  )
+  const loadKey = `${conversationId ?? ''}\u0000${turnId ?? ''}\u0000${artifact.id}`
+
+  useEffect(() => {
+    if (!mustLoad || isNearViewport || typeof IntersectionObserver === 'undefined') return
+    const card = cardRef.current
+    if (!card) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setIsNearViewport(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin: '600px 0px' }
+    )
+    observer.observe(card)
+    return () => observer.disconnect()
+  }, [isNearViewport, mustLoad])
+
+  useEffect(() => {
+    let active = true
+    if (!mustLoad || !isNearViewport || !conversationId || !turnId || !window.api?.readChatArtifact)
+      return
+    void window.api
+      .readChatArtifact(conversationId, turnId, artifact.id)
+      .then((result) => {
+        if (!active) return
+        if (!result.ok || result.content === undefined) {
+          setLoadState({ key: loadKey, error: result.error ?? 'Aperçu indisponible' })
+          return
+        }
+        setLoadState({
+          key: loadKey,
+          artifact: {
+            ...(result.artifact ?? artifact),
+            content: result.content,
+            encoding: result.encoding
+          }
+        })
+      })
+      .catch(() => {
+        if (active) setLoadState({ key: loadKey, error: 'Lecture de l’artefact impossible' })
+      })
+    return () => {
+      active = false
+    }
+  }, [artifact, conversationId, isNearViewport, loadKey, mustLoad, turnId])
+
+  const activeLoadState = loadState?.key === loadKey ? loadState : undefined
+  const loaded = activeLoadState?.artifact
+  const loadError = activeLoadState?.error
+  const resolved = loaded ?? artifact
+
   return (
-    <article className="artifact-preview" data-artifact-kind={artifact.kind}>
+    <article ref={cardRef} className="artifact-preview" data-artifact-kind={artifact.kind}>
       <header className="artifact-preview__header">
         <span className="artifact-preview__kind">{LABELS[artifact.kind]}</span>
         <strong title={artifact.name}>{artifact.name}</strong>
         <span>{fileSize(artifact.size)}</span>
       </header>
       <div className="artifact-preview__body">
-        <ArtifactBody artifact={artifact} />
+        {mustLoad && !isNearViewport ? (
+          <div className="artifact-preview__placeholder">Aperçu chargé à l’approche</div>
+        ) : mustLoad && !loaded && !loadError ? (
+          <div className="artifact-preview__placeholder" role="status">
+            Chargement de l’aperçu…
+          </div>
+        ) : loadError ? (
+          <div className="artifact-preview__blocked">{loadError}</div>
+        ) : (
+          <ArtifactBody artifact={resolved} onOpenImage={onOpenImage} />
+        )}
       </div>
       <footer className="artifact-preview__footer">
-        <span>{artifact.mimeType}</span>
+        <span>{resolved.mimeType}</span>
         <span>
-          {artifact.source.provider}
-          {artifact.source.model ? ` · ${artifact.source.model}` : ''}
+          {resolved.source.provider}
+          {resolved.source.model ? ` · ${resolved.source.model}` : ''}
         </span>
+        {artifact.path && conversationId && turnId && (
+          <button
+            type="button"
+            className="artifact-preview__reveal"
+            onClick={() => {
+              void window.api?.revealChatArtifact?.(conversationId, turnId, artifact.id)
+            }}
+          >
+            Afficher le fichier
+          </button>
+        )}
       </footer>
     </article>
   )

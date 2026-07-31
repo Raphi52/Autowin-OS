@@ -3,7 +3,8 @@ import {
   automationAppIdentity,
   presentAutomationWindow,
   resolveAutomationInstanceMode,
-  resolveExplicitUserDataDir
+  resolveExplicitUserDataDir,
+  resolveIsolatedAppDataBase
 } from './headless-instance'
 
 describe('mode instance automatisée', () => {
@@ -65,5 +66,13 @@ describe('mode instance automatisée', () => {
         '--user-data-dir=C:\\profil --isolated-test-instance'
       ])
     ).toBeUndefined()
+  })
+  it('place aussi les conversations et artefacts sous le profil de test explicite', () => {
+    expect(
+      resolveIsolatedAppDataBase('C:\\Users\\real\\AppData\\Roaming', true, 'C:\\proof\\user-data')
+    ).toBe('C:\\proof\\user-data\\app-data')
+    expect(
+      resolveIsolatedAppDataBase('C:\\Users\\real\\AppData\\Roaming', false, 'C:\\proof\\user-data')
+    ).toBe('C:\\Users\\real\\AppData\\Roaming')
   })
 })
