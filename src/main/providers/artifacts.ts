@@ -308,6 +308,11 @@ export function artifactsFromExecutionEvidence(
     const workspaceRoot = item.workspaceRoot ?? context.workspaceRoot
     for (const path of item.paths ?? (item.path ? [item.path] : [])) {
       const kind = artifactKindFor(path)
+      // Le CODE n'est jamais une carte dans le fil. Une carte sert à REGARDER un livrable (image,
+      // rapport, tableau) ; un fichier source, lui, se lit en diff. Constaté en usage : un `index.ts`
+      // de 119 Ko déversé au milieu de la conversation parce qu'il avait été pris pour un fichier
+      // neuf. Le travail sur le code reste visible dans Source control et dans les preuves d'étape.
+      if (kind === 'code') continue
       const isNew = baseFingerprintFor(item, path) === null
       const isOutputFormat = !['code', 'text', 'markdown', 'diff', 'structured-data'].includes(kind)
       if (!isNew && !isOutputFormat) continue

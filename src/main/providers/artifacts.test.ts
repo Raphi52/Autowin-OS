@@ -110,4 +110,36 @@ describe('provider artifacts', () => {
 
     expect(artifacts.map((artifact) => artifact.name)).toEqual(['capture.png'])
   })
+
+  it('un fichier de CODE, même vu comme neuf, ne devient jamais une carte dans le fil', () => {
+    // Constaté en usage : un `index.ts` de 119 Ko déversé au milieu de la conversation, parce qu'il
+    // n'avait pas d'empreinte de base et passait donc pour un fichier neuf. Une carte sert à
+    // REGARDER un livrable ; le code se lit en diff, dans Source control.
+    const root = mkdtempSync(join(tmpdir(), 'autowin-evidence-code-'))
+    scratch.push(root)
+    writeFileSync(join(root, 'index.ts'), 'export const a = 1', 'utf8')
+    writeFileSync(join(root, 'rapport.md'), '# rapport', 'utf8')
+    writeFileSync(join(root, 'schema.png'), Buffer.from('png'))
+
+    const artifacts = artifactsFromExecutionEvidence(
+      [
+        {
+          type: 'file_change',
+          kind: 'mutation',
+          status: 'completed',
+          ok: true,
+          summary: 'files',
+          workspaceRoot: root,
+          paths: ['index.ts', 'rapport.md', 'schema.png'],
+          pathBaseFingerprints: { 'index.ts': null, 'rapport.md': null, 'schema.png': null }
+        }
+      ],
+      { provider: 'codex', workspaceRoot: root, now: () => 789 }
+    )
+
+    const noms = artifacts.map((artifact) => artifact.name)
+    expect(noms).not.toContain('index.ts') // le code sort du fil
+    expect(noms).toContain('schema.png') // un vrai livrable reste
+    expect(noms).toContain('rapport.md') // une note produite reste
+  })
 })
