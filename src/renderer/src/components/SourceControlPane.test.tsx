@@ -75,7 +75,8 @@ function mockApi(
     getWorktreeActivity: () => Promise.resolve([]),
     onWorktreeActivity: () => () => {},
     onPilotEvent: () => () => {},
-    onAppEvent: () => () => {}
+    onAppEvent: () => () => {},
+    retryWorktreeRecovery: () => Promise.resolve(undefined)
   }
 }
 
@@ -131,6 +132,90 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(container.querySelectorAll('[data-testid="sc-file"]')).toHaveLength(0)
   })
 
+  it('ouvre le vrai diff read-only du bureau conflictuel sans écrire dans le prompt', async () => {
+    mockApi(GIT)
+    const getWorktreeConflictDiff = vi.fn(() =>
+      Promise.resolve({
+        available: true as const,
+        agentId: 'a2',
+        paths: ['src/main/os.ts'],
+        diff: '@@ -1 +1 @@\n-version principale\n+version du bureau'
+      })
+    )
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    api.getWorktreeActivity = () =>
+      Promise.resolve([
+        {
+          agentId: 'a2',
+          agentName: 'Builder',
+          state: 'conflict',
+          files: [{ path: 'src/main/os.ts', kind: 'mod' }],
+          startedAtMs: 1,
+          conflictFile: 'src/main/os.ts',
+          verdict: 'green',
+          publication: 'blocked'
+        }
+      ])
+    api.getWorktreeStatus = () =>
+      Promise.resolve({ available: true, workspacePath: 'C:\\Amitel\\Autowin OS' })
+    api.getWorktreeConflictDiff = getWorktreeConflictDiff
+    const onSendPrompt = vi.fn()
+    await render(onSendPrompt)
+    await openWorktreeView()
+
+    const compare = container.querySelector(
+      '[data-testid="wt-resolve-conflict"]'
+    ) as HTMLButtonElement
+    await act(async () => {
+      compare.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(getWorktreeConflictDiff).toHaveBeenCalledWith('a2')
+    expect(onSendPrompt).not.toHaveBeenCalled()
+    expect(container.querySelector('[data-testid="wt-conflict-diff"]')).toBeTruthy()
+    expect(container.querySelector('[data-testid="diff-view"]')).toBeTruthy()
+    expect(container.textContent).toContain('version du bureau')
+  })
+
+  it('réarme depuis le Hub la recréation d’un bureau épuisé', async () => {
+    mockApi(GIT)
+    const retryWorktreeRecovery = vi.fn(() => Promise.resolve(undefined))
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    api.getWorktreeActivity = () =>
+      Promise.resolve([
+        {
+          agentId: 'restore-me',
+          agentName: 'Agent récupéré',
+          state: 'ready',
+          files: [{ path: 'late.txt', kind: 'mod' }],
+          startedAtMs: 1,
+          verdict: 'green',
+          publication: 'cleanup-pending',
+          attentionReason: 'retry-exhausted',
+          retryCount: 6,
+          worktreePath: 'C:\\AppData\\worktrees\\agent__restore-me',
+          worktreeAvailable: false
+        }
+      ])
+    api.getWorktreeStatus = () =>
+      Promise.resolve({ available: true, workspacePath: 'C:\\Amitel\\Autowin OS' })
+    api.retryWorktreeRecovery = retryWorktreeRecovery
+    await render()
+    await openWorktreeView()
+
+    const retry = container.querySelector<HTMLButtonElement>('[data-testid="wt-retry-office"]')
+    expect(retry?.textContent).toContain('Réessayer de recréer')
+    await act(async () => {
+      retry!.click()
+      await Promise.resolve()
+    })
+
+    expect(retryWorktreeRecovery).toHaveBeenCalledWith('restore-me')
+    expect(container.querySelector('[data-testid="wt-open-office"]')).toBeNull()
+  })
+
   it('clic sur un fichier affiche son diff (consultation read-only)', async () => {
     mockApi(GIT)
     await render()
@@ -140,9 +225,7 @@ describe('SourceControlPane (prompt-first)', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
-    expect(calls.conversationDiffArgs).toEqual([
-      ['conv-a', 'src/main/index.ts', 'C:/repo']
-    ])
+    expect(calls.conversationDiffArgs).toEqual([['conv-a', 'src/main/index.ts', 'C:/repo']])
     expect(container.querySelector('[data-testid="diff-view"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="sc-diff-card"]')).not.toBeNull()
     expect(container.querySelector('.sc-diff-title')?.textContent).toBe('src/main/index.ts')

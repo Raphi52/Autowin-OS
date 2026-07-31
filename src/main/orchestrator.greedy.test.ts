@@ -12,6 +12,7 @@ import type {
 } from './providers/types'
 import { RoleModelConfig } from './roles'
 import { TrustLedger } from './trust/ledger'
+import { makeTestWorktrees } from './orchestrator.test-helpers'
 
 /** Provider fake : renvoie OUT_<id> par sous-tâche, VALIDE pour le juge, throw si le prompt contient CRASH. */
 class GreedyProvider implements ProviderAdapter {
@@ -44,7 +45,22 @@ class GreedyProvider implements ProviderAdapter {
       provider: this.id,
       systemInjected,
       usage: { inputTokens: 10, outputTokens: 5, costUsd: 0.002 },
-      executionEvidence: []
+      executionEvidence: [
+        {
+          type: 'file_change',
+          kind: 'mutation',
+          status: 'completed',
+          ok: true,
+          summary: 'mutation simulée'
+        },
+        {
+          type: 'command_execution',
+          kind: 'verification',
+          status: 'completed',
+          ok: true,
+          summary: 'tests simulés'
+        }
+      ]
     }
   }
 }
@@ -67,6 +83,7 @@ function makeGreedy(
     trust: new TrustLedger(),
     authority: new AuthoritySas(),
     executionWorkspace: 'C:\\ws',
+    worktrees: makeTestWorktrees('C:\\ws'),
     greedyConcurrency: 4,
     decompose,
     classifyPhases

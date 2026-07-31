@@ -59,8 +59,11 @@ import {
 import { defaultBehaviourWorkspace } from './behaviour-files'
 import { WorktreeManager } from './store/worktree-manager'
 import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
+import { WorktreeRunStateStore } from './store/worktree-run-state'
+import { repositoryWorktreeIdentity } from './store/worktree-repository'
 import type {
   WorktreeAgentActivity,
+  WorktreeConflictDiffResult,
   WorktreeRuntimeStatus
 } from '../shared/worktree-activity-model'
 import { existsSync } from 'node:fs'
@@ -130,6 +133,7 @@ export class AutowinOS {
    * → comportement historique, workspace partagé). Exposé pour l'IPC d'observabilité (volet A).
    */
   readonly worktrees?: RunWorktreeCoordinator
+  private worktreeRuntimeStatus!: WorktreeRuntimeStatus
   private worktreeActivityListener?: (a: WorktreeAgentActivity[]) => void
   /** Dossier des états d'orchestration reprenables (survie niveau 3). */
   private readonly orchestrationStateRoot = join(ensureAutowinAppData(), 'run-state')
@@ -149,16 +153,40 @@ export class AutowinOS {
     process.env[AUTOWIN_WORKSPACE_ENV] = executionWorkspace
     // Garde : `git worktree` exige un vrai repo. Absent (.git manquant) → pas d'isolation (undefined).
     if (existsSync(join(executionWorkspace, '.git'))) {
-      const manager = new WorktreeManager({
-        baseRepo: executionWorkspace,
-        worktreeRoot: join(ensureAutowinAppData(), 'worktrees')
-      })
-      this.worktrees = new RunWorktreeCoordinator({
-        manager,
-        onActivity: (a) => {
-          this.worktreeActivityListener?.(a)
+      try {
+        const identity = repositoryWorktreeIdentity(
+          join(ensureAutowinAppData(), 'worktrees'),
+          executionWorkspace
+        )
+        const manager = new WorktreeManager({
+          baseRepo: executionWorkspace,
+          worktreeRoot: identity.root
+        })
+        this.worktrees = new RunWorktreeCoordinator({
+          manager,
+          stateStore: new WorktreeRunStateStore(identity.root, identity.repoId),
+          onActivity: (a) => {
+            this.worktreeActivityListener?.(a)
+          }
+        })
+        this.worktreeRuntimeStatus = {
+          available: true,
+          workspacePath: executionWorkspace,
+          repoId: identity.repoId
         }
-      })
+      } catch {
+        this.worktreeRuntimeStatus = {
+          available: false,
+          workspacePath: executionWorkspace,
+          reason: 'identity-unavailable'
+        }
+      }
+    } else {
+      this.worktreeRuntimeStatus = {
+        available: false,
+        workspacePath: executionWorkspace,
+        reason: 'not-git'
+      }
     }
     this.orchestrator = new Orchestrator({
       registry: this.registry,
@@ -195,8 +223,7 @@ export class AutowinOS {
       },
       // Fan-out multi-modèles : les blocs topology scout/frame → phases de divergence ; judge → juges.
       // ≥2 modèles déposés → l'orchestrateur duplique + agrège (voir orchestrator.ts). Sinon mono.
-      phaseFanOut: (phase) =>
-        phase === 'scout' || phase === 'frame' ? this.fanOut[phase] : [],
+      phaseFanOut: (phase) => (phase === 'scout' || phase === 'frame' ? this.fanOut[phase] : []),
       judgeFanOut: () => this.fanOut.judge,
       // Fonctionnement NORMAL : on décompose systématiquement via le modèle orchestrateur (best-effort
       // → [] pour une tâche atomique = fallback séquentiel naturel). Pas de « mode » à activer.
@@ -211,7 +238,10 @@ export class AutowinOS {
         // Photo de l'arbre au démarrage : tout ce qui était déjà modifié n'appartient pas au run.
         begin: (runId) => {
           if (!this.autoClose) return
-          this.closeBaselines.set(runId, captureCloseBaseline(executionWorkspace, amitelBrainRoot()))
+          this.closeBaselines.set(
+            runId,
+            captureCloseBaseline(executionWorkspace, amitelBrainRoot())
+          )
         },
         close: async ({ runId, task }) => {
           const baselinePromise = this.closeBaselines.get(runId)
@@ -259,7 +289,26 @@ export class AutowinOS {
   }
 
   getWorktreeRuntimeStatus(): WorktreeRuntimeStatus {
-    return { available: this.worktrees !== undefined }
+    return (
+      this.worktreeRuntimeStatus ?? {
+        available: false,
+        workspacePath: this.executionWorkspace,
+        reason: 'identity-unavailable'
+      }
+    )
+  }
+
+  getWorktreeConflictDiff(agentId: string): WorktreeConflictDiffResult {
+    return (
+      this.worktrees?.conflictDiff(agentId) ?? {
+        available: false,
+        reason: 'not-conflict'
+      }
+    )
+  }
+
+  retryWorktreeRecovery(agentId: string): WorktreeAgentActivity | undefined {
+    return this.worktrees?.retryRun(agentId)
   }
 
   /** Abonne l'IPC aux changements d'activité worktree (push live vers le cockpit). Idempotent. */

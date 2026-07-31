@@ -47,7 +47,8 @@ const api = {
   pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),
   brainRepoPath: (): Promise<string> => ipcRenderer.invoke('git:brainRoot'),
   getAutoClose: (): Promise<unknown> => ipcRenderer.invoke('run:autoClose:get'),
-  setAutoClose: (enabled: boolean): Promise<unknown> => ipcRenderer.invoke('run:autoClose:set', enabled),
+  setAutoClose: (enabled: boolean): Promise<unknown> =>
+    ipcRenderer.invoke('run:autoClose:set', enabled),
   // Survie niveau 2 : tours restés inachevés (app fermée pendant l'exécution) + leur journal.
   unfinishedTurns: (): Promise<
     Array<{ conversationId: string; turnId: string; events: number; updatedAt: number }>
@@ -76,6 +77,12 @@ const api = {
   // Cockpit worktree (volet A) — activité des copies isolées par agent (frise + journal).
   getWorktreeActivity: (): Promise<unknown[]> => ipcRenderer.invoke('worktree:activity'),
   getWorktreeStatus: (): Promise<unknown> => ipcRenderer.invoke('worktree:status'),
+  getWorktreeConflictDiff: (agentId: string): Promise<unknown> =>
+    ipcRenderer.invoke('worktree:conflict-diff', agentId),
+  retryWorktreeRecovery: (agentId: string): Promise<unknown> =>
+    ipcRenderer.invoke('worktree:retry-recovery', agentId),
+  setWorktreeFixture: (fixture: unknown): Promise<boolean> =>
+    ipcRenderer.invoke('app:test:worktree-fixture', fixture),
   onWorktreeActivity: (cb: (activity: unknown[]) => void): (() => void) => {
     const handler = (_e: unknown, activity: unknown[]): void => cb(activity)
     ipcRenderer.on('worktree:activity-changed', handler)
@@ -103,8 +110,7 @@ const api = {
     reasoningEffort?: string
   ): Promise<unknown> => ipcRenderer.invoke('os:setRole', role, provider, model, reasoningEffort),
   models: (force = false): Promise<unknown[]> => ipcRenderer.invoke('os:models:list', force),
-  modelQuotas: (force = false): Promise<unknown> =>
-    ipcRenderer.invoke('os:models:quotas', force),
+  modelQuotas: (force = false): Promise<unknown> => ipcRenderer.invoke('os:models:quotas', force),
   profiles: (): Promise<unknown[]> => ipcRenderer.invoke('os:profiles:list'),
   saveProfile: (profile: unknown): Promise<unknown[]> =>
     ipcRenderer.invoke('os:profiles:save', profile),

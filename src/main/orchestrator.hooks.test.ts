@@ -15,6 +15,7 @@ import { AuthoritySas } from './authority/sas'
 import { HookBus } from './hooks/hook-bus'
 import { createDefaultHookBus } from './hooks/default-gate-hooks'
 import type { VerifyRunner } from './hooks/verify-replay-hook'
+import { makeTestWorktrees } from './orchestrator.test-helpers'
 
 /** Provider dont l'exec fournit mutation+verification ok et le juge répond VALIDE (gate vert par défaut). */
 class GreenProvider implements ProviderAdapter {
@@ -63,6 +64,7 @@ function makeOrchestrator(
     trust: new TrustLedger(),
     authority: new AuthoritySas(),
     executionWorkspace: 'C:\\ws',
+    worktrees: makeTestWorktrees(extra.executionWorkspace ?? 'C:\\ws'),
     classifyPhases: () => ['build'],
     ...extra
   })

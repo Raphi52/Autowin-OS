@@ -3,10 +3,14 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorktreeActivityView } from './WorktreeActivityView'
-import type { WorktreeAgentActivity } from '../../../shared/worktree-activity-model'
+import type {
+  WorktreeAgentActivity,
+  WorktreeRuntimeStatus
+} from '../../../shared/worktree-activity-model'
 
-;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true
+;(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true
 
 let container: HTMLDivElement
 let root: Root
@@ -16,114 +20,286 @@ afterEach(() => {
   container?.remove()
 })
 
-function render(props: Parameters<typeof WorktreeActivityView>[0]): void {
+function render(
+  agents: WorktreeAgentActivity[],
+  status: WorktreeRuntimeStatus = {
+    available: true,
+    workspacePath: 'C:\\Amitel\\Autowin OS',
+    repoId: 'repo-a'
+  },
+  onResolveConflict?: (agentId: string) => void,
+  onOpenOffice?: (path: string) => void,
+  onRetryOffice?: (agentId: string) => void
+): void {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
-  act(() => root.render(createElement(WorktreeActivityView, props)))
-}
-
-const merged: WorktreeAgentActivity = {
-  agentId: 'a1',
-  agentName: 'Scout',
-  state: 'merged',
-  files: [
-    { path: 'orchestrator.ts', kind: 'mod' },
-    { path: 'worktree-ui.tsx', kind: 'add' }
-  ],
-  startedAtMs: 1000,
-  endedAtMs: 2000
-}
-const conflict: WorktreeAgentActivity = {
-  agentId: 'a2',
-  agentName: 'Judge',
-  state: 'conflict',
-  files: [{ path: 'os.ts', kind: 'mod' }],
-  startedAtMs: 3000,
-  endedAtMs: 4000,
-  conflictWith: ['Builder'],
-  conflictFile: 'os.ts'
-}
-const blocked: WorktreeAgentActivity = {
-  agentId: 'a3',
-  agentName: 'Builder',
-  state: 'blocked',
-  files: [{ path: 'os.ts', kind: 'mod' }],
-  startedAtMs: 5000,
-  endedAtMs: 6000,
-  attentionReason: 'base-dirty'
-}
-
-describe('WorktreeActivityView (Mix 2)', () => {
-  it('rend une lane de frise par agent + le journal', () => {
-    render({ agents: [merged, conflict], nowMs: 5000 })
-    expect(container.querySelectorAll('[data-testid="wt-lane"]')).toHaveLength(2)
-    expect(container.querySelectorAll('[data-testid="wt-jrow"]')).toHaveLength(2)
-    expect(container.querySelector('[data-testid="wt-frieze"]')).toBeTruthy()
-  })
-
-  it('colore la lane selon l’issue (merged/conflict)', () => {
-    render({ agents: [merged, conflict], nowMs: 5000 })
-    const outcomes = Array.from(container.querySelectorAll('[data-testid="wt-lane"]')).map((l) =>
-      l.getAttribute('data-outcome')
+  act(() =>
+    root.render(
+      createElement(WorktreeActivityView, {
+        agents,
+        status,
+        onResolveConflict,
+        onOpenOffice,
+        onRetryOffice
+      })
     )
-    expect(outcomes).toContain('merged')
-    expect(outcomes).toContain('conflict')
-  })
+  )
+}
 
-  it('affiche le badge conflit + bouton, et déclenche onResolveConflict', () => {
-    const onResolve = vi.fn()
-    render({ agents: [conflict], nowMs: 5000, onResolveConflict: onResolve })
-    const btn = container.querySelector('.wt-btn') as HTMLButtonElement
-    expect(btn).toBeTruthy()
-    expect(container.textContent).toContain('À toi de trancher')
-    act(() => btn.click())
-    expect(onResolve).toHaveBeenCalledWith('a2')
-  })
+const offices: WorktreeAgentActivity[] = [
+  {
+    agentId: 'a1',
+    agentName: 'Builder',
+    role: 'build',
+    task: 'Sécuriser la reprise',
+    worktreePath: 'C:\\AppData\\worktrees\\repo-a\\agent__a1',
+    state: 'working',
+    verdict: 'running',
+    publication: 'not-requested',
+    files: [{ path: 'src/main/orchestrator.ts', kind: 'mod' }],
+    startedAtMs: 1
+  },
+  {
+    agentId: 'a2',
+    agentName: 'Judge',
+    role: 'judge',
+    task: 'Comparer les versions',
+    worktreePath: 'C:\\AppData\\worktrees\\repo-a\\agent__a2',
+    state: 'conflict',
+    verdict: 'green',
+    publication: 'blocked',
+    files: [{ path: 'src/main/os.ts', kind: 'mod' }],
+    conflictFile: 'src/main/os.ts',
+    startedAtMs: 2,
+    endedAtMs: 3
+  },
+  {
+    agentId: 'a3',
+    agentName: 'Agent récupéré',
+    role: 'build',
+    task: 'Ancienne tentative',
+    worktreePath: 'C:\\AppData\\worktrees\\repo-a\\agent__a3',
+    state: 'ready',
+    verdict: 'red',
+    publication: 'not-requested',
+    recovered: true,
+    files: [{ path: 'src/shared/state.ts', kind: 'add' }],
+    startedAtMs: 4,
+    endedAtMs: 5
+  }
+]
 
-  it('affiche les changements locaux comme un blocage sans faux bouton de conflit', () => {
-    render({ agents: [blocked], nowMs: 7000 })
+describe('WorktreeActivityView — A2 Hub', () => {
+  it('montre le vrai bureau principal protégé et chaque bureau agent', () => {
+    render(offices)
 
-    expect(container.querySelector('[data-outcome="blocked"]')).toBeTruthy()
-    expect(container.querySelector('.wt-badge-blocked')).toBeTruthy()
-    expect(container.textContent).toContain('changements locaux')
-    expect(container.querySelector('.wt-btn')).toBeNull()
-  })
-
-  it('affiche une opération préexistante comme prioritaire sans faux conflit', () => {
-    render({
-      agents: [{ ...blocked, attentionReason: 'base-in-progress' }],
-      nowMs: 7000
-    })
-
-    expect(container.textContent).toContain('ta branche est déjà occupée')
-    expect(container.querySelector('.wt-badge-blocked')?.textContent).toContain(
-      'ton travail en cours passe d’abord'
+    expect(container.querySelector('[data-testid="wt-main-office"]')?.textContent).toContain(
+      'C:\\Amitel\\Autowin OS'
     )
-    expect(container.querySelector('.wt-btn')).toBeNull()
+    expect(container.querySelectorAll('[data-testid="wt-agent-office"]')).toHaveLength(3)
+    expect(container.textContent).toContain('TON WORKSPACE')
+    expect(container.textContent).toContain('Sécuriser la reprise')
+    expect(container.textContent).toContain('agent__a1')
   })
 
-  it('affiche une copie rangée sans prétendre à une fusion quand aucun fichier n’a changé', () => {
-    render({ agents: [{ ...merged, files: [] }], nowMs: 5000 })
+  it('relie visuellement chaque worktree au workspace et explique son trajet', () => {
+    render([
+      offices[0],
+      {
+        ...offices[0],
+        agentId: 'a4',
+        agentName: 'Cleaner',
+        state: 'merged',
+        verdict: 'green',
+        publication: 'published',
+        endedAtMs: 6
+      },
+      offices[1]
+    ])
 
-    expect(container.textContent).toContain('Aucun changement · copie rangée')
-    expect(container.textContent).not.toContain('Fusionné tout seul')
-    expect(container.textContent).not.toContain('ajouté à ton code')
+    expect(container.querySelector('[data-testid="wt-office-flow"]')).toBeTruthy()
+    expect(container.querySelectorAll('[data-testid="wt-office-branch"]')).toHaveLength(3)
+    expect(container.textContent).toContain('BUREAUX SÉPARÉS')
+    expect(container.textContent).toContain('Travaille dans ce bureau séparé')
+    expect(container.textContent).toContain('Revenu dans ton workspace')
+    expect(container.textContent).toContain('Retour suspendu')
   })
 
-  it('résume le nombre de copies en attente dans l’en-tête', () => {
-    render({ agents: [merged, conflict], nowMs: 5000 })
-    expect(container.textContent).toContain('attend ta décision')
-  })
+  it('rend working, conflict et recovered sans jargon Git', () => {
+    render(offices)
 
-  it('aucun jargon git dans le rendu', () => {
-    render({ agents: [merged, conflict], nowMs: 5000 })
+    expect(container.querySelector('[data-state="working"]')).toBeTruthy()
+    expect(container.querySelector('[data-state="conflict"]')).toBeTruthy()
+    expect(container.querySelector('[data-recovered="true"]')).toBeTruthy()
+    expect(container.textContent).toContain('Récupéré après redémarrage')
     expect(container.textContent).not.toMatch(/HEAD|detached|rebase|checkout|git merge/i)
   })
 
-  it('état vide → message pédagogique, pas de frise', () => {
-    render({ agents: [] })
-    expect(container.querySelector('[data-testid="wt-frieze"]')).toBeNull()
-    expect(container.textContent).toContain('Aucune copie en cours')
+  it('propose une décision seulement pour un vrai conflit', () => {
+    const onResolve = vi.fn()
+    render(offices, undefined, onResolve)
+
+    const buttons = container.querySelectorAll('[data-testid="wt-resolve-conflict"]')
+    expect(buttons).toHaveLength(1)
+    act(() => (buttons[0] as HTMLButtonElement).click())
+    expect(onResolve).toHaveBeenCalledWith('a2')
+  })
+
+  it('affiche les fichiers et la boîte des changements entrants', () => {
+    render(offices)
+
+    expect(container.textContent).toContain('src/main/orchestrator.ts')
+    expect(container.querySelector('[data-testid="wt-inbox"]')?.textContent).toContain(
+      'Changements entrants'
+    )
+    expect(container.querySelector('[data-testid="wt-inbox"]')?.textContent).toContain(
+      '1 bureau à vérifier'
+    )
+  })
+
+  it('rend le moteur indisponible avant toute mutation', () => {
+    render([], {
+      available: false,
+      workspacePath: 'D:\\notes',
+      reason: 'not-git'
+    })
+
+    expect(container.textContent).toContain('Protection indisponible')
+    expect(container.textContent).toContain('D:\\notes')
+    expect(container.textContent).toContain('mutations sont bloquées')
+  })
+
+  it('garde le bureau principal visible quand aucun agent ne travaille', () => {
+    render([])
+
+    expect(container.querySelector('[data-testid="wt-main-office"]')).toBeTruthy()
+    expect(container.querySelectorAll('[data-testid="wt-agent-office"]')).toHaveLength(0)
+    expect(container.textContent).toContain('Aucun bureau agent ouvert')
+  })
+
+  it('dit qu’un retour déjà publié attend seulement son rangement automatique', () => {
+    render([
+      {
+        ...offices[0],
+        state: 'ready',
+        verdict: 'green',
+        publication: 'cleanup-pending'
+      }
+    ])
+
+    expect(container.textContent).toContain('Changements ajoutés')
+    expect(container.textContent).toContain('termine le rangement seul')
+    expect(container.textContent).not.toContain('Aucun fichier local n’a été touché')
+  })
+
+  it('distingue un retour publié des nouveautés plus récentes conservées', () => {
+    render([
+      {
+        ...offices[0],
+        state: 'ready',
+        verdict: 'green',
+        publication: 'published',
+        attentionReason: 'post-publish-change',
+        files: [{ path: 'late.tmp', kind: 'mod' }]
+      }
+    ])
+
+    expect(container.textContent).toContain('Changements ajoutés')
+    expect(container.textContent).toContain('déjà dans ton workspace')
+    expect(container.textContent).toContain('plus récent reste protégé')
+    expect(container.querySelector('.wt-office-route')?.textContent).toContain(
+      'Revenu dans ton workspace · suite protégée'
+    )
+    expect(container.querySelector('.wt-office-route')?.textContent).not.toContain(
+      'Retour suspendu'
+    )
+    expect(container.textContent).not.toContain('Aucun fichier local n’a été touché')
+  })
+
+  it('dit honnêtement quand le budget de rangement automatique est épuisé', () => {
+    const onOpenOffice = vi.fn()
+    render(
+      [
+        {
+          ...offices[0],
+          state: 'ready',
+          verdict: 'green',
+          publication: 'cleanup-pending',
+          attentionReason: 'retry-exhausted',
+          retryCount: 6
+        }
+      ],
+      undefined,
+      undefined,
+      onOpenOffice
+    )
+
+    expect(container.textContent).toContain('rangement à vérifier')
+    expect(container.textContent).toContain('Après six essais')
+    expect(container.querySelector('.wt-office-route')?.textContent).toContain(
+      'Revenu dans ton workspace · rangement à vérifier'
+    )
+    expect(container.textContent).not.toContain('termine le rangement seul')
+    expect(container.textContent).not.toContain('Les retours verts sont rangés automatiquement')
+    expect(container.textContent).toContain('1 bureau à vérifier')
+    const open = container.querySelector<HTMLButtonElement>('[data-testid="wt-open-office"]')
+    expect(open).toBeTruthy()
+    act(() => open!.click())
+    expect(onOpenOffice).toHaveBeenCalledWith('C:\\AppData\\worktrees\\repo-a\\agent__a1')
+  })
+
+  it('ne propose pas d’ouvrir un bureau que Git doit encore recréer', () => {
+    const onRetryOffice = vi.fn()
+    render(
+      [
+        {
+          ...offices[0],
+          state: 'ready',
+          verdict: 'green',
+          publication: 'cleanup-pending',
+          attentionReason: 'retry-exhausted',
+          retryCount: 6,
+          worktreeAvailable: false
+        }
+      ],
+      undefined,
+      undefined,
+      vi.fn(),
+      onRetryOffice
+    )
+
+    expect(container.textContent).toContain('rangement à vérifier')
+    expect(container.querySelector('[data-testid="wt-open-office"]')).toBeNull()
+    const retry = container.querySelector<HTMLButtonElement>('[data-testid="wt-retry-office"]')
+    expect(retry?.textContent).toContain('Réessayer de recréer')
+    act(() => retry!.click())
+    expect(onRetryOffice).toHaveBeenCalledWith('a1')
+  })
+
+  it('propose de relancer une publication épuisée quand le bureau existe', () => {
+    const onRetryOffice = vi.fn()
+    render(
+      [
+        {
+          ...offices[0],
+          state: 'blocked',
+          verdict: 'green',
+          publication: 'pending',
+          attentionReason: 'retry-exhausted',
+          retryCount: 6,
+          worktreeAvailable: true
+        }
+      ],
+      undefined,
+      undefined,
+      vi.fn(),
+      onRetryOffice
+    )
+
+    const retry = container.querySelector<HTMLButtonElement>('[data-testid="wt-retry-office"]')
+    expect(retry?.textContent).toContain('Réessayer maintenant')
+    act(() => retry!.click())
+    expect(onRetryOffice).toHaveBeenCalledWith('a1')
   })
 })

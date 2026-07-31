@@ -12,6 +12,7 @@ import type {
 } from './providers/types'
 import { RoleModelConfig } from './roles'
 import { TrustLedger } from './trust/ledger'
+import { HookBus } from './hooks/hook-bus'
 
 class CapturingProvider implements ProviderAdapter {
   readonly id = 'capture'
@@ -77,6 +78,13 @@ function makeOrchestrator(worktrees?: RunWorktrees): {
 }
 
 describe('Orchestrator — flip live worktree', () => {
+  it('bloque une mutation si le moteur d’isolation est indisponible', async () => {
+    const { orch, provider } = makeOrchestrator()
+
+    await expect(orch.run('modifie le projet')).rejects.toThrow(/isolation/i)
+    expect(provider.calls).toHaveLength(0)
+  })
+
   it('ne réutilise pas un identifiant de run après recréation de l’orchestrateur', async () => {
     const ids: string[] = []
     for (let instance = 0; instance < 2; instance++) {
@@ -162,13 +170,82 @@ describe('Orchestrator — flip live worktree', () => {
 
   describe('le travail ne remonte dans la base QUE si le run est vert', () => {
     it('run VERT → end({ merge: true })', async () => {
-      const end = vi.fn()
+      const end = vi.fn((_runId: string, _options?: { merge?: boolean }) => ({
+        outcome: 'merged' as const,
+        agentId: 'run-1',
+        committed: true
+      }))
       const { orch } = makeOrchestrator({ begin: () => 'C:\\wt\\run-1', end })
 
       const result = await orch.run('modifie le projet')
 
       expect(result.gateBlocked).toBe(false)
       expect(end.mock.calls[0][1]).toMatchObject({ merge: true })
+    })
+
+    it('run jugé vert mais finalisation bloquée → résultat rouge, reprise conservée et aucune clôture', async () => {
+      const provider = new CapturingProvider()
+      const close = vi.fn().mockResolvedValue(undefined)
+      const onRunSettled = vi.fn()
+      const orch = new Orchestrator({
+        registry: new ProviderRegistry().register(provider),
+        roles: new RoleModelConfig({
+          subagent: { provider: provider.id, model: 'worker' },
+          judge: { provider: provider.id, model: 'judge' }
+        }),
+        cost: new CostAggregator(),
+        trust: new TrustLedger(),
+        authority: new AuthoritySas(),
+        executionWorkspace: 'C:\\base',
+        worktrees: {
+          begin: () => 'C:\\wt\\run-1',
+          end: () => ({
+            outcome: 'blocked' as const,
+            agentId: 'run-1',
+            files: ['src/a.ts'],
+            reason: 'base-dirty' as const
+          })
+        },
+        onRunSettled,
+        closeGreenRun: { begin: vi.fn(), close }
+      })
+
+      const result = await orch.run('modifie le projet')
+
+      expect(result.gateBlocked).toBe(true)
+      expect(result.valid).toBe(false)
+      expect(result.gateReasons).toContain('intégration locale non terminée')
+      expect(onRunSettled).not.toHaveBeenCalled()
+      expect(close).not.toHaveBeenCalled()
+    })
+
+    it('exécute le gate dans la copie isolée, pas dans le workspace principal', async () => {
+      const hookCwds: string[] = []
+      const hooks = new HookBus().register('pre-green', ({ cwd }) => {
+        hookCwds.push(cwd ?? '')
+        return {}
+      })
+      const provider = new CapturingProvider()
+      const orch = new Orchestrator({
+        registry: new ProviderRegistry().register(provider),
+        roles: new RoleModelConfig({
+          subagent: { provider: provider.id, model: 'worker' },
+          judge: { provider: provider.id, model: 'judge' }
+        }),
+        cost: new CostAggregator(),
+        trust: new TrustLedger(),
+        authority: new AuthoritySas(),
+        executionWorkspace: 'C:\\base',
+        hooks,
+        worktrees: {
+          begin: () => 'C:\\wt\\run-1',
+          end: () => ({ outcome: 'merged' as const, agentId: 'run-1', committed: true })
+        }
+      })
+
+      await orch.run('modifie le projet')
+
+      expect(hookCwds).toEqual(['C:\\wt\\run-1'])
     })
 
     it('run ROUGE (juge en défaut) → end({ merge: false }) : la copie reste isolée', async () => {
@@ -284,7 +361,13 @@ describe('le rapport ne pointe pas vers une copie supprimée', () => {
   it('CONFLIT malgré un run vert : le chemin de la copie est GARDÉ et signalé', async () => {
     const orch = orchestratorReportingPaths(WT, {
       begin: () => WT,
-      end: () => ({ outcome: 'conflict' as const, agentId: 'a1', files: ['src/a.ts'] })
+      end: () => ({
+        outcome: 'conflict' as const,
+        agentId: 'a1',
+        files: ['src/a.ts'],
+        baseSha: 'base111',
+        agentSha: 'agent222'
+      })
     })
 
     const result = await orch.run('modifie le projet')
@@ -294,13 +377,51 @@ describe('le rapport ne pointe pas vers une copie supprimée', () => {
     expect(result.result).toContain('NON fusionné')
   })
 
+  it('PUBLIÉ avec rangement différé : reste vert et pointe vers le workspace de base', async () => {
+    const orch = orchestratorReportingPaths(WT, {
+      begin: () => WT,
+      end: () => ({
+        outcome: 'cleanup-pending' as const,
+        agentId: 'a1',
+        files: ['src/a.ts'],
+        publishedSha: 'agent222'
+      })
+    })
+
+    const result = await orch.run('modifie le projet')
+
+    expect(result.valid).toBe(true)
+    expect(result.gateBlocked).toBe(false)
+    expect(result.result).toContain('C:\\base\\src\\shared\\duree.ts')
+    expect(result.result).not.toContain('NON fusionné')
+  })
+
+  it('PUBLIÉ avec nouveautés tardives protégées : reste vert et pointe vers la base', async () => {
+    const orch = orchestratorReportingPaths(WT, {
+      begin: () => WT,
+      end: () => ({
+        outcome: 'published-residue' as const,
+        agentId: 'a1',
+        files: ['late.tmp'],
+        publishedSha: 'agent222'
+      })
+    })
+
+    const result = await orch.run('modifie le projet')
+
+    expect(result.valid).toBe(true)
+    expect(result.gateBlocked).toBe(false)
+    expect(result.result).toContain('C:\\base\\src\\shared\\duree.ts')
+    expect(result.result).not.toContain('NON fusionné')
+  })
+
   it('run SANS copie isolée : le rapport est rendu tel quel', async () => {
     const orch = orchestratorReportingPaths('C:\\base', {
       begin: () => undefined,
       end: () => undefined
     })
 
-    const result = await orch.run('modifie le projet')
+    const result = await orch.run('analyse le projet')
 
     expect(result.result).toContain('C:\\base\\src\\shared\\duree.ts')
     expect(result.result).not.toContain('NON fusionné')

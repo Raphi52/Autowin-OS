@@ -3,9 +3,16 @@ import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
 import { Orchestrator } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
-import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk } from './providers/types'
+import type {
+  Message,
+  ProviderAdapter,
+  SendOptions,
+  SendResult,
+  StreamChunk
+} from './providers/types'
 import { RoleModelConfig } from './roles'
 import { TrustLedger } from './trust/ledger'
+import { makeTestWorktrees } from './orchestrator.test-helpers'
 
 /** Provider qui enregistre chaque appel (options) et rend une réponse valide + un usage mesurable. */
 class RecordingProvider implements ProviderAdapter {
@@ -52,6 +59,7 @@ function makeOrchestrator(provider: RecordingProvider, cost: CostAggregator): Or
     trust: new TrustLedger(),
     authority: new AuthoritySas(),
     executionWorkspace: 'C:\\ws',
+    worktrees: makeTestWorktrees('C:\\ws'),
     execPhases: ['frame'],
     phaseFanOut: (phase) =>
       phase === 'frame'
@@ -106,9 +114,7 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
     const result = await makeOrchestrator(provider, cost).run('cadre les pistes du projet')
 
     // La visibilité ×N vit dans la trace d'orchestration : un step par modèle, chacun avec son coût.
-    const execModels = result.trace
-      .filter((s) => s.step === 'exec' && s.model)
-      .map((s) => s.model)
+    const execModels = result.trace.filter((s) => s.step === 'exec' && s.model).map((s) => s.model)
     expect(execModels).toContain('m1')
     expect(execModels).toContain('m2')
     expect(execModels).toContain('orch') // la synthèse
@@ -138,6 +144,7 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
       trust: new TrustLedger(),
       authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
+      worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['frame']
       // pas de phaseFanOut → chemin mono-modèle
     })
@@ -164,6 +171,7 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
         trust: new TrustLedger(),
         authority: new AuthoritySas(),
         executionWorkspace: 'C:\\ws',
+        worktrees: makeTestWorktrees('C:\\ws'),
         execPhases: [phase],
         phaseFanOut: (requestedPhase) =>
           requestedPhase === phase
@@ -194,6 +202,7 @@ describe('Orchestrator — fan-out juge (quorum de vote)', () => {
       trust: new TrustLedger(),
       authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
+      worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['frame'],
       judgeFanOut: () => judges.map((model) => ({ provider: provider.id, model }))
     })
@@ -231,7 +240,9 @@ describe('Orchestrator — fan-out juge (quorum de vote)', () => {
     const provider = new RecordingProvider()
     // 3 juges configurés, 2 crashent, 1 seul répond et vote VALIDE.
     // Avant fix : votingN=3, seuil=2, valide=1 → DEFAUT (faux). Après : votingN=1 (répondants), seuil=1 → VALIDE.
-    const result = await makeJudgePanel(provider, ['j-ok', 'crash1', 'crash2']).run('cadre les pistes')
+    const result = await makeJudgePanel(provider, ['j-ok', 'crash1', 'crash2']).run(
+      'cadre les pistes'
+    )
     expect(result.valid).toBe(true)
   })
 
@@ -259,6 +270,7 @@ describe('Orchestrator — fan-out exec : cas limites', () => {
       trust: new TrustLedger(),
       authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
+      worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['frame'],
       phaseFanOut: (phase) =>
         phase === 'frame'
@@ -287,6 +299,7 @@ describe('Orchestrator — fan-out exec : cas limites', () => {
       trust: new TrustLedger(),
       authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
+      worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['frame'],
       phaseFanOut: (phase) =>
         phase === 'frame'

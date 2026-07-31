@@ -1,6 +1,11 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { parseGitStatus, parseGitLog, type GitReadResult, type GitDiffResult } from '../shared/git-read'
+import {
+  parseGitStatus,
+  parseGitLog,
+  type GitReadResult,
+  type GitDiffResult
+} from '../shared/git-read'
 
 const run = promisify(execFile)
 
@@ -17,7 +22,10 @@ function stdoutOf(error: unknown): string {
  */
 export async function readGitDiff(cwd: string, path: string): Promise<GitDiffResult> {
   try {
-    const r = await run('git', ['diff', '--no-color', 'HEAD', '--', path], { cwd, windowsHide: true })
+    const r = await run('git', ['diff', '--no-color', 'HEAD', '--', path], {
+      cwd,
+      windowsHide: true
+    })
     let diff = r.stdout
     if (!diff.trim()) {
       try {
@@ -52,9 +60,12 @@ export async function readGitState(cwd: string, historyLimit = 20): Promise<GitR
         windowsHide: true
       })
     ])
-    if (statusResult.status === 'rejected' || logResult.status === 'rejected') {
-      const error =
-        statusResult.status === 'rejected' ? statusResult.reason : logResult.reason
+    if (statusResult.status === 'rejected') {
+      const error = statusResult.reason
+      return { available: false, error: error instanceof Error ? error.message : String(error) }
+    }
+    if (logResult.status === 'rejected') {
+      const error = logResult.reason
       return { available: false, error: error instanceof Error ? error.message : String(error) }
     }
     return {

@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { WorktreeActivityView } from './WorktreeActivityView'
 import { DiffView } from './DiffView'
-import type { WorktreeAgentActivity } from '../../../shared/worktree-activity-model'
+import type {
+  WorktreeAgentActivity,
+  WorktreeConflictDiffResult,
+  WorktreeRuntimeStatus
+} from '../../../shared/worktree-activity-model'
 import type { GitReadResult, GitChange, GitDiffResult } from '../../../shared/git-read'
 import './SourceControlPane.css'
 
@@ -45,10 +49,14 @@ export function SourceControlPane({
   const [brainTraces, setBrainTraces] = useState<BrainTraceView[]>([])
   const [brainUnavailable, setBrainUnavailable] = useState(false)
   const [worktrees, setWorktrees] = useState<WorktreeAgentActivity[]>([])
+  const [worktreeStatus, setWorktreeStatus] = useState<WorktreeRuntimeStatus | null>(null)
   const [openFile, setOpenFile] = useState<string | null>(null)
   const [diff, setDiff] = useState<GitDiffResult | null>(null)
   const diffRequestRef = useRef(0)
   const dataRequestRef = useRef(0)
+  const [conflictAgentId, setConflictAgentId] = useState<string | null>(null)
+  const [conflictDiff, setConflictDiff] = useState<WorktreeConflictDiffResult | null>(null)
+  const conflictRequestRef = useRef(0)
   const [repoPath] = useState<string>(() => localStorage.getItem('autowin:sc-repo') ?? '')
   const [refreshTick, setRefreshTick] = useState(0)
   const [view, setView] = useState<PaneView>('project')
@@ -60,7 +68,10 @@ export function SourceControlPane({
     void window.api.getWorktreeActivity?.().then((activity) => {
       if (alive) setWorktrees(activity)
     })
-    const off = window.api.onWorktreeActivity?.((activity) => setWorktrees(activity))
+    void window.api.getWorktreeStatus?.().then((status) => {
+      if (alive) setWorktreeStatus(status)
+    })
+    const off = window.api.onWorktreeActivity?.((a) => setWorktrees(a))
     return () => {
       alive = false
       off?.()
@@ -202,6 +213,16 @@ export function SourceControlPane({
         : view === 'project'
           ? 'Projet de la conversation'
           : 'Dépôt courant'
+  const openConflictDiff = (agentId: string): void => {
+    const requestId = ++conflictRequestRef.current
+    setConflictAgentId(agentId)
+    setConflictDiff(null)
+    void window.api.getWorktreeConflictDiff?.(agentId).then((result) => {
+      if (conflictRequestRef.current === requestId) {
+        setConflictDiff(result as WorktreeConflictDiffResult)
+      }
+    })
+  }
 
   return (
     <div className="sc-pane" data-testid="source-control-pane">
@@ -362,9 +383,9 @@ export function SourceControlPane({
                           ? 'Brain indisponible'
                           : trace.found === false
                             ? 'Aucun résultat'
-                          : trace.found === true
-                            ? 'Résultat trouvé'
-                            : 'Résultat historique inconnu'}
+                            : trace.found === true
+                              ? 'Résultat trouvé'
+                              : 'Résultat historique inconnu'}
                       </span>
                       <span>{trace.injectedChars.toLocaleString('fr-FR')} caractères transmis</span>
                       {retained.length > 0 && <span>{retained.length} source(s) retenue(s)</span>}
@@ -425,19 +446,45 @@ export function SourceControlPane({
         {view === 'worktree' && (
           <section className="sc-sect">
             <header className="sc-h">
-              Worktrees{worktrees.length ? ` · ${worktrees.length}` : ''}
+              Hub des bureaux{worktrees.length ? ` · ${worktrees.length}` : ''}
             </header>
-            {worktrees.length === 0 ? (
-              <div className="sc-clean">Aucune copie d’agent en cours.</div>
-            ) : (
-              <WorktreeActivityView
-                agents={worktrees}
-                onResolveConflict={(id) =>
-                  propose(
-                    `montre-moi les deux versions en conflit du worktree ${id} et aide-moi à trancher`
-                  )
+            <WorktreeActivityView
+              agents={worktrees}
+              status={
+                worktreeStatus ?? {
+                  available: false,
+                  workspacePath: '',
+                  reason: 'identity-unavailable'
                 }
-              />
+              }
+              onResolveConflict={openConflictDiff}
+              onOpenOffice={(path) => void window.api.openFolder(path)}
+              onRetryOffice={(agentId) => void window.api.retryWorktreeRecovery(agentId)}
+            />
+            {conflictAgentId && (
+              <div className="sc-diff-wrap" data-testid="wt-conflict-diff">
+                <div className="sc-diff-card">
+                  <div className="sc-diff-head">
+                    <span className="sc-diff-title">
+                      {conflictDiff?.available
+                        ? conflictDiff.paths.join(', ')
+                        : 'Comparaison du bureau'}
+                    </span>
+                    <span className="sc-diff-wrap-mode">Lecture seule</span>
+                  </div>
+                  <div className="sc-diff-content">
+                    {conflictDiff === null ? (
+                      <div className="sc-clean">Préparation des deux versions…</div>
+                    ) : conflictDiff.available ? (
+                      <DiffView diff={conflictDiff.diff} />
+                    ) : (
+                      <div className="sc-clean">
+                        Comparaison indisponible : le bureau reste conservé.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             )}
           </section>
         )}

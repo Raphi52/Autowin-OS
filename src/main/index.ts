@@ -91,7 +91,6 @@ import type { AgentTopology, SlotBinding } from './topology'
 import {
   createAutowinAppDataRoot,
   ensureAutowinAppData,
-
   legacyAppDataRoot,
   resolveAutowinAppDataBase
 } from './app-data'
@@ -721,9 +720,9 @@ function registerChatIpc(): void {
         variant === 'a'
           ? 'src/renderer/src/components/SourceControlPane.tsx'
           : 'src/renderer/src/components/SourceControlPane.css'
-      const fingerprint = [
-        ...(await captureWorkspaceMutationSnapshot(os.executionWorkspace))
-      ].find(([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path))?.[1]
+      const fingerprint = [...(await captureWorkspaceMutationSnapshot(os.executionWorkspace))].find(
+        ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
+      )?.[1]
       const generationMarker = await captureWorkspacePathGenerationMarker(
         os.executionWorkspace,
         path
@@ -826,7 +825,8 @@ function registerChatIpc(): void {
       durableTurn.begin(guardString(task, 'task'))
       // Acquis d'un run interrompu portant la MÊME tâche dans CETTE conversation. Oublié aussitôt :
       // le run repris persiste le sien, sinon le même acquis serait rejoué à chaque relance.
-      const resumedAcquis = os.resumableOrchestrationForTask?.(guardString(task, 'task'), conversationId) ?? null
+      const resumedAcquis =
+        os.resumableOrchestrationForTask?.(guardString(task, 'task'), conversationId) ?? null
       if (resumedAcquis) os.forgetResumableOrchestration(resumedAcquis.runId)
       const result = await os.runTask(
         guardString(task, 'task'),
@@ -993,13 +993,45 @@ function registerChatIpc(): void {
     return amitelBrainRoot()
   })
   // Cockpit worktree (volet A) : snapshot à la demande + push live des changements d'activité.
+  let worktreeFixture:
+    | {
+        activity: ReturnType<typeof os.getWorktreeActivity>
+        status: ReturnType<typeof os.getWorktreeRuntimeStatus>
+      }
+    | undefined
   ipcMain.handle('worktree:activity', (event) => {
     assertTrustedRendererSender(event, 'WorktreeActivity')
-    return os.getWorktreeActivity()
+    return worktreeFixture?.activity ?? os.getWorktreeActivity()
   })
   ipcMain.handle('worktree:status', (event) => {
     assertTrustedRendererSender(event, 'WorktreeStatus')
-    return os.getWorktreeRuntimeStatus()
+    return worktreeFixture?.status ?? os.getWorktreeRuntimeStatus()
+  })
+  ipcMain.handle('worktree:conflict-diff', (event, agentId: unknown) => {
+    assertTrustedRendererSender(event, 'WorktreeConflictDiff')
+    return os.getWorktreeConflictDiff(typeof agentId === 'string' ? agentId : '')
+  })
+  ipcMain.handle('worktree:retry-recovery', (event, agentId: unknown) => {
+    assertTrustedRendererSender(event, 'WorktreeRetryRecovery')
+    if (typeof agentId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(agentId)) {
+      throw new Error('Identifiant de bureau invalide')
+    }
+    return os.retryWorktreeRecovery(agentId)
+  })
+  ipcMain.handle('app:test:worktree-fixture', (event, value: unknown) => {
+    assertTrustedRendererSender(event, 'Fixture worktree')
+    if (!isolatedTestInstance) throw new Error('Fixture worktree indisponible hors instance isolée')
+    if (!value || typeof value !== 'object') throw new Error('Fixture worktree invalide')
+    const fixture = value as Record<string, unknown>
+    if (!Array.isArray(fixture.activity) || !fixture.status || typeof fixture.status !== 'object') {
+      throw new Error('Fixture worktree incomplète')
+    }
+    const nextFixture = fixture as NonNullable<typeof worktreeFixture>
+    worktreeFixture = nextFixture
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send('worktree:activity-changed', nextFixture.activity)
+    }
+    return true
   })
   os.onWorktreeActivity((activity) => {
     for (const w of BrowserWindow.getAllWindows())
@@ -1410,424 +1442,422 @@ function registerChatIpc(): void {
     turnId: string
     error?: string
   }> => {
-      // Duree du tour : MESUREE de bout en bout, pour repondre a « qu'est-ce qui est lent ? » et pas
-      // seulement a « qu'est-ce qui coute ? » (les deux ne coincident pas forcement).
-      const turnStartedAtMs = performance.now()
-      const controller = new AbortController()
-      let resolveCompletion!: () => void
-      const completion = new Promise<void>((resolve) => {
-        resolveCompletion = resolve
-      })
-      const turnId = randomUUID()
-      /**
-       * Plafond d'un TOUR de chat. Réutilise le circuit-breaker déjà éprouvé sur l'orchestration
-       * (module pur, testé) avec un seuil PROPRE au chat : un tour conversationnel n'a pas le même
-       * ordre de grandeur qu'un run complet. Réglable via AUTOWIN_CHAT_USD_CAP ; défaut généreux
-       * (2 $) — assez haut pour ne jamais gêner un tour légitime, assez bas pour arrêter une boucle
-       * (le pire tour mesuré coûtait 2,109 $).
-       */
-      const chatUsdCap = Number(process.env.AUTOWIN_CHAT_USD_CAP)
-      const chatBreaker = new CostCircuitBreaker({
-        maxUsd: Number.isFinite(chatUsdCap) && chatUsdCap > 0 ? chatUsdCap : 2
-      })
-      if (conversationId) activeChatTurns.set(conversationId, controller, completion)
-      try {
-        const safe = (Array.isArray(messages) ? messages : []).slice(-40).map((m) => ({
-          role: m.role,
-          content: guardString(m.content, 'content'),
-          ...(m.attachments?.length ? { attachments: guardAttachments(m.attachments) } : {})
-        }))
-        const spoken: string[] = []
-        let streamedSpoken = ''
-        let traceParentId: string | undefined
-        let traceSequence = conversationId ? causalTrace.nextSequence(conversationId) : 0
-        let traceActionIndex = 0
-        let turnUsage: { inputTokens: number; outputTokens: number; costUsd?: number } | undefined
-        let turnSessionId: string | undefined
-        let turnPromptIdentity:
-          { provider: string; model?: string; reasoningEffort?: string } | undefined
-        const last = safe[safe.length - 1]
-        if (conversationId && last?.role === 'user' && os.conversations.get(conversationId)) {
-          const binding = bindingOverride ?? os.roles.getBinding('orchestrator')
-          os.conversations.beginTurn(
-            conversationId,
-            {
-              content: last.content,
-              attachments: last.attachments?.map(({ name, mimeType, size, thumbnail }) => ({
-                name,
-                mimeType,
-                size,
-                ...(thumbnail && { thumbnail })
-              }))
-            },
-            {
-              turnId,
-              runtime: {
-                provider: binding.provider,
-                model: binding.model,
-                reasoningEffort: binding.reasoningEffort
-              }
+    // Duree du tour : MESUREE de bout en bout, pour repondre a « qu'est-ce qui est lent ? » et pas
+    // seulement a « qu'est-ce qui coute ? » (les deux ne coincident pas forcement).
+    const turnStartedAtMs = performance.now()
+    const controller = new AbortController()
+    let resolveCompletion!: () => void
+    const completion = new Promise<void>((resolve) => {
+      resolveCompletion = resolve
+    })
+    const turnId = randomUUID()
+    /**
+     * Plafond d'un TOUR de chat. Réutilise le circuit-breaker déjà éprouvé sur l'orchestration
+     * (module pur, testé) avec un seuil PROPRE au chat : un tour conversationnel n'a pas le même
+     * ordre de grandeur qu'un run complet. Réglable via AUTOWIN_CHAT_USD_CAP ; défaut généreux
+     * (2 $) — assez haut pour ne jamais gêner un tour légitime, assez bas pour arrêter une boucle
+     * (le pire tour mesuré coûtait 2,109 $).
+     */
+    const chatUsdCap = Number(process.env.AUTOWIN_CHAT_USD_CAP)
+    const chatBreaker = new CostCircuitBreaker({
+      maxUsd: Number.isFinite(chatUsdCap) && chatUsdCap > 0 ? chatUsdCap : 2
+    })
+    if (conversationId) activeChatTurns.set(conversationId, controller, completion)
+    try {
+      const safe = (Array.isArray(messages) ? messages : []).slice(-40).map((m) => ({
+        role: m.role,
+        content: guardString(m.content, 'content'),
+        ...(m.attachments?.length ? { attachments: guardAttachments(m.attachments) } : {})
+      }))
+      const spoken: string[] = []
+      let streamedSpoken = ''
+      let traceParentId: string | undefined
+      let traceSequence = conversationId ? causalTrace.nextSequence(conversationId) : 0
+      let traceActionIndex = 0
+      let turnUsage: { inputTokens: number; outputTokens: number; costUsd?: number } | undefined
+      let turnSessionId: string | undefined
+      let turnPromptIdentity:
+        { provider: string; model?: string; reasoningEffort?: string } | undefined
+      const last = safe[safe.length - 1]
+      if (conversationId && last?.role === 'user' && os.conversations.get(conversationId)) {
+        const binding = bindingOverride ?? os.roles.getBinding('orchestrator')
+        os.conversations.beginTurn(
+          conversationId,
+          {
+            content: last.content,
+            attachments: last.attachments?.map(({ name, mimeType, size, thumbnail }) => ({
+              name,
+              mimeType,
+              size,
+              ...(thumbnail && { thumbnail })
+            }))
+          },
+          {
+            turnId,
+            runtime: {
+              provider: binding.provider,
+              model: binding.model,
+              reasoningEffort: binding.reasoningEffort
             }
-          )
-        }
-        const applyDurableEvent = (pilotEvent: PilotEvent): void => {
-          if (!conversationId || !os.conversations.get(conversationId)) return
-          let durableEvent: ChatTurnEvent | undefined
-          if (pilotEvent.kind === 'delta' && pilotEvent.text && pilotEvent.streamId)
-            durableEvent = {
-              kind: 'delta',
-              streamId: pilotEvent.streamId,
-              text: pilotEvent.text
-            }
-          else if (pilotEvent.kind === 'stream-reset' && pilotEvent.streamId)
-            durableEvent = { kind: 'stream-reset', streamId: pilotEvent.streamId }
-          else if (pilotEvent.kind === 'think' && pilotEvent.text)
-            durableEvent = {
-              kind: 'delta',
-              streamId: `fallback:${pilotEvent.iteration ?? 0}`,
-              text: pilotEvent.text
-            }
-          else if (pilotEvent.kind === 'command' && pilotEvent.name)
-            durableEvent = {
-              kind: 'command',
-              actionId: pilotEvent.actionId ?? `${pilotEvent.iteration ?? 0}:${traceActionIndex}`,
-              name: pilotEvent.name,
-              args: pilotEvent.args
-            }
-          else if (pilotEvent.kind === 'result' && pilotEvent.name)
-            durableEvent = {
-              kind: 'result',
-              actionId:
-                pilotEvent.actionId ??
-                `${pilotEvent.iteration ?? 0}:${Math.max(0, traceActionIndex - 1)}`,
-              name: pilotEvent.name,
-              ok: pilotEvent.ok,
-              data: pilotEvent.data
-            }
-          else if (pilotEvent.kind === 'done') {
-            /**
-             * Le TEXTE du `done` doit atterrir dans le message quand rien n'a ete streame.
-             *
-             * Constate en essai reel (2026-07-29) : le chemin direct `orchestrate` emet sa carte de
-             * livraison (statut, cout, run, resultat) UNIQUEMENT dans le `done` — aucun delta. Comme
-             * seul `sessionId` etait persiste, la carte etait calculee puis JETEE, et le fil ne gardait
-             * que « [a execute orchestrate] ». Meme patron que le cout jete : produire l'information
-             * puis la perdre a la frontiere de persistance.
-             *
-             * Condition stricte pour ne JAMAIS dupliquer : on ne persiste ce texte que si aucun delta
-             * n'a ete emis pendant le tour (sinon le texte du `done` reprend ce qui a deja ete dit).
-             */
-            const closing = pilotEvent.text?.trim()
-            if (closing && !streamedSpoken.trim()) {
-              os.conversations.applyTurnEvent(conversationId, turnId, {
-                kind: 'delta',
-                // Flux dedie : ce texte de cloture n'appartient a aucun stream deja ouvert.
-                streamId: `${turnId}:closing`,
-                text: closing
-              })
-              try {
-                appendTurnEvent(turnJournalRoot, conversationId, turnId, {
-                  kind: 'delta',
-                  text: closing,
-                  at: Date.now()
-                })
-              } catch {
-                /* journal best-effort */
-              }
-            }
-            durableEvent = { kind: 'done', sessionId: turnSessionId }
           }
-          else if (pilotEvent.kind === 'cancellation') durableEvent = { kind: 'cancelled' }
-          if (durableEvent) {
-            os.conversations.applyTurnEvent(conversationId, turnId, durableEvent)
-            // Survie niveau 2 : le même événement va AUSSI dans le journal fichier du tour, pour
-            // pouvoir repérer/rejouer un tour resté inachevé après une fermeture complète de l'app.
+        )
+      }
+      const applyDurableEvent = (pilotEvent: PilotEvent): void => {
+        if (!conversationId || !os.conversations.get(conversationId)) return
+        let durableEvent: ChatTurnEvent | undefined
+        if (pilotEvent.kind === 'delta' && pilotEvent.text && pilotEvent.streamId)
+          durableEvent = {
+            kind: 'delta',
+            streamId: pilotEvent.streamId,
+            text: pilotEvent.text
+          }
+        else if (pilotEvent.kind === 'stream-reset' && pilotEvent.streamId)
+          durableEvent = { kind: 'stream-reset', streamId: pilotEvent.streamId }
+        else if (pilotEvent.kind === 'think' && pilotEvent.text)
+          durableEvent = {
+            kind: 'delta',
+            streamId: `fallback:${pilotEvent.iteration ?? 0}`,
+            text: pilotEvent.text
+          }
+        else if (pilotEvent.kind === 'command' && pilotEvent.name)
+          durableEvent = {
+            kind: 'command',
+            actionId: pilotEvent.actionId ?? `${pilotEvent.iteration ?? 0}:${traceActionIndex}`,
+            name: pilotEvent.name,
+            args: pilotEvent.args
+          }
+        else if (pilotEvent.kind === 'result' && pilotEvent.name)
+          durableEvent = {
+            kind: 'result',
+            actionId:
+              pilotEvent.actionId ??
+              `${pilotEvent.iteration ?? 0}:${Math.max(0, traceActionIndex - 1)}`,
+            name: pilotEvent.name,
+            ok: pilotEvent.ok,
+            data: pilotEvent.data
+          }
+        else if (pilotEvent.kind === 'done') {
+          /**
+           * Le TEXTE du `done` doit atterrir dans le message quand rien n'a ete streame.
+           *
+           * Constate en essai reel (2026-07-29) : le chemin direct `orchestrate` emet sa carte de
+           * livraison (statut, cout, run, resultat) UNIQUEMENT dans le `done` — aucun delta. Comme
+           * seul `sessionId` etait persiste, la carte etait calculee puis JETEE, et le fil ne gardait
+           * que « [a execute orchestrate] ». Meme patron que le cout jete : produire l'information
+           * puis la perdre a la frontiere de persistance.
+           *
+           * Condition stricte pour ne JAMAIS dupliquer : on ne persiste ce texte que si aucun delta
+           * n'a ete emis pendant le tour (sinon le texte du `done` reprend ce qui a deja ete dit).
+           */
+          const closing = pilotEvent.text?.trim()
+          if (closing && !streamedSpoken.trim()) {
+            os.conversations.applyTurnEvent(conversationId, turnId, {
+              kind: 'delta',
+              // Flux dedie : ce texte de cloture n'appartient a aucun stream deja ouvert.
+              streamId: `${turnId}:closing`,
+              text: closing
+            })
             try {
               appendTurnEvent(turnJournalRoot, conversationId, turnId, {
-                ...durableEvent,
+                kind: 'delta',
+                text: closing,
                 at: Date.now()
               })
             } catch {
-              /* journal best-effort : ne jamais casser un tour pour une écriture de trace */
+              /* journal best-effort */
             }
+          }
+          durableEvent = { kind: 'done', sessionId: turnSessionId }
+        } else if (pilotEvent.kind === 'cancellation') durableEvent = { kind: 'cancelled' }
+        if (durableEvent) {
+          os.conversations.applyTurnEvent(conversationId, turnId, durableEvent)
+          // Survie niveau 2 : le même événement va AUSSI dans le journal fichier du tour, pour
+          // pouvoir repérer/rejouer un tour resté inachevé après une fermeture complète de l'app.
+          try {
+            appendTurnEvent(turnJournalRoot, conversationId, turnId, {
+              ...durableEvent,
+              at: Date.now()
+            })
+          } catch {
+            /* journal best-effort : ne jamais casser un tour pour une écriture de trace */
           }
         }
-        const handlePilotEvent = (pilotEvent: PilotEvent): void => {
-          if (pilotEvent.kind === 'delta' && pilotEvent.text) streamedSpoken += pilotEvent.text
-          if (pilotEvent.kind === 'think' && pilotEvent.text) spoken.push(pilotEvent.text)
-          if (pilotEvent.kind === 'command' && pilotEvent.name)
-            spoken.push(`[a exécuté ${pilotEvent.name}]`)
-          if (pilotEvent.kind === 'done' && pilotEvent.usage) turnUsage = pilotEvent.usage
-          // Budget du TOUR de chat : le circuit-breaker de coût ne protégeait que les runs
-          // orchestrés. Mesuré le 2026-07-28 : un seul tour a coûté 2,109 $ (40 itérations d'outils)
-          // sans qu'aucune borne n'existe côté chat. On compte chaque appel et on COUPE au seuil.
-          if (pilotEvent.kind === 'prompt-call' && pilotEvent.callUsage) {
-            const tripped = chatBreaker.observe({
-              step: 'exec',
-              detail: 'chat',
-              costUsd: pilotEvent.callUsage.costUsd,
-              tokens: pilotEvent.callUsage.inputTokens + pilotEvent.callUsage.outputTokens
-            } as Parameters<typeof chatBreaker.observe>[0])
-            if (tripped) {
-              ledger.append({
-                source: 'orchestrate',
-                name: 'chat-budget',
-                detail: `tour coupé — ${tripped.reason}`
-              })
-              controller.abort(`budget du tour dépassé : ${tripped.reason}`)
-            }
-          }
-          if (pilotEvent.kind === 'prompt-call' && pilotEvent.sessionId)
-            turnSessionId = pilotEvent.sessionId
-          if (pilotEvent.kind === 'prompt-call' && pilotEvent.prompt) {
-            const reasoningEffort = pilotEvent.prompt.options.reasoningEffort
-            turnPromptIdentity ??= {
-              provider: pilotEvent.prompt.provider,
-              model: pilotEvent.prompt.model,
-              reasoningEffort: typeof reasoningEffort === 'string' ? reasoningEffort : undefined
-            }
-          }
-          applyDurableEvent(pilotEvent)
-          if (conversationId && pilotEvent.kind === 'prompt-call' && pilotEvent.prompt) {
-            const promptCall = appendPromptCall({
-              conversationId,
-              turnId,
-              iteration: pilotEvent.iteration ?? 0,
-              actor: 'orchestrator',
-              provider: pilotEvent.prompt.provider,
-              model: pilotEvent.prompt.model,
-              transport: pilotEvent.prompt.transport,
-              boundary: 'Autowin OS -> provider adapter',
-              limitation: pilotEvent.prompt.limitation,
-              system: pilotEvent.prompt.system,
-              messages: pilotEvent.prompt.messages,
-              options: pilotEvent.prompt.options,
-              response: pilotEvent.response ?? '',
-              status: pilotEvent.status,
-              error: pilotEvent.error,
-              usage: pilotEvent.callUsage,
-              durationMs: pilotEvent.callDurationMs,
-              sessionId: pilotEvent.sessionId
+      }
+      const handlePilotEvent = (pilotEvent: PilotEvent): void => {
+        if (pilotEvent.kind === 'delta' && pilotEvent.text) streamedSpoken += pilotEvent.text
+        if (pilotEvent.kind === 'think' && pilotEvent.text) spoken.push(pilotEvent.text)
+        if (pilotEvent.kind === 'command' && pilotEvent.name)
+          spoken.push(`[a exécuté ${pilotEvent.name}]`)
+        if (pilotEvent.kind === 'done' && pilotEvent.usage) turnUsage = pilotEvent.usage
+        // Budget du TOUR de chat : le circuit-breaker de coût ne protégeait que les runs
+        // orchestrés. Mesuré le 2026-07-28 : un seul tour a coûté 2,109 $ (40 itérations d'outils)
+        // sans qu'aucune borne n'existe côté chat. On compte chaque appel et on COUPE au seuil.
+        if (pilotEvent.kind === 'prompt-call' && pilotEvent.callUsage) {
+          const tripped = chatBreaker.observe({
+            step: 'exec',
+            detail: 'chat',
+            costUsd: pilotEvent.callUsage.costUsd,
+            tokens: pilotEvent.callUsage.inputTokens + pilotEvent.callUsage.outputTokens
+          } as Parameters<typeof chatBreaker.observe>[0])
+          if (tripped) {
+            ledger.append({
+              source: 'orchestrate',
+              name: 'chat-budget',
+              detail: `tour coupé — ${tripped.reason}`
             })
-            const promptTraceEvents = promptCallToTraceEvents(
-              promptCall,
-              traceSequence,
-              traceParentId
-            )
-            for (const traceEvent of promptTraceEvents) causalTrace.append(traceEvent)
-            traceParentId = `${promptCall.id}:3`
-            traceSequence += promptTraceEvents.length
-            traceActionIndex = 0
+            controller.abort(`budget du tour dépassé : ${tripped.reason}`)
           }
-          if (
-            conversationId &&
-            (pilotEvent.kind === 'command' ||
-              pilotEvent.kind === 'result' ||
-              pilotEvent.kind === 'error' ||
-              pilotEvent.kind === 'retry' ||
-              pilotEvent.kind === 'cancellation')
-          ) {
-            const actionSequence = traceActionIndex++
-            const stableActionId = pilotEvent.actionId?.replaceAll(':', '-') ?? `${actionSequence}`
-            const action = pilotActionToTraceEvent({
-              id: `${turnId}:action:${stableActionId}:${pilotEvent.kind}`,
-              conversationId,
-              turnId,
-              parentId: traceParentId,
-              timestamp: new Date().toISOString(),
-              sequence: traceSequence++,
-              kind: pilotEvent.kind,
-              name: pilotEvent.name,
-              data:
-                pilotEvent.kind === 'command'
-                  ? pilotEvent.args
-                  : (pilotEvent.data ?? pilotEvent.text),
-              ok: pilotEvent.ok
-            })
-            causalTrace.append(action)
-            traceParentId = action.id
+        }
+        if (pilotEvent.kind === 'prompt-call' && pilotEvent.sessionId)
+          turnSessionId = pilotEvent.sessionId
+        if (pilotEvent.kind === 'prompt-call' && pilotEvent.prompt) {
+          const reasoningEffort = pilotEvent.prompt.options.reasoningEffort
+          turnPromptIdentity ??= {
+            provider: pilotEvent.prompt.provider,
+            model: pilotEvent.prompt.model,
+            reasoningEffort: typeof reasoningEffort === 'string' ? reasoningEffort : undefined
           }
-          // Idem pour le flux de chat : une fenetre fermee est un non-evenement, pas une erreur du
-          // tour en cours (qui est deja paye et persiste).
-          emitToLiveWindows(BrowserWindow.getAllWindows(), 'pilot:event', {
-            ...pilotEvent,
+        }
+        applyDurableEvent(pilotEvent)
+        if (conversationId && pilotEvent.kind === 'prompt-call' && pilotEvent.prompt) {
+          const promptCall = appendPromptCall({
             conversationId,
-            turnId
+            turnId,
+            iteration: pilotEvent.iteration ?? 0,
+            actor: 'orchestrator',
+            provider: pilotEvent.prompt.provider,
+            model: pilotEvent.prompt.model,
+            transport: pilotEvent.prompt.transport,
+            boundary: 'Autowin OS -> provider adapter',
+            limitation: pilotEvent.prompt.limitation,
+            system: pilotEvent.prompt.system,
+            messages: pilotEvent.prompt.messages,
+            options: pilotEvent.prompt.options,
+            response: pilotEvent.response ?? '',
+            status: pilotEvent.status,
+            error: pilotEvent.error,
+            usage: pilotEvent.callUsage,
+            durationMs: pilotEvent.callDurationMs,
+            sessionId: pilotEvent.sessionId
           })
+          const promptTraceEvents = promptCallToTraceEvents(
+            promptCall,
+            traceSequence,
+            traceParentId
+          )
+          for (const traceEvent of promptTraceEvents) causalTrace.append(traceEvent)
+          traceParentId = `${promptCall.id}:3`
+          traceSequence += promptTraceEvents.length
+          traceActionIndex = 0
         }
-        const delayedPilotFixture =
-          isolatedTestInstance &&
-          safe.at(-1)?.content.startsWith('[[autowin-fixture-delayed-pilot]]')
-        const durableStreamPrefix = '[[autowin-fixture-durable-stream]]'
-        const durableStreamFixture =
-          isolatedTestInstance && safe.at(-1)?.content.startsWith(durableStreamPrefix)
-        if (durableStreamFixture) {
-          const target = safe.at(-1)?.content.slice(durableStreamPrefix.length).trim() || 'fixture'
-          let fixtureCall = 0
-          const fixtureProvider: ProviderAdapter = {
-            id: 'autowin-durable-fixture',
-            auth: async () => true,
-            async *send(): AsyncGenerator<StreamChunk, SendResult, void> {
-              fixtureCall += 1
-              if (fixtureCall > 1) {
-                return {
-                  text: '',
-                  provider: 'autowin-durable-fixture',
-                  systemInjected: true
-                }
-              }
-              const chunks = [
-                'Je ',
-                'réponds ',
-                'progressivement.',
-                '<cm',
-                `d>{"name":"get_state","args":{"target":${JSON.stringify(target)},"token":"fixture-secret"}}</cmd>`,
-                ' Terminé.'
-              ]
-              for (const delta of chunks) {
-                yield { delta }
-                if (!delta.startsWith('<') && !delta.startsWith('d>'))
-                  await new Promise((resolve) => setTimeout(resolve, 120))
-              }
+        if (
+          conversationId &&
+          (pilotEvent.kind === 'command' ||
+            pilotEvent.kind === 'result' ||
+            pilotEvent.kind === 'error' ||
+            pilotEvent.kind === 'retry' ||
+            pilotEvent.kind === 'cancellation')
+        ) {
+          const actionSequence = traceActionIndex++
+          const stableActionId = pilotEvent.actionId?.replaceAll(':', '-') ?? `${actionSequence}`
+          const action = pilotActionToTraceEvent({
+            id: `${turnId}:action:${stableActionId}:${pilotEvent.kind}`,
+            conversationId,
+            turnId,
+            parentId: traceParentId,
+            timestamp: new Date().toISOString(),
+            sequence: traceSequence++,
+            kind: pilotEvent.kind,
+            name: pilotEvent.name,
+            data:
+              pilotEvent.kind === 'command'
+                ? pilotEvent.args
+                : (pilotEvent.data ?? pilotEvent.text),
+            ok: pilotEvent.ok
+          })
+          causalTrace.append(action)
+          traceParentId = action.id
+        }
+        // Idem pour le flux de chat : une fenetre fermee est un non-evenement, pas une erreur du
+        // tour en cours (qui est deja paye et persiste).
+        emitToLiveWindows(BrowserWindow.getAllWindows(), 'pilot:event', {
+          ...pilotEvent,
+          conversationId,
+          turnId
+        })
+      }
+      const delayedPilotFixture =
+        isolatedTestInstance && safe.at(-1)?.content.startsWith('[[autowin-fixture-delayed-pilot]]')
+      const durableStreamPrefix = '[[autowin-fixture-durable-stream]]'
+      const durableStreamFixture =
+        isolatedTestInstance && safe.at(-1)?.content.startsWith(durableStreamPrefix)
+      if (durableStreamFixture) {
+        const target = safe.at(-1)?.content.slice(durableStreamPrefix.length).trim() || 'fixture'
+        let fixtureCall = 0
+        const fixtureProvider: ProviderAdapter = {
+          id: 'autowin-durable-fixture',
+          auth: async () => true,
+          async *send(): AsyncGenerator<StreamChunk, SendResult, void> {
+            fixtureCall += 1
+            if (fixtureCall > 1) {
               return {
-                text: chunks.join(''),
+                text: '',
                 provider: 'autowin-durable-fixture',
                 systemInjected: true
               }
             }
-          }
-          const fixtureRegistry = new ProviderRegistry().register(fixtureProvider)
-          const fixtureRoles = new RoleModelConfig({
-            orchestrator: { provider: fixtureProvider.id, model: 'deterministic-fixture' }
-          })
-          const fixtureBus = {
-            catalog: () => bus.catalog(),
-            snapshot: () => bus.snapshot(),
-            snapshotForPrompt: () => bus.snapshotForPrompt(),
-            exec: async (name: string, args: Record<string, unknown>) =>
-              name === 'get_state'
-                ? { ok: true, data: { source: 'durable-fixture', target: args.target } }
-                : bus.exec(name, args, conversationId)
-          } as AppCommandBus
-          await new AgentPilot(fixtureRegistry, fixtureRoles, fixtureBus).chat(
-            safe,
-            handlePilotEvent,
-            undefined,
-            6,
-            conversationId,
-            controller.signal,
-            conversationId ? (os.conversations.get(conversationId)?.authorityMode ?? 'ask') : 'ask'
-          )
-        } else if (delayedPilotFixture) {
-          await new Promise<void>((resolve, reject) => {
-            const finish = (): void => {
-              controller.signal.removeEventListener('abort', cancel)
-              resolve()
+            const chunks = [
+              'Je ',
+              'réponds ',
+              'progressivement.',
+              '<cm',
+              `d>{"name":"get_state","args":{"target":${JSON.stringify(target)},"token":"fixture-secret"}}</cmd>`,
+              ' Terminé.'
+            ]
+            for (const delta of chunks) {
+              yield { delta }
+              if (!delta.startsWith('<') && !delta.startsWith('d>'))
+                await new Promise((resolve) => setTimeout(resolve, 120))
             }
-            const cancel = (): void => {
-              clearTimeout(timeout)
-              reject(new Error('aborted'))
+            return {
+              text: chunks.join(''),
+              provider: 'autowin-durable-fixture',
+              systemInjected: true
             }
-            const timeout = setTimeout(finish, 600)
-            if (controller.signal.aborted) cancel()
-            else controller.signal.addEventListener('abort', cancel, { once: true })
-          })
-          const fixtureEvents = [
-            { kind: 'think', text: 'événement tardif correctement routé' },
-            { kind: 'command', name: 'get_state', args: { target: 'late-conversation' } },
-            { kind: 'result', name: 'get_state', ok: true, data: { source: 'isolated' } },
-            { kind: 'command', name: 'navigate', args: { tab: 'memory' } },
-            { kind: 'result', name: 'navigate', ok: true, data: { activeTab: 'memory' } },
-            { kind: 'done', text: 'fixture pilot terminée' }
-          ]
-          for (const fixtureEvent of fixtureEvents) handlePilotEvent(fixtureEvent as PilotEvent)
-        } else
-          await pilot.chat(
-            safe,
-            handlePilotEvent,
-            (question) =>
-              sender
-                ? askModelQuestion(sender, 'chat', question, 'Chat', controller.signal)
-                : Promise.reject(
-                    new Error(
-                      'Une tâche planifiée ne peut pas répondre à une question interactive du modèle.'
-                    )
-                  ),
-            6,
-            conversationId,
-            controller.signal,
-            conversationId ? (os.conversations.get(conversationId)?.authorityMode ?? 'ask') : 'ask',
-            conversationId ? () => drainPendingDirectives(conversationId) : undefined,
-            bindingOverride,
-            turnId
-          )
-        // Journal d'activité de la conversation : le tour de chat, avec son coût ET sa durée.
-        const turnDurationMs = Math.round(performance.now() - turnStartedAtMs)
-        if (conversationId) {
-          const last = safe[safe.length - 1]
-          const orchestratorBinding = bindingOverride ?? os.roles.getBinding('orchestrator')
-          appendConvActivity(conversationId, {
-            kind: 'chat',
-            label: last?.role === 'user' ? last.content : 'tour agent',
-            provider: turnPromptIdentity?.provider ?? orchestratorBinding.provider,
-            model: turnPromptIdentity?.model ?? orchestratorBinding.model,
-            reasoningEffort:
-              turnPromptIdentity?.reasoningEffort ?? orchestratorBinding.reasoningEffort,
-            inputTokens: turnUsage?.inputTokens,
-            outputTokens: turnUsage?.outputTokens,
-            costUsd: turnUsage?.costUsd,
-            durationMs: turnDurationMs,
-            text: (streamedSpoken || spoken.join('\n')).slice(0, 600)
-          })
-        }
-        broadcast({ type: 'refresh', scope: 'workflows' })
-        return { ok: true, cancelled: false, turnId }
-      } catch (e) {
-        /**
-         * ETAT TERMINAL, journal COMPRIS. Ce catch n'ecrivait que dans le store : le journal FICHIER
-         * du tour ne recevait ni `done` ni `failed`, donc le tour restait « inacheve » pour toujours
-         * et la reprise automatique le rejouait a chaque demarrage — un tour ZOMBIE.
-         *
-         * Constate en reel le 2026-07-29 : une erreur d'API repetee (filtre de contenu) fait jeter le
-         * pilote apres 2 tentatives ; le journal du tour s'arretait sur ['delta','stream-reset',
-         * 'delta'] sans aucun evenement terminal. Un tour qui echoue doit se CONCLURE, pas disparaitre.
-         */
-        const terminal = controller.signal.aborted
-          ? ({ kind: 'cancelled' } as const)
-          : ({ kind: 'failed', error: e instanceof Error ? e.message : String(e) } as const)
-        if (conversationId && os.conversations.get(conversationId)) {
-          os.conversations.applyTurnEvent(conversationId, turnId, terminal)
-        }
-        if (conversationId) {
-          try {
-            appendTurnEvent(turnJournalRoot, conversationId, turnId, {
-              ...terminal,
-              at: Date.now()
-            })
-          } catch {
-            /* journal best-effort : ne jamais masquer l'erreur d'origine pour une ecriture de trace */
           }
         }
-        broadcast({ type: 'refresh', scope: 'workflows' })
-        if (controller.signal.aborted) return { ok: true, cancelled: true, turnId }
-        return {
-          ok: false,
-          cancelled: false,
-          turnId,
-          error: e instanceof Error ? e.message : String(e)
-        }
-      } finally {
-        if (conversationId) {
-          activeChatTurns.delete(conversationId, controller)
-          broadcast({ type: 'refresh', scope: 'conversations' })
-          if (pendingDirectives.delete(conversationId)) {
-            // directives non consommées = obsolètes
-            broadcast({ type: 'refresh', scope: 'directives' })
+        const fixtureRegistry = new ProviderRegistry().register(fixtureProvider)
+        const fixtureRoles = new RoleModelConfig({
+          orchestrator: { provider: fixtureProvider.id, model: 'deterministic-fixture' }
+        })
+        const fixtureBus = {
+          catalog: () => bus.catalog(),
+          snapshot: () => bus.snapshot(),
+          snapshotForPrompt: () => bus.snapshotForPrompt(),
+          exec: async (name: string, args: Record<string, unknown>) =>
+            name === 'get_state'
+              ? { ok: true, data: { source: 'durable-fixture', target: args.target } }
+              : bus.exec(name, args, conversationId)
+        } as AppCommandBus
+        await new AgentPilot(fixtureRegistry, fixtureRoles, fixtureBus).chat(
+          safe,
+          handlePilotEvent,
+          undefined,
+          6,
+          conversationId,
+          controller.signal,
+          conversationId ? (os.conversations.get(conversationId)?.authorityMode ?? 'ask') : 'ask'
+        )
+      } else if (delayedPilotFixture) {
+        await new Promise<void>((resolve, reject) => {
+          const finish = (): void => {
+            controller.signal.removeEventListener('abort', cancel)
+            resolve()
           }
-        }
-        resolveCompletion()
+          const cancel = (): void => {
+            clearTimeout(timeout)
+            reject(new Error('aborted'))
+          }
+          const timeout = setTimeout(finish, 600)
+          if (controller.signal.aborted) cancel()
+          else controller.signal.addEventListener('abort', cancel, { once: true })
+        })
+        const fixtureEvents = [
+          { kind: 'think', text: 'événement tardif correctement routé' },
+          { kind: 'command', name: 'get_state', args: { target: 'late-conversation' } },
+          { kind: 'result', name: 'get_state', ok: true, data: { source: 'isolated' } },
+          { kind: 'command', name: 'navigate', args: { tab: 'memory' } },
+          { kind: 'result', name: 'navigate', ok: true, data: { activeTab: 'memory' } },
+          { kind: 'done', text: 'fixture pilot terminée' }
+        ]
+        for (const fixtureEvent of fixtureEvents) handlePilotEvent(fixtureEvent as PilotEvent)
+      } else
+        await pilot.chat(
+          safe,
+          handlePilotEvent,
+          (question) =>
+            sender
+              ? askModelQuestion(sender, 'chat', question, 'Chat', controller.signal)
+              : Promise.reject(
+                  new Error(
+                    'Une tâche planifiée ne peut pas répondre à une question interactive du modèle.'
+                  )
+                ),
+          6,
+          conversationId,
+          controller.signal,
+          conversationId ? (os.conversations.get(conversationId)?.authorityMode ?? 'ask') : 'ask',
+          conversationId ? () => drainPendingDirectives(conversationId) : undefined,
+          bindingOverride,
+          turnId
+        )
+      // Journal d'activité de la conversation : le tour de chat, avec son coût ET sa durée.
+      const turnDurationMs = Math.round(performance.now() - turnStartedAtMs)
+      if (conversationId) {
+        const last = safe[safe.length - 1]
+        const orchestratorBinding = bindingOverride ?? os.roles.getBinding('orchestrator')
+        appendConvActivity(conversationId, {
+          kind: 'chat',
+          label: last?.role === 'user' ? last.content : 'tour agent',
+          provider: turnPromptIdentity?.provider ?? orchestratorBinding.provider,
+          model: turnPromptIdentity?.model ?? orchestratorBinding.model,
+          reasoningEffort:
+            turnPromptIdentity?.reasoningEffort ?? orchestratorBinding.reasoningEffort,
+          inputTokens: turnUsage?.inputTokens,
+          outputTokens: turnUsage?.outputTokens,
+          costUsd: turnUsage?.costUsd,
+          durationMs: turnDurationMs,
+          text: (streamedSpoken || spoken.join('\n')).slice(0, 600)
+        })
       }
+      broadcast({ type: 'refresh', scope: 'workflows' })
+      return { ok: true, cancelled: false, turnId }
+    } catch (e) {
+      /**
+       * ETAT TERMINAL, journal COMPRIS. Ce catch n'ecrivait que dans le store : le journal FICHIER
+       * du tour ne recevait ni `done` ni `failed`, donc le tour restait « inacheve » pour toujours
+       * et la reprise automatique le rejouait a chaque demarrage — un tour ZOMBIE.
+       *
+       * Constate en reel le 2026-07-29 : une erreur d'API repetee (filtre de contenu) fait jeter le
+       * pilote apres 2 tentatives ; le journal du tour s'arretait sur ['delta','stream-reset',
+       * 'delta'] sans aucun evenement terminal. Un tour qui echoue doit se CONCLURE, pas disparaitre.
+       */
+      const terminal = controller.signal.aborted
+        ? ({ kind: 'cancelled' } as const)
+        : ({ kind: 'failed', error: e instanceof Error ? e.message : String(e) } as const)
+      if (conversationId && os.conversations.get(conversationId)) {
+        os.conversations.applyTurnEvent(conversationId, turnId, terminal)
+      }
+      if (conversationId) {
+        try {
+          appendTurnEvent(turnJournalRoot, conversationId, turnId, {
+            ...terminal,
+            at: Date.now()
+          })
+        } catch {
+          /* journal best-effort : ne jamais masquer l'erreur d'origine pour une ecriture de trace */
+        }
+      }
+      broadcast({ type: 'refresh', scope: 'workflows' })
+      if (controller.signal.aborted) return { ok: true, cancelled: true, turnId }
+      return {
+        ok: false,
+        cancelled: false,
+        turnId,
+        error: e instanceof Error ? e.message : String(e)
+      }
+    } finally {
+      if (conversationId) {
+        activeChatTurns.delete(conversationId, controller)
+        broadcast({ type: 'refresh', scope: 'conversations' })
+        if (pendingDirectives.delete(conversationId)) {
+          // directives non consommées = obsolètes
+          broadcast({ type: 'refresh', scope: 'directives' })
+        }
+      }
+      resolveCompletion()
     }
+  }
   ipcMain.handle('os:pilotChat', (event, messages, conversationId) => {
     assertTrustedRendererSender(event, 'PilotChat')
     return runPilotChat(event.sender, messages, conversationId)
@@ -1839,15 +1869,12 @@ function registerChatIpc(): void {
   })
   ipcMain.handle(
     'git:conversationDiff',
-    async (
-      event,
-      conversationId: unknown,
-      rawPath: unknown,
-      rawWorkspaceRoot: unknown
-    ) => {
+    async (event, conversationId: unknown, rawPath: unknown, rawWorkspaceRoot: unknown) => {
       assertTrustedRendererSender(event, 'ConversationGitDiff')
       const safeConversationId = guardString(conversationId, 'conversationId')
-      const path = guardString(rawPath, 'path').replaceAll('\\', '/').replace(/^\.\/+/, '')
+      const path = guardString(rawPath, 'path')
+        .replaceAll('\\', '/')
+        .replace(/^\.\/+/, '')
       const requestedRoot = guardString(rawWorkspaceRoot, 'workspaceRoot')
       return readConversationGitDiff(safeConversationId, path, requestedRoot)
     }
@@ -2339,7 +2366,8 @@ app.whenReady().then(async () => {
             turnId: resumeTurnId,
             workspaceRoot: os.executionWorkspace
           })
-          for (const w of BrowserWindow.getAllWindows()) w.webContents.send('orchestrate:step', step)
+          for (const w of BrowserWindow.getAllWindows())
+            w.webContents.send('orchestrate:step', step)
         },
         undefined,
         undefined,
