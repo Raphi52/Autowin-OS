@@ -5,6 +5,7 @@ import { ArtifactArchivePreview } from './ArtifactArchivePreview'
 import { ArtifactDiagramPreview } from './ArtifactDiagramPreview'
 import { ArtifactFontPreview } from './ArtifactFontPreview'
 import { ArtifactModel3dPreview } from './ArtifactModel3dPreview'
+import { SandboxedHtmlPreview } from './SandboxedHtmlPreview'
 import './ArtifactPreview.css'
 
 const LABELS: Record<ArtifactKind, string> = {
@@ -199,11 +200,11 @@ function ArtifactBody({
   if (artifact.kind === 'notebook' && text !== undefined) return <NotebookPreview text={text} />
   if (artifact.kind === 'web' && text !== undefined)
     return (
-      <iframe
-        className="artifact-preview__frame"
+      <SandboxedHtmlPreview
+        source={text}
         title={`Aperçu de ${artifact.name}`}
-        sandbox="allow-scripts"
-        srcDoc={text}
+        embedded
+        enforceInlineLimit={false}
       />
     )
   if (artifact.kind === 'pdf' && dataUrl)
