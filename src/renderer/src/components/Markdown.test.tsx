@@ -113,6 +113,57 @@ describe('Markdown', () => {
     expect(container.querySelector('pre code')?.textContent).toContain('| a |')
   })
 
+  it('renders only a closed html-render fence as a sandboxed surface', () => {
+    render('Avant\n```html-render\n<!doctype html><button id="demo">Démo</button>\n```\nAprès')
+    const preview = container.querySelector('[data-testid="html-render-preview"]')
+    expect(preview).not.toBeNull()
+    expect(preview?.querySelector('iframe')?.getAttribute('src')).toMatch(/^data:text\/html/)
+    expect(container.textContent).toContain('Avant')
+    expect(container.textContent).toContain('Après')
+  })
+
+  it('keeps ordinary and incomplete HTML fences inert', () => {
+    render('```html\n<script>window.evil = true</script>\n```')
+    expect(container.querySelector('[data-testid="html-render-preview"]')).toBeNull()
+    expect(container.querySelector('pre code')?.textContent).toContain('<script>')
+
+    render('```html-render\n<script>window.evil = true</script>')
+    expect(container.querySelector('[data-testid="html-render-preview"]')).toBeNull()
+    expect(container.querySelector('pre code')?.textContent).toContain('<script>')
+  })
+
+  it('accepts Markdown fence indentation without rendering ordinary HTML', () => {
+    render('1. Vue proposée\n   ```html-render\n   <strong>Rendue</strong>\n   ```')
+    expect(container.querySelector('[data-testid="html-render-preview"]')).not.toBeNull()
+
+    render('1. Exemple\n   ```html\n   <strong>Code</strong>\n   ```')
+    expect(container.querySelector('[data-testid="html-render-preview"]')).toBeNull()
+    expect(container.querySelector('pre code')?.textContent).toContain('<strong>Code</strong>')
+  })
+
+  it('recreates the same rendered surface from persisted text', () => {
+    const persisted = JSON.parse(
+      JSON.stringify({ content: '```html-render\n<h1>Après redémarrage</h1>\n```' })
+    ) as { content: string }
+    render(persisted.content)
+    expect(container.querySelector('iframe')?.getAttribute('src')).toMatch(/^data:text\/html/)
+  })
+
+  it('keeps an oversized html-render block explicit instead of degrading it to code', () => {
+    const oversizedSource = `<img src="data:image/png;base64,${'a'.repeat(1_000_001)}">`
+    render(`\`\`\`html-render\n${oversizedSource}\n\`\`\``)
+
+    expect(container.querySelector('[data-testid="html-render-preview"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="html-render-too-large"]')).not.toBeNull()
+    expect(container.querySelector('iframe')).toBeNull()
+    expect(container.querySelector('pre.md-code')).toBeNull()
+
+    act(() => (container.querySelector('[data-action="html-source"]') as HTMLButtonElement).click())
+    expect(container.querySelector('.html-render-preview__source')?.textContent).toContain(
+      'data:image/png'
+    )
+  })
+
   it('groups the model final summary in one dedicated region and absorbs its separator', () => {
     render(
       'Réponse détaillée.\n\n---\n\n✅ Fait\n1. Correctif appliqué.\n\n📍 Maintenant : vérifié.\n⏳ Reste à faire : rien.\n👉 Recommandé : tester.',

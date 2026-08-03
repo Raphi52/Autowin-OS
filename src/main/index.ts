@@ -780,11 +780,11 @@ function registerChatIpc(): void {
       return { conversationId: safeConversationId, path, variant }
     }
   )
-  ipcMain.handle('app:test:seed-artifact-previews', (event) => {
+  ipcMain.handle('app:test:seed-artifact-previews', (event, htmlOnly = false) => {
     assertTrustedRendererSender(event, 'Fixture artifact previews')
     if (!isolatedTestInstance) throw new Error('Fixture indisponible hors instance isolée')
     const conversation = os.conversations.create({
-      title: 'Galerie · artefacts modèles',
+      title: htmlOnly ? 'HTML rendu · fixture' : 'Galerie · artefacts modèles',
       category: 'codex',
       provider: 'codex'
     })
@@ -797,6 +797,56 @@ function registerChatIpc(): void {
         runtime: { provider: 'codex', model: 'gpt-artifact-fixture' }
       }
     )
+    os.conversations.applyTurnEvent(conversation.id, previewTurnId, {
+      kind: 'delta',
+      streamId: 'html-render-fixture',
+      text: `Voici la même réponse, mais pensée comme une surface plutôt qu'un mur de texte.
+
+\`\`\`html-render
+<!-- <head> hostile : la CSP doit rester active malgré ce faux tag -->
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta http-equiv="refresh" content="0;url=http://127.0.0.1:9262/autowin-html-render-meta-refresh-canary">
+  <style>
+    :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 22px; color: #f7f9fb; background: radial-gradient(circle at 12% 0%, #163f38, #080d12 50%); }
+    .eyebrow { color: #6ee7c0; font: 700 11px/1.2 ui-monospace, monospace; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { max-width: 620px; margin: 10px 0 18px; font-size: clamp(25px, 5vw, 43px); line-height: 1.03; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .card { min-width: 0; padding: 14px; border: 1px solid #ffffff18; border-radius: 13px; background: #ffffff0a; }
+    .card strong { display: block; margin-bottom: 6px; color: #8ef0d2; font-size: 20px; }
+    .card span { color: #a9b4c0; font-size: 12px; line-height: 1.45; }
+    .security { display: flex; flex-wrap: wrap; gap: 7px; margin: 18px 0; }
+    .pill { padding: 6px 9px; border: 1px solid #52d6ab55; border-radius: 999px; color: #9debd3; background: #13352c; font-size: 11px; }
+    details { padding: 10px 12px; border: 1px solid #52d6ab55; border-radius: 10px; color: #b7c1cc; background: #0c1717; font-size: 12px; }
+    summary { color: #75e8c5; font-weight: 800; cursor: pointer; }
+    details p { margin: 10px 0 2px; }
+    @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } body { padding: 16px; } }
+  </style>
+</head>
+<body>
+  <img src="http://127.0.0.1:9262/autowin-html-render-network-canary.png" alt="" hidden>
+  <div class="eyebrow">Autowin · réponse vivante</div>
+  <h1>Comprendre en un regard, explorer si besoin.</h1>
+  <div class="grid">
+    <div class="card"><strong>01</strong><span>Le texte normal reste simple et rapide.</span></div>
+    <div class="card"><strong>02</strong><span>Le HTML compose cartes, rythme et hiérarchie.</span></div>
+    <div class="card"><strong>03</strong><span>Les interactions restent enfermées ici.</span></div>
+  </div>
+  <div class="security">
+    <span class="pill">DOM parent isolé</span><span class="pill">API Autowin absente</span><span class="pill">Réseau coupé</span>
+  </div>
+  <details id="native-interaction"><summary>Explorer le détail</summary><p>Interaction HTML native, toujours sans accès à Autowin.</p></details>
+  <a id="network-navigation-canary" href="http://127.0.0.1:9262/autowin-html-render-link-canary">Lien réseau canari</a>
+  <script>document.documentElement.dataset.forbiddenScript = 'executed';</script>
+</body>
+</html>
+\`\`\`
+
+Le fil reprend ensuite normalement.`
+    })
     const fixtureArtifacts = [
       {
         id: 'fixture-image',
@@ -858,12 +908,14 @@ function registerChatIpc(): void {
         source: { provider: 'codex', model: 'gpt-artifact-fixture' }
       }
     ]
-    for (const artifact of fixtureArtifacts) {
-      const stored = materializeChatArtifact(artifact, conversation.id, previewTurnId)
-      os.conversations.applyTurnEvent(conversation.id, previewTurnId, {
-        kind: 'artifact',
-        artifact: stored
-      })
+    if (!htmlOnly) {
+      for (const artifact of fixtureArtifacts) {
+        const stored = materializeChatArtifact(artifact, conversation.id, previewTurnId)
+        os.conversations.applyTurnEvent(conversation.id, previewTurnId, {
+          kind: 'artifact',
+          artifact: stored
+        })
+      }
     }
     os.conversations.applyTurnEvent(conversation.id, previewTurnId, { kind: 'done' })
     return { conversationId: conversation.id, turnId: previewTurnId }
@@ -2472,6 +2524,14 @@ function createWindow(): void {
   }
   mainWindow.webContents.on('will-navigate', blockUntrustedNavigation)
   mainWindow.webContents.on('will-redirect', blockUntrustedNavigation)
+  mainWindow.webContents.on('will-frame-navigate', (details) => {
+    if (details.isMainFrame) return
+    const currentUrl = details.frame?.url ?? ''
+    const isInitialLocalFrameLoad =
+      (currentUrl === '' || currentUrl === 'about:blank') &&
+      (details.url.startsWith('data:') || details.url.startsWith('blob:'))
+    if (!isInitialLocalFrameLoad) details.preventDefault()
+  })
 
   // Desync fenêtre↔viewport (vécu) : le contenu reste parfois rendu à ses ANCIENNES métriques —
   // rogné en haut à gauche, le reste noir — jusqu'à ce qu'un vrai resize force un relayout, d'où le

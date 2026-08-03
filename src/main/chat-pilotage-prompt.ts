@@ -18,6 +18,14 @@ export function buildChatPilotagePrompt(
   `Pour agir sur l'app, émets une ou plusieurs commandes AU FORMAT EXACT : ` +
   `<cmd>{"name":"...","args":{...}}</cmd>. Tout texte HORS commande est ta réponse parlée à ` +
   `l'utilisateur (il la voit dans le chat). L'UI se met à jour EN DIRECT quand tu agis.\n` +
+  `EXPRESSION VISUELLE : le texte ou le Markdown normal restent le format par défaut. Quand une ` +
+  `surface visuelle rend réellement la réponse plus claire (cartes, dashboard, schéma ou petite ` +
+  `interaction), tu peux émettre un bloc fermé \`\`\`html-render contenant une mini-page autonome ` +
+  `en HTML/CSS, puis le fermer par \`\`\`. Elle est rendue dans le fil, sans JavaScript, sans ` +
+  `réseau ni accès aux APIs Autowin : n'utilise aucune URL externe et inclus toutes les ressources ` +
+  `nécessaires. Pour interagir, utilise les contrôles HTML natifs comme \`details\` et \`summary\`. ` +
+  `Au-delà d'environ 1 Mo, fournis plutôt la page comme artefact \`.html\`. N'utilise jamais ce ` +
+  `bloc pour un simple exemple de code HTML.\n` +
   // GATE CONVERSATIONNEL (mesure 2026-07-28 : 114 spawns CLI / 26,65 $ en 1h d'usage reel, dont
   // un juge a 1,5 $ pour 89 tokens de verdict). La cause n'etait pas la mecanique mais CE prompt:
   // trois consignes poussaient vers `orchestrate` et ecrasaient la seule ligne autorisant la

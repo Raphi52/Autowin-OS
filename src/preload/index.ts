@@ -6,8 +6,10 @@ const api = {
   captureTestPage: (): Promise<string> => ipcRenderer.invoke('app:test:capture-page'),
   seedConversationScopeTest: (conversationId: string, variant: 'a' | 'b'): Promise<unknown> =>
     ipcRenderer.invoke('app:test:seed-conversation-scope', conversationId, variant),
-  seedArtifactPreviewsTest: (): Promise<{ conversationId: string; turnId: string }> =>
-    ipcRenderer.invoke('app:test:seed-artifact-previews'),
+  seedArtifactPreviewsTest: (
+    htmlOnly = false
+  ): Promise<{ conversationId: string; turnId: string }> =>
+    ipcRenderer.invoke('app:test:seed-artifact-previews', htmlOnly),
   storageMigration: (): Promise<Record<string, string>> =>
     ipcRenderer.invoke('app:storage-migration'),
   completeStorageMigration: (): Promise<boolean> =>

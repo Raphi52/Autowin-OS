@@ -115,8 +115,20 @@ describe('ArtifactPreview', () => {
       })
     )
     const frame = container.querySelector('iframe')
-    expect(frame?.getAttribute('sandbox')).toContain('allow-scripts')
+    expect(frame?.getAttribute('sandbox')).toBe('')
     expect(frame?.getAttribute('sandbox')).not.toContain('allow-same-origin')
+
+    render(
+      artifact({
+        name: 'large.html',
+        mimeType: 'text/html',
+        kind: 'web',
+        encoding: 'utf8',
+        content: `<main>${'a'.repeat(1_000_001)}</main>`
+      })
+    )
+    expect(container.querySelector('[data-testid="html-render-too-large"]')).toBeNull()
+    expect(container.querySelector('iframe')?.getAttribute('src')).toMatch(/^data:text\/html/)
 
     render(
       artifact({

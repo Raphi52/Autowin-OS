@@ -6,6 +6,8 @@
  * Les liens ne sont créés que pour les schémas http/https (ouverts en externe par
  * le setWindowOpenHandler du main). Suffisant pour des réponses de chat.
  */
+import { SandboxedHtmlPreview } from './SandboxedHtmlPreview'
+
 type MarkdownProps = {
   text: string
   highlightFinalSummary?: boolean
@@ -64,16 +66,57 @@ export function Markdown({
   )
 }
 
+type FencedBlock = { kind: 'text' | 'code' | 'html-render'; content: string }
+
+function tokenizeFencedBlocks(text: string): FencedBlock[] {
+  const blocks: FencedBlock[] = []
+  const opening = /^ {0,3}```([^\r\n]*)\r?\n/gm
+  let cursor = 0
+  let match: RegExpExecArray | null
+
+  while ((match = opening.exec(text)) !== null) {
+    if (match.index > cursor)
+      blocks.push({ kind: 'text', content: text.slice(cursor, match.index) })
+    const contentStart = opening.lastIndex
+    const closing = /^ {0,3}```[ \t]*(?:\r?\n|$)/gm
+    closing.lastIndex = contentStart
+    const end = closing.exec(text)
+
+    if (!end) {
+      // Pendant le streaming, un fence non fermé reste une source inerte.
+      blocks.push({ kind: 'code', content: text.slice(contentStart) })
+      cursor = text.length
+      break
+    }
+
+    const content = text.slice(contentStart, end.index).replace(/\r?\n$/u, '')
+    const language = match[1].trim()
+    blocks.push({
+      kind: language === 'html-render' ? 'html-render' : 'code',
+      content
+    })
+    cursor = closing.lastIndex
+    opening.lastIndex = cursor
+  }
+
+  if (cursor < text.length) blocks.push({ kind: 'text', content: text.slice(cursor) })
+  return blocks.length ? blocks : [{ kind: 'text', content: text }]
+}
+
 function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[] {
-  return text.split(/```/).map((block, i) =>
-    i % 2 === 1 ? (
-      <pre key={`${keyPrefix}-code-${i}`} className="md-code">
-        <code>{block.replace(/^[a-zA-Z0-9]*\n/, '')}</code>
-      </pre>
-    ) : (
-      <span key={`${keyPrefix}-text-${i}`}>{renderTextBlock(block)}</span>
-    )
-  )
+  return tokenizeFencedBlocks(text).map((block, index) => {
+    if (block.kind === 'html-render')
+      return (
+        <SandboxedHtmlPreview key={`${keyPrefix}-html-render-${index}`} source={block.content} />
+      )
+    if (block.kind === 'code')
+      return (
+        <pre key={`${keyPrefix}-code-${index}`} className="md-code">
+          <code>{block.content}</code>
+        </pre>
+      )
+    return <span key={`${keyPrefix}-text-${index}`}>{renderTextBlock(block.content)}</span>
+  })
 }
 
 function splitFinalSummary(text: string): FinalSummaryParts | null {

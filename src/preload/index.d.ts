@@ -272,7 +272,10 @@ interface ChatApi {
     conversationId: string,
     variant: 'a' | 'b'
   ) => Promise<{ conversationId: string; path: string; variant: 'a' | 'b' }>
-  seedArtifactPreviewsTest: () => Promise<{ conversationId: string; turnId: string }>
+  seedArtifactPreviewsTest: (htmlOnly?: boolean) => Promise<{
+    conversationId: string
+    turnId: string
+  }>
   storageMigration: () => Promise<Record<string, string>>
   completeStorageMigration: () => Promise<boolean>
   orchestrate: (
