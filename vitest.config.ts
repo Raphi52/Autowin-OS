@@ -32,7 +32,16 @@ export default defineConfig({
       '**/out/**',
       'Audit/**',
       '**/worktrees/**',
-      '**/.claude/**'
+      '**/.claude/**',
+      /**
+       * Tests `*.live.test.*` : ils consomment un VRAI provider (coût réel, réseau, authentification).
+       * Ils répondent à une question qu'aucun mock ne tranche — « le modèle produit-il vraiment ce que
+       * le renderer sait rendre ? » — mais les laisser dans la suite par défaut ferait payer un appel
+       * modèle à chaque `npm test`, et rendrait la suite rouge hors ligne. Lancement EXPLICITE :
+       * `npx vitest run --config vitest.live.config.ts` — `--exclude` en CLI ne surcharge PAS cette
+       * liste (vérifié : « No test files found »), d'où une config dédiée plutôt qu'un drapeau.
+       */
+      '**/*.live.test.*'
     ],
     pool: 'threads',
     maxWorkers: 8,
