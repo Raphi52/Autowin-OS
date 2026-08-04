@@ -360,6 +360,6 @@ Une implémentation runtime est recevable seulement si une fixture réelle prouv
 5. résultat renvoyé via continuation ;
 6. réponse finale fondée sur ce résultat ;
 7. provider/node/resource/digests exacts dans la preuve ;
-8. absence de fallback Codex/OmniRoute/Claude/`orchestrate` ;
+8. absence de fallback Codex/Claude/`orchestrate` ;
 9. replay, digest invalide, séquence invalide, offline et cancel rejetés ;
 10. aucun secret, PEM, origine ou chemin brut dans UI/trace/bundle.

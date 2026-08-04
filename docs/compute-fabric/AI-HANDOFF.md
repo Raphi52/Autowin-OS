@@ -41,7 +41,7 @@ Contraintes non négociables :
 2. Le Node ne reçoit aucun accès direct au PC et n’exécute rien en mode local-tools.
 3. Le domaine Autowin reste indépendant du runtime : toute particularité [runtime] vit dans un adaptateur Node.
 4. Le principal Fabric ne voit jamais AppCommandBus.catalog() complet, orchestrate ou un shell libre.
-5. Aucun fallback vers Codex, OmniRoute, Claude ou un autre agent.
+5. Aucun fallback vers Codex, Claude ou un autre agent.
 6. Le contrat cible est autowin.tool-stream/v1 : SSE typé + continuation HTTP.
 7. Toute capacité annoncée doit être reliée à une sonde ou documentation exacte de la version installée.
 8. Ne jamais inventer un champ externe, une limite, un rôle de message ou un format tool-call.

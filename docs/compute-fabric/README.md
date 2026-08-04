@@ -46,7 +46,7 @@ Autowin doit pouvoir utiliser une ressource d’IA située sur une autre machine
 - coupler le desktop à un fournisseur ou runtime précis ;
 - donner au serveur un accès direct au PC ;
 - confondre l’IA qui raisonne avec l’agent qui exécute ;
-- basculer silencieusement vers Codex, OmniRoute, Claude ou `orchestrate` ;
+- basculer silencieusement vers Codex, Claude ou `orchestrate` ;
 - exposer origine, bearer, clés, chemins locaux ou primitives d’exécution au renderer.
 
 Deux placements explicites existent :

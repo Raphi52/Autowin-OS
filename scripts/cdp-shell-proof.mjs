@@ -13,7 +13,7 @@ const shot = async (name) => { const s = await send('Page.captureScreenshot', { 
 
 // ROUTING
 await ev(click('/agent studio/i')); await new Promise(r=>setTimeout(r,700))
-await ev(click('/routage|omniroute/i')); await new Promise(r=>setTimeout(r,900))
+await ev(click('/routage/i')); await new Promise(r=>setTimeout(r,900))
 const routing = await ev(`(()=>{const rv=document.querySelector('.router-view');const tabs=document.querySelector('.domain-tabs');const act=document.querySelector('.domain-tabs button.is-active');return {routerBg:rv?getComputedStyle(rv).backgroundColor:null,routerBorder:rv?getComputedStyle(rv).borderTopWidth:null,tabsBorder:tabs?getComputedStyle(tabs).borderTopWidth:null,tabsRadius:tabs?getComputedStyle(tabs).borderRadius:null,activeBg:act?getComputedStyle(act).backgroundColor:null,activeBorder:act?getComputedStyle(act).borderTopColor:null,activeLabel:act?act.textContent.trim():null}})()`)
 const routingPng = await shot('shell-routing')
 
