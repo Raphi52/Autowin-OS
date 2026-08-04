@@ -8,6 +8,7 @@ import {
   STEP_META,
   groupSubagentSteps,
   costByModel,
+  formatTokens,
   type ChatActionPart,
   type EvidencePart,
   type OrchStep
@@ -45,10 +46,23 @@ export function SubAgentStep({ step: s }: { step: OrchStep }): React.JSX.Element
         )}
         {s.status === 'failed' && <span className="subagent-failed-pill">échec</span>}
         {s.detail && <span className="c-faint">{s.detail}</span>}
-        {typeof s.costUsd === 'number' && (
+        {typeof s.costUsd === 'number' ? (
           <span className="c-faint tnum" style={{ marginLeft: 'auto' }}>
             {s.costUsd.toFixed(4)} $
           </span>
+        ) : (
+          // Provider muet sur le coût : on montre le VOLUME plutôt que rien. Un tour à 795k tokens
+          // sans aucune indication de poids se lit comme un tour anodin.
+          typeof s.tokens === 'number' &&
+          s.tokens > 0 && (
+            <span
+              className="c-faint tnum"
+              style={{ marginLeft: 'auto' }}
+              title="Coût non chiffré par le provider"
+            >
+              {formatTokens(s.tokens)}
+            </span>
+          )
         )}
       </div>
       {s.status === 'failed' && s.error && <div className="subagent-error">{s.error}</div>}
@@ -101,7 +115,15 @@ export function StepThread({ steps }: { steps: OrchStep[] }): React.JSX.Element 
           {perModel.map((m) => (
             <span key={m.model} className="run-cost-chip">
               <span className="mono">{m.model}</span>
-              <b className="tnum">{m.costUsd.toFixed(4)} $</b>
+              {/* Montant affiché SEULEMENT s'il couvre quelque chose : sinon « 0.0000 $ » se lit
+                  « gratuit » alors que le provider n'a rien chiffré (mesuré : 532M de tokens codex
+                  comptés à zéro). Le volume non chiffré prend alors la place du montant. */}
+              {m.costUsd > 0 && <b className="tnum">{m.costUsd.toFixed(4)} $</b>}
+              {m.uncostedCalls > 0 && (
+                <b className="tnum run-cost-uncosted" data-testid="cost-uncosted">
+                  {formatTokens(m.uncostedTokens)} non chiffré{m.uncostedCalls > 1 ? 's' : ''}
+                </b>
+              )}
               <i className="c-faint">×{m.count}</i>
             </span>
           ))}
