@@ -160,7 +160,7 @@ export function persistOrchestrationStep(
       timestamp: new Date().toISOString(),
       sequence: sequence++,
       type: structuralType,
-      status: step.status ?? 'completed',
+      status: step.status === 'provider-blocked' ? 'failed' : (step.status ?? 'completed'),
       actor: {
         id: step.execution?.agentId ?? step.role ?? step.step,
         kind: step.step === 'gate' || !step.provider ? 'system' : 'agent',
@@ -233,7 +233,7 @@ export function persistOrchestrationStep(
       messages: step.prompt.messages,
       options: step.prompt.options,
       response: step.text,
-      status: step.status ?? 'completed',
+      status: step.status === 'provider-blocked' ? 'failed' : (step.status ?? 'completed'),
       error: step.error,
       usage: step.usage,
       durationMs: step.durationMs

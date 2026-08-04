@@ -79,7 +79,7 @@ export interface OrchestrationStep {
   usage?: Usage
   /** Id du meme appel dans prompt-observability, injecte a la frontiere de persistance. */
   usageCallId?: string
-  status?: 'completed' | 'failed'
+  status?: 'completed' | 'failed' | 'provider-blocked'
   error?: string
   durationMs?: number
   evidence?: ExecutionEvidence[]
@@ -159,7 +159,14 @@ export interface OrchestrationRuntimeSnapshot {
   judgeFanOut: RoleBinding[]
 }
 
-export interface OrchestratorDeps {
+/**
+ * COLLABORATEURS — les cinq objets sans lesquels aucun run n'existe, plus le retriever substituable.
+ *
+ * `OrchestratorDeps` (plus bas) reste UN SEUL contrat plat pour tous ses appelants : il hérite de ces
+ * groupes, il ne les imbrique pas. Aucun des 39 sites de construction ne change de forme. Le découpage
+ * ne sert qu'à rendre le contrat LISIBLE — 26 champs à plat mêlaient cinq préoccupations sans frontière.
+ */
+export interface OrchestratorCollaboratorDeps {
   registry: ProviderRegistry
   roles: RoleModelConfig
   cost: CostAggregator
@@ -167,6 +174,14 @@ export interface OrchestratorDeps {
   authority: AuthoritySas
   /** Retriever substituable pour prouver les frontières d'injection sans serveur global. */
   retrieveBrain?: typeof retrieveBrainContext
+}
+
+/**
+ * GATES & VÉRIFICATION — ce qui a le droit de BLOQUER un run, et sur quelle preuve.
+ *
+ * Tout est opt-in : absent, l'enforcement retombe sur le comportement historique.
+ */
+export interface OrchestratorGateDeps {
   /**
    * Système de hooks INTERNE (cycle de vie). Absent → bus par défaut (hooks synchrones existants +
    * verify-replay) → enforcement identique à l'historique (rétrocompat HARD) + verify-replay en plus.
@@ -180,6 +195,14 @@ export interface OrchestratorDeps {
    */
   verifyCmd?: string
   autoVerify?: boolean
+}
+
+/**
+ * ROUTAGE — le vrai contrat métier : où l'on travaille, quelles phases sont jouées, et sur combien
+ * de modèles. C'est le groupe qui décide de la QUALITÉ d'un run, et il était le plus dur à trouver
+ * dans le contrat plat : noyé entre les hooks de persistance et le contexte ambiant.
+ */
+export interface OrchestratorRoutingDeps {
   /** Workspace borné remis au sous-agent outillé. Jamais transmis au juge ou au chat. */
   executionWorkspace: string
   /**
@@ -207,6 +230,14 @@ export interface OrchestratorDeps {
    * puis synthèse par QUORUM. <2 ou absent → un seul juge (rétrocompat).
    */
   judgeFanOut?: () => Array<{ provider: string; model?: string; reasoningEffort?: ReasoningEffort }>
+}
+
+/**
+ * ISOLATION, SURVIE & CLÔTURE — le run peut mourir à tout moment, et une mutation ne doit pas salir
+ * le workspace partagé. Ces champs sont ce qui rend un run REPRENABLE et son travail publiable.
+ * Tous best-effort : une erreur de persistance ne casse jamais le run.
+ */
+export interface OrchestratorLifecycleDeps {
   /**
    * Volet B "gestion worktree par défaut" (flip live). Si fourni, un run de MUTATION s'exécute dans
    * une COPIE isolée (worktree) dont le cwd remplace `executionWorkspace` ; à la fin, le travail est
@@ -215,15 +246,12 @@ export interface OrchestratorDeps {
    */
   worktrees?: RunWorktrees
   /**
-   * SURVIE NIVEAU 3 — notifié APRÈS chaque phase terminée, avec l'acquis complet du run. L'appelant
-   * y persiste de quoi reprendre à la phase suivante si le process main meurt (la boucle
-   * d'orchestration vit ici, elle ne survit pas à un kill : sans ça, les phases restantes étaient
-   * perdues). Best-effort : une erreur de persistance ne doit JAMAIS casser le run.
-   */
-  /**
-   * Point de sauvegarde de l'acquis reprenable. Appelé au DÉMARRAGE du run (acquis vide) puis après
-   * CHAQUE phase. Le premier appel est ce qui rend un run tué très tôt encore reprenable : sans lui,
-   * une mort avant la fin de la première phase perdait la tâche entière.
+   * SURVIE NIVEAU 3 — point de sauvegarde de l'acquis reprenable. Appelé au DÉMARRAGE du run (acquis
+   * vide) puis après CHAQUE phase terminée, avec l'acquis complet. L'appelant y persiste de quoi
+   * reprendre à la phase suivante si le process main meurt : la boucle d'orchestration vit ici et ne
+   * survit pas à un kill, donc sans ça les phases restantes étaient perdues. Le PREMIER appel est ce
+   * qui rend un run tué très tôt encore reprenable — sans lui, une mort avant la fin de la première
+   * phase perdait la tâche entière. Best-effort : une erreur de persistance ne casse JAMAIS le run.
    */
   onPhaseCompleted?: (info: {
     runId: string
@@ -251,12 +279,14 @@ export interface OrchestratorDeps {
    * est alors dans la base). Best-effort : son échec ne change pas le verdict du run.
    */
   closeGreenRun?: RunCloser
-  /**
-   * MODE d'orchestration. `sequential` (défaut, rétrocompat HARD) = pipeline phase-par-phase actuel.
-   * `greedy` = dispatch completion-driven d'un DAG de sous-tâches (traite chaque sous-agent DÈS son
-   * arrivée, enchaîne les avals sans barrière). N'a d'effet que si `decompose` fournit ≥2 sous-tâches ;
-   * sinon on retombe sur le pipeline séquentiel (rétrocompat). Injecté par AutowinOS ; absent = séquentiel.
-   */
+}
+
+/**
+ * DÉCOMPOSITION & CONTEXTE DE RUN — comment la tâche est découpée, et les valeurs ambiantes que
+ * l'orchestrateur LIT sans les posséder (devis, compteurs, workflow actif), portées par
+ * l'ExecutionSupervisor local au run.
+ */
+export interface OrchestratorDecompositionDeps {
   /**
    * DÉCOMPOSEUR — le fonctionnement NORMAL d'Autowin : découpe la tâche en sous-tâches
    * indépendantes/enchaînables + leurs dépendances, dispatchées en completion-driven (chaque
@@ -289,6 +319,24 @@ export interface OrchestratorDeps {
    */
   currentWorkflow?: () => WorkflowRunOverride | undefined
 }
+
+/**
+ * Le contrat de l'orchestrateur — inchangé pour tous ses appelants.
+ *
+ * `extends` et non des sous-objets imbriqués : la forme reste PLATE, donc les 39 sites de construction
+ * (11 fichiers, dont `os.ts` et 10 suites de tests) n'ont pas une ligne à changer. Sur 26 champs, 6
+ * seulement sont obligatoires — tout le reste est un opt-in que les tests laissent absent.
+ *
+ * NB, mesuré : ajouter un champ OPTIONNEL à cette interface ne casse AUCUN site de construction. La
+ * douleur qu'on prêtait à ce fourre-tout (« un champ de plus force 39 édits ») n'existait pas ; le
+ * regret réel était la seule lisibilité, et c'est ce que ce découpage paie.
+ */
+export interface OrchestratorDeps
+  extends OrchestratorCollaboratorDeps,
+    OrchestratorGateDeps,
+    OrchestratorRoutingDeps,
+    OrchestratorLifecycleDeps,
+    OrchestratorDecompositionDeps {}
 
 /** Ce qu'un workflow nommé impose au run, au-delà du binding de rôle déjà accepté par `run`. */
 export interface WorkflowRunOverride {
@@ -1267,6 +1315,58 @@ export class Orchestrator {
     skipped: string[]
   }> {
     const { registry, roles, cost } = this.deps
+    type ProviderAdmission = {
+      state: 'probing' | 'ready' | 'blocked'
+      settled: Promise<void>
+      release: () => void
+      signature?: string
+      cause?: string
+    }
+    const providerAdmissions = new Map<string, ProviderAdmission>()
+    const admitProviderCall = async (
+      provider: string
+    ): Promise<{ admission: ProviderAdmission; leader: boolean }> => {
+      const existing = providerAdmissions.get(provider)
+      if (existing) {
+        if (existing.state === 'probing') await existing.settled
+        return { admission: existing, leader: false }
+      }
+      let release = (): void => undefined
+      const settled = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      const admission: ProviderAdmission = { state: 'probing', settled, release }
+      providerAdmissions.set(provider, admission)
+      return { admission, leader: true }
+    }
+    const structuralFailure = (
+      error: unknown
+    ): { provider: string; signature: string; cause: string } | undefined => {
+      if (!error || typeof error !== 'object') return undefined
+      const candidate = error as {
+        structuralProviderFailure?: unknown
+        provider?: unknown
+        signature?: unknown
+        causeText?: unknown
+      }
+      if (
+        candidate.structuralProviderFailure !== true ||
+        typeof candidate.provider !== 'string' ||
+        typeof candidate.signature !== 'string'
+      ) {
+        return undefined
+      }
+      return {
+        provider: candidate.provider,
+        signature: candidate.signature,
+        cause:
+          typeof candidate.causeText === 'string'
+            ? candidate.causeText
+            : error instanceof Error
+              ? error.message
+              : String(error)
+      }
+    }
     const projectContext = projectContextBlock(this.deps.executionWorkspace)
     // Une phase décomposée ne doit pas contourner son panel : chaque sous-tâche est exécutée par
     // tous les membres configurés, puis leurs sorties sont fusionnées. Sans panel (build/refine ou
@@ -1346,10 +1446,39 @@ export class Orchestrator {
                 execution
               })
               const startedAt = performance.now()
+              const { admission, leader } = await admitProviderCall(subProvider)
+              if (admission.state === 'blocked') {
+                const cause = admission.cause ?? `provider ${subProvider} bloqué`
+                push({
+                  step: 'exec',
+                  provider: subProvider,
+                  role: 'subagent',
+                  model: phaseBinding.model,
+                  text: '',
+                  status: 'provider-blocked',
+                  error: cause,
+                  durationMs: performance.now() - startedAt,
+                  detail: `sous-tâche ${node.id}`,
+                  execution
+                })
+                return {
+                  ok: false as const,
+                  provider: subProvider,
+                  model: phaseBinding.model,
+                  text: '',
+                  evidence: [] as ExecutionEvidence[],
+                  agentId: execution.agentId,
+                  cause
+                }
+              }
               try {
                 const result = await registry.send(subProvider, messages, options, (chunk) =>
                   onDelta?.('exec', chunk.delta)
                 )
+                if (leader) {
+                  admission.state = 'ready'
+                  admission.release()
+                }
                 if (result.usage) {
                   cost.add({
                     provider: result.provider ?? subProvider,
@@ -1394,6 +1523,18 @@ export class Orchestrator {
                   cause: undefined
                 }
               } catch (error) {
+                const structural = structuralFailure(error)
+                if (structural && structural.provider === subProvider) {
+                  admission.state = 'blocked'
+                  admission.signature = structural.signature
+                  admission.cause = structural.cause
+                }
+                if (leader) {
+                  if (!structural || structural.provider !== subProvider) {
+                    admission.state = 'ready'
+                  }
+                  admission.release()
+                }
                 const explained = explainRoleFailure(`sous-tâche ${node.id}`, 'subagent', {
                   provider: subProvider,
                   ...(phaseBinding.model ? { model: phaseBinding.model } : {}),
