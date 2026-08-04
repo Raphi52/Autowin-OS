@@ -186,3 +186,56 @@ describe('ne jamais accepter en silence', () => {
     expect(container.querySelector('[data-testid="wf-inert-judge-1-build-1"]')).toBeNull()
   })
 })
+
+describe('un modèle par agent', () => {
+  const troisAgents: CanvasGraph = {
+    entry: 'judge-1',
+    nodes: [
+      {
+        id: 'judge-1',
+        phase: 'judge',
+        agents: [{ provider: 'claude' }, { provider: 'claude' }],
+        quorum: 2
+      }
+    ],
+    edges: []
+  }
+  const saisir = (id: string, valeur: string): void => {
+    const champ = q<HTMLInputElement>(`[data-testid="${id}"]`)
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      setter.call(champ, valeur)
+      champ.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  }
+
+  it('chaque agent a son propre modèle — sinon trois juges seraient trois fois le même', () => {
+    render({ graph: troisAgents })
+    clic('wf-open-judge-1')
+    saisir('wf-agent-model-judge-1-1', 'codex-mini')
+    const agents = dernier().nodes[0].agents!
+    expect(agents[1].model).toBe('codex-mini')
+    expect(agents[0].model).toBeUndefined() // l'autre est intact
+  })
+
+  it('augmenter le nombre d’agents PRÉSERVE les modèles déjà choisis', () => {
+    render({
+      graph: {
+        ...troisAgents,
+        nodes: [{ ...troisAgents.nodes[0], agents: [{ provider: 'claude', model: 'opus' }] , quorum: 1 }]
+      }
+    })
+    clic('wf-open-judge-1')
+    saisir('wf-agents-judge-1', '3')
+    expect(dernier().nodes[0].agents?.[0].model).toBe('opus')
+    expect(dernier().nodes[0].agents).toHaveLength(3)
+  })
+
+  it('réduire le nombre d’agents ramène un quorum devenu impossible', () => {
+    // Sinon le graphe deviendrait invalide sans que le geste en soit la cause visible.
+    render({ graph: troisAgents })
+    clic('wf-open-judge-1')
+    saisir('wf-agents-judge-1', '1')
+    expect(dernier().nodes[0].quorum).toBe(1)
+  })
+})

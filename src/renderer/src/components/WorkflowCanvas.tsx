@@ -44,6 +44,9 @@ export interface WorkflowCanvasProps {
 
 const PALETTE: Phase[] = ['scout', 'frame', 'terrain', 'build', 'clean', 'judge']
 
+/** Provider par défaut d'un agent ajouté ; le modèle, lui, se choisit agent par agent. */
+const defaultProvider = 'claude'
+
 /** Réenchaîne les nœuds dans leur ordre d'affichage, en préservant les retours déjà tracés. */
 function rechain(nodes: CanvasNode[], edges: CanvasEdge[]): CanvasEdge[] {
   const retours = edges.filter((e) => e.when !== 'always')
@@ -192,12 +195,41 @@ export function WorkflowCanvas({
                       value={node.agents?.length ?? 1}
                       onChange={(e) => {
                         const n = Math.max(1, Number(e.target.value) || 1)
+                        const actuels = node.agents ?? []
+                        // On PRÉSERVE les modèles déjà choisis : changer le nombre d'agents ne doit
+                        // pas effacer en silence le réglage fin de ceux qui restent.
                         majNoeud(node.id, {
-                          agents: Array.from({ length: n }, () => ({ provider: 'claude' }))
+                          agents: Array.from(
+                            { length: n },
+                            (_, i) => actuels[i] ?? { provider: defaultProvider }
+                          ),
+                          ...(node.quorum && node.quorum > n ? { quorum: n } : {})
                         })
                       }}
                     />
                   </label>
+                  {/* Un modèle par agent : sans cela un panel de trois juges serait trois fois le
+                      même, ce qui ne juge rien de plus qu'un seul. */}
+                  {(node.agents ?? []).map((agent, rang) => (
+                    <label key={rang}>
+                      Agent {rang + 1}
+                      <input
+                        type="text"
+                        data-testid={`wf-agent-model-${node.id}-${rang}`}
+                        value={agent.model ?? ''}
+                        placeholder="modèle par défaut"
+                        onChange={(e) =>
+                          majNoeud(node.id, {
+                            agents: (node.agents ?? []).map((a, i) =>
+                              i === rang
+                                ? { ...a, ...(e.target.value ? { model: e.target.value } : { model: undefined }) }
+                                : a
+                            )
+                          })
+                        }
+                      />
+                    </label>
+                  ))}
                   <label>
                     Quorum
                     <input

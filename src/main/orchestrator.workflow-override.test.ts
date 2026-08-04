@@ -296,3 +296,53 @@ describe('les agents composés sur un nœud atteignent le run', () => {
     expect(provider.modeles).toContain('gros') // le binding de rôle par défaut
   })
 })
+
+describe('le quorum composé décide du verdict', () => {
+  /** Un juge sur trois trouve un défaut : la majorité simple passe, l'unanimité non. */
+  class UnDissident extends Recorder {
+    async *send(
+      messages: Message[],
+      options: SendOptions = {}
+    ): AsyncGenerator<StreamChunk, SendResult, void> {
+      const resultat = yield* super.send(messages, options)
+      if (options.model === 'juge-c' && options.execution?.sandbox === 'read-only') {
+        return { ...resultat, text: 'DEFAUT: il manque une preuve.' }
+      }
+      return resultat
+    }
+  }
+
+  const jury = (quorum?: number) => ({
+    entry: 'b',
+    nodes: [
+      { id: 'b', phase: 'build' as const },
+      {
+        id: 'j',
+        phase: 'judge' as const,
+        agents: [
+          { provider: 'rec', model: 'juge-a' },
+          { provider: 'rec', model: 'juge-b' },
+          { provider: 'rec', model: 'juge-c' }
+        ],
+        ...(quorum ? { quorum } : {})
+      }
+    ],
+    edges: [{ from: 'b', to: 'j', when: 'always' as const }]
+  })
+
+  const lancer = async (quorum?: number) =>
+    makeOrchestrator(
+      new UnDissident(),
+      { graph: jury(quorum) },
+      compileExecutionQuote('refonte architecture sécurité migration')
+    ).run('corrige le bug')
+
+  it('sans quorum composé, la majorité simple suffit : 2 voix sur 3 valident', async () => {
+    expect((await lancer()).valid).toBe(true)
+  })
+
+  it('un quorum de 3 exige l’unanimité — le dissident fait échouer', async () => {
+    // C'est là que le réglage composé se VOIT : même jury, même dissident, verdict inverse.
+    expect((await lancer(3)).valid).toBe(false)
+  })
+})
