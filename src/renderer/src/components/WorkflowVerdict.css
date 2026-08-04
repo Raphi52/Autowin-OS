@@ -1,0 +1,72 @@
+.workflow-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.workflow-verdict-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text, #e6edf3);
+}
+
+.workflow-verdict-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.workflow-verdict-table th,
+.workflow-verdict-table td {
+  padding: 7px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--line, #31373f);
+}
+
+.workflow-verdict-table thead th {
+  color: var(--c-faint, #9caab5);
+  font-weight: 500;
+}
+
+/* Les chiffres se comparent en colonne : alignés à droite, ils se lisent d'un coup d'œil. */
+.workflow-verdict-table td:not(:first-of-type) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.workflow-verdict-table tbody th {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-weight: 500;
+  color: var(--c-text, #e6edf3);
+}
+
+.workflow-verdict-table .is-recommended {
+  background: var(--accent-soft, rgba(88, 166, 255, 0.08));
+}
+
+.workflow-verdict-badge {
+  align-self: flex-start;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--accent, #58a6ff);
+  color: var(--c-on-accent, #0d1117);
+  font-size: 10px;
+  text-transform: lowercase;
+}
+
+/* La réserve doit se lire AVEC la ligne, sinon le chiffre passe pour une certitude. */
+.workflow-verdict-caveat {
+  color: var(--warn, #d8a657);
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+.workflow-verdict-rationale,
+.workflow-verdict-skipped {
+  margin: 0;
+  color: var(--c-faint, #9caab5);
+  font-size: 11px;
+}
