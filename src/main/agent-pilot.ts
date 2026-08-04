@@ -167,11 +167,28 @@ export function parseOrderedPilotTokens(raw: string): OrderedPilotToken[] {
           name?: string
           args?: Record<string, unknown>
         }
-        if (parsed.name) {
-          tokens.push({ kind: 'command', name: parsed.name, args: parsed.args ?? {} })
+        // `name` doit être une STRING non vide : un `if (parsed.name)` laissait passer tout truthy
+        // (`42`, `{}`, `[]`) → un token `command` portait un nom non-string, et le dispatch en aval
+        // (comparaison/normalisation de nom) cassait sur une entrée qu'un modèle peut produire.
+        const name = typeof parsed.name === 'string' ? parsed.name.trim() : ''
+        if (name) {
+          // `args` doit être un objet simple : un tableau/scalaire produirait un sac d'arguments
+          // invalide côté exécution → on retombe sur un objet vide plutôt que de propager.
+          const args =
+            parsed.args && typeof parsed.args === 'object' && !Array.isArray(parsed.args)
+              ? parsed.args
+              : {}
+          tokens.push({ kind: 'command', name, args })
         } else {
-          // JSON valide mais sans `name` : deuxieme trou silencieux du parseur d'origine.
-          tokens.push({ kind: 'invalid', raw: rawBlock, reason: 'champ « name » absent' })
+          // JSON valide mais sans `name` exploitable : deuxieme trou silencieux du parseur d'origine.
+          tokens.push({
+            kind: 'invalid',
+            raw: rawBlock,
+            reason:
+              parsed.name === undefined || parsed.name === null
+                ? 'champ « name » absent'
+                : 'champ « name » invalide (chaîne non vide attendue)'
+          })
         }
       } catch (error) {
         tokens.push({

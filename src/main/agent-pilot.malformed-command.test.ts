@@ -98,3 +98,43 @@ describe('câblage — l’échec est visible ET corrigible', () => {
     expect(branch.slice(0, branch.indexOf('continue'))).not.toContain('this.bus.exec(')
   })
 })
+
+/**
+ * TROISIÈME trou : `if (parsed.name)` acceptait tout truthy. Un `name` numérique/objet passait en
+ * token `command` avec un nom NON-STRING → le dispatch en aval (normalisation/comparaison du nom)
+ * casse sur une entrée qu'un modèle peut réellement produire.
+ */
+describe('parseOrderedPilotTokens — « name » doit être une chaîne exploitable', () => {
+  const first = (raw: string): ReturnType<typeof parseOrderedPilotTokens>[number] =>
+    parseOrderedPilotTokens(raw)[0]
+
+  it('name NUMÉRIQUE → invalid (jamais une commande)', () => {
+    const token = first('<cmd>{"name": 42}</cmd>')
+    expect(token.kind).toBe('invalid')
+    if (token.kind === 'invalid') expect(token.reason).toMatch(/invalide/i)
+  })
+
+  it('name OBJET → invalid', () => {
+    expect(first('<cmd>{"name": {"a": 1}}</cmd>').kind).toBe('invalid')
+  })
+
+  it('name chaîne VIDE ou blanche → invalid', () => {
+    expect(first('<cmd>{"name": ""}</cmd>').kind).toBe('invalid')
+    expect(first('<cmd>{"name": "   "}</cmd>').kind).toBe('invalid')
+  })
+
+  it('name valide est conservé trimé, et args non-objet retombe sur {}', () => {
+    const token = first('<cmd>{"name": "  navigate  ", "args": [1,2]}</cmd>')
+    expect(token.kind).toBe('command')
+    if (token.kind === 'command') {
+      expect(token.name).toBe('navigate')
+      expect(token.args).toEqual({})
+    }
+  })
+
+  it('une commande légitime reste intacte (pas de faux refus)', () => {
+    const token = first('<cmd>{"name":"navigate","args":{"tab":"chat"}}</cmd>')
+    expect(token.kind).toBe('command')
+    if (token.kind === 'command') expect(token.args).toEqual({ tab: 'chat' })
+  })
+})
