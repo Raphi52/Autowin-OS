@@ -31,6 +31,8 @@ import { join } from 'node:path'
 class RecordingProvider implements ProviderAdapter {
   readonly id = 'rec'
   readonly supportsExecution = true
+  /** Tient le rôle d'un adaptateur qui REPREND vraiment : sans ça, plus de session à chaîner. */
+  readonly honoursSessionResume = true
   readonly calls: SendOptions[] = []
   readonly userMessages: string[] = []
   execCount = 0

@@ -33,6 +33,11 @@ describe('spawn CLI — regime de contexte', () => {
 
   it('ne charge AUCUNE source de reglages (user/project/local)', () => {
     expect(source).toContain("'--setting-sources',")
+    // La VALEUR, pas seulement le flag : `'user'` ou `'project'` ramenerait le CLAUDE.md de
+    // l'utilisateur dans CHAQUE appel, et l'ancien test serait reste vert. Verifie empiriquement le
+    // 2026-08-04 par A/B sur le CLI reel : sans le flag il recite les regles du CLAUDE.md global mot
+    // pour mot, avec `--setting-sources ''` il repond n'en avoir aucune.
+    expect(source).toMatch(/'--setting-sources',\s*\n?\s*''/)
   })
 
   it('REMPLACE le system prompt, ne s’y ajoute jamais', () => {

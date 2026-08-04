@@ -50,6 +50,34 @@ export function kitAvailable(root = skillsRoot()): boolean {
 }
 
 /**
+ * Skill invoquée EN TÊTE d'un message (`/remake …`), sinon undefined.
+ *
+ * En tête seulement : une mention au fil du texte (« regarde /remake quand tu peux ») n'est pas une
+ * invocation, et l'injecter ferait payer un corps de skill à chaque fois qu'on en parle.
+ */
+export function invokedSkillId(message: string): string | undefined {
+  return /^\s*\/([a-z][a-z0-9-]*)\b/i.exec(message ?? '')?.[1]?.toLowerCase()
+}
+
+/**
+ * Corps injectable d'une skill DÉSIGNÉE PAR SON NOM, phase du pipeline ou non.
+ *
+ * `phaseInstruction` ne sait servir que les 7 `PipelinePhase` : c'est ce qui rendait `/remake`
+ * inatteignable alors que l'entrée slash existait — le renderer promettait un contrat que le main ne
+ * chargeait jamais. « Être une phase du pipeline » et « avoir un corps injectable » sont deux
+ * propriétés distinctes ; les confondre a produit une étiquette qui mentait. Vide si introuvable :
+ * une skill inconnue ne jette pas, elle n'ajoute simplement rien.
+ */
+export function skillInstruction(id: string, roots = skillRoots()): string {
+  const root = roots.find(
+    (candidate) => readIfExists(join(candidate, id, 'SKILL.md')).length > 0
+  )
+  if (!root) return ''
+  const body = stripSkillFrontmatter(readIfExists(join(root, id, 'SKILL.md')))
+  return body ? `\n=== SKILL ${id.toUpperCase()} (kit) ===\n${body}\n` : ''
+}
+
+/**
  * Retire la frontmatter YAML (`---\n…\n---`) d'un SKILL.md. Ce bloc (`name:` + le long
  * `description:` d'heuristiques "Trigger on… / Do NOT use to…") sert au SÉLECTEUR de skill de
  * Claude Code, PAS à un sous-agent qui exécute déjà la phase imposée : l'injecter est du bruit

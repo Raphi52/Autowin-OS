@@ -51,6 +51,8 @@ export interface AutoKaizenIncident {
   fixTurnId?: string
   fixResult?: string
   error?: string
+  errorStack?: string
+  failureSourceIncidentId?: string
   occurrenceCount: number
   severity: 'warning' | 'high' | 'critical'
   lastSeenAt: number
@@ -434,7 +436,6 @@ export class AutoKaizenSupervisor {
   }
 
   private async process(incident: AutoKaizenIncident): Promise<void> {
-    let currentConversationId = incident.sourceConversationId
     try {
       let analysisConversationId = incident.analysisConversationId
       if (!analysisConversationId) {
@@ -452,7 +453,6 @@ export class AutoKaizenSupervisor {
           `🔄 Auto-Kaizen ${incident.id} lancé dans ${analysisConversationId} : ${incident.summary}`
         )
       }
-      currentConversationId = analysisConversationId
       let analysisText = incident.analysisResult
       if (!analysisText) {
         if (this.runtime.isConversationRunning?.(analysisConversationId)) return
@@ -494,7 +494,6 @@ export class AutoKaizenSupervisor {
           `🛠️ Diagnostic terminé ; correction lancée dans ${fixConversationId} pour ${incident.id}.`
         )
       }
-      currentConversationId = fixConversationId
       if (this.runtime.isConversationRunning?.(fixConversationId)) return
       const recoveredFix = this.runtime.readConversationResult?.(fixConversationId)
       const fixPrompt =
@@ -522,23 +521,17 @@ export class AutoKaizenSupervisor {
       )
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      this.update(incident, { status: 'failed', error: clipped(message, 2_000) })
+      const stack = error instanceof Error ? error.stack : undefined
+      this.update(incident, {
+        status: 'failed',
+        error: clipped(message, 2_000),
+        ...(stack ? { errorStack: clipped(stack, 8_000) } : {}),
+        failureSourceIncidentId: incident.id
+      })
       this.safeUpdate(
         incident.sourceConversationId,
         `⚠️ Auto-Kaizen ${incident.id} en échec : ${message}`
       )
-      this.report({
-        dedupeKey: `${incident.id}:internal-failure:${incident.status}:${message}`,
-        sourceConversationId: currentConversationId,
-        kind: 'auto-kaizen-failure',
-        summary: `La tâche Auto-Kaizen ${incident.id} a échoué`,
-        detail: message,
-        lineage: {
-          rootIncidentId: incident.rootIncidentId,
-          parentIncidentId: incident.id,
-          depth: incident.depth + 1
-        }
-      })
     }
   }
 }

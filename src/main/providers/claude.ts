@@ -256,6 +256,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
   // B — Claude EST un exécuteur outillé (Claude Code). Quand `opts.execution` est fourni, on lance
   // le CLI avec les outils activés + un mode permission autonome, et on remonte l'executionEvidence.
   readonly supportsExecution = true
+  /** Vrai : `send` pousse `--resume <id>` au CLI (voir plus bas). Le seul adaptateur dans ce cas. */
+  readonly honoursSessionResume = true
   private readonly bin: string
   private readonly timeoutMs: number
 

@@ -46,45 +46,84 @@ function extractJsonArray(text: string): string | undefined {
 }
 
 /**
- * Parse + VALIDE un plan de décomposition. Renvoie [] (⇒ fallback séquentiel) si : pas de JSON, JSON
- * invalide, aucun nœud exploitable, ids dupliqués, dépendance inconnue, ou cycle. Robuste au bruit
+ * Pourquoi un plan a été écarté. `atomic` n'est PAS un échec : le modèle a délibérément répondu
+ * « cette tâche ne se découpe pas ». Toutes les autres valeurs sont des défaillances.
+ */
+export type DecompositionRejection =
+  | 'no-json' // aucun tableau JSON dans la réponse (prose seule, réponse vide)
+  | 'invalid-json' // tableau trouvé mais JSON.parse échoue, ou n'en produit pas un
+  | 'malformed-node' // un nœud sans id/prompt exploitable, ou deps non-string
+  | 'duplicate-ids' // deux sous-tâches partagent le même id
+  | 'unknown-dep' // une dep pointe un id absent du plan (ou elle-même)
+  | 'cycle' // le DAG n'en est pas un
+  | 'provider-error' // l'appel modèle a jeté (réseau, quota, sandbox)
+
+/**
+ * Issue d'une décomposition, où « le modèle juge la tâche atomique » est DISTINCT de « la
+ * décomposition a échoué ». Les deux retombent en séquentiel, mais seul le second est un incident :
+ * les confondre rendait invisible un orchestrateur qui n'orchestrait plus.
+ */
+export type DecompositionOutcome =
+  | { kind: 'plan'; nodes: GreedyTaskNode[] }
+  | { kind: 'atomic' }
+  | { kind: 'rejected'; reason: DecompositionRejection }
+
+/**
+ * Parse + VALIDE un plan de décomposition, en NOMMANT pourquoi il est écarté. Robuste au bruit
  * (fences ```json, prose). Ne fait JAMAIS confiance aveuglément à la sortie du modèle.
  */
-export function parseDecompositionPlan(text: string): GreedyTaskNode[] {
+export function analyzeDecomposition(text: string): DecompositionOutcome {
+  const rejected = (reason: DecompositionRejection): DecompositionOutcome => ({
+    kind: 'rejected',
+    reason
+  })
   const json = extractJsonArray(text ?? '')
-  if (!json) return []
+  if (!json) return rejected('no-json')
   let raw: unknown
   try {
     raw = JSON.parse(json)
   } catch {
-    return []
+    return rejected('invalid-json')
   }
-  if (!Array.isArray(raw)) return []
+  // Garde défensif : `extractJsonArray` ne rend qu'une tranche `[...]` équilibrée, donc un parse
+  // réussi produit toujours un tableau. Le garde reste, mais aucun motif propre ne lui est dédié.
+  if (!Array.isArray(raw)) return rejected('invalid-json')
   const nodes: GreedyTaskNode[] = []
   for (const item of raw) {
-    if (!item || typeof item !== 'object') return []
+    if (!item || typeof item !== 'object') return rejected('malformed-node')
     const o = item as Record<string, unknown>
-    if (typeof o.id !== 'string' || !o.id.trim()) return []
-    if (typeof o.prompt !== 'string' || !o.prompt.trim()) return []
+    if (typeof o.id !== 'string' || !o.id.trim()) return rejected('malformed-node')
+    if (typeof o.prompt !== 'string' || !o.prompt.trim()) return rejected('malformed-node')
     const deps = Array.isArray(o.deps) ? o.deps : []
-    if (!deps.every((d) => typeof d === 'string')) return []
+    if (!deps.every((d) => typeof d === 'string')) return rejected('malformed-node')
     nodes.push({
       id: o.id.trim(),
       prompt: o.prompt.trim(),
       deps: (deps as string[]).map((d) => d.trim())
     })
   }
-  if (nodes.length === 0) return []
+  // Un tableau vide est la réponse ATTENDUE sur une tâche atomique — pas un échec.
+  if (nodes.length === 0) return { kind: 'atomic' }
   // Validation structurelle : ids uniques, deps connues, pas de cycle (sinon plan rejeté → séquentiel).
   const ids = new Set(nodes.map((n) => n.id))
-  if (ids.size !== nodes.length) return []
+  if (ids.size !== nodes.length) return rejected('duplicate-ids')
   for (const n of nodes) {
     for (const d of n.deps) {
-      if (!ids.has(d) || d === n.id) return []
+      if (!ids.has(d) || d === n.id) return rejected('unknown-dep')
     }
   }
-  if (hasCycle(nodes)) return []
-  return nodes
+  if (hasCycle(nodes)) return rejected('cycle')
+  return { kind: 'plan', nodes }
+}
+
+/**
+ * Vue « nœuds seuls » de {@link analyzeDecomposition} : [] ⇒ fallback séquentiel, que la tâche soit
+ * atomique ou que le plan ait été rejeté. Conservée pour les appelants qui n'ont pas besoin du motif ;
+ * préférer `analyzeDecomposition` dès qu'il faut distinguer les deux.
+ */
+export function parseDecompositionPlan(text: string): GreedyTaskNode[] {
+  const outcome = analyzeDecomposition(text)
+  return outcome.kind === 'plan' ? outcome.nodes : []
 }
 
 /** Détection de cycle (Kahn) — un plan cyclique est rejeté. */
@@ -115,9 +154,39 @@ export function buildOrchestratorDecomposer(deps: {
   registry: ProviderRegistry
   roles: RoleModelConfig
   cwd: string
-}): (task: string, bindingOverride?: RoleBinding) => Promise<GreedyTaskNode[]> {
-  return async (task: string, bindingOverride?: RoleBinding): Promise<GreedyTaskNode[]> => {
+  /**
+   * Notifié à CHAQUE décomposition, y compris quand elle retombe en séquentiel. C'est le seul point
+   * d'où l'on peut voir la différence entre « tâche atomique » et « le modèle a foiré son JSON » :
+   * sans ce sink, les deux cas produisent le même silence côté logs.
+   */
+  onOutcome?: (outcome: DecompositionOutcome, task: string) => void
+}): (
+  task: string,
+  bindingOverride?: RoleBinding,
+  onOutcome?: (outcome: DecompositionOutcome, task: string) => void
+) => Promise<GreedyTaskNode[]> {
+  return async (
+    task: string,
+    bindingOverride?: RoleBinding,
+    // Sink PAR APPEL, en plus de celui de construction. Il existe parce que le sink de construction
+    // ne peut RIEN savoir du run en cours : le décomposeur est fabriqué une fois, au démarrage, hors
+    // de tout `runId` et de tout canal `onStep`. Sans ce second point d'entrée, l'issue ne pouvait
+    // être qu'écrite dans un log — invisible aux tests comme à l'UI.
+    onOutcome?: (outcome: DecompositionOutcome, task: string) => void
+  ): Promise<GreedyTaskNode[]> => {
     const binding = bindingOverride ?? deps.roles.getBinding('orchestrator')
+    const report = (outcome: DecompositionOutcome): GreedyTaskNode[] => {
+      // Un sink qui jette ne doit pas faire échouer la décomposition : il n'est qu'observateur.
+      // Chacun est isolé : un observateur cassé n'empêche pas l'autre d'être notifié.
+      for (const sink of [deps.onOutcome, onOutcome]) {
+        try {
+          sink?.(outcome, task)
+        } catch {
+          /* observateur best-effort */
+        }
+      }
+      return outcome.kind === 'plan' ? outcome.nodes : []
+    }
     try {
       const res = await deps.registry.send(
         binding.provider,
@@ -128,9 +197,10 @@ export function buildOrchestratorDecomposer(deps: {
           execution: { cwd: deps.cwd, sandbox: 'read-only' }
         }
       )
-      return parseDecompositionPlan(res.text ?? '')
+      return report(analyzeDecomposition(res.text ?? ''))
     } catch {
-      return [] // décomposeur best-effort : jamais bloquant, fallback séquentiel
+      // décomposeur best-effort : jamais bloquant, fallback séquentiel — mais l'incident est NOMMÉ.
+      return report({ kind: 'rejected', reason: 'provider-error' })
     }
   }
 }

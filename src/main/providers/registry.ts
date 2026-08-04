@@ -56,6 +56,14 @@ export class ProviderRegistry {
     return a
   }
 
+  /**
+   * Cet adaptateur reprend-il VRAIMENT une session ? Un provider inconnu répond non : élider un
+   * historique sur une capacité qu'on n'a pas pu vérifier est précisément le défaut à empêcher.
+   */
+  honoursSessionResume(id: string): boolean {
+    return this.adapters.get(id)?.honoursSessionResume === true
+  }
+
   private resolve(id: string, opts: SendOptions): { id: string; opts: SendOptions } {
     this.get(id)
     if (id.startsWith('fabric:') && opts.execution) {

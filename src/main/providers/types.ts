@@ -184,6 +184,15 @@ export interface ProviderAdapter {
   readonly id: string
   /** Le provider possède un vrai runner local (terminal/fichiers), pas seulement du chat. */
   readonly supportsExecution?: boolean
+  /**
+   * L'adaptateur REPREND réellement une session passée via `resumeSessionId`.
+   *
+   * À déclarer `true` UNIQUEMENT si `send` transmet l'identifiant au provider. Rendre un `sessionId`
+   * ne suffit pas : `codex` rend son `thread_id` sans savoir le reprendre. L'appelant qui élide
+   * l'historique en s'appuyant sur une reprise doit consulter CETTE capacité, jamais la seule
+   * présence d'un `sessionId` — sinon il ampute le fil au profit d'une session qui n'existe pas.
+   */
+  readonly honoursSessionResume?: boolean
 
   /**
    * S'assure que l'adaptateur est authentifié (OAuth abonnement, PAS clé API).

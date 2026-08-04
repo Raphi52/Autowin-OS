@@ -64,7 +64,10 @@ function makeOrchestrator(
     registry: new ProviderRegistry().register(provider),
     roles: new RoleModelConfig({
       subagent: { provider: provider.id, model: 'gros' },
-      judge: { provider: provider.id, model: 'juge' }
+      judge: { provider: provider.id, model: 'juge' },
+      // Un fan-out fait synthétiser par l'orchestrateur : sans ce binding le test échouerait sur
+      // l'absence de provider, pas sur ce qu'il prétend vérifier.
+      orchestrator: { provider: provider.id, model: 'chef' }
     }),
     cost: new CostAggregator(),
     trust: new TrustLedger(),
@@ -200,5 +203,96 @@ describe('un graphe pilote le run', () => {
         'corrige le bug'
       )
     ).rejects.toThrow('Devis impossible')
+  })
+})
+
+describe('les agents composés sur un nœud atteignent le run', () => {
+  /** Compte les appels par modèle : le seul endroit où un fan-out se constate vraiment. */
+  class ParModele extends Recorder {
+    readonly modeles: string[] = []
+    async *send(
+      messages: Message[],
+      options: SendOptions = {}
+    ): AsyncGenerator<StreamChunk, SendResult, void> {
+      this.modeles.push(options.model ?? '(défaut)')
+      return yield* super.send(messages, options)
+    }
+  }
+
+  const troisJuges = {
+    entry: 'b',
+    nodes: [
+      { id: 'b', phase: 'build' as const },
+      {
+        id: 'j',
+        phase: 'judge' as const,
+        agents: [
+          { provider: 'rec', model: 'juge-a' },
+          { provider: 'rec', model: 'juge-b' },
+          { provider: 'rec', model: 'juge-c' }
+        ],
+        quorum: 3
+      }
+    ],
+    edges: [{ from: 'b', to: 'j', when: 'always' as const }]
+  }
+
+  it('trois juges composés font TROIS appels de juge, pas un', async () => {
+    // Sans le branchement, ouvrir le nœud et y régler trois agents ne changeait rien : le canevas
+    // laissait régler quelque chose d'inerte.
+    const provider = new ParModele()
+    const quote = compileExecutionQuote('refonte architecture sécurité migration')
+    await makeOrchestrator(provider, { graph: troisJuges }, quote).run('corrige le bug')
+    // Les TROIS juges composés participent. Le nombre total d'appels peut dépasser trois (une passe
+    // de re-jugement les rejoue) : ce qu'on vérifie, c'est qu'aucun n'est resté sur le banc.
+    const juges = new Set(provider.modeles.filter((m) => m.startsWith('juge-')))
+    expect([...juges].sort()).toEqual(['juge-a', 'juge-b', 'juge-c'])
+  })
+
+  it('l’allocation du devis SUIT les agents composés — sinon le panel serait tronqué', async () => {
+    const quote = compileExecutionQuote('refonte architecture sécurité migration')
+    await makeOrchestrator(new ParModele(), { graph: troisJuges }, quote).run('corrige le bug')
+    expect(quote.allocation?.judgeMembers).toBe(3)
+  })
+
+  it('une allocation écrite explicitement reste prioritaire sur la déduction', async () => {
+    const quote = compileExecutionQuote('refonte architecture sécurité migration')
+    await makeOrchestrator(
+      new ParModele(),
+      { graph: troisJuges, allocation: { judgeMembers: 2 } },
+      quote
+    ).run('corrige le bug')
+    expect(quote.allocation?.judgeMembers).toBe(2)
+  })
+
+  it('les agents composés sur une phase d’exécution priment aussi', async () => {
+    const provider = new ParModele()
+    const graphe = {
+      entry: 'f',
+      nodes: [
+        {
+          id: 'f',
+          phase: 'frame' as const,
+          agents: [
+            { provider: 'rec', model: 'cadreur-a' },
+            { provider: 'rec', model: 'cadreur-b' }
+          ]
+        },
+        { id: 'b', phase: 'build' as const }
+      ],
+      edges: [{ from: 'f', to: 'b', when: 'always' as const }]
+    }
+    const quote = compileExecutionQuote('refonte architecture sécurité migration')
+    await makeOrchestrator(provider, { graph: graphe }, quote).run('corrige le bug')
+    expect(provider.modeles).toContain('cadreur-a')
+    expect(provider.modeles).toContain('cadreur-b')
+  })
+
+  it('sans agent composé, la topologie globale reprend la main', async () => {
+    const provider = new ParModele()
+    await makeOrchestrator(provider, {
+      graph: { entry: 'b', nodes: [{ id: 'b', phase: 'build' }], edges: [] }
+    }).run('corrige le bug')
+    expect(provider.modeles).toContain('gros') // le binding de rôle par défaut
   })
 })

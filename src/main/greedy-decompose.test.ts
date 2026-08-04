@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildOrchestratorDecomposer, parseDecompositionPlan } from './greedy-decompose'
+import {
+  analyzeDecomposition,
+  buildOrchestratorDecomposer,
+  parseDecompositionPlan
+} from './greedy-decompose'
+import type { DecompositionOutcome } from './greedy-decompose'
 import { compileExecutionQuote } from './execution-quote'
 import { ExecutionSupervisor } from './execution-supervisor'
 import { ProviderRegistry } from './providers/registry'
@@ -61,6 +66,98 @@ describe('parseDecompositionPlan', () => {
     expect(parseDecompositionPlan('[{"id":"a","prompt":"p"}]')).toEqual([
       { id: 'a', prompt: 'p', deps: [] }
     ])
+  })
+})
+
+describe('analyzeDecomposition — un échec ne se déguise plus en tâche atomique', () => {
+  it('distingue « le modèle juge la tâche atomique » de « le modèle a foiré son JSON »', () => {
+    // Les deux retombent en séquentiel via parseDecompositionPlan : c'était exactement le point aveugle.
+    expect(parseDecompositionPlan('[]')).toEqual([])
+    expect(parseDecompositionPlan('{"pas":"un tableau"}')).toEqual([])
+    // ...mais l'issue nommée les sépare.
+    expect(analyzeDecomposition('[]')).toEqual({ kind: 'atomic' })
+    expect(analyzeDecomposition('{"pas":"un tableau"}')).toEqual({
+      kind: 'rejected',
+      reason: 'no-json'
+    })
+  })
+
+  it('nomme chaque motif de rejet distinctement', () => {
+    const reasonOf = (text: string): string => {
+      const outcome = analyzeDecomposition(text)
+      return outcome.kind === 'rejected' ? outcome.reason : outcome.kind
+    }
+    expect(reasonOf('aucun plan ici, que de la prose')).toBe('no-json')
+    expect(reasonOf('[{"id":"a", "prompt":]')).toBe('invalid-json')
+    expect(reasonOf('[{"id":"a","prompt":"p"},{"id":"a","prompt":"q"}]')).toBe('duplicate-ids')
+    expect(reasonOf('[{"id":"a","prompt":"p","deps":["fantome"]}]')).toBe('unknown-dep')
+    expect(reasonOf('[{"id":"a","prompt":"p","deps":["b"]},{"id":"b","prompt":"q","deps":["a"]}]')).toBe(
+      'cycle'
+    )
+    expect(reasonOf('[{"id":"a"}]')).toBe('malformed-node')
+    expect(reasonOf('[{"id":"a","prompt":"p","deps":[42]}]')).toBe('malformed-node')
+  })
+
+  it('rend le plan validé sous la clé nodes, identique à la vue historique', () => {
+    const text = '[{"id":"a","prompt":"fais a","deps":[]},{"id":"b","prompt":"fais b","deps":["a"]}]'
+    const outcome = analyzeDecomposition(text)
+    expect(outcome.kind).toBe('plan')
+    expect(outcome.kind === 'plan' ? outcome.nodes : []).toEqual(parseDecompositionPlan(text))
+  })
+})
+
+describe('buildOrchestratorDecomposer — le sink voit ce que le retour [] cache', () => {
+  const decomposerOver = (
+    behaviour: () => string | never,
+    onOutcome: (outcome: DecompositionOutcome, task: string) => void
+  ): ((task: string) => Promise<unknown>) => {
+    const provider: ProviderAdapter = {
+      id: 'sink-probe',
+      supportsExecution: true,
+      auth: async () => true,
+      async *send(): AsyncGenerator<StreamChunk, SendResult, void> {
+        const text = behaviour()
+        yield { delta: 'plan' }
+        return { text, provider: 'sink-probe', systemInjected: true }
+      }
+    }
+    const registry = new ProviderRegistry().register(provider)
+    const roles = new RoleModelConfig({
+      orchestrator: { provider: provider.id, model: 'test-model' }
+    })
+    return buildOrchestratorDecomposer({ registry, roles, cwd: process.cwd(), onOutcome })
+  }
+
+  it('signale provider-error quand l’appel modèle jette, au lieu de rendre un [] muet', async () => {
+    const seen: DecompositionOutcome[] = []
+    const decompose = decomposerOver(() => {
+      throw new Error('réseau coupé')
+    }, (outcome) => seen.push(outcome))
+
+    await expect(decompose('une tâche')).resolves.toEqual([])
+    expect(seen).toEqual([{ kind: 'rejected', reason: 'provider-error' }])
+  })
+
+  it('signale atomic — un [] VOULU — et transmet la tâche au sink', async () => {
+    const seen: Array<[DecompositionOutcome, string]> = []
+    const decompose = decomposerOver(
+      () => '[]',
+      (outcome, task) => seen.push([outcome, task])
+    )
+
+    await expect(decompose('renomme une variable')).resolves.toEqual([])
+    expect(seen).toEqual([[{ kind: 'atomic' }, 'renomme une variable']])
+  })
+
+  it('n’échoue pas quand le sink lui-même jette : il n’est qu’observateur', async () => {
+    const decompose = decomposerOver(
+      () => '[{"id":"a","prompt":"fais a","deps":[]},{"id":"b","prompt":"fais b","deps":[]}]',
+      () => {
+        throw new Error('sink cassé')
+      }
+    )
+
+    await expect(decompose('une tâche')).resolves.toHaveLength(2)
   })
 })
 

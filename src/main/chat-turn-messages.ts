@@ -18,6 +18,14 @@ export interface TurnMessageParts {
   brainContext: string
   /** Écho des faits retenus dans ce fil. Peut être vide. */
   memoryEcho: string
+  /**
+   * Corps de la skill invoquée en tête du message (`/remake …`), déjà mis en forme. Vide sinon.
+   *
+   * Ici et non dans le `system`, pour la raison qui gouverne tout ce fichier : ce contenu APPARAÎT et
+   * DISPARAÎT selon le tour, donc le mettre dans le préfixe le réécrirait à chaque invocation et tuerait
+   * le cache. Conséquence voulue : le coût d'une skill n'est payé que quand elle est demandée.
+   */
+  skillBody?: string
   /** Le fil complet, utilisé quand aucune session CLI n'est reprise. */
   history: ReadonlyArray<{ role: string; content: string }>
   /** Renseigné quand une session CLI existante est reprise : le modèle connaît déjà l'historique. */
@@ -38,6 +46,7 @@ export function buildTurnMessages(parts: TurnMessageParts): string[] {
         `ÉTAT DE L'APP:\n${JSON.stringify(parts.snapshot)}`,
         parts.brainContext,
         parts.memoryEcho,
+        parts.skillBody ?? '',
         `Suite de NOTRE conversation en cours (tu en connais déjà l'historique par ta session : ne le redemande pas).`,
         `UTILISATEUR: ${parts.lastUserMessage ?? ''}`
       ]
@@ -45,6 +54,7 @@ export function buildTurnMessages(parts: TurnMessageParts): string[] {
         `ÉTAT DE L'APP:\n${JSON.stringify(parts.snapshot)}`,
         parts.brainContext,
         parts.memoryEcho,
+        parts.skillBody ?? '',
         ...parts.history.map((m) => `${m.role === 'user' ? 'UTILISATEUR' : 'TOI'}: ${m.content}`)
       ]
   return entries.filter((entry) => entry.trim().length > 0)

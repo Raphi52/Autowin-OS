@@ -19,6 +19,8 @@ import { makeTestWorktrees } from './orchestrator.test-helpers'
 class RecordingProvider implements ProviderAdapter {
   readonly id = 'rec'
   readonly supportsExecution = true
+  /** Tient le rôle d'un adaptateur qui REPREND vraiment : sans ça, plus de session à chaîner. */
+  readonly honoursSessionResume: boolean = true
   readonly calls: SendOptions[] = []
   async auth(): Promise<boolean> {
     return true
@@ -82,5 +84,39 @@ describe('#2 anti-perte-de-contexte : pas de ré-injection discipline/projectCon
     expect((provider.calls[1].system ?? '').length).toBeLessThan(
       (provider.calls[0].system ?? '').length
     )
+  })
+
+  /**
+   * RESUME FANTÔME côté orchestrateur — même défaut que dans le chat, conséquence plus lourde.
+   *
+   * Un provider qui rend un `sessionId` sans l'honorer (`codex` et son `thread_id`) faisait basculer
+   * la phase suivante dans la branche `resuming`, qui REMPLACE tout `phaseContext` par « acquis des
+   * phases précédentes déjà connus — ne les redemande pas ». L'acquis de la phase `frame` disparaissait
+   * donc au moment exact où `build` en dépend, sans que rien ne le signale.
+   */
+  it("provider qui ne REPREND pas → la phase 2 reçoit l'acquis en entier, pas une promesse de session", async () => {
+    class SessionIdWithoutResume extends RecordingProvider {
+      /** Exactement `codex` : rend son thread_id, ne sait pas le reprendre. */
+      readonly honoursSessionResume = false
+      readonly contents: string[] = []
+      async *send(
+        messages: Message[],
+        options: SendOptions = {}
+      ): AsyncGenerator<StreamChunk, SendResult, void> {
+        this.contents.push(messages.at(-1)?.content ?? '')
+        return yield* super.send(messages, options)
+      }
+    }
+    const provider = new SessionIdWithoutResume()
+    const orch = makeOrchestrator(provider, () => ['frame', 'build'])
+    await orch.run('ajoute une fonctionnalité')
+
+    // Aucune reprise n'est armée, puisque personne ne la tient.
+    expect(provider.calls[1].resumeSessionId).toBeUndefined()
+    // L'acquis de la phase précédente est REMIS, au lieu d'être supposé connu.
+    expect(provider.contents[1]).toContain('[phase frame]')
+    expect(provider.contents[1]).not.toContain('ne les redemande pas')
+    // Et la discipline redevient nécessaire, faute de session qui la porterait.
+    expect(names(provider.calls[1])).toContain('discipline')
   })
 })

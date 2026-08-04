@@ -257,6 +257,45 @@ describe('AutoKaizenSupervisor — boucle conversationnelle persistante', () => 
     expect(h.sourceUpdates.join('\n')).toContain('sans preuve')
   })
 
+  it('rend terminal un échec interne sans créer un incident ni une conversation enfant', async () => {
+    const h = harness()
+    const failure = new Error('provider indisponible')
+    failure.stack = 'Error: provider indisponible\n    at runFix (auto-kaizen-test.ts:1:1)'
+    h.runtime.runFix = async () => {
+      throw failure
+    }
+    const path = join(h.root, 'auto-kaizen-incidents.json')
+    const supervisor = new AutoKaizenSupervisor({
+      path,
+      runtime: h.runtime
+    })
+
+    const source = supervisor.report({
+      dedupeKey: 'terminal-internal-failure',
+      sourceConversationId: 'conv-source',
+      kind: 'provider-error',
+      summary: 'provider indisponible',
+      detail: 'appel initial'
+    })
+    await supervisor.drain()
+
+    expect(h.conversations).toHaveLength(2)
+    expect(supervisor.snapshot().incidents).toHaveLength(1)
+    expect(supervisor.snapshot().incidents[0]).toMatchObject({
+      id: source.id,
+      status: 'failed',
+      error: 'provider indisponible',
+      errorStack: failure.stack,
+      failureSourceIncidentId: source.id
+    })
+    expect(new AutoKaizenSupervisor({ path, runtime: h.runtime }).snapshot().incidents[0]).toMatchObject({
+      id: source.id,
+      error: 'provider indisponible',
+      errorStack: failure.stack,
+      failureSourceIncidentId: source.id
+    })
+  })
+
   it('reprend après redémarrage une analyse déjà acquise sans la repayer', async () => {
     const h = harness()
     const path = join(h.root, 'auto-kaizen-incidents.json')

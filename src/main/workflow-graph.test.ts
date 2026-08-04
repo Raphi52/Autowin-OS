@@ -4,6 +4,9 @@ import {
   graphFromPhases,
   linearPhasesOf,
   worstCaseNodeExecutions,
+  agentsForPhase,
+  allocationFromGraph,
+  quorumForPhase,
   worstCaseVisits,
   type WorkflowGraph
 } from './workflow-graph'
@@ -179,5 +182,52 @@ describe('compatibilité avec les workflows déjà enregistrés', () => {
       ]
     }
     expect(linearPhasesOf(fourche)).toBeUndefined()
+  })
+})
+
+describe('les agents composés sur un nœud', () => {
+  const avecAgents: WorkflowGraph = {
+    entry: 'b',
+    nodes: [
+      { id: 'b', phase: 'build', agents: [{ provider: 'claude', model: 'gros' }] },
+      {
+        id: 'j',
+        phase: 'judge',
+        agents: [{ provider: 'claude' }, { provider: 'codex' }, { provider: 'gemini' }],
+        quorum: 2
+      }
+    ],
+    edges: [{ from: 'b', to: 'j', when: 'always' }]
+  }
+
+  it('se lisent par phase', () => {
+    expect(agentsForPhase(avecAgents, 'judge')).toHaveLength(3)
+    expect(agentsForPhase(avecAgents, 'build')).toEqual([{ provider: 'claude', model: 'gros' }])
+    expect(agentsForPhase(avecAgents, 'clean')).toBeUndefined()
+  })
+
+  it('un agent sans provider n’est pas exécutable, donc pas compté', () => {
+    const bancal: WorkflowGraph = {
+      entry: 'j',
+      nodes: [{ id: 'j', phase: 'judge', agents: [{ provider: 'claude' }, {} as never] }],
+      edges: []
+    }
+    expect(agentsForPhase(bancal, 'judge')).toHaveLength(1)
+  })
+
+  it('le quorum se lit par phase, absent = majorité simple', () => {
+    expect(quorumForPhase(avecAgents, 'judge')).toBe(2)
+    expect(quorumForPhase(avecAgents, 'build')).toBeUndefined()
+  })
+
+  it('l’allocation DÉCOULE des agents composés — sinon le panel serait tronqué', () => {
+    // Trois juges composés mais une allocation à 1 : on en jouerait un seul, en silence.
+    const alloc = allocationFromGraph(avecAgents)
+    expect(alloc.judgeMembers).toBe(3)
+    expect(alloc.phaseMembers).toEqual({ build: 1 })
+  })
+
+  it('un graphe sans agent composé n’impose aucune allocation', () => {
+    expect(allocationFromGraph(chaine)).toEqual({})
   })
 })

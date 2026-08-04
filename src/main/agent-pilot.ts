@@ -5,6 +5,7 @@ import type { Message, PromptEnvelope, SendOptions, Usage } from './providers/ty
 import { parseModelQuestion, type ModelQuestion } from './model-questions'
 import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-memory-echo'
 import { buildTurnMessages } from './chat-turn-messages'
+import { invokedSkillId, skillInstruction } from './skill-pipeline'
 import { VisibleStreamFilter } from '../shared/stream-markup-filter'
 import type { ConversationAuthorityMode } from './conversation-capabilities'
 import { randomUUID } from 'node:crypto'
@@ -26,13 +27,59 @@ import type { ChatArtifact } from '../shared/artifacts'
  * en direct), puis on lui renvoie le résultat + le nouvel état, et il reboucle
  * jusqu'à écrire DONE (ou cap d'itérations). C'est « l'agent voit ce qu'il update ».
  */
+type TurnUsage = { inputTokens: number; outputTokens: number; costUsd?: number }
+
+/**
+ * Union discriminée sur `kind` : chaque variante ne porte que ses champs REELS, non-optionnels
+ * quand ils le sont vraiment. Avant, `PilotEvent` etait une interface a ~20 champs optionnels pour
+ * 13 `kind` differents — rien n'empechait d'ecrire `{kind:'command'}` sans `name`, ou
+ * `{kind:'result'}` sans `actionId` : l'erreur ne se voyait qu'a l'execution. Le typage devient
+ * l'oracle : un site d'emission incomplet ne compile plus.
+ *
+ * `PilotEvent` (large, ci-dessous) reste exporte tel quel pour les consommateurs hors-perimetre
+ * (preload/renderer/main index.ts) qui l'utilisent deja de façon structurelle — cette union est
+ * assignable a `PilotEvent` (chaque champ requis d'une variante est un optionnel de meme nom/type
+ * dans le large), donc `emit(e: PilotEvent)` continue d'accepter ces valeurs sans changement
+ * d'API externe.
+ */
+export type PilotEventVariant =
+  | { kind: 'delta'; streamId: string; text: string; iteration: number }
+  | { kind: 'stream-reset'; streamId: string; iteration: number }
+  | { kind: 'think'; text: string }
+  /** Raisonnement LIVE du modèle pendant qu'il réfléchit — affiché, jamais persisté dans le message. */
+  | { kind: 'reasoning'; text: string; iteration: number }
+  | { kind: 'command'; actionId: string; name: string; args: unknown }
+  | { kind: 'result'; actionId: string; name: string; ok: boolean; data?: unknown }
+  | { kind: 'done'; text: string; usage?: TurnUsage }
+  | { kind: 'error'; text: string; usage?: TurnUsage }
+  | { kind: 'retry'; iteration: number; name: string; text: string; data: unknown }
+  | { kind: 'cancellation'; iteration: number; name: string; text: string; data: unknown }
+  | {
+      kind: 'prompt-call'
+      iteration: number
+      prompt: PromptEnvelope
+      response: string
+      status: 'completed' | 'failed'
+      error?: string
+      callUsage?: Usage
+      callDurationMs: number
+      sessionId?: string
+    }
+  | { kind: 'artifact'; artifact: ChatArtifact; iteration: number }
+
+/**
+ * Type LARGE historique, conserve pour la compatibilite des consommateurs hors-perimetre
+ * (src/preload, src/renderer, src/main/index.ts) qui typent leurs propres event handlers dessus ou
+ * le re-exportent. `AgentPilot.chat()` n'émet plus directement sur cette forme : en interne, chaque
+ * évènement est construit comme `PilotEventVariant` (voir `emit()` dans `chat()`), qui est
+ * structurellement assignable ici.
+ */
 export interface PilotEvent {
   conversationId?: string
   kind:
     | 'delta'
     | 'stream-reset'
     | 'think'
-    /** Raisonnement LIVE du modèle pendant qu'il réfléchit — affiché, jamais persisté dans le message. */
     | 'reasoning'
     | 'command'
     | 'result'
@@ -59,7 +106,7 @@ export interface PilotEvent {
   actionId?: string
   artifact?: ChatArtifact
   /** Coût cumulé du tour (surfacé sur l'event 'done') → journal d'activité par conversation. */
-  usage?: { inputTokens: number; outputTokens: number; costUsd?: number }
+  usage?: TurnUsage
 }
 
 const CONTROL_RE = /<(cmd|question)>\s*([\s\S]*?)\s*<\/\1>/g
@@ -80,6 +127,29 @@ export type OrderedPilotToken =
 function filterVisibleText(raw: string): string {
   const filter = new VisibleStreamFilter()
   return filter.push(raw) + filter.finish()
+}
+
+/**
+ * T1b — reconstruction du texte déjà streamé, FACTORISÉE. `chat()` doit émettre en `delta` le texte
+ * final moins ce qui a déjà été streamé pendant l'appel provider (pour ne jamais dupliquer à
+ * l'écran) — cette logique de `startsWith` vivait EN DOUBLE (cas « pas de commande » sur le texte
+ * entier joint, et cas « ordered tokens » consommé token par token). Une seule fonction pure, les
+ * deux mêmes 3 branches partout : le reste du texte déjà couvert par le préfixe streamé, le préfixe
+ * restant à consommer, ou aucun recouvrement (le préfixe streamé ne correspond plus au texte final —
+ * on ne réémet rien plutôt que de deviner).
+ */
+export function consumeStreamedPrefix(
+  text: string,
+  prefixRemaining: string
+): { visible: string; prefixRemaining: string } {
+  if (!prefixRemaining) return { visible: text, prefixRemaining: '' }
+  if (prefixRemaining.startsWith(text)) {
+    return { visible: '', prefixRemaining: prefixRemaining.slice(text.length) }
+  }
+  if (text.startsWith(prefixRemaining)) {
+    return { visible: text.slice(prefixRemaining.length), prefixRemaining: '' }
+  }
+  return { visible: '', prefixRemaining: '' }
 }
 
 export function parseOrderedPilotTokens(raw: string): OrderedPilotToken[] {
@@ -190,6 +260,10 @@ export class AgentPilot {
   ): Promise<void> {
     // Chronométrage des jalons jusqu'au PREMIER token : c'est la latence réellement perçue au clic.
     const timer = startTurnTimer('chat')
+    // Frontière de typage T2 : chaque évènement construit ici doit correspondre EXACTEMENT à une
+    // variante de `PilotEventVariant` (excess-property-check compris) avant d'atteindre le
+    // consommateur externe `onEvent: (e: PilotEvent) => void`.
+    const emit = (e: PilotEventVariant): void => onEvent(e)
     let timingWritten = false
     const binding = runtimeBinding ?? bindingOverride ?? this.roles.getBinding('orchestrator')
     const execCommand = (name: string, args: Record<string, unknown>): Promise<CommandResult> => {
@@ -225,10 +299,10 @@ export class AgentPilot {
     if (directRoute?.reason === 'explicit-skill') {
       const actionId = 'route:0'
       const args = { task: directRoute.task }
-      onEvent({ kind: 'command', actionId, name: 'orchestrate', args })
+      emit({ kind: 'command', actionId, name: 'orchestrate', args })
       signal?.throwIfAborted()
       const result = await execCommand('orchestrate', args)
-      onEvent({
+      emit({
         kind: 'result',
         actionId,
         name: 'orchestrate',
@@ -247,7 +321,7 @@ export class AgentPilot {
       const directiveNotice = lateDirectives.length
         ? `\n\n⚠️ ${lateDirectives.length} orientation(s) reçue(s) après le lancement : aucun second run n'a été relancé. Renvoyez-la comme nouveau message si elle reste nécessaire.`
         : ''
-      onEvent({
+      emit({
         kind: 'done',
         // Les FAITS, pas une formule : statut, validite, blocage de gate, cout, run et resultat sont
         // tous rendus par l'orchestrateur et etaient jetes (conv-76 : 18 sous-agents, 10,05 $, le fil
@@ -297,7 +371,16 @@ export class AgentPilot {
     // message + l'état courant de l'app (qui, lui, a pu changer). Sinon : fil complet, inchangé.
     const sessionKey = `${provider}:${binding.model ?? ''}`
     const known = conversationId ? this.chatSessions.get(conversationId) : undefined
-    const resumeSessionId = known?.key === sessionKey ? known.sessionId : undefined
+    /**
+     * RESUME FANTÔME — la reprise n'est armée que si l'adaptateur la TRANSMET vraiment.
+     *
+     * `codex` rend un `sessionId` (son `thread_id`) sans jamais l'honorer : on élidait donc le fil
+     * en affirmant au modèle qu'il le connaissait « par sa session », alors qu'il démarrait à blanc.
+     * Mesuré le 2026-08-04 sur 90 fils : 0 appel réellement repris, 31 prompts amputés.
+     */
+    const providerResumes = this.registry.honoursSessionResume?.(provider) ?? false
+    const resumeSessionId =
+      providerResumes && known?.key === sessionKey ? known.sessionId : undefined
     // Un détour par un autre provider/modèle ajoute des échanges absents de l'ancienne session.
     // Elle devient donc définitivement périmée, même si l'utilisateur revient ensuite au binding initial.
     if (conversationId && known && known.key !== sessionKey) {
@@ -318,10 +401,20 @@ export class AgentPilot {
     )
     // L'assemblage vit dans `chat-turn-messages.ts` pour être testable sur sa SORTIE plutôt que grepable
     // dans ce fichier. Le tableau reste mutable : la boucle d'itérations y ajoute les tours suivants.
+    /**
+     * Skill invoquée en tête du message (`/remake …`) : son corps est CHARGÉ et injecté.
+     *
+     * Sans ça, `/remake` n'était qu'une entrée d'autocomplétion du renderer — le mot n'existait nulle
+     * part dans le main, donc le modèle recevait une commande dont il n'avait jamais lu le contrat.
+     * Générique par construction : toute skill du kit devient atteignable, sans nouvelle phase.
+     */
+    const invoked = invokedSkillId(lastUserMessage?.content ?? '')
+    const skillBody = invoked ? skillInstruction(invoked) : ''
     const convo: string[] = buildTurnMessages({
       snapshot,
       brainContext,
       memoryEcho,
+      skillBody,
       history,
       resumeSessionId,
       lastUserMessage: lastUserMessage?.content
@@ -332,6 +425,21 @@ export class AgentPilot {
     const usage = { inputTokens: 0, outputTokens: 0, costUsd: 0 }
 
     let iterationLimit = maxIter
+    /**
+     * T1a — POINT UNIQUE de recovery du cap d'itérations. Avant, `iterationLimit += 1` était
+     * dispersé à 4 endroits distincts, chacun avec son propre garde « une seule fois » : ajouter un
+     * 5ᵉ cas de recovery obligeait à deviner où placer un nouvel incrément. Chaque site nommé
+     * appelle désormais cette fonction avec un motif — la logique d'incrément elle-même ne vit
+     * qu'ICI, même si les gardes anti-boucle (`invalidQuestionRecoveryAvailable`, etc.) restent
+     * locales à chaque cas puisqu'elles portent un sens métier différent par motif.
+     */
+    const recoveryReasons: Array<'late-directive' | 'invalid-question' | 'muted-turn'> = []
+    const grantRecoveryIteration = (
+      reason: 'late-directive' | 'invalid-question' | 'muted-turn'
+    ): void => {
+      recoveryReasons.push(reason)
+      iterationLimit += 1
+    }
     let invalidQuestionRecoveryAvailable = true
     /**
      * TOUR MUET — un tour qui n'a produit que des etiquettes d'action est inexploitable.
@@ -411,7 +519,7 @@ export class AgentPilot {
             }
             if (commandBoundarySeen || !segment.text) continue
             attemptStreamedPrefix += segment.text
-            onEvent({ kind: 'delta', streamId, text: segment.text, iteration: i })
+            emit({ kind: 'delta', streamId, text: segment.text, iteration: i })
           }
         }
         try {
@@ -421,7 +529,7 @@ export class AgentPilot {
           res = await this.registry.send(provider, messages, options, (chunk) => {
             // Raisonnement : canal SÉPARÉ, diffusé en direct, hors du texte de la réponse.
             if (chunk.reasoning) {
-              onEvent({ kind: 'reasoning', text: chunk.reasoning, iteration: i })
+              emit({ kind: 'reasoning', text: chunk.reasoning, iteration: i })
               return
             }
             if (!sawFirstChunk) {
@@ -441,7 +549,7 @@ export class AgentPilot {
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           if (signal?.aborted) {
-            onEvent({
+            emit({
               kind: 'cancellation',
               iteration: i,
               name: provider,
@@ -450,7 +558,7 @@ export class AgentPilot {
             })
             throw error
           }
-          onEvent({
+          emit({
             kind: 'prompt-call',
             iteration: i,
             prompt,
@@ -460,9 +568,9 @@ export class AgentPilot {
             callDurationMs: performance.now() - callStartedAt
           })
           if (attempt >= 1) throw error
-          if (attemptStreamedPrefix) onEvent({ kind: 'stream-reset', streamId, iteration: i })
+          if (attemptStreamedPrefix) emit({ kind: 'stream-reset', streamId, iteration: i })
           attempt += 1
-          onEvent({
+          emit({
             kind: 'retry',
             iteration: i,
             name: provider,
@@ -471,7 +579,7 @@ export class AgentPilot {
           })
         }
       }
-      onEvent({
+      emit({
         kind: 'prompt-call',
         iteration: i,
         prompt,
@@ -483,7 +591,7 @@ export class AgentPilot {
       })
       // Mémorise la session pour que le PROCHAIN tour la reprenne au lieu de re-payer l'historique.
       if (conversationId) {
-        if (res.sessionId) {
+        if (res.sessionId && providerResumes) {
           this.chatSessions.set(conversationId, { key: sessionKey, sessionId: res.sessionId })
         } else {
           // Un provider qui ne rend pas de nouvelle session ne garantit pas que ce tour appartient
@@ -508,13 +616,13 @@ export class AgentPilot {
           )
         }
         if (successfulStreamedPrefix) {
-          onEvent({ kind: 'stream-reset', streamId: `${i}:${successfulAttempt}`, iteration: i })
+          emit({ kind: 'stream-reset', streamId: `${i}:${successfulAttempt}`, iteration: i })
         }
-        iterationLimit += 1
+        grantRecoveryIteration('late-directive')
         continue
       }
       for (const artifact of res.artifacts ?? []) {
-        onEvent({ kind: 'artifact', artifact, iteration: i })
+        emit({ kind: 'artifact', artifact, iteration: i })
       }
       const rejectedQuestion = /<question>/i.test(res.text)
       const text = res.text.replace(REJECTED_QUESTION_RE, REJECTED_QUESTION_MARKER).trim()
@@ -532,11 +640,11 @@ export class AgentPilot {
             'Continue de façon autonome avec une hypothèse raisonnable, sans solliciter l’utilisateur.'
         )
         if (invalidQuestionRecoveryAvailable) {
-          iterationLimit += 1
+          grantRecoveryIteration('invalid-question')
           invalidQuestionRecoveryAvailable = false
           continue
         }
-        onEvent({ kind: 'done', text: '', usage })
+        emit({ kind: 'done', text: '', usage })
         return
       }
 
@@ -552,7 +660,7 @@ export class AgentPilot {
       const hasCommand = ordered.some((token) => token.kind === 'command')
 
       if (!hasCommand) {
-        if (!successfulStreamedPrefix && spoken) onEvent({ kind: 'think', text: spoken })
+        if (!successfulStreamedPrefix && spoken) emit({ kind: 'think', text: spoken })
         else if (successfulStreamedPrefix) {
           const visible = ordered
             .filter(
@@ -561,11 +669,9 @@ export class AgentPilot {
             )
             .map((token) => token.text)
             .join('')
-          const remainder = visible.startsWith(successfulStreamedPrefix)
-            ? visible.slice(successfulStreamedPrefix.length)
-            : ''
+          const { visible: remainder } = consumeStreamedPrefix(visible, successfulStreamedPrefix)
           if (remainder)
-            onEvent({
+            emit({
               kind: 'delta',
               streamId: `${i}:${successfulAttempt}:remainder`,
               text: remainder,
@@ -576,7 +682,7 @@ export class AgentPilot {
         // etiquettes nues. Borne a une relance pour ne jamais boucler.
         if (!anySpokenText && anyActionExecuted && conclusionRecoveryAvailable) {
           conclusionRecoveryAvailable = false
-          iterationLimit += 1
+          grantRecoveryIteration('muted-turn')
           convo.push(
             'SYSTÈME: tu as agi mais tu n’as rien dit — l’utilisateur ne voit que des étiquettes ' +
               'd’action, il ne peut pas savoir ce qui a été fait. Conclus MAINTENANT en clair, SANS ' +
@@ -585,7 +691,7 @@ export class AgentPilot {
           )
           continue
         }
-        onEvent({ kind: 'done', text: spoken, usage })
+        emit({ kind: 'done', text: spoken, usage })
         return
       }
 
@@ -596,21 +702,11 @@ export class AgentPilot {
       for (const token of ordered) {
         signal?.throwIfAborted()
         if (token.kind === 'text') {
-          let visible = token.text
-          if (streamedPrefixRemaining) {
-            if (streamedPrefixRemaining.startsWith(visible)) {
-              streamedPrefixRemaining = streamedPrefixRemaining.slice(visible.length)
-              visible = ''
-            } else if (visible.startsWith(streamedPrefixRemaining)) {
-              visible = visible.slice(streamedPrefixRemaining.length)
-              streamedPrefixRemaining = ''
-            } else {
-              visible = ''
-              streamedPrefixRemaining = ''
-            }
-          }
+          const consumed = consumeStreamedPrefix(token.text, streamedPrefixRemaining)
+          const visible = consumed.visible
+          streamedPrefixRemaining = consumed.prefixRemaining
           if (visible)
-            onEvent({
+            emit({
               kind: 'delta',
               streamId: `${i}:${successfulAttempt}:ordered:${tokenIndex}`,
               text: visible,
@@ -628,8 +724,8 @@ export class AgentPilot {
            * suivant. Aucune action n'est inventee : on signale, on ne devine pas l'intention.
            */
           const actionId = `${i}:${commandIndex++}`
-          onEvent({ kind: 'command', actionId, name: 'commande illisible', args: {} })
-          onEvent({
+          emit({ kind: 'command', actionId, name: 'commande illisible', args: {} })
+          emit({
             kind: 'result',
             actionId,
             name: 'commande illisible',
@@ -647,11 +743,11 @@ export class AgentPilot {
 
         const actionId = `${i}:${commandIndex++}`
         anyActionExecuted = true
-        onEvent({ kind: 'command', actionId, name: token.name, args: token.args })
+        emit({ kind: 'command', actionId, name: token.name, args: token.args })
         if (token.name === 'orchestrate' && orchestrationIssued) {
           const refusal =
             'Une orchestration a deja ete lancee dans ce tour. Termine avec son resultat ; un nouveau run exige un nouveau message utilisateur.'
-          onEvent({
+          emit({
             kind: 'result',
             actionId,
             name: token.name,
@@ -665,7 +761,7 @@ export class AgentPilot {
         if (token.name === 'orchestrate') orchestrationIssued = true
         signal?.throwIfAborted()
         const r = await execCommand(token.name, token.args)
-        onEvent({
+        emit({
           kind: 'result',
           actionId,
           name: token.name,
@@ -681,7 +777,7 @@ export class AgentPilot {
       convo.push(`RÉSULTATS:\n${results.join('\n')}\n\nÉTAT MAINTENANT:\n${JSON.stringify(state)}`)
     }
     const capError = `Cap d'itérations (${maxIter}) atteint sans réponse finale`
-    onEvent({
+    emit({
       kind: 'error',
       text: capError,
       usage

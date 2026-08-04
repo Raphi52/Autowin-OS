@@ -66,10 +66,55 @@ export function nativeRegistryActive(base = ensureAutowinAppData()): boolean {
  * Racines de skills scannées : le kit `~/.claude/skills` (l'âme d'Autowin), `~/.codex/skills`, et la
  * racine Autowin `%APPDATA%/autowin-os/skills`. Générique : indépendant de tout arbre externe.
  */
-export function skillRoots(home = homedir(), localAppData = process.env.LOCALAPPDATA): string[] {
+/**
+ * Emplacements possibles des skills EMBARQUÉES avec l'application, par ordre de préférence.
+ *
+ * Le chemin doit résoudre en dev ET en application packagée : `process.cwd()` vaut la racine du dépôt
+ * en dev mais pas après empaquetage, où le code vit dans `app.asar`. On tente donc plusieurs candidats
+ * et on garde le premier qui porte réellement des skills — vérifier plutôt que supposer un layout.
+ * `__dirname` est absent quand ce module tourne en ESM (vitest) : on le sonde au lieu de le supposer.
+ */
+export function bundledSkillsCandidates(): string[] {
+  const candidates: string[] = []
+  if (process.env.AUTOWIN_SKILLS_ROOT) candidates.push(process.env.AUTOWIN_SKILLS_ROOT)
+  candidates.push(join(process.cwd(), 'skills'))
+  const here = typeof __dirname === 'string' ? __dirname : undefined
+  // Packagé : le bundle vit dans `<app>/out/main` → la racine `skills/` est deux niveaux au-dessus.
+  if (here) candidates.push(join(here, '..', '..', 'skills'), join(here, '..', 'skills'))
+  const resources = (process as { resourcesPath?: string }).resourcesPath
+  if (resources) candidates.push(join(resources, 'app.asar', 'skills'), join(resources, 'skills'))
+  return candidates
+}
+
+/** Première racine embarquée qui porte VRAIMENT des skills (sinon undefined — jamais un chemin deviné). */
+export function bundledSkillsRoot(
+  candidates = bundledSkillsCandidates()
+): string | undefined {
+  return candidates.find(
+    (candidate) =>
+      existsSync(join(candidate, '_engine', 'ENGINE.md')) ||
+      existsSync(join(candidate, 'build', 'SKILL.md'))
+  )
+}
+
+/**
+ * Racines de skills scannées. La racine EMBARQUÉE (dépôt) passe en tête : le comportement de l'app ne
+ * doit pas dépendre d'un arbre externe qu'elle ne possède pas — sans kit local, les phases s'injectaient
+ * VIDES sans que rien ne l'annonce. Les racines externes (`~/.codex`, `~/.claude`, `%LOCALAPPDATA%`)
+ * restent lues ensuite : la découverte des skills du poste est une fonctionnalité, pas un accident.
+ *
+ * Échappatoire nommée `AUTOWIN_SKILLS_PREFER_LOCAL=1` : remet le kit local devant, pour travailler sur
+ * le kit et voir l'effet sans rebuild. Reléguée, la racine embarquée n'est jamais perdue.
+ */
+export function skillRoots(
+  home = homedir(),
+  localAppData = process.env.LOCALAPPDATA,
+  bundled = bundledSkillsRoot()
+): string[] {
   const roots = [join(home, '.codex', 'skills'), join(home, '.claude', 'skills')]
   if (localAppData) roots.push(join(localAppData, 'autowin-os', 'skills'))
-  return roots
+  if (!bundled) return roots
+  return process.env.AUTOWIN_SKILLS_PREFER_LOCAL === '1' ? [...roots, bundled] : [bundled, ...roots]
 }
 
 /** Lit le champ `name:` d'un SKILL.md (front-matter simple) ; à défaut le nom du dossier. */

@@ -23,7 +23,9 @@ function pilot(captured: Captured[], sessionId: string | null = 'sess-1') {
         return { text: 'ok', ...(sessionId ? { sessionId } : {}) } as SendResult
       }
     ),
-    describePrompt: vi.fn(() => ({ provider: 'claude', messages: [], transport: 't' }))
+    describePrompt: vi.fn(() => ({ provider: 'claude', messages: [], transport: 't' })),
+    // Ce faux simule `claude`, le seul adaptateur qui transmet réellement `--resume`.
+    honoursSessionResume: vi.fn(() => true)
   }
   const roles = { getBinding: vi.fn(() => ({ provider: 'claude', model: 'opus-5' })) }
   const bus = {
@@ -76,7 +78,8 @@ describe('chat() — session-resume par conversation', () => {
         captured.push({ options: o, content: m.at(-1)?.content ?? '' })
         return { text: 'ok', sessionId: 'sess-1' } as SendResult
       }),
-      describePrompt: vi.fn(() => ({ provider: 'claude', messages: [], transport: 't' }))
+      describePrompt: vi.fn(() => ({ provider: 'claude', messages: [], transport: 't' })),
+      honoursSessionResume: vi.fn(() => true)
     }
     let model = 'opus-5'
     const roles = { getBinding: vi.fn(() => ({ provider: 'claude', model })) }
@@ -111,7 +114,9 @@ describe('chat() — session-resume par conversation', () => {
           ...(p === 'claude' ? { sessionId: 'sess-claude' } : {})
         } as SendResult
       }),
-      describePrompt: vi.fn(() => ({ provider, messages: [], transport: 't' }))
+      describePrompt: vi.fn(() => ({ provider, messages: [], transport: 't' })),
+      // Fidèle au réel : `claude` reprend, `codex` non — c'est tout l'objet de ce scénario.
+      honoursSessionResume: vi.fn((id: string) => id === 'claude')
     }
     const roles = { getBinding: vi.fn(() => ({ provider, model })) }
     const bus = { catalog: vi.fn(() => []), snapshotForPrompt: vi.fn(async () => ({})), exec: vi.fn() }
@@ -147,6 +152,49 @@ describe('chat() — session-resume par conversation', () => {
     expect(captured[2].options.resumeSessionId).toBeUndefined()
     expect(captured[2].content).toContain('passage à Codex')
     expect(captured[2].content).toContain('réponse Codex')
+  })
+
+  /**
+   * RESUME FANTÔME — mesuré le 2026-08-04 sur les journaux de prompts réels (90 fils, 113 appels) :
+   * 0 appel `resumed=true` au transport, mais 31 prompts affirmant « tu en connais déjà l'historique ».
+   *
+   * Cause : `codex` RETOURNE un sessionId (son `thread_id`) mais n'honore JAMAIS `resumeSessionId` —
+   * seul `claude` le passe à son CLI. Le pilote mémorisait la session sans regarder le provider, donc
+   * le tour suivant amputait le fil ET affirmait au modèle qu'il le connaissait par sa session. Il ne
+   * l'avait pas : il comblait le trou au lieu de signaler l'absence. Pire que perdre le contexte, on
+   * lui interdisait de le réclamer.
+   */
+  it("provider qui rend un sessionId sans savoir le REPRENDRE → fil COMPLET, jamais d'amputation", async () => {
+    const captured: Captured[] = []
+    const registry = {
+      send: vi.fn(async (_p: string, messages: Message[], options: SendOptions) => {
+        captured.push({ options, content: messages.at(-1)?.content ?? '' })
+        // Exactement codex : il rend son thread_id alors qu'il ne sait pas le reprendre.
+        return { text: 'ok', sessionId: 'thread-codex-1' } as SendResult
+      }),
+      describePrompt: vi.fn(() => ({ provider: 'codex', messages: [], transport: 't' })),
+      honoursSessionResume: vi.fn(() => false)
+    }
+    const roles = { getBinding: vi.fn(() => ({ provider: 'codex', model: 'gpt-5.6-sol' })) }
+    const bus = { catalog: vi.fn(() => []), snapshotForPrompt: vi.fn(async () => ({})), exec: vi.fn() }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p = new AgentPilot(registry as any, roles as any, bus as any)
+
+    await p.chat(history('premier message'), () => {}, undefined, 1, 'conv-A')
+    await p.chat(
+      history('premier message', 'ma reponse', 'deuxieme message'),
+      () => {},
+      undefined,
+      1,
+      'conv-A'
+    )
+
+    expect(captured[1].options.resumeSessionId).toBeUndefined()
+    // Le fil est REMIS en entier, puisque personne ne l'a réellement conservé.
+    expect(captured[1].content).toContain('premier message')
+    expect(captured[1].content).toContain('ma reponse')
+    // Et surtout : on ne lui affirme plus qu'il connaît un historique qu'il n'a pas reçu.
+    expect(captured[1].content).not.toContain('tu en connais déjà l’historique')
   })
 
   it('sans conversationId → jamais de resume (rien à quoi rattacher la session)', async () => {

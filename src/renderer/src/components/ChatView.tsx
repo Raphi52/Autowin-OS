@@ -2,7 +2,6 @@ import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } fro
 import { createPortal } from 'react-dom'
 import { Markdown, extractRecommendation } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
-import { SourceControlPane } from './SourceControlPane'
 import { ScoutTable } from './ScoutTable'
 import { ModuleHeader } from './ModuleHeader'
 import { pickTurnToResume, type UnfinishedTurn } from './resume-unfinished'
@@ -25,7 +24,6 @@ import {
   modelCostTier,
   turnCostEq,
   costEqTier,
-  STEP_META,
   phaseLabel,
   parseBtw,
   matchSlashCommands,
@@ -38,19 +36,15 @@ import {
   type RunRequestIdentity,
   type ScopedLiveRun
 } from './chat-view-model'
-import {
-  WORKFLOW_PANEL_SECTIONS,
-  sectionUsesScope,
-  visibleScopedRuns,
-  type WorkflowPanelSection
-} from './workflows-panel-sections'
+import { visibleScopedRuns, type WorkflowPanelSection } from './workflows-panel-sections'
+import { ForkIcon, InspectIcon } from './chat-view-icons'
+import { formatFileSize, encodeAttachment } from './chat-attachments'
 import { searchConversations } from './conversation-search'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
-import { StepThread, AssistantActivityGroup } from './ChatView.parts'
-import { RunInspector } from './RunInspector'
-import { WorkflowExecutionGraph } from './WorkflowExecutionGraph'
+import { AssistantActivityGroup } from './ChatView.parts'
+import { WorkflowsPanel } from './WorkflowsPanel'
 import { ArtifactPreview } from './ArtifactPreview'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
 import {
@@ -150,7 +144,7 @@ type Conv = {
   updatedAt: number
 }
 
-type RunEntry = {
+export type RunEntry = {
   subject: string
   session: string
   path: string
@@ -164,7 +158,7 @@ type RunEntry = {
     defauts: number
   }
 }
-type CheckpointEntry = { id: string; runId: string; createdAt: string }
+export type CheckpointEntry = { id: string; runId: string; createdAt: string }
 
 type Decision = { id: string; question: string; options?: unknown[]; safeDefault?: unknown }
 
@@ -275,108 +269,10 @@ const SUGGESTIONS = [
   'Quel est l’état des workflows ?'
 ]
 
-const RUN_DOT: Record<string, string> = {
-  green: 'st-ok',
-  open: 'st-warn',
-  red: 'st-err',
-  'degraded-closed': 'st-violet'
-}
-
 const MAX_ATTACHMENTS = 8
 const NEW_DRAFT_KEY = '__new__'
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 const MAX_ATTACHMENTS_BYTES = 20 * 1024 * 1024
-const MAX_INLINE_TEXT_BYTES = 2 * 1024 * 1024
-const TEXT_EXTENSIONS = new Set([
-  'txt',
-  'md',
-  'markdown',
-  'json',
-  'jsonl',
-  'csv',
-  'tsv',
-  'log',
-  'xml',
-  'yaml',
-  'yml',
-  'toml',
-  'ini',
-  'sql',
-  'js',
-  'jsx',
-  'ts',
-  'tsx',
-  'css',
-  'html',
-  'py',
-  'cs',
-  'vb'
-])
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} o`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
-}
-
-function fileKind(file: File): ChatAttachment['kind'] {
-  if (file.type.startsWith('image/')) return 'image'
-  const extension = file.name.split('.').pop()?.toLowerCase() ?? ''
-  if (
-    file.size <= MAX_INLINE_TEXT_BYTES &&
-    (file.type.startsWith('text/') || TEXT_EXTENSIONS.has(extension))
-  )
-    return 'text'
-  return 'file'
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = ''
-  const chunkSize = 32_768
-  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize))
-  }
-  return btoa(binary)
-}
-
-/** Miniature downscalée (max 96px, JPEG léger) pour une image — reconnaissable + persistable. */
-async function makeThumbnail(dataUrl: string, max = 96): Promise<string | undefined> {
-  return new Promise((resolve) => {
-    const img = new Image()
-    img.onload = () => {
-      const scale = Math.min(1, max / Math.max(img.width, img.height))
-      const w = Math.max(1, Math.round(img.width * scale))
-      const h = Math.max(1, Math.round(img.height * scale))
-      const canvas = document.createElement('canvas')
-      canvas.width = w
-      canvas.height = h
-      const context = canvas.getContext('2d')
-      if (!context) return resolve(undefined)
-      context.drawImage(img, 0, 0, w, h)
-      resolve(canvas.toDataURL('image/jpeg', 0.72))
-    }
-    img.onerror = () => resolve(undefined)
-    img.src = dataUrl
-  })
-}
-
-async function encodeAttachment(file: File): Promise<ChatAttachment> {
-  const kind = fileKind(file)
-  const mimeType = file.type || 'application/octet-stream'
-  const content =
-    kind === 'text' ? await file.text() : bytesToBase64(new Uint8Array(await file.arrayBuffer()))
-  const thumbnail =
-    kind === 'image' ? await makeThumbnail(`data:${mimeType};base64,${content}`) : undefined
-  return {
-    name: file.name,
-    mimeType,
-    size: file.size,
-    kind,
-    content,
-    ...(thumbnail && { thumbnail })
-  }
-}
-
 function messageKey(message: Msg, index: number): string {
   return `${message.role}:${index}`
 }
@@ -417,138 +313,6 @@ function sentImageArtifact(file: AttachmentMeta, index: number): ChatArtifact | 
     url: file.thumbnail,
     source: { provider: 'utilisateur' }
   }
-}
-
-/** Icône « brancher » (fork) — deux nœuds reliés, monochrome via currentColor. */
-function ForkIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
-      <circle cx="4" cy="3" r="1.8" stroke="currentColor" strokeWidth="1.3" />
-      <circle cx="4" cy="13" r="1.8" stroke="currentColor" strokeWidth="1.3" />
-      <circle cx="12" cy="6" r="1.8" stroke="currentColor" strokeWidth="1.3" />
-      <path
-        d="M4 4.8v6.4M4 8h4a2 2 0 0 0 2-2"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
-/** Icône « inspecter » (loupe), monochrome via currentColor. */
-function InspectIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
-      <circle cx="7" cy="7" r="4.2" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M10.2 10.2 14 14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-function WorkflowSectionIcon({ section }: { section: WorkflowPanelSection }): React.JSX.Element {
-  const common = {
-    className: 'workflow-section-icon',
-    viewBox: '0 0 16 16',
-    fill: 'none',
-    'aria-hidden': true,
-    focusable: false
-  } as const
-
-  if (section === 'subagents') {
-    return (
-      <svg {...common}>
-        <circle cx="8" cy="3" r="1.75" stroke="currentColor" strokeWidth="1.25" />
-        <circle cx="3.5" cy="12.5" r="1.75" stroke="currentColor" strokeWidth="1.25" />
-        <circle cx="12.5" cy="12.5" r="1.75" stroke="currentColor" strokeWidth="1.25" />
-        <path
-          d="M8 4.8v2.1M3.5 10.7V9.5A2.5 2.5 0 0 1 6 7h4a2.5 2.5 0 0 1 2.5 2.5v1.2"
-          stroke="currentColor"
-          strokeWidth="1.25"
-          strokeLinecap="round"
-        />
-      </svg>
-    )
-  }
-
-  if (section === 'run') {
-    return (
-      <svg {...common}>
-        <circle cx="8" cy="8" r="5.6" stroke="currentColor" strokeWidth="1.2" />
-        <path d="m6.7 5.5 4 2.5-4 2.5z" fill="currentColor" />
-      </svg>
-    )
-  }
-
-  if (section === 'graph') {
-    return (
-      <svg {...common}>
-        <path
-          d="m5 5 5.7 1.3M5.2 6.1l2 5M10.5 7.5 8.7 11"
-          stroke="currentColor"
-          strokeWidth="1.2"
-        />
-        <circle cx="3.7" cy="4.7" r="1.8" stroke="currentColor" strokeWidth="1.2" />
-        <circle cx="12.2" cy="6.6" r="1.8" stroke="currentColor" strokeWidth="1.2" />
-        <circle cx="8" cy="12.2" r="1.8" stroke="currentColor" strokeWidth="1.2" />
-      </svg>
-    )
-  }
-
-  return (
-    <svg {...common}>
-      <circle cx="4" cy="3" r="1.7" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="4" cy="13" r="1.7" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="12" cy="6" r="1.7" stroke="currentColor" strokeWidth="1.2" />
-      <path
-        d="M4 4.7v6.6M4 8h4.3A2.2 2.2 0 0 0 10.5 5.8"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
-function WorkflowRefreshIcon(): React.JSX.Element {
-  return (
-    <svg className="workflow-action-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M13.2 5.2A5.6 5.6 0 1 0 13 11M13.2 2.5v2.8h-2.8"
-        stroke="currentColor"
-        strokeWidth="1.35"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function WorkflowCloseIcon(): React.JSX.Element {
-  return (
-    <svg className="workflow-action-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="m4.2 4.2 7.6 7.6m0-7.6-7.6 7.6"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
-function RunTrashIcon(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d="M3.5 4.5h9M6 4.5V3.2h4v1.3m-5.5 0 .6 8.3h5.8l.6-8.3M6.7 6.5v4.2m2.6-4.2v4.2"
-        stroke="currentColor"
-        strokeWidth="1.25"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
 }
 
 const ChatMessageRow = memo(
@@ -1229,7 +993,6 @@ export function ChatView({
   }
   useEffect(() => {
     setPendingDirectives(queueRef.current.get(activeId ?? '') ?? [])
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId])
   const runScopeRef = useRef(runScope)
   useEffect(() => {
@@ -2943,304 +2706,38 @@ export function ChatView({
 
       {/* ---- Panneau droit : workflows + observatoire d'activité (repliable) ---- */}
       {showRuns && (
-        <>
-          <div
-            className="runs-pane-resizer"
-            role="separator"
-            aria-label="Redimensionner la colonne Workflows"
-            aria-orientation="vertical"
-            onPointerDown={beginRunsResize}
-          />
-          <aside className="runs-pane fade-in" style={{ width: `${runsPaneWidth}px` }}>
-            <div className="workflow-panel-head">
-              <div className="workflow-section-tabs" role="tablist" aria-label="Vues Workflows">
-                {WORKFLOW_PANEL_SECTIONS.map((section) => (
-                  <button
-                    key={section.id}
-                    className={`workflow-section-tab${paneTab === section.id ? ' active' : ''}`}
-                    role="tab"
-                    aria-selected={paneTab === section.id}
-                    onClick={() => setPaneTab(section.id)}
-                  >
-                    <WorkflowSectionIcon section={section.id} />
-                    <span className="workflow-section-label">{section.label}</span>
-                    <span className="workflow-section-separator" aria-hidden="true" />
-                  </button>
-                ))}
-              </div>
-              <div className="workflow-panel-actions">
-                <button
-                  className={`workflow-panel-action workflow-panel-refresh${paneTab === 'run' ? '' : ' is-placeholder'}`}
-                  onClick={refreshRuns}
-                  title={paneTab === 'run' ? 'Rafraîchir' : undefined}
-                  aria-label="Rafraîchir les runs"
-                  aria-hidden={paneTab !== 'run'}
-                  tabIndex={paneTab === 'run' ? 0 : -1}
-                  disabled={paneTab !== 'run'}
-                >
-                  <WorkflowRefreshIcon />
-                </button>
-                <button
-                  className="workflow-panel-action workflow-panel-close"
-                  onClick={() => setShowRuns(false)}
-                  title="Fermer Workflows"
-                  aria-label="Fermer Workflows"
-                >
-                  <WorkflowCloseIcon />
-                </button>
-              </div>
-            </div>
-            {paneTab === 'source-control' && (
-              <SourceControlPane conversationId={activeId ?? undefined} onSendPrompt={send} />
-            )}
-            {paneTab === 'graph' && (
-              <WorkflowExecutionGraph
-                conversationId={activeId ?? undefined}
-                active={isActive}
-                requestLabel={
-                  [...messages].reverse().find((message) => message.role === 'user')?.content
-                }
-                live={
-                  Boolean(activeId && busyConversations.has(activeId)) ||
-                  liveRuns[activeId ?? '']?.status === 'running'
-                }
-              />
-            )}
-            {sectionUsesScope(paneTab) && (
-              <div className="row gap2" style={{ fontSize: 11 }}>
-                <button
-                  className={`btn btn-sm${runScope === 'conv' ? ' btn-accent' : ''}`}
-                  onClick={() => selectRunScope('conv')}
-                >
-                  cette conversation
-                </button>
-                <button
-                  className={`btn btn-sm${runScope === 'tous' ? ' btn-accent' : ''}`}
-                  onClick={() => selectRunScope('tous')}
-                >
-                  tous
-                </button>
-              </div>
-            )}
-            <div
-              className="scroll-y col grow"
-              style={{
-                gap: 'var(--s2)',
-                minHeight: 0,
-                display: sectionUsesScope(paneTab) ? undefined : 'none'
-              }}
-            >
-              {/* SECTION SOUS-AGENTS : le fil d'une orchestration, en cours ou TERMINÉE. */}
-              {paneTab === 'subagents' && visibleLiveRuns.length === 0 && (
-                <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
-                  {activeId
-                    ? 'Aucune orchestration dans cette conversation — le fil des sous-agents apparaît ici dès qu’une tâche est lancée, et il y RESTE une fois terminée.'
-                    : 'Sélectionne une conversation pour voir le fil de ses sous-agents.'}
-                </div>
-              )}
-              {paneTab === 'subagents' &&
-                visibleLiveRuns.map(([runKey, liveRun]) => (
-                  <div
-                    key={runKey}
-                    ref={liveRun.convId === activeId ? liveRunCardRef : undefined}
-                    className={`card live-run stripe stripe-accent fade-in`}
-                    data-live-run-conversation-id={liveRun.convId}
-                  >
-                    <div className="row" style={{ justifyContent: 'space-between' }}>
-                      <div className="row gap2" style={{ minWidth: 0 }}>
-                        {liveRun.status === 'running' ? (
-                          <span className="spinner" />
-                        ) : (
-                          <span
-                            className={`status-dot ${liveRun.status === 'green' ? 'st-ok' : 'st-err'}`}
-                          />
-                        )}
-                        <span className="run-subject live-subject" title={liveRun.task}>
-                          {liveRun.task}
-                        </span>
-                      </div>
-                    </div>
-                    <div style={{ marginTop: 'var(--s2)' }}>
-                      <StepThread steps={liveRun.steps} />
-                      {liveRun.status === 'running' &&
-                        (() => {
-                          const phase = liveRun.phase
-                          const meta = phase ? STEP_META[phase.step] : undefined
-                          const label = phase ? phaseLabel(phase) : 'sous-agent'
-                          // Modèle réel (ex "cc/claude-opus-4-8" → "claude-opus-4-8") + effort en clair.
-                          const EFFORT_FR: Record<string, string> = {
-                            low: 'faible',
-                            medium: 'moyen',
-                            high: 'élevé',
-                            xhigh: 'très élevé',
-                            max: 'max',
-                            ultra: 'ultra'
-                          }
-                          const shortModel = phase?.model?.split('/').pop()
-                          const eff =
-                            phase?.reasoningEffort &&
-                            phase.reasoningEffort !== 'none' &&
-                            phase.reasoningEffort !== 'auto'
-                              ? (EFFORT_FR[phase.reasoningEffort] ?? phase.reasoningEffort)
-                              : undefined
-                          const detail = shortModel
-                            ? `${shortModel}${eff ? ` · ${eff}` : ''}`
-                            : phase?.provider
-                          return (
-                            <div className="subagent-step live-subagent-step">
-                              <div
-                                className="row gap2"
-                                style={{ justifyContent: 'space-between', fontSize: 11 }}
-                              >
-                                <span className="c-faint">
-                                  <span className="spinner" /> {meta?.icon ?? '⏳'} {label}
-                                  {detail && <span className="mono c-accent"> {detail}</span>}
-                                </span>
-                                <span className="row gap2">
-                                  <span className="badge">en cours</span>
-                                  <button
-                                    className="btn btn-sm btn-danger"
-                                    title="Stopper le sous-agent en cours"
-                                    onClick={() =>
-                                      void window.api.cancelOrchestration(liveRun.convId)
-                                    }
-                                  >
-                                    ⏹ Stop
-                                  </button>
-                                </span>
-                              </div>
-                              {liveRun.liveText && (
-                                <pre className="subagent-live-text">{liveRun.liveText}</pre>
-                              )}
-                            </div>
-                          )
-                        })()}
-                    </div>
-                  </div>
-                ))}
-              {/* SECTION RUN : les RUN.md eux-mêmes (statut, DoD, journal, défauts). */}
-              {paneTab === 'run' && checkpoints.length > 0 && (
-                <section className="card checkpoint-forks">
-                  <strong>Checkpoints persistants</strong>
-                  {checkpoints.map((checkpoint) => (
-                    <button
-                      key={checkpoint.id}
-                      className="btn btn-sm"
-                      onClick={() => {
-                        const forkId = `fork-${Date.now()}`
-                        void window.api
-                          .createCheckpointFork(checkpoint.id, forkId)
-                          .then(() => setForkedCheckpoint(forkId))
-                      }}
-                    >
-                      Forker {checkpoint.runId}
-                    </button>
-                  ))}
-                  {forkedCheckpoint && <small>Fork immuable préparé : {forkedCheckpoint}</small>}
-                </section>
-              )}
-              {paneTab === 'run' && runs.length === 0 && (
-                <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
-                  {runScope === 'conv'
-                    ? activeId
-                      ? 'Aucun RUN.md pour cette conversation — lance une tâche (orchestration) ou attache un RUN.md.'
-                      : 'Sélectionne ou démarre une conversation pour voir ses RUN.md.'
-                    : 'Aucun run.'}
-                </div>
-              )}
-              {paneTab === 'run' &&
-                runs.map((r) => {
-                  const pct =
-                    r.summary.dodTotal > 0
-                      ? Math.round((r.summary.dodChecked / r.summary.dodTotal) * 100)
-                      : 0
-                  const isOpen = openRun?.path === r.path
-                  return (
-                    <div key={r.path} className="col" style={{ gap: 0 }}>
-                      <div className="run-card-shell">
-                        <button
-                          className="card run-row"
-                          onClick={() => {
-                            if (isOpen) {
-                              setOpenRun(null)
-                              setOpenTrace(null)
-                            } else {
-                              viewRun(r)
-                            }
-                          }}
-                        >
-                          <div className="row" style={{ justifyContent: 'space-between' }}>
-                            <div className="row gap2" style={{ minWidth: 0 }}>
-                              <span className={`status-dot ${RUN_DOT[r.summary.status] ?? ''}`} />
-                              <span className="run-subject">{r.subject}</span>
-                            </div>
-                            <span className="badge">{r.summary.status}</span>
-                          </div>
-                          <div className="row" style={{ marginTop: 6, gap: 'var(--s2)' }}>
-                            <div className="meter grow">
-                              <span
-                                style={{
-                                  width: `${pct}%`,
-                                  background:
-                                    r.summary.status === 'green' ? 'var(--ok)' : 'var(--accent)'
-                                }}
-                              />
-                            </div>
-                            <span className="c-faint tnum" style={{ fontSize: 10 }}>
-                              {r.summary.dodChecked}/{r.summary.dodTotal}
-                            </span>
-                            <span className="c-faint tnum" style={{ fontSize: 10 }}>
-                              J {r.summary.journalEvents} · D {r.summary.defauts}
-                            </span>
-                          </div>
-                        </button>
-                        {(runScope === 'tous' || activeId) && (
-                          <button
-                            type="button"
-                            className="run-delete-button"
-                            aria-label={`Supprimer le run ${r.subject}`}
-                            title={r.session === 'attaché' ? 'Détacher ce RUN' : 'Supprimer ce RUN'}
-                            onClick={() => requestDeleteRun(r)}
-                          >
-                            <RunTrashIcon />
-                          </button>
-                        )}
-                      </div>
-                      {isOpen && (
-                        <div className="run-detail-box fade-in">
-                          {openTrace && openRun && (
-                            <div className="run-detail-tabs">
-                              <button
-                                type="button"
-                                className={`run-detail-tab${runDetailTab === 'trace' ? ' is-active' : ''}`}
-                                onClick={() => setRunDetailTab('trace')}
-                              >
-                                Fil des sous-agents
-                              </button>
-                              <button
-                                type="button"
-                                className={`run-detail-tab${runDetailTab === 'runmd' ? ' is-active' : ''}`}
-                                onClick={() => setRunDetailTab('runmd')}
-                              >
-                                RUN.md
-                              </button>
-                            </div>
-                          )}
-                          {openTrace && (runDetailTab === 'trace' || !openRun) ? (
-                            <StepThread steps={openTrace} />
-                          ) : (
-                            openRun && (
-                              <RunInspector content={openRun.content} summary={r.summary} />
-                            )
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-            </div>
-          </aside>
-        </>
+        <WorkflowsPanel
+          runsPaneWidth={runsPaneWidth}
+          beginRunsResize={beginRunsResize}
+          paneTab={paneTab}
+          setPaneTab={setPaneTab}
+          refreshRuns={refreshRuns}
+          setShowRuns={setShowRuns}
+          activeId={activeId}
+          send={send}
+          isActive={isActive}
+          requestLabel={[...messages].reverse().find((message) => message.role === 'user')?.content}
+          liveGraphActive={
+            Boolean(activeId && busyConversations.has(activeId)) ||
+            liveRuns[activeId ?? '']?.status === 'running'
+          }
+          runScope={runScope}
+          selectRunScope={selectRunScope}
+          visibleLiveRuns={visibleLiveRuns}
+          checkpoints={checkpoints}
+          forkedCheckpoint={forkedCheckpoint}
+          setForkedCheckpoint={setForkedCheckpoint}
+          runs={runs}
+          openRun={openRun}
+          viewRun={viewRun}
+          setOpenRun={setOpenRun}
+          setOpenTrace={setOpenTrace}
+          requestDeleteRun={requestDeleteRun}
+          openTrace={openTrace}
+          runDetailTab={runDetailTab}
+          setRunDetailTab={setRunDetailTab}
+          liveRunCardRef={liveRunCardRef}
+        />
       )}
       {openImage &&
         createPortal(

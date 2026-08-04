@@ -199,6 +199,49 @@ export function worstCaseNodeExecutions(graph: WorkflowGraph): number {
 }
 
 /**
+ * Les agents composés pour une phase. Premier nœud de cette phase qui en déclare : une chaîne peut
+ * contenir deux `build`, mais un même workflow ne joue qu'un panel par phase côté moteur.
+ */
+export function agentsForPhase(
+  graph: WorkflowGraph,
+  phase: PipelinePhase
+): RoleBinding[] | undefined {
+  const node = graph.nodes.find((n) => n.phase === phase && n.agents?.length)
+  return node?.agents?.filter((agent) => agent && agent.provider)
+}
+
+/**
+ * Le quorum composé pour une phase, s'il y en a un. Absent = majorité simple, le comportement actuel.
+ */
+export function quorumForPhase(graph: WorkflowGraph, phase: PipelinePhase): number | undefined {
+  const node = graph.nodes.find((n) => n.phase === phase && typeof n.quorum === 'number')
+  return node?.quorum
+}
+
+/**
+ * L'allocation que le graphe IMPOSE : autant de membres que d'agents composés. Sans cela le devis
+ * provisionnerait un panel d'un seul membre et le fan-out serait tronqué à l'exécution — on aurait
+ * composé trois juges pour n'en voir qu'un.
+ */
+export function allocationFromGraph(graph: WorkflowGraph): {
+  phaseMembers?: Partial<Record<PipelinePhase, number>>
+  judgeMembers?: number
+} {
+  const phaseMembers: Partial<Record<PipelinePhase, number>> = {}
+  let judgeMembers: number | undefined
+  for (const node of graph.nodes) {
+    const membres = node.agents?.filter((agent) => agent && agent.provider).length
+    if (!membres) continue
+    if (node.phase === 'judge') judgeMembers = Math.max(judgeMembers ?? 0, membres)
+    else phaseMembers[node.phase] = Math.max(phaseMembers[node.phase] ?? 0, membres)
+  }
+  return {
+    ...(Object.keys(phaseMembers).length ? { phaseMembers } : {}),
+    ...(judgeMembers ? { judgeMembers } : {})
+  }
+}
+
+/**
  * Le retour « juge rouge → build » exprimé par le graphe, traduit en nombre de réparations.
  *
  * L'orchestrateur sait DÉJÀ rejouer un build nourri du retour du gate puis re-juger — c'est

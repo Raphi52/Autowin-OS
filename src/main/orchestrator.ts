@@ -13,12 +13,16 @@ import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
 import { phaseInstruction, type PipelinePhase } from './skill-pipeline'
 import { combinePhaseInstruction, type PhaseInstructionOverride } from './workflow-instruction'
 import {
+  agentsForPhase,
+  allocationFromGraph,
   linearPhasesOf,
+  quorumForPhase,
   recoveriesFromGraph,
   worstCaseNodeExecutions,
   type WorkflowGraph
 } from './workflow-graph'
 import { phaseBrief } from './phase-briefs'
+import type { DecompositionOutcome } from './greedy-decompose'
 import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
 import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-scope'
 import {
@@ -260,8 +264,17 @@ export interface OrchestratorDeps {
    * modèle orchestrateur (il sait juger quand une tâche N'EST PAS décomposable) ; les tests injectent un
    * plan déterministe. Renvoyer <2 nœuds (tâche atomique) ⇒ exécution séquentielle classique (fallback
    * naturel, aucun « mode » à activer). Absent ⇒ séquentiel (rétrocompat tests).
+   *
+   * Le 3ᵉ paramètre `onOutcome` est OPTIONNEL et rétrocompatible (une implémentation à 2 paramètres
+   * reste assignable) : il permet à l'orchestrateur d'apprendre POURQUOI une décomposition est
+   * retombée en séquentiel. Sans lui, « tâche jugée atomique » et « le modèle a foiré son JSON »
+   * rendent tous deux `[]`, donc un orchestrateur qui n'orchestre plus est indiscernable du cas normal.
    */
-  decompose?: (task: string, binding?: RoleBinding) => Promise<GreedyTaskNode[]>
+  decompose?: (
+    task: string,
+    binding?: RoleBinding,
+    onOutcome?: (outcome: DecompositionOutcome, task: string) => void
+  ) => Promise<GreedyTaskNode[]>
   /** Plafond de sous-agents simultanés en mode greedy (défaut 4). */
   greedyConcurrency?: number
   /** Injection substituable pour les tests ; en production charge le vrai kit via skill-pipeline. */
@@ -476,7 +489,11 @@ export class Orchestrator {
     phase: PipelinePhase,
     runtimeSnapshot?: OrchestrationRuntimeSnapshot
   ): RoleBinding[] {
-    return (runtimeSnapshot?.phaseFanOut[phase] ?? this.deps.phaseFanOut?.(phase) ?? [])
+    // Les agents COMPOSÉS sur le nœud priment sur la topologie globale : c'est le sens même du
+    // canevas. Sans ce branchement, ouvrir un nœud et y régler trois agents ne changeait rien au run.
+    const graph = this.deps.currentWorkflow?.()?.graph
+    const composes = graph ? agentsForPhase(graph, phase) : undefined
+    return (composes ?? runtimeSnapshot?.phaseFanOut[phase] ?? this.deps.phaseFanOut?.(phase) ?? [])
       .filter((member) => member && member.provider)
       .slice(
         0,
@@ -488,7 +505,9 @@ export class Orchestrator {
 
   /** #8 — même facteur commun que {@link resolvePhaseFanOut}, pour le panel de JUGES. */
   private resolveJudgeFanOut(runtimeSnapshot?: OrchestrationRuntimeSnapshot): RoleBinding[] {
-    return (runtimeSnapshot?.judgeFanOut ?? this.deps.judgeFanOut?.() ?? [])
+    const graph = this.deps.currentWorkflow?.()?.graph
+    const composes = graph ? agentsForPhase(graph, 'judge') : undefined
+    return (composes ?? runtimeSnapshot?.judgeFanOut ?? this.deps.judgeFanOut?.() ?? [])
       .filter((member) => member && member.provider)
       .slice(
         0,
@@ -682,7 +701,21 @@ export class Orchestrator {
       // Le workflow impose son allocation PAR-DESSUS le calcul du devis, clé par clé : c'est tout
       // l'intérêt de comparer « 5 juges » à « 1 juge ». Ce qu'il ne dit pas reste ce que le devis a
       // décidé — sinon un workflow qui ne règle que le jury effacerait aussi le reste.
-      const impose = workflow?.allocation
+      // Les agents composés sur les nœuds DICTENT l'allocation : sans cela le devis provisionnerait
+      // un panel d'un membre et le fan-out serait tronqué — trois juges composés, un seul joué. Une
+      // allocation écrite explicitement dans le profil reste prioritaire sur cette déduction.
+      const depuisGraphe = workflow?.graph ? allocationFromGraph(workflow.graph) : undefined
+      const impose =
+        workflow?.allocation || depuisGraphe
+          ? {
+              ...depuisGraphe,
+              ...workflow?.allocation,
+              phaseMembers: {
+                ...depuisGraphe?.phaseMembers,
+                ...workflow?.allocation?.phaseMembers
+              }
+            }
+          : undefined
       if (impose) {
         executionQuote.allocation = {
           ...executionQuote.allocation,
@@ -817,7 +850,27 @@ export class Orchestrator {
         this.deps.decompose &&
         phases.includes('build')
       ) {
-        const plan = await this.deps.decompose(task, admittedRuntime.roles.orchestrator)
+        // L'issue de la décomposition devient un STEP observable, pas une ligne de log : un
+        // `rejected` sort en `status: 'failed'`, donc un test peut l'assérer et l'Observatory le
+        // montre. Avant, un JSON foiré et une tâche atomique produisaient le même `[]` silencieux.
+        const plan = await this.deps.decompose(
+          task,
+          admittedRuntime.roles.orchestrator,
+          (outcome) => {
+            onStep?.({
+              step: 'gate',
+              role: 'decompose',
+              status: outcome.kind === 'rejected' ? 'failed' : 'completed',
+              detail:
+                outcome.kind === 'rejected'
+                  ? `DÉCOMPOSITION REJETÉE (${outcome.reason}) — fallback séquentiel`
+                  : outcome.kind === 'atomic'
+                    ? 'tâche jugée atomique — séquentiel'
+                    : `plan de ${outcome.nodes.length} sous-tâches`,
+              execution: { runId }
+            })
+          }
+        )
         const admittedPlan = executionQuote
           ? limitGreedyPlan(
               plan,
@@ -2347,7 +2400,14 @@ export class Orchestrator {
         const responders = results.filter((r) => r.responded)
         const votingN = responders.length
         const valideVotes = responders.filter((r) => r.ok).length
-        const threshold = defaultQuorumThreshold(votingN)
+        // Le quorum composé prime, mais borné au nombre de votants RÉELS : un modèle crashé ne vote
+        // pas, et exiger 3 voix parmi 2 répondants rendrait le vert inatteignable sans le dire.
+        const graphQuorum = this.deps.currentWorkflow?.()?.graph
+          ? quorumForPhase(this.deps.currentWorkflow()!.graph!, 'judge')
+          : undefined
+        const threshold = graphQuorum
+          ? Math.min(Math.max(1, graphQuorum), votingN)
+          : defaultQuorumThreshold(votingN)
         const passes = votingN > 0 && valideVotes >= threshold
         const reasons = responders.filter((r) => !r.ok && r.text).map((r) => r.text)
         // Verdict AGRÉGÉ synthétique consommé par le gate ci-dessous. usage=undefined → le coût,

@@ -78,22 +78,25 @@ describe('sélection des fils de sous-agents', () => {
  * assertions gardent le raccordement ; le COMPORTEMENT, lui, est testé sur les sorties au-dessus.
  */
 describe('câblage du panneau', () => {
+  // Le panneau lui-même vit dans WorkflowsPanel.tsx (extrait de ChatView) ; ChatView ne fait
+  // plus que lui passer les props et consomme toujours le modèle de sélection des fils.
   const chatView = (): string => readFileSync(join(__dirname, 'ChatView.tsx'), 'utf8')
+  const workflowsPanel = (): string => readFileSync(join(__dirname, 'WorkflowsPanel.tsx'), 'utf8')
 
   it('le panneau consomme le modèle de sections et la sélection extraite', () => {
-    const source = chatView()
-    expect(source).toContain('WORKFLOW_PANEL_SECTIONS')
-    expect(source).toContain('visibleScopedRuns')
+    expect(chatView()).toContain('visibleScopedRuns')
+    expect(workflowsPanel()).toContain('WORKFLOW_PANEL_SECTIONS')
   })
 
   it('plus aucun code ne détruit un run terminé après un délai', () => {
     // Le défaut exact : à l'événement `orchestrate-end`, une minuterie différée dispatchait l'événement
     // d'effacement vers le réducteur, qui supprimait l'entrée et ses steps.
     expect(chatView()).not.toMatch(/type: 'clear'/)
+    expect(workflowsPanel()).not.toMatch(/type: 'clear'/)
   })
 
   it('Source control réutilise le composant existant au lieu d’être réécrit', () => {
-    expect(chatView()).toContain('<SourceControlPane')
+    expect(workflowsPanel()).toContain('<SourceControlPane')
   })
 })
 

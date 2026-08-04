@@ -395,8 +395,8 @@ describe('chat scrolling and layout rules', () => {
       scrollTop: 0,
       clientHeight: 100,
       scrollHeight: 1000,
-      scrollTo(options: { top: number; behavior?: string }) {
-        targets.push(options)
+      scrollTo(options: ScrollToOptions) {
+        targets.push({ top: options.top ?? 0, behavior: options.behavior })
       }
     }
 
@@ -417,22 +417,28 @@ describe('chat scrolling and layout rules', () => {
 
   it('arrête la descente quand le fil est démonté, sans replanifier de frame', () => {
     const queue: Array<() => void> = []
+    const scrolls: ScrollToOptions[] = []
     const element = {
       scrollTop: 0,
       clientHeight: 100,
       scrollHeight: 1000,
       isConnected: true,
-      scrollTo() {}
+      scrollTo(options: ScrollToOptions) {
+        scrolls.push(options)
+      }
     }
 
     scrollChatToBottom(element, (callback) => queue.push(callback))
     expect(queue).toHaveLength(1)
 
     element.isConnected = false
+    const scrollsBeforeUnmount = scrolls.length
     queue.shift()?.()
 
     // Sans ce garde, la boucle survivait au démontage et rappelait un window détruit.
     expect(queue).toHaveLength(0)
+    // Et elle ne doit plus scroller un élément démonté.
+    expect(scrolls).toHaveLength(scrollsBeforeUnmount)
   })
 
   it("abandonne la descente si le lecteur remonte lui-même entre deux frames", () => {
@@ -442,8 +448,8 @@ describe('chat scrolling and layout rules', () => {
       scrollTop: 500,
       clientHeight: 100,
       scrollHeight: 1000,
-      scrollTo(options: { top: number }) {
-        targets.push(options)
+      scrollTo(options: ScrollToOptions) {
+        targets.push({ top: options.top ?? 0 })
       }
     }
 

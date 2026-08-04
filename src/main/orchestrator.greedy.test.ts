@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
 import { HookBus } from './hooks/hook-bus'
-import { Orchestrator, type GreedyTaskNode } from './orchestrator'
+import { Orchestrator, type GreedyTaskNode, type OrchestrationStep } from './orchestrator'
+import type { DecompositionOutcome } from './greedy-decompose'
 import { ProviderRegistry } from './providers/registry'
 import type {
   Message,
@@ -301,5 +302,61 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
     expect(result.failedTasks).toBeUndefined()
     expect(result.skippedTasks).toBeUndefined()
     expect(result.trace.every((s) => !/sous-tâche/.test(s.detail ?? ''))).toBe(true)
+  })
+})
+
+describe("Orchestrator — l'issue de décomposition est OBSERVABLE, pas seulement loguée", () => {
+  /** Décomposeur qui rend [] tout en NOMMANT pourquoi, via le sink par appel. */
+  const decomposerReporting = (
+    outcome: DecompositionOutcome
+  ): ((
+    task: string,
+    binding?: unknown,
+    onOutcome?: (o: DecompositionOutcome, task: string) => void
+  ) => Promise<GreedyTaskNode[]>) =>
+    async (task, _binding, onOutcome) => {
+      onOutcome?.(outcome, task)
+      return outcome.kind === 'plan' ? outcome.nodes : []
+    }
+
+  it('un plan REJETÉ sort en step failed, avec son motif — un test peut désormais l’assérer', async () => {
+    const provider = new GreedyProvider()
+    const steps: OrchestrationStep[] = []
+    await makeGreedy(
+      provider,
+      decomposerReporting({ kind: 'rejected', reason: 'invalid-json' }),
+      () => ['build']
+    ).run('répare le module', (s) => steps.push(s))
+
+    const decomposeSteps = steps.filter((s) => s.role === 'decompose')
+    expect(decomposeSteps).toHaveLength(1)
+    expect(decomposeSteps[0].status).toBe('failed')
+    expect(decomposeSteps[0].detail).toContain('invalid-json')
+  })
+
+  it('une tâche ATOMIQUE n’est PAS un échec — même retour [], step completed', async () => {
+    const provider = new GreedyProvider()
+    const steps: OrchestrationStep[] = []
+    await makeGreedy(provider, decomposerReporting({ kind: 'atomic' }), () => ['build']).run(
+      'renomme une variable',
+      (s) => steps.push(s)
+    )
+
+    const decomposeSteps = steps.filter((s) => s.role === 'decompose')
+    expect(decomposeSteps).toHaveLength(1)
+    // C'EST le point aveugle d'origine : les deux cas rendent [], seul le statut les sépare.
+    expect(decomposeSteps[0].status).toBe('completed')
+    expect(decomposeSteps[0].detail).toContain('atomique')
+  })
+
+  it('un décomposeur historique à 2 paramètres reste accepté (rétrocompat du contrat)', async () => {
+    const provider = new GreedyProvider()
+    const steps: OrchestrationStep[] = []
+    const legacy = vi.fn().mockResolvedValue([])
+    await makeGreedy(provider, legacy, () => ['build']).run('une tâche', (s) => steps.push(s))
+
+    expect(legacy).toHaveBeenCalled()
+    // Il n'émet rien : l'observabilité est un ajout, jamais une exigence pour les appelants existants.
+    expect(steps.filter((s) => s.role === 'decompose')).toHaveLength(0)
   })
 })
