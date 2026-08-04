@@ -47,6 +47,16 @@ export interface ExecutionTopologyRequest {
   hasDecomposer: boolean
   phaseFanOut: Partial<Record<PipelinePhase, number>>
   judgeFanOut: number
+  /**
+   * Exécutions de nœuds à provisionner quand le workflow est un GRAPHE : un nœud dans une boucle bornée tourne
+   * plusieurs fois, et `phases.length` sous-provisionne alors le devis. Absent = pipeline linéaire, on compte
+   * les phases comme avant.
+   *
+   * Ce nombre est exact, pas prudentiel : toute arête de retour porte une borne, donc le pire cas est fini et
+   * calculable (`workflow-graph.ts:worstCaseNodeExecutions`). C'est ce qui permet de garder un devis ex-ante
+   * avec des boucles au lieu de renoncer à la garantie de clôture.
+   */
+  worstCaseNodeExecutions?: number
 }
 
 export interface ExecutionQuoteCaps {
@@ -136,7 +146,13 @@ export function allocateExecutionTopology(
   )
   const recoveries = request.mutation ? quote.limits.maxRecoveries : 0
   const judgePasses = 1 + recoveries
-  const mandatory = remainingPhases.length + judgePasses + recoveries
+  // Un graphe à boucles rejoue des nœuds : provisionner sa liste de phases reviendrait à laisser le run se faire
+  // couper en plein milieu au lieu d'être refusé proprement avant de dépenser quoi que ce soit.
+  const nodeExecutions = Math.max(
+    remainingPhases.length,
+    Math.floor(request.worstCaseNodeExecutions ?? 0)
+  )
+  const mandatory = nodeExecutions + judgePasses + recoveries
   if (mandatory > available) {
     throw new Error(
       `Devis impossible avant exécution : ${mandatory} agent(s) obligatoires pour ${available} place(s) restante(s).`

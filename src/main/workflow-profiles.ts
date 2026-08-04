@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
 import { ALL_ROLES, type Role, type RoleBinding } from './roles'
 import type { PipelinePhase } from './skill-pipeline'
+import { graphDefects, graphFromPhases, type WorkflowGraph } from './workflow-graph'
 
 /**
  * Un WORKFLOW nommé : la façon de travailler, rendue sélectionnable et comparable.
@@ -37,8 +38,16 @@ export interface WorkflowProfile {
   description?: string
   /** Écarts de provider/modèle/effort par rôle. Un rôle absent garde sa configuration courante. */
   roles?: Partial<Record<Role, Partial<RoleBinding>>>
-  /** Phases imposées. Absent → le régime décide, comportement actuel. */
+  /**
+   * Phases imposées, en chaîne. Absent → le régime décide, comportement actuel.
+   * Conservé pour tout profil écrit avant le canevas : `graphOf()` le convertit à la lecture.
+   */
   phases?: PipelinePhase[]
+  /**
+   * Le workflow comme GRAPHE : nœuds (une phase, ses agents, son quorum) et arêtes conditionnelles, dont les
+   * retours bornés. Prime sur `phases`, qui n'en exprime que le cas linéaire.
+   */
+  graph?: WorkflowGraph
   /** Largeurs voulues : membres de panel par phase, taille du jury, plafond de sous-tâches. */
   allocation?: {
     phaseMembers?: Partial<Record<PipelinePhase, number>>
@@ -46,6 +55,18 @@ export interface WorkflowProfile {
     maxGreedyNodes?: number
   }
   instructions?: WorkflowInstructions
+}
+
+/**
+ * Le graphe effectif d'un profil : celui qu'il déclare, sinon la chaîne équivalente à ses phases.
+ *
+ * Un seul point de lecture pour que le reste du code n'ait jamais à savoir si le profil vient d'avant ou d'après
+ * le canevas — sans quoi chaque appelant réimplémenterait la migration, et l'un d'eux l'oublierait.
+ */
+export function graphOf(profile: WorkflowProfile): WorkflowGraph | undefined {
+  if (profile.graph?.nodes?.length) return profile.graph
+  if (profile.phases?.length) return graphFromPhases(profile.phases)
+  return undefined
 }
 
 export interface WorkflowProfilesFile {
@@ -67,6 +88,22 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 /** Un identifiant sert de clé ET de nom de sélection : on refuse tout ce qui n'est pas simple. */
 function safeId(value: unknown): string | undefined {
   return typeof value === 'string' && /^[A-Za-z0-9._-]{1,64}$/.test(value) ? value : undefined
+}
+
+/**
+ * Un graphe relu du disque est refusé S'IL NE PEUT PAS TOURNER — notamment un retour sans borne, qui ferait
+ * boucler un run indéfiniment. Mieux vaut retomber sur les phases du profil que charger un piège.
+ */
+function normalizeGraph(value: unknown): WorkflowGraph | undefined {
+  if (!isPlainObject(value)) return undefined
+  const nodes = Array.isArray(value.nodes) ? value.nodes : []
+  const edges = Array.isArray(value.edges) ? value.edges : []
+  const candidate = {
+    entry: typeof value.entry === 'string' ? value.entry : '',
+    nodes,
+    edges
+  } as WorkflowGraph
+  return graphDefects(candidate).length === 0 ? candidate : undefined
 }
 
 function normalizeInstructions(value: unknown): WorkflowInstructions | undefined {
@@ -130,6 +167,7 @@ function normalizeProfile(value: unknown): WorkflowProfile | undefined {
       }
     : undefined
   const roles = normalizeRoles(value.roles)
+  const graph = normalizeGraph(value.graph)
   const instructions = normalizeInstructions(value.instructions)
   const description =
     typeof value.description === 'string' && value.description.trim()
@@ -141,6 +179,7 @@ function normalizeProfile(value: unknown): WorkflowProfile | undefined {
     ...(description ? { description } : {}),
     ...(roles ? { roles } : {}),
     ...(phases && phases.length ? { phases } : {}),
+    ...(graph ? { graph } : {}),
     ...(allocation && Object.keys(allocation).length ? { allocation } : {}),
     ...(instructions ? { instructions } : {})
   }
