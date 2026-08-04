@@ -16,6 +16,7 @@ import { findNpmGlobalFile } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { executionEvidencePath } from './execution-evidence-path'
+import { isShellMutation, isVerificationCommand } from './evidence-vocabulary'
 import {
   appendWorkspaceMutationEvidence,
   captureWorkspaceMutationSnapshot
@@ -73,9 +74,15 @@ export function normalizeClaudeUsage(raw: ClaudeRawUsage, costUsd?: number): Usa
  */
 export function claudeToolEvidenceKind(name: string, command: string): ExecutionEvidence['kind'] {
   if (/^(Edit|Write|MultiEdit|NotebookEdit)$/i.test(name)) return 'mutation'
-  const verify =
-    /\b(vitest|jest|pytest|cargo\s+test|dotnet\s+test|go\s+test|tsc|eslint|npm(?:\.cmd)?\s+(?:test|run\s+(?:test|typecheck|build|lint))|pnpm\s+(?:test|run)|node\s+-e)\b/i
-  if (/^Bash$/i.test(name)) return verify.test(command) ? 'verification' : 'inspection'
+  if (/^Bash$/i.test(name)) {
+    // Ordre voulu : un test reste une vérification même s'il touche le disque au passage ; une
+    // commande qui change l'état du dépôt est une MUTATION (avant, elle retombait en `inspection`,
+    // et le gate devenait insatisfiable pour toute tâche mutant par commande) ; le reste est une
+    // lecture. Vocabulaire partagé avec Codex — voir evidence-vocabulary.ts.
+    if (isVerificationCommand(command)) return 'verification'
+    if (isShellMutation(command)) return 'mutation'
+    return 'inspection'
+  }
   return 'inspection'
 }
 

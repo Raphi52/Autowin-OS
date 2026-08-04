@@ -33,6 +33,7 @@ import {
 } from './session-memory-echo'
 import { projectContextBlock } from './context-files'
 import type { ExecutionEvidence, PromptEnvelope, SendOptions, Usage } from './providers/types'
+import { isShellMutation, isStateOracle } from './providers/evidence-vocabulary'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
@@ -516,10 +517,18 @@ export function evidenceSatisfiesTask(task: string, evidence: ExecutionEvidence[
   // inspection : une lecture (`rg`, `Get-Content`) n'atteste pas que la mutation est correcte.
   // Compromis assumé : une mutation « vérifiée par relecture » doit désormais porter un test, ou
   // être close en degraded-closed/humain si aucun oracle n'existe (ex. édition de doc pure).
-  return (
-    successful.some((item) => item.kind === 'mutation') &&
-    successful.some((item) => item.kind === 'verification')
-  )
+  const mutations = successful.filter((item) => item.kind === 'mutation')
+  if (!mutations.length) return false
+  if (successful.some((item) => item.kind === 'verification')) return true
+  // J4 (2026-08-04) — une mutation d'ÉTAT (git stash/commit/checkout, déplacement de fichier) n'a
+  // pas de test à produire : son oracle EST l'état du dépôt. Un `git status --porcelain` est
+  // falsifiable, donc il vaut preuve — mais SEULEMENT ici, quand AUCUNE mutation de fichier n'est
+  // présente. Une édition de code continue d'exiger un vrai test : un git status n'atteste pas
+  // qu'un correctif est correct. Sans cette porte, la classe entière « muter par commande » était
+  // insatisfiable et échouait en `failed` même quand le travail avait réussi (incident « met toi
+  // à jour » : stash réellement effectué, run rapporté en échec).
+  const stateOnly = mutations.every((item) => !item.path && isShellMutation(item.command))
+  return stateOnly && successful.some((item) => isStateOracle(item.command))
 }
 
 export class Orchestrator {
