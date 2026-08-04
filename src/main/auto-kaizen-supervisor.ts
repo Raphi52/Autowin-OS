@@ -43,7 +43,8 @@ export interface AutoKaizenIncident {
   summary: string
   detail: string
   status: AutoKaizenIncidentStatus
-  suppressionReason?: 'active-limit' | 'depth-limit' | 'rate-limit'
+  suppressionReason?:
+    'active-limit' | 'depth-limit' | 'rate-limit' | 'breadth-limit' | 'non-actionable'
   analysisConversationId?: string
   analysisTurnId?: string
   analysisResult?: string
@@ -97,17 +98,32 @@ interface AutoKaizenSnapshot {
   incidents: AutoKaizenIncident[]
 }
 
-interface AutoKaizenLimits {
+export interface AutoKaizenLimits {
   maxActive: number
   maxDepth: number
   maxPerHour: number
+  /**
+   * Borne la LARGEUR de la cascade, pas seulement sa profondeur. Mesuré le 2026-08-04 : `maxDepth`
+   * tenait (les 2120 incidents de profondeur 4 étaient bien supprimés) mais la cascade s'élargissait
+   * de 8 → 11 → 104 → 681 par niveau, et ces 681 avaient chacun lancé leur run avant que le plafond
+   * horaire ne morde. Un garde en profondeur seul ne borne pas une croissance géométrique.
+   */
+  maxPerRoot: number
 }
 
 const DEFAULT_LIMITS: AutoKaizenLimits = {
   maxActive: 10,
   maxDepth: 3,
-  maxPerHour: 50
+  maxPerHour: 50,
+  maxPerRoot: 12
 }
+
+/**
+ * Motifs qu'un redémarrage ne réarme JAMAIS. Un plafond momentané (actif/horaire) mérite une seconde
+ * chance au boot ; un mur externe ou une cascade trop large n'en méritent aucune — c'est par cette
+ * porte que la frenzy repartait, avec 348 relances armées dans le snapshot du 2026-08-04.
+ */
+const NEVER_REVIVED = new Set<string>(['depth-limit', 'breadth-limit', 'non-actionable'])
 
 const ACTIVE_STATUSES = new Set<AutoKaizenIncidentStatus>([
   'detected',
@@ -121,23 +137,52 @@ function incidentId(dedupeKey: string): string {
 }
 
 function normalizedCause(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, '<id>')
-    .replace(
-      /\b(run|turn|task|job|session|message|event|attempt|essai|file|fichier|line|ligne)(\s*[#:=_-]?\s*)\d+\b/gi,
-      '$1$2<n>'
-    )
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 500)
+  return (
+    value
+      .toLowerCase()
+      .replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, '<id>')
+      .replace(
+        /\b(run|turn|task|job|session|message|event|attempt|essai|file|fichier|line|ligne)(\s*[#:=_-]?\s*)\d+\b/gi,
+        '$1$2<n>'
+      )
+      // Jetons volatils mesurés le 2026-08-04 : ils laissaient 1233 clés singleton pour une poignée
+      // de causes réelles. Chacun identifie l'OCCURRENCE, jamais la cause.
+      .replace(/\bconv-\d+\b/gi, 'conv-<n>')
+      .replace(/[a-z0-9]{8,}-workspace\b/gi, '<slug>-workspace')
+      .replace(/\b1[0-9]{9}\b/g, '<epoch>')
+      .replace(/"(resets_[a-z_]*|retry[a-z_]*|expires[a-z_]*)"\s*:\s*\d+/gi, '"$1":<n>')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 500)
+  )
+}
+
+/**
+ * Un mur EXTERNE n'est pas un défaut réparable : aucune modification de code ne rétablit un quota
+ * acheté. Le 2026-08-04, le quota codex épuisé jusqu'au 8 août a produit 2924 incidents en 3 h 09 —
+ * chaque run kaizen rappelait codex, échouait sur le même mur, et engendrait l'incident suivant.
+ * Ce garde coupe la boucle à la source ; l'erreur reste ENREGISTRÉE et signalée, simplement non
+ * confiée à un agent qui ne peut rien y faire.
+ */
+export function isNonActionableWall(summary: string, detail: string): boolean {
+  const text = `${summary} ${detail}`.toLowerCase()
+  return (
+    /\busage[ _-]?limit(?:_reached)?\b/.test(text) ||
+    /\bhit your usage limit\b/.test(text) ||
+    /\bquota (?:exceeded|epuise|épuisé|exhausted)\b/.test(text) ||
+    /\binsufficient_quota\b/.test(text) ||
+    /\bpurchase more credits\b/.test(text) ||
+    /\bhttp 429\b/.test(text)
+  )
 }
 
 export function correlationKeyForIncident(input: AutoKaizenIncidentInput): string {
   if (input.correlationKey?.trim()) return input.correlationKey.trim()
-  const cause =
-    `${input.sourceConversationId}|${input.kind}|${normalizedCause(input.summary)}|` +
-    normalizedCause(input.detail)
+  // `sourceConversationId` est VOLONTAIREMENT absent de la clé : chaque run kaizen ouvre une
+  // conversation neuve, donc l'inclure rendait la déduplication structurellement impossible pour
+  // tout incident né de la cascade. Mesuré le 2026-08-04 : 2924 clés distinctes pour 2924 incidents,
+  // soit 0 % de fusion, alors que 1172 d'entre eux partageaient une cause identique au caractère près.
+  const cause = `${input.kind}|${normalizedCause(input.summary)}|` + normalizedCause(input.detail)
   return `akc-${createHash('sha256').update(cause).digest('hex').slice(0, 20)}`
 }
 
@@ -341,9 +386,18 @@ export class AutoKaizenSupervisor {
     const recent = this.state.incidents.filter(
       (item) => item.status !== 'suppressed' && item.detectedAt > timestamp - 60 * 60_000
     ).length
-    if (depth > this.limits.maxDepth) {
+    const sameRoot = this.state.incidents.filter(
+      (item) => item.rootIncidentId === incident.rootIncidentId
+    ).length
+    if (isNonActionableWall(input.summary, input.detail)) {
+      incident.status = 'suppressed'
+      incident.suppressionReason = 'non-actionable'
+    } else if (depth > this.limits.maxDepth) {
       incident.status = 'suppressed'
       incident.suppressionReason = 'depth-limit'
+    } else if (depth > 0 && sameRoot >= this.limits.maxPerRoot) {
+      incident.status = 'suppressed'
+      incident.suppressionReason = 'breadth-limit'
     } else if (active >= this.limits.maxActive) {
       incident.status = 'suppressed'
       incident.suppressionReason = 'active-limit'
@@ -373,7 +427,7 @@ export class AutoKaizenSupervisor {
     for (const incident of this.state.incidents) {
       if (
         incident.status !== 'suppressed' ||
-        incident.suppressionReason === 'depth-limit' ||
+        NEVER_REVIVED.has(incident.suppressionReason ?? '') ||
         this.runningIncidentIds.has(incident.id)
       )
         continue
