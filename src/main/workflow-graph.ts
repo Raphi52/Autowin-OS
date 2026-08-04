@@ -199,6 +199,42 @@ export function worstCaseNodeExecutions(graph: WorkflowGraph): number {
 }
 
 /**
+ * Le retour « juge rouge → build » exprimé par le graphe, traduit en nombre de réparations.
+ *
+ * L'orchestrateur sait DÉJÀ rejouer un build nourri du retour du gate puis re-juger — c'est
+ * `maxRecoveries`, borné et éprouvé. Cette arête-là n'a donc pas besoin d'un second moteur : elle se
+ * branche sur celui qui existe (réflexe : câbler plutôt que recréer).
+ */
+export function recoveriesFromGraph(graph: WorkflowGraph): number | undefined {
+  const byId = indexNodes(graph)
+  const ranks = forwardRanks(graph, byId)
+  for (const edge of graph.edges) {
+    if (edge.when !== 'red' || !isReturnEdge(edge, ranks)) continue
+    if (byId.get(edge.from)?.phase !== 'judge') continue
+    if (byId.get(edge.to)?.phase !== 'build') continue
+    if (typeof edge.maxTraversals === 'number') return edge.maxTraversals
+  }
+  return undefined
+}
+
+/**
+ * Les retours que le moteur ne sait PAS encore jouer — un rejet qui remonte au frame, par exemple.
+ *
+ * Cette liste existe pour que le canevas puisse le DIRE au lieu de laisser composer quelque chose
+ * d'inerte : le piège serait un graphe accepté à l'écran dont une arête n'a aucun effet réel.
+ */
+export function unsupportedReturns(graph: WorkflowGraph): WorkflowEdge[] {
+  const byId = indexNodes(graph)
+  const ranks = forwardRanks(graph, byId)
+  return graph.edges.filter((edge) => {
+    if (!isReturnEdge(edge, ranks)) return false
+    const depuis = byId.get(edge.from)?.phase
+    const vers = byId.get(edge.to)?.phase
+    return !(edge.when === 'red' && depuis === 'judge' && vers === 'build')
+  })
+}
+
+/**
  * Convertit un workflow linéaire d'avant ce chantier en graphe. Sans cette conversion, tout profil déjà
  * enregistré deviendrait illisible le jour où le modèle change.
  */

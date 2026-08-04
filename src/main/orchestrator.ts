@@ -11,10 +11,13 @@ import { HookBus } from './hooks/hook-bus'
 import { createDefaultHookBus } from './hooks/default-gate-hooks'
 import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
 import { phaseInstruction, type PipelinePhase } from './skill-pipeline'
+import { combinePhaseInstruction, type PhaseInstructionOverride } from './workflow-instruction'
 import {
-  combinePhaseInstruction,
-  type PhaseInstructionOverride
-} from './workflow-instruction'
+  linearPhasesOf,
+  recoveriesFromGraph,
+  worstCaseNodeExecutions,
+  type WorkflowGraph
+} from './workflow-graph'
 import { phaseBrief } from './phase-briefs'
 import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
 import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-scope'
@@ -277,6 +280,8 @@ export interface OrchestratorDeps {
 /** Ce qu'un workflow nommé impose au run, au-delà du binding de rôle déjà accepté par `run`. */
 export interface WorkflowRunOverride {
   phases?: PipelinePhase[]
+  /** Le workflow comme graphe : pilote les phases jouées ET la borne des retours. */
+  graph?: WorkflowGraph
   allocation?: {
     phaseMembers?: Partial<Record<PipelinePhase, number>>
     judgeMembers?: number
@@ -368,21 +373,42 @@ const PHASE_CONTEXT_CAP = 2000
 const JUDGE_PHASE_CAP = 6000
 
 /**
- * J3 — une tâche est une MUTATION seulement si un verbe de mutation apparaît HORS d'une négation.
- * « Ne modifie pas de code » (cadrage) ne doit PAS exiger de preuve de mutation → sinon faux-red.
- * On neutralise les clauses négatives « ne … pas » / « n'… pas » avant de tester.
+ * Connecteurs de clause utilisés pour repérer une SECONDE action non couverte par le préfixe
+ * lecture-seule reconnu (voir `classifyMutationConfidence`).
  */
-export function isMutationTask(task: string): boolean {
+const CLAUSE_SPLIT = /\b(?:et|puis|then|and|apres|après)\b|[;,]/gi
+/** Verbes/participes lecture-seule reconnus À L'INTÉRIEUR d'une clause secondaire. */
+const READ_ONLY_STEM =
+  'analys|audit|cadr|document|expliqu|inspect|review|resume|resum|decri|lis|lire|liste|montre|affiche'
+const READ_ONLY_CLAUSE = new RegExp(`^(?:${READ_ONLY_STEM})\\w*\\b`, 'i')
+
+/**
+ * #2 — verdict EXPLICITE de confiance sur la nature (mutation ou non) d'une tâche, au lieu d'un
+ * booléen qui fait passer une heuristique textuelle pour une certitude. Trois issues :
+ *  - 'mutation'  : un verbe de mutation est présent hors négation → certain.
+ *  - 'read-only' : la tâche ENTIÈRE (chaque clause) matche un préfixe lecture-seule reconnu →
+ *                  confiant, mais jamais absolu (langage naturel).
+ *  - 'uncertain' : ni l'un ni l'autre — p.ex. une clause de tête « lecture seule » suivie d'une
+ *                  seconde clause (« puis », « et », « then »...) dont le verbe n'est PAS reconnu
+ *                  comme lecture-seule. C'est exactement le faux-négatif visé : une paraphrase ou
+ *                  un verbe de mutation absent du dictionnaire (« puis écrase le fichier ») ne doit
+ *                  jamais être absous par le préfixe lecture-seule du début de phrase.
+ * Fail-safe : tout appelant qui a besoin d'un booléen (`isMutationTask`) doit traiter 'uncertain'
+ * comme une mutation — le côté sûr (worktree isolé + preuve exigée), jamais le côté permissif.
+ */
+export type MutationConfidence = 'mutation' | 'read-only' | 'uncertain'
+
+export function classifyMutationConfidence(task: string): MutationConfidence {
   // Kaizen est contractuellement un audit natif en lecture seule, quel que soit le vocabulaire
   // cité dans sa cible (ex. « pourquoi le modèle a voulu modifier X »).
-  if (/^\/kaizen(?=\s|$)/i.test(task.trim())) return false
-  if (/^\/(?:scout|frame|judge)(?=\s|$)/i.test(task.trim())) return false
+  if (/^\/kaizen(?=\s|$)/i.test(task.trim())) return 'read-only'
+  if (/^\/(?:scout|frame|judge)(?=\s|$)/i.test(task.trim())) return 'read-only'
   const normalized = task
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
     .toLowerCase()
   const withoutNegations = normalized.replace(NEGATED_MUTATION, ' ')
-  if (MUTATION_TASK.test(withoutNegations)) return true
+  if (MUTATION_TASK.test(withoutNegations)) return 'mutation'
   // Fail-closed : le langage naturel ne peut pas fournir une liste exhaustive des façons de
   // demander une écriture ("write", "patch", "apply", "fais…"). Seule une négation explicite
   // ET un contrat de lecture identifiable autorisent le chemin partagé ; une négation mêlée à un
@@ -390,9 +416,32 @@ export function isMutationTask(task: string): boolean {
   const explicitReadOnly =
     withoutNegations !== normalized &&
     /\b(?:analys|audit|cadr|document|expliqu|inspect|lecture seule|review)\w*/i.test(normalized)
-  const simpleReadOnly =
+  const simpleReadOnlyLead =
     /^(?:analys|audit|expliqu|inspect|review|cadr|document|resume|decri)\w*\b/i.test(normalized)
-  return !(explicitReadOnly || simpleReadOnly)
+  if (!explicitReadOnly && !simpleReadOnlyLead) return 'mutation'
+  if (explicitReadOnly) return 'read-only'
+  // `simpleReadOnlyLead` ne certifie QUE le premier verbe. Une clause suivante introduite par un
+  // connecteur (« puis », « et », « then »...) porte peut-être une action non couverte par le
+  // dictionnaire de mutation — on ne peut pas l'affirmer lecture-seule sans l'avoir vérifiée.
+  const clauses = normalized
+    .split(CLAUSE_SPLIT)
+    .map((clause) => clause.trim())
+    .filter(Boolean)
+  if (clauses.length <= 1) return 'read-only'
+  const allClausesReadOnly = clauses.every((clause) => READ_ONLY_CLAUSE.test(clause))
+  return allClausesReadOnly ? 'read-only' : 'uncertain'
+}
+
+/**
+ * J3 — une tâche est une MUTATION seulement si un verbe de mutation apparaît HORS d'une négation.
+ * « Ne modifie pas de code » (cadrage) ne doit PAS exiger de preuve de mutation → sinon faux-red.
+ * On neutralise les clauses négatives « ne … pas » / « n'… pas » avant de tester.
+ *
+ * BEST-EFFORT, jamais une certitude : dérive du verdict `classifyMutationConfidence` et traite
+ * 'uncertain' comme mutation (fail-safe — voir sa docstring pour le faux-négatif visé).
+ */
+export function isMutationTask(task: string): boolean {
+  return classifyMutationConfidence(task) !== 'read-only'
 }
 
 export function evidenceSatisfiesTask(task: string, evidence: ExecutionEvidence[] = []): boolean {
@@ -414,6 +463,55 @@ export function evidenceSatisfiesTask(task: string, evidence: ExecutionEvidence[
 
 export class Orchestrator {
   constructor(private readonly deps: OrchestratorDeps) {}
+
+  /**
+   * #8 — résolution du panel fan-out d'UNE phase (topology scout/frame/terrain), factorisée : cette
+   * même expression (snapshot figé PRIME, sinon callback deps, filtrée + bornée par le devis) était
+   * dupliquée mot pour mot à deux call-sites (`runGreedyBuildPhase` et le chemin séquentiel), avec
+   * le risque qu'une correction future n'en touche qu'un. Le traitement de `bindingOverride` reste
+   * au call-site : les deux appelants n'en font PAS le même usage (l'un renvoie `[bindingOverride]`,
+   * l'autre `[]`), ce n'est donc pas un doublon à unifier.
+   */
+  private resolvePhaseFanOut(
+    phase: PipelinePhase,
+    runtimeSnapshot?: OrchestrationRuntimeSnapshot
+  ): RoleBinding[] {
+    return (runtimeSnapshot?.phaseFanOut[phase] ?? this.deps.phaseFanOut?.(phase) ?? [])
+      .filter((member) => member && member.provider)
+      .slice(
+        0,
+        this.deps.currentExecutionQuote?.()?.allocation?.phaseMembers[phase] ??
+          this.deps.currentExecutionQuote?.()?.limits.maxConcurrency ??
+          Number.POSITIVE_INFINITY
+      )
+  }
+
+  /** #8 — même facteur commun que {@link resolvePhaseFanOut}, pour le panel de JUGES. */
+  private resolveJudgeFanOut(runtimeSnapshot?: OrchestrationRuntimeSnapshot): RoleBinding[] {
+    return (runtimeSnapshot?.judgeFanOut ?? this.deps.judgeFanOut?.() ?? [])
+      .filter((member) => member && member.provider)
+      .slice(
+        0,
+        this.deps.currentExecutionQuote?.()?.allocation?.judgeMembers ??
+          this.deps.currentExecutionQuote?.()?.limits.maxConcurrency ??
+          Number.POSITIVE_INFINITY
+      )
+  }
+
+  /**
+   * Les phases réellement jouées. Point de lecture UNIQUE, à dessein : cette décision était dupliquée
+   * entre `run` (qui provisionne le devis) et `runInner` (qui exécute), et les deux ont divergé deux
+   * fois de suite — un pipeline provisionné, un autre joué. Une seule source, plus de dérive possible.
+   */
+  private effectivePhases(task: string): PipelinePhase[] {
+    const workflow = this.deps.currentWorkflow?.()
+    const fromGraph = workflow?.graph ? linearPhasesOf(workflow.graph) : undefined
+    const imposed = fromGraph?.length ? fromGraph : workflow?.phases
+    if (imposed?.length) return [...imposed]
+    return this.deps.classifyPhases
+      ? this.deps.classifyPhases(task)
+      : (this.deps.execPhases ?? ['build'])
+  }
 
   private phasePrompt(phase: PipelinePhase, withFoundation: boolean): PhasePromptBlock {
     const installed =
@@ -547,13 +645,7 @@ export class Orchestrator {
       this.deps.worktrees?.activity?.().find((activity) => activity.agentId === runId)
     const isMut = isMutationTask(task)
     const workflow = this.deps.currentWorkflow?.()
-    // Le workflow REMPLACE le pipeline classifié : comparer deux façons de faire n'a de sens que si
-    // l'une peut réellement sauter une phase que l'autre exécute.
-    const phases = workflow?.phases?.length
-      ? [...workflow.phases]
-      : this.deps.classifyPhases
-        ? this.deps.classifyPhases(task)
-        : (this.deps.execPhases ?? ['build'])
+    const phases = this.effectivePhases(task)
     const admittedRuntime: OrchestrationRuntimeSnapshot = runtimeSnapshot ?? {
       roles: this.deps.roles.all(),
       phaseFanOut: Object.fromEntries(
@@ -580,7 +672,12 @@ export class Orchestrator {
         mutation: isMut,
         hasDecomposer: Boolean(!bindingOverride && this.deps.decompose),
         phaseFanOut,
-        judgeFanOut: bindingOverride ? 0 : admittedRuntime.judgeFanOut.length
+        judgeFanOut: bindingOverride ? 0 : admittedRuntime.judgeFanOut.length,
+        // Un graphe à boucles rejoue des nœuds : provisionner sa seule chaîne ferait accepter un run
+        // qui serait ensuite coupé en plein milieu, faute de places.
+        ...(workflow?.graph
+          ? { worstCaseNodeExecutions: worstCaseNodeExecutions(workflow.graph) }
+          : {})
       })
       // Le workflow impose son allocation PAR-DESSUS le calcul du devis, clé par clé : c'est tout
       // l'intérêt de comparer « 5 juges » à « 1 juge ». Ce qu'il ne dit pas reste ce que le devis a
@@ -590,9 +687,7 @@ export class Orchestrator {
         executionQuote.allocation = {
           ...executionQuote.allocation,
           ...(impose.judgeMembers !== undefined ? { judgeMembers: impose.judgeMembers } : {}),
-          ...(impose.maxGreedyNodes !== undefined
-            ? { maxGreedyNodes: impose.maxGreedyNodes }
-            : {}),
+          ...(impose.maxGreedyNodes !== undefined ? { maxGreedyNodes: impose.maxGreedyNodes } : {}),
           phaseMembers: {
             ...executionQuote.allocation.phaseMembers,
             ...impose.phaseMembers
@@ -1126,14 +1221,7 @@ export class Orchestrator {
     // tâche reste autoritaire et désactive le fan-out, comme dans le chemin non décomposé.
     const configuredBindings: RoleBinding[] = bindingOverride
       ? [bindingOverride]
-      : (runtimeSnapshot?.phaseFanOut[phase] ?? this.deps.phaseFanOut?.(phase) ?? [])
-          .filter((member) => member && member.provider)
-          .slice(
-            0,
-            this.deps.currentExecutionQuote?.()?.allocation?.phaseMembers[phase] ??
-              this.deps.currentExecutionQuote?.()?.limits.maxConcurrency ??
-              Number.POSITIVE_INFINITY
-          )
+      : this.resolvePhaseFanOut(phase, runtimeSnapshot)
     const subBindings =
       configuredBindings.length > 0
         ? configuredBindings
@@ -1498,12 +1586,7 @@ export class Orchestrator {
     // triviale ne joue pas les 5 phases. Fallback `execPhases` statique (rétrocompat/tests).
     // Un workflow nommé REMPLACE ce pipeline : c'est ici que l'exécution se décide (le calcul du
     // devis, plus haut, en fait sa propre lecture — les deux doivent voir la même liste).
-    const workflowPhases = this.deps.currentWorkflow?.()?.phases
-    const execPhases: PipelinePhase[] = workflowPhases?.length
-      ? [...workflowPhases]
-      : this.deps.classifyPhases
-        ? this.deps.classifyPhases(task)
-        : (this.deps.execPhases ?? ['build'])
+    const execPhases: PipelinePhase[] = this.effectivePhases(task)
     let execPrompt
     let lastExecText = ''
     let lastUsage: Usage | undefined
@@ -1643,16 +1726,7 @@ export class Orchestrator {
       // Panel scout/frame/terrain : ≥1 modèle déposé dans le bloc topology → la phase s'exécute sur
       // CHAQUE membre. Avec un seul membre, sa sortie est réutilisée directement sans synthèse ;
       // avec plusieurs, l'orchestrateur synthétise. Aucun membre → binding subagent rétrocompatible.
-      const fanMembers = bindingOverride
-        ? []
-        : (runtimeSnapshot?.phaseFanOut[phase] ?? this.deps.phaseFanOut?.(phase) ?? [])
-            .filter((m) => m && m.provider)
-            .slice(
-              0,
-              this.deps.currentExecutionQuote?.()?.allocation?.phaseMembers[phase] ??
-                this.deps.currentExecutionQuote?.()?.limits.maxConcurrency ??
-                Number.POSITIVE_INFINITY
-            )
+      const fanMembers = bindingOverride ? [] : this.resolvePhaseFanOut(phase, runtimeSnapshot)
       if (fanMembers.length >= 1) {
         // Le fan-out casse la chaîne de session (N sessions //). Chaque membre part du contexte complet.
         const fanMessages = [{ role: 'user' as const, content: phaseContext.join('\n\n') }]
@@ -2003,7 +2077,15 @@ export class Orchestrator {
       }
       // Chaîne la session pour la phase suivante (fallback : garde l'ancien id si le provider n'en
       // rend pas de nouveau — un resume claude conserve le même id et y APPEND les tours).
-      prevSessionId = phaseRes.sessionId ?? prevSessionId
+      //
+      // RESUME FANTÔME : on ne chaîne que si l'adaptateur REPREND vraiment. `codex` rend un
+      // `thread_id` sans savoir le reprendre ; le chaîner faisait basculer la phase suivante dans la
+      // branche `resuming`, qui remplace tout `phaseContext` par « acquis déjà connus — ne les
+      // redemande pas ». L'acquis des phases était donc perdu au moment précis où la phase suivante
+      // en dépend. Sans capacité prouvée : pas de session, donc ré-injection complète.
+      prevSessionId = registry.honoursSessionResume(subProvider)
+        ? (phaseRes.sessionId ?? prevSessionId)
+        : undefined
       if (phaseRes.usage) {
         cost.add({
           // Provider RÉEL ayant répondu (le registre peut rerouter une exécution vers un executor
@@ -2156,16 +2238,7 @@ export class Orchestrator {
         judgeBinding.model
       )
       judgeEnvelope.systemBlocks = judgeBlocks
-      const judgeMembers = bindingOverride
-        ? []
-        : (runtimeSnapshot?.judgeFanOut ?? this.deps.judgeFanOut?.() ?? [])
-            .filter((m) => m && m.provider)
-            .slice(
-              0,
-              this.deps.currentExecutionQuote?.()?.allocation?.judgeMembers ??
-                this.deps.currentExecutionQuote?.()?.limits.maxConcurrency ??
-                Number.POSITIVE_INFINITY
-            )
+      const judgeMembers = bindingOverride ? [] : this.resolveJudgeFanOut(runtimeSnapshot)
       const singleJudgeExecution = {
         phase: 'judge' as const,
         agentId: 'judge:single',
@@ -2374,8 +2447,13 @@ export class Orchestrator {
 
     // B5 — pour une MUTATION bloquée, UNE réparation ciblée (feedback = raisons du gate) AVANT
     // d'escalader à l'humain (résolveur avant interruption). Bornée à 1, jamais de boucle infinie.
+    // Un graphe qui dessine « juge rouge → build, au plus N fois » PILOTE ce nombre : c'est la même
+    // boucle, nommée à l'écran au lieu d'être déduite du régime.
+    const graphRecoveries = this.deps.currentWorkflow?.()?.graph
+      ? recoveriesFromGraph(this.deps.currentWorkflow()!.graph!)
+      : undefined
     const allowedRecoveries = isMutationTask(task)
-      ? (this.deps.currentExecutionQuote?.()?.limits.maxRecoveries ?? 1)
+      ? (graphRecoveries ?? this.deps.currentExecutionQuote?.()?.limits.maxRecoveries ?? 1)
       : 0
     const MAX_ATTEMPTS = 1 + Math.max(0, Math.floor(allowedRecoveries))
     let valid = false

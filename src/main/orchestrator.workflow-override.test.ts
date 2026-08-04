@@ -154,3 +154,51 @@ describe('un workflow impose son allocation', () => {
     expect(quote.allocation?.maxGreedyNodes).toBe(attendu)
   })
 })
+
+describe('un graphe pilote le run', () => {
+  const boucle = {
+    entry: 'f',
+    nodes: [
+      { id: 'f', phase: 'frame' as const },
+      { id: 'b', phase: 'build' as const },
+      { id: 'j', phase: 'judge' as const }
+    ],
+    edges: [
+      { from: 'f', to: 'b', when: 'always' as const },
+      { from: 'b', to: 'j', when: 'always' as const },
+      { from: 'j', to: 'b', when: 'red' as const, maxTraversals: 2 }
+    ]
+  }
+
+  it('la CHAÎNE du graphe remplace les phases classifiées', async () => {
+    const provider = new Recorder()
+    await makeOrchestrator(provider, {
+      graph: { entry: 'b', nodes: [{ id: 'b', phase: 'build' }], edges: [] }
+    }).run('corrige le bug')
+    expect(provider.execCount).toBe(1) // 'frame' sauté, alors que la classification en donne deux
+  })
+
+  it('le graphe PRIME sur une liste de phases concurrente', async () => {
+    const provider = new Recorder()
+    await makeOrchestrator(provider, {
+      phases: ['frame', 'build', 'clean'],
+      graph: { entry: 'b', nodes: [{ id: 'b', phase: 'build' }], edges: [] }
+    }).run('corrige le bug')
+    expect(provider.execCount).toBe(1)
+  })
+
+  it('le devis provisionne le PIRE CAS du graphe, pas sa chaîne', async () => {
+    // Régime standard : la chaîne seule (2 phases) passe. C'est bien le pire cas du graphe à boucles
+    // — 7 exécutions de nœuds — qui fait refuser, AVANT de dépenser plutôt qu'en pleine course.
+    await expect(
+      makeOrchestrator(new Recorder(), undefined, compileExecutionQuote('corrige le bug')).run(
+        'corrige le bug'
+      )
+    ).resolves.toBeDefined()
+    await expect(
+      makeOrchestrator(new Recorder(), { graph: boucle }, compileExecutionQuote('corrige le bug')).run(
+        'corrige le bug'
+      )
+    ).rejects.toThrow('Devis impossible')
+  })
+})
