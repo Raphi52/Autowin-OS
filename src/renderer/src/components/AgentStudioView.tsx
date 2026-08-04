@@ -4,6 +4,7 @@ import type { AgentStudioSection } from '../tabs'
 // un renommage laisse a moitie fait — et un lecteur qui cherche `RolesView` ne trouve pas le code.
 import { AgentsTopologyView } from './AgentsTopologyView'
 import { RouterView } from './RouterView'
+import { WorkflowProfilesView } from './WorkflowProfilesView'
 import './DomainShell.css'
 
 export function AgentStudioView({
@@ -34,10 +35,20 @@ export function AgentStudioView({
         >
           Routage
         </button>
+        <button
+          type="button"
+          className={section === 'workflows' ? 'is-active' : ''}
+          aria-pressed={section === 'workflows'}
+          onClick={() => onSectionChange('workflows')}
+        >
+          Workflows
+        </button>
       </nav>
       <div className="domain-content">
         {section === 'routing' ? (
           <RouterView active={active} />
+        ) : section === 'workflows' ? (
+          <WorkflowProfilesView active={active} />
         ) : (
           <AgentsTopologyView active={active} />
         )}

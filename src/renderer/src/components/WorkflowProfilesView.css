@@ -1,0 +1,124 @@
+/*
+ * Liste de workflows : des lignes bordées, pas des cartes flottantes. On choisit une façon de
+ * travailler comme on choisit une option — la sélection doit se voir d'un coup d'œil.
+ */
+.workflow-profiles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3, 12px);
+  padding: var(--s3, 12px);
+}
+
+.workflow-profiles-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3, 12px);
+}
+
+.workflow-profiles-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.workflow-profiles-sub {
+  margin: 4px 0 0;
+  max-width: 62ch;
+  color: var(--c-faint, #9caab5);
+  font-size: 12px;
+}
+
+.workflow-profiles-error {
+  margin: 0;
+  color: var(--danger, #e6635b);
+  font-size: 12px;
+}
+
+.workflow-profiles-empty {
+  margin: 0;
+  padding: var(--s3, 12px);
+  border: 1px dashed var(--line, #31373f);
+  color: var(--c-faint, #9caab5);
+  font-size: 12.5px;
+}
+
+.workflow-profiles-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workflow-profile {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border: 1px solid var(--line, #31373f);
+  /* Bordure gauche = la sélection. Un seul signal, lisible en périphérie. */
+  border-left: 2px solid transparent;
+  background: var(--surface2, #191d23);
+}
+
+.workflow-profile.is-active {
+  border-left-color: var(--cyan, #5ecaf0);
+}
+
+.workflow-profile-pick {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workflow-profile-pick:hover {
+  background: color-mix(in srgb, var(--cyan, #5ecaf0) 7%, transparent);
+}
+
+.workflow-profile-name {
+  font-size: 13px;
+}
+
+.workflow-profile-summary {
+  color: var(--c-faint, #9caab5);
+  font-family: var(--mono, ui-monospace, Consolas, monospace);
+  font-size: 11px;
+}
+
+.workflow-profile-desc {
+  color: var(--c-faint, #9caab5);
+  font-size: 11.5px;
+}
+
+.workflow-profile-remove {
+  flex: none;
+  padding: 0 12px;
+  border: 0;
+  border-left: 1px solid var(--line, #31373f);
+  background: none;
+  color: var(--c-faint, #9caab5);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.workflow-profile-remove:hover {
+  color: var(--danger, #e6635b);
+}
+
+/* Dire ce qui n'est pas encore fait vaut mieux que de laisser croire que la sélection agit. */
+.workflow-profiles-note {
+  margin: 0;
+  color: var(--c-faint, #9caab5);
+  font-size: 11px;
+  font-style: italic;
+}
