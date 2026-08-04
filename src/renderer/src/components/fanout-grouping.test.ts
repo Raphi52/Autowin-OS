@@ -17,7 +17,10 @@ describe('matchSlashCommands (palette /)', () => {
       'build',
       'clean',
       'judge',
-      'kaizen'
+      'kaizen',
+      // `remake` ferme la liste et n'est PAS une phase du pipeline : il RE-ENTRE dans la progression
+      // au lieu d'en être une étape (`PipelinePhase` est une union fermée de 7).
+      'remake'
     ])
   })
   it('filtre par préfixe (casse-insensible)', () => {

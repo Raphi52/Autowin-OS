@@ -418,6 +418,13 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     name: 'kaizen',
     hint: 'Rétrospective Autowin : traces, agents, Git, RAG, coûts et mémoire',
     insert: '/kaizen '
+  },
+  {
+    // Hors pipeline, volontairement : `remake` RE-ENTRE dans la progression au lieu d'en être une
+    // étape (`PipelinePhase` est une union fermée de 7, décrivant une marche linéaire).
+    name: 'remake',
+    hint: 'Ce que tu ferais autrement avec le recul — et le fait',
+    insert: '/remake '
   }
 ]
 
