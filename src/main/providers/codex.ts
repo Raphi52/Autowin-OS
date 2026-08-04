@@ -38,6 +38,54 @@ import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './ar
  */
 const CODEX_RESPONSES_URL = 'https://chatgpt.com/backend-api/codex/responses'
 
+export type CodexStructuralFailureSignature =
+  | 'json-trailing-characters'
+  | 'missing-supports-reasoning-summaries'
+  /**
+   * Quota d'abonnement épuisé — la réinitialisation est annoncée des JOURS plus tard, donc relancer
+   * est inutile par nature. Mesuré le 2026-08-04 : faute de cette signature, 310 appels de sous-agents
+   * ont été lancés dans un quota mort (182 en phase kaizen, 128 en build) sur 410 échecs au total.
+   */
+  | 'usage-limit-reached'
+
+/** Erreur non transitoire : la relancer sans changement de provider/configuration est inutile. */
+export class CodexStructuralFailure extends Error {
+  readonly structuralProviderFailure = true
+
+  constructor(
+    readonly provider: 'codex',
+    readonly signature: CodexStructuralFailureSignature,
+    readonly causeText: string
+  ) {
+    super(causeText)
+    this.name = 'CodexStructuralFailure'
+  }
+}
+
+/**
+ * Distingue un quota ÉPUISÉ d'un rate-limit PASSAGER — les deux arrivent en HTTP 429, et les confondre
+ * coûte dans les deux sens : ignorer le premier fait tirer des centaines d'appels dans le vide (mesuré),
+ * bloquer sur le second transformerait une attente de 20 s en panne de provider pour tout le run.
+ * Le discriminant est le VOCABULAIRE du refus, pas le code HTTP.
+ */
+function isUsageLimit(cause: string): boolean {
+  if (/retry after|try again in|rate limit exceeded/i.test(cause)) return false
+  return /usage[_ ]limit|purchase more credits|hit your usage/i.test(cause)
+}
+
+export function codexStructuralFailure(error: unknown): Error {
+  if (error instanceof CodexStructuralFailure) return error
+  const cause = error instanceof Error ? error.message : String(error)
+  const signature = /trailing characters/i.test(cause)
+    ? 'json-trailing-characters'
+    : /supports_reasoning_summaries/i.test(cause)
+      ? 'missing-supports-reasoning-summaries'
+      : isUsageLimit(cause)
+        ? 'usage-limit-reached'
+        : undefined
+  return signature ? new CodexStructuralFailure('codex', signature, cause) : new Error(cause)
+}
+
 /** Élément d'exécution brut remonté par Codex (sous-ensemble typé utile à la preuve). */
 export interface CodexExecItem {
   type?: string
