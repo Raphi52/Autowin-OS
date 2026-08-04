@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
+import {
+  rememberViewBeforeFocus,
+  restoreView,
+  type CameraHandle,
+  type CameraView
+} from './graph-camera'
 import * as THREE from 'three'
 import {
   DEFAULT_GRAPH_VISIBILITY_SETTINGS,
@@ -110,6 +116,8 @@ export function GraphView({
   )
   const [brains, setBrains] = useState<Brain[]>([])
   const [selected, setSelected] = useState('')
+  /** Vue d'avant le premier rapprochement, rendue à la fermeture de la fiche. */
+  const viewBeforeFocusRef = useRef<CameraView | undefined>(undefined)
   const [graph, setGraph] = useState<GraphData>({ nodes: [], links: [] })
   const [graphReload, setGraphReload] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -711,6 +719,12 @@ export function GraphView({
   }
 
   function clearNodeSelection(): void {
+    // Rendre le point de vue d'où l'on est parti : c'est ce qui « réintègre » visuellement le nœud
+    // dans le graphe. La mémoire est libérée par `restoreView`, jamais rejouée deux fois.
+    viewBeforeFocusRef.current = restoreView(
+      viewBeforeFocusRef.current,
+      graphRef.current as unknown as CameraHandle
+    )
     fileRequestRef.current += 1
     setExpandingNodeId(null)
     setNode(null)
@@ -723,6 +737,12 @@ export function GraphView({
   function focusNode(nextNode: GraphNode): void {
     if ([nextNode.x, nextNode.y, nextNode.z].some((coordinate) => typeof coordinate !== 'number'))
       return
+    // Mémoriser AVANT de s'approcher : sans ça, refermer la fiche laisse la caméra braquée sur le
+    // nœud, qui paraît figé au centre de l'écran, seul, tout le reste hors champ.
+    viewBeforeFocusRef.current = rememberViewBeforeFocus(
+      viewBeforeFocusRef.current,
+      graphRef.current as unknown as CameraHandle
+    )
     const x = nextNode.x as number
     const y = nextNode.y as number
     const z = nextNode.z as number
