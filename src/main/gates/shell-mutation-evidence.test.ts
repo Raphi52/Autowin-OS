@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { claudeToolEvidenceKind } from '../providers/claude'
 import { evidenceSatisfiesTask } from '../orchestrator'
-import type { ExecutionEvidence } from '../../shared/types'
+import type { ExecutionEvidence } from '../providers/types'
 
 /**
  * Régression du 2026-08-04, incident réel : « met toi à jour » (git stash avant self-update).
@@ -39,9 +39,9 @@ const ev = (
 
 describe('classification des mutations faites par commande', () => {
   it('classe git stash comme une mutation, pas comme une inspection', () => {
-    expect(claudeToolEvidenceKind('Bash', 'git -C "C:/Amitel/Autowin OS" stash push -u -m wip')).toBe(
-      'mutation'
-    )
+    expect(
+      claudeToolEvidenceKind('Bash', 'git -C "C:/Amitel/Autowin OS" stash push -u -m wip')
+    ).toBe('mutation')
   })
 
   it.each([
@@ -56,7 +56,12 @@ describe('classification des mutations faites par commande', () => {
     expect(claudeToolEvidenceKind('Bash', command)).toBe('mutation')
   })
 
-  it.each(['git status --porcelain', 'git stash list', 'git diff --exit-code', 'git rev-parse HEAD'])(
+  it.each([
+    'git status --porcelain',
+    'git stash list',
+    'git diff --exit-code',
+    'git rev-parse HEAD'
+  ])(
     'laisse %s en inspection — un oracle d’état n’est PAS une vérification universelle',
     (command) => {
       // Choix de conception : si `git status` valait `verification` partout, une édition de code
