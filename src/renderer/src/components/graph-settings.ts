@@ -128,3 +128,26 @@ export function loadGraphVisualMode(storage: StorageLike): GraphVisualMode {
 export function saveGraphVisualMode(storage: StorageLike, mode: GraphVisualMode): void {
   storage.setItem(autowinStorageKey(GRAPH_VISUAL_MODE_SUFFIX), mode)
 }
+
+/**
+ * DISPOSITION des nœuds. `force` = positions émergentes (historique, défaut HARD) ; `radial` = anneaux
+ * concentriques par profondeur hiérarchique, découpés en secteurs thématiques.
+ *
+ * Pourquoi un mode et non un remplacement : le force-directed montre la CONNECTIVITÉ (ce qui est lié à
+ * quoi), le radial montre la STRUCTURE (où vit quoi). Aucun des deux ne subsume l'autre, et supprimer
+ * le premier ferait perdre une lecture qui fonctionne.
+ */
+export type GraphLayoutMode = 'force' | 'radial'
+
+export const GRAPH_LAYOUT_MODE_SUFFIX = 'memory.layout-mode.v1'
+
+export function loadGraphLayoutMode(storage: StorageLike): GraphLayoutMode {
+  // Toute valeur inconnue retombe sur `force` : une clé corrompue ne doit pas rendre le graphe illisible.
+  return readMigratedStorageValue(storage, GRAPH_LAYOUT_MODE_SUFFIX) === 'radial'
+    ? 'radial'
+    : 'force'
+}
+
+export function saveGraphLayoutMode(storage: StorageLike, mode: GraphLayoutMode): void {
+  storage.setItem(autowinStorageKey(GRAPH_LAYOUT_MODE_SUFFIX), mode)
+}

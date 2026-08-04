@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
+import { boundingRadius, layoutRadial } from './graph-radial-layout'
 import {
   rememberViewBeforeFocus,
   restoreView,
@@ -11,8 +12,11 @@ import {
   DEFAULT_GRAPH_VISIBILITY_SETTINGS,
   loadGraphVisibilitySettings,
   saveGraphVisibilitySettings,
+  loadGraphLayoutMode,
+  saveGraphLayoutMode,
   loadGraphVisualMode,
   saveGraphVisualMode,
+  type GraphLayoutMode,
   loadMemoryDetailWidths,
   saveMemoryDetailWidths,
   type GraphVisibilitySettings,
@@ -88,6 +92,8 @@ type PanelTab = 'visibility' | 'node'
 type ResizableColumn = 'theme' | 'visibility' | 'detail'
 type ColumnWidths = GraphColumnWidths
 const EMPTY_THEME_SELECTION = new Set<string>()
+/** Couleurs des BANDES radiales — une teinte par famille, du centre vers l'extérieur. */
+const BAND_COLORS = ["#8b5cf6", "#22d3ee", "#a78bfa", "#f472b6", "#facc15", "#34d399", "#60a5fa"] as const
 
 function initialVisibilitySettings(): GraphVisibilitySettings {
   return loadGraphVisibilitySettings(localStorage)
@@ -111,6 +117,9 @@ export function GraphView({
   onCleanMemory: (brainLabel: string) => void
 }): React.JSX.Element {
   // Mode visuel (sombre vs galaxy) : choisi via le toggle de la toolbar, persisté entre lancements.
+  const [layoutMode, setLayoutMode] = useState<GraphLayoutMode>(() =>
+    loadGraphLayoutMode(localStorage)
+  )
   const [visualMode, setVisualMode] = useState<GraphVisualMode>(() =>
     loadGraphVisualMode(localStorage)
   )
@@ -343,13 +352,129 @@ export function GraphView({
     () => filterGraphVisibility(graph, settings.orphans),
     [graph, settings.orphans]
   )
-  const renderedGraph = useMemo(
-    () => ({
-      nodes: displayGraph.nodes.map((graphNode) => ({ ...graphNode })),
-      links: displayGraph.links.map((graphLink) => ({ ...graphLink }))
-    }),
-    [displayGraph]
+  /**
+   * Points du mode radial. Un point = un GROUPE de fiches, pas une fiche : mesuré sur le brain réel,
+   * `knowledge/domain/rigapplication-documentation` porte 345 des 530 fiches — un point par fiche
+   * empile 345 points au même endroit, ce qui a rendu la première version illisible.
+   */
+  const radial = useMemo(
+    () =>
+      layoutMode === 'radial'
+        ? layoutRadial(displayGraph.nodes)
+        : { dots: [], bands: [] as ReturnType<typeof layoutRadial>['bands'] },
+    [layoutMode, displayGraph.nodes]
   )
+
+  const renderedGraph = useMemo(() => {
+    if (layoutMode !== 'radial') {
+      return {
+        nodes: displayGraph.nodes.map((graphNode) => ({ ...graphNode })),
+        links: displayGraph.links.map((graphLink) => ({ ...graphLink }))
+      }
+    }
+    const placement = new Map(radial.dots.map((dot) => [dot.id, dot]))
+    return {
+      // Un point = UNE fiche, avec son `file` et ses `themes` INTACTS : le clic continue d'ouvrir la
+      // vraie fiche, et la coloration par thème de l'app s'applique telle quelle — c'est elle qui, avec
+      // le tri par thème du layout, produit les arcs colorés. La v2 écrasait `themes` par la famille et
+      // perdait donc les 30 couleurs réelles.
+      nodes: displayGraph.nodes.flatMap((graphNode) => {
+        const dot = placement.get(String(graphNode.id))
+        if (!dot) return []
+        return [
+          {
+            ...graphNode,
+            // Épinglé : la simulation d3 tourne encore, elle repousserait sinon les points hors de
+            // leurs rangées en une seconde.
+            fx: dot.fx,
+            fy: dot.fy,
+            fz: dot.fz,
+            x: dot.fx,
+            y: dot.fy,
+            z: dot.fz
+          }
+        ]
+      }),
+      // AUCUN lien en radial. Des liens droits entre points agrégés traverseraient le disque en tous
+      // sens : c'est le « hairball » documenté, et la raison pour laquelle la référence visuelle n'en
+      // montre aucun. La réponse canonique (Hierarchical Edge Bundling, Holten 2006) exige un arbre à
+      // parent unique que ces données n'ont pas — donc on n'en dessine pas plutôt que d'en mentir.
+      links: []
+    }
+  }, [displayGraph, layoutMode, radial])
+
+  /**
+   * DESSIN des bandes : cercles + libellé de famille, ajoutés directement à la scène three.js.
+   *
+   * Sans ceci, la v2 calculait des rayons que RIEN ne rendait — mesuré : 0 étiquette affichée sur 30, et
+   * donc aucune structure visible. Ce sont les cercles et les noms qui FONT l'image concentrique ; la
+   * position des points seule ne suffit pas à la lire.
+   */
+  useEffect(() => {
+    const instance = graphRef.current
+    if (!instance || layoutMode !== 'radial' || radial.bands.length === 0) return
+    const scene = instance.scene()
+    if (!scene) return
+    const added: THREE.Object3D[] = []
+    radial.bands.forEach((band, index) => {
+      const color = new THREE.Color(BAND_COLORS[index % BAND_COLORS.length])
+      for (const radius of [band.innerRadius, band.outerRadius]) {
+        const points: THREE.Vector3[] = []
+        for (let step = 0; step <= 96; step++) {
+          const angle = (step / 96) * Math.PI * 2
+          points.push(new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, 0))
+        }
+        const loop = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints(points),
+          new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.32 })
+        )
+        scene.add(loop)
+        added.push(loop)
+      }
+      const label = createConnectedLabel(
+        `${band.family === '<racine>' ? 'RACINE' : band.family.toUpperCase()} · ${band.notes}`,
+        color.getStyle()
+      )
+      // Étiquette posée sur l'axe vertical de la bande : toujours au même endroit d'une bande à l'autre,
+      // donc lisible comme une légende plutôt que dispersée au hasard des points.
+      label.position.set(0, band.labelRadius, 12)
+      scene.add(label)
+      added.push(label)
+    })
+    return () => {
+      for (const object of added) {
+        scene.remove(object)
+        const disposable = object as unknown as {
+          geometry?: { dispose?: () => void }
+          material?: { dispose?: () => void }
+        }
+        disposable.geometry?.dispose?.()
+        disposable.material?.dispose?.()
+      }
+    }
+  }, [layoutMode, radial])
+
+  /**
+   * Recadrage DÉDIÉ au mode radial. L'effet de cadrage initial plus haut ne dépend volontairement pas
+   * du layout (un filtre ne doit jamais bouger la caméra), mais un CHANGEMENT DE LAYOUT, si : le disque
+   * radial est strictement plat (tous `fz = 0`), donc vu depuis la caméra héritée du force-directed il
+   * apparaît PAR LA TRANCHE — une ligne. C'était l'une des deux causes certaines de l'illisibilité de
+   * la première version. On se place d'aplomb sur l'axe Z, puis on cadre.
+   */
+  useEffect(() => {
+    if (layoutMode !== 'radial' || radial.dots.length === 0) return
+    const radius = boundingRadius(radial.dots)
+    if (radius <= 0) return
+    const timeout = window.setTimeout(() => {
+      // 2,35× le rayon, et SURTOUT pas de `zoomToFit` derrière : MESURÉ, c'est lui qui repoussait la
+      // caméra à 3413 unités pour des nœuds de 16-33 — chaque point faisait moins de 1 % du champ.
+      // Le facteur vient de la géométrie, pas d'un tâtonnement : avec un FOV vertical de 50°, la
+      // demi-hauteur visible à la distance d vaut d·tan(25°) ≈ 0,466·d, donc contenir un rayon R exige
+      // d ≥ 2,15·R. À 1,45·R le disque était ROGNÉ et 4 libellés de bande sur 7 tombaient hors cadre.
+      graphRef.current?.cameraPosition({ x: 0, y: 0, z: radius * 2.35 }, { x: 0, y: 0, z: 0 }, 600)
+    }, 120)
+    return () => window.clearTimeout(timeout)
+  }, [layoutMode, radial])
 
   // react-force-graph-3d positionne ses nœuds par mutation. `renderedGraph` est une copie profonde
   // dédiée au moteur impératif : `graph` et `displayGraph`, détenus par React, restent immuables.
@@ -452,7 +577,13 @@ export function GraphView({
     () => new Set(visibleThemeClusterIds(themeSummaries, activeThemes, node)),
     [activeThemes, node, themeSummaries]
   )
-  const showThemeClusterLabels = visibleThemeLabelIds.size > 0
+  /**
+   * Les pastilles de thème sont MASQUÉES en radial : mesuré sur capture, les ~30 pastilles flottantes se
+   * superposaient au disque et noyaient les anneaux qu'elles étaient censées commenter. En radial, la
+   * légende est portée par les libellés de BANDE dessinés dans la scène (`FAMILLE · effectif`), qui sont
+   * posés à un rayon fixe et ne se recouvrent donc jamais.
+   */
+  const showThemeClusterLabels = layoutMode !== 'radial' && visibleThemeLabelIds.size > 0
 
   useEffect(() => {
     const requestId = ++themeNodesRequestRef.current
@@ -938,6 +1069,25 @@ export function GraphView({
           title="Rafraîchir les graphes"
         >
           ↻
+        </button>
+        <button
+          type="button"
+          role="switch"
+          className={`graph-layout-switch${layoutMode === 'radial' ? ' is-radial' : ''}`}
+          onClick={() => {
+            const next = layoutMode === 'radial' ? 'force' : 'radial'
+            setLayoutMode(next)
+            saveGraphLayoutMode(localStorage, next)
+          }}
+          aria-checked={layoutMode === 'radial'}
+          aria-label="Disposition du graphe"
+          title={
+            layoutMode === 'radial'
+              ? 'Repasser en disposition libre (montre la connectivité)'
+              : 'Passer en anneaux concentriques (montre la structure)'
+          }
+        >
+          {layoutMode === 'radial' ? '◎' : '⁘'}
         </button>
         <button
           type="button"
