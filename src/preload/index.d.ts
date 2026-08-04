@@ -6,275 +6,41 @@ import type {
 } from '../shared/worktree-activity-model'
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
 import type { ChatArtifact, ArtifactEncoding } from '../shared/artifacts'
-
-interface ChatAttachment {
-  name: string
-  mimeType: string
-  size: number
-  kind: 'text' | 'image' | 'file'
-  content: string
-  thumbnail?: string
-}
-interface ChatAttachmentMeta {
-  name: string
-  mimeType: string
-  size: number
-  thumbnail?: string
-  artifact?: ChatArtifact
-  turnId?: string
-  originalUnavailable?: boolean
-}
-type StoredChatPart =
-  | { kind: 'text'; text: string; streamId?: string }
-  | {
-      kind: 'action'
-      actionId?: string
-      name: string
-      args?: unknown
-      ok?: boolean
-      data?: unknown
-    }
-  | { kind: 'artifact'; artifact: ChatArtifact }
-interface OrchestrationStep {
-  step: 'exec' | 'judge' | 'gate'
-  provider?: string
-  role?: string
-  text?: string
-  tokens?: number
-  detail?: string
-}
-interface OrchestrationResult {
-  task: string
-  result: string
-  valid: boolean
-  gateBlocked: boolean
-  gateReasons: string[]
-  pendingDecisionId?: string
-  costUsd: number
-  trace: OrchestrationStep[]
-}
-interface Brain3d {
-  nodes: Array<{ id: string; label: string; group: number; file?: string; themes?: string[] }>
-  links: Array<{ source: string; target: string; weight: number; relation?: string }>
-  totalNodes?: number
-}
-interface ConvActivityEntry {
-  ts: string
-  kind: 'chat' | 'exec' | 'judge' | 'gate' | string
-  label: string
-  provider?: string
-  model?: string
-  inputTokens?: number
-  outputTokens?: number
-  cacheReadTokens?: number
-  costUsd?: number
-  durationMs?: number
-  usageCallId?: string
-  text?: string
-}
-interface RunEntry {
-  subject: string
-  session: string
-  path: string
-  mtime: number
-  summary: {
-    status: string
-    regime?: string
-    dodTotal: number
-    dodChecked: number
-    journalEvents: number
-    defauts: number
-  }
-}
-interface CapabilityItem {
-  id: string
-  label: string
-  description: string
-  enabled: boolean
-  mutable: boolean
-  source?: string
-  scope?: 'global' | 'project'
-  event?: string
-  matcher?: string
-}
-
-interface SkillRegistryItem extends CapabilityItem {
-  source: string
-  sourceLabel: string
-}
-
-interface BehaviourFile {
-  id: string
-  label: string
-  path: string
-  engine: 'codex' | 'claude' | 'autowin'
-  state: 'active' | 'conditional' | 'shadowed' | 'declared' | 'injected'
-  scope: 'global' | 'workspace' | 'project' | 'skill'
-  reason: string
-  injectedAt: string
-  injectedInto: string
-  active: boolean
-  size: number
-}
-
-interface PendingModelQuestion {
-  id: string
-  source: 'chat' | 'loop'
-  context?: string
-  text: string
-  options: string[]
-}
-
-interface ImportedModel {
-  id: string
-  provider: string
-  model: string
-  label: string
-  reasoningEfforts: string[]
-  defaultReasoningEffort: string
-  dynamicallyLoaded?: boolean
-}
-
-interface SlotBinding {
-  slotId: string
-  provider: string
-  modelId: string
-  reasoningEffort: string
-}
-
-interface AgentTopology {
-  version: number
-  orchestrator: SlotBinding
-  subagents: SlotBinding[]
-  panels: {
-    scout: SlotBinding[]
-    frame: SlotBinding[]
-    terrain: SlotBinding[]
-    judge: SlotBinding[]
-  }
-}
-
-interface PromptCallRecord {
-  id: string
-  ts: string
-  conversationId: string
-  turnId: string
-  iteration: number
-  actor: string
-  provider: string
-  model?: string
-  transport: string
-  boundary: string
-  limitation: string
-  system?: string
-  messages: Array<{ role: string; content: string }>
-  options: Record<string, unknown>
-  response: string
-  usage?: {
-    inputTokens: number
-    outputTokens: number
-    cacheReadTokens?: number
-    costUsd?: number
-  }
-}
-
-type AuthStatus = 'authenticated' | 'expired' | 'installed-untested' | 'absent' | 'unknown'
-type ProviderDisplayStatus = AuthStatus | 'standby'
-interface ProviderStatus {
-  provider: string
-  status: ProviderDisplayStatus
-  testable: boolean
-  detail?: string
-  lastCheckedAt?: number
-}
-interface BehaviourInfluencerField {
-  label: string
-  value: string
-  source: string
-  excerpt?: string
-}
-interface BehaviourPhaseSystemPrompt {
-  phase: string
-  blocks: BehaviourInfluencerField[]
-}
-interface BehaviourComposition {
-  orchestrated: {
-    systemPrompt: BehaviourPhaseSystemPrompt[]
-    injectedContext: BehaviourInfluencerField[]
-    modelSelection: BehaviourInfluencerField[]
-    regime: BehaviourInfluencerField[]
-    guardrails: BehaviourInfluencerField[]
-  }
-  direct: {
-    systemPrompt: BehaviourInfluencerField[]
-    modelSelection: BehaviourInfluencerField[]
-  }
-}
-interface BrainNavigationCandidate {
-  rank: number
-  path: string
-  type: string
-  denseCos: number
-  retained: boolean
-}
-interface BrainNavigation {
-  query: string
-  minDense: number
-  candidates: BrainNavigationCandidate[]
-}
-interface BrainTrace {
-  timestamp: string
-  conversationId: string
-  turnId?: string
-  kind?: 'automatic' | 'query'
-  query: string
-  found?: boolean
-  status?: 'found' | 'empty' | 'unavailable'
-  injectedChars: number
-  navigation?: BrainNavigation
-}
-interface NativePreflightTrace {
-  schema: 'autowin.native-preflight/v1'
-  timestamp: string
-  sessionId: string
-  turnId: string
-  apiRequestId: string
-  provider: string
-  model: string
-  apiMode?: string
-  conversationId?: string
-  fidelity: 'exact-redacted'
-  boundary: 'native.pre_api_request'
-  source: 'plugin-hook' | 'request-dump'
-  messageCount: number
-  toolCount: number
-  request: Record<string, unknown>
-}
-
-interface PreflightCheck {
-  id: string
-  label: string
-  ok: boolean
-  detail?: string
-  standby?: boolean
-}
-interface PreflightResult {
-  ok: boolean
-  summary: string
-  checks: PreflightCheck[]
-}
-interface TaskManagerSnapshot {
-  schemaVersion: 1
-  tasks: Array<Record<string, unknown>>
-  occurrences: Array<Record<string, unknown>>
-  alerts: Array<Record<string, unknown>>
-  scheduler: {
-    running: boolean
-    nextWakeAt: number | null
-    relayAvailable: boolean
-    relayError?: string
-  }
-}
+import type {
+  ChatAttachment,
+  AgentTopology,
+  NativePreflightTrace
+} from '../shared/preload-contracts'
+import type { Conversation, ConversationSummary } from '../main/store/conversations'
+import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
+import type { VizGraph } from '../main/viz/graph'
+import type { RunEntry } from '../main/dashboards/runs-scan'
+import type { CapabilityItem } from '../main/capability-controls'
+import type { SkillRegistryItem } from '../main/skill-registry'
+import type { BehaviourFile } from '../main/behaviour-files'
+import type { PendingModelQuestion } from '../main/model-questions'
+import type { ImportedModel } from '../main/models'
+import type { PromptCallRecord, CostBreakdownRow } from '../main/activity/prompt-observability'
+import type { ProviderDisplayStatus, ProviderStatus } from '../main/provider-status'
+import type { BehaviourComposition } from '../main/behaviour-composition'
+import type { BrainTrace } from '../main/activity/brain-trace-spool'
+import type { PreflightResult } from '../main/preflight'
+import type { PreflightRepairOutcome } from '../main/preflight-repair'
+import type { TaskManagerSnapshot, ScheduledTask } from '../main/task-manager/types'
+import type { AutoCloseReport } from '../main/run-autoclose'
+import type { FabricNodeSummary } from '../main/compute-fabric/control-plane'
+import type { Role, RoleBinding } from '../main/roles'
+import type { WorkflowProfilesFile } from '../main/workflow-profiles'
+import type { WorkflowBenchReport } from '../main/workflow-bench'
+import type { AutowinProfile } from '../main/profile-store'
+import type { ShadowRouteRecommendation } from '../main/shadow-router'
+import type { PersistedCheckpoint, CheckpointForkManifest } from '../main/wire-checkpoint-fork'
+import type { OrchestrationRunState } from '../main/runs/orchestration-state'
+import type { CommandSpec, CommandResult, AppSnapshot } from '../main/commands'
+import type { TraceEventV1 } from '../main/activity/trace-event'
+import type { SessionMeta, SessionActivity } from '../main/activity/transcripts'
+import type { ClaudeHookItem } from '../main/claude-hooks'
+import type { ConvActivityEntry } from '../main/activity/conv-activity'
 interface ChatApi {
   captureTestPage: () => Promise<string>
   seedConversationScopeTest: (
@@ -294,7 +60,7 @@ interface ChatApi {
   onOrchestrateStep: (cb: (step: OrchestrationStep) => void) => () => void
   onPreflight: (cb: (result: PreflightResult) => void) => () => void
   getPreflight: () => Promise<PreflightResult | null>
-  repairPreflight: (checkId: string) => Promise<{ started: boolean; detail: string }>
+  repairPreflight: (checkId: string) => Promise<PreflightRepairOutcome>
   recheckPreflight: (force?: boolean) => Promise<PreflightResult>
   orchestrationBudget: () => Promise<{
     maxUsd: number | null
@@ -326,8 +92,8 @@ interface ChatApi {
   ) => Promise<import('../shared/git-read').GitDiffResult>
   pickGitRepo: () => Promise<string | null>
   brainRepoPath: () => Promise<string>
-  getAutoClose: () => Promise<{ enabled: boolean; last?: unknown }>
-  setAutoClose: (enabled: boolean) => Promise<{ enabled: boolean; last?: unknown }>
+  getAutoClose: () => Promise<{ enabled: boolean; last?: AutoCloseReport }>
+  setAutoClose: (enabled: boolean) => Promise<{ enabled: boolean; last?: AutoCloseReport }>
   unfinishedTurns: () => Promise<
     Array<{ conversationId: string; turnId: string; events: number; updatedAt: number }>
   >
@@ -364,47 +130,53 @@ interface ChatApi {
   }) => Promise<boolean>
   onWorktreeActivity: (cb: (activity: WorktreeAgentActivity[]) => void) => () => void
   /** Workflows nommés : lire, créer/modifier, supprimer, sélectionner. */
-  workflowProfiles: () => Promise<unknown>
-  workflowProfileSave: (profile: unknown) => Promise<unknown>
-  workflowProfileRemove: (id: string) => Promise<unknown>
-  workflowProfileSelect: (id: string | null) => Promise<unknown>
+  workflowProfiles: () => Promise<WorkflowProfilesFile>
+  workflowProfileSave: (profile: unknown) => Promise<WorkflowProfilesFile>
+  workflowProfileRemove: (id: string) => Promise<WorkflowProfilesFile>
+  workflowProfileSelect: (id: string | null) => Promise<WorkflowProfilesFile>
+  /** Quel workflow pilote une conversation donnée. */
+  conversationWorkflow: (conversationId: string) => Promise<string | null>
+  selectConversationWorkflow: (
+    conversationId: string,
+    profileId: string | null
+  ) => Promise<string | null>
   /** Confrontation : un même objectif joué sous plusieurs workflows, puis comparé. */
-  workflowBenchRun: (objective: string, profileIds: (string | null)[]) => Promise<unknown>
+  workflowBenchRun: (
+    objective: string,
+    profileIds: (string | null)[]
+  ) => Promise<WorkflowBenchReport>
   onWorkflowBenchProgress: (
     listener: (p: { done: number; total: number; label: string }) => void
   ) => () => void
-  roles: () => Promise<
-    Record<string, { provider: string; model?: string; reasoningEffort?: string }>
-  >
+  roles: () => Promise<Record<Role, RoleBinding>>
   setRole: (
     role: string,
     provider: string,
     model?: string,
     reasoningEffort?: string
-  ) => Promise<Record<string, { provider: string; model?: string; reasoningEffort?: string }>>
+  ) => Promise<Record<Role, RoleBinding>>
   models: (force?: boolean) => Promise<ImportedModel[]>
-  fabricNodes: () => Promise<unknown[]>
-  installIsolatedFabricFixture: () => Promise<unknown>
+  fabricNodes: () => Promise<FabricNodeSummary[]>
+  installIsolatedFabricFixture: () => Promise<{ summary: FabricNodeSummary; model: ImportedModel }>
+  /**
+   * Résultat d'exécution d'un provider — hétérogène par construction (`ProviderAdapter['send']`
+   * délègue au provider réel, dont la forme du résultat varie ; aucun oracle local ne le contraint).
+   */
   sendIsolatedFabricFixture: (execution?: boolean) => Promise<unknown>
-  refreshFabricNode: (nodeId: string) => Promise<unknown>
-  pairFabricNode: (request: unknown) => Promise<unknown>
-  checkpointForks: () => Promise<Array<{ id: string; runId: string; createdAt: string }>>
-  createCheckpointFork: (checkpointId: string, forkId: string) => Promise<unknown>
+  refreshFabricNode: (nodeId: string) => Promise<FabricNodeSummary>
+  pairFabricNode: (request: unknown) => Promise<FabricNodeSummary>
+  checkpointForks: () => Promise<Array<PersistedCheckpoint<OrchestrationRunState>>>
+  createCheckpointFork: (
+    checkpointId: string,
+    forkId: string
+  ) => Promise<CheckpointForkManifest<OrchestrationRunState>>
   shadowRouteRecommendation: (
     phase: string,
     champion: { provider: string; model: string }
-  ) => Promise<unknown>
+  ) => Promise<ShadowRouteRecommendation>
   modelQuotas: (force?: boolean) => Promise<ModelQuotaSnapshot>
-  profiles: () => Promise<
-    Array<{
-      id: string
-      name: string
-      description?: string
-      updatedAt: string
-      topology: AgentTopology
-    }>
-  >
-  saveProfile: (profile: unknown) => Promise<unknown[]>
+  profiles: () => Promise<AutowinProfile[]>
+  saveProfile: (profile: unknown) => Promise<AutowinProfile[]>
   applyProfile: (id: string) => Promise<{ topology: AgentTopology }>
   kimiLogin: () => Promise<{ ok: true }>
   providerLogin: (provider: string) => Promise<{ ok: true }>
@@ -413,25 +185,19 @@ interface ChatApi {
   capabilityControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins') => Promise<CapabilityItem[]>
   skills: () => Promise<SkillRegistryItem[]>
   promptCalls: (conversationId?: string) => Promise<PromptCallRecord[]>
+  // fix-ok: golden test src/main/activity/cost-breakdown.test.ts asserts this file's source text
+  // contains the literal 'cacheHitRatio' (see CostBreakdownRow) — keep the substring even after typing.
   costBreakdown: (
     dimension?: 'actor' | 'model' | 'provider',
     conversationId?: string
-  ) => Promise<
-    Array<{
-      key: string
-      calls: number
-      costUsd: number
-      inputTokens: number
-      outputTokens: number
-      cacheReadTokens: number
-      cacheHitRatio: number
-      durationMs: number
-      unpricedCalls: number
-    }>
-  >
+  ) => Promise<CostBreakdownRow[]>
   promptTraces: (conversationId: string) => Promise<NativePreflightTrace[]>
   brainTraces: (conversationId?: string) => Promise<BrainTrace[]>
-  behaviourComposition: (workspace?: string) => Promise<BehaviourComposition>
+  behaviourComposition: (workspace?: string) => Promise<
+    BehaviourComposition & {
+      inspection: { workspace: string; files: Array<BehaviourFile & { excerpt?: string }> }
+    }
+  >
   installIsolatedBehaviourFixture: () => Promise<string>
   providerStatus: () => Promise<ProviderStatus[]>
   providerTest: (provider: string) => Promise<{ provider: string; status: ProviderDisplayStatus }>
@@ -442,22 +208,15 @@ interface ChatApi {
   promptTraceSummary: () => Promise<NativePreflightTrace[]>
   authorizeDiagnostics: () => Promise<string | null>
   promptTracesGlobal: (capability: string) => Promise<NativePreflightTrace[]>
-  causalTrace: (conversationId: string) => Promise<unknown[]>
-  activitySessions: () => Promise<
-    Array<{ id: string; project: string; path: string; sizeMb: number; mtime: number }>
-  >
-  activitySession: (meta: { id: string; project: string }) => Promise<{
-    meta: { id: string; project: string; path: string; sizeMb: number; mtime: number }
-    turns: Array<{ kind: 'user' | 'assistant'; text: string }>
-    images: Array<{ path: string; exists: boolean }>
-    totalToolCalls: number
-  }>
+  causalTrace: (conversationId: string) => Promise<TraceEventV1[]>
+  activitySessions: () => Promise<SessionMeta[]>
+  activitySession: (meta: { id: string; project: string }) => Promise<SessionActivity>
   activityImage: (
     session: { id: string; project: string },
     path: string
   ) => Promise<{ dataUrl: string }>
-  claudeHooks: () => Promise<CapabilityItem[]>
-  codexHooks: () => Promise<CapabilityItem[]>
+  claudeHooks: () => Promise<ClaudeHookItem[]>
+  codexHooks: () => Promise<ClaudeHookItem[]>
   setCapabilityTool: (
     name: string,
     enabled: boolean
@@ -469,37 +228,14 @@ interface ChatApi {
     Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
   >
   authorityPending: () => Promise<Array<{ id: string; question: string }>>
+  /**
+   * `bus.resolveDecision()` (src/main/commands.ts) est lui-même typé `Promise<unknown>` : la décision
+   * résolue est un objet de forme libre selon le type de la question d'autorité posée.
+   */
   authorityResolve: (id: string, choice: unknown) => Promise<unknown>
 
-  conversations: () => Promise<
-    Array<{
-      id: string
-      title: string
-      category: string
-      provider: string
-      messageCount: number
-      lastMessageRole?: 'user' | 'assistant'
-      lastAssistantStatus?: 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
-      updatedAt: number
-    }>
-  >
-  conversation: (id: string) => Promise<{
-    id: string
-    title: string
-    category: string
-    provider: string
-    messages: Array<{
-      role: 'user' | 'assistant'
-      content: string
-      ts: number
-      attachments?: ChatAttachmentMeta[]
-      turnId?: string
-      status?: 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
-      parts?: StoredChatPart[]
-      error?: string
-    }>
-    updatedAt: number
-  } | null>
+  conversations: () => Promise<ConversationSummary[]>
+  conversation: (id: string) => Promise<Conversation | null>
   conversationsCreate: (p: {
     title: string
     category: string
@@ -522,9 +258,12 @@ interface ChatApi {
     title?: string
     decision: { route: 'current' | 'new'; confidence: number; reason: string }
   }>
-  conversationsRename: (id: string, title: string) => Promise<unknown>
-  conversationsSetAuthorityMode: (id: string, mode: 'plan' | 'ask' | 'auto') => Promise<unknown>
-  conversationsFork: (id: string, messageId: string) => Promise<unknown>
+  conversationsRename: (id: string, title: string) => Promise<void>
+  conversationsSetAuthorityMode: (
+    id: string,
+    mode: 'plan' | 'ask' | 'auto'
+  ) => Promise<Conversation>
+  conversationsFork: (id: string, messageId: string) => Promise<Conversation>
   conversationsRemove: (id: string) => Promise<boolean>
   readChatArtifact: (
     conversationId: string,
@@ -543,20 +282,15 @@ interface ChatApi {
     artifactId: string
   ) => Promise<{ ok: boolean; error?: string }>
   taskManagerSnapshot: () => Promise<TaskManagerSnapshot>
-  taskManagerCreate: (task: unknown) => Promise<Record<string, unknown>>
-  taskManagerUpdate: (id: string, task: unknown) => Promise<Record<string, unknown>>
+  taskManagerCreate: (task: unknown) => Promise<ScheduledTask>
+  taskManagerUpdate: (id: string, task: unknown) => Promise<ScheduledTask>
   taskManagerRemove: (id: string) => Promise<boolean>
   taskManagerAcknowledge: (alertId: string) => Promise<boolean>
   taskManagerRunNow: (id: string) => Promise<{ started: boolean }>
   openFolder: (path: string) => Promise<void>
-  appState: () => Promise<unknown>
-  appCatalog: () => Promise<
-    Array<{ name: string; description: string; args: Record<string, string> }>
-  >
-  appCommand: (
-    name: string,
-    args?: Record<string, unknown>
-  ) => Promise<{ ok: boolean; data?: unknown; error?: string }>
+  appState: () => Promise<AppSnapshot>
+  appCatalog: () => Promise<CommandSpec[]>
+  appCommand: (name: string, args?: Record<string, unknown>) => Promise<CommandResult>
   pilotChat: (
     messages: Array<{
       role: 'user' | 'assistant'
@@ -564,7 +298,14 @@ interface ChatApi {
       attachments?: ChatAttachment[]
     }>,
     conversationId?: string
-  ) => Promise<{ ok: boolean; cancelled?: boolean; error?: string }>
+  ) => Promise<{
+    ok: boolean
+    cancelled: boolean
+    turnId: string
+    text?: string
+    error?: string
+    verification?: { complete: boolean; evidence: string }
+  }>
   cancelPilotChat: (conversationId: string) => Promise<{ ok: boolean }>
   cancelOrchestration: (conversationId: string) => Promise<{ ok: boolean }>
   injectDirective: (conversationId: string, directive: string) => Promise<{ ok: boolean }>
@@ -614,7 +355,7 @@ interface ChatApi {
   ) => Promise<{ ok: boolean; kind: 'deleted' | 'detached' }>
   conversationActivity: (convId: string) => Promise<ConvActivityEntry[]>
   runTrace: (path: string) => Promise<OrchestrationStep[] | null>
-  setActiveConversation: (convId: string | null) => Promise<unknown>
+  setActiveConversation: (convId: string | null) => Promise<{ ok: boolean }>
   listBrains: () => Promise<
     Array<{
       id: string
@@ -625,11 +366,11 @@ interface ChatApi {
       themes?: Array<{ id: string; label: string }>
     }>
   >
-  loadBrainGraph: (path: string, lod?: number, community?: number) => Promise<Brain3d>
-  loadBrainGraphPreview: (path: string, lod?: number) => Promise<Brain3d>
+  loadBrainGraph: (path: string, lod?: number, community?: number) => Promise<VizGraph>
+  loadBrainGraphPreview: (path: string, lod?: number) => Promise<VizGraph>
   loadBrainThemes: (path: string) => Promise<Array<{ id: string; label: string }>>
-  loadBrainThemeNodes: (path: string, themeIds: string[]) => Promise<Brain3d['nodes']>
-  loadBrainNeighborhood: (path: string, nodeId: string) => Promise<Brain3d>
+  loadBrainThemeNodes: (path: string, themeIds: string[]) => Promise<VizGraph['nodes']>
+  loadBrainNeighborhood: (path: string, nodeId: string) => Promise<VizGraph>
   readNodeFile: (path: string) => Promise<{ path: string; content: string }>
   searchBrain: (
     path: string,

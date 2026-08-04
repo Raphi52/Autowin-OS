@@ -1506,6 +1506,17 @@ Le fil reprend ensuite normalement.`
     saveWorkflowProfiles(next)
     return next
   })
+  // Quel workflow pilote CETTE conversation. Par conversation et non global : on veut un fil en
+  // Rapide pendant qu'un autre tourne en Rigoureux.
+  ipcMain.handle('os:workflowSelection:get', (event, rawConvId: unknown) => {
+    assertTrustedRendererSender(event, 'Workflow selection')
+    return os.conversationWorkflow(guardString(rawConvId, 'conversationId'))
+  })
+  ipcMain.handle('os:workflowSelection:set', (event, rawConvId: unknown, rawId: unknown) => {
+    assertTrustedRendererSender(event, 'Workflow selection')
+    const profileId = rawId === null ? null : guardString(rawId, 'profileId')
+    return os.selectConversationWorkflow(guardString(rawConvId, 'conversationId'), profileId)
+  })
   // Confronter plusieurs workflows sur un même objectif. La logique vit dans son module : ce point
   // d'entrée n'a qu'à la brancher.
   registerWorkflowBenchIpc({

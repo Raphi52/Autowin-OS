@@ -79,6 +79,14 @@ import { AUTOWIN_WORKSPACE_ENV } from '../shared/app-identity'
 import { ExecutionSupervisor, type ExecutionUsageSnapshot } from './execution-supervisor'
 import { compileExecutionQuote } from './execution-quote'
 import { loadOrchestrationBudget } from './orchestration-budget'
+import { applyWorkflowProfile } from './workflow-profile-apply'
+import { graphOf, loadWorkflowProfiles } from './workflow-profiles'
+import {
+  loadWorkflowSelections,
+  saveWorkflowSelections,
+  selectWorkflowForConversation,
+  workflowForConversation
+} from './workflow-selection'
 import { preparePersistedRunForRelaunch, type ProcessIdentity } from './runs/run-reattach'
 
 interface ExecutionWorkspaceInput {
@@ -143,6 +151,43 @@ export class AutowinOS {
   private activeWorkflow?: WorkflowRunOverride
   setActiveWorkflow(workflow: WorkflowRunOverride | undefined): void {
     this.activeWorkflow = workflow
+  }
+
+  /**
+   * Pose le workflow choisi POUR CETTE CONVERSATION le temps du run. Rend `true` s'il a posé quelque
+   * chose, pour que l'appelant sache s'il doit le retirer.
+   *
+   * Ne fait rien si un workflow est déjà actif : la confrontation pose le sien autour de chaque run,
+   * et il doit gagner — sinon un banc lancé depuis une conversation comparerait le workflow de cette
+   * conversation à lui-même.
+   */
+  private poseConversationWorkflow(conversationId?: string): boolean {
+    if (this.activeWorkflow) return false
+    const selections = loadWorkflowSelections()
+    const profileId = workflowForConversation(selections, conversationId)
+    if (!profileId) return false
+    const profile = loadWorkflowProfiles().profiles.find((p) => p.id === profileId)
+    if (!profile) return false
+    const effectif = applyWorkflowProfile({ roles: {} }, profile)
+    this.activeWorkflow = {
+      ...(graphOf(profile) ? { graph: graphOf(profile) } : {}),
+      ...(effectif.phases?.length ? { phases: effectif.phases } : {}),
+      ...(effectif.allocation ? { allocation: effectif.allocation } : {}),
+      instructionFor: (phase) => effectif.instructionFor(phase)
+    }
+    return true
+  }
+
+  /** Le workflow attaché à une conversation, ou `null`. */
+  conversationWorkflow(conversationId: string): string | null {
+    return workflowForConversation(loadWorkflowSelections(), conversationId) ?? null
+  }
+
+  /** Attache (ou détache) un workflow à une conversation. */
+  selectConversationWorkflow(conversationId: string, profileId: string | null): string | null {
+    const next = selectWorkflowForConversation(loadWorkflowSelections(), conversationId, profileId)
+    saveWorkflowSelections(next)
+    return workflowForConversation(next, conversationId) ?? null
   }
   readonly executionWorkspace: string
   /**
@@ -285,7 +330,26 @@ export class AutowinOS {
       decompose: buildOrchestratorDecomposer({
         registry: this.registry,
         roles: this.roles,
-        cwd: executionWorkspace
+        cwd: executionWorkspace,
+        // Sans ce sink, un échec de décomposition (JSON foiré, réseau) et une tâche jugée atomique
+        // retombaient tous deux en séquentiel dans le MÊME silence — aucun moyen de distinguer
+        // « le modèle a tranché » de « le modèle a planté ». `rejected` est désormais un incident
+        // NOMMÉ et visible dans les logs main, distinct de `atomic`.
+        onOutcome: (outcome, task) => {
+          if (outcome.kind === 'rejected') {
+            console.warn(
+              `[decompose] rejected (${outcome.reason}) — fallback séquentiel — task="${task.slice(0, 120)}"`
+            )
+          } else if (outcome.kind === 'atomic') {
+            console.log(
+              `[decompose] atomic (jugée non décomposable) — task="${task.slice(0, 120)}"`
+            )
+          } else {
+            console.log(
+              `[decompose] plan (${outcome.nodes.length} sous-tâches) — task="${task.slice(0, 120)}"`
+            )
+          }
+        }
       }),
       // Clôture d'un run VERT : publication sur une branche dédiée (jamais main), côté projet puis
       // Brain. OFF par défaut — tant que l'utilisateur ne l'a pas activée, rien n'est publié tout seul.
@@ -560,27 +624,36 @@ export class AutowinOS {
       quote,
       signal,
       async () => {
-        const result = await this.orchestrator.run(
-          task,
-          onStep,
-          onPhase,
-          onDelta,
-          this.executionSupervisor.currentSignal(),
-          collectedContext,
-          resumeOutputs,
-          conversationId,
-          bindingOverride,
-          onBrainRetrieved,
-          turnId,
-          onRunLifecycle,
-          admittedRuntime
-        )
-        result.quote = quote
-        result.usage = this.executionSupervisor.currentSnapshot()
-        if (result.usage?.knownCostUsd !== null && result.usage?.knownCostUsd !== undefined) {
-          result.costUsd = result.usage.knownCostUsd
+        // LE branchement qui fait qu'un workflow sélectionné change quelque chose. Sans lui, choisir
+        // un profil n'écrivait qu'un champ dans un fichier : l'écran promettait un pilotage qui
+        // n'existait pas. On le pose autour du run et on le retire ensuite (voir `finally`).
+        const posed = this.poseConversationWorkflow(conversationId)
+        try {
+          const result = await this.orchestrator.run(
+            task,
+            onStep,
+            onPhase,
+            onDelta,
+            this.executionSupervisor.currentSignal(),
+            collectedContext,
+            resumeOutputs,
+            conversationId,
+            bindingOverride,
+            onBrainRetrieved,
+            turnId,
+            onRunLifecycle,
+            admittedRuntime
+          )
+          result.quote = quote
+          result.usage = this.executionSupervisor.currentSnapshot()
+          if (result.usage?.knownCostUsd !== null && result.usage?.knownCostUsd !== undefined) {
+            result.costUsd = result.usage.knownCostUsd
+          }
+          return result
+        } finally {
+          // Un run qui échoue ne doit pas léguer son workflow au tour suivant.
+          if (posed) this.activeWorkflow = undefined
         }
-        return result
       },
       resumeControl?.usage,
       onLateUsageSettlement

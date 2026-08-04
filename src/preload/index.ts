@@ -1,10 +1,63 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import type {
+  ChatAttachment,
+  AgentTopology,
+  NativePreflightTrace
+} from '../shared/preload-contracts'
+import type {
+  WorktreeAgentActivity,
+  WorktreeConflictDiffResult,
+  WorktreeRuntimeStatus
+} from '../shared/worktree-activity-model'
+import type { ModelQuotaSnapshot } from '../shared/model-quotas'
+import type { GitReadResult, GitDiffResult } from '../shared/git-read'
+import type { GitGraphSnapshot } from '../shared/git-graph'
+import type {
+  TicketSourceSummary,
+  TicketSourceProfile,
+  TicketListRequest,
+  TicketPage
+} from '../shared/tickets'
+import type { Conversation, ConversationSummary } from '../main/store/conversations'
+import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
+import type { VizGraph } from '../main/viz/graph'
+import type { RunEntry } from '../main/dashboards/runs-scan'
+import type { CapabilityItem } from '../main/capability-controls'
+import type { SkillRegistryItem } from '../main/skill-registry'
+import type { BehaviourFile } from '../main/behaviour-files'
+import type { PendingModelQuestion } from '../main/model-questions'
+import type { ImportedModel } from '../main/models'
+import type { PromptCallRecord, CostBreakdownRow } from '../main/activity/prompt-observability'
+import type { ProviderDisplayStatus, ProviderStatus } from '../main/provider-status'
+import type { BehaviourComposition } from '../main/behaviour-composition'
+import type { BrainTrace } from '../main/activity/brain-trace-spool'
+import type { PreflightResult } from '../main/preflight'
+import type { PreflightRepairOutcome } from '../main/preflight-repair'
+import type { TaskManagerSnapshot, ScheduledTask } from '../main/task-manager/types'
+import type { AutoCloseReport } from '../main/run-autoclose'
+import type { FabricNodeSummary } from '../main/compute-fabric/control-plane'
+import type { Role, RoleBinding } from '../main/roles'
+import type { WorkflowProfilesFile } from '../main/workflow-profiles'
+import type { WorkflowBenchReport } from '../main/workflow-bench'
+import type { AutowinProfile } from '../main/profile-store'
+import type { ShadowRouteRecommendation } from '../main/shadow-router'
+import type { PersistedCheckpoint, CheckpointForkManifest } from '../main/wire-checkpoint-fork'
+import type { OrchestrationRunState } from '../main/runs/orchestration-state'
+import type { CommandSpec, CommandResult, AppSnapshot } from '../main/commands'
+import type { TraceEventV1 } from '../main/activity/trace-event'
+import type { SessionMeta, SessionActivity } from '../main/activity/transcripts'
+import type { ClaudeHookItem } from '../main/claude-hooks'
+import type { ConvActivityEntry } from '../main/activity/conv-activity'
+import type { ChatArtifact, ArtifactEncoding } from '../shared/artifacts'
 
 /** API exposée au renderer — chaque méthode a un handler main réel. */
 const api = {
   captureTestPage: (): Promise<string> => ipcRenderer.invoke('app:test:capture-page'),
-  seedConversationScopeTest: (conversationId: string, variant: 'a' | 'b'): Promise<unknown> =>
+  seedConversationScopeTest: (
+    conversationId: string,
+    variant: 'a' | 'b'
+  ): Promise<{ conversationId: string; path: string; variant: 'a' | 'b' }> =>
     ipcRenderer.invoke('app:test:seed-conversation-scope', conversationId, variant),
   seedArtifactPreviewsTest: (
     htmlOnly = false
@@ -18,37 +71,40 @@ const api = {
   orchestrate: (
     task: string,
     conversationId?: string
-  ): Promise<{ ok: boolean; result?: unknown; error?: string }> =>
+  ): Promise<{ ok: boolean; result?: OrchestrationResult; error?: string }> =>
     ipcRenderer.invoke('os:orchestrate', task, conversationId),
-  onOrchestrateStep: (cb: (step: unknown) => void): (() => void) => {
-    const handler = (_e: unknown, step: unknown): void => cb(step)
+  onOrchestrateStep: (cb: (step: OrchestrationStep) => void): (() => void) => {
+    const handler = (_e: unknown, step: OrchestrationStep): void => cb(step)
     ipcRenderer.on('orchestrate:step', handler)
     return () => ipcRenderer.removeListener('orchestrate:step', handler)
   },
   // #4 — résultat du diagnostic de démarrage (émis seulement si dégradé) → bannière.
-  onPreflight: (cb: (result: unknown) => void): (() => void) => {
-    const handler = (_e: unknown, result: unknown): void => cb(result)
+  onPreflight: (cb: (result: PreflightResult) => void): (() => void) => {
+    const handler = (_e: unknown, result: PreflightResult): void => cb(result)
     ipcRenderer.on('preflight:result', handler)
     return () => ipcRenderer.removeListener('preflight:result', handler)
   },
-  getPreflight: (): Promise<unknown> => ipcRenderer.invoke('preflight:current'),
+  getPreflight: (): Promise<PreflightResult | null> => ipcRenderer.invoke('preflight:current'),
   // Source control — lecture git READ-ONLY (statut, branche, changements, historique). Aucune action git.
-  getGitState: (repoPath?: string): Promise<unknown> => ipcRenderer.invoke('git:read', repoPath),
-  conversationGitState: (conversationId: string): Promise<unknown> =>
+  getGitState: (repoPath?: string): Promise<GitReadResult> =>
+    ipcRenderer.invoke('git:read', repoPath),
+  conversationGitState: (conversationId: string): Promise<GitReadResult> =>
     ipcRenderer.invoke('git:conversationRead', conversationId),
   conversationGitDiff: (
     conversationId: string,
     path: string,
     workspaceRoot: string
-  ): Promise<unknown> =>
+  ): Promise<GitDiffResult> =>
     ipcRenderer.invoke('git:conversationDiff', conversationId, path, workspaceRoot),
-  getGitGraph: (repoPath?: string): Promise<unknown> => ipcRenderer.invoke('git:graph', repoPath),
-  getGitDiff: (path: string, repoPath?: string): Promise<unknown> =>
+  getGitGraph: (repoPath?: string): Promise<GitGraphSnapshot> =>
+    ipcRenderer.invoke('git:graph', repoPath),
+  getGitDiff: (path: string, repoPath?: string): Promise<GitDiffResult> =>
     ipcRenderer.invoke('git:diff', path, repoPath),
   pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),
   brainRepoPath: (): Promise<string> => ipcRenderer.invoke('git:brainRoot'),
-  getAutoClose: (): Promise<unknown> => ipcRenderer.invoke('run:autoClose:get'),
-  setAutoClose: (enabled: boolean): Promise<unknown> =>
+  getAutoClose: (): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
+    ipcRenderer.invoke('run:autoClose:get'),
+  setAutoClose: (enabled: boolean): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
     ipcRenderer.invoke('run:autoClose:set', enabled),
   // Survie niveau 2 : tours restés inachevés (app fermée pendant l'exécution) + leur journal.
   unfinishedTurns: (): Promise<
@@ -65,10 +121,11 @@ const api = {
     npmInstalled?: boolean
     error?: string
   }> => ipcRenderer.invoke('update:apply'),
-  ticketSources: (): Promise<unknown[]> => ipcRenderer.invoke('tickets:sources'),
-  saveTicketSource: (profile: unknown): Promise<unknown[]> =>
+  ticketSources: (): Promise<TicketSourceSummary[]> => ipcRenderer.invoke('tickets:sources'),
+  saveTicketSource: (profile: TicketSourceProfile): Promise<TicketSourceSummary[]> =>
     ipcRenderer.invoke('tickets:source:save', profile),
-  listTickets: (request: unknown): Promise<unknown> => ipcRenderer.invoke('tickets:list', request),
+  listTickets: (request: TicketListRequest): Promise<TicketPage> =>
+    ipcRenderer.invoke('tickets:list', request),
   cancelTickets: (requestId: string): Promise<boolean> =>
     ipcRenderer.invoke('tickets:cancel', requestId),
   listTicketPeople: (source: unknown): Promise<string[]> =>
@@ -76,30 +133,32 @@ const api = {
   setTicketsFixture: (fixture: unknown): Promise<boolean> =>
     ipcRenderer.invoke('app:test:tickets-fixture', fixture),
   // Cockpit worktree (volet A) — activité des copies isolées par agent (frise + journal).
-  getWorktreeActivity: (): Promise<unknown[]> => ipcRenderer.invoke('worktree:activity'),
-  getWorktreeStatus: (): Promise<unknown> => ipcRenderer.invoke('worktree:status'),
-  getWorktreeConflictDiff: (agentId: string): Promise<unknown> =>
+  getWorktreeActivity: (): Promise<WorktreeAgentActivity[]> =>
+    ipcRenderer.invoke('worktree:activity'),
+  getWorktreeStatus: (): Promise<WorktreeRuntimeStatus> => ipcRenderer.invoke('worktree:status'),
+  getWorktreeConflictDiff: (agentId: string): Promise<WorktreeConflictDiffResult> =>
     ipcRenderer.invoke('worktree:conflict-diff', agentId),
-  retryWorktreeRecovery: (agentId: string): Promise<unknown> =>
+  retryWorktreeRecovery: (agentId: string): Promise<WorktreeAgentActivity | undefined> =>
     ipcRenderer.invoke('worktree:retry-recovery', agentId),
-  setWorktreeFixture: (fixture: unknown): Promise<boolean> =>
-    ipcRenderer.invoke('app:test:worktree-fixture', fixture),
-  onWorktreeActivity: (cb: (activity: unknown[]) => void): (() => void) => {
-    const handler = (_e: unknown, activity: unknown[]): void => cb(activity)
+  setWorktreeFixture: (fixture: {
+    activity: WorktreeAgentActivity[]
+    status: WorktreeRuntimeStatus
+  }): Promise<boolean> => ipcRenderer.invoke('app:test:worktree-fixture', fixture),
+  onWorktreeActivity: (cb: (activity: WorktreeAgentActivity[]) => void): (() => void) => {
+    const handler = (_e: unknown, activity: WorktreeAgentActivity[]): void => cb(activity)
     ipcRenderer.on('worktree:activity-changed', handler)
     return () => ipcRenderer.removeListener('worktree:activity-changed', handler)
   },
   // #5 — le wizard first-run re-vérifie la config à la demande (force=true pour le bouton).
-  repairPreflight: (checkId: string): Promise<unknown> =>
+  repairPreflight: (checkId: string): Promise<PreflightRepairOutcome> =>
     ipcRenderer.invoke('preflight:repair', checkId),
-  recheckPreflight: (force?: boolean): Promise<unknown> =>
+  recheckPreflight: (force?: boolean): Promise<PreflightResult> =>
     ipcRenderer.invoke('preflight:recheck', force),
   orchestrationBudget: (): Promise<{
     maxUsd: number | null
     maxProviderCalls: number
     maxTotalTokens: number
-  }> =>
-    ipcRenderer.invoke('os:orchestrationBudget:get'),
+  }> => ipcRenderer.invoke('os:orchestrationBudget:get'),
   setOrchestrationBudget: (settings: {
     maxUsd: number | null
     maxProviderCalls: number
@@ -108,17 +167,27 @@ const api = {
     maxUsd: number | null
     maxProviderCalls: number
     maxTotalTokens: number
-  }> =>
-    ipcRenderer.invoke('os:orchestrationBudget:set', settings),
+  }> => ipcRenderer.invoke('os:orchestrationBudget:set', settings),
   // Config par rôle
-  workflowProfiles: (): Promise<unknown> => ipcRenderer.invoke('os:workflowProfiles:get'),
-  workflowProfileSave: (profile: unknown): Promise<unknown> =>
+  workflowProfiles: (): Promise<WorkflowProfilesFile> =>
+    ipcRenderer.invoke('os:workflowProfiles:get'),
+  workflowProfileSave: (profile: unknown): Promise<WorkflowProfilesFile> =>
     ipcRenderer.invoke('os:workflowProfiles:upsert', profile),
-  workflowProfileRemove: (id: string): Promise<unknown> =>
+  workflowProfileRemove: (id: string): Promise<WorkflowProfilesFile> =>
     ipcRenderer.invoke('os:workflowProfiles:remove', id),
-  workflowProfileSelect: (id: string | null): Promise<unknown> =>
+  workflowProfileSelect: (id: string | null): Promise<WorkflowProfilesFile> =>
     ipcRenderer.invoke('os:workflowProfiles:select', id),
-  workflowBenchRun: (objective: string, profileIds: (string | null)[]): Promise<unknown> =>
+  conversationWorkflow: (conversationId: string): Promise<string | null> =>
+    ipcRenderer.invoke('os:workflowSelection:get', conversationId),
+  selectConversationWorkflow: (
+    conversationId: string,
+    profileId: string | null
+  ): Promise<string | null> =>
+    ipcRenderer.invoke('os:workflowSelection:set', conversationId, profileId),
+  workflowBenchRun: (
+    objective: string,
+    profileIds: (string | null)[]
+  ): Promise<WorkflowBenchReport> =>
     ipcRenderer.invoke('os:workflowBench:run', { objective, profileIds }),
   // La confrontation dure plusieurs runs : sans ce flux, l'attente serait aveugle.
   onWorkflowBenchProgress: (
@@ -129,85 +198,111 @@ const api = {
     ipcRenderer.on('os:workflowBench:progress', handler)
     return () => ipcRenderer.removeListener('os:workflowBench:progress', handler)
   },
-  roles: (): Promise<
-    Record<string, { provider: string; model?: string; reasoningEffort?: string }>
-  > => ipcRenderer.invoke('os:roles'),
+  roles: (): Promise<Record<Role, RoleBinding>> => ipcRenderer.invoke('os:roles'),
   setRole: (
     role: string,
     provider: string,
     model?: string,
     reasoningEffort?: string
-  ): Promise<unknown> => ipcRenderer.invoke('os:setRole', role, provider, model, reasoningEffort),
-  models: (force = false): Promise<unknown[]> => ipcRenderer.invoke('os:models:list', force),
-  fabricNodes: (): Promise<unknown[]> => ipcRenderer.invoke('os:fabric:list'),
-  installIsolatedFabricFixture: (): Promise<unknown> =>
-    ipcRenderer.invoke('app:test:fabric-fixture:install'),
+  ): Promise<Record<Role, RoleBinding>> =>
+    ipcRenderer.invoke('os:setRole', role, provider, model, reasoningEffort),
+  models: (force = false): Promise<ImportedModel[]> => ipcRenderer.invoke('os:models:list', force),
+  fabricNodes: (): Promise<FabricNodeSummary[]> => ipcRenderer.invoke('os:fabric:list'),
+  installIsolatedFabricFixture: (): Promise<{
+    summary: FabricNodeSummary
+    model: ImportedModel
+  }> => ipcRenderer.invoke('app:test:fabric-fixture:install'),
+  // Résultat d'exécution provider — hétérogène par construction (`ProviderAdapter['send']` délègue
+  // au provider réel, dont la forme du résultat varie ; aucun oracle local ne le contraint).
   sendIsolatedFabricFixture: (execution = false): Promise<unknown> =>
     ipcRenderer.invoke('app:test:fabric-fixture:send', execution),
-  refreshFabricNode: (nodeId: string): Promise<unknown> =>
+  refreshFabricNode: (nodeId: string): Promise<FabricNodeSummary> =>
     ipcRenderer.invoke('os:fabric:refresh', nodeId),
-  pairFabricNode: (request: unknown): Promise<unknown> => ipcRenderer.invoke('os:fabric:pair', request),
-  checkpointForks: (): Promise<unknown[]> => ipcRenderer.invoke('os:checkpointForks:list'),
-  createCheckpointFork: (checkpointId: string, forkId: string): Promise<unknown> =>
+  pairFabricNode: (request: unknown): Promise<FabricNodeSummary> =>
+    ipcRenderer.invoke('os:fabric:pair', request),
+  checkpointForks: (): Promise<Array<PersistedCheckpoint<OrchestrationRunState>>> =>
+    ipcRenderer.invoke('os:checkpointForks:list'),
+  createCheckpointFork: (
+    checkpointId: string,
+    forkId: string
+  ): Promise<CheckpointForkManifest<OrchestrationRunState>> =>
     ipcRenderer.invoke('os:checkpointFork:create', checkpointId, forkId),
   shadowRouteRecommendation: (
     phase: string,
     champion: { provider: string; model: string }
-  ): Promise<unknown> => ipcRenderer.invoke('os:shadowRoute:recommend', phase, champion),
-  modelQuotas: (force = false): Promise<unknown> => ipcRenderer.invoke('os:models:quotas', force),
-  profiles: (): Promise<unknown[]> => ipcRenderer.invoke('os:profiles:list'),
-  saveProfile: (profile: unknown): Promise<unknown[]> =>
+  ): Promise<ShadowRouteRecommendation> =>
+    ipcRenderer.invoke('os:shadowRoute:recommend', phase, champion),
+  modelQuotas: (force = false): Promise<ModelQuotaSnapshot> =>
+    ipcRenderer.invoke('os:models:quotas', force),
+  profiles: (): Promise<AutowinProfile[]> => ipcRenderer.invoke('os:profiles:list'),
+  saveProfile: (profile: unknown): Promise<AutowinProfile[]> =>
     ipcRenderer.invoke('os:profiles:save', profile),
-  applyProfile: (id: string): Promise<unknown> => ipcRenderer.invoke('os:profiles:apply', id),
+  applyProfile: (id: string): Promise<{ topology: AgentTopology }> =>
+    ipcRenderer.invoke('os:profiles:apply', id),
   kimiLogin: (): Promise<{ ok: true }> => ipcRenderer.invoke('os:kimiLogin'),
   providerLogin: (provider: string): Promise<{ ok: true }> =>
     ipcRenderer.invoke('os:providerLogin', provider),
-  topology: (): Promise<unknown> => ipcRenderer.invoke('os:topology:get'),
-  setTopology: (topology: unknown): Promise<unknown> =>
+  topology: (): Promise<AgentTopology> => ipcRenderer.invoke('os:topology:get'),
+  setTopology: (topology: AgentTopology): Promise<AgentTopology> =>
     ipcRenderer.invoke('os:topology:set', topology),
-  capabilityControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins'): Promise<unknown[]> =>
+  capabilityControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins'): Promise<CapabilityItem[]> =>
     ipcRenderer.invoke('os:capabilities:list', kind),
-  skills: (): Promise<unknown[]> => ipcRenderer.invoke('skills:registry:list'),
-  promptCalls: (conversationId?: string): Promise<unknown[]> =>
+  skills: (): Promise<SkillRegistryItem[]> => ipcRenderer.invoke('skills:registry:list'),
+  promptCalls: (conversationId?: string): Promise<PromptCallRecord[]> =>
     ipcRenderer.invoke('os:promptCalls', conversationId),
   /** Repartition du cout par role/modele/provider, triee par cout decroissant. */
   costBreakdown: (
     dimension?: 'actor' | 'model' | 'provider',
     conversationId?: string
-  ): Promise<unknown[]> => ipcRenderer.invoke('os:costBreakdown', dimension, conversationId),
-  promptTraces: (conversationId: string): Promise<unknown[]> =>
+  ): Promise<CostBreakdownRow[]> =>
+    ipcRenderer.invoke('os:costBreakdown', dimension, conversationId),
+  promptTraces: (conversationId: string): Promise<NativePreflightTrace[]> =>
     ipcRenderer.invoke('os:promptTraces', conversationId),
-  brainTraces: (conversationId?: string): Promise<unknown[]> =>
+  brainTraces: (conversationId?: string): Promise<BrainTrace[]> =>
     ipcRenderer.invoke('os:brainTraces', conversationId),
-  behaviourComposition: (workspace?: string): Promise<unknown> =>
-    ipcRenderer.invoke('os:behaviourComposition', workspace),
+  behaviourComposition: (
+    workspace?: string
+  ): Promise<
+    BehaviourComposition & {
+      inspection: { workspace: string; files: Array<BehaviourFile & { excerpt?: string }> }
+    }
+  > => ipcRenderer.invoke('os:behaviourComposition', workspace),
   installIsolatedBehaviourFixture: (): Promise<string> =>
     ipcRenderer.invoke('app:test:behaviour-fixture:install'),
-  providerStatus: (): Promise<unknown[]> => ipcRenderer.invoke('os:providerStatus'),
-  providerTest: (provider: string): Promise<unknown> =>
+  providerStatus: (): Promise<ProviderStatus[]> => ipcRenderer.invoke('os:providerStatus'),
+  providerTest: (provider: string): Promise<{ provider: string; status: ProviderDisplayStatus }> =>
     ipcRenderer.invoke('os:providerTest', provider),
-  setProviderMode: (provider: string, mode: 'active' | 'standby'): Promise<unknown> =>
+  setProviderMode: (
+    provider: string,
+    mode: 'active' | 'standby'
+  ): Promise<{ mode: 'active' | 'standby' }> =>
     ipcRenderer.invoke('os:providerMode:set', provider, mode),
-  promptTraceSummary: (): Promise<unknown[]> => ipcRenderer.invoke('os:promptTraceSummary'),
+  promptTraceSummary: (): Promise<NativePreflightTrace[]> =>
+    ipcRenderer.invoke('os:promptTraceSummary'),
   authorizeDiagnostics: (): Promise<string | null> => ipcRenderer.invoke('os:authorizeDiagnostics'),
-  promptTracesGlobal: (capability: string): Promise<unknown[]> =>
+  promptTracesGlobal: (capability: string): Promise<NativePreflightTrace[]> =>
     ipcRenderer.invoke('os:promptTracesGlobal', capability),
-  causalTrace: (conversationId: string): Promise<unknown[]> =>
+  causalTrace: (conversationId: string): Promise<TraceEventV1[]> =>
     ipcRenderer.invoke('os:causalTrace', conversationId),
-  activitySessions: (): Promise<unknown[]> => ipcRenderer.invoke('os:activity:sessions'),
-  activitySession: (meta: unknown): Promise<unknown> => ipcRenderer.invoke('os:activity:session', meta),
+  activitySessions: (): Promise<SessionMeta[]> => ipcRenderer.invoke('os:activity:sessions'),
+  activitySession: (meta: { id: string; project: string }): Promise<SessionActivity> =>
+    ipcRenderer.invoke('os:activity:session', meta),
   activityImage: (
     session: { id: string; project: string },
     path: string
   ): Promise<{ dataUrl: string }> => ipcRenderer.invoke('os:activity:image', session, path),
-  claudeHooks: (): Promise<unknown[]> => ipcRenderer.invoke('claude:hooks:list'),
-  codexHooks: (): Promise<unknown[]> => ipcRenderer.invoke('codex:hooks:list'),
-  setCapabilityTool: (name: string, enabled: boolean): Promise<unknown> =>
+  claudeHooks: (): Promise<ClaudeHookItem[]> => ipcRenderer.invoke('claude:hooks:list'),
+  codexHooks: (): Promise<ClaudeHookItem[]> => ipcRenderer.invoke('codex:hooks:list'),
+  setCapabilityTool: (
+    name: string,
+    enabled: boolean
+  ): Promise<{ items: CapabilityItem[]; restartRequired: true }> =>
     ipcRenderer.invoke('os:capabilities:tools:set', name, enabled),
   chooseBehaviourWorkspace: (): Promise<string | null> =>
     ipcRenderer.invoke('os:behaviour:choose-workspace'),
-  onModelQuestion: (cb: (question: unknown) => void): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, question: unknown): void => cb(question)
+  onModelQuestion: (cb: (question: PendingModelQuestion) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, question: PendingModelQuestion): void =>
+      cb(question)
     ipcRenderer.on('model:question', handler)
     return () => ipcRenderer.removeListener('model:question', handler)
   },
@@ -217,14 +312,16 @@ const api = {
     Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
   > => ipcRenderer.invoke('os:toolUsage'),
   // Sas d'autorité
-  authorityPending: (): Promise<unknown[]> => ipcRenderer.invoke('os:authority:pending'),
+  authorityPending: (): Promise<Array<{ id: string; question: string }>> =>
+    ipcRenderer.invoke('os:authority:pending'),
+  // `bus.resolveDecision()` (src/main/commands.ts) est lui-même typé `Promise<unknown>` : la décision
+  // résolue est de forme libre selon le type de question d'autorité posée.
   authorityResolve: (id: string, choice: unknown): Promise<unknown> =>
     ipcRenderer.invoke('os:authority:resolve', id, choice),
   // Conversations
-  conversations: (): Promise<
-    Array<{ id: string; title: string; category: string; provider: string }>
-  > => ipcRenderer.invoke('os:conversations'),
-  conversation: (id: string): Promise<unknown> => ipcRenderer.invoke('os:conversation', id),
+  conversations: (): Promise<ConversationSummary[]> => ipcRenderer.invoke('os:conversations'),
+  conversation: (id: string): Promise<Conversation | null> =>
+    ipcRenderer.invoke('os:conversation', id),
   conversationsCreate: (p: {
     title: string
     category: string
@@ -244,11 +341,13 @@ const api = {
     decision: { route: 'current' | 'new'; confidence: number; reason: string }
   }> =>
     ipcRenderer.invoke('os:conversations:routeMessage', conversationId, message, attachmentNames),
-  conversationsRename: (id: string, title: string): Promise<unknown> =>
+  conversationsRename: (id: string, title: string): Promise<void> =>
     ipcRenderer.invoke('os:conversations:rename', id, title),
-  conversationsSetAuthorityMode: (id: string, mode: 'plan' | 'ask' | 'auto'): Promise<unknown> =>
-    ipcRenderer.invoke('os:conversations:authorityMode', id, mode),
-  conversationsFork: (id: string, messageId: string): Promise<unknown> =>
+  conversationsSetAuthorityMode: (
+    id: string,
+    mode: 'plan' | 'ask' | 'auto'
+  ): Promise<Conversation> => ipcRenderer.invoke('os:conversations:authorityMode', id, mode),
+  conversationsFork: (id: string, messageId: string): Promise<Conversation> =>
     ipcRenderer.invoke('os:conversations:fork', id, messageId),
   conversationsRemove: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:remove', id),
@@ -256,18 +355,24 @@ const api = {
     conversationId: string,
     turnId: string,
     artifactId: string
-  ): Promise<unknown> =>
-    ipcRenderer.invoke('os:chatArtifact:read', conversationId, turnId, artifactId),
+  ): Promise<{
+    ok: boolean
+    artifact?: ChatArtifact
+    encoding?: ArtifactEncoding
+    content?: string
+    error?: string
+  }> => ipcRenderer.invoke('os:chatArtifact:read', conversationId, turnId, artifactId),
   revealChatArtifact: (
     conversationId: string,
     turnId: string,
     artifactId: string
   ): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('os:chatArtifact:reveal', conversationId, turnId, artifactId),
-  taskManagerSnapshot: (): Promise<unknown> => ipcRenderer.invoke('task-manager:snapshot'),
-  taskManagerCreate: (task: unknown): Promise<unknown> =>
+  taskManagerSnapshot: (): Promise<TaskManagerSnapshot> =>
+    ipcRenderer.invoke('task-manager:snapshot'),
+  taskManagerCreate: (task: unknown): Promise<ScheduledTask> =>
     ipcRenderer.invoke('task-manager:create', task),
-  taskManagerUpdate: (id: string, task: unknown): Promise<unknown> =>
+  taskManagerUpdate: (id: string, task: unknown): Promise<ScheduledTask> =>
     ipcRenderer.invoke('task-manager:update', id, task),
   taskManagerRemove: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('task-manager:remove', id),
@@ -277,26 +382,25 @@ const api = {
     ipcRenderer.invoke('task-manager:run-now', id),
   openFolder: (path: string): Promise<void> => ipcRenderer.invoke('os:openFolder', path),
   // Plan de contrôle (app pilotable par les agents) + pilotage in-model
-  appState: (): Promise<unknown> => ipcRenderer.invoke('os:appState'),
-  appCatalog: (): Promise<unknown> => ipcRenderer.invoke('os:appCatalog'),
-  appCommand: (name: string, args?: Record<string, unknown>): Promise<unknown> =>
+  appState: (): Promise<AppSnapshot> => ipcRenderer.invoke('os:appState'),
+  appCatalog: (): Promise<CommandSpec[]> => ipcRenderer.invoke('os:appCatalog'),
+  appCommand: (name: string, args?: Record<string, unknown>): Promise<CommandResult> =>
     ipcRenderer.invoke('os:appCommand', name, args),
   pilotChat: (
     messages: Array<{
       role: 'user' | 'assistant'
       content: string
-      attachments?: Array<{
-        name: string
-        mimeType: string
-        size: number
-        kind: 'text' | 'image' | 'file'
-        content: string
-        thumbnail?: string
-      }>
+      attachments?: ChatAttachment[]
     }>,
     conversationId?: string
-  ): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('os:pilotChat', messages, conversationId),
+  ): Promise<{
+    ok: boolean
+    cancelled: boolean
+    turnId: string
+    text?: string
+    error?: string
+    verification?: { complete: boolean; evidence: string }
+  }> => ipcRenderer.invoke('os:pilotChat', messages, conversationId),
   cancelPilotChat: (conversationId: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('os:pilotChat:cancel', conversationId),
   cancelOrchestration: (conversationId: string): Promise<{ ok: boolean }> =>
@@ -308,13 +412,43 @@ const api = {
     content: string
   ): Promise<{ ok: boolean; eventId: string }> =>
     ipcRenderer.invoke('os:causalTrace:displayed', conversationId, content),
-  onPilotEvent: (cb: (e: unknown) => void): (() => void) => {
-    const h = (_e: unknown, ev: unknown): void => cb(ev)
+  onPilotEvent: (
+    cb: (e: {
+      kind: string
+      conversationId?: string
+      turnId?: string
+      streamId?: string
+      actionId?: string
+      iteration?: number
+      text?: string
+      name?: string
+      args?: unknown
+      ok?: boolean
+      data?: unknown
+    }) => void
+  ): (() => void) => {
+    const h = (_e: unknown, ev: Parameters<typeof cb>[0]): void => cb(ev)
     ipcRenderer.on('pilot:event', h)
     return () => ipcRenderer.removeListener('pilot:event', h)
   },
-  onAppEvent: (cb: (e: Record<string, unknown> & { type: string }) => void): (() => void) => {
-    const h = (_e: unknown, ev: Record<string, unknown> & { type: string }): void => cb(ev)
+  onAppEvent: (
+    cb: (e: {
+      type: string
+      tab?: string
+      origin?: string
+      scope?: string
+      text?: string
+      convId?: string
+      runPath?: string
+      task?: string
+      status?: string
+      step?: OrchestrationStep
+      phase?: { step: string; provider?: string; role?: string }
+      deltaStep?: 'exec' | 'judge'
+      delta?: string
+    }) => void
+  ): (() => void) => {
+    const h = (_e: unknown, ev: Parameters<typeof cb>[0]): void => cb(ev)
     ipcRenderer.on('app:event', h)
     return () => ipcRenderer.removeListener('app:event', h)
   },
@@ -323,17 +457,18 @@ const api = {
   isolatedTestConversationReadCount: (reset = false): Promise<number> =>
     ipcRenderer.invoke('app:test:conversation-read-count', reset),
   // Workflows de la conversation active (créés in-app + attachés)
-  conversationRuns: (convId: string): Promise<unknown[]> =>
+  conversationRuns: (convId: string): Promise<RunEntry[]> =>
     ipcRenderer.invoke('os:conversationRuns', convId),
   deleteConversationRun: (
     convId: string,
     path: string
   ): Promise<{ ok: boolean; kind: 'deleted' | 'detached' }> =>
     ipcRenderer.invoke('os:conversationRuns:delete', convId, path),
-  conversationActivity: (convId: string): Promise<unknown[]> =>
+  conversationActivity: (convId: string): Promise<ConvActivityEntry[]> =>
     ipcRenderer.invoke('os:conversationActivity', convId),
-  runTrace: (path: string): Promise<unknown[] | null> => ipcRenderer.invoke('os:runTrace', path),
-  setActiveConversation: (convId: string | null): Promise<unknown> =>
+  runTrace: (path: string): Promise<OrchestrationStep[] | null> =>
+    ipcRenderer.invoke('os:runTrace', path),
+  setActiveConversation: (convId: string | null): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('os:setActiveConversation', convId),
   // Graphe brain 3D + workflow
   listBrains: (): Promise<
@@ -346,20 +481,35 @@ const api = {
       themes?: Array<{ id: string; label: string }>
     }>
   > => ipcRenderer.invoke('os:listBrains'),
-  loadBrainGraph: (path: string, lod?: number, community?: number): Promise<unknown> =>
+  loadBrainGraph: (path: string, lod?: number, community?: number): Promise<VizGraph> =>
     ipcRenderer.invoke('os:loadBrainGraph', path, lod, community),
-  loadBrainGraphPreview: (path: string, lod?: number): Promise<unknown> =>
+  loadBrainGraphPreview: (path: string, lod?: number): Promise<VizGraph> =>
     ipcRenderer.invoke('os:loadBrainGraphPreview', path, lod),
-  loadBrainThemes: (path: string): Promise<unknown> =>
+  loadBrainThemes: (path: string): Promise<Array<{ id: string; label: string }>> =>
     ipcRenderer.invoke('os:loadBrainThemes', path),
-  loadBrainThemeNodes: (path: string, themeIds: string[]): Promise<unknown> =>
+  loadBrainThemeNodes: (path: string, themeIds: string[]): Promise<VizGraph['nodes']> =>
     ipcRenderer.invoke('os:loadBrainThemeNodes', path, themeIds),
-  loadBrainNeighborhood: (path: string, nodeId: string): Promise<unknown> =>
+  loadBrainNeighborhood: (path: string, nodeId: string): Promise<VizGraph> =>
     ipcRenderer.invoke('os:loadBrainNeighborhood', path, nodeId),
   readNodeFile: (path: string): Promise<{ path: string; content: string }> =>
     ipcRenderer.invoke('os:readNodeFile', path),
-  searchBrain: (path: string, query: string): Promise<unknown[]> =>
-    ipcRenderer.invoke('os:searchBrain', path, query),
+  searchBrain: (
+    path: string,
+    query: string
+  ): Promise<
+    Array<{
+      id: string
+      label: string
+      file: string
+      themes: string[]
+      score: number
+      denseScore?: number
+      lexicalScore?: number
+      graphScore?: number
+      fusedScore?: number
+      relations: Array<{ type: string; target: string }>
+    }>
+  > => ipcRenderer.invoke('os:searchBrain', path, query),
   refreshBrain: (path: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('os:refreshBrain', path),
   listRuns: (): Promise<
