@@ -914,12 +914,11 @@ export function GraphView({
           aria-label="Graphe de connaissances"
           value={selected}
           onChange={(event) => {
-            fileRequestRef.current += 1
-            setExpandingNodeId(null)
+            // Second chemin de sortie de la fiche : il dupliquait la remise à plat et oubliait donc
+            // la caméra, laissant un gros plan sur un nœud qui n'existe plus dans le graphe suivant.
+            clearNodeSelection()
             setSelected(event.target.value)
             setActiveThemes(new Set())
-            setNode(null)
-            setPanelTab('node')
           }}
         >
           {brains.length === 0 && <option value="">Aucun graphe accessible</option>}

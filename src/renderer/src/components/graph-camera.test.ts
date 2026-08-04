@@ -132,3 +132,14 @@ describe('la vue du graphe utilise réellement cette mémoire', () => {
     expect(source).toMatch(/viewBeforeFocusRef\.current = restoreView\(/)
   })
 })
+
+describe('tous les chemins de sortie de la fiche', () => {
+  const source = readFileSync(new URL('./GraphView.tsx', import.meta.url), 'utf8')
+
+  it('aucun ne remet `node` à null en contournant clearNodeSelection', () => {
+    // Un second chemin qui duplique la remise à plat oublie forcément la caméra un jour : c'était
+    // le cas du changement de graphe, qui laissait un gros plan sur un nœud désormais absent.
+    const contournements = source.split('setNode(null)').length - 1
+    expect(contournements).toBe(1) // uniquement celui de clearNodeSelection
+  })
+})
