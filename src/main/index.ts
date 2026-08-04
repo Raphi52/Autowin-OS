@@ -194,6 +194,12 @@ import {
   type WorkflowProfile
 } from './workflow-profiles'
 import { registerWorkflowBenchIpc } from './workflow-bench-ipc'
+import {
+  graphDefects,
+  unsupportedReturns,
+  worstCaseNodeExecutions,
+  type WorkflowGraph
+} from './workflow-graph'
 import { recapMessage, summarizeJournal } from './runs/journal-replay'
 import { tailJournalOnce } from './runs/stdout-journal'
 import { defaultProcessIdentity } from './store/worktree-manager'
@@ -1505,6 +1511,17 @@ Le fil reprend ensuite normalement.`
     const next = selectWorkflowProfile(loadWorkflowProfiles(), id)
     saveWorkflowProfiles(next)
     return next
+  })
+  // Ce que le moteur ne peut PAS jouer d'un graphe composé. Calculé côté main pour que le canevas et
+  // l'exécution partagent exactement la même règle — deux vérités divergeraient tôt ou tard.
+  ipcMain.handle('os:workflowGraph:check', (event, raw: unknown) => {
+    assertTrustedRendererSender(event, 'Workflow graph')
+    const graph = raw as WorkflowGraph
+    return {
+      defects: graphDefects(graph),
+      inertReturns: unsupportedReturns(graph).map((edge) => ({ from: edge.from, to: edge.to })),
+      worstCaseNodeExecutions: graphDefects(graph).length ? null : worstCaseNodeExecutions(graph)
+    }
   })
   // Quel workflow pilote CETTE conversation. Par conversation et non global : on veut un fil en
   // Rapide pendant qu'un autre tourne en Rigoureux.

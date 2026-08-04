@@ -177,6 +177,8 @@ const api = {
     ipcRenderer.invoke('os:workflowProfiles:remove', id),
   workflowProfileSelect: (id: string | null): Promise<WorkflowProfilesFile> =>
     ipcRenderer.invoke('os:workflowProfiles:select', id),
+  checkWorkflowGraph: (graph: unknown): Promise<unknown> =>
+    ipcRenderer.invoke('os:workflowGraph:check', graph),
   conversationWorkflow: (conversationId: string): Promise<string | null> =>
     ipcRenderer.invoke('os:workflowSelection:get', conversationId),
   selectConversationWorkflow: (

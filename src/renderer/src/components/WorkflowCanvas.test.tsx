@@ -1,0 +1,188 @@
+// @vitest-environment happy-dom
+import { act, createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { WorkflowCanvas, type CanvasGraph, type WorkflowCanvasProps } from './WorkflowCanvas'
+
+let container: HTMLDivElement
+let root: Root
+let onChange: ReturnType<typeof vi.fn>
+
+const chaine: CanvasGraph = {
+  entry: 'frame-1',
+  nodes: [
+    { id: 'frame-1', phase: 'frame' },
+    { id: 'build-1', phase: 'build' },
+    { id: 'judge-1', phase: 'judge' }
+  ],
+  edges: [
+    { from: 'frame-1', to: 'build-1', when: 'always' },
+    { from: 'build-1', to: 'judge-1', when: 'always' }
+  ]
+}
+
+beforeEach(() => {
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  onChange = vi.fn()
+  container = document.createElement('div')
+  document.body.append(container)
+  root = createRoot(container)
+})
+afterEach(() => {
+  act(() => root.unmount())
+  container.remove()
+})
+
+function render(props: Partial<WorkflowCanvasProps> = {}): void {
+  act(() => {
+    root.render(createElement(WorkflowCanvas, { graph: chaine, onChange, ...props }))
+  })
+}
+const q = <T extends Element>(sel: string): T => container.querySelector<T>(sel)!
+const clic = (id: string): void => {
+  act(() => q<HTMLElement>(`[data-testid="${id}"]`).click())
+}
+const dernier = (): CanvasGraph => onChange.mock.calls[onChange.mock.calls.length - 1][0]
+
+describe('composer la chaîne', () => {
+  it('la palette ajoute une phase au bout, et la relie', () => {
+    render()
+    clic('wf-add-clean')
+    expect(dernier().nodes.map((n) => n.phase)).toEqual(['frame', 'build', 'judge', 'clean'])
+    expect(dernier().edges.filter((e) => e.when === 'always')).toHaveLength(3)
+  })
+
+  it('deux phases identiques restent deux nœuds distincts', () => {
+    render()
+    clic('wf-add-build')
+    const ids = dernier().nodes.map((n) => n.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('retirer un nœud RECOMPOSE la chaîne au lieu de la laisser trouée', () => {
+    render()
+    clic('wf-remove-build-1')
+    expect(dernier().nodes.map((n) => n.id)).toEqual(['frame-1', 'judge-1'])
+    expect(dernier().edges).toEqual([{ from: 'frame-1', to: 'judge-1', when: 'always' }])
+  })
+
+  it('retirer le premier nœud déplace le point d’entrée', () => {
+    render()
+    clic('wf-remove-frame-1')
+    expect(dernier().entry).toBe('build-1')
+  })
+
+  it('glisser-déposer réordonne et réenchaîne', () => {
+    render()
+    const source = q<HTMLElement>('[data-testid="wf-node-judge-1"]')
+    const cible = q<HTMLElement>('[data-testid="wf-node-frame-1"]')
+    // Deux gestes séparés : dans un même lot de rendu, le dépôt lirait un état pas encore appliqué.
+    act(() => {
+      source.dispatchEvent(new Event('dragstart', { bubbles: true }))
+    })
+    act(() => {
+      cible.dispatchEvent(new Event('drop', { bubbles: true }))
+    })
+    expect(dernier().nodes.map((n) => n.phase)).toEqual(['judge', 'frame', 'build'])
+    expect(dernier().edges[0]).toEqual({ from: 'judge-1', to: 'frame-1', when: 'always' })
+  })
+})
+
+describe('ouvrir un nœud pour voir ses agents', () => {
+  it('le détail est fermé par défaut et s’ouvre au clic', () => {
+    render()
+    expect(container.querySelector('[data-testid="wf-detail-judge-1"]')).toBeNull()
+    clic('wf-open-judge-1')
+    expect(container.querySelector('[data-testid="wf-detail-judge-1"]')).not.toBeNull()
+  })
+
+  it('régler le nombre d’agents le persiste dans le nœud', () => {
+    render()
+    clic('wf-open-judge-1')
+    const champ = q<HTMLInputElement>('[data-testid="wf-agents-judge-1"]')
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      setter.call(champ, '3')
+      champ.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(dernier().nodes.find((n) => n.id === 'judge-1')?.agents).toHaveLength(3)
+  })
+})
+
+describe('tracer un retour', () => {
+  it('un retour se trace vers un nœud DÉJÀ passé, jamais vers l’avant', () => {
+    render()
+    clic('wf-open-judge-1')
+    // Les cibles proposées sont celles qui précèdent : un « retour » vers l'avant n'en est pas un.
+    expect(container.querySelector('[data-testid="wf-return-judge-1-build-1"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="wf-return-frame-1-judge-1"]')).toBeNull()
+  })
+
+  it('un retour naît BORNÉ — composer sans limite serait refusé d’office', () => {
+    render()
+    clic('wf-open-judge-1')
+    clic('wf-return-judge-1-build-1')
+    const retour = dernier().edges.find((e) => e.when === 'red')
+    expect(retour).toMatchObject({ from: 'judge-1', to: 'build-1', maxTraversals: 1 })
+  })
+
+  it('la limite se règle', () => {
+    render({ graph: { ...chaine, edges: [...chaine.edges, { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 1 }] } })
+    const champ = q<HTMLInputElement>('[data-testid="wf-bound-judge-1-build-1"]')
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      setter.call(champ, '3')
+      champ.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(dernier().edges.find((e) => e.when === 'red')?.maxTraversals).toBe(3)
+  })
+
+  it('une limite vide ou nulle retombe à 1, jamais à zéro', () => {
+    render({ graph: { ...chaine, edges: [...chaine.edges, { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 }] } })
+    const champ = q<HTMLInputElement>('[data-testid="wf-bound-judge-1-build-1"]')
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      setter.call(champ, '0')
+      champ.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(dernier().edges.find((e) => e.when === 'red')?.maxTraversals).toBe(1)
+  })
+
+  it('retirer un nœud efface les retours qui pointaient dessus', () => {
+    // Sinon une arête tracerait vers le vide et le graphe deviendrait illisible.
+    render({ graph: { ...chaine, edges: [...chaine.edges, { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 1 }] } })
+    clic('wf-remove-build-1')
+    expect(dernier().edges.filter((e) => e.when === 'red')).toEqual([])
+  })
+})
+
+describe('ne jamais accepter en silence', () => {
+  it('un défaut se lit SUR le nœud fautif, pas dans un message global', () => {
+    render({ defects: [{ target: 'judge-1', message: 'Quorum 3 impossible pour 2 agent(s).' }] })
+    expect(q('[data-testid="wf-node-judge-1"]').textContent).toContain('Quorum 3 impossible')
+    expect(q('[data-testid="wf-node-judge-1"]').className).toContain('is-broken')
+  })
+
+  it('un défaut sans nœud désigné s’affiche quand même', () => {
+    render({ defects: [{ message: 'Le workflow est vide.' }] })
+    expect(q('[data-testid="wf-defects"]').textContent).toContain('Le workflow est vide')
+  })
+
+  it('un retour COMPOSABLE MAIS INERTE est dit — c’est le pire des pièges', () => {
+    render({
+      graph: { ...chaine, edges: [...chaine.edges, { from: 'judge-1', to: 'frame-1', when: 'red', maxTraversals: 1 }] },
+      inertReturns: [{ from: 'judge-1', to: 'frame-1' }]
+    })
+    expect(q('[data-testid="wf-inert-judge-1-frame-1"]').textContent).toContain(
+      'ne sait pas encore le jouer'
+    )
+  })
+
+  it('un retour que le moteur JOUE ne porte pas cette mention', () => {
+    render({
+      graph: { ...chaine, edges: [...chaine.edges, { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 1 }] },
+      inertReturns: []
+    })
+    expect(container.querySelector('[data-testid="wf-inert-judge-1-build-1"]')).toBeNull()
+  })
+})

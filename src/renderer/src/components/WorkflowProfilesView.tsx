@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { WorkflowBenchPanel } from './WorkflowBenchPanel'
+import { WorkflowGraphEditor } from './WorkflowGraphEditor'
 import './WorkflowProfilesView.css'
 
 /**
@@ -17,6 +18,7 @@ interface WorkflowProfile {
   description?: string
   roles?: Record<string, { provider?: string; model?: string; reasoningEffort?: string }>
   phases?: string[]
+  graph?: import('./WorkflowCanvas').CanvasGraph
   allocation?: { judgeMembers?: number; maxGreedyNodes?: number }
   instructions?: { mode: 'append' | 'replace'; text?: string }
 }
@@ -88,6 +90,15 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
       if (next) setFile(next)
     } catch {
       setError('La suppression a échoué.')
+    }
+  }
+
+  const save = async (profile: WorkflowProfile): Promise<void> => {
+    try {
+      const next = (await window.api.workflowProfileSave?.(profile)) as ProfilesFile | undefined
+      if (next) setFile(next)
+    } catch {
+      setError('L’enregistrement a échoué.')
     }
   }
 
@@ -166,6 +177,12 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                   <span className="workflow-profile-desc">{profile.description}</span>
                 )}
               </button>
+              {file.activeId === profile.id && (
+                <WorkflowGraphEditor
+                  profile={profile}
+                  onSave={(graph) => void save({ ...profile, graph })}
+                />
+              )}
               <button
                 type="button"
                 className="workflow-profile-remove"

@@ -1,0 +1,174 @@
+.wf-canvas {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wf-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wf-palette button {
+  padding: 3px 9px;
+  border: 1px dashed var(--line, #31373f);
+  border-radius: 4px;
+  background: none;
+  color: var(--c-faint, #9caab5);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.wf-palette button:hover {
+  border-style: solid;
+  color: var(--c-text, #e6edf3);
+}
+
+.wf-chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wf-node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 130px;
+  border: 1px solid var(--line, #31373f);
+  border-radius: 5px;
+  background: var(--surface, #161b22);
+  cursor: grab;
+}
+
+/* La chaîne se lit : une flèche entre deux nœuds voisins. */
+.wf-node + .wf-node::before {
+  content: '▶';
+  position: absolute;
+  left: -12px;
+  top: 12px;
+  color: var(--c-faint, #9caab5);
+  font-size: 9px;
+}
+
+.wf-node.is-broken {
+  border-color: var(--danger, #e6635b);
+}
+
+.wf-node-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 9px;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wf-node-phase {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text, #e6edf3);
+}
+
+.wf-node-agents {
+  font-size: 10.5px;
+  color: var(--c-faint, #9caab5);
+}
+
+.wf-node-remove {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  border: 0;
+  background: none;
+  color: var(--c-faint, #9caab5);
+  cursor: pointer;
+}
+
+.wf-node-remove:hover {
+  color: var(--danger, #e6635b);
+}
+
+/* Un défaut se lit SUR le nœud fautif : un message global ferait chercher lequel. */
+.wf-node-defect {
+  margin: 0;
+  padding: 0 9px 7px;
+  color: var(--danger, #e6635b);
+  font-size: 10.5px;
+}
+
+.wf-node-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px 9px;
+  border-top: 1px solid var(--line, #31373f);
+  font-size: 10.5px;
+  color: var(--c-faint, #9caab5);
+}
+
+.wf-node-detail label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.wf-node-detail input {
+  width: 52px;
+  padding: 2px 5px;
+  border: 1px solid var(--line, #31373f);
+  border-radius: 3px;
+  background: var(--bg-input, #0d1117);
+  color: var(--c-text, #e6edf3);
+  font: inherit;
+}
+
+.wf-defects,
+.wf-returns {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+}
+
+.wf-defects {
+  color: var(--danger, #e6635b);
+}
+
+.wf-returns li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--c-faint, #9caab5);
+}
+
+.wf-returns input {
+  width: 44px;
+  margin: 0 4px;
+  padding: 1px 4px;
+  border: 1px solid var(--line, #31373f);
+  border-radius: 3px;
+  background: var(--bg-input, #0d1117);
+  color: var(--c-text, #e6edf3);
+  font: inherit;
+}
+
+/* Composable mais inerte = le pire piège. La mention doit accrocher l'œil. */
+.wf-inert {
+  color: var(--warn, #d8a657);
+}

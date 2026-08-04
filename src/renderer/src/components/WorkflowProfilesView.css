@@ -122,3 +122,23 @@
   font-size: 11px;
   font-style: italic;
 }
+
+.workflow-graph-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px 11px 11px;
+  border-top: 1px solid var(--line, #31373f);
+}
+
+.workflow-graph-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Dire POURQUOI on ne peut pas enregistrer vaut mieux qu'un bouton gris muet. */
+.workflow-graph-hint {
+  color: var(--c-faint, #9caab5);
+  font-size: 11px;
+}

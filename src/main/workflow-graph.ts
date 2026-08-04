@@ -239,7 +239,14 @@ export function unsupportedReturns(graph: WorkflowGraph): WorkflowEdge[] {
  * enregistré deviendrait illisible le jour où le modèle change.
  */
 export function graphFromPhases(phases: readonly PipelinePhase[]): WorkflowGraph {
-  const nodes = phases.map((phase, index) => ({ id: `${phase}-${index + 1}`, phase }))
+  // Numéroté par PHASE et non par rang dans le tableau : `frame-1, build-2` se lit comme s'il
+  // manquait un build. Deux `build` restent malgré tout distincts (`build-1`, `build-2`).
+  const vus = new Map<string, number>()
+  const nodes = phases.map((phase) => {
+    const rang = (vus.get(phase) ?? 0) + 1
+    vus.set(phase, rang)
+    return { id: `${phase}-${rang}`, phase }
+  })
   const edges = nodes.slice(0, -1).map((node, index) => ({
     from: node.id,
     to: nodes[index + 1].id,
