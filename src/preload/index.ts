@@ -118,6 +118,17 @@ const api = {
     ipcRenderer.invoke('os:workflowProfiles:remove', id),
   workflowProfileSelect: (id: string | null): Promise<unknown> =>
     ipcRenderer.invoke('os:workflowProfiles:select', id),
+  workflowBenchRun: (objective: string, profileIds: (string | null)[]): Promise<unknown> =>
+    ipcRenderer.invoke('os:workflowBench:run', { objective, profileIds }),
+  // La confrontation dure plusieurs runs : sans ce flux, l'attente serait aveugle.
+  onWorkflowBenchProgress: (
+    listener: (p: { done: number; total: number; label: string }) => void
+  ): (() => void) => {
+    const handler = (_e: unknown, p: { done: number; total: number; label: string }): void =>
+      listener(p)
+    ipcRenderer.on('os:workflowBench:progress', handler)
+    return () => ipcRenderer.removeListener('os:workflowBench:progress', handler)
+  },
   roles: (): Promise<
     Record<string, { provider: string; model?: string; reasoningEffort?: string }>
   > => ipcRenderer.invoke('os:roles'),

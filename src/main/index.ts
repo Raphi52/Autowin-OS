@@ -193,6 +193,7 @@ import {
   upsertWorkflowProfile,
   type WorkflowProfile
 } from './workflow-profiles'
+import { registerWorkflowBenchIpc } from './workflow-bench-ipc'
 import { recapMessage, summarizeJournal } from './runs/journal-replay'
 import { tailJournalOnce } from './runs/stdout-journal'
 import { defaultProcessIdentity } from './store/worktree-manager'
@@ -1504,6 +1505,24 @@ Le fil reprend ensuite normalement.`
     const next = selectWorkflowProfile(loadWorkflowProfiles(), id)
     saveWorkflowProfiles(next)
     return next
+  })
+  // Confronter plusieurs workflows sur un même objectif. La logique vit dans son module : ce point
+  // d'entrée n'a qu'à la brancher.
+  registerWorkflowBenchIpc({
+    ipcMain,
+    assertTrusted: (event, label) => assertTrustedRendererSender(event, label),
+    runOrchestration: (objective, bindingOverride, signal) =>
+      os.orchestrator.run(
+        objective,
+        undefined,
+        undefined,
+        undefined,
+        signal,
+        '',
+        [],
+        undefined,
+        bindingOverride
+      )
   })
   ipcMain.handle('os:orchestrationBudget:get', (event) => {
     assertTrustedRendererSender(event, 'Orchestration budget')
