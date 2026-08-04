@@ -368,6 +368,11 @@ interface ChatApi {
   workflowProfileSave: (profile: unknown) => Promise<unknown>
   workflowProfileRemove: (id: string) => Promise<unknown>
   workflowProfileSelect: (id: string | null) => Promise<unknown>
+  /** Confrontation : un même objectif joué sous plusieurs workflows, puis comparé. */
+  workflowBenchRun: (objective: string, profileIds: (string | null)[]) => Promise<unknown>
+  onWorkflowBenchProgress: (
+    listener: (p: { done: number; total: number; label: string }) => void
+  ) => () => void
   roles: () => Promise<
     Record<string, { provider: string; model?: string; reasoningEffort?: string }>
   >

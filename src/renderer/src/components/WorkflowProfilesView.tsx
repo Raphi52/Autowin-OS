@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { WorkflowBenchPanel } from './WorkflowBenchPanel'
 import './WorkflowProfilesView.css'
 
 /**
@@ -6,11 +7,8 @@ import './WorkflowProfilesView.css'
  *
  * La manière dont un run se déroule était éparpillée : modèles et efforts dans les rôles, phases
  * dans le régime, consignes dans les skills. Impossible de dire « lance ça en Rapide, puis en
- * Rigoureux, et compare ». Cette vue rend le workflow nommable et sélectionnable — condition
- * préalable pour rejouer un même objectif sous plusieurs façons de faire.
- *
- * La sélection ne PILOTE encore rien : elle est enregistrée, elle ne modifie pas le run. Le dire
- * ici plutôt que de laisser croire l'inverse.
+ * Rigoureux, et compare ». Cette vue rend le workflow nommable, sélectionnable — et confrontable :
+ * le panneau du bas rejoue un même objectif sous plusieurs d'entre eux et en compare le résultat.
  */
 
 interface WorkflowProfile {
@@ -182,10 +180,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
         </ul>
       )}
 
-      <p className="workflow-profiles-note">
-        La sélection est enregistrée, mais elle ne pilote pas encore l’exécution : le lancement
-        comparatif et le verdict coût/qualité restent à construire.
-      </p>
+      <WorkflowBenchPanel profiles={file.profiles} />
     </section>
   )
 }

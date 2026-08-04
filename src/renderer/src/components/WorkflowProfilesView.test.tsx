@@ -104,11 +104,13 @@ describe('vue Workflows — lister et sélectionner', () => {
     expect(container.textContent).toContain('Impossible de lire les workflows')
   })
 
-  it('annonce que la sélection ne pilote pas encore l’exécution', async () => {
-    // Laisser croire qu'un workflow sélectionné change le run serait une promesse non tenue.
+  it('donne accès à la confrontation — le moteur ne sert à rien s’il n’est pas atteignable', async () => {
+    // Cette vue annonçait « ne pilote pas encore l'exécution » ; elle le pilote maintenant, et c'est
+    // par ce panneau. Un panneau non monté rendrait tout le banc injoignable.
     api()
     await render()
-    expect(container.textContent).toContain('ne pilote pas encore')
+    expect(container.querySelector('[data-testid="workflow-bench"]')).not.toBeNull()
+    expect(container.textContent).not.toContain('ne pilote pas encore')
   })
 })
 

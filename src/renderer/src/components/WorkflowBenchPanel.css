@@ -1,0 +1,81 @@
+.workflow-bench {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line, #31373f);
+}
+
+.workflow-bench-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text, #e6edf3);
+}
+
+.workflow-bench-sub {
+  margin: 0;
+  color: var(--c-faint, #9caab5);
+  font-size: 11.5px;
+}
+
+.workflow-bench-objective {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--c-faint, #9caab5);
+}
+
+.workflow-bench-objective textarea {
+  padding: 7px 9px;
+  border: 1px solid var(--line, #31373f);
+  border-radius: 4px;
+  background: var(--bg-input, #0d1117);
+  color: var(--c-text, #e6edf3);
+  font: inherit;
+  font-size: 12px;
+  resize: vertical;
+}
+
+.workflow-bench-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11.5px;
+}
+
+.workflow-bench-picks label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.workflow-bench-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* La raison du refus se lit À CÔTÉ du bouton : un bouton gris muet fait chercher. */
+.workflow-bench-hint {
+  color: var(--c-faint, #9caab5);
+  font-size: 11px;
+}
+
+.workflow-bench-progress {
+  margin: 0;
+  color: var(--c-faint, #9caab5);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.workflow-bench-error {
+  margin: 0;
+  color: var(--danger, #e6635b);
+  font-size: 11.5px;
+}
