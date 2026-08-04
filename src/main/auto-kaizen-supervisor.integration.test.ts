@@ -154,7 +154,7 @@ describe('AutoKaizenSupervisor — boucle conversationnelle persistante', () => 
         ok: false,
         data: { error: 'Exit code: 1' }
       })
-    ).toMatchObject({ kind: 'tool-refused', summary: 'verify a échoué' })
+    ).toMatchObject({ kind: 'execution-failed', summary: 'verify a échoué' })
     expect(
       incidentFromPilotEvent({
         kind: 'result',
@@ -252,9 +252,20 @@ describe('AutoKaizenSupervisor — boucle conversationnelle persistante', () => 
     })
     await supervisor.drain()
 
-    expect(supervisor.snapshot().incidents[0].status).toBe('failed')
-    expect(h.sourceUpdates.join('\n')).not.toContain('Correctif vérifié')
-    expect(h.sourceUpdates.join('\n')).toContain('sans preuve')
+    // `validation-blocked` et non `failed` : la correction a bien TOURNÉ, c'est sa vérification
+    // qui manque (verification incomplète, sans preuve, ou oracles rouges). Confondre les deux
+    // est exactement ce qui a fait dire « il ne s'est probablement rien passé » sur un travail
+    // réellement effectué. Le statut porte désormais la distinction ; l'intention du test — ne
+    // JAMAIS annoncer un correctif vérifié sans preuve structurée — est portée par les deux
+    // assertions suivantes, inchangées.
+    expect(supervisor.snapshot().incidents[0].status).toBe('validation-blocked')
+    const updates = h.sourceUpdates.join('\n')
+    expect(updates).not.toContain('Correctif vérifié')
+    // On assère l'INTENTION (le message dit à l'humain qu'il manque une preuve), pas la prose
+    // exacte : le littéral « sans preuve » attendu au départ ne matchait pas « aucune preuve
+    // globale complète » que le code écrit réellement — même sens, test cassé pour un mot.
+    expect(updates).toMatch(/aucune preuve|sans preuve|preuve.*(absente|incomplète)/i)
+    expect(updates).toContain('bloqué par la validation')
   })
 
   it('rend terminal un échec interne sans créer un incident ni une conversation enfant', async () => {

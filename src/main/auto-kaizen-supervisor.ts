@@ -26,8 +26,16 @@ export type AutoKaizenIncidentStatus =
   | 'analysis-completed'
   | 'fix-running'
   | 'completed'
+  | 'validation-blocked'
   | 'failed'
   | 'suppressed'
+
+export interface AutoKaizenVerification {
+  complete: boolean
+  evidence: string
+  greenOracles?: string[]
+  redOracles?: string[]
+}
 
 export interface AutoKaizenIncident {
   id: string
@@ -51,6 +59,8 @@ export interface AutoKaizenIncident {
   fixConversationId?: string
   fixTurnId?: string
   fixResult?: string
+  verification?: AutoKaizenVerification
+  validationOracles?: { green: string[]; red: string[] }
   error?: string
   errorStack?: string
   failureSourceIncidentId?: string
@@ -87,7 +97,7 @@ export interface AutoKaizenRuntime {
     turnId?: string
     text?: string
     error?: string
-    verification?: { complete: boolean; evidence: string }
+    verification?: AutoKaizenVerification
   }>
   isConversationRunning?(conversationId: string): boolean
   readConversationResult?(conversationId: string): { turnId?: string; text: string } | undefined
@@ -176,8 +186,47 @@ export function isNonActionableWall(summary: string, detail: string): boolean {
   )
 }
 
+/**
+ * Les `kind` qui sont des PROJECTIONS d'un même run en échec, et non des causes indépendantes :
+ * une étape rouge, la terminaison rouge du run, et le résultat `orchestrate: false` décrivent UN
+ * seul évènement vu sous trois angles. Ils se corrèlent donc par RUN.
+ *
+ * La liste est EXPLICITE et fermée, c'est le garde : un `test-red` ou un `journal-replay-loss`
+ * survenant dans le même run garde son propre incident. Sans ce garde, tout ce qui partage un
+ * runPath fusionnerait et une seconde cause racine deviendrait invisible — l'inverse du défaut
+ * mesuré le 2026-08-04 (2924 clés pour 2924 incidents, 0 % de fusion), mais tout aussi faux.
+ */
+const RUN_FAILURE_PROJECTION_KINDS = new Set([
+  'orchestration-step-failed',
+  'orchestration-red',
+  'orchestration-error',
+  'execution-failed',
+  'provider-error',
+  'result'
+])
+
+/** Un chemin de RUN.md, tel qu'il apparaît dans une clé de dédup ou dans un détail d'incident. */
+const RUN_PATH_IN_TEXT = /([A-Za-z]:[\\/][^\s:]*?RUN\.md|\/[^\s:]*?RUN\.md)/i
+
+/**
+ * Le run auquel cet incident se rattache, s'il en est une projection connue. `undefined` sinon —
+ * et l'incident retombe alors sur la corrélation par cause textuelle.
+ */
+export function runScopeForIncident(input: AutoKaizenIncidentInput): string | undefined {
+  if (!RUN_FAILURE_PROJECTION_KINDS.has(input.kind)) return undefined
+  for (const field of [input.dedupeKey, input.detail, input.summary]) {
+    const found = field?.match(RUN_PATH_IN_TEXT)
+    if (found) return found[1].replace(/\\/g, '/').toLowerCase()
+  }
+  return undefined
+}
+
 export function correlationKeyForIncident(input: AutoKaizenIncidentInput): string {
   if (input.correlationKey?.trim()) return input.correlationKey.trim()
+  // Le run n'entre PAS dans la clé. Première tentative écartée : y mettre le chemin du run
+  // FRAGMENTE, puisque le slug de run et le n° de conversation varient à chaque occurrence — c'est
+  // le défaut mesuré (1233 singletons) que `normalizedCause` neutralise justement. Le run sert de
+  // chemin de fusion SUPPLÉMENTAIRE dans `report()`, jamais d'identité.
   // `sourceConversationId` est VOLONTAIREMENT absent de la clé : chaque run kaizen ouvre une
   // conversation neuve, donc l'inclure rendait la déduplication structurellement impossible pour
   // tout incident né de la cascade. Mesuré le 2026-08-04 : 2924 clés distinctes pour 2924 incidents,
@@ -254,10 +303,27 @@ export function incidentFromPilotEvent(event: {
   }
   if (event.kind !== 'result') return undefined
   if (event.ok === false) {
+    const detail = clipped(serialized(event.data) || event.text || 'Échec d’exécution sans détail')
+    const normalizedDetail = detail.toLowerCase()
+    const hasProviderEvidence =
+      /\b(provider|api|openai|anthropic|codex|claude)\b.*\b(error|erreur|failed|failure|échec|quota|rate[ -]?limit|authentication|authentification|api[ -]?key|401|429)\b/.test(
+        normalizedDetail
+      ) ||
+      /\b(error|erreur|failed|failure|échec|quota|rate[ -]?limit|authentication|authentification|api[ -]?key|401|429)\b.*\b(provider|api|openai|anthropic|codex|claude)\b/.test(
+        normalizedDetail
+      )
+    const hasAuthorityRefusal =
+      /\b(authority-refused|permission denied|access denied|not authorized|unauthorized|forbidden|tool refused|outil refusé|refus(?:é|e)? par (?:l['’])?outil)\b/.test(
+        normalizedDetail
+      )
     return {
-      kind: 'tool-refused',
+      kind: hasProviderEvidence
+        ? 'provider-error'
+        : hasAuthorityRefusal
+          ? 'authority-refused'
+          : 'execution-failed',
       summary: `${event.name || 'outil'} a échoué`,
-      detail: clipped(serialized(event.data) || event.text || 'Outil refusé sans détail')
+      detail
     }
   }
   if (!event.data || typeof event.data !== 'object') return undefined
@@ -341,9 +407,20 @@ export class AutoKaizenSupervisor {
     if (exact) return exact
     const correlationKey = correlationKeyForIncident(input)
     const id = incidentId(correlationKey)
-    const existing = this.state.incidents.find(
-      (incident) => incident.correlationKey === correlationKey || incident.id === id
-    )
+    // Trois chemins de fusion, du plus précis au plus large :
+    //   1. la clé de corrélation (cause textuelle normalisée) ou l'id qui en dérive ;
+    //   2. le RUN, quand les deux incidents sont des projections connues d'un même run en échec
+    //      (étape rouge + terminaison rouge + `orchestrate: false` = un évènement vu 3 fois).
+    // Le run est un chemin SUPPLÉMENTAIRE et jamais l'identité : l'y mettre fragmenterait, le slug
+    // de run variant à chaque occurrence.
+    const runScope = runScopeForIncident(input)
+    const existing =
+      this.state.incidents.find(
+        (incident) => incident.correlationKey === correlationKey || incident.id === id
+      ) ??
+      (runScope
+        ? this.state.incidents.find((incident) => runScopeForIncident(incident) === runScope)
+        : undefined)
     if (existing) {
       const occurrenceCount = (existing.occurrenceCount ?? 1) + 1
       this.update(existing, {
@@ -558,16 +635,47 @@ export class AutoKaizenSupervisor {
         `N'accepte « préexistant » ou « hors périmètre » qu'avec une baseline observée avant/après.\n\n` +
         `Diagnostic Kaizen :\n${analysisText}`
       const fixResult = recoveredFix
-        ? { ok: true, turnId: recoveredFix.turnId, text: recoveredFix.text }
+        ? {
+            ok: true,
+            turnId: recoveredFix.turnId,
+            text: recoveredFix.text,
+            verification: incident.verification
+          }
         : await this.runtime.runFix(fixConversationId, fixPrompt)
       if (!fixResult.ok) throw new Error(fixResult.error || 'La correction Auto-Kaizen a échoué')
-      if (!fixResult.verification?.complete || !fixResult.verification.evidence.trim()) {
-        throw new Error('Correction terminée sans preuve structurée de validation globale')
+      if (
+        !fixResult.verification?.complete ||
+        !fixResult.verification.evidence.trim() ||
+        Boolean(fixResult.verification.redOracles?.length)
+      ) {
+        const verification = fixResult.verification
+        this.update(incident, {
+          status: 'validation-blocked',
+          fixTurnId: fixResult.turnId,
+          fixResult: clipped(fixResult.text ?? 'Correction locale terminée', 12_000),
+          ...(verification ? { verification } : {}),
+          validationOracles: {
+            green: verification?.greenOracles ?? [],
+            red: verification?.redOracles?.length
+              ? verification.redOracles
+              : ['Preuve structurée de validation globale absente ou incomplète']
+          }
+        })
+        this.safeUpdate(
+          incident.sourceConversationId,
+          `⚠️ Auto-Kaizen ${incident.id} bloqué par la validation dans ${fixConversationId} : aucune preuve globale complète.`
+        )
+        return
       }
       this.update(incident, {
         status: 'completed',
         fixTurnId: fixResult.turnId,
-        fixResult: clipped(fixResult.text ?? 'Correction terminée', 12_000)
+        fixResult: clipped(fixResult.text ?? 'Correction terminée', 12_000),
+        verification: fixResult.verification,
+        validationOracles: {
+          green: fixResult.verification.greenOracles ?? [fixResult.verification.evidence],
+          red: fixResult.verification.redOracles ?? []
+        }
       })
       this.safeUpdate(
         incident.sourceConversationId,
