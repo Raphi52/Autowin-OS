@@ -492,6 +492,42 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => pilot.resolve({ ok: true }))
   })
 
+  it('affiche le saut vers le dernier message dès que le fil est remonté, sans attendre une nouvelle activité', async () => {
+    const mockApi = api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('un message')
+    await click('.composer-send')
+
+    const scroll = container!.querySelector('.chat-scroll') as HTMLDivElement
+    scroll.scrollTo = vi.fn()
+    Object.defineProperties(scroll, {
+      scrollHeight: { configurable: true, value: 1000 },
+      clientHeight: { configurable: true, value: 100 },
+      scrollTop: { configurable: true, writable: true, value: 900 }
+    })
+
+    // Au bas du fil : rien à proposer.
+    await act(async () => {
+      scroll.dispatchEvent(new Event('scroll', { bubbles: true }))
+    })
+    expect(container!.querySelector('.chat-jump-latest')).toBeNull()
+
+    // L'utilisateur remonte — aucune nouvelle activité n'arrive, le bouton doit apparaître quand même.
+    await act(async () => {
+      ;(scroll as unknown as { scrollTop: number }).scrollTop = 0
+      scroll.dispatchEvent(new Event('scroll', { bubbles: true }))
+    })
+    expect(container!.querySelector('.chat-jump-latest')).not.toBeNull()
+
+    // Redescendre le fait disparaître.
+    await act(async () => {
+      ;(scroll as unknown as { scrollTop: number }).scrollTop = 900
+      scroll.dispatchEvent(new Event('scroll', { bubbles: true }))
+    })
+    expect(container!.querySelector('.chat-jump-latest')).toBeNull()
+  })
+
   it('conserve tous les reçus orientés de la session sans évincer les plus anciens', async () => {
     const pilot = deferred<{ ok: boolean }>()
     const mockApi = api({

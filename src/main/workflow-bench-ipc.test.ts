@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
-import { registerWorkflowBenchIpc, unappliedDeviations } from './workflow-bench-ipc'
+import { overrideFor, registerWorkflowBenchIpc } from './workflow-bench-ipc'
 import type { OrchestrationResult } from './orchestrator'
 import type { WorkflowProfile } from './workflow-profiles'
 
@@ -134,6 +134,12 @@ describe('le canal est réellement branché à l’application', () => {
     expect(entree).toMatch(/registerWorkflowBenchIpc\(\{/)
   })
 
+  it('index.ts relie la pose du workflow à l’OS — sans ça, phases et consignes n’arrivent nulle part', () => {
+    expect(entree).toMatch(/setActiveWorkflow: \(workflow\) => os\.setActiveWorkflow\(workflow\)/)
+    const os = readFileSync(new URL('./os.ts', import.meta.url), 'utf8')
+    expect(os).toContain('currentWorkflow: () => this.activeWorkflow')
+  })
+
   it('le preload expose le lancement ET la progression', () => {
     const preload = readFileSync(new URL('../preload/index.ts', import.meta.url), 'utf8')
     expect(preload).toContain("ipcRenderer.invoke('os:workflowBench:run'")
@@ -141,24 +147,65 @@ describe('le canal est réellement branché à l’application', () => {
   })
 })
 
-describe('ce que la comparaison ne fait PAS varier', () => {
-  it('rapporte les écarts calculés mais non transmis à l’orchestrateur', async () => {
-    const bavard: WorkflowProfile = {
-      id: 'bavard',
-      name: 'Bavard',
-      phases: ['build'],
-      instructions: { mode: 'append', text: 'sois bref' }
-    }
-    const { invoke } = harness({ profiles: [vif, bavard] })
-    const report = (await invoke({ objective: 'o', profileIds: ['vif', 'bavard'] })) as {
-      unapplied: { profileId: string; deviations: string[] }[]
-    }
-    // Sans cette réserve, le verdict laisserait croire qu'on a comparé des consignes différentes.
-    expect(report.unapplied).toEqual([{ profileId: 'bavard', deviations: ['phases', 'consignes'] }])
+describe('phases, allocation et consignes atteignent l’orchestrateur', () => {
+  const bavard: WorkflowProfile = {
+    id: 'bavard',
+    name: 'Bavard',
+    phases: ['build'],
+    allocation: { judgeMembers: 4 },
+    instructions: { mode: 'replace', perPhase: { build: 'ma méthode' } }
+  }
+
+  it('traduit le workflow en écarts que l’orchestrateur sait recevoir', () => {
+    const over = overrideFor(bavard)!
+    expect(over.phases).toEqual(['build'])
+    expect(over.allocation).toMatchObject({ judgeMembers: 4 })
+    expect(over.instructionFor?.('build')).toEqual({ mode: 'replace', text: 'ma méthode' })
   })
 
-  it('un workflow qui ne change que le rôle n’a rien à réserver', () => {
-    expect(unappliedDeviations(vif)).toEqual([])
-    expect(unappliedDeviations(null)).toEqual([])
+  it('la configuration courante n’impose aucun écart', () => {
+    expect(overrideFor(null)).toBeUndefined()
+  })
+
+  it('POSE le workflow avant le run et le RETIRE après', async () => {
+    const poses: (string | undefined)[] = []
+    const setActiveWorkflow = vi.fn((w?: { phases?: string[] }) =>
+      poses.push(w?.phases?.[0] ?? (w ? 'sans-phase' : undefined))
+    )
+    const handlers = new Map<string, (e: unknown, r: unknown) => Promise<unknown>>()
+    registerWorkflowBenchIpc({
+      ipcMain: { handle: (c: string, f: never) => handlers.set(c, f) } as never,
+      assertTrusted: vi.fn(),
+      runOrchestration: (async () => ok(1)) as never,
+      setActiveWorkflow: setActiveWorkflow as never,
+      loadProfiles: () => ({ profiles: [vif, bavard], activeId: null })
+    })
+    await handlers.get('os:workflowBench:run')!(
+      { sender: { isDestroyed: () => false, send: vi.fn() } },
+      { objective: 'o', profileIds: ['bavard', 'vif'] }
+    )
+    expect(poses).toEqual(['build', undefined, 'sans-phase', undefined])
+  })
+
+  it('un run qui ÉCHOUE ne laisse pas ses réglages au workflow suivant', async () => {
+    const poses: unknown[] = []
+    const runOrchestration = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('mort'))
+      .mockResolvedValueOnce(ok(1))
+    const handlers = new Map<string, (e: unknown, r: unknown) => Promise<unknown>>()
+    registerWorkflowBenchIpc({
+      ipcMain: { handle: (c: string, f: never) => handlers.set(c, f) } as never,
+      assertTrusted: vi.fn(),
+      runOrchestration: runOrchestration as never,
+      setActiveWorkflow: ((w: unknown) => poses.push(w)) as never,
+      loadProfiles: () => ({ profiles: [vif, bavard], activeId: null })
+    })
+    await handlers.get('os:workflowBench:run')!(
+      { sender: { isDestroyed: () => false, send: vi.fn() } },
+      { objective: 'o', profileIds: ['bavard', 'vif'] }
+    )
+    // Sinon le verdict comparerait deux fois le même réglage sans le dire.
+    expect(poses[1]).toBeUndefined()
   })
 })

@@ -1511,6 +1511,7 @@ Le fil reprend ensuite normalement.`
   registerWorkflowBenchIpc({
     ipcMain,
     assertTrusted: (event, label) => assertTrustedRendererSender(event, label),
+    setActiveWorkflow: (workflow) => os.setActiveWorkflow(workflow),
     runOrchestration: (objective, bindingOverride, signal) =>
       os.orchestrator.run(
         objective,

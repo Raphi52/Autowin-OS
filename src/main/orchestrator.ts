@@ -11,6 +11,10 @@ import { HookBus } from './hooks/hook-bus'
 import { createDefaultHookBus } from './hooks/default-gate-hooks'
 import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
 import { phaseInstruction, type PipelinePhase } from './skill-pipeline'
+import {
+  combinePhaseInstruction,
+  type PhaseInstructionOverride
+} from './workflow-instruction'
 import { phaseBrief } from './phase-briefs'
 import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
 import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-scope'
@@ -263,6 +267,22 @@ export interface OrchestratorDeps {
   currentExecutionQuote?: () => ExecutionQuote | undefined
   /** Compteurs locaux du run, persistes avec chaque checkpoint pour une reprise sans reset. */
   currentExecutionUsage?: () => ExecutionUsageSnapshot | undefined
+  /**
+   * Workflow nommé actif pour le run en cours — même idiome ambiant que le devis ci-dessus, et même
+   * garantie : les runs d'une confrontation s'enchaînent en série, donc un seul workflow à la fois.
+   */
+  currentWorkflow?: () => WorkflowRunOverride | undefined
+}
+
+/** Ce qu'un workflow nommé impose au run, au-delà du binding de rôle déjà accepté par `run`. */
+export interface WorkflowRunOverride {
+  phases?: PipelinePhase[]
+  allocation?: {
+    phaseMembers?: Partial<Record<PipelinePhase, number>>
+    judgeMembers?: number
+    maxGreedyNodes?: number
+  }
+  instructionFor?: (phase: PipelinePhase) => PhaseInstructionOverride | undefined
 }
 
 /** Un nœud du plan greedy : une sous-tâche + les ids dont elle dépend (doivent réussir avant). */
@@ -399,6 +419,12 @@ export class Orchestrator {
     const installed =
       this.deps.skillInstruction?.(phase, { withFoundation }) ??
       phaseInstruction(phase, undefined, { withFoundation })
+    const base = installed || phaseBrief(phase)
+    // Point de passage UNIQUE des consignes de phase : y brancher le workflow suffit à couvrir
+    // exec, judge et greedy sans les threader un par un.
+    const override = this.deps.currentWorkflow?.()?.instructionFor?.(phase)
+    const text = combinePhaseInstruction(base, override)
+    if (override && text !== base) return { name: `workflow:${phase}`, text }
     return installed
       ? { name: `skill:${phase}`, text: installed }
       : { name: `consigne:${phase}`, text: phaseBrief(phase) }
@@ -520,9 +546,14 @@ export class Orchestrator {
     const activityForRun = (): WorktreeAgentActivity | undefined =>
       this.deps.worktrees?.activity?.().find((activity) => activity.agentId === runId)
     const isMut = isMutationTask(task)
-    const phases = this.deps.classifyPhases
-      ? this.deps.classifyPhases(task)
-      : (this.deps.execPhases ?? ['build'])
+    const workflow = this.deps.currentWorkflow?.()
+    // Le workflow REMPLACE le pipeline classifié : comparer deux façons de faire n'a de sens que si
+    // l'une peut réellement sauter une phase que l'autre exécute.
+    const phases = workflow?.phases?.length
+      ? [...workflow.phases]
+      : this.deps.classifyPhases
+        ? this.deps.classifyPhases(task)
+        : (this.deps.execPhases ?? ['build'])
     const admittedRuntime: OrchestrationRuntimeSnapshot = runtimeSnapshot ?? {
       roles: this.deps.roles.all(),
       phaseFanOut: Object.fromEntries(
@@ -551,6 +582,23 @@ export class Orchestrator {
         phaseFanOut,
         judgeFanOut: bindingOverride ? 0 : admittedRuntime.judgeFanOut.length
       })
+      // Le workflow impose son allocation PAR-DESSUS le calcul du devis, clé par clé : c'est tout
+      // l'intérêt de comparer « 5 juges » à « 1 juge ». Ce qu'il ne dit pas reste ce que le devis a
+      // décidé — sinon un workflow qui ne règle que le jury effacerait aussi le reste.
+      const impose = workflow?.allocation
+      if (impose) {
+        executionQuote.allocation = {
+          ...executionQuote.allocation,
+          ...(impose.judgeMembers !== undefined ? { judgeMembers: impose.judgeMembers } : {}),
+          ...(impose.maxGreedyNodes !== undefined
+            ? { maxGreedyNodes: impose.maxGreedyNodes }
+            : {}),
+          phaseMembers: {
+            ...executionQuote.allocation.phaseMembers,
+            ...impose.phaseMembers
+          }
+        }
+      }
       executionQuote.decomposition =
         executionQuote.allocation.maxGreedyNodes >= 2
           ? { mode: 'build-only', maxNodes: executionQuote.allocation.maxGreedyNodes }
@@ -1448,9 +1496,14 @@ export class Orchestrator {
     const subProvider = subBinding.provider
     // Sélection ADAPTATIVE (proportionnalité) : `classifyPhases(task)` prime si fourni — une tâche
     // triviale ne joue pas les 5 phases. Fallback `execPhases` statique (rétrocompat/tests).
-    const execPhases: PipelinePhase[] = this.deps.classifyPhases
-      ? this.deps.classifyPhases(task)
-      : (this.deps.execPhases ?? ['build'])
+    // Un workflow nommé REMPLACE ce pipeline : c'est ici que l'exécution se décide (le calcul du
+    // devis, plus haut, en fait sa propre lecture — les deux doivent voir la même liste).
+    const workflowPhases = this.deps.currentWorkflow?.()?.phases
+    const execPhases: PipelinePhase[] = workflowPhases?.length
+      ? [...workflowPhases]
+      : this.deps.classifyPhases
+        ? this.deps.classifyPhases(task)
+        : (this.deps.execPhases ?? ['build'])
     let execPrompt
     let lastExecText = ''
     let lastUsage: Usage | undefined

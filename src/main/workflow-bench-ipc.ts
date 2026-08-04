@@ -2,7 +2,7 @@ import type { IpcMain, IpcMainInvokeEvent, WebContents } from 'electron'
 import { runWorkflowBench, type WorkflowBenchReport } from './workflow-bench'
 import { applyWorkflowProfile } from './workflow-profile-apply'
 import { loadWorkflowProfiles } from './workflow-profiles'
-import type { OrchestrationResult } from './orchestrator'
+import type { OrchestrationResult, WorkflowRunOverride } from './orchestrator'
 import type { RoleBinding } from './roles'
 import type { WorkflowProfile } from './workflow-profiles'
 
@@ -13,11 +13,11 @@ import type { WorkflowProfile } from './workflow-profiles'
  * 3000 lignes et sert de zone de collision entre sessions. Ici la logique est isolée, testable sans
  * lancer Electron, et `index.ts` n'a qu'un appel à porter.
  *
- * LIMITE ASSUMÉE, à dire plutôt qu'à masquer : seul l'écart de RÔLE (provider, modèle, effort) est
- * réellement appliqué au run, via le binding figé que l'orchestrateur accepte déjà. Les écarts de
- * phases, d'allocation et de consignes sont calculés et rapportés, mais l'orchestrateur ne sait pas
- * encore les recevoir — les comparer aujourd'hui donnerait un verdict sur une différence qui n'a pas
- * eu lieu.
+ * Le workflow actif est POSÉ pendant le run puis retiré, comme le devis d'exécution juste à côté :
+ * les runs d'une confrontation s'enchaînent en série, donc un seul workflow est actif à la fois.
+ * Retirer le workflow dans un `finally` n'est pas de la coquetterie — un run qui échoue laisserait
+ * sinon ses réglages contaminer le workflow suivant, et le verdict comparerait deux fois la même
+ * chose sans le dire.
  */
 
 export interface WorkflowBenchIpcDeps {
@@ -28,6 +28,8 @@ export interface WorkflowBenchIpcDeps {
     bindingOverride: RoleBinding | undefined,
     signal: AbortSignal
   ) => Promise<OrchestrationResult>
+  /** Pose (ou retire) le workflow actif lu par l'orchestrateur pendant le run. */
+  setActiveWorkflow?: (workflow: WorkflowRunOverride | undefined) => void
   loadProfiles?: () => { profiles: WorkflowProfile[]; activeId: string | null }
   /** Rôle dont l'écart est réellement injecté dans le run. */
   benchRole?: string
@@ -39,14 +41,15 @@ export interface WorkflowBenchIpcRequest {
   profileIds: (string | null)[]
 }
 
-/** Écarts calculés mais non transmis à l'orchestrateur — rapportés pour ne pas surinterpréter. */
-export function unappliedDeviations(profile: WorkflowProfile | null): string[] {
-  if (!profile) return []
-  const restants: string[] = []
-  if (profile.phases?.length) restants.push('phases')
-  if (profile.allocation) restants.push('allocation')
-  if (profile.instructions) restants.push('consignes')
-  return restants
+/** Traduit un workflow nommé en ce que l'orchestrateur sait recevoir. */
+export function overrideFor(profile: WorkflowProfile | null): WorkflowRunOverride | undefined {
+  if (!profile) return undefined
+  const effectif = applyWorkflowProfile({ roles: {} }, profile)
+  return {
+    ...(effectif.phases?.length ? { phases: effectif.phases } : {}),
+    ...(effectif.allocation ? { allocation: effectif.allocation } : {}),
+    instructionFor: (phase) => effectif.instructionFor(phase)
+  }
 }
 
 function bindingFor(profile: WorkflowProfile | null, role: string): RoleBinding | undefined {
@@ -87,19 +90,20 @@ export function registerWorkflowBenchIpc(deps: WorkflowBenchIpcDeps): void {
     const report: WorkflowBenchReport = await runWorkflowBench(
       { objective, profiles },
       {
-        runOnce: (obj, profile) =>
-          deps.runOrchestration(obj, bindingFor(profile, role), controller.signal),
+        runOnce: async (obj, profile) => {
+          deps.setActiveWorkflow?.(overrideFor(profile))
+          try {
+            return await deps.runOrchestration(obj, bindingFor(profile, role), controller.signal)
+          } finally {
+            // Sans ce retrait, un run raté laisserait ses réglages au workflow suivant.
+            deps.setActiveWorkflow?.(undefined)
+          }
+        },
         onProgress,
         signal: controller.signal
       }
     )
 
-    return {
-      ...report,
-      // Ce que la comparaison n'a PAS fait varier, par workflow — la réserve voyage avec le verdict.
-      unapplied: profiles
-        .map((p) => ({ profileId: p?.id ?? '', deviations: unappliedDeviations(p) }))
-        .filter((entry) => entry.deviations.length > 0)
-    }
+    return report
   })
 }

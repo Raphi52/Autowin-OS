@@ -36,7 +36,8 @@ import {
   type OrchestrationResult,
   type OrchestrationRuntimeSnapshot,
   type OrchestrationStep,
-  type OrchestrationPhase
+  type OrchestrationPhase,
+  type WorkflowRunOverride
 } from './orchestrator'
 import { resolveVerifyReplayConfig } from './hooks/verify-replay-config'
 import { buildOrchestratorDecomposer } from './greedy-decompose'
@@ -135,6 +136,14 @@ export class AutowinOS {
   readonly conversations = new ConversationStore()
   readonly trust = new TrustLedger(join(ensureAutowinAppData(), 'trust.jsonl'))
   readonly orchestrator: Orchestrator
+  /**
+   * Workflow nommé imposé au run en cours. Les runs d'une confrontation s'enchaînent en série, donc
+   * un seul à la fois — la confrontation le pose puis le retire, y compris quand le run échoue.
+   */
+  private activeWorkflow?: WorkflowRunOverride
+  setActiveWorkflow(workflow: WorkflowRunOverride | undefined): void {
+    this.activeWorkflow = workflow
+  }
   readonly executionWorkspace: string
   /**
    * Source LIVE du fan-out multi-modèles, alimentée par la topology (index.ts `syncRuntimeTopology`).
@@ -222,6 +231,9 @@ export class AutowinOS {
       classifyPhases: regimePhases,
       currentExecutionQuote: () => this.executionSupervisor.currentQuote(),
       currentExecutionUsage: () => this.executionSupervisor.currentSnapshot(),
+      // Workflow nommé actif — posé le temps d'un run par la confrontation de workflows, absent le
+      // reste du temps. Même portée ambiante que le devis ci-dessus.
+      currentWorkflow: () => this.activeWorkflow,
       // SURVIE NIVEAU 3 : après CHAQUE phase, on persiste l'acquis du run ; à la clôture on l'efface.
       // Un kill du process main laisse donc un état reprenable → `resumableOrchestration()`.
       onPhaseCompleted: ({

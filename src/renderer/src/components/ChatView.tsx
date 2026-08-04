@@ -843,6 +843,8 @@ export function ChatView({
     return clampConversationPaneWidth(Number.isFinite(saved) && saved > 0 ? saved : 232)
   })
   const [hasNewActivity, setHasNewActivity] = useState(false)
+  /* Fil remonté : le saut vers le dernier message ne dépend pas d'une nouvelle activité. */
+  const [scrolledAwayFromTail, setScrolledAwayFromTail] = useState(false)
   const [showRuns, setShowRuns] = useState(false)
   const [runsPaneWidth, setRunsPaneWidth] = useState(() => {
     const saved = Number(window.localStorage.getItem('autowin.chat.runsPaneWidth'))
@@ -1443,6 +1445,7 @@ export function ChatView({
     requestAnimationFrame(() => {
       scroll.scrollTo({ top: scroll.scrollHeight, behavior: 'smooth' })
       setHasNewActivity(false)
+      setScrolledAwayFromTail(false)
     })
   }, [messages, activeDirectiveReceipts])
 
@@ -2573,6 +2576,7 @@ export function ChatView({
           onScroll={(event) => {
             const nearBottom = isChatNearBottom(event.currentTarget)
             followTailRef.current = nearBottom
+            setScrolledAwayFromTail(!nearBottom)
             if (nearBottom) setHasNewActivity(false)
           }}
         >
@@ -2625,20 +2629,21 @@ export function ChatView({
           ))}
         </div>
 
-        {hasNewActivity && (
+        {(hasNewActivity || scrolledAwayFromTail) && (
           <button
             type="button"
             className="chat-jump-latest"
             onClick={() => {
               followTailRef.current = true
               setHasNewActivity(false)
+              setScrolledAwayFromTail(false)
               scrollRef.current?.scrollTo({
                 top: scrollRef.current.scrollHeight,
                 behavior: 'smooth'
               })
             }}
           >
-            ↓ Dernière réponse
+            {hasNewActivity ? '↓ Dernière réponse' : '↓ Dernier message'}
           </button>
         )}
 
