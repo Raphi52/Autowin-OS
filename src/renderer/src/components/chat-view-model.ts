@@ -9,6 +9,7 @@ import {
 } from '../../../shared/chat-turn'
 import { parseScoutSuggestions, type SuggestionGroup } from './scout-suggestions'
 import { parseScoutTable, type ScoutRow } from './scout-table'
+import type { PilotEventKind } from '../../../shared/pilot-events'
 
 export type ChatActionPart = PersistedChatActionPart
 export type ChatArtifactPart = PersistedChatArtifactPart
@@ -112,18 +113,13 @@ export function deriveConversationState(input: {
 
 export interface AssistantPilotEvent {
   turnId?: string
-  kind:
-    | 'delta'
-    | 'stream-reset'
-    | 'think'
-    | 'reasoning'
-    | 'command'
-    | 'result'
-    | 'done'
-    | 'error'
-    | 'retry'
-    | 'cancellation'
-    | 'artifact'
+  /**
+   * Vocabulaire partagé (`src/shared/pilot-events.ts`). C'était la TROISIÈME liste recopiée à la main
+   * — le main en déclarait 12, celle-ci 11 (`prompt-call` manquant), celle de `ChatView` 10. Aucune
+   * ne compilait contre les autres : la frontière IPC casse, et le réducteur ci-dessous ne réagit
+   * qu'aux kinds qu'il reconnaît, donc un kind absent de la liste se traduisait par un silence.
+   */
+  kind: PilotEventKind
   streamId?: string
   actionId?: string
   iteration?: number
@@ -297,6 +293,12 @@ export type OrchStep = {
   text?: string
   detail?: string
   costUsd?: number
+  /**
+   * Tokens du tour, tels que remontés par le provider. Le main les envoie déjà dans
+   * `OrchestrationStep` ; ils n'étaient simplement pas déclarés ici, donc invisibles à l'affichage —
+   * or c'est la seule unité disponible quand le provider ne chiffre pas son coût.
+   */
+  tokens?: number
   /** Statut du sous-agent — un échec doit se voir (sinon un step raté passe pour réussi). */
   status?: 'completed' | 'failed'
   /** Cause de l'échec (message), affichée quand status==='failed'. */
@@ -442,23 +444,78 @@ export function matchSlashCommands(input: string): SlashCommand[] {
 }
 
 /**
- * Récap coût PAR MODÈLE d'un run : somme `costUsd` + nombre d'appels par `model` (steps sans model
- * ignorés), trié coût décroissant. Pur → testable. Sert à voir « Opus vs Codex vs Kimi » dans un run.
+ * Volume de tokens en forme lisible d'un coup d'œil. « 795k » et « 1.0G » se comparent mentalement,
+ * « 795000 » et « 1002340000 » non — et c'est un chiffre destiné à faire réagir sur une dérive.
  */
-export function costByModel(
-  steps: OrchStep[]
-): Array<{ model: string; costUsd: number; count: number }> {
-  const map = new Map<string, { costUsd: number; count: number }>()
+export function formatTokens(tokens: number): string {
+  if (tokens >= 1_000_000_000) return `${(tokens / 1_000_000_000).toFixed(1)}G tokens`
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M tokens`
+  if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}k tokens`
+  return `${tokens} tokens`
+}
+
+/**
+ * Récap coût PAR MODÈLE d'un run : somme `costUsd` + nombre d'appels par `model` (steps sans model
+ * ignorés). Pur → testable. Sert à voir « Opus vs Codex vs Kimi » dans un run.
+ *
+ * Rend AUSSI le volume NON CHIFFRÉ, sans quoi le récap mentait. Mesuré le 2026-08-04 sur le journal
+ * réel : codex ne remonte aucun `costUsd` — 1 280 appels, 532M de tokens — donc `costUsd ?? 0`
+ * affichait « 0.0000 $ » à côté de « ×1280 ». Un zéro se lit « gratuit », et c'est sur ce chiffre qu'on
+ * décide. On ne comble pas le trou avec un tarif inventé (un prix sans source tracée serait un faux
+ * présenté comme mesuré) : on expose le volume que le montant ne couvre pas.
+ *
+ * Tri : par TOKENS décroissants, l'unité commune aux deux cas — un modèle qui a englouti 90M tokens
+ * doit passer devant un montant connu de 2 centimes. À tokens égaux (ou absents), on retombe sur le
+ * coût décroissant, ce qui préserve l'ordre historique.
+ */
+export function costByModel(steps: OrchStep[]): Array<{
+  model: string
+  costUsd: number
+  count: number
+  /** Tokens des appels de ce modèle dont le provider n'a PAS chiffré le coût. */
+  uncostedTokens: number
+  /** Nombre de ces appels — un provider muet sur tout doit rester visible. */
+  uncostedCalls: number
+}> {
+  const map = new Map<
+    string,
+    {
+      costUsd: number
+      count: number
+      uncostedTokens: number
+      uncostedCalls: number
+      tokens: number
+    }
+  >()
   for (const s of steps) {
     if (!s.model) continue
-    const e = map.get(s.model) ?? { costUsd: 0, count: 0 }
+    const e = map.get(s.model) ?? {
+      costUsd: 0,
+      count: 0,
+      uncostedTokens: 0,
+      uncostedCalls: 0,
+      tokens: 0
+    }
     e.costUsd += s.costUsd ?? 0
     e.count += 1
+    e.tokens += s.tokens ?? 0
+    if (!Number.isFinite(s.costUsd)) {
+      e.uncostedCalls += 1
+      e.uncostedTokens += s.tokens ?? 0
+    }
     map.set(s.model, e)
   }
+  // `tokens` sert au TRI mais ne fait pas partie du contrat rendu : on trie sur les entrées de la map,
+  // puis on projette. Évite d'exposer un champ que personne n'affiche.
   return [...map.entries()]
-    .map(([model, v]) => ({ model, costUsd: v.costUsd, count: v.count }))
-    .sort((a, b) => b.costUsd - a.costUsd)
+    .sort(([, a], [, b]) => b.tokens - a.tokens || b.costUsd - a.costUsd)
+    .map(([model, v]) => ({
+      model,
+      costUsd: v.costUsd,
+      count: v.count,
+      uncostedTokens: v.uncostedTokens,
+      uncostedCalls: v.uncostedCalls
+    }))
 }
 
 /** Icône + libellé par type d'étape d'orchestration (affichage temps réel). */

@@ -19,6 +19,7 @@ import {
   type OrchestrationOutcome
 } from '../shared/orchestration-outcome'
 import type { ChatArtifact } from '../shared/artifacts'
+import type { PilotEventKind } from '../shared/pilot-events'
 
 /**
  * Boucle de PILOTAGE : un agent LLM conduit l'app lui-même.
@@ -76,19 +77,12 @@ export type PilotEventVariant =
  */
 export interface PilotEvent {
   conversationId?: string
-  kind:
-    | 'delta'
-    | 'stream-reset'
-    | 'think'
-    | 'reasoning'
-    | 'command'
-    | 'result'
-    | 'done'
-    | 'error'
-    | 'retry'
-    | 'cancellation'
-    | 'prompt-call'
-    | 'artifact'
+  /**
+   * Vocabulaire partagé avec le renderer (`src/shared/pilot-events.ts`). Écrit à la main des deux
+   * côtés, il avait dérivé : `reasoning` et `prompt-call` manquaient côté renderer, sans que rien ne
+   * le signale — la frontière IPC fait un cast non vérifié.
+   */
+  kind: PilotEventKind
   text?: string
   name?: string
   args?: unknown

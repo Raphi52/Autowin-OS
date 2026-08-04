@@ -56,6 +56,7 @@ import './ChatView.css'
 import './SlashPalette.css'
 import type { InspectTurnTarget } from '../observatory-focus'
 import type { ChatArtifact } from '../../../shared/artifacts'
+import type { PilotEventKind } from '../../../shared/pilot-events'
 
 /* ---------- Types ---------- */
 
@@ -96,17 +97,12 @@ type Msg = (UserMsg | AsstMsg) & { messageId?: string }
 interface PilotEvent {
   conversationId?: string
   turnId?: string
-  kind:
-    | 'delta'
-    | 'stream-reset'
-    | 'think'
-    | 'command'
-    | 'result'
-    | 'done'
-    | 'error'
-    | 'retry'
-    | 'cancellation'
-    | 'artifact'
+  /**
+   * Même vocabulaire que le main (`src/shared/pilot-events.ts`), plus recopié ici. Cette liste avait
+   * dérivé : il lui manquait `reasoning` et `prompt-call`, que le main émet — et comme la réception
+   * fait `raw as PilotEvent`, le renderer les ignorait en silence au lieu de ne pas compiler.
+   */
+  kind: PilotEventKind
   text?: string
   streamId?: string
   actionId?: string
