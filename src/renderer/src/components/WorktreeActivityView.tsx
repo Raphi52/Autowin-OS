@@ -148,6 +148,59 @@ function FileList({ agent }: { agent: WorktreeAgentActivity }): React.JSX.Elemen
   )
 }
 
+function freshnessLabel(agent: WorktreeAgentActivity, nowMs: number): string {
+  const timestamp = agent.endedAtMs ?? agent.startedAtMs
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return 'Fraîcheur inconnue'
+  const ageMs = Math.max(0, nowMs - timestamp)
+  if (!agent.endedAtMs && ageMs > 30 * 60_000) return 'Obsolète'
+  if (ageMs < 60_000) return 'À l’instant'
+  if (ageMs < 3_600_000) return `Il y a ${Math.floor(ageMs / 60_000)} min`
+  return `Il y a ${Math.floor(ageMs / 3_600_000)} h`
+}
+
+/** Carte compacte partagée par le cockpit Worktrees, alimentée par les mêmes traductions métier. */
+export function WorktreeActivitySummary({
+  agent,
+  nowMs,
+  onOpen,
+  showFiles = true
+}: {
+  agent: WorktreeAgentActivity
+  nowMs?: number
+  onOpen?: (agent: WorktreeAgentActivity) => void
+  showFiles?: boolean
+}): React.JSX.Element {
+  const [renderedAt] = React.useState(() => Date.now())
+  const copy = stateCopy(agent)
+  const freshness = freshnessLabel(agent, nowMs ?? renderedAt)
+  return (
+    <article className="wt-activity-summary">
+      <header>
+        {onOpen ? (
+          <button type="button" className="wt-summary-open" onClick={() => onOpen(agent)}>
+            <strong>{agent.task ?? agent.agentName}</strong>
+            <span>{agent.agentName}</span>
+          </button>
+        ) : (
+          <div>
+            <strong>{agent.task ?? agent.agentName}</strong>
+            <span>{agent.agentName}</span>
+          </div>
+        )}
+        <span className={`wt-office-state is-${copy.tone}`}>{copy.label}</span>
+      </header>
+      <div className="wt-summary-meta">
+        <span>Phase · {agent.role || 'Inconnue'}</span>
+        <span>
+          Verdict · {agent.verdict && agent.verdict !== 'unknown' ? agent.verdict : 'inconnu'}
+        </span>
+        <span className={freshness === 'Obsolète' ? 'is-stale' : ''}>{freshness}</span>
+      </div>
+      {showFiles && <FileList agent={agent} />}
+    </article>
+  )
+}
+
 function AgentOffice({
   agent,
   onResolveConflict,

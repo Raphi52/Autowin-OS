@@ -1,5 +1,5 @@
-import { readdir, readFile, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { readdir, readFile, rm, stat } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
 import { parseRun, type RunSummary } from './runs'
 
 /**
@@ -57,4 +57,17 @@ export async function scanRuns(
   const limit =
     options.limit === undefined ? entries.length : Math.max(0, Math.floor(options.limit))
   return entries.sort((a, b) => b.mtime - a.mtime).slice(0, limit)
+}
+
+function comparablePath(path: string): string {
+  const absolute = resolve(path)
+  return process.platform === 'win32' ? absolute.toLocaleLowerCase('en-US') : absolute
+}
+
+/** Supprime uniquement un workspace dont le RUN.md figure encore dans le scan global courant. */
+export async function deleteListedRun(runPath: string, root = runsRoot()): Promise<void> {
+  const candidate = comparablePath(runPath)
+  const listedRun = (await scanRuns(root)).find((run) => comparablePath(run.path) === candidate)
+  if (!listedRun) throw new Error('RUN non autorisé dans la liste globale')
+  await rm(dirname(listedRun.path), { recursive: true, force: false })
 }

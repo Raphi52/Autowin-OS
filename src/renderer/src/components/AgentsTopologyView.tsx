@@ -37,7 +37,6 @@ type Target = 'orchestrator' | 'subagents' | 'scout' | 'frame' | 'terrain' | 'ju
 /** Cibles dont le fan-out multi-modèles EST branché au runtime (≥2 slots → dupliqué + agrégé). */
 const FANOUT_ACTIVE: ReadonlySet<Target> = new Set<Target>(['scout', 'frame', 'terrain', 'judge'])
 type Profile = { id: string; name: string; updatedAt: string; topology: AgentTopology }
-type RoleBinding = { provider: string; model?: string; reasoningEffort?: string }
 
 const DRAG_TYPE = 'application/x-autowin-model'
 
@@ -52,27 +51,6 @@ function nextSlotId(target: Exclude<Target, 'orchestrator'>, topology: AgentTopo
   let index = slots.length + 1
   while (slots.some((slot) => slot.slotId === `${target.replace(/s$/, '')}-${index}`)) index += 1
   return `${target.replace(/s$/, '')}-${index}`
-}
-
-function withOrchestratorRole(
-  topology: AgentTopology,
-  models: ImportedModel[],
-  role: RoleBinding
-): AgentTopology {
-  const model = models.find(
-    (candidate) =>
-      candidate.provider === role.provider &&
-      (candidate.id === role.model || candidate.model === role.model)
-  )
-  return {
-    ...topology,
-    orchestrator: {
-      slotId: 'orchestrator',
-      provider: role.provider,
-      modelId: model?.id ?? role.model ?? `${role.provider}:default`,
-      reasoningEffort: role.reasoningEffort ?? model?.defaultReasoningEffort ?? 'auto'
-    }
-  }
 }
 
 export function AgentsTopologyView({
@@ -97,10 +75,10 @@ export function AgentsTopologyView({
   }
 
   useEffect(() => {
-    Promise.all([window.api.models(), window.api.topology(), window.api.roles()])
-      .then(([catalog, current, roles]) => {
+    Promise.all([window.api.models(), window.api.topology()])
+      .then(([catalog, current]) => {
         setModels(catalog)
-        replaceTopology(withOrchestratorRole(current, catalog, roles.orchestrator))
+        replaceTopology(current)
         setSelectedModelId(catalog.find((model) => model.dynamicallyLoaded)?.id ?? '')
         setState('ready')
       })
@@ -113,21 +91,11 @@ export function AgentsTopologyView({
     if (!active) return
     const off = window.api.onAppEvent((event) => {
       if (event.type === 'refresh' && event.scope === 'roles') {
-        void window.api.roles().then((roles) => {
-          setTopology((current) =>
-            current
-              ? (() => {
-                  const next = withOrchestratorRole(current, models, roles.orchestrator)
-                  topologyRef.current = next
-                  return next
-                })()
-              : current
-          )
-        })
+        void window.api.topology().then(replaceTopology)
       }
     })
     return off
-  }, [active, models])
+  }, [active])
   useEffect(() => {
     window.api
       .profiles()
@@ -154,8 +122,7 @@ export function AgentsTopologyView({
   }
   async function applyProfile(id: string): Promise<void> {
     const applied = await window.api.applyProfile(id)
-    const roles = await window.api.roles()
-    replaceTopology(withOrchestratorRole(applied.topology, models, roles.orchestrator))
+    replaceTopology(applied.topology)
   }
 
   const modelsById = useMemo(() => new Map(models.map((model) => [model.id, model])), [models])
@@ -180,39 +147,6 @@ export function AgentsTopologyView({
       const saved = await request
       if (version === persistVersionRef.current) {
         replaceTopology(saved)
-        setState('ready')
-      }
-    } catch (reason) {
-      if (version === persistVersionRef.current) {
-        setError(reason instanceof Error ? reason.message : String(reason))
-        setState('error')
-      }
-    }
-  }
-
-  async function persistOrchestrator(binding: SlotBinding): Promise<void> {
-    const version = ++persistVersionRef.current
-    const current = topologyRef.current
-    if (current) replaceTopology({ ...current, orchestrator: binding })
-    setState('saving')
-    setError('')
-    const request = persistQueueRef.current.then(() =>
-      window.api.setRole(
-        'orchestrator',
-        binding.provider,
-        modelsById.get(binding.modelId)?.model ?? binding.modelId,
-        binding.reasoningEffort
-      )
-    )
-    persistQueueRef.current = request.then(
-      () => undefined,
-      () => undefined
-    )
-    try {
-      const roles = await request
-      if (version === persistVersionRef.current) {
-        const latest = topologyRef.current
-        if (latest) replaceTopology(withOrchestratorRole(latest, models, roles.orchestrator))
         setState('ready')
       }
     } catch (reason) {
@@ -254,8 +188,7 @@ export function AgentsTopologyView({
                 [target]: replaceOrAppend(current.panels[target], binding)
               }
             }
-    if (target === 'orchestrator') void persistOrchestrator(binding)
-    else void persist(next)
+    void persist(next)
   }
 
   function replaceOrAppend(slots: SlotBinding[], binding: SlotBinding): SlotBinding[] {
@@ -278,8 +211,7 @@ export function AgentsTopologyView({
               ...current,
               panels: { ...current.panels, [target]: current.panels[target].map(update) }
             }
-    if (target === 'orchestrator') void persistOrchestrator(next.orchestrator)
-    else void persist(next)
+    void persist(next)
   }
 
   function remove(target: Exclude<Target, 'orchestrator'>, slotId: string): void {

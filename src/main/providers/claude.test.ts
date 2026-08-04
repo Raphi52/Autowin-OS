@@ -136,6 +136,164 @@ describe('ClaudeCliAdapter — pièces jointes', () => {
 })
 
 describe('ClaudeCliAdapter — sorties artefact stream-json', () => {
+  it('ne republie pas une image utilisateur identique comme artefact généré', async () => {
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'assistant',
+        message: {
+          model: 'claude-opus-test',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: 'image/png', data: 'YWJj' }
+            }
+          ]
+        }
+      },
+      { type: 'result', result: 'Image lue', session_id: 'artifact-session', is_error: false }
+    ]
+    const { ClaudeCliAdapter } = await import('./claude')
+    const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([
+      {
+        role: 'user',
+        content: 'Lis cette image',
+        attachments: [
+          {
+            name: 'preuve.png',
+            mimeType: 'image/png',
+            size: 3,
+            kind: 'image',
+            content: 'YWJj'
+          }
+        ]
+      }
+    ])
+    let step = await gen.next()
+    while (!step.done) step = await gen.next()
+
+    expect(step.value.artifacts).toBeUndefined()
+  })
+
+  it('conserve une image Claude différente même si le tour contient une image utilisateur', async () => {
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'assistant',
+        message: {
+          model: 'claude-opus-test',
+          content: [
+            {
+              type: 'image',
+              name: 'résultat.png',
+              source: { type: 'base64', media_type: 'image/png', data: 'ZGVm' }
+            }
+          ]
+        }
+      },
+      { type: 'result', result: 'Image créée', session_id: 'artifact-session', is_error: false }
+    ]
+    const { ClaudeCliAdapter } = await import('./claude')
+    const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([
+      {
+        role: 'user',
+        content: 'Transforme cette image',
+        attachments: [
+          {
+            name: 'preuve.png',
+            mimeType: 'image/png',
+            size: 3,
+            kind: 'image',
+            content: 'YWJj'
+          }
+        ]
+      }
+    ])
+    let step = await gen.next()
+    while (!step.done) step = await gen.next()
+
+    expect(step.value.artifacts).toEqual([
+      expect.objectContaining({ name: 'résultat.png', content: 'ZGVm', kind: 'image' })
+    ])
+  })
+
+  it('déduplique deux encodages base64 équivalents de la même image utilisateur', async () => {
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'assistant',
+        message: {
+          model: 'claude-opus-test',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: 'image/png', data: 'Y W J j\n' }
+            }
+          ]
+        }
+      },
+      { type: 'result', result: 'Image lue', session_id: 'artifact-session', is_error: false }
+    ]
+    const { ClaudeCliAdapter } = await import('./claude')
+    const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([
+      {
+        role: 'user',
+        content: 'Lis cette image',
+        attachments: [
+          {
+            name: 'preuve.png',
+            mimeType: 'image/png',
+            size: 3,
+            kind: 'image',
+            content: 'YWJj'
+          }
+        ]
+      }
+    ])
+    let step = await gen.next()
+    while (!step.done) step = await gen.next()
+
+    expect(step.value.artifacts).toBeUndefined()
+  })
+
+  it('ne supprime pas un document ayant les mêmes octets qu’une image utilisateur', async () => {
+    spawnCapture.stdoutEvents = [
+      {
+        type: 'assistant',
+        message: {
+          model: 'claude-opus-test',
+          content: [
+            {
+              type: 'document',
+              name: 'preuve.pdf',
+              source: { type: 'base64', media_type: 'application/pdf', data: 'YWJj' }
+            }
+          ]
+        }
+      },
+      { type: 'result', result: 'Document prêt', session_id: 'artifact-session', is_error: false }
+    ]
+    const { ClaudeCliAdapter } = await import('./claude')
+    const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([
+      {
+        role: 'user',
+        content: 'Lis cette image',
+        attachments: [
+          {
+            name: 'preuve.png',
+            mimeType: 'image/png',
+            size: 3,
+            kind: 'image',
+            content: 'YWJj'
+          }
+        ]
+      }
+    ])
+    let step = await gen.next()
+    while (!step.done) step = await gen.next()
+
+    expect(step.value.artifacts).toEqual([
+      expect.objectContaining({ name: 'preuve.pdf', mimeType: 'application/pdf', content: 'YWJj' })
+    ])
+  })
+
   it('transporte un bloc image assistant complet jusqu’au résultat supplier-agnostic', async () => {
     spawnCapture.stdoutEvents = [
       {

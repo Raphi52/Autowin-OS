@@ -16,7 +16,6 @@ export interface BehaviourQuery {
   localAppDataRoot?: string
 }
 
-
 export interface BehaviourFile {
   id: string
   label: string
@@ -383,6 +382,16 @@ export async function readBehaviourFile(
 ): Promise<string> {
   const normalized = normalizeQuery(query)
   const manifest = await listBehaviourFiles(normalized)
+  return readBehaviourFileFromManifest(id, manifest, normalized)
+}
+
+/** Lit un fichier depuis un inventaire déjà calculé, sans rescanner le workspace. */
+export async function readBehaviourFileFromManifest(
+  id: string,
+  manifest: readonly BehaviourFile[],
+  query?: string | BehaviourQuery
+): Promise<string> {
+  const normalized = normalizeQuery(query)
   const file = manifest.find((candidate) => candidate.id === id)
   if (!file) throw new Error('Fichier de comportement inconnu ou hors du workspace autorisé')
   const allowedRoots = [

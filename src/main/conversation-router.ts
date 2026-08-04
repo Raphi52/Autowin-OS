@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import type { ProviderRegistry } from './providers/registry'
-import type { Usage } from './providers/types'
+import type { SendResult, Usage } from './providers/types'
 import type { RoleModelConfig } from './roles'
 import type { Conversation, ConversationStore, Msg } from './store/conversations'
+import { compileExecutionQuote } from './execution-quote'
+import type { ExecutionSupervisor } from './execution-supervisor'
+import { routeSkillRequest } from './skill-routing'
 
 const ROUTE_CONFIDENCE_THRESHOLD = 0.9
 const CONTEXT_MESSAGE_LIMIT = 10
@@ -26,6 +29,8 @@ export type ConversationRouteReason =
   | 'new-topic'
   | 'uncertain'
   | 'empty-context'
+  | 'explicit-command'
+  | 'local-follow-up'
   | 'fallback'
 
 export interface ConversationRouteDecision {
@@ -60,9 +65,7 @@ function parseDecision(text: string): Omit<ConversationRouteDecision, 'provider'
       : 'uncertain'
     const title = typeof parsed.title === 'string' ? clip(parsed.title, TITLE_CHARS) : ''
     const wantsNew =
-      parsed.route === 'new' &&
-      reason === 'new-topic' &&
-      confidence >= ROUTE_CONFIDENCE_THRESHOLD
+      parsed.route === 'new' && reason === 'new-topic' && confidence >= ROUTE_CONFIDENCE_THRESHOLD
     return {
       route: wantsNew ? 'new' : 'current',
       confidence,
@@ -81,10 +84,21 @@ function contextMessages(messages: Msg[]): Array<{ role: Msg['role']; content: s
   }))
 }
 
+function isDeterministicFollowUp(value: string, hasAttachments: boolean): boolean {
+  if (hasAttachments) return false
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  if (!normalized || normalized.length > 160) return false
+  return /^(?:continue|poursuis|relance|recommence|go\b|vas[- ]?y\b|vazy\b|fais[- ]le\b|corrige (?:ça|cela)\b)/i.test(
+    normalized
+  )
+}
+
 export class ConversationRouter {
   constructor(
     private readonly registry: ProviderRegistry,
-    private readonly roles: RoleModelConfig
+    private readonly roles: RoleModelConfig,
+    private readonly executionSupervisor: ExecutionSupervisor,
+    private readonly waitUntilReady: () => Promise<void> = async () => {}
   ) {}
 
   async decide(
@@ -96,8 +110,13 @@ export class ConversationRouter {
     if (!conversation.messages.some((message) => message.content.trim())) {
       return { route: 'current', confidence: 1, reason: 'empty-context' }
     }
+    if (routeSkillRequest(incomingMessage)?.reason === 'explicit-skill') {
+      return { route: 'current', confidence: 1, reason: 'explicit-command' }
+    }
+    if (isDeterministicFollowUp(incomingMessage, attachmentNames.length > 0)) {
+      return { route: 'current', confidence: 1, reason: 'local-follow-up' }
+    }
 
-    const binding = this.roles.getBinding('orchestrator')
     const messages = [
       {
         role: 'user' as const,
@@ -110,13 +129,39 @@ export class ConversationRouter {
       }
     ]
     try {
-      const result = await this.registry.send(binding.provider, messages, {
-        system: ROUTER_SYSTEM,
-        model: binding.model,
-        reasoningEffort: binding.reasoningEffort,
-        signal,
-        requestId: randomUUID()
-      })
+      await this.waitUntilReady()
+      // La découverte peut remplacer un alias pendant l'attente : relire APRÈS la barrière évite
+      // d'envoyer l'ancien `codex/flagship` alors que son transport concret vient d'être résolu.
+      const binding = this.roles.getBinding('orchestrator')
+      const send = (): Promise<SendResult> =>
+        this.registry.send(binding.provider, messages, {
+          system: ROUTER_SYSTEM,
+          model: binding.model,
+          reasoningEffort: binding.reasoningEffort,
+          signal,
+          requestId: randomUUID()
+        })
+      const result = this.executionSupervisor.currentQuote()
+        ? await send()
+        : await this.executionSupervisor.run(
+            (() => {
+              const quote = compileExecutionQuote(`conversation-route:${incomingMessage}`, {
+                maxProviderCalls: 1,
+                maxTotalTokens: 200_000,
+                maxUsd: 0.1
+              })
+              quote.phases = []
+              quote.decomposition = { mode: 'disabled', maxNodes: 1 }
+              quote.limits.maxAgents = 0
+              quote.limits.maxConcurrency = 1
+              quote.limits.maxDurationMs = 30_000
+              quote.limits.maxRecoveries = 0
+              quote.limits.maxFreshTokens = Math.min(quote.limits.maxFreshTokens, 50_000)
+              return quote
+            })(),
+            signal,
+            send
+          )
       const parsed = parseDecision(result.text)
       if (!parsed) {
         return {
@@ -137,6 +182,7 @@ export class ConversationRouter {
         usage: result.usage
       }
     } catch {
+      const binding = this.roles.getBinding('orchestrator')
       return {
         route: 'current',
         confidence: 0,

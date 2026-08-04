@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { structuredEvidenceFields } from './codex'
+import { codexExecutionEvidenceKind, structuredEvidenceFields } from './codex'
 
 describe('structuredEvidenceFields', () => {
   it('command_execution → command + exitCode + stdout (sortie brute conservée)', () => {
@@ -16,7 +16,11 @@ describe('structuredEvidenceFields', () => {
   })
 
   it('exit_code non nul est préservé (échec visible)', () => {
-    const f = structuredEvidenceFields({ type: 'command_execution', command: 'npm run build', exit_code: 2 })
+    const f = structuredEvidenceFields({
+      type: 'command_execution',
+      command: 'npm run build',
+      exit_code: 2
+    })
     expect(f.exitCode).toBe(2)
   })
 
@@ -31,7 +35,10 @@ describe('structuredEvidenceFields', () => {
   })
 
   it('file_change avec diff déjà en string → conservé tel quel', () => {
-    const f = structuredEvidenceFields({ type: 'file_change', changes: '+ ligne ajoutée\n- ligne retirée' })
+    const f = structuredEvidenceFields({
+      type: 'file_change',
+      changes: '+ ligne ajoutée\n- ligne retirée'
+    })
     expect(f.diff).toBe('+ ligne ajoutée\n- ligne retirée')
   })
 
@@ -43,5 +50,17 @@ describe('structuredEvidenceFields', () => {
 
   it('type inconnu → aucun champ structuré (rétrocompat)', () => {
     expect(structuredEvidenceFields({ type: 'reasoning' })).toEqual({})
+  })
+})
+
+describe('codexExecutionEvidenceKind', () => {
+  it('reconnaît une assertion PowerShell avec branches exit comme vérification', () => {
+    expect(
+      codexExecutionEvidenceKind({
+        type: 'command_execution',
+        command:
+          'powershell -Command "if ((Get-Content -Raw .\\proof.txt).Trim() -eq \'DONE\') { exit 0 } else { exit 1 }"'
+      })
+    ).toBe('verification')
   })
 })

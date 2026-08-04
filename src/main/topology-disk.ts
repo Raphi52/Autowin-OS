@@ -3,6 +3,7 @@ import { dirname } from 'node:path'
 import type { ImportedModel } from './models'
 import {
   assertTopology,
+  assertTopologyAgainstAvailableModels,
   createDefaultTopology,
   migrateTopologyShape,
   type AgentTopology
@@ -11,7 +12,7 @@ import {
 export function loadAgentTopology(path: string, models: ImportedModel[]): AgentTopology {
   try {
     const parsed = migrateTopologyShape(JSON.parse(readFileSync(path, 'utf8'))) as AgentTopology
-    return assertTopology(parsed, models)
+    return assertTopologyAgainstAvailableModels(parsed, models)
   } catch {
     return createDefaultTopology(models)
   }

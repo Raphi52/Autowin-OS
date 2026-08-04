@@ -15,15 +15,23 @@ const event = (over: Partial<HarnessTimelineEvent>): HarnessTimelineEvent =>
     ...Object.fromEntries(Object.entries(over).filter(([, value]) => value !== undefined))
   }) as HarnessTimelineEvent
 
-const timeline = (turns: HarnessTimeline['turns']): HarnessTimeline => ({
-  turns,
-  anomalies: [],
-  totalTokens: 0,
-  totalCostUsd: 0
-} as unknown as HarnessTimeline)
+const timeline = (turns: HarnessTimeline['turns']): HarnessTimeline =>
+  ({
+    turns,
+    anomalies: [],
+    totalTokens: 0,
+    totalCostUsd: 0
+  }) as unknown as HarnessTimeline
 
-const turn = (id: string, events: HarnessTimelineEvent[]): HarnessTimeline['turns'][number] =>
-  ({ id, ts: '2026-07-31T10:00:00Z', events, tokens: 0, costUsd: 0, inputTokens: 0, outputTokens: 0 })
+const turn = (id: string, events: HarnessTimelineEvent[]): HarnessTimeline['turns'][number] => ({
+  id,
+  ts: '2026-07-31T10:00:00Z',
+  events,
+  tokens: 0,
+  costUsd: 0,
+  inputTokens: 0,
+  outputTokens: 0
+})
 
 /**
  * Le fil des sous-agents ne vivait qu'en mémoire : « Aucune orchestration dans cette conversation »
@@ -82,6 +90,39 @@ describe('fil des sous-agents reconstruit depuis la trace persistée', () => {
     )
     expect(runs.map((run) => run.task)).toEqual(['premier', 'second'])
     expect(runs.map((run) => run.runPath)).toEqual(['turn-1', 'turn-2'])
+  })
+
+  it('répare à l’affichage une ancienne identité impossible codex + modèle Gemini', () => {
+    const runs = scopedRunsFromTimeline(
+      timeline([
+        turn('turn-stale', [
+          event({
+            kind: 'verdict',
+            provider: 'codex',
+            model: 'gemini-2.5-pro',
+            content: 'défaut'
+          })
+        ])
+      ]),
+      'conv-1',
+      new Map([['turn-stale', { provider: 'codex', model: 'gpt-5.6-sol', reasoningEffort: 'low' }]])
+    )
+
+    expect(runs[0].steps[0]).toMatchObject({ provider: 'codex', model: 'gpt-5.6-sol' })
+  })
+
+  it('conserve un vrai juge Gemini quand son provider est lui aussi Gemini', () => {
+    const runs = scopedRunsFromTimeline(
+      timeline([
+        turn('turn-gemini', [
+          event({ kind: 'verdict', provider: 'gemini', model: 'gemini-2.5-pro' })
+        ])
+      ]),
+      'conv-1',
+      new Map([['turn-gemini', { provider: 'codex', model: 'gpt-5.6-sol' }]])
+    )
+
+    expect(runs[0].steps[0]).toMatchObject({ provider: 'gemini', model: 'gemini-2.5-pro' })
   })
 })
 

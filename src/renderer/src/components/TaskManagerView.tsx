@@ -5,7 +5,7 @@ import { compareModelsByName, displayedModelName } from './model-name-order'
 import './TaskManagerView.css'
 
 type ExecutionMode = 'windows' | 'active-only'
-type RecurrenceUnit = 'none' | 'day' | 'week' | 'month'
+type RecurrenceUnit = 'none' | 'minute' | 'hour' | 'day' | 'week' | 'month'
 
 interface TaskSchedule {
   startDate: string
@@ -99,6 +99,17 @@ const WEEK_DAYS = [
   { value: 7, label: 'D' }
 ]
 
+const EFFORT_LABELS: Record<string, string> = {
+  none: 'Aucun',
+  minimal: 'Minimal',
+  low: 'Léger',
+  medium: 'Moyen',
+  high: 'Élevé',
+  xhigh: 'Très élevé',
+  max: 'Max',
+  ultra: 'Ultra'
+}
+
 function localInputParts(date = new Date(Date.now() + 5 * 60_000)): {
   date: string
   time: string
@@ -163,6 +174,8 @@ function formatDateTime(value: number | null | undefined): string {
 function recurrenceLabel(schedule: TaskSchedule): string {
   const { unit, interval, weekDays } = schedule.recurrence
   if (unit === 'none') return 'Une fois'
+  if (unit === 'minute') return interval === 1 ? 'Chaque minute' : `Toutes les ${interval} minutes`
+  if (unit === 'hour') return interval === 1 ? 'Chaque heure' : `Toutes les ${interval} heures`
   if (unit === 'day') return interval === 1 ? 'Chaque jour' : `Tous les ${interval} jours`
   if (unit === 'month') return interval === 1 ? 'Chaque mois' : `Tous les ${interval} mois`
   const days = (weekDays ?? []).map((day) => WEEK_DAYS[day - 1]?.label).join(' · ')
@@ -299,6 +312,15 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
           )
         })()
       : ''
+  const draftModel = selectableModels.find((candidate) => candidate.id === draftModelId)
+  const draftEfforts =
+    draftModel?.reasoningEfforts?.length
+      ? draftModel.reasoningEfforts
+      : draftModel
+        ? [draftModel.defaultReasoningEffort ?? 'none']
+        : []
+  const draftEffort =
+    draftDestination?.reasoningEffort ?? draftModel?.defaultReasoningEffort ?? draftEfforts[0] ?? ''
 
   const openCreate = (): void => {
     setEditingId(undefined)
@@ -707,6 +729,33 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                   </select>
                 </label>
                 <label className="task-manager-field">
+                  <span>Effort</span>
+                  <select
+                    value={draftEffort}
+                    disabled={!draftModel || draftEfforts.length <= 1}
+                    onChange={(event) => {
+                      const reasoningEffort = event.target.value
+                      setDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              destination: {
+                                ...current.destination,
+                                reasoningEffort
+                              }
+                            }
+                          : current
+                      )
+                    }}
+                  >
+                    {draftEfforts.map((effort) => (
+                      <option key={effort} value={effort}>
+                        {EFFORT_LABELS[effort] ?? effort}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="task-manager-field">
                   <span>Date de départ</span>
                   <input
                     type="date"
@@ -737,6 +786,8 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                     }
                   >
                     <option value="none">Aucune</option>
+                    <option value="minute">Minute(s)</option>
+                    <option value="hour">Heure(s)</option>
                     <option value="day">Jour(s)</option>
                     <option value="week">Semaine(s)</option>
                     <option value="month">Mois</option>

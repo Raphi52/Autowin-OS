@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { ProviderRegistry } from './providers/registry'
-import type { RoleBinding, RoleModelConfig, ReasoningEffort } from './roles'
+import type { Role, RoleBinding, RoleModelConfig, ReasoningEffort } from './roles'
 import { resolvePhaseBinding } from './roles'
 import { defaultQuorumThreshold } from './quorum'
 import type { CostAggregator } from './dashboards/cost'
@@ -13,6 +13,13 @@ import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
 import { phaseInstruction, type PipelinePhase } from './skill-pipeline'
 import { phaseBrief } from './phase-briefs'
 import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
+import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-scope'
+import {
+  ECHO_MAX_BLOCK_CHARS,
+  evictedCount,
+  rememberedFacts,
+  sessionMemoryBlock
+} from './session-memory-echo'
 import { projectContextBlock } from './context-files'
 import type { ExecutionEvidence, PromptEnvelope, SendOptions, Usage } from './providers/types'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
@@ -24,6 +31,8 @@ import { runGreedy, type GreedyNode } from './greedy-scheduler'
 import type { ChatArtifact } from '../shared/artifacts'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import type { WorktreeAgentActivity } from '../shared/worktree-activity-model'
+import { allocateExecutionTopology, type ExecutionQuote } from './execution-quote'
+import type { ExecutionUsageSnapshot } from './execution-supervisor'
 
 /**
  * Boucle d'orchestration DISCIPLINÉE — le cœur d'Autowin OS.
@@ -57,6 +66,8 @@ export interface OrchestrationStep {
   detail?: string
   prompt?: PromptEnvelope
   usage?: Usage
+  /** Id du meme appel dans prompt-observability, injecte a la frontiere de persistance. */
+  usageCallId?: string
   status?: 'completed' | 'failed'
   error?: string
   durationMs?: number
@@ -98,6 +109,10 @@ export interface OrchestrationResult {
   gateBlocked: boolean
   gateReasons: string[]
   costUsd: number
+  /** Devis immutable compile avant le premier appel provider. */
+  quote?: ExecutionQuote
+  /** Consommation atomique locale a ce run, jamais le cumul historique. */
+  usage?: ExecutionUsageSnapshot
   /** Id de la décision d'autorité ouverte si le gate a bloqué (sinon undefined). */
   pendingDecisionId?: string
   /** Sortie brute de chaque phase exec — sert à peupler le RUN.md de la conversation (J2). */
@@ -121,9 +136,16 @@ export interface BrainRetrievalEvent {
   timestamp: string
   query: string
   found: boolean
-  status: 'found' | 'empty' | 'unavailable'
+  status: 'found' | 'empty' | 'invalid' | 'unavailable'
   injectedChars: number
   navigation?: BrainNavigation
+}
+
+/** Snapshot immuable des modeles et panels admis pour un run entier. */
+export interface OrchestrationRuntimeSnapshot {
+  roles: Record<Role, RoleBinding>
+  phaseFanOut: Partial<Record<PipelinePhase, RoleBinding[]>>
+  judgeFanOut: RoleBinding[]
 }
 
 export interface OrchestratorDeps {
@@ -132,6 +154,8 @@ export interface OrchestratorDeps {
   cost: CostAggregator
   trust: TrustLedger
   authority: AuthoritySas
+  /** Retriever substituable pour prouver les frontières d'injection sans serveur global. */
+  retrieveBrain?: typeof retrieveBrainContext
   /**
    * Système de hooks INTERNE (cycle de vie). Absent → bus par défaut (hooks synchrones existants +
    * verify-replay) → enforcement identique à l'historique (rétrocompat HARD) + verify-replay en plus.
@@ -197,10 +221,16 @@ export interface OrchestratorDeps {
     conversationId?: string
     turnId?: string
     bindingOverride?: RoleBinding
+    /** Topologie exacte admise au debut du run, reutilisee telle quelle apres un crash. */
+    runtimeSnapshot: OrchestrationRuntimeSnapshot
     phaseOutputs: { phase: PipelinePhase; text: string }[]
+    executionQuote?: ExecutionQuote
+    usage?: ExecutionUsageSnapshot
     /** Agents CLI du run : ce qui permettra de s'y RATTACHER après un redémarrage. */
     agents?: RunAgentRef[]
   }) => void
+  /** Persiste immédiatement pid/journal : attendre la fin d’une phase rendrait le run non rattachable. */
+  onAgentsChanged?: (runId: string, agents: RunAgentRef[]) => void
   /** Notifié quand le run atteint sa fin (vert, rouge ou abandon) → l'appelant efface l'état repris. */
   onRunSettled?: (runId: string) => void
   /** Empreinte d'un processus vivant — sert à savoir, au redémarrage, si un agent travaille encore. */
@@ -224,11 +254,15 @@ export interface OrchestratorDeps {
    * plan déterministe. Renvoyer <2 nœuds (tâche atomique) ⇒ exécution séquentielle classique (fallback
    * naturel, aucun « mode » à activer). Absent ⇒ séquentiel (rétrocompat tests).
    */
-  decompose?: (task: string) => Promise<GreedyTaskNode[]>
+  decompose?: (task: string, binding?: RoleBinding) => Promise<GreedyTaskNode[]>
   /** Plafond de sous-agents simultanés en mode greedy (défaut 4). */
   greedyConcurrency?: number
   /** Injection substituable pour les tests ; en production charge le vrai kit via skill-pipeline. */
   skillInstruction?: (phase: PipelinePhase, opts: { withFoundation: boolean }) => string
+  /** Source du devis actif, portee par l'ExecutionSupervisor local au run. */
+  currentExecutionQuote?: () => ExecutionQuote | undefined
+  /** Compteurs locaux du run, persistes avec chaque checkpoint pour une reprise sans reset. */
+  currentExecutionUsage?: () => ExecutionUsageSnapshot | undefined
 }
 
 /** Un nœud du plan greedy : une sous-tâche + les ids dont elle dépend (doivent réussir avant). */
@@ -238,6 +272,20 @@ export interface GreedyTaskNode {
   prompt: string
   /** Ids des sous-tâches prérequises (vide = indépendante, dispatchable d'emblée). */
   deps: string[]
+}
+
+function costOfTrace(trace: OrchestrationStep[]): number {
+  return trace.reduce(
+    (total, step) =>
+      total + (Number.isFinite(step.costUsd) ? Math.max(0, step.costUsd as number) : 0),
+    0
+  )
+}
+
+export function limitGreedyPlan(plan: GreedyTaskNode[], maxNodes: number): GreedyTaskNode[] {
+  const kept = plan.slice(0, Math.max(0, maxNodes))
+  const ids = new Set(kept.map((node) => node.id))
+  return kept.filter((node) => node.deps.every((dependency) => ids.has(dependency)))
 }
 
 interface PhasePromptBlock {
@@ -378,6 +426,22 @@ export class Orchestrator {
     const byToken = this.runAgents.get(runId) ?? new Map<string, RunAgentRef>()
     byToken.set(token, { ...(byToken.get(token) ?? { token }), ...patch, token })
     this.runAgents.set(runId, byToken)
+    try {
+      this.deps.onAgentsChanged?.(runId, this.agentsOf(runId))
+    } catch {
+      /* persistance best-effort : elle ne casse jamais le run vivant */
+    }
+  }
+
+  private forgetPendingAgent(runId: string, token: string): void {
+    const byToken = this.runAgents.get(runId)
+    if (!byToken?.delete(token)) return
+    if (byToken.size === 0) this.runAgents.delete(runId)
+    try {
+      this.deps.onAgentsChanged?.(runId, this.agentsOf(runId))
+    } catch {
+      /* persistance best-effort : elle ne casse jamais le run vivant */
+    }
   }
 
   /** Agents connus d'un run, pour la persistance de reprise. */
@@ -399,9 +463,10 @@ export class Orchestrator {
 
   private executionOptions(
     cwd: string,
-    sandbox: NonNullable<SendOptions['execution']>['sandbox']
+    sandbox: NonNullable<SendOptions['execution']>['sandbox'],
+    runId: string
   ): NonNullable<SendOptions['execution']> {
-    const observers = this.processObservers.get(cwd)
+    const observers = this.processObservers.get(runId)
     return {
       cwd,
       sandbox,
@@ -439,11 +504,12 @@ export class Orchestrator {
     onBrainRetrieved?: (event: BrainRetrievalEvent) => void,
     /** Tour Chat causal, persisté avec l'état reprenable. */
     turnId?: string,
-    onRunLifecycle?: (event: RunLifecycleEvent) => void
+    onRunLifecycle?: (event: RunLifecycleEvent) => void,
+    runtimeSnapshot?: OrchestrationRuntimeSnapshot
   ): Promise<OrchestrationResult> {
     const runId = `run-${this.runNamespace}-${++this.runSeq}`
     const runStartedAtMs = Date.now()
-    const runCostStartUsd = this.deps.cost.totalUsd()
+    const executionQuote = this.deps.currentExecutionQuote?.()
     const emitLifecycle = (event: RunLifecycleEvent): void => {
       try {
         onRunLifecycle?.(event)
@@ -454,6 +520,42 @@ export class Orchestrator {
     const activityForRun = (): WorktreeAgentActivity | undefined =>
       this.deps.worktrees?.activity?.().find((activity) => activity.agentId === runId)
     const isMut = isMutationTask(task)
+    const phases = this.deps.classifyPhases
+      ? this.deps.classifyPhases(task)
+      : (this.deps.execPhases ?? ['build'])
+    const admittedRuntime: OrchestrationRuntimeSnapshot = runtimeSnapshot ?? {
+      roles: this.deps.roles.all(),
+      phaseFanOut: Object.fromEntries(
+        phases.map((phase) => [phase, [...(this.deps.phaseFanOut?.(phase) ?? [])]])
+      ),
+      judgeFanOut: [...(this.deps.judgeFanOut?.() ?? [])]
+    }
+    if (executionQuote && !executionQuote.allocation) {
+      const usage = this.deps.currentExecutionUsage?.()
+      const completedPhases = resumeOutputs
+        .filter((output) => output.text.trim().length > 0)
+        .map((output) => output.phase)
+      const phaseFanOut = Object.fromEntries(
+        phases.map((phase) => [
+          phase,
+          bindingOverride ? 0 : (admittedRuntime.phaseFanOut[phase] ?? []).length
+        ])
+      ) as Partial<Record<PipelinePhase, number>>
+      executionQuote.allocation = allocateExecutionTopology(executionQuote, {
+        phases,
+        completedPhases,
+        startedAgents: usage?.startedAgents ?? usage?.startedCalls ?? 0,
+        startedCalls: usage?.startedCalls ?? 0,
+        mutation: isMut,
+        hasDecomposer: Boolean(!bindingOverride && this.deps.decompose),
+        phaseFanOut,
+        judgeFanOut: bindingOverride ? 0 : admittedRuntime.judgeFanOut.length
+      })
+      executionQuote.decomposition =
+        executionQuote.allocation.maxGreedyNodes >= 2
+          ? { mode: 'build-only', maxNodes: executionQuote.allocation.maxGreedyNodes }
+          : { mode: 'disabled', maxNodes: 1 }
+    }
     if (isMut && !this.deps.worktrees) {
       throw new Error(
         'Mutation bloquée : le moteur d’isolation workspace est indisponible pour ce projet.'
@@ -477,7 +579,10 @@ export class Orchestrator {
       conversationId,
       turnId,
       bindingOverride,
+      runtimeSnapshot: admittedRuntime,
       phaseOutputs: [...resumeOutputs],
+      executionQuote,
+      usage: this.deps.currentExecutionUsage?.(),
       agents: this.agentsOf(runId)
     })
     const isolatedCwd = this.deps.worktrees?.begin(runId, 'Agent', isMut, {
@@ -508,14 +613,41 @@ export class Orchestrator {
       timestampMs: runStartedAtMs,
       closure: { status: 'open', totalDurationMs: 0, totalCostUsd: 0 }
     })
+    if (executionQuote) {
+      emitLifecycle({
+        stage: 'quote',
+        runId,
+        timestampMs: Date.now(),
+        quote: {
+          quoteId: executionQuote.id,
+          regime: executionQuote.regime,
+          phases: [...executionQuote.phases],
+          decomposition: { ...executionQuote.decomposition },
+          limits: { ...executionQuote.limits },
+          ...(executionQuote.allocation
+            ? {
+                allocation: {
+                  ...executionQuote.allocation,
+                  phaseMembers: { ...executionQuote.allocation.phaseMembers }
+                }
+              }
+            : {})
+        }
+      })
+    }
     // Les observateurs sont posés pour TOUT run, pas seulement les mutations : le rattachement a
     // besoin du journal même quand aucune copie isolée n'est en jeu. Les rappels worktree, eux,
     // restent conditionnels — sans copie, il n'y a pas de bail à tenir.
-    this.processObservers.set(workCwd, {
+    this.processObservers.set(runId, {
       process: (pid, active) => {
         if (isMut) this.deps.worktrees?.process?.(runId, pid, active)
       },
       spawnIntent: (token, active) => {
+        // L'intention est émise AVANT le spawn. À cet instant la réservation provider porte déjà
+        // activeCalls=1 : checkpoint-er le token maintenant ferme la fenêtre où un CLI détaché
+        // pouvait naître avant que son PID/journal ne soit persisté. Un spawn avorté retire ce pending.
+        if (active) this.rememberAgent(runId, token, {})
+        else this.forgetPendingAgent(runId, token)
         if (isMut) this.deps.worktrees?.spawnIntent?.(runId, token, active)
       },
       spawned: (token, pid) => {
@@ -532,27 +664,39 @@ export class Orchestrator {
       // peut). ≥2 sous-tâches → dispatch completion-driven (DAG). Tâche atomique (plan <2) ou pas de
       // décomposeur → pipeline séquentiel classique (fallback naturel, aucun « mode » à basculer).
       let greedyPlan: GreedyTaskNode[] | undefined
-      const phases = this.deps.classifyPhases
-        ? this.deps.classifyPhases(task)
-        : (this.deps.execPhases ?? ['build'])
       // Un modèle explicitement choisi pour la tâche doit rester l'unique décideur du run :
       // le décomposeur est lié au rôle orchestrateur global et casserait cet invariant.
-      if (!bindingOverride && this.deps.decompose && phases.includes('build')) {
-        const plan = await this.deps.decompose(task)
-        if (plan.length >= 2) {
+      const decompositionAllowed =
+        !executionQuote || executionQuote.decomposition.mode === 'build-only'
+      if (
+        decompositionAllowed &&
+        !bindingOverride &&
+        this.deps.decompose &&
+        phases.includes('build')
+      ) {
+        const plan = await this.deps.decompose(task, admittedRuntime.roles.orchestrator)
+        const admittedPlan = executionQuote
+          ? limitGreedyPlan(
+              plan,
+              executionQuote.allocation?.maxGreedyNodes ?? executionQuote.decomposition.maxNodes
+            )
+          : plan
+        if (admittedPlan.length >= 2) {
           if (phases.length !== 1 || phases[0] !== 'build') {
-            greedyPlan = plan
+            greedyPlan = admittedPlan
           } else {
             const greedyResult = await this.runGreedyPipeline(
               task,
-              plan,
+              admittedPlan,
               workCwd,
+              runId,
               onStep,
               onPhase,
               onDelta,
               signal,
               collectedContext,
-              bindingOverride
+              bindingOverride,
+              admittedRuntime
             )
             green = !greedyResult.gateBlocked
             produced = greedyResult
@@ -574,13 +718,14 @@ export class Orchestrator {
         conversationId,
         bindingOverride,
         onBrainRetrieved,
-        turnId
+        turnId,
+        admittedRuntime
       )
       green = !result.gateBlocked
       produced = result
       return result
     } finally {
-      this.processObservers.delete(workCwd)
+      this.processObservers.delete(runId)
       // Le travail n'est fusionné dans la base QUE si le run est vert. Un run rouge, annulé ou planté
       // garde sa copie isolée (l'exception saute le `green = true` ci-dessus) : on ne ramène plus
       // automatiquement dans la base un travail jugé raté.
@@ -663,6 +808,7 @@ export class Orchestrator {
         } catch {
           /* effacement best-effort */
         }
+        this.runAgents.delete(runId)
       }
       emitLifecycle({
         stage: 'closure',
@@ -671,9 +817,10 @@ export class Orchestrator {
         closure: {
           status: green && integrated ? 'green' : 'red',
           totalDurationMs: Math.max(0, Date.now() - runStartedAtMs),
-          totalCostUsd: Math.max(0, this.deps.cost.totalUsd() - runCostStartUsd),
+          totalCostUsd: this.deps.currentExecutionUsage?.()?.knownCostUsd ?? produced?.costUsd ?? 0,
           gateReasons: produced?.gateReasons,
-          integrationOutcome: finalizeOutcome
+          integrationOutcome: finalizeOutcome,
+          usage: this.deps.currentExecutionUsage?.()
         }
       })
     }
@@ -689,14 +836,15 @@ export class Orchestrator {
     task: string,
     plan: GreedyTaskNode[],
     workCwd: string,
+    runId: string,
     onStep?: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
     signal?: AbortSignal,
     collectedContext = '',
-    bindingOverride?: RoleBinding
+    bindingOverride?: RoleBinding,
+    runtimeSnapshot?: OrchestrationRuntimeSnapshot
   ): Promise<OrchestrationResult> {
-    const { cost } = this.deps
     const trace: OrchestrationStep[] = []
     const push = (s: OrchestrationStep): void => {
       trace.push(s)
@@ -706,6 +854,7 @@ export class Orchestrator {
       task,
       plan,
       workCwd,
+      runId,
       collectedContext,
       true,
       'build',
@@ -713,7 +862,8 @@ export class Orchestrator {
       onPhase,
       onDelta,
       signal,
-      bindingOverride
+      bindingOverride,
+      runtimeSnapshot
     )
 
     const { valid, gate } = await this.greedyJudgeAndGate(
@@ -721,11 +871,13 @@ export class Orchestrator {
       greedy.aggregate,
       greedy.evidence,
       workCwd,
+      runId,
       push,
       onPhase,
       onDelta,
       signal,
-      bindingOverride
+      bindingOverride,
+      runtimeSnapshot
     )
 
     return {
@@ -734,7 +886,8 @@ export class Orchestrator {
       valid,
       gateBlocked: gate.blocked,
       gateReasons: gate.reasons,
-      costUsd: cost.totalUsd(),
+      costUsd: costOfTrace(trace),
+      quote: this.deps.currentExecutionQuote?.(),
       phaseOutputs: greedy.orderedOutputs.map((output) => ({
         phase: 'build' as PipelinePhase,
         text: output.text
@@ -751,15 +904,45 @@ export class Orchestrator {
     aggregate: string,
     evidence: ExecutionEvidence[],
     workCwd: string,
+    runId: string,
     push: (s: OrchestrationStep) => void,
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
     signal?: AbortSignal,
-    bindingOverride?: RoleBinding
+    bindingOverride?: RoleBinding,
+    runtimeSnapshot?: OrchestrationRuntimeSnapshot
   ): Promise<{ valid: boolean; gate: ReturnType<typeof evaluateClosure> }> {
     const { registry, roles, cost, trust } = this.deps
+    // Le chemin greedy doit respecter le même ordre économique que le séquentiel : les oracles
+    // locaux falsifiables passent AVANT le juge payant. S'ils réfutent le livrable, aucun appel
+    // modèle ne peut rendre cette tentative verte.
+    const evidenceOk = evidenceSatisfiesTask(task, evidence)
+    const hookOutcome = await this.hooks.run('pre-green', {
+      task,
+      cwd: workCwd,
+      verifyCmd: this.resolveVerifyCmd(workCwd),
+      requireProof: isMutationTask(task),
+      evidenceOkCount: evidence.filter((item) => item.ok).length,
+      evidence
+    })
+    const preGate = evaluateClosure({
+      status: evidenceOk && !hookOutcome.blocked ? 'green' : 'red',
+      dod: [{ checked: evidenceOk, hasContent: true }]
+    })
+    if (hookOutcome.blocked) preGate.reasons.push(...hookOutcome.reasons)
+    if (preGate.blocked) {
+      onPhase?.({ step: 'gate' })
+      push({
+        step: 'gate',
+        role: 'gate',
+        detail: `PRÉ-GATE BLOQUÉ: ${preGate.reasons.join('; ')}`
+      })
+      return { valid: false, gate: preGate }
+    }
+
     const projectContext = projectContextBlock(this.deps.executionWorkspace)
-    const judgeBinding = bindingOverride ?? roles.getBinding('judge')
+    const judgeBinding =
+      bindingOverride ?? runtimeSnapshot?.roles.judge ?? roles.getBinding('judge')
     const judgeProvider = judgeBinding.provider
     const judgePrompt =
       `Tu es un juge outillé en lecture seule. Confronte le livrable aux preuves d'outil. ` +
@@ -782,7 +965,7 @@ export class Orchestrator {
       systemBlocks,
       model: judgeBinding.model,
       reasoningEffort: judgeBinding.reasoningEffort,
-      execution: this.executionOptions(workCwd, 'read-only'),
+      execution: this.executionOptions(workCwd, 'read-only', runId),
       signal,
       observePrompt: (observed) => {
         observed.systemBlocks = systemBlocks
@@ -822,8 +1005,8 @@ export class Orchestrator {
       })
     }
     const verdictText = res.text ?? ''
-    // Même règle que le séquentiel : VALIDE du juge ET preuves d'outil suffisantes pour la tâche.
-    const ok = evidenceSatisfiesTask(task, evidence) && /^\s*valide/i.test(verdictText)
+    // Les preuves ont déjà passé le pré-gate : le juge tranche maintenant la substance.
+    const ok = /^\s*valide/i.test(verdictText)
     trust.record({ judgeModel: judgeProvider, verdict: ok ? 'green' : 'red' })
     push({
       step: 'judge',
@@ -841,21 +1024,11 @@ export class Orchestrator {
       durationMs: performance.now() - startedAt,
       execution: judgeExecution
     })
-    // GATE déterministe + HookBus interne (pre-green) : enforcement HORS-MODÈLE, uniforme tous exécuteurs.
-    const hookOutcome = await this.hooks.run('pre-green', {
-      task,
-      cwd: workCwd,
-      verifyCmd: this.resolveVerifyCmd(workCwd),
-      requireProof: isMutationTask(task),
-      evidenceOkCount: evidence.filter((e) => e.ok).length,
-      evidence
-    })
     onPhase?.({ step: 'gate' })
     const gate = evaluateClosure({
-      status: ok && !hookOutcome.blocked ? 'green' : 'red',
+      status: ok ? 'green' : 'red',
       dod: [{ checked: ok, hasContent: true }]
     })
-    if (hookOutcome.blocked) gate.reasons.push(...hookOutcome.reasons)
     push({
       step: 'gate',
       role: 'gate',
@@ -880,6 +1053,7 @@ export class Orchestrator {
     task: string,
     plan: GreedyTaskNode[],
     workCwd: string,
+    runId: string,
     phaseContext: string,
     withFoundation: boolean,
     phase: PipelinePhase,
@@ -887,7 +1061,8 @@ export class Orchestrator {
     onPhase?: (p: OrchestrationPhase) => void,
     onDelta?: (step: 'exec' | 'judge', delta: string) => void,
     signal?: AbortSignal,
-    bindingOverride?: RoleBinding
+    bindingOverride?: RoleBinding,
+    runtimeSnapshot?: OrchestrationRuntimeSnapshot
   ): Promise<{
     aggregate: string
     orderedOutputs: { id: string; text: string }[]
@@ -903,9 +1078,18 @@ export class Orchestrator {
     // tâche reste autoritaire et désactive le fan-out, comme dans le chemin non décomposé.
     const configuredBindings: RoleBinding[] = bindingOverride
       ? [bindingOverride]
-      : (this.deps.phaseFanOut?.(phase) ?? []).filter((member) => member && member.provider)
+      : (runtimeSnapshot?.phaseFanOut[phase] ?? this.deps.phaseFanOut?.(phase) ?? [])
+          .filter((member) => member && member.provider)
+          .slice(
+            0,
+            this.deps.currentExecutionQuote?.()?.allocation?.phaseMembers[phase] ??
+              this.deps.currentExecutionQuote?.()?.limits.maxConcurrency ??
+              Number.POSITIVE_INFINITY
+          )
     const subBindings =
-      configuredBindings.length > 0 ? configuredBindings : [roles.getBinding('subagent')]
+      configuredBindings.length > 0
+        ? configuredBindings
+        : [runtimeSnapshot?.roles.subagent ?? roles.getBinding('subagent')]
     const fallbackProvider = subBindings[0].provider
     const sandbox = isMutationTask(task) ? 'danger-full-access' : 'read-only'
     const evidence: ExecutionEvidence[] = []
@@ -943,7 +1127,7 @@ export class Orchestrator {
                 systemBlocks,
                 model: phaseBinding.model,
                 reasoningEffort: phaseBinding.reasoningEffort,
-                execution: this.executionOptions(workCwd, sandbox),
+                execution: this.executionOptions(workCwd, sandbox, runId),
                 signal,
                 observePrompt: (observed) => {
                   observed.systemBlocks = systemBlocks
@@ -1072,7 +1256,8 @@ export class Orchestrator {
           const nodeEvidence = good.flatMap((member) => member.evidence)
           let nodeText = good[0].text
           if (good.length > 1) {
-            const orchBinding = roles.getBinding('orchestrator')
+            const orchBinding =
+              runtimeSnapshot?.roles.orchestrator ?? roles.getBinding('orchestrator')
             const labelled = good
               .map(
                 (member, index) =>
@@ -1091,7 +1276,7 @@ export class Orchestrator {
               system: CONSTITUTION + CONCISE_STRUCTURED_RESPONSE_INSTRUCTION + projectContext,
               model: orchBinding.model,
               reasoningEffort: orchBinding.reasoningEffort,
-              execution: this.executionOptions(workCwd, 'read-only'),
+              execution: this.executionOptions(workCwd, 'read-only', runId),
               signal
             }
             const synthExecution = {
@@ -1159,7 +1344,10 @@ export class Orchestrator {
       })
     )
     const run = await runGreedy(nodes, {
-      concurrency: this.deps.greedyConcurrency ?? 4,
+      concurrency: Math.min(
+        this.deps.greedyConcurrency ?? 4,
+        this.deps.currentExecutionQuote?.()?.limits.maxConcurrency ?? Number.POSITIVE_INFINITY
+      ),
       onSettled: (event) => {
         if (!event.skipped) return
         const skippedNode = plan.find((node) => node.id === event.id)
@@ -1237,8 +1425,12 @@ export class Orchestrator {
     conversationId?: string,
     bindingOverride?: RoleBinding,
     onBrainRetrieved?: (event: BrainRetrievalEvent) => void,
-    turnId?: string
+    turnId?: string,
+    runtimeSnapshot?: OrchestrationRuntimeSnapshot
   ): Promise<OrchestrationResult> {
+    if (!runtimeSnapshot) {
+      throw new Error("Snapshot runtime manquant dans le coeur d'orchestration")
+    }
     const { registry, roles, cost, trust } = this.deps
     // Souveraineté contexte (décision PLIER) : Autowin lit LUI-MÊME le fichier projet gagnant de la
     // chaîne de précédence et le plie dans chaque system → source unique, quel que soit le modèle.
@@ -1251,7 +1443,8 @@ export class Orchestrator {
 
     // 1. Le sous-agent EXÉCUTE la tâche via la PIPELINE de phases (1 skill du kit par phase,
     //    provider-agnostique). Défaut ['build'] = exec simple ; prod = ['frame','build'] etc.
-    const subBinding = bindingOverride ?? roles.getBinding('subagent')
+    const subBinding =
+      bindingOverride ?? runtimeSnapshot?.roles.subagent ?? roles.getBinding('subagent')
     const subProvider = subBinding.provider
     // Sélection ADAPTATIVE (proportionnalité) : `classifyPhases(task)` prime si fourni — une tâche
     // triviale ne joue pas les 5 phases. Fallback `execPhases` statique (rétrocompat/tests).
@@ -1279,7 +1472,10 @@ export class Orchestrator {
           conversationId,
           turnId,
           bindingOverride,
+          runtimeSnapshot,
           phaseOutputs: [...phaseOutputs],
+          executionQuote: this.deps.currentExecutionQuote?.(),
+          usage: this.deps.currentExecutionUsage?.(),
           agents: this.agentsOf(runId)
         })
       } catch {
@@ -1291,18 +1487,30 @@ export class Orchestrator {
     // RAG Brain : 1×/run, on récupère du cerveau Amitel la connaissance pertinente (retriever
     // hybride chaud du brain_server) et on l'injecte en tête de contexte. Le sous-agent part du
     // savoir CURÉ au lieu de brute-forcer le repo. Dégrade à '' si le serveur est absent.
-    const brain = await retrieveBrainContext(task)
+    const brainCorpus = brainCorpusForWorkspace(this.deps.executionWorkspace)
+    const brain =
+      brainCorpus?.length === 0
+        ? { context: '', status: 'empty' as const }
+        : await (this.deps.retrieveBrain ?? retrieveBrainContext)(task, {
+            corpus: brainCorpus
+          })
     const brainRetrievedAt = new Date().toISOString()
-    const brainContext = brain.context
-    const brainQuery = brain.navigation?.query || task
+    const scopedBrain = scopeBrainRetrieval(brain, brainCorpus)
+    const brainContext = scopedBrain.context
+    const memoryEcho = sessionMemoryBlock(
+      rememberedFacts(conversationId, this.deps.executionWorkspace),
+      ECHO_MAX_BLOCK_CHARS,
+      evictedCount(conversationId, this.deps.executionWorkspace)
+    )
+    const brainQuery = scopedBrain.navigation?.query || task
     try {
       onBrainRetrieved?.({
         timestamp: brainRetrievedAt,
         query: brainQuery,
         found: brainContext.length > 0,
-        status: brain.status,
+        status: scopedBrain.status,
         injectedChars: brainContext.length,
-        navigation: brain.navigation
+        navigation: scopedBrain.navigation
       })
     } catch {
       // L'observabilité Brain ne doit jamais faire échouer le run.
@@ -1312,6 +1520,7 @@ export class Orchestrator {
     // sous-agent → contre-productif (piège du soft-steer saturé). Levier retiré. Cf. harnais
     // scripts/measure-orchestration-tokens.mjs pour re-mesurer une éventuelle version micro.
     const phaseContext: string[] = [
+      ...(memoryEcho ? [memoryEcho] : []),
       ...(brainContext
         ? [
             brainContext,
@@ -1347,11 +1556,12 @@ export class Orchestrator {
       // levier au build : une phase longue est presque toujours plusieurs travaux qui s'ignorent.
       // Le garde-fou reste le decomposeur lui-meme : sans au moins 2 sous-taches, on retombe sur le
       // chemin sequentiel d'origine. Les droits ne changent pas (ils viennent de isMutationTask).
-      if (greedyPlan && greedyPlan.length >= 2) {
+      if (phase === 'build' && greedyPlan && greedyPlan.length >= 2) {
         const greedy = await this.runGreedyBuildPhase(
           task,
           greedyPlan,
           workCwd,
+          runId,
           phaseContext.join('\n\n'),
           true,
           phase,
@@ -1359,7 +1569,8 @@ export class Orchestrator {
           onPhase,
           onDelta,
           signal,
-          bindingOverride
+          bindingOverride,
+          runtimeSnapshot
         )
         aggregatedEvidence.push(...greedy.evidence)
         lastExecText = greedy.aggregate
@@ -1381,7 +1592,14 @@ export class Orchestrator {
       // avec plusieurs, l'orchestrateur synthétise. Aucun membre → binding subagent rétrocompatible.
       const fanMembers = bindingOverride
         ? []
-        : (this.deps.phaseFanOut?.(phase) ?? []).filter((m) => m && m.provider)
+        : (runtimeSnapshot?.phaseFanOut[phase] ?? this.deps.phaseFanOut?.(phase) ?? [])
+            .filter((m) => m && m.provider)
+            .slice(
+              0,
+              this.deps.currentExecutionQuote?.()?.allocation?.phaseMembers[phase] ??
+                this.deps.currentExecutionQuote?.()?.limits.maxConcurrency ??
+                Number.POSITIVE_INFINITY
+            )
       if (fanMembers.length >= 1) {
         // Le fan-out casse la chaîne de session (N sessions //). Chaque membre part du contexte complet.
         const fanMessages = [{ role: 'user' as const, content: phaseContext.join('\n\n') }]
@@ -1412,7 +1630,7 @@ export class Orchestrator {
               systemBlocks: fanSystemBlocks,
               model: member.model,
               reasoningEffort: member.reasoningEffort,
-              execution: this.executionOptions(workCwd, sandbox),
+              execution: this.executionOptions(workCwd, sandbox, runId),
               signal
             }
             const startedAt = performance.now()
@@ -1524,7 +1742,8 @@ export class Orchestrator {
           prevSessionId = undefined
           continue
         }
-        const orchBinding = bindingOverride ?? roles.getBinding('orchestrator')
+        const orchBinding =
+          bindingOverride ?? runtimeSnapshot?.roles.orchestrator ?? roles.getBinding('orchestrator')
         const labelled = good
           .map(
             (o, i) =>
@@ -1543,7 +1762,7 @@ export class Orchestrator {
             .map((p) => ({ name: p.name, chars: p.text.length })),
           model: orchBinding.model,
           reasoningEffort: orchBinding.reasoningEffort,
-          execution: this.executionOptions(workCwd, 'read-only'),
+          execution: this.executionOptions(workCwd, 'read-only', runId),
           signal
         }
         const synthMessages = [
@@ -1670,7 +1889,8 @@ export class Orchestrator {
           workCwd,
           // B3 — une tâche NON-mutation (cadrage/analyse) n'a aucune raison d'écrire : sandbox
           // read-only → pas d'effet de bord (ex. RUN.md fantôme dans Audit/). Mutation → full access.
-          isMutationTask(task) ? 'danger-full-access' : 'read-only'
+          isMutationTask(task) ? 'danger-full-access' : 'read-only',
+          runId
         ),
         signal,
         observePrompt: (observed) => {
@@ -1804,7 +2024,8 @@ export class Orchestrator {
     let lastJudgeText = ''
 
     // 2. Un JUGE (autre rôle → potentiellement autre modèle) évalue le résultat.
-    const judgeBinding = bindingOverride ?? roles.getBinding('judge')
+    const judgeBinding =
+      bindingOverride ?? runtimeSnapshot?.roles.judge ?? roles.getBinding('judge')
     const judgeProvider = judgeBinding.provider
 
     // Une passe JUGE (autre rôle → décorrélation) + GATE déterministe sur l'état COURANT de `exec`.
@@ -1813,6 +2034,33 @@ export class Orchestrator {
       valid: boolean
       gate: ReturnType<typeof evaluateClosure>
     }> => {
+      // Les contrôles locaux falsifiables passent AVANT le juge payant. Un livrable sans preuve ou
+      // bloqué par pre-green part directement en réparation : le juge ne peut rien apprendre qu'un
+      // oracle local vient déjà de réfuter.
+      const evidenceOk = evidenceSatisfiesTask(task, exec.executionEvidence)
+      const hookOutcome = await this.hooks.run('pre-green', {
+        task,
+        cwd: workCwd,
+        verifyCmd: this.resolveVerifyCmd(workCwd),
+        requireProof: isMutationTask(task),
+        evidenceOkCount: (exec.executionEvidence ?? []).filter((e) => e.ok).length,
+        evidence: exec.executionEvidence
+      })
+      const preGate = evaluateClosure({
+        status: evidenceOk && !hookOutcome.blocked ? 'green' : 'red',
+        dod: [{ checked: evidenceOk, hasContent: true }]
+      })
+      if (hookOutcome.blocked) preGate.reasons.push(...hookOutcome.reasons)
+      if (preGate.blocked) {
+        onPhase?.({ step: 'gate' })
+        push({
+          step: 'gate',
+          role: 'gate',
+          detail: `PRÉ-GATE BLOQUÉ: ${preGate.reasons.join('; ')}`
+        })
+        return { valid: false, gate: preGate }
+      }
+
       // fix-ok: cause PROUVÉE en live (verdict conv-30 : « le livrable requis est un RUN.md
       // physique ») — A2 a chargé le SKILL judge du kit qui exige un RUN.md/fingerprint absent
       // in-app ; on neutralise ce couplage côté juge, comme J4/B2 côté exec.
@@ -1841,7 +2089,7 @@ export class Orchestrator {
         systemBlocks: judgeBlocks,
         model: judgeBinding.model,
         reasoningEffort: judgeBinding.reasoningEffort,
-        execution: this.executionOptions(workCwd, 'read-only'),
+        execution: this.executionOptions(workCwd, 'read-only', runId),
         signal,
         observePrompt: (observed) => {
           observed.systemBlocks = judgeBlocks
@@ -1857,7 +2105,14 @@ export class Orchestrator {
       judgeEnvelope.systemBlocks = judgeBlocks
       const judgeMembers = bindingOverride
         ? []
-        : (this.deps.judgeFanOut?.() ?? []).filter((m) => m && m.provider)
+        : (runtimeSnapshot?.judgeFanOut ?? this.deps.judgeFanOut?.() ?? [])
+            .filter((m) => m && m.provider)
+            .slice(
+              0,
+              this.deps.currentExecutionQuote?.()?.allocation?.judgeMembers ??
+                this.deps.currentExecutionQuote?.()?.limits.maxConcurrency ??
+                Number.POSITIVE_INFINITY
+            )
       const singleJudgeExecution = {
         phase: 'judge' as const,
         agentId: 'judge:single',
@@ -2019,8 +2274,7 @@ export class Orchestrator {
           })
         }
       }
-      const ok =
-        evidenceSatisfiesTask(task, exec.executionEvidence) && /^\s*valide/i.test(verdict.text)
+      const ok = evidenceOk && /^\s*valide/i.test(verdict.text)
       lastJudgeText = verdict.text.trim()
       trust.record({ judgeModel: judgeProvider, verdict: ok ? 'green' : 'red' })
       push({
@@ -2050,21 +2304,13 @@ export class Orchestrator {
             : singleJudgeExecution
       })
 
-      // GATE déterministe (model-agnostic) + HookBus interne (pre-green) : enforcement HORS-MODÈLE.
-      const hookOutcome = await this.hooks.run('pre-green', {
-        task,
-        cwd: workCwd,
-        verifyCmd: this.resolveVerifyCmd(workCwd),
-        requireProof: isMutationTask(task),
-        evidenceOkCount: (exec.executionEvidence ?? []).filter((e) => e.ok).length,
-        evidence: exec.executionEvidence
-      })
+      // Gate final après verdict : le juge reste nécessaire, mais seulement sur un candidat ayant
+      // déjà franchi le pré-gate local. Le juge est read-only, le signal local n'a donc pas changé.
       onPhase?.({ step: 'gate' })
       const g = evaluateClosure({
-        status: ok && !hookOutcome.blocked ? 'green' : 'red',
+        status: ok ? 'green' : 'red',
         dod: [{ checked: ok, hasContent: true }]
       })
-      if (hookOutcome.blocked) g.reasons.push(...hookOutcome.reasons)
       push({
         step: 'gate',
         role: 'gate',
@@ -2075,7 +2321,10 @@ export class Orchestrator {
 
     // B5 — pour une MUTATION bloquée, UNE réparation ciblée (feedback = raisons du gate) AVANT
     // d'escalader à l'humain (résolveur avant interruption). Bornée à 1, jamais de boucle infinie.
-    const MAX_ATTEMPTS = isMutationTask(task) ? 2 : 1
+    const allowedRecoveries = isMutationTask(task)
+      ? (this.deps.currentExecutionQuote?.()?.limits.maxRecoveries ?? 1)
+      : 0
+    const MAX_ATTEMPTS = 1 + Math.max(0, Math.floor(allowedRecoveries))
     let valid = false
     let gate!: ReturnType<typeof evaluateClosure>
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -2099,7 +2348,7 @@ export class Orchestrator {
             projectContext,
           model: subBinding.model,
           reasoningEffort: subBinding.reasoningEffort,
-          execution: this.executionOptions(workCwd, 'danger-full-access'),
+          execution: this.executionOptions(workCwd, 'danger-full-access', runId),
           signal,
           observePrompt: (observed) => {
             repairPrompt = observed
@@ -2189,9 +2438,10 @@ export class Orchestrator {
       phaseOutputs,
       brainQuery,
       brainRetrievedAt,
-      brainNavigation: brain.navigation,
+      brainNavigation: scopedBrain.navigation,
       brainInjectedChars: brainContext.length,
-      costUsd: cost.totalUsd(),
+      costUsd: costOfTrace(trace),
+      quote: this.deps.currentExecutionQuote?.(),
       trace,
       failedTasks,
       skippedTasks

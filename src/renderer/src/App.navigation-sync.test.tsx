@@ -31,7 +31,42 @@ describe('navigation humaine synchronisée avec le main', () => {
   afterEach(() => {
     document.body.replaceChildren()
     localStorage.clear()
+    window.history.replaceState({}, '', '/')
   })
+
+  it.each([
+    ['?instance=test', 'test', true, 'Autowin OS Test'],
+    ['', 'user', false, 'Autowin OS']
+  ] as const)(
+    'renders automation identity %s without leaking it into the user mode',
+    async (search, expectedMode, hasBanner, expectedTitle) => {
+      window.history.replaceState({}, '', `/${search}`)
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: {
+          storageMigration: vi.fn().mockResolvedValue({}),
+          completeStorageMigration: vi.fn().mockResolvedValue(true),
+          appState: vi.fn(async () => ({ tab: 'chat' })),
+          onAppEvent: vi.fn(() => vi.fn())
+        }
+      })
+      const container = document.createElement('div')
+      document.body.append(container)
+      const root = createRoot(container)
+
+      await act(async () => {
+        root.render(createElement(MainApp))
+        await Promise.resolve()
+      })
+
+      expect(container.querySelector('.shell')?.getAttribute('data-automation-instance')).toBe(
+        expectedMode
+      )
+      expect(container.querySelector('.test-instance-banner') !== null).toBe(hasBanner)
+      expect(document.title).toBe(expectedTitle)
+      await act(async () => root.unmount())
+    }
+  )
 
   it('affiche une branche Git vectorielle pour Worktrees', async () => {
     Object.defineProperty(window, 'api', {

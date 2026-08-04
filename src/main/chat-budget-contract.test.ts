@@ -35,7 +35,13 @@ describe('tour de chat — budget applique', () => {
 
   it('a un plafond par DEFAUT (une variable d’env absente ne desarme pas la garde)', () => {
     // Le defaut doit etre un nombre positif : sans lui, un poste sans env serait sans protection.
-    expect(chatRunner).toMatch(/maxUsd:[\s\S]{0,120}:\s*\d+(\.\d+)?\s*\n?\s*\}/)
+    expect(chatRunner).toMatch(/maxUsd:[\s\S]{0,120}:\s*\d+(\.\d+)?/)
+    expect(chatRunner).toMatch(/maxTokens:[\s\S]{0,160}:\s*1_500_000/)
+    expect(chatRunner).toMatch(/maxCalls:[\s\S]{0,120}:\s*6/)
+  })
+
+  it('place tout le tour dans le supervisor avant le premier appel provider', () => {
+    expect(chatRunner).toContain('os.runChatTurn(')
   })
 })
 

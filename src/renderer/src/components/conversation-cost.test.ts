@@ -26,6 +26,7 @@ const row = (over: Partial<CostRow> & { key: string }): CostRow => ({
   outputTokens: 0,
   cacheReadTokens: 0,
   cacheHitRatio: 0,
+  unpricedCalls: 0,
   ...over
 })
 
@@ -63,7 +64,7 @@ describe('summarizeConversationCost — le total, et le poste qui l’explique',
     // Une ligne minuscule à 100 % de cache ne doit pas masquer une grosse ligne à 0 %.
     const summary = summarizeConversationCost([
       row({ key: 'gros', costUsd: 9, inputTokens: 900_000, cacheReadTokens: 0, calls: 10 }),
-      row({ key: 'petit', costUsd: 0.01, inputTokens: 0, cacheReadTokens: 100, calls: 1 })
+      row({ key: 'petit', costUsd: 0.01, inputTokens: 100, cacheReadTokens: 100, calls: 1 })
     ])
     expect(summary.cacheHitRatio).toBeLessThan(0.01)
     expect(summary.rewritingContext).toBe(true)
@@ -71,7 +72,7 @@ describe('summarizeConversationCost — le total, et le poste qui l’explique',
 
   it('un bon ratio de cache ne déclenche AUCUNE alerte', () => {
     const summary = summarizeConversationCost([
-      row({ key: 'orchestrator', costUsd: 2, inputTokens: 10_000, cacheReadTokens: 90_000, calls: 20 })
+      row({ key: 'orchestrator', costUsd: 2, inputTokens: 100_000, cacheReadTokens: 90_000, calls: 20 })
     ])
     expect(summary.cacheHitRatio).toBeCloseTo(0.9, 2)
     expect(summary.rewritingContext).toBe(false)
@@ -86,7 +87,7 @@ describe('summarizeConversationCost — le total, et le poste qui l’explique',
       row({ key: 'judge', costUsd: 0.03, inputTokens: 800, cacheReadTokens: 9000, calls: 1 })
     ])
     expect(summary.calls).toBe(3)
-    expect(Math.round(summary.cacheHitRatio * 100)).toBe(5)
+    expect(Math.round(summary.cacheHitRatio * 100)).toBe(6)
     expect(summary.rewritingContext).toBe(true)
   })
 
@@ -166,9 +167,7 @@ describe('câblage — l’indicateur est réellement monté dans le composeur',
   })
 
   it('rien dépensé → rien affiché (pas de « 0 $ » qui ferait croire à une mesure)', () => {
-    expect(read('ConversationCostIndicator.tsx')).toContain(
-      'if (summary.totalUsd <= 0) return null'
-    )
+    expect(read('ConversationCostIndicator.tsx')).toContain('summary.calls <= 0')
   })
 })
 
@@ -265,5 +264,16 @@ describe('câblage — la durée est écrite ET affichée', () => {
     const panel = read2('ConversationCostIndicator.tsx')
     expect(panel).toContain('data-testid={`conversation-time-${row.key}`}')
     expect(panel).toContain('timeSharePercent(row, summary.durationMs)')
+  })
+})
+
+describe('unknown pricing', () => {
+  it('keeps an unpriced provider call visible and explicit', () => {
+    const summary = summarizeConversationCost([
+      row({ key: 'codex', calls: 1, outputTokens: 50, unpricedCalls: 1 })
+    ])
+    expect(summary.calls).toBe(1)
+    expect(summary.unpricedCalls).toBe(1)
+    expect(summary.label).toMatch(/non expos/i)
   })
 })

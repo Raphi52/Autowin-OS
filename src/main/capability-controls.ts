@@ -14,6 +14,11 @@ import {
 export type CapabilityItem = RegistryItem
 export type CapabilityKind = RegistryKind
 
+/** Lecture synchrone du verrou runtime. `undefined` signifie que la capacité n'est pas cataloguée. */
+export function capabilityEnabled(kind: CapabilityKind, id: string): boolean | undefined {
+  return listNativeRegistry(kind).find((item) => item.id === id)?.enabled
+}
+
 /** Inventaire d'un type de capacité (lecture locale). */
 export async function listCapabilities(kind: CapabilityKind): Promise<CapabilityItem[]> {
   return listNativeRegistry(kind)

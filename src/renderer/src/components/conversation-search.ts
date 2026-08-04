@@ -4,7 +4,7 @@ export type ConversationSearchSource = {
   category: string
   provider: string
   updatedAt: number
-  messages: ReadonlyArray<{ role: 'user' | 'assistant'; content: string; ts: number }>
+  messages?: ReadonlyArray<{ role: 'user' | 'assistant'; content: string; ts: number }>
 }
 
 export type ConversationSearchHit<T extends ConversationSearchSource = ConversationSearchSource> = {

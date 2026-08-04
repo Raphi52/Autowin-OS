@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { readFile, readdir, stat } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { readFile, readdir, rm, stat } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { parseRun } from '../dashboards/runs'
 import { scanRuns, type RunEntry } from '../dashboards/runs-scan'
 import type { OrchestrationStep } from '../orchestrator'
@@ -241,4 +241,53 @@ export function listConvRuns(
     ).filter((entry): entry is RunEntry => entry !== null)
     return [...own, ...attached].sort((a, b) => b.mtime - a.mtime)
   })
+}
+
+function comparablePath(path: string): string {
+  const absolute = resolve(path)
+  return process.platform === 'win32' ? absolute.toLocaleLowerCase('en-US') : absolute
+}
+
+function samePath(left: string, right: string): boolean {
+  return comparablePath(left) === comparablePath(right)
+}
+
+/**
+ * Retire un RUN de la conversation sans accepter de chemin arbitraire venant du renderer.
+ * Les runs natifs appartiennent à Autowin : leur workspace complet (trace comprise) est supprimé.
+ * Un RUN externe reste la propriété de son outil d'origine : il est uniquement détaché.
+ */
+export async function deleteConvRun(
+  convId: string,
+  runPath: string,
+  attachedPaths: string[] = [],
+  root = convRunsRoot()
+): Promise<{ kind: 'deleted' } | { kind: 'detached'; attachedPath: string }> {
+  const candidate = resolve(runPath)
+  const attachedPath = attachedPaths.find((path) => samePath(path, candidate))
+  if (attachedPath) {
+    return { kind: 'detached', attachedPath }
+  }
+
+  const conversationRoot = resolve(root, convId)
+  const workspace = dirname(candidate)
+  const workspaceRelative = relative(conversationRoot, workspace)
+  const isDirectNativeWorkspace =
+    workspaceRelative !== '' &&
+    workspaceRelative !== '..' &&
+    !workspaceRelative.startsWith(`..${sep}`) &&
+    !isAbsolute(workspaceRelative) &&
+    !workspaceRelative.includes(sep) &&
+    basename(candidate).toLocaleLowerCase('en-US') === 'run.md'
+
+  if (isDirectNativeWorkspace) {
+    const allowed = (await listConvRuns(convId, attachedPaths, root)).some(
+      (run) => run.session === convId && samePath(run.path, candidate)
+    )
+    if (!allowed) throw new Error('RUN non autorisé pour cette conversation')
+    await rm(workspace, { recursive: true, force: false })
+    return { kind: 'deleted' }
+  }
+
+  throw new Error('RUN non autorisé pour cette conversation')
 }

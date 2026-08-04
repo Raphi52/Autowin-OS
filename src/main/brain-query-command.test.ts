@@ -67,6 +67,14 @@ describe('buildBrainOutcome — distingue « rien trouvé » d’une panne', () 
   })
 })
 
+describe('buildBrainOutcome status', () => {
+  it('distingue absence de resultat, panne et reponse invalide', () => {
+    expect(buildBrainOutcome('q', '', 'empty').note).toContain('aucun savoir')
+    expect(buildBrainOutcome('q', '', 'unavailable').note).toContain('indisponible')
+    expect(buildBrainOutcome('q', '', 'invalid').note).toContain('integrite')
+  })
+})
+
 /** Contrat de CABLAGE : une commande declaree mais jamais atteignable resterait du theatre. */
 describe('cablage de brain_query', () => {
   const commands = (): string => {
@@ -79,7 +87,10 @@ describe('cablage de brain_query', () => {
 
   it('est declaree au catalogue avec sa question, et annoncee en LECTURE SEULE', () => {
     const source = commands()
-    const spec = source.slice(source.indexOf("name: 'brain_query'"), source.indexOf("name: 'brain_query'") + 600)
+    const spec = source.slice(
+      source.indexOf("name: 'brain_query'"),
+      source.indexOf("name: 'brain_query'") + 600
+    )
     expect(spec).toContain('question')
     expect(spec).toContain('readOnlyHint: true')
   })
@@ -87,15 +98,16 @@ describe('cablage de brain_query', () => {
   it('passe par la decision bornee et le retriever reel', () => {
     const source = commands()
     expect(source).toContain('decideBrainQuery(')
-    expect(source).toContain('retrieveBrainContext(')
+    expect(source).toContain("import { retrieveBrainContext } from './brain-retrieval'")
+    expect(source).toContain('this.retrieveBrain(')
     expect(source).toContain('buildBrainOutcome(')
   })
 
   it('un refus n’appelle PAS le Brain', () => {
     const source = commands()
     const impl = source.slice(source.indexOf('private async runBrainQuery'))
-    const refusal = impl.slice(0, impl.indexOf('retrieveBrainContext('))
+    const refusal = impl.slice(0, impl.indexOf('this.retrieveBrain('))
     expect(refusal).toContain('if (!decision.allowed)')
-    expect(refusal).not.toContain('await retrieveBrainContext')
+    expect(refusal).not.toContain('await this.retrieveBrain')
   })
 })

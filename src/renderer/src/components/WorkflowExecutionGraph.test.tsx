@@ -449,4 +449,70 @@ describe('WorkflowExecutionGraph', () => {
     expect(causalTrace).toHaveBeenCalledTimes(2)
     expect(container?.querySelector('[data-execution-node="final"]')).not.toBeNull()
   })
+
+  it('recharge la cloture quand un usage provider tardif est publie', async () => {
+    let appEvent: ((event: Record<string, unknown>) => void) | undefined
+    const causalTrace = vi
+      .fn()
+      .mockResolvedValueOnce([trace('root', 1)])
+      .mockResolvedValueOnce([
+        trace('root', 1),
+        trace('late-usage', 2, { parentId: 'root', type: 'response-displayed' })
+      ])
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        causalTrace,
+        onAppEvent: (listener: (event: Record<string, unknown>) => void) => {
+          appEvent = listener
+          return () => undefined
+        }
+      }
+    })
+    await render({ conversationId: 'conv-a', active: true, live: false })
+
+    await act(async () => {
+      appEvent?.({ type: 'orchestrate-usage', convId: 'conv-a' })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(causalTrace).toHaveBeenCalledTimes(2)
+    expect(container?.querySelector('[data-execution-node="late-usage"]')).not.toBeNull()
+  })
+
+  it('recharge aussi un usage tardif du chat deja terminal sans navigation', async () => {
+    let appEvent: ((event: Record<string, unknown>) => void) | undefined
+    const causalTrace = vi
+      .fn()
+      .mockResolvedValueOnce([trace('root', 1)])
+      .mockResolvedValueOnce([
+        trace('root', 1),
+        trace('chat-late-usage', 2, {
+          parentId: 'root',
+          type: 'boundary',
+          actor: { id: 'execution-supervisor', kind: 'system', label: 'Execution supervisor' }
+        })
+      ])
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        causalTrace,
+        onAppEvent: (listener: (event: Record<string, unknown>) => void) => {
+          appEvent = listener
+          return () => undefined
+        }
+      }
+    })
+    await render({ conversationId: 'conv-a', active: true, live: false })
+
+    await act(async () => {
+      appEvent?.({ type: 'causal-trace-updated', convId: 'conv-a' })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(causalTrace).toHaveBeenCalledTimes(2)
+    expect(container?.querySelector('[data-execution-node="chat-late-usage"]')).not.toBeNull()
+  })
 })

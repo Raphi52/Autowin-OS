@@ -99,6 +99,56 @@ describe('chat() — session-resume par conversation', () => {
     expect(captured[1].content).toContain('un') // fil complet
   })
 
+  it('retour au binding initial après un provider sans session → invalide la session périmée', async () => {
+    const captured: Array<Captured & { provider: string }> = []
+    let provider = 'claude'
+    let model = 'opus-5'
+    const registry = {
+      send: vi.fn(async (p: string, messages: Message[], options: SendOptions) => {
+        captured.push({ provider: p, options, content: messages.at(-1)?.content ?? '' })
+        return {
+          text: 'ok',
+          ...(p === 'claude' ? { sessionId: 'sess-claude' } : {})
+        } as SendResult
+      }),
+      describePrompt: vi.fn(() => ({ provider, messages: [], transport: 't' }))
+    }
+    const roles = { getBinding: vi.fn(() => ({ provider, model })) }
+    const bus = { catalog: vi.fn(() => []), snapshotForPrompt: vi.fn(async () => ({})), exec: vi.fn() }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p = new AgentPilot(registry as any, roles as any, bus as any)
+
+    await p.chat(history('début avec Claude'), () => {}, undefined, 1, 'conv-A')
+    provider = 'codex'
+    model = 'gpt-nouveau'
+    await p.chat(
+      history('début avec Claude', 'réponse Claude', 'passage à Codex'),
+      () => {},
+      undefined,
+      1,
+      'conv-A'
+    )
+    provider = 'claude'
+    model = 'opus-5'
+    await p.chat(
+      history(
+        'début avec Claude',
+        'réponse Claude',
+        'passage à Codex',
+        'réponse Codex',
+        'retour à Claude'
+      ),
+      () => {},
+      undefined,
+      1,
+      'conv-A'
+    )
+
+    expect(captured[2].options.resumeSessionId).toBeUndefined()
+    expect(captured[2].content).toContain('passage à Codex')
+    expect(captured[2].content).toContain('réponse Codex')
+  })
+
   it('sans conversationId → jamais de resume (rien à quoi rattacher la session)', async () => {
     const captured: Captured[] = []
     const p = pilot(captured)

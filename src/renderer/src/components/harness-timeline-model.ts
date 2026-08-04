@@ -1,5 +1,6 @@
 import type {
   RunClosureObservation,
+  RunExecutionQuoteObservation,
   RunGitObservation,
   RunLifecycleEvent,
   RunWorkspaceObservation
@@ -56,7 +57,16 @@ export interface HarnessTimelineEvent {
   }
   display?: {
     kind:
-      'workspace' | 'skill' | 'agent' | 'git' | 'closure' | 'request' | 'phase' | 'tool' | 'event'
+      | 'workspace'
+      | 'quote'
+      | 'skill'
+      | 'agent'
+      | 'git'
+      | 'closure'
+      | 'request'
+      | 'phase'
+      | 'tool'
+      | 'event'
     title: string
     observedEventIds?: string[]
     dependencyIds?: string[]
@@ -67,6 +77,7 @@ export interface HarnessTimelineEvent {
     runId?: string
     attemptId?: string
     workspace?: RunWorkspaceObservation & { root?: boolean }
+    quote?: RunExecutionQuoteObservation
     git?: RunGitObservation
     closure?: RunClosureObservation
   }
@@ -196,14 +207,17 @@ export function buildHarnessTimelineFromTrace(events: HarnessTraceEvent[]): Harn
           raw: event
         }
       })
+      // Une trace porte aussi des evenements structurels (handoff, gate, closure) qui referencent
+      // le meme appel. Seule la reponse provider est une unite de consommation atomique.
+      const atomicUsage = mapped.filter((_event, index) => ordered[index]?.type === 'model-response')
       return {
         id: turnId,
         ts: ordered[0]?.timestamp ?? '',
         events: mapped,
-        tokens: mapped.reduce((sum, event) => sum + (event.tokens ?? 0), 0),
-        costUsd: mapped.reduce((sum, event) => sum + (event.costUsd ?? 0), 0),
-        inputTokens: mapped.reduce((sum, event) => sum + (event.inputTokens ?? 0), 0),
-        outputTokens: mapped.reduce((sum, event) => sum + (event.outputTokens ?? 0), 0)
+        tokens: atomicUsage.reduce((sum, event) => sum + (event.tokens ?? 0), 0),
+        costUsd: atomicUsage.reduce((sum, event) => sum + (event.costUsd ?? 0), 0),
+        inputTokens: atomicUsage.reduce((sum, event) => sum + (event.inputTokens ?? 0), 0),
+        outputTokens: atomicUsage.reduce((sum, event) => sum + (event.outputTokens ?? 0), 0)
       }
     })
     .sort((a, b) => b.ts.localeCompare(a.ts))

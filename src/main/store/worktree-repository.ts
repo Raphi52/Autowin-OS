@@ -15,7 +15,8 @@ function defaultProbe(repo: string): string | undefined {
   try {
     const raw = execFileSync('git', ['rev-parse', '--git-common-dir'], {
       cwd: repo,
-      encoding: 'utf8'
+      encoding: 'utf8',
+      windowsHide: true
     }).trim()
     if (!raw) return undefined
     return isAbsolute(raw) ? raw : resolve(repo, raw)

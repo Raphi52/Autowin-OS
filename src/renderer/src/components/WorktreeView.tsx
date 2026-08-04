@@ -1,166 +1,138 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { GitGraphCommit, GitGraphRefKind, GitGraphSnapshot } from '../../../shared/git-graph'
+import type { GitGraphCommit, GitGraphSnapshot } from '../../../shared/git-graph'
+import type { GitDiffResult } from '../../../shared/git-read'
+import type {
+  WorktreeAgentActivity,
+  WorktreeRuntimeStatus
+} from '../../../shared/worktree-activity-model'
 import { ModuleHeader } from './ModuleHeader'
-import { commitsReachableFromRefs, layoutGitGraph } from './GitGraphLayout'
+import { layoutGitGraph } from './GitGraphLayout'
+import { WorktreeActivitySummary, WorktreeActivityView } from './WorktreeActivityView'
+import { DiffView } from './DiffView'
+import { RunInspector } from './RunInspector'
 import './WorktreeView.css'
 
-type CenterMode = 'topology' | 'chronology' | 'remote' | 'tags'
+type DetailTab = 'work' | 'files' | 'run' | 'git'
+type RunEntry = Awaited<ReturnType<typeof window.api.listRuns>>[number]
+type DataState = 'healthy' | 'unknown' | 'unavailable' | 'stale'
 
-const laneColors = [
-  'var(--cyan)',
-  'var(--violet)',
-  'var(--mint)',
-  'var(--orange)',
-  'var(--rose)',
-  'var(--gold)'
-]
+const staleAfterMs = 30 * 60 * 1000
 
-const kindLabel: Record<GitGraphRefKind, string> = {
-  local: 'locale',
-  remote: 'distante',
-  tag: 'tag'
+function projectState(
+  snapshot: GitGraphSnapshot | undefined,
+  agents: WorktreeAgentActivity[],
+  activityAvailable: boolean
+): { state: DataState; label: string; alertCount: number } {
+  if (snapshot?.available === false)
+    return { state: 'unavailable', label: 'Indisponible', alertCount: 1 }
+  if (!snapshot || !activityAvailable) return { state: 'unknown', label: 'Inconnu', alertCount: 0 }
+  if (agents.some((agent) => !agent.verdict || agent.verdict === 'unknown'))
+    return { state: 'unknown', label: 'Inconnu', alertCount: 0 }
+  const now = Date.now()
+  const stale = agents.some((agent) => now - (agent.endedAtMs ?? agent.startedAtMs) > staleAfterMs)
+  const alerts = agents.filter(
+    (agent) => agent.state === 'conflict' || agent.state === 'blocked'
+  ).length
+  if (stale) return { state: 'stale', label: 'Obsolète', alertCount: alerts }
+  return { state: 'healthy', label: alerts ? 'Attention' : 'Sain', alertCount: alerts }
 }
 
-function formatDate(value: string): string {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat('fr-FR', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }).format(date)
-}
-
-function GitTopology({
-  commits,
-  selectedHash,
-  onSelect
-}: {
-  commits: GitGraphCommit[]
-  selectedHash?: string
-  onSelect: (commit: GitGraphCommit) => void
-}): React.JSX.Element {
+function GitTopology({ commits }: { commits: GitGraphCommit[] }): React.JSX.Element {
   const layout = useMemo(() => layoutGitGraph(commits), [commits])
   return (
-    <div className="git-ledger__graph-scroll" data-testid="git-topology">
+    <div className="cockpit-detail__graph" data-testid="git-topology">
       <svg
-        className="git-ledger__graph"
         viewBox={`0 0 ${layout.width} ${layout.height}`}
         width={layout.width}
         height={layout.height}
-        aria-label="Topologie des commits Git"
-        role="img"
       >
-        {layout.edges.map((edge) => {
-          const color = laneColors[edge.lane % laneColors.length]
-          const middleY = edge.from.y + Math.max(20, (edge.to.y - edge.from.y) * 0.48)
-          return (
-            <path
-              key={`${edge.from.commit.hash}-${edge.to.commit.hash}`}
-              d={`M ${edge.from.x} ${edge.from.y} C ${edge.from.x} ${middleY}, ${edge.to.x} ${middleY}, ${edge.to.x} ${edge.to.y}`}
-              fill="none"
-              stroke={color}
-              strokeWidth="2"
-              opacity="0.82"
+        {layout.edges.map((edge) => (
+          <path
+            key={`${edge.from.commit.hash}-${edge.to.commit.hash}`}
+            d={`M ${edge.from.x} ${edge.from.y} L ${edge.to.x} ${edge.to.y}`}
+            fill="none"
+            stroke="var(--cyan)"
+          />
+        ))}
+        {layout.nodes.map((node) => (
+          <g key={node.commit.hash}>
+            <circle
+              cx={node.x}
+              cy={node.y}
+              r="5"
+              fill="var(--surface-inset)"
+              stroke="var(--gold)"
             />
-          )
-        })}
-        {layout.nodes.map((node) => {
-          const selected = node.commit.hash === selectedHash
-          const color = laneColors[node.lane % laneColors.length]
-          const important = selected || node.commit.refs.length > 0
-          return (
-            <g
-              key={node.commit.hash}
-              className={`git-ledger__node${selected ? ' is-selected' : ''}`}
-              role="button"
-              tabIndex={0}
-              onClick={() => onSelect(node.commit)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') onSelect(node.commit)
-              }}
-            >
-              <circle
-                cx={node.x}
-                cy={node.y}
-                r={selected ? 7 : 5}
-                fill="var(--surface-inset)"
-                stroke={color}
-                strokeWidth={selected ? 3 : 2}
-              />
-              <text x={node.x + 15} y={node.y + 4} className="git-ledger__hash">
-                {node.commit.shortHash}
-              </text>
-              {important && (
-                <text x={node.x + 76} y={node.y + 4} className="git-ledger__subject">
-                  {node.commit.subject}
-                </text>
-              )}
-            </g>
-          )
-        })}
+            <text x={node.x + 14} y={node.y + 4}>
+              {node.commit.shortHash} · {node.commit.subject}
+            </text>
+          </g>
+        ))}
       </svg>
     </div>
   )
 }
 
 export function WorktreeView({ active }: { active: boolean }): React.JSX.Element {
-  return <WorktreeViewSession active={active} />
-}
-
-function WorktreeViewSession({ active }: { active: boolean }): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<GitGraphSnapshot>()
-  const [selectedHash, setSelectedHash] = useState<string>()
-  const [mode, setMode] = useState<CenterMode>('topology')
-  const [query, setQuery] = useState('')
+  const [agents, setAgents] = useState<WorktreeAgentActivity[]>([])
+  const [status, setStatus] = useState<WorktreeRuntimeStatus>()
   const [loading, setLoading] = useState(false)
-  const requestId = useRef(0)
+  const [activityAvailable, setActivityAvailable] = useState(true)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailTab, setDetailTab] = useState<DetailTab>('work')
+  const [openFile, setOpenFile] = useState<string>()
+  const [diff, setDiff] = useState<GitDiffResult | null>(null)
+  const [openRun, setOpenRun] = useState<{ entry: RunEntry; content: string }>()
+  const [detailError, setDetailError] = useState<string>()
   const [repoPath, setRepoPath] = useState(() => localStorage.getItem('autowin:sc-repo') ?? '')
+  const requestId = useRef(0)
+  const detailRequestId = useRef(0)
 
   const load = useCallback(async (): Promise<void> => {
     const id = ++requestId.current
-    if (typeof window.api?.getGitGraph !== 'function') {
-      setSnapshot({
-        available: false,
-        repoPath,
-        error: 'Bridge Git indisponible'
-      })
+    setLoading(true)
+    const gitPromise = window.api?.getGitGraph?.(repoPath || undefined)
+    if (!gitPromise) {
+      setSnapshot({ available: false, repoPath, error: 'Bridge Git indisponible' })
+      setLoading(false)
       return
     }
-    setLoading(true)
-    try {
-      const next = await window.api.getGitGraph(repoPath || undefined)
-      if (id !== requestId.current) return
-      setSnapshot(next)
-      const preferred =
-        next.commits?.find((commit) => commit.shortHash === next.head) ?? next.commits?.[0]
-      setSelectedHash((current) =>
-        next.commits?.some((commit) => commit.hash === current) ? current : preferred?.hash
-      )
-    } catch (error) {
-      if (id === requestId.current) {
-        setSnapshot({
-          available: false,
-          repoPath,
-          error: error instanceof Error ? error.message : String(error)
-        })
-      }
-    } finally {
-      if (id === requestId.current) setLoading(false)
-    }
+    const [gitResult, activityResult, statusResult] = await Promise.allSettled([
+      gitPromise,
+      window.api.getWorktreeActivity?.() ?? Promise.reject(new Error('Activité indisponible')),
+      window.api.getWorktreeStatus?.() ?? Promise.reject(new Error('Statut indisponible'))
+    ])
+    if (id !== requestId.current) return
+    setSnapshot(
+      gitResult.status === 'fulfilled'
+        ? gitResult.value
+        : { available: false, repoPath, error: String(gitResult.reason) }
+    )
+    setActivityAvailable(activityResult.status === 'fulfilled')
+    setAgents(activityResult.status === 'fulfilled' ? activityResult.value : [])
+    setStatus(statusResult.status === 'fulfilled' ? statusResult.value : undefined)
+    setLoading(false)
   }, [repoPath])
 
   useEffect(() => {
-    // Charge le graphe Git externe dès l'activation de la vue.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (active) void load()
     return () => {
       requestId.current += 1
     }
   }, [active, load])
+
+  const health = projectState(snapshot, agents, activityAvailable)
+  const activeAgents = agents.filter(
+    (agent) => agent.state === 'working' || agent.state === 'isolated'
+  )
+  const priorities = agents.filter(
+    (agent) => agent.state === 'conflict' || agent.state === 'blocked'
+  )
+  const recent = [...agents].sort(
+    (a, b) => (b.endedAtMs ?? b.startedAtMs) - (a.endedAtMs ?? a.startedAtMs)
+  )
 
   const pickRepo = async (): Promise<void> => {
     const chosen = await window.api.pickGitRepo?.()
@@ -169,48 +141,47 @@ function WorktreeViewSession({ active }: { active: boolean }): React.JSX.Element
     setRepoPath(chosen)
   }
 
-  const refs = snapshot?.refs ?? []
-  const commits = snapshot?.commits ?? []
-  const worktrees = snapshot?.worktrees ?? []
-  const normalizedQuery = query.trim().toLocaleLowerCase('fr')
-  const filteredRefs = refs.filter((ref) =>
-    `${ref.name} ${ref.hash}`.toLocaleLowerCase('fr').includes(normalizedQuery)
-  )
-  const visibleRefs =
-    mode === 'remote'
-      ? filteredRefs.filter((ref) => ref.kind === 'remote')
-      : mode === 'tags'
-        ? filteredRefs.filter((ref) => ref.kind === 'tag')
-        : filteredRefs
-  const topologyIsFiltered = normalizedQuery.length > 0 || mode === 'remote' || mode === 'tags'
-  const visibleCommits = topologyIsFiltered
-    ? commitsReachableFromRefs(commits, visibleRefs)
-    : commits
-  const selectedCommit =
-    visibleCommits.find((commit) => commit.hash === selectedHash) ?? visibleCommits[0]
+  const openDiff = (agent: WorktreeAgentActivity, path: string): void => {
+    const id = ++detailRequestId.current
+    setOpenFile(path)
+    setDiff(null)
+    setDetailError(undefined)
+    void window.api.getGitDiff(path, agent.worktreePath || repoPath || undefined).then(
+      (value) => {
+        if (detailRequestId.current === id) setDiff(value)
+      },
+      (error) => {
+        if (detailRequestId.current === id) setDetailError(String(error))
+      }
+    )
+  }
+
+  const openRunDetail = (): void => {
+    setDetailTab('run')
+    if (openRun || detailError) return
+    const id = ++detailRequestId.current
+    void window.api
+      .listRuns()
+      .then(async (runs) => {
+        const entry = runs[0]
+        if (!entry) throw new Error('Aucun RUN disponible')
+        const file = await window.api.readNodeFile(entry.path)
+        if (detailRequestId.current === id) setOpenRun({ entry, content: file.content })
+      })
+      .catch((error) => {
+        if (detailRequestId.current === id)
+          setDetailError(error instanceof Error ? error.message : String(error))
+      })
+  }
 
   return (
-    <section className="worktree-tab" data-active={active}>
-      <header className="git-ledger__header">
+    <section className="worktree-tab cockpit" data-active={active}>
+      <header className="cockpit-header">
         <div>
-          <ModuleHeader eyebrow="Cartographie Git" title="Références & historique" />
-          <span className="git-ledger__path" title={snapshot?.repoPath || repoPath}>
-            {snapshot?.repoPath || repoPath || 'Dépôt courant'}
-          </span>
+          <ModuleHeader eyebrow="Cockpit projet" title={snapshot?.repositoryName ?? 'Worktrees'} />
+          <span className="cockpit-path">{snapshot?.repoPath || repoPath || 'Dépôt courant'}</span>
         </div>
-        <div className="git-ledger__metrics" aria-live="polite">
-          <span>
-            <strong>{snapshot?.changeCount ?? 0}</strong>
-            modifications
-          </span>
-          <span>
-            <strong>{refs.length}</strong>
-            références
-          </span>
-          <span>
-            <strong>{worktrees.length}</strong>
-            worktrees
-          </span>
+        <div className="cockpit-actions">
           <button type="button" onClick={() => void pickRepo()}>
             Choisir
           </button>
@@ -220,185 +191,245 @@ function WorktreeViewSession({ active }: { active: boolean }): React.JSX.Element
         </div>
       </header>
 
-      {loading && snapshot === undefined ? (
-        <div className="git-ledger__state" role="status">
-          Lecture de la topologie Git…
-        </div>
-      ) : snapshot?.available === false ? (
-        <div className="git-ledger__state is-error" role="alert">
-          <strong>Dépôt Git introuvable</strong>
-          <span>Choisis un dépôt versionné ou vérifie le chemin configuré.</span>
-          {snapshot.error && <code>{snapshot.error}</code>}
+      {loading && !snapshot ? (
+        <div className="cockpit-state" role="status">
+          Chargement du cockpit projet…
         </div>
       ) : (
-        <div className="git-ledger__shell">
-          <aside className="git-ledger__ledger" aria-label="Références et worktrees">
-            <label className="git-ledger__search">
-              <span>Rechercher</span>
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Branche, tag, hash…"
-              />
-            </label>
-            <div className="git-ledger__section-head">
-              <span>Branche / référence</span>
-              <span>HEAD</span>
-              <span>État</span>
+        <div className="cockpit-scroll">
+          <section className={`project-strip is-${health.state}`} aria-label="Santé du projet">
+            <div>
+              <span>Santé du projet</span>
+              <strong>{health.label}</strong>
             </div>
-            <div className="git-ledger__rows">
-              {visibleRefs.map((ref) => (
-                <button
-                  type="button"
-                  key={ref.fullName}
-                  className={selectedCommit?.hash === ref.hash ? 'is-selected' : ''}
-                  onClick={() => {
-                    const commit = commits.find((candidate) => candidate.hash === ref.hash)
-                    if (commit) setSelectedHash(commit.hash)
-                  }}
-                >
-                  <span className={`git-ledger__dot is-${ref.kind}`} />
-                  <span title={ref.fullName}>
-                    <strong>{ref.name}</strong>
-                    <small>
-                      {ref.kind === 'local'
-                        ? ref.fullName.replace('refs/heads/', '')
-                        : ref.fullName}
-                    </small>
-                  </span>
-                  <code>{ref.hash.slice(0, 7)}</code>
-                  <em>{ref.isHead ? 'HEAD' : kindLabel[ref.kind]}</em>
-                </button>
-              ))}
-              {visibleRefs.length === 0 && (
-                <p className="git-ledger__empty">Aucune référence correspondante.</p>
-              )}
-            </div>
-            <div className="git-ledger__section-head is-worktrees">
-              <span>Worktree</span>
+            <div>
               <span>Branche</span>
-              <span>Mode</span>
+              <strong>{snapshot?.branch ?? 'Inconnue'}</strong>
             </div>
-            <div className="git-ledger__worktrees">
-              {worktrees.map((worktree) => (
+            <div>
+              <span>Changements locaux</span>
+              <strong>
+                {snapshot?.available === false ? 'Indisponibles' : (snapshot?.changeCount ?? 0)}
+              </strong>
+            </div>
+            <div>
+              <span>Travaux actifs</span>
+              <strong>{activityAvailable ? activeAgents.length : 'Inconnus'}</strong>
+            </div>
+            <div>
+              <span>Alertes</span>
+              <strong>{health.alertCount}</strong>
+            </div>
+          </section>
+
+          {snapshot?.available === false && (
+            <div className="cockpit-notice is-error" role="alert">
+              <strong>Git indisponible</strong>
+              <span>{snapshot.error ?? 'Le dépôt ne peut pas être lu.'}</span>
+            </div>
+          )}
+          {!activityAvailable && (
+            <div className="cockpit-notice" role="status">
+              <strong>Données partielles</strong>
+              <span>L’activité des worktrees est indisponible.</span>
+            </div>
+          )}
+
+          <section className="cockpit-section cockpit-now" data-testid="worktree-priorities">
+            <header>
+              <div>
+                <span>Priorités</span>
+                <h2>À faire maintenant</h2>
+              </div>
+              <b>{priorities.length}</b>
+            </header>
+            {priorities.length ? (
+              priorities.map((agent) => (
                 <button
+                  key={agent.agentId}
                   type="button"
-                  key={worktree.path}
                   onClick={() => {
-                    const commit = commits.find((candidate) => candidate.hash === worktree.head)
-                    if (commit) setSelectedHash(commit.hash)
+                    setDetailTab('work')
+                    setDetailOpen(true)
                   }}
                 >
-                  <code title={worktree.path}>{worktree.path}</code>
-                  <span title={worktree.branch ?? 'detached'}>{worktree.branch ?? 'detached'}</span>
-                  <em>{worktree.locked ? 'lock' : 'rw'}</em>
+                  <strong>
+                    {agent.state === 'conflict' ? 'Conflit à trancher' : 'Travail bloqué'}
+                  </strong>
+                  <span>
+                    {agent.task ?? agent.agentName}
+                    {agent.conflictFile ? ` · ${agent.conflictFile}` : ''}
+                  </span>
                 </button>
-              ))}
-            </div>
-          </aside>
+              ))
+            ) : (
+              <p>Aucun blocage ni décision prioritaire.</p>
+            )}
+          </section>
 
-          <main className="git-ledger__center">
-            <nav className="git-ledger__tabs" aria-label="Vue du dépôt">
-              {(
-                [
-                  ['topology', 'Topologie'],
-                  ['chronology', 'Chronologie'],
-                  ['remote', 'Refs distantes'],
-                  ['tags', 'Tags']
-                ] as Array<[CenterMode, string]>
-              ).map(([value, label]) => (
-                <button
-                  type="button"
-                  key={value}
-                  className={mode === value ? 'is-active' : ''}
-                  onClick={() => setMode(value)}
-                >
-                  {label}
-                </button>
-              ))}
-              {snapshot?.truncated && (
-                <small>Historique récent borné · références anciennes incluses</small>
-              )}
-            </nav>
-            {mode === 'topology' ? (
-              <GitTopology
-                commits={visibleCommits}
-                selectedHash={selectedCommit?.hash}
-                onSelect={(commit) => setSelectedHash(commit.hash)}
-              />
-            ) : mode === 'chronology' ? (
-              <div className="git-ledger__chronology">
-                {visibleCommits.map((commit) => (
-                  <button
-                    type="button"
-                    key={commit.hash}
-                    className={selectedCommit?.hash === commit.hash ? 'is-selected' : ''}
-                    onClick={() => setSelectedHash(commit.hash)}
-                  >
-                    <code>{commit.shortHash}</code>
-                    <span>
-                      <strong>{commit.subject}</strong>
-                      <small>
-                        {commit.author} · {formatDate(commit.date)}
-                      </small>
-                    </span>
-                  </button>
+          <section className="cockpit-section" data-testid="worktree-current-work">
+            <header>
+              <div>
+                <span>Vue d’ensemble</span>
+                <h2>Travaux en cours</h2>
+              </div>
+            </header>
+            {activeAgents.length ? (
+              <div className="cockpit-work-list">
+                {activeAgents.map((agent) => (
+                  <WorktreeActivitySummary
+                    key={agent.agentId}
+                    agent={agent}
+                    onOpen={() => {
+                      setDetailTab('work')
+                      setDetailOpen(true)
+                    }}
+                  />
+                ))}
+                <div className="cockpit-touched-files" aria-label="Fichiers touchés">
+                  {activeAgents
+                    .flatMap((agent) => agent.files)
+                    .map((file) => (
+                      <span key={`${file.kind}:${file.path}`}>{file.path}</span>
+                    ))}
+                </div>
+              </div>
+            ) : (
+              <div className="cockpit-empty">
+                <strong>{activityAvailable ? 'Projet prêt' : 'Activité indisponible'}</strong>
+                <span>
+                  {activityAvailable
+                    ? 'Aucun travail agent en cours.'
+                    : 'Impossible de déterminer les travaux actifs.'}
+                </span>
+              </div>
+            )}
+          </section>
+
+          <section
+            className="cockpit-section cockpit-recent"
+            data-testid="worktree-recent-activity"
+          >
+            <header>
+              <div>
+                <span>Historique</span>
+                <h2>Activité récente</h2>
+              </div>
+            </header>
+            {recent.length ? (
+              <div className="cockpit-work-list">
+                {recent.slice(0, 6).map((agent) => (
+                  <WorktreeActivitySummary
+                    key={agent.agentId}
+                    agent={agent}
+                    onOpen={() => {
+                      setDetailTab('work')
+                      setDetailOpen(true)
+                    }}
+                  />
                 ))}
               </div>
             ) : (
-              <GitTopology
-                commits={visibleCommits}
-                selectedHash={selectedCommit?.hash}
-                onSelect={(commit) => setSelectedHash(commit.hash)}
-              />
+              <p>
+                {activityAvailable ? 'Aucune activité récente.' : 'Activité récente indisponible.'}
+              </p>
             )}
-          </main>
+          </section>
 
-          <aside className="git-ledger__inspector" aria-label="Analyse du commit">
-            <span className="git-ledger__eyebrow">Analyse</span>
-            {selectedCommit ? (
-              <>
-                <code className="git-ledger__selected-hash">{selectedCommit.shortHash}</code>
-                <h2>{selectedCommit.subject}</h2>
-                <dl>
-                  <div>
-                    <dt>Branche</dt>
-                    <dd>{selectedCommit.refs[0] ?? snapshot?.branch ?? '—'}</dd>
-                  </div>
-                  <div>
-                    <dt>Auteur</dt>
-                    <dd>{selectedCommit.author}</dd>
-                  </div>
-                  <div>
-                    <dt>Date</dt>
-                    <dd>{formatDate(selectedCommit.date)}</dd>
-                  </div>
-                  <div>
-                    <dt>Parents</dt>
-                    <dd>
-                      {selectedCommit.parents.length
-                        ? selectedCommit.parents.map((parent) => parent.slice(0, 7)).join(' · ')
-                        : 'Commit racine'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Réfs jointes</dt>
-                    <dd>{selectedCommit.refs.join(' · ') || 'Aucune'}</dd>
-                  </div>
-                  <div>
-                    <dt>Worktree</dt>
-                    <dd>
-                      {worktrees.find((worktree) => worktree.head === selectedCommit.hash)?.path ??
-                        'Aucun worktree attaché'}
-                    </dd>
-                  </div>
-                </dl>
-              </>
-            ) : (
-              <p className="git-ledger__empty">Aucun commit dans cet historique.</p>
-            )}
-          </aside>
+          <button
+            className="cockpit-open-detail"
+            type="button"
+            onClick={() => {
+              setDetailTab('git')
+              setDetailOpen(true)
+            }}
+          >
+            Ouvrir la topologie Git
+          </button>
         </div>
+      )}
+
+      {detailOpen && (
+        <aside
+          className="cockpit-detail"
+          aria-label="Détails du projet"
+          data-testid="worktree-detail-panel"
+        >
+          <header>
+            <strong>Détails du projet</strong>
+            <button type="button" onClick={() => setDetailOpen(false)}>
+              Fermer
+            </button>
+          </header>
+          <nav>
+            <button
+              className={detailTab === 'work' ? 'is-active' : ''}
+              onClick={() => setDetailTab('work')}
+            >
+              État du travail
+            </button>
+            <button
+              className={detailTab === 'files' ? 'is-active' : ''}
+              onClick={() => setDetailTab('files')}
+            >
+              Fichiers
+            </button>
+            <button className={detailTab === 'run' ? 'is-active' : ''} onClick={openRunDetail}>
+              RUN
+            </button>
+            <button
+              className={detailTab === 'git' ? 'is-active' : ''}
+              onClick={() => setDetailTab('git')}
+            >
+              Topologie Git
+            </button>
+          </nav>
+          {detailTab === 'git' ? (
+            snapshot?.available === false ? (
+              <p>Topologie indisponible.</p>
+            ) : (
+              <GitTopology commits={snapshot?.commits ?? []} />
+            )
+          ) : detailTab === 'run' ? (
+            detailError ? (
+              <p role="alert">RUN indisponible : {detailError}</p>
+            ) : openRun ? (
+              <RunInspector content={openRun.content} summary={openRun.entry.summary} />
+            ) : (
+              <p role="status">Lecture du RUN…</p>
+            )
+          ) : detailTab === 'files' ? (
+            <div className="cockpit-detail__files">
+              {agents
+                .flatMap((agent) => agent.files.map((file) => ({ agent, file })))
+                .map(({ agent, file }) => (
+                  <div key={`${agent.agentId}:${file.path}`}>
+                    <button type="button" onClick={() => openDiff(agent, file.path)}>
+                      {file.path}
+                    </button>
+                    {openFile === file.path && (
+                      <div className="cockpit-detail__diff">
+                        {detailError ? (
+                          <p role="alert">Diff indisponible : {detailError}</p>
+                        ) : diff === null ? (
+                          <p role="status">Chargement du diff…</p>
+                        ) : diff.available ? (
+                          <DiffView diff={diff.diff ?? ''} />
+                        ) : (
+                          <p role="alert">
+                            Diff indisponible{diff.error ? ` : ${diff.error}` : '.'}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              {agents.every((agent) => agent.files.length === 0) && <p>Aucun fichier touché.</p>}
+            </div>
+          ) : (
+            <WorktreeActivityView agents={agents} status={status} className="is-detail" />
+          )}
+        </aside>
       )}
     </section>
   )

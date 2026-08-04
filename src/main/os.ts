@@ -34,6 +34,7 @@ import {
   Orchestrator,
   type BrainRetrievalEvent,
   type OrchestrationResult,
+  type OrchestrationRuntimeSnapshot,
   type OrchestrationStep,
   type OrchestrationPhase
 } from './orchestrator'
@@ -51,8 +52,10 @@ import type { PipelinePhase } from './skill-pipeline'
 import {
   clearOrchestrationState,
   loadOrchestrationStates,
+  pickOrchestrationsToResume,
   pickOrchestrationToResume,
   pickResumeForTask,
+  saveOrchestrationAgentCheckpoint,
   saveOrchestrationState,
   type OrchestrationRunState
 } from './runs/orchestration-state'
@@ -72,6 +75,10 @@ import { dirname, join, resolve } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
 import { loadAutoClose, saveAutoClose } from './autoclose-store'
 import { AUTOWIN_WORKSPACE_ENV } from '../shared/app-identity'
+import { ExecutionSupervisor, type ExecutionUsageSnapshot } from './execution-supervisor'
+import { compileExecutionQuote } from './execution-quote'
+import { loadOrchestrationBudget } from './orchestration-budget'
+import { preparePersistedRunForRelaunch, type ProcessIdentity } from './runs/run-reattach'
 
 interface ExecutionWorkspaceInput {
   cwd?: string
@@ -121,6 +128,7 @@ export function selectPhaseFanOut(fanOut: FanOutTopology, phase: PipelinePhase):
 export class AutowinOS {
   private readonly brainGraphCache = new Map<string, ReturnType<typeof loadBrainGraph>>()
   readonly registry: ProviderRegistry
+  readonly executionSupervisor = new ExecutionSupervisor()
   readonly roles = new RoleModelConfig(loadRoleBindings()) // restaure la config persistée
   readonly authority = new AuthoritySas()
   readonly cost = new CostAggregator(undefined, join(ensureAutowinAppData(), 'cost.jsonl'))
@@ -134,7 +142,7 @@ export class AutowinOS {
    * (deps `phaseFanOut`/`judgeFanOut`). Vide par défaut → mono-modèle (rétrocompat).
    */
   private fanOut: FanOutTopology = { scout: [], frame: [], terrain: [], judge: [] }
-  private taskReadiness: Promise<void> = Promise.resolve()
+  private taskReadiness: Promise<{ error?: unknown }> = Promise.resolve({})
   /**
    * Coordinateur worktree (volet B) : donne à chaque run de mutation une copie isolée, fusionnée en
    * full-auto (conflit → assisté). Présent seulement si le workspace est un repo git (sinon undefined
@@ -148,7 +156,7 @@ export class AutowinOS {
   private readonly orchestrationStartedAt = new Map<string, number>()
 
   constructor() {
-    this.registry = new ProviderRegistry(CONSTITUTION)
+    this.registry = new ProviderRegistry(CONSTITUTION, this.executionSupervisor)
       .register(new ClaudeCliAdapter())
       .register(new CodexAdapter())
       .register(new KimiCliAdapter())
@@ -212,6 +220,8 @@ export class AutowinOS {
       // le juge (rôle distinct). Déterministe/générique (task-regime.ts). Économise tokens + latence
       // sur les tâches simples sans jamais sous-traiter les complexes (doute → critical).
       classifyPhases: regimePhases,
+      currentExecutionQuote: () => this.executionSupervisor.currentQuote(),
+      currentExecutionUsage: () => this.executionSupervisor.currentSnapshot(),
       // SURVIE NIVEAU 3 : après CHAQUE phase, on persiste l'acquis du run ; à la clôture on l'efface.
       // Un kill du process main laisse donc un état reprenable → `resumableOrchestration()`.
       onPhaseCompleted: ({
@@ -220,7 +230,10 @@ export class AutowinOS {
         conversationId,
         turnId,
         bindingOverride,
+        runtimeSnapshot,
         phaseOutputs,
+        executionQuote,
+        usage,
         agents
       }) =>
         saveOrchestrationState(this.orchestrationStateRoot, {
@@ -229,13 +242,24 @@ export class AutowinOS {
           ...(conversationId ? { conversationId } : {}),
           ...(turnId ? { turnId } : {}),
           ...(bindingOverride ? { bindingOverride } : {}),
+          runtimeSnapshot,
           phaseOutputs,
+          ...(executionQuote ? { executionQuote } : {}),
+          ...(usage ? { usage } : {}),
           // Les agents CLI du run : un processus detache survit a l'app, ces references sont ce qui
           // permettra de le retrouver vivant et de relire sa sortie au lieu de tout relancer.
           ...(agents && agents.length ? { agents } : {}),
           startedAt: this.orchestrationStartedAt.get(runId) ?? Date.now(),
           updatedAt: Date.now()
         }),
+      onAgentsChanged: (runId, agents) => {
+        saveOrchestrationAgentCheckpoint(
+          this.orchestrationStateRoot,
+          runId,
+          agents,
+          this.executionSupervisor.currentSnapshot()
+        )
+      },
       onRunSettled: (runId) => {
         this.orchestrationStartedAt.delete(runId)
         clearOrchestrationState(this.orchestrationStateRoot, runId)
@@ -302,6 +326,29 @@ export class AutowinOS {
     this.fanOut = next
   }
 
+  /** Fige l'identite complete d'un run pour que affichage, reprise et providers restent alignes. */
+  captureOrchestrationRuntime(): OrchestrationRuntimeSnapshot {
+    const copy = (binding: RoleBinding): RoleBinding => ({
+      ...binding,
+      ...(binding.phaseModel ? { phaseModel: { ...binding.phaseModel } } : {})
+    })
+    const current = this.roles.all()
+    return {
+      roles: {
+        orchestrator: copy(current.orchestrator),
+        subagent: copy(current.subagent),
+        judge: copy(current.judge),
+        scout: copy(current.scout)
+      },
+      phaseFanOut: {
+        scout: this.fanOut.scout.map(copy),
+        frame: this.fanOut.frame.map(copy),
+        terrain: this.fanOut.terrain.map(copy)
+      },
+      judgeFanOut: this.fanOut.judge.map(copy)
+    }
+  }
+
   /** Activité worktree courante (volet A) — snapshot pour l'IPC/renderer. */
   getWorktreeActivity(): WorktreeAgentActivity[] {
     return this.worktrees ? this.worktrees.activity() : []
@@ -337,25 +384,92 @@ export class AutowinOS {
 
   /** Empêche tout run de lire la topology avant la fin de la découverte des modèles. */
   setTaskReadiness(readiness: Promise<unknown>): void {
-    this.taskReadiness = readiness.then(() => undefined)
+    this.taskReadiness = readiness.then(
+      () => ({}),
+      (error: unknown) => ({ error })
+    )
+  }
+
+  async waitUntilReady(): Promise<void> {
+    // Les harness unitaires peuvent instancier le prototype sans constructeur ; en production la
+    // propriété existe toujours, mais l'absence signifie naturellement « aucune barrière ».
+    for (;;) {
+      const observed = this.taskReadiness
+      if (!observed) return
+      const readiness = await observed
+      // Une actualisation peut installer une nouvelle generation pendant l'attente. Valider
+      // l'ancienne seulement ferait passer un alias devenu invalide entre les deux barrieres.
+      if (observed !== this.taskReadiness) continue
+      if (readiness && 'error' in readiness) throw readiness.error
+      return
+    }
   }
 
   // --- Conversation directe (chat) : alimente le coût réel ---
+  async runChatTurn<T>(
+    task: string,
+    signal: AbortSignal | undefined,
+    execute: () => Promise<T>,
+    onUsageSettlement?: (usage: ExecutionUsageSnapshot) => void
+  ): Promise<T> {
+    await this.waitUntilReady()
+    // Un chat deja lance depuis un run (par exemple `chat_send` pendant AgentPilot) partage
+    // l'enveloppe courante. Une nouvelle AsyncLocalStorage imbriquee remettrait les compteurs a zero.
+    if (this.executionSupervisor.currentQuote()) return execute()
+    const settings = loadOrchestrationBudget(
+      join(ensureAutowinAppData(), 'orchestration-budget.json')
+    )
+    const envCalls = Number(process.env.AUTOWIN_CHAT_CALL_CAP)
+    const envTokens = Number(process.env.AUTOWIN_CHAT_TOKEN_CAP)
+    const envUsd = Number(process.env.AUTOWIN_CHAT_USD_CAP)
+    const maxProviderCalls =
+      Number.isSafeInteger(envCalls) && envCalls > 0
+        ? Math.min(settings.maxProviderCalls, envCalls)
+        : Math.min(settings.maxProviderCalls, 6)
+    const maxTotalTokens =
+      Number.isSafeInteger(envTokens) && envTokens > 0
+        ? Math.min(settings.maxTotalTokens, envTokens)
+        : Math.min(settings.maxTotalTokens, 1_500_000)
+    const defaultUsd = Number.isFinite(envUsd) && envUsd > 0 ? envUsd : 2
+    const maxUsd = settings.maxUsd === null ? defaultUsd : Math.min(settings.maxUsd, defaultUsd)
+    const quote = compileExecutionQuote(task || 'chat', {
+      maxProviderCalls,
+      maxTotalTokens,
+      maxUsd
+    })
+    // Un tour de chat n'a ni phase ni fan-out : ses caps sont plus petits et sa concurrence est 1.
+    quote.phases = []
+    quote.decomposition = { mode: 'disabled', maxNodes: 1 }
+    quote.limits.maxAgents = 1
+    quote.limits.maxConcurrency = 1
+    quote.limits.maxRecoveries = 0
+    quote.limits.maxFreshTokens = Math.min(quote.limits.maxFreshTokens, maxTotalTokens)
+    return this.executionSupervisor.run(quote, signal, execute, undefined, onUsageSettlement)
+  }
+
   async chat(
     provider: string | undefined,
     role: Role | undefined,
     messages: Message[],
     onDelta: (d: string) => void
   ): Promise<{ text: string; provider: string; systemInjected: boolean }> {
-    const binding = this.roles.getBinding(role ?? 'orchestrator')
-    const p = provider ?? binding.provider
-    const options = provider
-      ? {}
-      : { model: binding.model, reasoningEffort: binding.reasoningEffort }
-    const r = await this.registry.send(p, messages, options, (c) => onDelta(c.delta))
+    const task =
+      [...messages].reverse().find((message) => message.role === 'user')?.content ?? 'chat'
+    let selectedProvider = provider
+    const r = await this.runChatTurn(task, undefined, () => {
+      // Comme le routeur, relire APRÈS la readiness : le catalogue peut résoudre un alias pendant
+      // l'attente et remplacer `codex/flagship` par son transport concret.
+      const binding = this.roles.getBinding(role ?? 'orchestrator')
+      const currentProvider = provider ?? binding.provider
+      selectedProvider = currentProvider
+      const options = provider
+        ? {}
+        : { model: binding.model, reasoningEffort: binding.reasoningEffort }
+      return this.registry.send(currentProvider, messages, options, (c) => onDelta(c.delta))
+    })
     if (r.usage) {
       this.cost.add({
-        provider: p,
+        provider: selectedProvider ?? r.provider,
         inputTokens: r.usage.inputTokens,
         outputTokens: r.usage.outputTokens,
         cacheReadTokens: r.usage.cacheReadTokens,
@@ -413,35 +527,51 @@ export class AutowinOS {
     /** Trace immédiate de la récupération Brain, y compris si le run échoue ensuite. */
     onBrainRetrieved?: (event: BrainRetrievalEvent) => void,
     turnId?: string,
-    onRunLifecycle?: (event: RunLifecycleEvent) => void
+    onRunLifecycle?: (event: RunLifecycleEvent) => void,
+    /** Etat budgetaire du run interrompu ; utilise uniquement avec `resumeOutputs`. */
+    resumeControl?: Pick<OrchestrationRunState, 'executionQuote' | 'usage'>,
+    /** Publication terminale si un provider ignore d'abord l'abort puis se règle réellement. */
+    onLateUsageSettlement?: (usage: ExecutionUsageSnapshot) => void,
+    /** Snapshot deja persiste par l'appelant ; absent, capture apres readiness. */
+    runtimeSnapshot?: OrchestrationRuntimeSnapshot
   ): Promise<OrchestrationResult> {
-    await this.taskReadiness
-    if (!onBrainRetrieved && !turnId && !onRunLifecycle) {
-      return this.orchestrator.run(
-        task,
-        onStep,
-        onPhase,
-        onDelta,
-        signal,
-        collectedContext,
-        resumeOutputs,
-        conversationId,
-        bindingOverride
-      )
-    }
-    return this.orchestrator.run(
-      task,
-      onStep,
-      onPhase,
-      onDelta,
+    await this.waitUntilReady()
+    // Certains harness historiques construisent le prototype avec un orchestrateur factice sans
+    // magasin de roles. En production `roles` existe toujours ; le fallback laisse le mock intact.
+    const admittedRuntime =
+      runtimeSnapshot ?? (this.roles ? this.captureOrchestrationRuntime() : undefined)
+    const settings = loadOrchestrationBudget(
+      join(ensureAutowinAppData(), 'orchestration-budget.json')
+    )
+    const quote = resumeControl?.executionQuote ?? compileExecutionQuote(task, settings)
+    return this.executionSupervisor.run(
+      quote,
       signal,
-      collectedContext,
-      resumeOutputs,
-      conversationId,
-      bindingOverride,
-      onBrainRetrieved,
-      turnId,
-      onRunLifecycle
+      async () => {
+        const result = await this.orchestrator.run(
+          task,
+          onStep,
+          onPhase,
+          onDelta,
+          this.executionSupervisor.currentSignal(),
+          collectedContext,
+          resumeOutputs,
+          conversationId,
+          bindingOverride,
+          onBrainRetrieved,
+          turnId,
+          onRunLifecycle,
+          admittedRuntime
+        )
+        result.quote = quote
+        result.usage = this.executionSupervisor.currentSnapshot()
+        if (result.usage?.knownCostUsd !== null && result.usage?.knownCostUsd !== undefined) {
+          result.costUsd = result.usage.knownCostUsd
+        }
+        return result
+      },
+      resumeControl?.usage,
+      onLateUsageSettlement
     )
   }
 
@@ -454,6 +584,43 @@ export class AutowinOS {
     return pickOrchestrationToResume(loadOrchestrationStates(this.orchestrationStateRoot))
   }
 
+  /** Tous les runs éligibles à la reprise automatique au démarrage, dans leur ordre de priorité. */
+  resumableOrchestrations(): OrchestrationRunState[] {
+    return pickOrchestrationsToResume(loadOrchestrationStates(this.orchestrationStateRoot))
+  }
+
+  /** Persiste une branche reprenable sans réécrire le checkpoint source. */
+  persistCheckpointFork(
+    state: OrchestrationRunState,
+    ancestor: NonNullable<OrchestrationRunState['forkedFrom']>
+  ): OrchestrationRunState {
+    const existing = loadOrchestrationStates(this.orchestrationStateRoot)
+    if (existing.some((candidate) => candidate.runId === state.runId)) {
+      throw new Error(`Run de fork déjà existant : ${state.runId}`)
+    }
+    const now = Date.now()
+    const branchState = structuredClone(state)
+    delete branchState.turnId
+    const fork: OrchestrationRunState = {
+      ...branchState,
+      runId: state.runId,
+      forkedFrom: structuredClone(ancestor),
+      startedAt: now,
+      updatedAt: now,
+      agents: []
+    }
+    saveOrchestrationState(this.orchestrationStateRoot, fork)
+    return fork
+  }
+
+  /** Persiste la preuve de fin des providers orphelins avant de remettre leur budget au supervisor. */
+  reconcileResumableOrchestrationForRelaunch(
+    runId: string,
+    identityOf: ProcessIdentity
+  ): OrchestrationRunState | null {
+    return preparePersistedRunForRelaunch(this.orchestrationStateRoot, runId, identityOf)
+  }
+
   /**
    * Acquis reutilisable pour une tache RELANCEE dans une conversation (« reprend »). Le chemin de
    * reprise n'existait qu'au redemarrage de l'app : relancer depuis le chat repayait les phases deja
@@ -463,13 +630,15 @@ export class AutowinOS {
     task: string,
     conversationId: string | undefined,
     nowMs = Date.now(),
-    bindingOverride?: RoleBinding
+    bindingOverride?: RoleBinding,
+    runtimeSnapshot?: OrchestrationRuntimeSnapshot
   ): OrchestrationRunState | null {
     return pickResumeForTask(loadOrchestrationStates(this.orchestrationStateRoot), {
       task,
       conversationId,
       nowMs,
-      bindingOverride
+      bindingOverride,
+      runtimeSnapshot
     })
   }
 
@@ -479,7 +648,13 @@ export class AutowinOS {
    */
   rememberAgentOffsets(
     runId: string,
-    agents: Array<{ token: string; pid?: number; identity?: string; journalPath?: string; offset?: number }>
+    agents: Array<{
+      token: string
+      pid?: number
+      identity?: string
+      journalPath?: string
+      offset?: number
+    }>
   ): void {
     const state = loadOrchestrationStates(this.orchestrationStateRoot).find(
       (candidate) => candidate.runId === runId

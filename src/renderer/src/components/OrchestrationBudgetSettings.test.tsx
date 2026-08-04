@@ -20,7 +20,11 @@ describe('OrchestrationBudgetSettings', () => {
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
-        orchestrationBudget: vi.fn().mockResolvedValue({ maxUsd: null }),
+        orchestrationBudget: vi.fn().mockResolvedValue({
+          maxUsd: null,
+          maxProviderCalls: 24,
+          maxTotalTokens: 15_000_000
+        }),
         setOrchestrationBudget: vi.fn()
       }
     })
@@ -33,10 +37,12 @@ describe('OrchestrationBudgetSettings', () => {
       root.render(createElement(OrchestrationBudgetSettings))
     })
 
-    const input = container.querySelector('input')
-    const help = container.querySelector('#orchestration-budget-help')
-    expect(input?.getAttribute('aria-describedby')).toBe('orchestration-budget-help')
-    expect(help?.textContent).toContain('Champ vide = aucune limite de coût')
-    expect(container.textContent).toContain('dollars américains (USD)')
+    const inputs = [...container.querySelectorAll('input')]
+    expect(inputs).toHaveLength(3)
+    expect(inputs.map((input) => input.value)).toEqual(['24', '15000000', ''])
+    expect(container.textContent).toContain('appels fournisseur')
+    expect(container.textContent).toContain('tokens totaux')
+    expect(container.textContent).toContain('optionnel')
+    expect(container.textContent).toContain("usage final d'un appel")
   })
 })

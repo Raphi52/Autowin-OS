@@ -103,13 +103,18 @@ export function buildProviderStatuses(inputs: {
   codexTokens: { obtainedAt: number; expiresInSec?: number } | null
   claudeResponds: boolean
   kimiResponds: boolean
+  geminiResponds?: boolean
   now: number
-  states?: Partial<Record<'codex' | 'claude' | 'kimi', ProviderStateSnapshot>>
+  states?: Partial<Record<'codex' | 'claude' | 'kimi' | 'gemini', ProviderStateSnapshot>>
 }): ProviderStatus[] {
   const codex = codexTokenStatus(inputs.codexTokens, inputs.now)
   const claude = presenceStatus(inputs.claudeResponds)
   const kimi = presenceStatus(inputs.kimiResponds)
-  const display = (provider: 'codex' | 'claude' | 'kimi', fallback: AuthStatus): ProviderStatus => {
+  const gemini = presenceStatus(inputs.geminiResponds ?? false)
+  const display = (
+    provider: 'codex' | 'claude' | 'kimi' | 'gemini',
+    fallback: AuthStatus
+  ): ProviderStatus => {
     const state = inputs.states?.[provider]
     if (state?.mode === 'standby') {
       return {
@@ -137,5 +142,9 @@ export function buildProviderStatuses(inputs: {
     }
     return { provider, status: fallback, testable: isTestable(fallback) }
   }
-  return [display('codex', codex), display('claude', claude), display('kimi', kimi)]
+  const statuses = [display('codex', codex), display('claude', claude), display('kimi', kimi)]
+  if (inputs.geminiResponds !== undefined || inputs.states?.gemini) {
+    statuses.push(display('gemini', gemini))
+  }
+  return statuses
 }

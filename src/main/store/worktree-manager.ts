@@ -66,12 +66,12 @@ export interface GitRunner {
 }
 
 const defaultGit: GitRunner = (repo, args) =>
-  execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim()
+  execFileSync('git', args, { cwd: repo, encoding: 'utf8', windowsHide: true }).trim()
 
 /** Comme defaultGit mais ne jette PAS : renvoie code + sorties (pour détecter un conflit de merge). */
 function tryGit(repo: string, args: string[]): { code: number; stdout: string; stderr: string } {
   try {
-    const stdout = execFileSync('git', args, { cwd: repo, encoding: 'utf8' })
+    const stdout = execFileSync('git', args, { cwd: repo, encoding: 'utf8', windowsHide: true })
     return { code: 0, stdout, stderr: '' }
   } catch (err) {
     const e = err as { status?: number; stdout?: Buffer | string; stderr?: Buffer | string }

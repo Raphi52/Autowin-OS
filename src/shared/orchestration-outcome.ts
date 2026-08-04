@@ -15,6 +15,10 @@ export interface OrchestrationOutcome {
   valid?: unknown
   gateBlocked?: unknown
   costUsd?: unknown
+  /** Somme des seuls appels tarifés ; null signifie qu'aucun prix n'est exposé. */
+  knownCostUsd?: unknown
+  /** Appels dont les tokens sont connus mais dont le fournisseur n'expose pas le prix. */
+  unpricedCalls?: unknown
   runPath?: unknown
   runId?: unknown
   result?: unknown
@@ -28,6 +32,30 @@ function asString(value: unknown): string | undefined {
 
 function asNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function asCallCount(value: unknown): number {
+  const count = asNumber(value)
+  return count === undefined ? 0 : Math.max(0, Math.floor(count))
+}
+
+/** Libellé de coût honnête, compatible avec les anciens résultats qui n'avaient que `costUsd`. */
+export function formatExecutionCostCoverage(data: OrchestrationOutcome): string | undefined {
+  const hasCoverage = Object.prototype.hasOwnProperty.call(data, 'knownCostUsd')
+  const knownCost = asNumber(data.knownCostUsd)
+  const unpricedCalls = asCallCount(data.unpricedCalls)
+  const unpricedLabel = `${unpricedCalls} appel${unpricedCalls > 1 ? 's' : ''} non chiffré${unpricedCalls > 1 ? 's' : ''}`
+
+  if (hasCoverage && data.knownCostUsd === null) {
+    return unpricedCalls > 0 ? `coût non exposé · ${unpricedLabel}` : 'coût non exposé'
+  }
+  if (hasCoverage && knownCost !== undefined) {
+    return unpricedCalls > 0
+      ? `${knownCost.toFixed(2)} $ connus · ${unpricedLabel}`
+      : `${knownCost.toFixed(2)} $`
+  }
+  const legacyCost = asNumber(data.costUsd)
+  return legacyCost === undefined ? undefined : `${legacyCost.toFixed(2)} $`
 }
 
 /** Nom lisible du run à partir de son chemin (le dossier `<sujet>-workspace`). */
@@ -55,7 +83,7 @@ export function formatOrchestrationOutcome(
   const gateBlocked = outcome.gateBlocked === true
   const invalid = outcome.valid === false
   const status = asString(outcome.status)
-  const cost = asNumber(outcome.costUsd)
+  const cost = formatExecutionCostCoverage(outcome)
   const run = runLabelFromPath(asString(outcome.runPath) ?? asString(outcome.runId))
   const result = asString(outcome.result)
 
@@ -69,7 +97,7 @@ export function formatOrchestrationOutcome(
 
   const facts = [
     status && `statut ${status}`,
-    cost !== undefined && `coût ${cost.toFixed(2)} $`,
+    cost && (cost.startsWith('coût ') ? cost : `coût ${cost}`),
     run && `run « ${run} »`
   ].filter((fact): fact is string => Boolean(fact))
 

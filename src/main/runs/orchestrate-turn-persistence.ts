@@ -35,6 +35,8 @@ export interface OrchestrateTurnPersistenceOptions {
   conversationId: string
   turnId: string
   runtime?: ChatTurnRuntime
+  /** Réutilise le tour interrompu portant déjà `turnId`, sans ajouter une seconde paire de messages. */
+  resumeExisting?: boolean
   /** Survie niveau 2 (journal fichier du tour) — best-effort, ne casse jamais le run. */
   journal?: (event: ChatTurnEvent) => void
 }
@@ -58,7 +60,14 @@ const AUTONOMOUS = '__autonomous__'
 export function createOrchestrateTurnPersistence(
   options: OrchestrateTurnPersistenceOptions
 ): OrchestrateTurnPersistence {
-  const { conversations, conversationId, turnId, runtime, journal } = options
+  const {
+    conversations,
+    conversationId,
+    turnId,
+    runtime,
+    resumeExisting = false,
+    journal
+  } = options
   const targeted = conversationId !== AUTONOMOUS
   let opened = false
   let closed = false
@@ -72,6 +81,7 @@ export function createOrchestrateTurnPersistence(
    */
   let openedTask = ''
   let actionIndex = 0
+  let resumedActionIds: string[] = []
 
   const live = (): boolean => targeted && Boolean(conversations.get(conversationId))
 
@@ -92,6 +102,23 @@ export function createOrchestrateTurnPersistence(
     begin(task) {
       if (opened || !live()) return
       openedTask = task
+      if (resumeExisting) {
+        const message = conversations
+          .get(conversationId)
+          ?.messages.find(
+            (candidate) => candidate.role === 'assistant' && candidate.turnId === turnId
+          )
+        if (!message) return
+        resumedActionIds = (message.parts ?? [])
+          .filter(
+            (part) =>
+              part.kind === 'action' && part.ok === undefined && typeof part.actionId === 'string'
+          )
+          .map((part) => (part.kind === 'action' ? part.actionId! : ''))
+        opened = true
+        emit({ kind: 'resumed' })
+        return
+      }
       conversations.beginTurn(
         conversationId,
         { content: task },
@@ -138,6 +165,14 @@ export function createOrchestrateTurnPersistence(
     succeed(result) {
       if (!opened || closed) return
       closed = true
+      for (const actionId of resumedActionIds)
+        emit({
+          kind: 'result',
+          actionId,
+          name: 'orchestrate',
+          ok: true,
+          data: { resumed: true }
+        })
       const closing = result?.result?.trim()
       if (closing && !streamedText.trim())
         emit({ kind: 'delta', streamId: `${turnId}:closing`, text: closing })

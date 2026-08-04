@@ -23,6 +23,8 @@ export interface CostRow {
   cacheHitRatio: number
   /** Temps cumulé des appels de cette ligne (0 = non mesuré par la source). */
   durationMs?: number
+  /** Appels executes dont le fournisseur n'expose pas de prix fiable. */
+  unpricedCalls: number
 }
 
 export interface CostSummary
@@ -37,6 +39,7 @@ export interface CostSummary
     cacheHitRatio: number
     /** Temps cumulé de la conversation. 0 = aucune source ne l'a mesuré. */
     durationMs: number
+    unpricedCalls: number
     /**
      * Le contexte est RÉÉCRIT au lieu d'être relu — c'est ce symptôme qui a mené à la cause racine du
      * 2026-07-28. Jugé sur le VOLUME de contexte, pas sur le nombre d'appels : trois appels qui
@@ -73,6 +76,7 @@ export function summarizeConversationCost(rows: readonly CostRow[]): CostSummary
   let cacheRead = 0
   let input = 0
   let durationMs = 0
+  let unpricedCalls = 0
   let topKey: string | undefined
   let topCost = 0
   for (const row of rows) {
@@ -83,18 +87,26 @@ export function summarizeConversationCost(rows: readonly CostRow[]): CostSummary
     cacheRead += typeof row?.cacheReadTokens === 'number' ? Math.max(0, row.cacheReadTokens) : 0
     durationMs += typeof row?.durationMs === 'number' && row.durationMs > 0 ? row.durationMs : 0
     input += typeof row?.inputTokens === 'number' ? Math.max(0, row.inputTokens) : 0
+    unpricedCalls +=
+      typeof row?.unpricedCalls === 'number' && row.unpricedCalls > 0 ? row.unpricedCalls : 0
     if (cost > topCost) {
       topCost = cost
       topKey = row.key
     }
   }
-  const contextTotal = cacheRead + input
-  const cacheHitRatio = contextTotal > 0 ? cacheRead / contextTotal : 0
+  const contextTotal = input
+  const cacheHitRatio = contextTotal > 0 ? Math.min(1, cacheRead / contextTotal) : 0
   return {
     totalUsd,
     calls,
-    label: formatUsd(totalUsd),
+    label:
+      unpricedCalls > 0
+        ? totalUsd > 0
+          ? `${formatUsd(totalUsd)} + non expos\u00e9`
+          : 'co\u00fbt non expos\u00e9'
+        : formatUsd(totalUsd),
     durationMs,
+    unpricedCalls,
     ...(topKey !== undefined ? { topKey } : {}),
     cacheHitRatio,
     rewritingContext:
@@ -105,8 +117,12 @@ export function summarizeConversationCost(rows: readonly CostRow[]): CostSummary
 /** Lignes triées par coût décroissant, sans les lignes à 0 $ (elles n'expliquent aucune dépense). */
 export function spendingRows(rows: readonly CostRow[]): CostRow[] {
   return rows
-    .filter((row) => typeof row?.costUsd === 'number' && row.costUsd > 0)
-    .sort((a, b) => b.costUsd - a.costUsd)
+    .filter(
+      (row) =>
+        (typeof row?.costUsd === 'number' && row.costUsd > 0) ||
+        (typeof row?.unpricedCalls === 'number' && row.unpricedCalls > 0)
+    )
+    .sort((a, b) => b.costUsd - a.costUsd || b.unpricedCalls - a.unpricedCalls)
 }
 
 /** « 1 appel » / « 3 appels » — vu a l'ecran le 2026-07-29 en « 1 appels ». */

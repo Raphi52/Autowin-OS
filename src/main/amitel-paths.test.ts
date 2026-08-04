@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   amitelBrainOrigin,
   amitelBrainRoot,
+  amitelBrainStateRoot,
   amitelBrainTooling,
   amitelWorkspaces,
   DEFAULT_AMITEL_WORKSPACES,
@@ -29,12 +30,15 @@ describe('amitel-paths — source unique et surchargeable', () => {
   })
 
   it('le tooling SUIT la racine du Brain — avant, les deux litteraux pouvaient diverger', () => {
-    // C'est LE gain de la centralisation : deplacer la racine deplace le tooling avec elle.
-    expect(amitelBrainTooling({ AMITEL_BRAIN_ROOT: 'D:\\brain' })).toBe('D:\\brain\\tooling')
-    // Mais la surcharge explicite du tooling reste prioritaire sur la derivation.
+    // Le partage fournit les donnees, jamais du code executable.
+    expect(amitelBrainTooling({ AMITEL_BRAIN_ROOT: 'D:\\brain', LOCALAPPDATA: 'C:\\Local' })).toBe(
+      'C:\\Local\\AmitelBrain\\tooling'
+    )
+    expect(amitelBrainStateRoot({ LOCALAPPDATA: 'C:\\Local' })).toBe('C:\\Local\\AmitelBrain')
     expect(amitelBrainTooling({ AMITEL_BRAIN_ROOT: 'D:\\brain', AUTOWIN_BRAIN_TOOLING: 'E:\\t' })).toBe(
       'E:\\t'
     )
+    expect(amitelBrainTooling({ AMITEL_BRAIN_ROOT: '\\\\ged2\\brain' })).toBe('')
   })
 
   it('une valeur VIDE ou en espaces ne masque pas le defaut', () => {

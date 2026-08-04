@@ -1,11 +1,12 @@
-import { mkdtempSync, readFileSync, rmSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import {
   createConvRun,
   reuseOrCreateConvRun,
   closeConvRun,
+  deleteConvRun,
   listConvRuns,
   saveConvRunTrace,
   loadConvRunTrace
@@ -93,5 +94,71 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
     expect(b[0].summary.status).toBe('green')
     // chemin attaché disparu → ignoré sans crash
     expect(await listConvRuns('conv-B', [join(root, 'nexiste', 'RUN.md')], root)).toHaveLength(0)
+  })
+
+  it('supprime uniquement le workspace natif visé, trace comprise', async () => {
+    const target = createConvRun('conv-delete', 'à supprimer', root, () => 10_000)
+    const sibling = createConvRun('conv-delete', 'à garder', root, () => 11_000)
+    saveConvRunTrace(target, [{ step: 'exec', text: 'trace à retirer' }])
+
+    await expect(deleteConvRun('conv-delete', target, [], root)).resolves.toEqual({
+      kind: 'deleted'
+    })
+
+    expect(existsSync(target)).toBe(false)
+    expect(existsSync(join(dirname(target), 'trace.json'))).toBe(false)
+    expect(existsSync(sibling)).toBe(true)
+  })
+
+  it('refuse un chemin arbitraire ou le run natif d’une autre conversation', async () => {
+    const other = createConvRun('conv-other', 'run étranger', root, () => 12_000)
+    const arbitrary = join(root, '..', 'ne-pas-effacer.txt')
+    writeFileSync(arbitrary, 'important', 'utf8')
+
+    await expect(deleteConvRun('conv-delete', other, [], root)).rejects.toThrow(/autorisé/i)
+    await expect(deleteConvRun('conv-delete', arbitrary, [], root)).rejects.toThrow(/autorisé/i)
+    expect(existsSync(other)).toBe(true)
+    expect(readFileSync(arbitrary, 'utf8')).toBe('important')
+  })
+
+  it('détache un RUN externe sans supprimer son fichier', async () => {
+    const externalDir = join(root, '..', 'external-delete-workspace')
+    mkdirSync(externalDir, { recursive: true })
+    const external = join(externalDir, 'RUN.md')
+    writeFileSync(external, 'status: green\n\n## Besoin\nexterne\n', 'utf8')
+
+    await expect(deleteConvRun('conv-delete', external, [external], root)).resolves.toEqual({
+      kind: 'detached',
+      attachedPath: external
+    })
+    expect(existsSync(external)).toBe(true)
+  })
+
+  it('un RUN natif explicitement attaché est détaché sans supprimer son workspace', async () => {
+    const nativeAttached = createConvRun('conv-delete', 'natif attaché', root, () => 13_000)
+    saveConvRunTrace(nativeAttached, [{ step: 'exec', text: 'trace à conserver' }])
+
+    await expect(
+      deleteConvRun('conv-delete', nativeAttached, [nativeAttached], root)
+    ).resolves.toEqual({
+      kind: 'detached',
+      attachedPath: nativeAttached
+    })
+    expect(existsSync(nativeAttached)).toBe(true)
+    expect(existsSync(join(dirname(nativeAttached), 'trace.json'))).toBe(true)
+  })
+
+  it('retourne le chemin attaché canonique quand la requête change seulement de casse', async () => {
+    const externalDir = join(root, '..', 'external-case-workspace')
+    mkdirSync(externalDir, { recursive: true })
+    const external = join(externalDir, 'RUN.md')
+    writeFileSync(external, 'status: green\n\n## Besoin\nexterne\n', 'utf8')
+
+    await expect(
+      deleteConvRun('conv-delete', external.toLocaleUpperCase('en-US'), [external], root)
+    ).resolves.toEqual({
+      kind: 'detached',
+      attachedPath: external
+    })
   })
 })

@@ -337,7 +337,7 @@
 
 .node-search-result {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
+  grid-template-columns: 18px minmax(0, 1fr);
   align-items: center;
   gap: 7px;
   width: 100%;
@@ -358,11 +358,14 @@
 }
 
 .node-search-result i {
+  grid-row: 1 / span 2;
+  align-self: start;
   color: var(--rose-bright, #d95a8c);
   font-style: normal;
 }
 
 .node-search-result span {
+  grid-column: 2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -371,6 +374,13 @@
 .node-search-result small {
   color: var(--gold, #c9a75d);
   font-size: 9px;
+}
+
+.node-search-result__meta {
+  grid-column: 2;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .theme-sidebar__note {

@@ -4,6 +4,7 @@ import type { PromptSnapshot } from './commands'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
+import { forgetEcho, noteRemembered } from './session-memory-echo'
 
 const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
   tab: 'chat',
@@ -14,6 +15,57 @@ const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
 })
 
 describe('AgentPilot turn contract', () => {
+  it('autorise au plus une orchestration par tour, meme si le modele en emet deux', async () => {
+    const responses = [
+      '<cmd>{"name":"orchestrate","args":{"task":"premier run"}}</cmd>' +
+        '<cmd>{"name":"orchestrate","args":{"task":"second run"}}</cmd>',
+      'Le run unique est termine.'
+    ]
+    const registry = {
+      send: vi
+        .fn()
+        .mockImplementation(async () => ({ text: responses.shift()!, provider: 'codex' })),
+      describePrompt: () => ({
+        provider: 'codex',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = {
+      catalog: () => [{ name: 'orchestrate', args: { task: 'string' }, description: 'run' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { status: 'succeeded' } })
+    }
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'fais la tache' }],
+      () => undefined,
+      undefined,
+      2,
+      'conv-unique',
+      undefined,
+      'ask',
+      undefined,
+      undefined,
+      'turn-unique'
+    )
+
+    expect(bus.exec).toHaveBeenCalledTimes(1)
+    expect(bus.exec).toHaveBeenCalledWith(
+      'orchestrate',
+      { task: 'premier run' },
+      'conv-unique',
+      'ask',
+      undefined,
+      'turn-unique'
+    )
+  })
+
   it('route un /skill vers orchestrate avant tout appel au modèle conversationnel', async () => {
     const registry = {
       send: vi.fn(),
@@ -45,6 +97,39 @@ describe('AgentPilot turn contract', () => {
       'ask'
     )
     expect(events.map((event) => event.kind)).toEqual(['command', 'result', 'done'])
+  })
+
+  it('ne relance pas un second run quand une orientation arrive pendant un /skill', async () => {
+    const bus = {
+      catalog: () => [],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { valid: true } })
+    }
+    const directives = [['resserre le correctif'], []] as string[][]
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(
+      { send: vi.fn(), describePrompt: vi.fn() } as never,
+      {
+        getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+      } as never,
+      bus as never
+    ).chat(
+      [{ role: 'user', content: '/build corrige le bug' }],
+      (event) => events.push(event),
+      undefined,
+      2,
+      'conv-directive',
+      undefined,
+      'ask',
+      () => directives.shift() ?? []
+    )
+
+    expect(bus.exec).toHaveBeenCalledTimes(1)
+    expect(events.at(-1)).toMatchObject({ kind: 'done' })
+    expect((events.at(-1) as { text?: string }).text).toMatch(
+      /orientation[\s\S]*aucun second run.*relanc/i
+    )
   })
 
   it('propage le binding par tour à un /skill explicite', async () => {
@@ -84,10 +169,55 @@ describe('AgentPilot turn contract', () => {
     )
   })
 
+  it('utilise le snapshot runtime du tour meme si le role global change ensuite', async () => {
+    const snapshot = {
+      provider: 'codex',
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'low' as const
+    }
+    const roles = {
+      getBinding: vi.fn(() => ({
+        provider: 'gemini',
+        model: 'gemini-2.5-pro',
+        reasoningEffort: 'none' as const
+      }))
+    }
+    const registry = {
+      send: vi.fn(async () => ({ text: 'termine', provider: 'codex', systemInjected: true })),
+      describePrompt: () => ({ provider: 'codex', transport: 'fixture', messages: [], options: {} })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'continue' }],
+      () => undefined,
+      undefined,
+      1,
+      'conv-snapshot',
+      undefined,
+      'ask',
+      undefined,
+      undefined,
+      'turn-snapshot',
+      snapshot
+    )
+
+    expect(registry.send).toHaveBeenCalledWith(
+      'codex',
+      expect.any(Array),
+      expect.objectContaining({ model: 'gpt-5.6-sol', reasoningEffort: 'low' }),
+      expect.any(Function)
+    )
+    expect(roles.getBinding).not.toHaveBeenCalled()
+  })
+
   it('passes the persisted authority mode from the real pilotChat IPC path', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    expect(source).toContain(
+      'const supervisedSignal = os.executionSupervisor.currentSignal() ?? controller.signal'
+    )
     expect(source).toMatch(
-      /pilot\.chat\([\s\S]*?conversationId,[\s\S]*?controller\.signal,[\s\S]*?authorityMode/
+      /pilot\.chat\([\s\S]*?conversationId,[\s\S]*?supervisedSignal,[\s\S]*?authorityMode/
     )
   })
 
@@ -100,10 +230,10 @@ describe('AgentPilot turn contract', () => {
 
     const normalizedActivityBlock = activityBlock?.replace(/\s+/g, ' ')
     expect(normalizedActivityBlock).toContain(
-      'model: turnPromptIdentity?.model ?? orchestratorBinding.model'
+      'model: turnPromptIdentity?.model ?? turnRuntimeBinding.model'
     )
     expect(normalizedActivityBlock).toContain(
-      'reasoningEffort: turnPromptIdentity?.reasoningEffort ?? orchestratorBinding.reasoningEffort'
+      'reasoningEffort: turnPromptIdentity?.reasoningEffort ?? turnRuntimeBinding.reasoningEffort'
     )
   })
 
@@ -399,7 +529,6 @@ describe('AgentPilot turn contract', () => {
     for (const call of describePrompt.mock.calls) {
       expect(call[3]).toBe('gpt-initial')
     }
-
   })
 
   it('uses a per-turn binding without mutating the orchestrator role', async () => {
@@ -491,6 +620,61 @@ describe('AgentPilot turn contract', () => {
     expect(userContent).toContain('[GRAPHIFY CODE EVIDENCE]')
     // Le préfixe system ne doit PLUS porter de contenu dépendant de la question.
     expect(system).not.toContain('[AMITEL BRAIN REFERENCE DATA]')
+  })
+
+  it('injects only current-workspace and global provisional memories into direct chat', async () => {
+    forgetEcho()
+    noteRemembered('conv-workspace-memory', {
+      title: 'Compilation RIG',
+      body: 'Utiliser gacRig avant le build.',
+      scope: 'rigapplication',
+      workspace: 'D:\\DevSrc\\RigApplication'
+    })
+    noteRemembered('conv-workspace-memory', {
+      title: 'Préférence globale',
+      body: 'Répondre de façon concise.',
+      scope: 'global',
+      workspace: 'global'
+    })
+    const send = vi.fn().mockResolvedValue({ text: 'Réponse finale', provider: 'codex' })
+    const registry = {
+      send,
+      describePrompt: () => ({
+        provider: 'codex',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+
+    try {
+      await new AgentPilot(
+        registry as never,
+        roles as never,
+        bus as never,
+        undefined,
+        () => '',
+        () => 'C:\\Amitel\\Autowin OS'
+      ).chat(
+        [{ role: 'user', content: 'Continue ici' }],
+        () => undefined,
+        undefined,
+        2,
+        'conv-workspace-memory'
+      )
+
+      const userContent =
+        (send.mock.calls[0][1] as Array<{ content: string }>).at(-1)?.content ?? ''
+      expect(userContent).not.toContain('gacRig')
+      expect(userContent).toContain('Répondre de façon concise.')
+    } finally {
+      forgetEcho()
+    }
   })
 
   it('reports the iteration cap as an error terminal event, never as done', async () => {

@@ -38,6 +38,72 @@ function runTrace(
 }
 
 describe('projectLatestRequestExecution', () => {
+  it('affiche le devis entre le workspace et les skills avant tout agent', () => {
+    const timeline = buildHarnessTimelineFromTrace([
+      runTrace('workspace', 'turn-quote', 1, 'run-quote', {
+        type: 'boundary',
+        execution: { runId: 'run-quote' },
+        run: {
+          stage: 'workspace',
+          runId: 'run-quote',
+          timestampMs: 100,
+          workspace: {
+            mode: 'worktree',
+            repositoryPath: 'C:\\repo',
+            path: 'C:\\worktrees\\run-quote'
+          }
+        }
+      }),
+      runTrace('quote', 'turn-quote', 2, 'run-quote', {
+        type: 'decision',
+        execution: { runId: 'run-quote' },
+        run: {
+          stage: 'quote',
+          runId: 'run-quote',
+          timestampMs: 110,
+          quote: {
+            quoteId: 'quote-1',
+            regime: 'standard',
+            phases: ['frame', 'build'],
+            decomposition: { mode: 'disabled', maxNodes: 1 },
+            limits: {
+              maxProviderCalls: 12,
+              maxFreshTokens: 750_000,
+              maxTotalTokens: 6_000_000,
+              maxAgents: 3,
+              maxConcurrency: 3,
+              maxDurationMs: 2_700_000,
+              maxRecoveries: 1,
+              maxUsd: null
+            }
+          }
+        }
+      }),
+      runTrace('agent', 'turn-quote', 3, 'run-quote', {
+        execution: {
+          runId: 'run-quote',
+          attemptId: 'attempt-1',
+          phase: 'build',
+          agentId: 'builder',
+          taskId: 'task-1'
+        }
+      })
+    ])
+
+    const projection = projectLatestRequestExecution(timeline)
+    const quote = projection.events.find((event) => event.display?.kind === 'quote')
+    const skill = projection.events.find((event) => event.display?.kind === 'skill')
+    const workspace = projection.events.find(
+      (event) => event.display?.kind === 'workspace' && !event.display.workspace?.root
+    )
+
+    expect(quote).toMatchObject({
+      parentId: workspace?.id,
+      display: { kind: 'quote', title: 'Devis d execution', runId: 'run-quote' }
+    })
+    expect(skill?.parentId).toBe(quote?.id)
+  })
+
   it('projette deux runs sous un workspace commun sans collision entre les tours', () => {
     const workspace = (runId: string, path: string) => ({
       stage: 'workspace' as const,

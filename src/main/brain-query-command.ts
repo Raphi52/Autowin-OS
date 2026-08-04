@@ -1,3 +1,5 @@
+import type { BrainRetrievalStatus } from './brain-retrieval'
+
 /**
  * COMMANDE `brain_query` — interroger le savoir CURE a la demande.
  *
@@ -49,20 +51,31 @@ export interface BrainQueryOutcome {
   found: boolean
   query: string
   knowledge: string
+  status: BrainRetrievalStatus | 'not-requested'
   /** Renseigné quand rien n'est rendu : le serveur est absent, ou le savoir ne couvre pas la question. */
   note?: string
 }
 
 /** Compose la réponse, en distinguant « rien trouvé » d'une panne (l'agent doit pouvoir le dire). */
-export function buildBrainOutcome(query: string, context: string): BrainQueryOutcome {
+export function buildBrainOutcome(
+  query: string,
+  context: string,
+  status: BrainRetrievalStatus = context.trim() ? 'found' : 'unavailable'
+): BrainQueryOutcome {
   const knowledge = capBrainResult(context)
   if (!knowledge) {
+    const note = status === 'invalid'
+      ? "reponse Brain rejetee : identite ou integrite invalide - aucune connaissance n'a ete utilisee"
+      : status === 'empty'
+        ? 'aucun savoir cure sur cette question - ne pas conclure que la reponse est negative'
+        : 'service Brain indisponible - ne pas conclure que la reponse est negative'
     return {
       found: false,
       query,
       knowledge: '',
-      note: 'aucun savoir curé sur cette question (ou service Brain indisponible) — ne pas conclure que la réponse est négative'
+      status,
+      note
     }
   }
-  return { found: true, query, knowledge }
+  return { found: true, query, knowledge, status: 'found' }
 }

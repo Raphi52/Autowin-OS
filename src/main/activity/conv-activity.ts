@@ -17,7 +17,10 @@ export interface ConvActivityEntry {
   reasoningEffort?: string
   inputTokens?: number
   outputTokens?: number
+  cacheReadTokens?: number
   costUsd?: number
+  /** Stable id of the provider call, when this entry mirrors prompt observability. */
+  usageCallId?: string
   /**
    * Duree de l'operation. ABSENTE jusqu'au 2026-07-29 : ce journal porte les sous-agents les plus
    * couteux (mesure conv-75 : 2,83 $ vus cote appels contre ~20,70 $ reels), donc on ne pouvait pas
@@ -65,7 +68,10 @@ export function appendConvActivity(
       reasoningEffort: entry.reasoningEffort,
       inputTokens: entry.inputTokens,
       outputTokens: entry.outputTokens,
+      cacheReadTokens: entry.cacheReadTokens,
       costUsd: entry.costUsd,
+      usageCallId: entry.usageCallId,
+      durationMs: entry.durationMs,
       // Configuration diffs are audit evidence: truncating them would make the
       // Workflows view unable to explain the exact effective prompt change.
       text: entry.text

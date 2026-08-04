@@ -10,6 +10,7 @@ import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { closeSync, existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { openStdoutJournal, tailJsonLines, type StdoutJournalHandle } from '../runs/stdout-journal'
+import { backgroundSurvivalInvocation } from '../runs/survivable-spawn'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 import { findNpmGlobalFile } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
@@ -266,7 +267,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
   /** L'auth vit dans le CLI (abonnement déjà loggé) — on vérifie qu'il répond. */
   async auth(): Promise<boolean> {
     return await new Promise((resolve) => {
-      const p = spawn(this.bin, ['--version'], { shell: false })
+      const p = spawn(this.bin, ['--version'], { shell: false, windowsHide: true })
       p.on('error', () => resolve(false))
       p.on('close', (code) => resolve(code === 0))
     })
@@ -295,6 +296,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     messages: Message[],
     opts: SendOptions = {}
   ): AsyncGenerator<StreamChunk, SendResult, void> {
+    opts.signal?.throwIfAborted()
     const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')
     const materialized = lastUserMessage?.attachments?.length
       ? materializeClaudeAttachments(lastUserMessage.attachments)
@@ -304,10 +306,20 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const systemInjected = typeof system === 'string' && system.length > 0
 
     const execution = opts.execution
-    const mutationBefore =
-      execution?.causallyIsolated && execution.sandbox !== 'read-only'
-        ? await captureWorkspaceMutationSnapshot(execution.cwd)
-        : undefined
+    let mutationBefore: Awaited<ReturnType<typeof captureWorkspaceMutationSnapshot>> | undefined
+    try {
+      mutationBefore =
+        execution?.causallyIsolated && execution.sandbox !== 'read-only'
+          ? await captureWorkspaceMutationSnapshot(execution.cwd)
+          : undefined
+      opts.signal?.throwIfAborted()
+    } catch (error) {
+      // Une annulation peut arriver pendant la capture asynchrone du workspace, avant que le
+      // process CLI (et donc son handler `close`) n'existe. Nettoyer ici les pièces jointes déjà
+      // matérialisées évite de laisser un dossier temporaire à chaque tentative interrompue.
+      materialized?.cleanup()
+      throw error
+    }
     // Autowin = SOURCE UNIQUE : on lance le CLI « nu ». `--setting-sources ""` → aucun CLAUDE.md
     // utilisateur/projet, ni skills, ni hooks CC, ni MCP hérités → zéro doublon avec les consignes
     // qu'Autowin injecte (--system-prompt). L'enforcement vit alors dans le HookBus interne d'Autowin.
@@ -444,10 +456,22 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         journal = undefined // journal impossible → on retombe sur le pipe plutôt que d'échouer
       }
     }
-    const child = spawn(this.bin, args, {
+    const invocation = journal
+      ? backgroundSurvivalInvocation(this.bin, args, journalRoot!, journal.path, lastUser)
+      : { bin: this.bin, args, relay: false }
+    const child = spawn(invocation.bin, invocation.args, {
       shell: false,
+      windowsHide: true,
       cwd: execution?.cwd ?? readOnlyCwd,
-      ...(journal ? { detached: true, stdio: ['pipe', journal.fd, journal.fd] as const } : {})
+      ...(invocation.env ? { env: invocation.env } : {}),
+      ...(journal
+        ? {
+            detached: true,
+            stdio: invocation.relay
+              ? ('ignore' as const)
+              : (['pipe', journal.fd, journal.fd] as const)
+          }
+        : {})
     })
     // `unref` n'existe que sur un vrai ChildProcess (doubles de test / stubs peuvent l'omettre).
     if (journal && typeof child.unref === 'function') child.unref() // l'app peut mourir sans emporter le CLI
@@ -488,6 +512,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const pendingTools = new Map<string, { name: string; command: string; filePath: string }>()
     const queue: StreamChunk[] = []
     let done = false
+    let childClosed = false
     let errored: Error | null = null
     let resolveWait: (() => void) | null = null
 
@@ -504,6 +529,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       done = true
       wake()
     }
+    execution?.registerTermination?.((reason) => {
+      killEscalate(child)
+      forceSettle(new Error(reason))
+    })
     const watchdog = createStreamWatchdog({
       inactivityMs: SUBAGENT_INACTIVITY_MS,
       totalMs: this.timeoutMs,
@@ -635,6 +664,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       wake()
     }
 
+    let tailSettled: Promise<unknown> | undefined
     if (journal) {
       // Mode DÉTACHÉ : la sortie est dans un FICHIER (elle survit à la mort de l'app) et on la SUIT.
       // Le fd parent est fermé (l'enfant garde le sien) ; le tail lit par chemin.
@@ -643,12 +673,15 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       } catch {
         /* déjà fermé */
       }
-      void tailJsonLines(journal.path, (line) => consumeText(`${line}\n`), {
+      tailSettled = tailJsonLines(journal.path, (line) => consumeText(`${line}\n`), {
         // 40ms : le streaming passe par un poll de fichier (et non un pipe instantané) — granularité
         // assez fine pour que le chat reste fluide, sans brûler du CPU.
         pollMs: 40,
-        isComplete: () => done
-      })
+        isComplete: () => childClosed
+      }).then(
+        () => undefined,
+        (error: unknown) => error
+      )
     } else {
       child.stdout?.on('data', (chunk: Buffer) => consumeText(chunk.toString('utf8')))
     }
@@ -659,13 +692,16 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       done = true
       wake()
     })
-    child.on('close', (code) => {
+    child.on('close', async (code) => {
+      childClosed = true
+      const tailError = await tailSettled
       watchdog.dispose()
       if (childPid) execution?.onProcess?.(childPid, false)
       if (systemPromptDir) rmSync(systemPromptDir, { recursive: true, force: true })
       // Meme hygiene que le system prompt : un dossier temporaire par appel ne doit pas s'accumuler
       // (c'est exactement la fuite disque constatee ce jour sur run-stdout/).
       if (settingsDir) rmSync(settingsDir, { recursive: true, force: true })
+      if (invocation.inputPath) rmSync(invocation.inputPath, { force: true })
       // Journal de sortie resté VIDE = le CLI n'a rien écrit (échec de lancement, appel avorté). Il
       // n'apporte rien à une reprise et fait croire à un run existant : mesuré 3 journaux vides sur 7
       // spawns lors d'un test réel, et 20 spawns en erreur sur 114 en usage réel. On le supprime.
@@ -688,6 +724,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         }
         buffer = ''
       }
+      if (tailError && !errored) {
+        errored = tailError instanceof Error ? tailError : new Error(String(tailError))
+      }
       if (code !== 0 && !errored) errored = new Error(`claude CLI exit ${code}`)
       done = true
       wake()
@@ -696,7 +735,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     // Prompt remis sur STDIN (et non en argv) → aucune limite de longueur de ligne de commande.
     // Best-effort : un stdin fermé (process déjà mort) ne doit pas jeter hors du flux normal.
     try {
-      child.stdin?.end(lastUser)
+      if (!journal) child.stdin?.end(lastUser)
     } catch {
       /* stdin indisponible (process mort avant écriture) → close/error prendront le relais */
     }

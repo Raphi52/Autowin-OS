@@ -138,7 +138,9 @@ export class AgentPilot {
      * Contexte projet plié (CLAUDE.md/AGENTS.md du workspace), MÊME source que les phases
      * orchestrées (context-files). Défaut vide → le chat reste fonctionnel sans workspace.
      */
-    private readonly projectContext: () => string = () => ''
+    private readonly projectContext: () => string = () => '',
+    /** Workspace actif, pour ne jamais relire dans un dépôt un fait provisoire appris dans un autre. */
+    private readonly executionWorkspace: () => string = () => ''
   ) {}
 
   /**
@@ -182,12 +184,14 @@ export class AgentPilot {
     /** Binding figé pour ce tour uniquement (ex. tâche planifiée), sans mutation du rôle global. */
     bindingOverride?: RoleBinding,
     /** Identité causale du tour créée par le contrôleur de chat. */
-    turnId?: string
+    turnId?: string,
+    /** Snapshot du runtime affiche pour ce tour ; distinct de l'override des commandes orchestrees. */
+    runtimeBinding?: RoleBinding
   ): Promise<void> {
     // Chronométrage des jalons jusqu'au PREMIER token : c'est la latence réellement perçue au clic.
     const timer = startTurnTimer('chat')
     let timingWritten = false
-    const binding = bindingOverride ?? this.roles.getBinding('orchestrator')
+    const binding = runtimeBinding ?? bindingOverride ?? this.roles.getBinding('orchestrator')
     const execCommand = (name: string, args: Record<string, unknown>): Promise<CommandResult> => {
       if (bindingOverride) {
         return turnId
@@ -199,6 +203,9 @@ export class AgentPilot {
         : this.bus.exec(name, args, conversationId, authorityMode)
     }
     const provider = binding.provider
+    // Autorite du tour : une demande utilisateur ne peut ouvrir qu'un run. Une reparation ou reprise
+    // appartient au controleur du run courant ; un second run exige un nouveau message utilisateur.
+    let orchestrationIssued = false
     const catalog = this.bus.catalog()
     const snapshot = await this.bus.snapshotForPrompt()
     timer.mark('snapshot')
@@ -228,41 +235,29 @@ export class AgentPilot {
         ok: result.ok,
         data: result.ok ? result.data : result.error
       })
-      // Une orientation peut arriver pendant l'orchestration longue. On vide la file jusqu'à un
-      // point stable avant de clore le tour : aucune directive déjà acquittée ne peut être perdue.
-      let followUpIndex = 0
+      // Le /skill vient déjà de consommer l'unique orchestration autorisée pour ce tour. Une
+      // orientation arrivée pendant l'attente ne peut pas être injectée rétroactivement dans ce
+      // run : surtout ne pas la transformer silencieusement en second run payant.
+      const lateDirectives: string[] = []
       for (;;) {
         const directives = drainDirectives?.() ?? []
         if (!directives.length) break
-        for (const directive of directives) {
-          const followUpActionId = `route:follow-up:${followUpIndex++}`
-          const followUpArgs = { task: directive }
-          onEvent({
-            kind: 'command',
-            actionId: followUpActionId,
-            name: 'orchestrate',
-            args: followUpArgs
-          })
-          const followUp = await execCommand('orchestrate', followUpArgs)
-          onEvent({
-            kind: 'result',
-            actionId: followUpActionId,
-            name: 'orchestrate',
-            ok: followUp.ok,
-            data: followUp.ok ? followUp.data : followUp.error
-          })
-        }
+        lateDirectives.push(...directives)
       }
+      const directiveNotice = lateDirectives.length
+        ? `\n\n⚠️ ${lateDirectives.length} orientation(s) reçue(s) après le lancement : aucun second run n'a été relancé. Renvoyez-la comme nouveau message si elle reste nécessaire.`
+        : ''
       onEvent({
         kind: 'done',
         // Les FAITS, pas une formule : statut, validite, blocage de gate, cout, run et resultat sont
         // tous rendus par l'orchestrateur et etaient jetes (conv-76 : 18 sous-agents, 10,05 $, le fil
         // n'affichait que « Workflow Autowin execute. »).
-        text: formatOrchestrationOutcome(
-          result.ok,
-          result.ok ? (result.data as OrchestrationOutcome | undefined) : undefined,
-          result.ok ? undefined : String(result.error ?? '')
-        ),
+        text:
+          formatOrchestrationOutcome(
+            result.ok,
+            result.ok ? (result.data as OrchestrationOutcome | undefined) : undefined,
+            result.ok ? undefined : String(result.error ?? '')
+          ) + directiveNotice,
         usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 }
       })
       return
@@ -303,6 +298,11 @@ export class AgentPilot {
     const sessionKey = `${provider}:${binding.model ?? ''}`
     const known = conversationId ? this.chatSessions.get(conversationId) : undefined
     const resumeSessionId = known?.key === sessionKey ? known.sessionId : undefined
+    // Un détour par un autre provider/modèle ajoute des échanges absents de l'ancienne session.
+    // Elle devient donc définitivement périmée, même si l'utilisateur revient ensuite au binding initial.
+    if (conversationId && known && known.key !== sessionKey) {
+      this.chatSessions.delete(conversationId)
+    }
     const lastUserMessage = [...history].reverse().find((m) => m.role === 'user')
     // Le contexte Brain vit ICI (et non dans le system) pour ne pas casser le préfixe cachable.
     const brainContext = retrievedContext ? `CONNAISSANCE RÉCUPÉRÉE:\n${retrievedContext}` : ''
@@ -310,10 +310,11 @@ export class AgentPilot {
     // dans CE fil lui est remis. Ici et non dans le system, pour la même raison que le contexte Brain :
     // un contenu variable dans le préfixe tue le cache. Plafonné à ~1 500 car. — la lecture automatique
     // des fiches avait été coupée parce qu'elle pesait 552 Ko par appel.
+    const executionWorkspace = this.executionWorkspace().trim()
     const memoryEcho = sessionMemoryBlock(
-      rememberedFacts(conversationId),
+      rememberedFacts(conversationId, executionWorkspace || undefined),
       undefined,
-      evictedCount(conversationId)
+      evictedCount(conversationId, executionWorkspace || undefined)
     )
     // L'assemblage vit dans `chat-turn-messages.ts` pour être testable sur sa SORTIE plutôt que grepable
     // dans ce fichier. Le tableau reste mutable : la boucle d'itérations y ajoute les tours suivants.
@@ -481,8 +482,14 @@ export class AgentPilot {
         sessionId: res.sessionId
       })
       // Mémorise la session pour que le PROCHAIN tour la reprenne au lieu de re-payer l'historique.
-      if (conversationId && res.sessionId) {
-        this.chatSessions.set(conversationId, { key: sessionKey, sessionId: res.sessionId })
+      if (conversationId) {
+        if (res.sessionId) {
+          this.chatSessions.set(conversationId, { key: sessionKey, sessionId: res.sessionId })
+        } else {
+          // Un provider qui ne rend pas de nouvelle session ne garantit pas que ce tour appartient
+          // à la précédente. La conserver ferait élider un historique qu'il n'a peut-être jamais reçu.
+          this.chatSessions.delete(conversationId)
+        }
       }
       if (res.usage) {
         usage.inputTokens += res.usage.inputTokens
@@ -641,6 +648,21 @@ export class AgentPilot {
         const actionId = `${i}:${commandIndex++}`
         anyActionExecuted = true
         onEvent({ kind: 'command', actionId, name: token.name, args: token.args })
+        if (token.name === 'orchestrate' && orchestrationIssued) {
+          const refusal =
+            'Une orchestration a deja ete lancee dans ce tour. Termine avec son resultat ; un nouveau run exige un nouveau message utilisateur.'
+          onEvent({
+            kind: 'result',
+            actionId,
+            name: token.name,
+            ok: false,
+            data: refusal
+          })
+          results.push(`${token.name} → ERREUR ${refusal}`)
+          tokenIndex += 1
+          continue
+        }
+        if (token.name === 'orchestrate') orchestrationIssued = true
         signal?.throwIfAborted()
         const r = await execCommand(token.name, token.args)
         onEvent({

@@ -230,7 +230,7 @@ async function defaultGitRunner(): Promise<GitRunner> {
   const { execFile } = await import('node:child_process')
   const { promisify } = await import('node:util')
   const exec = promisify(execFile)
-  return async (args, cwd) => (await exec('git', args, { cwd })).stdout
+  return async (args, cwd) => (await exec('git', args, { cwd, windowsHide: true })).stdout
 }
 
 export interface AutoCloseReport {

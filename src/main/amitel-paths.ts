@@ -43,14 +43,22 @@ export function amitelBrainOrigin(env: NodeJS.ProcessEnv = process.env): string 
   return configured ? configured : DEFAULT_BRAIN_ORIGIN
 }
 
-/**
- * Racine du tooling Python du Brain. Derive de la racine du Brain — donc surcharger
- * `AMITEL_BRAIN_ROOT` deplace AUSSI le tooling, ce qui n'etait pas le cas avant (les deux litteraux
- * etaient independants et pouvaient diverger). `AUTOWIN_BRAIN_TOOLING` reste prioritaire.
- */
+/** Etat et runtime installes localement par Hermes-Brain. Le partage ne contient que les donnees. */
+export function amitelBrainStateRoot(env: NodeJS.ProcessEnv = process.env): string {
+  const configured = env.AUTOWIN_BRAIN_STATE_ROOT?.trim()
+  if (configured) return configured
+  const localAppData = env.LOCALAPPDATA?.trim()
+  return localAppData ? join(localAppData, 'AmitelBrain') : ''
+}
+
+/** Racine du runtime Python LOCAL. Elle ne dérive jamais du partage de données du Brain. */
 export function amitelBrainTooling(env: NodeJS.ProcessEnv = process.env): string {
   const configured = env.AUTOWIN_BRAIN_TOOLING?.trim()
-  return configured ? configured : join(amitelBrainRoot(env), 'tooling')
+  if (configured) return configured
+  const installed = env.AMITEL_BRAIN_CODE_ROOT?.trim()
+  if (installed) return installed
+  const stateRoot = amitelBrainStateRoot(env)
+  return stateRoot ? join(stateRoot, 'tooling') : ''
 }
 
 /**

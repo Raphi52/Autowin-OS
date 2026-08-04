@@ -62,6 +62,40 @@ describe('persistance du tour pour le run direct os:orchestrate', () => {
     expect(store.get(id)!.messages[1].status).toBe('cancelled')
   })
 
+  it('reprend le tour existant sans le dupliquer et rend son état live puis terminal', () => {
+    const { store, id } = storeWithConversation()
+    store.beginTurn(id, { content: 'tâche interrompue' }, { turnId: 'turn-resume' })
+    store.applyTurnEvent(id, 'turn-resume', {
+      kind: 'command',
+      actionId: 'original',
+      name: 'orchestrate',
+      args: { task: 'tâche interrompue' }
+    })
+    store.applyTurnEvent(id, 'turn-resume', { kind: 'interrupted' })
+    const journal: string[] = []
+    const turn = createOrchestrateTurnPersistence({
+      conversations: store,
+      conversationId: id,
+      turnId: 'turn-resume',
+      resumeExisting: true,
+      journal: (event) => journal.push(event.kind)
+    })
+
+    turn.begin('tâche interrompue')
+    expect(store.get(id)!.messages).toHaveLength(2)
+    expect(store.get(id)!.messages[1].status).toBe('streaming')
+    turn.step({ step: 'exec', role: 'subagent', provider: 'codex' })
+    turn.succeed({ result: 'terminé' })
+
+    const assistant = store.get(id)!.messages[1]
+    expect(assistant.status).toBe('completed')
+    expect(
+      assistant.parts?.find((part) => part.kind === 'action' && part.actionId === 'original')
+    ).toMatchObject({ ok: true, data: { resumed: true } })
+    expect(journal[0]).toBe('resumed')
+    expect(journal.at(-1)).toBe('done')
+  })
+
   it('ne duplique pas un texte déjà porté par les étapes', () => {
     const { store, id } = storeWithConversation()
     const turn = createOrchestrateTurnPersistence({

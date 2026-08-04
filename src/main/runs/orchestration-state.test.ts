@@ -4,9 +4,14 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
   clearOrchestrationState,
+  admitAutomaticResumeRuntime,
+  admitLiveReattachment,
   loadOrchestrationStates,
   pickResumeForTask,
+  pickOrchestrationsToResume,
   pickOrchestrationToResume,
+  resolveResumableRuntime,
+  saveOrchestrationAgentCheckpoint,
   saveOrchestrationState,
   type OrchestrationRunState
 } from './orchestration-state'
@@ -55,6 +60,204 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
     )
   })
 
+  it('persiste puis restaure la topologie runtime complete du run', () => {
+    const binding = { provider: 'codex', model: 'gpt-5.6-sol', reasoningEffort: 'low' as const }
+    const runtimeSnapshot = {
+      roles: {
+        orchestrator: binding,
+        subagent: binding,
+        judge: binding,
+        scout: binding
+      },
+      phaseFanOut: { scout: [binding], frame: [], terrain: [] },
+      judgeFanOut: [binding]
+    }
+    saveOrchestrationState(root, {
+      ...state('run-runtime', 1000, ['frame']),
+      runtimeSnapshot
+    })
+
+    expect(loadOrchestrationStates(root)[0].runtimeSnapshot).toEqual(runtimeSnapshot)
+  })
+
+  it('reprend le snapshot persiste et migre explicitement un checkpoint historique', () => {
+    const codex = { provider: 'codex', model: 'gpt-5.6-sol', reasoningEffort: 'low' as const }
+    const current = {
+      roles: { orchestrator: codex, subagent: codex, judge: codex, scout: codex },
+      phaseFanOut: { scout: [], frame: [], terrain: [] },
+      judgeFanOut: []
+    }
+    const claude = { provider: 'claude', model: 'claude-fable-5' }
+    const persisted = {
+      roles: { orchestrator: claude, subagent: claude, judge: claude, scout: claude },
+      phaseFanOut: { scout: [], frame: [], terrain: [] },
+      judgeFanOut: []
+    }
+
+    expect(
+      resolveResumableRuntime(
+        { ...state('new', 1, ['frame']), runtimeSnapshot: persisted },
+        current
+      )
+    ).toEqual({ runtimeSnapshot: persisted, migratedLegacyCheckpoint: false })
+    expect(resolveResumableRuntime(state('legacy', 1, ['frame']), current)).toEqual({
+      runtimeSnapshot: current,
+      migratedLegacyCheckpoint: true
+    })
+  })
+
+  it('admet la meme identite pour la carte et le provider apres un changement Studio A vers B', async () => {
+    const snapshot = (provider: string, model: string) => {
+      const selected = { provider, model }
+      return {
+        roles: {
+          orchestrator: selected,
+          subagent: selected,
+          judge: selected,
+          scout: selected
+        },
+        phaseFanOut: { scout: [], frame: [], terrain: [] },
+        judgeFanOut: []
+      }
+    }
+    const persisted = snapshot('claude', 'claude-fable-5')
+    const current = snapshot('codex', 'gpt-5.6-sol')
+    const admission = admitAutomaticResumeRuntime(
+      {
+        ...state('run-restart-a-b', 1, ['frame']),
+        turnId: 'turn-a',
+        runtimeSnapshot: persisted
+      },
+      current,
+      'turn-migration',
+      persisted.roles.orchestrator
+    )
+    const calledProviders: string[] = []
+
+    await admission.run(async (runtimeSnapshot) => {
+      calledProviders.push(runtimeSnapshot.roles.judge.provider)
+    })
+
+    expect(admission).toMatchObject({
+      turnId: 'turn-a',
+      resumeExisting: true,
+      turnBinding: persisted.roles.orchestrator,
+      task: 'ajoute un bouton'
+    })
+    expect(calledProviders).toEqual(['claude'])
+  })
+
+  it('ouvre un nouveau tour legacy avec la meme identite que le provider admis', async () => {
+    const codex = { provider: 'codex', model: 'gpt-5.6-sol' }
+    const current = {
+      roles: { orchestrator: codex, subagent: codex, judge: codex, scout: codex },
+      phaseFanOut: { scout: [], frame: [], terrain: [] },
+      judgeFanOut: []
+    }
+    const admission = admitAutomaticResumeRuntime(
+      { ...state('legacy-restart', 1, ['frame']), turnId: 'turn-historique' },
+      current,
+      'turn-migration'
+    )
+    let provider = ''
+
+    await admission.run(async (runtimeSnapshot) => {
+      provider = runtimeSnapshot.roles.judge.provider
+    })
+
+    expect(admission).toMatchObject({
+      turnId: 'turn-migration',
+      resumeExisting: false,
+      turnBinding: codex,
+      task: '[Reprise automatique] ajoute un bouton'
+    })
+    expect(provider).toBe('codex')
+  })
+
+  it('ne réactive pas une carte dont l’identité contredit le snapshot de reprise', () => {
+    const codex = { provider: 'codex', model: 'gpt-5.6-sol', reasoningEffort: 'low' as const }
+    const runtimeSnapshot = {
+      roles: { orchestrator: codex, subagent: codex, judge: codex, scout: codex },
+      phaseFanOut: { scout: [], frame: [], terrain: [] },
+      judgeFanOut: []
+    }
+
+    expect(
+      admitAutomaticResumeRuntime(
+        { ...state('known-relaunch', 1, ['frame']), turnId: 'turn-gemini', runtimeSnapshot },
+        runtimeSnapshot,
+        'turn-codex',
+        { provider: 'gemini', model: 'gemini-2.5-pro' }
+      )
+    ).toMatchObject({
+      resumeExisting: false,
+      turnId: 'turn-codex',
+      turnBinding: codex,
+      task: '[Reprise automatique] ajoute un bouton'
+    })
+  })
+
+  it('ne reactive jamais une ancienne carte Gemini pour un agent legacy encore vivant', () => {
+    const admission = admitLiveReattachment(
+      { ...state('legacy-live', 1, ['frame']), turnId: 'turn-gemini' },
+      { provider: 'gemini', model: 'gemini-2.5-pro' },
+      'turn-rattachement-inconnu'
+    )
+
+    expect(admission).toEqual({
+      identityKnown: false,
+      resumeExisting: false,
+      turnId: 'turn-rattachement-inconnu',
+      task: '[Rattachement — identité provider inconnue] ajoute un bouton'
+    })
+  })
+
+  it('ouvre une carte conforme au snapshot si la carte historique porte une autre identite', () => {
+    const codex = { provider: 'codex', model: 'gpt-5.6-sol', reasoningEffort: 'low' as const }
+    const runtimeSnapshot = {
+      roles: { orchestrator: codex, subagent: codex, judge: codex, scout: codex },
+      phaseFanOut: { scout: [], frame: [], terrain: [] },
+      judgeFanOut: []
+    }
+
+    expect(
+      admitLiveReattachment(
+        { ...state('known-live', 1, ['frame']), turnId: 'turn-gemini', runtimeSnapshot },
+        { provider: 'gemini', model: 'gemini-2.5-pro' },
+        'turn-codex'
+      )
+    ).toEqual({
+      identityKnown: true,
+      resumeExisting: false,
+      turnId: 'turn-codex',
+      turnBinding: codex,
+      task: '[Rattachement automatique] ajoute un bouton'
+    })
+  })
+
+  it('reprend le tour existant seulement si sa carte porte deja le snapshot du run vivant', () => {
+    const codex = { provider: 'codex', model: 'gpt-5.6-sol', reasoningEffort: 'low' as const }
+    const runtimeSnapshot = {
+      roles: { orchestrator: codex, subagent: codex, judge: codex, scout: codex },
+      phaseFanOut: { scout: [], frame: [], terrain: [] },
+      judgeFanOut: []
+    }
+
+    expect(
+      admitLiveReattachment(
+        { ...state('known-live', 1, ['frame']), turnId: 'turn-codex', runtimeSnapshot },
+        codex,
+        'turn-inutile'
+      )
+    ).toMatchObject({
+      identityKnown: true,
+      resumeExisting: true,
+      turnId: 'turn-codex',
+      turnBinding: codex,
+      task: 'ajoute un bouton'
+    })
+  })
+
   it('persiste le vrai tour Chat pour la reprise', () => {
     saveOrchestrationState(root, {
       ...state('run-turn', 1000, ['frame']),
@@ -67,8 +270,9 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
       turnId: 'turn-chat-originel'
     })
     const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
-    expect(indexSource).toContain('resumableRun.turnId ?? randomUUID()')
-    expect(indexSource).toContain('legacyResumeTurn?.begin(')
+    expect(indexSource).toContain('const resumeTurnId = liveReattachment.turnId')
+    expect(indexSource).toContain('resumeExisting: liveReattachment.resumeExisting')
+    expect(indexSource).toContain('durableResumeTurn.begin(')
   })
 
   it('n’écrit pas de fichier temporaire résiduel (écriture atomique)', () => {
@@ -78,11 +282,85 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
     expect(loadOrchestrationStates(root)[0].phaseOutputs).toHaveLength(2)
   })
 
+  it('remplace le JSON sans fenêtre destructive avant le rename atomique', () => {
+    const source = readFileSync(new URL('./orchestration-state.ts', import.meta.url), 'utf8')
+    const saveBlock = source.slice(
+      source.indexOf('export function saveOrchestrationState'),
+      source.indexOf('export function clearOrchestrationState')
+    )
+
+    expect(saveBlock).toContain('renameSync(temporary, target)')
+    expect(saveBlock).not.toContain('rmSync(target')
+  })
+
+  it("persiste avec l'agent le snapshot actif deja reserve", () => {
+    saveOrchestrationState(root, state('run-active', 1000, []))
+    const usage = {
+      quoteId: 'quote-active',
+      startedAgents: 1,
+      startedCalls: 1,
+      completedCalls: 0,
+      failedCalls: 0,
+      activeCalls: 1,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      totalTokens: 0,
+      freshTokens: 0,
+      knownCostUsd: null,
+      unpricedCalls: 0,
+      unmeteredCalls: 0,
+      tokenCoverage: 'complete' as const
+    }
+
+    saveOrchestrationAgentCheckpoint(
+      root,
+      'run-active',
+      [{ token: 'agent-1', pid: 4242 }],
+      usage,
+      2000
+    )
+
+    expect(loadOrchestrationStates(root)[0]).toMatchObject({
+      agents: [{ token: 'agent-1', pid: 4242 }],
+      usage: { startedAgents: 1, startedCalls: 1, activeCalls: 1 },
+      updatedAt: 2000
+    })
+  })
+
+  it('branche le callback de spawn sur le snapshot actif du superviseur', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/os.ts'), 'utf8')
+    const start = source.indexOf('onAgentsChanged:')
+    const end = source.indexOf('onRunSettled:', start)
+    const callback = source.slice(start, end)
+
+    expect(start).toBeGreaterThanOrEqual(0)
+    expect(end).toBeGreaterThan(start)
+    expect(callback).toContain('saveOrchestrationAgentCheckpoint(')
+    expect(callback).toContain('this.executionSupervisor.currentSnapshot()')
+  })
+
   it('reprend le run le PLUS RÉCENT qui a déjà produit une phase', () => {
     saveOrchestrationState(root, state('run-a-1', 1000, ['frame']))
     saveOrchestrationState(root, state('run-a-2', 5000, ['frame', 'terrain']))
     saveOrchestrationState(root, state('run-a-3', 9000, [])) // aucun acquis → non reprenable
     expect(pickOrchestrationToResume(loadOrchestrationStates(root))?.runId).toBe('run-a-2')
+  })
+
+  it('reprend TOUS les runs éligibles en priorisant le travail déjà produit', () => {
+    const paidOlder = state('run-paid-old', 1000, ['frame'])
+    const paidNewer = state('run-paid-new', 3000, ['frame'])
+    const neverStarted = state('run-zero', 9000, [])
+    const emptyOutput: OrchestrationRunState = {
+      ...state('run-empty-output', 12000, []),
+      phaseOutputs: [{ phase: 'frame' as never, text: '   ' }]
+    }
+
+    expect(
+      pickOrchestrationsToResume([neverStarted, emptyOutput, paidOlder, paidNewer]).map(
+        (candidate) => candidate.runId
+      )
+    ).toEqual(['run-paid-new', 'run-paid-old', 'run-zero'])
   })
 
   it('ignore un état tronqué par un crash sans perdre les autres', () => {
@@ -162,6 +440,119 @@ describe('identité du modèle lors d’une reprise de conversation', () => {
         bindingOverride: { provider: 'codex', model: 'gpt-5.6-sol' }
       })
     ).toBeNull()
+  })
+
+  it('ne reutilise pas un acquis sans override si la topologie du run a change', () => {
+    const binding = (provider: string, model: string) => ({ provider, model })
+    const snapshot = (provider: string, model: string) => {
+      const selected = binding(provider, model)
+      return {
+        roles: {
+          orchestrator: selected,
+          subagent: selected,
+          judge: selected,
+          scout: selected
+        },
+        phaseFanOut: { scout: [], frame: [], terrain: [] },
+        judgeFanOut: []
+      }
+    }
+    const saved: OrchestrationRunState = {
+      ...state('run-claude-topology', 1000, ['frame']),
+      conversationId: 'conv-1',
+      runtimeSnapshot: snapshot('claude', 'claude-fable-5')
+    }
+
+    expect(
+      pickResumeForTask([saved], {
+        task: saved.task,
+        conversationId: 'conv-1',
+        nowMs: 1500,
+        runtimeSnapshot: snapshot('codex', 'gpt-5.6-sol')
+      })
+    ).toBeNull()
+  })
+})
+
+describe('admission de la reprise automatique au démarrage', () => {
+  it('restaure la topologie persistee et isole la migration des anciens tours', () => {
+    const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const relaunchStart = indexSource.indexOf('const relaunchResumableRun =')
+    const relaunchEnd = indexSource.indexOf("if (reprise === 'rattacher')", relaunchStart)
+    const relaunchSource = indexSource.slice(relaunchStart, relaunchEnd)
+    const osSource = readFileSync(join(process.cwd(), 'src/main/os.ts'), 'utf8')
+
+    expect(relaunchSource).toContain('admitAutomaticResumeRuntime(')
+    expect(relaunchSource).toContain('runtime: {')
+    expect(relaunchSource).toMatch(/resumedRuntime\s*\.run\(\(runtimeSnapshot\) =>/)
+    const runTaskSource = relaunchSource.slice(relaunchSource.indexOf('.runTask('))
+    expect(runTaskSource).toContain('runtimeSnapshot')
+    expect(runTaskSource).not.toContain('os.captureOrchestrationRuntime()')
+    expect(osSource).toMatch(
+      /onPhaseCompleted:[\s\S]*runtimeSnapshot,[\s\S]*saveOrchestrationState/
+    )
+  })
+
+  it('fait aussi passer le rattachement vivant par une admission d’identité', () => {
+    const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const attachStart = indexSource.indexOf("if (reprise === 'rattacher'")
+    const attachEnd = indexSource.indexOf('const relaunchResumableRun =', attachStart)
+    const attachSource = indexSource.slice(attachStart, attachEnd)
+
+    expect(attachSource).toContain('admitLiveReattachment(')
+    expect(attachSource).toContain('resumeExisting: liveReattachment.resumeExisting')
+    expect(attachSource).toContain('runtime: liveReattachment.turnBinding')
+    expect(attachSource).toContain('liveReattachment.task')
+  })
+
+  it('clôture le tour de rattachement inconnu avant d’ouvrir le tour de relance', () => {
+    const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const attachStart = indexSource.indexOf("if (reprise === 'rattacher'")
+    const continuationEnd = indexSource.indexOf(
+      "if (reprise === 'relancer') void relaunchResumableRun",
+      attachStart
+    )
+    const continuationSource = indexSource.slice(attachStart, continuationEnd)
+
+    expect(continuationSource).toContain(
+      'durableLiveReattachment = createOrchestrateTurnPersistence('
+    )
+    const newTurnBranchAt = continuationSource.indexOf('if (!liveReattachment?.resumeExisting)')
+    const closeAt = continuationSource.indexOf('durableLiveReattachment?.succeed(', newTurnBranchAt)
+    const relaunchAt = continuationSource.indexOf(
+      'void relaunchResumableRun(latest)',
+      newTurnBranchAt
+    )
+    expect(closeAt).toBeGreaterThan(newTurnBranchAt)
+    expect(closeAt).toBeLessThan(relaunchAt)
+  })
+
+  it('ne supprime le checkpoint historique qu’après le premier lifecycle admis', () => {
+    const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const relaunchStart = indexSource.indexOf('const relaunchResumableRun =')
+    const relaunchEnd = indexSource.indexOf("if (reprise === 'rattacher')", relaunchStart)
+    const relaunchSource = indexSource.slice(relaunchStart, relaunchEnd)
+    const runTaskAt = relaunchSource.indexOf('.runTask(')
+    const lifecycleAt = relaunchSource.indexOf('(lifecycle) =>')
+    const forgetAt = relaunchSource.indexOf('os.forgetResumableOrchestration')
+
+    expect(relaunchStart).toBeGreaterThanOrEqual(0)
+    expect(relaunchEnd).toBeGreaterThan(relaunchStart)
+    expect(runTaskAt).toBeGreaterThanOrEqual(0)
+    expect(lifecycleAt).toBeGreaterThan(runTaskAt)
+    expect(forgetAt).toBeGreaterThan(lifecycleAt)
+  })
+
+  it('repersiste un règlement tardif sur la reprise automatique', () => {
+    const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const relaunchStart = indexSource.indexOf('const relaunchResumableRun =')
+    const relaunchEnd = indexSource.indexOf("if (reprise === 'rattacher')", relaunchStart)
+    const relaunchSource = indexSource.slice(relaunchStart, relaunchEnd)
+
+    expect(relaunchSource).toContain('reconcileLateRunLifecycle(')
+    expect(relaunchSource).toContain(
+      "broadcast({ type: 'orchestrate-usage', convId: conversationId })"
+    )
   })
 })
 

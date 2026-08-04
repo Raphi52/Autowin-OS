@@ -6,10 +6,12 @@ import {
   SUBAGENT_TOTAL_MS
 } from './watchdog'
 import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { findNpmGlobalFile } from './npm-global-resolve'
 import { join } from 'node:path'
+import { spawnSurvivable } from '../runs/survivable-spawn'
 import type {
   Message,
   PromptEnvelope,
@@ -20,7 +22,13 @@ import type {
 } from './types'
 
 /** Sous-chemin de l'entrypoint ESM du paquet npm `@moonshot-ai/kimi-code`. */
-export const KIMI_PACKAGE_ENTRY = join('node_modules', '@moonshot-ai', 'kimi-code', 'dist', 'main.mjs')
+export const KIMI_PACKAGE_ENTRY = join(
+  'node_modules',
+  '@moonshot-ai',
+  'kimi-code',
+  'dist',
+  'main.mjs'
+)
 
 /** Résolution sans shell : le CLI Kimi Code officiel appartient au compte local. */
 export type KimiCommand = { executable: string; prefix: string[] }
@@ -123,7 +131,8 @@ export class KimiCliAdapter implements ProviderAdapter {
     return await new Promise((resolve) => {
       try {
         const child = spawn(this.command.executable, [...this.command.prefix, '--version'], {
-          shell: false
+          shell: false,
+          windowsHide: true
         })
         child.on('error', () => resolve(false))
         child.on('close', (code) => resolve(code === 0))
@@ -162,6 +171,7 @@ export class KimiCliAdapter implements ProviderAdapter {
     messages: Message[],
     opts: SendOptions = {}
   ): AsyncGenerator<StreamChunk, SendResult, void> {
+    opts.signal?.throwIfAborted()
     const systemInjected = typeof opts.system === 'string' && opts.system.trim().length > 0
     const sandbox = mkdtempSync(join(tmpdir(), 'autowin-os-kimi-'))
     const args = [
@@ -178,11 +188,15 @@ export class KimiCliAdapter implements ProviderAdapter {
     assertArgvWithinLimit('Kimi Code CLI', [...this.command.prefix, ...args])
     const spawnToken = randomUUID()
     opts.execution?.onSpawnIntent?.(spawnToken, true)
-    const child = spawn(this.command.executable, [...this.command.prefix, ...args], {
-      shell: false,
-      cwd: sandbox
+    const run = spawnSurvivable({
+      bin: this.command.executable,
+      args: [...this.command.prefix, ...args],
+      cwd: sandbox,
+      runId: spawnToken
     })
+    const child = run.child
     const childPid = child.pid
+    if (run.journalPath) opts.execution?.onJournal?.(spawnToken, run.journalPath)
     if (childPid) {
       if (opts.execution?.onSpawned) opts.execution.onSpawned(spawnToken, childPid)
       else {
@@ -190,9 +204,10 @@ export class KimiCliAdapter implements ProviderAdapter {
         opts.execution?.onSpawnIntent?.(spawnToken, false)
       }
     }
-    let buffer = ''
     let text = ''
     let done = false
+    let childClosed = false
+    let exitCode: number | null = null
     let errored: Error | null = null
     let wake: (() => void) | undefined
     const queue: StreamChunk[] = []
@@ -219,6 +234,10 @@ export class KimiCliAdapter implements ProviderAdapter {
       done = true
       notify()
     }
+    opts.execution?.registerTermination?.((reason) => {
+      killEscalate(child)
+      forceSettle(new Error(reason))
+    })
     const watchdog = createStreamWatchdog({
       inactivityMs: SUBAGENT_INACTIVITY_MS,
       totalMs: this.timeoutMs,
@@ -236,38 +255,44 @@ export class KimiCliAdapter implements ProviderAdapter {
       forceSettle(new Error('Kimi Code annulé'))
     })
 
-    child.stdout.on('data', (chunk: Buffer) => {
+    const consumeLine = (line: string): void => {
       watchdog.beat()
-      buffer += chunk.toString('utf8')
-      let newline: number
-      while ((newline = buffer.indexOf('\n')) >= 0) {
-        const line = buffer.slice(0, newline).trim()
-        buffer = buffer.slice(newline + 1)
-        if (line) emitLine(line)
-      }
+      if (line.trim()) emitLine(line.trim())
       notify()
-    })
+    }
     child.on('error', (error) => {
       watchdog.dispose()
       if (!childPid) opts.execution?.onSpawnIntent?.(spawnToken, false)
       errored = error
       done = true
+      run.release()
+      rmSync(sandbox, { recursive: true, force: true })
       notify()
     })
     child.on('close', (code) => {
       watchdog.dispose()
       if (childPid) opts.execution?.onProcess?.(childPid, false)
-      const rest = buffer.trim()
-      if (rest) emitLine(rest)
-      if (code !== 0 && !errored) {
-        errored = new Error(
-          `Kimi Code indisponible ou non connecté (exit ${code}). Installe Kimi Code puis lance \`kimi login\` pour relier ton compte.`
-        )
-      }
-      rmSync(sandbox, { recursive: true, force: true })
-      done = true
-      notify()
+      exitCode = code
+      childClosed = true
     })
+    void run
+      .tail(consumeLine, { isComplete: () => childClosed, signal: opts.signal })
+      .then(() => {
+        if (exitCode !== 0 && !errored) {
+          errored = new Error(
+            `Kimi Code indisponible ou non connecté (exit ${exitCode}). Installe Kimi Code puis lance \`kimi login\` pour relier ton compte.`
+          )
+        }
+      })
+      .catch((error: unknown) => {
+        if (!errored) errored = error instanceof Error ? error : new Error(String(error))
+      })
+      .finally(() => {
+        run.release()
+        rmSync(sandbox, { recursive: true, force: true })
+        done = true
+        notify()
+      })
 
     while (!done || queue.length > 0) {
       if (queue.length > 0) {
@@ -280,4 +305,3 @@ export class KimiCliAdapter implements ProviderAdapter {
     return { text, provider: this.id, systemInjected }
   }
 }
-import { randomUUID } from 'node:crypto'

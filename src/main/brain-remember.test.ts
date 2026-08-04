@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { createHmac } from 'node:crypto'
 import {
   REMEMBER_BODY_MAX,
   REMEMBER_SCOPE_MAX,
   REMEMBER_SOURCE_SCHEMES,
   REMEMBER_TAG_MAX,
   decideRemember,
+  configureRememberDepositStore,
   forgetSessionDeposits,
   likelySecretShape,
   rememberFact,
@@ -32,10 +35,243 @@ const FAIT_VALIDE = {
   source: 'git:src/main/providers/npm-global-resolve.ts@9218eaf'
 }
 
+const signedContextPayload = (context: string, token = 'jeton'): Record<string, unknown> => {
+  const authenticated = JSON.stringify({ context, navigation: null })
+  return {
+    service: 'amitel-brain',
+    protocol: 2,
+    authenticated,
+    signature: createHmac('sha256', token)
+      .update(`amitel-brain\n2\n${authenticated}`, 'utf8')
+      .digest('hex')
+  }
+}
+
+describe('idempotence atomique de remember', () => {
+  it('bloque un retry aveugle quand le premier depot a un etat inconnu', async () => {
+    const deposited = new Map<string, string>()
+    const slow = vi.fn(
+      (_url: unknown, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError'))
+          )
+        })
+    ) as unknown as typeof fetch
+    const uncertain = await rememberFact(FAIT_VALIDE, {
+      token: 'jeton',
+      fetchFn: slow,
+      timeoutMs: 1,
+      deposited
+    })
+    const retry = vi.fn(
+      async () =>
+        new Response(JSON.stringify(signedContextPayload('C:/brain/inbox/retry.md')), {
+          status: 200
+        })
+    ) as unknown as typeof fetch
+    const second = await rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn: retry, deposited })
+
+    expect(uncertain.unknown).toBe(true)
+    expect(second.unknown).toBe(true)
+    expect(retry).not.toHaveBeenCalled()
+  })
+
+  it('conserve le ledger anti-doublon apres redemarrage', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-remember-ledger-'))
+    const store = join(root, 'remember-deposits.json')
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(JSON.stringify(signedContextPayload('C:/brain/inbox/durable.md')), {
+          status: 200
+        })
+    ) as unknown as typeof fetch
+    try {
+      configureRememberDepositStore(store)
+      expect((await rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn })).stored).toBe(true)
+
+      configureRememberDepositStore()
+      configureRememberDepositStore(store)
+      expect((await rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn })).stored).toBe(false)
+      expect(fetchFn).toHaveBeenCalledTimes(1)
+    } finally {
+      configureRememberDepositStore()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('deux depots concurrents identiques ne produisent qu un appel reseau', async () => {
+    const deposited = new Map<string, string>()
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const fetchFn = vi.fn(async () => {
+      await gate
+      return new Response(JSON.stringify(signedContextPayload('C:/brain/inbox/concurrent.md')), {
+        status: 200
+      })
+    }) as unknown as typeof fetch
+
+    const first = rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn, deposited })
+    const second = rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn, deposited })
+    release()
+    const outcomes = await Promise.all([first, second])
+
+    expect(fetchFn).toHaveBeenCalledTimes(1)
+    expect(outcomes.filter((outcome) => outcome.stored)).toHaveLength(1)
+  })
+
+  it('ne dedoublonne jamais un meme texte entre scopes ou workspaces distincts', async () => {
+    const deposited = new Map<string, string>()
+    let callIndex = 0
+    const fetchFn = vi.fn(async () => {
+      callIndex += 1
+      return new Response(
+        JSON.stringify(signedContextPayload(`C:/brain/inbox/scope-${callIndex}.md`)),
+        {
+          status: 200
+        }
+      )
+    }) as unknown as typeof fetch
+
+    const first = await rememberFact(
+      { ...FAIT_VALIDE, scope: 'scope-a' },
+      { token: 'jeton', fetchFn, deposited, workspace: 'C:\\repo-a' }
+    )
+    const otherScope = await rememberFact(
+      { ...FAIT_VALIDE, scope: 'scope-b' },
+      { token: 'jeton', fetchFn, deposited, workspace: 'C:\\repo-a' }
+    )
+    const otherWorkspace = await rememberFact(
+      { ...FAIT_VALIDE, scope: 'scope-a' },
+      { token: 'jeton', fetchFn, deposited, workspace: 'C:\\repo-b' }
+    )
+    const exactRetry = await rememberFact(
+      { ...FAIT_VALIDE, scope: 'scope-a' },
+      { token: 'jeton', fetchFn, deposited, workspace: 'C:\\repo-a' }
+    )
+
+    expect([first.stored, otherScope.stored, otherWorkspace.stored, exactRetry.stored]).toEqual([
+      true,
+      true,
+      true,
+      false
+    ])
+    expect(fetchFn).toHaveBeenCalledTimes(3)
+  })
+
+  it('migre un ledger v1 sans laisser son empreinte non scopee bloquer un depot v2', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-remember-v1-'))
+    const store = join(root, 'remember-deposits.json')
+    const legacyKey = 'a'.repeat(64)
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(JSON.stringify(signedContextPayload('C:/brain/inbox/v2.md')), { status: 200 })
+    ) as unknown as typeof fetch
+    try {
+      writeFileSync(store, JSON.stringify({ version: 1, deposits: [[legacyKey, 'legacy.md']] }))
+      configureRememberDepositStore(store)
+
+      const outcome = await rememberFact(FAIT_VALIDE, {
+        token: 'jeton',
+        fetchFn,
+        workspace: 'C:\\Amitel\\Autowin OS'
+      })
+
+      expect(outcome.stored).toBe(true)
+      expect(fetchFn).toHaveBeenCalledOnce()
+      expect(JSON.parse(readFileSync(store, 'utf8')).version).toBe(2)
+    } finally {
+      configureRememberDepositStore()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('conserve apres redemarrage la frontiere workspace du ledger v2', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-remember-workspaces-'))
+    const store = join(root, 'remember-deposits.json')
+    let callIndex = 0
+    const fetchFn = vi.fn(async () => {
+      callIndex += 1
+      return new Response(
+        JSON.stringify(signedContextPayload(`C:/brain/inbox/ws-${callIndex}.md`)),
+        { status: 200 }
+      )
+    }) as unknown as typeof fetch
+    try {
+      configureRememberDepositStore(store)
+      expect(
+        (
+          await rememberFact(FAIT_VALIDE, {
+            token: 'jeton',
+            fetchFn,
+            workspace: 'C:\\repo-a'
+          })
+        ).stored
+      ).toBe(true)
+
+      configureRememberDepositStore()
+      configureRememberDepositStore(store)
+      expect(
+        (
+          await rememberFact(FAIT_VALIDE, {
+            token: 'jeton',
+            fetchFn,
+            workspace: 'C:\\repo-b'
+          })
+        ).stored
+      ).toBe(true)
+
+      configureRememberDepositStore()
+      configureRememberDepositStore(store)
+      expect(
+        (
+          await rememberFact(FAIT_VALIDE, {
+            token: 'jeton',
+            fetchFn,
+            workspace: 'C:\\repo-b'
+          })
+        ).stored
+      ).toBe(false)
+      expect(fetchFn).toHaveBeenCalledTimes(2)
+    } finally {
+      configureRememberDepositStore()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('un fait global identique reste dedoublonne entre workspaces', async () => {
+    const deposited = new Map<string, string>()
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(JSON.stringify(signedContextPayload('C:/brain/inbox/global.md')), {
+          status: 200
+        })
+    ) as unknown as typeof fetch
+
+    const first = await rememberFact(
+      { ...FAIT_VALIDE, scope: 'global' },
+      { token: 'jeton', fetchFn, deposited, workspace: 'C:\\repo-a' }
+    )
+    const second = await rememberFact(
+      { ...FAIT_VALIDE, scope: 'global' },
+      { token: 'jeton', fetchFn, deposited, workspace: 'C:\\repo-b' }
+    )
+
+    expect(first.stored).toBe(true)
+    expect(second.stored).toBe(false)
+    expect(fetchFn).toHaveBeenCalledOnce()
+  })
+})
+
 // L'anti-doublon de session vit dans le module : sans ce reset, un dépôt réussi dans un test rendrait
 // « déjà déposé » dans le suivant. Constaté pour de vrai en ajoutant la garde (6 tests cassés d'un coup) —
 // c'est la preuve qu'elle mord, et la raison pour laquelle la production peut compter dessus.
-beforeEach(forgetSessionDeposits)
+beforeEach(() => {
+  configureRememberDepositStore()
+  forgetSessionDeposits()
+})
 
 describe('decideRemember — refuser TÔT, et en disant pourquoi', () => {
   it('un fait complet est accepté et normalisé', () => {
@@ -107,8 +343,11 @@ describe('decideRemember — refuser TÔT, et en disant pourquoi', () => {
 
 describe('rememberFact — ce qui est DÉPOSÉ, jamais « mémorisé »', () => {
   it('envoie le candidat sur /ingest avec le jeton', async () => {
-    const fetchFn = vi.fn(async () =>
-      new Response(JSON.stringify({ context: 'C:/brain/inbox/2026-07-29-cli.md' }), { status: 200 })
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(JSON.stringify(signedContextPayload('C:/brain/inbox/2026-07-29-cli.md')), {
+          status: 200
+        })
     ) as unknown as typeof fetch
     const outcome = await rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn })
     expect(outcome.stored).toBe(true)
@@ -119,8 +358,9 @@ describe('rememberFact — ce qui est DÉPOSÉ, jamais « mémorisé »', () => 
   })
 
   it('le compte-rendu dit CANDIDAT, la promotion humaine et la réindexation', async () => {
-    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ context: 'inbox/x.md' }), { status: 200 })) as
-      unknown as typeof fetch
+    const fetchFn = vi.fn(
+      async () => new Response(JSON.stringify(signedContextPayload('inbox/x.md')), { status: 200 })
+    ) as unknown as typeof fetch
     const outcome = await rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn })
     expect(outcome.detail).toMatch(/candidat/i)
     expect(outcome.detail).toMatch(/humain/i)
@@ -130,10 +370,11 @@ describe('rememberFact — ce qui est DÉPOSÉ, jamais « mémorisé »', () => 
   })
 
   it('un REFUS du serveur est rendu tel quel, pas maquillé en succès', async () => {
-    const fetchFn = vi.fn(async () =>
-      new Response(JSON.stringify({ error: 'likely secret detected; candidate rejected' }), {
-        status: 400
-      })
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: 'likely secret detected; candidate rejected' }), {
+          status: 400
+        })
     ) as unknown as typeof fetch
     const outcome = await rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn })
     expect(outcome.stored).toBe(false)
@@ -159,10 +400,13 @@ describe('rememberFact — ce qui est DÉPOSÉ, jamais « mémorisé »', () => 
 
   it('un candidat invalide n’atteint JAMAIS le réseau', async () => {
     const fetchFn = vi.fn() as unknown as typeof fetch
-    const outcome = await rememberFact({ ...FAIT_VALIDE, source: 'de mémoire' }, {
-      token: 'jeton',
-      fetchFn
-    })
+    const outcome = await rememberFact(
+      { ...FAIT_VALIDE, source: 'de mémoire' },
+      {
+        token: 'jeton',
+        fetchFn
+      }
+    )
     expect(outcome.allowed).toBe(false)
     expect(fetchFn).not.toHaveBeenCalled()
   })
@@ -225,6 +469,20 @@ describe('contrat réel — la réponse de succès est un contexte signé', () =
   const reponse = (body: unknown, status = 200): typeof fetch =>
     vi.fn(async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch
 
+  it('rejette un chemin de candidat dont la signature est forgee', async () => {
+    const outcome = await rememberFact(FAIT_VALIDE, {
+      token: 'jeton',
+      fetchFn: reponse({
+        service: 'amitel-brain',
+        protocol: 1,
+        context: 'C:/brain/inbox/forge.md',
+        signature: '0'.repeat(64)
+      })
+    })
+    expect(outcome.stored).toBe(false)
+    expect(outcome.detail).toContain('integrite')
+  })
+
   it('un 200 avec `context` est un SUCCÈS, et le nom de la note en est extrait', async () => {
     const outcome = await rememberFact(FAIT_VALIDE, {
       token: 'jeton',
@@ -232,7 +490,9 @@ describe('contrat réel — la réponse de succès est un contexte signé', () =
         service: 'amitel-brain',
         protocol: 1,
         context: 'C:/brain/inbox/20260730-le-fait.md',
-        signature: 'x'
+        signature: createHmac('sha256', 'jeton')
+          .update('amitel-brain\n1\nC:/brain/inbox/20260730-le-fait.md', 'utf8')
+          .digest('hex')
       })
     })
     expect(outcome.stored).toBe(true)
@@ -318,7 +578,9 @@ describe('câblage — la description dit les FORMES au modèle', () => {
  */
 describe('audit 2026-07-30 — les échecs silencieux', () => {
   const contexteSigne = (chemin: string): typeof fetch =>
-    vi.fn(async () => new Response(JSON.stringify({ context: chemin }), { status: 200 })) as unknown as typeof fetch
+    vi.fn(
+      async () => new Response(JSON.stringify(signedContextPayload(chemin)), { status: 200 })
+    ) as unknown as typeof fetch
 
   it('un fait TRONQUÉ le dit — sinon le candidat peut affirmer l’inverse du fait voulu', async () => {
     // La negation tombe APRES la borne : une coupe muette publierait le contraire.
@@ -386,7 +648,11 @@ describe('audit 2026-07-30 — les échecs silencieux', () => {
     const mort: typeof fetch = vi.fn(async () => {
       throw new Error('connect ECONNREFUSED 127.0.0.1:8765')
     }) as unknown as typeof fetch
-    const outcome = await rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn: mort, deposited: new Map() })
+    const outcome = await rememberFact(FAIT_VALIDE, {
+      token: 'jeton',
+      fetchFn: mort,
+      deposited: new Map()
+    })
     expect(outcome.unknown).toBeFalsy()
     expect(outcome.detail).toMatch(/injoignable/i)
   })
@@ -471,7 +737,9 @@ describe('audit 2026-07-30 cycle 2 — les faux refus que j’avais créés', ()
   it('un chemin de dépôt AVEC UN ESPACE est accepté par git: — ce dépôt s’appelle « Autowin OS »', () => {
     // Mon premier ancrage (`^[^\s]+@`) interdisait l'espace : le cas le plus courant de cette machine
     // devenait un refus, et aucun test ne l'attrapait puisqu'ils utilisaient tous un chemin sans espace.
-    expect(sourceLocatorProblem('git:C:/Amitel/Autowin OS/src/main/brain-remember.ts@ce4a595')).toBeUndefined()
+    expect(
+      sourceLocatorProblem('git:C:/Amitel/Autowin OS/src/main/brain-remember.ts@ce4a595')
+    ).toBeUndefined()
     // L'ancrage doit tout de même mordre : un sha trop court reste refusé.
     expect(sourceLocatorProblem('git:src/main/x.ts@abc')).toBeDefined()
     // Et un locator multiligne ne doit pas passer par sa seule dernière ligne.
@@ -517,7 +785,9 @@ describe('audit 2026-07-30 cycle 2 — les faux refus que j’avais créés', ()
   it('la forme CANONIQUE d’un secret — la variable d’environnement en MAJUSCULES — est vue', () => {
     // Trou mesuré le 2026-07-30 : le garde était sensible à la casse sur le NOM de la clé, or c'est
     // justement en majuscules qu'un secret s'écrit. Il partait donc dans un corpus partagé.
-    expect(likelySecretShape('AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENGbPxRfiCYEXAMPLEKEY')).toBeDefined()
+    expect(
+      likelySecretShape('AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENGbPxRfiCYEXAMPLEKEY')
+    ).toBeDefined()
     expect(likelySecretShape('TOKEN=aB3dEfGhIjKlMnOpQ12')).toBeDefined()
     expect(likelySecretShape('Password: aB3dEfGhIjKlMnOpQ12')).toBeDefined()
     // Mot-cle en DEBUT de chaine, sans prefixe : la regle exigeait un caractere avant.
@@ -546,7 +816,10 @@ describe('audit 2026-07-30 cycle 2 — les faux refus que j’avais créés', ()
       {
         token: 'jeton',
         fetchFn: vi.fn(
-          async () => new Response(JSON.stringify({ context: 'C:/brain/inbox/x.md' }), { status: 200 })
+          async () =>
+            new Response(JSON.stringify(signedContextPayload('C:/brain/inbox/x.md')), {
+              status: 200
+            })
         ) as unknown as typeof fetch,
         deposited: new Map()
       }
@@ -554,13 +827,18 @@ describe('audit 2026-07-30 cycle 2 — les faux refus que j’avais créés', ()
     expect(outcome.stored).toBe(true)
     expect(outcome.fact?.body).toBe('le vrai contenu du fait')
     expect(outcome.fact?.title).toBe(FAIT_VALIDE.title)
+    expect(outcome.fact?.scope).toBe(FAIT_VALIDE.scope)
   })
 
   it('le fait remonte MÊME quand le Brain est injoignable — sinon rien n’est retenu du tout', async () => {
     const mort: typeof fetch = vi.fn(async () => {
       throw new Error('connect ECONNREFUSED 127.0.0.1:8765')
     }) as unknown as typeof fetch
-    const outcome = await rememberFact(FAIT_VALIDE, { token: 'jeton', fetchFn: mort, deposited: new Map() })
+    const outcome = await rememberFact(FAIT_VALIDE, {
+      token: 'jeton',
+      fetchFn: mort,
+      deposited: new Map()
+    })
     expect(outcome.stored).toBe(false)
     expect(outcome.fact?.body).toContain('shims')
   })
@@ -617,7 +895,11 @@ describe('audit 2026-07-30 cycle 2 — les faux refus que j’avais créés', ()
   })
 
   it('la troncature RESPECTE la borne, marque comprise', () => {
-    for (const cas of ['A'.repeat(5_000), `${'mot '.repeat(1_500)}fin`, `Court. ${'x'.repeat(5_000)}`]) {
+    for (const cas of [
+      'A'.repeat(5_000),
+      `${'mot '.repeat(1_500)}fin`,
+      `Court. ${'x'.repeat(5_000)}`
+    ]) {
       const { body, truncated } = truncateFact(cas)
       expect(truncated).toBe(true)
       expect(body.length).toBeLessThanOrEqual(REMEMBER_BODY_MAX)

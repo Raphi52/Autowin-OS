@@ -1,9 +1,11 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   AMITEL_BRAIN_THEMES,
+  applyBrainRetrievalScores,
+  invalidateBrainCaches,
   loadBrainGraph,
   loadVaultBrainGraph,
   loadVaultBrainNodesForThemes,
@@ -15,6 +17,74 @@ import {
 } from './fs-brains'
 
 describe('Amitel Brain graph', () => {
+  it('fusionne les quatre canaux signes du retriever avec les fiches locales', () => {
+    const local = [
+      {
+        id: 'knowledge/decision',
+        label: 'Decision',
+        file: 'C:\\brain\\knowledge\\decision.md',
+        themes: [],
+        score: 12,
+        relations: []
+      }
+    ]
+    const [result] = applyBrainRetrievalScores(local, {
+      query: 'decision',
+      minDense: 0.2,
+      root: '\\\\ged2\\rig\\Projets IA\\Amitel Brain',
+      candidates: [
+        {
+          rank: 1,
+          path: '//ged2/rig/Projets IA/Amitel Brain/knowledge/decision.md',
+          type: 'decision',
+          denseCos: 0.81,
+          denseScore: 0.72,
+          lexicalScore: 0.64,
+          graphScore: 0.31,
+          fusedScore: 0.93,
+          retained: true,
+          relations: [{ type: 'supersedes', target: 'knowledge/old.md' }]
+        }
+      ]
+    })
+
+    expect(result).toMatchObject({
+      denseScore: 0.72,
+      lexicalScore: 0.64,
+      graphScore: 0.31,
+      fusedScore: 0.93,
+      relations: [{ type: 'supersedes', target: 'knowledge/old.md' }]
+    })
+  })
+
+  it('branche la recherche Memory sur le retriever signé avant de rendre les scores', () => {
+    const source = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+    expect(source).toContain('retrieveBrainContext(boundedQuery)')
+    expect(source).toContain('applyBrainRetrievalScores(local, retrieval.navigation)')
+  })
+
+  it('recherche le contenu et recharge une note modifiee apres invalidation', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-os-vault-search-'))
+    const note = join(root, 'decision.md')
+    writeFileSync(
+      note,
+      '---\nrelated: [knowledge/runtime.md]\n---\n# Decision\nLe fournisseur est local uniquement.\n',
+      'utf8'
+    )
+
+    const first = searchVaultBrainNotes(root, 'fournisseur local')
+    expect(first[0]).toMatchObject({
+      id: 'decision',
+      score: expect.any(Number),
+      relations: [{ type: 'related', target: 'knowledge/runtime.md' }]
+    })
+
+    writeFileSync(note, '# Decision\nLa source devient canonique apres promotion.\n', 'utf8')
+    expect(searchVaultBrainNotes(root, 'canonique')).toEqual([])
+    invalidateBrainCaches(root)
+    expect(searchVaultBrainNotes(root, 'canonique')[0]?.id).toBe('decision')
+  })
+
   it('discovers Amitel Brain with a broad multi-category catalog', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-os-brain-'))
     mkdirSync(join(root, 'projects'))

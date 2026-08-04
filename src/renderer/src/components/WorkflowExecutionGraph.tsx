@@ -90,6 +90,17 @@ function ExecutionNodeMeta({ event }: { event: HarnessTimelineEvent }): React.JS
       </>
     )
   }
+  if (display?.kind === 'quote') {
+    return (
+      <>
+        <span>{display.quote?.regime ?? 'regime inconnu'}</span>
+        <span aria-hidden="true">·</span>
+        <span>{display.quote?.limits.maxProviderCalls ?? 0} appels max</span>
+        <span aria-hidden="true">·</span>
+        <span>{display.quote?.limits.maxAgents ?? 0} agents max</span>
+      </>
+    )
+  }
   if (display?.kind === 'skill') {
     return (
       <>
@@ -113,13 +124,17 @@ function ExecutionNodeMeta({ event }: { event: HarnessTimelineEvent }): React.JS
     )
   }
   if (display?.kind === 'closure') {
+    const unknown = display.closure?.usage?.unpricedCalls ?? 0
     return (
       <>
         <span>{closureStatusLabel(display.closure?.status)}</span>
         <span aria-hidden="true">·</span>
         <span>{durationLabel(display.closure?.totalDurationMs)}</span>
         <span aria-hidden="true">·</span>
-        <span>{costLabel(display.closure?.totalCostUsd)}</span>
+        <span>
+          {costLabel(display.closure?.totalCostUsd)}
+          {unknown > 0 ? ` + ${unknown} non chiffre(s)` : ''}
+        </span>
       </>
     )
   }
@@ -173,6 +188,34 @@ function ExecutionNodeDetail({ event }: { event: HarnessTimelineEvent }): React.
       </dl>
     )
   }
+  if (display?.kind === 'quote') {
+    const quote = display.quote
+    return (
+      <dl>
+        <DetailRow label="Regime" value={quote?.regime ?? 'Non expose'} />
+        <DetailRow label="Phases" value={quote?.phases.join(' · ') || 'Aucune'} />
+        <DetailRow
+          label="Decomposition"
+          value={
+            quote?.decomposition.mode === 'build-only'
+              ? `build uniquement · ${quote.decomposition.maxNodes} noeuds max`
+              : 'desactivee'
+          }
+        />
+        <DetailRow label="Appels max" value={quote?.limits.maxProviderCalls ?? 'Non expose'} />
+        <DetailRow
+          label="Budget tokens d'admission"
+          value={quote?.limits.maxTotalTokens ?? 'Non expose'}
+        />
+        <DetailRow
+          label="Mesure tokens"
+          value="Usage final du provider; le prochain appel est refuse au plafond"
+        />
+        <DetailRow label="Agents max" value={quote?.limits.maxAgents ?? 'Non expose'} />
+        <DetailRow label="Concurrence max" value={quote?.limits.maxConcurrency ?? 'Non expose'} />
+      </dl>
+    )
+  }
   if (display?.kind === 'skill') {
     return (
       <dl>
@@ -222,6 +265,25 @@ function ExecutionNodeDetail({ event }: { event: HarnessTimelineEvent }): React.
         <DetailRow label="État de clôture" value={closureStatusLabel(closure?.status)} />
         <DetailRow label="Temps total" value={durationLabel(closure?.totalDurationMs)} />
         <DetailRow label="Coût total" value={costLabel(closure?.totalCostUsd)} />
+        {closure?.usage && (
+          <>
+            <DetailRow label="Agents admis" value={closure.usage.startedAgents ?? 'Non expose'} />
+            <DetailRow label="Appels fournisseur" value={closure.usage.startedCalls} />
+            <DetailRow label="Appels actifs" value={closure.usage.activeCalls} />
+            <DetailRow label="Tokens totaux" value={closure.usage.totalTokens} />
+            <DetailRow label="Tokens frais" value={closure.usage.freshTokens} />
+            <DetailRow
+              label="Couverture"
+              value={
+                closure.usage.unpricedCalls > 0
+                  ? `${closure.usage.unpricedCalls} appel(s) sans prix`
+                  : closure.usage.tokenCoverage === 'complete'
+                    ? 'Complète'
+                    : 'Partielle'
+              }
+            />
+          </>
+        )}
         {closure?.integrationOutcome && (
           <DetailRow label="Intégration" value={gitOutcomeLabel(closure.integrationOutcome)} />
         )}
@@ -294,8 +356,9 @@ export function WorkflowExecutionGraph({
   )
 
   useEffect(() => {
+    const gate = requestGate.current
     if (!active || !conversationId) {
-      requestGate.current.invalidate()
+      gate.invalidate()
       return
     }
     let cancelled = false
@@ -304,7 +367,7 @@ export function WorkflowExecutionGraph({
     })
     return () => {
       cancelled = true
-      requestGate.current.invalidate()
+      gate.invalidate()
     }
   }, [active, conversationId, load])
 
@@ -319,6 +382,17 @@ export function WorkflowExecutionGraph({
     previousLive.current = live
     if (active && conversationId && wasLive && !live) void load(false)
   }, [active, conversationId, live, load])
+
+  useEffect(() => {
+    if (!active || !conversationId || !window.api.onAppEvent) return
+    return window.api.onAppEvent((event) => {
+      if (
+        (event.type === 'orchestrate-usage' || event.type === 'causal-trace-updated') &&
+        event.convId === conversationId
+      )
+        void load(false)
+    })
+  }, [active, conversationId, load])
 
   const graph = useMemo(() => buildCausalPath(events), [events])
   const nodes = useMemo(() => flattenCausalNodes(graph.roots), [graph.roots])

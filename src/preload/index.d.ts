@@ -13,11 +13,16 @@ interface ChatAttachment {
   size: number
   kind: 'text' | 'image' | 'file'
   content: string
+  thumbnail?: string
 }
 interface ChatAttachmentMeta {
   name: string
   mimeType: string
   size: number
+  thumbnail?: string
+  artifact?: ChatArtifact
+  turnId?: string
+  originalUnavailable?: boolean
 }
 type StoredChatPart =
   | { kind: 'text'; text: string; streamId?: string }
@@ -58,9 +63,13 @@ interface ConvActivityEntry {
   kind: 'chat' | 'exec' | 'judge' | 'gate' | string
   label: string
   provider?: string
+  model?: string
   inputTokens?: number
   outputTokens?: number
+  cacheReadTokens?: number
   costUsd?: number
+  durationMs?: number
+  usageCallId?: string
   text?: string
 }
 interface RunEntry {
@@ -287,10 +296,20 @@ interface ChatApi {
   getPreflight: () => Promise<PreflightResult | null>
   repairPreflight: (checkId: string) => Promise<{ started: boolean; detail: string }>
   recheckPreflight: (force?: boolean) => Promise<PreflightResult>
-  orchestrationBudget: () => Promise<{ maxUsd: number | null }>
+  orchestrationBudget: () => Promise<{
+    maxUsd: number | null
+    maxProviderCalls: number
+    maxTotalTokens: number
+  }>
   setOrchestrationBudget: (settings: {
     maxUsd: number | null
-  }) => Promise<{ maxUsd: number | null }>
+    maxProviderCalls: number
+    maxTotalTokens: number
+  }) => Promise<{
+    maxUsd: number | null
+    maxProviderCalls: number
+    maxTotalTokens: number
+  }>
   getGitState: (repoPath?: string) => Promise<import('../shared/git-read').GitReadResult>
   conversationGitState: (
     conversationId: string
@@ -344,6 +363,11 @@ interface ChatApi {
     status: WorktreeRuntimeStatus
   }) => Promise<boolean>
   onWorktreeActivity: (cb: (activity: WorktreeAgentActivity[]) => void) => () => void
+  /** Workflows nommés : lire, créer/modifier, supprimer, sélectionner. */
+  workflowProfiles: () => Promise<unknown>
+  workflowProfileSave: (profile: unknown) => Promise<unknown>
+  workflowProfileRemove: (id: string) => Promise<unknown>
+  workflowProfileSelect: (id: string | null) => Promise<unknown>
   roles: () => Promise<
     Record<string, { provider: string; model?: string; reasoningEffort?: string }>
   >
@@ -354,6 +378,17 @@ interface ChatApi {
     reasoningEffort?: string
   ) => Promise<Record<string, { provider: string; model?: string; reasoningEffort?: string }>>
   models: (force?: boolean) => Promise<ImportedModel[]>
+  fabricNodes: () => Promise<unknown[]>
+  installIsolatedFabricFixture: () => Promise<unknown>
+  sendIsolatedFabricFixture: (execution?: boolean) => Promise<unknown>
+  refreshFabricNode: (nodeId: string) => Promise<unknown>
+  pairFabricNode: (request: unknown) => Promise<unknown>
+  checkpointForks: () => Promise<Array<{ id: string; runId: string; createdAt: string }>>
+  createCheckpointFork: (checkpointId: string, forkId: string) => Promise<unknown>
+  shadowRouteRecommendation: (
+    phase: string,
+    champion: { provider: string; model: string }
+  ) => Promise<unknown>
   modelQuotas: (force?: boolean) => Promise<ModelQuotaSnapshot>
   profiles: () => Promise<
     Array<{
@@ -385,11 +420,14 @@ interface ChatApi {
       outputTokens: number
       cacheReadTokens: number
       cacheHitRatio: number
+      durationMs: number
+      unpricedCalls: number
     }>
   >
   promptTraces: (conversationId: string) => Promise<NativePreflightTrace[]>
   brainTraces: (conversationId?: string) => Promise<BrainTrace[]>
-  behaviourComposition: () => Promise<BehaviourComposition>
+  behaviourComposition: (workspace?: string) => Promise<BehaviourComposition>
+  installIsolatedBehaviourFixture: () => Promise<string>
   providerStatus: () => Promise<ProviderStatus[]>
   providerTest: (provider: string) => Promise<{ provider: string; status: ProviderDisplayStatus }>
   setProviderMode: (
@@ -400,6 +438,19 @@ interface ChatApi {
   authorizeDiagnostics: () => Promise<string | null>
   promptTracesGlobal: (capability: string) => Promise<NativePreflightTrace[]>
   causalTrace: (conversationId: string) => Promise<unknown[]>
+  activitySessions: () => Promise<
+    Array<{ id: string; project: string; path: string; sizeMb: number; mtime: number }>
+  >
+  activitySession: (meta: { id: string; project: string }) => Promise<{
+    meta: { id: string; project: string; path: string; sizeMb: number; mtime: number }
+    turns: Array<{ kind: 'user' | 'assistant'; text: string }>
+    images: Array<{ path: string; exists: boolean }>
+    totalToolCalls: number
+  }>
+  activityImage: (
+    session: { id: string; project: string },
+    path: string
+  ) => Promise<{ dataUrl: string }>
   claudeHooks: () => Promise<CapabilityItem[]>
   codexHooks: () => Promise<CapabilityItem[]>
   setCapabilityTool: (
@@ -421,19 +472,29 @@ interface ChatApi {
       title: string
       category: string
       provider: string
-      messages: Array<{
-        role: 'user' | 'assistant'
-        content: string
-        ts: number
-        attachments?: ChatAttachmentMeta[]
-        turnId?: string
-        status?: 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
-        parts?: StoredChatPart[]
-        error?: string
-      }>
+      messageCount: number
+      lastMessageRole?: 'user' | 'assistant'
+      lastAssistantStatus?: 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
       updatedAt: number
     }>
   >
+  conversation: (id: string) => Promise<{
+    id: string
+    title: string
+    category: string
+    provider: string
+    messages: Array<{
+      role: 'user' | 'assistant'
+      content: string
+      ts: number
+      attachments?: ChatAttachmentMeta[]
+      turnId?: string
+      status?: 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
+      parts?: StoredChatPart[]
+      error?: string
+    }>
+    updatedAt: number
+  } | null>
   conversationsCreate: (p: {
     title: string
     category: string
@@ -540,7 +601,12 @@ interface ChatApi {
     }) => void
   ) => () => void
   emitIsolatedTestAppEvent: (event: Record<string, unknown> & { type: string }) => Promise<boolean>
+  isolatedTestConversationReadCount: (reset?: boolean) => Promise<number>
   conversationRuns: (convId: string) => Promise<RunEntry[]>
+  deleteConversationRun: (
+    convId: string,
+    path: string
+  ) => Promise<{ ok: boolean; kind: 'deleted' | 'detached' }>
   conversationActivity: (convId: string) => Promise<ConvActivityEntry[]>
   runTrace: (path: string) => Promise<OrchestrationStep[] | null>
   setActiveConversation: (convId: string | null) => Promise<unknown>
@@ -563,8 +629,23 @@ interface ChatApi {
   searchBrain: (
     path: string,
     query: string
-  ) => Promise<Array<{ id: string; label: string; file: string; themes: string[] }>>
+  ) => Promise<
+    Array<{
+      id: string
+      label: string
+      file: string
+      themes: string[]
+      score: number
+      denseScore?: number
+      lexicalScore?: number
+      graphScore?: number
+      fusedScore?: number
+      relations: Array<{ type: string; target: string }>
+    }>
+  >
+  refreshBrain: (path: string) => Promise<{ ok: boolean }>
   listRuns: () => Promise<RunEntry[]>
+  deleteRun: (path: string) => Promise<{ ok: boolean }>
 
   getZoomFactor: () => number
   setZoomFactor: (factor: number) => void

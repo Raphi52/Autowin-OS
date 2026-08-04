@@ -12,10 +12,12 @@
  * connaissance vit dans le graphe de code (déjà scopé) et dans le contexte projet ; le Brain n'apporte
  * que 4 documents, qui restent atteignables.
  *
- * PRINCIPE DE PRUDENCE : un workspace SANS corpus déclaré n'est PAS filtré. On ne coupe que là où on
- * sait quoi garder — sinon on remplacerait du bruit par du vide, ce qui se déguiserait en progrès.
+ * PRINCIPE DE PRUDENCE : un workspace sans identité déclarée est fail-closed. L'opérateur peut
+ * explicitement demander le corpus global avec `AUTOWIN_BRAIN_CORPUS=*`, mais une absence de mapping
+ * ne doit jamais devenir silencieusement « tout autoriser ».
  */
 import { basename } from 'node:path'
+import type { BrainRetrievalResult } from './brain-retrieval'
 
 /** Séparateur entre deux sources dans le bloc rendu par le Brain (`brain_context.py:128`). */
 const SOURCE_SEPARATOR = '\n\n---\n\n'
@@ -23,18 +25,54 @@ const SOURCE_SEPARATOR = '\n\n---\n\n'
 const SOURCE_HEADER = /^### Source \d+ — (.+)$/m
 
 /**
- * Corpus Brain par workspace, indexé par SLUG de dossier. Les valeurs sont des fragments cherchés dans
- * le CHEMIN de la source — pas dans le champ `scope`, qui est vide sur 98 % des chunks et ferait donc
- * tout écarter par simple absence de métadonnée.
+ * Corpus Brain par workspace, indexé par SLUG de dossier. Les valeurs sont des identités exactes ou
+ * des préfixes ANCRÉS du chemin `knowledge/...` (`/` ou `-` final = famille). Une sous-chaîne libre
+ * permettrait à `rig/.../autowin-migration.md` de contourner l'isolation.
  *
  * Table EXPLICITE et non devinée : le slug d'un dossier ne dit pas le nom de son corpus
  * (« Code RIG » → la doc s'appelle `rigapplication-documentation`). Un workspace absent de cette table
- * n'est pas filtré.
+ * est fail-closed.
  */
 const WORKSPACE_BRAIN_CORPUS: Readonly<Record<string, readonly string[]>> = {
-  'autowin-os': ['autowin-os', 'autowin'],
-  'code-rig': ['rigapplication-documentation', 'rig-'],
-  rig: ['rigapplication-documentation', 'rig-']
+  'autowin-os': [
+    'knowledge/_maps/autowin-os.md',
+    'knowledge/domain/autowin-os-',
+    'knowledge/runbooks/autowin-os-'
+  ],
+  'code-rig': [
+    'knowledge/_maps/rig.md',
+    'knowledge/_maps/rig-',
+    'knowledge/decisions/rig-',
+    'knowledge/domain/rig-',
+    'knowledge/domain/rigapplication-documentation/',
+    'knowledge/lessons/rig-'
+  ],
+  rigapplication: [
+    'knowledge/_maps/rig.md',
+    'knowledge/_maps/rig-',
+    'knowledge/decisions/rig-',
+    'knowledge/domain/rig-',
+    'knowledge/domain/rigapplication-documentation/',
+    'knowledge/lessons/rig-'
+  ],
+  rig: [
+    'knowledge/_maps/rig.md',
+    'knowledge/_maps/rig-',
+    'knowledge/decisions/rig-',
+    'knowledge/domain/rig-',
+    'knowledge/domain/rigapplication-documentation/',
+    'knowledge/lessons/rig-'
+  ]
+}
+
+let invalidOverrideWarningEmitted = false
+
+function warnInvalidCorpusOverride(): void {
+  if (invalidOverrideWarningEmitted) return
+  invalidOverrideWarningEmitted = true
+  process.emitWarning('AUTOWIN_BRAIN_CORPUS malformé : accès Brain désactivé (fail-closed).', {
+    code: 'AUTOWIN_BRAIN_CORPUS_INVALID'
+  })
 }
 
 /** Slug comparable d'un chemin de workspace : dernier segment, minuscules, espaces en tirets. */
@@ -48,8 +86,8 @@ export function workspaceSlug(workspacePath: string): string {
 }
 
 /**
- * Fragments de chemin autorisés pour ce workspace, ou `undefined` si aucun corpus n'est déclaré
- * (→ AUCUN filtrage, comportement historique).
+ * Fragments de chemin autorisés. `[]` signifie fail-closed ; `undefined` est réservé au wildcard
+ * opérateur explicite (aucun filtrage).
  *
  * Échappatoire opérateur : `AUTOWIN_BRAIN_CORPUS` (fragments séparés par des virgules) surclasse la
  * table ; la valeur `*` désactive explicitement le filtrage.
@@ -58,37 +96,70 @@ export function brainCorpusForWorkspace(
   workspacePath: string | undefined,
   env: NodeJS.ProcessEnv = process.env
 ): readonly string[] | undefined {
-  const override = env.AUTOWIN_BRAIN_CORPUS?.trim()
-  if (override === '*') return undefined
-  if (override) {
-    const fragments = override
-      .split(',')
-      .map((fragment) => fragment.trim().toLowerCase())
-      .filter(Boolean)
-    return fragments.length > 0 ? fragments : undefined
+  const configuredOverride = env.AUTOWIN_BRAIN_CORPUS
+  if (configuredOverride !== undefined) {
+    const override = configuredOverride.trim()
+    if (override === '*') return undefined
+    const fragments = override.split(',').map((fragment) => fragment.trim().toLowerCase())
+    // Le wildcard n'est valide que SEUL et chaque élément doit être explicite. Une virgule finale,
+    // une liste vide ou `*,foo` est une erreur de configuration : elle coupe le Brain au lieu de
+    // transformer une faute de frappe en accès global.
+    if (fragments.some((fragment) => !fragment || fragment === '*')) {
+      warnInvalidCorpusOverride()
+      return []
+    }
+    return fragments
   }
-  if (!workspacePath) return undefined
-  return WORKSPACE_BRAIN_CORPUS[workspaceSlug(workspacePath)]
+  if (!workspacePath) return []
+  const segments = workspacePath
+    .split(/[\\/]+/)
+    .map((segment) => workspaceSlug(segment))
+    .filter(Boolean)
+    .reverse()
+  for (const slug of segments) {
+    const corpus = WORKSPACE_BRAIN_CORPUS[slug]
+    if (corpus) return corpus
+  }
+  return []
 }
 
-/** Une source appartient-elle au corpus ? Comparaison sur le chemin, insensible à la casse. */
-function sourceAllowed(section: string, fragments: readonly string[]): boolean {
+/** Ramène un chemin absolu/UNC ou relatif à son identité stable `knowledge/...`. */
+function normalizedKnowledgePath(value: string): string {
+  const normalized = value.trim().toLowerCase().replace(/\\/g, '/').replace(/\/{2,}/g, '/')
+  if (normalized.startsWith('knowledge/')) return normalized
+  const marker = '/knowledge/'
+  const markerIndex = normalized.indexOf(marker)
+  if (markerIndex >= 0) return normalized.slice(markerIndex + 1)
+  return normalized.replace(/^\.\//, '').replace(/^\//, '')
+}
+
+/** Exact par défaut ; `/` ou `-` final déclare explicitement une famille de chemins. */
+function matchesCorpusSelector(path: string, selector: string): boolean {
+  const normalizedPath = normalizedKnowledgePath(path)
+  const normalizedSelector = normalizedKnowledgePath(selector)
+  return normalizedSelector.endsWith('/') || normalizedSelector.endsWith('-')
+    ? normalizedPath.startsWith(normalizedSelector)
+    : normalizedPath === normalizedSelector
+}
+
+/** Une source appartient-elle au corpus ? Comparaison ancrée, insensible à la casse. */
+function sourceAllowed(section: string, selectors: readonly string[]): boolean {
   const header = SOURCE_HEADER.exec(section)
   // Un fragment SANS en-tête reconnaissable est conservé : c'est le préambule (signature + consigne
   // anti-injection), pas une source. Le jeter romprait le contrat de confiance du bloc.
   if (!header) return true
   const path = header[1].toLowerCase()
-  return fragments.some((fragment) => path.includes(fragment))
+  return selectors.some((selector) => matchesCorpusSelector(path, selector))
 }
 
 /** Même règle que le filtrage du bloc, appliquée à un chemin de navigation observé. */
 export function brainSourcePathAllowed(
   path: string,
-  fragments: readonly string[] | undefined
+  selectors: readonly string[] | undefined
 ): boolean {
-  if (!fragments || fragments.length === 0) return true
-  const normalized = path.toLowerCase()
-  return fragments.some((fragment) => normalized.includes(fragment))
+  if (selectors === undefined) return true
+  if (selectors.length === 0) return false
+  return selectors.some((selector) => matchesCorpusSelector(path, selector))
 }
 
 export interface BrainScopeResult {
@@ -101,7 +172,8 @@ export interface BrainScopeResult {
 }
 
 /**
- * Restreint un bloc Brain aux sources du corpus. Rend le bloc INTACT si aucun corpus n'est déclaré.
+ * Restreint un bloc Brain aux sources du corpus. Rend le bloc intact seulement pour le wildcard
+ * explicite (`undefined`) et vide pour un corpus fail-closed (`[]`).
  *
  * Si plus aucune source ne survit, le bloc rendu est VIDE : mieux vaut n'injecter rien que le préambule
  * seul, qui coûterait des tokens en n'annonçant aucune connaissance.
@@ -111,9 +183,13 @@ export function scopeBrainBlock(
   fragments: readonly string[] | undefined
 ): BrainScopeResult {
   if (!block.trim()) return { block: '', dropped: 0, kept: 0 }
-  if (!fragments || fragments.length === 0) {
+  if (fragments === undefined) {
     const total = block.split(SOURCE_SEPARATOR).filter((part) => SOURCE_HEADER.test(part)).length
     return { block, dropped: 0, kept: total }
+  }
+  if (fragments.length === 0) {
+    const total = block.split(SOURCE_SEPARATOR).filter((part) => SOURCE_HEADER.test(part)).length
+    return { block: '', dropped: total, kept: 0 }
   }
   const parts = block.split(SOURCE_SEPARATOR)
   const kept: string[] = []
@@ -135,4 +211,23 @@ export function scopeBrainBlock(
   // Aucune source retenue → rien a injecter (le preambule seul ne porte aucune connaissance).
   if (keptSources === 0) return { block: '', dropped, kept: 0 }
   return { block: kept.join(SOURCE_SEPARATOR), dropped, kept: keptSources }
+}
+
+/** Projette ensemble contexte, statut et navigation après application de la portée workspace. */
+export function scopeBrainRetrieval(
+  result: BrainRetrievalResult,
+  fragments: readonly string[] | undefined
+): BrainRetrievalResult {
+  const scoped = scopeBrainBlock(result.context, fragments)
+  const status = result.status === 'found' && !scoped.block ? 'empty' : result.status
+  const navigation = result.navigation
+    ? {
+        ...result.navigation,
+        candidates: result.navigation.candidates.map((candidate) => ({
+          ...candidate,
+          retained: candidate.retained && brainSourcePathAllowed(candidate.path, fragments)
+        }))
+      }
+    : undefined
+  return { context: scoped.block, status, navigation }
 }

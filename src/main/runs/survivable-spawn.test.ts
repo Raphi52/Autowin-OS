@@ -1,10 +1,10 @@
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { stdoutJournalPath } from './stdout-journal'
-import { spawnSurvivable } from './survivable-spawn'
+import { spawnSurvivable, usesWindowsSurvivalRelay } from './survivable-spawn'
 
 /** Vrais processus : c'est la SURVIE qu'on veut prouver, pas notre idée de la survie. */
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
@@ -36,7 +36,28 @@ const timer = setInterval(() => {
   return path
 }
 
+async function waitUntil(predicate: () => boolean, limitMs: number): Promise<boolean> {
+  const deadline = Date.now() + limitMs
+  while (Date.now() < deadline) {
+    if (predicate()) return true
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  return predicate()
+}
+
+function waitForClose(child: ReturnType<typeof spawn>): Promise<number | null> {
+  return new Promise((resolve, reject) => {
+    child.once('error', reject)
+    child.once('close', resolve)
+  })
+}
+
 describe('lancement survivable — la sortie n’est pas perdue avec l’app', () => {
+  it('isole les runs Windows dans le relais sans console', () => {
+    expect(usesWindowsSurvivalRelay('win32')).toBe(true)
+    expect(usesWindowsSurvivalRelay('linux')).toBe(false)
+  })
+
   it('écrit dans un journal fichier plutôt que dans un pipe', async () => {
     const root = tempRoot()
     const writer = slowWriter(root, 3, 10)
@@ -131,15 +152,150 @@ setInterval(() => {}, 1000) // reste vivant jusqu'a ce qu'on le tue
     const lu = (): string => (existsSync(path) ? readFileSync(path, 'utf8') : '')
 
     // L'enfant a demarre et produit ses premieres lignes.
-    expect(await waitUntil(() => lu().includes('"n":1'), 40_000)).toBe(true)
+    const started = await waitUntil(() => lu().includes('"n":1'), 40_000)
+    expect(started, lu()).toBe(true)
 
     parent.kill('SIGKILL')
-    expect(await waitUntil(() => parent.exitCode !== null || parent.signalCode !== null, 10_000)).toBe(true)
+    expect(
+      await waitUntil(() => parent.exitCode !== null || parent.signalCode !== null, 10_000)
+    ).toBe(true)
     const auMomentDuKill = lu()
     expect(auMomentDuKill).not.toContain('"n":8') // il restait du travail a faire
 
     // Parent mort. L'enfant doit AVOIR CONTINUE jusqu'au bout, dans le journal.
     expect(await waitUntil(() => lu().includes('"n":8'), 40_000)).toBe(true)
+  })
+
+  it('tuer le relais arrête son CLI et efface le prompt matérialisé', async () => {
+    if (process.platform !== 'win32') return
+    const root = tempRoot()
+    const writer = slowWriter(root, 30, 100)
+    const run = spawnSurvivable({
+      bin: process.execPath,
+      args: [writer],
+      journalRoot: root,
+      runId: 'run-annule',
+      stdin: 'prompt sensible'
+    })
+    const read = (): string => readFileSync(run.journalPath!, 'utf8')
+    expect(await waitUntil(() => read().includes('"n":1'), 10_000)).toBe(true)
+    expect(readdirSync(root).some((name) => name.endsWith('.stdin'))).toBe(true)
+    run.child.kill('SIGKILL')
+    expect(
+      await waitUntil(() => run.child.exitCode !== null || run.child.signalCode !== null, 5_000)
+    ).toBe(true)
+    expect(
+      await waitUntil(() => !readdirSync(root).some((name) => name.endsWith('.stdin')), 5_000)
+    ).toBe(true)
+    const journalAtStop = read()
+    // Le writer met 3 s à finir. Attendre au-delà rend la preuve falsifiable : si le Job Object ne
+    // tuait pas le vrai CLI, le journal aurait nécessairement continué à grossir jusqu'à n=30.
+    await new Promise((resolve) => setTimeout(resolve, 3_500))
+    expect(read()).toBe(journalAtStop)
+    run.release()
+  })
+
+  it('garde invisible un descendant console lancé par un CLI Kimi/Gemini-like', async () => {
+    if (process.platform !== 'win32') return
+    const root = tempRoot()
+    const marker = `AUTOWIN_AGENT_CLI_HIDDEN_${Date.now()}`
+    const readyPath = join(root, 'monitor.ready')
+    const observedPath = join(root, 'observed.json')
+    const monitorPath = join(root, 'monitor.ps1')
+    const fixturePath = join(root, 'kimi-like.cjs')
+
+    writeFileSync(
+      monitorPath,
+      String.raw`param([string]$Marker, [string]$ReadyPath, [string]$ObservedPath)
+$source = @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class AutowinVisibleWindowProbe {
+  delegate bool EnumWindowsProc(IntPtr handle, IntPtr state);
+  [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc callback, IntPtr state);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr handle);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr handle, StringBuilder title, int max);
+  public static string[] Find(string marker) {
+    var found = new List<string>();
+    EnumWindows((handle, state) => {
+      if (!IsWindowVisible(handle)) return true;
+      var title = new StringBuilder(512);
+      GetWindowText(handle, title, title.Capacity);
+      if (title.ToString().IndexOf(marker, StringComparison.Ordinal) >= 0) found.Add(title.ToString());
+      return true;
+    }, IntPtr.Zero);
+    return found.ToArray();
+  }
+}
+'@
+Add-Type -TypeDefinition $source
+[System.IO.File]::WriteAllText($ReadyPath, 'ready')
+$hits = @()
+$deadline = (Get-Date).AddSeconds(4)
+while ((Get-Date) -lt $deadline) {
+  $hits += [AutowinVisibleWindowProbe]::Find($Marker)
+  Start-Sleep -Milliseconds 20
+}
+$json = ConvertTo-Json -InputObject @($hits | Sort-Object -Unique) -Compress
+[System.IO.File]::WriteAllText($ObservedPath, $json)
+`
+    )
+    writeFileSync(
+      fixturePath,
+      `const { spawn } = require('node:child_process')
+const command = ${JSON.stringify(`try { $Host.UI.RawUI.WindowTitle = '${marker}' } catch {}; Start-Sleep -Milliseconds 1500`)}
+const child = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-Command', command], {
+  shell: false,
+  windowsHide: false,
+  stdio: 'ignore'
+})
+child.once('error', (error) => { console.error(error); process.exit(1) })
+child.once('close', (code) => {
+  process.stdout.write(JSON.stringify({ probe: 'done', code }) + '\\n')
+  process.exit(code == null ? 1 : code)
+})
+`
+    )
+
+    const monitor = spawn(
+      'powershell.exe',
+      [
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        monitorPath,
+        '-Marker',
+        marker,
+        '-ReadyPath',
+        readyPath,
+        '-ObservedPath',
+        observedPath
+      ],
+      { shell: false, windowsHide: true, stdio: 'ignore' }
+    )
+    expect(await waitUntil(() => existsSync(readyPath), 10_000)).toBe(true)
+
+    const run = spawnSurvivable({
+      bin: process.execPath,
+      args: [fixturePath],
+      journalRoot: root,
+      runId: 'run-kimi-like'
+    })
+    const lines: string[] = []
+    await run.tail((line) => lines.push(line), {
+      isComplete: () => run.child.exitCode !== null,
+      pollMs: 20
+    })
+    run.release()
+    expect(await waitForClose(monitor)).toBe(0)
+
+    expect(lines.some((line) => line.includes('"probe":"done"'))).toBe(true)
+    expect(JSON.parse(readFileSync(observedPath, 'utf8'))).toEqual([])
   })
 
   it('sans racine de journal : dégradation annoncée, jamais un lancement refusé', async () => {

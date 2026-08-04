@@ -8,7 +8,17 @@ async function render(): Promise<{ root: Root; container: HTMLElement }> {
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
-      behaviourComposition: vi.fn(async () => ({
+      behaviourComposition: vi.fn(async (workspace?: string) => ({
+        inspection: workspace
+          ? {
+              workspace,
+              files: [{
+                id: 'codex:workspace:b', label: 'AGENTS.md', path: `${workspace}\\AGENTS.md`,
+                engine: 'codex', state: 'active', reason: 'Applicable au contexte sélectionné',
+                active: true, excerpt: 'INSTRUCTION_WORKSPACE_B_ACTIVE'
+              }]
+            }
+          : { workspace: 'C:\\workspace-a', files: [] },
         cockpit: {
           systemPrompt: [],
           retrievedContext: [],
@@ -31,7 +41,8 @@ async function render(): Promise<{ root: Root; container: HTMLElement }> {
           ],
           modelSelection: []
         }
-      }))
+      })),
+      chooseBehaviourWorkspace: vi.fn(async () => 'C:\\workspace-b')
     }
   })
 
@@ -66,6 +77,22 @@ describe('vue Behaviour', () => {
     expect(container.textContent).toContain('CONSTITUTION')
     expect(container.textContent).not.toContain('seul kit SOUL')
 
+    await act(async () => root.unmount())
+  })
+
+  it('recharge la composition avec le workspace approuvé', async () => {
+    const { root, container } = await render()
+    const button = [...container.querySelectorAll('button')].find((item) =>
+      item.textContent?.includes('Choisir un workspace')
+    ) as HTMLButtonElement
+    await act(async () => {
+      button.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(window.api.behaviourComposition).toHaveBeenLastCalledWith('C:\\workspace-b')
+    expect(container.textContent).toContain('INSTRUCTION_WORKSPACE_B_ACTIVE')
+    expect(container.textContent).toContain('AGENTS.md')
     await act(async () => root.unmount())
   })
 })

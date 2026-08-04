@@ -49,13 +49,94 @@ describe('récapitulatif d’un journal', () => {
     expect(recapMessage(recap, false)).toContain('a produit')
   })
 
-  it('annonce ce qu’il n’a pas pu lire plutôt que de le taire', () => {
+  it('annonce la preuve non structurée plutôt que de la qualifier à tort', () => {
     const message = recapMessage(summarizeJournal([claude('ok'), 'bruit']), false)
-    expect(message).toContain('illisibles')
+    expect(message).toContain('non structurée(s)')
+    expect(message).toContain('1 perte(s) de preuve')
   })
 
   it('sans message final, dit le nombre d’étapes au lieu de rester muet', () => {
     const recap = summarizeJournal([JSON.stringify({ type: 'thread.started' })])
     expect(recapMessage(recap, false)).toContain('1 étape(s)')
+  })
+})
+
+describe('diagnostics Auto-Kaizen du journal mixte', () => {
+  it('conserve un test rouge structuré dans un événement Codex JSONL', () => {
+    const recap = summarizeJournal([
+      JSON.stringify({
+        type: 'item.completed',
+        item: {
+          type: 'command_execution',
+          command: 'npx vitest run src/main/example.test.ts',
+          aggregated_output: 'Tests 1 failed | 10 passed',
+          exit_code: 1,
+          status: 'failed'
+        }
+      })
+    ])
+
+    expect(recap.events).toBe(1)
+    expect(recap.diagnostics).toEqual([
+      expect.objectContaining({
+        kind: 'command-failed',
+        summary: expect.stringContaining('vitest'),
+        detail: expect.stringContaining('1 failed')
+      })
+    ])
+  })
+
+  it('conserve les erreurs stderr Codex au lieu de les ignorer', () => {
+    const recap = summarizeJournal([
+      '2026-08-01T17:43:54.448133Z ERROR codex_core::tools::router: error=quota proche du seuil',
+      JSON.stringify({
+        type: 'item.completed',
+        item: {
+          type: 'command_execution',
+          command: 'npx vitest run',
+          aggregated_output: '1 failed',
+          exit_code: 1,
+          status: 'failed'
+        }
+      }),
+      'Wall time: 0.4 seconds',
+      'sortie métier non classée'
+    ])
+
+    expect(recap.diagnostics).toHaveLength(2)
+    expect(recap.diagnostics[0]).toMatchObject({
+      kind: 'stderr-error',
+      classification: 'diagnostic',
+      summary: expect.stringContaining('quota proche')
+    })
+    expect(recap.diagnostics[1]).toMatchObject({
+      kind: 'command-failed',
+      classification: 'blockage'
+    })
+    expect(recap.unreadable).toBe(3)
+    expect(recap.coverage).toMatchObject({
+      total: 4,
+      structured: 1,
+      diagnostics: 1,
+      blockages: 1,
+      noise: 1,
+      lostProof: 1
+    })
+    expect(recapMessage(recap, false)).toContain('2 erreur(s) exploitable(s)')
+    expect(recapMessage(recap, false)).toContain('Couverture structurée : 25 %')
+    expect(recapMessage(recap, false)).toContain('1 perte(s) de preuve')
+    expect(recapMessage(recap, false)).not.toContain('ignorées')
+  })
+
+  it('distingue le bruit connu de la perte de preuve', () => {
+    const recap = summarizeJournal(['Wall time: 0.4 seconds', 'sortie métier non classée'])
+    const message = recapMessage(recap, false)
+
+    expect(recap.coverage.noise).toBe(1)
+    expect(recap.coverage.lostProof).toBe(1)
+    expect(message).toContain('2 ligne(s) non structurée(s)')
+    expect(message).toContain('1 bruit(s)')
+    expect(message).toContain('1 perte(s) de preuve')
+    expect(message).not.toContain('conservées comme diagnostics')
   })
 })

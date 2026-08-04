@@ -26,6 +26,16 @@ function messageDuTimeout(): string {
 }
 
 describe('borne du probe provider — le message doit rester diagnostique', () => {
+  it('ne dépense aucun tour modèle automatiquement au démarrage', () => {
+    expect(source).not.toContain('startupProviderChecks = runStartupProviderProbes(')
+  })
+
+  it('le test explicite du provider passe par ExecutionSupervisor', () => {
+    const probe = source.match(/async function probeProviderConnection[\s\S]*?\n}/)?.[0] ?? ''
+    expect(probe).toContain('executionSupervisor.run(')
+    expect(probe).toContain('maxProviderCalls: 1')
+  })
+
   it('la constante est NOMMEE, plus un nombre nu dans l’appel', () => {
     expect(source).toContain('const PROVIDER_PROBE_TIMEOUT_MS = 20_000')
     // La constante doit etre CONSOMMEE, pas seulement declaree : declaration + message + delai = 3.

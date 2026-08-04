@@ -26,15 +26,15 @@ const tokens = { accessToken: 'AT', refreshToken: 'RT', obtainedAt: Date.now(), 
 const conv: Message[] = [{ role: 'user', content: 'x' }]
 
 // Non-régression (judge corrector cycle 1) : le reliquat de buffer (dernier
-// `data:` sans '\n' final) doit être flushé, sinon le dernier delta et le
-// response.completed (session_id) sont perdus silencieusement.
+// `data:` sans '\n' final) doit être flushé, sinon le dernier delta et les
+// métriques de response.completed sont perdus silencieusement.
 describe('CodexAdapter — flush du reliquat SSE (régression judge)', () => {
   it('parse le dernier event même sans newline terminal', async () => {
     const fetchFn = async (): Promise<Response> =>
       sseNoTrailingNewline([
         'data: {"type":"response.output_text.delta","delta":"FIN"}\n',
         // dernier event SANS '\n' final :
-        'data: {"type":"response.completed","response":{"id":"resp_last"}}'
+        'data: {"type":"response.completed","response":{"id":"resp_last","usage":{"input_tokens":12,"output_tokens":3}}}'
       ])
     const adapter = new CodexAdapter({
       fetchFn: fetchFn as unknown as typeof fetch,
@@ -43,8 +43,9 @@ describe('CodexAdapter — flush du reliquat SSE (régression judge)', () => {
     const gen = adapter.send(conv, { system: 'SOUL' })
     let s = await gen.next()
     while (!s.done) s = await gen.next()
-    // AVANT le fix : sessionId restait undefined (dernier event jamais parsé).
-    expect(s.value.sessionId).toBe('resp_last')
+    // Usage proves the final response.completed event was parsed. Its id is not resumable yet.
+    expect(s.value.usage).toMatchObject({ inputTokens: 12, outputTokens: 3 })
+    expect(s.value.sessionId).toBeUndefined()
     expect(s.value.text).toBe('FIN')
   })
 

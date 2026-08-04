@@ -8,10 +8,11 @@ import { createAmitelContextProvider, graphifyEvidence } from './amitel-context'
 const TOKEN = 'a'.repeat(43)
 
 function signed(context: string): Record<string, unknown> {
+  const authenticated = JSON.stringify({ context, navigation: null })
   const signature = createHmac('sha256', TOKEN)
-    .update(`amitel-brain\n1\n${context}`, 'utf8')
+    .update(`amitel-brain\n2\n${authenticated}`, 'utf8')
     .digest('hex')
-  return { service: 'amitel-brain', protocol: 1, context, signature }
+  return { service: 'amitel-brain', protocol: 2, authenticated, signature }
 }
 
 const graph = JSON.stringify({
@@ -38,13 +39,17 @@ describe('Amitel prompt context', () => {
   it('combines authenticated Amitel Brain evidence with matching Graphify code evidence', async () => {
     const fetchFn = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => signed('[AMITEL BRAIN REFERENCE DATA]\n### Source 1 — knowledge/test.md')
+      json: async () =>
+        signed('[AMITEL BRAIN REFERENCE DATA]\n### Source 1 — knowledge/domain/autowin-os/test.md')
     })
     const provider = createAmitelContextProvider({
+      workspace: () => 'C:\\Amitel\\Autowin OS',
       fetchFn: fetchFn as never,
-      readText: vi.fn().mockImplementation(async (path: string) =>
-        path.endsWith('service-token') ? TOKEN : graph
-      ),
+      readText: vi
+        .fn()
+        .mockImplementation(async (path: string) =>
+          path.endsWith('service-token') ? TOKEN : graph
+        ),
       tokenPath: 'C:/token/service-token',
       graphPath: 'C:/brain/projects/autowin-os/graphify-out/graph.json',
       graphLoader: vi.fn().mockResolvedValue({
@@ -67,13 +72,16 @@ describe('Amitel prompt context', () => {
 
   it('rejects an unauthenticated Brain payload without discarding valid Graphify evidence', async () => {
     const provider = createAmitelContextProvider({
+      workspace: () => 'C:\\Amitel\\Autowin OS',
       fetchFn: vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({ ...signed('brain'), signature: 'invalid' })
       }) as never,
-      readText: vi.fn().mockImplementation(async (path: string) =>
-        path.endsWith('service-token') ? TOKEN : graph
-      ),
+      readText: vi
+        .fn()
+        .mockImplementation(async (path: string) =>
+          path.endsWith('service-token') ? TOKEN : graph
+        ),
       tokenPath: 'C:/token/service-token',
       graphPath: 'C:/brain/projects/autowin-os/graphify-out/graph.json',
       graphLoader: vi.fn().mockResolvedValue({
@@ -92,18 +100,38 @@ describe('Amitel prompt context', () => {
   })
 
   it('caps the locally accepted signed Brain context', async () => {
+    const longContext = `### Source 1 — knowledge/domain/autowin-os/test.md\n${'x'.repeat(1_000)}`
     const provider = createAmitelContextProvider({
-      fetchFn: vi.fn().mockResolvedValue({ ok: true, json: async () => signed('x'.repeat(1_000)) }) as never,
+      workspace: () => 'C:\\Amitel\\Autowin OS',
+      fetchFn: vi
+        .fn()
+        .mockResolvedValue({ ok: true, json: async () => signed(longContext) }) as never,
       readText: vi.fn().mockResolvedValue(TOKEN),
       tokenPath: 'C:/token/service-token',
-      graphLoader: vi.fn().mockResolvedValue({ raw: graph, sourcePath: 'C:/brain/graph.json', sha256: 'sha' }),
+      graphLoader: vi
+        .fn()
+        .mockResolvedValue({ raw: graph, sourcePath: 'C:/brain/graph.json', sha256: 'sha' }),
       graphEvidence: resolveGraphEvidence,
       maxBrainContextChars: 64
     })
 
     const context = await provider('facturation judiciaire')
 
-    expect(context).toBe(`[AMITEL BRAIN SIGNATURE VERIFIED]\n${'x'.repeat(64)}`)
+    expect(context).toBe(`[AMITEL BRAIN SIGNATURE VERIFIED]\n${longContext.slice(0, 64)}`)
+  })
+
+  it('fails closed for an unknown workspace without contacting the Brain', async () => {
+    const fetchFn = vi.fn()
+    const provider = createAmitelContextProvider({
+      workspace: () => 'C:\\Unknown\\Repository',
+      fetchFn: fetchFn as never,
+      readText: vi.fn().mockResolvedValue(TOKEN),
+      tokenPath: 'C:/token/service-token',
+      graphLoader: vi.fn().mockResolvedValue(null)
+    })
+
+    await expect(provider('secret transverse')).resolves.toBe('')
+    expect(fetchFn).not.toHaveBeenCalled()
   })
 
   it('returns no invented Graphify evidence when the query matches no node', () => {

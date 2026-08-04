@@ -31,6 +31,7 @@ interface PromptCall {
   conversationId: string
   turnId: string
   provider: string
+  actor?: string
   model?: string
   boundary: string
   limitation: string
@@ -46,6 +47,25 @@ interface NativeDiagnosticTrace extends NativeTraceSummaryInput {
   toolCount: number
   request: Record<string, unknown>
   fidelity: 'exact-redacted'
+}
+interface ConversationActivity {
+  ts: string
+  kind: string
+  label: string
+  text?: string
+}
+interface ActivitySessionMeta {
+  id: string
+  project: string
+  path: string
+  sizeMb: number
+  mtime: number
+}
+interface ActivitySession {
+  meta: ActivitySessionMeta
+  turns: Array<{ kind: 'user' | 'assistant'; text: string }>
+  images: Array<{ path: string; exists: boolean }>
+  totalToolCalls: number
 }
 const EMPTY: HarnessTimeline = { turns: [], anomalies: [], totalTokens: 0, totalCostUsd: 0 }
 const LABEL: Record<HarnessTimelineEvent['kind'], string> = {
@@ -271,6 +291,11 @@ export function ObservatoryView({
     'conversation' | 'turn' | 'source' | null
   >(null)
   const [causalTracePartial, setCausalTracePartial] = useState(false)
+  const [conversationActivity, setConversationActivity] = useState<ConversationActivity[]>([])
+  const [activitySessions, setActivitySessions] = useState<ActivitySessionMeta[]>([])
+  const [activitySession, setActivitySession] = useState<ActivitySession | null>(null)
+  const [activityImage, setActivityImage] = useState('')
+  const [shadowRecommendation, setShadowRecommendation] = useState<unknown>(null)
   const causalRequestGate = useRef(new LatestRequestGate())
   const refreshStartedAt = useRef(0)
 
@@ -355,6 +380,18 @@ export function ObservatoryView({
       disposed = true
     }
   }, [active, refreshKey, focus, resetConversationFilters])
+
+  useEffect(() => {
+    if (!active) return
+    void window.api.activitySessions?.().then((sessions) => setActivitySessions(sessions ?? []))
+  }, [active, refreshKey])
+
+  useEffect(() => {
+    if (!active || !conversationId) return
+    void (window.api.conversationActivity?.(conversationId) ?? Promise.resolve([]))
+      .then((entries) => setConversationActivity(entries as ConversationActivity[]))
+      .catch(() => setConversationActivity([]))
+  }, [active, conversationId, refreshKey])
 
   useEffect(() => {
     if (!active) return
@@ -820,15 +857,14 @@ export function ObservatoryView({
             <small>cache lu</small>
           </strong>
           {observed.cost === 0 && observed.input + observed.output > 0 ? (
-            // A1 — coût 0 alors que des tokens ont été consommés = usage sur abonnement forfaitaire
-            // (ex. codex/sol via OAuth ChatGPT, non facturé au token). Ne pas afficher « $0.000 »
-            // qui se lit comme une panne d'observabilité.
+            // Des tokens sans prix ne prouvent ni une gratuite ni un abonnement : le fournisseur
+            // peut simplement ne pas exposer la tarification dans son retour d'usage.
             <strong
               data-metric="cost"
-              title="Providers sur abonnement (OAuth) — non facturés au token"
+              title="Prix non exposé par le fournisseur pour ces appels"
             >
-              forfait
-              <small>abonnement</small>
+              non exposé
+              <small>coût inconnu</small>
             </strong>
           ) : (
             <strong data-metric="cost">
@@ -1162,6 +1198,58 @@ export function ObservatoryView({
               </button>
             ))}
           </section>
+          <section
+            className="observatory-conversation-activity"
+            data-testid="conversation-activity"
+          >
+            <span className="observatory-panel-title">ACTIVITÉ CONVERSATION</span>
+            {conversationActivity.slice(-12).map((entry, index) => (
+              <p key={`${entry.ts}:${entry.kind}:${index}`}>
+                <strong>{entry.label}</strong>
+                <small>{entry.kind}</small>
+              </p>
+            ))}
+          </section>
+          <section className="observatory-transcripts" data-testid="activity-transcripts">
+            <span className="observatory-panel-title">TRANSCRIPTS</span>
+            {activitySessions.slice(0, 8).map((session) => (
+              <button
+                key={session.path}
+                onClick={() =>
+                  void window.api.activitySession(session).then((result) => {
+                    setActivitySession(result)
+                    setActivityImage('')
+                  })
+                }
+              >
+                <strong>{session.project}</strong>
+                <small>{session.id}</small>
+              </button>
+            ))}
+            {activitySession && (
+              <div>
+                <small>{activitySession.totalToolCalls} appels outil</small>
+                {activitySession.turns.slice(-3).map((turn, index) => (
+                  <p key={`${turn.kind}:${index}`}>{turn.text}</p>
+                ))}
+                {activitySession.images
+                  .filter((image) => image.exists)
+                  .map((image) => (
+                    <button
+                      key={image.path}
+                      onClick={() =>
+                        void window.api
+                          .activityImage(activitySession.meta, image.path)
+                          .then((result) => setActivityImage(result.dataUrl))
+                      }
+                    >
+                      Voir image
+                    </button>
+                  ))}
+                {activityImage && <img src={activityImage} alt="Capture du transcript" />}
+              </div>
+            )}
+          </section>
           <section className="observatory-diagnostics">
             <span className="observatory-panel-title">SIGNAUX PRIORITAIRES</span>
             {visibleAnomalies.length === 0 ? (
@@ -1309,6 +1397,25 @@ export function ObservatoryView({
                 <span>${(selectedCall.usage?.costUsd ?? 0).toFixed(4)}</span>
               </div>
               <small>{selectedCall.limitation}</small>
+              <button
+                type="button"
+                onClick={() =>
+                  void window.api
+                    .shadowRouteRecommendation(selectedCall.actor ?? selectedCall.boundary, {
+                      provider: selectedCall.provider,
+                      model: selectedCall.model ?? 'default'
+                    })
+                    .then(setShadowRecommendation)
+                }
+              >
+                Comparer en shadow
+              </button>
+              {shadowRecommendation != null && (
+                <section data-testid="shadow-route-recommendation">
+                  <b>Recommandation shadow · jamais appliquée automatiquement</b>
+                  <HumanJson value={shadowRecommendation} />
+                </section>
+              )}
               {selectedCall.system && (
                 <>
                   <b>System</b>

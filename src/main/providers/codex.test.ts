@@ -134,7 +134,9 @@ describe('CodexAdapter — inférence + injection (mocké, hors-ligne)', () => {
     expect(chunks.join('')).toBe('SALUT')
     expect(step.value.text).toBe('SALUT')
     expect(step.value.provider).toBe('codex')
-    expect(step.value.sessionId).toBe('resp_1')
+    // `response.id` is not resumable until the adapter sends it back as `previous_response_id`.
+    // Advertising it as a session would make AgentPilot drop the history on the next turn.
+    expect(step.value.sessionId).toBeUndefined()
     expect(step.value.systemInjected).toBe(true)
   })
 

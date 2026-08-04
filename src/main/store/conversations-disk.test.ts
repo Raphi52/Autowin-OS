@@ -54,6 +54,21 @@ describe('conversations-disk — persistance à chaque mutation', () => {
     expect(b.get(c.id)?.runPaths).toEqual(['C:\\x\\RUN.md'])
   })
 
+  it('detachRun retire uniquement la pièce jointe visée et persiste le changement', () => {
+    const p = join(dir, 'c4.json')
+    const store = new ConversationStore()
+    persistConversations(store, p)
+    const c = store.create({ title: 'avec deux runs', category: 'claude', provider: 'claude' })
+    store.attachRun(c.id, 'C:\\x\\RUN.md')
+    store.attachRun(c.id, 'C:\\y\\RUN.md')
+
+    store.detachRun(c.id, 'C:\\x\\RUN.md')
+
+    const reloaded = new ConversationStore()
+    persistConversations(reloaded, p)
+    expect(reloaded.get(c.id)?.runPaths).toEqual(['C:\\y\\RUN.md'])
+  })
+
   it('fichier absent retourne vide mais une corruption est explicite', () => {
     const p = join(dir, 'corrompu.json')
     writeFileSync(p, '{pas du json', 'utf8')

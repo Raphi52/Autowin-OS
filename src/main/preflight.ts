@@ -7,6 +7,7 @@
  * exécute les checks au démarrage et pousse le résultat au renderer comme bannière.
  */
 import type { ClaudeSessionState } from './claude-session'
+import type { RoutedProvider } from './routed-providers'
 
 export interface PreflightCheck {
   id: 'brain' | 'codex' | 'codex-session' | 'claude' | 'claude-session' | 'kimi' | 'brain-token'
@@ -40,7 +41,7 @@ export interface PreflightProbes {
 }
 
 export interface PreflightOptions {
-  standbyProviders?: Array<'codex' | 'claude' | 'kimi'>
+  standbyProviders?: RoutedProvider[]
 }
 
 /**

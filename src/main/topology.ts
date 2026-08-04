@@ -64,9 +64,7 @@ export interface ResolvedSlot {
 
 /** Valide un binding contre le catalogue de modèles importés. Jette si incohérent. */
 export function assertBinding(binding: SlotBinding, models: ImportedModel[]): SlotBinding {
-  if (typeof binding.slotId !== 'string' || !binding.slotId.trim()) {
-    throw new Error('Slot sans identité')
-  }
+  assertBindingShape(binding)
   const model = findModel(models, binding.modelId)
   if (!model) throw new Error(`Modèle inconnu : ${binding.modelId}`)
   if (model.provider !== binding.provider) {
@@ -91,6 +89,100 @@ export function assertBinding(binding: SlotBinding, models: ImportedModel[]): Sl
   return binding
 }
 
+const REASONING_EFFORTS = new Set<ReasoningEffort>([
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+  'ultra'
+])
+
+function assertBindingShape(value: unknown): asserts value is SlotBinding {
+  if (!value || typeof value !== 'object') throw new Error('Binding de slot invalide')
+  const binding = value as Partial<SlotBinding>
+  if (typeof binding.slotId !== 'string' || !binding.slotId.trim()) {
+    throw new Error('Slot sans identité')
+  }
+  if (typeof binding.provider !== 'string' || !binding.provider.trim()) {
+    throw new Error(`Provider absent pour ${binding.slotId}`)
+  }
+  if (typeof binding.modelId !== 'string' || !binding.modelId.trim()) {
+    throw new Error(`Modèle absent pour ${binding.slotId}`)
+  }
+  if (!binding.reasoningEffort || !REASONING_EFFORTS.has(binding.reasoningEffort)) {
+    throw new Error(`Effort invalide pour ${binding.slotId}`)
+  }
+  if (binding.compute) {
+    const compute = parseComputeBinding(binding.compute)
+    const expectedProvider = `fabric:${compute.nodeId}:${compute.resourceId}`
+    const expectedModelId = `fabric/${compute.nodeId}/${compute.resourceId}`
+    if (binding.provider !== expectedProvider || binding.modelId !== expectedModelId) {
+      throw new Error(`Identité Fabric incohérente pour ${binding.slotId}`)
+    }
+  } else if (!binding.modelId.startsWith(`${binding.provider}/`)) {
+    throw new Error(`Identité de modèle incohérente pour ${binding.slotId}`)
+  }
+}
+
+/**
+ * Valide la structure persistée sans exiger que le catalogue dynamique soit disponible.
+ * Un démarrage hors ligne ne doit jamais transformer une sélection utilisateur valide en
+ * topologie par défaut Kimi/Gemini simplement parce que Codex/Claude n'a pas encore répondu.
+ */
+export function assertTopologyShape(value: unknown): AgentTopology {
+  if (!value || typeof value !== 'object') throw new Error('Topologie invalide')
+  const topology = value as Partial<AgentTopology>
+  if (!Number.isInteger(topology.version) || topology.version! < 1) {
+    throw new Error('Version de topologie invalide')
+  }
+  assertBindingShape(topology.orchestrator)
+  if (!topology.panels || typeof topology.panels !== 'object') {
+    throw new Error('Panels de topologie invalides')
+  }
+  const groups: Array<[string, unknown]> = [
+    ['subagents', topology.subagents],
+    ['scout', topology.panels.scout],
+    ['frame', topology.panels.frame],
+    ['terrain', topology.panels.terrain],
+    ['judge', topology.panels.judge]
+  ]
+  for (const [name, candidate] of groups) {
+    if (!Array.isArray(candidate)) throw new Error(`Cible « ${name} » : tableau attendu`)
+    if (candidate.length > 16) throw new Error(`Cible « ${name} » : 16 slots maximum`)
+    const seen = new Set<string>()
+    for (const slot of candidate) {
+      assertBindingShape(slot)
+      if (seen.has(slot.slotId))
+        throw new Error(`slotId dupliqué dans « ${name} » : ${slot.slotId}`)
+      seen.add(slot.slotId)
+    }
+  }
+  return topology as AgentTopology
+}
+
+/** Valide entièrement les modèles déjà connus et tolère seulement ceux non encore découverts. */
+export function assertTopologyAgainstAvailableModels(
+  value: unknown,
+  models: ImportedModel[]
+): AgentTopology {
+  const topology = assertTopologyShape(value)
+  const bindings = [
+    topology.orchestrator,
+    ...topology.subagents,
+    ...topology.panels.scout,
+    ...topology.panels.frame,
+    ...topology.panels.terrain,
+    ...topology.panels.judge
+  ]
+  for (const binding of bindings) {
+    if (findModel(models, binding.modelId)) assertBinding(binding, models)
+  }
+  return topology
+}
+
 /** Construit un binding par défaut pour un modèle donné (effort = défaut du modèle). */
 export function bindingForModel(slotId: string, model: ImportedModel): SlotBinding {
   return {
@@ -107,27 +199,21 @@ export function bindingForModel(slotId: string, model: ImportedModel): SlotBindi
  * orchestrateur présent + unique, chaque binding cohérent, slotId uniques par cible.
  */
 export function assertTopology(topology: AgentTopology, models: ImportedModel[]): AgentTopology {
-  if (!topology.orchestrator) throw new Error('Topologie sans orchestrateur (exactement 1 requis)')
-  assertBinding(topology.orchestrator, models)
+  const validated = assertTopologyShape(topology)
+  assertBinding(validated.orchestrator, models)
   const groups: Array<[string, SlotBinding[]]> = [
-    ['subagents', topology.subagents],
-    ['scout', topology.panels.scout],
-    ['frame', topology.panels.frame],
-    ['terrain', topology.panels.terrain],
-    ['judge', topology.panels.judge]
+    ['subagents', validated.subagents],
+    ['scout', validated.panels.scout],
+    ['frame', validated.panels.frame],
+    ['terrain', validated.panels.terrain],
+    ['judge', validated.panels.judge]
   ]
-  for (const [name, slots] of groups) {
-    if (!Array.isArray(slots)) throw new Error(`Cible « ${name} » : tableau attendu`)
-    if (slots.length > 16) throw new Error(`Cible « ${name} » : 16 slots maximum`)
-    const seen = new Set<string>()
+  for (const [, slots] of groups) {
     for (const slot of slots) {
       assertBinding(slot, models)
-      if (seen.has(slot.slotId))
-        throw new Error(`slotId dupliqué dans « ${name} » : ${slot.slotId}`)
-      seen.add(slot.slotId)
     }
   }
-  return topology
+  return validated
 }
 
 /** Retourne le tableau de bindings d'une cible panel/subagents. */

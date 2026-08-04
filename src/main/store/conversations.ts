@@ -8,6 +8,8 @@ import {
   type PersistedChatPart
 } from '../../shared/chat-turn'
 import type { ConversationAuthorityMode } from '../conversation-capabilities'
+import type { ChatArtifact } from '../../shared/artifacts'
+import type { AutoKaizenConversationLink } from '../auto-kaizen-supervisor'
 
 // Store en mémoire pour les conversations catégorisées (candidat type claude/codex).
 // Interface pensée pour être remplacée plus tard par un backend sqlite sans changer l'appelant.
@@ -21,6 +23,10 @@ export interface AttachmentMeta {
   size: number
   /** Miniature downscalée (data URL) d'une image — persistée pour l'aperçu dans le fil. */
   thumbnail?: string
+  artifact?: ChatArtifact
+  turnId?: string
+  /** L’original n’a pas pu être conservé ; ne pas présenter la miniature comme sa source. */
+  originalUnavailable?: boolean
 }
 
 /** Un message échangé dans une conversation. */
@@ -66,11 +72,19 @@ export interface Conversation {
   workspaceId?: string
   /** Renseigné si la conversation est née d'un fork. Purement informatif. */
   forkedFrom?: ForkOrigin
+  /** Filiation durable d'une analyse/correction Auto-Kaizen avec la conversation source. */
+  autoKaizen?: AutoKaizenConversationLink
   authorityMode?: ConversationAuthorityMode
   /** RUN.md externes (Claude Code) attachés à cette conversation. */
   runPaths?: string[]
   createdAt: number
   updatedAt: number
+}
+
+export type ConversationSummary = Omit<Conversation, 'messages'> & {
+  messageCount: number
+  lastMessageRole?: Msg['role']
+  lastAssistantStatus?: ChatTurnStatus
 }
 
 /** Store en mémoire de conversations, avec horloge et générateur d'id injectables pour les tests. */
@@ -157,6 +171,7 @@ export class ConversationStore {
     category: Category
     provider: string
     authorityMode?: ConversationAuthorityMode
+    autoKaizen?: AutoKaizenConversationLink
   }): Conversation {
     const ts = this.now()
     const id = `conv-${this.nextId++}`
@@ -169,6 +184,7 @@ export class ConversationStore {
       messages: [],
       workspaceId: `workspace-${id}`,
       authorityMode: p.authorityMode ?? 'auto',
+      ...(p.autoKaizen ? { autoKaizen: p.autoKaizen } : {}),
       createdAt: ts,
       updatedAt: ts
     }
@@ -275,6 +291,18 @@ export class ConversationStore {
     return [...this.conversations.values()].sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
+  /** Projection légère destinée aux listes IPC : les historiques se chargent séparément. */
+  listSummaries(): ConversationSummary[] {
+    return this.list().map(({ messages, ...summary }) => ({
+      ...summary,
+      messageCount: messages.length,
+      lastMessageRole: messages.at(-1)?.role,
+      lastAssistantStatus: [...messages]
+        .reverse()
+        .find((message) => message.role === 'assistant')?.status
+    }))
+  }
+
   /** Liste les conversations d'une catégorie donnée, triées par updatedAt décroissant. */
   byCategory(cat: Category): Conversation[] {
     return this.list().filter((c) => c.category === cat)
@@ -312,6 +340,21 @@ export class ConversationStore {
     conversation.runPaths ??= []
     if (!conversation.runPaths.includes(runPath)) {
       conversation.runPaths.push(runPath)
+      conversation.updatedAt = this.now()
+      this.changed()
+    }
+    return conversation
+  }
+
+  /** Détache un RUN.md externe sans supprimer le fichier qui appartient à son outil d'origine. */
+  detachRun(id: string, runPath: string): Conversation {
+    const conversation = this.conversations.get(id)
+    if (!conversation) {
+      throw new Error(`Conversation inconnue: ${id}`)
+    }
+    const nextRunPaths = (conversation.runPaths ?? []).filter((path) => path !== runPath)
+    if (nextRunPaths.length !== (conversation.runPaths?.length ?? 0)) {
+      conversation.runPaths = nextRunPaths
       conversation.updatedAt = this.now()
       this.changed()
     }

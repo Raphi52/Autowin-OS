@@ -24,7 +24,8 @@ import {
 import { spawnSurvivable } from '../runs/survivable-spawn'
 import { findNpmGlobalFile } from './npm-global-resolve'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
 import type { ProviderArtifactCandidate } from '../../shared/artifacts'
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 
@@ -44,6 +45,29 @@ export interface CodexExecItem {
   exit_code?: number
   aggregated_output?: string
   changes?: unknown
+}
+
+const CODEX_MUTATION_COMMAND =
+  /\b(apply_patch|set-content|new-item|copy-item|move-item|remove-item|sed\s+-i|perl\s+-pi)\b|(?:^|\s)(?:echo|printf)\b[^\n]*>/i
+const CODEX_VERIFICATION_COMMAND =
+  /\b(vitest|jest|pytest|cargo\s+test|dotnet\s+test|go\s+test|tsc|eslint|npm(?:\.cmd)?\s+(?:test|run\s+(?:test|typecheck|build|lint))|pnpm\s+(?:test|run\s+(?:test|typecheck|build|lint))|node\s+-e)\b/i
+
+/**
+ * Classe une opération Codex sans confondre une lecture avec une preuve. Une assertion PowerShell
+ * est une vérification seulement si elle porte un oracle explicite : branche succès `exit 0` ET
+ * branche d'échec non nulle (ou `throw`). C'est le format naturel des preuves sous Windows.
+ */
+export function codexExecutionEvidenceKind(item: CodexExecItem): ExecutionEvidence['kind'] {
+  const command = item.command ?? ''
+  if (item.type === 'file_change' || CODEX_MUTATION_COMMAND.test(command)) return 'mutation'
+  if (item.type !== 'command_execution') return 'other'
+  const powershellAssertion =
+    /\bif\s*\(/i.test(command) &&
+    /\bexit\s+0\b/i.test(command) &&
+    /(?:\bexit\s+[1-9]\d*\b|\bthrow\b)/i.test(command)
+  return CODEX_VERIFICATION_COMMAND.test(command) || powershellAssertion
+    ? 'verification'
+    : 'inspection'
 }
 
 /**
@@ -97,6 +121,46 @@ export interface CodexExecSpec {
 /** Sous-chemin de l'entrypoint Node du paquet npm `@openai/codex`. */
 export const CODEX_PACKAGE_ENTRY = join('node_modules', '@openai', 'codex', 'bin', 'codex.js')
 
+/**
+ * Sous Windows, le wrapper `codex.js` relance le binaire natif sans `windowsHide` : chaque fan-out
+ * recrée alors un `conhost.exe` visible. On résout le même binaire que le wrapper afin de le lancer
+ * directement avec les drapeaux du runner survivable.
+ */
+export function codexNativeBinaryFromEntrypoint(
+  entrypoint: string,
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch,
+  exists: (path: string) => boolean = existsSync
+): string | undefined {
+  if (platform !== 'win32') return undefined
+  const target =
+    arch === 'x64'
+      ? { packageName: '@openai/codex-win32-x64', triple: 'x86_64-pc-windows-msvc' }
+      : arch === 'arm64'
+        ? { packageName: '@openai/codex-win32-arm64', triple: 'aarch64-pc-windows-msvc' }
+        : undefined
+  if (!target) return undefined
+
+  const packageRoot = dirname(dirname(entrypoint))
+  const nativeFrom = (vendorRoot: string): string =>
+    join(vendorRoot, target.triple, 'bin', 'codex.exe')
+  const conventional = nativeFrom(
+    join(packageRoot, 'node_modules', ...target.packageName.split('/'), 'vendor')
+  )
+  if (exists(conventional)) return conventional
+
+  try {
+    const packageJson = createRequire(entrypoint).resolve(`${target.packageName}/package.json`)
+    const resolved = nativeFrom(join(dirname(packageJson), 'vendor'))
+    if (exists(resolved)) return resolved
+  } catch {
+    // Installation sans dépendance native résoluble : le wrapper produira son erreur habituelle.
+  }
+
+  const bundled = nativeFrom(join(packageRoot, 'vendor'))
+  return exists(bundled) ? bundled : undefined
+}
+
 export function codexExecSpec(
   cwd: string,
   model: string,
@@ -139,6 +203,13 @@ export function codexExecSpec(
       `Codex CLI introuvable : ni sous le dossier npm de %APPDATA%, ni dans le PATH (${CODEX_PACKAGE_ENTRY}). Definis CODEX_BIN pour le designer explicitement.`
     )
   }
+  const nativeBinary = codexNativeBinaryFromEntrypoint(
+    entrypoint,
+    process.platform,
+    process.arch,
+    entrypointExists
+  )
+  if (nativeBinary) return { executable: nativeBinary, cwd, args: commonArgs }
   return { executable: 'node', cwd, args: [entrypoint, ...commonArgs] }
 }
 
@@ -147,6 +218,7 @@ async function runCodexExec(
   opts: SendOptions,
   model: string
 ): Promise<SendResult> {
+  opts.signal?.throwIfAborted()
   const execution = opts.execution
   if (!execution) throw new Error('Contrat d’exécution Codex absent')
   const spec = codexExecSpec(execution.cwd, model, execution.sandbox, opts.reasoningEffort)
@@ -154,6 +226,7 @@ async function runCodexExec(
     execution.causallyIsolated && execution.sandbox !== 'read-only'
       ? await captureWorkspaceMutationSnapshot(spec.cwd)
       : undefined
+  opts.signal?.throwIfAborted()
   const prompt = [
     opts.system,
     ...messages.filter((message) => message.role !== 'system').map((m) => m.content)
@@ -166,7 +239,11 @@ async function runCodexExec(
     transport: `Codex CLI exec JSONL · ${execution.sandbox}`,
     system: opts.system,
     messages: messages.filter((message) => message.role !== 'system'),
-    options: { argv: spec.args.slice(1), cwd: spec.cwd, sandbox: execution.sandbox },
+    options: {
+      argv: spec.args[0] === 'exec' ? spec.args : spec.args.slice(1),
+      cwd: spec.cwd,
+      sandbox: execution.sandbox
+    },
     limitation:
       'Arguments exacts remis au CLI Codex ; ses instructions internes ne sont pas exposées.'
   })
@@ -180,7 +257,8 @@ async function runCodexExec(
       bin: spec.executable,
       args: spec.args,
       cwd: spec.cwd,
-      runId: spawnToken
+      runId: spawnToken,
+      stdin: prompt
     })
     const child = run.child
     const childPid = child.pid
@@ -212,6 +290,10 @@ async function runCodexExec(
           )
         )
       }
+    })
+    execution.registerTermination?.((reason) => {
+      killEscalate(child)
+      reject(new Error(reason))
     })
     opts.signal?.addEventListener('abort', () => {
       killEscalate(child)
@@ -250,18 +332,7 @@ async function runCodexExec(
                   : item.type === 'command_execution'
                     ? item.exit_code === 0 && item.status !== 'failed'
                     : item.status !== 'failed'
-              const mutationCommand =
-                /\b(apply_patch|set-content|new-item|copy-item|move-item|remove-item|sed\s+-i|perl\s+-pi)\b|(?:^|\s)(?:echo|printf)\b[^\n]*>/i
-              const verificationCommand =
-                /\b(vitest|jest|pytest|cargo\s+test|dotnet\s+test|go\s+test|tsc|eslint|npm(?:\.cmd)?\s+(?:test|run\s+(?:test|typecheck|build|lint))|pnpm\s+(?:test|run\s+(?:test|typecheck|build|lint))|node\s+-e)\b/i
-              const kind: ExecutionEvidence['kind'] =
-                item.type === 'file_change' || mutationCommand.test(command)
-                  ? 'mutation'
-                  : item.type === 'command_execution' && verificationCommand.test(command)
-                    ? 'verification'
-                    : item.type === 'command_execution'
-                      ? 'inspection'
-                      : 'other'
+              const kind = codexExecutionEvidenceKind(item)
               const summary =
                 item.type === 'command_execution'
                   ? `${item.command ?? ''}\nexit=${item.exit_code ?? 'unknown'}\n${item.aggregated_output ?? ''}`
@@ -314,9 +385,12 @@ async function runCodexExec(
       }
     }
     let closed = false
-    void run
+    const tailSettled = run
       .tail(handleLine, { isComplete: () => closed, signal: opts.signal })
-      .catch(() => undefined)
+      .then(
+        () => undefined,
+        (error: unknown) => error
+      )
     child.on('error', (error) => {
       watchdog.dispose()
       if (!childPid) execution.onSpawnIntent?.(spawnToken, false)
@@ -324,9 +398,14 @@ async function runCodexExec(
     })
     child.on('close', async (code) => {
       closed = true // le tail draine ce qui reste puis s'arrête
+      const tailError = await tailSettled
       run.release()
       watchdog.dispose()
       if (childPid) execution.onProcess?.(childPid, false)
+      if (tailError) {
+        reject(tailError instanceof Error ? tailError : new Error(String(tailError)))
+        return
+      }
       if (code !== 0) {
         reject(new Error(`codex exec échec (${code ?? 'signal'}): ${stderr.trim().slice(-800)}`))
         return
@@ -354,8 +433,7 @@ async function runCodexExec(
         artifacts: artifacts.length ? artifacts : undefined
       })
     })
-    // stdin reste un pipe même en mode détaché (seules stdout/stderr vont au journal).
-    child.stdin?.end(prompt)
+    // La couche commune remet le prompt par pipe, ou par fichier éphémère avec le relais Windows.
   })
 }
 
@@ -554,7 +632,6 @@ export class CodexAdapter implements ProviderAdapter {
     const decoder = new TextDecoder()
     let buffer = ''
     let text = ''
-    let responseId: string | undefined
     let usage: SendResult['usage']
     const artifactCandidates: ProviderArtifactCandidate[] = []
 
@@ -592,7 +669,6 @@ export class CodexAdapter implements ProviderAdapter {
         if (ev.type === 'response.output_text.delta' && typeof ev.delta === 'string')
           return ev.delta
         if (ev.type === 'response.completed') {
-          responseId = ev.response?.id
           const measured = ev.response?.usage
           if (
             measured &&
@@ -674,7 +750,6 @@ export class CodexAdapter implements ProviderAdapter {
     return {
       text,
       provider: this.id,
-      sessionId: responseId,
       systemInjected,
       usage,
       artifacts: artifacts.length ? artifacts : undefined

@@ -63,25 +63,20 @@ beforeEach(() => {
 })
 
 describe('AgentsTopologyView orchestrator persistence', () => {
-  it('serializes rapid orchestrator edits and keeps the latest reasoning effort', async () => {
-    type RoleResult = {
-      orchestrator: { provider: string; model: string; reasoningEffort: string }
-    }
-    const roleSaves: Array<Deferred<RoleResult>> = []
-    const setRole = vi.fn(
-      (_role: string, _provider: string, _model: string, _reasoningEffort: string) => {
-        const request = deferred<RoleResult>()
-        roleSaves.push(request)
-        return request.promise
-      }
-    )
+  it('persiste les changements orchestrateur dans la topologie canonique, dans l’ordre', async () => {
+    const topologySaves: Array<Deferred<typeof topology>> = []
+    const setTopology = vi.fn((_next: typeof topology) => {
+      const request = deferred<typeof topology>()
+      topologySaves.push(request)
+      return request.promise
+    })
     ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
       models: async () => models,
       topology: async () => topology,
       roles: async () => ({ orchestrator: { provider: 'openai', model: 'gpt' } }),
       profiles: async () => [],
       onAppEvent: () => () => undefined,
-      setRole
+      setTopology
     }
 
     await act(async () => root.render(createElement(AgentsTopologyView)))
@@ -99,21 +94,13 @@ describe('AgentsTopologyView orchestrator persistence', () => {
       effort!.dispatchEvent(new Event('change', { bubbles: true }))
     })
 
-    expect(setRole).toHaveBeenCalledTimes(1)
-    roleSaves[0].resolve({
-      orchestrator: {
-        provider: 'openai',
-        model: 'gpt',
-        reasoningEffort: setRole.mock.calls[0][3]
-      }
-    })
+    expect(setTopology).toHaveBeenCalledTimes(1)
+    topologySaves[0].resolve(setTopology.mock.calls[0][0])
     await flush()
 
-    expect(setRole).toHaveBeenCalledTimes(2)
-    expect(setRole.mock.calls[1][3]).toBe('low')
-    roleSaves[1].resolve({
-      orchestrator: { provider: 'openai', model: 'gpt', reasoningEffort: 'low' }
-    })
+    expect(setTopology).toHaveBeenCalledTimes(2)
+    expect(setTopology.mock.calls[1][0].orchestrator.reasoningEffort).toBe('low')
+    topologySaves[1].resolve(setTopology.mock.calls[1][0])
     await flush()
     expect(effort!.value).toBe('low')
   })

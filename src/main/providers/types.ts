@@ -64,6 +64,11 @@ export interface SendOptions {
     /** Remplace atomiquement l'intention par le lease du PID créé. */
     onSpawned?: (token: string, pid: number) => void
     /**
+     * Enregistre la fermeture forte propre à l'adaptateur. Le registre l'invoque seulement si le
+     * provider ignore l'abort au-delà de la grâce de drainage du watchdog de coordination.
+     */
+    registerTermination?: (terminate: (reason: string) => void) => void
+    /**
      * Journal de sortie du CLI lancé, quand le provider en ouvre un.
      *
      * C'est le chaînon qui manquait pour se RATTACHER : le processus survit à la mort de l'app et

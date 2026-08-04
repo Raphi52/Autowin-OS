@@ -16,6 +16,8 @@ export interface CircuitBreakerLimits {
   maxUsd?: number
   /** Plafond de tokens cumulés (in+out) (trip si dépassé). Absent → non surveillé. */
   maxTokens?: number
+  /** Maximum provider calls. Useful when usage/cost are unavailable. */
+  maxCalls?: number
 }
 
 export interface CircuitBreakerTrip {
@@ -23,17 +25,19 @@ export interface CircuitBreakerTrip {
   reason: string
   spentUsd: number
   spentTokens: number
+  spentCalls: number
 }
 
 export class CostCircuitBreaker {
   private spentUsd = 0
   private spentTokens = 0
+  private spentCalls = 0
   private tripped = false
 
   constructor(private readonly limits: CircuitBreakerLimits = {}) {}
 
-  get totals(): { usd: number; tokens: number } {
-    return { usd: this.spentUsd, tokens: this.spentTokens }
+  get totals(): { usd: number; tokens: number; calls: number } {
+    return { usd: this.spentUsd, tokens: this.spentTokens, calls: this.spentCalls }
   }
 
   /**
@@ -46,6 +50,7 @@ export class CostCircuitBreaker {
     // (NaN + x = NaN, comparaisons toujours false → breaker désactivé silencieusement). (Corrector #3.)
     if (Number.isFinite(step.costUsd)) this.spentUsd += step.costUsd as number
     if (Number.isFinite(step.tokens)) this.spentTokens += step.tokens as number
+    this.spentCalls += 1
     if (this.tripped) return null
     const reasons: string[] = []
     if (this.limits.maxUsd !== undefined && this.spentUsd > this.limits.maxUsd) {
@@ -54,13 +59,17 @@ export class CostCircuitBreaker {
     if (this.limits.maxTokens !== undefined && this.spentTokens > this.limits.maxTokens) {
       reasons.push(`tokens ${this.spentTokens} > seuil ${this.limits.maxTokens}`)
     }
+    if (this.limits.maxCalls !== undefined && this.spentCalls > this.limits.maxCalls) {
+      reasons.push(`appels ${this.spentCalls} > seuil ${this.limits.maxCalls}`)
+    }
     if (!reasons.length) return null
     this.tripped = true
     return {
       trip: true,
       reason: reasons.join(' ; '),
       spentUsd: this.spentUsd,
-      spentTokens: this.spentTokens
+      spentTokens: this.spentTokens,
+      spentCalls: this.spentCalls
     }
   }
 

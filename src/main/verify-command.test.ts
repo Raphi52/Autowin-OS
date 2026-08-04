@@ -127,6 +127,7 @@ describe('cablage de la commande verify', () => {
     const source = commands()
     const impl = source.slice(source.indexOf('private async runVerify'))
     expect(impl).toContain('shell: false')
+    expect(impl).toContain('windowsHide: true')
     // La sortie est bornee : une suite de tests entiere n'inonde pas le tour.
     expect(impl).toContain('capVerifyOutput(')
   })

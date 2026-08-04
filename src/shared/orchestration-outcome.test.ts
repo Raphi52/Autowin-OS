@@ -41,13 +41,28 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     expect(text).toContain('Trois fichiers modifiés')
   })
 
+  it('un coût inconnu ne devient jamais un faux 0.00 $', () => {
+    const text = formatOrchestrationOutcome(true, {
+      status: 'succeeded',
+      valid: true,
+      costUsd: 0,
+      knownCostUsd: null,
+      unpricedCalls: 3
+    })
+    expect(text).toContain('coût non exposé')
+    expect(text).toContain('3 appels non chiffrés')
+    expect(text).not.toContain('0.00 $')
+  })
+
   it('une réutilisation de run en cours est signalée (aucun nouveau run)', () => {
     const text = formatOrchestrationOutcome(true, { status: 'running', reused: true })
     expect(text).toContain('réutilisé')
   })
 
   it('un échec rapporte sa RAISON', () => {
-    expect(formatOrchestrationOutcome(false, undefined, 'budget dépassé')).toContain('budget dépassé')
+    expect(formatOrchestrationOutcome(false, undefined, 'budget dépassé')).toContain(
+      'budget dépassé'
+    )
     expect(formatOrchestrationOutcome(false, { error: 'gate rouge' })).toContain('gate rouge')
   })
 

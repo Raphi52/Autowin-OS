@@ -14,13 +14,21 @@ import {
 describe('verifyOutcomeSummary — le verdict est lisible', () => {
   it('succès : la commande et son exit code', () => {
     expect(
-      verifyOutcomeSummary({ name: 'verify', ok: true, data: { command: 'npm test', exitCode: 0, ok: true } })
+      verifyOutcomeSummary({
+        name: 'verify',
+        ok: true,
+        data: { command: 'npm test', exitCode: 0, ok: true }
+      })
     ).toEqual({ label: 'npm test → exit 0', state: 'ok' })
   })
 
   it('ÉCHEC : l’exit code non nul est rendu visible', () => {
     expect(
-      verifyOutcomeSummary({ name: 'verify', ok: true, data: { command: 'npm test', exitCode: 1, ok: false } })
+      verifyOutcomeSummary({
+        name: 'verify',
+        ok: true,
+        data: { command: 'npm test', exitCode: 1, ok: false }
+      })
     ).toEqual({ label: 'npm test → exit 1', state: 'failed' })
   })
 
@@ -43,7 +51,9 @@ describe('verifyOutcomeSummary — le verdict est lisible', () => {
   })
 
   it('une AUTRE action ne produit aucun résumé (aucune régression visuelle)', () => {
-    expect(verifyOutcomeSummary({ name: 'edit_file', ok: true, data: { path: 'a.ts' } })).toBeUndefined()
+    expect(
+      verifyOutcomeSummary({ name: 'edit_file', ok: true, data: { path: 'a.ts' } })
+    ).toBeUndefined()
     expect(verifyOutcomeSummary({ name: 'orchestrate', ok: true, data: {} })).toBeUndefined()
   })
 
@@ -77,11 +87,13 @@ describe('groupOutcomeSummary — l’ÉCHEC passe devant', () => {
   })
 })
 
-
 describe('orchestrateOutcomeSummary — 92 % de la depense devient visible', () => {
   it('succes : statut et cout', () => {
     expect(
-      orchestrateOutcomeSummary({ name: 'orchestrate', data: { status: 'succeeded', costUsd: 10.05 } })
+      orchestrateOutcomeSummary({
+        name: 'orchestrate',
+        data: { status: 'succeeded', costUsd: 10.05 }
+      })
     ).toEqual({ label: 'succeeded · 10.05 $', state: 'ok' })
   })
 
@@ -95,20 +107,36 @@ describe('orchestrateOutcomeSummary — 92 % de la depense devient visible', () 
 
   it('livrable REFUSE par le juge = echec, meme si l’appel a reussi', () => {
     expect(
-      orchestrateOutcomeSummary({ name: 'orchestrate', data: { status: 'succeeded', valid: false } })?.state
+      orchestrateOutcomeSummary({
+        name: 'orchestrate',
+        data: { status: 'succeeded', valid: false }
+      })?.state
     ).toBe('failed')
   })
 
   it('run REUTILISE est signale (aucun nouveau travail lance)', () => {
-    expect(
-      orchestrateOutcomeSummary({ name: 'orchestrate', data: { reused: true } })?.state
-    ).toBe('refused')
+    expect(orchestrateOutcomeSummary({ name: 'orchestrate', data: { reused: true } })?.state).toBe(
+      'refused'
+    )
   })
 
   it('cout de mauvais type ignore au lieu d’etre affiche', () => {
     expect(
-      orchestrateOutcomeSummary({ name: 'orchestrate', data: { status: 'succeeded', costUsd: 'cher' } })?.label
+      orchestrateOutcomeSummary({
+        name: 'orchestrate',
+        data: { status: 'succeeded', costUsd: 'cher' }
+      })?.label
     ).toBe('succeeded')
+  })
+
+  it('coût inconnu : affiche la couverture, jamais un faux 0.00 $', () => {
+    const summary = orchestrateOutcomeSummary({
+      name: 'orchestrate',
+      data: { status: 'succeeded', costUsd: 0, knownCostUsd: null, unpricedCalls: 3 }
+    })
+    expect(summary?.label).toContain('coût non exposé')
+    expect(summary?.label).toContain('3 appels non chiffrés')
+    expect(summary?.label).not.toContain('0.00 $')
   })
 
   it('une autre action ne produit rien', () => {

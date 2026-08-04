@@ -91,8 +91,20 @@ function api() {
         { id: 'conv-1', title: 'Projet RIG', category: 'codex', provider: 'codex' }
       ]),
     models: vi.fn().mockResolvedValue([
-      { id: 'ollama:qwen', provider: 'ollama', model: 'qwen' },
-      { id: 'claude:sonnet', provider: 'claude', model: 'claude-sonnet' }
+      {
+        id: 'ollama:qwen',
+        provider: 'ollama',
+        model: 'qwen',
+        reasoningEfforts: ['none'],
+        defaultReasoningEffort: 'none'
+      },
+      {
+        id: 'claude:sonnet',
+        provider: 'claude',
+        model: 'claude-sonnet',
+        reasoningEfforts: ['low', 'medium', 'high'],
+        defaultReasoningEffort: 'medium'
+      }
     ]),
     providerStatus: vi.fn().mockResolvedValue([
       { provider: 'kimi', status: 'authenticated', testable: true },
@@ -277,6 +289,23 @@ describe('TaskManagerView', () => {
       )
       model?.dispatchEvent(new Event('change', { bubbles: true }))
     })
+    const effort = [...container.querySelectorAll('label')]
+      .find((label) => label.querySelector('span')?.textContent === 'Effort')
+      ?.querySelector('select')
+    expect(effort?.disabled).toBe(false)
+    expect(effort?.value).toBe('medium')
+    expect([...effort!.options].map((option) => [option.value, option.textContent])).toEqual([
+      ['low', 'Léger'],
+      ['medium', 'Moyen'],
+      ['high', 'Élevé']
+    ])
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set?.call(
+        effort,
+        'high'
+      )
+      effort?.dispatchEvent(new Event('change', { bubbles: true }))
+    })
     const save = [...container.querySelectorAll('button')].find(
       (button) => button.textContent === 'Créer la tâche'
     )
@@ -289,7 +318,8 @@ describe('TaskManagerView', () => {
         destination: expect.objectContaining({
           kind: 'new',
           provider: 'claude',
-          model: 'claude-sonnet'
+          model: 'claude-sonnet',
+          reasoningEffort: 'high'
         }),
         schedule: expect.objectContaining({
           startDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
@@ -297,6 +327,27 @@ describe('TaskManagerView', () => {
         })
       })
     )
+  })
+
+  it('propose les répétitions en minutes et en heures', async () => {
+    const { container } = await mount()
+    const newButton = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Nouvelle tâche')
+    )
+    await act(async () => newButton?.click())
+
+    const recurrence = [...container.querySelectorAll('label')]
+      .find((label) => label.textContent?.includes('Répétition'))
+      ?.querySelector('select')
+
+    expect([...recurrence!.options].map((option) => [option.value, option.textContent])).toEqual([
+      ['none', 'Aucune'],
+      ['minute', 'Minute(s)'],
+      ['hour', 'Heure(s)'],
+      ['day', 'Jour(s)'],
+      ['week', 'Semaine(s)'],
+      ['month', 'Mois']
+    ])
   })
 
   it('propose exactement les providers dynamiques d’Agent Studio', async () => {

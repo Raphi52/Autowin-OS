@@ -4,9 +4,30 @@ export type GraphNode = {
   group: number
   file?: string
   themes?: string[]
+  score?: number
+  denseScore?: number
+  lexicalScore?: number
+  graphScore?: number
+  fusedScore?: number
+  relations?: Array<{ type: string; target: string }>
   x?: number
   y?: number
   z?: number
+}
+
+function formatBrainScore(value: number | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value.toFixed(3).replace('.', ',')
+    : '—'
+}
+
+export function brainScoreChannelLabel(node: GraphNode): string {
+  return [
+    `dense ${formatBrainScore(node.denseScore)}`,
+    `lexical ${formatBrainScore(node.lexicalScore)}`,
+    `graphe ${formatBrainScore(node.graphScore)}`,
+    `fusion ${formatBrainScore(node.fusedScore)}`
+  ].join(' · ')
 }
 export type GraphLink = {
   source: string | GraphNode

@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'n
 import { readFile, readdir } from 'node:fs/promises'
 import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
 import { amitelBrainRoot, amitelWorkspaces } from '../amitel-paths'
+import type { BrainNavigation } from '../brain-retrieval'
 import {
   normalize,
   topByDegree,
@@ -38,6 +39,62 @@ export interface BrainNoteSearchResult {
   label: string
   file: string
   themes: string[]
+  score: number
+  denseScore?: number
+  lexicalScore?: number
+  graphScore?: number
+  fusedScore?: number
+  relations: Array<{
+    type: 'related' | 'supersedes' | 'contradicts' | 'caused_by' | 'links_to'
+    target: string
+  }>
+}
+
+function retrievalNoteId(path: string, root?: string): string {
+  const normalizedPath = path.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '')
+  const normalizedRoot = root?.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '')
+  const pathLower = normalizedPath.toLowerCase()
+  const rootLower = normalizedRoot?.toLowerCase()
+  const relativePath =
+    normalizedRoot && rootLower && pathLower.startsWith(`${rootLower}/`)
+      ? normalizedPath.slice(normalizedRoot.length + 1)
+      : normalizedPath
+  return relativePath.replace(/^\/+/, '').replace(/\.md$/i, '').toLowerCase()
+}
+
+/** Ajoute aux résultats locaux les scores signés produits par le retriever Brain. */
+export function applyBrainRetrievalScores(
+  results: readonly BrainNoteSearchResult[],
+  navigation?: BrainNavigation
+): BrainNoteSearchResult[] {
+  if (!navigation) return results.map((result) => ({ ...result }))
+  const candidates = new Map(
+    navigation.candidates.map((candidate) => [
+      retrievalNoteId(candidate.path, navigation.root),
+      candidate
+    ])
+  )
+  return results.map((result) => {
+    const candidate = candidates.get(retrievalNoteId(result.id))
+    if (!candidate) return { ...result }
+    const relations = [...result.relations]
+    const seen = new Set(relations.map((relation) => `${relation.type}\0${relation.target}`))
+    for (const relation of candidate.relations ?? []) {
+      const key = `${relation.type}\0${relation.target}`
+      if (!seen.has(key)) {
+        relations.push(relation)
+        seen.add(key)
+      }
+    }
+    return {
+      ...result,
+      ...(candidate.denseScore !== undefined ? { denseScore: candidate.denseScore } : {}),
+      ...(candidate.lexicalScore !== undefined ? { lexicalScore: candidate.lexicalScore } : {}),
+      ...(candidate.graphScore !== undefined ? { graphScore: candidate.graphScore } : {}),
+      ...(candidate.fusedScore !== undefined ? { fusedScore: candidate.fusedScore } : {}),
+      relations
+    }
+  })
 }
 
 /** Racine du Brain — SOURCE UNIQUE dans `amitel-paths.ts`, surchargeable par `AMITEL_BRAIN_ROOT`. */
@@ -208,7 +265,15 @@ export async function loadVaultBrainGraphPreviewAsync(root: string, lod = 100): 
     const content = await readFile(file, 'utf8')
     const id = relative(root, file).replace(/\\/g, '/').replace(/\.md$/i, '')
     const label = content.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? id.split('/').at(-1) ?? id
-    return { id, file, content, label, themes: noteThemes(id, content) }
+    return {
+      id,
+      file,
+      content,
+      label,
+      themes: noteThemes(id, content),
+      score: 0,
+      relations: noteRelations(content)
+    }
   })
   return { ...graphFromVaultRecords(records, records.length), totalNodes: files.length }
 }
@@ -315,21 +380,98 @@ export function searchVaultBrainNotes(
   query: string,
   limit = 40
 ): BrainNoteSearchResult[] {
-  const normalized = query.trim().toLowerCase()
-  if (!normalized || limit <= 0) return []
+  const normalized = normalizeSearchText(query)
+  const tokens = normalized.split(/[^a-z0-9_.-]+/).filter((token) => token.length >= 2)
+  if (!normalized || tokens.length === 0 || limit <= 0) return []
   return vaultNoteRecords(root)
-    .filter((record) =>
-      `${record.id}\n${record.label}\n${record.themes.join('\n')}`
-        .toLowerCase()
-        .includes(normalized)
-    )
+    .map((record) => ({ record, score: vaultSearchScore(record, normalized, tokens) }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.record.label.localeCompare(b.record.label))
     .slice(0, limit)
-    .map(({ id, label, file, themes }) => ({ id, label, file, themes }))
+    .map(({ record, score }) => ({
+      id: record.id,
+      label: record.label,
+      file: record.file,
+      themes: record.themes,
+      relations: record.relations,
+      score
+    }))
 }
 
 type VaultNoteRecord = BrainNoteSearchResult & { content: string }
 const vaultRecordsCache = new Map<string, VaultNoteRecord[]>()
 const vaultRecordsPromises = new Map<string, Promise<VaultNoteRecord[]>>()
+
+export function invalidateBrainCaches(root?: string): void {
+  if (root) {
+    vaultRecordsCache.delete(root)
+    vaultRecordsPromises.delete(root)
+    return
+  }
+  vaultRecordsCache.clear()
+  vaultRecordsPromises.clear()
+}
+
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
+
+function noteRelations(content: string): BrainNoteSearchResult['relations'] {
+  const relations: BrainNoteSearchResult['relations'] = []
+  const seen = new Set<string>()
+  for (const type of ['related', 'supersedes', 'contradicts', 'caused_by'] as const) {
+    const raw = content.match(new RegExp(`^${type}\\s*:\\s*(.+)$`, 'mi'))?.[1] ?? ''
+    for (const target of raw
+      .replace(/^\[|\]$/g, '')
+      .split(/[,;]/)
+      .map((value) => value.trim().replace(/^['"]|['"]$/g, ''))
+      .filter(Boolean)) {
+      const key = `${type}\0${target}`
+      if (!seen.has(key)) {
+        relations.push({ type, target })
+        seen.add(key)
+      }
+    }
+  }
+  for (const match of content.matchAll(WIKI_LINK_RE)) {
+    const target = (match[1] ?? '').split('|')[0].split('#')[0].trim()
+    const key = `links_to\0${target}`
+    if (target && !seen.has(key)) {
+      relations.push({ type: 'links_to', target })
+      seen.add(key)
+    }
+  }
+  return relations
+}
+
+function vaultSearchScore(record: VaultNoteRecord, phrase: string, tokens: string[]): number {
+  const id = normalizeSearchText(record.id)
+  const label = normalizeSearchText(record.label)
+  const themes = normalizeSearchText(record.themes.join(' '))
+  const relations = normalizeSearchText(
+    record.relations.map((relation) => relation.target).join(' ')
+  )
+  const content = normalizeSearchText(record.content)
+  const all = `${id} ${label} ${themes} ${relations} ${content}`
+  if (!tokens.every((token) => all.includes(token))) return 0
+  let score = 0
+  if (label.includes(phrase)) score += 12
+  if (id.includes(phrase)) score += 8
+  if (themes.includes(phrase)) score += 6
+  if (relations.includes(phrase)) score += 5
+  if (content.includes(phrase)) score += 4
+  for (const token of tokens) {
+    if (label.includes(token)) score += 4
+    if (id.includes(token)) score += 3
+    if (themes.includes(token)) score += 2
+    if (relations.includes(token)) score += 2
+    if (content.includes(token)) score += 1
+  }
+  return score
+}
 
 function vaultNoteRecords(root: string): VaultNoteRecord[] {
   const cached = vaultRecordsCache.get(root)
@@ -338,7 +480,15 @@ function vaultNoteRecords(root: string): VaultNoteRecord[] {
     const content = readFileSync(file, 'utf8')
     const id = relative(root, file).replace(/\\/g, '/').replace(/\.md$/i, '')
     const label = content.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? id.split('/').at(-1) ?? id
-    return { id, file, content, label, themes: noteThemes(id, content) }
+    return {
+      id,
+      file,
+      content,
+      label,
+      themes: noteThemes(id, content),
+      score: 0,
+      relations: noteRelations(content)
+    }
   })
   vaultRecordsCache.set(root, records)
   return records
@@ -355,7 +505,15 @@ async function vaultNoteRecordsAsync(root: string): Promise<VaultNoteRecord[]> {
       const content = await readFile(file, 'utf8')
       const id = relative(root, file).replace(/\\/g, '/').replace(/\.md$/i, '')
       const label = content.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? id.split('/').at(-1) ?? id
-      return { id, file, content, label, themes: noteThemes(id, content) }
+      return {
+        id,
+        file,
+        content,
+        label,
+        themes: noteThemes(id, content),
+        score: 0,
+        relations: noteRelations(content)
+      }
     })
     vaultRecordsCache.set(root, records)
     vaultRecordsPromises.delete(root)

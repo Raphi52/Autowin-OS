@@ -187,7 +187,7 @@ export function assertTraceEvent(event: TraceEventV1): TraceEventV1 {
     nonEmpty(event.run.runId, 'run.runId')
     if (!Number.isFinite(event.run.timestampMs) || event.run.timestampMs < 0)
       throw new Error('TraceEvent: run.timestampMs invalide')
-    if (!['workspace', 'git', 'closure'].includes(event.run.stage))
+    if (!['quote', 'workspace', 'git', 'closure'].includes(event.run.stage))
       throw new Error('TraceEvent: run.stage invalide')
   }
   return event

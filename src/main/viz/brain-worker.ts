@@ -7,6 +7,7 @@ import {
   loadBrainNeighborhood,
   loadBrainThemeNodes,
   loadBrainThemes,
+  invalidateBrainCaches,
   readNodeFile,
   scanBrainGraphs,
   searchVaultBrainNotes
@@ -23,6 +24,7 @@ type BrainWorkerRequest = {
     | 'loadNeighborhood'
     | 'readNodeFile'
     | 'searchBrain'
+    | 'invalidate'
     | 'graphifyEvidence'
   args: unknown[]
 }
@@ -80,6 +82,12 @@ parentPort.on('message', async (request: BrainWorkerRequest) => {
         break
       case 'searchBrain':
         value = searchVaultBrainNotes(request.args[0] as string, request.args[1] as string)
+        break
+      case 'invalidate':
+        graphCache.clear()
+        neighborhoodCache.clear()
+        invalidateBrainCaches(request.args[0] as string | undefined)
+        value = true
         break
       case 'graphifyEvidence':
         value = graphifyEvidence(

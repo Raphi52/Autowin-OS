@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
+import { HookBus } from './hooks/hook-bus'
 import { Orchestrator, type GreedyTaskNode } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
 import type {
@@ -68,7 +69,8 @@ class GreedyProvider implements ProviderAdapter {
 function makeGreedy(
   provider: GreedyProvider,
   decompose: (task: string) => Promise<GreedyTaskNode[]>,
-  classifyPhases?: () => Array<'scout' | 'frame' | 'terrain' | 'build' | 'clean'>
+  classifyPhases?: () => Array<'scout' | 'frame' | 'terrain' | 'build' | 'clean'>,
+  extra: Partial<ConstructorParameters<typeof Orchestrator>[0]> = {}
 ): Orchestrator {
   const registry = new ProviderRegistry().register(provider)
   const roles = new RoleModelConfig({
@@ -86,7 +88,8 @@ function makeGreedy(
     worktrees: makeTestWorktrees('C:\\ws'),
     greedyConcurrency: 4,
     decompose,
-    classifyPhases
+    classifyPhases,
+    ...extra
   })
 }
 
@@ -140,20 +143,16 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
       }
     )
 
-    // TOUTE phase est desormais decoupee, pas seulement `build` : `frame` s'execute en 2 sous-agents
-    // paralleles (2 evenements) au lieu d'un seul appel monolithique. C'est le gain visee — mesure du
-    // 2026-07-28 : une phase non decoupee a coute 10,90 $ / 11 min quand le meme travail decoupe
-    // revenait a ~0,8 $ / ~1 min par sous-tache.
-    expect(phases).toEqual(['frame', 'frame', 'build', 'build', 'judge'])
+    // Le plan est phase-aware : frame reste un agent, seul build porte le DAG propose.
+    expect(phases).toEqual(['frame', 'build', 'build', 'judge'])
     // Un seul AGREGAT par phase : le decoupage change l'execution, pas la structure du livrable.
     expect(result.phaseOutputs.map((output) => output.phase)).toEqual(['frame', 'build'])
-    // 2 phases x 2 sous-taches = 4 sous-agents. Avant, seul `build` etait decoupe (2).
-    expect(result.trace.filter((step) => /sous-tâche/.test(step.detail ?? ''))).toHaveLength(4)
+    expect(result.trace.filter((step) => /sous-tâche/.test(step.detail ?? ''))).toHaveLength(2)
     // L'attribution a la bonne phase est prouvee par les evenements onPhase ci-dessus
     // (['frame','frame','build','build','judge']) : les steps de trace ne portent pas de phase.
   })
 
-  it('DECOUPE TOUTE phase, pas seulement build (levier de cout generalise)', async () => {
+  it('ne multiplie jamais le meme DAG par toutes les phases', async () => {
     const provider = new GreedyProvider()
     const phases: string[] = []
     const orchestrator = makeGreedy(
@@ -168,8 +167,7 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
     await orchestrator.run('audit large en plusieurs volets', undefined, (event) => {
       if (event.phase) phases.push(event.phase)
     })
-    // 3 sous-taches x 2 phases : le scout n'est PLUS un appel monolithique.
-    expect(phases.filter((phase) => phase === 'scout')).toHaveLength(3)
+    expect(phases.filter((phase) => phase === 'scout')).toHaveLength(1)
     expect(phases.filter((phase) => phase === 'build')).toHaveLength(3)
   })
 
@@ -250,6 +248,27 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
     expect(result.failedTasks).toEqual([])
     expect(result.skippedTasks).toEqual([])
     expect(result.phaseOutputs).toHaveLength(3)
+  })
+
+  it('court-circuite le juge payant quand le pre-gate local du chemin greedy est rouge', async () => {
+    const provider = new GreedyProvider()
+    const hooks = new HookBus().register('pre-green', () => ({
+      block: true,
+      reason: 'verification locale rouge'
+    }))
+    const result = await makeGreedy(
+      provider,
+      async () => [
+        { id: 'A', deps: [], prompt: 'fais A' },
+        { id: 'B', deps: [], prompt: 'fais B' }
+      ],
+      () => ['build'],
+      { hooks }
+    ).run('corrige le bug en plusieurs volets')
+
+    expect(provider.contents).toHaveLength(2)
+    expect(result.trace.some((step) => step.step === 'judge')).toBe(false)
+    expect(result.gateBlocked).toBe(true)
   })
 
   it('cascade : une sous-tâche dont la dépendance échoue est SAUTÉE, pas exécutée', async () => {

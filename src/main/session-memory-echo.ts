@@ -10,12 +10,13 @@
  * remis au tour suivant. Rien de plus.
  *
  * TROIS LIMITES ASSUMÉES, et elles doivent être dites au modèle plutôt que découvertes :
- *  1. C'est un écho LOCAL et VOLATILE : il vit dans le processus, il meurt avec lui. Le Brain reste la
- *     mémoire durable, et lui seul est partagé.
+ *  1. C'est un écho LOCAL et DURABLE : il survit au redémarrage, mais reste provisoire. Le Brain demeure
+ *     la seule mémoire canonique partagée.
  *  2. Il est PLAFONNÉ, et ce n'est pas une timidité : la lecture automatique des fiches de claude.exe a
  *     été coupée dans Autowin parce qu'elle pesait 552 Ko — ~9 200 tokens à CHAQUE appel. Rouvrir ce
  *     robinet sans borne rejouerait exactement le défaut qu'on avait payé pour fermer.
- *  3. Il est cloisonné PAR CONVERSATION : les faits d'un fil n'ont pas à polluer le contexte d'un autre.
+ *  3. Il est cloisonné PAR CONVERSATION ET WORKSPACE : changer de dépôt ne réinjecte pas les faits du
+ *     précédent. Seule une portée explicitement `global` traverse cette frontière.
  *
  * Il vit dans le MESSAGE du tour, jamais dans le prompt système : celui-ci doit rester identique d'un tour
  * à l'autre pour que le cache de préfixe fonctionne (mesuré le 2026-07-28 : `cache_read` à 0 sur 100 % des
@@ -25,6 +26,10 @@
 export interface RememberedFact {
   title: string
   body: string
+  /** Portée métier validée par `remember` (`global` reste volontairement inter-workspaces). */
+  scope?: string
+  /** Identité du workspace actif au moment où le fait a été retenu. */
+  workspace?: string
   /** Nom du fichier candidat rendu par le Brain, quand il y en a un. */
   note?: string
   /**
@@ -47,11 +52,138 @@ interface ConversationEcho {
   facts: RememberedFact[]
   /** Faits sortis par le plafond. Comptés pour que la perte soit DITE, jamais muette. */
   evicted: number
+  evictedByWorkspace: Record<string, number>
 }
 
 const byConversation = new Map<string, ConversationEcho>()
 /** Nombre de conversations suivies : le processus principal d'Electron vit longtemps. */
 const MAX_CONVERSATIONS = 50
+const MAX_STORE_BYTES = 2 * 1024 * 1024
+const MAX_STORED_TITLE_CHARS = 500
+const MAX_STORED_BODY_CHARS = 8_000
+const MAX_FACTS_PER_CONVERSATION = ECHO_MAX_FACTS * 4
+let persistencePath: string | undefined
+
+interface StoredEchoFile {
+  version: 1 | 2
+  conversations: Array<{
+    id: string
+    facts: RememberedFact[]
+    evicted: number
+    evictedByWorkspace?: Record<string, number>
+  }>
+}
+
+/** Une même copie de travail doit produire la même clé malgré la casse et les séparateurs Windows. */
+export function memoryWorkspaceIdentity(workspace?: string): string {
+  const value = workspace?.trim()
+  if (!value) return ''
+  return resolve(value).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+}
+
+function factWorkspaceKey(fact: Pick<RememberedFact, 'scope' | 'workspace'>): string {
+  if (fact.scope?.trim().toLowerCase() === 'global') return 'global'
+  const workspace = memoryWorkspaceIdentity(fact.workspace)
+  return workspace ? `workspace:${workspace}` : 'legacy-unscoped'
+}
+
+function validEvictedByWorkspace(value: unknown): Record<string, number> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, count]) => Number.isFinite(count))
+      .map(([key, count]) => [key.slice(0, 1_000), Math.max(0, Math.floor(Number(count)))])
+  )
+}
+
+function validFact(value: unknown): RememberedFact | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const raw = value as Record<string, unknown>
+  if (typeof raw.title !== 'string' || typeof raw.body !== 'string') return undefined
+  const title = raw.title.trim().slice(0, MAX_STORED_TITLE_CHARS)
+  const body = raw.body.trim().slice(0, MAX_STORED_BODY_CHARS)
+  if (!title || !body) return undefined
+  const state =
+    raw.state === 'depose' || raw.state === 'inconnu' || raw.state === 'local'
+      ? raw.state
+      : undefined
+  return {
+    title,
+    body,
+    ...(typeof raw.scope === 'string' && raw.scope.trim()
+      ? { scope: raw.scope.trim().slice(0, 120) }
+      : {}),
+    ...(typeof raw.workspace === 'string' && raw.workspace.trim()
+      ? { workspace: memoryWorkspaceIdentity(raw.workspace) }
+      : {}),
+    ...(typeof raw.note === 'string' && raw.note.trim()
+      ? { note: raw.note.trim().slice(0, 500) }
+      : {}),
+    ...(state ? { state } : {})
+  }
+}
+
+function persistEcho(): void {
+  if (!persistencePath) return
+  const data: StoredEchoFile = {
+    version: 2,
+    conversations: [...byConversation.entries()].map(([id, echo]) => ({
+      id,
+      facts: echo.facts,
+      evicted: echo.evicted,
+      evictedByWorkspace: echo.evictedByWorkspace
+    }))
+  }
+  const temp = `${persistencePath}.${process.pid}.${Date.now()}.tmp`
+  try {
+    mkdirSync(dirname(persistencePath), { recursive: true })
+    writeFileSync(temp, JSON.stringify(data), { encoding: 'utf8', mode: 0o600 })
+    renameSync(temp, persistencePath)
+  } catch {
+    try {
+      unlinkSync(temp)
+    } catch {
+      // Une panne de persistance ne doit jamais casser le run courant.
+    }
+  }
+}
+
+/** Active le store durable local, ou le desactive sans effacer le fichier quand path est absent. */
+export function configureSessionMemoryEcho(path?: string): void {
+  persistencePath = path?.trim() || undefined
+  byConversation.clear()
+  if (!persistencePath || !existsSync(persistencePath)) return
+  try {
+    if (statSync(persistencePath).size > MAX_STORE_BYTES) return
+    const parsed = JSON.parse(readFileSync(persistencePath, 'utf8')) as Partial<StoredEchoFile>
+    if ((parsed.version !== 1 && parsed.version !== 2) || !Array.isArray(parsed.conversations))
+      return
+    for (const item of parsed.conversations.slice(-MAX_CONVERSATIONS)) {
+      if (!item || typeof item.id !== 'string' || !item.id.trim()) continue
+      const facts = Array.isArray(item.facts)
+        ? item.facts
+            .map(validFact)
+            .filter((fact): fact is RememberedFact => Boolean(fact))
+            .slice(-MAX_FACTS_PER_CONVERSATION)
+        : []
+      if (facts.length === 0) continue
+      byConversation.set(item.id.slice(0, 256), {
+        facts,
+        evicted: Number.isFinite(item.evicted) ? Math.max(0, Math.floor(item.evicted)) : 0,
+        evictedByWorkspace:
+          parsed.version === 2
+            ? validEvictedByWorkspace(item.evictedByWorkspace)
+            : {
+                'legacy-unscoped': Number.isFinite(item.evicted)
+                  ? Math.max(0, Math.floor(item.evicted))
+                  : 0
+              }
+      })
+    }
+  } catch {
+    byConversation.clear()
+  }
+}
 
 /**
  * Remet la conversation en fin de Map, pour que l'éviction soit une vraie LRU.
@@ -70,20 +202,42 @@ function touch(conversationId: string, echo: ConversationEcho): void {
  * travail, ce qui vient d'être établi compte plus que ce qui l'a été il y a trente tours.
  */
 export function noteRemembered(conversationId: string, fact: RememberedFact): boolean {
-  if (!conversationId || !fact.title.trim() || !fact.body.trim()) return false
-  const echo = byConversation.get(conversationId) ?? { facts: [], evicted: 0 }
+  const normalized = validFact(fact)
+  if (!conversationId || !normalized) return false
+  const echo = byConversation.get(conversationId) ?? {
+    facts: [],
+    evicted: 0,
+    evictedByWorkspace: {}
+  }
+  const workspaceKey = factWorkspaceKey(normalized)
   /**
    * Déduplication sur le TITRE seul, et non sur le couple titre+corps : deux faits de même titre sont
    * une SUPERSESSION, pas deux faits. Sans ça, « Décision — on part sur A » et « Décision — finalement B,
    * A est abandonné » cohabitaient, le modèle relisait le périmé en premier, et la correction consommait
    * deux des douze places. Relevé le 2026-07-30.
    */
-  const already = echo.facts.findIndex((f) => f.title === fact.title)
+  const already = echo.facts.findIndex(
+    (candidate) =>
+      factWorkspaceKey(candidate) === workspaceKey && candidate.title === normalized.title
+  )
   if (already >= 0) echo.facts.splice(already, 1)
-  echo.facts.push(fact)
-  while (echo.facts.length > ECHO_MAX_FACTS) {
-    echo.facts.shift()
+  echo.facts.push(normalized)
+  while (
+    echo.facts.filter((candidate) => factWorkspaceKey(candidate) === workspaceKey).length >
+    ECHO_MAX_FACTS
+  ) {
+    const oldest = echo.facts.findIndex((candidate) => factWorkspaceKey(candidate) === workspaceKey)
+    if (oldest < 0) break
+    echo.facts.splice(oldest, 1)
     echo.evicted += 1
+    echo.evictedByWorkspace[workspaceKey] = (echo.evictedByWorkspace[workspaceKey] ?? 0) + 1
+  }
+  while (echo.facts.length > MAX_FACTS_PER_CONVERSATION) {
+    const removed = echo.facts.shift()
+    if (!removed) break
+    const removedKey = factWorkspaceKey(removed)
+    echo.evicted += 1
+    echo.evictedByWorkspace[removedKey] = (echo.evictedByWorkspace[removedKey] ?? 0) + 1
   }
   touch(conversationId, echo)
   while (byConversation.size > MAX_CONVERSATIONS) {
@@ -91,6 +245,7 @@ export function noteRemembered(conversationId: string, fact: RememberedFact): bo
     if (oldest === undefined) break
     byConversation.delete(oldest)
   }
+  persistEcho()
   return true
 }
 
@@ -101,22 +256,35 @@ export function noteRemembered(conversationId: string, fact: RememberedFact): bo
  * retour muterait l'écho du fil. Lire rafraîchit aussi la récence — c'est le vrai signal d'activité, la
  * conversation en cours étant relue à chaque tour.
  */
-export function rememberedFacts(conversationId: string | undefined): readonly RememberedFact[] {
+export function rememberedFacts(
+  conversationId: string | undefined,
+  workspace?: string
+): readonly RememberedFact[] {
   if (!conversationId) return []
   const echo = byConversation.get(conversationId)
   if (!echo) return []
   touch(conversationId, echo)
-  return [...echo.facts]
+  if (workspace === undefined) return [...echo.facts]
+  const workspaceKey = `workspace:${memoryWorkspaceIdentity(workspace)}`
+  return echo.facts.filter((fact) => {
+    const key = factWorkspaceKey(fact)
+    return key === 'global' || key === workspaceKey
+  })
 }
 
 /** Combien de faits le plafond a fait sortir de ce fil. Sert à DIRE la perte. */
-export function evictedCount(conversationId: string | undefined): number {
-  return (conversationId ? byConversation.get(conversationId)?.evicted : 0) ?? 0
+export function evictedCount(conversationId: string | undefined, workspace?: string): number {
+  const echo = conversationId ? byConversation.get(conversationId) : undefined
+  if (!echo) return 0
+  if (workspace === undefined) return echo.evicted
+  const workspaceKey = `workspace:${memoryWorkspaceIdentity(workspace)}`
+  return (echo.evictedByWorkspace.global ?? 0) + (echo.evictedByWorkspace[workspaceKey] ?? 0)
 }
 
 /** Vide l'écho. Existe pour qu'aucun fait ne fuite d'un test à l'autre. */
 export function forgetEcho(): void {
   byConversation.clear()
+  persistEcho()
 }
 
 /**
@@ -171,3 +339,13 @@ export function sessionMemoryBlock(
   }
   return `${header}\n${lines.reverse().join('\n')}${pied}`
 }
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
+import { dirname, resolve } from 'node:path'

@@ -2,6 +2,31 @@ export type RunWorkspaceMode = 'base' | 'worktree'
 export type RunGitOutcome = 'merged' | 'nothing' | 'conflict' | 'blocked' | 'kept'
 export type RunClosureStatus = 'open' | 'green' | 'degraded-closed' | 'red'
 
+export interface RunExecutionQuoteObservation {
+  quoteId: string
+  regime: 'trivial' | 'standard' | 'critical'
+  phases: string[]
+  decomposition: { mode: 'disabled' | 'build-only'; maxNodes: number }
+  limits: {
+    maxProviderCalls: number
+    maxFreshTokens: number
+    maxTotalTokens: number
+    maxAgents: number
+    maxConcurrency: number
+    maxDurationMs: number
+    maxRecoveries: number
+    maxUsd: number | null
+  }
+  allocation?: {
+    phaseMembers: Partial<Record<string, number>>
+    judgeMembers: number
+    maxGreedyNodes: number
+    reservedMandatoryAgents: number
+    estimatedMaxAgents: number
+    estimatedMaxCalls: number
+  }
+}
+
 export interface RunWorkspaceObservation {
   mode: RunWorkspaceMode
   /** Dépôt de travail qui porte le tronc commun de la conversation. */
@@ -30,9 +55,32 @@ export interface RunClosureObservation {
   totalCostUsd: number
   gateReasons?: string[]
   integrationOutcome?: string
+  usage?: {
+    startedAgents?: number
+    startedCalls: number
+    completedCalls: number
+    failedCalls: number
+    activeCalls: number
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens: number
+    totalTokens: number
+    freshTokens: number
+    knownCostUsd: number | null
+    unpricedCalls: number
+    unmeteredCalls: number
+    tokenCoverage: 'complete' | 'partial'
+    stoppedReason?: string
+  }
 }
 
 export type RunLifecycleEvent =
+  | {
+      stage: 'quote'
+      runId: string
+      timestampMs: number
+      quote: RunExecutionQuoteObservation
+    }
   | {
       stage: 'workspace'
       runId: string

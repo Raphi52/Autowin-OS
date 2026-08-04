@@ -20,6 +20,11 @@
  */
 
 import { SECRET_SHAPES_SOURCE } from './activity/trace-redact'
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
+import { createHash } from 'node:crypto'
+import { readSignedBrainPayload, verifySignedBrainPayload } from './brain-protocol'
+import { memoryWorkspaceIdentity } from './session-memory-echo'
 
 /** Types acceptés par le garde du Brain (`brain_propose.ALLOWED_TYPES`). Liste FERMÉE. */
 export const REMEMBER_TYPES = ['lesson', 'decision', 'preference', 'domain'] as const
@@ -125,14 +130,21 @@ export function likelySecretShape(text: string): string | undefined {
  * et faire dire au candidat l'INVERSE du fait voulu — silencieusement, alors que le contrat exige un fait
  * « autoporté, relisible dans 3 mois ». Défaut relevé par l'audit du 2026-07-30.
  */
-export function truncateFact(body: string, max = REMEMBER_BODY_MAX): { body: string; truncated: boolean } {
+export function truncateFact(
+  body: string,
+  max = REMEMBER_BODY_MAX
+): { body: string; truncated: boolean } {
   if (body.length <= max) return { body, truncated: false }
   // La marque est BUDGÉTÉE : sans ça le résultat dépassait la borne qu'il est censé faire respecter.
   const MARK = ' […tronqué]'
   // Sous la longueur de la marque, la marque elle-même dépasserait la borne : coupe nue.
   if (max <= MARK.length) return { body: body.slice(0, max), truncated: true }
   const window = body.slice(0, max - MARK.length)
-  const sentence = Math.max(window.lastIndexOf('. '), window.lastIndexOf('! '), window.lastIndexOf('? '))
+  const sentence = Math.max(
+    window.lastIndexOf('. '),
+    window.lastIndexOf('! '),
+    window.lastIndexOf('? ')
+  )
   // Le seuil de moitié n'est PAS un réglage arbitraire : une fin de phrase située très tôt ferait jeter
   // l'essentiel du fait. Au-delà de la moitié on coupe proprement à la phrase, sinon au dernier mot.
   const cut = sentence > window.length * 0.5 ? sentence + 1 : window.lastIndexOf(' ')
@@ -197,7 +209,8 @@ const LOCATOR_RULES: Array<{
     // peut refuser tout de suite un chemin relatif, qui echouera a coup sur.
     scheme: 'file',
     test: (l) => /^([A-Za-z]:[\\/]|[\\/]{1,2}|~)/.test(l),
-    expected: 'file:<chemin ABSOLU existant côté serveur> — pour un fichier de dépôt, préférer git:<chemin>@<sha>'
+    expected:
+      'file:<chemin ABSOLU existant côté serveur> — pour un fichier de dépôt, préférer git:<chemin>@<sha>'
   }
 ]
 
@@ -259,7 +272,8 @@ export function decideRemember(args: Record<string, unknown>): RememberDecision 
   // « le fait est vide » alors qu'un contenu existait. On prend le premier NON VIDE.
   const rawBody = text(args.fact) || text(args.body)
   const { body, truncated } = truncateFact(rawBody)
-  if (!title) return { allowed: false, reason: 'titre manquant — un fait sans titre est introuvable' }
+  if (!title)
+    return { allowed: false, reason: 'titre manquant — un fait sans titre est introuvable' }
   if (!body) return { allowed: false, reason: 'rien à retenir : le fait est vide' }
 
   // Profondeur de défense : ce que le garde distant laisse passer. Un secret déposé dans un corpus
@@ -314,7 +328,17 @@ export function decideRemember(args: Record<string, unknown>): RememberDecision 
     // Les étiquettes au-delà de la 8ᵉ étaient jetées en silence : « toute amputation compte » les inclut.
     rawTags.filter((tag) => text(tag)).length > 8
 
-  return { allowed: true, title, body, type, scope, source, tags, confidence, truncated: anythingCut }
+  return {
+    allowed: true,
+    title,
+    body,
+    type,
+    scope,
+    source,
+    tags,
+    confidence,
+    truncated: anythingCut
+  }
 }
 
 export interface RememberOutcome {
@@ -334,7 +358,7 @@ export interface RememberOutcome {
    * Ce qui a réellement été validé et envoyé. Présent dès que la demande est recevable, même si le dépôt
    * a échoué : c'est ce qui permet de retenir le fait DANS le fil quand le Brain ne répond pas.
    */
-  fact?: { title: string; body: string; truncated: boolean }
+  fact?: { title: string; body: string; scope: string; truncated: boolean }
 }
 
 /**
@@ -344,18 +368,90 @@ export interface RememberOutcome {
  * `NEAR_DUP_DENSE = 0.82`). Or `inbox/` n'est PAS indexé : deux dépôts du MÊME fait renvoient donc deux
  * fois 200 et créent deux fichiers. Observé le 2026-07-30 (deux POST identiques → deux candidats), et
  * corroboré par deux fiches quasi jumelles déposées à 09:47 et 09:48 le même jour.
- * On garde donc l'empreinte de ce qui a déjà été déposé DANS CETTE SESSION.
+ * On garde donc durablement l'empreinte de ce qui a déjà été déposé, sans fusionner deux scopes ou deux
+ * workspaces. Une portée `global` forme volontairement un seul namespace partagé.
  */
 const depositedThisSession = new Map<string, string>()
 const SESSION_MEMO_MAX = 200
+const UNKNOWN_DEPOSIT = '[etat-inconnu]'
+let depositStorePath: string | undefined
+type DepositOutcome = RememberOutcome & { allowed: boolean }
+const pendingByLedger = new WeakMap<Map<string, string>, Map<string, Promise<DepositOutcome>>>()
 
 /** Vide la mémoire de dépôt. Existe pour que rien ne fuite d'un test à l'autre. */
 export function forgetSessionDeposits(): void {
   depositedThisSession.clear()
+  persistDepositLedger()
 }
 
-function fingerprint(title: string, body: string): string {
-  return `${title.toLowerCase()} ${body.toLowerCase()}`
+function persistDepositLedger(): void {
+  if (!depositStorePath) return
+  const temp = `${depositStorePath}.${process.pid}.${Date.now()}.tmp`
+  try {
+    mkdirSync(dirname(depositStorePath), { recursive: true })
+    writeFileSync(
+      temp,
+      JSON.stringify({ version: 2, deposits: [...depositedThisSession.entries()] }),
+      { encoding: 'utf8', mode: 0o600 }
+    )
+    renameSync(temp, depositStorePath)
+  } catch {
+    try {
+      unlinkSync(temp)
+    } catch {
+      // La memoire du processus courant reste active si le disque est indisponible.
+    }
+  }
+}
+
+/** Active le ledger durable anti-doublon, ou le desactive sans effacer le fichier. */
+export function configureRememberDepositStore(path?: string): void {
+  depositStorePath = path?.trim() || undefined
+  depositedThisSession.clear()
+  if (!depositStorePath || !existsSync(depositStorePath)) return
+  try {
+    const parsed = JSON.parse(readFileSync(depositStorePath, 'utf8')) as {
+      version?: unknown
+      deposits?: unknown
+    }
+    if ((parsed.version !== 1 && parsed.version !== 2) || !Array.isArray(parsed.deposits)) return
+    // Les clés v1 ne portaient ni scope ni workspace. Les réutiliser pourrait bloquer un dépôt légitime
+    // dans n'importe quel projet : migration fail-closed, le premier dépôt v2 réécrit le ledger.
+    if (parsed.version === 1) return
+    for (const entry of parsed.deposits.slice(-SESSION_MEMO_MAX)) {
+      if (!Array.isArray(entry) || entry.length !== 2) continue
+      const [key, note] = entry
+      if (typeof key !== 'string' || !/^[a-f0-9]{64}$/.test(key)) continue
+      if (typeof note !== 'string' || !note.trim()) continue
+      depositedThisSession.set(key, note.trim().slice(0, 500))
+    }
+  } catch {
+    depositedThisSession.clear()
+  }
+}
+
+function durableFingerprint(
+  decision: Extract<RememberDecision, { allowed: true }>,
+  workspace?: string
+): string {
+  const scope = decision.scope.trim().toLowerCase()
+  const workspaceIdentity =
+    scope === 'global' ? 'global' : memoryWorkspaceIdentity(workspace) || 'workspace-unavailable'
+  const material = `v2\0${scope}\0${workspaceIdentity}\0${decision.title.toLowerCase()}\0${decision.body.toLowerCase()}`
+  return createHash('sha256').update(material, 'utf8').digest('hex')
+}
+
+function recordDepositState(
+  deposited: Map<string, string>,
+  decision: Extract<RememberDecision, { allowed: true }>,
+  note: string,
+  workspace?: string
+): void {
+  if (deposited.size >= SESSION_MEMO_MAX) {
+    deposited.delete(deposited.keys().next().value as string)
+  }
+  deposited.set(durableFingerprint(decision, workspace), note)
+  if (deposited === depositedThisSession) persistDepositLedger()
 }
 
 export interface RememberDeps {
@@ -365,6 +461,8 @@ export interface RememberDeps {
   timeoutMs?: number
   authorAgent?: string
   model?: string
+  /** Workspace qui produit le candidat ; participe à l'idempotence sans être envoyé au Brain. */
+  workspace?: string
   /**
    * Où retenir ce qui a déjà été déposé. Injectable pour ne pas cacher un état global : la production
    * partage la mémoire du module, un test fournit la sienne et reste isolé.
@@ -392,7 +490,12 @@ export async function rememberFact(
   return {
     ...outcome,
     allowed: true,
-    fact: { title: decision.title, body: decision.body, truncated: decision.truncated }
+    fact: {
+      title: decision.title,
+      body: decision.body,
+      scope: decision.scope,
+      truncated: decision.truncated
+    }
   }
 }
 
@@ -409,8 +512,17 @@ async function depositCandidate(
     }
   }
   const deposited = deps.deposited ?? depositedThisSession
-  const alreadyHere = deposited.get(fingerprint(decision.title, decision.body))
+  const key = durableFingerprint(decision, deps.workspace)
+  const alreadyHere = deposited.get(key)
   if (alreadyHere) {
+    if (alreadyHere === UNKNOWN_DEPOSIT) {
+      return {
+        allowed: true,
+        stored: false,
+        unknown: true,
+        detail: "depot precedent d'etat INCONNU - retry automatique bloque pour eviter un doublon"
+      }
+    }
     return {
       allowed: true,
       stored: false,
@@ -418,6 +530,37 @@ async function depositCandidate(
       detail: `déjà déposé dans cette session (${alreadyHere}) — rien de nouveau, et c’est voulu : le Brain ne dédoublonne pas la boîte de réception`
     }
   }
+  let pending = pendingByLedger.get(deposited)
+  if (!pending) {
+    pending = new Map()
+    pendingByLedger.set(deposited, pending)
+  }
+  const current = pending.get(key)
+  if (current) {
+    const joined = await current
+    if (!joined.stored) return joined
+    return {
+      allowed: true,
+      stored: false,
+      note: joined.note,
+      detail: `deja depose par l'appel concurrent (${joined.note ?? 'candidat'}) - aucun second appel reseau`
+    }
+  }
+  const operation = performDepositCandidate(decision, deps, deposited)
+  pending.set(key, operation)
+  try {
+    return await operation
+  } finally {
+    pending.delete(key)
+  }
+}
+
+async function performDepositCandidate(
+  decision: Extract<RememberDecision, { allowed: true }>,
+  deps: RememberDeps,
+  deposited: Map<string, string>
+): Promise<DepositOutcome> {
+  const token = deps.token ?? ''
   const origin = deps.origin ?? 'http://127.0.0.1:8765'
   const doFetch = deps.fetchFn ?? fetch
   const controller = new AbortController()
@@ -439,12 +582,15 @@ async function depositCandidate(
         model: deps.model ?? 'autowin'
       })
     })
-    const payload = (await response.json().catch(() => ({}))) as {
+    const payload = (await readSignedBrainPayload(response).catch(() => ({}))) as {
       /** Succès : le serveur rend un CONTEXTE SIGNÉ dont `context` porte le chemin de la note. */
       context?: string
       /** 409 : le Brain sait déjà — refus délibéré, pas une erreur. */
       status?: string
       error?: string
+      service?: unknown
+      protocol?: unknown
+      signature?: unknown
     }
     /**
      * QUASI-DOUBLON — garde anti-bruit du Brain. Ce n'est PAS un échec : c'est le Brain qui dit « je le
@@ -462,15 +608,33 @@ async function depositCandidate(
         detail: 'déjà connu du Brain (quasi-doublon) — rien n’a été ajouté, et c’est voulu'
       }
     }
-    // SUCCÈS : le serveur répond 200 avec un contexte SIGNÉ (`{service, protocol, context, signature}`),
-    // PAS un `{ok:true}`. Défaut trouvé par un essai LIVE : ma première version exigeait `ok === true` et
-    // aurait donc annoncé « refusé » sur CHAQUE succès. Aucune lecture de code ne l'avait montré.
-    if (response.ok && typeof payload.context === 'string' && payload.context) {
-      const note = payload.context.split(/[\\/]/).pop() ?? payload.context
-      if (deposited.size >= SESSION_MEMO_MAX) {
-        deposited.delete(deposited.keys().next().value as string)
+    // SUCCÈS : le serveur répond 200 avec une enveloppe signée, PAS un `{ok:true}`.
+    if (response.ok) {
+      let verifiedContext: string
+      try {
+        verifiedContext = verifySignedBrainPayload(payload, token).context
+      } catch {
+        recordDepositState(deposited, decision, UNKNOWN_DEPOSIT, deps.workspace)
+        return {
+          allowed: true,
+          stored: false,
+          unknown: true,
+          detail:
+            'reponse Brain illisible ou d integrite invalide apres statut 200 - etat du depot INCONNU, ne retente pas a l aveugle'
+        }
       }
-      deposited.set(fingerprint(decision.title, decision.body), note)
+      if (!verifiedContext) {
+        recordDepositState(deposited, decision, UNKNOWN_DEPOSIT, deps.workspace)
+        return {
+          allowed: true,
+          stored: false,
+          unknown: true,
+          detail:
+            'reponse Brain vide apres statut 200 - etat du depot INCONNU, ne retente pas a l aveugle'
+        }
+      }
+      const note = verifiedContext.split(/[\\/]/).pop() ?? verifiedContext
+      recordDepositState(deposited, decision, note, deps.workspace)
       return {
         allowed: true,
         stored: true,
@@ -480,17 +644,6 @@ async function depositCandidate(
           (decision.truncated
             ? ' ⚠️ quelque chose dépassait la limite et a été TRONQUÉ (fait, titre ou étiquette) : relis le candidat avant de compter dessus'
             : '')
-      }
-    }
-    // 200 SANS contexte lisible (corps tronqué, proxy, réponse non-JSON) : le serveur a peut-être écrit.
-    // L'annoncer « refusé » était un mensonge dans les deux sens — et poussait à retenter, donc à doubler.
-    if (response.ok) {
-      return {
-        allowed: true,
-        stored: false,
-        unknown: true,
-        detail:
-          'réponse du Brain illisible malgré un statut 200 — état du dépôt INCONNU. Ne retente pas à l’aveugle : vérifie avec brain_query plus tard'
       }
     }
     // Le motif du refus vient du serveur : on le rend TEL QUEL, sans le reformuler en succès.
@@ -507,6 +660,7 @@ async function depositCandidate(
     // et se faisait classer « délai dépassé », dissuadant un retry pourtant légitime (audit 2026-07-30).
     const aborted = controller.signal.aborted
     if (aborted) {
+      recordDepositState(deposited, decision, UNKNOWN_DEPOSIT, deps.workspace)
       return {
         allowed: true,
         stored: false,

@@ -6,6 +6,7 @@ import {
   buildBrainLaunchCommand,
   ensureBrainServerStarted,
   resetBrainLaunchAttempt,
+  resolveBrainRuntime,
   resolveBrainTooling
 } from './brain-server-launch'
 
@@ -130,6 +131,31 @@ describe('ensureBrainServerStarted', () => {
 
   it('resolveBrainTooling : env override sinon défaut Amitel', () => {
     expect(resolveBrainTooling({ AUTOWIN_BRAIN_TOOLING: 'X:/t' })).toBe('X:/t')
-    expect(resolveBrainTooling({})).toContain('Amitel Brain')
+    expect(resolveBrainTooling({})).toBe('')
+  })
+
+  it('resout le runtime INSTALLE localement sans jamais executer le tooling du partage GED', () => {
+    const localAppData = mkdtempSync(join(tmpdir(), 'brain-localappdata-'))
+    const stateRoot = join(localAppData, 'AmitelBrain')
+    const codeRoot = join(stateRoot, 'tooling')
+    const python = join(stateRoot, '.venv', 'Scripts', 'python.exe')
+    mkdirSync(stateRoot, { recursive: true })
+    writeFileSync(
+      join(stateRoot, 'config.json'),
+      JSON.stringify({
+        brain_root: '\\\\ged2\\rig\\Projets IA\\Amitel Brain',
+        code_root: codeRoot,
+        python
+      })
+    )
+    try {
+      const runtime = resolveBrainRuntime({ LOCALAPPDATA: localAppData })
+      expect(runtime).toMatchObject({ tooling: codeRoot, python })
+      expect(runtime.brainRoot).toContain('Amitel Brain')
+      expect(runtime.tooling.startsWith('\\\\')).toBe(false)
+      expect(runtime.python.startsWith('\\\\')).toBe(false)
+    } finally {
+      rmSync(localAppData, { recursive: true, force: true })
+    }
   })
 })

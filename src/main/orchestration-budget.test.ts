@@ -20,21 +20,25 @@ afterEach(() =>
 )
 
 describe('orchestration budget settings', () => {
-  it('defaults explicitly to no cost limit and therefore never trips on cost', () => {
+  it('a des plafonds durs par defaut meme sans cout USD', () => {
     const path = settingPath()
     const settings = loadOrchestrationBudget(path)
-    expect(settings).toEqual({ maxUsd: null })
-    expect(
-      new CostCircuitBreaker(costLimitsFromSettings(settings)).observe({
-        step: 'exec',
-        costUsd: 999
-      })
-    ).toBeNull()
+    expect(settings).toEqual({
+      maxUsd: null,
+      maxProviderCalls: 24,
+      maxTotalTokens: 15_000_000
+    })
+    const breaker = new CostCircuitBreaker(costLimitsFromSettings(settings))
+    expect(breaker.observe({ step: 'exec', tokens: 15_000_001 })?.trip).toBe(true)
   })
 
   it('persists a positive USD cap and feeds the runtime breaker', () => {
     const path = settingPath()
-    expect(saveOrchestrationBudget(path, { maxUsd: 1.5 })).toEqual({ maxUsd: 1.5 })
+    expect(saveOrchestrationBudget(path, { maxUsd: 1.5 })).toEqual({
+      maxUsd: 1.5,
+      maxProviderCalls: 24,
+      maxTotalTokens: 15_000_000
+    })
     const breaker = new CostCircuitBreaker(costLimitsFromSettings(loadOrchestrationBudget(path)))
     expect(breaker.observe({ step: 'exec', costUsd: 1.5 })).toBeNull()
     expect(breaker.observe({ step: 'exec', costUsd: 0.01 })?.reason).toContain('seuil 1.50$')
@@ -44,6 +48,10 @@ describe('orchestration budget settings', () => {
     const path = settingPath()
     expect(() => saveOrchestrationBudget(path, { maxUsd: 0 })).toThrow(/strictement positif/)
     writeFileSync(path, '{"maxUsd":"not-a-number"}', 'utf8')
-    expect(loadOrchestrationBudget(path)).toEqual({ maxUsd: null })
+    expect(loadOrchestrationBudget(path)).toEqual({
+      maxUsd: null,
+      maxProviderCalls: 24,
+      maxTotalTokens: 15_000_000
+    })
   })
 })

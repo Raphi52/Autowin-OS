@@ -2,7 +2,15 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, statSync } from 'node:fs
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { listSessions, parseSession, aggregateHabits, type SessionMeta } from './transcripts'
+import {
+  listSessions,
+  listSessionsAsync,
+  parseSession,
+  aggregateHabits,
+  resolveListedSessionAsync,
+  resolveListedSessionImage,
+  type SessionMeta
+} from './transcripts'
 
 /** Fixture au format transcript Claude Code réel (types/champs relevés sur un vrai .jsonl). */
 const LINES = [
@@ -56,6 +64,8 @@ const projDir = join(root, 'C--Mon-Projet')
 mkdirSync(projDir)
 const file = join(projDir, 'abc-123.jsonl')
 writeFileSync(file, LINES.join('\n'), 'utf8')
+const unreferencedImage = join(root, 'secret.png')
+writeFileSync(unreferencedImage, 'not exposed merely because the extension is valid', 'utf8')
 
 const meta: SessionMeta = {
   id: 'abc-123',
@@ -106,5 +116,48 @@ describe('transcripts — parse streaming des sessions Claude Code', () => {
 
   it('racine absente → liste vide, pas de crash', () => {
     expect(listSessions(10, join(root, 'nexiste-pas'))).toEqual([])
+  })
+
+  it('résout sessions et images depuis l’inventaire serveur, jamais depuis un chemin forgé', async () => {
+    await expect(
+      resolveListedSessionAsync({ id: 'abc-123', project: 'C--Mon-Projet' }, 10, root)
+    ).resolves.toMatchObject({ path: file })
+    await expect(
+      resolveListedSessionAsync({ id: 'inconnue', project: 'C--Mon-Projet' }, 10, root)
+    ).resolves.toBeNull()
+    await expect(
+      resolveListedSessionImage(
+        { id: 'abc-123', project: 'C--Mon-Projet' },
+        unreferencedImage,
+        10,
+        root
+      )
+    ).resolves.toBeNull()
+  })
+
+  it('keeps the async inventory bounded and reuses its short-lived cache', async () => {
+    const asyncRoot = mkdtempSync(join(tmpdir(), 'aos-transcripts-async-'))
+    try {
+      const project = join(asyncRoot, 'project')
+      mkdirSync(project)
+      const { utimesSync } = await import('node:fs')
+      for (let index = 0; index < 5; index += 1) {
+        const candidate = join(project, `session-${index}.jsonl`)
+        writeFileSync(candidate, '{}', 'utf8')
+        const timestamp = new Date(Date.now() + index * 1_000)
+        utimesSync(candidate, timestamp, timestamp)
+      }
+
+      const first = await listSessionsAsync(2, asyncRoot, 60_000)
+      expect(first.map((session) => session.id)).toEqual(['session-4', 'session-3'])
+
+      writeFileSync(join(project, 'session-new.jsonl'), '{}', 'utf8')
+      expect(await listSessionsAsync(2, asyncRoot, 60_000)).toEqual(first)
+      expect(
+        await resolveListedSessionAsync({ id: 'session-new', project: 'project' }, 10, asyncRoot)
+      ).toMatchObject({ id: 'session-new' })
+    } finally {
+      rmSync(asyncRoot, { recursive: true, force: true })
+    }
   })
 })

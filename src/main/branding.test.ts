@@ -83,6 +83,7 @@ describe('identite Autowin OS', () => {
       /resolveAutomationInstanceMode\(\s*process\.argv,\s*process\.env,\s*app\.isPackaged\s*\)/
     )
     expect(main).toContain('const isolatedTestInstance = automationInstanceMode.isolated')
+    expect(main).toContain("query: isolatedTestInstance ? { instance: 'test' } : undefined")
     expect(main).toContain("resolveAutowinAppDataBase(app.getPath('appData'), app.isPackaged)")
   })
 

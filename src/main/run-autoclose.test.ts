@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -24,6 +24,18 @@ const realGit: GitRunner = async (args, cwd) => (await run('git', args, { cwd })
 const dirs: string[] = []
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
+})
+
+describe('defaultGitRunner — processus invisible', () => {
+  it('masque les commandes Git non interactives sous Windows', () => {
+    const source = readFileSync(join(__dirname, 'run-autoclose.ts'), 'utf8')
+    const runner = source.slice(
+      source.indexOf('async function defaultGitRunner'),
+      source.indexOf('export interface AutoCloseReport')
+    )
+
+    expect(runner).toContain('windowsHide: true')
+  })
 })
 
 /** Dépôt de travail + un « distant » local (bare) pour observer un vrai push. */

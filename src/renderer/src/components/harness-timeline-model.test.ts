@@ -22,6 +22,16 @@ function trace(overrides: Partial<HarnessTraceEvent> = {}): HarnessTraceEvent {
 }
 
 describe('Harnais timeline canonique', () => {
+  it('ne somme que les appels provider atomiques, jamais leur handoff structurel', () => {
+    const structural = trace({ id: 'handoff', type: 'handoff' })
+    const provider = trace({ id: 'provider', type: 'model-response', parentId: 'handoff' })
+    const timeline = buildHarnessTimelineFromTrace([structural, provider])
+
+    expect(timeline.totalTokens).toBe(5)
+    expect(timeline.turns[0].inputTokens).toBe(3)
+    expect(timeline.turns[0].outputTokens).toBe(2)
+  })
+
   it('conserve type, contenu, métriques et provenance sans fabriquer d’étapes', () => {
     const timeline = buildHarnessTimelineFromTrace([trace()])
     expect(timeline.turns[0].events).toHaveLength(1)

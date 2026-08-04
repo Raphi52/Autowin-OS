@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
-import { listBehaviourFiles, readBehaviourFile } from './behaviour-files'
+import {
+  listBehaviourFiles,
+  readBehaviourFile,
+  readBehaviourFileFromManifest
+} from './behaviour-files'
 
 vi.mock('./capability-controls', () => ({
   listCapabilities: vi.fn(async (kind: string) =>
@@ -225,5 +229,20 @@ describe('behaviour instruction map', () => {
         homeRoot
       })
     ).rejects.toThrow(/inconnu|autoris|workspace|racine/i)
+  })
+
+  it('reuses an existing manifest when reading excerpts', async () => {
+    const root = sandbox()
+    const opts = options(root, join(root, 'workspace'))
+    const path = put(join(opts.workspaceRoot, 'AGENTS.md'), 'manifest reuse')
+    const manifest = await listBehaviourFiles(opts)
+    const file = manifest.find((candidate) => candidate.path === path)
+
+    await expect(readBehaviourFileFromManifest(file!.id, manifest, opts)).resolves.toBe(
+      'manifest reuse'
+    )
+    await expect(readBehaviourFileFromManifest('forged', manifest, opts)).rejects.toThrow(
+      /inconnu|autoris|workspace/i
+    )
   })
 })

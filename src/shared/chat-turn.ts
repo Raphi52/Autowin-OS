@@ -50,6 +50,7 @@ export interface ChatTurnState {
 export type ChatTurnEvent =
   | { kind: 'delta'; streamId: string; text: string }
   | { kind: 'stream-reset'; streamId: string }
+  | { kind: 'resumed' }
   | { kind: 'command'; actionId: string; name: string; args?: unknown }
   | { kind: 'result'; actionId: string; name: string; ok?: boolean; data?: unknown }
   | { kind: 'artifact'; artifact: ChatArtifact }
@@ -99,6 +100,8 @@ export function createChatTurn(turnId: string, runtime?: ChatTurnRuntime): ChatT
 }
 
 export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): ChatTurnState {
+  if (event.kind === 'resumed') return { ...state, status: 'streaming', error: undefined }
+
   if (event.kind === 'delta') {
     if (!event.text) return state
     const parts = state.parts.slice()

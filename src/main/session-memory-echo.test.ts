@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import {
   ECHO_MAX_BLOCK_CHARS,
   ECHO_MAX_BODY_CHARS,
   ECHO_MAX_FACTS,
   evictedCount,
   forgetEcho,
+  configureSessionMemoryEcho,
   noteRemembered,
   rememberedFacts,
   sessionMemoryBlock,
@@ -23,7 +25,93 @@ import { buildTurnMessages } from './chat-turn-messages'
  * qui s'opposent : le modèle doit RETROUVER ce qu'il a retenu, et l'écho ne doit JAMAIS redevenir le
  * robinet de 552 Ko qu'on avait coupé.
  */
-beforeEach(forgetEcho)
+beforeEach(() => {
+  configureSessionMemoryEcho()
+  forgetEcho()
+})
+
+describe('persistance locale de la memoire provisoire', () => {
+  it('survit a un redemarrage du processus quand un store local est configure', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-memory-echo-'))
+    const store = join(root, 'session-memory.json')
+    try {
+      configureSessionMemoryEcho(store)
+      noteRemembered('conv-durable', { title: 'Decision', body: 'utiliser le runtime local' })
+
+      configureSessionMemoryEcho()
+      expect(rememberedFacts('conv-durable')).toHaveLength(0)
+      configureSessionMemoryEcho(store)
+
+      expect(rememberedFacts('conv-durable')).toEqual([
+        { title: 'Decision', body: 'utiliser le runtime local' }
+      ])
+    } finally {
+      configureSessionMemoryEcho()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reste cloisonnee par workspace apres redemarrage et conserve les faits globaux', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-memory-workspace-'))
+    const store = join(root, 'session-memory.json')
+    try {
+      configureSessionMemoryEcho(store)
+      noteRemembered('conv-shared', {
+        title: 'RIG seulement',
+        body: 'utiliser gacRig avant build',
+        scope: 'RIG',
+        workspace: 'D:\\DevSrc\\RigApplication'
+      })
+      noteRemembered('conv-shared', {
+        title: 'Partage explicite',
+        body: 'garder une preuve reproductible',
+        scope: 'global',
+        workspace: 'global'
+      })
+
+      configureSessionMemoryEcho(store)
+
+      expect(
+        rememberedFacts('conv-shared', 'C:\\Amitel\\Autowin OS').map((fact) => fact.title)
+      ).toEqual(['Partage explicite'])
+      expect(
+        rememberedFacts('conv-shared', 'D:\\DevSrc\\RigApplication').map((fact) => fact.title)
+      ).toEqual(['RIG seulement', 'Partage explicite'])
+    } finally {
+      configureSessionMemoryEcho()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('migre le store v1 sans exposer ses faits non scopes dans un workspace actif', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-memory-v1-'))
+    const store = join(root, 'session-memory.json')
+    try {
+      writeFileSync(
+        store,
+        JSON.stringify({
+          version: 1,
+          conversations: [
+            {
+              id: 'conv-v1',
+              facts: [{ title: 'Ancien fait', body: 'workspace inconnu' }],
+              evicted: 2
+            }
+          ]
+        })
+      )
+
+      configureSessionMemoryEcho(store)
+
+      expect(rememberedFacts('conv-v1')).toHaveLength(1)
+      expect(rememberedFacts('conv-v1', 'C:\\Amitel\\Autowin OS')).toEqual([])
+      expect(evictedCount('conv-v1', 'C:\\Amitel\\Autowin OS')).toBe(0)
+    } finally {
+      configureSessionMemoryEcho()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
 
 const fait = (n: number) => ({ title: `Fait ${n}`, body: `le contenu numéro ${n}` })
 
@@ -39,6 +127,24 @@ describe('l’écho rend ce qui a été retenu — dans CE fil seulement', () =>
     noteRemembered('conv-1', fait(1))
     expect(rememberedFacts('conv-2')).toHaveLength(0)
     expect(sessionMemoryBlock(rememberedFacts('conv-2'))).toBe('')
+  })
+
+  it('un meme fil ne laisse pas fuiter les faits d un autre workspace', () => {
+    noteRemembered('conv-1', {
+      title: 'RIG',
+      body: 'fait du depot RIG',
+      scope: 'RIG',
+      workspace: 'D:\\DevSrc\\RigApplication'
+    })
+    noteRemembered('conv-1', {
+      title: 'Global',
+      body: 'fait partage explicitement',
+      scope: 'global',
+      workspace: 'global'
+    })
+    expect(rememberedFacts('conv-1', 'C:\\Amitel\\Autowin OS').map((fact) => fact.title)).toEqual([
+      'Global'
+    ])
   })
 
   it('sans rien de retenu, AUCUN bloc n’est produit', () => {
@@ -135,14 +241,20 @@ describe('audit cycle 4 — les pertes silencieuses de l’écho', () => {
     // Assertion DURCIE : elle concédait « <= 700 » pour un budget de 600, donc elle ne pouvait pas voir
     // le depassement de ~61 caracteres du pied.
     for (const budget of [300, 600, 1_500]) {
-      expect(sessionMemoryBlock(rememberedFacts('conv-1'), budget).length).toBeLessThanOrEqual(budget)
+      expect(sessionMemoryBlock(rememberedFacts('conv-1'), budget).length).toBeLessThanOrEqual(
+        budget
+      )
     }
   })
 
   it('les faits évincés par le plafond sont COMPTÉS, pas oubliés', () => {
     for (let n = 1; n <= ECHO_MAX_FACTS + 3; n += 1) noteRemembered('conv-1', fait(n))
     expect(evictedCount('conv-1')).toBe(3)
-    const bloc = sessionMemoryBlock(rememberedFacts('conv-1'), ECHO_MAX_BLOCK_CHARS, evictedCount('conv-1'))
+    const bloc = sessionMemoryBlock(
+      rememberedFacts('conv-1'),
+      ECHO_MAX_BLOCK_CHARS,
+      evictedCount('conv-1')
+    )
     expect(bloc).toMatch(/3 fait\(s\) non repris/)
   })
 
@@ -252,9 +364,14 @@ describe('câblage — l’écho est réellement alimenté et réellement relu',
 
   it('l’écho n’entre PAS dans le prompt système — le préfixe doit rester cachable', () => {
     const source = readFileSync(join(__dirname, 'agent-pilot.ts'), 'utf8')
-    const system = source.slice(source.indexOf('const systemParts'), source.indexOf('const system ='))
+    const system = source.slice(
+      source.indexOf('const systemParts'),
+      source.indexOf('const system =')
+    )
     expect(system).not.toContain('memoryEcho')
-    expect(buildChatPilotagePrompt([])).not.toMatch(/CE QUE TU AS RETENU DANS CETTE CONVERSATION \(/)
+    expect(buildChatPilotagePrompt([])).not.toMatch(
+      /CE QUE TU AS RETENU DANS CETTE CONVERSATION \(/
+    )
   })
 
   it('le prompt distingue les DEUX portées : ce fil, et les autres', () => {

@@ -1,4 +1,4 @@
-export type RecurrenceUnit = 'none' | 'day' | 'week' | 'month'
+export type RecurrenceUnit = 'none' | 'minute' | 'hour' | 'day' | 'week' | 'month'
 
 export interface StructuredRecurrence {
   unit: RecurrenceUnit
@@ -221,6 +221,16 @@ export function resolveFirstOccurrenceAtOrAfter(
 ): number | null {
   if (!Number.isFinite(threshold)) throw new Error('Seuil temporel invalide')
   let occurrence: number | null = resolveFirstOccurrence(schedule)
+  const fixedIntervalMs =
+    schedule.recurrence.unit === 'minute'
+      ? schedule.recurrence.interval * 60_000
+      : schedule.recurrence.unit === 'hour'
+        ? schedule.recurrence.interval * 3_600_000
+        : null
+  if (fixedIntervalMs !== null && occurrence < threshold) {
+    occurrence += Math.ceil((threshold - occurrence) / fixedIntervalMs) * fixedIntervalMs
+    return isBeyondEnd(schedule, wallAt(occurrence, schedule.timeZone)) ? null : occurrence
+  }
   for (let scanned = 0; occurrence !== null && scanned < 200_000; scanned += 1) {
     if (occurrence >= threshold) return occurrence
     occurrence = resolveNextOccurrence(schedule, occurrence)
@@ -240,6 +250,14 @@ export function resolveNextOccurrence(
   switch (schedule.recurrence.unit) {
     case 'none':
       return null
+    case 'minute':
+    case 'hour': {
+      const unitMs = schedule.recurrence.unit === 'minute' ? 60_000 : 3_600_000
+      const nextOccurrence = currentOccurrence + schedule.recurrence.interval * unitMs
+      return isBeyondEnd(schedule, wallAt(nextOccurrence, schedule.timeZone))
+        ? null
+        : nextOccurrence
+    }
     case 'day':
       next = addCalendarDays(current, schedule.recurrence.interval)
       break

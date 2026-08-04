@@ -94,13 +94,30 @@ const api = {
     ipcRenderer.invoke('preflight:repair', checkId),
   recheckPreflight: (force?: boolean): Promise<unknown> =>
     ipcRenderer.invoke('preflight:recheck', force),
-  orchestrationBudget: (): Promise<{ maxUsd: number | null }> =>
+  orchestrationBudget: (): Promise<{
+    maxUsd: number | null
+    maxProviderCalls: number
+    maxTotalTokens: number
+  }> =>
     ipcRenderer.invoke('os:orchestrationBudget:get'),
   setOrchestrationBudget: (settings: {
     maxUsd: number | null
-  }): Promise<{ maxUsd: number | null }> =>
+    maxProviderCalls: number
+    maxTotalTokens: number
+  }): Promise<{
+    maxUsd: number | null
+    maxProviderCalls: number
+    maxTotalTokens: number
+  }> =>
     ipcRenderer.invoke('os:orchestrationBudget:set', settings),
   // Config par rôle
+  workflowProfiles: (): Promise<unknown> => ipcRenderer.invoke('os:workflowProfiles:get'),
+  workflowProfileSave: (profile: unknown): Promise<unknown> =>
+    ipcRenderer.invoke('os:workflowProfiles:upsert', profile),
+  workflowProfileRemove: (id: string): Promise<unknown> =>
+    ipcRenderer.invoke('os:workflowProfiles:remove', id),
+  workflowProfileSelect: (id: string | null): Promise<unknown> =>
+    ipcRenderer.invoke('os:workflowProfiles:select', id),
   roles: (): Promise<
     Record<string, { provider: string; model?: string; reasoningEffort?: string }>
   > => ipcRenderer.invoke('os:roles'),
@@ -111,6 +128,21 @@ const api = {
     reasoningEffort?: string
   ): Promise<unknown> => ipcRenderer.invoke('os:setRole', role, provider, model, reasoningEffort),
   models: (force = false): Promise<unknown[]> => ipcRenderer.invoke('os:models:list', force),
+  fabricNodes: (): Promise<unknown[]> => ipcRenderer.invoke('os:fabric:list'),
+  installIsolatedFabricFixture: (): Promise<unknown> =>
+    ipcRenderer.invoke('app:test:fabric-fixture:install'),
+  sendIsolatedFabricFixture: (execution = false): Promise<unknown> =>
+    ipcRenderer.invoke('app:test:fabric-fixture:send', execution),
+  refreshFabricNode: (nodeId: string): Promise<unknown> =>
+    ipcRenderer.invoke('os:fabric:refresh', nodeId),
+  pairFabricNode: (request: unknown): Promise<unknown> => ipcRenderer.invoke('os:fabric:pair', request),
+  checkpointForks: (): Promise<unknown[]> => ipcRenderer.invoke('os:checkpointForks:list'),
+  createCheckpointFork: (checkpointId: string, forkId: string): Promise<unknown> =>
+    ipcRenderer.invoke('os:checkpointFork:create', checkpointId, forkId),
+  shadowRouteRecommendation: (
+    phase: string,
+    champion: { provider: string; model: string }
+  ): Promise<unknown> => ipcRenderer.invoke('os:shadowRoute:recommend', phase, champion),
   modelQuotas: (force = false): Promise<unknown> => ipcRenderer.invoke('os:models:quotas', force),
   profiles: (): Promise<unknown[]> => ipcRenderer.invoke('os:profiles:list'),
   saveProfile: (profile: unknown): Promise<unknown[]> =>
@@ -136,7 +168,10 @@ const api = {
     ipcRenderer.invoke('os:promptTraces', conversationId),
   brainTraces: (conversationId?: string): Promise<unknown[]> =>
     ipcRenderer.invoke('os:brainTraces', conversationId),
-  behaviourComposition: (): Promise<unknown> => ipcRenderer.invoke('os:behaviourComposition'),
+  behaviourComposition: (workspace?: string): Promise<unknown> =>
+    ipcRenderer.invoke('os:behaviourComposition', workspace),
+  installIsolatedBehaviourFixture: (): Promise<string> =>
+    ipcRenderer.invoke('app:test:behaviour-fixture:install'),
   providerStatus: (): Promise<unknown[]> => ipcRenderer.invoke('os:providerStatus'),
   providerTest: (provider: string): Promise<unknown> =>
     ipcRenderer.invoke('os:providerTest', provider),
@@ -148,6 +183,12 @@ const api = {
     ipcRenderer.invoke('os:promptTracesGlobal', capability),
   causalTrace: (conversationId: string): Promise<unknown[]> =>
     ipcRenderer.invoke('os:causalTrace', conversationId),
+  activitySessions: (): Promise<unknown[]> => ipcRenderer.invoke('os:activity:sessions'),
+  activitySession: (meta: unknown): Promise<unknown> => ipcRenderer.invoke('os:activity:session', meta),
+  activityImage: (
+    session: { id: string; project: string },
+    path: string
+  ): Promise<{ dataUrl: string }> => ipcRenderer.invoke('os:activity:image', session, path),
   claudeHooks: (): Promise<unknown[]> => ipcRenderer.invoke('claude:hooks:list'),
   codexHooks: (): Promise<unknown[]> => ipcRenderer.invoke('codex:hooks:list'),
   setCapabilityTool: (name: string, enabled: boolean): Promise<unknown> =>
@@ -172,6 +213,7 @@ const api = {
   conversations: (): Promise<
     Array<{ id: string; title: string; category: string; provider: string }>
   > => ipcRenderer.invoke('os:conversations'),
+  conversation: (id: string): Promise<unknown> => ipcRenderer.invoke('os:conversation', id),
   conversationsCreate: (p: {
     title: string
     category: string
@@ -238,6 +280,7 @@ const api = {
         size: number
         kind: 'text' | 'image' | 'file'
         content: string
+        thumbnail?: string
       }>
     }>,
     conversationId?: string
@@ -266,9 +309,16 @@ const api = {
   },
   emitIsolatedTestAppEvent: (event: Record<string, unknown> & { type: string }): Promise<boolean> =>
     ipcRenderer.invoke('app:test:emit-event', event),
+  isolatedTestConversationReadCount: (reset = false): Promise<number> =>
+    ipcRenderer.invoke('app:test:conversation-read-count', reset),
   // Workflows de la conversation active (créés in-app + attachés)
   conversationRuns: (convId: string): Promise<unknown[]> =>
     ipcRenderer.invoke('os:conversationRuns', convId),
+  deleteConversationRun: (
+    convId: string,
+    path: string
+  ): Promise<{ ok: boolean; kind: 'deleted' | 'detached' }> =>
+    ipcRenderer.invoke('os:conversationRuns:delete', convId, path),
   conversationActivity: (convId: string): Promise<unknown[]> =>
     ipcRenderer.invoke('os:conversationActivity', convId),
   runTrace: (path: string): Promise<unknown[] | null> => ipcRenderer.invoke('os:runTrace', path),
@@ -299,6 +349,8 @@ const api = {
     ipcRenderer.invoke('os:readNodeFile', path),
   searchBrain: (path: string, query: string): Promise<unknown[]> =>
     ipcRenderer.invoke('os:searchBrain', path, query),
+  refreshBrain: (path: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('os:refreshBrain', path),
   listRuns: (): Promise<
     Array<{
       subject: string
@@ -315,6 +367,7 @@ const api = {
       }
     }>
   > => ipcRenderer.invoke('os:listRuns'),
+  deleteRun: (path: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('os:runs:delete', path),
 
   // Zoom app-wide (accessibilité) — agit sur tout le rendu comme un navigateur.
   getZoomFactor: (): number => webFrame.getZoomFactor(),

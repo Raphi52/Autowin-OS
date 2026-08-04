@@ -1,7 +1,17 @@
-import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { afterEach, describe, expect, it } from 'vitest'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { agentVerdict, resumeActionFor, runLiveness } from './run-reattach'
+import { tmpdir } from 'node:os'
+import {
+  agentVerdict,
+  preparePersistedRunForRelaunch,
+  resumeActionFor,
+  runLiveness,
+  waitUntilRunCanResume
+} from './run-reattach'
+import { loadOrchestrationStates, saveOrchestrationState } from './orchestration-state'
+import { compileExecutionQuote } from '../execution-quote'
+import { ExecutionSupervisor } from '../execution-supervisor'
 
 /**
  * Le risque le plus grave de la survie des runs : au redémarrage, l'app relançait le travail SANS
@@ -75,6 +85,148 @@ describe('que faire du run au démarrage', () => {
   })
 })
 
+describe('réconciliation persistée avant relance', () => {
+  const roots: string[] = []
+  afterEach(() => {
+    for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+  })
+
+  it('classe l’appel actif comme échoué seulement après preuve que son PID est mort', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-resume-dead-'))
+    roots.push(root)
+    saveOrchestrationState(root, {
+      runId: 'run-dead-provider',
+      task: 'reprendre sans doubler',
+      phaseOutputs: [{ phase: 'build', text: 'acquis' }],
+      usage: {
+        quoteId: 'quote-1',
+        startedAgents: 1,
+        startedCalls: 1,
+        completedCalls: 0,
+        failedCalls: 0,
+        activeCalls: 1,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        totalTokens: 0,
+        freshTokens: 0,
+        knownCostUsd: null,
+        unpricedCalls: 0,
+        unmeteredCalls: 0,
+        tokenCoverage: 'complete'
+      },
+      agents: [{ token: 'agent-1', pid: 42, identity: 'ancienne-identité' }],
+      startedAt: 1,
+      updatedAt: 2
+    })
+
+    const reconciled = preparePersistedRunForRelaunch(root, 'run-dead-provider', () => undefined, 9)
+
+    expect(reconciled?.usage).toMatchObject({
+      activeCalls: 0,
+      failedCalls: 1,
+      unpricedCalls: 1,
+      unmeteredCalls: 1,
+      tokenCoverage: 'partial'
+    })
+    expect(loadOrchestrationStates(root)[0]).toEqual(reconciled)
+    expect(reconciled?.updatedAt).toBe(9)
+  })
+
+  it('ne touche pas au compteur si la preuve de mort est incomplète', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-resume-unknown-'))
+    roots.push(root)
+    saveOrchestrationState(root, {
+      runId: 'run-unknown-provider',
+      task: 'ne pas doubler',
+      phaseOutputs: [],
+      usage: {
+        quoteId: 'quote-1',
+        startedCalls: 1,
+        completedCalls: 0,
+        failedCalls: 0,
+        activeCalls: 1,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        totalTokens: 0,
+        freshTokens: 0,
+        knownCostUsd: null,
+        unpricedCalls: 0,
+        unmeteredCalls: 0,
+        tokenCoverage: 'complete'
+      },
+      agents: [{ token: 'agent-1' }],
+      startedAt: 1,
+      updatedAt: 2
+    })
+
+    const reconciled = preparePersistedRunForRelaunch(
+      root,
+      'run-unknown-provider',
+      () => undefined,
+      9
+    )
+
+    expect(reconciled?.usage?.activeCalls).toBe(1)
+    expect(reconciled?.updatedAt).toBe(2)
+  })
+
+  it('rend réellement le snapshot admissible au supervisor après disparition du PID', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-resume-supervisor-'))
+    roots.push(root)
+    const quote = compileExecutionQuote('reprendre le build interrompu')
+    saveOrchestrationState(root, {
+      runId: 'run-supervisor-retry',
+      task: 'reprendre le build interrompu',
+      phaseOutputs: [{ phase: 'build', text: 'acquis' }],
+      executionQuote: quote,
+      usage: {
+        quoteId: quote.id,
+        startedAgents: 1,
+        startedCalls: 1,
+        completedCalls: 0,
+        failedCalls: 0,
+        activeCalls: 1,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        totalTokens: 0,
+        freshTokens: 0,
+        knownCostUsd: null,
+        unpricedCalls: 0,
+        unmeteredCalls: 0,
+        tokenCoverage: 'complete'
+      },
+      agents: [{ token: 'agent-1', pid: 42, identity: 'ancienne-identité' }],
+      startedAt: 1,
+      updatedAt: 2
+    })
+
+    const reconciled = preparePersistedRunForRelaunch(root, 'run-supervisor-retry', () => undefined)
+    expect(reconciled?.usage).toMatchObject({
+      totalTokens: 500_000,
+      freshTokens: 62_500,
+      unpricedCalls: 1,
+      unmeteredCalls: 1
+    })
+    let executeCalled = false
+
+    await expect(
+      new ExecutionSupervisor().run(
+        quote,
+        undefined,
+        async () => {
+          executeCalled = true
+          return 'repris'
+        },
+        reconciled?.usage
+      )
+    ).resolves.toBe('repris')
+    expect(executeCalled).toBe(true)
+  })
+})
+
 /**
  * CÂBLAGE. La logique de vivacité ne sert à rien si le démarrage ne la consulte pas — c'était
  * précisément le défaut : la reprise relançait sans jamais poser la question.
@@ -82,16 +234,28 @@ describe('que faire du run au démarrage', () => {
 describe('câblage — le démarrage consulte la garde avant de relancer', () => {
   const source = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
 
+  it('parcourt TOUS les runs reprenables plutôt qu’un seul', () => {
+    expect(source).toContain('const resumableRuns = os.resumableOrchestrations()')
+    expect(source).toContain('for (const resumableRun of resumableRuns)')
+    expect(source).not.toContain('const resumableRun = os.resumableOrchestration()')
+  })
+
   it('la reprise au démarrage passe par resumeActionFor', () => {
-    expect(source).toContain('const reprise = resumeActionFor(resumableRun, defaultProcessIdentity)')
+    expect(source).toContain(
+      'const reprise = resumeActionFor(resumableRun, defaultProcessIdentity)'
+    )
   })
 
   it('elle ne relance QUE si le verdict est « relancer »', () => {
-    expect(source).toContain("if (resumableRun && reprise === 'relancer') {")
+    expect(source).toContain("if (reprise === 'relancer') void relaunchResumableRun(resumableRun)")
+  })
+
+  it('réconcilie et persiste les appels morts avant de passer le snapshot au superviseur', () => {
+    expect(source).toContain('os.reconcileResumableOrchestrationForRelaunch(')
   })
 
   it('un agent encore au travail est SIGNALÉ, pas passé sous silence', () => {
-    expect(source).toContain("un agent travaille ENCORE")
+    expect(source).toContain('un agent travaille ENCORE')
   })
 })
 
@@ -117,5 +281,24 @@ describe('câblage — le démarrage rejoue le journal et mémorise où il s’e
 
   it('un échec de rattachement ne casse pas le démarrage', () => {
     expect(bloc).toContain('rattachement impossible')
+  })
+})
+
+describe('surveillance continue apres rattachement', () => {
+  it("relance des la sortie de l'agent sans exiger un nouveau redemarrage", async () => {
+    const actions = ['rattacher', 'rattacher', 'relancer'] as const
+    let reads = 0
+    let waits = 0
+
+    const result = await waitUntilRunCanResume(
+      () => actions[Math.min(reads++, actions.length - 1)],
+      async () => {
+        waits += 1
+      }
+    )
+
+    expect(result).toBe('relancer')
+    expect(reads).toBe(3)
+    expect(waits).toBe(2)
   })
 })

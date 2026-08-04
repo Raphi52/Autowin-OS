@@ -13,6 +13,8 @@ import type {
 import { RoleModelConfig } from './roles'
 import { TrustLedger } from './trust/ledger'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
+import { compileExecutionQuote } from './execution-quote'
+import { ExecutionSupervisor } from './execution-supervisor'
 
 /** Provider qui enregistre chaque appel (options) et rend une réponse valide + un usage mesurable. */
 class RecordingProvider implements ProviderAdapter {
@@ -40,7 +42,20 @@ class RecordingProvider implements ProviderAdapter {
       text: /no/i.test(model) ? 'DEFAUT: raison' : 'VALIDE',
       provider: this.id,
       systemInjected: Boolean(options.system),
-      usage: { inputTokens: 10, outputTokens: 5, costUsd: 0.001 }
+      usage: { inputTokens: 10, outputTokens: 5, costUsd: 0.001 },
+      executionEvidence:
+        options.execution?.sandbox === 'danger-full-access'
+          ? [
+              { type: 'file_change', kind: 'mutation', status: 'done', ok: true, summary: 'edit' },
+              {
+                type: 'command_execution',
+                kind: 'verification',
+                status: 'done',
+                ok: true,
+                summary: 'test exit=0'
+              }
+            ]
+          : undefined
     }
   }
 }
@@ -76,6 +91,75 @@ function makeOrchestrator(
 }
 
 describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
+  it('réduit la topologie avant tout appel pour préserver build, juge et récupération', async () => {
+    const provider = new RecordingProvider()
+    const supervisor = new ExecutionSupervisor()
+    const quote = compileExecutionQuote('ajoute une page de réglages')
+    const registry = new ProviderRegistry(undefined, supervisor).register(provider)
+    const roles = new RoleModelConfig({
+      orchestrator: { provider: provider.id, model: 'orch' },
+      subagent: { provider: provider.id, model: 'worker' },
+      judge: { provider: provider.id, model: 'judge' }
+    })
+    const orch = new Orchestrator({
+      registry,
+      roles,
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      authority: new AuthoritySas(),
+      executionWorkspace: 'C:\\ws',
+      worktrees: makeTestWorktrees('C:\\ws'),
+      classifyPhases: () => ['frame', 'build'],
+      currentExecutionQuote: () => supervisor.currentQuote(),
+      currentExecutionUsage: () => supervisor.currentSnapshot(),
+      phaseFanOut: (phase) =>
+        phase === 'frame'
+          ? ['m1', 'm2', 'm3'].map((model) => ({ provider: provider.id, model }))
+          : []
+    })
+
+    await supervisor.run(quote, undefined, () => orch.run('ajoute une page de réglages'))
+
+    expect(provider.calls.map((call) => call.model)).toEqual(['m1', 'worker', 'judge'])
+    expect(supervisor.lastSnapshot()).toMatchObject({
+      startedAgents: 3,
+      completedCalls: 3,
+      activeCalls: 0
+    })
+    expect(quote.allocation).toMatchObject({
+      phaseMembers: { frame: 1 },
+      reservedMandatoryAgents: 5,
+      estimatedMaxAgents: 5
+    })
+  })
+
+  it('refuse un pipeline impossible sans toucher le provider', async () => {
+    const provider = new RecordingProvider()
+    const supervisor = new ExecutionSupervisor()
+    const quote = compileExecutionQuote('ajoute une page de réglages', { maxProviderCalls: 2 })
+    const registry = new ProviderRegistry(undefined, supervisor).register(provider)
+    const orch = new Orchestrator({
+      registry,
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'worker' },
+        judge: { provider: provider.id, model: 'judge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      authority: new AuthoritySas(),
+      executionWorkspace: 'C:\\ws',
+      worktrees: makeTestWorktrees('C:\\ws'),
+      classifyPhases: () => ['frame', 'build'],
+      currentExecutionQuote: () => supervisor.currentQuote(),
+      currentExecutionUsage: () => supervisor.currentSnapshot()
+    })
+
+    await expect(
+      supervisor.run(quote, undefined, () => orch.run('ajoute une page de réglages'))
+    ).rejects.toThrow(/devis impossible.*avant exécution/i)
+    expect(provider.calls).toHaveLength(0)
+  })
+
   it('exécute deux membres Terrain et les rattache au groupe terrain:fanout', async () => {
     const provider = new RecordingProvider()
     const result = await makeOrchestrator(provider, new CostAggregator(), 'terrain').run(
@@ -131,12 +215,13 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
     const terrainAgents = result.trace.filter(
       (step) => step.role === 'subagent' && step.execution?.phase === 'terrain'
     )
-    expect(terrainAgents).toHaveLength(4)
+    // Le DAG ne se recopie plus sur chaque phase : Terrain garde son panel, une fois par membre.
+    expect(terrainAgents).toHaveLength(2)
     expect(new Set(terrainAgents.map((step) => step.model))).toEqual(new Set(['m1', 'm2']))
     expect(terrainAgents.some((step) => step.model === 'worker')).toBe(false)
   })
 
-  it('conserve les échecs Terrain si une phase greedy suivante réussit', async () => {
+  it("interrompt le pipeline quand aucun membre Terrain n'a produit de sortie", async () => {
     const provider = new RecordingProvider()
     const registry = new ProviderRegistry().register(provider)
     const roles = new RoleModelConfig({
@@ -166,11 +251,10 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
           : []
     })
 
-    const result = await orch.run('prépare puis construis la modification')
-
-    expect(result.failedTasks).toContain('observe')
-    expect(result.skippedTasks).toContain('prepare')
-    expect(provider.calls.some((call) => call.model === 'worker')).toBe(true)
+    await expect(orch.run('prépare puis construis la modification')).rejects.toThrow(
+      /aucun modèle n'a produit de sortie/i
+    )
+    expect(provider.calls.some((call) => call.model === 'worker')).toBe(false)
   })
 
   it('attribue un attemptId stable à chacun des N agents dès son démarrage live', async () => {

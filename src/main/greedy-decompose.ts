@@ -1,5 +1,5 @@
 import type { ProviderRegistry } from './providers/registry'
-import type { RoleModelConfig } from './roles'
+import type { RoleBinding, RoleModelConfig } from './roles'
 import type { GreedyTaskNode } from './orchestrator'
 
 /**
@@ -68,7 +68,11 @@ export function parseDecompositionPlan(text: string): GreedyTaskNode[] {
     if (typeof o.prompt !== 'string' || !o.prompt.trim()) return []
     const deps = Array.isArray(o.deps) ? o.deps : []
     if (!deps.every((d) => typeof d === 'string')) return []
-    nodes.push({ id: o.id.trim(), prompt: o.prompt.trim(), deps: (deps as string[]).map((d) => d.trim()) })
+    nodes.push({
+      id: o.id.trim(),
+      prompt: o.prompt.trim(),
+      deps: (deps as string[]).map((d) => d.trim())
+    })
   }
   if (nodes.length === 0) return []
   // Validation structurelle : ids uniques, deps connues, pas de cycle (sinon plan rejeté → séquentiel).
@@ -111,9 +115,9 @@ export function buildOrchestratorDecomposer(deps: {
   registry: ProviderRegistry
   roles: RoleModelConfig
   cwd: string
-}): (task: string) => Promise<GreedyTaskNode[]> {
-  return async (task: string): Promise<GreedyTaskNode[]> => {
-    const binding = deps.roles.getBinding('orchestrator')
+}): (task: string, bindingOverride?: RoleBinding) => Promise<GreedyTaskNode[]> {
+  return async (task: string, bindingOverride?: RoleBinding): Promise<GreedyTaskNode[]> => {
+    const binding = bindingOverride ?? deps.roles.getBinding('orchestrator')
     try {
       const res = await deps.registry.send(
         binding.provider,

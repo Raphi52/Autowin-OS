@@ -6,6 +6,7 @@ import { SourceControlPane } from './SourceControlPane'
 import { ScoutTable } from './ScoutTable'
 import { ModuleHeader } from './ModuleHeader'
 import { pickTurnToResume, type UnfinishedTurn } from './resume-unfinished'
+import { refreshesActiveConversation } from './chat-event-routing'
 import { pickRunForTrace } from './run-trace-target'
 import {
   CHAT_PANE_LIMITS,
@@ -51,7 +52,11 @@ import { RunInspector } from './RunInspector'
 import { WorkflowExecutionGraph } from './WorkflowExecutionGraph'
 import { ArtifactPreview } from './ArtifactPreview'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
-import { mergeLiveAndPersisted, scopedRunsFromTimeline } from './subagent-thread-from-trace'
+import {
+  mergeLiveAndPersisted,
+  scopedRunsFromTimeline,
+  type TurnRuntimeIdentity
+} from './subagent-thread-from-trace'
 import './ChatView.css'
 import './SlashPalette.css'
 import type { InspectTurnTarget } from '../observatory-focus'
@@ -124,7 +129,7 @@ type Conv = {
   title: string
   category: string
   provider: string
-  messages: Array<{
+  messages?: Array<{
     role: 'user' | 'assistant'
     content: string
     ts: number
@@ -134,9 +139,13 @@ type Conv = {
     turnId?: string
     turnConversationId?: string
     status?: 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
+    runtime?: TurnRuntimeIdentity
     parts?: Part[]
     error?: string
   }>
+  messageCount?: number
+  lastMessageRole?: 'user' | 'assistant'
+  lastAssistantStatus?: 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
   updatedAt: number
 }
 
@@ -154,6 +163,7 @@ type RunEntry = {
     defauts: number
   }
 }
+type CheckpointEntry = { id: string; runId: string; createdAt: string }
 
 type Decision = { id: string; question: string; options?: unknown[]; safeDefault?: unknown }
 
@@ -844,6 +854,8 @@ export function ChatView({
   const [paneTab, setPaneTab] = useState<WorkflowPanelSection>('subagents')
   const [runScope, setRunScope] = useState<'conv' | 'tous'>('conv')
   const [runs, setRuns] = useState<RunEntry[]>([])
+  const [checkpoints, setCheckpoints] = useState<CheckpointEntry[]>([])
+  const [forkedCheckpoint, setForkedCheckpoint] = useState('')
   /** Miroir stable : `revealLiveAction` lit la liste courante sans se recreer a chaque chargement. */
   const runsRef = useRef<RunEntry[]>([])
   runsRef.current = runs
@@ -900,6 +912,7 @@ export function ChatView({
     new Map<string, ComposerDraft>([[NEW_DRAFT_KEY, { input: '', attachments: [], error: null }]])
   )
   const activeRef = useRef<string | null>(null)
+  const loadConversationRequestRef = useRef(0)
   const runtimeRefreshGenerationRef = useRef(0)
   const runsRequestRef = useRef<RunRequestIdentity>({ id: 0, scope: 'conv', convId: null })
   const followTailRef = useRef(true)
@@ -1179,7 +1192,7 @@ export function ChatView({
     if (!target) return
     const conversation = loaded.find((candidate) => candidate.id === target.conversationId)
     if (!conversation) return
-    loadConv(conversation)
+    await loadConv(conversation)
     await replayTurnJournal(target.conversationId, target.turnId)
   }
   // File d'attente LOCALE (renderer) : messages tapés pendant un tour, envoyés comme des tours
@@ -1239,6 +1252,10 @@ export function ChatView({
       convId: activeRef.current
     }
     if (isRunRequestCurrent(request, currentRequest)) setRuns(nextRuns)
+    if (window.api.checkpointForks) {
+      const nextCheckpoints = await window.api.checkpointForks()
+      if (isRunRequestCurrent(request, currentRequest)) setCheckpoints(nextCheckpoints)
+    }
   }
   function selectRunScope(scope: 'conv' | 'tous'): void {
     runScopeRef.current = scope
@@ -1263,7 +1280,6 @@ export function ChatView({
   useEffect(() => {
     void Promise.resolve().then(() => {
       void refreshConvs()
-      void refreshRuns()
       void refreshDecisions()
       void refreshRuntimeIdentity()
     })
@@ -1296,6 +1312,13 @@ export function ChatView({
         if (e.scope === 'decisions') refreshDecisions()
         if (e.scope === 'workflows') refreshRuns()
         if (e.scope === 'roles') refreshRuntimeIdentity()
+        if (refreshesActiveConversation(e, activeRef.current)) {
+          const id = activeRef.current!
+          liveMessagesRef.current.delete(id)
+          void window.api.conversation(id).then((conversation) => {
+            if (conversation && activeRef.current === id) void loadConv(conversation as Conv)
+          })
+        }
       } else if (e.type === 'orchestrate-start') {
         if (!e.convId) return
         setLiveRuns((current) =>
@@ -1350,7 +1373,6 @@ export function ChatView({
             status: (e.status as 'green' | 'red') ?? 'green'
           })
         )
-        void refreshRuns()
         // Le run terminé RESTE dans la section Sous-agents avec son fil.
         //
         // Il y avait ici un `setTimeout(4000)` qui dispatchait `clear`, au motif que le run « rejoignait
@@ -1433,12 +1455,15 @@ export function ChatView({
 
   /* --- conversations : sélection = fil rechargé depuis le store --- */
 
-  function loadConv(c: Conv): void {
+  async function loadConv(c: Conv): Promise<void> {
+    const requestId = ++loadConversationRequestRef.current
+    const detailed = c.messages ? c : ((await window.api.conversation(c.id)) as Conv | null)
+    if (!detailed || requestId !== loadConversationRequestRef.current) return
     followTailRef.current = true
     setHasNewActivity(false)
     activeRef.current = c.id
     setActiveId(c.id)
-    const branchMessages = c.messages
+    const branchMessages = detailed.messages ?? []
     const stored =
       liveMessagesRef.current.get(c.id) ??
       branchMessages.map((m) =>
@@ -1460,6 +1485,7 @@ export function ChatView({
   }
 
   function newConv(): void {
+    loadConversationRequestRef.current += 1
     followTailRef.current = true
     setHasNewActivity(false)
     activeRef.current = null
@@ -1931,7 +1957,6 @@ export function ChatView({
             setActiveId(convId)
             switchComposerDraft(convId)
           }
-          void refreshConvs()
         }
       }
 
@@ -1959,7 +1984,6 @@ export function ChatView({
           composerDraftKeyRef.current = c.id
           composerDraftsRef.current.set(c.id, { input: '', attachments: [], error: null })
         }
-        void refreshConvs()
       }
 
       const history: Msg[] = [
@@ -2053,10 +2077,6 @@ export function ChatView({
         if (renderedText.trim()) await window.api.markResponseDisplayed(convId, renderedText)
       }
     }
-    if (messageCommitted) {
-      void refreshConvs()
-      void refreshRuns()
-    }
   }
 
   /* --- workflows --- */
@@ -2118,8 +2138,18 @@ export function ChatView({
       try {
         const trace = (await window.api.causalTrace?.(activeId)) as HarnessTraceEvent[] | undefined
         if (!alive || !trace) return
+        const runtimeByTurn = new Map<string, TurnRuntimeIdentity>()
+        for (const message of active?.messages ?? []) {
+          if (message.role === 'assistant' && message.turnId && message.runtime) {
+            runtimeByTurn.set(message.turnId, message.runtime)
+          }
+        }
         setPersistedRuns(
-          scopedRunsFromTimeline(buildHarnessTimelineFromTrace(trace), activeId) as ScopedLiveRun<OrchStep>[]
+          scopedRunsFromTimeline(
+            buildHarnessTimelineFromTrace(trace),
+            activeId,
+            runtimeByTurn
+          ) as ScopedLiveRun<OrchStep>[]
         )
       } catch {
         /* trace illisible : on garde le direct, jamais d'écran vide à cause de la relecture */
@@ -2128,7 +2158,7 @@ export function ChatView({
     return () => {
       alive = false
     }
-  }, [isActive, activeId, showRuns, paneTab, liveRuns])
+  }, [isActive, activeId, showRuns, paneTab, liveRuns, active])
 
   const visibleLiveRuns = mergeLiveAndPersisted<OrchStep>(
     visibleScopedRuns<OrchStep>(liveRuns, activeId ?? undefined, runScope),
@@ -2208,15 +2238,11 @@ export function ChatView({
             <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
           )}
           {conversationHits.map(({ conversation: c, snippet }) => {
-            const branchMessages = c.messages
-            const lastAssistant = [...branchMessages]
-              .reverse()
-              .find((message) => message.role === 'assistant')
             const conversationState = deriveConversationState({
               busy: busyConversations.has(c.id),
-              messageCount: branchMessages.length,
-              lastMessageRole: branchMessages.at(-1)?.role,
-              lastAssistantStatus: lastAssistant?.status
+              messageCount: c.messageCount ?? c.messages?.length ?? 0,
+              lastMessageRole: c.lastMessageRole ?? c.messages?.at(-1)?.role,
+              lastAssistantStatus: c.lastAssistantStatus
             })
             const stateDescription = `${conversationState.label} — ${conversationState.detail}`
             return (
@@ -2235,11 +2261,15 @@ export function ChatView({
                     {!convQuery && (
                       <span className="conv-meta">
                         <span>{c.provider}</span>
-                        <span>{c.messages.length} messages</span>
+                        <span>{c.messageCount ?? c.messages?.length ?? 0} messages</span>
                       </span>
                     )}
                   </span>
-                  {convQuery && <span className="conv-count tnum">{c.messages.length}</span>}
+                  {convQuery && (
+                    <span className="conv-count tnum">
+                      {c.messageCount ?? c.messages?.length ?? 0}
+                    </span>
+                  )}
                 </button>
                 <button
                   className="conv-menu-trigger"
@@ -3082,6 +3112,26 @@ export function ChatView({
                   </div>
                 ))}
               {/* SECTION RUN : les RUN.md eux-mêmes (statut, DoD, journal, défauts). */}
+              {paneTab === 'run' && checkpoints.length > 0 && (
+                <section className="card checkpoint-forks">
+                  <strong>Checkpoints persistants</strong>
+                  {checkpoints.map((checkpoint) => (
+                    <button
+                      key={checkpoint.id}
+                      className="btn btn-sm"
+                      onClick={() => {
+                        const forkId = `fork-${Date.now()}`
+                        void window.api
+                          .createCheckpointFork(checkpoint.id, forkId)
+                          .then(() => setForkedCheckpoint(forkId))
+                      }}
+                    >
+                      Forker {checkpoint.runId}
+                    </button>
+                  ))}
+                  {forkedCheckpoint && <small>Fork immuable préparé : {forkedCheckpoint}</small>}
+                </section>
+              )}
               {paneTab === 'run' && runs.length === 0 && (
                 <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
                   {runScope === 'conv'

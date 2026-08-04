@@ -165,7 +165,7 @@ describe('ProviderRegistry — contrat d’adaptateur', () => {
       reg.send(fabricId, conv, {
         execution: { cwd: 'C:\\workspace', sandbox: 'workspace-write' }
       })
-    ).rejects.toThrow(/tool-stream/i)
+    ).rejects.toThrow(/local-tools/i)
     expect(fabricSend).not.toHaveBeenCalled()
     expect(codexSend).not.toHaveBeenCalled()
   })

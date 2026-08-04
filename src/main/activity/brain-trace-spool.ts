@@ -29,7 +29,7 @@ export interface BrainTrace {
   kind?: 'automatic' | 'query'
   query: string
   found?: boolean
-  status?: 'found' | 'empty' | 'unavailable'
+  status?: 'found' | 'empty' | 'invalid' | 'unavailable'
   injectedChars: number
   navigation?: BrainNavigation
 }

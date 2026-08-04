@@ -10,6 +10,30 @@ describe('collapsed navigation rail', () => {
     expect(css).not.toContain('.brand b')
   })
 
+  it('marks an isolated automation window so it cannot be mistaken for the user app', () => {
+    const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
+    const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8')
+    expect(app).toContain("new URLSearchParams(window.location.search).get('instance') === 'test'")
+    expect(app).toContain("data-automation-instance={testInstance ? 'test' : 'user'}")
+    expect(app).toContain('INSTANCE DE TEST')
+    expect(css).toContain('.test-instance-banner')
+  })
+
+  it('keeps the test marker above full-screen image and model-question overlays', () => {
+    const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8')
+    const chatCss = readFileSync(new URL('../components/ChatView.css', import.meta.url), 'utf8')
+    const questionCss = readFileSync(
+      new URL('../components/ModelQuestionPopup.css', import.meta.url),
+      'utf8'
+    )
+    const markerZ = Number(css.match(/\.test-instance-banner\s*{[^}]*z-index:\s*(\d+)/s)?.[1])
+    const imageZ = Number(chatCss.match(/\.image-lightbox\s*{[^}]*z-index:\s*(\d+)/s)?.[1])
+    const questionZ = Number(
+      questionCss.match(/\.model-question-layer\s*{[^}]*z-index:\s*(\d+)/s)?.[1]
+    )
+    expect(markerZ).toBeGreaterThan(Math.max(imageZ, questionZ))
+  })
+
   it('uses the selected Segoe UI Variable face for the Autowin OS brand title', () => {
     const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8')
     expect(css).toMatch(

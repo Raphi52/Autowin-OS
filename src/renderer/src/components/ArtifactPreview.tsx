@@ -40,6 +40,7 @@ function fileSize(bytes: number): string {
 }
 
 function inlineDataUrl(artifact: ChatArtifact): string | undefined {
+  if (artifact.url?.startsWith('data:')) return artifact.url
   if (artifact.content === undefined || artifact.encoding !== 'base64') return undefined
   return `data:${artifact.mimeType};base64,${artifact.content}`
 }
@@ -255,12 +256,18 @@ export function ArtifactPreview({
   artifact,
   conversationId,
   turnId,
-  onOpenImage
+  onOpenImage,
+  displayName,
+  sourceLabel,
+  previewError
 }: {
   artifact: ChatArtifact
   conversationId?: string | null
   turnId?: string
   onOpenImage?: (image: { src: string; name: string }) => void
+  displayName?: string
+  sourceLabel?: string
+  previewError?: string
 }): React.JSX.Element {
   const cardRef = useRef<HTMLElement>(null)
   const [loadState, setLoadState] = useState<{
@@ -333,11 +340,13 @@ export function ArtifactPreview({
     <article ref={cardRef} className="artifact-preview" data-artifact-kind={artifact.kind}>
       <header className="artifact-preview__header">
         <span className="artifact-preview__kind">{LABELS[artifact.kind]}</span>
-        <strong title={artifact.name}>{artifact.name}</strong>
+        <strong title={artifact.name}>{displayName ?? artifact.name}</strong>
         <span>{fileSize(artifact.size)}</span>
       </header>
       <div className="artifact-preview__body">
-        {mustLoad && !isNearViewport ? (
+        {previewError ? (
+          <div className="artifact-preview__blocked">{previewError}</div>
+        ) : mustLoad && !isNearViewport ? (
           <div className="artifact-preview__placeholder">Aperçu chargé à l’approche</div>
         ) : mustLoad && !loaded && !loadError ? (
           <div className="artifact-preview__placeholder" role="status">
@@ -352,8 +361,8 @@ export function ArtifactPreview({
       <footer className="artifact-preview__footer">
         <span>{resolved.mimeType}</span>
         <span>
-          {resolved.source.provider}
-          {resolved.source.model ? ` · ${resolved.source.model}` : ''}
+          {sourceLabel ??
+            `${resolved.source.provider}${resolved.source.model ? ` · ${resolved.source.model}` : ''}`}
         </span>
         {artifact.path && conversationId && turnId && (
           <button

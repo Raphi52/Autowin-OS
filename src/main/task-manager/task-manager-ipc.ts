@@ -138,7 +138,7 @@ function schedule(raw: unknown): StructuredSchedule {
   const value = object(raw, 'schedule')
   const recurrenceValue = object(value.recurrence, 'recurrence')
   const unit = recurrenceValue.unit
-  if (!['none', 'day', 'week', 'month'].includes(String(unit))) {
+  if (!['none', 'minute', 'hour', 'day', 'week', 'month'].includes(String(unit))) {
     throw new Error('Unité de récurrence invalide')
   }
   const recurrence: StructuredRecurrence = {

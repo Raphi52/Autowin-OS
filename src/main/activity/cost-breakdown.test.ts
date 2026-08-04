@@ -39,8 +39,7 @@ const callFixture = (actor: string, costUsd: number, outputTokens: number): Prom
  * jamais appele (facade). On verifie la chaine complete main -> preload -> types.
  */
 describe('os:costBreakdown — chaine IPC complete', () => {
-  const read = (p: string): string =>
-    readFileSync(join(__dirname, '..', '..', p), 'utf8')
+  const read = (p: string): string => readFileSync(join(__dirname, '..', '..', p), 'utf8')
 
   it('le main enregistre le handler et borne la dimension recue', () => {
     const main = read('main/index.ts')
@@ -58,6 +57,86 @@ describe('os:costBreakdown — chaine IPC complete', () => {
     expect(read('preload/index.ts')).toContain("ipcRenderer.invoke('os:costBreakdown'")
     expect(read('preload/index.d.ts')).toContain('costBreakdown:')
     expect(read('preload/index.d.ts')).toContain('cacheHitRatio')
+  })
+})
+
+describe('comptabilite canonique des appels', () => {
+  it('dedoublonne par usageCallId sans comparer des montants arrondis', () => {
+    const call = callFixture('subagent', 0.3684004, 2834)
+    const rows = summarizeCostSamples(
+      costSamplesFrom(
+        [call],
+        [
+          {
+            kind: 'exec',
+            label: 'subagent',
+            provider: 'claude',
+            usageCallId: call.id,
+            costUsd: 0.3683996,
+            outputTokens: 2840
+          }
+        ]
+      )
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0].calls).toBe(1)
+  })
+
+  it('ne recompte pas le total agrege chat quand les appels canoniques existent', () => {
+    const call = callFixture('orchestrator', 0.5, 100)
+    const rows = summarizeCostSamples(
+      costSamplesFrom(
+        [call],
+        [{ kind: 'chat', provider: 'claude', costUsd: 0.5, outputTokens: 100 }]
+      )
+    )
+    expect(rows.reduce((sum, row) => sum + row.calls, 0)).toBe(1)
+  })
+
+  it('rend visible un appel non chiffre au lieu de le transformer en zero certain', () => {
+    const call = { ...callFixture('subagent', 0, 0), usage: undefined }
+    const rows = summarizeCostSamples(costSamplesFrom([call]))
+    expect(rows[0]).toMatchObject({ calls: 1, unpricedCalls: 1, costUsd: 0 })
+  })
+
+  it("enrichit l'appel echoue avec son usage tardif au lieu de jeter ses tokens", () => {
+    const failed = {
+      ...callFixture('orchestrator', 0, 0),
+      usage: undefined,
+      status: 'failed' as const
+    }
+    const rows = summarizeCostSamples(
+      costSamplesFrom(
+        [failed],
+        [
+          {
+            kind: 'chat-usage',
+            label: 'tour en timeout',
+            provider: 'claude',
+            inputTokens: 120,
+            outputTokens: 8,
+            cacheReadTokens: 20
+          }
+        ]
+      )
+    )
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      calls: 1,
+      inputTokens: 120,
+      outputTokens: 8,
+      cacheReadTokens: 20,
+      unpricedCalls: 1
+    })
+  })
+
+  it('calcule le cache comme une part des tokens entree', () => {
+    const call = {
+      ...callFixture('subagent', 1, 10),
+      usage: { inputTokens: 100, outputTokens: 10, cacheReadTokens: 80, costUsd: 1 }
+    }
+    expect(summarizeCostSamples(costSamplesFrom([call]))[0].cacheHitRatio).toBe(0.8)
   })
 })
 

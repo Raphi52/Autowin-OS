@@ -17,7 +17,7 @@ const markGlyph: Record<GitChange['status'], string> = {
   untracked: '?'
 }
 
-type PaneView = 'project' | 'brain' | 'worktree'
+type PaneView = 'project' | 'brain' | 'workspace'
 
 interface BrainTraceView {
   timestamp: string
@@ -26,7 +26,7 @@ interface BrainTraceView {
   kind?: 'automatic' | 'query'
   query: string
   found?: boolean
-  status?: 'found' | 'empty' | 'unavailable'
+  status?: 'found' | 'empty' | 'invalid' | 'unavailable'
   injectedChars: number
   navigation?: {
     candidates: Array<{ path: string; retained: boolean }>
@@ -60,7 +60,7 @@ export function SourceControlPane({
   const [repoPath] = useState<string>(() => localStorage.getItem('autowin:sc-repo') ?? '')
   const [refreshTick, setRefreshTick] = useState(0)
   const [view, setView] = useState<PaneView>('project')
-  const scope = `${view}:${conversationId ?? ''}:${view === 'worktree' ? repoPath : ''}`
+  const scope = `${view}:${conversationId ?? ''}:${view === 'workspace' ? repoPath : ''}`
   const [loadedScope, setLoadedScope] = useState('')
 
   useEffect(() => {
@@ -208,7 +208,7 @@ export function SourceControlPane({
   const paneLabel =
     view === 'brain'
       ? 'Appels Brain de la conversation'
-      : view === 'worktree' && repoPath
+      : view === 'workspace' && repoPath
         ? repoPath.replace(/^.*[\\/]/, '')
         : view === 'project'
           ? 'Projet de la conversation'
@@ -254,12 +254,12 @@ export function SourceControlPane({
             Brain
           </button>
           <button
-            className={`sc-btn sc-repo-btn${view === 'worktree' ? ' is-active' : ''}`}
-            data-testid="sc-view-worktree"
-            title="Branche, copies d’agents et historique"
-            onClick={() => selectView('worktree')}
+            className={`sc-btn sc-repo-btn${view === 'workspace' ? ' is-active' : ''}`}
+            data-testid="sc-view-workspace"
+            title="Branche et copies d’agents du workspace"
+            onClick={() => selectView('workspace')}
           >
-            Worktree
+            Workspace
           </button>
         </div>
 
@@ -406,7 +406,7 @@ export function SourceControlPane({
           </section>
         )}
 
-        {view === 'worktree' && visibleGit?.state && (
+        {view === 'workspace' && visibleGit?.state && (
           <section className="sc-sect">
             <header className="sc-h">Branche</header>
             <div className="sc-branch-row">
@@ -443,7 +443,7 @@ export function SourceControlPane({
           </section>
         )}
 
-        {view === 'worktree' && (
+        {view === 'workspace' && (
           <section className="sc-sect">
             <header className="sc-h">
               Hub des bureaux{worktrees.length ? ` · ${worktrees.length}` : ''}
@@ -489,17 +489,6 @@ export function SourceControlPane({
           </section>
         )}
 
-        {view === 'worktree' && visibleGit?.history && visibleGit.history.length > 0 && (
-          <section className="sc-sect">
-            <header className="sc-h">Historique</header>
-            {visibleGit.history.map((commit) => (
-              <div className="sc-commit" key={commit.hash}>
-                <span className="sc-hash">{commit.hash}</span>
-                <span className="sc-subj">{commit.subject}</span>
-              </div>
-            ))}
-          </section>
-        )}
       </div>
     </div>
   )

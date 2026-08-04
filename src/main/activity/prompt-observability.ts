@@ -177,6 +177,8 @@ export interface CostBreakdownRow {
   cacheHitRatio: number
   /** Temps cumule des appels de cette ligne. 0 = aucune source ne l'a enregistre, jamais devine. */
   durationMs: number
+  /** Appels executes dont le fournisseur n'expose pas de prix fiable. */
+  unpricedCalls: number
 }
 
 /**
@@ -194,11 +196,14 @@ export interface CostSample {
   provider: string
   model?: string
   costUsd: number
+  /** Distingue un vrai 0 $ d'un prix absent. */
+  costKnown: boolean
   inputTokens: number
   outputTokens: number
   cacheReadTokens: number
   /** Duree de l'appel ; 0 quand la source ne la connait pas. */
   durationMs: number
+  callId?: string
 }
 
 function sampleFromCall(call: PromptCallRecord): CostSample {
@@ -207,10 +212,12 @@ function sampleFromCall(call: PromptCallRecord): CostSample {
     provider: call.provider || '(inconnu)',
     ...(call.model ? { model: call.model } : {}),
     costUsd: call.usage?.costUsd ?? 0,
+    costKnown: Number.isFinite(call.usage?.costUsd),
     inputTokens: call.usage?.inputTokens ?? 0,
     outputTokens: call.usage?.outputTokens ?? 0,
     cacheReadTokens: call.usage?.cacheReadTokens ?? 0,
-    durationMs: typeof call.durationMs === 'number' && call.durationMs > 0 ? call.durationMs : 0
+    durationMs: typeof call.durationMs === 'number' && call.durationMs > 0 ? call.durationMs : 0,
+    callId: call.id
   }
 }
 
@@ -223,7 +230,9 @@ export interface ActivityCostEntry {
   costUsd?: number
   inputTokens?: number
   outputTokens?: number
+  cacheReadTokens?: number
   durationMs?: number
+  usageCallId?: string
 }
 
 /**
@@ -253,10 +262,12 @@ function sampleFromActivity(entry: ActivityCostEntry): CostSample {
     provider: entry.provider || '(inconnu)',
     ...(entry.model ? { model: entry.model } : {}),
     costUsd: entry.costUsd ?? 0,
+    costKnown: Number.isFinite(entry.costUsd),
     inputTokens: entry.inputTokens ?? 0,
     outputTokens: entry.outputTokens ?? 0,
-    cacheReadTokens: 0,
-    durationMs: typeof entry.durationMs === 'number' && entry.durationMs > 0 ? entry.durationMs : 0
+    cacheReadTokens: entry.cacheReadTokens ?? 0,
+    durationMs: typeof entry.durationMs === 'number' && entry.durationMs > 0 ? entry.durationMs : 0,
+    ...(entry.usageCallId ? { callId: entry.usageCallId } : {})
   }
 }
 
@@ -277,7 +288,13 @@ function costMatchKey(sample: CostSample): string {
 
 /** Un echantillon sans cout NI tokens de sortie n'apporte rien a une repartition de cout. */
 function hasSpend(sample: CostSample): boolean {
-  return sample.costUsd !== 0 || sample.outputTokens !== 0
+  return (
+    sample.costUsd !== 0 ||
+    sample.inputTokens !== 0 ||
+    sample.outputTokens !== 0 ||
+    sample.cacheReadTokens !== 0 ||
+    Boolean(sample.callId)
+  )
 }
 
 /**
@@ -295,20 +312,46 @@ export function costSamplesFrom(
   activity: readonly ActivityCostEntry[] = []
 ): CostSample[] {
   const samples = calls.map(sampleFromCall).filter(hasSpend)
-  // Multiset des prompt-calls encore appariables, par cle de cout.
-  const unmatched = new Map<string, number>()
-  for (const sample of samples) {
+  const hasCanonicalCalls = samples.length > 0
+  const canonicalIds = new Set(samples.flatMap((sample) => (sample.callId ? [sample.callId] : [])))
+  // Multiset des prompt-calls encore appariables, par cle de cout. Les indices permettent aussi
+  // d'enrichir une trace d'echec sans usage lorsque le provider rend ses vrais compteurs plus tard.
+  const unmatched = new Map<string, number[]>()
+  for (const [index, sample] of samples.entries()) {
     const key = costMatchKey(sample)
-    unmatched.set(key, (unmatched.get(key) ?? 0) + 1)
+    const indices = unmatched.get(key) ?? []
+    indices.push(index)
+    unmatched.set(key, indices)
   }
   for (const entry of activity) {
+    if (entry.usageCallId && canonicalIds.has(entry.usageCallId)) continue
+    // `chat` est un cumul de tour, pas un appel atomique. Des appels fins presents font foi.
+    if (entry.kind === 'chat' && hasCanonicalCalls) continue
     const sample = sampleFromActivity(entry)
     if (!hasSpend(sample)) continue
     const key = costMatchKey(sample)
-    const remaining = unmatched.get(key) ?? 0
-    if (remaining > 0) {
-      // Deja compte cote prompt-calls : on consomme l'appariement et on n'ajoute rien.
-      unmatched.set(key, remaining - 1)
+    const candidates = unmatched.get(key) ?? []
+    const canonicalIndex = candidates.shift()
+    if (canonicalIndex !== undefined) {
+      const canonical = samples[canonicalIndex]
+      // Timeout: la trace canonique existe deja mais ne connait aucun token. Le règlement tardif
+      // porte la mesure réelle; la jeter au nom du dedoublonnage produirait « 1 appel, 0 token ».
+      if (
+        canonical.inputTokens === 0 &&
+        canonical.outputTokens === 0 &&
+        canonical.cacheReadTokens === 0 &&
+        (sample.inputTokens > 0 || sample.outputTokens > 0 || sample.cacheReadTokens > 0)
+      ) {
+        samples[canonicalIndex] = {
+          ...canonical,
+          inputTokens: sample.inputTokens,
+          outputTokens: sample.outputTokens,
+          cacheReadTokens: sample.cacheReadTokens,
+          costUsd: sample.costUsd,
+          costKnown: sample.costKnown,
+          durationMs: Math.max(canonical.durationMs, sample.durationMs)
+        }
+      }
       continue
     }
     samples.push(sample)
@@ -324,29 +367,28 @@ export function summarizeCostSamples(
   const rows = new Map<string, CostBreakdownRow>()
   for (const sample of samples) {
     const key = (dimension === 'actor' ? sample.actor : sample[dimension]) || '(inconnu)'
-    const row =
-      rows.get(key) ??
-      {
-        key,
-        calls: 0,
-        costUsd: 0,
-        inputTokens: 0,
-        outputTokens: 0,
-        cacheReadTokens: 0,
-        cacheHitRatio: 0,
-        durationMs: 0
-      }
+    const row = rows.get(key) ?? {
+      key,
+      calls: 0,
+      costUsd: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheHitRatio: 0,
+      durationMs: 0,
+      unpricedCalls: 0
+    }
     row.calls += 1
     row.costUsd += sample.costUsd
     row.inputTokens += sample.inputTokens
     row.outputTokens += sample.outputTokens
     row.cacheReadTokens += sample.cacheReadTokens
     row.durationMs += sample.durationMs
+    if (!sample.costKnown) row.unpricedCalls += 1
     rows.set(key, row)
   }
   for (const row of rows.values()) {
-    const contextTotal = row.inputTokens + row.cacheReadTokens
-    row.cacheHitRatio = contextTotal > 0 ? row.cacheReadTokens / contextTotal : 0
+    row.cacheHitRatio = row.inputTokens > 0 ? Math.min(1, row.cacheReadTokens / row.inputTokens) : 0
   }
   return [...rows.values()].sort((a, b) => b.costUsd - a.costUsd)
 }

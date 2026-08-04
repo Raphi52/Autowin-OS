@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   occurrenceIdFor,
   resolveFirstOccurrence,
+  resolveFirstOccurrenceAtOrAfter,
   resolveNextOccurrence,
   type StructuredSchedule
 } from './schedule'
@@ -27,6 +28,25 @@ describe('Task Manager — planification structurée', () => {
     const everyTwoDays = schedule({ recurrence: { unit: 'day', interval: 2 } })
     const first = resolveFirstOccurrence(everyTwoDays)
     expect(resolveNextOccurrence(everyTwoDays, first)).toBe(Date.parse('2026-08-05T07:30:00.000Z'))
+  })
+
+  it('calcule les récurrences en minutes et en heures', () => {
+    const everyFifteenMinutes = schedule({ recurrence: { unit: 'minute', interval: 15 } })
+    const everyTwoHours = schedule({ recurrence: { unit: 'hour', interval: 2 } })
+    const first = resolveFirstOccurrence(everyFifteenMinutes)
+
+    expect(resolveNextOccurrence(everyFifteenMinutes, first)).toBe(
+      Date.parse('2026-08-03T07:45:00.000Z')
+    )
+    expect(resolveNextOccurrence(everyTwoHours, first)).toBe(Date.parse('2026-08-03T09:30:00.000Z'))
+  })
+
+  it('retrouve directement une échéance future pour une récurrence à la minute', () => {
+    const everyFiveMinutes = schedule({ recurrence: { unit: 'minute', interval: 5 } })
+
+    expect(
+      resolveFirstOccurrenceAtOrAfter(everyFiveMinutes, Date.parse('2028-08-03T07:32:00.000Z'))
+    ).toBe(Date.parse('2028-08-03T07:35:00.000Z'))
   })
 
   it('respecte les jours choisis pour une récurrence hebdomadaire', () => {

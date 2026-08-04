@@ -162,6 +162,56 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => pilot.resolve({ ok: true }))
   })
 
+  it('does not reload conversations or runs locally after a completed turn', async () => {
+    const conversations = vi.fn().mockResolvedValue([conversation('A')])
+    const conversationRuns = vi.fn().mockResolvedValue([])
+    const mockApi = api({ conversations, conversationRuns })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('tour sans rechargement redondant')
+    await click('.composer-send')
+    await act(async () => flushAnimationFrames())
+
+    expect(conversations).toHaveBeenCalledTimes(1)
+    expect(conversationRuns).toHaveBeenCalledTimes(1)
+  })
+
+  it('relies on the conversation invalidation broadcast after creating a conversation', async () => {
+    const conversations = vi.fn().mockResolvedValue([])
+    const mockApi = api({
+      conversations,
+      conversationsCreate: vi.fn().mockResolvedValue(conversation('A'))
+    })
+    await mount(mockApi)
+    await type('nouvelle conversation')
+    await click('.composer-send')
+    await act(async () => flushAnimationFrames())
+
+    expect(conversations).toHaveBeenCalledTimes(1)
+  })
+
+  it('reloads runs once when orchestration completion also emits a workflow refresh', async () => {
+    let appHandler: ((event: Record<string, unknown>) => void) | undefined
+    const conversationRuns = vi.fn().mockResolvedValue([])
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      conversationRuns,
+      onAppEvent: vi.fn((handler: (event: Record<string, unknown>) => void) => {
+        appHandler = handler
+        return vi.fn()
+      })
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await act(async () => {
+      appHandler?.({ type: 'orchestrate-end', convId: 'A', status: 'green' })
+      appHandler?.({ type: 'refresh', scope: 'workflows' })
+      await Promise.resolve()
+    })
+
+    expect(conversationRuns).toHaveBeenCalledTimes(2)
+  })
+
   it('drains queued messages in order after stopping the active turn', async () => {
     const firstTurn = deferred<{ ok: boolean; cancelled?: boolean }>()
     const secondTurn = deferred<{ ok: boolean }>()
@@ -1658,6 +1708,49 @@ describe('ChatView behavior under concurrent UI actions', () => {
     ).toBe('B')
     expect((container!.querySelector('textarea') as HTMLTextAreaElement).value).toBe('draft B')
   })
+
+  it.each(['click', 'enter'] as const)(
+    'sends from an existing empty conversation B by %s while conversation A is still working',
+    async (submission) => {
+      const pilotA = deferred<{ ok: boolean }>()
+      const pilotChat = vi
+        .fn()
+        .mockImplementationOnce(() => pilotA.promise)
+        .mockResolvedValue({ ok: true })
+      const mockApi = api({
+        conversations: vi.fn().mockResolvedValue([conversation('A'), conversation('B')]),
+        pilotChat
+      })
+      await mount(mockApi)
+      const picks = container!.querySelectorAll('.conv-pick')
+      await act(async () => (picks[0] as HTMLElement).click())
+      await type('travail long dans A')
+      await click('.composer-send')
+
+      await act(async () => (picks[1] as HTMLElement).click())
+      await type('Conversation active — Preuve portée conversation A · 1785448165496')
+      if (submission === 'click') {
+        await click('.composer-send')
+      } else {
+        const textarea = container!.querySelector('textarea') as HTMLTextAreaElement
+        await act(async () => {
+          textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+        })
+      }
+
+      expect(pilotChat).toHaveBeenCalledTimes(2)
+      expect(pilotChat.mock.calls[1][1]).toBe('B')
+      expect(pilotChat.mock.calls[1][0]).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            role: 'user',
+            content: 'Conversation active — Preuve portée conversation A · 1785448165496'
+          })
+        ])
+      )
+      await act(async () => pilotA.resolve({ ok: true }))
+    }
+  )
 
   it('releases the New lock after assigning A while retaining A busy', async () => {
     const pilotA = deferred<{ ok: boolean }>()

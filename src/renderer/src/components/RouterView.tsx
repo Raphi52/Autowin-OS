@@ -29,13 +29,19 @@ const STATUS_LABEL: Record<ProviderDisplayStatus, string> = {
   unknown: 'Indéterminé',
   standby: 'En standby'
 }
-const PROVIDER_LABEL: Record<string, string> = { claude: 'Claude', codex: 'Codex', kimi: 'Kimi' }
+const PROVIDER_LABEL: Record<string, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  kimi: 'Kimi',
+  gemini: 'Gemini'
+}
 const RE_AUTH_HINT: Record<string, string> = {
   claude:
     'CLI Claude introuvable ou non authentifié — installer/authentifier Claude, puis relance « Tester ».',
   codex:
     'CLI Codex ou session OAuth indisponible — installer/reconnecter Codex, puis rouvre la page.',
-  kimi: 'CLI Kimi introuvable — installer/authentifier Kimi, puis relance « Tester ».'
+  kimi: 'CLI Kimi introuvable — installer/authentifier Kimi, puis relance « Tester ».',
+  gemini: 'Session Gemini absente — reconnecte le compte Google, puis relance « Tester ».'
 }
 
 interface Binding {

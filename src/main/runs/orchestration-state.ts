@@ -10,6 +10,9 @@ import {
 import { join } from 'node:path'
 import type { PipelinePhase } from '../skill-pipeline'
 import type { RoleBinding } from '../roles'
+import type { ExecutionQuote } from '../execution-quote'
+import type { ExecutionUsageSnapshot } from '../execution-supervisor'
+import type { OrchestrationRuntimeSnapshot } from '../orchestrator'
 
 /**
  * SURVIE NIVEAU 3 — état reprenable d'une ORCHESTRATION.
@@ -34,14 +37,27 @@ export interface OrchestrationPhaseOutput {
 
 export interface OrchestrationRunState {
   runId: string
+  /** Lignée immuable d'une branche créée depuis un checkpoint persistant. */
+  forkedFrom?: {
+    checkpointId: string
+    runId: string
+    checkpointCreatedAt: string
+    contentHash: string
+  }
   task: string
   conversationId?: string
   /** Tour Chat d'origine ; absent seulement sur les états historiques. */
   turnId?: string
   /** Binding figé du run; absent sur les états historiques. */
   bindingOverride?: RoleBinding
+  /** Topologie complete figee avant le premier appel provider; absente sur les anciens checkpoints. */
+  runtimeSnapshot?: OrchestrationRuntimeSnapshot
   /** Livrables des phases DÉJÀ terminées, dans l'ordre — rejoués tels quels à la reprise. */
   phaseOutputs: OrchestrationPhaseOutput[]
+  /** Devis originel : une reprise continue CE contrat, elle n'en compile pas un nouveau. */
+  executionQuote?: ExecutionQuote
+  /** Consommation deja engagee : une reprise ne repart jamais avec des compteurs a zero. */
+  usage?: ExecutionUsageSnapshot
   startedAt: number
   updatedAt: number
   /**
@@ -76,12 +92,33 @@ export function saveOrchestrationState(root: string, state: OrchestrationRunStat
   const target = statePath(root, state.runId)
   const temporary = `${target}.tmp`
   writeFileSync(temporary, JSON.stringify(state), 'utf8')
-  try {
-    rmSync(target, { force: true })
-  } catch {
-    /* cible absente : normal au premier enregistrement */
-  }
+  // `rename` remplace la cible sur les plateformes supportées par Node. Supprimer d'abord le JSON
+  // créerait une fenêtre de crash où seul le `.tmp` subsiste et où le loader perdrait le checkpoint.
   renameSync(temporary, target)
+}
+
+/**
+ * Le spawn d'un agent arrive avant la fin de sa phase. Il faut donc checkpoint-er dans la même
+ * écriture ses références de rattachement ET la réservation provider déjà active ; sinon un crash
+ * entre les deux fait croire à la reprise que cet appel n'a jamais été lancé.
+ */
+export function saveOrchestrationAgentCheckpoint(
+  root: string,
+  runId: string,
+  agents: NonNullable<OrchestrationRunState['agents']>,
+  usage: ExecutionUsageSnapshot | undefined,
+  nowMs = Date.now()
+): OrchestrationRunState | null {
+  const current = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
+  if (!current) return null
+  const updated: OrchestrationRunState = {
+    ...current,
+    agents,
+    ...(usage ? { usage } : {}),
+    updatedAt: nowMs
+  }
+  saveOrchestrationState(root, updated)
+  return updated
 }
 
 export function clearOrchestrationState(root: string, runId: string): void {
@@ -129,17 +166,24 @@ export function pickOrchestrationToResume(
   //    tâche (c'est le cas le plus courant, la première phase étant la plus longue).
   //  - Des phases enregistrées mais TOUTES sans livrable (vu en réel) : les reprendre les ferait
   //    sauter sans avoir leur travail → pire que tout rejouer. Celui-là reste écarté.
-  const mostRecent = (candidates: readonly OrchestrationRunState[]): OrchestrationRunState | null =>
-    candidates.length === 0
-      ? null
-      : candidates.reduce((best, state) => (state.updatedAt > best.updatedAt ? state : best))
+  return pickOrchestrationsToResume(states)[0] ?? null
+}
 
-  // Priorité au travail DÉJÀ PAYÉ : un run porteur d'un livrable réel passe devant un run plus
-  // récent qui n'a rien produit — le reprendre économise les phases déjà faites.
+/**
+ * Tous les runs à reprendre au démarrage, dans l'ordre de priorité : travail déjà payé d'abord,
+ * puis tâches mortes avant leur première phase. Les phases présentes mais vides restent exclues.
+ */
+export function pickOrchestrationsToResume(
+  states: readonly OrchestrationRunState[]
+): OrchestrationRunState[] {
+  const mostRecentFirst = (candidates: readonly OrchestrationRunState[]): OrchestrationRunState[] =>
+    [...candidates].sort((left, right) => right.updatedAt - left.updatedAt)
+
   const withWork = states.filter((state) =>
     state.phaseOutputs.some((output) => typeof output.text === 'string' && output.text.trim())
   )
-  return mostRecent(withWork) ?? mostRecent(states.filter((state) => state.phaseOutputs.length === 0))
+  const neverStarted = states.filter((state) => state.phaseOutputs.length === 0)
+  return [...mostRecentFirst(withWork), ...mostRecentFirst(neverStarted)]
 }
 
 /** Normalise un libelle de tache pour comparer « la meme tache » ecrite a l'espace pres. */
@@ -153,6 +197,8 @@ export interface ResumeLookup {
   conversationId?: string
   /** Empêche de rejouer des phases produites par un autre modèle. */
   bindingOverride?: RoleBinding
+  /** Topologie du nouveau run; requise hors override pour ne pas melanger des acquis de modeles. */
+  runtimeSnapshot?: OrchestrationRuntimeSnapshot
   nowMs: number
   /** Au-dela, l'acquis est trop vieux pour etre reinjecte sans surprendre (defaut 24 h). */
   maxAgeMs?: number
@@ -171,6 +217,136 @@ function bindingIdentity(binding: RoleBinding | undefined): string {
     reasoningEffort: binding.reasoningEffort,
     phaseModel
   })
+}
+
+function runtimeSnapshotIdentity(snapshot: OrchestrationRuntimeSnapshot | undefined): string {
+  if (!snapshot) return ''
+  const phaseFanOut = Object.fromEntries(
+    Object.entries(snapshot.phaseFanOut)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([phase, bindings]) => [phase, (bindings ?? []).map(bindingIdentity)])
+  )
+  return JSON.stringify({
+    roles: {
+      orchestrator: bindingIdentity(snapshot.roles.orchestrator),
+      subagent: bindingIdentity(snapshot.roles.subagent),
+      judge: bindingIdentity(snapshot.roles.judge),
+      scout: bindingIdentity(snapshot.roles.scout)
+    },
+    phaseFanOut,
+    judgeFanOut: snapshot.judgeFanOut.map(bindingIdentity)
+  })
+}
+
+/**
+ * Migration explicite des checkpoints historiques : leur topologie n'existe pas sur disque, donc
+ * on adopte celle qui vient d'etre admise, mais l'appelant doit ouvrir un NOUVEAU tour. L'ancienne
+ * carte reste ainsi un fait historique et n'est jamais rebaptisee avec un modele actuel.
+ */
+export function resolveResumableRuntime(
+  state: OrchestrationRunState,
+  currentRuntime: OrchestrationRuntimeSnapshot
+): {
+  runtimeSnapshot: OrchestrationRuntimeSnapshot
+  migratedLegacyCheckpoint: boolean
+} {
+  return state.runtimeSnapshot
+    ? { runtimeSnapshot: state.runtimeSnapshot, migratedLegacyCheckpoint: false }
+    : { runtimeSnapshot: currentRuntime, migratedLegacyCheckpoint: true }
+}
+
+export interface PersistedTurnRuntimeIdentity {
+  provider: string
+  model?: string
+  reasoningEffort?: string
+}
+
+export interface LiveReattachmentAdmission {
+  identityKnown: boolean
+  resumeExisting: boolean
+  turnId: string
+  turnBinding?: RoleBinding
+  task: string
+}
+
+function sameRuntimeIdentity(
+  recorded: PersistedTurnRuntimeIdentity | undefined,
+  expected: RoleBinding
+): boolean {
+  return (
+    recorded?.provider === expected.provider &&
+    recorded.model === expected.model &&
+    recorded.reasoningEffort === expected.reasoningEffort
+  )
+}
+
+/**
+ * Admet le rattachement d'un processus encore vivant sans réécrire son identité historique.
+ * Un checkpoint legacy ne transporte pas le provider réellement lancé : il ouvre donc un tour
+ * explicitement inconnu. Un tour existant n'est réactivé que si sa carte correspond au snapshot.
+ */
+export function admitLiveReattachment(
+  state: OrchestrationRunState,
+  recordedTurnRuntime: PersistedTurnRuntimeIdentity | undefined,
+  migrationTurnId: string
+): LiveReattachmentAdmission {
+  if (!state.runtimeSnapshot) {
+    return {
+      identityKnown: false,
+      resumeExisting: false,
+      turnId: migrationTurnId,
+      task: `[Rattachement — identité provider inconnue] ${state.task}`
+    }
+  }
+
+  const turnBinding = state.bindingOverride ?? state.runtimeSnapshot.roles.orchestrator
+  const resumeExisting =
+    Boolean(state.turnId) && sameRuntimeIdentity(recordedTurnRuntime, turnBinding)
+  return {
+    identityKnown: true,
+    resumeExisting,
+    turnId: resumeExisting ? state.turnId! : migrationTurnId,
+    turnBinding,
+    task: resumeExisting ? state.task : `[Rattachement automatique] ${state.task}`
+  }
+}
+
+export interface AutomaticResumeRuntimeAdmission {
+  runtimeSnapshot: OrchestrationRuntimeSnapshot
+  migratedLegacyCheckpoint: boolean
+  resumeExisting: boolean
+  turnId: string
+  turnBinding: RoleBinding
+  task: string
+  /** Ferme l'identite admise dans l'appel : carte et provider ne peuvent plus relire deux topologies. */
+  run<T>(execute: (runtimeSnapshot: OrchestrationRuntimeSnapshot) => T | Promise<T>): Promise<T>
+}
+
+/**
+ * Admission atomique d'une reprise automatique. Le plan visible de la carte et le snapshot remis au
+ * provider sont derives une seule fois, puis transportes ensemble par `run`.
+ */
+export function admitAutomaticResumeRuntime(
+  state: OrchestrationRunState,
+  currentRuntime: OrchestrationRuntimeSnapshot,
+  migrationTurnId: string,
+  recordedTurnRuntime?: PersistedTurnRuntimeIdentity
+): AutomaticResumeRuntimeAdmission {
+  const resolved = resolveResumableRuntime(state, currentRuntime)
+  const runtimeSnapshot = resolved.runtimeSnapshot
+  const turnBinding = state.bindingOverride ?? runtimeSnapshot.roles.orchestrator
+  const resumeExisting =
+    Boolean(state.turnId) &&
+    !resolved.migratedLegacyCheckpoint &&
+    sameRuntimeIdentity(recordedTurnRuntime, turnBinding)
+  return {
+    ...resolved,
+    resumeExisting,
+    turnId: resumeExisting ? state.turnId! : migrationTurnId,
+    turnBinding,
+    task: resumeExisting ? state.task : `[Reprise automatique] ${state.task}`,
+    run: async (execute) => execute(runtimeSnapshot)
+  }
 }
 
 /**
@@ -201,6 +377,9 @@ export function pickResumeForTask(
     (state) =>
       state.conversationId === lookup.conversationId &&
       bindingIdentity(state.bindingOverride) === bindingIdentity(lookup.bindingOverride) &&
+      (lookup.bindingOverride !== undefined ||
+        runtimeSnapshotIdentity(state.runtimeSnapshot) ===
+          runtimeSnapshotIdentity(lookup.runtimeSnapshot)) &&
       normalizeTaskKey(state.task) === wanted &&
       lookup.nowMs - state.updatedAt <= maxAge &&
       lookup.nowMs >= state.updatedAt &&

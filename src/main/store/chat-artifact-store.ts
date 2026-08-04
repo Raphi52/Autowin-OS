@@ -96,6 +96,38 @@ export function materializeChatArtifact(
   }
 }
 
+export function materializeUserImageArtifact(
+  attachment: { name: string; mimeType: string; size: number; content: string },
+  conversationId: string,
+  turnId: string,
+  base?: string
+): ChatArtifact {
+  const attachmentHash = createHash('sha256')
+    .update(Buffer.from(attachment.content, 'base64'))
+    .update('\0')
+    .update(attachment.name)
+    .update('\0')
+    .update(attachment.mimeType)
+    .digest('hex')
+    .slice(0, 24)
+  return materializeChatArtifact(
+    {
+      id: `user-image-${attachmentHash}`,
+      name: attachment.name,
+      mimeType: attachment.mimeType,
+      kind: 'image',
+      size: attachment.size,
+      createdAt: Date.now(),
+      encoding: 'base64',
+      content: attachment.content,
+      source: { provider: 'user' }
+    },
+    conversationId,
+    turnId,
+    base
+  )
+}
+
 export interface ChatArtifactReadResult {
   ok: boolean
   artifact?: ChatArtifact
@@ -143,6 +175,12 @@ export function findConversationArtifact(
   artifactId: string
 ): ChatArtifact | undefined {
   if (!conversation) return undefined
+  for (const candidate of conversation.messages) {
+    const attachment = candidate.attachments?.find(
+      (item) => item.turnId === turnId && item.artifact?.id === artifactId
+    )
+    if (attachment?.artifact) return attachment.artifact
+  }
   const message = conversation.messages.find(
     (candidate) => candidate.role === 'assistant' && candidate.turnId === turnId
   )

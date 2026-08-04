@@ -7,6 +7,7 @@ import type {
   StreamChunk
 } from './types'
 import { withHardDeadline } from './watchdog'
+import type { ExecutionSupervisor } from '../execution-supervisor'
 
 /**
  * Plafond DUR de coordination : même si un adaptateur défaille (promesse jamais réglée, event `close`
@@ -20,11 +21,11 @@ const COORDINATION_CEILING_MS = ((): number => {
   return Number.isFinite(raw) && raw > 0 ? raw : 45 * 60_000
 })()
 
-function assertOutsideLegacyFabricBridge(providerId: string): void {
-  if (providerId.startsWith('fabric:')) {
-    throw new Error('Une ressource Fabric exige autowin.tool-stream/v1, hors bridge legacy')
-  }
-}
+/** Grâce bornée laissée à l'adaptateur pour se régler après l'abort de coordination. */
+const COORDINATION_DRAIN_GRACE_MS = ((): number => {
+  const raw = Number(process.env.AUTOWIN_SUBAGENT_DRAIN_GRACE_MS)
+  return Number.isFinite(raw) && raw > 0 ? raw : 10_000
+})()
 
 /**
  * Routeur d'adaptateurs. Le seul point par lequel l'app envoie un tour :
@@ -35,7 +36,10 @@ export class ProviderRegistry {
   private readonly adapters = new Map<string, ProviderAdapter>()
 
   /** Bloc système par défaut (kit condensé SOUL) injecté sur CHAQUE tour. */
-  constructor(private readonly systemBlock: string | undefined = undefined) {}
+  constructor(
+    private readonly systemBlock: string | undefined = undefined,
+    private readonly executionSupervisor?: ExecutionSupervisor
+  ) {}
 
   register(adapter: ProviderAdapter): this {
     this.adapters.set(adapter.id, adapter)
@@ -53,7 +57,12 @@ export class ProviderRegistry {
   }
 
   private resolve(id: string, opts: SendOptions): { id: string; opts: SendOptions } {
-    assertOutsideLegacyFabricBridge(id)
+    this.get(id)
+    if (id.startsWith('fabric:') && opts.execution) {
+      throw new Error(
+        'Une ressource Fabric local-tools ne peut pas recevoir une exécution distante'
+      )
+    }
     if (opts.execution) {
       const requested = this.get(id)
       if (requested.supportsExecution === true) return { id, opts }
@@ -126,24 +135,138 @@ export class ProviderRegistry {
     // la MÊME CONSTITUTION explicitement via leurs propres `parts` (agent-pilot.ts / orchestrator.ts) :
     // ce fallback ne les concerne donc pas — ce n'est plus une exclusion voulue du soul.
     const system = route.opts.system ?? this.systemBlock
-    const gen = adapter.send(messages, { ...route.opts, system })
+    // Admission AVANT l'adaptateur : un budget epuise ne doit jamais faire apparaitre une fenetre,
+    // ouvrir un stream ou lancer un CLI qui sera seulement tue apres sa reponse.
+    // Toute execution outillee est un agent du devis. L'admission appels + agents est atomique et
+    // precede adapter.send : fan-out, greedy, juge, synthese et reparation suivent le meme plafond.
+    const reservation = this.executionSupervisor?.reserveProviderCall(
+      route.opts.signal,
+      Boolean(route.opts.execution)
+    )
+    const coordinationController = new AbortController()
+    const providerSignal = reservation?.signal ?? route.opts.signal
+    let spawnFailure: Error | undefined
+    const spawnedTokens = new Set<string>()
+    let terminateProvider: ((reason: string) => void) | undefined
+    const execution = route.opts.execution
+      ? {
+          ...route.opts.execution,
+          onSpawnIntent: (token: string, active: boolean) => {
+            // Les adaptateurs retirent l'intention juste avant de rejeter lorsqu'un spawn échoue.
+            // Régler d'abord la réservation garantit que la persistance déclenchée par le callback
+            // ne peut jamais écrire le couple incohérent `agents=[]` + `activeCalls=1`.
+            if (!active && !spawnedTokens.has(token)) {
+              reservation?.fail()
+              spawnFailure ??= new Error(
+                `Lancement du sous-agent ${route.id} annulé avant création du processus (${token}).`
+              )
+            }
+            if (active || !spawnedTokens.has(token)) {
+              route.opts.execution?.onSpawnIntent?.(token, active)
+            }
+          },
+          onSpawned: (token: string, pid: number) => {
+            // Le registre fournit toujours ce callback. Les adaptateurs n'ont donc plus besoin de
+            // traduire un PID réussi en `spawnIntent(false)` lorsque l'appelant ne suivait que les
+            // processus. On reproduit ici ce fallback historique sans le confondre avec un échec.
+            spawnedTokens.add(token)
+            if (route.opts.execution?.onSpawned) {
+              route.opts.execution.onSpawned(token, pid)
+            } else {
+              route.opts.execution?.onProcess?.(pid, true)
+              route.opts.execution?.onSpawnIntent?.(token, false)
+            }
+          },
+          registerTermination: (terminate: (reason: string) => void) => {
+            terminateProvider = terminate
+            route.opts.execution?.registerTermination?.(terminate)
+          }
+        }
+      : undefined
+    const effectiveOptions = {
+      ...route.opts,
+      system,
+      ...(execution ? { execution } : {}),
+      signal: providerSignal
+        ? AbortSignal.any([providerSignal, coordinationController.signal])
+        : coordinationController.signal
+    }
+    let gen: ReturnType<ProviderAdapter['send']>
+    try {
+      gen = adapter.send(messages, effectiveOptions)
+    } catch (error) {
+      reservation?.fail()
+      throw error
+    }
 
     // Pompe du stream, enveloppée d'un PLAFOND DUR de coordination : si l'adaptateur ne rend jamais la
     // main (zombie, `close` jamais émis), la course rejette au lieu de pendre à l'infini. Garantie que
     // l'orchestrateur se règle TOUJOURS ; le watchdog de flux des adaptateurs tue le process bien avant.
+    let forceDrainReject!: (error: Error) => void
+    const forcedDrain = new Promise<never>((_resolve, reject) => {
+      forceDrainReject = reject
+    })
+    const nextStep = (): ReturnType<typeof gen.next> => Promise.race([gen.next(), forcedDrain])
     const pump = (async (): Promise<SendResult> => {
-      let step = await gen.next()
+      let step = await nextStep()
       while (!step.done) {
-        onChunk?.(step.value)
-        step = await gen.next()
+        // Une fois l'appel annulé, continuer à drainer le générateur pour observer sa vraie fin,
+        // mais ne plus livrer de delta à une conversation déjà clôturée.
+        if (!effectiveOptions.signal.aborted && !spawnFailure) onChunk?.(step.value)
+        step = await nextStep()
       }
+      // `spawnIntent(false)` est terminal par contrat. Même un adaptateur défaillant qui retourne
+      // ensuite un résultat ne peut donc faire valider un succès déjà persisté comme échec.
+      if (spawnFailure) throw spawnFailure
       // Valeur de retour du generator = SendResult final.
       return step.value
     })()
+    // La réservation suit la vraie fin pendant une grâce bornée. Au-delà, elle est réglée en échec
+    // conservateur et la pompe du registre est coupée, même si un provider tiers ignore encore l'abort.
+    let drainGraceTimer: ReturnType<typeof setTimeout> | undefined
+    const trackedPump = pump
+      .then(
+        (result) => {
+          if (effectiveOptions.signal.aborted) reservation?.fail(result.usage)
+          else reservation?.complete(result.usage)
+          return result
+        },
+        (error) => {
+          reservation?.fail()
+          throw error
+        }
+      )
+      .finally(() => {
+        if (drainGraceTimer) clearTimeout(drainGraceTimer)
+      })
     return withHardDeadline(
-      pump,
+      trackedPump,
       COORDINATION_CEILING_MS,
-      `Sous-agent ${route.id} sans réponse depuis ${Math.round(COORDINATION_CEILING_MS / 1000)}s (watchdog coordination) — abandonné pour ne pas bloquer le run.`
+      `Sous-agent ${route.id} sans réponse depuis ${Math.round(COORDINATION_CEILING_MS / 1000)}s (watchdog coordination) — abandonné pour ne pas bloquer le run.`,
+      () => {
+        const reason = `Watchdog coordination expiré pour ${route.id}`
+        coordinationController.abort(reason)
+        reservation?.abort(reason)
+        drainGraceTimer = setTimeout(() => {
+          const error = new Error(
+            `${reason} : drainage toujours actif après ${COORDINATION_DRAIN_GRACE_MS} ms`
+          )
+          try {
+            terminateProvider?.(error.message)
+          } catch {
+            // La fermeture de l'adaptateur reste best-effort ; la pompe est bornée quoi qu'il arrive.
+          }
+          // Arrête la boucle du registre même si `gen.next()` reste bloqué dans un provider fautif.
+          forceDrainReject(error)
+          reservation?.fail()
+          try {
+            void gen.return?.(undefined as never).catch(() => undefined)
+          } catch {
+            // Un générateur tiers peut rejeter synchroniquement sa fermeture : réservation déjà close.
+          }
+        }, COORDINATION_DRAIN_GRACE_MS)
+        drainGraceTimer.unref?.()
+      }
     )
   }
 }

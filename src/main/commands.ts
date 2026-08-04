@@ -1,11 +1,7 @@
 import { applyEdit, decideEdit, editDiff } from './edit-file-command'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { delimiter, dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import {
-  brainCorpusForWorkspace,
-  brainSourcePathAllowed,
-  scopeBrainBlock
-} from './brain-corpus-scope'
+import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-scope'
 import { buildBrainOutcome, decideBrainQuery, type BrainQueryOutcome } from './brain-query-command'
 import { retrieveBrainContext } from './brain-retrieval'
 import { spawn } from 'node:child_process'
@@ -45,6 +41,8 @@ import {
   type ConversationAuthorityMode
 } from './conversation-capabilities'
 import { APP_DESTINATIONS, resolveAppLocation, type AppDestination } from '../shared/navigation'
+import { formatExecutionCostCoverage } from '../shared/orchestration-outcome'
+import type { RunLifecycleEvent } from '../shared/run-execution'
 import { collectOrchestrationContext } from './orchestration-context'
 import { rememberFact } from './brain-remember'
 import { noteRemembered } from './session-memory-echo'
@@ -57,6 +55,7 @@ import {
 } from './graphify-command'
 import { ensureAutowinAppData } from './app-data'
 import type { TraceStore } from './activity/trace-store'
+import { reconcileLateRunLifecycle } from './activity/late-run-usage-settlement'
 
 /**
  * Bus de commandes de l'app — le PLAN DE CONTRÔLE que les agents pilotent.
@@ -111,7 +110,7 @@ export interface PromptSnapshot {
 
 export type AppEvent =
   | { type: 'navigate'; tab: string; origin?: string }
-  | { type: 'refresh'; scope: string }
+  | { type: 'refresh'; scope: string; convId?: string }
   | { type: 'toast'; text: string }
   // Orchestration LIVE (statut temps réel + fil des sous-agents), diffusée par étape.
   | { type: 'orchestrate-start'; convId?: string; runPath?: string; task: string }
@@ -125,6 +124,8 @@ export type AppEvent =
     }
   | { type: 'orchestrate-step'; convId?: string; runPath?: string; step: OrchestrationStep }
   | { type: 'orchestrate-end'; convId?: string; runPath?: string; status: 'green' | 'red' }
+  | { type: 'orchestrate-usage'; convId?: string; runPath?: string }
+  | { type: 'causal-trace-updated'; convId: string }
 
 const CATALOG: CommandSpec[] = [
   {
@@ -193,21 +194,6 @@ const CATALOG: CommandSpec[] = [
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
-      idempotentHint: true,
-      openWorldHint: false
-    }
-  },
-  {
-    name: 'set_role',
-    description: 'Régler le modèle d’un rôle',
-    args: {
-      role: 'orchestrator|subagent|judge|scout',
-      provider: 'claude|codex',
-      model: 'modèle (optionnel)'
-    },
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: false,
       idempotentHint: true,
       openWorldHint: false
     }
@@ -374,8 +360,6 @@ function approvalQuestion(name: string, args: Record<string, unknown>): string {
           .pop(),
         'nom masqué'
       )} » à la conversation active ?`
-    case 'set_role':
-      return `Modifier le rôle ${safePreview(args.role, 'sélectionné')} vers ${safePreview(args.provider, 'fournisseur masqué')}${args.model ? ` / ${safePreview(args.model, 'modèle masqué')}` : ''} ?`
     case 'orchestrate':
       return `Lancer l’orchestration : « ${safePreview(args.task, 'tâche masquée car sensible')} » ?`
     default:
@@ -500,11 +484,13 @@ export class AppCommandBus {
     ) => Promise<string>,
     private readonly graphify: (
       input: GraphifyCommandInput
-    ) => Promise<GraphifyCommandResult> = runGraphify
+    ) => Promise<GraphifyCommandResult> = runGraphify,
+    private readonly isCommandEnabled: (name: string) => boolean = () => true,
+    private readonly retrieveBrain: typeof retrieveBrainContext = retrieveBrainContext
   ) {}
 
   catalog(): CommandSpec[] {
-    return CATALOG.map((command) => ({
+    return CATALOG.filter((command) => this.isCommandEnabled(command.name)).map((command) => ({
       ...command,
       annotations:
         command.annotations ??
@@ -629,8 +615,9 @@ export class AppCommandBus {
     turnId?: string
   ): Promise<CommandResult> {
     try {
-      const specification = this.catalog().find((command) => command.name === name)
+      const specification = CATALOG.find((command) => command.name === name)
       if (!specification) throw new Error(`Commande inconnue: ${name}`)
+      if (!this.isCommandEnabled(name)) throw new Error(`Capacité désactivée: ${name}`)
       const decision = decideConversationCapability({
         mode: authorityMode,
         mutates: !specification.annotations?.readOnlyHint,
@@ -730,9 +717,17 @@ export class AppCommandBus {
         const phasePrefix = modelPhaseAllowed ? `/${requestedPhase} ` : ''
         const requestedTask = `${phasePrefix}${s('task')}`
         const conversation = this.os.conversations.get(convId)
+        const kaizenEvidenceConversation =
+          conversation?.autoKaizen?.role === 'analysis'
+            ? (this.os.conversations.get(conversation.autoKaizen.sourceConversationId) ??
+              conversation)
+            : conversation
         const task =
-          /^\/kaizen(?=\s|$)/i.test(requestedTask) && conversation
-            ? buildAutowinKaizenTask(requestedTask, collectAutowinKaizenEvidence(conversation))
+          /^\/kaizen(?=\s|$)/i.test(requestedTask) && kaizenEvidenceConversation
+            ? buildAutowinKaizenTask(
+                requestedTask,
+                collectAutowinKaizenEvidence(kaizenEvidenceConversation)
+              )
             : requestedTask
         const fingerprint = actionFingerprint('orchestrate', { convId, task, bindingOverride })
         const existingRun = this.activeOrchestrationByFingerprint.get(fingerprint)
@@ -783,35 +778,26 @@ export class AppCommandBus {
         // Sous-agent STOPPABLE : un AbortController par conversation, coupé par abortOrchestration.
         const abortController = new AbortController()
         this.claimOrchestration(convId, orchestrationRank, abortController)
-        // REPRISE depuis le chat : le chemin de reprise n'existait qu'au REDEMARRAGE de l'app, donc
-        // « reprend » relancait de zero et REPAYAIT les phases deja produites (2026-07-29). On cherche
-        // un acquis de la MEME tache dans LA MEME conversation, recent et non vide.
-        const resumable =
-          this.os.resumableOrchestrationForTask?.(task, convId, Date.now(), bindingOverride) ?? null
-        const resumeOutputs = resumable?.phaseOutputs ?? []
-        if (resumable) {
-          // Le run repris a son PROPRE etat persiste : sans cet oubli, le meme acquis serait rejoue a
-          // chaque relance (bug deja attrape sur le chemin de demarrage).
-          this.os.forgetResumableOrchestration(resumable.runId)
-          const reused = resumeOutputs.map((output) => output.phase).join(', ')
-          // VISIBLE : sauter des phases deja payees ne doit jamais etre silencieux.
-          this.broadcast({
-            type: 'orchestrate-step',
-            convId,
-            runPath,
-            step: {
-              step: 'exec',
-              role: 'subagent',
-              text: '',
-              status: 'completed',
-              detail: `reprise : phases deja acquises reutilisees (${reused})`
-            } as OrchestrationStep
-          })
-        }
-        this.broadcast({ type: 'orchestrate-start', convId, runPath, task: requestedTask })
-        let currentRunId: string | undefined
-        let phaseStartIteration = 0
         try {
+          await this.os.waitUntilReady?.()
+          const runtimeSnapshot = this.os.captureOrchestrationRuntime?.()
+          // REPRISE depuis le chat : le chemin de reprise n'existait qu'au REDEMARRAGE de l'app, donc
+          // « reprend » relancait de zero et REPAYAIT les phases deja produites (2026-07-29). On cherche
+          // un acquis de la MEME tache dans LA MEME conversation, recent et non vide.
+          const resumable =
+            this.os.resumableOrchestrationForTask?.(
+              task,
+              convId,
+              Date.now(),
+              bindingOverride,
+              runtimeSnapshot
+            ) ?? null
+          const resumeOutputs = resumable?.phaseOutputs ?? []
+          this.broadcast({ type: 'orchestrate-start', convId, runPath, task: requestedTask })
+          let currentRunId: string | undefined
+          let terminalLifecycle: Extract<RunLifecycleEvent, { stage: 'closure' }> | undefined
+          let resumedCheckpointReleased = false
+          let phaseStartIteration = 0
           const r = await this.os.runTask(
             task,
             (step) => {
@@ -860,17 +846,16 @@ export class AppCommandBus {
               this.broadcast({ type: 'orchestrate-step', convId, runPath, step })
               // Journal d'activité de la conversation : chaque étape facturée + coût tokens.
               if (convId) {
-                const s = step as OrchestrationStep & {
-                  inputTokens?: number
-                  outputTokens?: number
-                }
                 appendConvActivity(convId, {
                   kind: step.step,
                   label: step.role ?? step.step,
                   provider: step.provider,
-                  inputTokens: s.inputTokens,
-                  outputTokens: s.outputTokens ?? step.tokens,
-                  costUsd: step.costUsd,
+                  model: step.model,
+                  inputTokens: step.usage?.inputTokens,
+                  outputTokens: step.usage?.outputTokens,
+                  cacheReadTokens: step.usage?.cacheReadTokens,
+                  costUsd: step.usage?.costUsd ?? step.costUsd,
+                  usageCallId: step.usageCallId,
                   // La duree etait DEJA mesuree par l'orchestrateur et jetee ici : sans elle, on ne
                   // pouvait repondre qu'a « quelle phase coute », pas a « quelle phase est LENTE ».
                   durationMs: step.durationMs,
@@ -913,6 +898,27 @@ export class AppCommandBus {
             orchestrationTurnId,
             (lifecycle) => {
               currentRunId = lifecycle.runId
+              // Le supervisor refuse une reprise avec provider encore actif AVANT d'entrer ici.
+              // Conserver l'ancien checkpoint jusque ce premier evenement evite de perdre les phases
+              // deja payees lorsqu'une admission echoue. Une fois admis, le nouveau run prend le relais.
+              if (resumable && !resumedCheckpointReleased) {
+                resumedCheckpointReleased = true
+                this.os.forgetResumableOrchestration(resumable.runId)
+                const reused = resumeOutputs.map((output) => output.phase).join(', ')
+                this.broadcast({
+                  type: 'orchestrate-step',
+                  convId,
+                  runPath,
+                  step: {
+                    step: 'exec',
+                    role: 'subagent',
+                    text: '',
+                    status: 'completed',
+                    detail: `reprise : phases deja acquises reutilisees (${reused})`
+                  } as OrchestrationStep
+                })
+              }
+              if (lifecycle.stage === 'closure') terminalLifecycle = lifecycle
               persistRunLifecycle(
                 lifecycle,
                 {
@@ -921,9 +927,42 @@ export class AppCommandBus {
                 },
                 this.traceStore
               )
-            }
+            },
+            resumable ?? undefined,
+            (usage) => {
+              if (!currentRunId) return
+              const settledLifecycle = reconcileLateRunLifecycle(terminalLifecycle, usage)
+              if (!settledLifecycle) return
+              terminalLifecycle = settledLifecycle
+              persistRunLifecycle(
+                terminalLifecycle,
+                { conversationId: convId, turnId: orchestrationTurnId },
+                this.traceStore
+              )
+              const costCoverage = formatExecutionCostCoverage({
+                costUsd: usage.knownCostUsd ?? 0,
+                knownCostUsd: usage.knownCostUsd,
+                unpricedCalls: usage.unpricedCalls
+              })
+              if (runPath) {
+                closeConvRun(
+                  runPath,
+                  terminalLifecycle.closure.status === 'green',
+                  `Usage provider finalisee apres cloture: ${usage.totalTokens} tokens, ${costCoverage ?? 'cout non rapporte'}, ${usage.activeCalls} appel(s) actif(s).`
+                )
+              }
+              this.broadcast({ type: 'orchestrate-usage', convId, runPath })
+              this.broadcast({ type: 'refresh', scope: 'workflows' })
+              this.broadcast({ type: 'refresh', scope: 'orchestration' })
+            },
+            runtimeSnapshot
           )
           if (runPath) {
+            const costCoverage = formatExecutionCostCoverage({
+              costUsd: r.costUsd,
+              knownCostUsd: r.usage?.knownCostUsd,
+              unpricedCalls: r.usage?.unpricedCalls
+            })
             saveConvRunTrace(runPath, steps)
             populateConvRunSections(runPath, r.phaseOutputs) // J2 — RUN.md peuplé du vrai livrable
             closeConvRun(
@@ -931,7 +970,7 @@ export class AppCommandBus {
               !r.gateBlocked,
               r.gateBlocked
                 ? `Gate BLOQUÉ: ${r.gateReasons.join('; ')}`
-                : `Juge: validé — clôture autorisée (coût ${r.costUsd.toFixed(4)} $).`
+                : `Juge: validé — clôture autorisée (${costCoverage ?? 'coût non rapporté'}).`
             )
           }
           this.broadcast({
@@ -948,6 +987,8 @@ export class AppCommandBus {
             valid: r.valid,
             gateBlocked: r.gateBlocked,
             costUsd: r.costUsd,
+            knownCostUsd: r.usage?.knownCostUsd,
+            unpricedCalls: r.usage?.unpricedCalls,
             result: r.result,
             runId: runPath,
             runPath,
@@ -986,14 +1027,6 @@ export class AppCommandBus {
       case 'remove_conversation': {
         const id = s('id')
         return { removed: this.os.conversations.remove(id) }
-      }
-      case 'set_role': {
-        const all = this.os.setRole(s('role') as Role, {
-          provider: s('provider'),
-          model: a.model ? s('model') : undefined
-        })
-        this.broadcast({ type: 'refresh', scope: 'roles' })
-        return all
       }
       case 'attach_run': {
         const convId =
@@ -1034,7 +1067,8 @@ export class AppCommandBus {
         const outcome = await rememberFact(a, {
           token: brainServiceToken(),
           authorAgent: 'autowin-os',
-          model: this.os.roles.getBinding('orchestrator').model ?? 'autowin'
+          model: this.os.roles.getBinding('orchestrator').model ?? 'autowin',
+          workspace: this.os.executionWorkspace
         })
         /**
          * ÉCHO : sans ça, le modèle écrit sans jamais relire — la moitié manquante de la mécanique de
@@ -1053,6 +1087,11 @@ export class AppCommandBus {
           const attache = noteRemembered(convId, {
             title: outcome.fact.title,
             body: outcome.fact.body,
+            scope: outcome.fact.scope,
+            workspace:
+              outcome.fact.scope.trim().toLowerCase() === 'global'
+                ? 'global'
+                : this.os.executionWorkspace,
             note: outcome.note,
             state: outcome.stored ? 'depose' : outcome.unknown ? 'inconnu' : 'local'
           })
@@ -1271,25 +1310,23 @@ export class AppCommandBus {
   ): Promise<BrainQueryOutcome & { allowed: boolean; reason?: string }> {
     const decision = decideBrainQuery(question)
     if (!decision.allowed) {
-      return { allowed: false, reason: decision.reason, found: false, query: '', knowledge: '' }
+      return {
+        allowed: false,
+        reason: decision.reason,
+        found: false,
+        query: '',
+        knowledge: '',
+        status: 'not-requested'
+      }
     }
-    const brain = await retrieveBrainContext(decision.query)
-    const { context, navigation } = brain
-    // MEME PORTEE que la voie poussee : `brain_query` passe par un autre module
-    // (`brain-retrieval`), donc sans ce filtre la portee par workspace serait MORTE sur le chemin a la
-    // demande — exactement le defaut qu'on corrige (un module atteignable mais jamais applique).
     const corpus = brainCorpusForWorkspace(this.os.executionWorkspace)
-    const scoped = scopeBrainBlock(context, corpus)
-    const outcome = buildBrainOutcome(decision.query, scoped.block)
-    const scopedNavigation = navigation
-      ? {
-          ...navigation,
-          candidates: navigation.candidates.map((candidate) => ({
-            ...candidate,
-            retained: candidate.retained && brainSourcePathAllowed(candidate.path, corpus)
-          }))
-        }
-      : undefined
+    const brain =
+      corpus?.length === 0
+        ? { context: '', status: 'empty' as const }
+        : await this.retrieveBrain(decision.query, { corpus })
+    // MEME PORTEE que la voie poussee : le contexte, le statut et la navigation sont projetés ensemble.
+    const scoped = scopeBrainRetrieval(brain, corpus)
+    const outcome = buildBrainOutcome(decision.query, scoped.context, scoped.status)
     if (conversationId) {
       appendBrainTrace({
         timestamp: new Date().toISOString(),
@@ -1298,9 +1335,9 @@ export class AppCommandBus {
         kind: 'query',
         query: decision.query,
         found: outcome.found,
-        status: context ? 'found' : brain.status,
+        status: scoped.status,
         injectedChars: outcome.knowledge.length,
-        navigation: scopedNavigation
+        navigation: scoped.navigation
       })
     }
     return { allowed: true, ...outcome }
@@ -1345,6 +1382,7 @@ export class AppCommandBus {
         process.platform === 'win32'
           ? spawn('cmd.exe', ['/c', file, ...rest], {
               shell: false,
+              windowsHide: true,
               cwd: decision.cwd,
               env
             })

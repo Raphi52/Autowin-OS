@@ -27,7 +27,9 @@ export function persistRunLifecycle(
   )
   const sequence = traceStore.nextSequence(context.conversationId)
   const label =
-    lifecycle.stage === 'workspace'
+    lifecycle.stage === 'quote'
+      ? lifecycle.quote.regime
+      : lifecycle.stage === 'workspace'
       ? lifecycle.workspace.path
       : lifecycle.stage === 'git'
         ? lifecycle.git.outcome
@@ -41,7 +43,12 @@ export function persistRunLifecycle(
       parentId: runEvents.at(-1)?.id,
       timestamp: new Date(lifecycle.timestampMs).toISOString(),
       sequence,
-      type: lifecycle.stage === 'closure' ? 'gate' : 'boundary',
+      type:
+        lifecycle.stage === 'closure'
+          ? 'gate'
+          : lifecycle.stage === 'quote'
+            ? 'decision'
+            : 'boundary',
       status:
         lifecycle.stage === 'closure'
           ? lifecycle.closure.status === 'open'
@@ -49,7 +56,9 @@ export function persistRunLifecycle(
             : lifecycle.closure.status === 'red'
               ? 'failed'
               : 'completed'
-          : lifecycle.stage === 'workspace'
+          : lifecycle.stage === 'quote'
+            ? 'completed'
+            : lifecycle.stage === 'workspace'
             ? 'running'
             : lifecycle.git.outcome === 'conflict' || lifecycle.git.outcome === 'blocked'
               ? 'failed'
@@ -61,13 +70,8 @@ export function persistRunLifecycle(
       observation: { boundary: `Autowin run ${lifecycle.stage}`, fidelity: 'exact' },
       execution: { runId: lifecycle.runId },
       run: lifecycle,
-      metrics:
-        lifecycle.stage === 'closure'
-          ? {
-              durationMs: lifecycle.closure.totalDurationMs,
-              costUsd: lifecycle.closure.totalCostUsd
-            }
-          : undefined
+      // Lifecycle = structure/rollup, jamais un nouvel appel facturable.
+      metrics: undefined
     })
   )
 }
@@ -236,6 +240,9 @@ export function persistOrchestrationStep(
     },
     promptRoot
   )
+  // Le callback appelant persiste ensuite l'activite avec le MEME objet step : cette reference
+  // causale remplace les appariements fragiles par provider/cout.
+  step.usageCallId = call.id
   const providerEvents = promptCallToTraceEvents(call, sequence, parentId).map((event) => ({
     ...event,
     execution: { ...step.execution, runId: context.runId ?? step.execution?.runId }

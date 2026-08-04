@@ -17,6 +17,10 @@ Assert-True ($LASTEXITCODE -eq 0) 'electron-vite dev --help must succeed'
 Assert-True ($help -match '--watch.*main process or preload script modules') `
   '--watch must cover main and preload; renderer remains on its dev-server hot update path'
 
+$shortcutSource = Get-Content -Raw (Join-Path $PSScriptRoot 'create-dev-shortcut.ps1')
+Assert-True ($shortcutSource -match '\$shortcut\.Arguments\s*=.*-WindowStyle Hidden') `
+  'the desktop shortcut must hide its bootstrap PowerShell window'
+
 $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) "autowin-launch-dev-test-$PID"
 New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null
 Set-Content -LiteralPath (Join-Path $fixtureRoot 'package.json') -Value '{}'
@@ -67,8 +71,10 @@ try {
   Assert-True ($script:startCalls[0].ArgumentList[1] -eq 'title Autowin OS Dev && npm run dev') `
     'the delegated command must remain the unique marked dev loop'
   Assert-True ($script:startCalls[0].WorkingDirectory -eq $fixtureRoot) 'the dev loop must start in the requested project'
+  Assert-True ($script:startCalls[0].WindowStyle -eq 'Hidden') `
+    'the long-lived dev loop must never occupy Alt+Tab or the taskbar'
 } finally {
   Remove-Item -LiteralPath $fixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-Write-Output 'PASS launch-dev watcher contract: renderer HMR, main/preload watch, single launch, clean cmd exit'
+Write-Output 'PASS launch-dev watcher contract: renderer HMR, main/preload watch, single hidden launch, clean cmd exit'

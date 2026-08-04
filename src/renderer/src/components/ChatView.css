@@ -456,10 +456,7 @@
   height: 46px;
   flex: none;
   align-items: stretch;
-  margin:
-    calc(var(--runs-pane-pad-top) * -1)
-    calc(var(--runs-pane-pad-x) * -1)
-    0;
+  margin: calc(var(--runs-pane-pad-top) * -1) calc(var(--runs-pane-pad-x) * -1) 0;
   padding-left: 6px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.16);
   background: rgba(3, 7, 11, 0.96);
@@ -626,8 +623,43 @@
 .run-row {
   width: 100%;
   text-align: left;
-  padding: var(--s2) var(--s3);
+  padding: var(--s2) 42px var(--s2) var(--s3);
   cursor: pointer;
+}
+.run-card-shell {
+  position: relative;
+}
+.run-delete-button {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  opacity: 0.68;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease,
+    background 120ms ease,
+    opacity 120ms ease;
+}
+.run-delete-button svg {
+  width: 14px;
+  height: 14px;
+}
+.run-delete-button:hover,
+.run-delete-button:focus-visible {
+  border-color: color-mix(in srgb, var(--err) 48%, transparent);
+  background: color-mix(in srgb, var(--err) 12%, transparent);
+  color: var(--err);
+  opacity: 1;
 }
 .run-subject {
   font-size: 12px;
@@ -783,6 +815,28 @@
   background: var(--accent-soft);
   border-color: var(--accent-dim);
 }
+.directive-receipt-status {
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--info) 45%, transparent);
+  border-radius: 999px;
+  color: var(--info);
+  background: color-mix(in srgb, var(--info) 11%, transparent);
+  font-size: 10px;
+  font-weight: 650;
+}
+.directive-receipt.is-sent .directive-receipt-status {
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 11%, transparent);
+}
+.directive-receipt.is-failed .directive-receipt-status {
+  border-color: color-mix(in srgb, var(--err) 45%, transparent);
+  color: var(--err);
+  background: color-mix(in srgb, var(--err) 11%, transparent);
+}
+.directive-receipt.is-failed .msg-body {
+  border-color: color-mix(in srgb, var(--err) 55%, transparent);
+}
 .md-final-summary {
   margin-top: 12px;
   padding: 13px 15px;
@@ -891,6 +945,15 @@
 }
 .attachment-list.sent {
   justify-content: flex-end;
+}
+.attachment-list.sent.has-preview {
+  width: min(760px, 100%);
+  flex-direction: column;
+  align-items: stretch;
+}
+.attachment-list.sent.has-preview .artifact-preview {
+  margin: 0;
+  text-align: left;
 }
 .attachment-chip {
   display: inline-flex;
@@ -2205,7 +2268,8 @@ h6.md-h {
   border: 1px solid transparent;
 }
 .activity-outcome.st-ok {
-  color: var(--ok, #4ec9a5);
+  background: color-mix(in srgb, var(--ok, #4ec9a5) 12%, transparent);
+  color: #d8f5e8;
   border-color: color-mix(in srgb, var(--ok, #4ec9a5) 35%, transparent);
 }
 .activity-outcome.st-failed {

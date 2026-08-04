@@ -7,6 +7,7 @@ import type { Conversation } from './conversations'
 import {
   ChatArtifactPreviewBudget,
   materializeChatArtifact,
+  materializeUserImageArtifact,
   readConversationArtifact,
   removeConversationArtifacts,
   revealableConversationArtifactPath
@@ -48,6 +49,109 @@ function conversation(value: ChatArtifact): Conversation {
 }
 
 describe('chat artifact store', () => {
+  it('matérialise et relit l’image utilisateur originale depuis son message', () => {
+    const base = mkdtempSync(join(tmpdir(), 'autowin-user-image-'))
+    const stored = materializeUserImageArtifact(
+      {
+        name: 'preuve.png',
+        mimeType: 'image/png',
+        size: 3,
+        content: 'YWJj'
+      },
+      'conv-1',
+      'turn-user',
+      base
+    )
+    const userConversation: Conversation = {
+      id: 'conv-1',
+      title: 'test',
+      category: 'claude',
+      provider: 'claude',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [
+        {
+          role: 'user',
+          content: 'Regarde',
+          ts: 1,
+          attachments: [
+            {
+              name: 'preuve.png',
+              mimeType: 'image/png',
+              size: 3,
+              turnId: 'turn-user',
+              artifact: stored
+            }
+          ]
+        }
+      ]
+    }
+
+    expect(stored.content).toBeUndefined()
+    expect(readFileSync(stored.path!)).toEqual(Buffer.from('abc'))
+    expect(readConversationArtifact(userConversation, 'turn-user', stored.id, base)).toMatchObject({
+      ok: true,
+      encoding: 'base64',
+      content: 'YWJj'
+    })
+  })
+
+  it('distingue deux images aux mêmes octets mais portant des noms différents', () => {
+    const base = mkdtempSync(join(tmpdir(), 'autowin-user-images-'))
+    const first = materializeUserImageArtifact(
+      { name: 'avant.png', mimeType: 'image/png', size: 3, content: 'YWJj' },
+      'conv-1',
+      'turn-user',
+      base
+    )
+    const second = materializeUserImageArtifact(
+      { name: 'apres.png', mimeType: 'image/png', size: 3, content: 'YWJj' },
+      'conv-1',
+      'turn-user',
+      base
+    )
+    const userConversation: Conversation = {
+      id: 'conv-1',
+      title: 'test',
+      category: 'claude',
+      provider: 'claude',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [
+        {
+          role: 'user',
+          content: 'Compare',
+          ts: 1,
+          attachments: [
+            {
+              name: 'avant.png',
+              mimeType: 'image/png',
+              size: 3,
+              turnId: 'turn-user',
+              artifact: first
+            },
+            {
+              name: 'apres.png',
+              mimeType: 'image/png',
+              size: 3,
+              turnId: 'turn-user',
+              artifact: second
+            }
+          ]
+        }
+      ]
+    }
+
+    expect(first.id).not.toBe(second.id)
+    expect(first.path).not.toBe(second.path)
+    expect(
+      readConversationArtifact(userConversation, 'turn-user', first.id, base).artifact?.name
+    ).toBe('avant.png')
+    expect(
+      readConversationArtifact(userConversation, 'turn-user', second.id, base).artifact?.name
+    ).toBe('apres.png')
+  })
+
   it('matérialise le contenu inline hors de la conversation puis le relit par identité', () => {
     const base = mkdtempSync(join(tmpdir(), 'autowin-artifact-'))
     const stored = materializeChatArtifact(artifact(), 'conv-1', 'turn-1', base)

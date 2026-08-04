@@ -1,7 +1,10 @@
 import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { spawnSurvivable } from '../runs/survivable-spawn'
+import { killEscalate } from './watchdog'
 import type {
   Message,
   PromptEnvelope,
@@ -101,26 +104,43 @@ export class GeminiCliAdapter implements ProviderAdapter {
           [{ role: 'user', content: 'Réponds exactement AUTOWIN_AUTH_OK' }],
           { model: 'Gemini 3.5 Flash (Low)', system: 'Réponds sans outil.' }
         )
-        const child = spawn(this.command.executable, [...this.command.prefix, ...args], {
-          shell: false,
-          windowsHide: true,
-          cwd: sandbox
+        const run = spawnSurvivable({
+          bin: this.command.executable,
+          args: [...this.command.prefix, ...args],
+          cwd: sandbox,
+          journalRoot: sandbox,
+          runId: `gemini-auth-${randomUUID()}`
         })
+        const child = run.child
         let output = ''
-        child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString('utf8')))
+        let childClosed = false
+        let settled = false
+        const tailSettled = run
+          .tail((line) => (output += `${line}\n`), { isComplete: () => childClosed })
+          .then(
+            () => undefined,
+            (error: unknown) => error
+          )
+        const finish = async (code: number | null, transportOk: boolean): Promise<void> => {
+          if (settled) return
+          settled = true
+          childClosed = true
+          clearTimeout(timer)
+          const tailError = await tailSettled
+          run.release()
+          cleanupSandbox()
+          resolve(transportOk && !tailError && isAntigravityAuthProbe(code, output))
+        }
         const timer = setTimeout(() => {
-          child.kill()
-          resolve(false)
+          killEscalate(child)
+          void finish(null, false)
         }, 20_000)
         child.on('error', () => {
-          clearTimeout(timer)
-          cleanupSandbox()
-          resolve(false)
+          void finish(null, false)
         })
         child.on('close', (code) => {
-          clearTimeout(timer)
-          cleanupSandbox()
-          resolve(isAntigravityAuthProbe(code, output))
+          childClosed = true
+          void finish(code, true)
         })
       } catch {
         cleanupSandbox()
@@ -172,24 +192,44 @@ export class GeminiCliAdapter implements ProviderAdapter {
     const systemInjected = typeof opts.system === 'string' && opts.system.trim().length > 0
     const sandbox = mkdtempSync(join(tmpdir(), 'autowin-os-gemini-'))
     const args = buildGeminiArgs(messages, opts)
-
-    const child = spawn(this.command.executable, [...this.command.prefix, ...args], {
-      shell: false,
+    const spawnToken = randomUUID()
+    opts.execution?.onSpawnIntent?.(spawnToken, true)
+    const run = spawnSurvivable({
+      bin: this.command.executable,
+      args: [...this.command.prefix, ...args],
       cwd: sandbox,
-      windowsHide: true
+      journalRoot: process.env.AUTOWIN_RUN_JOURNAL_ROOT ?? join(sandbox, '.run'),
+      runId: spawnToken
     })
-    const timer = setTimeout(() => child.kill(), this.timeoutMs)
-    let stderr = ''
+    const child = run.child
+    const childPid = child.pid
+    if (run.journalPath) opts.execution?.onJournal?.(spawnToken, run.journalPath)
+    if (childPid) {
+      if (opts.execution?.onSpawned) opts.execution.onSpawned(spawnToken, childPid)
+      else {
+        opts.execution?.onProcess?.(childPid, true)
+        opts.execution?.onSpawnIntent?.(spawnToken, false)
+      }
+    }
     let text = ''
     let done = false
+    let childClosed = false
+    let exitCode: number | null = null
     let errored: Error | null = null
     let wake: (() => void) | undefined
     const queue: StreamChunk[] = []
+    const tailController = new AbortController()
+    const timer = setTimeout(() => {
+      errored = new Error('Gemini via Antigravity a dépassé la durée maximale.')
+      killEscalate(child)
+      forceTerminate(errored)
+    }, this.timeoutMs)
     const onAbort = (): void => {
       const error = new Error('Envoi Gemini annulé.')
       error.name = 'AbortError'
       errored = error
-      child.kill()
+      killEscalate(child)
+      forceTerminate(error)
     }
     opts.signal?.addEventListener('abort', onAbort, { once: true })
 
@@ -197,33 +237,71 @@ export class GeminiCliAdapter implements ProviderAdapter {
       wake?.()
       wake = undefined
     }
-    child.stdout.on('data', (chunk: Buffer) => {
-      const delta = chunk.toString('utf8')
+    const cleanupSandbox = (): void => {
+      try {
+        rmSync(sandbox, { recursive: true, force: true })
+      } catch {
+        // Le processus peut encore conserver son cwd quelques instants apres l'escalade de kill.
+      }
+    }
+    function forceTerminate(error: Error): void {
+      if (done) return
+      errored = error
+      done = true
+      queue.length = 0
+      clearTimeout(timer)
+      opts.signal?.removeEventListener('abort', onAbort)
+      tailController.abort(error)
+      run.release()
+      cleanupSandbox()
+      notify()
+    }
+    opts.execution?.registerTermination?.((reason) => {
+      killEscalate(child)
+      forceTerminate(new Error(reason))
+    })
+    const consumeLine = (line: string): void => {
+      if (done) return
+      const delta = `${line}\n`
       text += delta
       queue.push({ delta })
       notify()
-    })
-    child.stderr.on('data', (chunk: Buffer) => {
-      stderr = `${stderr}${chunk.toString('utf8')}`.slice(-4_000)
-    })
+    }
     child.on('error', (error) => {
-      errored = error
-      done = true
-      notify()
+      if (!childPid) opts.execution?.onSpawnIntent?.(spawnToken, false)
+      forceTerminate(error)
     })
     child.on('close', (code) => {
       clearTimeout(timer)
       opts.signal?.removeEventListener('abort', onAbort)
-      if (code !== 0 && !errored) {
-        const detail = stderr.trim().split(/\r?\n/).at(-1)
-        errored = new Error(
-          `Gemini via Antigravity indisponible ou non connecté (exit ${code}). Ouvre « Connecter Gemini » pour relier ton compte Google.${detail ? ` ${detail}` : ''}`
-        )
-      }
-      rmSync(sandbox, { recursive: true, force: true })
-      done = true
-      notify()
+      if (childPid) opts.execution?.onProcess?.(childPid, false)
+      exitCode = code
+      childClosed = true
     })
+    void run
+      .tail(consumeLine, {
+        isComplete: () => childClosed,
+        signal: opts.signal
+          ? AbortSignal.any([opts.signal, tailController.signal])
+          : tailController.signal
+      })
+      .then(() => {
+        if (exitCode !== 0 && !errored) {
+          const detail = text.trim().split(/\r?\n/).at(-1)
+          errored = new Error(
+            `Gemini via Antigravity indisponible ou non connecté (exit ${exitCode}). Ouvre « Connecter Gemini » pour relier ton compte Google.${detail ? ` ${detail}` : ''}`
+          )
+        }
+      })
+      .catch((error: unknown) => {
+        if (!errored) errored = error instanceof Error ? error : new Error(String(error))
+      })
+      .finally(() => {
+        run.release()
+        cleanupSandbox()
+        done = true
+        notify()
+      })
 
     while (!done || queue.length > 0) {
       if (queue.length > 0) yield queue.shift()!

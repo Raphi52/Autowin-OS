@@ -1,4 +1,10 @@
-import { createReadStream, existsSync, readdirSync, statSync } from 'node:fs'
+import {
+  createReadStream,
+  existsSync,
+  promises as fsPromises,
+  readdirSync,
+  statSync
+} from 'node:fs'
 import { createInterface } from 'node:readline'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
@@ -16,6 +22,11 @@ export interface SessionMeta {
   path: string
   sizeMb: number
   mtime: number
+}
+
+export interface SessionRef {
+  id: string
+  project: string
 }
 
 export interface ToolCall {
@@ -51,6 +62,9 @@ export interface SessionActivity {
 const IMG_RE = /\.(png|jpe?g|webp|gif|bmp)$/i
 const TEXT_CAP = 280
 const DETAIL_CAP = 160
+const SESSION_CACHE_TTL_MS = 15_000
+const SESSION_SCAN_CONCURRENCY = 8
+const sessionListCache = new Map<string, { expiresAt: number; sessions: SessionMeta[] }>()
 
 export function projectsRoot(): string {
   return join(homedir(), '.claude', 'projects')
@@ -90,6 +104,112 @@ export function listSessions(cap = 60, root = projectsRoot()): SessionMeta[] {
     }
   }
   return out.sort((a, b) => b.mtime - a.mtime).slice(0, cap)
+}
+
+function retainRecent(sessions: SessionMeta[], candidate: SessionMeta, cap: number): void {
+  if (cap <= 0) return
+  sessions.push(candidate)
+  if (sessions.length <= cap) return
+  let oldest = 0
+  for (let index = 1; index < sessions.length; index += 1) {
+    if (sessions[index].mtime < sessions[oldest].mtime) oldest = index
+  }
+  sessions.splice(oldest, 1)
+}
+
+/**
+ * Inventaire asynchrone et borné pour les IPC UI. Le scan ne bloque pas la boucle Electron,
+ * conserve seulement les `cap` sessions les plus récentes et amortit les rafraîchissements.
+ */
+export async function listSessionsAsync(
+  cap = 60,
+  root = projectsRoot(),
+  cacheTtlMs = SESSION_CACHE_TTL_MS
+): Promise<SessionMeta[]> {
+  const boundedCap = Math.max(0, Math.floor(cap))
+  const cacheKey = `${root}\u0000${boundedCap}`
+  const now = Date.now()
+  const cached = sessionListCache.get(cacheKey)
+  if (cacheTtlMs > 0 && cached && cached.expiresAt > now) return cached.sessions.slice()
+
+  let projects: import('node:fs').Dirent[]
+  try {
+    projects = await fsPromises.readdir(root, { withFileTypes: true })
+  } catch {
+    return []
+  }
+
+  const recent: SessionMeta[] = []
+  let cursor = 0
+  const worker = async (): Promise<void> => {
+    while (cursor < projects.length) {
+      const project = projects[cursor]
+      cursor += 1
+      if (!project.isDirectory()) continue
+      const dir = join(root, project.name)
+      let files: import('node:fs').Dirent[]
+      try {
+        files = await fsPromises.readdir(dir, { withFileTypes: true })
+      } catch {
+        continue
+      }
+      for (const file of files) {
+        if (!file.isFile() || !file.name.endsWith('.jsonl')) continue
+        const path = join(dir, file.name)
+        try {
+          const stats = await fsPromises.stat(path)
+          retainRecent(
+            recent,
+            {
+              id: basename(file.name, '.jsonl'),
+              project: project.name,
+              path,
+              sizeMb: Math.round((stats.size / 1024 / 1024) * 10) / 10,
+              mtime: stats.mtimeMs
+            },
+            boundedCap
+          )
+        } catch {
+          // Fichier disparu entre l'inventaire et le stat : ignoré.
+        }
+      }
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(SESSION_SCAN_CONCURRENCY, projects.length) }, async () =>
+      worker()
+    )
+  )
+  const sessions = recent.sort((a, b) => b.mtime - a.mtime)
+  if (cacheTtlMs > 0)
+    sessionListCache.set(cacheKey, { expiresAt: Date.now() + cacheTtlMs, sessions })
+  return sessions.slice()
+}
+
+export async function resolveListedSessionAsync(
+  ref: SessionRef,
+  cap = 60,
+  root = projectsRoot()
+): Promise<SessionMeta | null> {
+  const sessions = await listSessionsAsync(cap, root)
+  return (
+    sessions.find((session) => session.id === ref.id && session.project === ref.project) ?? null
+  )
+}
+
+/** Une image n'est lisible que si un transcript autorisé l'a réellement référencée. */
+export async function resolveListedSessionImage(
+  ref: SessionRef,
+  imagePath: string,
+  cap = 60,
+  root = projectsRoot()
+): Promise<string | null> {
+  const session = await resolveListedSessionAsync(ref, cap, root)
+  if (!session) return null
+  const activity = await parseSession(session)
+  return activity.images.some((image) => image.exists && image.path === imagePath)
+    ? imagePath
+    : null
 }
 
 /** Extrait le texte des blocs d'un message (string ou blocs typés). */

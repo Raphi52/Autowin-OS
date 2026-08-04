@@ -117,7 +117,11 @@ describe('pickResumeForTask — reprend, ou refuse en le justifiant', () => {
 
   it('tâche vide → rien (jamais un appariement sur du vide)', () => {
     expect(
-      pickResumeForTask([state({ task: '   ' })], { task: '   ', conversationId: 'conv-1', nowMs: NOW })
+      pickResumeForTask([state({ task: '   ' })], {
+        task: '   ',
+        conversationId: 'conv-1',
+        nowMs: NOW
+      })
     ).toBeNull()
   })
 
@@ -130,9 +134,7 @@ describe('pickResumeForTask — reprend, ou refuse en le justifiant', () => {
   })
 
   it('aucun état → null', () => {
-    expect(
-      pickResumeForTask([], { task: 'x', conversationId: 'conv-1', nowMs: NOW })
-    ).toBeNull()
+    expect(pickResumeForTask([], { task: 'x', conversationId: 'conv-1', nowMs: NOW })).toBeNull()
   })
 })
 
@@ -145,7 +147,7 @@ describe('câblage — la commande du chat reprend et rattache la conversation',
 
   it('elle cherche un acquis pour CETTE tâche et CETTE conversation', () => {
     expect(source).toMatch(
-      /resumableOrchestrationForTask\?\.\(\s*task,\s*convId,\s*Date\.now\(\),\s*bindingOverride\s*\)/
+      /resumableOrchestrationForTask\?\.\(\s*task,\s*convId,\s*Date\.now\(\),\s*bindingOverride,\s*runtimeSnapshot\s*\)/
     )
   })
 
@@ -161,6 +163,7 @@ describe('câblage — la commande du chat reprend et rattache la conversation',
     const call = source.slice(start, source.indexOf('\n          )', start))
     expect(call).toContain('convId')
     expect(call).toContain('resumeOutputs')
+    expect(call).toContain('runtimeSnapshot')
   })
 
   it('elle OUBLIE l’acquis repris (sinon il serait rejoué à chaque relance)', () => {
@@ -183,6 +186,7 @@ describe('câblage — le chemin DIRECT reprend lui aussi', () => {
 
   it('il cherche un acquis pour cette tâche et cette conversation', () => {
     expect(handler).toContain('os.resumableOrchestrationForTask?.(')
+    expect(handler).toContain('runtimeSnapshot')
   })
 
   it('il passe l’acquis ET la conversation à runTask', () => {
@@ -192,6 +196,8 @@ describe('câblage — le chemin DIRECT reprend lui aussi', () => {
     )
     expect(call).toContain('resumedAcquis?.phaseOutputs')
     expect(call).toContain('conversationId')
+    expect(call).toMatch(/,\s*runtimeSnapshot\s*$/)
+    expect(call).not.toContain('captureOrchestrationRuntime')
   })
 
   it('il OUBLIE l’acquis repris (sinon rejoué à chaque relance)', () => {

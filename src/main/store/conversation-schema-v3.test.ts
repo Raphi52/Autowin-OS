@@ -16,6 +16,18 @@ const legacyConversation = (): Conversation =>
   }) as Conversation
 
 describe('conversation schema v3', () => {
+  it('lists lightweight summaries without message histories', () => {
+    const store = new ConversationStore(() => 42)
+    const conversation = store.create({ title: 'Heavy', category: 'chat', provider: 'codex' })
+    store.append(conversation.id, { role: 'user', content: 'large history' })
+
+    const summaries = store.listSummaries()
+
+    expect(summaries).toHaveLength(1)
+    expect(summaries[0]).toMatchObject({ id: conversation.id, title: 'Heavy', updatedAt: 42 })
+    expect(summaries[0]).not.toHaveProperty('messages')
+  })
+
   it('migrates v2 deterministically with stable branch, workspace and message identities', () => {
     const first = new ConversationStore(() => 100)
     expect(first.hydrate([legacyConversation()])).toBe(true)

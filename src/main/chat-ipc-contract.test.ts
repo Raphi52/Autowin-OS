@@ -26,6 +26,13 @@ function readChatContractSources(): Record<string, string> {
 }
 
 describe('renderer chat IPC contract', () => {
+  it('keeps conversation lists lightweight and loads one history on demand', () => {
+    const sources = readChatContractSources()
+    expect(sources.main).toMatch(/'os:conversations'[\s\S]*?listSummaries\(\)/)
+    expect(sources.main).toMatch(/'os:conversation'[\s\S]*?conversations\.get/)
+    expect(sources.preload).toMatch(/conversation:\s*\(id: string\)[\s\S]*?'os:conversation'/)
+  })
+
   it('detects the legacy direct-chat discriminant', () => {
     expect(
       findLegacyChatMarkers({ fixture: "ipcMain.handle('chat:send', () => undefined)" })
@@ -42,6 +49,37 @@ describe('renderer chat IPC contract', () => {
     expect(findLegacyChatMarkers(sources)).toEqual([])
   })
 
+  it('persiste les reglements tardifs du superviseur sur le chemin de chat renderer', () => {
+    const { main } = readChatContractSources()
+    const pilotChat = main.slice(
+      main.indexOf('const runPilotChat = async'),
+      main.indexOf("ipcMain.handle('os:pilotChat'")
+    )
+
+    expect(main).toContain("from './activity/chat-usage-settlement'")
+    expect(pilotChat).toContain('persistChatUsageSettlement({')
+    expect(pilotChat).toMatch(/os\.runChatTurn\([\s\S]*?onSupervisedUsageSettlement/)
+    expect(pilotChat).toContain('os.executionSupervisor.currentSignal()')
+    expect(pilotChat).toContain("broadcast({ type: 'refresh', scope: 'workflows' })")
+  })
+
+  it('conserve le checkpoint et persiste le règlement tardif sur os:orchestrate', () => {
+    const { main } = readChatContractSources()
+    const directRun = main.slice(
+      main.indexOf("ipcMain.handle('os:orchestrate'"),
+      main.indexOf("ipcMain.handle('os:behaviourComposition'")
+    )
+    const runTaskAt = directRun.indexOf('os.runTask(')
+    const lifecycleAt = directRun.indexOf('(lifecycle) =>')
+    const forgetAt = directRun.indexOf('os.forgetResumableOrchestration')
+
+    expect(runTaskAt).toBeGreaterThanOrEqual(0)
+    expect(lifecycleAt).toBeGreaterThan(runTaskAt)
+    expect(forgetAt).toBeGreaterThan(lifecycleAt)
+    expect(directRun).toContain('reconcileLateRunLifecycle(')
+    expect(directRun).toContain("broadcast({ type: 'orchestrate-usage', convId: conversationId })")
+  })
+
   it('serves the cached model catalog immediately, then notifies the renderer after boot refresh', () => {
     const sources = readChatContractSources()
     const modelHandler = sources.main.slice(
@@ -53,7 +91,10 @@ describe('renderer chat IPC contract', () => {
       sources.main.indexOf('const agentModelsReady =')
     )
 
-    expect(modelHandler).toContain('serveModelCatalog(modelCatalog, force)')
+    expect(modelHandler).toContain('if (!force) return agentModels')
+    expect(catalogSetup).toContain('applyFabricSummaries(')
+    expect(modelHandler).toContain('const refresh = modelCatalog.refresh(true)')
+    expect(modelHandler).toContain('os.setTaskReadiness(')
     expect(sources.preload).toContain("ipcRenderer.invoke('os:models:list', force)")
     expect(catalogSetup).toContain("broadcast({ type: 'refresh', scope: 'roles' })")
   })

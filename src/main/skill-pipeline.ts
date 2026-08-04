@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { listNativeRegistry, skillRoots } from './native-registry'
 
 /**
  * Charge le TEXTE des skills du kit (`~/.claude/skills/<phase>/SKILL.md` + `_engine/ENGINE.md`)
@@ -113,15 +114,30 @@ export function engineForPhase(
  */
 export function phaseInstruction(
   phase: PipelinePhase,
-  root = skillsRoot(),
+  root?: string,
+  opts: { withFoundation?: boolean } = {}
+): string {
+  if (root) return phaseInstructionFromRoots(phase, [root], () => true, opts)
+  const enabled = (id: PipelinePhase): boolean =>
+    listNativeRegistry('skills').find((item) => item.id === id)?.enabled !== false
+  return phaseInstructionFromRoots(phase, skillRoots(), enabled, opts)
+}
+
+/** Sélectionne la première racine qui contient la phase, en respectant son verrou d'activation. */
+export function phaseInstructionFromRoots(
+  phase: PipelinePhase,
+  roots: string[],
+  isEnabled: (id: PipelinePhase) => boolean = () => true,
   opts: { withFoundation?: boolean } = {}
 ): string {
   // Kaizen est un workflow NATIF Autowin : aucun fichier ~/.claude n'est lu ou injecté.
   // Son contrat purpose-built vit dans phase-briefs.ts et sa preuve dans autowin-kaizen-context.ts.
-  if (phase === 'kaizen') return ''
+  if (phase === 'kaizen' || !isEnabled(phase)) return ''
   // Défaut true : un appel ISOLÉ (chat, phase unique) garde la fondation. L'orchestrateur multi-phases
   // passe false sur les phases ≥2 pour n'injecter la fondation qu'UNE fois par run.
   const withFoundation = opts.withFoundation ?? true
+  const root = roots.find((candidate) => loadSkillText(phase, candidate).length > 0)
+  if (!root) return ''
   const body = stripSkillFrontmatter(loadSkillText(phase, root))
   if (!body) return ''
   const skill = `\n=== SKILL ${phase.toUpperCase()} (kit) ===\n${body}\n`

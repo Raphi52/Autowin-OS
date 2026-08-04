@@ -27,6 +27,12 @@ export interface ThreadStep {
   status?: 'completed' | 'failed'
 }
 
+export interface TurnRuntimeIdentity {
+  provider: string
+  model?: string
+  reasoningEffort?: string
+}
+
 /** Événements qui comptent pour un fil de sous-agents ; le reste est de la plomberie de transport. */
 function stepKindOf(event: HarnessTimelineEvent): ThreadStep['step'] | undefined {
   if (event.kind === 'gate') return 'gate'
@@ -35,13 +41,53 @@ function stepKindOf(event: HarnessTimelineEvent): ThreadStep['step'] | undefined
   return undefined
 }
 
-function toStep(event: HarnessTimelineEvent): ThreadStep {
+function knownProviderFamily(
+  value: string | undefined
+): 'codex' | 'claude' | 'gemini' | 'kimi' | undefined {
+  const normalized = value?.trim().toLowerCase()
+  if (!normalized) return undefined
+  if (normalized === 'codex') return 'codex'
+  if (normalized === 'claude') return 'claude'
+  if (normalized === 'gemini') return 'gemini'
+  if (normalized === 'kimi') return 'kimi'
+  return undefined
+}
+
+function modelFamily(value: string | undefined): ReturnType<typeof knownProviderFamily> {
+  const normalized = value?.trim().toLowerCase()
+  if (!normalized) return undefined
+  if (/^gemini(?:[-/.]|$)/.test(normalized)) return 'gemini'
+  if (/^claude(?:[-/.]|$)/.test(normalized)) return 'claude'
+  if (/^(?:gpt|codex|o[134])(?:[-/.]|$)/.test(normalized)) return 'codex'
+  if (/^(?:kimi|moonshot)(?:[-/.]|$)/.test(normalized)) return 'kimi'
+  return undefined
+}
+
+/**
+ * Les anciennes traces pouvaient figer le nom du rôle avant le reroutage effectif (ex. provider
+ * Codex + modèle Gemini). On ne remplace que ces couples impossibles, et seulement par le runtime
+ * du même provider persisté sur le tour. Un vrai fan-out Gemini reste donc Gemini.
+ */
+function reliableHistoricalModel(
+  event: HarnessTimelineEvent,
+  turnRuntime: TurnRuntimeIdentity | undefined
+): string | undefined {
+  const provider = knownProviderFamily(event.provider)
+  const declaredModel = modelFamily(event.model)
+  if (!provider || !declaredModel || provider === declaredModel) return event.model
+  const recordedModel = turnRuntime?.model
+  if (turnRuntime?.provider === event.provider && recordedModel) return recordedModel
+  return undefined
+}
+
+function toStep(event: HarnessTimelineEvent, turnRuntime?: TurnRuntimeIdentity): ThreadStep {
   const kind = stepKindOf(event) ?? 'exec'
+  const model = reliableHistoricalModel(event, turnRuntime)
   return {
     step: kind,
     ...(event.provider ? { provider: event.provider } : {}),
     ...(event.execution?.phase ? { role: event.execution.phase } : {}),
-    ...(event.model ? { model: event.model } : {}),
+    ...(model ? { model } : {}),
     ...(event.content ? { text: event.content } : {}),
     ...(event.detail ? { detail: event.detail } : {}),
     ...(typeof event.tokens === 'number' ? { tokens: event.tokens } : {}),
@@ -74,11 +120,15 @@ function statusOf(steps: ThreadStep[]): 'green' | 'red' {
  */
 export function scopedRunsFromTimeline(
   timeline: HarnessTimeline,
-  convId: string
+  convId: string,
+  runtimeByTurn?: ReadonlyMap<string, TurnRuntimeIdentity>
 ): Array<ScopedLiveRun<ThreadStep>> {
   const runs: Array<ScopedLiveRun<ThreadStep>> = []
   for (const turn of timeline.turns) {
-    const steps = turn.events.filter((event) => stepKindOf(event) !== undefined).map(toStep)
+    const turnRuntime = runtimeByTurn?.get(turn.id)
+    const steps = turn.events
+      .filter((event) => stepKindOf(event) !== undefined)
+      .map((event) => toStep(event, turnRuntime))
     if (steps.length === 0) continue
     runs.push({
       convId,
@@ -110,5 +160,8 @@ export function mergeLiveAndPersisted<TStep>(
       // Sans runPath des deux côtés, on ne peut pas apparier : le direct l'emporte pour éviter un doublon.
       !(!run.runPath && liveConvs.has(run.convId))
   )
-  return [...kept.map((run): [string, ScopedLiveRun<TStep>] => [run.runPath ?? run.convId, run]), ...live]
+  return [
+    ...kept.map((run): [string, ScopedLiveRun<TStep>] => [run.runPath ?? run.convId, run]),
+    ...live
+  ]
 }

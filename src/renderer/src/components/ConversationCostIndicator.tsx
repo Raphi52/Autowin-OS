@@ -62,7 +62,7 @@ export function ConversationCostIndicator({
   const summary = summarizeConversationCost(rows)
   // Rien dépensé = rien à dire. Afficher « 0 $ » laisserait croire à une mesure là où il n'y a
   // qu'un journal vide.
-  if (summary.totalUsd <= 0) return null
+  if (summary.calls <= 0) return null
   const detail = spendingRows(rows)
   const totalDuration = formatDuration(summary.durationMs)
 
@@ -114,7 +114,13 @@ export function ConversationCostIndicator({
                 <span className="conv-cost-bar" aria-hidden="true">
                   <span style={{ width: `${sharePercent(row, summary.totalUsd)}%` }} />
                 </span>
-                <span className="conv-cost-amount">{formatUsd(row.costUsd)}</span>
+                <span className="conv-cost-amount">
+                  {row.unpricedCalls > 0 && row.costUsd <= 0
+                    ? 'co\u00fbt non expos\u00e9'
+                    : row.unpricedCalls > 0
+                      ? `${formatUsd(row.costUsd)} + inconnu`
+                      : formatUsd(row.costUsd)}
+                </span>
                 {/* Le poste le plus LENT n'est pas forcement le plus cher : les deux sont montres. */}
                 <span className="conv-cost-time" data-testid={`conversation-time-${row.key}`}>
                   {formatDuration(row.durationMs ?? 0) ?? '—'}

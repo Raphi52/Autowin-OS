@@ -6,17 +6,15 @@
  * (127.0.0.1 = instance PAR MACHINE ; une instance vivante ne doit pas être touchée, cf. mémoire).
  *
  * Garde anti-doublon : on ping AVANT de spawn (déjà up → no-op) et on ne tente qu'UNE fois par session.
- * Chemin du tooling : env `AUTOWIN_BRAIN_TOOLING` (override), sinon défaut Amitel documenté ci-dessous
- * (jamais une racine utilisateur devinée — un défaut d'intégration explicite, surchargé par env).
+ * Chemin du tooling : config de l'installation locale, avec `AUTOWIN_BRAIN_TOOLING` comme override.
+ * Le partage GED n'est utilisé que comme racine de données.
  */
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { amitelBrainTooling } from './amitel-paths'
+import { amitelBrainRoot, amitelBrainStateRoot, amitelBrainTooling } from './amitel-paths'
 
-// Le chemin du tooling vient de la SOURCE UNIQUE `amitel-paths.ts`, ou il est DERIVE de la racine du
-// Brain. Avant, les deux litteraux etaient independants : surcharger la racine laissait le tooling
-// pointer ailleurs, et rien ne signalait la divergence.
+// Le chemin du tooling vient de la SOURCE UNIQUE `amitel-paths.ts` et reste distinct du corpus partagé.
 
 export interface BrainLaunchResult {
   status: 'already-up' | 'starting' | 'unavailable'
@@ -27,9 +25,8 @@ export interface BrainLaunchResult {
  * Caractères que cmd.exe interprète AVANT d'exécuter la ligne (séparateurs, redirections,
  * expansion de variables). L'échappement win32 de Node ne met des guillemets qu'autour des
  * arguments contenant espace/tabulation/guillemet : ceux-ci passeraient NUS au shell. Comme le
- * tooling par défaut est un partage RÉSEAU écrivable par des collègues, un dossier nommé
- * `Brain & payload` suffirait à couper la ligne et à exécuter la suite au démarrage de l'app,
- * sans aucun clic (le preflight appelle ce lanceur). On REFUSE donc plutôt que d'échapper.
+ * Un override de tooling non fiable nommé `Brain & payload` suffirait à couper la ligne et à
+ * exécuter la suite au démarrage de l'app. On REFUSE donc plutôt que d'échapper.
  */
 const CMD_UNSAFE = /[&|^<>()"%!\r\n]/
 
@@ -72,8 +69,58 @@ export function buildBrainLaunchCommand(
 /** Tentative unique par session : évite de spammer des spawns pendant le backoff de re-probe. */
 let attempted = false
 
+export interface BrainRuntimePaths {
+  tooling: string
+  python: string
+  brainRoot: string
+}
+
+interface InstalledBrainConfig {
+  brain_root?: unknown
+  code_root?: unknown
+  python?: unknown
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+/**
+ * Resout le code et Python depuis l'installation locale de confiance. La racine GED ne sert que
+ * de corpus : elle ne doit jamais redevenir une source de code executable.
+ */
+export function resolveBrainRuntime(env: NodeJS.ProcessEnv = process.env): BrainRuntimePaths {
+  const stateRoot = amitelBrainStateRoot(env)
+  let config: InstalledBrainConfig = {}
+  if (stateRoot) {
+    try {
+      config = JSON.parse(readFileSync(join(stateRoot, 'config.json'), 'utf8')) as InstalledBrainConfig
+    } catch {
+      // Installation inachevee ou configuration absente : les chemins locaux par defaut restent
+      // valides et ensureBrainServerStarted verifiera l'existence des fichiers avant tout spawn.
+    }
+  }
+
+  const explicitLegacyTooling = nonEmptyString(env.AUTOWIN_BRAIN_TOOLING)
+  const tooling = explicitLegacyTooling
+    ?? nonEmptyString(env.AMITEL_BRAIN_CODE_ROOT)
+    ?? nonEmptyString(config.code_root)
+    ?? amitelBrainTooling(env)
+  const python = nonEmptyString(env.AMITEL_BRAIN_PYTHON)
+    ?? nonEmptyString(config.python)
+    ?? (explicitLegacyTooling
+      ? join(explicitLegacyTooling, '.venv', 'Scripts', 'python.exe')
+      : stateRoot
+        ? join(stateRoot, '.venv', 'Scripts', 'python.exe')
+        : '')
+  const brainRoot = nonEmptyString(env.AMITEL_BRAIN_ROOT)
+    ?? nonEmptyString(config.brain_root)
+    ?? amitelBrainRoot(env)
+  return { tooling, python, brainRoot }
+}
+
 export function resolveBrainTooling(env: NodeJS.ProcessEnv = process.env): string {
-  return amitelBrainTooling(env)
+  return resolveBrainRuntime(env).tooling
 }
 
 /** Réarme la tentative (ex. brain repassé up puis re-tombé, ou déclenchement manuel explicite). */
@@ -101,9 +148,15 @@ export async function ensureBrainServerStarted(
   if (attempted) {
     return { status: 'unavailable', detail: 'démarrage déjà tenté cette session — pas de nouveau spawn' }
   }
-  const tooling = resolveBrainTooling(env)
-  const python = join(tooling, '.venv', 'Scripts', 'python.exe')
+  const runtime = resolveBrainRuntime(env)
+  const { tooling, python } = runtime
   const script = join(tooling, 'brain_server.py')
+  if (!tooling || !python) {
+    return {
+      status: 'unavailable',
+      detail: 'runtime Brain local non configure — relancer install.ps1 depuis le clone Hermes-Brain de confiance'
+    }
+  }
   if (!existsSync(python)) {
     return { status: 'unavailable', detail: `venv Python introuvable (${python}) — venv par machine à créer (uv venv)` }
   }
@@ -113,6 +166,9 @@ export async function ensureBrainServerStarted(
   // ⚠️ PYTHONPATH retiré : sinon un PYTHONPATH hérité (Hermes) shadow les deps du venv isolé (cf. README).
   const childEnv: NodeJS.ProcessEnv = { ...env }
   delete childEnv.PYTHONPATH
+  childEnv.AMITEL_BRAIN_ROOT = runtime.brainRoot
+  childEnv.AMITEL_BRAIN_CODE_ROOT = runtime.tooling
+  childEnv.AMITEL_BRAIN_PYTHON = runtime.python
   // Détaché + unref : survit à l'app, stdio ignoré (pas de pipe qui bloque). windowsHide : pas de
   // console qui pop.
   // Sous Windows, `detached` + `stdio:'ignore'` + `unref()` ne suffisent PAS : libuv appelle

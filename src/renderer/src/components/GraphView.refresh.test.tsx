@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 import { act, createElement, forwardRef, useImperativeHandle } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-force-graph-3d', () => ({
@@ -51,7 +53,16 @@ afterEach(() => {
 })
 
 describe('GraphView refresh', () => {
+  it('rend les canaux Memory lisibles dans la colonne étroite', () => {
+    const css = readFileSync(join(__dirname, 'GraphView.css'), 'utf8')
+    const metadataRule = css.match(/\.node-search-result__meta\s*\{([^}]+)\}/)?.[1] ?? ''
+    expect(metadataRule).toContain('grid-column: 2')
+    expect(metadataRule).toContain('white-space: normal')
+    expect(metadataRule).not.toContain('text-overflow: ellipsis')
+  })
+
   it('reloads the selected graph even when listBrains returns the same path', async () => {
+    const refreshBrain = vi.fn().mockResolvedValue({ ok: true })
     const loadBrainGraphPreview = vi
       .fn()
       .mockResolvedValueOnce({ nodes: [{ id: 'before', label: 'Before', group: 0 }], links: [] })
@@ -69,6 +80,7 @@ describe('GraphView refresh', () => {
         ]),
       loadBrainGraphPreview,
       loadBrainGraph,
+      refreshBrain,
       loadBrainThemes: vi.fn().mockResolvedValue([]),
       loadBrainThemeNodes: vi.fn().mockResolvedValue([])
     }
@@ -86,6 +98,7 @@ describe('GraphView refresh', () => {
     await act(async () => refresh?.click())
     await flush()
 
+    expect(refreshBrain).toHaveBeenCalledWith('C:\\brain')
     expect(loadBrainGraphPreview).toHaveBeenCalledTimes(2)
     expect(loadBrainGraph).toHaveBeenCalledTimes(2)
   })

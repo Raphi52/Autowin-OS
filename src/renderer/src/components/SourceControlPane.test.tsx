@@ -103,9 +103,9 @@ async function render(
   })
 }
 describe('SourceControlPane (prompt-first)', () => {
-  /** Bascule sur la vue « Worktree » (branche, copies d'agents, historique). */
-  async function openWorktreeView(): Promise<void> {
-    const tab = container.querySelector('[data-testid="sc-view-worktree"]') as HTMLButtonElement
+  /** Bascule sur la vue « Workspace » (branche et copies d'agents). */
+  async function openWorkspaceView(): Promise<void> {
+    const tab = container.querySelector('[data-testid="sc-view-workspace"]') as HTMLButtonElement
     await act(async () => {
       tab.click()
       await Promise.resolve()
@@ -118,17 +118,21 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(calls.conversationArgs).toEqual(['conv-a'])
     expect(calls.repoArgs).toHaveLength(0)
     expect(container.querySelectorAll('[data-testid="sc-file"]')).toHaveLength(2)
-    // Branche et historique vivent désormais derrière « Worktree » — la liste reste lisible.
+    // La branche vit derrière « Workspace » ; l'historique appartient à la vue Worktrees.
     expect(container.textContent).not.toContain('feat/source-control')
     expect(container.textContent).not.toContain('a1b2c3d')
   })
 
-  it('vue Worktree : branche, copies d’agents et historique (pas la liste des changements)', async () => {
+  it('vue Workspace : branche et copies d’agents, sans historique ni liste des changements', async () => {
     mockApi(GIT)
     await render()
-    await openWorktreeView()
+    const tab = container.querySelector('[data-testid="sc-view-workspace"]')
+    expect(tab?.textContent?.trim()).toBe('Workspace')
+    await openWorkspaceView()
     expect(container.textContent).toContain('feat/source-control')
-    expect(container.textContent).toContain('a1b2c3d')
+    expect(container.textContent).toContain('Hub des bureaux')
+    expect(container.textContent).not.toContain('a1b2c3d')
+    expect(container.textContent).not.toContain('Historique')
     expect(container.querySelectorAll('[data-testid="sc-file"]')).toHaveLength(0)
   })
 
@@ -161,7 +165,7 @@ describe('SourceControlPane (prompt-first)', () => {
     api.getWorktreeConflictDiff = getWorktreeConflictDiff
     const onSendPrompt = vi.fn()
     await render(onSendPrompt)
-    await openWorktreeView()
+    await openWorkspaceView()
 
     const compare = container.querySelector(
       '[data-testid="wt-resolve-conflict"]'
@@ -203,7 +207,7 @@ describe('SourceControlPane (prompt-first)', () => {
       Promise.resolve({ available: true, workspacePath: 'C:\\Amitel\\Autowin OS' })
     api.retryWorktreeRecovery = retryWorktreeRecovery
     await render()
-    await openWorktreeView()
+    await openWorkspaceView()
 
     const retry = container.querySelector<HTMLButtonElement>('[data-testid="wt-retry-office"]')
     expect(retry?.textContent).toContain('Réessayer de recréer')
@@ -299,7 +303,7 @@ describe('SourceControlPane (prompt-first)', () => {
     await render()
     expect(calls.conversationArgs).toEqual(['conv-a'])
     expect(calls.repoArgs).toHaveLength(0)
-    await openWorktreeView()
+    await openWorkspaceView()
     expect(calls.repoArgs).toContain('C:/rig')
   })
 
@@ -489,11 +493,11 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(container.textContent).not.toContain('brain-a')
   })
 
-  it('le bouton Push (vue Worktree) transmet directement la demande à l’agent', async () => {
+  it('le bouton Push (vue Workspace) transmet directement la demande à l’agent', async () => {
     mockApi(GIT)
     const onSendPrompt = vi.fn()
     await render(onSendPrompt)
-    await openWorktreeView()
+    await openWorkspaceView()
     const push = [...container.querySelectorAll('button')].find((b) =>
       b.textContent?.includes('Push')
     ) as HTMLButtonElement

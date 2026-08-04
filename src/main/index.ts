@@ -6,13 +6,13 @@ import {
   dialog,
   ipcMain,
   Menu,
-  Notification,
   Tray,
   type IpcMainInvokeEvent,
   type WebContents
 } from 'electron'
 import { join } from 'path'
-import { randomUUID } from 'node:crypto'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { createHash, randomUUID } from 'node:crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import devIcon from '../../resources/autowin-os-dev.png?asset'
@@ -24,13 +24,13 @@ import { projectContextBlock } from './context-files'
 import { DEFAULT_CDP_PORT, listeningPorts, resolveCdpPort } from './cdp-port'
 import { execFileSync } from 'node:child_process'
 import { ensureBrainServerStarted } from './brain-server-launch'
+import { configureSessionMemoryEcho } from './session-memory-echo'
+import { configureRememberDepositStore } from './brain-remember'
+import { clearBrainRetrievalCache, retrieveBrainContext } from './brain-retrieval'
+import { applyBrainRetrievalScores, type BrainNoteSearchResult } from './viz/fs-brains'
 import { installCrashHandlers } from './crash-handlers'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
-import {
-  costLimitsFromSettings,
-  loadOrchestrationBudget,
-  saveOrchestrationBudget
-} from './orchestration-budget'
+import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
 import {
   appPreflightProbes,
   getLastAppPreflightResult,
@@ -44,13 +44,24 @@ import { AgentPilot, type PilotEvent } from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
 import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
 import type { ChatTurnEvent } from '../shared/chat-turn'
+import type { RunLifecycleEvent } from '../shared/run-execution'
 import { TraceLedger } from './activity/ledger'
-import { listSessions, parseSession } from './activity/transcripts'
+import {
+  listSessionsAsync,
+  parseSession,
+  resolveListedSessionAsync,
+  resolveListedSessionImage
+} from './activity/transcripts'
 import { persistConversations } from './store/conversations-disk'
 import { collectStdoutJournals } from './runs/journal-gc'
 import { deleteConvRun, listConvRuns, loadConvRunTrace } from './runs/conv-runs'
 import { deleteListedRun } from './dashboards/runs-scan'
 import { createOrchestrateTurnPersistence } from './runs/orchestrate-turn-persistence'
+import {
+  admitAutomaticResumeRuntime,
+  admitLiveReattachment,
+  type OrchestrationRunState
+} from './runs/orchestration-state'
 import {
   appendTurnEvent,
   listUnfinishedTurns,
@@ -58,6 +69,9 @@ import {
   readTurnJournal
 } from './runs/turn-journal'
 import { appendConvActivity, loadConvActivity } from './activity/conv-activity'
+import { persistChatUsageSettlement } from './activity/chat-usage-settlement'
+import { sameExecutionUsage, type ExecutionUsageSnapshot } from './execution-supervisor'
+import { reconcileLateRunLifecycle } from './activity/late-run-usage-settlement'
 import {
   appendPromptCall,
   deletePromptCalls,
@@ -81,18 +95,47 @@ import {
 import { aggregateToolUsage } from './activity/tool-usage'
 
 import { ProfileStore, type AutowinProfile } from './profile-store'
-import { listCapabilities, setCapabilityEnabled, warmCapabilities } from './capability-controls'
-import { defaultBehaviourWorkspace } from './behaviour-files'
+import {
+  capabilityEnabled,
+  listCapabilities,
+  setCapabilityEnabled,
+  warmCapabilities
+} from './capability-controls'
+import { seedRegistrySnapshot } from './native-registry'
+import { ROUTED_PROVIDERS, type RoutedProvider } from './routed-providers'
+import {
+  defaultBehaviourWorkspace,
+  listBehaviourFiles,
+  readBehaviourFileFromManifest
+} from './behaviour-files'
 import { ApprovedBehaviourWorkspaces, isTrustedRendererUrl } from './behaviour-access'
 import { discoverConfiguredSkillRegistry } from './skill-registry'
 import { listClaudeHooks, listCodexHooks } from './claude-hooks'
 import { ModelQuestionHub, type ModelQuestion, type PendingModelQuestion } from './model-questions'
-import { discoverImportedModels, findModel, loadCachedImportedModels } from './models'
-import { ModelCatalogRefresher, serveModelCatalog } from './model-refresh'
+import {
+  discoverImportedModels,
+  findModel,
+  loadCachedImportedModels,
+  type ImportedModel
+} from './models'
+import { FabricControlPlane, type FabricNodeSummary } from './compute-fabric/control-plane'
+import { FetchFabricManifestClient } from './compute-fabric/manifest-client'
+import { createFabricNodeTransportStore } from './compute-fabric/node-transport-store'
+import { createFabricProductBindings } from './compute-fabric/product-bridge'
+import { createCheckpointForkManifest } from './wire-checkpoint-fork'
+import { recommendShadowRoute } from './shadow-router'
+import { ModelCatalogRefresher } from './model-refresh'
 import { buildModelQuotaSnapshot, getModelQuotaSnapshot } from './model-quotas'
 import { loadAgentTopology, saveAgentTopology } from './topology-disk'
 import { migrateTopologyShape } from './topology'
 import type { AgentTopology, SlotBinding } from './topology'
+import {
+  assertRuntimeTopologyAvailable,
+  runtimeRoleBinding,
+  runtimeRoleSlots,
+  topologyWithRuntimeRole,
+  UnresolvedRuntimeModelError
+} from './runtime-topology'
 import {
   configureAutowinAppDataBase,
   createAutowinAppDataRoot,
@@ -141,7 +184,15 @@ import {
 } from './activity/native-preflight'
 import { nativeSpoolRoot, appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace, readBrainTraces } from './activity/brain-trace-spool'
-import { resumeActionFor } from './runs/run-reattach'
+import { resumeActionFor, waitUntilRunCanResume } from './runs/run-reattach'
+import {
+  loadWorkflowProfiles,
+  removeWorkflowProfile,
+  saveWorkflowProfiles,
+  selectWorkflowProfile,
+  upsertWorkflowProfile,
+  type WorkflowProfile
+} from './workflow-profiles'
 import { recapMessage, summarizeJournal } from './runs/journal-replay'
 import { tailJournalOnce } from './runs/stdout-journal'
 import { defaultProcessIdentity } from './store/worktree-manager'
@@ -158,10 +209,10 @@ import { buildBehaviourComposition } from './behaviour-composition'
 import {
   buildProviderStatuses,
   probePresenceUnlessStandby,
-  probeResultStatus,
-  runStartupProviderProbes
+  probeResultStatus
 } from './provider-status'
 import { ProviderStateStore, type ProviderMode } from './provider-state-store'
+import { compileExecutionQuote } from './execution-quote'
 import { loadTokens } from './providers/codex-auth'
 import { artifactsFromExecutionEvidence } from './providers/artifacts'
 
@@ -190,6 +241,12 @@ import {
   taskOccurrenceFromArgs
 } from './task-manager/windows-relay'
 import { registerTaskManagerIpc } from './task-manager/task-manager-ipc'
+import {
+  AutoKaizenSupervisor,
+  inheritAutoKaizenAuthority,
+  incidentFromPilotEvent,
+  type AutoKaizenIncidentInput
+} from './auto-kaizen-supervisor'
 
 guardBrokenProcessPipes(process.stdout, process.stderr)
 
@@ -205,6 +262,7 @@ const automationInstanceMode = {
   headless: resolvedAutomationInstanceMode.headless || scheduledTaskDispatch
 }
 const isolatedTestInstance = automationInstanceMode.isolated
+let isolatedConversationReadCount = 0
 const headlessTestInstance = automationInstanceMode.headless
 const explicitUserDataPath = resolveExplicitUserDataDir(process.argv)
 const appDataRoot = resolveIsolatedAppDataBase(
@@ -235,6 +293,8 @@ if (is.dev) {
 configureAutowinAppDataBase(appDataRoot)
 const canonicalAppDataRoot = createAutowinAppDataRoot(appDataRoot)
 if (!explicitUserDataDir) app.setPath('userData', canonicalAppDataRoot)
+configureSessionMemoryEcho(join(app.getPath('userData'), 'session-memory.json'))
+configureRememberDepositStore(join(app.getPath('userData'), 'remember-deposits.json'))
 // En DEV, on n'enforce PAS le single-instance lock : un hot-restart electron-vite (ou un
 // process résiduel qui détient encore le lock) ne doit jamais laisser une instance PÉRIMÉE
 // à l'écran en tuant la nouvelle. Le lock n'est appliqué que sur le build packagé.
@@ -257,6 +317,7 @@ const flushConversations = persistConversations(os.conversations)
 const scheduledTasks = new TaskStore()
 const flushScheduledTasks = persistTaskStore(scheduledTasks)
 let scheduledTaskScheduler: TaskScheduler | undefined
+let autoKaizenSupervisor: AutoKaizenSupervisor | undefined
 const pendingScheduledOccurrences = new Set<string>()
 const chatArtifactPreviewBudget = new ChatArtifactPreviewBudget()
 const budgetedArtifactRenderers = new Set<number>()
@@ -264,9 +325,55 @@ const budgetedArtifactRenderers = new Set<number>()
 /** Diffuse un événement d'app à toutes les fenêtres (UI live quand un agent pilote). */
 function broadcast(e: AppEvent): void {
   for (const w of BrowserWindow.getAllWindows()) w.webContents.send('app:event', e)
+  if (!autoKaizenSupervisor) return
+  if (e.type === 'orchestrate-step' && e.convId && e.step.status === 'failed') {
+    const attempt = e.step.execution?.attemptId ?? `${e.step.step}:${e.step.provider ?? 'unknown'}`
+    autoKaizenSupervisor.report({
+      dedupeKey: `orchestration-step:${e.runPath ?? e.convId}:${attempt}`,
+      sourceConversationId: e.convId,
+      kind: e.step.step === 'gate' ? 'gate-failed' : 'orchestration-step-failed',
+      summary: `${e.step.step} a échoué`,
+      detail: e.step.error ?? e.step.detail ?? e.step.text ?? 'Étape en échec sans détail',
+      lineage: autoKaizenSupervisor.lineageForConversation(e.convId)
+    })
+  } else if (e.type === 'orchestrate-end' && e.convId && e.status === 'red') {
+    autoKaizenSupervisor.report({
+      dedupeKey: `orchestration-end:${e.runPath ?? e.convId}:red`,
+      sourceConversationId: e.convId,
+      kind: 'orchestration-red',
+      summary: 'Une orchestration s’est terminée en rouge',
+      detail: e.runPath ? `RUN en échec : ${e.runPath}` : 'Orchestration rouge sans RUN associé',
+      lineage: autoKaizenSupervisor.lineageForConversation(e.convId)
+    })
+  }
 }
 /** Bus de commandes (plan de contrôle) + pilote agent (tool-loop). */
-const bus = new AppCommandBus(os, broadcast)
+function reportAutoKaizen(input: AutoKaizenIncidentInput): void {
+  const supervisor = autoKaizenSupervisor
+  if (!supervisor || !os.conversations.get(input.sourceConversationId)) return
+  supervisor.report({
+    ...input,
+    lineage: input.lineage ?? supervisor.lineageForConversation(input.sourceConversationId)
+  })
+}
+
+const bus = new AppCommandBus(
+  os,
+  broadcast,
+  undefined,
+  undefined,
+  (name) => capabilityEnabled('tools', name) !== false
+)
+seedRegistrySnapshot({
+  tools: bus.catalog().map((command) => ({
+    id: command.name,
+    label: command.name,
+    description: command.description,
+    enabled: true,
+    mutable: true,
+    source: 'app-command-bus'
+  }))
+})
 const pilot = new AgentPilot(
   os.registry,
   os.roles,
@@ -293,11 +400,12 @@ const pilot = new AgentPilot(
     }
   }),
   // MÊME source de contexte projet que les phases orchestrées (fold du CLAUDE.md/AGENTS.md du workspace).
-  () => projectContextBlock(os.executionWorkspace)
+  () => projectContextBlock(os.executionWorkspace),
+  () => os.executionWorkspace
 )
 const conversationRouteCoordinator = new ConversationRouteCoordinator(
   os.conversations,
-  new ConversationRouter(os.registry, os.roles)
+  new ConversationRouter(os.registry, os.roles, os.executionSupervisor, () => os.waitUntilReady())
 )
 const modelQuestions = new ModelQuestionHub()
 const activeChatTurns = new ActiveChatTurns()
@@ -367,8 +475,6 @@ function setupTray(): void {
 const providerStateStore = new ProviderStateStore(
   join(app.getPath('userData'), 'provider-state.json')
 )
-const routedProviders = ['codex', 'claude', 'kimi'] as const
-type RoutedProvider = (typeof routedProviders)[number]
 let startupProviderChecks: Promise<void> = Promise.resolve()
 
 /**
@@ -384,22 +490,38 @@ async function probeProviderConnection(
   if (providerStateStore.get(id).mode === 'standby') {
     return { provider: id, status: 'standby' }
   }
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined
   try {
-    const result = (await Promise.race([
-      // Probe minimal : aucun kit système injecté, pour éviter de facturer le contexte applicatif.
-      os.registry.send(id, [{ role: 'user', content: 'ping' }], { system: '' }),
-      new Promise<never>((_resolve, reject) =>
-        setTimeout(
-          // Le message NOMME le provider et le délai. Avant, un `Error('timeout')` nu rendait un hang
-          // provider indistinguable d'une borne arbitraire : impossible de savoir QUI n'a pas répondu,
-          // ni après combien, alors que c'est la seule information utile quand ça arrive.
-          // Aucun des mots `authenticate|oauth|expired|not logged|login` ici : le `catch` en aval
-          // classe sur ce message, et l'un d'eux ferait passer un timeout pour une session expirée.
-          () => reject(new Error(`pas de reponse de ${id} apres ${PROVIDER_PROBE_TIMEOUT_MS} ms`)),
-          PROVIDER_PROBE_TIMEOUT_MS
-        )
-      ) // sleep-ok: garde-timeout bornant un vrai appel provider (réseau/CLI)
-    ])) as { text?: string }
+    const quote = compileExecutionQuote(`provider-probe:${id}`, {
+      maxProviderCalls: 1,
+      maxTotalTokens: 100_000,
+      maxUsd: 0.05
+    })
+    quote.phases = []
+    quote.decomposition = { mode: 'disabled', maxNodes: 1 }
+    quote.limits.maxAgents = 0
+    quote.limits.maxConcurrency = 1
+    quote.limits.maxDurationMs = PROVIDER_PROBE_TIMEOUT_MS
+    quote.limits.maxRecoveries = 0
+    quote.limits.maxFreshTokens = Math.min(quote.limits.maxFreshTokens, 25_000)
+    const timeoutController = new AbortController()
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timeoutHandle = setTimeout(() => {
+        const message = `pas de reponse de ${id} apres ${PROVIDER_PROBE_TIMEOUT_MS} ms`
+        timeoutController.abort(message)
+        reject(new Error(`pas de reponse de ${id} apres ${PROVIDER_PROBE_TIMEOUT_MS} ms`))
+      }, PROVIDER_PROBE_TIMEOUT_MS) // sleep-ok: garde-timeout bornant un vrai appel provider (réseau/CLI)
+    })
+    const result = (await os.executionSupervisor.run(quote, timeoutController.signal, () =>
+      Promise.race([
+        // Probe minimal : aucun kit système injecté, pour éviter de facturer le contexte applicatif.
+        os.registry.send(id, [{ role: 'user', content: 'ping' }], {
+          system: '',
+          signal: timeoutController.signal
+        }),
+        timeout
+      ])
+    )) as { text?: string }
     const text = (result?.text ?? '').toLowerCase()
     const status = /authenticate|oauth|expired|not logged|login/.test(text)
       ? probeResultStatus({ expired: true })
@@ -413,12 +535,14 @@ async function probeProviderConnection(
       : probeResultStatus({ errored: true })
     providerStateStore.recordProbe(id, status)
     return { provider: id, status }
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle)
   }
 }
 
-function preflightProviderOptions(): { standbyProviders: Array<(typeof routedProviders)[number]> } {
+function preflightProviderOptions(): { standbyProviders: RoutedProvider[] } {
   return {
-    standbyProviders: routedProviders.filter(
+    standbyProviders: ROUTED_PROVIDERS.filter(
       (provider) => providerStateStore.get(provider).mode === 'standby'
     )
   }
@@ -427,6 +551,44 @@ const agentTopologyPath = join(app.getPath('userData'), 'agent-topology.json')
 const modelCatalogCachePath = join(app.getPath('userData'), 'model-catalog.json')
 // Le cache est chargé AVANT la topologie : un bridge momentanément incomplet ne rase pas les bindings existants.
 let agentModels = loadCachedImportedModels(modelCatalogCachePath)
+const fabricControlPlane = new FabricControlPlane({
+  statePath: join(app.getPath('userData'), 'compute-fabric.json'),
+  manifestClient: new FetchFabricManifestClient(),
+  transportStoreFactory: createFabricNodeTransportStore
+})
+let fabricModels: ImportedModel[] = []
+let isolatedFabricFixtureSummary: FabricNodeSummary | null = null
+
+function applyFabricSummaries(summaries: FabricNodeSummary[]): void {
+  fabricModels = summaries.flatMap((summary) => {
+    const bindings = createFabricProductBindings(summary)
+    for (const resource of summary.resources) {
+      if (resource.modes.includes('local-tools')) {
+        os.registry.register(
+          fabricControlPlane.createLocalToolsAdapter(summary.nodeId, resource.id)
+        )
+      }
+    }
+    return bindings.models
+  })
+  agentModels = [
+    ...agentModels.filter((model) => model.compute?.kind !== 'fabric'),
+    ...fabricModels
+  ]
+  os.roles.setCatalog(agentModels)
+}
+
+async function refreshFabricNodes(): Promise<FabricNodeSummary[]> {
+  await Promise.allSettled(
+    fabricControlPlane
+      .list()
+      .filter((node) => node.trust === 'paired')
+      .map((node) => fabricControlPlane.refresh(node.nodeId))
+  )
+  const summaries = fabricControlPlane.list()
+  applyFabricSummaries(summaries)
+  return summaries
+}
 let agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
 const modelCatalog = new ModelCatalogRefresher(
   agentModels,
@@ -456,33 +618,52 @@ const modelCatalog = new ModelCatalogRefresher(
     },
     onApply: (models) => {
       agentModels = models
+      applyFabricSummaries(fabricControlPlane.list())
       // Les défauts de rôle (provider-only) se résolvent désormais par alias de famille
       // contre le catalogue découvert ; les bindings existants (modèle explicite) restent intacts.
       os.roles.setCatalog(agentModels)
       agentTopology = loadAgentTopology(agentTopologyPath, agentModels)
       syncRuntimeTopology(agentTopology)
+      os.setTaskReadiness(runtimeTopologyReadiness(agentTopology))
       broadcast({ type: 'refresh', scope: 'roles' })
     }
   }
 )
+// Le cache est une source valide même si la découverte live revient vide ou échoue. Projeter la
+// topologie AVANT le refresh empêche un ancien roles.json de survivre à tout le démarrage.
+syncRuntimeTopology(agentTopology)
 const agentModelsReady = modelCatalog.refresh(true)
-os.setTaskReadiness(agentModelsReady)
+const fabricNodesReady = agentModelsReady.then(() => refreshFabricNodes())
+os.setTaskReadiness(
+  Promise.all([agentModelsReady, fabricNodesReady]).then(() =>
+    assertRuntimeTopologyAvailable(agentTopology, agentModels)
+  )
+)
+
+function runtimeTopologyReadiness(topology: AgentTopology): Promise<void> {
+  return Promise.resolve().then(() => assertRuntimeTopologyAvailable(topology, agentModels))
+}
 
 function syncRuntimeTopology(topology: AgentTopology): void {
-  const sync = (role: Role, binding: SlotBinding | undefined): void => {
-    if (!binding) return
-    const model = findModel(agentModels, binding.modelId)
-    if (!model) return
-    os.setRole(role, {
-      provider: binding.provider,
-      model: model.model,
-      reasoningEffort: binding.reasoningEffort
-    })
+  const sync = (role: Role, binding: SlotBinding): void => {
+    try {
+      os.setRole(role, runtimeRoleBinding(binding, agentModels))
+    } catch (error) {
+      if (!(error instanceof UnresolvedRuntimeModelError)) throw error
+      // Identité visible et fail-closed : aucun ancien rôle d'un autre provider ne survit, mais la
+      // readiness bloque l'appel provider tant que l'alias n'a pas de transport découvert.
+      os.setRole(role, {
+        provider: binding.provider,
+        model: binding.modelId,
+        reasoningEffort: binding.reasoningEffort
+      })
+    }
   }
-  sync('orchestrator', topology.orchestrator)
-  sync('subagent', topology.subagents[0])
-  sync('scout', topology.panels.scout[0])
-  sync('judge', topology.panels.judge[0])
+  for (const [role, binding] of Object.entries(runtimeRoleSlots(topology)) as Array<
+    [Role, SlotBinding]
+  >) {
+    sync(role, binding)
+  }
   // Fan-out multi-modèles : on fournit à l'orchestrateur la LISTE COMPLÈTE des modèles de chaque
   // bloc de divergence/jugement (plus le seul `[0]`). ≥2 → il duplique + agrège. La ligne `sync`
   // ci-dessus reste pour le chemin mono-modèle (rétrocompat : 0/1 slot → comportement actuel).
@@ -937,10 +1118,21 @@ Le fil reprend ensuite normalement.`
     ) {
       throw new Error('Type d’événement de test interdit')
     }
-    if (appEvent.type === 'refresh' && appEvent.scope !== 'conversations')
+    if (
+      appEvent.type === 'refresh' &&
+      appEvent.scope !== 'conversations' &&
+      appEvent.scope !== 'chat'
+    )
       throw new Error('Scope de refresh de test interdit')
     broadcast(appEvent as unknown as AppEvent)
     return true
+  })
+  ipcMain.handle('app:test:conversation-read-count', (event, reset?: unknown) => {
+    assertTrustedRendererSender(event, 'Compteur conversation de test')
+    if (!isolatedTestInstance) throw new Error('Compteur de test indisponible hors instance isolée')
+    const count = isolatedConversationReadCount
+    if (reset === true) isolatedConversationReadCount = 0
+    return count
   })
   ipcMain.handle('skills:registry:list', (event) => {
     assertTrustedRendererSender(event, 'Skills')
@@ -960,19 +1152,15 @@ Le fil reprend ensuite normalement.`
   // --- Orchestration disciplinée (le cœur) : streame chaque étape ---
   ipcMain.handle('os:orchestrate', async (event, task: string, targetConversationId?: string) => {
     assertTrustedRendererSender(event, 'Orchestrate')
+    await os.waitUntilReady()
+    const runtimeSnapshot = os.captureOrchestrationRuntime()
+    const orchestratorBinding = runtimeSnapshot.roles.orchestrator
     // #6 — un conversationId explicite (ex. traitement ticket) lance la VRAIE pipeline scout→frame→
     // build→judge SUR cette conversation ; sinon on retombe sur la conversation active (comportement historique).
     const conversationId = targetConversationId ?? bus.activeConversationId ?? '__autonomous__'
     // #2 — run STOPPABLE : on enregistre un AbortController dans le registre du bus pour que
     // `os:orchestrate:cancel` → abortOrchestration(conversationId) le coupe réellement (sinon no-op).
     const controller = bus.registerOrchestration(conversationId)
-    // #3 — circuit-breaker de coût : coupe + notifie AVANT dépassement d'un seuil déclaré (env
-    // AUTOWIN_RUN_USD_CAP / AUTOWIN_RUN_TOKEN_CAP), plutôt qu'une facture surprise en post-mortem.
-    const tokenCap = Number(process.env.AUTOWIN_RUN_TOKEN_CAP)
-    const breaker = new CostCircuitBreaker({
-      ...costLimitsFromSettings(loadOrchestrationBudget(orchestrationBudgetPath)),
-      maxTokens: Number.isFinite(tokenCap) && tokenCap > 0 ? tokenCap : undefined
-    })
     const turnId = randomUUID()
     // FRONTIÈRE DE PERSISTANCE : le run direct n'écrivait que le ledger et `orchestrate:step` (canal
     // sans aucun abonné renderer) — le fil restait VIDE, échec compris. On persiste donc le tour
@@ -982,9 +1170,9 @@ Le fil reprend ensuite normalement.`
       conversationId,
       turnId,
       runtime: {
-        provider: os.roles.getBinding('orchestrator').provider,
-        model: os.roles.getBinding('orchestrator').model,
-        reasoningEffort: os.roles.getBinding('orchestrator').reasoningEffort
+        provider: orchestratorBinding.provider,
+        model: orchestratorBinding.model,
+        reasoningEffort: orchestratorBinding.reasoningEffort
       },
       journal: (durableEvent) =>
         appendTurnEvent(turnJournalRoot, conversationId, turnId, {
@@ -994,14 +1182,20 @@ Le fil reprend ensuite normalement.`
     })
     const emittedArtifactIds = new Set<string>()
     let currentRunId: string | undefined
+    let terminalLifecycle: Extract<RunLifecycleEvent, { stage: 'closure' }> | undefined
+    let resumedCheckpointReleased = false
     let phaseStartIteration = 0
     try {
       durableTurn.begin(guardString(task, 'task'))
-      // Acquis d'un run interrompu portant la MÊME tâche dans CETTE conversation. Oublié aussitôt :
-      // le run repris persiste le sien, sinon le même acquis serait rejoué à chaque relance.
+      // Acquis d'un run interrompu portant la MÊME tâche dans CETTE conversation.
       const resumedAcquis =
-        os.resumableOrchestrationForTask?.(guardString(task, 'task'), conversationId) ?? null
-      if (resumedAcquis) os.forgetResumableOrchestration(resumedAcquis.runId)
+        os.resumableOrchestrationForTask?.(
+          guardString(task, 'task'),
+          conversationId,
+          Date.now(),
+          undefined,
+          runtimeSnapshot
+        ) ?? null
       const result = await os.runTask(
         guardString(task, 'task'),
         (step) => {
@@ -1068,21 +1262,6 @@ Le fil reprend ensuite normalement.`
           // cours de run ne doit ni jeter (« Object has been destroyed ») ni empecher la reprise
           // d'affichage quand on la rouvre. Le run, lui, continue en tray.
           emitToLiveWindows(BrowserWindow.getAllWindows(), 'orchestrate:step', step)
-          // #3 — au franchissement du seuil : couper le run + prévenir l'utilisateur immédiatement.
-          const trip = breaker.observe(step)
-          if (trip) {
-            controller.abort()
-            try {
-              if (Notification.isSupported()) {
-                new Notification({
-                  title: 'Autowin OS — run stoppé (budget)',
-                  body: `Run coupé : ${trip.reason}.`
-                }).show()
-              }
-            } catch {
-              /* notif best-effort : ne jamais casser le run à cause d'un échec de notification */
-            }
-          }
         },
         (phase) => {
           if (!currentRunId) return
@@ -1117,8 +1296,25 @@ Le fil reprend ensuite normalement.`
         turnId,
         (lifecycle) => {
           currentRunId = lifecycle.runId
+          if (resumedAcquis && !resumedCheckpointReleased) {
+            resumedCheckpointReleased = true
+            os.forgetResumableOrchestration(resumedAcquis.runId)
+          }
+          if (lifecycle.stage === 'closure') terminalLifecycle = lifecycle
           persistRunLifecycle(lifecycle, { conversationId, turnId }, causalTrace)
-        }
+        },
+        resumedAcquis ?? undefined,
+        (usage) => {
+          if (!currentRunId) return
+          const settledLifecycle = reconcileLateRunLifecycle(terminalLifecycle, usage)
+          if (!settledLifecycle) return
+          terminalLifecycle = settledLifecycle
+          persistRunLifecycle(terminalLifecycle, { conversationId, turnId }, causalTrace)
+          broadcast({ type: 'orchestrate-usage', convId: conversationId })
+          broadcast({ type: 'refresh', scope: 'workflows' })
+          broadcast({ type: 'refresh', scope: 'orchestration' })
+        },
+        runtimeSnapshot
       )
       durableTurn.succeed(result)
       return { ok: true, result }
@@ -1137,14 +1333,41 @@ Le fil reprend ensuite normalement.`
   // --- Config par rôle (orchestrateur / sous-agent / juge / scout) ---
   // #5 — le wizard first-run re-vérifie la config à la demande. `force` (bouton) ignore le cache TTL ;
   // sans force (montage) le cache déduplique avec le run de démarrage.
-  ipcMain.handle('os:behaviourComposition', (event) => {
+  ipcMain.handle('os:behaviourComposition', async (event, requestedWorkspace?: unknown) => {
     assertTrustedRendererSender(event, 'Behaviour composition')
-    return buildBehaviourComposition(
+    const workspace = requestedWorkspace
+      ? behaviourAccess.require(guardString(requestedWorkspace, 'workspace'))
+      : defaultBehaviourRoot
+    const composition = buildBehaviourComposition(
       os.roles,
       process.env,
       agentTopology,
       loadOrchestrationBudget(orchestrationBudgetPath).maxUsd
     )
+    const files = await listBehaviourFiles(workspace)
+    const inspectedFiles = await Promise.all(
+      files.map(async (file) => ({
+        ...file,
+        excerpt:
+          file.active || file.state === 'declared'
+            ? (await readBehaviourFileFromManifest(file.id, files, workspace)).slice(0, 2_000)
+            : undefined
+      }))
+    )
+    return { ...composition, inspection: { workspace, files: inspectedFiles } }
+  })
+  ipcMain.handle('app:test:behaviour-fixture:install', (event) => {
+    assertTrustedRendererSender(event, 'Fixture Behaviour')
+    if (!isolatedTestInstance)
+      throw new Error('Fixture Behaviour indisponible hors instance isolée')
+    const workspace = join(app.getPath('userData'), 'wire-behaviour-workspace')
+    mkdirSync(workspace, { recursive: true })
+    writeFileSync(
+      join(workspace, 'AGENTS.md'),
+      '# Wire Behaviour\n\nINSTRUCTION_WORKSPACE_WIRE_ACTIVE\n',
+      'utf8'
+    )
+    return behaviourAccess.approve(workspace)
   })
   ipcMain.handle('os:brainTraces', (event, conversationId?: unknown) => {
     assertTrustedRendererSender(event, 'Brain traces')
@@ -1252,7 +1475,36 @@ Le fil reprend ensuite normalement.`
     for (const w of BrowserWindow.getAllWindows())
       w.webContents.send('worktree:activity-changed', activity)
   })
-  ipcMain.handle('os:roles', () => os.roles.all())
+  ipcMain.handle('os:roles', async () => {
+    await agentModelsReady
+    return os.roles.all()
+  })
+  // WORKFLOWS NOMMÉS : lire, écrire, sélectionner. La sélection ne PILOTE encore rien — c'est la
+  // pièce qui rend un workflow nommable et choisissable, préalable à la comparaison de plusieurs
+  // façons de faire sur un même objectif.
+  ipcMain.handle('os:workflowProfiles:get', (event) => {
+    assertTrustedRendererSender(event, 'Workflow profiles')
+    return loadWorkflowProfiles()
+  })
+  ipcMain.handle('os:workflowProfiles:upsert', (event, raw: unknown) => {
+    assertTrustedRendererSender(event, 'Workflow profiles')
+    const next = upsertWorkflowProfile(loadWorkflowProfiles(), raw as WorkflowProfile)
+    saveWorkflowProfiles(next)
+    return next
+  })
+  ipcMain.handle('os:workflowProfiles:remove', (event, rawId: unknown) => {
+    assertTrustedRendererSender(event, 'Workflow profiles')
+    const next = removeWorkflowProfile(loadWorkflowProfiles(), guardString(rawId, 'id'))
+    saveWorkflowProfiles(next)
+    return next
+  })
+  ipcMain.handle('os:workflowProfiles:select', (event, rawId: unknown) => {
+    assertTrustedRendererSender(event, 'Workflow profiles')
+    const id = rawId === null ? null : guardString(rawId, 'id')
+    const next = selectWorkflowProfile(loadWorkflowProfiles(), id)
+    saveWorkflowProfiles(next)
+    return next
+  })
   ipcMain.handle('os:orchestrationBudget:get', (event) => {
     assertTrustedRendererSender(event, 'Orchestration budget')
     return loadOrchestrationBudget(orchestrationBudgetPath)
@@ -1263,21 +1515,190 @@ Le fil reprend ensuite normalement.`
   })
   ipcMain.handle(
     'os:setRole',
-    (event, role: Role, provider: string, model?: string, reasoningEffort?: string) => {
+    async (event, role: Role, provider: string, model?: string, reasoningEffort?: string) => {
       assertTrustedRendererSender(event, 'SetRole')
-      const binding = os.setRole(role, {
-        provider,
-        model,
-        reasoningEffort: reasoningEffort as ReasoningEffort | undefined
-      })
+      await agentModelsReady
+      const next = topologyWithRuntimeRole(
+        agentTopology,
+        role,
+        {
+          provider,
+          model,
+          reasoningEffort: reasoningEffort as ReasoningEffort | undefined
+        },
+        agentModels
+      )
+      agentTopology = saveAgentTopology(agentTopologyPath, next, agentModels)
+      syncRuntimeTopology(agentTopology)
       broadcast({ type: 'refresh', scope: 'roles' })
-      return binding
+      return os.roles.all()
     }
   )
-  ipcMain.handle('os:models:list', (event, force = false) => {
+  ipcMain.handle('os:models:list', async (event, force = false) => {
     assertTrustedRendererSender(event, 'Model catalog')
     if (typeof force !== 'boolean') throw new Error('Option de rafraîchissement invalide')
-    return serveModelCatalog(modelCatalog, force)
+    if (!force) return agentModels
+    const refresh = modelCatalog.refresh(true)
+    // Armer la barriere avant le premier await : aucun tour ne part sur l'ancien catalogue
+    // pendant qu'un rafraichissement force est en vol.
+    os.setTaskReadiness(
+      refresh.then(() => assertRuntimeTopologyAvailable(agentTopology, agentModels))
+    )
+    await refresh
+    applyFabricSummaries(fabricControlPlane.list())
+    return agentModels
+  })
+  ipcMain.handle('os:fabric:list', (event) => {
+    assertTrustedRendererSender(event, 'Compute Fabric')
+    const live = fabricControlPlane.list()
+    return isolatedFabricFixtureSummary
+      ? [
+          ...live.filter((node) => node.nodeId !== isolatedFabricFixtureSummary?.nodeId),
+          isolatedFabricFixtureSummary
+        ]
+      : live
+  })
+  ipcMain.handle('app:test:fabric-fixture:install', (event) => {
+    assertTrustedRendererSender(event, 'Fixture Compute Fabric')
+    if (!isolatedTestInstance)
+      throw new Error('Fixture Compute Fabric indisponible hors instance isolée')
+    const summary: FabricNodeSummary = {
+      nodeId: 'wire-node',
+      trust: 'paired',
+      availability: 'online',
+      lastSequence: 1,
+      lastManifestDigest: 'wire-manifest-digest',
+      lastVerifiedAt: new Date().toISOString(),
+      resources: [
+        {
+          id: 'wire-resource',
+          nodeId: 'wire-node',
+          kind: 'model',
+          adapterId: 'wire-adapter',
+          displayName: 'Wire local tools',
+          runtimeVersion: '1.0.0',
+          modes: ['local-tools'],
+          capabilities: ['chat'],
+          limits: { contextTokens: 4096, maxConcurrentRuns: 1 }
+        }
+      ]
+    }
+    const [model] = createFabricProductBindings(summary).models
+    if (!model) throw new Error('La fixture Compute Fabric ne produit aucun modèle')
+    const fixtureAdapter: ProviderAdapter = {
+      id: model.provider,
+      supportsExecution: false,
+      async auth() {
+        return true
+      },
+      async *send(_messages, opts = {}) {
+        yield { delta: 'fixture-ok' }
+        return {
+          text: 'fixture-ok',
+          provider: model.provider,
+          model: model.model,
+          systemInjected: Boolean(opts.system)
+        }
+      }
+    }
+    os.registry.register(fixtureAdapter)
+    isolatedFabricFixtureSummary = summary
+    agentModels = [...agentModels.filter((candidate) => candidate.id !== model.id), model]
+    os.roles.setCatalog(agentModels)
+    return { summary, model }
+  })
+  ipcMain.handle('app:test:fabric-fixture:send', async (event, execution?: unknown) => {
+    assertTrustedRendererSender(event, 'Exécution fixture Compute Fabric')
+    if (!isolatedTestInstance)
+      throw new Error('Fixture Compute Fabric indisponible hors instance isolée')
+    if (!isolatedFabricFixtureSummary) throw new Error('Fixture Compute Fabric non installée')
+    if (execution !== undefined && typeof execution !== 'boolean') {
+      throw new Error('Mode d’exécution fixture invalide')
+    }
+    return os.registry.send(
+      'fabric:wire-node:wire-resource',
+      [{ role: 'user', content: 'preuve Compute Fabric packagée' }],
+      execution ? { execution: { cwd: os.executionWorkspace, sandbox: 'read-only' } } : {}
+    )
+  })
+  ipcMain.handle('os:fabric:refresh', async (event, nodeId?: unknown) => {
+    assertTrustedRendererSender(event, 'Compute Fabric')
+    const summary = await fabricControlPlane.refresh(guardString(nodeId, 'nodeId'))
+    applyFabricSummaries(fabricControlPlane.list())
+    broadcast({ type: 'refresh', scope: 'roles' })
+    return summary
+  })
+  ipcMain.handle('os:fabric:pair', async (event, request: unknown) => {
+    assertTrustedRendererSender(event, 'Compute Fabric')
+    const summary = await fabricControlPlane.pair(
+      request as Parameters<FabricControlPlane['pair']>[0]
+    )
+    applyFabricSummaries(fabricControlPlane.list())
+    broadcast({ type: 'refresh', scope: 'roles' })
+    return summary
+  })
+  ipcMain.handle('os:checkpointForks:list', (event) => {
+    assertTrustedRendererSender(event, 'Checkpoint forks')
+    return os.resumableOrchestrations().map((checkpoint) => ({
+      id: checkpoint.runId,
+      runId: checkpoint.runId,
+      createdAt: new Date(checkpoint.updatedAt).toISOString(),
+      sourceSnapshot: {
+        workspaceId: os.executionWorkspace,
+        baseSha: checkpoint.runtimeSnapshot ? 'runtime-snapshot' : 'legacy-checkpoint',
+        contentHash: createHash('sha256').update(JSON.stringify(checkpoint)).digest('hex')
+      },
+      state: checkpoint
+    }))
+  })
+  ipcMain.handle('os:checkpointFork:create', (event, checkpointId?: unknown, forkId?: unknown) => {
+    assertTrustedRendererSender(event, 'Checkpoint fork')
+    const safeForkId = guardString(forkId, 'forkId')
+    const checkpoints = os.resumableOrchestrations().map((checkpoint) => ({
+      id: checkpoint.runId,
+      runId: checkpoint.runId,
+      createdAt: new Date(checkpoint.updatedAt).toISOString(),
+      sourceSnapshot: {
+        workspaceId: os.executionWorkspace,
+        baseSha: checkpoint.runtimeSnapshot ? 'runtime-snapshot' : 'legacy-checkpoint',
+        contentHash: createHash('sha256').update(JSON.stringify(checkpoint)).digest('hex')
+      },
+      state: checkpoint
+    }))
+    const manifest = createCheckpointForkManifest(checkpoints, {
+      checkpointId: guardString(checkpointId, 'checkpointId'),
+      forkId: safeForkId,
+      createdAt: new Date().toISOString(),
+      deriveState: (state) => ({ ...state, runId: safeForkId })
+    })
+    os.persistCheckpointFork(structuredClone(manifest.branchState) as OrchestrationRunState, {
+      checkpointId: manifest.ancestor.checkpointId,
+      runId: manifest.ancestor.runId,
+      checkpointCreatedAt: manifest.ancestor.checkpointCreatedAt,
+      contentHash: manifest.sourceSnapshot.contentHash
+    })
+    return manifest
+  })
+  ipcMain.handle('os:shadowRoute:recommend', (event, phase?: unknown, champion?: unknown) => {
+    assertTrustedRendererSender(event, 'Shadow router')
+    const safePhase = guardString(phase, 'phase')
+    if (!champion || typeof champion !== 'object') throw new Error('Champion invalide')
+    const route = champion as { provider?: unknown; model?: unknown }
+    const samples = loadAllPromptCalls().map((call) => ({
+      phase: call.actor || call.boundary,
+      provider: call.provider,
+      model: call.model ?? 'default',
+      cost: call.usage?.costUsd ?? 0,
+      durationMs: call.durationMs ?? 0,
+      green: call.status !== 'failed'
+    }))
+    return recommendShadowRoute(samples, {
+      phase: safePhase,
+      champion: {
+        provider: guardString(route.provider, 'champion.provider'),
+        model: guardString(route.model, 'champion.model')
+      }
+    })
   })
   ipcMain.handle('os:models:quotas', async (event, force = false) => {
     assertTrustedRendererSender(event, 'Model quotas')
@@ -1355,23 +1776,29 @@ Le fil reprend ensuite normalement.`
         }
       })
     }
-    const [claudeResponds, kimiResponds] = await Promise.all([responds('claude'), responds('kimi')])
+    const [claudeResponds, kimiResponds, geminiResponds] = await Promise.all([
+      responds('claude'),
+      responds('kimi'),
+      responds('gemini')
+    ])
     return buildProviderStatuses({
       codexTokens: loadTokens(),
       claudeResponds,
       kimiResponds,
+      geminiResponds,
       now: Date.now(),
       states: {
         codex: providerStateStore.get('codex'),
         claude: providerStateStore.get('claude'),
-        kimi: providerStateStore.get('kimi')
+        kimi: providerStateStore.get('kimi'),
+        gemini: providerStateStore.get('gemini')
       }
     })
   })
   ipcMain.handle('os:providerMode:set', (event, provider: unknown, mode: unknown) => {
     assertTrustedRendererSender(event, 'Provider mode')
     const id = guardString(provider, 'provider')
-    if (!routedProviders.includes(id as (typeof routedProviders)[number])) {
+    if (!ROUTED_PROVIDERS.includes(id as RoutedProvider)) {
       throw new Error('Provider non supporté.')
     }
     if (mode !== 'active' && mode !== 'standby') throw new Error('Mode provider invalide.')
@@ -1382,7 +1809,7 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('os:providerTest', async (event, provider: unknown) => {
     assertTrustedRendererSender(event, 'Provider test')
     const id = guardString(provider, 'provider')
-    if (!routedProviders.includes(id as RoutedProvider)) {
+    if (!ROUTED_PROVIDERS.includes(id as RoutedProvider)) {
       throw new Error('Provider non supporté.')
     }
     return probeProviderConnection(id as RoutedProvider)
@@ -1417,10 +1844,8 @@ Le fil reprend ensuite normalement.`
       agentModels
     )
     syncRuntimeTopology(agentTopology)
-    for (const [role, binding] of Object.entries(profile.roles) as Array<
-      [Role, import('./roles').RoleBinding]
-    >)
-      os.setRole(role, binding)
+    // `roles` reste dans le schéma des anciens profils pour la lecture rétrocompatible, mais Agent
+    // Studio n'édite que `topology`. Le réappliquer ici recréerait une seconde autorité invisible.
     broadcast({ type: 'refresh', scope: 'roles' })
     return { ...profile, topology: agentTopology }
   })
@@ -1506,7 +1931,12 @@ Le fil reprend ensuite normalement.`
   )
 
   // --- Conversations catégorisées ---
-  ipcMain.handle('os:conversations', () => os.conversations.list())
+  ipcMain.handle('os:conversations', () => os.conversations.listSummaries())
+  ipcMain.handle('os:conversation', (event, rawId: unknown) => {
+    assertTrustedRendererSender(event, 'Conversation detail')
+    if (isolatedTestInstance) isolatedConversationReadCount += 1
+    return os.conversations.get(guardString(rawId, 'conversationId')) ?? null
+  })
   ipcMain.handle(
     'os:chatArtifact:read',
     (event, rawConversationId: unknown, rawTurnId: unknown, rawArtifactId: unknown) => {
@@ -1687,9 +2117,22 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Brain')
     return brainWorker.request('readNodeFile', guardString(path, 'path'))
   })
-  ipcMain.handle('os:searchBrain', (_e, path: string, query: string) =>
-    brainWorker.request('searchBrain', guardString(path, 'path'), guardString(query, 'query'))
-  )
+  ipcMain.handle('os:searchBrain', async (event, path: string, query: string) => {
+    assertTrustedRendererSender(event, 'BrainSearch')
+    const selectedPath = guardString(path, 'path')
+    const boundedQuery = guardString(query, 'query')
+    const [local, retrieval] = await Promise.all([
+      brainWorker.request<BrainNoteSearchResult[]>('searchBrain', selectedPath, boundedQuery),
+      retrieveBrainContext(boundedQuery)
+    ])
+    return applyBrainRetrievalScores(local, retrieval.navigation)
+  })
+  ipcMain.handle('os:refreshBrain', async (event, path: string) => {
+    assertTrustedRendererSender(event, 'BrainRefresh')
+    clearBrainRetrievalCache()
+    await brainWorker.request('invalidate', guardString(path, 'path'))
+    return { ok: true }
+  })
   ipcMain.handle('os:listRuns', () => os.listRuns())
   ipcMain.handle('os:runs:delete', async (event, rawPath: string) => {
     assertTrustedRendererSender(event, 'DeleteRun')
@@ -1723,8 +2166,12 @@ Le fil reprend ensuite normalement.`
     ok: boolean
     cancelled: boolean
     turnId: string
+    text?: string
     error?: string
+    verification?: { complete: boolean; evidence: string }
   }> => {
+    await os.waitUntilReady()
+    const turnRuntimeBinding = bindingOverride ?? os.roles.getBinding('orchestrator')
     // Duree du tour : MESUREE de bout en bout, pour repondre a « qu'est-ce qui est lent ? » et pas
     // seulement a « qu'est-ce qui coute ? » (les deux ne coincident pas forcement).
     const turnStartedAtMs = performance.now()
@@ -1742,9 +2189,47 @@ Le fil reprend ensuite normalement.`
      * (le pire tour mesuré coûtait 2,109 $).
      */
     const chatUsdCap = Number(process.env.AUTOWIN_CHAT_USD_CAP)
+    const chatTokenCap = Number(process.env.AUTOWIN_CHAT_TOKEN_CAP)
+    const chatCallCap = Number(process.env.AUTOWIN_CHAT_CALL_CAP)
     const chatBreaker = new CostCircuitBreaker({
-      maxUsd: Number.isFinite(chatUsdCap) && chatUsdCap > 0 ? chatUsdCap : 2
+      maxUsd: Number.isFinite(chatUsdCap) && chatUsdCap > 0 ? chatUsdCap : 2,
+      maxTokens: Number.isFinite(chatTokenCap) && chatTokenCap > 0 ? chatTokenCap : 1_500_000,
+      maxCalls: Number.isFinite(chatCallCap) && chatCallCap > 0 ? chatCallCap : 6
     })
+    const spoken: string[] = []
+    let streamedSpoken = ''
+    let completedText = ''
+    let verification: { complete: boolean; evidence: string } | undefined
+    let turnUsage: { inputTokens: number; outputTokens: number; costUsd?: number } | undefined
+    let turnPromptIdentity:
+      { provider: string; model?: string; reasoningEffort?: string } | undefined
+    let activityLabel = 'tour agent'
+    let supervisedUsage: ExecutionUsageSnapshot | undefined
+    let persistedSupervisedUsage: ExecutionUsageSnapshot | undefined
+    let usagePersistenceReady = false
+    const persistSupervisedChatUsage = (usage: ExecutionUsageSnapshot): void => {
+      if (!conversationId) return
+      if (sameExecutionUsage(persistedSupervisedUsage, usage)) return
+      persistedSupervisedUsage = persistChatUsageSettlement({
+        conversationId,
+        turnId,
+        usage,
+        previous: persistedSupervisedUsage,
+        provider: turnPromptIdentity?.provider ?? turnRuntimeBinding.provider,
+        model: turnPromptIdentity?.model ?? turnRuntimeBinding.model,
+        reasoningEffort: turnPromptIdentity?.reasoningEffort ?? turnRuntimeBinding.reasoningEffort,
+        label: activityLabel,
+        durationMs: Math.round(performance.now() - turnStartedAtMs),
+        text: (streamedSpoken || spoken.join('\n')).slice(0, 600) || undefined,
+        traceStore: causalTrace
+      })
+      broadcast({ type: 'refresh', scope: 'workflows' })
+      broadcast({ type: 'causal-trace-updated', convId: conversationId })
+    }
+    const onSupervisedUsageSettlement = (usage: ExecutionUsageSnapshot): void => {
+      supervisedUsage = usage
+      if (usagePersistenceReady) persistSupervisedChatUsage(usage)
+    }
     if (conversationId) activeChatTurns.set(conversationId, controller, completion)
     try {
       const safe = (Array.isArray(messages) ? messages : []).slice(-40).map((m) => ({
@@ -1752,18 +2237,13 @@ Le fil reprend ensuite normalement.`
         content: guardString(m.content, 'content'),
         ...(m.attachments?.length ? { attachments: guardAttachments(m.attachments) } : {})
       }))
-      const spoken: string[] = []
-      let streamedSpoken = ''
       let traceParentId: string | undefined
       let traceSequence = conversationId ? causalTrace.nextSequence(conversationId) : 0
       let traceActionIndex = 0
-      let turnUsage: { inputTokens: number; outputTokens: number; costUsd?: number } | undefined
       let turnSessionId: string | undefined
-      let turnPromptIdentity:
-        { provider: string; model?: string; reasoningEffort?: string } | undefined
       const last = safe[safe.length - 1]
+      activityLabel = last?.role === 'user' ? last.content : 'tour agent'
       if (conversationId && last?.role === 'user' && os.conversations.get(conversationId)) {
-        const binding = bindingOverride ?? os.roles.getBinding('orchestrator')
         os.conversations.beginTurn(
           conversationId,
           {
@@ -1800,9 +2280,9 @@ Le fil reprend ensuite normalement.`
           {
             turnId,
             runtime: {
-              provider: binding.provider,
-              model: binding.model,
-              reasoningEffort: binding.reasoningEffort
+              provider: turnRuntimeBinding.provider,
+              model: turnRuntimeBinding.model,
+              reasoningEffort: turnRuntimeBinding.reasoningEffort
             }
           }
         )
@@ -1907,11 +2387,65 @@ Le fil reprend ensuite normalement.`
             }
           }
         }
+        if (conversationId) {
+          const structuredIncident = incidentFromPilotEvent({
+            kind: pilotEvent.kind,
+            name: pilotEvent.name,
+            text: pilotEvent.kind === 'prompt-call' ? pilotEvent.error : pilotEvent.text,
+            ok: pilotEvent.ok,
+            data: pilotEvent.data,
+            status: pilotEvent.kind === 'prompt-call' ? pilotEvent.status : undefined
+          })
+          if (structuredIncident) {
+            const resultData =
+              pilotEvent.data && typeof pilotEvent.data === 'object'
+                ? (pilotEvent.data as Record<string, unknown>)
+                : undefined
+            const runPath =
+              typeof resultData?.runPath === 'string'
+                ? resultData.runPath
+                : typeof resultData?.runId === 'string'
+                  ? resultData.runId
+                  : undefined
+            const terminalRunError =
+              pilotEvent.name === 'orchestrate' && runPath
+                ? `orchestration-end:${runPath}:red`
+                : undefined
+            reportAutoKaizen({
+              dedupeKey:
+                terminalRunError ??
+                `pilot:${conversationId}:${turnId}:${pilotEvent.actionId ?? pilotEvent.iteration ?? 0}:${pilotEvent.kind}:${pilotEvent.name ?? 'provider'}`,
+              sourceConversationId: conversationId,
+              sourceTurnId: turnId,
+              ...structuredIncident
+            })
+          }
+        }
+        if (
+          pilotEvent.kind === 'result' &&
+          pilotEvent.name === 'orchestrate' &&
+          pilotEvent.ok !== false &&
+          pilotEvent.data &&
+          typeof pilotEvent.data === 'object'
+        ) {
+          const outcome = pilotEvent.data as Record<string, unknown>
+          if (outcome.valid === true && outcome.gateBlocked !== true) {
+            verification = {
+              complete: true,
+              evidence:
+                typeof outcome.runPath === 'string'
+                  ? `judge vert, RUN ${outcome.runPath}`
+                  : 'judge vert et gate validée'
+            }
+          }
+        }
         if (pilotEvent.kind === 'delta' && pilotEvent.text) streamedSpoken += pilotEvent.text
         if (pilotEvent.kind === 'think' && pilotEvent.text) spoken.push(pilotEvent.text)
         if (pilotEvent.kind === 'command' && pilotEvent.name)
           spoken.push(`[a exécuté ${pilotEvent.name}]`)
         if (pilotEvent.kind === 'done' && pilotEvent.usage) turnUsage = pilotEvent.usage
+        if (pilotEvent.kind === 'done' && pilotEvent.text?.trim())
+          completedText = pilotEvent.text.trim()
         // Budget du TOUR de chat : le circuit-breaker de coût ne protégeait que les runs
         // orchestrés. Mesuré le 2026-07-28 : un seul tour a coûté 2,109 $ (40 itérations d'outils)
         // sans qu'aucune borne n'existe côté chat. On compte chaque appel et on COUPE au seuil.
@@ -2013,10 +2547,31 @@ Le fil reprend ensuite normalement.`
       }
       const delayedPilotFixture =
         isolatedTestInstance && safe.at(-1)?.content.startsWith('[[autowin-fixture-delayed-pilot]]')
+      const autoKaizenFailureFixture =
+        isolatedTestInstance &&
+        safe.at(-1)?.content.startsWith('[[autowin-fixture-auto-kaizen-error]]')
       const durableStreamPrefix = '[[autowin-fixture-durable-stream]]'
       const durableStreamFixture =
         isolatedTestInstance && safe.at(-1)?.content.startsWith(durableStreamPrefix)
-      if (durableStreamFixture) {
+      if (autoKaizenFailureFixture) {
+        const fixtureEvents: PilotEvent[] = [
+          {
+            kind: 'command',
+            actionId: `${turnId}:fixture-auto-kaizen`,
+            name: 'verify',
+            args: { command: 'fixture rouge' }
+          },
+          {
+            kind: 'result',
+            actionId: `${turnId}:fixture-auto-kaizen`,
+            name: 'verify',
+            ok: false,
+            data: { error: 'Exit code: 1', source: 'isolated-auto-kaizen-fixture' }
+          },
+          { kind: 'done', text: 'Erreur structurée de fixture transmise à Auto-Kaizen.' }
+        ]
+        for (const fixtureEvent of fixtureEvents) handlePilotEvent(fixtureEvent)
+      } else if (durableStreamFixture) {
         const target = safe.at(-1)?.content.slice(durableStreamPrefix.length).trim() || 'fixture'
         let fixtureCall = 0
         const fixtureProvider: ProviderAdapter = {
@@ -2097,46 +2652,67 @@ Le fil reprend ensuite normalement.`
         ]
         for (const fixtureEvent of fixtureEvents) handlePilotEvent(fixtureEvent as PilotEvent)
       } else
-        await pilot.chat(
-          safe,
-          handlePilotEvent,
-          (question) =>
-            sender
-              ? askModelQuestion(sender, 'chat', question, 'Chat', controller.signal)
-              : Promise.reject(
-                  new Error(
-                    'Une tâche planifiée ne peut pas répondre à une question interactive du modèle.'
-                  )
-                ),
-          6,
-          conversationId,
+        await os.runChatTurn(
+          last?.content ?? 'chat',
           controller.signal,
-          conversationId ? (os.conversations.get(conversationId)?.authorityMode ?? 'ask') : 'ask',
-          conversationId ? () => drainPendingDirectives(conversationId) : undefined,
-          bindingOverride,
-          turnId
+          () => {
+            // Le supervisor peut annuler pour budget/watchdog sans que le controller UI soit lui-meme
+            // aborté. Le pilote doit voir CE signal combine pour ne jamais retenter apres le cut-off.
+            const supervisedSignal = os.executionSupervisor.currentSignal() ?? controller.signal
+            return pilot.chat(
+              safe,
+              handlePilotEvent,
+              (question) =>
+                sender
+                  ? askModelQuestion(sender, 'chat', question, 'Chat', supervisedSignal)
+                  : Promise.reject(
+                      new Error(
+                        'Une tâche planifiée ne peut pas répondre à une question interactive du modèle.'
+                      )
+                    ),
+              6,
+              conversationId,
+              supervisedSignal,
+              conversationId
+                ? (os.conversations.get(conversationId)?.authorityMode ?? 'ask')
+                : 'ask',
+              conversationId ? () => drainPendingDirectives(conversationId) : undefined,
+              bindingOverride,
+              turnId,
+              turnRuntimeBinding
+            )
+          },
+          onSupervisedUsageSettlement
         )
       // Journal d'activité de la conversation : le tour de chat, avec son coût ET sa durée.
       const turnDurationMs = Math.round(performance.now() - turnStartedAtMs)
       if (conversationId) {
-        const last = safe[safe.length - 1]
-        const orchestratorBinding = bindingOverride ?? os.roles.getBinding('orchestrator')
-        appendConvActivity(conversationId, {
-          kind: 'chat',
-          label: last?.role === 'user' ? last.content : 'tour agent',
-          provider: turnPromptIdentity?.provider ?? orchestratorBinding.provider,
-          model: turnPromptIdentity?.model ?? orchestratorBinding.model,
-          reasoningEffort:
-            turnPromptIdentity?.reasoningEffort ?? orchestratorBinding.reasoningEffort,
-          inputTokens: turnUsage?.inputTokens,
-          outputTokens: turnUsage?.outputTokens,
-          costUsd: turnUsage?.costUsd,
-          durationMs: turnDurationMs,
-          text: (streamedSpoken || spoken.join('\n')).slice(0, 600)
-        })
+        if (supervisedUsage) persistSupervisedChatUsage(supervisedUsage)
+        else {
+          appendConvActivity(conversationId, {
+            kind: 'chat',
+            label: activityLabel,
+            provider: turnPromptIdentity?.provider ?? turnRuntimeBinding.provider,
+            model: turnPromptIdentity?.model ?? turnRuntimeBinding.model,
+            reasoningEffort:
+              turnPromptIdentity?.reasoningEffort ?? turnRuntimeBinding.reasoningEffort,
+            inputTokens: turnUsage?.inputTokens,
+            outputTokens: turnUsage?.outputTokens,
+            costUsd: turnUsage?.costUsd,
+            durationMs: turnDurationMs,
+            text: (streamedSpoken || spoken.join('\n')).slice(0, 600)
+          })
+        }
       }
+      usagePersistenceReady = true
       broadcast({ type: 'refresh', scope: 'workflows' })
-      return { ok: true, cancelled: false, turnId }
+      return {
+        ok: true,
+        cancelled: false,
+        turnId,
+        text: completedText || streamedSpoken.trim() || spoken.join('\n').trim(),
+        verification
+      }
     } catch (e) {
       /**
        * ETAT TERMINAL, journal COMPRIS. Ce catch n'ecrivait que dans le store : le journal FICHIER
@@ -2163,8 +2739,26 @@ Le fil reprend ensuite normalement.`
           /* journal best-effort : ne jamais masquer l'erreur d'origine pour une ecriture de trace */
         }
       }
+      if (supervisedUsage) persistSupervisedChatUsage(supervisedUsage)
+      usagePersistenceReady = true
       broadcast({ type: 'refresh', scope: 'workflows' })
-      if (controller.signal.aborted) return { ok: true, cancelled: true, turnId }
+      if (controller.signal.aborted)
+        return {
+          ok: true,
+          cancelled: true,
+          turnId,
+          text: completedText || streamedSpoken.trim() || spoken.join('\n').trim()
+        }
+      if (conversationId) {
+        reportAutoKaizen({
+          dedupeKey: `chat-turn:${conversationId}:${turnId}:failed`,
+          sourceConversationId: conversationId,
+          sourceTurnId: turnId,
+          kind: 'chat-turn-failed',
+          summary: 'Le tour de conversation a échoué',
+          detail: e instanceof Error ? e.message : String(e)
+        })
+      }
       return {
         ok: false,
         cancelled: false,
@@ -2172,6 +2766,8 @@ Le fil reprend ensuite normalement.`
         error: e instanceof Error ? e.message : String(e)
       }
     } finally {
+      usagePersistenceReady = true
+      if (supervisedUsage) persistSupervisedChatUsage(supervisedUsage)
       if (conversationId) {
         activeChatTurns.delete(conversationId, controller)
         broadcast({ type: 'refresh', scope: 'conversations' })
@@ -2183,6 +2779,96 @@ Le fil reprend ensuite normalement.`
       resolveCompletion()
     }
   }
+  autoKaizenSupervisor = new AutoKaizenSupervisor({
+    path: join(app.getPath('userData'), 'auto-kaizen-incidents.json'),
+    runtime: {
+      createConversation: ({ title, link }) => {
+        const source = os.conversations.get(link.sourceConversationId)
+        return os.conversations.create({
+          title: title.slice(0, 140),
+          category: source?.category ?? 'codex',
+          provider: source?.provider ?? os.roles.getBinding('orchestrator').provider,
+          authorityMode: inheritAutoKaizenAuthority(source?.authorityMode),
+          autoKaizen: link
+        })
+      },
+      appendSourceUpdate: (conversationId, text) => {
+        if (!os.conversations.get(conversationId)) return
+        os.conversations.append(conversationId, { role: 'assistant', content: text })
+        broadcast({ type: 'refresh', scope: 'conversations' })
+      },
+      runAnalysis: async (conversationId, prompt) => {
+        if (isolatedTestInstance) {
+          const turnId = `${conversationId}:isolated-auto-kaizen-analysis`
+          os.conversations.append(conversationId, { role: 'user', content: prompt })
+          const text = 'Diagnostic Auto-Kaizen isolé : erreur structurée reproduite et bornée.'
+          os.conversations.append(conversationId, { role: 'assistant', content: text })
+          return { ok: true, turnId, text }
+        }
+        const result = await runPilotChat(
+          undefined,
+          [{ role: 'user', content: prompt }],
+          conversationId
+        )
+        return {
+          ok: result.ok && !result.cancelled,
+          turnId: result.turnId,
+          text: result.text,
+          error: result.cancelled ? 'Analyse Auto-Kaizen interrompue' : result.error
+        }
+      },
+      runFix: async (conversationId, prompt) => {
+        if (isolatedTestInstance) {
+          const turnId = `${conversationId}:isolated-auto-kaizen-fix`
+          os.conversations.append(conversationId, { role: 'user', content: prompt })
+          const text = 'Correctif Auto-Kaizen isolé vérifié rouge→vert.'
+          os.conversations.append(conversationId, { role: 'assistant', content: text })
+          return {
+            ok: true,
+            turnId,
+            text,
+            verification: { complete: true, evidence: 'fixture rouge→vert, gate isolée validée' }
+          }
+        }
+        const result = await runPilotChat(
+          undefined,
+          [{ role: 'user', content: prompt }],
+          conversationId
+        )
+        return {
+          ok: result.ok && !result.cancelled,
+          turnId: result.turnId,
+          text: result.text,
+          verification: result.verification,
+          error: result.cancelled ? 'Correction Auto-Kaizen interrompue' : result.error
+        }
+      },
+      isConversationRunning: (conversationId) =>
+        Boolean(activeChatTurns.get(conversationId)) ||
+        os
+          .resumableOrchestrations()
+          .some((candidate) => candidate.conversationId === conversationId),
+      readConversationResult: (conversationId) => {
+        const message = os.conversations
+          .get(conversationId)
+          ?.messages.slice()
+          .reverse()
+          .find(
+            (candidate) =>
+              candidate.role === 'assistant' &&
+              candidate.status !== 'failed' &&
+              candidate.status !== 'cancelled' &&
+              candidate.status !== 'interrupted' &&
+              candidate.content.trim()
+          )
+        return message ? { turnId: message.turnId, text: message.content } : undefined
+      }
+    }
+  })
+  autoKaizenSupervisor.resumePending()
+  const autoKaizenResumeTimer = setInterval(() => autoKaizenSupervisor?.resumePending(), 15_000)
+  autoKaizenResumeTimer.unref()
+
   ipcMain.handle('os:pilotChat', (event, messages, conversationId) => {
     assertTrustedRendererSender(event, 'PilotChat')
     return runPilotChat(event.sender, messages, conversationId)
@@ -2453,16 +3139,39 @@ Le fil reprend ensuite normalement.`
   })
 
   // --- Observatoire d'activité : transcripts Claude Code (lecture seule) + ledger in-app ---
-  ipcMain.handle('os:activity:sessions', () => listSessions(60))
-  ipcMain.handle('os:activity:session', async (_e, meta) => parseSession(meta))
+  ipcMain.handle('os:activity:sessions', (event) => {
+    assertTrustedRendererSender(event, 'Activity sessions')
+    return listSessionsAsync(60)
+  })
+  ipcMain.handle('os:activity:session', async (event, ref: unknown) => {
+    assertTrustedRendererSender(event, 'Activity session')
+    if (!ref || typeof ref !== 'object') throw new Error('Référence de session invalide')
+    const raw = ref as Record<string, unknown>
+    const session = await resolveListedSessionAsync({
+      id: guardString(raw.id, 'session.id'),
+      project: guardString(raw.project, 'session.project')
+    })
+    if (!session) throw new Error('Session non autorisée ou hors inventaire')
+    return parseSession(session)
+  })
 
   // Affichage des screenshots consultés : whitelist extensions + cap taille, lecture seule.
-  ipcMain.handle('os:activity:image', async (event, path: string) => {
+  ipcMain.handle('os:activity:image', async (event, ref: unknown, path: string) => {
     assertTrustedRendererSender(event, 'ActivityImage')
+    if (!ref || typeof ref !== 'object') throw new Error('Référence de session invalide')
+    const raw = ref as Record<string, unknown>
     const p = guardString(path, 'path')
     if (!/\.(png|jpe?g|webp|gif|bmp)$/i.test(p)) throw new Error('extension non autorisée')
+    const authorizedPath = await resolveListedSessionImage(
+      {
+        id: guardString(raw.id, 'session.id'),
+        project: guardString(raw.project, 'session.project')
+      },
+      p
+    )
+    if (!authorizedPath) throw new Error('Image absente des transcripts autorisés')
     const { statSync, readFileSync } = await import('node:fs')
-    if (statSync(p).size > 8_000_000) throw new Error('image trop volumineuse')
+    if (statSync(authorizedPath).size > 8_000_000) throw new Error('image trop volumineuse')
     const ext = p.split('.').pop()!.toLowerCase()
     const mime =
       ext === 'png'
@@ -2470,7 +3179,7 @@ Le fil reprend ensuite normalement.`
         : ext === 'webp'
           ? 'image/webp'
           : `image/${ext === 'jpg' ? 'jpeg' : ext}`
-    return { dataUrl: `data:${mime};base64,${readFileSync(p).toString('base64')}` }
+    return { dataUrl: `data:${mime};base64,${readFileSync(authorizedPath).toString('base64')}` }
   })
 }
 
@@ -2484,7 +3193,7 @@ function rendererLocation(): { devRendererUrl?: string; rendererHtmlPath: string
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    title: 'Autowin OS',
+    title: isolatedTestInstance ? 'Autowin OS Test' : 'Autowin OS',
     width: 900,
     height: 670,
     show: false,
@@ -2575,9 +3284,13 @@ function createWindow(): void {
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    const rendererUrl = new URL(process.env['ELECTRON_RENDERER_URL'])
+    if (isolatedTestInstance) rendererUrl.searchParams.set('instance', 'test')
+    mainWindow.loadURL(rendererUrl.toString())
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'), {
+      query: isolatedTestInstance ? { instance: 'test' } : undefined
+    })
   }
 }
 
@@ -2650,13 +3363,9 @@ app.whenReady().then(async () => {
     assertTrusted: assertTrustedRendererSender,
     isolated: isolatedTestInstance
   })
-  // Validation d'auth réelle en arrière-plan à chaque démarrage. Le batch est lancé avant la fenêtre,
-  // sans être attendu ici : l'ouverture reste immédiate, tandis que providerStatus attend le résultat.
-  startupProviderChecks = runStartupProviderProbes(
-    routedProviders,
-    (provider) => providerStateStore.get(provider),
-    probeProviderConnection
-  )
+  // Aucun tour modèle au démarrage. Le statut initial vient des tokens/CLI locaux ; le seul probe
+  // payant est l'action explicite « Tester », elle-même bornée par ExecutionSupervisor ci-dessus.
+  startupProviderChecks = Promise.resolve()
   createWindow()
   setupTray() // l'app vit en tray → fermer la fenêtre ne tue plus les runs en cours
 
@@ -2673,159 +3382,291 @@ app.whenReady().then(async () => {
   // bouton, pas de question). Un run d'orchestration tué avec la mort du process main laisse son
   // acquis persisté ; on relance ICI à la phase suivante, en réinjectant les livrables déjà produits
   // (aucune phase refaite). Rien à reprendre → aucun effet (démarrage normal strictement inchangé).
-  const resumableRun = os.resumableOrchestration()
-  // GARDE DE VIVACITÉ : les CLI sont détachés, donc un agent du run précédent peut ÊTRE ENCORE EN
-  // TRAIN DE TRAVAILLER. Relancer par-dessus mettrait deux agents sur la même copie, à s'écraser
-  // l'un l'autre. On vérifie avant de relancer — et on l'écrit, pour que ce silence soit lisible.
-  const reprise = resumeActionFor(resumableRun, defaultProcessIdentity)
-  if (reprise === 'rattacher' && resumableRun) {
-    console.log(
-      '[resume-orchestration]',
-      resumableRun.runId,
-      '→ un agent travaille ENCORE : aucune relance. Son journal reste la source de vérité.'
-    )
-    // RATTACHEMENT : on relit ce que l'agent a produit PENDANT l'absence de l'app, depuis l'offset
-    // déjà lu, et on le remet dans la conversation. Sans ça le travail existait sur le disque mais
-    // restait invisible — donc réputé perdu, donc relancé.
-    try {
-      const conversationId = resumableRun.conversationId
-      const lignes: string[] = []
-      const agentsApres = (resumableRun.agents ?? []).map((agent) => {
-        if (!agent.journalPath) return agent
-        const { offset } = tailJournalOnce(agent.journalPath, agent.offset ?? 0, (ligne) =>
-          lignes.push(ligne)
-        )
-        return { ...agent, offset }
+  const resumableRuns = os.resumableOrchestrations()
+  for (const resumableRun of resumableRuns) {
+    let durableLiveReattachment: ReturnType<typeof createOrchestrateTurnPersistence> | undefined
+    let liveReattachment: ReturnType<typeof admitLiveReattachment> | undefined
+    // GARDE DE VIVACITÉ : les CLI sont détachés, donc un agent du run précédent peut ÊTRE ENCORE EN
+    // TRAIN DE TRAVAILLER. Relancer par-dessus mettrait deux agents sur la même copie, à s'écraser
+    // l'un l'autre. On vérifie chaque run avant de le relancer — et on l'écrit, pour que ce silence
+    // soit lisible sans empêcher les autres reprises.
+    const reprise = resumeActionFor(resumableRun, defaultProcessIdentity)
+    if (reprise === 'rattacher' && resumableRun) {
+      const conversationId = resumableRun.conversationId ?? '__autonomous__'
+      const recordedTurnRuntime = resumableRun.turnId
+        ? os.conversations
+            .get(conversationId)
+            ?.messages.find(
+              (message) => message.role === 'assistant' && message.turnId === resumableRun.turnId
+            )?.runtime
+        : undefined
+      liveReattachment = admitLiveReattachment(resumableRun, recordedTurnRuntime, randomUUID())
+      const resumeTurnId = liveReattachment.turnId
+      durableLiveReattachment = createOrchestrateTurnPersistence({
+        conversations: os.conversations,
+        conversationId,
+        turnId: resumeTurnId,
+        runtime: liveReattachment.turnBinding,
+        resumeExisting: liveReattachment.resumeExisting,
+        journal: (event) => appendTurnEvent(turnJournalRoot, conversationId, resumeTurnId, event)
       })
-      const message = recapMessage(summarizeJournal(lignes), true)
-      if (conversationId && message) {
-        os.conversations.append(conversationId, { role: 'assistant', content: message })
-        broadcast({ type: 'refresh', scope: 'chat' })
-      }
-      // L'offset atteint est repersisté : ce qui vient d'être montré ne sera pas remontré.
-      os.rememberAgentOffsets(resumableRun.runId, agentsApres)
-    } catch (error) {
-      console.warn('[resume-orchestration] rattachement impossible :', error)
-    }
-  }
-  if (resumableRun && reprise === 'relancer') {
-    const conversationId = resumableRun.conversationId ?? '__autonomous__'
-    const resumeTurnId = resumableRun.turnId ?? randomUUID()
-    const legacyResumeTurn = resumableRun.turnId
-      ? null
-      : createOrchestrateTurnPersistence({
-          conversations: os.conversations,
-          conversationId,
-          turnId: resumeTurnId
+      durableLiveReattachment.begin(liveReattachment.task)
+      console.log(
+        '[resume-orchestration]',
+        resumableRun.runId,
+        '→ un agent travaille ENCORE : aucune relance. Son journal reste la source de vérité.'
+      )
+      // RATTACHEMENT : on relit ce que l'agent a produit PENDANT l'absence de l'app, depuis l'offset
+      // déjà lu, et on le remet dans la conversation. Sans ça le travail existait sur le disque mais
+      // restait invisible — donc réputé perdu, donc relancé.
+      try {
+        const conversationId = resumableRun.conversationId
+        const lignes: string[] = []
+        const agentsApres = (resumableRun.agents ?? []).map((agent) => {
+          if (!agent.journalPath) return agent
+          const { offset } = tailJournalOnce(agent.journalPath, agent.offset ?? 0, (ligne) =>
+            lignes.push(ligne)
+          )
+          return { ...agent, offset }
         })
-    const resumedArtifactIds = new Set<string>()
-    let resumedCurrentRunId: string | undefined
-    let resumedPhaseStartIteration = 0
-    legacyResumeTurn?.begin(`[Reprise automatique] ${resumableRun.task}`)
-    console.log(
-      '[resume-orchestration]',
-      resumableRun.runId,
-      '→ phases déjà acquises :',
-      resumableRun.phaseOutputs.map((output) => output.phase).join(', ')
-    )
-    // ATTENTION (bug attrapé en vérifiant) : le run REPRIS reçoit un NOUVEAU runId et persiste son
-    // propre état ; `onRunSettled` n'effacerait donc jamais l'ancien fichier, et l'app rejouerait la
-    // même reprise à CHAQUE démarrage. On oublie l'ancien état dès que la reprise est lancée : son
-    // acquis est déjà passé dans `resumeOutputs`, et le nouveau run a sa propre persistance.
-    os.forgetResumableOrchestration(resumableRun.runId)
-    void os
-      .runTask(
-        resumableRun.task,
-        (step) => {
-          legacyResumeTurn?.step(step)
-          persistOrchestrationStep(
-            step,
-            {
-              conversationId,
-              turnId: resumeTurnId,
-              iteration: step.step === 'exec' ? 0 : 1,
-              runId: resumedCurrentRunId
+        const recap = summarizeJournal(lignes)
+        const message = recapMessage(recap, true)
+        if (conversationId && message) {
+          os.conversations.append(conversationId, { role: 'assistant', content: message })
+          broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+        }
+        if (conversationId && (recap.coverage.lostProof > 0 || recap.diagnostics.length > 0)) {
+          const replayWindow = (resumableRun.agents ?? [])
+            .map((agent) => `${agent.token}:${agent.offset ?? 0}`)
+            .join('|')
+          if (recap.coverage.lostProof > 0) {
+            reportAutoKaizen({
+              dedupeKey: `journal-replay-loss:${resumableRun.runId}:${replayWindow}:${lignes.length}`,
+              sourceConversationId: conversationId,
+              sourceTurnId: resumeTurnId,
+              kind: 'journal-replay-loss',
+              summary: `${recap.coverage.lostProof} perte(s) de preuve dans le journal`,
+              detail:
+                `Couverture structurée ${recap.coverage.structuredPercent} % ; ` +
+                `${recap.coverage.noise} bruit(s), ${recap.coverage.diagnostics} diagnostic(s), ` +
+                `${recap.coverage.blockages} blocage(s), ${recap.coverage.lostProof} perte(s) de preuve.`
+            })
+          }
+          for (const diagnostic of recap.diagnostics) {
+            reportAutoKaizen({
+              dedupeKey: `journal-diagnostic:${resumableRun.runId}:${replayWindow}:${diagnostic.line}:${diagnostic.summary}`,
+              sourceConversationId: conversationId,
+              sourceTurnId: resumeTurnId,
+              kind: diagnostic.kind,
+              summary: diagnostic.summary,
+              detail: diagnostic.detail
+            })
+          }
+        }
+        // L'offset atteint est repersisté : ce qui vient d'être montré ne sera pas remontré.
+        os.rememberAgentOffsets(resumableRun.runId, agentsApres)
+      } catch (error) {
+        console.warn('[resume-orchestration] rattachement impossible :', error)
+      }
+    }
+    const relaunchResumableRun = async (
+      candidate: ReturnType<typeof os.resumableOrchestrations>[number]
+    ): Promise<void> => {
+      const resumableRun = os.reconcileResumableOrchestrationForRelaunch(
+        candidate.runId,
+        defaultProcessIdentity
+      )
+      if (!resumableRun) return
+      try {
+        await os.waitUntilReady()
+      } catch (error) {
+        console.warn('[resume-orchestration] topologie indisponible, checkpoint conserve :', error)
+        return
+      }
+      const conversationId = resumableRun.conversationId ?? '__autonomous__'
+      const recordedTurnRuntime = resumableRun.turnId
+        ? os.conversations
+            .get(conversationId)
+            ?.messages.find(
+              (message) => message.role === 'assistant' && message.turnId === resumableRun.turnId
+            )?.runtime
+        : undefined
+      const resumedRuntime = admitAutomaticResumeRuntime(
+        resumableRun,
+        os.captureOrchestrationRuntime(),
+        randomUUID(),
+        recordedTurnRuntime
+      )
+      const { resumeExisting, turnId: resumeTurnId, turnBinding: resumeBinding } = resumedRuntime
+      const durableResumeTurn = createOrchestrateTurnPersistence({
+        conversations: os.conversations,
+        conversationId,
+        turnId: resumeTurnId,
+        runtime: {
+          provider: resumeBinding.provider,
+          model: resumeBinding.model,
+          reasoningEffort: resumeBinding.reasoningEffort
+        },
+        resumeExisting,
+        journal: (event) => appendTurnEvent(turnJournalRoot, conversationId, resumeTurnId, event)
+      })
+      const resumedArtifactIds = new Set<string>()
+      let resumedCurrentRunId: string | undefined
+      let resumedTerminalLifecycle: Extract<RunLifecycleEvent, { stage: 'closure' }> | undefined
+      let resumedCheckpointReleased = false
+      let resumedPhaseStartIteration = 0
+      durableResumeTurn.begin(resumedRuntime.task)
+      broadcast({ type: 'orchestrate-start', convId: conversationId, task: resumableRun.task })
+      console.log(
+        '[resume-orchestration]',
+        resumableRun.runId,
+        '→ phases déjà acquises :',
+        resumableRun.phaseOutputs.map((output) => output.phase).join(', ')
+      )
+      void resumedRuntime
+        .run((runtimeSnapshot) =>
+          os.runTask(
+            resumableRun.task,
+            (step) => {
+              durableResumeTurn.step(step)
+              broadcast({ type: 'orchestrate-step', convId: conversationId, step })
+              persistOrchestrationStep(
+                step,
+                {
+                  conversationId,
+                  turnId: resumeTurnId,
+                  iteration: step.step === 'exec' ? 0 : 1,
+                  runId: resumedCurrentRunId
+                },
+                undefined,
+                causalTrace
+              )
+              appendExecutionEvidenceFileTrace(step.evidence, {
+                conversationId,
+                turnId: resumeTurnId,
+                workspaceRoot: os.executionWorkspace
+              })
+              const stepArtifacts = [
+                ...(step.artifacts ?? []),
+                ...artifactsFromExecutionEvidence(step.evidence ?? [], {
+                  provider: step.provider ?? 'orchestrator',
+                  model: step.model,
+                  workspaceRoot: os.executionWorkspace
+                })
+              ]
+              for (const artifact of stepArtifacts) {
+                if (resumedArtifactIds.has(artifact.id)) continue
+                resumedArtifactIds.add(artifact.id)
+                try {
+                  const stored = materializeChatArtifact(artifact, conversationId, resumeTurnId)
+                  durableResumeTurn.artifact(stored)
+                  emitToLiveWindows(BrowserWindow.getAllWindows(), 'pilot:event', {
+                    kind: 'artifact',
+                    artifact: stored,
+                    conversationId,
+                    turnId: resumeTurnId
+                  })
+                } catch {
+                  /* artefact best-effort pendant la reprise */
+                }
+              }
+              for (const w of BrowserWindow.getAllWindows())
+                w.webContents.send('orchestrate:step', step)
+            },
+            (phase) => {
+              broadcast({ type: 'orchestrate-phase', convId: conversationId, phase })
+              if (!resumedCurrentRunId) return
+              persistOrchestrationPhaseStart(
+                phase,
+                {
+                  conversationId,
+                  turnId: resumeTurnId,
+                  iteration: resumedPhaseStartIteration++,
+                  runId: resumedCurrentRunId
+                },
+                causalTrace
+              )
             },
             undefined,
-            causalTrace
-          )
-          appendExecutionEvidenceFileTrace(step.evidence, {
-            conversationId,
-            turnId: resumeTurnId,
-            workspaceRoot: os.executionWorkspace
-          })
-          const stepArtifacts = [
-            ...(step.artifacts ?? []),
-            ...artifactsFromExecutionEvidence(step.evidence ?? [], {
-              provider: step.provider ?? 'orchestrator',
-              model: step.model,
-              workspaceRoot: os.executionWorkspace
-            })
-          ]
-          for (const artifact of stepArtifacts) {
-            if (resumedArtifactIds.has(artifact.id)) continue
-            resumedArtifactIds.add(artifact.id)
-            try {
-              const stored = materializeChatArtifact(artifact, conversationId, resumeTurnId)
-              if (legacyResumeTurn) legacyResumeTurn.artifact(stored)
-              else if (os.conversations.get(conversationId))
-                os.conversations.applyTurnEvent(conversationId, resumeTurnId, {
-                  kind: 'artifact',
-                  artifact: stored
-                })
-              emitToLiveWindows(BrowserWindow.getAllWindows(), 'pilot:event', {
-                kind: 'artifact',
-                artifact: stored,
+            undefined,
+            undefined,
+            resumableRun.phaseOutputs,
+            resumableRun.conversationId,
+            resumableRun.bindingOverride,
+            (brain) =>
+              appendBrainTrace({
+                ...brain,
                 conversationId,
-                turnId: resumeTurnId
-              })
-            } catch {
-              /* artefact best-effort pendant la reprise */
-            }
-          }
-          for (const w of BrowserWindow.getAllWindows())
-            w.webContents.send('orchestrate:step', step)
-        },
-        (phase) => {
-          if (!resumedCurrentRunId) return
-          persistOrchestrationPhaseStart(
-            phase,
-            {
-              conversationId,
-              turnId: resumeTurnId,
-              iteration: resumedPhaseStartIteration++,
-              runId: resumedCurrentRunId
+                ...(resumeTurnId ? { turnId: resumeTurnId } : {}),
+                kind: 'automatic'
+              }),
+            resumeTurnId,
+            (lifecycle) => {
+              // Le nouveau runId n'effacera jamais l'ancien checkpoint. On le libère au premier
+              // lifecycle seulement : cet événement prouve que le superviseur a admis la reprise.
+              // Un refus avant admission conserve donc les acquis pour le prochain démarrage.
+              if (!resumedCheckpointReleased) {
+                resumedCheckpointReleased = true
+                os.forgetResumableOrchestration(resumableRun.runId)
+              }
+              resumedCurrentRunId = lifecycle.runId
+              if (lifecycle.stage === 'closure') resumedTerminalLifecycle = lifecycle
+              persistRunLifecycle(lifecycle, { conversationId, turnId: resumeTurnId }, causalTrace)
             },
-            causalTrace
+            resumableRun,
+            (usage) => {
+              if (!resumedCurrentRunId) return
+              const settledLifecycle = reconcileLateRunLifecycle(resumedTerminalLifecycle, usage)
+              if (!settledLifecycle) return
+              resumedTerminalLifecycle = settledLifecycle
+              persistRunLifecycle(
+                resumedTerminalLifecycle,
+                { conversationId, turnId: resumeTurnId },
+                causalTrace
+              )
+              broadcast({ type: 'orchestrate-usage', convId: conversationId })
+              broadcast({ type: 'refresh', scope: 'workflows' })
+              broadcast({ type: 'refresh', scope: 'orchestration' })
+            },
+            runtimeSnapshot
           )
-        },
-        undefined,
-        undefined,
-        undefined,
-        resumableRun.phaseOutputs,
-        resumableRun.conversationId,
-        resumableRun.bindingOverride,
-        (brain) =>
-          appendBrainTrace({
-            ...brain,
-            conversationId,
-            ...(resumeTurnId ? { turnId: resumeTurnId } : {}),
-            kind: 'automatic'
-          }),
-        resumeTurnId,
-        (lifecycle) => {
-          resumedCurrentRunId = lifecycle.runId
-          persistRunLifecycle(lifecycle, { conversationId, turnId: resumeTurnId }, causalTrace)
+        )
+        .then((result) => {
+          durableResumeTurn.succeed(result)
+          broadcast({ type: 'orchestrate-end', convId: conversationId, status: 'green' })
+          broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+          return result
+        })
+        .catch((error: unknown) => {
+          durableResumeTurn.fail(error instanceof Error ? error.message : String(error), false)
+          broadcast({ type: 'orchestrate-end', convId: conversationId, status: 'red' })
+          broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+          console.warn('[resume-orchestration] échec de la reprise :', error)
+        })
+    }
+    if (reprise === 'rattacher') {
+      void waitUntilRunCanResume(() => {
+        const latest = os
+          .resumableOrchestrations()
+          .find((candidate) => candidate.runId === resumableRun.runId)
+        return latest ? resumeActionFor(latest, defaultProcessIdentity) : 'ignorer'
+      }).then((action) => {
+        const latest = os
+          .resumableOrchestrations()
+          .find((candidate) => candidate.runId === resumableRun.runId)
+        if (action !== 'relancer' || !latest) {
+          durableLiveReattachment?.succeed({ result: 'Rattachement terminé.' })
+          return
         }
-      )
-      .then((result) => {
-        legacyResumeTurn?.succeed(result)
-        return result
+        if (!liveReattachment?.resumeExisting) {
+          durableLiveReattachment?.succeed({
+            result: 'Agent détaché terminé — reprise du workflow dans un nouveau tour.'
+          })
+        }
+        void relaunchResumableRun(latest)
       })
-      .catch((error: unknown) => {
-        legacyResumeTurn?.fail(error instanceof Error ? error.message : String(error), false)
-        console.warn('[resume-orchestration] échec de la reprise :', error)
-      })
+    }
+    if (reprise === 'relancer') void relaunchResumableRun(resumableRun)
   }
 
   preflightWatchHandle = watchAppPreflight((result) => {

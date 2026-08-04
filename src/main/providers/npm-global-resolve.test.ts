@@ -181,10 +181,11 @@ describe('kimi — même correction, même repli mort évité', () => {
  * échouera en ENOENT — c'est le défaut d'origine, pas une hypothèse.
  */
 describe('sur CETTE machine, les CLI se résolvent en chemins réels', () => {
-  it('codex : un entrypoint .js existant, jamais un nom nu', () => {
+  it('codex : le binaire natif existe et évite le wrapper console', () => {
     if (process.platform !== 'win32' || process.env.CODEX_BIN) return
-    const args = codexExecSpec('C:\\repo', 'gpt-5.6-terra', 'read-only').args
-    expect(args[0].toLowerCase().endsWith('codex.js')).toBe(true)
+    const resolved = codexExecSpec('C:\\repo', 'gpt-5.6-terra', 'read-only')
+    expect(resolved.executable.toLowerCase().endsWith('codex.exe')).toBe(true)
+    expect(resolved.args[0]).toBe('exec')
   })
 
   it('kimi : soit l’entrypoint .mjs via node, soit le repli ASSUMÉ', () => {

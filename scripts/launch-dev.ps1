@@ -27,9 +27,9 @@ $existingDevTerminal = Get-DevTerminal
 if ($existingDevTerminal) {
   throw "Autowin OS Dev est déjà lancé (PID $($existingDevTerminal.ProcessId))."
 }
-# La console reste ouverte pendant electron-vite, puis se ferme avec lui (/c) pour ne pas
-# laisser de terminal orphelin. electron-vite --watch gère lui-même les redémarrages.
+# Le processus reste vivant pendant electron-vite, mais sa console est cachée : il n'occupe ni
+# Alt+Tab ni la barre des tâches. `/c` le ferme avec electron-vite et évite tout terminal orphelin.
 Start-Process -FilePath "$env:SystemRoot\System32\cmd.exe" `
   -ArgumentList @('/c', $devMarker) `
   -WorkingDirectory $ProjectRoot `
-  -WindowStyle Minimized
+  -WindowStyle Hidden

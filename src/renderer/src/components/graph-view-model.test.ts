@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   GRAPH_PALETTE,
   buildThemeSummaries,
+  brainScoreChannelLabel,
   completeProgressiveGraph,
   dynamicGraphForKey,
   filterGraphVisibility,
@@ -38,6 +39,22 @@ describe('graph theme palette', () => {
   it('keeps enough unique colors for every current Memory theme', () => {
     expect(GRAPH_PALETTE).toHaveLength(32)
     expect(new Set(GRAPH_PALETTE).size).toBe(GRAPH_PALETTE.length)
+  })
+})
+
+describe('Memory retrieval score channels', () => {
+  it('rend les quatre canaux, y compris les canaux indisponibles', () => {
+    expect(
+      brainScoreChannelLabel({
+        id: 'memory',
+        label: 'Memory',
+        group: 1,
+        denseScore: 0.72,
+        lexicalScore: 0.64,
+        graphScore: undefined,
+        fusedScore: 0.93
+      })
+    ).toBe('dense 0,720 · lexical 0,640 · graphe — · fusion 0,930')
   })
 })
 

@@ -58,6 +58,37 @@ const evaluate = async (expression) => {
 console.log('[cdp] connecté')
 await send('Page.reload', { ignoreCache: true })
 await new Promise((resolve) => setTimeout(resolve, 700))
+for (let attempt = 0; attempt < 40; attempt += 1) {
+  const wizard = await evaluate(`(() => {
+    const overlay = document.querySelector('.frw-overlay')
+    if (!overlay) return { dismissed: true }
+    const continueButton = [...overlay.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'Continuer quand même'
+    )
+    if (!continueButton) return { dismissed: false }
+    const rect = continueButton.getBoundingClientRect()
+    return { dismissed: false, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  })()`)
+  if (wizard.dismissed) break
+  if (wizard.x != null && wizard.y != null) {
+    await send('Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      x: wizard.x,
+      y: wizard.y,
+      button: 'left',
+      clickCount: 1
+    })
+    await send('Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      x: wizard.x,
+      y: wizard.y,
+      button: 'left',
+      clickCount: 1
+    })
+  }
+  await new Promise((resolve) => setTimeout(resolve, 100))
+}
+await new Promise((resolve) => setTimeout(resolve, 250))
 await evaluate(`(async () => {
   const existing = (await window.api.conversations()).find((item) => item.title === 'Preuve chemin critique')
   const conversation = existing ?? await window.api.conversationsCreate({
@@ -81,6 +112,17 @@ await evaluate(`(() => {
 })()`)
 console.log('[cdp] Observatory ouvert')
 await new Promise((resolve) => setTimeout(resolve, 900))
+for (let attempt = 0; attempt < 40; attempt += 1) {
+  const dismissed = await evaluate(`(() => {
+    const overlay = document.querySelector('.frw-overlay')
+    if (!overlay) return true
+    const actions = overlay.querySelectorAll('.frw-actions button')
+    actions[actions.length - 1]?.click()
+    return false
+  })()`)
+  if (dismissed) break
+  await new Promise((resolve) => setTimeout(resolve, 100))
+}
 await evaluate(`(() => {
   const target = [...document.querySelectorAll('button')].find((button) =>
     button.textContent?.trim() === 'Chemin critique')
@@ -108,9 +150,21 @@ const state = await evaluate(`(() => ({
   critical: document.querySelectorAll('.observatory-causal-node-wrap > button.is-critical').length,
   bottlenecks: document.querySelectorAll('.observatory-causal-node-wrap > button.is-bottleneck').length,
   detailVisible: Boolean(document.querySelector('.observatory-causal-detail')),
+  blockingDialogs: [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')]
+    .filter((element) => getComputedStyle(element).visibility !== 'hidden')
+    .map((element) => element.className),
+  blockingActions: [...document.querySelectorAll('[role="dialog"][aria-modal="true"] button')]
+    .map((element) => element.textContent?.trim()),
   errors: document.querySelector('.observatory-source-errors')?.textContent?.trim() ?? null
 }))()`)
-if (!state.title || state.nodes < 2 || state.critical < 1 || !state.detailVisible)
+if (
+  !state.title ||
+  state.nodes < 2 ||
+  state.critical < 1 ||
+  !state.detailVisible ||
+  state.blockingDialogs.length > 0 ||
+  Boolean(state.errors)
+)
   throw new Error(`Preuve causale insuffisante: ${JSON.stringify(state)}`)
 const screenshot = await evaluate('window.api.captureTestPage()')
 writeFileSync(output, Buffer.from(screenshot, 'base64'))

@@ -267,6 +267,35 @@ function projectRunExecutions(timeline: HarnessTimeline): RequestExecutionProjec
       runWorkspaceId = isolated.id
     }
 
+    const quoteFact = runEvents.find((event) => event.run?.stage === 'quote')
+    let quoteNode: HarnessTimelineEvent | undefined
+    if (quoteFact?.run?.stage === 'quote') {
+      const quote = quoteFact.run.quote
+      quoteNode = {
+        id: `quote:${runId}`,
+        parentId: runWorkspaceId,
+        kind: 'decision',
+        actor: 'Autowin OS',
+        label: quote.regime,
+        content: '',
+        detail: `Devis compile avant le premier appel provider`,
+        timestamp: quoteFact.timestamp,
+        status: 'completed',
+        durationMs: 0,
+        payloads: [],
+        execution: { runId },
+        display: {
+          kind: 'quote',
+          title: 'Devis d execution',
+          runId,
+          quote,
+          observedEventIds: [quoteFact.id]
+        }
+      }
+      events.push(quoteNode)
+    }
+    const workflowRootId = quoteNode?.id ?? runWorkspaceId
+
     const structural = runEvents.filter(
       (event) =>
         (event.kind === 'handoff' || event.kind === 'verdict') && Boolean(event.execution?.agentId)
@@ -293,7 +322,7 @@ function projectRunExecutions(timeline: HarnessTimeline): RequestExecutionProjec
         .filter((event) => event.execution?.phase === phase)
       const skill: HarnessTimelineEvent = {
         id: `skill:${runId}:${phase}`,
-        parentId: runWorkspaceId,
+        parentId: workflowRootId,
         kind: 'decision',
         actor: 'Autowin OS',
         label: phase,
@@ -461,9 +490,17 @@ export function projectLatestRequestExecution(
   const keptAuxiliary = turn.events.filter(
     (event) =>
       !agentSourceIds.has(event.id) &&
-      ['tool-call', 'tool-result', 'retry', 'cancellation', 'error', 'response-displayed'].includes(
-        event.kind
-      )
+      ([
+        'tool-call',
+        'tool-result',
+        'retry',
+        'cancellation',
+        'error',
+        'response-displayed'
+      ].includes(event.kind) ||
+        (event.kind === 'boundary' &&
+          (event.raw as { actor?: { id?: string } } | undefined)?.actor?.id ===
+            'execution-supervisor'))
   )
 
   const phases: string[] = []

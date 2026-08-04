@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   brainCorpusForWorkspace,
   brainSourcePathAllowed,
   scopeBrainBlock,
+  scopeBrainRetrieval,
   workspaceSlug
 } from './brain-corpus-scope'
 
@@ -25,6 +26,36 @@ const REAL_BLOCK = [
   '### Source 3 — //ged2/rig/Projets IA/Amitel Brain/knowledge/domain/autowin-os-realite-produit-v4.md\nProvenance: domain | autowin-os | claude | 2026-07-20\n\nLe cockpit Autowin OS'
 ].join('\n\n---\n\n')
 
+describe('scopeBrainRetrieval — statut et navigation post-filtrage', () => {
+  it('projette found vers empty quand toutes les sources sont hors workspace', () => {
+    const scoped = scopeBrainRetrieval(
+      {
+        context:
+          '[AMITEL BRAIN REFERENCE DATA]\n\n### Source 1 — knowledge/domain/rigapplication-documentation/hors-scope.md\ncontenu RIG',
+        status: 'found',
+        navigation: {
+          query: 'autowin',
+          minDense: 0.2,
+          candidates: [
+            {
+              rank: 1,
+              path: 'knowledge/domain/rigapplication-documentation/hors-scope.md',
+              type: 'domain',
+              denseCos: 0.8,
+              retained: true
+            }
+          ]
+        }
+      },
+      ['autowin-os']
+    )
+
+    expect(scoped.context).toBe('')
+    expect(scoped.status).toBe('empty')
+    expect(scoped.navigation?.candidates[0]?.retained).toBe(false)
+  })
+})
+
 describe('workspaceSlug — un dossier devient une clé comparable', () => {
   it('minuscules, espaces en tirets, séparateur final ignoré', () => {
     expect(workspaceSlug('C:\\Amitel\\Autowin OS')).toBe('autowin-os')
@@ -39,24 +70,36 @@ describe('workspaceSlug — un dossier devient une clé comparable', () => {
 
 describe('brainCorpusForWorkspace — dérivé du workspace, jamais écrit en dur', () => {
   it('Autowin OS a son corpus', () => {
-    expect(brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', {})).toContain('autowin-os')
+    expect(brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', {})).toContain(
+      'knowledge/domain/autowin-os-'
+    )
   })
 
   it('un workspace RIG reçoit le corpus RIG — c’est là que la doc RIG est PERTINENTE', () => {
     // Le piege que le cadrage nomme : regler le bruit d'aujourd'hui en creant un trou demain.
-    expect(brainCorpusForWorkspace('C:\\Code RIG', {})).toContain('rigapplication-documentation')
+    expect(brainCorpusForWorkspace('C:\\Code RIG', {})).toContain(
+      'knowledge/domain/rigapplication-documentation/'
+    )
   })
 
-  it('un workspace INCONNU n’a pas de corpus → aucun filtrage', () => {
-    // On ne coupe que la ou on sait quoi garder. Sinon on remplace du bruit par du vide.
-    expect(brainCorpusForWorkspace('C:\\Autre\\Projet', {})).toBeUndefined()
-    expect(brainCorpusForWorkspace(undefined, {})).toBeUndefined()
+  it('reconnaît le vrai dépôt RigApplication et un worktree dérivé', () => {
+    expect(brainCorpusForWorkspace('D:\\DevSrc\\RigApplication', {})).toContain(
+      'knowledge/domain/rigapplication-documentation/'
+    )
+    expect(
+      brainCorpusForWorkspace('D:\\DevSrc\\RigApplication\\.autowin\\agent__run-42', {})
+    ).toContain('knowledge/domain/rigapplication-documentation/')
+  })
+
+  it('un workspace INCONNU ou absent est fail-closed', () => {
+    expect(brainCorpusForWorkspace('C:\\Autre\\Projet', {})).toEqual([])
+    expect(brainCorpusForWorkspace(undefined, {})).toEqual([])
   })
 
   it('AUTOWIN_BRAIN_CORPUS surclasse la table (échappatoire opérateur)', () => {
-    expect(brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', { AUTOWIN_BRAIN_CORPUS: 'foo, bar' })).toEqual(
-      ['foo', 'bar']
-    )
+    expect(
+      brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', { AUTOWIN_BRAIN_CORPUS: 'foo, bar' })
+    ).toEqual(['foo', 'bar'])
   })
 
   it('AUTOWIN_BRAIN_CORPUS=* désactive explicitement le filtrage', () => {
@@ -64,10 +107,76 @@ describe('brainCorpusForWorkspace — dérivé du workspace, jamais écrit en du
       brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', { AUTOWIN_BRAIN_CORPUS: '*' })
     ).toBeUndefined()
   })
+
+  it('un override vide ou pseudo-wildcard malformé reste fail-closed', () => {
+    const warning = vi.spyOn(process, 'emitWarning').mockImplementation(() => undefined)
+    try {
+      for (const malformed of ['', ' ', ',', ', ,', '*,', 'foo,', 'foo,*']) {
+        expect(
+          brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', {
+            AUTOWIN_BRAIN_CORPUS: malformed
+          })
+        ).toEqual([])
+      }
+      expect(warning).toHaveBeenCalledOnce()
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining('fail-closed'),
+        expect.objectContaining({ code: 'AUTOWIN_BRAIN_CORPUS_INVALID' })
+      )
+    } finally {
+      warning.mockRestore()
+    }
+  })
+
+  it('un corpus fail-closed vide écarte contexte et navigation', () => {
+    const scoped = scopeBrainRetrieval(
+      {
+        context: REAL_BLOCK,
+        status: 'found',
+        navigation: {
+          query: 'secret',
+          minDense: 0.2,
+          candidates: [
+            {
+              rank: 1,
+              path: 'knowledge/domain/autowin-os-realite-produit-v4.md',
+              type: 'domain',
+              denseCos: 0.9,
+              retained: true
+            }
+          ]
+        }
+      },
+      []
+    )
+    expect(scoped.context).toBe('')
+    expect(scoped.status).toBe('empty')
+    expect(scoped.navigation?.candidates[0].retained).toBe(false)
+  })
+
+  it('rejette les collisions de nom étrangères dans les deux sens', () => {
+    const autowin = brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', {})
+    const rig = brainCorpusForWorkspace('D:\\DevSrc\\RigApplication', {})
+    const rigNamedAutowin =
+      'knowledge/domain/rigapplication-documentation/reference/autowin-os-migration.md'
+    const autowinNamedRig = 'knowledge/domain/autowin-os-rig-migration.md'
+
+    expect(brainSourcePathAllowed(rigNamedAutowin, autowin)).toBe(false)
+    expect(brainSourcePathAllowed(autowinNamedRig, rig)).toBe(false)
+    expect(brainSourcePathAllowed('knowledge/domain/autowin-os-memory-runtime-v1.md', autowin)).toBe(
+      true
+    )
+    expect(
+      brainSourcePathAllowed(
+        'knowledge/domain/rigapplication-documentation/reference/proc.md',
+        rig
+      )
+    ).toBe(true)
+  })
 })
 
 describe('scopeBrainBlock — sur le bloc RÉEL de conv-81', () => {
-  const corpus = ['autowin-os', 'autowin']
+  const corpus = brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', {}) as readonly string[]
 
   it('LE CAS RÉEL : les 2 sources RIG sont écartées, la source Autowin reste', () => {
     const result = scopeBrainBlock(REAL_BLOCK, corpus)
@@ -91,7 +200,10 @@ describe('scopeBrainBlock — sur le bloc RÉEL de conv-81', () => {
   })
 
   it('un workspace RIG garde les sources RIG et écarte l’Autowin', () => {
-    const result = scopeBrainBlock(REAL_BLOCK, ['rigapplication-documentation'])
+    const result = scopeBrainBlock(
+      REAL_BLOCK,
+      brainCorpusForWorkspace('D:\\DevSrc\\RigApplication', {})
+    )
     expect(result.kept).toBe(2)
     expect(result.block).toContain('proc_mjud.md')
     expect(result.block).not.toContain('autowin-os-realite-produit-v4.md')
@@ -117,13 +229,16 @@ describe('scopeBrainBlock — sur le bloc RÉEL de conv-81', () => {
   })
 
   it('comparaison insensible à la casse du chemin', () => {
-    const upper = REAL_BLOCK.replace('autowin-os-realite-produit-v4.md', 'AUTOWIN-OS-REALITE-PRODUIT-V4.MD')
+    const upper = REAL_BLOCK.replace(
+      'autowin-os-realite-produit-v4.md',
+      'AUTOWIN-OS-REALITE-PRODUIT-V4.MD'
+    )
     expect(scopeBrainBlock(upper, corpus).kept).toBe(1)
   })
 
   it('applique la même portée aux candidats de navigation', () => {
-    const corpus = ['autowin-os', 'autowin']
-    expect(brainSourcePathAllowed('knowledge/domain/autowin-os/note.md', corpus)).toBe(true)
+    const corpus = brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', {})
+    expect(brainSourcePathAllowed('knowledge/domain/autowin-os-note.md', corpus)).toBe(true)
     expect(
       brainSourcePathAllowed('knowledge/domain/rigapplication-documentation/note.md', corpus)
     ).toBe(false)
@@ -181,7 +296,9 @@ describe('câblage O4 — le chat ne pousse plus le Brain, mais y accède', () =
   it('la poussée du Brain est réellement conditionnée (pas seulement déclarée)', () => {
     const source = read('amitel-context.ts')
     expect(source).toContain("const pushBrain = sources.includes('brain')")
-    expect(source).toContain('pushBrain ? retrieveBrain(boundedQuery) : Promise.resolve()'.replace('()', "('')"))
+    expect(source).toContain(
+      'pushBrain ? retrieveBrain(boundedQuery) : Promise.resolve()'.replace('()', "('')")
+    )
   })
 
   it('DÉFAUT rétro-compatible : sans option, les DEUX sources sont poussées', () => {
@@ -200,8 +317,17 @@ describe('câblage O4 — le chat ne pousse plus le Brain, mais y accède', () =
   it('le chemin À LA DEMANDE applique la MÊME portée par workspace', () => {
     const source = read('commands.ts')
     expect(source).toContain('const corpus = brainCorpusForWorkspace(this.os.executionWorkspace)')
-    expect(source).toContain('scopeBrainBlock(context, corpus)')
-    expect(source).toContain('brainSourcePathAllowed(candidate.path, corpus)')
-    expect(source).toContain('buildBrainOutcome(decision.query, scoped.block)')
+    expect(source).toContain('scopeBrainRetrieval(brain, corpus)')
+    expect(source).toContain('buildBrainOutcome(decision.query, scoped.context, scoped.status)')
+    expect(source).toContain('status: scoped.status')
+    expect(source).toContain('navigation: scoped.navigation')
+  })
+
+  it('le chemin ORCHESTRÉ publie aussi le statut et la navigation post-filtrage', () => {
+    const source = read('orchestrator.ts')
+    expect(source).toContain('scopeBrainRetrieval(brain, brainCorpus)')
+    expect(source).toContain('status: scopedBrain.status')
+    expect(source).toContain('navigation: scopedBrain.navigation')
+    expect(source).toContain('brainNavigation: scopedBrain.navigation')
   })
 })

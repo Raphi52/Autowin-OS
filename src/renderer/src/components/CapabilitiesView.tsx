@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import './CapabilitiesView.css'
 import { ModuleHeader } from './ModuleHeader'
 
-type Kind = 'skills' | 'hooks' | 'tools'
+type Kind = 'skills' | 'hooks' | 'tools' | 'plugins'
 type HookModel = 'claude' | 'codex'
 
 interface Item {
@@ -23,7 +23,8 @@ type RelatedItem = Item & { relationKind: 'hook' | 'tool'; relationSource: strin
 const META: Record<Kind, { title: string; empty: string }> = {
   skills: { title: 'Skills', empty: 'Aucune skill trouvée.' },
   hooks: { title: 'Hooks', empty: 'Aucun hook configuré.' },
-  tools: { title: 'Tools', empty: 'Aucun toolset trouvé.' }
+  tools: { title: 'Tools', empty: 'Aucun toolset trouvé.' },
+  plugins: { title: 'Plugins', empty: 'Aucun plugin enregistré.' }
 }
 
 const HOOK_SOURCES: Array<{ id: HookModel; label: string }> = [
@@ -264,7 +265,7 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
                 <small>Hooks {source.label}</small>
               </button>
             ))
-          ) : (
+          ) : kind === 'tools' ? (
             <>
               <button
                 className={toolSource === 'real' ? 'is-active' : ''}
@@ -283,6 +284,12 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
                 <small>Décoratif · non invoqué</small>
               </button>
             </>
+          ) : (
+            <button className="is-active">
+              <b>Registre local</b>
+              <strong>{items.length}</strong>
+              <small>Plugins installés et déclarés</small>
+            </button>
           )}
 
           <h2 className="status-title">État</h2>
@@ -304,7 +311,7 @@ export function CapabilitiesView({ active }: { active: boolean }): React.JSX.Ele
 
         <main className="cockpit-registry">
           <div className="cockpit-tabs" role="tablist" aria-label="Registre des capacités">
-            {(['skills', 'hooks', 'tools'] as const).map((candidate) => (
+            {(['skills', 'hooks', 'tools', 'plugins'] as const).map((candidate) => (
               <button
                 key={candidate}
                 role="tab"

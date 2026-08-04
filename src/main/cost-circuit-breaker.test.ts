@@ -29,6 +29,12 @@ describe('CostCircuitBreaker', () => {
     expect(t?.reason).toContain('coût 2.00$ > seuil 1.50$')
   })
 
+  it('borne les appels meme quand le provider ne remonte aucune metrique', () => {
+    const b = new CostCircuitBreaker({ maxCalls: 1 })
+    expect(b.observe(step({}))).toBeNull()
+    expect(b.observe(step({}))?.reason).toContain('appels 2 > seuil 1')
+  })
+
   it('ne trip QU’UNE fois (pas de notif en boucle après coupure)', () => {
     const b = new CostCircuitBreaker({ maxTokens: 100 })
     expect(b.observe(step({ tokens: 200 }))?.trip).toBe(true)

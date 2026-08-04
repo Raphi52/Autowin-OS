@@ -107,6 +107,17 @@ describe('model final summary', () => {
   })
 })
 
+describe('chat action outcome', () => {
+  it('keeps a successful orchestration label readable over its success background', () => {
+    const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+    const success = css.match(/\.activity-outcome\.st-ok\s*{([^}]*)}/s)?.[1]
+
+    expect(success).toBeDefined()
+    expect(success).toMatch(/background:\s*color-mix\([^;]+12%,\s*transparent\)/)
+    expect(success).toMatch(/color:\s*#d8f5e8/)
+  })
+})
+
 describe('chat image containment', () => {
   it('keeps thumbnails inside their chip and lightbox images inside the viewport', () => {
     const css = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')

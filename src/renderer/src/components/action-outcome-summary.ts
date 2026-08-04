@@ -62,8 +62,8 @@ export function orchestrateOutcomeSummary(action: ActionLike): OutcomeSummary | 
   if (action.name !== 'orchestrate') return undefined
   const data = asRecord(action.data)
   if (!data) return undefined
-  const cost = typeof data.costUsd === 'number' && Number.isFinite(data.costUsd) ? data.costUsd : undefined
-  const suffix = cost !== undefined ? ` · ${cost.toFixed(2)} $` : ''
+  const cost = formatExecutionCostCoverage(data)
+  const suffix = cost ? ` · ${cost}` : ''
   if (data.gateBlocked === true) return { label: `bloqué par le gate${suffix}`, state: 'failed' }
   if (data.valid === false) return { label: `livrable refusé${suffix}`, state: 'failed' }
   if (data.reused === true) return { label: `run réutilisé${suffix}`, state: 'refused' }
@@ -75,9 +75,7 @@ export function orchestrateOutcomeSummary(action: ActionLike): OutcomeSummary | 
  * Premier résumé de preuve d'un groupe d'actions. Une vérification en ÉCHEC est prioritaire sur une
  * réussie : c'est elle qu'il faut voir quand un tour en contient plusieurs.
  */
-export function groupOutcomeSummary(
-  actions: readonly ActionLike[]
-): OutcomeSummary | undefined {
+export function groupOutcomeSummary(actions: readonly ActionLike[]): OutcomeSummary | undefined {
   const summaries = actions
     .map((action) => verifyOutcomeSummary(action) ?? orchestrateOutcomeSummary(action))
     .filter((summary): summary is OutcomeSummary => summary !== undefined)
@@ -87,3 +85,4 @@ export function groupOutcomeSummary(
     summaries[0]
   )
 }
+import { formatExecutionCostCoverage } from '../../../shared/orchestration-outcome'

@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
+import { ExecutionSupervisor } from './execution-supervisor'
+import { ProviderRegistry } from './providers/registry'
+import type {
+  Message,
+  ProviderAdapter,
+  SendOptions,
+  SendResult,
+  StreamChunk
+} from './providers/types'
 import { ConversationStore, type Conversation } from './store/conversations'
 
 function conversation(messages: Conversation['messages']): Conversation {
@@ -27,7 +36,16 @@ function message(role: 'user' | 'assistant', content: string, index: number) {
   }
 }
 
-function harness(response: string | Error) {
+function deferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+function harness(response: string | Error, waitUntilReady: () => Promise<void> = async () => {}) {
+  const supervisor = new ExecutionSupervisor()
   const registry = {
     send: vi.fn(async () => {
       if (response instanceof Error) throw response
@@ -47,10 +65,55 @@ function harness(response: string | Error) {
       reasoningEffort: 'low'
     })
   }
-  return { router: new ConversationRouter(registry as never, roles as never), registry }
+  return {
+    router: new ConversationRouter(registry as never, roles as never, supervisor, waitUntilReady),
+    registry,
+    supervisor
+  }
+}
+
+class MeteredRouterProvider implements ProviderAdapter {
+  readonly id = 'router-provider'
+  calls = 0
+  async auth(): Promise<boolean> {
+    return true
+  }
+  async *send(
+    _messages: Message[],
+    _options?: SendOptions
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    this.calls += 1
+    yield* [] as StreamChunk[]
+    return {
+      text: '{"route":"current","confidence":0.99,"reason":"related","title":""}',
+      provider: this.id,
+      systemInjected: true,
+      usage: { inputTokens: 20, outputTokens: 8 }
+    }
+  }
 }
 
 describe('ConversationRouter', () => {
+  it('place aussi la décision de routage dans une enveloppe mesurée', async () => {
+    const supervisor = new ExecutionSupervisor()
+    const provider = new MeteredRouterProvider()
+    const registry = new ProviderRegistry(undefined, supervisor).register(provider)
+    const roles = {
+      getBinding: () => ({ provider: provider.id, model: 'router', reasoningEffort: 'low' })
+    }
+    const router = new ConversationRouter(registry, roles as never, supervisor)
+    const current = conversation([message('user', 'Sujet courant', 1)])
+
+    await router.decide(current, 'Suite du même sujet')
+
+    expect(provider.calls).toBe(1)
+    expect(supervisor.lastSnapshot()).toMatchObject({
+      startedCalls: 1,
+      completedCalls: 1,
+      totalTokens: 28
+    })
+  })
+
   it('keeps a related follow-up in the current conversation', async () => {
     const { router } = harness(
       '{"route":"current","confidence":0.99,"reason":"follow-up","title":""}'
@@ -124,6 +187,78 @@ describe('ConversationRouter', () => {
     })
     expect(registry.send).not.toHaveBeenCalled()
   })
+
+  it('ne lance aucun préflight provider quand la topologie runtime est indisponible', async () => {
+    const { router, registry, supervisor } = harness(
+      '{"route":"new","confidence":1,"reason":"new-topic","title":"Jamais"}',
+      async () => {
+        throw new Error('Alias de modèle indisponible hors catalogue : codex/flagship')
+      }
+    )
+    vi.spyOn(supervisor, 'currentQuote').mockReturnValue({} as never)
+    const current = conversation([message('user', 'Sujet courant', 1)])
+
+    await expect(router.decide(current, 'Un sujet vraiment différent')).resolves.toMatchObject({
+      route: 'current',
+      reason: 'fallback'
+    })
+    expect(registry.send).not.toHaveBeenCalled()
+  })
+
+  it('relit le binding après la readiness quand le catalogue revient pendant l’attente', async () => {
+    const ready = deferred()
+    let binding = {
+      provider: 'codex',
+      model: 'codex/flagship',
+      reasoningEffort: 'medium' as const
+    }
+    const registry = {
+      send: vi.fn(async (_provider: string, _messages: unknown, options: { model?: string }) => ({
+        text: '{"route":"current","confidence":0.99,"reason":"related","title":""}',
+        provider: 'codex',
+        model: options.model,
+        systemInjected: true
+      }))
+    }
+    const roles = { getBinding: () => binding }
+    const router = new ConversationRouter(
+      registry as never,
+      roles as never,
+      new ExecutionSupervisor(),
+      () => ready.promise
+    )
+    const pending = router.decide(
+      conversation([message('user', 'Sujet courant', 1)]),
+      'Suite substantielle du sujet'
+    )
+    await Promise.resolve()
+    binding = { provider: 'codex', model: 'gpt-5.6-terra', reasoningEffort: 'medium' }
+    ready.resolve()
+
+    await pending
+
+    expect(registry.send).toHaveBeenCalledWith(
+      'codex',
+      expect.any(Array),
+      expect.objectContaining({ model: 'gpt-5.6-terra' })
+    )
+  })
+
+  it.each(['/build corrige le bug', '/terrain prépare la boucle', 'continue'])(
+    'keeps the deterministic follow-up %s without spending a routing call',
+    async (incoming) => {
+      const { router, registry } = harness(
+        '{"route":"new","confidence":1,"reason":"new-topic","title":"Jamais"}'
+      )
+      const current = conversation([message('user', 'Sujet courant', 1)])
+
+      await expect(router.decide(current, incoming)).resolves.toMatchObject({
+        route: 'current',
+        confidence: 1
+      })
+      expect(registry.send).not.toHaveBeenCalled()
+    }
+  )
 
   it('can route an attachment-only message without inventing text', async () => {
     const { router, registry } = harness(

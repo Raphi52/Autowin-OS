@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { createHmac } from 'node:crypto'
+import { describe, expect, it, vi } from 'vitest'
 import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
 import { Orchestrator } from './orchestrator'
@@ -15,11 +16,14 @@ import { RoleModelConfig } from './roles'
 import { TrustLedger } from './trust/ledger'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
+import { forgetEcho, noteRemembered } from './session-memory-echo'
+import { retrieveBrainContext } from './brain-retrieval'
 
 class CapturingProvider implements ProviderAdapter {
   readonly id = 'capture'
   readonly supportsExecution = true
   readonly calls: SendOptions[] = []
+  readonly messages: Message[][] = []
 
   constructor(private readonly emitsEvidence = true) {}
 
@@ -28,10 +32,11 @@ class CapturingProvider implements ProviderAdapter {
   }
 
   async *send(
-    _messages: Message[],
+    messages: Message[],
     options: SendOptions = {}
   ): AsyncGenerator<StreamChunk, SendResult, void> {
     this.calls.push(options)
+    this.messages.push(messages)
     return {
       text: this.calls.length === 1 ? 'travail exécuté' : 'VALIDE',
       provider: this.id,
@@ -73,6 +78,220 @@ class FailingProvider implements ProviderAdapter {
 }
 
 describe('Orchestrator execution contract', () => {
+  it('ne contacte pas le Brain avec un override corpus malformé', async () => {
+    vi.stubEnv('AUTOWIN_BRAIN_CORPUS', '*,')
+    try {
+      const provider = new CapturingProvider()
+      const retrieveBrain = vi.fn(async () => ({ context: 'INTERDIT', status: 'found' as const }))
+      const brainEvents: Array<{ status: string; injectedChars: number }> = []
+      const orchestrator = new Orchestrator({
+        registry: new ProviderRegistry().register(provider),
+        roles: new RoleModelConfig({
+          subagent: { provider: provider.id },
+          judge: { provider: provider.id }
+        }),
+        cost: new CostAggregator(),
+        trust: new TrustLedger(),
+        authority: new AuthoritySas(),
+        executionWorkspace: process.cwd(),
+        retrieveBrain
+      })
+
+      await orchestrator.run(
+        'analyse sans mutation',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        '',
+        [],
+        undefined,
+        undefined,
+        (event) => brainEvents.push(event)
+      )
+
+      expect(retrieveBrain).not.toHaveBeenCalled()
+      expect(brainEvents).toEqual([expect.objectContaining({ status: 'empty', injectedChars: 0 })])
+      expect(
+        provider.messages
+          .flat()
+          .map((message) => message.content)
+          .join('\n')
+      ).not.toContain('INTERDIT')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('transporte la memoire provisoire de la conversation jusqu au sous-agent', async () => {
+    forgetEcho()
+    noteRemembered('conv-memory', {
+      title: 'Decision runtime',
+      body: 'le code Python vient uniquement de installation locale',
+      scope: 'autowin-os',
+      workspace: process.cwd()
+    })
+    const provider = new CapturingProvider()
+    const orchestrator = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      authority: new AuthoritySas(),
+      executionWorkspace: process.cwd()
+    })
+
+    await orchestrator.run(
+      'analyse le projet sans le modifier',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      '',
+      [],
+      'conv-memory'
+    )
+
+    expect(provider.messages[0].map((message) => message.content).join('\n')).toContain(
+      'le code Python vient uniquement de installation locale'
+    )
+  })
+
+  it('n injecte pas au sous-agent la memoire du meme fil creee dans un autre workspace', async () => {
+    forgetEcho()
+    noteRemembered('conv-cross-workspace', {
+      title: 'RIG prive',
+      body: 'utiliser gacRig avant build',
+      scope: 'RIG',
+      workspace: 'D:\\DevSrc\\RigApplication'
+    })
+    noteRemembered('conv-cross-workspace', {
+      title: 'Global explicite',
+      body: 'conserver les preuves',
+      scope: 'global',
+      workspace: 'global'
+    })
+    const provider = new CapturingProvider()
+    const orchestrator = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      authority: new AuthoritySas(),
+      executionWorkspace: process.cwd()
+    })
+
+    await orchestrator.run(
+      'analyse Autowin sans le modifier',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      '',
+      [],
+      'conv-cross-workspace'
+    )
+
+    const prompt = provider.messages[0].map((message) => message.content).join('\n')
+    expect(prompt).not.toContain('utiliser gacRig avant build')
+    expect(prompt).toContain('conserver les preuves')
+  })
+
+  it('isole le vrai workspace RigApplication d une source Autowin adverse', async () => {
+    const provider = new CapturingProvider()
+    const seenCorpus: Array<readonly string[] | undefined> = []
+    const mixedContext = [
+      '[AMITEL BRAIN REFERENCE DATA]',
+      '### Source 1 — knowledge/domain/rigapplication-documentation/reference/proc.md\nRIG_SOURCE_AUTORISEE',
+      '### Source 2 — knowledge/domain/autowin-os-realite-produit-v5.md\nAUTOWIN_SOURCE_INTERDITE'
+    ].join('\n\n---\n\n')
+    const orchestrator = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      authority: new AuthoritySas(),
+      executionWorkspace: 'D:\\DevSrc\\RigApplication',
+      retrieveBrain: async (_query, options) => {
+        seenCorpus.push(options?.corpus)
+        return { context: mixedContext, status: 'found' }
+      }
+    })
+
+    await orchestrator.run('analyse RigApplication en lecture seule sans le modifier')
+
+    const prompt = provider.messages[0].map((message) => message.content).join('\n')
+    expect(seenCorpus[0]).toContain('knowledge/domain/rigapplication-documentation/')
+    expect(prompt).toContain('RIG_SOURCE_AUTORISEE')
+    expect(prompt).not.toContain('AUTOWIN_SOURCE_INTERDITE')
+  })
+
+  it('n injecte aucun caractère quand un contexte signé dépasse le budget', async () => {
+    const token = 'orchestrator-brain-budget-token'.repeat(2)
+    const context = `oversized-marker-${'x'.repeat(3_001)}`
+    const authenticated = JSON.stringify({ context, navigation: null })
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            service: 'amitel-brain',
+            protocol: 2,
+            authenticated,
+            signature: createHmac('sha256', token)
+              .update(`amitel-brain\n2\n${authenticated}`, 'utf8')
+              .digest('hex')
+          }),
+          { status: 200 }
+        )
+    ) as unknown as typeof fetch
+    const provider = new CapturingProvider()
+    const brainEvents: Array<{ status: string; injectedChars: number }> = []
+    const orchestrator = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      authority: new AuthoritySas(),
+      executionWorkspace: process.cwd(),
+      retrieveBrain: (query, options) =>
+        retrieveBrainContext(query, {
+          ...options,
+          env: { AMITEL_BRAIN_TOKEN: token } as NodeJS.ProcessEnv,
+          fetchFn
+        })
+    })
+
+    await orchestrator.run(
+      'analyse le budget Brain en lecture seule sans le modifier',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      '',
+      [],
+      'conv-brain-budget',
+      undefined,
+      (event) => brainEvents.push(event)
+    )
+
+    const prompt = provider.messages[0].map((message) => message.content).join('\n')
+    expect(prompt).not.toContain('oversized-marker')
+    expect(brainEvents).toHaveLength(1)
+    expect(brainEvents[0]).toMatchObject({ status: 'invalid', injectedChars: 0 })
+  })
+
   it('notifie la récupération Brain avant une erreur ultérieure du provider', async () => {
     const provider = new FailingProvider()
     const brainEvents: Array<{ query: string; injectedChars: number }> = []
@@ -334,11 +553,13 @@ describe('Orchestrator execution contract', () => {
   it('B5 — répare UNE fois une mutation bloquée puis clôture vert', async () => {
     // exec#1 sans preuve → bloqué ; réparation exec#2 avec mutation+vérification → vert.
     let execCount = 0
+    let providerCalls = 0
     const provider: ProviderAdapter = {
       id: 'repair',
       supportsExecution: true,
       auth: async () => true,
       async *send(_m, options: SendOptions = {}) {
+        providerCalls += 1
         const isExec = options.execution?.sandbox === 'danger-full-access'
         if (isExec) execCount += 1
         const secondExec = isExec && execCount >= 2
@@ -386,6 +607,8 @@ describe('Orchestrator execution contract', () => {
     expect(result.valid).toBe(true)
     expect(result.gateBlocked).toBe(false)
     expect(execCount).toBe(2) // une réparation a bien eu lieu
+    // Le pré-gate local bloque la tentative sans preuve AVANT de payer un premier juge.
+    expect(providerCalls).toBe(3) // build rouge + réparation + juge final
   })
 
   it('F3 (strict) — une mutation exige une VÉRIFICATION, pas une simple inspection', async () => {

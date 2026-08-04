@@ -14,6 +14,7 @@ import { readBrainTraces } from './activity/brain-trace-spool'
 import { WorktreeManager } from './store/worktree-manager'
 import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
 import { TraceStore } from './activity/trace-store'
+import type { BrainRetrievalOptions } from './brain-retrieval'
 
 function fakeOs(): any {
   const conversations = new Map<
@@ -73,6 +74,50 @@ function fakeOs(): any {
 }
 
 describe('AppCommandBus orchestration cancel (#2)', () => {
+  it('brain_query ne contacte pas le Brain avec un override corpus malformé', async () => {
+    vi.stubEnv('AUTOWIN_BRAIN_CORPUS', ',')
+    try {
+      const retrieve = vi.fn(async () => ({ context: 'INTERDIT', status: 'found' as const }))
+      const result = await new AppCommandBus(
+        fakeOs(),
+        () => {},
+        undefined,
+        undefined,
+        undefined,
+        retrieve
+      ).exec('brain_query', { question: 'secret transverse' })
+
+      expect(retrieve).not.toHaveBeenCalled()
+      expect(result).toMatchObject({ ok: true, data: { found: false, status: 'empty' } })
+      expect(JSON.stringify(result)).not.toContain('INTERDIT')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('brain_query isole le vrai workspace RigApplication d une source Autowin adverse', async () => {
+    const os = fakeOs()
+    os.executionWorkspace = 'D:\\DevSrc\\RigApplication'
+    const mixedContext = [
+      '[AMITEL BRAIN REFERENCE DATA]',
+      '### Source 1 — knowledge/domain/rigapplication-documentation/reference/proc.md\nRIG_COMMANDE_AUTORISEE',
+      '### Source 2 — knowledge/domain/autowin-os-realite-produit-v5.md\nAUTOWIN_COMMANDE_INTERDITE'
+    ].join('\n\n---\n\n')
+    const seenCorpus: Array<readonly string[] | undefined> = []
+    const retrieve = vi.fn(async (_query: string, options?: BrainRetrievalOptions) => {
+      seenCorpus.push(options?.corpus)
+      return { context: mixedContext, status: 'found' as const }
+    })
+    const bus = new AppCommandBus(os, () => {}, undefined, undefined, undefined, retrieve)
+
+    const result = await bus.exec('brain_query', { question: 'architecture RIG' })
+
+    expect(seenCorpus[0]).toContain('knowledge/domain/rigapplication-documentation/')
+    expect(result).toMatchObject({ ok: true, data: { found: true } })
+    expect(JSON.stringify(result)).toContain('RIG_COMMANDE_AUTORISEE')
+    expect(JSON.stringify(result)).not.toContain('AUTOWIN_COMMANDE_INTERDITE')
+  })
+
   it('persiste lifecycle et démarrage live dans le TraceStore de cette instance', async () => {
     const os = fakeOs()
     const root = mkdtempSync(join(tmpdir(), 'autowin-command-trace-'))
@@ -181,6 +226,45 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     expect(result.ok).toBe(true)
     expect(collected).toMatch(/^\[COLLECTE DE CONTEXTE — effectuée avant RUN.md et délégation\]/)
     expect(collected).toContain('Conversation: conv-1 — A garder')
+  })
+
+  it('propage la couverture du coût pour ne pas présenter un tarif inconnu comme zéro', async () => {
+    const os = fakeOs()
+    os.runTask = async () => ({
+      gateBlocked: false,
+      gateReasons: [],
+      valid: true,
+      costUsd: 0,
+      usage: {
+        startedCalls: 3,
+        completedCalls: 3,
+        failedCalls: 0,
+        activeCalls: 0,
+        startedAgents: 3,
+        activeAgents: 0,
+        inputTokens: 100,
+        outputTokens: 20,
+        cacheReadTokens: 80,
+        totalTokens: 120,
+        freshInputTokens: 20,
+        knownCostUsd: null,
+        unpricedCalls: 3
+      },
+      result: '',
+      phaseOutputs: []
+    })
+
+    const result = await new AppCommandBus(os, () => {}).exec(
+      'orchestrate',
+      { task: '/build corrige la typo' },
+      'conv-1',
+      'auto'
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: { costUsd: 0, knownCostUsd: null, unpricedCalls: 3 }
+    })
   })
 
   it('réutilise une orchestration équivalente déjà en cours', async () => {
@@ -595,6 +679,49 @@ describe('AppCommandBus authority policy', () => {
       expect(os.calls.lastTask).toContain('DOSSIER DE PREUVE AUTOWIN OS')
       expect(os.calls.lastTask).toContain('le worktree est resté ouvert')
       expect(os.calls.lastTask).toContain('"source":"autowin-os"')
+    } finally {
+      if (previousAppData === undefined) delete process.env.APPDATA
+      else process.env.APPDATA = previousAppData
+      rmSync(appData, { recursive: true, force: true })
+    }
+  })
+
+  it('alimente un Auto-Kaizen avec les preuves de sa conversation source', async () => {
+    const previousAppData = process.env.APPDATA
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-auto-kaizen-command-'))
+    process.env.APPDATA = appData
+    try {
+      const os = fakeOs()
+      const sourceGet = os.conversations.get
+      os.conversations.get = (id: string) =>
+        id === 'conv-analysis'
+          ? {
+              id,
+              title: 'Auto-Kaizen',
+              category: 'codex',
+              provider: 'codex',
+              messages: [{ role: 'user', content: '/kaizen incident figé', ts: 2 }],
+              runPaths: [],
+              autoKaizen: {
+                incidentId: 'ak-1',
+                sourceConversationId: 'conv-1',
+                role: 'analysis',
+                rootIncidentId: 'ak-1',
+                depth: 0
+              }
+            }
+          : sourceGet(id)
+      const bus = new AppCommandBus(os, () => {})
+
+      const result = await bus.exec(
+        'orchestrate',
+        { task: '/kaizen incident figé' },
+        'conv-analysis'
+      )
+
+      expect(result).toMatchObject({ ok: true })
+      expect(os.calls.lastTask).toContain('le worktree est resté ouvert')
+      expect(os.calls.lastTask).not.toContain('"title":"Auto-Kaizen"')
     } finally {
       if (previousAppData === undefined) delete process.env.APPDATA
       else process.env.APPDATA = previousAppData
@@ -1029,21 +1156,188 @@ describe('AppCommandBus authority policy', () => {
     expect(catalogue.find((tool) => tool.name === 'orchestrate')?.description).toMatch(
       /lire, modifier et tester le code/i
     )
+    expect(catalogue.some((tool) => tool.name === 'set_role')).toBe(false)
   })
 
   it('runs reversible actions immediately and reserves approval for deletion', async () => {
     const os = fakeOs()
     const bus = new AppCommandBus(os, () => {})
     bus.activeConversationId = 'conv-1'
-    await bus.exec('set_role', { role: 'judge', provider: 'codex', model: 'gpt-5' })
     await bus.exec('attach_run', { path: 'C:/private/RUN.md' })
     await bus.exec('orchestrate', { task: 'use token=top-secret' })
     const deletion = await bus.exec('remove_conversation', { id: 'conv-1' })
 
-    expect(os.calls).toMatchObject({ setRole: 1, attachRun: 1, runTask: 1 })
+    expect(os.calls).toMatchObject({ setRole: 0, attachRun: 1, runTask: 1 })
     expect(os.authority.pending()).toHaveLength(1)
     expect(deletion).toMatchObject({ ok: true, data: { pendingApproval: true } })
     expect(os.conversations.get('conv-1')).toBeTruthy()
+  })
+
+  it('refuse la commande legacy set_role sans muter un rôle caché', async () => {
+    const os = fakeOs()
+
+    const result = await new AppCommandBus(os, () => {}).exec('set_role', {
+      role: 'judge',
+      provider: 'gemini',
+      model: 'gemini-2.5-pro'
+    })
+
+    expect(result).toMatchObject({ ok: false, error: 'Commande inconnue: set_role' })
+    expect(os.calls.setRole).toBe(0)
+  })
+
+  it('republie une fin provider tardive dans la trace et le graphe du run', async () => {
+    const os = fakeOs()
+    const root = mkdtempSync(join(tmpdir(), 'autowin-command-late-usage-'))
+    const traceStore = new TraceStore(root)
+    const broadcasts: Array<Record<string, unknown>> = []
+    let publishLateUsage: ((usage: Record<string, unknown>) => void) | undefined
+    os.runTask = async (...args: unknown[]) => {
+      const onLifecycle = args[11] as (event: unknown) => void
+      publishLateUsage = args[13] as (usage: Record<string, unknown>) => void
+      onLifecycle({
+        runId: 'run-late',
+        timestampMs: 1,
+        stage: 'workspace',
+        workspace: { mode: 'base', repositoryPath: 'C:\\repo', path: 'C:\\repo' }
+      })
+      onLifecycle({
+        runId: 'run-late',
+        timestampMs: 2,
+        stage: 'closure',
+        closure: {
+          status: 'red',
+          totalDurationMs: 20,
+          totalCostUsd: 0,
+          usage: { startedCalls: 1, completedCalls: 0, failedCalls: 0, activeCalls: 1 }
+        }
+      })
+      return {
+        gateBlocked: true,
+        gateReasons: ['watchdog coordination'],
+        valid: false,
+        costUsd: 0,
+        result: '',
+        phaseOutputs: []
+      }
+    }
+    const bus = new AppCommandBus(os, (event) => broadcasts.push(event as Record<string, unknown>))
+    try {
+      bus.setTraceStore(traceStore)
+      const result = await bus.exec(
+        'orchestrate',
+        { task: '/build refactorer le workflow de securite complet' },
+        'conv-1',
+        'auto'
+      )
+      const runPath = (result.data as { runPath?: string } | undefined)?.runPath
+      expect(publishLateUsage).toBeTypeOf('function')
+
+      publishLateUsage?.({
+        quoteId: 'quote-late',
+        startedAgents: 1,
+        startedCalls: 1,
+        completedCalls: 0,
+        failedCalls: 1,
+        activeCalls: 0,
+        inputTokens: 120,
+        outputTokens: 8,
+        cacheReadTokens: 20,
+        totalTokens: 128,
+        freshTokens: 108,
+        knownCostUsd: null,
+        unpricedCalls: 1,
+        unmeteredCalls: 0,
+        tokenCoverage: 'complete',
+        stoppedReason: 'watchdog coordination'
+      })
+
+      const closures = traceStore
+        .readConversation('conv-1')
+        .filter((event) => event.run?.stage === 'closure')
+      expect(closures.at(-1)?.run).toMatchObject({
+        stage: 'closure',
+        closure: { usage: { activeCalls: 0, failedCalls: 1, totalTokens: 128 } }
+      })
+      expect(runPath && readFileSync(runPath, 'utf8')).toContain(
+        'Usage provider finalisee apres cloture'
+      )
+      expect(broadcasts).toContainEqual(
+        expect.objectContaining({ type: 'orchestrate-usage', convId: 'conv-1' })
+      )
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it("conserve le checkpoint si la reprise est refusee avant d'entrer dans l'orchestrateur", async () => {
+    const os = fakeOs()
+    const forget = vi.fn()
+    os.resumableOrchestrationForTask = () => ({
+      runId: 'run-active',
+      task: '/build corrige la typo',
+      conversationId: 'conv-1',
+      phaseOutputs: [{ phase: 'frame', text: 'cadrage deja paye' }],
+      executionQuote: { id: 'quote-active' },
+      usage: { quoteId: 'quote-active', activeCalls: 1 },
+      startedAt: 1,
+      updatedAt: 2
+    })
+    os.forgetResumableOrchestration = forget
+    os.runTask = async () => {
+      throw new Error('Reprise refusee : 1 appel provider encore actif.')
+    }
+
+    const result = await new AppCommandBus(os, () => {}).exec(
+      'orchestrate',
+      { task: '/build corrige la typo' },
+      'conv-1',
+      'auto'
+    )
+
+    expect(result).toMatchObject({ ok: false })
+    expect(forget).not.toHaveBeenCalled()
+  })
+
+  it("oublie l'ancien checkpoint seulement apres l'admission effective de la reprise", async () => {
+    const os = fakeOs()
+    const forget = vi.fn()
+    os.resumableOrchestrationForTask = () => ({
+      runId: 'run-admitted',
+      task: '/build corrige la typo',
+      conversationId: 'conv-1',
+      phaseOutputs: [{ phase: 'frame', text: 'cadrage deja paye' }],
+      startedAt: 1,
+      updatedAt: 2
+    })
+    os.forgetResumableOrchestration = forget
+    os.runTask = async (...args: unknown[]) => {
+      const onLifecycle = args[11] as (event: unknown) => void
+      onLifecycle({
+        runId: 'run-new',
+        timestampMs: 3,
+        stage: 'workspace',
+        workspace: { mode: 'base', repositoryPath: 'C:\\repo', path: 'C:\\repo' }
+      })
+      return {
+        gateBlocked: false,
+        gateReasons: [],
+        valid: true,
+        costUsd: 0,
+        result: '',
+        phaseOutputs: []
+      }
+    }
+
+    await new AppCommandBus(os, () => {}).exec(
+      'orchestrate',
+      { task: '/build corrige la typo' },
+      'conv-1',
+      'auto'
+    )
+
+    expect(forget).toHaveBeenCalledTimes(1)
+    expect(forget).toHaveBeenCalledWith('run-admitted')
   })
 
   it('traces choice and redacted result, then cancels expiry without mutation', async () => {

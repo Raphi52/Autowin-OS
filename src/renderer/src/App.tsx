@@ -96,6 +96,7 @@ function TaskManagerIcon(): React.JSX.Element {
 }
 
 export function MainApp(): React.JSX.Element {
+  const testInstance = new URLSearchParams(window.location.search).get('instance') === 'test'
   const [tab, setTab] = useState<Tab>('chat')
   const [driven, setDriven] = useState(false) // un agent pilote → halo sur la vue
   // #11 — l'état replié/déplié de la rail est PERSISTÉ (comme le zoom), pour ne pas re-replier à
@@ -109,6 +110,10 @@ export function MainApp(): React.JSX.Element {
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('capabilities')
   const [navigationOrigin] = useState(() => `renderer-${globalThis.crypto.randomUUID()}`)
   const navigationGeneration = useRef(0)
+
+  useEffect(() => {
+    document.title = testInstance ? 'Autowin OS Test' : 'Autowin OS'
+  }, [testInstance])
 
   useEffect(() => {
     migrateAutowinStorage(localStorage)
@@ -333,7 +338,15 @@ export function MainApp(): React.JSX.Element {
   }, [applyLocation, navigationOrigin])
 
   return (
-    <div className="shell cosmic-outline theme-serious">
+    <div
+      className="shell cosmic-outline theme-serious"
+      data-automation-instance={testInstance ? 'test' : 'user'}
+    >
+      {testInstance && (
+        <div className="test-instance-banner" role="status">
+          INSTANCE DE TEST — AUTOMATISATION EN COURS
+        </div>
+      )}
       <FirstRunWizard />
       <aside className={`rail${railCollapsed ? ' is-collapsed' : ''}`}>
         <div className="brand">

@@ -288,19 +288,3 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.sc-commit {
-  display: flex;
-  gap: 8px;
-  padding: 2px 0;
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 11px;
-}
-.sc-hash {
-  color: var(--accent, #4b9fff);
-}
-.sc-subj {
-  color: var(--muted, #8b939f);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}

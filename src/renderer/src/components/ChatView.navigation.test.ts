@@ -34,20 +34,18 @@ describe('navigation pendant une reponse', () => {
     expect(source).toContain("if (e.scope === 'roles') refreshRuntimeIdentity()")
     expect(source).toContain('window.api.roles()')
     expect(source).toMatch(/window\.api\.setRole\(\s*'orchestrator'/)
-    expect(modelsSource).toContain('window.api.roles()')
-    expect(modelsSource).toMatch(/window\.api\.setRole\(\s*'orchestrator'/)
+    expect(modelsSource).not.toContain('window.api.roles()')
+    expect(modelsSource).not.toContain('window.api.setRole(')
+    expect(modelsSource).toContain('window.api.setTopology(')
     expect(modelsSource).toContain("event.scope === 'roles'")
-    expect(modelsSource).toMatch(/function withOrchestratorRole\(/)
-    expect(modelsSource).toContain('provider: role.provider')
-    expect(modelsSource).toContain('model?.id ?? role.model')
-    expect(modelsSource).toContain('role.reasoningEffort ?? model?.defaultReasoningEffort')
-    expect(modelsSource).toMatch(
-      /const applied = await window\.api\.applyProfile\(id\)[\s\S]*?const roles = await window\.api\.roles\(\)[\s\S]*?withOrchestratorRole\(applied\.topology, models, roles\.orchestrator\)/
-    )
+    expect(modelsSource).not.toMatch(/function withOrchestratorRole\(/)
+    expect(modelsSource).toContain('replaceTopology(applied.topology)')
   })
 
   it('synchronise le routage live avant de publier une nouvelle selection', () => {
-    const load = source.match(/function loadConv\(c: Conv\): void \{[\s\S]*?\n\s{2}\}/)?.[0]
+    const load = source.match(
+      /async function loadConv\(c: Conv\): Promise<void> \{[\s\S]*?\n\s{2}\}/
+    )?.[0]
     const fresh = source.match(/function newConv\(\): void \{[\s\S]*?\n\s{2}\}/)?.[0]
 
     expect(load).toBeDefined()

@@ -33,6 +33,7 @@ import {
   highlightedNodeIdsForThemes,
   floatingNodeIdsForThemeHighlight,
   isLinkAttachedToNode,
+  brainScoreChannelLabel,
   linkedNodesFor,
   mergeGraphDelta,
   nodeColorForTheme,
@@ -94,7 +95,6 @@ function initialColumnWidths(): ColumnWidths {
     detail: null
   }
 }
-
 
 /** Observatoire 3D : thèmes en surbrillance, visibilité réglable et lecture du nœud. */
 export function GraphView({
@@ -167,19 +167,35 @@ export function GraphView({
       .listBrains()
       .then((available) => {
         setBrains(available)
-        if (available[0]) setSelected(available[0].path)
+        setSelected((current) =>
+          available.some((brain) => brain.path === current) ? current : (available[0]?.path ?? '')
+        )
       })
       .catch((error) => setErr(String(error)))
   }, [])
 
   const refreshGraph = useCallback((): void => {
-    if (selected) {
-      graphCacheRef.current.delete(`${selected}\u0000${settings.lod}`)
-      dynamicGraphKeyRef.current = ''
-      dynamicGraphRef.current = { nodes: [], links: [] }
-      setGraphReload((request) => request + 1)
+    if (!selected) {
+      refreshBrains()
+      return
     }
-    refreshBrains()
+
+    setLoading(true)
+    setErr('')
+    void window.api
+      .refreshBrain(selected)
+      .then(() => {
+        graphCacheRef.current.delete(`${selected}\u0000${settings.lod}`)
+        dynamicGraphKeyRef.current = ''
+        dynamicGraphRef.current = { nodes: [], links: [] }
+        setVaultSearch([])
+        setGraphReload((request) => request + 1)
+        refreshBrains()
+      })
+      .catch((error) => {
+        setErr(`Rafraîchissement impossible : ${String(error)}`)
+        setLoading(false)
+      })
   }, [refreshBrains, selected, settings.lod])
 
   useEffect(() => {
@@ -411,7 +427,8 @@ export function GraphView({
           | undefined
         if (!twinkle || !(object instanceof THREE.Sprite)) return
         const wave = Math.sin(time * 0.0012 * twinkle.speed + twinkle.phase)
-        object.material.opacity = twinkle.baseOpacity * (1 - twinkle.amp / 2 + (twinkle.amp / 2) * wave)
+        object.material.opacity =
+          twinkle.baseOpacity * (1 - twinkle.amp / 2 + (twinkle.amp / 2) * wave)
         const size =
           twinkle.baseScale *
           (1 + 0.06 * twinkle.amp * Math.sin(time * 0.0017 * twinkle.speed + twinkle.phase * 1.7))
@@ -855,11 +872,7 @@ export function GraphView({
     return graphLinkColor(visualMode, visualProfile, linkIsHighlighted(value))
   }
   // Mode détail courant → largeur persistée de CE mode (sinon défaut CSS 20%/88% via la classe).
-  const detailMode: 'node' | 'theme' | null = node
-    ? 'node'
-    : activeThemes.size > 0
-      ? 'theme'
-      : null
+  const detailMode: 'node' | 'theme' | null = node ? 'node' : activeThemes.size > 0 ? 'theme' : null
   const activeDetailWidth = detailMode ? detailWidths[detailMode] : null
   return (
     <section
@@ -979,10 +992,10 @@ export function GraphView({
           </small>
         </button>
         <div className="theme-list">
-          {themeQuery.trim() && [...catalogSearch.nodes, ...vaultSearch].length > 0 && (
+          {themeQuery.trim() && [...vaultSearch, ...catalogSearch.nodes].length > 0 && (
             <div className="node-search-results" aria-label="Fiches trouvées">
               <span className="search-results-heading">Fiches</span>
-              {[...catalogSearch.nodes, ...vaultSearch]
+              {[...vaultSearch, ...catalogSearch.nodes]
                 .filter(
                   (resultNode, index, all) =>
                     all.findIndex((item) => item.id === resultNode.id) === index
@@ -995,6 +1008,16 @@ export function GraphView({
                   >
                     <i aria-hidden="true">✦</i>
                     <span>{resultNode.label}</span>
+                    <small className="node-search-result__meta">
+                      {brainScoreChannelLabel(resultNode)}
+                      {' · '}
+                      {resultNode.score !== undefined
+                        ? `pertinence locale ${Math.round(resultNode.score)}`
+                        : 'pertinence locale —'}
+                      {(resultNode.relations?.length ?? 0) > 0
+                        ? ` · ${resultNode.relations?.length} relation${resultNode.relations?.length === 1 ? '' : 's'}`
+                        : ''}
+                    </small>
                   </button>
                 ))}
             </div>
