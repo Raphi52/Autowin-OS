@@ -50,3 +50,29 @@ describe('ProviderStateStore', () => {
     expect(new ProviderStateStore(path).get('kimi')).toEqual({ mode: 'standby' })
   })
 })
+
+describe('ProviderStateStore — mutations entrelacées (anti-perte)', () => {
+  it('conserve les DEUX mutations quand un probe s’intercale entre lecture et écriture', () => {
+    const { path } = fixture()
+    const store = new ProviderStateStore(path)
+    // Un autre acteur (probe de fond / 2ᵉ process) écrit PENDANT que setMode calcule sa mutation.
+    // Simulé en mutant le disque via une seconde instance juste avant l'écriture de la première.
+    const other = new ProviderStateStore(path)
+    store.setMode('codex', 'standby')
+    other.recordProbe('claude', 'authenticated', 1000)
+    // Le standby de codex ne doit PAS avoir été écrasé par l'écriture de l'autre acteur.
+    expect(store.get('codex').mode).toBe('standby')
+    expect(store.get('claude').lastProbe?.status).toBe('authenticated')
+  })
+
+  it('une écriture depuis un snapshot périmé n’efface pas la mutation de l’autre provider', () => {
+    const { path } = fixture()
+    const a = new ProviderStateStore(path)
+    const b = new ProviderStateStore(path)
+    a.setMode('codex', 'standby') // état initial sur disque
+    // b a été construit AVANT ; sa mutation doit relire le disque (et donc voir le standby de codex)
+    b.recordProbe('kimi', 'expired', 2000)
+    expect(a.get('codex').mode).toBe('standby')
+    expect(a.get('kimi').lastProbe?.status).toBe('expired')
+  })
+})

@@ -243,7 +243,20 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                               <button
                                 className="btn btn-sm btn-danger"
                                 title="Stopper le sous-agent en cours"
-                                onClick={() => void window.api.cancelOrchestration(liveRun.convId)}
+                                onClick={(event) => {
+                                  // Sans ce retour, un échec d'annulation laissait le run affiché
+                                  // « en cours » sans explication : l'utilisateur croit avoir stoppé
+                                  // le sous-agent alors qu'il tourne toujours. Le composant est
+                                  // sans état → on reporte l'échec sur le bouton lui-même (libellé
+                                  // + title), visible et sans introduire de store local.
+                                  const button = event.currentTarget
+                                  void window.api
+                                    .cancelOrchestration(liveRun.convId)
+                                    .catch((error: unknown) => {
+                                      button.textContent = '⚠ Stop échoué'
+                                      button.title = `Annulation impossible : ${error instanceof Error ? error.message : String(error)}`
+                                    })
+                                }}
                               >
                                 ⏹ Stop
                               </button>

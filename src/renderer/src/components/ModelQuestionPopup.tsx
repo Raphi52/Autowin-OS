@@ -13,6 +13,8 @@ export function ModelQuestionPopup(): React.JSX.Element | null {
   const [queue, setQueue] = useState<PendingQuestion[]>([])
   const [answer, setAnswer] = useState('')
   const [sending, setSending] = useState(false)
+  /** Échec d'envoi de la réponse (IPC) — affiché à l'utilisateur, la saisie est conservée. */
+  const [sendError, setSendError] = useState<string | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const current = queue[0]
 
@@ -48,10 +50,18 @@ export function ModelQuestionPopup(): React.JSX.Element | null {
     const resolved = value.trim()
     if (!resolved || sending) return
     setSending(true)
+    setSendError(null)
     try {
       await window.api.answerModelQuestion(current.id, resolved)
       setAnswer('')
       setQueue((pending) => pending.slice(1))
+    } catch (error) {
+      // Sans ce retour, un échec d'IPC (main indisponible, tour déjà terminé) laissait l'utilisateur
+      // croire que sa réponse était partie : le bouton se réactivait, rien ne s'affichait, et la
+      // réponse saisie était perdue en silence. On garde la saisie ET on dit que ça a échoué.
+      setSendError(
+        `La réponse n'a pas pu être envoyée : ${error instanceof Error ? error.message : String(error)}. Réessaie.`
+      )
     } finally {
       setSending(false)
     }
@@ -91,6 +101,11 @@ export function ModelQuestionPopup(): React.JSX.Element | null {
             }}
           />
         </label>
+        {sendError ? (
+          <p className="model-question-error" role="alert" data-testid="model-question-error">
+            {sendError}
+          </p>
+        ) : null}
         <footer>
           <small>Ctrl + Entrée pour envoyer · Échap pour passer</small>
           <div className="model-question-actions">

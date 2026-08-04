@@ -368,8 +368,16 @@ export function ArtifactPreview({
           <button
             type="button"
             className="artifact-preview__reveal"
-            onClick={() => {
-              void window.api?.revealChatArtifact?.(conversationId, turnId, artifact.id)
+            onClick={(event) => {
+              // Sans ce retour, un fichier déplacé/supprimé donnait un clic totalement muet :
+              // rien ne s'ouvre, aucune explication. On reporte l'échec sur le bouton lui-même.
+              const button = event.currentTarget
+              void Promise.resolve(
+                window.api?.revealChatArtifact?.(conversationId, turnId, artifact.id)
+              ).catch((error: unknown) => {
+                button.textContent = '⚠ Fichier introuvable'
+                button.title = error instanceof Error ? error.message : String(error)
+              })
             }}
           >
             Afficher le fichier

@@ -34,16 +34,25 @@ export function ConversationCostIndicator({
   const [rows, setRows] = useState<CostRow[]>([])
   const [openConversationId, setOpenConversationId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  /**
+   * Échec du dernier refresh MANUEL (clic « Actualiser ») uniquement. Le refresh AUTOMATIQUE reste
+   * silencieux à dessein (un journal illisible ne doit pas casser le composeur), mais une action
+   * explicite qui échoue sans rien afficher faisait croire à un total à jour alors qu'il est périmé.
+   */
+  const [manualError, setManualError] = useState(false)
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (manual = false) => {
     if (!conversationId || !window.api?.costBreakdown) return
     setLoading(true)
+    if (manual) setManualError(false)
     try {
       const result = (await window.api.costBreakdown('actor', conversationId)) as
         CostRow[] | undefined
       setRows(Array.isArray(result) ? result : [])
+      setManualError(false)
     } catch {
       // Un journal illisible ne doit pas casser le composeur : on garde le dernier total connu.
+      if (manual) setManualError(true)
     } finally {
       setLoading(false)
     }
@@ -95,12 +104,18 @@ export function ConversationCostIndicator({
             <button
               type="button"
               className="conv-cost-refresh"
-              onClick={() => void refresh()}
+              onClick={() => void refresh(true)}
               disabled={loading}
             >
               {loading ? '…' : 'Actualiser'}
             </button>
           </div>
+          {manualError && (
+            <p className="conv-cost-warn" role="alert" data-testid="conversation-cost-error">
+              L’actualisation a échoué (journal des coûts illisible) — le total affiché peut être
+              périmé.
+            </p>
+          )}
           {summary.rewritingContext && (
             <p className="conv-cost-warn" data-testid="conversation-cost-warning">
               Le contexte est réécrit à chaque appel au lieu d’être relu depuis le cache — c’est ce

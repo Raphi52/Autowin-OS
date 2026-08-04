@@ -1081,9 +1081,16 @@ export function ChatView({
         if (refreshesActiveConversation(e, activeRef.current)) {
           const id = activeRef.current!
           liveMessagesRef.current.delete(id)
-          void window.api.conversation(id).then((conversation) => {
-            if (conversation && activeRef.current === id) void loadConv(conversation as Conv)
-          })
+          // `.catch` obligatoire : ce handler tourne à CHAQUE event `refresh` ; si la conversation a
+          // été supprimée entre l'émission et l'appel (course normale), le rejet produisait un
+          // unhandledRejection en usage courant. L'échec est ATTENDU ici (la conv n'existe plus) →
+          // on l'absorbe sans message : rien à recharger, l'UI se met à jour par le refresh de liste.
+          void window.api
+            .conversation(id)
+            .then((conversation) => {
+              if (conversation && activeRef.current === id) void loadConv(conversation as Conv)
+            })
+            .catch(() => {})
         }
       } else if (e.type === 'orchestrate-start') {
         if (!e.convId) return

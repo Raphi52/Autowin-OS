@@ -1216,10 +1216,23 @@ export function ObservatoryView({
               <button
                 key={session.path}
                 onClick={() =>
-                  void window.api.activitySession(session).then((result) => {
-                    setActivitySession(result)
-                    setActivityImage('')
-                  })
+                  // `.catch` obligatoire : une session supprimée/déplacée entre le listing et le clic
+                  // (nettoyage auto des runs) rejetait en silence — clic muet, l'utilisateur reclique.
+                  void window.api
+                    .activitySession(session)
+                    .then((result) => {
+                      setActivitySession(result)
+                      setActivityImage('')
+                    })
+                    .catch((error: unknown) => {
+                      setActivitySession(null)
+                      setActivityImage('')
+                      // Visible : le bandeau d'erreurs de sources, plutôt qu'un clic sans effet.
+                      setSourceErrors((current) => ({
+                        ...current,
+                        activitySession: `Session illisible (${session.path}) : ${error instanceof Error ? error.message : String(error)}`
+                      }))
+                    })
                 }
               >
                 <strong>{session.project}</strong>

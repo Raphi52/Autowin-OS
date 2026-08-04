@@ -89,13 +89,26 @@ export class ProviderStateStore {
     return this.read()[id] ?? defaultState(id)
   }
 
-  setMode(provider: string, mode: ProviderMode): ProviderState {
-    const id = validProvider(provider)
-    const states = this.read()
-    const next = { ...(states[id] ?? defaultState(id)), mode }
+  /**
+   * Mutation d'UN provider, appliquée sur l'état FRAIS du disque (read-modify-write borné au champ
+   * visé). Sans cette relecture juste avant l'écriture, deux mutations entrelacées (ex. un
+   * `setMode('codex','standby')` fait par l'utilisateur et un `recordProbe('claude',…)` déclenché par
+   * un probe de fond, ou un second process Autowin) réécrivaient l'objet ENTIER depuis une lecture
+   * périmée → la mutation de l'autre provider était silencieusement PERDUE (un « provider marqué
+   * facultatif » pouvait redevenir actif tout seul). On ne réécrit donc jamais un état qu'on n'a pas
+   * relu, et on ne touche que l'entrée mutée : les autres providers gardent la version du disque.
+   */
+  private mutate(id: string, patch: (current: ProviderState) => ProviderState): ProviderState {
+    const states = this.read() // relecture FRAÎCHE : ne jamais écrire depuis un snapshot périmé
+    const next = patch(states[id] ?? defaultState(id))
     states[id] = next
     this.write(states)
     return next
+  }
+
+  setMode(provider: string, mode: ProviderMode): ProviderState {
+    const id = validProvider(provider)
+    return this.mutate(id, (current) => ({ ...current, mode }))
   }
 
   recordProbe(provider: string, status: AuthStatus, checkedAt = Date.now()): ProviderState {
@@ -103,13 +116,6 @@ export class ProviderStateStore {
     if (!AUTH_STATUSES.has(status) || !Number.isFinite(checkedAt) || checkedAt <= 0) {
       throw new Error('Résultat de probe invalide.')
     }
-    const states = this.read()
-    const next = {
-      ...(states[id] ?? defaultState(id)),
-      lastProbe: { status, checkedAt }
-    }
-    states[id] = next
-    this.write(states)
-    return next
+    return this.mutate(id, (current) => ({ ...current, lastProbe: { status, checkedAt } }))
   }
 }

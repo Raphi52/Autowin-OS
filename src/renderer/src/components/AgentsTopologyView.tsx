@@ -91,7 +91,16 @@ export function AgentsTopologyView({
     if (!active) return
     const off = window.api.onAppEvent((event) => {
       if (event.type === 'refresh' && event.scope === 'roles') {
-        void window.api.topology().then(replaceTopology)
+        // `.catch` obligatoire : un rejet ici (topologie invalide/illisible) restait un
+        // unhandledRejection muet, la vue gardait l'ANCIENNE topologie sans le dire.
+        void window.api
+          .topology()
+          .then(replaceTopology)
+          .catch((reason: unknown) =>
+            setError(
+              `Rafraîchissement de la topologie impossible : ${reason instanceof Error ? reason.message : String(reason)}`
+            )
+          )
       }
     })
     return off
@@ -412,7 +421,17 @@ export function AgentsTopologyView({
           <button
             type="button"
             className="topology-provider-login"
-            onClick={() => void window.api.providerLogin('gemini')}
+            onClick={() =>
+              // Sans ce retour, un échec de lancement du login (spawn du terminal OAuth impossible)
+              // était totalement silencieux : l'utilisateur attend une fenêtre qui ne viendra pas.
+              void window.api
+                .providerLogin('gemini')
+                .catch((reason: unknown) =>
+                  setError(
+                    `Le login Gemini n'a pas pu être lancé : ${reason instanceof Error ? reason.message : String(reason)}`
+                  )
+                )
+            }
           >
             Connecter Gemini avec Google
           </button>
