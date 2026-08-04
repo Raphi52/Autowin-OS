@@ -114,10 +114,24 @@ export interface StreamChunk {
   artifacts?: ChatArtifact[]
 }
 
-/** Consommation réelle d'un tour, telle que remontée par le provider. */
+/**
+ * Consommation réelle d'un tour, NORMALISÉE par l'adaptateur — pas la sémantique brute du provider.
+ *
+ * L'INVARIANT, car les providers ne s'accordent pas et un consommateur ne peut pas deviner : mesuré le
+ * 2026-08-04 sur le journal réel, codex rend `cacheRead <= input` (1 048 cas, 0 exception : le cache est
+ * un sous-ensemble de l'input) tandis que claude rend `cacheRead > input` (486 cas, 0 exception : les
+ * deux sont disjoints). `execution-supervisor` n'en supposait qu'une, donc comptait un tour claude de
+ * 13 492 tokens comme un tour de 6.
+ *
+ * Chaque adaptateur DOIT donc rendre :
+ *   - `inputTokens`      : l'input TOTAL du tour, cache INCLUS ;
+ *   - `cacheReadTokens`  : la part de cet input relue depuis le cache, donc toujours ≤ `inputTokens`.
+ */
 export interface Usage {
+  /** Input total du tour, cache inclus. */
   inputTokens: number
   outputTokens: number
+  /** Sous-ensemble de `inputTokens` relu depuis le cache — jamais une quantité qui s'y ajoute. */
   cacheReadTokens?: number
   costUsd?: number
 }

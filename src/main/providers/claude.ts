@@ -28,10 +28,44 @@ import type {
   ProviderAdapter,
   SendOptions,
   SendResult,
-  StreamChunk
+  StreamChunk,
+  Usage
 } from './types'
 import type { ProviderArtifactCandidate } from '../../shared/artifacts'
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
+
+/** Usage brut du `result` event du CLI Claude, dans la sémantique ANTHROPIC (voir ci-dessous). */
+export interface ClaudeRawUsage {
+  input_tokens?: number
+  output_tokens?: number
+  cache_read_input_tokens?: number
+}
+
+/**
+ * Ramène l'usage Claude à l'invariant de `Usage` : `inputTokens` = input TOTAL, cache INCLUS.
+ *
+ * Anthropic rend `input_tokens` = tokens NON cachés seuls, et `cache_read_input_tokens` à part — deux
+ * quantités DISJOINTES (mesuré le 2026-08-04 : 486 tours réels avec `cacheRead > input`, dont input=6
+ * pour cache=13 486). OpenAI fait l'inverse, son `input_tokens` inclut déjà le cache. Sans
+ * normalisation ici, le même champ voulait dire deux choses selon le provider, et
+ * `execution-supervisor` — qui borne le cache à l'input puis totalise `input + output` — comptait ce
+ * tour de 13 492 tokens comme un tour de 6.
+ *
+ * Normaliser à la SOURCE plutôt que chez le consommateur : l'adaptateur est le seul endroit qui
+ * connaisse la convention de son propre provider.
+ */
+export function normalizeClaudeUsage(raw: ClaudeRawUsage, costUsd?: number): Usage {
+  const nonCache = Number.isFinite(raw.input_tokens) ? Math.max(0, raw.input_tokens as number) : 0
+  const cache = Number.isFinite(raw.cache_read_input_tokens)
+    ? Math.max(0, raw.cache_read_input_tokens as number)
+    : undefined
+  return {
+    inputTokens: nonCache + (cache ?? 0),
+    outputTokens: Number.isFinite(raw.output_tokens) ? Math.max(0, raw.output_tokens as number) : 0,
+    ...(cache === undefined ? {} : { cacheReadTokens: cache }),
+    ...(costUsd === undefined ? {} : { costUsd })
+  }
+}
 
 /**
  * Mappe un outil Claude (tool_use) vers le type de preuve d'exécution commun (mutation / vérification
@@ -633,17 +667,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         if (o['is_error'] === true)
           errored = new Error(`claude result error: ${String(o['result'] ?? '')}`)
         // Tokens/coût RÉELS du tour (le result event du CLI les porte).
-        const u = o['usage'] as
-          | { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number }
-          | undefined
+        const u = o['usage'] as ClaudeRawUsage | undefined
         if (u) {
-          usage = {
-            inputTokens: u.input_tokens ?? 0,
-            outputTokens: u.output_tokens ?? 0,
-            cacheReadTokens: u.cache_read_input_tokens,
-            costUsd:
-              typeof o['total_cost_usd'] === 'number' ? (o['total_cost_usd'] as number) : undefined
-          }
+          usage = normalizeClaudeUsage(
+            u,
+            typeof o['total_cost_usd'] === 'number' ? (o['total_cost_usd'] as number) : undefined
+          )
         }
       }
     }
