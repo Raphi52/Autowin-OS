@@ -853,6 +853,43 @@ export function isChatNearBottom(
   return metrics.scrollHeight - metrics.clientHeight - metrics.scrollTop <= threshold
 }
 
+type ScrollableChat = Pick<HTMLElement, 'scrollTop' | 'clientHeight' | 'scrollHeight'> & {
+  scrollTo(options: ScrollToOptions): void
+}
+
+/**
+ * Descend jusqu'au DERNIER message, pas seulement vers le bas connu au moment du clic.
+ *
+ * Un unique `scrollTo(scrollHeight)` vise une cible périmée : le markdown, les images et les cartes
+ * d'activité finissent de se rendre PENDANT l'animation, donc le bas réel s'éloigne et la descente
+ * atterrit court. On re-cible donc à chaque frame où la hauteur bouge, et on garantit l'arrivée par
+ * un dernier saut sec. Si le lecteur remonte de lui-même entre deux frames, on lui rend la main.
+ */
+export function scrollChatToBottom(
+  element: ScrollableChat,
+  schedule: (callback: () => void) => void = requestAnimationFrame,
+  maxFrames = 40
+): void {
+  let frames = 0
+  let lastHeight = -1
+  let lastTop = Number.NEGATIVE_INFINITY
+  const step = (): void => {
+    // Le fil a été démonté (changement de conversation, fermeture) : plus rien à faire piloter.
+    if ('isConnected' in element && element.isConnected === false) return
+    if (element.scrollTop < lastTop - 4) return
+    const height = element.scrollHeight
+    const isLastFrame = frames >= maxFrames - 1
+    if (height !== lastHeight || (isLastFrame && !isChatNearBottom(element))) {
+      element.scrollTo({ top: height, behavior: isLastFrame ? 'auto' : 'smooth' })
+    }
+    lastHeight = height
+    lastTop = element.scrollTop
+    frames += 1
+    if (!isLastFrame) schedule(step)
+  }
+  step()
+}
+
 export function clampConversationPaneWidth(width: number): number {
   return Math.round(
     Math.min(

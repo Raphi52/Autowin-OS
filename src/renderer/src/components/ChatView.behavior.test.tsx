@@ -528,6 +528,48 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(container!.querySelector('.chat-jump-latest')).toBeNull()
   })
 
+  it('un message arrivé juste avant un scroll vers le haut ne ramène pas l’utilisateur en bas', async () => {
+    // La frame est mise sous contrôle : c'est le seul moyen de placer le scroll utilisateur ENTRE la
+    // décision de suivre le fil et son exécution. Sous charge, cet écart existe pour de vrai — c'est
+    // lui qui faisait clignoter ce comportement d'un run à l'autre.
+    const frames: FrameRequestCallback[] = []
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      frames.push(cb)
+      return frames.length
+    })
+    try {
+      const mockApi = api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) })
+      await mount(mockApi)
+      await click('.conv-pick')
+      await type('un message')
+      await click('.composer-send')
+
+      const scroll = container!.querySelector('.chat-scroll') as HTMLDivElement
+      scroll.scrollTo = vi.fn()
+      Object.defineProperties(scroll, {
+        scrollHeight: { configurable: true, value: 1000 },
+        clientHeight: { configurable: true, value: 100 },
+        scrollTop: { configurable: true, writable: true, value: 900 }
+      })
+
+      // L'utilisateur remonte pendant que la frame du message est encore en attente.
+      await act(async () => {
+        ;(scroll as unknown as { scrollTop: number }).scrollTop = 0
+        scroll.dispatchEvent(new Event('scroll', { bubbles: true }))
+      })
+      expect(container!.querySelector('.chat-jump-latest')).not.toBeNull()
+
+      // La frame en retard s'exécute : elle doit relire l'intention, pas l'écraser.
+      await act(async () => {
+        for (const frame of frames.splice(0)) frame(0)
+      })
+      expect(container!.querySelector('.chat-jump-latest')).not.toBeNull()
+      expect(scroll.scrollTo).not.toHaveBeenCalled()
+    } finally {
+      raf.mockRestore()
+    }
+  })
+
   it('conserve tous les reçus orientés de la session sans évincer les plus anciens', async () => {
     const pilot = deferred<{ ok: boolean }>()
     const mockApi = api({

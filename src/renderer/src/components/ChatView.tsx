@@ -17,6 +17,7 @@ import {
   hydrateStoredAssistant,
   isRunRequestCurrent,
   isChatNearBottom,
+  scrollChatToBottom,
   reduceScopedLiveRuns,
   reduceAssistantPilotEvent,
   settleIfDone,
@@ -1443,7 +1444,11 @@ export function ChatView({
       return
     }
     requestAnimationFrame(() => {
-      scroll.scrollTo({ top: scroll.scrollHeight, behavior: 'smooth' })
+      // L'utilisateur a pu remonter le fil ENTRE la décision et la frame : on relit son intention au
+      // lieu de la présumer. Sans cette relecture, un message qui arrive juste avant un scroll vers
+      // le haut le ramène de force en bas et efface le bouton de retour.
+      if (!followTailRef.current) return
+      scrollChatToBottom(scroll)
       setHasNewActivity(false)
       setScrolledAwayFromTail(false)
     })
@@ -2637,10 +2642,7 @@ export function ChatView({
               followTailRef.current = true
               setHasNewActivity(false)
               setScrolledAwayFromTail(false)
-              scrollRef.current?.scrollTo({
-                top: scrollRef.current.scrollHeight,
-                behavior: 'smooth'
-              })
+              if (scrollRef.current) scrollChatToBottom(scrollRef.current)
             }}
           >
             {hasNewActivity ? '↓ Dernière réponse' : '↓ Dernier message'}

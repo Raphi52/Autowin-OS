@@ -7,6 +7,10 @@ import { createAmitelContextProvider, graphifyEvidence } from './amitel-context'
 
 const TOKEN = 'a'.repeat(43)
 
+// Les sources Autowin du Brain sont des fichiers PLATS `knowledge/domain/autowin-os-*.md` — vérifié
+// sur la GED le 2026-08-04, il n'existe aucun répertoire `autowin-os/`. Les fixtures décrivaient ce
+// répertoire inexistant : le scope les écartait à raison, et le test accusait le code.
+
 function signed(context: string): Record<string, unknown> {
   const authenticated = JSON.stringify({ context, navigation: null })
   const signature = createHmac('sha256', TOKEN)
@@ -40,7 +44,7 @@ describe('Amitel prompt context', () => {
     const fetchFn = vi.fn().mockResolvedValue({
       ok: true,
       json: async () =>
-        signed('[AMITEL BRAIN REFERENCE DATA]\n### Source 1 — knowledge/domain/autowin-os/test.md')
+        signed('[AMITEL BRAIN REFERENCE DATA]\n### Source 1 — knowledge/domain/autowin-os-test.md')
     })
     const provider = createAmitelContextProvider({
       workspace: () => 'C:\\Amitel\\Autowin OS',
@@ -100,7 +104,7 @@ describe('Amitel prompt context', () => {
   })
 
   it('caps the locally accepted signed Brain context', async () => {
-    const longContext = `### Source 1 — knowledge/domain/autowin-os/test.md\n${'x'.repeat(1_000)}`
+    const longContext = `### Source 1 — knowledge/domain/autowin-os-test.md\n${'x'.repeat(1_000)}`
     const provider = createAmitelContextProvider({
       workspace: () => 'C:\\Amitel\\Autowin OS',
       fetchFn: vi

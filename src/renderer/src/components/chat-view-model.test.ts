@@ -7,6 +7,7 @@ import {
   groupAssistantActivity,
   isRunRequestCurrent,
   isChatNearBottom,
+  scrollChatToBottom,
   hydrateStoredAssistant,
   createLiveRunDeltaBatcher,
   reduceAssistantPilotEvent,
@@ -385,6 +386,74 @@ describe('chat scrolling and layout rules', () => {
   it('follows the tail only when the reader is close to the bottom', () => {
     expect(isChatNearBottom({ scrollTop: 700, clientHeight: 300, scrollHeight: 1040 })).toBe(true)
     expect(isChatNearBottom({ scrollTop: 300, clientHeight: 300, scrollHeight: 1040 })).toBe(false)
+  })
+
+  it('atteint le VRAI bas même quand le contenu grandit pendant la descente', () => {
+    const queue: Array<() => void> = []
+    const targets: Array<{ top: number; behavior?: string }> = []
+    const element = {
+      scrollTop: 0,
+      clientHeight: 100,
+      scrollHeight: 1000,
+      scrollTo(options: { top: number; behavior?: string }) {
+        targets.push(options)
+      }
+    }
+
+    scrollChatToBottom(element, (callback) => queue.push(callback))
+    expect(targets[0]).toEqual({ top: 1000, behavior: 'smooth' })
+
+    // Le markdown/les images finissent de se rendre : le bas RÉEL a bougé.
+    element.scrollHeight = 2400
+    queue.shift()?.()
+
+    // Sans re-ciblage on resterait bloqué à 1000 — un « scroll down » qui n'atteint pas le dernier message.
+    expect(targets.at(-1)?.top).toBe(2400)
+
+    // La descente se termine par un atterrissage garanti sur le bas final.
+    while (queue.length > 0) queue.shift()?.()
+    expect(targets.at(-1)).toEqual({ top: 2400, behavior: 'auto' })
+  })
+
+  it('arrête la descente quand le fil est démonté, sans replanifier de frame', () => {
+    const queue: Array<() => void> = []
+    const element = {
+      scrollTop: 0,
+      clientHeight: 100,
+      scrollHeight: 1000,
+      isConnected: true,
+      scrollTo() {}
+    }
+
+    scrollChatToBottom(element, (callback) => queue.push(callback))
+    expect(queue).toHaveLength(1)
+
+    element.isConnected = false
+    queue.shift()?.()
+
+    // Sans ce garde, la boucle survivait au démontage et rappelait un window détruit.
+    expect(queue).toHaveLength(0)
+  })
+
+  it("abandonne la descente si le lecteur remonte lui-même entre deux frames", () => {
+    const queue: Array<() => void> = []
+    const targets: Array<{ top: number }> = []
+    const element = {
+      scrollTop: 500,
+      clientHeight: 100,
+      scrollHeight: 1000,
+      scrollTo(options: { top: number }) {
+        targets.push(options)
+      }
+    }
+
+    scrollChatToBottom(element, (callback) => queue.push(callback))
+    const beforeReaderActs = targets.length
+
+    element.scrollTop = 40 // le lecteur reprend la main et remonte
+    while (queue.length > 0) queue.shift()?.()
+
+    expect(targets).toHaveLength(beforeReaderActs)
   })
 
   it('keeps the conversation library within usable bounds', () => {

@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { dirname, resolve } from 'node:path'
+import { withDeviceMetricsOverride } from './cdp-device-metrics.mjs'
 
 const argument = (name, fallback) => {
   const index = process.argv.indexOf(name)
@@ -220,32 +221,35 @@ const inspect = async () =>
   })()`)
 
 // Un premier reflow amorce la composition OOPIF ; la capture suivante porte la largeur mesurée.
-await send('Emulation.setDeviceMetricsOverride', {
-  width: 759,
-  height: 900,
-  deviceScaleFactor: 1,
-  mobile: false
-})
-await centerPreview()
-await send('Emulation.setDeviceMetricsOverride', {
-  width: 760,
-  height: 900,
-  deviceScaleFactor: 1,
-  mobile: false
-})
-await centerPreview()
-const narrow = await inspect()
-await capture(narrowOutput)
-await send('Emulation.setDeviceMetricsOverride', {
-  width: 1280,
-  height: 900,
-  deviceScaleFactor: 1,
-  mobile: false
-})
-await centerPreview()
-const wide = await inspect()
-await capture(output)
-await send('Emulation.clearDeviceMetricsOverride')
+// Le bail restaure le viewport même si une inspection ou une capture jette : sans lui, un échec en
+// milieu de mesure laissait la fenêtre figée à 1280 pour tout ce qui passait après.
+let narrow
+let wide
+await withDeviceMetricsOverride(
+  send,
+  { width: 759, height: 900, deviceScaleFactor: 1, mobile: false },
+  async () => {
+    await centerPreview()
+    await send('Emulation.setDeviceMetricsOverride', {
+      width: 760,
+      height: 900,
+      deviceScaleFactor: 1,
+      mobile: false
+    })
+    await centerPreview()
+    narrow = await inspect()
+    await capture(narrowOutput)
+    await send('Emulation.setDeviceMetricsOverride', {
+      width: 1280,
+      height: 900,
+      deviceScaleFactor: 1,
+      mobile: false
+    })
+    await centerPreview()
+    wide = await inspect()
+    await capture(output)
+  }
+)
 
 const cleanedConversationIds = await evaluate(`(async () => {
   const fixtures = (await window.api.conversations())
