@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { checkForUpdate, applyUpdate, type GitRunner } from './git-update'
 
 function runnerFrom(map: Record<string, string>, throwOn?: string): GitRunner {
@@ -182,5 +184,45 @@ describe('applyUpdate — jamais de mutation silencieuse dune branche', () => {
     const r = await applyUpdate('/r', {}, run, async () => {})
     expect(r).toMatchObject({ ok: true, relaunch: true })
     expect(pulled).toHaveBeenCalledOnce()
+  })
+})
+
+/**
+ * Le check tournait sur `process.cwd()`. En DÉVELOPPEMENT le cwd EST le dépôt, donc la bannière
+ * marchait — par accident. Dans l'app PACKAGÉE, le cwd est le dossier de lancement de l'exe :
+ * `git fetch` y échoue (« not a git repository »), l'erreur est capturée en `{available:false}`
+ * et la bannière reste MUETTE. Symptôme rapporté le 2026-08-04 : des merges sur `main` ne
+ * déclenchaient aucun bouton chez les collègues.
+ */
+describe('le check de mise à jour vise le DÉPÔT, pas le dossier de lancement', () => {
+  const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+  const handlers = source.slice(
+    source.indexOf("ipcMain.handle('update:check'"),
+    source.indexOf("ipcMain.handle('update:apply'") + 900
+  )
+
+  it('passe le workspace canonique aux deux handlers', () => {
+    expect(handlers).toContain('checkForUpdate(os.executionWorkspace)')
+    expect(handlers).toContain('applyUpdate(os.executionWorkspace')
+  })
+
+  it('n’utilise plus process.cwd() pour la mise à jour', () => {
+    // On écarte les lignes de commentaire : elles CITENT `process.cwd()` pour expliquer le défaut.
+    const code = handlers
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('//'))
+      .join('\n')
+    expect(code).not.toContain('process.cwd()')
+  })
+
+  it('une erreur de fetch reste silencieuse — d’où l’importance du bon dossier', () => {
+    // Confirme le mécanisme du symptôme : hors dépôt, aucun signal n'atteint l'utilisateur.
+    const throwing: GitRunner = async () => {
+      throw new Error('fatal: not a git repository')
+    }
+    return checkForUpdate('/pas-un-depot', throwing).then((status) => {
+      expect(status.available).toBe(false)
+      expect(status.behind).toBe(0)
+    })
   })
 })

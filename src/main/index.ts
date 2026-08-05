@@ -910,15 +910,23 @@ function registerChatIpc(): void {
     )
   })
   // Auto-update git : check au démarrage (non-bloquant) + application 1-clic (pull + relaunch).
+  //
+  // `os.executionWorkspace` et NON `process.cwd()` : dans l'app PACKAGÉE, le cwd est le dossier de
+  // lancement de l'exécutable, pas le dépôt. `git fetch` y échoue (« not a git repository »),
+  // l'erreur est capturée en `{ available: false }` et la bannière reste MUETTE. Symptôme observé
+  // le 2026-08-04 : des merges sur `main` ne faisaient apparaître aucun bouton chez les collègues,
+  // alors que la bannière fonctionnait en développement — où le cwd EST le dépôt, par accident.
+  // Tout le reste de ce fichier utilise déjà `os.executionWorkspace` ; ces deux appels étaient les
+  // seuls à ne pas le faire.
   ipcMain.handle('update:check', (event) => {
     assertTrustedRendererSender(event, 'Update')
-    return checkForUpdate(process.cwd())
+    return checkForUpdate(os.executionWorkspace)
   })
   ipcMain.handle('update:apply', async (event, strategy?: UpdateStrategy) => {
     assertTrustedRendererSender(event, 'Update')
     // La stratégie vient du BOUTON cliqué : hors de main, c'est ce qui distingue une intégration
     // demandée d'un merge fabriqué dans le dos de l'utilisateur.
-    const result = await applyUpdate(process.cwd(), strategy ? { strategy } : {})
+    const result = await applyUpdate(os.executionWorkspace, strategy ? { strategy } : {})
     if (result.ok && result.relaunch) {
       restartApplication(app)
     }
