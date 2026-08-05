@@ -162,6 +162,46 @@ describe('le gate ne peut pas se prouver tout seul', () => {
   })
 })
 
+/**
+ * Le besoin d'origine — et le commentaire d'`evidence-vocabulary.ts` — nommaient « un redémarrage
+ * de service » parmi les mutations débloquées. C'était FAUX : le vocabulaire était purement git,
+ * donc `Restart-Service` restait `inspection` et le gate restait insatisfiable pour cette famille.
+ * L'audit du 2026-08-04 l'a relevé comme une sur-revendication. Les deux côtés sont désormais
+ * symétriques : une mutation d'état non-git a un oracle d'état non-git.
+ */
+describe('les mutations d’état NON-git satisfont aussi le gate', () => {
+  it.each([
+    ['Restart-Service RigSvc', 'Get-Service RigSvc'],
+    ['systemctl restart nginx', 'systemctl status nginx'],
+    ['docker compose up -d', 'docker ps -a'],
+    ['dotnet publish -o out', 'Test-Path out'],
+    ['dotnet ef database update', 'dotnet ef migrations list'],
+    ['Rename-Item a.txt b.txt', 'Test-Path b.txt'],
+    ['pip install foo', 'Get-Item foo']
+  ])('« %s » se prouve par « %s »', (mutation, oracle) => {
+    expect(claudeToolEvidenceKind('Bash', mutation)).toBe('mutation')
+    expect(claudeToolEvidenceKind('Bash', oracle)).toBe('inspection')
+    expect(
+      evidenceSatisfiesTask('redémarre le service et prouve qu’il tourne', [
+        ev('mutation', mutation),
+        ev('inspection', oracle)
+      ])
+    ).toBe(true)
+  })
+
+  it('ne prend PAS une lecture de conteneur ou de service pour une mutation', () => {
+    for (const lecture of ['docker ps', 'docker inspect x', 'Get-Service', 'sc query RigSvc']) {
+      expect(claudeToolEvidenceKind('Bash', lecture)).toBe('inspection')
+    }
+  })
+
+  it('une mutation non-git SEULE ne suffit toujours pas', () => {
+    expect(
+      evidenceSatisfiesTask('redémarre le service', [ev('mutation', 'Restart-Service RigSvc')])
+    ).toBe(false)
+  })
+})
+
 describe('le shell du chat ne porte aucune primitive d’écriture', () => {
   it('exclut les sous-commandes qui acceptent --output', () => {
     // PROUVÉ : `git diff --output=victim.txt HEAD HEAD` ramène un fichier à 0 octet, et

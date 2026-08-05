@@ -8,6 +8,7 @@ import type {
   ExecutionEvidence
 } from './types'
 import { executionEvidencePath } from './execution-evidence-path'
+import { isShellMutation, isVerificationCommand } from './evidence-vocabulary'
 import {
   appendWorkspaceMutationEvidence,
   captureWorkspaceMutationSnapshot
@@ -95,11 +96,15 @@ export interface CodexExecItem {
   changes?: unknown
 }
 
-const CODEX_MUTATION_COMMAND =
-  /\b(apply_patch|set-content|new-item|copy-item|move-item|remove-item|sed\s+-i|perl\s+-pi)\b|(?:^|\s)(?:echo|printf)\b[^\n]*>/i
-const CODEX_VERIFICATION_COMMAND =
-  /\b(vitest|jest|pytest|cargo\s+test|dotnet\s+test|go\s+test|tsc|eslint|npm(?:\.cmd)?\s+(?:test|run\s+(?:test|typecheck|build|lint))|pnpm\s+(?:test|run\s+(?:test|typecheck|build|lint))|node\s+-e)\b/i
-
+/**
+ * Le vocabulaire de classement vit dans `evidence-vocabulary.ts`, PARTAGÉ avec le provider Claude.
+ *
+ * Il était dupliqué ici, et les deux copies avaient divergé : la version locale ne contenait AUCUN
+ * verbe git, donc `git -C "<depot>" stash push` — la commande EXACTE de l'incident fondateur du
+ * 2026-08-04 — était classée `inspection` sous Codex et `mutation` sous Claude. La même tâche
+ * passait le gate sous un provider et échouait sous l'autre. C'est cette duplication qui a permis
+ * la dérive ; il n'en reste qu'une source.
+ */
 /**
  * Classe une opération Codex sans confondre une lecture avec une preuve. Une assertion PowerShell
  * est une vérification seulement si elle porte un oracle explicite : branche succès `exit 0` ET
@@ -107,13 +112,13 @@ const CODEX_VERIFICATION_COMMAND =
  */
 export function codexExecutionEvidenceKind(item: CodexExecItem): ExecutionEvidence['kind'] {
   const command = item.command ?? ''
-  if (item.type === 'file_change' || CODEX_MUTATION_COMMAND.test(command)) return 'mutation'
+  if (item.type === 'file_change' || isShellMutation(command)) return 'mutation'
   if (item.type !== 'command_execution') return 'other'
   const powershellAssertion =
     /\bif\s*\(/i.test(command) &&
     /\bexit\s+0\b/i.test(command) &&
     /(?:\bexit\s+[1-9]\d*\b|\bthrow\b)/i.test(command)
-  return CODEX_VERIFICATION_COMMAND.test(command) || powershellAssertion
+  return isVerificationCommand(command) || powershellAssertion
     ? 'verification'
     : 'inspection'
 }

@@ -18,7 +18,7 @@
  * `git stash list` / `git stash show` sont exclus par le lookahead : ce sont des lectures.
  */
 export const SHELL_MUTATION_COMMAND =
-  /(?:^|[;&|]\s*|\n\s*)git\s+(?:-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+)\s+)?(?:stash(?!\s+(?:list|show))|commit|checkout|switch|restore|reset|revert|merge|rebase|cherry-pick|apply|am|clean|mv|rm|tag(?!\s*(?:$|-l\b|--list|-n))|push|pull|fetch|init|add|worktree\s+(?:add|remove|prune)|branch\s+-[dDmM]|remote\s+(?:add|remove|set-url))\b|\b(?:apply_patch|set-content|new-item|copy-item|move-item|remove-item|sed\s+-i|perl\s+-pi)\b|(?:^|[;&|]\s*)(?:mv|rm|cp|mkdir|rmdir|ren|touch)\s|(?:^|\s)(?:echo|printf)\b[^\n]*>|\bnpm(?:\.cmd)?\s+(?:install|ci|uninstall)\b/i
+  /(?:^|[;&|]\s*|\n\s*)git\s+(?:-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+)\s+)?(?:stash(?!\s+(?:list|show))|commit|checkout|switch|restore|reset|revert|merge|rebase|cherry-pick|apply|am|clean|mv|rm|tag(?!\s*(?:$|-l\b|--list|-n))|push|pull|fetch|init|add|worktree\s+(?:add|remove|prune)|branch\s+-[dDmM]|remote\s+(?:add|remove|set-url))\b|\b(?:apply_patch|set-content|new-item|copy-item|move-item|remove-item|sed\s+-i|perl\s+-pi)\b|(?:^|[;&|]\s*)(?:mv|rm|cp|mkdir|rmdir|ren|touch)\s|(?:^|\s)(?:echo|printf)\b[^\n]*>|\bnpm(?:\.cmd)?\s+(?:install|ci|uninstall)\b|\b(?:pip3?|uv)\s+(?:install|uninstall)\b|\b(?:Restart|Stop|Start|Set)-Service\b|\bsc(?:\.exe)?\s+(?:start|stop|config|delete)\b|\bsystemctl\s+(?:start|stop|restart|reload|enable|disable)\b|\b(?:docker|podman)(?:\s+compose)?\s+(?:run|up|start|stop|restart|rm|kill|build|push|pull)\b|\bdotnet\s+(?:publish|restore|ef\s+database\s+update)\b|\b(?:Rename|Remove|New|Copy|Move)-Item\b|\bAdd-Content\b|\bOut-File\b|\brobocopy\b|\bExpand-Archive\b|\bCompress-Archive\b/i
 
 /**
  * Commandes de VÉRIFICATION universelles : un oracle qui échoue si le code est cassé.
@@ -34,7 +34,7 @@ export const VERIFICATION_COMMAND =
  * promeut en preuve, et seulement lorsque la mutation est elle-même un état.
  */
 export const STATE_ORACLE_COMMAND =
-  /(?:^|[;&|]\s*|\n\s*)git\s+(?:-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+)\s+)?(?:status|stash\s+(?:list|show)|diff(?:\s|$)|rev-parse|ls-files|log|show-ref|worktree\s+list|remote\s+-v)\b/i
+  /(?:^|[;&|]\s*|\n\s*)git\s+(?:-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+)\s+)?(?:status|stash\s+(?:list|show)|diff(?:\s|$)|rev-parse|ls-files|log|show-ref|worktree\s+list|remote\s+-v)\b|\bGet-Service\b|\bsc(?:\.exe)?\s+query\b|\bsystemctl\s+(?:status|is-active)\b|\b(?:docker|podman)\s+(?:ps|inspect|images|logs)\b|\bdotnet\s+ef\s+migrations\s+list\b|\bGet-(?:Item|ChildItem|Content|Process)\b|\bTest-Path\b/i
 
 export function isShellMutation(command: string | undefined): boolean {
   return Boolean(command) && SHELL_MUTATION_COMMAND.test(command as string)

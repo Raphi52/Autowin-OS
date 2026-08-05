@@ -24,7 +24,7 @@ describe('discipline de pipeline canonique', () => {
    */
   it('distingue un obstacle de chemin d un vrai blocage, et impose de le réparer', () => {
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/OBSTACLE ≠ BLOCAGE/)
-    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/RÉPARE-LE et poursuis/)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/répare-le et poursuis/i)
     // Les motifs d'arrêt LÉGITIMES restent nommés : sans eux la consigne dirait « ne t'arrête
     // jamais », ce qui pousserait un agent à forcer une action destructrice.
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/destructrice ou irréversible/)
@@ -40,5 +40,27 @@ describe('discipline de pipeline canonique', () => {
 
   it('impose de vérifier que le rouge vient du dépôt, pas de l environnement du run', () => {
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/vient du DÉPÔT et non de ton environnement/)
+  })
+
+  /**
+   * Première rédaction RÉFUTÉE par l'audit : elle ordonnait à TOUTE phase de réparer l'obstacle,
+   * alors que la ligne OUTILLAGE RÉEL du même bloc dit qu'une phase de lecture seule n'a ni Bash ni
+   * Edit ni Write. Un scout recevait donc l'ordre de rendre une baseline verte sans aucun outil de
+   * mutation — poussé vers un blocage muet ou un vert non prouvé. Et la phase JUDGE recevait deux
+   * ordres opposés : « dis bloqué en cas d'échec » et « ne rends pas la main ».
+   */
+  it('ne demande de réparer QU aux phases outillées, et laisse une issue aux autres', () => {
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/SI TA PHASE DISPOSE DES OUTILS DE MUTATION/)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/SI TA PHASE EST EN LECTURE SEULE/)
+    // L'issue de la lecture seule : nommer l'obstacle dans le livrable, ni réparer ni taire.
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/tu NOMMES l'obstacle/)
+  })
+
+  it('reconcilie la regle avec la phase JUDGE au lieu de la contredire', () => {
+    // Le « bloqué » de JUDGE doit rester un cas de rendu de main EXPLICITEMENT autorisé.
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(
+      /échec du livrable que l'outillage de ta phase ne permet pas de réparer/
+    )
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/JUDGE dit « bloqué », et il reste obligatoire/)
   })
 })
