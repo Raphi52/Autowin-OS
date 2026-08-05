@@ -143,6 +143,17 @@ interface ChatApi {
   workflowProfileSave: (profile: unknown) => Promise<WorkflowProfilesFile>
   workflowProfileRemove: (id: string) => Promise<WorkflowProfilesFile>
   workflowProfileSelect: (id: string | null) => Promise<WorkflowProfilesFile>
+  /** `id` nul = tout le fichier ; un id = ce seul workflow, pour en partager un sans donner le reste. */
+  workflowProfilesExport: (
+    id: string | null
+  ) => Promise<{ ok: boolean; reason?: string; path?: string; count?: number }>
+  workflowProfilesImport: () => Promise<{
+    ok: boolean
+    reason?: string
+    imported?: number
+    rejected?: string[]
+    file?: WorkflowProfilesFile
+  }>
   /** Ce que le moteur ne peut pas jouer d'un graphe composé, plus son pire cas. */
   checkWorkflowGraph: (graph: unknown) => Promise<{
     defects: { target?: string; message: string }[]

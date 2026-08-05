@@ -188,6 +188,11 @@ const api = {
     ipcRenderer.invoke('os:workflowProfiles:remove', id),
   workflowProfileSelect: (id: string | null): Promise<WorkflowProfilesFile> =>
     ipcRenderer.invoke('os:workflowProfiles:select', id),
+  // `id` nul = tout le fichier ; un id = ce seul workflow, pour en partager un sans donner le reste.
+  workflowProfilesExport: (id: string | null): Promise<unknown> =>
+    ipcRenderer.invoke('os:workflowProfiles:export', id),
+  workflowProfilesImport: (): Promise<unknown> =>
+    ipcRenderer.invoke('os:workflowProfiles:import'),
   checkWorkflowGraph: (graph: unknown): Promise<unknown> =>
     ipcRenderer.invoke('os:workflowGraph:check', graph),
   conversationWorkflow: (conversationId: string): Promise<string | null> =>

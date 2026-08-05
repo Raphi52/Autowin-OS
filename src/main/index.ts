@@ -12,7 +12,8 @@ import {
   type WebContents
 } from 'electron'
 import { join } from 'path'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { buildExport, readImport, suggestedFileName } from './workflow-transfer'
 import { createHash, randomUUID } from 'node:crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -1521,6 +1522,52 @@ Le fil reprend ensuite normalement.`
     const next = selectWorkflowProfile(loadWorkflowProfiles(), id)
     saveWorkflowProfiles(next)
     return next
+  })
+  /**
+   * Sortir un ou tous les workflows vers un fichier. Un workflow est une façon de travailler : elle
+   * se partage et se versionne, elle ne doit pas rester prisonnière d'un %APPDATA%.
+   */
+  ipcMain.handle('os:workflowProfiles:export', async (event, rawId: unknown) => {
+    assertTrustedRendererSender(event, 'Workflow profiles')
+    const fichier = loadWorkflowProfiles()
+    const id = rawId === null || rawId === undefined ? null : guardString(rawId, 'id')
+    const choisis = id ? fichier.profiles.filter((p) => p.id === id) : fichier.profiles
+    if (!choisis.length) return { ok: false as const, reason: 'aucun workflow à exporter' }
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const cible = await (win
+      ? dialog.showSaveDialog(win, { defaultPath: suggestedFileName(id ? choisis[0] : undefined) })
+      : dialog.showSaveDialog({ defaultPath: suggestedFileName(id ? choisis[0] : undefined) }))
+    if (cible.canceled || !cible.filePath) return { ok: false as const, reason: 'annulé' }
+    const paquet = buildExport(choisis, new Date().toISOString())
+    writeFileSync(cible.filePath, JSON.stringify(paquet, null, 2), 'utf8')
+    return { ok: true as const, path: cible.filePath, count: choisis.length }
+  })
+  /**
+   * Faire entrer des workflows depuis un fichier. Le contenu n'est JAMAIS cru : il passe par le même
+   * assainisseur que la relecture locale, et un identifiant en collision est ré-attribué plutôt que
+   * d'écraser en silence le workflow d'à côté.
+   */
+  ipcMain.handle('os:workflowProfiles:import', async (event) => {
+    assertTrustedRendererSender(event, 'Workflow profiles')
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const choix = await (win
+      ? dialog.showOpenDialog(win, { properties: ['openFile'] })
+      : dialog.showOpenDialog({ properties: ['openFile'] }))
+    if (choix.canceled || !choix.filePaths.length) {
+      return { ok: false as const, reason: 'annulé', file: loadWorkflowProfiles() }
+    }
+    let brut: unknown
+    try {
+      // Le BOM est retiré : sous Windows, presque tout ce qui écrit un JSON à la main en pose un.
+      brut = JSON.parse(readFileSync(choix.filePaths[0], 'utf8').replace(/^﻿/, ''))
+    } catch {
+      return { ok: false as const, reason: 'fichier illisible', file: loadWorkflowProfiles() }
+    }
+    let fichier = loadWorkflowProfiles()
+    const { profiles, rejected } = readImport(brut, fichier.profiles)
+    for (const profil of profiles) fichier = upsertWorkflowProfile(fichier, profil)
+    if (profiles.length) saveWorkflowProfiles(fichier)
+    return { ok: true as const, imported: profiles.length, rejected, file: fichier }
   })
   // La validité d'un graphe composé. Calculée côté main pour que le canevas et l'exécution partagent
   // exactement la même règle — deux vérités divergeraient tôt ou tard.

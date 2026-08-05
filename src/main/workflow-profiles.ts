@@ -142,6 +142,15 @@ function normalizeRoles(value: unknown): WorkflowProfile['roles'] {
   return Object.keys(roles).length ? roles : undefined
 }
 
+/**
+ * Assainit un profil venu de l'EXTÉRIEUR (fichier importé) avec exactement la même règle que la
+ * relecture du fichier local. Un second validateur divergerait du premier, et c'est par cet écart
+ * qu'un profil refusé au chargement passerait à l'import.
+ */
+export function sanitizeImportedProfile(value: unknown): WorkflowProfile | undefined {
+  return normalizeProfile(value)
+}
+
 function normalizeProfile(value: unknown): WorkflowProfile | undefined {
   if (!isPlainObject(value)) return undefined
   const id = safeId(value.id)

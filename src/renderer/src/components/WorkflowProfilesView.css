@@ -72,6 +72,67 @@
   border-left-color: var(--cyan, #5ecaf0);
 }
 
+/* Boutons d'en-tête : icône + libellé, alignés sur la ligne de base du texte. */
+.workflow-profiles-actions {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+.workflow-profiles-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--text-dim, #b5bcc8);
+  background: var(--surface-card, #1b222c);
+  border: 1px solid var(--container-border, #2c3543);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.workflow-profiles-actions button:hover:not(:disabled) {
+  color: var(--text, #f5f7fb);
+  border-color: var(--container-border-strong, #3d4859);
+}
+.workflow-profiles-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.workflow-profiles-actions button:focus-visible {
+  outline: 2px solid var(--accent, #ef3f91);
+  outline-offset: 1px;
+}
+.wf-icone {
+  flex: none;
+  display: block;
+}
+
+/* « Configuration courante » n'est pas renommable : son libellé reste du texte. */
+.workflow-profile-name-static {
+  font-size: 13px;
+}
+
+/* Le nom se corrige sur place : un champ qui ne se signale que par son focus. */
+input.workflow-profile-name {
+  min-width: 0;
+  padding: 1px 4px;
+  font: inherit;
+  font-size: 13px;
+  color: inherit;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+input.workflow-profile-name:hover {
+  border-color: var(--container-border, #2c3543);
+}
+input.workflow-profile-name:focus-visible {
+  outline: none;
+  border-color: var(--accent, #ef3f91);
+  background: var(--surface-inset, #0e131a);
+}
+
 /* L'en-tête : sélection à gauche, suppression à droite, sur une seule rangée. */
 .workflow-profile-row {
   display: flex;

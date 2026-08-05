@@ -56,8 +56,32 @@ describe('vue Workflows — lister et sélectionner', () => {
     api()
     await render()
     const ligne = container.querySelector('[data-testid="workflow-profile-rapide"]')
-    expect(ligne?.textContent).toContain('Rapide')
+    // Le nom est un champ éditable depuis qu'on peut renommer sur place : sa valeur ne se lit donc
+    // plus dans le texte de la ligne.
+    const nom = container.querySelector<HTMLInputElement>('[data-testid="workflow-rename-rapide"]')
+    expect(nom?.value).toBe('Rapide')
     expect(ligne?.textContent).toContain('petit') // le modèle imposé est visible sans ouvrir
+  })
+
+  // Défaut vu par l'utilisateur DANS L'APPLICATION, invisible aux tests d'alors : le badge « actif »
+  // n'était rendu que sur les profils. Revenir à « Configuration courante » le faisait disparaître
+  // partout — plus rien ne disait sous quel régime le chat allait tourner.
+  it('le badge « actif » marque toujours ce qui est en vigueur, y compris « aucun workflow »', async () => {
+    api({
+      workflowProfiles: vi.fn().mockResolvedValue({ profiles: [rapide], activeId: null })
+    })
+    await render()
+    expect(container.querySelector('[data-testid="workflow-active-none"]')).not.toBeNull()
+  })
+
+  it('… et il passe sur le profil dès qu’un workflow est activé', async () => {
+    api({
+      workflowProfiles: vi.fn().mockResolvedValue({ profiles: [rapide], activeId: rapide.id })
+    })
+    await render()
+    expect(container.querySelector('[data-testid="workflow-active-none"]')).toBeNull()
+    const ligne = container.querySelector('[data-testid="workflow-profile-rapide"]')
+    expect(ligne?.textContent).toContain('actif')
   })
 
   it('propose TOUJOURS de revenir à la configuration courante', async () => {

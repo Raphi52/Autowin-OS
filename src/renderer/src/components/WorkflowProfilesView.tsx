@@ -28,6 +28,38 @@ interface ProfilesFile {
   activeId: string | null
 }
 
+/**
+ * Icônes en SVG inline : un glyphe typographique détourné (× ↥ ↩) dépend de la police installée et
+ * s'aligne mal. Trait de 1,5 px, `currentColor`, 14 px — elles héritent donc de la couleur du bouton,
+ * y compris à son survol.
+ */
+function Icone({ nom }: { nom: 'import' | 'export' | 'plus' | 'poubelle' }): React.JSX.Element {
+  const traces: Record<typeof nom, string> = {
+    // Flèche vers le BAS dans un bac : ce qui entre dans l'application.
+    import: 'M8 2v7m0 0 3-3m-3 3L5 6M2.5 11v1.5A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V11',
+    // Flèche vers le HAUT hors du bac : ce qui en sort.
+    export: 'M8 9V2m0 0 3 3M8 2 5 5M2.5 11v1.5A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V11',
+    plus: 'M8 3.5v9M3.5 8h9',
+    poubelle: 'M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.2a1 1 0 0 0 1 .8h3.8a1 1 0 0 0 1-.8l.6-8.2'
+  }
+  return (
+    <svg
+      className="wf-icone"
+      viewBox="0 0 16 16"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d={traces[nom]} />
+    </svg>
+  )
+}
+
 /* ── La portée : la topologie d'un workflow lue d'un seul regard, sans l'ouvrir ── */
 const TN_W = 118
 const TN_GAP = 34
@@ -189,6 +221,38 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
     }
   }
 
+  /** `id` nul = tout le fichier ; un id = ce seul workflow, pour en partager un sans donner le reste. */
+  const exporter = async (id: string | null): Promise<void> => {
+    try {
+      const res = await window.api.workflowProfilesExport?.(id)
+      // Une annulation n'est pas une erreur : on ne crie pas quand l'utilisateur ferme la boîte.
+      if (res && !res.ok && res.reason && res.reason !== 'annulé') setError(`Export : ${res.reason}`)
+    } catch {
+      setError('L’export a échoué.')
+    }
+  }
+
+  const importer = async (): Promise<void> => {
+    setError(undefined)
+    try {
+      const res = await window.api.workflowProfilesImport?.()
+      if (!res) return
+      if (res.file) setFile(res.file)
+      if (!res.ok && res.reason && res.reason !== 'annulé') {
+        setError(`Import : ${res.reason}`)
+        return
+      }
+      // Ce qui a été ÉCARTÉ se dit : un import silencieux qui perd la moitié du fichier ment.
+      if (res.rejected?.length) {
+        setError(
+          `${res.imported ?? 0} workflow(s) importé(s) ; ${res.rejected.length} écarté(s) : ${res.rejected.join(', ')}`
+        )
+      }
+    } catch {
+      setError('L’import a échoué.')
+    }
+  }
+
   const create = async (): Promise<void> => {
     // Un identifiant lisible dérivé du rang : on ne demande pas à l'utilisateur d'inventer une clé.
     const rang = file.profiles.length + 1
@@ -213,9 +277,25 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
             pour comparer plus tard le même objectif sous plusieurs workflows.
           </p>
         </div>
-        <button type="button" onClick={() => void create()} data-testid="workflow-create">
-          Nouveau workflow
-        </button>
+        <div className="workflow-profiles-actions">
+          <button type="button" onClick={() => void importer()} data-testid="workflow-import">
+            <Icone nom="import" />
+            Importer
+          </button>
+          <button
+            type="button"
+            onClick={() => void exporter(null)}
+            data-testid="workflow-export-all"
+            disabled={file.profiles.length === 0}
+          >
+            <Icone nom="export" />
+            Tout exporter
+          </button>
+          <button type="button" onClick={() => void create()} data-testid="workflow-create">
+            <Icone nom="plus" />
+            Nouveau
+          </button>
+        </div>
       </header>
 
       {error && (
@@ -239,7 +319,19 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
               aria-pressed={file.activeId === null}
               onClick={() => void select(null)}
             >
-              <span className="workflow-profile-name">Configuration courante</span>
+              {/* Le badge marque CE QUI EST EN VIGUEUR, y compris quand c'est « aucun workflow ».
+                  Le réserver aux profils faisait disparaître tout repère dès qu'on revenait ici :
+                  plus rien à l'écran ne disait sous quel régime le chat allait tourner. */}
+              <span className="workflow-profile-line">
+                <span className="workflow-profile-name workflow-profile-name-static">
+                  Configuration courante
+                </span>
+                {file.activeId === null && (
+                  <span className="wf-badge is-on" data-testid="workflow-active-none">
+                    actif
+                  </span>
+                )}
+              </span>
               <span className="workflow-profile-summary">
                 Aucun workflow imposé — les réglages d’Agent Studio s’appliquent.
               </span>
@@ -263,7 +355,21 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                   onClick={() => void select(profile.id)}
                 >
                   <span className="workflow-profile-line">
-                    <span className="workflow-profile-name">{profile.name}</span>
+                    {/* Le nom se corrige SUR PLACE. Un workflow créé « Workflow 3 » et jamais
+                        renommable ne se distingue plus de ses voisins dès qu'il y en a quatre. */}
+                    <input
+                      className="workflow-profile-name"
+                      data-testid={`workflow-rename-${profile.id}`}
+                      value={profile.name}
+                      aria-label={`Nom du workflow ${profile.name}`}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        const name = e.target.value
+                        // Un nom vide rendrait le profil illisible ET le ferait rejeter à la
+                        // relecture : on refuse l'enregistrement plutôt que de le perdre.
+                        if (name.trim()) void save({ ...profile, name })
+                      }}
+                    />
                     {file.activeId === profile.id && <span className="wf-badge is-on">actif</span>}
                     <span className="workflow-profile-summary">{profileSummary(profile)}</span>
                   </span>
@@ -274,11 +380,22 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                 <button
                   type="button"
                   className="workflow-profile-remove"
+                  data-testid={`workflow-export-${profile.id}`}
+                  title={`Exporter ${profile.name}`}
+                  aria-label={`Exporter ${profile.name}`}
+                  onClick={() => void exporter(profile.id)}
+                >
+                  <Icone nom="export" />
+                </button>
+                <button
+                  type="button"
+                  className="workflow-profile-remove"
                   data-testid={`workflow-remove-${profile.id}`}
                   title={`Supprimer ${profile.name}`}
+                  aria-label={`Supprimer ${profile.name}`}
                   onClick={() => void remove(profile.id)}
                 >
-                  ×
+                  <Icone nom="poubelle" />
                 </button>
               </div>
               {/* La portée reste visible même quand l'éditeur est ouvert : on ne perd jamais la vue d'ensemble. */}
