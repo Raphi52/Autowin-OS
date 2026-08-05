@@ -518,12 +518,29 @@ export function isMutationTask(task: string): boolean {
  * pas l'agent lucide sur l'endroit où il se trouve. Ce bloc lui donne les trois faits qui lui
  * manquaient : où il est, où est le vrai dépôt, et ce qui est partagé entre les deux.
  */
-export function workspaceIsolationNotice(workCwd: string, baseWorkspace: string): string {
-  if (!workCwd || !baseWorkspace || workCwd === baseWorkspace) return ''
+/**
+ * Neutralise un chemin avant de l'interpoler dans un bloc système.
+ *
+ * Deux raisons. (1) Un chemin est interpolé dans du Markdown : un dossier contenant des sauts de
+ * ligne et un faux titre réécrirait le bloc — injection de prompt. (2) On n'expose pas plus que
+ * nécessaire à un service distant. Le chemin du dépôt reste ENTIER : l'agent doit pouvoir écrire
+ * `git -C "<base>"`, un chemin tronqué rendrait la consigne inapplicable. Seul le chemin de la
+ * copie jetable est réduit à son nom de dossier — il ne sert qu'à situer l'agent.
+ */
+function safePathForPrompt(value: string): string {
+  return value.replace(/[\r\n`]+/g, ' ').trim()
+}
+
+export function workspaceIsolationNotice(rawWorkCwd: string, rawBaseWorkspace: string): string {
+  if (!rawWorkCwd || !rawBaseWorkspace || rawWorkCwd === rawBaseWorkspace) return ''
+  const baseWorkspace = safePathForPrompt(rawBaseWorkspace)
+  // La copie est identifiée par son NOM, pas par son chemin complet : elle est jetable, et son
+  // arborescence n'apprend rien d'utile à l'agent.
+  const workCwd = safePathForPrompt(rawWorkCwd).split(/[\\/]/).filter(Boolean).pop() ?? 'copie'
   return [
     '## Où tu travailles',
     '',
-    `Ton dossier courant est une COPIE ISOLÉE (worktree git) : ${workCwd}`,
+    `Ton dossier courant est une COPIE ISOLÉE (worktree git), nommée « ${workCwd} ».`,
     `Le dépôt de l'utilisateur, lui, est ici : ${baseWorkspace}`,
     '',
     "Ce que tu écris dans ta copie n'atteint le dépôt de l'utilisateur QUE si le run se termine",

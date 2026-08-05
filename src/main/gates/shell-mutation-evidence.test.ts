@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { CHAT_READ_ONLY_SHELL, claudeToolEvidenceKind } from '../providers/claude'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import {
+  CHAT_READ_ONLY_SHELL,
+  NON_INTERACTIVE_ENV,
+  claudeToolEvidenceKind
+} from '../providers/claude'
 import { evidenceSatisfiesTask } from '../orchestrator'
 import type { ExecutionEvidence } from '../providers/types'
 
@@ -178,5 +184,30 @@ describe('le shell du chat ne porte aucune primitive d’écriture', () => {
   it('garde ce qui est réellement inoffensif', () => {
     expect(CHAT_READ_ONLY_SHELL).toContain('Bash(git status:*)')
     expect(CHAT_READ_ONLY_SHELL).toContain('Bash(git stash list:*)')
+  })
+
+  it('neutralise pager, visualiseur d’aide et invites au niveau du processus fils', () => {
+    // `git status --help` respecte le périmètre autorisé et pourtant LANCE un visualiseur. Cette
+    // défense agit sur l'environnement du fils, donc elle tient quelle que soit la façon dont le
+    // CLI interprète ses règles — propriété que je n'ai PAS pu établir.
+    expect(NON_INTERACTIVE_ENV.GIT_PAGER).toBe('cat')
+    expect(NON_INTERACTIVE_ENV.PAGER).toBe('cat')
+    expect(NON_INTERACTIVE_ENV.GIT_TERMINAL_PROMPT).toBe('0')
+    expect(NON_INTERACTIVE_ENV.GIT_ASKPASS).toBeTruthy()
+    // `--help` retombe sur `man`, absent sous Windows : échec propre au lieu d'un navigateur.
+    expect(NON_INTERACTIVE_ENV.GIT_CONFIG_VALUE_0).toBe('man')
+  })
+
+  it('applique réellement cet environnement au spawn (pas une constante morte)', () => {
+    const source = readFileSync(join(__dirname, '..', 'providers', 'claude.ts'), 'utf8')
+    // On assère la LIGNE de code, pas une mention : un commentaire citant la constante ferait
+    // passer un test qui ne prouve rien (erreur commise une première fois sur ce même fichier).
+    const envLine = source
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line.startsWith('env: {'))
+    expect(envLine).toBeDefined()
+    // Étalé EN DERNIER : ni l'env hérité ni celui de l'invocation ne peuvent le réintroduire.
+    expect(envLine).toMatch(/\.\.\.process\.env.*\.\.\.NON_INTERACTIVE_ENV\s*}/)
   })
 })

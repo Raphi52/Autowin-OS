@@ -85,7 +85,18 @@ export function normalizeClaudeUsage(raw: ClaudeRawUsage, costUsd?: number): Usa
  * On ne remplace donc pas la propriété par rien, mais par une PLUS FORTE : le shell est ouvert
  * uniquement sur des commandes dont aucune forme ne peut muter. Chaque entrée est un périmètre
  * `Bash(<préfixe>:*)` — le CLI ne l'autorise que pour ce préfixe, tout le reste retombe sur la
- * demande d'autorisation, donc échoue en mode non interactif. Fail-closed.
+ * demande d'autorisation, donc échoue en mode non interactif.
+ *
+ * NON ÉTABLI — à ne pas prendre pour un fait : la façon dont le CLI traite une commande CHAÎNÉE
+ * (`git status; rm -rf x`, `&&`, `|`, `$(…)`) face à un périmètre par préfixe n'a PAS été vérifiée.
+ * J'avais d'abord écrit « fail-closed » comme un acquis ; ce n'en était pas un. Deux tentatives de
+ * vérification le 2026-08-04 se sont soldées par `API Error: 529 Overloaded`, donc la question
+ * reste ouverte. La sonde rejouable est `scripts/probe-chat-shell-permissions.mjs` : la lancer dès
+ * que l'API répond, et remplacer ce paragraphe par le résultat OBSERVÉ.
+ *
+ * C'est pourquoi la défense ne repose PAS sur cette propriété : les verbes retenus n'ont aucune
+ * option écrivante (voir CHAT_SHELL_REJECTED), et NON_INTERACTIVE_ENV neutralise pagers, visualiseurs
+ * d'aide et invites d'identifiants au niveau du PROCESSUS FILS — indépendamment du CLI.
  *
  * SONT EXCLUS À DESSEIN, bien qu'ils commencent par `git` : `branch` (`-d` supprime), `remote`
  * (`add`/`set-url` écrivent), `stash` nu (`push`/`pop` mutent — seul `stash list` est ici), et
@@ -119,6 +130,32 @@ export const CHAT_READ_ONLY_SHELL = [
  * entrée ajoutée ici doit être justifiée option par option, pas par le verbe.
  */
 export const CHAT_SHELL_REJECTED = ['git diff', 'git show', 'git log', 'git ls-remote'] as const
+
+/**
+ * Environnement imposé au processus fils pour qu'aucune commande git n'ouvre quoi que ce soit.
+ *
+ * `git status --help` respecte le périmètre autorisé (il commence bien par `git status`) et
+ * pourtant il n'AFFICHE pas : il LANCE un visualiseur — navigateur ou man — depuis un tour censé
+ * être sans effet de bord. De même, une commande git peut ouvrir une invite d'identifiants
+ * graphique et rester bloquée sans que personne ne la voie.
+ *
+ * Ces variables agissent sur le PROCESSUS FILS, donc elles tiennent quelle que soit la façon dont
+ * le CLI interprète ses règles de permission — c'est ce qui les rend fiables ici, là où un
+ * périmètre par préfixe ne borne que le verbe.
+ */
+export const NON_INTERACTIVE_ENV: Record<string, string> = {
+  GIT_PAGER: 'cat',
+  PAGER: 'cat',
+  // Jamais d'invite d'identifiants ni de fenêtre d'authentification.
+  GIT_TERMINAL_PROMPT: '0',
+  GIT_ASKPASS: 'echo',
+  SSH_ASKPASS: 'echo',
+  // `--help` retombe sur le format `man`, absent sous Windows : la commande échoue proprement
+  // au lieu d'ouvrir un navigateur.
+  GIT_CONFIG_COUNT: '1',
+  GIT_CONFIG_KEY_0: 'help.format',
+  GIT_CONFIG_VALUE_0: 'man'
+}
 
 export function claudeToolEvidenceKind(name: string, command: string): ExecutionEvidence['kind'] {
   if (/^(Edit|Write|MultiEdit|NotebookEdit)$/i.test(name)) return 'mutation'
@@ -560,7 +597,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       shell: false,
       windowsHide: true,
       cwd: execution?.cwd ?? readOnlyCwd,
-      ...(invocation.env ? { env: invocation.env } : {}),
+      // Toujours un env EXPLICITE : sans lui le fils hérite du nôtre et peut ouvrir un pager, un
+      // navigateur d'aide ou une invite d'identifiants. Voir NON_INTERACTIVE_ENV.
+      env: { ...process.env, ...(invocation.env ?? {}), ...NON_INTERACTIVE_ENV },
       ...(journal
         ? {
             detached: true,
