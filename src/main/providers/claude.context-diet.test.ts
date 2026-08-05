@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { CHAT_READ_ONLY_SHELL } from './claude'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -73,15 +74,76 @@ describe('spawn CLI — regime de contexte', () => {
     // exigeait une orchestration (conv-75 : 38,68 $). Verifie en reel : sans outils il repond « Je
     // dois verifier le fichier » ; avec Read/Grep/Glob il repond juste, pour ~0,12 $.
     const chatBranch = source.slice(source.indexOf('} else {'), source.indexOf('let settingsDir'))
-    expect(chatBranch).toContain("'Read,Grep,Glob'")
     expect(chatBranch).toContain("'--add-dir'")
-    // JAMAIS d'ecriture ni de shell sur un tour de chat : un dialogue ne mute rien. On inspecte les
-    // LISTES d'outils reellement passees (les commentaires du code citent ces noms, pas le contrat).
-    const toolLists = [...chatBranch.matchAll(/'([A-Z][A-Za-z]*(?:,[A-Z][A-Za-z]*)*)'/g)].map((m) => m[1])
+    // JAMAIS d'ECRITURE sur un tour de chat : un dialogue ne mute rien.
+    const toolLists = [...chatBranch.matchAll(/'([A-Z][A-Za-z]*(?:,[A-Z][A-Za-z]*)*)'/g)].map(
+      (m) => m[1]
+    )
     expect(toolLists.length).toBeGreaterThan(0)
     for (const list of toolLists) {
-      for (const mutating of ['Write', 'Edit', 'MultiEdit', 'Bash', 'NotebookEdit']) {
+      for (const mutating of ['Write', 'Edit', 'MultiEdit', 'NotebookEdit']) {
         expect(list.split(',')).not.toContain(mutating)
+      }
+    }
+  })
+
+  it('ouvre le shell du chat UNIQUEMENT sur des commandes incapables de muter', () => {
+    // Le contrat a CHANGÉ le 2026-08-04 : avant, aucun shell du tout. L'intention (un dialogue ne
+    // mute rien) était juste, mais l'agent ne pouvait pas constater l'état du dépôt et devait
+    // router vers une orchestration, qui répond depuis un worktree ISOLÉ — à côté de la question.
+    // La propriété remplaçante est PLUS FORTE : shell ouvert, mais par périmètres vérifiés.
+    const chatBranch = source.slice(source.indexOf('} else {'), source.indexOf('let settingsDir'))
+    // Bash n'est jamais autorisé NU dans la branche chat (ce serait `rm`, `git checkout`, …).
+    const nakedLists = [...chatBranch.matchAll(/'([A-Z][A-Za-z]*(?:,[A-Z][A-Za-z]*)*)'/g)].map(
+      (m) => m[1]
+    )
+    const allowedNaked = nakedLists.filter((list) => list.split(',').includes('Bash'))
+    // Seul `--tools` (ce qui est CHARGÉ) peut citer Bash ; `--allowedTools` (ce qui est AUTORISÉ)
+    // ne le reçoit que par périmètres.
+    expect(allowedNaked).toEqual(['Read,Grep,Glob,Bash'])
+    expect(chatBranch).toContain('CHAT_READ_ONLY_SHELL')
+
+    // Chaque périmètre est scopé, et sur un verbe git strictement lisible.
+    const READ_ONLY_VERBS = [
+      'status',
+      'log',
+      'diff',
+      'show',
+      'stash list',
+      'rev-parse',
+      'ls-files',
+      'ls-remote',
+      'worktree list'
+    ]
+    expect(CHAT_READ_ONLY_SHELL.length).toBeGreaterThan(0)
+    for (const spec of CHAT_READ_ONLY_SHELL) {
+      const scoped = spec.match(/^Bash\(git (.+?):\*\)$/)
+      expect(scoped, `${spec} doit être un périmètre Bash(git …:*)`).not.toBeNull()
+      expect(READ_ONLY_VERBS).toContain(scoped![1])
+    }
+
+    // DISCRIMINANT : aucun verbe mutant ne doit être atteignable, y compris ceux qui commencent
+    // par un préfixe autorisé (`git stash list` est permis, `git stash push` ne doit PAS l'être).
+    for (const mutating of [
+      'checkout',
+      'reset',
+      'clean',
+      'commit',
+      'push',
+      'pull',
+      'branch',
+      'remote',
+      'stash push',
+      'stash pop',
+      'rm',
+      'mv'
+    ]) {
+      for (const spec of CHAT_READ_ONLY_SHELL) {
+        const prefix = spec.replace(/^Bash\(git /, '').replace(/:\*\)$/, '')
+        expect(
+          mutating.startsWith(prefix),
+          `${mutating} ne doit pas être couvert par le périmètre « ${prefix} »`
+        ).toBe(false)
       }
     }
   })

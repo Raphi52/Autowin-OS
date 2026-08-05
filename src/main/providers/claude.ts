@@ -72,6 +72,38 @@ export function normalizeClaudeUsage(raw: ClaudeRawUsage, costUsd?: number): Usa
  * Mappe un outil Claude (tool_use) vers le type de preuve d'exécution commun (mutation / vérification
  * / inspection), miroir de codex. Contrat provider-agnostique : tout exécuteur émet ce même shape.
  */
+/**
+ * Le shell LECTURE SEULE d'un tour de chat.
+ *
+ * Le chat n'avait aucun shell, par décision délibérée : « ni Write/Edit, ni Bash (qui rouvrirait
+ * les effets de bord par `cat`, `rm`, `git`…) ». L'intention était juste, la conséquence non :
+ * incapable de lancer `git status`, l'agent devait router vers une orchestration — qui s'exécute
+ * dans un worktree ISOLÉ, donc au mauvais endroit pour une question portant sur le dépôt réel.
+ * Mesuré le 2026-08-04 : l'utilisateur demande « met toi à jour », l'agent ne peut pas constater
+ * l'état de son propre dépôt et lui renvoie la charge de taper les commandes.
+ *
+ * On ne remplace donc pas la propriété par rien, mais par une PLUS FORTE : le shell est ouvert
+ * uniquement sur des commandes dont aucune forme ne peut muter. Chaque entrée est un périmètre
+ * `Bash(<préfixe>:*)` — le CLI ne l'autorise que pour ce préfixe, tout le reste retombe sur la
+ * demande d'autorisation, donc échoue en mode non interactif. Fail-closed.
+ *
+ * SONT EXCLUS À DESSEIN, bien qu'ils commencent par `git` : `branch` (`-d` supprime), `remote`
+ * (`add`/`set-url` écrivent), `stash` nu (`push`/`pop` mutent — seul `stash list` est ici), et
+ * évidemment `checkout`, `reset`, `clean`, `commit`. Une mutation reste le travail d'une
+ * orchestration, avec sa preuve et son gate.
+ */
+export const CHAT_READ_ONLY_SHELL = [
+  'Bash(git status:*)',
+  'Bash(git log:*)',
+  'Bash(git diff:*)',
+  'Bash(git show:*)',
+  'Bash(git stash list:*)',
+  'Bash(git rev-parse:*)',
+  'Bash(git ls-files:*)',
+  'Bash(git ls-remote:*)',
+  'Bash(git worktree list:*)'
+]
+
 export function claudeToolEvidenceKind(name: string, command: string): ExecutionEvidence['kind'] {
   if (/^(Edit|Write|MultiEdit|NotebookEdit)$/i.test(name)) return 'mutation'
   if (/^Bash$/i.test(name)) {
@@ -429,9 +461,15 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           '--add-dir',
           readOnlyWorkspace,
           '--tools',
-          'Read,Grep,Glob',
+          'Read,Grep,Glob,Bash',
           '--allowedTools',
-          'Read,Grep,Glob'
+          'Read',
+          'Grep',
+          'Glob',
+          // Bash n'est JAMAIS autorisé nu ici : uniquement par périmètres incapables de muter
+          // (voir CHAT_READ_ONLY_SHELL). Sans eux, une question sur l'état du dépôt forçait une
+          // orchestration, qui répond depuis un worktree isolé — donc à côté de la question.
+          ...CHAT_READ_ONLY_SHELL
         )
       } else {
         // Aucun workspace resolu : on garde le comportement d'origine plutot que de deviner un dossier.
