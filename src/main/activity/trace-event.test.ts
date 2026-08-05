@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { assertTraceEvent, type TraceEventV1, type TracePayload } from './trace-event'
+import {
+  assertTraceEvent,
+  traceActionEventId,
+  type TraceEventV1,
+  type TracePayload
+} from './trace-event'
 
 const payloads: TracePayload[] = [
   { kind: 'user-message', content: 'Analyse ce dossier.' },
@@ -83,5 +88,52 @@ describe('TraceEvent v1 — contrat causal canonique', () => {
       })
     ]
     expect(variants.map(assertTraceEvent)).toEqual(variants)
+  })
+})
+
+describe('identifiant d action — l unicite ne doit pas dependre d un compteur remis a zero', () => {
+  it('DEUX retry d un meme tour recoivent des identifiants DISTINCTS', () => {
+    // Le defaut mesure : l id valait `${turnId}:action:${compteur}:${kind}` et le compteur etait remis a
+    // ZERO a chaque `prompt-call`. Un tour avec deux `retry` separes par un prompt-call produisait donc
+    // deux fois `…:action:0:retry`, `TraceStore.append` jetait « evenement duplique », et le TOUR ENTIER
+    // echouait. C etait le dernier incident legitime capable de declencher un auto-kaizen.
+    const premier = traceActionEventId({ turnId: 'T', kind: 'retry', iteration: 1, ordinal: 0 })
+    const second = traceActionEventId({ turnId: 'T', kind: 'retry', iteration: 2, ordinal: 1 })
+    expect(premier).not.toBe(second)
+  })
+
+  it('reste distinct meme dans la MEME iteration — c est l ordinal qui porte l unicite', () => {
+    // Inclure seulement l iteration ne suffisait pas : deux retry de la meme iteration collisionneraient.
+    const a = traceActionEventId({ turnId: 'T', kind: 'retry', iteration: 1, ordinal: 0 })
+    const b = traceActionEventId({ turnId: 'T', kind: 'retry', iteration: 1, ordinal: 1 })
+    expect(a).not.toBe(b)
+  })
+
+  it('un lot de 50 evenements sans actionId ne produit AUCUN doublon', () => {
+    const ids = Array.from({ length: 50 }, (_, i) =>
+      traceActionEventId({ turnId: 'T', kind: 'retry', iteration: i % 3, ordinal: i })
+    )
+    expect(new Set(ids).size).toBe(50)
+  })
+
+  it('respecte l actionId FOURNI quand il existe, et neutralise ses deux-points', () => {
+    // `command`/`result` portent leur propre actionId, deja unique : on ne le remplace pas. Les `:` sont
+    // remplaces pour que l identifiant reste decoupable sans ambiguite.
+    expect(traceActionEventId({ turnId: 'T', kind: 'command', actionId: 'a:b:c', ordinal: 7 })).toBe(
+      'T:action:a-b-c:command'
+    )
+  })
+
+  it('reste STABLE pour un meme actionId, quel que soit l ordinal', () => {
+    // L ordinal ne doit pas fabriquer de fausse difference sur un evenement deja identifie.
+    const x = traceActionEventId({ turnId: 'T', kind: 'result', actionId: 'act-1', ordinal: 0 })
+    const y = traceActionEventId({ turnId: 'T', kind: 'result', actionId: 'act-1', ordinal: 99 })
+    expect(x).toBe(y)
+  })
+
+  it('distingue deux KINDS partageant le meme ordinal', () => {
+    expect(traceActionEventId({ turnId: 'T', kind: 'retry', ordinal: 0 })).not.toBe(
+      traceActionEventId({ turnId: 'T', kind: 'error', ordinal: 0 })
+    )
   })
 })

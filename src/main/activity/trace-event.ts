@@ -193,3 +193,35 @@ export function assertTraceEvent(event: TraceEventV1): TraceEventV1 {
   return event
 }
 import type { RunLifecycleEvent } from '../../shared/run-execution'
+
+/**
+ * Identifiant d'un évènement d'ACTION du pilote dans la trace causale.
+ *
+ * POURQUOI CETTE FONCTION EXISTE. L'identifiant était construit en ligne comme
+ * `${turnId}:action:${compteur}:${kind}`, où le compteur était REMIS À ZÉRO à chaque `prompt-call`.
+ * Or `retry`, `error` et `cancellation` n'ont pas d'`actionId` : ils retombaient sur ce compteur. Un tour
+ * portant deux `retry` séparés par un `prompt-call` produisait donc DEUX FOIS `…:action:0:retry`, et
+ * `TraceStore.append` refusait le doublon en jetant — ce qui faisait échouer le tour entier.
+ *
+ * Mesuré sur les incidents réels du 2026-08-05 : après avoir fermé les cascades d'abandon, de quota et de
+ * remédiation, `événement dupliqué: <uuid>:action:0:retry` était le SEUL incident restant, et la seule
+ * cause légitime encore capable de déclencher un auto-kaizen.
+ *
+ * Le correctif : quand l'évènement n'a pas d'`actionId` propre, on utilise un ordinal MONOTONE du tour,
+ * jamais remis à zéro. L'unicité est alors garantie par construction, plus par la chance d'un compteur.
+ * Le préfixe d'itération est conservé pour que l'identifiant reste lisible dans un journal.
+ */
+export function traceActionEventId(input: {
+  turnId: string
+  kind: string
+  /** Identifiant d'action FOURNI par l'évènement (`command`/`result`). Déjà unique quand il existe. */
+  actionId?: string
+  /** Itération du pilote, à titre indicatif dans l'identifiant. */
+  iteration?: number
+  /** Ordinal MONOTONE du tour : c'est lui qui porte l'unicité, et il ne doit jamais être réinitialisé. */
+  ordinal: number
+}): string {
+  const stable =
+    input.actionId?.replaceAll(':', '-') ?? `${input.iteration ?? 0}-${input.ordinal}`
+  return `${input.turnId}:action:${stable}:${input.kind}`
+}

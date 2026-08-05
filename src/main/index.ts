@@ -1,3 +1,4 @@
+import { traceActionEventId } from './activity/trace-event'
 import { emitToLiveWindows } from './renderer-emit'
 import {
   app,
@@ -2301,6 +2302,12 @@ Le fil reprend ensuite normalement.`
       let traceParentId: string | undefined
       let traceSequence = conversationId ? causalTrace.nextSequence(conversationId) : 0
       let traceActionIndex = 0
+      /**
+       * Ordinal MONOTONE du tour pour les identifiants de trace. Distinct de `traceActionIndex`, qui est
+       * remis a zero a chaque `prompt-call` et sert d'index LOCAL au bloc : s'appuyer sur lui pour un
+       * identifiant produisait des doublons. Celui-ci ne redescend jamais.
+       */
+      let traceActionOrdinal = 0
       let turnSessionId: string | undefined
       const last = safe[safe.length - 1]
       activityLabel = last?.role === 'user' ? last.content : 'tour agent'
@@ -2581,10 +2588,19 @@ Le fil reprend ensuite normalement.`
             pilotEvent.kind === 'cancellation')
         ) {
           traceSequence = rebaseTraceSequence(causalTrace, conversationId, traceSequence)
-          const actionSequence = traceActionIndex++
-          const stableActionId = pilotEvent.actionId?.replaceAll(':', '-') ?? `${actionSequence}`
+          traceActionIndex++
           const action = pilotActionToTraceEvent({
-            id: `${turnId}:action:${stableActionId}:${pilotEvent.kind}`,
+            // `traceActionOrdinal` et NON `traceActionIndex` : ce dernier est remis a zero a chaque
+            // `prompt-call`, ce qui faisait collisionner deux `retry` d'un meme tour sur
+            // `…:action:0:retry` — `TraceStore.append` jetait alors « evenement duplique » et le tour
+            // entier echouait. L'ordinal, lui, ne se reinitialise jamais.
+            id: traceActionEventId({
+              turnId,
+              kind: pilotEvent.kind,
+              actionId: pilotEvent.actionId,
+              iteration: pilotEvent.iteration,
+              ordinal: traceActionOrdinal++
+            }),
             conversationId,
             turnId,
             parentId: traceParentId,
