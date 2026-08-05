@@ -104,3 +104,58 @@ describe('abortAndWait — un tour qui REJETTE ne doit pas bloquer la suppressio
     expect(turns.get('conv-2')).toBeUndefined()
   })
 })
+
+describe('ARRÊT DÉLIBÉRÉ — cliquer sur Stop n est pas une erreur a kaizener', () => {
+  it('memorise un arret demande, pour que la fin ROUGE qui suit ne devienne pas un incident', () => {
+    // La raison etait deja passee a `controller.abort(reason)` mais jamais memorisee : elle disparaissait
+    // avec le tour, alors que l evenement de fin d ORCHESTRATION arrive apres. D ou la boucle rapportee —
+    // couper un run auto-kaizen en declenchait un autre.
+    const turns = new ActiveChatTurns()
+    const controller = new AbortController()
+    turns.set('conv-1', controller, Promise.resolve())
+    expect(turns.wasDeliberatelyStopped('conv-1')).toBe(false)
+
+    turns.abort('conv-1', 'user')
+    expect(turns.wasDeliberatelyStopped('conv-1')).toBe(true)
+  })
+
+  it('memorise meme si aucun tour n est plus actif — l orchestration peut rendre son rouge apres', () => {
+    const turns = new ActiveChatTurns()
+    expect(turns.abort('conv-vide', 'user')).toBe(false)
+    // Le retour est `false` (rien a couper) mais l intention est enregistree : c est ce qui compte pour
+    // le site de signalement, qui s execute plus tard.
+    expect(turns.wasDeliberatelyStopped('conv-vide')).toBe(true)
+  })
+
+  it('couvre le chemin qui ne coupe QUE l orchestration', () => {
+    // `os:orchestrate:cancel` ne passe pas par `abort()` : sans marquage explicite, la moitie des arrets
+    // resterait indiscernable d une panne.
+    const turns = new ActiveChatTurns()
+    turns.markDeliberateStop('conv-2')
+    expect(turns.wasDeliberatelyStopped('conv-2')).toBe(true)
+  })
+
+  it('compte la SUPPRESSION de conversation comme un arret voulu', async () => {
+    const turns = new ActiveChatTurns()
+    await turns.abortAndWait('conv-3', 'conversation-deleted')
+    expect(turns.wasDeliberatelyStopped('conv-3')).toBe(true)
+  })
+
+  it('REFERME la fenetre au tour suivant — pas de suppression durable et silencieuse', () => {
+    // Le point le plus important : un drapeau qui resterait arme etoufferait des VRAIS echecs sans que
+    // rien ne le signale. Un nouveau tour signifie que la fenetre d arret est refermee.
+    const turns = new ActiveChatTurns()
+    turns.abort('conv-4', 'user')
+    expect(turns.wasDeliberatelyStopped('conv-4')).toBe(true)
+
+    turns.set('conv-4', new AbortController(), Promise.resolve())
+    expect(turns.wasDeliberatelyStopped('conv-4')).toBe(false)
+  })
+
+  it('n affecte QUE la conversation arretee', () => {
+    const turns = new ActiveChatTurns()
+    turns.abort('conv-a', 'user')
+    expect(turns.wasDeliberatelyStopped('conv-a')).toBe(true)
+    expect(turns.wasDeliberatelyStopped('conv-b')).toBe(false)
+  })
+})

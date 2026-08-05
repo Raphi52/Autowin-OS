@@ -12,6 +12,21 @@ describe('branchement runtime Auto-Kaizen', () => {
     expect(source).toContain('reportAutoKaizen({')
   })
 
+  it('n ouvre AUCUN incident sur un arret DELIBERE — les deux sites de signalement sont gardes', () => {
+    // Rapporte par l utilisateur : couper un run auto-kaizen en declenchait un autre. Le chemin du tour
+    // pilote etait deja protege par `signal.aborted` ; celui de l ORCHESTRATION ne l etait pas, un run
+    // coupe finissant ROUGE et rouge valant incident. Ce test garde le CABLAGE : la memoire d arret peut
+    // exister sans etre consultee, et le defaut reviendrait sans que rien ne rougisse.
+    expect(source).toContain(
+      'if (structuredIncident && !activeChatTurns.wasDeliberatelyStopped(conversationId))'
+    )
+    expect(source).toContain(
+      'if (conversationId && !activeChatTurns.wasDeliberatelyStopped(conversationId))'
+    )
+    // Le chemin qui ne coupe QUE l orchestration doit marquer l intention lui aussi.
+    expect(source).toContain("activeChatTurns.markDeliberateStop(conversationId)")
+  })
+
   it('transforme la perte du replay et chaque diagnostic exploitable en incident', () => {
     expect(source).toContain('const recap = summarizeJournal(lignes)')
     expect(source).toContain('journal-replay-loss:')

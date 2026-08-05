@@ -1529,7 +1529,7 @@ Le fil reprend ensuite normalement.`
     const graph = raw as WorkflowGraph
     return {
       defects: graphDefects(graph),
-      inertReturns: unsupportedReturns(graph).map((edge) => ({ from: edge.from, to: edge.to })),
+      inertReturns: unsupportedReturns().map((edge) => ({ from: edge.from, to: edge.to })),
       worstCaseNodeExecutions: graphDefects(graph).length ? null : worstCaseNodeExecutions(graph)
     }
   })
@@ -2454,7 +2454,10 @@ Le fil reprend ensuite normalement.`
             data: pilotEvent.data,
             status: pilotEvent.kind === 'prompt-call' ? pilotEvent.status : undefined
           })
-          if (structuredIncident) {
+          // ARRÊT VOULU ⇒ AUCUN incident. Le chemin du tour pilote était déjà protégé (`signal.aborted`),
+          // mais pas celui de l'ORCHESTRATION : un run coupé finit rouge, et rouge valait incident. D'où
+          // la boucle rapportée — couper un run kaizen en engendrait un autre.
+          if (structuredIncident && !activeChatTurns.wasDeliberatelyStopped(conversationId)) {
             const resultData =
               pilotEvent.data && typeof pilotEvent.data === 'object'
                 ? (pilotEvent.data as Record<string, unknown>)
@@ -2807,7 +2810,10 @@ Le fil reprend ensuite normalement.`
           turnId,
           text: completedText || streamedSpoken.trim() || spoken.join('\n').trim()
         }
-      if (conversationId) {
+      // Le `return` ci-dessus couvre l'abort du contrôleur du TOUR. Ce garde couvre le cas où l'arrêt de
+      // l'ORCHESTRATION fait jeter le tour sans que son propre contrôleur ait été aborté : même geste
+      // volontaire, même absence d'incident.
+      if (conversationId && !activeChatTurns.wasDeliberatelyStopped(conversationId)) {
         reportAutoKaizen({
           dedupeKey: `chat-turn:${conversationId}:${turnId}:failed`,
           sourceConversationId: conversationId,
@@ -3004,6 +3010,9 @@ Le fil reprend ensuite normalement.`
   })
   ipcMain.handle('os:orchestrate:cancel', (_e, rawConversationId: string) => {
     const conversationId = guardString(rawConversationId, 'conversationId')
+    // Ce chemin ne coupe QUE l'orchestration, donc ne passe pas par `activeChatTurns.abort` : sans ce
+    // marquage explicite, la moitié des arrêts resterait indiscernable d'une panne.
+    activeChatTurns.markDeliberateStop(conversationId)
     return { ok: bus.abortOrchestration(conversationId) }
   })
   // Injection LIVE : une directive envoyée pendant un tour atteint la boucle pilote
