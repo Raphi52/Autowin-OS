@@ -815,24 +815,51 @@
   background: var(--accent-soft);
   border-color: var(--accent-dim);
 }
+/*
+ * Le reçu d'orientation était illisible : 10 px sur un fond à 11 %, sans aucun signal d'apparition.
+ * L'utilisateur ne savait pas si son « Orienter » avait fait quelque chose — la preuve existait à
+ * l'écran mais ne se voyait pas. On garde la discrétion du design, on gagne la LISIBILITÉ : un cran de
+ * taille, un fond deux fois plus dense, et un bref surlignage à l'apparition pour que l'œil l'attrape
+ * même quand l'aller-retour IPC dure quelques dizaines de millisecondes.
+ */
 .directive-receipt-status {
-  padding: 2px 7px;
-  border: 1px solid color-mix(in srgb, var(--info) 45%, transparent);
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, var(--info) 62%, transparent);
   border-radius: 999px;
   color: var(--info);
-  background: color-mix(in srgb, var(--info) 11%, transparent);
-  font-size: 10px;
-  font-weight: 650;
+  background: color-mix(in srgb, var(--info) 22%, transparent);
+  font-size: 11.5px;
+  font-weight: 700;
+  animation: directive-receipt-in 1.1s ease-out 1;
+}
+
+@keyframes directive-receipt-in {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--info) 55%, transparent);
+  }
+  35% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--info) 30%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/* Respecter le réglage système : un surlignage animé ne doit pas s'imposer à qui le refuse. */
+@media (prefers-reduced-motion: reduce) {
+  .directive-receipt-status {
+    animation: none;
+  }
 }
 .directive-receipt.is-sent .directive-receipt-status {
-  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+  border-color: color-mix(in srgb, var(--ok) 62%, transparent);
   color: var(--ok);
-  background: color-mix(in srgb, var(--ok) 11%, transparent);
+  background: color-mix(in srgb, var(--ok) 22%, transparent);
 }
 .directive-receipt.is-failed .directive-receipt-status {
-  border-color: color-mix(in srgb, var(--err) 45%, transparent);
+  border-color: color-mix(in srgb, var(--err) 62%, transparent);
   color: var(--err);
-  background: color-mix(in srgb, var(--err) 11%, transparent);
+  background: color-mix(in srgb, var(--err) 22%, transparent);
 }
 .directive-receipt.is-failed .msg-body {
   border-color: color-mix(in srgb, var(--err) 55%, transparent);

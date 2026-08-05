@@ -144,6 +144,111 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await new Promise((resolve) => setTimeout(resolve, 25))
   }
 
+  it('ARRÊTE un tour même quand du texte est tapé — le defaut rapporte par l utilisateur', async () => {
+    // Avant : UN SEUL bouton portait trois comportements, et `busy && input.trim()` le faisait basculer
+    // en « Mettre en file ». Arreter exigeait donc un composer VIDE — l utilisateur devait aller vider la
+    // barre de prompt avant que le clic agisse comme stop. L action la plus urgente etait masquee
+    // derriere un etat accessoire. Aucun test ne couvrait ce mode : c est pour cela qu il a survecu.
+    const turn = deferred<{ ok: boolean; cancelled?: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => turn.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('lance un tour')
+    await click('.composer-send')
+
+    // Du texte dans le composer PENDANT le tour : c est exactement le cas qui bloquait.
+    await type('un message en cours de frappe')
+    const stop = container!.querySelector('[data-testid="composer-stop"]') as HTMLButtonElement
+    expect(stop).not.toBeNull()
+    expect(stop.disabled).toBe(false)
+    await click('[data-testid="composer-stop"]')
+    expect(mockApi.cancelPilotChat).toHaveBeenCalledWith('A')
+
+    await act(async () => turn.resolve({ ok: true, cancelled: true }))
+  })
+
+  it('n affiche AUCUN bouton stop hors tour — il n y a rien a arreter', async () => {
+    const mockApi = api({ conversations: vi.fn().mockResolvedValue([conversation('A')]) })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('du texte, mais aucun tour')
+    expect(container!.querySelector('[data-testid="composer-stop"]')).toBeNull()
+  })
+
+  it('le bouton d envoi MET EN FILE pendant un tour, il n annule plus', async () => {
+    // Separation des roles : un bouton, une action a la fois.
+    const turn = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => turn.promise)
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('lance')
+    await click('.composer-send')
+    await type('a mettre en file')
+    await click('.composer-send')
+    expect(mockApi.cancelPilotChat).not.toHaveBeenCalled()
+    expect(container!.querySelector('.directive-queue')).not.toBeNull()
+
+    await act(async () => turn.resolve({ ok: true }))
+  })
+
+  it('/btw pendant un tour laisse une TRACE dans le fil (recu), au lieu de disparaitre', async () => {
+    // `submitBtw` et `steerWithoutInterrupt` appellent la MEME IPC `injectDirective`, et seul le second
+    // posait un recu. Le texte quittait donc le composer sans que rien n apparaisse — d ou « ca doit
+    // m envoyer le message et me donner une reponse ». Divergence entre deux chemins du meme mecanisme.
+    const turn = deferred<{ ok: boolean }>()
+    const injectDirective = vi.fn().mockResolvedValue({ ok: true })
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => turn.promise),
+      injectDirective
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('lance un tour')
+    await click('.composer-send')
+
+    await type('/btw pense aux tests')
+    await click('.composer-send')
+    await flushAnimationFrames()
+
+    expect(injectDirective).toHaveBeenCalledWith('A', 'pense aux tests')
+    const receipt = container!.querySelector('.directive-receipt')
+    expect(receipt).not.toBeNull()
+    expect(receipt!.textContent).toContain('pense aux tests')
+    // Le recu porte son statut : c est ce qui repond « est-ce que ca a fait quelque chose ».
+    expect(container!.querySelector('.directive-receipt-status')).not.toBeNull()
+
+    await act(async () => turn.resolve({ ok: true }))
+  })
+
+  it('/btw dont l injection ECHOUE le dit, et ne perd pas le message', async () => {
+    const turn = deferred<{ ok: boolean }>()
+    const mockApi = api({
+      conversations: vi.fn().mockResolvedValue([conversation('A')]),
+      pilotChat: vi.fn(() => turn.promise),
+      injectDirective: vi.fn().mockResolvedValue({ ok: false })
+    })
+    await mount(mockApi)
+    await click('.conv-pick')
+    await type('lance un tour')
+    await click('.composer-send')
+    await type('/btw a ne pas perdre')
+    await click('.composer-send')
+    await flushAnimationFrames()
+
+    // Repli en file : le message reste recuperable, et le recu dit que ca a echoue.
+    expect(container!.querySelector('.directive-queue')).not.toBeNull()
+    expect(container!.textContent).toContain('a ne pas perdre')
+
+    await act(async () => turn.resolve({ ok: true }))
+  })
+
   it('blocks a synchronous double Enter with one pilot request', async () => {
     const pilot = deferred<{ ok: boolean }>()
     const mockApi = api({

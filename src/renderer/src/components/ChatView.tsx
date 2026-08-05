@@ -1578,6 +1578,14 @@ export function ChatView({
     const id = activeRef.current
     if (!id) return
     setDraftInput(composerDraftKeyRef.current, '')
+    // REÇU, comme `steerWithoutInterrupt` : les deux chemins appellent la MÊME IPC `injectDirective`,
+    // et seul l'autre en rendait compte. Sans ce reçu, le texte quittait le composer et RIEN
+    // n'apparaissait dans le fil — d'où « je clique et ça devrait m'envoyer le message et me donner une
+    // réponse ». Une divergence entre deux chemins du même mécanisme, pas un oubli isolé.
+    // Même compteur que la file : un reçu et une entrée de file ne doivent jamais partager un id,
+    // sinon le repli en file (ci-dessous) écraserait le reçu qu'on vient de poser.
+    const entry: QueuedDirective = { id: nextQueueEntryIdRef.current++, text, mode: 'btw' }
+    setDirectiveReceipt(id, entry, 'sending')
     let injected = false
     try {
       injected = (await window.api.injectDirective(id, text))?.ok === true
@@ -1586,6 +1594,7 @@ export function ChatView({
     }
     // Repli explicite : l'injection a échoué → file d'attente (drainée en fin de tour), rien n'est perdu.
     if (!injected) enqueueMessage(id, text, 'btw')
+    setDirectiveReceipt(id, entry, injected ? 'sent' : 'failed')
   }
   /** True (et déclenche submitBtw) si le composer commence par `/btw` ; sinon false (submit normal). */
   function handleBtw(): boolean {
@@ -2663,26 +2672,44 @@ export function ChatView({
                       : 'Écrire à l’agent ou déposer des fichiers…'
                 }
               />
+              {/*
+                ARRÊTER ne doit dépendre de RIEN d'autre que « un tour est en cours ».
+                Avant, un SEUL bouton portait trois comportements : `busy && !input.trim()` → Stop,
+                `busy && input.trim()` → Mettre en file, sinon Envoyer. Conséquence rapportée par
+                l'utilisateur : dès qu'il avait tapé quelque chose, il devait d'abord aller VIDER la
+                barre de prompt pour que le clic agisse comme stop. L'action la plus urgente du produit
+                était masquée derrière un état accessoire.
+              */}
+              {busy && (
+                <button
+                  className="btn composer-stop"
+                  data-testid="composer-stop"
+                  onClick={() => {
+                    if (activeId) void window.api.cancelPilotChat(activeId)
+                  }}
+                  disabled={!activeId}
+                  aria-label="Arrêter la réponse"
+                  title="Arrêter la réponse en cours (indépendant de ce qui est tapé)"
+                >
+                  ■ Stop
+                </button>
+              )}
               <button
-                className={`btn-accent btn composer-send${busy && !input.trim() ? ' is-stop' : ''}`}
+                className="btn-accent btn composer-send"
+                data-testid="composer-send"
                 onClick={() => {
                   if (handleBtw()) return
-                  busy && activeId
-                    ? input.trim()
-                      ? queueCurrentMessage()
-                      : void window.api.cancelPilotChat(activeId)
-                    : send()
+                  // Plus de branche « composer vide → annuler » : arrêter a son propre bouton, donc ce
+                  // bouton ne fait plus qu'une chose à la fois — envoyer, ou mettre en file.
+                  if (busy && activeId) queueCurrentMessage()
+                  else send()
                 }}
-                disabled={busy ? !activeId : !input.trim() && attachments.length === 0}
-                aria-label={
-                  busy
-                    ? input.trim()
-                      ? 'Mettre le message en file d’attente'
-                      : 'Arrêter la réponse'
-                    : 'Envoyer le message'
+                disabled={
+                  busy ? !activeId || !input.trim() : !input.trim() && attachments.length === 0
                 }
+                aria-label={busy ? 'Mettre le message en file d’attente' : 'Envoyer le message'}
               >
-                {busy ? (input.trim() ? '⚡ Mettre en file' : '■ Stop') : 'Envoyer'}
+                {busy ? '⚡ Mettre en file' : 'Envoyer'}
               </button>
             </div>
             <div className="composer-meta">
