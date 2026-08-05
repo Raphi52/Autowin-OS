@@ -52,7 +52,13 @@ export interface AutoKaizenIncident {
   detail: string
   status: AutoKaizenIncidentStatus
   suppressionReason?:
-    'active-limit' | 'depth-limit' | 'rate-limit' | 'breadth-limit' | 'non-actionable'
+    | 'active-limit'
+    | 'depth-limit'
+    | 'rate-limit'
+    | 'breadth-limit'
+    | 'non-actionable'
+    /** Le fournisseur est en panne : rien a corriger chez nous, et l'analyse rappellerait l'API morte. */
+    | 'upstream-outage'
   analysisConversationId?: string
   analysisTurnId?: string
   analysisResult?: string
@@ -133,7 +139,13 @@ const DEFAULT_LIMITS: AutoKaizenLimits = {
  * chance au boot ; un mur externe ou une cascade trop large n'en méritent aucune — c'est par cette
  * porte que la frenzy repartait, avec 348 relances armées dans le snapshot du 2026-08-04.
  */
-const NEVER_REVIVED = new Set<string>(['depth-limit', 'breadth-limit', 'non-actionable'])
+const NEVER_REVIVED = new Set<string>([
+  'depth-limit',
+  'breadth-limit',
+  'non-actionable',
+  // Une panne amont ne merite AUCUNE seconde chance : on ne veut jamais l'analyser, meme apres reboot.
+  'upstream-outage'
+])
 
 const ACTIVE_STATUSES = new Set<AutoKaizenIncidentStatus>([
   'detected',
@@ -183,6 +195,46 @@ export function isNonActionableWall(summary: string, detail: string): boolean {
     /\binsufficient_quota\b/.test(text) ||
     /\bpurchase more credits\b/.test(text) ||
     /\bhttp 429\b/.test(text)
+  )
+}
+
+/**
+ * PANNE AMONT — le fournisseur est en vrac, il n'y a rien à corriger chez nous.
+ *
+ * Classe SÉPARÉE de `isNonActionableWall` (qui ne connaît que le quota), et c'est délibéré : un quota
+ * est un mur JUSQU'À UNE DATE, une panne est TRANSITOIRE. Les confondre rendrait impossible de répondre
+ * « combien de fois une panne amont nous a coûté un run ». Les deux sont non-actionnables, pour des
+ * raisons différentes.
+ *
+ * Ce que ce garde évite, mesuré : une erreur `kind: 'error'` devient TOUJOURS un incident
+ * `provider-error` ; sans reconnaissance de la panne, l'incident reste actionnable, lance une analyse
+ * qui RAPPELLE l'API en panne, échoue, et engendre l'incident suivant. Même porte que le quota codex du
+ * commit 5b68735, autre serrure.
+ *
+ * Les motifs sont ANCRÉS pour ne pas mordre sur un vrai défaut : un code 5xx n'est reconnu qu'accolé à
+ * `http`/`status`/`api error`, jamais nu — sinon « ligne 500 », « port 5000 » ou « 503 tests » feraient
+ * taire un incident légitime.
+ */
+export function isUpstreamOutage(summary: string, detail: string): boolean {
+  const text = `${summary} ${detail}`.toLowerCase()
+  return (
+    // Vocabulaire explicite des fournisseurs (Anthropic, OpenAI) : aucune ambiguïté possible.
+    /\boverloaded(?:_error)?\b/.test(text) ||
+    /\bapi_error\b/.test(text) ||
+    /\binternal server error\b/.test(text) ||
+    /\bservice[ _]unavailable\b/.test(text) ||
+    /\bbad gateway\b/.test(text) ||
+    /\bgateway time-?out\b/.test(text) ||
+    /\bupstream connect error\b/.test(text) ||
+    // Codes 5xx, uniquement quand le contexte dit qu'il s'agit d'un statut.
+    /\bhttp\s?5\d{2}\b/.test(text) ||
+    /\bstatus(?:\s?code)?\s?5\d{2}\b/.test(text) ||
+    /\bapi error\b[^\n]{0,40}\b5\d{2}\b/.test(text) ||
+    /\b5\d{2}\b[^\n]{0,40}\bapi error\b/.test(text) ||
+    // Couche réseau : la requête n'a même pas abouti, il n'y a rien à analyser.
+    /\b(?:econnreset|etimedout|enotfound|eai_again|econnrefused)\b/.test(text) ||
+    /\bsocket hang up\b/.test(text) ||
+    /\bfetch failed\b/.test(text)
   )
 }
 
@@ -466,7 +518,12 @@ export class AutoKaizenSupervisor {
     const sameRoot = this.state.incidents.filter(
       (item) => item.rootIncidentId === incident.rootIncidentId
     ).length
-    if (isNonActionableWall(input.summary, input.detail)) {
+    if (isUpstreamOutage(input.summary, input.detail)) {
+      // Teste AVANT le mur de quota : les deux suppriment, mais l'etiquette doit dire laquelle des deux
+      // causes a mordu, sinon la telemetrie ne sait plus distinguer « quota epuise » de « serveur HS ».
+      incident.status = 'suppressed'
+      incident.suppressionReason = 'upstream-outage'
+    } else if (isNonActionableWall(input.summary, input.detail)) {
       incident.status = 'suppressed'
       incident.suppressionReason = 'non-actionable'
     } else if (depth > this.limits.maxDepth) {

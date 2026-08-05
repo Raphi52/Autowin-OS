@@ -7,6 +7,7 @@ import {
   correlationKeyForIncident,
   inheritAutoKaizenAuthority,
   incidentFromPilotEvent,
+  isUpstreamOutage,
   type AutoKaizenConversationLink,
   type AutoKaizenRuntime
 } from './auto-kaizen-supervisor'
@@ -432,5 +433,143 @@ describe('AutoKaizenSupervisor — boucle conversationnelle persistante', () => 
     expect(tooDeep.severity).toBe('critical')
     expect(h.sourceUpdates.filter((message) => message.includes('ALERTE CRITIQUE'))).toHaveLength(2)
     expect(supervisor.snapshot().incidents).toHaveLength(4)
+  })
+})
+
+describe('PANNE AMONT — une panne serveur ne se kaizene pas', () => {
+  const roots: string[] = []
+  afterEach(() => {
+    for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+  })
+
+  function harness() {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-auto-kaizen-outage-'))
+    roots.push(root)
+    const analysisPrompts: string[] = []
+    const conversations: string[] = []
+    const sourceUpdates: string[] = []
+    const runtime: AutoKaizenRuntime = {
+      createConversation(input) {
+        conversations.push(input.title)
+        return { id: `conv-outage-${conversations.length}` }
+      },
+      appendSourceUpdate(_c, text) {
+        sourceUpdates.push(text)
+      },
+      async runAnalysis(_c, prompt) {
+        analysisPrompts.push(prompt)
+        return { ok: true, text: 'analyse' }
+      },
+      async runFix() {
+        return { ok: true, text: 'fix' }
+      }
+    }
+    return { root, runtime, analysisPrompts, conversations, sourceUpdates }
+  }
+
+  it('reconnait le vocabulaire REEL des pannes fournisseur et reseau', () => {
+    for (const text of [
+      'API Error: 529 {"type":"overloaded_error"}',
+      'api_error renvoye par le provider',
+      'Internal Server Error',
+      'HTTP 503 sur le transport',
+      'status code 502',
+      'API Error: 500 Internal',
+      'bad gateway',
+      'gateway timeout',
+      'upstream connect error',
+      'ECONNRESET pendant l appel',
+      'socket hang up',
+      'fetch failed'
+    ]) {
+      expect(isUpstreamOutage('appel provider en echec', text)).toBe(true)
+    }
+  })
+
+  it('ne mord PAS sur un vrai defaut qui mentionne un nombre a trois chiffres', () => {
+    // Un 5xx nu ne suffit pas : sinon un incident legitime serait etouffe, ce qui est exactement le
+    // defaut inverse de celui qu'on corrige — et le plus difficile a apercevoir ensuite.
+    for (const text of [
+      'assertion echouee ligne 500 du fichier orchestrator.ts',
+      'le port 5000 est deja utilise',
+      '503 tests verts, 0 rouge',
+      'quota epuise jusqu au 8 aout'
+    ]) {
+      expect(isUpstreamOutage('un outil a echoue', text)).toBe(false)
+    }
+  })
+
+  it('SUPPRIME l incident et ne lance AUCUN run — c est ca qui coupe la depense', async () => {
+    const h = harness()
+    const supervisor = new AutoKaizenSupervisor({
+      path: join(h.root, 'incidents.json'),
+      runtime: h.runtime,
+      now: () => Date.parse('2026-08-04T18:00:00.000Z')
+    })
+
+    const incident = supervisor.report({
+      dedupeKey: 'provider-error:anthropic:529:req_abc',
+      sourceConversationId: 'conv-source',
+      kind: 'provider-error',
+      summary: 'Un appel provider a echoue',
+      detail: 'API Error: 529 {"type":"error","error":{"type":"overloaded_error"}}'
+    })
+    await supervisor.drain()
+
+    expect(incident.status).toBe('suppressed')
+    expect(incident.suppressionReason).toBe('upstream-outage')
+    // LE point : aucune conversation d analyse creee, aucun prompt envoye. Sans cette assertion, le
+    // correctif ne serait qu une etiquette posee sur un run qui partirait quand meme.
+    expect(h.analysisPrompts).toEqual([])
+    expect(h.conversations).toEqual([])
+    // L erreur reste SIGNALEE : supprimer l analyse ne doit pas rendre la panne invisible.
+    expect(h.sourceUpdates.join(' ')).toContain('upstream-outage')
+  })
+
+  it('distingue la panne du mur de QUOTA — deux causes, deux etiquettes', async () => {
+    const h = harness()
+    const supervisor = new AutoKaizenSupervisor({
+      path: join(h.root, 'incidents.json'),
+      runtime: h.runtime,
+      now: () => Date.parse('2026-08-04T18:00:00.000Z')
+    })
+    const quota = supervisor.report({
+      dedupeKey: 'provider-error:quota',
+      sourceConversationId: 'conv-source',
+      kind: 'provider-error',
+      summary: 'appel provider en echec',
+      detail: "You've hit your usage limit"
+    })
+    await supervisor.drain()
+    expect(quota.status).toBe('suppressed')
+    // Confondre les deux rendrait impossible de repondre « combien de fois une panne amont nous a coute
+    // un run » — la telemetrie doit pouvoir les separer.
+    expect(quota.suppressionReason).toBe('non-actionable')
+  })
+
+  it('n est JAMAIS reanime au redemarrage', async () => {
+    const h = harness()
+    const path = join(h.root, 'incidents.json')
+    const supervisor = new AutoKaizenSupervisor({
+      path,
+      runtime: h.runtime,
+      now: () => Date.parse('2026-08-04T18:00:00.000Z')
+    })
+    supervisor.report({
+      dedupeKey: 'provider-error:anthropic:overloaded',
+      sourceConversationId: 'conv-source',
+      kind: 'provider-error',
+      summary: 'appel provider en echec',
+      detail: 'overloaded_error'
+    })
+    await supervisor.drain()
+
+    const reloaded = new AutoKaizenSupervisor({ path, runtime: h.runtime })
+    await reloaded.drain()
+    expect(reloaded.snapshot().incidents[0]).toMatchObject({
+      status: 'suppressed',
+      suppressionReason: 'upstream-outage'
+    })
+    expect(h.analysisPrompts).toEqual([])
   })
 })
