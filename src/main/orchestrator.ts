@@ -564,7 +564,13 @@ export function evidenceSatisfiesTask(task: string, evidence: ExecutionEvidence[
   // insatisfiable et échouait en `failed` même quand le travail avait réussi (incident « met toi
   // à jour » : stash réellement effectué, run rapporté en échec).
   const stateOnly = mutations.every((item) => !item.path && isShellMutation(item.command))
-  return stateOnly && successful.some((item) => isStateOracle(item.command))
+  if (!stateOnly) return false
+  // L'oracle doit être une preuve DISTINCTE de la mutation. Sans cette exclusion, une commande
+  // unique matchant les deux motifs se prouvait TOUTE SEULE : `echo "git status" > f.txt` est à la
+  // fois une mutation (redirection) et un oracle (le littéral cité en argument), donc un `echo`
+  // bidon fermait le gate. Vérifié sur les regex réelles lors de l'audit du 2026-08-04.
+  const mutationSet = new Set(mutations)
+  return successful.some((item) => !mutationSet.has(item) && isStateOracle(item.command))
 }
 
 export class Orchestrator {

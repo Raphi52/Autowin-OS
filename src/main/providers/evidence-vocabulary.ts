@@ -18,7 +18,7 @@
  * `git stash list` / `git stash show` sont exclus par le lookahead : ce sont des lectures.
  */
 export const SHELL_MUTATION_COMMAND =
-  /\bgit\s+(?:-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+)\s+)?(?:stash(?!\s+(?:list|show))|commit|checkout|switch|restore|reset|revert|merge|rebase|cherry-pick|apply|am|clean|mv|rm|tag|push|pull|fetch|init|add|worktree\s+(?:add|remove|prune)|branch\s+-[dDmM]|remote\s+(?:add|remove|set-url))\b|\b(?:apply_patch|set-content|new-item|copy-item|move-item|remove-item|sed\s+-i|perl\s+-pi)\b|(?:^|[;&|]\s*)(?:mv|rm|cp|mkdir|rmdir|ren|touch)\s|(?:^|\s)(?:echo|printf)\b[^\n]*>|\bnpm(?:\.cmd)?\s+(?:install|ci|uninstall)\b/i
+  /(?:^|[;&|]\s*|\n\s*)git\s+(?:-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+)\s+)?(?:stash(?!\s+(?:list|show))|commit|checkout|switch|restore|reset|revert|merge|rebase|cherry-pick|apply|am|clean|mv|rm|tag(?!\s*(?:$|-l\b|--list|-n))|push|pull|fetch|init|add|worktree\s+(?:add|remove|prune)|branch\s+-[dDmM]|remote\s+(?:add|remove|set-url))\b|\b(?:apply_patch|set-content|new-item|copy-item|move-item|remove-item|sed\s+-i|perl\s+-pi)\b|(?:^|[;&|]\s*)(?:mv|rm|cp|mkdir|rmdir|ren|touch)\s|(?:^|\s)(?:echo|printf)\b[^\n]*>|\bnpm(?:\.cmd)?\s+(?:install|ci|uninstall)\b/i
 
 /**
  * Commandes de VÉRIFICATION universelles : un oracle qui échoue si le code est cassé.
@@ -34,7 +34,7 @@ export const VERIFICATION_COMMAND =
  * promeut en preuve, et seulement lorsque la mutation est elle-même un état.
  */
 export const STATE_ORACLE_COMMAND =
-  /\bgit\s+(?:-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+)\s+)?(?:status|stash\s+(?:list|show)|diff(?:\s|$)|rev-parse|ls-files|log|show-ref|worktree\s+list|remote\s+-v)\b/i
+  /(?:^|[;&|]\s*|\n\s*)git\s+(?:-C\s+(?:"[^"]*"|\x27[^\x27]*\x27|\S+)\s+)?(?:status|stash\s+(?:list|show)|diff(?:\s|$)|rev-parse|ls-files|log|show-ref|worktree\s+list|remote\s+-v)\b/i
 
 export function isShellMutation(command: string | undefined): boolean {
   return Boolean(command) && SHELL_MUTATION_COMMAND.test(command as string)

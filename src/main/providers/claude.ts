@@ -94,15 +94,31 @@ export function normalizeClaudeUsage(raw: ClaudeRawUsage, costUsd?: number): Usa
  */
 export const CHAT_READ_ONLY_SHELL = [
   'Bash(git status:*)',
-  'Bash(git log:*)',
-  'Bash(git diff:*)',
-  'Bash(git show:*)',
   'Bash(git stash list:*)',
   'Bash(git rev-parse:*)',
   'Bash(git ls-files:*)',
-  'Bash(git ls-remote:*)',
   'Bash(git worktree list:*)'
 ]
+
+/**
+ * RETIRÉS après audit de sécurité, chacun pour une raison PROUVÉE — ne pas les remettre sans
+ * réfuter la preuve correspondante.
+ *
+ * `git diff` / `git show` / `git log` : ces sous-commandes acceptent `--output=<chemin>`, qui ÉCRIT
+ * un fichier arbitraire tout en respectant le préfixe autorisé. Vérifié sur ce dépôt :
+ * `git diff --output=victim.txt HEAD HEAD` a ramené un fichier de 9 octets à **0 octet**, et
+ * `git show --output=…` a créé un fichier de 9 663 octets. Le périmètre PORTAIT donc une primitive
+ * de destruction : ma revendication « aucune de ces formes ne peut muter » était fausse, faute
+ * d'avoir testé une seule option.
+ *
+ * `git ls-remote` : contacte une URL ARBITRAIRE, donc canal de sortie réseau depuis un tour qui lit
+ * par ailleurs le dépôt — et déclenche l'helper d'identifiants. L'ouverture réseau est une classe de
+ * risque distincte de la mutation, que la justification d'origine n'avait jamais évaluée.
+ *
+ * LEÇON DE MÉTHODE : un périmètre par préfixe ne borne QUE le verbe, jamais ses options. Toute
+ * entrée ajoutée ici doit être justifiée option par option, pas par le verbe.
+ */
+export const CHAT_SHELL_REJECTED = ['git diff', 'git show', 'git log', 'git ls-remote'] as const
 
 export function claudeToolEvidenceKind(name: string, command: string): ExecutionEvidence['kind'] {
   if (/^(Edit|Write|MultiEdit|NotebookEdit)$/i.test(name)) return 'mutation'
@@ -568,6 +584,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     }
     let buffer = ''
     let text = ''
+    // Surcharge API : derniere tentative annoncee par le CLI + presence d'un event `result`. Les deux
+    // servent a distinguer un tour REELLEMENT vide d'un tour mort sur retries epuises.
+    let lastRetry: { attempt: number; maxRetries: number; status: string } | null = null
+    let resultSeen = false
     const reasoningFragments: string[] = []
     let resolvedModel: string | undefined
     let sessionId: string | undefined
@@ -633,6 +653,23 @@ export class ClaudeCliAdapter implements ProviderAdapter {
 
     const handleEvent = (o: Record<string, unknown>): void => {
       const t = o['type']
+      if (t === 'system' && o['subtype'] === 'api_retry') {
+        // Surcharge API (529) : le CLI retente en backoff exponentiel jusqu'a 10 fois, soit 2-3 min
+        // pendant lesquelles il n'emet RIEN d'autre. Sans ce relais, l'UI reste sur un spinner muet
+        // et l'utilisateur conclut a un agent fige (constate le 2026-08-05 dans run-stdout/).
+        const attempt = Number(o['attempt'] ?? 0)
+        const maxRetries = Number(o['max_retries'] ?? 0)
+        const delayMs = Number(o['retry_delay_ms'] ?? 0)
+        const status = o['error_status'] ? ` ${String(o['error_status'])}` : ''
+        lastRetry = { attempt, maxRetries, status: String(o['error_status'] ?? o['error'] ?? '') }
+        const note =
+          `API${status} ${String(o['error'] ?? 'indisponible')} — nouvelle tentative ` +
+          `${attempt}/${maxRetries}${delayMs ? ` dans ${(delayMs / 1000).toFixed(1)}s` : ''}`
+        reasoningFragments.push(note)
+        queue.push({ delta: '', reasoning: note })
+        return
+      }
+      if (t === 'result') resultSeen = true
       if (t === 'assistant') {
         const msg = o['message'] as
           | {
@@ -804,6 +841,14 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         errored = tailError instanceof Error ? tailError : new Error(String(tailError))
       }
       if (code !== 0 && !errored) errored = new Error(`claude CLI exit ${code}`)
+      // Retries epuises sans reponse : le CLI sort en 0 sans event `result`, donc le tour passait
+      // pour un succes VIDE et l'UI ne quittait jamais l'etat « reflexion ». C'est un ECHEC, nomme.
+      if (!errored && !resultSeen && !text && lastRetry) {
+        errored = new Error(
+          `API Claude surchargée (${lastRetry.status || '529'}) — abandon après ` +
+            `${lastRetry.attempt}/${lastRetry.maxRetries} tentatives, aucune réponse. Réessayez.`
+        )
+      }
       done = true
       wake()
     })

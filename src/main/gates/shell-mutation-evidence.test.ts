@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { claudeToolEvidenceKind } from '../providers/claude'
+import { CHAT_READ_ONLY_SHELL, claudeToolEvidenceKind } from '../providers/claude'
 import { evidenceSatisfiesTask } from '../orchestrator'
 import type { ExecutionEvidence } from '../providers/types'
 
@@ -120,5 +120,63 @@ describe('un gate satisfiable pour une mutation d’état', () => {
 
   it('ne demande aucune preuve à une tâche de lecture seule', () => {
     expect(evidenceSatisfiesTask('analyse le dépôt', [])).toBe(true)
+  })
+})
+
+/**
+ * Exploits TROUVÉS PAR L'AUDIT du 2026-08-04 sur ce même correctif, et refermés.
+ * Chacun est ici pour ne pas revenir : ils sont passés une fois.
+ */
+describe('le gate ne peut pas se prouver tout seul', () => {
+  const task = 'mets le dépôt de côté en stash'
+
+  it('une commande unique ne vaut PAS à la fois mutation et oracle', () => {
+    // `echo "git status" > f` matchait les DEUX motifs : redirection (mutation) et littéral
+    // « git status » cité en argument (oracle). Un echo bidon fermait donc le gate.
+    const auto = ev('mutation', 'echo "git status" > f.txt')
+    expect(evidenceSatisfiesTask(task, [auto])).toBe(false)
+  })
+
+  it('exige un oracle DISTINCT de la mutation, pas la même preuve comptée deux fois', () => {
+    const mutation = ev('mutation', 'git stash push -u')
+    expect(evidenceSatisfiesTask(task, [mutation])).toBe(false)
+    expect(evidenceSatisfiesTask(task, [mutation, ev('inspection', 'git status')])).toBe(true)
+  })
+
+  it('ne prend plus un nom de commande CITÉ pour un constat', () => {
+    expect(claudeToolEvidenceKind('Bash', 'printf "git log"')).toBe('inspection')
+    expect(claudeToolEvidenceKind('Bash', 'echo "git status" > f.txt')).toBe('mutation')
+  })
+
+  it('ne classe plus une LISTE en mutation (git tag nu ne mute rien)', () => {
+    expect(claudeToolEvidenceKind('Bash', 'git tag')).toBe('inspection')
+    expect(claudeToolEvidenceKind('Bash', 'git tag --list')).toBe('inspection')
+    // Créer un tag reste bien une mutation.
+    expect(claudeToolEvidenceKind('Bash', 'git tag v1.2.3')).toBe('mutation')
+  })
+})
+
+describe('le shell du chat ne porte aucune primitive d’écriture', () => {
+  it('exclut les sous-commandes qui acceptent --output', () => {
+    // PROUVÉ : `git diff --output=victim.txt HEAD HEAD` ramène un fichier à 0 octet, et
+    // `git show --output=…` en crée un. Le préfixe autorisé est pourtant respecté : le périmètre
+    // portait lui-même la primitive de destruction.
+    for (const verb of ['git diff', 'git show', 'git log']) {
+      expect(
+        CHAT_READ_ONLY_SHELL.some((spec) => spec.startsWith(`Bash(${verb}`)),
+        `${verb} accepte --output=<chemin> : il ne peut pas être autorisé par simple préfixe`
+      ).toBe(false)
+    }
+  })
+
+  it('n’ouvre aucun accès réseau depuis un tour de chat', () => {
+    for (const spec of CHAT_READ_ONLY_SHELL) {
+      expect(spec).not.toMatch(/ls-remote|fetch|clone|push|pull/)
+    }
+  })
+
+  it('garde ce qui est réellement inoffensif', () => {
+    expect(CHAT_READ_ONLY_SHELL).toContain('Bash(git status:*)')
+    expect(CHAT_READ_ONLY_SHELL).toContain('Bash(git stash list:*)')
   })
 })
