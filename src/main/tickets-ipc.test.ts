@@ -15,6 +15,16 @@ function setup(isolated = false) {
     list: vi.fn(async (_request?: unknown, _signal?: AbortSignal) => ({
       items: [],
       hasMore: false
+    })),
+    create: vi.fn(async (_request?: unknown, _signal?: AbortSignal) => ({
+      id: '4242',
+      sourceId: DEFAULT_TICKET_SOURCE.id,
+      type: 'Task',
+      title: 'Fiche créée',
+      state: 'New',
+      url: 'https://dev.azure.com/org/proj/_workitems/edit/4242',
+      updatedAt: '2026-08-04T15:44:03Z',
+      fields: {}
     }))
   }
   const assertTrusted = vi.fn()
@@ -38,6 +48,66 @@ describe('IPC Tickets', () => {
       { source: DEFAULT_TICKET_SOURCE, requestId: 'request-1' },
       expect.any(AbortSignal)
     )
+  })
+
+  /**
+   * La CRÉATION est la seule action sortante de la chaîne Tickets : elle écrit dans le backlog d'une
+   * équipe. Elle doit donc franchir la même porte que les lectures (`assertTrusted`) et rester
+   * annulable comme elles, faute de quoi un appel réseau lent resterait pendu sans recours.
+   */
+  it('valide le renderer avant une CRÉATION et rend la fiche créée', async () => {
+    const { handlers, service, assertTrusted } = setup()
+    const event = { senderFrame: { url: 'app://trusted' } }
+
+    const created = await handlers.get('tickets:create')!(event, {
+      source: DEFAULT_TICKET_SOURCE,
+      title: 'Créer les fiches depuis Autowin',
+      requestId: 'create-1'
+    })
+
+    expect(assertTrusted).toHaveBeenCalledTimes(1)
+    expect(created).toMatchObject({ id: '4242' })
+    expect(service.create).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Créer les fiches depuis Autowin' }),
+      expect.any(AbortSignal)
+    )
+  })
+
+  it('une CRÉATION est annulable par le même requestId qu’une lecture', async () => {
+    const { handlers, service } = setup()
+    const event = { senderFrame: { url: 'app://trusted' } }
+    let observed: AbortSignal | undefined
+    service.create.mockImplementation(
+      async (_request?: unknown, signal?: AbortSignal) =>
+        await new Promise((_resolve, reject) => {
+          observed = signal
+          signal?.addEventListener('abort', () => reject(new Error('annulé')))
+        })
+    )
+
+    const pending = handlers.get('tickets:create')!(event, {
+      source: DEFAULT_TICKET_SOURCE,
+      title: 'Fiche lente',
+      requestId: 'create-2'
+    })
+    expect(handlers.get('tickets:cancel')!(event, 'create-2')).toBe(true)
+
+    await expect(pending).rejects.toThrow(/annul/i)
+    expect(observed?.aborted).toBe(true)
+  })
+
+  it('un requestId invalide est refusé AVANT d’atteindre le service', async () => {
+    const { handlers, service } = setup()
+    const event = { senderFrame: { url: 'app://trusted' } }
+
+    await expect(
+      handlers.get('tickets:create')!(event, {
+        source: DEFAULT_TICKET_SOURCE,
+        title: 'Titre',
+        requestId: 'pas valide !'
+      })
+    ).rejects.toThrow(/requ/i)
+    expect(service.create).not.toHaveBeenCalled()
   })
 
   it('annule réellement une lecture active à la demande du renderer', async () => {

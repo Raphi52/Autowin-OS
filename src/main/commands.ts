@@ -28,6 +28,9 @@ import {
   captureWorkspacePathGenerationMarker
 } from './providers/workspace-mutation-evidence'
 import { appendConvActivity } from './activity/conv-activity'
+import { createTicketFromCommand, type TicketCreateArgs } from './ticket-create-command'
+import type { TicketCreateRequest } from './ticket-providers/provider-contract'
+import type { TicketItem, TicketSourceProfile } from '../shared/tickets'
 import { buildAutowinKaizenTask, collectAutowinKaizenEvidence } from './autowin-kaizen-context'
 import type { OrchestrationStep, OrchestrationPhase } from './orchestrator'
 import {
@@ -272,6 +275,27 @@ const CATALOG: CommandSpec[] = [
     }
   },
   {
+    name: 'ticket_create',
+    description:
+      'Créer une fiche (work item) chez le fournisseur de tickets configuré — écrit dans le backlog de l’équipe, sous l’identité de l’utilisateur : ne l’utiliser que sur une demande explicite',
+    args: {
+      title: 'titre court et explicite de la fiche (obligatoire)',
+      description: 'facultatif — contexte, reproduction, critère de fin',
+      workItemType: 'facultatif — ex. Bug, Task, User Story ; défaut = celui du fournisseur',
+      assignee: 'facultatif — identifiant de la personne assignée',
+      sourceId:
+        'facultatif si une seule source est configurée ; OBLIGATOIRE s’il y en a plusieurs (on ne devine pas le projet cible)'
+    },
+    annotations: {
+      readOnlyHint: false,
+      // Non destructif (on ajoute, on ne supprime rien) mais NON idempotent : deux appels créent
+      // DEUX fiches. Et `openWorldHint` : l'effet sort de l'app, chez un tiers.
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true
+    }
+  },
+  {
     name: 'graphify',
     description:
       "Créer le graphe Graphify d'une codebase du workspace, ou le mettre à jour s'il existe déjà, avant une exploration large",
@@ -486,7 +510,14 @@ export class AppCommandBus {
       input: GraphifyCommandInput
     ) => Promise<GraphifyCommandResult> = runGraphify,
     private readonly isCommandEnabled: (name: string) => boolean = () => true,
-    private readonly retrieveBrain: typeof retrieveBrainContext = retrieveBrainContext
+    private readonly retrieveBrain: typeof retrieveBrainContext = retrieveBrainContext,
+    /**
+     * Sources Tickets configurées, relues à CHAQUE appel : le modèle nomme au plus un `sourceId`,
+     * jamais un profil. Défaut vide → `ticket_create` refusera en disant de configurer une source.
+     */
+    private readonly listTicketSources: () => readonly TicketSourceProfile[] = () => [],
+    /** Créateur réel, câblé depuis index.ts. Absent → la commande annonce l'indisponibilité. */
+    private readonly createTicket?: (request: TicketCreateRequest) => Promise<TicketItem>
   ) {}
 
   catalog(): CommandSpec[] {
@@ -1051,6 +1082,13 @@ export class AppCommandBus {
         return await this.runVerify()
       case 'brain_query':
         return await this.runBrainQuery(a.question, conversationId, turnId)
+      case 'ticket_create':
+        // Écriture chez un tiers : la cible et les bornes sont décidées hors du modèle
+        // (`ticket-create-command.ts` + `TicketService`), jamais d'après les arguments bruts.
+        return await createTicketFromCommand(a as TicketCreateArgs, {
+          listSources: this.listTicketSources,
+          ...(this.createTicket ? { create: this.createTicket } : {})
+        })
       case 'graphify':
         return await this.withIsolatedMutation(
           'graphify',
