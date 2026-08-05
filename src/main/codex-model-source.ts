@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
+import { codexNativeBinaryFromEntrypoint } from './providers/codex'
 import { killEscalate } from './providers/watchdog'
 
 export interface CodexAppServerModel {
@@ -26,6 +27,8 @@ export interface CodexModelSourceOptions {
   codexBin?: string
   appData?: string
   platform?: NodeJS.Platform
+  /** Injectable pour le test : sinon `process.arch`, qui decide du triplet du binaire natif. */
+  arch?: string
 }
 
 function commandSpec(options: CodexModelSourceOptions): { command: string; args: string[] } {
@@ -41,6 +44,16 @@ function commandSpec(options: CodexModelSourceOptions): { command: string; args:
     if (!entrypoint || !existsSync(entrypoint)) {
       throw new Error('Codex CLI npm introuvable')
     }
+    // BINAIRE NATIF D'ABORD. Notre `spawn` pose `windowsHide: true`, mais lancer le WRAPPER npm
+    // `codex.js` ne fait que déplacer le problème : c'est le wrapper qui relance ensuite le binaire
+    // natif, sans ce drapeau — et le masquage ne se transmet pas à un petit-enfant. Mesuré le
+    // 2026-08-05 : une fenêtre Windows Terminal titrée `…\bin\codex.exe` apparaissait ~14 s après le
+    // démarrage, filiation `codex.exe ← electron.exe (codex.js) ← electron`. `providers/codex.ts`
+    // résolvait déjà le natif pour cette raison ; ce chemin-ci passait encore par le wrapper.
+    const natif = codexNativeBinaryFromEntrypoint(entrypoint, platform, options.arch)
+    if (natif) return { command: natif, args: ['app-server', '--stdio'] }
+    // Pas de binaire natif publié pour cette architecture : le wrapper reste le seul chemin, et son
+    // erreur habituelle vaut mieux qu'un échec muet.
     return { command: process.execPath, args: [entrypoint, 'app-server', '--stdio'] }
   }
 

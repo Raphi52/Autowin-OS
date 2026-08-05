@@ -1,4 +1,7 @@
 import { EventEmitter } from 'node:events'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import { listCodexAppServerModels, type CodexAppServerModel } from './codex-model-source'
@@ -143,5 +146,68 @@ describe('Codex app-server model source', () => {
       })
     ).rejects.toThrow(/curseur/i)
     expect(fixture.requests.filter((request) => request.method === 'model/list')).toHaveLength(2)
+  })
+})
+
+/**
+ * LE WRAPPER `codex.js` OUVRE UNE CONSOLE VISIBLE — il faut viser le binaire natif.
+ *
+ * Mesuré le 2026-08-05 : ~14 s après le démarrage de l'app, une fenêtre Windows Terminal titrée
+ * `…\codex-win32-x64\vendor\x86_64-pc-windows-msvc\bin\codex.exe` apparaissait à côté de l'app. La
+ * filiation relevée était `codex.exe ← electron.exe (exécutant codex.js) ← electron ← electron-vite`.
+ *
+ * Notre `spawn` pose bien `windowsHide: true`, mais il lance le WRAPPER npm, et c'est le wrapper qui
+ * relance le binaire natif — sans ce drapeau. Le masquage ne se transmet pas à un petit-enfant.
+ * `providers/codex.ts` résolvait déjà le binaire natif pour cette raison exacte ; ce chemin-ci, lui,
+ * passait encore par le wrapper.
+ */
+describe('Codex app-server — aucune console visible sous Windows', () => {
+  const tripleParArch: Record<string, { paquet: string; triple: string }> = {
+    x64: { paquet: '@openai/codex-win32-x64', triple: 'x86_64-pc-windows-msvc' },
+    arm64: { paquet: '@openai/codex-win32-arm64', triple: 'aarch64-pc-windows-msvc' }
+  }
+
+  it('lance le binaire NATIF, pas le wrapper codex.js qui rouvre une console', async () => {
+    const cible = tripleParArch[process.arch]
+    if (!cible) return // architecture sans binaire natif publié : le wrapper reste le seul chemin
+
+    const racine = mkdtempSync(join(tmpdir(), 'autowin-codex-native-'))
+    const paquet = join(racine, 'npm', 'node_modules', '@openai', 'codex')
+    mkdirSync(join(paquet, 'bin'), { recursive: true })
+    writeFileSync(join(paquet, 'bin', 'codex.js'), '// wrapper npm')
+    const natif = join(
+      paquet,
+      'node_modules',
+      ...cible.paquet.split('/'),
+      'vendor',
+      cible.triple,
+      'bin'
+    )
+    mkdirSync(natif, { recursive: true })
+    writeFileSync(join(natif, 'codex.exe'), 'binaire natif')
+
+    const fixture = fakeAppServer({ first: { data: [] } })
+    let commande = ''
+    let args: string[] = []
+    try {
+      await listCodexAppServerModels({
+        platform: 'win32',
+        appData: racine,
+        timeoutMs: 1_000,
+        spawnFn: (c, a) => {
+          commande = c
+          args = a
+          return fixture.child as never
+        }
+      })
+    } finally {
+      rmSync(racine, { recursive: true, force: true })
+    }
+
+    expect(commande).toBe(join(natif, 'codex.exe'))
+    expect(args).toEqual(['app-server', '--stdio'])
+    // Le discriminant : ni Electron-comme-node, ni le wrapper, ne doivent apparaître.
+    expect(commande).not.toContain('electron')
+    expect(args.join(' ')).not.toContain('codex.js')
   })
 })
