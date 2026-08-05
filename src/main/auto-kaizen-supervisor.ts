@@ -59,6 +59,8 @@ export interface AutoKaizenIncident {
     | 'non-actionable'
     /** Le fournisseur est en panne : rien a corriger chez nous, et l'analyse rappellerait l'API morte. */
     | 'upstream-outage'
+    /** Arret demande par un humain : il n'y a aucun defaut a analyser. */
+    | 'aborted'
   analysisConversationId?: string
   analysisTurnId?: string
   analysisResult?: string
@@ -144,8 +146,18 @@ const NEVER_REVIVED = new Set<string>([
   'breadth-limit',
   'non-actionable',
   // Une panne amont ne merite AUCUNE seconde chance : on ne veut jamais l'analyser, meme apres reboot.
-  'upstream-outage'
+  'upstream-outage',
+  // Un abandon voulu non plus : le relancer au boot ressusciterait la cascade que l'utilisateur a coupee.
+  'aborted'
 ])
+
+/**
+ * Motifs qui signifient « il n'y a rien a analyser ». Un incident dont la RACINE porte l'un d'eux est sa
+ * consequence mecanique : l'analyser separement ne peut rien apprendre. C'est par cette porte que
+ * passait le gros de la depense — 2937 descendants de deux racines de quota, dont aucun ne portait le
+ * texte du quota.
+ */
+const NOTHING_TO_ANALYSE = new Set<string>(['aborted', 'upstream-outage', 'non-actionable'])
 
 const ACTIVE_STATUSES = new Set<AutoKaizenIncidentStatus>([
   'detected',
@@ -325,6 +337,45 @@ export function isNonActionableWall(summary: string, detail: string): boolean {
  * `http`/`status`/`api error`, jamais nu — sinon « ligne 500 », « port 5000 » ou « 503 tests » feraient
  * taire un incident légitime.
  */
+/**
+ * ABANDON VOULU — l'arrêt vient d'un humain, il n'y a aucun défaut à analyser.
+ *
+ * POURQUOI CE GARDE EXISTE ALORS QU'UN DRAPEAU PAR CONVERSATION EXISTE DÉJÀ. Le drapeau
+ * (`ActiveChatTurns.wasDeliberatelyStopped`) est consulté sur la conversation SOURCE de l'incident. Or
+ * mesuré sur les incidents réels du 2026-08-05 : les incidents nés d'un arrêt vivent dans les
+ * conversations ENFANTS du kaizen (`conv-1036`…`conv-1043`, profondeurs 2 à 4, même racine), dont les
+ * identifiants n'ont jamais été marqués — l'utilisateur a cliqué Stop ailleurs. Le drapeau ne pouvait
+ * donc structurellement pas les couvrir.
+ *
+ * J'avais écarté le filtrage par SIGNATURE comme « fragile ». Les données le contredisent : l'abandon
+ * produit un vocabulaire stable et reconnaissable, et c'est le seul garde qui traverse la cascade sans
+ * plomberie. Relevés tels quels dans le fichier d'incidents : « This operation was aborted »,
+ * « claude CLI annulé », et le détail réduit au mot « user » — littéralement la raison passée à
+ * `controller.abort('user')`, remontée jusqu'ici comme si c'était un message d'erreur.
+ *
+ * Les motifs sont ANCRÉS : le mot « aborted » seul n'est PAS retenu, une transaction annulée par une
+ * base de données étant un vrai échec. On ne reconnaît que les formulations propres à un abandon demandé.
+ */
+export function isDeliberateAbort(summary: string, detail: string): boolean {
+  const text = `${summary} ${detail}`.toLowerCase().trim()
+  return (
+    // Message exact d'un `AbortController` Node/undici.
+    /\bthis operation was aborted\b/.test(text) ||
+    /\bthe operation was aborted\b/.test(text) ||
+    /\baborterror\b/.test(text) ||
+    /\boperation was (?:canceled|cancelled)\b/.test(text) ||
+    // « claude CLI annulé », « sous-agent annulé » : l'annulation d'un exécutable qu'on a coupé.
+    // PAS de `\b` final : `é` n'est pas un caractère de mot en regex JS, donc la frontière tomberait
+    // AVANT l'accent et le motif ne matcherait jamais. Vérifié — c'est un test qui l'a attrapé.
+    // `(?![a-zà-ÿ])` joue le rôle de la frontière sans dépendre de la classe de `é`.
+    /\b(?:cli|agent|sous-agent|run|orchestration|processus)\s+annul(?:é|e)(?![a-zà-ÿ])/.test(text) ||
+    // Le détail réduit à la RAISON d'abandon. Ancré aux extrémités : « user » au milieu d'une phrase
+    // n'est pas un abandon.
+    /^\s*user\s*$/.test(detail.trim().toLowerCase()) ||
+    /^\s*(?:conversation-deleted|user)\s*$/.test(detail.trim().toLowerCase())
+  )
+}
+
 export function isUpstreamOutage(summary: string, detail: string): boolean {
   const text = `${summary} ${detail}`.toLowerCase()
   return (
@@ -628,7 +679,30 @@ export class AutoKaizenSupervisor {
     const sameRoot = this.state.incidents.filter(
       (item) => item.rootIncidentId === incident.rootIncidentId
     ).length
-    if (isUpstreamOutage(input.summary, input.detail)) {
+    // HÉRITAGE depuis la RACINE. Mesuré sur les 2955 incidents réels du 2026-08-05 : les deux racines
+    // dominantes (1569 et 1368 descendants) sont des murs de QUOTA — `codex HTTP 429
+    // usage_limit_reached` — donc bien reconnues non-actionnables. Mais leurs descendants ne portent PAS
+    // ce texte : ils disent « orchestrate a échoué », « orchestration rouge ». Ils échappaient donc au
+    // garde et lançaient leur run. C'est là qu'était le gros de la dépense, pas dans la racine.
+    //
+    // Un incident dont la racine a été jugée « rien à analyser » ne mérite pas davantage d'analyse : il
+    // en est la conséquence mécanique.
+    const inheritedReason = this.state.incidents.find(
+      (item) =>
+        item.id === incident.rootIncidentId &&
+        item.suppressionReason !== undefined &&
+        NOTHING_TO_ANALYSE.has(item.suppressionReason)
+    )?.suppressionReason
+    // ABANDON VOULU testé en premier : c'est la cause la plus fréquente d'incident inutile, et la seule
+    // qui naisse dans des conversations enfants que le drapeau par conversation ne peut pas couvrir.
+    if (isDeliberateAbort(input.summary, input.detail)) {
+      incident.status = 'suppressed'
+      incident.suppressionReason = 'aborted'
+    } else if (inheritedReason) {
+      incident.status = 'suppressed'
+      // On garde le motif de la RACINE : la télémétrie doit dire pourquoi la cascade n'a pas été analysée.
+      incident.suppressionReason = inheritedReason
+    } else if (isUpstreamOutage(input.summary, input.detail)) {
       // Teste AVANT le mur de quota : les deux suppriment, mais l'etiquette doit dire laquelle des deux
       // causes a mordu, sinon la telemetrie ne sait plus distinguer « quota epuise » de « serveur HS ».
       incident.status = 'suppressed'

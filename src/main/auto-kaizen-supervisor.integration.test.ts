@@ -8,6 +8,7 @@ import {
   inheritAutoKaizenAuthority,
   incidentFromPilotEvent,
   isUpstreamOutage,
+  isDeliberateAbort,
   buildKaizenAnalysisPrompt,
   buildKaizenFixPrompt,
   type AutoKaizenIncident,
@@ -670,5 +671,137 @@ describe('PROMPT KAIZEN — il doit emporter les FAITS, pas seulement le resume'
     const prompt = buildKaizenAnalysisPrompt(incident({ occurrenceCount: 1, eventKeys: ['k1'] }))
     expect(prompt).toContain('vu 1 fois')
     expect(prompt).not.toContain('occurrences distinctes fusionnées')
+  })
+})
+
+describe('ABANDON VOULU — reproduit sur les incidents REELS du 2026-08-05', () => {
+  const roots: string[] = []
+  afterEach(() => {
+    for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+  })
+
+  function harness() {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-ak-abort-'))
+    roots.push(root)
+    const analysisPrompts: string[] = []
+    const conversations: string[] = []
+    const runtime: AutoKaizenRuntime = {
+      createConversation(input) {
+        conversations.push(input.title)
+        return { id: `conv-ab-${conversations.length}` }
+      },
+      appendSourceUpdate() {},
+      async runAnalysis(_c, prompt) {
+        analysisPrompts.push(prompt)
+        return { ok: true, text: 'analyse' }
+      },
+      async runFix() {
+        return { ok: true, text: 'fix' }
+      }
+    }
+    return { root, runtime, analysisPrompts, conversations }
+  }
+
+  it('reconnait les signatures RELEVEES telles quelles dans le fichier d incidents', () => {
+    // Chacune est copiee du fichier reel : ce ne sont pas des exemples inventes.
+    for (const detail of [
+      'This operation was aborted',
+      'user',
+      'Phase build — le role subagent est binde sur claude (claude-opus-5) : This operation was aborted',
+      'Phase kaizen — le role subagent est binde sur claude (claude-opus-5) : claude CLI annulé',
+      'conversation-deleted'
+    ]) {
+      expect(isDeliberateAbort('un outil a echoue', detail)).toBe(true)
+    }
+  })
+
+  it('ne mord PAS sur un vrai echec qui parle d annulation sans etre un abandon demande', () => {
+    // Le defaut symetrique : etouffer un incident legitime est pire, car plus difficile a apercevoir.
+    for (const detail of [
+      'la transaction a ete aborted par la base de donnees',
+      'le user 42 n a pas les droits',
+      'impossible de joindre le serveur user-service',
+      'assertion echouee : expected 3 to be 4'
+    ]) {
+      expect(isDeliberateAbort('un outil a echoue', detail)).toBe(false)
+    }
+  })
+
+  it('SUPPRIME l incident d abandon et ne lance AUCUN run', async () => {
+    const h = harness()
+    const supervisor = new AutoKaizenSupervisor({
+      path: join(h.root, 'incidents.json'),
+      runtime: h.runtime,
+      now: () => Date.parse('2026-08-05T11:14:00.000Z')
+    })
+    const incident = supervisor.report({
+      dedupeKey: 'execution-failed:conv-1039:build',
+      sourceConversationId: 'conv-1039',
+      kind: 'execution-failed',
+      summary: 'orchestrate a echoue',
+      detail: 'Phase build — le role subagent est binde sur claude (claude-opus-5) : This operation was aborted'
+    })
+    await supervisor.drain()
+
+    expect(incident.status).toBe('suppressed')
+    expect(incident.suppressionReason).toBe('aborted')
+    expect(h.analysisPrompts).toEqual([])
+    expect(h.conversations).toEqual([])
+  })
+
+  it('HERITE du verdict de la racine — c est ce qui tue la cascade ENTIERE', async () => {
+    // Le trou structurel mesure : les incidents naissent dans des conversations ENFANTS
+    // (conv-1036..conv-1043, profondeurs 2 a 4) que le drapeau par conversation ne pouvait pas couvrir.
+    // Un enfant ne PORTE pas toujours la signature, mais il DESCEND d un incident qui la portait.
+    const h = harness()
+    const supervisor = new AutoKaizenSupervisor({
+      path: join(h.root, 'incidents.json'),
+      runtime: h.runtime,
+      now: () => Date.parse('2026-08-05T11:14:00.000Z')
+    })
+    const racine = supervisor.report({
+      dedupeKey: 'chat-turn:conv-1000:t1:failed',
+      sourceConversationId: 'conv-1000',
+      kind: 'chat-turn-failed',
+      summary: 'Le tour de conversation a echoue',
+      detail: 'This operation was aborted'
+    })
+    await supervisor.drain()
+    expect(racine.suppressionReason).toBe('aborted')
+
+    // Enfant SANS signature d abandon, mais descendant de la racine abandonnee.
+    const enfant = supervisor.report({
+      dedupeKey: 'orchestration-red:conv-1043:run',
+      sourceConversationId: 'conv-1043',
+      kind: 'orchestration-red',
+      summary: 'Une orchestration s est terminee en rouge',
+      detail: 'RUN en echec : C:/runs/conv-1043/kaizen-workspace/RUN.md',
+      lineage: { rootIncidentId: racine.id, parentIncidentId: racine.id, depth: 2 }
+    })
+    await supervisor.drain()
+
+    expect(enfant.status).toBe('suppressed')
+    expect(enfant.suppressionReason).toBe('aborted')
+    expect(h.analysisPrompts).toEqual([])
+  })
+
+  it('un incident SANS rapport avec un abandon garde son analyse', async () => {
+    // Sans ce test, le correctif pourrait etouffer tout le monde et personne ne le verrait.
+    const h = harness()
+    const supervisor = new AutoKaizenSupervisor({
+      path: join(h.root, 'incidents.json'),
+      runtime: h.runtime,
+      now: () => Date.parse('2026-08-05T11:14:00.000Z')
+    })
+    const incident = supervisor.report({
+      dedupeKey: 'test-red:suite',
+      sourceConversationId: 'conv-9',
+      kind: 'test-red',
+      summary: '3 tests rouges',
+      detail: 'expected 3 to be 4'
+    })
+    await supervisor.drain()
+    expect(incident.status).not.toBe('suppressed')
+    expect(h.analysisPrompts).toHaveLength(1)
   })
 })
