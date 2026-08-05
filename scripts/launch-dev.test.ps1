@@ -17,9 +17,22 @@ Assert-True ($LASTEXITCODE -eq 0) 'electron-vite dev --help must succeed'
 Assert-True ($help -match '--watch.*main process or preload script modules') `
   '--watch must cover main and preload; renderer remains on its dev-server hot update path'
 
+# LE HAUT DE LA CHAÎNE NE DOIT PAS ÊTRE UNE APPLICATION CONSOLE.
+# Viser powershell.exe donnait une console allouée par Windows, confiée à Windows Terminal sur
+# Windows 11 — lequel ignore le SW_HIDE de `-WindowStyle Hidden`. La fenêtre restait affichée puis
+# `cmd` en héritait, son `title` la renommant « Autowin OS Dev ». wscript.exe est graphique : pas de
+# console à hériter, et le masquage s'applique alors réellement au PowerShell qu'il lance.
 $shortcutSource = Get-Content -Raw (Join-Path $PSScriptRoot 'create-dev-shortcut.ps1')
-Assert-True ($shortcutSource -match '\$shortcut\.Arguments\s*=.*-WindowStyle Hidden') `
-  'the desktop shortcut must hide its bootstrap PowerShell window'
+Assert-True ($shortcutSource -match '\$shortcut\.TargetPath\s*=\s*"\$env:SystemRoot\\System32\\wscript\.exe"') `
+  'the desktop shortcut must be launched by wscript.exe, a GUI host with no console to inherit'
+Assert-True ($shortcutSource -notmatch '\$shortcut\.TargetPath\s*=[^\r\n]*powershell\.exe') `
+  'the shortcut must never target powershell.exe directly: Windows Terminal would show its console'
+Assert-True (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'launch-dev.vbs')) `
+  'the console-less bootstrap must exist'
+$bootstrapSource = Get-Content -Raw (Join-Path $PSScriptRoot 'launch-dev.vbs')
+Assert-True ($bootstrapSource -match 'shell\.Run\s+commande,\s*0,\s*False') `
+  'the bootstrap must start the launcher hidden and not wait for it'
+Assert-True ($bootstrapSource -match 'launch-dev\.ps1') 'the bootstrap must delegate to the real launcher'
 
 $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) "autowin-launch-dev-test-$PID"
 New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null
@@ -37,25 +50,21 @@ function Get-CimInstance {
   }
   return $null
 }
-function Start-Process {
-  param(
-    [string]$FilePath,
-    [object[]]$ArgumentList,
-    [string]$WorkingDirectory,
-    [string]$WindowStyle
-  )
+# Le lanceur est injecté : la vraie implémentation crée un PROCESSUS (CREATE_NO_WINDOW), elle ne
+# passe plus par Start-Process, dont le -WindowStyle Hidden était ignoré par Windows Terminal.
+$launcherEspion = {
+  param([string]$FilePath, [string]$Arguments, [string]$WorkingDirectory)
   $script:startCalls += [pscustomobject]@{
     FilePath = $FilePath
-    ArgumentList = $ArgumentList
+    Arguments = $Arguments
     WorkingDirectory = $WorkingDirectory
-    WindowStyle = $WindowStyle
   }
 }
 
 try {
   $duplicateError = $null
   try {
-    . (Join-Path $PSScriptRoot 'launch-dev.ps1') -ProjectRoot $fixtureRoot
+    . (Join-Path $PSScriptRoot 'launch-dev.ps1') -ProjectRoot $fixtureRoot -Launcher $launcherEspion
   } catch {
     $duplicateError = $_
   }
@@ -64,15 +73,27 @@ try {
   Assert-True ($script:startCalls.Count -eq 0) 'duplicate rejection must not launch another terminal'
 
   $script:processMode = 'none'
-  . (Join-Path $PSScriptRoot 'launch-dev.ps1') -ProjectRoot $fixtureRoot
+  . (Join-Path $PSScriptRoot 'launch-dev.ps1') -ProjectRoot $fixtureRoot -Launcher $launcherEspion
   Assert-True ($script:startCalls.Count -eq 1) 'normal launch must delegate exactly once'
-  Assert-True ($script:startCalls[0].ArgumentList[0] -eq '/c') `
-    'cmd must exit cleanly with electron-vite instead of remaining orphaned via /k'
-  Assert-True ($script:startCalls[0].ArgumentList[1] -eq 'title Autowin OS Dev && npm run dev') `
-    'the delegated command must remain the unique marked dev loop'
+  Assert-True ($script:startCalls[0].Arguments -eq '/c title Autowin OS Dev && npm run dev') `
+    'the delegated command must stay the unique marked dev loop, with /c so cmd exits with electron-vite'
   Assert-True ($script:startCalls[0].WorkingDirectory -eq $fixtureRoot) 'the dev loop must start in the requested project'
-  Assert-True ($script:startCalls[0].WindowStyle -eq 'Hidden') `
-    'the long-lived dev loop must never occupy Alt+Tab or the taskbar'
+
+  # LA CAUSE, verrouillée sur la source : `-WindowStyle Hidden` posait SW_HIDE, que conhost honore
+  # mais que Windows Terminal — terminal par defaut de Windows 11 — ignore. Une fenetre titree
+  # « Autowin OS Dev » s'affichait donc a cote de l'app. Seul CREATE_NO_WINDOW n'alloue aucune
+  # console, ce qui rend le reglage terminal de l'utilisateur sans effet.
+  $launchSource = Get-Content -Raw (Join-Path $PSScriptRoot 'launch-dev.ps1')
+  # Le CODE seul : sans cette mise à l'écart des commentaires, l'assertion suivante se déclenchait sur
+  # la ligne d'explication qui NOMME `-WindowStyle Hidden` pour dire pourquoi on ne s'en sert plus.
+  $launchCode = (Get-Content (Join-Path $PSScriptRoot 'launch-dev.ps1') |
+    Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
+  Assert-True ($launchSource -match '\$psi\.CreateNoWindow\s*=\s*\$true') `
+    'the dev loop must allocate NO console (CREATE_NO_WINDOW), not merely hide a window style'
+  Assert-True ($launchSource -match '\$psi\.UseShellExecute\s*=\s*\$false') `
+    'CreateNoWindow is only honoured when UseShellExecute is false'
+  Assert-True ($launchCode -notmatch 'Start-Process[^\r\n]*-WindowStyle\s+Hidden') `
+    'no launch path may rely on -WindowStyle Hidden: Windows Terminal ignores it'
 } finally {
   Remove-Item -LiteralPath $fixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
