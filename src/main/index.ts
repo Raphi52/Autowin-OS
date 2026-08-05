@@ -188,14 +188,16 @@ import { nativeSpoolRoot, appendNativeTrace } from './activity/native-trace-spoo
 import { appendBrainTrace, readBrainTraces } from './activity/brain-trace-spool'
 import { resumeActionFor, waitUntilRunCanResume } from './runs/run-reattach'
 import {
+  activeWorkflowProfile,
   loadWorkflowProfiles,
   removeWorkflowProfile,
   saveWorkflowProfiles,
   selectWorkflowProfile,
   upsertWorkflowProfile,
-  type WorkflowProfile
+  type WorkflowProfile,
+  type WorkflowProfilesFile
 } from './workflow-profiles'
-import { registerWorkflowBenchIpc } from './workflow-bench-ipc'
+import { overrideFor, registerWorkflowBenchIpc } from './workflow-bench-ipc'
 import {
   graphDefects,
   worstCaseNodeExecutions,
@@ -1500,6 +1502,20 @@ Le fil reprend ensuite normalement.`
   // WORKFLOWS NOMMÉS : lire, écrire, sélectionner. La sélection ne PILOTE encore rien — c'est la
   // pièce qui rend un workflow nommable et choisissable, préalable à la comparaison de plusieurs
   // façons de faire sur un même objectif.
+  /**
+   * Porte le workflow ACTIF jusqu'au moteur.
+   *
+   * Sans cet appel, `activeId` n'était qu'une préférence écrite sur disque que PERSONNE ne lisait :
+   * `setActiveWorkflow` n'était sollicité que par le banc de comparaison, qui le pose puis le retire
+   * aussitôt. Le graphe composé, ses personas et ses retours bornés n'avaient donc AUCUN effet sur un
+   * tour de chat — la feature était entièrement décorative. On applique à l'ouverture ET à chaque
+   * changement de sélection, sinon l'un des deux chemins retombe dans le même piège.
+   */
+  const appliquerWorkflowActif = (fichier: WorkflowProfilesFile): void => {
+    os.setActiveWorkflow(overrideFor(activeWorkflowProfile(fichier) ?? null))
+  }
+  appliquerWorkflowActif(loadWorkflowProfiles())
+
   ipcMain.handle('os:workflowProfiles:get', (event) => {
     assertTrustedRendererSender(event, 'Workflow profiles')
     return loadWorkflowProfiles()
@@ -1508,12 +1524,17 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Workflow profiles')
     const next = upsertWorkflowProfile(loadWorkflowProfiles(), raw as WorkflowProfile)
     saveWorkflowProfiles(next)
+    // Éditer le graphe du workflow ACTIF doit prendre effet tout de suite : sinon le moteur
+    // continuerait de jouer la version d'avant, sans que rien ne le signale.
+    appliquerWorkflowActif(next)
     return next
   })
   ipcMain.handle('os:workflowProfiles:remove', (event, rawId: unknown) => {
     assertTrustedRendererSender(event, 'Workflow profiles')
     const next = removeWorkflowProfile(loadWorkflowProfiles(), guardString(rawId, 'id'))
     saveWorkflowProfiles(next)
+    // Supprimer le workflow actif doit le retirer du moteur, pas le laisser piloter un profil mort.
+    appliquerWorkflowActif(next)
     return next
   })
   ipcMain.handle('os:workflowProfiles:select', (event, rawId: unknown) => {
@@ -1521,6 +1542,7 @@ Le fil reprend ensuite normalement.`
     const id = rawId === null ? null : guardString(rawId, 'id')
     const next = selectWorkflowProfile(loadWorkflowProfiles(), id)
     saveWorkflowProfiles(next)
+    appliquerWorkflowActif(next)
     return next
   })
   /**

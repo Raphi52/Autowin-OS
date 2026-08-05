@@ -130,8 +130,23 @@ describe('le canal est réellement branché à l’application', () => {
   const entree = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
 
   it('index.ts importe et appelle registerWorkflowBenchIpc', () => {
-    expect(entree).toMatch(/import \{ registerWorkflowBenchIpc \} from '\.\/workflow-bench-ipc'/)
+    // L'import est groupé depuis que `overrideFor` sert AUSSI à poser le workflow actif du chat :
+    // on vérifie le symbole, pas la forme exacte de la ligne d'import.
+    expect(entree).toMatch(/registerWorkflowBenchIpc[^\n]*from '\.\/workflow-bench-ipc'/)
     expect(entree).toMatch(/registerWorkflowBenchIpc\(\{/)
+  })
+
+  /**
+   * Le défaut que ce test ferme : `activeId` n'était qu'une préférence écrite sur disque. Personne
+   * ne la lisait — `setActiveWorkflow` n'était appelé QUE par le banc, qui le pose puis le retire.
+   * Le graphe composé, ses personas et ses retours bornés n'avaient donc aucun effet sur un tour de
+   * chat. Une feature entièrement décorative, invisible à tous les autres tests.
+   */
+  it('le workflow ACTIF est porté jusqu’au moteur — à l’ouverture et à chaque changement', () => {
+    expect(entree).toMatch(/os\.setActiveWorkflow\(overrideFor\(activeWorkflowProfile\(/)
+    // Les trois chemins qui changent l'actif doivent le republier, sinon l'un d'eux ment.
+    const applications = entree.match(/appliquerWorkflowActif\(/g) ?? []
+    expect(applications.length).toBeGreaterThanOrEqual(4) // définition + ouverture + select + upsert + remove
   })
 
   it('index.ts relie la pose du workflow à l’OS — sans ça, phases et consignes n’arrivent nulle part', () => {
