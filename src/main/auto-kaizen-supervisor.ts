@@ -129,13 +129,22 @@ export interface AutoKaizenLimits {
    * horaire ne morde. Un garde en profondeur seul ne borne pas une croissance géométrique.
    */
   maxPerRoot: number
+  /**
+   * Au-delà de ce silence, un incident ACTIF est déclaré abandonné. Mesuré le 2026-08-05 : 3 incidents
+   * étaient figés en `fix-running`, dont la racine depuis 2,2 h, et rien ne les en faisait sortir après
+   * un crash ou une fermeture de l'app. Le vrai danger n'était pas l'incident perdu mais le budget :
+   * `fix-running` comptant dans ACTIVE_STATUSES, chaque figé confisquait une part de `maxActive` —
+   * 10 figés gelaient tout le système par `active-limit`, sans le moindre signal.
+   */
+  staleActiveMs: number
 }
 
 const DEFAULT_LIMITS: AutoKaizenLimits = {
   maxActive: 10,
   maxDepth: 3,
   maxPerHour: 50,
-  maxPerRoot: 12
+  maxPerRoot: 12,
+  staleActiveMs: 60 * 60_000
 }
 
 /**
@@ -205,7 +214,9 @@ function observationWindow(incident: AutoKaizenIncident): string {
       : minutes < 120
         ? `${minutes} min`
         : `${Math.round(minutes / 60)} h`
-  return incident.occurrenceCount <= 1 ? 'vu 1 fois' : `vu ${incident.occurrenceCount} fois sur ${window}`
+  return incident.occurrenceCount <= 1
+    ? 'vu 1 fois'
+    : `vu ${incident.occurrenceCount} fois sur ${window}`
 }
 
 /**
@@ -392,7 +403,9 @@ export function isDeliberateAbort(summary: string, detail: string): boolean {
     // PAS de `\b` final : `é` n'est pas un caractère de mot en regex JS, donc la frontière tomberait
     // AVANT l'accent et le motif ne matcherait jamais. Vérifié — c'est un test qui l'a attrapé.
     // `(?![a-zà-ÿ])` joue le rôle de la frontière sans dépendre de la classe de `é`.
-    /\b(?:cli|agent|sous-agent|run|orchestration|processus)\s+annul(?:é|e)(?![a-zà-ÿ])/.test(text) ||
+    /\b(?:cli|agent|sous-agent|run|orchestration|processus)\s+annul(?:é|e)(?![a-zà-ÿ])/.test(
+      text
+    ) ||
     // Le détail réduit à la RAISON d'abandon. Ancré aux extrémités : « user » au milieu d'une phrase
     // n'est pas un abandon.
     /^\s*user\s*$/.test(detail.trim().toLowerCase()) ||
@@ -637,6 +650,9 @@ export class AutoKaizenSupervisor {
   }
 
   report(input: AutoKaizenIncidentInput): AutoKaizenIncident {
+    // AVANT tout comptage de budget : un figé ne doit pas confisquer la place d'une demande vivante.
+    // C'est ici que le blocage progressif se dénoue, `report` étant le battement naturel du système.
+    this.reapStaleActive(this.now())
     const exact = this.state.incidents.find(
       (incident) =>
         incident.dedupeKey === input.dedupeKey || incident.eventKeys?.includes(input.dedupeKey)
@@ -776,6 +792,10 @@ export class AutoKaizenSupervisor {
   /** Reprend les transitions persistées après redémarrage, sans relancer une conversation encore active. */
   resumePending(): void {
     const timestamp = this.now()
+    // Le redémarrage est le moment où le résidu se voit : les incidents restés actifs au moment de
+    // l'arrêt sont ici les seuls candidats. On les fauche AVANT de reprendre, sinon on relance un
+    // travail que plus personne ne porte — c'est ainsi que 3 incidents tournaient encore en boucle.
+    this.reapStaleActive(timestamp)
     for (const incident of this.state.incidents) {
       if (
         incident.status !== 'suppressed' ||
@@ -803,6 +823,34 @@ export class AutoKaizenSupervisor {
 
   private persist(): void {
     saveSnapshot(this.path, this.state)
+  }
+
+  /**
+   * Déclare abandonné tout incident ACTIF qui n'a plus progressé depuis `staleActiveMs`.
+   *
+   * Ne fauche JAMAIS un incident dont la promesse est encore en vol dans CE processus
+   * (`runningIncidentIds`) : là, le travail avance vraiment, même si la transition suivante tarde.
+   * Ce que la garde ramasse, c'est le résidu d'un crash ou d'une fermeture — l'incident que plus
+   * personne ne porte. `failed` est terminal ET hors de la portée de `resumePending`, donc l'incident
+   * ne repart pas en boucle au démarrage suivant.
+   */
+  private reapStaleActive(timestamp: number): void {
+    for (const incident of this.state.incidents) {
+      if (!ACTIVE_STATUSES.has(incident.status)) continue
+      if (this.runningIncidentIds.has(incident.id)) continue
+      const silence = timestamp - (incident.updatedAt ?? 0)
+      if (silence <= this.limits.staleActiveMs) continue
+      const minutes = Math.round(silence / 60_000)
+      this.update(incident, {
+        status: 'failed',
+        severity: 'critical',
+        error: `Abandonné par l'horloge de garde : aucune progression depuis ${minutes} min (statut « ${incident.status} » figé, probable arrêt de l'app en cours de traitement).`
+      })
+      this.safeUpdate(
+        incident.sourceConversationId,
+        `⏱️ Auto-Kaizen ${incident.id} déclaré abandonné après ${minutes} min sans progression — le budget qu'il confisquait est rendu.`
+      )
+    }
   }
 
   private update(incident: AutoKaizenIncident, patch: Partial<AutoKaizenIncident>): void {
