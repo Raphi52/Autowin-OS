@@ -506,6 +506,42 @@ export function isMutationTask(task: string): boolean {
   return classifyMutationConfidence(task) !== 'read-only'
 }
 
+/**
+ * Ce que l'agent doit savoir quand il travaille dans une COPIE isolée — et qu'il ignorait.
+ *
+ * Incident du 2026-08-04 : l'agent a correctement fait un `git stash` sur le dépôt réel (via
+ * `git -C`), puis a conclu « mon cwd est un worktree, donc mon stash y est local, je ne peux rien
+ * certifier » et a rapporté un échec. Le raisonnement est faux — `refs/stash` est PARTAGÉ entre
+ * worktrees — mais rien ne le lui disait. Il a deviné sa propre topologie, et mal.
+ *
+ * Aucun de mes autres correctifs n'empêche cela de recommencer : ils rendent le gate satisfiable,
+ * pas l'agent lucide sur l'endroit où il se trouve. Ce bloc lui donne les trois faits qui lui
+ * manquaient : où il est, où est le vrai dépôt, et ce qui est partagé entre les deux.
+ */
+export function workspaceIsolationNotice(workCwd: string, baseWorkspace: string): string {
+  if (!workCwd || !baseWorkspace || workCwd === baseWorkspace) return ''
+  return [
+    '## Où tu travailles',
+    '',
+    `Ton dossier courant est une COPIE ISOLÉE (worktree git) : ${workCwd}`,
+    `Le dépôt de l'utilisateur, lui, est ici : ${baseWorkspace}`,
+    '',
+    "Ce que tu écris dans ta copie n'atteint le dépôt de l'utilisateur QUE si le run se termine",
+    'en vert : un run bloqué par le gate laisse ta copie non fusionnée.',
+    '',
+    'Ce qui est PARTAGÉ entre les deux, malgré des dossiers distincts, parce que le dépôt git est',
+    'le même : le stash (`refs/stash`), les branches, les tags, les commits, la configuration.',
+    "Un `git stash` lancé ici EST visible depuis le dépôt de l'utilisateur.",
+    '',
+    "Si une tâche vise l'état du dépôt de l'utilisateur (stash, branche, mise à jour), agis",
+    `explicitement dessus avec \`git -C "${baseWorkspace}" …\` — pas sur ta copie.`,
+    '',
+    "Et ne DEVINE jamais ce qui s'est passé : constate-le. Après une opération, relis l'état réel",
+    '(`git -C … status --porcelain`, `git -C … stash list`) et rapporte ce que tu as LU. Un agent',
+    "a déjà annoncé « il ne s'est probablement rien passé » sur un travail qu'il venait de réussir."
+  ].join('\n')
+}
+
 export function evidenceSatisfiesTask(task: string, evidence: ExecutionEvidence[] = []): boolean {
   // B1 — une tâche NON-mutation (cadrage, analyse, scout) n'a aucune preuve d'outil à fournir :
   // son livrable est le TEXTE, validé par le juge. Ne pas exiger de preuve outil ici (sinon
@@ -1408,7 +1444,12 @@ export class Orchestrator {
             this.phasePrompt(phase, withFoundation),
             { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
             { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
-            { name: 'projectContext', text: projectContext }
+            { name: 'projectContext', text: projectContext },
+            // Vide quand le run tourne dans le dépôt de base : rien n'est payé en contexte.
+            {
+              name: 'workspaceIsolation',
+              text: workspaceIsolationNotice(workCwd, this.deps.executionWorkspace)
+            }
           ]
           const systemBlocks = parts
             .filter((part) => part.text)
@@ -1938,7 +1979,11 @@ export class Orchestrator {
           this.phasePrompt(phase, true),
           { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
           { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
-          { name: 'projectContext', text: projectContext }
+          { name: 'projectContext', text: projectContext },
+          {
+            name: 'workspaceIsolation',
+            text: workspaceIsolationNotice(workCwd, this.deps.executionWorkspace)
+          }
         ]
         const fanSystemBlocks = parts
           .filter((p) => p.text)
