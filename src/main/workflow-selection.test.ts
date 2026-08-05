@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   loadWorkflowSelections,
   pruneWorkflowSelections,
+  refusExplicite,
   saveWorkflowSelections,
   selectWorkflowForConversation,
   workflowForConversation
@@ -29,14 +30,22 @@ describe('un workflow par conversation', () => {
     expect(workflowForConversation(sel, 'conv-b')).toBe('rigoureux')
   })
 
-  it('détacher retire l’entrée au lieu d’enregistrer un vide qui ne désigne rien', () => {
+  /**
+   * Contrat CHANGÉ le 2026-08-05, après un audit de l'application sur son propre code : effacer
+   * l'entrée rendait un refus EXPLICITE indiscernable de « jamais choisi ». Le mode dynamique
+   * réimposait alors un workflow que l'utilisateur venait de retirer — la laisse exacte que ce
+   * chantier veut éviter. Un refus est une décision : il se persiste.
+   */
+  it('détacher enregistre un REFUS explicite, discernable de « jamais choisi »', () => {
     const sel = selectWorkflowForConversation(
       { byConversation: { 'conv-a': 'rapide' } },
       'conv-a',
       null
     )
-    expect(sel.byConversation).toEqual({})
-    expect(workflowForConversation(sel, 'conv-a')).toBeUndefined()
+    expect(refusExplicite(sel, 'conv-a')).toBe(true)
+    // Une conversation qui ne s'est jamais prononcée reste, elle, indéterminée.
+    expect(refusExplicite(sel, 'conv-jamais-vue')).toBe(false)
+    expect(workflowForConversation(sel, 'conv-jamais-vue')).toBeUndefined()
   })
 
   it('une conversation sans choix n’impose rien', () => {

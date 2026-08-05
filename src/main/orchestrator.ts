@@ -402,6 +402,14 @@ export interface OrchestratorDeps
 
 /** Ce qu'un workflow nommé impose au run, au-delà du binding de rôle déjà accepté par `run`. */
 export interface WorkflowRunOverride {
+  /**
+   * L'utilisateur a CHOISI ce workflow, il n'a pas été deviné.
+   *
+   * Un choix explicite bat l'heuristique de proportionnalité : sans ce drapeau, attacher un
+   * workflow à une conversation puis envoyer une demande jugée légère le désactivait EN SILENCE —
+   * l'écran affichait un workflow attaché qui ne pilotait rien.
+   */
+  explicit?: boolean
   phases?: PipelinePhase[]
   /** Le workflow comme graphe : pilote les phases jouées ET la borne des retours. */
   graph?: WorkflowGraph
@@ -716,6 +724,9 @@ export class Orchestrator {
    * ne doit pas être. Le graphe est un outil qu'on sort quand le travail le mérite.
    */
   private tacheTriviale(task: string): boolean {
+    // Un workflow CHOISI par l'utilisateur n'est jamais écarté par l'heuristique : entre une
+    // décision explicite et une devinette sur la longueur de la demande, c'est la décision qui gagne.
+    if (this.deps.currentWorkflow?.()?.explicit) return false
     const classees = this.deps.classifyPhases?.(task)
     return !!classees && classees.length <= 1
   }

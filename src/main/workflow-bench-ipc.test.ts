@@ -143,7 +143,14 @@ describe('le canal est réellement branché à l’application', () => {
    * chat. Une feature entièrement décorative, invisible à tous les autres tests.
    */
   it('le workflow ACTIF est porté jusqu’au moteur — à l’ouverture et à chaque changement', () => {
-    expect(entree).toMatch(/os\.setActiveWorkflow\(overrideFor\(activeWorkflowProfile\(/)
+    // La pose passe par une variable depuis que le choix EXPLICITE est marqué (`explicit: true`) :
+    // on vérifie les deux maillons, pas la forme d'une ligne unique.
+    expect(entree).toMatch(/activeWorkflowProfile\(/)
+    expect(entree).toMatch(/overrideFor\(/)
+    expect(entree).toMatch(/os\.setActiveWorkflow\(/)
+    // Le choix venu de la vue est marqué EXPLICITE : sans ce drapeau, l'heuristique de
+    // proportionnalité le désactivait en silence sur une demande jugée légère.
+    expect(entree).toMatch(/explicit: true/)
     // Les trois chemins qui changent l'actif doivent le republier, sinon l'un d'eux ment.
     const applications = entree.match(/appliquerWorkflowActif\(/g) ?? []
     expect(applications.length).toBeGreaterThanOrEqual(4) // définition + ouverture + select + upsert + remove

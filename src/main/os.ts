@@ -85,6 +85,7 @@ import { graphOf, loadWorkflowProfiles } from './workflow-profiles'
 import {
   loadWorkflowSelections,
   saveWorkflowSelections,
+  refusExplicite,
   selectWorkflowForConversation,
   workflowForConversation
 } from './workflow-selection'
@@ -165,15 +166,20 @@ export class AutowinOS {
   private async poseConversationWorkflow(conversationId?: string, task?: string): Promise<boolean> {
     if (this.activeWorkflow) return false
     const selections = loadWorkflowSelections()
+    // Un refus EXPLICITE se respecte : l'utilisateur a retiré le workflow de cette conversation, le
+    // mode dynamique n'a pas à lui en réimposer un. C'est la différence entre proposer et forcer.
+    if (refusExplicite(selections, conversationId)) return false
     const profileId = workflowForConversation(selections, conversationId)
-    // MODE DYNAMIQUE : aucun workflow choisi à la main → on DEMANDE au modèle lequel convient. Il a
-    // le droit de répondre « aucun », et c'est souvent la bonne réponse : sans ce droit le mode
-    // deviendrait la laisse que tout ce chantier cherche à éviter.
+    // MODE DYNAMIQUE : l'utilisateur ne s'est JAMAIS prononcé → on demande au modèle lequel convient.
+    // Il a le droit de répondre « aucun », et c'est souvent la bonne réponse.
     if (!profileId) return task ? await this.poseWorkflowDynamique(task) : false
     const profile = loadWorkflowProfiles().profiles.find((p) => p.id === profileId)
     if (!profile) return false
     const effectif = applyWorkflowProfile({ roles: {} }, profile)
     this.activeWorkflow = {
+      // CHOISI À LA MAIN : la proportionnalité ne doit pas l'écraser. Un garde heuristique qui
+      // désactive en silence une décision explicite affiche un workflow qui ne pilote rien.
+      explicit: true,
       ...(graphOf(profile) ? { graph: graphOf(profile) } : {}),
       ...(effectif.phases?.length ? { phases: effectif.phases } : {}),
       ...(effectif.allocation ? { allocation: effectif.allocation } : {}),

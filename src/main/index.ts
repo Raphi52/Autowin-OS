@@ -1518,7 +1518,10 @@ Le fil reprend ensuite normalement.`
    * changement de sélection, sinon l'un des deux chemins retombe dans le même piège.
    */
   const appliquerWorkflowActif = (fichier: WorkflowProfilesFile): void => {
-    os.setActiveWorkflow(overrideFor(activeWorkflowProfile(fichier) ?? null))
+    const actif = activeWorkflowProfile(fichier)
+    const override = overrideFor(actif ?? null)
+    // Activé depuis la vue = choix EXPLICITE : la proportionnalité ne doit pas l'écarter en silence.
+    os.setActiveWorkflow(override ? { ...override, explicit: true } : undefined)
   }
   // Le semis d'origine précède l'application : sinon la toute première ouverture montrerait une vue
   // vide, et le moteur n'aurait rien à porter.
