@@ -90,10 +90,23 @@ describe('le choix atteint réellement le run du chat', () => {
   const os = readFileSync(new URL('./os.ts', import.meta.url), 'utf8')
 
   it('la façade pose le workflow de la conversation autour de l’appel à l’orchestrateur', () => {
-    const pose = os.indexOf('const posed = this.poseConversationWorkflow(conversationId)')
+    // La pose est ATTENDUE depuis le mode dynamique : choisir peut demander un appel de modèle.
+    // On vérifie l'ordre pose-avant-run, pas la forme exacte de l'appel.
+    const pose = os.indexOf('await this.poseConversationWorkflow(conversationId')
     const run = os.indexOf('await this.orchestrator.run(', pose)
     expect(pose).toBeGreaterThan(-1)
     expect(run).toBeGreaterThan(pose) // posé AVANT, sinon le run part sans lui
+  })
+
+  /**
+   * Le mode dynamique doit être ATTEINT quand aucun workflow n'est choisi à la main. Sans ce test,
+   * `poseWorkflowDynamique` pourrait exister, être parfaitement testée, et n'être jamais appelée —
+   * le défaut exact que ce fichier existe pour empêcher.
+   */
+  it('faute de choix manuel, le mode dynamique est sollicité', () => {
+    expect(os).toMatch(/if \(!profileId\) return task \? await this\.poseWorkflowDynamique\(task\)/)
+    // Et il retombe sur « aucun workflow » plutôt que d'empêcher le run de partir.
+    expect(os).toMatch(/if \(!meriteUneDecision\(task\)\) return false/)
   })
 
   it('et le retire ensuite, y compris quand le run échoue', () => {

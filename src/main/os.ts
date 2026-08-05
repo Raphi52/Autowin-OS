@@ -13,6 +13,7 @@ import type { Message } from './providers/types'
 import { CONSTITUTION } from './constitution'
 import { planProviderLogin, spawnLoginTerminal } from './provider-login'
 import { RoleModelConfig, type Role, type RoleBinding, type ReasoningEffort } from './roles'
+import { dynamicPrompt, meriteUneDecision, readWorkflowDecision } from './workflow-dynamic'
 import { loadRoleBindings, saveRoleBindings } from './role-store'
 // fix-ok: refonte qualité (demande user « refais comme en fable ») — purge du mort, pas un blind-fix.
 import { AuthoritySas } from './authority/sas'
@@ -161,11 +162,14 @@ export class AutowinOS {
    * et il doit gagner — sinon un banc lancé depuis une conversation comparerait le workflow de cette
    * conversation à lui-même.
    */
-  private poseConversationWorkflow(conversationId?: string): boolean {
+  private async poseConversationWorkflow(conversationId?: string, task?: string): Promise<boolean> {
     if (this.activeWorkflow) return false
     const selections = loadWorkflowSelections()
     const profileId = workflowForConversation(selections, conversationId)
-    if (!profileId) return false
+    // MODE DYNAMIQUE : aucun workflow choisi à la main → on DEMANDE au modèle lequel convient. Il a
+    // le droit de répondre « aucun », et c'est souvent la bonne réponse : sans ce droit le mode
+    // deviendrait la laisse que tout ce chantier cherche à éviter.
+    if (!profileId) return task ? await this.poseWorkflowDynamique(task) : false
     const profile = loadWorkflowProfiles().profiles.find((p) => p.id === profileId)
     if (!profile) return false
     const effectif = applyWorkflowProfile({ roles: {} }, profile)
@@ -175,6 +179,48 @@ export class AutowinOS {
       ...(effectif.allocation ? { allocation: effectif.allocation } : {}),
       instructionFor: (phase) => effectif.instructionFor(phase)
     }
+    return true
+  }
+
+  /**
+   * Demande au modèle quelle façon de travailler convient — et accepte qu'il réponde « aucune ».
+   *
+   * Best-effort de bout en bout : une panne de provider, une réponse illisible, un graphe inventé
+   * invalide ou trop coûteux font TOUS retomber sur « aucun workflow », c'est-à-dire le comportement
+   * d'avant ce mode. Un choix automatique ne doit jamais pouvoir empêcher un run de partir.
+   */
+  private async poseWorkflowDynamique(task: string): Promise<boolean> {
+    // Ne pas payer un appel de modèle pour apprendre qu'une demande de trois mots ne mérite rien.
+    if (!meriteUneDecision(task)) return false
+    const profiles = loadWorkflowProfiles().profiles
+    let reponse: string
+    try {
+      const binding = this.roles.all().orchestrator
+      if (!binding?.provider) return false
+      const res = await this.registry.send(
+        binding.provider,
+        [{ role: 'user', content: dynamicPrompt(task, profiles) }],
+        { model: binding.model, reasoningEffort: 'low' }
+      )
+      reponse = res.text ?? ''
+    } catch {
+      return false
+    }
+
+    const decision = readWorkflowDecision(reponse, profiles)
+    if (decision.kind === 'none') return false
+    if (decision.kind === 'existing') {
+      const effectif = applyWorkflowProfile({ roles: {} }, decision.profile)
+      this.activeWorkflow = {
+        ...(graphOf(decision.profile) ? { graph: graphOf(decision.profile) } : {}),
+        ...(effectif.phases?.length ? { phases: effectif.phases } : {}),
+        ...(effectif.allocation ? { allocation: effectif.allocation } : {}),
+        instructionFor: (phase) => effectif.instructionFor(phase)
+      }
+      return true
+    }
+    // Graphe composé à la volée : déjà validé par `readWorkflowDecision` (défauts ET plafond de coût).
+    this.activeWorkflow = { graph: decision.graph, instructionFor: () => undefined }
     return true
   }
 
@@ -627,7 +673,7 @@ export class AutowinOS {
         // LE branchement qui fait qu'un workflow sélectionné change quelque chose. Sans lui, choisir
         // un profil n'écrivait qu'un champ dans un fichier : l'écran promettait un pilotage qui
         // n'existait pas. On le pose autour du run et on le retire ensuite (voir `finally`).
-        const posed = this.poseConversationWorkflow(conversationId)
+        const posed = await this.poseConversationWorkflow(conversationId, task)
         try {
           const result = await this.orchestrator.run(
             task,
