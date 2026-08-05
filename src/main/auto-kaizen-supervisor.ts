@@ -61,6 +61,8 @@ export interface AutoKaizenIncident {
     | 'upstream-outage'
     /** Arret demande par un humain : il n'y a aucun defaut a analyser. */
     | 'aborted'
+    /** Le run que le kaizen venait de lancer a fini rouge : le parent le sait deja. */
+    | 'remediation-red'
   analysisConversationId?: string
   analysisTurnId?: string
   analysisResult?: string
@@ -148,7 +150,9 @@ const NEVER_REVIVED = new Set<string>([
   // Une panne amont ne merite AUCUNE seconde chance : on ne veut jamais l'analyser, meme apres reboot.
   'upstream-outage',
   // Un abandon voulu non plus : le relancer au boot ressusciterait la cascade que l'utilisateur a coupee.
-  'aborted'
+  'aborted',
+  // Le rouge d'une remediation n'apprend rien de plus au redemarrage qu'il n'en apprenait sur le moment.
+  'remediation-red'
 ])
 
 /**
@@ -337,6 +341,26 @@ export function isNonActionableWall(summary: string, detail: string): boolean {
  * `http`/`status`/`api error`, jamais nu — sinon « ligne 500 », « port 5000 » ou « 503 tests » feraient
  * taire un incident légitime.
  */
+/**
+ * ROUGE D'UNE REMÉDIATION — « le run que je viens de lancer a fini rouge ».
+ *
+ * À profondeur > 0, un `orchestration-red` est par CONSTRUCTION le compte rendu du run que le kaizen
+ * lui-même a lancé. Le parent porte déjà cette information : son statut devient `failed`, son `error` est
+ * renseigné et `failureSourceIncidentId` le désigne. En refaire une cause INDÉPENDANTE n'apprend rien et
+ * lui ouvre un run, qui relancera la cascade.
+ *
+ * Mesuré sur les 2967 incidents réels du 2026-08-05 : 883 incidents à profondeur > 0 portent ce seul
+ * `kind`, dont 841 se réduisent au texte « RUN en échec : <chemin> ».
+ *
+ * LA FRONTIÈRE, et c'est elle qui rend la règle sûre : un défaut réellement NOUVEAU découvert pendant un
+ * run de correction garde son propre `kind` — `test-red`, `gate-failed`, `journal-replay-loss`,
+ * `provider-error` — et conserve donc son incident et son analyse. Seul le compte rendu « ça a fini
+ * rouge » est écarté, jamais ce qui explique POURQUOI.
+ */
+export function isRemediationRed(kind: string, depth: number): boolean {
+  return depth > 0 && kind === 'orchestration-red'
+}
+
 /**
  * ABANDON VOULU — l'arrêt vient d'un humain, il n'y a aucun défaut à analyser.
  *
@@ -700,8 +724,18 @@ export class AutoKaizenSupervisor {
       incident.suppressionReason = 'aborted'
     } else if (inheritedReason) {
       incident.status = 'suppressed'
-      // On garde le motif de la RACINE : la télémétrie doit dire pourquoi la cascade n'a pas été analysée.
+      // Le motif de la RACINE PRIME sur tout autre : à la question « pourquoi cette cascade n'a-t-elle pas
+      // été analysée », la réponse utile est la cause d'origine (un abandon, un quota), pas le symptôme
+      // local. Testé AVANT `isRemediationRed`, qui sinon étiquetterait tous les descendants du même mot.
       incident.suppressionReason = inheritedReason
+    } else if (isRemediationRed(input.kind, depth)) {
+      // Le run que le kaizen venait de lancer a fini rouge. Le parent porte DÉJÀ cette information
+      // (`status: failed`, `error`, `failureSourceIncidentId`) : en refaire une cause indépendante ne
+      // peut rien apprendre, et lui ouvrir un run relance la cascade. Mesuré sur les incidents réels du
+      // 2026-08-05 : 883 incidents de ce seul motif à profondeur > 0, dont 841 se réduisent à
+      // « RUN en échec : <chemin> ».
+      incident.status = 'suppressed'
+      incident.suppressionReason = 'remediation-red'
     } else if (isUpstreamOutage(input.summary, input.detail)) {
       // Teste AVANT le mur de quota : les deux suppriment, mais l'etiquette doit dire laquelle des deux
       // causes a mordu, sinon la telemetrie ne sait plus distinguer « quota epuise » de « serveur HS ».

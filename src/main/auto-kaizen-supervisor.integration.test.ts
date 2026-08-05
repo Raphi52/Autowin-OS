@@ -9,6 +9,7 @@ import {
   incidentFromPilotEvent,
   isUpstreamOutage,
   isDeliberateAbort,
+  isRemediationRed,
   buildKaizenAnalysisPrompt,
   buildKaizenFixPrompt,
   type AutoKaizenIncident,
@@ -803,5 +804,106 @@ describe('ABANDON VOULU — reproduit sur les incidents REELS du 2026-08-05', ()
     await supervisor.drain()
     expect(incident.status).not.toBe('suppressed')
     expect(h.analysisPrompts).toHaveLength(1)
+  })
+})
+
+describe('ROUGE D UNE REMEDIATION — « le run que je viens de lancer a fini rouge »', () => {
+  const roots: string[] = []
+  afterEach(() => {
+    for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+  })
+
+  function harness() {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-ak-remed-'))
+    roots.push(root)
+    const analysisPrompts: string[] = []
+    const runtime: AutoKaizenRuntime = {
+      createConversation: () => ({ id: `conv-r-${analysisPrompts.length + 1}` }),
+      appendSourceUpdate: () => {},
+      async runAnalysis(_c, prompt) {
+        analysisPrompts.push(prompt)
+        return { ok: true, text: 'analyse' }
+      },
+      async runFix() {
+        return { ok: true, text: 'fix' }
+      }
+    }
+    return { root, runtime, analysisPrompts }
+  }
+
+  it('ne retient QUE orchestration-red a profondeur > 0', () => {
+    // A profondeur 0, un rouge est la cause d origine : il DOIT etre analyse.
+    expect(isRemediationRed('orchestration-red', 0)).toBe(false)
+    expect(isRemediationRed('orchestration-red', 1)).toBe(true)
+    // La frontiere qui rend la regle sure : un defaut NOUVEAU garde son incident, meme dans un run kaizen.
+    for (const kind of ['test-red', 'gate-failed', 'journal-replay-loss', 'provider-error', 'stderr-error']) {
+      expect(isRemediationRed(kind, 3)).toBe(false)
+    }
+  })
+
+  it('SUPPRIME le compte rendu « RUN en echec » d un run lance par le kaizen', async () => {
+    const h = harness()
+    const supervisor = new AutoKaizenSupervisor({
+      path: join(h.root, 'incidents.json'),
+      runtime: h.runtime,
+      now: () => Date.parse('2026-08-05T11:14:00.000Z')
+    })
+    const racine = supervisor.report({
+      dedupeKey: 'chat-turn:conv-1:t:failed',
+      sourceConversationId: 'conv-1',
+      kind: 'chat-turn-failed',
+      summary: 'Le tour de conversation a echoue',
+      detail: 'evenement duplique: 5e01155e:action:0:retry'
+    })
+    await supervisor.drain()
+    // La racine est un VRAI defaut : elle garde son analyse.
+    expect(racine.status).not.toBe('suppressed')
+    expect(h.analysisPrompts).toHaveLength(1)
+
+    const remediation = supervisor.report({
+      dedupeKey: 'orchestration-red:conv-9:run',
+      sourceConversationId: 'conv-9',
+      kind: 'orchestration-red',
+      summary: 'Une orchestration s est terminee en rouge',
+      detail: 'RUN en echec : C:/runs/conv-9/kaizen-analyse-workspace/RUN.md',
+      lineage: { rootIncidentId: racine.id, parentIncidentId: racine.id, depth: 1 }
+    })
+    await supervisor.drain()
+
+    expect(remediation.status).toBe('suppressed')
+    expect(remediation.suppressionReason).toBe('remediation-red')
+    // AUCUN run supplementaire : c est ce qui coupe la cascade auto-alimentee.
+    expect(h.analysisPrompts).toHaveLength(1)
+  })
+
+  it('laisse son analyse a un defaut NOUVEAU decouvert pendant un run de correction', async () => {
+    // Sans ce test, la regle pourrait etouffer ce qui explique POURQUOI le run a echoue — l inverse du but.
+    const h = harness()
+    const supervisor = new AutoKaizenSupervisor({
+      path: join(h.root, 'incidents.json'),
+      runtime: h.runtime,
+      now: () => Date.parse('2026-08-05T11:14:00.000Z')
+    })
+    const racine = supervisor.report({
+      dedupeKey: 'chat-turn:conv-1:t:failed',
+      sourceConversationId: 'conv-1',
+      kind: 'chat-turn-failed',
+      summary: 'Le tour a echoue',
+      detail: 'evenement duplique: abc:action:0:retry'
+    })
+    await supervisor.drain()
+
+    const nouveau = supervisor.report({
+      dedupeKey: 'test-red:conv-9:suite',
+      sourceConversationId: 'conv-9',
+      kind: 'test-red',
+      summary: '3 tests rouges',
+      detail: 'expected 3 to be 4',
+      lineage: { rootIncidentId: racine.id, parentIncidentId: racine.id, depth: 1 }
+    })
+    await supervisor.drain()
+
+    expect(nouveau.status).not.toBe('suppressed')
+    expect(h.analysisPrompts).toHaveLength(2)
   })
 })
