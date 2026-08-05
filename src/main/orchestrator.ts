@@ -29,6 +29,25 @@ import { initialBudget, nextNode, type NodeVerdict } from './workflow-walk'
  * mentionne « défaut » au milieu d'un paragraphe raconte son travail, il ne se prononce pas.
  */
 const REJET_EN_TETE = /^\s*(REJET|REJETE|REJETÉ|INVALIDE|DEFAUT|DÉFAUT|ROUGE|KO)\b/i
+/**
+ * Le binding d'une phase quand AUCUN agent n'est composé sur son nœud — le cas par défaut.
+ *
+ * Une phase `judge` répond au rôle `judge` ; toutes les autres au rôle `subagent`. Avant ce
+ * branchement, le repli était `subagent` pour TOUT LE MONDE : le rôle `judge` configuré n'était honoré
+ * que si l'on avait pensé à déposer des agents sur le nœud. Un nœud judge par défaut faisait donc
+ * évaluer le livrable par le modèle qui venait de le produire — pas une vérification, un auto-jugement.
+ * (`resolvePhaseFanOut` honore déjà les agents COMPOSÉS : ce repli ne concerne que leur absence.)
+ */
+function bindingDeRepliPourPhase(
+  phase: PipelinePhase,
+  roles: RoleModelConfig,
+  runtimeSnapshot?: OrchestrationRuntimeSnapshot
+): RoleBinding {
+  return phase === 'judge'
+    ? (runtimeSnapshot?.roles.judge ?? roles.getBinding('judge'))
+    : (runtimeSnapshot?.roles.subagent ?? roles.getBinding('subagent'))
+}
+
 /** La forme que le brief du juge IMPOSE pour un rejet : « DEFAUT: <raison> », où qu'elle se trouve. */
 const REJET_FORME_CONTRAT = /\b(REJET|REJETE|REJETÉ|INVALIDE|DEFAUT|DÉFAUT|KO)\s*:/i
 /** L'approbation que le brief du juge IMPOSE : « Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: …" ». */
@@ -1490,7 +1509,7 @@ export class Orchestrator {
     const subBindings =
       configuredBindings.length > 0
         ? configuredBindings
-        : [runtimeSnapshot?.roles.subagent ?? roles.getBinding('subagent')]
+        : [bindingDeRepliPourPhase(phase, roles, runtimeSnapshot)]
     const fallbackProvider = subBindings[0].provider
     const sandbox = isMutationTask(task) ? 'danger-full-access' : 'read-only'
     const evidence: ExecutionEvidence[] = []
@@ -2166,7 +2185,9 @@ export class Orchestrator {
               (autre) => (autre.persona ?? autre.model ?? autre.provider) === signatureMembre
             ).length
             const identite =
-              homonymes > 1 ? `${phase}:${signatureMembre}:${rang + 1}` : `${phase}:${signatureMembre}`
+              homonymes > 1
+                ? `${phase}:${signatureMembre}:${rang + 1}`
+                : `${phase}:${signatureMembre}`
             const execution = {
               phase,
               agentId: identite,
@@ -2393,7 +2414,14 @@ export class Orchestrator {
         prevSessionId = undefined // fan-out : pas de session linéaire à chaîner
         continue
       }
-      const resuming = Boolean(prevSessionId)
+      // Un nœud `judge` répond au rôle JUDGE — sinon l'exécutant s'évalue avec son propre modèle, ce
+      // qui n'est pas une vérification. `bindingOverride` reste autoritaire : un binding figé pour le
+      // run prime sur tous les rôles (même règle qu'au chemin décomposé et qu'au gate final).
+      const jugeDedie = phase === 'judge' && !bindingOverride
+      // Et il ne REPREND PAS la session de l'exécution : son provider peut différer, où cette session
+      // n'existe pas. Reprendre y aurait remplacé tout le contexte par « acquis déjà connus, ne les
+      // redemande pas » — le juge aurait jugé à l'aveugle. Il reçoit donc le contexte complet.
+      const resuming = Boolean(prevSessionId) && !jugeDedie
       // Le CADRAGE (phase frame) est le socle du prompt remis aux sous-agents : on le ré-injecte
       // TOUJOURS explicitement, même en resume. Se fier à l'historique de session (opaque, variable
       // par provider, cassé par un fan-out) faisait perdre le besoin cadré exactement au moment où
@@ -2414,7 +2442,12 @@ export class Orchestrator {
       // (besoin + acquis des phases) vit dans le message user ci-dessous, pas dans le system.
       // Modèle EFFECTIF de la phase : override par phase (petit modèle sur analyse, gros sur build)
       // → défaut = modèle du binding. Générique/rétrocompat (resolvePhaseBinding).
-      const phaseBinding = resolvePhaseBinding(subBinding, phase)
+      const bindingDeLaPhase = jugeDedie
+        ? bindingDeRepliPourPhase(phase, roles, runtimeSnapshot)
+        : subBinding
+      const providerDeLaPhase = bindingDeLaPhase.provider
+      const roleDeLaPhase = jugeDedie ? 'judge' : 'subagent'
+      const phaseBinding = resolvePhaseBinding(bindingDeLaPhase, phase)
       // Anti-perte-de-contexte / longs runs : en session-resume, la discipline (~1-2k) et le
       // projectContext (≤32k) sont DÉJÀ connus de la session (envoyés en phase 1) → les ré-envoyer
       // à chaque phase gonfle le contexte pour rien ("ENGINE injectée N fois", "1M3 tokens"). On ne
@@ -2439,7 +2472,9 @@ export class Orchestrator {
         systemBlocks,
         model: phaseBinding.model,
         reasoningEffort: phaseBinding.reasoningEffort,
-        resumeSessionId: prevSessionId,
+        // Pas la session de l'exécution pour un juge dédié : elle n'existe pas chez son provider, et
+        // la lui passer l'enverrait reprendre un fil inconnu. `resuming` est déjà faux — cohérence.
+        resumeSessionId: jugeDedie ? undefined : prevSessionId,
         execution: this.executionOptions(
           workCwd,
           // B3 — une tâche NON-mutation (cadrage/analyse) n'a aucune raison d'écrire : sandbox
@@ -2454,7 +2489,7 @@ export class Orchestrator {
         }
       }
       execPrompt = registry.describePrompt(
-        subProvider,
+        providerDeLaPhase,
         phaseMessages,
         subOptions,
         phaseBinding.model
@@ -2470,8 +2505,8 @@ export class Orchestrator {
       }
       onPhase?.({
         step: 'exec',
-        provider: subProvider,
-        role: 'subagent',
+        provider: providerDeLaPhase,
+        role: roleDeLaPhase,
         model: phaseBinding.model,
         reasoningEffort: phaseBinding.reasoningEffort,
         phase,
@@ -2480,20 +2515,20 @@ export class Orchestrator {
       const phaseStartedAt = performance.now()
       let phaseRes
       try {
-        phaseRes = await registry.send(subProvider, phaseMessages, subOptions, (c) =>
+        phaseRes = await registry.send(providerDeLaPhase, phaseMessages, subOptions, (c) =>
           onDelta?.('exec', c.delta)
         )
       } catch (error) {
         // L'erreur brute dit la cause mais pas QUEL role l'a subie ni son binding : on prefixe.
         const explained = explainRoleFailure(`Phase ${phase}`, 'subagent', {
-          provider: subProvider,
+          provider: providerDeLaPhase,
           ...(subOptions.model ? { model: subOptions.model } : {}),
           message: error instanceof Error ? error.message : String(error)
         })
         push({
           step: 'exec',
-          provider: subProvider,
-          role: 'subagent',
+          provider: providerDeLaPhase,
+          role: roleDeLaPhase,
           text: '',
           prompt: execPrompt,
           status: 'failed',
@@ -2511,9 +2546,14 @@ export class Orchestrator {
       // branche `resuming`, qui remplace tout `phaseContext` par « acquis déjà connus — ne les
       // redemande pas ». L'acquis des phases était donc perdu au moment précis où la phase suivante
       // en dépend. Sans capacité prouvée : pas de session, donc ré-injection complète.
-      prevSessionId = registry.honoursSessionResume(subProvider)
-        ? (phaseRes.sessionId ?? prevSessionId)
-        : undefined
+      // Un juge dédié ne CHAÎNE pas sa session dans l'exécution : son provider peut différer, et sa
+      // session n'est pas la continuation du travail. On préserve la chaîne de l'exécution telle
+      // quelle — sinon la phase suivante reprendrait la session du juge au lieu de la sienne.
+      prevSessionId = jugeDedie
+        ? prevSessionId
+        : registry.honoursSessionResume(providerDeLaPhase)
+          ? (phaseRes.sessionId ?? prevSessionId)
+          : undefined
       if (phaseRes.usage) {
         cost.add({
           // Provider RÉEL ayant répondu (le registre peut rerouter une exécution vers un executor
