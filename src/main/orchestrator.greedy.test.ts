@@ -15,6 +15,7 @@ import type {
 import { RoleModelConfig } from './roles'
 import { TrustLedger } from './trust/ledger'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
+import { CodexStructuralFailure } from './providers/codex'
 
 /** Provider fake : renvoie OUT_<id> par sous-tâche, VALIDE pour le juge, throw si le prompt contient CRASH. */
 class GreedyProvider implements ProviderAdapter {
@@ -31,6 +32,13 @@ class GreedyProvider implements ProviderAdapter {
     yield* [] as StreamChunk[]
     const content = String(messages[messages.length - 1]?.content ?? '')
     this.contents.push(content)
+    if (/STRUCTURAL_CACHE_FAILURE/.test(content)) {
+      throw new CodexStructuralFailure(
+        'codex',
+        'json-trailing-characters',
+        'cache JSON invalide: trailing characters at line 1 column 42'
+      )
+    }
     if (/CRASH/.test(content)) throw new Error('sous-agent en échec (simulé)')
     const systemInjected = Boolean(options.system)
     if (/juge|VALIDE ou/i.test(content)) {
@@ -290,6 +298,30 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
     // Une trace de saut est présente.
     expect(result.trace.some((s) => s.status === 'failed' && /sautée/.test(s.error ?? ''))).toBe(
       true
+    )
+  })
+
+  it('coupe le provider après une erreur structurelle avant les autres sous-tâches du fan-out', async () => {
+    const provider = new GreedyProvider('codex')
+    const plan: GreedyTaskNode[] = ['A', 'B', 'C', 'D'].map((id) => ({
+      id,
+      deps: [],
+      prompt: `STRUCTURAL_CACHE_FAILURE ${id}`
+    }))
+
+    const hooks = new HookBus().register('pre-green', () => ({
+      block: true,
+      reason: 'arrêt local après le fan-out simulé'
+    }))
+    const result = await makeGreedy(provider, async () => plan, () => ['build'], { hooks }).run(
+      'analyse quatre volets indépendants'
+    )
+
+    expect(provider.contents).toHaveLength(1)
+    const blocked = result.trace.filter((step) => step.status === 'provider-blocked')
+    expect(blocked).toHaveLength(3)
+    expect(new Set(blocked.map((step) => step.error))).toEqual(
+      new Set(['cache JSON invalide: trailing characters at line 1 column 42'])
     )
   })
 

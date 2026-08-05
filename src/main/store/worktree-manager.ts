@@ -10,6 +10,7 @@ import {
   realpathSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
 import { platform } from 'node:os'
@@ -138,6 +139,13 @@ export interface WorktreeManagerOptions {
 }
 
 const SPAWN_INTENT_MAX_AGE_MS = 2 * 60 * 1_000
+
+/**
+ * Âge minimal avant qu'une copie agent SANS aucun travail récupérable soit considérée abandonnée.
+ * Marge délibérément large : un run vivant qui n'a pas encore posé son lease (fenêtre acquire →
+ * markSpawnIntent) reste hors de portée du balayage.
+ */
+const ABANDONED_AGENT_MIN_AGE_MS = 24 * 60 * 60 * 1_000
 
 /**
  * Empreinte d'un processus : heure de démarrage + chemin. Deux processus peuvent porter le MÊME pid
@@ -278,11 +286,13 @@ export class WorktreeManager {
     cleaned: number
     recovered: string[]
     blocked: Array<{ path: string; detail: string }>
+    swept?: string[]
   } {
     const result: {
       cleaned: number
       recovered: string[]
       blocked: Array<{ path: string; detail: string }>
+      swept?: string[]
     } = { cleaned: 0, recovered: [], blocked: [] }
     if (!existsSync(this.worktreeRoot)) return result
 
@@ -303,6 +313,9 @@ export class WorktreeManager {
         })
       }
     }
+
+    const swept = this.sweepAbandonedAgentCopies()
+    if (swept.length > 0) result.swept = swept
 
     const quarantineRoot = join(this.worktreeRoot, '.quarantine')
     if (!existsSync(quarantineRoot)) return result
@@ -359,6 +372,59 @@ export class WorktreeManager {
       })
     }
     return result
+  }
+
+  /**
+   * Supprime les copies `agent__*` dont le run s'est terminé SANS publication (échec, abandon,
+   * crash) : la finalisation ne range que le chemin `merged`, donc sans ce balayage chaque run
+   * stérile laisse un worktree définitif (811 mesurés le 2026-08-05 sur ce dépôt).
+   *
+   * Une copie n'est supprimée QUE si elle ne peut rien faire perdre — les quatre conditions sont
+   * cumulatives et chacune est vérifiée sur l'état Git réel, jamais sur un registre applicatif :
+   *   1. aucun processus vivant ne la détient (lease PID + intention de spawn) ;
+   *   2. son arborescence de travail est vide (fichiers suivis ET ignorés préservés) ;
+   *   3. son HEAD est déjà contenu dans une référence — un commit propre à la copie la conserve ;
+   *   4. elle est plus vieille que la fenêtre de spawn.
+   * Le moindre doute conserve la copie : ce balayage ne remonte aucun blocage.
+   */
+  private sweepAbandonedAgentCopies(): string[] {
+    const swept: string[] = []
+    if (!existsSync(this.worktreeRoot)) return swept
+
+    for (const entry of readdirSync(this.worktreeRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !entry.name.startsWith('agent__')) continue
+      const agentId = entry.name.slice('agent__'.length)
+      if (!SAFE_ID.test(agentId)) continue
+      const path = join(this.worktreeRoot, entry.name)
+      if (this.ownershipIssue(path)) continue
+
+      let ageMs: number
+      try {
+        ageMs = this.now() - statSync(path).mtimeMs
+      } catch {
+        continue
+      }
+      if (!(ageMs >= ABANDONED_AGENT_MIN_AGE_MS)) continue
+
+      if (this.hasActiveProcesses(agentId)) continue
+      if (this.unpublishedFiles(path).length > 0) continue
+
+      const head = this.tryGitFn(path, ['rev-parse', 'HEAD'])
+      if (head.code !== 0) continue
+      const sha = head.stdout.trim()
+      if (!/^[0-9a-f]{40,64}$/i.test(sha)) continue
+      const containing = this.tryGitFn(this.baseRepo, [
+        'for-each-ref',
+        '--contains',
+        sha,
+        '--count=1',
+        '--format=%(refname)'
+      ])
+      if (containing.code !== 0 || !containing.stdout.trim()) continue
+
+      if (this.cleanupWorktree(path, false).ok) swept.push(agentId)
+    }
+    return swept
   }
 
   /** Lease durable par PID : empêche une autre instance de récupérer une copie encore utilisée. */

@@ -122,3 +122,72 @@
     animation: none;
   }
 }
+
+/*
+ * Voies d'integration ALTERNATIVES (hors de main). Volontairement discretes : le geste recommande
+ * reste le bouton principal, celles-ci ne se montrent qu'a la demande. Meme grammaire visuelle que le
+ * bouton (bord dore, angles droits) pour qu'on lise un seul objet et non un widget rapporte.
+ */
+.rail-update-more {
+  align-self: stretch;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--gold, #e9bd4e) 30%, var(--line));
+  border-radius: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--gold, #e9bd4e) 78%, var(--fg, #fff));
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  letter-spacing: 2px;
+  cursor: pointer;
+}
+
+.rail-update-more:hover:not(:disabled) {
+  border-color: var(--gold, #e9bd4e);
+  color: var(--gold, #e9bd4e);
+}
+
+.rail-update-more:focus-visible {
+  outline: 2px solid var(--gold, #e9bd4e);
+  outline-offset: 1px;
+}
+
+.rail-update-more:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.rail-update-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rail-update-choice {
+  min-height: 26px;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--gold, #e9bd4e) 22%, var(--line));
+  border-radius: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--gold, #e9bd4e) 72%, var(--fg, #fff));
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rail-update-choice:hover:not(:disabled) {
+  border-color: var(--gold, #e9bd4e);
+  color: var(--gold, #e9bd4e);
+}
+
+.rail-update-choice:focus-visible {
+  outline: 2px solid var(--gold, #e9bd4e);
+  outline-offset: 1px;
+}
+
+.rail-update-choice:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

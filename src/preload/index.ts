@@ -11,6 +11,7 @@ import type {
   WorktreeRuntimeStatus
 } from '../shared/worktree-activity-model'
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
+import type { UpdateStrategy } from '../shared/update-contract'
 import type { GitReadResult, GitDiffResult } from '../shared/git-read'
 import type { GitGraphSnapshot } from '../shared/git-graph'
 import type {
@@ -113,14 +114,24 @@ const api = {
   turnJournal: (conversationId: string, turnId: string): Promise<Array<Record<string, unknown>>> =>
     ipcRenderer.invoke('runs:turnJournal', conversationId, turnId),
   // Auto-update git au démarrage.
-  checkUpdate: (): Promise<{ available: boolean; behind: number; branch?: string }> =>
-    ipcRenderer.invoke('update:check'),
-  applyUpdate: (): Promise<{
+  checkUpdate: (): Promise<{
+    available: boolean
+    behind: number
+    branch?: string
+    reference?: string
+    dirty?: boolean
+    strategies?: UpdateStrategy[]
+  }> => ipcRenderer.invoke('update:check'),
+  applyUpdate: (strategy?: UpdateStrategy): Promise<{
     ok: boolean
     relaunch?: boolean
     npmInstalled?: boolean
     error?: string
-  }> => ipcRenderer.invoke('update:apply'),
+    strategy?: UpdateStrategy
+    /** Rien n'a ete touche : il manque une intention explicite. Ce n'est pas un echec. */
+    needsChoice?: boolean
+    strategies?: UpdateStrategy[]
+  }> => ipcRenderer.invoke('update:apply', strategy),
   ticketSources: (): Promise<TicketSourceSummary[]> => ipcRenderer.invoke('tickets:sources'),
   saveTicketSource: (profile: TicketSourceProfile): Promise<TicketSourceSummary[]> =>
     ipcRenderer.invoke('tickets:source:save', profile),

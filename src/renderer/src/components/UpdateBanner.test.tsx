@@ -111,3 +111,117 @@ describe('mise à jour disponible — un bouton, pas une bannière', () => {
     expect(button.getAttribute('aria-label')).toContain('pull refusé')
   })
 })
+
+describe('sonde RÉGULIÈRE — une seule fois au montage ne suffisait pas', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('re-sonde périodiquement : un collègue qui laisse l’app ouverte voit arriver les commits', async () => {
+    // Comportement d'origine : UNE sonde au montage. Un nouveau commit n'apparaissait qu'au
+    // redémarrage suivant — c'est-à-dire jamais, pour qui garde l'app ouverte toute la journée.
+    vi.useFakeTimers()
+    const checkUpdate = vi.fn().mockResolvedValue({ available: true, behind: 1, branch: 'main' })
+    api({ checkUpdate })
+    await act(async () => {
+      root.render(createElement(UpdateBanner, {}))
+    })
+    expect(checkUpdate).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      vi.advanceTimersByTime(180_000)
+    })
+    expect(checkUpdate).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      vi.advanceTimersByTime(360_000)
+    })
+    expect(checkUpdate).toHaveBeenCalledTimes(4)
+  })
+
+  it('re-sonde quand on REVIENT sur l’app, sans attendre le tour d’horloge', async () => {
+    const checkUpdate = vi.fn().mockResolvedValue({ available: true, behind: 1, branch: 'main' })
+    api({ checkUpdate })
+    await render()
+    expect(checkUpdate).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      await Promise.resolve()
+    })
+    expect(checkUpdate).toHaveBeenCalledTimes(2)
+  })
+
+  it('arrête de sonder après démontage — pas de fetch fantôme', async () => {
+    vi.useFakeTimers()
+    const checkUpdate = vi.fn().mockResolvedValue({ available: true, behind: 1, branch: 'main' })
+    api({ checkUpdate })
+    await act(async () => {
+      root.render(createElement(UpdateBanner, {}))
+    })
+    await act(async () => root.unmount())
+    const after = checkUpdate.mock.calls.length
+    await act(async () => {
+      vi.advanceTimersByTime(600_000)
+    })
+    expect(checkUpdate).toHaveBeenCalledTimes(after)
+    root = createRoot(container) // le afterEach global démonte
+  })
+})
+
+describe('SOUPLESSE hors de main — proposer, jamais choisir à sa place', () => {
+  const onFeature = {
+    available: true,
+    behind: 3,
+    branch: 'feat/x',
+    reference: 'origin/main',
+    strategies: ['merge', 'rebase', 'switch-main']
+  }
+
+  it('le bouton principal DIT ce qu’il fait, au lieu d’annoncer un « mettre à jour » qui refusera', async () => {
+    api({ checkUpdate: vi.fn().mockResolvedValue(onFeature) })
+    await render()
+    const button = container.querySelector('[data-testid="update-apply"]')!
+    expect(button.textContent).toContain('Fusionner origin/main')
+    expect(button.getAttribute('title')).toContain('tu es sur feat/x')
+  })
+
+  it('expose les AUTRES voies, et applique celle qu’on clique', async () => {
+    const applyUpdate = vi.fn().mockResolvedValue({ ok: true })
+    api({ checkUpdate: vi.fn().mockResolvedValue(onFeature), applyUpdate })
+    await render()
+    expect(container.querySelector('[data-testid="update-choices"]')).toBeNull()
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="update-more"]')!.click()
+    })
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="update-choice-rebase"]')!.click()
+      await Promise.resolve()
+    })
+    // La stratégie part au main : c'est le CLIC qui porte l'intention, pas un défaut caché.
+    expect(applyUpdate).toHaveBeenCalledWith('rebase')
+  })
+
+  it('sur main : aucune alternative proposée, le geste est sans ambiguïté', async () => {
+    api({
+      checkUpdate: vi.fn().mockResolvedValue({
+        available: true,
+        behind: 2,
+        branch: 'main',
+        strategies: ['fast-forward']
+      })
+    })
+    await render()
+    expect(container.querySelector('[data-testid="update-more"]')).toBeNull()
+    expect(container.querySelector('[data-testid="update-apply"]')!.textContent).toContain(
+      'Mettre à jour'
+    )
+  })
+
+  it('annonce que le travail en cours sera mis de côté, au lieu de refuser après le clic', async () => {
+    api({
+      checkUpdate: vi
+        .fn()
+        .mockResolvedValue({ available: true, behind: 1, branch: 'main', dirty: true })
+    })
+    await render()
+    expect(container.querySelector('[data-testid="update-apply"]')!.getAttribute('title')).toContain(
+      'mis de côté puis remis'
+    )
+  })
+})

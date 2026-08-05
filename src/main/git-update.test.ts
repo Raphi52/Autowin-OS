@@ -17,11 +17,16 @@ describe('checkForUpdate', () => {
       'rev-list --count HEAD..origin/main': '3'
     })
     // La reference comparee est l'etat d'EQUIPE (origin/main), pas l'upstream de la branche sortie.
+    // `toEqual` volontairement EXHAUSTIF : un champ ajoute au contrat doit forcer une relecture de ce
+    // test, pas passer inapercu. `dirty` et `strategies` sont remontes pour que l'interface puisse
+    // annoncer ce qui va se passer AVANT le clic.
     expect(await checkForUpdate('/r', run)).toEqual({
       available: true,
       behind: 3,
       branch: 'main',
-      reference: 'origin/main'
+      reference: 'origin/main',
+      dirty: false,
+      strategies: ['fast-forward']
     })
   })
 
@@ -43,24 +48,78 @@ describe('checkForUpdate', () => {
 })
 
 describe('applyUpdate', () => {
-  it('arbre SALE → refuse, ne pull pas', async () => {
-    const pulled = vi.fn()
+  it('arbre SALE → met le travail de cote via --autostash au lieu de REFUSER', async () => {
+    // L'ancien comportement refusait, ce qui obligeait a commiter n'importe quoi pour recuperer une
+    // mise a jour. `--autostash` est confie a git : il remet le travail meme si l'operation echoue.
+    const calls: string[][] = []
     const run: GitRunner = async (args) => {
-      if (args[0] === 'pull') pulled()
-      return { stdout: args.join(' ') === 'status --porcelain' ? ' M src/x.ts' : '' }
+      calls.push(args)
+      if (args.join(' ') === 'rev-parse --abbrev-ref HEAD') return { stdout: 'main' }
+      if (args.join(' ') === 'status --porcelain') return { stdout: ' M src/x.ts' }
+      return { stdout: '' }
     }
-    const r = await applyUpdate('/r', run, async () => {})
-    expect(r.ok).toBe(false)
-    expect(pulled).not.toHaveBeenCalled()
+    const r = await applyUpdate('/r', {}, run, async () => {})
+    expect(r.ok).toBe(true)
+    expect(calls).toContainEqual(['pull', '--ff-only', '--autostash'])
   })
 
-  it('arbre propre → pull ff-only + relaunch, npm install seulement si package a changé', async () => {
-    const run: GitRunner = async () => ({ stdout: '' }) // status vide = propre
+  it('sur main : fast-forward par defaut, relaunch, npm install seulement si package a change', async () => {
+    const run: GitRunner = async (args) =>
+      args.join(' ') === 'rev-parse --abbrev-ref HEAD' ? { stdout: 'main' } : { stdout: '' }
     const npm = vi.fn().mockResolvedValue(undefined)
-    const r = await applyUpdate('/r', run, npm)
-    expect(r).toMatchObject({ ok: true, relaunch: true })
-    // package.json inchangé (signature identique avant/après ici) → pas de npm install
+    const r = await applyUpdate('/r', {}, run, npm)
+    expect(r).toMatchObject({ ok: true, relaunch: true, strategy: 'fast-forward' })
     expect(npm).not.toHaveBeenCalled()
+  })
+})
+
+describe('applyUpdate — souplesse HORS de main, sans mutation non demandee', () => {
+  const onBranch = (calls: string[][]): GitRunner => async (args) => {
+    calls.push(args)
+    return args.join(' ') === 'rev-parse --abbrev-ref HEAD' ? { stdout: 'feat/x' } : { stdout: '' }
+  }
+
+  it('sans strategie explicite : ne touche a RIEN et POSE la question', async () => {
+    const calls: string[][] = []
+    const r = await applyUpdate('/r', {}, onBranch(calls), async () => {})
+    expect(r.needsChoice).toBe(true)
+    expect(r.strategies).toEqual(['merge', 'rebase', 'switch-main'])
+    // Aucune commande mutante : c'est une question, pas un echec, et surtout pas un merge fabrique.
+    expect(calls.some((c) => ['pull', 'merge', 'rebase', 'switch'].includes(c[0]))).toBe(false)
+  })
+
+  it('strategie merge : fusionne origin/main avec autostash', async () => {
+    const calls: string[][] = []
+    const r = await applyUpdate('/r', { strategy: 'merge' }, onBranch(calls), async () => {})
+    expect(r).toMatchObject({ ok: true, strategy: 'merge' })
+    expect(calls).toContainEqual(['merge', '--autostash', 'origin/main'])
+  })
+
+  it('strategie rebase : rejoue par-dessus origin/main', async () => {
+    const calls: string[][] = []
+    const r = await applyUpdate('/r', { strategy: 'rebase' }, onBranch(calls), async () => {})
+    expect(r).toMatchObject({ ok: true, strategy: 'rebase' })
+    expect(calls).toContainEqual(['rebase', '--autostash', 'origin/main'])
+  })
+
+  it('strategie switch-main : bascule PUIS avance, sans toucher au travail de la branche', async () => {
+    const calls: string[][] = []
+    const r = await applyUpdate('/r', { strategy: 'switch-main' }, onBranch(calls), async () => {})
+    expect(r).toMatchObject({ ok: true, strategy: 'switch-main' })
+    expect(calls).toContainEqual(['switch', 'main'])
+    expect(calls).toContainEqual(['pull', '--ff-only', '--autostash'])
+  })
+
+  it('refuse une strategie INAPPLICABLE ici plutot que de faire autre chose', async () => {
+    const calls: string[][] = []
+    const run: GitRunner = async (args) => {
+      calls.push(args)
+      return args.join(' ') === 'rev-parse --abbrev-ref HEAD' ? { stdout: 'main' } : { stdout: '' }
+    }
+    const r = await applyUpdate('/r', { strategy: 'rebase' }, run, async () => {})
+    expect(r.ok).toBe(false)
+    expect(r.strategies).toEqual(['fast-forward'])
+    expect(calls.some((c) => c[0] === 'rebase')).toBe(false)
   })
 })
 
@@ -106,7 +165,7 @@ describe('applyUpdate — jamais de mutation silencieuse dune branche', () => {
       if (key === 'rev-parse --abbrev-ref HEAD') return { stdout: 'feat/quotas' }
       return { stdout: '' } // status vide = propre
     }
-    const r = await applyUpdate('/r', run, async () => {})
+    const r = await applyUpdate('/r', {}, run, async () => {})
     expect(r.ok).toBe(false)
     expect(r.error).toMatch(/feat\/quotas/)
     expect(pulled).not.toHaveBeenCalled()
@@ -120,7 +179,7 @@ describe('applyUpdate — jamais de mutation silencieuse dune branche', () => {
       if (key === 'rev-parse --abbrev-ref HEAD') return { stdout: 'main' }
       return { stdout: '' }
     }
-    const r = await applyUpdate('/r', run, async () => {})
+    const r = await applyUpdate('/r', {}, run, async () => {})
     expect(r).toMatchObject({ ok: true, relaunch: true })
     expect(pulled).toHaveBeenCalledOnce()
   })

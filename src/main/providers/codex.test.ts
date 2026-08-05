@@ -1,5 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
-import { CodexAdapter, codexExecSpec, codexApiEffort, structuredEvidenceFields } from './codex'
+import {
+  CodexAdapter,
+  CodexStructuralFailure,
+  codexExecSpec,
+  codexApiEffort,
+  codexStructuralFailure,
+  structuredEvidenceFields
+} from './codex'
 import { startDeviceLogin, pollForToken, refreshTokens, CODEX_CLIENT_ID } from './codex-auth'
 import type { Message } from './types'
 
@@ -51,6 +58,26 @@ function sseRes(events: string[]): Response {
 }
 
 const conv: Message[] = [{ role: 'user', content: 'salut' }]
+
+describe('CodexAdapter — classification des pannes structurelles', () => {
+  it.each([
+    ['cache JSON: trailing characters at column 8', 'json-trailing-characters'],
+    [
+      'schema invalide: supports_reasoning_summaries absent',
+      'missing-supports-reasoning-summaries'
+    ]
+  ])('marque %s sans perdre la cause', (cause, signature) => {
+    const error = codexStructuralFailure(new Error(cause))
+    expect(error).toBeInstanceOf(CodexStructuralFailure)
+    expect(error).toMatchObject({ provider: 'codex', signature, causeText: cause })
+  })
+
+  it('ne marque pas une panne transitoire sans signature connue', () => {
+    expect(codexStructuralFailure(new Error('timeout temporaire'))).not.toBeInstanceOf(
+      CodexStructuralFailure
+    )
+  })
+})
 
 describe('codex-auth — device-code flow (mocké, hors-ligne)', () => {
   it('startDeviceLogin poste le client_id et rend user_code + interval', async () => {

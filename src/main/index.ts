@@ -164,7 +164,7 @@ import { gitlabTicketProvider } from './ticket-providers/gitlab'
 import { loadAzureDevOpsCliToken } from './azure-cli-token'
 import { loadForgeCliToken } from './forge-cli-token'
 import { registerTicketsIpc } from './tickets-ipc'
-import { checkForUpdate, applyUpdate } from './git-update'
+import { checkForUpdate, applyUpdate, type UpdateStrategy } from './git-update'
 import { restartApplication } from './app-restart'
 import {
   ChatArtifactPreviewBudget,
@@ -914,9 +914,11 @@ function registerChatIpc(): void {
     assertTrustedRendererSender(event, 'Update')
     return checkForUpdate(process.cwd())
   })
-  ipcMain.handle('update:apply', async (event) => {
+  ipcMain.handle('update:apply', async (event, strategy?: UpdateStrategy) => {
     assertTrustedRendererSender(event, 'Update')
-    const result = await applyUpdate(process.cwd())
+    // La stratégie vient du BOUTON cliqué : hors de main, c'est ce qui distingue une intégration
+    // demandée d'un merge fabriqué dans le dos de l'utilisateur.
+    const result = await applyUpdate(process.cwd(), strategy ? { strategy } : {})
     if (result.ok && result.relaunch) {
       restartApplication(app)
     }

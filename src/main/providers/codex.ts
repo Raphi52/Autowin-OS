@@ -320,6 +320,7 @@ async function runCodexExec(
       }
     }
     let stderr = ''
+    let lastStructuredError = ''
     let finalText = ''
     const reasoningFragments: string[] = []
     let sessionId: string | undefined
@@ -354,6 +355,10 @@ async function runCodexExec(
       {
         try {
           const event = JSON.parse(line) as Record<string, unknown>
+          const eventStatus = typeof event.status === 'string' ? event.status : undefined
+          if (/error|fail/i.test(String(event.type ?? '')) || eventStatus === 'failed') {
+            lastStructuredError = JSON.stringify(event).slice(-4_000)
+          }
           if (event.type === 'thread.started' && typeof event.thread_id === 'string')
             sessionId = event.thread_id
           if (event.type === 'item.completed') {
@@ -395,6 +400,7 @@ async function runCodexExec(
                 summary: summary.slice(-4_000),
                 ...structured
               })
+              if (!ok) lastStructuredError = JSON.stringify(event).slice(-4_000)
               // Une commande atomique peut écrire puis vérifier (lecture + assertion).
               // Conserver les deux signaux évite que la mutation masque sa preuve.
               const embeddedVerification =
@@ -444,18 +450,26 @@ async function runCodexExec(
       if (!childPid) execution.onSpawnIntent?.(spawnToken, false)
       reject(error)
     })
-    child.on('close', async (code) => {
+    child.on('close', async (code, signal) => {
       closed = true // le tail draine ce qui reste puis s'arrête
       const tailError = await tailSettled
       run.release()
       watchdog.dispose()
       if (childPid) execution.onProcess?.(childPid, false)
       if (tailError) {
-        reject(tailError instanceof Error ? tailError : new Error(String(tailError)))
+        reject(codexStructuralFailure(tailError))
         return
       }
       if (code !== 0) {
-        reject(new Error(`codex exec échec (${code ?? 'signal'}): ${stderr.trim().slice(-800)}`))
+        const diagnostic = lastStructuredError || stderr.trim().slice(-800) || 'diagnostic-absent'
+        const termination = [
+          `exit-code=${code ?? 'null'}`,
+          `signal=${signal ?? 'none'}`,
+          `last-event=${lastStructuredError || 'none'}`,
+          `stderr=${stderr.trim().slice(-800) || 'none'}`,
+          `diagnostic=${diagnostic}`
+        ].join('\n')
+        reject(codexStructuralFailure(new Error(`codex exec échec\n${termination}`)))
         return
       }
       if (!finalText.trim()) {
@@ -670,8 +684,8 @@ export class CodexAdapter implements ProviderAdapter {
     if (!res.ok || !res.body) {
       // Surface le CORPS du 4xx (l'API y nomme la raison exacte) — sinon le status seul est aveugle.
       const detail = await res.text().catch(() => '')
-      throw new Error(
-        `codex responses HTTP ${res.status}${detail ? ` — ${detail.slice(0, 600)}` : ''}`
+      throw codexStructuralFailure(
+        new Error(`codex responses HTTP ${res.status}${detail ? ` — ${detail.slice(0, 600)}` : ''}`)
       )
     }
 

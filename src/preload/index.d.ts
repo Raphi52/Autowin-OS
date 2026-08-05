@@ -5,6 +5,7 @@ import type {
   WorktreeRuntimeStatus
 } from '../shared/worktree-activity-model'
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
+import type { UpdateStrategy } from '../shared/update-contract'
 import type { ChatArtifact, ArtifactEncoding } from '../shared/artifacts'
 import type {
   ChatAttachment,
@@ -102,13 +103,21 @@ interface ChatApi {
     available: boolean
     behind: number
     branch?: string
+    reference?: string
+    /** Travail en cours : sera mis de cote puis remis (`--autostash`), plus jamais un refus. */
+    dirty?: boolean
+    strategies?: UpdateStrategy[]
     error?: string
   }>
-  applyUpdate: () => Promise<{
+  applyUpdate: (strategy?: UpdateStrategy) => Promise<{
     ok: boolean
     relaunch?: boolean
     npmInstalled?: boolean
     error?: string
+    strategy?: UpdateStrategy
+    /** Rien n'a ete touche faute d'intention explicite : une QUESTION, pas un echec. */
+    needsChoice?: boolean
+    strategies?: UpdateStrategy[]
   }>
   ticketSources: () => Promise<import('../shared/tickets').TicketSourceSummary[]>
   saveTicketSource: (

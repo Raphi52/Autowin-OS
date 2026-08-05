@@ -1,0 +1,1 @@
+{"type":"item.completed","item":{"type":"command_execution","command":"npx vitest run src/main/example.test.ts","aggregated_output":"Tests 1 failed | 10 passed","exit_code":1,"status":"failed"}}
