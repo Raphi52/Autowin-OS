@@ -29,6 +29,32 @@ import { initialBudget, nextNode, type NodeVerdict } from './workflow-walk'
  * mentionne « défaut » au milieu d'un paragraphe raconte son travail, il ne se prononce pas.
  */
 const REJET_EN_TETE = /^\s*(REJET|REJETE|REJETÉ|INVALIDE|DEFAUT|DÉFAUT|ROUGE|KO)\b/i
+/** La forme que le brief du juge IMPOSE pour un rejet : « DEFAUT: <raison> », où qu'elle se trouve. */
+const REJET_FORME_CONTRAT = /\b(REJET|REJETE|REJETÉ|INVALIDE|DEFAUT|DÉFAUT|KO)\s*:/i
+/** L'approbation que le brief du juge IMPOSE : « Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: …" ». */
+const APPROBATION_CONTRAT = /\bVALIDE\b/i
+
+/**
+ * Lit le verdict d'une phase — FERMÉ par défaut pour le juge.
+ *
+ * `REJET_EN_TETE` seul ne testait que les PREMIERS mots, ce qui rendait VERT tout juge qui n'avait pas
+ * la bonne forme. Mesuré le 2026-08-05 sur les 4 cas dégénérés, tous lus « green » :
+ *   texte vide · « Error: provider timeout » · réponse hors contrat · « Le livrable présente un DEFAUT: … »
+ * Le dernier est le plus coûteux : un juge qui rejette explicitement était lu comme une approbation,
+ * simplement parce que le mot de rejet n'ouvrait pas la phrase.
+ *
+ * Le brief du juge (`phase-briefs.ts`) impose « VALIDE » ou « DEFAUT: <raison> ». On s'aligne sur CE
+ * contrat : hors contrat, on ne présume pas l'approbation. Les autres phases restent vertes — elles
+ * racontent leur travail, elles ne se prononcent pas.
+ */
+function verdictDePhase(phase: PipelinePhase, text: string): NodeVerdict {
+  if (phase !== 'judge') return 'green'
+  const propre = (text ?? '').trim()
+  if (!propre) return 'red'
+  if (REJET_EN_TETE.test(propre) || REJET_FORME_CONTRAT.test(propre)) return 'red'
+  // Ni rejet lisible, ni approbation contractuelle : un juge muet sur sa conclusion ne vaut pas un OK.
+  return APPROBATION_CONTRAT.test(propre) ? 'green' : 'red'
+}
 import { phaseBrief } from './phase-briefs'
 import type { DecompositionOutcome } from './greedy-decompose'
 import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
@@ -341,7 +367,8 @@ export interface OrchestratorDecompositionDeps {
  * regret réel était la seule lisibilité, et c'est ce que ce découpage paie.
  */
 export interface OrchestratorDeps
-  extends OrchestratorCollaboratorDeps,
+  extends
+    OrchestratorCollaboratorDeps,
     OrchestratorGateDeps,
     OrchestratorRoutingDeps,
     OrchestratorLifecycleDeps,
@@ -567,10 +594,10 @@ export function workspaceIsolationNotice(rawWorkCwd: string, rawBaseWorkspace: s
     '',
     "## Ta copie n'est pas un environnement complet",
     '',
-    "Elle peut ne pas avoir les dépendances installées ni les artefacts de build. Une suite de tests",
+    'Elle peut ne pas avoir les dépendances installées ni les artefacts de build. Une suite de tests',
     'qui échoue ICI ne prouve donc RIEN sur le produit : le défaut peut être ton environnement.',
     `Avant d'attribuer une panne au code, rejoue-la dans le dépôt réel (${baseWorkspace}).`,
-    "Mesuré : un agent a annoncé « 48 fichiers rouges, impossible de démarrer » alors que la suite",
+    'Mesuré : un agent a annoncé « 48 fichiers rouges, impossible de démarrer » alors que la suite',
     'était verte dans le dépôt réel — le rouge venait de sa propre copie.'
   ].join('\n')
 }
@@ -1942,24 +1969,33 @@ export class Orchestrator {
     for (const output of usableResume) {
       resteAPasser.set(output.phase, (resteAPasser.get(output.phase) ?? 0) + 1)
     }
+    /**
+     * Le texte de CHAQUE visite reprise, dans l'ordre, par phase.
+     *
+     * Pré-amorcer le verdict depuis la seule DERNIÈRE phase reprise ne suffisait pas : la marche relit
+     * `dernierVerdict` à chaque pas, et une phase rejouée sort par `dejaPayee` sans passer par
+     * `recordPhase`. Un nœud intermédiaire choisissait donc son arête avec le verdict de quelqu'un
+     * d'autre. Cas mesuré : acquis `scout → judge(ROUGE) → clean`, le pré-amorçage retenait `clean`
+     * (vert), le marcheur franchissait l'arête VERTE au nœud judge et SAUTAIT la réparation que le
+     * rouge devait déclencher — en se déclarant réussi.
+     */
+    const textesRepris = new Map<PipelinePhase, string[]>()
+    for (const output of usableResume) {
+      const file = textesRepris.get(output.phase) ?? []
+      file.push(output.text)
+      textesRepris.set(output.phase, file)
+    }
     /** Consomme un crédit de reprise pour cette phase. `true` = déjà payée, on saute cette visite. */
     const dejaPayee = (phase: PipelinePhase): boolean => {
       const reste = resteAPasser.get(phase) ?? 0
       if (reste <= 0) return false
       resteAPasser.set(phase, reste - 1)
+      // Le verdict de CETTE visite rejouée — même décompte que `resteAPasser`, donc la Nᵉ visite de la
+      // phase consomme le Nᵉ acquis de cette phase. C'est ce qui fait suivre au rejeu le chemin
+      // RÉELLEMENT emprunté avant l'interruption, et non celui du dernier acquis.
+      const texte = textesRepris.get(phase)?.shift()
+      if (texte !== undefined) dernierVerdict = verdictDePhase(phase, texte)
       return true
-    }
-    /**
-     * Le verdict de la DERNIÈRE phase reprise, rejoué avant d'entrer dans la marche.
-     *
-     * Sans cela, un run interrompu juste après un juge ROUGE redémarrait avec le verdict par défaut
-     * `green` : le marcheur choisissait l'arête verte et SAUTAIT la réparation que ce rouge devait
-     * déclencher. L'acquis persisté porte le texte — il porte donc aussi le verdict.
-     */
-    const dernierRepris = usableResume[usableResume.length - 1]
-    if (dernierRepris) {
-      dernierVerdict =
-        dernierRepris.phase === 'judge' && REJET_EN_TETE.test(dernierRepris.text) ? 'red' : 'green'
     }
     /** Enregistre une phase terminée ET notifie l'appelant pour qu'il persiste l'acquis. */
     const recordPhase = (phase: PipelinePhase, text: string): void => {
@@ -1970,7 +2006,7 @@ export class Orchestrator {
       // `frame` rédige librement ; l'un d'eux ouvrant par « KO » ou « Rejeté » aurait fait basculer
       // tout le run sur une arête rouge que personne n'a demandée. Les autres phases sont vertes —
       // elles racontent leur travail, elles ne se prononcent pas.
-      dernierVerdict = phase === 'judge' && REJET_EN_TETE.test(text) ? 'red' : 'green'
+      dernierVerdict = verdictDePhase(phase, text)
       phaseOutputs.push({ phase, text })
       try {
         this.deps.onPhaseCompleted?.({
