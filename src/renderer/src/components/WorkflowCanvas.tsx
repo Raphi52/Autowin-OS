@@ -1,5 +1,9 @@
 import { useMemo, useState } from 'react'
+import { personasFor } from '../../../shared/persona'
 import './WorkflowCanvas.css'
+
+/** Les efforts proposables. Miroir de `ReasoningEffort` côté main. */
+const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 
 /**
  * Le workflow comme PLAN, et non plus comme liste.
@@ -26,10 +30,19 @@ export type Phase =
   | 'kaizen'
   | 'remake'
 
+/** Un membre du fan-out : QUI regarde (persona), avec QUEL modèle et QUEL effort. */
+export interface CanvasAgent {
+  provider: string
+  model?: string
+  reasoningEffort?: string
+  /** L'angle imposé à ce membre. Injecté dans son prompt — sans lui, le panel est N fois le même. */
+  persona?: string
+}
+
 export interface CanvasNode {
   id: string
   phase: Phase
-  agents?: { provider: string; model?: string }[]
+  agents?: CanvasAgent[]
   quorum?: number
 }
 export interface CanvasEdge {
@@ -44,9 +57,20 @@ export interface CanvasGraph {
   edges: CanvasEdge[]
 }
 
+/** Un modèle proposable, tel qu'Agent Studio le connaît. */
+export interface CanvasModel {
+  provider: string
+  id: string
+}
+
 export interface WorkflowCanvasProps {
   graph: CanvasGraph
   onChange: (graph: CanvasGraph) => void
+  /**
+   * Les modèles réellement disponibles — MÊME source qu'Agent Studio (`window.api.models()`).
+   * Une saisie libre laissait composer un modèle inexistant, découvert seulement au lancement.
+   */
+  models?: CanvasModel[]
   /** Ce que le moteur ne peut pas jouer, calculé côté main et affiché tel quel. */
   defects?: { target?: string; message: string }[]
   /** Exécutions provisionnées au pire cas, affichées en barre d'état. */
@@ -100,6 +124,7 @@ export function WorkflowCanvas({
   graph,
   onChange,
   defects = [],
+  models = [],
   worstCase = null
 }: WorkflowCanvasProps): React.JSX.Element {
   const [drag, setDrag] = useState<number>()
@@ -138,6 +163,12 @@ export function WorkflowCanvas({
 
   const majNoeud = (id: string, patch: Partial<CanvasNode>): void =>
     onChange({ ...graph, nodes: graph.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)) })
+
+  /** Modifie UN membre du fan-out sans toucher aux autres réglages déjà posés. */
+  const majAgent = (node: CanvasNode, rang: number, patch: Partial<CanvasAgent>): void =>
+    majNoeud(node.id, {
+      agents: (node.agents ?? []).map((a, i) => (i === rang ? { ...a, ...patch } : a))
+    })
 
   const tracerRetour = (from: string, to: string): void =>
     onChange({
@@ -385,32 +416,65 @@ export function WorkflowCanvas({
                       }}
                     />
                   </label>
-                  {/* Un modèle par agent : sans cela un panel de trois juges serait trois fois le
-                        même, ce qui ne juge rien de plus qu'un seul. */}
+                  {/* Trois réglages par membre — modèle, effort, ANGLE. Sans l'angle, un panel de
+                      trois juges est trois fois le même juge : il coûte trois fois plus et
+                      n'apprend rien de plus. L'angle est injecté dans le prompt du membre. */}
                   {(node.agents ?? []).map((agent, r) => (
-                    <label key={r}>
-                      Agent {r + 1}
-                      <input
-                        type="text"
-                        data-testid={`wf-agent-model-${node.id}-${r}`}
-                        value={agent.model ?? ''}
-                        placeholder="modèle par défaut"
-                        onChange={(e) =>
-                          majNoeud(node.id, {
-                            agents: (node.agents ?? []).map((a, i) =>
-                              i === r
-                                ? {
-                                    ...a,
-                                    ...(e.target.value
-                                      ? { model: e.target.value }
-                                      : { model: undefined })
-                                  }
-                                : a
-                            )
-                          })
-                        }
-                      />
-                    </label>
+                    <div className="wf-agent-card" key={r}>
+                      <p className="wf-agent-rang">Agent {r + 1}</p>
+                      <label>
+                        Angle
+                        <select
+                          data-testid={`wf-agent-persona-${node.id}-${r}`}
+                          value={agent.persona ?? ''}
+                          onChange={(e) => majAgent(node, r, { persona: e.target.value || undefined })}
+                        >
+                          <option value="">aucun angle imposé</option>
+                          {personasFor(node.phase).map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Modèle
+                        <select
+                          data-testid={`wf-agent-model-${node.id}-${r}`}
+                          value={agent.model ?? ''}
+                          onChange={(e) => majAgent(node, r, { model: e.target.value || undefined })}
+                        >
+                          <option value="">modèle par défaut</option>
+                          {/* Un modèle déjà composé mais absent du catalogue reste proposé : sinon
+                              ouvrir un profil ancien effacerait silencieusement son réglage. */}
+                          {agent.model && !models.some((m) => m.id === agent.model) && (
+                            <option value={agent.model}>{agent.model} (indisponible)</option>
+                          )}
+                          {models.map((m) => (
+                            <option key={`${m.provider}:${m.id}`} value={m.id}>
+                              {m.id}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Effort
+                        <select
+                          data-testid={`wf-agent-effort-${node.id}-${r}`}
+                          value={agent.reasoningEffort ?? ''}
+                          onChange={(e) =>
+                            majAgent(node, r, { reasoningEffort: e.target.value || undefined })
+                          }
+                        >
+                          <option value="">par défaut</option>
+                          {EFFORTS.map((effort) => (
+                            <option key={effort} value={effort}>
+                              {effort}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
                   ))}
                   <label>
                     Quorum

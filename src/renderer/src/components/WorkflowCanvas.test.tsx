@@ -238,13 +238,51 @@ describe('un modèle par agent', () => {
     })
   }
 
+  /** Choisir dans une liste : `saisir` passe par le setter d'HTMLInputElement, inopérant sur un select. */
+  const choisir = (id: string, valeur: string): void => {
+    const champ = q<HTMLSelectElement>(`[data-testid="${id}"]`)
+    act(() => {
+      champ.value = valeur
+      champ.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+  }
+
   it('chaque agent a son propre modèle — sinon trois juges seraient trois fois le même', () => {
-    render({ graph: troisAgents })
+    // Le modèle se choisit désormais dans la liste d'Agent Studio, plus en saisie libre : une
+    // saisie libre laissait composer un modèle inexistant, découvert seulement au lancement.
+    render({ graph: troisAgents, models: [{ provider: 'codex', id: 'codex-mini' }] })
     clic('wf-open-judge-1')
-    saisir('wf-agent-model-judge-1-1', 'codex-mini')
+    choisir('wf-agent-model-judge-1-1', 'codex-mini')
     const agents = dernier().nodes[0].agents!
     expect(agents[1].model).toBe('codex-mini')
     expect(agents[0].model).toBeUndefined() // l'autre est intact
+  })
+
+  it('chaque agent a son propre ANGLE, et il est distinct du modèle', () => {
+    render({ graph: troisAgents })
+    clic('wf-open-judge-1')
+    choisir('wf-agent-persona-judge-1-1', 'lean')
+    const agents = dernier().nodes[0].agents!
+    expect(agents[1].persona).toBe('lean')
+    expect(agents[0].persona).toBeUndefined() // l'angle des autres membres est intact
+    expect(agents[1].model).toBeUndefined() // l'angle ne se confond pas avec le modèle
+  })
+
+  it('un modèle composé mais absent du catalogue reste proposé, jamais effacé en silence', () => {
+    render({
+      graph: {
+        ...troisAgents,
+        nodes: [
+          { ...troisAgents.nodes[0], agents: [{ provider: 'claude', model: 'modele-retire' }] }
+        ]
+      },
+      models: [{ provider: 'claude', id: 'opus' }]
+    })
+    clic('wf-open-judge-1')
+    const options = [
+      ...container.querySelectorAll('[data-testid="wf-agent-model-judge-1-0"] option')
+    ].map((o) => o.getAttribute('value'))
+    expect(options).toContain('modele-retire')
   })
 
   it('augmenter le nombre d’agents PRÉSERVE les modèles déjà choisis', () => {

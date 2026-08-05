@@ -54,6 +54,27 @@ export function WorkflowGraphEditor({
   const [graph, setGraph] = useState<CanvasGraph>(() => initialGraph(profile))
   const [verdict, setVerdict] = useState<Verdict>()
   const [enregistre, setEnregistre] = useState(true)
+  // MÊME source que la liste d'Agent Studio : deux catalogues divergeraient, et on composerait ici
+  // un modèle que le runtime ne connaît pas.
+  const [models, setModels] = useState<{ provider: string; id: string }[]>([])
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const bruts = (await window.api.models?.()) as
+          | { provider?: string; id?: string }[]
+          | undefined
+        setModels(
+          (bruts ?? [])
+            .filter((m): m is { provider: string; id: string } => !!m?.id)
+            .map((m) => ({ provider: m.provider ?? '', id: m.id }))
+        )
+      } catch {
+        // Catalogue injoignable : on retombe sur « modèle par défaut », jamais sur une liste inventée.
+        setModels([])
+      }
+    })()
+  }, [])
 
   const verifier = useCallback(async (candidat: CanvasGraph) => {
     try {
@@ -86,6 +107,7 @@ export function WorkflowGraphEditor({
         graph={graph}
         onChange={modifier}
         defects={verdict?.defects}
+        models={models}
         worstCase={verdict?.worstCaseNodeExecutions ?? null}
       />
       <div className="workflow-graph-actions">

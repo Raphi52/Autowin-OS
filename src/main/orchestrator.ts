@@ -56,6 +56,7 @@ function verdictDePhase(phase: PipelinePhase, text: string): NodeVerdict {
   return APPROBATION_CONTRAT.test(propre) ? 'green' : 'red'
 }
 import { phaseBrief } from './phase-briefs'
+import { personaInstruction } from '../shared/persona'
 import type { DecompositionOutcome } from './greedy-decompose'
 import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
 import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-scope'
@@ -2155,18 +2156,33 @@ export class Orchestrator {
         const fanSystem = parts.map((p) => p.text).join('')
         const sandbox = isMutationTask(task) ? 'danger-full-access' : 'read-only'
         const memberOutputs = await Promise.all(
-          fanMembers.map(async (member) => {
+          fanMembers.map(async (member, rang) => {
+            // L'identité prend la persona quand il y en a une, sinon le modèle. Le rang n'est ajouté
+            // QUE s'il lève une ambiguïté réelle : trois membres sur le même modèle portaient
+            // jusqu'ici le MÊME agentId et se télescopaient dans le suivi comme dans l'UI ; deux
+            // modèles distincts, eux, n'ont jamais eu besoin d'un suffixe.
+            const signatureMembre = member.persona ?? member.model ?? member.provider
+            const homonymes = fanMembers.filter(
+              (autre) => (autre.persona ?? autre.model ?? autre.provider) === signatureMembre
+            ).length
+            const identite =
+              homonymes > 1 ? `${phase}:${signatureMembre}:${rang + 1}` : `${phase}:${signatureMembre}`
             const execution = {
               phase,
-              agentId: `${phase}:${member.model ?? member.provider}`,
-              taskId: `${phase}:${member.model ?? member.provider}`,
+              agentId: identite,
+              taskId: identite,
               groupId: `${phase}:fanout`,
               dependencyIds: [] as string[],
               attemptId: randomUUID()
             }
+            // La persona s'ajoute AU PROMPT de ce membre-là. Un prompt commun à tous rendrait le
+            // fan-out inutile : N fois le même avis, pour N fois le prix.
+            const personaBloc = personaInstruction(member.persona)
             const opts: SendOptions = {
-              system: fanSystem,
-              systemBlocks: fanSystemBlocks,
+              system: fanSystem + personaBloc,
+              systemBlocks: personaBloc
+                ? [...fanSystemBlocks, { name: 'persona', chars: personaBloc.length }]
+                : fanSystemBlocks,
               model: member.model,
               reasoningEffort: member.reasoningEffort,
               execution: this.executionOptions(workCwd, sandbox, runId),

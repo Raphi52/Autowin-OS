@@ -16,6 +16,14 @@ export interface RoleBinding {
   model?: string
   reasoningEffort?: ReasoningEffort
   /**
+   * L'ANGLE sous lequel ce membre regarde — ce qui rend un fan-out utile.
+   *
+   * Trois agents sur un même nœud avec le même prompt sont trois fois le même avis : le panel coûte
+   * trois fois plus cher et n'apporte rien, parce que sa valeur vient de la DÉCORRÉLATION, pas du
+   * nombre. La persona est donc injectée dans le prompt système du membre, jamais seulement affichée.
+   */
+  persona?: string
+  /**
    * Override de modèle PAR PHASE (proportionnalité coût/latence) : les phases d'analyse
    * (scout/frame/terrain) peuvent tourner sur un petit modèle rapide, build/juge sur le gros.
    * Générique : référence des modèles du provider ACTIF, jamais un id figé. Absent pour une phase
