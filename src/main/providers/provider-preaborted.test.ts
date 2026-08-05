@@ -1,5 +1,6 @@
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const spawns = vi.hoisted(() => ({ direct: 0, survivable: 0 }))
@@ -31,7 +32,10 @@ import { CodexAdapter } from './codex'
 import { KimiCliAdapter } from './kimi'
 
 const previousCodexBin = process.env.CODEX_BIN
+/** Restaurations à jouer après chaque test (variables d'environnement, dossiers privés). */
+const nettoyages: Array<() => void> = []
 afterEach(() => {
+  for (const nettoyer of nettoyages.splice(0)) nettoyer()
   spawns.direct = 0
   spawns.survivable = 0
   workspaceCapture.capture.mockReset()
@@ -93,6 +97,22 @@ describe('providers CLI — annulation avant lancement', () => {
   })
 
   it('Claude refuse sans spawn si le signal est annulé pendant la capture et nettoie la pièce jointe', async () => {
+    // FENÊTRE D'OBSERVATION PRIVÉE. Ce test comptait les dossiers `autowin-os-attachments-*` du
+    // dossier temporaire SYSTÈME et en exigeait exactement un — il postulait donc l'exclusivité sur
+    // une ressource partagée. Tout voisin matérialisant une pièce jointe en parallèle le faisait
+    // échouer, et l'ajout d'un fichier de test sans lien suffisait à changer l'ordonnancement de
+    // vitest pour provoquer ce chevauchement (constaté le 2026-08-05 : vert seul, rouge en suite).
+    // `os.tmpdir()` lit TEMP/TMP : les rediriger ici rend le compte insensible aux voisins.
+    const tmpSysteme = tmpdir()
+    const tmpPrive = mkdtempSync(join(tmpSysteme, 'preaborted-'))
+    const anciennesVars = { TEMP: process.env.TEMP, TMP: process.env.TMP }
+    process.env.TEMP = tmpPrive
+    process.env.TMP = tmpPrive
+    nettoyages.push(() => {
+      process.env.TEMP = anciennesVars.TEMP
+      process.env.TMP = anciennesVars.TMP
+      rmSync(tmpPrive, { recursive: true, force: true })
+    })
     const before = new Set(readdirSync(tmpdir()))
     const deferred = deferredSnapshot()
     workspaceCapture.capture.mockReturnValueOnce(deferred.promise)

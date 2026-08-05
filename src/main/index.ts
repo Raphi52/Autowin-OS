@@ -56,7 +56,12 @@ import {
 } from './activity/transcripts'
 import { persistConversations } from './store/conversations-disk'
 import { collectStdoutJournals } from './runs/journal-gc'
-import { deleteConvRun, listConvRuns, loadConvRunTrace } from './runs/conv-runs'
+import {
+  deleteConvRun,
+  listConvRuns,
+  loadConvRunTrace,
+  reconcileAbandonedConvRuns
+} from './runs/conv-runs'
 import { deleteListedRun } from './dashboards/runs-scan'
 import { createOrchestrateTurnPersistence } from './runs/orchestrate-turn-persistence'
 import {
@@ -3526,6 +3531,25 @@ app.whenReady().then(async () => {
   startupProviderChecks = Promise.resolve()
   createWindow()
   setupTray() // l'app vit en tray → fermer la fenêtre ne tue plus les runs en cours
+
+  // RÉCONCILIATION DES RUNS ABANDONNÉS. Un run dont l'app est morte en cours gardait `status: open`
+  // à vie : mesuré le 2026-08-05, 141 runs ouverts depuis plus de 24 h, ni succès ni échec, alors
+  // que ce sont des échecs — ils faussaient donc en silence toute lecture du taux de réussite.
+  // APRÈS `createWindow` et sans `await` : le démarrage ne doit rien attendre de cette hygiène. Le
+  // seuil de 24 h laisse intacts les runs en vol et ceux que la reprise va récupérer.
+  setImmediate(() => {
+    try {
+      const bilan = reconcileAbandonedConvRuns({})
+      if (bilan.closed || bilan.remaining) {
+        // Le reste est dit à voix haute : une borne muette se lirait « tout est traité ».
+        console.log(
+          `[runs] ${bilan.closed} run(s) abandonné(s) clos en red, ${bilan.remaining} en attente du prochain démarrage`
+        )
+      }
+    } catch (error) {
+      console.warn('[runs] réconciliation des runs abandonnés impossible', error)
+    }
+  })
 
   // #4 — diagnostic de démarrage (non bloquant) : on vérifie brain_server, CLI providers et token,
   // et on pousse le résultat au renderer (bannière) pour que l'utilisateur voie une config incomplète

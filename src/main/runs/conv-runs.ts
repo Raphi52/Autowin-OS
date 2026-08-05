@@ -1,4 +1,14 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  readSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { readFile, readdir, rm, stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { parseRun } from '../dashboards/runs'
@@ -172,6 +182,92 @@ export function closeConvRun(path: string, green: boolean, journalLine: string):
   } catch {
     /* clôture best-effort : un RUN resté open est visible, pas fatal */
   }
+}
+
+/**
+ * Vrai si le fichier COMMENCE par ce texte, en ne lisant que les premiers octets.
+ *
+ * La réconciliation examine des milliers de RUN.md dont l'immense majorité est déjà close : les
+ * charger entiers pour ne regarder que leur première ligne coûterait des dizaines de mégaoctets à
+ * chaque démarrage.
+ */
+function commencePar(path: string, prefixe: string): boolean {
+  const tampon = Buffer.alloc(Buffer.byteLength(prefixe, 'utf8'))
+  let fd: number | undefined
+  try {
+    fd = openSync(path, 'r')
+    const lus = readSync(fd, tampon, 0, tampon.length, 0)
+    return lus === tampon.length && tampon.toString('utf8') === prefixe
+  } finally {
+    if (fd !== undefined) closeSync(fd)
+  }
+}
+
+/**
+ * Clôt les runs restés `open` alors que plus personne ne les porte.
+ *
+ * `closeConvRun` n'est appelé qu'à la FIN d'une orchestration : si l'app s'arrête avant — crash,
+ * fermeture, coupure — le `RUN.md` garde `status: open` et rien ne l'en sort jamais. Mesuré le
+ * 2026-08-05 sur l'état réel (8888 workspaces) : 151 runs `open` dont **141 vieux de plus de 24 h**.
+ * Le taux de réussite se lisant dans ces fichiers, ces 141 le faussaient en silence — ni succès, ni
+ * échec, alors que ce sont des échecs. `red` est le statut juste : la docstring de `closeConvRun` le
+ * dit déjà, « red = rejeté/crash ».
+ *
+ * Le SEUIL protège les runs en vol et ceux que la reprise va récupérer : ceux-là ont un `mtime` de
+ * quelques secondes, jamais de plusieurs heures. Le PLAFOND borne le travail au démarrage, et le
+ * reste est RENVOYÉ pour être journalisé — une troncature muette se lirait « tout est traité ».
+ *
+ * Ne lit que le début de chaque fichier : le statut est en première ligne, inutile de charger 8888
+ * documents entiers. Coût mesuré de la seule traversée : ~360 ms pour 8888 workspaces.
+ */
+export function reconcileAbandonedConvRuns(options: {
+  root?: string
+  now?: number
+  olderThanMs?: number
+  max?: number
+}): { closed: number; remaining: number } {
+  const root = options.root ?? convRunsRoot()
+  const now = options.now ?? Date.now()
+  const olderThanMs = options.olderThanMs ?? 24 * 3_600_000
+  const max = options.max ?? 500
+  let closed = 0
+  let remaining = 0
+  let convs: string[]
+  try {
+    convs = readdirSync(root)
+  } catch {
+    return { closed: 0, remaining: 0 } // racine absente : rien à réconcilier, et surtout rien à casser
+  }
+  for (const conv of convs) {
+    let workspaces: string[]
+    try {
+      workspaces = readdirSync(join(root, conv))
+    } catch {
+      continue
+    }
+    for (const ws of workspaces) {
+      // Seuls les workspaces portent un RUN.md à clore ; un worktree d'agent n'en est pas un.
+      if (!ws.endsWith('-workspace')) continue
+      const path = join(root, conv, ws, 'RUN.md')
+      try {
+        if (now - statSync(path).mtimeMs <= olderThanMs) continue
+        if (!commencePar(path, 'status: open')) continue
+      } catch {
+        continue // RUN.md absent ou illisible : ce n'est pas à la réconciliation de le signaler
+      }
+      if (closed >= max) {
+        remaining += 1
+        continue
+      }
+      closeConvRun(
+        path,
+        false,
+        "Abandonné : l'app s'est arrêtée avant la clôture, aucun verdict n'a été rendu."
+      )
+      closed += 1
+    }
+  }
+  return { closed, remaining }
 }
 
 /** Chemin du sidecar de trace (fil des sous-agents) d'un RUN.md. */
