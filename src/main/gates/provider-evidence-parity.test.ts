@@ -14,39 +14,69 @@ import { codexExecutionEvidenceKind } from '../providers/codex'
  * Ce test est le garde-fou de la source unique. Il compare les deux classifieurs sur la même
  * liste, donc il tombe dès que l'un des deux repart avec son propre vocabulaire.
  */
-const CASES = [
-  'git -C "C:/Amitel/Autowin OS" stash push -u -m wip',
-  'git stash push -u',
-  'git commit -m "wip"',
-  'git checkout -- .',
-  'git reset --hard origin/main',
-  'git worktree add ../wt HEAD',
-  'git tag v1.2.3',
-  'mv src/a.ts src/b.ts',
-  'rm -rf out',
-  'npm install',
-  'echo "x" > f.txt',
-  'set-content f.txt x',
-  'copy-item a b',
-  // Lectures : aucun des deux ne doit y voir une mutation.
-  'git status --porcelain',
-  'git stash list',
-  'git tag',
-  'git rev-parse HEAD',
-  'rg "TODO" src',
-  'cat package.json',
-  'printf "git log"',
-  // Vérifications : identiques des deux côtés.
-  'npm run test',
-  'npx vitest run',
-  'tsc --noEmit'
+/**
+ * Table `[commande, kind attendu]` et non simple égalité : l'audit du 3e cycle a montré qu'un tiers
+ * des cas étaient une égalité TRIVIALE (les deux retombaient sur `inspection` par défaut, sans
+ * exercer aucune branche partagée), et surtout que la liste ne contenait AUCUNE commande à
+ * l'intersection mutation ∩ vérification — la seule zone où l'ORDRE des branches est observable,
+ * précisément ce que le recâblage n'avait pas unifié. Les cas composés ci-dessous couvrent cette
+ * intersection.
+ */
+const CASES: Array<[string, 'mutation' | 'verification' | 'inspection']> = [
+  // Mutations d'état, dont le cas de l'incident fondateur.
+  ['git -C "C:/Amitel/Autowin OS" stash push -u -m wip', 'mutation'],
+  ['git stash push -u', 'mutation'],
+  ['git commit -m "wip"', 'mutation'],
+  ['git checkout -- .', 'mutation'],
+  ['git reset --hard origin/main', 'mutation'],
+  ['git worktree add ../wt HEAD', 'mutation'],
+  ['git tag v1.2.3', 'mutation'],
+  ['mv src/a.ts src/b.ts', 'mutation'],
+  ['rm -rf out', 'mutation'],
+  ['npm install', 'mutation'],
+  ['echo "x" > f.txt', 'mutation'],
+  ['set-content f.txt x', 'mutation'],
+  ['copy-item a b', 'mutation'],
+  ['Restart-Service RigSvc', 'mutation'],
+  ['docker compose up -d', 'mutation'],
+  // INTERSECTION mutation ∩ vérification : l'ordre des branches y est observable.
+  ['npm install && npm test', 'verification'],
+  ['npm ci && npx vitest run', 'verification'],
+  ['dotnet restore; dotnet test', 'verification'],
+  ['npm install; npx tsc --noEmit', 'verification'],
+  ['docker compose up -d && npm run test', 'verification'],
+  // Vérifications simples.
+  ['npm run test', 'verification'],
+  ['npx vitest run', 'verification'],
+  ['tsc --noEmit', 'verification'],
+  // Lectures.
+  ['git status --porcelain', 'inspection'],
+  ['git stash list', 'inspection'],
+  ['git tag', 'inspection'],
+  ['git rev-parse HEAD', 'inspection'],
+  ['rg "TODO" src', 'inspection'],
+  ['cat package.json', 'inspection'],
+  ['printf "git log"', 'inspection'],
+  ['rg "Restart-Service" src', 'inspection']
 ]
 
 describe('parité de classement entre les providers', () => {
-  it.each(CASES)('classe « %s » de la même façon sous Claude et sous Codex', (command) => {
-    const claude = claudeToolEvidenceKind('Bash', command)
-    const codex = codexExecutionEvidenceKind({ type: 'command_execution', command })
-    expect(codex).toBe(claude)
+  it.each(CASES)('classe « %s » en %s des DEUX côtés', (command, expected) => {
+    // On exige le kind ATTENDU, pas seulement l'égalité : deux `inspection` par défaut sont égales
+    // sans rien prouver de la parité.
+    expect(claudeToolEvidenceKind('Bash', command)).toBe(expected)
+    expect(codexExecutionEvidenceKind({ type: 'command_execution', command })).toBe(expected)
+  })
+
+  it('couvre réellement les trois kinds, dont l’intersection mutation ∩ vérification', () => {
+    const kinds = new Set(CASES.map(([, kind]) => kind))
+    expect(kinds).toEqual(new Set(['mutation', 'verification', 'inspection']))
+    // Au moins une commande COMPOSÉE qui mute ET vérifie : sans elle, l'ordre des branches n'est
+    // pas observable et le test ne peut pas tomber sur la divergence qu'il prétend garder.
+    const composees = CASES.filter(
+      ([command, kind]) => /&&|;/.test(command) && kind === 'verification'
+    )
+    expect(composees.length).toBeGreaterThanOrEqual(3)
   })
 
   it('classe le cas de l’incident fondateur comme une mutation des DEUX côtés', () => {

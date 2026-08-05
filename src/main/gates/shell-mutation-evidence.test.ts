@@ -202,6 +202,78 @@ describe('les mutations d’état NON-git satisfont aussi le gate', () => {
   })
 })
 
+/**
+ * TROISIÈME cycle d'audit. Les deux premiers avaient corrigé des VALEURS ; celui-ci a montré que la
+ * MÉTHODE était en cause — une regex qui cherche le verbe n'importe où dans la chaîne ne distingue
+ * pas un littéral cité d'une commande exécutée. Le classement se fait désormais par SEGMENT et par
+ * PREMIER TOKEN. Ces cas figent les quatre familles trouvées.
+ */
+describe('un littéral cité n’est pas une commande exécutée', () => {
+  it.each([
+    'rg "Restart-Service" src',
+    'grep -rn "Remove-Item" .',
+    'rg "npm install" README.md',
+    'cat notes.md',
+    'printf "git log"',
+    'echo "Restart-Service RigSvc"'
+  ])('« %s » est une LECTURE, pas une mutation', (command) => {
+    expect(claudeToolEvidenceKind('Bash', command)).toBe('inspection')
+  })
+
+  it('deux lectures ne peuvent PAS fermer un gate de mutation', () => {
+    // Le bypass exact du 3e audit : `rg "Restart-Service" src` était classé mutation, donc un agent
+    // en lecture seule satisfaisait un gate de mutation avec deux commandes qui ne changent rien.
+    expect(
+      evidenceSatisfiesTask('redémarre le service', [
+        ev('mutation', 'rg "Restart-Service" src'),
+        ev('inspection', 'git status --porcelain')
+      ])
+    ).toBe(false)
+  })
+})
+
+describe('la commande est reconnue quelle que soit sa forme d’appel', () => {
+  it.each([
+    'git stash push -u',
+    '  git stash push -u',
+    '\tgit stash push -u',
+    'sudo git stash push -u',
+    'env FOO=1 git stash push -u',
+    'pwsh -c "git stash push -u"',
+    'bash -c \'git stash push -u\'',
+    'git -C "C:/Amitel/Autowin OS" stash push -u -m wip'
+  ])('« %s » reste une mutation', (command) => {
+    expect(claudeToolEvidenceKind('Bash', command)).toBe('mutation')
+  })
+})
+
+describe('les mutations voisines ne sont plus invisibles', () => {
+  it.each([
+    ['Stop-Process -Name node -Force', 'Get-Process node'],
+    ['taskkill /F /IM node.exe', 'Get-Process node'],
+    ['curl -o a.zip http://x', 'Test-Path a.zip'],
+    ['yarn add lodash', 'Test-Path node_modules'],
+    ['docker rmi img', 'docker images'],
+    ['cat a >> b', 'Get-Content b'],
+    ['del f.txt', 'Test-Path f.txt'],
+    ['reg add HKCU\\X /v Y /d 1 /f', 'Get-ItemProperty HKCU:\\X']
+  ])('« %s » est une mutation, prouvable par « %s »', (mutation, oracle) => {
+    expect(claudeToolEvidenceKind('Bash', mutation)).toBe('mutation')
+    expect(
+      evidenceSatisfiesTask('change l’état et prouve-le', [
+        ev('mutation', mutation),
+        ev('inspection', oracle)
+      ])
+    ).toBe(true)
+  })
+
+  it('une lecture d’état correspondante ne devient pas une mutation', () => {
+    for (const read of ['Get-Process', 'docker images', 'Test-Path f.txt', 'curl http://x']) {
+      expect(claudeToolEvidenceKind('Bash', read)).toBe('inspection')
+    }
+  })
+})
+
 describe('le shell du chat ne porte aucune primitive d’écriture', () => {
   it('exclut les sous-commandes qui acceptent --output', () => {
     // PROUVÉ : `git diff --output=victim.txt HEAD HEAD` ramène un fichier à 0 octet, et
