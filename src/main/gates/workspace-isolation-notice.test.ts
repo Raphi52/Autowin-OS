@@ -52,6 +52,17 @@ describe('le bloc « où tu travailles »', () => {
   it('avertit qu’un run non vert ne fusionne pas la copie', () => {
     expect(workspaceIsolationNotice(WORKTREE, BASE)).toMatch(/non fusionn|que si le run/i)
   })
+
+  it('avertit que la copie peut ne pas avoir de dépendances — un rouge n’y prouve rien', () => {
+    // 2026-08-04 : un agent a rapporté « 48 fichiers rouges, act is not a function, impossible de
+    // démarrer » et rendu la main. La suite était VERTE dans le dépôt réel. Deux hypothèses
+    // réfutées depuis (React périmé sur disque ; ancien commit important `act` d'ailleurs — il
+    // vient de 'react' depuis le commit initial) : le rouge appartenait à son environnement.
+    const notice = workspaceIsolationNotice(WORKTREE, BASE)
+    expect(notice).toMatch(/dépendances/i)
+    expect(notice).toMatch(/ne prouve donc RIEN sur le produit/)
+    expect(notice).toContain(BASE)
+  })
 })
 
 describe('le bloc est réellement CÂBLÉ dans les prompts', () => {

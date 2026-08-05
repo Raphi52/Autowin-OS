@@ -538,7 +538,15 @@ export function workspaceIsolationNotice(workCwd: string, baseWorkspace: string)
     '',
     "Et ne DEVINE jamais ce qui s'est passé : constate-le. Après une opération, relis l'état réel",
     '(`git -C … status --porcelain`, `git -C … stash list`) et rapporte ce que tu as LU. Un agent',
-    "a déjà annoncé « il ne s'est probablement rien passé » sur un travail qu'il venait de réussir."
+    "a déjà annoncé « il ne s'est probablement rien passé » sur un travail qu'il venait de réussir.",
+    '',
+    "## Ta copie n'est pas un environnement complet",
+    '',
+    "Elle peut ne pas avoir les dépendances installées ni les artefacts de build. Une suite de tests",
+    'qui échoue ICI ne prouve donc RIEN sur le produit : le défaut peut être ton environnement.',
+    `Avant d'attribuer une panne au code, rejoue-la dans le dépôt réel (${baseWorkspace}).`,
+    "Mesuré : un agent a annoncé « 48 fichiers rouges, impossible de démarrer » alors que la suite",
+    'était verte dans le dépôt réel — le rouge venait de sa propre copie.'
   ].join('\n')
 }
 
