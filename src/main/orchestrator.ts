@@ -22,7 +22,13 @@ import {
   worstCaseNodeExecutions,
   type WorkflowGraph
 } from './workflow-graph'
-import { initialBudget, nextNode, type NodeVerdict } from './workflow-walk'
+import {
+  initialBudget,
+  nextNode,
+  readModelChoice,
+  type ModelChoice,
+  type NodeVerdict
+} from './workflow-walk'
 
 /**
  * Ce qui fait d'une sortie de phase un ROUGE. Marqueur en TÊTE uniquement : un compte rendu qui
@@ -75,7 +81,7 @@ function verdictDePhase(phase: PipelinePhase, text: string): NodeVerdict {
   return APPROBATION_CONTRAT.test(propre) ? 'green' : 'red'
 }
 import { phaseBrief } from './phase-briefs'
-import { personaInstruction } from '../shared/persona'
+import { personaInstruction, WORKFLOW_IS_A_TOOL_INSTRUCTION } from '../shared/persona'
 import type { DecompositionOutcome } from './greedy-decompose'
 import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
 import { brainCorpusForWorkspace, scopeBrainRetrieval } from './brain-corpus-scope'
@@ -1529,6 +1535,12 @@ export class Orchestrator {
             { name: 'constitution', text: CONSTITUTION },
             this.phasePrompt(phase, withFoundation),
             { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
+            // Le droit de dévier n'est dit QUE si un graphe pilote : sinon la consigne parlerait
+            // d'étapes qui n'existent pas, et inviterait à sortir d'un chemin qu'on ne suit pas.
+            {
+              name: 'workflowTool',
+              text: this.deps.currentWorkflow?.()?.graph ? WORKFLOW_IS_A_TOOL_INSTRUCTION : ''
+            },
             { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
             { name: 'projectContext', text: projectContext },
             // Vide quand le run tourne dans le dépôt de base : rien n'est payé en contexte.
@@ -1925,6 +1937,13 @@ export class Orchestrator {
      */
     let dernierVerdict: NodeVerdict = 'green'
     /**
+     * Ce que le modèle a demandé pour la suite, ou rien.
+     *
+     * Consommé à chaque pas puis remis à zéro : un souhait ne vaut que pour la transition qui suit,
+     * sinon il repiloterait tout le reste du run depuis une phase déjà passée.
+     */
+    let souhaitModele: ModelChoice
+    /**
      * La suite des phases à jouer. Avec un graphe, on le MARCHE (retours compris, budgets consommés) ;
      * sans graphe, on déroule la liste plate d'avant. Un générateur plutôt qu'un tableau : la suite ne
      * peut pas être connue à l'avance, elle dépend du verdict de chaque phase au moment où elle finit.
@@ -1961,7 +1980,9 @@ export class Orchestrator {
       // qu'un graphe corrompu (arête vers un nœud absent, budget incohérent) ne fige pas le process.
       for (let pas = 0; pas < 200 && courant && parId.has(courant); pas++) {
         yield parId.get(courant)!.phase
-        const suivant = nextNode(graphePilote, courant, dernierVerdict, budget, rangs)
+        const voulu = souhaitModele
+        souhaitModele = undefined // consommé : un souhait ne vaut que pour CETTE transition
+        const suivant = nextNode(graphePilote, courant, dernierVerdict, budget, rangs, voulu)
         if (!suivant) return
         courant = suivant.to
       }
@@ -2027,6 +2048,10 @@ export class Orchestrator {
       // tout le run sur une arête rouge que personne n'a demandée. Les autres phases sont vertes —
       // elles racontent leur travail, elles ne se prononcent pas.
       dernierVerdict = verdictDePhase(phase, text)
+      // Le souhait du modèle pour la suite, s'il s'est prononcé. Il PRIME sur le graphe : un workflow
+      // est un outil, et l'agent qui vient de travailler sait mieux que le plan si l'étape prévue a
+      // encore un sens. Silence = le graphe décide, ce qui reste le cas courant.
+      souhaitModele = readModelChoice(text)
       phaseOutputs.push({ phase, text })
       try {
         this.deps.onPhaseCompleted?.({
@@ -2162,6 +2187,9 @@ export class Orchestrator {
           { name: 'constitution', text: CONSTITUTION },
           this.phasePrompt(phase, true),
           { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
+          // Le droit de dévier n'est dit QUE si un graphe pilote : sinon la consigne parlerait
+          // d'étapes qui n'existent pas, et inviterait à sortir d'un chemin qu'on ne suit pas.
+          { name: 'workflowTool', text: grapheBrut ? WORKFLOW_IS_A_TOOL_INSTRUCTION : '' },
           { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
           { name: 'projectContext', text: projectContext },
           {
@@ -2461,6 +2489,9 @@ export class Orchestrator {
             { name: 'constitution', text: CONSTITUTION },
             this.phasePrompt(phase, true),
             { name: 'discipline', text: PIPELINE_DISCIPLINE_INSTRUCTION },
+            // Le droit de dévier n'est dit QUE si un graphe pilote : sinon la consigne parlerait
+            // d'étapes qui n'existent pas, et inviterait à sortir d'un chemin qu'on ne suit pas.
+            { name: 'workflowTool', text: grapheBrut ? WORKFLOW_IS_A_TOOL_INSTRUCTION : '' },
             { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
             { name: 'projectContext', text: projectContext }
           ]

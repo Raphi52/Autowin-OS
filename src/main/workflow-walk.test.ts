@@ -112,6 +112,65 @@ describe('marcher le graphe', () => {
     expect(walk(graph, ['green', 'green', 'green'])).toEqual(['frame-1', 'build-1', 'judge-1'])
   })
 
+  /**
+   * Le principe : un workflow est un OUTIL pour les modèles, pas une contrainte. Si l'agent qui vient
+   * de travailler juge l'étape suivante hors sujet, c'est LUI qui tranche. Ces tests fixent cette
+   * priorité — sans eux, le graphe redeviendrait une laisse.
+   */
+  describe('le modèle a le dernier mot', () => {
+    const chaine = g({})
+
+    it('un arrêt demandé arrête, même si le graphe enchaînait', () => {
+      const ranks = nodeRanks(chaine)
+      expect(
+        nextNode(chaine, 'frame-1', 'green', initialBudget(chaine, ranks), ranks, { kind: 'stop' })
+      ).toBeUndefined()
+    })
+
+    it('une destination demandée est honorée même sans arête qui la desserve', () => {
+      const ranks = nodeRanks(chaine)
+      const suite = nextNode(chaine, 'frame-1', 'green', initialBudget(chaine, ranks), ranks, {
+        kind: 'node',
+        id: 'judge-1'
+      })
+      expect(suite?.to).toBe('judge-1') // le graphe menait à build-1
+    })
+
+    it('une destination par PHASE est résolue vers son nœud', () => {
+      const ranks = nodeRanks(chaine)
+      const suite = nextNode(chaine, 'frame-1', 'green', initialBudget(chaine, ranks), ranks, {
+        kind: 'phase',
+        phase: 'judge'
+      })
+      expect(suite?.to).toBe('judge-1')
+    })
+
+    it('une destination INCONNUE ne fait rien inventer : on retombe sur le graphe', () => {
+      const ranks = nodeRanks(chaine)
+      const suite = nextNode(chaine, 'frame-1', 'green', initialBudget(chaine, ranks), ranks, {
+        kind: 'phase',
+        phase: 'terrain'
+      })
+      expect(suite?.to).toBe('build-1')
+    })
+
+    it('un retour emprunté sur demande consomme QUAND MÊME son budget', () => {
+      const graph = g({
+        edges: [
+          { from: 'frame-1', to: 'build-1', when: 'always' },
+          { from: 'build-1', to: 'judge-1', when: 'always' },
+          { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 1 }
+        ]
+      })
+      const ranks = nodeRanks(graph)
+      const budget = initialBudget(graph, ranks)
+      // Le modèle demande le retour alors que son verdict est VERT : le pire cas provisionné doit
+      // rester une borne, sinon une boucle demandée à répétition sortirait du devis.
+      nextNode(graph, 'judge-1', 'green', budget, ranks, { kind: 'node', id: 'build-1' })
+      expect(budget.get(edgeKey({ from: 'judge-1', to: 'build-1', when: 'red' }))).toBe(0)
+    })
+  })
+
   it('le budget initial ne compte que les retours, jamais les arêtes avant', () => {
     const graph = g({
       edges: [

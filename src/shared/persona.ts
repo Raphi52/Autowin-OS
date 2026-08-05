@@ -113,6 +113,25 @@ export const PERSONAS: Partial<Record<PipelinePhase, Persona[]>> = {
   ]
 }
 
+/**
+ * Ce qu'on dit à un agent quand un graphe pilote le run.
+ *
+ * Sans cette consigne, la porte de sortie existe mais personne ne la trouve : le modèle subirait un
+ * plan qu'il sait inadapté. Elle est volontairement formulée comme un DROIT et non comme une
+ * obligation — un agent sommé de se prononcer à chaque tour finirait par le faire au hasard.
+ */
+export const WORKFLOW_IS_A_TOOL_INSTRUCTION = `
+=== LE WORKFLOW EST UN OUTIL, PAS UNE LAISSE ===
+Un graphe d'étapes pilote ce run. Il propose la suite ; c'est TOI qui tranches.
+Si l'étape prévue n'a plus de sens au vu de ce que tu viens de trouver, termine ta réponse par une
+ligne seule :
+  SUITE: <phase>     (ex. SUITE: build — pour aller à cette phase plutôt qu'à celle prévue)
+  SUITE: fin         (le travail est terminé, rien ne justifie une étape de plus)
+Ne mets RIEN si l'étape prévue convient : le silence laisse le graphe décider, et c'est le cas normal.
+Ne t'en sers pas pour éviter un travail difficile — seulement quand la suite prévue serait du gâchis
+ou hors sujet.
+`
+
 /** Les personas proposables pour une phase. Vide = fan-out sans angle imposé, ce qui reste licite. */
 export function personasFor(phase: PipelinePhase): Persona[] {
   return PERSONAS[phase] ?? []

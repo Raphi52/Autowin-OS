@@ -4,6 +4,25 @@ import { ensureAutowinAppData } from './app-data'
 import { ALL_ROLES, type Role, type RoleBinding } from './roles'
 import type { PipelinePhase } from './skill-pipeline'
 import { graphDefects, graphFromPhases, type WorkflowGraph } from './workflow-graph'
+import { DEFAULT_WORKFLOWS } from './workflow-defaults'
+
+/**
+ * Sème le catalogue livré d'origine, UNE SEULE FOIS, quand aucun fichier n'existe encore.
+ *
+ * Une vue vide ne s'utilise pas : composer un graphe depuis une page blanche demande de connaître
+ * les phases, les personas et les bornes de retour — c'est-à-dire tout ce que ces exemples montrent.
+ * Le geste est explicite et séparé de la LECTURE : `loadWorkflowProfiles` ne doit jamais inventer du
+ * contenu, sinon un fichier vidé volontairement se repeuplerait tout seul au prochain démarrage.
+ */
+export function seedDefaultWorkflows(path = workflowProfilesPath()): WorkflowProfilesFile {
+  if (existsSync(path)) return loadWorkflowProfiles(path)
+  const fichier: WorkflowProfilesFile = {
+    profiles: DEFAULT_WORKFLOWS.map((profile) => ({ ...profile })),
+    activeId: null
+  }
+  saveWorkflowProfiles(fichier, path)
+  return fichier
+}
 
 /**
  * Un WORKFLOW nommé : la façon de travailler, rendue sélectionnable et comparable.

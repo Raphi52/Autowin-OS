@@ -192,6 +192,7 @@ import {
   loadWorkflowProfiles,
   removeWorkflowProfile,
   saveWorkflowProfiles,
+  seedDefaultWorkflows,
   selectWorkflowProfile,
   upsertWorkflowProfile,
   type WorkflowProfile,
@@ -1514,7 +1515,9 @@ Le fil reprend ensuite normalement.`
   const appliquerWorkflowActif = (fichier: WorkflowProfilesFile): void => {
     os.setActiveWorkflow(overrideFor(activeWorkflowProfile(fichier) ?? null))
   }
-  appliquerWorkflowActif(loadWorkflowProfiles())
+  // Le semis d'origine précède l'application : sinon la toute première ouverture montrerait une vue
+  // vide, et le moteur n'aurait rien à porter.
+  appliquerWorkflowActif(seedDefaultWorkflows())
 
   ipcMain.handle('os:workflowProfiles:get', (event) => {
     assertTrustedRendererSender(event, 'Workflow profiles')
