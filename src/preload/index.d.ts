@@ -146,7 +146,6 @@ interface ChatApi {
   /** Ce que le moteur ne peut pas jouer d'un graphe composé, plus son pire cas. */
   checkWorkflowGraph: (graph: unknown) => Promise<{
     defects: { target?: string; message: string }[]
-    inertReturns: { from: string; to: string }[]
     worstCaseNodeExecutions: number | null
   }>
   /** Quel workflow pilote une conversation donnée. */

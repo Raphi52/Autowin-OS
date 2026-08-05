@@ -10,7 +10,15 @@ import { listNativeRegistry, skillRoots } from './native-registry'
  * packagée chez un autre), chaque loader renvoie '' → l'orchestration retombe sur la discipline
  * condensée intégrée (pipeline-discipline.ts). Aucune dépendance dure au home du dev.
  */
-export type PipelinePhase = 'scout' | 'frame' | 'terrain' | 'build' | 'clean' | 'judge' | 'kaizen'
+export type PipelinePhase =
+  | 'scout'
+  | 'frame'
+  | 'terrain'
+  | 'build'
+  | 'clean'
+  | 'judge'
+  | 'kaizen'
+  | 'remake'
 
 export const PIPELINE_PHASES: PipelinePhase[] = [
   'scout',
@@ -19,7 +27,8 @@ export const PIPELINE_PHASES: PipelinePhase[] = [
   'build',
   'clean',
   'judge',
-  'kaizen'
+  'kaizen',
+  'remake'
 ]
 
 export function skillsRoot(root = join(homedir(), '.claude', 'skills')): string {
@@ -100,7 +109,10 @@ const PHASE_ENGINE_CHAPTER: Record<PipelinePhase, 'Ch.1' | 'Ch.2' | 'Ch.3' | 'Ch
   build: 'Ch.4',
   clean: 'Ch.4',
   judge: 'Ch.2',
-  kaizen: null
+  kaizen: null,
+  // `remake` PILOTE le pipeline (scout → frame → build → clean → judge) au lieu d'en occuper un
+  // chapitre : aucune mécanique du moteur ne lui appartient en propre.
+  remake: null
 }
 
 function engineSection(full: string, headingPattern: string, stop: string): string {

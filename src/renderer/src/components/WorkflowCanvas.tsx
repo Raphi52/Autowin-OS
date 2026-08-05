@@ -2,18 +2,29 @@ import { useMemo, useState } from 'react'
 import './WorkflowCanvas.css'
 
 /**
- * Composer un workflow en le manipulant.
+ * Le workflow comme PLAN, et non plus comme liste.
  *
- * Deux règles gouvernent ce canevas, et elles viennent du défaut qu'il corrige :
+ * L'ancien canevas empilait les nœuds dans un `<ol>` et listait les retours en texte dessous : on ne voyait ni la
+ * topologie, ni le fan-out, ni où un retour retombait. Ici le graphe est DESSINÉ — nœuds placés, arêtes tracées,
+ * retours en connecteurs orthogonaux portant leur borne — et l'édition fine passe par l'inspecteur latéral.
  *
- *  1. **Ce qu'on compose doit être ce qui tourne.** Un graphe que le moteur ne sait pas jouer est
- *     signalé À LA COMPOSITION, jamais accepté en silence. L'écran a déjà promis deux fois un
- *     pilotage qui n'existait pas ; il ne recommence pas.
- *  2. **Un retour sans limite est refusé.** Sans borne, le run peut ne jamais s'arrêter — et le devis
- *     ne peut plus garantir sa clôture avant de partir.
+ * Les positions ne sont PAS stockées : elles se DÉRIVENT de l'ordre de la chaîne (colonnes de trois). Un modèle
+ * qui porterait `x`/`y` ferait vieillir des coordonnées, divergerait du graphe et n'aurait aucun sens à la
+ * relecture d'un profil ; dérivées, elles sont justes par construction et le glisser-déposer garde le sens qu'il
+ * a toujours eu — réordonner la chaîne, pas déplacer dans le plan.
  */
 
-export type Phase = 'scout' | 'frame' | 'terrain' | 'build' | 'clean' | 'judge'
+// Miroir de `PipelinePhase` (src/main/skill-pipeline.ts) — les deux doivent rester alignés, sinon on
+// compose à l'écran une phase que le moteur ne sait pas jouer.
+export type Phase =
+  | 'scout'
+  | 'frame'
+  | 'terrain'
+  | 'build'
+  | 'clean'
+  | 'judge'
+  | 'kaizen'
+  | 'remake'
 
 export interface CanvasNode {
   id: string
@@ -38,14 +49,39 @@ export interface WorkflowCanvasProps {
   onChange: (graph: CanvasGraph) => void
   /** Ce que le moteur ne peut pas jouer, calculé côté main et affiché tel quel. */
   defects?: { target?: string; message: string }[]
-  /** Retours composables mais encore inertes — dits, pas masqués. */
-  inertReturns?: { from: string; to: string }[]
+  /** Exécutions provisionnées au pire cas, affichées en barre d'état. */
+  worstCase?: number | null
 }
 
-const PALETTE: Phase[] = ['scout', 'frame', 'terrain', 'build', 'clean', 'judge']
+const PALETTE: Phase[] = [
+  'scout',
+  'frame',
+  'terrain',
+  'build',
+  'clean',
+  'judge',
+  'kaizen',
+  'remake'
+]
 
 /** Provider par défaut d'un agent ajouté ; le modèle, lui, se choisit agent par agent. */
 const defaultProvider = 'claude'
+
+/* ── Géométrie du plan. Des constantes plutôt que des valeurs semées : le tracé des arêtes en dépend. ── */
+const NODE_W = 158
+const NODE_H = 64
+const COL_GAP = 188
+const ROW_GAP = 90
+const PAD = 44
+const PER_COL = 3
+const LOOP_LANE = 108 // couloir à droite du plan où passent les retours
+const VOIE_ECART = 14 // écart entre deux retours dans le couloir, pour qu'ils ne se recouvrent pas
+
+function place(index: number): { x: number; y: number } {
+  const col = Math.floor(index / PER_COL)
+  const row = index % PER_COL
+  return { x: PAD + col * (NODE_W + COL_GAP), y: PAD + row * (NODE_H + ROW_GAP) }
+}
 
 /** Réenchaîne les nœuds dans leur ordre d'affichage, en préservant les retours déjà tracés. */
 function rechain(nodes: CanvasNode[], edges: CanvasEdge[]): CanvasEdge[] {
@@ -64,7 +100,7 @@ export function WorkflowCanvas({
   graph,
   onChange,
   defects = [],
-  inertReturns = []
+  worstCase = null
 }: WorkflowCanvasProps): React.JSX.Element {
   const [drag, setDrag] = useState<number>()
   const [ouvert, setOuvert] = useState<string>()
@@ -101,10 +137,7 @@ export function WorkflowCanvas({
   }
 
   const majNoeud = (id: string, patch: Partial<CanvasNode>): void =>
-    onChange({
-      ...graph,
-      nodes: graph.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n))
-    })
+    onChange({ ...graph, nodes: graph.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)) })
 
   const tracerRetour = (from: string, to: string): void =>
     onChange({
@@ -121,70 +154,214 @@ export function WorkflowCanvas({
     })
 
   const retours = graph.edges.filter((e) => e.when !== 'always')
+  const avants = graph.edges.filter((e) => e.when === 'always')
+  const rang = useMemo(() => new Map(graph.nodes.map((n, i) => [n.id, i])), [graph.nodes])
+
+  const colonnes = Math.max(1, Math.ceil(graph.nodes.length / PER_COL))
+  const lignes = Math.min(PER_COL, Math.max(1, graph.nodes.length))
+  const planW = PAD * 2 + colonnes * NODE_W + (colonnes - 1) * COL_GAP + LOOP_LANE
+  const planH = PAD * 2 + lignes * NODE_H + (lignes - 1) * ROW_GAP
+
+  /** Chaîne : vertical si même colonne, coude sinon. Les coudes passent à mi-gouttière. */
+  const traceAvant = (a: number, b: number): string => {
+    const p = place(a)
+    const q = place(b)
+    if (p.x === q.x) return `M${p.x + NODE_W / 2} ${p.y + NODE_H} V${q.y - 7}`
+    const mid = p.x + NODE_W + COL_GAP / 2
+    return `M${p.x + NODE_W} ${p.y + NODE_H / 2} H${mid} V${q.y + NODE_H / 2} H${q.x - 7}`
+  }
+
+  /**
+   * Retour : sort à droite, remonte par le couloir, rentre par la droite de la cible.
+   *
+   * Le couloir est DÉCALÉ par retour (`voie`) : sans cela deux retours partant du même nœud
+   * partagent exactement le même segment vertical et se recouvrent au pixel près — une seule flèche
+   * reste visible, et on ne peut plus dire quel retour va où.
+   */
+  const traceRetour = (a: number, b: number, voie: number): string => {
+    const p = place(a)
+    const q = place(b)
+    const lane =
+      PAD + colonnes * NODE_W + (colonnes - 1) * COL_GAP + LOOP_LANE / 2 + voie * VOIE_ECART
+    return `M${p.x + NODE_W} ${p.y + NODE_H / 2} H${lane} V${q.y + NODE_H / 2 + 10} H${q.x + NODE_W + 7}`
+  }
 
   return (
     <section className="wf-canvas" data-testid="workflow-canvas">
-      <ul className="wf-palette" data-testid="wf-palette">
-        {PALETTE.map((phase) => (
-          <li key={phase}>
-            <button type="button" data-testid={`wf-add-${phase}`} onClick={() => ajouter(phase)}>
-              + {phase}
-            </button>
-          </li>
-        ))}
-      </ul>
+      <div className="wf-editor">
+        <aside className="wf-palette-pane">
+          <p className="wf-kicker">Phases</p>
+          <ul className="wf-palette" data-testid="wf-palette">
+            {PALETTE.map((phase) => (
+              <li key={phase}>
+                <button
+                  type="button"
+                  className={`wf-pal-item wf-ph-${phase}`}
+                  data-testid={`wf-add-${phase}`}
+                  onClick={() => ajouter(phase)}
+                >
+                  <span className="wf-dot" />
+                  {phase}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="wf-hint">
+            Cliquer ajoute la phase au bout de la chaîne. Glisser un nœud le réordonne.
+          </p>
+        </aside>
 
-      {globaux.length > 0 && (
-        <ul className="wf-defects" role="alert" data-testid="wf-defects">
-          {globaux.map((d) => (
-            <li key={d.message}>{d.message}</li>
-          ))}
-        </ul>
-      )}
-
-      <ol className="wf-chain">
-        {graph.nodes.map((node, index) => {
-          const soucis = parNoeud.get(node.id) ?? []
-          return (
-            <li
-              key={node.id}
-              className={`wf-node${soucis.length ? ' is-broken' : ''}`}
-              data-testid={`wf-node-${node.id}`}
-              draggable
-              onDragStart={() => setDrag(index)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => deposer(index)}
-            >
-              <button
-                type="button"
-                className="wf-node-head"
-                data-testid={`wf-open-${node.id}`}
-                onClick={() => setOuvert(ouvert === node.id ? undefined : node.id)}
+        <div className="wf-plan" style={{ minWidth: planW, minHeight: planH }}>
+          <svg className="wf-wires" width={planW} height={planH} aria-hidden="true">
+            <defs>
+              <marker id="wf-ar" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                <path d="M0,0 L7,3.5 L0,7 z" className="wf-ar-n" />
+              </marker>
+              <marker
+                id="wf-ar-red"
+                markerWidth="7"
+                markerHeight="7"
+                refX="6"
+                refY="3.5"
+                orient="auto"
               >
-                <span className="wf-node-phase">{node.phase}</span>
+                <path d="M0,0 L7,3.5 L0,7 z" className="wf-ar-r" />
+              </marker>
+              <marker
+                id="wf-ar-green"
+                markerWidth="7"
+                markerHeight="7"
+                refX="6"
+                refY="3.5"
+                orient="auto"
+              >
+                <path d="M0,0 L7,3.5 L0,7 z" className="wf-ar-g" />
+              </marker>
+            </defs>
+            {/* Les arêtes AVANT se lisent dans `graph.edges`, JAMAIS dans l'ordre du tableau de
+                nœuds : dessiner nœud[i] → nœud[i+1] afficherait une chaîne linéaire même quand le
+                moteur, lui, suit d'autres arêtes — l'utilisateur validerait un graphe qu'il ne
+                compose pas. */}
+            {avants.map((edge) => {
+              const a = rang.get(edge.from)
+              const b = rang.get(edge.to)
+              if (a === undefined || b === undefined) return null
+              return (
+                <path
+                  key={`fwd-${edge.from}-${edge.to}`}
+                  d={traceAvant(a, b)}
+                  className="wf-wire"
+                  markerEnd="url(#wf-ar)"
+                />
+              )
+            })}
+            {retours.map((edge, voie) => {
+              const a = rang.get(edge.from)
+              const b = rang.get(edge.to)
+              if (a === undefined || b === undefined) return null
+              return (
+                <path
+                  key={`ret-${edge.from}-${edge.to}`}
+                  d={traceRetour(a, b, voie)}
+                  className={`wf-wire wf-wire-${edge.when}`}
+                  markerEnd={`url(#wf-ar-${edge.when === 'green' ? 'green' : 'red'})`}
+                />
+              )
+            })}
+          </svg>
+
+          {graph.nodes.map((node, index) => {
+            const soucis = parNoeud.get(node.id) ?? []
+            const pos = place(index)
+            const agents = node.agents ?? []
+            return (
+              <div
+                key={node.id}
+                className={`wf-node wf-ph-${node.phase}${soucis.length ? ' is-broken' : ''}${
+                  ouvert === node.id ? ' is-open' : ''
+                }`}
+                style={{ left: pos.x, top: pos.y, width: NODE_W }}
+                data-testid={`wf-node-${node.id}`}
+                draggable
+                onDragStart={() => setDrag(index)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => deposer(index)}
+              >
+                <span className="wf-node-bar" />
+                <button
+                  type="button"
+                  className="wf-node-head"
+                  data-testid={`wf-open-${node.id}`}
+                  onClick={() => setOuvert(ouvert === node.id ? undefined : node.id)}
+                >
+                  <span className="wf-node-phase">
+                    <span className="wf-dot" />
+                    {node.phase}
+                  </span>
+                  <span className="wf-node-id">{node.id}</span>
+                </button>
+                <button
+                  type="button"
+                  className="wf-node-remove"
+                  data-testid={`wf-remove-${node.id}`}
+                  title={`Retirer ${node.phase}`}
+                  onClick={() => retirer(node.id)}
+                >
+                  ×
+                </button>
                 <span className="wf-node-agents">
-                  {node.agents?.length ? `${node.agents.length} agent(s)` : '1 agent'}
-                  {node.quorum ? ` · quorum ${node.quorum}` : ''}
+                  {agents.length > 1 ? (
+                    agents.map((agent, i) => (
+                      <span className="wf-ag" key={i} title={agent.model ?? 'modèle par défaut'} />
+                    ))
+                  ) : (
+                    <span className="wf-ag-label">{agents[0]?.model ?? '1 agent'}</span>
+                  )}
+                  {node.quorum ? <span className="wf-quorum-badge">q{node.quorum}</span> : null}
                 </span>
-              </button>
-              <button
-                type="button"
-                className="wf-node-remove"
-                data-testid={`wf-remove-${node.id}`}
-                title={`Retirer ${node.phase}`}
-                onClick={() => retirer(node.id)}
-              >
-                ×
-              </button>
+                {soucis.map((message) => (
+                  <p className="wf-node-defect" key={message}>
+                    {message}
+                  </p>
+                ))}
+              </div>
+            )
+          })}
 
-              {soucis.map((message) => (
-                <p className="wf-node-defect" key={message}>
-                  {message}
-                </p>
+          <div className="wf-statusbar">
+            {worstCase ? (
+              <span className="wf-pill is-warn">≤{worstCase} exéc. au pire cas</span>
+            ) : null}
+            {defects.length ? (
+              <span className="wf-pill is-err">
+                {defects.length} défaut{defects.length > 1 ? 's' : ''}
+              </span>
+            ) : (
+              <span className="wf-pill is-ok">valide</span>
+            )}
+          </div>
+        </div>
+
+        <aside className="wf-insp">
+          {globaux.length > 0 && (
+            <ul className="wf-defects" role="alert" data-testid="wf-defects">
+              {globaux.map((d) => (
+                <li key={d.message}>{d.message}</li>
               ))}
+            </ul>
+          )}
 
-              {ouvert === node.id && (
+          {ouvert && graph.nodes.some((n) => n.id === ouvert) ? (
+            (() => {
+              const node = graph.nodes.find((n) => n.id === ouvert)!
+              const index = rang.get(node.id) ?? 0
+              return (
                 <div className="wf-node-detail" data-testid={`wf-detail-${node.id}`}>
+                  <p className="wf-kicker">Nœud sélectionné</p>
+                  <p className={`wf-insp-title wf-ph-${node.phase}`}>
+                    <span className="wf-dot" />
+                    {node.id}
+                  </p>
                   <label>
                     Agents
                     <input
@@ -209,20 +386,25 @@ export function WorkflowCanvas({
                     />
                   </label>
                   {/* Un modèle par agent : sans cela un panel de trois juges serait trois fois le
-                      même, ce qui ne juge rien de plus qu'un seul. */}
-                  {(node.agents ?? []).map((agent, rang) => (
-                    <label key={rang}>
-                      Agent {rang + 1}
+                        même, ce qui ne juge rien de plus qu'un seul. */}
+                  {(node.agents ?? []).map((agent, r) => (
+                    <label key={r}>
+                      Agent {r + 1}
                       <input
                         type="text"
-                        data-testid={`wf-agent-model-${node.id}-${rang}`}
+                        data-testid={`wf-agent-model-${node.id}-${r}`}
                         value={agent.model ?? ''}
                         placeholder="modèle par défaut"
                         onChange={(e) =>
                           majNoeud(node.id, {
                             agents: (node.agents ?? []).map((a, i) =>
-                              i === rang
-                                ? { ...a, ...(e.target.value ? { model: e.target.value } : { model: undefined }) }
+                              i === r
+                                ? {
+                                    ...a,
+                                    ...(e.target.value
+                                      ? { model: e.target.value }
+                                      : { model: undefined })
+                                  }
                                 : a
                             )
                           })
@@ -247,71 +429,78 @@ export function WorkflowCanvas({
                     />
                   </label>
                   {/* Tracer un retour depuis ce nœud vers un nœud déjà passé. */}
-                  {graph.nodes.slice(0, index).map((cible) => (
-                    <button
-                      key={cible.id}
-                      type="button"
-                      data-testid={`wf-return-${node.id}-${cible.id}`}
-                      onClick={() => tracerRetour(node.id, cible.id)}
-                    >
-                      ↩ renvoyer à {cible.phase}
-                    </button>
-                  ))}
+                  {graph.nodes.slice(0, index).length > 0 && (
+                    <p className="wf-kicker wf-kicker-sub">Renvoyer vers</p>
+                  )}
+                  <div className="wf-return-buttons">
+                    {graph.nodes.slice(0, index).map((cible) => (
+                      <button
+                        key={cible.id}
+                        type="button"
+                        data-testid={`wf-return-${node.id}-${cible.id}`}
+                        onClick={() => tracerRetour(node.id, cible.id)}
+                      >
+                        ↩ {cible.phase}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              )}
-            </li>
-          )
-        })}
-      </ol>
+              )
+            })()
+          ) : (
+            <p className="wf-hint wf-insp-empty">
+              Cliquer un nœud pour régler ses agents, son quorum et ses retours.
+            </p>
+          )}
 
-      {retours.length > 0 && (
-        <ul className="wf-returns" data-testid="wf-returns">
-          {retours.map((edge) => {
-            const inerte = inertReturns.some((r) => r.from === edge.from && r.to === edge.to)
-            return (
-              <li key={`${edge.from}>${edge.to}`} data-testid={`wf-edge-${edge.from}-${edge.to}`}>
-                <span>
-                  {edge.from} → {edge.to} si rouge
-                </span>
-                <label>
-                  au plus
-                  <input
-                    type="number"
-                    min={1}
-                    max={10}
-                    data-testid={`wf-bound-${edge.from}-${edge.to}`}
-                    value={edge.maxTraversals ?? 1}
-                    onChange={(e) =>
-                      onChange({
-                        ...graph,
-                        edges: graph.edges.map((c) =>
-                          c.from === edge.from && c.to === edge.to && c.when === edge.when
-                            ? { ...c, maxTraversals: Math.max(1, Number(e.target.value) || 1) }
-                            : c
-                        )
-                      })
-                    }
-                  />
-                  fois
-                </label>
-                {/* Un retour composable mais inerte serait le pire des pièges : on le DIT. */}
-                {inerte && (
-                  <span className="wf-inert" data-testid={`wf-inert-${edge.from}-${edge.to}`}>
-                    composable, mais le moteur ne sait pas encore le jouer
-                  </span>
-                )}
-                <button
-                  type="button"
-                  data-testid={`wf-drop-${edge.from}-${edge.to}`}
-                  onClick={() => retirerRetour(edge.from, edge.to)}
-                >
-                  ×
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-      )}
+          {retours.length > 0 && (
+            <ul className="wf-returns" data-testid="wf-returns">
+              <li className="wf-kicker wf-kicker-sub">Retours</li>
+              {retours.map((edge) => {
+                return (
+                  <li
+                    key={`${edge.from}>${edge.to}`}
+                    data-testid={`wf-edge-${edge.from}-${edge.to}`}
+                  >
+                    <span className="wf-return-name">
+                      {edge.from} → {edge.to} si {edge.when === 'green' ? 'vert' : 'rouge'}
+                    </span>
+                    <label>
+                      au plus
+                      <input
+                        type="number"
+                        min={1}
+                        max={10}
+                        data-testid={`wf-bound-${edge.from}-${edge.to}`}
+                        value={edge.maxTraversals ?? 1}
+                        onChange={(e) =>
+                          onChange({
+                            ...graph,
+                            edges: graph.edges.map((c) =>
+                              c.from === edge.from && c.to === edge.to && c.when === edge.when
+                                ? { ...c, maxTraversals: Math.max(1, Number(e.target.value) || 1) }
+                                : c
+                            )
+                          })
+                        }
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="wf-return-drop"
+                      data-testid={`wf-drop-${edge.from}-${edge.to}`}
+                      onClick={() => retirerRetour(edge.from, edge.to)}
+                      title="Retirer ce retour"
+                    >
+                      ×
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </aside>
+      </div>
     </section>
   )
 }

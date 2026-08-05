@@ -58,7 +58,10 @@ function indexNodes(graph: WorkflowGraph): Map<string, WorkflowNode> {
   return byId
 }
 
-/** Ordre d'atteinte depuis l'entrée en ne suivant que les arêtes avant — sert à qualifier les retours. */
+/**
+ * Ordre d'atteinte depuis l'entrée en ne suivant que les arêtes avant — sert à qualifier les retours.
+ * Exporté via `nodeRanks()` : le marcheur en a besoin pour savoir quelle arête consomme un budget.
+ */
 function forwardRanks(graph: WorkflowGraph, byId: Map<string, WorkflowNode>): Map<string, number> {
   const rank = new Map<string, number>()
   const walk = (id: string, depth: number): void => {
@@ -86,6 +89,11 @@ export function isReturnEdge(edge: WorkflowEdge, ranks: Map<string, number>): bo
   return to <= from
 }
 
+/** Les rangs, pour un appelant externe (le marcheur) qui doit distinguer une arête avant d'un retour. */
+export function nodeRanks(graph: WorkflowGraph): Map<string, number> {
+  return forwardRanks(graph, indexNodes(graph))
+}
+
 /**
  * Tout ce qui empêcherait ce graphe de tourner. Retourne une LISTE : le canevas doit pouvoir tout signaler d'un
  * coup, pas faire découvrir les problèmes un par un.
@@ -99,7 +107,8 @@ export function graphDefects(graph: WorkflowGraph): GraphDefect[] {
   }
   const vus = new Set<string>()
   for (const node of graph.nodes) {
-    if (vus.has(node.id)) defects.push({ target: node.id, message: `Deux nœuds portent l’id ${node.id}.` })
+    if (vus.has(node.id))
+      defects.push({ target: node.id, message: `Deux nœuds portent l’id ${node.id}.` })
     vus.add(node.id)
     if (node.quorum !== undefined) {
       const agents = node.agents?.length ?? 1
@@ -119,11 +128,17 @@ export function graphDefects(graph: WorkflowGraph): GraphDefect[] {
   const ranks = forwardRanks(graph, byId)
   for (const edge of graph.edges) {
     if (!byId.has(edge.from)) {
-      defects.push({ target: edge.from, message: `Une arête part d’un nœud inconnu (${edge.from}).` })
+      defects.push({
+        target: edge.from,
+        message: `Une arête part d’un nœud inconnu (${edge.from}).`
+      })
       continue
     }
     if (!byId.has(edge.to)) {
-      defects.push({ target: edge.to, message: `Une arête pointe vers un nœud inconnu (${edge.to}).` })
+      defects.push({
+        target: edge.to,
+        message: `Une arête pointe vers un nœud inconnu (${edge.to}).`
+      })
       continue
     }
     if (!isReturnEdge(edge, ranks)) continue
@@ -260,22 +275,14 @@ export function recoveriesFromGraph(graph: WorkflowGraph): number | undefined {
   return undefined
 }
 
-/**
- * Les retours que le moteur ne sait PAS encore jouer — un rejet qui remonte au frame, par exemple.
- *
- * Cette liste existe pour que le canevas puisse le DIRE au lieu de laisser composer quelque chose
- * d'inerte : le piège serait un graphe accepté à l'écran dont une arête n'a aucun effet réel.
+/*
+ * `unsupportedReturns()` a été SUPPRIMÉE ici. Elle listait les retours que le moteur ne savait pas
+ * jouer ; depuis que l'orchestrateur MARCHE le graphe (`workflow-walk.ts`), la réponse est « aucun »
+ * pour tout graphe. La garder sous forme de constante aurait maintenu en vie tout un contrat — champ
+ * IPC, type preload, prop, rendu, CSS, tests — autour d'une mention devenue inatteignable. Les cas
+ * voisins (extrémité inconnue, borne absente ou hors plage, nœud jamais atteint) appartiennent à
+ * `graphDefects`, qui les REFUSE au lieu de les tolérer.
  */
-export function unsupportedReturns(graph: WorkflowGraph): WorkflowEdge[] {
-  const byId = indexNodes(graph)
-  const ranks = forwardRanks(graph, byId)
-  return graph.edges.filter((edge) => {
-    if (!isReturnEdge(edge, ranks)) return false
-    const depuis = byId.get(edge.from)?.phase
-    const vers = byId.get(edge.to)?.phase
-    return !(edge.when === 'red' && depuis === 'judge' && vers === 'build')
-  })
-}
 
 /**
  * Convertit un workflow linéaire d'avant ce chantier en graphe. Sans cette conversion, tout profil déjà

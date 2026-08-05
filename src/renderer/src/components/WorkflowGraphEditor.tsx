@@ -20,7 +20,6 @@ interface ProfileLike {
 
 interface Verdict {
   defects: { target?: string; message: string }[]
-  inertReturns: { from: string; to: string }[]
   worstCaseNodeExecutions: number | null
 }
 
@@ -39,7 +38,9 @@ function initialGraph(profile: ProfileLike): CanvasGraph {
   return {
     entry: nodes[0]?.id ?? '',
     nodes,
-    edges: nodes.slice(0, -1).map((n, i) => ({ from: n.id, to: nodes[i + 1].id, when: 'always' as const }))
+    edges: nodes
+      .slice(0, -1)
+      .map((n, i) => ({ from: n.id, to: nodes[i + 1].id, when: 'always' as const }))
   }
 }
 
@@ -60,7 +61,10 @@ export function WorkflowGraphEditor({
       if (resultat) setVerdict(resultat)
     } catch {
       // Une vérification injoignable ne doit pas bloquer la composition ; elle bloque l'enregistrement.
-      setVerdict({ defects: [{ message: 'Vérification indisponible.' }], inertReturns: [], worstCaseNodeExecutions: null })
+      setVerdict({
+        defects: [{ message: 'Vérification indisponible.' }],
+        worstCaseNodeExecutions: null
+      })
     }
   }, [])
 
@@ -82,7 +86,7 @@ export function WorkflowGraphEditor({
         graph={graph}
         onChange={modifier}
         defects={verdict?.defects}
-        inertReturns={verdict?.inertReturns}
+        worstCase={verdict?.worstCaseNodeExecutions ?? null}
       />
       <div className="workflow-graph-actions">
         <button

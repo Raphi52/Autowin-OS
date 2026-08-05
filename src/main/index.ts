@@ -196,7 +196,6 @@ import {
 import { registerWorkflowBenchIpc } from './workflow-bench-ipc'
 import {
   graphDefects,
-  unsupportedReturns,
   worstCaseNodeExecutions,
   type WorkflowGraph
 } from './workflow-graph'
@@ -1522,15 +1521,19 @@ Le fil reprend ensuite normalement.`
     saveWorkflowProfiles(next)
     return next
   })
-  // Ce que le moteur ne peut PAS jouer d'un graphe composé. Calculé côté main pour que le canevas et
-  // l'exécution partagent exactement la même règle — deux vérités divergeraient tôt ou tard.
+  // La validité d'un graphe composé. Calculée côté main pour que le canevas et l'exécution partagent
+  // exactement la même règle — deux vérités divergeraient tôt ou tard.
+  //
+  // `inertReturns` a disparu de ce contrat : depuis que l'orchestrateur MARCHE le graphe, aucun
+  // retour n'est inerte. Le champ ne rendait plus qu'un tableau vide, et la mention qu'il pilotait
+  // à l'écran (« le moteur ne sait pas encore le jouer ») était devenue un mensonge inatteignable.
   ipcMain.handle('os:workflowGraph:check', (event, raw: unknown) => {
     assertTrustedRendererSender(event, 'Workflow graph')
     const graph = raw as WorkflowGraph
+    const defects = graphDefects(graph)
     return {
-      defects: graphDefects(graph),
-      inertReturns: unsupportedReturns().map((edge) => ({ from: edge.from, to: edge.to })),
-      worstCaseNodeExecutions: graphDefects(graph).length ? null : worstCaseNodeExecutions(graph)
+      defects,
+      worstCaseNodeExecutions: defects.length ? null : worstCaseNodeExecutions(graph)
     }
   })
   // Quel workflow pilote CETTE conversation. Par conversation et non global : on veut un fil en

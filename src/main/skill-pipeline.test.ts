@@ -39,7 +39,7 @@ describe('skill-pipeline — chargement du kit au runtime', () => {
     expect(phaseInstruction('build', root)).toBe('')
   })
 
-  it('expose les 7 phases de la pipeline dans l’ordre', () => {
+  it('expose les 8 phases de la pipeline dans l’ordre', () => {
     expect(PIPELINE_PHASES).toEqual([
       'scout',
       'frame',
@@ -47,7 +47,8 @@ describe('skill-pipeline — chargement du kit au runtime', () => {
       'build',
       'clean',
       'judge',
-      'kaizen'
+      'kaizen',
+      'remake'
     ])
     expect(phaseInstruction('kaizen')).toBe('')
   })

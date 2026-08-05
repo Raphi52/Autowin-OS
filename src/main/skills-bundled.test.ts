@@ -93,9 +93,18 @@ describe('skills embarquées dans la code base', () => {
     for (const dir of dirs) expect(existsSync(join(root, dir, 'SKILL.md'))).toBe(true)
   })
 
-  it("PipelinePhase reste une union de 7 — `remake` n'est pas devenue une phase", () => {
-    expect(PIPELINE_PHASES).toHaveLength(7)
-    expect(PIPELINE_PHASES).not.toContain('remake')
+  // Décision utilisateur du 2026-08-05 : `remake` DEVIENT une phase composable. Sa SKILL.md était
+  // déjà embarquée (test ci-dessus) mais l'enum l'excluait, donc on ne pouvait pas la poser sur un
+  // graphe de workflow. Le test qui protégeait l'exclusion est remplacé par celui qui garde le
+  // nouveau contrat : chaque phase déclarée doit avoir sa skill embarquée.
+  it('PipelinePhase est une union de 8, et chaque phase a sa skill embarquée', () => {
+    expect(PIPELINE_PHASES).toHaveLength(8)
+    expect(PIPELINE_PHASES).toContain('remake')
+    const root = bundledSkillsRoot()
+    for (const phase of PIPELINE_PHASES) {
+      if (phase === 'kaizen') continue // workflow natif Autowin, pas de SKILL.md embarquée
+      expect(existsSync(join(root!, phase, 'SKILL.md'))).toBe(true)
+    }
   })
 
   it("kit externe ABSENT → l'instruction reste NON VIDE (avant : chaîne vide, en silence)", () => {

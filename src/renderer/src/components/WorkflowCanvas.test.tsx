@@ -168,22 +168,51 @@ describe('ne jamais accepter en silence', () => {
     expect(q('[data-testid="wf-defects"]').textContent).toContain('Le workflow est vide')
   })
 
-  it('un retour COMPOSABLE MAIS INERTE est dit — c’est le pire des pièges', () => {
+  // Les deux tests de la mention « inerte » ont été retirés avec la fonctionnalité : depuis que
+  // l'orchestrateur marche le graphe, TOUT retour composable est joué, et la mention ne pouvait plus
+  // apparaître. Ce que le moteur fait vraiment de ces retours est prouvé dans `workflow-walk.test.ts`.
+
+  it('les arêtes AVANT sont tracées d’après les ARÊTES, pas d’après l’ordre du tableau', () => {
+    // Un graphe dont l'ordre du tableau contredit les arêtes : frame → judge → build en arêtes,
+    // mais [frame, build, judge] en tableau. Dessiner nœud[i]→nœud[i+1] afficherait frame→build,
+    // une topologie que le moteur ne jouera jamais.
     render({
-      graph: { ...chaine, edges: [...chaine.edges, { from: 'judge-1', to: 'frame-1', when: 'red', maxTraversals: 1 }] },
-      inertReturns: [{ from: 'judge-1', to: 'frame-1' }]
+      graph: {
+        entry: 'frame-1',
+        nodes: [
+          { id: 'frame-1', phase: 'frame' },
+          { id: 'build-1', phase: 'build' },
+          { id: 'judge-1', phase: 'judge' }
+        ],
+        edges: [
+          { from: 'frame-1', to: 'judge-1', when: 'always' },
+          { from: 'judge-1', to: 'build-1', when: 'always' }
+        ]
+      }
     })
-    expect(q('[data-testid="wf-inert-judge-1-frame-1"]').textContent).toContain(
-      'ne sait pas encore le jouer'
-    )
+    const traces = [...container.querySelectorAll('path.wf-wire')].length
+    // Exactement 2 arêtes avant dessinées — celles du graphe, pas les 2 de la chaîne du tableau.
+    expect(traces).toBe(2)
   })
 
-  it('un retour que le moteur JOUE ne porte pas cette mention', () => {
+  it('deux retours ne se superposent pas : chacun a sa voie dans le couloir', () => {
     render({
-      graph: { ...chaine, edges: [...chaine.edges, { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 1 }] },
-      inertReturns: []
+      graph: {
+        ...chaine,
+        edges: [
+          ...chaine.edges,
+          { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 1 },
+          { from: 'judge-1', to: 'frame-1', when: 'red', maxTraversals: 1 }
+        ]
+      }
     })
-    expect(container.querySelector('[data-testid="wf-inert-judge-1-build-1"]')).toBeNull()
+    const retours = [...container.querySelectorAll('path.wf-wire-red')].map((p) =>
+      p.getAttribute('d')
+    )
+    expect(retours).toHaveLength(2)
+    // Le segment vertical du couloir doit différer, sinon les deux flèches se recouvrent au pixel.
+    const voies = retours.map((d) => /H(\d+(?:\.\d+)?)/.exec(d ?? '')?.[1])
+    expect(voies[0]).not.toBe(voies[1])
   })
 })
 

@@ -16,11 +16,19 @@ import {
   agentsForPhase,
   allocationFromGraph,
   linearPhasesOf,
+  nodeRanks,
   quorumForPhase,
   recoveriesFromGraph,
   worstCaseNodeExecutions,
   type WorkflowGraph
 } from './workflow-graph'
+import { initialBudget, nextNode, type NodeVerdict } from './workflow-walk'
+
+/**
+ * Ce qui fait d'une sortie de phase un ROUGE. Marqueur en TÊTE uniquement : un compte rendu qui
+ * mentionne « défaut » au milieu d'un paragraphe raconte son travail, il ne se prononce pas.
+ */
+const REJET_EN_TETE = /^\s*(REJET|REJETE|REJETÉ|INVALIDE|DEFAUT|DÉFAUT|ROUGE|KO)\b/i
 import { phaseBrief } from './phase-briefs'
 import type { DecompositionOutcome } from './greedy-decompose'
 import { retrieveBrainContext, type BrainNavigation } from './brain-retrieval'
@@ -1862,6 +1870,55 @@ export class Orchestrator {
     // Un workflow nommé REMPLACE ce pipeline : c'est ici que l'exécution se décide (le calcul du
     // devis, plus haut, en fait sa propre lecture — les deux doivent voir la même liste).
     const execPhases: PipelinePhase[] = this.effectivePhases(task)
+    /**
+     * Le verdict de la phase qui vient de finir. C'est lui qui décide quelle arête le marcheur franchit.
+     * Vert par défaut, DÉLIBÉRÉMENT : une phase qui ne déclare rien ne doit pas déclencher une réparation
+     * que personne n'a demandée. Seul un rejet explicite en tête de sortie fait basculer au rouge —
+     * même idiome qu'au juge, dont la validité se lit déjà sur les premiers mots de son verdict.
+     */
+    let dernierVerdict: NodeVerdict = 'green'
+    /**
+     * La suite des phases à jouer. Avec un graphe, on le MARCHE (retours compris, budgets consommés) ;
+     * sans graphe, on déroule la liste plate d'avant. Un générateur plutôt qu'un tableau : la suite ne
+     * peut pas être connue à l'avance, elle dépend du verdict de chaque phase au moment où elle finit.
+     */
+    const grapheBrut = this.deps.currentWorkflow?.()?.graph
+    /**
+     * Le graphe tel que le MARCHEUR le voit — privé du seul retour `judge --red--> build`.
+     *
+     * Ce retour-là est déjà joué en aval par la boucle de réparation, qui fait plus que revenir au
+     * build : elle le RENOURRIT des raisons du gate. Le laisser aussi au marcheur le jouerait DEUX
+     * fois, et doublerait silencieusement le coût que le devis a provisionné.
+     */
+    const graphePilote: WorkflowGraph | undefined = grapheBrut
+      ? {
+          ...grapheBrut,
+          edges: grapheBrut.edges.filter((edge) => {
+            if (edge.when !== 'red') return true
+            const depuis = grapheBrut.nodes.find((n) => n.id === edge.from)?.phase
+            const vers = grapheBrut.nodes.find((n) => n.id === edge.to)?.phase
+            return !(depuis === 'judge' && vers === 'build')
+          })
+        }
+      : undefined
+    const suitePhases = function* (): Generator<PipelinePhase> {
+      if (!graphePilote?.nodes?.length) {
+        yield* execPhases
+        return
+      }
+      const rangs = nodeRanks(graphePilote)
+      const budget = initialBudget(graphePilote, rangs)
+      const parId = new Map(graphePilote.nodes.map((node) => [node.id, node]))
+      let courant: string | undefined = graphePilote.entry
+      // Garde-fou de dernier ressort : les budgets bornent déjà le run, ce plafond n'existe que pour
+      // qu'un graphe corrompu (arête vers un nœud absent, budget incohérent) ne fige pas le process.
+      for (let pas = 0; pas < 200 && courant && parId.has(courant); pas++) {
+        yield parId.get(courant)!.phase
+        const suivant = nextNode(graphePilote, courant, dernierVerdict, budget, rangs)
+        if (!suivant) return
+        courant = suivant.to
+      }
+    }
     let execPrompt
     let lastExecText = ''
     let lastUsage: Usage | undefined
@@ -1872,9 +1929,48 @@ export class Orchestrator {
     // donc que les phases porteuses de contenu ; les autres seront rejouées normalement.
     const usableResume = resumeOutputs.filter((output) => output.text.trim().length > 0)
     const phaseOutputs: { phase: PipelinePhase; text: string }[] = [...usableResume]
-    const resumedPhases = new Set(usableResume.map((output) => output.phase))
+    /**
+     * Les phases déjà payées, comptées par OCCURRENCE et non par nom.
+     *
+     * Un Set de noms de phase suffisait quand le moteur déroulait une liste plate où chaque phase
+     * apparaissait une fois. Avec un graphe, un `frame` peut être rejoué LÉGITIMEMENT par une arête
+     * de retour : un Set le sauterait pour toujours, et le travail annoncé par ce retour n'aurait
+     * jamais lieu. On décompte donc : la 1re visite d'une phase reprise est sautée, les suivantes
+     * s'exécutent.
+     */
+    const resteAPasser = new Map<PipelinePhase, number>()
+    for (const output of usableResume) {
+      resteAPasser.set(output.phase, (resteAPasser.get(output.phase) ?? 0) + 1)
+    }
+    /** Consomme un crédit de reprise pour cette phase. `true` = déjà payée, on saute cette visite. */
+    const dejaPayee = (phase: PipelinePhase): boolean => {
+      const reste = resteAPasser.get(phase) ?? 0
+      if (reste <= 0) return false
+      resteAPasser.set(phase, reste - 1)
+      return true
+    }
+    /**
+     * Le verdict de la DERNIÈRE phase reprise, rejoué avant d'entrer dans la marche.
+     *
+     * Sans cela, un run interrompu juste après un juge ROUGE redémarrait avec le verdict par défaut
+     * `green` : le marcheur choisissait l'arête verte et SAUTAIT la réparation que ce rouge devait
+     * déclencher. L'acquis persisté porte le texte — il porte donc aussi le verdict.
+     */
+    const dernierRepris = usableResume[usableResume.length - 1]
+    if (dernierRepris) {
+      dernierVerdict =
+        dernierRepris.phase === 'judge' && REJET_EN_TETE.test(dernierRepris.text) ? 'red' : 'green'
+    }
     /** Enregistre une phase terminée ET notifie l'appelant pour qu'il persiste l'acquis. */
     const recordPhase = (phase: PipelinePhase, text: string): void => {
+      // Point d'accroche UNIQUE du verdict : tous les chemins de phase (séquentiel, fan-out, greedy)
+      // passent par ici. Le brancher ailleurs laisserait une branche muette, donc un retour jamais pris.
+      //
+      // RESTREINT AU JUGE : seul son brief impose le vocabulaire `DEFAUT:`/`VALIDE`. Un `scout` ou un
+      // `frame` rédige librement ; l'un d'eux ouvrant par « KO » ou « Rejeté » aurait fait basculer
+      // tout le run sur une arête rouge que personne n'a demandée. Les autres phases sont vertes —
+      // elles racontent leur travail, elles ne se prononcent pas.
+      dernierVerdict = phase === 'judge' && REJET_EN_TETE.test(text) ? 'red' : 'green'
       phaseOutputs.push({ phase, text })
       try {
         this.deps.onPhaseCompleted?.({
@@ -1958,9 +2054,10 @@ export class Orchestrator {
       phaseContext.push(`[phase ${output.phase}] ${carried}`)
       lastExecText = output.text
     }
-    for (const phase of execPhases) {
-      // SURVIE NIVEAU 3 : phase déjà terminée avant l'interruption → on ne la refait pas.
-      if (resumedPhases.has(phase)) continue
+    for (const phase of suitePhases()) {
+      // SURVIE NIVEAU 3 : phase déjà terminée avant l'interruption → on ne la refait pas. Compté par
+      // occurrence : une visite ULTÉRIEURE du même nœud, via une arête de retour, doit bien s'exécuter.
+      if (dejaPayee(phase)) continue
       // DECOUPAGE DE TOUTE PHASE (et non du seul `build`). Mesure du 2026-07-28 sur conv-75 : une
       // phase d'exploration monolithique a coute 10,90 $ en 11 min, quand le meme travail decoupe en
       // 5 sous-taches ciblees revenait a ~0,8 $ et ~1 min chacune. Rien ne justifiait de reserver ce

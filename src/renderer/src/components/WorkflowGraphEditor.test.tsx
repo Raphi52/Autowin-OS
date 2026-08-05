@@ -9,7 +9,7 @@ let root: Root
 let check: ReturnType<typeof vi.fn>
 let onSave: ReturnType<typeof vi.fn>
 
-const sain = { defects: [], inertReturns: [], worstCaseNodeExecutions: 3 }
+const sain = { defects: [], worstCaseNodeExecutions: 3 }
 
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -82,7 +82,6 @@ describe('ne jamais enregistrer un graphe que le moteur refusera', () => {
   it('un défaut bloque l’enregistrement, et le DIT', async () => {
     check.mockResolvedValue({
       defects: [{ target: 'build-1', message: 'Le retour doit porter une limite.' }],
-      inertReturns: [],
       worstCaseNodeExecutions: null
     })
     await render()
@@ -94,7 +93,6 @@ describe('ne jamais enregistrer un graphe que le moteur refusera', () => {
   it('le défaut remonte jusqu’au nœud fautif', async () => {
     check.mockResolvedValue({
       defects: [{ target: 'build-1', message: 'Le retour doit porter une limite.' }],
-      inertReturns: [],
       worstCaseNodeExecutions: null
     })
     await render()
@@ -120,12 +118,12 @@ describe('dire ce que le graphe peut coûter', () => {
     expect(q('[data-testid="workflow-graph-worstcase"]').textContent).toContain('au plus 3')
   })
 
-  it('un retour inerte est signalé jusque dans le canevas', async () => {
-    check.mockResolvedValue({
-      defects: [],
-      inertReturns: [{ from: 'build-1', to: 'frame-1' }],
-      worstCaseNodeExecutions: 2
-    })
+  // Le test « un retour inerte est signalé » a été retiré avec la fonctionnalité : depuis que
+  // l'orchestrateur marche le graphe, aucun retour n'est inerte et la mention ne peut plus
+  // apparaître. Un test qui ne peut plus devenir rouge ne prouve rien.
+
+  it('un retour composé est rendu dans le canevas, avec sa borne éditable', async () => {
+    check.mockResolvedValue({ defects: [], worstCaseNodeExecutions: 2 })
     await render({
       id: 'p',
       graph: {
@@ -140,8 +138,6 @@ describe('dire ce que le graphe peut coûter', () => {
         ]
       }
     })
-    expect(q('[data-testid="wf-inert-build-1-frame-1"]').textContent).toContain(
-      'ne sait pas encore le jouer'
-    )
+    expect(q<HTMLInputElement>('[data-testid="wf-bound-build-1-frame-1"]').value).toBe('1')
   })
 })

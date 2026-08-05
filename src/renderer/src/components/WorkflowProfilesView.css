@@ -52,8 +52,14 @@
   list-style: none;
 }
 
+/*
+ * COLONNE, pas ligne : l'en-tête occupe une rangée, la portée et l'éditeur prennent ensuite TOUTE
+ * la largeur. En flex horizontal, l'éditeur de graphe se retrouvait comprimé entre le bouton de
+ * sélection et la croix — un plan de travail réduit à une colonne étroite.
+ */
 .workflow-profile {
   display: flex;
+  flex-direction: column;
   align-items: stretch;
   gap: 0;
   border: 1px solid var(--line, #31373f);
@@ -64,6 +70,19 @@
 
 .workflow-profile.is-active {
   border-left-color: var(--cyan, #5ecaf0);
+}
+
+/* L'en-tête : sélection à gauche, suppression à droite, sur une seule rangée. */
+.workflow-profile-row {
+  display: flex;
+  align-items: stretch;
+}
+
+/* Le plan de travail occupe toute la largeur disponible sous l'en-tête. */
+.workflow-profile .workflow-graph-editor {
+  width: 100%;
+  min-width: 0;
+  padding: 0 12px 12px;
 }
 
 .workflow-profile-pick {
@@ -113,6 +132,62 @@
 
 .workflow-profile-remove:hover {
   color: var(--danger, #e6635b);
+}
+
+/*
+ * ── La portée ──
+ * Un workflow = une bande horizontale. Empilées, elles se comparent sans un clic : c'est la réponse à
+ * « lequel choisir ? », que la liste textuelle d'avant ne donnait pas.
+ */
+.workflow-profile-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.wf-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--container-border, #2c3543);
+  color: var(--text-dim, #b5bcc8);
+}
+.wf-badge.is-on {
+  color: var(--accent, #ef3f91);
+  border-color: var(--accent-dim, #8d2054);
+}
+
+.wf-track {
+  position: relative;
+  margin: 2px 14px 12px;
+  max-width: 100%;
+}
+.wf-track svg { position: absolute; left: 0; top: 0; }
+.wf-track-line { stroke: var(--container-border, #2c3543); stroke-width: 1; }
+.wf-track-arc { fill: none; stroke: var(--err, #cf625e); stroke-width: 1.5; }
+
+.wf-tn {
+  position: absolute;
+  top: 8px;
+  display: block;
+  padding: 6px 8px;
+  background: var(--surface-card, #1b222c);
+  border: 1px solid var(--container-border, #2c3543);
+  border-radius: 6px;
+}
+.wf-tn-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.wf-tn-ags {
+  display: flex;
+  gap: 2px;
+  margin-top: 5px;
+  min-height: 3px;
 }
 
 /* Dire ce qui n'est pas encore fait vaut mieux que de laisser croire que la sélection agit. */

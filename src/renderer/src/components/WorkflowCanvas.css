@@ -1,174 +1,315 @@
+/*
+ * Le plan de workflow. Tout part des tokens du thème : ce panneau ne réinvente ni couleur ni rayon.
+ * Une couleur par phase, tenue par --wf-hue, sert au liseré du nœud, à sa pastille et à la palette —
+ * c'est ce qui rend une topologie identifiable d'un coup d'œil sans lire les libellés.
+ */
+
 .wf-canvas {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: block;
 }
 
+.wf-editor {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr) 270px;
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-panel);
+  background: var(--surface-panel);
+  overflow: hidden;
+}
+
+/* ── Couleurs de phase ── */
+.wf-ph-scout { --wf-hue: var(--cyan); }
+.wf-ph-frame { --wf-hue: var(--violet); }
+.wf-ph-terrain { --wf-hue: var(--gold); }
+.wf-ph-build { --wf-hue: var(--accent); }
+.wf-ph-clean { --wf-hue: var(--text-faint); }
+.wf-ph-judge { --wf-hue: var(--ok); }
+.wf-ph-kaizen { --wf-hue: var(--cyan); }
+.wf-ph-remake { --wf-hue: var(--gold-bright, #ffdc73); }
+
+.wf-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--wf-hue, var(--text-faint));
+  flex: none;
+  display: inline-block;
+}
+
+.wf-kicker {
+  margin: 0 0 9px;
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+.wf-kicker-sub { margin-top: 16px; }
+
+.wf-hint {
+  margin: 12px 0 0;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--text-faint);
+}
+
+/* ── Palette ── */
+.wf-palette-pane {
+  padding: 13px 11px;
+  border-right: 1px solid var(--container-border);
+  background: var(--surface-panel);
+}
 .wf-palette {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  list-style: none;
   margin: 0;
   padding: 0;
-  list-style: none;
-}
-
-.wf-palette button {
-  padding: 3px 9px;
-  border: 1px dashed var(--line, #31373f);
-  border-radius: 4px;
-  background: none;
-  color: var(--c-faint, #9caab5);
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.wf-palette button:hover {
-  border-style: solid;
-  color: var(--c-text, #e6edf3);
-}
-
-.wf-chain {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.wf-node {
-  position: relative;
   display: flex;
   flex-direction: column;
-  min-width: 130px;
-  border: 1px solid var(--line, #31373f);
-  border-radius: 5px;
-  background: var(--surface, #161b22);
-  cursor: grab;
+  gap: 6px;
 }
+.wf-pal-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 6px 9px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-card);
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-card);
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.wf-pal-item:hover { border-color: var(--wf-hue); background: var(--surface-hover); }
+.wf-pal-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-/* La chaîne se lit : une flèche entre deux nœuds voisins. */
-.wf-node + .wf-node::before {
-  content: '▶';
+/* ── Le plan ── */
+.wf-plan {
+  position: relative;
+  overflow: auto;
+  background:
+    linear-gradient(var(--surface-hover) 1px, transparent 1px) 0 0 / 22px 22px,
+    linear-gradient(90deg, var(--surface-hover) 1px, transparent 1px) 0 0 / 22px 22px,
+    var(--surface-inset);
+}
+.wf-wires { position: absolute; inset: 0; pointer-events: none; }
+.wf-wire { fill: none; stroke: var(--line-strong); stroke-width: 1.5; }
+.wf-wire-red { stroke: var(--err); }
+.wf-wire-green { stroke: var(--ok); }
+.wf-wire.is-inert { stroke-dasharray: 4 3; opacity: 0.75; }
+.wf-ar-n { fill: var(--line-strong); }
+.wf-ar-r { fill: var(--err); }
+.wf-ar-g { fill: var(--ok); }
+
+/* ── Un nœud ── */
+.wf-node {
   position: absolute;
-  left: -12px;
-  top: 12px;
-  color: var(--c-faint, #9caab5);
-  font-size: 9px;
+  background: var(--surface-card);
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-card);
+  overflow: hidden;
+  cursor: grab;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
-
-.wf-node.is-broken {
-  border-color: var(--danger, #e6635b);
-}
+.wf-node:hover { border-color: var(--container-border-strong); }
+.wf-node.is-open { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.wf-node.is-broken { border-color: var(--err); }
+.wf-node-bar { display: block; height: 3px; background: var(--wf-hue, var(--text-faint)); }
 
 .wf-node-head {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 7px 9px;
-  border: 0;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 26px 3px 10px;
+  font: inherit;
+  color: var(--text);
   background: none;
-  color: inherit;
-  text-align: left;
+  border: 0;
   cursor: pointer;
+  text-align: left;
 }
-
+.wf-node-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .wf-node-phase {
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 600;
-  color: var(--c-text, #e6edf3);
+  font-size: 12.5px;
 }
-
-.wf-node-agents {
-  font-size: 10.5px;
-  color: var(--c-faint, #9caab5);
-}
+.wf-node-id { font-family: var(--mono); font-size: 9.5px; color: var(--text-faint); }
 
 .wf-node-remove {
   position: absolute;
-  top: 2px;
+  top: 5px;
   right: 4px;
-  border: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font: inherit;
+  line-height: 1;
+  color: var(--text-faint);
   background: none;
-  color: var(--c-faint, #9caab5);
+  border: 0;
+  border-radius: 4px;
   cursor: pointer;
 }
+.wf-node-remove:hover { color: var(--err); background: var(--surface-hover); }
 
-.wf-node-remove:hover {
-  color: var(--danger, #e6635b);
+.wf-node-agents {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 10px 9px;
+  min-height: 15px;
 }
-
-/* Un défaut se lit SUR le nœud fautif : un message global ferait chercher lequel. */
+.wf-ag { width: 12px; height: 3px; border-radius: 2px; background: var(--wf-hue); display: block; }
+.wf-ag-label { font-family: var(--mono); font-size: 10px; color: var(--text-dim); }
+.wf-quorum-badge {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--gold);
+}
 .wf-node-defect {
   margin: 0;
-  padding: 0 9px 7px;
-  color: var(--danger, #e6635b);
-  font-size: 10.5px;
+  padding: 0 10px 8px;
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--err);
 }
 
-.wf-node-detail {
+.wf-statusbar {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
   display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 7px 9px;
-  border-top: 1px solid var(--line, #31373f);
-  font-size: 10.5px;
-  color: var(--c-faint, #9caab5);
+  gap: 6px;
 }
+.wf-pill {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--surface-inset);
+  border: 1px solid var(--container-border);
+  color: var(--text-dim);
+}
+.wf-pill.is-warn { color: var(--gold); }
+.wf-pill.is-err { color: var(--err); }
+.wf-pill.is-ok { color: var(--ok); }
+
+/* ── Inspecteur ── */
+.wf-insp {
+  padding: 14px 13px;
+  border-left: 1px solid var(--container-border);
+  background: var(--surface-panel);
+  overflow: auto;
+}
+.wf-insp-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 12px;
+  font-weight: 600;
+  font-size: 14px;
+}
+.wf-insp-empty { margin-top: 0; }
 
 .wf-node-detail label {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--container-border);
+  font-size: 12px;
+  color: var(--text-dim);
 }
-
 .wf-node-detail input {
-  width: 52px;
-  padding: 2px 5px;
-  border: 1px solid var(--line, #31373f);
-  border-radius: 3px;
-  background: var(--bg-input, #0d1117);
-  color: var(--c-text, #e6edf3);
-  font: inherit;
-}
-
-.wf-defects,
-.wf-returns {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  width: 88px;
+  padding: 3px 6px;
+  font-family: var(--mono);
   font-size: 11px;
+  text-align: right;
+  color: var(--text);
+  background: var(--surface-inset);
+  border: 1px solid var(--container-border);
+  border-radius: 5px;
 }
+.wf-node-detail input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.wf-return-buttons { display: flex; flex-wrap: wrap; gap: 5px; }
+.wf-return-buttons button {
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 8px;
+  color: var(--text-dim);
+  background: var(--surface-card);
+  border: 1px solid var(--container-border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.wf-return-buttons button:hover { border-color: var(--err); color: var(--err); }
 
 .wf-defects {
-  color: var(--danger, #e6635b);
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #e79b98;
+  background: rgba(207, 98, 94, 0.12);
+  border: 1px solid rgba(207, 98, 94, 0.4);
+  border-radius: 6px;
 }
 
+.wf-returns { list-style: none; margin: 0; padding: 0; }
 .wf-returns li {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: var(--c-faint, #9caab5);
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--container-border);
+  font-size: 11px;
 }
-
+.wf-returns li.wf-kicker-sub { border-bottom: 0; display: block; }
+.wf-return-name { font-family: var(--mono); font-size: 10px; color: var(--text-dim); }
+.wf-returns label { display: flex; align-items: center; gap: 5px; color: var(--text-faint); font-size: 10.5px; }
 .wf-returns input {
-  width: 44px;
-  margin: 0 4px;
-  padding: 1px 4px;
-  border: 1px solid var(--line, #31373f);
-  border-radius: 3px;
-  background: var(--bg-input, #0d1117);
-  color: var(--c-text, #e6edf3);
-  font: inherit;
+  width: 42px;
+  padding: 2px 5px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-align: right;
+  color: var(--text);
+  background: var(--surface-inset);
+  border: 1px solid var(--container-border);
+  border-radius: 4px;
 }
+.wf-return-drop {
+  margin-left: auto;
+  font: inherit;
+  color: var(--text-faint);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.wf-return-drop:hover { color: var(--err); }
 
 /* Composable mais inerte = le pire piège. La mention doit accrocher l'œil. */
 .wf-inert {
-  color: var(--warn, #d8a657);
+  width: 100%;
+  font-size: 10px;
+  color: var(--gold);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wf-pal-item,
+  .wf-node { transition: none; }
 }

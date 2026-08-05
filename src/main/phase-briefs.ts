@@ -43,7 +43,15 @@ Livrable :
 2. Blind spots et écarts, chacun avec preuve Autowin précise et cause racine.
 3. Propositions classées par impact/effort/risque, avec cible Autowin exacte (module, prompt, gate, provider, UI, mémoire ou test) et signal de validation falsifiable.
 4. Une recommandation à soumettre à l'humain.
-Garde cardinale : lecture seule. Ne modifie aucun fichier, réglage, mémoire, hook, conversation, worktree ou dépôt. Une approbation humaine explicite déclenche ensuite un workflow Autowin normal de build/clean/judge séparé.`
+Garde cardinale : lecture seule. Ne modifie aucun fichier, réglage, mémoire, hook, conversation, worktree ou dépôt. Une approbation humaine explicite déclenche ensuite un workflow Autowin normal de build/clean/judge séparé.`,
+  remake: `Tu es en phase REMAKE. Le livrable est FINI et fonctionne : ta matière première est le recul que seul un produit terminé donne.
+Objectif : lire le produit fini comme sa propre spécification, et payer les compromis accumulés — pas corriger des bugs (ça, c'est BUILD), pas auditer la conformité (ça, c'est JUDGE).
+Le bar est le REGRET, pas le défaut : « si je le refaisais en sachant ce que je sais maintenant, que ferais-je autrement ? »
+Obligation de preuve INVERSÉE : il n'y a aucun bug à reproduire, donc chaque changement doit prouver qu'il ne casse RIEN. Le signal existant du livrable est le filet — sans signal rejouable, tu refuses de commencer et tu le dis.
+Livrable :
+1. Les regrets, classés par ce qu'ils coûtent aujourd'hui (et non par leur élégance).
+2. Pour chacun : le premier pas concret, et le signal qui prouvera l'absence de régression.
+3. Ce que tu NE refais pas, et pourquoi — un remake qui touche à tout n'est pas un remake, c'est une réécriture.`
 }
 
 /** Consigne d'une phase (vide si inconnue — l'appelant retombe alors sur la discipline générique). */
