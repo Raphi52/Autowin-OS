@@ -171,6 +171,15 @@ describe('marcher le graphe', () => {
     })
   })
 
+  it('un graphe d’un seul nœud s’arrête après lui — aucun pipeline imposé', () => {
+    const solo: WorkflowGraph = {
+      entry: 'build-1',
+      nodes: [{ id: 'build-1', phase: 'build' }],
+      edges: []
+    }
+    expect(walk(solo, [])).toEqual(['build-1'])
+  })
+
   it('le budget initial ne compte que les retours, jamais les arêtes avant', () => {
     const graph = g({
       edges: [

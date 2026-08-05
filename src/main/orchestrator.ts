@@ -707,8 +707,30 @@ export class Orchestrator {
    * entre `run` (qui provisionne le devis) et `runInner` (qui exécute), et les deux ont divergé deux
    * fois de suite — un pipeline provisionné, un autre joué. Une seule source, plus de dérive possible.
    */
+  /**
+   * Une demande TRIVIALE ne mérite aucun workflow.
+   *
+   * Le classifieur de proportionnalité rend une seule phase quand la tâche ne justifie pas un
+   * pipeline. Laisser le graphe primer dans ce cas ferait enchaîner frame → build → clean → judge
+   * sur un « quelle heure est-il ? » : le workflow deviendrait une CONTRAINTE, exactement ce qu'il
+   * ne doit pas être. Le graphe est un outil qu'on sort quand le travail le mérite.
+   */
+  private tacheTriviale(task: string): boolean {
+    const classees = this.deps.classifyPhases?.(task)
+    return !!classees && classees.length <= 1
+  }
+
+  /** Le graphe qui pilote CE run, ou rien si la demande ne justifie pas d'en sortir un. */
+  private graphePourTache(task: string): WorkflowGraph | undefined {
+    if (this.tacheTriviale(task)) return undefined
+    return this.deps.currentWorkflow?.()?.graph
+  }
+
   private effectivePhases(task: string): PipelinePhase[] {
     const workflow = this.deps.currentWorkflow?.()
+    // Trivial : la proportionnalité prime sur le workflow composé, sans quoi le moindre échange
+    // paierait le pipeline entier.
+    if (this.tacheTriviale(task)) return this.deps.classifyPhases!(task)
     const fromGraph = workflow?.graph ? linearPhasesOf(workflow.graph) : undefined
     const imposed = fromGraph?.length ? fromGraph : workflow?.phases
     if (imposed?.length) return [...imposed]
@@ -1948,7 +1970,9 @@ export class Orchestrator {
      * sans graphe, on déroule la liste plate d'avant. Un générateur plutôt qu'un tableau : la suite ne
      * peut pas être connue à l'avance, elle dépend du verdict de chaque phase au moment où elle finit.
      */
-    const grapheBrut = this.deps.currentWorkflow?.()?.graph
+    // `graphePourTache` et non le workflow brut : sur une demande triviale, AUCUN graphe ne pilote —
+    // ni la marche, ni la consigne « tu peux dévier », qui parlerait d'étapes qu'on ne joue pas.
+    const grapheBrut = this.graphePourTache(task)
     /**
      * Le graphe tel que le MARCHEUR le voit — privé du seul retour `judge --red--> build`.
      *
