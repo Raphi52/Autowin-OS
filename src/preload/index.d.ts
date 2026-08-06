@@ -100,6 +100,9 @@ interface ChatApi {
     workspaceRoot: string
   ) => Promise<import('../shared/git-read').GitDiffResult>
   getGitGraph: (repoPath?: string) => Promise<import('../shared/git-graph').GitGraphSnapshot>
+  getWorktreeMap: (
+    repoPath?: string
+  ) => Promise<import('../shared/worktree-map').WorktreeMapSnapshot>
   getGitDiff: (
     path: string,
     repoPath?: string

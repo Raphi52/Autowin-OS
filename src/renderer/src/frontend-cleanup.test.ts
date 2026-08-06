@@ -30,9 +30,22 @@ describe('frontend cleanup guard', () => {
     ['components/ObservatoryView.css', '.observatory-call-sent'],
     ['assets/ui-system.css', '.surface-card'],
     ['assets/cosmic-outline.css', '.behaviour-reader'],
-    ['components/WorktreeView.css', '.git-ledger__ref-catalog']
+    // Le cockpit d'activite agents `WorktreeView` a ete supprime : l'onglet Worktrees porte
+    // desormais le plan git (`WorktreeMapView`). Le selecteur mort est garde ici comme
+    // interdiction, contre le fichier qui a herite du sujet.
+    ['components/WorktreeMapView.css', '.git-ledger__ref-catalog']
   ])('does not restore stale selector %s → %s', (file, selector) => {
     expect(source(file)).not.toContain(selector)
+  })
+
+  it('keeps the superseded agent-activity cockpit out of the renderer', () => {
+    // La vue Worktrees a change de SUJET (activite des agents -> copies git). Ses fichiers ne
+    // doivent pas revenir : un residu monte par erreur rendrait deux vues concurrentes.
+    for (const file of ['WorktreeView.tsx', 'WorktreeView.css', 'GitGraphLayout.ts']) {
+      expect(existsSync(join(rendererRoot, 'components', file))).toBe(false)
+    }
+    expect(source('App.tsx')).toContain("<WorktreeMapView active={tab === 'worktree'} />")
+    expect(source('App.tsx')).not.toContain('<WorktreeView ')
   })
 
   it('mounts a single preflight surface', () => {
@@ -42,7 +55,7 @@ describe('frontend cleanup guard', () => {
   })
 
   it('does not remount Worktree when its tab visibility changes', () => {
-    expect(source('components/WorktreeView.tsx')).not.toContain(
+    expect(source('components/WorktreeMapView.tsx')).not.toContain(
       "key={active ? 'active' : 'inactive'}"
     )
   })

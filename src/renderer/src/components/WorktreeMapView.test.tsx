@@ -1,0 +1,267 @@
+// @vitest-environment happy-dom
+import { act, createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { WorktreeMapSnapshot } from '../../../shared/worktree-map'
+import { WorktreeMapView } from './WorktreeMapView'
+
+;(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true
+
+const snapshot: WorktreeMapSnapshot = {
+  available: true,
+  repoPath: 'C:\\Amitel\\Autowin OS',
+  repositoryName: 'Autowin OS',
+  baseBranch: 'main',
+  baseHead: '1cdfe64',
+  entries: [
+    {
+      path: 'C:\\Amitel\\Autowin OS',
+      head: '1cdfe64',
+      branch: 'main',
+      detached: false,
+      locked: false,
+      behind: 0,
+      dirtyFiles: 5,
+      sizeBytes: 120_000_000
+    },
+    {
+      path: 'C:\\runs\\wt-propre',
+      head: '592b289',
+      detached: true,
+      locked: false,
+      behind: 8,
+      dirtyFiles: 0,
+      sizeBytes: 60_000_000
+    },
+    {
+      // 21 commits d'ecart avec la precedente -> une cassure doit etre declaree.
+      path: 'C:\\runs\\wt-vieux',
+      head: '6df0705',
+      detached: true,
+      locked: false,
+      behind: 30,
+      dirtyFiles: 2,
+      sizeBytes: 40_000_000
+    },
+    {
+      // Saleté NON mesurée : ni « avec travail », ni « propre », ni recuperable.
+      path: 'C:\\runs\\wt-inconnu',
+      head: '6df0705',
+      detached: true,
+      locked: true,
+      behind: 30
+    }
+  ]
+}
+
+let container: HTMLDivElement | undefined
+let root: Root | undefined
+let previousApi: PropertyDescriptor | undefined
+
+interface StubApi {
+  getWorktreeMap: ReturnType<typeof vi.fn>
+  pickGitRepo: ReturnType<typeof vi.fn>
+}
+
+function installApi(
+  value: WorktreeMapSnapshot = snapshot,
+  chosenRepo: string | null = null
+): StubApi {
+  previousApi = Object.getOwnPropertyDescriptor(window, 'api')
+  const api: StubApi = {
+    getWorktreeMap: vi.fn().mockResolvedValue(value),
+    pickGitRepo: vi.fn().mockResolvedValue(chosenRepo)
+  }
+  Object.defineProperty(window, 'api', { value: api, configurable: true, writable: true })
+  return api
+}
+
+async function clickTestId(testId: string): Promise<void> {
+  const node = container?.querySelector(`[data-testid="${testId}"]`) as HTMLElement | null
+  if (!node) throw new Error(`absent: ${testId}`)
+  await act(async () => {
+    node.click()
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+}
+
+async function renderView(): Promise<void> {
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+  await act(async () => {
+    root?.render(createElement(WorktreeMapView, { active: true }))
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+}
+
+afterEach(() => {
+  act(() => root?.unmount())
+  container?.remove()
+  root = undefined
+  container = undefined
+  if (previousApi) Object.defineProperty(window, 'api', previousApi)
+  else Reflect.deleteProperty(window, 'api')
+  previousApi = undefined
+  localStorage.clear()
+})
+
+describe('WorktreeMapView — plan de métro des worktrees git', () => {
+  it('rend un graphe, jamais une liste ni un tableau', async () => {
+    installApi()
+    await renderView()
+
+    expect(container?.querySelector('[data-testid="worktree-map"]')).toBeTruthy()
+    expect(container?.querySelector('svg.wtmap-plan')).toBeTruthy()
+    // L'utilisateur a explicitement rejete les listes : la vue ne doit en produire AUCUNE.
+    expect(container?.querySelector('table')).toBeNull()
+    expect(container?.querySelector('ul')).toBeNull()
+    expect(container?.querySelector('ol')).toBeNull()
+  })
+
+  it('sépare les territoires : une copie sale au-dessus du tronc, une copie propre en dessous', async () => {
+    installApi()
+    await renderView()
+
+    const live = container?.querySelectorAll('polyline.wtmap-line.is-live') ?? []
+    const closed = container?.querySelectorAll('polyline.wtmap-line.is-closed') ?? []
+    // 3 copies sales (5 fich., 2 fich., et la saleté inconnue traitee comme non-vivante) :
+    // 2 vivantes exactement, car l'inconnue n'est PAS declaree en travaux.
+    expect(live).toHaveLength(2)
+    expect(closed).toHaveLength(2)
+
+    const trunkY = Number(container?.querySelector('line.wtmap-trunk')?.getAttribute('y1'))
+    for (const node of live) {
+      for (const y of ordinates(node)) expect(y).toBeLessThanOrEqual(trunkY)
+    }
+    for (const node of closed) {
+      for (const y of ordinates(node)) expect(y).toBeGreaterThanOrEqual(trunkY)
+    }
+  })
+
+  it('déclare les commits sautés par une cassure au lieu de laisser du vide', async () => {
+    installApi()
+    await renderView()
+
+    const breaks = container?.querySelectorAll('[data-testid="worktree-map-break"]') ?? []
+    expect(breaks).toHaveLength(2)
+    // 0 -> 8 : 7 commits sautés ; 8 -> 30 : 21 commits sautés.
+    expect(container?.textContent).toContain('7 commits sautés')
+    expect(container?.textContent).toContain('21 commits sautés')
+  })
+
+  it('ne compte pas une saleté non mesurée comme une copie propre récupérable', async () => {
+    installApi()
+    await renderView()
+
+    const header = container?.querySelector('.wtmap-header')?.textContent ?? ''
+    expect(header).toContain('2avec travail')
+    expect(header).toContain('1propres')
+    expect(header).toContain('1non mesurés')
+    // Recuperable = la seule copie propre AVEC certitude (60 Mo), pas 100 Mo.
+    expect(header).toContain('60 Morécupérables')
+    expect(header).toContain('220 Moau total')
+  })
+
+  it('offre la barre de défilement horizontale et une mini-carte de navigation', async () => {
+    installApi()
+    await renderView()
+
+    expect(container?.querySelector('[data-testid="worktree-map-scroller"]')).toBeTruthy()
+    expect(container?.querySelector('[data-testid="worktree-map-minimap"]')).toBeTruthy()
+    expect(container?.querySelector('.wtmap-mini-viewport')).toBeTruthy()
+  })
+
+  it('ouvre le détail d’une copie au clic sur sa station, avec le retard et la saleté réels', async () => {
+    installApi()
+    await renderView()
+
+    expect(container?.querySelector('[data-testid="worktree-map-detail"]')).toBeNull()
+    const station = container?.querySelector('.wtmap-station') as SVGGElement | null
+    if (!station) throw new Error('aucune station rendue')
+    await act(async () => {
+      station.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+    const detail = container?.querySelector('[data-testid="worktree-map-detail"]')
+    expect(detail).toBeTruthy()
+    expect(detail?.textContent).toContain('à jour')
+    expect(detail?.textContent).toContain('5 fichiers non commités')
+  })
+
+  it('dit qu’une grandeur n’a pas été mesurée au lieu d’afficher un zéro', async () => {
+    installApi()
+    await renderView()
+
+    const stations = Array.from(container?.querySelectorAll('.wtmap-station') ?? [])
+    const unknown = stations.find((node) => node.getAttribute('aria-label')?.includes('wt-inconnu'))
+    if (!unknown) throw new Error('station de la copie non mesurée absente')
+    await act(async () => {
+      unknown.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+    const detail =
+      container?.querySelector('[data-testid="worktree-map-detail"]')?.textContent ?? ''
+    expect(detail).toContain('non mesuré')
+    expect(detail).toContain('non mesurée')
+    expect(detail).toContain('verrouillé')
+  })
+
+  it('laisse choisir un dépôt, le relit aussitôt et le retient pour l’app', async () => {
+    const api = installApi(snapshot, 'D:\\autre\\depot')
+    await renderView()
+    expect(api.getWorktreeMap).toHaveBeenLastCalledWith(undefined)
+
+    await clickTestId('worktree-map-pick')
+
+    expect(api.pickGitRepo).toHaveBeenCalledTimes(1)
+    // Choisir doit RELIRE : sans ça le bouton ne fait visiblement rien.
+    expect(api.getWorktreeMap).toHaveBeenLastCalledWith('D:\\autre\\depot')
+    // Même clé que Source control : le dépôt choisi vaut pour l'app, pas pour cette vue seule.
+    expect(localStorage.getItem('autowin:sc-repo')).toBe('D:\\autre\\depot')
+  })
+
+  it('n’oublie pas le dépôt choisi précédemment au montage', async () => {
+    localStorage.setItem('autowin:sc-repo', 'D:\\memorise')
+    const api = installApi()
+    await renderView()
+    expect(api.getWorktreeMap).toHaveBeenCalledWith('D:\\memorise')
+  })
+
+  it('ne change pas de dépôt quand la sélection est annulée', async () => {
+    const api = installApi(snapshot, null)
+    await renderView()
+    await clickTestId('worktree-map-pick')
+    expect(api.getWorktreeMap).toHaveBeenCalledTimes(1)
+    expect(localStorage.getItem('autowin:sc-repo')).toBeNull()
+  })
+
+  it('dit que le pont est indisponible au lieu de rejeter une promesse non capturée', async () => {
+    previousApi = Object.getOwnPropertyDescriptor(window, 'api')
+    Object.defineProperty(window, 'api', { value: {}, configurable: true, writable: true })
+    await renderView()
+    expect(container?.querySelector('[data-testid="worktree-map-error"]')?.textContent).toContain(
+      'Bridge Git indisponible'
+    )
+  })
+
+  it('annonce l’échec de lecture git au lieu de rester muette', async () => {
+    installApi({ available: false, repoPath: 'C:\\x', entries: [], error: 'git absent du PATH' })
+    await renderView()
+
+    const notice = container?.querySelector('[data-testid="worktree-map-error"]')
+    expect(notice?.textContent).toContain('git absent du PATH')
+    expect(container?.querySelector('svg.wtmap-plan')).toBeNull()
+  })
+})
+
+function ordinates(node: Element): number[] {
+  return (node.getAttribute('points') ?? '')
+    .trim()
+    .split(/\s+/)
+    .map((pair) => Number(pair.split(',')[1]))
+}

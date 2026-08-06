@@ -3,7 +3,10 @@ import packageManifest from '../../../package.json'
 import { ChatView } from './components/ChatView'
 import { FirstRunWizard } from './components/FirstRunWizard'
 import { ObservatoryView } from './components/ObservatoryView'
-import { WorktreeView } from './components/WorktreeView'
+// L'onglet Worktrees porte le plan de metro des copies GIT. L'ancien cockpit d'activite agents
+// (`WorktreeView`) a ete SUPPRIME : son sujet n'etait pas git. `WorktreeActivityView`, lui, vit
+// toujours — il est utilise par SourceControlPane.
+import { WorktreeMapView } from './components/WorktreeMapView'
 import { UpdateBanner } from './components/UpdateBanner'
 import { pickTurnToResume } from './components/resume-unfinished'
 import { TicketsView } from './components/TicketsView'
@@ -435,7 +438,7 @@ export function MainApp(): React.JSX.Element {
         )}
         {visitedTabs.has('worktree') && (
           <div className={`view-slot${tab === 'worktree' ? ' is-active' : ''}`}>
-            <WorktreeView active={tab === 'worktree'} />
+            <WorktreeMapView active={tab === 'worktree'} />
           </div>
         )}
         {visitedTabs.has('task-manager') && (
