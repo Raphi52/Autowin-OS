@@ -100,6 +100,7 @@ const PAD = 44
 const PER_COL = 3
 const LOOP_LANE = 108 // couloir à droite du plan où passent les retours
 const VOIE_ECART = 14 // écart entre deux retours dans le couloir, pour qu'ils ne se recouvrent pas
+const COURBE = 18 // rayon d'arrondi des coudes ; borné au tracé pour ne jamais boucler sur soi
 
 function place(index: number): { x: number; y: number } {
   const col = Math.floor(index / PER_COL)
@@ -193,13 +194,33 @@ export function WorkflowCanvas({
   const planW = PAD * 2 + colonnes * NODE_W + (colonnes - 1) * COL_GAP + LOOP_LANE
   const planH = PAD * 2 + lignes * NODE_H + (lignes - 1) * ROW_GAP
 
-  /** Chaîne : vertical si même colonne, coude sinon. Les coudes passent à mi-gouttière. */
+  /**
+   * Chaîne : vertical si même colonne, coude ADOUCI sinon.
+   *
+   * Le tracé garde exactement la même géométrie qu'avant — même point de départ, même gouttière
+   * intermédiaire, même point d'arrivée : seuls les deux angles droits deviennent des arrondis.
+   * Un coude à 90° lit « schéma technique » ; le même trajet arrondi lit « flux ». C'est la moitié
+   * de l'impression de fluidité, pour aucun changement de topologie.
+   */
   const traceAvant = (a: number, b: number): string => {
     const p = place(a)
     const q = place(b)
     if (p.x === q.x) return `M${p.x + NODE_W / 2} ${p.y + NODE_H} V${q.y - 7}`
     const mid = p.x + NODE_W + COL_GAP / 2
-    return `M${p.x + NODE_W} ${p.y + NODE_H / 2} H${mid} V${q.y + NODE_H / 2} H${q.x - 7}`
+    const y1 = p.y + NODE_H / 2
+    const y2 = q.y + NODE_H / 2
+    // Rayon borné par la demi-distance disponible : sur deux nœuds très proches, un rayon fixe
+    // ferait boucler la courbe sur elle-même.
+    const r = Math.min(COURBE, Math.abs(y2 - y1) / 2, COL_GAP / 2)
+    if (r < 2) return `M${p.x + NODE_W} ${y1} H${mid} V${y2} H${q.x - 7}`
+    const sens = y2 > y1 ? 1 : -1
+    return (
+      `M${p.x + NODE_W} ${y1} H${mid - r}` +
+      `Q${mid} ${y1} ${mid} ${y1 + r * sens}` +
+      `V${y2 - r * sens}` +
+      `Q${mid} ${y2} ${mid + r} ${y2}` +
+      `H${q.x - 7}`
+    )
   }
 
   /**
@@ -214,7 +235,18 @@ export function WorkflowCanvas({
     const q = place(b)
     const lane =
       PAD + colonnes * NODE_W + (colonnes - 1) * COL_GAP + LOOP_LANE / 2 + voie * VOIE_ECART
-    return `M${p.x + NODE_W} ${p.y + NODE_H / 2} H${lane} V${q.y + NODE_H / 2 + 10} H${q.x + NODE_W + 7}`
+    const y1 = p.y + NODE_H / 2
+    const y2 = q.y + NODE_H / 2 + 10
+    const r = Math.min(COURBE, Math.abs(y2 - y1) / 2)
+    if (r < 2) return `M${p.x + NODE_W} ${y1} H${lane} V${y2} H${q.x + NODE_W + 7}`
+    const sens = y2 > y1 ? 1 : -1
+    return (
+      `M${p.x + NODE_W} ${y1} H${lane - r}` +
+      `Q${lane} ${y1} ${lane} ${y1 + r * sens}` +
+      `V${y2 - r * sens}` +
+      `Q${lane} ${y2} ${lane - r} ${y2}` +
+      `H${q.x + NODE_W + 7}`
+    )
   }
 
   return (

@@ -93,8 +93,10 @@ function WorkflowTrack({ profile }: { profile: WorkflowProfile }): React.JSX.Ele
   const retours = (profile.graph?.edges ?? []).filter((e) => e.when !== 'always')
   const centre = (i: number): number => TRACK_PAD + i * (TN_W + TN_GAP) + TN_W / 2
   const largeur = TRACK_PAD * 2 + nodes.length * TN_W + (nodes.length - 1) * TN_GAP
-  // Les arcs de retour se logent SOUS la ligne ; la hauteur suit leur nombre pour qu'ils ne s'empilent pas.
-  const hauteur = 62 + (retours.length ? 20 + retours.length * 16 : 0)
+  // Les arcs de retour partent du BAS des pastilles (top 8px + ~36px de contenu) : un arc qui démarre
+  // dans le vide se lit comme une flèche orpheline plutôt que comme un retour entre deux phases.
+  const basPastille = 46
+  const hauteur = basPastille + (retours.length ? 18 + retours.length * 16 : 4)
 
   return (
     <div
@@ -113,11 +115,11 @@ function WorkflowTrack({ profile }: { profile: WorkflowProfile }): React.JSX.Ele
           const a = rang.get(edge.from)
           const b = rang.get(edge.to)
           if (a === undefined || b === undefined) return null
-          const creux = 70 + i * 16
+          const creux = basPastille + 14 + i * 16
           return (
             <path
               key={`${edge.from}>${edge.to}`}
-              d={`M${centre(a)} 58 C${centre(a)} ${creux}, ${centre(b)} ${creux}, ${centre(b)} 62`}
+              d={`M${centre(a)} ${basPastille} C${centre(a)} ${creux}, ${centre(b)} ${creux}, ${centre(b)} ${basPastille + 4}`}
               className={`wf-track-arc wf-wire-${edge.when}`}
               markerEnd="url(#wft-r)"
             />

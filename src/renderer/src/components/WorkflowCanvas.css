@@ -356,3 +356,108 @@
   .wf-pal-item,
   .wf-node { transition: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   FLUIDITÉ — remake du 2026-08-06
+   Diagnostic mesuré avant : 3 transitions et 2 ombres dans tout ce fichier,
+   0 dans WorkflowProfilesView.css et WorkflowExecutionGraph.css. Le vocabulaire
+   de mouvement du thème (--dur, --ease) existait mais n'était appliqué que dans
+   3 fichiers CSS sur 34. Rien n'est inventé ici : la vue rejoint son système.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.wf-canvas {
+  --wf-dur-lent: 220ms;
+  --wf-ease-doux: cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* Ressort discret pour l'apparition d'un nœud : la seule courbe qui dépasse. */
+  --wf-ease-ressort: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+/* ── Détacher du fond cosmique ────────────────────────────────────────────
+   Le fond de l'app est une image fixe (theme.css). Sans plan intermédiaire elle
+   traverse les panneaux et concurrence le contenu — c'est le premier facteur de
+   « bruit » sur la capture. Un voile flouté redonne un plan de lecture, sans
+   toucher au fond global qui appartient à toute l'app.                        */
+.wf-palette-pane,
+.wf-plan {
+  backdrop-filter: blur(14px) saturate(115%);
+  background: color-mix(in srgb, var(--bg-2) 88%, transparent);
+}
+
+/* ── Nœuds : élévation, réponse au survol, saisie ─────────────────────── */
+.wf-node {
+  transition:
+    border-color var(--dur) var(--ease),
+    box-shadow var(--wf-dur-lent) var(--wf-ease-doux),
+    transform var(--wf-dur-lent) var(--wf-ease-doux),
+    background-color var(--wf-dur-lent) var(--wf-ease-doux);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.28), 0 6px 18px -12px rgb(0 0 0 / 0.5);
+  will-change: transform;
+}
+.wf-node:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.3), 0 16px 32px -18px rgb(0 0 0 / 0.65);
+}
+/* Le halo reprend la couleur de PHASE : la sélection se lit sans chercher. */
+.wf-node.is-open {
+  box-shadow:
+    0 0 0 1px var(--wf-hue, var(--accent)),
+    0 0 22px -6px color-mix(in srgb, var(--wf-hue, var(--accent)) 55%, transparent),
+    0 14px 30px -18px rgb(0 0 0 / 0.7);
+}
+.wf-node:active { cursor: grabbing; transform: scale(0.985); }
+
+/* La barre de phase s'épaissit à l'ouverture : un signal de plus, gratuit. */
+.wf-node-bar { transition: height var(--wf-dur-lent) var(--wf-ease-doux); }
+.wf-node.is-open .wf-node-bar { height: 5px; }
+
+/* Un nœud qui apparaît ne surgit pas : il monte et se pose. */
+@keyframes wf-node-pose {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+.wf-node { animation: wf-node-pose var(--wf-dur-lent) var(--wf-ease-ressort) both; }
+
+/* ── Palette de phases ─────────────────────────────────────────────────── */
+.wf-pal-item {
+  transition:
+    border-color var(--dur) var(--ease),
+    background-color var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
+}
+.wf-pal-item:hover { transform: translateX(2px); }
+.wf-pal-item:active { transform: translateX(2px) scale(0.98); }
+.wf-dot { transition: box-shadow var(--wf-dur-lent) var(--wf-ease-doux); }
+.wf-pal-item:hover .wf-dot {
+  box-shadow: 0 0 10px -1px var(--wf-hue, var(--accent));
+}
+
+/* ── Arêtes : épaisseur lisible, extrémités adoucies ──────────────────── */
+.wf-wire {
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke var(--wf-dur-lent) var(--wf-ease-doux);
+}
+/* Une arête inerte RESPIRE au lieu d'être un pointillé figé : on distingue au
+   premier coup d'œil un chemin conditionnel d'un chemin mort. */
+@keyframes wf-flux { to { stroke-dashoffset: -14; } }
+.wf-wire.is-inert { animation: wf-flux 1.1s linear infinite; }
+
+/* ── Respect de la préférence système ─────────────────────────────────────
+   Une animation non désactivable est un défaut d'accessibilité, pas une
+   finition. Tout ce qui bouge s'arrête ici ; rien de ce qui SIGNIFIE ne
+   disparaît (les ombres, les couleurs et les halos restent).                */
+@media (prefers-reduced-motion: reduce) {
+  .wf-node,
+  .wf-pal-item,
+  .wf-node-bar,
+  .wf-wire,
+  .wf-dot {
+    animation: none !important;
+    transition-duration: 1ms !important;
+  }
+  .wf-node:hover,
+  .wf-pal-item:hover,
+  .wf-pal-item:active,
+  .wf-node:active { transform: none; }
+}
