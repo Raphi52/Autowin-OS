@@ -28,19 +28,6 @@ const COORDINATION_DRAIN_GRACE_MS = ((): number => {
 })()
 
 /**
- * Durée pendant laquelle un provider au quota épuisé cesse d'être sollicité.
- *
- * La date de reset ANNONCÉE par le provider (« try again at Aug 8th ») n'est délibérément PAS analysée :
- * un format mal lu verrouillerait des jours un provider parfaitement sain. Une fenêtre bornée cicatrise
- * d'elle-même — au pire on paie une sonde par fenêtre, contre 536 appels en une heure mesurés le
- * 2026-08-04. Réglable via AUTOWIN_QUOTA_WALL_MS.
- */
-const QUOTA_WALL_MS = ((): number => {
-  const raw = Number(process.env.AUTOWIN_QUOTA_WALL_MS)
-  return Number.isFinite(raw) && raw > 0 ? raw : 30 * 60_000
-})()
-
-/**
  * Reconnaît un quota d'abonnement ÉPUISÉ — et lui seul.
  *
  * Le discriminant est le VOCABULAIRE du refus, pas le code HTTP : un quota épuisé et un rate-limit
@@ -70,14 +57,15 @@ export class ProviderRegistry {
   private readonly adapters = new Map<string, ProviderAdapter>()
 
   /**
-   * Providers dont le quota est épuisé, et jusqu'à quand on cesse de les solliciter.
+   * Providers dont le quota est épuisé, avec le refus qu'ils ont écrit.
    *
-   * En MÉMOIRE, donc remis à zéro au redémarrage : la première tentative d'après relance rouvre le
-   * disjoncteur aussitôt. Le coût d'un redémarrage est donc UN appel perdu, contre les 536 d'une seule
-   * heure du 2026-08-04. Persister l'état couvrirait aussi ce cas, mais demanderait un chemin d'écriture
-   * que le registre n'a pas — la limite est assumée, pas ignorée.
+   * AUCUNE SONDE AUTOMATIQUE, à dessein : re-tester périodiquement si le quota est revenu COÛTERAIT du
+   * quota, pour une vérification que personne n'a demandée. Le mur tient donc toute la session, et c'est
+   * l'utilisateur qui le lève en relançant l'app — un geste délibéré, au moment où il veut travailler.
+   *
+   * D'où l'état en mémoire : ce n'est pas une limite subie, c'est le mécanisme de levée.
    */
-  private readonly quotaWalls = new Map<string, { jusqua: number; raison: string }>()
+  private readonly quotaWalls = new Map<string, string>()
 
   /** Bloc système par défaut (kit condensé SOUL) injecté sur CHAQUE tour. */
   constructor(
@@ -194,15 +182,10 @@ export class ProviderRegistry {
     // cause, dont 285 APRÈS le correctif qui se contentait de la NOMMER sans fermer la porte.
     const mur = this.quotaWalls.get(route.id)
     if (mur) {
-      if (mur.jusqua > Date.now()) {
-        const minutes = Math.max(1, Math.round((mur.jusqua - Date.now()) / 60_000))
-        throw new Error(
-          `Provider ${route.id} écarté : quota épuisé. Nouvelle tentative dans ~${minutes} min. ` +
-            `Refus du provider : ${mur.raison.slice(0, 300)}`
-        )
-      }
-      // Fenêtre expirée : on laisse passer UNE sonde. Si le mur tient, elle le réarme aussitôt.
-      this.quotaWalls.delete(route.id)
+      throw new Error(
+        `Provider ${route.id} écarté : quota épuisé, plus aucun appel ne lui est envoyé. ` +
+          `Relancer l'app remet le compteur à zéro. Refus du provider : ${mur.slice(0, 300)}`
+      )
     }
     // Admission AVANT l'adaptateur : un budget epuise ne doit jamais faire apparaitre une fenetre,
     // ouvrir un stream ou lancer un CLI qui sera seulement tue apres sa reponse.
@@ -306,9 +289,7 @@ export class ProviderRegistry {
           // la PREUVE (le refus du provider), pas sur une supposition — `quotaWallReason` écarte
           // explicitement le rate-limit passager.
           const raison = quotaWallReason(error)
-          if (raison) {
-            this.quotaWalls.set(route.id, { jusqua: Date.now() + QUOTA_WALL_MS, raison })
-          }
+          if (raison) this.quotaWalls.set(route.id, raison)
           throw error
         }
       )

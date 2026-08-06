@@ -111,7 +111,7 @@ describe('disjoncteur de quota provider', () => {
     expect(claude.appels).toBe(1)
   })
 
-  it('le blocage EXPIRE : une sonde repasse, le quota rétabli n’est pas verrouillé des jours', async () => {
+  it('AUCUNE sonde automatique : le temps qui passe ne redéclenche aucun appel payant', async () => {
     const codex = new FauxProvider('codex')
     const registry = new ProviderRegistry().register(codex)
 
@@ -119,11 +119,21 @@ describe('disjoncteur de quota provider', () => {
     await expect(registry.send('codex', UN_TOUR)).rejects.toThrow()
     await expect(registry.send('codex', UN_TOUR)).rejects.toThrow(/quota/i)
 
-    // La date de reset annoncée n'est PAS analysée : un format mal lu bloquerait un provider sain
-    // pendant des jours. Fenêtre bornée, donc auto-cicatrisante.
-    vi.setSystemTime(new Date('2026-08-06T11:00:00Z'))
+    // Re-tester periodiquement si le quota est revenu COUTERAIT du quota, pour une verification que
+    // personne n'a demandee. Meme six heures plus tard, rien ne repart de soi-meme : c'est l'utilisateur
+    // qui leve le mur en relancant l'app, au moment ou il veut travailler.
     codex.erreur = undefined
-    await expect(registry.send('codex', UN_TOUR)).resolves.toMatchObject({ text: 'ok' })
-    expect(codex.appels).toBe(2)
+    vi.setSystemTime(new Date('2026-08-06T16:00:00Z'))
+    await expect(registry.send('codex', UN_TOUR)).rejects.toThrow(/quota/i)
+    expect(codex.appels).toBe(1)
+  })
+
+  it('le refus dit COMMENT lever le mur — sinon il ressemble a une impasse', async () => {
+    const codex = new FauxProvider('codex')
+    const registry = new ProviderRegistry().register(codex)
+    codex.erreur = MUR_DE_QUOTA
+    await expect(registry.send('codex', UN_TOUR)).rejects.toThrow()
+
+    await expect(registry.send('codex', UN_TOUR)).rejects.toThrow(/relancer l'app/i)
   })
 })
