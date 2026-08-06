@@ -22,7 +22,7 @@ import type {
   TicketListRequest,
   TicketPage
 } from '../shared/tickets'
-import type { TicketCreateIpcRequest } from '../main/tickets-ipc'
+import type { TicketCreateIpcRequest, TicketGetIpcRequest } from '../main/tickets-ipc'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
@@ -157,6 +157,8 @@ const api = {
     ipcRenderer.invoke('tickets:list', request),
   createTicket: (request: TicketCreateIpcRequest): Promise<TicketItem> =>
     ipcRenderer.invoke('tickets:create', request),
+  getTicket: (request: TicketGetIpcRequest): Promise<TicketItem> =>
+    ipcRenderer.invoke('tickets:get', request),
   cancelTickets: (requestId: string): Promise<boolean> =>
     ipcRenderer.invoke('tickets:cancel', requestId),
   listTicketPeople: (source: unknown): Promise<string[]> =>

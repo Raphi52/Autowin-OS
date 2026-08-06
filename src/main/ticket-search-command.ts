@@ -87,11 +87,27 @@ export interface TicketSearchHit {
 export interface TicketSearchCommandDeps {
   listSources: () => readonly TicketSourceProfile[]
   /** Absent = capacité non câblée (instance de test, ou service Tickets indisponible). */
-  list?: (request: TicketListRequest) => Promise<{ items: TicketItem[]; hasMore: boolean }>
+  list?: (
+    request: TicketListRequest
+  ) => Promise<{ items: TicketItem[]; hasMore: boolean; cursor?: string }>
 }
 
 export type TicketSearchOutcome =
-  | { ok: true; items: TicketSearchHit[]; hasMore: boolean; summary: string }
+  | {
+      ok: true
+      items: TicketSearchHit[]
+      hasMore: boolean
+      /**
+       * À repasser en `cursor` pour obtenir la suite. Présent SEULEMENT si `hasMore`.
+       *
+       * Constaté en réel (2026-08-06) : sans lui, un agent annonçant « il en reste » n'avait aucun
+       * moyen de continuer. Il a vu 100 fiches couvrant les ids 1 à 175, puis a conclu que le projet
+       * s'arrêtait à 175 — alors qu'il compte 780 fiches, id max 1278. Annoncer une suite sans donner
+       * le moyen de l'atteindre pousse le modèle à inventer une conclusion.
+       */
+      cursor?: string
+      summary: string
+    }
   | { ok: false; reason: string }
 
 /** Projection volontairement étroite : ni `fields`, ni `relations`, ni description. */
@@ -135,15 +151,27 @@ export async function searchTicketsFromCommand(
     const page = await deps.list({ ...decision.request, source: resolved.source })
     const items = page.items.map(toHit)
     const cherche = decision.request.titleContains
+    // On ne FABRIQUE pas de curseur : si la couche basse n'en rend pas, on n'en invente pas (déduire
+    // « le dernier id vu » serait faux dès que le tri change).
+    const cursor = typeof page.cursor === 'string' && page.cursor ? page.cursor : undefined
+    const suite = page.hasMore
+      ? cursor
+        ? ` Il en reste : rappelle ticket_search avec cursor="${cursor}".`
+        : ' Il en reste, mais aucun curseur n’a été fourni : la suite est inatteignable.'
+      : ''
     const summary =
       items.length === 0
         ? cherche
           ? `Aucun ticket ne contient « ${cherche} » dans son titre.`
           : 'Aucun ticket trouvé.'
-        : `${items.length} ticket(s)${cherche ? ` contenant « ${cherche} »` : ''}${
-            page.hasMore ? ', et il en reste' : ''
-          }.`
-    return { ok: true, items, hasMore: page.hasMore, summary }
+        : `${items.length} ticket(s)${cherche ? ` contenant « ${cherche} »` : ''}.${suite}`
+    return {
+      ok: true,
+      items,
+      hasMore: page.hasMore,
+      ...(cursor ? { cursor } : {}),
+      summary
+    }
   } catch (error) {
     return {
       ok: false,
