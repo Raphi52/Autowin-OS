@@ -314,3 +314,85 @@ child.once('close', (code) => {
     expect(lines.length).toBe(2) // et la sortie reste lisible tant que l'app vit
   })
 })
+
+/**
+ * UN JOURNAL VIDE EST INDISCERNABLE D'UN SOUS-AGENT BLOQUÉ.
+ *
+ * Le journal est ouvert AVANT le spawn (il faut son descripteur pour les stdio de l'enfant). Quand le
+ * CLI n'écrit finalement rien — sortie immédiate, lancement en échec, signal déjà annulé — le fichier
+ * reste à 0 octet et rien ne le supprime.
+ *
+ * Mesuré le 2026-08-06 sur l'état réel : **18 journaux vides sur 242 (7,4 %)**, dont les UUID
+ * n'apparaissaient dans AUCUNE trace (`activity`, `causal-trace`, `run-state`,
+ * `prompt-observability`). Le coût n'est pas le disque, ce sont des fichiers minuscules : c'est
+ * l'observabilité. Un 0 octet ressemble trait pour trait à un agent figé — ce défaut a fait partir son
+ * propre diagnostic sur une fausse piste pendant dix minutes.
+ */
+describe('journal de run — pas de trace vide laissée derrière', () => {
+  it('un CLI qui sort sans rien écrire ne laisse AUCUN journal vide', async () => {
+    const root = tempRoot()
+    const muet = join(root, 'muet.mjs')
+    writeFileSync(muet, 'process.exit(0)\n')
+
+    const run = spawnSurvivable({
+      bin: process.execPath,
+      args: [muet],
+      journalRoot: root,
+      runId: 'run-muet'
+    })
+    const chemin = run.journalPath!
+    expect(chemin).toBeDefined()
+
+    await new Promise<void>((resolve) => run.child.once('close', () => resolve()))
+    run.release()
+
+    // Laisser au nettoyage le temps de suivre la fermeture, sans dormir en aveugle.
+    await waitUntil(() => !existsSync(chemin), 10_000)
+    expect(existsSync(chemin)).toBe(false)
+  })
+
+  it('un journal qui a REÇU des lignes est conservé — discriminant', async () => {
+    const root = tempRoot()
+    const writer = slowWriter(root, 2, 10)
+
+    const run = spawnSurvivable({
+      bin: process.execPath,
+      args: [writer],
+      journalRoot: root,
+      runId: 'run-bavard'
+    })
+    const chemin = run.journalPath!
+
+    const lignes: string[] = []
+    await run.tail((l) => lignes.push(l), {
+      isComplete: () => run.child.exitCode !== null,
+      pollMs: 20
+    })
+    run.release()
+
+    // Si ce test devient rouge, le nettoyage détruit la reprise : c'est ce fichier qui la porte.
+    expect(lignes.length).toBe(2)
+    expect(existsSync(chemin)).toBe(true)
+    expect(readFileSync(chemin, 'utf8')).toContain('"n":2')
+  })
+
+  it('un binaire introuvable GARDE son journal : il porte la raison de son échec', async () => {
+    const root = tempRoot()
+    const run = spawnSurvivable({
+      bin: join(root, 'binaire-qui-nexiste-pas.exe'),
+      args: [],
+      journalRoot: root,
+      runId: 'run-introuvable'
+    })
+    const chemin = run.journalPath!
+
+    await waitUntil(() => run.child.exitCode !== null, 10_000)
+    run.release()
+
+    // Le nettoyage n'efface QUE le vide. Ici le relais a écrit pourquoi il a échoué : cette trace est
+    // la seule explication disponible du run manqué, et un nettoyage trop large la détruirait.
+    // (Assertion d'abord écrite à l'envers : je réclamais la suppression, le code avait raison.)
+    expect(existsSync(chemin)).toBe(true)
+    expect(readFileSync(chemin, 'utf8').length).toBeGreaterThan(0)
+  })
+})

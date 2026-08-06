@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { closeSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import {
@@ -354,6 +354,37 @@ export function spawnSurvivable(input: SurvivableSpawnInput): SurvivableRun {
       /* fd déjà fermé : sans conséquence */
     }
   }
+
+  /**
+   * Supprime le journal s'il n'a JAMAIS rien reçu.
+   *
+   * Le journal est ouvert AVANT le spawn — son descripteur sert de stdio à l'enfant, on ne peut donc
+   * pas l'ouvrir paresseusement. Quand le CLI n'écrit finalement rien (sortie immédiate, binaire
+   * introuvable, signal déjà annulé), le fichier restait à 0 octet et rien ne l'effaçait. Mesuré le
+   * 2026-08-06 : 18 journaux vides sur 242, dont aucun UUID n'apparaissait dans une seule trace.
+   *
+   * Le coût n'était pas le disque mais l'OBSERVABILITÉ : un journal à 0 octet est indiscernable d'un
+   * sous-agent figé, et a fait partir un diagnostic sur une fausse piste.
+   *
+   * Accroché à la FERMETURE du processus, et nulle part ailleurs : c'est le seul instant où l'on sait
+   * que plus rien n'arrivera. Le faire dans `release()` casserait la survie — l'app peut appeler
+   * `release` à son extinction alors que le CLI détaché, lui, continue d'écrire.
+   *
+   * Sans risque pour un `tail` en cours : `readChunkFrom` traite un fichier absent comme vide, ce qui
+   * est exactement ce qu'un journal vide aurait rendu.
+   */
+  const discardEmptyJournal = (): void => {
+    if (!journal) return
+    // Fermer le descripteur AVANT d'effacer : sous Windows, un fichier encore ouvert ne s'efface pas.
+    release()
+    try {
+      if (statSync(journal.path).size === 0) rmSync(journal.path, { force: true })
+    } catch {
+      /* déjà effacé, ou verrouillé par le relais : un journal vide de plus n'est pas un échec de run */
+    }
+  }
+  child.once('close', discardEmptyJournal)
+  child.once('error', discardEmptyJournal)
 
   return {
     child,
