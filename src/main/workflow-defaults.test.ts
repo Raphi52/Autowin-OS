@@ -1,4 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  removeWorkflowProfile,
+  saveWorkflowProfiles,
+  seedDefaultWorkflows
+} from './workflow-profiles'
 import { PIPELINE_PHASES } from './skill-pipeline'
 import { DEFAULT_WORKFLOWS } from './workflow-defaults'
 import { graphDefects, worstCaseNodeExecutions } from './workflow-graph'
@@ -9,6 +17,40 @@ import { PERSONAS } from '../shared/persona'
  * catalogue : l'utilisateur ouvrirait la vue sur six graphes que l'application refuse d'enregistrer,
  * sans comprendre pourquoi. Ces tests confrontent les exemples aux règles qu'ils sont censés montrer.
  */
+
+/**
+ * Défaut CONSTATÉ EN RÉEL le 2026-08-05 : l'installation de l'utilisateur n'avait qu'un profil et
+ * n'a JAMAIS reçu les six workflows livrés. `seedDefaultWorkflows` ne semait que si le FICHIER était
+ * absent — or il existait. Six workflows « livrés » et invisibles.
+ */
+describe('semis du catalogue', () => {
+  const racines: string[] = []
+  afterEach(() => {
+    for (const r of racines.splice(0)) rmSync(r, { recursive: true, force: true })
+  })
+  const chemin = (): string => {
+    const dir = mkdtempSync(join(tmpdir(), 'autowin-seed-'))
+    racines.push(dir)
+    return join(dir, 'workflow-profiles.json')
+  }
+
+  it('une installation qui possède DÉJÀ un profil reçoit quand même le catalogue', () => {
+    const p = chemin()
+    saveWorkflowProfiles({ profiles: [{ id: 'workflow-1', name: 'Le mien' }], activeId: null }, p)
+    const apres = seedDefaultWorkflows(p)
+    expect(apres.profiles.map((x) => x.id)).toContain('workflow-1') // le sien est INTACT
+    expect(apres.profiles.length).toBeGreaterThan(DEFAULT_WORKFLOWS.length)
+  })
+
+  it('un second démarrage ne resème RIEN — un workflow supprimé reste supprimé', () => {
+    const p = chemin()
+    const premier = seedDefaultWorkflows(p)
+    const sansEclair = removeWorkflowProfile(premier, 'eclair')
+    saveWorkflowProfiles(sansEclair, p)
+    const second = seedDefaultWorkflows(p)
+    expect(second.profiles.map((x) => x.id)).not.toContain('eclair')
+  })
+})
 
 describe('workflows livrés d’origine', () => {
   it('aucun ne porte de défaut — ils sont enregistrables tels quels', () => {

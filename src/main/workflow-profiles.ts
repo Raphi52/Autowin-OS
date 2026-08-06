@@ -15,10 +15,20 @@ import { DEFAULT_WORKFLOWS } from './workflow-defaults'
  * contenu, sinon un fichier vidé volontairement se repeuplerait tout seul au prochain démarrage.
  */
 export function seedDefaultWorkflows(path = workflowProfilesPath()): WorkflowProfilesFile {
-  if (existsSync(path)) return loadWorkflowProfiles(path)
+  const actuel = loadWorkflowProfiles(path)
+  // Semé une fois, tracé par MARQUEUR et non par l'existence du fichier : une installation qui
+  // possédait déjà un profil n'aurait JAMAIS reçu le catalogue (constaté en réel — un seul profil
+  // présent, six livrés invisibles). Le marqueur permet aussi de ne pas ressusciter au démarrage
+  // suivant ce que l'utilisateur a délibérément supprimé.
+  if (actuel.seeded) return actuel
+  const connus = new Set(actuel.profiles.map((p) => p.id))
   const fichier: WorkflowProfilesFile = {
-    profiles: DEFAULT_WORKFLOWS.map((profile) => ({ ...profile })),
-    activeId: null
+    ...actuel,
+    seeded: true,
+    profiles: [
+      ...actuel.profiles,
+      ...DEFAULT_WORKFLOWS.filter((p) => !connus.has(p.id)).map((profile) => ({ ...profile }))
+    ]
   }
   saveWorkflowProfiles(fichier, path)
   return fichier
@@ -92,6 +102,14 @@ export interface WorkflowProfilesFile {
   profiles: WorkflowProfile[]
   /** Profil sélectionné pour le prochain run. `null` = aucun, on garde la configuration courante. */
   activeId: string | null
+  /**
+   * Le catalogue d'origine a déjà été semé.
+   *
+   * Se fier à l'EXISTENCE du fichier ne marchait pas : une installation possédant déjà un profil
+   * n'a jamais reçu les workflows livrés. Un marqueur explicite sème une fois, sans ressusciter
+   * ensuite ce qui a été supprimé exprès.
+   */
+  seeded?: boolean
 }
 
 const EMPTY: WorkflowProfilesFile = { profiles: [], activeId: null }
@@ -240,7 +258,9 @@ export function loadWorkflowProfiles(path = workflowProfilesPath()): WorkflowPro
   const activeCandidate = safeId(parsed.activeId)
   // Un profil sélectionné qui n'existe plus vaut « aucun » : jamais une sélection fantôme.
   const activeId = activeCandidate && seen.has(activeCandidate) ? activeCandidate : null
-  return { profiles, activeId }
+  // Le marqueur de semis se RELIT : sans lui, chaque démarrage resèmerait le catalogue et
+  // ressusciterait les workflows livrés que l'utilisateur a supprimés.
+  return { profiles, activeId, ...(parsed.seeded === true ? { seeded: true } : {}) }
 }
 
 /** Écrit les profils. Best-effort : un disque en échec ne casse pas le réglage en cours. */
@@ -266,7 +286,7 @@ export function upsertWorkflowProfile(
   const profiles = file.profiles.some((candidate) => candidate.id === normalized.id)
     ? file.profiles.map((candidate) => (candidate.id === normalized.id ? normalized : candidate))
     : [...file.profiles, normalized]
-  return { profiles, activeId: file.activeId }
+  return { ...file, profiles, activeId: file.activeId }
 }
 
 /** Supprime un profil. Supprimer celui qui est SÉLECTIONNÉ remet la sélection à « aucun ». */
@@ -275,7 +295,9 @@ export function removeWorkflowProfile(
   id: string
 ): WorkflowProfilesFile {
   const profiles = file.profiles.filter((profile) => profile.id !== id)
-  return { profiles, activeId: file.activeId === id ? null : file.activeId }
+  // `...file` : sans lui, supprimer un profil effaçait le marqueur de semis — et le catalogue
+  // entier revenait au démarrage suivant, y compris ce qu'on venait de supprimer.
+  return { ...file, profiles, activeId: file.activeId === id ? null : file.activeId }
 }
 
 /** Sélectionne un profil. Un identifiant inconnu vaut « aucun » plutôt qu'une sélection invalide. */
