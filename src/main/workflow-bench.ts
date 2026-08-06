@@ -46,6 +46,13 @@ export interface WorkflowBenchDeps {
 export interface WorkflowBenchReport extends WorkflowComparison {
   objective: string
   /**
+   * Arms empeches de tourner par une enveloppe epuisee (quota, plafond d'agents, budget).
+   *
+   * NON MESURE n'est pas PERDU : les lister a part evite de compter comme « moins bon » un
+   * workflow qui n'a simplement pas eu sa chance.
+   */
+  nonMesures?: { label: string; raison: string }[]
+  /**
    * Le verdict de QUALITE, absent si aucun juge n'a pu se prononcer.
    *
    * Son absence est une information : elle dit que le classement rendu ne repose que sur le cout
@@ -76,6 +83,17 @@ function outcomeOf(
   }
 }
 
+/**
+ * L'arret vient-il d'une ENVELOPPE epuisee plutot que du travail lui-meme ?
+ *
+ * Quota de session, plafond d'agents, budget : dans ces cas le workflow n'a pas demerite, il n'a
+ * pas eu sa chance. Le dire est la seule facon de ne pas transformer « plus couteux » en « moins
+ * bon » — un biais qui frappe toujours le meme arm, le plus ambitieux.
+ */
+export function nonMesurable(raison: string): boolean {
+  return /session limit|budget|quota|plafond|agents atteint|rate.?limit/i.test(raison)
+}
+
 function crashedOutcome(profile: WorkflowProfile | null, durationMs: number): WorkflowRunOutcome {
   return {
     profileId: profile?.id ?? CURRENT.id,
@@ -97,6 +115,8 @@ export async function runWorkflowBench(
   // precisement pourquoi le banc ne jugeait que le prix.
   const livrables: Livrable[] = []
   const skipped: string[] = []
+  /** Arms empeches de tourner par une limite d'enveloppe — a distinguer d'un echec de fond. */
+  const nonMesures: { label: string; raison: string }[] = []
   const total = request.profiles.length
 
   for (const [index, profile] of request.profiles.entries()) {
@@ -116,8 +136,19 @@ export async function runWorkflowBench(
         texte: result.result ?? '',
         costUsd: result.costUsd ?? 0
       })
-    } catch {
-      outcomes.push(crashedOutcome(profile, now() - start))
+    } catch (error) {
+      const raison = error instanceof Error ? error.message : String(error)
+      // NON MESURE n'est pas PERDU. Mesure du 2026-08-06 : le banc joue en SERIE, le premier arm a
+      // epuise le quota de session, et le second — un panel de trois juges, donc plus gourmand —
+      // s'est arrete en 57 s sur « Budget d'agents atteint » puis « session limit ». Le classement
+      // l'a lu comme « non vert », c'est-a-dire moins bon. Il n'etait pas moins bon : il n'a pas
+      // tourne. Confondre les deux desavantage SYSTEMATIQUEMENT le workflow le plus couteux, quelle
+      // que soit sa qualite — l'exact contraire de ce qu'un banc doit mesurer.
+      if (nonMesurable(raison)) {
+        nonMesures.push({ label, raison })
+      } else {
+        outcomes.push(crashedOutcome(profile, now() - start))
+      }
     }
   }
   deps.onProgress?.(total - skipped.length, total, 'terminé')
@@ -139,6 +170,7 @@ export async function runWorkflowBench(
   return {
     objective: request.objective,
     skipped,
+    ...(nonMesures.length ? { nonMesures } : {}),
     ...compareWorkflowRuns(outcomes),
     ...(qualite ? { qualite } : {})
   }

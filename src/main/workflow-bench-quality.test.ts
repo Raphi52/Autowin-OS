@@ -7,6 +7,7 @@ import {
   promptComparaison,
   type Livrable
 } from './workflow-bench-quality'
+import { nonMesurable } from './workflow-bench'
 
 /**
  * Ce que ces tests protègent : que le banc juge enfin la VALEUR et non le prix, et qu'il le fasse
@@ -47,6 +48,36 @@ describe('le juge est REELLEMENT branché', () => {
     expect(ipc).toMatch(/judgeQuality: deps\.judgeQuality/)
     expect(index).toMatch(/judgeQuality: async \(prompt\)/)
     expect(index).toMatch(/os\.registry\.send\(/)
+  })
+})
+
+/**
+ * Mesuré le 2026-08-06 : le banc joue en SÉRIE. Le premier arm a épuisé le quota de session, et le
+ * second — un panel de trois juges, donc plus gourmand — s'est arrêté en 57 s sur « Budget d'agents
+ * atteint » puis « session limit ». Le classement l'a lu comme « non vert », donc moins bon. Il
+ * n'était pas moins bon : il n'avait pas tourné. Ce biais frappe TOUJOURS le workflow le plus
+ * ambitieux, quelle que soit sa qualité — l'exact contraire de ce qu'un banc doit mesurer.
+ */
+describe('non mesuré n’est pas perdu', () => {
+  it('reconnaît une enveloppe épuisée, pas un échec de fond', () => {
+    for (const raison of [
+      "claude result error: You've hit your session limit · resets 2:10pm",
+      "Budget d'agents atteint (10)",
+      'quota dépassé',
+      'rate-limit provider'
+    ]) {
+      expect(nonMesurable(raison), raison).toBe(true)
+    }
+  })
+
+  it('un VRAI échec reste un échec — on ne blanchit pas tout', () => {
+    for (const raison of [
+      'TypeError: cannot read properties of undefined',
+      'le graphe est invalide',
+      'timeout du provider'
+    ]) {
+      expect(nonMesurable(raison), raison).toBe(false)
+    }
   })
 })
 
