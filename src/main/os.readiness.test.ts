@@ -19,7 +19,9 @@ describe('barrière de disponibilité des modèles', () => {
     const os = Object.create(AutowinOS.prototype) as AutowinOS & {
       setTaskReadiness(promise: Promise<unknown>): void
     }
-    Object.defineProperty(os, 'orchestrator', { value: { run } })
+    // L'orchestrateur est construit PAR RUN (isolation entre conversations) : c'est la fabrique
+    // qu'un harnais remplace, plus le champ d'instance qui n'est plus consulté par `runTask`.
+    Object.defineProperty(os, 'orchestrateurPour', { value: () => ({ run }) })
     Object.defineProperty(os, 'executionSupervisor', { value: new ExecutionSupervisor() })
 
     os.setTaskReadiness(readiness.promise)

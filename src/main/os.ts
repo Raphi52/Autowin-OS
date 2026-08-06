@@ -38,6 +38,7 @@ import {
   type OrchestrationRuntimeSnapshot,
   type OrchestrationStep,
   type OrchestrationPhase,
+  type OrchestratorDeps,
   type WorkflowRunOverride
 } from './orchestrator'
 import { resolveVerifyReplayConfig } from './hooks/verify-replay-config'
@@ -147,12 +148,20 @@ export class AutowinOS {
   readonly trust = new TrustLedger(join(ensureAutowinAppData(), 'trust.jsonl'))
   readonly orchestrator: Orchestrator
   /**
+   * Les dépendances de l'orchestrateur, figées à la construction de l'OS.
+   *
+   * Un orchestrateur est construit PAR RUN à partir d'elles, avec sa propre closure de workflow :
+   * c'est ce qui empêche deux conversations simultanées de se voler leur workflow. Le champ partagé
+   * `activeWorkflow` qui servait avant était l'unique cause de cette contamination.
+   */
+  private readonly orchestratorDeps: OrchestratorDeps
+  /**
    * Workflow nommé imposé au run en cours. Les runs d'une confrontation s'enchaînent en série, donc
    * un seul à la fois — la confrontation le pose puis le retire, y compris quand le run échoue.
    */
-  private activeWorkflow?: WorkflowRunOverride
+  private workflowImpose?: WorkflowRunOverride
   setActiveWorkflow(workflow: WorkflowRunOverride | undefined): void {
-    this.activeWorkflow = workflow
+    this.workflowImpose = workflow
   }
 
   /**
@@ -163,20 +172,36 @@ export class AutowinOS {
    * et il doit gagner — sinon un banc lancé depuis une conversation comparerait le workflow de cette
    * conversation à lui-même.
    */
-  private async poseConversationWorkflow(conversationId?: string, task?: string): Promise<boolean> {
-    if (this.activeWorkflow) return false
+  /**
+   * L'orchestrateur de CE run, avec SA closure de workflow.
+   *
+   * Extrait en fabrique pour deux raisons : c'est le point unique ou l'isolation entre conversations
+   * est realisee, et c'est le seul endroit qu'un harnais doit remplacer pour tester le chemin sans
+   * lancer un vrai orchestrateur.
+   */
+  protected orchestrateurPour(workflow?: WorkflowRunOverride): Orchestrator {
+    return new Orchestrator({ ...this.orchestratorDeps, currentWorkflow: () => workflow })
+  }
+
+  private async poseConversationWorkflow(
+    conversationId?: string,
+    task?: string
+  ): Promise<WorkflowRunOverride | undefined> {
+    // La confrontation IMPOSE son workflow autour de chaque run et gagne : sinon un banc lancé
+    // depuis une conversation comparerait le workflow de cette conversation à lui-même.
+    if (this.workflowImpose) return this.workflowImpose
     const selections = loadWorkflowSelections()
     // Un refus EXPLICITE se respecte : l'utilisateur a retiré le workflow de cette conversation, le
     // mode dynamique n'a pas à lui en réimposer un. C'est la différence entre proposer et forcer.
-    if (refusExplicite(selections, conversationId)) return false
+    if (refusExplicite(selections, conversationId)) return undefined
     const profileId = workflowForConversation(selections, conversationId)
     // MODE DYNAMIQUE : l'utilisateur ne s'est JAMAIS prononcé → on demande au modèle lequel convient.
     // Il a le droit de répondre « aucun », et c'est souvent la bonne réponse.
-    if (!profileId) return task ? await this.poseWorkflowDynamique(task) : false
+    if (!profileId) return task ? await this.poseWorkflowDynamique(task) : undefined
     const profile = loadWorkflowProfiles().profiles.find((p) => p.id === profileId)
-    if (!profile) return false
+    if (!profile) return undefined
     const effectif = applyWorkflowProfile({ roles: {} }, profile)
-    this.activeWorkflow = {
+    return {
       // CHOISI À LA MAIN : la proportionnalité ne doit pas l'écraser. Un garde heuristique qui
       // désactive en silence une décision explicite affiche un workflow qui ne pilote rien.
       explicit: true,
@@ -185,7 +210,6 @@ export class AutowinOS {
       ...(effectif.allocation ? { allocation: effectif.allocation } : {}),
       instructionFor: (phase) => effectif.instructionFor(phase)
     }
-    return true
   }
 
   /**
@@ -195,14 +219,14 @@ export class AutowinOS {
    * invalide ou trop coûteux font TOUS retomber sur « aucun workflow », c'est-à-dire le comportement
    * d'avant ce mode. Un choix automatique ne doit jamais pouvoir empêcher un run de partir.
    */
-  private async poseWorkflowDynamique(task: string): Promise<boolean> {
+  private async poseWorkflowDynamique(task: string): Promise<WorkflowRunOverride | undefined> {
     // Ne pas payer un appel de modèle pour apprendre qu'une demande de trois mots ne mérite rien.
-    if (!meriteUneDecision(task)) return false
+    if (!meriteUneDecision(task)) return undefined
     const profiles = loadWorkflowProfiles().profiles
     let reponse: string
     try {
       const binding = this.roles.all().orchestrator
-      if (!binding?.provider) return false
+      if (!binding?.provider) return undefined
       const res = await this.registry.send(
         binding.provider,
         [{ role: 'user', content: dynamicPrompt(task, profiles) }],
@@ -210,24 +234,22 @@ export class AutowinOS {
       )
       reponse = res.text ?? ''
     } catch {
-      return false
+      return undefined
     }
 
     const decision = readWorkflowDecision(reponse, profiles)
-    if (decision.kind === 'none') return false
+    if (decision.kind === 'none') return undefined
     if (decision.kind === 'existing') {
       const effectif = applyWorkflowProfile({ roles: {} }, decision.profile)
-      this.activeWorkflow = {
+      return {
         ...(graphOf(decision.profile) ? { graph: graphOf(decision.profile) } : {}),
         ...(effectif.phases?.length ? { phases: effectif.phases } : {}),
         ...(effectif.allocation ? { allocation: effectif.allocation } : {}),
         instructionFor: (phase) => effectif.instructionFor(phase)
       }
-      return true
     }
     // Graphe composé à la volée : déjà validé par `readWorkflowDecision` (défauts ET plafond de coût).
-    this.activeWorkflow = { graph: decision.graph, instructionFor: () => undefined }
-    return true
+    return { graph: decision.graph, instructionFor: () => undefined }
   }
 
   /** Le workflow attaché à une conversation, ou `null`. */
@@ -310,7 +332,11 @@ export class AutowinOS {
         reason: 'not-git'
       }
     }
-    this.orchestrator = new Orchestrator({
+    // Les dépendances sont FIGÉES ici, mais l'orchestrateur est construit PAR RUN (`runTask`) :
+    // c'est ce qui donne à chaque tour sa propre closure `currentWorkflow` et supprime l'état
+    // partagé entre conversations. `this.orchestrator` n'était utilisé qu'à deux endroits — sa
+    // construction et l'unique appel à `run()` — donc rien ne dépend de sa persistance.
+    this.orchestratorDeps = {
       registry: this.registry,
       roles: this.roles,
       cost: this.cost,
@@ -330,7 +356,8 @@ export class AutowinOS {
       currentExecutionUsage: () => this.executionSupervisor.currentSnapshot(),
       // Workflow nommé actif — posé le temps d'un run par la confrontation de workflows, absent le
       // reste du temps. Même portée ambiante que le devis ci-dessus.
-      currentWorkflow: () => this.activeWorkflow,
+      // Remplacé PAR RUN dans `runTask` : ici c'est le défaut inerte, pas la vraie source.
+      currentWorkflow: () => undefined,
       // SURVIE NIVEAU 3 : après CHAQUE phase, on persiste l'acquis du run ; à la clôture on l'efface.
       // Un kill du process main laisse donc un état reprenable → `resumableOrchestration()`.
       onPhaseCompleted: ({
@@ -427,7 +454,10 @@ export class AutowinOS {
           })
         }
       }
-    })
+    }
+    // Instance par DÉFAUT, conservée pour les appelants qui ne passent pas par `runTask`. Le run,
+    // lui, s'en construit une avec SA closure de workflow — c'est ce qui isole les conversations.
+    this.orchestrator = new Orchestrator(this.orchestratorDeps)
   }
 
   /**
@@ -678,10 +708,15 @@ export class AutowinOS {
       async () => {
         // LE branchement qui fait qu'un workflow sélectionné change quelque chose. Sans lui, choisir
         // un profil n'écrivait qu'un champ dans un fichier : l'écran promettait un pilotage qui
-        // n'existait pas. On le pose autour du run et on le retire ensuite (voir `finally`).
-        const posed = await this.poseConversationWorkflow(conversationId, task)
-        try {
-          const result = await this.orchestrator.run(
+        // n'existait pas.
+        //
+        // Résolu POUR CE RUN, puis enfermé dans la closure d'un orchestrateur qui n'appartient qu'à
+        // lui. Avant, il était posé dans un champ partagé de l'instance et retiré dans un `finally` :
+        // deux conversations simultanées se volaient leur workflow, et le `finally` de l'une effaçait
+        // celui de l'autre. Ici la contamination n'est plus improbable, elle est IMPOSSIBLE.
+        const workflowDuRun = await this.poseConversationWorkflow(conversationId, task)
+        const orchestrator = this.orchestrateurPour(workflowDuRun)
+          const result = await orchestrator.run(
             task,
             onStep,
             onPhase,
@@ -702,10 +737,6 @@ export class AutowinOS {
             result.costUsd = result.usage.knownCostUsd
           }
           return result
-        } finally {
-          // Un run qui échoue ne doit pas léguer son workflow au tour suivant.
-          if (posed) this.activeWorkflow = undefined
-        }
       },
       resumeControl?.usage,
       onLateUsageSettlement

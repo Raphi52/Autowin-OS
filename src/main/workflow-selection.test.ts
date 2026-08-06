@@ -102,7 +102,9 @@ describe('le choix atteint réellement le run du chat', () => {
     // La pose est ATTENDUE depuis le mode dynamique : choisir peut demander un appel de modèle.
     // On vérifie l'ordre pose-avant-run, pas la forme exacte de l'appel.
     const pose = os.indexOf('await this.poseConversationWorkflow(conversationId')
-    const run = os.indexOf('await this.orchestrator.run(', pose)
+    // L'orchestrateur est construit PAR RUN autour du workflow résolu : la variable locale a
+    // remplacé le champ d'instance, donc l'appel n'est plus `this.orchestrator.run(`.
+    const run = os.indexOf('await orchestrator.run(', pose)
     expect(pose).toBeGreaterThan(-1)
     expect(run).toBeGreaterThan(pose) // posé AVANT, sinon le run part sans lui
   })
@@ -115,16 +117,19 @@ describe('le choix atteint réellement le run du chat', () => {
   it('faute de choix manuel, le mode dynamique est sollicité', () => {
     expect(os).toMatch(/if \(!profileId\) return task \? await this\.poseWorkflowDynamique\(task\)/)
     // Et il retombe sur « aucun workflow » plutôt que d'empêcher le run de partir.
-    expect(os).toMatch(/if \(!meriteUneDecision\(task\)\) return false/)
+    expect(os).toMatch(/if \(!meriteUneDecision\(task\)\) return undefined/)
   })
 
   it('et le retire ensuite, y compris quand le run échoue', () => {
-    expect(os).toMatch(/finally \{[\s\S]{0,200}if \(posed\) this\.activeWorkflow = undefined/)
+    // Il n'y a plus RIEN a retirer : le workflow vit dans la closure d'un orchestrateur construit
+    // pour ce run seul. Le `finally` existait parce que la pose etait globale — sa disparition EST
+    // la correction (cf. workflow-isolation.test.ts).
+    expect(os).not.toMatch(/this\.activeWorkflow/)
   })
 
   it('la confrontation garde la priorité sur le workflow de la conversation', () => {
     // Sinon un banc lancé depuis une conversation comparerait son workflow à lui-même.
-    expect(os).toMatch(/poseConversationWorkflow[\s\S]{0,400}if \(this\.activeWorkflow\) return false/)
+    expect(os).toMatch(/poseConversationWorkflow[\s\S]{0,500}if \(this\.workflowImpose\) return this\.workflowImpose/)
   })
 })
 

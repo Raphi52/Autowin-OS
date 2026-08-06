@@ -159,7 +159,8 @@ describe('le canal est réellement branché à l’application', () => {
   it('index.ts relie la pose du workflow à l’OS — sans ça, phases et consignes n’arrivent nulle part', () => {
     expect(entree).toMatch(/setActiveWorkflow: \(workflow\) => os\.setActiveWorkflow\(workflow\)/)
     const os = readFileSync(new URL('./os.ts', import.meta.url), 'utf8')
-    expect(os).toContain('currentWorkflow: () => this.activeWorkflow')
+    // L'etat partage a disparu : chaque run construit son orchestrateur avec SA closure.
+    expect(os).toContain('currentWorkflow: () => workflow')
   })
 
   it('le preload expose le lancement ET la progression', () => {

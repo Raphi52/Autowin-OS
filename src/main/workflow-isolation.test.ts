@@ -33,9 +33,22 @@ describe('isolation du workflow entre conversations', () => {
     expect(os).not.toMatch(/this\.activeWorkflow\s*=/)
   })
 
-  it('le workflow résolu est passé À l’orchestrateur, pas lu depuis l’instance', () => {
-    // La preuve positive : sans elle, supprimer le champ pourrait simplement avoir déplacé
-    // l'état partagé ailleurs.
-    expect(os).toMatch(/this\.orchestrator\.run\([\s\S]{0,600}workflow/)
+  /**
+   * La preuve POSITIVE : sans elle, supprimer le champ pourrait n'avoir que déplacé l'état partagé.
+   *
+   * Le cadrage prévoyait de passer le workflow en paramètre de `run()` — 13 sites d'appel à
+   * traverser. La mesure a révélé mieux : `this.orchestrator` n'était utilisé qu'à DEUX endroits,
+   * sa construction et l'unique `run()`. Construire l'orchestrateur PAR RUN donne à chaque tour sa
+   * propre closure `currentWorkflow`, sans toucher un seul des 13 sites. Le workflow ne peut plus
+   * fuir d'un run à l'autre parce qu'il n'existe plus d'endroit où il pourrait être partagé.
+   */
+  it('chaque run construit son orchestrateur, avec SA closure de workflow', () => {
+    // Le workflow du tour est résolu…
+    expect(os).toMatch(/const workflowDuRun = await this\.poseConversationWorkflow\(/)
+    // …puis enfermé dans un orchestrateur bâti pour lui seul, via la fabrique.
+    expect(os).toMatch(/const orchestrator = this\.orchestrateurPour\(workflowDuRun\)/)
+    expect(os).toMatch(
+      /orchestrateurPour\(workflow\?: WorkflowRunOverride\)[\s\S]{0,200}currentWorkflow: \(\) => workflow/
+    )
   })
 })
