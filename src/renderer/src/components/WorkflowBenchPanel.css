@@ -1,9 +1,18 @@
+/*
+ * Même correction que l'en-tête de la liste : ce panneau flottait sur le fond cosmique, et il tombe
+ * précisément là où l'image est la plus chargée — son texte devenait illisible. Surface de conteneur
+ * de l'app, pas une couleur locale. Le trait supérieur ne sert plus à rien une fois la surface là :
+ * deux séparations pour une seule frontière font du bruit.
+ */
 .workflow-bench {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line, #31373f);
+  flex: none;
+  padding: var(--s3, 12px);
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-panel);
+  background: var(--surface-panel);
 }
 
 .workflow-bench-title {

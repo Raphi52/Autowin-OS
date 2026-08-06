@@ -15,11 +15,21 @@
 }
 
 
+/*
+ * L'en-tête posait son titre et son texte À NU sur le fond cosmique : lisible sur une zone sombre de
+ * l'image, illisible dès qu'une nébuleuse passait derrière. On lui donne la même surface qu'aux
+ * lignes — c'est la recette `.surface-panel` de `ui-system.css`, pas une couleur inventée ici.
+ */
 .workflow-profiles-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--s3, 12px);
+  flex: none;
+  padding: var(--s3, 12px);
+  border: 1px solid var(--container-border);
+  border-radius: var(--container-radius-panel);
+  background: var(--surface-panel);
 }
 
 .workflow-profiles-head h2 {
