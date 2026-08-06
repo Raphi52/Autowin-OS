@@ -21,6 +21,8 @@ interface WorkflowProfile {
   graph?: import('./WorkflowCanvas').CanvasGraph
   allocation?: { judgeMembers?: number; maxGreedyNodes?: number }
   instructions?: { mode: 'append' | 'replace'; text?: string }
+  /** Le chat peut-il invoquer ce workflow de lui-même ? Absent vaut oui (voir `workflow-profiles.ts`). */
+  enabled?: boolean
 }
 
 interface ProfilesFile {
@@ -313,32 +315,6 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
         </p>
       ) : (
         <ul className="workflow-profiles-list">
-          <li className={`workflow-profile${file.activeId === null ? ' is-active' : ''}`}>
-            <button
-              type="button"
-              className="workflow-profile-pick"
-              data-testid="workflow-pick-none"
-              aria-pressed={file.activeId === null}
-              onClick={() => void select(null)}
-            >
-              {/* Le badge marque CE QUI EST EN VIGUEUR, y compris quand c'est « aucun workflow ».
-                  Le réserver aux profils faisait disparaître tout repère dès qu'on revenait ici :
-                  plus rien à l'écran ne disait sous quel régime le chat allait tourner. */}
-              <span className="workflow-profile-line">
-                <span className="workflow-profile-name workflow-profile-name-static">
-                  Configuration courante
-                </span>
-                {file.activeId === null && (
-                  <span className="wf-badge is-on" data-testid="workflow-active-none">
-                    actif
-                  </span>
-                )}
-              </span>
-              <span className="workflow-profile-summary">
-                Aucun workflow imposé — les réglages d’Agent Studio s’appliquent.
-              </span>
-            </button>
-          </li>
           {file.profiles.map((profile) => (
             <li
               key={profile.id}
@@ -354,7 +330,10 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                   className="workflow-profile-pick"
                   data-testid={`workflow-pick-${profile.id}`}
                   aria-pressed={file.activeId === profile.id}
-                  onClick={() => void select(profile.id)}
+                  // Re-cliquer le workflow actif le DÉSÉLECTIONNE. C'est le seul chemin qui reste vers
+                  // « aucun workflow imposé » depuis que la ligne « Configuration courante » a été
+                  // retirée : sans ce retour, une sélection serait définitive.
+                  onClick={() => void select(file.activeId === profile.id ? null : profile.id)}
                 >
                   <span className="workflow-profile-line">
                     {/* Le nom se corrige SUR PLACE. Un workflow créé « Workflow 3 » et jamais
@@ -379,6 +358,24 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
                     <span className="workflow-profile-desc">{profile.description}</span>
                   )}
                 </button>
+                {/* Invocable ou non par le chat. Distinct de la sélection : cocher n'impose rien,
+                    décocher retire du choix automatique sans supprimer le workflow. */}
+                <label
+                  className="workflow-profile-toggle"
+                  title={
+                    profile.enabled === false
+                      ? `${profile.name} : le chat ne peut pas l’invoquer`
+                      : `${profile.name} : le chat peut l’invoquer`
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    data-testid={`workflow-enabled-${profile.id}`}
+                    checked={profile.enabled !== false}
+                    aria-label={`Rendre ${profile.name} invocable par le chat`}
+                    onChange={(e) => void save({ ...profile, enabled: e.target.checked })}
+                  />
+                </label>
                 <button
                   type="button"
                   className="workflow-profile-remove"

@@ -1,5 +1,5 @@
 import { graphDefects, worstCaseNodeExecutions, type WorkflowGraph } from './workflow-graph'
-import type { WorkflowProfile } from './workflow-profiles'
+import { estInvocable, type WorkflowProfile } from './workflow-profiles'
 
 /**
  * Choisir le workflow adapté à la situation — ou n'en choisir AUCUN.
@@ -44,10 +44,17 @@ export function meriteUneDecision(task: string): boolean {
   return true
 }
 
-/** Le catalogue tel qu'on le montre au modèle : ce que chacun FAIT, pas sa structure interne. */
+/**
+ * Le catalogue tel qu'on le montre au modèle : ce que chacun FAIT, pas sa structure interne.
+ *
+ * Les workflows désactivés en sont ABSENTS. Les montrer en demandant au modèle de ne pas les choisir
+ * serait une consigne, donc une chose qu'il peut manquer ; ne pas les écrire est une garantie. Le
+ * filtre est doublé côté `decide()` pour un modèle qui nommerait un id qu'on ne lui a pas donné.
+ */
 export function catalogueBrief(profiles: WorkflowProfile[]): string {
-  if (!profiles.length) return '(aucun workflow enregistré)'
-  return profiles
+  const invocables = profiles.filter(estInvocable)
+  if (!invocables.length) return '(aucun workflow enregistré)'
+  return invocables
     .map((p) => {
       const noeuds = p.graph?.nodes.map((n) => n.phase).join(' → ') ?? p.phases?.join(' → ') ?? '—'
       return `- ${p.id} « ${p.name} » : ${p.description ?? 'sans description'} [${noeuds}]`
@@ -130,7 +137,13 @@ export function readWorkflowDecision(
     return { kind: 'new', graph, name }
   }
 
-  const trouve = profiles.find((p) => p.id === valeur)
+  // Deuxième barrière du drapeau `enabled` : le catalogue ne montre déjà que les invocables, mais un
+  // modèle peut nommer un id qu'il a vu ailleurs (un run précédent, la demande de l'utilisateur).
+  // Désactiver doit EMPÊCHER, pas seulement s'abstenir de suggérer.
+  const trouve = profiles.filter(estInvocable).find((p) => p.id === valeur)
+  if (!trouve && profiles.some((p) => p.id === valeur)) {
+    return { kind: 'none', reason: `workflow désactivé : ${valeur}` }
+  }
   // Un id inconnu n'est pas un incident : le modèle a pu inventer un nom. On ne pilote rien plutôt
   // que de choisir un workflow au hasard parce qu'il ressemblait.
   return trouve ? { kind: 'existing', profile: trouve } : { kind: 'none', reason: `id inconnu : ${valeur}` }

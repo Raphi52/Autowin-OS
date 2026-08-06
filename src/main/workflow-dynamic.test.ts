@@ -48,6 +48,34 @@ describe('la question posée au modèle', () => {
   it('un catalogue vide ne produit pas un prompt cassé', () => {
     expect(catalogueBrief([])).toContain('aucun workflow')
   })
+
+  it('un workflow désactivé n’est pas MONTRÉ au modèle', () => {
+    // Le montrer en lui demandant de ne pas le choisir serait une consigne, donc faillible.
+    const texte = catalogueBrief([{ ...catalogue[0], enabled: false }, catalogue[1]])
+    expect(texte).not.toContain('eclair')
+    expect(texte).toContain('correctif')
+  })
+
+  it('un profil sans drapeau reste invocable — une mise à jour ne rend pas le catalogue muet', () => {
+    expect(catalogueBrief(catalogue)).toContain('eclair')
+  })
+})
+
+describe('le drapeau « invocable par le chat » EMPÊCHE, il ne fait pas que s’abstenir', () => {
+  it('un id désactivé nommé quand même par le modèle est REFUSÉ', () => {
+    // Deuxième barrière : le modèle peut avoir vu cet id ailleurs qu'au catalogue.
+    const desactive = [{ ...catalogue[0], enabled: false }, catalogue[1]]
+    expect(readWorkflowDecision('WORKFLOW: eclair', desactive)).toEqual({
+      kind: 'none',
+      reason: 'workflow désactivé : eclair'
+    })
+  })
+
+  it('le même id, réactivé, redevient choisissable — le drapeau discrimine bien', () => {
+    const decision = readWorkflowDecision('WORKFLOW: eclair', catalogue)
+    expect(decision.kind).toBe('existing')
+    expect(decision.kind === 'existing' && decision.profile.id).toBe('eclair')
+  })
 })
 
 describe('faut-il seulement poser la question', () => {

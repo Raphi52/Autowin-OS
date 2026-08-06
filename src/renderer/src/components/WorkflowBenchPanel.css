@@ -10,12 +10,12 @@
   margin: 0;
   font-size: 12px;
   font-weight: 600;
-  color: var(--c-text, #e6edf3);
+  color: var(--text);
 }
 
 .workflow-bench-sub {
   margin: 0;
-  color: var(--c-faint, #9caab5);
+  color: var(--text-faint);
   font-size: 11.5px;
 }
 
@@ -24,15 +24,15 @@
   flex-direction: column;
   gap: 4px;
   font-size: 11px;
-  color: var(--c-faint, #9caab5);
+  color: var(--text-faint);
 }
 
 .workflow-bench-objective textarea {
   padding: 7px 9px;
   border: 1px solid var(--line, #31373f);
   border-radius: 4px;
-  background: var(--bg-input, #0d1117);
-  color: var(--c-text, #e6edf3);
+  background: var(--surface-inset);
+  color: var(--text);
   font: inherit;
   font-size: 12px;
   resize: vertical;
@@ -63,19 +63,19 @@
 
 /* La raison du refus se lit À CÔTÉ du bouton : un bouton gris muet fait chercher. */
 .workflow-bench-hint {
-  color: var(--c-faint, #9caab5);
+  color: var(--text-faint);
   font-size: 11px;
 }
 
 .workflow-bench-progress {
   margin: 0;
-  color: var(--c-faint, #9caab5);
+  color: var(--text-faint);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 
 .workflow-bench-error {
   margin: 0;
-  color: var(--danger, #e6635b);
+  color: var(--err);
   font-size: 11.5px;
 }

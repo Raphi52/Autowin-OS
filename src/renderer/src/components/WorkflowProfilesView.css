@@ -7,7 +7,13 @@
   flex-direction: column;
   gap: var(--s3, 12px);
   padding: var(--s3, 12px);
+  /* La vue occupe sa hauteur et NE grandit PAS au-delà : sans cela la liste poussait le bas de page
+     hors de l'écran et les derniers workflows devenaient inatteignables — il n'y avait aucune barre
+     de défilement parce que rien ne débordait au sens CSS, tout dépassait simplement. */
+  height: 100%;
+  min-height: 0;
 }
+
 
 .workflow-profiles-head {
   display: flex;
@@ -25,13 +31,13 @@
 .workflow-profiles-sub {
   margin: 4px 0 0;
   max-width: 62ch;
-  color: var(--c-faint, #9caab5);
+  color: var(--text-faint);
   font-size: 12px;
 }
 
 .workflow-profiles-error {
   margin: 0;
-  color: var(--danger, #e6635b);
+  color: var(--err);
   font-size: 12px;
 }
 
@@ -39,17 +45,24 @@
   margin: 0;
   padding: var(--s3, 12px);
   border: 1px dashed var(--line, #31373f);
-  color: var(--c-faint, #9caab5);
+  color: var(--text-faint);
   font-size: 12.5px;
 }
 
+/* C'est la LISTE qui défile, pas la page : l'en-tête et ses actions restent atteignables quel que
+   soit le nombre de workflows. La barre est celle de l'app (theme.css) — aucun style de défilement
+   propre à cette vue, sinon elle serait la seule à ne pas ressembler au reste. */
 .workflow-profiles-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin: 0;
-  padding: 0;
+  padding: 0 2px 0 0;
   list-style: none;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /*
@@ -65,7 +78,16 @@
   border: 1px solid var(--line, #31373f);
   /* Bordure gauche = la sélection. Un seul signal, lisible en périphérie. */
   border-left: 2px solid transparent;
-  background: var(--surface2, #191d23);
+  /*
+   * Surface + flou, la recette des conteneurs de l'app (ui-system.css). Les tokens de surface sont
+   * volontairement TRANSLUCIDES pour laisser vivre le fond cosmique ; seuls, ils laissaient le texte
+   * flotter sur la galaxie et la liste devenait illisible. C'est le flou qui rend la translucidité
+   * lisible — l'un ne va pas sans l'autre, et remettre une couleur opaque en dur serait sortir de la
+   * palette une deuxième fois.
+   */
+  background: var(--surface-card);
+  backdrop-filter: blur(var(--container-blur)) saturate(112%);
+  border-radius: var(--container-radius-card);
 }
 
 .workflow-profile.is-active {
@@ -170,13 +192,13 @@ input.workflow-profile-name:focus-visible {
 }
 
 .workflow-profile-summary {
-  color: var(--c-faint, #9caab5);
+  color: var(--text-faint);
   font-family: var(--mono, ui-monospace, Consolas, monospace);
   font-size: 11px;
 }
 
 .workflow-profile-desc {
-  color: var(--c-faint, #9caab5);
+  color: var(--text-faint);
   font-size: 11.5px;
 }
 
@@ -186,13 +208,67 @@ input.workflow-profile-name:focus-visible {
   border: 0;
   border-left: 1px solid var(--line, #31373f);
   background: none;
-  color: var(--c-faint, #9caab5);
+  color: var(--text-faint);
   font-size: 15px;
   cursor: pointer;
 }
 
 .workflow-profile-remove:hover {
-  color: var(--danger, #e6635b);
+  color: var(--err);
+}
+
+/*
+ * La case « invocable par le chat », alignée avec exporter et supprimer : les trois actions d'un
+ * workflow se tiennent au même endroit. Le carré est dessiné à la main plutôt que laissé natif —
+ * une case Windows bleue au milieu d'une interface rose et or se voit comme une pièce rapportée.
+ */
+.workflow-profile-toggle {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 0 12px;
+  border-left: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.workflow-profile-toggle input {
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--surface-inset);
+  cursor: pointer;
+  transition:
+    border-color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+
+.workflow-profile-toggle:hover input {
+  border-color: var(--accent);
+}
+
+.workflow-profile-toggle input:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+/* La coche est un pseudo-élément : pas d'image, donc rien à charger et elle suit la couleur. */
+.workflow-profile-toggle input:checked::after {
+  content: '';
+  display: block;
+  width: 4px;
+  height: 8px;
+  margin: 1px auto 0;
+  border: solid var(--bg-0);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.workflow-profile-toggle input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /*
@@ -254,7 +330,7 @@ input.workflow-profile-name:focus-visible {
 /* Dire ce qui n'est pas encore fait vaut mieux que de laisser croire que la sélection agit. */
 .workflow-profiles-note {
   margin: 0;
-  color: var(--c-faint, #9caab5);
+  color: var(--text-faint);
   font-size: 11px;
   font-style: italic;
 }
@@ -275,6 +351,6 @@ input.workflow-profile-name:focus-visible {
 
 /* Dire POURQUOI on ne peut pas enregistrer vaut mieux qu'un bouton gris muet. */
 .workflow-graph-hint {
-  color: var(--c-faint, #9caab5);
+  color: var(--text-faint);
   font-size: 11px;
 }

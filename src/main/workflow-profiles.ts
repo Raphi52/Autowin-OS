@@ -84,6 +84,23 @@ export interface WorkflowProfile {
     maxGreedyNodes?: number
   }
   instructions?: WorkflowInstructions
+  /**
+   * Le chat a-t-il le droit d'INVOQUER ce workflow de lui-même ?
+   *
+   * Absent vaut `true` : un profil écrit avant ce drapeau reste invocable, sans quoi une mise à jour
+   * rendrait muet tout le catalogue existant. On désactive pour retirer un workflow du choix
+   * automatique sans le supprimer — l'archiver en le gardant sous la main, plutôt que de devoir le
+   * réécrire pour le réessayer.
+   *
+   * Ne touche PAS à la sélection manuelle : un workflow désactivé reste sélectionnable à la main.
+   * Deux gestes différents, deux effets différents.
+   */
+  enabled?: boolean
+}
+
+/** Un profil est invocable par le chat sauf s'il a été explicitement désactivé. */
+export function estInvocable(profile: WorkflowProfile): boolean {
+  return profile.enabled !== false
 }
 
 /**

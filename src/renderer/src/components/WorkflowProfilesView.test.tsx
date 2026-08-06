@@ -66,12 +66,16 @@ describe('vue Workflows — lister et sélectionner', () => {
   // Défaut vu par l'utilisateur DANS L'APPLICATION, invisible aux tests d'alors : le badge « actif »
   // n'était rendu que sur les profils. Revenir à « Configuration courante » le faisait disparaître
   // partout — plus rien ne disait sous quel régime le chat allait tourner.
-  it('le badge « actif » marque toujours ce qui est en vigueur, y compris « aucun workflow »', async () => {
+  it('quand aucun workflow n’est imposé, AUCUN n’est marqué actif', async () => {
+    // La ligne « Configuration courante » a été retirée : l'absence de workflow ne se signale plus
+    // par un badge à elle, elle se lit à ce qu'aucune ligne ne porte le badge. L'assertion suit le
+    // même invariant qu'avant — savoir sous quel régime le chat tourne — par un autre repère.
     api({
       workflowProfiles: vi.fn().mockResolvedValue({ profiles: [rapide], activeId: null })
     })
     await render()
-    expect(container.querySelector('[data-testid="workflow-active-none"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="workflow-pick-rapide"]')!.getAttribute('aria-pressed')).toBe('false')
+    expect(container.textContent).not.toContain('actif')
   })
 
   it('… et il passe sur le profil dès qu’un workflow est activé', async () => {
@@ -84,11 +88,36 @@ describe('vue Workflows — lister et sélectionner', () => {
     expect(ligne?.textContent).toContain('actif')
   })
 
-  it('propose TOUJOURS de revenir à la configuration courante', async () => {
-    api()
+  it('permet TOUJOURS de revenir à « aucun workflow imposé »', async () => {
+    // La capacité que gardait l'ancienne ligne « Configuration courante » : sans elle, sélectionner
+    // un workflow serait irréversible depuis la vue. Le chemin a changé — re-cliquer le workflow
+    // actif le désélectionne — mais l'invariant est le même, et c'est LUI qu'on teste.
+    const select = vi.fn().mockResolvedValue({ profiles: [rapide], activeId: null })
+    api({
+      workflowProfiles: vi.fn().mockResolvedValue({ profiles: [rapide], activeId: rapide.id }),
+      workflowProfileSelect: select
+    })
     await render()
-    // Sans cette ligne, sélectionner un workflow serait irréversible depuis la vue.
-    expect(container.querySelector('[data-testid="workflow-pick-none"]')).not.toBeNull()
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="workflow-pick-rapide"]')!.click()
+    )
+
+    expect(select).toHaveBeenCalledWith(null)
+  })
+
+  it('décocher un workflow le retire du choix automatique sans le supprimer', async () => {
+    const save = vi.fn().mockResolvedValue({ profiles: [rapide], activeId: null })
+    api({ workflowProfileSave: save })
+    await render()
+
+    const case_ = container.querySelector<HTMLInputElement>('[data-testid="workflow-enabled-rapide"]')!
+    expect(case_.checked).toBe(true) // `enabled` absent vaut invocable
+    // `.click()` et non `.checked = false` : React suit la valeur des cases par un tracker interne,
+    // qu'une écriture directe contourne — l'évènement part, mais React le considère sans changement.
+    await act(async () => case_.click())
+
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ id: 'rapide', enabled: false }))
   })
 
   it('sélectionner un workflow l’enregistre et le marque actif', async () => {
