@@ -88,6 +88,36 @@ function trackNodes(profile: WorkflowProfile): { id: string; phase: string; agen
  * Une portée horizontale par workflow. C'est ce qui permet de COMPARER sans cliquer : la séquence, la
  * densité de fan-out et les retours bornés se lisent côte à côte, workflow après workflow.
  */
+/**
+ * Le tracé d'un retour, en COUDE arrondi plutôt qu'en courbe de Bézier d'un bout à l'autre.
+ *
+ * La Bézier donnait un arc dissymétrique : ses deux poignées verticales tiraient la courbe vers le
+ * bas près de la source et l'aplatissaient près de la cible, si bien que le trait semblait sortir de
+ * nulle part d'un côté et raser la pastille de l'autre — et la pointe, prenant la tangente de cette
+ * fin plate, arrivait de biais. Le coude règle les deux : segments francs, virages de rayon constant,
+ * et une arrivée VERTICALE, donc une pointe qui entre droit dans la pastille cible.
+ *
+ * C'est aussi la géométrie des arêtes du canevas (`COURBE` dans `WorkflowCanvas`) : deux vues du même
+ * graphe qui dessinent leurs retours autrement se lisent comme deux mécanismes différents.
+ */
+function arcRetour(xa: number, xb: number, bas: number, creux: number): string {
+  const sens = xb > xa ? 1 : -1
+  const r = Math.min(7, Math.abs(xb - xa) / 2, (creux - bas) / 2)
+  // Trop court ou trop plat pour loger deux virages : un coude dégénéré serait plus laid que l'arc.
+  if (r < 2) return `M${xa} ${bas} C${xa} ${creux}, ${xb} ${creux}, ${xb} ${bas + 3}`
+  return (
+    `M${xa} ${bas}` +
+    `V${creux - r}` +
+    `Q${xa} ${creux} ${xa + r * sens} ${creux}` +
+    `H${xb - r * sens}` +
+    `Q${xb} ${creux} ${xb} ${creux - r}` +
+    // Jusqu'au bas de la pastille, pas 3px au-dessus du coude : la remontée doit être PLUS LONGUE que
+    // la pointe, sinon la flèche ne se lit pas comme une arrivée mais comme un triangle posé sur le
+    // trait horizontal. C'est ce que montrait la première version — coude correct, lecture fausse.
+    `V${bas}`
+  )
+}
+
 function WorkflowTrack({ profile }: { profile: WorkflowProfile }): React.JSX.Element | null {
   const nodes = trackNodes(profile)
   if (!nodes.length) return null
@@ -98,7 +128,9 @@ function WorkflowTrack({ profile }: { profile: WorkflowProfile }): React.JSX.Ele
   // Les arcs de retour partent du BAS des pastilles (top 8px + ~36px de contenu) : un arc qui démarre
   // dans le vide se lit comme une flèche orpheline plutôt que comme un retour entre deux phases.
   const basPastille = 46
-  const hauteur = basPastille + (retours.length ? 18 + retours.length * 16 : 4)
+  // La profondeur du creux n'est pas décorative : elle donne à la remontée finale de quoi être plus
+  // longue que la pointe de flèche. Trop peu, et l'arrivée ne se lit pas.
+  const hauteur = basPastille + (retours.length ? 24 + retours.length * 16 : 4)
 
   return (
     <div
@@ -108,7 +140,21 @@ function WorkflowTrack({ profile }: { profile: WorkflowProfile }): React.JSX.Ele
     >
       <svg width={largeur} height={hauteur} aria-hidden="true">
         <defs>
-          <marker id="wft-r" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+          {/*
+            Id UNIQUE par piste. Il était fixe (`wft-r`) : chaque workflow rendant son propre <defs>,
+            le document contenait autant de fois le même id que de pistes. Tous les `markerEnd` se
+            résolvaient alors vers le PREMIER — et démonter ce premier workflow faisait disparaître la
+            pointe de tous les autres. Un défaut qui ne se voit qu'après une suppression.
+            `refX` sur la pointe (7) et non 6 : sinon la flèche dépasse d'un pixel le bout du tracé.
+          */}
+          <marker
+            id={`wft-r-${profile.id}`}
+            markerWidth="7"
+            markerHeight="7"
+            refX="7"
+            refY="3.5"
+            orient="auto"
+          >
             <path d="M0,0 L7,3.5 L0,7 z" className="wf-ar-r" />
           </marker>
         </defs>
@@ -117,13 +163,13 @@ function WorkflowTrack({ profile }: { profile: WorkflowProfile }): React.JSX.Ele
           const a = rang.get(edge.from)
           const b = rang.get(edge.to)
           if (a === undefined || b === undefined) return null
-          const creux = basPastille + 14 + i * 16
+          const creux = basPastille + 20 + i * 16
           return (
             <path
               key={`${edge.from}>${edge.to}`}
-              d={`M${centre(a)} ${basPastille} C${centre(a)} ${creux}, ${centre(b)} ${creux}, ${centre(b)} ${basPastille + 4}`}
+              d={arcRetour(centre(a), centre(b), basPastille, creux)}
               className={`wf-track-arc wf-wire-${edge.when}`}
-              markerEnd="url(#wft-r)"
+              markerEnd={`url(#wft-r-${profile.id})`}
             />
           )
         })}

@@ -86,10 +86,22 @@
 .wf-pal-item:hover { border-color: var(--wf-hue); background: var(--surface-hover); }
 .wf-pal-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-/* ── Le plan ── */
+/* ── Le plan ──
+   Le VIEWPORT défile ; la SURFACE porte la taille du graphe. Confondre les deux empêchait tout
+   défilement : la boîte grandissait avec le contenu, donc rien ne débordait. */
+/* La ZONE ne défile pas : c'est elle qui ancre la barre d'état. Un enfant `absolute` d'un conteneur
+   qui défile suit le contenu — mesuré, les pastilles se faisaient couper à gauche. */
+.wf-plan-zone {
+  position: relative;
+  display: grid;
+  min-width: 0;
+}
+.wf-plan-viewport {
+  overflow: auto;
+  min-width: 0;
+}
 .wf-plan {
   position: relative;
-  overflow: auto;
   background:
     linear-gradient(var(--surface-hover) 1px, transparent 1px) 0 0 / 22px 22px,
     linear-gradient(90deg, var(--surface-hover) 1px, transparent 1px) 0 0 / 22px 22px,
@@ -378,10 +390,13 @@
    « bruit » sur la capture. Un voile flouté redonne un plan de lecture, sans
    toucher au fond global qui appartient à toute l'app.                        */
 .wf-palette-pane,
-.wf-plan {
+.wf-plan-viewport {
   backdrop-filter: blur(14px) saturate(115%);
   background: color-mix(in srgb, var(--bg-2) 88%, transparent);
 }
+/* Le voile va sur le VIEWPORT, pas sur la surface : posé sur `.wf-plan`, il écrasait le fond
+   quadrillé déclaré plus haut — la règle venant après gagnait, et le papier millimétré du plan
+   avait silencieusement disparu. Le quadrillage reste donc sur la surface, translucide par-dessus. */
 
 /* ── Nœuds : élévation, réponse au survol, saisie ─────────────────────── */
 .wf-node {

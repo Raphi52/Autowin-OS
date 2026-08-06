@@ -41,6 +41,53 @@ describe('vue Workflows — le style tient ses promesses', () => {
     expect(vue).toMatch(/height\s*:\s*100%/)
   })
 
+  it('le plan des blueprints DÉFILE horizontalement quand la chaîne s’allonge', () => {
+    // Défaut vécu : `overflow: auto` et la largeur du graphe étaient posés sur LE MÊME élément. Une
+    // boîte ne déborde pas d'elle-même : elle grandissait avec le contenu, donc rien ne défilait et
+    // une longue chaîne sortait de l'écran par la droite. Il faut deux boîtes, et le test vérifie
+    // exactement cette séparation — pas la simple présence d'un `overflow` quelque part.
+    const viewport = corpsDeRegle('WorkflowCanvas.css', '.wf-plan-viewport')
+    expect(viewport, 'règle .wf-plan-viewport introuvable').toBeDefined()
+    expect(viewport).toMatch(/overflow\s*:\s*auto/)
+
+    const surface = corpsDeRegle('WorkflowCanvas.css', '.wf-plan')
+    expect(surface).toBeDefined()
+    // La surface ne doit PAS défiler elle-même, sinon on recrée le défaut.
+    expect(surface).not.toMatch(/overflow\s*:/)
+
+    // Et sa taille vient du graphe, posée en ligne par le composant.
+    const tsx = lire('WorkflowCanvas.tsx')
+    expect(tsx).toMatch(/className="wf-plan-viewport"/)
+    expect(tsx).toMatch(/className="wf-plan"[\s\S]{0,80}width:\s*planW/)
+  })
+
+  it('le devis « ≤N exéc. » reste visible quand on défile vers la droite', () => {
+    // Défaut commis en corrigeant le précédent : la barre d'état posée DANS le viewport. Un enfant
+    // `absolute` d'un conteneur qui défile suit le contenu — les pastilles se faisaient couper à
+    // gauche dès qu'on regardait la droite du graphe. Son ancre doit être une boîte qui NE défile pas.
+    const zone = corpsDeRegle('WorkflowCanvas.css', '.wf-plan-zone')
+    expect(zone, 'règle .wf-plan-zone introuvable').toBeDefined()
+    expect(zone).toMatch(/position\s*:\s*relative/)
+    expect(zone).not.toMatch(/overflow\s*:\s*(auto|scroll)/)
+
+    // Et le viewport ne doit pas redevenir l'ancre en reprenant `position: relative`.
+    expect(corpsDeRegle('WorkflowCanvas.css', '.wf-plan-viewport')).not.toMatch(/position\s*:\s*relative/)
+
+    // La barre est un frère du viewport, pas son enfant.
+    const tsx = lire('WorkflowCanvas.tsx')
+    const viewportPuisBarre = tsx.match(/wf-plan-viewport[\s\S]*?wf-statusbar/)?.[0] ?? ''
+    expect(viewportPuisBarre).toMatch(/<\/div>\s*<\/div>[\s\S]*wf-statusbar/)
+  })
+
+  it('le voile flouté ne recouvre pas le quadrillage du plan', () => {
+    // Régression vécue : la règle de voile visait `.wf-plan` et, venant APRÈS, écrasait le
+    // `background` quadrillé déclaré plus haut. Le papier millimétré avait disparu en silence.
+    const css = lire('WorkflowCanvas.css')
+    const voile = css.match(/([^}]*)\{[^}]*backdrop-filter[^}]*\}/g)?.join('\n') ?? ''
+    expect(voile).not.toMatch(/\.wf-plan\s*[,{]/)
+    expect(corpsDeRegle('WorkflowCanvas.css', '.wf-plan')).toMatch(/linear-gradient/)
+  })
+
   it.each([
     ['WorkflowProfilesView.css', '.workflow-profile'],
     ['WorkflowProfilesView.css', '.workflow-profiles-head'],

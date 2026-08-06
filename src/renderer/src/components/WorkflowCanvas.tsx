@@ -274,7 +274,13 @@ export function WorkflowCanvas({
           </p>
         </aside>
 
-        <div className="wf-plan" style={{ minWidth: planW, minHeight: planH }}>
+        {/* Deux boîtes, pas une : le VIEWPORT défile, la SURFACE porte sa taille réelle. Elles étaient
+            confondues — `overflow: auto` et `minWidth: planW` sur le même élément — donc la boîte
+            grandissait avec le graphe au lieu de déborder, et rien ne pouvait défiler : une chaîne
+            longue sortait simplement de l'écran par la droite. Un conteneur ne déborde pas de lui-même. */}
+        <div className="wf-plan-zone">
+          <div className="wf-plan-viewport">
+            <div className="wf-plan" style={{ width: planW, height: planH }}>
           <svg className="wf-wires" width={planW} height={planH} aria-hidden="true">
             <defs>
               <marker id="wf-ar" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
@@ -391,6 +397,14 @@ export function WorkflowCanvas({
             )
           })}
 
+            </div>
+          </div>
+
+          {/* Hors du VIEWPORT, pas seulement hors de la surface. Première tentative : la barre placée
+              dans le viewport — mesuré faux, un enfant `absolute` d'un conteneur qui défile suit le
+              contenu, et les pastilles se faisaient couper à gauche dès qu'on regardait la droite du
+              graphe. Elle vit donc dans une zone qui, elle, ne défile pas. Or c'est précisément quand
+              la chaîne s'allonge que le devis « ≤N exéc. » doit rester sous les yeux. */}
           <div className="wf-statusbar">
             {worstCase ? (
               <span className="wf-pill is-warn">≤{worstCase} exéc. au pire cas</span>
