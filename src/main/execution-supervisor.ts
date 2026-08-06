@@ -158,9 +158,22 @@ export class ExecutionSupervisor {
     onLateSettlement?: (usage: ExecutionUsageSnapshot) => void
   ): Promise<T> {
     const controller = new AbortController()
-    const parsedCreatedAt = Date.parse(quote.createdAt)
-    const quoteCreatedAtMs = Number.isFinite(parsedCreatedAt) ? parsedCreatedAt : Date.now()
-    const deadlineAtMs = quoteCreatedAtMs + quote.limits.maxDurationMs
+    /*
+     * L'échéance court depuis le DÉBUT DE CETTE EXÉCUTION, pas depuis la création du devis.
+     *
+     * Constaté en réel le 2026-08-05 : deux runs repris au démarrage ont échoué INSTANTANÉMENT —
+     * « budget duree depasse (7200000 ms) » — sans jouer une seule phase. Le devis étant persisté
+     * avec le run, son échéance était calculée depuis sa création d'origine : un run tué à 14 h 10
+     * et repris à 17 h avec 2 h de budget était condamné avant de commencer. La durée mesurait le
+     * temps écoulé DANS LE MONDE, pas le temps travaillé — donc toute reprise après une longue
+     * interruption perdait le travail déjà payé.
+     *
+     * La sémantique retenue, et elle est cohérente : la DURÉE borne une exécution (elle protège de
+     * l'emballement d'un run qui tourne), le COÛT borne le run entier et reste cumulatif à travers
+     * les reprises via `prior` (jetons, appels, agents ci-dessous). Une reprise est un acte
+     * délibéré de l'utilisateur ; lui rendre son temps de travail ne lui rend pas son budget.
+     */
+    const deadlineAtMs = Date.now() + quote.limits.maxDurationMs
     const runtime: ExecutionRuntime = {
       executionId: randomUUID(),
       quote,

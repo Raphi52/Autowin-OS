@@ -371,13 +371,37 @@ describe('ExecutionSupervisor', () => {
     expect(provider.calls).toBe(0)
   })
 
+  /**
+   * Défaut CONSTATÉ EN RÉEL le 2026-08-05, dans le log de démarrage : deux runs repris ont échoué
+   * instantanément — « budget duree depasse (7200000 ms) » — sans jouer une seule phase. Le devis
+   * étant persisté avec le run, l'échéance se calculait depuis sa création d'origine : un run mort
+   * pendant 3 h était condamné avant de commencer, et tout le travail déjà payé était perdu.
+   */
+  it('un devis ANCIEN ne condamne plus une reprise — la durée borne l’exécution, pas l’attente', async () => {
+    const supervisor = new ExecutionSupervisor()
+    const provider = new CountedProvider({ inputTokens: 1, outputTokens: 0 })
+    const registry = new ProviderRegistry(undefined, supervisor).register(provider)
+    const quote = compileExecutionQuote('corrige la typo')
+    // Devis créé il y a 3 heures, budget de 2 heures : l'ancien calcul refusait tout net.
+    quote.createdAt = new Date(Date.now() - 3 * 60 * 60 * 1_000).toISOString()
+    quote.limits.maxDurationMs = 2 * 60 * 60 * 1_000
+
+    await supervisor.run(quote, undefined, () =>
+      registry.send('counted', [{ role: 'user', content: 'reprise' }])
+    )
+    expect(provider.calls).toBe(1)
+  })
+
   it('refuse synchroniquement un run dont la deadline est deja expiree', async () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new CountedProvider({ inputTokens: 1, outputTokens: 0 })
     const registry = new ProviderRegistry(undefined, supervisor).register(provider)
     const quote = compileExecutionQuote('corrige la typo')
-    quote.createdAt = new Date(Date.now() - 1_000).toISOString()
-    quote.limits.maxDurationMs = 1
+    // Budget NUL : l'échéance court désormais depuis le début de l'exécution, donc un devis
+    // simplement ANCIEN ne suffit plus à la faire expirer — c'est précisément la correction (une
+    // reprise après une longue interruption était condamnée avant de jouer une phase). Le garde du
+    // refus synchrone, lui, reste indispensable et c'est ce que ce test continue de prouver.
+    quote.limits.maxDurationMs = 0
 
     await expect(
       supervisor.run(quote, undefined, () =>
