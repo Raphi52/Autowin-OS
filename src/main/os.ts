@@ -641,13 +641,15 @@ export class AutowinOS {
    * Lance le login OFFICIEL d'un provider (bouton « Se reconnecter » de la page Routeur).
    * Les adapters qui exposent `startLogin` gèrent leur connexion ; claude/codex passent par un terminal.
    */
-  startProviderLogin(provider: string): void {
+  startProviderLogin(provider: string, configDir?: string): void {
     const adapter = this.registry.get(provider)
     if (adapter.startLogin) {
       adapter.startLogin()
       return
     }
-    const plan = planProviderLogin(provider)
+    // `configDir` n'est renseigné que par le multi-comptes Claude : il dirige le login vers le
+    // dossier du compte visé, au lieu d'écraser la session du compte courant.
+    const plan = planProviderLogin(provider, undefined, configDir)
     if (plan.kind === 'adapter')
       throw new Error(`Le provider ${provider} n'expose pas de connexion interactive.`)
     // codex : `npm run codex:login` doit tourner à la racine du repo (dev) → cwd = process.cwd().

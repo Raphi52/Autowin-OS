@@ -314,12 +314,39 @@ describe('le shell du chat ne porte aucune primitive d’écriture', () => {
     const source = readFileSync(join(__dirname, '..', 'providers', 'claude.ts'), 'utf8')
     // On assère la LIGNE de code, pas une mention : un commentaire citant la constante ferait
     // passer un test qui ne prouve rien (erreur commise une première fois sur ce même fichier).
-    const envLine = source
-      .split('\n')
-      .map((line) => line.trim())
-      .find((line) => line.startsWith('env: {'))
-    expect(envLine).toBeDefined()
-    // Étalé EN DERNIER : ni l'env hérité ni celui de l'invocation ne peuvent le réintroduire.
-    expect(envLine).toMatch(/\.\.\.process\.env.*\.\.\.NON_INTERACTIVE_ENV\s*}/)
+    // L'objet env peut tenir sur PLUSIEURS lignes (il en porte trois depuis l'ajout du
+    // multi-comptes Claude) : on lit le BLOC entier, pas une ligne. Faire dépendre un garde de
+    // sécurité du formatage le rendait rouge sur un simple retour à la ligne, sans qu'aucune
+    // propriété n'ait bougé — et un garde qui crie à tort finit par ne plus être cru.
+    const start = source.indexOf('env: {')
+    expect(start).toBeGreaterThan(-1)
+    // Accolades COMPTÉES jusqu'à la fermeture correspondante. Une première version coupait au
+    // premier `}` suivant NON_INTERACTIVE_ENV : elle amputait tout ce qui venait après, si bien
+    // qu'un `...(invocation.env)` étalé APRÈS la constante — exactement la régression à empêcher —
+    // sortait vert. Vérifié en rejouant le garde sur une source volontairement fautive.
+    let depth = 0
+    let end = start
+    for (let index = source.indexOf('{', start); index < source.length; index += 1) {
+      if (source[index] === '{') depth += 1
+      else if (source[index] === '}') {
+        depth -= 1
+        if (depth === 0) {
+          end = index + 1
+          break
+        }
+      }
+    }
+    const envBlock = source.slice(start, end)
+    // Ce qui est RÉELLEMENT protégé, et la façon de le vérifier sans dépendre du formatage :
+    //  (a) l'env hérité est la BASE — sinon le fils perd PATH et consorts ;
+    //  (b) NON_INTERACTIVE_ENV est le DERNIER élément avant l'accolade fermante — donc ni l'env
+    //      hérité ni celui de l'invocation ne peuvent réintroduire pager, aide ou invite.
+    // (b) s'exprime par la position, PAS par une liste de spreads : `...(invocation.env ?? {})`
+    // commence par une parenthèse et échappe à toute regex d'identifiant — une version
+    // intermédiaire de ce garde l'a appris en laissant passer, au vert, la régression même
+    // qu'il existe pour attraper.
+    const firstSpread = /\.\.\.\s*\(?\s*([A-Za-z_$][\w$.]*)/.exec(envBlock)
+    expect(firstSpread?.[1]).toBe('process.env')
+    expect(envBlock).toMatch(/\.\.\.\s*NON_INTERACTIVE_ENV\s*,?\s*\}$/)
   })
 })

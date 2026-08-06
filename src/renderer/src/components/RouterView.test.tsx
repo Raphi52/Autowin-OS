@@ -105,7 +105,15 @@ describe('RouterView — erreurs provider locales', () => {
     await flush()
 
     const kimi = container.querySelector<HTMLElement>('[data-provider="kimi"]')!
-    expect(kimi.textContent).toContain('Kimi for Coding')
+    // Le MODÈLE n'est plus listé, et c'est voulu : depuis le 2026-08-06 les listes de modèles
+    // partagent la définition de « Modèles & topologie » (`libraryModels`), qui ne retient que les
+    // modèles découverts dynamiquement. Les modèles kimi/gemini sont des constantes statiques, ils
+    // n'y entrent pas. Arbitrage explicite de l'utilisateur, pris en connaissance de cette perte.
+    expect(kimi.textContent).toContain('Aucun modèle listé')
+    expect(kimi.textContent).not.toContain('Kimi for Coding')
+    // Ce que ce test protège VRAIMENT et qui n'a pas bougé : la carte du provider et son état
+    // d'authentification restent visibles même sans modèle listé — sinon Routage perdrait l'écran
+    // qui sert précisément à voir cet état.
     expect(kimi.textContent).toContain('En standby')
     expect(kimi.textContent).not.toContain('Tester')
     expect(kimi.textContent).not.toContain('Se reconnecter')

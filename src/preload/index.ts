@@ -31,6 +31,19 @@ import type { PendingModelQuestion } from '../main/model-questions'
 import type { ImportedModel } from '../main/models'
 import type { PromptCallRecord, CostBreakdownRow } from '../main/activity/prompt-observability'
 import type { ProviderDisplayStatus, ProviderStatus } from '../main/provider-status'
+
+export interface ClaudeAccountEntry {
+  id: string
+  displayName: string
+  /** Niveau d'abonnement (« team », « max »…) : ce qui distingue deux comptes de meme email. */
+  tier: string
+  email?: string
+  active: boolean
+}
+export interface ClaudeAccountsPayload {
+  activeId: string
+  accounts: ClaudeAccountEntry[]
+}
 import type { BehaviourComposition } from '../main/behaviour-composition'
 import type { BrainTrace } from '../main/activity/brain-trace-spool'
 import type { PreflightResult } from '../main/preflight'
@@ -260,6 +273,19 @@ const api = {
   kimiLogin: (): Promise<{ ok: true }> => ipcRenderer.invoke('os:kimiLogin'),
   providerLogin: (provider: string): Promise<{ ok: true }> =>
     ipcRenderer.invoke('os:providerLogin', provider),
+  /** Comptes Claude multiples — un CLAUDE_CONFIG_DIR par compte, bascule sans re-login. */
+  claudeAccounts: (): Promise<ClaudeAccountsPayload> =>
+    ipcRenderer.invoke('os:claudeAccounts:list'),
+  claudeAccountAdd: (label?: string): Promise<ClaudeAccountsPayload> =>
+    ipcRenderer.invoke('os:claudeAccounts:add', label),
+  claudeAccountSwitch: (id: string): Promise<ClaudeAccountsPayload> =>
+    ipcRenderer.invoke('os:claudeAccounts:switch', id),
+  claudeAccountRemove: (id: string): Promise<ClaudeAccountsPayload> =>
+    ipcRenderer.invoke('os:claudeAccounts:remove', id),
+  claudeAccountLogin: (id: string): Promise<{ ok: true }> =>
+    ipcRenderer.invoke('os:claudeAccounts:login', id),
+  claudeAccountRefresh: (): Promise<ClaudeAccountsPayload> =>
+    ipcRenderer.invoke('os:claudeAccounts:refresh'),
   topology: (): Promise<AgentTopology> => ipcRenderer.invoke('os:topology:get'),
   setTopology: (topology: AgentTopology): Promise<AgentTopology> =>
     ipcRenderer.invoke('os:topology:set', topology),

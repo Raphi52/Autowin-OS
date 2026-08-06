@@ -34,6 +34,7 @@ import type {
 } from './types'
 import type { ProviderArtifactCandidate } from '../../shared/artifacts'
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
+import { claudeAccountEnv } from '../claude-accounts'
 
 /** Usage brut du `result` event du CLI Claude, dans la sémantique ANTHROPIC (voir ci-dessous). */
 export interface ClaudeRawUsage {
@@ -599,7 +600,15 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       cwd: execution?.cwd ?? readOnlyCwd,
       // Toujours un env EXPLICITE : sans lui le fils hérite du nôtre et peut ouvrir un pager, un
       // navigateur d'aide ou une invite d'identifiants. Voir NON_INTERACTIVE_ENV.
-      env: { ...process.env, ...(invocation.env ?? {}), ...NON_INTERACTIVE_ENV },
+      // `claudeAccountEnv()` porte le CLAUDE_CONFIG_DIR du compte actif — vide tant qu'un seul
+      // compte existe. Placé AVANT `invocation.env` : une invocation qui fixerait explicitement
+      // une variable garde le dernier mot.
+      env: {
+        ...process.env,
+        ...claudeAccountEnv(),
+        ...(invocation.env ?? {}),
+        ...NON_INTERACTIVE_ENV
+      },
       ...(journal
         ? {
             detached: true,

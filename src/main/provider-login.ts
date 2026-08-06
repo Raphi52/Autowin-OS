@@ -29,15 +29,22 @@ export type LoginPlan =
  * L'opérateur d'appel `&` et les guillemets sont obligatoires : ces chemins traversent
  * `Program Files` / `AppData`.
  */
-export function planProviderLogin(provider: string, bin?: string): LoginPlan {
+export function planProviderLogin(provider: string, bin?: string, configDir?: string): LoginPlan {
   switch (provider) {
     case 'kimi':
       return { kind: 'adapter', provider: 'kimi' }
-    case 'claude':
+    case 'claude': {
+      // Multi-comptes : le login doit ecrire dans le dossier du compte VISE, pas dans l'identite
+      // courante. Sans ce prefixe, ajouter un second compte ecraserait le premier — le CLI ne sait
+      // stocker qu'une session par dossier de configuration.
+      // Syntaxe PowerShell (le terminal est lance via `powershell -ExecutionPolicy Bypass`), et le
+      // dossier est fixe AVANT l'appel pour que le CLI le voie des son demarrage.
+      const prefix = configDir ? `$env:CLAUDE_CONFIG_DIR = "${configDir}"; ` : ''
       return {
         kind: 'terminal',
-        command: bin ? `& "${bin}" auth login` : 'claude auth login'
+        command: prefix + (bin ? `& "${bin}" auth login` : 'claude auth login')
       }
+    }
     case 'codex':
       return { kind: 'terminal', command: 'npm run codex:login' }
     default:

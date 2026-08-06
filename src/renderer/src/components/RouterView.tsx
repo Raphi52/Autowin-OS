@@ -4,6 +4,8 @@ import { ModuleHeader } from './ModuleHeader'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import type { RuntimeModel, OrchestratorModelOption } from './chat-view-model'
 import { agentStudioProviderIds } from './provider-catalog'
+import { libraryModels } from './model-library'
+import type { ClaudeAccountEntry } from '../../../preload/index.d'
 
 /**
  * Page « Routeur » — voir les providers/modèles connectés + leur statut d'auth RÉEL, (ré)authentifier,
@@ -57,6 +59,8 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
   const [loaded, setLoaded] = useState(false)
   const [testing, setTesting] = useState<Record<string, boolean>>({})
   const [modePending, setModePending] = useState<Record<string, boolean>>({})
+  const [accounts, setAccounts] = useState<ClaudeAccountEntry[]>([])
+  const [accountBusy, setAccountBusy] = useState(false)
   const [modelPending, setModelPending] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
   const [catalogActive, setCatalogActive] = useState(active)
@@ -110,7 +114,10 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
 
   const byProvider = useMemo(() => {
     const map = new Map<string, RuntimeModel[]>()
-    for (const m of models) {
+    // `libraryModels` et pas `models` : c'est LA liste partagée avec « Modèles & topologie ».
+    // Sans elle, les alias du CLI Claude s'affichaient à côté du modèle concret dont ils portent
+    // le label, donc en doublon apparent.
+    for (const m of libraryModels(models)) {
       const list = map.get(m.provider) ?? []
       list.push(m)
       map.set(m.provider, list)
@@ -119,6 +126,9 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
   }, [models])
 
   const providers = useMemo(() => {
+    // Volontairement le catalogue COMPLET, pas la liste filtrée : un provider dont aucun modèle
+    // n'est listé garde sa carte et son badge d'authentification. Routage existe d'abord pour
+    // montrer cet état ; le filtrer ici ferait disparaître kimi et gemini de l'écran entier.
     return agentStudioProviderIds(models, statuses)
   }, [models, statuses])
 
@@ -165,6 +175,36 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
       setLaunched((l) => ({ ...l, [provider]: true }))
     } catch {
       // le spawn du terminal a échoué → on n'affiche pas « lancé »
+    }
+  }
+
+  const reloadAccounts = useCallback(async (): Promise<void> => {
+    const payload = await window.api.claudeAccounts().catch(() => null)
+    if (payload) setAccounts(payload.accounts)
+  }, [])
+
+  useEffect(() => {
+    if (!active) return
+    void reloadAccounts()
+  }, [active, reloadAccounts])
+
+  // Toute mutation de comptes rend la liste a jour : on la reprend telle quelle plutot que de
+  // recalculer l'etat cote renderer, pour qu'il n'existe qu'UNE verite (celle du store principal).
+  const runAccountAction = async (
+    action: () => Promise<{ accounts: ClaudeAccountEntry[] } | { ok: true }>
+  ): Promise<void> => {
+    if (accountBusy) return
+    setAccountBusy(true)
+    try {
+      const result = await action()
+      if ('accounts' in result) setAccounts(result.accounts)
+      // Le compte actif change l'identite du CLI : le badge d'auth affiche ne vaut plus rien tant
+      // qu'il n'a pas ete re-teste. On recharge donc les statuts au lieu de laisser un vert perime.
+      await reloadCatalog()
+    } catch {
+      // fail-open : la liste precedente reste affichee plutot qu'un ecran vide
+    } finally {
+      setAccountBusy(false)
     }
   }
 
@@ -263,6 +303,59 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
                   </button>
                 </span>
               </header>
+              {provider === 'claude' && (
+                <div className="router-accounts" data-testid="claude-accounts">
+                  <span className="router-accounts-title">Comptes</span>
+                  <div className="router-accounts-list">
+                    {accounts.map((account) => (
+                      <span key={account.id} className="router-account">
+                        <button
+                          type="button"
+                          className={`router-account-chip${account.active ? ' is-active' : ''}`}
+                          aria-pressed={account.active}
+                          disabled={accountBusy || account.active}
+                          title={account.email ?? account.displayName}
+                          onClick={() =>
+                            void runAccountAction(() => window.api.claudeAccountSwitch(account.id))
+                          }
+                        >
+                          {account.displayName}
+                          {account.tier && (
+                            <em className="router-account-tier">{account.tier}</em>
+                          )}
+                        </button>
+                        {account.id !== 'default' && (
+                          <button
+                            type="button"
+                            className="router-account-remove"
+                            aria-label={`Retirer ${account.displayName}`}
+                            disabled={accountBusy}
+                            onClick={() =>
+                              void runAccountAction(() =>
+                                window.api.claudeAccountRemove(account.id)
+                              )
+                            }
+                          >
+                            ×
+                          </button>
+                        )}
+                      </span>
+                    ))}
+                    <button
+                      type="button"
+                      className="router-account-add"
+                      disabled={accountBusy}
+                      onClick={() => void runAccountAction(() => window.api.claudeAccountAdd())}
+                    >
+                      + Ajouter un compte
+                    </button>
+                  </div>
+                  <p className="router-hint">
+                    Chaque compte garde sa propre session : basculer ne redemande pas de connexion.
+                    Ajouter un compte ouvre un terminal de login dédié.
+                  </p>
+                </div>
+              )}
               {st.status === 'standby' ? (
                 <p className="router-hint">
                   Aucun test ni login automatique. Les modèles restent disponibles dans le

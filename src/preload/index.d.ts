@@ -42,6 +42,19 @@ import type { TraceEventV1 } from '../main/activity/trace-event'
 import type { SessionMeta, SessionActivity } from '../main/activity/transcripts'
 import type { ClaudeHookItem } from '../main/claude-hooks'
 import type { ConvActivityEntry } from '../main/activity/conv-activity'
+export interface ClaudeAccountEntry {
+  id: string
+  displayName: string
+  /** Niveau d'abonnement (« team », « max »…) : ce qui distingue deux comptes de meme email. */
+  tier: string
+  email?: string
+  active: boolean
+}
+export interface ClaudeAccountsPayload {
+  activeId: string
+  accounts: ClaudeAccountEntry[]
+}
+
 interface ChatApi {
   captureTestPage: () => Promise<string>
   seedConversationScopeTest: (
@@ -205,6 +218,13 @@ interface ChatApi {
   applyProfile: (id: string) => Promise<{ topology: AgentTopology }>
   kimiLogin: () => Promise<{ ok: true }>
   providerLogin: (provider: string) => Promise<{ ok: true }>
+  /** Comptes Claude multiples : un CLAUDE_CONFIG_DIR par compte, bascule sans re-login. */
+  claudeAccounts: () => Promise<ClaudeAccountsPayload>
+  claudeAccountAdd: (label?: string) => Promise<ClaudeAccountsPayload>
+  claudeAccountSwitch: (id: string) => Promise<ClaudeAccountsPayload>
+  claudeAccountRemove: (id: string) => Promise<ClaudeAccountsPayload>
+  claudeAccountLogin: (id: string) => Promise<{ ok: true }>
+  claudeAccountRefresh: () => Promise<ClaudeAccountsPayload>
   topology: () => Promise<AgentTopology>
   setTopology: (topology: AgentTopology) => Promise<AgentTopology>
   capabilityControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins') => Promise<CapabilityItem[]>

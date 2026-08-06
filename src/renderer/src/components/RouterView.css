@@ -135,3 +135,80 @@
   opacity: 0.6;
   font-size: 0.9em;
 }
+
+/* Comptes Claude : bascule en un clic. Variables du thème existant, aucune couleur en dur. */
+.router-accounts {
+  margin-top: 10px;
+}
+.router-accounts-title {
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+}
+.router-accounts-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.router-account {
+  display: inline-flex;
+  align-items: center;
+}
+.router-account-chip {
+  font-size: 0.85em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle, rgba(128, 128, 128, 0.35));
+  background: var(--surface-card);
+  cursor: pointer;
+}
+/* L'actif est desactive (on ne rebascule pas sur soi-meme) : sans cette regle il heriterait du
+   gris "disabled" et se lirait comme indisponible, l'inverse de ce qu'il signifie. */
+.router-account-chip.is-active,
+.router-account-chip.is-active:disabled {
+  border-color: currentColor;
+  font-weight: 600;
+  opacity: 1;
+  cursor: default;
+}
+.router-account-chip:disabled:not(.is-active) {
+  opacity: 0.5;
+  cursor: default;
+}
+.router-account-remove {
+  margin-left: 2px;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  opacity: 0.45;
+  cursor: pointer;
+  font-size: 1em;
+  line-height: 1;
+}
+.router-account-remove:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.router-account-add {
+  font-size: 0.85em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px dashed var(--border-subtle, rgba(128, 128, 128, 0.45));
+  background: none;
+  cursor: pointer;
+  opacity: 0.8;
+}
+/* Le niveau d'abonnement : ce qui distingue deux comptes portant la meme adresse mail. */
+.router-account-tier {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 0.8em;
+  font-style: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--surface-raised, rgba(128, 128, 128, 0.18));
+  opacity: 0.85;
+}

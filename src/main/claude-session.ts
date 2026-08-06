@@ -33,6 +33,7 @@
  */
 import { spawn } from 'node:child_process'
 import { resolveClaudeBin } from './providers/claude'
+import { claudeAccountEnv } from './claude-accounts'
 
 export type ClaudeSessionState = 'authenticated' | 'absent' | 'unknown'
 
@@ -148,7 +149,13 @@ export async function probeClaudeSession(
     }
     let child: ReturnType<typeof spawn>
     try {
-      child = spawnFn(resolveBin(), ['auth', 'status'], { windowsHide: true, shell: false })
+      child = spawnFn(resolveBin(), ['auth', 'status'], {
+        windowsHide: true,
+        shell: false,
+        // Sonder SANS l'env du compte actif interrogerait une AUTRE identite que celle que
+        // le run utilisera : le badge d'auth mentirait des qu'un second compte existe.
+        env: { ...process.env, ...claudeAccountEnv() }
+      })
     } catch {
       finish('unknown')
       return

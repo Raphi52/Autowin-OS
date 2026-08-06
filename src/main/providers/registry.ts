@@ -28,12 +28,56 @@ const COORDINATION_DRAIN_GRACE_MS = ((): number => {
 })()
 
 /**
+ * Durée pendant laquelle un provider au quota épuisé cesse d'être sollicité.
+ *
+ * La date de reset ANNONCÉE par le provider (« try again at Aug 8th ») n'est délibérément PAS analysée :
+ * un format mal lu verrouillerait des jours un provider parfaitement sain. Une fenêtre bornée cicatrise
+ * d'elle-même — au pire on paie une sonde par fenêtre, contre 536 appels en une heure mesurés le
+ * 2026-08-04. Réglable via AUTOWIN_QUOTA_WALL_MS.
+ */
+const QUOTA_WALL_MS = ((): number => {
+  const raw = Number(process.env.AUTOWIN_QUOTA_WALL_MS)
+  return Number.isFinite(raw) && raw > 0 ? raw : 30 * 60_000
+})()
+
+/**
+ * Reconnaît un quota d'abonnement ÉPUISÉ — et lui seul.
+ *
+ * Le discriminant est le VOCABULAIRE du refus, pas le code HTTP : un quota épuisé et un rate-limit
+ * passager arrivent tous deux en 429, et les confondre coûte dans les deux sens. Ignorer le premier fait
+ * tirer des centaines d'appels dans le vide (mesuré : 852 runs rouges) ; bloquer sur le second
+ * transformerait une attente de 20 s en panne de provider pour tout le run.
+ *
+ * Deux sources acceptées : la signature structurée que pose l'adaptateur codex, et le texte brut — pour
+ * qu'un provider qui n'a pas (encore) de signature soit couvert quand même.
+ */
+export function quotaWallReason(error: unknown): string | undefined {
+  const signature = (error as { signature?: unknown } | null)?.signature
+  const texte = error instanceof Error ? error.message : String(error ?? '')
+  if (/retry after|try again in|rate limit exceeded/i.test(texte)) return undefined
+  if (signature === 'usage-limit-reached') return texte
+  return /usage[_ ]limit|purchase more credits|hit your usage|insufficient_quota/i.test(texte)
+    ? texte
+    : undefined
+}
+
+/**
  * Routeur d'adaptateurs. Le seul point par lequel l'app envoie un tour :
  * choisit l'adaptateur par id, INJECTE le bloc système (kit condensé) de façon
  * uniforme, délègue le streaming à l'adaptateur, et centralise la traçabilité.
  */
 export class ProviderRegistry {
   private readonly adapters = new Map<string, ProviderAdapter>()
+
+  /**
+   * Providers dont le quota est épuisé, et jusqu'à quand on cesse de les solliciter.
+   *
+   * En MÉMOIRE, donc remis à zéro au redémarrage : la première tentative d'après relance rouvre le
+   * disjoncteur aussitôt. Le coût d'un redémarrage est donc UN appel perdu, contre les 536 d'une seule
+   * heure du 2026-08-04. Persister l'état couvrirait aussi ce cas, mais demanderait un chemin d'écriture
+   * que le registre n'a pas — la limite est assumée, pas ignorée.
+   */
+  private readonly quotaWalls = new Map<string, { jusqua: number; raison: string }>()
 
   /** Bloc système par défaut (kit condensé SOUL) injecté sur CHAQUE tour. */
   constructor(
@@ -143,6 +187,23 @@ export class ProviderRegistry {
     // la MÊME CONSTITUTION explicitement via leurs propres `parts` (agent-pilot.ts / orchestrator.ts) :
     // ce fallback ne les concerne donc pas — ce n'est plus une exclusion voulue du soul.
     const system = route.opts.system ?? this.systemBlock
+    // DISJONCTEUR DE QUOTA, avant même la réservation : un appel refusé ne doit consommer aucun budget.
+    // Même intention que l'admission ci-dessous — ne rien lancer qui soit condamné d'avance — mais pour
+    // une cause EXTERNE : un quota d'abonnement épuisé se rétablit des JOURS plus tard, jamais par une
+    // relance. Dépouillement du 2026-08-06 : 852 runs rouges (70 % des échecs réels) n'avaient que cette
+    // cause, dont 285 APRÈS le correctif qui se contentait de la NOMMER sans fermer la porte.
+    const mur = this.quotaWalls.get(route.id)
+    if (mur) {
+      if (mur.jusqua > Date.now()) {
+        const minutes = Math.max(1, Math.round((mur.jusqua - Date.now()) / 60_000))
+        throw new Error(
+          `Provider ${route.id} écarté : quota épuisé. Nouvelle tentative dans ~${minutes} min. ` +
+            `Refus du provider : ${mur.raison.slice(0, 300)}`
+        )
+      }
+      // Fenêtre expirée : on laisse passer UNE sonde. Si le mur tient, elle le réarme aussitôt.
+      this.quotaWalls.delete(route.id)
+    }
     // Admission AVANT l'adaptateur : un budget epuise ne doit jamais faire apparaitre une fenetre,
     // ouvrir un stream ou lancer un CLI qui sera seulement tue apres sa reponse.
     // Toute execution outillee est un agent du devis. L'admission appels + agents est atomique et
@@ -241,6 +302,13 @@ export class ProviderRegistry {
         },
         (error) => {
           reservation?.fail()
+          // Toute défaillance passe ici : c'est le point unique où armer le disjoncteur. On l'arme sur
+          // la PREUVE (le refus du provider), pas sur une supposition — `quotaWallReason` écarte
+          // explicitement le rate-limit passager.
+          const raison = quotaWallReason(error)
+          if (raison) {
+            this.quotaWalls.set(route.id, { jusqua: Date.now() + QUOTA_WALL_MS, raison })
+          }
           throw error
         }
       )

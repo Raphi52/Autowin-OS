@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './AgentsTopologyView.css'
 import { ModuleHeader } from './ModuleHeader'
-import { compareModelsByName } from './model-name-order'
+import { libraryModels } from './model-library'
 
 type ImportedModel = {
   id: string
@@ -135,11 +135,9 @@ export function AgentsTopologyView({
   }
 
   const modelsById = useMemo(() => new Map(models.map((model) => [model.id, model])), [models])
-  const libraryModels = useMemo(
-    () => models.filter((model) => model.dynamicallyLoaded === true),
-    [models]
-  )
-  const sortedModels = useMemo(() => [...libraryModels].sort(compareModelsByName), [libraryModels])
+  // Même dérivation que Routage, désormais définie une seule fois (`model-library`) : c'est cette
+  // vue qui faisait référence, elle garde donc exactement son comportement.
+  const sortedModels = useMemo(() => libraryModels(models), [models])
   const selectedModel = modelsById.get(selectedModelId)
 
   async function persist(next: AgentTopology): Promise<void> {
@@ -417,7 +415,7 @@ export function AgentsTopologyView({
       <aside className="topology-library">
         <span className="topology-eyebrow">Modèles importés</span>
         <p>Glissez un modèle sur un slot ou sélectionnez-le puis utilisez Ajouter.</p>
-        {libraryModels.some((model) => model.provider === 'gemini') && (
+        {sortedModels.some((model) => model.provider === 'gemini') && (
           <button
             type="button"
             className="topology-provider-login"
