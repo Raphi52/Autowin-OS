@@ -35,6 +35,7 @@ import type {
 import type { ProviderArtifactCandidate } from '../../shared/artifacts'
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { claudeAccountEnv } from '../claude-accounts'
+import { describeExitCode } from '../provider-failure-diagnosis'
 
 /** Usage brut du `result` event du CLI Claude, dans la sémantique ANTHROPIC (voir ci-dessous). */
 export interface ClaudeRawUsage {
@@ -888,7 +889,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       if (tailError && !errored) {
         errored = tailError instanceof Error ? tailError : new Error(String(tailError))
       }
-      if (code !== 0 && !errored) errored = new Error(`claude CLI exit ${code}`)
+      if (code !== 0 && !errored) {
+        // Un NTSTATUS decimal brut (« exit 1073807364 ») ne dit rien : on nomme le statut systeme
+        // quand il est connu, pour que le diagnostic de role puisse conseiller un relancement.
+        const abnormal = describeExitCode(code)
+        errored = new Error(`claude CLI exit ${code}${abnormal ? ` (${abnormal})` : ''}`)
+      }
       // Retries epuises sans reponse : le CLI sort en 0 sans event `result`, donc le tour passait
       // pour un succes VIDE et l'UI ne quittait jamais l'etat « reflexion ». C'est un ECHEC, nomme.
       if (!errored && !resultSeen && !text && lastRetry) {

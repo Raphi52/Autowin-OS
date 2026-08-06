@@ -17,8 +17,35 @@ export type ProviderFailureKind =
   | 'auth'
   /** L'exécutable est introuvable → rien ne peut tourner tant qu'il n'est pas résolu. */
   | 'cli-missing'
+  /** Le CLI est mort anormalement (tué, crash, arrêt de session Windows) → relancer a du sens. */
+  | 'crashed'
   /** Autre chose (timeout, watchdog, refus du modèle…) : on ne devine pas. */
   | 'other'
+
+/**
+ * Codes de sortie Windows (NTSTATUS / DBG_*) rencontrés RÉELLEMENT en production.
+ *
+ * Incident ak-820d7029b0c5e76d (2026-08-06) : « claude CLI exit 1073807364 » puis « exit 3221226091 ».
+ * Un entier décimal de 10 chiffres ne dit rien ; sa forme hexadécimale est un statut système connu.
+ * On ne décode QUE les codes observés — inventer une table complète serait du bruit non vérifiable.
+ */
+const ABNORMAL_EXIT_CODES: Readonly<Record<number, string>> = {
+  0x40010004: 'arrêt du process demandé par l’hôte',
+  0xc000013a: 'interruption Ctrl-C',
+  0xc0000005: 'violation d’accès (crash du CLI)',
+  0xc0000409: 'corruption de pile détectée (crash du CLI)',
+  0xc000026b: 'échec d’initialisation d’une DLL (arrêt de session Windows)'
+}
+
+/**
+ * Décrit un code de sortie anormal, ou `undefined` si ce n'est pas un statut système connu (un
+ * `exit 1` ordinaire reste un `exit 1` : ne rien prétendre est plus honnête qu'un faux diagnostic).
+ */
+export function describeExitCode(code: number | null | undefined): string | undefined {
+  if (typeof code !== 'number' || !Number.isInteger(code)) return undefined
+  const label = ABNORMAL_EXIT_CODES[code >>> 0]
+  return label ? `0x${(code >>> 0).toString(16)} ${label}` : undefined
+}
 
 export interface ProviderFailure {
   provider: string
@@ -45,6 +72,10 @@ export function classifyProviderFailure(message: string): ProviderFailureKind {
     return 'auth'
   }
   if (/enoent|introuvable|not found|command not found/.test(text)) return 'cli-missing'
+  // Sortie anormale : soit le message porte déjà le statut hexadécimal, soit le code décimal brut.
+  const decimal = /exit (-?\d+)/.exec(text)
+  if (decimal && describeExitCode(Number(decimal[1]))) return 'crashed'
+  if (/0x(4001|c000)[0-9a-f]{4}/.test(text)) return 'crashed'
   return 'other'
 }
 
@@ -55,6 +86,9 @@ export function repairHint(provider: string, kind: ProviderFailureKind): string 
     if (provider === 'claude') return 'Reconnecte le CLI : `claude auth login`.'
     if (provider === 'kimi') return 'Reconnecte Kimi depuis la page Routeur.'
     return 'Reconnecte ce provider depuis la page Routeur.'
+  }
+  if (kind === 'crashed') {
+    return `Le CLI ${provider} s’est arrêté anormalement (process tué ou crashé) — relance la phase ; si ça se répète, vérifie la session Windows et les antivirus/quotas mémoire.`
   }
   if (kind === 'cli-missing') {
     return `Le CLI ${provider} n’a pas été trouvé — installe-le, ou désigne-le via ${provider.toUpperCase()}_BIN.`
