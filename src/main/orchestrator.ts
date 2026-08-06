@@ -684,7 +684,7 @@ export class Orchestrator {
   ): RoleBinding[] {
     // Les agents COMPOSÉS sur le nœud priment sur la topologie globale : c'est le sens même du
     // canevas. Sans ce branchement, ouvrir un nœud et y régler trois agents ne changeait rien au run.
-    const graph = this.deps.currentWorkflow?.()?.graph
+    const graph = this.workflowDuRun()?.graph
     const composes = graph ? agentsForPhase(graph, phase) : undefined
     return (composes ?? runtimeSnapshot?.phaseFanOut[phase] ?? this.deps.phaseFanOut?.(phase) ?? [])
       .filter((member) => member && member.provider)
@@ -698,7 +698,7 @@ export class Orchestrator {
 
   /** #8 — même facteur commun que {@link resolvePhaseFanOut}, pour le panel de JUGES. */
   private resolveJudgeFanOut(runtimeSnapshot?: OrchestrationRuntimeSnapshot): RoleBinding[] {
-    const graph = this.deps.currentWorkflow?.()?.graph
+    const graph = this.workflowDuRun()?.graph
     const composes = graph ? agentsForPhase(graph, 'judge') : undefined
     return (composes ?? runtimeSnapshot?.judgeFanOut ?? this.deps.judgeFanOut?.() ?? [])
       .filter((member) => member && member.provider)
@@ -723,10 +723,22 @@ export class Orchestrator {
    * sur un « quelle heure est-il ? » : le workflow deviendrait une CONTRAINTE, exactement ce qu'il
    * ne doit pas être. Le graphe est un outil qu'on sort quand le travail le mérite.
    */
+  /**
+   * LE point de lecture du workflow qui pilote le tour courant.
+   *
+   * Douze lectures dispersées de `deps.currentWorkflow?.()` interrogeaient l'instance depuis dix
+   * endroits. Les ramener ici ne change aucun comportement, mais ouvre le pas suivant : le jour où
+   * le workflow voyage EN PARAMÈTRE du run — ce qu'exige l'isolation entre conversations, cf.
+   * `workflow-isolation.test.ts` — il n'y aura qu'UNE porte à déplacer au lieu de douze.
+   */
+  private workflowDuRun(): WorkflowRunOverride | undefined {
+    return this.deps.currentWorkflow?.()
+  }
+
   private tacheTriviale(task: string): boolean {
     // Un workflow CHOISI par l'utilisateur n'est jamais écarté par l'heuristique : entre une
     // décision explicite et une devinette sur la longueur de la demande, c'est la décision qui gagne.
-    if (this.deps.currentWorkflow?.()?.explicit) return false
+    if (this.workflowDuRun()?.explicit) return false
     const classees = this.deps.classifyPhases?.(task)
     return !!classees && classees.length <= 1
   }
@@ -734,11 +746,11 @@ export class Orchestrator {
   /** Le graphe qui pilote CE run, ou rien si la demande ne justifie pas d'en sortir un. */
   private graphePourTache(task: string): WorkflowGraph | undefined {
     if (this.tacheTriviale(task)) return undefined
-    return this.deps.currentWorkflow?.()?.graph
+    return this.workflowDuRun()?.graph
   }
 
   private effectivePhases(task: string): PipelinePhase[] {
-    const workflow = this.deps.currentWorkflow?.()
+    const workflow = this.workflowDuRun()
     // Trivial : la proportionnalité prime sur le workflow composé, sans quoi le moindre échange
     // paierait le pipeline entier.
     if (this.tacheTriviale(task)) return this.deps.classifyPhases!(task)
@@ -757,7 +769,7 @@ export class Orchestrator {
     const base = installed || phaseBrief(phase)
     // Point de passage UNIQUE des consignes de phase : y brancher le workflow suffit à couvrir
     // exec, judge et greedy sans les threader un par un.
-    const override = this.deps.currentWorkflow?.()?.instructionFor?.(phase)
+    const override = this.workflowDuRun()?.instructionFor?.(phase)
     const text = combinePhaseInstruction(base, override)
     if (override && text !== base) return { name: `workflow:${phase}`, text }
     return installed
@@ -881,7 +893,7 @@ export class Orchestrator {
     const activityForRun = (): WorktreeAgentActivity | undefined =>
       this.deps.worktrees?.activity?.().find((activity) => activity.agentId === runId)
     const isMut = isMutationTask(task)
-    const workflow = this.deps.currentWorkflow?.()
+    const workflow = this.workflowDuRun()
     const phases = this.effectivePhases(task)
     const admittedRuntime: OrchestrationRuntimeSnapshot = runtimeSnapshot ?? {
       roles: this.deps.roles.all(),
@@ -1572,7 +1584,7 @@ export class Orchestrator {
             // d'étapes qui n'existent pas, et inviterait à sortir d'un chemin qu'on ne suit pas.
             {
               name: 'workflowTool',
-              text: this.deps.currentWorkflow?.()?.graph ? WORKFLOW_IS_A_TOOL_INSTRUCTION : ''
+              text: this.workflowDuRun()?.graph ? WORKFLOW_IS_A_TOOL_INSTRUCTION : ''
             },
             { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
             { name: 'projectContext', text: projectContext },
@@ -2883,8 +2895,8 @@ export class Orchestrator {
         const valideVotes = responders.filter((r) => r.ok).length
         // Le quorum composé prime, mais borné au nombre de votants RÉELS : un modèle crashé ne vote
         // pas, et exiger 3 voix parmi 2 répondants rendrait le vert inatteignable sans le dire.
-        const graphQuorum = this.deps.currentWorkflow?.()?.graph
-          ? quorumForPhase(this.deps.currentWorkflow()!.graph!, 'judge')
+        const graphQuorum = this.workflowDuRun()?.graph
+          ? quorumForPhase(this.workflowDuRun()!.graph!, 'judge')
           : undefined
         const threshold = graphQuorum
           ? Math.min(Math.max(1, graphQuorum), votingN)
@@ -2990,8 +3002,8 @@ export class Orchestrator {
     // d'escalader à l'humain (résolveur avant interruption). Bornée à 1, jamais de boucle infinie.
     // Un graphe qui dessine « juge rouge → build, au plus N fois » PILOTE ce nombre : c'est la même
     // boucle, nommée à l'écran au lieu d'être déduite du régime.
-    const graphRecoveries = this.deps.currentWorkflow?.()?.graph
-      ? recoveriesFromGraph(this.deps.currentWorkflow()!.graph!)
+    const graphRecoveries = this.workflowDuRun()?.graph
+      ? recoveriesFromGraph(this.workflowDuRun()!.graph!)
       : undefined
     const allowedRecoveries = isMutationTask(task)
       ? (graphRecoveries ?? this.deps.currentExecutionQuote?.()?.limits.maxRecoveries ?? 1)
