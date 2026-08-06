@@ -28,6 +28,10 @@ import {
   captureWorkspacePathGenerationMarker
 } from './providers/workspace-mutation-evidence'
 import { appendConvActivity } from './activity/conv-activity'
+import { createTicketFromCommand, type TicketCreateArgs } from './ticket-create-command'
+import { searchTicketsFromCommand, type TicketSearchArgs } from './ticket-search-command'
+import type { TicketCreateRequest } from './ticket-providers/provider-contract'
+import type { TicketItem, TicketListRequest, TicketSourceProfile } from '../shared/tickets'
 import { buildAutowinKaizenTask, collectAutowinKaizenEvidence } from './autowin-kaizen-context'
 import type { OrchestrationStep, OrchestrationPhase } from './orchestrator'
 import {
@@ -272,6 +276,48 @@ const CATALOG: CommandSpec[] = [
     }
   },
   {
+    name: 'ticket_create',
+    description:
+      'Créer une fiche (work item) chez le fournisseur de tickets configuré — écrit dans le backlog de l’équipe, sous l’identité de l’utilisateur : ne l’utiliser que sur une demande explicite',
+    args: {
+      title: 'titre court et explicite de la fiche (obligatoire)',
+      description: 'facultatif — contexte, reproduction, critère de fin',
+      workItemType: 'facultatif — ex. Bug, Task, User Story ; défaut = celui du fournisseur',
+      assignee: 'facultatif — identifiant de la personne assignée',
+      sourceId:
+        'facultatif si une seule source est configurée ; OBLIGATOIRE s’il y en a plusieurs (on ne devine pas le projet cible)'
+    },
+    annotations: {
+      readOnlyHint: false,
+      // Non destructif (on ajoute, on ne supprime rien) mais NON idempotent : deux appels créent
+      // DEUX fiches. Et `openWorldHint` : l'effet sort de l'app, chez un tiers.
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true
+    }
+  },
+  {
+    name: 'ticket_search',
+    description:
+      'Lire les fiches (work items) du fournisseur de tickets configuré, avec une recherche par titre — à utiliser AVANT de créer une fiche, pour vérifier qu’un doublon n’existe pas déjà',
+    args: {
+      query:
+        'facultatif — mots-clés cherchés dans le TITRE ; sans lui la liste part des fiches les plus anciennes',
+      pageSize: 'facultatif — nombre de fiches à rendre (1 à 100, défaut 25)',
+      cursor: 'facultatif — pour continuer une lecture précédente',
+      sourceId:
+        'facultatif si une seule source est configurée ; OBLIGATOIRE s’il y en a plusieurs (on ne devine pas le projet)'
+    },
+    annotations: {
+      // Lecture pure : rien n'est modifié chez le fournisseur, et deux appels identiques rendent la
+      // même chose. Mais `openWorldHint` : la donnée vient d'un tiers, hors de l'app.
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true
+    }
+  },
+  {
     name: 'graphify',
     description:
       "Créer le graphe Graphify d'une codebase du workspace, ou le mettre à jour s'il existe déjà, avant une exploration large",
@@ -486,7 +532,18 @@ export class AppCommandBus {
       input: GraphifyCommandInput
     ) => Promise<GraphifyCommandResult> = runGraphify,
     private readonly isCommandEnabled: (name: string) => boolean = () => true,
-    private readonly retrieveBrain: typeof retrieveBrainContext = retrieveBrainContext
+    private readonly retrieveBrain: typeof retrieveBrainContext = retrieveBrainContext,
+    /**
+     * Sources Tickets configurées, relues à CHAQUE appel : le modèle nomme au plus un `sourceId`,
+     * jamais un profil. Défaut vide → `ticket_create` refusera en disant de configurer une source.
+     */
+    private readonly listTicketSources: () => readonly TicketSourceProfile[] = () => [],
+    /** Créateur réel, câblé depuis index.ts. Absent → la commande annonce l'indisponibilité. */
+    private readonly createTicket?: (request: TicketCreateRequest) => Promise<TicketItem>,
+    /** Lecture réelle des tickets, câblée depuis index.ts. Absente → la commande annonce l'indisponibilité. */
+    private readonly listTickets?: (
+      request: TicketListRequest
+    ) => Promise<{ items: TicketItem[]; hasMore: boolean }>
   ) {}
 
   catalog(): CommandSpec[] {
@@ -1051,6 +1108,20 @@ export class AppCommandBus {
         return await this.runVerify()
       case 'brain_query':
         return await this.runBrainQuery(a.question, conversationId, turnId)
+      case 'ticket_create':
+        // Écriture chez un tiers : la cible et les bornes sont décidées hors du modèle
+        // (`ticket-create-command.ts` + `TicketService`), jamais d'après les arguments bruts.
+        return await createTicketFromCommand(a as TicketCreateArgs, {
+          listSources: this.listTicketSources,
+          ...(this.createTicket ? { create: this.createTicket } : {})
+        })
+      case 'ticket_search':
+        // Lecture chez un tiers : même garde de cible que la création (le modèle nomme au plus un
+        // `sourceId`), et le filtre est échappé plus bas dans la chaîne, jamais ici.
+        return await searchTicketsFromCommand(a as TicketSearchArgs, {
+          listSources: this.listTicketSources,
+          ...(this.listTickets ? { list: this.listTickets } : {})
+        })
       case 'graphify':
         return await this.withIsolatedMutation(
           'graphify',

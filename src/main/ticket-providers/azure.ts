@@ -11,6 +11,17 @@ const DEFAULT_PAGE_SIZE = 100
 const MAX_PAGE_SIZE = 1_000
 const WORK_ITEM_BATCH_SIZE = 200
 
+/**
+ * Type de work item appliqué quand l'appelant n'en fournit aucun. `Tache` est le type custom
+ * Amitel-SCRUM (« Suivi d'une tâche à accomplir ») de l'organisation ciblée par
+ * `DEFAULT_TICKET_SOURCE`. ⚠️ Le type anglais par défaut `Task` y est DÉSACTIVÉ (l'API répond
+ * `VS403074`), il ne peut donc pas servir de défaut.
+ */
+const DEFAULT_WORK_ITEM_TYPE = 'Tache'
+
+/** L'API de création n'accepte QUE ce content-type (corps = tableau d'opérations JSON-Patch). */
+const JSON_PATCH_CONTENT_TYPE = 'application/json-patch+json'
+
 interface AzureWorkItemReference {
   id: number
 }
@@ -81,27 +92,33 @@ function assertWiqlResponse(value: unknown): asserts value is AzureWiqlResponse 
   }
 }
 
+function isWorkItem(item: unknown): item is AzureWorkItem {
+  return (
+    isRecord(item) &&
+    Number.isSafeInteger(item.id) &&
+    Number(item.id) >= 1 &&
+    isRecord(item.fields) &&
+    (item.relations === undefined ||
+      (Array.isArray(item.relations) &&
+        !item.relations.some(
+          (relation) =>
+            !isRecord(relation) ||
+            typeof relation.rel !== 'string' ||
+            typeof relation.url !== 'string'
+        )))
+  )
+}
+
 function assertWorkItemsResponse(value: unknown): asserts value is AzureWorkItemsResponse {
-  if (
-    !isRecord(value) ||
-    !Array.isArray(value.value) ||
-    value.value.some(
-      (item) =>
-        !isRecord(item) ||
-        !Number.isSafeInteger(item.id) ||
-        Number(item.id) < 1 ||
-        !isRecord(item.fields) ||
-        (item.relations !== undefined &&
-          (!Array.isArray(item.relations) ||
-            item.relations.some(
-              (relation) =>
-                !isRecord(relation) ||
-                typeof relation.rel !== 'string' ||
-                typeof relation.url !== 'string'
-            )))
-    )
-  ) {
+  if (!isRecord(value) || !Array.isArray(value.value) || value.value.some((item) => !isWorkItem(item))) {
     throw invalidResponse()
+  }
+}
+
+/** La création renvoie le work item SEUL (pas d'enveloppe `{ value: [...] }`). */
+function assertCreatedWorkItem(value: unknown): asserts value is AzureWorkItem {
+  if (!isWorkItem(value)) {
+    throw invalidResponse('Réponse de création Azure DevOps invalide.')
   }
 }
 
@@ -264,6 +281,23 @@ export async function listAzurePeople(
   return [...people].sort((a, b) => a.localeCompare(b))
 }
 
+/**
+ * Clause WIQL de recherche par titre, ou chaîne vide si aucune recherche n'est demandée.
+ *
+ * SÉCURITÉ — WIQL n'offre PAS de requête paramétrée : la valeur est interpolée dans le texte de la
+ * requête, et l'échappement est notre seule défense. Une apostrophe non doublée refermerait le
+ * littéral et laisserait injecter la suite de la clause (`x' OR [System.Id] > 0 OR '` ramènerait tout
+ * le projet). La convention WIQL, comme en SQL, est de DOUBLER l'apostrophe.
+ *
+ * Vide ou blanc rend `''` : aucun filtre. Ne JAMAIS produire `CONTAINS ''`, qui matcherait tout et
+ * ferait passer une recherche ratée pour une recherche exhaustive.
+ */
+function wiqlTitleClause(titleContains: string | undefined): string {
+  const needle = typeof titleContains === 'string' ? titleContains.trim() : ''
+  if (!needle) return ''
+  return ` AND [System.Title] CONTAINS '${needle.replace(/'/g, "''")}'`
+}
+
 export const azureTicketProvider: TicketProviderAdapter = {
   provider: 'azure',
   async list(request, context) {
@@ -279,9 +313,10 @@ export const azureTicketProvider: TicketProviderAdapter = {
     const project = encodeURIComponent(source.project)
     const baseUrl = `https://dev.azure.com/${organization}/${project}`
     const cursorClause = cursor === undefined ? '' : ` AND [System.Id] > ${cursor}`
+    const searchClause = wiqlTitleClause(request.titleContains)
     const query =
       'SELECT [System.Id] FROM WorkItems ' +
-      `WHERE [System.TeamProject] = @project${cursorClause} ` +
+      `WHERE [System.TeamProject] = @project${cursorClause}${searchClause} ` +
       'ORDER BY [System.Id] ASC'
 
     const wiqlResponse = await fetchTicketJson<unknown>(
@@ -309,5 +344,44 @@ export const azureTicketProvider: TicketProviderAdapter = {
       cursor: hasMore && ids.length > 0 ? String(ids[ids.length - 1]) : undefined,
       hasMore
     }
+  },
+
+  async create(request, context) {
+    if (request.source.provider !== 'azure') {
+      throw invalidResponse('Source Azure DevOps invalide.')
+    }
+
+    const source = request.source
+    const title = request.title?.trim() ?? ''
+    if (title.length === 0) {
+      throw invalidResponse('Titre obligatoire pour créer une fiche Azure DevOps.')
+    }
+    const description = request.description?.trim()
+    const assignee = request.assignee?.trim()
+    const workItemType = request.workItemType?.trim() || DEFAULT_WORK_ITEM_TYPE
+
+    const authorization = authorizationHeader(context)
+    const organization = encodeURIComponent(source.organization)
+    const project = encodeURIComponent(source.project)
+    // Le segment de type est préfixé d'un `$` littéral, exigé par l'API de création.
+    const url = `https://dev.azure.com/${organization}/${project}/_apis/wit/workitems/$${encodeURIComponent(workItemType)}?api-version=${API_VERSION}`
+
+    const operations = [
+      { op: 'add', path: '/fields/System.Title', value: title },
+      ...(description ? [{ op: 'add', path: '/fields/System.Description', value: description }] : []),
+      ...(assignee ? [{ op: 'add', path: '/fields/System.AssignedTo', value: assignee }] : [])
+    ]
+
+    const response = await fetchTicketJson<unknown>(url, {
+      fetchFn: context.fetchFn,
+      signal: context.signal,
+      method: 'POST',
+      headers: { authorization },
+      contentType: JSON_PATCH_CONTENT_TYPE,
+      body: operations
+    })
+    assertCreatedWorkItem(response)
+
+    return normalizeWorkItem(response, source.id, source.organization, source.project)
   }
 }

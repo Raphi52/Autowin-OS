@@ -67,6 +67,12 @@ export interface TicketListRequest {
   requestId?: string
   cursor?: string
   pageSize?: number
+  /**
+   * Filtre par SOUS-CHAÎNE du titre. Sans lui, la lecture balaie tout le projet par id croissant :
+   * répondre à « existe-t-il déjà une fiche sur ce sujet ? » demanderait de parcourir des milliers
+   * d'items. Vide ou blanc = aucun filtre (et NON « aucun résultat »).
+   */
+  titleContains?: string
 }
 
 export const DEFAULT_TICKET_SOURCE: AzureTicketSource = {

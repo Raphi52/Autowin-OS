@@ -15,11 +15,13 @@ import type { UpdateStrategy } from '../shared/update-contract'
 import type { GitReadResult, GitDiffResult } from '../shared/git-read'
 import type { GitGraphSnapshot } from '../shared/git-graph'
 import type {
+  TicketItem,
   TicketSourceSummary,
   TicketSourceProfile,
   TicketListRequest,
   TicketPage
 } from '../shared/tickets'
+import type { TicketCreateIpcRequest } from '../main/tickets-ipc'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
@@ -150,6 +152,8 @@ const api = {
     ipcRenderer.invoke('tickets:source:save', profile),
   listTickets: (request: TicketListRequest): Promise<TicketPage> =>
     ipcRenderer.invoke('tickets:list', request),
+  createTicket: (request: TicketCreateIpcRequest): Promise<TicketItem> =>
+    ipcRenderer.invoke('tickets:create', request),
   cancelTickets: (requestId: string): Promise<boolean> =>
     ipcRenderer.invoke('tickets:cancel', requestId),
   listTicketPeople: (source: unknown): Promise<string[]> =>
