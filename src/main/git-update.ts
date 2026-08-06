@@ -77,9 +77,45 @@ export async function checkForUpdate(cwd: string, run: GitRunner = defaultRunner
   }
 }
 
+/**
+ * Ce qu'il faut faire de l'application une fois le code tiré.
+ *
+ * `reload` : recharger la FENÊTRE seulement — le process principal reste vivant, les runs en cours
+ * aussi. `relaunch` : redémarrer, seule option quand le main ou le preload a changé (Electron ne
+ * sait pas remplacer à chaud des modules déjà chargés dans le process principal).
+ * `none` : rien n'a bougé, on ne dérange pas l'utilisateur.
+ */
+export type UpdateEffect = 'none' | 'reload' | 'relaunch'
+
+/** Chemins dont un changement N'IMPACTE QUE la fenêtre. Tout le reste impose un redémarrage. */
+const RENDERER_ONLY = /^src\/renderer\//
+
+/**
+ * Décide de l'effet à partir des fichiers réellement changés par la mise à jour.
+ *
+ * La règle est volontairement ASYMÉTRIQUE : on ne recharge que si l'on est sûr, on redémarre dans
+ * tous les autres cas — y compris quand la liste est inconnue. Un renderer neuf qui parle à un main
+ * périmé produit les bugs les plus coûteux à diagnostiquer : une IPC qui « n'existe pas » alors
+ * qu'elle est bien dans le code source qu'on vient de tirer. Ce défaut exact s'est produit sur ce
+ * dépôt le 2026-08-06 (`window.api.claudeAccounts` absent d'un preload plus ancien que le renderer).
+ *
+ * `src/shared/**` compte donc comme un redémarrage : ces fichiers sont importés des DEUX côtés.
+ */
+export function updateEffectFor(changedPaths: readonly string[]): UpdateEffect {
+  const paths = changedPaths.map((path) => path.trim()).filter(Boolean)
+  if (paths.length === 0) return 'none'
+  return paths.every((path) => RENDERER_ONLY.test(path)) ? 'reload' : 'relaunch'
+}
+
 export interface ApplyResult {
   ok: boolean
   relaunch?: boolean
+  /** Recharger la fenêtre suffit : le changement ne touche que le renderer. */
+  reload?: boolean
+  /** L'effet décidé, pour que l'interface puisse le DIRE au lieu de le subir. */
+  effect?: UpdateEffect
+  /** Les fichiers changés, pour expliquer POURQUOI un redémarrage est nécessaire. */
+  changedPaths?: string[]
   npmInstalled?: boolean
   error?: string
   /** Stratégie réellement appliquée — à afficher, pour que l'utilisateur sache ce qui a été fait. */
@@ -125,6 +161,10 @@ export async function applyUpdate(
 ): Promise<ApplyResult> {
   try {
     const before = packageSignature(cwd)
+    // Le SHA d'avant : c'est lui qui permettra de lister ce que la mise à jour a réellement changé,
+    // donc de décider entre recharger la fenêtre et redémarrer. `HEAD@{1}` ne conviendrait pas —
+    // le reflog bouge aussi pour un autostash.
+    const headBefore = (await run(['rev-parse', 'HEAD'], cwd)).stdout.trim()
     const currentBranch = (await run(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)).stdout.trim()
     const available = strategiesFor(currentBranch)
     // Sur main, avancer est sans ambiguïté → défaut. Ailleurs, l'appelant DOIT nommer sa stratégie :
@@ -160,7 +200,45 @@ export async function applyUpdate(
     }
     const npmInstalled = packageSignature(cwd) !== before
     if (npmInstalled) await npmInstall(cwd)
-    return { ok: true, relaunch: true, npmInstalled, strategy }
+
+    let changedPaths: string[] = []
+    let effect: UpdateEffect = 'relaunch'
+    try {
+      const headAfter = (await run(['rev-parse', 'HEAD'], cwd)).stdout.trim()
+      // Un SHA VIDE n'est pas « inchangé », c'est « inconnu » — et les deux se ressemblent
+      // dangereusement : `'' === ''` concluait « rien n'a bougé », donc aucun redémarrage, donc une
+      // mise à jour réellement tirée mais jamais appliquée, sous une interface qui annonce le
+      // succès. Le pire des faux verts. Inconnu ⇒ redémarrage.
+      if (!headBefore || !headAfter) {
+        effect = 'relaunch'
+      } else if (headAfter === headBefore) {
+        // Rien n'a bougé (déjà à jour) : ni rechargement ni redémarrage.
+        changedPaths = []
+        effect = 'none'
+      } else {
+        const diff = await run(['diff', '--name-only', `${headBefore}..${headAfter}`], cwd)
+        changedPaths = diff.stdout
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+        effect = updateEffectFor(changedPaths)
+      }
+    } catch {
+      // Liste indisponible → on ne PARIE pas : redémarrage, l'option toujours correcte.
+      effect = 'relaunch'
+    }
+    // Une dépendance installée invalide le process en cours quoi qu'ait changé le renderer.
+    if (npmInstalled && effect !== 'relaunch') effect = 'relaunch'
+
+    return {
+      ok: true,
+      relaunch: effect === 'relaunch',
+      reload: effect === 'reload',
+      effect,
+      changedPaths,
+      npmInstalled,
+      strategy
+    }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
   }

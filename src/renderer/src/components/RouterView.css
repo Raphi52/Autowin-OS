@@ -136,7 +136,12 @@
   font-size: 0.9em;
 }
 
-/* Comptes Claude : bascule en un clic. Variables du thème existant, aucune couleur en dur. */
+/* Comptes Claude : bascule en un clic.
+   Convention du fichier (voir `.router-actions button`) : `color: inherit` et `font: inherit`.
+   Sans elles un <button> retombe sur le noir et la police de l'agent utilisateur — c'est
+   exactement ce qui rendait ces puces noir sur noir en theme sombre. Et seuls des tokens
+   REELLEMENT definis sont utilises : `--border-subtle` et `--surface-raised`, que j'avais
+   inventes, n'existent pas dans ce depot. */
 .router-accounts {
   margin-top: 10px;
 }
@@ -144,7 +149,7 @@
   font-size: 0.8em;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  opacity: 0.6;
+  color: var(--text-dim);
 }
 .router-accounts-list {
   display: flex;
@@ -158,18 +163,27 @@
   align-items: center;
 }
 .router-account-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--container-border);
+  background: var(--surface-card);
+  color: var(--text);
+  font: inherit;
   font-size: 0.85em;
   padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid var(--border-subtle, rgba(128, 128, 128, 0.35));
-  background: var(--surface-card);
   cursor: pointer;
 }
-/* L'actif est desactive (on ne rebascule pas sur soi-meme) : sans cette regle il heriterait du
-   gris "disabled" et se lirait comme indisponible, l'inverse de ce qu'il signifie. */
+.router-account-chip:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+/* Le compte ACTIF est desactive (on ne rebascule pas sur soi-meme). Sans cette regle il heriterait
+   du gris « disabled » et se lirait comme indisponible — l'inverse de ce qu'il signifie. */
 .router-account-chip.is-active,
 .router-account-chip.is-active:disabled {
-  border-color: currentColor;
+  background: var(--surface-selected);
+  border-color: var(--accent);
+  color: var(--text);
   font-weight: 600;
   opacity: 1;
   cursor: default;
@@ -178,29 +192,6 @@
   opacity: 0.5;
   cursor: default;
 }
-.router-account-remove {
-  margin-left: 2px;
-  padding: 0 4px;
-  border: none;
-  background: none;
-  opacity: 0.45;
-  cursor: pointer;
-  font-size: 1em;
-  line-height: 1;
-}
-.router-account-remove:hover:not(:disabled) {
-  opacity: 0.9;
-}
-.router-account-add {
-  font-size: 0.85em;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px dashed var(--border-subtle, rgba(128, 128, 128, 0.45));
-  background: none;
-  cursor: pointer;
-  opacity: 0.8;
-}
-/* Le niveau d'abonnement : ce qui distingue deux comptes portant la meme adresse mail. */
 .router-account-tier {
   margin-left: 6px;
   padding: 1px 6px;
@@ -209,6 +200,42 @@
   font-style: normal;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  background: var(--surface-raised, rgba(128, 128, 128, 0.18));
-  opacity: 0.85;
+  background: var(--surface-inset);
+  color: var(--text-dim);
+}
+.router-account-chip.is-active .router-account-tier {
+  color: var(--accent);
+}
+.router-account-remove {
+  margin-left: 2px;
+  padding: 0 5px;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 1.05em;
+  line-height: 1;
+  cursor: pointer;
+}
+.router-account-remove:hover:not(:disabled) {
+  color: var(--err);
+}
+.router-account-add {
+  border: 1px dashed var(--container-border);
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.85em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.router-account-add:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.router-account-add:disabled,
+.router-account-remove:disabled {
+  opacity: 0.4;
+  cursor: default;
 }

@@ -190,7 +190,11 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
 
   useEffect(() => {
     if (!active) return
-    void reloadAccounts()
+    // Différé d'une micro-tâche, comme l'effet du catalogue juste au-dessus : un `setAccounts`
+    // atteint SYNCHRONEMENT depuis un effet (stub de test qui résout immédiatement) déclenche des
+    // rendus en cascade, et `react-hooks/set-state-in-effect` le refuse — c'était la seule des dix
+    // erreurs de lint du dépôt qui m'appartienne.
+    void Promise.resolve().then(reloadAccounts)
   }, [active, reloadAccounts])
 
   // Toute mutation de comptes rend la liste a jour : on la reprend telle quelle plutot que de

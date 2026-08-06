@@ -965,7 +965,16 @@ function registerChatIpc(): void {
     // La stratégie vient du BOUTON cliqué : hors de main, c'est ce qui distingue une intégration
     // demandée d'un merge fabriqué dans le dos de l'utilisateur.
     const result = await applyUpdate(os.executionWorkspace, strategy ? { strategy } : {})
-    if (result.ok && result.relaunch) {
+    if (result.ok && result.reload) {
+      // Le changement ne touche que le renderer : on recharge les FENÊTRES et le process principal
+      // reste vivant — donc les runs en cours, les connexions et l'état en mémoire survivent.
+      // `reloadIgnoringCache` et pas `reload` : un bundle reconstruit sous le même nom serait
+      // resservi depuis le cache, et l'utilisateur verrait l'ANCIEN écran en croyant l'avoir mis
+      // à jour — un faux vert particulièrement traître puisqu'il ressemble à un succès.
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.webContents.reloadIgnoringCache()
+      }
+    } else if (result.ok && result.relaunch) {
       restartApplication(app)
     }
     return result
