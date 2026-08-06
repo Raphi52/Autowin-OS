@@ -23,6 +23,11 @@ import type { WorkflowProfile } from './workflow-profiles'
 export interface WorkflowBenchIpcDeps {
   ipcMain: IpcMain
   assertTrusted: (event: IpcMainInvokeEvent, label: string) => void
+  /**
+   * Juge de QUALITE de la confrontation. Injecte ici parce que c'est la couche qui possede un
+   * provider ; `workflow-bench.ts` reste pur. Absent = le banc ne classe que sur le cout, et le dit.
+   */
+  judgeQuality?: (prompt: string) => Promise<string>
   runOrchestration: (
     objective: string,
     bindingOverride: RoleBinding | undefined,
@@ -100,6 +105,7 @@ export function registerWorkflowBenchIpc(deps: WorkflowBenchIpcDeps): void {
           }
         },
         onProgress,
+        judgeQuality: deps.judgeQuality,
         signal: controller.signal
       }
     )

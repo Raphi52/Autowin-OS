@@ -1,6 +1,11 @@
 import { traceActionEventId } from './activity/trace-event'
 import { emitToLiveWindows } from './renderer-emit'
 import {
+  ClaudeAccountsStore,
+  accountDisplayName,
+  configureClaudeAccountEnv
+} from './claude-accounts'
+import {
   app,
   shell,
   BrowserWindow,
@@ -565,6 +570,16 @@ function preflightProviderOptions(): { standbyProviders: RoutedProvider[] } {
 }
 const agentTopologyPath = join(app.getPath('userData'), 'agent-topology.json')
 const modelCatalogCachePath = join(app.getPath('userData'), 'model-catalog.json')
+
+// Comptes Claude multiples (bascule en un clic). Le store est cree tot et branche AUSSITOT sur
+// `configureClaudeAccountEnv` : tout spawn du CLI Claude — run, sonde d'auth, login — lit le
+// CLAUDE_CONFIG_DIR du compte actif par ce seul canal. Tant qu'aucun second compte n'existe, il
+// rend {} et le comportement est celui d'avant.
+const claudeAccounts = new ClaudeAccountsStore(
+  join(app.getPath('userData'), 'claude-accounts.json'),
+  join(app.getPath('userData'), 'claude-accounts')
+)
+configureClaudeAccountEnv(() => claudeAccounts.env())
 // Le cache est chargé AVANT la topologie : un bridge momentanément incomplet ne rase pas les bindings existants.
 let agentModels = loadCachedImportedModels(modelCatalogCachePath)
 const fabricControlPlane = new FabricControlPlane({
@@ -1169,6 +1184,57 @@ Le fil reprend ensuite normalement.`
     os.startProviderLogin(guardString(provider, 'provider'))
     return { ok: true }
   })
+  // --- Comptes Claude multiples : lister / basculer / ajouter / retirer ---
+  // Un compte = un CLAUDE_CONFIG_DIR (mecanisme verifie sur le CLI reel). Basculer ne relance
+  // aucun login : les sessions restent stockees cote a cote, comme dans claude.exe.
+  const claudeAccountsPayload = (): {
+    activeId: string
+    accounts: Array<{ id: string; displayName: string; email?: string; active: boolean }>
+  } => {
+    const state = claudeAccounts.current()
+    return {
+      activeId: state.activeId,
+      accounts: state.accounts.map((account) => ({
+        id: account.id,
+        displayName: accountDisplayName(account),
+        email: account.email,
+        active: account.id === state.activeId
+      }))
+    }
+  }
+
+  ipcMain.handle('os:claudeAccounts:list', (event) => {
+    assertTrustedRendererSender(event, 'Claude accounts list')
+    return claudeAccountsPayload()
+  })
+  ipcMain.handle('os:claudeAccounts:add', (event, label: unknown) => {
+    assertTrustedRendererSender(event, 'Claude accounts add')
+    const account = claudeAccounts.add(typeof label === 'string' ? label : undefined)
+    // On enchaine directement sur le login DANS LE DOSSIER DU NOUVEAU COMPTE : un compte ajoute
+    // mais jamais authentifie ne servirait a rien, et l'utilisateur n'a aucun moyen de le faire
+    // lui-meme depuis l'app.
+    os.startProviderLogin('claude', account.dir)
+    return claudeAccountsPayload()
+  })
+  ipcMain.handle('os:claudeAccounts:switch', (event, id: unknown) => {
+    assertTrustedRendererSender(event, 'Claude accounts switch')
+    claudeAccounts.switchTo(guardString(id, 'id'))
+    return claudeAccountsPayload()
+  })
+  ipcMain.handle('os:claudeAccounts:remove', (event, id: unknown) => {
+    assertTrustedRendererSender(event, 'Claude accounts remove')
+    claudeAccounts.remove(guardString(id, 'id'))
+    return claudeAccountsPayload()
+  })
+  ipcMain.handle('os:claudeAccounts:login', (event, id: unknown) => {
+    assertTrustedRendererSender(event, 'Claude accounts login')
+    const wanted = guardString(id, 'id')
+    const account = claudeAccounts.current().accounts.find((entry) => entry.id === wanted)
+    if (!account) throw new Error(`compte Claude inconnu : ${wanted}`)
+    os.startProviderLogin('claude', account.dir)
+    return { ok: true }
+  })
+
   ipcMain.handle('os:kimiLogin', (event) => {
     assertTrustedRendererSender(event, 'KimiLogin')
     os.startKimiLogin()
@@ -1634,6 +1700,20 @@ Le fil reprend ensuite normalement.`
     ipcMain,
     assertTrusted: (event, label) => assertTrustedRendererSender(event, label),
     setActiveWorkflow: (workflow) => os.setActiveWorkflow(workflow),
+    // Le juge de QUALITE. Sans lui, le banc departageait sur le PRIX en laissant croire qu'il
+    // departageait la valeur — mesure du 2026-08-06 : un workflow recommande parce qu'il coutait
+    // 0,65 $ de moins, sans que rien n'ait lu ce qu'il produisait. La comparaison qu'il recoit est
+    // AVEUGLE (livrables etiquetes A/B, aucun nom de workflow).
+    judgeQuality: async (prompt) => {
+      const binding = os.roles.all().judge ?? os.roles.all().orchestrator
+      if (!binding?.provider) return ''
+      const res = await os.registry.send(
+        binding.provider,
+        [{ role: 'user', content: prompt }],
+        { model: binding.model, reasoningEffort: 'low' }
+      )
+      return res.text ?? ''
+    },
     runOrchestration: (objective, bindingOverride, signal) =>
       os.orchestrator.run(
         objective,
