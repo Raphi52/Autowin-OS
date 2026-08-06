@@ -637,3 +637,77 @@ describe('projectLatestRequestExecution', () => {
     expect(skill?.status).toBe('completed')
   })
 })
+
+/**
+ * UNE ABSENCE NE DOIT PAS S'AFFICHER COMME UNE ACTIVITÉ.
+ *
+ * Un run non clos (`closure.status === 'open'`, l'état NORMAL d'un run en vol) produisait un nœud
+ * intitulé « Clôture du run » au statut `running`, donc rendu « en cours ». Le libellé affirmait que la
+ * clôture était en train de se faire, alors que la vérité est que rien n'est clos — et la carte
+ * affichait `0 ms · 0 $`, preuve qu'il ne s'y passait rien.
+ *
+ * Constaté le 2026-08-06 : l'utilisateur a cru sa session arrêtée en voyant cette carte, alors que les
+ * phases tournaient normalement. Sur un graphe où tous les autres « en cours » signifient un travail
+ * qui avance, celui-là signifiait l'inverse.
+ */
+describe('nœud de clôture — un run non clos est EN ATTENTE, pas en cours', () => {
+  const workspace = (runId: string) =>
+    runTrace('workspace', 'turn-c', 1, runId, {
+      type: 'boundary',
+      execution: { runId },
+      run: {
+        stage: 'workspace',
+        runId,
+        timestampMs: 100,
+        workspace: { mode: 'worktree', repositoryPath: 'C:\\repo', path: 'C:\\wt\\a' }
+      }
+    })
+
+  const closure = (runId: string, status: string, sequence = 2) =>
+    runTrace(`closure-${status}`, 'turn-c', sequence, runId, {
+      type: 'gate',
+      execution: { runId },
+      run: {
+        stage: 'closure',
+        runId,
+        timestampMs: 200,
+        closure: { status, totalDurationMs: 0, totalCostUsd: 0 }
+      }
+    })
+
+  const noeudDeCloture = (statut: string) => {
+    const timeline = buildHarnessTimelineFromTrace([workspace('run-c'), closure('run-c', statut)])
+    const projection = projectLatestRequestExecution(timeline)
+    return projection.events.find((event) => event.display?.kind === 'closure')
+  }
+
+  it('un run OUVERT rend un nœud « en attente », jamais « en cours »', () => {
+    const noeud = noeudDeCloture('open')
+    expect(noeud).toBeDefined()
+    // `pending` est déjà traduit « en attente » par statusLabel : rien à ajouter au rendu.
+    expect(noeud?.status).toBe('pending')
+    expect(noeud?.status).not.toBe('running')
+  })
+
+  it('un run ROUGE reste un échec — discriminant', () => {
+    expect(noeudDeCloture('red')?.status).toBe('failed')
+  })
+
+  it('un run VERT reste terminé — discriminant', () => {
+    expect(noeudDeCloture('green')?.status).toBe('completed')
+  })
+
+  it('une clôture dégradée reste terminée — discriminant', () => {
+    expect(noeudDeCloture('degraded-closed')?.status).toBe('completed')
+  })
+
+  /**
+   * SECOND ORDRE, ÉCARTÉ PAR LECTURE plutôt que par un test qui n'aurait rien gardé.
+   *
+   * Le statut d'un nœud « demande » agrège ses enfants sur `running` seul, ce qui aurait pu faire
+   * passer un run abandonné (clôture ouverte à vie) pour « terminé » — un faux vert. Mais
+   * `projectLatestRequestExecution` RETOURNE avant de construire ce nœud dès qu'une projection de run
+   * existe : cette agrégation appartient à la branche SANS run, où aucune clôture n'est émise. Le
+   * chemin corrigé ici ne la traverse jamais.
+   */
+})

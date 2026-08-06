@@ -442,8 +442,15 @@ function projectRunExecutions(timeline: HarnessTimeline): RequestExecutionProjec
       content: '',
       detail: `Clôture du run ${runId}`,
       timestamp: closureFact?.timestamp ?? workspaceFact.timestamp,
+      // UN RUN NON CLOS EST « EN ATTENTE », PAS « EN COURS ».
+      //
+      // `open` est l'état NORMAL d'un run en vol : sa clôture n'a pas commencé. La rendre `running`
+      // affichait « Clôture du run — en cours » avec `0 ms · 0 $`, soit une ABSENCE présentée comme une
+      // activité. Sur un graphe où tout autre « en cours » signifie un travail qui avance, ce nœud
+      // signifiait l'inverse : le 2026-08-06 il a fait croire à une session arrêtée alors que les
+      // phases tournaient. `pending` est déjà traduit « en attente » par `statusLabel`.
       status:
-        closure.status === 'open' ? 'running' : closure.status === 'red' ? 'failed' : 'completed',
+        closure.status === 'open' ? 'pending' : closure.status === 'red' ? 'failed' : 'completed',
       durationMs: closure.totalDurationMs,
       costUsd: closure.totalCostUsd,
       payloads: [],

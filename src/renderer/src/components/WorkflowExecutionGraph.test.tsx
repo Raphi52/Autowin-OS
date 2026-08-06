@@ -403,8 +403,12 @@ describe('WorkflowExecutionGraph', () => {
     })
     const view = await render({ conversationId: 'conv-a', active: true, live: true })
 
+    // `is-pending` et NON `is-running` : la clôture d'un run encore ouvert n'a pas commencé. Cette
+    // assertion verrouillait l'ancien libellé « en cours », qui présentait une ABSENCE comme une
+    // activité et a fait croire à une session arrêtée. Le nœud reste bien visible et non terminal —
+    // le CSS traite `is-pending` et `is-running` avec la même pastille — mais il dit « en attente ».
     expect(view.querySelector('[data-execution-node="closure:run-1"]')?.className).toContain(
-      'is-running'
+      'is-pending'
     )
     expect(view.querySelector('[data-execution-kind="agent"]')).toBeNull()
 
