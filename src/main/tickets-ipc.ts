@@ -26,11 +26,19 @@ export interface TicketCreateIpcRequest {
   assignee?: string
 }
 
+/** Lecture d'une fiche par son id. Le service valide l'id, seule autorité sur sa forme. */
+export interface TicketGetIpcRequest {
+  source: TicketSourceProfile
+  id: string
+  requestId?: string
+}
+
 interface TicketsServicePort {
   sources(): TicketSourceSummary[]
   saveSource(value: unknown): TicketSourceSummary[]
   list(value: TicketListRequest, signal?: AbortSignal): Promise<TicketPage>
   create(value: TicketCreateIpcRequest, signal?: AbortSignal): Promise<TicketItem>
+  get(value: TicketGetIpcRequest, signal?: AbortSignal): Promise<TicketItem>
 }
 
 interface RegisterTicketsIpcOptions {
@@ -171,6 +179,28 @@ export function registerTicketsIpc({
     senderRequests.set(id, controller)
     try {
       return await service.create(request, controller.signal)
+    } finally {
+      if (senderRequests.get(id) === controller) senderRequests.delete(id)
+      if (senderRequests.size === 0) active.delete(event.sender)
+    }
+  })
+  /**
+   * LECTURE par id. Franchit la même porte de confiance que les autres canaux et partage leur
+   * registre d'annulation : un appel réseau lent doit pouvoir être coupé par `tickets:cancel`.
+   */
+  ipc.handle('tickets:get', async (event, request: TicketGetIpcRequest) => {
+    assertTrusted(event, 'Tickets')
+    const id = requestId(request?.requestId)
+    let senderRequests = active.get(event.sender)
+    if (!senderRequests) {
+      senderRequests = new Map()
+      active.set(event.sender, senderRequests)
+    }
+    senderRequests.get(id)?.abort()
+    const controller = new AbortController()
+    senderRequests.set(id, controller)
+    try {
+      return await service.get(request, controller.signal)
     } finally {
       if (senderRequests.get(id) === controller) senderRequests.delete(id)
       if (senderRequests.size === 0) active.delete(event.sender)

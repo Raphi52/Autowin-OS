@@ -30,7 +30,8 @@ import {
 import { appendConvActivity } from './activity/conv-activity'
 import { createTicketFromCommand, type TicketCreateArgs } from './ticket-create-command'
 import { searchTicketsFromCommand, type TicketSearchArgs } from './ticket-search-command'
-import type { TicketCreateRequest } from './ticket-providers/provider-contract'
+import { getTicketFromCommand, type TicketGetArgs } from './ticket-get-command'
+import type { TicketCreateRequest, TicketGetRequest } from './ticket-providers/provider-contract'
 import type { TicketItem, TicketListRequest, TicketSourceProfile } from '../shared/tickets'
 import { buildAutowinKaizenTask, collectAutowinKaizenEvidence } from './autowin-kaizen-context'
 import type { OrchestrationStep, OrchestrationPhase } from './orchestrator'
@@ -297,6 +298,22 @@ const CATALOG: CommandSpec[] = [
     }
   },
   {
+    name: 'ticket_get',
+    description:
+      'Lire UNE fiche (work item) par son numéro — à utiliser dès qu’un numéro de fiche est mentionné ; chercher ce numéro avec ticket_search ne le trouvera PAS (la recherche porte sur les titres)',
+    args: {
+      id: 'le numéro de la fiche (ex. 1227)',
+      sourceId:
+        'facultatif si une seule source est configurée ; OBLIGATOIRE s’il y en a plusieurs (on ne devine pas le projet)'
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true
+    }
+  },
+  {
     name: 'ticket_search',
     description:
       'Lire les fiches (work items) du fournisseur de tickets configuré, avec une recherche par titre — à utiliser AVANT de créer une fiche, pour vérifier qu’un doublon n’existe pas déjà',
@@ -543,7 +560,9 @@ export class AppCommandBus {
     /** Lecture réelle des tickets, câblée depuis index.ts. Absente → la commande annonce l'indisponibilité. */
     private readonly listTickets?: (
       request: TicketListRequest
-    ) => Promise<{ items: TicketItem[]; hasMore: boolean }>
+    ) => Promise<{ items: TicketItem[]; hasMore: boolean; cursor?: string }>,
+    /** Lecture d'UNE fiche par id, câblée depuis index.ts. */
+    private readonly getTicket?: (request: TicketGetRequest) => Promise<TicketItem>
   ) {}
 
   catalog(): CommandSpec[] {
@@ -1114,6 +1133,11 @@ export class AppCommandBus {
         return await createTicketFromCommand(a as TicketCreateArgs, {
           listSources: this.listTicketSources,
           ...(this.createTicket ? { create: this.createTicket } : {})
+        })
+      case 'ticket_get':
+        return await getTicketFromCommand(a as TicketGetArgs, {
+          listSources: this.listTicketSources,
+          ...(this.getTicket ? { get: this.getTicket } : {})
         })
       case 'ticket_search':
         // Lecture chez un tiers : même garde de cible que la création (le modèle nomme au plus un

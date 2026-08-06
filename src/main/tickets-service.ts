@@ -10,6 +10,7 @@ import {
 import type { TicketCredentialStore } from './ticket-credential-store'
 import type {
   TicketCreateRequest,
+  TicketGetRequest,
   TicketProviderRegistry
 } from './ticket-providers/provider-contract'
 import type { TicketSourceStore } from './ticket-source-store'
@@ -141,6 +142,29 @@ export class TicketService {
         // Vide = AUCUN filtre : on ne transmet rien, plutôt qu'un filtre vide qui ramènerait tout.
         ...(titleContains ? { titleContains } : {})
       },
+      { ...credential, ...(signal ? { signal } : {}) }
+    )
+  }
+
+  /**
+   * LECTURE d'une fiche par son identifiant. Même garde d'autorisation que `list` : le profil doit
+   * être STRICTEMENT celui du store.
+   *
+   * L'identifiant est validé ICI, avant tout appel réseau : il finit dans le chemin d'une URL, et un
+   * refus local vaut mieux qu'une requête forgée envoyée au fournisseur.
+   */
+  async get(value: TicketGetRequest, signal?: AbortSignal): Promise<TicketItem> {
+    const source = this.authorizedSource(value?.source)
+    const id = typeof value?.id === 'string' ? value.id.trim() : ''
+    if (!/^[1-9]\d*$/.test(id)) {
+      throw new Error(`Identifiant de fiche invalide : « ${id} » (entier positif attendu)`)
+    }
+    if (!this.dependencies.registry.supports(source)) {
+      throw new Error(`Fournisseur Tickets non supporté : ${source.provider}`)
+    }
+    const credential = await this.resolveCredential(source)
+    return this.dependencies.registry.get(
+      { source, id },
       { ...credential, ...(signal ? { signal } : {}) }
     )
   }

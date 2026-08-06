@@ -16,6 +16,16 @@ function setup(isolated = false) {
       items: [],
       hasMore: false
     })),
+    get: vi.fn(async (_request?: unknown, _signal?: AbortSignal) => ({
+      id: '1227',
+      sourceId: DEFAULT_TICKET_SOURCE.id,
+      type: 'Fiche Team',
+      title: 'Fiche lue par id',
+      state: 'Ouvert',
+      url: 'https://dev.azure.com/AmitelGTC/RIG/_workitems/edit/1227',
+      updatedAt: '2026-08-06T10:00:00.000Z',
+      fields: {}
+    })),
     create: vi.fn(async (_request?: unknown, _signal?: AbortSignal) => ({
       id: '4242',
       sourceId: DEFAULT_TICKET_SOURCE.id,
@@ -108,6 +118,48 @@ describe('IPC Tickets', () => {
       })
     ).rejects.toThrow(/requ/i)
     expect(service.create).not.toHaveBeenCalled()
+  })
+
+  /**
+   * LECTURE PAR ID — le canal qui manquait. Constaté en réel : faute de cet accès, l'agent cherchait
+   * la chaîne « 1227 » dans les titres et concluait que la fiche n'existait pas.
+   */
+  it('valide le renderer avant une lecture par id et rend la fiche', async () => {
+    const { handlers, service, assertTrusted } = setup()
+    const event = { senderFrame: { url: 'app://trusted' } }
+
+    const fiche = await handlers.get('tickets:get')!(event, {
+      source: DEFAULT_TICKET_SOURCE,
+      id: '1227',
+      requestId: 'get-1'
+    })
+
+    expect(assertTrusted).toHaveBeenCalledTimes(1)
+    expect(fiche).toMatchObject({ id: '1227' })
+    expect(service.get).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '1227' }),
+      expect.any(AbortSignal)
+    )
+  })
+
+  it('une lecture par id est annulable par son requestId', async () => {
+    const { handlers, service } = setup()
+    const event = { senderFrame: { url: 'app://trusted' } }
+    service.get.mockImplementation(
+      async (_request?: unknown, signal?: AbortSignal) =>
+        await new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(new Error('annulé')))
+        })
+    )
+
+    const pending = handlers.get('tickets:get')!(event, {
+      source: DEFAULT_TICKET_SOURCE,
+      id: '1227',
+      requestId: 'get-2'
+    })
+    expect(handlers.get('tickets:cancel')!(event, 'get-2')).toBe(true)
+
+    await expect(pending).rejects.toThrow(/annul/i)
   })
 
   it('annule réellement une lecture active à la demande du renderer', async () => {

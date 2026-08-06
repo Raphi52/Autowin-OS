@@ -142,6 +142,9 @@ interface ChatApi {
   createTicket: (
     request: import('../main/tickets-ipc').TicketCreateIpcRequest
   ) => Promise<import('../shared/tickets').TicketItem>
+  getTicket: (
+    request: import('../main/tickets-ipc').TicketGetIpcRequest
+  ) => Promise<import('../shared/tickets').TicketItem>
   cancelTickets: (requestId: string) => Promise<boolean>
   listTicketPeople: (source: unknown) => Promise<string[]>
   setTicketsFixture: (fixture: unknown) => Promise<boolean>

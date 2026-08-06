@@ -395,7 +395,8 @@ const bus = new AppCommandBus(
   // Les sources sont relues à CHAQUE appel : le modèle nomme au plus un `sourceId`, jamais un profil.
   () => tickets.sources().map((summary) => summary.profile),
   (request) => tickets.create(request),
-  (request) => tickets.list(request)
+  (request) => tickets.list(request),
+  (request) => tickets.get(request)
 )
 seedRegistrySnapshot({
   tools: bus.catalog().map((command) => ({

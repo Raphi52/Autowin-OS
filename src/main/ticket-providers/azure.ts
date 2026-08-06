@@ -346,6 +346,31 @@ export const azureTicketProvider: TicketProviderAdapter = {
     }
   },
 
+  /**
+   * Lecture directe d'une fiche par son id. Réutilise `fetchWorkItems` — le chemin déjà éprouvé par
+   * `list` — plutôt qu'un second appel écrit pour l'occasion : une seule normalisation, un seul
+   * traitement des lots et des absences.
+   */
+  async get(request, context) {
+    if (request.source.provider !== 'azure') {
+      throw invalidResponse('Source Azure DevOps invalide.')
+    }
+    // L'id est interpolé dans l'URL : on n'accepte QUE des entiers positifs. Un `../../` ou un
+    // fragment de requête n'a rien à faire dans un chemin d'API.
+    const raw = typeof request.id === 'string' ? request.id.trim() : ''
+    if (!/^[1-9]\d*$/.test(raw)) {
+      throw invalidResponse(`Identifiant de fiche Azure DevOps invalide : « ${raw} ».`)
+    }
+    const source = request.source
+    const authorization = authorizationHeader(context)
+    const organization = encodeURIComponent(source.organization)
+    const project = encodeURIComponent(source.project)
+    const baseUrl = `https://dev.azure.com/${organization}/${project}`
+
+    const [item] = await fetchWorkItems(baseUrl, [Number(raw)], authorization, context)
+    if (!item) throw invalidResponse(`Fiche Azure DevOps ${raw} introuvable.`)
+    return normalizeWorkItem(item, source.id, source.organization, source.project)
+  },
   async create(request, context) {
     if (request.source.provider !== 'azure') {
       throw invalidResponse('Source Azure DevOps invalide.')

@@ -50,6 +50,20 @@ export interface TicketCreateRequest {
   assignee?: string
 }
 
+/**
+ * Lecture d'UNE fiche par son identifiant.
+ *
+ * Motif (constaté le 2026-08-06) : sans elle, demander la fiche 1227 revenait à chercher la chaîne
+ * « 1227 » dans les TITRES — ce qui ne trouve rien, un titre ne contenant pas son propre numéro.
+ * L'agent en avait conclu que la fiche n'existait pas. Un identifiant s'adresse directement, il ne se
+ * cherche pas textuellement.
+ */
+export interface TicketGetRequest {
+  source: TicketSourceProfile
+  id: string
+  requestId?: string
+}
+
 export interface TicketProviderAdapter {
   readonly provider: TicketProvider
   list(request: TicketListRequest, context: TicketProviderContext): Promise<TicketPage>
@@ -58,11 +72,14 @@ export interface TicketProviderAdapter {
    * seule (GitHub, GitLab) n'implémente pas cette méthode et reste conforme au contrat.
    */
   create?(request: TicketCreateRequest, context: TicketProviderContext): Promise<TicketItem>
+  /** Lecture par id — OPTIONNELLE : tous les fournisseurs n'exposent pas d'accès direct. */
+  get?(request: TicketGetRequest, context: TicketProviderContext): Promise<TicketItem>
 }
 
 export interface TicketProviderRegistry {
   list(request: TicketListRequest, context: TicketProviderContext): Promise<TicketPage>
   create(request: TicketCreateRequest, context: TicketProviderContext): Promise<TicketItem>
+  get(request: TicketGetRequest, context: TicketProviderContext): Promise<TicketItem>
   supports(source: TicketSourceProfile): boolean
 }
 
@@ -170,7 +187,10 @@ export function createTicketProviderRegistry(
   return {
     supports: (source) => byProvider.has(source.provider),
     list: (request, context) => adapterFor(request.source).list(request, context),
-    create: (request, context) => {
+    // `async` DÉLIBÉRÉ sur ces deux méthodes : elles sont typées `Promise`, donc un fournisseur non
+    // supporté doit REJETER, pas jeter de façon synchrone. Sans cela, un appelant en `.catch()` — sans
+    // `try` autour de l'appel — plante au lieu de recevoir l'erreur.
+    create: async (request, context) => {
       const adapter = adapterFor(request.source)
       if (!adapter.create) {
         throw new TicketProviderError(
@@ -178,7 +198,17 @@ export function createTicketProviderRegistry(
           `Création non supportée par le fournisseur ${request.source.provider}.`
         )
       }
-      return adapter.create(request, context)
+      return await adapter.create(request, context)
+    },
+    get: async (request, context) => {
+      const adapter = adapterFor(request.source)
+      if (!adapter.get) {
+        throw new TicketProviderError(
+          'UNSUPPORTED_PROVIDER',
+          `Lecture par identifiant non supportée par le fournisseur ${request.source.provider}.`
+        )
+      }
+      return await adapter.get(request, context)
     }
   }
 }
