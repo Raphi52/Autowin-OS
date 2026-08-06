@@ -281,6 +281,23 @@ export async function listAzurePeople(
   return [...people].sort((a, b) => a.localeCompare(b))
 }
 
+/**
+ * Clause WIQL de recherche par titre, ou chaîne vide si aucune recherche n'est demandée.
+ *
+ * SÉCURITÉ — WIQL n'offre PAS de requête paramétrée : la valeur est interpolée dans le texte de la
+ * requête, et l'échappement est notre seule défense. Une apostrophe non doublée refermerait le
+ * littéral et laisserait injecter la suite de la clause (`x' OR [System.Id] > 0 OR '` ramènerait tout
+ * le projet). La convention WIQL, comme en SQL, est de DOUBLER l'apostrophe.
+ *
+ * Vide ou blanc rend `''` : aucun filtre. Ne JAMAIS produire `CONTAINS ''`, qui matcherait tout et
+ * ferait passer une recherche ratée pour une recherche exhaustive.
+ */
+function wiqlTitleClause(titleContains: string | undefined): string {
+  const needle = typeof titleContains === 'string' ? titleContains.trim() : ''
+  if (!needle) return ''
+  return ` AND [System.Title] CONTAINS '${needle.replace(/'/g, "''")}'`
+}
+
 export const azureTicketProvider: TicketProviderAdapter = {
   provider: 'azure',
   async list(request, context) {
@@ -296,9 +313,10 @@ export const azureTicketProvider: TicketProviderAdapter = {
     const project = encodeURIComponent(source.project)
     const baseUrl = `https://dev.azure.com/${organization}/${project}`
     const cursorClause = cursor === undefined ? '' : ` AND [System.Id] > ${cursor}`
+    const searchClause = wiqlTitleClause(request.titleContains)
     const query =
       'SELECT [System.Id] FROM WorkItems ' +
-      `WHERE [System.TeamProject] = @project${cursorClause} ` +
+      `WHERE [System.TeamProject] = @project${cursorClause}${searchClause} ` +
       'ORDER BY [System.Id] ASC'
 
     const wiqlResponse = await fetchTicketJson<unknown>(

@@ -29,8 +29,9 @@ import {
 } from './providers/workspace-mutation-evidence'
 import { appendConvActivity } from './activity/conv-activity'
 import { createTicketFromCommand, type TicketCreateArgs } from './ticket-create-command'
+import { searchTicketsFromCommand, type TicketSearchArgs } from './ticket-search-command'
 import type { TicketCreateRequest } from './ticket-providers/provider-contract'
-import type { TicketItem, TicketSourceProfile } from '../shared/tickets'
+import type { TicketItem, TicketListRequest, TicketSourceProfile } from '../shared/tickets'
 import { buildAutowinKaizenTask, collectAutowinKaizenEvidence } from './autowin-kaizen-context'
 import type { OrchestrationStep, OrchestrationPhase } from './orchestrator'
 import {
@@ -296,6 +297,27 @@ const CATALOG: CommandSpec[] = [
     }
   },
   {
+    name: 'ticket_search',
+    description:
+      'Lire les fiches (work items) du fournisseur de tickets configuré, avec une recherche par titre — à utiliser AVANT de créer une fiche, pour vérifier qu’un doublon n’existe pas déjà',
+    args: {
+      query:
+        'facultatif — mots-clés cherchés dans le TITRE ; sans lui la liste part des fiches les plus anciennes',
+      pageSize: 'facultatif — nombre de fiches à rendre (1 à 100, défaut 25)',
+      cursor: 'facultatif — pour continuer une lecture précédente',
+      sourceId:
+        'facultatif si une seule source est configurée ; OBLIGATOIRE s’il y en a plusieurs (on ne devine pas le projet)'
+    },
+    annotations: {
+      // Lecture pure : rien n'est modifié chez le fournisseur, et deux appels identiques rendent la
+      // même chose. Mais `openWorldHint` : la donnée vient d'un tiers, hors de l'app.
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true
+    }
+  },
+  {
     name: 'graphify',
     description:
       "Créer le graphe Graphify d'une codebase du workspace, ou le mettre à jour s'il existe déjà, avant une exploration large",
@@ -517,7 +539,11 @@ export class AppCommandBus {
      */
     private readonly listTicketSources: () => readonly TicketSourceProfile[] = () => [],
     /** Créateur réel, câblé depuis index.ts. Absent → la commande annonce l'indisponibilité. */
-    private readonly createTicket?: (request: TicketCreateRequest) => Promise<TicketItem>
+    private readonly createTicket?: (request: TicketCreateRequest) => Promise<TicketItem>,
+    /** Lecture réelle des tickets, câblée depuis index.ts. Absente → la commande annonce l'indisponibilité. */
+    private readonly listTickets?: (
+      request: TicketListRequest
+    ) => Promise<{ items: TicketItem[]; hasMore: boolean }>
   ) {}
 
   catalog(): CommandSpec[] {
@@ -1088,6 +1114,13 @@ export class AppCommandBus {
         return await createTicketFromCommand(a as TicketCreateArgs, {
           listSources: this.listTicketSources,
           ...(this.createTicket ? { create: this.createTicket } : {})
+        })
+      case 'ticket_search':
+        // Lecture chez un tiers : même garde de cible que la création (le modèle nomme au plus un
+        // `sourceId`), et le filtre est échappé plus bas dans la chaîne, jamais ici.
+        return await searchTicketsFromCommand(a as TicketSearchArgs, {
+          listSources: this.listTicketSources,
+          ...(this.listTickets ? { list: this.listTickets } : {})
         })
       case 'graphify':
         return await this.withIsolatedMutation(

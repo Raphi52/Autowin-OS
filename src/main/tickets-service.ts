@@ -52,6 +52,12 @@ export function ticketCredentialKey(source: TicketSourceProfile): string {
  * plafonné à 255 caractères côté serveur — autant refuser AVANT l'appel réseau).
  */
 const MAX_TITLE_LENGTH = 255
+/**
+ * Borne du filtre de recherche par titre. Généreuse par rapport à `System.Title` (255) — on cherche
+ * une sous-chaîne, jamais un titre entier — mais bornée : la valeur est interpolée dans une requête
+ * WIQL envoyée à l'API distante.
+ */
+const MAX_TITLE_SEARCH_LENGTH = 400
 const MAX_DESCRIPTION_LENGTH = 100_000
 const MAX_ASSIGNEE_LENGTH = 320
 /**
@@ -115,6 +121,13 @@ export class TicketService {
     ) {
       throw new Error('Curseur Tickets invalide')
     }
+    // Le filtre part dans une requête WIQL construite par l'adaptateur (qui l'échappe). Ici on borne
+    // sa LONGUEUR : c'est le service qui protège l'API distante, comme pour `pageSize` et `cursor`.
+    const titleContains =
+      typeof value.titleContains === 'string' ? value.titleContains.trim() : undefined
+    if (titleContains !== undefined && titleContains.length > MAX_TITLE_SEARCH_LENGTH) {
+      throw new Error(`Recherche Tickets trop longue (max ${MAX_TITLE_SEARCH_LENGTH} caractères)`)
+    }
     if (!this.dependencies.registry.supports(source)) {
       throw new Error(`Fournisseur Tickets non supporté : ${source.provider}`)
     }
@@ -124,7 +137,9 @@ export class TicketService {
       {
         source,
         ...(value.cursor ? { cursor: value.cursor } : {}),
-        ...(value.pageSize ? { pageSize: value.pageSize } : {})
+        ...(value.pageSize ? { pageSize: value.pageSize } : {}),
+        // Vide = AUCUN filtre : on ne transmet rien, plutôt qu'un filtre vide qui ramènerait tout.
+        ...(titleContains ? { titleContains } : {})
       },
       { ...credential, ...(signal ? { signal } : {}) }
     )
