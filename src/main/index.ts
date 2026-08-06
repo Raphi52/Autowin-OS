@@ -1,9 +1,14 @@
+import { spawn } from 'node:child_process'
+import { resolveClaudeBin } from './providers/claude'
 import { traceActionEventId } from './activity/trace-event'
 import { emitToLiveWindows } from './renderer-emit'
 import {
   ClaudeAccountsStore,
-  accountDisplayName,
-  configureClaudeAccountEnv
+  accountEnv,
+  configureClaudeAccountEnv,
+  describeAccounts,
+  parseIdentity,
+  type ClaudeIdentity
 } from './claude-accounts'
 import {
   app,
@@ -1189,22 +1194,80 @@ Le fil reprend ensuite normalement.`
   // aucun login : les sessions restent stockees cote a cote, comme dans claude.exe.
   const claudeAccountsPayload = (): {
     activeId: string
-    accounts: Array<{ id: string; displayName: string; email?: string; active: boolean }>
+    accounts: Array<{
+      id: string
+      displayName: string
+      tier: string
+      email?: string
+      active: boolean
+    }>
   } => {
     const state = claudeAccounts.current()
     return {
       activeId: state.activeId,
-      accounts: state.accounts.map((account) => ({
+      accounts: describeAccounts(state.accounts, state.activeId).map((account) => ({
         id: account.id,
-        displayName: accountDisplayName(account),
+        displayName: account.displayName,
+        tier: account.tier,
         email: account.email,
-        active: account.id === state.activeId
+        active: account.active
       }))
     }
   }
 
-  ipcMain.handle('os:claudeAccounts:list', (event) => {
+  /**
+   * Sonde l'identite REELLE d'un compte : `claude auth status` dans SON dossier de configuration.
+   * C'est le seul moyen de distinguer deux comptes qui partagent la meme adresse mail et ne
+   * different que par le niveau d'abonnement (`subscriptionType`) — le cas d'usage demande.
+   * Borne dans le temps et fail-open : une sonde muette laisse le compte tel quel, elle ne doit
+   * jamais bloquer l'affichage de la liste.
+   */
+  const probeAccountIdentity = async (accountId: string): Promise<void> => {
+    const account = claudeAccounts.find(accountId)
+    if (!account) return
+    const identity = await new Promise<ClaudeIdentity | undefined>((resolve) => {
+      let out = ''
+      let settled = false
+      const done = (value: ClaudeIdentity | undefined): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        resolve(value)
+      }
+      const timer = setTimeout(() => done(undefined), 8000)
+      try {
+        const child = spawn(resolveClaudeBin(), ['auth', 'status'], {
+          windowsHide: true,
+          shell: false,
+          env: { ...process.env, ...accountEnv(account) }
+        })
+        child.stdout?.on('data', (chunk: Buffer) => {
+          out += chunk.toString('utf8')
+        })
+        child.on('error', () => done(undefined))
+        child.on('close', () => done(parseIdentity(out)))
+      } catch {
+        done(undefined)
+      }
+    })
+    claudeAccounts.setIdentity(accountId, identity)
+  }
+
+  /** Sonde TOUS les comptes en parallele — la liste ne vaut que si chaque puce dit vrai. */
+  const refreshAllAccountIdentities = async (): Promise<void> => {
+    await Promise.all(
+      claudeAccounts.current().accounts.map((account) => probeAccountIdentity(account.id))
+    )
+  }
+
+  ipcMain.handle('os:claudeAccounts:list', async (event) => {
     assertTrustedRendererSender(event, 'Claude accounts list')
+    await refreshAllAccountIdentities()
+    return claudeAccountsPayload()
+  })
+  ipcMain.handle('os:claudeAccounts:refresh', async (event) => {
+    assertTrustedRendererSender(event, 'Claude accounts refresh')
+    await refreshAllAccountIdentities()
     return claudeAccountsPayload()
   })
   ipcMain.handle('os:claudeAccounts:add', (event, label: unknown) => {
