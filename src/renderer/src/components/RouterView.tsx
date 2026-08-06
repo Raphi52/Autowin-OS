@@ -179,7 +179,12 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
   }
 
   const reloadAccounts = useCallback(async (): Promise<void> => {
-    const payload = await window.api.claudeAccounts().catch(() => null)
+    // Appel OPTIONNEL, comme partout ailleurs dans le renderer (`checkUpdate?.()`, `appCommand?.()`).
+    // Sans le `?.`, l'effet lançait un rejet NON GÉRÉ dès qu'un test montait cette vue sans stubber
+    // `claudeAccounts` : la suite affichait 3733 tests verts et sortait quand même en exit 1, avec
+    // 6 « Unhandled Rejection ». Un preload plus ancien que le renderer — le cas d'une app packagée
+    // pas encore réinstallée — produirait exactement le même plantage en production.
+    const payload = await window.api.claudeAccounts?.().catch(() => null)
     if (payload) setAccounts(payload.accounts)
   }, [])
 
