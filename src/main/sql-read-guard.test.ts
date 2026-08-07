@@ -414,6 +414,165 @@ describe('decideSqlRead — évasions du périmètre sans nom qualifié', () => 
 })
 
 /**
+ * 4ᵉ audit, volet PÉRIMÈTRE — les deux fuites les plus graves de toute la série, et les seules
+ * constatées sur des données réelles d'AUTRES greffes.
+ *
+ * Cause commune : le cycle 3 a interdit les DMV (`dm_exec_*`) et les vues modernes (`sys.databases`)
+ * mais PAS leurs équivalents de COMPATIBILITÉ, résolubles sans qualification. `sysdatabases` avait
+ * été bouché, ses voisins non.
+ *
+ * Constaté en réel depuis `RIG_AMIENS` :
+ *  - `syscacheobjects` → 55 948 plans d'autres bases AVEC leurs littéraux, donc du contenu
+ *    applicatif d'autres greffes (`… WHERE ETP_IDDMD=355878`). C'est l'équivalent compat de
+ *    `dm_exec_cached_plans` + `dm_exec_sql_text`, tous deux déjà interdits ;
+ *  - `sysperfinfo` → énumère les 334 bases du serveur ;
+ *  - `syslockinfo` → activité de verrouillage de 135 bases.
+ */
+describe('decideSqlRead — vues de compatibilité qui exposent les autres greffes', () => {
+  const base = { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS' }
+
+  it('REFUSE les vues compat équivalentes aux DMV interdites', () => {
+    for (const query of [
+      'SELECT TOP 2 dbid, sql FROM syscacheobjects WHERE dbid <> 1',
+      "SELECT RTRIM(instance_name) AS b FROM sysperfinfo WHERE object_name LIKE '%Databases%'",
+      'SELECT COUNT(DISTINCT rsc_dbid) AS n FROM syslockinfo',
+      'SELECT * FROM sysoledbusers',
+      'SELECT * FROM sysdevices',
+      'SELECT * FROM sys.syscacheobjects'
+    ]) {
+      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+    }
+  })
+
+  it('REFUSE les fonctions et variables qui renseignent hors du greffe', () => {
+    for (const query of [
+      "SELECT DATABASEPROPERTYEX('master','Status') AS s",
+      'SELECT @@SERVERNAME AS s',
+      'SELECT @@SERVICENAME AS s',
+      'SELECT @@VERSION AS v',
+      'SELECT HOST_NAME() AS h',
+      'SELECT APP_NAME() AS a',
+      'SELECT ORIGINAL_LOGIN() AS l',
+      "SELECT IS_SRVROLEMEMBER('sysadmin') AS r",
+      "SELECT HAS_PERMS_BY_NAME('RIG_LYON','DATABASE','SELECT') AS p",
+      "SELECT LOGINPROPERTY('x','IsLocked') AS p"
+    ]) {
+      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+    }
+  })
+
+  /**
+   * Le motif énumérait les familles de DMV, donc en oubliait. Il vise maintenant la FORME `dm_<mot>_`,
+   * ce qui couvre les familles présentes et futures. Le juge a vérifié 0 collision avec les vrais
+   * noms de colonnes des bases RIG : la règle large ne coûte rien en usage réel.
+   */
+  it('REFUSE toute vue de gestion dynamique, famille connue ou non', () => {
+    for (const query of [
+      'SELECT * FROM sys.dm_database_encryption_keys',
+      'SELECT * FROM sys.dm_hadr_cluster',
+      'SELECT * FROM sys.dm_broker_connections',
+      'SELECT * FROM sys.dm_fts_index_population',
+      'SELECT * FROM sys.dm_repl_articles'
+    ]) {
+      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+    }
+  })
+
+  it('REFUSE les vues de configuration serveur', () => {
+    for (const query of [
+      'SELECT name FROM sys.configurations',
+      'SELECT * FROM sys.server_role_members',
+      'SELECT * FROM sys.tcp_endpoints'
+    ]) {
+      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+    }
+  })
+
+  it('mais les métadonnées de portée BASE restent lisibles', () => {
+    for (const query of [
+      'SELECT name FROM sys.objects',
+      'SELECT name FROM sys.database_principals',
+      'SELECT name FROM sysobjects',
+      'SELECT TABLE_NAME AS t FROM INFORMATION_SCHEMA.TABLES',
+      'SELECT COLUMN_NAME AS c FROM INFORMATION_SCHEMA.COLUMNS',
+      'SELECT USER_NAME() AS u',
+      'SELECT SCHEMA_NAME() AS s'
+    ]) {
+      expect(decideSqlRead({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
+    }
+  })
+})
+
+/**
+ * 4ᵉ audit, FAUX REFUS le seul bloquant : la règle « 3 parties » comptait les segments sans regarder
+ * ce qu'ils NOMMENT. `dbo.INS_INFOGREFFE.[date insc]` est du T-SQL valide et strictement local —
+ * vérifié, il retourne des lignes sur `RIG_AMIENS`. C'est la forme que produisent les générateurs SQL
+ * et les LLM. Le danger vient de la PREMIÈRE partie quand elle nomme une base ou un serveur, pas du
+ * nombre de segments.
+ */
+describe('decideSqlRead — nom qualifié par le SCHÉMA, pas par la base', () => {
+  const base = { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS' }
+
+  it('accepte schéma.table.colonne, qui est local', () => {
+    for (const query of [
+      'SELECT dbo.INS_INFOGREFFE.[date insc] FROM dbo.INS_INFOGREFFE',
+      'SELECT dbo.T.A, dbo.T.B FROM dbo.T',
+      'SELECT [dbo].[T].[col] FROM [dbo].[T]',
+      'SELECT sys.tables.name FROM sys.tables'
+    ]) {
+      expect(decideSqlRead({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
+    }
+  })
+
+  it('REFUSE toujours ce qui nomme une autre base ou un serveur', () => {
+    for (const query of [
+      'SELECT name FROM master.sys.databases',
+      'SELECT * FROM RIG_PARIS.dbo.CODE_EVENEMENT_RCS',
+      'SELECT * FROM RIG_PARIS..CODE_EVENEMENT_RCS',
+      'SELECT * FROM [SOMELINK].master.sys.databases',
+      'SELECT * FROM [SOMELINK].[master].[sys].[databases]',
+      'SELECT RIGBD5.RIG_X.dbo.T.col FROM RIGBD5.RIG_X.dbo.T'
+    ]) {
+      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+    }
+  })
+})
+
+/**
+ * 4ᵉ audit : le préfixe `RIG_` ne définit pas « base greffe vivante ». Constaté sur les 44 bases
+ * `RIG_*` de `SQL-PROD\PROD` : une maquette, une copie figée d'avant changement de structure, et
+ * quatre bases de service web tarif. Des données nominatives figées devenaient lisibles.
+ *
+ * On ne refuse ici que les formes NON AMBIGUËS. Les copies d'anciennes entités identifiées par leur
+ * seul nom (`RIG_AURILLAC_BECHONNET`, `RIG_LE_PUY_MARTIN`, `RIG_GRENOBLE_SCP`) restent autorisées :
+ * c'est un arbitrage métier, pas une déduction, et il revient à l'utilisateur — pas à ce code.
+ */
+describe('decideSqlRead — bases hors périmètre greffe malgré le préfixe RIG_', () => {
+  const server = 'SQL-PROD\\PROD'
+
+  it('REFUSE maquettes, copies figées et bases de service', () => {
+    for (const database of [
+      'RIG_PUY_MAQUETTE',
+      'RIG_DUNKERQUE_AVANT_SELARL',
+      'RIG_WS_TARIF_PAP',
+      'RIG_WS_TARIF_SAINT_DENIS'
+    ]) {
+      expect(decideSqlRead({ server, database, query: 'SELECT 1 AS a' }).allowed, database).toBe(
+        false
+      )
+    }
+  })
+
+  it('accepte les bases greffe vivantes', () => {
+    for (const database of ['RIG_AMIENS', 'RIG_LYON', 'RIG_POINTE_A_PITRE', 'RIG_LE_HAVRE']) {
+      expect(decideSqlRead({ server, database, query: 'SELECT 1 AS a' }).allowed, database).toBe(
+        true
+      )
+    }
+  })
+})
+
+/**
  * EFFET SUR LA PRODUCTION SANS ÉCRITURE. Un indice de table est PRIORITAIRE sur le niveau
  * d'isolation posé par l'enveloppe : `WITH (TABLOCKX, HOLDLOCK)` prend un verrou exclusif de table
  * tenu jusqu'au `ROLLBACK`. `SET LOCK_TIMEOUT` protège NOTRE session, pas les greffiers qui
@@ -438,6 +597,36 @@ describe('decideSqlRead — pas de verrou imposé à une base de production', ()
   it('mais les indices de lecture inoffensifs passent', () => {
     for (const query of ['SELECT * FROM T WITH (NOLOCK)', 'SELECT * FROM T WITH (INDEX(1))']) {
       expect(decideSqlRead({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
+    }
+  })
+})
+
+/**
+ * fix-ok: nouveaux tests de couverture (pas un correctif à l'aveugle) — le constat est reproduit en
+ * réel par le 4ᵉ audit : `SELECT 1 AS a SELECT 2 AS b` exécute DEUX instructions sur SQL Server.
+ *
+ * 4ᵉ audit — constat structurel : **T-SQL juxtapose les instructions SANS séparateur.**
+ * La garantie « une seule instruction » ne repose donc PAS sur l'interdiction du `;` ni du `GO`,
+ * contrairement à ce que les deux premiers cycles laissaient croire : elle repose ENTIÈREMENT sur la
+ * liste de mots-clés.
+ *
+ * Ces formes-ci seraient de toute façon annulées par l'enveloppe transactionnelle (l'attaquant ne
+ * peut plus la refermer, `commit`/`rollback`/`begin` étant interdits). On les bloque quand même :
+ * une garantie affichée aussi fort ne doit pas dépendre d'un seul filet.
+ */
+describe('decideSqlRead — juxtaposition d’instructions sans séparateur', () => {
+  const base = { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS' }
+
+  it('REFUSE une seconde instruction à effet, même sans point-virgule ni GO', () => {
+    for (const query of [
+      'SELECT 1 AS a RECEIVE * FROM maFile',
+      'SELECT 1 AS a SEND ON CONVERSATION x',
+      'SELECT 1 AS a CHECKPOINT',
+      'SELECT 1 AS a DISABLE TRIGGER ALL ON T',
+      'SELECT 1 AS a ENABLE TRIGGER ALL ON T',
+      'SELECT 1 AS a WHILE (1=1) SELECT 1'
+    ]) {
+      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 })

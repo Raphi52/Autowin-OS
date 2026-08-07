@@ -36,6 +36,32 @@ const MAX_QUERY_LENGTH = 4000
 const DATABASE_PATTERN = /^RIG_[A-Za-z0-9_]+$/
 
 /**
+ * Schémas LOCAUX : quand la première partie d'un nom à trois segments est l'un d'eux, on a
+ * `schéma.table.colonne`, qui ne sort pas de la base ciblée.
+ */
+const LOCAL_SCHEMAS = ['dbo', 'sys', 'information_schema']
+
+/**
+ * Le préfixe `RIG_` ne définit PAS « base greffe vivante ». Constaté sur les 44 bases `RIG_*` de
+ * `SQL-PROD\PROD` au 4ᵉ audit : une maquette, une copie figée d'avant changement de structure, et
+ * quatre bases de service web tarif. Des données nominatives figées devenaient lisibles.
+ *
+ * On ne refuse ici que les formes NON AMBIGUËS. Les copies d'anciennes entités reconnaissables à leur
+ * seul nom — `RIG_AURILLAC_BECHONNET`, `RIG_LE_PUY_MARTIN`, `RIG_GRENOBLE_SCP` — restent AUTORISÉES :
+ * savoir si ce sont des archives ou des greffes vivants est un arbitrage métier, pas une déduction.
+ * Il revient à l'utilisateur, pas à ce code, et il est signalé plutôt que tranché en silence.
+ */
+const NON_GREFFE_DATABASES = [
+  /_MAQUETTE$/i,
+  /_AVANT_/i,
+  /^RIG_WS_/i,
+  /_RECETTE$/i,
+  /_TEST$/i,
+  /_SAUVE(GARDE)?$/i,
+  /_COPIE$/i
+]
+
+/**
  * Vues et fonctions système à portée SERVEUR : elles sont visibles depuis n'importe quelle base et
  * renseignent donc sur ce qui est HORS du périmètre annoncé (liste des bases, serveurs liés,
  * comptes). Les métadonnées de la base courante (`sys.tables`, `sys.columns`) restent autorisées :
@@ -69,7 +95,48 @@ const COMPAT_SERVER_VIEWS = [
   'sysprocesses',
   'sysfiles',
   'syscurconfigs',
-  'sysconfigures'
+  'sysconfigures',
+  // fix-ok: cause reproduite hors modèle (cf. RUN.md, CausalHypothesis du 4ᵉ audit). Ajoutées ici
+  // parce que ce sont les équivalents COMPAT de DMV DÉJÀ interdites, et que par elles passaient les
+  // deux fuites les plus graves de la série, constatées sur des données réelles d'AUTRES greffes
+  // depuis RIG_AMIENS :
+  //   `syscacheobjects` → 55 948 plans d'autres bases AVEC leurs littéraux, donc du contenu
+  //                       applicatif (« … WHERE ETP_IDDMD=355878 ») ; compat de
+  //                       dm_exec_cached_plans + dm_exec_sql_text, tous deux déjà interdits ;
+  //   `sysperfinfo`     → énumère les 334 bases du serveur ;
+  //   `syslockinfo`     → activité de verrouillage de 135 bases.
+  'syscacheobjects',
+  'sysperfinfo',
+  'syslockinfo',
+  'sysoledbusers',
+  'sysdevices'
+]
+
+/**
+ * Vues du schéma `sys` à portée SERVEUR qui ne sont PAS des vues de compatibilité : elles exigent le
+ * préfixe `sys.`, d'où leur place dans `SERVER_SCOPED_VIEWS` plutôt qu'ici — cette liste-ci les
+ * complète simplement, pour garder la première lisible.
+ */
+const SERVER_SCOPED_VIEWS_EXTRA = [
+  'configurations',
+  'server_role_members',
+  'tcp_endpoints',
+  'server_audits',
+  'availability_groups',
+  'symmetric_keys',
+  'traces'
+]
+
+/**
+ * Variables système à portée serveur. Cherchées AVEC leur `@@`, jamais en mot nu : une colonne nommée
+ * `SERVERNAME` ou `VERSION` est parfaitement légitime et ne doit pas être refusée.
+ */
+const SERVER_SCOPED_VARIABLES = [
+  'servername',
+  'servicename',
+  'version',
+  'language',
+  'max_connections'
 ]
 
 /**
@@ -96,11 +163,27 @@ const SERVER_SCOPED_FUNCTIONS = [
   'fn_xe_file_target_read_file',
   'fn_get_audit_file',
   'fn_virtualfilestats',
-  'fn_servershareddrives'
+  'fn_servershareddrives',
+  // Ajoutées au 4ᵉ audit : elles renseignent hors du greffe sans nommer aucune table.
+  // `DATABASEPROPERTYEX('master','Status')` confirme n'importe quelle base par son nom, et survivait
+  // donc à l'interdiction de `sys.databases`.
+  'databasepropertyex',
+  'original_login',
+  'is_srvrolemember',
+  'has_perms_by_name',
+  'host_name',
+  'app_name',
+  'loginproperty'
 ]
 
-/** Préfixes des vues de gestion dynamique : portée serveur, jamais nécessaires à une lecture métier. */
-const DYNAMIC_MANAGEMENT_PREFIX = /\bdm_(?:exec|os|db|io|tran|resource|server|cluster|xe)_/
+/**
+ * Vues de gestion dynamique. On vise la FORME `dm_<mot>_` et non une énumération de familles :
+ * l'ancienne liste (`exec|os|db|io|tran|resource|server|cluster|xe`) laissait passer `dm_hadr_*`,
+ * `dm_broker_*`, `dm_fts_*`, `dm_repl_*` et `dm_database_encryption_keys` (préfixe `dm_database_`,
+ * pas `dm_db_`) — tous constatés passants au 4ᵉ audit. Le juge a vérifié 0 collision entre ce motif
+ * et les vrais noms de colonnes des bases RIG : la règle large ne coûte rien en usage réel.
+ */
+const DYNAMIC_MANAGEMENT_PREFIX = /\bdm_[a-z]+_/
 
 /**
  * Indices de verrouillage. Un indice de table est PRIORITAIRE sur le niveau d'isolation posé par
@@ -158,6 +241,17 @@ const FORBIDDEN_KEYWORDS = [
   'begin',
   'tran',
   'transaction',
+  // T-SQL JUXTAPOSE les instructions SANS séparateur : `SELECT 1 AS a SELECT 2 AS b` en exécute deux
+  // (constaté en réel, 4ᵉ audit). La garantie « une seule instruction » ne repose donc PAS sur
+  // l'interdiction du `;` ni du `GO` — elle repose ENTIÈREMENT sur cette liste de mots-clés. D'où
+  // l'ajout de ces formes : leurs effets seraient annulés par l'enveloppe, mais on ne veut pas
+  // dépendre du seul filet transactionnel pour une garantie affichée aussi fort.
+  'receive',
+  'send',
+  'checkpoint',
+  'disable',
+  'enable',
+  'while',
   // `GO` n'est pas du T-SQL mais un séparateur de lots de sqlcmd : il sépare les instructions SANS
   // point-virgule, et `GO <n>` réexécute le lot n fois. Il est aussi refusé en début de ligne
   // ci-dessous ; ici on couvre le cas où il apparaît ailleurs.
@@ -283,7 +377,11 @@ function stripDelimited(query: string): StrippedQuery | undefined {
     masked += delim.masked
     // Le contenu d'un LITTÉRAL reste vidé : y chercher un nom d'objet n'aurait aucun sens, et le
     // garder ferait échouer une lecture légitime dont la valeur cherchée ressemble à un nom interdit.
-    named += open === "'" ? "''" : ` ${query.slice(debutContenu, i - 1)} `
+    // Les POINTS du contenu sont neutralisés : `[a.b]` est UN identifiant contenant un point, pas
+    // deux parties d'un nom qualifié. Sans ça, la règle sur les noms qualifiés compterait faux — et
+    // c'est pour cette raison que `named` peut servir AUSSI au comptage des parties, ce qui permet à
+    // son tour de savoir ce que la première partie NOMME (cf. `outOfScopeName`).
+    named += open === "'" ? "''" : ` ${query.slice(debutContenu, i - 1).replace(/\./g, '_')} `
   }
   return { masked, named }
 }
@@ -302,17 +400,24 @@ function stripDelimited(query: string): StrippedQuery | undefined {
  * Les deux formes du texte produites par `stripDelimited` sont nécessaires : le comptage des parties
  * se fait sur la forme masquée, la recherche des vues interdites sur la forme qui garde les noms.
  */
-function outOfScopeName(masque: string, nomme: string): string | undefined {
-  const ident = '[A-Za-z0-9_@#$]'
-  // Comptage des parties sur `masque` : le contenu d'un identifiant peut contenir un point
-  // (`[a.b]` est UN nom), qui compterait à tort comme un séparateur de parties.
-  // ident . (ident éventuellement vide, pour la forme base..objet) . ident
-  if (new RegExp(`${ident}+\\s*\\.\\s*${ident}*\\s*\\.\\s*${ident}`).test(masque)) {
-    return 'Nom d’objet qualifié sur plusieurs bases : la lecture doit rester dans la base ciblée.'
+function outOfScopeName(nomme: string): string | undefined {
+  // Une chaîne de segments séparés par des points. `nomme` a neutralisé les points INTERNES aux
+  // identifiants délimités, donc chaque point ici est bien un séparateur de parties.
+  const chaines = nomme.match(/[A-Za-z0-9_@#$]+(?:\s*\.\s*[A-Za-z0-9_@#$]*)+/g) ?? []
+  for (const chaine of chaines) {
+    const parties = chaine.split('.').map((p) => p.trim())
+    if (parties.length < 3) continue
+    // Trois segments exactement dont le premier est un SCHÉMA connu : c'est
+    // `schéma.table.colonne`, strictement local, et du T-SQL parfaitement valide. La version auditée
+    // le refusait — c'était le seul faux refus bloquant du 4ᵉ audit, et cette forme est produite en
+    // routine par les générateurs SQL et les modèles. Le danger vient de ce que la PREMIÈRE partie
+    // NOMME (une base, un serveur lié), pas du nombre de segments.
+    if (parties.length === 3 && LOCAL_SCHEMAS.includes(parties[0])) continue
+    return 'Nom d’objet qualifié hors de la base ciblée : la lecture doit rester dans le greffe.'
   }
-  // Recherche des vues interdites sur `nomme`, où le contenu des identifiants est conservé : sinon
+  // Vues interdites cherchées sur `nomme`, où le contenu des identifiants est conservé : sinon
   // `sys.[databases]` passait, le nom ayant été remplacé par un jeton neutre (second audit).
-  for (const vue of SERVER_SCOPED_VIEWS) {
+  for (const vue of [...SERVER_SCOPED_VIEWS, ...SERVER_SCOPED_VIEWS_EXTRA]) {
     if (new RegExp(`\\bsys\\s*\\.\\s*${vue}\\b`).test(nomme)) {
       return `Vue système à portée serveur interdite : « sys.${vue} » sort du périmètre du greffe.`
     }
@@ -321,6 +426,11 @@ function outOfScopeName(masque: string, nomme: string): string | undefined {
   for (const vue of COMPAT_SERVER_VIEWS) {
     if (new RegExp(`\\b(?:sys\\s*\\.\\s*)?${vue}\\b`).test(nomme)) {
       return `Vue système à portée serveur interdite : « ${vue} » sort du périmètre du greffe.`
+    }
+  }
+  for (const variable of SERVER_SCOPED_VARIABLES) {
+    if (new RegExp(`@@\\s*${variable}\\b`).test(nomme)) {
+      return `Variable à portée serveur interdite : « @@${variable} » sort du périmètre du greffe.`
     }
   }
   return undefined
@@ -341,6 +451,12 @@ export function decideSqlRead(args: SqlReadArgs): SqlReadDecision {
     return {
       allowed: false,
       reason: `Base non autorisée : « ${database} ». Attendu une base greffe RIG_… (ex. RIG_AMIENS).`
+    }
+  }
+  if (NON_GREFFE_DATABASES.some((motif) => motif.test(database))) {
+    return {
+      allowed: false,
+      reason: `Base hors périmètre : « ${database} » n’est pas un greffe vivant (maquette, copie figée ou base de service).`
     }
   }
 
@@ -426,7 +542,7 @@ export function decideSqlRead(args: SqlReadArgs): SqlReadDecision {
       reason: 'Vues de gestion dynamique interdites : elles exposent l’activité de tout le serveur.'
     }
   }
-  const horsPerimetre = outOfScopeName(normalise, sansLitteraux.named.toLowerCase())
+  const horsPerimetre = outOfScopeName(sansLitteraux.named.toLowerCase())
   if (horsPerimetre) return { allowed: false, reason: horsPerimetre }
   // `SELECT … INTO nouvelle_table` crée une table : la clause est refusée à part, `into` seul étant
   // aussi utilisé par `INSERT INTO` (déjà bloqué) et par `BULK INSERT`.

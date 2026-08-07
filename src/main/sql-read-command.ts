@@ -17,7 +17,60 @@
  * `shell: false` et arguments en TABLEAU : rien ne traverse un interpréteur de commandes.
  */
 import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { readFileSync, rmSync, statSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { decideSqlRead, RIG_SQL_SERVERS, type SqlReadArgs } from './sql-read-guard'
+
+/**
+ * POURQUOI LA SORTIE PASSE PAR UN FICHIER ET NON PAR LE PIPE — mesuré le 2026-08-07, et c'est la
+ * preuve réelle qui l'a imposé contre le raisonnement de l'audit, qui affirmait l'inverse.
+ *
+ * Encodage réellement produit par sqlcmd, selon le chemin de sortie :
+ *
+ *   pipe (stdout)          -> CP850 (codepage OEM console) : « é » = 0x82, « à » = 0x85
+ *   pipe + `-f 65001`      -> INCHANGÉ, toujours CP850 (l'option ne vise que les fichiers)
+ *   pipe + `-u`            -> INCHANGÉ
+ *   `-o fichier`           -> CP1252
+ *   `-o fichier` + `-u`    -> UTF-16LE avec BOM
+ *   `-o fichier` + `-f 65001` -> UTF-8 avec BOM   <- le seul chemin explicitement Unicode
+ *
+ * Lu en UTF-8, le pipe rendait donc un U+FFFD par accent : « Adjonction d'activité » devenait
+ * « Adjonction d'activit<>é » dans un JSON PARFAITEMENT VALIDE. L'agent recevait des libellés de
+ * greffe corrompus sans aucune trace. Décoder le pipe en CP850 aurait « marché » sur ce poste, mais la
+ * codepage OEM dépend de la machine : `-f 65001` est explicite et ne dépend d'aucune locale.
+ *
+ * Effet de bord assumé : le résultat touche brièvement le disque, dans le répertoire temporaire de
+ * l'utilisateur. Le fichier est supprimé sur TOUS les chemins de sortie, y compris expiration et
+ * erreur de lancement — la suppression est faite par `finish`, qui est le seul point de sortie.
+ */
+const OUTPUT_CODEPAGE = '65001'
+
+/** Accès au fichier de sortie, injectable pour les tests. */
+export interface OutputFileAccess {
+  size: (path: string) => number
+  read: (path: string) => string
+  remove: (path: string) => void
+}
+
+const REAL_OUTPUT_FILE: OutputFileAccess = {
+  size: (path) => {
+    try {
+      return statSync(path).size
+    } catch {
+      return 0
+    }
+  },
+  read: (path) => readFileSync(path, 'utf8'),
+  remove: (path) => {
+    try {
+      rmSync(path, { force: true })
+    } catch {
+      // Un fichier déjà disparu n'est pas une erreur : l'objectif est qu'il ne reste pas.
+    }
+  }
+}
 
 /** Assez pour constater une spécificité, trop peu pour aspirer une table. */
 const DEFAULT_MAX_ROWS = 200
@@ -25,7 +78,11 @@ const MAX_ROWS_CAP = 1000
 /** Une lecture de paramétrage répond en moins d'une seconde ; au-delà, quelque chose déraille. */
 const QUERY_TIMEOUT_SEC = 20
 const PROCESS_TIMEOUT_MS = 30_000
-/** Plafond de sortie : une requête trop bavarde ne doit pas noyer le contexte du modèle. */
+/**
+ * Plafond de sortie : une requête trop bavarde ne doit pas noyer le contexte du modèle. Mesuré en
+ * OCTETS sur le fichier de sortie, donc exactement — et AVANT de le lire, si bien qu'un résultat
+ * démesuré n'entre jamais en mémoire.
+ */
 const MAX_OUTPUT_BYTES = 400_000
 
 export type SqlReadOutcome =
@@ -43,6 +100,10 @@ export interface SqlReadCommandDeps {
   /** Chemin de sqlcmd. Injectable en test ; absent = capacité non câblée. */
   sqlcmdPath?: string
   maxRows?: number
+  /** Accès au fichier de sortie. Injectable pour tester sans toucher le disque. */
+  outputFile?: OutputFileAccess
+  /** Chemin du fichier de sortie. Injectable pour rendre les tests déterministes. */
+  outputPath?: string
 }
 
 /**
@@ -52,6 +113,12 @@ export interface SqlReadCommandDeps {
 export function buildReadOnlyBatch(query: string, maxRows: number): string {
   return [
     'SET NOCOUNT ON',
+    // La garde traite `"…"` comme un IDENTIFIANT délimité. Or sous `sqlcmd -Q`, QUOTED_IDENTIFIER est
+    // OFF (mesuré : `SESSIONPROPERTY('QUOTED_IDENTIFIER')` = 0 sur RIG_AMIENS), donc `"…"` serait une
+    // CHAÎNE. La sécurité tenait quand même — un contenu délimité est inerte dans les deux lectures —
+    // mais elle tenait par accident, sur une prémisse fausse. On aligne le runtime sur le modèle de la
+    // garde plutôt que de laisser une évolution future partir d'un raisonnement erroné (4ᵉ audit).
+    'SET QUOTED_IDENTIFIER ON',
     // Ne jamais attendre derrière un verrou de production : on abandonne plutôt que de bloquer.
     'SET LOCK_TIMEOUT 5000',
     // Lectures non bloquantes : on ne pose pas de verrou partagé sur une base vivante.
@@ -63,6 +130,50 @@ export function buildReadOnlyBatch(query: string, maxRows: number): string {
     'ROLLBACK TRANSACTION',
     'SET ROWCOUNT 0'
   ].join(';\n')
+}
+
+/** Longueur maximale du motif d'erreur rendu à l'agent : au-delà, on pollue son contexte pour rien. */
+const MAX_ERROR_DETAIL = 500
+
+/**
+ * Extrait les messages de SQL Server, OÙ QU'ILS SOIENT dans la sortie.
+ *
+ * Une erreur de COMPILATION arrive seule, en tête. Mais une erreur d'EXÉCUTION survient après que
+ * SQL Server a déjà streamé une partie du JSON : le message est alors à la FIN. La version auditée
+ * ne regardait que les 6 premières lignes, et comme `FOR JSON` replie la sortie tous les 2033
+ * caractères, l'agent recevait « Requête refusée par SQL Server : [{"v":"AAAA… » — un refus sans
+ * motif, plus 12 ko de JSON brut dans son contexte (4ᵉ audit du 2026-08-07).
+ *
+ * Le texte du message est sur la ligne SUIVANTE de l'en-tête `Msg …`, d'où la reprise par paires.
+ */
+function extraireMessagesSql(brut: string): string | undefined {
+  const lignes = brut.split('\n')
+  const retenues: string[] = []
+  for (let i = 0; i < lignes.length; i += 1) {
+    if (!/^Msg \d+, Level \d+/.test(lignes[i])) continue
+    retenues.push(lignes[i].trim())
+    if (lignes[i + 1] !== undefined && !/^Msg \d+, Level \d+/.test(lignes[i + 1])) {
+      retenues.push(lignes[i + 1].trim())
+    }
+  }
+  if (retenues.length === 0) return undefined
+  return retenues.join(' ').slice(0, MAX_ERROR_DETAIL)
+}
+
+/**
+ * `FOR JSON PATH` est ajouté inconditionnellement à la requête, ce qui fait échouer deux formes
+ * parfaitement légitimes — et `SELECT COUNT(*)` est la requête la plus naturelle qu'un agent écrive.
+ * L'erreur de SQL Server est exacte mais opaque : on y ajoute la marche à suivre, pour que l'agent
+ * se corrige du premier coup au lieu de brûler un aller-retour.
+ */
+function expliquer(detail: string): string {
+  if (/\bMsg (?:13605|13600)\b/.test(detail)) {
+    return `${detail} — la lecture est enveloppée dans FOR JSON : donne un alias à chaque colonne calculée, par exemple SELECT COUNT(*) AS n.`
+  }
+  if (/\bMsg 13601\b/.test(detail)) {
+    return `${detail} — deux colonnes portent le même nom : donne un alias distinct à chacune plutôt qu’un SELECT *.`
+  }
+  return detail
 }
 
 export async function runSqlRead(
@@ -86,16 +197,20 @@ export async function runSqlRead(
   const batch = buildReadOnlyBatch(decision.query, maxRows + 1)
   const spawnFn = deps.spawnFn ?? spawn
 
+  const fichierSortie = deps.outputPath ?? join(tmpdir(), `autowin-sqlread-${randomUUID()}.json`)
+  const sortie = deps.outputFile ?? REAL_OUTPUT_FILE
+
   return await new Promise<SqlReadOutcome>((resolve) => {
-    let stdout = ''
     let stderr = ''
-    let outputTruncated = false
     let settled = false
     const timer: { handle?: ReturnType<typeof setTimeout> } = {}
+    // `finish` est le SEUL point de sortie, et c'est lui qui supprime le fichier : expiration, erreur
+    // de lancement, refus ou succès, le résultat ne reste jamais sur le disque.
     const finish = (outcome: SqlReadOutcome): void => {
       if (settled) return
       settled = true
       if (timer.handle) clearTimeout(timer.handle)
+      sortie.remove(fichierSortie)
       resolve(outcome)
     }
 
@@ -127,6 +242,15 @@ export async function runSqlRead(
           // vérifie un état en base concluait « rien » sur une requête cassée. Le message est aussi
           // détecté sur la sortie, plus bas : on ne dépend pas du seul code de retour.
           '-b',
+          // Sortie vers un FICHIER en UTF-8 explicite. Sur le pipe, sqlcmd écrit la codepage OEM
+          // (CP850 ici : « é » = 0x82), ce qui rendait un U+FFFD par accent dans un JSON pourtant
+          // VALIDE — donc des libellés de greffe corrompus sans aucune trace. `-f 65001` ne vise que
+          // les fichiers : c'est `-o` + `-f` ensemble qui donnent de l'UTF-8, et rien d'autre.
+          // Mesuré le 2026-08-07 ; voir le commentaire en tête de module pour le tableau complet.
+          '-f',
+          OUTPUT_CODEPAGE,
+          '-o',
+          fichierSortie,
           '-t',
           String(QUERY_TIMEOUT_SEC),
           '-l',
@@ -151,16 +275,9 @@ export async function runSqlRead(
       finish({ ok: false, reason: `Requête abandonnée après ${PROCESS_TIMEOUT_MS / 1000} s.` })
     }, PROCESS_TIMEOUT_MS)
 
-    child.stdout?.on('data', (c: Buffer | string) => {
-      if (stdout.length >= MAX_OUTPUT_BYTES) {
-        outputTruncated = true
-        return
-      }
-      stdout += String(c)
-      // On MÉMORISE la coupure. Sans ce drapeau, un JSON tronqué se reparsait partiellement et
-      // l'agent recevait 1 ligne au lieu de N, annoncées complètes (3ᵉ audit du 2026-08-07).
-      if (stdout.length >= MAX_OUTPUT_BYTES) outputTruncated = true
-    })
+    // Avec `-o`, tout part dans le fichier : le pipe ne sert plus qu'aux pannes de sqlcmd lui-même
+    // (mesuré : sur erreur SQL, stdout et stderr sont VIDES et le message est dans le fichier).
+    child.stderr?.setEncoding('utf8')
     child.stderr?.on('data', (c: Buffer | string) => {
       if (stderr.length < 8000) stderr += String(c)
     })
@@ -168,37 +285,33 @@ export async function runSqlRead(
       finish({ ok: false, reason: `sqlcmd a échoué : ${error.message}` })
     )
     child.once('close', (code) => {
-      const brut = stdout.trim()
-      // Un message d'erreur SQL Server arrive sur stdout ET code ≠ 0 : on le rend TEL QUEL, c'est
-      // l'information utile (objet inconnu, colonne inexistante, droits refusés…).
-      if (code !== 0) {
-        const detail = (stderr.trim() || brut || `code ${code}`).split('\n').slice(0, 6).join(' ')
-        finish({ ok: false, reason: `Requête refusée par SQL Server : ${detail}` })
-        return
-      }
-      // sqlcmd préfixe la sortie de l'en-tête de colonne (le GUID que SQL Server donne au résultat
-      // `FOR JSON`) et peut y glisser un message d'information. On ne peut donc pas se fier au
-      // PREMIER crochet rencontré — un `[` dans un message cassait le parsing (audit du
-      // 2026-08-07). On essaie chaque début candidat et on garde le premier qui parse réellement.
-      // sqlcmd peut aussi replier le JSON sur plusieurs lignes : on les recolle avant d'essayer.
-      // Un message d'erreur SQL Server peut arriver AVEC un code 0 (cf. `-b`). On le détecte donc
-      // aussi dans la sortie : mieux vaut une erreur explicite qu'un « aucune ligne » mensonger.
-      const messageSql = brut.match(/^Msg \d+, Level \d+.*$/m)
-      if (messageSql) {
-        const detail = brut.split('\n').slice(0, 6).join(' ').trim()
-        finish({ ok: false, reason: `Requête refusée par SQL Server : ${detail}` })
-        return
-      }
-      // Sortie coupée au plafond : le JSON restant est incomplet, et un JSON incomplet se reparse
-      // partiellement en un résultat FAUX. On refuse plutôt que de rendre une donnée trompeuse.
-      if (outputTruncated) {
+      // Plafond vérifié AVANT la lecture, sur la taille réelle du fichier : un résultat démesuré
+      // n'entre jamais en mémoire, et on ne rend pas un JSON coupé qui se reparserait en donnée FAUSSE.
+      const octets = sortie.size(fichierSortie)
+      if (octets > MAX_OUTPUT_BYTES) {
         finish({
           ok: false,
-          reason:
-            'Résultat trop volumineux : la sortie a été coupée et ne peut pas être rendue sans risque de fausser la donnée. Restreins les colonnes ou ajoute un filtre.'
+          reason: `Résultat trop volumineux (${Math.round(octets / 1024)} ko) : il ne peut pas être rendu sans risque de fausser la donnée. Restreins les colonnes ou ajoute un filtre.`
         })
         return
       }
+      let brut: string
+      try {
+        // `-f 65001` produit un BOM en tête : on le retire, il n'appartient pas au contenu.
+        brut = sortie
+          .read(fichierSortie)
+          .replace(/^\uFEFF/, '')
+          .trim()
+      } catch (error) {
+        finish({
+          ok: false,
+          reason: `Sortie de sqlcmd illisible : ${
+            error instanceof Error ? error.message : String(error)
+          }${stderr.trim() ? ` — ${stderr.trim().slice(0, 200)}` : ''}`
+        })
+        return
+      }
+      const messagesSql = extraireMessagesSql(brut)
       const colle = brut.replace(/\r?\n/g, '')
       let rows: Record<string, unknown>[] | undefined
       let candidats = 0
@@ -219,6 +332,20 @@ export async function runSqlRead(
           // début candidat invalide : on tente le suivant
         }
       }
+      // ORDRE DÉLIBÉRÉ. Une erreur d'exécution survient APRÈS que SQL Server a déjà streamé du JSON :
+      // il peut donc y avoir à la fois du JSON parsable ET un message d'erreur. Le message gagne, car
+      // les lignes déjà reçues sont un résultat PARTIEL qu'on ne doit pas faire passer pour complet.
+      if (code !== 0 || (messagesSql && !rows)) {
+        const detail = messagesSql ?? stderr.trim() ?? ''
+        finish({
+          ok: false,
+          reason: `Requête refusée par SQL Server : ${expliquer(detail || `code ${code}`)}`
+        })
+        return
+      }
+      // fix-ok: suppression d'un contrôle DEVENU MORT (pas un correctif à l'aveugle) — le plafond est
+      // désormais vérifié plus haut sur la TAILLE du fichier, donc avant lecture et exactement.
+      // L'ancien drapeau de coupure par chunk n'a plus d'objet : il n'y a plus de chunks.
       // `FOR JSON` sans ligne ne rend RIEN : c'est un résultat vide, pas une erreur.
       if (!rows && candidats === 0) {
         finish({
