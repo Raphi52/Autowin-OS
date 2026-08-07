@@ -75,6 +75,66 @@ export function runLiveness(
  */
 export type ResumeAction = 'rattacher' | 'relancer' | 'ignorer'
 
+/**
+ * Depuis combien de temps le journal d'un agent n'a-t-il plus bougé ?
+ *
+ * `runLiveness` répond « ce processus EXISTE-t-il », ce qui n'est pas la même question que « cet
+ * agent PRODUIT-il encore ». Un CLI bloqué sur un appel qui ne revient jamais garde son processus
+ * vivant : le run est alors rattaché indéfiniment, aucune échéance ne le dépingle
+ * (`deadlineAtMs` vit en mémoire dans l'ExecutionRuntime, et une reprise n'en arme aucune), et le
+ * chat attend une réponse qui n'arrivera pas.
+ *
+ * Le journal est le seul témoin de production qu'on ait sur disque. `undefined` = on ne sait pas
+ * (pas de journal, ou sonde en échec) — et on n'invente pas un verdict à partir d'une ignorance.
+ */
+export function agentSilenceMs(
+  agent: { journalPath?: string },
+  nowMs: number,
+  lastWriteMs: (path: string) => number | undefined
+): number | undefined {
+  if (!agent.journalPath) return undefined
+  let ecritA: number | undefined
+  try {
+    ecritA = lastWriteMs(agent.journalPath)
+  } catch {
+    return undefined // sonde en échec : on ne sait pas, on ne conclut pas
+  }
+  if (ecritA === undefined) return undefined
+  return Math.max(0, nowMs - ecritA)
+}
+
+/**
+ * Seuil au-delà duquel un agent vivant mais muet cesse d'être crédité d'un travail en cours.
+ *
+ * Généreux À DESSEIN : un agent peut légitimement rester silencieux pendant un appel outil long.
+ * Se tromper en déclarant « muet » un agent qui travaille coûte un message inexact ; l'inverse — ce
+ * qu'on avait — coûte une attente sans fin.
+ */
+export const SILENCE_TOLERE_MS = 10 * 60_000
+
+/**
+ * Cet agent produit-il encore, pour de bon ?
+ *
+ * Distinct de `runLiveness` : un run peut être VIVANT (processus présent, donc à ne surtout pas
+ * relancer par-dessus) et pourtant NE PLUS PRODUIRE. Les deux réponses commandent des choses
+ * différentes — la première décide s'il faut relancer, la seconde ce qu'on a le droit de DIRE à
+ * l'utilisateur.
+ *
+ * Ne rend jamais `false` sur une ignorance : sans journal lisible, on répond `true` (comportement
+ * historique) plutôt que d'annoncer un arrêt qu'on n'a pas constaté.
+ */
+export function runIsProducing(
+  state: Pick<OrchestrationRunState, 'agents'> | null | undefined,
+  nowMs: number,
+  lastWriteMs: (path: string) => number | undefined,
+  seuilMs = SILENCE_TOLERE_MS
+): boolean {
+  const silences = (state?.agents ?? []).map((agent) => agentSilenceMs(agent, nowMs, lastWriteMs))
+  const mesures = silences.filter((silence): silence is number => silence !== undefined)
+  if (!mesures.length) return true // rien de mesurable : on n'affirme pas un arrêt
+  return mesures.some((silence) => silence < seuilMs)
+}
+
 function strandedTokenReservation(
   cap: number,
   used: number,

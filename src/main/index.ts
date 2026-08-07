@@ -22,7 +22,7 @@ import {
   type WebContents
 } from 'electron'
 import { dirname, join } from 'path'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { buildExport, readImport, suggestedFileName } from './workflow-transfer'
 import { createHash, randomUUID } from 'node:crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -202,7 +202,7 @@ import {
 } from './activity/native-preflight'
 import { nativeSpoolRoot, appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace, readBrainTraces } from './activity/brain-trace-spool'
-import { resumeActionFor, waitUntilRunCanResume } from './runs/run-reattach'
+import { resumeActionFor, runIsProducing, waitUntilRunCanResume } from './runs/run-reattach'
 import {
   activeWorkflowProfile,
   loadWorkflowProfiles,
@@ -3823,7 +3823,21 @@ app.whenReady().then(async () => {
           return { ...agent, offset }
         })
         const recap = summarizeJournal(lignes)
-        const message = recapMessage(recap, true)
+        // `true` était écrit EN DUR ici : l'app affirmait « l'agent travaille encore » sans l'avoir
+        // vérifié une seule fois, et la branche `false` de `recapMessage` — pourtant écrite — n'était
+        // atteignable que par les tests. Un agent bloqué depuis une heure était annoncé au travail.
+        //
+        // On mesure maintenant la seule trace de production qu'on ait sur disque : la date de
+        // dernière écriture du journal. Sans journal lisible, `runIsProducing` rend `true`, donc le
+        // comportement historique est conservé partout où l'on ne sait pas.
+        const produitEncore = runIsProducing(resumableRun, Date.now(), (chemin) => {
+          try {
+            return statSync(chemin).mtimeMs
+          } catch {
+            return undefined
+          }
+        })
+        const message = recapMessage(recap, produitEncore)
         if (conversationId && message) {
           os.conversations.append(conversationId, { role: 'assistant', content: message })
           broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
