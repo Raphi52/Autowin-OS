@@ -10,6 +10,7 @@ import {
   drillTrail,
   radiusOf,
   repoSlug,
+  spreadLabelRadii,
   brainProjectsForRepo,
   summarizeRepo
 } from './graph-drill'
@@ -266,5 +267,40 @@ describe('rattacher un dépôt aux projets du Brain', () => {
   it('réserve l’héritage des modules au SEUL monorepo', () => {
     // Sans cette réserve, n'importe quel dépôt happerait les projets `rig-*`.
     expect(brainProjectsForRepo('RIG-V3', ['rig-processus'], ['RIG-V3'])).toEqual([])
+  })
+})
+
+describe('étiquettes de couronne — le chevauchement visible sur la capture', () => {
+  it('pousse vers l’extérieur les étiquettes trop proches, dans l’ordre', () => {
+    // Deux bandes voisines dont les mi-hauteurs sont à 5 unités : les libellés se touchaient.
+    expect(spreadLabelRadii([100, 105, 110], 30)).toEqual([100, 130, 160])
+  })
+
+  it('ne touche PAS des étiquettes déjà assez écartées', () => {
+    expect(spreadLabelRadii([100, 200, 300], 30)).toEqual([100, 200, 300])
+  })
+
+  it('ne fait JAMAIS descendre une étiquette sous sa position d’origine', () => {
+    // Sinon un libellé sortirait de sa propre bande, vers l'intérieur.
+    const depart = [100, 140, 141, 300]
+    const arrivee = spreadLabelRadii(depart, 30)
+    depart.forEach((r, i) => expect(arrivee[i]).toBeGreaterThanOrEqual(r))
+  })
+
+  it('rend les rayons dans l’ordre FOURNI, pour que l’appelant retrouve ses bandes', () => {
+    // Entrée volontairement désordonnée : la sortie doit suivre l'entrée, pas le tri interne.
+    expect(spreadLabelRadii([110, 100, 105], 30)).toEqual([160, 100, 130])
+  })
+
+  it('garantit l’écart minimal entre tous les voisins — l’invariant, pas un cas', () => {
+    const sortie = [...spreadLabelRadii([50, 52, 54, 56, 58, 60, 62], 25)].sort((a, b) => a - b)
+    for (let i = 1; i < sortie.length; i += 1) {
+      expect(sortie[i] - sortie[i - 1]).toBeGreaterThanOrEqual(25)
+    }
+  })
+
+  it('supporte le cas dégénéré sans jeter', () => {
+    expect(spreadLabelRadii([], 30)).toEqual([])
+    expect(spreadLabelRadii([42], 30)).toEqual([42])
   })
 })

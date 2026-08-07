@@ -139,6 +139,35 @@ export function summarizeRepo(repo: string, relativeIds: readonly string[]): Rep
   return { repo, total: relativeIds.length, categories, empty: relativeIds.length === 0 }
 }
 
+/* ─────────────────────────────── étiquettes de couronne ─────────────────────────────── */
+
+/**
+ * Écarte les étiquettes de couronne pour qu'elles ne se recouvrent plus.
+ *
+ * Le défaut est VISIBLE sur la capture d'origine de l'utilisateur : les six libellés (`INBOX`,
+ * `INTEGRATIONS`, `PROJECTS`, `KNOWLEDGE`, `GOVERNANCE`, `RACINE`) se touchent en haut au centre,
+ * parce qu'ils sont tous posés sur l'axe vertical à la mi-hauteur de leur bande — et deux bandes
+ * voisines peuvent être plus rapprochées que la hauteur d'un libellé.
+ *
+ * On PRÉSERVE la décision d'origine (toutes les étiquettes sur le même axe, donc lisibles comme une
+ * légende plutôt que dispersées au hasard des points) et on corrige seulement le chevauchement : les
+ * étiquettes trop proches sont poussées vers l'extérieur, dans l'ordre, d'un écart minimal. Aucune ne
+ * descend jamais en dessous de sa position d'origine, sinon une étiquette sortirait de sa bande.
+ */
+export function spreadLabelRadii(radii: readonly number[], minGap: number): number[] {
+  const sorted = [...radii].sort((a, b) => a - b)
+  const out: number[] = []
+  for (const radius of sorted) {
+    const previous = out[out.length - 1]
+    out.push(previous === undefined ? radius : Math.max(radius, previous + minGap))
+  }
+  // Rendu dans l'ordre des rayons FOURNIS, pour que l'appelant retrouve ses bandes.
+  return radii.map((radius) => {
+    const index = sorted.indexOf(radius)
+    return out[index]
+  })
+}
+
 /* ─────────────────────────────── dépôt ↔ projets du Brain ─────────────────────────────── */
 
 /**

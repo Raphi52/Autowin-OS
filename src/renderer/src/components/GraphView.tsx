@@ -9,6 +9,7 @@ import {
   drillInto,
   drillTrail,
   radiusOf,
+  spreadLabelRadii,
   summarizeRepo,
   type DrillPosition
 } from './graph-drill'
@@ -105,6 +106,10 @@ type ResizableColumn = 'theme' | 'visibility' | 'detail'
 type ColumnWidths = GraphColumnWidths
 const EMPTY_THEME_SELECTION = new Set<string>()
 /** Couleurs des BANDES radiales — une teinte par famille, du centre vers l'extérieur. */
+/** Écart vertical minimal entre deux libellés de couronne, en unités de scène. Calé sur la hauteur
+ *  d'une étiquette rendue : en dessous, deux libellés voisins se recouvrent. */
+const MIN_LABEL_GAP = 34
+
 const BAND_COLORS = [
   '#8b5cf6',
   '#22d3ee',
@@ -436,6 +441,14 @@ export function GraphView({
     const scene = instance.scene()
     if (!scene) return
     const added: THREE.Object3D[] = []
+    // Les libellés sont tous posés sur le MÊME axe vertical — décision d'origine, qui les rend
+    // lisibles comme une légende. Mais deux bandes voisines peuvent être plus rapprochées que la
+    // hauteur d'un libellé : sur la capture d'origine, INBOX, INTEGRATIONS et PROJECTS se touchaient.
+    // On écarte donc les rayons d'étiquette d'un minimum, sans changer l'axe.
+    const labelRadii = spreadLabelRadii(
+      radial.bands.map((band) => band.labelRadius),
+      MIN_LABEL_GAP
+    )
     radial.bands.forEach((band, index) => {
       const color = new THREE.Color(BAND_COLORS[index % BAND_COLORS.length])
       for (const radius of [band.innerRadius, band.outerRadius]) {
@@ -457,7 +470,7 @@ export function GraphView({
       )
       // Étiquette posée sur l'axe vertical de la bande : toujours au même endroit d'une bande à l'autre,
       // donc lisible comme une légende plutôt que dispersée au hasard des points.
-      label.position.set(0, band.labelRadius, 12)
+      label.position.set(0, labelRadii[index], 12)
       scene.add(label)
       added.push(label)
     })
