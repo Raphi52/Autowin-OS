@@ -301,12 +301,12 @@ const CATALOG: CommandSpec[] = [
   {
     name: 'sql_query',
     description:
-      'Consulter les bases RIG des greffes en LECTURE SEULE (un seul SELECT) — pour constater un paramétrage ou une spécificité. Toute écriture est refusée avant d’atteindre le serveur.',
+      'Consulter les bases RIG des greffes en LECTURE SEULE (un seul SELECT) — pour constater un paramétrage ou une spécificité. Seuls les greffes EXPLOITÉS sont lisibles (la liste vient de COMMUN_RIG.dbo.GREFFE, GRF_IS_EXPLOIT = 1) : les maquettes, copies figées et bases de formation sont refusées. Toute écriture est refusée avant d’atteindre le serveur.',
     args: {
       query: 'un SELECT unique, sans point-virgule ni commentaire (obligatoire)',
       database: 'la base greffe visée, ex. RIG_AMIENS (obligatoire)',
       server:
-        'facultatif — défaut SQL-PROD\\PROD (métropole) ; RIGBD-ANTILLES ou RIGBD-REUNION pour les DROM'
+        'facultatif — défaut SQL-PROD\\PROD (métropole) ; RIGBD-ANTILLES, RIGBD-REUNION ou RIGBD-POLYNESIE pour les DROM ; SQL-DEV\\DEV pour RIG_DEV et RIG_RECETTE. En cas de refus, le message liste les bases disponibles sur le serveur visé.'
     },
     annotations: {
       // Lecture stricte : l'enveloppe annule systématiquement sa transaction. Mais `openWorldHint` —

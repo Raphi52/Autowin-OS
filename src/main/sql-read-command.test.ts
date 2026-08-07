@@ -1,12 +1,15 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  buildReadOnlyBatch,
-  runSqlRead,
-  type OutputFileAccess,
-  type SqlReadCommandDeps
-} from './sql-read-command'
+// fix-ok: adaptation à la nouvelle direction de l'utilisateur (l'autorité du périmètre devient
+// COMMUN_RIG.dbo.GREFFE, GRF_IS_EXPLOIT = 1) — refactor demandé, pas un correctif à l'aveugle.
+// L'exécution de sqlcmd vit désormais dans `sqlcmd-runner`, d'où provient `OutputFileAccess`.
+import { buildReadOnlyBatch, runSqlRead, type SqlReadCommandDeps } from './sql-read-command'
+import { buildSqlTargetCatalog } from './sql-read-catalog'
+import type { OutputFileAccess } from './sqlcmd-runner'
+
+/** Catalogue de test : la cible est autorisée, pour que ces tests portent sur l'EXÉCUTION. */
+const CATALOGUE = buildSqlTargetCatalog([{ server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS' }])
 
 /**
  * L'enveloppe d'exécution est la COUCHE 2 de la défense : même si une écriture franchissait la garde,
@@ -99,6 +102,7 @@ function lancer(
   const resultat = runSqlRead(cible, {
     spawnFn: spawnFn as never,
     sqlcmdPath: 'sqlcmd.exe',
+    catalog: CATALOGUE,
     outputFile: fichier,
     outputPath: 'T:\\sortie.json',
     ...extra
@@ -113,7 +117,7 @@ describe('runSqlRead — invocation de sqlcmd', () => {
     const spawnFn = vi.fn()
     const out = await runSqlRead(
       { ...cible, query: 'DELETE FROM T' },
-      { spawnFn: spawnFn as never, sqlcmdPath: 'sqlcmd.exe' }
+      { spawnFn: spawnFn as never, sqlcmdPath: 'sqlcmd.exe', catalog: CATALOGUE }
     )
     expect(out.ok).toBe(false)
     expect(spawnFn).not.toHaveBeenCalled()
@@ -125,6 +129,7 @@ describe('runSqlRead — invocation de sqlcmd', () => {
     const p = runSqlRead(cible, {
       spawnFn: spawnFn as never,
       sqlcmdPath: 'C:\\bin\\sqlcmd.exe',
+      catalog: CATALOGUE,
       outputFile: fakeFile('[{"x":1}]'),
       outputPath: 'T:\\sortie.json'
     })
@@ -164,7 +169,7 @@ describe('runSqlRead — invocation de sqlcmd', () => {
   })
 
   it('capacité non câblée → refus explicite, sans exception', async () => {
-    const out = await runSqlRead(cible, {})
+    const out = await runSqlRead(cible, { catalog: CATALOGUE })
     expect(out.ok).toBe(false)
     if (!out.ok) expect(out.reason).toMatch(/indisponible|sqlcmd/i)
   })
@@ -174,7 +179,8 @@ describe('runSqlRead — invocation de sqlcmd', () => {
       spawnFn: (() => {
         throw new Error('EPERM')
       }) as never,
-      sqlcmdPath: 'sqlcmd.exe'
+      sqlcmdPath: 'sqlcmd.exe',
+      catalog: CATALOGUE
     })
     expect(out.ok).toBe(false)
     if (!out.ok) expect(out.reason).toContain('EPERM')
@@ -380,6 +386,7 @@ describe('runSqlRead — erreurs et plafonds', () => {
     const p = runSqlRead(cible, {
       spawnFn: (() => child) as never,
       sqlcmdPath: 'sqlcmd.exe',
+      catalog: CATALOGUE,
       outputPath: 'T:\\sortie.json',
       outputFile: {
         size: () => 10,

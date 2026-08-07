@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { RIG_SQL_SERVERS, decideSqlRead } from './sql-read-guard'
+import { decideSqlRead, type SqlReadArgs } from './sql-read-guard'
+import { buildSqlTargetCatalog } from './sql-read-catalog'
 
 /**
  * GARDE DE LECTURE SQL — le maillon de sécurité de la consultation des bases RIG.
@@ -18,11 +19,33 @@ import { RIG_SQL_SERVERS, decideSqlRead } from './sql-read-guard'
  * systématiquement annulée, un délai borné et un plafond de lignes — mais on ne compte pas sur elles
  * pour rattraper une requête qui n'aurait pas dû passer.
  */
+/**
+ * Catalogue de test, calqué sur la réalité mesurée le 2026-08-07 dans `COMMUN_RIG.dbo.GREFFE` :
+ * 40 greffes exploités répartis sur 4 serveurs, plus les deux cibles fixes de développement.
+ * On en garde un échantillon représentatif — dont `RIGBD-POLYNESIE`, que la liste codée en dur
+ * précédente omettait alors qu'il héberge un greffe VIVANT.
+ */
+const CATALOGUE = buildSqlTargetCatalog([
+  { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS' },
+  { server: 'SQL-PROD\\PROD', database: 'RIG_LYON' },
+  { server: 'SQL-PROD\\PROD', database: 'RIG_LE_PUY' },
+  { server: 'SQL-PROD\\PROD', database: 'RIG_GRENOBLE' },
+  { server: 'SQL-PROD\\PROD', database: 'RIG_AURILLAC' },
+  { server: 'RIGBD-ANTILLES', database: 'RIG_POINTE_A_PITRE' },
+  { server: 'RIGBD-POLYNESIE', database: 'RIG_PAPEETE' },
+  { server: 'RIGBD-REUNION', database: 'RIG_MAMOUDZOU' },
+  { server: 'SQL-DEV\\DEV', database: 'RIG_DEV' },
+  { server: 'SQL-DEV\\DEV', database: 'RIG_RECETTE' }
+])
+
+const decide = (args: SqlReadArgs): ReturnType<typeof decideSqlRead> =>
+  decideSqlRead(args, CATALOGUE)
+
 describe('decideSqlRead — seule une lecture unique passe', () => {
   const base = { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS' }
 
   it('accepte un SELECT simple', () => {
-    const d = decideSqlRead({
+    const d = decide({
       ...base,
       query: 'SELECT R_CODEEVENEM_VALEUR FROM CODE_EVENEMENT_RCS'
     })
@@ -30,7 +53,7 @@ describe('decideSqlRead — seule une lecture unique passe', () => {
   })
 
   it('accepte un SELECT avec jointure, WHERE, ORDER BY et fonctions', () => {
-    const d = decideSqlRead({
+    const d = decide({
       ...base,
       query:
         "SELECT TOP 10 a.x, COUNT(*) AS n FROM T a JOIN U b ON b.id = a.id WHERE a.v = 'MORCA' GROUP BY a.x HAVING COUNT(*) > 1 ORDER BY n DESC"
@@ -39,7 +62,7 @@ describe('decideSqlRead — seule une lecture unique passe', () => {
   })
 
   it('accepte un CTE de lecture (WITH … SELECT)', () => {
-    const d = decideSqlRead({
+    const d = decide({
       ...base,
       query: 'WITH c AS (SELECT id FROM T) SELECT * FROM c'
     })
@@ -67,14 +90,14 @@ describe('decideSqlRead — seule une lecture unique passe', () => {
       'SHUTDOWN'
     ]
     for (const query of ecritures) {
-      const d = decideSqlRead({ ...base, query })
+      const d = decide({ ...base, query })
       expect(d.allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 
   it('REFUSE plusieurs instructions (le point-virgule est interdit)', () => {
     for (const query of ['SELECT 1; DELETE FROM T', 'SELECT 1;', 'SELECT 1 ; UPDATE T SET c=1']) {
-      const d = decideSqlRead({ ...base, query })
+      const d = decide({ ...base, query })
       expect(d.allowed, `accepté à tort : ${query}`).toBe(false)
       if (!d.allowed) expect(d.reason).toMatch(/instruction|point-virgule/i)
     }
@@ -86,19 +109,19 @@ describe('decideSqlRead — seule une lecture unique passe', () => {
       'SELECT /* ruse */ 1',
       'SELECT 1 /* DELETE FROM T */'
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 
   it('REFUSE ce qui ne commence pas par SELECT ou WITH', () => {
     for (const query of ['', '   ', 'sp_help T', 'USE RIG_LYON', 'SET NOCOUNT ON']) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 
   it('n’est pas dupé par la casse ni par les espaces multiples', () => {
-    expect(decideSqlRead({ ...base, query: '  DeLeTe   FROM T  ' }).allowed).toBe(false)
-    expect(decideSqlRead({ ...base, query: 'select\n\t1' }).allowed).toBe(true)
+    expect(decide({ ...base, query: '  DeLeTe   FROM T  ' }).allowed).toBe(false)
+    expect(decide({ ...base, query: 'select\n\t1' }).allowed).toBe(true)
   })
 
   /**
@@ -106,7 +129,7 @@ describe('decideSqlRead — seule une lecture unique passe', () => {
    * cherchée rendrait l'outil inutilisable sur des données réelles.
    */
   it('un mot-clé à l’intérieur d’un littéral ne fait PAS échouer la requête', () => {
-    const d = decideSqlRead({
+    const d = decide({
       ...base,
       query: "SELECT * FROM T WHERE libelle = 'demande de delete' OR libelle = 'drop table'"
     })
@@ -114,31 +137,83 @@ describe('decideSqlRead — seule une lecture unique passe', () => {
   })
 
   it('mais un littéral non fermé est REFUSÉ (on ne peut plus raisonner dessus)', () => {
-    expect(decideSqlRead({ ...base, query: "SELECT * FROM T WHERE x = 'oups" }).allowed).toBe(false)
+    expect(decide({ ...base, query: "SELECT * FROM T WHERE x = 'oups" }).allowed).toBe(false)
   })
 
   it('REFUSE une requête démesurée', () => {
-    expect(
-      decideSqlRead({ ...base, query: 'SELECT ' + 'x,'.repeat(5000) + 'y FROM T' }).allowed
-    ).toBe(false)
+    expect(decide({ ...base, query: 'SELECT ' + 'x,'.repeat(5000) + 'y FROM T' }).allowed).toBe(
+      false
+    )
   })
 })
 
-describe('decideSqlRead — cible autorisée', () => {
-  it('n’accepte que les serveurs RIG connus', () => {
-    for (const server of RIG_SQL_SERVERS) {
-      expect(decideSqlRead({ server, database: 'RIG_AMIENS', query: 'SELECT 1' }).allowed).toBe(
-        true
-      )
+/**
+ * LA CIBLE — c'est le CATALOGUE qui décide, plus un motif de nom.
+ *
+ * La version précédente définissait le périmètre par `^RIG_…` plus une liste de serveurs codée en
+ * dur. Elle était à la fois trop large (maquettes, copies figées, bases de service) et trop étroite
+ * (`RIGBD-POLYNESIE` manquait, alors qu'il héberge `RIG_PAPEETE`, greffe exploité). L'autorité est
+ * `COMMUN_RIG.dbo.GREFFE` avec `GRF_IS_EXPLOIT = 1`.
+ */
+describe('decideSqlRead — la cible vient du catalogue, pas d’un motif de nom', () => {
+  it('accepte tout couple présent au catalogue, sur les 4 serveurs', () => {
+    for (const [server, database] of [
+      ['SQL-PROD\\PROD', 'RIG_AMIENS'],
+      ['RIGBD-ANTILLES', 'RIG_POINTE_A_PITRE'],
+      ['RIGBD-POLYNESIE', 'RIG_PAPEETE'],
+      ['RIGBD-REUNION', 'RIG_MAMOUDZOU']
+    ]) {
+      expect(
+        decide({ server, database, query: 'SELECT 1 AS a' }).allowed,
+        `refusé à tort : ${database}@${server}`
+      ).toBe(true)
     }
   })
 
-  it('REFUSE un serveur inconnu, et liste les serveurs valides', () => {
-    const d = decideSqlRead({
-      server: 'SERVEUR-PIRATE',
-      database: 'RIG_AMIENS',
-      query: 'SELECT 1'
-    })
+  it('accepte les bases de DÉVELOPPEMENT sur SQL-DEV\\DEV', () => {
+    for (const database of ['RIG_DEV', 'RIG_RECETTE']) {
+      expect(
+        decide({ server: 'SQL-DEV\\DEV', database, query: 'SELECT 1 AS a' }).allowed,
+        `refusé à tort : ${database}`
+      ).toBe(true)
+    }
+  })
+
+  /**
+   * Ces bases existent, portent le préfixe `RIG_`, et sont `GRF_IS_EXPLOIT = 0` — vérifié dans
+   * l'autorité. Aucune heuristique de nom ne pouvait les distinguer d'un greffe : c'est bien pour ça
+   * que le catalogue remplace le motif.
+   */
+  it('REFUSE les bases RIG_ qui ne sont PAS exploitées', () => {
+    for (const database of [
+      'RIG_LE_PUY_MARTIN',
+      'RIG_GRENOBLE_SCP',
+      'RIG_AURILLAC_BECHONNET',
+      'RIG_DUNKERQUE_AVANT_SELARL',
+      'RIG_PUY_MAQUETTE',
+      'RIG_WS_TARIF_PAP',
+      'RIG_ANTIBES_FORMATION',
+      'RIG_QUIMPER_RECETTE'
+    ]) {
+      expect(
+        decide({ server: 'SQL-PROD\\PROD', database, query: 'SELECT 1 AS a' }).allowed,
+        `accepté à tort : ${database}`
+      ).toBe(false)
+    }
+  })
+
+  /** Un greffe exploité ne l'est que sur SON serveur : le couple compte, pas la base seule. */
+  it('REFUSE un greffe exploité mais sur le MAUVAIS serveur', () => {
+    expect(
+      decide({ server: 'SQL-PROD\\PROD', database: 'RIG_PAPEETE', query: 'SELECT 1 AS a' }).allowed
+    ).toBe(false)
+    expect(
+      decide({ server: 'RIGBD-ANTILLES', database: 'RIG_AMIENS', query: 'SELECT 1 AS a' }).allowed
+    ).toBe(false)
+  })
+
+  it('REFUSE un serveur inconnu, et liste les serveurs disponibles', () => {
+    const d = decide({ server: 'SERVEUR-PIRATE', database: 'RIG_AMIENS', query: 'SELECT 1 AS a' })
     expect(d.allowed).toBe(false)
     if (!d.allowed) {
       expect(d.reason).toMatch(/serveur/i)
@@ -146,27 +221,48 @@ describe('decideSqlRead — cible autorisée', () => {
     }
   })
 
-  it('REFUSE une base hors périmètre RIG (master, msdb, autre applicatif)', () => {
-    for (const database of ['master', 'msdb', 'tempdb', 'AutreAppli', 'RIGSOMETHING']) {
-      const d = decideSqlRead({ server: 'SQL-PROD\\PROD', database, query: 'SELECT 1' })
-      expect(d.allowed, `accepté à tort : ${database}`).toBe(false)
+  it('REFUSE les bases hors RIG, dont celle qui porte les mots de passe', () => {
+    for (const database of ['master', 'msdb', 'tempdb', 'AutreAppli', 'COMMUN_RIG']) {
+      expect(
+        decide({ server: 'SQL-PROD\\PROD', database, query: 'SELECT 1 AS a' }).allowed,
+        `accepté à tort : ${database}`
+      ).toBe(false)
     }
   })
 
-  it('accepte les bases RIG_ y compris les variantes de greffe', () => {
-    for (const database of ['RIG_AMIENS', 'RIG_LE_PUY_MARTIN', 'RIG_GRENOBLE_SCP']) {
-      expect(decideSqlRead({ server: 'SQL-PROD\\PROD', database, query: 'SELECT 1' }).allowed).toBe(
-        true
-      )
-    }
-  })
-
-  it('REFUSE un nom de base porteur d’injection (il part dans la ligne de commande)', () => {
+  it('REFUSE un nom porteur d’injection (il part dans la ligne de commande)', () => {
     for (const database of ['RIG_A"; DROP', 'RIG_A B', 'RIG_A$(x)', 'RIG_A`x`', 'RIG_A;x']) {
-      expect(decideSqlRead({ server: 'SQL-PROD\\PROD', database, query: 'SELECT 1' }).allowed).toBe(
-        false
-      )
+      expect(
+        decide({ server: 'SQL-PROD\\PROD', database, query: 'SELECT 1 AS a' }).allowed,
+        `accepté à tort : ${database}`
+      ).toBe(false)
     }
+    for (const server of ['SQL-PROD\\PROD; DROP', 'SQL PROD', 'SQL$(x)']) {
+      expect(
+        decide({ server, database: 'RIG_AMIENS', query: 'SELECT 1 AS a' }).allowed,
+        `accepté à tort : ${server}`
+      ).toBe(false)
+    }
+  })
+
+  /**
+   * Autorité injoignable = défaut FERMÉ et VISIBLE. Retomber sur un motif de nom serait exactement le
+   * défaut que quatre rounds d'audit ont trouvé : un périmètre qui se dégrade en silence.
+   */
+  it('catalogue dégradé : la production est refusée, et le message le dit', () => {
+    const degrade = buildSqlTargetCatalog([{ server: 'SQL-DEV\\DEV', database: 'RIG_DEV' }], true)
+    const prod = decideSqlRead(
+      { server: 'SQL-PROD\\PROD', database: 'RIG_AMIENS', query: 'SELECT 1 AS a' },
+      degrade
+    )
+    expect(prod.allowed).toBe(false)
+    if (!prod.allowed) expect(prod.reason).toMatch(/indisponible|COMMUN_RIG/i)
+
+    const dev = decideSqlRead(
+      { server: 'SQL-DEV\\DEV', database: 'RIG_DEV', query: 'SELECT 1 AS a' },
+      degrade
+    )
+    expect(dev.allowed).toBe(true)
   })
 })
 
@@ -192,7 +288,7 @@ describe('decideSqlRead — contournements par identifiant délimité', () => {
 
   it('REFUSE le contournement exact rapporté par l’audit', () => {
     const attaque = "SELECT 1 AS [x'a] ; COMMIT TRANSACTION ; DELETE FROM CODE_EVENEMENT_RCS ; --'"
-    const d = decideSqlRead({ ...base, query: attaque })
+    const d = decide({ ...base, query: attaque })
     expect(d.allowed, 'le contournement de l’audit passe encore').toBe(false)
   })
 
@@ -209,7 +305,7 @@ describe('decideSqlRead — contournements par identifiant délimité', () => {
       // guillemet double jamais fermé
       'SELECT 1 AS "x'
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 
@@ -222,7 +318,7 @@ describe('decideSqlRead — contournements par identifiant délimité', () => {
       'SELECT "col espacée" FROM T',
       'SELECT [a]]b] FROM T' // identifiant contenant un ] échappé
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
+      expect(decide({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
     }
   })
 })
@@ -256,7 +352,7 @@ describe('decideSqlRead — contournements par le préprocesseur sqlcmd', () => 
       'SELECT 1\r\nGO\r\nDELETE FROM T',
       'SELECT 1\nGO 2000000000' // GO <n> : réexécution en boucle = déni de service
     ]) {
-      const d = decideSqlRead({ ...base, query })
+      const d = decide({ ...base, query })
       expect(d.allowed, `accepté à tort : ${JSON.stringify(query)}`).toBe(false)
     }
   })
@@ -267,7 +363,7 @@ describe('decideSqlRead — contournements par le préprocesseur sqlcmd', () => 
       'SELECT 1\n:r C:\\x.sql',
       'SELECT 1\n  :setvar a b'
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 
@@ -277,7 +373,7 @@ describe('decideSqlRead — contournements par le préprocesseur sqlcmd', () => 
       'SELECT 1\ndelete"T"',
       'SELECT * FROM T\nupdate[T]'
     ]) {
-      const d = decideSqlRead({ ...base, query })
+      const d = decide({ ...base, query })
       expect(d.allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
@@ -289,12 +385,12 @@ describe('decideSqlRead — contournements par le préprocesseur sqlcmd', () => 
       'SELECT 1\nROLLBACK',
       'SELECT 1\nBEGIN TRAN'
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 
   it('REFUSE NEXT VALUE FOR — une séquence s’incrémente hors transaction', () => {
-    expect(decideSqlRead({ ...base, query: 'SELECT NEXT VALUE FOR dbo.maSeq' }).allowed).toBe(false)
+    expect(decide({ ...base, query: 'SELECT NEXT VALUE FOR dbo.maSeq' }).allowed).toBe(false)
   })
 
   it('mais une lecture multi-lignes normale passe toujours', () => {
@@ -303,7 +399,7 @@ describe('decideSqlRead — contournements par le préprocesseur sqlcmd', () => 
       'SELECT [R_CODEEVENEM_VALEUR]\nFROM [dbo].[CODE_EVENEMENT_RCS]',
       "SELECT * FROM T\nWHERE libelle = 'gomme'" // « go » dans un littéral, pas en début de ligne
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
+      expect(decide({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
     }
   })
 })
@@ -334,7 +430,7 @@ describe('decideSqlRead — directive sqlcmd cachée dans une région délimité
       'SELECT "z\nGO\ndelete T\nGO\n" FROM t',
       'SELECT 1 FROM t WHERE a=1 OR [z\r\nGO\r\ndelete T\r\n]=1'
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 
@@ -344,7 +440,7 @@ describe('decideSqlRead — directive sqlcmd cachée dans une région délimité
       'SELECT "c\n:r C:\\evil.sql\nx" FROM t',
       "SELECT 'c\n:setvar a b\nx' FROM t"
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 
@@ -353,7 +449,7 @@ describe('decideSqlRead — directive sqlcmd cachée dans une région délimité
       'SELECT [R_CODEEVENEM_VALEUR]\nFROM [dbo].[CODE_EVENEMENT_RCS]\nWHERE 1 = 1',
       "SELECT *\nFROM CODE_EVENEMENT_RCS\nWHERE R_CODEEVENEM_VALEUR = 'MORCA'"
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
+      expect(decide({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
     }
   })
 })
@@ -379,7 +475,7 @@ describe('decideSqlRead — évasions du périmètre sans nom qualifié', () => 
       'SELECT * FROM sysaltfiles',
       'SELECT * FROM sysprocesses'
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 
@@ -392,7 +488,7 @@ describe('decideSqlRead — évasions du périmètre sans nom qualifié', () => 
       "SELECT * FROM fn_my_permissions(NULL,'SERVER')",
       "SELECT * FROM fn_trace_gettable('x', 1)"
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 
@@ -402,13 +498,13 @@ describe('decideSqlRead — évasions du périmètre sans nom qualifié', () => 
       'SELECT * FROM sys.dm_exec_sql_text(NULL)',
       'SELECT * FROM sys.dm_os_host_info'
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 
   it('mais DB_NAME() sans argument et les métadonnées locales restent lisibles', () => {
     for (const query of ['SELECT t.name FROM sys.tables t', 'SELECT c.name FROM sys.columns c']) {
-      expect(decideSqlRead({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
+      expect(decide({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
     }
   })
 })
@@ -440,7 +536,7 @@ describe('decideSqlRead — vues de compatibilité qui exposent les autres greff
       'SELECT * FROM sysdevices',
       'SELECT * FROM sys.syscacheobjects'
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 
@@ -457,7 +553,7 @@ describe('decideSqlRead — vues de compatibilité qui exposent les autres greff
       "SELECT HAS_PERMS_BY_NAME('RIG_LYON','DATABASE','SELECT') AS p",
       "SELECT LOGINPROPERTY('x','IsLocked') AS p"
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 
@@ -474,7 +570,7 @@ describe('decideSqlRead — vues de compatibilité qui exposent les autres greff
       'SELECT * FROM sys.dm_fts_index_population',
       'SELECT * FROM sys.dm_repl_articles'
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 
@@ -484,7 +580,7 @@ describe('decideSqlRead — vues de compatibilité qui exposent les autres greff
       'SELECT * FROM sys.server_role_members',
       'SELECT * FROM sys.tcp_endpoints'
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 
@@ -498,7 +594,7 @@ describe('decideSqlRead — vues de compatibilité qui exposent les autres greff
       'SELECT USER_NAME() AS u',
       'SELECT SCHEMA_NAME() AS s'
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
+      expect(decide({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
     }
   })
 })
@@ -520,7 +616,7 @@ describe('decideSqlRead — nom qualifié par le SCHÉMA, pas par la base', () =
       'SELECT [dbo].[T].[col] FROM [dbo].[T]',
       'SELECT sys.tables.name FROM sys.tables'
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
+      expect(decide({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
     }
   })
 
@@ -533,44 +629,17 @@ describe('decideSqlRead — nom qualifié par le SCHÉMA, pas par la base', () =
       'SELECT * FROM [SOMELINK].[master].[sys].[databases]',
       'SELECT RIGBD5.RIG_X.dbo.T.col FROM RIGBD5.RIG_X.dbo.T'
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 })
 
 /**
- * 4ᵉ audit : le préfixe `RIG_` ne définit pas « base greffe vivante ». Constaté sur les 44 bases
- * `RIG_*` de `SQL-PROD\PROD` : une maquette, une copie figée d'avant changement de structure, et
- * quatre bases de service web tarif. Des données nominatives figées devenaient lisibles.
- *
- * On ne refuse ici que les formes NON AMBIGUËS. Les copies d'anciennes entités identifiées par leur
- * seul nom (`RIG_AURILLAC_BECHONNET`, `RIG_LE_PUY_MARTIN`, `RIG_GRENOBLE_SCP`) restent autorisées :
- * c'est un arbitrage métier, pas une déduction, et il revient à l'utilisateur — pas à ce code.
+ * (Le bloc « bases hors périmètre malgré le préfixe RIG_ » a été retiré : le catalogue a remplacé
+ * l'heuristique de nom, et ces cas sont désormais couverts par « la cible vient du catalogue » —
+ * y compris `RIG_PUY_MAQUETTE` et les bases de service, refusées parce qu'elles ne sont pas
+ * `GRF_IS_EXPLOIT = 1`, et non parce que leur nom y ressemble.)
  */
-describe('decideSqlRead — bases hors périmètre greffe malgré le préfixe RIG_', () => {
-  const server = 'SQL-PROD\\PROD'
-
-  it('REFUSE maquettes, copies figées et bases de service', () => {
-    for (const database of [
-      'RIG_PUY_MAQUETTE',
-      'RIG_DUNKERQUE_AVANT_SELARL',
-      'RIG_WS_TARIF_PAP',
-      'RIG_WS_TARIF_SAINT_DENIS'
-    ]) {
-      expect(decideSqlRead({ server, database, query: 'SELECT 1 AS a' }).allowed, database).toBe(
-        false
-      )
-    }
-  })
-
-  it('accepte les bases greffe vivantes', () => {
-    for (const database of ['RIG_AMIENS', 'RIG_LYON', 'RIG_POINTE_A_PITRE', 'RIG_LE_HAVRE']) {
-      expect(decideSqlRead({ server, database, query: 'SELECT 1 AS a' }).allowed, database).toBe(
-        true
-      )
-    }
-  })
-})
 
 /**
  * EFFET SUR LA PRODUCTION SANS ÉCRITURE. Un indice de table est PRIORITAIRE sur le niveau
@@ -590,13 +659,13 @@ describe('decideSqlRead — pas de verrou imposé à une base de production', ()
       'SELECT * FROM T WITH (SERIALIZABLE)',
       'SELECT * FROM T WITH (REPEATABLEREAD)'
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 
   it('mais les indices de lecture inoffensifs passent', () => {
     for (const query of ['SELECT * FROM T WITH (NOLOCK)', 'SELECT * FROM T WITH (INDEX(1))']) {
-      expect(decideSqlRead({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
+      expect(decide({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
     }
   })
 })
@@ -626,7 +695,7 @@ describe('decideSqlRead — juxtaposition d’instructions sans séparateur', ()
       'SELECT 1 AS a ENABLE TRIGGER ALL ON T',
       'SELECT 1 AS a WHILE (1=1) SELECT 1'
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 })
@@ -647,7 +716,7 @@ describe('decideSqlRead — le périmètre annoncé est réellement tenu', () =>
       'SELECT * FROM [SOMELINK].master.sys.databases',
       'SELECT * FROM [SOMELINK].[master].[sys].[databases]'
     ]) {
-      const d = decideSqlRead({ ...base, query })
+      const d = decide({ ...base, query })
       expect(d.allowed, `accepté à tort : ${query}`).toBe(false)
       if (!d.allowed) expect(d.reason).toMatch(/base|périmètre|qualifi/i)
     }
@@ -665,7 +734,7 @@ describe('decideSqlRead — le périmètre annoncé est réellement tenu', () =>
       'SELECT * FROM sys.[sql_logins]',
       'SELECT * FROM [sys].servers'
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 
@@ -675,7 +744,7 @@ describe('decideSqlRead — le périmètre annoncé est réellement tenu', () =>
       'SELECT c.name FROM sys.columns c', // métadonnées de la base courante : utile et sans risque
       'SELECT t.name FROM sys.tables t'
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
+      expect(decide({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
     }
   })
 })
@@ -696,7 +765,7 @@ describe('decideSqlRead — pas de faux refus sur des colonnes réelles', () => 
       'SELECT MNTSP_ID_MNTSP FROM MENTION_SP',
       'SELECT EXPEDITION_ID FROM EXPEDITION' // « exp » contient xp
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
+      expect(decide({ ...base, query }).allowed, `refusé à tort : ${query}`).toBe(true)
     }
   })
 
@@ -706,7 +775,7 @@ describe('decideSqlRead — pas de faux refus sur des colonnes réelles', () => 
       'SELECT * FROM sp_helptext',
       "SELECT * FROM OPENROWSET('x','y','exec xp_cmdshell ''dir''')"
     ]) {
-      expect(decideSqlRead({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
+      expect(decide({ ...base, query }).allowed, `accepté à tort : ${query}`).toBe(false)
     }
   })
 })

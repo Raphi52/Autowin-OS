@@ -19,47 +19,31 @@
  * CHOIX ASSUMÉ, décidé par l'utilisateur le 2026-08-06 : le périmètre couvre TOUTES les tables des
  * bases RIG, pas seulement le paramétrage. Conséquence explicite : des données nominatives de greffe
  * peuvent entrer dans le contexte du modèle, donc quitter le poste. Ce n'est pas un oubli.
+ *
+ * QUELLES BASES : ce module ne le décide plus. L'autorité est `COMMUN_RIG.dbo.GREFFE`
+ * (`GRF_IS_EXPLOIT = 1`), lue par `sql-read-catalog.ts` et passée ici en paramètre. Un motif de nom ne
+ * peut pas trancher — `RIG_LE_PUY_MARTIN` ressemble à un greffe et n'en est pas un.
  */
-
-/** Serveurs RIG connus et joignables — vérifiés le 2026-08-06 depuis le poste de référence. */
-export const RIG_SQL_SERVERS = ['SQL-PROD\\PROD', 'RIGBD-ANTILLES', 'RIGBD-REUNION'] as const
-export type RigSqlServer = (typeof RIG_SQL_SERVERS)[number]
+import type { SqlTargetCatalog } from './sql-read-catalog'
 
 /** Une requête plus longue n'est plus relisible par un humain, et sent l'accident. */
 const MAX_QUERY_LENGTH = 4000
 
 /**
- * Noms de base acceptés : `RIG_` suivi de lettres, chiffres et soulignés. Le nom part dans la ligne
- * de commande de `sqlcmd` (option `-d`) : tout ce qui pourrait y être interprété est refusé, et on
- * exige le préfixe pour rester dans le périmètre RIG (jamais `master`, `msdb`, ni un autre applicatif).
+ * Formes acceptables pour les cibles. Ce ne sont PAS elles qui définissent le périmètre — l'autorité
+ * est le catalogue (`sql-read-catalog.ts`, `GRF_IS_EXPLOIT = 1`). Ces motifs sont une seconde couche,
+ * pour la seule raison que le serveur et la base partent dans la LIGNE DE COMMANDE de `sqlcmd`
+ * (options `-S` et `-d`) : tout ce qui pourrait y être interprété est refusé, même si une entrée
+ * corrompue de l'autorité le proposait.
  */
-const DATABASE_PATTERN = /^RIG_[A-Za-z0-9_]+$/
+const DATABASE_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/
+const SERVER_PATTERN = /^[A-Za-z][A-Za-z0-9_.\\-]*$/
 
 /**
  * Schémas LOCAUX : quand la première partie d'un nom à trois segments est l'un d'eux, on a
  * `schéma.table.colonne`, qui ne sort pas de la base ciblée.
  */
 const LOCAL_SCHEMAS = ['dbo', 'sys', 'information_schema']
-
-/**
- * Le préfixe `RIG_` ne définit PAS « base greffe vivante ». Constaté sur les 44 bases `RIG_*` de
- * `SQL-PROD\PROD` au 4ᵉ audit : une maquette, une copie figée d'avant changement de structure, et
- * quatre bases de service web tarif. Des données nominatives figées devenaient lisibles.
- *
- * On ne refuse ici que les formes NON AMBIGUËS. Les copies d'anciennes entités reconnaissables à leur
- * seul nom — `RIG_AURILLAC_BECHONNET`, `RIG_LE_PUY_MARTIN`, `RIG_GRENOBLE_SCP` — restent AUTORISÉES :
- * savoir si ce sont des archives ou des greffes vivants est un arbitrage métier, pas une déduction.
- * Il revient à l'utilisateur, pas à ce code, et il est signalé plutôt que tranché en silence.
- */
-const NON_GREFFE_DATABASES = [
-  /_MAQUETTE$/i,
-  /_AVANT_/i,
-  /^RIG_WS_/i,
-  /_RECETTE$/i,
-  /_TEST$/i,
-  /_SAUVE(GARDE)?$/i,
-  /_COPIE$/i
-]
 
 /**
  * Vues et fonctions système à portée SERVEUR : elles sont visibles depuis n'importe quelle base et
@@ -293,7 +277,7 @@ export interface SqlReadArgs {
 }
 
 export type SqlReadDecision =
-  | { allowed: true; server: RigSqlServer; database: string; query: string }
+  | { allowed: true; server: string; database: string; query: string }
   | { allowed: false; reason: string }
 
 /**
@@ -436,27 +420,39 @@ function outOfScopeName(nomme: string): string | undefined {
   return undefined
 }
 
-/** Valide la cible et la requête. Ne throw jamais : un refus est un résultat à afficher. */
-export function decideSqlRead(args: SqlReadArgs): SqlReadDecision {
+/**
+ * Valide la cible et la requête. Ne throw jamais : un refus est un résultat à afficher.
+ *
+ * Le `catalogue` est OBLIGATOIRE, et c'est délibéré : rendre l'autorité optionnelle laisserait un
+ * chemin permissif par défaut, et un périmètre qui se dégrade en silence est exactement le défaut que
+ * quatre rounds d'audit ont trouvé. L'appelant doit dire sur quoi il autorise la lecture.
+ */
+export function decideSqlRead(args: SqlReadArgs, catalogue: SqlTargetCatalog): SqlReadDecision {
   const server = typeof args?.server === 'string' ? args.server.trim() : ''
-  if (!(RIG_SQL_SERVERS as readonly string[]).includes(server)) {
-    return {
-      allowed: false,
-      reason: `Serveur non autorisé : « ${server} ». Serveurs RIG : ${RIG_SQL_SERVERS.join(', ')}.`
-    }
-  }
-
   const database = typeof args?.database === 'string' ? args.database.trim() : ''
-  if (!DATABASE_PATTERN.test(database)) {
-    return {
-      allowed: false,
-      reason: `Base non autorisée : « ${database} ». Attendu une base greffe RIG_… (ex. RIG_AMIENS).`
-    }
+
+  // Formes d'abord : le serveur et la base partent dans la ligne de commande de sqlcmd.
+  if (!SERVER_PATTERN.test(server)) {
+    return { allowed: false, reason: `Nom de serveur invalide : « ${server} ».` }
   }
-  if (NON_GREFFE_DATABASES.some((motif) => motif.test(database))) {
+  if (!DATABASE_PATTERN.test(database)) {
+    return { allowed: false, reason: `Nom de base invalide : « ${database} ».` }
+  }
+  // Puis l'AUTORITÉ. Un couple absent du catalogue est refusé, sans repli sur un motif de nom.
+  if (!catalogue.has(server, database)) {
+    if (catalogue.degraded) {
+      return {
+        allowed: false,
+        reason:
+          'Liste des greffes indisponible (COMMUN_RIG injoignable) : seules les bases de développement sont lisibles pour l’instant. Réessaie, ou vérifie l’accès à SQL-PROD\\PROD.'
+      }
+    }
+    const connues = catalogue.databasesFor(server)
     return {
       allowed: false,
-      reason: `Base hors périmètre : « ${database} » n’est pas un greffe vivant (maquette, copie figée ou base de service).`
+      reason: connues.length
+        ? `Base hors périmètre : « ${database} » n’est pas un greffe exploité sur ${server}. Bases disponibles : ${connues.slice(0, 8).join(', ')}${connues.length > 8 ? `, … (${connues.length} au total)` : ''}.`
+        : `Serveur hors périmètre : « ${server} ». Serveurs disponibles : ${catalogue.servers().join(', ')}.`
     }
   }
 
@@ -550,5 +546,5 @@ export function decideSqlRead(args: SqlReadArgs): SqlReadDecision {
     return { allowed: false, reason: 'Clause INTO interdite : elle créerait une table.' }
   }
 
-  return { allowed: true, server: server as RigSqlServer, database, query }
+  return { allowed: true, server, database, query }
 }
