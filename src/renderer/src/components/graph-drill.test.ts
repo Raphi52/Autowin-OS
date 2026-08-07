@@ -9,6 +9,8 @@ import {
   drillInto,
   drillTrail,
   radiusOf,
+  repoSlug,
+  brainProjectsForRepo,
   summarizeRepo
 } from './graph-drill'
 
@@ -194,5 +196,75 @@ describe('navigation — descendre, remonter, se situer', () => {
     const depart = { level: 'crown', family: 'projects' } as const
     const descendu = drillInto(depart, { repo: 'rig-tv' })
     expect(drillBack(descendu)).toEqual(depart)
+  })
+})
+
+describe('rattacher un dépôt aux projets du Brain', () => {
+  /** Les 9 projets réels du Brain, mesurés sur le partage. */
+  const PROJETS = [
+    'autowin-os',
+    'rig-etapefacture',
+    'rig-etapejudiciaire',
+    'rig-etapercs',
+    'rig-operations',
+    'rig-processus',
+    'rig-rig_ope_metier',
+    'rig-rig_ult_metier',
+    'rig-tv'
+  ]
+  /** Les 5 dépôts réels de la machine. */
+  const DEPOTS = ['RigApplication', 'Autowin OS', 'RIG-V3', 'Fiche_Nouveau_Collaborateur', 'RIG-TV']
+
+  it('réduit un nom de dépôt à la forme employée par le Brain', () => {
+    expect(repoSlug('Autowin OS')).toBe('autowin-os')
+    expect(repoSlug('RIG-TV')).toBe('rig-tv')
+    expect(repoSlug('Fiche_Nouveau_Collaborateur')).toBe('fiche-nouveau-collaborateur')
+    expect(repoSlug('  RigApplication  ')).toBe('rigapplication')
+  })
+
+  it('rattache par nom EXACT quand il existe, et le déclare comme sûr', () => {
+    expect(brainProjectsForRepo('Autowin OS', PROJETS, DEPOTS)).toEqual([
+      { project: 'autowin-os', match: 'exact' }
+    ])
+    expect(brainProjectsForRepo('RIG-TV', PROJETS, DEPOTS)).toEqual([
+      { project: 'rig-tv', match: 'exact' }
+    ])
+  })
+
+  it('donne au monorepo ses modules restants, MARQUÉS comme heuristiques', () => {
+    const liens = brainProjectsForRepo('RigApplication', PROJETS, DEPOTS)
+    // Les 8 modules `rig-*` moins `rig-tv`, que le dépôt RIG-TV réclame par son nom.
+    expect(liens.map((l) => l.project)).toEqual([
+      'rig-etapefacture',
+      'rig-etapejudiciaire',
+      'rig-etapercs',
+      'rig-operations',
+      'rig-processus',
+      'rig-rig_ope_metier',
+      'rig-rig_ult_metier'
+    ])
+    // Un rattachement déduit ne doit JAMAIS se présenter comme certain.
+    expect(liens.every((l) => l.match === 'heuristique')).toBe(true)
+  })
+
+  it('ne compte JAMAIS un projet deux fois — l’invariant qui protège les totaux', () => {
+    const tous = DEPOTS.flatMap((depot) =>
+      brainProjectsForRepo(depot, PROJETS, DEPOTS).map((l) => l.project)
+    )
+    expect(new Set(tous).size).toBe(tous.length)
+    // `rig-tv` va au dépôt qui porte son nom, pas au monorepo.
+    expect(
+      brainProjectsForRepo('RigApplication', PROJETS, DEPOTS).map((l) => l.project)
+    ).not.toContain('rig-tv')
+  })
+
+  it('ne rattache rien à un dépôt sans projet, plutôt que d’inventer', () => {
+    expect(brainProjectsForRepo('RIG-V3', PROJETS, DEPOTS)).toEqual([])
+    expect(brainProjectsForRepo('Fiche_Nouveau_Collaborateur', PROJETS, DEPOTS)).toEqual([])
+  })
+
+  it('réserve l’héritage des modules au SEUL monorepo', () => {
+    // Sans cette réserve, n'importe quel dépôt happerait les projets `rig-*`.
+    expect(brainProjectsForRepo('RIG-V3', ['rig-processus'], ['RIG-V3'])).toEqual([])
   })
 })

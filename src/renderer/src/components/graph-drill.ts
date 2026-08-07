@@ -139,6 +139,57 @@ export function summarizeRepo(repo: string, relativeIds: readonly string[]): Rep
   return { repo, total: relativeIds.length, categories, empty: relativeIds.length === 0 }
 }
 
+/* ─────────────────────────────── dépôt ↔ projets du Brain ─────────────────────────────── */
+
+/**
+ * Le nom d'un dépôt, réduit à la forme que le Brain emploie pour ses dossiers.
+ * `Autowin OS` → `autowin-os`, `RIG-TV` → `rig-tv`, `Fiche_Nouveau_Collaborateur` →
+ * `fiche-nouveau-collaborateur`.
+ */
+export function repoSlug(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+/**
+ * Les projets du Brain qui alimentent un dépôt.
+ *
+ * Le rattachement exact — même nom réduit — est SÛR. Le reste est une HEURISTIQUE assumée et
+ * signalée : les 8 projets `rig-*` du Brain (`rig-etapefacture`, `rig-processus`…) sont des MODULES
+ * de `RigApplication`, pas des dépôts distincts ; sans cette règle ils resteraient orphelins alors
+ * que l'utilisateur a dit « tout ce qui est dans le repo RigApplication est un projet qui aura son
+ * arborescence interne ». Toute correspondance heuristique est marquée, pour que la vue puisse le
+ * DIRE plutôt que de laisser croire à un rattachement certain.
+ */
+export interface RepoBrainLink {
+  project: string
+  /** `exact` = même nom réduit. `heuristique` = module déduit d'un préfixe, à confirmer. */
+  match: 'exact' | 'heuristique'
+}
+
+export function brainProjectsForRepo(
+  repoName: string,
+  projects: readonly string[],
+  allRepoNames: readonly string[] = [repoName]
+): RepoBrainLink[] {
+  const slug = repoSlug(repoName)
+  const exact = projects.filter((project) => repoSlug(project) === slug)
+  if (exact.length > 0) return exact.map((project) => ({ project, match: 'exact' as const }))
+  // Seul le monorepo hérite des modules `rig-*` restants — et seulement ceux qu'AUCUN autre dépôt
+  // ne réclame par son nom, sinon `rig-tv` serait compté deux fois.
+  if (slug !== 'rigapplication') return []
+  const reclamesAilleurs = new Set(
+    allRepoNames.filter((name) => repoSlug(name) !== slug).map((name) => repoSlug(name))
+  )
+  return projects
+    .filter((project) => project.startsWith('rig-') && !reclamesAilleurs.has(repoSlug(project)))
+    .map((project) => ({ project, match: 'heuristique' as const }))
+}
+
 /* ─────────────────────────────── état de navigation ─────────────────────────────── */
 
 /**

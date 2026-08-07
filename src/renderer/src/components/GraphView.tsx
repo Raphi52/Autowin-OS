@@ -2,6 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
 import { boundingRadius, layoutRadial } from './graph-radial-layout'
 import {
+  DRILL_ROOT,
+  bandAtRadius,
+  brainProjectsForRepo,
+  drillBack,
+  drillInto,
+  drillTrail,
+  radiusOf,
+  summarizeRepo,
+  type DrillPosition
+} from './graph-drill'
+import type { RepoEntry } from '../../../main/repo-inventory'
+import {
   rememberViewBeforeFocus,
   restoreView,
   type CameraHandle,
@@ -93,7 +105,15 @@ type ResizableColumn = 'theme' | 'visibility' | 'detail'
 type ColumnWidths = GraphColumnWidths
 const EMPTY_THEME_SELECTION = new Set<string>()
 /** Couleurs des BANDES radiales — une teinte par famille, du centre vers l'extérieur. */
-const BAND_COLORS = ["#8b5cf6", "#22d3ee", "#a78bfa", "#f472b6", "#facc15", "#34d399", "#60a5fa"] as const
+const BAND_COLORS = [
+  '#8b5cf6',
+  '#22d3ee',
+  '#a78bfa',
+  '#f472b6',
+  '#facc15',
+  '#34d399',
+  '#60a5fa'
+] as const
 
 function initialVisibilitySettings(): GraphVisibilitySettings {
   return loadGraphVisibilitySettings(localStorage)
@@ -849,6 +869,71 @@ export function GraphView({
     setActiveThemes((current) => selectExclusiveTheme(current, theme))
   }
 
+  /* ───────────────────── FORAGE : couronne → dépôt → catégories ─────────────────────
+   * La couronne comptait des NOTES en les faisant passer pour des projets (« PROJECTS · 100 » pour
+   * 100 notes réparties sur 9 projets). Le forage remplace ce compte par des membres NOMMÉS, et le
+   * mot « projet » par « dépôt » — décidé avec l'utilisateur, parce que « projet » était ambigu
+   * entre trois mailles incompatibles. */
+  const [drill, setDrill] = useState<DrillPosition>(DRILL_ROOT)
+  const [repos, setRepos] = useState<RepoEntry[]>([])
+
+  useEffect(() => {
+    // Chargé une seule fois, jamais au clic : l'inventaire lance des commandes git, et le refaire à
+    // chaque geste rendrait le forage poussif.
+    if (layoutMode !== 'radial' || repos.length > 0) return
+    let vivant = true
+    void window.api
+      ?.repoInventory?.()
+      .then((inventory) => {
+        if (vivant) setRepos(inventory.repos)
+      })
+      .catch(() => {
+        /* pont absent : la couronne restera muette plutôt que de mentir */
+      })
+    return () => {
+      vivant = false
+    }
+  }, [layoutMode, repos.length])
+
+  /** Les chemins des notes du graphe affiché, relatifs au vault — la matière des catégories. */
+  const noteIds = useMemo(() => displayGraph.nodes.map((item) => item.id), [displayGraph])
+
+  /**
+   * Le clic ne tombe pas sur un objet three.js : les anneaux sont de simples tracés, sans détection
+   * propre. On résout donc en GÉOMÉTRIE — rayon du point cliqué, puis la bande qui le contient.
+   * Aucun raycaster n'est nécessaire, contrairement à mon estimation initiale.
+   */
+  function bandeSousLeClic(event: MouseEvent): string | undefined {
+    const instance = graphRef.current as unknown as {
+      screen2GraphCoords?: (x: number, y: number, distance: number) => { x: number; y: number }
+      cameraPosition?: () => { x: number; y: number; z: number }
+    } | null
+    const box = wrap.current?.getBoundingClientRect()
+    if (!instance?.screen2GraphCoords || !box) return undefined
+    const camera = instance.cameraPosition?.()
+    // En mode radial la caméra est d'aplomb sur l'axe Z : sa cote EST la distance au plan du disque.
+    const distance = Math.abs(camera?.z ?? 0)
+    if (distance <= 0) return undefined
+    const point = instance.screen2GraphCoords(
+      event.clientX - box.left,
+      event.clientY - box.top,
+      distance
+    )
+    return bandAtRadius(radial.bands, radiusOf(point.x, point.y))?.family
+  }
+
+  function surClicDeFond(event: MouseEvent): void {
+    if (layoutMode === 'radial' && drill.level === 'crowns') {
+      const family = bandeSousLeClic(event)
+      // Hors de toute bande, on rend le geste à sa fonction d'origine : désélectionner.
+      if (family) {
+        setDrill(drillInto(DRILL_ROOT, { family }))
+        return
+      }
+    }
+    clearNodeSelection()
+  }
+
   function clearNodeSelection(): void {
     // Rendre le point de vue d'où l'on est parti : c'est ce qui « réintègre » visuellement le nœud
     // dans le graphe. La mémoire est libérée par `restoreView`, jamais rejouée deux fois.
@@ -1253,6 +1338,118 @@ export function GraphView({
         {!loading && !err && graph.nodes.length === 0 && (
           <div className="graph-status">Aucun nœud disponible pour ce graphe.</div>
         )}
+        {layoutMode === 'radial' && drill.level !== 'crowns' && (
+          <div className="graph-drill" data-testid="graph-drill">
+            <nav className="graph-drill__trail" aria-label="Chemin de forage">
+              {drillTrail(drill).map((etape, index, all) => (
+                <span key={`${etape}-${index}`}>
+                  {etape}
+                  {index < all.length - 1 ? ' › ' : ''}
+                </span>
+              ))}
+              <button
+                type="button"
+                className="graph-drill__back"
+                data-testid="graph-drill-back"
+                onClick={() => setDrill(drillBack(drill))}
+              >
+                ↑ Remonter
+              </button>
+            </nav>
+
+            {drill.level === 'crown' &&
+              (drill.family === 'projects' ? (
+                repos.length === 0 ? (
+                  <p className="graph-drill__empty">
+                    Aucun dépôt trouvé sur cette machine — la liste vient de git, pas du graphe.
+                  </p>
+                ) : (
+                  <div className="graph-drill__items">
+                    {repos.map((repo) => (
+                      <button
+                        key={repo.path}
+                        type="button"
+                        className="graph-drill__item"
+                        data-testid={`graph-drill-repo-${repo.name}`}
+                        onClick={() => setDrill(drillInto(drill, { repo: repo.name }))}
+                      >
+                        <b>{repo.name}</b>
+                        <small>
+                          {repo.commits ?? '?'} commits
+                          {repo.branch ? ` · ${repo.branch}` : ' · tête détachée'}
+                          {/* Les worktrees sont COMPTÉS, jamais présentés comme des dépôts. */}
+                          {repo.worktrees > 0 ? ` · ${repo.worktrees} worktrees` : ''}
+                        </small>
+                      </button>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <p className="graph-drill__empty">
+                  Cette couronne n’a pas encore de forage : seule « projects » mène aux dépôts.
+                </p>
+              ))}
+
+            {drill.level === 'repo' &&
+              (() => {
+                const liens = brainProjectsForRepo(
+                  drill.repo,
+                  [...new Set(noteIds.map((id) => id.split('/')[1]).filter(Boolean))],
+                  repos.map((repo) => repo.name)
+                )
+                const notes = noteIds.filter((id) =>
+                  liens.some((lien) => id.startsWith(`projects/${lien.project}/`))
+                )
+                const resume = summarizeRepo(drill.repo, notes)
+                const heuristique = liens.some((lien) => lien.match === 'heuristique')
+                return (
+                  <>
+                    {resume.empty && (
+                      <p className="graph-drill__empty" data-testid="graph-drill-repo-empty">
+                        Aucune note rattachée à ce dépôt dans le Brain — il n’a peut-être que son
+                        snapshot de code.
+                      </p>
+                    )}
+                    <div className="graph-drill__items">
+                      {resume.categories.map((categorie) => (
+                        <button
+                          key={categorie.category}
+                          type="button"
+                          className={`graph-drill__item${categorie.count === 0 ? ' is-empty' : ''}`}
+                          data-testid={`graph-drill-cat-${categorie.category}`}
+                          onClick={() =>
+                            setDrill(drillInto(drill, { category: categorie.category }))
+                          }
+                        >
+                          <b>{categorie.label}</b>
+                          <small>{categorie.count} notes</small>
+                        </button>
+                      ))}
+                    </div>
+                    {heuristique && (
+                      <p className="graph-drill__caveat" data-testid="graph-drill-caveat">
+                        Rattachement DÉDUIT des noms ({liens.map((l) => l.project).join(', ')}) — à
+                        confirmer, ce n’est pas une correspondance certaine.
+                      </p>
+                    )}
+                  </>
+                )
+              })()}
+
+            {drill.level === 'category' && (
+              <div className="graph-drill__items">
+                {noteIds
+                  .filter((id) => id.startsWith('projects/'))
+                  .slice(0, 40)
+                  .map((id) => (
+                    <span key={id} className="graph-drill__leaf">
+                      {id.split('/').at(-1)?.replace(/\.md$/, '')}
+                    </span>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
         <div ref={wrap} className="graph-canvas">
           <ForceGraph3D
             ref={graphRef}
@@ -1277,7 +1474,7 @@ export function GraphView({
             linkDirectionalArrowColor={() => graphLinkArrowColor(visualMode)}
             onEngineTick={syncThemeClusterLabels}
             onEngineStop={syncThemeClusterLabels}
-            onBackgroundClick={clearNodeSelection}
+            onBackgroundClick={surClicDeFond}
             onNodeHover={(value) => setHoveredNode(value ? (value as GraphNode) : null)}
             onNodeClick={(value) => openNode(value as GraphNode)}
           />
