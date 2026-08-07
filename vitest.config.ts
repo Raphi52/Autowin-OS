@@ -43,6 +43,24 @@ export default defineConfig({
        */
       '**/*.live.test.*'
     ],
+    /**
+     * HERMETICITE vis-a-vis de l'app EN COURS D'EXECUTION — meme classe de panne que l'exclusion
+     * d'`Audit/` ci-dessus : la suite doit mesurer le DEPOT, jamais l'environnement qui la lance.
+     *
+     * `AUTOWIN_RUN_JOURNAL_ROOT` est une variable de RUNTIME : l'app la pose pour activer la survie
+     * niveau 2 (CLI spawne DETACHE, sortie vers un journal sur disque). Lancer `npm run test:unit`
+     * depuis un terminal issu de l'app la fait FUIR dans les workers vitest. Consequence mesuree le
+     * 2026-08-07 : `claude.ts` basculait sur le chemin journal (`relay`, `stdio: 'ignore'`), donc le
+     * stdout simule par les tests n'etait JAMAIS lu — 6 tests de l'adaptateur Claude rouges
+     * (artefacts absents, `text` vide, erreur 529 avalee, argv reduit aux 3 args du relais), verts en
+     * shell propre. Un faux rouge qui accusait le code au lieu de l'environnement.
+     *
+     * Valeur VIDE (donc falsy) : le code retombe sur le pipe, exactement le comportement que les
+     * tests decrivent. Rien n'est modifie cote production ni cote assertions.
+     */
+    env: {
+      AUTOWIN_RUN_JOURNAL_ROOT: ''
+    },
     pool: 'threads',
     maxWorkers: 8,
     testTimeout: 20_000,
