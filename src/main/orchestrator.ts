@@ -410,6 +410,15 @@ export interface WorkflowRunOverride {
    * l'écran affichait un workflow attaché qui ne pilotait rien.
    */
   explicit?: boolean
+  /**
+   * QUI pilote ce run, et d'où il vient.
+   *
+   * Sans ce champ, l'identité du workflow était détruite à la frontière : les sites de construction
+   * recevaient un profil portant `id` et `name` et n'en transmettaient que la topologie. Le devis
+   * affichait donc des plafonds SANS pouvoir nommer ce qui les cause — alors que les plafonds en
+   * découlent directement. Purement informatif : rien dans le moteur ne s'en sert pour décider.
+   */
+  identity?: { name: string; source: 'manuel' | 'modele' | 'compose' }
   phases?: PipelinePhase[]
   /** Le workflow comme graphe : pilote les phases jouées ET la borne des retours. */
   graph?: WorkflowGraph
@@ -1026,6 +1035,11 @@ export class Orchestrator {
         timestampMs: Date.now(),
         quote: {
           quoteId: executionQuote.id,
+          // Le devis engage des plafonds qui DÉCOULENT du workflow (cf. `worstCaseNodeExecutions`
+          // plus haut) : les annoncer sans nommer leur cause revient à afficher un prix sans article.
+          ...(this.workflowDuRun()?.identity
+            ? { workflow: { ...this.workflowDuRun()!.identity! } }
+            : {}),
           regime: executionQuote.regime,
           phases: [...executionQuote.phases],
           decomposition: { ...executionQuote.decomposition },

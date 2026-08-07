@@ -205,6 +205,7 @@ export class AutowinOS {
       // CHOISI À LA MAIN : la proportionnalité ne doit pas l'écraser. Un garde heuristique qui
       // désactive en silence une décision explicite affiche un workflow qui ne pilote rien.
       explicit: true,
+      identity: { name: profile.name, source: 'manuel' },
       ...(graphOf(profile) ? { graph: graphOf(profile) } : {}),
       ...(effectif.phases?.length ? { phases: effectif.phases } : {}),
       ...(effectif.allocation ? { allocation: effectif.allocation } : {}),
@@ -242,6 +243,7 @@ export class AutowinOS {
     if (decision.kind === 'existing') {
       const effectif = applyWorkflowProfile({ roles: {} }, decision.profile)
       return {
+        identity: { name: decision.profile.name, source: 'modele' },
         ...(graphOf(decision.profile) ? { graph: graphOf(decision.profile) } : {}),
         ...(effectif.phases?.length ? { phases: effectif.phases } : {}),
         ...(effectif.allocation ? { allocation: effectif.allocation } : {}),
@@ -249,7 +251,14 @@ export class AutowinOS {
       }
     }
     // Graphe composé à la volée : déjà validé par `readWorkflowDecision` (défauts ET plafond de coût).
-    return { graph: decision.graph, instructionFor: () => undefined }
+    // Le nom que le modèle lui a donné était JETÉ ici : un workflow inventé pilotait le run sans que
+    // rien à l'écran ne puisse dire lequel — le cas où l'utilisateur a le moins décidé était aussi
+    // le plus muet.
+    return {
+      identity: { name: decision.name, source: 'compose' },
+      graph: decision.graph,
+      instructionFor: () => undefined
+    }
   }
 
   /** Le workflow attaché à une conversation, ou `null`. */

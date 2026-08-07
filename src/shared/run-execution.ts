@@ -2,8 +2,28 @@ export type RunWorkspaceMode = 'base' | 'worktree'
 export type RunGitOutcome = 'merged' | 'nothing' | 'conflict' | 'blocked' | 'kept'
 export type RunClosureStatus = 'open' | 'green' | 'degraded-closed' | 'red'
 
+/**
+ * D'où vient le workflow qui pilote le run. Le NOM seul ne suffit pas : un workflow que
+ * l'utilisateur n'a jamais demandé — choisi par le modèle, voire composé par lui à la volée —
+ * n'engage pas la même confiance qu'un workflow choisi à la main. C'est justement le cas où
+ * l'utilisateur n'a rien décidé qui mérite d'être signalé.
+ */
+export type RunWorkflowSource = 'manuel' | 'modele' | 'compose'
+
+export interface RunWorkflowObservation {
+  name: string
+  source: RunWorkflowSource
+}
+
 export interface RunExecutionQuoteObservation {
   quoteId: string
+  /**
+   * La façon de travailler qui pilote ce run. ABSENT = aucun workflow, ce qui est une réponse de
+   * plein droit et non une donnée manquante — l'affichage doit le dire, pas masquer la ligne.
+   *
+   * Optionnel pour rester relisible : un événement `quote` émis avant ce champ reste valide.
+   */
+  workflow?: RunWorkflowObservation
   regime: 'trivial' | 'standard' | 'critical'
   phases: string[]
   decomposition: { mode: 'disabled' | 'build-only'; maxNodes: number }

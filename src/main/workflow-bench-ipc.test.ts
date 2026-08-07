@@ -232,3 +232,27 @@ describe('phases, allocation et consignes atteignent l’orchestrateur', () => {
     expect(poses[1]).toBeUndefined()
   })
 })
+
+/**
+ * L'identité du workflow doit SURVIVRE à la conversion profil → override.
+ *
+ * Elle était détruite à cette frontière : `overrideFor` recevait un profil portant `id` et `name` et
+ * n'en transmettait que la topologie. Le devis affichait donc des plafonds sans pouvoir nommer ce
+ * qui les cause — alors que les plafonds en découlent.
+ */
+describe('overrideFor — l’identité du workflow survit à la conversion', () => {
+  it('transmet le NOM du profil, pas seulement sa topologie', () => {
+    const o = overrideFor({ id: 'correctif', name: 'Correctif', phases: ['build', 'judge'] })
+    expect(o?.identity).toEqual({ name: 'Correctif', source: 'manuel' })
+  })
+
+  it('un profil absent ne fabrique pas une identité fantôme', () => {
+    expect(overrideFor(null)).toBeUndefined()
+  })
+
+  it('l’identité n’altère PAS la topologie transmise', () => {
+    // C'est un ajout d'observabilité : si elle changeait ce que le moteur joue, elle serait un bug.
+    const o = overrideFor({ id: 'x', name: 'X', phases: ['build'] })
+    expect(o?.phases).toEqual(['build'])
+  })
+})

@@ -51,6 +51,7 @@ export function overrideFor(profile: WorkflowProfile | null): WorkflowRunOverrid
   if (!profile) return undefined
   const effectif = applyWorkflowProfile({ roles: {} }, profile)
   return {
+    identity: { name: profile.name, source: 'manuel' },
     ...(effectif.phases?.length ? { phases: effectif.phases } : {}),
     ...(effectif.allocation ? { allocation: effectif.allocation } : {}),
     instructionFor: (phase) => effectif.instructionFor(phase)

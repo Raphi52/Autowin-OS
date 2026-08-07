@@ -5,6 +5,7 @@ import {
   type HarnessTimelineEvent,
   type HarnessTraceEvent
 } from './harness-timeline-model'
+import type { RunWorkflowObservation } from '../../../shared/run-execution'
 import { LatestRequestGate } from './observatory-reliability'
 import { projectLatestRequestExecution } from './request-execution-tree-model'
 import './WorkflowExecutionGraph.css'
@@ -79,6 +80,24 @@ function workspaceModeLabel(mode: string | undefined): string {
   return mode === 'worktree' ? 'Copie isolée' : 'Dépôt de travail'
 }
 
+/**
+ * Le workflow qui pilote le run, avec sa PROVENANCE.
+ *
+ * Le nom seul ne suffit pas : un workflow que l'utilisateur n'a jamais demandé — choisi par le
+ * modèle, voire composé par lui à la volée — n'engage pas la même confiance qu'un workflow choisi à
+ * la main. Le cas où l'utilisateur a le moins décidé est celui qui doit le plus se voir.
+ */
+export function workflowQuoteLabel(workflow: RunWorkflowObservation | undefined): string {
+  if (!workflow) return 'aucun workflow'
+  const provenance =
+    workflow.source === 'manuel'
+      ? 'choisi à la main'
+      : workflow.source === 'modele'
+        ? 'choisi par le modèle'
+        : 'composé à la volée'
+  return `${workflow.name} — ${provenance}`
+}
+
 function ExecutionNodeMeta({ event }: { event: HarnessTimelineEvent }): React.JSX.Element {
   const display = event.display
   if (display?.kind === 'workspace') {
@@ -93,6 +112,15 @@ function ExecutionNodeMeta({ event }: { event: HarnessTimelineEvent }): React.JS
   if (display?.kind === 'quote') {
     return (
       <>
+        {/*
+          En TÊTE, avant le régime : les plafonds annoncés découlent du workflow retenu, donc c'est
+          lui qu'on lit d'abord. « Aucun workflow » est écrit plutôt que la ligne masquée — une ligne
+          absente se lit comme une information manquante, pas comme une absence voulue.
+        */}
+        <span className="workflow-execution-quote-workflow">
+          {workflowQuoteLabel(display.quote?.workflow)}
+        </span>
+        <span aria-hidden="true">·</span>
         <span>{display.quote?.regime ?? 'regime inconnu'}</span>
         <span aria-hidden="true">·</span>
         <span>{display.quote?.limits.maxProviderCalls ?? 0} appels max</span>
