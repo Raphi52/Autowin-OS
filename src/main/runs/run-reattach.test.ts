@@ -302,3 +302,47 @@ describe('surveillance continue apres rattachement', () => {
     expect(waits).toBe(2)
   })
 })
+
+/**
+ * LA CAUSE RACINE DU RUN ZOMBIE — l'empreinte n'était JAMAIS capturée.
+ *
+ * `agentVerdict` ne peut distinguer « notre agent vit encore » de « un inconnu a hérité du pid »
+ * que si l'empreinte a été relevée AU LANCEMENT (`orchestrator.ts` : `this.deps.processIdentity`).
+ * Or `os.ts` ne fournissait pas cette sonde : aucun agent persisté ne portait d'`identity`, donc
+ * `agentVerdict` retombait sur son défaut prudent « vivant » — À VIE.
+ *
+ * Constaté sur l'état réel le 2026-08-07 : `run-state/run-135d936755f8-1.json` porte
+ * `{"token":…,"journalPath":…,"pid":5396}` — sans `identity`. Conséquence dans conv-1056 : le
+ * démarrage concluait « rattacher » à chaque fois, rouvrait le tour en `streaming` et empilait
+ * quatre fois « l'agent … travaille encore ». Le run ne pouvait JAMAIS être déclaré terminé.
+ */
+describe('câblage — l’empreinte du processus est réellement capturée au lancement', () => {
+  const source = readFileSync(join(__dirname, '..', 'os.ts'), 'utf8')
+
+  it('os.ts fournit la sonde d’empreinte à l’orchestrateur', () => {
+    expect(source).toContain('processIdentity: defaultProcessIdentity')
+  })
+
+  it('sans empreinte capturée, un pid vivant reste présumé vivant — le défaut à ne pas subir', () => {
+    // Le comportement lui-même est correct et volontaire ; ce qui manquait, c'est la capture.
+    expect(agentVerdict({ token: 'a', pid: 42 }, () => 'inconnu|autre.exe').state).toBe('vivant')
+    // Avec l'empreinte, le pid recyclé est démasqué et le run peut enfin être déclaré terminé.
+    expect(
+      agentVerdict({ token: 'a', pid: 42, identity: 'nous' }, () => 'inconnu|autre.exe').state
+    ).toBe('pid-recycle')
+  })
+})
+
+/**
+ * CÂBLAGE DE LA SORTIE D'ATTENTE. Clore le tour au chargement ne sert à rien si le démarrage ne
+ * dit pas QUELS tours vont réellement reprendre : sans ce discriminant, un run repris serait
+ * annoncé interrompu, ou — le défaut mesuré — aucun tour ne serait annoncé du tout.
+ */
+describe('câblage — le chargement des conversations connaît les runs reprenables', () => {
+  const source = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+
+  it('persistConversations reçoit les tours des checkpoints encore sur disque', () => {
+    expect(source).toContain('resumableTurnIds')
+    expect(source).toMatch(/persistConversations\(\s*os\.conversations/)
+  })
+})

@@ -359,17 +359,19 @@ export class AutowinOS {
       // EMPREINTE DE PROCESSUS — sans elle, la garde de vivacité ne garde rien.
       //
       // `resumeActionFor` compare, au démarrage, l'empreinte capturée au lancement de l'agent à
-      // celle du pid courant, pour distinguer NOTRE agent d'un pid recyclé
-      // ([run-reattach.ts:50](src/main/runs/run-reattach.ts:50)). Le côté LECTURE était armé
-      // (`index.ts` passe `defaultProcessIdentity` à chaque appel), mais le côté ÉCRITURE ne l'était
-      // pas : l'orchestrateur était construit SANS `processIdentity`, donc `identity` valait
+      // celle du pid courant, pour distinguer NOTRE agent d'un processus étranger ayant hérité du
+      // même numéro ([run-reattach.ts:50](src/main/runs/run-reattach.ts:50)). Le côté LECTURE était
+      // armé (`index.ts` passe `defaultProcessIdentity` à chaque appel), mais le côté ÉCRITURE ne
+      // l'était pas : l'orchestrateur était construit SANS `processIdentity`, donc `identity` valait
       // toujours `undefined` et n'était jamais persistée.
       //
-      // Conséquence mesurée : `agentVerdict` tombait TOUJOURS dans son repli « on penche vers
-      // vivant », qui n'était donc pas un repli mais l'unique chemin. Tout run dont le pid existe
-      // encore était jugé « un agent travaille encore » → rattaché, jamais relancé, jamais clos, et
-      // le chat attendait indéfiniment. C'est précisément le bug zombie que l'app cherchait à
-      // corriger, et il tenait à cette dépendance non branchée.
+      // `agentVerdict` retombait donc TOUJOURS sur son défaut prudent « vivant » — pas un repli mais
+      // l'unique chemin. Tout run dont le pid existe encore était jugé « un agent travaille
+      // encore » : rattaché, jamais relancé, jamais déclarable terminé, et le chat attendait
+      // indéfiniment. C'est le bug zombie que l'app cherchait à corriger, et il tenait à cette
+      // dépendance non branchée.
+      //
+      // Mesuré le 2026-08-07 : TOUS les agents persistés portaient un pid sans `identity`.
       processIdentity: defaultProcessIdentity,
       // Pipeline ADAPTATIF (proportionnalité) : le régime de la tâche choisit le sous-ensemble de
       // phases (trivial → build seul ; standard → frame+build ; critical → les 5 scout→clean), puis

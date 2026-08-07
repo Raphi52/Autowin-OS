@@ -83,9 +83,14 @@ export function saveConversations(all: Conversation[], path = conversationsPath(
 /** Branche un store sur le disque : recharge l'existant + sauve à chaque mutation. */
 export function persistConversations(
   store: ConversationStore,
-  path = conversationsPath()
+  path = conversationsPath(),
+  /**
+   * Tours dont le run VA reprendre au démarrage (checkpoint encore sur disque). Eux seuls échappent
+   * à l'avis d'interruption : les annoncer interrompus alors qu'ils redémarrent serait faux.
+   */
+  options?: { resumableTurnIds?: ReadonlySet<string> }
 ): () => void {
-  const migrated = store.hydrate(loadConversations(path))
+  const migrated = store.hydrate(loadConversations(path), options)
   let pending: Conversation[] | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
 

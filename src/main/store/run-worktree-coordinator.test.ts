@@ -849,4 +849,64 @@ describe('RunWorktreeCoordinator (flip live)', () => {
       rmSync(root, { recursive: true, force: true })
     }
   })
+
+  /**
+   * WORKTREE ORPHELIN D'UN RUN INTERROMPU. Le redemarrage marque deja `interrupted` un run dont le
+   * processus a disparu (`verdict: 'running'` -> `interrupted`), mais RIEN ne permettait de savoir
+   * quelles copies isolees restaient sur le disque a cause de ca : elles restaient noyees dans
+   * l'activite generale. On les LISTE — jamais on ne les supprime : le travail d'un agent tue par la
+   * fermeture de l'app est recuperable, et une suppression est irreversible.
+   */
+  it('liste les copies isolees des runs interrompus, sans jamais les supprimer', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-interrupted-worktrees-'))
+    try {
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      for (const [runId, verdict] of [
+        ['run-zombie', 'running'],
+        ['run-fini', 'green']
+      ] as const) {
+        stateStore.save({
+          version: 1,
+          repoId: 'repo-a',
+          runId,
+          agentName: 'Builder',
+          task: 'une tache interrompue',
+          conversationId: 'conv-1056',
+          worktreePath: join(root, `agent__${runId}`),
+          baseBranch: 'main',
+          baseSha: TEST_SHA,
+          verdict,
+          publication: verdict === 'green' ? 'complete' : 'not-requested',
+          files: [{ path: 'a.txt', kind: 'mod' }],
+          createdAtMs: 10,
+          updatedAtMs: 20
+        })
+      }
+      const remove = vi.fn()
+      const coordinator = new RunWorktreeCoordinator({
+        manager: fakeManager({
+          listAgentIds: () => ['run-zombie', 'run-fini'],
+          hasActiveProcesses: () => false,
+          remove
+        }),
+        stateStore,
+        nowFn: () => 30
+      })
+
+      const orphelins = coordinator.interruptedWorktrees()
+
+      expect(orphelins).toEqual([
+        {
+          runId: 'run-zombie',
+          worktreePath: join(root, 'agent__run-zombie'),
+          task: 'une tache interrompue',
+          conversationId: 'conv-1056'
+        }
+      ])
+      // Contrainte dure : lister n'est pas nettoyer. Une suppression ici serait irreversible.
+      expect(remove).not.toHaveBeenCalled()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
 })

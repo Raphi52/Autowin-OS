@@ -187,7 +187,19 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
       )
     }
   if (event.kind === 'cancelled') return { ...state, status: 'cancelled' }
-  return { ...state, status: 'interrupted' }
+  // INTERROMPU : le tour est clos sans que les actions en vol puissent aboutir. Les laisser en
+  // `ok === undefined` les ferait lire « encore en cours » par toutes les surfaces (fil, graphe) —
+  // c'est exactement l'état zombie d'un run tué par la fermeture de l'app. `interrupted` dit la
+  // vérité : l'issue ne viendra jamais, sans la maquiller en échec constaté (`ok: false`).
+  return {
+    ...state,
+    status: 'interrupted',
+    parts: state.parts.map((part) =>
+      part.kind === 'action' && part.ok === undefined && !part.interrupted
+        ? { ...part, interrupted: true }
+        : part
+    )
+  }
 }
 
 export function flattenChatParts(parts: PersistedChatPart[]): string {

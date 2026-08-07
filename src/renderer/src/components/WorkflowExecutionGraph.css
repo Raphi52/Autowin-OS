@@ -202,6 +202,12 @@
   box-shadow: 0 0 8px color-mix(in srgb, var(--warn) 50%, transparent);
 }
 
+/* Interrompu : ni un succès (vert) ni un échec constaté (rouge) — une issue qui ne viendra jamais. */
+.workflow-execution-node.is-interrupted .workflow-execution-dot {
+  background: var(--text-faint);
+  box-shadow: none;
+}
+
 .workflow-execution-node.is-failed .workflow-execution-dot,
 .workflow-execution-node.is-cancelled .workflow-execution-dot {
   background: var(--err);

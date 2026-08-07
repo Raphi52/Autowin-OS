@@ -519,4 +519,23 @@ describe('WorkflowExecutionGraph', () => {
     expect(causalTrace).toHaveBeenCalledTimes(2)
     expect(container?.querySelector('[data-execution-node="chat-late-usage"]')).not.toBeNull()
   })
+  /**
+   * RUN ZOMBIE DANS LE GRAPHE. Une etape d'un run tue avec l'app est reconciliee en `interrupted`.
+   * `statusLabel` ne connaissait pas ce statut : il retombait sur son defaut « termine ». Le graphe
+   * annoncait donc terminee une etape qui ne s'est jamais achevee — le contraire de la verite.
+   */
+  it('une etape reconciliee « interrupted » est dite interrompue, pas terminee', async () => {
+    const causalTrace = vi.fn().mockResolvedValue([
+      trace('etape-zombie', 1, { turnId: 'turn-latest', status: 'interrupted' })
+    ])
+    Object.defineProperty(window, 'api', { configurable: true, value: { causalTrace } })
+
+    const view = await render({ conversationId: 'conv-a', active: true })
+    const node = view.querySelector('[data-execution-node="etape-zombie"]')
+
+    expect(node?.textContent).toContain('interrompu')
+    expect(node?.textContent).not.toContain('terminé')
+    // La pastille doit porter le statut reconcilie, sinon elle reste verte comme un succes.
+    expect(node?.className).toContain('is-interrupted')
+  })
 })

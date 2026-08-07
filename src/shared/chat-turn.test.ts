@@ -89,3 +89,35 @@ describe('chat turn reducer', () => {
     expect(flattenChatParts(retried.parts)).toBe('[artefact capture.png]')
   })
 })
+
+/**
+ * ZOMBIE APRÈS INTERRUPTION. Un tour clos par `interrupted` (l'app a été fermée) laissait ses
+ * actions sans résultat en `ok === undefined` — c'est-à-dire « encore en cours ». Toutes les
+ * surfaces qui lisent ces parts (fil de chat, graphe d'exécution) affichaient donc indéfiniment
+ * une étape active dont l'issue n'arrivera jamais. La branche `failed` réglait déjà ce cas ; la
+ * branche `interrupted`, non.
+ */
+describe('clôture « interrompu » d’un tour', () => {
+  it('règle les actions restées sans résultat au lieu de les laisser « en cours »', () => {
+    const enCours = reduceChatTurn(
+      reduceChatTurn(createChatTurn('turn-zombie'), {
+        kind: 'command',
+        actionId: '0:orchestrate',
+        name: 'orchestrate'
+      }),
+      { kind: 'command', actionId: '1:gate', name: 'gate' }
+    )
+    const regle = reduceChatTurn(
+      reduceChatTurn(enCours, { kind: 'result', actionId: '1:gate', name: 'gate', ok: true }),
+      { kind: 'interrupted' }
+    )
+
+    expect(regle.status).toBe('interrupted')
+    const actions = regle.parts.filter((part) => part.kind === 'action')
+    // L'action jamais résolue est INTERROMPUE : son issue ne viendra jamais.
+    expect(actions[0]).toMatchObject({ name: 'orchestrate', interrupted: true })
+    // Discriminant : une action déjà résolue n'est pas réécrite en interrompue.
+    expect(actions[1]).toMatchObject({ name: 'gate', ok: true })
+    expect(actions[1]).not.toHaveProperty('interrupted')
+  })
+})

@@ -306,3 +306,89 @@ describe('ConversationStore — le dossier de travail qui groupe', () => {
     expect(store.setProjectPath('conv-inexistante', 'D:/projets')).toBeUndefined()
   })
 })
+
+/**
+ * RUN ZOMBIE — LA CONVERSATION NE DOIT JAMAIS RESTER EN ATTENTE D'UNE RÉPONSE QUI NE VIENDRA PAS.
+ *
+ * Mesuré sur l'état réel (`conv-1056`, 2026-08-07) : un tour assistant persisté `streaming` avec une
+ * action `orchestrate` sans résultat, et un checkpoint de run qui ne le référence plus. `hydrate`
+ * basculait bien le statut en `interrupted`, mais SANS RIEN DIRE : aucune trace dans le fil, donc
+ * l'utilisateur attend une réponse qui n'arrivera jamais, et les actions restent « en cours ».
+ *
+ * Discriminant : un tour dont le run SURVIT (checkpoint reprenable) ne reçoit PAS l'avis — il va
+ * réellement reprendre, l'annoncer interrompu serait un mensonge.
+ */
+describe('réconciliation au chargement des tours interrompus', () => {
+  const zombie = (): Parameters<ConversationStore['hydrate']>[0] => [
+    {
+      id: 'conv-1056',
+      title: 'run interrompu',
+      category: 'codex',
+      provider: 'codex',
+      createdAt: 1,
+      updatedAt: 2,
+      messages: [
+        { role: 'user', content: 'lance le run', ts: 1 },
+        {
+          role: 'assistant',
+          content: '',
+          ts: 2,
+          turnId: 'turn-zombie',
+          status: 'streaming',
+          parts: [{ kind: 'action', actionId: '0:orchestrate', name: 'orchestrate' }]
+        }
+      ]
+    }
+  ]
+
+  it('un tour `streaming` sans run reprenable est clos ET annoncé dans la conversation', () => {
+    const store = new ConversationStore(makeClock())
+    store.hydrate(zombie())
+
+    const message = store.get('conv-1056')!.messages.at(-1)!
+    expect(message.status).toBe('interrupted')
+    expect(message.content).toContain(
+      "run `turn-zombie` interrompu — l'application a été fermée"
+    )
+    // L'action en vol n'est plus « en cours » : son issue ne viendra jamais.
+    expect(message.parts?.[0]).toMatchObject({ name: 'orchestrate', interrupted: true })
+  })
+
+  it('un tour dont le run est REPRENABLE n’est pas annoncé interrompu', () => {
+    const store = new ConversationStore(makeClock())
+    store.hydrate(zombie(), { resumableTurnIds: new Set(['turn-zombie']) })
+
+    const message = store.get('conv-1056')!.messages.at(-1)!
+    expect(message.content).not.toContain('interrompu')
+  })
+
+  it('un second chargement ne réempile pas l’avis', () => {
+    const store = new ConversationStore(makeClock())
+    store.hydrate(zombie())
+    const once = store.get('conv-1056')!.messages.at(-1)!.content
+    // Le rattachement au démarrage REROUVRE le tour (`resumed` → `streaming`) et le repersiste :
+    // constaté sur conv-1056, où quatre redémarrages ont empilé quatre fois le même récapitulatif.
+    // Le second chargement retrouve donc bien un tour `streaming` déjà porteur de l'avis.
+    const reouvert = store.list().map((conversation) => ({
+      ...conversation,
+      messages: conversation.messages.map((message) =>
+        message.turnId === 'turn-zombie' ? { ...message, status: 'streaming' as const } : message
+      )
+    }))
+    store.hydrate(reouvert)
+
+    expect(store.get('conv-1056')!.messages.at(-1)!.content).toBe(once)
+  })
+
+  it("expose l'etat reconcilie au resume que lit la liste des conversations", () => {
+    const store = new ConversationStore(makeClock())
+    store.hydrate(zombie())
+
+    // `lastAssistantStatus` est exactement ce que `deriveConversationState` consomme cote vue :
+    // tant qu'il valait `streaming`, la conversation s'affichait « En cours » pour toujours.
+    expect(store.listSummaries()[0]).toMatchObject({
+      id: 'conv-1056',
+      lastAssistantStatus: 'interrupted'
+    })
+  })
+})

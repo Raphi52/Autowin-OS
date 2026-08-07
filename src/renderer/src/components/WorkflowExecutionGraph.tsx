@@ -50,6 +50,9 @@ function statusLabel(status: string | undefined): string {
   if (status === 'failed') return 'échec'
   if (status === 'cancelled') return 'annulé'
   if (status === 'pending') return 'en attente'
+  // Un run tué avec l'app est réconcilié en `interrupted` au démarrage. Sans ce cas, l'étape
+  // tombait dans le défaut « terminé » : le graphe affirmait achevé ce qui ne le sera jamais.
+  if (status === 'interrupted') return 'interrompu'
   return 'terminé'
 }
 

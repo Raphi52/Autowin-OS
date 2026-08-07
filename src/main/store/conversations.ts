@@ -8,6 +8,7 @@ import {
   type PersistedChatPart
 } from '../../shared/chat-turn'
 import type { ConversationAuthorityMode } from '../conversation-capabilities'
+import { hasInterruptionNotice, interruptionNotice } from '../runs/run-interruption'
 import type { ChatArtifact } from '../../shared/artifacts'
 import type { AutoKaizenConversationLink } from '../auto-kaizen-supervisor'
 
@@ -111,8 +112,19 @@ export class ConversationStore {
     this.now = now
   }
 
-  /** Recharge un état persisté (au démarrage). nextId repart au-delà des ids existants. */
-  hydrate(saved: Conversation[]): boolean {
+  /**
+   * Recharge un état persisté (au démarrage). nextId repart au-delà des ids existants.
+   *
+   * C'est AUSSI le point où la conversation sort d'une attente sans issue : un tour laissé
+   * `streaming` sur disque appartient forcément à un run mort avec l'app — le process qui aurait
+   * pu le clore n'existe plus. Il est donc clos ici, ses actions en vol réglées, et l'utilisateur
+   * PRÉVENU. Sans cet avis, le fil restait muet et l'attente pouvait durer indéfiniment.
+   *
+   * `resumableTurnIds` est le discriminant : un tour dont le checkpoint de run survit va réellement
+   * reprendre au démarrage — l'annoncer interrompu serait faux. Absent = plus rien ne reprend.
+   */
+  hydrate(saved: Conversation[], options?: { resumableTurnIds?: ReadonlySet<string> }): boolean {
+    const resumable = options?.resumableTurnIds
     this.conversations.clear()
     let max = 0
     let migrated = false
@@ -142,7 +154,26 @@ export class ConversationStore {
         }
         if (message.status === 'streaming') {
           migrated = true
-          return { ...message, status: 'interrupted' as const }
+          const interrupted: Msg = {
+            ...message,
+            status: 'interrupted' as const,
+            // Une action sans résultat n'est pas « en cours » : le tour est clos, son issue ne
+            // viendra jamais. C'est ce que lisent le fil ET le graphe d'exécution.
+            parts: (message.parts ?? []).map((part) =>
+              part.kind === 'action' && part.ok === undefined && !part.interrupted
+                ? { ...part, interrupted: true }
+                : part
+            )
+          }
+          const runId = message.turnId
+          if (!runId || resumable?.has(runId)) return interrupted
+          if (hasInterruptionNotice(interrupted.content, runId)) return interrupted
+          const notice = interruptionNotice(runId)
+          const parts: PersistedChatPart[] = [
+            ...(interrupted.parts ?? []),
+            { kind: 'text', text: notice }
+          ]
+          return { ...interrupted, parts, content: flattenChatParts(parts) }
         }
         return { ...message, status: message.status ?? ('completed' as const) }
       })

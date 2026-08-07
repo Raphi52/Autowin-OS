@@ -352,7 +352,17 @@ else configureTurnTiming(ensureAutowinAppData(appDataRoot))
 const os = new AutowinOS()
 const brainWorker = new BrainWorkerClient(join(__dirname, 'brain-worker.js'))
 // Conversations persistées sur disque : rechargées au démarrage, sauvées à chaque mutation.
-const flushConversations = persistConversations(os.conversations)
+// SORTIE DE L'ÉTAT D'ATTENTE. Un tour laissé `streaming` sur disque appartient à un run mort avec
+// l'app : plus aucun process ne viendra le clore. Le chargement le clôt donc et le DIT dans la
+// conversation d'origine — sauf pour les tours dont le checkpoint survit, qui vont vraiment
+// reprendre quelques lignes plus bas. Sans ce discriminant on mentirait dans un sens ou dans l'autre.
+const resumableTurnIds = new Set(
+  os
+    .resumableOrchestrations()
+    .map((state) => state.turnId)
+    .filter((turnId): turnId is string => Boolean(turnId))
+)
+const flushConversations = persistConversations(os.conversations, undefined, { resumableTurnIds })
 const scheduledTasks = new TaskStore()
 const flushScheduledTasks = persistTaskStore(scheduledTasks)
 let scheduledTaskScheduler: TaskScheduler | undefined
@@ -3759,6 +3769,22 @@ app.whenReady().then(async () => {
       }
     } catch (error) {
       console.warn('[runs] réconciliation des runs abandonnés impossible', error)
+    }
+    // COPIES ISOLÉES ORPHELINES. Un run tué avec l'app laisse son bureau isolé sur le disque ;
+    // il est déjà marqué `interrupted` par le coordinateur, mais restait introuvable. On les NOMME
+    // ici. Jamais de suppression automatique : le travail de l'agent est récupérable, et une
+    // copie effacée ne revient pas — le nettoyage reste une décision humaine, prise sur cette liste.
+    try {
+      const orphelins = os.worktrees?.interruptedWorktrees() ?? []
+      for (const orphelin of orphelins) {
+        console.log(
+          `[worktrees] copie isolée orpheline (run interrompu) : ${orphelin.runId}` +
+            `${orphelin.worktreePath ? ` → ${orphelin.worktreePath}` : ''}` +
+            `${orphelin.conversationId ? ` (${orphelin.conversationId})` : ''}`
+        )
+      }
+    } catch (error) {
+      console.warn('[worktrees] inventaire des copies interrompues impossible', error)
     }
   })
 

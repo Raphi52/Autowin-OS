@@ -288,6 +288,30 @@ export class RunWorktreeCoordinator {
     }))
   }
 
+  /**
+   * Copies isolées laissées par un run INTERROMPU (l'app est morte pendant son travail).
+   *
+   * Le redémarrage marque déjà ces runs `interrupted`, mais rien ne permettait de les RETROUVER :
+   * elles restaient noyées dans l'activité générale, donc invisibles et jamais nettoyées. On les
+   * énumère ici — et seulement ça. Supprimer serait irréversible alors que le travail de l'agent
+   * est récupérable : le nettoyage reste une décision humaine, prise sur cette liste.
+   */
+  interruptedWorktrees(): Array<{
+    runId: string
+    worktreePath?: string
+    task?: string
+    conversationId?: string
+  }> {
+    return [...this.runs.values()]
+      .filter((tracked) => tracked.isMutation && tracked.verdict === 'interrupted')
+      .map((tracked) => ({
+        runId: tracked.runId,
+        ...(tracked.worktreePath ? { worktreePath: tracked.worktreePath } : {}),
+        ...(tracked.task ? { task: tracked.task } : {}),
+        ...(tracked.conversationId ? { conversationId: tracked.conversationId } : {})
+      }))
+  }
+
   conflictDiff(agentId: string): WorktreeConflictDiffResult {
     const tracked = this.runs.get(agentId)
     if (
