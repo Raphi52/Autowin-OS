@@ -63,7 +63,7 @@ import {
   type OrchestrationRunState
 } from './runs/orchestration-state'
 import { defaultBehaviourWorkspace } from './behaviour-files'
-import { WorktreeManager } from './store/worktree-manager'
+import { defaultProcessIdentity, WorktreeManager } from './store/worktree-manager'
 import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import { WorktreeRunStateStore } from './store/worktree-run-state'
@@ -356,6 +356,21 @@ export class AutowinOS {
       // de croire l'evidence sur parole. Off par défaut (voir resolveVerifyReplayConfig).
       ...resolveVerifyReplayConfig(),
       worktrees: this.worktrees,
+      // EMPREINTE DE PROCESSUS — sans elle, la garde de vivacité ne garde rien.
+      //
+      // `resumeActionFor` compare, au démarrage, l'empreinte capturée au lancement de l'agent à
+      // celle du pid courant, pour distinguer NOTRE agent d'un pid recyclé
+      // ([run-reattach.ts:50](src/main/runs/run-reattach.ts:50)). Le côté LECTURE était armé
+      // (`index.ts` passe `defaultProcessIdentity` à chaque appel), mais le côté ÉCRITURE ne l'était
+      // pas : l'orchestrateur était construit SANS `processIdentity`, donc `identity` valait
+      // toujours `undefined` et n'était jamais persistée.
+      //
+      // Conséquence mesurée : `agentVerdict` tombait TOUJOURS dans son repli « on penche vers
+      // vivant », qui n'était donc pas un repli mais l'unique chemin. Tout run dont le pid existe
+      // encore était jugé « un agent travaille encore » → rattaché, jamais relancé, jamais clos, et
+      // le chat attendait indéfiniment. C'est précisément le bug zombie que l'app cherchait à
+      // corriger, et il tenait à cette dépendance non branchée.
+      processIdentity: defaultProcessIdentity,
       // Pipeline ADAPTATIF (proportionnalité) : le régime de la tâche choisit le sous-ensemble de
       // phases (trivial → build seul ; standard → frame+build ; critical → les 5 scout→clean), puis
       // le juge (rôle distinct). Déterministe/générique (task-regime.ts). Économise tokens + latence
