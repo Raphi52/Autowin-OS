@@ -1,5 +1,6 @@
 import type { HarnessTimeline, HarnessTimelineEvent } from './harness-timeline-model'
 import type { ScopedLiveRun } from './chat-view-model'
+import { extractHumanMessage } from './human-message'
 
 /**
  * Reconstitue le fil des sous-agents à partir de la trace PERSISTÉE.
@@ -97,12 +98,19 @@ function toStep(event: HarnessTimelineEvent, turnRuntime?: TurnRuntimeIdentity):
   }
 }
 
-/** Libellé du run : la demande qui l'a déclenché, sinon un repli honnête. */
+/**
+ * Libellé du run : la demande qui l'a déclenché, sinon un repli honnête.
+ *
+ * Le contenu d'un tour est COMPOSÉ (`ÉTAT DE L'APP:\n{json}\n\nUTILISATEUR: …`). Le lire brut donnait
+ * à chaque bloc le même titre illisible — le JSON d'état — et masquait la demande réelle. On réutilise
+ * l'extracteur déjà éprouvé par l'Observatoire plutôt que d'en écrire un second.
+ */
 function taskOf(events: HarnessTimelineEvent[]): string {
   const request = events.find((event) => event.kind === 'message')
-  const label = (request?.content || request?.label || '').replace(/\s+/g, ' ').trim()
+  const brut = request?.content || request?.label || ''
+  const label = extractHumanMessage(brut, 120)
   if (!label) return 'orchestration'
-  return label.length > 120 ? `${label.slice(0, 117)}…` : label
+  return label
 }
 
 /**

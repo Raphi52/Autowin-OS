@@ -54,6 +54,52 @@ describe('fil des sous-agents reconstruit depuis la trace persistée', () => {
 
     expect(runs).toHaveLength(1)
     expect(runs[0].task).toBe('ajoute un module')
+  })
+
+  /**
+   * LE TITRE D'UN BLOC DOIT ÊTRE LA DEMANDE, PAS LE CONTEXTE INJECTÉ.
+   *
+   * Le contenu d'un tour de chat est COMPOSÉ par `chat-turn-messages.ts` : il commence par
+   * `ÉTAT DE L'APP:\n{json}` avant le message humain. En prenant le contenu brut, chaque bloc de la
+   * vue Sous-agents s'intitulait `ÉTAT DE L'APP: {"tab":"chat","activeConversationId":…` — tous
+   * identiques, tous illisibles, et la demande réelle invisible.
+   */
+  it('titre un run par la DEMANDE humaine, pas par l’état de l’app injecté', () => {
+    const compose = [
+      `ÉTAT DE L'APP:\n${JSON.stringify({ tab: 'chat', activeConversationId: 'conv-1056' })}`,
+      'UTILISATEUR: corrige la propagation de l’erreur 529'
+    ].join('\n\n')
+    const runs = scopedRunsFromTimeline(
+      timeline([
+        turn('turn-1', [
+          event({ id: 'm', kind: 'message', content: compose }),
+          event({ id: 'a', kind: 'model-response', provider: 'codex', model: 'gpt', costUsd: 0.4 }),
+          event({ id: 'g', kind: 'gate' })
+        ])
+      ]),
+      'conv-1'
+    )
+
+    expect(runs).toHaveLength(1)
+    expect(runs[0].task).toBe('corrige la propagation de l’erreur 529')
+    expect(runs[0].task).not.toContain('ÉTAT DE')
+    expect(runs[0].task).not.toContain('activeConversationId')
+  })
+
+  it('un contenu SIMPLE reste intact — discriminant', () => {
+    const runs = scopedRunsFromTimeline(
+      timeline([
+        turn('turn-1', [
+          event({ id: 'm', kind: 'message', content: 'ajoute un module' }),
+          event({ id: 'a', kind: 'model-response', provider: 'codex', model: 'gpt', costUsd: 0.4 }),
+          event({ id: 'j', kind: 'verdict', provider: 'claude' }),
+          event({ id: 'g', kind: 'gate' })
+        ])
+      ]),
+      'conv-1'
+    )
+    // Si ce test casse, l'extraction mange les demandes normales au lieu du seul préfixe injecté.
+    expect(runs[0].task).toBe('ajoute un module')
     expect(runs[0].steps.map((step) => step.step)).toEqual(['exec', 'judge', 'gate'])
     expect(runs[0].steps[0]).toMatchObject({ provider: 'codex', model: 'gpt', costUsd: 0.4 })
   })

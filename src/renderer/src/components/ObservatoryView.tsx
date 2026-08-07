@@ -8,6 +8,7 @@ import {
 import { HumanJson } from './HumanJson'
 import { BrainMarkdown } from './BrainMarkdown'
 import { summarizeNativeTraces, type NativeTraceSummaryInput } from './native-trace-summary'
+import { extractHumanMessage } from './human-message'
 import './ObservatoryView.css'
 import { ModuleHeader } from './ModuleHeader'
 import { RagTraceCard } from './RagTraceCard'
@@ -131,29 +132,9 @@ function splitLabeledJson(content: string): { prefix: string; json: string } | n
   return { prefix: content.slice(0, start).trim(), json }
 }
 
-/**
- * Extrait le message HUMAIN d'un contenu composé ("ÉTAT DE L'APP:\n{json}\n\nUTILISATEUR: …").
- * Prend le dernier segment "UTILISATEUR:" ; sinon un contenu normal est rendu tel quel ;
- * un pur blob d'état retombe sur un libellé court.
- */
-function extractHumanMessage(content: string, max = 100): string {
-  const segments = (content ?? '').split('\n\n')
-  const utilisateur = segments.filter((s) => /^\s*UTILISATEUR\s*:/.test(s))
-  let human: string
-  if (utilisateur.length) {
-    human = utilisateur[utilisateur.length - 1].replace(/^\s*UTILISATEUR\s*:\s*/, '')
-  } else if (/^\s*(ÉTAT|ETAT)\b/.test(content ?? '')) {
-    human =
-      segments.find((s) => {
-        const t = s.trim()
-        return t && !/^(ÉTAT|ETAT|TOI\s*:|\()/.test(t) && !t.startsWith('{')
-      }) ?? '(état de l’app)'
-  } else {
-    human = content ?? ''
-  }
-  const text = human.replace(/\s+/g, ' ').trim()
-  return text.length > max ? `${text.slice(0, max)}…` : text
-}
+// `extractHumanMessage` vit désormais dans `human-message.ts` : la vue Sous-agents affrontait le même
+// contenu composé et affichait le JSON d'état en titre. Deux copies auraient divergé à la première
+// évolution du format de tour.
 
 /** Tente de parser le contenu JSON d'un événement ; null si ce n'est pas du JSON objet. */
 function parseEventJson(content: string): Record<string, unknown> | null {
@@ -859,10 +840,7 @@ export function ObservatoryView({
           {observed.cost === 0 && observed.input + observed.output > 0 ? (
             // Des tokens sans prix ne prouvent ni une gratuite ni un abonnement : le fournisseur
             // peut simplement ne pas exposer la tarification dans son retour d'usage.
-            <strong
-              data-metric="cost"
-              title="Prix non exposé par le fournisseur pour ces appels"
-            >
+            <strong data-metric="cost" title="Prix non exposé par le fournisseur pour ces appels">
               non exposé
               <small>coût inconnu</small>
             </strong>
