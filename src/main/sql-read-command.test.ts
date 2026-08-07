@@ -32,7 +32,11 @@ describe('buildReadOnlyBatch — l’enveloppe ne peut RIEN valider', () => {
   })
 })
 
-function fakeChild(): EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; kill: () => void } {
+function fakeChild(): EventEmitter & {
+  stdout: EventEmitter
+  stderr: EventEmitter
+  kill: () => void
+} {
   const c = new EventEmitter() as EventEmitter & {
     stdout: EventEmitter
     stderr: EventEmitter
@@ -116,7 +120,32 @@ describe('runSqlRead — exécution', () => {
     }
   })
 
-  it('signale la troncature quand le plafond est atteint', async () => {
+  /**
+   * On demande UNE ligne de plus que le plafond, uniquement pour savoir s'il y avait une suite. Cette
+   * ligne de sonde ne doit jamais être rendue à l'agent.
+   */
+  it('signale la troncature quand il y a une ligne de PLUS que le plafond', async () => {
+    const child = fakeChild()
+    const p = runSqlRead(cible, {
+      spawnFn: (() => child) as never,
+      sqlcmdPath: 'sqlcmd.exe',
+      maxRows: 2
+    })
+    child.stdout.emit('data', '[{"a":1},{"a":2},{"a":3}]')
+    child.emit('close', 0)
+    const out = await p
+    expect(out.ok).toBe(true)
+    if (out.ok) {
+      expect(out.truncated).toBe(true)
+      expect(out.summary).toMatch(/plafond/i)
+      expect(out.rowCount).toBe(2) // la ligne de sonde n'est pas rendue
+      expect(out.rows).toEqual([{ a: 1 }, { a: 2 }])
+    }
+  })
+
+  it('un résultat COMPLET de exactement `maxRows` lignes n’est PAS tronqué', () => {
+    // Régression (audit 2026-08-07) : `rows.length >= maxRows` annonçait tronqué un résultat
+    // exhaustif, et l'agent affinait une requête déjà complète.
     const child = fakeChild()
     const p = runSqlRead(cible, {
       spawnFn: (() => child) as never,
@@ -125,12 +154,84 @@ describe('runSqlRead — exécution', () => {
     })
     child.stdout.emit('data', '[{"a":1},{"a":2}]')
     child.emit('close', 0)
+    return p.then((out) => {
+      expect(out.ok).toBe(true)
+      if (out.ok) {
+        expect(out.truncated).toBe(false)
+        expect(out.rowCount).toBe(2)
+      }
+    })
+  })
+
+  it('demande une ligne de plus que le plafond au serveur', async () => {
+    const child = fakeChild()
+    const spawnFn = vi.fn(() => child)
+    const p = runSqlRead(cible, {
+      spawnFn: spawnFn as never,
+      sqlcmdPath: 'sqlcmd.exe',
+      maxRows: 200
+    })
+    child.emit('close', 0)
+    await p
+    const [, args] = spawnFn.mock.calls[0] as unknown as [string, string[]]
+    expect(args[args.indexOf('-Q') + 1]).toContain('SET ROWCOUNT 201')
+  })
+
+  it('ignore un crochet présent dans un message sqlcmd avant le JSON', async () => {
+    // Régression (audit 2026-08-07) : on repartait du PREMIER crochet, donc un message
+    // d'information contenant « [ » rendait la réponse illisible.
+    const child = fakeChild()
+    const p = runSqlRead(cible, { spawnFn: (() => child) as never, sqlcmdPath: 'sqlcmd.exe' })
+    child.stdout.emit('data', 'Changed database context to [RIG_AMIENS].\n[{"a":1}]')
+    child.emit('close', 0)
     const out = await p
     expect(out.ok).toBe(true)
-    if (out.ok) {
-      expect(out.truncated).toBe(true)
-      expect(out.summary).toMatch(/plafond/i)
-    }
+    if (out.ok) expect(out.rows).toEqual([{ a: 1 }])
+  })
+
+  /**
+   * Régression (3ᵉ audit) : sans `-b`, sqlcmd sort en code 0 même sur « Invalid object name ». Le
+   * message n'ayant ni `[` ni `{`, la commande rendait « la requête est valide et ne ramène rien ».
+   * Un agent qui vérifie un état en base concluait « rien » sur une requête cassée — et pouvait agir
+   * sur cette conclusion. Une erreur doit rester une erreur, quel que soit le code de sortie.
+   */
+  it('une erreur SQL en code 0 n’est PAS « aucune ligne »', async () => {
+    const child = fakeChild()
+    const p = runSqlRead(cible, { spawnFn: (() => child) as never, sqlcmdPath: 'sqlcmd.exe' })
+    child.stdout.emit(
+      'data',
+      "Msg 208, Level 16, State 1, Server X, Line 6\nInvalid object name 'T'."
+    )
+    child.emit('close', 0)
+    const out = await p
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.reason).toContain('Invalid object name')
+  })
+
+  it('demande à sqlcmd de sortir en erreur sur erreur SQL (-b)', async () => {
+    const child = fakeChild()
+    const spawnFn = vi.fn(() => child)
+    const p = runSqlRead(cible, { spawnFn: spawnFn as never, sqlcmdPath: 'sqlcmd.exe' })
+    child.emit('close', 0)
+    await p
+    const [, args] = spawnFn.mock.calls[0] as unknown as [string, string[]]
+    expect(args).toContain('-b')
+  })
+
+  /**
+   * Régression (3ᵉ audit) : la sortie était coupée à `MAX_OUTPUT_BYTES` sans que personne le sache.
+   * Sur un JSON coupé, seul le DERNIER objet parsait, et l'agent recevait 1 ligne au lieu de N, avec
+   * `truncated: false`. Un résultat FAUX présenté comme complet est pire qu'une erreur.
+   */
+  it('une sortie coupée au plafond d’octets est un REFUS, pas un résultat', async () => {
+    const child = fakeChild()
+    const p = runSqlRead(cible, { spawnFn: (() => child) as never, sqlcmdPath: 'sqlcmd.exe' })
+    child.stdout.emit('data', '[' + '{"v":"' + 'x'.repeat(500_000) + '"},')
+    child.stdout.emit('data', '{"v":1}]')
+    child.emit('close', 0)
+    const out = await p
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.reason).toMatch(/volumineu|plafond|coup/i)
   })
 
   it('remonte l’erreur SQL Server TELLE QUELLE', async () => {

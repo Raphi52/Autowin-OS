@@ -29,7 +29,13 @@ const PROCESS_TIMEOUT_MS = 30_000
 const MAX_OUTPUT_BYTES = 400_000
 
 export type SqlReadOutcome =
-  | { ok: true; rows: Record<string, unknown>[]; rowCount: number; truncated: boolean; summary: string }
+  | {
+      ok: true
+      rows: Record<string, unknown>[]
+      rowCount: number
+      truncated: boolean
+      summary: string
+    }
   | { ok: false; reason: string }
 
 export interface SqlReadCommandDeps {
@@ -73,12 +79,17 @@ export async function runSqlRead(
     }
   }
   const maxRows = Math.min(MAX_ROWS_CAP, Math.max(1, Math.trunc(deps.maxRows ?? DEFAULT_MAX_ROWS)))
-  const batch = buildReadOnlyBatch(decision.query, maxRows)
+  // On demande UNE ligne de plus que le plafond annoncé : c'est ce qui permet de distinguer un
+  // résultat complet de exactement `maxRows` lignes d'un résultat réellement coupé. Sans ce +1, un
+  // résultat complet de 200 lignes était annoncé « tronqué » et l'agent affinait une requête déjà
+  // exhaustive (défaut relevé à l'audit du 2026-08-07).
+  const batch = buildReadOnlyBatch(decision.query, maxRows + 1)
   const spawnFn = deps.spawnFn ?? spawn
 
   return await new Promise<SqlReadOutcome>((resolve) => {
     let stdout = ''
     let stderr = ''
+    let outputTruncated = false
     let settled = false
     const timer: { handle?: ReturnType<typeof setTimeout> } = {}
     const finish = (outcome: SqlReadOutcome): void => {
@@ -93,16 +104,35 @@ export async function runSqlRead(
       child = spawnFn(
         deps.sqlcmdPath as string,
         [
-          '-S', decision.server,
+          '-S',
+          decision.server,
           '-E', // authentification Windows intégrée : aucun secret ne transite
-          '-d', decision.database,
+          '-d',
+          decision.database,
           // `-y 0` = largeur ILLIMITÉE, sans quoi sqlcmd tronque le JSON à 256 caractères. On ne peut
           // PAS y ajouter `-h -1` : sqlcmd refuse les deux ensemble (« mutually exclusive », constaté
           // en réel). L'en-tête de colonne est donc présent, et c'est le parseur qui l'ignore.
-          '-y', '0',
-          '-t', String(QUERY_TIMEOUT_SEC),
-          '-l', '10',
-          '-Q', batch
+          '-y',
+          '0',
+          // CEINTURE contre le préprocesseur de sqlcmd, qui traite le texte du lot ligne par ligne
+          // AVANT de l'envoyer au moteur (second audit du 2026-08-07) :
+          //   -X désactive les commandes qui sortent de SQL (`:!!` lance une commande OS, `ED`),
+          //   -x désactive la substitution de variables `$(…)`.
+          // La bretelle est dans la garde, qui refuse déjà `GO` et toute ligne commençant par `:`.
+          // On veut les deux : ne dépendre ni d'une analyse lexicale seule, ni d'un drapeau seul.
+          '-X',
+          '-x',
+          // Sans `-b`, sqlcmd sort en code 0 MÊME sur « Invalid object name » : la commande rendait
+          // alors « la requête est valide et ne ramène rien » (3ᵉ audit du 2026-08-07). Un agent qui
+          // vérifie un état en base concluait « rien » sur une requête cassée. Le message est aussi
+          // détecté sur la sortie, plus bas : on ne dépend pas du seul code de retour.
+          '-b',
+          '-t',
+          String(QUERY_TIMEOUT_SEC),
+          '-l',
+          '10',
+          '-Q',
+          batch
         ],
         { windowsHide: true, shell: false }
       )
@@ -122,7 +152,14 @@ export async function runSqlRead(
     }, PROCESS_TIMEOUT_MS)
 
     child.stdout?.on('data', (c: Buffer | string) => {
-      if (stdout.length < MAX_OUTPUT_BYTES) stdout += String(c)
+      if (stdout.length >= MAX_OUTPUT_BYTES) {
+        outputTruncated = true
+        return
+      }
+      stdout += String(c)
+      // On MÉMORISE la coupure. Sans ce drapeau, un JSON tronqué se reparsait partiellement et
+      // l'agent recevait 1 ligne au lieu de N, annoncées complètes (3ᵉ audit du 2026-08-07).
+      if (stdout.length >= MAX_OUTPUT_BYTES) outputTruncated = true
     })
     child.stderr?.on('data', (c: Buffer | string) => {
       if (stderr.length < 8000) stderr += String(c)
@@ -140,11 +177,50 @@ export async function runSqlRead(
         return
       }
       // sqlcmd préfixe la sortie de l'en-tête de colonne (le GUID que SQL Server donne au résultat
-      // `FOR JSON`) : on repart du premier caractère JSON réel. Voir le commentaire sur `-y 0`.
-      const debut = brut.search(/[[{]/)
-      const utile = debut >= 0 ? brut.slice(debut) : ''
+      // `FOR JSON`) et peut y glisser un message d'information. On ne peut donc pas se fier au
+      // PREMIER crochet rencontré — un `[` dans un message cassait le parsing (audit du
+      // 2026-08-07). On essaie chaque début candidat et on garde le premier qui parse réellement.
+      // sqlcmd peut aussi replier le JSON sur plusieurs lignes : on les recolle avant d'essayer.
+      // Un message d'erreur SQL Server peut arriver AVEC un code 0 (cf. `-b`). On le détecte donc
+      // aussi dans la sortie : mieux vaut une erreur explicite qu'un « aucune ligne » mensonger.
+      const messageSql = brut.match(/^Msg \d+, Level \d+.*$/m)
+      if (messageSql) {
+        const detail = brut.split('\n').slice(0, 6).join(' ').trim()
+        finish({ ok: false, reason: `Requête refusée par SQL Server : ${detail}` })
+        return
+      }
+      // Sortie coupée au plafond : le JSON restant est incomplet, et un JSON incomplet se reparse
+      // partiellement en un résultat FAUX. On refuse plutôt que de rendre une donnée trompeuse.
+      if (outputTruncated) {
+        finish({
+          ok: false,
+          reason:
+            'Résultat trop volumineux : la sortie a été coupée et ne peut pas être rendue sans risque de fausser la donnée. Restreins les colonnes ou ajoute un filtre.'
+        })
+        return
+      }
+      const colle = brut.replace(/\r?\n/g, '')
+      let rows: Record<string, unknown>[] | undefined
+      let candidats = 0
+      // Recherche BORNÉE. La boucle est quadratique (chaque candidat déclenche un `JSON.parse` sur
+      // le reste), et elle tourne dans le process principal d'Electron : une sortie riche en `{`
+      // gelait l'interface plusieurs secondes (3ᵉ audit). Le vrai début du JSON est de toute façon
+      // dans les premiers octets, juste après l'en-tête de colonne de sqlcmd.
+      const zoneDeRecherche = Math.min(colle.length, 2048)
+      for (let i = 0; i < zoneDeRecherche && !rows && candidats < 32; i += 1) {
+        if (colle[i] !== '[' && colle[i] !== '{') continue
+        candidats += 1
+        try {
+          const parsed: unknown = JSON.parse(colle.slice(i))
+          rows = Array.isArray(parsed)
+            ? (parsed as Record<string, unknown>[])
+            : [parsed as Record<string, unknown>]
+        } catch {
+          // début candidat invalide : on tente le suivant
+        }
+      }
       // `FOR JSON` sans ligne ne rend RIEN : c'est un résultat vide, pas une erreur.
-      if (!utile) {
+      if (!rows && candidats === 0) {
         finish({
           ok: true,
           rows: [],
@@ -154,25 +230,22 @@ export async function runSqlRead(
         })
         return
       }
-      // sqlcmd peut replier le JSON sur plusieurs lignes : on les recolle avant de parser.
-      let rows: Record<string, unknown>[]
-      try {
-        const parsed = JSON.parse(utile.replace(/\r?\n/g, ''))
-        rows = Array.isArray(parsed) ? parsed : [parsed]
-      } catch {
+      if (!rows) {
         finish({
           ok: false,
-          reason: `Réponse illisible de sqlcmd (JSON attendu) : ${utile.slice(0, 200)}`
+          reason: `Réponse illisible de sqlcmd (JSON attendu) : ${colle.slice(0, 200)}`
         })
         return
       }
-      const truncated = rows.length >= maxRows
+      // La ligne excédentaire demandée plus haut ne sert qu'à DÉTECTER la coupure : on ne la rend pas.
+      const truncated = rows.length > maxRows
+      const visibles = truncated ? rows.slice(0, maxRows) : rows
       finish({
         ok: true,
-        rows,
-        rowCount: rows.length,
+        rows: visibles,
+        rowCount: visibles.length,
         truncated,
-        summary: `${rows.length} ligne(s) sur ${decision.database}@${decision.server}${
+        summary: `${visibles.length} ligne(s) sur ${decision.database}@${decision.server}${
           truncated ? ` — plafond de ${maxRows} atteint, affine la requête` : ''
         }.`
       })
