@@ -21,7 +21,7 @@ import {
   type IpcMainInvokeEvent,
   type WebContents
 } from 'electron'
-import { join } from 'path'
+import { dirname, join } from 'path'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { buildExport, readImport, suggestedFileName } from './workflow-transfer'
 import { createHash, randomUUID } from 'node:crypto'
@@ -158,6 +158,7 @@ import {
   createAutowinAppDataRoot,
   ensureAutowinAppData,
   legacyAppDataRoot,
+  portableAppDataBase,
   resolveAutowinAppDataBase
 } from './app-data'
 import { configureTurnTiming } from './turn-timing'
@@ -214,6 +215,11 @@ import {
   type WorkflowProfilesFile
 } from './workflow-profiles'
 import { overrideFor, registerWorkflowBenchIpc } from './workflow-bench-ipc'
+import {
+  DEFAULT_BRAIN_GRACE_MS,
+  decidePreflightAnnouncement,
+  type BrainLaunchOutcome
+} from './preflight-announce'
 import {
   graphDefects,
   worstCaseNodeExecutions,
@@ -292,8 +298,14 @@ const isolatedTestInstance = automationInstanceMode.isolated
 let isolatedConversationReadCount = 0
 const headlessTestInstance = automationInstanceMode.headless
 const explicitUserDataPath = resolveExplicitUserDataDir(process.argv)
+// STOCKAGE PORTABLE : l'app écrit dans SON dossier, plus dans `%APPDATA%`. Mesuré le 2026-08-07,
+// supprimer le dossier du projet laissait 1,8 Go derrière lui. `dirname(app.getPath('exe'))` et non
+// `app.getAppPath()` en packagé : ce dernier pointe dans l'asar, où rien ne s'écrit.
 const appDataRoot = resolveIsolatedAppDataBase(
-  resolveAutowinAppDataBase(app.getPath('appData'), app.isPackaged),
+  resolveAutowinAppDataBase(
+    portableAppDataBase(app.getAppPath(), dirname(app.getPath('exe')), app.isPackaged),
+    app.isPackaged
+  ),
   isolatedTestInstance,
   explicitUserDataPath
 )
@@ -4050,7 +4062,29 @@ app.whenReady().then(async () => {
     if (reprise === 'relancer') void relaunchResumableRun(resumableRun)
   }
 
-  preflightWatchHandle = watchAppPreflight((result) => {
+  const preflightStartedAt = Date.now()
+  let brainLaunch: BrainLaunchOutcome | undefined
+  preflightWatchHandle = watchAppPreflight((raw) => {
+    // #2 — un rouge « brain » → tenter de DÉMARRER le service local (garde anti-doublon + tentative
+    // unique par session dans ensureBrainServerStarted). Le backoff de watchAppPreflight re-sondera
+    // ensuite jusqu'à sa disponibilité (warm-up fastembed). Fire-and-forget : ne bloque pas le push.
+    if (raw.checks.some((c) => c.id === 'brain' && !c.ok)) {
+      void ensureBrainServerStarted(() => appPreflightProbes().pingBrain()).then((r) => {
+        // Retenu pour DIRE POURQUOI si le délai de grâce expire : la première sonde ne pouvait pas
+        // le savoir, cette tentative l'a appris.
+        brainLaunch = { status: r.status, detail: r.detail }
+        console.log('[brain-launch]', r.status, '—', r.detail)
+      })
+    }
+    // Un Brain qui n'a pas fini de démarrer n'est pas une panne : on lui laisse un délai avant d'en
+    // parler. Ce qui ne se répare pas seul, lui, s'annonce tout de suite.
+    const decision = decidePreflightAnnouncement(raw, {
+      elapsedMs: Date.now() - preflightStartedAt,
+      graceMs: DEFAULT_BRAIN_GRACE_MS,
+      brainLaunch
+    })
+    if (!decision.announce) return
+    const result = decision.result
     const signature = `${result.ok}|${result.checks
       .filter((c) => !c.ok)
       .map((c) => c.id)
@@ -4059,14 +4093,6 @@ app.whenReady().then(async () => {
     if (signature === lastPreflightSignature) return
     lastPreflightSignature = signature
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send('preflight:result', result)
-    // #2 — un rouge « brain » → tenter de DÉMARRER le service local (garde anti-doublon + tentative
-    // unique par session dans ensureBrainServerStarted). Le backoff de watchAppPreflight re-sondera
-    // ensuite jusqu'à sa disponibilité (warm-up fastembed). Fire-and-forget : ne bloque pas le push.
-    if (result.checks.some((c) => c.id === 'brain' && !c.ok)) {
-      void ensureBrainServerStarted(() => appPreflightProbes().pingBrain()).then((r) =>
-        console.log('[brain-launch]', r.status, '—', r.detail)
-      )
-    }
   }, preflightProviderOptions())
 
   app.on('activate', function () {
