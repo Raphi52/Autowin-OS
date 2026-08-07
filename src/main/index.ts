@@ -46,6 +46,7 @@ import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestratio
 import {
   appPreflightProbes,
   getLastAppPreflightResult,
+  resolveBinOnPath,
   runAppPreflight,
   watchAppPreflight
 } from './preflight-probes'
@@ -419,7 +420,10 @@ const bus = new AppCommandBus(
   () => tickets.sources().map((summary) => summary.profile),
   (request) => tickets.create(request),
   (request) => tickets.list(request),
-  (request) => tickets.get(request)
+  (request) => tickets.get(request),
+  // `sqlcmd` est resolu UNE fois au demarrage, par lecture du PATH (jamais en lancant un process).
+  // Absent -> `sql_query` annoncera l'indisponibilite plutot que de tenter un binaire inexistant.
+  resolveBinOnPath('sqlcmd') ?? undefined
 )
 seedRegistrySnapshot({
   tools: bus.catalog().map((command) => ({

@@ -31,6 +31,7 @@ import { appendConvActivity } from './activity/conv-activity'
 import { createTicketFromCommand, type TicketCreateArgs } from './ticket-create-command'
 import { searchTicketsFromCommand, type TicketSearchArgs } from './ticket-search-command'
 import { getTicketFromCommand, type TicketGetArgs } from './ticket-get-command'
+import { runSqlRead } from './sql-read-command'
 import type { TicketCreateRequest, TicketGetRequest } from './ticket-providers/provider-contract'
 import type { TicketItem, TicketListRequest, TicketSourceProfile } from '../shared/tickets'
 import { buildAutowinKaizenTask, collectAutowinKaizenEvidence } from './autowin-kaizen-context'
@@ -294,6 +295,25 @@ const CATALOG: CommandSpec[] = [
       // DEUX fiches. Et `openWorldHint` : l'effet sort de l'app, chez un tiers.
       destructiveHint: false,
       idempotentHint: false,
+      openWorldHint: true
+    }
+  },
+  {
+    name: 'sql_query',
+    description:
+      'Consulter les bases RIG des greffes en LECTURE SEULE (un seul SELECT) — pour constater un paramétrage ou une spécificité. Toute écriture est refusée avant d’atteindre le serveur.',
+    args: {
+      query: 'un SELECT unique, sans point-virgule ni commentaire (obligatoire)',
+      database: 'la base greffe visée, ex. RIG_AMIENS (obligatoire)',
+      server:
+        'facultatif — défaut SQL-PROD\\PROD (métropole) ; RIGBD-ANTILLES ou RIGBD-REUNION pour les DROM'
+    },
+    annotations: {
+      // Lecture stricte : l'enveloppe annule systématiquement sa transaction. Mais `openWorldHint` —
+      // la donnée vient d'une base de PRODUCTION, hors de l'app.
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
       openWorldHint: true
     }
   },
@@ -562,7 +582,12 @@ export class AppCommandBus {
       request: TicketListRequest
     ) => Promise<{ items: TicketItem[]; hasMore: boolean; cursor?: string }>,
     /** Lecture d'UNE fiche par id, câblée depuis index.ts. */
-    private readonly getTicket?: (request: TicketGetRequest) => Promise<TicketItem>
+    private readonly getTicket?: (request: TicketGetRequest) => Promise<TicketItem>,
+    /**
+     * Chemin de `sqlcmd`, résolu au démarrage. Absent → `sql_query` annonce l'indisponibilité au lieu
+     * de tenter un binaire inexistant.
+     */
+    private readonly sqlcmdPath?: string
   ) {}
 
   catalog(): CommandSpec[] {
@@ -1134,6 +1159,17 @@ export class AppCommandBus {
           listSources: this.listTicketSources,
           ...(this.createTicket ? { create: this.createTicket } : {})
         })
+      case 'sql_query':
+        // La cible et la nature de la requête sont décidées hors du modèle (`sql-read-guard.ts`),
+        // jamais d'après les arguments bruts : le compte Windows utilisé PEUT écrire en production.
+        return await runSqlRead(
+          {
+            server: typeof a.server === 'string' && a.server ? a.server : 'SQL-PROD\\PROD',
+            database: a.database,
+            query: a.query
+          },
+          { ...(this.sqlcmdPath ? { sqlcmdPath: this.sqlcmdPath } : {}) }
+        )
       case 'ticket_get':
         return await getTicketFromCommand(a as TicketGetArgs, {
           listSources: this.listTicketSources,
