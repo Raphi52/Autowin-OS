@@ -233,6 +233,71 @@
   flex: 1;
   min-height: 0;
 }
+/*
+ * ── Groupes de conversations ──
+ * Repris de claude.exe : un groupe par dossier de travail. L'en-tête est aussi la zone de dépôt —
+ * viser un titre est plus facile que viser un interstice, et ça évite une cible invisible.
+ */
+.conv-group {
+  margin-top: var(--s2);
+  border-radius: var(--r1);
+  border: 1px solid transparent;
+  transition:
+    border-color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+.conv-group:first-child {
+  margin-top: 0;
+}
+/* Le dépôt doit se VOIR avant le relâchement : sinon on lâche à l'aveugle. */
+.conv-group.is-drop {
+  border-color: var(--accent);
+  background: var(--surface-selected);
+}
+.conv-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  padding: 5px var(--s2);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  background: none;
+  border: 0;
+  border-radius: var(--r1);
+  cursor: pointer;
+  text-align: left;
+}
+.conv-group-head:hover {
+  color: var(--text-dim);
+  background: var(--surface-hover);
+}
+.conv-group-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.conv-group-chevron {
+  font-size: 9px;
+  line-height: 1;
+  flex: none;
+}
+.conv-group-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Le compte reste lisible même replié : c'est ce qui dit qu'on cache quelque chose. */
+.conv-group-count {
+  margin-left: auto;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--text-faint);
+}
+
 .conv-item {
   display: flex;
   align-items: center;

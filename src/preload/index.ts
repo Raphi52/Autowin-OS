@@ -400,6 +400,13 @@ const api = {
     id: string,
     mode: 'plan' | 'ask' | 'auto'
   ): Promise<Conversation> => ipcRenderer.invoke('os:conversations:authorityMode', id, mode),
+  /**
+   * Range une conversation dans un dossier de travail — ce qui la groupe dans la liste.
+   * `path` OMIS → le main ouvre le sélecteur natif (le renderer n'a pas le disque) ;
+   * `null` → la conversation retourne dans « Divers ». Rend le chemin retenu, ou `null`.
+   */
+  conversationsSetProject: (id: string, path?: string | null): Promise<string | null> =>
+    ipcRenderer.invoke('os:conversations:setProject', id, path),
   conversationsFork: (id: string, messageId: string): Promise<Conversation> =>
     ipcRenderer.invoke('os:conversations:fork', id, messageId),
   conversationsRemove: (id: string): Promise<boolean> =>

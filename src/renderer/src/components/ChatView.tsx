@@ -40,6 +40,7 @@ import { visibleScopedRuns, type WorkflowPanelSection } from './workflows-panel-
 import { ForkIcon, InspectIcon } from './chat-view-icons'
 import { formatFileSize, encodeAttachment } from './chat-attachments'
 import { searchConversations } from './conversation-search'
+import { estReplie, grouperConversations } from './conversation-groups'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
@@ -137,6 +138,10 @@ type Conv = {
   messageCount?: number
   lastMessageRole?: 'user' | 'assistant'
   lastAssistantStatus?: 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
+  /** Le dossier de travail qui GROUPE la conversation dans la liste. Absent → « Divers ». */
+  projectPath?: string
+  /** Marque une analyse Auto-Kaizen : elles vivent dans leur propre groupe, replié par défaut. */
+  autoKaizen?: unknown
   updatedAt: number
 }
 
@@ -1885,6 +1890,62 @@ export function ChatView({
   const conversationHits = useMemo(() => searchConversations(convs, convQuery), [convs, convQuery])
 
   /**
+   * Repli des groupes, PERSISTÉ. Le redéplier à chaque ouverture annulerait tout le bénéfice :
+   * l'utilisateur replie « Auto-kaizen » pour ne plus le voir, pas pour le refermer chaque matin.
+   * `localStorage` et non le store disque : c'est une préférence d'affichage locale, elle n'a rien à
+   * faire dans `conversations.json` que d'autres chemins relisent.
+   */
+  const [groupesReplies, setGroupesReplies] = useState<Record<string, boolean>>(() => {
+    try {
+      const brut = localStorage.getItem('autowin.conv-groups.collapsed')
+      return brut ? (JSON.parse(brut) as Record<string, boolean>) : {}
+    } catch {
+      // Un JSON corrompu ne doit pas empêcher la liste de s'afficher : on repart des défauts.
+      return {}
+    }
+  })
+  const basculerGroupe = useCallback((key: string, replieActuel: boolean): void => {
+    setGroupesReplies((courant) => {
+      const suivant = { ...courant, [key]: !replieActuel }
+      try {
+        localStorage.setItem('autowin.conv-groups.collapsed', JSON.stringify(suivant))
+      } catch {
+        // Quota plein ou stockage indisponible : le repli reste valable pour la session en cours.
+      }
+      return suivant
+    })
+  }, [])
+
+  /** La cible d'un glisser en cours, pour que l'utilisateur VOIE où il va déposer. */
+  const [surviole, setSurvole] = useState<string | null>(null)
+
+  const rangerDans = useCallback(
+    async (conversationId: string, chemin?: string | null): Promise<void> => {
+      await window.api.conversationsSetProject?.(conversationId, chemin)
+      await refreshConvs()
+    },
+    [refreshConvs]
+  )
+
+  /**
+   * Les résultats de recherche, groupés. On transporte le HIT entier (`snippet` compris) plutôt que
+   * d'aplatir la conversation dedans : l'aplatissement faisait collisionner des champs homonymes et
+   * rendait impossible de savoir, à la lecture, d'où venait chaque valeur.
+   */
+  const groupes = useMemo(
+    () =>
+      grouperConversations(
+        conversationHits.map((hit) => ({
+          id: hit.conversation.id,
+          projectPath: hit.conversation.projectPath,
+          autoKaizen: hit.conversation.autoKaizen,
+          hit
+        }))
+      ),
+    [conversationHits]
+  )
+
+  /**
    * Inbox d'agents : conversations avec un agent EN TRAVAIL (tour en cours) ou une
    * orchestration live — visible en tête, même quand la conv active est ailleurs.
    */
@@ -2020,57 +2081,115 @@ export function ChatView({
           {convs.length > 0 && conversationHits.length === 0 && (
             <div className="conv-search-empty">Aucun message ou titre trouvé.</div>
           )}
-          {conversationHits.map(({ conversation: c, snippet }) => {
-            const conversationState = deriveConversationState({
-              busy: busyConversations.has(c.id),
-              messageCount: c.messageCount ?? c.messages?.length ?? 0,
-              lastMessageRole: c.lastMessageRole ?? c.messages?.at(-1)?.role,
-              lastAssistantStatus: c.lastAssistantStatus
-            })
-            const stateDescription = `${conversationState.label} — ${conversationState.detail}`
+          {groupes.map((groupe) => {
+            const replie = estReplie(groupe.key, groupesReplies)
             return (
-              <div key={c.id} className={`conv-item${c.id === activeId ? ' active' : ''}`}>
-                <button className="conv-pick" onClick={() => loadConv(c)}>
-                  <span
-                    className={`conversation-state is-${conversationState.key}`}
-                    data-conversation-state={conversationState.key}
-                    role="img"
-                    aria-label={`État de la conversation : ${stateDescription}`}
-                    title={stateDescription}
-                  />
-                  <span className="conv-copy">
-                    <span className="conv-label">{c.title}</span>
-                    {convQuery && snippet && <span className="conv-snippet">{snippet}</span>}
-                    {!convQuery && (
-                      <span className="conv-meta">
-                        <span>{c.provider}</span>
-                        <span>{c.messageCount ?? c.messages?.length ?? 0} messages</span>
-                      </span>
-                    )}
-                  </span>
-                  {convQuery && (
-                    <span className="conv-count tnum">
-                      {c.messageCount ?? c.messages?.length ?? 0}
-                    </span>
-                  )}
-                </button>
-                <button
-                  className="conv-menu-trigger"
-                  title="Actions"
-                  aria-label="Actions de la conversation"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    const rect = event.currentTarget.getBoundingClientRect()
-                    setConvMenu((current) =>
-                      current?.conv.id === c.id
-                        ? null
-                        : { conv: c, top: rect.top, left: rect.right + 6 }
-                    )
+              <Fragment key={groupe.key}>
+                {/*
+                  L'en-tête est AUSSI la zone de dépôt : viser un titre est plus facile que viser un
+                  interstice, et ça évite d'inventer une cible invisible. On ne dépose pas sur un
+                  groupe dérivé (« Auto-kaizen » vient du champ `autoKaizen`, « Divers » est l'absence
+                  de dossier) — y traîner une conversation ne voudrait rien dire.
+                */}
+                <div
+                  className={`conv-group${replie ? ' is-collapsed' : ''}${
+                    surviole === groupe.key ? ' is-drop' : ''
+                  }`}
+                  data-testid={`conv-group-${groupe.key}`}
+                  onDragOver={(e) => {
+                    if (groupe.kind !== 'projet') return
+                    e.preventDefault()
+                    setSurvole(groupe.key)
+                  }}
+                  onDragLeave={() => setSurvole((c) => (c === groupe.key ? null : c))}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    setSurvole(null)
+                    const id = e.dataTransfer.getData('text/autowin-conversation')
+                    if (id && groupe.kind === 'projet') void rangerDans(id, groupe.key)
                   }}
                 >
-                  ⋮
-                </button>
-              </div>
+                  <button
+                    className="conv-group-head"
+                    onClick={() => basculerGroupe(groupe.key, replie)}
+                    aria-expanded={!replie}
+                    title={groupe.kind === 'projet' ? groupe.key : groupe.label}
+                  >
+                    <span className="conv-group-chevron" aria-hidden="true">
+                      {replie ? '▸' : '▾'}
+                    </span>
+                    <span className="conv-group-label">{groupe.label}</span>
+                    <span className="conv-group-count tnum">{groupe.items.length}</span>
+                  </button>
+                </div>
+                {!replie &&
+                  groupe.items.map(({ hit: { conversation: c, snippet } }) => {
+                    const conversationState = deriveConversationState({
+                      busy: busyConversations.has(c.id),
+                      messageCount: c.messageCount ?? c.messages?.length ?? 0,
+                      lastMessageRole: c.lastMessageRole ?? c.messages?.at(-1)?.role,
+                      lastAssistantStatus: c.lastAssistantStatus
+                    })
+                    const stateDescription = `${conversationState.label} — ${conversationState.detail}`
+                    return (
+                      <div
+                        key={c.id}
+                        className={`conv-item${c.id === activeId ? ' active' : ''}`}
+                        // Le glisser est un RACCOURCI, pas le seul chemin : le menu ⋮ offre la même
+                        // action au clavier. Une fonction qui n'existe qu'au glisser exclut de fait
+                        // ceux qui ne peuvent pas glisser.
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData('text/autowin-conversation', c.id)
+                          e.dataTransfer.effectAllowed = 'move'
+                        }}
+                      >
+                        <button className="conv-pick" onClick={() => loadConv(c)}>
+                          <span
+                            className={`conversation-state is-${conversationState.key}`}
+                            data-conversation-state={conversationState.key}
+                            role="img"
+                            aria-label={`État de la conversation : ${stateDescription}`}
+                            title={stateDescription}
+                          />
+                          <span className="conv-copy">
+                            <span className="conv-label">{c.title}</span>
+                            {convQuery && snippet && (
+                              <span className="conv-snippet">{snippet}</span>
+                            )}
+                            {!convQuery && (
+                              <span className="conv-meta">
+                                <span>{c.provider}</span>
+                                <span>{c.messageCount ?? c.messages?.length ?? 0} messages</span>
+                              </span>
+                            )}
+                          </span>
+                          {convQuery && (
+                            <span className="conv-count tnum">
+                              {c.messageCount ?? c.messages?.length ?? 0}
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          className="conv-menu-trigger"
+                          title="Actions"
+                          aria-label="Actions de la conversation"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            const rect = event.currentTarget.getBoundingClientRect()
+                            setConvMenu((current) =>
+                              current?.conv.id === c.id
+                                ? null
+                                : { conv: c, top: rect.top, left: rect.right + 6 }
+                            )
+                          }}
+                        >
+                          ⋮
+                        </button>
+                      </div>
+                    )
+                  })}
+              </Fragment>
             )
           })}
         </div>
@@ -2097,6 +2216,43 @@ export function ChatView({
                 </span>
                 Renommer
               </button>
+              {/*
+                La MÊME action que le glisser-déposer, au clavier. Ce n'est pas un doublon de confort :
+                une fonctionnalité qui n'existe qu'au glisser est inatteignable sans souris.
+              */}
+              <button
+                role="menuitem"
+                data-testid="conv-menu-set-project"
+                onClick={() => {
+                  const conv = convMenu.conv
+                  setConvMenu(null)
+                  // Chemin OMIS : c'est le main qui ouvre le sélecteur natif — le renderer n'a pas
+                  // le disque, et lui laisser fabriquer un chemin ferait de ce canal une écriture
+                  // non contrôlée.
+                  void rangerDans(conv.id)
+                }}
+              >
+                <span className="conv-menu-ic" aria-hidden="true">
+                  🗂
+                </span>
+                Ranger dans un dossier…
+              </button>
+              {convMenu.conv.projectPath && (
+                <button
+                  role="menuitem"
+                  data-testid="conv-menu-clear-project"
+                  onClick={() => {
+                    const conv = convMenu.conv
+                    setConvMenu(null)
+                    void rangerDans(conv.id, null)
+                  }}
+                >
+                  <span className="conv-menu-ic" aria-hidden="true">
+                    ↩
+                  </span>
+                  Sortir du dossier
+                </button>
+              )}
               <button
                 role="menuitem"
                 className="c-err"

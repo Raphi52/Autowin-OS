@@ -235,3 +235,74 @@ describe('ConversationStore structured turns', () => {
     expect(store.get('conv-4')?.messages[1].status).toBe('interrupted')
   })
 })
+
+/**
+ * Ranger une conversation dans un dossier de travail — ce qui la GROUPE dans la liste du Chat.
+ * Repris de claude.exe, dont le mécanisme est purement déterministe : le groupe EST le dossier.
+ */
+describe('ConversationStore — le dossier de travail qui groupe', () => {
+  const neuve = (store: ConversationStore): string =>
+    store.create({ title: 'T', category: 'claude', provider: 'anthropic' }).id
+
+  it('une conversation naît SANS dossier — on ne devine pas son projet', () => {
+    const store = new ConversationStore(makeClock())
+    expect(store.get(neuve(store))?.projectPath).toBeUndefined()
+  })
+
+  it('poser un dossier le persiste', () => {
+    const store = new ConversationStore(makeClock())
+    const id = neuve(store)
+    store.setProjectPath(id, 'D:/projets/Autowin OS')
+    expect(store.get(id)?.projectPath).toBe('D:/projets/Autowin OS')
+  })
+
+  it('`null` SORT du dossier et efface le champ, sans laisser de chaîne vide sur disque', () => {
+    // Sans ce chemin de retour, un rangement serait définitif : la seule sortie serait de supprimer.
+    const store = new ConversationStore(makeClock())
+    const id = neuve(store)
+    store.setProjectPath(id, 'D:/projets/p')
+    store.setProjectPath(id, null)
+    expect(store.get(id)?.projectPath).toBeUndefined()
+    expect('projectPath' in (store.get(id) as object)).toBe(false)
+  })
+
+  it('un chemin fait d’espaces vaut « pas de dossier », pas un groupe fantôme', () => {
+    const store = new ConversationStore(makeClock())
+    const id = neuve(store)
+    store.setProjectPath(id, '   ')
+    expect(store.get(id)?.projectPath).toBeUndefined()
+  })
+
+  it('ranger ne fait PAS remonter la conversation en tête de liste', () => {
+    // La liste est triée par `updatedAt`. Si ranger touchait cette date, un simple classement
+    // ferait passer une vieille conversation devant celle sur laquelle on travaille.
+    const store = new ConversationStore(makeClock())
+    const id = neuve(store)
+    const avant = store.get(id)!.updatedAt
+    store.setProjectPath(id, 'D:/projets/p')
+    expect(store.get(id)?.updatedAt).toBe(avant)
+  })
+
+  it('le dossier survit à un rechargement depuis le disque', () => {
+    const store = new ConversationStore(makeClock())
+    const id = neuve(store)
+    store.setProjectPath(id, 'D:/projets/p')
+    // `list()` EST ce qui part sur disque (`onChange?.(this.list(), …)`) : recharger depuis lui,
+    // plutôt que depuis un objet fabriqué à la main, teste le vrai aller-retour.
+    const recharge = new ConversationStore(makeClock())
+    recharge.hydrate(store.list())
+    expect(recharge.get(id)?.projectPath).toBe('D:/projets/p')
+  })
+
+  it('la projection envoyée à la liste porte le dossier — sinon l’UI ne peut pas grouper', () => {
+    const store = new ConversationStore(makeClock())
+    const id = neuve(store)
+    store.setProjectPath(id, 'D:/projets/p')
+    expect(store.listSummaries().find((s) => s.id === id)?.projectPath).toBe('D:/projets/p')
+  })
+
+  it('un id inconnu ne jette pas et ne crée rien', () => {
+    const store = new ConversationStore(makeClock())
+    expect(store.setProjectPath('conv-inexistante', 'D:/projets')).toBeUndefined()
+  })
+})

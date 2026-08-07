@@ -2377,6 +2377,33 @@ Le fil reprend ensuite normalement.`
     }
     return os.conversations.setAuthorityMode(id, rawMode as 'plan' | 'ask' | 'auto')
   })
+  /**
+   * Ranger une conversation dans un dossier de travail. `null` la remet dans « Divers ».
+   *
+   * Le sélecteur natif est ouvert ICI et non côté renderer : le renderer n'a pas accès au disque, et
+   * lui laisser passer un chemin arbitraire ferait de ce canal une écriture non contrôlée. Il envoie
+   * soit un chemin déjà connu (glisser-déposer vers un groupe existant), soit `undefined` pour
+   * demander l'ouverture du sélecteur.
+   */
+  ipcMain.handle(
+    'os:conversations:setProject',
+    async (event, rawId: string, rawPath?: string | null) => {
+      assertTrustedRendererSender(event, 'Conversations')
+      const id = guardString(rawId, 'id')
+      let chemin: string | null
+      if (rawPath === undefined) {
+        if (headlessTestInstance) return null
+        const result = await dialog.showOpenDialog({ properties: ['openDirectory'] })
+        if (result.canceled) return null
+        chemin = result.filePaths[0] ?? null
+      } else {
+        chemin = rawPath === null ? null : guardString(rawPath, 'projectPath')
+      }
+      const updated = os.conversations.setProjectPath(id, chemin)
+      if (updated) broadcast({ type: 'refresh', scope: 'conversations' })
+      return updated?.projectPath ?? null
+    }
+  )
   ipcMain.handle('os:conversations:fork', (event, rawId: string, rawMessageId: string) => {
     assertTrustedRendererSender(event, 'Conversation fork')
     return os.conversations.fork(guardString(rawId, 'id'), guardString(rawMessageId, 'messageId'))

@@ -75,6 +75,18 @@ export interface Conversation {
   /** Filiation durable d'une analyse/correction Auto-Kaizen avec la conversation source. */
   autoKaizen?: AutoKaizenConversationLink
   authorityMode?: ConversationAuthorityMode
+  /**
+   * Le dossier de travail auquel cette conversation appartient — ce qui la GROUPE dans la liste.
+   *
+   * Distinct de `category`, qui porte le PROVIDER (`'claude' | 'codex' | ...`) et que consomment le
+   * dispatch task-manager et les commandes : le détourner pour y ranger un dossier casserait ces
+   * chemins sans erreur visible. Distinct aussi de `workspaceId`, synthétique et 1:1 avec la
+   * conversation, donc incapable de regrouper quoi que ce soit.
+   *
+   * OPTIONNEL, et il le reste : un `conversations.json` écrit par une version antérieure doit
+   * continuer à se relire. Absent → la conversation vit dans « Divers ».
+   */
+  projectPath?: string
   /** RUN.md externes (Claude Code) attachés à cette conversation. */
   runPaths?: string[]
   createdAt: number
@@ -320,6 +332,26 @@ export class ConversationStore {
       conversation.title = title
       this.changed()
     }
+  }
+
+  /**
+   * Range la conversation dans un dossier de travail — c'est ce qui la groupe dans la liste.
+   *
+   * `null` la SORT de son groupe (retour à « Divers ») : sans ce chemin, un rangement serait
+   * définitif et la seule façon d'en sortir serait de supprimer la conversation. Le champ est effacé
+   * plutôt que mis à la chaîne vide, pour qu'un `conversations.json` relu n'en garde aucune trace.
+   *
+   * Ne touche PAS `updatedAt` : déplacer une conversation n'est pas y travailler, et la liste est
+   * triée par `updatedAt` — un rangement la ferait remonter en tête comme si elle venait de servir.
+   */
+  setProjectPath(id: string, projectPath: string | null): Conversation | undefined {
+    const conversation = this.conversations.get(id)
+    if (!conversation) return undefined
+    const propre = projectPath?.trim()
+    if (propre) conversation.projectPath = propre
+    else delete conversation.projectPath
+    this.changed()
+    return conversation
   }
 
   setAuthorityMode(id: string, authorityMode: ConversationAuthorityMode): Conversation {

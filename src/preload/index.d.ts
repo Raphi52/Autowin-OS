@@ -317,6 +317,8 @@ interface ChatApi {
     id: string,
     mode: 'plan' | 'ask' | 'auto'
   ) => Promise<Conversation>
+  /** Range une conversation dans un dossier. Chemin omis → sélecteur natif ; `null` → « Divers ». */
+  conversationsSetProject: (id: string, path?: string | null) => Promise<string | null>
   conversationsFork: (id: string, messageId: string) => Promise<Conversation>
   conversationsRemove: (id: string) => Promise<boolean>
   readChatArtifact: (
