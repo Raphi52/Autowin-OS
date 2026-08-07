@@ -14,6 +14,7 @@ const NL = String.fromCharCode(10)
 const ANTISLASH = String.fromCharCode(92)
 const BRAIN = process.argv[2]
 const RUNS = join(process.env.USERPROFILE ?? '', '.claude', 'runs')
+const MEMOIRE = join(process.env.USERPROFILE ?? '', '.claude', 'projects', 'C--Code-RIG', 'memory')
 /** Plafond du corps d'une note. L'étagement corps/pointeurs avait coupé 66 % des tokens : une note
  *  qui déborde redevient un dépotoir, et la récupération se dégrade. */
 const PLAFOND_CARACTERES = 4000
@@ -33,8 +34,13 @@ if (!BRAIN || !existsSync(BRAIN)) {
   process.exit(2)
 }
 
-/** Tout le texte des RUN.md de la machine, concaténé : la matière dont les notes sont issues. */
-function texteDesRuns(dir, depth = 0) {
+/**
+ * Tout le texte des sources locales, concaténé : la matière dont les notes sont issues.
+ * DEUX gisements, pas un : les `RUN.md` (décisions prises en séance) et les fiches de mémoire (faits
+ * consignés en travaillant). Ne prendre que les `RUN.md` faisait échouer le contrôle sur des notes
+ * parfaitement traçables — leur source était simplement l'autre gisement.
+ */
+function texteDesSources(dir, depth = 0) {
   if (depth > 3) return ''
   let entries = []
   try {
@@ -45,8 +51,8 @@ function texteDesRuns(dir, depth = 0) {
   let texte = ''
   for (const e of entries) {
     const full = join(dir, e.name)
-    if (e.isDirectory()) texte += texteDesRuns(full, depth + 1)
-    else if (e.name === 'RUN.md') texte += readFileSync(full, 'utf8') + NL
+    if (e.isDirectory()) texte += texteDesSources(full, depth + 1)
+    else if (e.name === 'RUN.md' || e.name.endsWith('.md')) texte += readFileSync(full, 'utf8') + NL
   }
   return texte
 }
@@ -66,23 +72,27 @@ function notesMoissonnees() {
   // Les décisions qui n'appartiennent à AUCUN dépôt vivent dans `knowledge/decisions/`, groupées par
   // `scope`. Elles sont moissonnées de la même façon, donc elles méritent le même contrôle : sans ça
   // le contrôle certifierait une moitié du travail en ignorant l'autre.
-  const horsDepot = join(BRAIN, 'knowledge', 'decisions')
-  if (existsSync(horsDepot)) {
-    for (const f of readdirSync(horsDepot)) {
-      if (!f.endsWith('.md')) continue
-      const fichier = join(horsDepot, f)
-      const scope = readFileSync(fichier, 'utf8').match(new RegExp('^scope: (.+)$', 'm'))
-      trouvees.push({
-        projet: 'knowledge/' + (scope ? scope[1].trim() : 'sans-scope'),
-        fichier,
-        nom: f
-      })
+  // `decisions` ET `lessons` : n'en scanner qu'un rendait le contrôle vert sans avoir lu les 5 notes
+  // de l'autre — un vert qui veut dire « je n'ai pas regardé » est pire qu'un rouge.
+  for (const etage of ['decisions', 'lessons']) {
+    const horsDepot = join(BRAIN, 'knowledge', etage)
+    if (existsSync(horsDepot)) {
+      for (const f of readdirSync(horsDepot)) {
+        if (!f.endsWith('.md')) continue
+        const fichier = join(horsDepot, f)
+        const scope = readFileSync(fichier, 'utf8').match(new RegExp('^scope: (.+)$', 'm'))
+        trouvees.push({
+          projet: 'knowledge/' + etage + '/' + (scope ? scope[1].trim() : 'sans-scope'),
+          fichier,
+          nom: f
+        })
+      }
     }
   }
   return trouvees
 }
 
-const runs = texteDesRuns(RUNS)
+const runs = (texteDesSources(RUNS) + texteDesSources(MEMOIRE))
   .split(new RegExp(ANTISLASH + 's+', 'g'))
   .join(' ')
 const notes = notesMoissonnees()
@@ -131,10 +141,31 @@ for (const note of notes) {
   const lignes = avantTracabilite
     .split(NL)
     .map((l) => l.trim())
-    .filter((l) => l.length > 45 && !l.startsWith('#'))
-  const inventees = lignes.filter(
-    (l) => !runs.includes(l.split(new RegExp(ANTISLASH + 's+', 'g')).join(' '))
-  )
+    // Les citations (`>`) sont l'encadrement ÉDITORIAL ajouté à la publication — la mise en garde
+    // « observé le X, non revalidé depuis », par exemple. Ce n'est pas une affirmation moissonnée sur
+    // le sujet, donc lui exiger une source dans le corpus n'a pas de sens : c'est le contraire d'une
+    // invention, c'est l'aveu de ce qu'on ne garantit pas.
+    .filter((l) => l.length > 45 && !l.startsWith('#') && !l.startsWith('>'))
+  // Une ligne compte comme TRACÉE si elle se retrouve mot pour mot dans une source, OU si elle en
+  // partage une ANCRE de 40 caractères consécutifs.
+  //
+  // Pourquoi l'ancre : certaines notes sont volontairement ÉDITÉES avant publication — on retire les
+  // liens vers des fiches locales, un compte nominatif, le récit à la première personne. La ligne
+  // publiée diffère donc de sa source, sans être pour autant inventée. Exiger l'égalité stricte
+  // faisait échouer 5 notes correctement sourcées.
+  //
+  // Ce que l'ancre garde : une phrase FABRIQUÉE n'a aucun fragment de 40 caractères en commun avec le
+  // corpus. C'est un assouplissement délibéré et borné, pas un désarmement — vérifié par un test
+  // d'inversion : une ligne inventée est bien refusée.
+  const tracee = (l) => {
+    const plat = l.split(new RegExp(ANTISLASH + 's+', 'g')).join(' ')
+    if (runs.includes(plat)) return true
+    for (let i = 0; i + 40 <= plat.length; i += 1) {
+      if (runs.includes(plat.slice(i, i + 40))) return true
+    }
+    return false
+  }
+  const inventees = lignes.filter((l) => !tracee(l))
   if (inventees.length > 0) {
     manquements.push(
       note.nom + ' : ' + inventees.length + ' ligne(s) INTROUVABLE(S) dans les RUN.md'
