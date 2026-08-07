@@ -11,8 +11,7 @@ Write-Host '== typecheck (node + web) =='
 if ($LASTEXITCODE -ne 0) { Write-Host 'ECHEC : typecheck'; exit 1 }
 
 $suites = @(
-  'src/renderer/src/components/graph-drill.test.ts',
-  'src/renderer/src/components/graph-radial-layout.test.ts',
+  'src/renderer/src/components/graph-vault-paths.test.ts',
   'src/main/repo-inventory.test.ts',
   'src/main/repo-inventory.wiring.test.ts'
 )

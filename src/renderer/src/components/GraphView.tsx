@@ -1,21 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
-import { boundingRadius, layoutRadial } from './graph-radial-layout'
 import { brainSubjectOf } from './graph-brain-categories'
 import { layoutTree, pickVisibleLabels, treeBoundingRadius } from './graph-tree-layout'
-import {
-  DRILL_ROOT,
-  bandAtRadius,
-  brainProjectsForRepo,
-  drillBack,
-  drillInto,
-  drillTrail,
-  radiusOf,
-  spreadLabelRadii,
-  summarizeRepo,
-  type DrillPosition
-} from './graph-drill'
-import type { RepoEntry } from '../../../main/repo-inventory'
 import {
   rememberViewBeforeFocus,
   restoreView,
@@ -118,14 +104,12 @@ const LABEL_SCREEN_HEIGHT = 0.035
 
 /** Ce que fera le PROCHAIN clic — un bouton doit annoncer sa destination, pas son état. */
 const LIBELLE_BASCULE: Record<GraphLayoutMode, string> = {
-  force: 'Passer en anneaux concentriques (montre les familles)',
-  radial: 'Passer en arborescence (un anneau = un niveau, les branches portent la filiation)',
+  force: 'Passer en arborescence (un anneau = un niveau, les branches portent la filiation)',
   tree: 'Repasser en disposition libre (montre la connectivité)'
 }
 
 const ICONE_BASCULE: Record<GraphLayoutMode, string> = {
   force: '⁘',
-  radial: '◎',
   tree: '⁂'
 }
 
@@ -396,23 +380,6 @@ export function GraphView({
     () => filterGraphVisibility(graph, settings.orphans),
     [graph, settings.orphans]
   )
-  /**
-   * Points du mode radial. Un point = un GROUPE de fiches, pas une fiche : mesuré sur le brain réel,
-   * `knowledge/domain/rigapplication-documentation` porte 345 des 530 fiches — un point par fiche
-   * empile 345 points au même endroit, ce qui a rendu la première version illisible.
-   */
-  const radial = useMemo(
-    () =>
-      layoutMode === 'radial'
-        ? layoutRadial(displayGraph.nodes)
-        : { dots: [], bands: [] as ReturnType<typeof layoutRadial>['bands'] },
-    [layoutMode, displayGraph.nodes]
-  )
-
-  /**
-   * ARBORESCENCE : un anneau = un NIVEAU, une branche = une filiation. L'arbre n'est pas fabriqué —
-   * il est le chemin de fichier de chaque fiche, donc chaque nœud a un parent unique et réel.
-   */
   const tree = useMemo(
     () =>
       layoutMode === 'tree'
@@ -427,7 +394,13 @@ export function GraphView({
   )
 
   const renderedGraph = useMemo(() => {
-    if (layoutMode === 'tree' && tree) {
+    if (layoutMode !== 'tree' || !tree) {
+      return {
+        nodes: displayGraph.nodes.map((graphNode) => ({ ...graphNode })),
+        links: displayGraph.links.map((graphLink) => ({ ...graphLink }))
+      }
+    }
+    {
       // Une fiche = une FEUILLE. Les nœuds internes (dossiers) ne sont pas des fiches : ils sont
       // dessinés à part, avec les branches et les anneaux.
       const parNote = new Map(
@@ -455,101 +428,7 @@ export function GraphView({
         links: []
       }
     }
-    if (layoutMode !== 'radial') {
-      return {
-        nodes: displayGraph.nodes.map((graphNode) => ({ ...graphNode })),
-        links: displayGraph.links.map((graphLink) => ({ ...graphLink }))
-      }
-    }
-    const placement = new Map(radial.dots.map((dot) => [dot.id, dot]))
-    return {
-      // Un point = UNE fiche, avec son `file` et ses `themes` INTACTS : le clic continue d'ouvrir la
-      // vraie fiche, et la coloration par thème de l'app s'applique telle quelle — c'est elle qui, avec
-      // le tri par thème du layout, produit les arcs colorés. La v2 écrasait `themes` par la famille et
-      // perdait donc les 30 couleurs réelles.
-      nodes: displayGraph.nodes.flatMap((graphNode) => {
-        const dot = placement.get(String(graphNode.id))
-        if (!dot) return []
-        return [
-          {
-            ...graphNode,
-            // Épinglé : la simulation d3 tourne encore, elle repousserait sinon les points hors de
-            // leurs rangées en une seconde.
-            fx: dot.fx,
-            fy: dot.fy,
-            fz: dot.fz,
-            x: dot.fx,
-            y: dot.fy,
-            z: dot.fz
-          }
-        ]
-      }),
-      // AUCUN lien en radial. Des liens droits entre points agrégés traverseraient le disque en tous
-      // sens : c'est le « hairball » documenté, et la raison pour laquelle la référence visuelle n'en
-      // montre aucun. La réponse canonique (Hierarchical Edge Bundling, Holten 2006) exige un arbre à
-      // parent unique que ces données n'ont pas — donc on n'en dessine pas plutôt que d'en mentir.
-      links: []
-    }
-  }, [displayGraph, layoutMode, radial, tree])
-
-  /**
-   * DESSIN des bandes : cercles + libellé de famille, ajoutés directement à la scène three.js.
-   *
-   * Sans ceci, la v2 calculait des rayons que RIEN ne rendait — mesuré : 0 étiquette affichée sur 30, et
-   * donc aucune structure visible. Ce sont les cercles et les noms qui FONT l'image concentrique ; la
-   * position des points seule ne suffit pas à la lire.
-   */
-  useEffect(() => {
-    const instance = graphRef.current
-    if (!instance || layoutMode !== 'radial' || radial.bands.length === 0) return
-    const scene = instance.scene()
-    if (!scene) return
-    const added: THREE.Object3D[] = []
-    // Les libellés sont tous posés sur le MÊME axe vertical — décision d'origine, qui les rend
-    // lisibles comme une légende. Mais deux bandes voisines peuvent être plus rapprochées que la
-    // hauteur d'un libellé : sur la capture d'origine, INBOX, INTEGRATIONS et PROJECTS se touchaient.
-    // On écarte donc les rayons d'étiquette d'un minimum, sans changer l'axe.
-    const labelRadii = spreadLabelRadii(
-      radial.bands.map((band) => band.labelRadius),
-      MIN_LABEL_GAP
-    )
-    radial.bands.forEach((band, index) => {
-      const color = new THREE.Color(BAND_COLORS[index % BAND_COLORS.length])
-      for (const radius of [band.innerRadius, band.outerRadius]) {
-        const points: THREE.Vector3[] = []
-        for (let step = 0; step <= 96; step++) {
-          const angle = (step / 96) * Math.PI * 2
-          points.push(new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, 0))
-        }
-        const loop = new THREE.Line(
-          new THREE.BufferGeometry().setFromPoints(points),
-          new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.32 })
-        )
-        scene.add(loop)
-        added.push(loop)
-      }
-      const label = createConnectedLabel(
-        `${band.family === '<racine>' ? 'RACINE' : band.family.toUpperCase()} · ${band.notes}`,
-        color.getStyle()
-      )
-      // Étiquette posée sur l'axe vertical de la bande : toujours au même endroit d'une bande à l'autre,
-      // donc lisible comme une légende plutôt que dispersée au hasard des points.
-      label.position.set(0, labelRadii[index], 12)
-      scene.add(label)
-      added.push(label)
-    })
-    return () => {
-      for (const object of added) {
-        scene.remove(object)
-        const disposable = object as unknown as {
-          geometry?: { dispose?: () => void }
-          material?: { dispose?: () => void }
-        }
-        disposable.geometry?.dispose?.()
-        disposable.material?.dispose?.()
-      }
-    }
-  }, [layoutMode, radial])
+  }, [displayGraph, layoutMode, tree])
 
   /**
    * DESSIN de l'arborescence : les anneaux de niveau, les branches de filiation, les nœuds internes.
@@ -758,28 +637,6 @@ export function GraphView({
     return () => window.clearTimeout(timeout)
   }, [layoutMode, tree])
 
-  /**
-   * Recadrage DÉDIÉ au mode radial. L'effet de cadrage initial plus haut ne dépend volontairement pas
-   * du layout (un filtre ne doit jamais bouger la caméra), mais un CHANGEMENT DE LAYOUT, si : le disque
-   * radial est strictement plat (tous `fz = 0`), donc vu depuis la caméra héritée du force-directed il
-   * apparaît PAR LA TRANCHE — une ligne. C'était l'une des deux causes certaines de l'illisibilité de
-   * la première version. On se place d'aplomb sur l'axe Z, puis on cadre.
-   */
-  useEffect(() => {
-    if (layoutMode !== 'radial' || radial.dots.length === 0) return
-    const radius = boundingRadius(radial.dots)
-    if (radius <= 0) return
-    const timeout = window.setTimeout(() => {
-      // 2,35× le rayon, et SURTOUT pas de `zoomToFit` derrière : MESURÉ, c'est lui qui repoussait la
-      // caméra à 3413 unités pour des nœuds de 16-33 — chaque point faisait moins de 1 % du champ.
-      // Le facteur vient de la géométrie, pas d'un tâtonnement : avec un FOV vertical de 50°, la
-      // demi-hauteur visible à la distance d vaut d·tan(25°) ≈ 0,466·d, donc contenir un rayon R exige
-      // d ≥ 2,15·R. À 1,45·R le disque était ROGNÉ et 4 libellés de bande sur 7 tombaient hors cadre.
-      graphRef.current?.cameraPosition({ x: 0, y: 0, z: radius * 2.35 }, { x: 0, y: 0, z: 0 }, 600)
-    }, 120)
-    return () => window.clearTimeout(timeout)
-  }, [layoutMode, radial])
-
   // react-force-graph-3d positionne ses nœuds par mutation. `renderedGraph` est une copie profonde
   // dédiée au moteur impératif : `graph` et `displayGraph`, détenus par React, restent immuables.
   /* eslint-disable react-hooks/immutability */
@@ -887,7 +744,7 @@ export function GraphView({
    * légende est portée par les libellés de BANDE dessinés dans la scène (`FAMILLE · effectif`), qui sont
    * posés à un rayon fixe et ne se recouvrent donc jamais.
    */
-  const showThemeClusterLabels = layoutMode !== 'radial' && visibleThemeLabelIds.size > 0
+  const showThemeClusterLabels = layoutMode !== 'tree' && visibleThemeLabelIds.size > 0
 
   useEffect(() => {
     const requestId = ++themeNodesRequestRef.current
@@ -1153,68 +1010,7 @@ export function GraphView({
     setActiveThemes((current) => selectExclusiveTheme(current, theme))
   }
 
-  /* ───────────────────── FORAGE : couronne → dépôt → catégories ─────────────────────
-   * La couronne comptait des NOTES en les faisant passer pour des projets (« PROJECTS · 100 » pour
-   * 100 notes réparties sur 9 projets). Le forage remplace ce compte par des membres NOMMÉS, et le
-   * mot « projet » par « dépôt » — décidé avec l'utilisateur, parce que « projet » était ambigu
-   * entre trois mailles incompatibles. */
-  const [drill, setDrill] = useState<DrillPosition>(DRILL_ROOT)
-  const [repos, setRepos] = useState<RepoEntry[]>([])
-
-  useEffect(() => {
-    // Chargé une seule fois, jamais au clic : l'inventaire lance des commandes git, et le refaire à
-    // chaque geste rendrait le forage poussif.
-    if (layoutMode !== 'radial' || repos.length > 0) return
-    let vivant = true
-    void window.api
-      ?.repoInventory?.()
-      .then((inventory) => {
-        if (vivant) setRepos(inventory.repos)
-      })
-      .catch(() => {
-        /* pont absent : la couronne restera muette plutôt que de mentir */
-      })
-    return () => {
-      vivant = false
-    }
-  }, [layoutMode, repos.length])
-
-  /** Les chemins des notes du graphe affiché, relatifs au vault — la matière des catégories. */
-  const noteIds = useMemo(() => displayGraph.nodes.map((item) => item.id), [displayGraph])
-
-  /**
-   * Le clic ne tombe pas sur un objet three.js : les anneaux sont de simples tracés, sans détection
-   * propre. On résout donc en GÉOMÉTRIE — rayon du point cliqué, puis la bande qui le contient.
-   * Aucun raycaster n'est nécessaire, contrairement à mon estimation initiale.
-   */
-  function bandeSousLeClic(event: MouseEvent): string | undefined {
-    const instance = graphRef.current as unknown as {
-      screen2GraphCoords?: (x: number, y: number, distance: number) => { x: number; y: number }
-      cameraPosition?: () => { x: number; y: number; z: number }
-    } | null
-    const box = wrap.current?.getBoundingClientRect()
-    if (!instance?.screen2GraphCoords || !box) return undefined
-    const camera = instance.cameraPosition?.()
-    // En mode radial la caméra est d'aplomb sur l'axe Z : sa cote EST la distance au plan du disque.
-    const distance = Math.abs(camera?.z ?? 0)
-    if (distance <= 0) return undefined
-    const point = instance.screen2GraphCoords(
-      event.clientX - box.left,
-      event.clientY - box.top,
-      distance
-    )
-    return bandAtRadius(radial.bands, radiusOf(point.x, point.y))?.family
-  }
-
-  function surClicDeFond(event: MouseEvent): void {
-    if (layoutMode === 'radial' && drill.level === 'crowns') {
-      const family = bandeSousLeClic(event)
-      // Hors de toute bande, on rend le geste à sa fonction d'origine : désélectionner.
-      if (family) {
-        setDrill(drillInto(DRILL_ROOT, { family }))
-        return
-      }
-    }
+  function surClicDeFond(): void {
     clearNodeSelection()
   }
 
@@ -1442,7 +1238,7 @@ export function GraphView({
         <button
           type="button"
           role="switch"
-          className={`graph-layout-switch${layoutMode === 'radial' ? ' is-radial' : ''}${layoutMode === 'tree' ? ' is-tree' : ''}`}
+          className={`graph-layout-switch${layoutMode === 'tree' ? ' is-tree' : ''}`}
           onClick={() => {
             const next = nextGraphLayoutMode(layoutMode)
             setLayoutMode(next)
@@ -1451,7 +1247,7 @@ export function GraphView({
           // Le bouton a TROIS états, donc `aria-checked` ne peut plus valoir « radial ou rien » : en
           // arborescence il aurait annoncé « éteint » à un lecteur d'écran alors qu'un agencement est
           // bien actif. `mixed` est la valeur prévue par ARIA pour un troisième état.
-          aria-checked={layoutMode === 'tree' ? 'mixed' : layoutMode === 'radial'}
+          aria-checked={layoutMode === 'tree'}
           aria-label="Disposition du graphe"
           data-layout-mode={layoutMode}
           title={LIBELLE_BASCULE[layoutMode]}
@@ -1621,118 +1417,6 @@ export function GraphView({
         {err && <div className="graph-status graph-status--error">{err}</div>}
         {!loading && !err && graph.nodes.length === 0 && (
           <div className="graph-status">Aucun nœud disponible pour ce graphe.</div>
-        )}
-        {layoutMode === 'radial' && drill.level !== 'crowns' && (
-          <div className="graph-drill" data-testid="graph-drill">
-            <nav className="graph-drill__trail" aria-label="Chemin de forage">
-              {drillTrail(drill).map((etape, index, all) => (
-                <span key={`${etape}-${index}`}>
-                  {etape}
-                  {index < all.length - 1 ? ' › ' : ''}
-                </span>
-              ))}
-              <button
-                type="button"
-                className="graph-drill__back"
-                data-testid="graph-drill-back"
-                onClick={() => setDrill(drillBack(drill))}
-              >
-                ↑ Remonter
-              </button>
-            </nav>
-
-            {drill.level === 'crown' &&
-              (drill.family === 'projects' ? (
-                repos.length === 0 ? (
-                  <p className="graph-drill__empty">
-                    Aucun dépôt trouvé sur cette machine — la liste vient de git, pas du graphe.
-                  </p>
-                ) : (
-                  <div className="graph-drill__items">
-                    {repos.map((repo) => (
-                      <button
-                        key={repo.path}
-                        type="button"
-                        className="graph-drill__item"
-                        data-testid={`graph-drill-repo-${repo.name}`}
-                        onClick={() => setDrill(drillInto(drill, { repo: repo.name }))}
-                      >
-                        <b>{repo.name}</b>
-                        <small>
-                          {repo.commits ?? '?'} commits
-                          {repo.branch ? ` · ${repo.branch}` : ' · tête détachée'}
-                          {/* Les worktrees sont COMPTÉS, jamais présentés comme des dépôts. */}
-                          {repo.worktrees > 0 ? ` · ${repo.worktrees} worktrees` : ''}
-                        </small>
-                      </button>
-                    ))}
-                  </div>
-                )
-              ) : (
-                <p className="graph-drill__empty">
-                  Cette couronne n’a pas encore de forage : seule « projects » mène aux dépôts.
-                </p>
-              ))}
-
-            {drill.level === 'repo' &&
-              (() => {
-                const liens = brainProjectsForRepo(
-                  drill.repo,
-                  [...new Set(noteIds.map((id) => id.split('/')[1]).filter(Boolean))],
-                  repos.map((repo) => repo.name)
-                )
-                const notes = noteIds.filter((id) =>
-                  liens.some((lien) => id.startsWith(`projects/${lien.project}/`))
-                )
-                const resume = summarizeRepo(drill.repo, notes)
-                const heuristique = liens.some((lien) => lien.match === 'heuristique')
-                return (
-                  <>
-                    {resume.empty && (
-                      <p className="graph-drill__empty" data-testid="graph-drill-repo-empty">
-                        Aucune note rattachée à ce dépôt dans le Brain — il n’a peut-être que son
-                        snapshot de code.
-                      </p>
-                    )}
-                    <div className="graph-drill__items">
-                      {resume.categories.map((categorie) => (
-                        <button
-                          key={categorie.category}
-                          type="button"
-                          className={`graph-drill__item${categorie.count === 0 ? ' is-empty' : ''}`}
-                          data-testid={`graph-drill-cat-${categorie.category}`}
-                          onClick={() =>
-                            setDrill(drillInto(drill, { category: categorie.category }))
-                          }
-                        >
-                          <b>{categorie.label}</b>
-                          <small>{categorie.count} notes</small>
-                        </button>
-                      ))}
-                    </div>
-                    {heuristique && (
-                      <p className="graph-drill__caveat" data-testid="graph-drill-caveat">
-                        Rattachement DÉDUIT des noms ({liens.map((l) => l.project).join(', ')}) — à
-                        confirmer, ce n’est pas une correspondance certaine.
-                      </p>
-                    )}
-                  </>
-                )
-              })()}
-
-            {drill.level === 'category' && (
-              <div className="graph-drill__items">
-                {noteIds
-                  .filter((id) => id.startsWith('projects/'))
-                  .slice(0, 40)
-                  .map((id) => (
-                    <span key={id} className="graph-drill__leaf">
-                      {id.split('/').at(-1)?.replace(/\.md$/, '')}
-                    </span>
-                  ))}
-              </div>
-            )}
-          </div>
         )}
         <div ref={wrap} className="graph-canvas">
           <ForceGraph3D

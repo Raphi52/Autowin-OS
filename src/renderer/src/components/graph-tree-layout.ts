@@ -1,13 +1,14 @@
-import { pathSegments, relativePathOf } from './graph-radial-layout'
+import { pathSegments, relativePathOf } from './graph-vault-paths'
 import type { GraphNode } from './graph-view-model'
 
 /**
  * Agencement en ARBORESCENCE RADIALE — un anneau = un NIVEAU de profondeur, une branche = une
  * filiation.
  *
- * Ce que cet agencement change par rapport aux BANDES (`graph-radial-layout.ts`), et pourquoi :
- * dans les bandes, la distance au centre dit « de quelle famille » et les points flottent sans
- * aucun lien. Ici la distance dit « à quelle profondeur », et chaque nœud est RELIÉ à son parent.
+ * Ce que cet agencement a remplace : un mode « anneaux par famille » ou la distance au centre
+ * disait de quelle FAMILLE venait une fiche, et ou les points flottaient sans aucun lien entre eux.
+ * Ce mode a ete supprime a la demande de l'utilisateur, l'arborescence montrant la meme hierarchie en
+ * la rendant navigable. Ici la distance dit « a quelle profondeur », et chaque noeud est RELIE a son parent.
  * C'est la demande explicite de l'utilisateur, croquis à l'appui.
  *
  * L'arbre n'est PAS fabriqué : il est déjà dans les données. Chaque fiche porte un `file`, dont le

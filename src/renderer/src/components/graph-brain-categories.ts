@@ -1,4 +1,4 @@
-import { pathSegments, relativePathOf } from './graph-radial-layout'
+import { pathSegments, relativePathOf } from './graph-vault-paths'
 import type { GraphNode } from './graph-view-model'
 
 /**

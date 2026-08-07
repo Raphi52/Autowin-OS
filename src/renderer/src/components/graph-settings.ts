@@ -129,23 +129,23 @@ export function saveGraphVisualMode(storage: StorageLike, mode: GraphVisualMode)
 }
 
 /**
- * DISPOSITION des nœuds — TROIS lectures des mêmes fiches, dont aucune ne subsume les autres.
+ * DISPOSITION des nœuds — DEUX lectures des mêmes fiches, dont aucune ne subsume l'autre.
  *
  * - `force` : positions émergentes (historique, défaut HARD). Montre la CONNECTIVITÉ — ce qui est
  *   lié à quoi.
- * - `radial` : bandes concentriques, un anneau = une FAMILLE. Montre où vit quoi, et c'est à ces
- *   bandes qu'est accroché le forage couronne → dépôt → catégories.
- * - `tree` : arborescence radiale, un anneau = un NIVEAU de profondeur, et les branches portent la
- *   FILIATION. Montre la hiérarchie réelle du vault, que les deux autres ne disent pas.
+ * - `tree` : arborescence radiale, un anneau = un NIVEAU de profondeur, les branches portent la
+ *   FILIATION, et le premier anneau porte le SUJET. Montre la hiérarchie réelle du vault.
  *
- * Pourquoi trois modes et non un remplacement : supprimer `force` ferait perdre la connectivité, et
- * supprimer `radial` détruirait le forage qui en dépend — sans que personne ne l'ait demandé.
+ * Un troisième mode a existé — `radial`, des bandes concentriques par famille — et il a été SUPPRIMÉ
+ * sur demande de l'utilisateur : l'arborescence montre graphiquement la même hiérarchie que ces
+ * bandes suggéraient, en la rendant navigable. Le forage textuel qui y était accroché disparaît avec
+ * lui, pour la même raison : l'arbre l'affiche au lieu de le lister.
  */
-export type GraphLayoutMode = 'force' | 'radial' | 'tree'
+export type GraphLayoutMode = 'force' | 'tree'
 
 export const GRAPH_LAYOUT_MODE_SUFFIX = 'memory.layout-mode.v1'
 
-const MODES_CONNUS: readonly GraphLayoutMode[] = ['force', 'radial', 'tree']
+const MODES_CONNUS: readonly GraphLayoutMode[] = ['force', 'tree']
 
 export function loadGraphLayoutMode(storage: StorageLike): GraphLayoutMode {
   // Toute valeur inconnue retombe sur `force` : une clé corrompue ne doit pas rendre le graphe illisible.
@@ -153,7 +153,7 @@ export function loadGraphLayoutMode(storage: StorageLike): GraphLayoutMode {
   return MODES_CONNUS.includes(brut as GraphLayoutMode) ? (brut as GraphLayoutMode) : 'force'
 }
 
-/** L'ordre de bascule du bouton : libre → bandes → arbre → libre. */
+/** L'ordre de bascule du bouton : libre → arbre → libre. */
 export function nextGraphLayoutMode(mode: GraphLayoutMode): GraphLayoutMode {
   const index = MODES_CONNUS.indexOf(mode)
   return MODES_CONNUS[(index + 1) % MODES_CONNUS.length]

@@ -13,8 +13,7 @@ if ($LASTEXITCODE -ne 0) { Write-Host 'ECHEC : typecheck'; exit 1 }
 $suites = @(
   'src/renderer/src/components/graph-brain-categories.test.ts',
   'src/renderer/src/components/graph-tree-layout.test.ts',
-  'src/renderer/src/components/graph-radial-layout.test.ts',
-  'src/renderer/src/components/graph-drill.test.ts',
+  'src/renderer/src/components/graph-vault-paths.test.ts',
   'src/renderer/src/components/graph-settings.test.ts'
 )
 Write-Host '== rattachement + arbre + non-regression des vues existantes =='
