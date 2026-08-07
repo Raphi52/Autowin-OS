@@ -61,9 +61,14 @@ export type TreeLayoutOptions = {
   /** Angle de départ, pour orienter l'arbre. */
   startAngle?: number
   /**
-   * Regroupement du PREMIER anneau. Sans lui, l'arbre suit le disque : `knowledge`, `projects`,
-   * `governance`. Avec lui, on peut coiffer le disque d'une lecture — les catégories cognitives —
-   * sans déplacer un seul fichier : le groupe devient simplement un segment de chemin en plus.
+   * Regroupement des PREMIERS anneaux. Sans lui, l'arbre suit le disque : `knowledge`, `projects`,
+   * `governance`. Avec lui, on coiffe le disque d'une lecture sans déplacer un seul fichier : le
+   * groupe devient simplement un ou plusieurs segments de chemin en plus.
+   *
+   * La valeur peut contenir des `/` pour produire PLUSIEURS anneaux — par exemple `RIG/proc`. C'est
+   * ce qui permet de subdiviser un gros sujet À L'INTÉRIEUR de son propre secteur, au lieu de croiser
+   * deux axes : la campagne d'architecture a mesuré que le croisement fait chuter la justesse à 50 %,
+   * sous chacun des axes pris seul.
    */
   groupOf?: (node: GraphNode) => string
 }
@@ -102,7 +107,8 @@ function construire(
     // Le groupe est PRÉFIXÉ au chemin : tout le reste de l'algorithme continue de ne connaître que
     // des chemins, donc la profondeur, la partition et les angles restent gouvernés par les mêmes
     // invariants — il y a juste un anneau de plus au début.
-    const chemin = groupe ? [groupe(node), ...brut] : brut
+    // Le groupe peut porter plusieurs niveaux, séparés par `/` — ils deviennent autant d'anneaux.
+    const chemin = groupe ? [...groupe(node).split('/').filter(Boolean), ...brut] : brut
 
     let courant = racine
     let idCourant = ''

@@ -170,7 +170,31 @@ export function brainSubjectOf(node: Pick<GraphNode, 'id' | 'file' | 'themes'>):
   if (segments.length === 1 && RACINE_CONDUITE.has(segments[0]))
     return 'Le kit et la façon de travailler'
   if (chemin.includes('brain') || segments[1] === '_maps') return 'Le Brain lui-même'
-  if (chemin.includes('rig') || has(themes, 'rig')) return 'RIG'
+  if (chemin.includes('rig') || has(themes, 'rig')) return 'RIG/' + sousDomaineRig(segments)
   if (segments[0] === 'inbox') return 'À trier'
   return 'Transverse'
+}
+
+/**
+ * Le second niveau de RIG — subdiviser le gros paquet À L'INTÉRIEUR de son secteur.
+ *
+ * Mesuré : RIG porte 454 fiches sur 628. Sans second niveau, l'anneau suivant retombe sur les
+ * dossiers bruts (`knowledge`, `projects`) et ne dit rien. Ce n'est PAS un croisement d'axes — la
+ * campagne a montré que croiser sujet et intention fait chuter la justesse à 50 %, sous chacun des
+ * axes pris seul. C'est le MÊME axe, affiné.
+ *
+ * Les sections ne sont pas inventées : ce sont celles que la documentation RIG porte déjà
+ * (`reference/70-edi-integrations`, `reference/proc`…). On retire seulement le préfixe numérique de
+ * tri et les tirets, qui sont de la mécanique de dossier, pas du sens.
+ */
+function sousDomaineRig(segments: readonly string[]): string {
+  const i = segments.indexOf('rigapplication-documentation')
+  if (i >= 0) {
+    const section = segments[i + 1] === 'reference' ? segments[i + 2] : segments[i + 1]
+    if (section) return section.replace(/^\d+-/, '').replace(/-/g, ' ')
+  }
+  // Les cartes de code d'un dépôt RIG : leur nom de dépôt EST leur sous-domaine.
+  if (segments[0] === 'projects' && segments[1]?.startsWith('rig-')) return segments[1].slice(4)
+  if (segments.includes('decisions') || segments.includes('lessons')) return 'décisions et leçons'
+  return 'savoir général'
 }
