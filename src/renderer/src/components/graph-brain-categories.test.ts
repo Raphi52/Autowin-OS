@@ -64,7 +64,7 @@ describe('catégories cognitives — le rattachement', () => {
 
   it('range le tampon d’entrée dans À trier, et les connecteurs dans Environnement', () => {
     expect(brainCategoryOf(fiche('inbox/brouillon.md'))).toBe('À trier')
-    expect(brainCategoryOf(fiche('integrations/ged.md'))).toBe('Environnement')
+    expect(brainCategoryOf(fiche('integrations/ged.md'))).toBe('Environnement et contraintes')
   })
 
   it('LE CAS QUI DÉCIDE LA PRÉCÉDENCE : une décision AUSSI taguée kit va au Comportement', () => {
@@ -82,9 +82,9 @@ describe('catégories cognitives — le rattachement', () => {
     // Une fiche taguée délibérément doit atterrir là où on l'a marquée, même si son chemin ou ses
     // autres tags la tireraient ailleurs.
     const dansLessons = fiche('knowledge/lessons/msdtc.md', ['rig', 'environnement'])
-    expect(brainCategoryOf(dansLessons)).toBe('Environnement')
+    expect(brainCategoryOf(dansLessons)).toBe('Environnement et contraintes')
     const aussiKit = fiche('knowledge/decisions/x.md', ['kit', 'environnement'])
-    expect(brainCategoryOf(aussiKit)).toBe('Environnement')
+    expect(brainCategoryOf(aussiKit)).toBe('Environnement et contraintes')
   })
 
   it('n’attrape RIEN par le contenu : une fiche qui parle de serveurs sans tag reste Savoir', () => {
@@ -166,7 +166,7 @@ describe('les catégories sont l’ancrage — elles doivent survivre à l’arb
     const comptes = countByBrainCategory(echantillon)
     expect(comptes['Comportement']).toBe(1)
     expect(comptes['Mémoires']).toBe(1)
-    expect(comptes['Environnement']).toBe(1)
+    expect(comptes['Environnement et contraintes']).toBe(1)
     expect(comptes['Savoir']).toBe(1)
     expect(comptes['Documentation']).toBe(1)
     expect(comptes['Code']).toBe(1)

@@ -5,6 +5,12 @@ import type { GraphNode } from './graph-view-model'
  * CATÉGORIES COGNITIVES — le premier anneau de l'arbre, par analogie avec un cerveau : ce qu'on sait
  * faire, ce dont on se souvient, où l'on est, et ce qu'on sait.
  *
+ * POURQUOI « Environnement ET CONTRAINTES » et non « Environnement » tout court : mesuré. Un
+ * sous-agent à qui l'on demandait « pourquoi une transaction échoue-t-elle en silence ? » a routé la
+ * question vers `Savoir`, pas vers `Environnement`. Il lisait la catégorie comme « où vivent les
+ * choses », alors que la moitié de son sens est « ce que le terrain exige ou interdit » — donc aussi
+ * les pannes qu'il provoque. Le nom ne portait pas cette moitié ; il la porte maintenant.
+ *
  * C'est une couche de LECTURE, dérivée. Aucun fichier n'est déplacé dans le Brain : son outillage
  * (`brain_validate.py`, `obsidian_graph.py`, `rig_coverage.py`) est couplé aux chemins, le dépôt est
  * partagé, et un déménagement casserait tout le monde pour un gain d'affichage.
@@ -29,7 +35,7 @@ import type { GraphNode } from './graph-view-model'
 export type BrainCategory =
   | 'Comportement'
   | 'Mémoires'
-  | 'Environnement'
+  | 'Environnement et contraintes'
   | 'Savoir'
   | 'Documentation'
   | 'Code'
@@ -40,7 +46,7 @@ export type BrainCategory =
 export const BRAIN_CATEGORIES: readonly BrainCategory[] = [
   'Comportement',
   'Mémoires',
-  'Environnement',
+  'Environnement et contraintes',
   'Savoir',
   'Documentation',
   'Code',
@@ -72,10 +78,11 @@ export function brainCategoryOf(node: Pick<GraphNode, 'id' | 'file' | 'themes'>)
   const segments = pathSegments(chemin)
 
   // 1. Le tag explicite gagne toujours : il a été posé pour ça.
-  if (has(themes, 'environnement', 'environment', 'theme/environnement')) return 'Environnement'
+  if (has(themes, 'environnement', 'environment', 'theme/environnement'))
+    return 'Environnement et contraintes'
   // Les connecteurs vers des systèmes tiers SONT de l'environnement : ce qu'on doit joindre, et à
   // quelles conditions.
-  if (segments[0] === 'integrations') return 'Environnement'
+  if (segments[0] === 'integrations') return 'Environnement et contraintes'
 
   // 2. Comment on travaille — les règles de conduite.
   if (has(themes, 'kit', 'process', 'preference')) return 'Comportement'
