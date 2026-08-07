@@ -127,7 +127,12 @@ describe('tracer un retour', () => {
   })
 
   it('la limite se règle', () => {
-    render({ graph: { ...chaine, edges: [...chaine.edges, { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 1 }] } })
+    render({
+      graph: {
+        ...chaine,
+        edges: [...chaine.edges, { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 1 }]
+      }
+    })
     const champ = q<HTMLInputElement>('[data-testid="wf-bound-judge-1-build-1"]')
     act(() => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
@@ -138,7 +143,12 @@ describe('tracer un retour', () => {
   })
 
   it('une limite vide ou nulle retombe à 1, jamais à zéro', () => {
-    render({ graph: { ...chaine, edges: [...chaine.edges, { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 }] } })
+    render({
+      graph: {
+        ...chaine,
+        edges: [...chaine.edges, { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 }]
+      }
+    })
     const champ = q<HTMLInputElement>('[data-testid="wf-bound-judge-1-build-1"]')
     act(() => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
@@ -148,9 +158,48 @@ describe('tracer un retour', () => {
     expect(dernier().edges.find((e) => e.when === 'red')?.maxTraversals).toBe(1)
   })
 
+  it('un renvoi déjà tracé ne peut plus être recliqué — donc jamais empilé', () => {
+    // Chaque clic empilait une arête : le plan dessinait N flèches superposées, et le pire cas
+    // d'exécution était MULTIPLIÉ par (1 + borne) à chaque doublon — 5 clics = devis x32.
+    render({
+      graph: {
+        ...chaine,
+        edges: [...chaine.edges, { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 1 }]
+      }
+    })
+    clic('wf-open-judge-1')
+    const bouton = q<HTMLButtonElement>('[data-testid="wf-return-judge-1-build-1"]')
+    act(() => bouton.click())
+    act(() => bouton.click())
+    // Rien a changer : le graphe ne doit meme pas etre reecrit.
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('un renvoi déjà tracé se VOIT sur son bouton et ne se reclique pas', () => {
+    render({
+      graph: {
+        ...chaine,
+        edges: [...chaine.edges, { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 1 }]
+      }
+    })
+    clic('wf-open-judge-1')
+    const bouton = q<HTMLButtonElement>('[data-testid="wf-return-judge-1-build-1"]')
+    expect(bouton.getAttribute('aria-pressed')).toBe('true')
+    expect(bouton.disabled).toBe(true)
+    // Une cible SANS renvoi reste cliquable : le discriminant du test precedent.
+    const libre = q<HTMLButtonElement>('[data-testid="wf-return-judge-1-frame-1"]')
+    expect(libre.getAttribute('aria-pressed')).toBe('false')
+    expect(libre.disabled).toBe(false)
+  })
+
   it('retirer un nœud efface les retours qui pointaient dessus', () => {
     // Sinon une arête tracerait vers le vide et le graphe deviendrait illisible.
-    render({ graph: { ...chaine, edges: [...chaine.edges, { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 1 }] } })
+    render({
+      graph: {
+        ...chaine,
+        edges: [...chaine.edges, { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 1 }]
+      }
+    })
     clic('wf-remove-build-1')
     expect(dernier().edges.filter((e) => e.when === 'red')).toEqual([])
   })
@@ -289,7 +338,9 @@ describe('un modèle par agent', () => {
     render({
       graph: {
         ...troisAgents,
-        nodes: [{ ...troisAgents.nodes[0], agents: [{ provider: 'claude', model: 'opus' }] , quorum: 1 }]
+        nodes: [
+          { ...troisAgents.nodes[0], agents: [{ provider: 'claude', model: 'opus' }], quorum: 1 }
+        ]
       }
     })
     clic('wf-open-judge-1')

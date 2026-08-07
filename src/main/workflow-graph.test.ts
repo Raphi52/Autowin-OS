@@ -88,7 +88,12 @@ describe('ce qui empêche un graphe de tourner', () => {
     const trop: WorkflowGraph = {
       entry: 'j',
       nodes: [
-        { id: 'j', phase: 'judge', agents: [{ provider: 'claude' }, { provider: 'codex' }], quorum: 3 }
+        {
+          id: 'j',
+          phase: 'judge',
+          agents: [{ provider: 'claude' }, { provider: 'codex' }],
+          quorum: 3
+        }
       ],
       edges: []
     }
@@ -229,5 +234,77 @@ describe('les agents composés sur un nœud', () => {
 
   it('un graphe sans agent composé n’impose aucune allocation', () => {
     expect(allocationFromGraph(chaine)).toEqual({})
+  })
+})
+
+describe('retours composés en double', () => {
+  /** Le même retour judge → build, composé `fois` fois : c'est ce que produisaient N clics. */
+  const doublons = (fois: number): WorkflowGraph => ({
+    entry: 'f',
+    nodes: [
+      { id: 'f', phase: 'frame' },
+      { id: 'b', phase: 'build' },
+      { id: 'j', phase: 'judge' }
+    ],
+    edges: [
+      { from: 'f', to: 'b', when: 'always' },
+      { from: 'b', to: 'j', when: 'always' },
+      ...Array.from({ length: fois }, () => ({
+        from: 'j',
+        to: 'b',
+        when: 'red' as const,
+        maxTraversals: 1
+      }))
+    ]
+  })
+
+  it('ne multiplie PAS le pire cas quand la même arête est composée plusieurs fois', () => {
+    // L'effet d'un retour est multiplicatif : sans fusion, 5 doublons donnaient 2^5 fois le devis.
+    const seul = worstCaseNodeExecutions(doublons(1))
+    expect(worstCaseNodeExecutions(doublons(2))).toBe(seul)
+    expect(worstCaseNodeExecutions(doublons(5))).toBe(seul)
+  })
+
+  it('signale le doublon au lieu de l’absorber en silence', () => {
+    const messages = graphDefects(doublons(3)).map((d) => d.message)
+    expect(messages.filter((m) => m.includes('composé plusieurs fois'))).toHaveLength(2)
+    expect(graphDefects(doublons(1)).map((d) => d.message)).not.toContain(
+      expect.stringContaining('composé plusieurs fois')
+    )
+  })
+
+  it('garde la borne la plus permissive en fondant, pour ne pas resserrer un choix explicite', () => {
+    const melange: WorkflowGraph = {
+      ...doublons(1),
+      edges: [
+        { from: 'f', to: 'b', when: 'always' },
+        { from: 'b', to: 'j', when: 'always' },
+        { from: 'j', to: 'b', when: 'red', maxTraversals: 1 },
+        { from: 'j', to: 'b', when: 'red', maxTraversals: 4 }
+      ]
+    }
+    const large: WorkflowGraph = {
+      ...melange,
+      edges: melange.edges.filter((e) => (e.maxTraversals ?? 0) !== 1)
+    }
+    expect(worstCaseNodeExecutions(melange)).toBe(worstCaseNodeExecutions(large))
+  })
+
+  it('ne fond PAS deux retours de conditions différentes : ce sont deux chemins réels', () => {
+    const deuxConditions: WorkflowGraph = {
+      ...doublons(1),
+      edges: [
+        { from: 'f', to: 'b', when: 'always' },
+        { from: 'b', to: 'j', when: 'always' },
+        { from: 'j', to: 'b', when: 'red', maxTraversals: 1 },
+        { from: 'j', to: 'b', when: 'green', maxTraversals: 1 }
+      ]
+    }
+    expect(worstCaseNodeExecutions(deuxConditions)).toBeGreaterThan(
+      worstCaseNodeExecutions(doublons(1))
+    )
+    expect(graphDefects(deuxConditions).map((d) => d.message)).not.toContain(
+      expect.stringContaining('composé plusieurs fois')
+    )
   })
 })

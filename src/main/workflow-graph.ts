@@ -126,6 +126,21 @@ export function graphDefects(graph: WorkflowGraph): GraphDefect[] {
   }
 
   const ranks = forwardRanks(graph, byId)
+  // Un retour composé deux fois n'ouvre aucun chemin de plus, mais il se DESSINE deux fois et il
+  // multipliait le pire cas. Le signaler plutôt que l'absorber en silence : les profils déjà
+  // enregistrés avec des doublons doivent pouvoir être réparés par leur auteur.
+  const retoursVus = new Set<string>()
+  for (const edge of graph.edges) {
+    if (!byId.has(edge.from) || !byId.has(edge.to) || !isReturnEdge(edge, ranks)) continue
+    const cle = returnEdgeKey(edge)
+    if (retoursVus.has(cle)) {
+      defects.push({
+        target: edge.from,
+        message: `Le retour ${edge.from} → ${edge.to} est composé plusieurs fois : gardez-en un seul.`
+      })
+    }
+    retoursVus.add(cle)
+  }
   for (const edge of graph.edges) {
     if (!byId.has(edge.from)) {
       defects.push({
@@ -178,8 +193,11 @@ export function worstCaseVisits(graph: WorkflowGraph): Map<string, number> {
   const visits = new Map<string, number>()
   for (const id of ranks.keys()) visits.set(id, 1)
 
-  for (const edge of graph.edges) {
-    if (!isReturnEdge(edge, ranks)) continue
+  // Les retours en DOUBLE sont fondus avant le calcul. L'effet d'un retour est MULTIPLICATIF
+  // (`* (1 + bound)`) : deux arêtes identiques doublaient le pire cas, cinq le multipliaient par 32,
+  // et le devis explosait sans qu'aucune boucle supplémentaire n'existe réellement. Un doublon
+  // n'ajoute aucun chemin — c'est la même arête composée deux fois.
+  for (const edge of collapseDuplicateReturns(graph.edges, ranks)) {
     const bound = edge.maxTraversals
     if (typeof bound !== 'number' || bound < 1) continue
     // Tout ce qui est réatteignable depuis la cible du retour est rejoué autant de fois que la borne l'autorise.
@@ -188,6 +206,34 @@ export function worstCaseVisits(graph: WorkflowGraph): Map<string, number> {
     }
   }
   return visits
+}
+
+/** Clé d'identité d'un retour : deux arêtes qui la partagent sont LA MÊME arête, composée deux fois. */
+export function returnEdgeKey(edge: Pick<WorkflowEdge, 'from' | 'to' | 'when'>): string {
+  return `${edge.from}>${edge.to}:${edge.when}`
+}
+
+/**
+ * Ne garde qu'un retour par identité, avec la borne la PLUS PERMISSIVE rencontrée.
+ * Prendre le maximum et non le premier : fondre deux arêtes ne doit jamais RESSERRER une limite que
+ * l'utilisateur a explicitement élargie, sinon la fusion changerait sa décision en silence.
+ */
+function collapseDuplicateReturns(
+  edges: readonly WorkflowEdge[],
+  ranks: Map<string, number>
+): WorkflowEdge[] {
+  const parIdentite = new Map<string, WorkflowEdge>()
+  for (const edge of edges) {
+    if (!isReturnEdge(edge, ranks)) continue
+    const cle = returnEdgeKey(edge)
+    const connu = parIdentite.get(cle)
+    if (!connu) {
+      parIdentite.set(cle, edge)
+      continue
+    }
+    if ((edge.maxTraversals ?? 0) > (connu.maxTraversals ?? 0)) parIdentite.set(cle, edge)
+  }
+  return [...parIdentite.values()]
 }
 
 function reachableFrom(

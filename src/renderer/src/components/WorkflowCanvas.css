@@ -309,7 +309,12 @@
   border-radius: 5px;
   cursor: pointer;
 }
-.wf-return-buttons button:hover { border-color: var(--err); color: var(--err); }
+.wf-return-buttons button:hover:not(:disabled) { border-color: var(--err); color: var(--err); }
+/* Renvoi deja trace : l'etat se lit sur le bouton, sinon rien ne distingue « c'est fait » de
+   « ca n'a rien fait » — et c'est en recliquant qu'on empilait les fleches. */
+.wf-return-buttons button.is-active {
+  border-color: var(--err); color: var(--err); cursor: default; opacity: 0.75;
+}
 
 .wf-defects {
   list-style: none;

@@ -171,13 +171,20 @@ export function WorkflowCanvas({
       agents: (node.agents ?? []).map((a, i) => (i === rang ? { ...a, ...patch } : a))
     })
 
-  const tracerRetour = (from: string, to: string): void =>
+  /**
+   * Un retour vers une carte donnée existe, ou n'existe pas — il ne s'EMPILE pas. Chaque clic ajoutait une arête de
+   * plus : le plan dessinait N flèches superposées, et surtout le pire cas d'exécution était MULTIPLIÉ par (1 + borne)
+   * à chaque doublon. Cinq clics suffisaient à multiplier le devis par 32 sans qu'aucune boucle de plus n'existe.
+   */
+  const tracerRetour = (from: string, to: string): void => {
+    if (graph.edges.some((e) => e.from === from && e.to === to && e.when !== 'always')) return
     onChange({
       ...graph,
       // Limite posée d'office à 1 : composer un retour sans borne serait immédiatement refusé, autant
       // livrer une valeur valide et laisser l'ajuster.
       edges: [...graph.edges, { from, to, when: 'red', maxTraversals: 1 }]
     })
+  }
 
   const retirerRetour = (from: string, to: string): void =>
     onChange({
@@ -543,16 +550,27 @@ export function WorkflowCanvas({
                     <p className="wf-kicker wf-kicker-sub">Renvoyer vers</p>
                   )}
                   <div className="wf-return-buttons">
-                    {graph.nodes.slice(0, index).map((cible) => (
-                      <button
-                        key={cible.id}
-                        type="button"
-                        data-testid={`wf-return-${node.id}-${cible.id}`}
-                        onClick={() => tracerRetour(node.id, cible.id)}
-                      >
-                        ↩ {cible.phase}
-                      </button>
-                    ))}
+                    {graph.nodes.slice(0, index).map((cible) => {
+                      // Un renvoi déjà tracé se VOIT sur son bouton : sans ce retour visuel, rien ne distinguait
+                      // « c'est fait » de « ça n'a rien fait », et c'est en recliquant qu'on empilait les flèches.
+                      const dejaTrace = graph.edges.some(
+                        (e) => e.from === node.id && e.to === cible.id && e.when !== 'always'
+                      )
+                      return (
+                        <button
+                          key={cible.id}
+                          type="button"
+                          className={dejaTrace ? 'is-active' : undefined}
+                          aria-pressed={dejaTrace}
+                          disabled={dejaTrace}
+                          title={dejaTrace ? `Renvoi vers ${cible.phase} déjà tracé — retirez-le dans « Retours »` : undefined}
+                          data-testid={`wf-return-${node.id}-${cible.id}`}
+                          onClick={() => tracerRetour(node.id, cible.id)}
+                        >
+                          {dejaTrace ? '✓' : '↩'} {cible.phase}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               )
@@ -569,7 +587,9 @@ export function WorkflowCanvas({
               {retours.map((edge) => {
                 return (
                   <li
-                    key={`${edge.from}>${edge.to}`}
+                    // La condition fait partie de l'identité : `judge→build si rouge` et `judge→build si vert` sont deux
+                    // retours distincts, et sans elle ils partageaient la même clé React.
+                    key={`${edge.from}>${edge.to}:${edge.when}`}
                     data-testid={`wf-edge-${edge.from}-${edge.to}`}
                   >
                     <span className="wf-return-name">

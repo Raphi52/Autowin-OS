@@ -104,6 +104,34 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
     }
   }, [syncViewport])
 
+  /**
+   * LA MOLETTE PARCOURT LE PLAN AU LIEU DE TOURNER DANS LE VIDE.
+   *
+   * Ce plan ne défile QUE latéralement : sa zone n'a aucune hauteur à parcourir. Une molette verticale
+   * n'y produisait donc rien, devant une carte qui s'étend sur des milliers de pixels vers la droite.
+   *
+   * Écouteur NATIF et non `onWheel` de React : React attache ses gestionnaires de molette en mode
+   * PASSIF, où `preventDefault()` est ignoré. Sans annulation, le geste remonterait aussi au conteneur
+   * parent et ferait bouger deux choses à la fois.
+   *
+   * `deltaX` est laissé au navigateur : un trackpad horizontal défile déjà nativement, et y ajouter
+   * notre conversion doublerait la distance parcourue.
+   */
+  useEffect(() => {
+    const node = scrollerRef.current
+    if (!node) return undefined
+    const surMolette = (event: WheelEvent): void => {
+      if (event.deltaX !== 0 || event.deltaY === 0) return
+      node.scrollLeft += event.deltaY
+      event.preventDefault()
+    }
+    node.addEventListener('wheel', surMolette, { passive: false })
+    return () => node.removeEventListener('wheel', surMolette)
+    // Dépend de `entries` : le scroller n'existe qu'UNE FOIS la lecture git revenue. Avec un tableau
+    // vide, l'effet ne tournait qu'au premier rendu — là où `scrollerRef` est encore nul — et
+    // l'écouteur n'était jamais attaché. La molette restait donc morte malgré le code présent.
+  }, [entries])
+
   const jumpTo = useCallback((ratio: number) => {
     const node = scrollerRef.current
     if (!node) return

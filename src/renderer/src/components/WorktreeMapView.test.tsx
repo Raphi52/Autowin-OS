@@ -193,6 +193,56 @@ describe('WorktreeMapView — plan de métro des worktrees git', () => {
     expect(detail?.textContent).toContain('5 fichiers non commités')
   })
 
+  /**
+   * LA MOLETTE DOIT PARCOURIR LE PLAN, PAS LE TRAVERSER.
+   *
+   * Le plan de métro ne défile QUE latéralement : sa zone n'a aucune hauteur à parcourir. Une molette
+   * verticale n'y produisait donc rien du tout — l'utilisateur tournait dans le vide devant une carte
+   * qui s'étend sur des milliers de pixels à droite.
+   */
+  it('la molette verticale fait défiler le plan LATÉRALEMENT', async () => {
+    installApi()
+    await renderView()
+
+    const scroller = container?.querySelector(
+      '[data-testid="worktree-map-scroller"]'
+    ) as HTMLDivElement | null
+    if (!scroller) throw new Error('aucun scroller rendu')
+    // happy-dom ne calcule pas de mise en page : on déclare une largeur défilable, sinon le navigateur
+    // simulé bornerait `scrollLeft` à 0 et le test passerait pour la mauvaise raison.
+    Object.defineProperty(scroller, 'scrollWidth', { value: 4000, configurable: true })
+    Object.defineProperty(scroller, 'clientWidth', { value: 800, configurable: true })
+    scroller.scrollLeft = 0
+
+    await act(async () => {
+      scroller.dispatchEvent(new WheelEvent('wheel', { deltaY: 240, bubbles: true, cancelable: true }))
+      await Promise.resolve()
+    })
+
+    expect(scroller.scrollLeft).toBeGreaterThan(0)
+  })
+
+  it('une molette HORIZONTALE reste au navigateur — discriminant', async () => {
+    installApi()
+    await renderView()
+
+    const scroller = container?.querySelector(
+      '[data-testid="worktree-map-scroller"]'
+    ) as HTMLDivElement | null
+    if (!scroller) throw new Error('aucun scroller rendu')
+    Object.defineProperty(scroller, 'scrollWidth', { value: 4000, configurable: true })
+    Object.defineProperty(scroller, 'clientWidth', { value: 800, configurable: true })
+    scroller.scrollLeft = 100
+
+    await act(async () => {
+      // Trackpad : le navigateur gère déjà cet axe. Y ajouter notre conversion doublerait la distance.
+      scroller.dispatchEvent(new WheelEvent('wheel', { deltaX: 50, deltaY: 0, bubbles: true, cancelable: true }))
+      await Promise.resolve()
+    })
+
+    expect(scroller.scrollLeft).toBe(100)
+  })
+
   it('dit qu’une grandeur n’a pas été mesurée au lieu d’afficher un zéro', async () => {
     installApi()
     await renderView()
