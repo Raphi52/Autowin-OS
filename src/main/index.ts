@@ -256,6 +256,7 @@ import {
 } from './providers/workspace-mutation-evidence'
 import { readGitGraph } from './git-graph-main'
 import { readWorktreeMap } from './worktree-map-main'
+import { readRepoInventory } from './repo-inventory'
 import {
   automationAppIdentity,
   presentAutomationWindow,
@@ -2464,6 +2465,13 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('os:loadBrainGraph', (event, path: string, lod?: number, community?: number) => {
     assertTrustedRendererSender(event, 'Brain')
     return brainWorker.request('loadGraph', guardString(path, 'path'), lod, community)
+  })
+  // Inventaire des DÉPÔTS — la source de la couronne « repos » du graphe. Lecture seule.
+  // Les worktrees en sont exclus : ils portent un `.git` mais ne sont pas des dépôts, et les
+  // compter annoncerait 11 dépôts là où il y en a 5.
+  ipcMain.handle('os:repoInventory', (event) => {
+    assertTrustedRendererSender(event, 'RepoInventory')
+    return readRepoInventory()
   })
   ipcMain.handle('os:loadBrainNeighborhood', (event, path: string, nodeId: string) => {
     assertTrustedRendererSender(event, 'Brain')

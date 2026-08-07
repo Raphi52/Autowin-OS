@@ -103,6 +103,7 @@ interface ChatApi {
   getWorktreeMap: (
     repoPath?: string
   ) => Promise<import('../shared/worktree-map').WorktreeMapSnapshot>
+  repoInventory: () => Promise<import('../main/repo-inventory').RepoInventory>
   getGitDiff: (
     path: string,
     repoPath?: string

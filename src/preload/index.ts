@@ -15,6 +15,7 @@ import type { UpdateStrategy } from '../shared/update-contract'
 import type { GitReadResult, GitDiffResult } from '../shared/git-read'
 import type { GitGraphSnapshot } from '../shared/git-graph'
 import type { WorktreeMapSnapshot } from '../shared/worktree-map'
+import type { RepoInventory } from '../main/repo-inventory'
 import type {
   TicketItem,
   TicketSourceSummary,
@@ -117,6 +118,7 @@ const api = {
     ipcRenderer.invoke('git:graph', repoPath),
   getWorktreeMap: (repoPath?: string): Promise<WorktreeMapSnapshot> =>
     ipcRenderer.invoke('git:worktreeMap', repoPath),
+  repoInventory: (): Promise<RepoInventory> => ipcRenderer.invoke('os:repoInventory'),
   getGitDiff: (path: string, repoPath?: string): Promise<GitDiffResult> =>
     ipcRenderer.invoke('git:diff', path, repoPath),
   pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),
