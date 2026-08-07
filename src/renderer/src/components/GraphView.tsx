@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
 import { boundingRadius, layoutRadial } from './graph-radial-layout'
-import { brainCategoryOf } from './graph-brain-categories'
+import { brainSubjectOf } from './graph-brain-categories'
 import { layoutTree, pickVisibleLabels, treeBoundingRadius } from './graph-tree-layout'
 import {
   DRILL_ROOT,
@@ -416,9 +416,12 @@ export function GraphView({
   const tree = useMemo(
     () =>
       layoutMode === 'tree'
-        ? // Le premier anneau porte les CATÉGORIES COGNITIVES, pas les dossiers bruts : c'est une
-          // lecture posée sur le disque, aucun fichier n'est déplacé dans le Brain partagé.
-          layoutTree(displayGraph.nodes, { groupOf: brainCategoryOf })
+        ? // Le premier anneau porte l'axe SUJET — « de quoi ça parle ». C'est celui que la campagne
+          // d'architecture a désigné : 78 % de premier choix juste et surtout l'étendue la plus
+          // FAIBLE (72-83 %), là où l'axe par nature cognitive oscillait de 44 % à 83 % selon le
+          // tirage. Une lecture dont le résultat dépend du tirage ne peut pas servir de socle.
+          // Toujours une couche de lecture dérivée : aucun fichier n'est déplacé dans le Brain.
+          layoutTree(displayGraph.nodes, { groupOf: brainSubjectOf })
         : null,
     [layoutMode, displayGraph.nodes]
   )

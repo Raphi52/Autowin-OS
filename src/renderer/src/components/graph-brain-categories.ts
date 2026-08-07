@@ -133,3 +133,44 @@ export function countByBrainCategory(
   for (const node of nodes) out[brainCategoryOf(node)] += 1
   return out
 }
+
+/**
+ * L'AXE SUJET — « de quoi ça parle ». C'est lui qui a gagné la campagne d'architecture, et c'est lui
+ * qui porte désormais le premier anneau de l'arbre.
+ *
+ * Mesuré sur 18 sous-agents, 18 questions à vérité-terrain vérifiée, 3 tirages par axe :
+ *   · sujet          78 %, étendue 72-83 %   ← le meilleur ET le plus STABLE
+ *   · nature         67 %, étendue 44-83 %   ← instable : il dépend du tirage
+ *   · intention      61 %
+ *   · sujet×intention 50 %   ← croiser deux axes NUIT, il faut réussir deux choix au lieu d'un
+ *   · dossiers       28 %
+ *   · liste plate    21 %
+ *
+ * Ce n'est PAS une réfutation de `brainCategoryOf` : 11,1 points d'écart pour 11,1 points de
+ * dispersion, rien n'est départagé entre sujet et nature. Le sujet est retenu pour sa STABILITÉ — une
+ * architecture dont le résultat varie de 44 à 83 % selon le tirage ne peut pas servir de socle. La
+ * règle « nature » reste donc en place, testée, disponible.
+ *
+ * L'ORDRE des règles compte et n'est pas cosmétique : `rig-tv` avant `rig` (sinon RIG-TV serait avalé
+ * par RIG), et `autowin` avant tout le reste (un chemin peut citer les deux).
+ */
+export type BrainSubject = string
+
+export function brainSubjectOf(node: Pick<GraphNode, 'id' | 'file' | 'themes'>): BrainSubject {
+  const themes = (node.themes ?? []).map((t) => t.toLowerCase())
+  const chemin = relativePathOf(node).toLowerCase()
+  const segments = pathSegments(chemin)
+
+  if (chemin.includes('autowin')) return 'Autowin OS'
+  if (chemin.includes('portail') || chemin.includes('fiche_nouveau')) return 'Portail Amitel'
+  if (chemin.includes('rig-tv') || chemin.includes('rigtv') || chemin.includes('testviewer'))
+    return 'RIG-TV'
+  if (has(themes, 'kit', 'process') || segments[0] === 'governance')
+    return 'Le kit et la façon de travailler'
+  if (segments.length === 1 && RACINE_CONDUITE.has(segments[0]))
+    return 'Le kit et la façon de travailler'
+  if (chemin.includes('brain') || segments[1] === '_maps') return 'Le Brain lui-même'
+  if (chemin.includes('rig') || has(themes, 'rig')) return 'RIG'
+  if (segments[0] === 'inbox') return 'À trier'
+  return 'Transverse'
+}

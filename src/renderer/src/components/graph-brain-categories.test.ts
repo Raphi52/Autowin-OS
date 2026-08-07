@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { BRAIN_CATEGORIES, brainCategoryOf, countByBrainCategory } from './graph-brain-categories'
+import {
+  BRAIN_CATEGORIES,
+  brainCategoryOf,
+  brainSubjectOf,
+  countByBrainCategory
+} from './graph-brain-categories'
 import type { GraphNode } from './graph-view-model'
 
 const RACINE = '//ged2/rig/Projets IA/Amitel Brain/'
@@ -171,5 +176,40 @@ describe('les catégories sont l’ancrage — elles doivent survivre à l’arb
     expect(comptes['Documentation']).toBe(1)
     expect(comptes['Code']).toBe(1)
     expect(comptes['À trier']).toBe(1)
+  })
+})
+
+describe('axe SUJET — celui que la campagne d’architecture a désigné', () => {
+  it('range chaque produit sous son nom', () => {
+    expect(brainSubjectOf(fiche('projects/autowin-os/obsidian/autowin-os.md'))).toBe('Autowin OS')
+    expect(brainSubjectOf(fiche('knowledge/decisions/portail-amitel.md'))).toBe('Portail Amitel')
+    expect(brainSubjectOf(fiche('projects/rig-tv/obsidian/areas/a.md'))).toBe('RIG-TV')
+    expect(brainSubjectOf(fiche('knowledge/domain/rig-edi.md'))).toBe('RIG')
+  })
+
+  it('L’ORDRE DES RÈGLES COMPTE : RIG-TV n’est pas avalé par RIG', () => {
+    // `rig-tv` contient `rig`. Sans la priorité, tout RIG-TV finirait dans RIG et le sujet le plus
+    // travaillé de la session disparaîtrait de la vue.
+    expect(brainSubjectOf(fiche('projects/rig-tv/obsidian/decisions/cheminb.md'))).toBe('RIG-TV')
+    expect(brainSubjectOf(fiche('knowledge/lessons/rigtv-smoke.md'))).toBe('RIG-TV')
+  })
+
+  it('sépare le kit du reste, y compris les consignes de la racine', () => {
+    expect(brainSubjectOf(fiche('governance/NOTE-SCHEMA-v1.md'))).toBe(
+      'Le kit et la façon de travailler'
+    )
+    expect(brainSubjectOf(fiche('CLAUDE.md'))).toBe('Le kit et la façon de travailler')
+    expect(brainSubjectOf(fiche('knowledge/decisions/skill-map.md', ['kit']))).toBe(
+      'Le kit et la façon de travailler'
+    )
+  })
+
+  it('nomme le tampon d’entrée et le vraiment-transverse au lieu de les diluer', () => {
+    expect(brainSubjectOf(fiche('inbox/x.md'))).toBe('À trier')
+    expect(brainSubjectOf(fiche('divers/note-sans-sujet.md'))).toBe('Transverse')
+  })
+
+  it('ne jette pas sur une fiche nue', () => {
+    expect(brainSubjectOf({ id: 'nu', file: undefined, themes: undefined })).toBe('Transverse')
   })
 })
