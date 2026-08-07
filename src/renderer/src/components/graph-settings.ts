@@ -67,8 +67,7 @@ export function loadGraphVisibilitySettings(storage: StorageLike): GraphVisibili
     contextOpacity:
       boundedNumber(stored.contextOpacity, 0.05, 0.8) ??
       DEFAULT_GRAPH_VISIBILITY_SETTINGS.contextOpacity,
-    nodeSize:
-      boundedNumber(stored.nodeSize, 0.5, 3) ?? DEFAULT_GRAPH_VISIBILITY_SETTINGS.nodeSize,
+    nodeSize: boundedNumber(stored.nodeSize, 0.5, 3) ?? DEFAULT_GRAPH_VISIBILITY_SETTINGS.nodeSize,
     linkWidth:
       boundedNumber(stored.linkWidth, 0.1, 2) ?? DEFAULT_GRAPH_VISIBILITY_SETTINGS.linkWidth,
     nodeSpacing:
@@ -130,22 +129,34 @@ export function saveGraphVisualMode(storage: StorageLike, mode: GraphVisualMode)
 }
 
 /**
- * DISPOSITION des nœuds. `force` = positions émergentes (historique, défaut HARD) ; `radial` = anneaux
- * concentriques par profondeur hiérarchique, découpés en secteurs thématiques.
+ * DISPOSITION des nœuds — TROIS lectures des mêmes fiches, dont aucune ne subsume les autres.
  *
- * Pourquoi un mode et non un remplacement : le force-directed montre la CONNECTIVITÉ (ce qui est lié à
- * quoi), le radial montre la STRUCTURE (où vit quoi). Aucun des deux ne subsume l'autre, et supprimer
- * le premier ferait perdre une lecture qui fonctionne.
+ * - `force` : positions émergentes (historique, défaut HARD). Montre la CONNECTIVITÉ — ce qui est
+ *   lié à quoi.
+ * - `radial` : bandes concentriques, un anneau = une FAMILLE. Montre où vit quoi, et c'est à ces
+ *   bandes qu'est accroché le forage couronne → dépôt → catégories.
+ * - `tree` : arborescence radiale, un anneau = un NIVEAU de profondeur, et les branches portent la
+ *   FILIATION. Montre la hiérarchie réelle du vault, que les deux autres ne disent pas.
+ *
+ * Pourquoi trois modes et non un remplacement : supprimer `force` ferait perdre la connectivité, et
+ * supprimer `radial` détruirait le forage qui en dépend — sans que personne ne l'ait demandé.
  */
-export type GraphLayoutMode = 'force' | 'radial'
+export type GraphLayoutMode = 'force' | 'radial' | 'tree'
 
 export const GRAPH_LAYOUT_MODE_SUFFIX = 'memory.layout-mode.v1'
 
+const MODES_CONNUS: readonly GraphLayoutMode[] = ['force', 'radial', 'tree']
+
 export function loadGraphLayoutMode(storage: StorageLike): GraphLayoutMode {
   // Toute valeur inconnue retombe sur `force` : une clé corrompue ne doit pas rendre le graphe illisible.
-  return readMigratedStorageValue(storage, GRAPH_LAYOUT_MODE_SUFFIX) === 'radial'
-    ? 'radial'
-    : 'force'
+  const brut = readMigratedStorageValue(storage, GRAPH_LAYOUT_MODE_SUFFIX)
+  return MODES_CONNUS.includes(brut as GraphLayoutMode) ? (brut as GraphLayoutMode) : 'force'
+}
+
+/** L'ordre de bascule du bouton : libre → bandes → arbre → libre. */
+export function nextGraphLayoutMode(mode: GraphLayoutMode): GraphLayoutMode {
+  const index = MODES_CONNUS.indexOf(mode)
+  return MODES_CONNUS[(index + 1) % MODES_CONNUS.length]
 }
 
 export function saveGraphLayoutMode(storage: StorageLike, mode: GraphLayoutMode): void {

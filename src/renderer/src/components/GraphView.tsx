@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
 import { boundingRadius, layoutRadial } from './graph-radial-layout'
+import { layoutTree, pickVisibleLabels, treeBoundingRadius } from './graph-tree-layout'
 import {
   DRILL_ROOT,
   bandAtRadius,
@@ -26,6 +27,7 @@ import {
   loadGraphVisibilitySettings,
   saveGraphVisibilitySettings,
   loadGraphLayoutMode,
+  nextGraphLayoutMode,
   saveGraphLayoutMode,
   loadGraphVisualMode,
   saveGraphVisualMode,
@@ -109,6 +111,22 @@ const EMPTY_THEME_SELECTION = new Set<string>()
 /** Écart vertical minimal entre deux libellés de couronne, en unités de scène. Calé sur la hauteur
  *  d'une étiquette rendue : en dessous, deux libellés voisins se recouvrent. */
 const MIN_LABEL_GAP = 34
+
+/** Hauteur d'une etiquette, en FRACTION de la hauteur du viewport — c'est l'unite des sprites. */
+const LABEL_SCREEN_HEIGHT = 0.035
+
+/** Ce que fera le PROCHAIN clic — un bouton doit annoncer sa destination, pas son état. */
+const LIBELLE_BASCULE: Record<GraphLayoutMode, string> = {
+  force: 'Passer en anneaux concentriques (montre les familles)',
+  radial: 'Passer en arborescence (un anneau = un niveau, les branches portent la filiation)',
+  tree: 'Repasser en disposition libre (montre la connectivité)'
+}
+
+const ICONE_BASCULE: Record<GraphLayoutMode, string> = {
+  force: '⁘',
+  radial: '◎',
+  tree: '⁂'
+}
 
 const BAND_COLORS = [
   '#8b5cf6',
@@ -390,7 +408,44 @@ export function GraphView({
     [layoutMode, displayGraph.nodes]
   )
 
+  /**
+   * ARBORESCENCE : un anneau = un NIVEAU, une branche = une filiation. L'arbre n'est pas fabriqué —
+   * il est le chemin de fichier de chaque fiche, donc chaque nœud a un parent unique et réel.
+   */
+  const tree = useMemo(
+    () => (layoutMode === 'tree' ? layoutTree(displayGraph.nodes) : null),
+    [layoutMode, displayGraph.nodes]
+  )
+
   const renderedGraph = useMemo(() => {
+    if (layoutMode === 'tree' && tree) {
+      // Une fiche = une FEUILLE. Les nœuds internes (dossiers) ne sont pas des fiches : ils sont
+      // dessinés à part, avec les branches et les anneaux.
+      const parNote = new Map(
+        tree.nodes.filter((n) => n.noteId !== undefined).map((n) => [String(n.noteId), n])
+      )
+      return {
+        nodes: displayGraph.nodes.flatMap((graphNode) => {
+          const feuille = parNote.get(String(graphNode.id))
+          if (!feuille) return []
+          return [
+            {
+              ...graphNode,
+              fx: feuille.fx,
+              fy: feuille.fy,
+              fz: 0,
+              x: feuille.fx,
+              y: feuille.fy,
+              z: 0
+            }
+          ]
+        }),
+        // Les liens SÉMANTIQUES restent absents : le commentaire du mode bandes vaut ici aussi, ils
+        // traverseraient le disque en tous sens. Ce qui est dessiné, ce sont les branches de
+        // FILIATION — un jeu d'arêtes différent, et celui-là a bien un parent unique.
+        links: []
+      }
+    }
     if (layoutMode !== 'radial') {
       return {
         nodes: displayGraph.nodes.map((graphNode) => ({ ...graphNode })),
@@ -426,7 +481,7 @@ export function GraphView({
       // parent unique que ces données n'ont pas — donc on n'en dessine pas plutôt que d'en mentir.
       links: []
     }
-  }, [displayGraph, layoutMode, radial])
+  }, [displayGraph, layoutMode, radial, tree])
 
   /**
    * DESSIN des bandes : cercles + libellé de famille, ajoutés directement à la scène three.js.
@@ -486,6 +541,165 @@ export function GraphView({
       }
     }
   }, [layoutMode, radial])
+
+  /**
+   * DESSIN de l'arborescence : les anneaux de niveau, les branches de filiation, les nœuds internes.
+   *
+   * Les fiches elles-mêmes sont rendues par le graphe (elles sont épinglées sur leurs feuilles) ;
+   * ce qui manque et que rien d'autre ne trace, c'est la STRUCTURE — sans elle on retombe sur des
+   * points sans lien, exactement ce que cette vue doit corriger.
+   *
+   * Étiquetage : seuls les nœuds INTERNES portent un nom. L'utilisateur a demandé l'arbre complet
+   * jusqu'à la note, ce qui met ~564 feuilles sur l'anneau externe, à ~0,64° l'une de l'autre. La
+   * structure se lit très bien à cette densité, mais 564 étiquettes simultanées seraient une bouillie
+   * illisible — c'est une limite physique, pas un choix de goût.
+   */
+  useEffect(() => {
+    const instance = graphRef.current
+    if (!instance || layoutMode !== 'tree' || !tree) return
+    const scene = instance.scene()
+    if (!scene) return
+    const added: THREE.Object3D[] = []
+
+    // Les anneaux de niveau, en pointillé discret : ils disent « ceci est une profondeur ».
+    tree.ringRadii.forEach((radius, depth) => {
+      if (radius <= 0) return
+      const points: THREE.Vector3[] = []
+      for (let step = 0; step <= 128; step++) {
+        const angle = (step / 128) * Math.PI * 2
+        points.push(new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, -2))
+      }
+      const loop = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(points),
+        new THREE.LineBasicMaterial({
+          color: new THREE.Color(BAND_COLORS[depth % BAND_COLORS.length]),
+          transparent: true,
+          opacity: 0.14
+        })
+      )
+      scene.add(loop)
+      added.push(loop)
+    })
+
+    // Les branches, en UN seul objet : ~700 arêtes en autant d'objets three.js écroulerait le rendu.
+    const parId = new Map(tree.nodes.map((n) => [n.id, n]))
+    const sommets: number[] = []
+    const couleurs: number[] = []
+    for (const edge of tree.edges) {
+      const from = parId.get(edge.from)
+      const to = parId.get(edge.to)
+      if (!from || !to) continue
+      const teinte = new THREE.Color(BAND_COLORS[edge.depth % BAND_COLORS.length])
+      sommets.push(from.fx, from.fy, -1, to.fx, to.fy, -1)
+      // Une branche profonde est plus pâle : la hiérarchie se lit d'un coup d'œil.
+      const fondu = Math.max(0.25, 1 - edge.depth * 0.16)
+      for (let i = 0; i < 2; i += 1)
+        couleurs.push(teinte.r * fondu, teinte.g * fondu, teinte.b * fondu)
+    }
+    if (sommets.length > 0) {
+      const geometrie = new THREE.BufferGeometry()
+      geometrie.setAttribute('position', new THREE.Float32BufferAttribute(sommets, 3))
+      geometrie.setAttribute('color', new THREE.Float32BufferAttribute(couleurs, 3))
+      const branches = new THREE.LineSegments(
+        geometrie,
+        new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55 })
+      )
+      scene.add(branches)
+      added.push(branches)
+    }
+
+    // Les étiquettes sont décidées AVANT d'être posées : il faut les connaître toutes pour savoir
+    // lesquelles se marchent dessus. Mesuré sur le vault réel — les huit dossiers sous `projects`
+    // empilaient huit libellés au même endroit, exactement le défaut corrigé sur les couronnes.
+    const aNommer = tree.nodes.filter(
+      (n) => !n.isLeaf && (n.depth <= 1 || (n.depth === 2 && n.leaves >= 5))
+    )
+    // CONVERSION D'UNITÉS — c'est tout le sujet des deux corrections ratées avant celle-ci. Les
+    // étiquettes sont des sprites en `sizeAttenuation: false` : leur taille est une FRACTION DE
+    // L'ÉCRAN (3,5 % de la hauteur), constante quelle que soit la distance. Leur POSITION, elle, est
+    // en unités de scène. Écarter de « 34 » revenait donc à écarter de ~17 px au zoom courant —
+    // moitié moins qu'une étiquette, d'où des libellés toujours empilés sur la capture.
+    //
+    // Le facteur se CALCULE, il ne se tâtonne pas : avec un FOV vertical de 50°, la demi-hauteur
+    // visible à la distance d vaut d·tan(25°) ≈ 0,466·d. Le champ fait donc 0,932·d unités de haut,
+    // et un sprite de 3,5 % d'écran y mesure 0,035 × 0,932 × d unités.
+    const distanceCamera = (treeBoundingRadius(tree) + 26 + MIN_LABEL_GAP * 3) * 2.6
+    const hauteurEtiquette = LABEL_SCREEN_HEIGHT * 0.932 * distanceCamera
+
+    // On calcule d'abord OÙ chaque étiquette tomberait, puis on décide lesquelles sont dessinées.
+    const poses = aNommer.map((n) => {
+      const pousse = n.radius + 26
+      return {
+        x: Math.cos(n.angle) * pousse,
+        y: Math.sin(n.angle) * pousse,
+        // Dans la MÊME unité que la position : ~0,55 hauteur par caractère.
+        width: `${n.label} · ${n.leaves}`.length * hauteurEtiquette * 0.55,
+        height: hauteurEtiquette,
+        // Le nombre de fiches sous le nœud FAIT l'importance : quand deux noms se disputent la même
+        // place, celui qui porte le plus de contenu la garde.
+        priority: n.leaves
+      }
+    })
+    const visibles = pickVisibleLabels(poses)
+    const poseDe = new Map(
+      aNommer.flatMap((n, i) => (visibles[i] ? [[n.id, { x: poses[i].x, y: poses[i].y }]] : []))
+    )
+
+    // Les nœuds internes : un disque dont la taille dit combien de fiches pendent dessous.
+    for (const noeud of tree.nodes) {
+      if (noeud.isLeaf) continue
+      const rayon = Math.max(3, Math.min(14, 2.4 * Math.sqrt(noeud.leaves)))
+      const disque = new THREE.Mesh(
+        new THREE.CircleGeometry(rayon, 20),
+        new THREE.MeshBasicMaterial({
+          color: new THREE.Color(BAND_COLORS[noeud.depth % BAND_COLORS.length]),
+          transparent: true,
+          opacity: 0.9
+        })
+      )
+      disque.position.set(noeud.fx, noeud.fy, 4)
+      scene.add(disque)
+      added.push(disque)
+
+      const pose = poseDe.get(noeud.id)
+      if (pose === undefined) continue
+      const label = createConnectedLabel(
+        `${noeud.label} · ${noeud.leaves}`,
+        new THREE.Color(BAND_COLORS[noeud.depth % BAND_COLORS.length]).getStyle()
+      )
+      // Poussée vers l'EXTÉRIEUR le long de son propre rayon, puis écartée en Y si elle recouvrait
+      // une voisine — l'écartement radial seul ne séparait pas les libellés visant la gauche.
+      label.position.set(pose.x, pose.y, 14)
+      scene.add(label)
+      added.push(label)
+    }
+
+    return () => {
+      for (const object of added) {
+        scene.remove(object)
+        const disposable = object as unknown as {
+          geometry?: { dispose?: () => void }
+          material?: { dispose?: () => void }
+        }
+        disposable.geometry?.dispose?.()
+        disposable.material?.dispose?.()
+      }
+    }
+  }, [layoutMode, tree])
+
+  /** Recadrage de l'arborescence — même raison qu'en bandes : le disque est plat, donc vu par la tranche. */
+  useEffect(() => {
+    if (layoutMode !== 'tree' || !tree) return
+    // Cadrer sur les NŒUDS seuls coupait le haut et la droite : les étiquettes vivent plus loin que
+    // le nœud qu'elles nomment, et la colonne de gauche mange encore de la largeur. On cadre donc sur
+    // le rayon des nœuds AUGMENTÉ de la portée maximale d'une étiquette.
+    const radius = treeBoundingRadius(tree) + 26 + MIN_LABEL_GAP * 3
+    if (radius <= 0) return
+    const timeout = window.setTimeout(() => {
+      graphRef.current?.cameraPosition({ x: 0, y: 0, z: radius * 2.6 }, { x: 0, y: 0, z: 0 }, 600)
+    }, 120)
+    return () => window.clearTimeout(timeout)
+  }, [layoutMode, tree])
 
   /**
    * Recadrage DÉDIÉ au mode radial. L'effet de cadrage initial plus haut ne dépend volontairement pas
@@ -1171,21 +1385,21 @@ export function GraphView({
         <button
           type="button"
           role="switch"
-          className={`graph-layout-switch${layoutMode === 'radial' ? ' is-radial' : ''}`}
+          className={`graph-layout-switch${layoutMode === 'radial' ? ' is-radial' : ''}${layoutMode === 'tree' ? ' is-tree' : ''}`}
           onClick={() => {
-            const next = layoutMode === 'radial' ? 'force' : 'radial'
+            const next = nextGraphLayoutMode(layoutMode)
             setLayoutMode(next)
             saveGraphLayoutMode(localStorage, next)
           }}
-          aria-checked={layoutMode === 'radial'}
+          // Le bouton a TROIS états, donc `aria-checked` ne peut plus valoir « radial ou rien » : en
+          // arborescence il aurait annoncé « éteint » à un lecteur d'écran alors qu'un agencement est
+          // bien actif. `mixed` est la valeur prévue par ARIA pour un troisième état.
+          aria-checked={layoutMode === 'tree' ? 'mixed' : layoutMode === 'radial'}
           aria-label="Disposition du graphe"
-          title={
-            layoutMode === 'radial'
-              ? 'Repasser en disposition libre (montre la connectivité)'
-              : 'Passer en anneaux concentriques (montre la structure)'
-          }
+          data-layout-mode={layoutMode}
+          title={LIBELLE_BASCULE[layoutMode]}
         >
-          {layoutMode === 'radial' ? '◎' : '⁘'}
+          {ICONE_BASCULE[layoutMode]}
         </button>
         <button
           type="button"
