@@ -26,11 +26,45 @@ describe('catégories cognitives — le rattachement', () => {
     expect(brainCategoryOf(fiche('knowledge/lessons/smb.md'))).toBe('Mémoires')
   })
 
-  it('range le savoir et les cartes de code dans Savoir', () => {
+  it('SÉPARE les trois natures que « Savoir » confondait', () => {
+    // Mesuré : « Savoir » pesait 484 fiches sur 628 (77 %), dont 345 d'un arbre de doc IMPORTÉ et
+    // 100 cartes de code GÉNÉRÉES — seulement 38 étaient du savoir rédigé. C'était une étiquette
+    // mensongère, un repli déguisé en catégorie. Chaque nature a maintenant son nom.
     expect(brainCategoryOf(fiche('knowledge/domain/rig-edi.md'))).toBe('Savoir')
     expect(brainCategoryOf(fiche('projects/rig-tv/obsidian/areas/import.md', ['area']))).toBe(
-      'Savoir'
+      'Code'
     )
+    expect(
+      brainCategoryOf(fiche('knowledge/domain/rigapplication-documentation/reference/x.md'))
+    ).toBe('Documentation')
+  })
+
+  it('range les consignes de la racine du vault dans Comportement', () => {
+    // `CLAUDE.md` et `AGENTS.md` sont littéralement des règles de conduite. Elles tombaient dans
+    // « Non classé », ce qui était faux deux fois : ni inclassables, ni sans catégorie évidente.
+    expect(brainCategoryOf(fiche('CLAUDE.md'))).toBe('Comportement')
+    expect(brainCategoryOf(fiche('AGENTS.md'))).toBe('Comportement')
+  })
+
+  it('les fiches de projet vont dans Code par leur CHEMIN, sans dépendre de leurs tags', () => {
+    // Mesuré dans l'app : `Savoir · 137` valait `knowledge · 38` + `projects · 99` — les 99 fiches de
+    // projets n'atteignaient pas `Code`, leurs tags n'arrivant pas sous la forme attendue. Le chemin
+    // est le signal fiable ; ces cas passent SANS aucun tag.
+    expect(brainCategoryOf(fiche('projects/rig-tv/obsidian/areas/import.md'))).toBe('Code')
+    expect(brainCategoryOf(fiche('projects/rig-tv/obsidian/relations/calls.md'))).toBe('Code')
+    expect(brainCategoryOf(fiche('projects/autowin-os/obsidian/autowin-os.md'))).toBe('Code')
+  })
+
+  it('MAIS une décision rangée sous un projet reste une Mémoire', () => {
+    // Les 30 décisions moissonnées vivent sous `projects/<dépôt>/obsidian/decisions/` : les verser
+    // dans `Code` parce qu'elles partagent le préfixe serait exactement la mauvaise attribution que
+    // tout ce rangement cherche à éviter.
+    expect(brainCategoryOf(fiche('projects/rig-tv/obsidian/decisions/cheminb.md'))).toBe('Mémoires')
+  })
+
+  it('range le tampon d’entrée dans À trier, et les connecteurs dans Environnement', () => {
+    expect(brainCategoryOf(fiche('inbox/brouillon.md'))).toBe('À trier')
+    expect(brainCategoryOf(fiche('integrations/ged.md'))).toBe('Environnement')
   })
 
   it('LE CAS QUI DÉCIDE LA PRÉCÉDENCE : une décision AUSSI taguée kit va au Comportement', () => {
@@ -61,7 +95,24 @@ describe('catégories cognitives — le rattachement', () => {
   })
 
   it('nomme ce qu’il ne sait pas ranger au lieu de le dissoudre', () => {
-    expect(brainCategoryOf(fiche('inbox/brouillon.md'))).toBe('Non classé')
+    expect(brainCategoryOf(fiche('.trash/vieux.md'))).toBe('Non classé')
+  })
+
+  it('aucune catégorie ne dépasse la moitié du vault par simple REPLI', () => {
+    // Le garde-fou de l'étiquette mensongère : une catégorie majoritaire doit l'être parce que le
+    // vault est ainsi fait, jamais parce qu'une règle attrape tout ce qui reste. Ici `Documentation`
+    // domine, et c'est un FAIT — un seul arbre de doc importé — pas un fourre-tout.
+    const melange = [
+      fiche('knowledge/domain/a.md'),
+      fiche('projects/x/obsidian/areas/b.md', ['area']),
+      fiche('knowledge/decisions/c.md', ['kit']),
+      fiche('knowledge/lessons/d.md'),
+      fiche('inbox/e.md'),
+      fiche('integrations/f.md')
+    ]
+    const comptes = countByBrainCategory(melange)
+    const max = Math.max(...Object.values(comptes))
+    expect(max).toBeLessThanOrEqual(melange.length / 2)
   })
 })
 
@@ -73,7 +124,8 @@ describe('catégories cognitives — les invariants de la vue', () => {
     fiche('knowledge/domain/savoir-d.md'),
     fiche('projects/rig-tv/obsidian/areas/e.md', ['area']),
     fiche('governance/f.md'),
-    fiche('inbox/g.md')
+    fiche('inbox/g.md'),
+    fiche('.trash/h.md')
   ]
 
   it('PARTITION : chaque fiche compte pour exactement une catégorie', () => {
@@ -106,12 +158,18 @@ describe('les catégories sont l’ancrage — elles doivent survivre à l’arb
       fiche('knowledge/decisions/kit.md', ['kit']),
       fiche('knowledge/decisions/produit.md', ['decision-tracee']),
       fiche('knowledge/lessons/msdtc.md', ['environnement']),
-      fiche('knowledge/domain/rig.md')
+      fiche('knowledge/domain/rig.md'),
+      fiche('knowledge/domain/rigapplication-documentation/r.md'),
+      fiche('projects/x/obsidian/relations/calls.md', ['relation']),
+      fiche('inbox/z.md')
     ]
     const comptes = countByBrainCategory(echantillon)
     expect(comptes['Comportement']).toBe(1)
     expect(comptes['Mémoires']).toBe(1)
     expect(comptes['Environnement']).toBe(1)
     expect(comptes['Savoir']).toBe(1)
+    expect(comptes['Documentation']).toBe(1)
+    expect(comptes['Code']).toBe(1)
+    expect(comptes['À trier']).toBe(1)
   })
 })

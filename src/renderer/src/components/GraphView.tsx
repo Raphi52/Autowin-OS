@@ -701,6 +701,46 @@ export function GraphView({
     }
   }, [layoutMode, tree])
 
+  /**
+   * L'arbre est une vue 2D : on coupe la 3ᵉ dimension et on fait converger le zoom vers le CURSEUR.
+   *
+   * Pourquoi c'est nécessaire : le disque est strictement plat (tous les nœuds à `z = 0`), mais les
+   * contrôles par défaut de la bibliothèque sont des trackball, qui tournent librement sur trois
+   * axes. Un simple glissement fait donc basculer le disque jusqu'à le voir PAR LA TRANCHE — une
+   * ligne. Et la molette zoome vers le centre de l'écran, alors que sur un arbre l'information
+   * intéressante est en périphérie : il fallait zoomer puis recadrer à la main, en boucle.
+   *
+   * `OrbitControls` fait exactement cela nativement — `zoomToCursor` existe pour ça. On ne
+   * réimplémente donc rien : on désarme la rotation, on met le panoramique dans le plan de l'écran,
+   * et on branche le zoom sur le pointeur.
+   */
+  useEffect(() => {
+    if (layoutMode !== 'tree') return
+    const controls = graphRef.current?.controls() as
+      | {
+          enableRotate?: boolean
+          screenSpacePanning?: boolean
+          zoomToCursor?: boolean
+          mouseButtons?: { LEFT?: number; MIDDLE?: number; RIGHT?: number }
+          touches?: { ONE?: number; TWO?: number }
+          update?: () => void
+        }
+      | undefined
+    if (!controls) return
+    controls.enableRotate = false
+    controls.screenSpacePanning = true
+    controls.zoomToCursor = true
+    // Le bouton GAUCHE doit déplacer, pas tourner : c'est le geste naturel sur une carte, et la
+    // rotation étant désarmée il ne ferait plus rien du tout.
+    if (controls.mouseButtons) {
+      controls.mouseButtons.LEFT = THREE.MOUSE.PAN
+      controls.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY
+      controls.mouseButtons.RIGHT = THREE.MOUSE.PAN
+    }
+    if (controls.touches) controls.touches.ONE = THREE.TOUCH.PAN
+    controls.update?.()
+  }, [layoutMode, tree])
+
   /** Recadrage de l'arborescence — même raison qu'en bandes : le disque est plat, donc vu par la tranche. */
   useEffect(() => {
     if (layoutMode !== 'tree' || !tree) return
@@ -1694,6 +1734,10 @@ export function GraphView({
         <div ref={wrap} className="graph-canvas">
           <ForceGraph3D
             ref={graphRef}
+            // `controlType` n'est lu qu'à l'initialisation de la vue : sans une `key` qui change
+            // avec le mode, passer en arbre garderait les contrôles trackball déjà en place.
+            key={layoutMode === 'tree' ? 'orbit' : 'trackball'}
+            controlType={layoutMode === 'tree' ? 'orbit' : 'trackball'}
             width={size.w}
             height={size.h}
             graphData={renderedGraph}

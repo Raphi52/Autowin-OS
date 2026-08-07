@@ -26,7 +26,15 @@ import type { GraphNode } from './graph-view-model'
  * ------------------------------------------------------------------------------------------------
  */
 
-export type BrainCategory = 'Comportement' | 'Mémoires' | 'Environnement' | 'Savoir' | 'Non classé'
+export type BrainCategory =
+  | 'Comportement'
+  | 'Mémoires'
+  | 'Environnement'
+  | 'Savoir'
+  | 'Documentation'
+  | 'Code'
+  | 'À trier'
+  | 'Non classé'
 
 /** L'ordre d'affichage, et rien d'autre : la précédence de rattachement est celle des règles. */
 export const BRAIN_CATEGORIES: readonly BrainCategory[] = [
@@ -34,8 +42,14 @@ export const BRAIN_CATEGORIES: readonly BrainCategory[] = [
   'Mémoires',
   'Environnement',
   'Savoir',
+  'Documentation',
+  'Code',
+  'À trier',
   'Non classé'
 ]
+
+/** Fichiers de consigne à la racine du vault : des règles de conduite, pas des inclassables. */
+const RACINE_CONDUITE = new Set(['claude.md', 'agents.md', 'readme.md', 'home.md', 'index.md'])
 
 const has = (themes: readonly string[], ...cherches: string[]): boolean =>
   themes.some((theme) => cherches.includes(theme.toLowerCase()))
@@ -59,21 +73,44 @@ export function brainCategoryOf(node: Pick<GraphNode, 'id' | 'file' | 'themes'>)
 
   // 1. Le tag explicite gagne toujours : il a été posé pour ça.
   if (has(themes, 'environnement', 'environment', 'theme/environnement')) return 'Environnement'
+  // Les connecteurs vers des systèmes tiers SONT de l'environnement : ce qu'on doit joindre, et à
+  // quelles conditions.
+  if (segments[0] === 'integrations') return 'Environnement'
 
   // 2. Comment on travaille — les règles de conduite.
   if (has(themes, 'kit', 'process', 'preference')) return 'Comportement'
   if (segments[0] === 'governance') return 'Comportement'
   if (segments[1] === 'preferences') return 'Comportement'
+  // Les consignes de la racine du vault (`CLAUDE.md`, `AGENTS.md`) sont littéralement des règles de
+  // conduite. Elles tombaient dans « Non classé », ce qui était faux deux fois : ni non classables,
+  // ni sans catégorie évidente.
+  if (segments.length === 1 && RACINE_CONDUITE.has(segments[0])) return 'Comportement'
 
   // 3. Ce dont on se souvient — ce qui s'est passé, ce qu'on a choisi.
   if (has(themes, 'decision-tracee', 'lesson')) return 'Mémoires'
   if (segments.includes('decisions') || segments.includes('lessons')) return 'Mémoires'
 
-  // 4. Ce qu'on sait — le savoir sémantique et les cartes de code.
-  if (has(themes, 'code-map', 'area', 'relation', 'graphify')) return 'Savoir'
+  // 4. LE FOURRE-TOUT ÉCLATÉ. Une seule règle envoyait tout `knowledge`/`projects` dans « Savoir »,
+  //    qui pesait alors 484 fiches sur 628 — 77 % du vault. Mesuré, son contenu réel était : 345
+  //    fiches d'un arbre de doc IMPORTÉ, 100 cartes de code GÉNÉRÉES, et seulement 38 notes de savoir
+  //    réellement rédigées. « Savoir » était donc une étiquette mensongère : un défaut de repli
+  //    déguisé en catégorie. Chacune de ces trois natures a désormais son nom.
+  // Le rattachement passe par le CHEMIN, pas par les tags seuls. Mesuré dans l'app : la vue
+  // affichait `Savoir · 137` = `knowledge · 38` + `projects · 99`, donc les 99 fiches de projets
+  // n'atteignaient PAS `Code` — leurs tags n'arrivent pas jusqu'ici sous la forme attendue. Le
+  // chemin, lui, est connu avec certitude.
+  if (has(themes, 'code-map', 'area', 'relation', 'graphify')) return 'Code'
+  // `projects/<dépôt>/obsidian/{areas,relations}/…` et la carte du dépôt sont des cartes de code.
+  // L'exception `decisions` est essentielle : les 30 décisions moissonnées vivent sous ce même
+  // préfixe, et les verser dans `Code` serait la mauvaise attribution que tout ceci veut éviter.
+  if (segments[0] === 'projects' && !segments.includes('decisions')) return 'Code'
+  if (segments.includes('rigapplication-documentation')) return 'Documentation'
   if (segments[0] === 'knowledge' || segments[0] === 'projects') return 'Savoir'
 
-  // 5. Le reste est NOMMÉ, pas dissous. Une fiche qu'aucune règle n'attrape doit se voir : c'est ce
+  // 5. Ce qui attend d'être trié — le tampon d'entrée, pas encore consolidé.
+  if (segments[0] === 'inbox') return 'À trier'
+
+  // 6. Le reste est NOMMÉ, pas dissous. Une fiche qu'aucune règle n'attrape doit se voir : c'est ce
   //    compteur qui dira si les règles vieillissent mal.
   return 'Non classé'
 }
