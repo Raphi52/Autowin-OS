@@ -211,7 +211,9 @@ export function SourceControlPane({
       : view === 'workspace' && repoPath
         ? repoPath.replace(/^.*[\\/]/, '')
         : view === 'project'
-          ? 'Projet de la conversation'
+          ? // Suit le renommage de l'onglet : un onglet « Fichiers » ouvrant un panneau intitulé
+            // « Projet de la conversation » se contredirait à l'écran.
+            'Fichiers de la conversation'
           : 'Dépôt courant'
   const openConflictDiff = (agentId: string): void => {
     const requestId = ++conflictRequestRef.current
@@ -243,7 +245,10 @@ export function SourceControlPane({
             title="Fichiers modifiés par cette conversation"
             onClick={() => selectView('project')}
           >
-            Projet
+            {/* « Fichiers » et non « Projet » : cet onglet liste les FICHIERS modifiés par la
+                conversation, ce que son propre `title` disait déjà. « Projet » annonçait un périmètre
+                (le dépôt) au lieu du contenu (les fichiers touchés ici). */}
+            Fichiers
           </button>
           <button
             className={`sc-btn sc-repo-btn${view === 'brain' ? ' is-active' : ''}`}
@@ -488,7 +493,6 @@ export function SourceControlPane({
             )}
           </section>
         )}
-
       </div>
     </div>
   )

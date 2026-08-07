@@ -19,3 +19,7 @@ agent-studio-*.png
 
 # Reglages LOCAUX de Claude Code (par machine) : jamais partages.
 .claude/settings.local.json
+
+# Donnees produites par l app (conversations, runs, worktrees, cache).
+# Racine UNIQUE hors du code : la supprimer ne laisse aucune trace sur la machine.
+.autowin-data

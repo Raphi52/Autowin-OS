@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest'
 
 const ROOT = process.cwd()
 const ALLOWED_LEGACY_FILE = 'src/shared/app-identity.ts'
-const EXCLUDED = new Set(['node_modules', 'out', 'dist', 'Audit', '.git'])
+// `.autowin-data` : depuis le stockage portable, les DONNÉES de l'app vivent dans le dépôt. Ce
+// balayage cherche des traces de branding dans le CODE ; y inclure des conversations reviendrait à
+// faire échouer le test sur ce qu'un modèle a écrit un jour, et non sur ce que le projet contient.
+const EXCLUDED = new Set(['node_modules', 'out', 'dist', 'Audit', '.git', '.autowin-data'])
 const TEXT_EXTENSIONS = new Set([
   '.ts',
   '.tsx',
@@ -84,7 +87,13 @@ describe('identite Autowin OS', () => {
     )
     expect(main).toContain('const isolatedTestInstance = automationInstanceMode.isolated')
     expect(main).toContain("query: isolatedTestInstance ? { instance: 'test' } : undefined")
-    expect(main).toContain("resolveAutowinAppDataBase(app.getPath('appData'), app.isPackaged)")
+    // STOCKAGE PORTABLE : la racine n'est plus `%APPDATA%` mais le dossier de l'app. Cette assertion
+    // verrouillait l'ancienne source ; elle verrouille désormais la nouvelle, et surtout le PIÈGE du
+    // packagé — viser `app.getAppPath()` y pointerait dans l'asar, où aucune écriture n'est possible.
+    expect(main).toContain(
+      "portableAppDataBase(app.getAppPath(), dirname(app.getPath('exe')), app.isPackaged)"
+    )
+    expect(main).not.toContain("resolveAutowinAppDataBase(app.getPath('appData')")
   })
 
   it('aligne le headless et la preuve CDP sur le binaire et le preload canoniques', () => {

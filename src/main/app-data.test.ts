@@ -18,6 +18,7 @@ import {
   legacyAppDataRoot,
   migrateLegacyAppData,
   migrateLegacyAppDataDetailed,
+  portableAppDataBase,
   resolveAutowinAppDataBase
 } from './app-data'
 
@@ -168,6 +169,48 @@ describe('migration APPDATA Autowin OS', () => {
       'C:\\real-appdata'
     )
     expect(resolveAutowinAppDataBase('C:\\real-appdata', false, environment)).toBe(isolated)
+  })
+
+  /**
+   * TOUT CE QUE L'APP ÉCRIT DOIT VIVRE DANS SON DOSSIER.
+   *
+   * Mesuré le 2026-08-07 : supprimer le dossier du projet laissait 1,8 Go dans `%APPDATA%\autowin-os`
+   * — conversations, runs, worktrees, cache. Une app qu'on désinstalle en effaçant son dossier ne doit
+   * rien semer ailleurs.
+   *
+   * Le PIÈGE du packagé : `app.getAppPath()` pointe DANS l'archive asar, où l'on ne peut pas écrire.
+   * Le dossier de l'exécutable est le seul emplacement inscriptible et voisin — convention des apps
+   * portables.
+   */
+  describe('base portable — les données vivent à côté de l’app', () => {
+    it('en DEV : dans le dossier du projet', () => {
+      expect(portableAppDataBase('C:\\projet', 'C:\\projet\\dist\\win-unpacked', false)).toBe(
+        join('C:\\projet', '.autowin-data')
+      )
+    })
+
+    it('en PACKAGÉ : à côté de l’exécutable, JAMAIS dans l’asar', () => {
+      const base = portableAppDataBase(
+        'C:\\projet\\resources\\app.asar',
+        'C:\\projet\\dist\\win-unpacked',
+        true
+      )
+      expect(base).toBe(join('C:\\projet\\dist\\win-unpacked', '.autowin-data'))
+      // Discriminant : une base dans l'asar rendrait toute écriture impossible au démarrage.
+      expect(base).not.toContain('asar')
+    })
+
+    it('l’isolation des tests garde la priorité — discriminant', () => {
+      const isolated = join(fixtureRoot(), 'isolated')
+      const environment = {
+        AUTOWIN_ISOLATED_TEST_INSTANCE: '1',
+        AUTOWIN_TEST_APP_DATA_ROOT: isolated
+      }
+      // Si ce test casse, les instances headless isolées se remettent à partager une racine.
+      expect(
+        resolveAutowinAppDataBase(portableAppDataBase('C:\\projet', 'C:\\exe', false), false, environment)
+      ).toBe(isolated)
+    })
   })
 
   it('applique la base configurée aux stores qui utilisent la valeur par défaut', () => {

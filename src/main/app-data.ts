@@ -12,6 +12,12 @@ import { randomUUID } from 'node:crypto'
 import { dirname, isAbsolute, join } from 'node:path'
 import { AUTOWIN_APP_DATA_DIR, legacyAppDataDirName } from '../shared/app-identity'
 
+/**
+ * Dossier unique à ignorer par git et à supprimer pour ne rien laisser : c'est la SEULE racine que
+ * l'app écrit désormais hors de son code. Préfixé d'un point pour ne pas encombrer la vue du projet.
+ */
+const PORTABLE_APP_DATA_DIR = '.autowin-data'
+
 const FILE_STORES = [
   'auth.json',
   'roles.json',
@@ -151,6 +157,29 @@ export function createAutowinAppDataRoot(base = appDataBase()): string {
   const target = autowinAppDataRoot(base)
   mkdirSync(target, { recursive: true })
   return target
+}
+
+/**
+ * Base de stockage PORTABLE : tout ce que l'app écrit vit à côté d'elle.
+ *
+ * Mesuré le 2026-08-07 : supprimer le dossier du projet laissait 1,8 Go dans `%APPDATA%\autowin-os`
+ * (conversations, runs, worktrees, cache). Une app qu'on désinstalle en effaçant son dossier ne doit
+ * rien semer ailleurs sur la machine.
+ *
+ * En PACKAGÉ, viser `app.getAppPath()` serait une faute : ce chemin pointe DANS l'archive asar, où
+ * aucune écriture n'est possible. Le dossier de l'exécutable est le seul emplacement inscriptible et
+ * voisin — c'est la convention des applications portables.
+ *
+ * Ne concerne QUE ce que l'app produit. Les lectures d'autres produits (transcripts Claude Code,
+ * jeton AmitelBrain, installation codex, skills) restent à leur place : les rediriger casserait
+ * l'app sans rien nettoyer.
+ */
+export function portableAppDataBase(
+  appPath: string,
+  executableDir: string,
+  isPackaged: boolean
+): string {
+  return join(isPackaged ? executableDir : appPath, PORTABLE_APP_DATA_DIR)
 }
 
 export function resolveAutowinAppDataBase(
