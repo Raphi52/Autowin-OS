@@ -168,7 +168,13 @@ describe('le barycentre est PONDÉRÉ — l’invariant qu’une moyenne simple 
 })
 
 describe('étiquettes de l’arbre — on garde le plus important, on tait l’autre', () => {
-  const et = (x: number, y: number, priority: number) => ({ x, y, width: 100, height: 20, priority })
+  const et = (x: number, y: number, priority: number) => ({
+    x,
+    y,
+    width: 100,
+    height: 20,
+    priority
+  })
 
   it('omet le libellé MOINS important quand deux se recouvrent', () => {
     expect(pickVisibleLabels([et(0, 0, 5), et(10, 5, 50)])).toEqual([false, true])
@@ -198,5 +204,26 @@ describe('étiquettes de l’arbre — on garde le plus important, on tait l’a
   it('supporte le cas dégénéré', () => {
     expect(pickVisibleLabels([])).toEqual([])
     expect(pickVisibleLabels([et(0, 0, 1)])).toEqual([true])
+  })
+})
+
+describe('premier anneau regroupé — la lecture posée sur le disque', () => {
+  it('coiffe l’arbre d’un anneau de groupes sans rien perdre', () => {
+    const { nodes } = layoutTree(VAULT, { groupOf: () => 'Savoir' })
+    const premier = nodes.filter((n) => n.depth === 1)
+    expect(premier.map((n) => n.label)).toEqual(['Savoir'])
+    // La partition tient : le groupe ajoute un niveau, il ne mange aucune fiche.
+    expect(nodes.filter((n) => n.isLeaf)).toHaveLength(VAULT.length)
+  })
+
+  it('sépare les groupes distincts, et la profondeur augmente d’exactement un', () => {
+    const sansGroupe = layoutTree(VAULT)
+    const avecGroupe = layoutTree(VAULT, {
+      groupOf: (n) => (n.id.startsWith('knowledge') ? 'Mémoires' : 'Savoir')
+    })
+    expect(new Set(avecGroupe.nodes.filter((n) => n.depth === 1).map((n) => n.label))).toEqual(
+      new Set(['Mémoires', 'Savoir'])
+    )
+    expect(avecGroupe.maxDepth).toBe(sansGroupe.maxDepth + 1)
   })
 })

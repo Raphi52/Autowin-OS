@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
 import { boundingRadius, layoutRadial } from './graph-radial-layout'
+import { brainCategoryOf } from './graph-brain-categories'
 import { layoutTree, pickVisibleLabels, treeBoundingRadius } from './graph-tree-layout'
 import {
   DRILL_ROOT,
@@ -413,7 +414,12 @@ export function GraphView({
    * il est le chemin de fichier de chaque fiche, donc chaque nœud a un parent unique et réel.
    */
   const tree = useMemo(
-    () => (layoutMode === 'tree' ? layoutTree(displayGraph.nodes) : null),
+    () =>
+      layoutMode === 'tree'
+        ? // Le premier anneau porte les CATÉGORIES COGNITIVES, pas les dossiers bruts : c'est une
+          // lecture posée sur le disque, aucun fichier n'est déplacé dans le Brain partagé.
+          layoutTree(displayGraph.nodes, { groupOf: brainCategoryOf })
+        : null,
     [layoutMode, displayGraph.nodes]
   )
 
@@ -627,17 +633,25 @@ export function GraphView({
     const hauteurEtiquette = LABEL_SCREEN_HEIGHT * 0.932 * distanceCamera
 
     // On calcule d'abord OÙ chaque étiquette tomberait, puis on décide lesquelles sont dessinées.
+    // Les étiquettes de CATÉGORIE sont posées sur le pourtour du disque, pas contre leur nœud. À
+    // l'anneau 1 les cinq catégories sont très proches en angle — `Savoir` occupe 83 % du cercle et
+    // tasse les autres dans le reste — donc leurs libellés se disputaient le même coin : mesuré sur
+    // capture, deux seulement survivaient. Au rayon extérieur, le même écart angulaire donne
+    // largement la place, et la catégorie reste alignée sur son propre secteur.
+    const rayonPourtour = treeBoundingRadius(tree) + 40
     const poses = aNommer.map((n) => {
-      const pousse = n.radius + 26
+      const pousse = n.depth === 1 ? rayonPourtour : n.radius + 26
       return {
         x: Math.cos(n.angle) * pousse,
         y: Math.sin(n.angle) * pousse,
         // Dans la MÊME unité que la position : ~0,55 hauteur par caractère.
         width: `${n.label} · ${n.leaves}`.length * hauteurEtiquette * 0.55,
         height: hauteurEtiquette,
-        // Le nombre de fiches sous le nœud FAIT l'importance : quand deux noms se disputent la même
-        // place, celui qui porte le plus de contenu la garde.
-        priority: n.leaves
+        // Le nombre de fiches sous le nœud fait l'importance — SAUF pour le premier anneau. Les
+        // catégories cognitives sont l'ancrage de toute la lecture : sans leurs noms, l'anneau ne
+        // dit plus rien. Mesuré sur capture — seule `Savoir · 250` survivait, les trois autres
+        // perdant l'arbitrage face à des dossiers voisins plus gros.
+        priority: n.depth === 1 ? Number.MAX_SAFE_INTEGER - n.depth : n.leaves
       }
     })
     const visibles = pickVisibleLabels(poses)

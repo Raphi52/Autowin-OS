@@ -60,6 +60,12 @@ export type TreeLayoutOptions = {
   excluded?: readonly string[]
   /** Angle de départ, pour orienter l'arbre. */
   startAngle?: number
+  /**
+   * Regroupement du PREMIER anneau. Sans lui, l'arbre suit le disque : `knowledge`, `projects`,
+   * `governance`. Avec lui, on peut coiffer le disque d'une lecture — les catégories cognitives —
+   * sans déplacer un seul fichier : le groupe devient simplement un segment de chemin en plus.
+   */
+  groupOf?: (node: GraphNode) => string
 }
 
 const DEFAULT_RING_GAP = 120
@@ -83,12 +89,20 @@ function creerInterne(id: string, label: string, parentId: string | null, depth:
  * son propre identifiant : la perdre en silence serait pire que l'afficher à la racine, et le test
  * de partition l'exigerait de toute façon.
  */
-function construire(nodes: readonly GraphNode[], exclues: readonly string[]): Interne {
+function construire(
+  nodes: readonly GraphNode[],
+  exclues: readonly string[],
+  groupe?: (node: GraphNode) => string
+): Interne {
   const racine = creerInterne('', 'Brain', null, 0)
   for (const node of nodes) {
     const segments = pathSegments(relativePathOf(node))
-    const chemin = segments.length > 0 ? segments : [node.id]
-    if (exclues.includes(chemin[0])) continue
+    const brut = segments.length > 0 ? segments : [node.id]
+    if (exclues.includes(brut[0])) continue
+    // Le groupe est PRÉFIXÉ au chemin : tout le reste de l'algorithme continue de ne connaître que
+    // des chemins, donc la profondeur, la partition et les angles restent gouvernés par les mêmes
+    // invariants — il y a juste un anneau de plus au début.
+    const chemin = groupe ? [groupe(node), ...brut] : brut
 
     let courant = racine
     let idCourant = ''
@@ -139,7 +153,7 @@ export function layoutTree(
   const exclues = options.excluded ?? DEFAULT_EXCLUDED
   const startAngle = options.startAngle ?? -Math.PI / 2
 
-  const racine = construire(nodes, exclues)
+  const racine = construire(nodes, exclues, options.groupOf)
   const feuilles: Interne[] = []
   feuillesDe(racine, feuilles)
 
