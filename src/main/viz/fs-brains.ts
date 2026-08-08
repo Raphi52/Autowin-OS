@@ -302,6 +302,20 @@ function graphFromVaultRecords(records: VaultNoteRecord[], lod: number): VizGrap
       const resolved = resolveWikiTarget(record.id, target, ids, byBasename)
       if (resolved) links.push({ source: record.id, target: resolved, weight: 1 })
     }
+    for (const relation of record.relations) {
+      // Les wiki-liens sont déjà projetés ci-dessus. Ici, on conserve le type des relations
+      // frontmatter explicites afin que Knowledge puisse distinguer remplacement et contradiction.
+      if (relation.type === 'links_to') continue
+      const resolved = resolveWikiTarget(record.id, relation.target, ids, byBasename)
+      if (resolved) {
+        links.push({
+          source: record.id,
+          target: resolved,
+          weight: 1,
+          relation: relation.type
+        })
+      }
+    }
   }
   const graph: VizGraph = {
     nodes: records.map((record) => ({
@@ -422,12 +436,23 @@ function normalizeSearchText(value: string): string {
 function noteRelations(content: string): BrainNoteSearchResult['relations'] {
   const relations: BrainNoteSearchResult['relations'] = []
   const seen = new Set<string>()
+  const frontmatter = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)/)?.[1] ?? ''
   for (const type of ['related', 'supersedes', 'contradicts', 'caused_by'] as const) {
-    const raw = content.match(new RegExp(`^${type}\\s*:\\s*(.+)$`, 'mi'))?.[1] ?? ''
+    // Seul le YAML signé fait foi : une phrase du corps ne doit jamais devenir une relation de
+    // santé simplement parce qu'elle commence par `contradicts:` ou `supersedes:`.
+    const raw = frontmatter.match(new RegExp(`^${type}\\s*:\\s*(.+)$`, 'mi'))?.[1] ?? ''
     for (const target of raw
       .replace(/^\[|\]$/g, '')
       .split(/[,;]/)
-      .map((value) => value.trim().replace(/^['"]|['"]$/g, ''))
+      .map((value) => {
+        let clean = value.trim().replace(/^['"]|['"]$/g, '')
+        // Le Brain partagé emploie aussi la forme wiki dans les listes YAML :
+        // `supersedes: [[workflow-contribution-brain]]`. L'enveloppe de liste retirée ci-dessus
+        // laisse alors `[workflow-contribution-brain]`; enlever les crochets restants préserve les
+        // chemins bruts tout en rendant les deux écritures équivalentes.
+        clean = clean.replace(/^\[+|\]+$/g, '')
+        return clean.split('|')[0].split('#')[0].trim()
+      })
       .filter(Boolean)) {
       const key = `${type}\0${target}`
       if (!seen.has(key)) {

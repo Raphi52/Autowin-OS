@@ -21,13 +21,14 @@ class MemoryStorage {
 }
 
 describe('réglages Memory persistants', () => {
-  it('sauvegarde et restaure chacun des neuf réglages', () => {
+  it('sauvegarde et restaure chacun des dix réglages', () => {
     const storage = new MemoryStorage()
     const expected = {
       labels: false,
       links: false,
       orphans: false,
       arrows: true,
+      health: true,
       contextOpacity: 0.41,
       nodeSize: 2.2,
       linkWidth: 1.3,

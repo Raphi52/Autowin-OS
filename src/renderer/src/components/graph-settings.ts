@@ -10,6 +10,7 @@ export type GraphVisibilitySettings = {
   links: boolean
   orphans: boolean
   arrows: boolean
+  health: boolean
   contextOpacity: number
   nodeSize: number
   linkWidth: number
@@ -30,6 +31,7 @@ export const DEFAULT_GRAPH_VISIBILITY_SETTINGS: GraphVisibilitySettings = {
   links: true,
   orphans: true,
   arrows: false,
+  health: false,
   contextOpacity: 0.22,
   nodeSize: 1.4,
   linkWidth: 0.7,
@@ -64,6 +66,7 @@ export function loadGraphVisibilitySettings(storage: StorageLike): GraphVisibili
     links: boolean('links') ?? DEFAULT_GRAPH_VISIBILITY_SETTINGS.links,
     orphans: boolean('orphans') ?? DEFAULT_GRAPH_VISIBILITY_SETTINGS.orphans,
     arrows: boolean('arrows') ?? DEFAULT_GRAPH_VISIBILITY_SETTINGS.arrows,
+    health: boolean('health') ?? DEFAULT_GRAPH_VISIBILITY_SETTINGS.health,
     contextOpacity:
       boundedNumber(stored.contextOpacity, 0.05, 0.8) ??
       DEFAULT_GRAPH_VISIBILITY_SETTINGS.contextOpacity,

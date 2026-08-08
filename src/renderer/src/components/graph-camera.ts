@@ -28,6 +28,37 @@ export interface CameraView {
 }
 
 const RESTORE_MS = 700
+const FOCUS_DISTANCE = 220
+
+/**
+ * Calcule le gros plan sans placer la caméra dans le plan d'un graphe radial.
+ *
+ * En vue plane, multiplier la coordonnée `z=0` du nœud laisse aussi la caméra à `z=0` : le disque
+ * est alors vu par la tranche. On se place donc à la verticale du nœud. Les graphes 3D conservent
+ * le rapprochement radial historique.
+ */
+export function focusCameraView(
+  target: Coords,
+  planar: boolean,
+  focusDistance = FOCUS_DISTANCE
+): CameraView {
+  if (planar) {
+    return {
+      position: {
+        x: target.x,
+        y: target.y,
+        z: target.z + focusDistance
+      },
+      target: { ...target }
+    }
+  }
+  const distance = Math.hypot(target.x, target.y, target.z) || 1
+  const ratio = 1 + focusDistance / distance
+  return {
+    position: { x: target.x * ratio, y: target.y * ratio, z: target.z * ratio },
+    target: { ...target }
+  }
+}
 
 /**
  * La vue courante, ou `undefined` si le graphe n'est pas prêt. Ne jette jamais : une caméra

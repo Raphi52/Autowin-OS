@@ -16,6 +16,7 @@ import {
   highlightedNodeIdsForThemes,
   floatingNodeIdsForThemeHighlight,
   isLinkAttachedToNode,
+  knowledgeHealthIssues,
   linkedNodesFor,
   mergeGraphDelta,
   searchGraphCatalog,
@@ -34,6 +35,34 @@ import {
   type GraphLink,
   type GraphNode
 } from './graph-view-model'
+
+describe('lentille de santé des connaissances', () => {
+  const healthNodes: GraphNode[] = [
+    { id: 'current', label: 'Décision actuelle', group: 1 },
+    { id: 'old', label: 'Ancienne décision', group: 1 },
+    { id: 'other', label: 'Texte qui contredit peut-être', group: 1 }
+  ]
+
+  it('retient uniquement les relations explicites de contradiction et remplacement', () => {
+    expect(
+      knowledgeHealthIssues({
+        nodes: healthNodes,
+        links: [
+          { source: 'current', target: 'old', weight: 1, relation: 'supersedes' },
+          { source: 'current', target: 'other', weight: 1, relation: 'contradicts' },
+          { source: 'old', target: 'other', weight: 1, relation: 'related' }
+        ]
+      })
+    ).toEqual([
+      { relation: 'contradicts', source: healthNodes[0], target: healthNodes[2] },
+      { relation: 'supersedes', source: healthNodes[0], target: healthNodes[1] }
+    ])
+  })
+
+  it('n’infère rien depuis le texte des notes', () => {
+    expect(knowledgeHealthIssues({ nodes: healthNodes, links: [] })).toEqual([])
+  })
+})
 
 describe('graph theme palette', () => {
   it('keeps enough unique colors for every current Memory theme', () => {

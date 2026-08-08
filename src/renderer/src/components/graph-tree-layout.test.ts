@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { layoutTree, pickVisibleLabels, treeBoundingRadius } from './graph-tree-layout'
+import {
+  layoutTree,
+  pickVisibleLabels,
+  projectTreeVisibility,
+  semanticZoomTier,
+  shouldLabelTreeNode,
+  treeBoundingRadius
+} from './graph-tree-layout'
 import type { GraphNode } from './graph-view-model'
 
 const RACINE_UNC = '//ged2/rig/Projets IA/Amitel Brain/'
@@ -225,5 +232,37 @@ describe('premier anneau regroupé — la lecture posée sur le disque', () => {
       new Set(['Mémoires', 'Savoir'])
     )
     expect(avecGroupe.maxDepth).toBe(sansGroupe.maxDepth + 1)
+  })
+})
+
+describe('exploration progressive de l’arbre', () => {
+  it('replie tous les descendants d’un dossier sans recalculer les positions restantes', () => {
+    const complet = layoutTree(VAULT)
+    const replie = projectTreeVisibility(complet, new Set(['projects/rig-tv']))
+    expect(replie.nodes.some((node) => node.id === 'projects/rig-tv')).toBe(true)
+    expect(replie.nodes.some((node) => node.id.startsWith('projects/rig-tv/'))).toBe(false)
+    expect(replie.nodes.some((node) => node.id.startsWith('knowledge/'))).toBe(true)
+    for (const node of replie.nodes) {
+      const origine = complet.nodes.find((candidate) => candidate.id === node.id)
+      expect([node.fx, node.fy]).toEqual([origine?.fx, origine?.fy])
+    }
+  })
+
+  it('le zoom passe de catégories à dossiers puis notes avec des seuils stables', () => {
+    expect(semanticZoomTier(900, 300)).toBe('overview')
+    expect(semanticZoomTier(450, 300)).toBe('branches')
+    expect(semanticZoomTier(200, 300)).toBe('notes')
+  })
+
+  it('chaque niveau de zoom révèle strictement plus de libellés', () => {
+    const layout = layoutTree(VAULT)
+    const catégorie = layout.nodes.find((node) => node.depth === 1 && !node.isLeaf)!
+    const dossier = layout.nodes.find((node) => node.depth === 2 && !node.isLeaf)!
+    const note = layout.nodes.find((node) => node.isLeaf)!
+    expect(shouldLabelTreeNode(catégorie, 'overview')).toBe(true)
+    expect(shouldLabelTreeNode(dossier, 'overview')).toBe(false)
+    expect(shouldLabelTreeNode(dossier, 'branches')).toBe(true)
+    expect(shouldLabelTreeNode(note, 'branches')).toBe(false)
+    expect(shouldLabelTreeNode(note, 'notes')).toBe(true)
   })
 })

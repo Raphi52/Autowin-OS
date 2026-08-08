@@ -163,6 +163,50 @@ describe('Amitel Brain graph', () => {
     expect(graph.links).toHaveLength(2)
   })
 
+  it('projette les relations frontmatter explicites dans le graphe du vault', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-os-vault-health-'))
+    mkdirSync(join(root, 'knowledge'), { recursive: true })
+    writeFileSync(
+      join(root, 'knowledge/current.md'),
+      '---\nsupersedes: [[knowledge/old.md]]\ncontradicts: [knowledge/alternative.md]\n---\n# Current\n',
+      'utf8'
+    )
+    writeFileSync(join(root, 'knowledge/old.md'), '# Old\n', 'utf8')
+    writeFileSync(join(root, 'knowledge/alternative.md'), '# Alternative\n', 'utf8')
+    writeFileSync(
+      join(root, 'knowledge/prose.md'),
+      '# Prose\n\ncontradicts: [knowledge/alternative.md]\n',
+      'utf8'
+    )
+
+    const links = loadVaultBrainGraph(root, 20).links
+    expect(links).toEqual(
+      expect.arrayContaining([
+        {
+          source: 'knowledge/current',
+          target: 'knowledge/old',
+          weight: 1,
+          relation: 'supersedes'
+        },
+        {
+          source: 'knowledge/current',
+          target: 'knowledge/alternative',
+          weight: 1,
+          relation: 'contradicts'
+        }
+      ])
+    )
+    expect(links).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'knowledge/prose',
+          target: 'knowledge/alternative',
+          relation: 'contradicts'
+        })
+      ])
+    )
+  })
+
   it('discovers YAML themes dynamically and searches notes outside the displayed LOD', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-os-dynamic-theme-'))
     mkdirSync(join(root, 'knowledge/domain'), { recursive: true })

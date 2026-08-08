@@ -54,6 +54,8 @@ export type TreeLayout = {
   ringRadii: number[]
 }
 
+export type SemanticZoomTier = 'overview' | 'branches' | 'notes'
+
 export type TreeLayoutOptions = {
   /** Écart radial entre deux anneaux. */
   ringGap?: number
@@ -228,6 +230,48 @@ export function layoutTree(
 /** Rayon utile pour recadrer la caméra : sans lui la vue est cadrée sur du vide. */
 export function treeBoundingRadius(layout: TreeLayout): number {
   return layout.nodes.reduce((max, n) => Math.max(max, n.radius), 0)
+}
+
+/**
+ * Masque les descendants des dossiers repliés sans recalculer l'arbre : les nœuds restants gardent
+ * exactement leur position, ce qui préserve la carte mentale lors d'un repli/dépli.
+ */
+export function projectTreeVisibility(
+  layout: TreeLayout,
+  collapsedIds: ReadonlySet<string>
+): TreeLayout {
+  if (collapsedIds.size === 0) return layout
+  const byId = new Map(layout.nodes.map((node) => [node.id, node]))
+  const hidden = new Set<string>()
+  for (const node of layout.nodes) {
+    let parentId = node.parentId
+    while (parentId !== null) {
+      if (collapsedIds.has(parentId)) {
+        hidden.add(node.id)
+        break
+      }
+      parentId = byId.get(parentId)?.parentId ?? null
+    }
+  }
+  return {
+    ...layout,
+    nodes: layout.nodes.filter((node) => !hidden.has(node.id)),
+    edges: layout.edges.filter((edge) => !hidden.has(edge.from) && !hidden.has(edge.to))
+  }
+}
+
+/** Trois niveaux lisibles, exprimés relativement au rayon réel du Brain. */
+export function semanticZoomTier(cameraDistance: number, graphRadius: number): SemanticZoomTier {
+  const radius = Math.max(1, graphRadius)
+  if (cameraDistance >= radius * 2) return 'overview'
+  if (cameraDistance >= radius) return 'branches'
+  return 'notes'
+}
+
+export function shouldLabelTreeNode(node: TreeNode, tier: SemanticZoomTier): boolean {
+  if (tier === 'notes') return true
+  if (node.isLeaf) return false
+  return tier === 'overview' ? node.depth === 1 : node.depth <= 2
 }
 
 /**
