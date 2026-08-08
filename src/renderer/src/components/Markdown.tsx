@@ -6,7 +6,7 @@
  * Les liens ne sont créés que pour les schémas http/https (ouverts en externe par
  * le setWindowOpenHandler du main). Suffisant pour des réponses de chat.
  */
-import { SandboxedHtmlPreview } from './SandboxedHtmlPreview'
+import { MAX_INLINE_HTML_CHARS, prepareChatHtml } from './chat-html-inline'
 
 type MarkdownProps = {
   text: string
@@ -105,10 +105,42 @@ function tokenizeFencedBlocks(text: string): FencedBlock[] {
 
 function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[] {
   return tokenizeFencedBlocks(text).map((block, index) => {
-    if (block.kind === 'html-render')
+    if (block.kind === 'html-render' && block.content.length > MAX_INLINE_HTML_CHARS)
       return (
-        <SandboxedHtmlPreview key={`${keyPrefix}-html-render-${index}`} source={block.content} />
+        // Trop volumineux pour etre injecte dans le fil. On le dit explicitement plutot que de le
+        // laisser passer pour un bloc de code ordinaire : le modele a demande un RENDU, et savoir
+        // qu'il a ete refuse — et pourquoi — vaut mieux qu'un silence.
+        <details
+          key={`${keyPrefix}-html-too-large-${index}`}
+          className="md-html-oversize"
+          data-testid="chat-inline-html-too-large"
+        >
+          <summary>
+            Rendu HTML ignoré — {block.content.length.toLocaleString('fr-FR')} caractères, au-delà
+            de la limite de {MAX_INLINE_HTML_CHARS.toLocaleString('fr-FR')}. Voir la source.
+          </summary>
+          <pre className="md-code">
+            <code>{block.content}</code>
+          </pre>
+        </details>
       )
+
+    if (block.kind === 'html-render') {
+      const prepared = prepareChatHtml(block.content)
+      return (
+        // Rendu DANS le fil, pas dans une vignette. L'iframe precedente imposait une bordure, une
+        // barre d'outils et une hauteur fixe qui scrollait : le contenu etait enferme dans une boite
+        // au lieu d'embellir la reponse. Le prix de ce choix est que le HTML du modele vit desormais
+        // dans le DOM de l'app — c'est `sanitizeChatHtml` qui porte seul cette frontiere.
+        <div
+          key={`${keyPrefix}-html-render-${index}`}
+          className="md-html"
+          data-testid="chat-inline-html"
+          data-html-scope={prepared.scopeId}
+          dangerouslySetInnerHTML={{ __html: prepared.html }}
+        />
+      )
+    }
     if (block.kind === 'code')
       return (
         <pre key={`${keyPrefix}-code-${index}`} className="md-code">
@@ -167,17 +199,45 @@ function splitFinalSummary(text: string): FinalSummaryParts | null {
 
 type Align = 'left' | 'center' | 'right'
 
-const TABLE_ROW = /^\s*\|.*\|\s*$/
-const TABLE_SEPARATOR = /^\s*\|(?:\s*:?-{1,}:?\s*\|)+\s*$/
+/**
+ * Une ligne de tableau. Les pipes ENCADRANTS sont facultatifs : `a | b | c` est une forme GFM
+ * parfaitement valide, et l'exiger faisait tomber le tableau ENTIER en texte brut — c'est ce qu'on
+ * voyait quand un tableau de skill « n'affichait pas tout ». Reproduit par test avant correction.
+ */
+const TABLE_ROW = /^\s*[^|\n]*\|/
+/** Le séparateur, pipes encadrants également facultatifs. */
+const TABLE_SEPARATOR = /^\s*\|?\s*:?-{1,}:?\s*(?:\|\s*:?-{1,}:?\s*)*\|?\s*$/
 
-/** Découpe une ligne `| a | b |` en cellules (les `\|` échappés restent littéraux). */
+/**
+ * Découpe une ligne `| a | b |` en cellules. Les `\|` échappés restent littéraux, et un pipe DANS du
+ * code inline n'est pas un séparateur.
+ *
+ * Découpage manuel plutôt qu'un `split` : `` `git log | head` `` contient un pipe qui appartient à la
+ * commande. Le traiter comme une frontière décalait toutes les colonnes suivantes d'un cran — ce qui
+ * se voit comme des colonnes en trop, ou mal alignées. Reproduit par test avant correction.
+ */
 function splitRow(line: string): string[] {
-  return line
-    .trim()
-    .replace(/^\|/, '')
-    .replace(/\|$/, '')
-    .split(/(?<!\\)\|/)
-    .map((cell) => cell.replace(/\\\|/g, '|').trim())
+  const texte = line.trim().replace(/^\|/, '').replace(/\|$/, '')
+  const cellules: string[] = []
+  let courante = ''
+  let dansCode = false
+  for (let i = 0; i < texte.length; i += 1) {
+    const c = texte[i]
+    if (c === '\\' && texte[i + 1] === '|') {
+      courante += '|'
+      i += 1
+      continue
+    }
+    if (c === '`') dansCode = !dansCode
+    if (c === '|' && !dansCode) {
+      cellules.push(courante.trim())
+      courante = ''
+      continue
+    }
+    courante += c
+  }
+  cellules.push(courante.trim())
+  return cellules
 }
 
 function parseAlignments(separator: string): Align[] {
@@ -195,13 +255,17 @@ function parseAlignments(separator: string): Align[] {
  * `88 %`) sur seuils 70/40, ou statut connu. `null` = pas de pastille.
  */
 function badgeLevel(value: string): 'good' | 'warn' | 'bad' | null {
-  const score = /^(\d{1,3})(?:\s*\/\s*100|\s*%)?$/.exec(value)
+  // Le score arrive presque toujours EMPHASE (`**88**`, `` `88` ``) : les skills graissent la colonne
+  // Score par convention. Tester la valeur brute faisait echouer le motif numerique sur les etoiles,
+  // donc la pastille ne s'allumait JAMAIS en usage reel — la colonne sortait en texte plat.
+  const value_ = value.replace(/^[*`_\s]+|[*`_\s]+$/gu, '')
+  const score = /^(\d{1,3})(?:\s*\/\s*100|\s*%)?$/.exec(value_)
   if (score) {
     const n = Number(score[1])
     if (n > 100) return null
     return n >= 70 ? 'good' : n >= 40 ? 'warn' : 'bad'
   }
-  const status = value
+  const status = value_
     .toUpperCase()
     .replace(/[✅⚠⛔🟢🟠🔴\s.]/gu, '')
     .replace(/\uFE0F/gu, '')
@@ -216,7 +280,9 @@ function badgeLevel(value: string): 'good' | 'warn' | 'bad' | null {
 function renderCell(value: string): React.ReactNode {
   const level = badgeLevel(value)
   if (!level) return inline(value)
-  return <span className={`md-badge md-badge-${level}`}>{value}</span>
+  // La pastille PORTE deja l'emphase (fond colore, graisse) : garder les `**` du markdown les
+  // afficherait litteralement a l'interieur.
+  return <span className={`md-badge md-badge-${level}`}>{value.replace(/[*`_]/gu, '').trim()}</span>
 }
 
 /** Rend un tableau GFM (entête + séparateur + lignes) en `<table>`. */
@@ -225,14 +291,19 @@ function renderTable(rows: string[], keyPrefix: string): React.ReactNode {
   const aligns = parseAlignments(rows[1])
   const body = rows.slice(2).map(splitRow)
   const alignOf = (i: number): Align => aligns[i] ?? 'left'
+  // Le nombre de colonnes est le MAXIMUM observe, pas la largeur de l'entete : itérer sur `headers`
+  // faisait disparaitre sans le moindre bruit les cellules d'une ligne plus large que son entete.
+  // Perdre une donnee en silence est pire que rendre une colonne sans titre.
+  const columnCount = Math.max(headers.length, ...body.map((cells) => cells.length))
+  const columns = Array.from({ length: columnCount }, (_, i) => i)
   return (
     <div className="md-table-wrap" key={keyPrefix}>
       <table className="md-table">
         <thead>
           <tr>
-            {headers.map((cell, i) => (
+            {columns.map((i) => (
               <th key={`th-${i}`} style={{ textAlign: alignOf(i) }}>
-                {inline(cell)}
+                {inline(headers[i] ?? '')}
               </th>
             ))}
           </tr>
@@ -240,7 +311,7 @@ function renderTable(rows: string[], keyPrefix: string): React.ReactNode {
         <tbody>
           {body.map((cells, r) => (
             <tr key={`tr-${r}`}>
-              {headers.map((_, i) => (
+              {columns.map((i) => (
                 <td key={`td-${r}-${i}`} style={{ textAlign: alignOf(i) }}>
                   {renderCell(cells[i] ?? '')}
                 </td>
@@ -257,18 +328,29 @@ function renderTable(rows: string[], keyPrefix: string): React.ReactNode {
 function renderTextBlock(block: string): React.ReactNode[] {
   const out: React.ReactNode[] = []
   let list: React.ReactNode[] | null = null
+  let listKind: 'ul' | 'ol' = 'ul'
+  let listStart = 1
   let lastWasText = false
   let key = 0
 
   const flushList = (): void => {
-    if (list) {
-      out.push(
+    if (!list) return
+    // Une liste numerotee doit rendre un `<ol>` : la traiter comme du texte nu faisait perdre a la
+    // fois la numerotation et le retrait, ce qui aplatissait toute enumeration ordonnee.
+    out.push(
+      listKind === 'ol' ? (
+        <ol key={`ol-${key++}`} className="md-list" start={listStart === 1 ? undefined : listStart}>
+          {list}
+        </ol>
+      ) : (
         <ul key={`ul-${key++}`} className="md-list">
           {list}
         </ul>
       )
-      list = null
-    }
+    )
+    list = null
+    listKind = 'ul'
+    listStart = 1
   }
 
   const lines = block.split('\n')
@@ -308,10 +390,45 @@ function renderTextBlock(block: string): React.ReactNode[] {
       continue
     }
 
-    const item = /^\s*[-*]\s+(.*)$/.exec(line)
-    if (item) {
+    // Filet horizontal `---` / `***` / `___`. Sans ce cas, le separateur qui precede le bloc de
+    // cloture s'affichait tel quel, en tirets nus au milieu de la reponse.
+    if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      flushList()
+      out.push(<hr key={`hr-${key++}`} className="md-hr" />)
       lastWasText = false
-      if (!list) list = []
+      continue
+    }
+
+    const quote = /^\s*>\s?(.*)$/.exec(line)
+    if (quote) {
+      flushList()
+      out.push(
+        <blockquote key={`bq-${key++}`} className="md-quote">
+          {inline(quote[1])}
+        </blockquote>
+      )
+      lastWasText = false
+      continue
+    }
+
+    const ordered = /^\s*(\d{1,3})[.)]\s+(.*)$/.exec(line)
+    const item = ordered ? null : /^\s*[-*]\s+(.*)$/.exec(line)
+    if (ordered) {
+      lastWasText = false
+      if (!list || listKind !== 'ol') {
+        flushList()
+        list = []
+        listKind = 'ol'
+        listStart = Number(ordered[1])
+      }
+      list.push(<li key={`li-${key++}`}>{inline(ordered[2])}</li>)
+    } else if (item) {
+      lastWasText = false
+      if (!list || listKind !== 'ul') {
+        flushList()
+        list = []
+        listKind = 'ul'
+      }
       list.push(<li key={`li-${key++}`}>{inline(item[1])}</li>)
     } else {
       flushList()
@@ -328,10 +445,22 @@ function renderTextBlock(block: string): React.ReactNode[] {
   return out
 }
 
-/** `code` inline, **gras**, liens markdown et auto-liens http(s) dans une ligne. */
+/**
+ * `code` inline, **gras**, *italique*, ~~barre~~, liens markdown et auto-liens http(s) dans une ligne.
+ *
+ * La cible d'un lien markdown n'est plus restreinte a http(s). Les skills citent leurs preuves en
+ * `[orchestrator.ts:80](src/main/orchestrator.ts:80)` : le motif http-seul ne matchait pas, donc la
+ * ligne sortait LITTERALEMENT, crochets et parentheses compris, encombrant chaque cellule de tableau.
+ * Une cible non-http n'est PAS rendue cliquable pour autant — il n'existe pas de navigation fichier
+ * ici, et un `href` relatif se resoudrait contre l'origine de l'app. On rend le libelle en `code`,
+ * ce qui supprime le bruit sans promettre un clic qui ne marcherait pas.
+ */
 function inline(line: string): React.ReactNode[] {
   const out: React.ReactNode[] = []
-  const re = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s)]+)|`([^`]+)`|\*\*([^*]+)\*\*/g
+  const re =
+    // L'italique exige un contenu COLLE a ses etoiles (`*mot*`), jamais espace : sans cette regle
+    // de flanquement, une multiplication ecrite `2 * 3 * 4` devenait de l'italique.
+    /\[([^\]]+)\]\(([^\s)]+)\)|(https?:\/\/[^\s)]+)|`([^`]+)`|\*\*([^*]+)\*\*|~~([^~]+)~~|(?<![\w*])\*(?![\s*])([^*\n]*[^\s*])\*(?!\*)/g
   let last = 0
   let m: RegExpExecArray | null
   let k = 0
@@ -339,9 +468,15 @@ function inline(line: string): React.ReactNode[] {
     if (m.index > last) out.push(line.slice(last, m.index))
     if (m[2] !== undefined) {
       out.push(
-        <a key={k++} href={m[2]} target="_blank" rel="noopener noreferrer">
-          {m[1]}
-        </a>
+        /^https?:\/\//i.test(m[2]) ? (
+          <a key={k++} href={m[2]} target="_blank" rel="noopener noreferrer">
+            {m[1]}
+          </a>
+        ) : (
+          <code key={k++} className="md-ref">
+            {m[1]}
+          </code>
+        )
       )
     } else if (m[3] !== undefined) {
       out.push(
@@ -351,8 +486,12 @@ function inline(line: string): React.ReactNode[] {
       )
     } else if (m[4] !== undefined) {
       out.push(<code key={k++}>{m[4]}</code>)
-    } else {
+    } else if (m[5] !== undefined) {
       out.push(<strong key={k++}>{m[5]}</strong>)
+    } else if (m[6] !== undefined) {
+      out.push(<del key={k++}>{m[6]}</del>)
+    } else {
+      out.push(<em key={k++}>{m[7]}</em>)
     }
     last = m.index + m[0].length
   }
