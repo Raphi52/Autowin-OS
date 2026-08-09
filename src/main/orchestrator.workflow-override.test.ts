@@ -235,6 +235,23 @@ describe('un graphe pilote le run', () => {
     expect(quote.limits.maxAgents).toBeGreaterThanOrEqual(11)
     expect(quote.limits.maxAgents).toBeLessThanOrEqual(quote.limits.maxProviderCalls)
   })
+
+  it('un juge terminal du workflow est le gate final, pas un appel de juge en double', async () => {
+    const provider = new Recorder()
+    await makeOrchestrator(provider, {
+      graph: {
+        entry: 'b',
+        nodes: [
+          { id: 'b', phase: 'build' },
+          { id: 'j', phase: 'judge' }
+        ],
+        edges: [{ from: 'b', to: 'j', when: 'always' }]
+      }
+    }).run('corrige le bug')
+
+    expect(provider.prompts.filter((prompt) => prompt.includes('SKILL judge'))).toHaveLength(1)
+    expect(provider.prompts).toHaveLength(2) // build + gate judge
+  })
 })
 
 describe('les agents composés sur un nœud atteignent le run', () => {

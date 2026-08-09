@@ -1670,6 +1670,7 @@ export class Orchestrator {
     }
     onPhase?.({
       step: 'judge',
+      phase: 'judge',
       provider: judgeProvider,
       role: 'judge',
       model: judgeBinding.model,
@@ -2278,7 +2279,16 @@ export class Orchestrator {
       // Garde-fou de dernier ressort : les budgets bornent déjà le run, ce plafond n'existe que pour
       // qu'un graphe corrompu (arête vers un nœud absent, budget incohérent) ne fige pas le process.
       for (let pas = 0; pas < 200 && courant && parId.has(courant); pas++) {
-        yield parId.get(courant)!.phase
+        const node = parId.get(courant)!
+        // Le juge TERMINAL du canevas est le gate final exécuté juste après cette marche. Le jouer
+        // ici aussi ferait deux appels identiques (constaté sur le run réel conv-1071), dont le
+        // premier avait en plus le sandbox d'une phase de mutation. Après retrait du retour rouge
+        // pris en charge par la boucle de réparation, l'absence d'arête sortante prouve qu'il s'agit
+        // bien de ce juge terminal. Un juge intermédiaire garde son comportement de routage.
+        if (node.phase === 'judge' && !graphePilote.edges.some((edge) => edge.from === courant)) {
+          return
+        }
+        yield node.phase
         const voulu = souhaitModele
         souhaitModele = undefined // consommé : un souhait ne vaut que pour CETTE transition
         const suivant = nextNode(graphePilote, courant, dernierVerdict, budget, rangs, voulu)
@@ -3057,6 +3067,7 @@ export class Orchestrator {
       if (judgeMembers.length < 2) {
         onPhase?.({
           step: 'judge',
+          phase: 'judge',
           provider: judgeProvider,
           role: 'judge',
           model: judgeBinding.model,
@@ -3088,6 +3099,7 @@ export class Orchestrator {
             const startedAt = performance.now()
             onPhase?.({
               step: 'judge',
+              phase: 'judge',
               provider: member.provider,
               role: 'judge',
               model: member.model,

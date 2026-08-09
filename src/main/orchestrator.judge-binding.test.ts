@@ -15,7 +15,7 @@ import { makeTestWorktrees } from './orchestrator.test-helpers'
 import type { WorkflowGraph } from './workflow-graph'
 
 /**
- * UN NŒUD `judge` DOIT RÉPONDRE AU RÔLE `judge`, PAS AU RÔLE `subagent`.
+ * LE JUGE TERMINAL D'UN WORKFLOW DOIT RÉPONDRE AU RÔLE `judge`, PAS AU RÔLE `subagent`.
  *
  * Mesuré sur la version committée le 2026-08-05 : `resolvePhaseFanOut('judge')` honore bien les agents
  * COMPOSÉS sur le nœud, mais quand le nœud n'en porte aucun — le cas par défaut — le repli est le
@@ -90,7 +90,7 @@ function harnais() {
     currentWorkflow: () => ({ graph: GRAPHE })
   })
   const onPhase = (p: { step: string; phase?: string; role?: string; model?: string }): void => {
-    if (p.step !== 'exec') return
+    if (p.step !== 'exec' && p.step !== 'judge') return
     annonces.push({ phase: p.phase, role: p.role, model: p.model })
   }
   const lancer = () =>
@@ -98,7 +98,7 @@ function harnais() {
   return { provider, annonces, lancer }
 }
 
-describe('un nœud judge est jugé par le rôle judge, pas par l’exécutant', () => {
+describe('le juge terminal du workflow est jugé par le rôle judge, pas par l’exécutant', () => {
   it('le nœud judge tourne sur le MODÈLE du rôle judge', async () => {
     const { annonces, lancer } = harnais()
     await lancer()
@@ -126,10 +126,9 @@ describe('un nœud judge est jugé par le rôle judge, pas par l’exécutant', 
   it('le modèle du juge est réellement DEMANDÉ au provider, pas seulement affiché', async () => {
     const { provider, lancer } = harnais()
     await lancer()
-    // `toContain` était un FAUX VERT : la trace valait déjà ["ouvrier","ouvrier","juge-dedie"] avant
-    // tout correctif — le seul `juge-dedie` venant du GATE FINAL, qui utilise correctement le rôle.
-    // Ce qui manquait, c'était l'appel du NŒUD. On compte donc : 1 avant (gate seul), 2 après.
+    // Le nœud terminal et le gate sont une seule étape : compter deux appels réintroduirait le
+    // doublon coûteux observé sur le run réel conv-1071.
     const appelsDuJuge = provider.modelesDemandes.filter((m) => m === 'juge-dedie').length
-    expect(appelsDuJuge).toBeGreaterThanOrEqual(2)
+    expect(appelsDuJuge).toBe(1)
   })
 })
