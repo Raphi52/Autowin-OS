@@ -314,6 +314,15 @@ function sentImageArtifact(file: AttachmentMeta, index: number): ChatArtifact | 
   }
 }
 
+/** Le prompt utilisateur qui a DÉCLENCHÉ le tour affiché à `index` (le renvoi/reprise s'y rattache). */
+function lastUserPromptBefore(messages: Msg[], index: number): string | undefined {
+  for (let i = index - 1; i >= 0; i -= 1) {
+    const candidate = messages[i]
+    if (candidate.role === 'user') return candidate.content || undefined
+  }
+  return undefined
+}
+
 const ChatMessageRow = memo(
   function ChatMessageRow({
     message,
@@ -323,10 +332,17 @@ const ChatMessageRow = memo(
     onOpenImage,
     onPickSuggestion,
     onOpenLiveAction,
-    directiveReceipts
+    directiveReceipts,
+    retryPrompt,
+    onResend,
+    onResumeTurn
   }: {
     message: Msg
     conversationId: string | null
+    /** Prompt utilisateur à l'origine de ce tour — ce qu'on renvoie ou reprend. */
+    retryPrompt?: string
+    onResend?: (prompt: string) => void
+    onResumeTurn?: (prompt: string) => void
     onInspectTurn?: (target: InspectTurnTarget) => void
     onFork?: (messageId: string) => void
     onOpenImage?: (image: { src: string; name: string }) => void
@@ -469,6 +485,32 @@ const ChatMessageRow = memo(
               )
           )}
         </div>
+        {/* Statuts terminaux MUETS : un tour annulé ou interrompu ne poussait aucun texte — la bulle
+            restait vide et l'utilisateur n'avait aucun moyen de repartir. `failed` garde son ⚠️. */}
+        {message.done &&
+          (message.status === 'cancelled' || message.status === 'interrupted') &&
+          (() => {
+            const annule = message.status === 'cancelled'
+            const prompt = retryPrompt?.trim()
+            const relancer = annule ? onResend : onResumeTurn
+            return (
+              <div className="msg-terminal" data-status={message.status}>
+                <span className="msg-terminal-text">
+                  {annule ? 'Réponse annulée' : 'Réponse interrompue avant la fin'}
+                </span>
+                {prompt && relancer && (
+                  <button
+                    type="button"
+                    className="msg-terminal-action"
+                    title={annule ? `Renvoyer : ${prompt}` : `Reprendre : ${prompt}`}
+                    onClick={() => relancer(prompt)}
+                  >
+                    {annule ? '↻ Renvoyer' : '↻ Reprendre'}
+                  </button>
+                )}
+              </div>
+            )
+          })()}
         <div className="msg-turn-actions">
           {message.turnId && message.turnId !== 'pending' && conversationId && onInspectTurn && (
             <button
@@ -510,6 +552,7 @@ const ChatMessageRow = memo(
     // composer (frappe/ghost-text) : garantit l'invariant perf « composer change ≠ re-render des lignes ».
     prev.message === next.message &&
     prev.conversationId === next.conversationId &&
+    prev.retryPrompt === next.retryPrompt &&
     prev.directiveReceipts === next.directiveReceipts
 )
 
@@ -1625,6 +1668,18 @@ export function ChatView({
   const sendRef = useRef(send)
   sendRef.current = send
   const pickSuggestion = useCallback((prompt: string) => void sendRef.current(prompt), [])
+  /**
+   * Reprise d'un tour INTERROMPU : passe par le canal d'orchestration direct (même raison que le
+   * bouton « Reprendre » des actions) ; à défaut, on renvoie simplement le prompt d'origine.
+   */
+  const resumeTurnPrompt = useCallback(
+    (prompt: string) => {
+      const orchestrate = window.api?.orchestrate
+      if (orchestrate) void orchestrate(prompt, activeId ?? undefined)
+      else void sendRef.current(prompt)
+    },
+    [activeId]
+  )
 
   /* --- envoi --- */
 
@@ -1828,7 +1883,10 @@ export function ChatView({
         patchLast(convId, (m) => {
           if (m.status === 'streaming') m.status = 'interrupted'
           m.done = true
-          if (m.parts.length === 0) m.parts.push({ kind: 'text', text: '_(aucune réponse)_' })
+          // Un tour annulé/interrompu porte désormais son propre libellé terminal (msg-terminal) :
+          // le remplissage « aucune réponse » ferait doublon et masquerait la vraie raison.
+          if (m.parts.length === 0 && m.status !== 'cancelled' && m.status !== 'interrupted')
+            m.parts.push({ kind: 'text', text: '_(aucune réponse)_' })
         })
         setConversationBusy(convId, false)
         await new Promise<void>((resolve) =>
@@ -2492,6 +2550,11 @@ export function ChatView({
                 onFork={handleFork}
                 onOpenImage={setOpenImage}
                 onOpenLiveAction={revealLiveAction}
+                retryPrompt={
+                  message.role === 'assistant' ? lastUserPromptBefore(messages, index) : undefined
+                }
+                onResend={pickSuggestion}
+                onResumeTurn={resumeTurnPrompt}
                 directiveReceipts={
                   message.role === 'assistant'
                     ? activeDirectiveReceiptsByMessage.get(index)
