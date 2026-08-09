@@ -106,6 +106,19 @@ describe('vue Tickets', () => {
     await act(async () => root.unmount())
   })
 
+  it('expose un title dynamique sur le bouton de sélection globale', async () => {
+    api()
+    const { root, container } = await render()
+    const selectAll = container.querySelector(
+      '[data-testid="tickets-select-all"]'
+    ) as HTMLButtonElement
+
+    expect(selectAll.getAttribute('title')).toBe('Tout sélectionner (3)')
+    await act(async () => selectAll.click())
+    expect(selectAll.getAttribute('title')).toBe('Tout désélectionner')
+    await act(async () => root.unmount())
+  })
+
   it('PROMPT-FIRST : ouvre UNE conversation pour la sélection et pré-remplit sans envoyer', async () => {
     const conversationsCreate = vi.fn(async ({ title }: { title: string }) => ({
       id: `conv-${title}`

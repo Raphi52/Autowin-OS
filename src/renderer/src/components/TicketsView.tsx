@@ -833,6 +833,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         <button
           data-testid="tickets-select-all"
           type="button"
+          title={allVisibleChecked ? 'Tout désélectionner' : `Tout sélectionner (${visibleItems.length})`}
           disabled={visibleItems.length === 0}
           onClick={toggleAllVisible}
         >
