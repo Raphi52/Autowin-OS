@@ -47,6 +47,14 @@ describe('classifyRegime', () => {
     ).toBe('standard')
   })
 
+  it("ne classe pas critique l'arrêt borné d'appels orchestrate", () => {
+    expect(
+      classifyRegime(
+        'Aucun refactor. La boucle ne doit lancer ni les créations de conversations/orchestrations suivantes. Compter conversationsCreate/orchestrate : aucune nouvelle conversation ni orchestration ensuite.'
+      )
+    ).toBe('standard')
+  })
+
   it('conserve les vrais signaux critiques présents après une contrainte négative', () => {
     expect(
       classifyRegime(
