@@ -92,6 +92,15 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     expect(text).toBe('Preuve avant.\n\nPreuve après : checksum abc123.')
   })
 
+  it('retire la continuation d’un marqueur inline mais conserve le paragraphe factuel suivant', () => {
+    const text = reconcileClosedOrchestrationText(
+      "📍 Maintenant — BUILD-VERIFIED\nLe correctif est en état d'être audité.\n\nPreuve factuelle : checksum abc123.",
+      { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+    )
+
+    expect(text).toBe('Preuve factuelle : checksum abc123.')
+  })
+
   it('arrête une section provisoire au prochain titre pair sans ligne vide', () => {
     const text = reconcileClosedOrchestrationText(
       'Preuve avant.\n\n## Maintenant\nRUN open.\n## Preuves\nSHA publié abc123.',

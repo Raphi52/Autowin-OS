@@ -29,6 +29,12 @@ export interface OrchestrationOutcome {
 export const ORCHESTRATION_ALREADY_ISSUED_REFUSAL =
   'Une orchestration a deja ete lancee dans ce tour. Termine avec son resultat ; un nouveau run exige un nouveau message utilisateur.'
 
+export const AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX = 'Clôture Autowin : gate validé'
+
+export function isAuthoritativeOrchestrationClosureLine(line: string): boolean {
+  return line.startsWith(AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX)
+}
+
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined
 }
@@ -86,17 +92,6 @@ function isStaleWorkerLifecycleMarker(line: string): boolean {
   )
 }
 
-function isStandaloneWorkerLifecycleMarker(line: string): boolean {
-  const text = line
-    .trim()
-    .replace(/^#{1,6}\s+/u, '')
-    .replace(/\*\*/gu, '')
-    .trim()
-  return /^(?:📍\s*maintenant|⏳\s*reste\s+[àa]\s+faire|👉\s*recommand(?:é|ée|ation))\s*[:—,-]?\s*$/iu.test(
-    text
-  )
-}
-
 /**
  * Le rapport du worker est capturé AVANT la gate et la publication. Une fois l'issue structurée
  * `succeeded` connue, ses preuves restent utiles mais ses recommandations de cycle de vie deviennent
@@ -108,7 +103,7 @@ function removeStaleWorkerLifecycleAdvice(report: string): string {
   const kept: string[] = []
 
   for (const line of report.split(/\r?\n/u)) {
-    if (line.includes('Clôture Autowin : gate validé')) {
+    if (isAuthoritativeOrchestrationClosureLine(line)) {
       staleHeadingLevel = undefined
       staleMarkerParagraph = false
       kept.push(line)
@@ -138,7 +133,7 @@ function removeStaleWorkerLifecycleAdvice(report: string): string {
       continue
     }
     if (isStaleWorkerLifecycleMarker(line)) {
-      staleMarkerParagraph = isStandaloneWorkerLifecycleMarker(line)
+      staleMarkerParagraph = true
       continue
     }
     if (staleMarkerParagraph || isStaleWorkerLifecycleLine(line)) continue

@@ -11,6 +11,8 @@ import { parseScoutSuggestions, type SuggestionGroup } from './scout-suggestions
 import { parseScoutTable, type ScoutRow } from './scout-table'
 import type { PilotEventKind } from '../../../shared/pilot-events'
 import {
+  AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX,
+  isAuthoritativeOrchestrationClosureLine,
   isDeliveredOrchestrationOutcome,
   ORCHESTRATION_ALREADY_ISSUED_REFUSAL,
   reconcileClosedOrchestrationText,
@@ -195,20 +197,20 @@ function reconcileStoredOrchestrationClosure(parts: ChatPart[]): ChatPart[] {
   if (!isDeliveredOrchestrationOutcome(outcome)) return parts
   let changed = false
   let closureSeen = false
-  const closurePrefix = 'Clôture Autowin : gate validé'
   const reconciled = parts.flatMap((part): ChatPart[] => {
     if (part.kind !== 'text') return [part]
     const text = reconcileClosedOrchestrationText(part.text, outcome)
     const uniqueLines = text.split(/\r?\n/u).flatMap((line) => {
-      const first = line.indexOf(closurePrefix)
-      if (first < 0) return [line]
+      if (!isAuthoritativeOrchestrationClosureLine(line)) return [line]
       if (closureSeen) {
         changed = true
-        const beforeClosure = line.slice(0, first).trimEnd()
-        return beforeClosure ? [beforeClosure] : []
+        return []
       }
       closureSeen = true
-      const duplicate = line.indexOf(closurePrefix, first + closurePrefix.length)
+      const duplicate = line.indexOf(
+        AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX,
+        AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX.length
+      )
       if (duplicate < 0) {
         return [line]
       }

@@ -418,6 +418,55 @@ describe('durable assistant hydration and streaming', () => {
     expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(1)
   })
 
+  it('does not mistake a quoted closure assertion for an authoritative closure line', () => {
+    const quote = 'Test vert : expect(text).toContain("Clôture Autowin : gate validé").'
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: quote }
+      ]
+    })
+    const lines = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .flatMap((part) => part.text.split('\n'))
+
+    expect(lines).toContain(quote)
+    expect(
+      lines.filter((line) => line.startsWith('Clôture Autowin : gate validé, RUN fermé green'))
+    ).toHaveLength(1)
+  })
+
+  it('preserves a quoted assertion after the authoritative closure', () => {
+    const closure = 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
+    const quote = 'Test vert : expect(text).toContain("Clôture Autowin : gate validé").'
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: `${closure}\n${quote}` }
+      ]
+    })
+    const lines = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .flatMap((part) => part.text.split('\n'))
+
+    expect(lines).toContain(quote)
+    expect(lines.filter((line) => line.startsWith(closure))).toHaveLength(1)
+  })
+
   it('binds the first turn id then reduces progressive deltas without duplication', () => {
     const empty = hydrateStoredAssistant({ content: '', status: 'streaming', parts: [] })
     const first = reduceAssistantPilotEvent(empty, {
