@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { overrideFor, registerWorkflowBenchIpc } from './workflow-bench-ipc'
 import type { OrchestrationResult } from './orchestrator'
 import type { WorkflowProfile } from './workflow-profiles'
+import { DEFAULT_WORKFLOWS } from './workflow-defaults'
 import { TEST_MODEL_CATALOG } from './models.fixture'
 import { assertRuntimeBindingAvailable } from './runtime-topology'
 
@@ -463,5 +464,41 @@ describe('overrideFor — l’identité du workflow survit à la conversion', ()
     // C'est un ajout d'observabilité : si elle changeait ce que le moteur joue, elle serait un bug.
     const o = overrideFor({ id: 'x', name: 'X', phases: ['build'] })
     expect(o?.phases).toEqual(['build'])
+  })
+})
+
+/**
+ * Régression sur le workflow RÉELLEMENT livré, pas sur un profil de test.
+ *
+ * Les cas ci-dessus utilisent des profils fabriqués : ils prouvent la mécanique de conversion, pas
+ * que le pipeline embarqué survit à la traversée. Si `DEFAULT_WORKFLOWS` dérive (une phase perdue,
+ * un ordre inversé, un retour rouge dé-borné), le moteur jouerait autre chose sans qu'un test bouge.
+ */
+describe('overrideFor — le workflow livré « Chantier Autowin » arrive intact au moteur', () => {
+  const chantier = DEFAULT_WORKFLOWS.find((profile) => profile.id === 'chantier-autowin')!
+
+  it('le profil livré existe — sans lui, la régression testerait du vide', () => {
+    expect(chantier).toBeDefined()
+  })
+
+  it('transmet ses SIX phases dans l’ordre du profil', () => {
+    const graphe = overrideFor(chantier)?.graph
+    expect(graphe?.nodes.map((node) => node.phase)).toEqual([
+      'scout',
+      'frame',
+      'terrain',
+      'build',
+      'clean',
+      'judge'
+    ])
+    expect(graphe?.entry).toBe('scout-1')
+  })
+
+  it('un juge ROUGE borne la boucle de build à 2 itérations', () => {
+    const graphe = overrideFor(chantier)?.graph
+    const retours = (graphe?.edges ?? []).filter((edge) => edge.when === 'red')
+    // Un seul retour rouge : deux arêtes rouges cumuleraient leurs plafonds sans le dire.
+    expect(retours).toHaveLength(1)
+    expect(retours[0]).toMatchObject({ from: 'judge-1', to: 'build-1', maxTraversals: 2 })
   })
 })
