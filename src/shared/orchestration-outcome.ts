@@ -52,10 +52,11 @@ function asCallCount(value: unknown): number {
 }
 
 const WORKER_LIFECYCLE_PREFIX = /^(?:\s*\*\*)?\s*(?:(?:📍|⏳|👉|⚠️)\s*)?(?:\*\*)?\s*/u
+const PROOF_DECORATION_PREFIX = /^(?:(?:[-+*>]|\d+[.)])\s+|✅\s*)+/u
 
 function maskQuotedEvidence(text: string): string {
   return text.replace(
-    /«[^»\n]*»|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`[^`\n]*`|\/[^/\n]+\/[a-z]*/giu,
+    /«[^»\n]*»|"(?:\\.|[^"\\\n])*"|(?<![\p{L}\p{N}])'(?:\\.|[^'\\\n])*'|`[^`\n]*`|\/[^/\n]+\/[a-z]*/giu,
     (quoted) => ' '.repeat(quoted.length)
   )
 }
@@ -63,7 +64,10 @@ function maskQuotedEvidence(text: string): string {
 function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
   const text = line.replace(WORKER_LIFECYCLE_PREFIX, '').trim()
   if (/^#{1,6}\s+(?:\d+[.)]\s*)?publication\s*$/iu.test(text)) return undefined
-  const proofLike = /^(?:preuve|tests?(?:\s+verts?)?|contr[oô]le|r[ée]sultat)\b/iu.test(text)
+  const proofSubject = text.replace(PROOF_DECORATION_PREFIX, '')
+  const proofLike = /^(?:preuve|tests?(?:\s+verts?)?|contr[oô]le|r[ée]sultat)\b/iu.test(
+    proofSubject
+  )
   const searchable = (proofLike ? maskQuotedEvidence(text) : text).replace(/[`*_]/g, ' ')
 
   const staleSignal =
@@ -77,15 +81,17 @@ function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
   if (!staleSignal && !staleLead) return line
 
   if (staleSignal && proofLike) {
-    const proof = text
-      .slice(0, staleSignal.index)
+    const proofPrefix = text.slice(0, staleSignal.index).trimEnd()
+    const hasProofBoundary = /[.!?;:—-]$/u.test(proofPrefix)
+    const proof = proofPrefix
       .trimEnd()
       .replace(/\s*(?:[—-]|[;,:])\s*$/u, '')
       .trimEnd()
     const proofContent = proof
+      .replace(PROOF_DECORATION_PREFIX, '')
       .replace(/^(?:preuve|tests?(?:\s+verts?)?|contr[oô]le|r[ée]sultat)\b\s*:?\s*/iu, '')
       .trim()
-    if (proofContent) return proof
+    if (hasProofBoundary && proofContent) return proof
   }
   return undefined
 }

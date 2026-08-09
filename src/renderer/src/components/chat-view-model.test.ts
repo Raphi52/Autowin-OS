@@ -330,6 +330,33 @@ describe('durable assistant hydration and streaming', () => {
     expect(text).not.toContain('Clôture Autowin : gate validé')
   })
 
+  it.each(['failed', 'interrupted', 'cancelled'] as const)(
+    'does not let an older success hide a terminal %s message',
+    (status) => {
+      const hydrated = hydrateStoredAssistant({
+        content: 'projection',
+        status,
+        error: status === 'failed' ? 'timeout après orchestration' : undefined,
+        parts: [
+          {
+            kind: 'action',
+            name: 'orchestrate',
+            ok: true,
+            data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+          },
+          { kind: 'text', text: 'Échec final : publication non exécutée.' }
+        ]
+      })
+
+      const text = hydrated.parts
+        .filter((part) => part.kind === 'text')
+        .map((part) => part.text)
+        .join('\n')
+      expect(text).toContain('Échec final : publication non exécutée.')
+      expect(text).not.toContain('Clôture Autowin : gate validé')
+    }
+  )
+
   it('ignores the historical same-turn duplicate refusal because it launched no run', () => {
     const hydrated = hydrateStoredAssistant({
       content: 'projection',

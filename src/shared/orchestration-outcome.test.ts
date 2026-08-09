@@ -115,9 +115,40 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     ).toBe(report)
   })
 
+  it('ne prend pas les apostrophes grammaticales pour des délimiteurs de citation', () => {
+    expect(
+      reconcileClosedOrchestrationText(
+        "Preuve : l'état actuel du RUN reste open jusqu'à l'action suivante.",
+        {
+          status: 'succeeded',
+          valid: true,
+          gateBlocked: false,
+          reused: false
+        }
+      )
+    ).toBe('')
+  })
+
+  it.each([
+    ['- Tests 12/12 verts — RUN reste open.', '- Tests 12/12 verts'],
+    ['1. Tests 12/12 verts — RUN reste open.', '1. Tests 12/12 verts'],
+    ['> Tests 12/12 verts — RUN reste open.', '> Tests 12/12 verts'],
+    ['✅ Tests 12/12 verts — RUN reste open.', '✅ Tests 12/12 verts']
+  ])('conserve la preuve préfixée et retire son suffixe lifecycle : %s', (report, expected) => {
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe(expected)
+  })
+
   it.each([
     ['Preuve : publication non exécutée.', ''],
     ['Test vert : RUN toujours open.', ''],
+    ['Preuve : le RUN reste open selon le contrôle.', ''],
     ['Preuve : tests 12/12 verts. RUN reste open — lancer judge.', 'Preuve : tests 12/12 verts.'],
     ['Preuve : tests 12/12 verts — RUN reste open ; lancer judge.', 'Preuve : tests 12/12 verts'],
     ['Tests 12/12 verts - RUN reste open - lancer judge.', 'Tests 12/12 verts']

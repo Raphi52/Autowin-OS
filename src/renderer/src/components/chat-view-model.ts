@@ -251,7 +251,9 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
     message.parts?.map((part) => ({ ...part })) ??
     (message.content ? [{ kind: 'text' as const, text: message.content }] : [])
   const terminalParts = done
-    ? reconcileStoredOrchestrationClosure(settleUnresolvedActions(parts))
+    ? status === 'completed'
+      ? reconcileStoredOrchestrationClosure(settleUnresolvedActions(parts))
+      : settleUnresolvedActions(parts)
     : parts
   return {
     role: 'assistant',
