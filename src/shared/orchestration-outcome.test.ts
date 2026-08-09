@@ -3,6 +3,7 @@ import {
   formatOrchestrationOutcome,
   isDeliveredOrchestrationOutcome,
   reconcileClosedOrchestrationText,
+  reconcileClosedOrchestrationTextParts,
   runLabelFromPath
 } from './orchestration-outcome'
 
@@ -438,6 +439,64 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
       ).toBe(report)
     }
   )
+
+  it.each(['```', '~~~'])(
+    'préserve un bloc fenced %s placé dans une citation Markdown',
+    (fence) => {
+      const report = `> ${fence}text\n> RUN reste open — lancer judge.\n> ${fence}`
+
+      expect(
+        reconcileClosedOrchestrationText(report, {
+          status: 'succeeded',
+          valid: true,
+          gateBlocked: false,
+          reused: false
+        })
+      ).toBe(report)
+    }
+  )
+
+  it.each(['```', '~~~'])(
+    'termine le bloc fenced %s quand son conteneur de citation se termine',
+    (fence) => {
+      const report = `> ${fence}text\n> exemple reproduit\nRUN reste open — lancer judge.`
+
+      expect(
+        reconcileClosedOrchestrationText(report, {
+          status: 'succeeded',
+          valid: true,
+          gateBlocked: false,
+          reused: false
+        })
+      ).toBe(`> ${fence}text\n> exemple reproduit`)
+    }
+  )
+
+  it.each(['```', '~~~'])('refuse une pseudo-fermeture %s indentée de quatre espaces', (fence) => {
+    const report = `${fence}text\n    ${fence}\nRUN reste open — lancer judge.\n${fence}`
+
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe(report)
+  })
+
+  it.each(['```', '~~~'])("conserve verbatim les fragments d'un bloc fenced %s", (fence) => {
+    const reports = [`${fence}text`, '  RUN reste open  \n', fence]
+
+    expect(
+      reconcileClosedOrchestrationTextParts(reports, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toEqual(reports)
+  })
 
   it.each([
     'Preuve : RUN reste open. Gate toujours bloqué.',

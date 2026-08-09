@@ -60,39 +60,72 @@ export interface OrchestrationClosureSpan {
 export interface MarkdownFenceDelimiter {
   marker: '`' | '~'
   length: number
+  quoteDepth: number
 }
 
 interface MarkdownFenceLine extends MarkdownFenceDelimiter {
   trailing: string
 }
 
+function markdownContainerLine(line: string): { content: string; quoteDepth: number } {
+  let content = line
+  let quoteDepth = 0
+  for (;;) {
+    const quote = /^ {0,3}>[ \t]?/u.exec(content)
+    if (!quote) break
+    quoteDepth += 1
+    content = content.slice(quote[0].length)
+  }
+  return { content, quoteDepth }
+}
+
 function markdownFenceLine(line: string): MarkdownFenceLine | undefined {
-  const match = /^\s*(`{3,}|~{3,})(.*)$/u.exec(line)
+  const { content, quoteDepth } = markdownContainerLine(line)
+  const match = /^ {0,3}(`{3,}|~{3,})(.*)$/u.exec(content)
   if (!match) return undefined
-  return { marker: match[1][0] as '`' | '~', length: match[1].length, trailing: match[2] }
+  return {
+    marker: match[1][0] as '`' | '~',
+    length: match[1].length,
+    quoteDepth,
+    trailing: match[2]
+  }
 }
 
 export function markdownFenceDelimiter(line: string): MarkdownFenceDelimiter | undefined {
   const fence = markdownFenceLine(line)
-  return fence ? { marker: fence.marker, length: fence.length } : undefined
+  return fence
+    ? { marker: fence.marker, length: fence.length, quoteDepth: fence.quoteDepth }
+    : undefined
 }
 
 export function markdownFenceStateAfterLine(
   line: string,
   current: MarkdownFenceDelimiter | undefined
 ): MarkdownFenceDelimiter | undefined {
+  const { quoteDepth } = markdownContainerLine(line)
+  const active = current && quoteDepth < current.quoteDepth ? undefined : current
   const fence = markdownFenceLine(line)
-  if (!fence) return current
-  if (!current) {
+  if (!fence) return active
+  if (!active) {
     // CommonMark interdit un backtick dans l'info-string d'un fence backtick ouvrant.
     if (fence.marker === '`' && fence.trailing.includes('`')) return undefined
-    return { marker: fence.marker, length: fence.length }
+    return { marker: fence.marker, length: fence.length, quoteDepth: fence.quoteDepth }
   }
   const closes =
-    fence.marker === current.marker &&
-    fence.length >= current.length &&
+    fence.marker === active.marker &&
+    fence.length >= active.length &&
+    fence.quoteDepth === active.quoteDepth &&
     fence.trailing.trim().length === 0
-  return closes ? undefined : current
+  return closes ? undefined : active
+}
+
+export function markdownFenceTransition(
+  line: string,
+  current: MarkdownFenceDelimiter | undefined
+): { state: MarkdownFenceDelimiter | undefined; protected: boolean } {
+  const fence = markdownFenceDelimiter(line)
+  const state = markdownFenceStateAfterLine(line, current)
+  return { state, protected: Boolean(fence || (current && state)) }
 }
 
 /** Localise une vraie clause de clôture, mais jamais sa citation entre guillemets ou backticks. */
@@ -286,13 +319,9 @@ function removeStaleWorkerLifecycleAdvice(
   const kept: string[] = []
 
   for (const line of report.split(/\r?\n/u)) {
-    const fence = markdownFenceDelimiter(line)
-    if (fence) {
-      fencedBy = markdownFenceStateAfterLine(line, fencedBy)
-      kept.push(line)
-      continue
-    }
-    if (fencedBy) {
+    const fence = markdownFenceTransition(line, fencedBy)
+    fencedBy = fence.state
+    if (fence.protected) {
       kept.push(line)
       continue
     }
@@ -335,11 +364,10 @@ function removeStaleWorkerLifecycleAdvice(
     if (usefulLine !== undefined) kept.push(usefulLine)
   }
 
+  const joined = kept.join('\n')
+  const changed = joined !== report.replace(/\r\n/gu, '\n')
   return {
-    text: kept
-      .join('\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim(),
+    text: changed ? joined.replace(/\n{3,}/g, '\n\n').trim() : report,
     fencedBy
   }
 }
@@ -369,10 +397,11 @@ export function reconcileClosedOrchestrationText(
 /** Réconcilie un flux persisté sans perdre l'état d'un fence entre deux fragments texte. */
 export function reconcileClosedOrchestrationTextParts(
   reports: readonly string[],
-  outcome: OrchestrationOutcome
+  outcome: OrchestrationOutcome,
+  initialFence?: MarkdownFenceDelimiter
 ): string[] {
   if (!isDeliveredOrchestrationOutcome(outcome)) return [...reports]
-  let fencedBy: MarkdownFenceDelimiter | undefined
+  let fencedBy = initialFence
   return reports.map((report) => {
     const reconciled = removeStaleWorkerLifecycleAdvice(report, fencedBy)
     fencedBy = reconciled.fencedBy
