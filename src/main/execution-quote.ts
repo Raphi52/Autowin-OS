@@ -152,7 +152,13 @@ export function allocateExecutionTopology(
     remainingPhases.length,
     Math.floor(request.worstCaseNodeExecutions ?? 0)
   )
-  const mandatory = nodeExecutions + judgePasses + recoveries
+  // Dans un graphe, chaque visite de nœud est déjà un appel complet : les retours incluent donc les
+  // builds de réparation et les nouveaux juges. Les rajouter une seconde fois créait un juge
+  // fantôme dans le devis. Le pipeline plat conserve son calcul historique explicite.
+  const mandatory =
+    request.worstCaseNodeExecutions === undefined
+      ? nodeExecutions + judgePasses + recoveries
+      : nodeExecutions
   if (mandatory > available) {
     throw new Error(
       `Devis impossible avant exécution : ${mandatory} agent(s) obligatoires pour ${available} place(s) restante(s).`
@@ -183,7 +189,7 @@ export function allocateExecutionTopology(
       continue
     }
     if (configured >= 2 && optional >= 2) {
-      const admitted = Math.min(configured, optional)
+      const admitted = Math.min(configured, optional, quote.limits.maxConcurrency)
       phaseMembers[phase] = admitted
       // N membres + une synthèse remplacent un worker mono : surcoût net = N.
       optional -= admitted
@@ -196,7 +202,7 @@ export function allocateExecutionTopology(
   let judgeMembers = 1
   if (configuredJudges >= 2) {
     const maxByCapacity = 1 + Math.floor(optional / judgePasses)
-    judgeMembers = Math.min(configuredJudges, maxByCapacity)
+    judgeMembers = Math.min(configuredJudges, maxByCapacity, quote.limits.maxConcurrency)
     if (judgeMembers >= 2) optional -= (judgeMembers - 1) * judgePasses
     else judgeMembers = 1
   }

@@ -21,6 +21,7 @@ import {
   quorumForPhase,
   recoveriesFromGraph,
   worstCaseNodeExecutions,
+  worstCaseVisits,
   type WorkflowGraph
 } from './workflow-graph'
 import {
@@ -96,6 +97,57 @@ function sansRetourReparationJuge(graph: WorkflowGraph): WorkflowGraph {
       return !(depuis === 'judge' && vers === 'build')
     })
   }
+}
+
+/**
+ * Phases situées entre le build ciblé par un retour rouge et le juge qui l'a déclenché.
+ * Le build est exécuté par la réparation enrichie ; le juge par le gate final. Ce tableau est donc
+ * exactement le milieu à rejouer (par exemple `clean` dans build → clean → judge).
+ */
+function phasesApresBuildDeReparation(graph: WorkflowGraph): PipelinePhase[] {
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+  const retour = graph.edges.find((edge) => {
+    if (edge.when !== 'red') return false
+    return byId.get(edge.from)?.phase === 'judge' && byId.get(edge.to)?.phase === 'build'
+  })
+  if (!retour) return []
+  const phases: PipelinePhase[] = []
+  const vus = new Set<string>([retour.to])
+  let courant = retour.to
+  for (let pas = 0; pas < graph.nodes.length; pas++) {
+    const suivantes = graph.edges.filter((edge) => edge.from === courant && edge.when === 'always')
+    if (suivantes.length !== 1) return []
+    courant = suivantes[0].to
+    if (courant === retour.from) return phases
+    if (vus.has(courant)) return []
+    vus.add(courant)
+    const node = byId.get(courant)
+    if (!node || node.phase === 'judge') return []
+    phases.push(node.phase)
+  }
+  return []
+}
+
+/** Nombre d'appels réellement promis par le graphe, panels et synthèses compris. */
+function appelsRequisParWorkflow(
+  graph: WorkflowGraph,
+  allocation?: WorkflowRunOverride['allocation']
+): number {
+  const visits = worstCaseVisits(graph)
+  let total = 0
+  for (const node of graph.nodes) {
+    const passages = visits.get(node.id) ?? 0
+    if (passages === 0) continue
+    const membres =
+      node.phase === 'judge'
+        ? (allocation?.judgeMembers ?? node.agents?.length ?? 1)
+        : (allocation?.phaseMembers?.[node.phase] ?? node.agents?.length ?? 1)
+    // Un panel d'exécution de N membres est suivi d'une synthèse ; le jury agrège mécaniquement.
+    const appelsParPassage =
+      node.phase === 'judge' ? Math.max(1, membres) : membres >= 2 ? membres + 1 : 1
+    total += passages * appelsParPassage
+  }
+  return total
 }
 import { phaseBrief } from './phase-briefs'
 import { personaInstruction, WORKFLOW_IS_A_TOOL_INSTRUCTION } from '../shared/persona'
@@ -1052,6 +1104,18 @@ export class Orchestrator {
     const requiresIsolatedWorkspace = isMut || runOptions.publication === 'hold'
     const workflow = this.workflowDuRun()
     const phases = this.effectivePhases(task)
+    const depuisGraphe = workflow?.graph ? allocationFromGraph(workflow.graph) : undefined
+    const impose =
+      workflow?.allocation || depuisGraphe
+        ? {
+            ...depuisGraphe,
+            ...workflow?.allocation,
+            phaseMembers: {
+              ...depuisGraphe?.phaseMembers,
+              ...workflow?.allocation?.phaseMembers
+            }
+          }
+        : undefined
     if (executionQuote && workflow?.explicit && workflow.graph) {
       // Une sélection manuelle engage le graphe affiché. Le devis doit donc refléter ses phases et
       // la borne de reprise qu'il porte, puis lui réserver les places nécessaires sans dépasser le
@@ -1059,15 +1123,20 @@ export class Orchestrator {
       executionQuote.phases = [...phases]
       const graphRecoveries = recoveriesFromGraph(workflow.graph)
       if (graphRecoveries !== undefined) executionQuote.limits.maxRecoveries = graphRecoveries
-      const effectiveNodeExecutions = worstCaseNodeExecutions(
-        sansRetourReparationJuge(workflow.graph)
+      const mandatory = appelsRequisParWorkflow(workflow.graph, impose)
+      const maxPanel = Math.max(
+        impose?.judgeMembers ?? 1,
+        ...Object.values(impose?.phaseMembers ?? {}).map((count) => count ?? 1)
       )
-      const recoveries = isMut ? executionQuote.limits.maxRecoveries : 0
-      const mandatory = effectiveNodeExecutions + (1 + recoveries) + recoveries
-      executionQuote.limits.maxAgents = Math.max(
-        executionQuote.limits.maxAgents,
-        Math.min(executionQuote.limits.maxProviderCalls, mandatory)
-      )
+      if (
+        mandatory > executionQuote.limits.maxProviderCalls ||
+        maxPanel > executionQuote.limits.maxConcurrency
+      ) {
+        throw new Error(
+          `Devis impossible avant exécution : workflow exige ${mandatory} appel(s) et ${maxPanel} agent(s) simultané(s), plafonds ${executionQuote.limits.maxProviderCalls}/${executionQuote.limits.maxConcurrency}.`
+        )
+      }
+      executionQuote.limits.maxAgents = Math.max(executionQuote.limits.maxAgents, mandatory)
     }
     const admittedRuntime: OrchestrationRuntimeSnapshot = runtimeSnapshot ?? {
       roles: this.deps.roles.all(),
@@ -1084,7 +1153,9 @@ export class Orchestrator {
       const phaseFanOut = Object.fromEntries(
         phases.map((phase) => [
           phase,
-          bindingOverride ? 0 : (admittedRuntime.phaseFanOut[phase] ?? []).length
+          bindingOverride
+            ? 0
+            : (impose?.phaseMembers?.[phase] ?? (admittedRuntime.phaseFanOut[phase] ?? []).length)
         ])
       ) as Partial<Record<PipelinePhase, number>>
       executionQuote.allocation = allocateExecutionTopology(executionQuote, {
@@ -1095,14 +1166,14 @@ export class Orchestrator {
         mutation: isMut,
         hasDecomposer: Boolean(!bindingOverride && this.deps.decompose),
         phaseFanOut,
-        judgeFanOut: bindingOverride ? 0 : admittedRuntime.judgeFanOut.length,
+        judgeFanOut: bindingOverride
+          ? 0
+          : (impose?.judgeMembers ?? admittedRuntime.judgeFanOut.length),
         // Un graphe à boucles rejoue des nœuds : provisionner sa seule chaîne ferait accepter un run
         // qui serait ensuite coupé en plein milieu, faute de places.
         ...(workflow?.graph
           ? {
-              worstCaseNodeExecutions: worstCaseNodeExecutions(
-                workflow.explicit ? sansRetourReparationJuge(workflow.graph) : workflow.graph
-              )
+              worstCaseNodeExecutions: worstCaseNodeExecutions(workflow.graph)
             }
           : {})
       })
@@ -1112,27 +1183,21 @@ export class Orchestrator {
       // Les agents composés sur les nœuds DICTENT l'allocation : sans cela le devis provisionnerait
       // un panel d'un membre et le fan-out serait tronqué — trois juges composés, un seul joué. Une
       // allocation écrite explicitement dans le profil reste prioritaire sur cette déduction.
-      const depuisGraphe = workflow?.graph ? allocationFromGraph(workflow.graph) : undefined
-      const impose =
-        workflow?.allocation || depuisGraphe
-          ? {
-              ...depuisGraphe,
-              ...workflow?.allocation,
-              phaseMembers: {
-                ...depuisGraphe?.phaseMembers,
-                ...workflow?.allocation?.phaseMembers
-              }
-            }
-          : undefined
       if (impose) {
-        executionQuote.allocation = {
-          ...executionQuote.allocation,
-          ...(impose.judgeMembers !== undefined ? { judgeMembers: impose.judgeMembers } : {}),
-          ...(impose.maxGreedyNodes !== undefined ? { maxGreedyNodes: impose.maxGreedyNodes } : {}),
-          phaseMembers: {
-            ...executionQuote.allocation.phaseMembers,
-            ...impose.phaseMembers
-          }
+        const refusesJudge =
+          impose.judgeMembers !== undefined &&
+          executionQuote.allocation.judgeMembers !== impose.judgeMembers
+        const refusePhase = Object.entries(impose.phaseMembers ?? {}).find(
+          ([phase, count]) =>
+            executionQuote.allocation?.phaseMembers[phase as PipelinePhase] !== count
+        )
+        const refuseGreedy =
+          impose.maxGreedyNodes !== undefined &&
+          executionQuote.allocation.maxGreedyNodes < impose.maxGreedyNodes
+        if (refusesJudge || refusePhase || refuseGreedy) {
+          throw new Error(
+            `Devis impossible avant exécution : l'allocation du workflow dépasse les plafonds du run.`
+          )
         }
       }
       executionQuote.decomposition =
@@ -2453,10 +2518,10 @@ export class Orchestrator {
       phaseContext.push(`[phase ${output.phase}] ${carried}`)
       lastExecText = output.text
     }
-    for (const phase of suitePhases()) {
+    const executePipelinePhase = async (phase: PipelinePhase): Promise<void> => {
       // SURVIE NIVEAU 3 : phase déjà terminée avant l'interruption → on ne la refait pas. Compté par
       // occurrence : une visite ULTÉRIEURE du même nœud, via une arête de retour, doit bien s'exécuter.
-      if (dejaPayee(phase)) continue
+      if (dejaPayee(phase)) return
       // DECOUPAGE DE TOUTE PHASE (et non du seul `build`). Mesure du 2026-07-28 sur conv-75 : une
       // phase d'exploration monolithique a coute 10,90 $ en 11 min, quand le meme travail decoupe en
       // 5 sous-taches ciblees revenait a ~0,8 $ et ~1 min chacune. Rien ne justifiait de reserver ce
@@ -2492,7 +2557,7 @@ export class Orchestrator {
         failedTasks = [...new Set([...(failedTasks ?? []), ...greedy.failed])]
         skippedTasks = [...new Set([...(skippedTasks ?? []), ...greedy.skipped])]
         prevSessionId = undefined
-        continue
+        return
       }
       // Panel scout/frame/terrain : ≥1 modèle déposé dans le bloc topology → la phase s'exécute sur
       // CHAQUE membre. Avec un seul membre, sa sortie est réutilisée directement sans synthèse ;
@@ -2662,7 +2727,7 @@ export class Orchestrator {
               : solo
           phaseContext.push(`[phase ${phase}] ${carriedSolo}`)
           prevSessionId = undefined
-          continue
+          return
         }
         const orchBinding =
           bindingOverride ?? runtimeSnapshot?.roles.orchestrator ?? roles.getBinding('orchestrator')
@@ -2758,7 +2823,7 @@ export class Orchestrator {
             : synth.text
         phaseContext.push(`[phase ${phase}] ${carried}`)
         prevSessionId = undefined // fan-out : pas de session linéaire à chaîner
-        continue
+        return
       }
       // Un nœud `judge` répond au rôle JUDGE — sinon l'exécutant s'évalue avec son propre modèle, ce
       // qui n'est pas une vérification. `bindingOverride` reste autoritaire : un binding figé pour le
@@ -2947,6 +3012,7 @@ export class Orchestrator {
           : phaseRes.text
       phaseContext.push(`[phase ${phase}] ${carried}`)
     }
+    for (const phase of suitePhases()) await executePipelinePhase(phase)
     // J1 — le juge (et le résultat) reçoivent l'AGRÉGAT de toutes les phases, jamais la seule
     // dernière : sinon un livrable produit en frame/terrain devient invisible si clean dérive.
     // Recalculable : une phase de réparation (B5) ajoute à phaseOutputs, l'agrégat suit.
@@ -3377,7 +3443,19 @@ export class Orchestrator {
         aggregatedEvidence.push(...(repairRes.executionEvidence ?? []))
         lastExecText = repairRes.text
         lastUsage = repairRes.usage
-        phaseOutputs.push({ phase: 'build', text: repairRes.text })
+        recordPhase('build', repairRes.text)
+        const carriedRepair =
+          repairRes.text.length > PHASE_CONTEXT_CAP
+            ? `${repairRes.text.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
+            : repairRes.text
+        phaseContext.push(`[phase build · réparation ${attempt}] ${carriedRepair}`)
+        prevSessionId = registry.honoursSessionResume(subProvider) ? repairRes.sessionId : undefined
+        // Le graphe reste la source de vérité après un rouge : le build de réparation est suivi de
+        // toutes les étapes dessinées avant le nouveau juge (notamment clean), pas d'un raccourci
+        // codé en dur build → judge.
+        for (const phase of grapheBrut ? phasesApresBuildDeReparation(grapheBrut) : []) {
+          await executePipelinePhase(phase)
+        }
         exec = buildExec()
       }
       const r = await judgeAndGate()

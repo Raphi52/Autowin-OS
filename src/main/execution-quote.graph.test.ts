@@ -47,8 +47,8 @@ describe('provisionner un graphe à boucles', () => {
       quote,
       requete({ phases: ['frame', 'build', 'judge'], worstCaseNodeExecutions: pireCas })
     )
-    // Sinon on provisionnerait 3 pour 7 exécutions réellement possibles.
-    expect(alloc.reservedMandatoryAgents).toBe(pireCas + 1)
+    // Le nœud judge est déjà l'une des 7 visites : le rajouter créerait un appel fantôme.
+    expect(alloc.reservedMandatoryAgents).toBe(pireCas)
   })
 
   it('un graphe trop gourmand est REFUSÉ avant de dépenser, pas coupé en route', () => {
@@ -64,7 +64,7 @@ describe('provisionner un graphe à boucles', () => {
     // Une valeur absente ou incohérente ne doit jamais réduire ce qui était déjà réservé.
     const quote = compileExecutionQuote('corrige le bug')
     const alloc = allocateExecutionTopology(quote, requete({ worstCaseNodeExecutions: 1 }))
-    expect(alloc.reservedMandatoryAgents).toBe(3)
+    expect(alloc.reservedMandatoryAgents).toBe(2)
   })
 
   it('absent, le comportement est strictement celui d’avant', () => {

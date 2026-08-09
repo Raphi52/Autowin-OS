@@ -54,6 +54,24 @@ class Recorder implements ProviderAdapter {
   }
 }
 
+/** Rend le premier gate rouge puis le suivant vert, et conserve l'ordre réellement payé. */
+class RedPuisVert extends Recorder {
+  readonly phases: string[] = []
+  private verdicts = 0
+
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const phase = /SKILL\s+(scout|frame|terrain|build|clean|judge)/.exec(options.system ?? '')?.[1]
+    if (phase) this.phases.push(phase)
+    const result = yield* super.send(messages, options)
+    if (phase !== 'judge' || options.execution?.sandbox !== 'read-only') return result
+    this.verdicts += 1
+    return { ...result, text: this.verdicts === 1 ? 'DEFAUT: reprise requise' : 'VALIDE' }
+  }
+}
+
 function makeOrchestrator(
   provider: ProviderAdapter,
   workflow?: WorkflowRunOverride,
@@ -131,7 +149,14 @@ describe('un workflow impose ses consignes', () => {
 })
 
 describe('un workflow impose son allocation', () => {
-  const quoteFor = (): ExecutionQuote => compileExecutionQuote('corrige le bug')
+  const quoteFor = (): ExecutionQuote => {
+    const quote = compileExecutionQuote('corrige le bug')
+    // Ce bloc teste la priorité de l'allocation, pas son admission : on lui donne volontairement
+    // assez de capacité pour quatre juges. Les tests de refus hors caps vivent avec les graphes.
+    quote.limits.maxAgents = 12
+    quote.limits.maxConcurrency = 4
+    return quote
+  }
 
   it('le nombre de juges du workflow prime sur le calcul du devis', async () => {
     const quote = quoteFor()
@@ -251,6 +276,104 @@ describe('un graphe pilote le run', () => {
 
     expect(provider.prompts.filter((prompt) => prompt.includes('SKILL judge'))).toHaveLength(1)
     expect(provider.prompts).toHaveLength(2) // build + gate judge
+  })
+
+  it('un juge rouge rejoue tout le sous-chemin build → clean avant le nouveau gate', async () => {
+    const provider = new RedPuisVert()
+    const quote = compileExecutionQuote('corrige le bug')
+    await makeOrchestrator(
+      provider,
+      {
+        explicit: true,
+        graph: {
+          entry: 'scout',
+          nodes: [
+            { id: 'scout', phase: 'scout' },
+            { id: 'frame', phase: 'frame' },
+            { id: 'terrain', phase: 'terrain' },
+            { id: 'build', phase: 'build' },
+            { id: 'clean', phase: 'clean' },
+            { id: 'judge', phase: 'judge' }
+          ],
+          edges: [
+            { from: 'scout', to: 'frame', when: 'always' },
+            { from: 'frame', to: 'terrain', when: 'always' },
+            { from: 'terrain', to: 'build', when: 'always' },
+            { from: 'build', to: 'clean', when: 'always' },
+            { from: 'clean', to: 'judge', when: 'always' },
+            { from: 'judge', to: 'build', when: 'red', maxTraversals: 1 }
+          ]
+        }
+      },
+      quote
+    ).run('corrige le bug')
+
+    expect(provider.phases).toEqual([
+      'scout',
+      'frame',
+      'terrain',
+      'build',
+      'clean',
+      'judge',
+      'build',
+      'clean',
+      'judge'
+    ])
+  })
+
+  it('un graphe avec une reprise tient dans un cap égal à son vrai pire cas', async () => {
+    const provider = new RedPuisVert()
+    const quote = compileExecutionQuote('corrige le bug', { maxProviderCalls: 5 })
+    await expect(
+      makeOrchestrator(
+        provider,
+        {
+          explicit: true,
+          graph: {
+            entry: 'frame',
+            nodes: [
+              { id: 'frame', phase: 'frame' },
+              { id: 'build', phase: 'build' },
+              { id: 'judge', phase: 'judge' }
+            ],
+            edges: [
+              { from: 'frame', to: 'build', when: 'always' },
+              { from: 'build', to: 'judge', when: 'always' },
+              { from: 'judge', to: 'build', when: 'red', maxTraversals: 1 }
+            ]
+          }
+        },
+        quote
+      ).run('corrige le bug')
+    ).resolves.toBeDefined()
+    expect(provider.prompts).toHaveLength(5)
+  })
+
+  it('refuse un panel composé hors caps avant le premier appel provider', async () => {
+    const provider = new Recorder()
+    const quote = compileExecutionQuote('refonte architecture sécurité migration')
+    const agents = Array.from({ length: 25 }, (_, index) => ({
+      provider: 'rec',
+      model: `juge-${index + 1}`
+    }))
+    await expect(
+      makeOrchestrator(
+        provider,
+        {
+          explicit: true,
+          graph: {
+            entry: 'build',
+            nodes: [
+              { id: 'build', phase: 'build' },
+              { id: 'judge', phase: 'judge', agents, quorum: 13 }
+            ],
+            edges: [{ from: 'build', to: 'judge', when: 'always' }]
+          }
+        },
+        quote
+      ).run('refonte architecture sécurité migration')
+    ).rejects.toThrow('Devis impossible')
+    expect(provider.prompts).toHaveLength(0)
   })
 })
 
