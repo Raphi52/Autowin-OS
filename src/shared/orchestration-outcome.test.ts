@@ -58,6 +58,15 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     expect(text).toBe('Preuve utile.')
   })
 
+  it('retire les blocs emoji sans titre Markdown observés dans les fils réels', () => {
+    const text = reconcileClosedOrchestrationText(
+      'Preuve utile.\n\n📍 **Maintenant**\nDeux tests rouges préexistants.\n\n⏳ **Reste à faire**\nDécider de leur sort.\n\n👉 **Recommandé**\nOuvrir un run séparé.',
+      { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+    )
+
+    expect(text).toBe('Preuve utile.')
+  })
+
   it('un gate BLOQUÉ est annoncé comme tel, même si l’appel a « réussi »', () => {
     const text = formatOrchestrationOutcome(true, {
       status: 'failed',

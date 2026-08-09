@@ -72,6 +72,15 @@ function isStaleWorkerLifecycleSection(line: string): boolean {
   )
 }
 
+function isStaleWorkerLifecycleMarker(line: string): boolean {
+  const text = line
+    .trim()
+    .replace(/^#{1,6}\s+/u, '')
+    .replace(/^\*\*/u, '')
+    .trim()
+  return /^(?:📍|⏳|👉)(?:\s|$)/u.test(text)
+}
+
 /**
  * Le rapport du worker est capturé AVANT la gate et la publication. Une fois l'issue structurée
  * `succeeded` connue, ses preuves restent utiles mais ses recommandations de cycle de vie deviennent
@@ -83,6 +92,10 @@ function removeStaleWorkerLifecycleAdvice(report: string): string {
     if (line.includes('Clôture Autowin : gate validé')) {
       skipSection = false
       return true
+    }
+    if (isStaleWorkerLifecycleMarker(line)) {
+      skipSection = true
+      return false
     }
     if (/^\s*#{1,6}\s+/u.test(line)) {
       skipSection = isStaleWorkerLifecycleSection(line)
