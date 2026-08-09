@@ -103,7 +103,7 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
 
   it('conserve les preuves qui citent une ancienne formule de cycle de vie', () => {
     const report =
-      'Test vert : absence de « RUN open » confirmée — PASS.\nPreuve : la regex /lancer judge/ ne matche plus — PASS.'
+      "Test vert : absence de « RUN open » confirmée — PASS.\nPreuve : la regex /lancer judge/ ne matche plus — PASS.\nTest vert : expect(text).not.toContain('RUN open') — PASS.\nPreuve : `lancer judge` ne matche plus — PASS."
 
     expect(
       reconcileClosedOrchestrationText(report, {
@@ -118,10 +118,9 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
   it.each([
     ['Preuve : publication non exécutée.', ''],
     ['Test vert : RUN toujours open.', ''],
-    [
-      'Preuve : tests 12/12 verts. RUN reste open — lancer judge.',
-      'Preuve : tests 12/12 verts.'
-    ]
+    ['Preuve : tests 12/12 verts. RUN reste open — lancer judge.', 'Preuve : tests 12/12 verts.'],
+    ['Preuve : tests 12/12 verts — RUN reste open ; lancer judge.', 'Preuve : tests 12/12 verts'],
+    ['Tests 12/12 verts - RUN reste open - lancer judge.', 'Tests 12/12 verts']
   ])('retire l’assertion lifecycle active sans effacer la preuve : %s', (report, expected) => {
     expect(
       reconcileClosedOrchestrationText(report, {

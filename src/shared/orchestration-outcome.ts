@@ -51,20 +51,20 @@ function asCallCount(value: unknown): number {
   return count === undefined ? 0 : Math.max(0, Math.floor(count))
 }
 
-const WORKER_LIFECYCLE_PREFIX =
-  /^(?:\s*\*\*)?\s*(?:(?:📍|⏳|👉|⚠️)\s*)?(?:\*\*)?\s*/u
+const WORKER_LIFECYCLE_PREFIX = /^(?:\s*\*\*)?\s*(?:(?:📍|⏳|👉|⚠️)\s*)?(?:\*\*)?\s*/u
 
 function maskQuotedEvidence(text: string): string {
   return text.replace(
-    /«[^»\n]*»|"[^"\n]*"|`[^`\n]*`|\/[^/\n]+\/[a-z]*/giu,
+    /«[^»\n]*»|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`[^`\n]*`|\/[^/\n]+\/[a-z]*/giu,
     (quoted) => ' '.repeat(quoted.length)
   )
 }
 
 function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
-  const text = line.replace(WORKER_LIFECYCLE_PREFIX, '').replace(/[`*_]/g, '').trim()
+  const text = line.replace(WORKER_LIFECYCLE_PREFIX, '').trim()
   if (/^#{1,6}\s+(?:\d+[.)]\s*)?publication\s*$/iu.test(text)) return undefined
-  const searchable = maskQuotedEvidence(text)
+  const proofLike = /^(?:preuve|tests?(?:\s+verts?)?|contr[oô]le|r[ée]sultat)\b/iu.test(text)
+  const searchable = (proofLike ? maskQuotedEvidence(text) : text).replace(/[`*_]/g, ' ')
 
   const staleSignal =
     /\b(?:run\s+(?:(?:reste|toujours)\s+)?open|non\s+(?:publi[ée]e?|commit[ée]e?)|publication\s+(?:reste|non\s+ex[ée]cut)|(?:autoriser|d[ée]clencher)\s+(?:la\s+)?publication|(?:lancer|relancer)\s+(?:le\s+)?judge|judge[^\n]*(?:refus[ée]|reste|non\s+cl[oô]tur)|clean\s+(?:puis|et)\s+judge|encha[iî]ner\s+clean[^\n]*judge)\b/iu.exec(
@@ -73,14 +73,19 @@ function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
   const staleLead =
     /^(?:maintenant|reste\s+[àa]\s+faire|recommand[ée]|encha[iî]ner|clean)(?=\s|[—:,-]|$)/iu.test(
       searchable
-    ) &&
-    /\b(?:publication|commit|judge|clean)\b/iu.test(searchable)
+    ) && /\b(?:publication|commit|judge|clean)\b/iu.test(searchable)
   if (!staleSignal && !staleLead) return line
 
-  if (staleSignal) {
-    const sentenceEnd = text.lastIndexOf('.', staleSignal.index)
-    const proof = sentenceEnd >= 0 ? text.slice(0, sentenceEnd + 1).trim() : ''
-    if (/^(?:tests?|preuve|contr[oô]le|r[ée]sultat)\b/iu.test(proof)) return proof
+  if (staleSignal && proofLike) {
+    const proof = text
+      .slice(0, staleSignal.index)
+      .trimEnd()
+      .replace(/\s*(?:[—-]|[;,:])\s*$/u, '')
+      .trimEnd()
+    const proofContent = proof
+      .replace(/^(?:preuve|tests?(?:\s+verts?)?|contr[oô]le|r[ée]sultat)\b\s*:?\s*/iu, '')
+      .trim()
+    if (proofContent) return proof
   }
   return undefined
 }
@@ -178,7 +183,9 @@ export function reconcileClosedOrchestrationText(
   report: string,
   outcome: OrchestrationOutcome
 ): string {
-  return isDeliveredOrchestrationOutcome(outcome) ? removeStaleWorkerLifecycleAdvice(report) : report
+  return isDeliveredOrchestrationOutcome(outcome)
+    ? removeStaleWorkerLifecycleAdvice(report)
+    : report
 }
 
 /** Libellé de coût honnête, compatible avec les anciens résultats qui n'avaient que `costUsd`. */
@@ -251,9 +258,7 @@ export function formatOrchestrationOutcome(
   if (visibleResult)
     lines.push(
       '',
-      visibleResult.length > 4_000
-        ? `${visibleResult.slice(0, 4_000)}…[tronqué]`
-        : visibleResult
+      visibleResult.length > 4_000 ? `${visibleResult.slice(0, 4_000)}…[tronqué]` : visibleResult
     )
   return lines.join('\n')
 }
