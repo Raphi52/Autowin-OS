@@ -370,6 +370,24 @@ describe('phases, allocation et consignes atteignent l’orchestrateur', () => {
     expect(over.instructionFor?.('build')).toEqual({ mode: 'replace', text: 'ma méthode' })
   })
 
+  it('transmet aussi le graphe et ses retours bornés au moteur', () => {
+    const graph = {
+      entry: 'scout-1',
+      nodes: [
+        { id: 'scout-1', phase: 'scout' as const },
+        { id: 'build-1', phase: 'build' as const },
+        { id: 'judge-1', phase: 'judge' as const }
+      ],
+      edges: [
+        { from: 'scout-1', to: 'build-1', when: 'always' as const },
+        { from: 'build-1', to: 'judge-1', when: 'always' as const },
+        { from: 'judge-1', to: 'build-1', when: 'red' as const, maxTraversals: 2 }
+      ]
+    }
+
+    expect(overrideFor({ id: 'graphe', name: 'Graphe', graph })?.graph).toEqual(graph)
+  })
+
   it('la configuration courante n’impose aucun écart', () => {
     expect(overrideFor(null)).toBeUndefined()
   })

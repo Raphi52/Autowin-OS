@@ -1,7 +1,7 @@
 import type { IpcMain, IpcMainInvokeEvent, WebContents } from 'electron'
 import { runWorkflowBench, type WorkflowBenchReport } from './workflow-bench'
 import { applyWorkflowProfile } from './workflow-profile-apply'
-import { loadWorkflowProfiles } from './workflow-profiles'
+import { graphOf, loadWorkflowProfiles } from './workflow-profiles'
 import type { OrchestrationResult, WorkflowRunOverride } from './orchestrator'
 import type { Role, RoleBinding } from './roles'
 import type { WorkflowProfile } from './workflow-profiles'
@@ -63,8 +63,10 @@ export interface WorkflowBenchIpcRequest {
 export function overrideFor(profile: WorkflowProfile | null): WorkflowRunOverride | undefined {
   if (!profile) return undefined
   const effectif = applyWorkflowProfile({ roles: {} }, profile)
+  const graph = graphOf(profile)
   return {
     identity: { name: profile.name, source: 'manuel' },
+    ...(graph ? { graph } : {}),
     ...(effectif.phases?.length ? { phases: effectif.phases } : {}),
     ...(effectif.allocation ? { allocation: effectif.allocation } : {}),
     instructionFor: (phase) => effectif.instructionFor(phase)
