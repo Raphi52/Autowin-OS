@@ -103,7 +103,7 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
 
   it('conserve les preuves qui citent une ancienne formule de cycle de vie', () => {
     const report =
-      "Test vert : absence de « RUN open » confirmée — PASS.\nPreuve : la regex /lancer judge/ ne matche plus — PASS.\nTest vert : expect(text).not.toContain('RUN open') — PASS.\nPreuve : `lancer judge` ne matche plus — PASS."
+      "Test vert : absence de « RUN open » confirmée — PASS.\nPreuve : la regex /lancer judge/ ne matche plus — PASS.\nTest vert : expect(text).not.toContain('RUN open') — PASS.\nPreuve : `lancer judge` ne matche plus — PASS.\nTest vert : **RUN open** est absent — PASS.\nTest vert : [RUN open](#assertion) est absent — PASS."
 
     expect(
       reconcileClosedOrchestrationText(report, {
@@ -133,7 +133,14 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     ['- Tests 12/12 verts — RUN reste open.', '- Tests 12/12 verts'],
     ['1. Tests 12/12 verts — RUN reste open.', '1. Tests 12/12 verts'],
     ['> Tests 12/12 verts — RUN reste open.', '> Tests 12/12 verts'],
-    ['✅ Tests 12/12 verts — RUN reste open.', '✅ Tests 12/12 verts']
+    ['✅ Tests 12/12 verts — RUN reste open.', '✅ Tests 12/12 verts'],
+    [
+      "- [x] Test vert : expect(text).not.toContain('RUN open') — PASS.",
+      "- [x] Test vert : expect(text).not.toContain('RUN open') — PASS."
+    ],
+    ['- **Tests 12/12 verts** — RUN reste open.', '- **Tests 12/12 verts**'],
+    ['| Tests 12/12 verts | RUN reste open |', '| Tests 12/12 verts |'],
+    ['• Tests 12/12 verts — RUN reste open.', '• Tests 12/12 verts']
   ])('conserve la preuve préfixée et retire son suffixe lifecycle : %s', (report, expected) => {
     expect(
       reconcileClosedOrchestrationText(report, {
@@ -143,6 +150,29 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
         reused: false
       })
     ).toBe(expected)
+  })
+
+  it('filtre aussi un suffixe lifecycle dans un titre de preuve Markdown', () => {
+    expect(
+      reconcileClosedOrchestrationText(
+        '### Preuve : tests 12/12 verts — RUN reste open ; lancer judge.',
+        {
+          status: 'succeeded',
+          valid: true,
+          gateBlocked: false,
+          reused: false
+        }
+      )
+    ).toBe('### Preuve : tests 12/12 verts')
+
+    expect(
+      reconcileClosedOrchestrationText('### Résultat — publication non exécutée.', {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe('')
   })
 
   it.each([

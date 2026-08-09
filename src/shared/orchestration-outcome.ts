@@ -51,18 +51,18 @@ function asCallCount(value: unknown): number {
   return count === undefined ? 0 : Math.max(0, Math.floor(count))
 }
 
-const WORKER_LIFECYCLE_PREFIX = /^(?:\s*\*\*)?\s*(?:(?:📍|⏳|👉|⚠️)\s*)?(?:\*\*)?\s*/u
-const PROOF_DECORATION_PREFIX = /^(?:(?:[-+*>]|\d+[.)])\s+|✅\s*)+/u
+const PROOF_DECORATION_PREFIX =
+  /^(?:(?:[-+*>•]|\d+[.)])\s+|\[[ xX]\]\s+|✅\s*|\|\s*|(?:\*\*|__|\*|_))+/u
 
 function maskQuotedEvidence(text: string): string {
   return text.replace(
-    /«[^»\n]*»|"(?:\\.|[^"\\\n])*"|(?<![\p{L}\p{N}])'(?:\\.|[^'\\\n])*'|`[^`\n]*`|\/[^/\n]+\/[a-z]*/giu,
+    /\[[^\]\n]+\]\([^)\n]*\)|«[^»\n]*»|"(?:\\.|[^"\\\n])*"|(?<![\p{L}\p{N}])'(?:\\.|[^'\\\n])*'|`[^`\n]*`|\/[^/\n]+\/[a-z]*|\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\n]+\*|_[^_\n]+_/giu,
     (quoted) => ' '.repeat(quoted.length)
   )
 }
 
 function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
-  const text = line.replace(WORKER_LIFECYCLE_PREFIX, '').trim()
+  const text = line.trim()
   if (/^#{1,6}\s+(?:\d+[.)]\s*)?publication\s*$/iu.test(text)) return undefined
   const proofSubject = text.replace(PROOF_DECORATION_PREFIX, '')
   const proofLike = /^(?:preuve|tests?(?:\s+verts?)?|contr[oô]le|r[ée]sultat)\b/iu.test(
@@ -82,7 +82,7 @@ function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
 
   if (staleSignal && proofLike) {
     const proofPrefix = text.slice(0, staleSignal.index).trimEnd()
-    const hasProofBoundary = /[.!?;:—-]$/u.test(proofPrefix)
+    const hasProofBoundary = /[.!?;:—|-]$/u.test(proofPrefix)
     const proof = proofPrefix
       .trimEnd()
       .replace(/\s*(?:[—-]|[;,:])\s*$/u, '')
@@ -135,9 +135,9 @@ function removeStaleWorkerLifecycleAdvice(report: string): string {
       continue
     }
 
-    const heading = /^\s*(#{1,6})\s+/u.exec(line)
+    const heading = /^(\s*(#{1,6})\s+)(.+?)\s*$/u.exec(line)
     if (heading) {
-      const level = heading[1].length
+      const level = heading[2].length
       if (staleHeadingLevel !== undefined && level <= staleHeadingLevel) {
         staleHeadingLevel = undefined
       }
@@ -147,7 +147,8 @@ function removeStaleWorkerLifecycleAdvice(report: string): string {
         staleHeadingLevel = level
         continue
       }
-      kept.push(line)
+      const usefulHeading = withoutStaleWorkerLifecycleLine(heading[3])
+      if (usefulHeading !== undefined) kept.push(`${heading[1]}${usefulHeading}`)
       continue
     }
 

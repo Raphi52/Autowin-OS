@@ -245,7 +245,7 @@ function reconcileStoredOrchestrationClosure(parts: ChatPart[]): ChatPart[] {
 }
 
 export function hydrateStoredAssistant(message: StoredAssistantMessage): HydratedAssistantMessage {
-  const status = message.status ?? 'completed'
+  const status = message.status ?? (message.error ? 'failed' : 'completed')
   const done = status !== 'streaming'
   const parts =
     message.parts?.map((part) => ({ ...part })) ??

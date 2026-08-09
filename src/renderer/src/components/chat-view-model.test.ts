@@ -357,6 +357,30 @@ describe('durable assistant hydration and streaming', () => {
     }
   )
 
+  it('treats a legacy message with an error and no status as failed', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      error: 'timeout après orchestration',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: 'Échec final : publication non exécutée.' }
+      ]
+    })
+
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+    expect(hydrated.status).toBe('failed')
+    expect(text).toContain('Échec final : publication non exécutée.')
+    expect(text).not.toContain('Clôture Autowin : gate validé')
+  })
+
   it('ignores the historical same-turn duplicate refusal because it launched no run', () => {
     const hydrated = hydrateStoredAssistant({
       content: 'projection',
