@@ -376,24 +376,35 @@ function splitMarkdownTableCells(line: string): string[] | undefined {
 }
 
 function stripStaleLifecycleClause(cell: string): string {
-  const searchable = lifecycleSearchableSource(cell)
-  // Dans un tableau d'audit, une mention de rôle `judge` peut précéder le vrai statut du RUN.
-  // Le statut du RUN est plus précis que le motif générique et doit donc gagner.
-  const staleSignal = ACTIVE_RUN_LIFECYCLE.exec(searchable) ?? ACTIVE_LIFECYCLE.exec(searchable)
-  if (!staleSignal) return cell
+  let rewritten = cell
+  // Une cellule peut cumuler plusieurs conclusions périmées. On retire une clause à la fois puis
+  // on reparcourt le résultat : un seul `exec` laissait la seconde contradiction visible à côté de
+  // la clôture autoritative. La borne empêche toute boucle en cas de future regex non consommatrice.
+  for (let pass = 0; pass < 32; pass += 1) {
+    const searchable = lifecycleSearchableSource(rewritten)
+    // Dans un tableau d'audit, une mention de rôle `judge` peut précéder le vrai statut du RUN.
+    // Le statut du RUN est plus précis que le motif générique et doit donc gagner.
+    const staleSignal = ACTIVE_RUN_LIFECYCLE.exec(searchable) ?? ACTIVE_LIFECYCLE.exec(searchable)
+    if (!staleSignal) return rewritten
 
-  const staleStart = staleSignal.index
-  const staleEnd = staleStart + staleSignal[0].length
-  const prefix = cell.slice(0, staleStart)
-  const separators = [...prefix.matchAll(/(?:[.!?;:,](?:[*_]+)?\s+|[—–]\s*|\s-\s+)/gu)]
-  const previous = separators.at(-1)
-  const clauseStart = previous?.index ?? 0
-  const tail = cell.slice(staleEnd)
-  const next = /^\s*(?:[*_`]+\s*)*(?:[.!?;,]\s*|[—–]\s*|\s-\s+)/u.exec(tail)
-  const clauseEnd = next ? staleEnd + next[0].length : staleEnd
-  const before = cell.slice(0, clauseStart).trimEnd()
-  const after = cell.slice(clauseEnd).trimStart()
-  return [before, after].filter(Boolean).join(' ')
+    const staleStart = staleSignal.index
+    const staleEnd = staleStart + staleSignal[0].length
+    const prefix = rewritten.slice(0, staleStart)
+    const separators = [...prefix.matchAll(/(?:[.!?;:,](?:[*_]+)?\s+|[—–]\s*|\s-\s+)/gu)]
+    const previous = separators.at(-1)
+    // Si une suppression précédente a consommé le séparateur, conserver le préfixe factuel au lieu
+    // de traiter toute la cellule comme une unique clause lifecycle.
+    const clauseStart = previous?.index ?? (prefix.trim() ? staleStart : 0)
+    const tail = rewritten.slice(staleEnd)
+    const next = /^\s*(?:[*_`]+\s*)*(?:[.!?;,]\s*|[—–]\s*|\s-\s+)/u.exec(tail)
+    const clauseEnd = next ? staleEnd + next[0].length : staleEnd
+    const before = rewritten.slice(0, clauseStart).trimEnd()
+    const after = rewritten.slice(clauseEnd).trimStart()
+    const nextValue = [before, after].filter(Boolean).join(' ')
+    if (nextValue === rewritten) return rewritten
+    rewritten = nextValue
+  }
+  return rewritten
 }
 
 /** Réconcilie cellule par cellule pour qu'un statut périmé ne supprime jamais toute une ligne. */

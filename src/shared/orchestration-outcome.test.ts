@@ -344,6 +344,21 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     expect(reconciled).not.toMatch(/RUN\s+(?:reste|toujours)\s+(?:`?open`?|ouvert)/iu)
   })
 
+  it('retire toutes les contradictions lifecycle d’une cellule sans perdre ses preuves', () => {
+    const reconciled = reconcileClosedOrchestrationText(
+      '| Preuve | 12 tests verts ; RUN reste open. Publication non exécutée. |',
+      {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      }
+    )
+
+    expect(reconciled).toContain('12 tests verts')
+    expect(reconciled).not.toMatch(/RUN reste open|Publication non exécutée/iu)
+  })
+
   it('filtre aussi un suffixe lifecycle dans un titre de preuve Markdown', () => {
     expect(
       reconcileClosedOrchestrationText(
