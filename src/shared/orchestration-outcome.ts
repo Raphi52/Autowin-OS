@@ -86,31 +86,67 @@ function isStaleWorkerLifecycleMarker(line: string): boolean {
   )
 }
 
+function isStandaloneWorkerLifecycleMarker(line: string): boolean {
+  const text = line
+    .trim()
+    .replace(/^#{1,6}\s+/u, '')
+    .replace(/\*\*/gu, '')
+    .trim()
+  return /^(?:📍\s*maintenant|⏳\s*reste\s+[àa]\s+faire|👉\s*recommand(?:é|ée|ation))\s*[:—,-]?\s*$/iu.test(
+    text
+  )
+}
+
 /**
  * Le rapport du worker est capturé AVANT la gate et la publication. Une fois l'issue structurée
  * `succeeded` connue, ses preuves restent utiles mais ses recommandations de cycle de vie deviennent
  * fausses. On retire uniquement ces lignes, jamais les tests, diffs ou diagnostics.
  */
 function removeStaleWorkerLifecycleAdvice(report: string): string {
-  const paragraphs = report.split(/\r?\n(?:[ \t]*\r?\n)+/u)
-  const kept = paragraphs.flatMap((paragraph) => {
-    const lines = paragraph.split(/\r?\n/u)
-    const firstContent = lines.find((line) => line.trim()) ?? ''
-    if (isStaleWorkerLifecycleMarker(firstContent) || isStaleWorkerLifecycleSection(firstContent)) {
-      return []
+  let staleHeadingLevel: number | undefined
+  let staleMarkerParagraph = false
+  const kept: string[] = []
+
+  for (const line of report.split(/\r?\n/u)) {
+    if (line.includes('Clôture Autowin : gate validé')) {
+      staleHeadingLevel = undefined
+      staleMarkerParagraph = false
+      kept.push(line)
+      continue
     }
-    const useful = lines.filter(
-      (line) =>
-        line.includes('Clôture Autowin : gate validé') ||
-        (!isStaleWorkerLifecycleMarker(line) &&
-          !isStaleWorkerLifecycleSection(line) &&
-          !isStaleWorkerLifecycleLine(line))
-    )
-    const text = useful.join('\n').trim()
-    return text ? [text] : []
-  })
+
+    const heading = /^\s*(#{1,6})\s+/u.exec(line)
+    if (heading) {
+      const level = heading[1].length
+      if (staleHeadingLevel !== undefined && level <= staleHeadingLevel) {
+        staleHeadingLevel = undefined
+      }
+      if (staleHeadingLevel !== undefined) continue
+      staleMarkerParagraph = false
+      if (isStaleWorkerLifecycleSection(line)) {
+        staleHeadingLevel = level
+        continue
+      }
+      kept.push(line)
+      continue
+    }
+
+    if (staleHeadingLevel !== undefined) continue
+    if (!line.trim()) {
+      staleMarkerParagraph = false
+      kept.push(line)
+      continue
+    }
+    if (isStaleWorkerLifecycleMarker(line)) {
+      staleMarkerParagraph = isStandaloneWorkerLifecycleMarker(line)
+      continue
+    }
+    if (staleMarkerParagraph || isStaleWorkerLifecycleLine(line)) continue
+    kept.push(line)
+  }
+
   return kept
-    .join('\n\n')
+    .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
@@ -178,6 +214,7 @@ export function formatOrchestrationOutcome(
   const outcome = data ?? {}
   const gateBlocked = outcome.gateBlocked === true
   const invalid = outcome.valid === false
+  const delivered = isDeliveredOrchestrationOutcome(outcome)
   const status = asString(outcome.status)
   const cost = formatExecutionCostCoverage(outcome)
   const run = runLabelFromPath(asString(outcome.runPath) ?? asString(outcome.runId))
@@ -190,7 +227,9 @@ export function formatOrchestrationOutcome(
       ? '⚠️ Workflow terminé mais le juge a REFUSÉ le livrable'
       : outcome.reused === true
         ? '↻ Workflow déjà en cours réutilisé (aucun nouveau run lancé)'
-        : '✅ Workflow terminé'
+        : delivered
+          ? '✅ Workflow terminé'
+          : '⚠️ Workflow terminé — preuve incomplète de livraison'
 
   const facts = [
     status && `statut ${status}`,

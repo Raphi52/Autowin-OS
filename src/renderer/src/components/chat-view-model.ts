@@ -195,17 +195,27 @@ function reconcileStoredOrchestrationClosure(parts: ChatPart[]): ChatPart[] {
   if (!isDeliveredOrchestrationOutcome(outcome)) return parts
   let changed = false
   let closureSeen = false
+  const closurePrefix = 'Clôture Autowin : gate validé'
   const reconciled = parts.flatMap((part): ChatPart[] => {
     if (part.kind !== 'text') return [part]
     const text = reconcileClosedOrchestrationText(part.text, outcome)
-    const uniqueLines = text.split(/\r?\n/u).filter((line) => {
-      if (!line.includes('Clôture Autowin : gate validé')) return true
-      if (!closureSeen) {
-        closureSeen = true
-        return true
+    const uniqueLines = text.split(/\r?\n/u).flatMap((line) => {
+      const first = line.indexOf(closurePrefix)
+      if (first < 0) return [line]
+      if (closureSeen) {
+        changed = true
+        const beforeClosure = line.slice(0, first).trimEnd()
+        return beforeClosure ? [beforeClosure] : []
+      }
+      closureSeen = true
+      const duplicate = line.indexOf(closurePrefix, first + closurePrefix.length)
+      if (duplicate < 0) {
+        return [line]
       }
       changed = true
-      return false
+      const beforeDuplicate = line.slice(0, duplicate).trimEnd()
+      if (beforeDuplicate) return [beforeDuplicate]
+      return []
     })
     const uniqueText = uniqueLines
       .join('\n')

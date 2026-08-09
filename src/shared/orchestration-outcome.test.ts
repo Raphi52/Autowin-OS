@@ -92,6 +92,24 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     expect(text).toBe('Preuve avant.\n\nPreuve après : checksum abc123.')
   })
 
+  it('arrête une section provisoire au prochain titre pair sans ligne vide', () => {
+    const text = reconcileClosedOrchestrationText(
+      'Preuve avant.\n\n## Maintenant\nRUN open.\n## Preuves\nSHA publié abc123.',
+      { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+    )
+
+    expect(text).toBe('Preuve avant.\n\n## Preuves\nSHA publié abc123.')
+  })
+
+  it('retire tous les paragraphes d’une section provisoire jusqu’au prochain titre pair', () => {
+    const text = reconcileClosedOrchestrationText(
+      'Preuve avant.\n\n## Publication\nNon publiée.\n\nPousser la branche demain.\n\n## Preuves\nSHA publié abc123.',
+      { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+    )
+
+    expect(text).toBe('Preuve avant.\n\n## Preuves\nSHA publié abc123.')
+  })
+
   it('exige des discriminants booléens positifs avant de déclarer une livraison', () => {
     expect(
       isDeliveredOrchestrationOutcome({
@@ -110,6 +128,13 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
         reused: 'true'
       })
     ).toBe(false)
+  })
+
+  it('n’affiche aucun signal vert quand la preuve structurée de livraison est incomplète', () => {
+    const text = formatOrchestrationOutcome(true, { status: 'succeeded' })
+
+    expect(text).toContain('preuve incomplète')
+    expect(text).not.toContain('✅')
   })
 
   it('un gate BLOQUÉ est annoncé comme tel, même si l’appel a « réussi »', () => {
@@ -133,6 +158,8 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     const text = formatOrchestrationOutcome(true, {
       status: 'succeeded',
       valid: true,
+      gateBlocked: false,
+      reused: false,
       costUsd: 10.05,
       runPath: 'C:/Users/x/.claude/runs/sess-1/audit-cout-workspace/RUN.md',
       result: 'Trois fichiers modifiés, tests verts.'
@@ -175,12 +202,12 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
 
   it('données absentes → un en-tête, jamais de champ inventé', () => {
     const text = formatOrchestrationOutcome(true, {})
-    expect(text).toBe('✅ Workflow terminé')
+    expect(text).toBe('⚠️ Workflow terminé — preuve incomplète de livraison')
   })
 
   it('ignore les valeurs de mauvais type au lieu de les afficher', () => {
     const text = formatOrchestrationOutcome(true, { costUsd: 'beaucoup', status: 42 })
-    expect(text).toBe('✅ Workflow terminé')
+    expect(text).toBe('⚠️ Workflow terminé — preuve incomplète de livraison')
   })
 
   it('borne un résultat très long', () => {

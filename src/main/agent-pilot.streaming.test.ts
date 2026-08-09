@@ -107,6 +107,7 @@ describe('AgentPilot chat streaming', () => {
     const done = events.find((event) => event.kind === 'done')
     expect(done?.text).toContain('résultat terminal rendu')
     expect(done?.text).not.toContain('gate validé')
+    expect(done?.text).not.toContain('✅')
   })
 
   it('emits progressive visible deltas while suppressing fragmented command markup', async () => {

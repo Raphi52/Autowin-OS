@@ -398,6 +398,26 @@ describe('durable assistant hydration and streaming', () => {
     expect(occurrences).toHaveLength(1)
   })
 
+  it('deduplicates authoritative closures concatenated on the same line', () => {
+    const closure = 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: `${closure} ${closure}` }
+      ]
+    })
+
+    const text = hydrated.parts.find((part) => part.kind === 'text')?.text ?? ''
+    expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(1)
+  })
+
   it('binds the first turn id then reduces progressive deltas without duplication', () => {
     const empty = hydrateStoredAssistant({ content: '', status: 'streaming', parts: [] })
     const first = reduceAssistantPilotEvent(empty, {
