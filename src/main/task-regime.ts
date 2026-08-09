@@ -33,7 +33,7 @@ const CRITICAL_SIGNALS =
  * placé dans la petite fenêtre de la négation : tout autre signal positif reste classé critical.
  */
 const NEGATED_CRITICAL_SIGNALS =
-  /\b(?:ne\s+pas|n['’]\s*|pas\s+de|sans|do\s+not|don't|without)\s+(?:\w+[’'/-]?\w*\s+){0,2}(?:architect\w*|refactor\w*|migrat\w*|s[eé]curit\w*|security|auth\w*|pipeline|orchestrat\w*|transvers\w*|breaking|irr[eé]versibl\w*|production|prod\b|deploy\w*|d[eé]ploie\w*|sch[eé]ma|schema|multi-\w+|tout le|l'ensemble|whole|entire)/gi
+  /\b(?:ne\s+pas|n['’]\s*|pas\s+de|aucun(?:e)?|sans|do\s+not|don't|without)\s+(?:\w+[’'/-]?\w*\s+){0,2}(?:architect\w*|refactor\w*|migrat\w*|s[eé]curit\w*|security|auth\w*|pipeline|orchestrat\w*|transvers\w*|breaking|irr[eé]versibl\w*|production|prod\b|deploy\w*|d[eé]ploie\w*|sch[eé]ma|schema|multi-\w+|tout le|l'ensemble|whole|entire)/gi
 
 /** Signaux de TRIVIALITÉ (→ trivial) : micro-édition ciblée, déjà précise. */
 const TRIVIAL_SIGNALS =
