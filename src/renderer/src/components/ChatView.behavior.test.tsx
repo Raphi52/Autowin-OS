@@ -1224,7 +1224,8 @@ describe('ChatView behavior under concurrent UI actions', () => {
         container!.querySelector('.directive-queue-item')!.querySelectorAll('button'),
         (element) => element.textContent
       )
-    ).toEqual(['⏹ Interrompre et envoyer', '🧭 Orienter', 'BTW', '✕'])
+      // ↑/↓ = réordonnancement de la file, ajoutés devant les actions existantes.
+    ).toEqual(['↑', '↓', '⏹ Interrompre et envoyer', '🧭 Orienter', 'BTW', '✕'])
     expect(
       Array.from(
         container!.querySelectorAll('.directive-queue-text'),

@@ -2,6 +2,9 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const source = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
+// La ligne de message a été EXTRAITE dans son propre module (découpe de ChatView.tsx). L'invariant
+// vérifié ici — mémoïsation data-only — n'a pas changé, seul son fichier a changé.
+const rowSource = readFileSync(new URL('./ChatMessageRow.tsx', import.meta.url), 'utf8')
 
 describe('ChatView composer resilience', () => {
   it('acquires a synchronous send lock before the first bootstrap await', () => {
@@ -39,7 +42,8 @@ describe('ChatView composer resilience', () => {
   })
 
   it('memoizes stable message rows for long histories', () => {
-    expect(source).toContain('const ChatMessageRow = memo(')
+    expect(rowSource).toContain('export const ChatMessageRow = memo(')
+    expect(rowSource).toContain('prev.message === next.message')
     expect(source).toContain('<ChatMessageRow')
     expect(source).toContain('messageKey(')
   })
