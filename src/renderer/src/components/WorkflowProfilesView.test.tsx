@@ -2,7 +2,8 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { profileSummary, WorkflowProfilesView } from './WorkflowProfilesView'
+import { WorkflowProfilesView } from './WorkflowProfilesView'
+import { profileSummary } from './workflow-profile-summary'
 
 let container: HTMLDivElement
 let root: Root
@@ -74,7 +75,9 @@ describe('vue Workflows — lister et sélectionner', () => {
       workflowProfiles: vi.fn().mockResolvedValue({ profiles: [rapide], activeId: null })
     })
     await render()
-    expect(container.querySelector('[data-testid="workflow-pick-rapide"]')!.getAttribute('aria-pressed')).toBe('false')
+    expect(
+      container.querySelector('[data-testid="workflow-pick-rapide"]')!.getAttribute('aria-pressed')
+    ).toBe('false')
     expect(container.textContent).not.toContain('actif')
   })
 
@@ -111,7 +114,9 @@ describe('vue Workflows — lister et sélectionner', () => {
     api({ workflowProfileSave: save })
     await render()
 
-    const case_ = container.querySelector<HTMLInputElement>('[data-testid="workflow-enabled-rapide"]')!
+    const case_ = container.querySelector<HTMLInputElement>(
+      '[data-testid="workflow-enabled-rapide"]'
+    )!
     expect(case_.checked).toBe(true) // `enabled` absent vaut invocable
     // `.click()` et non `.checked = false` : React suit la valeur des cases par un tracker interne,
     // qu'une écriture directe contourne — l'évènement part, mais React le considère sans changement.
@@ -131,7 +136,8 @@ describe('vue Workflows — lister et sélectionner', () => {
 
     expect(select).toHaveBeenCalledWith('rapide')
     expect(
-      container.querySelector<HTMLButtonElement>('[data-testid="workflow-pick-rapide"]')!
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="workflow-pick-rapide"]')!
         .getAttribute('aria-pressed')
     ).toBe('true')
   })

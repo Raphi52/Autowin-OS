@@ -1,3 +1,5 @@
+import { decideConversationCapability } from '../conversation-capabilities'
+
 export type TraceEventType =
   | 'message'
   | 'injection'
@@ -5,6 +7,14 @@ export type TraceEventType =
   | 'tool-call'
   | 'tool-result'
   | 'model-response'
+  /**
+   * Un livrable produit par le modele (fichier, image, document) — une SORTIE, pas le retour d'un
+   * outil. Ajoute le 2026-08-07 : les artefacts etaient persistes dans le tour de chat mais
+   * n'apparaissaient dans AUCUN evenement causal, si bien qu'Observatory omettait purement et
+   * simplement un livrable tout en pretendant montrer ce que le tour avait produit. Type distinct de
+   * `tool-result` a dessein : les confondre faussait le comptage des appels d'outils.
+   */
+  | 'artifact'
   | 'response-displayed'
   | 'handoff'
   | 'verdict'
@@ -29,6 +39,12 @@ export type TracePayloadKind =
   | 'tool-call'
   | 'tool-result'
   | 'model-response'
+  /**
+   * Raisonnement : la reflexion du modele, ou le `thinking` d'un sous-agent. Distinct de
+   * `model-response` (la reponse REMISE) : confondre les deux ferait passer une deliberation pour
+   * une conclusion.
+   */
+  | 'reasoning'
   | 'error'
 
 export interface TraceParticipant {
@@ -60,6 +76,17 @@ export interface TraceExecutionContext {
   attemptId?: string
 }
 
+/** Reçu vérifiable de la politique d'autorité appliquée à une commande du modèle. */
+export interface TraceAuthorityReceipt {
+  mode: 'plan' | 'ask' | 'auto'
+  commandAuthority: 'automatic' | 'sensitive' | 'destructive'
+  mutates: boolean
+  decision: 'allow' | 'confirm' | 'deny'
+  decisionId?: string
+  resolution?: 'approve' | 'cancel'
+  resolvedBy?: 'user' | 'timeout-default'
+}
+
 export interface TraceEventV1 {
   schema: 'autowin.trace/v1'
   id: string
@@ -77,6 +104,7 @@ export interface TraceEventV1 {
   payloads: TracePayload[]
   observation: TraceObservation
   execution?: TraceExecutionContext
+  authority?: TraceAuthorityReceipt
   run?: RunLifecycleEvent
   provider?: {
     id: string
@@ -101,6 +129,7 @@ const EVENT_TYPES = new Set<TraceEventType>([
   'tool-call',
   'tool-result',
   'model-response',
+  'artifact',
   'handoff',
   'verdict',
   'gate',
@@ -140,6 +169,7 @@ const PAYLOAD_KINDS = new Set<TracePayloadKind>([
   'tool-call',
   'tool-result',
   'model-response',
+  'reasoning',
   'error'
 ])
 
@@ -190,6 +220,70 @@ export function assertTraceEvent(event: TraceEventV1): TraceEventV1 {
     if (!['quote', 'workspace', 'git', 'closure'].includes(event.run.stage))
       throw new Error('TraceEvent: run.stage invalide')
   }
+  if (event.authority) {
+    if (
+      event.type !== 'decision' ||
+      event.actor.id !== 'autowin-authority' ||
+      event.actor.kind !== 'system' ||
+      event.channel !== 'internal' ||
+      event.observation.boundary !== 'app-command-bus' ||
+      event.observation.fidelity !== 'exact'
+    )
+      throw new Error('TraceEvent: authority envelope invalide')
+    if (!['plan', 'ask', 'auto'].includes(event.authority.mode))
+      throw new Error('TraceEvent: authority.mode invalide')
+    if (!['automatic', 'sensitive', 'destructive'].includes(event.authority.commandAuthority))
+      throw new Error('TraceEvent: authority.commandAuthority invalide')
+    if (typeof event.authority.mutates !== 'boolean')
+      throw new Error('TraceEvent: authority.mutates invalide')
+    if (!['allow', 'confirm', 'deny'].includes(event.authority.decision))
+      throw new Error('TraceEvent: authority.decision invalide')
+    if (
+      event.authority.decision !==
+      decideConversationCapability({
+        mode: event.authority.mode,
+        mutates: event.authority.mutates,
+        authority: event.authority.commandAuthority
+      })
+    )
+      throw new Error('TraceEvent: authority.decision contraire a la politique')
+    if (event.authority.decisionId !== undefined)
+      nonEmpty(event.authority.decisionId, 'authority.decisionId')
+    if (
+      event.authority.resolution !== undefined &&
+      !['approve', 'cancel'].includes(event.authority.resolution)
+    )
+      throw new Error('TraceEvent: authority.resolution invalide')
+    if (
+      event.authority.resolvedBy !== undefined &&
+      !['user', 'timeout-default'].includes(event.authority.resolvedBy)
+    )
+      throw new Error('TraceEvent: authority.resolvedBy invalide')
+    const hasResolution = event.authority.resolution !== undefined
+    const hasResolver = event.authority.resolvedBy !== undefined
+    if (hasResolution !== hasResolver)
+      throw new Error('TraceEvent: authority resolution incomplete')
+    if (event.authority.decision === 'confirm') {
+      if (!event.authority.decisionId)
+        throw new Error('TraceEvent: authority.decisionId requis pour confirm')
+      if (!hasResolution && event.status !== 'pending')
+        throw new Error('TraceEvent: authority confirm non resolu doit rester pending')
+      if (event.authority.resolution === 'cancel' && event.status !== 'cancelled')
+        throw new Error('TraceEvent: authority cancel doit etre cancelled')
+      if (
+        event.authority.resolution === 'approve' &&
+        !['completed', 'failed'].includes(event.status)
+      )
+        throw new Error('TraceEvent: authority approve doit etre terminal')
+    } else {
+      if (event.authority.decisionId || hasResolution || hasResolver)
+        throw new Error('TraceEvent: authority resolution interdite hors confirm')
+      if (event.authority.decision === 'deny' && event.status !== 'failed')
+        throw new Error('TraceEvent: authority deny doit etre failed')
+      if (event.authority.decision === 'allow' && !['completed', 'failed'].includes(event.status))
+        throw new Error('TraceEvent: authority allow doit etre terminal')
+    }
+  }
   return event
 }
 import type { RunLifecycleEvent } from '../../shared/run-execution'
@@ -221,7 +315,6 @@ export function traceActionEventId(input: {
   /** Ordinal MONOTONE du tour : c'est lui qui porte l'unicité, et il ne doit jamais être réinitialisé. */
   ordinal: number
 }): string {
-  const stable =
-    input.actionId?.replaceAll(':', '-') ?? `${input.iteration ?? 0}-${input.ordinal}`
+  const stable = input.actionId?.replaceAll(':', '-') ?? `${input.iteration ?? 0}-${input.ordinal}`
   return `${input.turnId}:action:${stable}:${input.kind}`
 }

@@ -21,6 +21,9 @@ const ZONE_OF: Record<string, TurnZone> = {
   boundary: 'sortant',
   'model-response': 'reponse',
   'response-displayed': 'reponse',
+  // Un artefact est une SORTIE du modele : il accompagne la reponse. Hors zone, il serait rendu
+  // isole au milieu de la chronologie, comme s'il n'avait aucun lien avec ce qui vient d'etre dit.
+  artifact: 'reponse',
   handoff: 'sousagent',
   verdict: 'sousagent'
 }
@@ -36,8 +39,7 @@ export interface GroupedEvent<E extends MinimalEvent> {
 }
 
 export type TurnRenderItem<E extends MinimalEvent> =
-  | { type: 'group'; zone: TurnZone; events: Array<GroupedEvent<E>> }
-  | { type: 'event'; event: E }
+  { type: 'group'; zone: TurnZone; events: Array<GroupedEvent<E>> } | { type: 'event'; event: E }
 
 /** Normalise pour comparer deux textes de réponse (espaces/bords ignorés). */
 export function normalizeResponse(text: string): string {

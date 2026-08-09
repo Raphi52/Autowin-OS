@@ -57,6 +57,14 @@ export function ownerOfWorktree(gitCommonDir: string): string {
   return path.basename(path.dirname(path.resolve(gitCommonDir.trim())))
 }
 
+function repoRootOfCommonDir(gitCommonDir: string): string {
+  return path.dirname(path.resolve(gitCommonDir.trim()))
+}
+
+function canonicalRepoIdentity(repoPath: string): string {
+  return path.resolve(repoPath.trim()).replace(/[\\/]+$/, '').toLowerCase()
+}
+
 /**
  * `HEAD` n'est pas un nom de branche : c'est ce que git rend sur une tête DÉTACHÉE. L'afficher
  * comme une branche ferait croire à une branche nommée « HEAD » — un mensonge discret mais réel.
@@ -72,6 +80,8 @@ export interface ScannedGitDir {
   worktree: boolean
   /** Nom du dépôt propriétaire — lui-même pour un dépôt, le parent pour un worktree. */
   owner: string
+  /** Racine canonique du dépôt propriétaire, issue de `--git-common-dir`. */
+  ownerPath?: string
   branch?: string
   commits?: number
 }
@@ -89,11 +99,14 @@ export function foldRepoScan(scanned: readonly ScannedGitDir[]): RepoEntry[] {
   const worktreesByOwner = new Map<string, number>()
   for (const item of scanned) {
     if (item.worktree) {
-      worktreesByOwner.set(item.owner, (worktreesByOwner.get(item.owner) ?? 0) + 1)
+      const ownerKey = item.ownerPath
+        ? canonicalRepoIdentity(item.ownerPath)
+        : `name:${item.owner.toLowerCase()}`
+      worktreesByOwner.set(ownerKey, (worktreesByOwner.get(ownerKey) ?? 0) + 1)
       continue
     }
     // Un même dépôt atteint par deux racines ne compte qu'une fois.
-    repos.set(item.path.toLowerCase(), {
+    repos.set(canonicalRepoIdentity(item.path), {
       name: path.basename(item.path),
       path: item.path,
       ...(item.branch ? { branch: item.branch } : {}),
@@ -103,7 +116,10 @@ export function foldRepoScan(scanned: readonly ScannedGitDir[]): RepoEntry[] {
   }
   const list = [...repos.values()].map((repo) => ({
     ...repo,
-    worktrees: worktreesByOwner.get(repo.name) ?? 0
+    worktrees:
+      worktreesByOwner.get(canonicalRepoIdentity(repo.path)) ??
+      worktreesByOwner.get(`name:${repo.name.toLowerCase()}`) ??
+      0
   }))
   return sortRepos(list)
 }
@@ -162,6 +178,7 @@ async function gitCandidates(root: string, depth = 0): Promise<string[]> {
 interface Classification {
   worktree: boolean
   owner: string
+  ownerPath: string
   branch?: string
   commits?: number
 }
@@ -177,6 +194,7 @@ async function classify(cwd: string): Promise<Classification | undefined> {
   return {
     worktree,
     owner: ownerOfWorktree(commonDir),
+    ownerPath: repoRootOfCommonDir(commonDir),
     // `HEAD` détachée n'est pas une branche : `branchLabel` s'en charge, et c'est testé.
     ...(branchLabel(branch) ? { branch: branchLabel(branch) as string } : {}),
     ...(Number.isFinite(commits) ? { commits } : {})

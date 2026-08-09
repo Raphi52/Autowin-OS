@@ -67,6 +67,14 @@ describe('layoutWorktreeMap — territoire', () => {
       layout.lines.find((line) => line.kind === 'closed')?.stations[0].dirtyFiles
     ).toBeUndefined()
   })
+
+  it('place une saleté non mesurée sur une ligne inconnue, jamais fermée', () => {
+    const unknownLayout = layoutWorktreeMap([entry({ path: '/inconnu', head: 'aaa' })])
+
+    expect(unknownLayout.lines).toHaveLength(1)
+    expect(unknownLayout.lines[0]).toMatchObject({ kind: 'unknown', label: 'INCONNU' })
+    expect(unknownLayout.lines.some((line) => line.kind === 'closed')).toBe(false)
+  })
 })
 
 describe('layoutWorktreeMap — correspondances et cassures', () => {

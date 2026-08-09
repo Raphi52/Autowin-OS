@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSy
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
+import { readDurableJson, writeDurableJson } from './durable-json'
 
 /**
  * REGISTRE NATIF — source LOCALE unique des capacités, sans aucun sous-processus externe :
@@ -24,6 +25,7 @@ export interface RegistryItem {
 export type RegistryKind = 'skills' | 'hooks' | 'tools' | 'plugins'
 
 interface Enablement {
+  schemaVersion?: 1
   skills?: Record<string, boolean>
   tools?: Record<string, boolean>
   plugins?: Record<string, boolean>
@@ -33,6 +35,93 @@ interface Catalog {
   tools?: Omit<RegistryItem, 'enabled'>[]
   plugins?: Omit<RegistryItem, 'enabled'>[]
   hooks?: Omit<RegistryItem, 'enabled'>[]
+}
+
+const REGISTRY_KINDS: RegistryKind[] = ['skills', 'hooks', 'tools', 'plugins']
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function booleanRecord(value: unknown): Record<string, boolean> | undefined {
+  if (!isPlainObject(value)) return undefined
+  const entries = Object.entries(value)
+  if (entries.some(([id, enabled]) => !id.trim() || typeof enabled !== 'boolean')) return undefined
+  return Object.fromEntries(entries) as Record<string, boolean>
+}
+
+function decodeEnablementMaps(value: Record<string, unknown>): Enablement | undefined {
+  const decoded: Enablement = {}
+  for (const kind of REGISTRY_KINDS) {
+    if (value[kind] === undefined) return undefined
+    const state = booleanRecord(value[kind])
+    if (!state) return undefined
+    decoded[kind] = state
+  }
+  return decoded
+}
+
+function decodeEnablement(value: unknown): Enablement | undefined {
+  if (!isPlainObject(value)) return undefined
+  if (value.schemaVersion !== 1) return undefined
+  const decoded = decodeEnablementMaps(value)
+  return decoded ? { schemaVersion: 1, ...decoded } : undefined
+}
+
+function decodeLegacyPartialEnablement(value: unknown): Enablement | undefined {
+  if (!isPlainObject(value)) return undefined
+  if (value.schemaVersion !== undefined) return undefined
+  if (Object.keys(value).some((key) => !REGISTRY_KINDS.includes(key as RegistryKind))) {
+    return undefined
+  }
+
+  const decoded: Enablement = {}
+  let hasKnownMap = false
+  for (const kind of REGISTRY_KINDS) {
+    if (value[kind] === undefined) continue
+    const state = booleanRecord(value[kind])
+    if (!state) return undefined
+    decoded[kind] = state
+    hasKnownMap = true
+  }
+  return hasKnownMap ? decoded : undefined
+}
+
+function completeEnablement(value: Enablement): Enablement {
+  return {
+    schemaVersion: 1,
+    skills: value.skills ?? {},
+    tools: value.tools ?? {},
+    plugins: value.plugins ?? {},
+    hooks: value.hooks ?? {}
+  }
+}
+
+function readEnablement(path: string): Enablement {
+  try {
+    return readDurableJson(path, decodeEnablement) ?? {}
+  } catch (error) {
+    // L'ancien writer ne produisait pas de backup. S'il en existe un, la paire
+    // appartient au format durable courant et doit rester fail-closed.
+    if (existsSync(`${path}.bak`)) throw error
+
+    let unversioned: Enablement | undefined
+    try {
+      unversioned = readDurableJson(path, decodeLegacyPartialEnablement)
+    } catch {
+      throw error
+    }
+    if (!unversioned) return {}
+
+    const migrated = completeEnablement(unversioned)
+    // Le décodeur précédent protège le legacy pendant la première publication.
+    // La seconde remplace ensuite ce backup par le snapshot courant versionné.
+    writeDurableJson(path, migrated, decodeEnablement, {
+      decodePrevious: decodeLegacyPartialEnablement
+    })
+    writeDurableJson(path, migrated, decodeEnablement)
+    return migrated
+  }
 }
 
 function registryDir(base = ensureAutowinAppData()): string {
@@ -59,7 +148,8 @@ function readJson<T>(path: string, fallback: T): T {
 export function nativeRegistryActive(base = ensureAutowinAppData()): boolean {
   if (process.env.AUTOWIN_NATIVE_REGISTRY === '0') return false
   if (process.env.AUTOWIN_NATIVE_REGISTRY === '1') return true
-  return existsSync(enablementPath(base))
+  const path = enablementPath(base)
+  return existsSync(path) || existsSync(`${path}.bak`)
 }
 
 /**
@@ -151,7 +241,7 @@ function scanSkillDirs(root: string): { id: string; dir: string }[] {
 }
 
 export function nativeSkills(base = ensureAutowinAppData()): RegistryItem[] {
-  const enablement = readJson<Enablement>(enablementPath(base), {}).skills ?? {}
+  const enablement = readEnablement(enablementPath(base)).skills ?? {}
   const seen = new Set<string>()
   const items: RegistryItem[] = []
   for (const root of skillRoots()) {
@@ -177,7 +267,7 @@ function catalogControls(
 ): RegistryItem[] {
   const catalog = readJson<Catalog>(catalogPath(base), {})
   const decls = catalog[kind] ?? []
-  const enablement = readJson<Enablement>(enablementPath(base), {})[kind] ?? {}
+  const enablement = readEnablement(enablementPath(base))[kind] ?? {}
   return decls.map((d) => ({ ...d, enabled: enablement[d.id] !== false }))
 }
 
@@ -198,11 +288,11 @@ export function setNativeEnablement(
   base = ensureAutowinAppData()
 ): RegistryItem[] {
   const path = enablementPath(base)
-  const state = readJson<Enablement>(path, {})
+  const state = readEnablement(path)
   const kindState = { ...(state[kind] ?? {}) }
   kindState[id] = enabled
-  const next: Enablement = { ...state, [kind]: kindState }
-  writeFileSync(path, JSON.stringify(next, null, 2), 'utf8')
+  const next = completeEnablement({ ...state, [kind]: kindState })
+  writeDurableJson(path, next, decodeEnablement)
   return listNativeRegistry(kind, base)
 }
 
@@ -213,7 +303,7 @@ export function seedRegistrySnapshot(
 ): void {
   const enablementFile = enablementPath(base)
   const catalogFile = catalogPath(base)
-  const existingEnablement = readJson<Enablement>(enablementFile, {})
+  const existingEnablement = readEnablement(enablementFile)
   const enablement: Enablement = { ...existingEnablement }
   const catalog: Catalog = {}
   for (const kind of ['skills', 'tools', 'plugins', 'hooks'] as RegistryKind[]) {
@@ -236,5 +326,5 @@ export function seedRegistrySnapshot(
   // Un toggle peut créer enablement.v1.json avant que le catalogue soit amorcé :
   // chaque fichier est donc initialisé indépendamment, sans écraser l'état déjà choisi.
   if (!existsSync(catalogFile)) writeFileSync(catalogFile, JSON.stringify(catalog, null, 2), 'utf8')
-  writeFileSync(enablementFile, JSON.stringify(enablement, null, 2), 'utf8')
+  writeDurableJson(enablementFile, completeEnablement(enablement), decodeEnablement)
 }

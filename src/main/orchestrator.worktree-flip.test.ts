@@ -14,6 +14,10 @@ import { RoleModelConfig } from './roles'
 import { TrustLedger } from './trust/ledger'
 import { HookBus } from './hooks/hook-bus'
 import type { RunLifecycleEvent } from '../shared/run-execution'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 class CapturingProvider implements ProviderAdapter {
   readonly id = 'capture'
@@ -100,6 +104,356 @@ function runWithLifecycle(
 }
 
 describe('Orchestrator — flip live worktree', () => {
+  it('laisse un log ignore hors du worktree et ne fabrique aucun claim publiable', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'autowin-causal-base-'))
+    const worktreeRoot = mkdtempSync(join(tmpdir(), 'autowin-causal-worktrees-'))
+    const worktree = join(worktreeRoot, 'run')
+    try {
+      execFileSync('git', ['init'], { cwd: base })
+      writeFileSync(join(base, '.gitignore'), '*.log\n', 'utf8')
+      writeFileSync(join(base, 'app.log'), 'initial\n', 'utf8')
+      execFileSync('git', ['add', '.gitignore'], { cwd: base })
+      execFileSync(
+        'git',
+        ['-c', 'user.email=t@t', '-c', 'user.name=T', 'commit', '-m', 'initial'],
+        { cwd: base }
+      )
+      execFileSync('git', ['worktree', 'add', '--detach', worktree, 'HEAD'], { cwd: base })
+      expect(existsSync(join(base, 'app.log'))).toBe(true)
+      expect(existsSync(join(worktree, 'app.log'))).toBe(false)
+      let call = 0
+      const seenOptions: SendOptions[] = []
+      const provider: ProviderAdapter = {
+        id: 'causal-provider',
+        supportsExecution: true,
+        auth: async () => true,
+        async *send(_messages, options = {}) {
+          seenOptions.push(options)
+          call += 1
+          return {
+            text: call === 1 ? 'travail' : 'VALIDE',
+            provider: 'causal-provider',
+            systemInjected: Boolean(options.system),
+            executionEvidence:
+              call === 1
+                ? [
+                    {
+                      type: 'file_change',
+                      kind: 'mutation',
+                      status: 'completed',
+                      ok: true,
+                      summary: 'mutation'
+                    },
+                    {
+                      type: 'command_execution',
+                      kind: 'verification',
+                      status: 'completed',
+                      ok: true,
+                      summary: 'preuve'
+                    }
+                  ]
+                : undefined
+          }
+        }
+      }
+      const registry = new ProviderRegistry().register(provider)
+      const roles = new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'worker' },
+        judge: { provider: provider.id, model: 'judge' }
+      })
+      const orch = new Orchestrator({
+        registry,
+        roles,
+        cost: new CostAggregator(),
+        trust: new TrustLedger(),
+        authority: new AuthoritySas(),
+        executionWorkspace: base,
+        worktrees: {
+          begin: () => worktree,
+          end: () => ({ outcome: 'merged', agentId: 'run', committed: true })
+        }
+      })
+
+      const result = await orch.run(
+        'modifie le projet',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        [join(base, 'app.log')]
+      )
+
+      expect(seenOptions[0].execution?.causalWatchPaths).toBeUndefined()
+      expect(result.causalMutationEvidence).toBeUndefined()
+      expect(existsSync(join(base, 'app.log'))).toBe(true)
+      expect(existsSync(join(worktree, 'app.log'))).toBe(false)
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+      rmSync(worktreeRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('observe dans le worktree une source future absente au demarrage', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'autowin-causal-future-base-'))
+    const worktreeRoot = mkdtempSync(join(tmpdir(), 'autowin-causal-future-worktrees-'))
+    const worktree = join(worktreeRoot, 'run')
+    try {
+      execFileSync('git', ['init'], { cwd: base })
+      writeFileSync(join(base, 'tracked.txt'), 'initial\n', 'utf8')
+      execFileSync('git', ['add', 'tracked.txt'], { cwd: base })
+      execFileSync(
+        'git',
+        ['-c', 'user.email=t@t', '-c', 'user.name=T', 'commit', '-m', 'initial'],
+        { cwd: base }
+      )
+      execFileSync('git', ['worktree', 'add', '--detach', worktree, 'HEAD'], { cwd: base })
+      const futurePath = join(base, 'future.log')
+      const seenOptions: SendOptions[] = []
+      let call = 0
+      const provider: ProviderAdapter = {
+        id: 'future-provider',
+        supportsExecution: true,
+        auth: async () => true,
+        async *send(_messages, options = {}) {
+          seenOptions.push(options)
+          call += 1
+          if (call === 1) {
+            writeFileSync(
+              join(options.execution!.cwd!, 'future.log'),
+              'ERROR auto-created\n',
+              'utf8'
+            )
+          }
+          return {
+            text: call === 1 ? 'travail' : 'VALIDE',
+            provider: 'future-provider',
+            systemInjected: Boolean(options.system),
+            executionEvidence:
+              call === 1
+                ? [
+                    {
+                      type: 'file_change',
+                      kind: 'mutation',
+                      status: 'completed',
+                      ok: true,
+                      summary: 'mutation'
+                    },
+                    {
+                      type: 'command_execution',
+                      kind: 'verification',
+                      status: 'completed',
+                      ok: true,
+                      summary: 'preuve'
+                    }
+                  ]
+                : undefined
+          }
+        }
+      }
+      const futureWorktrees: RunWorktrees = {
+        begin: () => worktree,
+        end: (_runId, options) => {
+          execFileSync('git', ['add', '-A'], { cwd: worktree })
+          execFileSync(
+            'git',
+            ['-c', 'user.email=t@t', '-c', 'user.name=T', 'commit', '-m', 'agent'],
+            { cwd: worktree }
+          )
+          const baseSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+            cwd: base,
+            encoding: 'utf8'
+          }).trim()
+          const agentSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+            cwd: worktree,
+            encoding: 'utf8'
+          }).trim()
+          options?.onPrepared?.({ baseSha, agentSha })
+          execFileSync('git', ['merge', '--ff-only', agentSha], { cwd: base })
+          options?.onPublished?.({ baseSha, agentSha })
+          return { outcome: 'merged', agentId: 'run', committed: true }
+        }
+      }
+      const registry = new ProviderRegistry().register(provider)
+      const roles = new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'worker' },
+        judge: { provider: provider.id, model: 'judge' }
+      })
+      const orch = new Orchestrator({
+        registry,
+        roles,
+        cost: new CostAggregator(),
+        trust: new TrustLedger(),
+        authority: new AuthoritySas(),
+        executionWorkspace: base,
+        worktrees: futureWorktrees
+      })
+
+      const result = await orch.run(
+        'modifie le projet',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        [futurePath]
+      )
+
+      expect(seenOptions[0].execution?.causalWatchPaths).toEqual([join(worktree, 'future.log')])
+      expect(result.causalMutationEvidence?.[0]).toMatchObject({
+        type: 'workspace_delta',
+        paths: ['future.log']
+      })
+      expect(
+        result.causalMutationEvidence?.[0].writtenLineFingerprintsByPath?.['future.log']
+      ).toHaveLength(1)
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+      rmSync(worktreeRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('attribue une ecriture tardive incluse dans le commit de publication', async () => {
+    let publish: (() => void) | undefined
+    const lateClaims = vi.fn()
+    const base = mkdtempSync(join(tmpdir(), 'autowin-causal-late-base-'))
+    const worktreeRoot = mkdtempSync(join(tmpdir(), 'autowin-causal-late-worktrees-'))
+    const worktree = join(worktreeRoot, 'run')
+    try {
+      execFileSync('git', ['init'], { cwd: base })
+      writeFileSync(join(base, 'tracked.txt'), 'initial\n', 'utf8')
+      execFileSync('git', ['add', 'tracked.txt'], { cwd: base })
+      execFileSync(
+        'git',
+        ['-c', 'user.email=t@t', '-c', 'user.name=T', 'commit', '-m', 'initial'],
+        { cwd: base }
+      )
+      execFileSync('git', ['worktree', 'add', '--detach', worktree, 'HEAD'], { cwd: base })
+      let call = 0
+      const provider: ProviderAdapter = {
+        id: 'late-provider',
+        supportsExecution: true,
+        auth: async () => true,
+        async *send(_messages, options = {}) {
+          call += 1
+          if (call === 1) writeFileSync(join(options.execution!.cwd!, 'code.ts'), 'done\n', 'utf8')
+          return {
+            text: call === 1 ? 'travail' : 'VALIDE',
+            provider: 'late-provider',
+            systemInjected: Boolean(options.system),
+            executionEvidence:
+              call === 1
+                ? [
+                    {
+                      type: 'file_change',
+                      kind: 'mutation',
+                      status: 'completed',
+                      ok: true,
+                      summary: 'mutation'
+                    },
+                    {
+                      type: 'command_execution',
+                      kind: 'verification',
+                      status: 'completed',
+                      ok: true,
+                      summary: 'preuve'
+                    }
+                  ]
+                : undefined
+          }
+        }
+      }
+      const registry = new ProviderRegistry().register(provider)
+      const roles = new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'worker' },
+        judge: { provider: provider.id, model: 'judge' }
+      })
+      const orch = new Orchestrator({
+        registry,
+        roles,
+        cost: new CostAggregator(),
+        trust: new TrustLedger(),
+        authority: new AuthoritySas(),
+        executionWorkspace: base,
+        worktrees: {
+          begin: () => worktree,
+          end: (_runId, options?: Parameters<RunWorktrees['end']>[1]) => {
+            writeFileSync(join(worktree, 'future.log'), 'ERROR late-after-snapshot\n', 'utf8')
+            execFileSync('git', ['add', '-A'], { cwd: worktree })
+            execFileSync(
+              'git',
+              ['-c', 'user.email=t@t', '-c', 'user.name=T', 'commit', '-m', 'agent'],
+              { cwd: worktree }
+            )
+            const baseSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+              cwd: base,
+              encoding: 'utf8'
+            }).trim()
+            const agentSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+              cwd: worktree,
+              encoding: 'utf8'
+            }).trim()
+            options?.onPrepared?.({ baseSha, agentSha })
+            execFileSync('git', ['merge', '--ff-only', agentSha], { cwd: base })
+            publish = () => options?.onPublished?.({ baseSha, agentSha })
+            return { outcome: 'merged', agentId: 'run', committed: true }
+          }
+        }
+      })
+
+      const result = await orch.run(
+        'modifie le projet',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'conv-late',
+        undefined,
+        undefined,
+        'turn-late',
+        undefined,
+        undefined,
+        [join(base, 'future.log')],
+        lateClaims
+      )
+
+      expect(result.causalMutationEvidence).toBeUndefined()
+      publish?.()
+      expect(
+        result.causalMutationEvidence?.[0].writtenLineFingerprintsByPath?.['future.log']
+      ).toHaveLength(1)
+      expect(lateClaims).toHaveBeenCalledWith({
+        eventId: expect.stringMatching(/^worktree-publication:run-[^:]+:[0-9a-f]{40}$/),
+        mutatedPaths: [join(base, 'future.log')],
+        mutatedLineFingerprints: {
+          [join(base, 'future.log')]: expect.arrayContaining([expect.any(String)])
+        },
+        mutatedPathGenerationMarkers: {
+          [join(base, 'future.log')]: expect.any(String)
+        }
+      })
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+      rmSync(worktreeRoot, { recursive: true, force: true })
+    }
+  })
+
   it('observe workspace, clôture open, Git réel puis clôture verte sur une mutation', async () => {
     const lifecycle: RunLifecycleEvent[] = []
     let currentRunId = ''
@@ -282,6 +636,115 @@ describe('Orchestrator — flip live worktree', () => {
 
       expect(result.gateBlocked).toBe(false)
       expect(end.mock.calls[0][1]).toMatchObject({ merge: true })
+    })
+
+    it('run VERT retenu par un tournoi → aucune fusion et résultat encore vert', async () => {
+      const end = vi.fn()
+      let actualRunId = ''
+      const { orch } = makeOrchestrator({
+        begin: (runId) => {
+          actualRunId = runId
+          return 'C:\\wt\\tournoi'
+        },
+        end,
+        activity: () => [
+          {
+            agentId: actualRunId,
+            agentName: 'Tournoi',
+            state: 'ready',
+            files: [{ path: 'src/a.ts', kind: 'mod' }],
+            startedAtMs: 1,
+            worktreePath: 'C:\\wt\\tournoi',
+            baseSha: 'abc123',
+            verdict: 'green',
+            publication: 'held'
+          }
+        ]
+      })
+
+      const result = await orch.run(
+        'modifie le projet',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { publication: 'hold' }
+      )
+
+      expect(end).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          merge: false,
+          retainGreen: true
+        })
+      )
+      expect(result).toMatchObject({
+        valid: true,
+        gateBlocked: false,
+        retainedWorkspace: { path: 'C:\\wt\\tournoi', baseSha: 'abc123' }
+      })
+    })
+
+    it('un tournoi lecture seule force quand même un bureau isolé et le conserve', async () => {
+      const end = vi.fn()
+      let actualRunId = ''
+      const begin = vi.fn((runId: string) => {
+        actualRunId = runId
+        return 'C:\\wt\\analyse'
+      })
+      const { orch } = makeOrchestrator({
+        begin,
+        end,
+        activity: () => [
+          {
+            agentId: actualRunId,
+            agentName: 'Tournoi',
+            state: 'ready',
+            files: [],
+            startedAtMs: 1,
+            worktreePath: 'C:\\wt\\analyse',
+            baseSha: 'abc123',
+            verdict: 'green',
+            publication: 'held'
+          }
+        ]
+      })
+
+      const result = await orch.run(
+        'analyse le projet',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { publication: 'hold' }
+      )
+
+      expect(begin).toHaveBeenCalledWith(expect.any(String), 'Agent', true, expect.any(Object))
+      expect(end).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ merge: false, retainGreen: true })
+      )
+      expect(result.retainedWorkspace?.path).toBe('C:\\wt\\analyse')
     })
 
     it('run jugé vert mais finalisation bloquée → résultat rouge, reprise conservée et aucune clôture', async () => {

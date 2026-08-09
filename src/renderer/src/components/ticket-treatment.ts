@@ -133,6 +133,7 @@ interface TreatmentDeps {
   onConversationCreated?: (conversation: TreatmentConversation) => void
   abandonConversation?: (conversation: TreatmentConversation) => Promise<void>
   onProgress?: (result: TicketTreatmentResult) => void
+  onItemSettled?: (item: TicketItem, succeeded: boolean) => void
 }
 
 export interface TicketTreatmentResult {
@@ -163,6 +164,7 @@ export async function runTicketTreatmentBatch(
       cursor += 1
       if (index >= items.length) return
       const item = items[index]
+      let succeeded = false
       try {
         if (!deps.shouldContinue()) return
         const conversation = await deps.createConversation(item)
@@ -178,11 +180,13 @@ export async function runTicketTreatmentBatch(
           item,
           formatTicketTreatmentPrompt(item)
         )
-        if (response.ok && !response.cancelled) result.succeeded += 1
+        succeeded = response.ok && !response.cancelled
+        if (succeeded) result.succeeded += 1
         else result.failed += 1
       } catch {
         result.failed += 1
       } finally {
+        deps.onItemSettled?.(item, succeeded)
         result.completed += 1
         report()
       }

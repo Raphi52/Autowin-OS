@@ -35,10 +35,11 @@ describe('critique #1 — persistance auth.json durcie', () => {
 describe('critique #2 — handlers IPC agentiques gardés', () => {
   const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
   const guarded = (channel: string): boolean => {
-    // le channel peut être sur la même ligne que ipcMain.handle OU la ligne suivante (pilotChat)
-    const start = source.indexOf(`'${channel}'`)
+    const marker = `'${channel}'`
+    const start = source.indexOf(marker)
     if (start < 0) return false
-    const block = source.slice(start, start + 1200)
+    const next = source.indexOf('ipcMain.handle(', start + marker.length)
+    const block = source.slice(start, next < 0 ? source.length : next)
     return /assertTrustedRendererSender\(\s*event/.test(block)
   }
   it.each([
@@ -52,11 +53,52 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     'os:profiles:apply',
     'os:profiles:save',
     'os:conversations:remove',
+    'os:authority:resolve',
+    'os:conversations:rename',
+    'os:openFolder',
+    'os:appCommand',
+    'os:pilotChat:cancel',
+    'os:orchestrate:cancel',
+    'os:pilotChat:inject',
+    'os:setActiveConversation',
+    'os:causalTrace:displayed',
+    'os:promptCalls',
+    'os:causalTrace',
+    'os:brainTraces',
     'os:runTrace',
     'os:loadBrainGraph',
-    'os:readNodeFile'
+    'os:readNodeFile',
+    'app:storage-migration'
   ])('%s appelle assertTrustedRendererSender', (channel) => {
     expect(guarded(channel)).toBe(true)
+  })
+
+  it('couvre exhaustivement tous les ipcMain.handle exposes au renderer', () => {
+    const handlers = [...source.matchAll(/ipcMain\.handle\(\s*['"]([^'"]+)['"]/g)]
+    const unguarded = handlers.flatMap((match, index) => {
+      const block = source.slice(match.index, handlers[index + 1]?.index ?? source.length)
+      const channel = match[1]
+      const genericGuard =
+        /assertTrusted(?:Renderer|Behaviour)Sender\(\s*event/.test(block) ||
+        /createStorageMigrationReadHandler/.test(block)
+      const specializedGuard =
+        (channel === 'app:storage-migration-complete' &&
+          /isTrustedRendererUrl\(event\.senderFrame/.test(block)) ||
+        (channel === 'model:question:answer' &&
+          /questionWindows\.get\(event\.sender\.id\)/.test(block))
+      return genericGuard || specializedGuard ? [] : [channel]
+    })
+
+    expect(handlers).toHaveLength(132)
+    expect(unguarded).toEqual([])
+  })
+
+  it('exige un conversationId avant toute lecture Brain', () => {
+    const start = source.indexOf("'os:brainTraces'")
+    const next = source.indexOf('ipcMain.handle(', start + 1)
+    const block = source.slice(start, next)
+    expect(block).toMatch(/guardString\(rawConversationId, 'conversationId'\)/)
+    expect(block).not.toMatch(/readBrainTraces\([^)]*undefined/)
   })
 })
 

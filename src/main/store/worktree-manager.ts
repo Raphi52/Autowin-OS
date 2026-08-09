@@ -15,7 +15,11 @@ import {
 } from 'node:fs'
 import { platform } from 'node:os'
 import { isAbsolute, join, relative, resolve } from 'node:path'
+import { Worker } from 'node:worker_threads'
 import type { WorktreeConflictDiffResult } from '../../shared/worktree-activity-model'
+import { parsePorcelainPaths } from '../run-autoclose'
+import { WorktreeOperationClient } from './worktree-operation-client'
+import type { WorktreeRecoveryInventory } from './worktree-operation-protocol'
 
 /**
  * Moteur worktree "par défaut, sans intervention" (volet B du cockpit worktree).
@@ -31,6 +35,7 @@ import type { WorktreeConflictDiffResult } from '../../shared/worktree-activity-
  */
 
 const SAFE_ID = /^[A-Za-z0-9_-]+$/
+const GIT_COMMAND_TIMEOUT_MS = 30_000
 function assertSafeId(value: string, label: string): void {
   if (!SAFE_ID.test(value))
     throw new Error(`${label} invalide (caractères non autorisés): ${value}`)
@@ -66,13 +71,29 @@ export interface GitRunner {
   (repo: string, args: string[]): string
 }
 
-const defaultGit: GitRunner = (repo, args) =>
-  execFileSync('git', args, { cwd: repo, encoding: 'utf8', windowsHide: true }).trim()
+const defaultGit: GitRunner = (repo, args) => {
+  const stdout = execFileSync('git', args, {
+    cwd: repo,
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: GIT_COMMAND_TIMEOUT_MS
+  })
+  return args.includes('-z') ? stdout : stdout.trim()
+}
+
+function parseNullSeparatedPaths(stdout: string): string[] {
+  return stdout.split('\0').filter((path) => path.length > 0)
+}
 
 /** Comme defaultGit mais ne jette PAS : renvoie code + sorties (pour détecter un conflit de merge). */
 function tryGit(repo: string, args: string[]): { code: number; stdout: string; stderr: string } {
   try {
-    const stdout = execFileSync('git', args, { cwd: repo, encoding: 'utf8', windowsHide: true })
+    const stdout = execFileSync('git', args, {
+      cwd: repo,
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: GIT_COMMAND_TIMEOUT_MS
+    })
     return { code: 0, stdout, stderr: '' }
   } catch (err) {
     const e = err as { status?: number; stdout?: Buffer | string; stderr?: Buffer | string }
@@ -136,6 +157,9 @@ export interface WorktreeManagerOptions {
   /** Identité stable du processus (démarrage + exécutable), injectable pour les tests. */
   processIdentityFn?: (pid: number) => string | undefined
   nowFn?: () => number
+  /** Désactive le client worker à l'intérieur du worker lui-même. */
+  disableAsyncOperations?: boolean
+  operationTimeoutMs?: number
 }
 
 const SPAWN_INTENT_MAX_AGE_MS = 2 * 60 * 1_000
@@ -199,6 +223,7 @@ export class WorktreeManager {
   private readonly configuredBaseBranch?: string
   private readonly processIdentity: (pid: number) => string | undefined
   private readonly now: () => number
+  private readonly operationClient?: WorktreeOperationClient
 
   constructor(opts: WorktreeManagerOptions) {
     this.baseRepo = opts.baseRepo
@@ -210,6 +235,144 @@ export class WorktreeManager {
     this.configuredBaseBranch = opts.baseBranch
     this.processIdentity = opts.processIdentityFn ?? defaultProcessIdentity
     this.now = opts.nowFn ?? Date.now
+    const operationWorkerPath = join(__dirname, 'worktree-operation-worker.js')
+    if (
+      !opts.disableAsyncOperations &&
+      !opts.git &&
+      !opts.tryGitFn &&
+      existsSync(operationWorkerPath)
+    ) {
+      this.operationClient = new WorktreeOperationClient(
+        operationWorkerPath,
+        {
+          timeoutMs: opts.operationTimeoutMs ?? GIT_COMMAND_TIMEOUT_MS + 2_000,
+          workerFactory: () =>
+            new Worker(operationWorkerPath, {
+              workerData: {
+                baseRepo: this.baseRepo,
+                worktreeRoot: this.worktreeRoot,
+                ...(this.configuredBaseBranch ? { baseBranch: this.configuredBaseBranch } : {})
+              }
+            })
+        }
+      )
+    }
+  }
+
+  async prepareAsync(
+    agentId: string,
+    context?: WorktreeRunContext
+  ): Promise<{ context: WorktreeRunContext; path: string }> {
+    if (!this.operationClient) {
+      const resolvedContext = context ?? this.describe(agentId)
+      return { context: resolvedContext, path: this.acquire(agentId, resolvedContext) }
+    }
+    return this.operationClient.run({ operation: 'prepare', agentId, context })
+  }
+
+  async changedFilesAsync(agentId: string): Promise<string[]> {
+    return this.operationClient
+      ? this.operationClient.run({ operation: 'changedFiles', agentId })
+      : this.changedFiles(agentId)
+  }
+
+  async finalizeAsync(
+    agentId: string,
+    options: {
+      baseBranch?: string
+      expectedAgentSha?: string
+      onPrepared?: (agentSha: string, baseSha: string) => void
+    } = {}
+  ): Promise<FinalizeResult> {
+    if (!this.operationClient) return this.finalize(agentId, options)
+    const { onPrepared, ...serializable } = options
+    return this.operationClient.run(
+      { operation: 'finalize', agentId, options: serializable },
+      onPrepared
+    )
+  }
+
+  async cleanupPublishedAsync(
+    agentId: string,
+    expectedSha: string,
+    baseBranch?: string
+  ): Promise<FinalizeResult> {
+    return this.operationClient
+      ? this.operationClient.run({
+          operation: 'cleanupPublished',
+          agentId,
+          expectedSha,
+          baseBranch
+        })
+      : this.cleanupPublished(agentId, expectedSha, baseBranch)
+  }
+
+  /** Vrai uniquement quand les opérations Git sont réellement déportées hors du main Electron. */
+  operationsAreIsolated(): boolean {
+    return Boolean(this.operationClient)
+  }
+
+  recoveryInventory(): WorktreeRecoveryInventory {
+    const residues = this.reconcileResidues()
+    const agents = this.listAgentIds().map((agentId) => {
+      let context: WorktreeRunContext | undefined
+      try {
+        context = this.describe(agentId)
+      } catch {
+        context = undefined
+      }
+      return {
+        agentId,
+        ...(context ? { context } : {}),
+        active: this.hasActiveProcesses(agentId),
+        changedFiles: this.changedFiles(agentId)
+      }
+    })
+    return { residues, agents }
+  }
+
+  async recoveryInventoryAsync(): Promise<WorktreeRecoveryInventory> {
+    return this.operationClient
+      ? this.operationClient.run({ operation: 'recoveryInventory' })
+      : this.recoveryInventory()
+  }
+
+  async describeAsync(agentId: string): Promise<WorktreeRunContext> {
+    return this.operationClient
+      ? this.operationClient.run({ operation: 'describe', agentId })
+      : this.describe(agentId)
+  }
+
+  async hasActiveProcessesAsync(agentId: string): Promise<boolean> {
+    return this.operationClient
+      ? this.operationClient.run({ operation: 'hasActiveProcesses', agentId })
+      : this.hasActiveProcesses(agentId)
+  }
+
+  async validateRecoveryContextAsync(
+    agentId: string,
+    context: WorktreeRecoveryContext
+  ): Promise<ReturnType<WorktreeManager['validateRecoveryContext']>> {
+    return this.operationClient
+      ? this.operationClient.run({ operation: 'validateRecoveryContext', agentId, context })
+      : this.validateRecoveryContext(agentId, context)
+  }
+
+  async readConflictDiffAsync(
+    agentId: string,
+    snapshot: { files: string[]; baseSha: string; agentSha: string }
+  ): Promise<WorktreeConflictDiffResult> {
+    return this.operationClient
+      ? this.operationClient.run({ operation: 'readConflictDiff', agentId, snapshot })
+      : this.readConflictDiff(agentId, snapshot)
+  }
+
+  async discardAsync(agentId: string): Promise<void> {
+    if (this.operationClient) {
+      await this.operationClient.run({ operation: 'discard', agentId })
+      return
+    }
+    this.discard(agentId)
   }
 
   private pathFor(agentId: string): string {
@@ -537,11 +700,8 @@ export class WorktreeManager {
   }
 
   private operationInProgress(repo = this.baseRepo): string[] | undefined {
-    const conflictOut = this.tryGitFn(repo, ['diff', '--name-only', '--diff-filter=U'])
-    const conflictFiles = conflictOut.stdout
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
+    const conflictOut = this.tryGitFn(repo, ['diff', '--name-only', '-z', '--diff-filter=U'])
+    const conflictFiles = parseNullSeparatedPaths(conflictOut.stdout)
     const operationPaths = [
       'MERGE_HEAD',
       'CHERRY_PICK_HEAD',
@@ -565,15 +725,12 @@ export class WorktreeManager {
   }
 
   private blockingDirtyFiles(agentFiles: string[]): string[] {
-    const dirtyFiles = this.git(this.baseRepo, ['status', '--porcelain', '--untracked-files=all'])
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => line.replace(/^\S+\s+/, ''))
-    const stagedFiles = this.git(this.baseRepo, ['diff', '--cached', '--name-only'])
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
+    const dirtyFiles = parsePorcelainPaths(
+      this.git(this.baseRepo, ['status', '--porcelain=v1', '-z', '--untracked-files=all'])
+    )
+    const stagedFiles = parseNullSeparatedPaths(
+      this.git(this.baseRepo, ['diff', '--cached', '--name-only', '-z'])
+    )
     const dirtyOverlap = agentFiles.filter((file) => dirtyFiles.includes(file))
     return [...new Set([...stagedFiles, ...dirtyOverlap])]
   }
@@ -581,10 +738,9 @@ export class WorktreeManager {
   private headAdvance(path: string, expectedSha: string): { advanced: boolean; files: string[] } {
     const currentSha = this.git(path, ['rev-parse', 'HEAD'])
     if (currentSha === expectedSha) return { advanced: false, files: [] }
-    const files = this.git(path, ['diff', '--name-only', `${expectedSha}..${currentSha}`])
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
+    const files = parseNullSeparatedPaths(
+      this.git(path, ['diff', '--name-only', '-z', `${expectedSha}..${currentSha}`])
+    )
     return { advanced: true, files }
   }
 
@@ -647,14 +803,9 @@ export class WorktreeManager {
 
     const durableSha = this.git(this.baseRepo, ['rev-parse', branch])
     if (durableSha !== expectedSha) {
-      const files = this.git(this.baseRepo, [
-        'diff',
-        '--name-only',
-        `${expectedSha}..${durableSha}`
-      ])
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
+      const files = parseNullSeparatedPaths(
+        this.git(this.baseRepo, ['diff', '--name-only', '-z', `${expectedSha}..${durableSha}`])
+      )
       this.tryGitFn(this.baseRepo, ['worktree', 'add', path, branch])
       return { ok: false, advanced: true, files }
     }
@@ -692,12 +843,11 @@ export class WorktreeManager {
     const files = this.tryGitFn(this.baseRepo, [
       'diff',
       '--name-only',
+      '-z',
       `${expectedSha}..${currentSha}`
     ])
-      .stdout.split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-    return { deleted: false, advanced: true, files }
+    const changedPaths = parseNullSeparatedPaths(files.stdout)
+    return { deleted: false, advanced: true, files: changedPaths }
   }
 
   /**
@@ -758,6 +908,7 @@ export class WorktreeManager {
   private preservedIgnoredFiles(repo: string): string[] {
     const out = this.git(repo, [
       'ls-files',
+      '-z',
       '--others',
       '--ignored',
       '--exclude-standard',
@@ -772,18 +923,13 @@ export class WorktreeManager {
       ':(exclude,glob)**/.eslintcache',
       ':(exclude,glob)**/.DS_Store'
     ])
-    return out
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
+    return parseNullSeparatedPaths(out)
   }
 
   private workingTreeFiles(repo: string): string[] {
-    return this.git(repo, ['status', '--porcelain', '--untracked-files=all'])
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => line.replace(/^\S+\s+/, ''))
+    return parsePorcelainPaths(
+      this.git(repo, ['status', '--porcelain=v1', '-z', '--untracked-files=all'])
+    )
   }
 
   /** Dernière barrière avant suppression : inclut les écritures suivies et ignorées arrivées tard. */
@@ -1064,7 +1210,7 @@ ${chainReferenceHook}exit 0
       return { ok: false, detail: 'La copie ne porte plus exactement le commit préparé.' }
     }
     if (context.publishedSha) {
-      const status = this.tryGitFn(path, ['status', '--porcelain'])
+      const status = this.tryGitFn(path, ['status', '--porcelain=v1', '-z'])
       if (status.code !== 0 || status.stdout.trim()) {
         return { ok: false, detail: 'La copie préparée a changé avant la reprise.' }
       }
@@ -1132,7 +1278,7 @@ ${chainReferenceHook}exit 0
     options: {
       baseBranch?: string
       expectedAgentSha?: string
-      onPrepared?: (agentSha: string) => void
+      onPrepared?: (agentSha: string, baseSha: string) => void
     } = {}
   ): FinalizeResult {
     const expectedBaseBranch = options.baseBranch ?? this.currentBaseBranch()
@@ -1173,7 +1319,7 @@ ${chainReferenceHook}exit 0
         return this.cleanupPublished(agentId, options.expectedAgentSha, expectedBaseBranch)
       }
       const currentSha = this.git(path, ['rev-parse', 'HEAD'])
-      const currentStatus = this.git(path, ['status', '--porcelain'])
+      const currentStatus = this.git(path, ['status', '--porcelain=v1', '-z'])
       if (currentSha !== options.expectedAgentSha || currentStatus.length > 0) {
         return {
           outcome: 'blocked',
@@ -1206,7 +1352,7 @@ ${chainReferenceHook}exit 0
       }
     }
 
-    const dirty = this.git(path, ['status', '--porcelain']).length > 0
+    const dirty = this.git(path, ['status', '--porcelain=v1', '-z']).length > 0
     let committed = false
     if (dirty) {
       this.git(path, ['add', '-A'])
@@ -1214,8 +1360,8 @@ ${chainReferenceHook}exit 0
       committed = true
     }
     const sha = this.git(path, ['rev-parse', 'HEAD'])
-    options.onPrepared?.(sha)
     const baseSha = this.git(this.baseRepo, ['rev-parse', 'HEAD'])
+    options.onPrepared?.(sha, baseSha)
     if (sha === baseSha) {
       const lateCommit = this.headAdvance(path, sha)
       if (lateCommit.advanced) {
@@ -1276,10 +1422,9 @@ ${chainReferenceHook}exit 0
       }
     }
 
-    const agentFiles = this.git(this.baseRepo, ['diff', '--name-only', `${baseSha}...${sha}`])
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
+    const agentFiles = parseNullSeparatedPaths(
+      this.git(this.baseRepo, ['diff', '--name-only', '-z', `${baseSha}...${sha}`])
+    )
     const blockingDirtyFiles = this.blockingDirtyFiles(agentFiles)
     if (blockingDirtyFiles.length > 0) {
       return {
@@ -1585,14 +1730,14 @@ ${chainReferenceHook}exit 0
       if (recoveryRef.code !== 0) return { outcome: 'merged', agentId, committed: false }
       const recoverySha = recoveryRef.stdout.trim()
       if (recoverySha !== expectedSha) {
-        const files = this.tryGitFn(this.baseRepo, [
-          'diff',
-          '--name-only',
-          `${expectedSha}..${recoverySha}`
-        ])
-          .stdout.split('\n')
-          .map((line) => line.trim())
-          .filter(Boolean)
+        const files = parseNullSeparatedPaths(
+          this.tryGitFn(this.baseRepo, [
+            'diff',
+            '--name-only',
+            '-z',
+            `${expectedSha}..${recoverySha}`
+          ]).stdout
+        )
         return this.recoveredPublishedResidue(agentId, recoveryBranch, expectedSha, files)
       }
       const deleteRef = this.deleteRecoveryRefIfExpected(recoveryBranch, expectedSha)
@@ -1672,6 +1817,21 @@ ${chainReferenceHook}exit 0
     const result = this.cleanupAgentWorktree(agentId, path, expectedSha)
     if (!result.ok) {
       throw new Error(`La copie ${agentId} contient encore du travail et a été conservée.`)
+    }
+  }
+
+  /** Abandon EXPLICITE d'un bureau retenu ; appelé seulement après confirmation UI. */
+  discard(agentId: string): void {
+    const path = this.pathFor(agentId)
+    if (!existsSync(path)) return
+    if (this.hasActiveProcesses(agentId)) {
+      throw new Error(`La copie ${agentId} est encore utilisée par un CLI actif.`)
+    }
+    const ownershipIssue = this.ownershipIssue(path)
+    if (ownershipIssue) throw new Error(ownershipIssue)
+    const cleanup = this.cleanupWorktree(path, true)
+    if (!cleanup.ok) {
+      throw new Error(cleanup.detail ?? `La copie ${agentId} n’a pas pu être supprimée.`)
     }
   }
 }

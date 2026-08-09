@@ -720,6 +720,85 @@ describe('vue Tickets — lots automatiques différés', () => {
     await act(async () => root.unmount())
   })
 
+  it('ne consomme pas les entrants sans provider puis les lance une seule fois apres configuration', async () => {
+    localStorage.setItem('autowin:tickets-auto-mode', '1')
+    const roles = vi
+      .fn()
+      .mockResolvedValueOnce({})
+      .mockResolvedValue({ orchestrator: { provider: 'claude' } })
+    const conversationsCreate = vi.fn(async ({ title }: { title: string }) => ({
+      id: `conv-${title}`
+    }))
+    api({
+      listTickets: vi.fn(async () => ({ items: [item('1')], hasMore: false })),
+      roles,
+      conversationsCreate,
+      conversationsSetAuthorityMode: vi.fn(async () => ({})),
+      orchestrate: vi.fn(async () => ({ ok: true }))
+    })
+
+    const { root } = await render()
+    await act(async () => {
+      for (let index = 0; index < 10; index += 1) await Promise.resolve()
+    })
+
+    expect(conversationsCreate).not.toHaveBeenCalled()
+    expect(localStorage.getItem('autowin:tickets-auto-seen')).toBeNull()
+
+    await act(async () => {
+      root.render(createElement(TicketsView, { active: false }))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      root.render(createElement(TicketsView, { active: true }))
+      for (let index = 0; index < 20; index += 1) await Promise.resolve()
+    })
+
+    expect(conversationsCreate).toHaveBeenCalledTimes(1)
+    await act(async () => root.unmount())
+  })
+
+  it('ne consomme pas un ticket si le provider est indisponible ou si le lancement echoue', async () => {
+    localStorage.setItem('autowin:tickets-auto-mode', '1')
+    const providerStatus = vi
+      .fn()
+      .mockResolvedValueOnce([{ provider: 'claude', status: 'expired', testable: false }])
+      .mockResolvedValue([{ provider: 'claude', status: 'authenticated', testable: false }])
+    const orchestrate = vi.fn().mockResolvedValueOnce({ ok: false }).mockResolvedValue({ ok: true })
+    api({
+      listTickets: vi.fn(async () => ({ items: [item('1')], hasMore: false })),
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      providerStatus,
+      conversationsCreate: vi.fn(async () => ({ id: 'conv-ticket' })),
+      conversationsSetAuthorityMode: vi.fn(async () => ({})),
+      orchestrate
+    })
+
+    const first = await render()
+    await act(async () => {
+      for (let index = 0; index < 10; index += 1) await Promise.resolve()
+    })
+    expect(orchestrate).not.toHaveBeenCalled()
+    expect(localStorage.getItem('autowin:tickets-auto-seen')).toBeNull()
+    await act(async () => first.root.unmount())
+
+    const second = await render()
+    await act(async () => {
+      for (let index = 0; index < 20; index += 1) await Promise.resolve()
+    })
+    expect(orchestrate).toHaveBeenCalledTimes(1)
+    expect(localStorage.getItem('autowin:tickets-auto-seen')).toBeNull()
+    await act(async () => second.root.unmount())
+
+    const third = await render()
+    await act(async () => {
+      for (let index = 0; index < 20; index += 1) await Promise.resolve()
+    })
+    expect(orchestrate).toHaveBeenCalledTimes(2)
+    expect(localStorage.getItem('autowin:tickets-auto-seen')).toContain('::1')
+    await act(async () => third.root.unmount())
+  })
+
   it('termine le lot courant mais ne lance pas le lot différé après désactivation', async () => {
     localStorage.setItem('autowin:tickets-auto-mode', '1')
     const pending: Array<(value: { ok: boolean }) => void> = []

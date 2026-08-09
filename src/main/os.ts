@@ -5,6 +5,7 @@
  * (chat, orchestration, dashboards, graphe 3D).
  */
 import { ProviderRegistry } from './providers/registry'
+import { claudeActiveAccountId, claudeRotateAccount } from './claude-accounts'
 import { ClaudeCliAdapter } from './providers/claude'
 import { CodexAdapter } from './providers/codex'
 import { KimiCliAdapter } from './providers/kimi'
@@ -33,6 +34,7 @@ import { ConversationStore } from './store/conversations'
 import { TrustLedger } from './trust/ledger'
 import {
   Orchestrator,
+  watchdogClaimsFromEvidence,
   type BrainRetrievalEvent,
   type OrchestrationResult,
   type OrchestrationRuntimeSnapshot,
@@ -67,6 +69,10 @@ import { defaultProcessIdentity, WorktreeManager } from './store/worktree-manage
 import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import { WorktreeRunStateStore } from './store/worktree-run-state'
+import type { WatchdogMutationClaimsSink } from './task-manager/types'
+import type { WatchdogMutationClaims } from './task-manager/types'
+import { preparedCommitMutationEvidence } from './providers/workspace-mutation-evidence'
+import { appendExecutionEvidenceFileTrace } from './activity/conversation-file-trace-spool'
 import { repositoryWorktreeIdentity } from './store/worktree-repository'
 import type {
   WorktreeAgentActivity,
@@ -288,12 +294,26 @@ export class AutowinOS {
   readonly worktrees?: RunWorktreeCoordinator
   private worktreeRuntimeStatus!: WorktreeRuntimeStatus
   private worktreeActivityListener?: (a: WorktreeAgentActivity[]) => void
+  private recoveredCausalClaimsListener?: WatchdogMutationClaimsSink
+  private readonly pendingRecoveredCausalClaims: WatchdogMutationClaims[] = []
+  private causalMemoryRetriever?: (conversationId: string) => string
   /** Dossier des états d'orchestration reprenables (survie niveau 3). */
   private readonly orchestrationStateRoot = join(ensureAutowinAppData(), 'run-state')
   private readonly orchestrationStartedAt = new Map<string, number>()
 
   constructor() {
-    this.registry = new ProviderRegistry(CONSTITUTION, this.executionSupervisor)
+    // Le 3e argument separe le mur de quota PAR COMPTE : deux abonnements Claude distincts ne
+    // partagent pas leur quota, donc l'epuisement de l'un ne doit pas fermer la porte a l'autre.
+    // Les autres providers n'ont qu'un compte -> `undefined` -> cle = le provider, comme avant.
+    this.registry = new ProviderRegistry(
+      CONSTITUTION,
+      this.executionSupervisor,
+      (providerId) => (providerId === 'claude' ? claudeActiveAccountId() : undefined),
+      // 4e argument : la ROTATION. Un abonnement epuise ne doit pas arreter le travail s'il en reste
+      // un autre. Seul `claude` est multi-comptes ; les autres providers rendent `undefined` et
+      // gardent donc exactement le comportement d'avant (l'echec de quota remonte tel quel).
+      (providerId, walled) => (providerId === 'claude' ? claudeRotateAccount(walled) : undefined)
+    )
       .register(new ClaudeCliAdapter())
       .register(new CodexAdapter())
       .register(new KimiCliAdapter())
@@ -318,6 +338,31 @@ export class AutowinOS {
         this.worktrees = new RunWorktreeCoordinator({
           manager,
           stateStore: new WorktreeRunStateStore(identity.root, identity.repoId),
+          onRecoveredPublication: (publication) => {
+            const evidence = preparedCommitMutationEvidence(
+              executionWorkspace,
+              publication.baseSha,
+              publication.agentSha,
+              publication.causalWatchPaths
+            )
+            const publicationEventId = `worktree-publication:${publication.runId}:${publication.agentSha}`
+            if (publication.conversationId && publication.turnId && evidence.length > 0) {
+              appendExecutionEvidenceFileTrace(evidence, {
+                conversationId: publication.conversationId,
+                turnId: publication.turnId,
+                workspaceRoot: executionWorkspace,
+                published: true,
+                eventId: publicationEventId
+              })
+            }
+            const claims = {
+              ...watchdogClaimsFromEvidence(evidence, executionWorkspace),
+              eventId: publicationEventId
+            }
+            if (Object.keys(claims.mutatedLineFingerprints ?? {}).length === 0) return
+            if (this.recoveredCausalClaimsListener) this.recoveredCausalClaimsListener(claims)
+            else this.pendingRecoveredCausalClaims.push(claims)
+          },
           onActivity: (a) => {
             this.worktreeActivityListener?.(a)
           }
@@ -352,6 +397,7 @@ export class AutowinOS {
       trust: this.trust,
       authority: this.authority,
       executionWorkspace,
+      causalMemoryFor: (conversationId) => this.causalMemoryRetriever?.(conversationId) ?? '',
       // verify-replay EN PROD (opt-in via AUTOWIN_VERIFY_REPLAY) : rejoue la vérif au gate au lieu
       // de croire l'evidence sur parole. Off par défaut (voir resolveVerifyReplayConfig).
       ...resolveVerifyReplayConfig(),
@@ -498,8 +544,10 @@ export class AutowinOS {
   private lastAutoClose: AutoCloseReport | undefined
 
   setAutoClose(enabled: boolean): void {
+    if (!saveAutoClose(enabled)) {
+      throw new Error('Impossible de persister le réglage de clôture automatique.')
+    }
     this.autoClose = enabled
-    saveAutoClose(enabled)
   }
   getAutoClose(): { enabled: boolean; last?: AutoCloseReport } {
     return { enabled: this.autoClose, ...(this.lastAutoClose ? { last: this.lastAutoClose } : {}) }
@@ -508,6 +556,11 @@ export class AutowinOS {
   /** Met à jour la source live du fan-out (appelé par la topology au boot et à chaque changement). */
   setFanOut(next: FanOutTopology): void {
     this.fanOut = next
+  }
+
+  /** Branche la mémoire causale après création du TraceStore (construit dans le point d'entrée). */
+  setCausalMemoryRetriever(retriever: (conversationId: string) => string): void {
+    this.causalMemoryRetriever = retriever
   }
 
   /** Fige l'identite complete d'un run pour que affichage, reprise et providers restent alignes. */
@@ -548,22 +601,29 @@ export class AutowinOS {
     )
   }
 
-  getWorktreeConflictDiff(agentId: string): WorktreeConflictDiffResult {
-    return (
-      this.worktrees?.conflictDiff(agentId) ?? {
-        available: false,
-        reason: 'not-conflict'
-      }
-    )
+  async getWorktreeConflictDiff(agentId: string): Promise<WorktreeConflictDiffResult> {
+    return this.worktrees
+      ? this.worktrees.conflictDiffAsync(agentId)
+      : { available: false, reason: 'not-conflict' }
   }
 
-  retryWorktreeRecovery(agentId: string): WorktreeAgentActivity | undefined {
-    return this.worktrees?.retryRun(agentId)
+  async retryWorktreeRecovery(agentId: string): Promise<WorktreeAgentActivity | undefined> {
+    return this.worktrees?.retryRunAsync(agentId)
+  }
+
+  async discardHeldWorktree(agentId: string): Promise<boolean> {
+    return (await this.worktrees?.discardHeldAsync(agentId)) ?? false
   }
 
   /** Abonne l'IPC aux changements d'activité worktree (push live vers le cockpit). Idempotent. */
   onWorktreeActivity(listener: (a: WorktreeAgentActivity[]) => void): void {
     this.worktreeActivityListener = listener
+  }
+
+  /** Rebranche sur le watchdog les publications reprises dont le callback originel est mort. */
+  onRecoveredCausalMutationClaims(listener: WatchdogMutationClaimsSink): void {
+    this.recoveredCausalClaimsListener = listener
+    for (const claims of this.pendingRecoveredCausalClaims.splice(0)) listener(claims)
   }
 
   /** Empêche tout run de lire la topology avant la fin de la découverte des modèles. */
@@ -719,7 +779,15 @@ export class AutowinOS {
     /** Publication terminale si un provider ignore d'abord l'abort puis se règle réellement. */
     onLateUsageSettlement?: (usage: ExecutionUsageSnapshot) => void,
     /** Snapshot deja persiste par l'appelant ; absent, capture apres readiness. */
-    runtimeSnapshot?: OrchestrationRuntimeSnapshot
+    runtimeSnapshot?: OrchestrationRuntimeSnapshot,
+    /** Sources fichier du watchdog à suivre jusque dans la copie isolée. */
+    causalWatchPaths: readonly string[] = [],
+    onLateCausalMutationClaims?: WatchdogMutationClaimsSink,
+    runOptions: {
+      workflowOverride?: WorkflowRunOverride
+      publication?: 'auto' | 'hold'
+      sourceSnapshot?: { workspaceId: string; baseSha: string; contentHash: string }
+    } = {}
   ): Promise<OrchestrationResult> {
     await this.waitUntilReady()
     // Certains harness historiques construisent le prototype avec un orchestrateur factice sans
@@ -742,29 +810,33 @@ export class AutowinOS {
         // lui. Avant, il était posé dans un champ partagé de l'instance et retiré dans un `finally` :
         // deux conversations simultanées se volaient leur workflow, et le `finally` de l'une effaçait
         // celui de l'autre. Ici la contamination n'est plus improbable, elle est IMPOSSIBLE.
-        const workflowDuRun = await this.poseConversationWorkflow(conversationId, task)
+        const workflowDuRun =
+          runOptions.workflowOverride ?? (await this.poseConversationWorkflow(conversationId, task))
         const orchestrator = this.orchestrateurPour(workflowDuRun)
-          const result = await orchestrator.run(
-            task,
-            onStep,
-            onPhase,
-            onDelta,
-            this.executionSupervisor.currentSignal(),
-            collectedContext,
-            resumeOutputs,
-            conversationId,
-            bindingOverride,
-            onBrainRetrieved,
-            turnId,
-            onRunLifecycle,
-            admittedRuntime
-          )
-          result.quote = quote
-          result.usage = this.executionSupervisor.currentSnapshot()
-          if (result.usage?.knownCostUsd !== null && result.usage?.knownCostUsd !== undefined) {
-            result.costUsd = result.usage.knownCostUsd
-          }
-          return result
+        const result = await orchestrator.run(
+          task,
+          onStep,
+          onPhase,
+          onDelta,
+          this.executionSupervisor.currentSignal(),
+          collectedContext,
+          resumeOutputs,
+          conversationId,
+          bindingOverride,
+          onBrainRetrieved,
+          turnId,
+          onRunLifecycle,
+          admittedRuntime,
+          causalWatchPaths,
+          onLateCausalMutationClaims,
+          { publication: runOptions.publication, sourceSnapshot: runOptions.sourceSnapshot }
+        )
+        result.quote = quote
+        result.usage = this.executionSupervisor.currentSnapshot()
+        if (result.usage?.knownCostUsd !== null && result.usage?.knownCostUsd !== undefined) {
+          result.costUsd = result.usage.knownCostUsd
+        }
+        return result
       },
       resumeControl?.usage,
       onLateUsageSettlement

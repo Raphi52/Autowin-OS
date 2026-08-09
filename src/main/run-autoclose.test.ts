@@ -70,7 +70,9 @@ describe('autoCloseRun — publication d’un run vert', () => {
 
     expect(res).toMatchObject({ status: 'pushed', branch: 'auto/run-42' })
     // La branche locale n'a PAS changé : l'utilisateur reste où il travaillait.
-    expect((await run('git', ['branch', '--show-current'], { cwd: repo })).stdout.trim()).toBe('travail')
+    expect((await run('git', ['branch', '--show-current'], { cwd: repo })).stdout.trim()).toBe(
+      'travail'
+    )
     // Le distant a bien reçu la branche dédiée…
     const remoteBranches = (await run('git', ['branch'], { cwd: remote })).stdout
     expect(remoteBranches).toContain('auto/run-42')
@@ -105,11 +107,15 @@ describe('autoCloseRun — publication d’un run vert', () => {
     })
 
     expect(res).toMatchObject({ status: 'committed', files: 1 })
-    const committed = (await run('git', ['show', '--name-only', '--format=', 'HEAD'], { cwd: repo })).stdout
+    const committed = (
+      await run('git', ['show', '--name-only', '--format=', 'HEAD'], { cwd: repo })
+    ).stdout
     expect(committed).toContain('du-run.md')
     expect(committed).not.toContain('autrui.md')
     // Le fichier d'autrui reste non suivi, intact.
-    expect((await run('git', ['status', '--porcelain'], { cwd: repo })).stdout).toContain('autrui.md')
+    expect((await run('git', ['status', '--porcelain'], { cwd: repo })).stdout).toContain(
+      'autrui.md'
+    )
   })
 
   it('ne crée pas de commit vide quand le run n’a rien changé', async () => {
@@ -126,7 +132,9 @@ describe('autoCloseRun — publication d’un run vert', () => {
 
     expect(res).toMatchObject({ status: 'skipped', reason: 'secret-detected' })
     // Rien n'a été commité.
-    expect((await run('git', ['log', '--oneline'], { cwd: repo })).stdout.trim().split('\n')).toHaveLength(1)
+    expect(
+      (await run('git', ['log', '--oneline'], { cwd: repo })).stdout.trim().split('\n')
+    ).toHaveLength(1)
   })
 
   it('une défaillance git devient un échec rapporté, jamais une exception', async () => {
@@ -171,8 +179,9 @@ describe('périmètre du run (ce qui traînait AVANT n’est pas publié)', () =
       [repo, 'du-run.ts', 'travail-concurrent.ts'],
       [brain, 'du-run.md', 'note-en-attente.md']
     ] as const) {
-      const committed = (await run('git', ['show', '--name-only', '--format=', 'HEAD'], { cwd: dir }))
-        .stdout
+      const committed = (
+        await run('git', ['show', '--name-only', '--format=', 'HEAD'], { cwd: dir })
+      ).stdout
       expect(committed).toContain(mine)
       expect(committed).not.toContain(autrui) // le travail d'autrui reste non commité
     }
@@ -291,8 +300,9 @@ describe('dossier NON SUIVI (le cas Brain : notes déposées dans inbox/)', () =
     })
 
     expect(report.brain).toMatchObject({ status: 'pushed', files: 1 })
-    const committed = (await run('git', ['show', '--name-only', '--format=', 'HEAD'], { cwd: brain }))
-      .stdout
+    const committed = (
+      await run('git', ['show', '--name-only', '--format=', 'HEAD'], { cwd: brain })
+    ).stdout
     expect(committed).toContain('note-du-run.md')
     expect(committed).not.toContain('autrui-en-cours.md')
     // Le brouillon d'autrui reste non suivi, intact.
@@ -309,11 +319,23 @@ describe('helpers', () => {
     expect(detectSecret('-----BEGIN RSA PRIVATE KEY-----')).toBe('clé privée')
   })
 
-  it('parsePorcelainPaths gère modifications, ajouts et renommages', () => {
-    expect(parsePorcelainPaths(' M src/a.ts\n?? b.md\nR  vieux.md -> neuf.md\n')).toEqual([
-      'src/a.ts',
-      'b.md',
-      'neuf.md'
+  it('parsePorcelainPaths conserve les chemins exacts du format porcelain -z', () => {
+    expect(
+      parsePorcelainPaths(
+        [
+          ' M café -> littéral.ts',
+          'R  nouveau\nnom.ts',
+          'ancien "nom".ts',
+          '?? ligne\nsuivante.txt',
+          '?? guillemet"brut.ts',
+          ''
+        ].join('\0')
+      )
+    ).toEqual([
+      'café -> littéral.ts',
+      'nouveau\nnom.ts',
+      'ligne\nsuivante.txt',
+      'guillemet"brut.ts'
     ])
   })
 

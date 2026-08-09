@@ -116,7 +116,7 @@ describe('agent topology disk persistence', () => {
 
     expect(loaded).toEqual(topology)
     expect(() => runtimeRoleBinding(loaded.orchestrator, DEFAULT_IMPORTED_MODELS)).toThrow(
-      'Alias de modèle indisponible hors catalogue : codex/flagship'
+      'Modèle indisponible hors catalogue : codex/flagship'
     )
   })
 

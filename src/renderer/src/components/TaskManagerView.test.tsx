@@ -144,6 +144,40 @@ describe('TaskManagerView', () => {
     expect(container.querySelector('[data-testid="task-manager-view"]')).not.toBeNull()
   })
 
+  it('désactive la suppression tant qu’une occurrence est active', async () => {
+    const mockApi = api()
+    const snapshot = await mockApi.taskManagerSnapshot()
+    snapshot.occurrences[0].status = 'running'
+    mockApi.taskManagerSnapshot.mockResolvedValue(snapshot)
+
+    const { container } = await mount(mockApi)
+    const remove = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Supprimer'
+    )
+
+    expect(remove?.disabled).toBe(true)
+    expect(remove?.title).toMatch(/en cours/i)
+  })
+
+  it('rend visibles le coût récent et une panne de surveillance', async () => {
+    const mockApi = api()
+    const snapshot = await mockApi.taskManagerSnapshot()
+    snapshot.tasks[0].schedule = undefined
+    snapshot.tasks[0].watchdog = {
+      source: { kind: 'file-match', path: 'C:/logs/app.log', pattern: 'ERROR' },
+      guards: { dedupWindowMs: 60_000, maxTriggersPerHour: 12, maxChainDepth: 0, maxPerRoot: 20 }
+    }
+    snapshot.watchdogs = {
+      'task-1': { admittedLastHour: 3, complaint: 'Fichier surveillé illisible' }
+    }
+    mockApi.taskManagerSnapshot.mockResolvedValue(snapshot)
+
+    const { container } = await mount(mockApi)
+
+    expect(container.textContent).toContain('3 réveils sur la dernière heure')
+    expect(container.textContent).toContain('Fichier surveillé illisible')
+  })
+
   it("affiche le mode figé sur chaque ligne d'historique", async () => {
     const { container } = await mount()
     const occurrence = container.querySelector('.task-manager-occurrence')
@@ -217,7 +251,9 @@ describe('TaskManagerView', () => {
       ?.querySelector('select')
     const options = [...model!.options]
 
-    expect(options.filter((option) => option.textContent === 'Claude Opus 5 · CLI · claude')).toHaveLength(1)
+    expect(
+      options.filter((option) => option.textContent === 'Claude Opus 5 · CLI · claude')
+    ).toHaveLength(1)
     expect(options.map((option) => option.value)).toContain('claude:opus')
     expect(options.map((option) => option.value)).not.toContain('claude:opus-5')
     expect(options.map((option) => option.value)).toContain('claude:opus-4-8')

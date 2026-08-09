@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import {
   createChatTurn,
   flattenChatParts,
@@ -100,13 +101,22 @@ export type ConversationSummary = Omit<Conversation, 'messages'> & {
   lastAssistantStatus?: ChatTurnStatus
 }
 
+export interface ConversationChange {
+  id: string
+  conversation?: Conversation
+  urgency: 'immediate' | 'checkpoint'
+  journal?:
+    | { op: 'append-messages'; messages: Msg[]; updatedAt: number; schemaVersion?: 2 | 3 }
+    | { op: 'turn-event'; turnId: string; event: ChatTurnEvent; updatedAt: number }
+}
+
 /** Store en mémoire de conversations, avec horloge et générateur d'id injectables pour les tests. */
 export class ConversationStore {
   private readonly conversations = new Map<string, Conversation>()
   private readonly now: () => number
   private nextId = 1
-  /** Hook de persistance : appelé après CHAQUE mutation (create/append/rename/remove). */
-  onChange?: (all: Conversation[], urgency: 'immediate' | 'checkpoint') => void
+  /** Hook de persistance : porte uniquement la conversation mutée, jamais le corpus complet. */
+  onChange?: (change: ConversationChange) => void
 
   constructor(now: () => number = () => Date.now()) {
     this.now = now
@@ -128,21 +138,44 @@ export class ConversationStore {
     this.conversations.clear()
     let max = 0
     let migrated = false
+    const usedMessageIds = new Set<string>()
     for (const c of saved) {
       let previousMessageId: string | undefined
+      const seenMessageIds = new Set<string>()
+      const messageIdRemap = new Map<string, string>()
       const messages = c.messages.map((sourceMessage, index) => {
         let message = sourceMessage
-        const messageId = message.messageId ?? `message-${c.id}-${index + 1}`
-        const parentMessageId = message.parentMessageId ?? previousMessageId
-        if (!message.messageId || message.parentMessageId !== parentMessageId) {
+        const persistedMessageId = message.messageId ?? `message-${c.id}-${index + 1}`
+        let messageId = persistedMessageId
+        if (usedMessageIds.has(messageId)) {
           migrated = true
-          message = {
-            ...message,
-            messageId,
-            ...(parentMessageId ? { parentMessageId } : {})
-          }
+          do {
+            messageId = `message-${randomUUID()}`
+          } while (usedMessageIds.has(messageId))
         }
+        // Les premiers forks v3 regeneraient les IDs locaux mais laissaient parfois un parent venu
+        // de la conversation source. Ce parent orphelin est une forme legacy migrable, pas une raison
+        // de rendre tout le store illisible : on retablit alors la chaine locale deterministe.
+        const mappedParentMessageId = message.parentMessageId
+          ? (messageIdRemap.get(message.parentMessageId) ?? message.parentMessageId)
+          : undefined
+        const parentMessageId =
+          mappedParentMessageId && seenMessageIds.has(mappedParentMessageId)
+            ? mappedParentMessageId
+            : previousMessageId
+        if (
+          !message.messageId ||
+          message.messageId !== messageId ||
+          message.parentMessageId !== parentMessageId
+        ) {
+          migrated = true
+          message = { ...message, messageId, parentMessageId }
+          if (!parentMessageId) delete message.parentMessageId
+        }
+        messageIdRemap.set(persistedMessageId, messageId)
         previousMessageId = messageId
+        seenMessageIds.add(messageId)
+        usedMessageIds.add(messageId)
         if (message.role !== 'assistant') return message
         if (!message.parts) {
           migrated = true
@@ -204,8 +237,17 @@ export class ConversationStore {
     return migrated
   }
 
-  private changed(urgency: 'immediate' | 'checkpoint' = 'immediate'): void {
-    this.onChange?.(this.list(), urgency)
+  private changed(
+    id: string,
+    urgency: 'immediate' | 'checkpoint' = 'immediate',
+    journal?: ConversationChange['journal']
+  ): void {
+    this.onChange?.({
+      id,
+      conversation: this.conversations.get(id),
+      urgency,
+      ...(journal ? { journal } : {})
+    })
   }
 
   /** Crée une nouvelle conversation vide et la stocke. */
@@ -217,7 +259,7 @@ export class ConversationStore {
     autoKaizen?: AutoKaizenConversationLink
   }): Conversation {
     const ts = this.now()
-    const id = `conv-${this.nextId++}`
+    const id = this.nextUniqueConversationId()
     const conversation: Conversation = {
       schemaVersion: 3,
       id,
@@ -232,8 +274,40 @@ export class ConversationStore {
       updatedAt: ts
     }
     this.conversations.set(conversation.id, conversation)
-    this.changed()
+    this.changed(conversation.id)
     return conversation
+  }
+
+  /** Alloue un id de conversation sans collision, même après épuisement du compteur sûr. */
+  private nextUniqueConversationId(): string {
+    while (Number.isSafeInteger(this.nextId)) {
+      const candidate = `conv-${this.nextId++}`
+      if (!this.conversations.has(candidate)) return candidate
+    }
+    let candidate: string
+    do {
+      candidate = `conv-${randomUUID()}`
+    } while (this.conversations.has(candidate))
+    return candidate
+  }
+
+  private hasMessageId(candidate: string): boolean {
+    return [...this.conversations.values()].some((conversation) =>
+      conversation.messages.some(({ messageId }) => messageId === candidate)
+    )
+  }
+
+  private nextUniqueMessageId(conversation: Conversation): string {
+    let ordinal = conversation.messages.length + 1
+    while (Number.isSafeInteger(ordinal)) {
+      const deterministic = `message-${conversation.id}-${ordinal++}`
+      if (!this.hasMessageId(deterministic)) return deterministic
+    }
+    let candidate: string
+    do {
+      candidate = `message-${randomUUID()}`
+    } while (this.hasMessageId(candidate))
+    return candidate
   }
 
   /** Ajoute un message à une conversation existante et met à jour updatedAt. Jette si l'id est inconnu. */
@@ -247,16 +321,21 @@ export class ConversationStore {
     }
     const ts = this.now()
     const previous = conversation.messages.at(-1)
-    conversation.messages.push({
-      messageId: `message-${conversation.id}-${conversation.messages.length + 1}`,
+    const message: Msg = {
+      messageId: this.nextUniqueMessageId(conversation),
       ...(previous?.messageId ? { parentMessageId: previous.messageId } : {}),
       role: m.role,
       content: m.content,
       ts,
       ...(m.attachments?.length ? { attachments: m.attachments } : {})
-    })
+    }
+    conversation.messages.push(message)
     conversation.updatedAt = ts
-    this.changed()
+    this.changed(id, 'immediate', {
+      op: 'append-messages',
+      messages: [structuredClone(message)],
+      updatedAt: ts
+    })
     return conversation
   }
 
@@ -270,18 +349,19 @@ export class ConversationStore {
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     const ts = this.now()
     const previous = conversation.messages.at(-1)
-    const userMessageId = `message-${conversation.id}-${conversation.messages.length + 1}`
-    conversation.messages.push({
+    const userMessageId = this.nextUniqueMessageId(conversation)
+    const userMessage: Msg = {
       messageId: userMessageId,
       ...(previous?.messageId ? { parentMessageId: previous.messageId } : {}),
       role: 'user',
       content: user.content,
       ts,
       ...(user.attachments?.length ? { attachments: user.attachments } : {})
-    })
+    }
+    conversation.messages.push(userMessage)
     const turn = createChatTurn(assistant.turnId, assistant.runtime)
-    conversation.messages.push({
-      messageId: `message-${conversation.id}-${conversation.messages.length + 1}`,
+    const assistantMessage: Msg = {
+      messageId: this.nextUniqueMessageId(conversation),
       parentMessageId: userMessageId,
       role: 'assistant',
       content: '',
@@ -290,10 +370,16 @@ export class ConversationStore {
       status: turn.status,
       parts: turn.parts,
       ...(turn.runtime ? { runtime: turn.runtime } : {})
-    })
+    }
+    conversation.messages.push(assistantMessage)
     conversation.schemaVersion = 3
     conversation.updatedAt = ts
-    this.changed('immediate')
+    this.changed(id, 'immediate', {
+      op: 'append-messages',
+      messages: [structuredClone(userMessage), structuredClone(assistantMessage)],
+      updatedAt: ts,
+      schemaVersion: 3
+    })
     return conversation
   }
 
@@ -320,7 +406,12 @@ export class ConversationStore {
     message.error = next.error
     conversation.updatedAt = this.now()
     const terminal = ['done', 'failed', 'cancelled', 'interrupted'].includes(event.kind)
-    this.changed(terminal ? 'immediate' : 'checkpoint')
+    this.changed(id, terminal ? 'immediate' : 'checkpoint', {
+      op: 'turn-event',
+      turnId,
+      event: structuredClone(event),
+      updatedAt: conversation.updatedAt
+    })
     return conversation
   }
 
@@ -340,9 +431,8 @@ export class ConversationStore {
       ...summary,
       messageCount: messages.length,
       lastMessageRole: messages.at(-1)?.role,
-      lastAssistantStatus: [...messages]
-        .reverse()
-        .find((message) => message.role === 'assistant')?.status
+      lastAssistantStatus: [...messages].reverse().find((message) => message.role === 'assistant')
+        ?.status
     }))
   }
 
@@ -361,7 +451,7 @@ export class ConversationStore {
     const conversation = this.conversations.get(id)
     if (conversation) {
       conversation.title = title
-      this.changed()
+      this.changed(id)
     }
   }
 
@@ -381,7 +471,7 @@ export class ConversationStore {
     const propre = projectPath?.trim()
     if (propre) conversation.projectPath = propre
     else delete conversation.projectPath
-    this.changed()
+    this.changed(id)
     return conversation
   }
 
@@ -390,7 +480,7 @@ export class ConversationStore {
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
     conversation.authorityMode = authorityMode
     conversation.updatedAt = this.now()
-    this.changed()
+    this.changed(id)
     return conversation
   }
 
@@ -404,7 +494,7 @@ export class ConversationStore {
     if (!conversation.runPaths.includes(runPath)) {
       conversation.runPaths.push(runPath)
       conversation.updatedAt = this.now()
-      this.changed()
+      this.changed(id)
     }
     return conversation
   }
@@ -419,7 +509,7 @@ export class ConversationStore {
     if (nextRunPaths.length !== (conversation.runPaths?.length ?? 0)) {
       conversation.runPaths = nextRunPaths
       conversation.updatedAt = this.now()
-      this.changed()
+      this.changed(id)
     }
     return conversation
   }
@@ -454,9 +544,21 @@ export class ConversationStore {
     })
     // Copie jusqu'au point de fork INCLUS. Les identifiants de message sont régénérés : deux
     // conversations ne doivent jamais partager un messageId (le fork suivant viserait les deux).
-    forked.messages = source.messages.slice(0, cut + 1).map((message) => ({
+    const copiedMessages = source.messages.slice(0, cut + 1)
+    const messageIds = new Map<string, string>()
+    const allocatedIds = new Set<string>()
+    const generatedIds = copiedMessages.map((message) => {
+      const generatedId = this.nextUniqueForkMessageId(allocatedIds)
+      allocatedIds.add(generatedId)
+      if (message.messageId) messageIds.set(message.messageId, generatedId)
+      return generatedId
+    })
+    forked.messages = copiedMessages.map((message, index) => ({
       ...message,
-      messageId: `msg-${this.nextId++}`,
+      messageId: generatedIds[index],
+      parentMessageId: message.parentMessageId
+        ? messageIds.get(message.parentMessageId)
+        : undefined,
       // Le journal d'un tour est rangé PAR CONVERSATION : celui d'un message copié n'existe pas
       // sous le fork. On note donc QUI le possède, pour que la loupe aille le lire au bon endroit
       // au lieu de chercher sous le fork et de retomber sur un run étranger.
@@ -465,14 +567,22 @@ export class ConversationStore {
     }))
     forked.forkedFrom = { conversationId: source.id, messageId: fromMessageId }
     forked.updatedAt = this.now()
-    this.changed()
+    this.changed(forked.id)
     return forked
+  }
+
+  private nextUniqueForkMessageId(allocatedIds: ReadonlySet<string>): string {
+    let candidate: string
+    do {
+      candidate = `msg-${randomUUID()}`
+    } while (allocatedIds.has(candidate) || this.hasMessageId(candidate))
+    return candidate
   }
 
   /** Supprime une conversation. Retourne true si elle existait. */
   remove(id: string): boolean {
     const existed = this.conversations.delete(id)
-    if (existed) this.changed()
+    if (existed) this.changed(id)
     return existed
   }
 }

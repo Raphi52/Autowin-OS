@@ -381,6 +381,33 @@ describe('ArtifactPreview', () => {
     expect(container.querySelector('.artifact-preview__blocked')).not.toBeNull()
   })
 
+  it('maintient le rendu Mermaid strict face à une tentative de CSS hors diagramme', async () => {
+    const hostile = `---
+config:
+  themeCSS: |-
+    & + * { position: fixed !important; inset: 0 !important; }
+---
+graph TD
+A`
+    render(
+      artifact({
+        name: 'hostile.mmd',
+        mimeType: 'text/vnd.mermaid',
+        kind: 'diagram',
+        encoding: 'utf8',
+        content: hostile
+      })
+    )
+
+    await act(async () => {})
+
+    expect(mermaidMock.initialize).toHaveBeenCalledWith(
+      expect.objectContaining({ securityLevel: 'strict' })
+    )
+    expect(mermaidMock.render).toHaveBeenCalledWith(expect.any(String), hostile)
+    expect(container.querySelector('.artifact-diagram')?.children).toHaveLength(1)
+  })
+
   it('agrandit une image et expose provenance, taille et revelation sure', () => {
     const onOpenImage = vi.fn()
     const reveal = vi.fn(async () => ({ ok: true }))

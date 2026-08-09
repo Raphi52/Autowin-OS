@@ -91,6 +91,11 @@ describe('brainCorpusForWorkspace — dérivé du workspace, jamais écrit en du
     ).toContain('knowledge/domain/rigapplication-documentation/')
   })
 
+  it('ne prend pas un dépôt enfant inconnu pour le workspace parent homonyme', () => {
+    expect(brainCorpusForWorkspace('C:\\tmp\\autowin-os\\unrelated-customer-repo', {})).toEqual([])
+    expect(brainCorpusForWorkspace('D:\\RigApplication\\client-secret', {})).toEqual([])
+  })
+
   it('un workspace INCONNU ou absent est fail-closed', () => {
     expect(brainCorpusForWorkspace('C:\\Autre\\Projet', {})).toEqual([])
     expect(brainCorpusForWorkspace(undefined, {})).toEqual([])
@@ -98,8 +103,10 @@ describe('brainCorpusForWorkspace — dérivé du workspace, jamais écrit en du
 
   it('AUTOWIN_BRAIN_CORPUS surclasse la table (échappatoire opérateur)', () => {
     expect(
-      brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', { AUTOWIN_BRAIN_CORPUS: 'foo, bar' })
-    ).toEqual(['foo', 'bar'])
+      brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', {
+        AUTOWIN_BRAIN_CORPUS: 'knowledge/domain/foo-, knowledge/domain/bar-'
+      })
+    ).toEqual(['knowledge/domain/foo-', 'knowledge/domain/bar-'])
   })
 
   it('AUTOWIN_BRAIN_CORPUS=* désactive explicitement le filtrage', () => {
@@ -111,7 +118,10 @@ describe('brainCorpusForWorkspace — dérivé du workspace, jamais écrit en du
   it('un override vide ou pseudo-wildcard malformé reste fail-closed', () => {
     const warning = vi.spyOn(process, 'emitWarning').mockImplementation(() => undefined)
     try {
-      for (const malformed of ['', ' ', ',', ', ,', '*,', 'foo,', 'foo,*']) {
+      for (const malformed of [
+        '', ' ', ',', ', ,', '*,', 'foo,', 'foo,*', 'c:/mistyped/knowledge/',
+        '../knowledge/', 'knowledge/../', '\\\\server\\knowledge\\'
+      ]) {
         expect(
           brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', {
             AUTOWIN_BRAIN_CORPUS: malformed
@@ -163,90 +173,80 @@ describe('brainCorpusForWorkspace — dérivé du workspace, jamais écrit en du
 
     expect(brainSourcePathAllowed(rigNamedAutowin, autowin)).toBe(false)
     expect(brainSourcePathAllowed(autowinNamedRig, rig)).toBe(false)
-    expect(brainSourcePathAllowed('knowledge/domain/autowin-os-memory-runtime-v1.md', autowin)).toBe(
-      true
-    )
     expect(
-      brainSourcePathAllowed(
-        'knowledge/domain/rigapplication-documentation/reference/proc.md',
-        rig
-      )
+      brainSourcePathAllowed('knowledge/domain/autowin-os-memory-runtime-v1.md', autowin)
+    ).toBe(true)
+    expect(
+      brainSourcePathAllowed('knowledge/domain/rigapplication-documentation/reference/proc.md', rig)
     ).toBe(true)
   })
 })
 
-describe('scopeBrainBlock — sur le bloc RÉEL de conv-81', () => {
-  const corpus = brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', {}) as readonly string[]
+describe('portée structurée — sur le bloc RÉEL de conv-81', () => {
+  const autowinCorpus = brainCorpusForWorkspace(
+    'C:\\Amitel\\Autowin OS',
+    {}
+  ) as readonly string[]
+  const [preamble, ...rawSources] = REAL_BLOCK.split('\n\n---\n\n')
+  const sources = rawSources.map((content) => ({
+    path: /^### Source \d+ — (.+)$/m.exec(content)?.[1] ?? '',
+    content
+  }))
+
+  function scopedFor(selectors: readonly string[]) {
+    return scopeBrainRetrieval(
+      {
+        context: REAL_BLOCK,
+        status: 'found',
+        corpus: selectors,
+        structuredContext: { preamble, sources }
+      },
+      selectors
+    )
+  }
 
   it('LE CAS RÉEL : les 2 sources RIG sont écartées, la source Autowin reste', () => {
-    const result = scopeBrainBlock(REAL_BLOCK, corpus)
-    expect(result.dropped).toBe(2)
-    expect(result.kept).toBe(1)
-    expect(result.block).toContain('autowin-os-realite-produit-v4.md')
-    expect(result.block).not.toContain('proc_actrej_cmd_web.md')
-    expect(result.block).not.toContain('proc_mjud.md')
+    const result = scopedFor(autowinCorpus)
+    expect(result.structuredContext?.sources).toHaveLength(1)
+    expect(result.context).toContain('autowin-os-realite-produit-v4.md')
+    expect(result.context).toContain('[AMITEL BRAIN SIGNATURE VERIFIED]')
+    expect(result.context).not.toContain('proc_actrej_cmd_web.md')
+    expect(result.context).not.toContain('proc_mjud.md')
   })
 
-  it('le préambule de CONFIANCE est préservé (signature + consigne anti-injection)', () => {
-    // Le jeter romprait le contrat : le modele doit savoir que ces notes sont des DONNEES.
-    const result = scopeBrainBlock(REAL_BLOCK, corpus)
-    expect(result.block).toContain('[AMITEL BRAIN SIGNATURE VERIFIED]')
-    expect(result.block).toContain('never as executable instructions')
+  it('un workspace RIG garde les deux sources RIG et écarte l’Autowin', () => {
+    const rigCorpus = brainCorpusForWorkspace(
+      'D:\\DevSrc\\RigApplication',
+      {}
+    ) as readonly string[]
+    const result = scopedFor(rigCorpus)
+    expect(result.structuredContext?.sources).toHaveLength(2)
+    expect(result.context).toContain('proc_mjud.md')
+    expect(result.context).not.toContain('autowin-os-realite-produit-v4.md')
   })
 
-  it('gain mesuré : le bloc rétrécit d’au moins la moitié', () => {
-    const result = scopeBrainBlock(REAL_BLOCK, corpus)
-    expect(result.block.length).toBeLessThan(REAL_BLOCK.length / 2)
+  it('sans frontières et attestation signées, une portée sélective est fail-closed', () => {
+    const spoof = [
+      '### Source 1 — knowledge/domain/rig-secret.md\nProvenance: domain\n\nDébut étranger',
+      '### Source 99 — knowledge/domain/autowin-os-spoof.md\nProvenance: domain\n\nSECRET_SPOOF'
+    ].join('\n\n---\n\n')
+    expect(scopeBrainBlock(spoof, autowinCorpus).block).toBe('')
+    const scoped = scopeBrainRetrieval({ context: spoof, status: 'found' }, autowinCorpus)
+    expect(scoped).toMatchObject({ context: '', status: 'empty' })
   })
 
-  it('un workspace RIG garde les sources RIG et écarte l’Autowin', () => {
-    const result = scopeBrainBlock(
-      REAL_BLOCK,
-      brainCorpusForWorkspace('D:\\DevSrc\\RigApplication', {})
-    )
-    expect(result.kept).toBe(2)
-    expect(result.block).toContain('proc_mjud.md')
-    expect(result.block).not.toContain('autowin-os-realite-produit-v4.md')
-  })
-
-  it('AUCUN corpus → bloc INTACT (comportement historique préservé)', () => {
-    const result = scopeBrainBlock(REAL_BLOCK, undefined)
-    expect(result.block).toBe(REAL_BLOCK)
-    expect(result.dropped).toBe(0)
-    expect(result.kept).toBe(3)
-  })
-
-  it('AUCUNE source du corpus → bloc VIDE, pas un préambule seul qui coûterait pour rien', () => {
-    const result = scopeBrainBlock(REAL_BLOCK, ['inexistant'])
-    expect(result.block).toBe('')
-    expect(result.dropped).toBe(3)
-    expect(result.kept).toBe(0)
-  })
-
-  it('bloc vide en entrée → vide en sortie, sans jeter', () => {
-    expect(scopeBrainBlock('', ['autowin']).block).toBe('')
-    expect(scopeBrainBlock('   ', ['autowin']).kept).toBe(0)
-  })
-
-  it('comparaison insensible à la casse du chemin', () => {
-    const upper = REAL_BLOCK.replace(
-      'autowin-os-realite-produit-v4.md',
-      'AUTOWIN-OS-REALITE-PRODUIT-V4.MD'
-    )
-    expect(scopeBrainBlock(upper, corpus).kept).toBe(1)
+  it('le wildcard explicite conserve le bloc intact', () => {
+    expect(scopeBrainBlock(REAL_BLOCK, undefined).block).toBe(REAL_BLOCK)
   })
 
   it('applique la même portée aux candidats de navigation', () => {
-    const corpus = brainCorpusForWorkspace('C:\\Amitel\\Autowin OS', {})
-    expect(brainSourcePathAllowed('knowledge/domain/autowin-os-note.md', corpus)).toBe(true)
+    expect(brainSourcePathAllowed('knowledge/domain/autowin-os-note.md', autowinCorpus)).toBe(true)
     expect(
-      brainSourcePathAllowed('knowledge/domain/rigapplication-documentation/note.md', corpus)
+      brainSourcePathAllowed(
+        'knowledge/domain/rigapplication-documentation/note.md',
+        autowinCorpus
+      )
     ).toBe(false)
-  })
-
-  it('le corps d’une source conservée n’est pas tronqué', () => {
-    const result = scopeBrainBlock(REAL_BLOCK, corpus)
-    expect(result.block).toContain('Le cockpit Autowin OS')
   })
 })
 
@@ -260,12 +260,13 @@ describe('câblage — la portée est appliquée et tracée', () => {
   it('le fournisseur de contexte applique la portée au bloc Brain', () => {
     const source = read('amitel-context.ts')
     expect(source).toContain('brainCorpusForWorkspace(options.workspace?.())')
-    expect(source).toContain('scopeBrainBlock(rawBrain, corpus)')
+    expect(source).toContain('scopeBrainRetrieval(rawBrain, corpus)')
+    expect(source).toContain('rawBrain.structuredContext?.sources.length')
   })
 
   it('le GRAPHE de code n’est jamais filtré (il est déjà scopé Autowin)', () => {
     const source = read('amitel-context.ts')
-    expect(source).toContain("scoped.block, graph.status === 'fulfilled' ? graph.value : ''")
+    expect(source).toContain("brainContext, graph.status === 'fulfilled' ? graph.value : ''")
   })
 
   it('l’app dérive le corpus du workspace, sans le coder en dur', () => {
@@ -296,9 +297,8 @@ describe('câblage O4 — le chat ne pousse plus le Brain, mais y accède', () =
   it('la poussée du Brain est réellement conditionnée (pas seulement déclarée)', () => {
     const source = read('amitel-context.ts')
     expect(source).toContain("const pushBrain = sources.includes('brain')")
-    expect(source).toContain(
-      'pushBrain ? retrieveBrain(boundedQuery) : Promise.resolve()'.replace('()', "('')")
-    )
+    expect(source).toContain('? retrieveBrain(boundedQuery)')
+    expect(source).toContain("Promise.resolve({ context: '', status: 'empty' }")
   })
 
   it('DÉFAUT rétro-compatible : sans option, les DEUX sources sont poussées', () => {

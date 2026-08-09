@@ -18,7 +18,8 @@ describe('floating note labels', () => {
   it('keeps label sprites in the graph raycast so their node can be opened', () => {
     const source = readFileSync(new URL('./GraphView.tsx', import.meta.url), 'utf8')
     expect(source).not.toContain('sprite.raycast = () => undefined')
-    expect(source).toContain('onNodeClick={(value) => openNode(value as GraphNode)}')
+    expect(source).toContain('onNodeClick={(value) => activateGraphNode(value as GraphNode)}')
+    expect(source).toContain('void openNode(nextNode)')
   })
 
   it('limits hover emphasis to the hovered node without taking over link focus', () => {
@@ -35,7 +36,7 @@ describe('floating note labels', () => {
     )
     expect(source).toContain('visualActiveThemes.size > 0 ? highlightedNodeIds : new Set()')
     expect(source).toContain(
-      'nodeColorForTheme(\n      value as GraphNode,\n      visualActiveThemes,'
+      'nodeColorForTheme(\n        nextNode,\n        visualActiveThemes,'
     )
   })
 
@@ -70,7 +71,8 @@ describe('floating note labels', () => {
 
     expect(source).toContain("nodeLabel={() => ''}")
     expect(source).not.toContain("nodeLabel={settings.labels ? 'label' : () => ''}")
-    expect(source).toContain('settings.labels && shouldShowFloatingNodeName')
+    expect(source).toContain('settings.labels &&')
+    expect(source).toContain('shouldShowFloatingNodeName(nextNode, floatingNodeIds)')
   })
 
   it('centers an animated and accessible loader while the graph is loading', () => {

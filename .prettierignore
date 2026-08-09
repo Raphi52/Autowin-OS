@@ -1,5 +1,6 @@
 out
 dist
+.autowin-data
 pnpm-lock.yaml
 LICENSE.md
 tsconfig.json

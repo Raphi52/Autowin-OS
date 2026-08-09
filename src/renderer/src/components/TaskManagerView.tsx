@@ -1,5 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ModuleHeader } from './ModuleHeader'
+import { WatchdogAgentsSection } from './WatchdogAgentsSection'
+import { WatchdogRuleFields } from './WatchdogRuleFields'
+import {
+  DEFAULT_DRAFT_GUARDS,
+  DEFAULT_FILE_SOURCE,
+  describeWatchdogSource,
+  toTaskPayload,
+  triggerKindOf,
+  watchdogDraftProblem,
+  type WatchdogOccurrenceLike,
+  type WatchdogRule,
+  type WatchdogTaskLike
+} from './watchdog-section-model'
 import type { RuntimeModel } from './chat-view-model'
 import { compareModelsByName, displayedModelName } from './model-name-order'
 import './TaskManagerView.css'
@@ -41,13 +54,22 @@ interface TaskDraft {
   mode: ExecutionMode | 'legacy-unknown'
   destination: TaskDestination
   schedule: TaskSchedule
+  /**
+   * Présent = la tâche est réveillée par un événement. Le brouillon garde l'horaire sous la main
+   * même en mode réveil : basculer d'un mode à l'autre ne doit pas détruire ce qui était saisi.
+   * C'est `toTaskPayload` qui tranche au moment d'envoyer.
+   */
+  watchdog?: WatchdogRule
 }
 
-interface ScheduledTask extends TaskDraft {
+interface ScheduledTask extends Omit<TaskDraft, 'schedule'> {
   id: string
+  schedule?: TaskSchedule
   nextRunAt: number | null
   createdAt: number
   updatedAt: number
+  /** Présent = tâche réveillée par un événement plutôt que par l'horloge. */
+  watchdog?: WatchdogRule
 }
 
 interface TaskOccurrence {
@@ -58,6 +80,9 @@ interface TaskOccurrence {
   status: string
   conversationId?: string
   error?: string
+  trigger?: 'schedule' | 'manual' | 'watchdog'
+  outcome?: 'benign' | 'report' | 'investigate' | 'repair'
+  watchdog?: { context: string; depth: number; source: string }
 }
 
 interface TaskAlert {
@@ -74,6 +99,7 @@ interface Snapshot {
   tasks: ScheduledTask[]
   occurrences: TaskOccurrence[]
   alerts: TaskAlert[]
+  watchdogs?: Record<string, { admittedLastHour: number; complaint?: string }>
   scheduler: {
     running: boolean
     nextWakeAt: number | null
@@ -122,7 +148,10 @@ function localInputParts(date = new Date(Date.now() + 5 * 60_000)): {
   return { date: `${year}-${month}-${day}`, time: `${hour}:${minute}` }
 }
 
-function defaultDraft(conversations: ConversationSummary[], selectedModel?: RuntimeModel): TaskDraft {
+function defaultDraft(
+  conversations: ConversationSummary[],
+  selectedModel?: RuntimeModel
+): TaskDraft {
   const now = localInputParts()
   return {
     title: '',
@@ -293,32 +322,33 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
     () => snapshot.occurrences.filter(({ taskId }) => taskId === selectedId),
     [selectedId, snapshot.occurrences]
   )
+  const taskIsRunning = occurrences.some(
+    ({ status }) => status === 'claimed' || status === 'running'
+  )
   const openAlerts = snapshot.alerts.filter(({ acknowledgedAt }) => !acknowledgedAt)
   const selectedAlerts = snapshot.alerts.filter(({ taskId }) => taskId === selectedId)
   const draftDestination = draft?.destination
-  const draftModelId =
-    draftDestination
-      ? (() => {
-          const loaded = models.find(
-            (candidate) =>
-              candidate.provider === draftDestination.provider &&
-              candidate.model === draftDestination.model
-          )
-          if (!loaded) return ''
-          return (
-            selectableModels.find(
-              (candidate) => modelDisplayKey(candidate) === modelDisplayKey(loaded)
-            )?.id ?? ''
-          )
-        })()
-      : ''
+  const draftModelId = draftDestination
+    ? (() => {
+        const loaded = models.find(
+          (candidate) =>
+            candidate.provider === draftDestination.provider &&
+            candidate.model === draftDestination.model
+        )
+        if (!loaded) return ''
+        return (
+          selectableModels.find(
+            (candidate) => modelDisplayKey(candidate) === modelDisplayKey(loaded)
+          )?.id ?? ''
+        )
+      })()
+    : ''
   const draftModel = selectableModels.find((candidate) => candidate.id === draftModelId)
-  const draftEfforts =
-    draftModel?.reasoningEfforts?.length
-      ? draftModel.reasoningEfforts
-      : draftModel
-        ? [draftModel.defaultReasoningEffort ?? 'none']
-        : []
+  const draftEfforts = draftModel?.reasoningEfforts?.length
+    ? draftModel.reasoningEfforts
+    : draftModel
+      ? [draftModel.defaultReasoningEffort ?? 'none']
+      : []
   const draftEffort =
     draftDestination?.reasoningEffort ?? draftModel?.defaultReasoningEffort ?? draftEfforts[0] ?? ''
 
@@ -329,7 +359,10 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
 
   const openEdit = (task: ScheduledTask): void => {
     setEditingId(task.id)
-    setDraft(structuredClone(task))
+    setDraft({
+      ...structuredClone(task),
+      schedule: structuredClone(task.schedule ?? defaultDraft(conversations).schedule)
+    })
   }
 
   const closeEditor = (): void => {
@@ -343,18 +376,21 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
       setError('Le titre et le prompt sont obligatoires.')
       return
     }
-    if (
-      !modelCatalogReady ||
-      !hasLoadedModel(draft.destination, models)
-    ) {
+    if (!modelCatalogReady || !hasLoadedModel(draft.destination, models)) {
       setError('Choisis un modèle chargé dans Agent Studio pour cette tâche.')
+      return
+    }
+    const watchdogProblem = watchdogDraftProblem(draft.watchdog)
+    if (watchdogProblem) {
+      setError(watchdogProblem)
       return
     }
     setSaving(true)
     setError(undefined)
     try {
-      if (editingId) await window.api.taskManagerUpdate(editingId, draft)
-      else await window.api.taskManagerCreate(draft)
+      const payload = toTaskPayload(draft)
+      if (editingId) await window.api.taskManagerUpdate(editingId, payload)
+      else await window.api.taskManagerCreate(payload)
       closeEditor()
       await load()
     } catch (failure) {
@@ -378,9 +414,18 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
 
   const removeTask = async (task: ScheduledTask): Promise<void> => {
     if (!window.confirm(`Supprimer définitivement « ${task.title} » ?`)) return
-    await window.api.taskManagerRemove(task.id)
-    if (editingId === task.id) closeEditor()
-    await load()
+    setSaving(true)
+    setError(undefined)
+    try {
+      await window.api.taskManagerRemove(task.id)
+      if (editingId === task.id) closeEditor()
+      await load()
+    } catch (failure) {
+      setError(errorText(failure))
+      await load()
+    } finally {
+      setSaving(false)
+    }
   }
 
   const runNow = async (task: ScheduledTask): Promise<void> => {
@@ -455,6 +500,14 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
           </button>
         </div>
       </header>
+
+      <WatchdogAgentsSection
+        tasks={snapshot.tasks satisfies WatchdogTaskLike[]}
+        occurrences={snapshot.occurrences satisfies WatchdogOccurrenceLike[]}
+        formatDateTime={formatDateTime}
+        onCreate={openCreate}
+        onSelect={setSelectedId}
+      />
 
       <div className="task-manager-stats">
         <span>
@@ -711,13 +764,11 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                         {draft.destination.model} · indisponible
                       </option>
                     )}
-                    {!draftModelId &&
-                      !draft.destination.model &&
-                      selectableModels.length > 0 && (
-                        <option value="" disabled>
-                          Choisir un modèle
-                        </option>
-                      )}
+                    {!draftModelId && !draft.destination.model && selectableModels.length > 0 && (
+                      <option value="" disabled>
+                        Choisir un modèle
+                      </option>
+                    )}
                     {selectableModels.length === 0 && !draft.destination.model && (
                       <option value="">Aucun modèle chargé dans Agent Studio</option>
                     )}
@@ -755,91 +806,131 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                     ))}
                   </select>
                 </label>
-                <label className="task-manager-field">
-                  <span>Date de départ</span>
-                  <input
-                    type="date"
-                    value={draft.schedule.startDate}
-                    onChange={(event) => setSchedule({ startDate: event.target.value })}
-                  />
-                </label>
-                <label className="task-manager-field">
-                  <span>Heure</span>
-                  <input
-                    type="time"
-                    value={draft.schedule.time}
-                    onChange={(event) => setSchedule({ time: event.target.value })}
-                  />
-                </label>
-                <label className="task-manager-field">
-                  <span>Répétition</span>
+                <label className="task-manager-field task-manager-field-wide">
+                  <span>Déclencheur</span>
                   <select
-                    value={draft.schedule.recurrence.unit}
+                    value={triggerKindOf(draft)}
+                    data-testid="trigger-kind"
                     onChange={(event) =>
-                      setRecurrence({
-                        unit: event.target.value as RecurrenceUnit,
-                        ...(event.target.value === 'week' &&
-                        !draft.schedule.recurrence.weekDays?.length
-                          ? { weekDays: [new Date().getDay() || 7] }
-                          : {})
-                      })
+                      setDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              watchdog:
+                                event.target.value === 'watchdog'
+                                  ? (current.watchdog ?? {
+                                      source: { ...DEFAULT_FILE_SOURCE },
+                                      guards: { ...DEFAULT_DRAFT_GUARDS }
+                                    })
+                                  : undefined
+                            }
+                          : current
+                      )
                     }
                   >
-                    <option value="none">Aucune</option>
-                    <option value="minute">Minute(s)</option>
-                    <option value="hour">Heure(s)</option>
-                    <option value="day">Jour(s)</option>
-                    <option value="week">Semaine(s)</option>
-                    <option value="month">Mois</option>
+                    <option value="schedule">À une heure (planifié)</option>
+                    <option value="watchdog">Sur événement (Watchdog Agent)</option>
                   </select>
                 </label>
-                {draft.schedule.recurrence.unit !== 'none' && (
-                  <label className="task-manager-field">
-                    <span>Intervalle</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={365}
-                      value={draft.schedule.recurrence.interval}
-                      onChange={(event) =>
-                        setRecurrence({ interval: Math.max(1, Number(event.target.value)) })
-                      }
-                    />
-                  </label>
-                )}
-                {draft.schedule.recurrence.unit === 'week' && (
-                  <fieldset className="task-manager-weekdays">
-                    <legend>Jours</legend>
-                    {WEEK_DAYS.map((day) => {
-                      const selected = draft.schedule.recurrence.weekDays?.includes(day.value)
-                      return (
-                        <label key={day.value} className={selected ? 'is-selected' : ''}>
-                          <input
-                            type="checkbox"
-                            checked={selected}
-                            onChange={() => {
-                              const current = draft.schedule.recurrence.weekDays ?? []
-                              setRecurrence({
-                                weekDays: selected
-                                  ? current.filter((value) => value !== day.value)
-                                  : [...current, day.value].sort()
-                              })
-                            }}
-                          />
-                          {day.label}
-                        </label>
-                      )
-                    })}
-                  </fieldset>
-                )}
-                <label className="task-manager-field">
-                  <span>Date de fin · optionnelle</span>
-                  <input
-                    type="date"
-                    value={draft.schedule.endDate ?? ''}
-                    onChange={(event) => setSchedule({ endDate: event.target.value || undefined })}
+                {draft.watchdog && (
+                  <WatchdogRuleFields
+                    rule={draft.watchdog}
+                    onChange={(rule) =>
+                      setDraft((current) => (current ? { ...current, watchdog: rule } : current))
+                    }
                   />
-                </label>
+                )}
+                {!draft.watchdog && (
+                  <>
+                    <label className="task-manager-field">
+                      <span>Date de départ</span>
+                      <input
+                        type="date"
+                        value={draft.schedule.startDate}
+                        onChange={(event) => setSchedule({ startDate: event.target.value })}
+                      />
+                    </label>
+                    <label className="task-manager-field">
+                      <span>Heure</span>
+                      <input
+                        type="time"
+                        value={draft.schedule.time}
+                        onChange={(event) => setSchedule({ time: event.target.value })}
+                      />
+                    </label>
+                    <label className="task-manager-field">
+                      <span>Répétition</span>
+                      <select
+                        value={draft.schedule.recurrence.unit}
+                        onChange={(event) =>
+                          setRecurrence({
+                            unit: event.target.value as RecurrenceUnit,
+                            ...(event.target.value === 'week' &&
+                            !draft.schedule.recurrence.weekDays?.length
+                              ? { weekDays: [new Date().getDay() || 7] }
+                              : {})
+                          })
+                        }
+                      >
+                        <option value="none">Aucune</option>
+                        <option value="minute">Minute(s)</option>
+                        <option value="hour">Heure(s)</option>
+                        <option value="day">Jour(s)</option>
+                        <option value="week">Semaine(s)</option>
+                        <option value="month">Mois</option>
+                      </select>
+                    </label>
+                    {draft.schedule.recurrence.unit !== 'none' && (
+                      <label className="task-manager-field">
+                        <span>Intervalle</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={365}
+                          value={draft.schedule.recurrence.interval}
+                          onChange={(event) =>
+                            setRecurrence({ interval: Math.max(1, Number(event.target.value)) })
+                          }
+                        />
+                      </label>
+                    )}
+                    {draft.schedule.recurrence.unit === 'week' && (
+                      <fieldset className="task-manager-weekdays">
+                        <legend>Jours</legend>
+                        {WEEK_DAYS.map((day) => {
+                          const selected = draft.schedule.recurrence.weekDays?.includes(day.value)
+                          return (
+                            <label key={day.value} className={selected ? 'is-selected' : ''}>
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() => {
+                                  const current = draft.schedule.recurrence.weekDays ?? []
+                                  setRecurrence({
+                                    weekDays: selected
+                                      ? current.filter((value) => value !== day.value)
+                                      : [...current, day.value].sort()
+                                  })
+                                }}
+                              />
+                              {day.label}
+                            </label>
+                          )
+                        })}
+                      </fieldset>
+                    )}
+                    <label className="task-manager-field">
+                      <span>Date de fin · optionnelle</span>
+                      <input
+                        type="date"
+                        value={draft.schedule.endDate ?? ''}
+                        onChange={(event) =>
+                          setSchedule({ endDate: event.target.value || undefined })
+                        }
+                      />
+                    </label>
+                  </>
+                )}
                 <label className="task-manager-switch">
                   <input
                     type="checkbox"
@@ -863,9 +954,7 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                   type="button"
                   className="task-manager-primary"
                   disabled={
-                    saving ||
-                    !modelCatalogReady ||
-                    !hasLoadedModel(draft.destination, models)
+                    saving || !modelCatalogReady || !hasLoadedModel(draft.destination, models)
                   }
                   onClick={() => void save()}
                 >
@@ -882,7 +971,11 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                   </span>
                   <h2>{selected.title}</h2>
                   <p>
-                    {recurrenceLabel(selected.schedule)} · {selected.schedule.timeZone}
+                    {selected.schedule
+                      ? `${recurrenceLabel(selected.schedule)} · ${selected.schedule.timeZone}`
+                      : selected.watchdog
+                        ? describeWatchdogSource(selected.watchdog.source)
+                        : 'Déclencheur invalide'}
                   </p>
                 </div>
                 <div className="task-manager-detail-actions">
@@ -905,6 +998,12 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                   <button
                     type="button"
                     className="is-danger"
+                    disabled={saving || taskIsRunning}
+                    title={
+                      taskIsRunning
+                        ? 'Cette tâche est en cours et ne peut pas être supprimée.'
+                        : undefined
+                    }
                     onClick={() => void removeTask(selected)}
                   >
                     Supprimer
@@ -933,12 +1032,35 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                 </div>
                 <div>
                   <dt>Répétition</dt>
-                  <dd>{recurrenceLabel(selected.schedule)}</dd>
+                  <dd>
+                    {selected.schedule
+                      ? recurrenceLabel(selected.schedule)
+                      : selected.watchdog
+                        ? describeWatchdogSource(selected.watchdog.source)
+                        : 'Inconnu'}
+                  </dd>
                 </div>
                 <div>
                   <dt>État</dt>
                   <dd>{selected.enabled ? 'Active' : 'Désactivée'}</dd>
                 </div>
+                {selected.watchdog && (
+                  <>
+                    <div>
+                      <dt>Activité watchdog</dt>
+                      <dd>
+                        {snapshot.watchdogs?.[selected.id]?.admittedLastHour ?? 0} réveils sur la
+                        dernière heure
+                      </dd>
+                    </div>
+                    {snapshot.watchdogs?.[selected.id]?.complaint && (
+                      <div>
+                        <dt>Diagnostic</dt>
+                        <dd>{snapshot.watchdogs[selected.id].complaint}</dd>
+                      </div>
+                    )}
+                  </>
+                )}
               </dl>
               <section className="task-manager-history">
                 <div className="task-manager-panel-title">

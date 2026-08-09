@@ -14,7 +14,7 @@
  *    quasi aucun faux positif, donc réutilisable par un garde de décision.
  * La rédaction utilise les DEUX ; `brain-remember.ts` n'importe que `SHAPES`.
  */
-const KEYED = String.raw`(Bearer\s+)[^\s"']+|((?:api[_-]?key|token|secret|password)\s*[=:]\s*)[^\s,"']+`
+const KEYED = String.raw`(Bearer\s+)[^\s"']+|((?:api[_-]?key|token|secret|password)["']?\s*(?::\s*[A-Za-z_$][\w.$<>\[\]| ]*)?(?:\/\*[\s\S]*?\*\/\s*)?[=:]\s*)(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;]+)`
 const SHAPES = String.raw`\b(?:sk-(?:proj-)?|gh[pousr]_)[A-Za-z0-9_-]{8,}|xox[baprs]-[A-Za-z0-9-]{8,}|\bAKIA[A-Z0-9]{16}\b|\bAIza[A-Za-z0-9_-]{30,}\b|\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b|-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----`
 
 const SECRET_VALUE = new RegExp(`${KEYED}|${SHAPES}`, 'gi')

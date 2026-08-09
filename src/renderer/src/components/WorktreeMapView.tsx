@@ -6,7 +6,8 @@ import {
   worktreeLabel,
   type WorktreeMapEntry,
   type WorktreeMapLine,
-  type WorktreeMapSnapshot
+  type WorktreeMapSnapshot,
+  type WorktreeDoctorProposal
 } from '../../../shared/worktree-map'
 import './WorktreeMapView.css'
 
@@ -35,9 +36,11 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
   const [selected, setSelected] = useState<string | null>(null)
   const [repoPath, setRepoPath] = useState(() => localStorage.getItem(REPO_STORAGE_KEY) ?? '')
   const scrollerRef = useRef<HTMLDivElement | null>(null)
+  const refreshGenerationRef = useRef(0)
   const [viewport, setViewport] = useState({ left: 0, width: 1 })
 
   const refresh = useCallback(async () => {
+    const generation = ++refreshGenerationRef.current
     // Sortie du cycle de rendu avant tout `setState` : appelée depuis un effet, une ecriture
     // synchrone declencherait une cascade de rendus (et le lint la refuse, a juste titre).
     await Promise.resolve()
@@ -45,27 +48,31 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
     // rejetee remonter en erreur non capturee.
     const read = window.api?.getWorktreeMap
     if (!read) {
-      setSnapshot({ available: false, repoPath, entries: [], error: 'Bridge Git indisponible' })
+      if (generation === refreshGenerationRef.current)
+        setSnapshot({ available: false, repoPath, entries: [], error: 'Bridge Git indisponible' })
       return
     }
     setLoading(true)
     try {
-      setSnapshot(await read(repoPath || undefined))
+      const next = await read(repoPath || undefined)
+      if (generation === refreshGenerationRef.current) setSnapshot(next)
     } catch (error) {
-      setSnapshot({
-        available: false,
-        repoPath,
-        entries: [],
-        error: error instanceof Error ? error.message : String(error)
-      })
+      if (generation === refreshGenerationRef.current)
+        setSnapshot({
+          available: false,
+          repoPath,
+          entries: [],
+          error: error instanceof Error ? error.message : String(error)
+        })
     } finally {
-      setLoading(false)
+      if (generation === refreshGenerationRef.current) setLoading(false)
     }
   }, [repoPath])
 
   const pickRepo = useCallback(async () => {
     const chosen = await window.api?.pickGitRepo?.()
     if (!chosen) return
+    refreshGenerationRef.current += 1
     localStorage.setItem(REPO_STORAGE_KEY, chosen)
     setSelected(null)
     setRepoPath(chosen)
@@ -76,6 +83,9 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
     // declenche une cascade de rendus. La microtâche est vidée dans le meme tour, donc la
     // lecture reste immediate a l'oeil comme au test.
     if (active) queueMicrotask(() => void refresh())
+    return () => {
+      refreshGenerationRef.current += 1
+    }
   }, [active, refresh])
 
   // Memoïsé : `?? []` fabriquait un tableau NEUF a chaque rendu, donc les trois mémos qui en
@@ -185,11 +195,15 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
         </p>
       )}
 
+      {snapshot?.available && snapshot.doctor && <WorktreeDoctor report={snapshot.doctor} />}
+
       {entries.length > 0 && (
         <>
           <div className="wtmap-area">
             <span className="wtmap-territory is-up">↑ vivant — réclame ton attention</span>
-            <span className="wtmap-territory is-down">↓ fermé — à curer</span>
+            <span className="wtmap-territory is-down">
+              ↓ fermé — à curer · inconnu — à vérifier
+            </span>
             <div className="wtmap-scroller" ref={scrollerRef} data-testid="worktree-map-scroller">
               <svg
                 className="wtmap-plan"
@@ -295,6 +309,8 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
                   key={`mini:${line.entryPaths.join('|')}`}
                   points={line.points.map(([x, y]) => `${x},${y}`).join(' ')}
                   className={`wtmap-mini-line is-${line.kind}`}
+                  stroke={line.kind === 'unknown' ? LATE : undefined}
+                  strokeDasharray={line.kind === 'unknown' ? '10 8' : undefined}
                 />
               ))}
               <line
@@ -357,6 +373,67 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
       )}
     </div>
   )
+}
+
+function WorktreeDoctor({
+  report
+}: {
+  report: NonNullable<WorktreeMapSnapshot['doctor']>
+}): React.JSX.Element {
+  const count = report.findings.length
+  return (
+    <section className={`wtmap-doctor is-${report.status}`} data-testid="worktree-doctor">
+      <div className="wtmap-doctor-head">
+        <b>
+          {report.status === 'healthy'
+            ? 'Docteur : sain'
+            : `Docteur : ${count} point${count > 1 ? 's' : ''} à vérifier`}
+        </b>
+        <span>Lecture seule · Jamais exécuté automatiquement</span>
+      </div>
+      {report.findings.map((finding) => (
+        <div
+          className={`wtmap-doctor-card is-${finding.severity}`}
+          key={`${finding.code}:${finding.path}`}
+        >
+          <div>
+            <strong>{doctorLabel(finding.code)}</strong>
+            <span className="mono">{finding.path}</span>
+          </div>
+          <p>{finding.evidence}</p>
+          {finding.proposals.map((proposal) => (
+            <div
+              className="wtmap-doctor-command"
+              key={`${proposal.action}:${proposal.argv.join('\0')}`}
+            >
+              <code>{formatGitCommand(proposal)}</code>
+              <button
+                className="btn btn-ghost"
+                onClick={() => void navigator.clipboard?.writeText(formatGitCommand(proposal))}
+                title={proposal.reason}
+              >
+                Copier
+              </button>
+            </div>
+          ))}
+        </div>
+      ))}
+    </section>
+  )
+}
+
+function doctorLabel(
+  code: NonNullable<WorktreeMapSnapshot['doctor']>['findings'][number]['code']
+): string {
+  if (code === 'prunable') return 'Métadonnées orphelines'
+  if (code === 'missing') return 'Dossier absent'
+  if (code === 'unreadable') return 'Copie illisible par Git'
+  return 'Copie verrouillée'
+}
+
+function formatGitCommand(proposal: WorktreeDoctorProposal): string {
+  const quote = (arg: string): string => (/\s/.test(arg) ? `"${arg.replace(/"/g, '\\"')}"` : arg)
+  return ['git', ...proposal.argv].map(quote).join(' ')
 }
 
 function describeBehind(entry: WorktreeMapEntry): string {
@@ -422,6 +499,7 @@ function Line({
   onSelect: (path: string) => void
 }): React.JSX.Element {
   const live = line.kind === 'live'
+  const unknown = line.kind === 'unknown'
   const [tx, ty] = line.terminus
   const goesRight = line.points[line.points.length - 1][0] >= line.points[0][0]
   return (
@@ -429,6 +507,9 @@ function Line({
       <polyline
         points={line.points.map(([x, y]) => `${x},${y}`).join(' ')}
         className={`wtmap-line is-${line.kind}`}
+        stroke={unknown ? LATE : undefined}
+        strokeWidth={unknown ? 4 : undefined}
+        strokeDasharray={unknown ? '10 8' : undefined}
       />
       {line.stations.map((station) => {
         const entry = entries.get(station.entryPath)
@@ -439,9 +520,7 @@ function Line({
             className={`wtmap-station${isSelected ? ' is-selected' : ''}`}
             role="button"
             tabIndex={0}
-            aria-label={`${entry ? worktreeLabel(entry) : station.entryPath} — ${
-              station.dirtyFiles ? `${station.dirtyFiles} fichiers non commités` : 'propre'
-            }`}
+            aria-label={`${entry ? worktreeLabel(entry) : station.entryPath} — ${entry ? describeDirty(entry) : 'état inconnu'}`}
             onClick={() => onSelect(station.entryPath)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' || event.key === ' ') onSelect(station.entryPath)
@@ -452,7 +531,7 @@ function Line({
               cy={station.y}
               r={station.dirtyFiles ? 6.5 : 5}
               fill={station.dirtyFiles ? LIVE : 'var(--surface-inset)'}
-              stroke={station.dirtyFiles ? LIVE : live ? LIVE : CLOSED}
+              stroke={station.dirtyFiles ? LIVE : unknown ? LATE : live ? LIVE : CLOSED}
               strokeWidth={3}
             />
             {station.dirtyFiles !== undefined && (
@@ -468,6 +547,20 @@ function Line({
           <circle cx={tx} cy={ty} r={9} className="wtmap-terminus is-live" />
           <circle cx={tx} cy={ty} r={3.5} fill={LIVE} />
         </>
+      ) : unknown ? (
+        <>
+          <circle
+            cx={tx}
+            cy={ty}
+            r={10}
+            fill="var(--surface-panel)"
+            stroke={LATE}
+            strokeWidth={2}
+          />
+          <text x={tx} y={ty + 4} textAnchor="middle" fill={LATE} fontWeight={700}>
+            ?
+          </text>
+        </>
       ) : (
         <>
           <circle cx={tx} cy={ty} r={10} className="wtmap-terminus is-closed" />
@@ -480,6 +573,7 @@ function Line({
         y={ty + 4}
         textAnchor={goesRight ? 'start' : 'end'}
         className={`wtmap-terminus-label is-${line.kind}`}
+        fill={unknown ? LATE : undefined}
       >
         {line.label}
       </text>

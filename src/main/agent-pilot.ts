@@ -51,7 +51,17 @@ export type PilotEventVariant =
   | { kind: 'reasoning'; text: string; iteration: number }
   | { kind: 'command'; actionId: string; name: string; args: unknown }
   | { kind: 'result'; actionId: string; name: string; ok: boolean; data?: unknown }
-  | { kind: 'done'; text: string; usage?: TurnUsage }
+  | {
+      kind: 'done'
+      text: string
+      usage?: TurnUsage
+      /**
+       * Issue d'orchestration STRUCTUREE. `text` en est la mise en forme humaine ; la trace, elle,
+       * a besoin des champs (gateBlocked, valid, reused) pour etre filtrable et comptable — un
+       * texte libre ne se filtre pas.
+       */
+      outcome?: Record<string, unknown>
+    }
   | { kind: 'error'; text: string; usage?: TurnUsage }
   | { kind: 'retry'; iteration: number; name: string; text: string; data: unknown }
   | { kind: 'cancellation'; iteration: number; name: string; text: string; data: unknown }
@@ -84,6 +94,12 @@ export interface PilotEvent {
    */
   kind: PilotEventKind
   text?: string
+  /**
+   * Issue d'orchestration STRUCTUREE, portee par le `done`. `text` en est la mise en forme humaine ;
+   * la trace, elle, a besoin des champs (gateBlocked, valid, reused) pour etre filtrable et
+   * comptable — un texte libre ne se filtre ni ne se compte.
+   */
+  outcome?: Record<string, unknown>
   name?: string
   args?: unknown
   ok?: boolean
@@ -343,6 +359,9 @@ export class AgentPilot {
             result.ok ? (result.data as OrchestrationOutcome | undefined) : undefined,
             result.ok ? undefined : String(result.error ?? '')
           ) + directiveNotice,
+        outcome: result.ok
+          ? ((result.data as Record<string, unknown> | undefined) ?? undefined)
+          : undefined,
         usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 }
       })
       return

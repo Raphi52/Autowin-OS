@@ -4,9 +4,25 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   AutoKaizenSupervisor,
+  legacyAutoKaizenSupervisorEnabled,
   type AutoKaizenLimits,
   type AutoKaizenRuntime
 } from './auto-kaizen-supervisor'
+
+describe('Auto-Kaizen legacy — activation explicite', () => {
+  it('reste OFF par defaut et ne s active que sur un opt-in exact', () => {
+    expect(legacyAutoKaizenSupervisorEnabled({})).toBe(false)
+    expect(legacyAutoKaizenSupervisorEnabled({ AUTOWIN_LEGACY_AUTO_KAIZEN_ENABLED: '0' })).toBe(
+      false
+    )
+    expect(legacyAutoKaizenSupervisorEnabled({ AUTOWIN_LEGACY_AUTO_KAIZEN_ENABLED: '1' })).toBe(
+      true
+    )
+    expect(legacyAutoKaizenSupervisorEnabled({ AUTOWIN_LEGACY_AUTO_KAIZEN_ENABLED: 'true' })).toBe(
+      true
+    )
+  })
+})
 
 /**
  * Un incident ACTIF n'avait aucune horloge de garde. Mesuré le 2026-08-05 sur l'état vivant :

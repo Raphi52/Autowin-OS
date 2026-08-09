@@ -65,6 +65,48 @@ describe('chemin causal critique', () => {
     expect(graph.byId.get('parent')?.issues).toContain('incomplete-child-timing')
   })
 
+  it('ne désigne aucun chemin critique lorsque les racines ne sont pas comparables', () => {
+    const graph = buildCausalPath([
+      event('opaque-a', undefined, '2026-07-20T10:00:00.000Z'),
+      event('opaque-b', undefined, '2026-07-20T10:00:01.000Z')
+    ])
+
+    expect(graph.criticalPathIds).toEqual([])
+    expect(graph.bottleneckId).toBeUndefined()
+    expect([...graph.byId.values()].every((node) => !node.onCriticalPath)).toBe(true)
+  })
+
+  it('refuse un classement global si une seule racine candidate reste opaque', () => {
+    const graph = buildCausalPath([
+      event('known', 10, '2026-07-20T10:00:00.000Z'),
+      event('opaque', undefined, '2026-07-20T10:00:01.000Z')
+    ])
+
+    expect(graph.criticalPathIds).toEqual([])
+    expect(graph.bottleneckId).toBeUndefined()
+  })
+
+  it('refuse aussi un classement quand un cycle coexiste avec une racine valide', () => {
+    const descendantOpaque = buildCausalPath([
+      event('opaque-root', 100, '2026-07-20T10:00:00.000Z'),
+      event('opaque-child', 50, '2026-07-20T10:00:00.010Z', 'opaque-root'),
+      event('opaque-grandchild', undefined, '2026-07-20T10:00:00.020Z', 'opaque-child')
+    ])
+
+    expect(descendantOpaque.byId.get('opaque-child')?.issues).toContain('incomplete-child-timing')
+    expect(descendantOpaque.criticalPathIds).toEqual([])
+    expect(descendantOpaque.bottleneckId).toBeUndefined()
+
+    const graph = buildCausalPath([
+      event('valid', 50, '2026-07-20T10:00:00.000Z'),
+      event('a', 10, '2026-07-20T10:00:00.001Z', 'b'),
+      event('b', 5, '2026-07-20T10:00:00.002Z', 'a')
+    ])
+
+    expect(graph.criticalPathIds).toEqual([])
+    expect(graph.bottleneckId).toBeUndefined()
+  })
+
   it('isole un cycle invalide au lieu de perdre les événements', () => {
     const graph = buildCausalPath([
       event('a', 10, '2026-07-20T10:00:00.000Z', 'b'),
@@ -74,5 +116,7 @@ describe('chemin causal critique', () => {
     expect(graph.roots).toHaveLength(2)
     expect(graph.byId.get('a')?.issues).toContain('causal-cycle')
     expect(graph.byId.get('b')?.issues).toContain('causal-cycle')
+    expect(graph.criticalPathIds).toEqual([])
+    expect(graph.bottleneckId).toBeUndefined()
   })
 })

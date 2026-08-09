@@ -21,10 +21,32 @@ const SANDBOX_POLICY = [
   "form-action 'none'"
 ].join('; ')
 
+/**
+ * Defauts de LISIBILITE du bac a sable (2026-08-07).
+ *
+ * L'app est sombre (`#080a0e`, texte clair) mais l'iframe s'affichait sur un blanc code en dur :
+ * chaque reponse HTML du modele apparaissait en rectangle eblouissant au milieu du fil. Ces defauts
+ * accordent la page a l'app.
+ *
+ * Ils sont poses sur `html`/`body` UNIQUEMENT, sans `!important` : n'importe quelle regle ecrite par
+ * le modele les emporte par specificite ou par ordre. C'est un PLANCHER, pas un theme impose.
+ * `color-scheme: dark` fait suivre les defauts du navigateur lui-meme (controles de formulaire,
+ * barres de defilement, `<hr>`), que la CSS seule n'atteint pas.
+ */
+const READABILITY_DEFAULTS =
+  '<style>' +
+  ':root{color-scheme:dark}' +
+  'html,body{margin:0;background:#0f1218;color:#e6e9ef;' +
+  "font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px;line-height:1.55}" +
+  'body{padding:16px}' +
+  'a{color:#7cc0ff}' +
+  '</style>'
+
 const SECURITY_HEAD =
   `<meta http-equiv="Content-Security-Policy" content="${SANDBOX_POLICY}">` +
   '<meta name="referrer" content="no-referrer">' +
-  '<meta name="viewport" content="width=device-width, initial-scale=1">'
+  '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+  READABILITY_DEFAULTS
 
 /**
  * Impose notre CSP AVANT le contenu modèle. Une CSP fournie par la page peut la resserrer, jamais

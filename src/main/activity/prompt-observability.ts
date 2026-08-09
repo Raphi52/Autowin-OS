@@ -3,14 +3,19 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
 import type { Message, Usage } from '../providers/types'
+import type { PipelinePhase } from '../skill-pipeline'
 
 export interface PromptCallRecord {
   id: string
+  /** Récupération Brain effectivement disponible au moment de construire cet appel. */
+  brainTraceId?: string
   ts: string
   conversationId: string
   turnId: string
   iteration: number
   actor: string
+  /** Phase d'execution reelle ; absente uniquement sur les anciens journaux. */
+  phase?: PipelinePhase
   provider: string
   model?: string
   transport: string

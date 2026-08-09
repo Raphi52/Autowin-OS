@@ -6,6 +6,9 @@ import { promptCallToTraceEvents } from './prompt-call-trace'
 import { TraceStore } from './trace-store'
 import { assertTraceEvent, type TraceEventV1 } from './trace-event'
 import type { RunLifecycleEvent } from '../../shared/run-execution'
+import { evidencePayloads } from './evidence-payloads'
+import { stepPayloads } from './step-reasoning-payloads'
+import { latestBrainTraceId } from './brain-trace-spool'
 
 interface OrchestrationTraceContext {
   conversationId: string
@@ -30,10 +33,10 @@ export function persistRunLifecycle(
     lifecycle.stage === 'quote'
       ? lifecycle.quote.regime
       : lifecycle.stage === 'workspace'
-      ? lifecycle.workspace.path
-      : lifecycle.stage === 'git'
-        ? lifecycle.git.outcome
-        : lifecycle.closure.status
+        ? lifecycle.workspace.path
+        : lifecycle.stage === 'git'
+          ? lifecycle.git.outcome
+          : lifecycle.closure.status
   traceStore.append(
     assertTraceEvent({
       schema: 'autowin.trace/v1',
@@ -59,10 +62,10 @@ export function persistRunLifecycle(
           : lifecycle.stage === 'quote'
             ? 'completed'
             : lifecycle.stage === 'workspace'
-            ? 'running'
-            : lifecycle.git.outcome === 'conflict' || lifecycle.git.outcome === 'blocked'
-              ? 'failed'
-              : 'completed',
+              ? 'running'
+              : lifecycle.git.outcome === 'conflict' || lifecycle.git.outcome === 'blocked'
+                ? 'failed'
+                : 'completed',
       actor: { id: 'autowin-run', kind: 'system', label: 'Autowin OS' },
       recipient: { id: 'orchestrator', kind: 'agent', label: 'orchestrator' },
       channel: 'internal',
@@ -168,12 +171,12 @@ export function persistOrchestrationStep(
       },
       recipient: { id: 'orchestrator', kind: 'agent', label: 'orchestrator' },
       channel: 'internal',
-      payloads: [
-        {
-          kind: step.step === 'gate' ? 'app-state' : 'model-response',
-          content: step.error ?? step.text ?? step.detail ?? ''
-        }
-      ],
+      /**
+       * Inclut desormais le RAISONNEMENT du sous-agent (`step.thinking`), affiche dans le chat mais
+       * absent de la trace jusqu'au 2026-08-07 : Observatory montrait la conclusion d'un sous-agent
+       * sans la deliberation qui y menait. Charge distincte, jamais concatenee a la conclusion.
+       */
+      payloads: stepPayloads(step),
       observation: { boundary: `Autowin orchestration ${step.step}`, fidelity: 'exact' },
       execution: { ...step.execution, runId: context.runId ?? step.execution?.runId },
       provider: step.provider ? { id: step.provider, model: step.model } : undefined,
@@ -194,6 +197,9 @@ export function persistOrchestrationStep(
     // événements causaux `tool-call` : sinon l'usage d'outils réel reste invisible dans Observatory
     // (seules les traces natives y comptaient). Rattachés à l'étape exec, dans l'ordre observé.
     for (const item of step.evidence ?? []) {
+      // Calcule AVANT le litteral : un spread d'IIFE elargissait le type et faisait echouer le
+      // typecheck sur l'evenement entier.
+      const evidenceCharges = evidencePayloads(item)
       const toolEvent = assertTraceEvent({
         schema: 'autowin.trace/v1',
         id: `${context.turnId}:tool:${step.step}:${context.iteration}:${sequence}`,
@@ -207,8 +213,22 @@ export function persistOrchestrationStep(
         actor: { id: item.kind, kind: 'tool', label: item.kind },
         recipient: { id: step.role ?? 'subagent', kind: 'agent', label: step.role ?? 'subagent' },
         channel: 'tool',
-        payloads: [{ kind: 'tool-call', content: item.summary || item.type }],
-        observation: { boundary: `Autowin exec ${item.type}`, fidelity: 'exact' },
+        /**
+         * Transporte ce que le CHAT affiche deja (commande, code de sortie, sortie brute, diff) au
+         * lieu du seul resume.
+         *
+         * Avant le 2026-08-07 cette charge valait `item.summary || item.type` TOUT EN declarant
+         * `fidelity: 'exact'` — un libelle menteur : Observatory affirmait l'exactitude en montrant
+         * une version appauvrie de ce que l'utilisateur avait sous les yeux. La fidelite est
+         * desormais CALCULEE : `exact` seulement si le contenu integral passe, `derived` sinon
+         * (resume seul, ou sortie bornee — et la borne est annoncee dans le contenu).
+         */
+        payloads: evidenceCharges.payloads,
+        observation: {
+          boundary: `Autowin exec ${item.type}`,
+          fidelity: evidenceCharges.fidelity,
+          limitation: evidenceCharges.limitation
+        },
         execution: { ...step.execution, runId: context.runId ?? step.execution?.runId }
       })
       traceStore.append(toolEvent)
@@ -222,7 +242,9 @@ export function persistOrchestrationStep(
   const call = appendPromptCall(
     {
       ...context,
+      brainTraceId: latestBrainTraceId(context.conversationId, context.turnId),
       actor: step.role,
+      phase: step.execution?.phase,
       provider: step.prompt.provider,
       model: step.prompt.model,
       transport: step.prompt.transport,

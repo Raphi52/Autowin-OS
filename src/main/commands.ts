@@ -60,7 +60,34 @@ import {
 } from './graphify-command'
 import { ensureAutowinAppData } from './app-data'
 import type { TraceStore } from './activity/trace-store'
+import type { TraceAuthorityReceipt } from './activity/trace-event'
+import { redactTrace } from './activity/trace-redact'
 import { reconcileLateRunLifecycle } from './activity/late-run-usage-settlement'
+import { addedLineFingerprints } from './exact-line-fingerprint'
+import type { WatchdogMutationClaimsSink } from './task-manager/types'
+
+/** Le log déclencheur reste une preuve en lecture seule ; l'agent reçoit un chemin relatif au bureau. */
+export function isolateWatchdogPromptPaths(
+  prompt: string,
+  watchedPaths: readonly string[],
+  workspaceRoot: string
+): string {
+  let isolated = prompt
+  for (const watchedPath of watchedPaths) {
+    const absolute = isAbsolute(watchedPath)
+      ? resolve(watchedPath)
+      : resolve(workspaceRoot, watchedPath)
+    const rel = relative(workspaceRoot, absolute)
+    if (!rel || rel === '..' || /^\.\.[\\/]/.test(rel) || isAbsolute(rel)) continue
+    const replacement = rel.replaceAll('\\', '/')
+    for (const candidate of [watchedPath, watchedPath.replaceAll('\\', '/'), absolute]) {
+      isolated = isolated.split(candidate).join(replacement)
+    }
+  }
+  return watchedPaths.length
+    ? `${isolated}\n\nCONTRAINTE WATCHDOG : la source surveillée est une preuve en lecture seule. Ne la modifie, ne la tronque et ne la recrée jamais ; corrige uniquement la cause dans les fichiers du bureau isolé.`
+    : isolated
+}
 
 /**
  * Bus de commandes de l'app — le PLAN DE CONTRÔLE que les agents pilotent.
@@ -362,7 +389,8 @@ const CATALOG: CommandSpec[] = [
       destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false
-    }
+    },
+    authority: 'destructive'
   }
 ]
 
@@ -385,9 +413,13 @@ function canonicalValue(value: unknown): unknown {
   )
 }
 
-function actionFingerprint(name: string, args: Record<string, unknown>): string {
+function actionFingerprint(
+  name: string,
+  args: Record<string, unknown>,
+  scope?: { conversationId?: string }
+): string {
   return createHash('sha256')
-    .update(JSON.stringify(canonicalValue({ name, args })), 'utf8')
+    .update(JSON.stringify(canonicalValue({ name, args, scope })), 'utf8')
     .digest('hex')
 }
 
@@ -396,9 +428,14 @@ function redactedArgs(name: string, args: Record<string, unknown>): Record<strin
   if (name === 'attach_run') return { path: '[redacted]', conversationId: '[redacted]' }
   if (name === 'chat_send')
     return { message: '[redacted]', provider: args.provider, role: args.role }
-  return Object.fromEntries(
-    Object.entries(args).map(([key, value]) => [key, SECRET_KEY.test(key) ? '[redacted]' : value])
-  )
+  if (name === 'edit_file') {
+    return {
+      path: args.path,
+      oldText: '[REDACTED]',
+      newText: '[REDACTED]'
+    }
+  }
+  return redactTrace(args) as Record<string, unknown>
 }
 
 function safePreview(value: unknown, fallback: string): string {
@@ -451,6 +488,12 @@ export class AppCommandBus {
       args: Record<string, unknown>
       fingerprint: string
       action: () => Promise<unknown>
+      authorityTrace?: {
+        conversationId: string
+        turnId: string
+        eventId: string
+        receipt: TraceAuthorityReceipt
+      }
     }
   >()
   private readonly pendingDecisionByFingerprint = new Map<string, string>()
@@ -537,6 +580,55 @@ export class AppCommandBus {
     this.traceStore = traceStore
   }
 
+  private appendAuthorityTrace(input: {
+    name: string
+    args: Record<string, unknown>
+    conversationId?: string
+    turnId?: string
+    status: 'pending' | 'completed' | 'failed' | 'cancelled'
+    receipt: TraceAuthorityReceipt
+    parentId?: string
+  }):
+    | { conversationId: string; turnId: string; eventId: string; receipt: TraceAuthorityReceipt }
+    | undefined {
+    const conversationId = input.conversationId ?? this.activeConversationId
+    if (!this.traceStore || !conversationId || !input.turnId) return undefined
+    const eventId = `${input.turnId}:authority:${randomUUID()}`
+    this.traceStore.append({
+      schema: 'autowin.trace/v1',
+      id: eventId,
+      conversationId,
+      turnId: input.turnId,
+      ...(input.parentId ? { parentId: input.parentId } : {}),
+      timestamp: new Date().toISOString(),
+      sequence: this.traceStore.nextSequence(conversationId),
+      type: 'decision',
+      status: input.status,
+      actor: { id: 'autowin-authority', kind: 'system', label: 'Autorité Autowin' },
+      recipient: { id: 'command-bus', kind: 'tool', label: input.name },
+      channel: 'internal',
+      payloads: [
+        {
+          kind: input.parentId ? 'tool-result' : 'tool-call',
+          name: input.name,
+          mediaType: 'application/json',
+          content: JSON.stringify(
+            input.parentId
+              ? {
+                  decisionId: input.receipt.decisionId,
+                  resolution: input.receipt.resolution,
+                  resolvedBy: input.receipt.resolvedBy
+                }
+              : redactedArgs(input.name, input.args)
+          )
+        }
+      ],
+      observation: { boundary: 'app-command-bus', fidelity: 'exact' },
+      authority: input.receipt
+    })
+    return { conversationId, turnId: input.turnId, eventId, receipt: input.receipt }
+  }
+
   constructor(
     private readonly os: AutowinOS,
     private readonly broadcast: (e: AppEvent) => void,
@@ -584,18 +676,68 @@ export class AppCommandBus {
     if (pending) this.pendingDecisionByFingerprint.delete(pending.fingerprint)
     this.trace?.(
       'authority_decision',
-      { action: pending?.name ?? 'unknown', choice: String(choice), by: resolution.by },
+      {
+        action: pending?.name ?? 'unknown',
+        choice: String(resolution.choice),
+        by: resolution.by
+      },
       true
     )
+    const approved = resolution.choice === 'approve'
+    if (pending?.authorityTrace && !approved) {
+      this.appendAuthorityTrace({
+        name: pending.name,
+        args: pending.args,
+        conversationId: pending.authorityTrace.conversationId,
+        turnId: pending.authorityTrace.turnId,
+        parentId: pending.authorityTrace.eventId,
+        status: 'cancelled',
+        receipt: {
+          ...pending.authorityTrace.receipt,
+          resolution: 'cancel',
+          resolvedBy: resolution.by
+        }
+      })
+    }
     this.broadcast({ type: 'refresh', scope: 'decisions' })
-    if (!pending || choice !== 'approve') return resolution
+    if (!pending || !approved) return resolution
     try {
       const data = await pending.action()
+      if (pending.authorityTrace) {
+        this.appendAuthorityTrace({
+          name: pending.name,
+          args: pending.args,
+          conversationId: pending.authorityTrace.conversationId,
+          turnId: pending.authorityTrace.turnId,
+          parentId: pending.authorityTrace.eventId,
+          status: 'completed',
+          receipt: {
+            ...pending.authorityTrace.receipt,
+            resolution: 'approve',
+            resolvedBy: resolution.by
+          }
+        })
+      }
       this.trace?.(pending.name, pending.args, true)
       this.broadcast({ type: 'refresh', scope: 'conversations' })
       this.broadcast({ type: 'refresh', scope: 'workflows' })
       return { ...resolution, executed: true, data }
     } catch (error) {
+      if (pending.authorityTrace) {
+        this.appendAuthorityTrace({
+          name: pending.name,
+          args: pending.args,
+          conversationId: pending.authorityTrace.conversationId,
+          turnId: pending.authorityTrace.turnId,
+          parentId: pending.authorityTrace.eventId,
+          status: 'failed',
+          receipt: {
+            ...pending.authorityTrace.receipt,
+            resolution: 'approve',
+            resolvedBy: resolution.by
+          }
+        })
+      }
       this.trace?.(pending.name, pending.args, false)
       throw error
     }
@@ -612,6 +754,21 @@ export class AppCommandBus {
         { action: pending?.name ?? 'unknown', choice: 'cancel', by: resolution.by },
         true
       )
+      if (pending?.authorityTrace) {
+        this.appendAuthorityTrace({
+          name: pending.name,
+          args: pending.args,
+          conversationId: pending.authorityTrace.conversationId,
+          turnId: pending.authorityTrace.turnId,
+          parentId: pending.authorityTrace.eventId,
+          status: 'cancelled',
+          receipt: {
+            ...pending.authorityTrace.receipt,
+            resolution: 'cancel',
+            resolvedBy: resolution.by
+          }
+        })
+      }
     }
     if (resolutions.length) this.broadcast({ type: 'refresh', scope: 'decisions' })
     return resolutions
@@ -620,9 +777,16 @@ export class AppCommandBus {
   private deferSensitiveAction(
     name: string,
     args: Record<string, unknown>,
-    action: () => Promise<unknown>
+    action: () => Promise<unknown>,
+    context?: {
+      conversationId?: string
+      turnId?: string
+      receipt: Omit<TraceAuthorityReceipt, 'decisionId'>
+    }
   ): { pendingApproval: true; decisionId: string } {
-    const fingerprint = actionFingerprint(name, args)
+    const fingerprint = actionFingerprint(name, args, {
+      conversationId: context?.conversationId ?? this.activeConversationId
+    })
     const existingId = this.pendingDecisionByFingerprint.get(fingerprint)
     if (existingId && this.os.authority.pending().some((decision) => decision.id === existingId)) {
       return { pendingApproval: true, decisionId: existingId }
@@ -635,11 +799,23 @@ export class AppCommandBus {
       safeDefault: 'cancel',
       ttlMs: 15 * 60_000
     })
+    const receipt = context ? { ...context.receipt, decisionId } : undefined
+    const authorityTrace = receipt
+      ? this.appendAuthorityTrace({
+          name,
+          args,
+          conversationId: context?.conversationId,
+          turnId: context?.turnId,
+          status: 'pending',
+          receipt
+        })
+      : undefined
     this.pendingActions.set(decisionId, {
       name,
       args: redactedArgs(name, args),
       fingerprint,
-      action
+      action,
+      authorityTrace
     })
     this.pendingDecisionByFingerprint.set(fingerprint, decisionId)
     this.broadcast({ type: 'refresh', scope: 'decisions' })
@@ -694,22 +870,65 @@ export class AppCommandBus {
       const specification = CATALOG.find((command) => command.name === name)
       if (!specification) throw new Error(`Commande inconnue: ${name}`)
       if (!this.isCommandEnabled(name)) throw new Error(`Capacité désactivée: ${name}`)
+      const annotations =
+        specification.annotations ??
+        (specification.name === 'get_state'
+          ? { ...DEFAULT_COMMAND_ANNOTATIONS, readOnlyHint: true, idempotentHint: true }
+          : DEFAULT_COMMAND_ANNOTATIONS)
       const decision = decideConversationCapability({
         mode: authorityMode,
-        mutates: !specification.annotations?.readOnlyHint,
+        mutates: !annotations.readOnlyHint,
         authority: specification.authority ?? 'automatic'
       })
+      const receipt = {
+        mode: authorityMode,
+        mutates: !annotations.readOnlyHint,
+        commandAuthority: specification.authority ?? 'automatic',
+        decision
+      } satisfies TraceAuthorityReceipt
       if (decision === 'deny') {
+        this.appendAuthorityTrace({
+          name,
+          args,
+          conversationId,
+          turnId,
+          status: 'failed',
+          receipt
+        })
         this.trace?.(name, redactedArgs(name, args), false)
         return { ok: false, error: `Action interdite en mode Plan: ${name}` }
       }
       if (decision === 'confirm') {
-        const pending = this.deferSensitiveAction(name, args, () =>
-          this.run(name, args, conversationId, bindingOverride, turnId)
+        const pending = this.deferSensitiveAction(
+          name,
+          args,
+          () => this.run(name, args, conversationId, bindingOverride, turnId),
+          { conversationId, turnId, receipt }
         )
         return { ok: true, data: pending }
       }
-      const data = await this.run(name, args, conversationId, bindingOverride, turnId)
+      let data: unknown
+      try {
+        data = await this.run(name, args, conversationId, bindingOverride, turnId)
+        this.appendAuthorityTrace({
+          name,
+          args,
+          conversationId,
+          turnId,
+          status: 'completed',
+          receipt
+        })
+      } catch (error) {
+        this.appendAuthorityTrace({
+          name,
+          args,
+          conversationId,
+          turnId,
+          status: 'failed',
+          receipt
+        })
+        throw error
+      }
       this.trace?.(name, redactedArgs(name, args), true)
       return { ok: true, data }
     } catch (e) {
@@ -769,6 +988,15 @@ export class AppCommandBus {
           conversationId ||
           this.activeConversationId ||
           '__autonomous__'
+        const causalWatchPaths = Array.isArray(a.causalWatchPaths)
+          ? a.causalWatchPaths
+              .filter((path): path is string => typeof path === 'string' && path.trim().length > 0)
+              .slice(0, 16)
+          : []
+        const onLateMutationClaims =
+          typeof a.onLateMutationClaims === 'function'
+            ? (a.onLateMutationClaims as WatchdogMutationClaimsSink)
+            : undefined
         // Rang pris ICI, dans le préfixe synchrone de `exec` : c'est le seul point qui reflète
         // l'ordre d'APPEL. Plus loin, le préambule asynchrone peut réordonner les lancements.
         const orchestrationRank = ++this.orchestrationRank
@@ -798,14 +1026,24 @@ export class AppCommandBus {
             ? (this.os.conversations.get(conversation.autoKaizen.sourceConversationId) ??
               conversation)
             : conversation
-        const task =
+        const rawTask =
           /^\/kaizen(?=\s|$)/i.test(requestedTask) && kaizenEvidenceConversation
             ? buildAutowinKaizenTask(
                 requestedTask,
                 collectAutowinKaizenEvidence(kaizenEvidenceConversation)
               )
             : requestedTask
-        const fingerprint = actionFingerprint('orchestrate', { convId, task, bindingOverride })
+        const task = isolateWatchdogPromptPaths(
+          rawTask,
+          causalWatchPaths,
+          this.os.executionWorkspace
+        )
+        const fingerprint = actionFingerprint('orchestrate', {
+          convId,
+          task,
+          bindingOverride,
+          causalWatchPaths
+        })
         const existingRun = this.activeOrchestrationByFingerprint.get(fingerprint)
         if (existingRun) {
           const existing = await existingRun
@@ -889,11 +1127,6 @@ export class AppCommandBus {
                 undefined,
                 this.traceStore
               )
-              appendExecutionEvidenceFileTrace(step.evidence, {
-                conversationId: convId,
-                turnId: orchestrationTurnId,
-                workspaceRoot: this.os.executionWorkspace
-              })
               // A3 — peuplement LIVE du RUN.md : à chaque phase exec terminée, on réécrit le
               // livrable dans le RUN.md que Workflows affiche (au lieu d'un template vide 7 min).
               // Chantier 3 — trace native (spool Autowin) pour l'observabilité RAG/injection.
@@ -1031,8 +1264,21 @@ export class AppCommandBus {
               this.broadcast({ type: 'refresh', scope: 'workflows' })
               this.broadcast({ type: 'refresh', scope: 'orchestration' })
             },
-            runtimeSnapshot
+            runtimeSnapshot,
+            causalWatchPaths,
+            onLateMutationClaims
           )
+          if (!r.gateBlocked) {
+            const causalEvidence = causalWatchPaths.length
+              ? (r.causalMutationEvidence ?? [])
+              : steps.flatMap((step) => step.evidence ?? [])
+            appendExecutionEvidenceFileTrace(causalEvidence, {
+              conversationId: convId,
+              turnId: orchestrationTurnId,
+              workspaceRoot: this.os.executionWorkspace,
+              published: true
+            })
+          }
           if (runPath) {
             const costCoverage = formatExecutionCostCoverage({
               costUsd: r.costUsd,
@@ -1066,6 +1312,8 @@ export class AppCommandBus {
             knownCostUsd: r.usage?.knownCostUsd,
             unpricedCalls: r.usage?.unpricedCalls,
             result: r.result,
+            gateReasons: r.gateReasons,
+            turnId: orchestrationTurnId,
             runId: runPath,
             runPath,
             status: r.gateBlocked ? 'failed' : 'succeeded',
@@ -1250,11 +1498,14 @@ export class AppCommandBus {
       throw new Error(`isolation workspace indisponible : ${command} refusé`)
     }
     const runId = `command-${command === 'edit_file' ? 'edit' : 'graphify'}-${randomUUID()}`
-    const workspaceRoot = this.os.worktrees.begin(runId, `Commande ${command}`, true, {
+    const beginOptions = {
       task: command,
       role: 'command',
       ...(conversationId ? { conversationId } : {})
-    })
+    }
+    const workspaceRoot = this.os.worktrees.beginAsync
+      ? await this.os.worktrees.beginAsync(runId, `Commande ${command}`, true, beginOptions)
+      : this.os.worktrees.begin(runId, `Commande ${command}`, true, beginOptions)
     if (!workspaceRoot) throw new Error(`isolation workspace indisponible : ${command} refusé`)
     let completed = false
     try {
@@ -1270,7 +1521,9 @@ export class AppCommandBus {
           )
         }
       }
-      const finalized = this.os.worktrees.end(runId, { merge: true })
+      const finalized = this.os.worktrees.endAsync
+        ? await this.os.worktrees.endAsync(runId, { merge: true })
+        : this.os.worktrees.end(runId, { merge: true })
       completed = true
       if (
         finalized?.outcome !== 'merged' &&
@@ -1282,7 +1535,10 @@ export class AppCommandBus {
       }
       return result
     } catch (error) {
-      if (!completed) this.os.worktrees.end(runId, { merge: false })
+      if (!completed) {
+        if (this.os.worktrees.endAsync) await this.os.worktrees.endAsync(runId, { merge: false })
+        else this.os.worktrees.end(runId, { merge: false })
+      }
       throw error
     }
   }
@@ -1353,6 +1609,12 @@ export class AppCommandBus {
     this.editFileTail = previous.then(() => current)
     await previous
     try {
+      const baseDecision = decideEdit(input, this.os.executionWorkspace, (absolutePath) =>
+        existsSync(absolutePath) ? readFileSync(absolutePath, 'utf8') : null
+      )
+      const baseContentBefore = baseDecision.allowed
+        ? readFileSync(baseDecision.absolutePath, 'utf8')
+        : undefined
       const before = await captureWorkspaceMutationSnapshot(this.os.executionWorkspace)
       const outcome = await this.withIsolatedMutation(
         'edit_file',
@@ -1379,6 +1641,9 @@ export class AppCommandBus {
           this.os.executionWorkspace,
           path
         )
+        const baseContentAfter = existsSync(resolve(this.os.executionWorkspace, path))
+          ? readFileSync(resolve(this.os.executionWorkspace, path), 'utf8')
+          : ''
         appendConversationFileTrace({
           timestamp: new Date().toISOString(),
           conversationId,
@@ -1389,7 +1654,14 @@ export class AppCommandBus {
           ...(fingerprint ? { pathFingerprints: { [path]: fingerprint } } : {}),
           pathBaseFingerprints: { [path]: baseFingerprint ?? null },
           pathGenerationMarkers: { [path]: generationMarker },
-          pathBaseGenerationMarkers: { [path]: baseGenerationMarker ?? null }
+          pathBaseGenerationMarkers: { [path]: baseGenerationMarker ?? null },
+          ...(baseContentBefore !== undefined
+            ? {
+                pathLineFingerprints: {
+                  [path]: addedLineFingerprints(baseContentBefore, baseContentAfter)
+                }
+              }
+            : {})
         })
       }
       return outcome

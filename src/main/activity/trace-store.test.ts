@@ -1,9 +1,10 @@
-import { appendFileSync, mkdtempSync, readFileSync } from 'node:fs'
+import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { describe, expect, it } from 'vitest'
-import { rebaseTraceSequence, TraceStore } from './trace-store'
+import { installTraceEventSink, rebaseTraceSequence, TraceStore } from './trace-store'
 import type { TraceEventV1 } from './trace-event'
 
 function event(id: string, sequence: number, content = id): TraceEventV1 {
@@ -36,6 +37,23 @@ describe('TraceStore append-only', () => {
     expect(
       readFileSync(join(root, 'conv-1.jsonl'), 'utf8').split('\n').filter(Boolean)
     ).toHaveLength(2)
+  })
+
+  it('notifie un sink optionnel après la persistance sans lui permettre de casser le journal', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-sink-'))
+    const seen: string[] = []
+    const removeSink = installTraceEventSink((item) => {
+      seen.push(item.id)
+      throw new Error('collecteur hors ligne')
+    })
+
+    try {
+      expect(() => new TraceStore(root).append(event('evt-0', 0))).not.toThrow()
+      expect(seen).toEqual(['evt-0'])
+      expect(new TraceStore(root).readConversation('conv-1')).toHaveLength(1)
+    } finally {
+      removeSink()
+    }
   })
 
   it('refuse un identifiant dupliqué sans modifier le journal', () => {
@@ -83,6 +101,22 @@ describe('TraceStore append-only', () => {
       'utf8'
     )
     expect(() => new TraceStore(root).readConversation('conv-1')).toThrow(/trace corrompue ligne 2/)
+  })
+  it('offre aux vues derivees une lecture partielle sans affaiblir la lecture canonique', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-derived-'))
+    const path = join(root, 'conv-1.jsonl')
+    appendFileSync(
+      path,
+      `${JSON.stringify(event('evt-0', 0))}\n${JSON.stringify({ schema: 'autowin.trace/v1' })}\n${JSON.stringify(event('evt-1', 1))}\n`,
+      'utf8'
+    )
+    const store = new TraceStore(root)
+
+    expect(() => store.readConversation('conv-1')).toThrow(/trace corrompue ligne 2/)
+    expect(store.readConversationBestEffort('conv-1').map((item) => item.id)).toEqual([
+      'evt-0',
+      'evt-1'
+    ])
   })
   it('absorbe 1 000 evenements sans bloquer une interaction', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-trace-volume-'))
@@ -135,5 +169,72 @@ describe('TraceStore append-only', () => {
     expect(() =>
       chatWriter.append({ ...event('evt-3', chatSequence), parentId: 'evt-0' })
     ).not.toThrow()
+  })
+
+  it('reserve atomiquement des sequences distinctes entre deux stores deja chauds', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-reservation-'))
+    const first = new TraceStore(root)
+    const second = new TraceStore(root)
+    first.append(event('evt-0', 0))
+
+    const firstSequence = first.nextSequence('conv-1')
+    const secondSequence = second.nextSequence('conv-1')
+    expect([firstSequence, secondSequence]).toEqual([1, 2])
+
+    first.append({ ...event('evt-1', firstSequence), parentId: 'evt-0' })
+    second.append({ ...event('evt-2', secondSequence), parentId: 'evt-1' })
+    expect(second.readConversation('conv-1').map(({ sequence }) => sequence)).toEqual([0, 1, 2])
+  })
+
+  it('reserve des sequences distinctes entre deux processus separes', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-process-reservation-'))
+    const barrier = join(root, 'start')
+    new TraceStore(root).append(event('evt-0', 0))
+    const script = [
+      "import { TraceStore } from './src/main/activity/trace-store.ts'",
+      "import { existsSync } from 'node:fs'",
+      "import { setTimeout as delay } from 'node:timers/promises'",
+      'while (!existsSync(process.argv[2])) await delay(2)',
+      "process.stdout.write(String(new TraceStore(process.argv[1]).nextSequence('conv-1')))"
+    ].join(';')
+    const reserve = (): Promise<number> =>
+      new Promise((resolve, reject) => {
+        const child = spawn(
+          process.execPath,
+          ['--import', 'tsx', '--input-type=module', '--eval', script, root, barrier],
+          { cwd: process.cwd(), stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }
+        )
+        let stdout = ''
+        let stderr = ''
+        child.stdout.on('data', (chunk) => (stdout += String(chunk)))
+        child.stderr.on('data', (chunk) => (stderr += String(chunk)))
+        child.on('error', reject)
+        child.on('close', (code) =>
+          code === 0 ? resolve(Number(stdout)) : reject(new Error(stderr || `child exit ${code}`))
+        )
+      })
+
+    const first = reserve()
+    const second = reserve()
+    writeFileSync(barrier, 'go', 'utf8')
+    expect((await Promise.all([first, second])).sort((a, b) => a - b)).toEqual([1, 2])
+  })
+
+  it('ne relit pas tout le journal apres warmup et ne scanne que l append externe', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-trace-sequence-cache-'))
+    const writer = new TraceStore(root)
+    for (let index = 0; index < 200; index += 1) writer.append(event(`evt-${index}`, index))
+
+    const reader = new TraceStore(root)
+    expect(reader.nextSequence('conv-1')).toBe(200)
+    const warmupBytes = reader.sequenceScanBytes
+    expect(warmupBytes).toBeGreaterThan(10_000)
+
+    expect(reader.nextSequence('conv-1')).toBe(201)
+    expect(reader.sequenceScanBytes).toBe(warmupBytes)
+
+    appendFileSync(join(root, 'conv-1.jsonl'), `${JSON.stringify(event('evt-200', 200))}\n`)
+    expect(reader.nextSequence('conv-1')).toBe(202)
+    expect(reader.sequenceScanBytes - warmupBytes).toBeLessThan(2_000)
   })
 })

@@ -36,6 +36,57 @@ function input(overrides: Partial<ScheduledTaskInput> = {}): ScheduledTaskInput 
 }
 
 describe('Task Manager — store durable', () => {
+  it('remplace atomiquement un horaire par un watchdog puis revient a un horaire', () => {
+    const store = new TaskStore({ now: () => 1000, id: () => 'task-1' })
+    const scheduled = store.create(input())
+    const watchdog = {
+      source: { kind: 'app-event' as const, events: ['task-failed' as const] },
+      guards: { dedupWindowMs: 60_000, maxTriggersPerHour: 4, maxChainDepth: 0, maxPerRoot: 20 }
+    }
+
+    const eventDriven = store.update(scheduled.id, { schedule: undefined, watchdog })
+    expect(eventDriven.schedule).toBeUndefined()
+    expect(eventDriven.watchdog).toEqual(watchdog)
+
+    const hourly = store.update(scheduled.id, {
+      watchdog: undefined,
+      schedule: input().schedule
+    })
+    expect(hourly.watchdog).toBeUndefined()
+    expect(hourly.schedule).toEqual(input().schedule)
+  })
+
+  it('publie immediatement une alerte creee par le scheduler', () => {
+    const ids = ['task-1', 'alert-1']
+    const store = new TaskStore({ now: () => 1000, id: () => ids.shift() ?? 'unused' })
+    const alertsSeen: string[][] = []
+    store.subscribe((snapshot) => alertsSeen.push(snapshot.alerts.map(({ id }) => id)))
+    const task = store.create(input())
+    const occurrenceId = `${task.id}@${task.nextRunAt}`
+
+    store.claim(task.id, occurrenceId, task.nextRunAt!)
+    store.finish(occurrenceId, 'failed', { error: 'provider indisponible' })
+
+    expect(alertsSeen.at(-1)).toEqual(['alert-1'])
+  })
+
+  it('accepte une tâche événementielle sans horaire et ne lui invente aucune échéance', () => {
+    const store = new TaskStore({ now: () => 1000, id: () => 'watchdog-1' })
+
+    const task = store.create(
+      input({
+        schedule: undefined,
+        watchdog: {
+          source: { kind: 'app-event', events: ['task-failed'] },
+          guards: { dedupWindowMs: 60_000, maxTriggersPerHour: 4, maxChainDepth: 0, maxPerRoot: 20 }
+        }
+      })
+    )
+
+    expect(task).toMatchObject({ id: 'watchdog-1', enabled: true, nextRunAt: null })
+    expect(task.schedule).toBeUndefined()
+  })
+
   it('persiste les tâches et les recharge après redémarrage', () => {
     const path = fixturePath()
     const first = new TaskStore({ now: () => 1000, id: () => 'task-1' })
@@ -112,6 +163,7 @@ describe('Task Manager — store durable', () => {
   it('édite, désactive et supprime sans conserver d’occurrence exécutable', () => {
     const store = new TaskStore({ now: () => 1000, id: () => 'task-1' })
     const task = store.create(input())
+    if (!task.schedule) throw new Error('Le fixture horaire doit conserver son planning')
     const updated = store.update(task.id, {
       title: 'Rapport modifié',
       enabled: false,
@@ -129,6 +181,46 @@ describe('Task Manager — store durable', () => {
     expect(store.remove(task.id)).toBe(true)
     expect(store.listTasks()).toEqual([])
     expect(store.listOccurrences()).toEqual([])
+  })
+
+  it('refuse de supprimer une tâche dont une occurrence tourne puis l’autorise terminée', () => {
+    const store = new TaskStore({ now: () => 1000, id: () => 'task-1' })
+    const task = store.create(input())
+    const occurrenceId = `${task.id}@${task.nextRunAt}`
+    store.claim(task.id, occurrenceId, task.nextRunAt!)
+    store.markRunning(occurrenceId, 'conv-4')
+
+    expect(() => store.remove(task.id)).toThrow(/en cours/i)
+    expect(store.getTask(task.id)).toBeDefined()
+    expect(store.getOccurrence(occurrenceId)?.status).toBe('running')
+
+    store.finish(occurrenceId, 'completed')
+    expect(store.remove(task.id)).toBe(true)
+    expect(store.getTask(task.id)).toBeUndefined()
+  })
+
+  it('agrège aussi les retards avant une mise à jour de tâche', () => {
+    const firstDue = Date.parse('2026-08-03T07:30:00.000Z')
+    let now = firstDue - 60_000
+    const ids = ['task-1', 'alert-1']
+    const store = new TaskStore({ now: () => now, id: () => ids.shift() ?? 'unused' })
+    const task = store.create(
+      input({
+        schedule: {
+          ...input().schedule!,
+          recurrence: { unit: 'minute', interval: 1 }
+        }
+      })
+    )
+    now = firstDue + 24 * 60 * 60_000
+
+    const updated = store.update(task.id, { title: 'Rapport agrégé' })
+
+    expect(store.listOccurrences(task.id)).toEqual([
+      expect.objectContaining({ missedCount: 1_441, lastMissedFor: now })
+    ])
+    expect(store.listAlerts()).toHaveLength(1)
+    expect(updated.nextRunAt).toBe(now + 60_000)
   })
 
   it('transforme un claim interrompu par un crash en échec alerté, sans le rejouer', () => {
@@ -196,5 +288,25 @@ describe('Task Manager — store durable', () => {
     expect(restarted.getOccurrence(legacyOccurrence.id)).toMatchObject({
       mode: 'legacy-unknown'
     })
+  })
+
+  it('restaure la borne de largeur sur une règle persistée avant son ajout', () => {
+    const source = new TaskStore({ now: () => 1000, id: () => 'watchdog-legacy' })
+    source.create(
+      input({
+        schedule: undefined,
+        watchdog: {
+          source: { kind: 'app-event', events: ['task-failed'] },
+          guards: { dedupWindowMs: 60_000, maxTriggersPerHour: 4, maxChainDepth: 0, maxPerRoot: 20 }
+        }
+      })
+    )
+    const legacy = source.snapshot()
+    delete (legacy.tasks[0].watchdog!.guards as Partial<{ maxPerRoot: number }>).maxPerRoot
+
+    const restarted = new TaskStore()
+    restarted.hydrate(legacy)
+
+    expect(restarted.listTasks()[0].watchdog?.guards.maxPerRoot).toBe(20)
   })
 })

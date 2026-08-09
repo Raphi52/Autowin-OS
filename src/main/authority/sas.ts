@@ -85,6 +85,18 @@ export class AuthoritySas {
       if (existing.choice === choice) return existing
       throw new Error(`AuthoritySas.resolve: id "${id}" déjà résolu avec un autre choix`)
     }
+    const now = this.now()
+    if (decision.createdAt + decision.ttlMs <= now) {
+      const resolution: Resolution<unknown> = {
+        id,
+        choice: decision.safeDefault,
+        by: 'timeout-default',
+        at: now
+      }
+      this.resolutions.set(id, resolution)
+      this.journalLog.push(resolution)
+      return resolution
+    }
     if (!decision.options.includes(choice)) {
       throw new Error(`AuthoritySas.resolve: choix invalide pour "${id}"`)
     }
@@ -92,7 +104,7 @@ export class AuthoritySas {
       id,
       choice,
       by: 'user',
-      at: this.now()
+      at: now
     }
     this.resolutions.set(id, resolution)
     this.journalLog.push(resolution)

@@ -1,22 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createHmac } from 'node:crypto'
+import { describe, expect, it, vi } from 'vitest'
+import { createDecipheriv, createHash, createHmac } from 'node:crypto'
 import {
   retrieveBrainContext,
-  brainServiceToken,
-  clearBrainRetrievalCache
+  brainServiceToken
 } from './brain-retrieval'
-
-// La mémoire courte est PORTÉE PAR LE MODULE : sans remise à zéro, un test servirait la réponse
-// mémorisée par le précédent (ils partagent la requête « q »). Effet de bord réel du cache, pas
-// une bizarrerie de test — c'est aussi ce qui se passerait entre deux appelants de l'app.
-beforeEach(() => clearBrainRetrievalCache())
 
 const TEST_TOKEN = 'x'.repeat(40)
 
 const signedPayload = (body: Record<string, unknown>): Record<string, unknown> => {
   if ('signature' in body) return body
   const context = typeof body.context === 'string' ? body.context : ''
-  const authenticated = JSON.stringify({ context, navigation: body.navigation ?? null })
+  const authenticated = JSON.stringify({
+    context,
+    navigation: body.navigation ?? null,
+    ...('corpus' in body ? { corpus: body.corpus } : {})
+  })
   return {
     service: 'amitel-brain',
     protocol: 2,
@@ -27,8 +25,33 @@ const signedPayload = (body: Record<string, unknown>): Record<string, unknown> =
   }
 }
 
+const challengeResponse = (url: unknown): { ok: true; json: () => Promise<unknown> } | undefined => {
+  if (!String(url).endsWith('/challenge')) return undefined
+  return { ok: true, json: async () => signedPayload({ context: `challenge:${'ab'.repeat(12)}` }) }
+}
+
+const withChallenge = (
+  queryFetch: (url: unknown, init?: RequestInit) => Promise<unknown>
+): typeof fetch =>
+  (async (url: unknown, init?: RequestInit) =>
+    challengeResponse(url) ?? queryFetch(url, init)) as unknown as typeof fetch
+
 const okFetch = (body: Record<string, unknown>): typeof fetch =>
-  (async () => ({ ok: true, json: async () => signedPayload(body) })) as unknown as typeof fetch
+  withChallenge(async () => ({ ok: true, json: async () => signedPayload(body) }))
+
+const openRequest = (body: unknown): Record<string, unknown> => {
+  const envelope = JSON.parse(String(body)) as { nonce: string; ciphertext: string }
+  const encrypted = Buffer.from(envelope.ciphertext, 'base64')
+  const key = createHash('sha256').update(TEST_TOKEN, 'utf8').digest()
+  const decipher = createDecipheriv(
+    'aes-256-gcm', key, Buffer.from(envelope.nonce, 'hex')
+  )
+  decipher.setAAD(Buffer.from('amitel-brain/request-v1', 'utf8'))
+  decipher.setAuthTag(encrypted.subarray(-16))
+  return JSON.parse(Buffer.concat([
+    decipher.update(encrypted.subarray(0, -16)), decipher.final()
+  ]).toString('utf8')) as Record<string, unknown>
+}
 
 describe('parseNavigation — offsets de chunk + root', () => {
   it('borne le nombre de candidats signés avant exposition à l’UI', async () => {
@@ -114,21 +137,52 @@ describe('retrieveBrainContext', () => {
     expect(fetchFn).not.toHaveBeenCalled()
   })
 
-  it('transporte le corpus autorisé au serveur et le sépare dans le cache', async () => {
+  it('transporte chaque corpus autorisé indépendamment au serveur', async () => {
     const bodies: unknown[] = []
-    const fetchFn = (async (_url: unknown, init?: RequestInit) => {
-      bodies.push(JSON.parse(String(init?.body)))
+    const fetchFn = withChallenge(async (_url: unknown, init?: RequestInit) => {
+      bodies.push(openRequest(init?.body))
       return { ok: true, json: async () => signedPayload({ context: '[BRAIN] savoir' }) }
-    }) as unknown as typeof fetch
+    })
     const env = { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv
 
-    await retrieveBrainContext('question', { env, fetchFn, corpus: ['autowin-os'] })
-    await retrieveBrainContext('question', { env, fetchFn, corpus: ['rig-'] })
+    await retrieveBrainContext('question', {
+      env, fetchFn, corpus: ['autowin-os'], traceId: () => 'trace-a'
+    })
+    await retrieveBrainContext('question', {
+      env, fetchFn, corpus: ['rig-'], traceId: () => 'trace-b'
+    })
 
     expect(bodies).toEqual([
-      { query: 'question', corpus: ['autowin-os'] },
-      { query: 'question', corpus: ['rig-'] }
+      { query: 'question', harness: 'autowin-os', trace_id: 'trace-a', corpus: ['autowin-os'] },
+      { query: 'question', harness: 'autowin-os', trace_id: 'trace-b', corpus: ['rig-'] }
     ])
+  })
+
+  it('refuse un contexte non lié cryptographiquement au corpus demandé', async () => {
+    const env = { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv
+    const missing = await retrieveBrainContext('sans-attestation', {
+      env,
+      corpus: ['knowledge/domain/autowin-os-'],
+      fetchFn: okFetch({ context: 'SECRET_RIG' })
+    })
+    const wrong = await retrieveBrainContext('mauvaise-attestation', {
+      env,
+      corpus: ['knowledge/domain/autowin-os-'],
+      fetchFn: okFetch({ context: 'SECRET_RIG', corpus: ['knowledge/domain/rig-'] })
+    })
+    const exact = await retrieveBrainContext('bonne-attestation', {
+      env,
+      corpus: ['knowledge/domain/autowin-os-'],
+      fetchFn: okFetch({ context: 'AUTOWIN_OK', corpus: ['knowledge/domain/autowin-os-'] })
+    })
+
+    expect(missing).toEqual({ context: '', status: 'invalid' })
+    expect(wrong).toEqual({ context: '', status: 'invalid' })
+    expect(exact).toMatchObject({
+      context: 'AUTOWIN_OK',
+      status: 'found',
+      corpus: ['knowledge/domain/autowin-os-']
+    })
   })
 
   it('rejette une reponse forgee meme si son contexte semble exploitable', async () => {
@@ -142,6 +196,27 @@ describe('retrieveBrainContext', () => {
       })
     })
     expect(res).toMatchObject({ context: '', status: 'invalid' })
+  })
+
+  it('ne divulgue ni token ni requête à un faux listener loopback', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const fetchFn = (async (url: unknown, init?: RequestInit) => {
+      calls.push({ url: String(url), init })
+      return challengeResponse(url) ?? { ok: false }
+    }) as unknown as typeof fetch
+    const result = await retrieveBrainContext('PROMPT_ULTRA_SECRET', {
+      env: { AMITEL_BRAIN_TOKEN: TEST_TOKEN } as NodeJS.ProcessEnv,
+      fetchFn
+    })
+    expect(result.status).toBe('unavailable')
+    expect(calls).toHaveLength(2)
+    expect(calls[0].url).toContain('/challenge')
+    expect(calls[0].init?.headers).toBeUndefined()
+    expect(calls[0].init?.body).toBeUndefined()
+    expect(calls[1].url).toContain('/query-secure')
+    expect(calls[1].init?.headers).toEqual({ 'Content-Type': 'application/json' })
+    expect(JSON.stringify(calls)).not.toContain('PROMPT_ULTRA_SECRET')
+    expect(JSON.stringify(calls)).not.toContain(TEST_TOKEN)
   })
 
   it.each([1, 2])('rejette fail-soft un contexte signé surdimensionné en v%s', async (protocol) => {
@@ -229,56 +304,55 @@ describe('retrieveBrainContext', () => {
   })
 })
 
-/**
- * Mesuré sur un journal réel : 15 appels pour 4 requêtes distinctes sur une seule conversation, 24
- * appels redondants sur 51 au total. Une question déjà posée au Brain, corpus inchangé, ne peut rien
- * apprendre de neuf — elle coûte juste ~1 500 caractères réinjectés et ~500 ms d'attente.
- */
-describe('mémoire courte — une même question ne repart pas sur le réseau', () => {
+describe('fraîcheur — aucune publication n’est masquée par le client', () => {
   const env = { AMITEL_BRAIN_TOKEN: 'x'.repeat(40) } as NodeJS.ProcessEnv
 
   function countingFetch(): { fetchFn: typeof fetch; appels: () => number } {
     let appels = 0
-    const fetchFn = (async () => {
+    const fetchFn = withChallenge(async () => {
       appels += 1
       return { ok: true, json: async () => signedPayload({ context: '[BRAIN] savoir' }) }
-    }) as unknown as typeof fetch
+    })
     return { fetchFn, appels: () => appels }
   }
 
-  it('la même requête n’interroge le serveur qu’UNE fois', async () => {
-    clearBrainRetrievalCache()
+  it('la même requête interroge le service à chaque fois', async () => {
     const { fetchFn, appels } = countingFetch()
     const premier = await retrieveBrainContext('même question', { env, fetchFn })
     const second = await retrieveBrainContext('même question', { env, fetchFn })
 
-    expect(appels()).toBe(1)
+    expect(appels()).toBe(2)
     expect(second.context).toBe(premier.context) // et le résultat servi est identique
   })
 
+  it('ne masque pas une nouvelle génération pour une requête identique', async () => {
+    let generation = 'A'
+    let appels = 0
+    const fetchFn = withChallenge(async () => {
+      appels += 1
+      return { ok: true, json: async () => signedPayload({ context: `[BRAIN] génération ${generation}` }) }
+    }) as unknown as typeof fetch
+
+    const premier = await retrieveBrainContext('même question', { env, fetchFn })
+    generation = 'B'
+    const second = await retrieveBrainContext('même question', { env, fetchFn })
+
+    expect(appels).toBe(2)
+    expect(premier.context).toContain('génération A')
+    expect(second.context).toContain('génération B')
+  })
+
   it('une requête DIFFÉRENTE repart bien sur le réseau', async () => {
-    clearBrainRetrievalCache()
     const { fetchFn, appels } = countingFetch()
     await retrieveBrainContext('question A', { env, fetchFn })
     await retrieveBrainContext('question B', { env, fetchFn })
     expect(appels()).toBe(2)
   })
 
-  it('passé le délai, on réinterroge — le corpus est vivant, pas figé', async () => {
-    clearBrainRetrievalCache()
-    const { fetchFn, appels } = countingFetch()
-    let horloge = 1_000_000
-    await retrieveBrainContext('q', { env, fetchFn, now: () => horloge })
-    horloge += 5 * 60 * 1000 + 1
-    await retrieveBrainContext('q', { env, fetchFn, now: () => horloge })
-    expect(appels()).toBe(2)
-  })
-
   it('un serveur indisponible n’est PAS mémorisé — sinon un vide se figerait', async () => {
-    clearBrainRetrievalCache()
     let appels = 0
     let enPanne = true
-    const fetchFn = (async () => {
+    const fetchFn = withChallenge(async () => {
       appels += 1
       if (enPanne) throw new Error('serveur down')
       return { ok: true, json: async () => signedPayload({ context: '[BRAIN] revenu' }) }

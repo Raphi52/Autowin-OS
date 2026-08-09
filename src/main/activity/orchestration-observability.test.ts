@@ -214,7 +214,9 @@ describe('observabilite orchestration', () => {
       join(root, 'prompts'),
       trace
     )
-    expect(loadPromptCalls('conv-1', join(root, 'prompts'))).toHaveLength(1)
+    expect(loadPromptCalls('conv-1', join(root, 'prompts'))).toMatchObject([
+      { actor: 'subagent', phase: 'build' }
+    ])
     expect(trace.readConversation('conv-1').map((event) => event.type)).toEqual([
       'handoff',
       'message',

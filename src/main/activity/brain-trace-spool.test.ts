@@ -1,8 +1,21 @@
-import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { appendBrainTrace, brainSpoolRoot, readBrainTraces } from './brain-trace-spool'
+import {
+  appendBrainTrace,
+  brainSpoolRoot,
+  latestBrainTraceId,
+  readBrainTraces
+} from './brain-trace-spool'
 
 describe('brain trace spool causal identity', () => {
   const roots: string[] = []
@@ -34,12 +47,16 @@ describe('brain trace spool causal identity', () => {
 
     expect(readBrainTraces('conv-1', root)).toMatchObject([
       {
+        id: expect.any(String),
         timestamp: '2026-07-24T10:11:12.000Z',
         conversationId: 'conv-1',
         turnId: 'turn-7',
         injectedChars: 842
       }
     ])
+    expect(latestBrainTraceId('conv-1', 'turn-7', root)).toBe(
+      readBrainTraces('conv-1', root)[0].id
+    )
   })
 
   it('keeps historical traces without a turn id readable but unlinked', () => {
@@ -140,5 +157,59 @@ describe('brain trace spool causal identity', () => {
     expect(readBrainTraces('conv-durable', root)).toEqual([
       expect.objectContaining({ turnId: 'turn-durable', query: 'appel durable' })
     ])
+  })
+
+  it('borne la taille totale du spool apres de nombreuses rotations', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-brain-retention-'))
+    roots.push(root)
+    const spool = brainSpoolRoot(root)
+    const current = join(spool, 'events.jsonl')
+
+    for (let index = 0; index < 12; index += 1) {
+      appendFileSync(current, `${'x'.repeat(2 * 1024 * 1024 + 1)}\n`, 'utf8')
+      appendBrainTrace(
+        {
+          timestamp: `2026-07-30T11:${String(index).padStart(2, '0')}:00.000Z`,
+          conversationId: `conv-${index}`,
+          kind: 'query',
+          query: `rotation ${index}`,
+          injectedChars: 0
+        },
+        root
+      )
+    }
+
+    const totalBytes = readdirSync(spool).reduce(
+      (total, name) => total + statSync(join(spool, name)).size,
+      0
+    )
+    expect(totalBytes).toBeLessThanOrEqual(13 * 1024 * 1024)
+    expect(readBrainTraces(undefined, root).length).toBeLessThanOrEqual(6)
+  })
+
+  it('borne une entree geante et redige aussi navigation.query avant toute persistance', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-brain-entry-bound-'))
+    roots.push(root)
+    const secret = 'sk-secret-navigation'
+    appendBrainTrace(
+      {
+        timestamp: '2026-08-08T12:00:00.000Z',
+        conversationId: 'conv-large',
+        query: `token=${secret}${'x'.repeat(20 * 1024 * 1024)}`,
+        injectedChars: 0,
+        navigation: {
+          query: `token=${secret}`,
+          minDense: 0.1,
+          candidates: []
+        }
+      },
+      root
+    )
+
+    const current = join(brainSpoolRoot(root), 'events.jsonl')
+    const persisted = readFileSync(current, 'utf8')
+    expect(statSync(current).size).toBeLessThanOrEqual(2 * 1024 * 1024)
+    expect(persisted).not.toContain(secret)
+    expect(readBrainTraces('conv-large', root)).toHaveLength(1)
   })
 })

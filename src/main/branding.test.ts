@@ -47,6 +47,14 @@ function activeTextFiles(): string[] {
 }
 
 describe('identite Autowin OS', () => {
+  it('conserve des sources textuelles sans octet NUL brut', () => {
+    const violations = activeTextFiles()
+      .filter((path) => readFileSync(path).includes(0))
+      .map((path) => relative(ROOT, path).replaceAll('\\', '/'))
+
+    expect(violations).toEqual([])
+  })
+
   it('contains no legacy branding outside the single compatibility module', () => {
     const violations = activeTextFiles().flatMap((path) => {
       const rel = relative(ROOT, path).replaceAll('\\', '/')
@@ -66,12 +74,15 @@ describe('identite Autowin OS', () => {
       homepage?: string
     }
     const builder = readFileSync(join(ROOT, 'electron-builder.yml'), 'utf8')
+    const prettierIgnore = readFileSync(join(ROOT, '.prettierignore'), 'utf8')
     const main = readFileSync(join(ROOT, 'src/main/index.ts'), 'utf8')
     const appShell = readFileSync(join(ROOT, 'src/renderer/src/App.tsx'), 'utf8')
     expect(builder).toContain('appId: com.amitel.autowin-os')
     expect(builder).toContain('productName: Autowin OS')
     expect(builder).toContain('executableName: autowin-os')
     expect(builder).toContain('maintainer: Amitel')
+    expect(builder).toContain("  - '!.autowin-data/**'")
+    expect(prettierIgnore.split(/\r?\n/)).toContain('.autowin-data')
     expect(builder).not.toMatch(/example\.com|electronjs\.org/)
     expect(manifest.author).toBe('Amitel')
     expect(manifest.homepage).toBeUndefined()

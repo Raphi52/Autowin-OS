@@ -160,6 +160,41 @@ describe('Orchestrator execution contract', () => {
     )
   })
 
+  it('injecte la memoire causale observee du meme fil dans un run ulterieur', async () => {
+    const provider = new CapturingProvider()
+    const causalMemoryFor = vi.fn(
+      () => 'MEMOIRE CAUSALE OBSERVEE\n- build · claude/fable · issue failed'
+    )
+    const orchestrator = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      authority: new AuthoritySas(),
+      executionWorkspace: process.cwd(),
+      causalMemoryFor
+    })
+
+    await orchestrator.run(
+      'analyse la decision precedente en lecture seule',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      '',
+      [],
+      'conv-causal-memory'
+    )
+
+    expect(causalMemoryFor).toHaveBeenCalledWith('conv-causal-memory')
+    expect(provider.messages[0].map((message) => message.content).join('\n')).toContain(
+      'MEMOIRE CAUSALE OBSERVEE'
+    )
+  })
+
   it('n injecte pas au sous-agent la memoire du meme fil creee dans un autre workspace', async () => {
     forgetEcho()
     noteRemembered('conv-cross-workspace', {
@@ -206,11 +241,20 @@ describe('Orchestrator execution contract', () => {
   it('isole le vrai workspace RigApplication d une source Autowin adverse', async () => {
     const provider = new CapturingProvider()
     const seenCorpus: Array<readonly string[] | undefined> = []
-    const mixedContext = [
-      '[AMITEL BRAIN REFERENCE DATA]',
-      '### Source 1 — knowledge/domain/rigapplication-documentation/reference/proc.md\nRIG_SOURCE_AUTORISEE',
-      '### Source 2 — knowledge/domain/autowin-os-realite-produit-v5.md\nAUTOWIN_SOURCE_INTERDITE'
-    ].join('\n\n---\n\n')
+    const preamble = '[AMITEL BRAIN REFERENCE DATA]\n\n'
+    const sources = [
+      {
+        path: 'knowledge/domain/rigapplication-documentation/reference/proc.md',
+        content:
+          '### Source 1 — knowledge/domain/rigapplication-documentation/reference/proc.md\nRIG_SOURCE_AUTORISEE'
+      },
+      {
+        path: 'knowledge/domain/autowin-os-realite-produit-v5.md',
+        content:
+          '### Source 2 — knowledge/domain/autowin-os-realite-produit-v5.md\nAUTOWIN_SOURCE_INTERDITE'
+      }
+    ]
+    const mixedContext = preamble + sources.map(({ content }) => content).join('\n\n---\n\n')
     const orchestrator = new Orchestrator({
       registry: new ProviderRegistry().register(provider),
       roles: new RoleModelConfig({
@@ -223,7 +267,12 @@ describe('Orchestrator execution contract', () => {
       executionWorkspace: 'D:\\DevSrc\\RigApplication',
       retrieveBrain: async (_query, options) => {
         seenCorpus.push(options?.corpus)
-        return { context: mixedContext, status: 'found' }
+        return {
+          context: mixedContext,
+          status: 'found',
+          corpus: options?.corpus,
+          structuredContext: { preamble, sources }
+        }
       }
     })
 

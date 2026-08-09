@@ -3,7 +3,17 @@ import { describe, expect, it } from 'vitest'
 import { TEST_MODEL_CATALOG } from './models.fixture'
 import { DEFAULT_IMPORTED_MODELS } from './models'
 import { bindingForModel, createDefaultTopology } from './topology'
-import { runtimeRoleBinding, runtimeRoleSlots, topologyWithRuntimeRole } from './runtime-topology'
+import {
+  assertRuntimeBindingAvailable,
+  assertRuntimeTopologyAvailable,
+  runtimeRoleBinding,
+  runtimeRoleSlots,
+  topologyWithRuntimeRole
+} from './runtime-topology'
+
+function indexSource(): string {
+  return readFileSync(new URL('./index.ts', import.meta.url), 'utf8').replace(/\r\n?/g, '\n')
+}
 
 describe('bindings runtime issus d’Agent Studio', () => {
   it('remplace un ancien juge invisible par le sous-agent encore présent dans la topologie', () => {
@@ -29,15 +39,40 @@ describe('bindings runtime issus d’Agent Studio', () => {
     expect(runtimeRoleSlots(topology).judge).toEqual(topology.orchestrator)
   })
 
-  it('projette le modèle configuré même si son catalogue dynamique est absent au boot', () => {
+  it('bloque un modèle concret absent du catalogue au lieu de le transmettre au provider', () => {
     const codex = TEST_MODEL_CATALOG.find((model) => model.provider === 'codex')!
     const slot = bindingForModel('subagent-1', codex)
 
-    expect(runtimeRoleBinding(slot, DEFAULT_IMPORTED_MODELS)).toEqual({
-      provider: 'codex',
-      model: codex.model,
-      reasoningEffort: slot.reasoningEffort
-    })
+    // La projection reste affichable pendant une découverte dynamique, mais ne constitue pas une
+    // autorisation d'exécution : seule la readiness ci-dessous ouvre le dispatch.
+    expect(runtimeRoleBinding(slot, DEFAULT_IMPORTED_MODELS).model).toBe(codex.model)
+    const topology = createDefaultTopology(TEST_MODEL_CATALOG)
+    topology.subagents = [slot]
+    const withoutCodex = TEST_MODEL_CATALOG.filter((model) => model.provider !== 'codex')
+    expect(() => assertRuntimeTopologyAvailable(topology, withoutCodex)).toThrow(
+      `Modèle indisponible hors catalogue : ${codex.id}`
+    )
+  })
+
+  it('valide modèle et effort d’un override ponctuel contre le catalogue', () => {
+    expect(() =>
+      assertRuntimeBindingAvailable(
+        { provider: 'claude', model: 'claude-fable-5', reasoningEffort: 'high' },
+        TEST_MODEL_CATALOG
+      )
+    ).not.toThrow()
+    expect(() =>
+      assertRuntimeBindingAvailable(
+        { provider: 'claude', model: 'modele-fantome', reasoningEffort: 'high' },
+        TEST_MODEL_CATALOG
+      )
+    ).toThrow('hors catalogue')
+    expect(() =>
+      assertRuntimeBindingAvailable(
+        { provider: 'claude', model: 'claude-fable-5', reasoningEffort: 'ultra' },
+        TEST_MODEL_CATALOG
+      )
+    ).toThrow('Effort indisponible')
   })
 
   it('refuse un alias dynamique non résolu plutôt que de l’inventer comme transport', () => {
@@ -49,13 +84,13 @@ describe('bindings runtime issus d’Agent Studio', () => {
     }
 
     expect(() => runtimeRoleBinding(slot, DEFAULT_IMPORTED_MODELS)).toThrow(
-      'Alias de modèle indisponible hors catalogue : codex/flagship'
+      'Modèle indisponible hors catalogue : codex/flagship'
     )
     expect(runtimeRoleBinding(slot, TEST_MODEL_CATALOG).model).toBe('gpt-5.6-terra')
   })
 
   it('ne laisse pas un profil réappliquer son ancien snapshot de rôles après la topologie', () => {
-    const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
+    const source = indexSource()
     const start = source.indexOf("ipcMain.handle('os:profiles:apply'")
     const end = source.indexOf("ipcMain.handle('os:topology:get'", start)
     const handler = source.slice(start, end)
@@ -88,7 +123,7 @@ describe('bindings runtime issus d’Agent Studio', () => {
   })
 
   it('fait passer l’API setRole par agent-topology.json au lieu de roles.json seul', () => {
-    const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
+    const source = indexSource()
     const start = source.indexOf("ipcMain.handle(\n    'os:setRole'")
     const end = source.indexOf("ipcMain.handle('os:models:list'", start)
     const handler = source.slice(start, end)
@@ -102,7 +137,7 @@ describe('bindings runtime issus d’Agent Studio', () => {
   })
 
   it('projette le cache de topologie avant une découverte de modèles vide ou en échec', () => {
-    const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
+    const source = indexSource()
 
     expect(source).toMatch(
       /\nsyncRuntimeTopology\(agentTopology\)\nconst agentModelsReady = modelCatalog\.refresh\(true\)/
@@ -110,7 +145,7 @@ describe('bindings runtime issus d’Agent Studio', () => {
   })
 
   it('ne sert pas les rôles avant la fin de la readiness modèles', () => {
-    const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
+    const source = indexSource()
     const start = source.indexOf("ipcMain.handle('os:roles'")
     const end = source.indexOf("ipcMain.handle('os:orchestrationBudget:get'", start)
     const handler = source.slice(start, end)

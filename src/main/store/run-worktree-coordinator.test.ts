@@ -20,7 +20,14 @@ function fakeManager(
         baseSha: string
       }
     ) => string
-    finalize: (id: string) => FinalizeResult
+    finalize: (
+      id: string,
+      options?: {
+        baseBranch?: string
+        expectedAgentSha?: string
+        onPrepared?: (agentSha: string, baseSha: string) => void
+      }
+    ) => FinalizeResult
     cleanupPublished: (id: string, sha: string, baseBranch?: string) => FinalizeResult
     readConflictDiff: (
       id: string,
@@ -42,7 +49,8 @@ function fakeManager(
         publication: 'pending' | 'integrating' | 'published' | 'cleanup-pending'
         publishedSha?: string
       }
-    ) => { ok: true } | { ok: false; detail: string }
+    ) =>
+      { ok: true; decision?: 'resume-publication' | 'cleanup-only' } | { ok: false; detail: string }
     describe: (id: string) => {
       workspacePath: string
       worktreePath: string
@@ -80,6 +88,38 @@ function fakeManager(
 }
 
 describe('RunWorktreeCoordinator (flip live)', () => {
+  it('récupère l’inventaire Git en worker sans bloquer le heartbeat du main', async () => {
+    const listAgentIds = vi.fn(() => {
+      throw new Error('le chemin synchrone ne doit pas être appelé')
+    })
+    let heartbeat = false
+    setTimeout(() => {
+      heartbeat = true
+    }, 5)
+    const coordinator = new RunWorktreeCoordinator({
+      manager: {
+        ...fakeManager({ listAgentIds }),
+        operationsAreIsolated: () => true,
+        recoveryInventoryAsync: () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  residues: { cleaned: 0, recovered: [], blocked: [] },
+                  agents: []
+                }),
+              25
+            )
+          )
+      }
+    })
+
+    expect(coordinator.activity()).toEqual([])
+    await new Promise((resolve) => setTimeout(resolve, 35))
+    expect(heartbeat).toBe(true)
+    expect(listAgentIds).not.toHaveBeenCalled()
+  })
+
   it('run MUTATION → acquiert une copie et renvoie son cwd', () => {
     const acquire = vi.fn((id: string) => `/wt/${id}`)
     const co = new RunWorktreeCoordinator({ manager: fakeManager({ acquire }), nowFn: () => 1 })
@@ -92,6 +132,20 @@ describe('RunWorktreeCoordinator (flip live)', () => {
       baseSha: '1111111'
     })
     expect(co.activity()[0]).toMatchObject({ agentId: 'run-1', state: 'working' })
+  })
+
+  it('impose le SHA du checkpoint a la copie au lieu de relire la branche courante', () => {
+    const acquire = vi.fn((id: string) => `/wt/${id}`)
+    const co = new RunWorktreeCoordinator({ manager: fakeManager({ acquire }), nowFn: () => 1 })
+    co.begin('run-checkpoint', 'Contrefactuel', true, {
+      sourceWorkspacePath: '/repo',
+      sourceBaseSha: TEST_SHA
+    })
+
+    expect(acquire).toHaveBeenCalledWith(
+      'run-checkpoint',
+      expect.objectContaining({ workspacePath: '/repo', baseSha: TEST_SHA })
+    )
   })
 
   it('run NON-mutation → pas de copie, cwd undefined (retombe sur la base)', () => {
@@ -107,6 +161,56 @@ describe('RunWorktreeCoordinator (flip live)', () => {
     const res = co.end('run-1')
     expect(res?.outcome).toBe('merged')
     expect(co.activity()[0]).toMatchObject({ state: 'merged', endedAtMs: 5 })
+  })
+
+  it('retient un run vert de tournoi sans appeler finalize et persiste green/held', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-held-'))
+    try {
+      const finalize = vi.fn()
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      const co = new RunWorktreeCoordinator({
+        manager: fakeManager({
+          finalize,
+          changedFiles: () => ['a.ts'],
+          acquire: (id) => join(root, `agent__${id}`),
+          describe: (id) => ({
+            workspacePath: root,
+            worktreePath: join(root, `agent__${id}`),
+            baseBranch: 'main',
+            baseSha: TEST_SHA
+          })
+        }),
+        stateStore,
+        nowFn: () => 5
+      })
+      co.begin('run-held', 'Tournoi', true)
+      co.end('run-held', { merge: false, retainGreen: true })
+
+      expect(finalize).not.toHaveBeenCalled()
+      expect(co.activity()[0]).toMatchObject({
+        state: 'ready',
+        verdict: 'green',
+        publication: 'held',
+        files: [{ path: 'a.ts', kind: 'mod' }]
+      })
+      expect(stateStore.get('run-held')).toMatchObject({ verdict: 'green', publication: 'held' })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('supprime uniquement un bureau explicitement retenu et le retire de l’activité', async () => {
+    const discardAsync = vi.fn().mockResolvedValue(undefined)
+    const coordinator = new RunWorktreeCoordinator({
+      manager: { ...fakeManager(), discardAsync }
+    })
+    coordinator.begin('held-run', 'Tournoi', true)
+    coordinator.end('held-run', { merge: false, retainGreen: true })
+
+    await expect(coordinator.discardHeldAsync('held-run')).resolves.toBe(true)
+    expect(discardAsync).toHaveBeenCalledWith('held-run')
+    expect(coordinator.activity()).toEqual([])
+    await expect(coordinator.discardHeldAsync('missing')).resolves.toBe(false)
   })
 
   it('end attend le CLI encore vivant avant de fusionner et supprimer sa copie', () => {
@@ -133,6 +237,245 @@ describe('RunWorktreeCoordinator (flip live)', () => {
       expect.objectContaining({ baseBranch: 'main', onPrepared: expect.any(Function) })
     )
     expect(co.activity()[0]).toMatchObject({ state: 'merged', endedAtMs: 5 })
+  })
+
+  it('conserve le callback causal jusqu a une publication differee', () => {
+    let active = true
+    const finalize = vi.fn(
+      (
+        id: string,
+        options?: { onPrepared?: (agentSha: string, baseSha: string) => void }
+      ): FinalizeResult => {
+        options?.onPrepared?.(PUBLISHED_SHA, TEST_SHA)
+        return { outcome: 'merged', agentId: id, committed: true }
+      }
+    )
+    const onPublished = vi.fn()
+    const co = new RunWorktreeCoordinator({
+      manager: fakeManager({ finalize, hasActiveProcesses: () => active }),
+      nowFn: () => 5
+    })
+    co.begin('run-deferred', 'Builder', true)
+
+    expect(co.end('run-deferred', { onPublished })).toBeUndefined()
+    active = false
+    co.retryRecovery()
+
+    expect(onPublished).toHaveBeenCalledTimes(1)
+    expect(onPublished).toHaveBeenCalledWith({ baseSha: TEST_SHA, agentSha: PUBLISHED_SHA })
+  })
+
+  it('restaure la publication causale durable quand le callback memoire est mort', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-causal-restart-'))
+    try {
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      let active = true
+      const context = (id: string) => ({
+        workspacePath: '/repo',
+        worktreePath: join(root, `agent__${id}`),
+        baseBranch: 'main',
+        baseSha: TEST_SHA
+      })
+      const first = new RunWorktreeCoordinator({
+        manager: fakeManager({
+          acquire: (id) => join(root, `agent__${id}`),
+          describe: context,
+          hasActiveProcesses: () => active
+        }),
+        stateStore,
+        nowFn: () => 10
+      })
+      first.begin('run-restart', 'Builder', true, {
+        conversationId: 'conv-1',
+        turnId: 'turn-1',
+        causalWatchPaths: ['C:/repo/app.log']
+      })
+      expect(first.end('run-restart', { onPublished: vi.fn() })).toBeUndefined()
+
+      active = false
+      const onRecoveredPublication = vi.fn()
+      new RunWorktreeCoordinator({
+        manager: fakeManager({
+          listAgentIds: () => ['run-restart'],
+          describe: context,
+          hasActiveProcesses: () => active,
+          finalize: (id, options) => {
+            options?.onPrepared?.(PUBLISHED_SHA, TEST_SHA)
+            return { outcome: 'merged', agentId: id, committed: true }
+          }
+        }),
+        stateStore,
+        nowFn: () => 20,
+        onRecoveredPublication
+      })
+
+      expect(onRecoveredPublication).toHaveBeenCalledWith({
+        runId: 'run-restart',
+        conversationId: 'conv-1',
+        turnId: 'turn-1',
+        causalWatchPaths: ['C:/repo/app.log'],
+        baseSha: TEST_SHA,
+        agentSha: PUBLISHED_SHA
+      })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('restaure la publication causale apres un crash entre fusion Git et callback', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-causal-post-publication-crash-'))
+    try {
+      const runId = 'run-post-publication-crash'
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      stateStore.save({
+        version: 1,
+        repoId: 'repo-a',
+        runId,
+        conversationId: 'conv-1',
+        turnId: 'turn-1',
+        causalWatchPaths: ['C:/repo/app.log'],
+        agentName: 'Builder',
+        worktreePath: join(root, `agent__${runId}`),
+        baseBranch: 'main',
+        baseSha: TEST_SHA,
+        publicationBaseSha: TEST_SHA,
+        verdict: 'green',
+        publication: 'integrating',
+        files: [{ path: 'app.log', kind: 'mod' }],
+        publishedSha: PUBLISHED_SHA,
+        createdAtMs: 10,
+        updatedAtMs: 11
+      })
+      const cleanupPublished = vi.fn((id: string): FinalizeResult => ({
+        outcome: 'merged',
+        agentId: id,
+        committed: false
+      }))
+      const onRecoveredPublication = vi.fn()
+
+      new RunWorktreeCoordinator({
+        manager: fakeManager({
+          listAgentIds: () => [runId],
+          cleanupPublished,
+          validateRecoveryContext: () => ({ ok: true, decision: 'cleanup-only' })
+        }),
+        stateStore,
+        nowFn: () => 20,
+        onRecoveredPublication
+      })
+
+      expect(cleanupPublished).toHaveBeenCalledWith(runId, PUBLISHED_SHA, 'main')
+      expect(onRecoveredPublication).toHaveBeenCalledWith({
+        runId,
+        conversationId: 'conv-1',
+        turnId: 'turn-1',
+        causalWatchPaths: ['C:/repo/app.log'],
+        baseSha: TEST_SHA,
+        agentSha: PUBLISHED_SHA
+      })
+      expect(stateStore.get(runId)).toMatchObject({ publication: 'complete' })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('rejoue puis acquitte un callback perdu apres le manifeste complete sans worktree', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-causal-complete-crash-'))
+    try {
+      const runId = 'run-complete-callback-crash'
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      stateStore.save({
+        version: 1,
+        repoId: 'repo-a',
+        runId,
+        conversationId: 'conv-complete',
+        turnId: 'turn-complete',
+        causalWatchPaths: ['C:/repo/app.log'],
+        agentName: 'Builder',
+        worktreePath: join(root, `agent__${runId}`),
+        baseBranch: 'main',
+        baseSha: '2'.repeat(40),
+        publicationBaseSha: TEST_SHA,
+        verdict: 'green',
+        publication: 'complete',
+        files: [{ path: 'app.log', kind: 'mod' }],
+        publishedSha: PUBLISHED_SHA,
+        createdAtMs: 10,
+        updatedAtMs: 11
+      })
+      const onRecoveredPublication = vi.fn()
+
+      new RunWorktreeCoordinator({
+        manager: fakeManager({ listAgentIds: () => [] }),
+        stateStore,
+        nowFn: () => 20,
+        onRecoveredPublication
+      })
+
+      expect(onRecoveredPublication).toHaveBeenCalledTimes(1)
+      expect(onRecoveredPublication).toHaveBeenCalledWith({
+        runId,
+        conversationId: 'conv-complete',
+        turnId: 'turn-complete',
+        causalWatchPaths: ['C:/repo/app.log'],
+        baseSha: TEST_SHA,
+        agentSha: PUBLISHED_SHA
+      })
+      expect(stateStore.get(runId)).toMatchObject({ causalPublicationDeliveredAtMs: 20 })
+
+      const replayAfterAck = vi.fn()
+      new RunWorktreeCoordinator({
+        manager: fakeManager({ listAgentIds: () => [] }),
+        stateStore,
+        nowFn: () => 30,
+        onRecoveredPublication: replayAfterAck
+      })
+      expect(replayAfterAck).not.toHaveBeenCalled()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('n invente pas la base causale d un ancien manifeste qui ne l a jamais persistee', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-causal-legacy-publication-'))
+    try {
+      const runId = 'run-legacy-publication'
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      stateStore.save({
+        version: 1,
+        repoId: 'repo-a',
+        runId,
+        conversationId: 'conv-legacy',
+        turnId: 'turn-legacy',
+        causalWatchPaths: ['C:/repo/app.log'],
+        agentName: 'Builder',
+        worktreePath: join(root, `agent__${runId}`),
+        baseBranch: 'main',
+        baseSha: TEST_SHA,
+        verdict: 'green',
+        publication: 'integrating',
+        files: [{ path: 'app.log', kind: 'mod' }],
+        publishedSha: PUBLISHED_SHA,
+        createdAtMs: 10,
+        updatedAtMs: 11
+      })
+      const onRecoveredPublication = vi.fn()
+
+      new RunWorktreeCoordinator({
+        manager: fakeManager({
+          listAgentIds: () => [runId],
+          validateRecoveryContext: () => ({ ok: true, decision: 'cleanup-only' })
+        }),
+        stateStore,
+        nowFn: () => 20,
+        onRecoveredPublication
+      })
+
+      expect(onRecoveredPublication).not.toHaveBeenCalled()
+      expect(stateStore.get(runId)).toMatchObject({ publication: 'complete' })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('end en CONFLIT → state conflict + fichier remonté (pas d’écrasement)', () => {

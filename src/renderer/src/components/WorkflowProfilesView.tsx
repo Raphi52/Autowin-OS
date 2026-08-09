@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { WorkflowBenchPanel } from './WorkflowBenchPanel'
 import { WorkflowGraphEditor } from './WorkflowGraphEditor'
+import { profileSummary } from './workflow-profile-summary'
 import './WorkflowProfilesView.css'
 
 /**
@@ -195,54 +196,34 @@ function WorkflowTrack({ profile }: { profile: WorkflowProfile }): React.JSX.Ele
   )
 }
 
-/** Résume un profil en une ligne : ce qu'il change, pas ce qu'il contient. */
-export function profileSummary(profile: WorkflowProfile): string {
-  const parts: string[] = []
-  const roles = Object.entries(profile.roles ?? {})
-  if (roles.length) {
-    parts.push(
-      roles
-        .map(([role, binding]) =>
-          [role, binding.model, binding.reasoningEffort].filter(Boolean).join(' ')
-        )
-        .join(' · ')
-    )
-  }
-  if (profile.phases?.length) parts.push(profile.phases.join(' → '))
-  if (typeof profile.allocation?.judgeMembers === 'number') {
-    parts.push(`${profile.allocation.judgeMembers} juge(s)`)
-  }
-  if (profile.instructions) {
-    parts.push(
-      profile.instructions.mode === 'replace' ? 'consignes remplacées' : 'consigne ajoutée'
-    )
-  }
-  // Un profil qui ne change rien est légitime (référence de comparaison) — on le dit au lieu
-  // d'afficher une ligne vide.
-  return parts.length ? parts.join(' · ') : 'aucun écart — configuration courante'
-}
-
 export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX.Element {
   const [file, setFile] = useState<ProfilesFile>({ profiles: [], activeId: null })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>()
 
-  const refresh = useCallback(async () => {
-    setLoading(true)
-    setError(undefined)
-    try {
-      const next = (await window.api.workflowProfiles?.()) as ProfilesFile | undefined
-      if (next) setFile(next)
-    } catch {
-      setError('Impossible de lire les workflows.')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
   useEffect(() => {
-    if (active) void refresh()
-  }, [active, refresh])
+    if (!active) return
+    let cancelled = false
+    void Promise.resolve()
+      .then(() => {
+        if (cancelled) return undefined
+        setLoading(true)
+        setError(undefined)
+        return window.api.workflowProfiles?.()
+      })
+      .then((next) => {
+        if (!cancelled && next) setFile(next as ProfilesFile)
+      })
+      .catch(() => {
+        if (!cancelled) setError('Impossible de lire les workflows.')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [active])
 
   const select = async (id: string | null): Promise<void> => {
     try {
@@ -276,7 +257,8 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
     try {
       const res = await window.api.workflowProfilesExport?.(id)
       // Une annulation n'est pas une erreur : on ne crie pas quand l'utilisateur ferme la boîte.
-      if (res && !res.ok && res.reason && res.reason !== 'annulé') setError(`Export : ${res.reason}`)
+      if (res && !res.ok && res.reason && res.reason !== 'annulé')
+        setError(`Export : ${res.reason}`)
     } catch {
       setError('L’export a échoué.')
     }

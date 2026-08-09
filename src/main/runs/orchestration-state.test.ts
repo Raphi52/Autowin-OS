@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { compileExecutionQuote } from '../execution-quote'
 import {
   clearOrchestrationState,
   admitAutomaticResumeRuntime,
@@ -78,6 +79,137 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
     })
 
     expect(loadOrchestrationStates(root)[0].runtimeSnapshot).toEqual(runtimeSnapshot)
+  })
+
+  it('ignore un runtimeSnapshot present mais structurellement invalide', () => {
+    writeFileSync(
+      join(root, 'invalid-runtime.json'),
+      JSON.stringify({ ...state('invalid-runtime', 1000, ['frame']), runtimeSnapshot: {} }),
+      'utf8'
+    )
+
+    expect(loadOrchestrationStates(root)).toEqual([])
+  })
+
+  it.each([
+    ['modele vide', { model: '' }],
+    ['provider non canonique', { provider: ' codex ', model: 'gpt-5.6-sol' }],
+    ['modele non canonique', { provider: 'codex', model: ' gpt-5.6-sol ' }],
+    ['effort inconnu', { reasoningEffort: 'turbo' }],
+    ['override de phase vide', { phaseModel: { build: { model: '' } } }]
+  ])('ignore un binding runtime invalide : %s', (_label, invalidBinding) => {
+    const validBinding = { provider: 'codex', model: 'gpt-5.6-sol', reasoningEffort: 'low' }
+    const runtimeSnapshot = {
+      roles: {
+        orchestrator: invalidBinding,
+        subagent: validBinding,
+        judge: validBinding,
+        scout: validBinding
+      },
+      phaseFanOut: { scout: [], frame: [], terrain: [] },
+      judgeFanOut: []
+    }
+    writeFileSync(
+      join(root, `invalid-binding-${readdirSync(root).length}.json`),
+      JSON.stringify({ ...state('invalid-binding', 1000, ['frame']), runtimeSnapshot }),
+      'utf8'
+    )
+
+    expect(loadOrchestrationStates(root)).toEqual([])
+  })
+
+  it('ignore un executionQuote present mais structurellement invalide', () => {
+    writeFileSync(
+      join(root, 'invalid-quote.json'),
+      JSON.stringify({ ...state('invalid-quote', 1000, ['frame']), executionQuote: {} }),
+      'utf8'
+    )
+
+    expect(loadOrchestrationStates(root)).toEqual([])
+  })
+
+  it('conserve un executionQuote valide et rejette un usage incomplet', () => {
+    saveOrchestrationState(root, {
+      ...state('valid-quote', 1000, ['frame']),
+      executionQuote: compileExecutionQuote('corrige le checkpoint')
+    })
+    writeFileSync(
+      join(root, 'invalid-usage.json'),
+      JSON.stringify({ ...state('invalid-usage', 2000, ['frame']), usage: {} }),
+      'utf8'
+    )
+
+    expect(loadOrchestrationStates(root).map((entry) => entry.runId)).toEqual(['valid-quote'])
+  })
+
+  it('rejette une collection agents invalide avant le rattachement', () => {
+    writeFileSync(
+      join(root, 'invalid-agents.json'),
+      JSON.stringify({ ...state('invalid-agents', 1000, ['frame']), agents: {} }),
+      'utf8'
+    )
+    writeFileSync(
+      join(root, 'invalid-agent-entry.json'),
+      JSON.stringify({ ...state('invalid-agent-entry', 1000, ['frame']), agents: [{}] }),
+      'utf8'
+    )
+
+    expect(loadOrchestrationStates(root)).toEqual([])
+  })
+
+  it.each([
+    ['conversationId objet', { conversationId: {} }],
+    ['conversationId vide', { conversationId: '   ' }],
+    ['turnId tableau', { turnId: [] }],
+    ['forkedFrom incomplet', { forkedFrom: {} }],
+    [
+      'forkedFrom date invalide',
+      {
+        forkedFrom: {
+          checkpointId: 'checkpoint-1',
+          runId: 'source-run',
+          checkpointCreatedAt: 'jamais',
+          contentHash: 'source-hash'
+        }
+      }
+    ],
+    ['runId traversal', { runId: '../escape' }],
+    ['startedAt non numerique', { startedAt: 'hier' }],
+    ['updatedAt nul', { updatedAt: null }]
+  ])('ignore le checkpoint hostile : %s', (_label, mutation) => {
+    writeFileSync(
+      join(root, `hostile-${readdirSync(root).length}.json`),
+      JSON.stringify({ ...state('hostile', 1000, ['frame']), ...mutation }),
+      'utf8'
+    )
+
+    expect(loadOrchestrationStates(root)).toEqual([])
+  })
+
+  it('conserve tous les champs optionnels valides du schema checkpoint', () => {
+    const complete = {
+      ...state('complete-run', 1000, ['frame']),
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      forkedFrom: {
+        checkpointId: 'checkpoint-1',
+        runId: 'source-run',
+        checkpointCreatedAt: '2026-08-08T16:00:00.000Z',
+        contentHash: 'source-hash'
+      },
+      agents: [
+        { token: 'agent-1', pid: 42, identity: 'pid:42', journalPath: 'run.jsonl', offset: 0 }
+      ]
+    }
+    saveOrchestrationState(root, complete)
+
+    expect(loadOrchestrationStates(root)).toEqual([complete])
+  })
+
+  it('ignore un checkpoint dont le nom de fichier contredit le runId interne', () => {
+    writeFileSync(join(root, 'foo.json'), JSON.stringify(state('bar', 1000, ['frame'])), 'utf8')
+
+    expect(loadOrchestrationStates(root)).toEqual([])
   })
 
   it('reprend le snapshot persiste et migre explicitement un checkpoint historique', () => {
@@ -367,6 +499,28 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
     saveOrchestrationState(root, state('run-a-1', 1000, ['frame']))
     writeFileSync(join(root, 'run-corrompu.json'), '{"runId":"run-corrompu","task":', 'utf8')
     expect(loadOrchestrationStates(root).map((s) => s.runId)).toEqual(['run-a-1'])
+  })
+
+  it.each([
+    ['sortie nulle', [null]],
+    ['phase inconnue', [{ phase: 'unknown', text: 'livrable' }]],
+    ['texte non chaîne', [{ phase: 'frame', text: 42 }]]
+  ])('ignore un JSON valide mais structurellement hostile : %s', (_label, phaseOutputs) => {
+    writeFileSync(
+      join(root, 'run-structurellement-hostile.json'),
+      JSON.stringify({
+        runId: 'run-structurellement-hostile',
+        task: 'reprendre sans planter',
+        phaseOutputs,
+        startedAt: 1,
+        updatedAt: 2
+      }),
+      'utf8'
+    )
+
+    const loaded = loadOrchestrationStates(root)
+    expect(loaded).toEqual([])
+    expect(() => pickOrchestrationsToResume(loaded)).not.toThrow()
   })
 
   it('refuse un runId qui sortirait du dossier (traversée de chemin)', () => {

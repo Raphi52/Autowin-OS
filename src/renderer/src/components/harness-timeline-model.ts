@@ -13,6 +13,8 @@ export type HarnessTimelineEventKind =
   | 'tool-call'
   | 'tool-result'
   | 'model-response'
+  /** Livrable produit par le modele (fichier, image, document) — une SORTIE, pas un retour d'outil. */
+  | 'artifact'
   | 'handoff'
   | 'verdict'
   | 'gate'
@@ -21,8 +23,18 @@ export type HarnessTimelineEventKind =
   | 'error'
   | 'boundary'
   | 'response-displayed'
+export interface HarnessAuthorityReceipt {
+  mode: 'plan' | 'ask' | 'auto'
+  commandAuthority: 'automatic' | 'sensitive' | 'destructive'
+  mutates: boolean
+  decision: 'allow' | 'confirm' | 'deny'
+  decisionId?: string
+  resolution?: 'approve' | 'cancel'
+  resolvedBy?: 'user' | 'timeout-default'
+}
 export interface HarnessTimelineEvent {
   id: string
+  sequence?: number
   kind: HarnessTimelineEventKind
   actor: string
   label: string
@@ -46,6 +58,7 @@ export interface HarnessTimelineEvent {
   reasoningEffort?: string
   transport?: string
   sessionId?: string
+  authority?: HarnessAuthorityReceipt
   execution?: {
     phase?: string
     agentId?: string
@@ -151,6 +164,7 @@ export interface HarnessTraceEvent {
     cacheReadTokens?: number
     costUsd?: number
   }
+  authority?: HarnessAuthorityReceipt
 }
 
 export function buildHarnessTimelineFromTrace(events: HarnessTraceEvent[]): HarnessTimeline {
@@ -172,6 +186,7 @@ export function buildHarnessTimelineFromTrace(events: HarnessTraceEvent[]): Harn
         ].join(' · ')
         return {
           id: event.id,
+          sequence: event.sequence,
           parentId: event.parentId,
           kind: event.type,
           actor: event.actor.label,
@@ -196,6 +211,7 @@ export function buildHarnessTimelineFromTrace(events: HarnessTraceEvent[]): Harn
           reasoningEffort: event.provider?.reasoningEffort,
           transport: event.provider?.transport,
           sessionId: event.provider?.sessionId,
+          authority: event.authority ? { ...event.authority } : undefined,
           execution: event.execution
             ? {
                 ...event.execution,
@@ -209,7 +225,9 @@ export function buildHarnessTimelineFromTrace(events: HarnessTraceEvent[]): Harn
       })
       // Une trace porte aussi des evenements structurels (handoff, gate, closure) qui referencent
       // le meme appel. Seule la reponse provider est une unite de consommation atomique.
-      const atomicUsage = mapped.filter((_event, index) => ordered[index]?.type === 'model-response')
+      const atomicUsage = mapped.filter(
+        (_event, index) => ordered[index]?.type === 'model-response'
+      )
       return {
         id: turnId,
         ts: ordered[0]?.timestamp ?? '',

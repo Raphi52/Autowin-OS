@@ -65,6 +65,22 @@ afterEach(() => {
 })
 
 describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
+  it('changedFiles restitue sans ambiguïté Unicode, retours ligne et flèche littérale', () => {
+    const repo = tempRepo()
+    const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
+    roots.push(wtRoot)
+    mkdirSync(join(wtRoot, 'agent__porcelain-z'))
+    const names = ['café -> littéral.txt', 'ligne\nsuivante.txt', 'guillemet"brut.txt']
+    const status = names.map((name) => `?? ${name}`).join('\0') + '\0'
+    const wm = new WorktreeManager({
+      baseRepo: repo,
+      worktreeRoot: wtRoot,
+      git: (_dir, args) => (args[0] === 'status' ? status : '')
+    })
+
+    expect(wm.changedFiles('porcelain-z').sort()).toEqual(names.sort())
+  })
+
   it('acquire donne une copie isolée qui ne touche pas le repo de base', () => {
     const repo = tempRepo()
     const wm = manager(repo)
@@ -1248,5 +1264,17 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
     expect(result).toMatchObject({ outcome: 'merged', committed: true })
     // `core.autocrlf` du poste peut réécrire les fins de ligne : on compare le contenu, pas l'EOL.
     expect(readFileSync(join(repo, 'a.txt'), 'utf8').trim()).toBe('travail de l’agent')
+  })
+
+  it('abandonne explicitement un bureau sale sans toucher au dépôt de base', () => {
+    const repo = tempRepo()
+    const wm = manager(repo)
+    const path = wm.acquire('held')
+    writeFileSync(join(path, 'solution.txt'), 'solution retenue puis abandonnée\n')
+
+    wm.discard('held')
+
+    expect(existsSync(path)).toBe(false)
+    expect(existsSync(join(repo, 'solution.txt'))).toBe(false)
   })
 })

@@ -15,6 +15,8 @@ import type { GitReadResult } from '../../shared/git-read'
 const SPOOL_MAX_BYTES = 4 * 1024 * 1024
 
 export interface ConversationFileTrace {
+  /** Identifiant stable d'un événement rejouable après crash. */
+  eventId?: string
   timestamp: string
   conversationId: string
   turnId?: string
@@ -26,7 +28,11 @@ export interface ConversationFileTrace {
   pathBaseFingerprints?: Record<string, string | null>
   pathGenerationMarkers?: Record<string, string>
   pathBaseGenerationMarkers?: Record<string, string | null>
+  /** Empreintes non réversibles des lignes revendiquées par un outil d'édition, par chemin. */
+  pathLineFingerprints?: Record<string, string[]>
 }
+
+export type ConversationFileTraceAppendResult = 'appended' | 'duplicate' | 'ignored' | 'failed'
 
 function spoolRoot(base = ensureAutowinAppData()): string {
   const root = join(base, 'conversation-file-trace-spool')
@@ -65,12 +71,22 @@ export function normalizeWorkspaceTracePath(path: string, workspaceRoot: string)
 export function appendConversationFileTrace(
   trace: ConversationFileTrace,
   base = ensureAutowinAppData()
-): void {
+): ConversationFileTraceAppendResult {
   const paths = [...new Set(trace.paths.map(normalizedStoredPath).filter(Boolean))]
-  if (!trace.conversationId.trim() || !trace.workspaceRoot.trim() || paths.length === 0) return
+  if (!trace.conversationId.trim() || !trace.workspaceRoot.trim() || paths.length === 0)
+    return 'ignored'
   try {
     const root = spoolRoot(base)
     const path = join(root, 'events.jsonl')
+    const eventId = trace.eventId?.trim()
+    if (
+      eventId &&
+      ['events.archive.jsonl', 'events.previous.jsonl', 'events.jsonl'].some((name) =>
+        readFileTraces(join(root, name)).some((existing) => existing.eventId === eventId)
+      )
+    ) {
+      return 'duplicate'
+    }
     if (existsSync(path) && statSync(path).size > SPOOL_MAX_BYTES) {
       const previous = join(root, 'events.previous.jsonl')
       if (existsSync(previous)) {
@@ -111,6 +127,14 @@ export function appendConversationFileTrace(
         return match ? [[path, match[1]]] : []
       })
     )
+    const normalizedLineFingerprints = Object.fromEntries(
+      paths.flatMap((path) => {
+        const fingerprints = Object.entries(trace.pathLineFingerprints ?? {}).find(
+          ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
+        )?.[1]
+        return fingerprints?.length ? [[path, fingerprints]] : []
+      })
+    )
     appendFileSync(
       path,
       `${JSON.stringify({
@@ -128,23 +152,43 @@ export function appendConversationFileTrace(
           : {}),
         ...(Object.keys(normalizedBaseGenerationMarkers).length > 0
           ? { pathBaseGenerationMarkers: normalizedBaseGenerationMarkers }
+          : {}),
+        ...(Object.keys(normalizedLineFingerprints).length > 0
+          ? { pathLineFingerprints: normalizedLineFingerprints }
           : {})
       })}\n`,
       'utf8'
     )
+    return 'appended'
   } catch {
     // L'observabilité ne doit jamais interrompre la mutation qu'elle décrit.
+    return 'failed'
   }
 }
 
 export function appendExecutionEvidenceFileTrace(
   evidence: readonly ExecutionEvidence[] | undefined,
-  context: { conversationId: string; turnId?: string; workspaceRoot: string },
+  context: {
+    conversationId: string
+    turnId?: string
+    workspaceRoot: string
+    /** Le run est vert et publié : les chemins relatifs désignent désormais la base. */
+    published?: boolean
+    /** Identifiant stable de la publication ; chaque preuve reçoit un suffixe déterministe. */
+    eventId?: string
+  },
   base = ensureAutowinAppData()
-): void {
-  for (const item of evidence ?? []) {
+): ConversationFileTraceAppendResult {
+  const hasValidatedWorkspaceDelta = evidence?.some(
+    (item) => item.ok && item.kind === 'mutation' && item.type === 'workspace_delta'
+  )
+  let aggregate: ConversationFileTraceAppendResult = 'ignored'
+  for (const [evidenceIndex, item] of (evidence ?? []).entries()) {
     if (!item.ok || item.kind !== 'mutation') continue
-    const workspaceRoot = item.workspaceRoot ?? context.workspaceRoot
+    if (hasValidatedWorkspaceDelta && item.type !== 'workspace_delta') continue
+    const workspaceRoot = context.published
+      ? context.workspaceRoot
+      : (item.workspaceRoot ?? context.workspaceRoot)
     const paths = (item.paths ?? (item.path ? [item.path] : []))
       .map((path) => normalizeWorkspaceTracePath(path, workspaceRoot))
       .filter((path): path is string => Boolean(path))
@@ -180,8 +224,18 @@ export function appendExecutionEvidenceFileTrace(
         return match ? [[path, match[1]]] : []
       })
     )
-    appendConversationFileTrace(
+    const pathLineFingerprints = Object.fromEntries(
+      paths.flatMap((path) => {
+        const pathSpecific = Object.entries(item.writtenLineFingerprintsByPath ?? {}).find(
+          ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
+        )?.[1]
+        const fingerprints = pathSpecific ?? item.writtenLineFingerprints
+        return fingerprints?.length ? [[path, fingerprints]] : []
+      })
+    )
+    const result = appendConversationFileTrace(
       {
+        ...(context.eventId ? { eventId: `${context.eventId}:${evidenceIndex}` } : {}),
         timestamp: new Date().toISOString(),
         conversationId: context.conversationId,
         ...(context.turnId ? { turnId: context.turnId } : {}),
@@ -189,19 +243,18 @@ export function appendExecutionEvidenceFileTrace(
         source: 'subagent',
         paths,
         ...(Object.keys(pathFingerprints).length > 0 ? { pathFingerprints } : {}),
-        ...(Object.keys(pathBaseFingerprints).length > 0
-          ? { pathBaseFingerprints }
-          : {}),
-        ...(Object.keys(pathGenerationMarkers).length > 0
-          ? { pathGenerationMarkers }
-          : {}),
-        ...(Object.keys(pathBaseGenerationMarkers).length > 0
-          ? { pathBaseGenerationMarkers }
-          : {})
+        ...(Object.keys(pathBaseFingerprints).length > 0 ? { pathBaseFingerprints } : {}),
+        ...(Object.keys(pathGenerationMarkers).length > 0 ? { pathGenerationMarkers } : {}),
+        ...(Object.keys(pathBaseGenerationMarkers).length > 0 ? { pathBaseGenerationMarkers } : {}),
+        ...(Object.keys(pathLineFingerprints).length > 0 ? { pathLineFingerprints } : {})
       },
       base
     )
+    if (result === 'appended') aggregate = 'appended'
+    else if (result === 'failed' && aggregate !== 'appended') aggregate = 'failed'
+    else if (result === 'duplicate' && aggregate === 'ignored') aggregate = 'duplicate'
   }
+  return aggregate
 }
 
 function readFileTraces(path: string): ConversationFileTrace[] {
@@ -249,6 +302,59 @@ export function readConversationFilePaths(
   return [...new Set(paths)]
 }
 
+/** Chemins absolus attribués à UN tour, pour relier une mutation à sa cause sans deviner au temps. */
+export function readConversationTurnFilePaths(
+  conversationId: string,
+  turnId: string,
+  base = ensureAutowinAppData()
+): string[] {
+  return readConversationTurnFileMutations(conversationId, turnId, base).paths
+}
+
+export interface ConversationTurnFileMutations {
+  paths: string[]
+  lineFingerprintsByPath: Record<string, string[]>
+  generationMarkersByPath: Record<string, string>
+}
+
+/** Attribution exacte d'un tour : chemins absolus et lignes revendiquées par ses outils d'édition. */
+export function readConversationTurnFileMutations(
+  conversationId: string,
+  turnId: string,
+  base = ensureAutowinAppData()
+): ConversationTurnFileMutations {
+  const root = spoolRoot(base)
+  const traces = [
+    ...readFileTraces(join(root, 'events.archive.jsonl')),
+    ...readFileTraces(join(root, 'events.previous.jsonl')),
+    ...readFileTraces(join(root, 'events.jsonl'))
+  ].filter((trace) => trace.conversationId === conversationId && trace.turnId === turnId)
+  const lineFingerprintsByPath: Record<string, string[]> = {}
+  const generationMarkersByPath: Record<string, string> = {}
+  const paths = traces.flatMap((trace) =>
+    trace.paths.map((path) => {
+      const absolute = canonicalWorkspaceRoot(
+        resolve(trace.workspaceRoot, normalizedStoredPath(path))
+      )
+      const fingerprints = Object.entries(trace.pathLineFingerprints ?? {}).find(
+        ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
+      )?.[1]
+      if (fingerprints?.length) {
+        lineFingerprintsByPath[absolute] = [
+          ...(lineFingerprintsByPath[absolute] ?? []),
+          ...fingerprints
+        ]
+      }
+      const generationMarker = Object.entries(trace.pathGenerationMarkers ?? {}).find(
+        ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
+      )?.[1]
+      if (generationMarker) generationMarkersByPath[absolute] = generationMarker
+      return absolute
+    })
+  )
+  return { paths: [...new Set(paths)], lineFingerprintsByPath, generationMarkersByPath }
+}
+
 export interface ConversationPathOwnership {
   conversationId: string
   workspaceRoot: string
@@ -290,9 +396,7 @@ export function readCurrentConversationPathOwnership(
       const baseMatch = Object.entries(trace.pathBaseFingerprints ?? {}).find(
         ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(normalized)
       )
-      const baseGenerationMatch = Object.entries(
-        trace.pathBaseGenerationMarkers ?? {}
-      ).find(
+      const baseGenerationMatch = Object.entries(trace.pathBaseGenerationMarkers ?? {}).find(
         ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(normalized)
       )
       const generationMarker = Object.entries(trace.pathGenerationMarkers ?? {}).find(
@@ -330,9 +434,7 @@ export function readCurrentConversationPathOwnership(
       .map((ownership) => ({
         ...ownership,
         ...(generation.fingerprint ? { fingerprint: generation.fingerprint } : {}),
-        ...(generation.generationMarker
-          ? { generationMarker: generation.generationMarker }
-          : {})
+        ...(generation.generationMarker ? { generationMarker: generation.generationMarker } : {})
       }))
   )
 }

@@ -109,6 +109,17 @@
   font-size: 0.85em;
   opacity: 0.8;
 }
+/* Échec d'une action de compte : visible, jamais avalé (sinon « Ajouter » semble sans effet). */
+.router-account-error {
+  margin: 6px 0 0;
+  padding: 6px 9px;
+  border: 1px solid rgba(242, 130, 104, 0.48);
+  border-radius: 6px;
+  background: rgba(92, 28, 31, 0.28);
+  color: #ffad9b;
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
 .router-models {
   list-style: none;
   margin: 8px 0 0;

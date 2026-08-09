@@ -24,7 +24,7 @@ describe('branchement runtime Auto-Kaizen', () => {
       'if (conversationId && !activeChatTurns.wasDeliberatelyStopped(conversationId))'
     )
     // Le chemin qui ne coupe QUE l orchestration doit marquer l intention lui aussi.
-    expect(source).toContain("activeChatTurns.markDeliberateStop(conversationId)")
+    expect(source).toContain('activeChatTurns.markDeliberateStop(conversationId)')
   })
 
   it('transforme la perte du replay et chaque diagnostic exploitable en incident', () => {
@@ -36,8 +36,18 @@ describe('branchement runtime Auto-Kaizen', () => {
 
   it('reprend périodiquement les transitions persistées', () => {
     expect(source).toContain("'auto-kaizen-incidents.json'")
-    expect(source).toContain('autoKaizenSupervisor.resumePending()')
+    expect(source).toContain('autoKaizenSupervisor?.resumePending()')
     expect(source).toContain('autoKaizenResumeTimer.unref()')
+  })
+
+  it('rend le superviseur legacy activable dans un mode exclusif du Watchdog', () => {
+    expect(source).toContain('legacyAutoKaizenSupervisorEnabled(process.env)')
+    expect(source).toContain(
+      'if (!AUTO_KAIZEN_SUPERVISOR_ENABLED) {\n    watchdogEngine = new WatchdogEngine('
+    )
+    expect(source).toContain(
+      'if (!AUTO_KAIZEN_SUPERVISOR_ENABLED) {\n        const seeded = seedWatchdogTasks'
+    )
   })
 
   it('hérite strictement de l’autorité de la conversation source', () => {

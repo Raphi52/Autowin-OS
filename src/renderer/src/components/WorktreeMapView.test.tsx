@@ -53,7 +53,29 @@ const snapshot: WorktreeMapSnapshot = {
       locked: true,
       behind: 30
     }
-  ]
+  ],
+  doctor: {
+    status: 'attention',
+    findings: [
+      {
+        code: 'prunable',
+        severity: 'warning',
+        path: 'C:\\runs\\wt-propre',
+        evidence: 'gitdir file points to non-existent location',
+        proposals: [
+          {
+            action: 'prune-preview',
+            cwd: 'C:\\Amitel\\Autowin OS',
+            argv: ['worktree', 'prune', '--dry-run', '--verbose'],
+            reason: 'Cette commande inspecte le dépôt entier.',
+            mutates: false,
+            automatic: false,
+            requiresConfirmation: false
+          }
+        ]
+      }
+    ]
+  }
 }
 
 let container: HTMLDivElement | undefined
@@ -63,6 +85,17 @@ let previousApi: PropertyDescriptor | undefined
 interface StubApi {
   getWorktreeMap: ReturnType<typeof vi.fn>
   pickGitRepo: ReturnType<typeof vi.fn>
+}
+
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+} {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
 }
 
 function installApi(
@@ -123,6 +156,27 @@ describe('WorktreeMapView — plan de métro des worktrees git', () => {
     expect(container?.querySelector('ol')).toBeNull()
   })
 
+  it('rend le docteur read-only et une commande copiable sans bouton d’exécution', async () => {
+    installApi()
+    await renderView()
+
+    const doctor = container?.querySelector('[data-testid="worktree-doctor"]')
+    expect(doctor?.textContent).toContain('1 point à vérifier')
+    expect(doctor?.textContent).toContain('gitdir file points to non-existent location')
+    expect(doctor?.textContent).toContain('git worktree prune --dry-run --verbose')
+    expect(doctor?.querySelector('[data-action="execute"]')).toBeNull()
+    expect(doctor?.textContent).toContain('Jamais exécuté automatiquement')
+  })
+
+  it('annonce explicitement un diagnostic sain', async () => {
+    installApi({ ...snapshot, doctor: { status: 'healthy', findings: [] } })
+    await renderView()
+
+    expect(container?.querySelector('[data-testid="worktree-doctor"]')?.textContent).toContain(
+      'Docteur : sain'
+    )
+  })
+
   it('sépare les territoires : une copie sale au-dessus du tronc, une copie propre en dessous', async () => {
     installApi()
     await renderView()
@@ -132,7 +186,10 @@ describe('WorktreeMapView — plan de métro des worktrees git', () => {
     // 3 copies sales (5 fich., 2 fich., et la saleté inconnue traitee comme non-vivante) :
     // 2 vivantes exactement, car l'inconnue n'est PAS declaree en travaux.
     expect(live).toHaveLength(2)
-    expect(closed).toHaveLength(2)
+    const unknown = container?.querySelectorAll('polyline.wtmap-line.is-unknown') ?? []
+    expect(closed).toHaveLength(1)
+    expect(unknown).toHaveLength(1)
+    expect(container?.textContent).toContain('INCONNU')
 
     const trunkY = Number(container?.querySelector('line.wtmap-trunk')?.getAttribute('y1'))
     for (const node of live) {
@@ -215,7 +272,9 @@ describe('WorktreeMapView — plan de métro des worktrees git', () => {
     scroller.scrollLeft = 0
 
     await act(async () => {
-      scroller.dispatchEvent(new WheelEvent('wheel', { deltaY: 240, bubbles: true, cancelable: true }))
+      scroller.dispatchEvent(
+        new WheelEvent('wheel', { deltaY: 240, bubbles: true, cancelable: true })
+      )
       await Promise.resolve()
     })
 
@@ -236,7 +295,9 @@ describe('WorktreeMapView — plan de métro des worktrees git', () => {
 
     await act(async () => {
       // Trackpad : le navigateur gère déjà cet axe. Y ajouter notre conversion doublerait la distance.
-      scroller.dispatchEvent(new WheelEvent('wheel', { deltaX: 50, deltaY: 0, bubbles: true, cancelable: true }))
+      scroller.dispatchEvent(
+        new WheelEvent('wheel', { deltaX: 50, deltaY: 0, bubbles: true, cancelable: true })
+      )
       await Promise.resolve()
     })
 
@@ -273,6 +334,32 @@ describe('WorktreeMapView — plan de métro des worktrees git', () => {
     expect(api.getWorktreeMap).toHaveBeenLastCalledWith('D:\\autre\\depot')
     // Même clé que Source control : le dépôt choisi vaut pour l'app, pas pour cette vue seule.
     expect(localStorage.getItem('autowin:sc-repo')).toBe('D:\\autre\\depot')
+  })
+
+  it('ignore la réponse obsolète de l’ancien dépôt après une nouvelle sélection', async () => {
+    const oldRead = deferred<WorktreeMapSnapshot>()
+    const newRead = deferred<WorktreeMapSnapshot>()
+    const api = installApi(snapshot, 'D:\\nouveau')
+    api.getWorktreeMap.mockReset()
+    api.getWorktreeMap.mockImplementation((repo?: string) =>
+      repo === 'D:\\nouveau' ? newRead.promise : oldRead.promise
+    )
+    await renderView()
+
+    await clickTestId('worktree-map-pick')
+    await act(async () => {
+      newRead.resolve({ ...snapshot, repoPath: 'D:\\nouveau', repositoryName: 'Nouveau' })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(container?.querySelector('.module-header h1')?.textContent).toBe('Nouveau')
+
+    await act(async () => {
+      oldRead.resolve({ ...snapshot, repoPath: 'C:\\ancien', repositoryName: 'Ancien' })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(container?.querySelector('.module-header h1')?.textContent).toBe('Nouveau')
   })
 
   it('n’oublie pas le dépôt choisi précédemment au montage', async () => {

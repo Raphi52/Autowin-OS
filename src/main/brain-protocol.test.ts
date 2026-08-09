@@ -10,8 +10,18 @@ import {
 
 const TOKEN = 'protocol-v2-test-token'.repeat(2)
 
-function signedV2(context: string, navigation: unknown): SignedBrainPayload {
-  const authenticated = JSON.stringify({ context, navigation })
+function signedV2(
+  context: string,
+  navigation: unknown,
+  corpus?: readonly string[],
+  structuredContext?: unknown
+): SignedBrainPayload {
+  const authenticated = JSON.stringify({
+    context,
+    navigation,
+    ...(corpus ? { corpus } : {}),
+    ...(structuredContext ? { structuredContext } : {})
+  })
   return {
     service: 'amitel-brain',
     protocol: 2,
@@ -44,10 +54,38 @@ describe('protocole Brain v2', () => {
   }
 
   it('rend contexte et navigation seulement après vérification de l’enveloppe complète', () => {
-    expect(verifySignedBrainPayload(signedV2('contexte fiable', navigation), TOKEN)).toEqual({
+    expect(
+      verifySignedBrainPayload(signedV2('contexte fiable', navigation, ['knowledge/domain/autowin-os-']), TOKEN)
+    ).toEqual({
       context: 'contexte fiable',
-      navigation
+      navigation,
+      corpus: ['knowledge/domain/autowin-os-']
     })
+  })
+
+  it('rejette une attestation de corpus malformée même correctement signée', () => {
+    for (const malformed of ['ok', '', '*', 'c:/mistyped/knowledge/', '../knowledge/', 'knowledge/../']) {
+      expect(() =>
+        verifySignedBrainPayload(signedV2('contexte', null, [malformed]), TOKEN)
+      ).toThrow('corpus')
+    }
+  })
+
+  it('compte la borne de contexte en points de code comme le serveur Python', () => {
+    expect(verifySignedBrainPayload(signedV2('😀'.repeat(3000), null), TOKEN).context).toHaveLength(6000)
+    expect(() => verifySignedBrainPayload(signedV2('😀'.repeat(3001), null), TOKEN)).toThrow('volumineux')
+  })
+
+  it('rejette des frontières signées qui ne reconstruisent pas exactement le contexte signé', () => {
+    expect(() =>
+      verifySignedBrainPayload(
+        signedV2('CONTEXTE_A', null, ['knowledge/domain/autowin-os-'], {
+          preamble: '',
+          sources: [{ path: 'knowledge/domain/autowin-os-note.md', content: 'CONTEXTE_B' }]
+        }),
+        TOKEN
+      )
+    ).toThrow('frontières')
   })
 
   it.each([

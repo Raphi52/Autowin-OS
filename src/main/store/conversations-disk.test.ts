@@ -1,4 +1,12 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
@@ -80,6 +88,86 @@ describe('conversations-disk — persistance à chaque mutation', () => {
 })
 
 describe('conversations-disk structured restart', () => {
+  it('conserve le delta en attente apres une erreur disque transitoire', () => {
+    const p = join(dir, 'retry-after-disk-error.json')
+    const store = new ConversationStore(() => 1000)
+    const flush = persistConversations(store, p)
+    const journal = `${p}.journal.jsonl`
+    mkdirSync(journal)
+
+    expect(() => store.create({ title: 'Retenue', category: 'codex', provider: 'codex' })).toThrow()
+    rmSync(journal, { recursive: true, force: true })
+    expect(() => flush()).not.toThrow()
+
+    expect(loadConversations(p).map(({ title }) => title)).toContain('Retenue')
+  })
+
+  it('persiste un delta sans reserialiser les conversations non liees', () => {
+    vi.useFakeTimers()
+    const p = join(dir, 'incremental.json')
+    const seed = new ConversationStore(() => 1000)
+    const target = seed.create({ title: 'Target', category: 'codex', provider: 'codex' })
+    for (let index = 0; index < 30; index += 1) {
+      const unrelated = seed.create({
+        title: `Unrelated ${index}`,
+        category: 'codex',
+        provider: 'codex'
+      })
+      seed.append(unrelated.id, { role: 'user', content: 'x'.repeat(50_000) })
+    }
+    saveConversations(seed.list(), p)
+
+    const store = new ConversationStore(() => 2000)
+    persistConversations(store, p)
+    store.beginTurn(target.id, { content: 'Go' }, { turnId: 'turn-incremental' })
+    const journal = `${p}.journal.jsonl`
+    expect(existsSync(journal)).toBe(true)
+    const beforeDelta = statSync(journal).size
+
+    store.applyTurnEvent(target.id, 'turn-incremental', {
+      kind: 'delta',
+      streamId: '0:0',
+      text: 'petit fragment'
+    })
+    vi.advanceTimersByTime(150)
+
+    const writtenForDelta = statSync(journal).size - beforeDelta
+    expect(writtenForDelta).toBeLessThan(5_000)
+    expect(
+      loadConversations(p)
+        .find(({ id }) => id === target.id)
+        ?.messages.at(-1)?.content
+    ).toBe('petit fragment')
+  })
+
+  it('journalise les evenements du tour plutot que la conversation geante active', () => {
+    vi.useFakeTimers()
+    const p = join(dir, 'active-large.json')
+    const seed = new ConversationStore(() => 1000)
+    const target = seed.create({ title: 'Large', category: 'codex', provider: 'codex' })
+    seed.append(target.id, { role: 'user', content: 'x'.repeat(5 * 1024 * 1024) })
+    saveConversations(seed.list(), p)
+    const store = new ConversationStore(() => 2000)
+    persistConversations(store, p)
+    store.beginTurn(target.id, { content: 'Go' }, { turnId: 'turn-large' })
+    const journal = `${p}.journal.jsonl`
+    const before = statSync(journal).size
+
+    for (let index = 0; index < 10; index += 1) {
+      store.applyTurnEvent(target.id, 'turn-large', {
+        kind: 'delta',
+        streamId: '0:0',
+        text: `fragment-${index}`
+      })
+      vi.advanceTimersByTime(150)
+    }
+
+    expect(statSync(journal).size - before).toBeLessThan(20_000)
+    expect(loadConversations(p).find(({ id }) => id === target.id)?.messages.at(-1)?.content).toContain(
+      'fragment-9'
+    )
+  })
+
   it('groups streaming checkpoints but flushes terminal state immediately', () => {
     vi.useFakeTimers()
     const p = join(dir, 'debounced.json')
@@ -97,9 +185,9 @@ describe('conversations-disk structured restart', () => {
     expect(readFileSync(p, 'utf8')).toBe(beforeDelta)
 
     vi.advanceTimersByTime(150)
-    expect(readFileSync(p, 'utf8')).toContain('partiel')
+    expect(loadConversations(p)[0].messages.at(-1)?.content).toBe('partiel')
     store.applyTurnEvent(c.id, 'turn-debounce', { kind: 'done' })
-    expect(readFileSync(p, 'utf8')).toContain('"status": "completed"')
+    expect(loadConversations(p)[0].messages.at(-1)?.status).toBe('completed')
   })
 
   it('flush() exposé écrit immédiatement l’état débouncé (chemin before-quit)', () => {
@@ -113,7 +201,23 @@ describe('conversations-disk structured restart', () => {
     store.applyTurnEvent(c.id, 't', { kind: 'delta', streamId: '0:0', text: 'fragment-final' })
     expect(readFileSync(p, 'utf8')).toBe(before) // débouncé, pas encore écrit
     flush() // simule before-quit
-    expect(readFileSync(p, 'utf8')).toContain('fragment-final')
+    expect(loadConversations(p)[0].messages.at(-1)?.content).toBe('fragment-final')
+  })
+
+  it('compacte au redemarrage le journal rejoue dans un snapshot canonique', () => {
+    const p = join(dir, 'startup-compaction.json')
+    const first = new ConversationStore(() => 1000)
+    persistConversations(first, p)
+    const conversation = first.create({ title: 'Compact', category: 'codex', provider: 'codex' })
+    first.append(conversation.id, { role: 'user', content: 'persisted once' })
+    const journal = `${p}.journal.jsonl`
+    expect(existsSync(journal)).toBe(true)
+
+    const restarted = new ConversationStore(() => 2000)
+    persistConversations(restarted, p)
+
+    expect(existsSync(journal)).toBe(false)
+    expect(loadConversations(p)[0].messages[0].content).toBe('persisted once')
   })
 
   it('restores ordered parts, results and status after restart', () => {

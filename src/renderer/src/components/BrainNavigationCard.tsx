@@ -16,9 +16,11 @@ interface BrainNavigation {
   candidates: BrainNavigationCandidate[]
 }
 export interface BrainTraceView {
+  id?: string
   timestamp: string
   conversationId: string
   turnId?: string
+  kind?: 'automatic' | 'query'
   query: string
   injectedChars: number
   navigation?: BrainNavigation

@@ -89,6 +89,32 @@ describe('TraceEvent v1 — contrat causal canonique', () => {
     ]
     expect(variants.map(assertTraceEvent)).toEqual(variants)
   })
+
+  it('valide un reçu d’autorité complet et rejette les valeurs inventées', () => {
+    const authorized = completeEvent({
+      type: 'decision',
+      actor: { id: 'autowin-authority', kind: 'system', label: 'Autorité Autowin' },
+      channel: 'internal',
+      observation: { boundary: 'app-command-bus', fidelity: 'exact' },
+      authority: {
+        mode: 'ask',
+        commandAuthority: 'destructive',
+        mutates: true,
+        decision: 'confirm',
+        decisionId: 'dec-1',
+        resolution: 'approve',
+        resolvedBy: 'user'
+      }
+    })
+
+    expect(assertTraceEvent(authorized)).toBe(authorized)
+    expect(() =>
+      assertTraceEvent({
+        ...authorized,
+        authority: { ...authorized.authority!, decision: 'maybe' as never }
+      })
+    ).toThrow(/authority\.decision/)
+  })
 })
 
 describe('identifiant d action — l unicite ne doit pas dependre d un compteur remis a zero', () => {
@@ -119,9 +145,9 @@ describe('identifiant d action — l unicite ne doit pas dependre d un compteur 
   it('respecte l actionId FOURNI quand il existe, et neutralise ses deux-points', () => {
     // `command`/`result` portent leur propre actionId, deja unique : on ne le remplace pas. Les `:` sont
     // remplaces pour que l identifiant reste decoupable sans ambiguite.
-    expect(traceActionEventId({ turnId: 'T', kind: 'command', actionId: 'a:b:c', ordinal: 7 })).toBe(
-      'T:action:a-b-c:command'
-    )
+    expect(
+      traceActionEventId({ turnId: 'T', kind: 'command', actionId: 'a:b:c', ordinal: 7 })
+    ).toBe('T:action:a-b-c:command')
   })
 
   it('reste STABLE pour un meme actionId, quel que soit l ordinal', () => {

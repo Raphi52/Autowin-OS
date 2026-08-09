@@ -25,6 +25,14 @@ function readChatContractSources(): Record<string, string> {
   }
 }
 
+function extractIpcHandler(source: string, channel: string): string {
+  const channelIndex = source.indexOf(`'${channel}'`)
+  if (channelIndex < 0) throw new Error(`IPC handler absent: ${channel}`)
+  const handlerStart = source.lastIndexOf('ipcMain.handle', channelIndex)
+  const nextHandler = source.indexOf('ipcMain.handle', channelIndex + channel.length + 2)
+  return source.slice(handlerStart, nextHandler < 0 ? undefined : nextHandler)
+}
+
 describe('renderer chat IPC contract', () => {
   it('keeps conversation lists lightweight and loads one history on demand', () => {
     const sources = readChatContractSources()
@@ -122,7 +130,7 @@ describe('renderer chat IPC contract', () => {
       main.indexOf('function drainPendingDirectives'),
       main.indexOf('const questionWindows')
     )
-    const handler = main.slice(main.indexOf("ipcMain.handle('os:pilotChat:inject'"))
+    const handler = extractIpcHandler(main, 'os:pilotChat:inject')
     const activeTurnGuard = handler.indexOf('if (!activeChatTurns.get(conversationId))')
     const pendingDirectiveWrite = handler.indexOf('pendingDirectives.set(conversationId, queued)')
     const turnCleanup = main.indexOf('activeChatTurns.delete(conversationId, controller)')
@@ -148,7 +156,7 @@ describe('renderer chat IPC contract', () => {
       main.indexOf('activeChatTurns.delete(conversationId, controller)'),
       main.indexOf('resolveCompletion()')
     )
-    const handler = main.slice(main.indexOf("ipcMain.handle('os:pilotChat:inject'"))
+    const handler = extractIpcHandler(main, 'os:pilotChat:inject')
 
     expect(drain).not.toContain('.resolve(')
     expect(turnCleanup).not.toContain('.resolve(')

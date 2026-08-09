@@ -23,6 +23,7 @@ import type { PendingModelQuestion } from '../main/model-questions'
 import type { ImportedModel } from '../main/models'
 import type { PromptCallRecord, CostBreakdownRow } from '../main/activity/prompt-observability'
 import type { ProviderDisplayStatus, ProviderStatus } from '../main/provider-status'
+import type { SemanticTemporalProjectionV1 } from '../main/knowledge/semantic-temporal-projection'
 import type { BehaviourComposition } from '../main/behaviour-composition'
 import type { BrainTrace } from '../main/activity/brain-trace-spool'
 import type { PreflightResult } from '../main/preflight'
@@ -34,7 +35,7 @@ import type { Role, RoleBinding } from '../main/roles'
 import type { WorkflowProfilesFile } from '../main/workflow-profiles'
 import type { WorkflowBenchReport } from '../main/workflow-bench'
 import type { AutowinProfile } from '../main/profile-store'
-import type { ShadowRouteRecommendation } from '../main/shadow-router'
+import type { ShadowRouteResult } from '../main/shadow-router'
 import type { PersistedCheckpoint, CheckpointForkManifest } from '../main/wire-checkpoint-fork'
 import type { OrchestrationRunState } from '../main/runs/orchestration-state'
 import type { CommandSpec, CommandResult, AppSnapshot } from '../main/commands'
@@ -129,6 +130,8 @@ interface ChatApi {
   applyUpdate: (strategy?: UpdateStrategy) => Promise<{
     ok: boolean
     relaunch?: boolean
+    reload?: boolean
+    effect?: 'none' | 'reload' | 'relaunch'
     npmInstalled?: boolean
     error?: string
     strategy?: UpdateStrategy
@@ -156,6 +159,7 @@ interface ChatApi {
   getWorktreeStatus: () => Promise<WorktreeRuntimeStatus>
   getWorktreeConflictDiff: (agentId: string) => Promise<WorktreeConflictDiffResult>
   retryWorktreeRecovery: (agentId: string) => Promise<WorktreeAgentActivity | undefined>
+  discardHeldWorktree: (agentId: string) => Promise<boolean>
   setWorktreeFixture: (fixture: {
     activity: WorktreeAgentActivity[]
     status: WorktreeRuntimeStatus
@@ -191,12 +195,15 @@ interface ChatApi {
   /** Confrontation : un même objectif joué sous plusieurs workflows, puis comparé. */
   workflowBenchRun: (
     objective: string,
-    profileIds: (string | null)[]
+    profileIds: (string | null)[],
+    options?: { mode?: 'comparison' | 'tournament' | 'counterfactual' }
   ) => Promise<WorkflowBenchReport>
+  workflowBenchCancel: () => Promise<boolean>
   onWorkflowBenchProgress: (
     listener: (p: { done: number; total: number; label: string }) => void
   ) => () => void
   roles: () => Promise<Record<Role, RoleBinding>>
+  semanticTimeline: (conversationId: string) => Promise<SemanticTemporalProjectionV1>
   setRole: (
     role: string,
     provider: string,
@@ -221,7 +228,7 @@ interface ChatApi {
   shadowRouteRecommendation: (
     phase: string,
     champion: { provider: string; model: string }
-  ) => Promise<ShadowRouteRecommendation>
+  ) => Promise<ShadowRouteResult>
   modelQuotas: (force?: boolean) => Promise<ModelQuotaSnapshot>
   profiles: () => Promise<AutowinProfile[]>
   saveProfile: (profile: unknown) => Promise<AutowinProfile[]>
@@ -239,7 +246,7 @@ interface ChatApi {
   setTopology: (topology: AgentTopology) => Promise<AgentTopology>
   capabilityControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins') => Promise<CapabilityItem[]>
   skills: () => Promise<SkillRegistryItem[]>
-  promptCalls: (conversationId?: string) => Promise<PromptCallRecord[]>
+  promptCalls: (conversationId: string) => Promise<PromptCallRecord[]>
   // fix-ok: golden test src/main/activity/cost-breakdown.test.ts asserts this file's source text
   // contains the literal 'cacheHitRatio' (see CostBreakdownRow) — keep the substring even after typing.
   costBreakdown: (
@@ -247,7 +254,7 @@ interface ChatApi {
     conversationId?: string
   ) => Promise<CostBreakdownRow[]>
   promptTraces: (conversationId: string) => Promise<NativePreflightTrace[]>
-  brainTraces: (conversationId?: string) => Promise<BrainTrace[]>
+  brainTraces: (conversationId: string) => Promise<BrainTrace[]>
   behaviourComposition: (workspace?: string) => Promise<
     BehaviourComposition & {
       inspection: { workspace: string; files: Array<BehaviourFile & { excerpt?: string }> }

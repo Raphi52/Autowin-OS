@@ -67,6 +67,16 @@ const WORKSPACE_BRAIN_CORPUS: Readonly<Record<string, readonly string[]>> = {
 
 let invalidOverrideWarningEmitted = false
 
+function isCanonicalCorpusSelector(selector: string): boolean {
+  const parts = selector.replace(/\/$/, '').split('/')
+  return (
+    selector.startsWith('knowledge/') &&
+    !selector.includes('\\') &&
+    !selector.includes('//') &&
+    parts.every((part) => part !== '' && part !== '.' && part !== '..')
+  )
+}
+
 function warnInvalidCorpusOverride(): void {
   if (invalidOverrideWarningEmitted) return
   invalidOverrideWarningEmitted = true
@@ -104,28 +114,35 @@ export function brainCorpusForWorkspace(
     // Le wildcard n'est valide que SEUL et chaque élément doit être explicite. Une virgule finale,
     // une liste vide ou `*,foo` est une erreur de configuration : elle coupe le Brain au lieu de
     // transformer une faute de frappe en accès global.
-    if (fragments.some((fragment) => !fragment || fragment === '*')) {
+    if (fragments.some((fragment) => !fragment || fragment === '*' || !isCanonicalCorpusSelector(fragment))) {
       warnInvalidCorpusOverride()
       return []
     }
     return fragments
   }
   if (!workspacePath) return []
-  const segments = workspacePath
-    .split(/[\\/]+/)
-    .map((segment) => workspaceSlug(segment))
-    .filter(Boolean)
-    .reverse()
-  for (const slug of segments) {
-    const corpus = WORKSPACE_BRAIN_CORPUS[slug]
-    if (corpus) return corpus
+  const segments = workspacePath.split(/[\\/]+/).filter(Boolean)
+  const direct = WORKSPACE_BRAIN_CORPUS[workspaceSlug(segments.at(-1) ?? '')]
+  if (direct) return direct
+
+  // Une copie agent vérifiée conserve l'identité du dépôt sous la forme
+  // `<workspace>/.autowin/agent__<id>`. Ne jamais remonter arbitrairement les parents : un dépôt
+  // client placé sous `.../autowin-os/` n'est pas pour autant le dépôt Autowin.
+  const leaf = segments.at(-1) ?? ''
+  const marker = segments.at(-2)?.toLowerCase()
+  if (/^agent__[a-z0-9._-]+$/i.test(leaf) && marker === '.autowin') {
+    return WORKSPACE_BRAIN_CORPUS[workspaceSlug(segments.at(-3) ?? '')] ?? []
   }
   return []
 }
 
 /** Ramène un chemin absolu/UNC ou relatif à son identité stable `knowledge/...`. */
 function normalizedKnowledgePath(value: string): string {
-  const normalized = value.trim().toLowerCase().replace(/\\/g, '/').replace(/\/{2,}/g, '/')
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/\\/g, '/')
+    .replace(/\/{2,}/g, '/')
   if (normalized.startsWith('knowledge/')) return normalized
   const marker = '/knowledge/'
   const markerIndex = normalized.indexOf(marker)
@@ -135,6 +152,7 @@ function normalizedKnowledgePath(value: string): string {
 
 /** Exact par défaut ; `/` ou `-` final déclare explicitement une famille de chemins. */
 function matchesCorpusSelector(path: string, selector: string): boolean {
+  if (!isCanonicalCorpusSelector(selector)) return false
   const normalizedPath = normalizedKnowledgePath(path)
   const normalizedSelector = normalizedKnowledgePath(selector)
   return normalizedSelector.endsWith('/') || normalizedSelector.endsWith('-')
@@ -143,13 +161,27 @@ function matchesCorpusSelector(path: string, selector: string): boolean {
 }
 
 /** Une source appartient-elle au corpus ? Comparaison ancrée, insensible à la casse. */
-function sourceAllowed(section: string, selectors: readonly string[]): boolean {
-  const header = SOURCE_HEADER.exec(section)
-  // Un fragment SANS en-tête reconnaissable est conservé : c'est le préambule (signature + consigne
-  // anti-injection), pas une source. Le jeter romprait le contrat de confiance du bloc.
-  if (!header) return true
-  const path = header[1].toLowerCase()
-  return selectors.some((selector) => matchesCorpusSelector(path, selector))
+/**
+ * Regroupe les séparateurs Markdown qui appartiennent au CORPS de la source précédente. Seul le
+ * texte avant le premier en-tête est un préambule de confiance ; un fragment sans en-tête situé
+ * après une source ne doit jamais redevenir un préambule autorisé indépendamment.
+ */
+function parseBrainBlock(block: string): { preamble: string[]; sources: string[] } {
+  const preamble: string[] = []
+  const sources: string[] = []
+  let currentSource: string[] | undefined
+  for (const part of block.split(SOURCE_SEPARATOR)) {
+    if (SOURCE_HEADER.test(part)) {
+      if (currentSource) sources.push(currentSource.join(SOURCE_SEPARATOR))
+      currentSource = [part]
+    } else if (currentSource) {
+      currentSource.push(part)
+    } else {
+      preamble.push(part)
+    }
+  }
+  if (currentSource) sources.push(currentSource.join(SOURCE_SEPARATOR))
+  return { preamble, sources }
 }
 
 /** Même règle que le filtrage du bloc, appliquée à un chemin de navigation observé. */
@@ -171,6 +203,19 @@ export interface BrainScopeResult {
   kept: number
 }
 
+/** Une attestation HMAC doit reprendre exactement la portée demandée, ordre compris. */
+export function brainCorpusAttestationMatches(
+  attested: readonly string[] | undefined,
+  requested: readonly string[] | undefined
+): boolean {
+  if (requested === undefined) return true
+  return (
+    attested !== undefined &&
+    attested.length === requested.length &&
+    attested.every((selector, index) => selector === requested[index])
+  )
+}
+
 /**
  * Restreint un bloc Brain aux sources du corpus. Rend le bloc intact seulement pour le wildcard
  * explicite (`undefined`) et vide pour un corpus fail-closed (`[]`).
@@ -183,34 +228,14 @@ export function scopeBrainBlock(
   fragments: readonly string[] | undefined
 ): BrainScopeResult {
   if (!block.trim()) return { block: '', dropped: 0, kept: 0 }
+  const parsed = parseBrainBlock(block)
   if (fragments === undefined) {
-    const total = block.split(SOURCE_SEPARATOR).filter((part) => SOURCE_HEADER.test(part)).length
-    return { block, dropped: 0, kept: total }
+    return { block, dropped: 0, kept: parsed.sources.length }
   }
-  if (fragments.length === 0) {
-    const total = block.split(SOURCE_SEPARATOR).filter((part) => SOURCE_HEADER.test(part)).length
-    return { block: '', dropped: total, kept: 0 }
-  }
-  const parts = block.split(SOURCE_SEPARATOR)
-  const kept: string[] = []
-  let dropped = 0
-  let keptSources = 0
-  for (const part of parts) {
-    const isSource = SOURCE_HEADER.test(part)
-    if (!isSource) {
-      kept.push(part)
-      continue
-    }
-    if (sourceAllowed(part, fragments)) {
-      kept.push(part)
-      keptSources += 1
-    } else {
-      dropped += 1
-    }
-  }
-  // Aucune source retenue → rien a injecter (le preambule seul ne porte aucune connaissance).
-  if (keptSources === 0) return { block: '', dropped, kept: 0 }
-  return { block: kept.join(SOURCE_SEPARATOR), dropped, kept: keptSources }
+  // Un contexte texte ne porte PAS de frontières sûres : une note peut contenir exactement le même
+  // séparateur et un faux `### Source`. Sans structure signée, filtrer serait deviner. Compatibilité
+  // fail-closed : le wildcard explicite reste intact, toute portée sélective exige `structuredContext`.
+  return { block: '', dropped: parsed.sources.length, kept: 0 }
 }
 
 /** Projette ensemble contexte, statut et navigation après application de la portée workspace. */
@@ -218,16 +243,34 @@ export function scopeBrainRetrieval(
   result: BrainRetrievalResult,
   fragments: readonly string[] | undefined
 ): BrainRetrievalResult {
-  const scoped = scopeBrainBlock(result.context, fragments)
-  const status = result.status === 'found' && !scoped.block ? 'empty' : result.status
+  if (fragments === undefined) return result
+  const attested = brainCorpusAttestationMatches(result.corpus, fragments)
+  const structured = attested ? result.structuredContext : undefined
+  const sources = structured
+    ? structured.sources.filter((source) => brainSourcePathAllowed(source.path, fragments))
+    : []
+  const context =
+    sources.length > 0
+      ? (structured?.preamble ?? '') + sources.map((source) => source.content).join(SOURCE_SEPARATOR)
+      : ''
+  const status = result.status === 'found' && !context ? 'empty' : result.status
   const navigation = result.navigation
     ? {
         ...result.navigation,
         candidates: result.navigation.candidates.map((candidate) => ({
           ...candidate,
-          retained: candidate.retained && brainSourcePathAllowed(candidate.path, fragments)
+          retained:
+            attested && candidate.retained && brainSourcePathAllowed(candidate.path, fragments)
         }))
       }
     : undefined
-  return { context: scoped.block, status, navigation }
+  return {
+    ...result,
+    context,
+    status,
+    navigation,
+    ...(structured
+      ? { structuredContext: { preamble: structured.preamble, sources } }
+      : { structuredContext: undefined })
+  }
 }

@@ -80,7 +80,41 @@ describe('parseGitWorktrees', () => {
         path: 'C:/repo-proof',
         head: 'bbbbbbbb',
         detached: true,
-        locked: true
+        locked: true,
+        lockedReason: 'preuve'
+      }
+    ])
+  })
+
+  it('parse le format NUL sans tronquer les chemins et conserve les raisons Git', () => {
+    const input = [
+      'worktree C:/repo avec\nun saut',
+      'HEAD aaaaaaaa',
+      'detached',
+      'locked volume externe',
+      '',
+      'worktree C:/repo-orphan',
+      'HEAD bbbbbbbb',
+      'detached',
+      'prunable gitdir file points to non-existent location',
+      '',
+      ''
+    ].join('\0')
+
+    expect(parseGitWorktrees(input)).toEqual([
+      {
+        path: 'C:/repo avec\nun saut',
+        head: 'aaaaaaaa',
+        detached: true,
+        locked: true,
+        lockedReason: 'volume externe'
+      },
+      {
+        path: 'C:/repo-orphan',
+        head: 'bbbbbbbb',
+        detached: true,
+        locked: false,
+        prunableReason: 'gitdir file points to non-existent location'
       }
     ])
   })

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { WorkflowCanvas, type CanvasGraph, type Phase } from './WorkflowCanvas'
 
 /**
@@ -62,8 +62,7 @@ export function WorkflowGraphEditor({
     void (async () => {
       try {
         const bruts = (await window.api.models?.()) as
-          | { provider?: string; id?: string }[]
-          | undefined
+          { provider?: string; id?: string }[] | undefined
         setModels(
           (bruts ?? [])
             .filter((m): m is { provider: string; id: string } => !!m?.id)
@@ -76,22 +75,25 @@ export function WorkflowGraphEditor({
     })()
   }, [])
 
-  const verifier = useCallback(async (candidat: CanvasGraph) => {
-    try {
-      const resultat = (await window.api.checkWorkflowGraph?.(candidat)) as Verdict | undefined
-      if (resultat) setVerdict(resultat)
-    } catch {
-      // Une vérification injoignable ne doit pas bloquer la composition ; elle bloque l'enregistrement.
-      setVerdict({
-        defects: [{ message: 'Vérification indisponible.' }],
-        worstCaseNodeExecutions: null
-      })
-    }
-  }, [])
-
   useEffect(() => {
-    void verifier(graph)
-  }, [graph, verifier])
+    let cancelled = false
+    void Promise.resolve()
+      .then(() => window.api.checkWorkflowGraph?.(graph))
+      .then((resultat) => {
+        if (!cancelled && resultat) setVerdict(resultat as Verdict)
+      })
+      .catch(() => {
+        if (cancelled) return
+        // Une vérification injoignable bloque l'enregistrement sans écraser un graphe plus récent.
+        setVerdict({
+          defects: [{ message: 'Vérification indisponible.' }],
+          worstCaseNodeExecutions: null
+        })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [graph])
 
   const modifier = (suivant: CanvasGraph): void => {
     setGraph(suivant)

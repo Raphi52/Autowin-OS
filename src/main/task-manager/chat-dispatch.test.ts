@@ -154,3 +154,194 @@ describe('Task Manager — dispatch par le vrai Chat', () => {
     })
   })
 })
+
+describe('Task Manager — dispatch d’un réveil événementiel', () => {
+  const watchdogOccurrence: TaskOccurrence = {
+    id: 'task-1@watchdog-1785742200000-abc',
+    taskId: 'task-1',
+    scheduledFor: 1785742200000,
+    mode: 'active-only',
+    status: 'claimed',
+    claimedAt: 1,
+    trigger: 'watchdog',
+    watchdog: {
+      signature: 'error connexion perdue',
+      rootSignature: 'error connexion perdue',
+      context:
+        'Source : fichier surveillé C:/logs/app.log\nLigne déclenchante : ERROR connexion perdue',
+      depth: 0,
+      source: 'file-match',
+      observedAt: 1785742200000
+    }
+  }
+
+  it('remet le CONTEXTE de l’événement à l’agent, en plus du prompt de la tâche', async () => {
+    // Sans le contexte, l’agent est réveillé par « il s’est passé quelque chose » et devine.
+    const chat = runtime()
+    await new ScheduledChatDispatcher(chat).run(task(), watchdogOccurrence)
+
+    const sentPrompt = vi.mocked(chat.runPrompt).mock.calls[0][1]
+    expect(sentPrompt).toContain('Prépare le rapport.')
+    expect(sentPrompt).toContain('ERROR connexion perdue')
+    expect(sentPrompt).toContain('C:/logs/app.log')
+    expect(sentPrompt).toContain('ISSUE: benign | report | investigate | repair')
+  })
+
+  it('une tâche HORAIRE garde exactement son prompt — le chemin planifié est intact', async () => {
+    const chat = runtime()
+    await new ScheduledChatDispatcher(chat).run(task(), occurrence)
+
+    expect(vi.mocked(chat.runPrompt).mock.calls[0][1]).toBe('Prépare le rapport.')
+  })
+
+  it('DoD : le tri rendu par l’agent redescend dans le résultat', async () => {
+    const chat = runtime({
+      runPrompt: vi.fn(async () => ({
+        ok: true,
+        turnId: 'turn-1',
+        text: 'Rien de grave, le service a repris seul.\n\nISSUE: benign'
+      }))
+    })
+
+    const result = await new ScheduledChatDispatcher(chat).run(task(), watchdogOccurrence)
+
+    expect(result.outcome).toBe('benign')
+  })
+
+  it('ne propage jamais les mutations revendiquees par un tour rouge ou annule', async () => {
+    const claims = {
+      'C:/logs/app.log': ['fingerprint-fantome']
+    }
+    const failed = runtime({
+      runPrompt: vi.fn(async () => ({
+        ok: false,
+        turnId: 'failed-turn',
+        mutatedPaths: ['C:/logs/app.log'],
+        mutatedLineFingerprints: claims
+      }))
+    })
+    const cancelled = runtime({
+      runPrompt: vi.fn(async () => ({
+        ok: false,
+        cancelled: true,
+        turnId: 'cancelled-turn',
+        mutatedPaths: ['C:/logs/app.log'],
+        mutatedLineFingerprints: claims
+      }))
+    })
+
+    const failedResult = await new ScheduledChatDispatcher(failed).run(task(), watchdogOccurrence)
+    const cancelledResult = await new ScheduledChatDispatcher(cancelled).run(
+      task(),
+      watchdogOccurrence
+    )
+
+    expect(failedResult).not.toHaveProperty('mutatedLineFingerprints')
+    expect(cancelledResult).not.toHaveProperty('mutatedLineFingerprints')
+  })
+
+  it('n’INVENTE pas de tri quand l’agent n’a pas conclu', async () => {
+    const chat = runtime({
+      runPrompt: vi.fn(async () => ({ ok: true, turnId: 'turn-1', text: 'J’ai regardé.' }))
+    })
+
+    const result = await new ScheduledChatDispatcher(chat).run(task(), watchdogOccurrence)
+
+    expect(result.outcome).toBeUndefined()
+  })
+
+  it('ne pose aucun tri sur une occurrence horaire, même si le texte en contient un', async () => {
+    const chat = runtime({
+      runPrompt: vi.fn(async () => ({ ok: true, turnId: 'turn-1', text: 'ISSUE: repair' }))
+    })
+
+    const result = await new ScheduledChatDispatcher(chat).run(task(), occurrence)
+
+    expect(result).not.toHaveProperty('outcome')
+  })
+})
+
+describe('Task Manager — une règle qui ORCHESTRE au lieu de discuter', () => {
+  const orchestrating = (): ScheduledTask =>
+    task({
+      schedule: undefined,
+      watchdog: {
+        source: { kind: 'app-event', events: ['orchestration-red'] },
+        guards: { dedupWindowMs: 0, maxTriggersPerHour: 10, maxChainDepth: 0, maxPerRoot: 20 },
+        action: 'orchestration'
+      }
+    })
+
+  const watchdogOccurrence: TaskOccurrence = {
+    id: 'task-1@watchdog-1',
+    taskId: 'task-1',
+    scheduledFor: 1785742200000,
+    mode: 'active-only',
+    status: 'claimed',
+    claimedAt: 1,
+    trigger: 'watchdog',
+    watchdog: {
+      signature: 'orchestration-red',
+      rootSignature: 'orchestration-red',
+      context: 'Une orchestration s’est terminée en ROUGE.',
+      depth: 0,
+      source: 'app-event',
+      observedAt: 1785742200000
+    }
+  }
+
+  it('passe par le PIPELINE, pas par un simple tour de conversation', () => {
+    const chat = runtime({ runOrchestration: vi.fn(async () => ({ ok: true, turnId: 't' })) })
+
+    return new ScheduledChatDispatcher(chat).run(orchestrating(), watchdogOccurrence).then(() => {
+      expect(chat.runOrchestration).toHaveBeenCalledOnce()
+      expect(chat.runPrompt).not.toHaveBeenCalled()
+      // Le contexte de l'événement part AUSSI dans l'orchestration.
+      expect(vi.mocked(chat.runOrchestration!).mock.calls[0][1]).toContain('ROUGE')
+    })
+  })
+
+  it('lit le tri rendu par le pipeline comme celui d’un chat', async () => {
+    const chat = runtime({
+      runOrchestration: vi.fn(async () => ({ ok: true, turnId: 't', text: 'ISSUE: repair' }))
+    })
+
+    const result = await new ScheduledChatDispatcher(chat).run(orchestrating(), watchdogOccurrence)
+
+    expect(result.outcome).toBe('repair')
+  })
+
+  it('retombe sur le chat si le runtime ne sait pas orchestrer, au lieu d’échouer', async () => {
+    // Dégradé ANNONCÉ : mieux vaut un tour de conversation qu'un réveil mort.
+    const chat = runtime()
+
+    const result = await new ScheduledChatDispatcher(chat).run(orchestrating(), watchdogOccurrence)
+
+    expect(result.status).toBe('completed')
+    expect(chat.runPrompt).toHaveBeenCalledOnce()
+  })
+
+  it('une règle en action chat n’orchestre JAMAIS', async () => {
+    const chat = runtime({ runOrchestration: vi.fn(async () => ({ ok: true })) })
+    const chatRule = orchestrating()
+    chatRule.watchdog!.action = 'chat'
+
+    await new ScheduledChatDispatcher(chat).run(chatRule, watchdogOccurrence)
+
+    expect(chat.runOrchestration).not.toHaveBeenCalled()
+    expect(chat.runPrompt).toHaveBeenCalledOnce()
+  })
+
+  it('propage le canal causal tardif au runtime orchestration', async () => {
+    const chat = runtime({ runOrchestration: vi.fn(async () => ({ ok: true, turnId: 't' })) })
+    const onLateMutationClaims = vi.fn()
+
+    await new ScheduledChatDispatcher(chat).run(
+      orchestrating(),
+      watchdogOccurrence,
+      onLateMutationClaims
+    )
+
+    expect(vi.mocked(chat.runOrchestration!).mock.calls[0][3]).toBe(onLateMutationClaims)
+  })
+})

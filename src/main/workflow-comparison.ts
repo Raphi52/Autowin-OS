@@ -22,6 +22,12 @@ export interface WorkflowRunOutcome {
   durationMs?: number
   /** Appels dont le prix n'a pas pu être établi — rend le coût partiel. */
   unpricedCalls?: number
+  proofStatus?: 'passed' | 'failed' | 'unknown'
+  checksPassed?: number
+  checksFailed?: number
+  proofs?: Array<{ command?: string; summary: string; ok: boolean; exitCode?: number }>
+  retainedWorkspace?: { runId: string; path: string; baseSha?: string; files: string[] }
+  nonMeasuredReason?: string
 }
 
 export interface WorkflowComparisonRow extends WorkflowRunOutcome {
@@ -48,6 +54,7 @@ function comparableCost(outcome: WorkflowRunOutcome): number | null {
 }
 
 function caveatFor(outcome: WorkflowRunOutcome, cost: number | null): string | undefined {
+  if (outcome.nonMeasuredReason) return `non mesuré — ${outcome.nonMeasuredReason}`
   if (!outcome.green) return 'run non vert — ne compte pas comme un résultat'
   if (cost === null && (outcome.unpricedCalls ?? 0) > 0) {
     return `coût partiel — ${outcome.unpricedCalls} appel(s) non tarifé(s)`
@@ -84,7 +91,8 @@ export function compareWorkflowRuns(outcomes: readonly WorkflowRunOutcome[]): Wo
     (row.comparableCostUsd as number) < (best.comparableCostUsd as number) ? row : best
   )
   const ecartes = verts.length - chiffrables.length
-  const reserve = ecartes > 0 ? ` ${ecartes} workflow(s) vert(s) écarté(s) faute de coût comparable.` : ''
+  const reserve =
+    ecartes > 0 ? ` ${ecartes} workflow(s) vert(s) écarté(s) faute de coût comparable.` : ''
   return {
     rows,
     recommendedProfileId: meilleur.profileId,

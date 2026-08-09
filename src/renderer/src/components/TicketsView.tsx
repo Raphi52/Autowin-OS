@@ -453,7 +453,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
    * Le perimetre est exactement ce que l'utilisateur voit (les filtres actifs sont le garde-fou).
    * A l'activation, l'existant est AMORCE (marque vu, non traite) : cocher la case ne declenche
    * jamais un run par ticket deja affiche. Chaque cycle est borne (AUTO_MODE_CAP_PER_CYCLE) et les
-   * tickets retenus sont marques AVANT traitement, pour qu'un echec ne les rejoue pas.
+   * tickets ne sont marques vus qu APRES succes ; un echec reste donc eligible au prochain cycle.
    */
   const [autoMode, setAutoMode] = useState(
     () => localStorage.getItem('autowin:tickets-auto-mode') === '1'
@@ -479,9 +479,6 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     if (!autoMode || autoBusyRef.current) return
     let selection = pickIncomingTickets(visibleItemsRef.current, seenRef.current)
     if (!selection.toTreat.length) return
-    // Marquage AVANT traitement (garde-fou 2) : un echec ne doit pas relancer le meme ticket.
-    for (const key of selection.seenAdditions) seenRef.current.add(key)
-    saveSeen(localStorage, seenRef.current)
     autoBusyRef.current = true
     setAutoStatus(
       `traitement de ${selection.toTreat.length} entrant(s)${
@@ -503,6 +500,16 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       setAutoStatus('en veille · aucun rôle configuré')
       return
     }
+    if (typeof window.api.providerStatus === 'function') {
+      const statuses = await window.api.providerStatus().catch(() => [])
+      const providerState = statuses.find((entry) => entry.provider === provider)?.status
+      if (providerState && ['absent', 'expired', 'standby'].includes(providerState)) {
+        autoBusyRef.current = false
+        setAutoStatus(`en veille · provider ${provider} indisponible (${providerState})`)
+        return
+      }
+    }
+    const attemptedThisCycle = new Set<string>()
     let succeeded = 0
     let failed = 0
     let total = 0
@@ -525,16 +532,24 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
           } catch {
             return { ok: false }
           }
+        },
+        onItemSettled: (item, ok) => {
+          const key = `${item.sourceId}::${item.id}`
+          attemptedThisCycle.add(key)
+          if (!ok) return
+          seenRef.current.add(key)
+          saveSeen(localStorage, seenRef.current)
         }
       })
       succeeded += result.succeeded
       failed += result.failed
       total += result.total
       if (!selection.deferred || !autoBusyRef.current || !autoModeEnabledRef.current) break
-      selection = pickIncomingTickets(visibleItemsRef.current, seenRef.current)
+      selection = pickIncomingTickets(
+        visibleItemsRef.current,
+        new Set([...seenRef.current, ...attemptedThisCycle])
+      )
       if (!selection.toTreat.length) break
-      for (const key of selection.seenAdditions) seenRef.current.add(key)
-      saveSeen(localStorage, seenRef.current)
     }
     autoBusyRef.current = false
     setAutoStatus(

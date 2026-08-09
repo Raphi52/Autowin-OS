@@ -156,6 +156,7 @@ export function SourceControlPane({
   }, [conversationId])
 
   const [autoClose, setAutoClose] = useState<{ enabled: boolean; last?: unknown } | null>(null)
+  const [autoCloseError, setAutoCloseError] = useState<string>()
   useEffect(() => {
     let alive = true
     void window.api.getAutoClose?.().then((state) => {
@@ -167,13 +168,17 @@ export function SourceControlPane({
   }, [])
 
   const toggleAutoClose = async (): Promise<void> => {
-    const next = !(autoClose?.enabled ?? false)
+    // fix-ok: l'état optimiste est rétabli et expliqué si le main process ne peut pas le persister.
+    const previous = autoClose?.enabled ?? false
+    const next = !previous
+    setAutoCloseError(undefined)
     setAutoClose({ enabled: next })
     try {
       const applied = await window.api.setAutoClose(next)
       setAutoClose(applied as { enabled: boolean })
     } catch {
-      setAutoClose({ enabled: !next })
+      setAutoClose({ enabled: previous })
+      setAutoCloseError('Impossible de conserver ce réglage sur le disque.')
     }
   }
 
@@ -196,9 +201,16 @@ export function SourceControlPane({
       view === 'project' && conversationId && change.workspaceRoot
         ? window.api.conversationGitDiff(conversationId, change.path, change.workspaceRoot)
         : window.api.getGitDiff(change.path, repoPath || undefined)
-    void request.then((value) => {
-      if (diffRequestRef.current === requestId) setDiff(value as GitDiffResult)
-    })
+    void request
+      .then((value) => {
+        if (diffRequestRef.current === requestId) setDiff(value as GitDiffResult)
+      })
+      .catch(() => {
+        // fix-ok: une erreur obsolète ne doit ni bloquer le chargement ni écraser un diff plus récent.
+        if (diffRequestRef.current === requestId) {
+          setDiff({ available: false, error: 'Diff indisponible.' })
+        }
+      })
   }
 
   const scopeLoaded = loadedScope === scope
@@ -219,11 +231,22 @@ export function SourceControlPane({
     const requestId = ++conflictRequestRef.current
     setConflictAgentId(agentId)
     setConflictDiff(null)
-    void window.api.getWorktreeConflictDiff?.(agentId).then((result) => {
-      if (conflictRequestRef.current === requestId) {
-        setConflictDiff(result as WorktreeConflictDiffResult)
-      }
-    })
+    const request = window.api.getWorktreeConflictDiff?.(agentId)
+    if (!request) {
+      setConflictDiff({ available: false, reason: 'read-failed' })
+      return
+    }
+    void request
+      .then((result) => {
+        if (conflictRequestRef.current === requestId) {
+          setConflictDiff(result as WorktreeConflictDiffResult)
+        }
+      })
+      .catch(() => {
+        if (conflictRequestRef.current === requestId) {
+          setConflictDiff({ available: false, reason: 'read-failed' })
+        }
+      })
   }
 
   return (
@@ -445,6 +468,11 @@ export function SourceControlPane({
                 Push
               </button>
             </div>
+            {autoCloseError && (
+              <div className="sc-clean" data-testid="sc-autoclose-error" role="alert">
+                {autoCloseError}
+              </div>
+            )}
           </section>
         )}
 

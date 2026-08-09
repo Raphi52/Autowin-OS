@@ -11,7 +11,7 @@
 //   - chaque binding atomique = provider + model + effort.
 // Aucun axe « métier / persona ».
 
-import type { ReasoningEffort } from './roles'
+import { isReasoningEffort, type ReasoningEffort } from './roles'
 import { defaultModelForProvider, findModel, type ImportedModel } from './models'
 import { parseComputeBinding, type ComputeBinding } from '../shared/compute-fabric'
 
@@ -89,17 +89,6 @@ export function assertBinding(binding: SlotBinding, models: ImportedModel[]): Sl
   return binding
 }
 
-const REASONING_EFFORTS = new Set<ReasoningEffort>([
-  'none',
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-  'ultra'
-])
-
 function assertBindingShape(value: unknown): asserts value is SlotBinding {
   if (!value || typeof value !== 'object') throw new Error('Binding de slot invalide')
   const binding = value as Partial<SlotBinding>
@@ -112,7 +101,7 @@ function assertBindingShape(value: unknown): asserts value is SlotBinding {
   if (typeof binding.modelId !== 'string' || !binding.modelId.trim()) {
     throw new Error(`Modèle absent pour ${binding.slotId}`)
   }
-  if (!binding.reasoningEffort || !REASONING_EFFORTS.has(binding.reasoningEffort)) {
+  if (!isReasoningEffort(binding.reasoningEffort)) {
     throw new Error(`Effort invalide pour ${binding.slotId}`)
   }
   if (binding.compute) {

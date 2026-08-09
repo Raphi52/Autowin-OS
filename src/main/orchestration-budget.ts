@@ -1,6 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
 import type { CircuitBreakerLimits } from './cost-circuit-breaker'
+import { readDurableJson, writeDurableJson } from './durable-json'
 
 export interface OrchestrationBudgetSettings {
   /** Maximum cumulative orchestration cost in USD. `null` deliberately disables the cost cap. */
@@ -39,33 +38,56 @@ export function normalizeOrchestrationBudget(value: unknown): OrchestrationBudge
   }
 }
 
-export function loadOrchestrationBudget(path: string): OrchestrationBudgetSettings {
-  if (!existsSync(path)) return { ...DEFAULT_ORCHESTRATION_BUDGET }
-  try {
-    return normalizeOrchestrationBudget(JSON.parse(readFileSync(path, 'utf8')))
-  } catch {
-    return { ...DEFAULT_ORCHESTRATION_BUDGET }
+function decodeOrchestrationBudgetInput(value: unknown): OrchestrationBudgetSettings | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const proposed = value as Partial<OrchestrationBudgetSettings>
+  if (proposed.maxUsd !== undefined && proposed.maxUsd !== null && !isValidCap(proposed.maxUsd)) {
+    return undefined
+  }
+  if (proposed.maxProviderCalls !== undefined && !isValidIntegerCap(proposed.maxProviderCalls)) {
+    return undefined
+  }
+  if (proposed.maxTotalTokens !== undefined && !isValidIntegerCap(proposed.maxTotalTokens)) {
+    return undefined
+  }
+  return normalizeOrchestrationBudget(value)
+}
+
+function decodeStoredOrchestrationBudget(value: unknown): OrchestrationBudgetSettings | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const proposed = value as Partial<OrchestrationBudgetSettings>
+  if (
+    !Object.prototype.hasOwnProperty.call(proposed, 'maxUsd') ||
+    !Object.prototype.hasOwnProperty.call(proposed, 'maxProviderCalls') ||
+    !Object.prototype.hasOwnProperty.call(proposed, 'maxTotalTokens')
+  ) {
+    return undefined
+  }
+  if (proposed.maxUsd !== null && !isValidCap(proposed.maxUsd)) return undefined
+  if (!isValidIntegerCap(proposed.maxProviderCalls)) return undefined
+  if (!isValidIntegerCap(proposed.maxTotalTokens)) return undefined
+  return {
+    maxUsd: proposed.maxUsd,
+    maxProviderCalls: proposed.maxProviderCalls,
+    maxTotalTokens: proposed.maxTotalTokens
   }
 }
 
+export function loadOrchestrationBudget(path: string): OrchestrationBudgetSettings {
+  return (
+    readDurableJson(path, decodeStoredOrchestrationBudget) ?? {
+      ...DEFAULT_ORCHESTRATION_BUDGET
+    }
+  )
+}
+
 export function saveOrchestrationBudget(path: string, value: unknown): OrchestrationBudgetSettings {
-  const settings = normalizeOrchestrationBudget(value)
-  if (
-    value !== null &&
-    (!value ||
-      typeof value !== 'object' ||
-      ((value as Partial<OrchestrationBudgetSettings>).maxUsd !== null &&
-        (value as Partial<OrchestrationBudgetSettings>).maxUsd !== undefined &&
-        !isValidCap((value as Partial<OrchestrationBudgetSettings>).maxUsd)) ||
-      ((value as Partial<OrchestrationBudgetSettings>).maxProviderCalls !== undefined &&
-        !isValidIntegerCap((value as Partial<OrchestrationBudgetSettings>).maxProviderCalls)) ||
-      ((value as Partial<OrchestrationBudgetSettings>).maxTotalTokens !== undefined &&
-        !isValidIntegerCap((value as Partial<OrchestrationBudgetSettings>).maxTotalTokens)))
-  ) {
+  const settings =
+    value === null ? { ...DEFAULT_ORCHESTRATION_BUDGET } : decodeOrchestrationBudgetInput(value)
+  if (!settings) {
     throw new Error('Les plafonds doivent etre des nombres finis strictement positifs, ou absents.')
   }
-  mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, JSON.stringify(settings, null, 2), 'utf8')
+  writeDurableJson(path, settings, decodeStoredOrchestrationBudget)
   return settings
 }
 

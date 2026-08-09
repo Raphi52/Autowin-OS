@@ -57,6 +57,8 @@ export interface SendOptions {
     sandbox: 'read-only' | 'workspace-write' | 'danger-full-access'
     /** Vrai uniquement quand ce cwd appartient exclusivement à ce run/conversation. */
     causallyIsolated?: boolean
+    /** Fichiers surveillés présents dans la copie isolée, à attribuer exactement. */
+    causalWatchPaths?: string[]
     /** Lease interne du processus CLI ; jamais transmis au fournisseur. */
     onProcess?: (pid: number, active: boolean) => void
     /** Barrière durable posée avant spawn, levée seulement après enregistrement du PID enfant. */
@@ -154,6 +156,10 @@ export interface ExecutionEvidence {
   path?: string
   /** Chemins structurés exacts, utilisés pour l'attribution causale par conversation. */
   paths?: string[]
+  /** Empreintes exactes rapportées par l'outil, bornées ; aucun contenu de fichier n'est transporté. */
+  writtenLineFingerprints?: string[]
+  /** Empreintes exactes par chemin quand une preuve couvre plusieurs fichiers. */
+  writtenLineFingerprintsByPath?: Record<string, string[]>
   /** Workspace où la mutation a réellement eu lieu (base ou worktree isolé). */
   workspaceRoot?: string
   /** Empreinte du diff Git juste après la mutation, indexée par chemin normalisé. */

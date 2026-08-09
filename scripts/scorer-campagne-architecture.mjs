@@ -13,13 +13,15 @@
 //   · le score d'une architecture n'est affiché qu'avec son ÉTENDUE entre tirages. Une moyenne seule
 //     laisserait croire à une précision qu'un petit nombre de tirages n'a pas.
 
-import { readFileSync, existsSync, readdirSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 const CAMPAGNE = process.argv[2]
 const REPONSES = process.argv[3]
 if (!CAMPAGNE || !existsSync(CAMPAGNE) || !REPONSES || !existsSync(REPONSES)) {
-  console.log('usage : node scripts/scorer-campagne-architecture.mjs "<campagne>" "<reponses.json>"')
+  console.log(
+    'usage : node scripts/scorer-campagne-architecture.mjs "<campagne>" "<reponses.json>"'
+  )
   process.exit(2)
 }
 

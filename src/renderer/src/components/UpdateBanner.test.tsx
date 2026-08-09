@@ -37,6 +37,171 @@ async function render(collapsed = false): Promise<void> {
   })
 }
 
+describe('rejets IPC de mise a jour', () => {
+  it('dit un rejet de applyUpdate et permet de reessayer', async () => {
+    api({ applyUpdate: vi.fn().mockRejectedValue(new Error('bridge coupe')) })
+    await render()
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!.click()
+    )
+
+    expect(container.querySelector('[data-testid="update-error"]')?.textContent).toContain(
+      'bridge coupe'
+    )
+    expect(
+      container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!.disabled
+    ).toBe(false)
+  })
+
+  it('rend un rejet de checkUpdate visible et relancable', async () => {
+    const checkUpdate = vi.fn().mockRejectedValue(new Error('origin inaccessible'))
+    api({ checkUpdate })
+    await render()
+
+    expect(container.querySelector('[data-testid="update-error"]')?.textContent).toContain(
+      'origin inaccessible'
+    )
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="update-retry"]')!.click()
+    )
+    expect(checkUpdate).toHaveBeenCalledTimes(2)
+  })
+
+  it('rend un echec resolu par le main visible et relancable', async () => {
+    const checkUpdate = vi.fn().mockResolvedValue({
+      available: false,
+      behind: 0,
+      error: 'fetch refuse'
+    })
+    api({ checkUpdate })
+    await render()
+
+    expect(container.querySelector('[data-testid="update-error"]')?.textContent).toContain(
+      'fetch refuse'
+    )
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="update-retry"]')!.click()
+    )
+    expect(checkUpdate).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignore une reponse obsolete quand deux checks se terminent dans le desordre', async () => {
+    let resolveFirst: (value: { available: boolean; behind: number }) => void = () => undefined
+    let resolveSecond: (value: { available: boolean; behind: number }) => void = () => undefined
+    const checkUpdate = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ available: boolean; behind: number }>((resolve) => {
+            resolveFirst = resolve
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ available: boolean; behind: number }>((resolve) => {
+            resolveSecond = resolve
+          })
+      )
+    api({ checkUpdate })
+    await act(async () => root.render(createElement(UpdateBanner, {})))
+    await act(async () => window.dispatchEvent(new Event('focus')))
+
+    await act(async () => resolveSecond({ available: true, behind: 2 }))
+    expect(container.querySelector('[data-testid="update-apply"]')?.textContent).toContain('2')
+    await act(async () => resolveFirst({ available: true, behind: 1 }))
+
+    expect(container.querySelector('[data-testid="update-apply"]')?.textContent).toContain('2')
+  })
+
+  it('refait le check apres son rejet meme si une ancienne mise a jour reste connue', async () => {
+    const checkUpdate = vi
+      .fn()
+      .mockResolvedValueOnce({ available: true, behind: 5, branch: 'main' })
+      .mockRejectedValueOnce(new Error('origin temporairement inaccessible'))
+      .mockResolvedValueOnce({ available: true, behind: 6, branch: 'main' })
+    const applyUpdate = vi.fn().mockResolvedValue({ ok: true })
+    api({ checkUpdate, applyUpdate })
+    await render()
+
+    await act(async () => window.dispatchEvent(new Event('focus')))
+    expect(container.querySelector('[data-testid="update-retry"]')).not.toBeNull()
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="update-retry"]')!.click()
+    )
+
+    expect(checkUpdate).toHaveBeenCalledTimes(3)
+    expect(applyUpdate).not.toHaveBeenCalled()
+    expect(container.querySelector('[data-testid="update-apply"]')?.textContent).toContain('6')
+  })
+
+  it("ne masque pas un rejet d'application quand un check deja en vol reussit ensuite", async () => {
+    let resolveCheck: (value: {
+      available: boolean
+      behind: number
+      branch: string
+    }) => void = () => undefined
+    const checkUpdate = vi
+      .fn()
+      .mockResolvedValueOnce({ available: true, behind: 5, branch: 'main' })
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ available: boolean; behind: number; branch: string }>((resolve) => {
+            resolveCheck = resolve
+          })
+      )
+    api({ checkUpdate, applyUpdate: vi.fn().mockRejectedValue(new Error('pull refuse')) })
+    await render()
+
+    act(() => window.dispatchEvent(new Event('focus')))
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!.click()
+    )
+    expect(container.querySelector('[data-testid="update-error"]')?.textContent).toContain(
+      'pull refuse'
+    )
+
+    await act(async () => resolveCheck({ available: true, behind: 6, branch: 'main' }))
+    expect(container.querySelector('[data-testid="update-error"]')?.textContent).toContain(
+      'pull refuse'
+    )
+  })
+
+  it("ne retire pas l'erreur d'application si un check en vol annonce aucune mise a jour", async () => {
+    let resolveCheck: (value: { available: boolean; behind: number }) => void = () => undefined
+    let rejectApply: (reason: Error) => void = () => undefined
+    const checkUpdate = vi
+      .fn()
+      .mockResolvedValueOnce({ available: true, behind: 5, branch: 'main' })
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ available: boolean; behind: number }>((resolve) => {
+            resolveCheck = resolve
+          })
+      )
+    const applyUpdate = vi.fn(
+      () =>
+        new Promise<never>((_resolve, reject) => {
+          rejectApply = reject
+        })
+    )
+    api({ checkUpdate, applyUpdate })
+    await render()
+
+    act(() => window.dispatchEvent(new Event('focus')))
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!.click()
+    )
+    await act(async () => resolveCheck({ available: false, behind: 0 }))
+    await act(async () => rejectApply(new Error('pull refuse')))
+
+    expect(container.querySelector('[data-testid="update-error"]')?.textContent).toContain(
+      'pull refuse'
+    )
+    expect(container.querySelector('[data-testid="update-apply"]')).not.toBeNull()
+  })
+})
+
 describe('mise à jour disponible — un bouton, pas une bannière', () => {
   it('n’affiche RIEN quand l’app est à jour', async () => {
     api({ checkUpdate: vi.fn().mockResolvedValue({ available: false, behind: 0 }) })
@@ -75,6 +240,30 @@ describe('mise à jour disponible — un bouton, pas une bannière', () => {
     await act(async () => resolveApply({ ok: true }))
   })
 
+  it('libere le bouton et revalide apres un succes sans effet', async () => {
+    const checkUpdate = vi
+      .fn()
+      .mockResolvedValueOnce({ available: true, behind: 1, branch: 'main' })
+      .mockResolvedValueOnce({ available: true, behind: 2, branch: 'main' })
+    const applyUpdate = vi.fn().mockResolvedValue({
+      ok: true,
+      effect: 'none',
+      reload: false,
+      relaunch: false
+    })
+    api({ checkUpdate, applyUpdate })
+    await render()
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!.click()
+    )
+
+    expect(checkUpdate).toHaveBeenCalledTimes(2)
+    const button = container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!
+    expect(button.disabled).toBe(false)
+    expect(button.textContent).toContain('2')
+  })
+
   it('un échec est DIT, et le bouton redevient cliquable', async () => {
     api({ applyUpdate: vi.fn().mockResolvedValue({ ok: false, error: 'pull refusé' }) })
     await render()
@@ -84,9 +273,9 @@ describe('mise à jour disponible — un bouton, pas une bannière', () => {
     expect(container.querySelector('[data-testid="update-error"]')?.textContent).toContain(
       'pull refusé'
     )
-    expect(container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!.disabled).toBe(
-      false
-    )
+    expect(
+      container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!.disabled
+    ).toBe(false)
   })
 
   it('rail replié : l’icône seule, sans texte qui déborde', async () => {
@@ -220,8 +409,8 @@ describe('SOUPLESSE hors de main — proposer, jamais choisir à sa place', () =
         .mockResolvedValue({ available: true, behind: 1, branch: 'main', dirty: true })
     })
     await render()
-    expect(container.querySelector('[data-testid="update-apply"]')!.getAttribute('title')).toContain(
-      'mis de côté puis remis'
-    )
+    expect(
+      container.querySelector('[data-testid="update-apply"]')!.getAttribute('title')
+    ).toContain('mis de côté puis remis')
   })
 })

@@ -8,8 +8,9 @@ import {
   writeFileSync
 } from 'node:fs'
 import { join } from 'node:path'
-import type { PipelinePhase } from '../skill-pipeline'
-import type { RoleBinding } from '../roles'
+import { PIPELINE_PHASES, type PipelinePhase } from '../skill-pipeline'
+import { decodeRoleBinding } from '../role-store'
+import { ALL_ROLES, type RoleBinding } from '../roles'
 import type { ExecutionQuote } from '../execution-quote'
 import type { ExecutionUsageSnapshot } from '../execution-supervisor'
 import type { OrchestrationRuntimeSnapshot } from '../orchestrator'
@@ -75,9 +76,211 @@ export interface OrchestrationRunState {
   }>
 }
 
+function isPhaseOutput(value: unknown): value is OrchestrationPhaseOutput {
+  if (!value || typeof value !== 'object') return false
+  const output = value as Record<string, unknown>
+  return (
+    typeof output.phase === 'string' &&
+    PIPELINE_PHASES.includes(output.phase as PipelinePhase) &&
+    typeof output.text === 'string'
+  )
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && Boolean(value.trim())
+}
+
+const RUN_ID_PATTERN = /^[A-Za-z0-9._-]{1,120}$/
+
+function isRunId(value: unknown): value is string {
+  return typeof value === 'string' && RUN_ID_PATTERN.test(value)
+}
+
+function isRoleBinding(value: unknown): value is RoleBinding {
+  const decoded = decodeRoleBinding(value)
+  if (!decoded || !isRecord(value)) return false
+  if (value.provider !== decoded.provider || value.model !== decoded.model) return false
+  if (value.phaseModel === undefined) return true
+  const rawPhaseModel = value.phaseModel as Record<string, Record<string, unknown>>
+  return Object.entries(rawPhaseModel).every(
+    ([phase, override]) => override.model === decoded.phaseModel?.[phase as PipelinePhase]?.model
+  )
+}
+
+function isRuntimeSnapshot(value: unknown): value is OrchestrationRuntimeSnapshot {
+  if (!isRecord(value) || !isRecord(value.roles)) return false
+  const roles = value.roles
+  if (!ALL_ROLES.every((role) => isRoleBinding(roles[role]))) return false
+  if (!isRecord(value.phaseFanOut)) return false
+  if (
+    !Object.entries(value.phaseFanOut).every(
+      ([phase, members]) =>
+        PIPELINE_PHASES.includes(phase as PipelinePhase) &&
+        Array.isArray(members) &&
+        members.every(isRoleBinding)
+    )
+  ) {
+    return false
+  }
+  return Array.isArray(value.judgeFanOut) && value.judgeFanOut.every(isRoleBinding)
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) > 0
+}
+
+function isExecutionQuote(value: unknown): value is ExecutionQuote {
+  if (!isRecord(value) || value.schema !== 'autowin.execution-quote/v1') return false
+  if (
+    typeof value.id !== 'string' ||
+    !value.id.trim() ||
+    typeof value.createdAt !== 'string' ||
+    !Number.isFinite(Date.parse(value.createdAt)) ||
+    typeof value.taskFingerprint !== 'string' ||
+    !value.taskFingerprint.trim() ||
+    !['trivial', 'standard', 'critical'].includes(String(value.regime)) ||
+    !Array.isArray(value.phases) ||
+    !value.phases.every(
+      (phase) => typeof phase === 'string' && PIPELINE_PHASES.includes(phase as PipelinePhase)
+    )
+  ) {
+    return false
+  }
+  if (!isRecord(value.decomposition) || !isPositiveInteger(value.decomposition.maxNodes)) {
+    return false
+  }
+  if (
+    (value.decomposition.mode !== 'disabled' && value.decomposition.mode !== 'build-only') ||
+    (value.decomposition.mode === 'disabled' && value.decomposition.maxNodes !== 1)
+  ) {
+    return false
+  }
+  if (!isRecord(value.limits)) return false
+  const positiveLimits = [
+    value.limits.maxProviderCalls,
+    value.limits.maxFreshTokens,
+    value.limits.maxTotalTokens,
+    value.limits.maxAgents,
+    value.limits.maxConcurrency,
+    value.limits.maxDurationMs
+  ]
+  if (
+    !positiveLimits.every(isPositiveInteger) ||
+    !isNonNegativeInteger(value.limits.maxRecoveries) ||
+    (value.limits.maxUsd !== null &&
+      !(
+        typeof value.limits.maxUsd === 'number' &&
+        Number.isFinite(value.limits.maxUsd) &&
+        value.limits.maxUsd >= 0
+      ))
+  ) {
+    return false
+  }
+  if (value.allocation === undefined) return true
+  if (!isRecord(value.allocation) || !isRecord(value.allocation.phaseMembers)) return false
+  if (
+    !Object.entries(value.allocation.phaseMembers).every(
+      ([phase, count]) =>
+        PIPELINE_PHASES.includes(phase as PipelinePhase) && isPositiveInteger(count)
+    )
+  ) {
+    return false
+  }
+  return (
+    isNonNegativeInteger(value.allocation.judgeMembers) &&
+    isPositiveInteger(value.allocation.maxGreedyNodes) &&
+    isNonNegativeInteger(value.allocation.reservedMandatoryAgents) &&
+    isNonNegativeInteger(value.allocation.estimatedMaxAgents) &&
+    isNonNegativeInteger(value.allocation.estimatedMaxCalls)
+  )
+}
+
+function isExecutionUsageSnapshot(value: unknown): value is ExecutionUsageSnapshot {
+  if (!isRecord(value) || typeof value.quoteId !== 'string' || !value.quoteId.trim()) return false
+  const counters = [
+    value.startedCalls,
+    value.completedCalls,
+    value.failedCalls,
+    value.activeCalls,
+    value.inputTokens,
+    value.outputTokens,
+    value.cacheReadTokens,
+    value.totalTokens,
+    value.freshTokens,
+    value.unpricedCalls,
+    value.unmeteredCalls
+  ]
+  return (
+    (value.startedAgents === undefined || isNonNegativeInteger(value.startedAgents)) &&
+    counters.every(isNonNegativeInteger) &&
+    (value.knownCostUsd === null ||
+      (typeof value.knownCostUsd === 'number' &&
+        Number.isFinite(value.knownCostUsd) &&
+        value.knownCostUsd >= 0)) &&
+    (value.tokenCoverage === 'complete' || value.tokenCoverage === 'partial') &&
+    (value.stoppedReason === undefined || typeof value.stoppedReason === 'string')
+  )
+}
+
+function isRunAgentRef(
+  value: unknown
+): value is NonNullable<OrchestrationRunState['agents']>[number] {
+  if (!isRecord(value) || typeof value.token !== 'string' || !value.token.trim()) return false
+  return (
+    (value.pid === undefined || isPositiveInteger(value.pid)) &&
+    (value.identity === undefined || typeof value.identity === 'string') &&
+    (value.journalPath === undefined || typeof value.journalPath === 'string') &&
+    (value.offset === undefined || isNonNegativeInteger(value.offset))
+  )
+}
+
+function isForkOrigin(value: unknown): value is NonNullable<OrchestrationRunState['forkedFrom']> {
+  if (!isRecord(value)) return false
+  return (
+    isNonEmptyString(value.checkpointId) &&
+    isRunId(value.runId) &&
+    isNonEmptyString(value.checkpointCreatedAt) &&
+    Number.isFinite(Date.parse(value.checkpointCreatedAt)) &&
+    isNonEmptyString(value.contentHash)
+  )
+}
+
+function isOrchestrationRunState(value: unknown): value is OrchestrationRunState {
+  if (!isRecord(value)) return false
+  return (
+    isRunId(value.runId) &&
+    isNonEmptyString(value.task) &&
+    (value.conversationId === undefined || isNonEmptyString(value.conversationId)) &&
+    (value.turnId === undefined || isNonEmptyString(value.turnId)) &&
+    (value.forkedFrom === undefined || isForkOrigin(value.forkedFrom)) &&
+    Array.isArray(value.phaseOutputs) &&
+    value.phaseOutputs.every(isPhaseOutput) &&
+    (value.bindingOverride === undefined || isRoleBinding(value.bindingOverride)) &&
+    (value.runtimeSnapshot === undefined || isRuntimeSnapshot(value.runtimeSnapshot)) &&
+    (value.executionQuote === undefined || isExecutionQuote(value.executionQuote)) &&
+    (value.usage === undefined || isExecutionUsageSnapshot(value.usage)) &&
+    (value.agents === undefined ||
+      (Array.isArray(value.agents) && value.agents.every(isRunAgentRef))) &&
+    typeof value.startedAt === 'number' &&
+    Number.isFinite(value.startedAt) &&
+    value.startedAt >= 0 &&
+    typeof value.updatedAt === 'number' &&
+    Number.isFinite(value.updatedAt) &&
+    value.updatedAt >= 0
+  )
+}
+
 /** Un `runId` est un nom de fichier : on refuse tout ce qui pourrait sortir du dossier. */
 function safeRunId(runId: string): string {
-  if (!/^[A-Za-z0-9._-]{1,120}$/.test(runId)) throw new Error('runId invalide')
+  if (!isRunId(runId)) throw new Error('runId invalide')
   return runId
 }
 
@@ -136,15 +339,8 @@ export function loadOrchestrationStates(root: string): OrchestrationRunState[] {
   for (const entry of readdirSync(root)) {
     if (!entry.endsWith('.json')) continue
     try {
-      const parsed = JSON.parse(readFileSync(join(root, entry), 'utf8')) as OrchestrationRunState
-      if (
-        typeof parsed?.runId === 'string' &&
-        typeof parsed.task === 'string' &&
-        parsed.task.trim() &&
-        Array.isArray(parsed.phaseOutputs)
-      ) {
-        states.push(parsed)
-      }
+      const parsed: unknown = JSON.parse(readFileSync(join(root, entry), 'utf8'))
+      if (isOrchestrationRunState(parsed) && entry === `${parsed.runId}.json`) states.push(parsed)
     } catch {
       // JSON tronqué par un crash : on ignore ce run plutôt que de perdre les autres.
     }

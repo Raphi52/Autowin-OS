@@ -86,11 +86,16 @@ function coveredChildDuration(parent: CausalPathNode): number | undefined {
   return start == null || end == null ? 0 : covered + end - start
 }
 
-function bestPath(node: CausalPathNode): { score: number; nodes: CausalPathNode[] } {
-  const childPaths = node.children.map(bestPath).sort((a, b) => b.score - a.score)
+function bestPath(node: CausalPathNode): { score: number; nodes: CausalPathNode[] } | undefined {
+  if (node.exclusiveDurationMs == null) return undefined
+  const candidates = node.children.map(bestPath)
+  if (candidates.some((path) => path == null)) return undefined
+  const childPaths = (candidates as Array<{ score: number; nodes: CausalPathNode[] }>).sort(
+    (a, b) => b.score - a.score
+  )
   const child = childPaths[0]
   return {
-    score: (node.exclusiveDurationMs ?? 0) + (child?.score ?? 0),
+    score: node.exclusiveDurationMs + (child?.score ?? 0),
     nodes: [node, ...(child?.nodes ?? [])]
   }
 }
@@ -152,7 +157,14 @@ export function buildCausalPath(events: readonly HarnessTimelineEvent[]): Causal
     node.exclusiveDurationMs = Math.max(0, node.inclusiveDurationMs - covered)
   }
 
-  const rootPaths = roots.map(bestPath).sort((a, b) => b.score - a.score)
+  const candidatePaths = roots.map((root) =>
+    root.issues.includes('causal-cycle') ? undefined : bestPath(root)
+  )
+  const rootPaths = candidatePaths.every(
+    (path): path is { score: number; nodes: CausalPathNode[] } => path != null
+  )
+    ? [...candidatePaths].sort((a, b) => b.score - a.score)
+    : []
   const critical = rootPaths[0]?.nodes ?? []
   for (const node of critical) node.onCriticalPath = true
   const bottleneck = critical

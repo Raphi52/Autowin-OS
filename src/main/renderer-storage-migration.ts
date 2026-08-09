@@ -15,6 +15,16 @@ export interface LegacyRendererStorageRead {
   errorCode?: string
 }
 
+export function createStorageMigrationReadHandler<TEvent>(
+  values: MigratedRendererStorage,
+  assertTrusted: (event: TEvent, scope: string) => void
+): (event: TEvent) => MigratedRendererStorage {
+  return (event) => {
+    assertTrusted(event, 'Storage migration')
+    return values
+  }
+}
+
 const MARKER_NAME = 'renderer-storage-migration.v1.done'
 const MARKER_CONTENT = 'autowin-renderer-storage-migration:v1\n'
 

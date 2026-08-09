@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { ProviderRegistry } from './providers/registry'
 import type { Role, RoleBinding, RoleModelConfig, ReasoningEffort } from './roles'
 import { resolvePhaseBinding } from './roles'
@@ -93,6 +95,9 @@ import {
 } from './session-memory-echo'
 import { projectContextBlock } from './context-files'
 import type { ExecutionEvidence, PromptEnvelope, SendOptions, Usage } from './providers/types'
+import { preparedCommitMutationEvidence } from './providers/workspace-mutation-evidence'
+import { appendExecutionEvidenceFileTrace } from './activity/conversation-file-trace-spool'
+import type { WatchdogMutationClaims, WatchdogMutationClaimsSink } from './task-manager/types'
 import { isShellMutation, isStateOracle } from './providers/evidence-vocabulary'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
@@ -105,6 +110,47 @@ import type { RunLifecycleEvent } from '../shared/run-execution'
 import type { WorktreeAgentActivity } from '../shared/worktree-activity-model'
 import { allocateExecutionTopology, type ExecutionQuote } from './execution-quote'
 import type { ExecutionUsageSnapshot } from './execution-supervisor'
+
+function canonicalCausalPath(root: string, path: string): string {
+  const normalized = resolve(root, path).replaceAll('\\', '/')
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized
+}
+
+/** Convertit la preuve Git publiée en claims directement consommables par le moteur vivant. */
+export function watchdogClaimsFromEvidence(
+  evidence: readonly ExecutionEvidence[],
+  workspaceRoot: string
+): WatchdogMutationClaims {
+  const paths = new Set<string>()
+  const mutatedLineFingerprints: Record<string, string[]> = {}
+  const mutatedPathGenerationMarkers: Record<string, string> = {}
+  for (const item of evidence) {
+    if (!item.ok || item.kind !== 'mutation') continue
+    for (const path of item.paths ?? (item.path ? [item.path] : [])) {
+      const absolute = resolve(workspaceRoot, path)
+      const canonical = canonicalCausalPath(workspaceRoot, path)
+      paths.add(absolute)
+      const fingerprints = Object.entries(item.writtenLineFingerprintsByPath ?? {}).find(
+        ([candidate]) => canonicalCausalPath(workspaceRoot, candidate) === canonical
+      )?.[1]
+      if (fingerprints?.length) {
+        mutatedLineFingerprints[absolute] = [
+          ...(mutatedLineFingerprints[absolute] ?? []),
+          ...fingerprints
+        ]
+      }
+      const generationMarker = Object.entries(item.pathGenerationMarkers ?? {}).find(
+        ([candidate]) => canonicalCausalPath(workspaceRoot, candidate) === canonical
+      )?.[1]
+      if (generationMarker) mutatedPathGenerationMarkers[absolute] = generationMarker
+    }
+  }
+  return {
+    mutatedPaths: [...paths],
+    mutatedLineFingerprints,
+    mutatedPathGenerationMarkers
+  }
+}
 
 /**
  * Boucle d'orchestration DISCIPLINÉE — le cœur d'Autowin OS.
@@ -197,11 +243,27 @@ export interface OrchestrationResult {
   brainNavigation?: BrainNavigation
   /** Caractères de contexte Brain réellement injectés. */
   brainInjectedChars?: number
+  /** Delta causal du commit préparé puis effectivement publié (sans doublons fan-out ni TOCTOU). */
+  causalMutationEvidence?: ExecutionEvidence[]
   trace: OrchestrationStep[]
   /** Mode greedy : ids des sous-tâches dont le run a échoué (rejet). */
   failedTasks?: string[]
   /** Mode greedy : ids des sous-tâches jamais lancées car une dépendance a échoué (cascade). */
   skippedTasks?: string[]
+  /** Copie verte volontairement conservée (tournoi) ; elle n'a pas été publiée dans la base. */
+  retainedWorkspace?: {
+    runId: string
+    path: string
+    baseSha?: string
+    files: string[]
+  }
+}
+
+export interface OrchestrationRunOptions {
+  /** `hold` conserve un run vert dans sa copie isolée et interdit sa publication automatique. */
+  publication?: 'auto' | 'hold'
+  /** Source Git immuable imposée aux bras d'un contrefactuel. */
+  sourceSnapshot?: { workspaceId: string; baseSha: string; contentHash: string }
 }
 
 export interface BrainRetrievalEvent {
@@ -235,6 +297,8 @@ export interface OrchestratorCollaboratorDeps {
   authority: AuthoritySas
   /** Retriever substituable pour prouver les frontières d'injection sans serveur global. */
   retrieveBrain?: typeof retrieveBrainContext
+  /** Résumé metadata-only des décisions reliées à leurs issues observées dans cette conversation. */
+  causalMemoryFor?: (conversationId: string) => string
 }
 
 /**
@@ -465,13 +529,52 @@ export interface RunWorktrees {
     runId: string,
     agentName: string,
     isMutation: boolean,
-    metadata?: { task?: string; role?: string; conversationId?: string }
+    metadata?: {
+      task?: string
+      role?: string
+      conversationId?: string
+      turnId?: string
+      causalWatchPaths?: readonly string[]
+      sourceWorkspacePath?: string
+      sourceBaseSha?: string
+    }
   ): string | undefined
+  beginAsync?(
+    runId: string,
+    agentName: string,
+    isMutation: boolean,
+    metadata?: {
+      task?: string
+      role?: string
+      conversationId?: string
+      turnId?: string
+      causalWatchPaths?: readonly string[]
+      sourceWorkspacePath?: string
+      sourceBaseSha?: string
+    }
+  ): Promise<string | undefined>
   /**
    * Clôt le run ; appelé en fin de run, y compris sur erreur. `merge: false` (run non vert) ⇒ le
    * travail N'EST PAS fusionné dans la base et la copie isolée est conservée pour décision humaine.
    */
-  end(runId: string, options?: { merge?: boolean }): unknown
+  end(
+    runId: string,
+    options?: {
+      merge?: boolean
+      retainGreen?: boolean
+      onPrepared?: (publication: { baseSha: string; agentSha: string }) => void
+      onPublished?: (publication: { baseSha: string; agentSha: string }) => void
+    }
+  ): unknown
+  endAsync?(
+    runId: string,
+    options?: {
+      merge?: boolean
+      retainGreen?: boolean
+      onPrepared?: (publication: { baseSha: string; agentSha: string }) => void
+      onPublished?: (publication: { baseSha: string; agentSha: string }) => void
+    }
+  ): Promise<unknown>
   /** Snapshot d'observation du coordinateur ; ne pilote jamais la finalisation. */
   activity?(): WorktreeAgentActivity[]
   /** Attache/détache un processus CLI réel au lease durable du run. */
@@ -677,6 +780,8 @@ export function evidenceSatisfiesTask(task: string, evidence: ExecutionEvidence[
 }
 
 export class Orchestrator {
+  private readonly causalWatchPathsByRun = new Map<string, readonly string[]>()
+
   constructor(private readonly deps: OrchestratorDeps) {}
 
   /**
@@ -849,15 +954,32 @@ export class Orchestrator {
     runId: string
   ): NonNullable<SendOptions['execution']> {
     const observers = this.processObservers.get(runId)
+    const causalWatchPaths = this.causalWatchPathsFor(cwd, runId)
     return {
       cwd,
       sandbox,
       ...(cwd !== this.deps.executionWorkspace ? { causallyIsolated: true } : {}),
+      ...(causalWatchPaths.length ? { causalWatchPaths } : {}),
       onProcess: observers?.process,
       onSpawnIntent: observers?.spawnIntent,
       onSpawned: observers?.spawned,
       onJournal: observers?.journal
     }
+  }
+
+  private causalWatchPathsFor(cwd: string, runId: string): string[] {
+    return (this.causalWatchPathsByRun.get(runId) ?? []).flatMap((path) => {
+      const absolute = isAbsolute(path)
+        ? resolve(path)
+        : resolve(this.deps.executionWorkspace, path)
+      const rel = relative(this.deps.executionWorkspace, absolute)
+      if (!rel || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return []
+      const mapped = resolve(cwd, rel)
+      // Un log existant mais ignoré par Git n'est pas présent dans le worktree : ne pas inviter
+      // l'agent à en fabriquer une copie. À l'inverse, une source absente PARTOUT est légitime
+      // (beginAtEnd la suit dès sa création) et doit rester observée dans le worktree.
+      return existsSync(mapped) || !existsSync(absolute) ? [mapped] : []
+    })
   }
 
   /**
@@ -887,9 +1009,13 @@ export class Orchestrator {
     /** Tour Chat causal, persisté avec l'état reprenable. */
     turnId?: string,
     onRunLifecycle?: (event: RunLifecycleEvent) => void,
-    runtimeSnapshot?: OrchestrationRuntimeSnapshot
+    runtimeSnapshot?: OrchestrationRuntimeSnapshot,
+    causalWatchPaths: readonly string[] = [],
+    onLateCausalMutationClaims?: WatchdogMutationClaimsSink,
+    runOptions: OrchestrationRunOptions = {}
   ): Promise<OrchestrationResult> {
     const runId = `run-${this.runNamespace}-${++this.runSeq}`
+    this.causalWatchPathsByRun.set(runId, [...causalWatchPaths])
     const runStartedAtMs = Date.now()
     const executionQuote = this.deps.currentExecutionQuote?.()
     const emitLifecycle = (event: RunLifecycleEvent): void => {
@@ -902,6 +1028,9 @@ export class Orchestrator {
     const activityForRun = (): WorktreeAgentActivity | undefined =>
       this.deps.worktrees?.activity?.().find((activity) => activity.agentId === runId)
     const isMut = isMutationTask(task)
+    // Un tournoi compare des solutions, pas seulement des textes : même une tâche classée
+    // lecture-seule doit donc disposer de son propre bureau attestable et conservé.
+    const requiresIsolatedWorkspace = isMut || runOptions.publication === 'hold'
     const workflow = this.workflowDuRun()
     const phases = this.effectivePhases(task)
     const admittedRuntime: OrchestrationRuntimeSnapshot = runtimeSnapshot ?? {
@@ -971,9 +1100,9 @@ export class Orchestrator {
           ? { mode: 'build-only', maxNodes: executionQuote.allocation.maxGreedyNodes }
           : { mode: 'disabled', maxNodes: 1 }
     }
-    if (isMut && !this.deps.worktrees) {
+    if (requiresIsolatedWorkspace && !this.deps.worktrees) {
       throw new Error(
-        'Mutation bloquée : le moteur d’isolation workspace est indisponible pour ce projet.'
+        'Isolation bloquée : le moteur de bureaux workspace est indisponible pour ce projet.'
       )
     }
     // Verdict du run, lu dans le `finally` : seul un run VERT ramène son travail dans la base.
@@ -1000,13 +1129,36 @@ export class Orchestrator {
       usage: this.deps.currentExecutionUsage?.(),
       agents: this.agentsOf(runId)
     })
-    const isolatedCwd = this.deps.worktrees?.begin(runId, 'Agent', isMut, {
-      task,
-      role: 'build',
-      conversationId
-    })
-    if (isMut && !isolatedCwd) {
-      throw new Error('Mutation bloquée : Autowin n’a pas pu créer un bureau agent isolé.')
+    const beginWorktree = this.deps.worktrees?.beginAsync?.bind(this.deps.worktrees)
+    const isolatedCwd = beginWorktree
+      ? await beginWorktree(runId, 'Agent', requiresIsolatedWorkspace, {
+          task,
+          role: 'build',
+          conversationId,
+          ...(turnId ? { turnId } : {}),
+          ...(causalWatchPaths.length ? { causalWatchPaths } : {}),
+          ...(runOptions.sourceSnapshot
+            ? {
+                sourceWorkspacePath: runOptions.sourceSnapshot.workspaceId,
+                sourceBaseSha: runOptions.sourceSnapshot.baseSha
+              }
+            : {})
+        })
+      : this.deps.worktrees?.begin(runId, 'Agent', requiresIsolatedWorkspace, {
+          task,
+          role: 'build',
+          conversationId,
+          ...(turnId ? { turnId } : {}),
+          ...(causalWatchPaths.length ? { causalWatchPaths } : {}),
+          ...(runOptions.sourceSnapshot
+            ? {
+                sourceWorkspacePath: runOptions.sourceSnapshot.workspaceId,
+                sourceBaseSha: runOptions.sourceSnapshot.baseSha
+              }
+            : {})
+        })
+    if (requiresIsolatedWorkspace && !isolatedCwd) {
+      throw new Error('Isolation bloquée : Autowin n’a pas pu créer un bureau agent isolé.')
     }
     const workCwd = isolatedCwd ?? this.deps.executionWorkspace
     const initialActivity = activityForRun()
@@ -1166,22 +1318,76 @@ export class Orchestrator {
       return result
     } finally {
       this.processObservers.delete(runId)
+      this.causalWatchPathsByRun.delete(runId)
       // Le travail n'est fusionné dans la base QUE si le run est vert. Un run rouge, annulé ou planté
       // garde sa copie isolée (l'exception saute le `green = true` ci-dessus) : on ne ramène plus
       // automatiquement dans la base un travail jugé raté.
-      const finalized = this.deps.worktrees?.end(runId, { merge: green })
+      let endReturned = false
+      const onPublished = (publication: { baseSha: string; agentSha: string }): void => {
+        if (!produced || causalWatchPaths.length === 0) return
+        const evidence = preparedCommitMutationEvidence(
+          this.deps.executionWorkspace,
+          publication.baseSha,
+          publication.agentSha,
+          causalWatchPaths
+        )
+        produced.causalMutationEvidence = evidence
+        // Une finalisation différée arrive APRÈS le retour de la commande : elle doit publier sa
+        // trace elle-même, sinon le scheduler a déjà lu un résultat vide et la ligne reboucle.
+        if (endReturned && conversationId && turnId && evidence.length > 0) {
+          const publicationEventId = `worktree-publication:${runId}:${publication.agentSha}`
+          appendExecutionEvidenceFileTrace(evidence, {
+            conversationId,
+            turnId,
+            workspaceRoot: this.deps.executionWorkspace,
+            published: true,
+            eventId: publicationEventId
+          })
+          try {
+            onLateCausalMutationClaims?.({
+              ...watchdogClaimsFromEvidence(evidence, this.deps.executionWorkspace),
+              eventId: publicationEventId
+            })
+          } catch {
+            // L'observateur ne doit jamais invalider une publication Git déjà réussie.
+          }
+        }
+      }
+      const retained = green && requiresIsolatedWorkspace && runOptions.publication === 'hold'
+      const finalizeOptions = {
+        merge: retained ? false : green,
+        ...(retained ? { retainGreen: true } : {}),
+        onPublished
+      }
+      const finalized = this.deps.worktrees?.endAsync
+        ? await this.deps.worktrees.endAsync(runId, finalizeOptions)
+        : this.deps.worktrees?.end(runId, finalizeOptions)
+      endReturned = true
       const finalizeOutcome =
         typeof finalized === 'object' && finalized !== null
           ? (finalized as { outcome?: string }).outcome
           : undefined
       const integrated =
-        !isMut ||
+        !requiresIsolatedWorkspace ||
         finalizeOutcome === 'merged' ||
         finalizeOutcome === 'nothing' ||
         finalizeOutcome === 'cleanup-pending' ||
         finalizeOutcome === 'published-residue'
       const finalActivity = activityForRun()
-      if (isMut && finalized && typeof finalized === 'object' && finalizeOutcome) {
+      if (retained && produced && isolatedCwd) {
+        produced.retainedWorkspace = {
+          runId,
+          path: finalActivity?.worktreePath ?? isolatedCwd,
+          ...(finalActivity?.baseSha ? { baseSha: finalActivity.baseSha } : {}),
+          files: finalActivity?.files.map((file) => file.path) ?? []
+        }
+      }
+      if (
+        requiresIsolatedWorkspace &&
+        finalized &&
+        typeof finalized === 'object' &&
+        finalizeOutcome
+      ) {
         const result = finalized as {
           outcome: string
           files?: string[]
@@ -1213,7 +1419,7 @@ export class Orchestrator {
           }
         })
       }
-      if (green && !integrated && produced) {
+      if (green && !integrated && !retained && produced) {
         produced.valid = false
         produced.gateBlocked = true
         if (!produced.gateReasons.includes('intégration locale non terminée')) {
@@ -1242,7 +1448,7 @@ export class Orchestrator {
       }
       // Un vert dont l'intégration n'est pas terminée reste reprenable. Tous les autres runs ont
       // réellement atteint un état terminal : leur acquis de phase peut alors être rangé.
-      if (!green || integrated) {
+      if (!green || integrated || retained) {
         try {
           this.deps.onRunSettled?.(runId)
         } catch {
@@ -1255,7 +1461,7 @@ export class Orchestrator {
         runId,
         timestampMs: Date.now(),
         closure: {
-          status: green && integrated ? 'green' : 'red',
+          status: green && (integrated || retained) ? 'green' : 'red',
           totalDurationMs: Math.max(0, Date.now() - runStartedAtMs),
           totalCostUsd: this.deps.currentExecutionUsage?.()?.knownCostUsd ?? produced?.costUsd ?? 0,
           gateReasons: produced?.gateReasons,
@@ -2151,6 +2357,14 @@ export class Orchestrator {
       ECHO_MAX_BLOCK_CHARS,
       evictedCount(conversationId, this.deps.executionWorkspace)
     )
+    let causalMemory = ''
+    if (conversationId && this.deps.causalMemoryFor) {
+      try {
+        causalMemory = this.deps.causalMemoryFor(conversationId).slice(0, 3_000)
+      } catch {
+        // Une vue dérivée de la mémoire ne doit jamais empêcher le run courant.
+      }
+    }
     const brainQuery = scopedBrain.navigation?.query || task
     try {
       onBrainRetrieved?.({
@@ -2170,6 +2384,7 @@ export class Orchestrator {
     // scripts/measure-orchestration-tokens.mjs pour re-mesurer une éventuelle version micro.
     const phaseContext: string[] = [
       ...(memoryEcho ? [memoryEcho] : []),
+      ...(causalMemory ? [causalMemory] : []),
       ...(brainContext
         ? [
             brainContext,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { AppCommandBus } from './commands'
+import { AppCommandBus, isolateWatchdogPromptPaths } from './commands'
 import { AuthoritySas } from './authority/sas'
 import { APP_DESTINATIONS } from '../shared/navigation'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -8,13 +8,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   readConversationFilePaths,
+  readConversationTurnFileMutations,
   readCurrentConversationPathOwnership
 } from './activity/conversation-file-trace-spool'
+import { exactLineFingerprint } from './exact-line-fingerprint'
 import { readBrainTraces } from './activity/brain-trace-spool'
 import { WorktreeManager } from './store/worktree-manager'
 import { RunWorktreeCoordinator } from './store/run-worktree-coordinator'
 import { TraceStore } from './activity/trace-store'
 import type { BrainRetrievalOptions } from './brain-retrieval'
+import type { OrchestrationStep } from './orchestrator'
 
 function fakeOs(): any {
   const conversations = new Map<
@@ -73,6 +76,38 @@ function fakeOs(): any {
   }
 }
 
+async function execApproved(
+  bus: AppCommandBus,
+  ...args: Parameters<AppCommandBus['exec']>
+): Promise<Awaited<ReturnType<AppCommandBus['exec']>>> {
+  const requested = await bus.exec(...args)
+  const pending = requested.data as { pendingApproval?: boolean; decisionId?: string } | undefined
+  if (!pending?.pendingApproval || !pending.decisionId) return requested
+  try {
+    const resolved = (await bus.resolveDecision(pending.decisionId, 'approve')) as {
+      data?: unknown
+    }
+    return { ok: true, data: resolved.data }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+describe('isolation du prompt watchdog', () => {
+  it('retire le chemin absolu de la base et interdit de modifier la source', () => {
+    const root = 'C:\\repo'
+    const watched = 'C:\\repo\\logs\\app.log'
+    const prompt = `Source : fichier surveillé ${watched}\nERROR initiale`
+
+    const isolated = isolateWatchdogPromptPaths(prompt, [watched], root)
+
+    expect(isolated).not.toContain(watched)
+    expect(isolated).toContain('logs/app.log')
+    expect(isolated).toContain('preuve en lecture seule')
+    expect(isolated).toContain('ne la recrée jamais')
+  })
+})
+
 describe('AppCommandBus orchestration cancel (#2)', () => {
   it('brain_query ne contacte pas le Brain avec un override corpus malformé', async () => {
     vi.stubEnv('AUTOWIN_BRAIN_CORPUS', ',')
@@ -98,15 +133,29 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
   it('brain_query isole le vrai workspace RigApplication d une source Autowin adverse', async () => {
     const os = fakeOs()
     os.executionWorkspace = 'D:\\DevSrc\\RigApplication'
-    const mixedContext = [
-      '[AMITEL BRAIN REFERENCE DATA]',
-      '### Source 1 — knowledge/domain/rigapplication-documentation/reference/proc.md\nRIG_COMMANDE_AUTORISEE',
-      '### Source 2 — knowledge/domain/autowin-os-realite-produit-v5.md\nAUTOWIN_COMMANDE_INTERDITE'
-    ].join('\n\n---\n\n')
+    const preamble = '[AMITEL BRAIN REFERENCE DATA]\n\n'
+    const sources = [
+      {
+        path: 'knowledge/domain/rigapplication-documentation/reference/proc.md',
+        content:
+          '### Source 1 — knowledge/domain/rigapplication-documentation/reference/proc.md\nRIG_COMMANDE_AUTORISEE'
+      },
+      {
+        path: 'knowledge/domain/autowin-os-realite-produit-v5.md',
+        content:
+          '### Source 2 — knowledge/domain/autowin-os-realite-produit-v5.md\nAUTOWIN_COMMANDE_INTERDITE'
+      }
+    ]
+    const mixedContext = preamble + sources.map(({ content }) => content).join('\n\n---\n\n')
     const seenCorpus: Array<readonly string[] | undefined> = []
     const retrieve = vi.fn(async (_query: string, options?: BrainRetrievalOptions) => {
       seenCorpus.push(options?.corpus)
-      return { context: mixedContext, status: 'found' as const }
+      return {
+        context: mixedContext,
+        status: 'found' as const,
+        corpus: options?.corpus,
+        structuredContext: { preamble, sources }
+      }
     })
     const bus = new AppCommandBus(os, () => {}, undefined, undefined, undefined, retrieve)
 
@@ -565,7 +614,8 @@ describe('AppCommandBus authority policy', () => {
       }
       const bus = new AppCommandBus(os, () => {})
 
-      const edit = await bus.exec(
+      const edit = await execApproved(
+        bus,
         'edit_file',
         { path: 'target.txt', oldText: 'avant', newText: 'après' },
         'conv-1',
@@ -586,6 +636,11 @@ describe('AppCommandBus authority policy', () => {
       expect(readFileSync(join(workspace, 'target.txt'), 'utf8')).toContain('après')
       expect(readConversationFilePaths('conv-1')).toEqual(['target.txt'])
       expect(readConversationFilePaths('conv-2')).toEqual([])
+      expect(readConversationTurnFileMutations('conv-1', 'turn-1').lineFingerprintsByPath).toEqual({
+        [join(workspace, 'target.txt').replaceAll('\\', '/').toLowerCase()]: [
+          exactLineFingerprint('après')
+        ]
+      })
       expect(brain).toMatchObject({ ok: true, data: { allowed: true, found: false } })
       expect(readBrainTraces('conv-1')).toEqual([
         expect.objectContaining({
@@ -602,6 +657,136 @@ describe('AppCommandBus authority policy', () => {
       else process.env.APPDATA = previousAppData
       rmSync(appData, { recursive: true, force: true })
       rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
+  it('attribue les lignes finales du fichier, pas les fragments oldText/newText', async () => {
+    const previousAppData = process.env.APPDATA
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-edit-final-lines-'))
+    const workspace = mkdtempSync(join(tmpdir(), 'autowin-edit-final-workspace-'))
+    process.env.APPDATA = appData
+    try {
+      writeFileSync(join(workspace, 'target.txt'), 'prefix needle suffix\n', 'utf8')
+      writeFileSync(
+        join(workspace, 'package.json'),
+        JSON.stringify({ scripts: { 'test:unit': 'node -e "process.exit(0)"' } }),
+        'utf8'
+      )
+      const os = fakeOs()
+      os.executionWorkspace = workspace
+      os.worktrees = {
+        begin: vi.fn(() => workspace),
+        end: vi.fn(() => ({ outcome: 'nothing', agentId: 'command' }))
+      }
+      const bus = new AppCommandBus(os, () => {})
+
+      await execApproved(
+        bus,
+        'edit_file',
+        { path: 'target.txt', oldText: 'needle', newText: 'ERROR future' },
+        'conv-final',
+        'auto',
+        undefined,
+        'turn-final'
+      )
+
+      const claims = readConversationTurnFileMutations('conv-final', 'turn-final')
+      expect(Object.values(claims.lineFingerprintsByPath)).toEqual([
+        [exactLineFingerprint('prefix ERROR future suffix')]
+      ])
+    } finally {
+      if (previousAppData === undefined) delete process.env.APPDATA
+      else process.env.APPDATA = previousAppData
+      rmSync(appData, { recursive: true, force: true })
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
+  it('publie la causalite orchestration sur la base et ignore les claims outil non valides', async () => {
+    const previousAppData = process.env.APPDATA
+    const appData = mkdtempSync(join(tmpdir(), 'autowin-orchestration-published-'))
+    const workspace = mkdtempSync(join(tmpdir(), 'autowin-orchestration-base-'))
+    const worktree = mkdtempSync(join(tmpdir(), 'autowin-orchestration-worktree-'))
+    process.env.APPDATA = appData
+    try {
+      const os = fakeOs()
+      os.executionWorkspace = workspace
+      os.runTask = async (...args: unknown[]) => {
+        const onStep = args[1] as (step: OrchestrationStep) => void
+        onStep({
+          step: 'exec',
+          role: 'subagent',
+          text: 'fait',
+          status: 'completed',
+          evidence: [
+            {
+              type: 'file_change',
+              kind: 'mutation',
+              status: 'completed',
+              ok: true,
+              summary: 'claim outil',
+              paths: ['logs/app.log'],
+              workspaceRoot: worktree,
+              writtenLineFingerprints: [exactLineFingerprint('ERROR fantôme')]
+            },
+            {
+              type: 'workspace_delta',
+              kind: 'mutation',
+              status: 'completed',
+              ok: true,
+              summary: 'delta publié',
+              paths: ['logs/app.log'],
+              workspaceRoot: worktree,
+              writtenLineFingerprintsByPath: {
+                'logs/app.log': [exactLineFingerprint('ERROR publiée')]
+              }
+            }
+          ]
+        })
+        return {
+          gateBlocked: false,
+          gateReasons: [],
+          valid: true,
+          costUsd: 0,
+          result: 'fait',
+          phaseOutputs: [],
+          causalMutationEvidence: [
+            {
+              type: 'workspace_delta',
+              kind: 'mutation',
+              status: 'completed',
+              ok: true,
+              summary: 'delta publié',
+              paths: ['logs/app.log'],
+              workspaceRoot: worktree,
+              writtenLineFingerprintsByPath: {
+                'logs/app.log': [exactLineFingerprint('ERROR publiée')]
+              }
+            }
+          ]
+        }
+      }
+      const bus = new AppCommandBus(os, () => {})
+
+      const response = await bus.exec(
+        'orchestrate',
+        { task: 'corrige le log', causalWatchPaths: [join(workspace, 'logs/app.log')] },
+        'conv-1',
+        'auto'
+      )
+      const turnId = (response.data as { turnId: string }).turnId
+      const mutations = readConversationTurnFileMutations('conv-1', turnId)
+      const basePath = join(workspace, 'logs/app.log').replaceAll('\\', '/').toLowerCase()
+
+      expect(mutations.lineFingerprintsByPath).toEqual({
+        [basePath]: [exactLineFingerprint('ERROR publiée')]
+      })
+    } finally {
+      if (previousAppData === undefined) delete process.env.APPDATA
+      else process.env.APPDATA = previousAppData
+      rmSync(appData, { recursive: true, force: true })
+      rmSync(workspace, { recursive: true, force: true })
+      rmSync(worktree, { recursive: true, force: true })
     }
   })
 
@@ -631,7 +816,8 @@ describe('AppCommandBus authority policy', () => {
       const bus = new AppCommandBus(os, () => {})
 
       const [first, second] = await Promise.all([
-        bus.exec(
+        execApproved(
+          bus,
           'edit_file',
           { path: 'target.txt', oldText: 'zéro', newText: 'un' },
           'conv-1',
@@ -639,7 +825,8 @@ describe('AppCommandBus authority policy', () => {
           undefined,
           'turn-1'
         ),
-        bus.exec(
+        execApproved(
+          bus,
           'edit_file',
           { path: 'target.txt', oldText: 'un', newText: 'deux' },
           'conv-2',
@@ -758,6 +945,145 @@ describe('AppCommandBus authority policy', () => {
     expect(os.authority.pending()).toHaveLength(1)
   })
 
+  it('scope la deduplication des approbations par conversation mais pas par tour', async () => {
+    const os = fakeOs()
+    const bus = new AppCommandBus(os, () => {})
+
+    const first = await bus.exec(
+      'remove_conversation',
+      { id: 'conv-1' },
+      'scope-a',
+      'ask',
+      undefined,
+      'turn-a'
+    )
+    const retry = await bus.exec(
+      'remove_conversation',
+      { id: 'conv-1' },
+      'scope-a',
+      'ask',
+      undefined,
+      'turn-b'
+    )
+    const otherConversation = await bus.exec(
+      'remove_conversation',
+      { id: 'conv-1' },
+      'scope-b',
+      'ask',
+      undefined,
+      'turn-c'
+    )
+
+    expect((retry.data as { decisionId: string }).decisionId).toBe(
+      (first.data as { decisionId: string }).decisionId
+    )
+    expect((otherConversation.data as { decisionId: string }).decisionId).not.toBe(
+      (first.data as { decisionId: string }).decisionId
+    )
+  })
+
+  it('redige recursivement les secrets des recus persistants', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-authority-redaction-'))
+    try {
+      const store = new TraceStore(root)
+      const bus = new AppCommandBus(fakeOs(), () => {})
+      bus.setTraceStore(store)
+      await bus.exec(
+        'remove_conversation',
+        {
+          id: 'conv-1',
+          description: 'Authorization: Bearer top-secret-value',
+          nested: { token: 'nested-secret', note: 'password=also-secret' }
+        },
+        'conv-1',
+        'ask',
+        undefined,
+        'turn-secret'
+      )
+
+      const serialized = JSON.stringify(store.readConversation('conv-1'))
+      expect(serialized).not.toContain('top-secret-value')
+      expect(serialized).not.toContain('nested-secret')
+      expect(serialized).not.toContain('also-secret')
+      expect(serialized).toContain('[REDACTED]')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('ne persiste jamais le contenu arbitraire transmis a edit_file', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-authority-edit-redaction-'))
+    try {
+      const store = new TraceStore(root)
+      const bus = new AppCommandBus(fakeOs(), () => {})
+      bus.setTraceStore(store)
+      const oldText = [
+        'command --token "CLI-SECRET-123"',
+        '<password>XML-SECRET-456</password>',
+        'token: |-\n  YAML-SECRET-789',
+        'token!: string = "TS-SECRET-987"'
+      ].join('\n')
+
+      await bus.exec(
+        'edit_file',
+        { path: 'src/example.ts', oldText, newText: `replacement\n${oldText}` },
+        'conv-edit-secret',
+        'ask',
+        undefined,
+        'turn-edit-secret'
+      )
+
+      const serialized = JSON.stringify(store.readConversation('conv-edit-secret'))
+      expect(serialized).toContain('src/example.ts')
+      for (const secret of [
+        'CLI-SECRET-123',
+        'XML-SECRET-456',
+        'YAML-SECRET-789',
+        'TS-SECRET-987'
+      ]) {
+        expect(serialized).not.toContain(secret)
+      }
+      expect(serialized).toContain('[REDACTED]')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('persiste failed si une action approuvee echoue apres la decision humaine', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-authority-failure-'))
+    try {
+      const os = fakeOs()
+      os.conversations.remove = () => {
+        throw new Error('suppression impossible')
+      }
+      const store = new TraceStore(root)
+      const bus = new AppCommandBus(os, () => {})
+      bus.setTraceStore(store)
+      const requested = await bus.exec(
+        'remove_conversation',
+        { id: 'conv-1' },
+        'conv-1',
+        'ask',
+        undefined,
+        'turn-fail'
+      )
+
+      await expect(
+        bus.resolveDecision((requested.data as { decisionId: string }).decisionId, 'approve')
+      ).rejects.toThrow('suppression impossible')
+      expect(store.readConversation('conv-1').map((event) => event.status)).toEqual([
+        'pending',
+        'failed'
+      ])
+      expect(store.readConversation('conv-1')[1]?.authority).toMatchObject({
+        resolution: 'approve',
+        resolvedBy: 'user'
+      })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('does not merge destructive decisions whose targets differ', async () => {
     const os = fakeOs()
     const bus = new AppCommandBus(os, () => {})
@@ -845,7 +1171,8 @@ describe('AppCommandBus authority policy', () => {
       }
       const bus = new AppCommandBus(os, () => {})
 
-      const result = await bus.exec(
+      const result = await execApproved(
+        bus,
         'edit_file',
         { path: 'note.txt', oldText: 'avant', newText: 'après' },
         'conv-1',
@@ -896,7 +1223,8 @@ describe('AppCommandBus authority policy', () => {
       }
       const bus = new AppCommandBus(os, () => {})
 
-      const result = await bus.exec(
+      const result = await execApproved(
+        bus,
         'edit_file',
         { path: 'code.ts', oldText: 'export const ok = 1', newText: 'export const =' },
         'conv-1',
@@ -945,7 +1273,8 @@ describe('AppCommandBus authority policy', () => {
       os.worktrees = coordinator
       const bus = new AppCommandBus(os, () => {})
 
-      const result = await bus.exec(
+      const result = await execApproved(
+        bus,
         'edit_file',
         { path: 'code.ts', oldText: 'export const ok = 1', newText: 'export const =' },
         'conv-1',
@@ -1002,7 +1331,8 @@ describe('AppCommandBus authority policy', () => {
       os.worktrees = coordinator
       const bus = new AppCommandBus(os, () => {})
 
-      const result = await bus.exec(
+      const result = await execApproved(
+        bus,
         'edit_file',
         { path: 'code.ts', oldText: 'export const ok = 1', newText: 'export const ok = 2' },
         'conv-1',
@@ -1123,6 +1453,26 @@ describe('AppCommandBus authority policy', () => {
     expect(os.conversations.get('conv-1')).toBeTruthy()
   })
 
+  it('autorise get_state en mode Plan et le trace comme lecture seule', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-readonly-authority-'))
+    try {
+      const store = new TraceStore(root)
+      const bus = new AppCommandBus(fakeOs(), () => {})
+      bus.setTraceStore(store)
+
+      const result = await bus.exec('get_state', {}, 'conv-1', 'plan', undefined, 'turn-read')
+
+      expect(result.ok).toBe(true)
+      expect(store.readConversation('conv-1')[0]?.authority).toMatchObject({
+        mode: 'plan',
+        mutates: false,
+        decision: 'allow'
+      })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('defers deletion until human approval and consumes it once', async () => {
     const os = fakeOs()
     const bus = new AppCommandBus(os, () => {})
@@ -1139,6 +1489,55 @@ describe('AppCommandBus authority policy', () => {
     })
   })
 
+  it('persiste la demande et la résolution d’autorité dans la trace de la conversation', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-authority-trace-'))
+    try {
+      const os = fakeOs()
+      const store = new TraceStore(root)
+      const bus = new AppCommandBus(os, () => {})
+      bus.setTraceStore(store)
+
+      const requested = await bus.exec(
+        'remove_conversation',
+        { id: 'conv-1' },
+        'conv-1',
+        'ask',
+        undefined,
+        'turn-1'
+      )
+      const decisionId = (requested.data as { decisionId: string }).decisionId
+      const pending = store.readConversation('conv-1')
+
+      expect(pending).toHaveLength(1)
+      expect(pending[0]).toMatchObject({
+        type: 'decision',
+        status: 'pending',
+        authority: {
+          mode: 'ask',
+          commandAuthority: 'destructive',
+          mutates: true,
+          decision: 'confirm',
+          decisionId
+        }
+      })
+
+      await bus.resolveDecision(decisionId, 'cancel')
+      const persisted = new TraceStore(root).readConversation('conv-1')
+      expect(persisted).toHaveLength(2)
+      expect(persisted[1]).toMatchObject({
+        parentId: pending[0].id,
+        status: 'cancelled',
+        authority: {
+          decisionId,
+          resolution: 'cancel',
+          resolvedBy: 'user'
+        }
+      })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('does not expose decision resolution to the model and annotates risk', () => {
     const catalogue = new AppCommandBus(fakeOs(), () => {}).catalog()
     expect(catalogue.some((tool) => tool.name === 'resolve_decision')).toBe(false)
@@ -1147,6 +1546,10 @@ describe('AppCommandBus authority policy', () => {
     ).toMatchObject({
       destructiveHint: true,
       readOnlyHint: false
+    })
+    expect(catalogue.find((tool) => tool.name === 'edit_file')).toMatchObject({
+      authority: 'destructive',
+      annotations: { destructiveHint: true, readOnlyHint: false }
     })
     expect(catalogue.every((tool) => tool.annotations !== undefined)).toBe(true)
     expect(catalogue.find((tool) => tool.name === 'get_state')?.annotations).toMatchObject({
@@ -1353,9 +1756,16 @@ describe('AppCommandBus authority policy', () => {
     )
     const expired = await bus.exec('remove_conversation', { id: 'conv-1' })
     now = 15 * 60_000
+    await expect(
+      bus.resolveDecision((expired.data as any).decisionId, 'approve')
+    ).resolves.toMatchObject({ choice: 'cancel', by: 'timeout-default' })
+    expect(os.conversations.get('conv-1')).toBeTruthy()
+
+    const swept = await bus.exec('remove_conversation', { id: 'conv-1' })
+    now += 15 * 60_000
     expect(bus.sweepExpired()).toHaveLength(1)
     expect(entries).toContainEqual(expect.objectContaining({ name: 'authority_decision' }))
-    await expect(bus.resolveDecision((expired.data as any).decisionId, 'approve')).rejects.toThrow()
+    await expect(bus.resolveDecision((swept.data as any).decisionId, 'approve')).rejects.toThrow()
     expect(os.conversations.get('conv-1')).toBeTruthy()
   })
 })

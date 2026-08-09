@@ -16,7 +16,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type { ReasoningEffort } from './roles'
+import { isReasoningEffort, type ReasoningEffort } from './roles'
 import type { ComputeBinding } from '../shared/compute-fabric'
 import { CODEX_VALID_EFFORTS } from './providers/codex'
 import {
@@ -121,17 +121,6 @@ export const DEFAULT_IMPORTED_MODELS: ImportedModel[] = [
 ]
 
 const CLAUDE_EFFORTS: ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
-const REASONING_EFFORTS = new Set<ReasoningEffort>([
-  'none',
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-  'ultra'
-])
-
 /** Résultat par voie : `live` distingue un listing réussi d'un repli (cache/seed). */
 interface DiscoveryResult {
   models: ImportedModel[]
@@ -163,7 +152,7 @@ async function discoverCodexModels(
         .filter(
           (effort): effort is ReasoningEffort =>
             typeof effort === 'string' &&
-            REASONING_EFFORTS.has(effort as ReasoningEffort) &&
+            isReasoningEffort(effort) &&
             CODEX_VALID_EFFORTS.has(effort)
         )
       if (efforts.length === 0) return []
@@ -243,8 +232,7 @@ function claudeAliasModels(candidates: ImportedModel[]): ImportedModel[] {
         return latestVersion && compareClaudeVersions(version, latestVersion) <= 0
           ? latest
           : candidate
-      }, undefined)?.label ??
-      `Claude ${family.charAt(0).toUpperCase()}${family.slice(1)} · CLI`,
+      }, undefined)?.label ?? `Claude ${family.charAt(0).toUpperCase()}${family.slice(1)} · CLI`,
     reasoningEfforts: [...CLAUDE_EFFORTS],
     defaultReasoningEffort: family === 'haiku' ? 'medium' : 'high'
   }))
@@ -355,9 +343,7 @@ function isValidCachedModel(model: unknown, provider: 'claude' | 'codex'): model
     candidate.label.trim().length > 0 &&
     Array.isArray(candidate.reasoningEfforts) &&
     candidate.reasoningEfforts.length > 0 &&
-    candidate.reasoningEfforts.every(
-      (effort) => typeof effort === 'string' && REASONING_EFFORTS.has(effort as ReasoningEffort)
-    ) &&
+    candidate.reasoningEfforts.every((effort) => isReasoningEffort(effort)) &&
     typeof candidate.defaultReasoningEffort === 'string' &&
     candidate.reasoningEfforts.includes(candidate.defaultReasoningEffort as ReasoningEffort)
   )

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { codexExecutionEvidenceKind, structuredEvidenceFields } from './codex'
+import { exactLineFingerprint } from '../exact-line-fingerprint'
 
 describe('structuredEvidenceFields', () => {
   it('command_execution → command + exitCode + stdout (sortie brute conservée)', () => {
@@ -62,5 +63,34 @@ describe('codexExecutionEvidenceKind', () => {
           'powershell -Command "if ((Get-Content -Raw .\\proof.txt).Trim() -eq \'DONE\') { exit 0 } else { exit 1 }"'
       })
     ).toBe('verification')
+  })
+})
+
+describe('structuredEvidenceFields - causalite des lignes', () => {
+  it('extrait seulement les lignes ajoutees pour attribuer une auto-ecriture', () => {
+    const fields = structuredEvidenceFields({
+      type: 'file_change',
+      changes: '--- a/app.log\n+++ b/app.log\n@@ -1 +1 @@\n-ERROR ancien\n+ERROR nouveau'
+    })
+
+    expect(fields.writtenLineFingerprints).toEqual([exactLineFingerprint('ERROR nouveau')])
+  })
+
+  it('ne confond pas une vraie ligne qui commence par ++ avec l en-tete du diff', () => {
+    const fields = structuredEvidenceFields({
+      type: 'file_change',
+      changes: '--- a/app.log\n+++ b/app.log\n@@ -0,0 +1 @@\n+++ERROR auto'
+    })
+
+    expect(fields.writtenLineFingerprints).toEqual([exactLineFingerprint('++ERROR auto')])
+  })
+
+  it('garde un remplacement de contenu -- old vers ++ new dans un hunk', () => {
+    const fields = structuredEvidenceFields({
+      type: 'file_change',
+      changes: '--- a/app.log\n+++ b/app.log\n@@ -1 +1 @@\n--- old\n+++ new'
+    })
+
+    expect(fields.writtenLineFingerprints).toEqual([exactLineFingerprint('++ new')])
   })
 })

@@ -29,6 +29,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import type { ProviderArtifactCandidate } from '../../shared/artifacts'
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
+import { addedLineFingerprintsFromUnifiedDiff } from '../exact-line-fingerprint'
 
 /**
  * Adaptateur voie Codex — abonnement ChatGPT via OAuth device-code (cf. codex-auth).
@@ -118,9 +119,7 @@ export function codexExecutionEvidenceKind(item: CodexExecItem): ExecutionEviden
     /\bif\s*\(/i.test(command) &&
     /\bexit\s+0\b/i.test(command) &&
     /(?:\bexit\s+[1-9]\d*\b|\bthrow\b)/i.test(command)
-  return isVerificationCommand(command) || powershellAssertion
-    ? 'verification'
-    : 'inspection'
+  return isVerificationCommand(command) || powershellAssertion ? 'verification' : 'inspection'
 }
 
 /**
@@ -138,6 +137,7 @@ export function structuredEvidenceFields(
   diff?: string
   path?: string
   paths?: string[]
+  writtenLineFingerprints?: string[]
 } {
   if (item.type === 'command_execution') {
     return {
@@ -159,7 +159,12 @@ export function structuredEvidenceFields(
         : JSON.stringify(item.changes ?? {}, null, 2)
       ).slice(0, 20_000),
       path: paths.join(', ') || undefined,
-      paths: paths.length ? paths : undefined
+      paths: paths.length ? paths : undefined,
+      ...(typeof item.changes === 'string'
+        ? {
+            writtenLineFingerprints: addedLineFingerprintsFromUnifiedDiff(item.changes)
+          }
+        : {})
     }
   }
   return {}
@@ -277,7 +282,7 @@ async function runCodexExec(
   const spec = codexExecSpec(execution.cwd, model, execution.sandbox, opts.reasoningEffort)
   const mutationBefore =
     execution.causallyIsolated && execution.sandbox !== 'read-only'
-      ? await captureWorkspaceMutationSnapshot(spec.cwd)
+      ? await captureWorkspaceMutationSnapshot(spec.cwd, execution.causalWatchPaths)
       : undefined
   opts.signal?.throwIfAborted()
   const prompt = [

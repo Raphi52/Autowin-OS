@@ -68,6 +68,7 @@ export interface WorktreeAgentActivity {
     | 'pending'
     | 'integrating'
     | 'published'
+    | 'held'
     | 'cleanup-pending'
     | 'complete'
     | 'blocked'

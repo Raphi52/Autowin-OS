@@ -32,6 +32,60 @@ class CountedProvider implements ProviderAdapter {
 }
 
 describe('ExecutionSupervisor', () => {
+  it('reserve tout le fan-out autorise sans sur-reserver le budget tokens', async () => {
+    const supervisor = new ExecutionSupervisor()
+    const quote = compileExecutionQuote('analyse trois pistes')
+    quote.limits.maxProviderCalls = 3
+    quote.limits.maxConcurrency = 3
+    quote.limits.maxTotalTokens = 300
+    quote.limits.maxFreshTokens = 300
+
+    await supervisor.run(quote, undefined, async () => {
+      expect(supervisor.reserveProviderCall()).toBeDefined()
+      expect(supervisor.reserveProviderCall()).toBeDefined()
+      expect(supervisor.reserveProviderCall()).toBeDefined()
+      expect(() => supervisor.reserveProviderCall()).toThrow(/budget.*appels/i)
+    })
+
+    expect(supervisor.lastSnapshot()).toMatchObject({ startedCalls: 3, activeCalls: 3 })
+  })
+
+  it('interrompt le fan-out restant quand un reglement consomme ses reservations', async () => {
+    const supervisor = new ExecutionSupervisor()
+    const quote = compileExecutionQuote('analyse trois pistes')
+    quote.limits.maxProviderCalls = 3
+    quote.limits.maxConcurrency = 3
+    quote.limits.maxTotalTokens = 300
+    quote.limits.maxFreshTokens = 300
+
+    await supervisor.run(quote, undefined, async () => {
+      const first = supervisor.reserveProviderCall()!
+      const second = supervisor.reserveProviderCall()!
+      const third = supervisor.reserveProviderCall()!
+
+      first.complete({ inputTokens: 90, outputTokens: 90 })
+
+      expect(second.signal.aborted).toBe(true)
+      expect(third.signal.aborted).toBe(true)
+    })
+  })
+
+  it("n'admet aucun appel dont la reservation tokens serait nulle", async () => {
+    const supervisor = new ExecutionSupervisor()
+    const quote = compileExecutionQuote('analyse trois pistes')
+    quote.limits.maxProviderCalls = 3
+    quote.limits.maxConcurrency = 3
+    quote.limits.maxTotalTokens = 1
+    quote.limits.maxFreshTokens = 1
+
+    await supervisor.run(quote, undefined, async () => {
+      expect(supervisor.reserveProviderCall()).toBeDefined()
+      expect(() => supervisor.reserveProviderCall()).toThrow(/budget.*tokens/i)
+    })
+
+    expect(supervisor.lastSnapshot()).toMatchObject({ startedCalls: 1, activeCalls: 1 })
+  })
+
   it('refuse le prochain appel AVANT de demarrer le provider', async () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new CountedProvider({ inputTokens: 10, outputTokens: 2 })

@@ -71,10 +71,7 @@ const PROVIDER_DEFAULT_SELECTIONS: Record<
  * famille du provider ; sans catalogue (ou alias insoluble), fallback figé = 0 régression.
  * Un `binding.model` explicite reste TOUJOURS prioritaire (jamais réécrit).
  */
-export function normalizeRoleBinding(
-  binding: RoleBinding,
-  catalog?: ImportedModel[]
-): RoleBinding {
+export function normalizeRoleBinding(binding: RoleBinding, catalog?: ImportedModel[]): RoleBinding {
   const defaults = PROVIDER_DEFAULT_SELECTIONS[binding.provider]
   if (!defaults) return { ...binding }
   const aliasModel =
@@ -157,5 +154,19 @@ export class RoleModelConfig {
  * réellement (cf. ImportedModel.reasoningEfforts) et chaque adaptateur rejette
  * explicitement une valeur qu'il ne sait pas transmettre (cf. providers/*).
  */
-export type ReasoningEffort =
-  'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
+export const REASONING_EFFORTS = [
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+  'ultra'
+] as const
+
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number]
+
+export function isReasoningEffort(value: unknown): value is ReasoningEffort {
+  return typeof value === 'string' && REASONING_EFFORTS.includes(value as ReasoningEffort)
+}

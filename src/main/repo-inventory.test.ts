@@ -93,6 +93,49 @@ describe('replier un balayage en dépôts — le cœur, sans git', () => {
     ])
     expect(repos).toHaveLength(1)
   })
+
+  it('garde independants deux depots homonymes et leurs worktrees', () => {
+    const repos = foldRepoScan([
+      {
+        path: 'C:\\A\\Repo',
+        worktree: false,
+        owner: 'Repo',
+        ownerPath: 'C:\\A\\Repo',
+        commits: 10
+      },
+      {
+        path: 'C:\\A\\Repo-wt',
+        worktree: true,
+        owner: 'Repo',
+        ownerPath: 'C:\\A\\Repo',
+        commits: 2
+      },
+      {
+        path: 'D:\\B\\Repo',
+        worktree: false,
+        owner: 'Repo',
+        ownerPath: 'D:\\B\\Repo',
+        commits: 20
+      },
+      {
+        path: 'D:\\B\\Repo-wt-1',
+        worktree: true,
+        owner: 'Repo',
+        ownerPath: 'D:\\B\\Repo',
+        commits: 3
+      },
+      {
+        path: 'D:\\B\\Repo-wt-2',
+        worktree: true,
+        owner: 'Repo',
+        ownerPath: 'D:\\B\\Repo',
+        commits: 4
+      }
+    ])
+
+    expect(repos.find((repo) => repo.path === 'C:\\A\\Repo')?.worktrees).toBe(1)
+    expect(repos.find((repo) => repo.path === 'D:\\B\\Repo')?.worktrees).toBe(2)
+  })
 })
 
 describe('libellé de branche', () => {

@@ -1,6 +1,6 @@
 import { appendFileSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { GitReadResult } from '../../shared/git-read'
 import {
@@ -8,10 +8,97 @@ import {
   appendExecutionEvidenceFileTrace,
   filterConversationGitState,
   readCurrentConversationPathOwnership,
-  readConversationFilePaths
+  readConversationFilePaths,
+  readConversationTurnFileMutations,
+  readConversationTurnFilePaths
 } from './conversation-file-trace-spool'
+import { lineFingerprint } from '../task-manager/watchdog-line'
 
 describe('conversation file trace spool', () => {
+  it('deduplique une publication rejouee apres crash par identifiant durable', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-conversation-idempotent-publication-'))
+    const evidence = [
+      {
+        type: 'workspace_delta' as const,
+        kind: 'mutation' as const,
+        status: 'completed' as const,
+        ok: true,
+        summary: 'delta publie',
+        paths: ['logs/app.log'],
+        writtenLineFingerprintsByPath: {
+          'logs/app.log': [lineFingerprint('ERROR publiee')]
+        }
+      }
+    ]
+    const context = {
+      conversationId: 'conv-replay',
+      turnId: 'turn-replay',
+      workspaceRoot: 'C:/repo',
+      published: true,
+      eventId: `worktree-publication:run-1:${'a'.repeat(40)}`
+    }
+
+    expect(appendExecutionEvidenceFileTrace(evidence, context, root)).toBe('appended')
+    expect(appendExecutionEvidenceFileTrace(evidence, context, root)).toBe('duplicate')
+    expect(
+      Object.values(
+        readConversationTurnFileMutations('conv-replay', 'turn-replay', root).lineFingerprintsByPath
+      )
+    ).toEqual([[lineFingerprint('ERROR publiee')]])
+  })
+
+  it('conserve un lot causal au dela de 256 empreintes', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-conversation-large-claims-'))
+    const fingerprints = Array.from({ length: 257 }, (_, index) => lineFingerprint(`line ${index}`))
+    appendConversationFileTrace(
+      {
+        timestamp: '2026-08-08T09:00:00.000Z',
+        conversationId: 'conv-large',
+        turnId: 'turn-large',
+        workspaceRoot: 'C:/repo-large',
+        source: 'subagent',
+        paths: ['logs/app.log'],
+        pathLineFingerprints: { 'logs/app.log': fingerprints }
+      },
+      root
+    )
+
+    const mutations = readConversationTurnFileMutations('conv-large', 'turn-large', root)
+
+    expect(Object.values(mutations.lineFingerprintsByPath)[0]).toEqual(fingerprints)
+  })
+
+  it('attribue les chemins absolus au tour exact qui les a modifies', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-conversation-turn-files-'))
+    appendConversationFileTrace(
+      {
+        timestamp: '2026-08-08T09:00:00.000Z',
+        conversationId: 'conv-a',
+        turnId: 'turn-a',
+        workspaceRoot: 'C:/repo-a',
+        source: 'subagent',
+        paths: ['logs/app.log']
+      },
+      root
+    )
+    appendConversationFileTrace(
+      {
+        timestamp: '2026-08-08T09:01:00.000Z',
+        conversationId: 'conv-a',
+        turnId: 'turn-b',
+        workspaceRoot: 'C:/repo-a',
+        source: 'subagent',
+        paths: ['logs/other.log']
+      },
+      root
+    )
+    const expected = resolve('C:/repo-a/logs/app.log').replaceAll('\\', '/')
+
+    expect(readConversationTurnFilePaths('conv-a', 'turn-a', root)).toEqual([
+      process.platform === 'win32' ? expected.toLowerCase() : expected
+    ])
+  })
+
   it('isole strictement les chemins par conversation et déduplique leur ordre', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-conversation-files-'))
     appendConversationFileTrace(
@@ -180,7 +267,11 @@ describe('conversation file trace spool', () => {
           status: 'completed',
           ok: true,
           summary: 'deux fichiers',
-          paths: ['src/a.ts', 'src/nested/b.ts']
+          paths: ['src/a.ts', 'src/nested/b.ts'],
+          writtenLineFingerprints: [
+            lineFingerprint('ERROR écrite par l’agent'),
+            lineFingerprint('ERROR écrite par l’agent')
+          ]
         },
         {
           type: 'file_change',
@@ -196,6 +287,56 @@ describe('conversation file trace spool', () => {
     )
 
     expect(readConversationFilePaths('conv-a', root)).toEqual(['src/a.ts', 'src/nested/b.ts'])
+    const mutations = readConversationTurnFileMutations('conv-a', 'turn-a', root)
+    expect(Object.values(mutations.lineFingerprintsByPath)).toEqual([
+      [lineFingerprint('ERROR écrite par l’agent'), lineFingerprint('ERROR écrite par l’agent')],
+      [lineFingerprint('ERROR écrite par l’agent'), lineFingerprint('ERROR écrite par l’agent')]
+    ])
+  })
+
+  it('remappe une preuve de worktree sur la base seulement apres publication verte', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-conversation-published-'))
+    appendExecutionEvidenceFileTrace(
+      [
+        {
+          type: 'file_change',
+          kind: 'mutation',
+          status: 'completed',
+          ok: true,
+          summary: 'revendication outil non validée',
+          paths: ['logs/app.log'],
+          workspaceRoot: 'C:/worktrees/run-1',
+          writtenLineFingerprints: [lineFingerprint('ERROR fantôme')]
+        },
+        {
+          type: 'workspace_delta',
+          kind: 'mutation',
+          status: 'completed',
+          ok: true,
+          summary: 'delta réel',
+          paths: ['logs/app.log'],
+          workspaceRoot: 'C:/worktrees/run-1',
+          writtenLineFingerprintsByPath: {
+            'logs/app.log': [lineFingerprint('ERROR publiée')]
+          }
+        }
+      ],
+      {
+        conversationId: 'conv-published',
+        turnId: 'turn-published',
+        workspaceRoot: 'C:/repo',
+        published: true
+      },
+      root
+    )
+
+    const mutations = readConversationTurnFileMutations('conv-published', 'turn-published', root)
+    const basePath = resolve('C:/repo/logs/app.log').replaceAll('\\', '/')
+    expect(mutations.lineFingerprintsByPath).toEqual({
+      [process.platform === 'win32' ? basePath.toLowerCase() : basePath]: [
+        lineFingerprint('ERROR publiée')
+      ]
+    })
   })
 
   it('conserve une trace active après trois rotations', () => {

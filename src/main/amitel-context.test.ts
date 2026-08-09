@@ -6,13 +6,27 @@ import { describe, expect, it, vi } from 'vitest'
 import { createAmitelContextProvider, graphifyEvidence } from './amitel-context'
 
 const TOKEN = 'a'.repeat(43)
+const TEST_CORPUS = [
+  'knowledge/_maps/autowin-os.md',
+  'knowledge/domain/autowin-os-',
+  'knowledge/runbooks/autowin-os-'
+] as const
 
 // Les sources Autowin du Brain sont des fichiers PLATS `knowledge/domain/autowin-os-*.md` — vérifié
 // sur la GED le 2026-08-04, il n'existe aucun répertoire `autowin-os/`. Les fixtures décrivaient ce
 // répertoire inexistant : le scope les écartait à raison, et le test accusait le code.
 
 function signed(context: string): Record<string, unknown> {
-  const authenticated = JSON.stringify({ context, navigation: null })
+  const headerAt = context.search(/^### Source \d+ — /m)
+  const preamble = headerAt >= 0 ? context.slice(0, headerAt) : ''
+  const content = headerAt >= 0 ? context.slice(headerAt) : context
+  const path = /^### Source \d+ — (.+)$/m.exec(content)?.[1] ?? 'knowledge/domain/autowin-os-test.md'
+  const authenticated = JSON.stringify({
+    context,
+    navigation: null,
+    corpus: TEST_CORPUS,
+    structuredContext: { preamble, sources: [{ path, content }] }
+  })
   const signature = createHmac('sha256', TOKEN)
     .update(`amitel-brain\n2\n${authenticated}`, 'utf8')
     .digest('hex')
@@ -40,6 +54,12 @@ const resolveGraphEvidence = async (raw: string, query: string, limit: number): 
   graphifyEvidence(raw, query, limit)
 
 describe('Amitel prompt context', () => {
+  it('refuse aussi une origine distante injectée directement au provider', () => {
+    expect(() => createAmitelContextProvider({
+      origin: 'https://remote.example.invalid:9443',
+      fetchFn: vi.fn() as never,
+    })).toThrow(/loopback/)
+  })
   it('combines authenticated Amitel Brain evidence with matching Graphify code evidence', async () => {
     const fetchFn = vi.fn().mockResolvedValue({
       ok: true,

@@ -89,6 +89,23 @@ describe('AuthoritySas', () => {
     expect(produced).toHaveLength(0)
     expect(sas.journal()).toHaveLength(1)
   })
+  it('applique le defaut sur resolve apres expiration au lieu d accepter le choix tardif', () => {
+    let t = 0
+    const sas = new AuthoritySas(() => t)
+    const id = sas.propose({
+      question: 'Supprimer ?',
+      options: ['approve', 'cancel'],
+      safeDefault: 'cancel',
+      ttlMs: 1000
+    })
+    t = 1000
+
+    expect(sas.resolve(id, 'approve')).toMatchObject({
+      choice: 'cancel',
+      by: 'timeout-default'
+    })
+  })
+
   it('rejects a choice outside the proposed options', () => {
     const sas = new AuthoritySas()
     const id = sas.propose({

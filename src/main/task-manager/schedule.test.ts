@@ -30,6 +30,32 @@ describe('Task Manager — planification structurée', () => {
     expect(resolveNextOccurrence(everyTwoDays, first)).toBe(Date.parse('2026-08-05T07:30:00.000Z'))
   })
 
+  it('conserve le jour mensuel ancre apres un mois plus court, y compris avec intervalle 2', () => {
+    const monthly = schedule({
+      startDate: '2026-01-31',
+      timeZone: 'UTC',
+      recurrence: { unit: 'month', interval: 1 }
+    })
+    const january = resolveFirstOccurrence(monthly)
+    const february = resolveNextOccurrence(monthly, january)
+    const march = resolveNextOccurrence(monthly, february!)
+
+    expect(february).toBe(Date.parse('2026-02-28T09:30:00.000Z'))
+    expect(march).toBe(Date.parse('2026-03-31T09:30:00.000Z'))
+
+    const everyTwoMonths = schedule({
+      startDate: '2025-12-31',
+      timeZone: 'UTC',
+      recurrence: { unit: 'month', interval: 2 }
+    })
+    const december = resolveFirstOccurrence(everyTwoMonths)
+    const februaryAfterTwoMonths = resolveNextOccurrence(everyTwoMonths, december)
+    const aprilAfterTwoMonths = resolveNextOccurrence(everyTwoMonths, februaryAfterTwoMonths!)
+
+    expect(februaryAfterTwoMonths).toBe(Date.parse('2026-02-28T09:30:00.000Z'))
+    expect(aprilAfterTwoMonths).toBe(Date.parse('2026-04-30T09:30:00.000Z'))
+  })
+
   it('calcule les récurrences en minutes et en heures', () => {
     const everyFifteenMinutes = schedule({ recurrence: { unit: 'minute', interval: 15 } })
     const everyTwoHours = schedule({ recurrence: { unit: 'hour', interval: 2 } })

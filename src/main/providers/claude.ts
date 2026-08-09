@@ -33,6 +33,7 @@ import type {
   Usage
 } from './types'
 import type { ProviderArtifactCandidate } from '../../shared/artifacts'
+import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-fingerprint'
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { claudeAccountEnv } from '../claude-accounts'
 
@@ -193,6 +194,53 @@ export function claudeToolResultText(content: unknown): string {
       .join('\n')
   }
   return ''
+}
+
+/** Lignes dont l'outil d'édition revendique directement l'écriture ; jamais le stdout d'un shell. */
+export function claudeWrittenLineFingerprints(
+  input: Record<string, unknown> | undefined
+): string[] {
+  if (!input) return []
+  const fingerprints: string[] = []
+  const wholeContent = (value: unknown): void => {
+    if (typeof value !== 'string') return
+    fingerprints.push(...value.split(/\r?\n/).filter(Boolean).map(exactLineFingerprint))
+  }
+  wholeContent(input.content)
+  if (typeof input.new_string === 'string') {
+    fingerprints.push(
+      ...addedLineFingerprints(
+        typeof input.old_string === 'string' ? input.old_string : '',
+        input.new_string
+      )
+    )
+  }
+  if (typeof input.new_source === 'string') {
+    fingerprints.push(
+      ...addedLineFingerprints(
+        typeof input.old_source === 'string' ? input.old_source : '',
+        input.new_source
+      )
+    )
+  }
+  if (Array.isArray(input.edits)) {
+    for (const edit of input.edits) {
+      if (
+        edit &&
+        typeof edit === 'object' &&
+        typeof (edit as { new_string?: unknown }).new_string === 'string'
+      ) {
+        const change = edit as { old_string?: unknown; new_string: string }
+        fingerprints.push(
+          ...addedLineFingerprints(
+            typeof change.old_string === 'string' ? change.old_string : '',
+            change.new_string
+          )
+        )
+      }
+    }
+  }
+  return fingerprints
 }
 
 /** Images/documents structurés éventuellement remontés par Claude ou un résultat d'outil. */
@@ -439,7 +487,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     try {
       mutationBefore =
         execution?.causallyIsolated && execution.sandbox !== 'read-only'
-          ? await captureWorkspaceMutationSnapshot(execution.cwd)
+          ? await captureWorkspaceMutationSnapshot(execution.cwd, execution.causalWatchPaths)
           : undefined
       opts.signal?.throwIfAborted()
     } catch (error) {
@@ -658,7 +706,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         )
       )
     }
-    const pendingTools = new Map<string, { name: string; command: string; filePath: string }>()
+    const pendingTools = new Map<
+      string,
+      { name: string; command: string; filePath: string; writtenLineFingerprints: string[] }
+    >()
     const queue: StreamChunk[] = []
     let done = false
     let childClosed = false
@@ -749,7 +800,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             // B — mémorise l'appel outil ; la preuve (ok/échec) arrive dans le tool_result associé.
             const filePath = String(part.input?.file_path ?? '')
             const command = String(part.input?.command ?? filePath)
-            pendingTools.set(part.id, { name: part.name, command, filePath })
+            pendingTools.set(part.id, {
+              name: part.name,
+              command,
+              filePath,
+              writtenLineFingerprints: claudeWrittenLineFingerprints(part.input)
+            })
           }
         }
       } else if (t === 'user') {
@@ -783,7 +839,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             ...(isFile
               ? {
                   path: call.filePath,
-                  paths: [claudeEvidencePath(call.filePath, execution?.cwd ?? process.cwd())]
+                  paths: [claudeEvidencePath(call.filePath, execution?.cwd ?? process.cwd())],
+                  ...(call.writtenLineFingerprints.length > 0
+                    ? { writtenLineFingerprints: call.writtenLineFingerprints }
+                    : {})
                 }
               : call.command
                 ? { command: call.command }

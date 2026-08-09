@@ -56,7 +56,10 @@ const SECRET_PATTERNS: Array<{ name: string; re: RegExp }> = [
   { name: 'clé privée', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
   { name: 'token GitHub', re: /\bgh[pousr]_[A-Za-z0-9]{20,}/ },
   { name: 'clé AWS', re: /\bAKIA[0-9A-Z]{16}\b/ },
-  { name: 'clé API générique', re: /\b(?:api[_-]?key|secret|password|token)\s*[:=]\s*['"][^'"]{16,}['"]/i },
+  {
+    name: 'clé API générique',
+    re: /\b(?:api[_-]?key|secret|password|token)\s*[:=]\s*['"][^'"]{16,}['"]/i
+  },
   { name: 'jeton Bearer', re: /\bBearer\s+[A-Za-z0-9._-]{24,}/ }
 ]
 
@@ -66,7 +69,7 @@ export function detectSecret(text: string): string | undefined {
 }
 
 /**
- * Lignes de `git status --porcelain` → chemins (gère le renommage `a -> b`).
+ * Enregistrements NUL de `git status --porcelain=v1 -z` → chemins exacts.
  *
  * NB : tous les appels passent `-uall`. Sans lui, git REPLIE un dossier non suivi en une seule
  * entrée (`?? inbox/`) : un fichier ajouté dans un dossier déjà non suivi devient alors invisible
@@ -74,15 +77,22 @@ export function detectSecret(text: string): string | undefined {
  * compris le travail d'autrui. Constaté en vrai sur le Brain.
  */
 export function parsePorcelainPaths(stdout: string): string[] {
-  return stdout
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const path = line.slice(2).trim().replace(/^"|"$/g, '')
-      const renamed = path.split(' -> ')
-      return renamed[renamed.length - 1]
-    })
+  const records = stdout.split('\0')
+  const paths: string[] = []
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index]
+    if (!record) continue
+    const separator = record[2] === ' ' ? 2 : record[1] === ' ' ? 1 : -1
+    if (separator < 0) continue
+    const status = record.slice(0, separator)
+    const path = record.slice(separator + 1)
+    if (!path) continue
+    paths.push(path)
+    // En mode -z, Git écrit le NOUVEAU chemin dans l'enregistrement status, puis l'ANCIEN
+    // chemin comme enregistrement NUL séparé. Il n'existe aucun séparateur textuel ` -> `.
+    if (status.includes('R') || status.includes('C')) index += 1
+  }
+  return paths
 }
 
 /**
@@ -96,7 +106,9 @@ export async function autoCloseRun(input: AutoCloseInput): Promise<AutoCloseResu
   }
   try {
     const scope = paths?.length ? ['--', ...paths] : []
-    const changed = parsePorcelainPaths(await runGit(['status', '--porcelain', '-uall', ...scope], repo))
+    const changed = parsePorcelainPaths(
+      await runGit(['status', '--porcelain=v1', '-z', '-uall', ...scope], repo)
+    )
     if (changed.length === 0) return { status: 'skipped', reason: 'no-changes' }
 
     // Dernier filet anti-secret : on inspecte ce qu'on s'apprête à publier, pas l'arbre entier.
@@ -180,7 +192,7 @@ export function autoCloseBranch(runId: string): string {
  */
 export async function snapshotChangedPaths(repo: string, runGit: GitRunner): Promise<string[]> {
   try {
-    return parsePorcelainPaths(await runGit(['status', '--porcelain', '-uall'], repo))
+    return parsePorcelainPaths(await runGit(['status', '--porcelain=v1', '-z', '-uall'], repo))
   } catch {
     return [] // dépôt illisible → aucune baseline ; le filtrage se comporte comme avant
   }
@@ -273,7 +285,9 @@ export async function closeGreenRunOnDisk(input: {
     baseHead: string | undefined
   ): Promise<AutoCloseResult> => {
     try {
-      const after = parsePorcelainPaths(await runGit(['status', '--porcelain', '-uall'], repo))
+      const after = parsePorcelainPaths(
+        await runGit(['status', '--porcelain=v1', '-z', '-uall'], repo)
+      )
       const mine = pathsFromRun(before, after)
       // Arbre propre : le travail du run a pu être DÉJÀ commité par la fusion du worktree.
       if (mine.length === 0) {

@@ -287,11 +287,19 @@ export class ExecutionSupervisor {
     }
     const remainingCalls = Math.max(1, limits.maxProviderCalls - runtime.startedCalls)
     const totalReservation = Math.ceil(
-      Math.max(0, limits.maxTotalTokens - runtime.totalTokens) / remainingCalls
+      Math.max(0, limits.maxTotalTokens - runtime.totalTokens - runtime.reservedTotalTokens) /
+        remainingCalls
     )
     const freshReservation = Math.ceil(
-      Math.max(0, limits.maxFreshTokens - runtime.freshTokens) / remainingCalls
+      Math.max(0, limits.maxFreshTokens - runtime.freshTokens - runtime.reservedFreshTokens) /
+        remainingCalls
     )
+    if (totalReservation <= 0) {
+      deny(`Budget tokens total entierement reserve (${limits.maxTotalTokens})`)
+    }
+    if (freshReservation <= 0) {
+      deny(`Budget tokens frais entierement reserve (${limits.maxFreshTokens})`)
+    }
     if (
       runtime.totalTokens + runtime.reservedTotalTokens + totalReservation >
       limits.maxTotalTokens
@@ -345,8 +353,18 @@ export class ExecutionSupervisor {
       if (runtime.totalTokens > limits.maxTotalTokens) {
         runtime.stoppedReason = `Budget tokens total depasse (${runtime.totalTokens}/${limits.maxTotalTokens})`
         runtime.controller.abort(runtime.stoppedReason)
+      } else if (runtime.totalTokens + runtime.reservedTotalTokens > limits.maxTotalTokens) {
+        runtime.stoppedReason =
+          `Budget tokens total compromis ` +
+          `(${runtime.totalTokens + runtime.reservedTotalTokens}/${limits.maxTotalTokens}, reservations actives incluses)`
+        runtime.controller.abort(runtime.stoppedReason)
       } else if (runtime.freshTokens > limits.maxFreshTokens) {
         runtime.stoppedReason = `Budget tokens frais depasse (${runtime.freshTokens}/${limits.maxFreshTokens})`
+        runtime.controller.abort(runtime.stoppedReason)
+      } else if (runtime.freshTokens + runtime.reservedFreshTokens > limits.maxFreshTokens) {
+        runtime.stoppedReason =
+          `Budget tokens frais compromis ` +
+          `(${runtime.freshTokens + runtime.reservedFreshTokens}/${limits.maxFreshTokens}, reservations actives incluses)`
         runtime.controller.abort(runtime.stoppedReason)
       } else if (limits.maxUsd !== null && runtime.knownCostUsd > limits.maxUsd) {
         runtime.stoppedReason = `Budget USD depasse (${runtime.knownCostUsd}/${limits.maxUsd})`

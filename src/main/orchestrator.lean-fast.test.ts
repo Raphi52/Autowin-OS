@@ -417,6 +417,44 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
     ])
   })
 
+  it('isole aussi les chemins causaux de deux runs concurrents multi-phases', async () => {
+    const provider = new ConcurrentObserverProvider()
+    const orch = makeOrchestrator(provider, { classifyPhases: () => ['build'] })
+    const runWithPath = (task: string, path: string) =>
+      orch.run(
+        task,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        [path]
+      )
+
+    const first = runWithPath('analyse concurrente A', 'C:\\ws\\a.log')
+    await provider.firstEntered
+    const second = runWithPath('analyse concurrente B', 'C:\\ws\\b.log')
+    await provider.secondEntered
+    provider.releaseFirst()
+    await first
+    provider.releaseSecond()
+    await second
+
+    expect(provider.calls.map((call) => call.execution?.causalWatchPaths)).toEqual([
+      ['C:\\ws\\a.log'],
+      ['C:\\ws\\a.log'],
+      ['C:\\ws\\b.log'],
+      ['C:\\ws\\b.log']
+    ])
+  })
+
   it("persiste le token pending avant que le provider n'annonce son pid", async () => {
     const provider = new SpawnIntentProvider()
     const snapshots: Array<Array<{ token: string; pid?: number }>> = []

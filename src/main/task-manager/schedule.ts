@@ -177,6 +177,10 @@ function addCalendarMonths(wall: WallClock, months: number): WallClock {
   }
 }
 
+function calendarMonthDistance(from: WallClock, to: WallClock): number {
+  return (to.year - from.year) * 12 + to.month - from.month
+}
+
 function isoWeekDay(wall: WallClock): number {
   const day = new Date(Date.UTC(wall.year, wall.month - 1, wall.day)).getUTCDay()
   return day === 0 ? 7 : day
@@ -262,7 +266,11 @@ export function resolveNextOccurrence(
       next = addCalendarDays(current, schedule.recurrence.interval)
       break
     case 'month':
-      next = addCalendarMonths(current, schedule.recurrence.interval)
+      next = addCalendarMonths(
+        start,
+        (Math.floor(calendarMonthDistance(start, current) / schedule.recurrence.interval) + 1) *
+          schedule.recurrence.interval
+      )
       break
     case 'week': {
       const selected = new Set(schedule.recurrence.weekDays)

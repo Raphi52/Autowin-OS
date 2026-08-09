@@ -76,7 +76,14 @@ function api() {
     promptTracesGlobal: vi.fn().mockResolvedValue([]),
     causalTrace: vi.fn((conversationId: string) =>
       Promise.resolve(conversationId === 'conv-1' ? convOne : convTwo)
-    )
+    ),
+    semanticTimeline: vi.fn(async () => ({
+      schema: 'autowin.semantic-temporal/v1',
+      sourceDigest: 'a'.repeat(64),
+      generatedAt: '2026-08-08T10:00:00.000Z',
+      nodes: [{ id: 'semantic-1' }, { id: 'semantic-2' }],
+      edges: [{ id: 'edge-1', source: 'semantic-1', target: 'semantic-2' }]
+    }))
   }
 }
 
@@ -111,7 +118,9 @@ describe('Observatory contextual toolbar', () => {
   }
 
   it('organise la barre en trois zones et rend les filtres rapides mesurables', async () => {
-    const { view } = await mount()
+    const { view, mockApi } = await mount()
+
+    expect(mockApi.promptCalls).toHaveBeenCalledWith('conv-1')
 
     expect(view.querySelectorAll('.observatory-toolbar > [data-toolbar-zone]')).toHaveLength(3)
     expect(view.querySelector('[data-testid="observatory-result-count"]')?.textContent).toContain(
@@ -133,6 +142,15 @@ describe('Observatory contextual toolbar', () => {
     ) as HTMLButtonElement
     await act(async () => reset.click())
     expect(view.querySelectorAll('.observatory-event')).toHaveLength(4)
+  })
+
+  it('rend la projection temporelle reconstruite pour la conversation active', async () => {
+    const { view, mockApi } = await mount()
+
+    expect(mockApi.semanticTimeline).toHaveBeenCalledWith('conv-1')
+    expect(view.querySelector('[data-testid="semantic-timeline-summary"]')?.textContent).toContain(
+      '2 noeuds · 1 lien'
+    )
   })
 
   it('rend la recherche et le filtre Type effectifs puis réinitialisables', async () => {
@@ -331,6 +349,195 @@ describe('Observatory contextual toolbar', () => {
     expect(view.textContent).toContain('conversation B')
   })
 
+  it('actualise en direct seulement la conversation active et coalesce une rafale', async () => {
+    let emitAppEvent: ((event: { type: string; convId?: string }) => void) | undefined
+    const unsubscribe = vi.fn()
+    const mockApi = {
+      ...api(),
+      onAppEvent: vi.fn((callback: typeof emitAppEvent) => {
+        emitAppEvent = callback
+        return unsubscribe
+      })
+    }
+    await mount(mockApi)
+    expect(mockApi.causalTrace).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      emitAppEvent?.({ type: 'causal-trace-updated', convId: 'conv-2' })
+      emitAppEvent?.({ type: 'causal-trace-updated', convId: 'conv-1' })
+      emitAppEvent?.({ type: 'causal-trace-updated', convId: 'conv-1' })
+      await new Promise((resolve) => setTimeout(resolve, 80))
+      await Promise.resolve()
+    })
+
+    expect(mockApi.causalTrace).toHaveBeenCalledTimes(2)
+    await act(async () => root?.unmount())
+    root = null
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('borne la latence live meme si les evenements arrivent plus vite que le debounce', async () => {
+    let emitAppEvent: ((event: { type: string; convId?: string }) => void) | undefined
+    const mockApi = {
+      ...api(),
+      onAppEvent: vi.fn((callback: typeof emitAppEvent) => {
+        emitAppEvent = callback
+        return vi.fn()
+      })
+    }
+    await mount(mockApi)
+
+    await act(async () => {
+      for (let index = 0; index < 5; index += 1) {
+        emitAppEvent?.({ type: 'causal-trace-updated', convId: 'conv-1' })
+        await new Promise((resolve) => setTimeout(resolve, 30))
+      }
+    })
+
+    expect(mockApi.causalTrace.mock.calls.length).toBeGreaterThan(1)
+  })
+
+  it('garde la trace causale a jour pendant que la vue visitee est masquee', async () => {
+    let emitAppEvent: ((event: { type: string; convId?: string }) => void) | undefined
+    const mockApi = {
+      ...api(),
+      onAppEvent: vi.fn((callback: typeof emitAppEvent) => {
+        emitAppEvent = callback
+        return vi.fn()
+      })
+    }
+    await mount(mockApi)
+    await act(async () => {
+      root?.render(createElement(ObservatoryView, { active: false }))
+      await Promise.resolve()
+    })
+    vi.useFakeTimers()
+    try {
+      await act(async () => {
+        emitAppEvent?.({ type: 'causal-trace-updated', convId: 'conv-1' })
+        await vi.advanceTimersByTimeAsync(50)
+      })
+
+      expect(mockApi.causalTrace).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('affiche les décisions ouvertes et les preuves clôturées', async () => {
+    const mockApi = api()
+    mockApi.causalTrace.mockResolvedValue([
+      trace('decision-closed', 'conv-1', 'decision', 'codex', {
+        content: JSON.stringify({ hypothesis: 'Valider le cache', expectedSignal: 'test vert' })
+      }),
+      trace('proof', 'conv-1', 'tool-result', 'codex', {
+        parentId: 'decision-closed',
+        content: '18 tests verts'
+      }),
+      trace('verdict', 'conv-1', 'verdict', 'codex', { parentId: 'proof', content: 'accepté' }),
+      trace('decision-open', 'conv-1', 'decision', 'codex', { content: 'Mesurer la latence' })
+    ])
+    const { view } = await mount(mockApi)
+
+    const ledger = view.querySelector('[data-testid="observatory-decision-ledger"]')
+    expect(ledger?.tagName).toBe('DETAILS')
+    expect((ledger as HTMLDetailsElement).open).toBe(false)
+    expect(ledger?.textContent).toContain('Valider le cache')
+    expect(ledger?.textContent).toContain('18 tests verts')
+    expect(ledger?.textContent).toContain('accepté')
+    expect(ledger?.textContent).toContain('Mesurer la latence')
+    expect(ledger?.textContent).toContain('ouverte')
+  })
+
+  it('rend les reçus d’autorité et leur résolution dans une piste dédiée', async () => {
+    const mockApi = api()
+    mockApi.causalTrace.mockResolvedValue([
+      {
+        ...trace('authority-request', 'conv-1', 'decision', 'codex', {
+          content: '{"id":"conv-1"}'
+        }),
+        status: 'pending',
+        authority: {
+          mode: 'ask',
+          commandAuthority: 'destructive',
+          mutates: true,
+          decision: 'confirm',
+          decisionId: 'dec-1'
+        }
+      },
+      {
+        ...trace('authority-resolution', 'conv-1', 'decision', 'codex', {
+          parentId: 'authority-request',
+          content: '{"resolution":"cancel"}'
+        }),
+        status: 'cancelled',
+        authority: {
+          mode: 'ask',
+          commandAuthority: 'destructive',
+          mutates: true,
+          decision: 'confirm',
+          decisionId: 'dec-1',
+          resolution: 'cancel',
+          resolvedBy: 'user'
+        }
+      },
+      trace('business-decision', 'conv-1', 'decision', 'codex', {
+        content: 'Verifier l ordre clavier'
+      })
+    ] as HarnessTraceEvent[])
+
+    const { view } = await mount(mockApi)
+    const lane = view.querySelector('[data-testid="observatory-authority-ledger"]')
+    expect(lane?.tagName).toBe('DETAILS')
+    expect((lane as HTMLDetailsElement).open).toBe(false)
+    expect(lane?.textContent).toContain('Autorité & mutations')
+    expect(lane?.textContent).toContain('destructive')
+    expect(lane?.textContent).toContain('confirmation')
+    expect(lane?.textContent).toContain('annulée')
+    expect(lane?.textContent).toContain('user')
+    const event = view.querySelector('.observatory-event')
+    const decisions = view.querySelector('[data-testid="observatory-decision-ledger"]')
+    expect(event?.compareDocumentPosition(lane as Node) ?? 0).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(event?.compareDocumentPosition(decisions as Node) ?? 0).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
+  })
+
+  it('ne présente pas une autorisation directe terminée comme en attente', async () => {
+    const mockApi = api()
+    mockApi.causalTrace.mockResolvedValue([
+      {
+        ...trace('authority-allow', 'conv-1', 'decision', 'codex'),
+        authority: {
+          mode: 'auto',
+          commandAuthority: 'automatic',
+          mutates: false,
+          decision: 'allow'
+        }
+      }
+    ] as HarnessTraceEvent[])
+
+    const { view } = await mount(mockApi)
+    const lane = view.querySelector('[data-testid="observatory-authority-ledger"]')
+    expect(lane?.textContent).toContain('autorisée')
+    expect(lane?.textContent).not.toContain('en attente')
+  })
+
+  it('rend une comparaison sémantique structurée pour deux événements', async () => {
+    const { view } = await mount()
+    const events = [...view.querySelectorAll('.observatory-event')].slice(0, 2)
+    await act(async () => {
+      for (const event of events)
+        event.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }))
+    })
+
+    const comparison = view.querySelector('.observatory-diff')
+    expect(comparison?.querySelector('table')).not.toBeNull()
+    expect(comparison?.textContent).toContain('Provider')
+    expect(comparison?.textContent).toContain('Contenu / contexte')
+    expect(comparison?.textContent).toContain('changement')
+  })
+
   it('propose deux exports explicitement distincts', async () => {
     const blobs: Blob[] = []
     vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
@@ -427,6 +634,22 @@ describe('Observatory contextual toolbar', () => {
     )
   })
 
+  it('termine une actualisation même quand aucune conversation n’existe', async () => {
+    const mockApi = api()
+    mockApi.conversations.mockResolvedValue([])
+    const { view } = await mount(mockApi)
+    const refresh = view.querySelector('[data-testid="observatory-refresh"]') as HTMLButtonElement
+
+    await act(async () => {
+      refresh.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(refresh.disabled).toBe(false)
+    expect(refresh.textContent).toBe('Actualiser')
+  })
+
   it('signale une fraîcheur partielle quand une source secondaire échoue', async () => {
     const mockApi = api()
     mockApi.promptCalls.mockRejectedValue(new Error('promptCalls indisponible'))
@@ -437,6 +660,34 @@ describe('Observatory contextual toolbar', () => {
     expect(freshness?.textContent).toContain('Actualisation partielle')
     expect(view.querySelector('.observatory-source-errors')?.textContent).toContain(
       'promptCalls indisponible'
+    )
+  })
+
+  it('relance la timeline en erreur depuis le bouton Reessayer sans attendre une autre conversation', async () => {
+    const mockApi = api()
+    mockApi.semanticTimeline
+      .mockRejectedValueOnce(new Error('timeline indisponible'))
+      .mockResolvedValueOnce({
+        schema: 'autowin.semantic-temporal/v1',
+        sourceDigest: 'b'.repeat(64),
+        generatedAt: '2026-08-08T10:00:00.000Z',
+        nodes: [{ id: 'recovered' }],
+        edges: []
+      })
+    const { view } = await mount(mockApi)
+    const retry = [...view.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Réessayer'
+    ) as HTMLButtonElement
+
+    await act(async () => {
+      retry.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(mockApi.semanticTimeline).toHaveBeenCalledTimes(2)
+    expect(view.querySelector('[data-testid="semantic-timeline-summary"]')?.textContent).toContain(
+      '1 noeud'
     )
   })
 })

@@ -1,11 +1,14 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { configureAutowinAppDataBase } from './app-data'
 import { loadAutoClose, saveAutoClose } from './autoclose-store'
+import { AutowinOS } from './os'
 
 const dirs: string[] = []
 afterEach(() => {
+  configureAutowinAppDataBase(undefined)
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
@@ -51,5 +54,29 @@ describe('persistance de l’interrupteur de clôture automatique', () => {
     const path = tempFile()
     writeFileSync(path, JSON.stringify({ enabled: 'oui' }))
     expect(loadAutoClose(path)).toBe(false)
+  })
+
+  it('signale une écriture impossible au lieu de promettre une persistance', () => {
+    const path = tempFile()
+    mkdirSync(path)
+
+    expect(saveAutoClose(true, path)).toBe(false)
+    expect(loadAutoClose(path)).toBe(false)
+  })
+
+  it('conserve l’état mémoire précédent quand la persistance échoue', () => {
+    const base = mkdtempSync(join(tmpdir(), 'autowin-autoclose-os-'))
+    dirs.push(base)
+    configureAutowinAppDataBase(base)
+    mkdirSync(join(base, 'autowin-os', 'autoclose.json'), { recursive: true })
+    const os = Object.create(AutowinOS.prototype) as {
+      autoClose: boolean
+      setAutoClose(enabled: boolean): void
+      getAutoClose(): { enabled: boolean }
+    }
+    os.autoClose = false
+
+    expect(() => os.setAutoClose(true)).toThrow(/persister/)
+    expect(os.getAutoClose().enabled).toBe(false)
   })
 })
