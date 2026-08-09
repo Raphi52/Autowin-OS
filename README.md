@@ -43,6 +43,24 @@ Trois idées directrices :
    garde-fous déterministes (dont un *verify-replay* qui **rejoue** réellement la vérification au lieu
    de croire l'agent sur parole) — uniforme quel que soit le fournisseur.
 
+## Workflow « Chantier Autowin »
+
+Profil livré d'origine (`chantier-autowin`, dans `src/main/workflow-defaults.ts`), le plus complet des
+workflows par défaut.
+
+**Quand l'utiliser** — une mission menée de bout en bout, quand la tâche n'est pas encore choisie ou
+pas cadrée, et qu'elle demande de préparer le terrain avant d'écrire. Pour un simple défaut, préférer
+*Correctif* ; pour un besoin déjà identifié, *Feature* ; pour une question, *Éclair*.
+
+**Chemin** — `scout → frame → terrain → build → clean → judge`, chaque transition inconditionnelle.
+
+**Retour** — un `judge` **rouge** renvoie au `build`, **2 reprises au maximum** ; la reprise repasse
+ensuite par `clean` avant d'être rejugée. Aucun autre retour arrière n'existe dans ce profil.
+
+**Agents** — aucun agent ni persona imposé : chaque phase reprend le fournisseur, le modèle et le
+fan-out réglés dans Agent Studio au moment du run. Le profil est dupliquable, modifiable et
+supprimable ; il n'est posé qu'une fois, à la création du fichier de profils.
+
 ## Aperçu
 
 ### Chat — parler à l'agent (qui répond ET agit sur l'app)
