@@ -185,6 +185,41 @@ function duplicateAuthoritativeClosureIndex(line: string): number | undefined {
   return undefined
 }
 
+function withoutPersistedAuthoritativeClosure(line: string): string | undefined {
+  if (!isAuthoritativeOrchestrationClosureLine(line)) return line
+  const closureStart = line.indexOf(AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX)
+  const closureEnd = line.indexOf(
+    '.',
+    closureStart + AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX.length
+  )
+  if (closureEnd < 0) return undefined
+  const remainder = line
+    .slice(closureEnd + 1)
+    .replace(/^(?:(?:\*\*|__|~~)\s*)+/u, '')
+    .trim()
+  return remainder && !/^(?:\*\*|__|~~)$/u.test(remainder) ? remainder : undefined
+}
+
+function removePersistedAuthoritativeClosures(parts: ChatPart[]): ChatPart[] {
+  let changed = false
+  const reconciled = parts.flatMap((part): ChatPart[] => {
+    if (part.kind !== 'text') return [part]
+    const lines = part.text.split(/\r?\n/u).flatMap((line) => {
+      const usefulLine = withoutPersistedAuthoritativeClosure(line)
+      if (usefulLine === line) return [line]
+      changed = true
+      return usefulLine ? [usefulLine] : []
+    })
+    const text = lines
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+    if (text !== part.text) changed = true
+    return text ? [{ ...part, text }] : []
+  })
+  return changed ? reconciled : parts
+}
+
 function reconcileStoredOrchestrationClosure(parts: ChatPart[]): ChatPart[] {
   const action = [...parts]
     .reverse()
@@ -198,16 +233,13 @@ function reconcileStoredOrchestrationClosure(parts: ChatPart[]): ChatPart[] {
           part.data === ORCHESTRATION_ALREADY_ISSUED_REFUSAL
         )
     )
-  if (
-    action?.kind !== 'action' ||
-    action.ok !== true ||
-    !action.data ||
-    typeof action.data !== 'object'
-  )
-    return parts
+  if (action?.kind !== 'action') return parts
+  if (action.ok !== true || !action.data || typeof action.data !== 'object') {
+    return removePersistedAuthoritativeClosures(parts)
+  }
 
   const outcome = action.data as OrchestrationOutcome
-  if (!isDeliveredOrchestrationOutcome(outcome)) return parts
+  if (!isDeliveredOrchestrationOutcome(outcome)) return removePersistedAuthoritativeClosures(parts)
   let changed = false
   let closureSeen = false
   const reconciled = parts.flatMap((part): ChatPart[] => {
@@ -253,7 +285,7 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
   const terminalParts = done
     ? status === 'completed'
       ? reconcileStoredOrchestrationClosure(settleUnresolvedActions(parts))
-      : settleUnresolvedActions(parts)
+      : removePersistedAuthoritativeClosures(settleUnresolvedActions(parts))
     : parts
   return {
     role: 'assistant',

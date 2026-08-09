@@ -33,8 +33,9 @@ export const AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX =
   'Clôture Autowin : gate validé, RUN fermé green'
 
 export function isAuthoritativeOrchestrationClosureLine(line: string): boolean {
-  if (!line.startsWith(AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX)) return false
-  const suffix = line.slice(AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX.length)
+  const candidate = line.trimStart().replace(/^(?:(?:>\s+|[-+*]\s+)|(?:\*\*|__))+/u, '')
+  if (!candidate.startsWith(AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX)) return false
+  const suffix = candidate.slice(AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX.length)
   return suffix === '' || /^\s*[.;]/u.test(suffix)
 }
 
@@ -56,22 +57,45 @@ const PROOF_DECORATION_PREFIX =
 
 function maskQuotedEvidence(text: string): string {
   return text.replace(
-    /«[^»\n]*»|"(?:\\.|[^"\\\n])*"|(?<![\p{L}\p{N}])'(?:\\.|[^'\\\n])*'|`[^`\n]*`|(?<![\p{L}\p{N}])\/[^/\n]+\/[a-z]*/giu,
+    /«[^»\n]*»|"(?:\\.|[^"\\\n])*"|(?<![\p{L}\p{N}])'(?:\\.|[^'\\\n])*'/gu,
     (quoted) => ' '.repeat(quoted.length)
   )
 }
 
-function maskNegatedMarkdownEvidence(text: string): string {
-  if (
-    !/\b(?:absen(?:t|ce)|introuvable|supprim[ée]e?|exclu(?:e)?|ne\s+(?:matche|correspond|contient|comprend|affiche|figure)\s+(?:plus|pas)|n['’]est\s+pas\s+pr[ée]sent|not\.(?:toContain|toMatch|includes)|does\s+not\s+(?:contain|match|include))\b/iu.test(
-      text
-    )
-  )
-    return text
-  return text.replace(
-    /\[[^\]\n]+\]\([^)\n]*\)|\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\n]+\*|_[^_\n]+_/gu,
-    (quoted) => ' '.repeat(quoted.length)
-  )
+const LIFECYCLE_ASSERTION_SOURCE =
+  '(?:run\\s+(?:(?:reste|toujours)\\s+)?open|non\\s+(?:publi[ée]e?|commit[ée]e?)|publication\\s+(?:reste|non\\s+ex[ée]cut)|(?:autoriser|d[ée]clencher)\\s+(?:la\\s+)?publication|(?:lancer|relancer)\\s+(?:le\\s+)?judge|judge[^\\n]*(?:refus[ée]|reste|non\\s+cl[oô]tur)|clean\\s+(?:puis|et)\\s+judge|encha[iî]ner\\s+clean[^\\n]*judge)'
+
+const LIFECYCLE_WRAPPED_SOURCE =
+  '(?:(?:\\*\\*|__|~~|\\*|_|\\[|`|\\/)\\s*)*' +
+  LIFECYCLE_ASSERTION_SOURCE +
+  '(?:\\s*(?:\\*\\*|__|~~|\\*|_|`|\\/|\\](?:\\([^\\n)]*\\))?))*'
+
+const NEGATED_LIFECYCLE_BEFORE = new RegExp(
+  `\\b(?:absence\\s+de|aucune\\s+(?:occurrence|mention)\\s+de|sans\\s+(?:occurrence|mention)\\s+de)\\s+${LIFECYCLE_WRAPPED_SOURCE}`,
+  'giu'
+)
+
+const NEGATED_LIFECYCLE_AFTER = new RegExp(
+  `${LIFECYCLE_WRAPPED_SOURCE}\\s+(?:(?:est|reste)\\s+)?(?:absent(?:e)?|introuvable|supprim[ée]e?|exclu(?:e)?|a\\s+disparu|n['’]appara[iî]t\\s+plus|n['’]est\\s+pas\\s+pr[ée]sent|ne\\s+(?:matche|correspond|contient|comprend|affiche|figure)\\s+(?:plus|pas))`,
+  'giu'
+)
+
+/** Masque seulement l'assertion lifecycle niée, pas les autres faits présents sur la même ligne. */
+function maskNegatedLifecycleEvidence(text: string): string {
+  return text
+    .replace(NEGATED_LIFECYCLE_BEFORE, (assertion) => ' '.repeat(assertion.length))
+    .replace(NEGATED_LIFECYCLE_AFTER, (assertion) => ' '.repeat(assertion.length))
+}
+
+function factualSuffixAfterStale(text: string, staleEnd: number): string | undefined {
+  const tail = text.slice(staleEnd)
+  const boundary = /[.;]\s+/u.exec(tail)
+  if (!boundary) return undefined
+  const candidate = tail.slice(boundary.index + boundary[0].length).trim()
+  const subject = candidate.replace(PROOF_DECORATION_PREFIX, '')
+  return /^(?:preuve|tests?(?:\s+verts?)?|contr[oô]le|r[ée]sultat)\b/iu.test(subject)
+    ? candidate
+    : undefined
 }
 
 function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
@@ -82,7 +106,7 @@ function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
     proofSubject
   )
   const searchable = (
-    proofLike ? maskNegatedMarkdownEvidence(maskQuotedEvidence(text)) : text
+    proofLike ? maskNegatedLifecycleEvidence(maskQuotedEvidence(text)) : text
   ).replace(/[`*_]/g, ' ')
 
   const staleSignal =
@@ -99,7 +123,7 @@ function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
     const proofPrefix = text
       .slice(0, staleSignal.index)
       .trimEnd()
-      .replace(/(?:\*\*|__|\*|_|\[)\s*$/u, '')
+      .replace(/(?:\*\*|__|\*|_|\[|`|\/)\s*$/u, '')
       .trimEnd()
     const hasProofBoundary = /[.!?;:—|-]$/u.test(proofPrefix)
     const proof = proofPrefix
@@ -110,7 +134,9 @@ function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
       .replace(PROOF_DECORATION_PREFIX, '')
       .replace(/^(?:preuve|tests?(?:\s+verts?)?|contr[oô]le|r[ée]sultat)\b\s*:?\s*/iu, '')
       .trim()
-    if (hasProofBoundary && proofContent) return proof
+    const suffixProof = factualSuffixAfterStale(text, staleSignal.index + staleSignal[0].length)
+    if (hasProofBoundary && proofContent) return suffixProof ? `${proof} ${suffixProof}` : proof
+    if (suffixProof) return suffixProof
   }
   return undefined
 }

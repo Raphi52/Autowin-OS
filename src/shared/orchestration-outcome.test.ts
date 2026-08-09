@@ -131,6 +131,23 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     ).toBe('')
   })
 
+  it.each([
+    'Test vert : RUN open absent — PASS.',
+    'Test vert : absence de RUN open confirmée — PASS.',
+    'Preuve : aucune occurrence de RUN open — PASS.',
+    'Test vert : RUN open a disparu — PASS.',
+    "Test vert : RUN open n'apparaît plus — PASS."
+  ])('conserve une preuve dont le signal lifecycle est localement nié : %s', (report) => {
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe(report)
+  })
+
   it('ne prend pas les apostrophes grammaticales pour des délimiteurs de citation', () => {
     expect(
       reconcileClosedOrchestrationText(
@@ -212,6 +229,20 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
       'Preuve : tests 12/12 verts — [lancer judge](https://example.test/judge).',
       'Preuve : tests 12/12 verts'
     ],
+    [
+      "Test vert : absence d'erreur confirmée. **RUN reste open**.",
+      "Test vert : absence d'erreur confirmée."
+    ],
+    ['Preuve : test absent ; **RUN reste open - lancer judge.**', 'Preuve : test absent'],
+    [
+      "Preuve : expect(text).not.toContain('timeout') — PASS ; [RUN reste open](#etat).",
+      "Preuve : expect(text).not.toContain('timeout') — PASS"
+    ],
+    [
+      'Preuve : la regex /timeout/ ne matche plus — **publication non exécutée**.',
+      'Preuve : la regex /timeout/ ne matche plus'
+    ],
+    ['Preuve : tests 12/12 verts - `lancer judge`.', 'Preuve : tests 12/12 verts'],
     ['Preuve : tests 12/12 verts — RUN reste open ; lancer judge.', 'Preuve : tests 12/12 verts'],
     ['Tests 12/12 verts - RUN reste open - lancer judge.', 'Tests 12/12 verts']
   ])('retire l’assertion lifecycle active sans effacer la preuve : %s', (report, expected) => {
@@ -223,6 +254,17 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
         reused: false
       })
     ).toBe(expected)
+  })
+
+  it('conserve une preuve factuelle placée après le statut lifecycle', () => {
+    expect(
+      reconcileClosedOrchestrationText('Preuve : RUN reste open. Tests 12/12 verts.', {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe('Tests 12/12 verts.')
   })
 
   it('arrête une section provisoire au prochain titre pair sans ligne vide', () => {

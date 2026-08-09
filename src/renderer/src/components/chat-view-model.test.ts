@@ -250,8 +250,7 @@ describe('durable assistant hydration and streaming', () => {
         },
         {
           kind: 'text',
-          text:
-            'Tests 12/12 verts.\n\n### Publication\n⚠️ Non publiée. La publication reste à déclencher.\n📍 Maintenant — diff non commité.\n⏳ Reste à faire — gate/publication non exécutées.\n👉 Recommandé — lancer judge.\n\nClôture Autowin : gate validé, RUN fermé green.'
+          text: 'Tests 12/12 verts.\n\n### Publication\n⚠️ Non publiée. La publication reste à déclencher.\n📍 Maintenant — diff non commité.\n⏳ Reste à faire — gate/publication non exécutées.\n👉 Recommandé — lancer judge.\n\nClôture Autowin : gate validé, RUN fermé green.'
         }
       ]
     })
@@ -259,7 +258,9 @@ describe('durable assistant hydration and streaming', () => {
     const text = hydrated.parts.find((part) => part.kind === 'text')?.text ?? ''
     expect(text).toContain('Tests 12/12 verts.')
     expect(text).toContain('Clôture Autowin : gate validé')
-    expect(text).not.toMatch(/non publiée|publication reste|non commité|gate\/publication|lancer judge/i)
+    expect(text).not.toMatch(
+      /non publiée|publication reste|non commité|gate\/publication|lancer judge/i
+    )
   })
 
   it('preserves unresolved advice when the structured outcome is not a delivered success', () => {
@@ -381,6 +382,80 @@ describe('durable assistant hydration and streaming', () => {
     expect(text).not.toContain('Clôture Autowin : gate validé')
   })
 
+  it.each(['failed', 'interrupted', 'cancelled'] as const)(
+    'removes a persisted green closure when the message is %s',
+    (status) => {
+      const hydrated = hydrateStoredAssistant({
+        content: 'projection',
+        status,
+        parts: [
+          {
+            kind: 'action',
+            name: 'orchestrate',
+            ok: true,
+            data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+          },
+          {
+            kind: 'text',
+            text: 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
+          },
+          { kind: 'text', text: 'Échec final : publication non exécutée.' }
+        ]
+      })
+      const text = hydrated.parts
+        .filter((part) => part.kind === 'text')
+        .map((part) => part.text)
+        .join('\n')
+
+      expect(text).toContain('Échec final : publication non exécutée.')
+      expect(text).not.toContain('Clôture Autowin : gate validé')
+    }
+  )
+
+  it('keeps failure evidence appended to a stale closure on the same line', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'failed',
+      parts: [
+        {
+          kind: 'text',
+          text: 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée. Échec final : timeout.'
+        }
+      ]
+    })
+
+    const text = hydrated.parts.find((part) => part.kind === 'text')?.text ?? ''
+    expect(text).toBe('Échec final : timeout.')
+  })
+
+  it('removes a persisted green closure when the latest orchestration failed', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        {
+          kind: 'text',
+          text: 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
+        },
+        { kind: 'action', name: 'orchestrate', ok: false, data: { error: 'timeout' } },
+        { kind: 'text', text: 'Échec final : publication non exécutée.' }
+      ]
+    })
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+
+    expect(text).toContain('Échec final : publication non exécutée.')
+    expect(text).not.toContain('Clôture Autowin : gate validé')
+  })
+
   it('ignores the historical same-turn duplicate refusal because it launched no run', () => {
     const hydrated = hydrateStoredAssistant({
       content: 'projection',
@@ -396,8 +471,7 @@ describe('durable assistant hydration and streaming', () => {
           kind: 'action',
           name: 'orchestrate',
           ok: false,
-          data:
-            'Une orchestration a deja ete lancee dans ce tour. Termine avec son resultat ; un nouveau run exige un nouveau message utilisateur.'
+          data: 'Une orchestration a deja ete lancee dans ce tour. Termine avec son resultat ; un nouveau run exige un nouveau message utilisateur.'
         },
         { kind: 'text', text: 'RUN open — lancer judge.' }
       ]
@@ -440,6 +514,30 @@ describe('durable assistant hydration and streaming', () => {
         },
         { kind: 'text', text: `Preuve.\n\n${closure}` },
         { kind: 'text', text: closure }
+      ]
+    })
+
+    const occurrences = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .flatMap((part) => part.text.match(/Clôture Autowin : gate validé/g) ?? [])
+    expect(occurrences).toHaveLength(1)
+  })
+
+  it('recognizes a persisted closure wrapped in Markdown without adding a second one', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        {
+          kind: 'text',
+          text: '**Clôture Autowin : gate validé, RUN fermé green ; publication terminée.**'
+        }
       ]
     })
 
@@ -820,7 +918,7 @@ describe('chat scrolling and layout rules', () => {
     expect(scrolls).toHaveLength(scrollsBeforeUnmount)
   })
 
-  it("abandonne la descente si le lecteur remonte lui-même entre deux frames", () => {
+  it('abandonne la descente si le lecteur remonte lui-même entre deux frames', () => {
     const queue: Array<() => void> = []
     const targets: Array<{ top: number }> = []
     const element = {
