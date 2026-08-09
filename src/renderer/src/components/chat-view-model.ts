@@ -12,6 +12,7 @@ import { parseScoutTable, type ScoutRow } from './scout-table'
 import type { PilotEventKind } from '../../../shared/pilot-events'
 import {
   isDeliveredOrchestrationOutcome,
+  ORCHESTRATION_ALREADY_ISSUED_REFUSAL,
   reconcileClosedOrchestrationText,
   type OrchestrationOutcome
 } from '../../../shared/orchestration-outcome'
@@ -172,24 +173,48 @@ export function settleIfDone(message: HydratedAssistantMessage): HydratedAssista
 function reconcileStoredOrchestrationClosure(parts: ChatPart[]): ChatPart[] {
   const action = [...parts]
     .reverse()
-    .find((part) => part.kind === 'action' && part.name === 'orchestrate' && part.ok === true)
-  if (action?.kind !== 'action' || !action.data || typeof action.data !== 'object') return parts
+    .find(
+      (part) =>
+        part.kind === 'action' &&
+        part.name === 'orchestrate' &&
+        !(
+          part.ok === false &&
+          typeof part.data === 'string' &&
+          part.data === ORCHESTRATION_ALREADY_ISSUED_REFUSAL
+        )
+    )
+  if (
+    action?.kind !== 'action' ||
+    action.ok !== true ||
+    !action.data ||
+    typeof action.data !== 'object'
+  )
+    return parts
 
   const outcome = action.data as OrchestrationOutcome
   if (!isDeliveredOrchestrationOutcome(outcome)) return parts
   let changed = false
-  const reconciled = parts.map((part) => {
-    if (part.kind !== 'text') return part
+  let closureSeen = false
+  const reconciled = parts.flatMap((part): ChatPart[] => {
+    if (part.kind !== 'text') return [part]
     const text = reconcileClosedOrchestrationText(part.text, outcome)
-    if (text === part.text) return part
-    changed = true
-    return { ...part, text }
+    const uniqueLines = text.split(/\r?\n/u).filter((line) => {
+      if (!line.includes('Clôture Autowin : gate validé')) return true
+      if (!closureSeen) {
+        closureSeen = true
+        return true
+      }
+      changed = true
+      return false
+    })
+    const uniqueText = uniqueLines
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+    if (uniqueText !== part.text) changed = true
+    return uniqueText ? [{ ...part, text: uniqueText }] : []
   })
-  if (
-    !reconciled.some(
-      (part) => part.kind === 'text' && part.text.includes('Clôture Autowin : gate validé')
-    )
-  ) {
+  if (!closureSeen) {
     reconciled.push({
       kind: 'text',
       text: 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'

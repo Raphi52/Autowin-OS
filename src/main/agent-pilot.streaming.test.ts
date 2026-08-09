@@ -48,6 +48,7 @@ describe('AgentPilot chat streaming', () => {
           status: 'succeeded',
           valid: true,
           gateBlocked: false,
+          reused: false,
           runPath: 'C:/runs/conv/build-settings-workspace/RUN.md',
           result: 'Le worker indique encore RUN open et recommande de lancer judge.'
         }
@@ -71,6 +72,41 @@ describe('AgentPilot chat streaming', () => {
     expect(done?.text).toContain('aucune autre orchestration')
     expect(done?.text).not.toContain('RUN open')
     expect(done?.text).not.toContain('lancer judge')
+  })
+
+  it('ne forge pas une clôture verte depuis un outcome incomplet', async () => {
+    const text = '<cmd>{"name":"orchestrate","args":{"task":"corrige"}}</cmd>'
+    const registry = {
+      send: vi.fn(async () => ({ text, provider: 'codex' })),
+      describePrompt: () => ({
+        provider: 'codex',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = {
+      catalog: () => [{ name: 'orchestrate', args: {}, description: 'workflow complet' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { status: 'succeeded' } })
+    }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'fais tout' }],
+      (event) => events.push(event),
+      undefined,
+      12,
+      'conv-malformed'
+    )
+
+    const done = events.find((event) => event.kind === 'done')
+    expect(done?.text).toContain('résultat terminal rendu')
+    expect(done?.text).not.toContain('gate validé')
   })
 
   it('emits progressive visible deltas while suppressing fragmented command markup', async () => {

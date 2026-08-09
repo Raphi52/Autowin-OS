@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatOrchestrationOutcome,
+  isDeliveredOrchestrationOutcome,
   reconcileClosedOrchestrationText,
   runLabelFromPath
 } from './orchestration-outcome'
@@ -18,6 +19,7 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
       status: 'succeeded',
       valid: true,
       gateBlocked: false,
+      reused: false,
       result:
         'Tests ciblés 11/11 verts.\n📍 Maintenant — RUN open, non commité.\n⏳ Reste à faire — lancer judge et publier.'
     })
@@ -65,6 +67,49 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     )
 
     expect(text).toBe('Preuve utile.')
+  })
+
+  it('ne confond pas une preuve géolocalisée avec un statut de cycle de vie', () => {
+    const report =
+      'Preuve avant.\n\n## 📍 Capture : settings.png\nLa capture est lisible.\n\nPreuve après.'
+
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe(report)
+  })
+
+  it('borne un bloc provisoire à son paragraphe et conserve la preuve suivante', () => {
+    const text = reconcileClosedOrchestrationText(
+      'Preuve avant.\n\n📍 Maintenant\nÉtat provisoire.\n\nPreuve après : checksum abc123.',
+      { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+    )
+
+    expect(text).toBe('Preuve avant.\n\nPreuve après : checksum abc123.')
+  })
+
+  it('exige des discriminants booléens positifs avant de déclarer une livraison', () => {
+    expect(
+      isDeliveredOrchestrationOutcome({
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe(true)
+    expect(isDeliveredOrchestrationOutcome({ status: 'succeeded' })).toBe(false)
+    expect(
+      isDeliveredOrchestrationOutcome({
+        status: 'succeeded',
+        valid: 'false',
+        gateBlocked: 'true',
+        reused: 'true'
+      })
+    ).toBe(false)
   })
 
   it('un gate BLOQUÉ est annoncé comme tel, même si l’appel a « réussi »', () => {

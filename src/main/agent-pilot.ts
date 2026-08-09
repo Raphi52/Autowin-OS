@@ -15,6 +15,8 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { startTurnTimer } from './turn-timing'
 import {
   formatOrchestrationOutcome,
+  isDeliveredOrchestrationOutcome,
+  ORCHESTRATION_ALREADY_ISSUED_REFUSAL,
   type OrchestrationOutcome
 } from '../shared/orchestration-outcome'
 import type { ChatArtifact } from '../shared/artifacts'
@@ -779,8 +781,7 @@ export class AgentPilot {
         anyActionExecuted = true
         emit({ kind: 'command', actionId, name: token.name, args: token.args })
         if (token.name === 'orchestrate' && orchestrationIssued) {
-          const refusal =
-            'Une orchestration a deja ete lancee dans ce tour. Termine avec son resultat ; un nouveau run exige un nouveau message utilisateur.'
+          const refusal = ORCHESTRATION_ALREADY_ISSUED_REFUSAL
           emit({
             kind: 'result',
             actionId,
@@ -810,12 +811,7 @@ export class AgentPilot {
         // donc mécaniquement le tour sur le résultat structuré, comme le chemin `/skill` explicite.
         if (token.name === 'orchestrate') {
           const outcome = r.ok ? (r.data as OrchestrationOutcome | undefined) : undefined
-          const deliveryClosed =
-            r.ok &&
-            outcome?.status === 'succeeded' &&
-            outcome.gateBlocked !== true &&
-            outcome.valid !== false &&
-            outcome.reused !== true
+          const deliveryClosed = r.ok && isDeliveredOrchestrationOutcome(outcome ?? {})
           const closureNotice = deliveryClosed
             ? 'Clôture Autowin : gate validé, RUN fermé green ; aucune autre orchestration ni aucun second judge ne sont nécessaires dans ce tour.'
             : 'Clôture Autowin : résultat terminal rendu ; aucune autre orchestration n’est relancée dans ce tour.'

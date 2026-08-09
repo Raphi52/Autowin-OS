@@ -305,6 +305,99 @@ describe('durable assistant hydration and streaming', () => {
     expect(text).toContain('Clôture Autowin : gate validé, RUN fermé green')
   })
 
+  it('does not let an older success hide a later failed orchestration', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: 'Premier run livré.' },
+        { kind: 'action', name: 'orchestrate', ok: false, data: { error: 'timeout' } },
+        { kind: 'text', text: 'Dernier run en échec : publication non exécutée.' }
+      ]
+    })
+
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+    expect(text).toContain('Dernier run en échec')
+    expect(text).not.toContain('Clôture Autowin : gate validé')
+  })
+
+  it('ignores the historical same-turn duplicate refusal because it launched no run', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: false,
+          data:
+            'Une orchestration a deja ete lancee dans ce tour. Termine avec son resultat ; un nouveau run exige un nouveau message utilisateur.'
+        },
+        { kind: 'text', text: 'RUN open — lancer judge.' }
+      ]
+    })
+
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+    expect(text).not.toContain('RUN open')
+    expect(text).toContain('Clôture Autowin : gate validé')
+  })
+
+  it('refuses to synthesize a closure from incomplete structured data', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        { kind: 'action', name: 'orchestrate', ok: true, data: { status: 'succeeded' } },
+        { kind: 'text', text: 'Publication non exécutée.' }
+      ]
+    })
+
+    expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe(
+      'Publication non exécutée.'
+    )
+  })
+
+  it('deduplicates an authoritative closure persisted in multiple text parts', () => {
+    const closure = 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: `Preuve.\n\n${closure}` },
+        { kind: 'text', text: closure }
+      ]
+    })
+
+    const occurrences = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .flatMap((part) => part.text.match(/Clôture Autowin : gate validé/g) ?? [])
+    expect(occurrences).toHaveLength(1)
+  })
+
   it('binds the first turn id then reduces progressive deltas without duplication', () => {
     const empty = hydrateStoredAssistant({ content: '', status: 'streaming', parts: [] })
     const first = reduceAssistantPilotEvent(empty, {

@@ -26,6 +26,9 @@ export interface OrchestrationOutcome {
   error?: unknown
 }
 
+export const ORCHESTRATION_ALREADY_ISSUED_REFUSAL =
+  'Une orchestration a deja ete lancee dans ce tour. Termine avec son resultat ; un nouveau run exige un nouveau message utilisateur.'
+
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined
 }
@@ -66,7 +69,7 @@ function isStaleWorkerLifecycleSection(line: string): boolean {
   const heading = /^\s*#{1,6}\s+(.+?)\s*$/u.exec(line)?.[1]
   if (!heading) return false
   const title = heading.replace(/[`*_]/g, '').trim()
-  if (/^(?:📍|⏳|👉)(?:\s|$)/u.test(title)) return true
+  if (isStaleWorkerLifecycleMarker(title)) return true
   return /^(?:\d+[.)]\s*)?(?:publication|maintenant|reste\s+[àa]\s+faire|recommand[ée])(?=\s|$)/iu.test(
     title
   )
@@ -76,9 +79,11 @@ function isStaleWorkerLifecycleMarker(line: string): boolean {
   const text = line
     .trim()
     .replace(/^#{1,6}\s+/u, '')
-    .replace(/^\*\*/u, '')
+    .replace(/\*\*/gu, '')
     .trim()
-  return /^(?:📍|⏳|👉)(?:\s|$)/u.test(text)
+  return /^(?:📍\s*maintenant|⏳\s*reste\s+[àa]\s+faire|👉\s*recommand(?:é|ée|ation))(?=\s|[—:,-]|$)/iu.test(
+    text
+  )
 }
 
 /**
@@ -87,25 +92,25 @@ function isStaleWorkerLifecycleMarker(line: string): boolean {
  * fausses. On retire uniquement ces lignes, jamais les tests, diffs ou diagnostics.
  */
 function removeStaleWorkerLifecycleAdvice(report: string): string {
-  let skipSection = false
-  const lines = report.split(/\r?\n/).filter((line) => {
-    if (line.includes('Clôture Autowin : gate validé')) {
-      skipSection = false
-      return true
+  const paragraphs = report.split(/\r?\n(?:[ \t]*\r?\n)+/u)
+  const kept = paragraphs.flatMap((paragraph) => {
+    const lines = paragraph.split(/\r?\n/u)
+    const firstContent = lines.find((line) => line.trim()) ?? ''
+    if (isStaleWorkerLifecycleMarker(firstContent) || isStaleWorkerLifecycleSection(firstContent)) {
+      return []
     }
-    if (isStaleWorkerLifecycleMarker(line)) {
-      skipSection = true
-      return false
-    }
-    if (/^\s*#{1,6}\s+/u.test(line)) {
-      skipSection = isStaleWorkerLifecycleSection(line)
-      if (skipSection) return false
-    }
-    if (skipSection || isStaleWorkerLifecycleLine(line)) return false
-    return true
+    const useful = lines.filter(
+      (line) =>
+        line.includes('Clôture Autowin : gate validé') ||
+        (!isStaleWorkerLifecycleMarker(line) &&
+          !isStaleWorkerLifecycleSection(line) &&
+          !isStaleWorkerLifecycleLine(line))
+    )
+    const text = useful.join('\n').trim()
+    return text ? [text] : []
   })
-  return lines
-    .join('\n')
+  return kept
+    .join('\n\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
@@ -113,9 +118,9 @@ function removeStaleWorkerLifecycleAdvice(report: string): string {
 export function isDeliveredOrchestrationOutcome(outcome: OrchestrationOutcome): boolean {
   return (
     asString(outcome.status) === 'succeeded' &&
-    outcome.gateBlocked !== true &&
-    outcome.valid !== false &&
-    outcome.reused !== true
+    outcome.valid === true &&
+    outcome.gateBlocked === false &&
+    outcome.reused === false
   )
 }
 
