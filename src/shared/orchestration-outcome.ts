@@ -286,7 +286,10 @@ function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
   const proofLike = /^(?:preuve|tests?(?:\s+verts?)?|contr[oô]le|r[ée]sultat)\b/iu.test(
     proofSubject
   )
-  const searchable = proofLike ? lifecycleSearchable(text) : text.replace(/[`*_]/g, ' ')
+  // Les citations historiques et les négations sont des preuves même sans préfixe « Preuve: ».
+  // Restreindre ce masquage aux lignes proof-like effaçait des diagnostics autonomes tels que
+  // « Ancienne trace : `RUN reste open` » ou « Aucune occurrence de RUN open ».
+  const searchable = lifecycleSearchable(text)
 
   const staleSignal = ACTIVE_LIFECYCLE.exec(searchable)
   const staleLead =

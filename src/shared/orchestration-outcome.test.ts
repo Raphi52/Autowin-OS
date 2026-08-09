@@ -52,6 +52,24 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     expect(text).toBe('Preuve utile.')
   })
 
+  it.each([
+    'Ancienne trace : `RUN reste open.`.',
+    'Historique : [RUN reste open](#ancien).',
+    'Log observé : /lancer judge/.',
+    'Aucune occurrence de RUN open.',
+    'Sans mention de RUN reste open.',
+    'Il n’y a plus de RUN reste open.'
+  ])('préserve une preuve historique ou négative autonome : %s', (evidence) => {
+    expect(
+      reconcileClosedOrchestrationText(evidence, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe(evidence)
+  })
+
   it('retire le bloc de statut provisoire même quand son contenu ne nomme pas le judge', () => {
     const text = reconcileClosedOrchestrationText(
       'Preuve utile.\n\n## 📍 Maintenant\nLe correctif est en état d’être audité.\n\n## ⏳ Reste à faire\n\n## 👉 Recommandé',

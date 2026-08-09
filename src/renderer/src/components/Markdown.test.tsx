@@ -2,6 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { groupAssistantActivity, hydrateStoredAssistant } from './chat-view-model'
 import { Markdown, extractRecommendation } from './Markdown'
 
 let container: HTMLDivElement
@@ -21,6 +22,28 @@ afterEach(() => {
 
 function render(text: string, highlightFinalSummary = false): void {
   act(() => root.render(createElement(Markdown, { text, highlightFinalSummary })))
+}
+
+const CLOSURE = 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
+
+function renderHydrated(message: Parameters<typeof hydrateStoredAssistant>[0]): void {
+  const hydrated = hydrateStoredAssistant(message)
+  const texts = groupAssistantActivity(hydrated.parts).filter((part) => part.kind === 'text')
+  act(() =>
+    root.render(
+      createElement(
+        'div',
+        null,
+        ...texts.map((part, index) => createElement(Markdown, { key: index, text: part.text }))
+      )
+    )
+  )
+}
+
+function textOutsideCode(): string {
+  const copy = container.cloneNode(true) as HTMLElement
+  copy.querySelectorAll('pre').forEach((node) => node.remove())
+  return copy.textContent ?? ''
 }
 
 describe('Markdown', () => {
@@ -212,6 +235,71 @@ describe('Markdown', () => {
     expect(container.querySelector('.md-final-summary')).toBeNull()
 
     render('```text\n✅ Fait\n```', true)
+    expect(container.querySelector('.md-final-summary')).toBeNull()
+  })
+
+  it.each([
+    `~~~text\n${CLOSURE}\n~~~`,
+    `    ${CLOSURE}`,
+    `> \`\`\`text\n> ${CLOSURE}\n> \`\`\``,
+    `- \`\`\`text\n  ${CLOSURE}\n  \`\`\``,
+    `10. Preuve :\n    ~~~text\n    ${CLOSURE}\n    ~~~`
+  ])(
+    'renders every CommonMark code citation as code after successful hydration: %s',
+    (citation) => {
+      renderHydrated({
+        content: 'projection',
+        status: 'completed',
+        parts: [
+          {
+            kind: 'action',
+            name: 'orchestrate',
+            ok: true,
+            data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+          },
+          { kind: 'text', text: citation }
+        ]
+      })
+
+      expect(
+        Array.from(container.querySelectorAll('pre code')).some((node) =>
+          node.textContent?.includes(CLOSURE)
+        )
+      ).toBe(true)
+      expect(textOutsideCode().match(/Clôture Autowin : gate validé/g)).toHaveLength(1)
+    }
+  )
+
+  it.each(
+    (['failed', 'interrupted', 'cancelled'] as const).flatMap((status) =>
+      [
+        `~~~text\n${CLOSURE}\n~~~`,
+        `    ${CLOSURE}`,
+        `> \`\`\`text\n> ${CLOSURE}\n> \`\`\``,
+        `- \`\`\`text\n  ${CLOSURE}\n  \`\`\``
+      ].map((citation) => [status, citation] as const)
+    )
+  )('never exposes a cited green closure as prose after %s hydration: %s', (status, citation) => {
+    renderHydrated({
+      content: 'projection',
+      status,
+      parts: [{ kind: 'text', text: `${citation}\n\nÉchec final : timeout.` }]
+    })
+
+    expect(
+      Array.from(container.querySelectorAll('pre code')).some((node) =>
+        node.textContent?.includes(CLOSURE)
+      )
+    ).toBe(true)
+    expect(textOutsideCode()).not.toContain(CLOSURE)
+    expect(textOutsideCode()).toContain('Échec final : timeout.')
+  })
+
+  it.each([
+    '~~~text\n✅ Fait\n📍 Maintenant\n⏳ Reste à faire\n👉 Recommandé\n~~~',
+    '    ✅ Fait\n    📍 Maintenant\n    ⏳ Reste à faire\n    👉 Recommandé'
+  ])('does not frame final-summary labels contained in CommonMark code: %s', (source) => {
+    render(source, true)
     expect(container.querySelector('.md-final-summary')).toBeNull()
   })
 })

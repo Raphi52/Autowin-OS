@@ -1008,8 +1008,13 @@ export function coalesceAssistantParts(parts: ChatPart[]): ChatPart[] {
   const compact: ChatPart[] = []
   let pendingText: string[] = []
   const flushText = (): void => {
-    const text = stripAssistantThinking(pendingText.join('\n\n')).trim()
-    if (text) compact.push({ kind: 'text', text })
+    // Même séparateur que `markdownCodeLineProtection` / `reconcileClosedOrchestrationTextParts` :
+    // hydratation et affichage doivent projeter exactement le même flux Markdown.
+    const text = stripAssistantThinking(pendingText.join('\n'))
+    // La décision de vacuité peut ignorer les espaces, mais la source rendue ne le peut pas : une
+    // indentation de quatre espaces est un bloc de code CommonMark et les espaces finaux peuvent
+    // appartenir à une preuve. `trim()` changeait donc la sémantique entre hydratation et écran.
+    if (text.trim()) compact.push({ kind: 'text', text })
     pendingText = []
   }
   for (const part of parts) {

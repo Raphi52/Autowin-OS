@@ -840,6 +840,36 @@ describe('durable assistant hydration and streaming', () => {
     )
   })
 
+  it.each([
+    'Ancienne trace : `RUN reste open.`.',
+    'Historique : [RUN reste open](#ancien).',
+    'Log observé : /lancer judge/.',
+    'Aucune occurrence de RUN open.',
+    'Sans mention de RUN reste open.',
+    'Il n’y a plus de RUN reste open.'
+  ])('keeps standalone historical or negated lifecycle evidence: %s', (evidence) => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: evidence }
+      ]
+    })
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+
+    expect(text).toContain(evidence)
+    expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(1)
+  })
+
   it('does not rewrite factual evidence emitted before the latest successful orchestration', () => {
     const hydrated = hydrateStoredAssistant({
       content: 'projection',
@@ -1257,7 +1287,7 @@ describe('coalesceAssistantParts', () => {
         { kind: 'text', text: 'Conclusion.' }
       ])
     ).toEqual([
-      { kind: 'text', text: 'Premiere phrase.\n\nDeuxieme phrase.' },
+      { kind: 'text', text: 'Premiere phrase.\nDeuxieme phrase.' },
       { kind: 'action', name: 'navigate', ok: true, data: { tab: 'memory' } },
       { kind: 'text', text: 'Conclusion.' }
     ])
@@ -1271,6 +1301,15 @@ describe('coalesceAssistantParts', () => {
         { kind: 'text', text: '' }
       ])
     ).toEqual([{ kind: 'action', name: 'get_state' }])
+  })
+
+  it('preserves source whitespace when CommonMark code spans cross text fragments', () => {
+    expect(
+      coalesceAssistantParts([
+        { kind: 'text', text: '    première ligne  \n' },
+        { kind: 'text', text: '    seconde ligne\n' }
+      ])
+    ).toEqual([{ kind: 'text', text: '    première ligne  \n\n    seconde ligne\n' }])
   })
 })
 

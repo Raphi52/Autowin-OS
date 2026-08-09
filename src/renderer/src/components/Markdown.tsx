@@ -6,6 +6,8 @@
  * Les liens ne sont créés que pour les schémas http/https (ouverts en externe par
  * le setWindowOpenHandler du main). Suffisant pour des réponses de chat.
  */
+import { fromMarkdown } from 'mdast-util-from-markdown'
+import { markdownCodeLineProtection } from '../../../shared/orchestration-outcome'
 import { MAX_INLINE_HTML_CHARS, prepareChatHtml } from './chat-html-inline'
 
 type MarkdownProps = {
@@ -66,37 +68,77 @@ export function Markdown({
   )
 }
 
-type FencedBlock = { kind: 'text' | 'code' | 'html-render'; content: string }
+type MarkdownBlock = { kind: 'text' | 'code' | 'html-render'; content: string }
 
-function tokenizeFencedBlocks(text: string): FencedBlock[] {
-  const blocks: FencedBlock[] = []
-  const opening = /^ {0,3}```([^\r\n]*)\r?\n/gm
-  let cursor = 0
-  let match: RegExpExecArray | null
+type MarkdownAstNode = {
+  type?: string
+  lang?: string | null
+  value?: string
+  position?: { start?: { offset?: number }; end?: { offset?: number } }
+  children?: MarkdownAstNode[]
+}
 
-  while ((match = opening.exec(text)) !== null) {
-    if (match.index > cursor)
-      blocks.push({ kind: 'text', content: text.slice(cursor, match.index) })
-    const contentStart = opening.lastIndex
-    const closing = /^ {0,3}```[ \t]*(?:\r?\n|$)/gm
-    closing.lastIndex = contentStart
-    const end = closing.exec(text)
+type MarkdownCodeSpan = {
+  start: number
+  end: number
+  language: string | null
+  content: string
+  source: string
+}
 
-    if (!end) {
-      // Pendant le streaming, un fence non fermé reste une source inerte.
-      blocks.push({ kind: 'code', content: text.slice(contentStart) })
-      cursor = text.length
-      break
+function hasClosingFence(source: string): boolean {
+  const opening = /^(`{3,}|~{3,})[^\r\n]*(?:\r?\n|$)/u.exec(source)
+  if (!opening) return false
+  const marker = opening[1][0]
+  const length = opening[1].length
+  const closing = new RegExp(
+    `(?:^|\\r?\\n)(?:[ \\t]*>[ \\t]?)*[ \\t]*${marker}{${length},}[ \\t]*$`,
+    'u'
+  )
+  return closing.test(source)
+}
+
+function tokenizeMarkdownCodeBlocks(text: string): MarkdownBlock[] {
+  const blocks: MarkdownBlock[] = []
+  const spans: MarkdownCodeSpan[] = []
+  let tree: MarkdownAstNode
+  try {
+    tree = fromMarkdown(text) as MarkdownAstNode
+  } catch {
+    // Une source que CommonMark ne peut pas projeter reste inerte plutôt que d'être interprétée
+    // comme prose lifecycle ou comme HTML rendu.
+    return [{ kind: 'code', content: text }]
+  }
+
+  const visit = (node: MarkdownAstNode): void => {
+    if (node.type === 'code') {
+      const start = node.position?.start?.offset
+      const end = node.position?.end?.offset
+      if (start !== undefined && end !== undefined && end >= start) {
+        spans.push({
+          start,
+          end,
+          language: node.lang ?? null,
+          content: node.value ?? '',
+          source: text.slice(start, end)
+        })
+      }
     }
+    node.children?.forEach(visit)
+  }
+  visit(tree)
+  spans.sort((left, right) => left.start - right.start)
 
-    const content = text.slice(contentStart, end.index).replace(/\r?\n$/u, '')
-    const language = match[1].trim()
+  let cursor = 0
+  for (const span of spans) {
+    if (span.start < cursor) continue
+    if (span.start > cursor) blocks.push({ kind: 'text', content: text.slice(cursor, span.start) })
     blocks.push({
-      kind: language === 'html-render' ? 'html-render' : 'code',
-      content
+      kind:
+        span.language === 'html-render' && hasClosingFence(span.source) ? 'html-render' : 'code',
+      content: span.content
     })
-    cursor = closing.lastIndex
-    opening.lastIndex = cursor
+    cursor = span.end
   }
 
   if (cursor < text.length) blocks.push({ kind: 'text', content: text.slice(cursor) })
@@ -104,7 +146,7 @@ function tokenizeFencedBlocks(text: string): FencedBlock[] {
 }
 
 function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[] {
-  return tokenizeFencedBlocks(text).map((block, index) => {
+  return tokenizeMarkdownCodeBlocks(text).map((block, index) => {
     if (block.kind === 'html-render' && block.content.length > MAX_INLINE_HTML_CHARS)
       return (
         // Trop volumineux pour etre injecte dans le fil. On le dit explicitement plutot que de le
@@ -153,14 +195,14 @@ function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[
 
 function splitFinalSummary(text: string): FinalSummaryParts | null {
   const lines = text.split('\n')
-  let inFence = false
+  const protectedLines = markdownCodeLineProtection([text])[0]
   let markerIndex = -1
   let candidateIndex = -1
   let nextLabelIndex = 0
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index]
-    if (!inFence) {
+    if (!protectedLines.has(index + 1)) {
       const labelIndex = FINAL_SUMMARY_LABELS.findIndex((pattern) => pattern.test(line.trim()))
       if (labelIndex === 0) {
         candidateIndex = index
@@ -179,9 +221,6 @@ function splitFinalSummary(text: string): FinalSummaryParts | null {
         }
       }
     }
-
-    const fences = line.match(/```/g)?.length ?? 0
-    if (fences % 2 === 1) inFence = !inFence
   }
 
   if (markerIndex < 0) return null
