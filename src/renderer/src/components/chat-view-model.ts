@@ -15,10 +15,10 @@ import {
   authoritativeOrchestrationClosureSpan,
   isAuthoritativeOrchestrationClosureLine,
   isDeliveredOrchestrationOutcome,
-  markdownFenceTransition,
+  markdownCodeLineProtection,
   ORCHESTRATION_ALREADY_ISSUED_REFUSAL,
   reconcileClosedOrchestrationTextParts,
-  type MarkdownFenceDelimiter,
+  rewriteUnprotectedMarkdownLines,
   type OrchestrationOutcome
 } from '../../../shared/orchestration-outcome'
 
@@ -213,21 +213,17 @@ function withoutPersistedAuthoritativeClosure(line: string): string | undefined 
 
 function removePersistedAuthoritativeClosures(parts: ChatPart[]): ChatPart[] {
   let changed = false
-  let fencedBy: MarkdownFenceDelimiter | undefined
+  const textParts = parts.filter((part): part is ChatTextPart => part.kind === 'text')
+  const protectedLines = markdownCodeLineProtection(textParts.map((part) => part.text))
+  let textIndex = 0
   const reconciled = parts.flatMap((part): ChatPart[] => {
     if (part.kind !== 'text') return [part]
-    const lines = part.text.split(/\r?\n/u).flatMap((line) => {
-      const fence = markdownFenceTransition(line, fencedBy)
-      fencedBy = fence.state
-      if (fence.protected) return [line]
-      const usefulLine = withoutPersistedAuthoritativeClosure(line)
-      if (usefulLine === line) return [line]
-      changed = true
-      return usefulLine ? [usefulLine] : []
-    })
-    const joined = lines.join('\n')
-    if (joined === part.text.replace(/\r\n/gu, '\n')) return [part]
-    const text = joined.replace(/\n{3,}/g, '\n\n').trim()
+    const text = rewriteUnprotectedMarkdownLines(
+      part.text,
+      protectedLines[textIndex++],
+      withoutPersistedAuthoritativeClosure
+    )
+    if (text === part.text) return [part]
     changed = true
     return text ? [{ ...part, text }] : []
   })
@@ -259,51 +255,45 @@ function reconcileStoredOrchestrationClosure(parts: ChatPart[]): ChatPart[] {
 
   const outcome = action.data as OrchestrationOutcome
   if (!isDeliveredOrchestrationOutcome(outcome)) return removePersistedAuthoritativeClosures(parts)
-  const postActionTextIndexes = parts.flatMap((part, index) =>
-    index > actionIndex && part.kind === 'text' ? [index] : []
-  )
-  let fenceBeforeAction: MarkdownFenceDelimiter | undefined
-  for (let index = 0; index < actionIndex; index += 1) {
-    const part = parts[index]
-    if (part.kind !== 'text') continue
-    for (const line of part.text.split(/\r?\n/u)) {
-      fenceBeforeAction = markdownFenceTransition(line, fenceBeforeAction).state
-    }
-  }
-  const reconciledPostActionText = reconcileClosedOrchestrationTextParts(
-    postActionTextIndexes.map((index) => (parts[index] as ChatTextPart).text),
+  const textIndexes = parts.flatMap((part, index) => (part.kind === 'text' ? [index] : []))
+  const mutableTextStart = textIndexes.findIndex((index) => index > actionIndex)
+  const reconciledText = reconcileClosedOrchestrationTextParts(
+    textIndexes.map((index) => (parts[index] as ChatTextPart).text),
     outcome,
-    fenceBeforeAction
+    mutableTextStart < 0 ? textIndexes.length : mutableTextStart
   )
-  const postActionTextByIndex = new Map(
-    postActionTextIndexes.map((index, position) => [index, reconciledPostActionText[position]])
+  const textByIndex = new Map(
+    textIndexes.map((index, position) => [index, reconciledText[position]])
   )
-  let changed = false
+  const candidateParts = parts.map((part, index) => {
+    if (part.kind !== 'text') return part
+    const text = textByIndex.get(index) ?? part.text
+    return text === part.text ? part : { ...part, text }
+  })
+  let changed = candidateParts.some((part, index) => part !== parts[index])
   let closureSeen = false
-  let fencedBy: MarkdownFenceDelimiter | undefined
-  const reconciled = parts.flatMap((part, partIndex): ChatPart[] => {
+  const protectedLines = markdownCodeLineProtection(
+    candidateParts
+      .filter((part): part is ChatTextPart => part.kind === 'text')
+      .map((part) => part.text)
+  )
+  let textIndex = 0
+  const reconciled = candidateParts.flatMap((part): ChatPart[] => {
     if (part.kind !== 'text') return [part]
-    const text = postActionTextByIndex.get(partIndex) ?? part.text
-    const uniqueLines = text.split(/\r?\n/u).flatMap((line) => {
-      const fence = markdownFenceTransition(line, fencedBy)
-      fencedBy = fence.state
-      if (fence.protected) return [line]
-      if (!isAuthoritativeOrchestrationClosureLine(line)) return [line]
-      if (closureSeen) {
-        changed = true
-        return []
+    const uniqueText = rewriteUnprotectedMarkdownLines(
+      part.text,
+      protectedLines[textIndex++],
+      (line) => {
+        if (!isAuthoritativeOrchestrationClosureLine(line)) return line
+        if (closureSeen) return undefined
+        closureSeen = true
+        const duplicate = duplicateAuthoritativeClosureIndex(line)
+        if (duplicate === undefined) return line
+        const beforeDuplicate = line.slice(0, duplicate).trimEnd()
+        return beforeDuplicate || undefined
       }
-      closureSeen = true
-      const duplicate = duplicateAuthoritativeClosureIndex(line)
-      if (duplicate === undefined) return [line]
-      changed = true
-      const beforeDuplicate = line.slice(0, duplicate).trimEnd()
-      if (beforeDuplicate) return [beforeDuplicate]
-      return []
-    })
-    const joined = uniqueLines.join('\n')
-    if (text === part.text && joined === part.text.replace(/\r\n/gu, '\n')) return [part]
-    const uniqueText = joined.replace(/\n{3,}/g, '\n\n').trim()
+    )
+    if (uniqueText === part.text) return [part]
     changed = true
     return uniqueText ? [{ ...part, text: uniqueText }] : []
   })

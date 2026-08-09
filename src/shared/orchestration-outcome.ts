@@ -1,3 +1,5 @@
+import { fromMarkdown } from 'mdast-util-from-markdown'
+
 /**
  * CARTE DE LIVRAISON d'une orchestration — les faits, pas une formule.
  *
@@ -57,75 +59,112 @@ export interface OrchestrationClosureSpan {
   end: number
 }
 
-export interface MarkdownFenceDelimiter {
-  marker: '`' | '~'
-  length: number
-  quoteDepth: number
+interface MarkdownAstNode {
+  type?: string
+  position?: { start?: { line?: number }; end?: { line?: number } }
+  children?: MarkdownAstNode[]
 }
 
-interface MarkdownFenceLine extends MarkdownFenceDelimiter {
-  trailing: string
+interface PreservedTextLine {
+  text: string
+  ending: string
+  originalIndex: number
+  protected: boolean
 }
 
-function markdownContainerLine(line: string): { content: string; quoteDepth: number } {
-  let content = line
-  let quoteDepth = 0
-  for (;;) {
-    const quote = /^ {0,3}>[ \t]?/u.exec(content)
-    if (!quote) break
-    quoteDepth += 1
-    content = content.slice(quote[0].length)
+function splitTextLines(text: string, protectedLines: ReadonlySet<number>): PreservedTextLine[] {
+  if (!text) return [{ text: '', ending: '', originalIndex: 0, protected: false }]
+  const lines: PreservedTextLine[] = []
+  let start = 0
+  let index = 0
+  while (start < text.length) {
+    const newline = text.indexOf('\n', start)
+    if (newline < 0) {
+      lines.push({
+        text: text.slice(start),
+        ending: '',
+        originalIndex: index,
+        protected: protectedLines.has(index + 1)
+      })
+      break
+    }
+    const crlf = newline > start && text[newline - 1] === '\r'
+    lines.push({
+      text: text.slice(start, crlf ? newline - 1 : newline),
+      ending: crlf ? '\r\n' : '\n',
+      originalIndex: index,
+      protected: protectedLines.has(index + 1)
+    })
+    start = newline + 1
+    index += 1
   }
-  return { content, quoteDepth }
+  return lines
 }
 
-function markdownFenceLine(line: string): MarkdownFenceLine | undefined {
-  const { content, quoteDepth } = markdownContainerLine(line)
-  const match = /^ {0,3}(`{3,}|~{3,})(.*)$/u.exec(content)
-  if (!match) return undefined
-  return {
-    marker: match[1][0] as '`' | '~',
-    length: match[1].length,
-    quoteDepth,
-    trailing: match[2]
+/** Les lignes `code` du même parseur CommonMark que la pile ReactMarkdown. */
+export function markdownCodeLineProtection(reports: readonly string[]): Array<Set<number>> {
+  const lineCounts = reports.map((report) => report.split(/\r?\n/u).length)
+  const starts: number[] = []
+  let nextStart = 1
+  for (const count of lineCounts) {
+    starts.push(nextStart)
+    nextStart += count
   }
-}
-
-export function markdownFenceDelimiter(line: string): MarkdownFenceDelimiter | undefined {
-  const fence = markdownFenceLine(line)
-  return fence
-    ? { marker: fence.marker, length: fence.length, quoteDepth: fence.quoteDepth }
-    : undefined
-}
-
-export function markdownFenceStateAfterLine(
-  line: string,
-  current: MarkdownFenceDelimiter | undefined
-): MarkdownFenceDelimiter | undefined {
-  const { quoteDepth } = markdownContainerLine(line)
-  const active = current && quoteDepth < current.quoteDepth ? undefined : current
-  const fence = markdownFenceLine(line)
-  if (!fence) return active
-  if (!active) {
-    // CommonMark interdit un backtick dans l'info-string d'un fence backtick ouvrant.
-    if (fence.marker === '`' && fence.trailing.includes('`')) return undefined
-    return { marker: fence.marker, length: fence.length, quoteDepth: fence.quoteDepth }
+  const protectedLines = reports.map(() => new Set<number>())
+  try {
+    const tree = fromMarkdown(reports.join('\n')) as MarkdownAstNode
+    const visit = (node: MarkdownAstNode): void => {
+      const start = node.position?.start?.line
+      const end = node.position?.end?.line
+      if (node.type === 'code' && start !== undefined && end !== undefined) {
+        for (let reportIndex = 0; reportIndex < reports.length; reportIndex += 1) {
+          const reportStart = starts[reportIndex]
+          const reportEnd = reportStart + lineCounts[reportIndex] - 1
+          const overlapStart = Math.max(start, reportStart)
+          const overlapEnd = Math.min(end, reportEnd)
+          for (let line = overlapStart; line <= overlapEnd; line += 1) {
+            protectedLines[reportIndex].add(line - reportStart + 1)
+          }
+        }
+      }
+      for (const child of node.children ?? []) visit(child)
+    }
+    visit(tree)
+  } catch {
+    // En cas d'entrée illisible, ne jamais détruire une preuve potentielle.
+    return lineCounts.map(
+      (count) => new Set(Array.from({ length: count }, (_, index) => index + 1))
+    )
   }
-  const closes =
-    fence.marker === active.marker &&
-    fence.length >= active.length &&
-    fence.quoteDepth === active.quoteDepth &&
-    fence.trailing.trim().length === 0
-  return closes ? undefined : active
+  return protectedLines
 }
 
-export function markdownFenceTransition(
-  line: string,
-  current: MarkdownFenceDelimiter | undefined
-): { state: MarkdownFenceDelimiter | undefined; protected: boolean } {
-  const fence = markdownFenceDelimiter(line)
-  const state = markdownFenceStateAfterLine(line, current)
-  return { state, protected: Boolean(fence || (current && state)) }
+/** Réécrit seulement les lignes hors code, sans normaliser les octets des lignes protégées. */
+export function rewriteUnprotectedMarkdownLines(
+  text: string,
+  protectedLines: ReadonlySet<number>,
+  rewrite: (line: string) => string | undefined
+): string {
+  const original = splitTextLines(text, protectedLines)
+  let changed = false
+  const rewritten = original.flatMap((line): PreservedTextLine[] => {
+    if (line.protected) return [line]
+    const next = rewrite(line.text)
+    if (next === line.text) return [line]
+    changed = true
+    return next === undefined ? [] : [{ ...line, text: next }]
+  })
+  if (!changed) return text
+  const kept = rewritten.filter((line, index) => {
+    if (line.protected || line.text.trim()) return true
+    const previous = rewritten[index - 1]
+    return !previous || previous.protected || previous.text.trim().length > 0
+  })
+  while (kept[0] && !kept[0].protected && !kept[0].text.trim()) kept.shift()
+  while (kept.at(-1) && !kept.at(-1)?.protected && !kept.at(-1)?.text.trim()) kept.pop()
+  const last = kept.at(-1)
+  if (last && last.originalIndex < original.length - 1) last.ending = ''
+  return kept.map((line) => `${line.text}${line.ending}`).join('')
 }
 
 /** Localise une vraie clause de clôture, mais jamais sa citation entre guillemets ou backticks. */
@@ -304,32 +343,17 @@ function isStaleWorkerLifecycleMarker(line: string): boolean {
  * `succeeded` connue, ses preuves restent utiles mais ses recommandations de cycle de vie deviennent
  * fausses. On retire uniquement ces lignes, jamais les tests, diffs ou diagnostics.
  */
-interface ReconciledLifecycleText {
-  text: string
-  fencedBy: MarkdownFenceDelimiter | undefined
-}
-
 function removeStaleWorkerLifecycleAdvice(
   report: string,
-  initialFence: MarkdownFenceDelimiter | undefined
-): ReconciledLifecycleText {
+  protectedLines: ReadonlySet<number>
+): string {
   let staleHeadingLevel: number | undefined
   let staleMarkerParagraph = false
-  let fencedBy = initialFence
-  const kept: string[] = []
-
-  for (const line of report.split(/\r?\n/u)) {
-    const fence = markdownFenceTransition(line, fencedBy)
-    fencedBy = fence.state
-    if (fence.protected) {
-      kept.push(line)
-      continue
-    }
+  return rewriteUnprotectedMarkdownLines(report, protectedLines, (line) => {
     if (isAuthoritativeOrchestrationClosureLine(line)) {
       staleHeadingLevel = undefined
       staleMarkerParagraph = false
-      kept.push(line)
-      continue
+      return line
     }
 
     const heading = /^(\s*(#{1,6})\s+)(.+?)\s*$/u.exec(line)
@@ -338,38 +362,27 @@ function removeStaleWorkerLifecycleAdvice(
       if (staleHeadingLevel !== undefined && level <= staleHeadingLevel) {
         staleHeadingLevel = undefined
       }
-      if (staleHeadingLevel !== undefined) continue
+      if (staleHeadingLevel !== undefined) return undefined
       staleMarkerParagraph = false
       if (isStaleWorkerLifecycleSection(line)) {
         staleHeadingLevel = level
-        continue
+        return undefined
       }
       const usefulHeading = withoutStaleWorkerLifecycleLine(heading[3])
-      if (usefulHeading !== undefined) kept.push(`${heading[1]}${usefulHeading}`)
-      continue
+      return usefulHeading === undefined ? undefined : `${heading[1]}${usefulHeading}`
     }
 
-    if (staleHeadingLevel !== undefined) continue
+    if (staleHeadingLevel !== undefined) return undefined
     if (!line.trim()) {
       staleMarkerParagraph = false
-      kept.push(line)
-      continue
+      return line
     }
     if (isStaleWorkerLifecycleMarker(line)) {
       staleMarkerParagraph = true
-      continue
+      return undefined
     }
-    if (staleMarkerParagraph) continue
-    const usefulLine = withoutStaleWorkerLifecycleLine(line)
-    if (usefulLine !== undefined) kept.push(usefulLine)
-  }
-
-  const joined = kept.join('\n')
-  const changed = joined !== report.replace(/\r\n/gu, '\n')
-  return {
-    text: changed ? joined.replace(/\n{3,}/g, '\n\n').trim() : report,
-    fencedBy
-  }
+    return staleMarkerParagraph ? undefined : withoutStaleWorkerLifecycleLine(line)
+  })
 }
 
 export function isDeliveredOrchestrationOutcome(outcome: OrchestrationOutcome): boolean {
@@ -390,23 +403,21 @@ export function reconcileClosedOrchestrationText(
   outcome: OrchestrationOutcome
 ): string {
   return isDeliveredOrchestrationOutcome(outcome)
-    ? removeStaleWorkerLifecycleAdvice(report, undefined).text
+    ? removeStaleWorkerLifecycleAdvice(report, markdownCodeLineProtection([report])[0])
     : report
 }
 
-/** Réconcilie un flux persisté sans perdre l'état d'un fence entre deux fragments texte. */
+/** Réconcilie un flux persisté en projetant d'abord ses spans Markdown sur tous les fragments. */
 export function reconcileClosedOrchestrationTextParts(
   reports: readonly string[],
   outcome: OrchestrationOutcome,
-  initialFence?: MarkdownFenceDelimiter
+  mutableStart = 0
 ): string[] {
   if (!isDeliveredOrchestrationOutcome(outcome)) return [...reports]
-  let fencedBy = initialFence
-  return reports.map((report) => {
-    const reconciled = removeStaleWorkerLifecycleAdvice(report, fencedBy)
-    fencedBy = reconciled.fencedBy
-    return reconciled.text
-  })
+  const protectedLines = markdownCodeLineProtection(reports)
+  return reports.map((report, index) =>
+    index < mutableStart ? report : removeStaleWorkerLifecycleAdvice(report, protectedLines[index])
+  )
 }
 
 /** Libellé de coût honnête, compatible avec les anciens résultats qui n'avaient que `costUsd`. */

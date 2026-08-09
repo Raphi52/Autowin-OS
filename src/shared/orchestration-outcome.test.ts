@@ -498,6 +498,63 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     ).toEqual(reports)
   })
 
+  it('préserve un bloc de code CommonMark indenté', () => {
+    const report =
+      '    Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n' +
+      '    RUN reste open — lancer judge.\n\n    SHA-256 abc123 vérifié.  '
+
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe(report)
+  })
+
+  it.each([
+    '- ```text\n  RUN reste open — lancer judge.\n  ```',
+    '- ~~~text\n  RUN reste open — lancer judge.\n  ~~~',
+    '10. Preuve :\n    ```text\n    RUN reste open — lancer judge.\n    ```',
+    '-   Preuve :\n    ~~~text\n    RUN reste open — lancer judge.\n    ~~~'
+  ])('préserve un fence placé dans un conteneur de liste CommonMark', (report) => {
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe(report)
+  })
+
+  it("préserve les espaces fenced lorsqu'une ligne voisine est retirée", () => {
+    const report = 'RUN reste open.\n```text\n  value  \n'
+
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe('```text\n  value  \n')
+  })
+
+  it('conserve un bloc de code indenté et ses lignes vides entre fragments', () => {
+    const reports = ['    RUN reste open  \n', '\n', '    SHA-256 abc123  \n']
+
+    expect(
+      reconcileClosedOrchestrationTextParts(reports, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toEqual(reports)
+  })
+
   it.each([
     'Preuve : RUN reste open. Gate toujours bloqué.',
     'Preuve : RUN reste open. Publication à faire.'

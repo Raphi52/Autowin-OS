@@ -753,6 +753,93 @@ describe('durable assistant hydration and streaming', () => {
     expect(texts.join('\n').match(/Clôture Autowin : gate validé/g)).toHaveLength(1)
   })
 
+  it('keeps an indented CommonMark code block intact and adds a real completed verdict', () => {
+    const citation =
+      '    Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n' +
+      '    RUN reste open — lancer judge.\n\n    SHA-256 abc123 vérifié.  '
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: citation }
+      ]
+    })
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+
+    expect(text).toContain(citation)
+    expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(2)
+  })
+
+  it('keeps an indented CommonMark closure citation intact on failure', () => {
+    const text =
+      '    Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n' +
+      '    RUN reste open — lancer judge.\n\nÉchec final : timeout.'
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'failed',
+      parts: [{ kind: 'text', text }]
+    })
+
+    expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe(text)
+  })
+
+  it.each([
+    '- ```text\n  Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n  ```',
+    '- ~~~text\n  Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n  ~~~',
+    '10. Preuve :\n    ```text\n    Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n    ```',
+    '-   Preuve :\n    ~~~text\n    Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n    ~~~'
+  ])('keeps a list-contained closure citation and adds the real verdict', (citation) => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: citation }
+      ]
+    })
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+
+    expect(text).toContain(citation)
+    expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(2)
+  })
+
+  it('preserves fenced whitespace after removing an adjacent stale line', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: 'RUN reste open.\n```text\n  value  \n' }
+      ]
+    })
+
+    expect(hydrated.parts.filter((part) => part.kind === 'text')[0]?.text).toBe(
+      '```text\n  value  \n'
+    )
+  })
+
   it('does not rewrite factual evidence emitted before the latest successful orchestration', () => {
     const hydrated = hydrateStoredAssistant({
       content: 'projection',
