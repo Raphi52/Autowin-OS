@@ -202,6 +202,25 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     ).toBe('')
   })
 
+  it.each([
+    'Preuve : publication est en attente.',
+    'Preuve : RUN est encore ouvert.',
+    'Preuve : Gate est toujours bloqué.',
+    'Résultat : les changements ne sont pas encore publiés.',
+    'Preuve : modifications non commitées.',
+    'Preuve : modifications non publiées.',
+    'Preuve : gate/publication non exécutées.'
+  ])('retire les accords et copules lifecycle réellement émis : %s', (report) => {
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe('')
+  })
+
   it('ne prend pas les apostrophes grammaticales pour des délimiteurs de citation', () => {
     expect(
       reconcileClosedOrchestrationText(
@@ -352,6 +371,37 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
       })
     ).toBe(expected)
   })
+
+  it.each([
+    ['Preuve : RUN reste open - SHA-256 abc123 vérifié.', 'SHA-256 abc123 vérifié.'],
+    ['Preuve : RUN reste open, commit abc123 vérifié.', 'commit abc123 vérifié.'],
+    ['Preuve : RUN reste open / capture écran vérifiée.', 'capture écran vérifiée.']
+  ])('conserve un suffixe factuel après un séparateur runtime : %s', (report, expected) => {
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe(expected)
+  })
+
+  it.each(['```', '~~~'])(
+    'préserve verbatim les reproductions placées dans un bloc de code Markdown %s',
+    (fence) => {
+      const report = `Preuve reproduite :\n${fence}text\nRUN reste open — lancer judge.\n${fence}`
+
+      expect(
+        reconcileClosedOrchestrationText(report, {
+          status: 'succeeded',
+          valid: true,
+          gateBlocked: false,
+          reused: false
+        })
+      ).toBe(report)
+    }
+  )
 
   it.each([
     'Preuve : RUN reste open. Gate toujours bloqué.',

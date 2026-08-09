@@ -35,8 +35,14 @@ export const AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX =
 const CLOSURE_LEADING_DECORATIONS =
   /^(?:(?:#{1,6}|>|[-+*•]|\d+[.)])\s+|\[[ xX]\]\s+|(?:✅|⚠️?|🧪)\s*|(?:\*\*|__|\*|_)\s*)+/u
 
-const AUTHORITATIVE_CLOSURE_SUFFIX_SOURCE =
-  '(?:publication\\s+termin[ée]e|aucune\\s+autre\\s+orchestration\\s+ni\\s+aucun\\s+second\\s+judge\\s+ne\\s+sont\\s+n[ée]cessaires\\s+dans\\s+ce\\s+tour)'
+const MARKDOWN_INLINE_WRAPPER_SOURCE = '(?:\\*\\*|__|\\*|_|\\[|\\](?:\\([^\\n)]*\\))?)'
+
+const MARKDOWN_PUBLICATION_TERMINATED_SOURCE =
+  `(?:(?:${MARKDOWN_INLINE_WRAPPER_SOURCE}\\s*)*publication\\s+` +
+  `(?:${MARKDOWN_INLINE_WRAPPER_SOURCE}\\s*)*termin[ée]e` +
+  `(?:\\s*${MARKDOWN_INLINE_WRAPPER_SOURCE})*)`
+
+const AUTHORITATIVE_CLOSURE_SUFFIX_SOURCE = `(?:${MARKDOWN_PUBLICATION_TERMINATED_SOURCE}|aucune\\s+autre\\s+orchestration\\s+ni\\s+aucun\\s+second\\s+judge\\s+ne\\s+sont\\s+n[ée]cessaires\\s+dans\\s+ce\\s+tour)`
 
 const AUTHORITATIVE_CLOSURE_BOUNDARY_SOURCE =
   '(?:\\s*\\.(?=\\s|$|[*_])|(?=\\s*(?:$|[,;:|·/—-]))|(?=\\s+(?:[ée]chec|erreur|interrompu|annul[ée]|failed|interrupted|cancelled)\\b))'
@@ -49,6 +55,13 @@ const AUTHORITATIVE_CLOSURE_PATTERN = new RegExp(
 export interface OrchestrationClosureSpan {
   start: number
   end: number
+}
+
+export type MarkdownFenceDelimiter = '`' | '~'
+
+export function markdownFenceDelimiter(line: string): MarkdownFenceDelimiter | undefined {
+  const fence = /^\s*(`{3,}|~{3,})/u.exec(line)?.[1]
+  return fence ? (fence[0] as MarkdownFenceDelimiter) : undefined
 }
 
 /** Localise une vraie clause de clôture, mais jamais sa citation entre guillemets ou backticks. */
@@ -92,7 +105,7 @@ function maskQuotedEvidence(text: string): string {
 }
 
 const LIFECYCLE_ASSERTION_SOURCE =
-  '(?:run\\s+(?:(?:(?:reste|toujours)\\s+)?open|encore\\s+ouvert)|non\\s+(?:publi[ée]e?|commit[ée]e?)|publication\\s+(?:reste|non\\s+ex[ée]cut(?:[ée]e?)?|en\\s+attente|[àa]\\s+faire)|changements?\\s+(?:(?:pas\\s+encore)|non)\\s+publi[ée]s?|gate\\s+(?:(?:reste|toujours|encore)\\s+)?bloqu[ée]|(?:autoriser|d[ée]clencher)\\s+(?:la\\s+)?publication|(?:lancer|relancer)\\s+(?:le\\s+)?judge|judge\\s+[àa]\\s+lancer|judge[^\\n]*(?:refus[ée]|reste|non\\s+cl[oô]tur)|clean\\s+(?:puis|et)\\s+judge|encha[iî]ner\\s+clean[^\\n]*judge)'
+  '(?:run\\s+(?:est\\s+)?(?:(?:(?:reste|toujours)\\s+)?open|encore\\s+ouvert)|non\\s+(?:publi[ée]e?s?|commit[ée]e?s?)|publication\\s+(?:est\\s+)?(?:reste|non\\s+ex[ée]cut(?:[ée]e?s?)?|en\\s+attente|[àa]\\s+faire)|(?:modifications?|changements?)\\s+non\\s+(?:publi[ée]e?s?|commit[ée]e?s?)|(?:les\\s+)?changements?\\s+(?:(?:ne\\s+sont\\s+)?pas\\s+encore|non)\\s+publi[ée]s?|gate\\s+(?:est\\s+)?(?:(?:reste|toujours|encore)\\s+)?bloqu[ée]|(?:autoriser|d[ée]clencher)\\s+(?:la\\s+)?publication|(?:lancer|relancer)\\s+(?:le\\s+)?judge|judge\\s+[àa]\\s+lancer|judge[^\\n]*(?:refus[ée]|reste|non\\s+cl[oô]tur)|clean\\s+(?:puis|et)\\s+judge|encha[iî]ner\\s+clean[^\\n]*judge)'
 
 const LIFECYCLE_WRAPPED_SOURCE =
   '(?:(?:\\*\\*|__|~~|\\*|_|\\[|`|\\/)\\s*)*' +
@@ -151,7 +164,7 @@ function lifecycleSearchable(text: string): string {
 
 function factualSuffixAfterStale(text: string, staleEnd: number): string | undefined {
   const tail = text.slice(staleEnd)
-  const boundary = /[.;:—|·]\s+/u.exec(tail)
+  const boundary = /(?:[.;:—|·,/]\s+|\s+-\s+)/u.exec(tail)
   if (!boundary) return undefined
   const candidate = tail.slice(boundary.index + boundary[0].length).trim()
   if (!candidate) return undefined
@@ -230,9 +243,20 @@ function isStaleWorkerLifecycleMarker(line: string): boolean {
 function removeStaleWorkerLifecycleAdvice(report: string): string {
   let staleHeadingLevel: number | undefined
   let staleMarkerParagraph = false
+  let fencedBy: MarkdownFenceDelimiter | undefined
   const kept: string[] = []
 
   for (const line of report.split(/\r?\n/u)) {
+    const fence = markdownFenceDelimiter(line)
+    if (fence) {
+      fencedBy = fencedBy === fence ? undefined : (fencedBy ?? fence)
+      kept.push(line)
+      continue
+    }
+    if (fencedBy) {
+      kept.push(line)
+      continue
+    }
     if (isAuthoritativeOrchestrationClosureLine(line)) {
       staleHeadingLevel = undefined
       staleMarkerParagraph = false

@@ -502,6 +502,65 @@ describe('durable assistant hydration and streaming', () => {
     expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe(expected)
   })
 
+  it.each([
+    '**publication terminée**',
+    'publication **terminée**',
+    '[publication terminée](#done)'
+  ])('removes a Markdown-wrapped closure suffix from a failed line: %s', (suffix) => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'failed',
+      parts: [
+        {
+          kind: 'text',
+          text: `Clôture Autowin : gate validé, RUN fermé green ; ${suffix} ; Échec final : timeout.`
+        }
+      ]
+    })
+
+    expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe('Échec final : timeout.')
+  })
+
+  it.each(['```', '~~~'])(
+    'preserves a closure citation inside a %s fenced code block on failure',
+    (fence) => {
+      const text = `${fence}text\nClôture Autowin : gate validé, RUN fermé green ; publication terminée.\n${fence}\nÉchec final : timeout.`
+      const hydrated = hydrateStoredAssistant({
+        content: 'projection',
+        status: 'failed',
+        parts: [{ kind: 'text', text }]
+      })
+
+      expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe(text)
+    }
+  )
+
+  it('does not count a closure citation in a fenced block as the completed verdict', () => {
+    const citation =
+      '```text\nClôture Autowin : gate validé, RUN fermé green ; publication terminée.\n```'
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: citation }
+      ]
+    })
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+
+    expect(text).toContain(citation)
+    expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(2)
+    expect(text.trimEnd().endsWith('publication terminée.')).toBe(true)
+  })
+
   it('does not rewrite factual evidence emitted before the latest successful orchestration', () => {
     const hydrated = hydrateStoredAssistant({
       content: 'projection',

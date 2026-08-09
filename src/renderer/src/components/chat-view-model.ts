@@ -15,6 +15,7 @@ import {
   authoritativeOrchestrationClosureSpan,
   isAuthoritativeOrchestrationClosureLine,
   isDeliveredOrchestrationOutcome,
+  markdownFenceDelimiter,
   ORCHESTRATION_ALREADY_ISSUED_REFUSAL,
   reconcileClosedOrchestrationText,
   type OrchestrationOutcome
@@ -211,9 +212,16 @@ function withoutPersistedAuthoritativeClosure(line: string): string | undefined 
 
 function removePersistedAuthoritativeClosures(parts: ChatPart[]): ChatPart[] {
   let changed = false
+  let fencedBy: ReturnType<typeof markdownFenceDelimiter>
   const reconciled = parts.flatMap((part): ChatPart[] => {
     if (part.kind !== 'text') return [part]
     const lines = part.text.split(/\r?\n/u).flatMap((line) => {
+      const fence = markdownFenceDelimiter(line)
+      if (fence) {
+        fencedBy = fencedBy === fence ? undefined : (fencedBy ?? fence)
+        return [line]
+      }
+      if (fencedBy) return [line]
       const usefulLine = withoutPersistedAuthoritativeClosure(line)
       if (usefulLine === line) return [line]
       changed = true
@@ -256,11 +264,18 @@ function reconcileStoredOrchestrationClosure(parts: ChatPart[]): ChatPart[] {
   if (!isDeliveredOrchestrationOutcome(outcome)) return removePersistedAuthoritativeClosures(parts)
   let changed = false
   let closureSeen = false
+  let fencedBy: ReturnType<typeof markdownFenceDelimiter>
   const reconciled = parts.flatMap((part, partIndex): ChatPart[] => {
     if (part.kind !== 'text') return [part]
     const text =
       partIndex > actionIndex ? reconcileClosedOrchestrationText(part.text, outcome) : part.text
     const uniqueLines = text.split(/\r?\n/u).flatMap((line) => {
+      const fence = markdownFenceDelimiter(line)
+      if (fence) {
+        fencedBy = fencedBy === fence ? undefined : (fencedBy ?? fence)
+        return [line]
+      }
+      if (fencedBy) return [line]
       if (!isAuthoritativeOrchestrationClosureLine(line)) return [line]
       if (closureSeen) {
         changed = true
