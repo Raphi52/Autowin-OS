@@ -29,7 +29,8 @@ export interface OrchestrationOutcome {
 export const ORCHESTRATION_ALREADY_ISSUED_REFUSAL =
   'Une orchestration a deja ete lancee dans ce tour. Termine avec son resultat ; un nouveau run exige un nouveau message utilisateur.'
 
-export const AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX = 'Clôture Autowin : gate validé'
+export const AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX =
+  'Clôture Autowin : gate validé, RUN fermé green'
 
 export function isAuthoritativeOrchestrationClosureLine(line: string): boolean {
   return line.startsWith(AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX)
@@ -51,24 +52,28 @@ function asCallCount(value: unknown): number {
 const WORKER_LIFECYCLE_PREFIX =
   /^(?:\s*\*\*)?\s*(?:(?:📍|⏳|👉|⚠️)\s*)?(?:\*\*)?\s*/u
 
-function isStaleWorkerLifecycleLine(line: string): boolean {
+function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
   const text = line.replace(WORKER_LIFECYCLE_PREFIX, '').replace(/[`*_]/g, '').trim()
-  if (/^#{1,6}\s+(?:\d+[.)]\s*)?publication\s*$/iu.test(text)) return true
-  if (/\brun\s+(?:(?:reste|toujours)\s+)?open(?:\s|[.,;:—-]|$)/iu.test(text)) return true
-  if (/\bnon\s+(?:publi[ée]e?|commit[ée]e?)(?:\s|[.,;:—-]|$)/iu.test(text)) return true
-  if (/\bpublication\s+reste\b/iu.test(text)) return true
-  if (/\b(?:autoriser|d[ée]clencher)\s+(?:la\s+)?publication\b/iu.test(text)) return true
-  if (/\b(?:lancer|relancer)\s+(?:le\s+)?judge\b/iu.test(text)) return true
-  if (/\bjudge\b[^\n]*(?:refus[ée]|reste|non\s+cl[oô]tur)/iu.test(text)) return true
-  if (/\b(?:clean\s+(?:puis|et)\s+judge|encha[iî]ner\s+clean[^\n]*judge)\b/iu.test(text))
-    return true
+  if (/^#{1,6}\s+(?:\d+[.)]\s*)?publication\s*$/iu.test(text)) return undefined
+  if (/^(?:test\s+vert|preuve)\s*:/iu.test(text)) return line
 
-  return (
+  const staleSignal =
+    /\b(?:run\s+(?:(?:reste|toujours)\s+)?open|non\s+(?:publi[ée]e?|commit[ée]e?)|publication\s+(?:reste|non\s+ex[ée]cut)|(?:autoriser|d[ée]clencher)\s+(?:la\s+)?publication|(?:lancer|relancer)\s+(?:le\s+)?judge|judge[^\n]*(?:refus[ée]|reste|non\s+cl[oô]tur)|clean\s+(?:puis|et)\s+judge|encha[iî]ner\s+clean[^\n]*judge)\b/iu.exec(
+      text
+    )
+  const staleLead =
     /^(?:maintenant|reste\s+[àa]\s+faire|recommand[ée]|encha[iî]ner|clean)(?=\s|[—:,-]|$)/iu.test(
       text
     ) &&
     /\b(?:publication|commit|judge|clean)\b/iu.test(text)
-  )
+  if (!staleSignal && !staleLead) return line
+
+  if (staleSignal) {
+    const sentenceEnd = text.lastIndexOf('.', staleSignal.index)
+    const proof = sentenceEnd >= 0 ? text.slice(0, sentenceEnd + 1).trim() : ''
+    if (/^(?:tests?|preuve|contr[oô]le|r[ée]sultat)\b/iu.test(proof)) return proof
+  }
+  return undefined
 }
 
 function isStaleWorkerLifecycleSection(line: string): boolean {
@@ -136,8 +141,9 @@ function removeStaleWorkerLifecycleAdvice(report: string): string {
       staleMarkerParagraph = true
       continue
     }
-    if (staleMarkerParagraph || isStaleWorkerLifecycleLine(line)) continue
-    kept.push(line)
+    if (staleMarkerParagraph) continue
+    const usefulLine = withoutStaleWorkerLifecycleLine(line)
+    if (usefulLine !== undefined) kept.push(usefulLine)
   }
 
   return kept

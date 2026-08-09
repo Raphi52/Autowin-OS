@@ -101,6 +101,20 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     expect(text).toBe('Preuve factuelle : checksum abc123.')
   })
 
+  it('conserve les preuves qui citent une ancienne formule de cycle de vie', () => {
+    const report =
+      'Test vert : absence de « RUN open » confirmée — PASS.\nPreuve : la regex /lancer judge/ ne matche plus — PASS.'
+
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe(report)
+  })
+
   it('arrête une section provisoire au prochain titre pair sans ligne vide', () => {
     const text = reconcileClosedOrchestrationText(
       'Preuve avant.\n\n## Maintenant\nRUN open.\n## Preuves\nSHA publié abc123.',
