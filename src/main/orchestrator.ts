@@ -1116,6 +1116,9 @@ export class Orchestrator {
             }
           }
         : undefined
+    const appelsWorkflow = workflow?.graph
+      ? appelsRequisParWorkflow(workflow.graph, impose)
+      : undefined
     if (executionQuote && workflow?.explicit && workflow.graph) {
       // Une sélection manuelle engage le graphe affiché. Le devis doit donc refléter ses phases et
       // la borne de reprise qu'il porte, puis lui réserver les places nécessaires sans dépasser le
@@ -1123,7 +1126,7 @@ export class Orchestrator {
       executionQuote.phases = [...phases]
       const graphRecoveries = recoveriesFromGraph(workflow.graph)
       if (graphRecoveries !== undefined) executionQuote.limits.maxRecoveries = graphRecoveries
-      const mandatory = appelsRequisParWorkflow(workflow.graph, impose)
+      const mandatory = appelsWorkflow!
       const maxPanel = Math.max(
         impose?.judgeMembers ?? 1,
         ...Object.values(impose?.phaseMembers ?? {}).map((count) => count ?? 1)
@@ -1164,7 +1167,7 @@ export class Orchestrator {
         startedAgents: usage?.startedAgents ?? usage?.startedCalls ?? 0,
         startedCalls: usage?.startedCalls ?? 0,
         mutation: isMut,
-        hasDecomposer: Boolean(!bindingOverride && this.deps.decompose),
+        hasDecomposer: Boolean(!workflow?.graph && !bindingOverride && this.deps.decompose),
         phaseFanOut,
         judgeFanOut: bindingOverride
           ? 0
@@ -1173,7 +1176,8 @@ export class Orchestrator {
         // qui serait ensuite coupé en plein milieu, faute de places.
         ...(workflow?.graph
           ? {
-              worstCaseNodeExecutions: worstCaseNodeExecutions(workflow.graph)
+              worstCaseNodeExecutions: worstCaseNodeExecutions(workflow.graph),
+              worstCaseProviderCalls: appelsWorkflow
             }
           : {})
       })
@@ -3341,115 +3345,28 @@ export class Orchestrator {
     // d'escalader à l'humain (résolveur avant interruption). Bornée à 1, jamais de boucle infinie.
     // Un graphe qui dessine « juge rouge → build, au plus N fois » PILOTE ce nombre : c'est la même
     // boucle, nommée à l'écran au lieu d'être déduite du régime.
-    const graphRecoveries = this.workflowDuRun()?.graph
-      ? recoveriesFromGraph(this.workflowDuRun()!.graph!)
-      : undefined
+    const graphRecoveries = grapheBrut ? recoveriesFromGraph(grapheBrut) : undefined
     const allowedRecoveries = isMutationTask(task)
-      ? (graphRecoveries ?? this.deps.currentExecutionQuote?.()?.limits.maxRecoveries ?? 1)
+      ? grapheBrut
+        ? (graphRecoveries ?? 0)
+        : (this.deps.currentExecutionQuote?.()?.limits.maxRecoveries ?? 1)
       : 0
     const MAX_ATTEMPTS = 1 + Math.max(0, Math.floor(allowedRecoveries))
     let valid = false
     let gate!: ReturnType<typeof evaluateClosure>
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       if (attempt > 0) {
-        // Phase de réparation = un BUILD supplémentaire nourri du feedback du gate.
-        const repairMessages = [
-          {
-            role: 'user' as const,
-            content: [
-              ...phaseContext,
-              `[RÉPARATION] Le gate a bloqué : ${gate.reasons.join('; ')}. Corrige le livrable et fournis une PREUVE d'outil (test rouge→vert / exit-code).`
-            ].join('\n\n')
-          }
-        ]
-        let repairPrompt
-        const repairOptions: SendOptions = {
-          system:
-            this.phasePrompt('build', true).text +
-            PIPELINE_DISCIPLINE_INSTRUCTION +
-            CONCISE_STRUCTURED_RESPONSE_INSTRUCTION +
-            projectContext,
-          model: subBinding.model,
-          reasoningEffort: subBinding.reasoningEffort,
-          execution: this.executionOptions(workCwd, 'danger-full-access', runId),
-          signal,
-          observePrompt: (observed) => {
-            repairPrompt = observed
-          }
-        }
-        repairPrompt = registry.describePrompt(
-          subProvider,
-          repairMessages,
-          repairOptions,
-          subBinding.model
+        // Une reprise n'est pas une primitive parallèle au graphe : elle REJOUE le vrai nœud build,
+        // donc son panel, sa synthèse, sa concurrence et sa télémétrie. L'ancien chemin spécialisé
+        // appelait toujours le binding `subagent` seul ; devis et graphe promettaient alors trois
+        // membres tandis que l'exécution n'en payait qu'un.
+        phaseContext.push(
+          `[RÉPARATION ${attempt}] Le gate a bloqué : ${gate.reasons.join('; ')}. Corrige le livrable et fournis une PREUVE d'outil (test rouge→vert / exit-code).`
         )
-        const repairExecution = {
-          phase: 'build' as const,
-          agentId: 'build:repair',
-          taskId: 'build:repair',
-          groupId: 'build:repair',
-          dependencyIds: [] as string[],
-          attemptId: randomUUID()
-        }
-        onPhase?.({
-          step: 'exec',
-          provider: subProvider,
-          role: 'subagent',
-          model: subBinding.model,
-          reasoningEffort: subBinding.reasoningEffort,
-          phase: 'build',
-          execution: repairExecution
-        })
-        const repairStartedAt = performance.now()
-        const repairRes = await this.sendWithRoleContext(
-          'réparation',
-          'subagent',
-          subProvider,
-          repairOptions.model,
-          () =>
-            registry.send(subProvider, repairMessages, repairOptions, (c) =>
-              onDelta?.('exec', c.delta)
-            )
-        )
-        if (repairRes.usage) {
-          cost.add({
-            provider: subProvider,
-            role: 'subagent',
-            inputTokens: repairRes.usage.inputTokens,
-            outputTokens: repairRes.usage.outputTokens,
-            cacheReadTokens: repairRes.usage.cacheReadTokens,
-            costUsd: repairRes.usage.costUsd
-          })
-        }
-        push({
-          step: 'exec',
-          provider: repairRes.provider ?? subProvider,
-          role: 'subagent',
-          model: repairRes.model ?? subBinding.model,
-          text: repairRes.text,
-          tokens: repairRes.usage
-            ? repairRes.usage.inputTokens + repairRes.usage.outputTokens
-            : undefined,
-          costUsd: repairRes.usage?.costUsd,
-          usage: repairRes.usage,
-          prompt: repairPrompt,
-          status: 'completed',
-          durationMs: performance.now() - repairStartedAt,
-          evidence: repairRes.executionEvidence,
-          artifacts: repairRes.artifacts,
-          detail: 'phase build (réparation)',
-          execution: repairExecution
-        })
-        aggregatedEvidence.push(...(repairRes.executionEvidence ?? []))
-        lastExecText = repairRes.text
-        lastUsage = repairRes.usage
-        recordPhase('build', repairRes.text)
-        const carriedRepair =
-          repairRes.text.length > PHASE_CONTEXT_CAP
-            ? `${repairRes.text.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
-            : repairRes.text
-        phaseContext.push(`[phase build · réparation ${attempt}] ${carriedRepair}`)
-        prevSessionId = registry.honoursSessionResume(subProvider) ? repairRes.sessionId : undefined
+        // Le nouveau passage doit recevoir le contexte complet, pas reprendre une session linéaire
+        // qui ne contient ni le verdict du juge ni, dans le cas d'un panel, les autres membres.
+        prevSessionId = undefined
+        await executePipelinePhase('build')
         // Le graphe reste la source de vérité après un rouge : le build de réparation est suivi de
         // toutes les étapes dessinées avant le nouveau juge (notamment clean), pas d'un raccourci
         // codé en dur build → judge.

@@ -72,6 +72,19 @@ class RedPuisVert extends Recorder {
   }
 }
 
+/** Même verdict rouge→vert, avec la preuve du binding réellement payé à chaque appel. */
+class RedPuisVertParModele extends RedPuisVert {
+  readonly modeles: string[] = []
+
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    this.modeles.push(options.model ?? '(défaut)')
+    return yield* super.send(messages, options)
+  }
+}
+
 function makeOrchestrator(
   provider: ProviderAdapter,
   workflow?: WorkflowRunOverride,
@@ -374,6 +387,64 @@ describe('un graphe pilote le run', () => {
       ).run('refonte architecture sécurité migration')
     ).rejects.toThrow('Devis impossible')
     expect(provider.prompts).toHaveLength(0)
+  })
+
+  it('un graphe sans arête rouge ne déclenche aucune réparation cachée', async () => {
+    const provider = new RedPuisVert()
+    const quote = compileExecutionQuote('corrige le bug', { maxProviderCalls: 2 })
+    const result = await makeOrchestrator(
+      provider,
+      {
+        explicit: true,
+        graph: {
+          entry: 'build',
+          nodes: [
+            { id: 'build', phase: 'build' },
+            { id: 'judge', phase: 'judge' }
+          ],
+          edges: [{ from: 'build', to: 'judge', when: 'always' }]
+        }
+      },
+      quote
+    ).run('corrige le bug')
+
+    expect(result.valid).toBe(false)
+    expect(provider.phases).toEqual(['build', 'judge'])
+    expect(provider.prompts).toHaveLength(2)
+  })
+
+  it('une reprise rejoue le panel composé du nœud build et sa synthèse', async () => {
+    const provider = new RedPuisVertParModele()
+    const quote = compileExecutionQuote('refonte architecture sécurité migration')
+    await makeOrchestrator(
+      provider,
+      {
+        explicit: true,
+        graph: {
+          entry: 'build',
+          nodes: [
+            {
+              id: 'build',
+              phase: 'build',
+              agents: [
+                { provider: 'rec', model: 'a' },
+                { provider: 'rec', model: 'b' },
+                { provider: 'rec', model: 'c' }
+              ]
+            },
+            { id: 'judge', phase: 'judge' }
+          ],
+          edges: [
+            { from: 'build', to: 'judge', when: 'always' },
+            { from: 'judge', to: 'build', when: 'red', maxTraversals: 1 }
+          ]
+        }
+      },
+      quote
+    ).run('refonte architecture sécurité migration')
+
+    expect(provider.modeles).toEqual(['a', 'b', 'c', 'chef', 'juge', 'a', 'b', 'c', 'chef', 'juge'])
+    expect(quote.allocation?.estimatedMaxCalls).toBe(10)
   })
 })
 
