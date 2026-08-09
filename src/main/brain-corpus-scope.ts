@@ -16,7 +16,8 @@
  * explicitement demander le corpus global avec `AUTOWIN_BRAIN_CORPUS=*`, mais une absence de mapping
  * ne doit jamais devenir silencieusement « tout autoriser ».
  */
-import { basename } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import type { BrainRetrievalResult } from './brain-retrieval'
 
 /** Séparateur entre deux sources dans le bloc rendu par le Brain (`brain_context.py:128`). */
@@ -104,7 +105,8 @@ export function workspaceSlug(workspacePath: string): string {
  */
 export function brainCorpusForWorkspace(
   workspacePath: string | undefined,
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  worktreeOwner: (workspacePath: string) => string | undefined = gitWorktreeOwner
 ): readonly string[] | undefined {
   const configuredOverride = env.AUTOWIN_BRAIN_CORPUS
   if (configuredOverride !== undefined) {
@@ -133,7 +135,23 @@ export function brainCorpusForWorkspace(
   if (/^agent__[a-z0-9._-]+$/i.test(leaf) && marker === '.autowin') {
     return WORKSPACE_BRAIN_CORPUS[workspaceSlug(segments.at(-3) ?? '')] ?? []
   }
-  return []
+
+  // Les copies actuelles vivent dans le dossier de données global de l'app, donc leur chemin ne
+  // porte PAS le nom du dépôt propriétaire. Leur fichier `.git` le prouve en revanche sans deviner
+  // un parent : `gitdir: <dépôt>/.git/worktrees/<copie>`. Cette frontière est aussi valable pour un
+  // dépôt externe (RigApplication) et évite de lui attribuer par erreur le corpus d'Autowin OS.
+  const owner = worktreeOwner(workspacePath)
+  return owner ? WORKSPACE_BRAIN_CORPUS[workspaceSlug(owner)] ?? [] : []
+}
+
+function gitWorktreeOwner(workspacePath: string): string | undefined {
+  try {
+    const pointer = readFileSync(join(workspacePath, '.git'), 'utf8').trim()
+    const match = /^gitdir:\s*(.+?)[\\/]\.git[\\/]worktrees[\\/][^\\/]+\s*$/i.exec(pointer)
+    return match ? basename(match[1]) : undefined
+  } catch {
+    return undefined
+  }
 }
 
 /** Ramène un chemin absolu/UNC ou relatif à son identité stable `knowledge/...`. */

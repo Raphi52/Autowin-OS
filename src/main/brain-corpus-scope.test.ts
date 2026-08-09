@@ -91,6 +91,16 @@ describe('brainCorpusForWorkspace — dérivé du workspace, jamais écrit en du
     ).toContain('knowledge/domain/rigapplication-documentation/')
   })
 
+  it('reconnaît le chemin réel des worktrees isolés Autowin', () => {
+    expect(
+      brainCorpusForWorkspace(
+        'C:\\Amitel\\Autowin OS\\.autowin-data\\autowin-os\\worktrees\\68fe8b086ee864a1\\agent__run-42',
+        {},
+        () => 'C:\\Amitel\\Autowin OS'
+      )
+    ).toContain('knowledge/domain/autowin-os-')
+  })
+
   it('ne prend pas un dépôt enfant inconnu pour le workspace parent homonyme', () => {
     expect(brainCorpusForWorkspace('C:\\tmp\\autowin-os\\unrelated-customer-repo', {})).toEqual([])
     expect(brainCorpusForWorkspace('D:\\RigApplication\\client-secret', {})).toEqual([])

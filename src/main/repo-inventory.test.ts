@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { execFileSync } from 'node:child_process'
+import { basename } from 'node:path'
 import {
   branchLabel,
   foldRepoScan,
@@ -179,8 +181,14 @@ describe('distinguer un dépôt d’un worktree', () => {
 
 describe('inventaire sur le dépôt réel', () => {
   it('trouve ce dépôt, avec sa branche et un compte de commits plausible', async () => {
-    const inventory = await readRepoInventory([process.cwd()])
-    const self = inventory.repos.find((repo) => repo.name === 'Autowin OS')
+    const primaryWorkspace = execFileSync('git', ['worktree', 'list', '--porcelain'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      windowsHide: true
+    }).match(/^worktree (.+)$/m)?.[1]
+    expect(primaryWorkspace).toBeTruthy()
+    const inventory = await readRepoInventory([primaryWorkspace!])
+    const self = inventory.repos.find((repo) => repo.name === basename(primaryWorkspace!))
     expect(self).toBeDefined()
     expect(self?.branch).toBeTruthy()
     expect(self?.commits ?? 0).toBeGreaterThan(100)
