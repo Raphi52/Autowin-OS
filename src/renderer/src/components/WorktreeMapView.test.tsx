@@ -121,6 +121,27 @@ async function clickTestId(testId: string): Promise<void> {
   })
 }
 
+function byRole(role: string): HTMLElement | null {
+  return (container?.querySelector(`[role="${role}"]`) as HTMLElement | null) ?? null
+}
+
+function buttonByText(text: string): HTMLButtonElement | null {
+  return (
+    (Array.from(container?.querySelectorAll('button') ?? []).find((node) =>
+      (node.textContent ?? '').includes(text)
+    ) as HTMLButtonElement | undefined) ?? null
+  )
+}
+
+async function renderViewWithoutSettling(): Promise<void> {
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+  await act(async () => {
+    root?.render(createElement(WorktreeMapView, { active: true }))
+  })
+}
+
 async function renderView(): Promise<void> {
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -393,6 +414,86 @@ describe('WorktreeMapView — plan de métro des worktrees git', () => {
     const notice = container?.querySelector('[data-testid="worktree-map-error"]')
     expect(notice?.textContent).toContain('git absent du PATH')
     expect(container?.querySelector('svg.wtmap-plan')).toBeNull()
+  })
+})
+
+describe('WorktreeMapView — états de chargement et d’erreur', () => {
+  it('affiche un indicateur de chargement lisible tant que le snapshot n’est pas arrivé', async () => {
+    const pending = deferred<WorktreeMapSnapshot>()
+    const api = installApi()
+    api.getWorktreeMap.mockReset()
+    api.getWorktreeMap.mockImplementation(() => pending.promise)
+
+    await renderViewWithoutSettling()
+
+    const status = byRole('status')
+    expect(status).toBeTruthy()
+    expect(status?.textContent).toContain('Lecture des worktrees')
+
+    await act(async () => {
+      pending.resolve(snapshot)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container?.querySelector('[data-testid="worktree-map-loading"]')).toBeNull()
+    expect(container?.querySelector('svg.wtmap-plan')).toBeTruthy()
+  })
+
+  it('offre un bandeau d’erreur actionnable quand le snapshot est indisponible', async () => {
+    installApi({
+      available: false,
+      repoPath: 'C:\\x',
+      entries: [],
+      error: 'fatal: not a git repository'
+    })
+    await renderView()
+
+    const banner = container?.querySelector('[data-testid="worktree-map-error"]')
+    expect(banner).toBeTruthy()
+    expect(banner?.getAttribute('role')).toBe('alert')
+    // Message humain, pas seulement la sortie git brute.
+    expect(banner?.textContent).toContain('dépôt git')
+    // La sortie git reste visible en détail secondaire.
+    expect(banner?.textContent).toContain('fatal: not a git repository')
+    expect(container?.querySelector('[data-testid="worktree-map-retry"]')).toBeTruthy()
+    expect(container?.querySelector('[data-testid="worktree-map-error-pick"]')).toBeTruthy()
+    expect(buttonByText('Réessayer')).toBeTruthy()
+    expect(buttonByText('Choisir un dépôt')).toBeTruthy()
+  })
+
+  it('explique un pont IPC absent en clair', async () => {
+    previousApi = Object.getOwnPropertyDescriptor(window, 'api')
+    Object.defineProperty(window, 'api', { value: {}, configurable: true, writable: true })
+    await renderView()
+
+    const banner = container?.querySelector('[data-testid="worktree-map-error"]')
+    expect(banner?.textContent).toContain('pont interne')
+    expect(banner?.textContent).toContain('Bridge Git indisponible')
+  })
+
+  it('explique un git introuvable en clair', async () => {
+    installApi({
+      available: false,
+      repoPath: 'C:\\x',
+      entries: [],
+      error: 'spawn git ENOENT'
+    })
+    await renderView()
+
+    expect(container?.querySelector('[data-testid="worktree-map-error"]')?.textContent).toContain(
+      'Git est introuvable'
+    )
+  })
+
+  it('relance la lecture au clic sur « Réessayer »', async () => {
+    const api = installApi({ available: false, repoPath: 'C:\\x', entries: [], error: 'boum' })
+    await renderView()
+    expect(api.getWorktreeMap).toHaveBeenCalledTimes(1)
+
+    await clickTestId('worktree-map-retry')
+
+    expect(api.getWorktreeMap).toHaveBeenCalledTimes(2)
   })
 })
 

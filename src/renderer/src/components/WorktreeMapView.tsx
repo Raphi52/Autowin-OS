@@ -159,7 +159,9 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
           <span className="wtmap-path">{snapshot?.repoPath || repoPath || 'Dépôt courant'}</span>
         </div>
         <div className="wtmap-spacer" />
-        <div className="wtmap-stats">
+        {/* Tant qu'aucun snapshot n'est arrivé, des compteurs à zéro MENTIRAIENT : on ne montre
+            que l'indicateur de lecture, pas un tableau de bord vide. */}
+        <div className="wtmap-stats" hidden={!snapshot}>
           <Stat value={String(totals.count)} label="worktrees" />
           <Stat value={String(totals.dirty)} label="avec travail" tone="live" />
           <Stat value={String(totals.clean)} label="propres" tone="clean" />
@@ -184,10 +186,30 @@ export function WorktreeMapView({ active }: { active: boolean }): React.JSX.Elem
         </div>
       </header>
 
-      {snapshot && !snapshot.available && (
-        <p className="wtmap-notice" role="status" data-testid="worktree-map-error">
-          Lecture git impossible — {snapshot.error ?? 'raison inconnue'}
+      {!snapshot && (
+        <p className="wtmap-notice" role="status" data-testid="worktree-map-loading">
+          Lecture des worktrees…
         </p>
+      )}
+
+      {snapshot && !snapshot.available && (
+        <section className="wtmap-notice is-error" role="alert" data-testid="worktree-map-error">
+          <b>Lecture git impossible</b>
+          <p>{explainWorktreeError(snapshot.error)}</p>
+          {snapshot.error && <code className="wtmap-notice-raw">{snapshot.error}</code>}
+          <div className="wtmap-notice-actions">
+            <button
+              onClick={() => void refresh()}
+              disabled={loading}
+              data-testid="worktree-map-retry"
+            >
+              Réessayer
+            </button>
+            <button onClick={() => void pickRepo()} data-testid="worktree-map-error-pick">
+              Choisir un dépôt
+            </button>
+          </div>
+        </section>
       )}
       {snapshot?.available && entries.length === 0 && (
         <p className="wtmap-notice" role="status">
@@ -420,6 +442,23 @@ function WorktreeDoctor({
       ))}
     </section>
   )
+}
+
+/**
+ * Traduit la sortie technique en cause LISIBLE et actionnable : le message git brut seul laisse
+ * l'utilisateur sans issue. Les trois cas usuels sont nommés, le reste tombe sur un générique.
+ */
+function explainWorktreeError(raw: string | undefined): string {
+  const text = (raw ?? '').toLowerCase()
+  if (!raw)
+    return 'Raison inconnue. Réessayez la lecture, ou choisissez explicitement le dépôt à lire.'
+  if (text.includes('bridge') || text.includes('pont') || text.includes('ipc'))
+    return 'Le pont interne (IPC) entre la fenêtre et le processus principal n’est pas disponible : cette vue ne peut pas interroger git. Relancez l’application, puis réessayez.'
+  if (text.includes('not a git repository') || text.includes('pas un dépôt'))
+    return 'Ce dossier n’est pas un dépôt git. Choisissez un dépôt valide (le dossier qui contient .git).'
+  if (text.includes('enoent') || text.includes('introuvable') || text.includes('not found'))
+    return 'Git est introuvable sur cette machine (absent du PATH). Installez git ou ouvrez l’application depuis un environnement où `git` répond.'
+  return 'La lecture git a échoué. Réessayez, ou choisissez un autre dépôt ; le détail technique est ci-dessous.'
 }
 
 function doctorLabel(
