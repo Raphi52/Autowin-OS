@@ -61,6 +61,7 @@ export interface OrchestrationClosureSpan {
 
 interface MarkdownAstNode {
   type?: string
+  lang?: string | null
   position?: {
     start?: { line?: number; offset?: number }
     end?: { line?: number; offset?: number }
@@ -168,11 +169,18 @@ export function markdownCodeContinuationPrefixes(
         const end = node.position?.end?.line
         const offset = node.position?.start?.offset
         const fenced = offset !== undefined && /^(?:`{3,}|~{3,})/u.test(source.slice(offset))
+        // Une fence `html-render` n'est exécutable que si son document complet reste dans un seul
+        // bloc visuel. La recréer artificiellement après une carte action/artefact pourrait exécuter
+        // un suffixe HTML privé de son contexte et produire un DOM différent de la source jointe.
         if (fenced && start !== undefined && end !== undefined) {
           const openingLine = lines[start - 1]
+          const continuationPrefix =
+            node.lang?.toLowerCase() === 'html-render'
+              ? openingLine.replace(/html-render/iu, 'html')
+              : openingLine
           for (let index = 1; index < starts.length; index += 1) {
             if (starts[index] > start && starts[index] <= end && prefixes[index] === undefined) {
-              prefixes[index] = openingLine
+              prefixes[index] = continuationPrefix
             }
           }
         }
@@ -255,8 +263,10 @@ function maskQuotedEvidence(text: string): string {
   )
 }
 
-const LIFECYCLE_ASSERTION_SOURCE =
-  '(?:run\\s+(?:est\\s+)?(?:(?:(?:reste|toujours)\\s+)?open|encore\\s+ouvert)|non\\s+(?:publi[ée]e?s?|commit[ée]e?s?)|publication\\s+(?:est\\s+)?(?:reste|non\\s+ex[ée]cut(?:[ée]e?s?)?|en\\s+attente|[àa]\\s+faire)|(?:modifications?|changements?)\\s+non\\s+(?:publi[ée]e?s?|commit[ée]e?s?)|(?:les\\s+)?changements?\\s+(?:(?:ne\\s+sont\\s+)?pas\\s+encore|non)\\s+publi[ée]s?|gate\\s+(?:est\\s+)?(?:(?:reste|toujours|encore)\\s+)?bloqu[ée]|(?:autoriser|d[ée]clencher)\\s+(?:la\\s+)?publication|(?:lancer|relancer)\\s+(?:le\\s+)?judge|judge\\s+[àa]\\s+lancer|judge[^\\n]*(?:refus[ée]|reste|non\\s+cl[oô]tur)|clean\\s+(?:puis|et)\\s+judge|encha[iî]ner\\s+clean[^\\n]*judge)'
+const RUN_LIFECYCLE_ASSERTION_SOURCE =
+  'run\\s+(?:est\\s+)?(?:(?:(?:reste|toujours)\\s+)?(?:(?:standard\\s*\\/\\s*)?(?:open|ouvert))|encore\\s+ouvert)'
+
+const LIFECYCLE_ASSERTION_SOURCE = `(?:${RUN_LIFECYCLE_ASSERTION_SOURCE}|non\\s+(?:publi[ée]e?s?|commit[ée]e?s?)|publication\\s+(?:est\\s+)?(?:reste|non\\s+ex[ée]cut(?:[ée]e?s?)?|en\\s+attente|[àa]\\s+faire)|(?:modifications?|changements?)\\s+non\\s+(?:publi[ée]e?s?|commit[ée]e?s?)|(?:les\\s+)?changements?\\s+(?:(?:ne\\s+sont\\s+)?pas\\s+encore|non)\\s+publi[ée]s?|gate\\s+(?:est\\s+)?(?:(?:reste|toujours|encore)\\s+)?bloqu[ée]|(?:autoriser|d[ée]clencher)\\s+(?:la\\s+)?publication|(?:lancer|relancer)\\s+(?:le\\s+)?judge|judge\\s+[àa]\\s+lancer|judge[^\\n]*(?:refus[ée]|reste|non\\s+cl[oô]tur)|clean\\s+(?:puis|et)\\s+judge|encha[iî]ner\\s+clean[^\\n]*judge)`
 
 const LIFECYCLE_WRAPPED_SOURCE =
   '(?:(?:\\*\\*|__|~~|\\*|_|\\[|`|\\/)\\s*)*' +
@@ -277,6 +287,11 @@ const FORMATTED_LIFECYCLE_REFERENCE = /`[^`\n]+`|\[[^\]\n]+\]\([^)\n]*\)|\/[^/\n
 
 const ACTIVE_LIFECYCLE = new RegExp(
   `(?<![\\p{L}\\p{N}])${LIFECYCLE_ASSERTION_SOURCE}(?![\\p{L}\\p{N}])`,
+  'iu'
+)
+
+const ACTIVE_RUN_LIFECYCLE = new RegExp(
+  `(?<![\\p{L}\\p{N}])${RUN_LIFECYCLE_ASSERTION_SOURCE}(?![\\p{L}\\p{N}])`,
   'iu'
 )
 
@@ -307,10 +322,14 @@ function maskHistoricalLifecycleEvidence(text: string): string {
   })
 }
 
+function lifecycleSearchableSource(text: string): string {
+  return maskHistoricalLifecycleEvidence(
+    maskNegatedLifecycleEvidence(maskQuotedEvidence(text))
+  ).replace(/[`*_]/g, ' ')
+}
+
 function lifecycleSearchable(text: string): string {
-  return maskHistoricalLifecycleEvidence(maskNegatedLifecycleEvidence(maskQuotedEvidence(text)))
-    .replace(/[`*_]/g, ' ')
-    .trim()
+  return lifecycleSearchableSource(text).trim()
 }
 
 function factualSuffixAfterStale(text: string, staleEnd: number): string | undefined {
@@ -327,9 +346,74 @@ function factualSuffixAfterStale(text: string, staleEnd: number): string | undef
   return ACTIVE_LIFECYCLE.test(searchable) || staleLead ? undefined : candidate
 }
 
+function splitMarkdownTableCells(line: string): string[] | undefined {
+  const text = line.trim()
+  if (!text.startsWith('|') || !text.endsWith('|')) return undefined
+  const cells: string[] = []
+  let start = 1
+  let codeMarkerLength = 0
+  for (let index = 1; index < text.length - 1; index += 1) {
+    if (text[index] === '\\') {
+      index += 1
+      continue
+    }
+    if (text[index] === '`') {
+      let end = index + 1
+      while (text[end] === '`') end += 1
+      const length = end - index
+      if (codeMarkerLength === 0) codeMarkerLength = length
+      else if (codeMarkerLength === length) codeMarkerLength = 0
+      index = end - 1
+      continue
+    }
+    if (text[index] === '|' && codeMarkerLength === 0) {
+      cells.push(text.slice(start, index))
+      start = index + 1
+    }
+  }
+  cells.push(text.slice(start, -1))
+  return cells.length >= 2 ? cells : undefined
+}
+
+function stripStaleLifecycleClause(cell: string): string {
+  const searchable = lifecycleSearchableSource(cell)
+  // Dans un tableau d'audit, une mention de rôle `judge` peut précéder le vrai statut du RUN.
+  // Le statut du RUN est plus précis que le motif générique et doit donc gagner.
+  const staleSignal = ACTIVE_RUN_LIFECYCLE.exec(searchable) ?? ACTIVE_LIFECYCLE.exec(searchable)
+  if (!staleSignal) return cell
+
+  const staleStart = staleSignal.index
+  const staleEnd = staleStart + staleSignal[0].length
+  const prefix = cell.slice(0, staleStart)
+  const separators = [...prefix.matchAll(/(?:[.!?;:,](?:[*_]+)?\s+|[—–]\s*|\s-\s+)/gu)]
+  const previous = separators.at(-1)
+  const clauseStart = previous?.index ?? 0
+  const tail = cell.slice(staleEnd)
+  const next = /^\s*(?:[*_`]+\s*)*(?:[.!?;,]\s*|[—–]\s*|\s-\s+)/u.exec(tail)
+  const clauseEnd = next ? staleEnd + next[0].length : staleEnd
+  const before = cell.slice(0, clauseStart).trimEnd()
+  const after = cell.slice(clauseEnd).trimStart()
+  return [before, after].filter(Boolean).join(' ')
+}
+
+/** Réconcilie cellule par cellule pour qu'un statut périmé ne supprime jamais toute une ligne. */
+function withoutStaleLifecycleTableRow(line: string): string | undefined {
+  const cells = splitMarkdownTableCells(line)
+  if (!cells) return undefined
+  const rewritten = cells.map(stripStaleLifecycleClause)
+  if (rewritten.every((cell, index) => cell === cells[index])) return line
+  // Compatibilité avec les anciennes preuves à deux cellules : une dernière cellule entièrement
+  // périmée disparaît, tandis qu'une vraie ligne multi-colonnes conserve sa géométrie.
+  if (rewritten.length === 2 && !rewritten[1].trim()) rewritten.pop()
+  if (rewritten.every((cell) => !cell.trim())) return ''
+  return `| ${rewritten.map((cell) => cell.trim()).join(' | ')} |`
+}
+
 function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
   const text = line.trim()
   if (/^#{1,6}\s+(?:\d+[.)]\s*)?publication\s*$/iu.test(text)) return undefined
+  const tableRow = withoutStaleLifecycleTableRow(line)
+  if (tableRow !== undefined) return tableRow || undefined
   const proofSubject = text.replace(PROOF_DECORATION_PREFIX, '')
   const proofLike = /^(?:preuve|tests?(?:\s+verts?)?|contr[oô]le|r[ée]sultat)\b/iu.test(
     proofSubject

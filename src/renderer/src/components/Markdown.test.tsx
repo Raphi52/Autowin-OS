@@ -389,6 +389,84 @@ describe('Markdown', () => {
       )
     ).toBe(true)
   })
+
+  it.each(['completed', 'failed', 'interrupted', 'cancelled'] as const)(
+    'keeps an html-render closure citation inert across an action for %s',
+    (status) => {
+      const delivered = status === 'completed'
+      renderHydrated({
+        content: 'projection',
+        status,
+        parts: [
+          { kind: 'text', text: '```html-render' },
+          {
+            kind: 'action',
+            name: 'orchestrate',
+            ok: delivered,
+            data: delivered
+              ? { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+              : { error: 'timeout' }
+          },
+          { kind: 'text', text: `<p>${CLOSURE}</p>\n\`\`\`\n\nÉchec final : timeout.` }
+        ]
+      })
+
+      expect(container.querySelector('[data-testid="chat-inline-html"]')).toBeNull()
+      expect(
+        Array.from(container.querySelectorAll('pre code')).some((node) =>
+          node.textContent?.includes(CLOSURE)
+        )
+      ).toBe(true)
+      expect(textOutsideCode().match(/Clôture Autowin : gate validé/g) ?? []).toHaveLength(
+        delivered ? 1 : 0
+      )
+    }
+  )
+
+  it('keeps an html-render payload split by an action inert', () => {
+    renderHydrated({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        { kind: 'text', text: '```html-render\n<section><b>' },
+        { kind: 'action', name: 'verify', ok: true },
+        { kind: 'text', text: 'LIVE</b></section>\n```' }
+      ]
+    })
+
+    expect(container.querySelector('[data-testid="chat-inline-html"]')).toBeNull()
+    expect(container.textContent).toContain('LIVE')
+  })
+
+  it('keeps every html-render fragment inert across action and artifact cards', () => {
+    renderHydrated({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        { kind: 'text', text: '```html-render\n<section>' },
+        { kind: 'action', name: 'verify', ok: true },
+        { kind: 'text', text: '<b>LIVE' },
+        {
+          kind: 'artifact',
+          artifact: {
+            id: 'artifact-proof',
+            name: 'proof.txt',
+            mimeType: 'text/plain',
+            kind: 'text',
+            size: 5,
+            createdAt: 1,
+            encoding: 'utf8',
+            content: 'proof',
+            source: { provider: 'test' }
+          }
+        },
+        { kind: 'text', text: '</b></section>\n```' }
+      ]
+    })
+
+    expect(container.querySelector('[data-testid="chat-inline-html"]')).toBeNull()
+    expect(container.textContent).toContain('LIVE')
+  })
 })
 
 describe('extractRecommendation — ghost-text du composer', () => {

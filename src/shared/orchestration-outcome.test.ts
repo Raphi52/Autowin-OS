@@ -20,6 +20,12 @@ describe('projection Markdown multi-fragments', () => {
       markdownCodeContinuationPrefixes(['    preuve', '    suite', '', 'Clôture réelle.'])
     ).toEqual([undefined, undefined, undefined, undefined])
   })
+
+  it('ne transporte jamais une fence html-render à travers une carte', () => {
+    expect(
+      markdownCodeContinuationPrefixes(['```html-render', '<section><b>LIVE</b></section>', '```'])
+    ).toEqual([undefined, '```html', '```html'])
+  })
 })
 
 /**
@@ -298,6 +304,44 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
         reused: false
       })
     ).toBe(expected)
+  })
+
+  it.each([
+    [
+      '| P0 | Critique | **Le même graphe de travail est rejoué.** `inventaire`, `audit_conv93`, puis `synthese` repartent. | **Mesuré :** deux cycles complets plus un troisième entamé ; le RUN reste `open`. **Estimation :** au moins 40–50 % des appels étaient évitables. | Dédupliquer par `{cible, angle, empreinte des traces}`. |',
+      ['même graphe de travail', 'deux cycles complets', '40–50 %', 'Dédupliquer par']
+    ],
+    [
+      '| P1 | Majeure | **`conv-105` part en build sur une hypothèse non mesurée.** [RUN conv-105](</tmp/RUN.md>) | Mesuré : 4 sous-agents, 2,84 M tokens d’entrée, 452 s, RUN toujours ouvert. | Premier incrément borné : mesurer le chargement. |',
+      ['hypothèse non mesurée', 'RUN conv-105', '4 sous-agents', 'Premier incrément']
+    ],
+    [
+      '| P0 | Critique | **Nouvelle dérive après synthèse.** [Trace causale](</tmp/trace.jsonl:76>) | **Mesuré :** 9 lancements observés ; plusieurs audits sont rejoués. Impact futur croissant puisque le RUN reste ouvert. | Clore après la synthèse judge. |',
+      ['Nouvelle dérive', 'Trace causale', '9 lancements', 'Clore après']
+    ],
+    [
+      '| P0 | Critique | **Phase demandée ignorée.** La demande `judge` passe par `scout`, puis `frame`. | Neuf sous-agents ; mêmes cibles auditées deux fois. RUN toujours ouvert. | Rendre la phase explicite contraignante. |',
+      ['Phase demandée ignorée', 'Neuf sous-agents', 'Rendre la phase']
+    ],
+    [
+      '| P0 | Critique | **La phase `judge` demandée n’est pas respectée.** Le RUN reste `standard/open`. [RUN](</tmp/RUN.md:1>) | **Mesuré :** 14 lancements : 5 `scout`, 5 `frame`, 4 `terrain`. | Rendre une phase explicite contraignante. |',
+      ['phase `judge`', 'RUN](', '14 lancements', 'Rendre une phase']
+    ],
+    [
+      '| P2 | Moyenne | **Rapport coût/valeur non piloté.** Plusieurs rapports convergent. | **Mesuré :** deux synthèses terminées, RUN toujours `open`, troisième phase engagée. | Arrêter après la première synthèse. |',
+      ['Rapport coût/valeur', 'deux synthèses', 'troisième phase', 'Arrêter après']
+    ]
+  ])('préserve les cellules factuelles d’une ligne de tableau réelle', (report, survivors) => {
+    const reconciled = reconcileClosedOrchestrationText(report, {
+      status: 'succeeded',
+      valid: true,
+      gateBlocked: false,
+      reused: false
+    })
+
+    expect(reconciled).toMatch(/^\|.*\|$/u)
+    survivors.forEach((fact) => expect(reconciled).toContain(fact))
+    expect(reconciled).not.toMatch(/RUN\s+(?:reste|toujours)\s+(?:`?open`?|ouvert)/iu)
   })
 
   it('filtre aussi un suffixe lifecycle dans un titre de preuve Markdown', () => {

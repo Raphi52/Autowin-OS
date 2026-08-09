@@ -7,7 +7,10 @@
  * le setWindowOpenHandler du main). Suffisant pour des réponses de chat.
  */
 import { fromMarkdown } from 'mdast-util-from-markdown'
-import { markdownCodeLineProtection } from '../../../shared/orchestration-outcome'
+import {
+  authoritativeOrchestrationClosureSpan,
+  markdownCodeLineProtection
+} from '../../../shared/orchestration-outcome'
 import { MAX_INLINE_HTML_CHARS, prepareChatHtml } from './chat-html-inline'
 
 type MarkdownProps = {
@@ -145,7 +148,9 @@ function tokenizeMarkdownCodeBlocks(text: string): MarkdownBlock[] {
     if (span.start > cursor) blocks.push({ kind: 'text', content: text.slice(cursor, span.start) })
     blocks.push({
       kind:
-        span.language === 'html-render' && hasClosingFence(span.source, span.content)
+        span.language === 'html-render' &&
+        hasClosingFence(span.source, span.content) &&
+        !authoritativeOrchestrationClosureSpan(span.content)
           ? 'html-render'
           : 'code',
       content: span.content
