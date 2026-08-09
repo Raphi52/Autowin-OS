@@ -887,7 +887,12 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
           <div className="tickets-error" role="alert">
             <strong>Chargement des sources impossible</strong>
             <span>{sourceError}</span>
-            <button data-testid="tickets-retry" type="button" onClick={retry}>
+            <button
+              data-testid="tickets-retry"
+              type="button"
+              title="Réessayer le chargement des tickets"
+              onClick={retry}
+            >
               Réessayer
             </button>
           </div>
@@ -900,7 +905,12 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
           <div className="tickets-error" role="alert">
             <strong>Chargement impossible</strong>
             <span>{error}</span>
-            <button data-testid="tickets-retry" type="button" onClick={retry}>
+            <button
+              data-testid="tickets-retry"
+              type="button"
+              title="Réessayer le chargement des tickets"
+              onClick={retry}
+            >
               Réessayer
             </button>
           </div>
