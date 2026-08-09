@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { SettingsSection } from '../tabs'
 import { BehaviourView } from './BehaviourView'
 import { CapabilitiesView } from './CapabilitiesView'
@@ -18,15 +18,62 @@ export function SettingsView({
 }): React.JSX.Element {
   const [preflight, setPreflight] = useState<PreflightResult>()
   const [checking, setChecking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [repairing, setRepairing] = useState<string | null>(null)
 
   const recheck = useCallback(async () => {
     setChecking(true)
+    setError(null)
     try {
       setPreflight(await window.api.recheckPreflight(true))
+    } catch {
+      // Un diagnostic qui échoue ne doit JAMAIS être silencieux : l'utilisateur voit l'échec et
+      // le bouton reste actionnable (finally) pour réessayer.
+      setError('Le diagnostic a échoué. Vérifiez la configuration puis réessayez.')
     } finally {
       setChecking(false)
     }
   }, [])
+
+  /**
+   * Hydratation immédiate : le dernier preflight est déjà en mémoire côté main (`preflight:current`)
+   * → la section Diagnostic affiche les checks à l'ouverture, sans clic. Puis abonnement aux pushs
+   * live (désabonnement au démontage).
+   */
+  useEffect(() => {
+    if (section !== 'preflight') return
+    let alive = true
+    void (async () => {
+      try {
+        const current = await window.api?.getPreflight?.()
+        if (alive && current) setPreflight(current as PreflightResult)
+      } catch {
+        /* l'hydratation est un confort : son échec ne casse pas la vue, le recheck reste dispo. */
+      }
+    })()
+    const off = window.api?.onPreflight?.((r) => setPreflight(r as PreflightResult))
+    return () => {
+      alive = false
+      off?.()
+    }
+  }, [section])
+
+  const repair = useCallback(
+    async (checkId: string) => {
+      setRepairing(checkId)
+      setError(null)
+      try {
+        await window.api?.repairPreflight?.(checkId)
+      } catch {
+        setError('La réparation a échoué. Suivez la consigne affichée puis réessayez.')
+      } finally {
+        setRepairing(null)
+        // Le re-diagnostic tranche : on n'affirme jamais qu'un prérequis est réparé.
+        await recheck()
+      }
+    },
+    [recheck]
+  )
 
   return (
     <section className="domain-shell" data-testid="settings-view">
@@ -82,6 +129,11 @@ export function SettingsView({
                 {checking ? 'Vérification…' : 'Relancer le diagnostic'}
               </button>
             </header>
+            {error && (
+              <p className="domain-warning" role="alert">
+                {error}
+              </p>
+            )}
             {!preflight ? (
               <p>Relance le même contrôle que l’onboarding, à tout moment.</p>
             ) : (
@@ -94,6 +146,17 @@ export function SettingsView({
                         {check.ok ? '✓' : '✗'} {check.label}
                       </strong>
                       {check.detail && <span>{check.detail}</span>}
+                      {!check.ok && (
+                        <button
+                          type="button"
+                          className="settings-preflight-repair"
+                          data-testid={`settings-repair-${check.id}`}
+                          onClick={() => void repair(check.id)}
+                          disabled={repairing !== null || checking}
+                        >
+                          {repairing === check.id ? 'Réparation…' : 'Réparer'}
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>

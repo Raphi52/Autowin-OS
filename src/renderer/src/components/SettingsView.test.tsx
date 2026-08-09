@@ -63,6 +63,117 @@ describe('SettingsView diagnostic', () => {
     expect(container.querySelector('.settings-preflight-list li')?.className).toContain('is-ok')
   })
 
+  it('hydrate les checks au montage sans clic (getPreflight)', async () => {
+    const getPreflight = vi.fn().mockResolvedValue({
+      ok: false,
+      summary: 'Un prérequis manque.',
+      checks: [{ id: 'brain', label: 'Brain server', ok: false, detail: 'Lancer brain_server.' }]
+    })
+    const recheckPreflight = vi.fn()
+    const off = vi.fn()
+    const onPreflight = vi.fn().mockReturnValue(off)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { getPreflight, recheckPreflight, onPreflight }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        createElement(SettingsView, {
+          active: true,
+          section: 'preflight',
+          onSectionChange: vi.fn()
+        })
+      )
+    })
+
+    expect(getPreflight).toHaveBeenCalled()
+    expect(recheckPreflight).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Brain server')
+    expect(container.textContent).toContain('Lancer brain_server.')
+    expect(onPreflight).toHaveBeenCalled()
+
+    await act(async () => root.unmount())
+    container.remove()
+    expect(off).toHaveBeenCalled()
+  })
+
+  it('répare un check en échec puis relance un recheck', async () => {
+    const getPreflight = vi.fn().mockResolvedValue({
+      ok: false,
+      summary: 'Un prérequis manque.',
+      checks: [{ id: 'brain', label: 'Brain server', ok: false, detail: 'Lancer brain_server.' }]
+    })
+    const repairPreflight = vi.fn().mockResolvedValue({ started: true, detail: 'Lancé.' })
+    const recheckPreflight = vi.fn().mockResolvedValue({
+      ok: true,
+      summary: 'Tous les prérequis sont OK.',
+      checks: [{ id: 'brain', label: 'Brain server', ok: true }]
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { getPreflight, recheckPreflight, repairPreflight, onPreflight: () => () => {} }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    mounted.push({ root, container })
+
+    await act(async () => {
+      root.render(
+        createElement(SettingsView, {
+          active: true,
+          section: 'preflight',
+          onSectionChange: vi.fn()
+        })
+      )
+    })
+    const repairButton = [...container.querySelectorAll('button')].find(
+      (candidate) => candidate.textContent === 'Réparer'
+    )
+    expect(repairButton).toBeTruthy()
+    await act(async () => repairButton?.click())
+
+    expect(repairPreflight).toHaveBeenCalledWith('brain')
+    expect(recheckPreflight).toHaveBeenCalledWith(true)
+  })
+
+  it('rend une alerte quand le recheck échoue', async () => {
+    const recheckPreflight = vi.fn().mockRejectedValue(new Error('boom'))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        getPreflight: vi.fn().mockResolvedValue(null),
+        recheckPreflight,
+        onPreflight: () => () => {}
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    mounted.push({ root, container })
+
+    await act(async () => {
+      root.render(
+        createElement(SettingsView, {
+          active: true,
+          section: 'preflight',
+          onSectionChange: vi.fn()
+        })
+      )
+    })
+    const button = [...container.querySelectorAll('button')].find((candidate) =>
+      candidate.textContent?.includes('Relancer')
+    ) as HTMLButtonElement | undefined
+    await act(async () => button?.click())
+
+    expect(container.querySelector('[role="alert"]')).toBeTruthy()
+    expect(button?.disabled).toBe(false)
+  })
+
   it('expose le réglage de budget', async () => {
     const container = document.createElement('div')
     document.body.append(container)
