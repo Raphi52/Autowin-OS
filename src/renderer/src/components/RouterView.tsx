@@ -57,6 +57,8 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
   const [statuses, setStatuses] = useState<ProviderStatus[]>([])
   const [binding, setBinding] = useState<Binding | null>(null)
   const [loaded, setLoaded] = useState(false)
+  /** Échec du CHARGEMENT du catalogue — distinct d'un catalogue vide. */
+  const [catalogError, setCatalogError] = useState<string | null>(null)
   const [testing, setTesting] = useState<Record<string, boolean>>({})
   const [modePending, setModePending] = useState<Record<string, boolean>>({})
   const [accounts, setAccounts] = useState<ClaudeAccountEntry[]>([])
@@ -73,6 +75,7 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
     setModels([])
     setStatuses([])
     setLoaded(false)
+    setCatalogError(null)
   }
 
   const reloadCatalog = useCallback(async (): Promise<void> => {
@@ -80,11 +83,23 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
     setModels([])
     setStatuses([])
     setLoaded(false)
-    const [nextModels, nextStatuses, roles] = await Promise.all([
-      window.api.models().catch(() => []),
-      window.api.providerStatus().catch(() => []),
-      window.api.roles().catch(() => ({}))
-    ])
+    setCatalogError(null)
+    // Un échec de chargement N'EST PAS un poste vide : avaler les rejets affichait « Aucun provider
+    // détecté. » sur une panne IPC, indiscernable d'un catalogue réellement vide et sans recours.
+    let nextModels: unknown
+    let nextStatuses: unknown
+    let roles: unknown
+    try {
+      ;[nextModels, nextStatuses, roles] = await Promise.all([
+        window.api.models(),
+        window.api.providerStatus(),
+        window.api.roles()
+      ])
+    } catch (reason) {
+      if (generation !== reloadGenerationRef.current) return
+      setCatalogError(reason instanceof Error ? reason.message : String(reason))
+      return
+    }
     if (generation !== reloadGenerationRef.current) return
     setModels(nextModels as RuntimeModel[])
     setStatuses(nextStatuses as ProviderStatus[])
@@ -413,7 +428,15 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
             </section>
           )
         })}
-        {loaded && providers.length === 0 && (
+        {catalogError && (
+          <div className="router-catalog-error" role="alert" data-testid="router-catalog-error">
+            <p>Chargement du catalogue impossible : {catalogError}</p>
+            <button type="button" onClick={() => void reloadCatalog()}>
+              Réessayer
+            </button>
+          </div>
+        )}
+        {!catalogError && loaded && providers.length === 0 && (
           <p className="router-empty">Aucun provider détecté.</p>
         )}
       </div>

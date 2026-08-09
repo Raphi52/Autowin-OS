@@ -216,6 +216,76 @@ describe('AgentsTopologyView concurrent persistence', () => {
     expect(labels).toEqual(['alpha 2', 'Éclair 3', 'Zulu 10'])
   })
 
+  it('affiche le rejet de saveProfile dans l’alerte, sans rejet non géré', async () => {
+    const unhandled: unknown[] = []
+    const onUnhandled = (event: PromiseRejectionEvent): void => {
+      event.preventDefault()
+      unhandled.push(event.reason)
+    }
+    window.addEventListener('unhandledrejection', onUnhandled)
+    vi.spyOn(window, 'prompt').mockReturnValue('Profil A')
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      models: async () => models,
+      topology: async () => topology,
+      roles: async () => ({ orchestrator: { provider: 'openai', model: 'gpt' } }),
+      profiles: async () => [],
+      onAppEvent: () => () => undefined,
+      setTopology: vi.fn(),
+      saveProfile: vi.fn(async () => {
+        throw new Error('profil non enregistrable')
+      })
+    }
+
+    await act(async () => root.render(createElement(AgentsTopologyView)))
+    await flush()
+
+    const save = [...container.querySelectorAll('.topology-profiles button')].find((button) =>
+      button.textContent?.includes('Profil')
+    ) as HTMLButtonElement
+    await act(async () => save.click())
+    await flush()
+
+    const alert = container.querySelector('[role="alert"]')
+    expect(alert?.textContent).toContain('profil non enregistrable')
+    window.removeEventListener('unhandledrejection', onUnhandled)
+    expect(unhandled).toEqual([])
+  })
+
+  it('affiche le rejet de applyProfile dans l’alerte, sans rejet non géré', async () => {
+    const unhandled: unknown[] = []
+    const onUnhandled = (event: PromiseRejectionEvent): void => {
+      event.preventDefault()
+      unhandled.push(event.reason)
+    }
+    window.addEventListener('unhandledrejection', onUnhandled)
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      models: async () => models,
+      topology: async () => topology,
+      roles: async () => ({ orchestrator: { provider: 'openai', model: 'gpt' } }),
+      profiles: async () => [{ id: 'p1', name: 'Profil A', updatedAt: '2026-01-01', topology }],
+      onAppEvent: () => () => undefined,
+      setTopology: vi.fn(),
+      applyProfile: vi.fn(async () => {
+        throw new Error('profil illisible')
+      })
+    }
+
+    await act(async () => root.render(createElement(AgentsTopologyView)))
+    await flush()
+
+    const select = container.querySelector<HTMLSelectElement>('[aria-label="Appliquer un profil"]')!
+    await act(async () => {
+      select.value = 'p1'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await flush()
+
+    const alert = container.querySelector('[role="alert"]')
+    expect(alert?.textContent).toContain('profil illisible')
+    window.removeEventListener('unhandledrejection', onUnhandled)
+    expect(unhandled).toEqual([])
+  })
+
   it('serializes rapid edits and builds the second save from the first optimistic snapshot', async () => {
     const saves: Array<Deferred<typeof topology>> = []
     const setTopology = vi.fn((_next: typeof topology) => {

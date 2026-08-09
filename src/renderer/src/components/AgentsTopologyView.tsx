@@ -120,18 +120,32 @@ export function AgentsTopologyView({
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '')}-${Date.now().toString(36)}`
-    setProfiles(
-      (await window.api.saveProfile({
-        schema: 'autowin.profile/v1',
-        id,
-        name,
-        topology
-      })) as Profile[]
-    )
+    // Même contrat que `persist()` : un rejet IPC devient une erreur AFFICHÉE, jamais un
+    // unhandledRejection muet avec un bouton qui semble sans effet.
+    setError('')
+    try {
+      setProfiles(
+        (await window.api.saveProfile({
+          schema: 'autowin.profile/v1',
+          id,
+          name,
+          topology
+        })) as Profile[]
+      )
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+      setState('error')
+    }
   }
   async function applyProfile(id: string): Promise<void> {
-    const applied = await window.api.applyProfile(id)
-    replaceTopology(applied.topology)
+    setError('')
+    try {
+      const applied = await window.api.applyProfile(id)
+      replaceTopology(applied.topology)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+      setState('error')
+    }
   }
 
   const modelsById = useMemo(() => new Map(models.map((model) => [model.id, model])), [models])
@@ -382,7 +396,10 @@ export function AgentsTopologyView({
     <div className="agents-topology">
       <header className="topology-toolbar">
         <ModuleHeader eyebrow="Configuration des agents" title="Models" />
-        <strong className={`topology-state is-${state}`}>
+        <strong
+          className={`topology-state is-${state}`}
+          role={state === 'error' ? 'alert' : undefined}
+        >
           {state === 'saving'
             ? 'Enregistrement…'
             : state === 'error'

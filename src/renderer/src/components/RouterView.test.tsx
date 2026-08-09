@@ -204,6 +204,52 @@ describe('RouterView — erreurs provider locales', () => {
     expect(container.querySelector('[data-provider="ollama"]')).not.toBeNull()
   })
 
+  it('distingue une panne de chargement d’un catalogue vide et offre Réessayer', async () => {
+    let fail = true
+    const models = vi.fn(async () => {
+      if (fail) throw new Error('IPC indisponible')
+      return [{ id: 'claude:sonnet', provider: 'claude', model: 'claude-sonnet', label: 'Claude' }]
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        models,
+        providerStatus: async () => {
+          if (fail) throw new Error('IPC indisponible')
+          return []
+        },
+        roles: async () => ({}),
+        providerTest: vi.fn(),
+        providerLogin: vi.fn(),
+        setProviderMode: vi.fn(),
+        onAppEvent: vi.fn(() => () => undefined),
+        setRole: vi.fn()
+      }
+    })
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => root.render(createElement(RouterView, { active: true })))
+    await flush()
+
+    const error = container.querySelector('[data-testid="router-catalog-error"]')
+    expect(error).not.toBeNull()
+    expect(error?.getAttribute('role')).toBe('alert')
+    expect(error?.textContent).toContain('IPC indisponible')
+    expect(container.textContent).not.toContain('Aucun provider détecté.')
+
+    fail = false
+    const retry = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Réessayer')
+    )!
+    await act(async () => retry.click())
+    await flush()
+
+    expect(container.querySelector('[data-testid="router-catalog-error"]')).toBeNull()
+    expect(container.querySelector('[data-provider="claude"]')).not.toBeNull()
+  })
+
   it('ignore une ancienne réponse de catalogue qui termine après la plus récente', async () => {
     type Model = { id: string; provider: string; model: string; label: string }
     let appEvent: ((event: { type: string; scope?: string }) => void) | undefined
