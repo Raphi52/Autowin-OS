@@ -31,6 +31,14 @@ describe('classifyRegime', () => {
     ).toBe('standard')
   })
 
+  it("ne transforme pas 'pas de refactor' en signal critique dans un périmètre strict", () => {
+    expect(
+      classifyRegime(
+        'PÉRIMÈTRE STRICT : GraphView.tsx uniquement. Aucun autre fichier modifié (pas de refactor de cohérence).'
+      )
+    ).toBe('standard')
+  })
+
   it('conserve les vrais signaux critiques présents après une contrainte négative', () => {
     expect(
       classifyRegime(
