@@ -2,10 +2,25 @@ import { describe, expect, it } from 'vitest'
 import {
   formatOrchestrationOutcome,
   isDeliveredOrchestrationOutcome,
+  markdownCodeContinuationPrefixes,
   reconcileClosedOrchestrationText,
   reconcileClosedOrchestrationTextParts,
   runLabelFromPath
 } from './orchestration-outcome'
+
+describe('projection Markdown multi-fragments', () => {
+  it('transporte la fence exacte vers chaque fragment qui reprend au milieu du code', () => {
+    expect(
+      markdownCodeContinuationPrefixes(['> ~~~~text', '> preuve', '> ~~~~\nClôture réelle.'])
+    ).toEqual([undefined, '> ~~~~text', '> ~~~~text'])
+  })
+
+  it('n’invente aucun contexte pour du code indenté ou un fragment après la fermeture', () => {
+    expect(
+      markdownCodeContinuationPrefixes(['    preuve', '    suite', '', 'Clôture réelle.'])
+    ).toEqual([undefined, undefined, undefined, undefined])
+  })
+})
 
 /**
  * Le fil doit rapporter ce que l'orchestration a VRAIMENT produit.

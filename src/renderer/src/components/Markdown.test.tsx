@@ -26,7 +26,10 @@ function render(text: string, highlightFinalSummary = false): void {
 
 const CLOSURE = 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
 
-function renderHydrated(message: Parameters<typeof hydrateStoredAssistant>[0]): void {
+function renderHydrated(
+  message: Parameters<typeof hydrateStoredAssistant>[0],
+  highlightFinalSummary = false
+): void {
   const hydrated = hydrateStoredAssistant(message)
   const texts = groupAssistantActivity(hydrated.parts).filter((part) => part.kind === 'text')
   act(() =>
@@ -34,7 +37,15 @@ function renderHydrated(message: Parameters<typeof hydrateStoredAssistant>[0]): 
       createElement(
         'div',
         null,
-        ...texts.map((part, index) => createElement(Markdown, { key: index, text: part.text }))
+        ...texts.map((part, index) =>
+          createElement(Markdown as React.ComponentType<Record<string, unknown>>, {
+            key: index,
+            text: part.text,
+            continuationPrefix: (part as { markdownContinuationPrefix?: string })
+              .markdownContinuationPrefix,
+            highlightFinalSummary
+          })
+        )
       )
     )
   )
@@ -193,6 +204,24 @@ describe('Markdown', () => {
     expect(refused?.querySelector('pre code')?.textContent).toContain('data:image/png')
   })
 
+  it.each([
+    '```html-render\n<b>LIVE</b>\n    ```',
+    '```html-render\n<b>LIVE</b>\n\t```',
+    '- ```html-render\n  <b>LIVE</b>\n      ```',
+    '> ```html-render\n> <b>LIVE</b>\n>     ```'
+  ])('keeps an html-render fence inert when CommonMark did not close it: %s', (source) => {
+    render(source)
+    expect(container.querySelector('[data-testid="chat-inline-html"]')).toBeNull()
+    expect(container.querySelector('pre code')?.textContent).toContain('<b>LIVE</b>')
+  })
+
+  it('still activates a truly closed html-render fence containing a marker-like code line', () => {
+    render('```html-render\n<b>LIVE</b>\n    ```\n```')
+    expect(container.querySelector('[data-testid="chat-inline-html"]')?.textContent).toContain(
+      'LIVE'
+    )
+  })
+
   it('groups the model final summary in one dedicated region and absorbs its separator', () => {
     render(
       'Réponse détaillée.\n\n---\n\n✅ Fait\n1. Correctif appliqué.\n\n📍 Maintenant : vérifié.\n⏳ Reste à faire : rien.\n👉 Recommandé : tester.',
@@ -301,6 +330,64 @@ describe('Markdown', () => {
   ])('does not frame final-summary labels contained in CommonMark code: %s', (source) => {
     render(source, true)
     expect(container.querySelector('.md-final-summary')).toBeNull()
+  })
+
+  it.each(['completed', 'failed', 'interrupted', 'cancelled'] as const)(
+    'keeps action-separated fenced evidence aligned with the visible DOM for %s',
+    (status) => {
+      const delivered = status === 'completed'
+      renderHydrated({
+        content: 'projection',
+        status,
+        parts: [
+          { kind: 'text', text: '~~~text' },
+          {
+            kind: 'action',
+            name: 'orchestrate',
+            ok: delivered,
+            data: delivered
+              ? { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+              : { error: 'timeout' }
+          },
+          { kind: 'text', text: `${CLOSURE}\n~~~\n\nÉchec final : timeout.` }
+        ]
+      })
+
+      expect(
+        Array.from(container.querySelectorAll('pre code')).some((node) =>
+          node.textContent?.includes(CLOSURE)
+        )
+      ).toBe(true)
+      expect(textOutsideCode().match(/Clôture Autowin : gate validé/g) ?? []).toHaveLength(
+        delivered ? 1 : 0
+      )
+      expect(textOutsideCode()).toContain('Échec final : timeout.')
+    }
+  )
+
+  it('does not frame final-summary labels when a fence crosses an action boundary', () => {
+    renderHydrated(
+      {
+        content: 'projection',
+        status: 'completed',
+        parts: [
+          { kind: 'text', text: '~~~text' },
+          { kind: 'action', name: 'get_state', ok: true },
+          {
+            kind: 'text',
+            text: '✅ Fait\n📍 Maintenant\n⏳ Reste à faire\n👉 Recommandé\n~~~'
+          }
+        ]
+      },
+      true
+    )
+
+    expect(container.querySelector('.md-final-summary')).toBeNull()
+    expect(
+      Array.from(container.querySelectorAll('pre code')).some((node) =>
+        node.textContent?.includes('✅ Fait')
+      )
+    ).toBe(true)
   })
 })
 

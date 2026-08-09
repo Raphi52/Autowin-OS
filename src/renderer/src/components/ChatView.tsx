@@ -442,7 +442,11 @@ const ChatMessageRow = memo(
                   {groupAssistantActivity(timelineItem.parts).map((part, index) =>
                     part.kind === 'text' ? (
                       <div key={index} className="msg-body" dir="auto">
-                        <Markdown text={part.text} highlightFinalSummary />
+                        <Markdown
+                          text={part.text}
+                          continuationPrefix={part.markdownContinuationPrefix}
+                          highlightFinalSummary
+                        />
                       </div>
                     ) : part.kind === 'suggestions' ? (
                       <SuggestionGrid

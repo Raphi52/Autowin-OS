@@ -12,6 +12,8 @@ import { MAX_INLINE_HTML_CHARS, prepareChatHtml } from './chat-html-inline'
 
 type MarkdownProps = {
   text: string
+  /** Fence ouverte dans un fragment texte précédent, séparé visuellement par une carte d'action. */
+  continuationPrefix?: string
   highlightFinalSummary?: boolean
 }
 
@@ -49,9 +51,11 @@ export function extractRecommendation(text: string): string | null {
 
 export function Markdown({
   text,
+  continuationPrefix,
   highlightFinalSummary = false
 }: MarkdownProps): React.JSX.Element {
-  const finalSummary = highlightFinalSummary ? splitFinalSummary(text) : null
+  const source = continuationPrefix ? `${continuationPrefix}\n${text}` : text
+  const finalSummary = highlightFinalSummary ? splitFinalSummary(source) : null
   return (
     <div className="md">
       {finalSummary ? (
@@ -62,7 +66,7 @@ export function Markdown({
           </section>
         </>
       ) : (
-        renderMarkdownBlocks(text, 'body')
+        renderMarkdownBlocks(source, 'body')
       )}
     </div>
   )
@@ -86,16 +90,22 @@ type MarkdownCodeSpan = {
   source: string
 }
 
-function hasClosingFence(source: string): boolean {
+function hasClosingFence(source: string, content: string): boolean {
   const opening = /^(`{3,}|~{3,})[^\r\n]*(?:\r?\n|$)/u.exec(source)
   if (!opening) return false
   const marker = opening[1][0]
   const length = opening[1].length
-  const closing = new RegExp(
-    `(?:^|\\r?\\n)(?:[ \\t]*>[ \\t]?)*[ \\t]*${marker}{${length},}[ \\t]*$`,
-    'u'
-  )
-  return closing.test(source)
+  const markerOnly = (line: string): boolean => {
+    let candidate = line.trimStart()
+    while (candidate.startsWith('>')) candidate = candidate.slice(1).trimStart()
+    return new RegExp(`^${marker}{${length},}[ \\t]*$`, 'u').test(candidate)
+  }
+  // Le parseur exclut la vraie fermeture de `value`. Une pseudo-fermeture trop indentée reste au
+  // contraire dans `value`. Comparer les comptes revient à demander au parseur — pas à une seconde
+  // regex permissive — s'il a réellement consommé un délimiteur de fermeture.
+  const sourceMarkers = source.split(/\r?\n/u).slice(1).filter(markerOnly).length
+  const contentMarkers = content.split('\n').filter(markerOnly).length
+  return sourceMarkers > contentMarkers
 }
 
 function tokenizeMarkdownCodeBlocks(text: string): MarkdownBlock[] {
@@ -135,7 +145,9 @@ function tokenizeMarkdownCodeBlocks(text: string): MarkdownBlock[] {
     if (span.start > cursor) blocks.push({ kind: 'text', content: text.slice(cursor, span.start) })
     blocks.push({
       kind:
-        span.language === 'html-render' && hasClosingFence(span.source) ? 'html-render' : 'code',
+        span.language === 'html-render' && hasClosingFence(span.source, span.content)
+          ? 'html-render'
+          : 'code',
       content: span.content
     })
     cursor = span.end

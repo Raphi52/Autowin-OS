@@ -15,6 +15,7 @@ import {
   authoritativeOrchestrationClosureSpan,
   isAuthoritativeOrchestrationClosureLine,
   isDeliveredOrchestrationOutcome,
+  markdownCodeContinuationPrefixes,
   markdownCodeLineProtection,
   ORCHESTRATION_ALREADY_ISSUED_REFUSAL,
   reconcileClosedOrchestrationTextParts,
@@ -24,8 +25,12 @@ import {
 
 export type ChatActionPart = PersistedChatActionPart
 export type ChatArtifactPart = PersistedChatArtifactPart
-export type ChatTextPart = PersistedChatTextPart
+export type ChatTextPart = PersistedChatTextPart & {
+  /** Contexte de fence calculé pour le rendu seulement — jamais persisté. */
+  markdownContinuationPrefix?: string
+}
 export type ChatPart = PersistedChatPart
+type ChatDisplayPart = ChatTextPart | ChatActionPart | ChatArtifactPart
 export type ChatActivityBlock = { kind: 'activity'; actions: ChatActionPart[] }
 export type ChatSuggestionsBlock = { kind: 'suggestions'; groups: SuggestionGroup[] }
 export type ChatScoutTableBlock = { kind: 'scout-table'; rows: ScoutRow[] }
@@ -1004,17 +1009,27 @@ export function stripAssistantThinking(text: string): string {
   return sanitized
 }
 
-export function coalesceAssistantParts(parts: ChatPart[]): ChatPart[] {
-  const compact: ChatPart[] = []
-  let pendingText: string[] = []
+export function coalesceAssistantParts(parts: ChatPart[]): ChatDisplayPart[] {
+  const compact: ChatDisplayPart[] = []
+  const textParts = parts.filter((part): part is PersistedChatTextPart => part.kind === 'text')
+  const continuationPrefixes = markdownCodeContinuationPrefixes(textParts.map((part) => part.text))
+  let textIndex = 0
+  let pendingText: Array<{ text: string; continuationPrefix?: string }> = []
   const flushText = (): void => {
     // Même séparateur que `markdownCodeLineProtection` / `reconcileClosedOrchestrationTextParts` :
     // hydratation et affichage doivent projeter exactement le même flux Markdown.
-    const text = stripAssistantThinking(pendingText.join('\n'))
+    const text = stripAssistantThinking(pendingText.map((part) => part.text).join('\n'))
     // La décision de vacuité peut ignorer les espaces, mais la source rendue ne le peut pas : une
     // indentation de quatre espaces est un bloc de code CommonMark et les espaces finaux peuvent
     // appartenir à une preuve. `trim()` changeait donc la sémantique entre hydratation et écran.
-    if (text.trim()) compact.push({ kind: 'text', text })
+    if (text.trim()) {
+      const continuationPrefix = pendingText[0]?.continuationPrefix
+      compact.push({
+        kind: 'text',
+        text,
+        ...(continuationPrefix ? { markdownContinuationPrefix: continuationPrefix } : {})
+      })
+    }
     pendingText = []
   }
   for (const part of parts) {
@@ -1023,7 +1038,10 @@ export function coalesceAssistantParts(parts: ChatPart[]): ChatPart[] {
       compact.push(part)
       continue
     }
-    pendingText.push(part.text)
+    pendingText.push({
+      text: part.text,
+      continuationPrefix: continuationPrefixes[textIndex++]
+    })
   }
   flushText()
   return compact

@@ -61,7 +61,10 @@ export interface OrchestrationClosureSpan {
 
 interface MarkdownAstNode {
   type?: string
-  position?: { start?: { line?: number }; end?: { line?: number } }
+  position?: {
+    start?: { line?: number; offset?: number }
+    end?: { line?: number; offset?: number }
+  }
   children?: MarkdownAstNode[]
 }
 
@@ -137,6 +140,51 @@ export function markdownCodeLineProtection(reports: readonly string[]): Array<Se
     )
   }
   return protectedLines
+}
+
+/**
+ * Préfixe de fence à réinjecter quand un fragment texte commence au milieu d'un bloc fenced.
+ * Les actions restent des cartes séparées dans le DOM, mais elles ne doivent pas réinitialiser la
+ * grammaire Markdown que l'hydratation a projetée sur le flux texte complet.
+ */
+export function markdownCodeContinuationPrefixes(
+  reports: readonly string[]
+): Array<string | undefined> {
+  const lineCounts = reports.map((report) => report.split(/\r?\n/u).length)
+  const starts: number[] = []
+  let nextStart = 1
+  for (const count of lineCounts) {
+    starts.push(nextStart)
+    nextStart += count
+  }
+  const prefixes = reports.map(() => undefined as string | undefined)
+  const source = reports.join('\n')
+  const lines = source.split(/\r?\n/u)
+  try {
+    const tree = fromMarkdown(source) as MarkdownAstNode
+    const visit = (node: MarkdownAstNode): void => {
+      if (node.type === 'code') {
+        const start = node.position?.start?.line
+        const end = node.position?.end?.line
+        const offset = node.position?.start?.offset
+        const fenced = offset !== undefined && /^(?:`{3,}|~{3,})/u.test(source.slice(offset))
+        if (fenced && start !== undefined && end !== undefined) {
+          const openingLine = lines[start - 1]
+          for (let index = 1; index < starts.length; index += 1) {
+            if (starts[index] > start && starts[index] <= end && prefixes[index] === undefined) {
+              prefixes[index] = openingLine
+            }
+          }
+        }
+      }
+      node.children?.forEach(visit)
+    }
+    visit(tree)
+  } catch {
+    // La protection principale échoue déjà fermée ; sans projection fiable, ne pas inventer de
+    // fence de continuation qui pourrait activer `html-render`.
+  }
+  return prefixes
 }
 
 /** Réécrit seulement les lignes hors code, sans normaliser les octets des lignes protégées. */

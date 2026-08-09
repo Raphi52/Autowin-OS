@@ -1311,6 +1311,24 @@ describe('coalesceAssistantParts', () => {
       ])
     ).toEqual([{ kind: 'text', text: '    première ligne  \n\n    seconde ligne\n' }])
   })
+
+  it('carries a fenced-code continuation across an intervening action', () => {
+    expect(
+      coalesceAssistantParts([
+        { kind: 'text', text: '~~~text' },
+        { kind: 'action', name: 'verify', ok: true },
+        { kind: 'text', text: 'preuve\n~~~\nAprès.' }
+      ])
+    ).toEqual([
+      { kind: 'text', text: '~~~text' },
+      { kind: 'action', name: 'verify', ok: true },
+      {
+        kind: 'text',
+        text: 'preuve\n~~~\nAprès.',
+        markdownContinuationPrefix: '~~~text'
+      }
+    ])
+  })
 })
 
 describe('groupAssistantActivity', () => {
