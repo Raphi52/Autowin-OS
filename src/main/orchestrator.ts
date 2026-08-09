@@ -81,6 +81,22 @@ function verdictDePhase(phase: PipelinePhase, text: string): NodeVerdict {
   // Ni rejet lisible, ni approbation contractuelle : un juge muet sur sa conclusion ne vaut pas un OK.
   return APPROBATION_CONTRAT.test(propre) ? 'green' : 'red'
 }
+
+/**
+ * Le retour judge rouge → build est exécuté par la boucle de réparation enrichie du moteur, pas par
+ * le marcheur générique. Le retirer ici donne au devis et à l'exécution la même topologie effective.
+ */
+function sansRetourReparationJuge(graph: WorkflowGraph): WorkflowGraph {
+  return {
+    ...graph,
+    edges: graph.edges.filter((edge) => {
+      if (edge.when !== 'red') return true
+      const depuis = graph.nodes.find((node) => node.id === edge.from)?.phase
+      const vers = graph.nodes.find((node) => node.id === edge.to)?.phase
+      return !(depuis === 'judge' && vers === 'build')
+    })
+  }
+}
 import { phaseBrief } from './phase-briefs'
 import { personaInstruction, WORKFLOW_IS_A_TOOL_INSTRUCTION } from '../shared/persona'
 import type { DecompositionOutcome } from './greedy-decompose'
@@ -865,7 +881,14 @@ export class Orchestrator {
     // paierait le pipeline entier.
     if (this.tacheTriviale(task)) return this.deps.classifyPhases!(task)
     const fromGraph = workflow?.graph ? linearPhasesOf(workflow.graph) : undefined
-    const imposed = fromGraph?.length ? fromGraph : workflow?.phases
+    // Un graphe explicite à retour n'est pas linéarisable, mais ses nœuds restent les phases que le
+    // devis doit réserver et afficher. Retomber sur la classification rendait « Chantier Autowin »
+    // visible tout en annonçant seulement frame → build.
+    const explicitGraphPhases =
+      workflow?.explicit && workflow.graph?.nodes.length
+        ? workflow.graph.nodes.map((node) => node.phase)
+        : undefined
+    const imposed = fromGraph?.length ? fromGraph : (explicitGraphPhases ?? workflow?.phases)
     if (imposed?.length) return [...imposed]
     return this.deps.classifyPhases
       ? this.deps.classifyPhases(task)
@@ -1029,6 +1052,23 @@ export class Orchestrator {
     const requiresIsolatedWorkspace = isMut || runOptions.publication === 'hold'
     const workflow = this.workflowDuRun()
     const phases = this.effectivePhases(task)
+    if (executionQuote && workflow?.explicit && workflow.graph) {
+      // Une sélection manuelle engage le graphe affiché. Le devis doit donc refléter ses phases et
+      // la borne de reprise qu'il porte, puis lui réserver les places nécessaires sans dépasser le
+      // plafond d'appels déjà fixé par le régime / l'utilisateur.
+      executionQuote.phases = [...phases]
+      const graphRecoveries = recoveriesFromGraph(workflow.graph)
+      if (graphRecoveries !== undefined) executionQuote.limits.maxRecoveries = graphRecoveries
+      const effectiveNodeExecutions = worstCaseNodeExecutions(
+        sansRetourReparationJuge(workflow.graph)
+      )
+      const recoveries = isMut ? executionQuote.limits.maxRecoveries : 0
+      const mandatory = effectiveNodeExecutions + (1 + recoveries) + recoveries
+      executionQuote.limits.maxAgents = Math.max(
+        executionQuote.limits.maxAgents,
+        Math.min(executionQuote.limits.maxProviderCalls, mandatory)
+      )
+    }
     const admittedRuntime: OrchestrationRuntimeSnapshot = runtimeSnapshot ?? {
       roles: this.deps.roles.all(),
       phaseFanOut: Object.fromEntries(
@@ -1059,7 +1099,11 @@ export class Orchestrator {
         // Un graphe à boucles rejoue des nœuds : provisionner sa seule chaîne ferait accepter un run
         // qui serait ensuite coupé en plein milieu, faute de places.
         ...(workflow?.graph
-          ? { worstCaseNodeExecutions: worstCaseNodeExecutions(workflow.graph) }
+          ? {
+              worstCaseNodeExecutions: worstCaseNodeExecutions(
+                workflow.explicit ? sansRetourReparationJuge(workflow.graph) : workflow.graph
+              )
+            }
           : {})
       })
       // Le workflow impose son allocation PAR-DESSUS le calcul du devis, clé par clé : c'est tout
@@ -2220,15 +2264,7 @@ export class Orchestrator {
      * fois, et doublerait silencieusement le coût que le devis a provisionné.
      */
     const graphePilote: WorkflowGraph | undefined = grapheBrut
-      ? {
-          ...grapheBrut,
-          edges: grapheBrut.edges.filter((edge) => {
-            if (edge.when !== 'red') return true
-            const depuis = grapheBrut.nodes.find((n) => n.id === edge.from)?.phase
-            const vers = grapheBrut.nodes.find((n) => n.id === edge.to)?.phase
-            return !(depuis === 'judge' && vers === 'build')
-          })
-        }
+      ? sansRetourReparationJuge(grapheBrut)
       : undefined
     const suitePhases = function* (): Generator<PipelinePhase> {
       if (!graphePilote?.nodes?.length) {

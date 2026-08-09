@@ -202,6 +202,39 @@ describe('un graphe pilote le run', () => {
       )
     ).rejects.toThrow('Devis impossible')
   })
+
+  it('un graphe explicitement choisi réserve son chemin complet et ses deux reprises', async () => {
+    const graph = {
+      entry: 'scout-1',
+      nodes: [
+        { id: 'scout-1', phase: 'scout' as const },
+        { id: 'frame-1', phase: 'frame' as const },
+        { id: 'terrain-1', phase: 'terrain' as const },
+        { id: 'build-1', phase: 'build' as const },
+        { id: 'clean-1', phase: 'clean' as const },
+        { id: 'judge-1', phase: 'judge' as const }
+      ],
+      edges: [
+        { from: 'scout-1', to: 'frame-1', when: 'always' as const },
+        { from: 'frame-1', to: 'terrain-1', when: 'always' as const },
+        { from: 'terrain-1', to: 'build-1', when: 'always' as const },
+        { from: 'build-1', to: 'clean-1', when: 'always' as const },
+        { from: 'clean-1', to: 'judge-1', when: 'always' as const },
+        { from: 'judge-1', to: 'build-1', when: 'red' as const, maxTraversals: 2 }
+      ]
+    }
+    const quote = compileExecutionQuote('corrige le sommaire du README')
+
+    await expect(
+      makeOrchestrator(new Recorder(), { explicit: true, graph }, quote).run(
+        'corrige le sommaire du README'
+      )
+    ).resolves.toBeDefined()
+    expect(quote.phases).toEqual(['scout', 'frame', 'terrain', 'build', 'clean', 'judge'])
+    expect(quote.limits.maxRecoveries).toBe(2)
+    expect(quote.limits.maxAgents).toBeGreaterThanOrEqual(11)
+    expect(quote.limits.maxAgents).toBeLessThanOrEqual(quote.limits.maxProviderCalls)
+  })
 })
 
 describe('les agents composés sur un nœud atteignent le run', () => {
