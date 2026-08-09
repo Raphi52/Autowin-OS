@@ -12,6 +12,7 @@ import { parseScoutTable, type ScoutRow } from './scout-table'
 import type { PilotEventKind } from '../../../shared/pilot-events'
 import {
   AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX,
+  authoritativeOrchestrationClosureSpan,
   isAuthoritativeOrchestrationClosureLine,
   isDeliveredOrchestrationOutcome,
   ORCHESTRATION_ALREADY_ISSUED_REFUSAL,
@@ -186,18 +187,26 @@ function duplicateAuthoritativeClosureIndex(line: string): number | undefined {
 }
 
 function withoutPersistedAuthoritativeClosure(line: string): string | undefined {
-  if (!isAuthoritativeOrchestrationClosureLine(line)) return line
-  const closureStart = line.indexOf(AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX)
-  const closureEnd = line.indexOf(
-    '.',
-    closureStart + AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX.length
-  )
-  if (closureEnd < 0) return undefined
-  const remainder = line
-    .slice(closureEnd + 1)
-    .replace(/^(?:(?:\*\*|__|~~)\s*)+/u, '')
-    .trim()
-  return remainder && !/^(?:\*\*|__|~~)$/u.test(remainder) ? remainder : undefined
+  let reconciled = line
+  let changed = false
+  for (;;) {
+    const closure = authoritativeOrchestrationClosureSpan(reconciled)
+    if (!closure) break
+    const leadingDecorationOnly = isAuthoritativeOrchestrationClosureLine(reconciled)
+    const before = (leadingDecorationOnly ? '' : reconciled.slice(0, closure.start))
+      .replace(/\s*[;:—-]\s*$/u, '')
+      .trimEnd()
+    const after = reconciled
+      .slice(closure.end)
+      .replace(/^\s*(?:(?:\*\*|__|~~|\*|_)\s*)+/u, '')
+      .replace(/^\s*[;:—-]\s*/u, '')
+      .trimStart()
+    reconciled = [before, after].filter(Boolean).join(' ')
+    changed = true
+  }
+  if (!changed) return line
+  const useful = reconciled.trim()
+  return useful && !/^(?:\*\*|__|~~|\*|_)$/u.test(useful) ? useful : undefined
 }
 
 function removePersistedAuthoritativeClosures(parts: ChatPart[]): ChatPart[] {
@@ -221,18 +230,23 @@ function removePersistedAuthoritativeClosures(parts: ChatPart[]): ChatPart[] {
 }
 
 function reconcileStoredOrchestrationClosure(parts: ChatPart[]): ChatPart[] {
-  const action = [...parts]
-    .reverse()
-    .find(
-      (part) =>
-        part.kind === 'action' &&
-        part.name === 'orchestrate' &&
-        !(
-          part.ok === false &&
-          typeof part.data === 'string' &&
-          part.data === ORCHESTRATION_ALREADY_ISSUED_REFUSAL
-        )
-    )
+  let actionIndex = -1
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = parts[index]
+    if (
+      part.kind === 'action' &&
+      part.name === 'orchestrate' &&
+      !(
+        part.ok === false &&
+        typeof part.data === 'string' &&
+        part.data === ORCHESTRATION_ALREADY_ISSUED_REFUSAL
+      )
+    ) {
+      actionIndex = index
+      break
+    }
+  }
+  const action = actionIndex >= 0 ? parts[actionIndex] : undefined
   if (action?.kind !== 'action') return parts
   if (action.ok !== true || !action.data || typeof action.data !== 'object') {
     return removePersistedAuthoritativeClosures(parts)
@@ -242,9 +256,10 @@ function reconcileStoredOrchestrationClosure(parts: ChatPart[]): ChatPart[] {
   if (!isDeliveredOrchestrationOutcome(outcome)) return removePersistedAuthoritativeClosures(parts)
   let changed = false
   let closureSeen = false
-  const reconciled = parts.flatMap((part): ChatPart[] => {
+  const reconciled = parts.flatMap((part, partIndex): ChatPart[] => {
     if (part.kind !== 'text') return [part]
-    const text = reconcileClosedOrchestrationText(part.text, outcome)
+    const text =
+      partIndex > actionIndex ? reconcileClosedOrchestrationText(part.text, outcome) : part.text
     const uniqueLines = text.split(/\r?\n/u).flatMap((line) => {
       if (!isAuthoritativeOrchestrationClosureLine(line)) return [line]
       if (closureSeen) {

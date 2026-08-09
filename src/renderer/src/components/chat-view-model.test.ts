@@ -428,6 +428,82 @@ describe('durable assistant hydration and streaming', () => {
     expect(text).toBe('Échec final : timeout.')
   })
 
+  it.each([
+    '1. Clôture Autowin : gate validé, RUN fermé green ; publication terminée.',
+    '- [x] Clôture Autowin : gate validé, RUN fermé green ; publication terminée.',
+    '✅ Clôture Autowin : gate validé, RUN fermé green ; publication terminée.',
+    '### Clôture Autowin : gate validé, RUN fermé green ; publication terminée.',
+    '_Clôture Autowin : gate validé, RUN fermé green ; publication terminée._'
+  ])('removes a decorated green closure from a failed message: %s', (closure) => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'failed',
+      parts: [
+        { kind: 'text', text: closure },
+        { kind: 'text', text: 'Échec final : timeout.' }
+      ]
+    })
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+
+    expect(text).toBe('Échec final : timeout.')
+  })
+
+  it.each([
+    [
+      'Clôture Autowin : gate validé, RUN fermé green ; Échec final : timeout.',
+      'Échec final : timeout.'
+    ],
+    [
+      'Clôture Autowin : gate validé, RUN fermé green - Échec final : timeout.',
+      'Échec final : timeout.'
+    ],
+    [
+      'Clôture Autowin : gate validé, RUN fermé green ; publication terminée ; Échec final : timeout.',
+      'Échec final : timeout.'
+    ],
+    [
+      'Échec final : timeout. Clôture Autowin : gate validé, RUN fermé green ; publication terminée.',
+      'Échec final : timeout.'
+    ]
+  ])('removes only the stale closure clause from a failed line: %s', (line, expected) => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'failed',
+      parts: [{ kind: 'text', text: line }]
+    })
+
+    expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe(expected)
+  })
+
+  it('does not rewrite factual evidence emitted before the latest successful orchestration', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        { kind: 'action', name: 'orchestrate', ok: false, data: { error: 'timeout' } },
+        { kind: 'text', text: 'Échec initial : publication non exécutée.' },
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: 'Tests 12/12 verts.' }
+      ]
+    })
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+
+    expect(text).toContain('Échec initial : publication non exécutée.')
+    expect(text).toContain('Tests 12/12 verts.')
+    expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(1)
+  })
+
   it('removes a persisted green closure when the latest orchestration failed', () => {
     const hydrated = hydrateStoredAssistant({
       content: 'projection',

@@ -148,6 +148,22 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     ).toBe(report)
   })
 
+  it.each([
+    'Test vert : **RUN reste open** est faux — PASS.',
+    "Test vert : [RUN reste open](#etat) n'est plus vrai — PASS.",
+    'Test vert : publication non exécutée = false — PASS.',
+    "Preuve : la commande `lancer judge` est observée dans l'ancien log — PASS."
+  ])('conserve une négation ou référence lifecycle factuelle : %s', (report) => {
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe(report)
+  })
+
   it('ne prend pas les apostrophes grammaticales pour des délimiteurs de citation', () => {
     expect(
       reconcileClosedOrchestrationText(
@@ -265,6 +281,23 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
         reused: false
       })
     ).toBe('Tests 12/12 verts.')
+  })
+
+  it.each([
+    ['Test vert : RUN reste open. SHA-256 abc123 vérifié.', 'SHA-256 abc123 vérifié.'],
+    [
+      'Test vert : **RUN reste open**. absence de publication non exécutée confirmée.',
+      'absence de publication non exécutée confirmée.'
+    ]
+  ])('conserve tout suffixe factuel délimité après le statut : %s', (report, expected) => {
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe(expected)
   })
 
   it('arrête une section provisoire au prochain titre pair sans ligne vide', () => {

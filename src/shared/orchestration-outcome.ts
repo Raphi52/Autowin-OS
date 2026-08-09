@@ -32,11 +32,34 @@ export const ORCHESTRATION_ALREADY_ISSUED_REFUSAL =
 export const AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX =
   'Clôture Autowin : gate validé, RUN fermé green'
 
+const CLOSURE_LEADING_DECORATIONS =
+  /^(?:(?:#{1,6}|>|[-+*•]|\d+[.)])\s+|\[[ xX]\]\s+|(?:✅|⚠️?|🧪)\s*|(?:\*\*|__|\*|_)\s*)+/u
+
+const AUTHORITATIVE_CLOSURE_PATTERN = new RegExp(
+  `${AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX}(?:\\s*;\\s*(?:publication\\s+termin[ée]e|aucune\\s+autre\\s+orchestration\\s+ni\\s+aucun\\s+second\\s+judge\\s+ne\\s+sont\\s+n[ée]cessaires\\s+dans\\s+ce\\s+tour))?(?:\\s*\\.(?=\\s|$|[*_])|(?=\\s*(?:$|[;—-])))`,
+  'iu'
+)
+
+export interface OrchestrationClosureSpan {
+  start: number
+  end: number
+}
+
+/** Localise une vraie clause de clôture, mais jamais sa citation entre guillemets ou backticks. */
+export function authoritativeOrchestrationClosureSpan(
+  line: string
+): OrchestrationClosureSpan | undefined {
+  const searchable = line.replace(
+    /«[^»\n]*»|"(?:\\.|[^"\\\n])*"|(?<![\p{L}\p{N}])'(?:\\.|[^'\\\n])*'|`[^`\n]*`/gu,
+    (quoted) => ' '.repeat(quoted.length)
+  )
+  const match = AUTHORITATIVE_CLOSURE_PATTERN.exec(searchable)
+  return match ? { start: match.index, end: match.index + match[0].length } : undefined
+}
+
 export function isAuthoritativeOrchestrationClosureLine(line: string): boolean {
-  const candidate = line.trimStart().replace(/^(?:(?:>\s+|[-+*]\s+)|(?:\*\*|__))+/u, '')
-  if (!candidate.startsWith(AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX)) return false
-  const suffix = candidate.slice(AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX.length)
-  return suffix === '' || /^\s*[.;]/u.test(suffix)
+  const candidate = line.trimStart().replace(CLOSURE_LEADING_DECORATIONS, '')
+  return authoritativeOrchestrationClosureSpan(candidate)?.start === 0
 }
 
 function asString(value: unknown): string | undefined {
@@ -63,7 +86,7 @@ function maskQuotedEvidence(text: string): string {
 }
 
 const LIFECYCLE_ASSERTION_SOURCE =
-  '(?:run\\s+(?:(?:reste|toujours)\\s+)?open|non\\s+(?:publi[ée]e?|commit[ée]e?)|publication\\s+(?:reste|non\\s+ex[ée]cut)|(?:autoriser|d[ée]clencher)\\s+(?:la\\s+)?publication|(?:lancer|relancer)\\s+(?:le\\s+)?judge|judge[^\\n]*(?:refus[ée]|reste|non\\s+cl[oô]tur)|clean\\s+(?:puis|et)\\s+judge|encha[iî]ner\\s+clean[^\\n]*judge)'
+  '(?:run\\s+(?:(?:reste|toujours)\\s+)?open|non\\s+(?:publi[ée]e?|commit[ée]e?)|publication\\s+(?:reste|non\\s+ex[ée]cut(?:[ée]e?)?)|(?:autoriser|d[ée]clencher)\\s+(?:la\\s+)?publication|(?:lancer|relancer)\\s+(?:le\\s+)?judge|judge[^\\n]*(?:refus[ée]|reste|non\\s+cl[oô]tur)|clean\\s+(?:puis|et)\\s+judge|encha[iî]ner\\s+clean[^\\n]*judge)'
 
 const LIFECYCLE_WRAPPED_SOURCE =
   '(?:(?:\\*\\*|__|~~|\\*|_|\\[|`|\\/)\\s*)*' +
@@ -76,9 +99,16 @@ const NEGATED_LIFECYCLE_BEFORE = new RegExp(
 )
 
 const NEGATED_LIFECYCLE_AFTER = new RegExp(
-  `${LIFECYCLE_WRAPPED_SOURCE}\\s+(?:(?:est|reste)\\s+)?(?:absent(?:e)?|introuvable|supprim[ée]e?|exclu(?:e)?|a\\s+disparu|n['’]appara[iî]t\\s+plus|n['’]est\\s+pas\\s+pr[ée]sent|ne\\s+(?:matche|correspond|contient|comprend|affiche|figure)\\s+(?:plus|pas))`,
+  `${LIFECYCLE_WRAPPED_SOURCE}\\s+(?:(?:(?:est|reste)\\s+)?(?:absent(?:e)?|introuvable|supprim[ée]e?|exclu(?:e)?|faux|fausse)|a\\s+disparu|n['’]appara[iî]t\\s+plus|n['’]est\\s+(?:pas\\s+pr[ée]sent|plus\\s+vrai)|ne\\s+(?:matche|correspond|contient|comprend|affiche|figure)\\s+(?:plus|pas)|=\\s*false)`,
   'giu'
 )
+
+const HISTORICAL_CODE_LIFECYCLE = new RegExp(
+  `\\b(?:la\\s+)?(?:commande|texte|cha[iî]ne|valeur|sortie)\\s+\`${LIFECYCLE_ASSERTION_SOURCE}\`\\s+(?:est|a\\s+[ée]t[ée])\\s+(?:observ[ée]e?|cit[ée]e?|pr[ée]sent(?:e)?|captur[ée]e?|trouv[ée]e?)\\b`,
+  'giu'
+)
+
+const ACTIVE_LIFECYCLE = new RegExp(`\\b${LIFECYCLE_ASSERTION_SOURCE}\\b`, 'iu')
 
 /** Masque seulement l'assertion lifecycle niée, pas les autres faits présents sur la même ligne. */
 function maskNegatedLifecycleEvidence(text: string): string {
@@ -87,15 +117,28 @@ function maskNegatedLifecycleEvidence(text: string): string {
     .replace(NEGATED_LIFECYCLE_AFTER, (assertion) => ' '.repeat(assertion.length))
 }
 
+function maskHistoricalLifecycleEvidence(text: string): string {
+  return text.replace(HISTORICAL_CODE_LIFECYCLE, (evidence) => ' '.repeat(evidence.length))
+}
+
+function lifecycleSearchable(text: string): string {
+  return maskHistoricalLifecycleEvidence(maskNegatedLifecycleEvidence(maskQuotedEvidence(text)))
+    .replace(/[`*_]/g, ' ')
+    .trim()
+}
+
 function factualSuffixAfterStale(text: string, staleEnd: number): string | undefined {
   const tail = text.slice(staleEnd)
   const boundary = /[.;]\s+/u.exec(tail)
   if (!boundary) return undefined
   const candidate = tail.slice(boundary.index + boundary[0].length).trim()
-  const subject = candidate.replace(PROOF_DECORATION_PREFIX, '')
-  return /^(?:preuve|tests?(?:\s+verts?)?|contr[oô]le|r[ée]sultat)\b/iu.test(subject)
-    ? candidate
-    : undefined
+  if (!candidate) return undefined
+  const searchable = lifecycleSearchable(candidate)
+  const staleLead =
+    /^(?:maintenant|reste\s+[àa]\s+faire|recommand[ée]|encha[iî]ner|clean)(?=\s|[”—:,-]|$)/iu.test(
+      searchable
+    ) && /\b(?:publication|commit|judge|clean)\b/iu.test(searchable)
+  return ACTIVE_LIFECYCLE.test(searchable) || staleLead ? undefined : candidate
 }
 
 function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
@@ -105,14 +148,9 @@ function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
   const proofLike = /^(?:preuve|tests?(?:\s+verts?)?|contr[oô]le|r[ée]sultat)\b/iu.test(
     proofSubject
   )
-  const searchable = (
-    proofLike ? maskNegatedLifecycleEvidence(maskQuotedEvidence(text)) : text
-  ).replace(/[`*_]/g, ' ')
+  const searchable = proofLike ? lifecycleSearchable(text) : text.replace(/[`*_]/g, ' ')
 
-  const staleSignal =
-    /\b(?:run\s+(?:(?:reste|toujours)\s+)?open|non\s+(?:publi[ée]e?|commit[ée]e?)|publication\s+(?:reste|non\s+ex[ée]cut)|(?:autoriser|d[ée]clencher)\s+(?:la\s+)?publication|(?:lancer|relancer)\s+(?:le\s+)?judge|judge[^\n]*(?:refus[ée]|reste|non\s+cl[oô]tur)|clean\s+(?:puis|et)\s+judge|encha[iî]ner\s+clean[^\n]*judge)\b/iu.exec(
-      searchable
-    )
+  const staleSignal = ACTIVE_LIFECYCLE.exec(searchable)
   const staleLead =
     /^(?:maintenant|reste\s+[àa]\s+faire|recommand[ée]|encha[iî]ner|clean)(?=\s|[—:,-]|$)/iu.test(
       searchable
