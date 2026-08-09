@@ -52,11 +52,24 @@ function asCallCount(value: unknown): number {
 }
 
 const PROOF_DECORATION_PREFIX =
-  /^(?:(?:[-+*>•]|\d+[.)])\s+|\[[ xX]\]\s+|✅\s*|\|\s*|(?:\*\*|__|\*|_))+/u
+  /^(?:(?:[-+*>•]|\d+[.)])\s+|\[[ xX]\]\s+|(?:✅|⚠️?|🧪)\s*|\|\s*|(?:\*\*|__|\*|_))+/u
 
 function maskQuotedEvidence(text: string): string {
   return text.replace(
-    /\[[^\]\n]+\]\([^)\n]*\)|«[^»\n]*»|"(?:\\.|[^"\\\n])*"|(?<![\p{L}\p{N}])'(?:\\.|[^'\\\n])*'|`[^`\n]*`|\/[^/\n]+\/[a-z]*|\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\n]+\*|_[^_\n]+_/giu,
+    /«[^»\n]*»|"(?:\\.|[^"\\\n])*"|(?<![\p{L}\p{N}])'(?:\\.|[^'\\\n])*'|`[^`\n]*`|(?<![\p{L}\p{N}])\/[^/\n]+\/[a-z]*/giu,
+    (quoted) => ' '.repeat(quoted.length)
+  )
+}
+
+function maskNegatedMarkdownEvidence(text: string): string {
+  if (
+    !/\b(?:absen(?:t|ce)|introuvable|supprim[ée]e?|exclu(?:e)?|ne\s+(?:matche|correspond|contient|comprend|affiche|figure)\s+(?:plus|pas)|n['’]est\s+pas\s+pr[ée]sent|not\.(?:toContain|toMatch|includes)|does\s+not\s+(?:contain|match|include))\b/iu.test(
+      text
+    )
+  )
+    return text
+  return text.replace(
+    /\[[^\]\n]+\]\([^)\n]*\)|\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\n]+\*|_[^_\n]+_/gu,
     (quoted) => ' '.repeat(quoted.length)
   )
 }
@@ -68,7 +81,9 @@ function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
   const proofLike = /^(?:preuve|tests?(?:\s+verts?)?|contr[oô]le|r[ée]sultat)\b/iu.test(
     proofSubject
   )
-  const searchable = (proofLike ? maskQuotedEvidence(text) : text).replace(/[`*_]/g, ' ')
+  const searchable = (
+    proofLike ? maskNegatedMarkdownEvidence(maskQuotedEvidence(text)) : text
+  ).replace(/[`*_]/g, ' ')
 
   const staleSignal =
     /\b(?:run\s+(?:(?:reste|toujours)\s+)?open|non\s+(?:publi[ée]e?|commit[ée]e?)|publication\s+(?:reste|non\s+ex[ée]cut)|(?:autoriser|d[ée]clencher)\s+(?:la\s+)?publication|(?:lancer|relancer)\s+(?:le\s+)?judge|judge[^\n]*(?:refus[ée]|reste|non\s+cl[oô]tur)|clean\s+(?:puis|et)\s+judge|encha[iî]ner\s+clean[^\n]*judge)\b/iu.exec(
@@ -81,7 +96,11 @@ function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
   if (!staleSignal && !staleLead) return line
 
   if (staleSignal && proofLike) {
-    const proofPrefix = text.slice(0, staleSignal.index).trimEnd()
+    const proofPrefix = text
+      .slice(0, staleSignal.index)
+      .trimEnd()
+      .replace(/(?:\*\*|__|\*|_|\[)\s*$/u, '')
+      .trimEnd()
     const hasProofBoundary = /[.!?;:—|-]$/u.test(proofPrefix)
     const proof = proofPrefix
       .trimEnd()

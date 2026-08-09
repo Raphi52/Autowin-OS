@@ -115,6 +115,22 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     ).toBe(report)
   })
 
+  it.each([
+    'Preuve : **RUN reste open**.',
+    'Preuve : **publication non exécutée**.',
+    'Preuve : *RUN toujours open*.',
+    'Preuve : [RUN reste open](#etat-actuel).'
+  ])("n'assimile pas automatiquement le gras ou un lien à une citation : %s", (report) => {
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe('')
+  })
+
   it('ne prend pas les apostrophes grammaticales pour des délimiteurs de citation', () => {
     expect(
       reconcileClosedOrchestrationText(
@@ -137,6 +153,14 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     [
       "- [x] Test vert : expect(text).not.toContain('RUN open') — PASS.",
       "- [x] Test vert : expect(text).not.toContain('RUN open') — PASS."
+    ],
+    [
+      "⚠️ Test vert : expect(text).not.toContain('RUN open') — PASS.",
+      "⚠️ Test vert : expect(text).not.toContain('RUN open') — PASS."
+    ],
+    [
+      "🧪 Test vert : expect(text).not.toContain('RUN open') — PASS.",
+      "🧪 Test vert : expect(text).not.toContain('RUN open') — PASS."
     ],
     ['- **Tests 12/12 verts** — RUN reste open.', '- **Tests 12/12 verts**'],
     ['| Tests 12/12 verts | RUN reste open |', '| Tests 12/12 verts |'],
@@ -180,6 +204,14 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     ['Test vert : RUN toujours open.', ''],
     ['Preuve : le RUN reste open selon le contrôle.', ''],
     ['Preuve : tests 12/12 verts. RUN reste open — lancer judge.', 'Preuve : tests 12/12 verts.'],
+    [
+      'Preuve : tests 12/12 verts. **RUN reste open — lancer judge.**',
+      'Preuve : tests 12/12 verts.'
+    ],
+    [
+      'Preuve : tests 12/12 verts — [lancer judge](https://example.test/judge).',
+      'Preuve : tests 12/12 verts'
+    ],
     ['Preuve : tests 12/12 verts — RUN reste open ; lancer judge.', 'Preuve : tests 12/12 verts'],
     ['Tests 12/12 verts - RUN reste open - lancer judge.', 'Tests 12/12 verts']
   ])('retire l’assertion lifecycle active sans effacer la preuve : %s', (report, expected) => {
