@@ -557,6 +557,22 @@ describe('vue Tickets', () => {
     await act(async () => root.unmount())
   })
 
+  it('expose aria-label et title sur le bouton enregistrer la source', async () => {
+    api()
+    const { root, container } = await render()
+    await act(async () => {
+      const add = container.querySelector('[aria-label="Ajouter une source"]') as HTMLButtonElement
+      add.click()
+    })
+    const btn = container.querySelector(
+      '[aria-label="Enregistrer la source"]'
+    ) as HTMLButtonElement
+    expect(btn).not.toBeNull()
+    expect(btn.getAttribute('aria-label')).toBe('Enregistrer la source')
+    expect(btn.getAttribute('title')).toBe('Enregistrer la source')
+    await act(async () => root.unmount())
+  })
+
   it('conserve les données et les marque périmées après une erreur de rafraîchissement', async () => {
     const listTickets = vi
       .fn()

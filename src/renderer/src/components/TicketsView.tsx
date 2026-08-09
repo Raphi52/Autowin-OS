@@ -715,7 +715,12 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
               </span>
             </>
           )}
-          <button type="button" onClick={() => void saveSource()}>
+          <button
+            type="button"
+            onClick={() => void saveSource()}
+            aria-label="Enregistrer la source"
+            title="Enregistrer la source"
+          >
             Enregistrer
           </button>
         </div>
