@@ -39,8 +39,28 @@ function asCallCount(value: unknown): number {
   return count === undefined ? 0 : Math.max(0, Math.floor(count))
 }
 
-const STALE_WORKER_LIFECYCLE_LINE =
-  /^(?:\s*\*\*)?\s*(?:(?:📍|⏳|👉|⚠️)\s*)?(?:#{1,6}\s+(?:\d+[.)]\s*)?publication\s*$|[^\n]*\b(?:run\s+(?:reste\s+|toujours\s+)?open|non\s+publi[ée]e?|non\s+commit[ée]e?|publication\s+reste|(?:gate\/)?publication\s+non\s+ex[ée]cut[ée]e?|(?:lancer|relancer)\s+(?:le\s+)?judge)[^\n]*$)/iu
+const WORKER_LIFECYCLE_PREFIX =
+  /^(?:\s*\*\*)?\s*(?:(?:📍|⏳|👉|⚠️)\s*)?(?:\*\*)?\s*/u
+
+function isStaleWorkerLifecycleLine(line: string): boolean {
+  const text = line.replace(WORKER_LIFECYCLE_PREFIX, '').replace(/[`*_]/g, '').trim()
+  if (/^#{1,6}\s+(?:\d+[.)]\s*)?publication\s*$/iu.test(text)) return true
+  if (/\brun\s+(?:(?:reste|toujours)\s+)?open(?:\s|[.,;:—-]|$)/iu.test(text)) return true
+  if (/\bnon\s+(?:publi[ée]e?|commit[ée]e?)(?:\s|[.,;:—-]|$)/iu.test(text)) return true
+  if (/\bpublication\s+reste\b/iu.test(text)) return true
+  if (/\b(?:autoriser|d[ée]clencher)\s+(?:la\s+)?publication\b/iu.test(text)) return true
+  if (/\b(?:lancer|relancer)\s+(?:le\s+)?judge\b/iu.test(text)) return true
+  if (/\bjudge\b[^\n]*(?:refus[ée]|reste|non\s+cl[oô]tur)/iu.test(text)) return true
+  if (/\b(?:clean\s+(?:puis|et)\s+judge|encha[iî]ner\s+clean[^\n]*judge)\b/iu.test(text))
+    return true
+
+  return (
+    /^(?:maintenant|reste\s+[àa]\s+faire|recommand[ée]|encha[iî]ner|clean)(?=\s|[—:,-]|$)/iu.test(
+      text
+    ) &&
+    /\b(?:publication|commit|judge|clean)\b/iu.test(text)
+  )
+}
 
 /**
  * Le rapport du worker est capturé AVANT la gate et la publication. Une fois l'issue structurée
@@ -50,7 +70,7 @@ const STALE_WORKER_LIFECYCLE_LINE =
 function removeStaleWorkerLifecycleAdvice(report: string): string {
   return report
     .split(/\r?\n/)
-    .filter((line) => !STALE_WORKER_LIFECYCLE_LINE.test(line))
+    .filter((line) => !isStaleWorkerLifecycleLine(line))
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()

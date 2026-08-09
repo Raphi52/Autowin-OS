@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { formatOrchestrationOutcome, runLabelFromPath } from './orchestration-outcome'
+import {
+  formatOrchestrationOutcome,
+  reconcileClosedOrchestrationText,
+  runLabelFromPath
+} from './orchestration-outcome'
 
 /**
  * Le fil doit rapporter ce que l'orchestration a VRAIMENT produit.
@@ -22,6 +26,27 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     expect(text).not.toContain('RUN open')
     expect(text).not.toContain('lancer judge')
     expect(text).not.toContain('non commité')
+  })
+
+  it.each([
+    '⏳ **Reste à faire** — publication (commit/push).',
+    '👉 **Recommandé** — autoriser la publication de ces 2 fichiers.',
+    '⏳ **Reste à faire** — Gate/publication (commit).',
+    '👉 **Recommandé** — Faire passer l’état post-clean au `judge` avant commit.',
+    '`clean` puis `judge` sur l’état livré.',
+    'Enchaîner `clean` sur ces 3 fichiers, puis passer l’état post-clean à `judge`.',
+    'Le RUN reste `open` — je lance le `judge` pour la clôture.',
+    '**📍 Maintenant** — État BUILD-VERIFIED, RUN toujours `open`. Le `judge` a été refusé.',
+    '**👉 Recommandé** — Relance-moi pour que je lance le `judge` sur ce RUN.'
+  ])('retire la formulation persistée réelle après publication : %s', (staleLine) => {
+    const text = reconcileClosedOrchestrationText(`Preuve utile.\n${staleLine}`, {
+      status: 'succeeded',
+      valid: true,
+      gateBlocked: false,
+      reused: false
+    })
+
+    expect(text).toBe('Preuve utile.')
   })
 
   it('un gate BLOQUÉ est annoncé comme tel, même si l’appel a « réussi »', () => {
