@@ -402,6 +402,36 @@ describe('Orchestrator execution contract', () => {
     ])
   })
 
+  it('utilise par defaut le contrat natif in-app, sans protocole RUN du kit externe', async () => {
+    const provider = new CapturingProvider()
+    const orchestrator = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\workspace',
+      worktrees: makeTestWorktrees('C:\\workspace'),
+      execPhases: ['terrain']
+    })
+
+    await orchestrator.run('prepare le terrain de verification')
+
+    expect(provider.calls[0].systemBlocks?.map((block) => block.name)).toContain(
+      'consigne:terrain'
+    )
+    expect(provider.calls[0].systemBlocks?.map((block) => block.name)).not.toContain(
+      'skill:terrain'
+    )
+    expect(provider.calls[0].system).toContain('Livrable : ## SOP')
+    expect(provider.calls[0].system).not.toMatch(/\.claude[\\/]runs/)
+    expect(provider.calls[0].system).toContain(
+      'Autowin OS crée et tient le RUN de la conversation'
+    )
+  })
+
   it('retombe sur la consigne embarquée lorsque le kit est absent', async () => {
     const provider = new CapturingProvider()
     const orchestrator = new Orchestrator({

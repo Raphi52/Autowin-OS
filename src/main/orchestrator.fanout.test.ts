@@ -162,11 +162,10 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
       'prépare le terrain de vérification'
     )
 
-    expect(provider.calls.map((call) => call.model).slice(0, 4)).toEqual([
-      'm1',
-      'm2',
-      'orch',
-      'judge'
+    expect(provider.calls.map((call) => call.model).slice(0, 3)).toEqual(['m1', 'm2', 'orch'])
+    expect(provider.calls.slice(0, 2).map((call) => call.execution?.sandbox)).toEqual([
+      'read-only',
+      'read-only'
     ])
     const terrainSteps = result.trace.filter((step) => step.execution?.groupId === 'terrain:fanout')
     expect(terrainSteps).toHaveLength(2)

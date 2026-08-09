@@ -42,6 +42,14 @@ describe('phase-briefs (consignes courtes in-app)', () => {
     expect(phaseBrief('scout')).toContain('SCOUT')
   })
 
+  it('les phases d analyse savent que la lecture seule est leur contrat normal', () => {
+    for (const phase of ['scout', 'frame', 'terrain'] as const) {
+      expect(PHASE_BRIEFS[phase], phase).toMatch(/lecture seule/i)
+      expect(PHASE_BRIEFS[phase], phase).toMatch(/pas un blocage/i)
+      expect(PHASE_BRIEFS[phase], phase).toMatch(/tu n'es pas BUILD/i)
+    }
+  })
+
   it('kaizen couvre les mécanismes propres à Autowin et reste en proposition', () => {
     const brief = phaseBrief('kaizen')
     expect(brief).toContain('conversation')

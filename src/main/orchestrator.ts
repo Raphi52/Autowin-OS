@@ -11,7 +11,7 @@ import { evaluateClosure } from './gates/stopgate'
 import { HookBus } from './hooks/hook-bus'
 import { createDefaultHookBus } from './hooks/default-gate-hooks'
 import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
-import { phaseInstruction, type PipelinePhase } from './skill-pipeline'
+import { PIPELINE_PHASES, type PipelinePhase } from './skill-pipeline'
 import { combinePhaseInstruction, type PhaseInstructionOverride } from './workflow-instruction'
 import {
   agentsForPhase,
@@ -752,6 +752,38 @@ export function isMutationTask(task: string): boolean {
 }
 
 /**
+ * Les droits suivent la RESPONSABILITE de la phase, pas seulement le verbe de la demande.
+ *
+ * Une demande de mutation traverse aussi scout/frame/terrain : leur donner les droits de la tache
+ * globale permettait a scout d'implementer, builder et tester avant la phase build. Seules BUILD et
+ * CLEAN produisent ou nettoient le livrable ; toutes les autres phases observent et decident.
+ */
+export function sandboxForPhase(
+  task: string,
+  phase: PipelinePhase
+): NonNullable<SendOptions['execution']>['sandbox'] {
+  return isMutationTask(task) && (phase === 'build' || phase === 'clean')
+    ? 'danger-full-access'
+    : 'read-only'
+}
+
+/**
+ * Le préfixe slash choisit le routage, il ne fait pas partie du besoin métier.
+ *
+ * Le conserver dans `TÂCHE:` devient contradictoire dès qu'un workflow explicite élargit `/build`
+ * en scout → frame → terrain → build : les phases amont lisent alors l'ordre « build » comme leur
+ * propre mission et tentent d'écrire malgré leur contrat read-only. Le routage a déjà été calculé
+ * avant la construction du contexte ; on peut donc retirer uniquement une phase native reconnue.
+ */
+export function taskForPipelineContext(task: string): string {
+  const match = /^\s*\/([a-z][a-z0-9-]*)\b\s*/i.exec(task)
+  if (!match) return task
+  const phase = match[1].toLowerCase() as PipelinePhase
+  if (!PIPELINE_PHASES.includes(phase)) return task
+  return task.slice(match[0].length).trimStart()
+}
+
+/**
  * Ce que l'agent doit savoir quand il travaille dans une COPIE isolée — et qu'il ignorait.
  *
  * Incident du 2026-08-04 : l'agent a correctement fait un `git stash` sur le dépôt réel (via
@@ -948,9 +980,11 @@ export class Orchestrator {
   }
 
   private phasePrompt(phase: PipelinePhase, withFoundation: boolean): PhasePromptBlock {
-    const installed =
-      this.deps.skillInstruction?.(phase, { withFoundation }) ??
-      phaseInstruction(phase, undefined, { withFoundation })
+    // Le pipeline IN-APP utilise ses contrats natifs courts. Les SKILL.md du kit externe exigent
+    // leurs propres RUN.md/hooks et demandaient donc a scout/frame/terrain d'ecrire alors que ces
+    // phases sont volontairement read-only. Une instruction explicitement injectee reste prioritaire
+    // (tests, extension embarquee), mais l'absence d'injection ne consulte plus le kit de la machine.
+    const installed = this.deps.skillInstruction?.(phase, { withFoundation }) ?? ''
     const base = installed || phaseBrief(phase)
     // Point de passage UNIQUE des consignes de phase : y brancher le workflow suffit à couvrir
     // exec, judge et greedy sans les threader un par un.
@@ -2493,6 +2527,8 @@ export class Orchestrator {
     // chaque phase coûtait +206k tokens (ON 573k vs OFF 367k) SANS réduire la lecture agentique du
     // sous-agent → contre-productif (piège du soft-steer saturé). Levier retiré. Cf. harnais
     // scripts/measure-orchestration-tokens.mjs pour re-mesurer une éventuelle version micro.
+    const taskBody = taskForPipelineContext(task)
+    const taskContext = `TÂCHE: ${taskBody}`
     const phaseContext: string[] = [
       ...(memoryEcho ? [memoryEcho] : []),
       ...(causalMemory ? [causalMemory] : []),
@@ -2502,16 +2538,42 @@ export class Orchestrator {
             `Sers-toi de la CONNAISSANCE (Brain) ci-dessus en priorité ; ne relis le dépôt que si strictement nécessaire.`
           ]
         : []),
-      `TÂCHE: ${task}`,
+      taskContext,
       ...(collectedContext ? [collectedContext] : [])
     ]
+    /**
+     * Une demande de mutation reste le BUT du workflow, pas la mission immédiate des phases amont.
+     *
+     * Le dire seulement dans le system prompt ne suffisait pas en réel : le message user
+     * `TÂCHE: ajoute ...` dominait et scout/frame tentaient le patch avant d'afficher un faux
+     * « bloqué — Edit absent ». On rend donc la hiérarchie explicite au même niveau que le besoin.
+     */
+    const analysisMission = (phase: PipelinePhase): string => {
+      if (phase !== 'scout' && phase !== 'frame' && phase !== 'terrain') return ''
+      return [
+        `MISSION ACTIVE — ${phase.toUpperCase()} UNIQUEMENT : produis le livrable textuel de cette phase en lecture seule.`,
+        `Le BESOIN GLOBAL ci-dessous décrit le résultat final du workflow ; ses verbes de mutation sont réservés à BUILD. N'essaie pas d'écrire ni de préparer un patch, et ne signale pas l'absence de Write/Edit/Bash comme un blocage.`
+      ].join(' ')
+    }
+    const userContextForPhase = (phase: PipelinePhase): string => {
+      const mission = analysisMission(phase)
+      if (!mission) return phaseContext.join('\n\n')
+      const context = phaseContext.map((entry) =>
+        entry === taskContext
+          ? `BESOIN GLOBAL (contexte, pas une action immédiate) : ${taskBody}`
+          : entry
+      )
+      return [mission, ...context].join('\n\n')
+    }
     // Session-resume chaîné (levier coût) : on RÉUTILISE la session de l'exécuteur d'une phase à la
     // suivante quand le provider rend un sessionId. La tâche + le Brain + l'acquis des phases sont
     // alors DÉJÀ dans l'historique de session → on n'envoie que l'instruction de la nouvelle phase
     // (supprime la re-injection ×N). Dégrade proprement : pas de sessionId → resumeSessionId undefined
-    // → on retombe sur la re-injection complète (comportement actuel). Le sandbox est constant sur un
-    // run (isMutationTask(task) fixe) → jamais de resume à travers un changement de sandbox.
+    // → on retombe sur la re-injection complète (comportement actuel). Une phase d'analyse reste
+    // read-only meme pour une tache de mutation : on ne reprend donc jamais une session a travers
+    // le changement de sandbox qui ouvre ensuite BUILD/CLEAN en ecriture.
     let prevSessionId: string | undefined
+    let prevSessionSandbox: NonNullable<SendOptions['execution']>['sandbox'] | undefined
     // Réinjecte l'acquis d'un run repris pour que la phase suivante l'ait dans son contexte.
     for (const output of usableResume) {
       const carried =
@@ -2569,7 +2631,7 @@ export class Orchestrator {
       const fanMembers = bindingOverride ? [] : this.resolvePhaseFanOut(phase, runtimeSnapshot)
       if (fanMembers.length >= 1) {
         // Le fan-out casse la chaîne de session (N sessions //). Chaque membre part du contexte complet.
-        const fanMessages = [{ role: 'user' as const, content: phaseContext.join('\n\n') }]
+        const fanMessages = [{ role: 'user' as const, content: userContextForPhase(phase) }]
         const parts = [
           { name: 'constitution', text: CONSTITUTION },
           this.phasePrompt(phase, true),
@@ -2588,7 +2650,7 @@ export class Orchestrator {
           .filter((p) => p.text)
           .map((p) => ({ name: p.name, chars: p.text.length }))
         const fanSystem = parts.map((p) => p.text).join('')
-        const sandbox = isMutationTask(task) ? 'danger-full-access' : 'read-only'
+        const sandbox = sandboxForPhase(task, phase)
         const memberOutputs = await Promise.all(
           fanMembers.map(async (member, rang) => {
             // L'identité prend la persona quand il y en a une, sinon le modèle. Le rang n'est ajouté
@@ -2833,6 +2895,11 @@ export class Orchestrator {
       // qui n'est pas une vérification. `bindingOverride` reste autoritaire : un binding figé pour le
       // run prime sur tous les rôles (même règle qu'au chemin décomposé et qu'au gate final).
       const jugeDedie = phase === 'judge' && !bindingOverride
+      const phaseSandbox = sandboxForPhase(task, phase)
+      if (prevSessionId && prevSessionSandbox !== phaseSandbox) {
+        prevSessionId = undefined
+        prevSessionSandbox = undefined
+      }
       // Et il ne REPREND PAS la session de l'exécution : son provider peut différer, où cette session
       // n'existe pas. Reprendre y aurait remplacé tout le contexte par « acquis déjà connus, ne les
       // redemande pas » — le juge aurait jugé à l'aveugle. Il reçoit donc le contexte complet.
@@ -2844,12 +2911,13 @@ export class Orchestrator {
       const framed = phaseContext.find((entry) => entry.startsWith('[phase frame]')) ?? ''
       const userContent = resuming
         ? [
+            analysisMission(phase),
             `Phase suivante du pipeline : ${phase}. Continue À PARTIR de l'état de la session (tâche, connaissance Brain et acquis des phases précédentes déjà connus — ne les redemande pas). Applique la consigne de phase et enrichis le livrable existant.`,
             framed && `RAPPEL DU CADRAGE — c'est LA référence du livrable :\n${framed}`
           ]
             .filter(Boolean)
             .join('\n\n')
-        : phaseContext.join('\n\n')
+        : userContextForPhase(phase)
       const phaseMessages = [{ role: 'user' as const, content: userContent }]
       // F6 — le system est composé de blocs NOMMÉS : on garde leur décomposition (nom + taille)
       // pour l'observabilité, en plus de la chaîne concaténée réellement envoyée.
@@ -2870,7 +2938,11 @@ export class Orchestrator {
       const parts = resuming
         ? [
             this.phasePrompt(phase, false),
-            { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION }
+            { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+            {
+              name: 'workspaceIsolation',
+              text: workspaceIsolationNotice(workCwd, this.deps.executionWorkspace)
+            }
           ]
         : [
             { name: 'constitution', text: CONSTITUTION },
@@ -2880,7 +2952,11 @@ export class Orchestrator {
             // d'étapes qui n'existent pas, et inviterait à sortir d'un chemin qu'on ne suit pas.
             { name: 'workflowTool', text: grapheBrut ? WORKFLOW_IS_A_TOOL_INSTRUCTION : '' },
             { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
-            { name: 'projectContext', text: projectContext }
+            { name: 'projectContext', text: projectContext },
+            {
+              name: 'workspaceIsolation',
+              text: workspaceIsolationNotice(workCwd, this.deps.executionWorkspace)
+            }
           ]
       const systemBlocks = parts
         .filter((p) => p.text)
@@ -2897,7 +2973,7 @@ export class Orchestrator {
           workCwd,
           // B3 — une tâche NON-mutation (cadrage/analyse) n'a aucune raison d'écrire : sandbox
           // read-only → pas d'effet de bord (ex. RUN.md fantôme dans Audit/). Mutation → full access.
-          isMutationTask(task) ? 'danger-full-access' : 'read-only',
+          phaseSandbox,
           runId
         ),
         signal,
@@ -2972,6 +3048,7 @@ export class Orchestrator {
         : registry.honoursSessionResume(providerDeLaPhase)
           ? (phaseRes.sessionId ?? prevSessionId)
           : undefined
+      prevSessionSandbox = prevSessionId ? phaseSandbox : undefined
       if (phaseRes.usage) {
         cost.add({
           // Provider RÉEL ayant répondu (le registre peut rerouter une exécution vers un executor

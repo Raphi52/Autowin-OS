@@ -75,7 +75,9 @@ function orchestrator(): { orch: Orchestrator; provider: CountingProvider } {
 
 /** Appels d'EXÉCUTION uniquement (le juge n'est pas une phase reprise). */
 const execPrompts = (provider: CountingProvider): string[] =>
-  provider.prompts.filter((p) => !p.includes('VALIDE') && p.includes('TÂCHE'))
+  provider.prompts.filter(
+    (p) => !p.includes('VALIDE') && (p.includes('TÂCHE') || p.includes('BESOIN GLOBAL'))
+  )
 
 describe('un acquis réinjecté ne repaie pas sa phase', () => {
   it('sans reprise : les DEUX phases sont envoyées au provider', async () => {

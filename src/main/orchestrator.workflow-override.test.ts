@@ -125,7 +125,26 @@ describe('un workflow impose ses phases', () => {
   it('sans écart de phases, la classification reprend la main', async () => {
     const provider = new Recorder()
     await makeOrchestrator(provider, {}).run('corrige le bug')
-    expect(provider.execCount).toBe(2) // frame + build
+    expect(provider.prompts.some((prompt) => prompt.includes('SKILL frame'))).toBe(true)
+    expect(provider.prompts.some((prompt) => prompt.includes('SKILL build'))).toBe(true)
+    expect(provider.execCount).toBe(1) // seule build a le droit de muter
+  })
+
+  it('sépare le besoin global de la mission read-only des phases amont', async () => {
+    const provider = new Recorder()
+    await makeOrchestrator(provider, {
+      explicit: true,
+      phases: ['scout', 'frame', 'terrain', 'build']
+    }).run('/build corrige le bug')
+
+    for (const phase of ['scout', 'frame', 'terrain']) {
+      const prompt = provider.prompts.find((candidate) => candidate.includes(`SKILL ${phase}`))
+      expect(prompt, phase).toContain(`MISSION ACTIVE — ${phase.toUpperCase()} UNIQUEMENT`)
+      expect(prompt, phase).toContain('BESOIN GLOBAL (contexte, pas une action immédiate)')
+      expect(prompt, phase).toContain('corrige le bug')
+      expect(prompt, phase).not.toContain('TÂCHE: /build corrige le bug')
+      expect(prompt, phase).toMatch(/ne signale pas l'absence.*comme un blocage/i)
+    }
   })
 })
 

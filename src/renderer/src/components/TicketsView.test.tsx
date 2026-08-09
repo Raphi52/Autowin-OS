@@ -442,8 +442,10 @@ describe('vue Tickets', () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       'Authentification requise'
     )
+    const retry = container.querySelector('[data-testid="tickets-retry"]') as HTMLButtonElement
+    expect(retry.getAttribute('title')).toBe('Réessayer le chargement des tickets')
     await act(async () => {
-      ;(container.querySelector('[data-testid="tickets-retry"]') as HTMLButtonElement).click()
+      retry.click()
       await Promise.resolve()
     })
     expect(listTickets).toHaveBeenCalledTimes(2)
@@ -460,8 +462,10 @@ describe('vue Tickets', () => {
     const { root, container } = await render()
 
     expect(container.textContent).toContain('Store de sources indisponible')
+    const retry = container.querySelector('[data-testid="tickets-retry"]') as HTMLButtonElement
+    expect(retry.getAttribute('title')).toBe('Réessayer le chargement des tickets')
     await act(async () => {
-      ;(container.querySelector('[data-testid="tickets-retry"]') as HTMLButtonElement).click()
+      retry.click()
       await Promise.resolve()
       await Promise.resolve()
     })
@@ -577,9 +581,7 @@ describe('vue Tickets', () => {
       const add = container.querySelector('[aria-label="Ajouter une source"]') as HTMLButtonElement
       add.click()
     })
-    const btn = container.querySelector(
-      '[aria-label="Enregistrer la source"]'
-    ) as HTMLButtonElement
+    const btn = container.querySelector('[aria-label="Enregistrer la source"]') as HTMLButtonElement
     expect(btn).not.toBeNull()
     expect(btn.getAttribute('aria-label')).toBe('Enregistrer la source')
     expect(btn.getAttribute('title')).toBe('Enregistrer la source')

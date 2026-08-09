@@ -182,14 +182,14 @@ describe('#2 modèle par phase', () => {
 })
 
 describe('#3 session-resume chaîné', () => {
-  it('la phase N+1 reçoit le sessionId de la phase N et un message allégé', async () => {
+  it('deux phases aux mêmes droits chaînent la session et allègent le message', async () => {
     const provider = new RecordingProvider()
-    const orch = makeOrchestrator(provider, { classifyPhases: () => ['frame', 'build'] })
+    const orch = makeOrchestrator(provider, { classifyPhases: () => ['frame', 'terrain'] })
     await orch.run('ajoute une fonctionnalité')
-    // Phase 1 (frame) : pas de resume, message complet contient la TÂCHE.
+    // Phase 1 (frame) : pas de resume, message complet contient le besoin global subordonné à FRAME.
     expect(provider.calls[0].resumeSessionId).toBeUndefined()
-    expect(provider.userMessages[0]).toContain('TÂCHE')
-    // Phase 2 (build) : reprend la session de la phase 1, message allégé (pas de re-injection TÂCHE).
+    expect(provider.userMessages[0]).toContain('BESOIN GLOBAL')
+    // Phase 2 (terrain, même sandbox read-only) : reprend la session de la phase 1.
     expect(provider.calls[1].resumeSessionId).toBe('sess-1')
     expect(provider.userMessages[1]).toContain('Continue À PARTIR de l')
     expect(provider.userMessages[1]).not.toContain('TÂCHE:')
@@ -206,6 +206,49 @@ describe('#3 session-resume chaîné', () => {
     expect(provider.calls[0].resumeSessionId).toBeUndefined()
     expect(provider.calls[1].resumeSessionId).toBeUndefined()
     expect(provider.userMessages[1]).toContain('[phase frame]') // re-injection complète (fallback)
+  })
+})
+
+describe('discipline des phases et continuite du worktree', () => {
+  it('borne les droits a la responsabilite de chaque phase', async () => {
+    const provider = new RecordingProvider()
+    const orch = makeOrchestrator(provider, {
+      classifyPhases: () => ['scout', 'frame', 'terrain', 'build', 'clean']
+    })
+
+    await orch.run('ajoute une fonctionnalite')
+
+    expect(provider.calls.slice(0, 5).map((call) => call.execution?.sandbox)).toEqual([
+      'read-only',
+      'read-only',
+      'read-only',
+      'danger-full-access',
+      'danger-full-access'
+    ])
+  })
+
+  it('ancre chaque phase sur le worktree et ne reprend pas une session a travers un changement de droits', async () => {
+    const provider = new RecordingProvider()
+    const worktree = 'C:\\ws\\.worktrees\\agent-1'
+    const orch = makeOrchestrator(provider, {
+      classifyPhases: () => ['frame', 'terrain', 'build'],
+      worktrees: {
+        begin: () => worktree,
+        end: () => ({ outcome: 'merged' })
+      }
+    })
+
+    await orch.run('ajoute une fonctionnalite')
+
+    const phaseCalls = provider.calls.slice(0, 3)
+    for (const call of phaseCalls) {
+      expect(call.execution?.cwd).toBe(worktree)
+      expect(call.systemBlocks?.map((block) => block.name)).toContain('workspaceIsolation')
+      expect(call.system).toContain('agent-1')
+    }
+    expect(phaseCalls[1].resumeSessionId).toBe('sess-1')
+    expect(phaseCalls[2].resumeSessionId).toBeUndefined()
+    expect(provider.userMessages[2]).toContain('TÂCHE:')
   })
 })
 
@@ -251,7 +294,7 @@ describe('survie niveau 3 — garde-fou acquis vide', () => {
     ])
     // frame + build + juge = 3 appels ; si frame avait été sautée à tort, il n'y en aurait que 2.
     expect(provider.calls).toHaveLength(3)
-    expect(provider.userMessages[0]).toContain('TÂCHE')
+    expect(provider.userMessages[0]).toContain('BESOIN GLOBAL')
   })
 })
 
