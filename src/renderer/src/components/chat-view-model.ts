@@ -10,6 +10,11 @@ import {
 import { parseScoutSuggestions, type SuggestionGroup } from './scout-suggestions'
 import { parseScoutTable, type ScoutRow } from './scout-table'
 import type { PilotEventKind } from '../../../shared/pilot-events'
+import {
+  isDeliveredOrchestrationOutcome,
+  reconcileClosedOrchestrationText,
+  type OrchestrationOutcome
+} from '../../../shared/orchestration-outcome'
 
 export type ChatActionPart = PersistedChatActionPart
 export type ChatArtifactPart = PersistedChatArtifactPart
@@ -164,12 +169,45 @@ export function settleIfDone(message: HydratedAssistantMessage): HydratedAssista
   return parts === message.parts ? message : { ...message, parts }
 }
 
+function reconcileStoredOrchestrationClosure(parts: ChatPart[]): ChatPart[] {
+  const action = [...parts]
+    .reverse()
+    .find((part) => part.kind === 'action' && part.name === 'orchestrate' && part.ok === true)
+  if (action?.kind !== 'action' || !action.data || typeof action.data !== 'object') return parts
+
+  const outcome = action.data as OrchestrationOutcome
+  if (!isDeliveredOrchestrationOutcome(outcome)) return parts
+  let changed = false
+  const reconciled = parts.map((part) => {
+    if (part.kind !== 'text') return part
+    const text = reconcileClosedOrchestrationText(part.text, outcome)
+    if (text === part.text) return part
+    changed = true
+    return { ...part, text }
+  })
+  if (
+    !reconciled.some(
+      (part) => part.kind === 'text' && part.text.includes('Clôture Autowin : gate validé')
+    )
+  ) {
+    reconciled.push({
+      kind: 'text',
+      text: 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
+    })
+    changed = true
+  }
+  return changed ? reconciled : parts
+}
+
 export function hydrateStoredAssistant(message: StoredAssistantMessage): HydratedAssistantMessage {
   const status = message.status ?? 'completed'
   const done = status !== 'streaming'
   const parts =
     message.parts?.map((part) => ({ ...part })) ??
     (message.content ? [{ kind: 'text' as const, text: message.content }] : [])
+  const terminalParts = done
+    ? reconcileStoredOrchestrationClosure(settleUnresolvedActions(parts))
+    : parts
   return {
     role: 'assistant',
     ...(message.turnId ? { turnId: message.turnId } : {}),
@@ -177,7 +215,7 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
     // le tour sous le fork, ou il n'existe pas.
     ...(message.turnConversationId ? { turnConversationId: message.turnConversationId } : {}),
     // Tour déjà clos à la relecture (dont : app fermée en plein run) → plus rien « en cours ».
-    parts: done ? settleUnresolvedActions(parts) : parts,
+    parts: terminalParts,
     status,
     done,
     ...(message.error ? { error: message.error } : {})

@@ -40,7 +40,7 @@ function asCallCount(value: unknown): number {
 }
 
 const STALE_WORKER_LIFECYCLE_LINE =
-  /^(?:\s*\*\*)?\s*[📍⏳👉]|\b(?:run\s+(?:reste\s+)?open|non\s+commit[ée]|(?:lancer|relancer)\s+(?:le\s+)?judge|(?:gate|publication)[^\n]*(?:reste|[àa]\s+faire|non\s+faite?|attente))\b/iu
+  /^(?:\s*\*\*)?\s*(?:(?:📍|⏳|👉|⚠️)\s*)?(?:#{1,6}\s+(?:\d+[.)]\s*)?publication\s*$|[^\n]*\b(?:run\s+(?:reste\s+|toujours\s+)?open|non\s+publi[ée]e?|non\s+commit[ée]e?|publication\s+reste|(?:gate\/)?publication\s+non\s+ex[ée]cut[ée]e?|(?:lancer|relancer)\s+(?:le\s+)?judge)[^\n]*$)/iu
 
 /**
  * Le rapport du worker est capturé AVANT la gate et la publication. Une fois l'issue structurée
@@ -54,6 +54,26 @@ function removeStaleWorkerLifecycleAdvice(report: string): string {
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
+}
+
+export function isDeliveredOrchestrationOutcome(outcome: OrchestrationOutcome): boolean {
+  return (
+    asString(outcome.status) === 'succeeded' &&
+    outcome.gateBlocked !== true &&
+    outcome.valid !== false &&
+    outcome.reused !== true
+  )
+}
+
+/**
+ * Réconcilie aussi les anciens messages déjà persistés : leur texte worker a été écrit avant la
+ * publication, mais leur action `orchestrate` conserve l'outcome structuré qui fait autorité.
+ */
+export function reconcileClosedOrchestrationText(
+  report: string,
+  outcome: OrchestrationOutcome
+): string {
+  return isDeliveredOrchestrationOutcome(outcome) ? removeStaleWorkerLifecycleAdvice(report) : report
 }
 
 /** Libellé de coût honnête, compatible avec les anciens résultats qui n'avaient que `costUsd`. */
@@ -103,8 +123,7 @@ export function formatOrchestrationOutcome(
   const cost = formatExecutionCostCoverage(outcome)
   const run = runLabelFromPath(asString(outcome.runPath) ?? asString(outcome.runId))
   const result = asString(outcome.result)
-  const deliveryClosed = status === 'succeeded' && !gateBlocked && !invalid && outcome.reused !== true
-  const visibleResult = result && deliveryClosed ? removeStaleWorkerLifecycleAdvice(result) : result
+  const visibleResult = result ? reconcileClosedOrchestrationText(result, outcome) : result
 
   const headline = gateBlocked
     ? '⛔ Workflow BLOQUÉ par le gate — livrable non validé'

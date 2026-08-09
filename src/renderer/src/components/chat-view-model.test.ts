@@ -231,6 +231,80 @@ describe('durable assistant hydration and streaming', () => {
     ).toBe(legacy)
   })
 
+  it('reconciles stale worker advice with the successful structured outcome on reload', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: {
+            status: 'succeeded',
+            valid: true,
+            gateBlocked: false,
+            reused: false,
+            runId: 'run-1'
+          }
+        },
+        {
+          kind: 'text',
+          text:
+            'Tests 12/12 verts.\n\n### Publication\n⚠️ Non publiée. La publication reste à déclencher.\n📍 Maintenant — diff non commité.\n⏳ Reste à faire — gate/publication non exécutées.\n👉 Recommandé — lancer judge.\n\nClôture Autowin : gate validé, RUN fermé green.'
+        }
+      ]
+    })
+
+    const text = hydrated.parts.find((part) => part.kind === 'text')?.text ?? ''
+    expect(text).toContain('Tests 12/12 verts.')
+    expect(text).toContain('Clôture Autowin : gate validé')
+    expect(text).not.toMatch(/non publiée|publication reste|non commité|gate\/publication|lancer judge/i)
+  })
+
+  it('preserves unresolved advice when the structured outcome is not a delivered success', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'failed', valid: false, gateBlocked: true }
+        },
+        { kind: 'text', text: 'Gate/publication non exécutées.' }
+      ]
+    })
+
+    expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toContain(
+      'Gate/publication non exécutées.'
+    )
+  })
+
+  it('adds the authoritative closure when an older successful message did not persist one', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: 'Tests verts. RUN toujours open.' }
+      ]
+    })
+
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+    expect(text).not.toContain('RUN toujours open')
+    expect(text).toContain('Clôture Autowin : gate validé, RUN fermé green')
+  })
+
   it('binds the first turn id then reduces progressive deltas without duplication', () => {
     const empty = hydrateStoredAssistant({ content: '', status: 'streaming', parts: [] })
     const first = reduceAssistantPilotEvent(empty, {
