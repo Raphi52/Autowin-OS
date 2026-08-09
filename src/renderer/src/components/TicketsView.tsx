@@ -815,6 +815,8 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         <button
           data-testid="tickets-refresh"
           type="button"
+          aria-label="Actualiser les tickets"
+          title="Actualiser les tickets"
           disabled={!selectedSource || loading}
           onClick={() => selectedSource && void load(selectedSource)}
         >

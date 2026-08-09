@@ -548,6 +548,15 @@ describe('vue Tickets', () => {
     await act(async () => root.unmount())
   })
 
+  it('expose aria-label et title sur le bouton actualiser', async () => {
+    api()
+    const { root, container } = await render()
+    const btn = container.querySelector('[data-testid="tickets-refresh"]') as HTMLButtonElement
+    expect(btn.getAttribute('aria-label')).toBe('Actualiser les tickets')
+    expect(btn.getAttribute('title')).toBe('Actualiser les tickets')
+    await act(async () => root.unmount())
+  })
+
   it('conserve les données et les marque périmées après une erreur de rafraîchissement', async () => {
     const listTickets = vi
       .fn()
