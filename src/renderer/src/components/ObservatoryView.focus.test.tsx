@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, createElement } from 'react'
+import { act, createElement, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ObservatoryView } from './ObservatoryView'
@@ -42,8 +42,20 @@ function api(events: HarnessTraceEvent[], promptCalls: unknown[] = []) {
     authorizeDiagnostics: vi.fn().mockResolvedValue(null),
     promptTracesGlobal: vi.fn().mockResolvedValue([]),
     causalTrace: vi.fn().mockResolvedValue(events),
-    shadowRouteRecommendation: vi.fn().mockResolvedValue({ kind: 'insufficient-data' })
+    shadowRouteRecommendation: vi.fn().mockResolvedValue({ kind: 'insufficient-data' }),
+    onAppEvent: vi.fn((listener: (event: { type: string; convId?: string }) => void) => {
+      appEventListeners.push(listener)
+      return () => {
+        appEventListeners = appEventListeners.filter((entry) => entry !== listener)
+      }
+    })
   }
+}
+
+let appEventListeners: Array<(event: { type: string; convId?: string }) => void> = []
+
+function emitAppEvent(event: { type: string; convId?: string }): void {
+  for (const listener of [...appEventListeners]) listener(event)
 }
 
 describe('Observatory turn focus', () => {
@@ -59,6 +71,56 @@ describe('Observatory turn focus', () => {
     container?.remove()
     root = null
     container = null
+    appEventListeners = []
+  })
+
+  it('keeps the focus dismissal effective when a live causal-trace-updated event arrives', async () => {
+    const mockApi = api([trace('turn-1', 'ancien tour', 1), trace('turn-2', 'tour ciblé', 2)])
+    Object.defineProperty(window, 'api', { configurable: true, value: mockApi })
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+
+    // Reproduit App.tsx : le focus est un état du PARENT, la vue doit pouvoir le congédier.
+    function Host(): React.JSX.Element {
+      const [focus, setFocus] = useState<{
+        conversationId: string
+        turnId: string
+        requestId: number
+      } | null>({ conversationId: 'conv-1', turnId: 'turn-2', requestId: 1 })
+      return createElement(ObservatoryView, {
+        active: true,
+        focus,
+        onDismissFocus: () => setFocus(null)
+      })
+    }
+
+    await act(async () => {
+      root?.render(createElement(Host))
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(container.textContent).toContain('Tour ciblé · turn-2')
+
+    const reset = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Toute la conversation'
+    ) as HTMLButtonElement
+    await act(async () => reset.click())
+    expect(container.textContent).not.toContain('Tour ciblé · turn-2')
+
+    await act(async () => {
+      emitAppEvent({ type: 'causal-trace-updated', convId: 'conv-1' })
+      await new Promise((resolve) => setTimeout(resolve, 80))
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).not.toContain('Tour ciblé · turn-2')
+    expect(container.querySelector('.observatory-turn-focus')).toBeNull()
+    expect(container.textContent).toContain('ancien tour')
+    expect(container.textContent).toContain('tour ciblé')
   })
 
   async function mount(

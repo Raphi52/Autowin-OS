@@ -429,6 +429,7 @@ export function MainApp(): React.JSX.Element {
             <ObservatoryView
               active={tab === 'observatory'}
               focus={observatoryFocus}
+              onDismissFocus={() => setObservatoryFocus(null)}
               onOpenCapabilities={() => {
                 setSettingsSection('capabilities')
                 navigate('settings')

@@ -127,10 +127,12 @@ function PayloadContent({ content }: { content: string }): React.JSX.Element {
 export function ObservatoryView({
   active,
   focus = null,
+  onDismissFocus,
   onOpenCapabilities
 }: {
   active: boolean
   focus?: ObservatoryFocus | null
+  onDismissFocus?: () => void
   onOpenCapabilities?: () => void
 }): React.JSX.Element {
   const [conversations, setConversations] = useState<ConversationItem[]>([])
@@ -943,6 +945,9 @@ export function ObservatoryView({
               setFocusUnavailable(null)
               setCausalTracePartial(false)
               if (!conversationId) setConversationId(conversations[0]?.id ?? '')
+              // Le congédiement doit remonter au parent : sinon la prop `focus` reste posée
+              // et le prochain rafraîchissement live ré-enferme la vue sur l'ancien tour.
+              onDismissFocus?.()
             }}
           >
             Toute la conversation
