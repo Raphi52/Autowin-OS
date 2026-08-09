@@ -62,15 +62,36 @@ function isStaleWorkerLifecycleLine(line: string): boolean {
   )
 }
 
+function isStaleWorkerLifecycleSection(line: string): boolean {
+  const heading = /^\s*#{1,6}\s+(.+?)\s*$/u.exec(line)?.[1]
+  if (!heading) return false
+  const title = heading.replace(/[`*_]/g, '').trim()
+  if (/^(?:📍|⏳|👉)(?:\s|$)/u.test(title)) return true
+  return /^(?:\d+[.)]\s*)?(?:publication|maintenant|reste\s+[àa]\s+faire|recommand[ée])(?=\s|$)/iu.test(
+    title
+  )
+}
+
 /**
  * Le rapport du worker est capturé AVANT la gate et la publication. Une fois l'issue structurée
  * `succeeded` connue, ses preuves restent utiles mais ses recommandations de cycle de vie deviennent
  * fausses. On retire uniquement ces lignes, jamais les tests, diffs ou diagnostics.
  */
 function removeStaleWorkerLifecycleAdvice(report: string): string {
-  return report
-    .split(/\r?\n/)
-    .filter((line) => !isStaleWorkerLifecycleLine(line))
+  let skipSection = false
+  const lines = report.split(/\r?\n/).filter((line) => {
+    if (line.includes('Clôture Autowin : gate validé')) {
+      skipSection = false
+      return true
+    }
+    if (/^\s*#{1,6}\s+/u.test(line)) {
+      skipSection = isStaleWorkerLifecycleSection(line)
+      if (skipSection) return false
+    }
+    if (skipSection || isStaleWorkerLifecycleLine(line)) return false
+    return true
+  })
+  return lines
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()

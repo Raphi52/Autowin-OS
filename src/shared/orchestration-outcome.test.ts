@@ -49,6 +49,15 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     expect(text).toBe('Preuve utile.')
   })
 
+  it('retire le bloc de statut provisoire même quand son contenu ne nomme pas le judge', () => {
+    const text = reconcileClosedOrchestrationText(
+      'Preuve utile.\n\n## 📍 Maintenant\nLe correctif est en état d’être audité.\n\n## ⏳ Reste à faire\n\n## 👉 Recommandé',
+      { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+    )
+
+    expect(text).toBe('Preuve utile.')
+  })
+
   it('un gate BLOQUÉ est annoncé comme tel, même si l’appel a « réussi »', () => {
     const text = formatOrchestrationOutcome(true, {
       status: 'failed',
