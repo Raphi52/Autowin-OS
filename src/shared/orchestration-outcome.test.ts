@@ -115,6 +115,24 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     ).toBe(report)
   })
 
+  it.each([
+    ['Preuve : publication non exécutée.', ''],
+    ['Test vert : RUN toujours open.', ''],
+    [
+      'Preuve : tests 12/12 verts. RUN reste open — lancer judge.',
+      'Preuve : tests 12/12 verts.'
+    ]
+  ])('retire l’assertion lifecycle active sans effacer la preuve : %s', (report, expected) => {
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe(expected)
+  })
+
   it('arrête une section provisoire au prochain titre pair sans ligne vide', () => {
     const text = reconcileClosedOrchestrationText(
       'Preuve avant.\n\n## Maintenant\nRUN open.\n## Preuves\nSHA publié abc123.',

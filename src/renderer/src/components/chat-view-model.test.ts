@@ -513,6 +513,52 @@ describe('durable assistant hydration and streaming', () => {
     expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe(line)
   })
 
+  it('does not treat the full closure label followed by explanatory prose as a verdict', () => {
+    const explanation =
+      'Clôture Autowin : gate validé, RUN fermé green est la chaîne attendue par le test, pas le verdict.'
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: explanation }
+      ]
+    })
+    const lines = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .flatMap((part) => part.text.split('\n'))
+
+    expect(lines).toContain(explanation)
+    expect(
+      lines.filter((line) => line.startsWith('Clôture Autowin : gate validé, RUN fermé green ;'))
+    ).toHaveLength(1)
+  })
+
+  it('preserves a full canonical closure citation on the same line as the verdict', () => {
+    const closure = 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
+    const line = `${closure} Test vert : expect(text).toContain("${closure}") — PASS.`
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: line }
+      ]
+    })
+
+    expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe(line)
+  })
+
   it('binds the first turn id then reduces progressive deltas without duplication', () => {
     const empty = hydrateStoredAssistant({ content: '', status: 'streaming', parts: [] })
     const first = reduceAssistantPilotEvent(empty, {

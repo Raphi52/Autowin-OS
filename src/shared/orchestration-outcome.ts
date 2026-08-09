@@ -33,7 +33,9 @@ export const AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX =
   'Clôture Autowin : gate validé, RUN fermé green'
 
 export function isAuthoritativeOrchestrationClosureLine(line: string): boolean {
-  return line.startsWith(AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX)
+  if (!line.startsWith(AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX)) return false
+  const suffix = line.slice(AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX.length)
+  return suffix === '' || /^\s*[.;]/u.test(suffix)
 }
 
 function asString(value: unknown): string | undefined {
@@ -52,20 +54,27 @@ function asCallCount(value: unknown): number {
 const WORKER_LIFECYCLE_PREFIX =
   /^(?:\s*\*\*)?\s*(?:(?:📍|⏳|👉|⚠️)\s*)?(?:\*\*)?\s*/u
 
+function maskQuotedEvidence(text: string): string {
+  return text.replace(
+    /«[^»\n]*»|"[^"\n]*"|`[^`\n]*`|\/[^/\n]+\/[a-z]*/giu,
+    (quoted) => ' '.repeat(quoted.length)
+  )
+}
+
 function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
   const text = line.replace(WORKER_LIFECYCLE_PREFIX, '').replace(/[`*_]/g, '').trim()
   if (/^#{1,6}\s+(?:\d+[.)]\s*)?publication\s*$/iu.test(text)) return undefined
-  if (/^(?:test\s+vert|preuve)\s*:/iu.test(text)) return line
+  const searchable = maskQuotedEvidence(text)
 
   const staleSignal =
     /\b(?:run\s+(?:(?:reste|toujours)\s+)?open|non\s+(?:publi[ée]e?|commit[ée]e?)|publication\s+(?:reste|non\s+ex[ée]cut)|(?:autoriser|d[ée]clencher)\s+(?:la\s+)?publication|(?:lancer|relancer)\s+(?:le\s+)?judge|judge[^\n]*(?:refus[ée]|reste|non\s+cl[oô]tur)|clean\s+(?:puis|et)\s+judge|encha[iî]ner\s+clean[^\n]*judge)\b/iu.exec(
-      text
+      searchable
     )
   const staleLead =
     /^(?:maintenant|reste\s+[àa]\s+faire|recommand[ée]|encha[iî]ner|clean)(?=\s|[—:,-]|$)/iu.test(
-      text
+      searchable
     ) &&
-    /\b(?:publication|commit|judge|clean)\b/iu.test(text)
+    /\b(?:publication|commit|judge|clean)\b/iu.test(searchable)
   if (!staleSignal && !staleLead) return line
 
   if (staleSignal) {

@@ -172,6 +172,19 @@ export function settleIfDone(message: HydratedAssistantMessage): HydratedAssista
   return parts === message.parts ? message : { ...message, parts }
 }
 
+function duplicateAuthoritativeClosureIndex(line: string): number | undefined {
+  let searchFrom = AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX.length
+  while (searchFrom < line.length) {
+    const index = line.indexOf(AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX, searchFrom)
+    if (index < 0) return undefined
+    const before = line[index - 1]
+    const suffix = line.slice(index + AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX.length)
+    if (/\s/u.test(before) && (suffix === '' || /^\s*[.;]/u.test(suffix))) return index
+    searchFrom = index + AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX.length
+  }
+  return undefined
+}
+
 function reconcileStoredOrchestrationClosure(parts: ChatPart[]): ChatPart[] {
   const action = [...parts]
     .reverse()
@@ -207,13 +220,8 @@ function reconcileStoredOrchestrationClosure(parts: ChatPart[]): ChatPart[] {
         return []
       }
       closureSeen = true
-      const duplicate = line.indexOf(
-        AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX,
-        AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX.length
-      )
-      if (duplicate < 0) {
-        return [line]
-      }
+      const duplicate = duplicateAuthoritativeClosureIndex(line)
+      if (duplicate === undefined) return [line]
       changed = true
       const beforeDuplicate = line.slice(0, duplicate).trimEnd()
       if (beforeDuplicate) return [beforeDuplicate]
