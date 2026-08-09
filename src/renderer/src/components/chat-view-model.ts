@@ -194,12 +194,12 @@ function withoutPersistedAuthoritativeClosure(line: string): string | undefined 
     if (!closure) break
     const leadingDecorationOnly = isAuthoritativeOrchestrationClosureLine(reconciled)
     const before = (leadingDecorationOnly ? '' : reconciled.slice(0, closure.start))
-      .replace(/\s*[;:—-]\s*$/u, '')
+      .replace(/\s*[,;:|·/—-]\s*$/u, '')
       .trimEnd()
     const after = reconciled
       .slice(closure.end)
       .replace(/^\s*(?:(?:\*\*|__|~~|\*|_)\s*)+/u, '')
-      .replace(/^\s*[;:—-]\s*/u, '')
+      .replace(/^\s*[,;:|·/—-]\s*/u, '')
       .trimStart()
     reconciled = [before, after].filter(Boolean).join(' ')
     changed = true

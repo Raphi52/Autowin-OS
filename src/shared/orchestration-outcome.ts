@@ -35,8 +35,14 @@ export const AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX =
 const CLOSURE_LEADING_DECORATIONS =
   /^(?:(?:#{1,6}|>|[-+*•]|\d+[.)])\s+|\[[ xX]\]\s+|(?:✅|⚠️?|🧪)\s*|(?:\*\*|__|\*|_)\s*)+/u
 
+const AUTHORITATIVE_CLOSURE_SUFFIX_SOURCE =
+  '(?:publication\\s+termin[ée]e|aucune\\s+autre\\s+orchestration\\s+ni\\s+aucun\\s+second\\s+judge\\s+ne\\s+sont\\s+n[ée]cessaires\\s+dans\\s+ce\\s+tour)'
+
+const AUTHORITATIVE_CLOSURE_BOUNDARY_SOURCE =
+  '(?:\\s*\\.(?=\\s|$|[*_])|(?=\\s*(?:$|[,;:|·/—-]))|(?=\\s+(?:[ée]chec|erreur|interrompu|annul[ée]|failed|interrupted|cancelled)\\b))'
+
 const AUTHORITATIVE_CLOSURE_PATTERN = new RegExp(
-  `${AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX}(?:\\s*;\\s*(?:publication\\s+termin[ée]e|aucune\\s+autre\\s+orchestration\\s+ni\\s+aucun\\s+second\\s+judge\\s+ne\\s+sont\\s+n[ée]cessaires\\s+dans\\s+ce\\s+tour))?(?:\\s*\\.(?=\\s|$|[*_])|(?=\\s*(?:$|[;—-])))`,
+  `${AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX}(?:\\s*;\\s*${AUTHORITATIVE_CLOSURE_SUFFIX_SOURCE}${AUTHORITATIVE_CLOSURE_BOUNDARY_SOURCE}|${AUTHORITATIVE_CLOSURE_BOUNDARY_SOURCE})`,
   'iu'
 )
 
@@ -86,7 +92,7 @@ function maskQuotedEvidence(text: string): string {
 }
 
 const LIFECYCLE_ASSERTION_SOURCE =
-  '(?:run\\s+(?:(?:reste|toujours)\\s+)?open|non\\s+(?:publi[ée]e?|commit[ée]e?)|publication\\s+(?:reste|non\\s+ex[ée]cut(?:[ée]e?)?)|(?:autoriser|d[ée]clencher)\\s+(?:la\\s+)?publication|(?:lancer|relancer)\\s+(?:le\\s+)?judge|judge[^\\n]*(?:refus[ée]|reste|non\\s+cl[oô]tur)|clean\\s+(?:puis|et)\\s+judge|encha[iî]ner\\s+clean[^\\n]*judge)'
+  '(?:run\\s+(?:(?:(?:reste|toujours)\\s+)?open|encore\\s+ouvert)|non\\s+(?:publi[ée]e?|commit[ée]e?)|publication\\s+(?:reste|non\\s+ex[ée]cut(?:[ée]e?)?|en\\s+attente|[àa]\\s+faire)|changements?\\s+(?:(?:pas\\s+encore)|non)\\s+publi[ée]s?|gate\\s+(?:(?:reste|toujours|encore)\\s+)?bloqu[ée]|(?:autoriser|d[ée]clencher)\\s+(?:la\\s+)?publication|(?:lancer|relancer)\\s+(?:le\\s+)?judge|judge\\s+[àa]\\s+lancer|judge[^\\n]*(?:refus[ée]|reste|non\\s+cl[oô]tur)|clean\\s+(?:puis|et)\\s+judge|encha[iî]ner\\s+clean[^\\n]*judge)'
 
 const LIFECYCLE_WRAPPED_SOURCE =
   '(?:(?:\\*\\*|__|~~|\\*|_|\\[|`|\\/)\\s*)*' +
@@ -94,21 +100,21 @@ const LIFECYCLE_WRAPPED_SOURCE =
   '(?:\\s*(?:\\*\\*|__|~~|\\*|_|`|\\/|\\](?:\\([^\\n)]*\\))?))*'
 
 const NEGATED_LIFECYCLE_BEFORE = new RegExp(
-  `\\b(?:absence\\s+de|aucune\\s+(?:occurrence|mention)\\s+de|sans\\s+(?:occurrence|mention)\\s+de)\\s+${LIFECYCLE_WRAPPED_SOURCE}`,
+  `\\b(?:absence\\s+de|(?:aucune|z[ée]ro)\\s+(?:occurrence|mention)\\s+de|sans\\s+(?:occurrence|mention)\\s+de|il\\s+n['’]y\\s+a\\s+plus\\s+de)\\s+${LIFECYCLE_WRAPPED_SOURCE}`,
   'giu'
 )
 
 const NEGATED_LIFECYCLE_AFTER = new RegExp(
-  `${LIFECYCLE_WRAPPED_SOURCE}\\s+(?:(?:(?:est|reste)\\s+)?(?:absent(?:e)?|introuvable|supprim[ée]e?|exclu(?:e)?|faux|fausse)|a\\s+disparu|n['’]appara[iî]t\\s+plus|n['’]est\\s+(?:pas\\s+pr[ée]sent|plus\\s+vrai)|ne\\s+(?:matche|correspond|contient|comprend|affiche|figure)\\s+(?:plus|pas)|=\\s*false)`,
+  `${LIFECYCLE_WRAPPED_SOURCE}\\s+(?:(?:(?:est|reste)\\s+)?(?:absent(?:e)?|introuvable|supprim[ée]e?|exclu(?:e)?|faux|fausse)|a\\s+disparu|n['’]appara[iî]t\\s+plus|n['’]est\\s+(?:pas\\s+pr[ée]sent|plus\\s+vrai)|ne\\s+(?:matche|correspond|contient|comprend|affiche|figure)\\s+(?:plus|pas)|=\\s*(?:false|0\\s+occurrences?))`,
   'giu'
 )
 
-const HISTORICAL_CODE_LIFECYCLE = new RegExp(
-  `\\b(?:la\\s+)?(?:commande|texte|cha[iî]ne|valeur|sortie)\\s+\`${LIFECYCLE_ASSERTION_SOURCE}\`\\s+(?:est|a\\s+[ée]t[ée])\\s+(?:observ[ée]e?|cit[ée]e?|pr[ée]sent(?:e)?|captur[ée]e?|trouv[ée]e?)\\b`,
-  'giu'
-)
+const FORMATTED_LIFECYCLE_REFERENCE = /`[^`\n]+`|\[[^\]\n]+\]\([^)\n]*\)|\/[^/\n]+\/[a-z]*/giu
 
-const ACTIVE_LIFECYCLE = new RegExp(`\\b${LIFECYCLE_ASSERTION_SOURCE}\\b`, 'iu')
+const ACTIVE_LIFECYCLE = new RegExp(
+  `(?<![\\p{L}\\p{N}])${LIFECYCLE_ASSERTION_SOURCE}(?![\\p{L}\\p{N}])`,
+  'iu'
+)
 
 /** Masque seulement l'assertion lifecycle niée, pas les autres faits présents sur la même ligne. */
 function maskNegatedLifecycleEvidence(text: string): string {
@@ -118,7 +124,23 @@ function maskNegatedLifecycleEvidence(text: string): string {
 }
 
 function maskHistoricalLifecycleEvidence(text: string): string {
-  return text.replace(HISTORICAL_CODE_LIFECYCLE, (evidence) => ' '.repeat(evidence.length))
+  return text.replace(FORMATTED_LIFECYCLE_REFERENCE, (formatted, offset: number) => {
+    const literal = formatted.startsWith('`')
+      ? formatted.slice(1, formatted.lastIndexOf('`'))
+      : formatted.startsWith('[')
+        ? (/^\[([^\]\n]+)\]/u.exec(formatted)?.[1] ?? formatted)
+        : formatted.slice(1, formatted.lastIndexOf('/'))
+    if (!ACTIVE_LIFECYCLE.test(literal)) return formatted
+    const context = `${text.slice(Math.max(0, offset - 80), offset)} ${text.slice(offset + formatted.length, offset + formatted.length + 120)}`
+    const historical =
+      /\b(?:ancien(?:ne)?|historique|logs?|trace|assertion|cha[iî]ne\s+attendue)\b|\b(?:observ|figur|cit|captur|trouv)[\p{L}]*\s+(?:dans|par)\b/iu.test(
+        context
+      )
+    const future = /\b(?:plan\s+restant|prochaine\s+[ée]tape|reste\s+[àa]\s+faire)\b/iu.test(
+      context
+    )
+    return historical && !future ? ' '.repeat(formatted.length) : formatted
+  })
 }
 
 function lifecycleSearchable(text: string): string {
@@ -129,7 +151,7 @@ function lifecycleSearchable(text: string): string {
 
 function factualSuffixAfterStale(text: string, staleEnd: number): string | undefined {
   const tail = text.slice(staleEnd)
-  const boundary = /[.;]\s+/u.exec(tail)
+  const boundary = /[.;:—|·]\s+/u.exec(tail)
   if (!boundary) return undefined
   const candidate = tail.slice(boundary.index + boundary[0].length).trim()
   if (!candidate) return undefined

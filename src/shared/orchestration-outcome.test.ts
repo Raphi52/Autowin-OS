@@ -164,6 +164,44 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
     ).toBe(report)
   })
 
+  it.each([
+    "Preuve : `lancer judge` figure dans l'ancien log — PASS.",
+    "Preuve : le littéral `lancer judge` est observé dans l'ancien log — PASS.",
+    'Preuve : le texte [RUN reste open](#ancien) est observé dans le test — PASS.',
+    'Preuve : la regex /lancer judge/ est observée dans la trace historique — PASS.',
+    'Preuve : zéro occurrence de RUN open — PASS.',
+    "Preuve : il n'y a plus de RUN open — PASS.",
+    'Preuve : RUN open = 0 occurrence — PASS.'
+  ])('conserve une référence passée ou une quantité lifecycle nulle : %s', (report) => {
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe(report)
+  })
+
+  it.each([
+    'Preuve : la commande `lancer judge` est présente dans le plan restant.',
+    'Preuve : publication en attente.',
+    'Résultat : changements pas encore publiés.',
+    'Preuve : RUN encore ouvert.',
+    'Preuve : judge à lancer.',
+    'Preuve : Gate toujours bloqué.',
+    'Preuve : Publication à faire.'
+  ])('retire un statut lifecycle encore actif : %s', (report) => {
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe('')
+  })
+
   it('ne prend pas les apostrophes grammaticales pour des délimiteurs de citation', () => {
     expect(
       reconcileClosedOrchestrationText(
@@ -298,6 +336,35 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
         reused: false
       })
     ).toBe(expected)
+  })
+
+  it.each([
+    ['Preuve : RUN reste open — SHA-256 abc123 vérifié.', 'SHA-256 abc123 vérifié.'],
+    ['Preuve : RUN reste open : commit abc123 vérifié.', 'commit abc123 vérifié.'],
+    ['Preuve : RUN reste open | capture écran vérifiée.', 'capture écran vérifiée.']
+  ])('conserve un suffixe factuel après tout séparateur de clause : %s', (report, expected) => {
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe(expected)
+  })
+
+  it.each([
+    'Preuve : RUN reste open. Gate toujours bloqué.',
+    'Preuve : RUN reste open. Publication à faire.'
+  ])('ne conserve pas un second statut terminal contradictoire : %s', (report) => {
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe('')
   })
 
   it('arrête une section provisoire au prochain titre pair sans ligne vide', () => {

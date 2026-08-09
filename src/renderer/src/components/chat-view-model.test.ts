@@ -467,6 +467,30 @@ describe('durable assistant hydration and streaming', () => {
     [
       'Échec final : timeout. Clôture Autowin : gate validé, RUN fermé green ; publication terminée.',
       'Échec final : timeout.'
+    ],
+    [
+      'Clôture Autowin : gate validé, RUN fermé green Échec final : timeout.',
+      'Échec final : timeout.'
+    ],
+    [
+      'Clôture Autowin : gate validé, RUN fermé green : Échec final : timeout.',
+      'Échec final : timeout.'
+    ],
+    [
+      'Clôture Autowin : gate validé, RUN fermé green ; publication terminée, Échec final : timeout.',
+      'Échec final : timeout.'
+    ],
+    [
+      'Clôture Autowin : gate validé, RUN fermé green ; publication terminée | Échec final : timeout.',
+      'Échec final : timeout.'
+    ],
+    [
+      'Clôture Autowin : gate validé, RUN fermé green ; publication terminée · Échec final : timeout.',
+      'Échec final : timeout.'
+    ],
+    [
+      'Clôture Autowin : gate validé, RUN fermé green ; publication terminée / Échec final : timeout.',
+      'Échec final : timeout.'
     ]
   ])('removes only the stale closure clause from a failed line: %s', (line, expected) => {
     const hydrated = hydrateStoredAssistant({
