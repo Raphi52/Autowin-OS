@@ -537,4 +537,58 @@ describe('TaskManagerView', () => {
 
     await act(async () => pending.resolve([]))
   })
+
+  it('affiche un état de chargement au lieu des états vides tant que le snapshot est en attente', async () => {
+    const pending = deferred<unknown>()
+    const mockApi = api()
+    mockApi.taskManagerSnapshot.mockImplementationOnce(() => pending.promise)
+
+    const { container } = await mount(mockApi)
+
+    expect(container.textContent).not.toContain('Aucune tâche')
+    expect(container.textContent).not.toContain('Sélectionne ou crée une tâche')
+    expect(
+      container.querySelectorAll('[data-testid="task-manager-loading"]').length
+    ).toBeGreaterThan(0)
+
+    await act(async () =>
+      pending.resolve({
+        tasks: [],
+        occurrences: [],
+        alerts: [],
+        scheduler: { running: false, nextWakeAt: null, relayAvailable: false }
+      })
+    )
+  })
+
+  it('affiche une bannière de chargement échoué quand l’IPC rejette', async () => {
+    const mockApi = api()
+    mockApi.taskManagerSnapshot.mockRejectedValueOnce(new Error('IPC coupé'))
+
+    const { container } = await mount(mockApi)
+
+    const banner = container.querySelector('[data-testid="task-manager-load-error"]')
+    expect(banner).not.toBeNull()
+    expect(banner?.textContent).toContain('IPC coupé')
+    expect(
+      [...banner!.querySelectorAll('button')].some((button) => button.textContent === 'Réessayer')
+    ).toBe(true)
+  })
+
+  it('rappelle réellement le chargement au clic sur Réessayer', async () => {
+    const mockApi = api()
+    mockApi.taskManagerSnapshot.mockRejectedValueOnce(new Error('IPC coupé'))
+
+    const { container } = await mount(mockApi)
+    expect(mockApi.taskManagerSnapshot).toHaveBeenCalledTimes(1)
+
+    const retry = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Réessayer'
+    )
+    await act(async () => retry?.click())
+
+    expect(mockApi.taskManagerSnapshot).toHaveBeenCalledTimes(2)
+    expect(container.querySelector('[data-testid="task-manager-load-error"]')).toBeNull()
+    expect(container.textContent).toContain('Rapport du matin')
+  })
 })

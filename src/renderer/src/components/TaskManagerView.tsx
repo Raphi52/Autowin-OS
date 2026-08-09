@@ -254,6 +254,7 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string>()
+  const [loadError, setLoadError] = useState<string>()
   const [catalogActive, setCatalogActive] = useState(active)
   const [catalogReady, setCatalogReady] = useState(false)
   const loadGenerationRef = useRef(0)
@@ -269,6 +270,7 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
     setLoading(true)
     setCatalogReady(false)
     setError(undefined)
+    setLoadError(undefined)
     setModels([])
     try {
       const [rawSnapshot, rawConversations, rawModels] = await Promise.all([
@@ -292,7 +294,7 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
       if (generation !== loadGenerationRef.current) return
       setModels([])
       setCatalogReady(false)
-      setError(errorText(failure))
+      setLoadError(errorText(failure))
     } finally {
       if (generation === loadGenerationRef.current) setLoading(false)
     }
@@ -522,6 +524,16 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
         </span>
       </div>
 
+      {loadError && (
+        <div className="task-manager-error" role="alert" data-testid="task-manager-load-error">
+          <strong>Chargement des tâches impossible</strong>
+          <span>{loadError}</span>
+          <button type="button" disabled={loading} onClick={() => void load()}>
+            Réessayer
+          </button>
+        </div>
+      )}
+
       {error && (
         <div className="task-manager-error" role="alert">
           <strong>Action impossible</strong>
@@ -540,7 +552,12 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
               {loading ? '…' : 'Actualiser'}
             </button>
           </div>
-          {snapshot.tasks.length === 0 ? (
+          {loading ? (
+            <div className="task-manager-empty" data-testid="task-manager-loading">
+              <span aria-hidden="true">◷</span>
+              <strong>Chargement des tâches…</strong>
+            </div>
+          ) : snapshot.tasks.length === 0 ? (
             <div className="task-manager-empty">
               <span aria-hidden="true">◷</span>
               <strong>Aucune tâche</strong>
@@ -1079,6 +1096,11 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                 )}
               </section>
             </>
+          ) : loading ? (
+            <div className="task-manager-empty is-detail" data-testid="task-manager-loading">
+              <span aria-hidden="true">◷</span>
+              <strong>Chargement des tâches…</strong>
+            </div>
           ) : (
             <div className="task-manager-empty is-detail">
               <span aria-hidden="true">◷</span>
