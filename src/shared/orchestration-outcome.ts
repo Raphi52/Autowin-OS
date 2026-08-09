@@ -40,7 +40,7 @@ function asCallCount(value: unknown): number {
 }
 
 const STALE_WORKER_LIFECYCLE_LINE =
-  /^(?:\s*\*\*)?\s*[📍⏳👉]|\b(?:run\s+(?:reste\s+)?open|non\s+commit[ée]|(?:lancer|relancer)\s+(?:le\s+)?judge|(?:gate|publication)[^\n]*(?:reste|[àa]\s+faire|non\s+faite?|attente))\b/i
+  /^(?:\s*\*\*)?\s*[📍⏳👉]|\b(?:run\s+(?:reste\s+)?open|non\s+commit[ée]|(?:lancer|relancer)\s+(?:le\s+)?judge|(?:gate|publication)[^\n]*(?:reste|[àa]\s+faire|non\s+faite?|attente))\b/iu
 
 /**
  * Le rapport du worker est capturé AVANT la gate et la publication. Une fois l'issue structurée
