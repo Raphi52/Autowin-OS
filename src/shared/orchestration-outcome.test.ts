@@ -9,6 +9,21 @@ import { formatOrchestrationOutcome, runLabelFromPath } from './orchestration-ou
  * étaient tous disponibles. Ces cas figent le contraire : jamais de succès prétendu, toujours les faits.
  */
 describe('formatOrchestrationOutcome — jamais un faux succès', () => {
+  it('retire les consignes de clôture périmées du worker après une livraison réussie', () => {
+    const text = formatOrchestrationOutcome(true, {
+      status: 'succeeded',
+      valid: true,
+      gateBlocked: false,
+      result:
+        'Tests ciblés 11/11 verts.\n📍 Maintenant — RUN open, non commité.\n⏳ Reste à faire — lancer judge et publier.'
+    })
+
+    expect(text).toContain('Tests ciblés 11/11 verts.')
+    expect(text).not.toContain('RUN open')
+    expect(text).not.toContain('lancer judge')
+    expect(text).not.toContain('non commité')
+  })
+
   it('un gate BLOQUÉ est annoncé comme tel, même si l’appel a « réussi »', () => {
     const text = formatOrchestrationOutcome(true, {
       status: 'failed',

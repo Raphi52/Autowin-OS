@@ -69,6 +69,8 @@ describe('AgentPilot chat streaming', () => {
     const done = events.find((event) => event.kind === 'done')
     expect(done?.text).toContain('Workflow terminé')
     expect(done?.text).toContain('aucune autre orchestration')
+    expect(done?.text).not.toContain('RUN open')
+    expect(done?.text).not.toContain('lancer judge')
   })
 
   it('emits progressive visible deltas while suppressing fragmented command markup', async () => {

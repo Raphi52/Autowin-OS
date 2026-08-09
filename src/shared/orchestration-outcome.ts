@@ -39,6 +39,23 @@ function asCallCount(value: unknown): number {
   return count === undefined ? 0 : Math.max(0, Math.floor(count))
 }
 
+const STALE_WORKER_LIFECYCLE_LINE =
+  /^(?:\s*\*\*)?\s*[📍⏳👉]|\b(?:run\s+(?:reste\s+)?open|non\s+commit[ée]|(?:lancer|relancer)\s+(?:le\s+)?judge|(?:gate|publication)[^\n]*(?:reste|[àa]\s+faire|non\s+faite?|attente))\b/i
+
+/**
+ * Le rapport du worker est capturé AVANT la gate et la publication. Une fois l'issue structurée
+ * `succeeded` connue, ses preuves restent utiles mais ses recommandations de cycle de vie deviennent
+ * fausses. On retire uniquement ces lignes, jamais les tests, diffs ou diagnostics.
+ */
+function removeStaleWorkerLifecycleAdvice(report: string): string {
+  return report
+    .split(/\r?\n/)
+    .filter((line) => !STALE_WORKER_LIFECYCLE_LINE.test(line))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 /** Libellé de coût honnête, compatible avec les anciens résultats qui n'avaient que `costUsd`. */
 export function formatExecutionCostCoverage(data: OrchestrationOutcome): string | undefined {
   const hasCoverage = Object.prototype.hasOwnProperty.call(data, 'knownCostUsd')
@@ -86,6 +103,8 @@ export function formatOrchestrationOutcome(
   const cost = formatExecutionCostCoverage(outcome)
   const run = runLabelFromPath(asString(outcome.runPath) ?? asString(outcome.runId))
   const result = asString(outcome.result)
+  const deliveryClosed = status === 'succeeded' && !gateBlocked && !invalid && outcome.reused !== true
+  const visibleResult = result && deliveryClosed ? removeStaleWorkerLifecycleAdvice(result) : result
 
   const headline = gateBlocked
     ? '⛔ Workflow BLOQUÉ par le gate — livrable non validé'
@@ -102,6 +121,12 @@ export function formatOrchestrationOutcome(
   ].filter((fact): fact is string => Boolean(fact))
 
   const lines = [facts.length ? `${headline} · ${facts.join(' · ')}` : headline]
-  if (result) lines.push('', result.length > 4_000 ? `${result.slice(0, 4_000)}…[tronqué]` : result)
+  if (visibleResult)
+    lines.push(
+      '',
+      visibleResult.length > 4_000
+        ? `${visibleResult.slice(0, 4_000)}…[tronqué]`
+        : visibleResult
+    )
   return lines.join('\n')
 }
