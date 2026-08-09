@@ -472,7 +472,11 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       for (const key of primeSeen(visibleItemsRef.current)) seenRef.current.add(key)
       saveSeen(localStorage, seenRef.current)
       setAutoStatus(`en veille · ${visibleItemsRef.current.length} ticket(s) déjà présents ignorés`)
-    } else setAutoStatus(undefined)
+    } else {
+      // ARRET IMMEDIAT : on libere l'etat occupe pour que le cycle en cours cesse de piocher.
+      autoBusyRef.current = false
+      setAutoStatus('arrêté')
+    }
   }
 
   const treatIncoming = useCallback(async () => {
@@ -515,7 +519,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     let total = 0
     while (selection.toTreat.length) {
       const result = await runTicketTreatmentBatch(selection.toTreat, {
-        shouldContinue: () => autoBusyRef.current,
+        shouldContinue: () => autoBusyRef.current && autoModeEnabledRef.current,
         createConversation: async (item) => {
           const conv = await window.api.conversationsCreate({
             title: ticketConversationTitle(item),
@@ -552,7 +556,9 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     }
     autoBusyRef.current = false
     setAutoStatus(
-      `en veille · ${succeeded}/${total} lancés${failed ? ` · ${failed} échec(s)` : ''}`
+      autoModeEnabledRef.current
+        ? `en veille · ${succeeded}/${total} lancés${failed ? ` · ${failed} échec(s)` : ''}`
+        : 'arrêté'
     )
   }, [autoMode])
 
@@ -861,7 +867,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
           />
           Mode auto (traite les entrants du filtre)
         </label>
-        {autoMode && autoStatus && (
+        {autoStatus && (
           <span className="tickets-auto-status" data-testid="tickets-auto-status">
             {autoStatus}
           </span>

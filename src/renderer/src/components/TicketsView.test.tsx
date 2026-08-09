@@ -833,4 +833,49 @@ describe('vue Tickets — lots automatiques différés', () => {
     expect(conversationsCreate).toHaveBeenCalledTimes(3)
     await act(async () => root.unmount())
   })
+
+  it('décocher « Mode auto » arrête le cycle en cours et affiche le statut arrêté', async () => {
+    localStorage.setItem('autowin:tickets-auto-mode', '1')
+    const pending: Array<(value: { ok: boolean }) => void> = []
+    const orchestrate = vi.fn(
+      () =>
+        new Promise<{ ok: boolean }>((resolve) => {
+          pending.push(resolve)
+        })
+    )
+    const conversationsCreate = vi.fn(async ({ title }: { title: string }) => {
+      // Decochage AU 2e item : la case est cherchee au moment de l'appel (le cycle a deja demarre).
+      if (conversationsCreate.mock.calls.length === 2) {
+        ;(
+          document.querySelector('[data-testid="tickets-mode-auto"] input') as HTMLInputElement
+        )?.click()
+      }
+      return { id: `conv-${title}` }
+    })
+    api({
+      listTickets: vi.fn(async () => ({
+        items: [item('1'), item('2'), item('3'), item('4'), item('5'), item('6')],
+        hasMore: false
+      })),
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      conversationsCreate,
+      orchestrate
+    })
+
+    const { root, container } = await render()
+
+    await act(async () => {
+      for (let index = 0; index < 20; index += 1) await Promise.resolve()
+    })
+    await act(async () => {
+      pending.splice(0).forEach((resolve) => resolve({ ok: true }))
+      for (let index = 0; index < 20; index += 1) await Promise.resolve()
+    })
+
+    expect(conversationsCreate.mock.calls.length).toBeLessThanOrEqual(3)
+    expect(container.querySelector('[data-testid="tickets-auto-status"]')?.textContent).toContain(
+      'arrêté'
+    )
+    await act(async () => root.unmount())
+  })
 })
