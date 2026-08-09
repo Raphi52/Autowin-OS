@@ -15,6 +15,7 @@ déterministe intégrés.
 ## Sommaire
 
 - [C'est quoi](#cest-quoi)
+- [Workflow « Chantier Autowin »](#workflow--chantier-autowin-)
 - [Fonctionnalités clés](#fonctionnalités-clés)
 - [Architecture](#architecture)
 - [Démarrage rapide](#démarrage-rapide)
