@@ -57,11 +57,42 @@ export interface OrchestrationClosureSpan {
   end: number
 }
 
-export type MarkdownFenceDelimiter = '`' | '~'
+export interface MarkdownFenceDelimiter {
+  marker: '`' | '~'
+  length: number
+}
+
+interface MarkdownFenceLine extends MarkdownFenceDelimiter {
+  trailing: string
+}
+
+function markdownFenceLine(line: string): MarkdownFenceLine | undefined {
+  const match = /^\s*(`{3,}|~{3,})(.*)$/u.exec(line)
+  if (!match) return undefined
+  return { marker: match[1][0] as '`' | '~', length: match[1].length, trailing: match[2] }
+}
 
 export function markdownFenceDelimiter(line: string): MarkdownFenceDelimiter | undefined {
-  const fence = /^\s*(`{3,}|~{3,})/u.exec(line)?.[1]
-  return fence ? (fence[0] as MarkdownFenceDelimiter) : undefined
+  const fence = markdownFenceLine(line)
+  return fence ? { marker: fence.marker, length: fence.length } : undefined
+}
+
+export function markdownFenceStateAfterLine(
+  line: string,
+  current: MarkdownFenceDelimiter | undefined
+): MarkdownFenceDelimiter | undefined {
+  const fence = markdownFenceLine(line)
+  if (!fence) return current
+  if (!current) {
+    // CommonMark interdit un backtick dans l'info-string d'un fence backtick ouvrant.
+    if (fence.marker === '`' && fence.trailing.includes('`')) return undefined
+    return { marker: fence.marker, length: fence.length }
+  }
+  const closes =
+    fence.marker === current.marker &&
+    fence.length >= current.length &&
+    fence.trailing.trim().length === 0
+  return closes ? undefined : current
 }
 
 /** Localise une vraie clause de clôture, mais jamais sa citation entre guillemets ou backticks. */
@@ -240,16 +271,24 @@ function isStaleWorkerLifecycleMarker(line: string): boolean {
  * `succeeded` connue, ses preuves restent utiles mais ses recommandations de cycle de vie deviennent
  * fausses. On retire uniquement ces lignes, jamais les tests, diffs ou diagnostics.
  */
-function removeStaleWorkerLifecycleAdvice(report: string): string {
+interface ReconciledLifecycleText {
+  text: string
+  fencedBy: MarkdownFenceDelimiter | undefined
+}
+
+function removeStaleWorkerLifecycleAdvice(
+  report: string,
+  initialFence: MarkdownFenceDelimiter | undefined
+): ReconciledLifecycleText {
   let staleHeadingLevel: number | undefined
   let staleMarkerParagraph = false
-  let fencedBy: MarkdownFenceDelimiter | undefined
+  let fencedBy = initialFence
   const kept: string[] = []
 
   for (const line of report.split(/\r?\n/u)) {
     const fence = markdownFenceDelimiter(line)
     if (fence) {
-      fencedBy = fencedBy === fence ? undefined : (fencedBy ?? fence)
+      fencedBy = markdownFenceStateAfterLine(line, fencedBy)
       kept.push(line)
       continue
     }
@@ -296,10 +335,13 @@ function removeStaleWorkerLifecycleAdvice(report: string): string {
     if (usefulLine !== undefined) kept.push(usefulLine)
   }
 
-  return kept
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
+  return {
+    text: kept
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim(),
+    fencedBy
+  }
 }
 
 export function isDeliveredOrchestrationOutcome(outcome: OrchestrationOutcome): boolean {
@@ -320,8 +362,22 @@ export function reconcileClosedOrchestrationText(
   outcome: OrchestrationOutcome
 ): string {
   return isDeliveredOrchestrationOutcome(outcome)
-    ? removeStaleWorkerLifecycleAdvice(report)
+    ? removeStaleWorkerLifecycleAdvice(report, undefined).text
     : report
+}
+
+/** Réconcilie un flux persisté sans perdre l'état d'un fence entre deux fragments texte. */
+export function reconcileClosedOrchestrationTextParts(
+  reports: readonly string[],
+  outcome: OrchestrationOutcome
+): string[] {
+  if (!isDeliveredOrchestrationOutcome(outcome)) return [...reports]
+  let fencedBy: MarkdownFenceDelimiter | undefined
+  return reports.map((report) => {
+    const reconciled = removeStaleWorkerLifecycleAdvice(report, fencedBy)
+    fencedBy = reconciled.fencedBy
+    return reconciled.text
+  })
 }
 
 /** Libellé de coût honnête, compatible avec les anciens résultats qui n'avaient que `costUsd`. */

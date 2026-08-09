@@ -404,6 +404,42 @@ describe('formatOrchestrationOutcome — jamais un faux succès', () => {
   )
 
   it.each([
+    ['````', '```'],
+    ['~~~~', '~~~']
+  ])('ne ferme pas un bloc %s sur un fence interne plus court %s', (outerFence, innerFence) => {
+    const report =
+      `Preuve reproduite :\n${outerFence}text\n${innerFence}js\n` +
+      `RUN reste open — lancer judge.\n${innerFence}\n${outerFence}`
+
+    expect(
+      reconcileClosedOrchestrationText(report, {
+        status: 'succeeded',
+        valid: true,
+        gateBlocked: false,
+        reused: false
+      })
+    ).toBe(report)
+  })
+
+  it.each(['```', '~~~'])(
+    'ne traite pas un fence avec info-string comme une fermeture de %s',
+    (fence) => {
+      const report =
+        `Preuve reproduite :\n${fence}text\n${fence}not-a-close\n` +
+        `RUN reste open — lancer judge.\n${fence}`
+
+      expect(
+        reconcileClosedOrchestrationText(report, {
+          status: 'succeeded',
+          valid: true,
+          gateBlocked: false,
+          reused: false
+        })
+      ).toBe(report)
+    }
+  )
+
+  it.each([
     'Preuve : RUN reste open. Gate toujours bloqué.',
     'Preuve : RUN reste open. Publication à faire.'
   ])('ne conserve pas un second statut terminal contradictoire : %s', (report) => {

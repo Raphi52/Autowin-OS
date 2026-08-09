@@ -16,8 +16,10 @@ import {
   isAuthoritativeOrchestrationClosureLine,
   isDeliveredOrchestrationOutcome,
   markdownFenceDelimiter,
+  markdownFenceStateAfterLine,
   ORCHESTRATION_ALREADY_ISSUED_REFUSAL,
-  reconcileClosedOrchestrationText,
+  reconcileClosedOrchestrationTextParts,
+  type MarkdownFenceDelimiter,
   type OrchestrationOutcome
 } from '../../../shared/orchestration-outcome'
 
@@ -212,13 +214,13 @@ function withoutPersistedAuthoritativeClosure(line: string): string | undefined 
 
 function removePersistedAuthoritativeClosures(parts: ChatPart[]): ChatPart[] {
   let changed = false
-  let fencedBy: ReturnType<typeof markdownFenceDelimiter>
+  let fencedBy: MarkdownFenceDelimiter | undefined
   const reconciled = parts.flatMap((part): ChatPart[] => {
     if (part.kind !== 'text') return [part]
     const lines = part.text.split(/\r?\n/u).flatMap((line) => {
       const fence = markdownFenceDelimiter(line)
       if (fence) {
-        fencedBy = fencedBy === fence ? undefined : (fencedBy ?? fence)
+        fencedBy = markdownFenceStateAfterLine(line, fencedBy)
         return [line]
       }
       if (fencedBy) return [line]
@@ -262,17 +264,26 @@ function reconcileStoredOrchestrationClosure(parts: ChatPart[]): ChatPart[] {
 
   const outcome = action.data as OrchestrationOutcome
   if (!isDeliveredOrchestrationOutcome(outcome)) return removePersistedAuthoritativeClosures(parts)
+  const postActionTextIndexes = parts.flatMap((part, index) =>
+    index > actionIndex && part.kind === 'text' ? [index] : []
+  )
+  const reconciledPostActionText = reconcileClosedOrchestrationTextParts(
+    postActionTextIndexes.map((index) => (parts[index] as ChatTextPart).text),
+    outcome
+  )
+  const postActionTextByIndex = new Map(
+    postActionTextIndexes.map((index, position) => [index, reconciledPostActionText[position]])
+  )
   let changed = false
   let closureSeen = false
-  let fencedBy: ReturnType<typeof markdownFenceDelimiter>
+  let fencedBy: MarkdownFenceDelimiter | undefined
   const reconciled = parts.flatMap((part, partIndex): ChatPart[] => {
     if (part.kind !== 'text') return [part]
-    const text =
-      partIndex > actionIndex ? reconcileClosedOrchestrationText(part.text, outcome) : part.text
+    const text = postActionTextByIndex.get(partIndex) ?? part.text
     const uniqueLines = text.split(/\r?\n/u).flatMap((line) => {
       const fence = markdownFenceDelimiter(line)
       if (fence) {
-        fencedBy = fencedBy === fence ? undefined : (fencedBy ?? fence)
+        fencedBy = markdownFenceStateAfterLine(line, fencedBy)
         return [line]
       }
       if (fencedBy) return [line]

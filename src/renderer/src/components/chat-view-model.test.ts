@@ -561,6 +561,104 @@ describe('durable assistant hydration and streaming', () => {
     expect(text.trimEnd().endsWith('publication terminée.')).toBe(true)
   })
 
+  it.each([
+    ['````', '```'],
+    ['~~~~', '~~~']
+  ])(
+    'keeps a closure citation inside a longer %s fence containing %s on failure',
+    (outerFence, innerFence) => {
+      const text =
+        `${outerFence}text\n${innerFence}js\n` +
+        `Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n` +
+        `${innerFence}\n${outerFence}\nÉchec final : timeout.`
+      const hydrated = hydrateStoredAssistant({
+        content: 'projection',
+        status: 'failed',
+        parts: [{ kind: 'text', text }]
+      })
+
+      expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe(text)
+    }
+  )
+
+  it.each(['```', '~~~'])(
+    'does not treat a %s fence with an info-string as a closing fence on failure',
+    (fence) => {
+      const text =
+        `${fence}text\n${fence}not-a-close\n` +
+        `Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n` +
+        `${fence}\nÉchec final : timeout.`
+      const hydrated = hydrateStoredAssistant({
+        content: 'projection',
+        status: 'failed',
+        parts: [{ kind: 'text', text }]
+      })
+
+      expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe(text)
+    }
+  )
+
+  it.each([
+    ['````', '```js', '```'],
+    ['~~~~', '~~~js', '~~~'],
+    ['```', '```not-a-close', ''],
+    ['~~~', '~~~not-a-close', '']
+  ])(
+    'adds the real completed verdict outside %s when %s is fenced evidence',
+    (outerFence, embeddedFence, embeddedClose) => {
+      const citation =
+        `${outerFence}text\n${embeddedFence}\n` +
+        `Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n` +
+        `${embeddedClose ? `${embeddedClose}\n` : ''}${outerFence}`
+      const hydrated = hydrateStoredAssistant({
+        content: 'projection',
+        status: 'completed',
+        parts: [
+          {
+            kind: 'action',
+            name: 'orchestrate',
+            ok: true,
+            data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+          },
+          { kind: 'text', text: citation }
+        ]
+      })
+      const text = hydrated.parts
+        .filter((part) => part.kind === 'text')
+        .map((part) => part.text)
+        .join('\n')
+
+      expect(text).toContain(citation)
+      expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(2)
+      expect(text.trimEnd().endsWith('publication terminée.')).toBe(true)
+    }
+  )
+
+  it.each(['```', '~~~'])('shares %s fence state across persisted text parts', (fence) => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: `${fence}text` },
+        { kind: 'text', text: 'RUN reste open — lancer judge.' },
+        { kind: 'text', text: fence }
+      ]
+    })
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+
+    expect(text).toContain(`${fence}text\nRUN reste open — lancer judge.\n${fence}`)
+    expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(1)
+  })
+
   it('does not rewrite factual evidence emitted before the latest successful orchestration', () => {
     const hydrated = hydrateStoredAssistant({
       content: 'projection',
