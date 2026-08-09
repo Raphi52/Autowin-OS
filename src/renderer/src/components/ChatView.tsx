@@ -161,8 +161,6 @@ export type RunEntry = {
 }
 export type CheckpointEntry = { id: string; runId: string; createdAt: string }
 
-type Decision = { id: string; question: string; options?: unknown[]; safeDefault?: unknown }
-
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 type QueuedDirective = { id: number; text: string; mode?: 'btw' }
 type DirectiveReceipt = {
@@ -655,9 +653,6 @@ export function ChatView({
       liveRunCardRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     )
   }, [])
-  const [decisions, setDecisions] = useState<Decision[]>([])
-  const [showDecisions, setShowDecisions] = useState(false)
-  const [decisionError, setDecisionError] = useState<string | null>(null)
   const [deleteCandidate, setDeleteCandidate] = useState<Conv | null>(null)
   const [deleteRunCandidate, setDeleteRunCandidate] = useState<{
     run: RunEntry
@@ -1035,19 +1030,9 @@ export function ChatView({
   useEffect(() => {
     window.api.setActiveConversation(activeId)
   }, [activeId])
-  // Une décision en attente doit se VOIR (questionnaire déplié), pas rester derrière un toggle.
-  useEffect(() => {
-    if (decisions.length > 0) setShowDecisions(true)
-  }, [decisions.length])
-  async function refreshDecisions(): Promise<void> {
-    const d = (await window.api.authorityPending()) as Decision[]
-    setDecisions(Array.isArray(d) ? d : [])
-  }
-
   useEffect(() => {
     void Promise.resolve().then(() => {
       void refreshConvs()
-      void refreshDecisions()
       void refreshRuntimeIdentity()
     })
     // Les mutations faites par l'agent (bus) rafraîchissent les listes SANS toucher le fil.
@@ -1076,7 +1061,6 @@ export function ChatView({
       if (e.type !== 'orchestrate-delta') deltaBatcher.flush()
       if (e.type === 'refresh') {
         if (e.scope === 'conversations') refreshConvs()
-        if (e.scope === 'decisions') refreshDecisions()
         if (e.scope === 'workflows') refreshRuns()
         if (e.scope === 'roles') refreshRuntimeIdentity()
         if (refreshesActiveConversation(e, activeRef.current)) {
@@ -1162,11 +1146,7 @@ export function ChatView({
   }, [])
 
   useEffect(() => {
-    if (!isActive) return
-    void Promise.resolve().then(refreshDecisions)
-    void Promise.resolve().then(() => refreshRuntimeIdentity())
-    const timer = setInterval(refreshDecisions, 8000)
-    return () => clearInterval(timer)
+    if (isActive) void Promise.resolve().then(() => refreshRuntimeIdentity())
   }, [isActive])
 
   /* --- fil : événements de pilotage → patch de la dernière bulle agent --- */
@@ -2349,15 +2329,6 @@ export function ChatView({
             </div>
           </div>
           <div className="row gap2 chat-head-actions">
-            {decisions.length > 0 && (
-              <button
-                className={`btn btn-sm${showDecisions ? ' btn-accent' : ''}`}
-                onClick={() => setShowDecisions((v) => !v)}
-              >
-                <span className="status-dot st-warn" /> {decisions.length} décision
-                {decisions.length > 1 ? 's' : ''}
-              </button>
-            )}
             <button
               type="button"
               className={`workflow-toggle${showRuns ? ' is-active' : ''}`}
@@ -2370,36 +2341,6 @@ export function ChatView({
             </button>
           </div>
         </header>
-
-        {showDecisions && decisions.length > 0 && (
-          <div className="decision-strip col fade-in">
-            {decisions.map((d) => (
-              <div key={d.id} className="decision-row">
-                <span className="decision-q">{d.question}</span>
-                <div className="row gap2">
-                  {(d.options ?? []).slice(0, 4).map((o, i) => (
-                    <button
-                      key={i}
-                      className="btn btn-sm"
-                      onClick={async () => {
-                        try {
-                          setDecisionError(null)
-                          await window.api.authorityResolve(d.id, o)
-                          refreshDecisions()
-                        } catch (error) {
-                          setDecisionError(error instanceof Error ? error.message : String(error))
-                        }
-                      }}
-                    >
-                      {String(o)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-            {decisionError && <div className="attachment-error">⚠️ {decisionError}</div>}
-          </div>
-        )}
 
         {deleteCandidate && (
           <div

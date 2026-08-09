@@ -674,7 +674,7 @@ describe('admission de la reprise automatique au démarrage', () => {
     const newTurnBranchAt = continuationSource.indexOf('if (!liveReattachment?.resumeExisting)')
     const closeAt = continuationSource.indexOf('durableLiveReattachment?.succeed(', newTurnBranchAt)
     const relaunchAt = continuationSource.indexOf(
-      'void relaunchResumableRun(latest)',
+      'await startupResumeQueue.enqueue(() => relaunchResumableRun(latest))',
       newTurnBranchAt
     )
     expect(closeAt).toBeGreaterThan(newTurnBranchAt)

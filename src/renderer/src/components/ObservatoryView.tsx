@@ -1459,12 +1459,12 @@ export function ObservatoryView({
             >
               <summary>
                 <div>
-                  <b>Autorité & mutations</b>
+                  <b>Ancienne autorité & mutations</b>
                   <small>
                     {authorityEvents.length} reçu{authorityEvents.length > 1 ? 's' : ''}
                   </small>
                 </div>
-                <span>Politique → décision → résolution</span>
+                <span>Historique antérieur à la politique unique</span>
               </summary>
               <div>
                 {authorityEvents.map((event) => {
@@ -1484,7 +1484,7 @@ export function ObservatoryView({
                           ? 'autorisée'
                           : receipt.decision === 'deny'
                             ? 'refusée'
-                            : 'en attente'
+                            : 'non résolue historiquement'
                   return (
                     <article key={event.id} data-decision={receipt.decision}>
                       <header>

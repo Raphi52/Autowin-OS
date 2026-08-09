@@ -70,7 +70,6 @@ describe('ConversationStore — fork', () => {
         provider: 'codex',
         messages: [{ role: 'user', content: 'u1', ts: 1, messageId: 'msg-3' }],
         workspaceId: 'workspace-conv-1',
-        authorityMode: 'auto',
         createdAt: 1,
         updatedAt: 1
       }
@@ -111,7 +110,6 @@ describe('ConversationStore — fork', () => {
           }
         ],
         workspaceId: `workspace-${sourceConversationId}`,
-        authorityMode: 'auto',
         createdAt: 1,
         updatedAt: 2
       }
@@ -150,7 +148,6 @@ describe('ConversationStore — fork', () => {
           }
         ],
         workspaceId: 'workspace-conv-1',
-        authorityMode: 'auto',
         createdAt: 1,
         updatedAt: 2
       }
@@ -176,7 +173,6 @@ describe('ConversationStore — fork', () => {
       provider: 'codex',
       messages: [{ role: 'user' as const, content, ts: 1, messageId: 'shared-id' }],
       workspaceId: `workspace-${id}`,
-      authorityMode: 'auto' as const,
       createdAt: 1,
       updatedAt: 1
     })
@@ -194,7 +190,6 @@ describe('ConversationStore — fork', () => {
       schemaVersion: 3 as const,
       category: 'codex' as const,
       provider: 'codex' as const,
-      authorityMode: 'auto' as const,
       createdAt: 1,
       updatedAt: 1
     }
@@ -247,7 +242,6 @@ describe('ConversationStore — fork', () => {
       schemaVersion: 3 as const,
       category: 'codex' as const,
       provider: 'codex' as const,
-      authorityMode: 'auto' as const,
       createdAt: 1,
       updatedAt: 1
     }
@@ -307,19 +301,17 @@ describe('ConversationStore — fork', () => {
     expect(store.get(id)!.messages.map((m) => m.content)).toEqual(['u1', 'a1', 'u2', 'a2'])
   })
 
-  it('reprend la catégorie, le provider et le mode d’autorité de la source', () => {
+  it('reprend la catégorie et le provider de la source', () => {
     const store = new ConversationStore(() => 1)
     const source = store.create({
       title: 'T',
       category: 'claude',
-      provider: 'claude',
-      authorityMode: 'manuel' as never
+      provider: 'claude'
     })
     store.append(source.id, { role: 'user', content: 'u1' })
     const forked = store.fork(source.id, store.get(source.id)!.messages[0].messageId!)
     expect(forked.category).toBe('claude')
     expect(forked.provider).toBe('claude')
-    expect(forked.authorityMode).toBe('manuel')
   })
 
   it('forker un fork n’empile pas les suffixes dans le titre', () => {

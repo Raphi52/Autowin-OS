@@ -522,7 +522,6 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
             category: provider as string,
             provider: provider as string
           })
-          await window.api.conversationsSetAuthorityMode(conv.id, 'ask')
           return { id: conv.id }
         },
         promptConversation: async (conv, _item, prompt) => {
@@ -583,7 +582,6 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       category: provider,
       provider
     })
-    await window.api.conversationsSetAuthorityMode(conv.id, 'ask')
     // On amène l'utilisateur SUR le Chat : préparer un prompt qu'il ne voit pas serait inutile.
     // Le main reste l'autorité de navigation (même chemin que la rail), puis le Chat pré-remplit.
     try {

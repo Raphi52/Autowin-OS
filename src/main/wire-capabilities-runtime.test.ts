@@ -12,7 +12,7 @@ describe('capability registry runtime gate', () => {
       (name) => name !== 'navigate'
     )
 
-    await expect(bus.exec('navigate', { tab: 'settings' }, undefined, 'auto')).resolves.toEqual({
+    await expect(bus.exec('navigate', { tab: 'settings' })).resolves.toEqual({
       ok: false,
       error: 'Capacité désactivée: navigate'
     })
@@ -23,7 +23,7 @@ describe('capability registry runtime gate', () => {
     const broadcast = vi.fn()
     const bus = new AppCommandBus({} as never, broadcast, undefined, undefined, () => true)
 
-    await expect(bus.exec('navigate', { tab: 'settings' }, undefined, 'auto')).resolves.toEqual({
+    await expect(bus.exec('navigate', { tab: 'settings' })).resolves.toEqual({
       ok: true,
       data: { tab: 'settings', section: undefined }
     })

@@ -20,7 +20,6 @@ export type TaskDestination =
       /** Modèle explicite de la tâche; absent sur les tâches historiques. */
       model?: string
       reasoningEffort?: ReasoningEffort
-      authorityMode?: 'plan' | 'ask' | 'auto'
       /** Conversation dédiée créée au premier déclenchement, puis réutilisée. */
       conversationId?: string
     }

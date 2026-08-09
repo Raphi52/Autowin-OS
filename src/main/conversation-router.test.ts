@@ -20,7 +20,6 @@ function conversation(messages: Conversation['messages']): Conversation {
     provider: 'codex',
     messages,
     workspaceId: 'workspace-conv-1',
-    authorityMode: 'auto',
     createdAt: 1,
     updatedAt: 1
   }
@@ -311,7 +310,6 @@ describe('ConversationRouteCoordinator', () => {
     const store = new ConversationStore(() => 10)
     const source = store.create({ title: 'Git', category: 'codex', provider: 'codex' })
     store.append(source.id, { role: 'user', content: 'Parlons du graphe Git' })
-    store.setAuthorityMode(source.id, 'ask')
     const decide = vi.fn().mockResolvedValue({
       route: 'new',
       confidence: 0.97,
@@ -336,7 +334,6 @@ describe('ConversationRouteCoordinator', () => {
       title: 'Mouse Move',
       category: 'codex',
       provider: 'codex',
-      authorityMode: 'ask',
       messages: []
     })
   })

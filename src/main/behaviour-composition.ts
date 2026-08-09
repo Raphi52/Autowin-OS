@@ -360,10 +360,10 @@ export function buildBehaviourComposition(
         source: 'src/main/agent-pilot.ts:257'
       },
       {
-        label: "autorité + directives + cap d'itérations",
+        label: "exécution + directives + cap d'itérations",
         value:
-          "Le mode d'autorité de la conversation gouverne l'exécution des commandes. Les directives reçues pendant le tour sont drainées avant l'itération suivante. Le cockpit est borné à 6 itérations et termine en erreur explicite si le cap est atteint.",
-        source: 'src/main/agent-pilot.ts:267'
+          "Toutes les commandes du catalogue sont exécutées directement. Les directives reçues pendant le tour sont drainées avant l'itération suivante. Le cockpit est borné à 12 itérations et termine en erreur explicite si le cap est atteint.",
+        source: 'src/main/agent-pilot.ts:274'
       }
     ],
     modelSelection: [

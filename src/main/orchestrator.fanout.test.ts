@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
 import { Orchestrator, type OrchestrationPhase } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
@@ -76,7 +75,6 @@ function makeOrchestrator(
     roles,
     cost,
     trust: new TrustLedger(),
-    authority: new AuthoritySas(),
     executionWorkspace: 'C:\\ws',
     worktrees: makeTestWorktrees('C:\\ws'),
     execPhases: [phase],
@@ -106,7 +104,6 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
       roles,
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       classifyPhases: () => ['frame', 'build'],
@@ -146,7 +143,6 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       classifyPhases: () => ['frame', 'build'],
@@ -193,7 +189,6 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
       roles,
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['terrain', 'build'],
@@ -234,7 +229,6 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
       roles,
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['terrain', 'build'],
@@ -343,7 +337,6 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
       roles,
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['frame']
@@ -370,7 +363,6 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
         roles,
         cost: new CostAggregator(),
         trust: new TrustLedger(),
-        authority: new AuthoritySas(),
         executionWorkspace: 'C:\\ws',
         worktrees: makeTestWorktrees('C:\\ws'),
         execPhases: [phase],
@@ -401,7 +393,6 @@ describe('Orchestrator — fan-out juge (quorum de vote)', () => {
       roles,
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['frame'],
@@ -477,7 +468,6 @@ describe('Orchestrator — fan-out exec : cas limites', () => {
       roles,
       cost,
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['frame'],
@@ -506,7 +496,6 @@ describe('Orchestrator — fan-out exec : cas limites', () => {
       roles,
       cost,
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['frame'],

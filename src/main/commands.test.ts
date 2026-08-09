@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import { AppCommandBus, isolateWatchdogPromptPaths } from './commands'
-import { AuthoritySas } from './authority/sas'
 import { APP_DESTINATIONS } from '../shared/navigation'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -57,7 +56,6 @@ function fakeOs(): any {
     },
     registry: { ids: () => ['claude'] },
     roles: { all: () => ({}) },
-    authority: new AuthoritySas(),
     runsWithGate: () => [],
     budget: () => ({ spent: 0 }),
     setRole: () => {
@@ -73,23 +71,6 @@ function fakeOs(): any {
     },
     chat: async () => ({ text: '', provider: 'claude', systemInjected: false }),
     calls
-  }
-}
-
-async function execApproved(
-  bus: AppCommandBus,
-  ...args: Parameters<AppCommandBus['exec']>
-): Promise<Awaited<ReturnType<AppCommandBus['exec']>>> {
-  const requested = await bus.exec(...args)
-  const pending = requested.data as { pendingApproval?: boolean; decisionId?: string } | undefined
-  if (!pending?.pendingApproval || !pending.decisionId) return requested
-  try {
-    const resolved = (await bus.resolveDecision(pending.decisionId, 'approve')) as {
-      data?: unknown
-    }
-    return { ok: true, data: resolved.data }
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) }
   }
 }
 
@@ -209,7 +190,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     const bus = new AppCommandBus(os, () => {})
     try {
       bus.setTraceStore(traceStore)
-      await bus.exec('orchestrate', { task: '/build corrige la typo' }, 'conv-1', 'auto')
+      await bus.exec('orchestrate', { task: '/build corrige la typo' }, 'conv-1')
       const events = traceStore.readConversation('conv-1')
       expect(events.some((event) => event.run?.stage === 'workspace')).toBe(true)
       expect(
@@ -243,11 +224,37 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
       'orchestrate',
       { task: '/build corrige puis teste' },
       'conv-1',
-      'auto',
       binding
     )
 
     expect(receivedBinding).toEqual(binding)
+  })
+
+  it("respecte la phase build choisie pour une correction bornée qui interdit le refactoring", async () => {
+    const os = fakeOs()
+    let receivedTask = ''
+    os.runTask = async (...args: unknown[]) => {
+      receivedTask = String(args[0] ?? '')
+      return {
+        gateBlocked: false,
+        gateReasons: [],
+        valid: true,
+        costUsd: 0,
+        result: '',
+        phaseOutputs: []
+      }
+    }
+
+    await new AppCommandBus(os, () => {}).exec(
+      'orchestrate',
+      {
+        task: 'Implémente les trois corrections ciblées. Ne pas refactorer ChatView.',
+        phase: 'build'
+      },
+      'conv-1'
+    )
+
+    expect(receivedTask).toMatch(/^\/build /)
   })
 
   it('collecte le contexte substantiel avant de déléguer au pipeline', async () => {
@@ -269,8 +276,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     const result = await new AppCommandBus(os, () => {}).exec(
       'orchestrate',
       { task: 'implémenter une évolution de workflow' },
-      'conv-1',
-      'auto'
+      'conv-1'
     )
     expect(result.ok).toBe(true)
     expect(collected).toMatch(/^\[COLLECTE DE CONTEXTE — effectuée avant RUN.md et délégation\]/)
@@ -306,8 +312,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     const result = await new AppCommandBus(os, () => {}).exec(
       'orchestrate',
       { task: '/build corrige la typo' },
-      'conv-1',
-      'auto'
+      'conv-1'
     )
 
     expect(result).toMatchObject({
@@ -332,10 +337,10 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
         release = resolve
       })
     const bus = new AppCommandBus(os, () => {})
-    const first = bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1', 'auto')
+    const first = bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1')
     await vi.waitFor(() => expect(os.calls.runTask).toBe(1), { timeout: 10_000 })
 
-    const second = await bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1', 'auto')
+    const second = await bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1')
 
     expect(second).toMatchObject({ ok: true, data: { reused: true, status: 'running' } })
     expect(os.calls.runTask).toBe(1)
@@ -373,9 +378,9 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     const claude = { provider: 'claude', model: 'claude-sonnet' }
     const codex = { provider: 'codex', model: 'gpt-5.6-sol' }
 
-    const first = bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1', 'auto', claude)
+    const first = bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1', claude)
     await vi.waitFor(() => expect(os.calls.runTask).toBe(1), { timeout: 5_000 })
-    const second = bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1', 'auto', codex)
+    const second = bus.exec('orchestrate', { task: 'corrige puis teste' }, 'conv-1', codex)
 
     let waitFailure: unknown
     try {
@@ -423,8 +428,8 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     }
     const bus = new AppCommandBus(os, () => {})
 
-    const oldRun = bus.exec('orchestrate', { task: 'ancien' }, 'conv-1', 'auto')
-    const newRun = bus.exec('orchestrate', { task: 'nouveau' }, 'conv-1', 'auto')
+    const oldRun = bus.exec('orchestrate', { task: 'ancien' }, 'conv-1')
+    const newRun = bus.exec('orchestrate', { task: 'nouveau' }, 'conv-1')
     await vi.waitFor(() => expect(signals.size).toBe(2), { timeout: 10_000 })
 
     first.resolve({
@@ -498,7 +503,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
   })
 })
 
-describe('AppCommandBus authority policy', () => {
+describe('AppCommandBus command execution policy', () => {
   it('trace aussi une recherche Brain automatique sans résultat', async () => {
     const previousAppData = process.env.APPDATA
     const appData = mkdtempSync(join(tmpdir(), 'autowin-empty-brain-trace-'))
@@ -529,7 +534,7 @@ describe('AppCommandBus authority policy', () => {
           phaseOutputs: []
         }
       }
-      await new AppCommandBus(os, () => {}).exec('orchestrate', { task: 'ping' }, 'conv-1', 'auto')
+      await new AppCommandBus(os, () => {}).exec('orchestrate', { task: 'ping' }, 'conv-1')
 
       expect(readBrainTraces('conv-1')).toEqual([
         expect.objectContaining({
@@ -574,7 +579,6 @@ describe('AppCommandBus authority policy', () => {
         'orchestrate',
         { task: 'ping' },
         'conv-1',
-        'auto',
         undefined,
         'turn-failed'
       )
@@ -614,12 +618,10 @@ describe('AppCommandBus authority policy', () => {
       }
       const bus = new AppCommandBus(os, () => {})
 
-      const edit = await execApproved(
-        bus,
+      const edit = await bus.exec(
         'edit_file',
         { path: 'target.txt', oldText: 'avant', newText: 'après' },
         'conv-1',
-        'auto',
         undefined,
         'turn-1'
       )
@@ -627,7 +629,6 @@ describe('AppCommandBus authority policy', () => {
         'brain_query',
         { question: 'quelle décision ?' },
         'conv-1',
-        'ask',
         undefined,
         'turn-1'
       )
@@ -680,12 +681,10 @@ describe('AppCommandBus authority policy', () => {
       }
       const bus = new AppCommandBus(os, () => {})
 
-      await execApproved(
-        bus,
+      await bus.exec(
         'edit_file',
         { path: 'target.txt', oldText: 'needle', newText: 'ERROR future' },
         'conv-final',
-        'auto',
         undefined,
         'turn-final'
       )
@@ -771,8 +770,7 @@ describe('AppCommandBus authority policy', () => {
       const response = await bus.exec(
         'orchestrate',
         { task: 'corrige le log', causalWatchPaths: [join(workspace, 'logs/app.log')] },
-        'conv-1',
-        'auto'
+        'conv-1'
       )
       const turnId = (response.data as { turnId: string }).turnId
       const mutations = readConversationTurnFileMutations('conv-1', turnId)
@@ -816,21 +814,17 @@ describe('AppCommandBus authority policy', () => {
       const bus = new AppCommandBus(os, () => {})
 
       const [first, second] = await Promise.all([
-        execApproved(
-          bus,
+        bus.exec(
           'edit_file',
           { path: 'target.txt', oldText: 'zéro', newText: 'un' },
           'conv-1',
-          'auto',
           undefined,
           'turn-1'
         ),
-        execApproved(
-          bus,
+        bus.exec(
           'edit_file',
           { path: 'target.txt', oldText: 'un', newText: 'deux' },
           'conv-2',
-          'auto',
           undefined,
           'turn-2'
         )
@@ -916,188 +910,21 @@ describe('AppCommandBus authority policy', () => {
     }
   })
 
-  it('launches ordinary orchestration immediately even when the conversation is in Ask mode', async () => {
+  it('launches ordinary orchestration immediately', async () => {
     const os = fakeOs()
     const bus = new AppCommandBus(os, () => {})
 
     const result = await bus.exec(
       'orchestrate',
       { task: 'corrige le clic extérieur puis teste' },
-      'conv-1',
-      'ask'
+      'conv-1'
     )
 
     expect(result).toMatchObject({ ok: true })
     expect(os.calls.runTask).toBe(1)
-    expect(os.authority.pending()).toHaveLength(0)
   })
 
-  it('reuses the pending decision for an identical destructive action', async () => {
-    const os = fakeOs()
-    const bus = new AppCommandBus(os, () => {})
-
-    const first = await bus.exec('remove_conversation', { id: 'conv-1' })
-    const second = await bus.exec('remove_conversation', { id: 'conv-1' })
-
-    expect((second.data as { decisionId: string }).decisionId).toBe(
-      (first.data as { decisionId: string }).decisionId
-    )
-    expect(os.authority.pending()).toHaveLength(1)
-  })
-
-  it('scope la deduplication des approbations par conversation mais pas par tour', async () => {
-    const os = fakeOs()
-    const bus = new AppCommandBus(os, () => {})
-
-    const first = await bus.exec(
-      'remove_conversation',
-      { id: 'conv-1' },
-      'scope-a',
-      'ask',
-      undefined,
-      'turn-a'
-    )
-    const retry = await bus.exec(
-      'remove_conversation',
-      { id: 'conv-1' },
-      'scope-a',
-      'ask',
-      undefined,
-      'turn-b'
-    )
-    const otherConversation = await bus.exec(
-      'remove_conversation',
-      { id: 'conv-1' },
-      'scope-b',
-      'ask',
-      undefined,
-      'turn-c'
-    )
-
-    expect((retry.data as { decisionId: string }).decisionId).toBe(
-      (first.data as { decisionId: string }).decisionId
-    )
-    expect((otherConversation.data as { decisionId: string }).decisionId).not.toBe(
-      (first.data as { decisionId: string }).decisionId
-    )
-  })
-
-  it('redige recursivement les secrets des recus persistants', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'autowin-authority-redaction-'))
-    try {
-      const store = new TraceStore(root)
-      const bus = new AppCommandBus(fakeOs(), () => {})
-      bus.setTraceStore(store)
-      await bus.exec(
-        'remove_conversation',
-        {
-          id: 'conv-1',
-          description: 'Authorization: Bearer top-secret-value',
-          nested: { token: 'nested-secret', note: 'password=also-secret' }
-        },
-        'conv-1',
-        'ask',
-        undefined,
-        'turn-secret'
-      )
-
-      const serialized = JSON.stringify(store.readConversation('conv-1'))
-      expect(serialized).not.toContain('top-secret-value')
-      expect(serialized).not.toContain('nested-secret')
-      expect(serialized).not.toContain('also-secret')
-      expect(serialized).toContain('[REDACTED]')
-    } finally {
-      rmSync(root, { recursive: true, force: true })
-    }
-  })
-
-  it('ne persiste jamais le contenu arbitraire transmis a edit_file', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'autowin-authority-edit-redaction-'))
-    try {
-      const store = new TraceStore(root)
-      const bus = new AppCommandBus(fakeOs(), () => {})
-      bus.setTraceStore(store)
-      const oldText = [
-        'command --token "CLI-SECRET-123"',
-        '<password>XML-SECRET-456</password>',
-        'token: |-\n  YAML-SECRET-789',
-        'token!: string = "TS-SECRET-987"'
-      ].join('\n')
-
-      await bus.exec(
-        'edit_file',
-        { path: 'src/example.ts', oldText, newText: `replacement\n${oldText}` },
-        'conv-edit-secret',
-        'ask',
-        undefined,
-        'turn-edit-secret'
-      )
-
-      const serialized = JSON.stringify(store.readConversation('conv-edit-secret'))
-      expect(serialized).toContain('src/example.ts')
-      for (const secret of [
-        'CLI-SECRET-123',
-        'XML-SECRET-456',
-        'YAML-SECRET-789',
-        'TS-SECRET-987'
-      ]) {
-        expect(serialized).not.toContain(secret)
-      }
-      expect(serialized).toContain('[REDACTED]')
-    } finally {
-      rmSync(root, { recursive: true, force: true })
-    }
-  })
-
-  it('persiste failed si une action approuvee echoue apres la decision humaine', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'autowin-authority-failure-'))
-    try {
-      const os = fakeOs()
-      os.conversations.remove = () => {
-        throw new Error('suppression impossible')
-      }
-      const store = new TraceStore(root)
-      const bus = new AppCommandBus(os, () => {})
-      bus.setTraceStore(store)
-      const requested = await bus.exec(
-        'remove_conversation',
-        { id: 'conv-1' },
-        'conv-1',
-        'ask',
-        undefined,
-        'turn-fail'
-      )
-
-      await expect(
-        bus.resolveDecision((requested.data as { decisionId: string }).decisionId, 'approve')
-      ).rejects.toThrow('suppression impossible')
-      expect(store.readConversation('conv-1').map((event) => event.status)).toEqual([
-        'pending',
-        'failed'
-      ])
-      expect(store.readConversation('conv-1')[1]?.authority).toMatchObject({
-        resolution: 'approve',
-        resolvedBy: 'user'
-      })
-    } finally {
-      rmSync(root, { recursive: true, force: true })
-    }
-  })
-
-  it('does not merge destructive decisions whose targets differ', async () => {
-    const os = fakeOs()
-    const bus = new AppCommandBus(os, () => {})
-
-    const first = await bus.exec('remove_conversation', { id: 'conv-1' })
-    const second = await bus.exec('remove_conversation', { id: 'conv-2' })
-
-    expect((second.data as { decisionId: string }).decisionId).not.toBe(
-      (first.data as { decisionId: string }).decisionId
-    )
-    expect(os.authority.pending()).toHaveLength(2)
-  })
-
-  it('publie les destinations canoniques et autorise la navigation en mode Plan', async () => {
+  it('publie les destinations canoniques et autorise la navigation', async () => {
     const events: Array<{ type: string; tab?: string }> = []
     const bus = new AppCommandBus(fakeOs(), (event) => events.push(event))
     const navigate = bus.catalog().find((tool) => tool.name === 'navigate')
@@ -1105,7 +932,7 @@ describe('AppCommandBus authority policy', () => {
     expect(navigate?.args.tab).toBe(APP_DESTINATIONS.map(({ id }) => id).join('|'))
     expect(navigate?.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false })
 
-    const result = await bus.exec('navigate', { tab: 'router' }, undefined, 'plan')
+    const result = await bus.exec('navigate', { tab: 'router' })
     expect(result).toMatchObject({
       ok: true,
       data: { tab: 'agent-studio', section: 'routing' }
@@ -1140,9 +967,7 @@ describe('AppCommandBus authority policy', () => {
         openWorldHint: false
       }
     })
-    await expect(
-      bus.exec('graphify', { path: 'packages/api' }, undefined, 'auto')
-    ).resolves.toMatchObject({
+    await expect(bus.exec('graphify', { path: 'packages/api' })).resolves.toMatchObject({
       ok: true,
       data: { action: 'updated', nodes: 42, links: 84 }
     })
@@ -1171,12 +996,10 @@ describe('AppCommandBus authority policy', () => {
       }
       const bus = new AppCommandBus(os, () => {})
 
-      const result = await execApproved(
-        bus,
+      const result = await bus.exec(
         'edit_file',
         { path: 'note.txt', oldText: 'avant', newText: 'après' },
-        'conv-1',
-        'auto'
+        'conv-1'
       )
 
       expect(result).toMatchObject({ ok: true, data: { allowed: true } })
@@ -1223,12 +1046,10 @@ describe('AppCommandBus authority policy', () => {
       }
       const bus = new AppCommandBus(os, () => {})
 
-      const result = await execApproved(
-        bus,
+      const result = await bus.exec(
         'edit_file',
         { path: 'code.ts', oldText: 'export const ok = 1', newText: 'export const =' },
-        'conv-1',
-        'auto'
+        'conv-1'
       )
 
       expect(result).toMatchObject({ ok: false })
@@ -1273,12 +1094,10 @@ describe('AppCommandBus authority policy', () => {
       os.worktrees = coordinator
       const bus = new AppCommandBus(os, () => {})
 
-      const result = await execApproved(
-        bus,
+      const result = await bus.exec(
         'edit_file',
         { path: 'code.ts', oldText: 'export const ok = 1', newText: 'export const =' },
-        'conv-1',
-        'auto'
+        'conv-1'
       )
 
       expect(result).toMatchObject({ ok: false })
@@ -1331,12 +1150,10 @@ describe('AppCommandBus authority policy', () => {
       os.worktrees = coordinator
       const bus = new AppCommandBus(os, () => {})
 
-      const result = await execApproved(
-        bus,
+      const result = await bus.exec(
         'edit_file',
         { path: 'code.ts', oldText: 'export const ok = 1', newText: 'export const ok = 2' },
-        'conv-1',
-        'auto'
+        'conv-1'
       )
 
       expect(result).toMatchObject({ ok: true, data: { allowed: true } })
@@ -1373,7 +1190,7 @@ describe('AppCommandBus authority policy', () => {
     os.worktrees = undefined
     const bus = new AppCommandBus(os, () => {}, undefined, graphify)
 
-    await expect(bus.exec('graphify', {}, 'conv-1', 'auto')).resolves.toMatchObject({
+    await expect(bus.exec('graphify', {}, 'conv-1')).resolves.toMatchObject({
       ok: false,
       error: expect.stringContaining('isolation')
     })
@@ -1410,7 +1227,7 @@ describe('AppCommandBus authority policy', () => {
       }
       const bus = new AppCommandBus(os, () => {}, undefined, graphify)
 
-      const result = await bus.exec('graphify', {}, 'conv-1', 'auto')
+      const result = await bus.exec('graphify', {}, 'conv-1')
       const graphPath = (result.data as { graph: string }).graph
 
       expect(result.ok).toBe(true)
@@ -1439,103 +1256,14 @@ describe('AppCommandBus authority policy', () => {
     expect(prompt).toMatchObject({ tab: expect.any(String), providers: expect.any(Array) })
   })
 
-  it('enforces conversation Plan and Auto modes before any mutation', async () => {
+  it('executes destructive commands immediately without an authority decision', async () => {
     const os = fakeOs()
     const bus = new AppCommandBus(os, () => {})
 
-    const planned = await bus.exec('remove_conversation', { id: 'conv-1' }, 'conv-1', 'plan')
-    expect(planned).toMatchObject({ ok: false })
-    expect(os.conversations.get('conv-1')).toBeTruthy()
-    expect(os.authority.pending()).toHaveLength(0)
+    const result = await bus.exec('remove_conversation', { id: 'conv-1' }, 'conv-1')
 
-    const automatic = await bus.exec('remove_conversation', { id: 'conv-1' }, 'conv-1', 'auto')
-    expect(automatic).toMatchObject({ ok: true, data: { pendingApproval: true } })
-    expect(os.conversations.get('conv-1')).toBeTruthy()
-  })
-
-  it('autorise get_state en mode Plan et le trace comme lecture seule', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'autowin-readonly-authority-'))
-    try {
-      const store = new TraceStore(root)
-      const bus = new AppCommandBus(fakeOs(), () => {})
-      bus.setTraceStore(store)
-
-      const result = await bus.exec('get_state', {}, 'conv-1', 'plan', undefined, 'turn-read')
-
-      expect(result.ok).toBe(true)
-      expect(store.readConversation('conv-1')[0]?.authority).toMatchObject({
-        mode: 'plan',
-        mutates: false,
-        decision: 'allow'
-      })
-    } finally {
-      rmSync(root, { recursive: true, force: true })
-    }
-  })
-
-  it('defers deletion until human approval and consumes it once', async () => {
-    const os = fakeOs()
-    const bus = new AppCommandBus(os, () => {})
-    const requested = await bus.exec('remove_conversation', { id: 'conv-1' })
-    const decisionId = (requested.data as { decisionId: string }).decisionId
-
-    expect(requested.ok).toBe(true)
-    expect(os.conversations.get('conv-1')).toBeTruthy()
-    await bus.resolveDecision(decisionId, 'approve')
+    expect(result).toMatchObject({ ok: true, data: { removed: true } })
     expect(os.conversations.get('conv-1')).toBeUndefined()
-    await expect(bus.resolveDecision(decisionId, 'approve')).resolves.toMatchObject({
-      id: decisionId,
-      choice: 'approve'
-    })
-  })
-
-  it('persiste la demande et la résolution d’autorité dans la trace de la conversation', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'autowin-authority-trace-'))
-    try {
-      const os = fakeOs()
-      const store = new TraceStore(root)
-      const bus = new AppCommandBus(os, () => {})
-      bus.setTraceStore(store)
-
-      const requested = await bus.exec(
-        'remove_conversation',
-        { id: 'conv-1' },
-        'conv-1',
-        'ask',
-        undefined,
-        'turn-1'
-      )
-      const decisionId = (requested.data as { decisionId: string }).decisionId
-      const pending = store.readConversation('conv-1')
-
-      expect(pending).toHaveLength(1)
-      expect(pending[0]).toMatchObject({
-        type: 'decision',
-        status: 'pending',
-        authority: {
-          mode: 'ask',
-          commandAuthority: 'destructive',
-          mutates: true,
-          decision: 'confirm',
-          decisionId
-        }
-      })
-
-      await bus.resolveDecision(decisionId, 'cancel')
-      const persisted = new TraceStore(root).readConversation('conv-1')
-      expect(persisted).toHaveLength(2)
-      expect(persisted[1]).toMatchObject({
-        parentId: pending[0].id,
-        status: 'cancelled',
-        authority: {
-          decisionId,
-          resolution: 'cancel',
-          resolvedBy: 'user'
-        }
-      })
-    } finally {
-      rmSync(root, { recursive: true, force: true })
-    }
   })
 
   it('does not expose decision resolution to the model and annotates risk', () => {
@@ -1547,9 +1275,9 @@ describe('AppCommandBus authority policy', () => {
       destructiveHint: true,
       readOnlyHint: false
     })
-    expect(catalogue.find((tool) => tool.name === 'edit_file')).toMatchObject({
-      authority: 'destructive',
-      annotations: { destructiveHint: true, readOnlyHint: false }
+    expect(catalogue.find((tool) => tool.name === 'edit_file')?.annotations).toMatchObject({
+      destructiveHint: true,
+      readOnlyHint: false
     })
     expect(catalogue.every((tool) => tool.annotations !== undefined)).toBe(true)
     expect(catalogue.find((tool) => tool.name === 'get_state')?.annotations).toMatchObject({
@@ -1562,7 +1290,7 @@ describe('AppCommandBus authority policy', () => {
     expect(catalogue.some((tool) => tool.name === 'set_role')).toBe(false)
   })
 
-  it('runs reversible actions immediately and reserves approval for deletion', async () => {
+  it('runs reversible and destructive actions immediately', async () => {
     const os = fakeOs()
     const bus = new AppCommandBus(os, () => {})
     bus.activeConversationId = 'conv-1'
@@ -1571,9 +1299,33 @@ describe('AppCommandBus authority policy', () => {
     const deletion = await bus.exec('remove_conversation', { id: 'conv-1' })
 
     expect(os.calls).toMatchObject({ setRole: 0, attachRun: 1, runTask: 1 })
-    expect(os.authority.pending()).toHaveLength(1)
-    expect(deletion).toMatchObject({ ok: true, data: { pendingApproval: true } })
-    expect(os.conversations.get('conv-1')).toBeTruthy()
+    expect(deletion).toMatchObject({ ok: true, data: { removed: true } })
+    expect(os.conversations.get('conv-1')).toBeUndefined()
+  })
+
+  it('redacts sensitive command arguments on success and failure without an approval layer', async () => {
+    const traces: Array<{ name: string; args: Record<string, unknown>; ok: boolean }> = []
+    const bus = new AppCommandBus(fakeOs(), () => {})
+    bus.trace = (name, args, ok) => traces.push({ name, args, ok })
+
+    await bus.exec('orchestrate', { task: 'use token=top-secret' })
+    await bus.exec('edit_file', {
+      path: 'missing.txt',
+      oldText: 'password=before',
+      newText: 'password=after'
+    })
+
+    expect(traces).toContainEqual({
+      name: 'orchestrate',
+      args: { task: '[redacted]' },
+      ok: true
+    })
+    expect(traces).toContainEqual({
+      name: 'edit_file',
+      args: { path: 'missing.txt', oldText: '[REDACTED]', newText: '[REDACTED]' },
+      ok: false
+    })
+    expect(JSON.stringify(traces)).not.toMatch(/top-secret|password=before|password=after/)
   })
 
   it('refuse la commande legacy set_role sans muter un rôle caché', async () => {
@@ -1587,6 +1339,49 @@ describe('AppCommandBus authority policy', () => {
 
     expect(result).toMatchObject({ ok: false, error: 'Commande inconnue: set_role' })
     expect(os.calls.setRole).toBe(0)
+  })
+
+  it('expose et execute directement observation et gestes desktop injectes', async () => {
+    const image = {
+      name: 'desktop.jpg',
+      mimeType: 'image/jpeg',
+      size: 3,
+      kind: 'image' as const,
+      content: 'YWJj'
+    }
+    const desktop = {
+      observe: vi.fn().mockResolvedValue({
+        data: { width: 1280, height: 720, originX: 0, originY: 0 },
+        attachment: image
+      }),
+      act: vi.fn().mockResolvedValue({ executed: 1 })
+    }
+    const bus = new AppCommandBus(
+      fakeOs(),
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      desktop as never
+    )
+
+    expect(bus.catalog().map(({ name }) => name)).toEqual(
+      expect.arrayContaining(['desktop_observe', 'desktop_act'])
+    )
+    await expect(bus.exec('desktop_observe')).resolves.toMatchObject({
+      ok: true,
+      data: { width: 1280, height: 720 },
+      attachments: [image]
+    })
+    await expect(
+      bus.exec('desktop_act', { actions: [{ type: 'click', x: 10, y: 20 }] })
+    ).resolves.toMatchObject({ ok: true, data: { executed: 1 } })
+    expect(desktop.act).toHaveBeenCalledWith([{ type: 'click', x: 10, y: 20 }])
   })
 
   it('republie une fin provider tardive dans la trace et le graphe du run', async () => {
@@ -1630,8 +1425,7 @@ describe('AppCommandBus authority policy', () => {
       const result = await bus.exec(
         'orchestrate',
         { task: '/build refactorer le workflow de securite complet' },
-        'conv-1',
-        'auto'
+        'conv-1'
       )
       const runPath = (result.data as { runPath?: string } | undefined)?.runPath
       expect(publishLateUsage).toBeTypeOf('function')
@@ -1694,8 +1488,7 @@ describe('AppCommandBus authority policy', () => {
     const result = await new AppCommandBus(os, () => {}).exec(
       'orchestrate',
       { task: '/build corrige la typo' },
-      'conv-1',
-      'auto'
+      'conv-1'
     )
 
     expect(result).toMatchObject({ ok: false })
@@ -1735,37 +1528,10 @@ describe('AppCommandBus authority policy', () => {
     await new AppCommandBus(os, () => {}).exec(
       'orchestrate',
       { task: '/build corrige la typo' },
-      'conv-1',
-      'auto'
+      'conv-1'
     )
 
     expect(forget).toHaveBeenCalledTimes(1)
     expect(forget).toHaveBeenCalledWith('run-admitted')
-  })
-
-  it('traces choice and redacted result, then cancels expiry without mutation', async () => {
-    let now = 0
-    const os = fakeOs()
-    os.authority = new AuthoritySas(() => now)
-    const entries: Array<{ name: string; args: Record<string, unknown>; ok: boolean }> = []
-    const bus = new AppCommandBus(os, () => {})
-    bus.trace = (name, args, ok) => entries.push({ name, args, ok })
-    await bus.exec('orchestrate', { task: 'Bearer top-secret' })
-    expect(entries).toContainEqual(
-      expect.objectContaining({ name: 'orchestrate', args: { task: '[redacted]' }, ok: true })
-    )
-    const expired = await bus.exec('remove_conversation', { id: 'conv-1' })
-    now = 15 * 60_000
-    await expect(
-      bus.resolveDecision((expired.data as any).decisionId, 'approve')
-    ).resolves.toMatchObject({ choice: 'cancel', by: 'timeout-default' })
-    expect(os.conversations.get('conv-1')).toBeTruthy()
-
-    const swept = await bus.exec('remove_conversation', { id: 'conv-1' })
-    now += 15 * 60_000
-    expect(bus.sweepExpired()).toHaveLength(1)
-    expect(entries).toContainEqual(expect.objectContaining({ name: 'authority_decision' }))
-    await expect(bus.resolveDecision((swept.data as any).decisionId, 'approve')).rejects.toThrow()
-    expect(os.conversations.get('conv-1')).toBeTruthy()
   })
 })

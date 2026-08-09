@@ -51,6 +51,12 @@ export class TaskStore {
     this.alerts.clear()
     for (const task of snapshot.tasks) {
       const hydrated = structuredClone(task)
+      if (hydrated.destination.kind === 'new') {
+        // Compatibilite legacy uniquement : les anciens snapshots portaient ce champ,
+        // qui n'existe plus dans les types ni dans le comportement runtime.
+        delete (hydrated.destination as typeof hydrated.destination & Record<string, unknown>)
+          .authorityMode
+      }
       if (hydrated.watchdog) {
         hydrated.watchdog.guards = {
           ...DEFAULT_WATCHDOG_GUARDS,

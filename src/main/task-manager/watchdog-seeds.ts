@@ -24,9 +24,8 @@ export const AUTO_KAIZEN_SEED_ID = 'auto-kaizen-v1'
  * pour toute autre regle, et son ACTION est l'orchestration — donc l'analyse, le correctif et la
  * VERIFICATION (gate a preuve + juge) viennent du pipeline au lieu d'etre redeveloppees.
  *
- * Autorite `plan` au depart, DELIBEREMENT : une regle qui se declenche seule et qui ecrit seule est
- * exactement le cas ou un reglage par defaut ne doit rien s'autoriser. L'utilisateur qui veut la
- * reparation automatique la passe en `auto` lui-meme, en connaissance de cause.
+ * Une regle qui se declenche seule peut agir directement ; ses effets restent observables et bornes
+ * par les gates de preuve et les gardes du pipeline.
  */
 export function autoKaizenSeed(): ScheduledTaskInput {
   return {
@@ -53,8 +52,7 @@ export function autoKaizenSeed(): ScheduledTaskInput {
       kind: 'new',
       title: 'Auto-kaizen',
       category: 'Qualite',
-      provider: 'claude',
-      authorityMode: 'plan'
+      provider: 'claude'
     },
     watchdog: {
       source: {

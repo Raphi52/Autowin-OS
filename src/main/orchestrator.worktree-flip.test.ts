@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
 import { Orchestrator, type RunWorktrees } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
@@ -75,7 +74,6 @@ function makeOrchestrator(worktrees?: RunWorktrees): {
     roles,
     cost: new CostAggregator(),
     trust: new TrustLedger(),
-    authority: new AuthoritySas(),
     executionWorkspace: 'C:\\base',
     worktrees
   })
@@ -166,7 +164,6 @@ describe('Orchestrator — flip live worktree', () => {
         roles,
         cost: new CostAggregator(),
         trust: new TrustLedger(),
-        authority: new AuthoritySas(),
         executionWorkspace: base,
         worktrees: {
           begin: () => worktree,
@@ -291,7 +288,6 @@ describe('Orchestrator — flip live worktree', () => {
         roles,
         cost: new CostAggregator(),
         trust: new TrustLedger(),
-        authority: new AuthoritySas(),
         executionWorkspace: base,
         worktrees: futureWorktrees
       })
@@ -387,7 +383,6 @@ describe('Orchestrator — flip live worktree', () => {
         roles,
         cost: new CostAggregator(),
         trust: new TrustLedger(),
-        authority: new AuthoritySas(),
         executionWorkspace: base,
         worktrees: {
           begin: () => worktree,
@@ -612,7 +607,6 @@ describe('Orchestrator — flip live worktree', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\base',
       worktrees: { begin: () => 'C:\\wt\\run-1', end }
     })
@@ -759,7 +753,6 @@ describe('Orchestrator — flip live worktree', () => {
         }),
         cost: new CostAggregator(),
         trust: new TrustLedger(),
-        authority: new AuthoritySas(),
         executionWorkspace: 'C:\\base',
         worktrees: {
           begin: () => 'C:\\wt\\run-1',
@@ -798,7 +791,6 @@ describe('Orchestrator — flip live worktree', () => {
         }),
         cost: new CostAggregator(),
         trust: new TrustLedger(),
-        authority: new AuthoritySas(),
         executionWorkspace: 'C:\\base',
         hooks,
         worktrees: {
@@ -836,7 +828,6 @@ describe('Orchestrator — flip live worktree', () => {
         }),
         cost: new CostAggregator(),
         trust: new TrustLedger(),
-        authority: new AuthoritySas(),
         executionWorkspace: 'C:\\base',
         worktrees: { begin: () => 'C:\\wt\\run-1', end }
       })
@@ -899,7 +890,6 @@ function orchestratorReportingPaths(worktreeCwd: string, worktrees: RunWorktrees
     }),
     cost: new CostAggregator(),
     trust: new TrustLedger(),
-    authority: new AuthoritySas(),
     executionWorkspace: 'C:\\base',
     worktrees
   })

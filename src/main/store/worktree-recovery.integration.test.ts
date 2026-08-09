@@ -422,7 +422,10 @@ describe('récupération des worktrees après redémarrage', () => {
 
   it('nettoie une copie qui ne contient que des sorties régénérables', () => {
     const repo = tempRepo()
-    writeFileSync(join(repo, '.gitignore'), 'node_modules\nout\n.eslintcache\n')
+    writeFileSync(
+      join(repo, '.gitignore'),
+      'node_modules\nout\n.eslintcache\n*.tsbuildinfo\n'
+    )
     git(repo, 'add', '.gitignore')
     git(repo, 'commit', '-q', '-m', 'ignore generated')
     const current = manager(repo)
@@ -432,6 +435,7 @@ describe('récupération des worktrees après redémarrage', () => {
     writeFileSync(join(path, 'node_modules', 'pkg', 'index.js'), 'generated\n')
     writeFileSync(join(path, 'out', 'bundle.js'), 'generated\n')
     writeFileSync(join(path, '.eslintcache'), 'generated\n')
+    writeFileSync(join(path, 'tsconfig.web.tsbuildinfo'), 'generated\n')
 
     expect(current.manager.finalize('run-generated')).toMatchObject({ outcome: 'nothing' })
     expect(current.manager.listAgentIds()).toEqual([])

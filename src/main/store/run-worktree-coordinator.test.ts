@@ -134,6 +134,72 @@ describe('RunWorktreeCoordinator (flip live)', () => {
     expect(co.activity()[0]).toMatchObject({ agentId: 'run-1', state: 'working' })
   })
 
+  it('persiste un contexte complet avant la preparation asynchrone du bureau', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-async-begin-'))
+    try {
+      const runId = 'run-async-begin'
+      const worktreePath = join(root, `agent__${runId}`)
+      const context = {
+        workspacePath: root,
+        worktreePath,
+        baseBranch: 'main',
+        baseSha: TEST_SHA
+      }
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      const prepareAsync = vi.fn(async () => ({ context, path: worktreePath }))
+      const coordinator = new RunWorktreeCoordinator({
+        manager: {
+          ...fakeManager({ describe: () => context }),
+          describeAsync: vi.fn(async () => context),
+          prepareAsync
+        },
+        stateStore,
+        nowFn: () => 10
+      })
+
+      await expect(coordinator.beginAsync(runId, 'Builder', true)).resolves.toBe(worktreePath)
+      expect(prepareAsync).toHaveBeenCalledWith(runId, context)
+      expect(stateStore.get(runId)).toMatchObject({
+        runId,
+        worktreePath,
+        baseBranch: 'main',
+        baseSha: TEST_SHA,
+        verdict: 'running'
+      })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('ne masque pas une erreur de description asynchrone par un manifeste vide', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-async-describe-error-'))
+    try {
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      const coordinator = new RunWorktreeCoordinator({
+        manager: {
+          ...fakeManager(),
+          describeAsync: vi.fn(async () => {
+            throw new Error('description Git indisponible')
+          }),
+          prepareAsync: vi.fn()
+        },
+        stateStore,
+        nowFn: () => 10
+      })
+
+      await expect(coordinator.beginAsync('run-describe-error', 'Builder', true)).rejects.toThrow(
+        'description Git indisponible'
+      )
+      expect(stateStore.get('run-describe-error')).toBeUndefined()
+      expect(coordinator.activity()[0]).toMatchObject({
+        agentId: 'run-describe-error',
+        state: 'blocked'
+      })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('impose le SHA du checkpoint a la copie au lieu de relire la branche courante', () => {
     const acquire = vi.fn((id: string) => `/wt/${id}`)
     const co = new RunWorktreeCoordinator({ manager: fakeManager({ acquire }), nowFn: () => 1 })
@@ -608,6 +674,38 @@ describe('RunWorktreeCoordinator (flip live)', () => {
       publication: 'complete'
     })
     expect(finalize).toHaveBeenCalledTimes(7)
+  })
+
+  it("réessaie manuellement une publication verte bloquée après correction de l'environnement", () => {
+    const finalize = vi
+      .fn<(id: string) => FinalizeResult>()
+      .mockReturnValueOnce({
+        outcome: 'blocked',
+        agentId: 'run-environment-fixed',
+        files: ['tsconfig.web.tsbuildinfo'],
+        reason: 'merge-failed',
+        detail: 'La copie contient des fichiers ignorés non régénérables.'
+      })
+      .mockReturnValueOnce({
+        outcome: 'merged',
+        agentId: 'run-environment-fixed',
+        committed: true
+      })
+    const co = new RunWorktreeCoordinator({ manager: fakeManager({ finalize }), nowFn: () => 9 })
+    co.begin('run-environment-fixed', 'Builder', true)
+
+    expect(co.end('run-environment-fixed')).toMatchObject({ outcome: 'blocked' })
+    expect(co.activity()[0]).toMatchObject({
+      state: 'blocked',
+      publication: 'blocked',
+      attentionReason: 'merge-failed'
+    })
+
+    expect(co.retryRun('run-environment-fixed')).toMatchObject({
+      state: 'merged',
+      publication: 'complete'
+    })
+    expect(finalize).toHaveBeenCalledTimes(2)
   })
 
   it('reprend seulement le rangement après une publication déjà réussie', () => {

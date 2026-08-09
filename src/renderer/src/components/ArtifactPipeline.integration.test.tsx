@@ -97,7 +97,6 @@ describe('pipeline artefact provider -> chat rechargé -> renderer', () => {
       2,
       conversation.id,
       undefined,
-      'auto',
       undefined,
       undefined,
       turnId

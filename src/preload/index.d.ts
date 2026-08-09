@@ -289,20 +289,12 @@ interface ChatApi {
   toolUsage: () => Promise<
     Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
   >
-  authorityPending: () => Promise<Array<{ id: string; question: string }>>
-  /**
-   * `bus.resolveDecision()` (src/main/commands.ts) est lui-même typé `Promise<unknown>` : la décision
-   * résolue est un objet de forme libre selon le type de la question d'autorité posée.
-   */
-  authorityResolve: (id: string, choice: unknown) => Promise<unknown>
-
   conversations: () => Promise<ConversationSummary[]>
   conversation: (id: string) => Promise<Conversation | null>
   conversationsCreate: (p: {
     title: string
     category: string
     provider: string
-    authorityMode?: 'plan' | 'ask' | 'auto'
   }) => Promise<{
     id: string
     title: string
@@ -321,10 +313,6 @@ interface ChatApi {
     decision: { route: 'current' | 'new'; confidence: number; reason: string }
   }>
   conversationsRename: (id: string, title: string) => Promise<void>
-  conversationsSetAuthorityMode: (
-    id: string,
-    mode: 'plan' | 'ask' | 'auto'
-  ) => Promise<Conversation>
   /** Range une conversation dans un dossier. Chemin omis → sélecteur natif ; `null` → « Divers ». */
   conversationsSetProject: (id: string, path?: string | null) => Promise<string | null>
   conversationsFork: (id: string, messageId: string) => Promise<Conversation>

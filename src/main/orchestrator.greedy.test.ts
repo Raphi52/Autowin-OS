@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
 import { HookBus } from './hooks/hook-bus'
 import { Orchestrator, type GreedyTaskNode, type OrchestrationStep } from './orchestrator'
@@ -92,7 +91,6 @@ function makeGreedy(
     roles,
     cost: new CostAggregator(),
     trust: new TrustLedger(),
-    authority: new AuthoritySas(),
     executionWorkspace: 'C:\\ws',
     worktrees: makeTestWorktrees('C:\\ws'),
     greedyConcurrency: 4,

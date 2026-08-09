@@ -108,8 +108,7 @@ describe('Task Manager — dispatch par le vrai Chat', () => {
         title: 'Rapport planifié',
         category: 'codex',
         provider: 'codex',
-        model: 'gpt-5.6-sol',
-        authorityMode: 'auto'
+        model: 'gpt-5.6-sol'
       }
     })
 
@@ -121,7 +120,6 @@ describe('Task Manager — dispatch par le vrai Chat', () => {
         category: 'codex',
         provider: 'codex',
         model: 'gpt-5.6-sol',
-        authorityMode: 'auto',
         conversationId: 'conv-new'
       }
     })

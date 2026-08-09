@@ -11,7 +11,6 @@ import type {
 import { RoleModelConfig } from './roles'
 import { CostAggregator } from './dashboards/cost'
 import { TrustLedger } from './trust/ledger'
-import { AuthoritySas } from './authority/sas'
 import type { PipelinePhase } from './skill-pipeline'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
 import type { ExecutionQuote } from './execution-quote'
@@ -102,7 +101,6 @@ function makeOrchestrator(
     }),
     cost: new CostAggregator(),
     trust: new TrustLedger(),
-    authority: new AuthoritySas(),
     executionWorkspace: 'C:\\ws',
     worktrees: opts.worktrees ?? makeTestWorktrees('C:\\ws'),
     classifyPhases: opts.classifyPhases,

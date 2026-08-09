@@ -41,10 +41,6 @@ import {
   persistRunLifecycle
 } from './activity/orchestration-observability'
 import { createHash, randomUUID } from 'node:crypto'
-import {
-  decideConversationCapability,
-  type ConversationAuthorityMode
-} from './conversation-capabilities'
 import { APP_DESTINATIONS, resolveAppLocation, type AppDestination } from '../shared/navigation'
 import { formatExecutionCostCoverage } from '../shared/orchestration-outcome'
 import type { RunLifecycleEvent } from '../shared/run-execution'
@@ -60,11 +56,11 @@ import {
 } from './graphify-command'
 import { ensureAutowinAppData } from './app-data'
 import type { TraceStore } from './activity/trace-store'
-import type { TraceAuthorityReceipt } from './activity/trace-event'
 import { redactTrace } from './activity/trace-redact'
 import { reconcileLateRunLifecycle } from './activity/late-run-usage-settlement'
 import { addedLineFingerprints } from './exact-line-fingerprint'
 import type { WatchdogMutationClaimsSink } from './task-manager/types'
+import type { DesktopController } from './desktop-control'
 
 /** Le log déclencheur reste une preuve en lecture seule ; l'agent reçoit un chemin relatif au bureau. */
 export function isolateWatchdogPromptPaths(
@@ -98,7 +94,6 @@ export function isolateWatchdogPromptPaths(
 export interface CommandSpec {
   name: string
   description: string
-  authority?: 'automatic' | 'sensitive' | 'destructive'
   args: Record<string, string> // nom → description courte du type
   annotations?: {
     readOnlyHint: boolean
@@ -111,6 +106,8 @@ export interface CommandResult {
   ok: boolean
   data?: unknown
   error?: string
+  /** Pieces jointes ephemeres pour l'iteration modele suivante ; jamais journalisees dans le texte. */
+  attachments?: NonNullable<Message['attachments']>
 }
 
 /** Instantané de l'état que l'agent PEUT VOIR (ce qu'il pilote). */
@@ -120,7 +117,6 @@ export interface AppSnapshot {
   providers: string[]
   roles: Record<string, { provider: string; model?: string }>
   conversations: Array<{ id: string; title: string; category: string }>
-  pendingDecisions: Array<{ id: string; question: string }>
   runs: Array<{ subject: string; status: string; blocked: boolean }>
   budgetUsd: number
 }
@@ -135,7 +131,6 @@ export interface PromptSnapshot {
   tab: AppDestination
   activeConversationId?: string
   providers: string[]
-  pendingDecisions: Array<{ id: string; question: string }>
   runsBlocked: Array<{ subject: string; status: string }>
   conversationsCount: number
 }
@@ -160,6 +155,33 @@ export type AppEvent =
   | { type: 'causal-trace-updated'; convId: string }
 
 const CATALOG: CommandSpec[] = [
+  {
+    name: 'desktop_observe',
+    description:
+      "Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet.",
+    args: {},
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true
+    }
+  },
+  {
+    name: 'desktop_act',
+    description:
+      "Agir sur le PC Windows apres desktop_observe. Les coordonnees x/y vont de 0 a 1000 dans l'image capturee. Envoyer une courte sequence puis observer de nouveau.",
+    args: {
+      actions:
+        "tableau (max 20) de {type:'move',x,y}, {type:'click',x,y,button?,clicks?}, {type:'scroll',delta,x?,y?}, {type:'type',text}, {type:'key',keys:['CTRL','A']}, {type:'open',target,args?}, {type:'wait',ms}"
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true
+    }
+  },
   {
     name: 'navigate',
     description: 'Afficher une vue',
@@ -222,7 +244,6 @@ const CATALOG: CommandSpec[] = [
     name: 'remove_conversation',
     description: 'Supprimer',
     args: { id: 'id' },
-    authority: 'destructive',
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -389,8 +410,7 @@ const CATALOG: CommandSpec[] = [
       destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false
-    },
-    authority: 'destructive'
+    }
   }
 ]
 
@@ -400,8 +420,6 @@ const DEFAULT_COMMAND_ANNOTATIONS: NonNullable<CommandSpec['annotations']> = {
   idempotentHint: false,
   openWorldHint: false
 }
-
-const SECRET_KEY = /(?:api[_-]?key|token|secret|password|credential|authorization)/i
 
 function canonicalValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalValue)
@@ -438,35 +456,6 @@ function redactedArgs(name: string, args: Record<string, unknown>): Record<strin
   return redactTrace(args) as Record<string, unknown>
 }
 
-function safePreview(value: unknown, fallback: string): string {
-  const text = String(value ?? '').trim()
-  if (
-    !text ||
-    SECRET_KEY.test(text) ||
-    /(?:bearer\s+|token\s*[=:]|secret\s*[=:]|password\s*[=:]|\bsk-[a-z0-9_-]+)/i.test(text)
-  )
-    return fallback
-  return text.replace(/\s+/g, ' ').slice(0, 96)
-}
-
-function approvalQuestion(name: string, args: Record<string, unknown>): string {
-  switch (name) {
-    case 'remove_conversation':
-      return 'Supprimer définitivement cette conversation ?'
-    case 'attach_run':
-      return `Attacher le RUN.md « ${safePreview(
-        String(args.path ?? '')
-          .split(/[\\/]/)
-          .pop(),
-        'nom masqué'
-      )} » à la conversation active ?`
-    case 'orchestrate':
-      return `Lancer l’orchestration : « ${safePreview(args.task, 'tâche masquée car sensible')} » ?`
-    default:
-      return 'Autoriser cette action sensible ?'
-  }
-}
-
 /**
  * Phases qu'un MODÈLE peut demander. Liste FERMÉE : une valeur hors liste est ignorée plutôt que
  * transmise, sinon un modèle pourrait préfixer la tâche de n'importe quoi. `kaizen` est volontairement
@@ -481,22 +470,6 @@ export class AppCommandBus {
   trace?: (name: string, args: Record<string, unknown>, ok: boolean) => void
   /** Conversation active (contexte posé par le chat) : les workflows créés s'y rattachent. */
   activeConversationId?: string
-  private readonly pendingActions = new Map<
-    string,
-    {
-      name: string
-      args: Record<string, unknown>
-      fingerprint: string
-      action: () => Promise<unknown>
-      authorityTrace?: {
-        conversationId: string
-        turnId: string
-        eventId: string
-        receipt: TraceAuthorityReceipt
-      }
-    }
-  >()
-  private readonly pendingDecisionByFingerprint = new Map<string, string>()
   /** Orchestrations en vol, par conversation : permet de STOPPER le sous-agent. */
   private readonly activeOrchestrations = new Map<string, AbortController>()
   /**
@@ -580,55 +553,6 @@ export class AppCommandBus {
     this.traceStore = traceStore
   }
 
-  private appendAuthorityTrace(input: {
-    name: string
-    args: Record<string, unknown>
-    conversationId?: string
-    turnId?: string
-    status: 'pending' | 'completed' | 'failed' | 'cancelled'
-    receipt: TraceAuthorityReceipt
-    parentId?: string
-  }):
-    | { conversationId: string; turnId: string; eventId: string; receipt: TraceAuthorityReceipt }
-    | undefined {
-    const conversationId = input.conversationId ?? this.activeConversationId
-    if (!this.traceStore || !conversationId || !input.turnId) return undefined
-    const eventId = `${input.turnId}:authority:${randomUUID()}`
-    this.traceStore.append({
-      schema: 'autowin.trace/v1',
-      id: eventId,
-      conversationId,
-      turnId: input.turnId,
-      ...(input.parentId ? { parentId: input.parentId } : {}),
-      timestamp: new Date().toISOString(),
-      sequence: this.traceStore.nextSequence(conversationId),
-      type: 'decision',
-      status: input.status,
-      actor: { id: 'autowin-authority', kind: 'system', label: 'Autorité Autowin' },
-      recipient: { id: 'command-bus', kind: 'tool', label: input.name },
-      channel: 'internal',
-      payloads: [
-        {
-          kind: input.parentId ? 'tool-result' : 'tool-call',
-          name: input.name,
-          mediaType: 'application/json',
-          content: JSON.stringify(
-            input.parentId
-              ? {
-                  decisionId: input.receipt.decisionId,
-                  resolution: input.receipt.resolution,
-                  resolvedBy: input.receipt.resolvedBy
-                }
-              : redactedArgs(input.name, input.args)
-          )
-        }
-      ],
-      observation: { boundary: 'app-command-bus', fidelity: 'exact' },
-      authority: input.receipt
-    })
-    return { conversationId, turnId: input.turnId, eventId, receipt: input.receipt }
-  }
-
   constructor(
     private readonly os: AutowinOS,
     private readonly broadcast: (e: AppEvent) => void,
@@ -654,7 +578,9 @@ export class AppCommandBus {
       request: TicketListRequest
     ) => Promise<{ items: TicketItem[]; hasMore: boolean; cursor?: string }>,
     /** Lecture d'UNE fiche par id, câblée depuis index.ts. */
-    private readonly getTicket?: (request: TicketGetRequest) => Promise<TicketItem>
+    private readonly getTicket?: (request: TicketGetRequest) => Promise<TicketItem>,
+    /** Controle Windows local, reserve aux commandes explicites du chat. */
+    private readonly desktop?: DesktopController
   ) {}
 
   catalog(): CommandSpec[] {
@@ -668,160 +594,6 @@ export class AppCommandBus {
     }))
   }
 
-  /** Consomme une approbation UI ; elle n'est volontairement pas exposée au modèle. */
-  async resolveDecision(id: string, choice: unknown): Promise<unknown> {
-    const resolution = this.os.authority.resolve(id, choice)
-    const pending = this.pendingActions.get(id)
-    this.pendingActions.delete(id)
-    if (pending) this.pendingDecisionByFingerprint.delete(pending.fingerprint)
-    this.trace?.(
-      'authority_decision',
-      {
-        action: pending?.name ?? 'unknown',
-        choice: String(resolution.choice),
-        by: resolution.by
-      },
-      true
-    )
-    const approved = resolution.choice === 'approve'
-    if (pending?.authorityTrace && !approved) {
-      this.appendAuthorityTrace({
-        name: pending.name,
-        args: pending.args,
-        conversationId: pending.authorityTrace.conversationId,
-        turnId: pending.authorityTrace.turnId,
-        parentId: pending.authorityTrace.eventId,
-        status: 'cancelled',
-        receipt: {
-          ...pending.authorityTrace.receipt,
-          resolution: 'cancel',
-          resolvedBy: resolution.by
-        }
-      })
-    }
-    this.broadcast({ type: 'refresh', scope: 'decisions' })
-    if (!pending || !approved) return resolution
-    try {
-      const data = await pending.action()
-      if (pending.authorityTrace) {
-        this.appendAuthorityTrace({
-          name: pending.name,
-          args: pending.args,
-          conversationId: pending.authorityTrace.conversationId,
-          turnId: pending.authorityTrace.turnId,
-          parentId: pending.authorityTrace.eventId,
-          status: 'completed',
-          receipt: {
-            ...pending.authorityTrace.receipt,
-            resolution: 'approve',
-            resolvedBy: resolution.by
-          }
-        })
-      }
-      this.trace?.(pending.name, pending.args, true)
-      this.broadcast({ type: 'refresh', scope: 'conversations' })
-      this.broadcast({ type: 'refresh', scope: 'workflows' })
-      return { ...resolution, executed: true, data }
-    } catch (error) {
-      if (pending.authorityTrace) {
-        this.appendAuthorityTrace({
-          name: pending.name,
-          args: pending.args,
-          conversationId: pending.authorityTrace.conversationId,
-          turnId: pending.authorityTrace.turnId,
-          parentId: pending.authorityTrace.eventId,
-          status: 'failed',
-          receipt: {
-            ...pending.authorityTrace.receipt,
-            resolution: 'approve',
-            resolvedBy: resolution.by
-          }
-        })
-      }
-      this.trace?.(pending.name, pending.args, false)
-      throw error
-    }
-  }
-
-  sweepExpired(): unknown[] {
-    const resolutions = this.os.authority.sweepExpired()
-    for (const resolution of resolutions) {
-      const pending = this.pendingActions.get(resolution.id)
-      this.pendingActions.delete(resolution.id)
-      if (pending) this.pendingDecisionByFingerprint.delete(pending.fingerprint)
-      this.trace?.(
-        'authority_decision',
-        { action: pending?.name ?? 'unknown', choice: 'cancel', by: resolution.by },
-        true
-      )
-      if (pending?.authorityTrace) {
-        this.appendAuthorityTrace({
-          name: pending.name,
-          args: pending.args,
-          conversationId: pending.authorityTrace.conversationId,
-          turnId: pending.authorityTrace.turnId,
-          parentId: pending.authorityTrace.eventId,
-          status: 'cancelled',
-          receipt: {
-            ...pending.authorityTrace.receipt,
-            resolution: 'cancel',
-            resolvedBy: resolution.by
-          }
-        })
-      }
-    }
-    if (resolutions.length) this.broadcast({ type: 'refresh', scope: 'decisions' })
-    return resolutions
-  }
-
-  private deferSensitiveAction(
-    name: string,
-    args: Record<string, unknown>,
-    action: () => Promise<unknown>,
-    context?: {
-      conversationId?: string
-      turnId?: string
-      receipt: Omit<TraceAuthorityReceipt, 'decisionId'>
-    }
-  ): { pendingApproval: true; decisionId: string } {
-    const fingerprint = actionFingerprint(name, args, {
-      conversationId: context?.conversationId ?? this.activeConversationId
-    })
-    const existingId = this.pendingDecisionByFingerprint.get(fingerprint)
-    if (existingId && this.os.authority.pending().some((decision) => decision.id === existingId)) {
-      return { pendingApproval: true, decisionId: existingId }
-    }
-    if (existingId) this.pendingDecisionByFingerprint.delete(fingerprint)
-
-    const decisionId = this.os.authority.propose({
-      question: approvalQuestion(name, args),
-      options: ['approve', 'cancel'],
-      safeDefault: 'cancel',
-      ttlMs: 15 * 60_000
-    })
-    const receipt = context ? { ...context.receipt, decisionId } : undefined
-    const authorityTrace = receipt
-      ? this.appendAuthorityTrace({
-          name,
-          args,
-          conversationId: context?.conversationId,
-          turnId: context?.turnId,
-          status: 'pending',
-          receipt
-        })
-      : undefined
-    this.pendingActions.set(decisionId, {
-      name,
-      args: redactedArgs(name, args),
-      fingerprint,
-      action,
-      authorityTrace
-    })
-    this.pendingDecisionByFingerprint.set(fingerprint, decisionId)
-    this.broadcast({ type: 'refresh', scope: 'decisions' })
-    return { pendingApproval: true, decisionId }
-  }
-
   async snapshot(): Promise<AppSnapshot> {
     const runs = await this.os.runsWithGate()
     return {
@@ -832,9 +604,6 @@ export class AppCommandBus {
       conversations: this.os.conversations
         .list()
         .map((c) => ({ id: c.id, title: c.title, category: c.category })),
-      pendingDecisions: (
-        this.os.authority.pending() as Array<{ id: string; question: string }>
-      ).map((d) => ({ id: d.id, question: d.question })),
       runs: runs
         .slice(0, 12)
         .map((r) => ({ subject: r.subject, status: r.summary.status, blocked: r.blocked })),
@@ -849,7 +618,6 @@ export class AppCommandBus {
       tab: full.tab,
       activeConversationId: full.activeConversationId,
       providers: full.providers,
-      pendingDecisions: full.pendingDecisions,
       runsBlocked: full.runs
         .filter((r) => r.blocked)
         .map((r) => ({ subject: r.subject, status: r.status })),
@@ -862,7 +630,6 @@ export class AppCommandBus {
     name: string,
     args: Record<string, unknown> = {},
     conversationId?: string,
-    authorityMode: ConversationAuthorityMode = 'ask',
     bindingOverride?: RoleBinding,
     turnId?: string
   ): Promise<CommandResult> {
@@ -870,65 +637,13 @@ export class AppCommandBus {
       const specification = CATALOG.find((command) => command.name === name)
       if (!specification) throw new Error(`Commande inconnue: ${name}`)
       if (!this.isCommandEnabled(name)) throw new Error(`Capacité désactivée: ${name}`)
-      const annotations =
-        specification.annotations ??
-        (specification.name === 'get_state'
-          ? { ...DEFAULT_COMMAND_ANNOTATIONS, readOnlyHint: true, idempotentHint: true }
-          : DEFAULT_COMMAND_ANNOTATIONS)
-      const decision = decideConversationCapability({
-        mode: authorityMode,
-        mutates: !annotations.readOnlyHint,
-        authority: specification.authority ?? 'automatic'
-      })
-      const receipt = {
-        mode: authorityMode,
-        mutates: !annotations.readOnlyHint,
-        commandAuthority: specification.authority ?? 'automatic',
-        decision
-      } satisfies TraceAuthorityReceipt
-      if (decision === 'deny') {
-        this.appendAuthorityTrace({
-          name,
-          args,
-          conversationId,
-          turnId,
-          status: 'failed',
-          receipt
-        })
-        this.trace?.(name, redactedArgs(name, args), false)
-        return { ok: false, error: `Action interdite en mode Plan: ${name}` }
+      if (name === 'desktop_observe') {
+        if (!this.desktop) throw new Error('Controle desktop indisponible')
+        const observed = await this.desktop.observe()
+        this.trace?.(name, redactedArgs(name, args), true)
+        return { ok: true, data: observed.data, attachments: [observed.attachment] }
       }
-      if (decision === 'confirm') {
-        const pending = this.deferSensitiveAction(
-          name,
-          args,
-          () => this.run(name, args, conversationId, bindingOverride, turnId),
-          { conversationId, turnId, receipt }
-        )
-        return { ok: true, data: pending }
-      }
-      let data: unknown
-      try {
-        data = await this.run(name, args, conversationId, bindingOverride, turnId)
-        this.appendAuthorityTrace({
-          name,
-          args,
-          conversationId,
-          turnId,
-          status: 'completed',
-          receipt
-        })
-      } catch (error) {
-        this.appendAuthorityTrace({
-          name,
-          args,
-          conversationId,
-          turnId,
-          status: 'failed',
-          receipt
-        })
-        throw error
-      }
+      const data = await this.run(name, args, conversationId, bindingOverride, turnId)
       this.trace?.(name, redactedArgs(name, args), true)
       return { ok: true, data }
     } catch (e) {
@@ -946,6 +661,10 @@ export class AppCommandBus {
   ): Promise<unknown> {
     const s = (k: string): string => String(a[k] ?? '')
     switch (name) {
+      case 'desktop_act': {
+        if (!this.desktop) throw new Error('Controle desktop indisponible')
+        return await this.desktop.act(a.actions)
+      }
       case 'navigate': {
         const requestedTab = s('tab')
         const location = resolveAppLocation(requestedTab)
@@ -1068,7 +787,7 @@ export class AppCommandBus {
           collectedContext = collectOrchestrationContext({
             task,
             conversation,
-            app: app && { tab: app.tab, pendingDecisions: app.pendingDecisions },
+            app: app && { tab: app.tab },
             runs: app?.runs,
             unavailable
           })
@@ -1303,8 +1022,6 @@ export class AppCommandBus {
           })
           this.broadcast({ type: 'refresh', scope: 'workflows' })
           this.broadcast({ type: 'refresh', scope: 'orchestration' })
-          // Gate bloqué → une décision d'autorité est ouverte : la surfacer TOUT DE SUITE.
-          if (r.gateBlocked) this.broadcast({ type: 'refresh', scope: 'decisions' })
           return {
             valid: r.valid,
             gateBlocked: r.gateBlocked,

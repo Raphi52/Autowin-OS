@@ -36,6 +36,27 @@ function input(overrides: Partial<ScheduledTaskInput> = {}): ScheduledTaskInput 
 }
 
 describe('Task Manager — store durable', () => {
+  it('charge une ancienne tâche puis retire son authorityMode devenu inactif', () => {
+    const seeded = new TaskStore({ now: () => 1000, id: () => 'task-legacy' })
+    seeded.create(
+      input({
+        destination: {
+          kind: 'new',
+          title: 'Legacy',
+          category: 'codex',
+          provider: 'codex'
+        }
+      })
+    )
+    const snapshot = seeded.snapshot()
+    Object.assign(snapshot.tasks[0].destination, { authorityMode: 'plan' })
+
+    const reloaded = new TaskStore({ now: () => 2000 })
+    reloaded.hydrate(snapshot)
+
+    expect(reloaded.getTask('task-legacy')?.destination).not.toHaveProperty('authorityMode')
+  })
+
   it('remplace atomiquement un horaire par un watchdog puis revient a un horaire', () => {
     const store = new TaskStore({ now: () => 1000, id: () => 'task-1' })
     const scheduled = store.create(input())

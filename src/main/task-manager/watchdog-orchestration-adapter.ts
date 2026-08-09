@@ -1,12 +1,9 @@
 import type { ScheduledTask, WatchdogMutationClaimsSink } from './types'
 
-type AuthorityMode = 'plan' | 'ask' | 'auto'
-
 interface OrchestrationAdapterDependencies {
   exec(
     task: string,
     conversationId: string,
-    authority: AuthorityMode,
     causalWatchPaths: readonly string[],
     onLateMutationClaims?: WatchdogMutationClaimsSink
   ): Promise<unknown>
@@ -29,10 +26,6 @@ export interface WatchdogOrchestrationDispatch {
   mutatedPathGenerationMarkers?: Record<string, string>
 }
 
-function authorityOf(task: ScheduledTask): AuthorityMode {
-  return task.destination.kind === 'new' ? (task.destination.authorityMode ?? 'ask') : 'ask'
-}
-
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null
     ? (value as Record<string, unknown>)
@@ -44,8 +37,8 @@ function text(value: unknown): string | undefined {
 }
 
 /**
- * Adapte le vrai contrat de `orchestrate` au scheduler. Un gate rouge reste rouge, et l'autorité
- * vient de la tâche courante — jamais d'une autre tâche qui partagerait la conversation.
+ * Adapte le vrai contrat de `orchestrate` au scheduler. Un gate rouge reste rouge et les preuves
+ * restent rattachées à la tâche courante, jamais à une autre qui partagerait la conversation.
  */
 export async function runWatchdogOrchestration(
   dependencies: OrchestrationAdapterDependencies,
@@ -62,11 +55,10 @@ export async function runWatchdogOrchestration(
         ? await dependencies.exec(
             prompt,
             conversationId,
-            authorityOf(task),
             causalWatchPaths,
             onLateMutationClaims
           )
-        : await dependencies.exec(prompt, conversationId, authorityOf(task), causalWatchPaths)
+        : await dependencies.exec(prompt, conversationId, causalWatchPaths)
     )
     if (!envelope) return { ok: false, error: 'Réponse d’orchestration illisible.' }
     if (envelope.ok !== true) {

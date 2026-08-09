@@ -60,6 +60,8 @@ import {
 import { repairPreflightCheck } from './preflight-repair'
 import { RoleModelConfig, type ReasoningEffort, type Role, type RoleBinding } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
+import { WindowsDesktopController } from './desktop-control'
+import { captureElectronDesktop } from './electron-desktop-capture'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
 import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
@@ -82,6 +84,7 @@ import {
 } from './runs/conv-runs'
 import { deleteListedRun } from './dashboards/runs-scan'
 import { createOrchestrateTurnPersistence } from './runs/orchestrate-turn-persistence'
+import { StartupResumeQueue } from './runs/startup-resume-queue'
 import {
   admitAutomaticResumeRuntime,
   admitLiveReattachment,
@@ -301,7 +304,6 @@ import {
 import { registerTaskManagerIpc } from './task-manager/task-manager-ipc'
 import {
   AutoKaizenSupervisor,
-  inheritAutoKaizenAuthority,
   incidentFromPilotEvent,
   legacyAutoKaizenSupervisorEnabled,
   type AutoKaizenIncidentInput
@@ -495,6 +497,7 @@ function reportAutoKaizen(input: AutoKaizenIncidentInput): void {
   })
 }
 
+const desktopController = new WindowsDesktopController({ capture: captureElectronDesktop })
 const bus = new AppCommandBus(
   os,
   broadcast,
@@ -508,7 +511,8 @@ const bus = new AppCommandBus(
   () => tickets.sources().map((summary) => summary.profile),
   (request) => tickets.create(request),
   (request) => tickets.list(request),
-  (request) => tickets.get(request)
+  (request) => tickets.get(request),
+  desktopController
 )
 seedRegistrySnapshot({
   tools: bus.catalog().map((command) => ({
@@ -2448,16 +2452,6 @@ Le fil reprend ensuite normalement.`
     return aggregateToolUsage()
   })
 
-  // --- Sas d'autorité (décisions AFK ouvertes par l'orchestrateur) ---
-  ipcMain.handle('os:authority:pending', (event) => {
-    assertTrustedRendererSender(event, 'Authority decisions')
-    return os.authority.pending()
-  })
-  ipcMain.handle('os:authority:resolve', (event, id: string, choice: unknown) => {
-    assertTrustedRendererSender(event, 'Authority decision')
-    return bus.resolveDecision(id, choice)
-  })
-
   // --- Conversations catégorisées ---
   ipcMain.handle('os:conversations', (event) => {
     assertTrustedRendererSender(event, 'Conversations')
@@ -2529,13 +2523,9 @@ Le fil reprend ensuite normalement.`
         title: string
         category: string
         provider: string
-        authorityMode?: 'plan' | 'ask' | 'auto'
       }
     ) => {
       assertTrustedRendererSender(event, 'Conversation create')
-      if (p.authorityMode && !['plan', 'ask', 'auto'].includes(p.authorityMode)) {
-        throw new Error('Mode d’autorité invalide')
-      }
       const conversation = os.conversations.create(p)
       broadcast({ type: 'refresh', scope: 'conversations' })
       return conversation
@@ -2589,14 +2579,6 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('os:conversations:rename', (event, id: string, title: string) => {
     assertTrustedRendererSender(event, 'Conversation rename')
     return os.conversations.rename(id, guardString(title, 'title'))
-  })
-  ipcMain.handle('os:conversations:authorityMode', (event, rawId: string, rawMode: unknown) => {
-    assertTrustedRendererSender(event, 'Conversation authority')
-    const id = guardString(rawId, 'id')
-    if (!['plan', 'ask', 'auto'].includes(String(rawMode))) {
-      throw new Error('Mode d’autorité invalide')
-    }
-    return os.conversations.setAuthorityMode(id, rawMode as 'plan' | 'ask' | 'auto')
   })
   /**
    * Ranger une conversation dans un dossier de travail. `null` la remet dans « Divers ».
@@ -3296,16 +3278,7 @@ Le fil reprend ensuite normalement.`
           snapshot: () => bus.snapshot(),
           snapshotForPrompt: () => bus.snapshotForPrompt(),
           exec: async (name: string, args: Record<string, unknown>) =>
-            bus.exec(
-              name,
-              args,
-              conversationId,
-              conversationId
-                ? (os.conversations.get(conversationId)?.authorityMode ?? 'ask')
-                : 'ask',
-              undefined,
-              turnId
-            )
+            bus.exec(name, args, conversationId, undefined, turnId)
         } as AppCommandBus
         await new AgentPilot(fixtureRegistry, fixtureRoles, fixtureBus).chat(
           safe,
@@ -3313,8 +3286,7 @@ Le fil reprend ensuite normalement.`
           undefined,
           6,
           conversationId,
-          controller.signal,
-          conversationId ? (os.conversations.get(conversationId)?.authorityMode ?? 'ask') : 'ask'
+          controller.signal
         )
         if (conversationId && target === 'observatory-critical-path') {
           const appendFixtureEvent = (
@@ -3434,9 +3406,6 @@ Le fil reprend ensuite normalement.`
               6,
               conversationId,
               supervisedSignal,
-              conversationId
-                ? (os.conversations.get(conversationId)?.authorityMode ?? 'ask')
-                : 'ask',
               conversationId ? () => drainPendingDirectives(conversationId) : undefined,
               bindingOverride,
               turnId,
@@ -3555,7 +3524,6 @@ Le fil reprend ensuite normalement.`
             title: title.slice(0, 140),
             category: source?.category ?? 'codex',
             provider: source?.provider ?? os.roles.getBinding('orchestrator').provider,
-            authorityMode: inheritAutoKaizenAuthority(source?.authorityMode),
             autoKaizen: link
           })
         },
@@ -3687,17 +3655,12 @@ Le fil reprend ensuite normalement.`
     },
     /**
      * Règle Watchdog en action `orchestration` : on passe par le MÊME `orchestrate` que le chat et
-     * les agents, donc par le pipeline complet avec son gate à preuve et son juge. C'est ce qui rend
-     * l'absorption de l'auto-kaizen non destructrice : l'analyse, le correctif et la vérification
-     * ne sont pas réécrits par déclencheur, ils existent déjà là.
-     *
-     * L'autorité vient de la TÂCHE (`authorityMode` de sa destination), pas d'un défaut maison :
-     * une règle qui a le droit de réparer l'a reçu explicitement.
+     * les agents, donc par le pipeline complet avec son gate à preuve et son juge.
      */
     runOrchestration: (conversationId, prompt, task, onLateMutationClaims) =>
       runWatchdogOrchestration(
         {
-          exec: (requestedTask, convId, authority, causalWatchPaths, onLateClaims) =>
+          exec: (requestedTask, convId, causalWatchPaths, onLateClaims) =>
             bus.exec(
               'orchestrate',
               {
@@ -3705,8 +3668,7 @@ Le fil reprend ensuite normalement.`
                 causalWatchPaths,
                 ...(onLateClaims ? { onLateMutationClaims: onLateClaims } : {})
               },
-              convId,
-              authority
+              convId
             ),
           readMutatedPaths: (convId, turnId) => readConversationTurnFilePaths(convId, turnId),
           readMutatedLineFingerprints: (convId, turnId) =>
@@ -4306,6 +4268,7 @@ app.whenReady().then(async () => {
   // acquis persisté ; on relance ICI à la phase suivante, en réinjectant les livrables déjà produits
   // (aucune phase refaite). Rien à reprendre → aucun effet (démarrage normal strictement inchangé).
   const resumableRuns = os.resumableOrchestrations()
+  const startupResumeQueue = new StartupResumeQueue()
   for (const resumableRun of resumableRuns) {
     let durableLiveReattachment: ReturnType<typeof createOrchestrateTurnPersistence> | undefined
     let liveReattachment: ReturnType<typeof admitLiveReattachment> | undefined
@@ -4465,7 +4428,7 @@ app.whenReady().then(async () => {
         '→ phases déjà acquises :',
         resumableRun.phaseOutputs.map((output) => output.phase).join(', ')
       )
-      void resumedRuntime
+      await resumedRuntime
         .run((runtimeSnapshot) =>
           os.runTask(
             resumableRun.task,
@@ -4608,7 +4571,7 @@ app.whenReady().then(async () => {
           .resumableOrchestrations()
           .find((candidate) => candidate.runId === resumableRun.runId)
         return latest ? resumeActionFor(latest, defaultProcessIdentity) : 'ignorer'
-      }).then((action) => {
+      }).then(async (action) => {
         const latest = os
           .resumableOrchestrations()
           .find((candidate) => candidate.runId === resumableRun.runId)
@@ -4621,10 +4584,12 @@ app.whenReady().then(async () => {
             result: 'Agent détaché terminé — reprise du workflow dans un nouveau tour.'
           })
         }
-        void relaunchResumableRun(latest)
+        await startupResumeQueue.enqueue(() => relaunchResumableRun(latest))
       })
     }
-    if (reprise === 'relancer') void relaunchResumableRun(resumableRun)
+    if (reprise === 'relancer') {
+      void startupResumeQueue.enqueue(() => relaunchResumableRun(resumableRun))
+    }
   }
 
   const preflightStartedAt = Date.now()

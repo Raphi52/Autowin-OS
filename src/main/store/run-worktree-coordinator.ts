@@ -243,7 +243,6 @@ export class RunWorktreeCoordinator {
       ...trackedMetadata
     }
     this.runs.set(runId, tracked)
-    this.persist(tracked, 'running', 'not-requested')
     try {
       const described = this.manager.describeAsync
         ? await this.manager.describeAsync(runId)
@@ -255,6 +254,8 @@ export class RunWorktreeCoordinator {
         sourceWorkspacePath && sourceBaseSha
           ? { ...described, workspacePath: sourceWorkspacePath, baseSha: sourceBaseSha }
           : described
+      Object.assign(tracked, context)
+      this.persist(tracked, 'running', 'not-requested')
       const prepared = await this.manager.prepareAsync(runId, context)
       Object.assign(tracked, prepared.context)
       tracked.worktreePath = prepared.path
@@ -267,12 +268,16 @@ export class RunWorktreeCoordinator {
       tracked.state = 'blocked'
       tracked.endedAtMs = this.now()
       tracked.attentionReason = 'merge-failed'
-      this.persist(
-        tracked,
-        'interrupted',
-        'blocked',
-        error instanceof Error ? error.message : String(error)
-      )
+      // `describeAsync` peut échouer avant que le contexte durable existe. Dans ce cas, persister
+      // fabriquerait trois chaînes vides et masquerait l'erreur Git par « manifeste invalide ».
+      if (tracked.worktreePath && tracked.baseBranch && tracked.baseSha) {
+        this.persist(
+          tracked,
+          'interrupted',
+          'blocked',
+          error instanceof Error ? error.message : String(error)
+        )
+      }
       this.emit()
       throw error
     }
@@ -498,16 +503,21 @@ export class RunWorktreeCoordinator {
   /** Réarme manuellement un seul rangement épuisé, sans jamais republier sa SHA. */
   retryRun(runId: string): WorktreeAgentActivity | undefined {
     const tracked = this.runs.get(runId)
+    const retryBlockedPublication =
+      tracked?.publication === 'blocked' && tracked.attentionReason === 'merge-failed'
+    const retryExhaustedPublication =
+      !!tracked &&
+      ['pending', 'cleanup-pending'].includes(tracked.publication ?? '') &&
+      tracked.attentionReason === 'retry-exhausted'
     if (
       !tracked ||
       tracked.verdict !== 'green' ||
-      !['pending', 'cleanup-pending'].includes(tracked.publication ?? '') ||
-      tracked.attentionReason !== 'retry-exhausted'
+      (!retryBlockedPublication && !retryExhaustedPublication)
     ) {
       return undefined
     }
     const retryPublication: WorktreePublicationState =
-      tracked.publication === 'pending' ? 'pending' : 'cleanup-pending'
+      retryBlockedPublication || tracked.publication === 'pending' ? 'pending' : 'cleanup-pending'
     this.retryCounts.set(runId, 0)
     tracked.attentionReason = undefined
     this.waitingForRetry.delete(runId)
@@ -530,16 +540,21 @@ export class RunWorktreeCoordinator {
 
   async retryRunAsync(runId: string): Promise<WorktreeAgentActivity | undefined> {
     const tracked = this.runs.get(runId)
+    const retryBlockedPublication =
+      tracked?.publication === 'blocked' && tracked.attentionReason === 'merge-failed'
+    const retryExhaustedPublication =
+      !!tracked &&
+      ['pending', 'cleanup-pending'].includes(tracked.publication ?? '') &&
+      tracked.attentionReason === 'retry-exhausted'
     if (
       !tracked ||
       tracked.verdict !== 'green' ||
-      !['pending', 'cleanup-pending'].includes(tracked.publication ?? '') ||
-      tracked.attentionReason !== 'retry-exhausted'
+      (!retryBlockedPublication && !retryExhaustedPublication)
     ) {
       return undefined
     }
     const retryPublication: WorktreePublicationState =
-      tracked.publication === 'pending' ? 'pending' : 'cleanup-pending'
+      retryBlockedPublication || tracked.publication === 'pending' ? 'pending' : 'cleanup-pending'
     this.retryCounts.set(runId, 0)
     tracked.attentionReason = undefined
     this.waitingForRetry.delete(runId)

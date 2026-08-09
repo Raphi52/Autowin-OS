@@ -490,7 +490,8 @@ describe('Observatory contextual toolbar', () => {
     const lane = view.querySelector('[data-testid="observatory-authority-ledger"]')
     expect(lane?.tagName).toBe('DETAILS')
     expect((lane as HTMLDetailsElement).open).toBe(false)
-    expect(lane?.textContent).toContain('Autorité & mutations')
+    expect(lane?.textContent).toContain('Ancienne autorité & mutations')
+    expect(lane?.textContent).toContain('Historique antérieur à la politique unique')
     expect(lane?.textContent).toContain('destructive')
     expect(lane?.textContent).toContain('confirmation')
     expect(lane?.textContent).toContain('annulée')
@@ -503,7 +504,7 @@ describe('Observatory contextual toolbar', () => {
     )
   })
 
-  it('ne présente pas une autorisation directe terminée comme en attente', async () => {
+  it('ne présente pas une ancienne autorisation directe terminée comme non résolue', async () => {
     const mockApi = api()
     mockApi.causalTrace.mockResolvedValue([
       {
@@ -520,7 +521,7 @@ describe('Observatory contextual toolbar', () => {
     const { view } = await mount(mockApi)
     const lane = view.querySelector('[data-testid="observatory-authority-ledger"]')
     expect(lane?.textContent).toContain('autorisée')
-    expect(lane?.textContent).not.toContain('en attente')
+    expect(lane?.textContent).not.toContain('non résolue historiquement')
   })
 
   it('rend une comparaison sémantique structurée pour deux événements', async () => {

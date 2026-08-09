@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AutoKaizenSupervisor,
   correlationKeyForIncident,
-  inheritAutoKaizenAuthority,
   incidentFromPilotEvent,
   isUpstreamOutage,
   isDeliberateAbort,
@@ -72,13 +71,6 @@ describe('AutoKaizenSupervisor — boucle conversationnelle persistante', () => 
       fixPrompts
     }
   }
-
-  it('hérite de chaque mode d’autorité et choisit ask si la source a disparu', () => {
-    expect(inheritAutoKaizenAuthority('plan')).toBe('plan')
-    expect(inheritAutoKaizenAuthority('ask')).toBe('ask')
-    expect(inheritAutoKaizenAuthority('auto')).toBe('auto')
-    expect(inheritAutoKaizenAuthority(undefined)).toBe('ask')
-  })
 
   it('transforme une erreur en analyse Kaizen puis correction liées, sans doublon au reload', async () => {
     const h = harness()

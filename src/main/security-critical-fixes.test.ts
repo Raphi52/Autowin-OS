@@ -53,7 +53,6 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     'os:profiles:apply',
     'os:profiles:save',
     'os:conversations:remove',
-    'os:authority:resolve',
     'os:conversations:rename',
     'os:openFolder',
     'os:appCommand',
@@ -89,7 +88,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
       return genericGuard || specializedGuard ? [] : [channel]
     })
 
-    expect(handlers).toHaveLength(132)
+    expect(handlers).toHaveLength(129)
     expect(unguarded).toEqual([])
   })
 

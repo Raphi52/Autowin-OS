@@ -8,7 +8,6 @@ import {
   type ChatTurnStatus,
   type PersistedChatPart
 } from '../../shared/chat-turn'
-import type { ConversationAuthorityMode } from '../conversation-capabilities'
 import { hasInterruptionNotice, interruptionNotice } from '../runs/run-interruption'
 import type { ChatArtifact } from '../../shared/artifacts'
 import type { AutoKaizenConversationLink } from '../auto-kaizen-supervisor'
@@ -76,7 +75,6 @@ export interface Conversation {
   forkedFrom?: ForkOrigin
   /** Filiation durable d'une analyse/correction Auto-Kaizen avec la conversation source. */
   autoKaizen?: AutoKaizenConversationLink
-  authorityMode?: ConversationAuthorityMode
   /**
    * Le dossier de travail auquel cette conversation appartient — ce qui la GROUPE dans la liste.
    *
@@ -219,14 +217,14 @@ export class ConversationStore {
       delete rest.rootBranchId
       delete rest.activeBranchId
       delete rest.branches
+      delete rest.authorityMode
       const hydrated: Conversation = {
         ...(rest as unknown as Conversation),
         schemaVersion: 3 as const,
         workspaceId: c.workspaceId ?? `workspace-${c.id}`,
-        authorityMode: c.authorityMode ?? 'auto',
         messages
       }
-      if (c.schemaVersion !== 3 || !c.workspaceId || !c.authorityMode || hadBranches) {
+      if (c.schemaVersion !== 3 || !c.workspaceId || legacy.authorityMode !== undefined || hadBranches) {
         migrated = true
       }
       this.conversations.set(c.id, hydrated)
@@ -255,7 +253,6 @@ export class ConversationStore {
     title: string
     category: Category
     provider: string
-    authorityMode?: ConversationAuthorityMode
     autoKaizen?: AutoKaizenConversationLink
   }): Conversation {
     const ts = this.now()
@@ -268,7 +265,6 @@ export class ConversationStore {
       provider: p.provider,
       messages: [],
       workspaceId: `workspace-${id}`,
-      authorityMode: p.authorityMode ?? 'auto',
       ...(p.autoKaizen ? { autoKaizen: p.autoKaizen } : {}),
       createdAt: ts,
       updatedAt: ts
@@ -475,15 +471,6 @@ export class ConversationStore {
     return conversation
   }
 
-  setAuthorityMode(id: string, authorityMode: ConversationAuthorityMode): Conversation {
-    const conversation = this.conversations.get(id)
-    if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
-    conversation.authorityMode = authorityMode
-    conversation.updatedAt = this.now()
-    this.changed(id)
-    return conversation
-  }
-
   /** Attache un RUN.md externe à une conversation (idempotent). Jette si l'id est inconnu. */
   attachRun(id: string, runPath: string): Conversation {
     const conversation = this.conversations.get(id)
@@ -539,8 +526,7 @@ export class ConversationStore {
     const forked = this.create({
       title: forkTitle(source.title),
       category: source.category,
-      provider: source.provider,
-      authorityMode: source.authorityMode
+      provider: source.provider
     })
     // Copie jusqu'au point de fork INCLUS. Les identifiants de message sont régénérés : deux
     // conversations ne doivent jamais partager un messageId (le fork suivant viserait les deux).

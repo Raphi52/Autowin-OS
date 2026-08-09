@@ -47,7 +47,6 @@ function api(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     runTrace: vi.fn().mockResolvedValue(null),
     readNodeFile: vi.fn(async (path: string) => ({ path, content: 'status: green' })),
     listRuns: vi.fn().mockResolvedValue([]),
-    authorityPending: vi.fn().mockResolvedValue([]),
     topology: vi.fn().mockResolvedValue({
       orchestrator: { provider: 'codex', modelId: 'gpt', reasoningEffort: 'auto' }
     }),

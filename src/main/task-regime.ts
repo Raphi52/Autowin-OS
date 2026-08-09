@@ -27,6 +27,14 @@ const REGIME_PHASES: Record<TaskRegime, PipelinePhase[]> = {
 const CRITICAL_SIGNALS =
   /\b(architect\w*|refactor\w*|migrat\w*|s[eé]curit\w*|security|auth\w*|pipeline|orchestrat\w*|transvers\w*|breaking|irr[eé]versibl\w*|production|prod\b|deploy\w*|d[eé]ploie\w*|sch[eé]ma|schema|multi-\w+|tout le|l'ensemble|whole|entire)/i
 
+/**
+ * Une contrainte négative décrit précisément ce qu'il NE faut pas faire ; elle ne doit donc pas
+ * promouvoir seule une correction bornée en chantier critique. On retire uniquement le signal
+ * placé dans la petite fenêtre de la négation : tout autre signal positif reste classé critical.
+ */
+const NEGATED_CRITICAL_SIGNALS =
+  /\b(?:ne\s+pas|n['’]\s*|sans|do\s+not|don't|without)\s+(?:\w+[’'/-]?\w*\s+){0,2}(?:architect\w*|refactor\w*|migrat\w*|s[eé]curit\w*|security|auth\w*|pipeline|orchestrat\w*|transvers\w*|breaking|irr[eé]versibl\w*|production|prod\b|deploy\w*|d[eé]ploie\w*|sch[eé]ma|schema|multi-\w+|tout le|l'ensemble|whole|entire)/gi
+
 /** Signaux de TRIVIALITÉ (→ trivial) : micro-édition ciblée, déjà précise. */
 const TRIVIAL_SIGNALS =
   /\b(typo|renomm\w*|rename|corrige la faute|coquille|commentaire|comment|reformul\w*|un mot|one word|bump\w*|version|lint|format\w*)\b/i
@@ -38,7 +46,8 @@ const TRIVIAL_SIGNALS =
 export function classifyRegime(task: string): TaskRegime {
   const t = task.trim()
   if (!t) return 'standard'
-  if (CRITICAL_SIGNALS.test(t)) return 'critical'
+  const positiveComplexity = t.replace(NEGATED_CRITICAL_SIGNALS, '')
+  if (CRITICAL_SIGNALS.test(positiveComplexity)) return 'critical'
   // Multi-clause = vraie coupure de phrase (`;`, retour ligne, `. ` suivi de texte, « puis/then »),
   // PAS n'importe quel point (« 1.0.1 » n'est pas multi-clause).
   const hasClauseBreak = /[;\n]|\.\s+\S|\b(puis|ensuite|then|and then)\b/i.test(t)

@@ -1,4 +1,14 @@
-import { decideConversationCapability } from '../conversation-capabilities'
+function legacyAuthorityDecision(input: {
+  mode: 'plan' | 'ask' | 'auto'
+  mutates: boolean
+  authority: 'automatic' | 'sensitive' | 'destructive'
+}): 'allow' | 'confirm' | 'deny' {
+  if (!input.mutates) return 'allow'
+  if (input.mode === 'plan') return 'deny'
+  if (input.authority === 'destructive') return 'confirm'
+  if (input.mode === 'ask' && input.authority === 'sensitive') return 'confirm'
+  return 'allow'
+}
 
 export type TraceEventType =
   | 'message'
@@ -76,7 +86,7 @@ export interface TraceExecutionContext {
   attemptId?: string
 }
 
-/** Reçu vérifiable de la politique d'autorité appliquée à une commande du modèle. */
+/** Schéma historique en lecture seule pour afficher les reçus produits avant la politique unique. */
 export interface TraceAuthorityReceipt {
   mode: 'plan' | 'ask' | 'auto'
   commandAuthority: 'automatic' | 'sensitive' | 'destructive'
@@ -240,7 +250,7 @@ export function assertTraceEvent(event: TraceEventV1): TraceEventV1 {
       throw new Error('TraceEvent: authority.decision invalide')
     if (
       event.authority.decision !==
-      decideConversationCapability({
+      legacyAuthorityDecision({
         mode: event.authority.mode,
         mutates: event.authority.mutates,
         authority: event.authority.commandAuthority

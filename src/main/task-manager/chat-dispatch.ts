@@ -9,7 +9,6 @@ export interface ScheduledChatRuntime {
     title: string
     category: string
     provider: string
-    authorityMode?: 'plan' | 'ask' | 'auto'
   }): { id: string }
   bindConversation(taskId: string, conversationId: string): void
   isConversationBusy(conversationId: string): boolean
@@ -149,8 +148,7 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
     const created = this.runtime.createConversation({
       title: task.destination.title,
       category: task.destination.category,
-      provider: task.destination.provider,
-      authorityMode: task.destination.authorityMode
+      provider: task.destination.provider
     })
     this.runtime.bindConversation(task.id, created.id)
     return created.id

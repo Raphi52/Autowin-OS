@@ -13,7 +13,6 @@ import {
 import { dirname, join } from 'node:path'
 
 export type AutoKaizenConversationRole = 'analysis' | 'fix'
-export type AutoKaizenAuthorityMode = 'plan' | 'ask' | 'auto'
 
 export const LEGACY_AUTO_KAIZEN_ENABLED_ENV = 'AUTOWIN_LEGACY_AUTO_KAIZEN_ENABLED'
 
@@ -22,12 +21,6 @@ export function legacyAutoKaizenSupervisorEnabled(
 ): boolean {
   const flag = env[LEGACY_AUTO_KAIZEN_ENABLED_ENV]?.trim().toLowerCase()
   return flag === '1' || flag === 'true'
-}
-
-export function inheritAutoKaizenAuthority(
-  sourceMode: AutoKaizenAuthorityMode | undefined
-): AutoKaizenAuthorityMode {
-  return sourceMode ?? 'ask'
 }
 
 export interface AutoKaizenConversationLink {

@@ -85,6 +85,31 @@ describe('conversations-disk — persistance à chaque mutation', () => {
     // Un sous-dossier valide est créé à la demande.
     expect(() => saveConversations([], join(dir, 'sub', 'ok.json'))).not.toThrow()
   })
+
+  it('charge depuis le disque une conversation legacy puis retire son mode a hydratation', () => {
+    const p = join(dir, 'legacy-authority-mode.json')
+    writeFileSync(
+      p,
+      JSON.stringify([
+        {
+          id: 'conv-legacy',
+          title: 'Legacy',
+          category: 'codex',
+          provider: 'codex',
+          authorityMode: 'plan',
+          messages: [{ role: 'user', content: 'Question', ts: 10 }],
+          createdAt: 9,
+          updatedAt: 10
+        }
+      ]),
+      'utf8'
+    )
+
+    const loaded = loadConversations(p)
+    const store = new ConversationStore(() => 20)
+    expect(store.hydrate(loaded)).toBe(true)
+    expect(store.get('conv-legacy')).not.toHaveProperty('authorityMode')
+  })
 })
 
 describe('conversations-disk structured restart', () => {

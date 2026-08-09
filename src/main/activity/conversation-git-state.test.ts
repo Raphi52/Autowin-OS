@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -253,7 +254,7 @@ describe('conversation Git state', () => {
     execFileSync('git', ['add', '.'], { cwd: repo })
     execFileSync('git', ['commit', '-m', 'add deleted file'], { cwd: repo })
     rmSync(join(repo, 'dir', 'foo.ts'))
-    const tsxCli = join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs')
+    const tsxCli = createRequire(import.meta.url).resolve('tsx/cli')
     const probe = join(process.cwd(), 'scripts', 'conversation-delete-restart-probe.ts')
     const env = { ...process.env, APPDATA: appData }
 

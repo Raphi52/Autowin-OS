@@ -86,6 +86,21 @@ describe('WatchdogEngine — observer, filtrer, deleguer', () => {
     expect(dispatch.calls[0].context).toContain(logPath)
   })
 
+  it('ignore une ancienne regle app-event mal formee au lieu de faire tomber le main', async () => {
+    const dispatch = spy()
+    const malformed = watchdogTask(logPath, {
+      watchdog: {
+        source: { kind: 'app-event' } as never,
+        guards: { dedupWindowMs: 0, maxTriggersPerHour: 100, maxChainDepth: 0, maxPerRoot: 20 }
+      }
+    })
+    const engine = new WatchdogEngine(() => [malformed], dispatch, clock)
+    await engine.start()
+
+    await expect(engine.notifyAppEvent('task-failed', 'incident')).resolves.toBeUndefined()
+    expect(dispatch.calls).toHaveLength(0)
+  })
+
   it('DoD : l historique du fichier ne reveille PERSONNE au demarrage', async () => {
     await writeFile(logPath, 'ERROR vieille 1\nERROR vieille 2\n')
     const dispatch = spy()

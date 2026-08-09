@@ -128,7 +128,7 @@ describe('catalogue — la commande s’annonce comme une écriture externe', ()
   it('déclare openWorldHint et n’est ni readOnly ni idempotente', async () => {
     const { AppCommandBus } = await import('./commands')
     const bus = new AppCommandBus(
-      { authority: { resolve: vi.fn() } } as never,
+      {} as never,
       vi.fn(),
       undefined,
       undefined,

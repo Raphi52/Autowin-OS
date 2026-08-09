@@ -921,6 +921,8 @@ export class WorktreeManager {
       ':(exclude,glob)dist-*/**',
       ':(exclude,glob)graphify-out/**',
       ':(exclude,glob)**/.eslintcache',
+      ':(exclude,glob)*.tsbuildinfo',
+      ':(exclude,glob)**/*.tsbuildinfo',
       ':(exclude,glob)**/.DS_Store'
     ])
     return parseNullSeparatedPaths(out)

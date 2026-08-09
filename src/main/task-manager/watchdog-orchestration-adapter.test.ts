@@ -45,7 +45,7 @@ describe('adaptateur orchestration watchdog', () => {
       })
     )
 
-    expect(exec).toHaveBeenCalledWith('prompt', 'conv-1', 'ask', [])
+    expect(exec).toHaveBeenCalledWith('prompt', 'conv-1', [])
     expect(readMutatedPaths).toHaveBeenCalledWith('conv-1', 'turn-red')
     expect(result).toMatchObject({
       ok: false,
@@ -56,7 +56,7 @@ describe('adaptateur orchestration watchdog', () => {
     expect(result.error).toContain('preuve manquante')
   })
 
-  it('utilise uniquement l’autorité de la tâche courante et conserve un succès vert', async () => {
+  it('utilise la politique unique et conserve un succès vert', async () => {
     const exec = vi.fn().mockResolvedValue({
       ok: true,
       data: {
@@ -76,19 +76,18 @@ describe('adaptateur orchestration watchdog', () => {
         title: 'Incidents',
         category: 'watchdog',
         provider: 'claude',
-        authorityMode: 'auto',
         conversationId: 'conv-dedicated'
       })
     )
 
-    expect(exec).toHaveBeenCalledWith('prompt', 'conv-dedicated', 'auto', [])
+    expect(exec).toHaveBeenCalledWith('prompt', 'conv-dedicated', [])
     expect(result).toMatchObject({ ok: true, text: 'ISSUE: repair', turnId: 'turn-green' })
   })
 
   it('conserve une erreur du bus sans inventer un statut orchestration', async () => {
     const result = await runWatchdogOrchestration(
       {
-        exec: async () => ({ ok: false, error: 'Action interdite en mode Plan' }),
+        exec: async () => ({ ok: false, error: 'Orchestration indisponible' }),
         readMutatedPaths: () => {
           throw new Error('ne doit pas lire un tour absent')
         }
@@ -98,7 +97,7 @@ describe('adaptateur orchestration watchdog', () => {
       task({ kind: 'existing', conversationId: 'conv-1' })
     )
 
-    expect(result).toEqual({ ok: false, error: 'Action interdite en mode Plan' })
+    expect(result).toEqual({ ok: false, error: 'Orchestration indisponible' })
   })
 
   it('transporte le fichier surveille jusqu au run sans le mettre dans le prompt', async () => {
@@ -120,7 +119,7 @@ describe('adaptateur orchestration watchdog', () => {
       fileTask
     )
 
-    expect(exec).toHaveBeenCalledWith('prompt sans chemin interne', 'conv-1', 'ask', [
+    expect(exec).toHaveBeenCalledWith('prompt sans chemin interne', 'conv-1', [
       'C:/repo/logs/app.log'
     ])
   })
@@ -140,6 +139,6 @@ describe('adaptateur orchestration watchdog', () => {
       onLateMutationClaims
     )
 
-    expect(exec).toHaveBeenCalledWith('prompt', 'conv-1', 'ask', [], onLateMutationClaims)
+    expect(exec).toHaveBeenCalledWith('prompt', 'conv-1', [], onLateMutationClaims)
   })
 })

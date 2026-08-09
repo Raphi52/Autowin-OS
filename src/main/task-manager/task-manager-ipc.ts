@@ -198,8 +198,6 @@ function destination(raw: unknown): TaskDestination {
     }
   }
   if (value.kind === 'new') {
-    const authorityMode =
-      value.authorityMode === undefined ? undefined : authority(value.authorityMode)
     return {
       kind: 'new',
       title: requiredString(value.title, 'destination.title'),
@@ -211,7 +209,6 @@ function destination(raw: unknown): TaskDestination {
       ...(value.reasoningEffort === undefined
         ? {}
         : { reasoningEffort: reasoningEffort(value.reasoningEffort) }),
-      ...(authorityMode ? { authorityMode } : {}),
       ...(typeof value.conversationId === 'string' && value.conversationId.trim()
         ? { conversationId: value.conversationId.trim() }
         : {})
@@ -273,13 +270,6 @@ function integer(value: unknown, label: string): number {
 
 function mode(value: unknown): ScheduledTaskInput['mode'] {
   if (value !== 'windows' && value !== 'active-only') throw new Error('Mode de tâche invalide')
-  return value
-}
-
-function authority(value: unknown): 'plan' | 'ask' | 'auto' {
-  if (value !== 'plan' && value !== 'ask' && value !== 'auto') {
-    throw new Error('Mode d’autorité invalide')
-  }
   return value
 }
 

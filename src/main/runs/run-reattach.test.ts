@@ -247,7 +247,18 @@ describe('câblage — le démarrage consulte la garde avant de relancer', () =>
   })
 
   it('elle ne relance QUE si le verdict est « relancer »', () => {
-    expect(source).toContain("if (reprise === 'relancer') void relaunchResumableRun(resumableRun)")
+    expect(source).toContain("if (reprise === 'relancer') {")
+    expect(source).toContain(
+      'void startupResumeQueue.enqueue(() => relaunchResumableRun(resumableRun))'
+    )
+  })
+
+  it('serialise globalement les reprises de plusieurs conversations', () => {
+    expect(source).toContain('const startupResumeQueue = new StartupResumeQueue()')
+    expect(source).toContain('await resumedRuntime')
+    expect(source).toContain(
+      'await startupResumeQueue.enqueue(() => relaunchResumableRun(latest))'
+    )
   })
 
   it('réconcilie et persiste les appels morts avant de passer le snapshot au superviseur', () => {

@@ -249,6 +249,8 @@ function isConversation(value: unknown): value is Conversation {
   ) {
     return false
   }
+  // Compatibilite de lecture uniquement : ConversationStore retire `authorityMode` a
+  // l'hydratation. Ces valeurs ne constituent plus des modes pris en charge au runtime.
   return (
     value.authorityMode === undefined ||
     value.authorityMode === 'plan' ||

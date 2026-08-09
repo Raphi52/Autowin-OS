@@ -23,6 +23,22 @@ describe('classifyRegime', () => {
     expect(classifyRegime('')).toBe('standard')
   })
 
+  it("ne transforme pas une interdiction de refactorer en signal de chantier critique", () => {
+    expect(
+      classifyRegime(
+        'Implémente les trois corrections ciblées. Ne pas refactorer ChatView ni renommer les API.'
+      )
+    ).toBe('standard')
+  })
+
+  it('conserve les vrais signaux critiques présents après une contrainte négative', () => {
+    expect(
+      classifyRegime(
+        'Ne pas refactorer ChatView ; migrer le schéma de production dans un lot séparé.'
+      )
+    ).toBe('critical')
+  })
+
   it('ne classe PAS trivial une tâche longue/multi-clauses même avec un mot trivial', () => {
     const long =
       'renomme la fonction foo en bar, puis mets à jour tous les appelants et vérifie que les tests passent encore correctement partout'

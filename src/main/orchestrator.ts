@@ -7,7 +7,6 @@ import { resolvePhaseBinding } from './roles'
 import { defaultQuorumThreshold } from './quorum'
 import type { CostAggregator } from './dashboards/cost'
 import type { TrustLedger } from './trust/ledger'
-import type { AuthoritySas } from './authority/sas'
 import { evaluateClosure } from './gates/stopgate'
 import { HookBus } from './hooks/hook-bus'
 import { createDefaultHookBus } from './hooks/default-gate-hooks'
@@ -231,8 +230,6 @@ export interface OrchestrationResult {
   quote?: ExecutionQuote
   /** Consommation atomique locale a ce run, jamais le cumul historique. */
   usage?: ExecutionUsageSnapshot
-  /** Id de la décision d'autorité ouverte si le gate a bloqué (sinon undefined). */
-  pendingDecisionId?: string
   /** Sortie brute de chaque phase exec — sert à peupler le RUN.md de la conversation (J2). */
   phaseOutputs: { phase: PipelinePhase; text: string }[]
   /** Requête envoyée au Brain (RAG 1×/run) — pour la traçabilité Observatory. */
@@ -294,7 +291,6 @@ export interface OrchestratorCollaboratorDeps {
   roles: RoleModelConfig
   cost: CostAggregator
   trust: TrustLedger
-  authority: AuthoritySas
   /** Retriever substituable pour prouver les frontières d'injection sans serveur global. */
   retrieveBrain?: typeof retrieveBrainContext
   /** Résumé metadata-only des décisions reliées à leurs issues observées dans cette conversation. */

@@ -89,8 +89,8 @@ export function describeWatchdogSource(source: WatchdogSource): string {
 
 /**
  * Rend les bornes LISIBLES. Elles sont la contrepartie du pouvoir accordé à une règle : les cacher
- * dans un formulaire replié reviendrait à laisser croire qu'un agent en autorité `auto` est borné
- * sans jamais montrer par quoi.
+ * dans un formulaire replié reviendrait à laisser croire qu'un agent autonome est borné sans
+ * jamais montrer par quoi.
  */
 export function describeWatchdogGuards(guards: WatchdogGuards): string {
   const parts = [

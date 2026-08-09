@@ -9,12 +9,61 @@ import { forgetEcho, noteRemembered } from './session-memory-echo'
 const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
   tab: 'chat',
   providers: [],
-  pendingDecisions: [],
   runsBlocked: [],
   conversationsCount: 0
 })
 
 describe('AgentPilot turn contract', () => {
+  it('reinjecte une capture de commande comme image ephemere a iteration suivante', async () => {
+    const calls: Array<Array<{ role: string; content: string; attachments?: unknown[] }>> = []
+    const responses = [
+      '<cmd>{"name":"desktop_observe","args":{}}</cmd>',
+      'Je vois maintenant le bureau.'
+    ]
+    const registry = {
+      send: vi.fn(async (_provider: string, messages: (typeof calls)[number]) => {
+        calls.push(structuredClone(messages))
+        return { text: responses.shift()!, provider: 'codex' }
+      }),
+      describePrompt: () => ({
+        provider: 'codex',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const image = {
+      name: 'desktop.jpg',
+      mimeType: 'image/jpeg',
+      size: 3,
+      kind: 'image' as const,
+      content: 'YWJj'
+    }
+    const bus = {
+      catalog: () => [{ name: 'desktop_observe', args: {}, description: 'observe' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { width: 1280, height: 720 },
+        attachments: [image]
+      })
+    }
+
+    await new AgentPilot(
+      registry as never,
+      {
+        getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+      } as never,
+      bus as never
+    ).chat([{ role: 'user', content: 'regarde mon ecran' }], () => undefined, undefined, 2)
+
+    expect(calls).toHaveLength(2)
+    expect(calls[0][0].attachments).toBeUndefined()
+    expect(calls[1][0].attachments).toEqual([image])
+    expect(calls[1][0].content).not.toContain('YWJj')
+  })
+
   it('autorise au plus une orchestration par tour, meme si le modele en emet deux', async () => {
     const responses = [
       '<cmd>{"name":"orchestrate","args":{"task":"premier run"}}</cmd>' +
@@ -49,7 +98,6 @@ describe('AgentPilot turn contract', () => {
       2,
       'conv-unique',
       undefined,
-      'ask',
       undefined,
       undefined,
       'turn-unique'
@@ -60,7 +108,6 @@ describe('AgentPilot turn contract', () => {
       'orchestrate',
       { task: 'premier run' },
       'conv-unique',
-      'ask',
       undefined,
       'turn-unique'
     )
@@ -93,8 +140,7 @@ describe('AgentPilot turn contract', () => {
     expect(bus.exec).toHaveBeenCalledWith(
       'orchestrate',
       { task: '/scout trouve les risques du repo' },
-      'conv-1',
-      'ask'
+      'conv-1'
     )
     expect(events.map((event) => event.kind)).toEqual(['command', 'result', 'done'])
   })
@@ -121,7 +167,6 @@ describe('AgentPilot turn contract', () => {
       2,
       'conv-directive',
       undefined,
-      'ask',
       () => directives.shift() ?? []
     )
 
@@ -155,7 +200,6 @@ describe('AgentPilot turn contract', () => {
       1,
       'conv-task',
       undefined,
-      'auto',
       undefined,
       binding
     )
@@ -164,7 +208,6 @@ describe('AgentPilot turn contract', () => {
       'orchestrate',
       { task: '/build corrige puis teste' },
       'conv-task',
-      'auto',
       binding
     )
   })
@@ -195,7 +238,6 @@ describe('AgentPilot turn contract', () => {
       1,
       'conv-snapshot',
       undefined,
-      'ask',
       undefined,
       undefined,
       'turn-snapshot',
@@ -211,14 +253,12 @@ describe('AgentPilot turn contract', () => {
     expect(roles.getBinding).not.toHaveBeenCalled()
   })
 
-  it('passes the persisted authority mode from the real pilotChat IPC path', () => {
+  it('does not pass an authority mode from the real pilotChat IPC path', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     expect(source).toContain(
       'const supervisedSignal = os.executionSupervisor.currentSignal() ?? controller.signal'
     )
-    expect(source).toMatch(
-      /pilot\.chat\([\s\S]*?conversationId,[\s\S]*?supervisedSignal,[\s\S]*?authorityMode/
-    )
+    expect(source).not.toContain('authorityMode')
   })
 
   it('journals the routed model and reasoning effort used by pilotChat', () => {
@@ -237,7 +277,7 @@ describe('AgentPilot turn contract', () => {
     )
   })
 
-  it('binds the conversation authority mode to every command in the turn', async () => {
+  it('dispatches every command without an authority mode', async () => {
     const responses = [
       '<cmd>{"name":"remove_conversation","args":{"id":"conv-1"}}</cmd>',
       'Refus confirmé'
@@ -254,7 +294,7 @@ describe('AgentPilot turn contract', () => {
     const bus = {
       catalog: () => [{ name: 'remove_conversation', args: { id: 'id' }, description: 'remove' }],
       snapshotForPrompt,
-      exec: vi.fn().mockResolvedValue({ ok: false, error: 'Action interdite en mode Plan' })
+      exec: vi.fn().mockResolvedValue({ ok: true, data: true })
     }
 
     await new AgentPilot(registry as never, roles as never, bus as never).chat(
@@ -262,12 +302,10 @@ describe('AgentPilot turn contract', () => {
       () => undefined,
       undefined,
       2,
-      'conv-1',
-      undefined,
-      'plan'
+      'conv-1'
     )
 
-    expect(bus.exec).toHaveBeenCalledWith('remove_conversation', { id: 'conv-1' }, 'conv-1', 'plan')
+    expect(bus.exec).toHaveBeenCalledWith('remove_conversation', { id: 'conv-1' }, 'conv-1')
   })
 
   it('does not interrupt the user for a structured question without an admitted blocker', async () => {
@@ -431,7 +469,6 @@ describe('AgentPilot turn contract', () => {
       6,
       'conv-1',
       undefined,
-      'ask',
       drain
     )
 
@@ -469,7 +506,6 @@ describe('AgentPilot turn contract', () => {
       6,
       'conv-1',
       undefined,
-      'ask',
       () => queue.splice(0, queue.length)
     )
 
@@ -560,7 +596,6 @@ describe('AgentPilot turn contract', () => {
       1,
       'conv-task',
       undefined,
-      'auto',
       undefined,
       { provider: 'claude', model: 'claude-sonnet', reasoningEffort: 'high' }
     )

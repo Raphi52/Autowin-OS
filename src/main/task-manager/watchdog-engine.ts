@@ -207,7 +207,12 @@ export class WatchdogEngine {
   async notifyAppEvent(event: WatchdogAppEvent, context: string): Promise<void> {
     for (const task of this.watchdogTasks()) {
       const source = task.watchdog?.source
-      if (source?.kind !== 'app-event' || !source.events.includes(event)) continue
+      if (
+        source?.kind !== 'app-event' ||
+        !Array.isArray(source.events) ||
+        !source.events.includes(event)
+      )
+        continue
       const signature = `${event}:${lineSignature(context)}`
       const observedAt = this.clock.now()
       await this.fire(task, {

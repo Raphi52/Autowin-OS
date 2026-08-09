@@ -376,13 +376,6 @@ const api = {
   toolUsage: (): Promise<
     Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
   > => ipcRenderer.invoke('os:toolUsage'),
-  // Sas d'autorité
-  authorityPending: (): Promise<Array<{ id: string; question: string }>> =>
-    ipcRenderer.invoke('os:authority:pending'),
-  // `bus.resolveDecision()` (src/main/commands.ts) est lui-même typé `Promise<unknown>` : la décision
-  // résolue est de forme libre selon le type de question d'autorité posée.
-  authorityResolve: (id: string, choice: unknown): Promise<unknown> =>
-    ipcRenderer.invoke('os:authority:resolve', id, choice),
   // Conversations
   conversations: (): Promise<ConversationSummary[]> => ipcRenderer.invoke('os:conversations'),
   conversation: (id: string): Promise<Conversation | null> =>
@@ -391,7 +384,6 @@ const api = {
     title: string
     category: string
     provider: string
-    authorityMode?: 'plan' | 'ask' | 'auto'
   }): Promise<{ id: string; title: string; category: string; provider: string }> =>
     ipcRenderer.invoke('os:conversations:create', p),
   routeConversationMessage: (
@@ -408,10 +400,6 @@ const api = {
     ipcRenderer.invoke('os:conversations:routeMessage', conversationId, message, attachmentNames),
   conversationsRename: (id: string, title: string): Promise<void> =>
     ipcRenderer.invoke('os:conversations:rename', id, title),
-  conversationsSetAuthorityMode: (
-    id: string,
-    mode: 'plan' | 'ask' | 'auto'
-  ): Promise<Conversation> => ipcRenderer.invoke('os:conversations:authorityMode', id, mode),
   /**
    * Range une conversation dans un dossier de travail — ce qui la groupe dans la liste.
    * `path` OMIS → le main ouvre le sélecteur natif (le renderer n'a pas le disque) ;

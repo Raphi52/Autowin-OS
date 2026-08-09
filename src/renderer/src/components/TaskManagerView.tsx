@@ -43,7 +43,6 @@ type TaskDestination =
       provider: string
       model?: string
       reasoningEffort?: string
-      authorityMode?: 'plan' | 'ask' | 'auto'
       conversationId?: string
     }
 
@@ -180,8 +179,7 @@ function defaultDraft(
                 model: selectedModel.model,
                 reasoningEffort: selectedModel.defaultReasoningEffort
               }
-            : {}),
-          authorityMode: 'auto'
+            : {})
         },
     schedule: {
       startDate: now.date,
@@ -663,8 +661,7 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                                             reasoningEffort:
                                               selectableModels[0].defaultReasoningEffort
                                           }
-                                        : {}),
-                                      authorityMode: 'auto'
+                                        : {})
                                     }
                             }
                           : current

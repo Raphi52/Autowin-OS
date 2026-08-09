@@ -155,6 +155,8 @@ describe('formatTicketSelectionPrompt — UNE conversation pour N tickets (promp
     expect(prompt).toContain('Traite les 3 tickets')
     for (const id of ['#1', '#2', '#3']) expect(prompt).toContain(id)
     expect(prompt).toContain('plan court')
+    expect(prompt).toContain('sans mode ni approbation')
+    expect(prompt).not.toMatch(/regles d autorite|sas/i)
   })
 
   it('encadre les donnees comme NON FIABLES (anti prompt-injection)', () => {

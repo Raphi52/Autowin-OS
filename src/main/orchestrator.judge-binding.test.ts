@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
 import { Orchestrator } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
@@ -85,7 +84,6 @@ function harnais() {
     }),
     cost: new CostAggregator(),
     trust: new TrustLedger(),
-    authority: new AuthoritySas(),
     executionWorkspace: 'C:\\base',
     worktrees: makeTestWorktrees('C:\\base'),
     execPhases: ['build'],

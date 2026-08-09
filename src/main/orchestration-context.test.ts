@@ -6,7 +6,7 @@ describe('collecte de contexte d’orchestration', () => {
     const context = collectOrchestrationContext({
       task: 'implémenter une évolution',
       conversation: { id: 'conv-1', title: 'Paiement', runPaths: ['C:/workflow/RUN.md'] },
-      app: { tab: 'workflows', pendingDecisions: [{ id: 'd1', question: 'continuer ?' }] },
+      app: { tab: 'workflows' },
       runs: [{ subject: 'paiement', status: 'open', blocked: false }]
     })
     expect(context).toMatch(/^\[COLLECTE DE CONTEXTE/)

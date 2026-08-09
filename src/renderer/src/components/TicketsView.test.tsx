@@ -115,7 +115,6 @@ describe('vue Tickets', () => {
     api({
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       conversationsCreate,
-      conversationsSetAuthorityMode: vi.fn(async () => ({})),
       orchestrate,
       appCommand
     })
@@ -160,7 +159,6 @@ describe('vue Tickets', () => {
     api({
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       conversationsCreate: vi.fn(async () => ({ id: 'conv-1' })),
-      conversationsSetAuthorityMode: vi.fn(async () => ({})),
       appCommand: vi.fn(async () => ({ ok: true }))
     })
     const prefills: Array<{ send?: boolean }> = []
@@ -650,7 +648,6 @@ describe('vue Tickets', () => {
     api({
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       conversationsCreate: vi.fn(async () => ({ id: 'c' })),
-      conversationsSetAuthorityMode: vi.fn(async () => ({})),
       orchestrate
     })
     const { root, container } = await render()
@@ -707,7 +704,6 @@ describe('vue Tickets — lots automatiques différés', () => {
       })),
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       conversationsCreate,
-      conversationsSetAuthorityMode: vi.fn(async () => ({})),
       orchestrate: vi.fn(async () => ({ ok: true }))
     })
 
@@ -733,7 +729,6 @@ describe('vue Tickets — lots automatiques différés', () => {
       listTickets: vi.fn(async () => ({ items: [item('1')], hasMore: false })),
       roles,
       conversationsCreate,
-      conversationsSetAuthorityMode: vi.fn(async () => ({})),
       orchestrate: vi.fn(async () => ({ ok: true }))
     })
 
@@ -770,7 +765,6 @@ describe('vue Tickets — lots automatiques différés', () => {
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       providerStatus,
       conversationsCreate: vi.fn(async () => ({ id: 'conv-ticket' })),
-      conversationsSetAuthorityMode: vi.fn(async () => ({})),
       orchestrate
     })
 
@@ -818,7 +812,6 @@ describe('vue Tickets — lots automatiques différés', () => {
       })),
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       conversationsCreate,
-      conversationsSetAuthorityMode: vi.fn(async () => ({})),
       orchestrate
     })
 

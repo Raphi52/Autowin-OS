@@ -166,11 +166,11 @@ describe('renderer chat IPC contract', () => {
     expect(handler).not.toContain('return new Promise')
   })
 
-  it('propage l’autorité de création et rafraîchit la liste des conversations', () => {
+  it('crée sans mode d’autorité et rafraîchit la liste des conversations', () => {
     const sources = readChatContractSources()
 
-    expect(sources.preload).toContain("authorityMode?: 'plan' | 'ask' | 'auto'")
-    expect(sources.preloadTypes).toContain("authorityMode?: 'plan' | 'ask' | 'auto'")
+    expect(sources.preload).not.toContain('authorityMode')
+    expect(sources.preloadTypes).not.toContain('authorityMode')
     expect(sources.main).toMatch(
       /'os:conversations:create'[\s\S]*?os\.conversations\.create\(p\)[\s\S]*?scope: 'conversations'/
     )

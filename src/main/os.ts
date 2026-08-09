@@ -17,7 +17,6 @@ import { RoleModelConfig, type Role, type RoleBinding, type ReasoningEffort } fr
 import { dynamicPrompt, meriteUneDecision, readWorkflowDecision } from './workflow-dynamic'
 import { loadRoleBindings, saveRoleBindings } from './role-store'
 // fix-ok: refonte qualité (demande user « refais comme en fable ») — purge du mort, pas un blind-fix.
-import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
 import { isBlocked } from './dashboards/runs'
 import { recurrentPatterns, parseJsonl } from './dashboards/kaizen'
@@ -148,7 +147,6 @@ export class AutowinOS {
   readonly registry: ProviderRegistry
   readonly executionSupervisor = new ExecutionSupervisor()
   readonly roles = new RoleModelConfig(loadRoleBindings()) // restaure la config persistée
-  readonly authority = new AuthoritySas()
   readonly cost = new CostAggregator(undefined, join(ensureAutowinAppData(), 'cost.jsonl'))
   readonly conversations = new ConversationStore()
   readonly trust = new TrustLedger(join(ensureAutowinAppData(), 'trust.jsonl'))
@@ -395,7 +393,6 @@ export class AutowinOS {
       roles: this.roles,
       cost: this.cost,
       trust: this.trust,
-      authority: this.authority,
       executionWorkspace,
       causalMemoryFor: (conversationId) => this.causalMemoryRetriever?.(conversationId) ?? '',
       // verify-replay EN PROD (opt-in via AUTOWIN_VERIFY_REPLAY) : rejoue la vérif au gate au lieu

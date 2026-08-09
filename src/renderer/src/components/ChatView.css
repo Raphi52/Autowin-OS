@@ -495,25 +495,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Bandeau décisions en attente (sas d'autorité) */
-.decision-strip {
-  gap: var(--s2);
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--line);
-  border-left: 2px solid var(--warn);
-  border-radius: var(--r2);
-  background: var(--bg-1);
-}
-.decision-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s3);
-}
-.decision-q {
-  font-size: 12px;
-  color: var(--text-dim);
-}
 /* Workflows */
 .workflow-panel-head {
   display: flex;
@@ -1993,13 +1974,6 @@ ol.md-list li {
   color: #e4c77b;
   white-space: normal;
   font-size: 9px;
-}
-
-.cosmic-outline .decision-strip {
-  margin: 12px 22px 0;
-  border-color: rgba(222, 183, 87, 0.34);
-  border-left-color: #dcb755;
-  background: #090b09;
 }
 
 .cosmic-outline .chat-scroll {

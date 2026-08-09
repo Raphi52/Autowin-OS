@@ -50,8 +50,8 @@ describe('branchement runtime Auto-Kaizen', () => {
     )
   })
 
-  it('hérite strictement de l’autorité de la conversation source', () => {
-    expect(source).toContain('authorityMode: inheritAutoKaizenAuthority(source?.authorityMode)')
-    expect(source).not.toContain("authorityMode: 'auto',\n          autoKaizen: link")
+  it('crée les conversations Auto-Kaizen sans mode d’autorité', () => {
+    expect(source).not.toContain('inheritAutoKaizenAuthority')
+    expect(source).not.toContain('authorityMode')
   })
 })

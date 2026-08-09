@@ -1,6 +1,5 @@
 import { createHmac } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
-import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
 import { Orchestrator } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
@@ -92,7 +91,6 @@ describe('Orchestrator execution contract', () => {
         }),
         cost: new CostAggregator(),
         trust: new TrustLedger(),
-        authority: new AuthoritySas(),
         executionWorkspace: process.cwd(),
         retrieveBrain
       })
@@ -140,7 +138,6 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: process.cwd()
     })
 
@@ -173,7 +170,6 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: process.cwd(),
       causalMemoryFor
     })
@@ -218,7 +214,6 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: process.cwd()
     })
 
@@ -263,7 +258,6 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'D:\\DevSrc\\RigApplication',
       retrieveBrain: async (_query, options) => {
         seenCorpus.push(options?.corpus)
@@ -312,7 +306,6 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: process.cwd(),
       retrieveBrain: (query, options) =>
         retrieveBrainContext(query, {
@@ -352,7 +345,6 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: process.cwd()
     })
 
@@ -386,7 +378,6 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\workspace',
       worktrees: makeTestWorktrees('C:\\workspace'),
       execPhases: ['frame', 'build'],
@@ -421,7 +412,6 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\workspace',
       worktrees: makeTestWorktrees('C:\\workspace'),
       skillInstruction: () => ''
@@ -449,7 +439,6 @@ describe('Orchestrator execution contract', () => {
       roles,
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\workspace',
       worktrees: makeTestWorktrees('C:\\workspace')
     })
@@ -473,7 +462,6 @@ describe('Orchestrator execution contract', () => {
   it('garde le gate rouge si le worker prétend réussir sans preuve d’outil', async () => {
     const provider = new CapturingProvider(false)
     const registry = new ProviderRegistry().register(provider)
-    const authority = new AuthoritySas()
     const roles = new RoleModelConfig({
       subagent: { provider: provider.id, model: 'worker' },
       judge: { provider: provider.id, model: 'judge' }
@@ -483,7 +471,6 @@ describe('Orchestrator execution contract', () => {
       roles,
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority,
       executionWorkspace: 'C:\\workspace',
       worktrees: makeTestWorktrees('C:\\workspace')
     })
@@ -494,8 +481,7 @@ describe('Orchestrator execution contract', () => {
 
     expect(result.valid).toBe(false)
     expect(result.gateBlocked).toBe(true)
-    expect(result.pendingDecisionId).toBeUndefined()
-    expect(authority.pending()).toHaveLength(0)
+    expect(result).not.toHaveProperty('pendingDecisionId')
   })
 
   it('B1 — une tâche NON-mutation sans preuve d’outil passe si le juge valide', async () => {
@@ -508,7 +494,6 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\workspace',
       worktrees: makeTestWorktrees('C:\\workspace')
     })
@@ -559,7 +544,6 @@ describe('Orchestrator execution contract', () => {
         }),
         cost: new CostAggregator(),
         trust: new TrustLedger(),
-        authority: new AuthoritySas(),
         executionWorkspace: 'C:\\workspace',
         worktrees: makeTestWorktrees('C:\\workspace')
       })
@@ -585,7 +569,6 @@ describe('Orchestrator execution contract', () => {
         }),
         cost: new CostAggregator(),
         trust: new TrustLedger(),
-        authority: new AuthoritySas(),
         executionWorkspace: ws,
         worktrees: makeTestWorktrees(ws)
       })
@@ -646,7 +629,6 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\workspace',
       worktrees: makeTestWorktrees('C:\\workspace')
     })

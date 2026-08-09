@@ -78,11 +78,10 @@ describe('seedWatchdogTasks — l’auto-kaizen comme VRAIE tâche', () => {
     expect(tasks.snapshot().seeds).toContain(AUTO_KAIZEN_SEED_ID)
   })
 
-  it('ne s’autorise RIEN par défaut : autorité « plan », pas « auto »', () => {
-    // Une règle qui se déclenche seule et écrit seule est le cas où un défaut ne doit rien s'arroger.
+  it('crée la règle sans mode d’autorité', () => {
     const seed = autoKaizenSeed()
 
-    expect(seed.destination.kind === 'new' && seed.destination.authorityMode).toBe('plan')
+    expect(seed.destination).not.toHaveProperty('authorityMode')
   })
 
   it('surveille les problèmes de WORKFLOW, pas seulement les orchestrations rouges', () => {

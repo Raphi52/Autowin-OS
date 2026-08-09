@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
 import { Orchestrator, type OrchestrationRuntimeSnapshot } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
@@ -80,7 +79,6 @@ describe('Orchestrator — identité provider réelle dans trace + coût', () =>
       roles,
       cost,
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['build']
@@ -133,7 +131,6 @@ describe('Orchestrator — identité provider réelle dans trace + coût', () =>
       roles,
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['build'],
