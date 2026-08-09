@@ -388,6 +388,80 @@ describe('GraphView refresh', () => {
     expect(container.querySelectorAll('[data-node-id]')).toHaveLength(before)
   })
 
+  it('remplace la stack IPC par un message métier quand loadBrainGraph échoue', async () => {
+    const loadBrainGraph = vi
+      .fn()
+      .mockRejectedValue(
+        new Error(
+          "Error invoking remote method 'brain:graph': Error: ENOENT no such file or directory"
+        )
+      )
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      listBrains: vi
+        .fn()
+        .mockResolvedValue([{ id: 'a', label: 'A', path: 'A', sizeMb: 1, kind: 'vault' }]),
+      loadBrainGraphPreview: vi.fn().mockResolvedValue({ nodes: [], links: [] }),
+      loadBrainGraph,
+      loadBrainThemes: vi.fn().mockResolvedValue([]),
+      loadBrainThemeNodes: vi.fn().mockResolvedValue([])
+    }
+
+    await act(async () =>
+      root.render(createElement(GraphView, { active: true, onCleanMemory: vi.fn() }))
+    )
+    await flush()
+
+    const alert = container.querySelector('[role="alert"]')
+    expect(alert).toBeTruthy()
+    expect(alert?.textContent).toContain('Impossible de charger le graphe de connaissances')
+    expect(alert?.textContent).not.toContain('Error invoking remote method')
+    expect(container.textContent).not.toContain('Error invoking remote method')
+  })
+
+  it('relance réellement le chargement via Réessayer, en effaçant l’erreur et en remontrant le spinner', async () => {
+    const secondPreview = deferred<{ nodes: never[]; links: never[] }>()
+    let previewCalls = 0
+    const loadBrainGraph = vi.fn().mockRejectedValue(new Error('canal IPC indisponible'))
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      listBrains: vi
+        .fn()
+        .mockResolvedValue([{ id: 'a', label: 'A', path: 'A', sizeMb: 1, kind: 'vault' }]),
+      loadBrainGraphPreview: vi.fn().mockImplementation(() => {
+        previewCalls += 1
+        return previewCalls === 1
+          ? Promise.resolve({ nodes: [], links: [] })
+          : secondPreview.promise
+      }),
+      loadBrainGraph,
+      loadBrainThemes: vi.fn().mockResolvedValue([]),
+      loadBrainThemeNodes: vi.fn().mockResolvedValue([])
+    }
+
+    await act(async () =>
+      root.render(createElement(GraphView, { active: true, onCleanMemory: vi.fn() }))
+    )
+    await flush()
+    expect(loadBrainGraph).toHaveBeenCalledTimes(1)
+    expect(container.querySelector('[role="status"]')).toBeNull()
+
+    const retry = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      button.textContent?.includes('Réessayer')
+    )
+    expect(retry).toBeTruthy()
+    await act(async () => retry?.click())
+    await flush()
+
+    expect(previewCalls).toBe(2)
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+    expect(container.querySelector('[role="status"]')).toBeTruthy()
+
+    await act(async () => {
+      secondPreview.resolve({ nodes: [], links: [] })
+      for (let index = 0; index < 4; index += 1) await Promise.resolve()
+    })
+    expect(loadBrainGraph).toHaveBeenCalledTimes(2)
+  })
+
   it('affiche une file de santé uniquement à partir des relations explicites', async () => {
     const nodes = [
       { id: 'new', label: 'Décision actuelle', group: 0 },

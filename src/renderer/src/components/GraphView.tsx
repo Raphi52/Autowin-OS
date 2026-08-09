@@ -146,6 +146,17 @@ function initialColumnWidths(): ColumnWidths {
   }
 }
 
+/**
+ * Traduit une erreur (souvent une stack IPC brute) en message métier lisible.
+ * Le détail technique n'est conservé que s'il est court et n'expose pas la plomberie IPC.
+ */
+function toBusinessError(headline: string, error: unknown): string {
+  const raw = (error instanceof Error ? error.message : String(error)).replace(/^Error:\s*/, '')
+  const opaque =
+    raw === '' || raw.length > 120 || /invoking remote method|\n|\bat\s+\S+:\d+|Error:/i.test(raw)
+  return opaque ? headline : `${headline} (${raw})`
+}
+
 /** Observatoire 3D : thèmes en surbrillance, visibilité réglable et lecture du nœud. */
 export function GraphView({
   active,
@@ -228,7 +239,9 @@ export function GraphView({
           available.some((brain) => brain.path === current) ? current : (available[0]?.path ?? '')
         )
       })
-      .catch((error) => setErr(String(error)))
+      .catch((error) =>
+        setErr(toBusinessError('Impossible de lister les graphes de connaissances.', error))
+      )
   }, [])
 
   const refreshGraph = useCallback((): void => {
@@ -253,9 +266,20 @@ export function GraphView({
         refreshBrains()
       })
       .catch((error) => {
-        setErr(`Rafraîchissement impossible : ${String(error)}`)
+        setErr(toBusinessError('Impossible de rafraîchir le graphe de connaissances.', error))
         setLoading(false)
       })
+  }, [refreshBrains, selected])
+
+  /** Réessai : relance le chargement par le MÊME chemin que le chargement initial. */
+  const retryGraph = useCallback((): void => {
+    setErr('')
+    if (!selected) {
+      refreshBrains()
+      return
+    }
+    setLoading(true)
+    setGraphReload((request) => request + 1)
   }, [refreshBrains, selected])
 
   useEffect(() => {
@@ -335,7 +359,8 @@ export function GraphView({
         })
       })
       .catch((error) => {
-        if (current) setErr(String(error))
+        if (current)
+          setErr(toBusinessError('Impossible de charger le graphe de connaissances.', error))
       })
       .finally(() => {
         if (current) setLoading(false)
@@ -1599,7 +1624,14 @@ export function GraphView({
         {expandingNodeId && !loading && (
           <div className="graph-status">Chargement des connexions…</div>
         )}
-        {err && <div className="graph-status graph-status--error">{err}</div>}
+        {err && (
+          <div className="graph-status graph-status--error" role="alert">
+            <span className="graph-status__message">{err}</span>
+            <button type="button" className="graph-status__retry" onClick={retryGraph}>
+              Réessayer
+            </button>
+          </div>
+        )}
         {!loading && !err && graph.nodes.length === 0 && (
           <div className="graph-status">Aucun nœud disponible pour ce graphe.</div>
         )}
