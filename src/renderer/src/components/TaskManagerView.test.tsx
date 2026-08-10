@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, createElement } from 'react'
+import { act, createElement, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TaskManagerView } from './TaskManagerView'
@@ -10,12 +10,18 @@ import { TaskManagerView } from './TaskManagerView'
 
 const mounted: Array<{ root: ReturnType<typeof createRoot>; container: HTMLDivElement }> = []
 
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason: unknown) => void
+} {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((done) => {
+  let reject!: (reason: unknown) => void
+  const promise = new Promise<T>((done, fail) => {
     resolve = done
+    reject = fail
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 
 afterEach(async () => {
@@ -138,6 +144,23 @@ async function mount(
 }
 
 describe('TaskManagerView', () => {
+  it('ne double pas le chargement initial sous StrictMode', async () => {
+    const mockApi = api()
+    Object.defineProperty(window, 'api', { value: mockApi, configurable: true })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    mounted.push({ root, container })
+
+    await act(async () => {
+      root.render(createElement(StrictMode, null, createElement(TaskManagerView, { active: true })))
+    })
+
+    expect(mockApi.taskManagerSnapshot).toHaveBeenCalledTimes(1)
+    expect(mockApi.conversations).toHaveBeenCalledTimes(1)
+    expect(mockApi.models).toHaveBeenCalledTimes(1)
+  })
+
   it('rend les tâches, la garantie Windows et les alertes manquées', async () => {
     const { container } = await mount()
 
@@ -466,6 +489,112 @@ describe('TaskManagerView', () => {
     expect(mockApi.taskManagerCreate).not.toHaveBeenCalled()
   })
 
+  it('rafraichit chaque ressource seulement quand son propre scope change', async () => {
+    let appEvent: ((event: { type: string; scope?: string }) => void) | undefined
+    const mockApi = api()
+    mockApi.onAppEvent.mockImplementation((listener) => {
+      appEvent = listener
+      return () => undefined
+    })
+    await mount(mockApi)
+
+    expect(mockApi.taskManagerSnapshot).toHaveBeenCalledTimes(1)
+    expect(mockApi.conversations).toHaveBeenCalledTimes(1)
+    expect(mockApi.models).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      appEvent?.({ type: 'refresh', scope: 'task-manager' })
+      await vi.waitFor(() => expect(mockApi.taskManagerSnapshot).toHaveBeenCalledTimes(2))
+    })
+    expect(mockApi.conversations).toHaveBeenCalledTimes(1)
+    expect(mockApi.models).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      appEvent?.({ type: 'refresh', scope: 'roles' })
+      await vi.waitFor(() => expect(mockApi.models).toHaveBeenCalledTimes(2))
+    })
+    expect(mockApi.taskManagerSnapshot).toHaveBeenCalledTimes(2)
+    expect(mockApi.conversations).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      appEvent?.({ type: 'refresh', scope: 'conversations' })
+      await vi.waitFor(() => expect(mockApi.conversations).toHaveBeenCalledTimes(2))
+    })
+    expect(mockApi.taskManagerSnapshot).toHaveBeenCalledTimes(2)
+    expect(mockApi.models).toHaveBeenCalledTimes(2)
+  })
+
+  it('ne laisse pas un echec initial tardif effacer un catalogue modeles plus recent', async () => {
+    let appEvent: ((event: { type: string; scope?: string }) => void) | undefined
+    const initialSnapshot =
+      deferred<Awaited<ReturnType<ReturnType<typeof api>['taskManagerSnapshot']>>>()
+    const mockApi = api()
+    mockApi.taskManagerSnapshot.mockImplementationOnce(() => initialSnapshot.promise)
+    mockApi.onAppEvent.mockImplementation((listener) => {
+      appEvent = listener
+      return () => undefined
+    })
+    const { container } = await mount(mockApi)
+    mockApi.models.mockResolvedValueOnce([
+      { id: 'ollama:fresh', provider: 'ollama', model: 'fresh' }
+    ])
+
+    await act(async () => {
+      appEvent?.({ type: 'refresh', scope: 'roles' })
+      await vi.waitFor(() => expect(mockApi.models).toHaveBeenCalledTimes(2))
+    })
+    await act(async () => initialSnapshot.reject(new Error('snapshot initial indisponible')))
+
+    const newButton = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Nouvelle tâche')
+    )
+    await act(async () => newButton?.click())
+    const destination = [...container.querySelectorAll('label')]
+      .find((label) => label.textContent?.includes('Destination'))
+      ?.querySelector('select')
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set?.call(
+        destination,
+        'new'
+      )
+      destination?.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const model = [...container.querySelectorAll('label')]
+      .find((label) => label.textContent?.includes('Modèle'))
+      ?.querySelector('select')
+
+    expect([...model!.options].map((option) => option.value)).toContain('ollama:fresh')
+    expect(model?.disabled).toBe(false)
+  })
+
+  it("n'efface pas l'erreur d'un scope quand une autre ressource reussit", async () => {
+    let appEvent: ((event: { type: string; scope?: string }) => void) | undefined
+    const mockApi = api()
+    mockApi.onAppEvent.mockImplementation((listener) => {
+      appEvent = listener
+      return () => undefined
+    })
+    const { container } = await mount(mockApi)
+    mockApi.taskManagerSnapshot.mockRejectedValueOnce(new Error('snapshot live indisponible'))
+
+    await act(async () => {
+      appEvent?.({ type: 'refresh', scope: 'task-manager' })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-testid="task-manager-load-error"]')).not.toBeNull()
+    await act(async () => {
+      appEvent?.({ type: 'refresh', scope: 'roles' })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(mockApi.models).toHaveBeenCalledTimes(2)
+
+    expect(
+      container.querySelector('[data-testid="task-manager-load-error"]')?.textContent
+    ).toContain('snapshot live indisponible')
+  })
+
   it('ignore un ancien rechargement qui termine après le catalogue le plus récent', async () => {
     type Model = { id: string; provider: string; model: string }
     let appEvent: ((event: { type: string; scope?: string }) => void) | undefined
@@ -587,6 +716,52 @@ describe('TaskManagerView', () => {
     ).toBe(true)
   })
 
+  it('signale un catalogue modèles indisponible au chargement initial', async () => {
+    const mockApi = api()
+    mockApi.models.mockRejectedValueOnce(new Error('catalogue indisponible'))
+
+    const { container } = await mount(mockApi)
+
+    const banner = container.querySelector('[data-testid="task-manager-load-error"]')
+    expect(banner?.querySelector('strong')?.textContent).toBe('Chargement des modèles impossible')
+    expect(banner?.textContent).toContain('catalogue indisponible')
+    expect(
+      [...banner!.querySelectorAll('button')].some((button) => button.textContent === 'Réessayer')
+    ).toBe(true)
+
+    await act(async () => {
+      ;[...banner!.querySelectorAll('button')]
+        .find((button) => button.textContent === 'Réessayer')
+        ?.click()
+    })
+
+    expect(mockApi.models).toHaveBeenCalledTimes(2)
+    expect(mockApi.taskManagerSnapshot).toHaveBeenCalledTimes(1)
+    expect(mockApi.conversations).toHaveBeenCalledTimes(1)
+    expect(container.querySelector('[data-testid="task-manager-load-error"]')).toBeNull()
+  })
+
+  it('retire une erreur initiale de snapshot après sa récupération ciblée', async () => {
+    let appEvent: ((event: { type: string; scope?: string }) => void) | undefined
+    const mockApi = api()
+    mockApi.taskManagerSnapshot.mockRejectedValueOnce(new Error('snapshot initial indisponible'))
+    mockApi.onAppEvent.mockImplementation((listener) => {
+      appEvent = listener
+      return () => undefined
+    })
+
+    const { container } = await mount(mockApi)
+    expect(container.querySelector('[data-testid="task-manager-load-error"]')).not.toBeNull()
+
+    await act(async () => {
+      appEvent?.({ type: 'refresh', scope: 'task-manager' })
+      await vi.waitFor(() => expect(mockApi.taskManagerSnapshot).toHaveBeenCalledTimes(2))
+    })
+
+    expect(container.querySelector('[data-testid="task-manager-load-error"]')).toBeNull()
+    expect(container.textContent).toContain('Rapport du matin')
+  })
+
   it('rappelle réellement le chargement au clic sur Réessayer', async () => {
     const mockApi = api()
     mockApi.taskManagerSnapshot.mockRejectedValueOnce(new Error('IPC coupé'))
@@ -600,6 +775,8 @@ describe('TaskManagerView', () => {
     await act(async () => retry?.click())
 
     expect(mockApi.taskManagerSnapshot).toHaveBeenCalledTimes(2)
+    expect(mockApi.conversations).toHaveBeenCalledTimes(1)
+    expect(mockApi.models).toHaveBeenCalledTimes(1)
     expect(container.querySelector('[data-testid="task-manager-load-error"]')).toBeNull()
     expect(container.textContent).toContain('Rapport du matin')
   })

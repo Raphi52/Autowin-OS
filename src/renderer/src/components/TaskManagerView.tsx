@@ -349,64 +349,136 @@ export function TaskManagerView({
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string>()
-  const [loadError, setLoadError] = useState<string>()
+  const [loadErrors, setLoadErrors] = useState<
+    Partial<Record<'task-manager' | 'conversations' | 'roles', string>>
+  >({})
   const [catalogActive, setCatalogActive] = useState(active)
   const [catalogReady, setCatalogReady] = useState(false)
   const loadGenerationRef = useRef(0)
+  const snapshotRequestRef = useRef(0)
+  const conversationsRequestRef = useRef(0)
+  const modelsRequestRef = useRef(0)
   const modelCatalogReady = active && catalogReady && !loading
+  const loadErrorScope = (['task-manager', 'conversations', 'roles'] as const).find(
+    (scope) => loadErrors[scope] !== undefined
+  )
+  const loadError = loadErrorScope ? loadErrors[loadErrorScope] : undefined
+  const loadErrorTitle =
+    loadErrorScope === 'roles'
+      ? 'Chargement des modèles impossible'
+      : loadErrorScope === 'conversations'
+        ? 'Chargement des conversations impossible'
+        : 'Chargement des tâches impossible'
 
   if (catalogActive !== active) {
     setCatalogActive(active)
     setCatalogReady(false)
   }
 
+  const applySnapshot = useCallback((nextSnapshot: Snapshot): void => {
+    setSnapshot(nextSnapshot)
+    setSelectedId((current) =>
+      current && nextSnapshot.tasks.some(({ id }) => id === current)
+        ? current
+        : nextSnapshot.tasks[0]?.id
+    )
+  }, [])
+
+  const clearLoadError = useCallback((scope: 'task-manager' | 'conversations' | 'roles'): void => {
+    setLoadErrors((current) => {
+      if (current[scope] === undefined) return current
+      const next = { ...current }
+      delete next[scope]
+      return next
+    })
+  }, [])
+
+  const recordLoadError = useCallback(
+    (scope: 'task-manager' | 'conversations' | 'roles', failure: unknown): void => {
+      setLoadErrors((current) => ({ ...current, [scope]: errorText(failure) }))
+    },
+    []
+  )
+
+  const refreshSnapshot = useCallback(async (): Promise<void> => {
+    const generation = loadGenerationRef.current
+    const request = ++snapshotRequestRef.current
+    try {
+      const rawSnapshot = await window.api.taskManagerSnapshot()
+      if (generation !== loadGenerationRef.current || request !== snapshotRequestRef.current) return
+      applySnapshot(rawSnapshot as unknown as Snapshot)
+      clearLoadError('task-manager')
+    } catch (failure) {
+      if (generation !== loadGenerationRef.current || request !== snapshotRequestRef.current) return
+      recordLoadError('task-manager', failure)
+    }
+  }, [applySnapshot, clearLoadError, recordLoadError])
+
+  const refreshConversations = useCallback(async (): Promise<void> => {
+    const generation = loadGenerationRef.current
+    const request = ++conversationsRequestRef.current
+    try {
+      const rawConversations = await window.api.conversations()
+      if (generation !== loadGenerationRef.current || request !== conversationsRequestRef.current)
+        return
+      setConversations(rawConversations as ConversationSummary[])
+      clearLoadError('conversations')
+    } catch (failure) {
+      if (generation !== loadGenerationRef.current || request !== conversationsRequestRef.current)
+        return
+      recordLoadError('conversations', failure)
+    }
+  }, [clearLoadError, recordLoadError])
+
+  const refreshModels = useCallback(async (): Promise<void> => {
+    const generation = loadGenerationRef.current
+    const request = ++modelsRequestRef.current
+    setCatalogReady(false)
+    try {
+      const rawModels = await window.api.models()
+      if (generation !== loadGenerationRef.current || request !== modelsRequestRef.current) return
+      setModels(rawModels as RuntimeModel[])
+      setCatalogReady(true)
+      clearLoadError('roles')
+    } catch (failure) {
+      if (generation !== loadGenerationRef.current || request !== modelsRequestRef.current) return
+      setCatalogReady(false)
+      recordLoadError('roles', failure)
+    }
+  }, [clearLoadError, recordLoadError])
+
   const load = useCallback(async (): Promise<void> => {
     const generation = ++loadGenerationRef.current
     setLoading(true)
     setCatalogReady(false)
     setError(undefined)
-    setLoadError(undefined)
+    setLoadErrors({})
     setModels([])
     try {
-      const [rawSnapshot, rawConversations, rawModels] = await Promise.all([
-        window.api.taskManagerSnapshot(),
-        window.api.conversations(),
-        window.api.models().catch(() => [])
-      ])
-      if (generation !== loadGenerationRef.current) return
-      const nextSnapshot = rawSnapshot as unknown as Snapshot
-      const nextConversations = rawConversations as ConversationSummary[]
-      setSnapshot(nextSnapshot)
-      setConversations(nextConversations)
-      setModels(rawModels as RuntimeModel[])
-      setCatalogReady(true)
-      setSelectedId((current) =>
-        current && nextSnapshot.tasks.some(({ id }) => id === current)
-          ? current
-          : nextSnapshot.tasks[0]?.id
-      )
-    } catch (failure) {
-      if (generation !== loadGenerationRef.current) return
-      setModels([])
-      setCatalogReady(false)
-      setLoadError(errorText(failure))
+      await Promise.all([refreshSnapshot(), refreshConversations(), refreshModels()])
     } finally {
       if (generation === loadGenerationRef.current) setLoading(false)
     }
-  }, [])
+  }, [refreshConversations, refreshModels, refreshSnapshot])
 
   useEffect(() => {
     if (!active) return
-    void Promise.resolve().then(load)
+    let disposed = false
+    void Promise.resolve().then(() => {
+      if (!disposed) void load()
+    })
     const off = window.api.onAppEvent((event) => {
-      if (event.type === 'refresh' && (event.scope === 'task-manager' || event.scope === 'roles'))
-        void load()
+      if (event.type !== 'refresh') return
+      if (event.scope === 'task-manager') void refreshSnapshot()
+      else if (event.scope === 'roles') void refreshModels()
+      else if (event.scope === 'conversations') void refreshConversations()
     })
     return () => {
+      disposed = true
       loadGenerationRef.current += 1
       off()
     }
-  }, [active, load])
+  }, [active, load, refreshConversations, refreshModels, refreshSnapshot])
 
   const selected = snapshot.tasks.find(({ id }) => id === selectedId)
   const selectableModels = useMemo(
@@ -621,9 +693,17 @@ export function TaskManagerView({
 
       {loadError && (
         <div className="task-manager-error" role="alert" data-testid="task-manager-load-error">
-          <strong>Chargement des tâches impossible</strong>
+          <strong>{loadErrorTitle}</strong>
           <span>{loadError}</span>
-          <button type="button" disabled={loading} onClick={() => void load()}>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => {
+              if (loadErrorScope === 'task-manager') void refreshSnapshot()
+              else if (loadErrorScope === 'conversations') void refreshConversations()
+              else if (loadErrorScope === 'roles') void refreshModels()
+            }}
+          >
             Réessayer
           </button>
         </div>

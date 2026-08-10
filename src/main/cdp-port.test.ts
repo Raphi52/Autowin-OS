@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_CDP_PORT, listeningPorts, resolveCdpPort } from './cdp-port'
 
+const resolveUnforced = (probe: () => Set<number>) => resolveCdpPort(probe, {})
+
 // Sortie `netstat -ano` réelle (Windows FR) : la 1ʳᵉ ligne est en ÉCOUTE, la 2ᵉ est une connexion
 // sortante vers un port distant — elle NE doit pas compter comme un port occupé localement.
 const NETSTAT = [
@@ -27,13 +29,13 @@ describe('listeningPorts', () => {
 
 describe('resolveCdpPort', () => {
   it('port préféré libre → on le garde', () => {
-    const r = resolveCdpPort(() => new Set([1234]))
+    const r = resolveUnforced(() => new Set([1234]))
     expect(r).toEqual({ port: DEFAULT_CDP_PORT, moved: false, forced: false })
   })
 
   it('port occupé par un socket orphelin → prend le suivant libre et le signale', () => {
     // Cas vécu : PID en LISTENING sur 9223 alors que le process n'existe plus (socket hérité).
-    const r = resolveCdpPort(() => new Set([9223, 9224]))
+    const r = resolveUnforced(() => new Set([9223, 9224]))
     expect(r).toEqual({ port: 9225, moved: true, forced: false })
   })
 
@@ -57,7 +59,7 @@ describe('resolveCdpPort', () => {
   })
 
   it('sonde indisponible (pas de netstat) → port préféré, jamais d’échec de démarrage', () => {
-    const r = resolveCdpPort(() => {
+    const r = resolveUnforced(() => {
       throw new Error('netstat introuvable')
     })
     expect(r).toEqual({ port: DEFAULT_CDP_PORT, moved: false, forced: false })
@@ -66,7 +68,7 @@ describe('resolveCdpPort', () => {
   it('toute la plage occupée → garde le port préféré (pas de boucle infinie)', () => {
     const busy = new Set<number>()
     for (let p = DEFAULT_CDP_PORT; p < DEFAULT_CDP_PORT + 50; p += 1) busy.add(p)
-    expect(resolveCdpPort(() => busy)).toEqual({
+    expect(resolveUnforced(() => busy)).toEqual({
       port: DEFAULT_CDP_PORT,
       moved: false,
       forced: false
