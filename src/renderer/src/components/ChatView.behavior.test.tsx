@@ -586,7 +586,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
     })
     const scrollTo = vi.fn()
     scroll.scrollTo = scrollTo
-    scroll.dispatchEvent(new Event('scroll', { bubbles: true }))
+    await act(async () => {
+      scroll.dispatchEvent(new Event('scroll', { bubbles: true }))
+    })
 
     await click('.directive-queue-steer')
     await act(async () => flushAnimationFrames())
