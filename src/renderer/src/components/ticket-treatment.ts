@@ -1,4 +1,5 @@
 import {
+  canonicalTicketId,
   ticketExecutionContext,
   type TicketExecutionContext,
   type TicketItem,
@@ -16,6 +17,68 @@ const MAX_COMMENTS = 10
 const MAX_COMMENT_CHARS = 600
 /** Longueur du marqueur ajoute par `truncate` — a reserver dans tout calcul de budget. */
 const TRUNCATION_MARKER_CHARS = '… [TRONQUÉ]'.length
+
+const TREATMENT_RECORDS_KEY = 'autowin:tickets-treatment-records'
+const MAX_TREATMENT_RECORDS = 2_000
+
+export type TicketTreatmentStatus = 'prepared' | 'running' | 'succeeded' | 'failed'
+
+export interface TicketTreatmentRecord {
+  conversationId: string
+  status: TicketTreatmentStatus
+  updatedAt: string
+}
+
+export type TicketTreatmentRecords = Record<string, TicketTreatmentRecord>
+
+interface TreatmentStorage {
+  getItem(key: string): string | null
+  setItem(key: string, value: string): void
+}
+
+function isTreatmentRecord(value: unknown): value is TicketTreatmentRecord {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  return (
+    typeof record.conversationId === 'string' &&
+    record.conversationId.length > 0 &&
+    ['prepared', 'running', 'succeeded', 'failed'].includes(String(record.status)) &&
+    typeof record.updatedAt === 'string'
+  )
+}
+
+/** Trace locale bornée : permet de retrouver le run d'une fiche après un rafraîchissement. */
+export function loadTicketTreatmentRecords(storage: Pick<TreatmentStorage, 'getItem'>): TicketTreatmentRecords {
+  try {
+    const raw = storage.getItem(TREATMENT_RECORDS_KEY)
+    const parsed: unknown = raw ? JSON.parse(raw) : {}
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>)
+        .filter((entry): entry is [string, TicketTreatmentRecord] => isTreatmentRecord(entry[1]))
+        .slice(-MAX_TREATMENT_RECORDS)
+    )
+  } catch {
+    return {}
+  }
+}
+
+export function saveTicketTreatmentRecord(
+  storage: TreatmentStorage,
+  item: Pick<TicketItem, 'sourceId' | 'id'>,
+  record: TicketTreatmentRecord
+): TicketTreatmentRecords {
+  const current = loadTicketTreatmentRecords(storage)
+  const next = Object.fromEntries(
+    [...Object.entries(current), [canonicalTicketId(item), record]].slice(-MAX_TREATMENT_RECORDS)
+  ) as TicketTreatmentRecords
+  try {
+    storage.setItem(TREATMENT_RECORDS_KEY, JSON.stringify(next))
+  } catch {
+    /* La trace reste visible pour ce rendu même si le quota localStorage est atteint. */
+  }
+  return next
+}
 
 function truncate(value: string, maximum: number): string {
   return value.length <= maximum ? value : `${value.slice(0, maximum)}… [TRONQUÉ]`
@@ -254,10 +317,14 @@ interface TreatmentDeps {
     item: TicketItem,
     prompt: string
   ) => Promise<{ ok: boolean; cancelled?: boolean }>
-  onConversationCreated?: (conversation: TreatmentConversation) => void
+  onConversationCreated?: (conversation: TreatmentConversation, item: TicketItem) => void
   abandonConversation?: (conversation: TreatmentConversation) => Promise<void>
   onProgress?: (result: TicketTreatmentResult) => void
-  onItemSettled?: (item: TicketItem, succeeded: boolean) => void
+  onItemSettled?: (
+    item: TicketItem,
+    succeeded: boolean,
+    conversation?: TreatmentConversation
+  ) => void
   /** Source du lot : injecte le contexte d'exécution dans chaque prompt. */
   source?: TicketSourceProfile
   /**
@@ -296,11 +363,12 @@ export async function runTicketTreatmentBatch(
       if (index >= items.length) return
       const item = items[index]
       let succeeded = false
+      let conversation: TreatmentConversation | undefined
       try {
         if (!deps.shouldContinue()) return
-        const conversation = await deps.createConversation(item)
+        conversation = await deps.createConversation(item)
         result.conversationIds.push(conversation.id)
-        deps.onConversationCreated?.(conversation)
+        deps.onConversationCreated?.(conversation, item)
         if (!deps.shouldContinue()) {
           await deps.abandonConversation?.(conversation)
           result.failed += 1
@@ -317,7 +385,7 @@ export async function runTicketTreatmentBatch(
       } catch {
         result.failed += 1
       } finally {
-        deps.onItemSettled?.(item, succeeded)
+        deps.onItemSettled?.(item, succeeded, conversation)
         result.completed += 1
         report()
       }

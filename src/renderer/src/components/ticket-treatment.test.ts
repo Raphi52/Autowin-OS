@@ -5,6 +5,8 @@ import {
   formatTicketTreatmentPrompt,
   plainText,
   runTicketTreatmentBatch,
+  loadTicketTreatmentRecords,
+  saveTicketTreatmentRecord,
   ticketConversationTitle,
   ticketSelectionTitle
 } from './ticket-treatment'
@@ -26,6 +28,42 @@ function ticket(id: string): TicketItem {
     fields: { AreaPath: 'RIG' }
   }
 }
+
+describe('traçabilité ticket ⇄ conversation', () => {
+  it('persiste le dernier statut et la conversation sans perdre les autres tickets', () => {
+    const values = new Map<string, string>()
+    const storage = {
+      getItem: (key: string): string | null => values.get(key) ?? null,
+      setItem: (key: string, value: string): void => {
+        values.set(key, value)
+      }
+    }
+
+    saveTicketTreatmentRecord(storage, ticket('1'), {
+      conversationId: 'conv-1',
+      status: 'running',
+      updatedAt: '2026-08-10T10:00:00.000Z'
+    })
+    saveTicketTreatmentRecord(storage, ticket('2'), {
+      conversationId: 'conv-2',
+      status: 'failed',
+      updatedAt: '2026-08-10T10:01:00.000Z'
+    })
+
+    expect(loadTicketTreatmentRecords(storage)).toEqual({
+      'azure:rig::1': {
+        conversationId: 'conv-1',
+        status: 'running',
+        updatedAt: '2026-08-10T10:00:00.000Z'
+      },
+      'azure:rig::2': {
+        conversationId: 'conv-2',
+        status: 'failed',
+        updatedAt: '2026-08-10T10:01:00.000Z'
+      }
+    })
+  })
+})
 
 describe('traitement groupé des tickets', () => {
   it('borne et délimite le contenu distant comme donnée non fiable', () => {

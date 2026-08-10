@@ -9,10 +9,13 @@ import {
 import { ModuleHeader } from './ModuleHeader'
 import {
   formatTicketSelectionPrompt,
+  loadTicketTreatmentRecords,
   plainText,
   runTicketTreatmentBatch,
+  saveTicketTreatmentRecord,
   ticketConversationTitle,
-  ticketSelectionTitle
+  ticketSelectionTitle,
+  type TicketTreatmentRecord
 } from './ticket-treatment'
 import {
   AUTO_MODE_LIMITS,
@@ -183,6 +186,21 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   /** Recherche ACTUELLEMENT appliquee cote serveur (titleContains). '' = aucun filtre. */
   const serverQueryRef = useRef('')
   const [serverQuery, setServerQuery] = useState('')
+  const [treatmentRecords, setTreatmentRecords] = useState(() =>
+    loadTicketTreatmentRecords(localStorage)
+  )
+
+  const recordTreatment = (
+    item: Pick<TicketItem, 'sourceId' | 'id'>,
+    record: TicketTreatmentRecord
+  ): void => {
+    setTreatmentRecords(saveTicketTreatmentRecord(localStorage, item, record))
+  }
+
+  const openTreatmentConversation = async (conversationId: string): Promise<void> => {
+    await window.api.appCommand?.('navigate', { tab: 'chat' })
+    window.dispatchEvent(new CustomEvent('autowin:open-conversation', { detail: conversationId }))
+  }
 
   useEffect(() => {
     activeRef.current = active
@@ -590,6 +608,10 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         return
       }
     }
+    // MARQUAGE AVANT le premier appel payant : un échec ou un remontage ne doit jamais repayer le
+    // même ticket automatiquement. Un provider indisponible, contrôlé au-dessus, ne consomme rien.
+    for (const key of selection.seenAdditions) seenRef.current.add(key)
+    saveSeen(localStorage, seenRef.current)
     const attemptedThisCycle = new Set<string>()
     let succeeded = 0
     let failed = 0
@@ -616,12 +638,23 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
             return { ok: false }
           }
         },
-        onItemSettled: (item, ok) => {
+        onConversationCreated: (conversation, item) => {
+          recordTreatment(item, {
+            conversationId: conversation.id,
+            status: 'running',
+            updatedAt: new Date().toISOString()
+          })
+        },
+        onItemSettled: (item, ok, conversation) => {
           const key = `${item.sourceId}::${item.id}`
           attemptedThisCycle.add(key)
-          if (!ok) return
-          seenRef.current.add(key)
-          saveSeen(localStorage, seenRef.current)
+          if (conversation) {
+            recordTreatment(item, {
+              conversationId: conversation.id,
+              status: ok ? 'succeeded' : 'failed',
+              updatedAt: new Date().toISOString()
+            })
+          }
         }
       })
       succeeded += result.succeeded
@@ -645,6 +678,8 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         Math.min(settings.capPerCycle, budget)
       )
       if (!selection.toTreat.length) break
+      for (const key of selection.seenAdditions) seenRef.current.add(key)
+      saveSeen(localStorage, seenRef.current)
     }
     autoBusyRef.current = false
     setAutoStatus(
@@ -681,6 +716,13 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       category: provider,
       provider
     })
+    for (const item of selection) {
+      recordTreatment(item, {
+        conversationId: conv.id,
+        status: sendDirectly ? 'running' : 'prepared',
+        updatedAt: new Date().toISOString()
+      })
+    }
     // On amène l'utilisateur SUR le Chat : préparer un prompt qu'il ne voit pas serait inutile.
     // Le main reste l'autorité de navigation (même chemin que la rail), puis le Chat pré-remplit.
     try {
@@ -1125,6 +1167,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
             <div className="tickets-list" role="list" aria-label="Tickets">
               {visibleItems.map((item) => {
                 const identity = `${item.sourceId}::${item.id}`
+                const treatment = treatmentRecords[identity]
                 return (
                   <div className="ticket-select-row" key={identity} role="listitem">
                     <input
@@ -1174,6 +1217,23 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                         </span>
                       </span>
                     </button>
+                    {treatment && (
+                      <button
+                        type="button"
+                        data-testid="ticket-treatment-status"
+                        className={`ticket-treatment-status is-${treatment.status}`}
+                        title="Ouvrir la conversation de traitement"
+                        onClick={() => void openTreatmentConversation(treatment.conversationId)}
+                      >
+                        {treatment.status === 'prepared'
+                          ? 'prêt'
+                          : treatment.status === 'running'
+                            ? 'en cours'
+                            : treatment.status === 'succeeded'
+                              ? 'traité'
+                              : 'échec'}
+                      </button>
+                    )}
                   </div>
                 )
               })}

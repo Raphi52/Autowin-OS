@@ -360,9 +360,24 @@
 
 .ticket-select-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
+}
+
+.ticket-treatment-status {
+  padding: 4px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.ticket-treatment-status.is-succeeded {
+  color: var(--success, #73d9a2);
+}
+
+.ticket-treatment-status.is-failed {
+  color: var(--danger, #ff7185);
 }
 .ticket-select-row > input {
   width: 16px;

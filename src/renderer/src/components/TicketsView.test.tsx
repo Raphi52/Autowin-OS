@@ -793,7 +793,7 @@ describe('vue Tickets — lots automatiques différés', () => {
     await act(async () => root.unmount())
   })
 
-  it('ne consomme pas un ticket si le provider est indisponible ou si le lancement echoue', async () => {
+  it('ne consomme pas sans provider mais ne REPAYE jamais un lancement deja tente', async () => {
     localStorage.setItem('autowin:tickets-auto-mode', '1')
     const providerStatus = vi
       .fn()
@@ -821,16 +821,48 @@ describe('vue Tickets — lots automatiques différés', () => {
       for (let index = 0; index < 20; index += 1) await Promise.resolve()
     })
     expect(orchestrate).toHaveBeenCalledTimes(1)
-    expect(localStorage.getItem('autowin:tickets-auto-seen')).toBeNull()
+    expect(localStorage.getItem('autowin:tickets-auto-seen')).toContain('::1')
     await act(async () => second.root.unmount())
 
     const third = await render()
     await act(async () => {
       for (let index = 0; index < 20; index += 1) await Promise.resolve()
     })
-    expect(orchestrate).toHaveBeenCalledTimes(2)
+    expect(orchestrate).toHaveBeenCalledTimes(1)
     expect(localStorage.getItem('autowin:tickets-auto-seen')).toContain('::1')
     await act(async () => third.root.unmount())
+  })
+
+  it('affiche et rouvre la conversation liee a un ticket prepare', async () => {
+    const appCommand = vi.fn(async () => ({ ok: true }))
+    api({
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      conversationsCreate: vi.fn(async () => ({ id: 'conv-ticket-1' })),
+      appCommand
+    })
+    const opened: string[] = []
+    const listener = (event: Event): void => opened.push((event as CustomEvent<string>).detail)
+    window.addEventListener('autowin:open-conversation', listener)
+    const { root, container } = await render()
+    const checks = container.querySelectorAll<HTMLInputElement>(
+      '[data-testid="ticket-process-checkbox"]'
+    )
+    await act(async () => checks[0].click())
+    await act(async () => {
+      ;(container.querySelector('[data-testid="tickets-treat-selection"]') as HTMLButtonElement).click()
+      for (let index = 0; index < 10; index += 1) await Promise.resolve()
+    })
+
+    const badge = container.querySelector(
+      '[data-testid="ticket-treatment-status"]'
+    ) as HTMLButtonElement
+    expect(badge.textContent).toContain('prêt')
+    await act(async () => badge.click())
+    expect(appCommand).toHaveBeenCalledWith('navigate', { tab: 'chat' })
+    expect(opened).toContain('conv-ticket-1')
+
+    window.removeEventListener('autowin:open-conversation', listener)
+    await act(async () => root.unmount())
   })
 
   it('termine le lot courant mais ne lance pas le lot différé après désactivation', async () => {
