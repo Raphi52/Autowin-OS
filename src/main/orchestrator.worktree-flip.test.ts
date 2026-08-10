@@ -772,6 +772,11 @@ describe('Orchestrator — flip live worktree', () => {
       expect(result.gateBlocked).toBe(true)
       expect(result.valid).toBe(false)
       expect(result.gateReasons).toContain('intégration locale non terminée')
+      // Sans la CAUSE, un run rouge est indiagnosticable : constate le 2026-08-10 sur conv-1080,
+      // deux runs verts consécutifs bloqués par une base sale sans que le RUN.md ne le dise.
+      expect(result.gateReasons).toContain(
+        'blocage d’intégration: base-dirty — fichiers en cause: src/a.ts'
+      )
       expect(onRunSettled).not.toHaveBeenCalled()
       expect(close).not.toHaveBeenCalled()
     })
