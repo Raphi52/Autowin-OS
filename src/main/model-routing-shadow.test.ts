@@ -1,34 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import {
-  rankShadowModels,
-  ShadowRoutingTraceObserver,
-  type RoutingObservation
-} from './model-routing-shadow'
+import { ShadowRoutingTraceObserver, type RoutingObservation } from './model-routing-shadow'
 import type { TraceEventV1 } from './activity/trace-event'
 import { promptCallToTraceEvents } from './activity/prompt-call-trace'
 import type { PromptCallRecord } from './activity/prompt-observability'
 
 const now = Date.parse('2026-08-08T12:00:00.000Z')
-
-function observations(
-  model: string,
-  outcome: RoutingObservation['outcome'],
-  count: number,
-  extras: Partial<RoutingObservation> = {}
-): RoutingObservation[] {
-  return Array.from({ length: count }, (_, index) => ({
-    schema: 'autowin.routing-observation/v1',
-    id: `${model}-${outcome}-${index}`,
-    timestamp: new Date(now - index * 60_000).toISOString(),
-    phase: 'build',
-    provider: 'codex',
-    model,
-    outcome,
-    durationMs: 1_000,
-    costUsd: 0.1,
-    ...extras
-  }))
-}
 
 describe('shadow model router', () => {
   it('n’apprend une réussite qu’après un gate vérifié du même run', () => {
@@ -332,66 +308,5 @@ describe('shadow model router', () => {
     })
 
     expect(appended).toHaveLength(2)
-  })
-
-  it('never mutates the execution binding and stays cautious on a tiny sample', () => {
-    const current = { provider: 'codex', model: 'steady' }
-    const advice = rankShadowModels({
-      phase: 'build',
-      current,
-      candidates: [current, { provider: 'codex', model: 'new' }],
-      observations: observations('new', 'verified-success', 2),
-      now
-    })
-
-    expect(advice.executionBinding).toEqual(current)
-    expect(advice.executionBinding).not.toBe(current)
-    expect(advice.confidence).toBe('low')
-    expect(advice.eligibleForReview).toBe(false)
-  })
-
-  it('does not let cheap latency beat repeated verified failures', () => {
-    const reliable = [
-      ...observations('reliable', 'verified-success', 8, { durationMs: 2_000, costUsd: 0.2 }),
-      ...observations('reliable', 'verified-failure', 1, { durationMs: 2_000, costUsd: 0.2 })
-    ]
-    const cheap = [
-      ...observations('cheap', 'verified-success', 4, { durationMs: 50, costUsd: 0.001 }),
-      ...observations('cheap', 'verified-failure', 6, { durationMs: 50, costUsd: 0.001 })
-    ]
-    const advice = rankShadowModels({
-      phase: 'build',
-      current: { provider: 'codex', model: 'cheap' },
-      candidates: [
-        { provider: 'codex', model: 'cheap' },
-        { provider: 'codex', model: 'reliable' }
-      ],
-      observations: [...cheap, ...reliable],
-      now
-    })
-
-    expect(advice.recommended.model).toBe('reliable')
-    expect(advice.ranking.find((entry) => entry.model === 'cheap')?.qualityVetoed).toBe(true)
-  })
-
-  it('treats unknown quota as neutral and uses only the requested phase', () => {
-    const advice = rankShadowModels({
-      phase: 'judge',
-      current: { provider: 'claude', model: 'a' },
-      candidates: [
-        { provider: 'claude', model: 'a' },
-        { provider: 'claude', model: 'b' }
-      ],
-      observations: [
-        ...observations('b', 'verified-success', 20),
-        ...observations('a', 'verified-failure', 20),
-        ...observations('a', 'verified-success', 7, { phase: 'judge', provider: 'claude' })
-      ],
-      quotas: [{ provider: 'claude', model: 'a', status: 'unknown' }],
-      now
-    })
-
-    expect(advice.recommended.model).toBe('a')
-    expect(advice.ranking.find((entry) => entry.model === 'a')?.quotaPenalty).toBe(0)
   })
 })

@@ -1,10 +1,11 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ScheduledTaskInput, TaskOccurrence } from './types'
 import { TaskStore } from './task-store'
 import { persistTaskStore } from './task-store-disk'
+import { WatchdogEngine } from './watchdog-engine'
 
 const roots: string[] = []
 
@@ -330,4 +331,123 @@ describe('Task Manager — store durable', () => {
 
     expect(restarted.listTasks()[0].watchdog?.guards.maxPerRoot).toBe(20)
   })
+
+  it('migre seulement l’ancien app-event.event et reste idempotent', () => {
+    let counter = 0
+    const source = new TaskStore({ now: () => 1000, id: () => `task-${++counter}` })
+    const legacy = source.create(
+      input({
+        schedule: undefined,
+        watchdog: {
+          source: { kind: 'app-event', events: ['orchestration-red'] },
+          guards: { dedupWindowMs: 1, maxTriggersPerHour: 2, maxChainDepth: 0, maxPerRoot: 3 }
+        }
+      })
+    )
+    const modern = source.create(
+      input({
+        schedule: undefined,
+        watchdog: {
+          source: { kind: 'app-event', events: ['task-failed', 'task-missed'] },
+          guards: { dedupWindowMs: 1, maxTriggersPerHour: 2, maxChainDepth: 0, maxPerRoot: 3 }
+        }
+      })
+    )
+    const file = source.create(
+      input({
+        schedule: undefined,
+        watchdog: {
+          source: { kind: 'file-match', path: 'C:\\logs\\app.log', pattern: 'ERROR' },
+          guards: { dedupWindowMs: 1, maxTriggersPerHour: 2, maxChainDepth: 0, maxPerRoot: 3 }
+        }
+      })
+    )
+    const persisted = source.snapshot()
+    const oldSource = persisted.tasks.find(({ id }) => id === legacy.id)!.watchdog!
+      .source as unknown as Record<string, unknown>
+    oldSource.event = 'orchestration-red'
+    delete oldSource.events
+    const fileSource = persisted.tasks.find(({ id }) => id === file.id)!.watchdog!
+      .source as unknown as Record<string, unknown>
+    fileSource.event = 'extension-custom'
+
+    const restarted = new TaskStore()
+    restarted.hydrate(persisted)
+    const twice = new TaskStore()
+    twice.hydrate(restarted.snapshot())
+    const byId = new Map(twice.listTasks().map((task) => [task.id, task]))
+
+    expect(byId.get(legacy.id)?.watchdog?.source).toEqual({
+      kind: 'app-event',
+      events: ['orchestration-red']
+    })
+    expect(byId.get(modern.id)?.watchdog?.source).toEqual({
+      kind: 'app-event',
+      events: ['task-failed', 'task-missed']
+    })
+    expect(byId.get(file.id)?.watchdog?.source).toEqual({
+      kind: 'file-match',
+      path: 'C:\\logs\\app.log',
+      pattern: 'ERROR',
+      event: 'extension-custom'
+    })
+  })
+
+  it.each([null, 42, {}, { kind: 'file-match' }, { kind: 'app-event' }])(
+    'ignore une source watchdog imbriquée corrompue sans bloquer le chargement (%j)',
+    async (corruptSource) => {
+      const path = fixturePath()
+      const source = new TaskStore({ now: () => 1000, id: () => 'task-corrupt' })
+      source.create(
+        input({
+          schedule: undefined,
+          watchdog: {
+            source: { kind: 'app-event', events: ['orchestration-red'] },
+            guards: { dedupWindowMs: 1, maxTriggersPerHour: 2, maxChainDepth: 0, maxPerRoot: 3 }
+          }
+        })
+      )
+      const persisted = source.snapshot()
+      persisted.tasks[0].watchdog!.source = corruptSource as never
+      writeFileSync(path, JSON.stringify(persisted), 'utf8')
+
+      const restarted = new TaskStore()
+
+      expect(() => persistTaskStore(restarted, path)).not.toThrow()
+      expect(restarted.listTasks()[0].watchdog?.source).toEqual(corruptSource)
+      const engine = new WatchdogEngine(() => restarted.listTasks(), {
+        async runWatchdog() {
+          throw new Error('Une source corrompue ne doit jamais atteindre le dispatcher')
+        }
+      })
+      await expect(engine.start()).resolves.toBeUndefined()
+      await expect(engine.poll()).resolves.toBeUndefined()
+      engine.stop()
+    }
+  )
+
+  it.each([null, 42, [], {}])(
+    'ignore un conteneur watchdog corrompu sans bloquer le chargement (%j)',
+    async (corruptWatchdog) => {
+      const path = fixturePath()
+      const source = new TaskStore({ now: () => 1000, id: () => 'task-corrupt-watchdog' })
+      source.create(input())
+      const persisted = source.snapshot()
+      persisted.tasks[0].watchdog = corruptWatchdog as never
+      writeFileSync(path, JSON.stringify(persisted), 'utf8')
+
+      const restarted = new TaskStore()
+
+      expect(() => persistTaskStore(restarted, path)).not.toThrow()
+      expect(restarted.listTasks()[0].watchdog).toEqual(corruptWatchdog)
+      const engine = new WatchdogEngine(() => restarted.listTasks(), {
+        async runWatchdog() {
+          throw new Error('Un watchdog corrompu ne doit jamais atteindre le dispatcher')
+        }
+      })
+      await expect(engine.start()).resolves.toBeUndefined()
+      await expect(engine.poll()).resolves.toBeUndefined()
+      engine.stop()
+    }
+  )
 })

@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest'
 import {
   discoverSkillProviders,
   discoverConfiguredSkillRegistry,
-  discoverSkillRegistry,
   type SkillRegistryRoots
 } from './skill-registry'
 
@@ -27,6 +26,14 @@ function roots(base: string): SkillRegistryRoots {
   }
 }
 
+function configuredProviders(configured: SkillRegistryRoots) {
+  return [
+    { id: 'codex', label: 'Codex', root: configured.codex },
+    { id: 'claude', label: 'Claude', root: configured.claude },
+    { id: 'autowin', label: 'Autowin', root: configured.autowin }
+  ]
+}
+
 describe('registre multi-source des skills (souverain de Native)', () => {
   it('conserve les homonymes Codex, Claude et Autowin avec des identités qualifiées', async () => {
     const base = join(process.cwd(), 'node_modules', '.tmp-skill-registry', crypto.randomUUID())
@@ -36,7 +43,7 @@ describe('registre multi-source des skills (souverain de Native)', () => {
     put(configured.autowin, 'shared', 'shared')
     put(configured.autowin, 'autowin-only', 'autowin-only')
 
-    const items = await discoverSkillRegistry(configured)
+    const items = await discoverSkillProviders(configuredProviders(configured))
 
     expect(items.map((item) => item.id)).toEqual([
       'codex:shared',
@@ -54,7 +61,7 @@ describe('registre multi-source des skills (souverain de Native)', () => {
     const configured = roots(base)
     put(configured.autowin, 'frame', 'frame')
 
-    const items = await discoverSkillRegistry(configured)
+    const items = await discoverSkillProviders(configuredProviders(configured))
 
     expect(items).toEqual([
       expect.objectContaining({ id: 'autowin:frame', label: 'frame', enabled: true })

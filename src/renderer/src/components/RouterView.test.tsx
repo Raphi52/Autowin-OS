@@ -49,7 +49,6 @@ describe('RouterView — erreurs provider locales', () => {
           })),
         roles: async () => ({}),
         providerTest: vi.fn(),
-        kimiLogin: vi.fn(),
         onAppEvent: vi.fn(() => () => undefined),
         setRole: vi.fn()
       }

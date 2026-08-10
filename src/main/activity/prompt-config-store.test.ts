@@ -2,7 +2,8 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { appendPromptConfigActivity, loadPromptConfigActivity } from './prompt-config-store'
+import { loadConvActivity } from './conv-activity'
+import { appendPromptConfigActivity, GLOBAL_PROMPT_ACTIVITY } from './prompt-config-store'
 
 describe('journal global Prompt Load', () => {
   it('persiste et recharge sans conversation active', () => {
@@ -12,6 +13,6 @@ describe('journal global Prompt Load', () => {
       { disabled: ['browser'], activation: 'next-session' },
       root
     )
-    expect(loadPromptConfigActivity(root)[0].text).toContain('next-session')
+    expect(loadConvActivity(GLOBAL_PROMPT_ACTIVITY, root)[0].text).toContain('next-session')
   })
 })

@@ -13,9 +13,7 @@ import type {
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
 import type { UpdateStrategy } from '../shared/update-contract'
 import type { GitReadResult, GitDiffResult } from '../shared/git-read'
-import type { GitGraphSnapshot } from '../shared/git-graph'
 import type { WorktreeMapSnapshot } from '../shared/worktree-map'
-import type { RepoInventory } from '../main/repo-inventory'
 import type {
   TicketItem,
   TicketSourceSummary,
@@ -117,11 +115,8 @@ const api = {
     workspaceRoot: string
   ): Promise<GitDiffResult> =>
     ipcRenderer.invoke('git:conversationDiff', conversationId, path, workspaceRoot),
-  getGitGraph: (repoPath?: string): Promise<GitGraphSnapshot> =>
-    ipcRenderer.invoke('git:graph', repoPath),
   getWorktreeMap: (repoPath?: string): Promise<WorktreeMapSnapshot> =>
     ipcRenderer.invoke('git:worktreeMap', repoPath),
-  repoInventory: (): Promise<RepoInventory> => ipcRenderer.invoke('os:repoInventory'),
   getGitDiff: (path: string, repoPath?: string): Promise<GitDiffResult> =>
     ipcRenderer.invoke('git:diff', path, repoPath),
   pickGitRepo: (): Promise<string | null> => ipcRenderer.invoke('git:pickRepo'),
@@ -293,7 +288,6 @@ const api = {
     ipcRenderer.invoke('os:profiles:save', profile),
   applyProfile: (id: string): Promise<{ topology: AgentTopology }> =>
     ipcRenderer.invoke('os:profiles:apply', id),
-  kimiLogin: (): Promise<{ ok: true }> => ipcRenderer.invoke('os:kimiLogin'),
   providerLogin: (provider: string): Promise<{ ok: true }> =>
     ipcRenderer.invoke('os:providerLogin', provider),
   /** Comptes Claude multiples — un CLAUDE_CONFIG_DIR par compte, bascule sans re-login. */
@@ -305,10 +299,6 @@ const api = {
     ipcRenderer.invoke('os:claudeAccounts:switch', id),
   claudeAccountRemove: (id: string): Promise<ClaudeAccountsPayload> =>
     ipcRenderer.invoke('os:claudeAccounts:remove', id),
-  claudeAccountLogin: (id: string): Promise<{ ok: true }> =>
-    ipcRenderer.invoke('os:claudeAccounts:login', id),
-  claudeAccountRefresh: (): Promise<ClaudeAccountsPayload> =>
-    ipcRenderer.invoke('os:claudeAccounts:refresh'),
   topology: (): Promise<AgentTopology> => ipcRenderer.invoke('os:topology:get'),
   setTopology: (topology: AgentTopology): Promise<AgentTopology> =>
     ipcRenderer.invoke('os:topology:set', topology),
@@ -323,8 +313,6 @@ const api = {
     conversationId?: string
   ): Promise<CostBreakdownRow[]> =>
     ipcRenderer.invoke('os:costBreakdown', dimension, conversationId),
-  promptTraces: (conversationId: string): Promise<NativePreflightTrace[]> =>
-    ipcRenderer.invoke('os:promptTraces', conversationId),
   brainTraces: (conversationId: string): Promise<BrainTrace[]> =>
     ipcRenderer.invoke('os:brainTraces', conversationId),
   behaviourComposition: (

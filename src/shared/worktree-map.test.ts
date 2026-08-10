@@ -3,10 +3,77 @@ import {
   LATE_BEHIND_THRESHOLD,
   formatBytes,
   layoutWorktreeMap,
+  parseGitWorktrees,
   summarizeWorktreeMap,
   worktreeLabel,
   type WorktreeMapEntry
 } from './worktree-map'
+
+describe('parseGitWorktrees', () => {
+  it('parse les worktrees branchés, detached et verrouillés', () => {
+    const input = [
+      'worktree C:/repo',
+      'HEAD aaaaaaaa',
+      'branch refs/heads/main',
+      '',
+      'worktree C:/repo-proof',
+      'HEAD bbbbbbbb',
+      'detached',
+      'locked preuve',
+      ''
+    ].join('\n')
+
+    expect(parseGitWorktrees(input)).toEqual([
+      {
+        path: 'C:/repo',
+        head: 'aaaaaaaa',
+        branch: 'main',
+        detached: false,
+        locked: false
+      },
+      {
+        path: 'C:/repo-proof',
+        head: 'bbbbbbbb',
+        detached: true,
+        locked: true,
+        lockedReason: 'preuve'
+      }
+    ])
+  })
+
+  it('parse le format NUL sans tronquer les chemins et conserve les raisons Git', () => {
+    const input = [
+      'worktree C:/repo avec\nun saut',
+      'HEAD aaaaaaaa',
+      'detached',
+      'locked volume externe',
+      '',
+      'worktree C:/repo-orphan',
+      'HEAD bbbbbbbb',
+      'detached',
+      'prunable gitdir file points to non-existent location',
+      '',
+      ''
+    ].join('\0')
+
+    expect(parseGitWorktrees(input)).toEqual([
+      {
+        path: 'C:/repo avec\nun saut',
+        head: 'aaaaaaaa',
+        detached: true,
+        locked: true,
+        lockedReason: 'volume externe'
+      },
+      {
+        path: 'C:/repo-orphan',
+        head: 'bbbbbbbb',
+        detached: true,
+        locked: false,
+        prunableReason: 'gitdir file points to non-existent location'
+      }
+    ])
+  })
+})
 
 function entry(over: Partial<WorktreeMapEntry> & { path: string; head: string }): WorktreeMapEntry {
   return { detached: true, locked: false, ...over }

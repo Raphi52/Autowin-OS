@@ -21,10 +21,12 @@ const envMs = (name: string, fallback: number): number => {
  *  - INACTIVITÉ : silence stdout au-delà → figé → kill. Détecteur FIN d'un vrai blocage.
  *  - TOTAL : plafond de durée d'un tour, même s'il progresse (backstop généreux).
  * Ancien comportement = un simple kill total à 120s SANS filet de rejet (→ pouvait pendre à l'infini
- * si `close` ne tirait pas). Nouveaux défauts : inactivité 5 min (le vrai signal de figé) + cap 20 min.
+ * si `close` ne tirait pas). L'inactivité 5 min reste le vrai signal de figé. Le cap total doit
+ * laisser finir un build actif : un run réel Agent Studio a été tué à 20 min après deux suites
+ * complètes vertes, avant son message final. 40 min reste sous le plafond de coordination à 45 min.
  */
 export const SUBAGENT_INACTIVITY_MS = envMs('AUTOWIN_SUBAGENT_INACTIVITY_MS', 5 * 60_000)
-export const SUBAGENT_TOTAL_MS = envMs('AUTOWIN_SUBAGENT_TOTAL_MS', 20 * 60_000)
+export const SUBAGENT_TOTAL_MS = envMs('AUTOWIN_SUBAGENT_TOTAL_MS', 40 * 60_000)
 /** Délai de grâce entre SIGTERM et SIGKILL lors de l'escalade de kill d'un process figé. */
 export const KILL_GRACE_MS = envMs('AUTOWIN_SUBAGENT_KILL_GRACE_MS', 3_000)
 

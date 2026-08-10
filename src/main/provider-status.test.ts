@@ -4,8 +4,7 @@ import {
   codexTokenStatus,
   presenceStatus,
   probePresenceUnlessStandby,
-  probeResultStatus,
-  runStartupProviderProbes
+  probeResultStatus
 } from './provider-status'
 
 const NOW = 1_000_000_000_000
@@ -147,57 +146,5 @@ describe('buildProviderStatuses (chargement)', () => {
     })
 
     expect(statuses[0]).toEqual({ provider: 'codex', status: 'expired', testable: false })
-  })
-})
-
-describe('startup provider probes', () => {
-  it('teste tous les providers actifs en parallèle et ignore ceux en standby', async () => {
-    const pending = new Map<string, () => void>()
-    const probe = vi.fn(
-      (provider: string) =>
-        new Promise<void>((resolve) => {
-          pending.set(provider, resolve)
-        })
-    )
-
-    const batch = runStartupProviderProbes(
-      ['codex', 'claude', 'kimi'],
-      (provider) => ({ mode: provider === 'kimi' ? 'standby' : 'active' }),
-      probe
-    )
-
-    await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(2))
-    expect(probe.mock.calls.map(([provider]) => provider).sort()).toEqual(['claude', 'codex'])
-    pending.get('claude')?.()
-    pending.get('codex')?.()
-    await batch
-  })
-
-  it('isole l’échec d’un provider pour tester les autres', async () => {
-    let finishCodex!: () => void
-    let failClaude!: (error: Error) => void
-    const codex = new Promise<void>((resolve) => {
-      finishCodex = resolve
-    })
-    const claude = new Promise<void>((_resolve, reject) => {
-      failClaude = reject
-    })
-    const probe = vi.fn((provider: string) => (provider === 'codex' ? codex : claude))
-    let settled = false
-
-    const batch = runStartupProviderProbes(
-      ['codex', 'claude'],
-      () => ({ mode: 'active' }),
-      probe
-    ).then(() => {
-      settled = true
-    })
-    failClaude(new Error('hors ligne'))
-    await Promise.resolve()
-
-    expect(settled).toBe(false)
-    finishCodex()
-    await expect(batch).resolves.toBeUndefined()
-    expect(probe).toHaveBeenCalledTimes(2)
   })
 })

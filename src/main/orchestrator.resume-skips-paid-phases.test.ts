@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { CostAggregator } from './dashboards/cost'
 import { Orchestrator } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
@@ -80,6 +80,66 @@ const execPrompts = (provider: CountingProvider): string[] =>
   )
 
 describe('un acquis réinjecté ne repaie pas sa phase', () => {
+  it('réutilise aussi l’identité du run pour rouvrir son worktree conservé', async () => {
+    const provider = new CountingProvider()
+    const begin = vi.fn(() => 'C:\\retained-worktree')
+    const end = vi.fn(() => ({ outcome: 'merged', agentId: 'run-retained', committed: true }))
+    const orch = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'worker' },
+        judge: { provider: provider.id, model: 'judge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\base',
+      worktrees: { begin, end },
+      execPhases: ['build']
+    })
+
+    await orch.run(
+      'modifie le projet',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [
+        {
+          phase: 'build',
+          text: 'code et tests terminés',
+          executionEvidence: [
+            { type: 'Edit', kind: 'mutation', status: 'completed', ok: true, summary: 'm' },
+            {
+              type: 'Bash',
+              kind: 'verification',
+              status: 'completed',
+              ok: true,
+              summary: 'v'
+            }
+          ]
+        }
+      ],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [],
+      undefined,
+      { resumeRunId: 'run-retained' }
+    )
+
+    expect(begin).toHaveBeenCalledWith(
+      'run-retained',
+      'Agent',
+      true,
+      expect.objectContaining({ resumeExisting: true })
+    )
+    expect(end).toHaveBeenCalledWith('run-retained', expect.objectContaining({ merge: true }))
+  })
+
   it('sans reprise : les DEUX phases sont envoyées au provider', async () => {
     const { orch, provider } = orchestrator()
     await orch.run('modifie le projet')
@@ -123,5 +183,44 @@ describe('un acquis réinjecté ne repaie pas sa phase', () => {
       { phase: 'scout', text: '   ' }
     ])
     expect(execPrompts(provider).length).toBe(2)
+  })
+
+  it('reutilise les preuves acquises avant redemarrage pour ouvrir le pre-gate', async () => {
+    const { orch, provider } = orchestrator()
+    const result = await orch.run(
+      'modifie le projet',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [
+        { phase: 'scout', text: 'exploration acquise' },
+        {
+          phase: 'build',
+          text: 'code et tests termines',
+          executionEvidence: [
+            {
+              type: 'Edit',
+              kind: 'mutation',
+              status: 'completed',
+              ok: true,
+              summary: 'source modifiee'
+            },
+            {
+              type: 'Bash',
+              kind: 'verification',
+              status: 'completed',
+              ok: true,
+              summary: 'tests verts',
+              command: 'npm test -- --run'
+            }
+          ]
+        }
+      ]
+    )
+
+    expect(result.gateBlocked).toBe(false)
+    expect(execPrompts(provider)).toHaveLength(0)
   })
 })

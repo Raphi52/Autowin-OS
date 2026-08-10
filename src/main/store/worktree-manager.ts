@@ -17,6 +17,7 @@ import { platform } from 'node:os'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import type { WorktreeConflictDiffResult } from '../../shared/worktree-activity-model'
+import { isSameProcessIdentity } from '../process-identity'
 import { parsePorcelainPaths } from '../run-autoclose'
 import { WorktreeOperationClient } from './worktree-operation-client'
 import type { WorktreeRecoveryInventory } from './worktree-operation-protocol'
@@ -155,7 +156,7 @@ export interface WorktreeManagerOptions {
   /** Suppression disque injectable pour simuler les verrous Windows dans les tests. */
   removeDirFn?: (path: string) => void
   /** Identité stable du processus (démarrage + exécutable), injectable pour les tests. */
-  processIdentityFn?: (pid: number) => string | undefined
+  processIdentityFn?: (pid: number) => string | null | undefined
   nowFn?: () => number
   /** Désactive le client worker à l'intérieur du worker lui-même. */
   disableAsyncOperations?: boolean
@@ -176,14 +177,24 @@ const ABANDONED_AGENT_MIN_AGE_MS = 24 * 60 * 60 * 1_000
  * à quelques minutes d'écart (recyclage) ; cette empreinte distingue « toujours le nôtre » de
  * « quelqu'un d'autre a hérité du numéro ». Exportée : le rattachement d'un run en a besoin aussi.
  */
-export function defaultProcessIdentity(pid: number): string | undefined {
+export function defaultProcessIdentity(pid: number): string | null | undefined {
+  // La disparition du PID et l'échec de la sonde sont deux faits différents. `undefined` est
+  // réservé à ESRCH (absence prouvée) ; `null` signifie que le PID existe peut-être encore mais
+  // que son empreinte n'a pas pu être lue. Le rattachement traite alors l'agent comme inconnu.
+  try {
+    process.kill(pid, 0)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ESRCH') return undefined
+    return null
+  }
   try {
     if (platform() === 'win32') {
       const command =
         `$p = Get-Process -Id ${pid} -ErrorAction Stop; ` +
         `$path = ''; try { $path = $p.Path } catch {}; ` +
         `Write-Output ($p.StartTime.ToUniversalTime().Ticks.ToString() + '|' + $path)`
-      return execFileSync(
+      const identity = execFileSync(
         'powershell.exe',
         ['-NoProfile', '-NonInteractive', '-Command', command],
         {
@@ -192,6 +203,7 @@ export function defaultProcessIdentity(pid: number): string | undefined {
           windowsHide: true
         }
       ).trim()
+      return identity || null
     }
     if (platform() === 'linux') {
       const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
@@ -203,14 +215,15 @@ export function defaultProcessIdentity(pid: number): string | undefined {
       } catch {
         // L'heure de démarrage reste suffisante pour distinguer un PID recyclé.
       }
-      return `${startedAt}|${executable}`
+      return startedAt ? `${startedAt}|${executable}` : null
     }
-    return execFileSync('ps', ['-p', String(pid), '-o', 'lstart=', '-o', 'comm='], {
+    const identity = execFileSync('ps', ['-p', String(pid), '-o', 'lstart=', '-o', 'comm='], {
       encoding: 'utf8',
       timeout: 3_000
     }).trim()
+    return identity || null
   } catch {
-    return undefined
+    return null
   }
 }
 
@@ -221,7 +234,7 @@ export class WorktreeManager {
   private readonly tryGitFn: typeof tryGit
   private readonly removeDirFn: (path: string) => void
   private readonly configuredBaseBranch?: string
-  private readonly processIdentity: (pid: number) => string | undefined
+  private readonly processIdentity: (pid: number) => string | null | undefined
   private readonly now: () => number
   private readonly operationClient?: WorktreeOperationClient
 
@@ -678,7 +691,11 @@ export class WorktreeManager {
         lease = { identity: null, recordedAt: 0 }
       }
       const currentIdentity = this.processIdentity(pid)
-      if (lease.identity && currentIdentity && lease.identity !== currentIdentity) {
+      if (
+        lease.identity &&
+        currentIdentity &&
+        !isSameProcessIdentity(lease.identity, currentIdentity)
+      ) {
         rmSync(leasePath, { force: true })
         continue
       }

@@ -46,12 +46,8 @@ import { execFileSync } from 'node:child_process'
 import { ensureBrainServerStarted } from './brain-server-launch'
 import { configureSessionMemoryEcho } from './session-memory-echo'
 import { configureRememberDepositStore } from './brain-remember'
-import { clearBrainRetrievalCache, retrieveBrainContext } from './brain-retrieval'
-import {
-  AMITEL_BRAIN_ROOT,
-  applyBrainRetrievalScores,
-  type BrainNoteSearchResult
-} from './viz/fs-brains'
+import { retrieveBrainContext } from './brain-retrieval'
+import { AMITEL_BRAIN_ROOT, type BrainNoteSearchResult } from './viz/fs-brains'
 import { buildBrainSearchEnvelope } from './brain-search-envelope'
 import {
   assertBrainVaultRoot,
@@ -78,6 +74,7 @@ import { captureElectronDesktop } from './electron-desktop-capture'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
 import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
+import { boundedTurnHistory } from './chat-turn-messages'
 import type { ChatTurnEvent } from '../shared/chat-turn'
 import type { RunLifecycleEvent } from '../shared/run-execution'
 import { TraceLedger } from './activity/ledger'
@@ -101,6 +98,7 @@ import { StartupResumeQueue } from './runs/startup-resume-queue'
 import {
   admitAutomaticResumeRuntime,
   admitLiveReattachment,
+  electStartupOrchestrationResumes,
   type OrchestrationRunState
 } from './runs/orchestration-state'
 import {
@@ -229,11 +227,8 @@ import {
 } from './store/chat-artifact-store'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
-import {
-  createNativePreflightReader,
-  filterNativePreflight,
-  readNativePreflight
-} from './activity/native-preflight'
+import { BrainSearchCoordinator } from './viz/brain-search-coordinator'
+import { filterNativePreflight, readNativePreflight } from './activity/native-preflight'
 import { nativeSpoolRoot, appendNativeTrace } from './activity/native-trace-spool'
 import { appendBrainTrace, latestBrainTraceId, readBrainTraces } from './activity/brain-trace-spool'
 import { resumeActionFor, runIsProducing, waitUntilRunCanResume } from './runs/run-reattach'
@@ -290,15 +285,13 @@ import {
   captureWorkspaceMutationSnapshot,
   captureWorkspacePathGenerationMarker
 } from './providers/workspace-mutation-evidence'
-import { readGitGraph } from './git-graph-main'
 import { readWorktreeMap } from './worktree-map-main'
-import { readRepoInventory } from './repo-inventory'
 import {
   automationAppIdentity,
   presentAutomationWindow,
   resolveAutomationInstanceMode,
   resolveExplicitUserDataDir,
-  resolveIsolatedAppDataBase
+  resolveInstanceAppDataBase
 } from './headless-instance'
 import { TaskStore } from './task-manager/task-store'
 import { persistTaskStore } from './task-manager/task-store-disk'
@@ -312,7 +305,8 @@ import {
   isolatedRelayLaunchArguments,
   PowerShellWindowsRelay,
   taskOccurrenceFromAdditionalData,
-  taskOccurrenceFromArgs
+  taskOccurrenceFromArgs,
+  windowsRelayTaskName
 } from './task-manager/windows-relay'
 import { registerTaskManagerIpc } from './task-manager/task-manager-ipc'
 import {
@@ -342,17 +336,15 @@ const explicitUserDataPath = resolveExplicitUserDataDir(process.argv)
 // STOCKAGE PORTABLE : l'app écrit dans SON dossier, plus dans `%APPDATA%`. Mesuré le 2026-08-07,
 // supprimer le dossier du projet laissait 1,8 Go derrière lui. `dirname(app.getPath('exe'))` et non
 // `app.getAppPath()` en packagé : ce dernier pointe dans l'asar, où rien ne s'écrit.
-const appDataRoot = resolveIsolatedAppDataBase(
+const appDataRoot = resolveInstanceAppDataBase(
   resolveAutowinAppDataBase(
     portableAppDataBase(app.getAppPath(), dirname(app.getPath('exe')), app.isPackaged),
     app.isPackaged
   ),
-  isolatedTestInstance,
   explicitUserDataPath
 )
 app.setName(isolatedTestInstance ? `${AUTOWIN_DISPLAY_NAME} Test` : AUTOWIN_DISPLAY_NAME)
 const explicitUserDataDir = explicitUserDataPath !== undefined
-if (explicitUserDataPath) app.setPath('userData', explicitUserDataPath)
 // En DEV uniquement : ouvre le port CDP pour piloter/inspecter le renderer réel. Jamais en packagé
 // (surface de debug). Doit être posé avant app ready — d'où la sonde SYNCHRONE du port.
 // Un enfant de l'app peut hériter du socket d'écoute et garder le port après la mort de l'app (vécu,
@@ -370,28 +362,41 @@ if (is.dev) {
       (cdp.moved ? ` — ${DEFAULT_CDP_PORT} était occupé` : '')
   )
 }
-configureAutowinAppDataBase(appDataRoot)
+// Electron exige un dossier existant pour `setPath`. Cette création vide et idempotente est la
+// seule I/O autorisée avant le verrou : le chemin obtenu est À LA FOIS l'identité Electron et la
+// racine effective de tous les stores, donc deux propriétaires distincts ne partagent jamais un run.
 const canonicalAppDataRoot = createAutowinAppDataRoot(appDataRoot)
-if (!explicitUserDataDir) app.setPath('userData', canonicalAppDataRoot)
+app.setPath('userData', canonicalAppDataRoot)
+// Le verrou Electron est rattaché au `userData` : deux instances de test isolées avec deux racines
+// restent indépendantes, tandis que DEUX processus sur la même racine ne peuvent jamais parcourir
+// ensemble les checkpoints de reprise. Cette exclusion vaut aussi en dev : sans elle, deux boots
+// concurrents élisent le même run puis lancent chacun son provider. Le second lancement réveille la
+// fenêtre de l'instance propriétaire via `second-instance` au lieu de reprendre le travail lui-même.
+const ownsInstanceLock = app.requestSingleInstanceLock(
+  startupTaskOccurrence ? { autowinTaskOccurrence: startupTaskOccurrence } : {}
+)
+if (!ownsInstanceLock) {
+  app.quit()
+  // `app.quit()` programme la fermeture mais laisse le module continuer synchroniquement. Sans cet
+  // arrêt dur, le perdant construit encore l'OS et peut lire/reprendre les mêmes checkpoints.
+  process.exit(0)
+}
+configureAutowinAppDataBase(appDataRoot)
+configureTurnTiming(ensureAutowinAppData(appDataRoot))
 configureSessionMemoryEcho(join(app.getPath('userData'), 'session-memory.json'))
 configureRememberDepositStore(join(app.getPath('userData'), 'remember-deposits.json'))
-// En DEV, on n'enforce PAS le single-instance lock : un hot-restart electron-vite (ou un
-// process résiduel qui détient encore le lock) ne doit jamais laisser une instance PÉRIMÉE
-// à l'écran en tuant la nouvelle. Le lock n'est appliqué que sur le build packagé.
-// Le verrou Electron est rattaché au `userData` : deux instances de test isolées avec deux racines
-// restent indépendantes, tandis qu'un second lancement sur la MÊME racine peut réveiller la fenêtre
-// du process tray (preuve Task Manager fermeture X → réouverture).
-const ownsInstanceLock =
-  !app.isPackaged ||
-  app.requestSingleInstanceLock(
-    startupTaskOccurrence ? { autowinTaskOccurrence: startupTaskOccurrence } : {}
-  )
-if (!ownsInstanceLock) app.quit()
-else configureTurnTiming(ensureAutowinAppData(appDataRoot))
 
 /** Noyau applicatif unique (P0-P4 câblés) : kit SOUL injecté, 2 voies, modules. */
 const os = new AutowinOS()
-const brainWorker = new BrainWorkerClient(join(__dirname, 'brain-worker.js'))
+const brainWorkerPath = join(__dirname, 'brain-worker.js')
+const brainWorker = new BrainWorkerClient(brainWorkerPath)
+const brainSearchWorker = new BrainWorkerClient(brainWorkerPath)
+const brainSearchCoordinator = new BrainSearchCoordinator()
+const BRAIN_SEARCH_BOUNDARY_TIMEOUT_MS = 2_500
+const invalidateBrainRuntime = async (): Promise<void> => {
+  brainSearchCoordinator.invalidate()
+  await Promise.all([brainWorker.invalidate(), brainSearchWorker.invalidate()])
+}
 // Conversations persistées sur disque : rechargées au démarrage, sauvées à chaque mutation.
 // SORTIE DE L'ÉTAT D'ATTENTE. Un tour laissé `streaming` sur disque appartient à un run mort avec
 // l'app : plus aucun process ne viendra le clore. Le chargement le clôt donc et le DIT dans la
@@ -638,7 +643,6 @@ function setupTray(): void {
 const providerStateStore = new ProviderStateStore(
   join(app.getPath('userData'), 'provider-state.json')
 )
-let startupProviderChecks: Promise<void> = Promise.resolve()
 
 /**
  * Borne du probe de connexion d'un provider. 20 s : c'est un VRAI appel (spawn de CLI + aller-retour
@@ -1439,11 +1443,6 @@ Le fil reprend ensuite normalement.`
     await refreshAllAccountIdentities()
     return claudeAccountsPayload()
   })
-  ipcMain.handle('os:claudeAccounts:refresh', async (event) => {
-    assertTrustedRendererSender(event, 'Claude accounts refresh')
-    await refreshAllAccountIdentities()
-    return claudeAccountsPayload()
-  })
   ipcMain.handle('os:claudeAccounts:add', (event, label: unknown) => {
     assertTrustedRendererSender(event, 'Claude accounts add')
     const account = claudeAccounts.add(typeof label === 'string' ? label : undefined)
@@ -1463,21 +1462,6 @@ Le fil reprend ensuite normalement.`
     claudeAccounts.remove(guardString(id, 'id'))
     return claudeAccountsPayload()
   })
-  ipcMain.handle('os:claudeAccounts:login', (event, id: unknown) => {
-    assertTrustedRendererSender(event, 'Claude accounts login')
-    const wanted = guardString(id, 'id')
-    const account = claudeAccounts.current().accounts.find((entry) => entry.id === wanted)
-    if (!account) throw new Error(`compte Claude inconnu : ${wanted}`)
-    os.startProviderLogin('claude', account.dir)
-    return { ok: true }
-  })
-
-  ipcMain.handle('os:kimiLogin', (event) => {
-    assertTrustedRendererSender(event, 'KimiLogin')
-    os.startKimiLogin()
-    return { ok: true }
-  })
-
   // --- Orchestration disciplinée (le cœur) : streame chaque étape ---
   ipcMain.handle('os:orchestrate', async (event, task: string, targetConversationId?: string) => {
     assertTrustedRendererSender(event, 'Orchestrate')
@@ -1624,7 +1608,9 @@ Le fil reprend ensuite normalement.`
           currentRunId = lifecycle.runId
           if (resumedAcquis && !resumedCheckpointReleased) {
             resumedCheckpointReleased = true
-            os.forgetResumableOrchestration(resumedAcquis.runId)
+            if (currentRunId !== resumedAcquis.runId) {
+              os.forgetResumableOrchestration(resumedAcquis.runId)
+            }
           }
           if (lifecycle.stage === 'closure') terminalLifecycle = lifecycle
           persistRunLifecycle(lifecycle, { conversationId, turnId }, causalTrace)
@@ -1750,12 +1736,6 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('git:read', (event, cwd?: string) => {
     assertTrustedRendererSender(event, 'GitRead')
     return readGitState(cwd && typeof cwd === 'string' ? cwd : process.cwd())
-  })
-  ipcMain.handle('git:graph', (event, cwd?: string) => {
-    assertTrustedRendererSender(event, 'GitGraph')
-    return readGitGraph(
-      cwd && typeof cwd === 'string' ? cwd : (process.env.AUTOWIN_OS_WORKSPACE ?? process.cwd())
-    )
   })
   // Vue Worktrees : état des copies git enrichi du retard, de la saleté et de la taille disque —
   // trois grandeurs que `git worktree list --porcelain` ne donne pas. Lecture seule.
@@ -2288,7 +2268,6 @@ Le fil reprend ensuite normalement.`
   // claude/kimi = présence CLI seulement (JAMAIS « authenticated » sans probe réel). Borné.
   ipcMain.handle('os:providerStatus', async (event) => {
     assertTrustedRendererSender(event, 'Provider status')
-    await startupProviderChecks
     const bounded = (p: Promise<boolean>): Promise<boolean> =>
       Promise.race([
         p.catch(() => false),
@@ -2662,13 +2641,6 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Brain')
     return brainWorker.request('loadGraph', guardString(path, 'path'), lod, community)
   })
-  // Inventaire des DÉPÔTS — la source de la couronne « repos » du graphe. Lecture seule.
-  // Les worktrees en sont exclus : ils portent un `.git` mais ne sont pas des dépôts, et les
-  // compter annoncerait 11 dépôts là où il y en a 5.
-  ipcMain.handle('os:repoInventory', (event) => {
-    assertTrustedRendererSender(event, 'RepoInventory')
-    return readRepoInventory()
-  })
   ipcMain.handle('os:loadBrainNeighborhood', (event, path: string, nodeId: string) => {
     assertTrustedRendererSender(event, 'Brain')
     return brainWorker.request(
@@ -2685,17 +2657,37 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'BrainSearch')
     const selectedPath = guardString(path, 'path')
     const boundedQuery = guardString(query, 'query')
-    const [local, retrieval] = await Promise.all([
-      brainWorker.request<BrainNoteSearchResult[]>('searchBrain', selectedPath, boundedQuery),
-      retrieveBrainContext(boundedQuery)
-    ])
+    const resolution = await brainSearchCoordinator.searchDetailed(selectedPath, boundedQuery, {
+      authorize: (root) =>
+        brainSearchWorker.requestWithTimeout<string>(
+          BRAIN_SEARCH_BOUNDARY_TIMEOUT_MS,
+          'authorizeVault',
+          root
+        ),
+      searchLocal: (root, searchQuery) =>
+        brainSearchWorker.requestWithTimeout<BrainNoteSearchResult[]>(
+          BRAIN_SEARCH_BOUNDARY_TIMEOUT_MS,
+          'searchBrain',
+          root,
+          searchQuery
+        ),
+      retrieve: retrieveBrainContext,
+      fuse: (local, navigation, root) =>
+        brainSearchWorker.requestWithTimeout<BrainNoteSearchResult[]>(
+          BRAIN_SEARCH_BOUNDARY_TIMEOUT_MS,
+          'fuseRetrieval',
+          local,
+          navigation,
+          root
+        )
+    })
     // On ne rend plus un tableau nu : le STATUT (found/empty/invalid/unavailable), la NAVIGATION et le
     // BUDGET d'injection étaient calculés puis jetés ici. Le renderer ne pouvait donc pas distinguer
     // une panne d'un « rien trouvé », ni montrer ce que les plafonds avaient coupé.
     return buildBrainSearchEnvelope({
       rawQuery: boundedQuery,
-      results: applyBrainRetrievalScores(local, retrieval.navigation),
-      retrieval
+      results: resolution.results,
+      retrieval: resolution.retrieval
     })
   })
   // BOÎTE DE RÉCEPTION du savoir : `brain-remember` dépose en `inbox/` et laisse la promotion à
@@ -2711,22 +2703,20 @@ Le fil reprend ensuite normalement.`
     const root = assertBrainVaultRoot(guardString(path, 'path'), AMITEL_BRAIN_ROOT)
     const moved = promoteInboxCandidate(root, guardString(id, 'id'))
     // Le fichier a changé de dossier : sans réindexation, le graphe montrerait encore l'ancien nœud.
-    clearBrainRetrievalCache()
-    await brainWorker.request('invalidate', root)
+    await invalidateBrainRuntime()
     return moved
   })
   ipcMain.handle('os:rejectInbox', async (event, path: string, id: string) => {
     assertTrustedRendererSender(event, 'BrainInboxReject')
     const root = assertBrainVaultRoot(guardString(path, 'path'), AMITEL_BRAIN_ROOT)
     const moved = rejectInboxCandidate(root, guardString(id, 'id'))
-    clearBrainRetrievalCache()
-    await brainWorker.request('invalidate', root)
+    await invalidateBrainRuntime()
     return moved
   })
   ipcMain.handle('os:refreshBrain', async (event, path: string) => {
     assertTrustedRendererSender(event, 'BrainRefresh')
-    clearBrainRetrievalCache()
-    await brainWorker.request('invalidate', guardString(path, 'path'))
+    guardString(path, 'path')
+    await invalidateBrainRuntime()
     return { ok: true }
   })
   ipcMain.handle('os:listRuns', (event) => {
@@ -2846,7 +2836,7 @@ Le fil reprend ensuite normalement.`
     }
     if (conversationId) activeChatTurns.set(conversationId, controller, completion)
     try {
-      const safe = (Array.isArray(messages) ? messages : []).slice(-40).map((m) => ({
+      const safe = boundedTurnHistory(Array.isArray(messages) ? messages : [], 40).map((m) => ({
         role: m.role,
         content: guardString(m.content, 'content'),
         ...(m.attachments?.length ? { attachments: guardAttachments(m.attachments) } : {})
@@ -3730,6 +3720,8 @@ Le fil reprend ensuite normalement.`
   const relay = new PowerShellWindowsRelay({
     scriptPath: relayScriptPath,
     executablePath: process.execPath,
+    taskName: windowsRelayTaskName(app.getPath('userData')),
+    migrateUnscopedLegacy: !explicitUserDataDir,
     launchArguments: isolatedRelayLaunchArguments({
       isolated: isolatedTestInstance,
       remoteDebuggingPort: app.commandLine.getSwitchValue('remote-debugging-port'),
@@ -3958,7 +3950,7 @@ Le fil reprend ensuite normalement.`
       // Anti-double-frontière : une conversation avec des appels NATIFS Autowin (codex/claude)
       // porte déjà sa propre frontière par appel. Les préflight legacy dupliqueraient la
       // même frontière dans la timeline → on ne les fusionne QUE pour les convs sans natif
-      // (aucun appel natif). La vue dédiée (os:promptTraces) reste inchangée.
+      // (aucun appel natif). Les diagnostics globaux restent disponibles via promptTracesGlobal.
       const preflightTraces = nativeCalls.length
         ? []
         : filterNativePreflight(nativePreflight, conversationId)
@@ -4002,12 +3994,6 @@ Le fil reprend ensuite normalement.`
     }
   }
   migrateLegacyCausalTraces()
-  const readNativePromptTraces = createNativePreflightReader(loadNativeTraces)
-  ipcMain.handle('os:promptTraces', (event, conversationId: unknown) => {
-    assertTrustedRendererSender(event, 'Native traces')
-    const safeConversationId = guardString(conversationId, 'conversationId')
-    return readNativePromptTraces(safeConversationId)
-  })
   ipcMain.handle('os:promptTraceSummary', (event) => {
     assertTrustedRendererSender(event, 'Native trace summary')
     // La requête brute est volontairement exclue de ce résumé IPC.
@@ -4258,9 +4244,6 @@ app.whenReady().then(async () => {
     assertTrusted: assertTrustedRendererSender,
     isolated: isolatedTestInstance
   })
-  // Aucun tour modèle au démarrage. Le statut initial vient des tokens/CLI locaux ; le seul probe
-  // payant est l'action explicite « Tester », elle-même bornée par ExecutionSupervisor ci-dessus.
-  startupProviderChecks = Promise.resolve()
   createWindow()
   setupTray() // l'app vit en tray → fermer la fenêtre ne tue plus les runs en cours
 
@@ -4313,16 +4296,102 @@ app.whenReady().then(async () => {
   // acquis persisté ; on relance ICI à la phase suivante, en réinjectant les livrables déjà produits
   // (aucune phase refaite). Rien à reprendre → aucun effet (démarrage normal strictement inchangé).
   const resumableRuns = os.resumableOrchestrations()
+  const resumeElection = electStartupOrchestrationResumes(resumableRuns)
+  const suppressedDuplicateByRunId = new Map(
+    resumeElection.suppressed.map(({ state, electedRunId }) => [state.runId, electedRunId])
+  )
+  const failedResumeElectionRunIds = new Set<string>()
+  for (const { state, electedRunId } of resumeElection.suppressed) {
+    if (state.resumeDisposition) continue
+    try {
+      os.suppressDuplicateOrchestrationPipeline(state.runId, electedRunId)
+    } catch (error) {
+      failedResumeElectionRunIds.add(electedRunId)
+      console.warn(
+        '[resume-orchestration]',
+        state.runId,
+        '-> election non persistable, toutes les relances de cette demande restent bloquees',
+        error
+      )
+    }
+  }
   const startupResumeQueue = new StartupResumeQueue()
   for (const resumableRun of resumableRuns) {
     let durableLiveReattachment: ReturnType<typeof createOrchestrateTurnPersistence> | undefined
     let liveReattachment: ReturnType<typeof admitLiveReattachment> | undefined
+    const electedDuplicateRunId = suppressedDuplicateByRunId.get(resumableRun.runId)
+    if (failedResumeElectionRunIds.has(electedDuplicateRunId ?? resumableRun.runId)) {
+      console.warn(
+        '[resume-orchestration]',
+        resumableRun.runId,
+        '-> reprise bloquee: la decision anti-doublon n est pas durable'
+      )
+      continue
+    }
     // GARDE DE VIVACITÉ : les CLI sont détachés, donc un agent du run précédent peut ÊTRE ENCORE EN
     // TRAIN DE TRAVAILLER. Relancer par-dessus mettrait deux agents sur la même copie, à s'écraser
     // l'un l'autre. On vérifie chaque run avant de le relancer — et on l'écrit, pour que ce silence
     // soit lisible sans empêcher les autres reprises.
     const reprise = resumeActionFor(resumableRun, defaultProcessIdentity)
-    if (reprise === 'rattacher' && resumableRun) {
+    if (electedDuplicateRunId) {
+      // Un doublon supprime n'est PAS un run a reprendre : aucun tour Chat n'est ouvert et aucune
+      // cloture verte/rouge n'est fabriquee. On observe uniquement la preuve de fin du provider,
+      // puis on retire son checkpoint. La disposition durable survit aux boots intermediaires.
+      const refreshSuppressedCheckpoint = (): void => {
+        broadcast({ type: 'refresh', scope: 'workflows' })
+        broadcast({ type: 'refresh', scope: 'orchestration' })
+      }
+      const suppressAfterProof = (
+        latest: ReturnType<typeof os.resumableOrchestrations>[number]
+      ): void => {
+        os.forgetResumableOrchestration(latest.runId)
+        refreshSuppressedCheckpoint()
+        console.warn(
+          '[resume-orchestration]',
+          latest.runId,
+          `-> pipeline doublon retire apres preuve de fin; workflow elu: ${electedDuplicateRunId}`
+        )
+      }
+
+      if (reprise === 'relancer') {
+        suppressAfterProof(resumableRun)
+        continue
+      }
+      if (reprise === 'bloquer') {
+        refreshSuppressedCheckpoint()
+        console.warn(
+          '[resume-orchestration]',
+          resumableRun.runId,
+          `-> pipeline doublon de ${electedDuplicateRunId} conserve sans relance: fin provider indemontrable`
+        )
+        continue
+      }
+
+      void waitUntilRunCanResume(() => {
+        const latest = os
+          .resumableOrchestrations()
+          .find((candidate) => candidate.runId === resumableRun.runId)
+        return latest ? resumeActionFor(latest, defaultProcessIdentity) : 'ignorer'
+      }).then((action) => {
+        const latest = os
+          .resumableOrchestrations()
+          .find((candidate) => candidate.runId === resumableRun.runId)
+        if (action === 'relancer' && latest) {
+          suppressAfterProof(latest)
+          return
+        }
+        refreshSuppressedCheckpoint()
+        console.warn(
+          '[resume-orchestration]',
+          resumableRun.runId,
+          action === 'bloquer'
+            ? '-> pipeline doublon conserve: fin provider sans preuve recuperable, aucune relance'
+            : '-> observation du pipeline doublon expiree, aucune relance ni nouveau tour'
+        )
+      })
+      continue
+    }
+    if ((reprise === 'rattacher' || reprise === 'bloquer') && resumableRun) {
       const conversationId = resumableRun.conversationId ?? '__autonomous__'
       const recordedTurnRuntime = resumableRun.turnId
         ? os.conversations
@@ -4548,14 +4617,16 @@ app.whenReady().then(async () => {
               }),
             resumeTurnId,
             (lifecycle) => {
-              // Le nouveau runId n'effacera jamais l'ancien checkpoint. On le libère au premier
-              // lifecycle seulement : cet événement prouve que le superviseur a admis la reprise.
-              // Un refus avant admission conserve donc les acquis pour le prochain démarrage.
+              resumedCurrentRunId = lifecycle.runId
+              // Une reprise moderne garde l'identité du run pour conserver sa copie Git. Elle vient
+              // donc de réécrire le même checkpoint : seuls les anciens chemins à nouvelle identité
+              // ont encore un checkpoint historique distinct à retirer.
               if (!resumedCheckpointReleased) {
                 resumedCheckpointReleased = true
-                os.forgetResumableOrchestration(resumableRun.runId)
+                if (resumedCurrentRunId !== resumableRun.runId) {
+                  os.forgetResumableOrchestration(resumableRun.runId)
+                }
               }
-              resumedCurrentRunId = lifecycle.runId
               if (lifecycle.stage === 'closure') resumedTerminalLifecycle = lifecycle
               persistRunLifecycle(lifecycle, { conversationId, turnId: resumeTurnId }, causalTrace)
             },
@@ -4610,6 +4681,16 @@ app.whenReady().then(async () => {
           console.warn('[resume-orchestration] échec de la reprise :', error)
         })
     }
+    if (reprise === 'bloquer') {
+      const reason =
+        'Appel provider terminé sans preuve récupérable — relance bloquée pour éviter un double coût.'
+      const conversationId = resumableRun.conversationId ?? '__autonomous__'
+      durableLiveReattachment?.fail(reason, false)
+      broadcast({ type: 'orchestrate-end', convId: conversationId, status: 'red' })
+      broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+      console.warn('[resume-orchestration]', resumableRun.runId, '→', reason)
+      continue
+    }
     if (reprise === 'rattacher') {
       void waitUntilRunCanResume(() => {
         const latest = os
@@ -4621,7 +4702,19 @@ app.whenReady().then(async () => {
           .resumableOrchestrations()
           .find((candidate) => candidate.runId === resumableRun.runId)
         if (action !== 'relancer' || !latest) {
-          durableLiveReattachment?.succeed({ result: 'Rattachement terminé.' })
+          if ((action === 'ignorer' || action === 'bloquer') && latest) {
+            const reason =
+              action === 'bloquer'
+                ? 'Appel provider terminé sans preuve récupérable — relance bloquée pour éviter un double coût.'
+                : 'Rattachement expiré sans preuve de fin — aucun appel provider n’a été relancé.'
+            const conversationId = latest.conversationId ?? '__autonomous__'
+            durableLiveReattachment?.fail(reason, false)
+            broadcast({ type: 'orchestrate-end', convId: conversationId, status: 'red' })
+            broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+            console.warn('[resume-orchestration]', latest.runId, '→', reason)
+          } else {
+            durableLiveReattachment?.succeed({ result: 'Rattachement terminé.' })
+          }
           return
         }
         if (!liveReattachment?.resumeExisting) {

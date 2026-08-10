@@ -185,6 +185,7 @@ export function GraphView({
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
   const [themeQuery, setThemeQuery] = useState('')
+  const [searchReload, setSearchReload] = useState(0)
   const [activeThemes, setActiveThemes] = useState<Set<string>>(() => new Set())
   const [themeNodes, setThemeNodes] = useState<GraphNode[]>([])
   const [settings, setSettings] = useState<GraphVisibilitySettings>(initialVisibilitySettings)
@@ -262,6 +263,8 @@ export function GraphView({
 
     setLoading(true)
     setErr('')
+    setVaultSearch([])
+    setSearchRetrieval(null)
     void window.api
       .refreshBrain(selected)
       .then(() => {
@@ -271,7 +274,7 @@ export function GraphView({
         }
         dynamicGraphKeyRef.current = ''
         dynamicGraphRef.current = { nodes: [], links: [] }
-        setVaultSearch([])
+        setSearchReload((request) => request + 1)
         setGraphReload((request) => request + 1)
         refreshBrains()
       })
@@ -332,7 +335,7 @@ export function GraphView({
       current = false
       window.clearTimeout(timeout)
     }
-  }, [brains, selected, themeQuery])
+  }, [brains, searchReload, selected, themeQuery])
 
   useEffect(() => {
     if (!selected) return

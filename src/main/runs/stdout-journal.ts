@@ -1,5 +1,76 @@
-import { closeSync, existsSync, mkdirSync, openSync, readSync, statSync } from 'node:fs'
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readSync,
+  renameSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { join } from 'node:path'
+
+export const SURVIVABLE_EXIT_EVENT_TYPE = 'autowin.survivable-exit'
+
+/**
+ * Preuve de fermeture écrite par le relais, hors de stdout/stderr contrôlés par le provider.
+ * Un texte de réponse ressemblant au marqueur ne peut donc jamais certifier sa propre réussite.
+ */
+export function survivableExitPath(journalPath: string): string {
+  return `${journalPath}.exit.json`
+}
+
+export function survivableExitCode(journalPath: string): number | undefined {
+  try {
+    return survivableExitCodeFromLine(readFileSync(survivableExitPath(journalPath), 'utf8'))
+  } catch {
+    return undefined
+  }
+}
+
+/** Écriture atomique côté parent/relais non-Windows. */
+export function writeSurvivableExit(journalPath: string, exitCode: number): void {
+  if (!Number.isSafeInteger(exitCode) || exitCode < 0) throw new Error('code de sortie invalide')
+  const path = survivableExitPath(journalPath)
+  const temporaryPath = `${path}.${process.pid}.tmp`
+  writeFileSync(
+    temporaryPath,
+    JSON.stringify({ type: SURVIVABLE_EXIT_EVENT_TYPE, exit_code: exitCode }),
+    'utf8'
+  )
+  renameSync(temporaryPath, path)
+}
+
+/** Marqueur écrit par le relais APRÈS la fermeture réelle du CLI. */
+export function survivableExitCodeFromLine(line: string): number | undefined {
+  try {
+    const value: unknown = JSON.parse(line)
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+    const event = value as Record<string, unknown>
+    return event.type === SURVIVABLE_EXIT_EVENT_TYPE &&
+      Number.isSafeInteger(event.exit_code) &&
+      (event.exit_code as number) >= 0
+      ? (event.exit_code as number)
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export function isSurvivableExitLine(line: string): boolean {
+  try {
+    const value: unknown = JSON.parse(line)
+    return Boolean(
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      (value as Record<string, unknown>).type === SURVIVABLE_EXIT_EVENT_TYPE
+    )
+  } catch {
+    return false
+  }
+}
 
 /**
  * Journal de SORTIE BRUTE d'un CLI (survie niveau 2, incr. 3) : au lieu de streamer dans un pipe
@@ -24,10 +95,23 @@ export function stdoutJournalPath(root: string, runId: string): string {
   return join(root, `${safe}.stdout.jsonl`)
 }
 
+/** Stderr reste observable, mais ne doit jamais être confondu avec la réponse du provider. */
+export function stderrJournalPath(root: string, runId: string): string {
+  const safe = runId.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 120)
+  if (!safe || safe === '.' || safe === '..') throw new Error('identifiant de run invalide')
+  return join(root, `${safe}.stderr.log`)
+}
+
 /** Ouvre (crée) le journal de sortie d'un run et rend son fd append pour `stdio`. */
 export function openStdoutJournal(root: string, runId: string): StdoutJournalHandle {
   mkdirSync(root, { recursive: true })
   const path = stdoutJournalPath(root, runId)
+  return { path, fd: openSync(path, 'a') }
+}
+
+export function openStderrJournal(root: string, runId: string): StdoutJournalHandle {
+  mkdirSync(root, { recursive: true })
+  const path = stderrJournalPath(root, runId)
   return { path, fd: openSync(path, 'a') }
 }
 
@@ -49,7 +133,11 @@ export interface TailResult {
 }
 
 /** Lit les octets disponibles depuis `offset` (lecture bornée, sans charger tout le fichier). */
-export function readChunkFrom(path: string, offset: number, maxBytes = 1_000_000): { text: string; next: number } {
+export function readChunkFrom(
+  path: string,
+  offset: number,
+  maxBytes = 1_000_000
+): { text: string; next: number } {
   if (!existsSync(path)) return { text: '', next: offset }
   const size = statSync(path).size
   if (size <= offset) return { text: '', next: offset }

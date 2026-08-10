@@ -6,7 +6,6 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  readConversationFilePaths,
   readConversationTurnFileMutations,
   readCurrentConversationPathOwnership
 } from './activity/conversation-file-trace-spool'
@@ -230,7 +229,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     expect(receivedBinding).toEqual(binding)
   })
 
-  it("respecte la phase build choisie pour une correction bornée qui interdit le refactoring", async () => {
+  it('respecte la phase build choisie pour une correction bornée qui interdit le refactoring', async () => {
     const os = fakeOs()
     let receivedTask = ''
     os.runTask = async (...args: unknown[]) => {
@@ -635,9 +634,15 @@ describe('AppCommandBus command execution policy', () => {
 
       expect(edit).toMatchObject({ ok: true, data: { allowed: true, path: 'target.txt' } })
       expect(readFileSync(join(workspace, 'target.txt'), 'utf8')).toContain('après')
-      expect(readConversationFilePaths('conv-1')).toEqual(['target.txt'])
-      expect(readConversationFilePaths('conv-2')).toEqual([])
-      expect(readConversationTurnFileMutations('conv-1', 'turn-1').lineFingerprintsByPath).toEqual({
+      expect(readCurrentConversationPathOwnership('conv-1').map((item) => item.path)).toEqual([
+        'target.txt'
+      ])
+      expect(readCurrentConversationPathOwnership('conv-2')).toEqual([])
+      const mutations = readConversationTurnFileMutations('conv-1', 'turn-1')
+      expect(mutations.paths).toEqual([
+        join(workspace, 'target.txt').replaceAll('\\', '/').toLowerCase()
+      ])
+      expect(mutations.lineFingerprintsByPath).toEqual({
         [join(workspace, 'target.txt').replaceAll('\\', '/').toLowerCase()]: [
           exactLineFingerprint('après')
         ]
@@ -1470,18 +1475,21 @@ describe('AppCommandBus command execution policy', () => {
   it("conserve le checkpoint si la reprise est refusee avant d'entrer dans l'orchestrateur", async () => {
     const os = fakeOs()
     const forget = vi.fn()
+    let observedResumeControl: unknown
     os.resumableOrchestrationForTask = () => ({
       runId: 'run-active',
       task: '/build corrige la typo',
       conversationId: 'conv-1',
-      phaseOutputs: [{ phase: 'frame', text: 'cadrage deja paye' }],
+      // Première phase encore en cours : aucun livrable, mais l'appel actif doit rester single-flight.
+      phaseOutputs: [],
       executionQuote: { id: 'quote-active' },
       usage: { quoteId: 'quote-active', activeCalls: 1 },
       startedAt: 1,
       updatedAt: 2
     })
     os.forgetResumableOrchestration = forget
-    os.runTask = async () => {
+    os.runTask = async (...args: unknown[]) => {
+      observedResumeControl = args[12]
       throw new Error('Reprise refusee : 1 appel provider encore actif.')
     }
 
@@ -1492,6 +1500,7 @@ describe('AppCommandBus command execution policy', () => {
     )
 
     expect(result).toMatchObject({ ok: false })
+    expect(observedResumeControl).toMatchObject({ usage: { activeCalls: 1 } })
     expect(forget).not.toHaveBeenCalled()
   })
 

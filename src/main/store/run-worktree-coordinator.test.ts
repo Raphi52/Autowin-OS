@@ -88,6 +88,73 @@ function fakeManager(
 }
 
 describe('RunWorktreeCoordinator (flip live)', () => {
+  it('reprend exactement la copie durable du run au lieu de recréer un bureau vide', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-resume-worktree-'))
+    try {
+      const runId = 'run-resume'
+      const worktreePath = join(root, `agent__${runId}`)
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      stateStore.save({
+        version: 1,
+        repoId: 'repo-a',
+        runId,
+        agentName: 'Builder',
+        worktreePath,
+        baseBranch: 'main',
+        baseSha: TEST_SHA,
+        verdict: 'interrupted',
+        publication: 'blocked',
+        files: [{ path: 'src/feature.ts', kind: 'mod' }],
+        createdAtMs: 10,
+        updatedAtMs: 20
+      })
+      const acquire = vi.fn((_id: string, context?: { worktreePath: string }) =>
+        context?.worktreePath ?? ''
+      )
+      const coordinator = new RunWorktreeCoordinator({
+        manager: fakeManager({
+          acquire,
+          listAgentIds: () => [runId],
+          describe: (id) => ({
+            workspacePath: '/repo',
+            worktreePath: join(root, `agent__${id}`),
+            baseBranch: 'main',
+            baseSha: '2'.repeat(40)
+          })
+        }),
+        stateStore,
+        nowFn: () => 30
+      })
+
+      expect(
+        coordinator.begin(runId, 'Builder', true, {
+          task: 'corrige',
+          role: 'build',
+          resumeExisting: true
+        })
+      ).toBe(worktreePath)
+      expect(acquire).toHaveBeenCalledWith(
+        runId,
+        expect.objectContaining({ worktreePath, baseSha: TEST_SHA })
+      )
+      expect(coordinator.activity()[0]).toMatchObject({
+        agentId: runId,
+        state: 'working',
+        worktreePath,
+        baseSha: TEST_SHA,
+        endedAtMs: undefined
+      })
+      expect(stateStore.get(runId)).toMatchObject({
+        verdict: 'running',
+        publication: 'not-requested',
+        worktreePath,
+        baseSha: TEST_SHA
+      })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('récupère l’inventaire Git en worker sans bloquer le heartbeat du main', async () => {
     const listAgentIds = vi.fn(() => {
       throw new Error('le chemin synchrone ne doit pas être appelé')

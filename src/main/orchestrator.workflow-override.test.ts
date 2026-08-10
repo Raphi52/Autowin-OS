@@ -130,21 +130,50 @@ describe('un workflow impose ses phases', () => {
     expect(provider.execCount).toBe(1) // seule build a le droit de muter
   })
 
-  it('sépare le besoin global de la mission read-only des phases amont', async () => {
+  it('une phase explicite court-circuite le workflow choisi', async () => {
     const provider = new Recorder()
     await makeOrchestrator(provider, {
       explicit: true,
       phases: ['scout', 'frame', 'terrain', 'build']
     }).run('/build corrige le bug')
 
-    for (const phase of ['scout', 'frame', 'terrain']) {
-      const prompt = provider.prompts.find((candidate) => candidate.includes(`SKILL ${phase}`))
-      expect(prompt, phase).toContain(`MISSION ACTIVE — ${phase.toUpperCase()} UNIQUEMENT`)
-      expect(prompt, phase).toContain('BESOIN GLOBAL (contexte, pas une action immédiate)')
-      expect(prompt, phase).toContain('corrige le bug')
-      expect(prompt, phase).not.toContain('TÂCHE: /build corrige le bug')
-      expect(prompt, phase).toMatch(/ne signale pas l'absence.*comme un blocage/i)
-    }
+    expect(provider.prompts.some((prompt) => prompt.includes('SKILL scout'))).toBe(false)
+    expect(provider.prompts.some((prompt) => prompt.includes('SKILL frame'))).toBe(false)
+    expect(provider.prompts.some((prompt) => prompt.includes('SKILL terrain'))).toBe(false)
+    expect(provider.prompts.filter((prompt) => prompt.includes('SKILL build'))).toHaveLength(1)
+    expect(provider.execCount).toBe(1)
+  })
+
+  it('une phase explicite ne réserve pas non plus le pire cas du graphe écarté', async () => {
+    const provider = new Recorder()
+    const quote = compileExecutionQuote('/build corrige le bug', { maxProviderCalls: 4 })
+    await expect(
+      makeOrchestrator(
+        provider,
+        {
+          explicit: true,
+          graph: {
+            entry: 'scout',
+            nodes: [
+              { id: 'scout', phase: 'scout' },
+              { id: 'frame', phase: 'frame' },
+              { id: 'terrain', phase: 'terrain' },
+              { id: 'build', phase: 'build' },
+              { id: 'clean', phase: 'clean' }
+            ],
+            edges: [
+              { from: 'scout', to: 'frame', when: 'always' },
+              { from: 'frame', to: 'terrain', when: 'always' },
+              { from: 'terrain', to: 'build', when: 'always' },
+              { from: 'build', to: 'clean', when: 'always' }
+            ]
+          }
+        },
+        quote
+      ).run('/build corrige le bug')
+    ).resolves.toBeDefined()
+    expect(quote.phases).toEqual(['build'])
+    expect(provider.execCount).toBe(1)
   })
 })
 

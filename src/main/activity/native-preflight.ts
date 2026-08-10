@@ -116,9 +116,3 @@ export function filterNativePreflight(
     ? traces
     : traces.filter((trace) => trace.conversationId === conversationId)
 }
-
-export function createNativePreflightReader(
-  load: () => NativePreflightTrace[]
-): (conversationId: string) => NativePreflightTrace[] {
-  return (conversationId) => filterNativePreflight(load(), conversationId)
-}

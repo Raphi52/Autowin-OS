@@ -31,7 +31,10 @@ class StableProvider implements ProviderAdapter {
     return true
   }
 
-  async *send(): AsyncGenerator<StreamChunk, SendResult, void> {
+  async *send(
+    _messages: Message[],
+    _options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
     this.calls += 1
     return {
       text: 'VALIDE',
@@ -65,7 +68,61 @@ class ReroutingProvider implements ProviderAdapter {
   }
 }
 
+class ChatOnlyProvider implements ProviderAdapter {
+  constructor(readonly id: string) {}
+  async auth(): Promise<boolean> {
+    return true
+  }
+  async *send(): AsyncGenerator<StreamChunk, SendResult, void> {
+    throw new Error('le provider de chat ne doit pas exécuter le run')
+  }
+}
+
+class SpawnReportingExecutor extends StableProvider {
+  private sequence = 0
+
+  async *send(
+    _messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const token = `actual-${++this.sequence}`
+    const pid = 9100 + this.sequence
+    options.execution?.onSpawnIntent?.(token, true)
+    options.execution?.onJournal?.(token, `C:/journaux/${token}.stdout.jsonl`)
+    options.execution?.onSpawned?.(token, pid)
+    const result = yield* super.send(_messages, options)
+    options.execution?.onProcess?.(pid, false)
+    return result
+  }
+}
+
 describe('Orchestrator — identité provider réelle dans trace + coût', () => {
+  it('persiste le vrai exécuteur quand un provider de chat est rerouté vers Codex', async () => {
+    const requested = new ChatOnlyProvider('gemini')
+    const codex = new SpawnReportingExecutor('codex', 'gpt-5.6-sol')
+    const registry = new ProviderRegistry().register(requested).register(codex)
+    const snapshots: Array<Array<{ provider?: string }>> = []
+    const roles = new RoleModelConfig({
+      subagent: { provider: requested.id, model: 'gemini-2.5-pro' },
+      judge: { provider: requested.id, model: 'gemini-2.5-pro' }
+    })
+
+    await new Orchestrator({
+      registry,
+      roles,
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\ws',
+      worktrees: makeTestWorktrees('C:\\ws'),
+      execPhases: ['build'],
+      onAgentsChanged: (_runId, agents) => snapshots.push(agents)
+    }).run('corrige le bug')
+
+    const persistedProviders = snapshots.flatMap((agents) => agents.map((agent) => agent.provider))
+    expect(persistedProviders.length).toBeGreaterThan(0)
+    expect(new Set(persistedProviders)).toEqual(new Set(['codex']))
+  })
+
   it('trace et coût attribuent le provider AYANT RÉPONDU, pas le demandé', async () => {
     const provider = new ReroutingProvider()
     const registry = new ProviderRegistry().register(provider)

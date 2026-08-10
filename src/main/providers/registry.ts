@@ -239,6 +239,9 @@ export class ProviderRegistry {
   ): Promise<SendResult> {
     const route = this.resolve(id, opts)
     const adapter = this.get(route.id)
+    // L'appelant a construit ses callbacks avant que le registre ne choisisse un fallback local.
+    // Publier la route AVANT tout spawn garantit que pid/journal portent l'exécuteur causal réel.
+    route.opts.execution?.onExecutorResolved?.(route.id)
     // Figer le compte au départ : une autre requête peut faire tourner le pool pendant que celle-ci
     // attend sa réponse. Le mur et la rotation doivent viser le compte qui a réellement été appelé.
     const accountAtStart = this.activeAccountOf?.(route.id)
@@ -289,6 +292,14 @@ export class ProviderRegistry {
     let spawnFailure: Error | undefined
     const spawnedTokens = new Set<string>()
     let terminateProvider: ((reason: string) => void) | undefined
+    let reservationSettled = false
+    const settleReservation = (failed: boolean, usage?: SendResult['usage']): void => {
+      if (!reservation || reservationSettled) return
+      reservationSettled = true
+      if (failed) reservation.fail(usage)
+      else reservation.complete(usage)
+      route.opts.execution?.onReservationSettled?.(reservation.id)
+    }
     const execution = route.opts.execution
       ? {
           ...route.opts.execution,
@@ -297,13 +308,13 @@ export class ProviderRegistry {
             // Régler d'abord la réservation garantit que la persistance déclenchée par le callback
             // ne peut jamais écrire le couple incohérent `agents=[]` + `activeCalls=1`.
             if (!active && !spawnedTokens.has(token)) {
-              reservation?.fail()
+              settleReservation(true)
               spawnFailure ??= new Error(
                 `Lancement du sous-agent ${route.id} annulé avant création du processus (${token}).`
               )
             }
             if (active || !spawnedTokens.has(token)) {
-              route.opts.execution?.onSpawnIntent?.(token, active)
+              route.opts.execution?.onSpawnIntent?.(token, active, reservation?.id)
             }
           },
           onSpawned: (token: string, pid: number) => {
@@ -315,7 +326,7 @@ export class ProviderRegistry {
               route.opts.execution.onSpawned(token, pid)
             } else {
               route.opts.execution?.onProcess?.(pid, true)
-              route.opts.execution?.onSpawnIntent?.(token, false)
+              route.opts.execution?.onSpawnIntent?.(token, false, reservation?.id)
             }
           },
           registerTermination: (terminate: (reason: string) => void) => {
@@ -336,7 +347,7 @@ export class ProviderRegistry {
     try {
       gen = adapter.send(messages, effectiveOptions)
     } catch (error) {
-      reservation?.fail()
+      settleReservation(true)
       throw error
     }
 
@@ -344,10 +355,15 @@ export class ProviderRegistry {
     // main (zombie, `close` jamais émis), la course rejette au lieu de pendre à l'infini. Garantie que
     // l'orchestrateur se règle TOUJOURS ; le watchdog de flux des adaptateurs tue le process bien avant.
     let forceDrainReject!: (error: Error) => void
+    let unprovenTerminationError: Error | undefined
     const forcedDrain = new Promise<never>((_resolve, reject) => {
       forceDrainReject = reject
     })
-    const nextStep = (): ReturnType<typeof gen.next> => Promise.race([gen.next(), forcedDrain])
+    let pendingNext: ReturnType<typeof gen.next> | undefined
+    const nextStep = (): ReturnType<typeof gen.next> => {
+      pendingNext = gen.next()
+      return Promise.race([pendingNext, forcedDrain])
+    }
     /**
      * Deltas déjà livrés à la conversation. Verrou de la rotation : une fois du texte affiché,
      * relancer le tour sur un autre compte le DUPLIQUERAIT sous les yeux de l'utilisateur. On ne
@@ -378,12 +394,14 @@ export class ProviderRegistry {
     const trackedPump = pump
       .then(
         (result) => {
-          if (effectiveOptions.signal.aborted) reservation?.fail(result.usage)
-          else reservation?.complete(result.usage)
+          settleReservation(effectiveOptions.signal.aborted, result.usage)
           return result
         },
         (error) => {
-          reservation?.fail()
+          // La coupure de la pompe de coordination ne prouve pas que le provider/CLI est mort. Sa
+          // réservation reste active jusqu'à ce que le `next()` réel ou `return()` du générateur
+          // termine ; le checkpoint continue ainsi de verrouiller toute reprise concurrente.
+          if (error !== unprovenTerminationError) settleReservation(true)
           // Toute défaillance passe ici : c'est le point unique où armer le disjoncteur. On l'arme sur
           // la PREUVE (le refus du provider), pas sur une supposition — `quotaWallReason` écarte
           // explicitement le rate-limit passager.
@@ -427,19 +445,37 @@ export class ProviderRegistry {
           const error = new Error(
             `${reason} : drainage toujours actif après ${COORDINATION_DRAIN_GRACE_MS} ms`
           )
+          unprovenTerminationError = error
           try {
             terminateProvider?.(error.message)
           } catch {
             // La fermeture de l'adaptateur reste best-effort ; la pompe est bornée quoi qu'il arrive.
           }
           // Arrête la boucle du registre même si `gen.next()` reste bloqué dans un provider fautif.
+          const unfinishedNext = pendingNext
           forceDrainReject(error)
-          reservation?.fail()
-          try {
-            void gen.return?.(undefined as never).catch(() => undefined)
-          } catch {
-            // Un générateur tiers peut rejeter synchroniquement sa fermeture : réservation déjà close.
-          }
+          // La fermeture continue hors de la promesse rendue à l'orchestrateur. Si le provider
+          // ignore aussi `return()`, cette promesse reste pendante ET la réservation reste active :
+          // c'est une incertitude durable, jamais une autorisation de second appel.
+          void (async () => {
+            try {
+              const step = unfinishedNext ? await unfinishedNext : await gen.next()
+              if (step.done) {
+                settleReservation(true, step.value.usage)
+                return
+              }
+              let closed = await gen.return(undefined as never)
+              // `return()` peut traverser un `finally` qui yield : `done:false` reste une activité,
+              // pas une terminaison. On poursuit donc la fermeture sans jamais solder entre deux
+              // yields ; une attente infinie conserve naturellement la réservation active.
+              // Après le premier `return`, reprendre avec `next` laisse le `finally` exécuter son
+              // nettoyage. Répéter `return` pourrait au contraire court-circuiter ce `finally`.
+              while (!closed.done) closed = await gen.next()
+              settleReservation(true, closed.value.usage)
+            } catch {
+              settleReservation(true)
+            }
+          })()
         }, COORDINATION_DRAIN_GRACE_MS)
         drainGraceTimer.unref?.()
       }

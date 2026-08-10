@@ -41,10 +41,6 @@ function readFromHandle(path: string, byteLimit: number, allowedRoots?: string[]
   }
 }
 
-export function readUtf8Prefix(path: string, maxBytes: number): string {
-  return readFromHandle(realpathSync(path), maxBytes).toString('utf8')
-}
-
 export function readBoundedUtf8FileWithin(
   path: string,
   allowedRoots: string[],

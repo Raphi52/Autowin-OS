@@ -58,14 +58,3 @@ export class ModelCatalogRefresher<T> {
     return this.inFlight
   }
 }
-
-/**
- * Les lectures ordinaires restent instantanées pendant le probe de démarrage.
- * Seul un appel explicitement forcé attend le fournisseur.
- */
-export function serveModelCatalog<T>(
-  refresher: ModelCatalogRefresher<T>,
-  force: boolean
-): T[] | Promise<T[]> {
-  return force ? refresher.refresh(true) : refresher.current()
-}

@@ -61,8 +61,12 @@ export interface SendOptions {
     causalWatchPaths?: string[]
     /** Lease interne du processus CLI ; jamais transmis au fournisseur. */
     onProcess?: (pid: number, active: boolean) => void
+    /** Route d'exécution réellement retenue après fallback (ex. Gemini demandé → Codex). */
+    onExecutorResolved?: (provider: string) => void
     /** Barrière durable posée avant spawn, levée seulement après enregistrement du PID enfant. */
-    onSpawnIntent?: (token: string, active: boolean) => void
+    onSpawnIntent?: (token: string, active: boolean, reservationId?: string) => void
+    /** La réservation est réglée en mémoire ; son agent devient historique au prochain checkpoint. */
+    onReservationSettled?: (reservationId: string) => void
     /** Remplace atomiquement l'intention par le lease du PID créé. */
     onSpawned?: (token: string, pid: number) => void
     /**

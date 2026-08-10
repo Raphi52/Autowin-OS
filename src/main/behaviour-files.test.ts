@@ -2,11 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
-import {
-  listBehaviourFiles,
-  readBehaviourFile,
-  readBehaviourFileFromManifest
-} from './behaviour-files'
+import { listBehaviourFiles, readBehaviourFileFromManifest } from './behaviour-files'
 
 vi.mock('./capability-controls', () => ({
   listCapabilities: vi.fn(async (kind: string) =>
@@ -219,11 +215,13 @@ describe('behaviour instruction map', () => {
     expect(fileA).toBeDefined()
 
     writeFileSync(pathA, 'x'.repeat(512_001), 'utf8')
-    await expect(readBehaviourFile(fileA!.id, optsA)).rejects.toThrow(/volumineux|512/i)
+    await expect(readBehaviourFileFromManifest(fileA!.id, manifestA, optsA)).rejects.toThrow(
+      /volumineux|512/i
+    )
 
     mkdirSync(workspaceB, { recursive: true })
     await expect(
-      readBehaviourFile(fileA!.id, {
+      readBehaviourFileFromManifest(fileA!.id, manifestA, {
         workspaceRoot: workspaceB,
         contextRoot: workspaceB,
         homeRoot

@@ -9,7 +9,11 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import { readSignedBrainPayload, sealBrainRequest, verifySignedBrainPayload } from './brain-protocol'
+import {
+  readSignedBrainPayload,
+  sealBrainRequest,
+  verifySignedBrainPayload
+} from './brain-protocol'
 
 type FetchLike = typeof fetch
 
@@ -160,11 +164,6 @@ function parseNavigation(raw: unknown): BrainNavigation | undefined {
     root: typeof nav.root === 'string' ? nav.root.slice(0, MAX_NAVIGATION_TEXT) : undefined,
     candidates
   }
-}
-
-/** @deprecated No-op conservé pour les appelants historiques : il n'existe plus de cache client. */
-export function clearBrainRetrievalCache(): void {
-  // Le service Brain possède le snapshot cohérent ; chaque appel consulte directement le service.
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ModelCatalogRefresher, serveModelCatalog } from './model-refresh'
+import { ModelCatalogRefresher } from './model-refresh'
 
 describe('ModelCatalogRefresher', () => {
   it('serves the cached catalog immediately during boot and only awaits forced refreshes', async () => {
@@ -10,8 +10,8 @@ describe('ModelCatalogRefresher', () => {
     const refresher = new ModelCatalogRefresher([{ id: 'cached' }], () => discovery)
     void refresher.refresh(true)
 
-    expect(serveModelCatalog(refresher, false)).toEqual([{ id: 'cached' }])
-    const forced = serveModelCatalog(refresher, true)
+    expect(refresher.current()).toEqual([{ id: 'cached' }])
+    const forced = refresher.refresh(true)
     resolveDiscovery([{ id: 'live' }])
     await expect(forced).resolves.toEqual([{ id: 'live' }])
   })

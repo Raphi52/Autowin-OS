@@ -23,7 +23,6 @@ import type { BrainRetrievalResult } from './brain-retrieval'
 /** Séparateur entre deux sources dans le bloc rendu par le Brain (`brain_context.py:128`). */
 const SOURCE_SEPARATOR = '\n\n---\n\n'
 /** En-tête d'une source : `### Source N — <chemin>`. */
-const SOURCE_HEADER = /^### Source \d+ — (.+)$/m
 
 /**
  * Corpus Brain par workspace, indexé par SLUG de dossier. Les valeurs sont des identités exactes ou
@@ -178,30 +177,6 @@ function matchesCorpusSelector(path: string, selector: string): boolean {
     : normalizedPath === normalizedSelector
 }
 
-/** Une source appartient-elle au corpus ? Comparaison ancrée, insensible à la casse. */
-/**
- * Regroupe les séparateurs Markdown qui appartiennent au CORPS de la source précédente. Seul le
- * texte avant le premier en-tête est un préambule de confiance ; un fragment sans en-tête situé
- * après une source ne doit jamais redevenir un préambule autorisé indépendamment.
- */
-function parseBrainBlock(block: string): { preamble: string[]; sources: string[] } {
-  const preamble: string[] = []
-  const sources: string[] = []
-  let currentSource: string[] | undefined
-  for (const part of block.split(SOURCE_SEPARATOR)) {
-    if (SOURCE_HEADER.test(part)) {
-      if (currentSource) sources.push(currentSource.join(SOURCE_SEPARATOR))
-      currentSource = [part]
-    } else if (currentSource) {
-      currentSource.push(part)
-    } else {
-      preamble.push(part)
-    }
-  }
-  if (currentSource) sources.push(currentSource.join(SOURCE_SEPARATOR))
-  return { preamble, sources }
-}
-
 /** Même règle que le filtrage du bloc, appliquée à un chemin de navigation observé. */
 export function brainSourcePathAllowed(
   path: string,
@@ -210,15 +185,6 @@ export function brainSourcePathAllowed(
   if (selectors === undefined) return true
   if (selectors.length === 0) return false
   return selectors.some((selector) => matchesCorpusSelector(path, selector))
-}
-
-export interface BrainScopeResult {
-  /** Bloc filtré, prêt à injecter. Vide si aucune source du corpus n'a survécu. */
-  block: string
-  /** Nombre de sources écartées — à journaliser : un filtrage silencieux est indéfendable. */
-  dropped: number
-  /** Nombre de sources conservées. */
-  kept: number
 }
 
 /** Une attestation HMAC doit reprendre exactement la portée demandée, ordre compris. */
@@ -232,28 +198,6 @@ export function brainCorpusAttestationMatches(
     attested.length === requested.length &&
     attested.every((selector, index) => selector === requested[index])
   )
-}
-
-/**
- * Restreint un bloc Brain aux sources du corpus. Rend le bloc intact seulement pour le wildcard
- * explicite (`undefined`) et vide pour un corpus fail-closed (`[]`).
- *
- * Si plus aucune source ne survit, le bloc rendu est VIDE : mieux vaut n'injecter rien que le préambule
- * seul, qui coûterait des tokens en n'annonçant aucune connaissance.
- */
-export function scopeBrainBlock(
-  block: string,
-  fragments: readonly string[] | undefined
-): BrainScopeResult {
-  if (!block.trim()) return { block: '', dropped: 0, kept: 0 }
-  const parsed = parseBrainBlock(block)
-  if (fragments === undefined) {
-    return { block, dropped: 0, kept: parsed.sources.length }
-  }
-  // Un contexte texte ne porte PAS de frontières sûres : une note peut contenir exactement le même
-  // séparateur et un faux `### Source`. Sans structure signée, filtrer serait deviner. Compatibilité
-  // fail-closed : le wildcard explicite reste intact, toute portée sélective exige `structuredContext`.
-  return { block: '', dropped: parsed.sources.length, kept: 0 }
 }
 
 /** Projette ensemble contexte, statut et navigation après application de la portée workspace. */

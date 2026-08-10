@@ -28,6 +28,52 @@ export interface WorktreeMapEntry {
   sizeBytes?: number
 }
 
+export interface GitWorktreePorcelainEntry {
+  path: string
+  head: string
+  branch?: string
+  detached: boolean
+  locked: boolean
+  lockedReason?: string
+  prunableReason?: string
+}
+
+/** Parse la sortie de `git worktree list --porcelain`, avec ou sans séparateurs NUL. */
+export function parseGitWorktrees(input: string): GitWorktreePorcelainEntry[] {
+  const blocks = input.includes('\0')
+    ? input.split('\0\0').map((block) => block.split('\0').filter(Boolean))
+    : input
+        .trim()
+        .split(/\r?\n\r?\n/)
+        .map((block) => block.split(/\r?\n/))
+
+  return blocks.flatMap((fields) => {
+    const path = fields.find((field) => field.startsWith('worktree '))?.slice('worktree '.length)
+    const head = fields.find((field) => field.startsWith('HEAD '))?.slice('HEAD '.length)
+    if (!path || !head) return []
+    const branchRef = fields.find((field) => field.startsWith('branch '))?.slice('branch '.length)
+    const lockedField = fields.find((field) => field === 'locked' || field.startsWith('locked '))
+    const prunableField = fields.find(
+      (field) => field === 'prunable' || field.startsWith('prunable ')
+    )
+    const lockedReason = lockedField?.slice('locked'.length).trim()
+    const prunableReason = prunableField?.slice('prunable'.length).trim()
+    return [
+      {
+        path,
+        head,
+        ...(branchRef ? { branch: branchRef.replace(/^refs\/heads\//, '') } : {}),
+        detached: fields.includes('detached'),
+        locked: Boolean(lockedField),
+        ...(lockedReason ? { lockedReason } : {}),
+        ...(prunableField
+          ? { prunableReason: prunableReason || 'entrée déclarée prunable par Git' }
+          : {})
+      }
+    ]
+  })
+}
+
 export interface WorktreeMapSnapshot {
   available: boolean
   repoPath: string

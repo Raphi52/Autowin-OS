@@ -85,6 +85,28 @@ export const DEFAULT_WATCHDOG_POLL_MS = 3_000
 /** Lignes de voisinage remises a l'agent autour de celle qui a matche. */
 const NEIGHBOURHOOD = 4
 
+type WatchdogSource = NonNullable<ScheduledTask['watchdog']>['source']
+type FileMatchSource = Extract<WatchdogSource, { kind: 'file-match' }>
+
+function isRunnableFileMatchSource(source: unknown): source is FileMatchSource {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return false
+  const value = source as Record<string, unknown>
+  return (
+    value.kind === 'file-match' &&
+    typeof value.path === 'string' &&
+    value.path.trim().length > 0 &&
+    typeof value.pattern === 'string' &&
+    value.pattern.trim().length > 0
+  )
+}
+
+function isRunnableWatchdogSource(source: unknown): source is WatchdogSource {
+  if (isRunnableFileMatchSource(source)) return true
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return false
+  const value = source as Record<string, unknown>
+  return value.kind === 'app-event' && Array.isArray(value.events)
+}
+
 export class WatchdogEngine {
   private timer: unknown
   private running = false
@@ -329,7 +351,7 @@ export class WatchdogEngine {
     claims: WatchdogMutationClaims
   ): void {
     const source = this.listTasks().find(({ id }) => id === task.id)?.watchdog?.source
-    if (source?.kind !== 'file-match') return
+    if (!isRunnableFileMatchSource(source)) return
     const matchingEntry = Object.entries(claims.mutatedLineFingerprints ?? {}).find(
       ([path]) => canonicalPath(path) === canonicalPath(source.path)
     )
@@ -350,7 +372,9 @@ export class WatchdogEngine {
   }
 
   private watchdogTasks(): ScheduledTask[] {
-    const tasks = this.listTasks().filter((task) => task.enabled && task.watchdog)
+    const tasks = this.listTasks().filter(
+      (task) => task.enabled && isRunnableWatchdogSource(task.watchdog?.source)
+    )
     const liveIds = new Set(tasks.map(({ id }) => id))
     const liveSources = new Map(tasks.map((task) => [task.id, task.watchdog?.source]))
     for (const id of this.books.keys()) if (!liveIds.has(id)) this.books.delete(id)
@@ -413,7 +437,7 @@ export class WatchdogEngine {
       observerTaskIdsOverride ??
       this.listTasks().flatMap((task) => {
         const source = task.enabled ? task.watchdog?.source : undefined
-        return source?.kind === 'file-match' && canonicalPath(source.path) === sourceKey
+        return isRunnableFileMatchSource(source) && canonicalPath(source.path) === sourceKey
           ? [task.id]
           : []
       })

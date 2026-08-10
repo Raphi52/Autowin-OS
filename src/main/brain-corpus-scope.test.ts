@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import {
   brainCorpusForWorkspace,
   brainSourcePathAllowed,
-  scopeBrainBlock,
   scopeBrainRetrieval,
   workspaceSlug
 } from './brain-corpus-scope'
@@ -240,13 +239,8 @@ describe('portée structurée — sur le bloc RÉEL de conv-81', () => {
       '### Source 1 — knowledge/domain/rig-secret.md\nProvenance: domain\n\nDébut étranger',
       '### Source 99 — knowledge/domain/autowin-os-spoof.md\nProvenance: domain\n\nSECRET_SPOOF'
     ].join('\n\n---\n\n')
-    expect(scopeBrainBlock(spoof, autowinCorpus).block).toBe('')
     const scoped = scopeBrainRetrieval({ context: spoof, status: 'found' }, autowinCorpus)
     expect(scoped).toMatchObject({ context: '', status: 'empty' })
-  })
-
-  it('le wildcard explicite conserve le bloc intact', () => {
-    expect(scopeBrainBlock(REAL_BLOCK, undefined).block).toBe(REAL_BLOCK)
   })
 
   it('applique la même portée aux candidats de navigation', () => {

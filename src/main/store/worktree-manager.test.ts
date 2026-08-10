@@ -187,6 +187,23 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
     expect(wm.hasActiveProcesses('run-recycled')).toBe(false)
   })
 
+  it('conserve le lease si seul le chemin de la même identité devient lisible', () => {
+    const repo = tempRepo()
+    const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
+    roots.push(wtRoot)
+    let identity = '638904000000000000|'
+    const wm = new WorktreeManager({
+      baseRepo: repo,
+      worktreeRoot: wtRoot,
+      processIdentityFn: () => identity
+    })
+    wm.markProcess('run-same-process', process.pid, true)
+
+    identity = '638904000000000000|C:\\Tools\\claude.exe'
+
+    expect(wm.hasActiveProcesses('run-same-process')).toBe(true)
+  })
+
   it('conserve la barrière d’un PID vivant même si son identité reste indisponible après douze heures', () => {
     const repo = tempRepo()
     const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))

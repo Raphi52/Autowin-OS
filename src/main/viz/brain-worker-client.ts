@@ -8,7 +8,9 @@ type BrainWorkerMethod =
   | 'loadThemeNodes'
   | 'loadNeighborhood'
   | 'readNodeFile'
+  | 'authorizeVault'
   | 'searchBrain'
+  | 'fuseRetrieval'
   | 'invalidate'
   | 'graphifyEvidence'
 type PendingCall = {
@@ -30,6 +32,7 @@ export type BrainWorkerFactory = (workerPath: string) => BrainWorkerLike
 
 export class BrainWorkerClient {
   private worker: BrainWorkerLike | undefined
+  private initialCreationError: Error | undefined
   private readonly pending = new Map<number, PendingCall>()
   private nextId = 0
 
@@ -39,7 +42,11 @@ export class BrainWorkerClient {
     private readonly timeoutMs = 30_000,
     private readonly maxPending = 64
   ) {
-    this.spawnWorker()
+    try {
+      this.spawnWorker()
+    } catch (error) {
+      this.initialCreationError = error instanceof Error ? error : new Error(String(error))
+    }
   }
 
   get pendingCount(): number {
@@ -68,22 +75,48 @@ export class BrainWorkerClient {
   }
 
   request<T>(method: BrainWorkerMethod, ...args: unknown[]): Promise<T> {
+    return this.requestWithTimeout(this.timeoutMs, method, ...args)
+  }
+
+  /**
+   * Invalidation prioritaire : les caches vivent uniquement dans le worker, donc retirer sa
+   * génération est l'acquittement le plus fort. Aucun état idle/bloqué ne peut retarder Refresh.
+   */
+  invalidate(): Promise<void> {
+    const worker = this.worker
+    if (worker) {
+      this.retireWorker(worker, new Error('Worker Brain retiré pour invalidation prioritaire'))
+    }
+    return Promise.resolve()
+  }
+
+  requestWithTimeout<T>(
+    timeoutMs: number,
+    method: BrainWorkerMethod,
+    ...args: unknown[]
+  ): Promise<T> {
     if (this.pending.size >= this.maxPending) {
       return Promise.reject(new Error(`Worker Brain sature (${this.maxPending} appels en attente)`))
     }
+    if (this.initialCreationError) {
+      const error = this.initialCreationError
+      this.initialCreationError = undefined
+      return Promise.reject(error)
+    }
+    const boundedTimeoutMs = Math.max(1, Math.min(timeoutMs, this.timeoutMs))
     const id = ++this.nextId
-    const worker = this.worker ?? this.spawnWorker()
+    let worker: BrainWorkerLike
+    try {
+      worker = this.worker ?? this.spawnWorker()
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)))
+    }
     return new Promise<T>((resolve, reject) => {
       const timeout = setTimeout(() => {
         if (!this.pending.has(id)) return
-        const error = new Error(`Worker Brain sans reponse apres ${this.timeoutMs} ms`)
-        this.failWorker(worker, error)
-        try {
-          void Promise.resolve(worker.terminate?.()).catch(() => undefined)
-        } catch {
-          // La generation est deja invalidee ; l'echec de terminaison ne doit pas masquer le timeout.
-        }
-      }, this.timeoutMs)
+        const error = new Error(`Worker Brain sans reponse apres ${boundedTimeoutMs} ms`)
+        this.retireWorker(worker, error)
+      }, boundedTimeoutMs)
       timeout.unref?.()
       this.pending.set(id, { resolve: (value) => resolve(value as T), reject, timeout })
       try {
@@ -98,6 +131,15 @@ export class BrainWorkerClient {
     if (this.worker !== worker) return
     this.worker = undefined
     this.rejectAll(error)
+  }
+
+  private retireWorker(worker: BrainWorkerLike, error: Error): void {
+    this.failWorker(worker, error)
+    try {
+      void Promise.resolve(worker.terminate?.()).catch(() => undefined)
+    } catch {
+      // La génération est déjà retirée ; l'échec de terminaison ne doit pas masquer le basculement.
+    }
   }
 
   private rejectAll(error: Error): void {

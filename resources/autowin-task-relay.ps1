@@ -4,6 +4,9 @@ param(
   [string]$Action,
 
   [string]$TaskName = "Autowin OS - Prompt Relay",
+  [string]$LegacyTaskName = "",
+  [string]$LegacyOwnerArgument = "",
+  [switch]$MigrateUnscopedLegacy,
   [string]$ExecutablePath = "",
   [long]$ScheduledForEpochMs = 0,
   [string]$OccurrenceId = "",
@@ -30,11 +33,47 @@ function Write-RelayState {
   } | ConvertTo-Json -Compress
 }
 
+function Quote-TaskArgument {
+  param([string]$Value)
+  if ($Value -notmatch '[\s"]') { return $Value }
+  return '"' + $Value.Replace('"', '\"') + '"'
+}
+
+function Remove-OwnedLegacyRelayTask {
+  if (
+    [string]::IsNullOrWhiteSpace($LegacyTaskName) -or
+    [string]::Equals($LegacyTaskName, $TaskName, [StringComparison]::OrdinalIgnoreCase)
+  ) { return }
+
+  $legacyTask = Get-ScheduledTask -TaskName $LegacyTaskName -ErrorAction SilentlyContinue
+  if (-not $legacyTask) { return }
+  $legacyArguments = [string]$legacyTask.Actions[0].Arguments
+  $belongsToCurrentProfile = $false
+  if (-not [string]::IsNullOrWhiteSpace($LegacyOwnerArgument)) {
+    $ownerToken = Quote-TaskArgument $LegacyOwnerArgument
+    $ownerPattern = '(?:^|\s)' + [Regex]::Escape($ownerToken) + '(?:\s|$)'
+    $belongsToCurrentProfile = [Regex]::IsMatch(
+      $legacyArguments,
+      $ownerPattern,
+      [Text.RegularExpressions.RegexOptions]::IgnoreCase
+    )
+  }
+  if (
+    -not $belongsToCurrentProfile -and
+    $MigrateUnscopedLegacy -and
+    $legacyArguments -notmatch '(?i)(?:^|\s)"?--user-data-dir(?:=|\s)'
+  ) { $belongsToCurrentProfile = $true }
+  if (-not $belongsToCurrentProfile) { return }
+
+  Unregister-ScheduledTask -TaskName $LegacyTaskName -Confirm:$false
+}
+
 if ($Action -eq "Disarm") {
   $existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
   if ($existing) {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
   }
+  Remove-OwnedLegacyRelayTask
   Write-RelayState -ScheduledFor $null
   exit 0
 }
@@ -63,11 +102,6 @@ if (-not [string]::IsNullOrWhiteSpace($LaunchArgumentsB64)) {
   foreach ($launchArgument in $decodedLaunchArguments) {
     $launchArguments += [string]$launchArgument
   }
-}
-function Quote-TaskArgument {
-  param([string]$Value)
-  if ($Value -notmatch '[\s"]') { return $Value }
-  return '"' + $Value.Replace('"', '\"') + '"'
 }
 $argumentParts = @(
   "--autowin-task-dispatch",
@@ -105,4 +139,8 @@ if (
   throw "La relecture Task Scheduler ne respecte pas le contrat WakeToRun/no-catch-up/IgnoreNew."
 }
 
+# L'ancien relais n'est retire qu'apres preuve que son remplacement est enregistre. Les deux ciblent
+# le meme profil et la meme occurrence, donc le verrou Electron + le claim du store ferment la courte
+# fenetre de coexistence sans perdre l'echeance si l'enregistrement du nouveau relais echoue.
+Remove-OwnedLegacyRelayTask
 Write-RelayState -ScheduledFor $ScheduledForEpochMs

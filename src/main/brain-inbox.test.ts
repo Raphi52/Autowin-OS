@@ -1,4 +1,13 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -153,6 +162,41 @@ describe('promouvoir / rejeter — le fichier BOUGE, la promotion reste humaine'
   it('refuse un candidat inexistant sans rien créer', () => {
     expect(() => promoteInboxCandidate(root, 'inbox/fantome')).toThrow(/introuvable/)
     expect(readdirSync(join(root, 'knowledge'))).toEqual([])
+  })
+
+  it.each([
+    ['promouvoir', promoteInboxCandidate],
+    ['rejeter', rejectInboxCandidate]
+  ])('refuse de %s depuis une inbox junction externe', (_label, moveCandidate) => {
+    const outside = mkdtempSync(join(tmpdir(), 'brain-inbox-outside-'))
+    try {
+      rmSync(join(root, 'inbox'), { recursive: true, force: true })
+      writeFileSync(join(outside, 'secret.md'), '# EXTERNE\n', 'utf8')
+      symlinkSync(outside, join(root, 'inbox'), 'junction')
+
+      expect(() => moveCandidate(root, 'inbox/secret')).toThrow(/hors périmètre/)
+      expect(readFileSync(join(outside, 'secret.md'), 'utf8')).toBe('# EXTERNE\n')
+    } finally {
+      rmSync(outside, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    ['knowledge', promoteInboxCandidate],
+    ['.trash', rejectInboxCandidate]
+  ])('refuse une destination %s qui est une junction externe', (destination, moveCandidate) => {
+    const outside = mkdtempSync(join(tmpdir(), 'brain-inbox-destination-'))
+    try {
+      note('inbox/a.md', '# A\n')
+      rmSync(join(root, destination), { recursive: true, force: true })
+      symlinkSync(outside, join(root, destination), 'junction')
+
+      expect(() => moveCandidate(root, 'inbox/a')).toThrow(/hors périmètre/)
+      expect(existsSync(join(root, 'inbox', 'a.md'))).toBe(true)
+      expect(readdirSync(outside)).toEqual([])
+    } finally {
+      rmSync(outside, { recursive: true, force: true })
+    }
   })
 })
 

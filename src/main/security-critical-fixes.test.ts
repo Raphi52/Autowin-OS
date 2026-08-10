@@ -46,7 +46,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     // critiques
     'os:orchestrate',
     'os:pilotChat',
-    'os:kimiLogin',
+    'os:providerLogin',
     // hautes/moyennes (audit #3) : config + lectures fichier + brain
     'os:setRole',
     'os:topology:set',
@@ -88,11 +88,9 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
       return genericGuard || specializedGuard ? [] : [channel]
     })
 
-    // 132 depuis le 2026-08-10 : `os:listInbox`, `os:promoteInbox` et `os:rejectInbox` (boîte de
-    // réception du savoir dans la vue Knowledge). Les trois passent par `assertTrustedRendererSender`,
-    // donc `unguarded` reste vide — c'est cette seconde assertion qui porte la garantie de sécurité,
-    // le compte n'étant là que pour forcer une relecture à chaque nouveau canal.
-    expect(handlers).toHaveLength(132)
+    // La vue Knowledge ajoute trois canaux inbox au socle courant. `unguarded` porte la garantie de
+    // sécurité ; le compte force une relecture explicite à chaque nouveau canal exposé.
+    expect(handlers).toHaveLength(126)
     expect(unguarded).toEqual([])
   })
 
@@ -102,6 +100,30 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     const block = source.slice(start, next)
     expect(block).toMatch(/guardString\(rawConversationId, 'conversationId'\)/)
     expect(block).not.toMatch(/readBrainTraces\([^)]*undefined/)
+  })
+
+  it('invalide les deux workers et le coordinateur apres toute mutation du Brain', () => {
+    const helperStart = source.indexOf('const invalidateBrainRuntime')
+    const helperEnd = source.indexOf('// Conversations persist', helperStart)
+    const helper = source.slice(helperStart, helperEnd)
+    expect(helper).toMatch(/brainSearchCoordinator\.invalidate\(\)/)
+    expect(helper).toMatch(/brainWorker\.invalidate\(\)/)
+    expect(helper).toMatch(/brainSearchWorker\.invalidate\(\)/)
+
+    for (const channel of ['os:promoteInbox', 'os:rejectInbox', 'os:refreshBrain']) {
+      const start = source.indexOf(`'${channel}'`)
+      const next = source.indexOf('ipcMain.handle(', start + 1)
+      expect(source.slice(start, next), channel).toMatch(/await invalidateBrainRuntime\(\)/)
+    }
+  })
+
+  it('autorise le vault dans le worker borne avant tout retrieval global', () => {
+    const start = source.indexOf("'os:searchBrain'")
+    const next = source.indexOf('ipcMain.handle(', start + 1)
+    const block = source.slice(start, next)
+    expect(block).toMatch(/authorize:\s*\(root\).*?requestWithTimeout<string>/s)
+    expect(block).toMatch(/'authorizeVault'/)
+    expect(block.indexOf('authorize:')).toBeLessThan(block.indexOf('retrieve:'))
   })
 })
 

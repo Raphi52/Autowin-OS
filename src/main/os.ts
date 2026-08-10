@@ -61,6 +61,7 @@ import {
   pickResumeForTask,
   saveOrchestrationAgentCheckpoint,
   saveOrchestrationState,
+  suppressOrchestrationPipeline,
   type OrchestrationRunState
 } from './runs/orchestration-state'
 import { defaultBehaviourWorkspace } from './behaviour-files'
@@ -739,10 +740,6 @@ export class AutowinOS {
     spawnLoginTerminal(plan.command, provider === 'codex' ? { cwd: process.cwd() } : {})
   }
 
-  startKimiLogin(): void {
-    this.startProviderLogin('kimi')
-  }
-
   /** Change le binding d'un rôle ET persiste sur disque. */
   setRole(role: Role, binding: RoleBinding): Record<Role, RoleBinding> {
     const proposed = new RoleModelConfig(this.roles.all(), this.roles.getCatalog())
@@ -772,7 +769,7 @@ export class AutowinOS {
     turnId?: string,
     onRunLifecycle?: (event: RunLifecycleEvent) => void,
     /** Etat budgetaire du run interrompu ; utilise uniquement avec `resumeOutputs`. */
-    resumeControl?: Pick<OrchestrationRunState, 'executionQuote' | 'usage'>,
+    resumeControl?: Pick<OrchestrationRunState, 'runId' | 'executionQuote' | 'usage'>,
     /** Publication terminale si un provider ignore d'abord l'abort puis se règle réellement. */
     onLateUsageSettlement?: (usage: ExecutionUsageSnapshot) => void,
     /** Snapshot deja persiste par l'appelant ; absent, capture apres readiness. */
@@ -826,7 +823,11 @@ export class AutowinOS {
           admittedRuntime,
           causalWatchPaths,
           onLateCausalMutationClaims,
-          { publication: runOptions.publication, sourceSnapshot: runOptions.sourceSnapshot }
+          {
+            publication: runOptions.publication,
+            sourceSnapshot: runOptions.sourceSnapshot,
+            resumeRunId: resumeControl?.runId
+          }
         )
         result.quote = quote
         result.usage = this.executionSupervisor.currentSnapshot()
@@ -854,6 +855,11 @@ export class AutowinOS {
     return pickOrchestrationsToResume(loadOrchestrationStates(this.orchestrationStateRoot))
   }
 
+  /** Interdit durablement de relancer le pipeline doublon, tout en gardant son agent drainable. */
+  suppressDuplicateOrchestrationPipeline(runId: string, electedRunId: string): void {
+    suppressOrchestrationPipeline(this.orchestrationStateRoot, runId, electedRunId)
+  }
+
   /** Persiste une branche reprenable sans réécrire le checkpoint source. */
   persistCheckpointFork(
     state: OrchestrationRunState,
@@ -866,6 +872,7 @@ export class AutowinOS {
     const now = Date.now()
     const branchState = structuredClone(state)
     delete branchState.turnId
+    delete branchState.resumeDisposition
     const fork: OrchestrationRunState = {
       ...branchState,
       runId: state.runId,
@@ -915,6 +922,10 @@ export class AutowinOS {
     runId: string,
     agents: Array<{
       token: string
+      provider?: string
+      phase?: PipelinePhase
+      active?: boolean
+      fanOut?: boolean
       pid?: number
       identity?: string
       journalPath?: string

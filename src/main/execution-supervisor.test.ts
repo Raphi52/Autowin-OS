@@ -32,6 +32,72 @@ class CountedProvider implements ProviderAdapter {
 }
 
 describe('ExecutionSupervisor', () => {
+  it('publie l’identité exacte de chaque réservation active puis la retire au règlement', async () => {
+    const supervisor = new ExecutionSupervisor()
+    const quote = compileExecutionQuote('suivre deux membres du fan-out')
+    quote.limits.maxProviderCalls = 2
+    quote.limits.maxConcurrency = 2
+
+    await supervisor.run(quote, undefined, async () => {
+      const first = supervisor.reserveProviderCall()!
+      const second = supervisor.reserveProviderCall()!
+      expect(supervisor.currentSnapshot()?.activeReservationIds).toEqual([first.id, second.id])
+
+      first.fail()
+      expect(supervisor.currentSnapshot()?.activeReservationIds).toEqual([second.id])
+
+      second.complete()
+      expect(supervisor.currentSnapshot()?.activeReservationIds).toEqual([])
+    })
+
+    expect(supervisor.lastSnapshot()).toMatchObject({
+      activeCalls: 0,
+      activeReservationIds: [],
+      completedCalls: 1,
+      failedCalls: 1
+    })
+  })
+
+  it('lie la réservation du registre au token de spawn avant tout lancement', async () => {
+    const supervisor = new ExecutionSupervisor()
+    let observedReservationId: string | undefined
+    let settledReservationId: string | undefined
+    const provider: ProviderAdapter = {
+      id: 'reservation-aware',
+      supportsExecution: true,
+      auth: async () => true,
+      async *send(_messages, options) {
+        options?.execution?.onSpawnIntent?.('agent-token', true)
+        yield* [] as StreamChunk[]
+        return { text: 'ok', provider: 'reservation-aware', systemInjected: true }
+      }
+    }
+    const registry = new ProviderRegistry(undefined, supervisor).register(provider)
+    const quote = compileExecutionQuote('lier une occurrence à son coût')
+
+    await supervisor.run(quote, undefined, async () => {
+      await registry.send(
+        'reservation-aware',
+        [{ role: 'user', content: 'go' }],
+        {
+          execution: {
+            cwd: process.cwd(),
+            sandbox: 'read-only',
+            onSpawnIntent: (_token, active, reservationId) => {
+              if (active) observedReservationId = reservationId
+            },
+            onReservationSettled: (reservationId) => {
+              settledReservationId = reservationId
+            }
+          }
+        }
+      )
+    })
+
+    expect(observedReservationId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(settledReservationId).toBe(observedReservationId)
+  })
+
   it('reserve tout le fan-out autorise sans sur-reserver le budget tokens', async () => {
     const supervisor = new ExecutionSupervisor()
     const quote = compileExecutionQuote('analyse trois pistes')

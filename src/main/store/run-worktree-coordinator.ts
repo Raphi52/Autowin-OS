@@ -108,6 +108,18 @@ interface Tracked {
   detail?: string
 }
 
+interface RunWorktreeBeginMetadata {
+  task?: string
+  role?: string
+  conversationId?: string
+  turnId?: string
+  causalWatchPaths?: readonly string[]
+  sourceWorkspacePath?: string
+  sourceBaseSha?: string
+  /** Réouvre la copie durable portant ce run ; interdit toute recréation depuis la base courante. */
+  resumeExisting?: boolean
+}
+
 function stateFromFinalize(res: FinalizeResult): WorktreeState {
   if (res.outcome === 'conflict') return 'conflict'
   if (res.outcome === 'blocked') return 'blocked'
@@ -152,22 +164,116 @@ export class RunWorktreeCoordinator {
     }
   }
 
+  private resumeCandidate(
+    runId: string,
+    agentName: string,
+    metadata: Omit<
+      RunWorktreeBeginMetadata,
+      'sourceWorkspacePath' | 'sourceBaseSha' | 'resumeExisting'
+    >
+  ): Tracked {
+    const record = this.stateStore?.get(runId)
+    const tracked =
+      this.runs.get(runId) ??
+      (record
+        ? {
+            runId,
+            agentName: record.agentName,
+            isMutation: true,
+            startedAtMs: record.createdAtMs,
+            endedAtMs: record.updatedAtMs,
+            state: 'blocked' as const,
+            files: record.files,
+            task: record.task,
+            role: record.role,
+            conversationId: record.conversationId,
+            turnId: record.turnId,
+            causalWatchPaths: record.causalWatchPaths,
+            worktreePath: record.worktreePath,
+            worktreeAvailable: record.worktreeAvailable,
+            baseBranch: record.baseBranch,
+            baseSha: record.baseSha,
+            verdict: record.verdict,
+            publication: record.publication,
+            recovered: true,
+            detail: record.detail
+          }
+        : undefined)
+    if (
+      !tracked?.worktreePath ||
+      !tracked.baseBranch ||
+      !tracked.baseSha ||
+      tracked.worktreeAvailable === false
+    ) {
+      throw new Error(
+        `Reprise du worktree impossible pour ${runId} : copie durable absente ou incomplète.`
+      )
+    }
+    tracked.agentName = agentName
+    Object.assign(tracked, metadata)
+    this.runs.set(runId, tracked)
+    return tracked
+  }
+
+  private activateResumed(
+    tracked: Tracked,
+    context: {
+      workspacePath: string
+      worktreePath: string
+      baseBranch: string
+      baseSha: string
+    },
+    cwd: string
+  ): void {
+    Object.assign(tracked, context)
+    tracked.worktreePath = cwd
+    tracked.worktreeAvailable = true
+    tracked.state = 'working'
+    tracked.endedAtMs = undefined
+    tracked.attentionReason = undefined
+    tracked.detail = undefined
+    tracked.recovered = true
+    this.waitingForProcess.delete(tracked.runId)
+    this.waitingForRetry.delete(tracked.runId)
+    this.retryCounts.delete(tracked.runId)
+    this.persist(tracked, 'running', 'not-requested')
+    this.emit()
+  }
+
   /** Démarre un run. Renvoie le cwd isolé (mutation) ou undefined (non-mutation → base). */
   begin(
     runId: string,
     agentName: string,
     isMutation: boolean,
-    metadata: {
-      task?: string
-      role?: string
-      conversationId?: string
-      turnId?: string
-      causalWatchPaths?: readonly string[]
-      sourceWorkspacePath?: string
-      sourceBaseSha?: string
-    } = {}
+    metadata: RunWorktreeBeginMetadata = {}
   ): string | undefined {
-    const { sourceWorkspacePath, sourceBaseSha, ...trackedMetadata } = metadata
+    const { sourceWorkspacePath, sourceBaseSha, resumeExisting, ...trackedMetadata } = metadata
+    if (isMutation && resumeExisting) {
+      const tracked = this.resumeCandidate(runId, agentName, trackedMetadata)
+      const described = this.manager.describe(runId)
+      const context = {
+        ...described,
+        worktreePath: tracked.worktreePath!,
+        baseBranch: tracked.baseBranch!,
+        baseSha: tracked.baseSha!
+      }
+      const validation = this.manager.validateRecoveryContext(runId, {
+        worktreePath: context.worktreePath,
+        baseBranch: context.baseBranch,
+        baseSha: context.baseSha,
+        publication: 'pending'
+      })
+      if (!validation.ok || validation.decision === 'cleanup-only') {
+        throw new Error(
+          !validation.ok
+            ? `Reprise du worktree refusée : ${validation.detail}`
+            : 'Reprise du worktree refusée : cette copie est déjà publiée.'
+        )
+      }
+      const cwd = this.manager.acquire(runId, context)
+      this.activateResumed(tracked, context, cwd)
+      return cwd
+    }
     const tracked: Tracked = {
       runId,
       agentName,
@@ -219,20 +325,47 @@ export class RunWorktreeCoordinator {
     runId: string,
     agentName: string,
     isMutation: boolean,
-    metadata: {
-      task?: string
-      role?: string
-      conversationId?: string
-      turnId?: string
-      causalWatchPaths?: readonly string[]
-      sourceWorkspacePath?: string
-      sourceBaseSha?: string
-    } = {}
+    metadata: RunWorktreeBeginMetadata = {}
   ): Promise<string | undefined> {
     if (!isMutation || !this.manager.prepareAsync) {
       return this.begin(runId, agentName, isMutation, metadata)
     }
-    const { sourceWorkspacePath, sourceBaseSha, ...trackedMetadata } = metadata
+    const { sourceWorkspacePath, sourceBaseSha, resumeExisting, ...trackedMetadata } = metadata
+    if (resumeExisting) {
+      const tracked = this.resumeCandidate(runId, agentName, trackedMetadata)
+      const described = this.manager.describeAsync
+        ? await this.manager.describeAsync(runId)
+        : this.manager.describe(runId)
+      const context = {
+        ...described,
+        worktreePath: tracked.worktreePath!,
+        baseBranch: tracked.baseBranch!,
+        baseSha: tracked.baseSha!
+      }
+      const validation = this.manager.validateRecoveryContextAsync
+        ? await this.manager.validateRecoveryContextAsync(runId, {
+            worktreePath: context.worktreePath,
+            baseBranch: context.baseBranch,
+            baseSha: context.baseSha,
+            publication: 'pending'
+          })
+        : this.manager.validateRecoveryContext(runId, {
+            worktreePath: context.worktreePath,
+            baseBranch: context.baseBranch,
+            baseSha: context.baseSha,
+            publication: 'pending'
+          })
+      if (!validation.ok || validation.decision === 'cleanup-only') {
+        throw new Error(
+          !validation.ok
+            ? `Reprise du worktree refusée : ${validation.detail}`
+            : 'Reprise du worktree refusée : cette copie est déjà publiée.'
+        )
+      }
+      const prepared = await this.manager.prepareAsync(runId, context)
+      this.activateResumed(tracked, prepared.context, prepared.path)
+      return prepared.path
+    }
     const tracked: Tracked = {
       runId,
       agentName,

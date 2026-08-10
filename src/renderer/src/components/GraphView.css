@@ -1595,11 +1595,11 @@
 }
 
 /* Un sha depasse n'est pas une erreur, c'est une alerte de fraicheur. */
-.knowledge-inbox__meta dd[data-sha-state="stale"] .knowledge-inbox__sha {
+.knowledge-inbox__meta dd[data-sha-state='stale'] .knowledge-inbox__sha {
   color: #ffd79a;
 }
 
-.knowledge-inbox__meta dd[data-sha-state="current"] .knowledge-inbox__sha {
+.knowledge-inbox__meta dd[data-sha-state='current'] .knowledge-inbox__sha {
   color: #8fdca4;
 }
 

@@ -2,8 +2,12 @@ import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { parseGitWorktrees, type GitGraphWorktree } from '../shared/git-graph'
-import type { WorktreeMapEntry, WorktreeMapSnapshot } from '../shared/worktree-map'
+import {
+  parseGitWorktrees,
+  type GitWorktreePorcelainEntry,
+  type WorktreeMapEntry,
+  type WorktreeMapSnapshot
+} from '../shared/worktree-map'
 import { diagnoseWorktrees } from './worktree-doctor'
 
 const run = promisify(execFile)
@@ -77,7 +81,7 @@ export async function readWorktreeMap(
 
 async function describeWorktree(
   repoPath: string,
-  worktree: GitGraphWorktree,
+  worktree: GitWorktreePorcelainEntry,
   baseBranch: string | undefined,
   measureSize: boolean
 ): Promise<WorktreeMapEntry> {

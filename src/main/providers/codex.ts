@@ -91,6 +91,7 @@ export function codexStructuralFailure(error: unknown): Error {
 /** Élément d'exécution brut remonté par Codex (sous-ensemble typé utile à la preuve). */
 export interface CodexExecItem {
   type?: string
+  status?: string
   command?: string
   exit_code?: number
   aggregated_output?: string
@@ -168,6 +169,55 @@ export function structuredEvidenceFields(
     }
   }
   return {}
+}
+
+/**
+ * Transforme un événement outil Codex en preuves, aussi bien pendant le stream qu'après un crash.
+ * Garder cette projection unique évite qu'une reprise accepte le texte terminal mais perde les
+ * mutations/vérifications qui ouvrent le gate.
+ */
+export function codexExecutionEvidenceFromItem(
+  item: CodexExecItem,
+  executionCwd?: string
+): ExecutionEvidence[] {
+  if (!item.type || item.type === 'agent_message' || item.type === 'reasoning') return []
+  const command = item.command ?? ''
+  const ok =
+    item.type === 'file_change'
+      ? item.status !== 'failed'
+      : item.type === 'command_execution'
+        ? item.exit_code === 0 && item.status !== 'failed'
+        : item.status !== 'failed'
+  const kind = codexExecutionEvidenceKind(item)
+  const summary =
+    item.type === 'command_execution'
+      ? `${item.command ?? ''}\nexit=${item.exit_code ?? 'unknown'}\n${item.aggregated_output ?? ''}`
+      : JSON.stringify(item.changes ?? item)
+  const evidence: ExecutionEvidence[] = [
+    {
+      type: item.type,
+      kind,
+      status: item.status ?? 'completed',
+      ok,
+      summary: summary.slice(-4_000),
+      ...structuredEvidenceFields(item, executionCwd)
+    }
+  ]
+  const embeddedVerification =
+    kind === 'mutation' &&
+    /\b(ReadAllText|ReadAllBytes|Get-Content|Test-Path)\b[\s\S]*\b(if|throw|Compare-Object)\b/i.test(
+      command
+    )
+  if (embeddedVerification) {
+    evidence.push({
+      type: item.type,
+      kind: 'verification',
+      status: item.status ?? 'completed',
+      ok,
+      summary: summary.slice(-4_000)
+    })
+  }
+  return evidence
 }
 
 export interface CodexExecSpec {
@@ -316,12 +366,13 @@ async function runCodexExec(
       args: spec.args,
       cwd: spec.cwd,
       runId: spawnToken,
-      stdin: prompt
+      stdin: prompt,
+      onJournalPrepared: execution.onJournal
+        ? (journalPath) => execution.onJournal?.(spawnToken, journalPath)
+        : undefined
     })
     const child = run.child
     const childPid = child.pid
-    // Le journal est le point de rattachement : sans lui, une app qui revient ne sait pas ou lire.
-    if (run.journalPath) execution.onJournal?.(spawnToken, run.journalPath)
     if (childPid) {
       if (execution.onSpawned) execution.onSpawned(spawnToken, childPid)
       else {
@@ -388,45 +439,10 @@ async function runCodexExec(
               // Raisonnement CONSERVÉ (plus jeté) : accumulé pour l'observation post-mortem.
               if (item.text) reasoningFragments.push(item.text)
             } else if (item?.type) {
-              const command = item.command ?? ''
-              const ok =
-                item.type === 'file_change'
-                  ? item.status !== 'failed'
-                  : item.type === 'command_execution'
-                    ? item.exit_code === 0 && item.status !== 'failed'
-                    : item.status !== 'failed'
-              const kind = codexExecutionEvidenceKind(item)
-              const summary =
-                item.type === 'command_execution'
-                  ? `${item.command ?? ''}\nexit=${item.exit_code ?? 'unknown'}\n${item.aggregated_output ?? ''}`
-                  : JSON.stringify(item.changes ?? item)
-              // Champs STRUCTURÉS (diff + stdout/exit) en plus du `summary` conservé (rétrocompat).
-              const structured = structuredEvidenceFields(item, spec.cwd)
-              executionEvidence.push({
-                type: item.type,
-                kind,
-                status: item.status ?? 'completed',
-                ok,
-                summary: summary.slice(-4_000),
-                ...structured
-              })
+              const itemEvidence = codexExecutionEvidenceFromItem(item, spec.cwd)
+              executionEvidence.push(...itemEvidence)
+              const ok = itemEvidence.every((entry) => entry.ok)
               if (!ok) lastStructuredError = JSON.stringify(event).slice(-4_000)
-              // Une commande atomique peut écrire puis vérifier (lecture + assertion).
-              // Conserver les deux signaux évite que la mutation masque sa preuve.
-              const embeddedVerification =
-                kind === 'mutation' &&
-                /\b(ReadAllText|ReadAllBytes|Get-Content|Test-Path)\b[\s\S]*\b(if|throw|Compare-Object)\b/i.test(
-                  command
-                )
-              if (embeddedVerification) {
-                executionEvidence.push({
-                  type: item.type,
-                  kind: 'verification',
-                  status: item.status ?? 'completed',
-                  ok,
-                  summary: summary.slice(-4_000)
-                })
-              }
             }
           }
           if (event.type === 'turn.completed') {

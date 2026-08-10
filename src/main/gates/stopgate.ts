@@ -55,17 +55,3 @@ export function evaluateClosure(state: ClosureState): ClosureEvaluation {
 
   return { blocked: reasons.length > 0, reasons }
 }
-
-/**
- * Jette une Error détaillée si la clôture n'est pas légitime.
- * Autorité de clôture : ne jamais déclarer "done/green" sans artefact vérifié.
- */
-export function assertClosable(state: ClosureState): void {
-  const evaluation = evaluateClosure(state)
-  if (evaluation.blocked) {
-    throw new Error(
-      `Clôture bloquée (${evaluation.reasons.length} raison(s)) :\n` +
-        evaluation.reasons.map((r) => `- ${r}`).join('\n')
-    )
-  }
-}

@@ -13,6 +13,7 @@ import type {
   TaskOccurrence,
   TaskOccurrenceStatus,
   TaskStoreSnapshot,
+  WatchdogAppEvent,
   WatchdogOutcome,
   WatchdogSignal
 } from './types'
@@ -57,10 +58,28 @@ export class TaskStore {
         delete (hydrated.destination as typeof hydrated.destination & Record<string, unknown>)
           .authorityMode
       }
-      if (hydrated.watchdog) {
-        hydrated.watchdog.guards = {
-          ...DEFAULT_WATCHDOG_GUARDS,
-          ...hydrated.watchdog.guards
+      const watchdog = hydrated.watchdog as unknown
+      if (watchdog && typeof watchdog === 'object' && !Array.isArray(watchdog)) {
+        const persistedWatchdog = watchdog as Record<string, unknown>
+        const source = persistedWatchdog.source
+        if (source && typeof source === 'object' && !Array.isArray(source)) {
+          const persistedSource = source as Record<string, unknown>
+          if (persistedSource.kind === 'app-event') {
+            if (
+              !Array.isArray(persistedSource.events) &&
+              typeof persistedSource.event === 'string'
+            ) {
+              persistedSource.events = [persistedSource.event as WatchdogAppEvent]
+            }
+            delete persistedSource.event
+          }
+          if (persistedSource.kind === 'app-event' || persistedSource.kind === 'file-match') {
+            const guards = persistedWatchdog.guards
+            persistedWatchdog.guards = {
+              ...DEFAULT_WATCHDOG_GUARDS,
+              ...(guards && typeof guards === 'object' && !Array.isArray(guards) ? guards : {})
+            }
+          }
         }
       }
       this.tasks.set(hydrated.id, hydrated)

@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import {
   loadSkillText,
   loadEngineText,
-  kitAvailable,
   phaseInstruction,
   stripSkillFrontmatter,
   engineForPhase,
@@ -24,7 +23,6 @@ describe('skill-pipeline — chargement du kit au runtime', () => {
       expect(loadSkillText('frame', root)).toContain('frame le besoin')
       expect(loadSkillText('judge', root)).toBe('') // absent → vide, pas de crash
       expect(loadEngineText(root)).toContain('Ch.4 build')
-      expect(kitAvailable(root)).toBe(true)
       expect(phaseInstruction('frame', root)).toContain('SKILL FRAME (kit)')
       expect(phaseInstruction('judge', root)).toBe('') // absent → pas d’injection
     } finally {
@@ -34,7 +32,6 @@ describe('skill-pipeline — chargement du kit au runtime', () => {
 
   it('kit absent (racine inexistante) → tout vide, jamais de throw', () => {
     const root = join(tmpdir(), 'skills-none-' + Math.random().toString(36).slice(2))
-    expect(kitAvailable(root)).toBe(false)
     expect(loadSkillText('frame', root)).toBe('')
     expect(phaseInstruction('build', root)).toBe('')
   })

@@ -26,10 +26,6 @@ function messageDuTimeout(): string {
 }
 
 describe('borne du probe provider — le message doit rester diagnostique', () => {
-  it('ne dépense aucun tour modèle automatiquement au démarrage', () => {
-    expect(source).not.toContain('startupProviderChecks = runStartupProviderProbes(')
-  })
-
   it('le test explicite du provider passe par ExecutionSupervisor', () => {
     const probe = source.match(/async function probeProviderConnection[\s\S]*?\n}/)?.[0] ?? ''
     expect(probe).toContain('executionSupervisor.run(')

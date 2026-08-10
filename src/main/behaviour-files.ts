@@ -376,15 +376,6 @@ export async function listBehaviourFiles(
   return cappedBehaviourFiles(groups)
 }
 
-export async function readBehaviourFile(
-  id: string,
-  query?: string | BehaviourQuery
-): Promise<string> {
-  const normalized = normalizeQuery(query)
-  const manifest = await listBehaviourFiles(normalized)
-  return readBehaviourFileFromManifest(id, manifest, normalized)
-}
-
 /** Lit un fichier depuis un inventaire déjà calculé, sans rescanner le workspace. */
 export async function readBehaviourFileFromManifest(
   id: string,

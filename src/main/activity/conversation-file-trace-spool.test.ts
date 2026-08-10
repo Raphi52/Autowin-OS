@@ -2,13 +2,10 @@ import { appendFileSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { GitReadResult } from '../../shared/git-read'
 import {
   appendConversationFileTrace,
   appendExecutionEvidenceFileTrace,
-  filterConversationGitState,
   readCurrentConversationPathOwnership,
-  readConversationFilePaths,
   readConversationTurnFileMutations,
   readConversationTurnFilePaths
 } from './conversation-file-trace-spool'
@@ -99,75 +96,6 @@ describe('conversation file trace spool', () => {
     ])
   })
 
-  it('isole strictement les chemins par conversation et déduplique leur ordre', () => {
-    const root = mkdtempSync(join(tmpdir(), 'autowin-conversation-files-'))
-    appendConversationFileTrace(
-      {
-        timestamp: '2026-07-30T20:00:00.000Z',
-        conversationId: 'conv-a',
-        workspaceRoot: 'C:/repo-a',
-        source: 'edit_file',
-        paths: ['src/a.ts']
-      },
-      root
-    )
-    appendConversationFileTrace(
-      {
-        timestamp: '2026-07-30T20:01:00.000Z',
-        conversationId: 'conv-b',
-        workspaceRoot: 'C:/repo-a',
-        source: 'subagent',
-        paths: ['src/b.ts']
-      },
-      root
-    )
-    appendConversationFileTrace(
-      {
-        timestamp: '2026-07-30T20:02:00.000Z',
-        conversationId: 'conv-a',
-        workspaceRoot: 'C:/repo-a',
-        source: 'subagent',
-        paths: ['src/a.ts', 'src/new.ts']
-      },
-      root
-    )
-
-    expect(readConversationFilePaths('conv-a', root)).toEqual(['src/a.ts', 'src/new.ts'])
-    expect(readConversationFilePaths('conv-b', root)).toEqual(['src/b.ts'])
-    expect(readConversationFilePaths('conv-new', root)).toEqual([])
-  })
-
-  it('ne mélange pas deux dépôts qui ont le même chemin relatif', () => {
-    const root = mkdtempSync(join(tmpdir(), 'autowin-conversation-repos-'))
-    appendConversationFileTrace(
-      {
-        timestamp: '2026-07-30T20:00:00.000Z',
-        conversationId: 'conv-a',
-        workspaceRoot: 'C:/repo-a',
-        source: 'edit_file',
-        paths: ['src/shared.ts']
-      },
-      root
-    )
-    appendConversationFileTrace(
-      {
-        timestamp: '2026-07-30T20:01:00.000Z',
-        conversationId: 'conv-a',
-        workspaceRoot: 'C:/repo-b',
-        source: 'edit_file',
-        paths: ['src/shared.ts', 'src/repo-b.ts']
-      },
-      root
-    )
-
-    expect(readConversationFilePaths('conv-a', root, 'C:/repo-a')).toEqual(['src/shared.ts'])
-    expect(readConversationFilePaths('conv-a', root, 'C:/repo-b')).toEqual([
-      'src/shared.ts',
-      'src/repo-b.ts'
-    ])
-    expect(readConversationFilePaths('conv-a', root, 'C:/repo-c')).toEqual([])
-  })
-
   it('révoque A quand B remodifie ensuite le même chemin', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-conversation-owner-'))
     appendConversationFileTrace(
@@ -199,64 +127,6 @@ describe('conversation file trace spool', () => {
     ])
   })
 
-  it('croise l’attribution avec le diff Git courant et exclut les changements étrangers', () => {
-    const git: GitReadResult = {
-      available: true,
-      state: {
-        branch: 'main',
-        ahead: 0,
-        behind: 0,
-        changes: [
-          { path: 'legacy.ts', status: 'modified', staged: false },
-          { path: 'src/a.ts', status: 'modified', staged: false },
-          { path: 'src/new.ts', status: 'untracked', staged: false }
-        ]
-      }
-    }
-
-    const filtered = filterConversationGitState(git, ['src/a.ts', 'src/reverted.ts'])
-    expect(filtered.state?.changes).toEqual([
-      { path: 'src/a.ts', status: 'modified', staged: false }
-    ])
-    expect(filtered.state?.branch).toBe('main')
-  })
-
-  it('compare les chemins sans tenir compte de la casse sur Windows', () => {
-    const git: GitReadResult = {
-      available: true,
-      state: {
-        branch: 'main',
-        ahead: 0,
-        behind: 0,
-        changes: [{ path: 'src/Foo.ts', status: 'modified', staged: false }]
-      }
-    }
-
-    expect(filterConversationGitState(git, ['SRC/foo.ts']).state?.changes).toHaveLength(
-      process.platform === 'win32' ? 1 : 0
-    )
-  })
-
-  it('préserve tous les statuts Git courants des chemins attribués', () => {
-    const changes = [
-      { path: 'created.ts', status: 'untracked' as const, staged: false },
-      { path: 'modified.ts', status: 'modified' as const, staged: false },
-      { path: 'deleted.ts', status: 'deleted' as const, staged: true },
-      { path: 'renamed.ts', status: 'renamed' as const, staged: true }
-    ]
-    const git: GitReadResult = {
-      available: true,
-      state: { branch: 'main', ahead: 0, behind: 0, changes }
-    }
-
-    expect(
-      filterConversationGitState(
-        git,
-        changes.map((change) => change.path)
-      ).state?.changes
-    ).toEqual(changes)
-  })
-
   it('conserve les chemins structurés des mutations réussies du sous-agent', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-conversation-evidence-'))
     appendExecutionEvidenceFileTrace(
@@ -286,8 +156,11 @@ describe('conversation file trace spool', () => {
       root
     )
 
-    expect(readConversationFilePaths('conv-a', root)).toEqual(['src/a.ts', 'src/nested/b.ts'])
     const mutations = readConversationTurnFileMutations('conv-a', 'turn-a', root)
+    expect(mutations.paths.map((path) => path.replaceAll('\\', '/'))).toEqual([
+      process.platform === 'win32' ? 'c:/repo/src/a.ts' : resolve('C:/repo/src/a.ts'),
+      process.platform === 'win32' ? 'c:/repo/src/nested/b.ts' : resolve('C:/repo/src/nested/b.ts')
+    ])
     expect(Object.values(mutations.lineFingerprintsByPath)).toEqual([
       [lineFingerprint('ERROR écrite par l’agent'), lineFingerprint('ERROR écrite par l’agent')],
       [lineFingerprint('ERROR écrite par l’agent'), lineFingerprint('ERROR écrite par l’agent')]
@@ -366,6 +239,8 @@ describe('conversation file trace spool', () => {
       )
     }
 
-    expect(readConversationFilePaths('conv-durable', root)).toEqual(['src/durable.ts'])
+    expect(
+      readCurrentConversationPathOwnership('conv-durable', root).map((item) => item.path)
+    ).toEqual(['src/durable.ts'])
   })
 })

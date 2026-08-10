@@ -144,6 +144,7 @@ describe('pickResumeForTask — reprend, ou refuse en le justifiant', () => {
  */
 describe('câblage — la commande du chat reprend et rattache la conversation', () => {
   const source = readFileSync(join(__dirname, '..', 'commands.ts'), 'utf8')
+  const osSource = readFileSync(join(__dirname, '..', 'os.ts'), 'utf8')
 
   it('elle cherche un acquis pour CETTE tâche et CETTE conversation', () => {
     expect(source).toMatch(
@@ -153,6 +154,10 @@ describe('câblage — la commande du chat reprend et rattache la conversation',
 
   it('elle passe l’acquis À runTask (sinon la recherche ne sert à rien)', () => {
     expect(source).toContain('resumeOutputs,')
+  })
+
+  it('elle transmet aussi le runId acquis pour rouvrir le même worktree', () => {
+    expect(osSource).toContain('resumeRunId: resumeControl?.runId')
   })
 
   it('elle passe enfin `conversationId` — il manquait aussi', () => {
@@ -168,6 +173,10 @@ describe('câblage — la commande du chat reprend et rattache la conversation',
 
   it('elle OUBLIE l’acquis repris (sinon il serait rejoué à chaque relance)', () => {
     expect(source).toContain('this.os.forgetResumableOrchestration(resumable.runId)')
+  })
+
+  it('elle ne supprime pas le checkpoint réécrit sous la même identité de run', () => {
+    expect(source).toContain('currentRunId !== resumable.runId')
   })
 
   it('la réutilisation est VISIBLE : sauter des phases payées n’est jamais silencieux', () => {
@@ -202,5 +211,9 @@ describe('câblage — le chemin DIRECT reprend lui aussi', () => {
 
   it('il OUBLIE l’acquis repris (sinon rejoué à chaque relance)', () => {
     expect(handler).toContain('os.forgetResumableOrchestration(resumedAcquis.runId)')
+  })
+
+  it('il conserve le checkpoint courant quand la reprise garde le même runId', () => {
+    expect(handler).toContain('currentRunId !== resumedAcquis.runId')
   })
 })

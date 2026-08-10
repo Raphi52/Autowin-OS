@@ -1,4 +1,4 @@
-import { appendConvActivity, loadConvActivity, type ConvActivityEntry } from './conv-activity'
+import { appendConvActivity } from './conv-activity'
 
 export const GLOBAL_PROMPT_ACTIVITY = '__global_prompt_config__'
 
@@ -12,8 +12,4 @@ export function appendPromptConfigActivity(label: string, change: unknown, root?
     },
     root
   )
-}
-
-export function loadPromptConfigActivity(root?: string): ConvActivityEntry[] {
-  return loadConvActivity(GLOBAL_PROMPT_ACTIVITY, root)
 }

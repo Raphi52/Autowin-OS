@@ -45,24 +45,6 @@ export async function probePresenceUnlessStandby(
   return state.mode === 'standby' ? false : probe()
 }
 
-/** Lance en parallèle un probe réel pour chaque provider actif, sans qu'un échec annule le batch. */
-export async function runStartupProviderProbes<Provider extends string>(
-  providers: readonly Provider[],
-  stateOf: (provider: Provider) => Pick<ProviderStateSnapshot, 'mode'>,
-  probe: (provider: Provider) => Promise<unknown>
-): Promise<void> {
-  await Promise.all(
-    providers.map(async (provider) => {
-      if (stateOf(provider).mode === 'standby') return
-      try {
-        await probe(provider)
-      } catch {
-        // Chaque probe persiste son propre statut ; une panne ne doit pas empêcher les autres tests.
-      }
-    })
-  )
-}
-
 /** Statut codex depuis le token (cheap, exact) : expiry vs horloge. */
 export function codexTokenStatus(
   tokens: { obtainedAt: number; expiresInSec?: number } | null,

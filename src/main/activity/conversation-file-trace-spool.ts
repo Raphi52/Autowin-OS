@@ -10,7 +10,6 @@ import {
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
 import type { ExecutionEvidence } from '../providers/types'
-import type { GitReadResult } from '../../shared/git-read'
 
 const SPOOL_MAX_BYTES = 4 * 1024 * 1024
 
@@ -278,30 +277,6 @@ function readFileTraces(path: string): ConversationFileTrace[] {
   return traces
 }
 
-export function readConversationFilePaths(
-  conversationId: string,
-  base = ensureAutowinAppData(),
-  workspaceRoot?: string
-): string[] {
-  const root = spoolRoot(base)
-  const expectedWorkspace = workspaceRoot ? canonicalWorkspaceRoot(workspaceRoot) : undefined
-  const paths = [
-    ...readFileTraces(join(root, 'events.archive.jsonl')),
-    ...readFileTraces(join(root, 'events.previous.jsonl')),
-    ...readFileTraces(join(root, 'events.jsonl'))
-  ]
-    .filter(
-      (trace) =>
-        trace.conversationId === conversationId &&
-        (!expectedWorkspace ||
-          (typeof trace.workspaceRoot === 'string' &&
-            canonicalWorkspaceRoot(trace.workspaceRoot) === expectedWorkspace))
-    )
-    .flatMap((trace) => trace.paths)
-    .map(normalizedStoredPath)
-  return [...new Set(paths)]
-}
-
 /** Chemins absolus attribués à UN tour, pour relier une mutation à sa cause sans deviner au temps. */
 export function readConversationTurnFilePaths(
   conversationId: string,
@@ -437,19 +412,4 @@ export function readCurrentConversationPathOwnership(
         ...(generation.generationMarker ? { generationMarker: generation.generationMarker } : {})
       }))
   )
-}
-
-export function filterConversationGitState(
-  git: GitReadResult,
-  attributedPaths: readonly string[]
-): GitReadResult {
-  if (!git.state) return git
-  const allowed = new Set(attributedPaths.map(workspaceTracePathKey))
-  return {
-    ...git,
-    state: {
-      ...git.state,
-      changes: git.state.changes.filter((change) => allowed.has(workspaceTracePathKey(change.path)))
-    }
-  }
 }

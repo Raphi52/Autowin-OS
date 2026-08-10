@@ -81,6 +81,12 @@ function changeRange(input: HTMLInputElement, value: string): void {
   input.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
+function changeText(input: HTMLInputElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+  setter?.call(input, value)
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
 beforeEach(() => {
   localStorage.clear()
   window.matchMedia = vi.fn().mockReturnValue({
@@ -148,6 +154,55 @@ describe('GraphView refresh', () => {
     expect(refreshBrain).toHaveBeenCalledWith('C:\\brain')
     expect(loadBrainGraphPreview).toHaveBeenCalledTimes(2)
     expect(loadBrainGraph).toHaveBeenCalledTimes(2)
+  })
+
+  it('efface puis relance la recherche du vault apres un refresh', async () => {
+    const searchBrain = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'found', note: 'ANCIEN', results: [] })
+      .mockResolvedValueOnce({ status: 'empty', note: 'FRAIS', results: [] })
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      listBrains: vi
+        .fn()
+        .mockResolvedValue([
+          { id: 'brain', label: 'Brain', path: 'C:\\brain', sizeMb: 1, kind: 'vault' }
+        ]),
+      loadBrainGraphPreview: vi.fn().mockResolvedValue({ nodes: [], links: [] }),
+      loadBrainGraph: vi.fn().mockResolvedValue({ nodes: [], links: [] }),
+      refreshBrain: vi.fn().mockResolvedValue({ ok: true }),
+      loadBrainThemes: vi.fn().mockResolvedValue([]),
+      loadBrainThemeNodes: vi.fn().mockResolvedValue([]),
+      searchBrain
+    }
+
+    await act(async () =>
+      root.render(createElement(GraphView, { active: true, onCleanMemory: vi.fn() }))
+    )
+    await flush()
+    const search = container.querySelector<HTMLInputElement>(
+      '[aria-label="Rechercher un thème ou une fiche"]'
+    )
+    if (!search) throw new Error('recherche Brain absente')
+    await act(async () => changeText(search, 'decision'))
+    await act(async () => new Promise((resolve) => window.setTimeout(resolve, 220)))
+    await flush()
+    expect(searchBrain).toHaveBeenCalledTimes(1)
+    expect(container.querySelector('[data-retrieval-status="found"]')?.textContent).toContain(
+      'ANCIEN'
+    )
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[aria-label="Rafraîchir les graphes"]')?.click()
+    )
+    await flush()
+    expect(container.querySelector('[data-retrieval-status]')).toBeNull()
+    await act(async () => new Promise((resolve) => window.setTimeout(resolve, 220)))
+    await flush()
+
+    expect(searchBrain).toHaveBeenCalledTimes(2)
+    expect(container.querySelector('[data-retrieval-status="empty"]')?.textContent).toContain(
+      'FRAIS'
+    )
   })
 
   it('ne traite jamais un aperçu interrompu comme un graphe complet au retour A→B→A', async () => {

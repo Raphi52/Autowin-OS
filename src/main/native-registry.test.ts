@@ -12,7 +12,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   enablementPath,
-  nativeRegistryActive,
   listNativeRegistry,
   setNativeEnablement,
   seedRegistrySnapshot,
@@ -26,21 +25,9 @@ describe('native-registry (Chantier 1 — souveraineté inventaire)', () => {
   })
   afterEach(() => {
     rmSync(base, { recursive: true, force: true })
-    delete process.env.AUTOWIN_NATIVE_REGISTRY
   })
 
-  it('actif si flag=1, inactif si flag=0, sinon dépend de la présence du fichier', () => {
-    process.env.AUTOWIN_NATIVE_REGISTRY = '1'
-    expect(nativeRegistryActive(base)).toBe(true)
-    process.env.AUTOWIN_NATIVE_REGISTRY = '0'
-    expect(nativeRegistryActive(base)).toBe(false)
-    delete process.env.AUTOWIN_NATIVE_REGISTRY
-    expect(nativeRegistryActive(base)).toBe(false) // pas de fichier
-    setNativeEnablement('tools', 'x', true, base)
-    expect(nativeRegistryActive(base)).toBe(true) // fichier créé
-  })
-
-  it('reste actif et récupérable si un crash laisse seulement le backup', () => {
+  it('reste récupérable si un crash laisse seulement le backup', () => {
     seedRegistrySnapshot(
       {
         tools: [{ id: 't1', label: 't1', description: 'outil', enabled: false, mutable: true }]
@@ -50,7 +37,6 @@ describe('native-registry (Chantier 1 — souveraineté inventaire)', () => {
     const primary = enablementPath(base)
     renameSync(primary, `${primary}.bak`)
 
-    expect(nativeRegistryActive(base)).toBe(true)
     expect(listNativeRegistry('tools', base)[0].enabled).toBe(false)
   })
 

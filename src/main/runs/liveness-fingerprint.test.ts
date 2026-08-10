@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { resumeActionFor } from './run-reattach'
+import { agentVerdict, resumeActionFor } from './run-reattach'
+import { defaultProcessIdentity } from '../store/worktree-manager'
 
 /**
  * Ce que ces tests protègent : qu'un run interrompu puisse être RELANCÉ.
@@ -29,12 +30,12 @@ describe('la garde de vivacité a besoin de l’empreinte pour garder quoi que c
     expect(action).toBe('rattacher')
   })
 
-  it('AVEC empreinte, le pid recyclé est démasqué et le run peut repartir', () => {
+  it('AVEC empreinte, le pid recyclé est démasqué mais reste bloqué sans preuve terminale', () => {
     const action = resumeActionFor(
       { agents: [{ token: 'a', pid: pidVivant, identity: 'notre-agent' }], phaseOutputs: [] },
       sondeRecyclee
     )
-    expect(action).toBe('relancer')
+    expect(action).toBe('bloquer')
   })
 
   it('AVEC empreinte, un agent réellement vivant reste protégé d’une double relance', () => {
@@ -47,16 +48,35 @@ describe('la garde de vivacité a besoin de l’empreinte pour garder quoi que c
     expect(action).toBe('rattacher')
   })
 
-  it('un pid éteint se relance, avec ou sans empreinte', () => {
+  it('un pid éteint sans preuve terminale est bloqué, avec ou sans empreinte', () => {
     for (const agent of [
       { token: 'a', pid: 999 },
       { token: 'a', pid: 999, identity: 'notre-agent' }
     ]) {
-      expect(resumeActionFor({ agents: [agent], phaseOutputs: [] }, () => undefined)).toBe(
-        'relancer'
-      )
+      expect(resumeActionFor({ agents: [agent], phaseOutputs: [] }, () => undefined)).toBe('bloquer')
     }
   })
+
+  it.runIf(process.platform === 'win32')(
+    'une panne de la sonde PowerShell reste inconnue, jamais confondue avec un PID mort',
+    () => {
+      const identity = defaultProcessIdentity(process.pid)
+      expect(identity).toEqual(expect.any(String))
+      const previousPath = process.env.PATH
+      process.env.PATH = ''
+      try {
+        expect(
+          agentVerdict(
+            { token: 'agent-vivant', pid: process.pid, identity: identity as string },
+            defaultProcessIdentity
+          ).state
+        ).toBe('inconnu')
+      } finally {
+        if (previousPath === undefined) delete process.env.PATH
+        else process.env.PATH = previousPath
+      }
+    }
+  )
 })
 
 /**

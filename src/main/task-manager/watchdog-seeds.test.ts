@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { TaskStore } from './task-store'
+import { WatchdogEngine } from './watchdog-engine'
 import { AUTO_KAIZEN_SEED_ID, autoKaizenSeed, seedWatchdogTasks } from './watchdog-seeds'
 
 function store(): TaskStore {
@@ -69,6 +70,29 @@ describe('seedWatchdogTasks — l’auto-kaizen comme VRAIE tâche', () => {
     seedWatchdogTasks(afterRestart)
 
     expect(afterRestart.listTasks()).toHaveLength(1)
+  })
+
+  it('réveille Auto-kaizen après chargement du vieux champ app-event.event', async () => {
+    const first = store()
+    seedWatchdogTasks(first)
+    const persisted = first.snapshot()
+    const source = persisted.tasks[0].watchdog?.source as unknown as Record<string, unknown>
+    source.event = 'orchestration-red'
+    delete source.events
+    const restarted = store()
+    restarted.hydrate(persisted)
+    const calls: string[] = []
+    const engine = new WatchdogEngine(() => restarted.listTasks(), {
+      async runWatchdog(taskId) {
+        calls.push(taskId)
+        return true
+      }
+    })
+
+    expect(seedWatchdogTasks(restarted)).toEqual([])
+    await engine.notifyAppEvent('orchestration-red', 'Huit chantiers dogfood rouges')
+
+    expect(calls).toEqual([persisted.tasks[0].id])
   })
 
   it('le semis est mémorisé dans l’instantané persisté', () => {

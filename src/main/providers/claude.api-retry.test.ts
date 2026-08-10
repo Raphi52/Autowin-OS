@@ -65,7 +65,14 @@ describe('ClaudeCliAdapter — surcharge API (529) rendue visible', () => {
         error_status: 529,
         error: 'overloaded'
       },
-      { type: 'result', result: 'ok', session_id: 's', is_error: false }
+      {
+        type: 'result',
+        subtype: 'success',
+        result: 'ok',
+        session_id: 's',
+        is_error: false,
+        usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0 }
+      }
     ]
     const { reasoning } = await drainReasoning()
 

@@ -17,7 +17,6 @@ const MAX_CAPTURE_CHARS = 64 * 1024
 const MAX_GRAPH_BYTES = 128 * 1024 * 1024
 const DEFAULT_SHARED_GRAPHIFY_SOURCE =
   process.platform === 'win32' ? '\\\\ged2\\rig\\Projets IA\\Graphify' : undefined
-export const GRAPHIFY_WHEEL_NAME = 'graphifyy-0.9.11-py3-none-any.whl'
 export const GRAPHIFY_WHEEL_SHA256 =
   '750b77232f460275aba596b09a1b8f289a1238a41ef5ad0edc29464e523b28ca'
 export const GRAPHIFY_REQUIREMENTS_SHA256 =

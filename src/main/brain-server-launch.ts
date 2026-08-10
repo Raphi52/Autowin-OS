@@ -119,10 +119,6 @@ export function resolveBrainRuntime(env: NodeJS.ProcessEnv = process.env): Brain
   return { tooling, python, brainRoot }
 }
 
-export function resolveBrainTooling(env: NodeJS.ProcessEnv = process.env): string {
-  return resolveBrainRuntime(env).tooling
-}
-
 /** Réarme la tentative (ex. brain repassé up puis re-tombé, ou déclenchement manuel explicite). */
 export function resetBrainLaunchAttempt(): void {
   attempted = false

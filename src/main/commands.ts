@@ -931,7 +931,12 @@ export class AppCommandBus {
               // deja payees lorsqu'une admission echoue. Une fois admis, le nouveau run prend le relais.
               if (resumable && !resumedCheckpointReleased) {
                 resumedCheckpointReleased = true
-                this.os.forgetResumableOrchestration(resumable.runId)
+                // La reprise conserve désormais son runId pour rouvrir le même worktree. Dans ce
+                // cas l'orchestrateur vient de réécrire CE checkpoint : l'effacer ici détruirait la
+                // prochaine reprise si le process retombe avant la phase suivante.
+                if (currentRunId !== resumable.runId) {
+                  this.os.forgetResumableOrchestration(resumable.runId)
+                }
                 const reused = resumeOutputs.map((output) => output.phase).join(', ')
                 this.broadcast({
                   type: 'orchestrate-step',

@@ -1,10 +1,4 @@
-import {
-  createReadStream,
-  existsSync,
-  promises as fsPromises,
-  readdirSync,
-  statSync
-} from 'node:fs'
+import { createReadStream, existsSync, promises as fsPromises } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
@@ -68,42 +62,6 @@ const sessionListCache = new Map<string, { expiresAt: number; sessions: SessionM
 
 export function projectsRoot(): string {
   return join(homedir(), '.claude', 'projects')
-}
-
-/** Liste les sessions (tous projets), triées par mtime décroissant, cappées. */
-export function listSessions(cap = 60, root = projectsRoot()): SessionMeta[] {
-  const out: SessionMeta[] = []
-  let projects: string[] = []
-  try {
-    projects = readdirSync(root)
-  } catch {
-    return [] // pas de dossier Claude Code sur ce poste
-  }
-  for (const project of projects) {
-    const dir = join(root, project)
-    let files: string[] = []
-    try {
-      files = readdirSync(dir).filter((f) => f.endsWith('.jsonl'))
-    } catch {
-      continue
-    }
-    for (const f of files) {
-      const p = join(dir, f)
-      try {
-        const st = statSync(p)
-        out.push({
-          id: basename(f, '.jsonl'),
-          project,
-          path: p,
-          sizeMb: Math.round((st.size / 1024 / 1024) * 10) / 10,
-          mtime: st.mtimeMs
-        })
-      } catch {
-        /* fichier disparu entre readdir et stat — ignoré */
-      }
-    }
-  }
-  return out.sort((a, b) => b.mtime - a.mtime).slice(0, cap)
 }
 
 function retainRecent(sessions: SessionMeta[], candidate: SessionMeta, cap: number): void {
@@ -327,33 +285,4 @@ export async function parseSession(meta: SessionMeta): Promise<SessionActivity> 
   const data: SessionActivity = { meta, turns, toolCounts, images, totalToolCalls }
   cache.set(meta.path, { mtime: meta.mtime, data })
   return data
-}
-
-export interface ToolHabits {
-  sessionsScanned: number
-  totalToolCalls: number
-  tools: Array<{ tool: string; count: number }>
-  imagesConsulted: number
-}
-
-/** Habitudes d'usage : agrégat des compteurs de tools sur les N sessions récentes. */
-export async function aggregateHabits(cap = 20, root = projectsRoot()): Promise<ToolHabits> {
-  const sessions = listSessions(cap, root)
-  const merged: Record<string, number> = {}
-  let total = 0
-  let imgs = 0
-  for (const s of sessions) {
-    const a = await parseSession(s)
-    for (const [tool, n] of Object.entries(a.toolCounts)) merged[tool] = (merged[tool] ?? 0) + n
-    total += a.totalToolCalls
-    imgs += a.images.length
-  }
-  return {
-    sessionsScanned: sessions.length,
-    totalToolCalls: total,
-    tools: Object.entries(merged)
-      .map(([tool, count]) => ({ tool, count }))
-      .sort((a, b) => b.count - a.count),
-    imagesConsulted: imgs
-  }
 }

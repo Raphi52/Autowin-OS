@@ -7,6 +7,7 @@ import {
   clearOrchestrationState,
   admitAutomaticResumeRuntime,
   admitLiveReattachment,
+  electStartupOrchestrationResumes,
   loadOrchestrationStates,
   pickResumeForTask,
   pickOrchestrationsToResume,
@@ -14,6 +15,7 @@ import {
   resolveResumableRuntime,
   saveOrchestrationAgentCheckpoint,
   saveOrchestrationState,
+  suppressOrchestrationPipeline,
   type OrchestrationRunState
 } from './orchestration-state'
 
@@ -142,6 +144,44 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
     expect(loadOrchestrationStates(root).map((entry) => entry.runId)).toEqual(['valid-quote'])
   })
 
+  it('rejette une réservation active liée à une occurrence historique plutôt qu’à l’agent actif', () => {
+    const usage = {
+      quoteId: 'quote-reservations',
+      startedCalls: 1,
+      completedCalls: 0,
+      failedCalls: 0,
+      activeCalls: 1,
+      activeReservationIds: ['reservation-historique'],
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      totalTokens: 0,
+      freshTokens: 0,
+      knownCostUsd: null,
+      unpricedCalls: 0,
+      unmeteredCalls: 0,
+      tokenCoverage: 'complete'
+    }
+    writeFileSync(
+      join(root, 'invalid-reservations.json'),
+      JSON.stringify({
+        ...state('invalid-reservations', 1000, ['frame']),
+        usage,
+        agents: [
+          { token: 'agent-actif', active: true, reservationId: 'reservation-active' },
+          {
+            token: 'agent-historique',
+            active: false,
+            reservationId: 'reservation-historique'
+          }
+        ]
+      }),
+      'utf8'
+    )
+
+    expect(loadOrchestrationStates(root)).toEqual([])
+  })
+
   it('rejette une collection agents invalide avant le rattachement', () => {
     writeFileSync(
       join(root, 'invalid-agents.json'),
@@ -151,6 +191,30 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
     writeFileSync(
       join(root, 'invalid-agent-entry.json'),
       JSON.stringify({ ...state('invalid-agent-entry', 1000, ['frame']), agents: [{}] }),
+      'utf8'
+    )
+    writeFileSync(
+      join(root, 'invalid-agent-phase.json'),
+      JSON.stringify({
+        ...state('invalid-agent-phase', 1000, ['frame']),
+        agents: [{ token: 'agent-1', phase: 'inconnue' }]
+      }),
+      'utf8'
+    )
+    writeFileSync(
+      join(root, 'invalid-agent-active.json'),
+      JSON.stringify({
+        ...state('invalid-agent-active', 1000, ['frame']),
+        agents: [{ token: 'agent-1', active: 'oui' }]
+      }),
+      'utf8'
+    )
+    writeFileSync(
+      join(root, 'invalid-agent-fanout.json'),
+      JSON.stringify({
+        ...state('invalid-agent-fanout', 1000, ['frame']),
+        agents: [{ token: 'agent-1', fanOut: 1 }]
+      }),
       'utf8'
     )
 
@@ -198,7 +262,17 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
         contentHash: 'source-hash'
       },
       agents: [
-        { token: 'agent-1', pid: 42, identity: 'pid:42', journalPath: 'run.jsonl', offset: 0 }
+        {
+          token: 'agent-1',
+          phase: 'frame' as const,
+          active: true,
+          fanOut: false,
+          reservationId: 'reservation-tok-1',
+          pid: 42,
+          identity: 'pid:42',
+          journalPath: 'run.jsonl',
+          offset: 0
+        }
       ]
     }
     saveOrchestrationState(root, complete)
@@ -460,6 +534,18 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
     })
   })
 
+  it('refuse une sauvegarde agent si le checkpoint courant a disparu', () => {
+    expect(() =>
+      saveOrchestrationAgentCheckpoint(
+        root,
+        'run-absent',
+        [{ token: 'agent-non-lance' }],
+        undefined,
+        2000
+      )
+    ).toThrow('checkpoint orchestration absent')
+  })
+
   it('branche le callback de spawn sur le snapshot actif du superviseur', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/os.ts'), 'utf8')
     const start = source.indexOf('onAgentsChanged:')
@@ -480,9 +566,9 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
   })
 
   it('reprend TOUS les runs éligibles en priorisant le travail déjà produit', () => {
-    const paidOlder = state('run-paid-old', 1000, ['frame'])
-    const paidNewer = state('run-paid-new', 3000, ['frame'])
-    const neverStarted = state('run-zero', 9000, [])
+    const paidOlder = { ...state('run-paid-old', 1000, ['frame']), task: 'tache payee A' }
+    const paidNewer = { ...state('run-paid-new', 3000, ['frame']), task: 'tache payee B' }
+    const neverStarted = { ...state('run-zero', 9000, []), task: 'tache neuve C' }
     const emptyOutput: OrchestrationRunState = {
       ...state('run-empty-output', 12000, []),
       phaseOutputs: [{ phase: 'frame' as never, text: '   ' }]
@@ -493,6 +579,160 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
         (candidate) => candidate.runId
       )
     ).toEqual(['run-paid-new', 'run-paid-old', 'run-zero'])
+  })
+
+  it('elit un seul workflow pour deux checkpoints de la meme demande canonique', () => {
+    const older: OrchestrationRunState = {
+      ...state('run-duplicate-old', 1000, ['frame']),
+      task: 'Corrig\u00e9 le bouton',
+      conversationId: 'conv-duplicate'
+    }
+    const activeNewer: OrchestrationRunState = {
+      ...state('run-duplicate-new', 2000, []),
+      task: 'Corrige\u0301   le bouton',
+      conversationId: 'conv-duplicate',
+      usage: {
+        quoteId: 'quote-duplicate',
+        startedAgents: 1,
+        startedCalls: 1,
+        completedCalls: 0,
+        failedCalls: 0,
+        activeCalls: 1,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        totalTokens: 0,
+        freshTokens: 0,
+        knownCostUsd: null,
+        unpricedCalls: 0,
+        unmeteredCalls: 0,
+        tokenCoverage: 'complete'
+      }
+    }
+
+    const election = electStartupOrchestrationResumes([older, activeNewer])
+
+    expect(election.elected.map((candidate) => candidate.runId)).toEqual(['run-duplicate-new'])
+    expect(election.suppressed).toEqual([{ state: older, electedRunId: 'run-duplicate-new' }])
+  })
+
+  it('ne remet jamais un checkpoint doublon dans la file de relance', () => {
+    const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const branchStart = indexSource.indexOf('const electedDuplicateRunId =')
+    const branchEnd = indexSource.indexOf("\n    if (reprise === 'bloquer') {", branchStart)
+    const duplicateBranch = indexSource.slice(branchStart, branchEnd)
+
+    expect(branchStart).toBeGreaterThanOrEqual(0)
+    expect(branchEnd).toBeGreaterThan(branchStart)
+    expect(duplicateBranch).toContain('waitUntilRunCanResume(')
+    expect(duplicateBranch).toContain('os.forgetResumableOrchestration(latest.runId)')
+    expect(duplicateBranch).not.toContain('startupResumeQueue.enqueue(')
+  })
+
+  it('ne reelit pas le doublon apres un second crash quand le workflow elu a disparu', () => {
+    const suppressed: OrchestrationRunState = {
+      ...state('run-suppressed-two-boots', 1000, []),
+      conversationId: 'conv-two-boots',
+      usage: {
+        quoteId: 'quote-two-boots',
+        startedAgents: 1,
+        startedCalls: 1,
+        completedCalls: 0,
+        failedCalls: 0,
+        activeCalls: 1,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        totalTokens: 0,
+        freshTokens: 0,
+        knownCostUsd: null,
+        unpricedCalls: 0,
+        unmeteredCalls: 0,
+        tokenCoverage: 'complete'
+      }
+    }
+    saveOrchestrationState(root, suppressed)
+    suppressOrchestrationPipeline(root, suppressed.runId, 'run-elected-gone', 2000)
+
+    const [persisted] = loadOrchestrationStates(root)
+    const secondBoot = electStartupOrchestrationResumes([persisted])
+
+    expect(persisted.resumeDisposition).toEqual({
+      kind: 'superseded-duplicate',
+      electedRunId: 'run-elected-gone',
+      decidedAt: 2000
+    })
+    expect(secondBoot.elected).toEqual([])
+    expect(secondBoot.suppressed).toEqual([{ state: persisted, electedRunId: 'run-elected-gone' }])
+  })
+
+  it('persiste les suppressions de pipeline avant de parcourir la file de demarrage', () => {
+    const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const electionAt = indexSource.indexOf('const resumeElection =')
+    const persistenceAt = indexSource.indexOf(
+      'os.suppressDuplicateOrchestrationPipeline(',
+      electionAt
+    )
+    const loopAt = indexSource.indexOf('for (const resumableRun of resumableRuns)', electionAt)
+
+    expect(electionAt).toBeGreaterThanOrEqual(0)
+    expect(persistenceAt).toBeGreaterThan(electionAt)
+    expect(persistenceAt).toBeLessThan(loopAt)
+  })
+
+  it('reserve aussi en dev la racine userData avant toute reprise automatique', () => {
+    const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const lockAt = indexSource.indexOf('const ownsInstanceLock =')
+    const rejectionAt = indexSource.indexOf('if (!ownsInstanceLock)', lockAt)
+    const hardStopAt = indexSource.indexOf('process.exit(0)', rejectionAt)
+    const osConstructionAt = indexSource.indexOf('const os = new AutowinOS()', lockAt)
+    const appDataAt = indexSource.indexOf('const appDataRoot =', 0)
+    const createIdentityAt = indexSource.indexOf('createAutowinAppDataRoot(appDataRoot)', appDataAt)
+    const setIdentityAt = indexSource.indexOf(
+      "app.setPath('userData', canonicalAppDataRoot)",
+      appDataAt
+    )
+    const configureBaseAt = indexSource.indexOf('configureAutowinAppDataBase(', appDataAt)
+    const configureMemoryAt = indexSource.indexOf('configureSessionMemoryEcho(', appDataAt)
+    const configureRememberAt = indexSource.indexOf('configureRememberDepositStore(', appDataAt)
+    const ensureDataAt = indexSource.indexOf('ensureAutowinAppData(', appDataAt)
+    const recoveryAt = indexSource.indexOf('const resumableRuns = os.resumableOrchestrations()')
+    const lockBranch = indexSource.slice(lockAt, recoveryAt)
+
+    expect(lockAt).toBeGreaterThanOrEqual(0)
+    expect(createIdentityAt).toBeGreaterThan(appDataAt)
+    expect(createIdentityAt).toBeLessThan(setIdentityAt)
+    expect(setIdentityAt).toBeLessThan(lockAt)
+    expect(rejectionAt).toBeGreaterThan(lockAt)
+    expect(hardStopAt).toBeGreaterThan(rejectionAt)
+    expect(hardStopAt).toBeLessThan(osConstructionAt)
+    expect(configureBaseAt).toBeGreaterThan(hardStopAt)
+    expect(configureMemoryAt).toBeGreaterThan(hardStopAt)
+    expect(configureRememberAt).toBeGreaterThan(hardStopAt)
+    expect(ensureDataAt).toBeGreaterThan(hardStopAt)
+    expect(lockAt).toBeLessThan(recoveryAt)
+    expect(lockBranch).toContain('app.requestSingleInstanceLock(')
+    expect(lockBranch).not.toContain("if (!explicitUserDataDir) app.setPath('userData'")
+    expect(lockBranch).not.toMatch(/!app\.isPackaged\s*\|\|/)
+  })
+
+  it('observe un doublon supprime sans ouvrir de tour ni publier une fausse cloture verte', () => {
+    const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const loopAt = indexSource.indexOf('for (const resumableRun of resumableRuns)')
+    const duplicateAt = indexSource.indexOf('if (electedDuplicateRunId) {', loopAt)
+    const liveTurnAt = indexSource.indexOf(
+      "if ((reprise === 'rattacher' || reprise === 'bloquer')",
+      loopAt
+    )
+    const duplicateBranch = indexSource.slice(duplicateAt, liveTurnAt)
+
+    expect(duplicateAt).toBeGreaterThan(loopAt)
+    expect(duplicateAt).toBeLessThan(liveTurnAt)
+    expect(duplicateBranch).toContain('waitUntilRunCanResume(')
+    expect(duplicateBranch).not.toContain('admitLiveReattachment(')
+    expect(duplicateBranch).not.toContain('createOrchestrateTurnPersistence(')
+    expect(duplicateBranch).not.toContain("status: 'green'")
+    expect(duplicateBranch).not.toContain('durableLiveReattachment')
   })
 
   it('ignore un état tronqué par un crash sans perdre les autres', () => {
@@ -579,6 +819,156 @@ describe('garde-fou acquis vide (constaté en réel)', () => {
 })
 
 describe('identité du modèle lors d’une reprise de conversation', () => {
+  it('un pipeline supprime ne redevient pas un acquis, mais son appel actif reste un verrou', () => {
+    const suppressed: OrchestrationRunState = {
+      ...state('run-suppressed-manual', 1000, ['frame']),
+      conversationId: 'conv-suppressed-manual',
+      resumeDisposition: {
+        kind: 'superseded-duplicate',
+        electedRunId: 'run-elected-manual',
+        decidedAt: 900
+      }
+    }
+    const lookup = {
+      task: suppressed.task,
+      conversationId: suppressed.conversationId,
+      nowMs: 1100
+    }
+
+    expect(pickResumeForTask([suppressed], lookup)).toBeNull()
+    expect(
+      pickResumeForTask(
+        [
+          {
+            ...suppressed,
+            usage: {
+              quoteId: 'quote-suppressed-manual',
+              startedAgents: 1,
+              startedCalls: 1,
+              completedCalls: 0,
+              failedCalls: 0,
+              activeCalls: 1,
+              inputTokens: 0,
+              outputTokens: 0,
+              cacheReadTokens: 0,
+              totalTokens: 0,
+              freshTokens: 0,
+              knownCostUsd: null,
+              unpricedCalls: 0,
+              unmeteredCalls: 0,
+              tokenCoverage: 'complete'
+            }
+          }
+        ],
+        lookup
+      )?.runId
+    ).toBe('run-suppressed-manual')
+  })
+
+  it('un libelle Unicode decompose retrouve le verrou actif canonique', () => {
+    const active: OrchestrationRunState = {
+      ...state('run-active-unicode', 1000, []),
+      task: 'Corrig\u00e9 le bouton',
+      conversationId: 'conv-unicode',
+      usage: {
+        quoteId: 'quote-active-unicode',
+        startedAgents: 1,
+        startedCalls: 1,
+        completedCalls: 0,
+        failedCalls: 0,
+        activeCalls: 1,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        totalTokens: 0,
+        freshTokens: 0,
+        knownCostUsd: null,
+        unpricedCalls: 0,
+        unmeteredCalls: 0,
+        tokenCoverage: 'complete'
+      }
+    }
+
+    expect(
+      pickResumeForTask([active], {
+        task: 'Corrige\u0301 le bouton',
+        conversationId: 'conv-unicode',
+        nowMs: 2000
+      })?.runId
+    ).toBe('run-active-unicode')
+  })
+
+  it('retourne aussi un checkpoint actif sans livrable pour verrouiller la relance identique', () => {
+    const active: OrchestrationRunState = {
+      ...state('run-active-empty', 1000, []),
+      conversationId: 'conv-1',
+      bindingOverride: { provider: 'claude', model: 'claude-fable-5' },
+      usage: {
+        quoteId: 'quote-active-empty',
+        startedAgents: 1,
+        startedCalls: 1,
+        completedCalls: 0,
+        failedCalls: 0,
+        activeCalls: 1,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        totalTokens: 0,
+        freshTokens: 0,
+        knownCostUsd: null,
+        unpricedCalls: 0,
+        unmeteredCalls: 0,
+        tokenCoverage: 'complete'
+      }
+    }
+
+    expect(
+      pickResumeForTask([active], {
+        task: active.task,
+        conversationId: 'conv-1',
+        // Un verrou actif ne devient pas réessayable parce que le modèle a changé ou que le
+        // checkpoint a vieilli : ce sont des critères de réutilisation de livrable, pas de sécurité.
+        nowMs: 50 * 24 * 60 * 60_000,
+        bindingOverride: { provider: 'codex', model: 'gpt-5.6-sol' }
+      })?.runId
+    ).toBe('run-active-empty')
+  })
+
+  it('priorise le verrou actif sur un livrable plus récent de la même tâche', () => {
+    const active: OrchestrationRunState = {
+      ...state('run-active-older', 1000, []),
+      conversationId: 'conv-1',
+      usage: {
+        quoteId: 'quote-active-older',
+        startedCalls: 1,
+        completedCalls: 0,
+        failedCalls: 0,
+        activeCalls: 1,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        totalTokens: 0,
+        freshTokens: 0,
+        knownCostUsd: null,
+        unpricedCalls: 0,
+        unmeteredCalls: 0,
+        tokenCoverage: 'complete'
+      }
+    }
+    const completed: OrchestrationRunState = {
+      ...state('run-completed-newer', 2000, ['frame']),
+      conversationId: 'conv-1'
+    }
+
+    expect(
+      pickResumeForTask([active, completed], {
+        task: active.task,
+        conversationId: 'conv-1',
+        nowMs: 2500
+      })?.runId
+    ).toBe('run-active-older')
+  })
+
   it('ne réutilise pas un acquis produit par un autre modèle', () => {
     const saved: OrchestrationRunState = {
       ...state('run-claude', 1000, ['frame']),
@@ -632,7 +1022,7 @@ describe('admission de la reprise automatique au démarrage', () => {
   it('restaure la topologie persistee et isole la migration des anciens tours', () => {
     const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const relaunchStart = indexSource.indexOf('const relaunchResumableRun =')
-    const relaunchEnd = indexSource.indexOf("if (reprise === 'rattacher')", relaunchStart)
+    const relaunchEnd = indexSource.indexOf("if (reprise === 'bloquer')", relaunchStart)
     const relaunchSource = indexSource.slice(relaunchStart, relaunchEnd)
     const osSource = readFileSync(join(process.cwd(), 'src/main/os.ts'), 'utf8')
 
@@ -649,7 +1039,9 @@ describe('admission de la reprise automatique au démarrage', () => {
 
   it('fait aussi passer le rattachement vivant par une admission d’identité', () => {
     const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
-    const attachStart = indexSource.indexOf("if (reprise === 'rattacher'")
+    const attachStart = indexSource.indexOf(
+      "if ((reprise === 'rattacher' || reprise === 'bloquer')"
+    )
     const attachEnd = indexSource.indexOf('const relaunchResumableRun =', attachStart)
     const attachSource = indexSource.slice(attachStart, attachEnd)
 
@@ -661,11 +1053,10 @@ describe('admission de la reprise automatique au démarrage', () => {
 
   it('clôture le tour de rattachement inconnu avant d’ouvrir le tour de relance', () => {
     const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
-    const attachStart = indexSource.indexOf("if (reprise === 'rattacher'")
-    const continuationEnd = indexSource.indexOf(
-      "if (reprise === 'relancer') void relaunchResumableRun",
-      attachStart
+    const attachStart = indexSource.indexOf(
+      "if ((reprise === 'rattacher' || reprise === 'bloquer')"
     )
+    const continuationEnd = indexSource.indexOf("if (reprise === 'relancer') {", attachStart)
     const continuationSource = indexSource.slice(attachStart, continuationEnd)
 
     expect(continuationSource).toContain(
@@ -684,7 +1075,7 @@ describe('admission de la reprise automatique au démarrage', () => {
   it('ne supprime le checkpoint historique qu’après le premier lifecycle admis', () => {
     const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const relaunchStart = indexSource.indexOf('const relaunchResumableRun =')
-    const relaunchEnd = indexSource.indexOf("if (reprise === 'rattacher')", relaunchStart)
+    const relaunchEnd = indexSource.indexOf("if (reprise === 'bloquer')", relaunchStart)
     const relaunchSource = indexSource.slice(relaunchStart, relaunchEnd)
     const runTaskAt = relaunchSource.indexOf('.runTask(')
     const lifecycleAt = relaunchSource.indexOf('(lifecycle) =>')
@@ -695,12 +1086,13 @@ describe('admission de la reprise automatique au démarrage', () => {
     expect(runTaskAt).toBeGreaterThanOrEqual(0)
     expect(lifecycleAt).toBeGreaterThan(runTaskAt)
     expect(forgetAt).toBeGreaterThan(lifecycleAt)
+    expect(relaunchSource).toContain('resumedCurrentRunId !== resumableRun.runId')
   })
 
   it('repersiste un règlement tardif sur la reprise automatique', () => {
     const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const relaunchStart = indexSource.indexOf('const relaunchResumableRun =')
-    const relaunchEnd = indexSource.indexOf("if (reprise === 'rattacher')", relaunchStart)
+    const relaunchEnd = indexSource.indexOf("if (reprise === 'bloquer')", relaunchStart)
     const relaunchSource = indexSource.slice(relaunchStart, relaunchEnd)
 
     expect(relaunchSource).toContain('reconcileLateRunLifecycle(')
@@ -716,19 +1108,41 @@ describe('admission de la reprise automatique au démarrage', () => {
  * a produit pendant son absence — elle relance donc un travail déjà fait, ou attend un clic.
  */
 describe('références d’agents — ce qui rend un run rattachable', () => {
-  it('persiste jeton, pid, journal et offset, et les relit à l’identique', () => {
+  it('persiste provider, phase, état, jeton, pid, journal et offset à l’identique', () => {
     saveOrchestrationState(root, {
       runId: 'run-attach',
       task: 'longue tâche',
       phaseOutputs: [],
-      agents: [{ token: 'tok-1', pid: 4242, journalPath: 'C:/j/tok-1.stdout.jsonl', offset: 128 }],
+      agents: [
+        {
+          token: 'tok-1',
+          provider: 'codex',
+          phase: 'build',
+          active: true,
+          fanOut: false,
+          reservationId: 'reservation-tok-1',
+          pid: 4242,
+          journalPath: 'C:/j/tok-1.stdout.jsonl',
+          offset: 128
+        }
+      ],
       startedAt: 1,
       updatedAt: 2
     })
 
     const [relu] = loadOrchestrationStates(root)
     expect(relu.agents).toEqual([
-      { token: 'tok-1', pid: 4242, journalPath: 'C:/j/tok-1.stdout.jsonl', offset: 128 }
+      {
+        token: 'tok-1',
+        provider: 'codex',
+        phase: 'build',
+        active: true,
+        fanOut: false,
+        reservationId: 'reservation-tok-1',
+        pid: 4242,
+        journalPath: 'C:/j/tok-1.stdout.jsonl',
+        offset: 128
+      }
     ])
   })
 

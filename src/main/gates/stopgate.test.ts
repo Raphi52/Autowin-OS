@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { evaluateClosure, assertClosable, type ClosureState } from './stopgate'
+import { evaluateClosure, type ClosureState } from './stopgate'
 
 describe('evaluateClosure', () => {
   it('bloque le statut "open"', () => {
@@ -90,15 +90,5 @@ describe('evaluateClosure', () => {
     const result = evaluateClosure(state)
     expect(result.blocked).toBe(true)
     expect(result.reasons.length).toBe(3)
-  })
-
-  it('assertClosable jette une Error détaillée si bloqué', () => {
-    const state: ClosureState = { status: 'red', dod: [] }
-    expect(() => assertClosable(state)).toThrowError(/Clôture bloquée/)
-  })
-
-  it('assertClosable ne jette rien si non bloqué', () => {
-    const state: ClosureState = { status: 'degraded-closed', dod: [] }
-    expect(() => assertClosable(state)).not.toThrow()
   })
 })

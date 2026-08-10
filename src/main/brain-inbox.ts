@@ -18,6 +18,7 @@
  */
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -25,7 +26,7 @@ import {
   renameSync,
   statSync
 } from 'node:fs'
-import { extname, join, relative, resolve } from 'node:path'
+import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { sourceLocatorProblem } from './brain-remember'
 
 /**
@@ -283,7 +284,37 @@ function resolveCandidate(root: string, id: string): string {
     throw new Error(`candidat hors de ${INBOX_DIR}/ — refusé : ${id}`)
   }
   if (!existsSync(file)) throw new Error(`candidat introuvable : ${id}`)
+  assertRealMutationPath(root, inboxRoot, file, INBOX_DIR)
   return file
+}
+
+function isInside(realPath: string, realRoot: string): boolean {
+  const inside = relative(realRoot, realPath)
+  return inside === '' || (!isAbsolute(inside) && inside !== '..' && !inside.startsWith(`..${sep}`))
+}
+
+function assertRealMutationPath(
+  root: string,
+  directory: string,
+  file: string | undefined,
+  label: string
+): void {
+  if (lstatSync(directory).isSymbolicLink()) {
+    throw new Error(`${label} hors périmètre autorisé — junction ou symlink refusée`)
+  }
+  const realRoot = realpathSync.native(root)
+  const realDirectory = realpathSync.native(directory)
+  if (!isInside(realDirectory, realRoot) || realDirectory === realRoot) {
+    throw new Error(`${label} hors périmètre autorisé`)
+  }
+  if (!file) return
+  if (lstatSync(file).isSymbolicLink()) {
+    throw new Error(`candidat hors périmètre autorisé — symlink refusé`)
+  }
+  const realFile = realpathSync.native(file)
+  if (!isInside(realFile, realDirectory) || realFile === realDirectory) {
+    throw new Error(`candidat hors périmètre autorisé`)
+  }
 }
 
 /** Destination libre : on n'écrase JAMAIS une fiche existante, on suffixe. */
@@ -301,8 +332,12 @@ function move(root: string, id: string, destinationDir: string): InboxMove {
   const from = resolveCandidate(root, id)
   const directory = join(root, destinationDir)
   mkdirSync(directory, { recursive: true })
+  assertRealMutationPath(root, directory, undefined, destinationDir)
   const basename = (id.split('/').at(-1) as string).replace(/\.md$/i, '')
   const to = freeTarget(directory, basename)
+  // Réévalue les deux frontières juste avant le rename : aucun résultat de revue mis en cache.
+  resolveCandidate(root, id)
+  assertRealMutationPath(root, directory, undefined, destinationDir)
   renameSync(from, to)
   return { ok: true, from: idOf(root, from), to: idOf(root, to) }
 }

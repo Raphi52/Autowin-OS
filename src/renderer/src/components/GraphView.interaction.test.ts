@@ -7,7 +7,7 @@ describe('floating note labels', () => {
     const knowledge = readFileSync(new URL('./KnowledgeView.tsx', import.meta.url), 'utf8')
     const graph = readFileSync(new URL('./GraphView.tsx', import.meta.url), 'utf8')
 
-    expect(app).toContain('<KnowledgeView active={tab === \'knowledge\'}')
+    expect(app).toContain("<KnowledgeView active={tab === 'knowledge'}")
     expect(knowledge).toContain('active: boolean')
     expect(knowledge).toContain('<GraphView active={active}')
     expect(graph).toContain('active: boolean')
@@ -35,9 +35,7 @@ describe('floating note labels', () => {
       'const visualActiveThemes = node ? EMPTY_THEME_SELECTION : activeThemes'
     )
     expect(source).toContain('visualActiveThemes.size > 0 ? highlightedNodeIds : new Set()')
-    expect(source).toContain(
-      'nodeColorForTheme(\n        nextNode,\n        visualActiveThemes,'
-    )
+    expect(source).toContain('nodeColorForTheme(\n        nextNode,\n        visualActiveThemes,')
   })
 
   it('uses the right column for a theme index, then replaces it with node detail', () => {

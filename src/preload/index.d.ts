@@ -102,11 +102,9 @@ interface ChatApi {
     path: string,
     workspaceRoot: string
   ) => Promise<import('../shared/git-read').GitDiffResult>
-  getGitGraph: (repoPath?: string) => Promise<import('../shared/git-graph').GitGraphSnapshot>
   getWorktreeMap: (
     repoPath?: string
   ) => Promise<import('../shared/worktree-map').WorktreeMapSnapshot>
-  repoInventory: () => Promise<import('../main/repo-inventory').RepoInventory>
   getGitDiff: (
     path: string,
     repoPath?: string
@@ -235,15 +233,12 @@ interface ChatApi {
   profiles: () => Promise<AutowinProfile[]>
   saveProfile: (profile: unknown) => Promise<AutowinProfile[]>
   applyProfile: (id: string) => Promise<{ topology: AgentTopology }>
-  kimiLogin: () => Promise<{ ok: true }>
   providerLogin: (provider: string) => Promise<{ ok: true }>
   /** Comptes Claude multiples : un CLAUDE_CONFIG_DIR par compte, bascule sans re-login. */
   claudeAccounts: () => Promise<ClaudeAccountsPayload>
   claudeAccountAdd: (label?: string) => Promise<ClaudeAccountsPayload>
   claudeAccountSwitch: (id: string) => Promise<ClaudeAccountsPayload>
   claudeAccountRemove: (id: string) => Promise<ClaudeAccountsPayload>
-  claudeAccountLogin: (id: string) => Promise<{ ok: true }>
-  claudeAccountRefresh: () => Promise<ClaudeAccountsPayload>
   topology: () => Promise<AgentTopology>
   setTopology: (topology: AgentTopology) => Promise<AgentTopology>
   capabilityControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins') => Promise<CapabilityItem[]>
@@ -255,7 +250,6 @@ interface ChatApi {
     dimension?: 'actor' | 'model' | 'provider',
     conversationId?: string
   ) => Promise<CostBreakdownRow[]>
-  promptTraces: (conversationId: string) => Promise<NativePreflightTrace[]>
   brainTraces: (conversationId: string) => Promise<BrainTrace[]>
   behaviourComposition: (workspace?: string) => Promise<
     BehaviourComposition & {

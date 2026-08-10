@@ -144,14 +144,6 @@ function readJson<T>(path: string, fallback: T): T {
   }
 }
 
-/** true si le registre natif doit être utilisé (flag explicite OU fichier d'état déjà présent). */
-export function nativeRegistryActive(base = ensureAutowinAppData()): boolean {
-  if (process.env.AUTOWIN_NATIVE_REGISTRY === '0') return false
-  if (process.env.AUTOWIN_NATIVE_REGISTRY === '1') return true
-  const path = enablementPath(base)
-  return existsSync(path) || existsSync(`${path}.bak`)
-}
-
 /**
  * Racines de skills scannées : le kit `~/.claude/skills` (l'âme d'Autowin), `~/.codex/skills`, et la
  * racine Autowin `%APPDATA%/autowin-os/skills`. Générique : indépendant de tout arbre externe.
