@@ -1,12 +1,45 @@
 import React from 'react'
-import type {
-  WorktreeAgentActivity,
-  WorktreeRuntimeStatus
+import {
+  requiresAttention,
+  type WorktreeAgentActivity,
+  type WorktreeRuntimeStatus
 } from '../../../shared/worktree-activity-model'
 import './WorktreeActivityView.css'
 
+function joinNames(names: string[]): string {
+  if (names.length === 1) return names[0]
+  return `${names.slice(0, -1).join(', ')} et ${names[names.length - 1]}`
+}
+
+/** Décrit un conflit avec les SEULES informations réellement fournies (jamais de valeur inventée). */
+function conflictOutcome(agent: WorktreeAgentActivity): string {
+  const parts: string[] = []
+  parts.push(
+    agent.conflictFile
+      ? `Deux versions touchent le même fichier : ${agent.conflictFile}.`
+      : 'Deux versions touchent le même fichier.'
+  )
+  const others = (agent.conflictWith ?? []).filter((name) => name.trim().length > 0)
+  if (others.length > 0) {
+    parts.push(`Versions en présence : ${joinNames([agent.agentName, ...others])}.`)
+  }
+  parts.push('Aucune version n’a été écrasée : les deux sont conservées, à toi de trancher.')
+  return parts.join(' ')
+}
+
+/** « après six essais » était un chiffre en dur : on montre le compteur réel quand il existe. */
+function attemptsPhrase(agent: WorktreeAgentActivity): string {
+  const count = agent.retryCount
+  if (typeof count !== 'number' || !Number.isFinite(count) || count <= 0) {
+    return 'plusieurs essais'
+  }
+  return `${count} essai${count > 1 ? 's' : ''}`
+}
+
 function stateCopy(agent: WorktreeAgentActivity): { label: string; outcome: string; tone: string } {
   if (agent.attentionReason === 'retry-exhausted') {
+    const attempts = attemptsPhrase(agent)
+    const detail = agent.detail ? ` ${agent.detail}` : ''
     return {
       label:
         agent.publication === 'cleanup-pending'
@@ -14,8 +47,8 @@ function stateCopy(agent: WorktreeAgentActivity): { label: string; outcome: stri
           : 'Essais automatiques arrêtés',
       outcome:
         agent.publication === 'cleanup-pending'
-          ? 'Le résultat est déjà dans ton workspace. Après six essais, la copie reste protégée et demande une vérification.'
-          : 'Autowin a arrêté ses essais après six tentatives. La copie reste protégée sans autre action automatique.',
+          ? `Le résultat est déjà dans ton workspace. Après ${attempts}, la copie reste protégée et demande une vérification.${detail}`
+          : `Autowin a arrêté ses essais après ${attempts}. La copie reste protégée sans autre action automatique.${detail}`,
       tone: 'waiting'
     }
   }
@@ -37,7 +70,7 @@ function stateCopy(agent: WorktreeAgentActivity): { label: string; outcome: stri
   if (agent.state === 'conflict') {
     return {
       label: 'Décision requise',
-      outcome: 'Deux versions touchent le même fichier. Rien n’a été écrasé.',
+      outcome: conflictOutcome(agent),
       tone: 'danger'
     }
   }
@@ -87,16 +120,6 @@ function stateCopy(agent: WorktreeAgentActivity): { label: string; outcome: stri
     outcome: 'Il travaille dans son propre bureau. Ton workspace reste disponible.',
     tone: 'working'
   }
-}
-
-function requiresAttention(agent: WorktreeAgentActivity): boolean {
-  if (agent.state === 'conflict') return true
-  if (
-    agent.attentionReason === 'retry-exhausted' ||
-    agent.attentionReason === 'post-publish-change'
-  )
-    return true
-  return agent.state === 'blocked' && agent.attentionReason !== 'base-in-progress'
 }
 
 function routeCopy(agent: WorktreeAgentActivity): { label: string; tone: string; glyph: string } {

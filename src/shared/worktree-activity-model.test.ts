@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildWorktreeActivity, type WorktreeAgentActivity } from './worktree-activity-model'
+import {
+  buildWorktreeActivity,
+  requiresAttention,
+  type WorktreeAgentActivity
+} from './worktree-activity-model'
 
 function agent(over: Partial<WorktreeAgentActivity> = {}): WorktreeAgentActivity {
   return {
@@ -159,5 +163,41 @@ describe('worktree-activity-model', () => {
     ])
     expect(m.journal[0].agentId).toBe('early')
     expect(m.journal[1].agentId).toBe('late')
+  })
+})
+
+describe('requiresAttention — décision unique partagée', () => {
+  it('couvre les états réellement actionnables', () => {
+    expect(requiresAttention(agent({ state: 'conflict' }))).toBe(true)
+    expect(requiresAttention(agent({ state: 'blocked', attentionReason: 'base-dirty' }))).toBe(true)
+    expect(requiresAttention(agent({ state: 'blocked', attentionReason: 'merge-failed' }))).toBe(
+      true
+    )
+    expect(requiresAttention(agent({ state: 'ready', attentionReason: 'retry-exhausted' }))).toBe(
+      true
+    )
+    expect(
+      requiresAttention(agent({ state: 'ready', attentionReason: 'post-publish-change' }))
+    ).toBe(true)
+    // base-in-progress = Autowin réessaie seul → pas d'action utilisateur
+    expect(
+      requiresAttention(agent({ state: 'blocked', attentionReason: 'base-in-progress' }))
+    ).toBe(false)
+    expect(requiresAttention(agent({ state: 'merged' }))).toBe(false)
+    expect(requiresAttention(agent({ state: 'working', endedAtMs: undefined }))).toBe(false)
+    expect(requiresAttention(agent({ state: 'ready' }))).toBe(false)
+  })
+
+  it('needsAttention du modèle = même décision que la vue', () => {
+    const agents = [
+      agent({ agentId: 'c', state: 'conflict' }),
+      agent({ agentId: 'p', state: 'ready', attentionReason: 'post-publish-change' }),
+      agent({ agentId: 'i', state: 'blocked', attentionReason: 'base-in-progress' }),
+      agent({ agentId: 'm', state: 'merged' })
+    ]
+    expect(buildWorktreeActivity(agents).needsAttention).toBe(
+      agents.filter(requiresAttention).length
+    )
+    expect(buildWorktreeActivity(agents).needsAttention).toBe(2)
   })
 })

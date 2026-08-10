@@ -118,6 +118,23 @@ function joinNames(names: string[]): string {
   return `${names.slice(0, -1).join(', ')} et ${names[names.length - 1]}`
 }
 
+/**
+ * Décision UNIQUE « ce bureau attend une action de l'utilisateur ».
+ * Source de vérité partagée par le modèle (`needsAttention`) et la vue Worktrees : les deux
+ * comptaient auparavant des ensembles différents. `base-in-progress` est exclu : Autowin réessaie
+ * seul, l'utilisateur n'a rien à décider.
+ */
+export function requiresAttention(agent: WorktreeAgentActivity): boolean {
+  if (agent.state === 'conflict') return true
+  if (
+    agent.attentionReason === 'retry-exhausted' ||
+    agent.attentionReason === 'post-publish-change'
+  ) {
+    return true
+  }
+  return agent.state === 'blocked' && agent.attentionReason !== 'base-in-progress'
+}
+
 function outcomeOf(state: WorktreeState): FriezeLane['outcome'] {
   if (state === 'merged') return 'merged'
   if (state === 'conflict') return 'conflict'
@@ -236,9 +253,7 @@ export function buildWorktreeActivity(
     })
     .sort((x, y) => x.atMs - y.atMs)
 
-  const needsAttention = agents.filter(
-    (a) => a.state === 'conflict' || a.state === 'blocked'
-  ).length
+  const needsAttention = agents.filter(requiresAttention).length
 
   return { lanes, journal, agentsTotal: agents.length, needsAttention }
 }
