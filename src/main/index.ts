@@ -47,7 +47,20 @@ import { ensureBrainServerStarted } from './brain-server-launch'
 import { configureSessionMemoryEcho } from './session-memory-echo'
 import { configureRememberDepositStore } from './brain-remember'
 import { clearBrainRetrievalCache, retrieveBrainContext } from './brain-retrieval'
-import { applyBrainRetrievalScores, type BrainNoteSearchResult } from './viz/fs-brains'
+import {
+  AMITEL_BRAIN_ROOT,
+  applyBrainRetrievalScores,
+  type BrainNoteSearchResult
+} from './viz/fs-brains'
+import { buildBrainSearchEnvelope } from './brain-search-envelope'
+import {
+  assertBrainVaultRoot,
+  listInboxCandidates,
+  promoteInboxCandidate,
+  rejectInboxCandidate
+} from './brain-inbox'
+import { createHeadShaResolver } from './brain-source-sha'
+import { amitelWorkspaces } from './amitel-paths'
 import { installCrashHandlers } from './crash-handlers'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
 import { loadOrchestrationBudget, saveOrchestrationBudget } from './orchestration-budget'
@@ -2676,7 +2689,39 @@ Le fil reprend ensuite normalement.`
       brainWorker.request<BrainNoteSearchResult[]>('searchBrain', selectedPath, boundedQuery),
       retrieveBrainContext(boundedQuery)
     ])
-    return applyBrainRetrievalScores(local, retrieval.navigation)
+    // On ne rend plus un tableau nu : le STATUT (found/empty/invalid/unavailable), la NAVIGATION et le
+    // BUDGET d'injection étaient calculés puis jetés ici. Le renderer ne pouvait donc pas distinguer
+    // une panne d'un « rien trouvé », ni montrer ce que les plafonds avaient coupé.
+    return buildBrainSearchEnvelope({
+      rawQuery: boundedQuery,
+      results: applyBrainRetrievalScores(local, retrieval.navigation),
+      retrieval
+    })
+  })
+  // BOÎTE DE RÉCEPTION du savoir : `brain-remember` dépose en `inbox/` et laisse la promotion à
+  // l'humain. Ces trois canaux sont cette main humaine, et ils sont bornés à la racine Brain autorisée.
+  ipcMain.handle('os:listInbox', (event, path: string) => {
+    assertTrustedRendererSender(event, 'BrainInbox')
+    return listInboxCandidates(assertBrainVaultRoot(guardString(path, 'path'), AMITEL_BRAIN_ROOT), {
+      headShaFor: createHeadShaResolver(amitelWorkspaces())
+    })
+  })
+  ipcMain.handle('os:promoteInbox', async (event, path: string, id: string) => {
+    assertTrustedRendererSender(event, 'BrainInboxPromote')
+    const root = assertBrainVaultRoot(guardString(path, 'path'), AMITEL_BRAIN_ROOT)
+    const moved = promoteInboxCandidate(root, guardString(id, 'id'))
+    // Le fichier a changé de dossier : sans réindexation, le graphe montrerait encore l'ancien nœud.
+    clearBrainRetrievalCache()
+    await brainWorker.request('invalidate', root)
+    return moved
+  })
+  ipcMain.handle('os:rejectInbox', async (event, path: string, id: string) => {
+    assertTrustedRendererSender(event, 'BrainInboxReject')
+    const root = assertBrainVaultRoot(guardString(path, 'path'), AMITEL_BRAIN_ROOT)
+    const moved = rejectInboxCandidate(root, guardString(id, 'id'))
+    clearBrainRetrievalCache()
+    await brainWorker.request('invalidate', root)
+    return moved
   })
   ipcMain.handle('os:refreshBrain', async (event, path: string) => {
     assertTrustedRendererSender(event, 'BrainRefresh')

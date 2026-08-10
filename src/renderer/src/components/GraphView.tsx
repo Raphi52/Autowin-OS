@@ -89,6 +89,8 @@ import {
   ToggleRow
 } from './GraphView.panels'
 import { ModuleHeader } from './ModuleHeader'
+import { KnowledgeInboxPanel } from './KnowledgeInboxPanel'
+import { BrainRetrievalBench } from './BrainRetrievalBench'
 import './GraphView.css'
 
 type BrainTheme = { id: string; label: string }
@@ -100,7 +102,7 @@ type Brain = {
   kind: 'vault' | 'graphify'
   themes?: BrainTheme[]
 }
-type PanelTab = 'visibility' | 'node'
+type PanelTab = 'visibility' | 'node' | 'workbench'
 type ResizableColumn = 'theme' | 'visibility' | 'detail'
 type ColumnWidths = GraphColumnWidths
 const EMPTY_THEME_SELECTION = new Set<string>()
@@ -196,6 +198,14 @@ export function GraphView({
   const [node, setNode] = useState<GraphNode | null>(null)
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null)
   const [vaultSearch, setVaultSearch] = useState<GraphNode[]>([])
+  /**
+   * Verdict du retrieval pour la recherche courante. `null` = pas de recherche en cours. `failed` est
+   * l'échec du CANAL, distinct des quatre états que le serveur sait rendre.
+   */
+  const [searchRetrieval, setSearchRetrieval] = useState<{
+    status: 'found' | 'empty' | 'invalid' | 'unavailable' | 'not-requested' | 'failed'
+    note: string
+  } | null>(null)
   const [file, setFile] = useState<{ path: string; content: string } | null>(null)
   const [fileErr, setFileErr] = useState('')
   const [expandingNodeId, setExpandingNodeId] = useState<string | null>(null)
@@ -293,17 +303,30 @@ export function GraphView({
       // Une recherche devenue inapplicable doit retirer immédiatement ses anciens résultats.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setVaultSearch([])
+      // …et son ancien verdict de retrieval avec eux, sinon la note survit à la question.
+      setSearchRetrieval(null)
       return
     }
     let current = true
     const timeout = window.setTimeout(() => {
       window.api
         .searchBrain(selected, query)
-        .then((results) => {
+        .then((envelope) => {
           if (!current) return
-          setVaultSearch(results.map((result) => ({ ...result, group: 0 })))
+          setVaultSearch(envelope.results.map((result) => ({ ...result, group: 0 })))
+          // Le STATUT du retrieval était jeté ici : `empty`, `invalid` et `unavailable` produisaient
+          // tous une liste vide muette. On le conserve pour pouvoir DIRE lequel des trois c'est.
+          setSearchRetrieval({ status: envelope.status, note: envelope.note })
         })
-        .catch(() => current && setVaultSearch([]))
+        .catch((error) => {
+          if (!current) return
+          // Une panne du canal n'est PAS « aucun résultat » : c'est le bug qu'on corrige.
+          setVaultSearch([])
+          setSearchRetrieval({
+            status: 'failed',
+            note: toBusinessError('Recherche indisponible.', error)
+          })
+        })
     }, 200)
     return () => {
       current = false
@@ -1535,6 +1558,17 @@ export function GraphView({
               : graph.nodes.length}
           </small>
         </button>
+        {/* Le verdict du Brain, DISTINCT du nombre de fiches locales : un serveur éteint et « le savoir
+            ne couvre pas la question » ne se disaient pas, ils se taisaient tous les deux. */}
+        {searchRetrieval && (
+          <p
+            className={`theme-sidebar__retrieval is-${searchRetrieval.status}`}
+            data-retrieval-status={searchRetrieval.status}
+            role={searchRetrieval.status === 'failed' ? 'alert' : undefined}
+          >
+            {searchRetrieval.note}
+          </p>
+        )}
         <div className="theme-list">
           {themeQuery.trim() && [...vaultSearch, ...catalogSearch.nodes].length > 0 && (
             <div className="node-search-results" aria-label="Fiches trouvées">
@@ -1774,6 +1808,38 @@ export function GraphView({
             <strong>{node.label}</strong>
             <span>Ouvrir le détail →</span>
           </button>
+        )}
+        {/* POSTE DE TRAVAIL du savoir : la revue de `inbox/` et le banc d'essai de récupération. Réservé
+            aux brains de type vault — un graphe graphify n'a ni boîte de réception ni retrieval. */}
+        {selectedBrain?.kind === 'vault' && (
+          <button
+            type="button"
+            className={`graph-workbench-button ${panelTab === 'workbench' ? 'is-active' : ''}`}
+            aria-label="Poste de travail du savoir"
+            aria-expanded={panelTab === 'workbench'}
+            title="Boîte de réception et banc d’essai de récupération"
+            onClick={() =>
+              setPanelTab((current) => (current === 'workbench' ? 'node' : 'workbench'))
+            }
+          >
+            ✦
+          </button>
+        )}
+        {panelTab === 'workbench' && selectedBrain?.kind === 'vault' && (
+          <div className="graph-workbench-popover">
+            <div className="graph-settings-popover__heading">
+              <strong>Savoir</strong>
+              <button
+                type="button"
+                onClick={() => setPanelTab('node')}
+                aria-label="Fermer le poste de travail"
+              >
+                ×
+              </button>
+            </div>
+            <KnowledgeInboxPanel brainPath={selected} onIndexChanged={refreshGraph} />
+            <BrainRetrievalBench brainPath={selected} />
+          </div>
         )}
         <button
           type="button"

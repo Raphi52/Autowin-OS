@@ -15,6 +15,8 @@ import type {
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
+import type { BrainSearchEnvelope } from '../main/brain-search-envelope'
+import type { InboxCandidate, InboxMove } from '../main/brain-inbox'
 import type { RunEntry } from '../main/dashboards/runs-scan'
 import type { CapabilityItem } from '../main/capability-controls'
 import type { SkillRegistryItem } from '../main/skill-registry'
@@ -291,11 +293,7 @@ interface ChatApi {
   >
   conversations: () => Promise<ConversationSummary[]>
   conversation: (id: string) => Promise<Conversation | null>
-  conversationsCreate: (p: {
-    title: string
-    category: string
-    provider: string
-  }) => Promise<{
+  conversationsCreate: (p: { title: string; category: string; provider: string }) => Promise<{
     id: string
     title: string
     category: string
@@ -424,24 +422,11 @@ interface ChatApi {
   loadBrainThemeNodes: (path: string, themeIds: string[]) => Promise<VizGraph['nodes']>
   loadBrainNeighborhood: (path: string, nodeId: string) => Promise<VizGraph>
   readNodeFile: (path: string) => Promise<{ path: string; content: string }>
-  searchBrain: (
-    path: string,
-    query: string
-  ) => Promise<
-    Array<{
-      id: string
-      label: string
-      file: string
-      themes: string[]
-      score: number
-      denseScore?: number
-      lexicalScore?: number
-      graphScore?: number
-      fusedScore?: number
-      relations: Array<{ type: string; target: string }>
-    }>
-  >
+  searchBrain: (path: string, query: string) => Promise<BrainSearchEnvelope>
   refreshBrain: (path: string) => Promise<{ ok: boolean }>
+  listInbox: (path: string) => Promise<InboxCandidate[]>
+  promoteInbox: (path: string, id: string) => Promise<InboxMove>
+  rejectInbox: (path: string, id: string) => Promise<InboxMove>
   listRuns: () => Promise<RunEntry[]>
   deleteRun: (path: string) => Promise<{ ok: boolean }>
 

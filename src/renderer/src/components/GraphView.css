@@ -1405,3 +1405,466 @@
   background: rgba(15, 15, 13, 0.94);
   color: var(--text-dim);
 }
+
+/* ==========================================================================
+   POSTE DE TRAVAIL DU SAVOIR — boîte de réception de `inbox/` et banc d'essai
+   de récupération. Ouvert par le bouton en pendant du réglage de visibilité,
+   dont il reprend la géométrie pour rester dans le même vocabulaire visuel.
+   La carte « Navigation Brain » réutilisée par le banc apporte ses propres
+   styles (ObservatoryView.css, classes globales) : rien n'est redéclaré ici.
+   ========================================================================== */
+
+.graph-workbench-button {
+  position: absolute;
+  z-index: 15;
+  top: 14px;
+  right: 54px;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #34404d;
+  border-radius: 7px;
+  background: rgba(8, 13, 20, 0.92);
+  color: #91a1b4;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.graph-workbench-button:hover,
+.graph-workbench-button.is-active {
+  border-color: #75d7ff;
+  color: #d9f5ff;
+  box-shadow: 0 0 12px rgba(117, 215, 255, 0.2);
+}
+
+.graph-workbench-popover {
+  position: absolute;
+  z-index: 14;
+  top: 53px;
+  right: 14px;
+  display: flex;
+  width: 430px;
+  max-width: calc(100% - 28px);
+  max-height: calc(100% - 72px);
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  padding-bottom: 12px;
+  border: 1px solid #34404d;
+  border-radius: 9px;
+  background: #000;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.5);
+}
+
+/* --- Boîte de réception ---------------------------------------------------- */
+
+.knowledge-inbox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 12px;
+}
+
+.knowledge-inbox__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #dce7f3;
+  font-size: 11px;
+}
+
+.knowledge-inbox__head > span {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.knowledge-inbox__head > strong {
+  color: #75d7ff;
+}
+
+.knowledge-inbox__head > button {
+  margin-left: auto;
+  padding: 3px 8px;
+  border: 1px solid #34404d;
+  border-radius: 6px;
+  background: rgba(8, 13, 20, 0.92);
+  color: #91a1b4;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.knowledge-inbox__error {
+  margin: 0;
+  padding: 7px 9px;
+  border: 1px solid #7a3340;
+  border-radius: 6px;
+  background: rgba(122, 51, 64, 0.16);
+  color: #ffc4cd;
+  font-size: 11px;
+}
+
+.knowledge-inbox__empty {
+  margin: 0;
+  color: #718094;
+  font-size: 11px;
+}
+
+.knowledge-inbox__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.knowledge-inbox__list > li {
+  border: 1px solid #202936;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.knowledge-inbox__list summary {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  color: #dce7f3;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.knowledge-inbox__type {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(117, 215, 255, 0.14);
+  color: #9fe3ff;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.knowledge-inbox__list summary > small {
+  color: #718094;
+  font-size: 10px;
+}
+
+/* Le doublon probable doit SAUTER AUX YEUX : c'est le signal que `inbox/` ne
+   porte pas côté serveur. */
+.knowledge-inbox__dup {
+  margin-left: auto;
+  padding: 1px 7px;
+  border: 1px solid #8a6a2a;
+  border-radius: 999px;
+  background: rgba(138, 106, 42, 0.2);
+  color: #ffd79a;
+  font-size: 9px;
+}
+
+.knowledge-inbox__meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  margin: 0;
+  padding: 0 10px 8px;
+  font-size: 10px;
+}
+
+.knowledge-inbox__meta dt {
+  color: #718094;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.knowledge-inbox__meta dd {
+  margin: 0;
+  color: #c3d1e0;
+  overflow-wrap: anywhere;
+}
+
+.knowledge-inbox__meta code {
+  color: #9fe3ff;
+}
+
+.knowledge-inbox__sha {
+  margin-left: 7px;
+  color: #718094;
+}
+
+/* Un sha depasse n'est pas une erreur, c'est une alerte de fraicheur. */
+.knowledge-inbox__meta dd[data-sha-state="stale"] .knowledge-inbox__sha {
+  color: #ffd79a;
+}
+
+.knowledge-inbox__meta dd[data-sha-state="current"] .knowledge-inbox__sha {
+  color: #8fdca4;
+}
+
+.knowledge-inbox__source-problem {
+  display: block;
+  color: #ffc4cd;
+  font-style: normal;
+}
+
+.knowledge-inbox__twins {
+  margin: 0 10px 8px;
+  padding: 7px 9px;
+  border: 1px solid #8a6a2a;
+  border-radius: 6px;
+  background: rgba(138, 106, 42, 0.12);
+  color: #ffd79a;
+  font-size: 10px;
+}
+
+.knowledge-inbox__twins ul {
+  margin: 4px 0;
+  padding-left: 16px;
+}
+
+.knowledge-inbox__twins small {
+  display: block;
+  color: #b99a63;
+}
+
+.knowledge-inbox__body {
+  max-height: 180px;
+  margin: 0 10px 8px;
+  overflow: auto;
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #c3d1e0;
+  font-size: 10px;
+  white-space: pre-wrap;
+}
+
+.knowledge-inbox__actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  padding: 0 10px 10px;
+}
+
+.knowledge-inbox__actions button {
+  padding: 4px 11px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.knowledge-inbox__actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.knowledge-inbox__actions .is-promote {
+  border: 1px solid #2f7d55;
+  background: rgba(47, 125, 85, 0.24);
+  color: #b6f2cd;
+}
+
+.knowledge-inbox__actions .is-reject {
+  border: 1px solid #7a3340;
+  background: rgba(122, 51, 64, 0.2);
+  color: #ffc4cd;
+}
+
+.knowledge-inbox__actions > small {
+  flex-basis: 100%;
+  color: #718094;
+  font-size: 9px;
+}
+
+/* --- Banc d'essai de recuperation ------------------------------------------ */
+
+.brain-bench {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 0;
+  border-top: 1px solid #202936;
+}
+
+.brain-bench__head {
+  display: flex;
+  flex-direction: column;
+  color: #dce7f3;
+  font-size: 11px;
+}
+
+.brain-bench__head > span {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.brain-bench__head > small {
+  color: #718094;
+  font-size: 10px;
+}
+
+.brain-bench__ask {
+  display: flex;
+  gap: 6px;
+}
+
+.brain-bench__ask input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid #34404d;
+  border-radius: 6px;
+  background: rgba(8, 13, 20, 0.92);
+  color: #dce7f3;
+  font-size: 11px;
+}
+
+.brain-bench__ask button {
+  padding: 5px 11px;
+  border: 1px solid #34404d;
+  border-radius: 6px;
+  background: rgba(117, 215, 255, 0.14);
+  color: #9fe3ff;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.brain-bench__ask button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Chaque etat de retrieval a SA couleur : c'est tout l'objet du correctif. */
+.brain-bench__status {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 7px 9px;
+  border: 1px solid #202936;
+  border-radius: 6px;
+  font-size: 10px;
+}
+
+.brain-bench__status > strong {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.brain-bench__status > span {
+  color: #91a1b4;
+}
+
+.brain-bench__status.is-empty {
+  border-color: #34404d;
+  background: rgba(255, 255, 255, 0.03);
+  color: #c3d1e0;
+}
+
+.brain-bench__status.is-unavailable {
+  border-color: #8a6a2a;
+  background: rgba(138, 106, 42, 0.16);
+  color: #ffd79a;
+}
+
+.brain-bench__status.is-failed {
+  border-color: #7a3340;
+  background: rgba(122, 51, 64, 0.16);
+  color: #ffc4cd;
+}
+
+.brain-budget {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.brain-budget > li {
+  display: grid;
+  grid-template-columns: 88px 1fr auto;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 10px;
+}
+
+.brain-budget-label {
+  color: #718094;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.brain-budget-gauge {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.brain-budget-gauge > i {
+  display: block;
+  height: 100%;
+  background: #75d7ff;
+}
+
+.brain-budget-figures {
+  color: #c3d1e0;
+  font-variant-numeric: tabular-nums;
+}
+
+.brain-budget > li.is-truncated .brain-budget-gauge > i {
+  background: #e0a44a;
+}
+
+.brain-budget-cut,
+.brain-budget-ok {
+  grid-column: 2 / -1;
+}
+
+.brain-budget-cut {
+  color: #ffd79a;
+}
+
+.brain-budget-ok {
+  color: #718094;
+}
+
+.brain-bench__cut {
+  margin: 0;
+  color: #ffd79a;
+  font-size: 10px;
+}
+
+.brain-bench__local {
+  margin: 0;
+  color: #718094;
+  font-size: 10px;
+}
+
+/* Verdict du retrieval dans la colonne de recherche : la note qui manquait au
+   setVaultSearch([]) muet. */
+.theme-sidebar__retrieval {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border: 1px solid #202936;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #91a1b4;
+  font-size: 10px;
+}
+
+.theme-sidebar__retrieval.is-unavailable {
+  border-color: #8a6a2a;
+  color: #ffd79a;
+}
+
+.theme-sidebar__retrieval.is-failed {
+  border-color: #7a3340;
+  color: #ffc4cd;
+}

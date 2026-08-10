@@ -88,7 +88,11 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
       return genericGuard || specializedGuard ? [] : [channel]
     })
 
-    expect(handlers).toHaveLength(129)
+    // 132 depuis le 2026-08-10 : `os:listInbox`, `os:promoteInbox` et `os:rejectInbox` (boîte de
+    // réception du savoir dans la vue Knowledge). Les trois passent par `assertTrustedRendererSender`,
+    // donc `unguarded` reste vide — c'est cette seconde assertion qui porte la garantie de sécurité,
+    // le compte n'étant là que pour forcer une relecture à chaque nouveau canal.
+    expect(handlers).toHaveLength(132)
     expect(unguarded).toEqual([])
   })
 

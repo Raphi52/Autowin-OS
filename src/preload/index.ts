@@ -27,6 +27,8 @@ import type { TicketCreateIpcRequest, TicketGetIpcRequest } from '../main/ticket
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
+import type { BrainSearchEnvelope } from '../main/brain-search-envelope'
+import type { InboxCandidate, InboxMove } from '../main/brain-inbox'
 import type { RunEntry } from '../main/dashboards/runs-scan'
 import type { CapabilityItem } from '../main/capability-controls'
 import type { SkillRegistryItem } from '../main/skill-registry'
@@ -553,25 +555,16 @@ const api = {
     ipcRenderer.invoke('os:loadBrainNeighborhood', path, nodeId),
   readNodeFile: (path: string): Promise<{ path: string; content: string }> =>
     ipcRenderer.invoke('os:readNodeFile', path),
-  searchBrain: (
-    path: string,
-    query: string
-  ): Promise<
-    Array<{
-      id: string
-      label: string
-      file: string
-      themes: string[]
-      score: number
-      denseScore?: number
-      lexicalScore?: number
-      graphScore?: number
-      fusedScore?: number
-      relations: Array<{ type: string; target: string }>
-    }>
-  > => ipcRenderer.invoke('os:searchBrain', path, query),
+  searchBrain: (path: string, query: string): Promise<BrainSearchEnvelope> =>
+    ipcRenderer.invoke('os:searchBrain', path, query),
   refreshBrain: (path: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('os:refreshBrain', path),
+  // Boîte de réception du savoir : lister les candidats de `inbox/`, puis la décision HUMAINE.
+  listInbox: (path: string): Promise<InboxCandidate[]> => ipcRenderer.invoke('os:listInbox', path),
+  promoteInbox: (path: string, id: string): Promise<InboxMove> =>
+    ipcRenderer.invoke('os:promoteInbox', path, id),
+  rejectInbox: (path: string, id: string): Promise<InboxMove> =>
+    ipcRenderer.invoke('os:rejectInbox', path, id),
   listRuns: (): Promise<
     Array<{
       subject: string
