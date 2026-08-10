@@ -86,7 +86,28 @@ function proofFixture(value: unknown): { source: TicketSourceProfile; page: Tick
           const rawRelation = relation as Record<string, unknown>
           return {
             kind: requiredText(rawRelation.kind, 'relation.kind'),
-            target: requiredText(rawRelation.target, 'relation.target')
+            target: requiredText(rawRelation.target, 'relation.target'),
+            // Titre OPTIONNEL : une relation sans titre reste un id nu, jamais un titre inventé.
+            ...(typeof rawRelation.title === 'string' && rawRelation.title
+              ? { title: rawRelation.title.slice(0, 255) }
+              : {})
+          }
+        })
+      : []
+    const comments = Array.isArray(item.comments)
+      ? item.comments.slice(-20).map((comment) => {
+          if (!comment || typeof comment !== 'object' || Array.isArray(comment)) {
+            throw new Error('Commentaire de fixture Tickets invalide')
+          }
+          const rawComment = comment as Record<string, unknown>
+          return {
+            text: requiredText(rawComment.text, 'comment.text').slice(0, 2_000),
+            ...(typeof rawComment.author === 'string' && rawComment.author
+              ? { author: rawComment.author.slice(0, 320) }
+              : {}),
+            ...(typeof rawComment.createdAt === 'string' && rawComment.createdAt
+              ? { createdAt: rawComment.createdAt.slice(0, 40) }
+              : {})
           }
         })
       : []
@@ -106,6 +127,7 @@ function proofFixture(value: unknown): { source: TicketSourceProfile; page: Tick
         ? { description: item.description.slice(0, 10_000) }
         : {}),
       relations,
+      ...(comments.length ? { comments } : {}),
       fields: { __autowinTicketsProofFixture: true }
     }
   })

@@ -1,7 +1,18 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { TicketItem } from '../../../shared/tickets'
 import {
   AUTO_MODE_CAP_PER_CYCLE,
+  AUTO_MODE_DEFAULTS,
+  AUTO_MODE_LIMITS,
+  describeAutoModeCost,
+  isAutoModeStopped,
+  loadAutoModeSettings,
+  normalizeAutoModeSettings,
+  onAutoModeStop,
+  remainingSessionRuns,
+  resumeAutoMode,
+  saveAutoModeSettings,
+  stopAutoModeNow,
   loadSeen,
   pickIncomingTickets,
   primeSeen,
@@ -124,5 +135,107 @@ describe('registre persiste', () => {
       }
     }
     expect(() => saveSeen(throwing, new Set(['a']))).not.toThrow()
+  })
+})
+
+describe('#7 garde-fous VISIBLES du mode auto', () => {
+  const memoryStorage = (): Pick<Storage, 'getItem' | 'setItem'> & { value?: string } => {
+    const store: { value?: string } = {}
+    return {
+      value: undefined,
+      getItem: () => store.value ?? null,
+      setItem: (_key: string, value: string) => {
+        store.value = value
+      }
+    }
+  }
+
+  it('les réglages par défaut sont explicites (plus de constante cachée)', () => {
+    expect(AUTO_MODE_DEFAULTS.concurrency).toBe(3)
+    expect(AUTO_MODE_DEFAULTS.capPerCycle).toBe(AUTO_MODE_CAP_PER_CYCLE)
+    expect(AUTO_MODE_DEFAULTS.maxRunsPerSession).toBeGreaterThan(0)
+  })
+
+  it('ramène TOUT réglage hors bornes dans les bornes dures', () => {
+    expect(normalizeAutoModeSettings({ concurrency: 99 }).concurrency).toBe(
+      AUTO_MODE_LIMITS.concurrency.max
+    )
+    expect(normalizeAutoModeSettings({ concurrency: 0 }).concurrency).toBe(
+      AUTO_MODE_LIMITS.concurrency.min
+    )
+    expect(normalizeAutoModeSettings({ capPerCycle: 10_000 }).capPerCycle).toBe(
+      AUTO_MODE_LIMITS.capPerCycle.max
+    )
+    expect(normalizeAutoModeSettings({ maxRunsPerSession: -5 }).maxRunsPerSession).toBe(
+      AUTO_MODE_LIMITS.maxRunsPerSession.min
+    )
+    expect(normalizeAutoModeSettings({ concurrency: 'beaucoup' })).toEqual(AUTO_MODE_DEFAULTS)
+    expect(normalizeAutoModeSettings(null)).toEqual(AUTO_MODE_DEFAULTS)
+  })
+
+  it('persiste les réglages normalisés et les relit', () => {
+    const storage = memoryStorage()
+    const saved = saveAutoModeSettings(storage, {
+      concurrency: 42,
+      capPerCycle: 2,
+      maxRunsPerSession: 7
+    })
+    expect(saved.concurrency).toBe(AUTO_MODE_LIMITS.concurrency.max)
+    expect(loadAutoModeSettings(storage)).toEqual(saved)
+  })
+
+  it('réglages illisibles ⇒ défauts, jamais un plafond absent', () => {
+    expect(loadAutoModeSettings({ getItem: () => '{pas du json' })).toEqual(AUTO_MODE_DEFAULTS)
+  })
+
+  it('annonce le COÛT avant de lancer', () => {
+    const text = describeAutoModeCost({ concurrency: 2, capPerCycle: 3, maxRunsPerSession: 10 }, 5)
+    expect(text).toContain('5 run(s)')
+    expect(text).toContain('2 en parallèle')
+    expect(text).toContain('max 3/cycle')
+    expect(text).toContain('10 run(s) payants')
+  })
+
+  it('le plafond de session borne les runs restants et tombe à zéro', () => {
+    const settings = { concurrency: 3, capPerCycle: 3, maxRunsPerSession: 5 }
+    expect(remainingSessionRuns(settings, 0)).toBe(5)
+    expect(remainingSessionRuns(settings, 4)).toBe(1)
+    expect(remainingSessionRuns(settings, 5)).toBe(0)
+    expect(remainingSessionRuns(settings, 99)).toBe(0)
+  })
+})
+
+describe('#7 kill-switch global', () => {
+  afterEach(() => resumeAutoMode())
+
+  const items = [ticket('101'), ticket('102')]
+
+  it('arrêt demandé ⇒ AUCUN ticket retenu, et rien n’est marqué vu', () => {
+    expect(isAutoModeStopped()).toBe(false)
+    stopAutoModeNow()
+    expect(isAutoModeStopped()).toBe(true)
+    const selection = pickIncomingTickets(items, new Set())
+    expect(selection.toTreat).toEqual([])
+    expect(selection.seenAdditions).toEqual([])
+    expect(selection.deferred).toBe(0)
+  })
+
+  it('la reprise est EXPLICITE : les entrants redeviennent éligibles', () => {
+    stopAutoModeNow()
+    expect(pickIncomingTickets(items, new Set()).toTreat).toEqual([])
+    resumeAutoMode()
+    expect(pickIncomingTickets(items, new Set()).toTreat).toHaveLength(2)
+  })
+
+  it('notifie les abonnés au moment de l’arrêt, puis se désabonne proprement', () => {
+    let calls = 0
+    const off = onAutoModeStop(() => {
+      calls += 1
+    })
+    stopAutoModeNow()
+    expect(calls).toBe(1)
+    off()
+    stopAutoModeNow()
+    expect(calls).toBe(1)
   })
 })

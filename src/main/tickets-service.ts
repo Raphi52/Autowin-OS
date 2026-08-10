@@ -68,6 +68,50 @@ const MAX_ASSIGNEE_LENGTH = 320
  */
 const WORK_ITEM_TYPE_PATTERN = /^[A-Za-z][A-Za-z0-9 _-]{0,63}$/
 
+/**
+ * Bornes de l'ENRICHISSEMENT remonté du fournisseur (discussion + titre des relations).
+ *
+ * La discussion d'une fiche est souvent l'information décisive — mais elle est aussi le champ le
+ * moins borné du fournisseur (des dizaines de messages, pièces jointes inlinées). Elle traverse
+ * l'IPC puis alimente un prompt au budget fixe : on la borne ICI, à la frontière, plutôt que de
+ * laisser chaque consommateur se défendre. On garde les messages les plus RÉCENTS.
+ */
+const MAX_COMMENTS = 20
+const MAX_COMMENT_TEXT = 2_000
+const MAX_RELATION_TITLE = 255
+
+function normalizeComments(item: TicketItem): TicketItem['comments'] {
+  if (!Array.isArray(item.comments) || item.comments.length === 0) return undefined
+  return item.comments
+    .filter((comment) => comment && typeof comment.text === 'string' && comment.text.trim())
+    .slice(-MAX_COMMENTS)
+    .map((comment) => ({
+      ...(comment.id ? { id: String(comment.id).slice(0, 100) } : {}),
+      ...(comment.author ? { author: String(comment.author).slice(0, 320) } : {}),
+      ...(comment.createdAt ? { createdAt: String(comment.createdAt).slice(0, 40) } : {}),
+      text: comment.text.trim().slice(0, MAX_COMMENT_TEXT)
+    }))
+}
+
+/**
+ * Normalise une fiche remontée par un adaptateur avant de la rendre au renderer : discussion bornée
+ * et titre de relation borné. Une relation sans titre reste une relation valide (id nu) — on
+ * n'invente jamais de titre.
+ */
+export function normalizeTicketItem(item: TicketItem): TicketItem {
+  const comments = normalizeComments(item)
+  const relations = item.relations?.map((relation) =>
+    relation.title
+      ? { ...relation, title: String(relation.title).trim().slice(0, MAX_RELATION_TITLE) }
+      : relation
+  )
+  return {
+    ...item,
+    ...(relations ? { relations } : {}),
+    ...(comments ? { comments } : {})
+  }
+}
+
 export class TicketService {
   constructor(private readonly dependencies: TicketServiceDependencies) {}
 
@@ -134,7 +178,7 @@ export class TicketService {
     }
 
     const credential = await this.resolveCredential(source)
-    return this.dependencies.registry.list(
+    const page = await this.dependencies.registry.list(
       {
         source,
         ...(value.cursor ? { cursor: value.cursor } : {}),
@@ -144,6 +188,7 @@ export class TicketService {
       },
       { ...credential, ...(signal ? { signal } : {}) }
     )
+    return { ...page, items: page.items.map(normalizeTicketItem) }
   }
 
   /**
@@ -163,9 +208,11 @@ export class TicketService {
       throw new Error(`Fournisseur Tickets non supporté : ${source.provider}`)
     }
     const credential = await this.resolveCredential(source)
-    return this.dependencies.registry.get(
-      { source, id },
-      { ...credential, ...(signal ? { signal } : {}) }
+    return normalizeTicketItem(
+      await this.dependencies.registry.get(
+        { source, id },
+        { ...credential, ...(signal ? { signal } : {}) }
+      )
     )
   }
 
