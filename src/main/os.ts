@@ -352,7 +352,8 @@ export class AutowinOS {
                 projectPublication: {
                   baseSha: publication.baseSha,
                   publishedSha: publication.agentSha
-                }
+                },
+                recoveredWithoutBrainBaseline: true
               })
             }
             const evidence = preparedCommitMutationEvidence(

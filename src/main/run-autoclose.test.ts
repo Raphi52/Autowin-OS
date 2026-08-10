@@ -265,7 +265,9 @@ describe('travail DÉJÀ COMMITÉ par la fusion du worktree (arbre propre)', () 
       files: 1
     })
     expect(
-      (await run('git', ['rev-parse', 'refs/heads/auto/run-conventional'], { cwd: remote })).stdout.trim()
+      (
+        await run('git', ['rev-parse', 'refs/heads/auto/run-conventional'], { cwd: remote })
+      ).stdout.trim()
     ).toBe(publishedSha)
   })
 
@@ -338,6 +340,38 @@ describe('travail DÉJÀ COMMITÉ par la fusion du worktree (arbre propre)', () 
 })
 
 describe('dossier NON SUIVI (le cas Brain : notes déposées dans inbox/)', () => {
+  it('une reprise sans baseline publie le projet atteste mais ne touche jamais au Brain partage', async () => {
+    const { repo } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseSha = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+    const brainHead = (await realGit(['rev-parse', 'HEAD'], brain)).trim()
+    writeFileSync(join(repo, 'recovered.txt'), 'publication recuperee\n')
+    await realGit(['add', 'recovered.txt'], repo)
+    await realGit(['commit', '-m', 'feat: recovered project'], repo)
+    const publishedSha = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+    writeFileSync(join(brain, 'brouillon-autrui.md'), '# ne jamais aspirer\n')
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-recovered-safe',
+      task: 'reprend le projet',
+      projectRepo: repo,
+      brainRepo: brain,
+      projectPublication: { baseSha, publishedSha },
+      recoveredWithoutBrainBaseline: true,
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({ status: 'pushed', branch: 'auto/run-recovered-safe' })
+    expect(report.brain).toMatchObject({
+      status: 'skipped',
+      reason: 'recovery-baseline-missing'
+    })
+    expect((await realGit(['rev-parse', 'HEAD'], brain)).trim()).toBe(brainHead)
+    expect(await realGit(['status', '--porcelain', '-uall'], brain)).toContain(
+      'brouillon-autrui.md'
+    )
+  })
+
   it('publie la note du run sans emporter le brouillon d’une autre session', async () => {
     const { repo } = await repoWithRemote()
     const brain = (await repoWithRemote()).repo

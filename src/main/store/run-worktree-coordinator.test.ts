@@ -595,12 +595,14 @@ describe('RunWorktreeCoordinator (flip live)', () => {
         finishPush = resolve
       })
       const onRecoveredPublication = vi.fn(() => pendingPush)
+      const onActivity = vi.fn()
 
       new RunWorktreeCoordinator({
         manager: fakeManager({ listAgentIds: () => [] }),
         stateStore,
         nowFn: () => 20,
-        onRecoveredPublication
+        onRecoveredPublication,
+        onActivity
       })
 
       expect(onRecoveredPublication).toHaveBeenCalledWith({
@@ -611,9 +613,11 @@ describe('RunWorktreeCoordinator (flip live)', () => {
         agentSha: PUBLISHED_SHA
       })
       expect(stateStore.get(runId)?.causalPublicationDeliveredAtMs).toBeUndefined()
+      const eventsBeforePush = onActivity.mock.calls.length
 
       finishPush()
       await vi.waitFor(() => expect(stateStore.get(runId)?.causalPublicationDeliveredAtMs).toBe(20))
+      expect(onActivity.mock.calls.length).toBeGreaterThan(eventsBeforePush)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

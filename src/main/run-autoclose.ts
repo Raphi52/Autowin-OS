@@ -41,6 +41,8 @@ export type AutoCloseResult =
         | 'secret-detected'
         | 'no-remote'
         | 'invalid-publication-range'
+        /** Reprise legacy : aucune preuve durable ne permet d'attribuer le dirty Brain au run. */
+        | 'recovery-baseline-missing'
         /** L'historique à publier contient un commit qui n'appartient pas à ce run. */
         | 'concurrent-commits'
       detail?: string
@@ -317,6 +319,8 @@ export async function closeGreenRunOnDisk(input: {
   baseline?: Readonly<CloseBaseline>
   /** Publication projet attestée par le moteur worktree ; elle prime sur HEAD et le dirty courant. */
   projectPublication?: Readonly<GitPublicationRange>
+  /** Après crash sans baseline Brain durable, interdit toute attribution opportuniste du dirty. */
+  recoveredWithoutBrainBaseline?: boolean
   runGit?: GitRunner
 }): Promise<AutoCloseReport> {
   const runGit: GitRunner = input.runGit ?? (await defaultGitRunner())
@@ -366,11 +370,9 @@ export async function closeGreenRunOnDisk(input: {
         input.baseline?.project ?? [],
         input.baseline?.projectHead
       )
-  const brain = await closeScoped(
-    input.brainRepo,
-    input.baseline?.brain ?? [],
-    input.baseline?.brainHead
-  )
+  const brain: AutoCloseResult = input.recoveredWithoutBrainBaseline
+    ? { status: 'skipped', reason: 'recovery-baseline-missing' }
+    : await closeScoped(input.brainRepo, input.baseline?.brain ?? [], input.baseline?.brainHead)
 
   return { runId: input.runId, branch, project, brain, at: new Date().toISOString() }
 }

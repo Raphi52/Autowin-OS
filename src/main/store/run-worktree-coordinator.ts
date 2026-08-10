@@ -1275,6 +1275,7 @@ export class RunWorktreeCoordinator {
       const acknowledge = (): void => {
         tracked.causalPublicationDeliveredAtMs = this.now()
         this.persist(tracked, 'green', 'complete', tracked.detail)
+        this.emit()
       }
       if (delivery && typeof delivery.then === 'function') {
         void delivery.then(acknowledge).catch(() => undefined)

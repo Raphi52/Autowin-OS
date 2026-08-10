@@ -62,6 +62,7 @@ function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): strin
   const reasons: Record<string, string> = {
     'no-changes': 'aucun changement',
     'no-remote': 'aucun distant',
+    'recovery-baseline-missing': 'baseline de reprise absente',
     'protected-branch': 'branche protégée',
     'secret-detected': 'secret détecté',
     'concurrent-commits': 'commits concurrents',
