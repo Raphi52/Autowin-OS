@@ -7,6 +7,15 @@ import './DomainShell.css'
 
 type PreflightResult = Awaited<ReturnType<typeof window.api.recheckPreflight>>
 
+/** Providers attendus par l'app — l'état réel vient de l'IPC existant `providerStatus`. */
+const KNOWN_PROVIDERS = ['claude', 'codex', 'kimi', 'gemini'] as const
+
+interface ProviderRow {
+  provider: string
+  status: string
+  detail?: string
+}
+
 export function SettingsView({
   active,
   section,
@@ -21,9 +30,16 @@ export function SettingsView({
   const [error, setError] = useState<string | null>(null)
   const [repairing, setRepairing] = useState<string | null>(null)
 
-  const recheck = useCallback(async () => {
+  const [providers, setProviders] = useState<ProviderRow[] | null>(null)
+  const [providersError, setProvidersError] = useState<string | null>(null)
+
+  /**
+   * `keepError` : le recheck déclenché par un échec de réparation ne doit PAS effacer le message
+   * d'erreur qui vient d'être posé — sinon l'échec devient invisible pour l'utilisateur.
+   */
+  const recheck = useCallback(async (options?: { keepError?: boolean }) => {
     setChecking(true)
-    setError(null)
+    if (!options?.keepError) setError(null)
     try {
       setPreflight(await window.api.recheckPreflight(true))
     } catch {
@@ -41,7 +57,6 @@ export function SettingsView({
    * live (désabonnement au démontage).
    */
   useEffect(() => {
-    if (section !== 'preflight') return
     let alive = true
     void (async () => {
       try {
@@ -56,24 +71,54 @@ export function SettingsView({
       alive = false
       off?.()
     }
+  }, [])
+
+  /** Providers : lecture seule via l'IPC existant `providerStatus` (aucun IPC inventé). */
+  useEffect(() => {
+    if (section !== 'providers') return
+    let alive = true
+    void (async () => {
+      const load = window.api?.providerStatus
+      if (typeof load !== 'function') {
+        if (alive) setProvidersError("L'état des providers n'est pas exposé par l'application.")
+        return
+      }
+      try {
+        const rows = await load()
+        if (alive) {
+          setProviders(rows as ProviderRow[])
+          setProvidersError(null)
+        }
+      } catch {
+        if (alive) setProvidersError("La lecture de l'état des providers a échoué.")
+      }
+    })()
+    return () => {
+      alive = false
+    }
   }, [section])
 
   const repair = useCallback(
     async (checkId: string) => {
       setRepairing(checkId)
       setError(null)
+      let repairFailed = false
       try {
         await window.api?.repairPreflight?.(checkId)
       } catch {
+        repairFailed = true
         setError('La réparation a échoué. Suivez la consigne affichée puis réessayez.')
       } finally {
         setRepairing(null)
         // Le re-diagnostic tranche : on n'affirme jamais qu'un prérequis est réparé.
-        await recheck()
+        // …mais il n'efface pas l'échec de réparation qui vient d'être signalé.
+        await recheck({ keepError: repairFailed })
       }
     },
     [recheck]
   )
+
+  const preflightAlert = preflight ? !preflight.ok || preflight.checks.some((c) => !c.ok) : false
 
   return (
     <section className="domain-shell" data-testid="settings-view">
@@ -104,17 +149,77 @@ export function SettingsView({
         </button>
         <button
           type="button"
+          className={section === 'providers' ? 'is-active' : ''}
+          aria-pressed={section === 'providers'}
+          onClick={() => onSectionChange('providers')}
+        >
+          Providers
+        </button>
+        <button
+          type="button"
           className={section === 'preflight' ? 'is-active' : ''}
           aria-pressed={section === 'preflight'}
           onClick={() => onSectionChange('preflight')}
         >
           Diagnostic
+          {preflightAlert && (
+            <span
+              className="domain-badge-alert"
+              data-testid="settings-preflight-alert"
+              title="Un prérequis est en échec"
+              aria-label="Un prérequis est en échec"
+            >
+              !
+            </span>
+          )}
         </button>
       </nav>
       <div className="domain-content">
         {section === 'capabilities' && <CapabilitiesView active={active} />}
         {section === 'budget' && <OrchestrationBudgetSettings />}
         {section === 'behaviour' && <BehaviourView />}
+        {section === 'providers' && (
+          <section className="settings-providers surface-panel" aria-label="Providers">
+            <header>
+              <div>
+                <span className="domain-eyebrow">Fournisseurs</span>
+                <h2>Providers</h2>
+              </div>
+            </header>
+            {providersError && (
+              <p className="domain-warning" role="alert">
+                {providersError}
+              </p>
+            )}
+            <ul className="settings-providers-list">
+              {KNOWN_PROVIDERS.map((name) => {
+                const row = providers?.find((entry) => entry.provider === name)
+                return (
+                  <li key={name} data-testid={`settings-provider-${name}`}>
+                    <strong>{name}</strong>
+                    <span>{row ? row.status : 'non configuré'}</span>
+                    {row?.detail && <span>{row.detail}</span>}
+                  </li>
+                )
+              })}
+              {providers
+                ?.filter(
+                  (entry) => !(KNOWN_PROVIDERS as readonly string[]).includes(entry.provider)
+                )
+                .map((entry) => (
+                  <li key={entry.provider} data-testid={`settings-provider-${entry.provider}`}>
+                    <strong>{entry.provider}</strong>
+                    <span>{entry.status}</span>
+                    {entry.detail && <span>{entry.detail}</span>}
+                  </li>
+                ))}
+            </ul>
+            <p className="domain-hint">
+              Lecture seule : la configuration (connexion, test, mode) se pilote depuis la page
+              Routeur.
+            </p>
+          </section>
+        )}
         {section === 'preflight' && (
           <section
             className="settings-preflight surface-panel"

@@ -11,7 +11,7 @@ export const APP_DESTINATIONS = [
 
 export type AppDestination = (typeof APP_DESTINATIONS)[number]['id']
 export type AgentStudioSection = 'topology' | 'routing' | 'workflows'
-export type SettingsSection = 'capabilities' | 'budget' | 'behaviour' | 'preflight'
+export type SettingsSection = 'capabilities' | 'budget' | 'behaviour' | 'providers' | 'preflight'
 
 export interface AppLocation {
   destination: AppDestination

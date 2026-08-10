@@ -141,6 +141,115 @@ describe('SettingsView diagnostic', () => {
     expect(recheckPreflight).toHaveBeenCalledWith(true)
   })
 
+  it("conserve l'erreur de réparation malgré le recheck qui suit", async () => {
+    const getPreflight = vi.fn().mockResolvedValue({
+      ok: false,
+      summary: 'Un prérequis manque.',
+      checks: [{ id: 'brain', label: 'Brain server', ok: false }]
+    })
+    const repairPreflight = vi.fn().mockRejectedValue(new Error('boom'))
+    const recheckPreflight = vi.fn().mockResolvedValue({
+      ok: false,
+      summary: 'Un prérequis manque.',
+      checks: [{ id: 'brain', label: 'Brain server', ok: false }]
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { getPreflight, recheckPreflight, repairPreflight, onPreflight: () => () => {} }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    mounted.push({ root, container })
+
+    await act(async () => {
+      root.render(
+        createElement(SettingsView, {
+          active: true,
+          section: 'preflight',
+          onSectionChange: vi.fn()
+        })
+      )
+    })
+    const repairButton = [...container.querySelectorAll('button')].find(
+      (candidate) => candidate.textContent === 'Réparer'
+    )
+    await act(async () => repairButton?.click())
+
+    expect(recheckPreflight).toHaveBeenCalledWith(true)
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'La réparation a échoué'
+    )
+  })
+
+  it('badge le tab Diagnostic quand un prérequis est en échec, même hors section preflight', async () => {
+    const getPreflight = vi.fn().mockResolvedValue({
+      ok: false,
+      summary: 'Un prérequis manque.',
+      checks: [{ id: 'brain', label: 'Brain server', ok: false }]
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        getPreflight,
+        recheckPreflight: vi.fn(),
+        onPreflight: () => () => {}
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    mounted.push({ root, container })
+
+    await act(async () => {
+      root.render(
+        createElement(SettingsView, { active: true, section: 'budget', onSectionChange: vi.fn() })
+      )
+    })
+
+    expect(getPreflight).toHaveBeenCalled()
+    expect(container.querySelector('[data-testid="settings-preflight-alert"]')).toBeTruthy()
+  })
+
+  it('liste les providers en lecture seule depuis providerStatus', async () => {
+    const providerStatus = vi.fn().mockResolvedValue([
+      { provider: 'codex', status: 'authenticated', testable: false },
+      { provider: 'claude', status: 'installed-untested', testable: true }
+    ])
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        providerStatus,
+        getPreflight: vi.fn().mockResolvedValue(null),
+        recheckPreflight: vi.fn(),
+        onPreflight: () => () => {}
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    mounted.push({ root, container })
+
+    await act(async () => {
+      root.render(
+        createElement(SettingsView, {
+          active: true,
+          section: 'providers',
+          onSectionChange: vi.fn()
+        })
+      )
+    })
+
+    expect(providerStatus).toHaveBeenCalled()
+    expect(
+      container.querySelector('[data-testid="settings-provider-codex"]')?.textContent
+    ).toContain('authenticated')
+    expect(
+      container.querySelector('[data-testid="settings-provider-kimi"]')?.textContent
+    ).toContain('non configuré')
+    expect(container.querySelector('[data-testid="settings-provider-gemini"]')).toBeTruthy()
+  })
+
   it('rend une alerte quand le recheck échoue', async () => {
     const recheckPreflight = vi.fn().mockRejectedValue(new Error('boom'))
     Object.defineProperty(window, 'api', {
