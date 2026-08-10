@@ -983,7 +983,20 @@ export class AppCommandBus {
                   } as OrchestrationStep
                 })
               }
-              if (lifecycle.stage === 'closure') terminalLifecycle = lifecycle
+              if (lifecycle.stage === 'closure') {
+                terminalLifecycle = lifecycle
+                // Le lifecycle terminal est le premier verdict durable du moteur. Un commit peut
+                // redémarrer Electron avant que runTask retourne : attendre ce retour laissait alors
+                // le RUN.md ouvert malgré une clôture déjà acquise dans la trace.
+                if (runPath && lifecycle.closure.status !== 'open') {
+                  closeConvRun(
+                    runPath,
+                    lifecycle.closure.status !== 'red',
+                    `Cycle de vie terminal: ${lifecycle.closure.status} (${lifecycle.closure.totalDurationMs} ms).`
+                  )
+                  this.broadcast({ type: 'refresh', scope: 'workflows' })
+                }
+              }
               persistRunLifecycle(
                 lifecycle,
                 {

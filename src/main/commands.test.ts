@@ -4,7 +4,7 @@ import { AppCommandBus, isolateWatchdogPromptPaths } from './commands'
 import { APP_DESTINATIONS } from '../shared/navigation'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import {
   readConversationTurnFileMutations,
   readCurrentConversationPathOwnership
@@ -200,6 +200,56 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
       expect(events.some((event) => event.run?.stage === 'closure')).toBe(true)
     } finally {
       rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('clot le RUN des le lifecycle terminal sans attendre le retour de runTask', async () => {
+    const os = fakeOs()
+    const broadcasts: Array<Record<string, unknown>> = []
+    let releaseRunTask!: () => void
+    let reportClosure!: () => void
+    const runTaskReleased = new Promise<void>((resolve) => {
+      releaseRunTask = resolve
+    })
+    const closureReported = new Promise<void>((resolve) => {
+      reportClosure = resolve
+    })
+    os.runTask = async (...args: unknown[]) => {
+      const onLifecycle = args[11] as (event: unknown) => void
+      onLifecycle({
+        runId: 'run-terminal-before-return',
+        timestampMs: 1,
+        stage: 'closure',
+        closure: { status: 'green', totalDurationMs: 12, totalCostUsd: 0 }
+      })
+      reportClosure()
+      await runTaskReleased
+      return {
+        gateBlocked: false,
+        gateReasons: [],
+        valid: true,
+        costUsd: 0,
+        result: '',
+        phaseOutputs: []
+      }
+    }
+    const bus = new AppCommandBus(os, (event) => broadcasts.push(event as Record<string, unknown>))
+    const execution = bus.exec(
+      'orchestrate',
+      { task: `/build fermeture lifecycle avant retour ${Date.now()}` },
+      'conv-1'
+    )
+    let runPath: string | undefined
+    try {
+      await closureReported
+      runPath = broadcasts.find((event) => event.type === 'orchestrate-start')?.runPath as
+        string | undefined
+      expect(runPath).toBeTypeOf('string')
+      expect(readFileSync(runPath as string, 'utf8')).toMatch(/^status: green$/m)
+    } finally {
+      releaseRunTask()
+      await execution
+      if (runPath) rmSync(dirname(runPath), { recursive: true, force: true })
     }
   })
 
