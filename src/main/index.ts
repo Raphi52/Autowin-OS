@@ -4670,13 +4670,23 @@ app.whenReady().then(async () => {
             /* observabilité best-effort pendant la reprise */
           }
           durableResumeTurn.succeed(result)
-          broadcast({ type: 'orchestrate-end', convId: conversationId, status: 'green' })
+          broadcast({
+            type: 'orchestrate-end',
+            convId: conversationId,
+            ...(resumedCurrentRunId ? { runPath: resumedCurrentRunId } : {}),
+            status: 'green'
+          })
           broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
           return result
         })
         .catch((error: unknown) => {
           durableResumeTurn.fail(error instanceof Error ? error.message : String(error), false)
-          broadcast({ type: 'orchestrate-end', convId: conversationId, status: 'red' })
+          broadcast({
+            type: 'orchestrate-end',
+            convId: conversationId,
+            ...(resumedCurrentRunId ? { runPath: resumedCurrentRunId } : {}),
+            status: 'red'
+          })
           broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
           console.warn('[resume-orchestration] échec de la reprise :', error)
         })
