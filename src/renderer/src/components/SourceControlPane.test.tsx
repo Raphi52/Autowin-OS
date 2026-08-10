@@ -184,6 +184,49 @@ describe('SourceControlPane (prompt-first)', () => {
     )
   })
 
+  it('rafraichit le resultat auto-close quand une publication differee se termine', async () => {
+    mockApi(GIT)
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    let published = false
+    let notifyWorktree!: (activity: unknown[]) => void
+    const getAutoClose = vi.fn(() =>
+      Promise.resolve(
+        published
+          ? {
+              enabled: true,
+              last: {
+                runId: 'run-delayed',
+                branch: 'auto/run-delayed',
+                at: '2026-08-10T12:00:00.000Z',
+                project: { status: 'pushed', branch: 'auto/run-delayed', files: 1 },
+                brain: { status: 'skipped', reason: 'no-changes' }
+              }
+            }
+          : { enabled: true }
+      )
+    )
+    api.getAutoClose = getAutoClose
+    api.onWorktreeActivity = (listener: (activity: unknown[]) => void) => {
+      notifyWorktree = listener
+      return () => {}
+    }
+    await render()
+    await openWorkspaceView()
+    expect(container.querySelector('[data-testid="sc-autoclose-last"]')).toBeNull()
+
+    published = true
+    await act(async () => {
+      notifyWorktree([])
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(getAutoClose).toHaveBeenCalledTimes(2)
+    expect(container.querySelector('[data-testid="sc-autoclose-last"]')?.textContent).toContain(
+      'Projet · publié · auto/run-delayed'
+    )
+  })
+
   it('ouvre le vrai diff read-only du bureau conflictuel sans écrire dans le prompt', async () => {
     mockApi(GIT)
     const getWorktreeConflictDiff = vi.fn(() =>

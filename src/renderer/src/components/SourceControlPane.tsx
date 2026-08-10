@@ -103,7 +103,12 @@ export function SourceControlPane({
     void window.api.getWorktreeStatus?.().then((status) => {
       if (alive) setWorktreeStatus(status)
     })
-    const off = window.api.onWorktreeActivity?.((a) => setWorktrees(a))
+    const off = window.api.onWorktreeActivity?.((a) => {
+      setWorktrees(a)
+      // Une publication peut se terminer après le retour du run : son résultat auto-close
+      // doit apparaître sans attendre un autre événement de chat ni un rafraîchissement manuel.
+      setRefreshTick((tick) => tick + 1)
+    })
     return () => {
       alive = false
       off?.()

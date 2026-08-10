@@ -1526,8 +1526,7 @@ export class Orchestrator {
       // Un modèle explicitement choisi pour la tâche doit rester l'unique décideur du run :
       // le décomposeur est lié au rôle orchestrateur global et casserait cet invariant.
       const decompositionAllowed =
-        !explicitPhase &&
-        (!executionQuote || executionQuote.decomposition.mode === 'build-only')
+        !explicitPhase && (!executionQuote || executionQuote.decomposition.mode === 'build-only')
       if (
         decompositionAllowed &&
         !bindingOverride &&
@@ -1613,9 +1612,10 @@ export class Orchestrator {
       let endReturned = false
       let projectPublication: { baseSha: string; publishedSha: string } | undefined
       let closeStarted = false
-      const closePublishedRun = async (
-        publication?: { baseSha: string; publishedSha: string }
-      ): Promise<void> => {
+      const closePublishedRun = async (publication?: {
+        baseSha: string
+        publishedSha: string
+      }): Promise<void> => {
         if (closeStarted || !green || !this.deps.closeGreenRun) return
         closeStarted = true
         await this.deps.closeGreenRun
@@ -1627,40 +1627,44 @@ export class Orchestrator {
           })
           .catch(() => undefined)
       }
-      const onPublished = (publication: { baseSha: string; agentSha: string }): void => {
+      const onPublished = async (publication: {
+        baseSha: string
+        agentSha: string
+      }): Promise<void> => {
         projectPublication = {
           baseSha: publication.baseSha,
           publishedSha: publication.agentSha
         }
-        if (endReturned) void closePublishedRun(projectPublication)
-        if (!produced || causalWatchPaths.length === 0) return
-        const evidence = preparedCommitMutationEvidence(
-          this.deps.executionWorkspace,
-          publication.baseSha,
-          publication.agentSha,
-          causalWatchPaths
-        )
-        produced.causalMutationEvidence = evidence
-        // Une finalisation différée arrive APRÈS le retour de la commande : elle doit publier sa
-        // trace elle-même, sinon le scheduler a déjà lu un résultat vide et la ligne reboucle.
-        if (endReturned && conversationId && turnId && evidence.length > 0) {
-          const publicationEventId = `worktree-publication:${runId}:${publication.agentSha}`
-          appendExecutionEvidenceFileTrace(evidence, {
-            conversationId,
-            turnId,
-            workspaceRoot: this.deps.executionWorkspace,
-            published: true,
-            eventId: publicationEventId
-          })
-          try {
-            onLateCausalMutationClaims?.({
-              ...watchdogClaimsFromEvidence(evidence, this.deps.executionWorkspace),
+        if (produced && causalWatchPaths.length > 0) {
+          const evidence = preparedCommitMutationEvidence(
+            this.deps.executionWorkspace,
+            publication.baseSha,
+            publication.agentSha,
+            causalWatchPaths
+          )
+          produced.causalMutationEvidence = evidence
+          // Une finalisation différée arrive APRÈS le retour de la commande : elle doit publier sa
+          // trace elle-même, sinon le scheduler a déjà lu un résultat vide et la ligne reboucle.
+          if (endReturned && conversationId && turnId && evidence.length > 0) {
+            const publicationEventId = `worktree-publication:${runId}:${publication.agentSha}`
+            appendExecutionEvidenceFileTrace(evidence, {
+              conversationId,
+              turnId,
+              workspaceRoot: this.deps.executionWorkspace,
+              published: true,
               eventId: publicationEventId
             })
-          } catch {
-            // L'observateur ne doit jamais invalider une publication Git déjà réussie.
+            try {
+              onLateCausalMutationClaims?.({
+                ...watchdogClaimsFromEvidence(evidence, this.deps.executionWorkspace),
+                eventId: publicationEventId
+              })
+            } catch {
+              // L'observateur ne doit jamais invalider une publication Git déjà réussie.
+            }
           }
         }
+        if (endReturned) await closePublishedRun(projectPublication)
       }
       const retained = green && requiresIsolatedWorkspace && runOptions.publication === 'hold'
       const finalizeOptions = {

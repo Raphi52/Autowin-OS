@@ -26,7 +26,8 @@ export type WorktreeOperationRequest =
   | {
       operation: 'cleanupPublished'
       agentId: string
-      expectedSha: string
+      publishedSha: string
+      agentSha: string
       baseBranch?: string
     }
   | { operation: 'recoveryInventory' }

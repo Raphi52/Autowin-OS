@@ -86,6 +86,8 @@ export interface WorktreeRunRecord {
   conflictBaseSha?: string
   conflictAgentSha?: string
   publishedSha?: string
+  /** HEAD agent utilisé uniquement pour prouver/nettoyer sa copie après un commit de merge. */
+  publicationAgentSha?: string
   /** SHA de la base au moment exact où le commit agent était prêt à être publié. */
   publicationBaseSha?: string
   /** Acquittement durable de la trace causale, écrit seulement après le callback réussi. */
@@ -172,9 +174,7 @@ function isRecord(value: unknown, worktreeRoot: string): value is WorktreeRunRec
     (candidate.excludedDirtyFiles === undefined ||
       (Array.isArray(candidate.excludedDirtyFiles) &&
         candidate.excludedDirtyFiles.length <= 500 &&
-        candidate.excludedDirtyFiles.every((path) =>
-          isSafeRelativeFile({ path, kind: 'mod' })
-        ))) &&
+        candidate.excludedDirtyFiles.every((path) => isSafeRelativeFile({ path, kind: 'mod' })))) &&
     VERDICT_PUBLICATIONS[verdict].has(publication) &&
     Array.isArray(candidate.files) &&
     candidate.files.every(isSafeRelativeFile) &&
@@ -183,6 +183,7 @@ function isRecord(value: unknown, worktreeRoot: string): value is WorktreeRunRec
       (typeof candidate.conflictFile === 'string' &&
         isSafeRelativeFile({ path: candidate.conflictFile, kind: 'mod' }))) &&
     (candidate.publishedSha === undefined || FULL_SHA.test(candidate.publishedSha)) &&
+    (candidate.publicationAgentSha === undefined || FULL_SHA.test(candidate.publicationAgentSha)) &&
     (candidate.publicationBaseSha === undefined || FULL_SHA.test(candidate.publicationBaseSha)) &&
     (candidate.causalPublicationDeliveredAtMs === undefined ||
       (Number.isFinite(candidate.causalPublicationDeliveredAtMs) &&

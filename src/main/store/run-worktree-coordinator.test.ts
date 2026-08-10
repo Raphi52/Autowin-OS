@@ -108,8 +108,8 @@ describe('RunWorktreeCoordinator (flip live)', () => {
         createdAtMs: 10,
         updatedAtMs: 20
       })
-      const acquire = vi.fn((_id: string, context?: { worktreePath: string }) =>
-        context?.worktreePath ?? ''
+      const acquire = vi.fn(
+        (_id: string, context?: { worktreePath: string }) => context?.worktreePath ?? ''
       )
       const coordinator = new RunWorktreeCoordinator({
         manager: fakeManager({
@@ -563,6 +563,57 @@ describe('RunWorktreeCoordinator (flip live)', () => {
         onRecoveredPublication: replayAfterAck
       })
       expect(replayAfterAck).not.toHaveBeenCalled()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reprend une auto-publication sans trace causale et ne l acquitte qu apres le push async', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-autoclose-recovery-'))
+    try {
+      const runId = 'run-autoclose-recovery'
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      stateStore.save({
+        version: 1,
+        repoId: 'repo-a',
+        runId,
+        task: 'Corriger la publication',
+        agentName: 'Builder',
+        worktreePath: join(root, `agent__${runId}`),
+        baseBranch: 'main',
+        baseSha: '2'.repeat(40),
+        publicationBaseSha: TEST_SHA,
+        verdict: 'green',
+        publication: 'complete',
+        files: [],
+        publishedSha: PUBLISHED_SHA,
+        createdAtMs: 10,
+        updatedAtMs: 11
+      })
+      let finishPush!: () => void
+      const pendingPush = new Promise<void>((resolve) => {
+        finishPush = resolve
+      })
+      const onRecoveredPublication = vi.fn(() => pendingPush)
+
+      new RunWorktreeCoordinator({
+        manager: fakeManager({ listAgentIds: () => [] }),
+        stateStore,
+        nowFn: () => 20,
+        onRecoveredPublication
+      })
+
+      expect(onRecoveredPublication).toHaveBeenCalledWith({
+        runId,
+        task: 'Corriger la publication',
+        causalWatchPaths: [],
+        baseSha: TEST_SHA,
+        agentSha: PUBLISHED_SHA
+      })
+      expect(stateStore.get(runId)?.causalPublicationDeliveredAtMs).toBeUndefined()
+
+      finishPush()
+      await vi.waitFor(() => expect(stateStore.get(runId)?.causalPublicationDeliveredAtMs).toBe(20))
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

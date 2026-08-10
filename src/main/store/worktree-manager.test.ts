@@ -863,7 +863,6 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
     const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot, tryGitFn })
     const agentPath = wm.acquire('builder')
     writeFileSync(join(agentPath, 'b.txt'), 'travail de la copie\n')
-
     const res = wm.finalize('builder')
 
     expect(failedIntegrationRemove).toBe(true)
@@ -912,6 +911,10 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
     })
     const agentPath = wm.acquire('builder')
     writeFileSync(join(agentPath, 'b.txt'), 'travail de la copie\n')
+    writeFileSync(join(repo, 'concurrent.txt'), 'avance concurrente de la base\n')
+    git(repo, 'add', 'concurrent.txt')
+    git(repo, 'commit', '-q', '-m', 'avance base')
+    const baseBeforeFinalize = git(repo, 'rev-parse', 'HEAD')
 
     const res = wm.finalize('builder')
 
@@ -921,11 +924,17 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
     expect(existsSync(agentPath)).toBe(true)
 
     const publishedHead = git(repo, 'rev-parse', 'HEAD')
-    locked = false
+    expect(res).toMatchObject({
+      baseSha: baseBeforeFinalize,
+      publishedSha: publishedHead,
+      agentSha: expect.any(String)
+    })
     if (res.outcome !== 'cleanup-pending') throw new Error('cleanup-pending attendu')
+    expect(res.agentSha).not.toBe(res.publishedSha)
+    locked = false
     git(repo, 'checkout', '-q', 'autre-branche')
     const otherBranchHead = git(repo, 'rev-parse', 'HEAD')
-    const resumed = wm.cleanupPublished('builder', res.publishedSha, publishedBranch)
+    const resumed = wm.cleanupPublished('builder', res.publishedSha, publishedBranch, res.agentSha)
 
     expect(resumed).toMatchObject({ outcome: 'merged', committed: false })
     expect(git(repo, 'rev-parse', 'HEAD')).toBe(otherBranchHead)

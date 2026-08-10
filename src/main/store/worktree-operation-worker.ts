@@ -41,8 +41,9 @@ port.on('message', (request: WorktreeOperationRequest) => {
       case 'cleanupPublished':
         value = manager.cleanupPublished(
           request.agentId,
-          request.expectedSha,
-          request.baseBranch
+          request.publishedSha,
+          request.baseBranch,
+          request.agentSha
         )
         break
       case 'recoveryInventory':

@@ -342,7 +342,19 @@ export class AutowinOS {
         this.worktrees = new RunWorktreeCoordinator({
           manager,
           stateStore: new WorktreeRunStateStore(identity.root, identity.repoId),
-          onRecoveredPublication: (publication) => {
+          onRecoveredPublication: async (publication) => {
+            if (this.autoClose) {
+              this.lastAutoClose = await closeGreenRunOnDisk({
+                runId: publication.runId,
+                task: publication.task ?? 'Run récupéré',
+                projectRepo: executionWorkspace,
+                brainRepo: amitelBrainRoot(),
+                projectPublication: {
+                  baseSha: publication.baseSha,
+                  publishedSha: publication.agentSha
+                }
+              })
+            }
             const evidence = preparedCommitMutationEvidence(
               executionWorkspace,
               publication.baseSha,
