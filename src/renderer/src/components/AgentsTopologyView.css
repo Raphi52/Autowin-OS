@@ -436,6 +436,49 @@
   color: #c8912f;
 }
 
+/*
+ * Un slot dont le modèle n'existe plus au catalogue : il rendait l'identifiant brut, impossible à
+ * distinguer d'un vrai libellé. Il porte maintenant sa panne, et la vue gèle profils/application.
+ */
+.slot-unresolved {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid #8a3a3a;
+  background: rgba(190, 70, 70, 0.16);
+  color: #d97b76;
+}
+
+.topology-slot.is-unresolved {
+  border-color: #8a3a3a;
+}
+
+.topology-unresolved-banner {
+  margin: 0 0 10px;
+  padding: 7px 11px;
+  border: 1px solid #8a3a3a;
+  border-radius: var(--container-radius-card);
+  background: rgba(190, 70, 70, 0.1);
+  color: #d97b76;
+  font-size: 12px;
+}
+
+.topology-profile-naming,
+.topology-profile-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.topology-profile-badge {
+  padding: 1px 7px;
+  border: 1px solid var(--container-border);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
 .topology-assign-button {
   width: 100%;
   margin-top: 9px;

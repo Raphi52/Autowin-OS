@@ -50,6 +50,16 @@ const models = [
 let container: HTMLDivElement
 let root: Root
 
+/**
+ * React suit la valeur des champs par un tracker interne : écrire `input.value` directement fait
+ * partir l'évènement mais React le considère « sans changement ». On passe donc par le setter natif.
+ */
+function saisir(champ: HTMLInputElement, valeur: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+  setter.call(champ, valeur)
+  champ.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
 const flush = (): Promise<void> =>
   act(async () => {
     await Promise.resolve()
@@ -223,7 +233,6 @@ describe('AgentsTopologyView concurrent persistence', () => {
       unhandled.push(event.reason)
     }
     window.addEventListener('unhandledrejection', onUnhandled)
-    vi.spyOn(window, 'prompt').mockReturnValue('Profil A')
     ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
       models: async () => models,
       topology: async () => topology,
@@ -239,10 +248,20 @@ describe('AgentsTopologyView concurrent persistence', () => {
     await act(async () => root.render(createElement(AgentsTopologyView)))
     await flush()
 
-    const save = [...container.querySelectorAll('.topology-profiles button')].find((button) =>
-      button.textContent?.includes('Profil')
-    ) as HTMLButtonElement
-    await act(async () => save.click())
+    // Le nom se saisit DANS l'application (plus de `window.prompt`, qui bloquait et restait
+    // intestable) : ouvrir le champ, le remplir, puis enregistrer.
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="topology-profile-new"]')!.click()
+    )
+    const champ = container.querySelector<HTMLInputElement>(
+      '[data-testid="topology-profile-name"]'
+    )!
+    await act(async () => {
+      saisir(champ, 'Profil A')
+    })
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="topology-profile-save"]')!.click()
+    )
     await flush()
 
     const alert = container.querySelector('[role="alert"]')
@@ -278,6 +297,11 @@ describe('AgentsTopologyView concurrent persistence', () => {
       select.value = 'p1'
       select.dispatchEvent(new Event('change', { bubbles: true }))
     })
+    await flush()
+    // Appliquer écrase la topologie : le choix ne part plus au `change`, il se confirme.
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="topology-apply-yes"]')!.click()
+    )
     await flush()
 
     const alert = container.querySelector('[role="alert"]')

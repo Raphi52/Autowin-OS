@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { WorkflowBenchPanel } from './WorkflowBenchPanel'
 import { WorkflowGraphEditor } from './WorkflowGraphEditor'
 import { profileSummary } from './workflow-profile-summary'
+import { rolesEffectifs, trackNodes, workflowIssues } from './workflow-executability'
 import './WorkflowProfilesView.css'
 
 /**
@@ -67,23 +68,6 @@ function Icone({ nom }: { nom: 'import' | 'export' | 'plus' | 'poubelle' }): Rea
 const TN_W = 118
 const TN_GAP = 34
 const TRACK_PAD = 14
-
-/** Les nœuds d'un profil, que sa topologie vienne du graphe composé ou de ses seules phases. */
-function trackNodes(profile: WorkflowProfile): { id: string; phase: string; agents: number }[] {
-  if (profile.graph?.nodes?.length) {
-    return profile.graph.nodes.map((n) => ({
-      id: n.id,
-      phase: n.phase,
-      agents: n.agents?.length ?? 1
-    }))
-  }
-  const vus = new Map<string, number>()
-  return (profile.phases ?? []).map((phase) => {
-    const rang = (vus.get(phase) ?? 0) + 1
-    vus.set(phase, rang)
-    return { id: `${phase}-${rang}`, phase, agents: 1 }
-  })
-}
 
 /**
  * Une portée horizontale par workflow. C'est ce qui permet de COMPARER sans cliquer : la séquence, la
@@ -196,10 +180,35 @@ function WorkflowTrack({ profile }: { profile: WorkflowProfile }): React.JSX.Ele
   )
 }
 
+/**
+ * Ce qu'un rejet IPC dit VRAIMENT. Un `catch {}` remplaçait la raison par une phrase générique :
+ * l'utilisateur voyait « L'enregistrement a échoué » sans jamais savoir que le disque était plein
+ * ou le fichier verrouillé. On garde la phrase de contexte ET on y accroche la raison réelle.
+ */
+/** Retire une clé d'un dictionnaire sans en déstructurer une variable jamais lue. */
+function oublier(source: Record<string, string>, cle: string): Record<string, string> {
+  const copie = { ...source }
+  delete copie[cle]
+  return copie
+}
+
+function raison(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason)
+}
+
 export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX.Element {
   const [file, setFile] = useState<ProfilesFile>({ profiles: [], activeId: null })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>()
+  /** Ouvrir l'éditeur n'est PAS activer le workflow : deux gestes, deux états (point 3). */
+  const [editingId, setEditingId] = useState<string | null>(null)
+  /** Une suppression se confirme : le geste est irréversible et voisin du bouton Exporter. */
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null)
+  /** Nom en cours de frappe, par workflow. Sans lui, chaque caractère partait en IPC. */
+  const [names, setNames] = useState<Record<string, string>>({})
+  const renameTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const persistQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const persistVersionRef = useRef(0)
 
   useEffect(() => {
     if (!active) return
@@ -214,8 +223,8 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
       .then((next) => {
         if (!cancelled && next) setFile(next as ProfilesFile)
       })
-      .catch(() => {
-        if (!cancelled) setError('Impossible de lire les workflows.')
+      .catch((reason: unknown) => {
+        if (!cancelled) setError(`Impossible de lire les workflows : ${raison(reason)}`)
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -226,31 +235,80 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
   }, [active])
 
   const select = async (id: string | null): Promise<void> => {
+    setError(undefined)
     try {
       const next = (await window.api.workflowProfileSelect?.(id)) as ProfilesFile | undefined
       if (next) setFile(next)
-    } catch {
-      setError('La sélection n’a pas pu être enregistrée.')
+    } catch (reason) {
+      setError(`La sélection n’a pas pu être enregistrée : ${raison(reason)}`)
     }
   }
 
   const remove = async (id: string): Promise<void> => {
+    setError(undefined)
     try {
       const next = (await window.api.workflowProfileRemove?.(id)) as ProfilesFile | undefined
       if (next) setFile(next)
-    } catch {
-      setError('La suppression a échoué.')
+      if (editingId === id) setEditingId(null)
+    } catch (reason) {
+      setError(`La suppression a échoué : ${raison(reason)}`)
     }
   }
 
   const save = async (profile: WorkflowProfile): Promise<void> => {
+    setError(undefined)
     try {
       const next = (await window.api.workflowProfileSave?.(profile)) as ProfilesFile | undefined
       if (next) setFile(next)
-    } catch {
-      setError('L’enregistrement a échoué.')
+    } catch (reason) {
+      setError(`L’enregistrement a échoué : ${raison(reason)}`)
     }
   }
+
+  /**
+   * Renommage : l'input était piloté par `profile.name` et écrivait en IPC à CHAQUE frappe — une
+   * écriture par caractère, donc autant de courses d'écriture, et un nom vide silencieusement
+   * perdu. Même contrat que `persist()` dans `AgentsTopologyView` : état local, debounce, file
+   * sérialisée, et rollback VISIBLE (le champ revient au nom persisté) quand l'IPC rejette.
+   */
+  const rename = (profile: WorkflowProfile, name: string): void => {
+    setNames((current) => ({ ...current, [profile.id]: name }))
+    clearTimeout(renameTimersRef.current[profile.id])
+    // Un nom vide rendrait le profil illisible ET le ferait rejeter à la relecture : on garde la
+    // frappe à l'écran mais on n'enregistre rien tant qu'elle ne dit rien.
+    if (!name.trim()) return
+    renameTimersRef.current[profile.id] = setTimeout(() => {
+      const version = ++persistVersionRef.current
+      setError(undefined)
+      const request = persistQueueRef.current.then(
+        () => window.api.workflowProfileSave?.({ ...profile, name }) as Promise<ProfilesFile>
+      )
+      persistQueueRef.current = request.then(
+        () => undefined,
+        () => undefined
+      )
+      void request.then(
+        (next) => {
+          if (version !== persistVersionRef.current) return
+          if (next) setFile(next)
+          setNames((current) => oublier(current, profile.id))
+        },
+        (reason: unknown) => {
+          if (version !== persistVersionRef.current) return
+          setError(`Le renommage a échoué : ${raison(reason)}`)
+          // Rollback visible : le champ retrouve le nom réellement persisté.
+          setNames((current) => oublier(current, profile.id))
+        }
+      )
+    }, 300)
+  }
+
+  useEffect(() => {
+    const timers = renameTimersRef.current
+    return () => {
+      for (const timer of Object.values(timers)) clearTimeout(timer)
+    }
+  }, [])
 
   /** `id` nul = tout le fichier ; un id = ce seul workflow, pour en partager un sans donner le reste. */
   const exporter = async (id: string | null): Promise<void> => {
@@ -259,8 +317,8 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
       // Une annulation n'est pas une erreur : on ne crie pas quand l'utilisateur ferme la boîte.
       if (res && !res.ok && res.reason && res.reason !== 'annulé')
         setError(`Export : ${res.reason}`)
-    } catch {
-      setError('L’export a échoué.')
+    } catch (reason) {
+      setError(`L’export a échoué : ${raison(reason)}`)
     }
   }
 
@@ -280,8 +338,8 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
           `${res.imported ?? 0} workflow(s) importé(s) ; ${res.rejected.length} écarté(s) : ${res.rejected.join(', ')}`
         )
       }
-    } catch {
-      setError('L’import a échoué.')
+    } catch (reason) {
+      setError(`L’import a échoué : ${raison(reason)}`)
     }
   }
 
@@ -294,8 +352,8 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
         name: `Workflow ${rang}`
       })) as ProfilesFile | undefined
       if (next) setFile(next)
-    } catch {
-      setError('La création a échoué.')
+    } catch (reason) {
+      setError(`La création a échoué : ${raison(reason)}`)
     }
   }
 
@@ -343,98 +401,193 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
         </p>
       ) : (
         <ul className="workflow-profiles-list">
-          {file.profiles.map((profile) => (
-            <li
-              key={profile.id}
-              className={`workflow-profile${file.activeId === profile.id ? ' is-active' : ''}`}
-              data-testid={`workflow-profile-${profile.id}`}
-            >
-              {/* En-tête sur UNE ligne, puis portée et éditeur PLEINE LARGEUR dessous. Sans cette
-                  séparation, la ligne étant un flex horizontal, l'éditeur se retrouvait comprimé
-                  dans une colonne entre le bouton de sélection et la croix de suppression. */}
-              <div className="workflow-profile-row">
-                <button
-                  type="button"
-                  className="workflow-profile-pick"
-                  data-testid={`workflow-pick-${profile.id}`}
-                  aria-pressed={file.activeId === profile.id}
-                  // Re-cliquer le workflow actif le DÉSÉLECTIONNE. C'est le seul chemin qui reste vers
-                  // « aucun workflow imposé » depuis que la ligne « Configuration courante » a été
-                  // retirée : sans ce retour, une sélection serait définitive.
-                  onClick={() => void select(file.activeId === profile.id ? null : profile.id)}
-                >
-                  <span className="workflow-profile-line">
-                    {/* Le nom se corrige SUR PLACE. Un workflow créé « Workflow 3 » et jamais
-                        renommable ne se distingue plus de ses voisins dès qu'il y en a quatre. */}
+          {file.profiles.map((profile) => {
+            // L'exécutabilité se calcule AVANT d'offrir l'activation : un workflow structurellement
+            // mort (phase inconnue, nœud sans agent, arête orpheline) ne doit pas pouvoir partir.
+            const issues = workflowIssues(profile)
+            const actif = file.activeId === profile.id
+            const bloque = issues.length > 0 && !actif
+            const nom = names[profile.id] ?? profile.name
+            return (
+              <li
+                key={profile.id}
+                className={`workflow-profile${actif ? ' is-active' : ''}${issues.length ? ' is-unrunnable' : ''}`}
+                data-testid={`workflow-profile-${profile.id}`}
+              >
+                {/* En-tête sur UNE ligne, puis portée et éditeur PLEINE LARGEUR dessous. Sans cette
+                    séparation, la ligne étant un flex horizontal, l'éditeur se retrouvait comprimé
+                    dans une colonne entre le bouton de sélection et la croix de suppression. */}
+                <div className="workflow-profile-row">
+                  <button
+                    type="button"
+                    className="workflow-profile-pick"
+                    data-testid={`workflow-pick-${profile.id}`}
+                    aria-pressed={actif}
+                    disabled={bloque}
+                    // Deux états DISTINCTS, dits ici plutôt qu'en texte de liste : « imposé » = ce
+                    // bouton, un seul à la fois ; « invocable » = la case voisine, le chat a le droit
+                    // de le choisir lui-même. Ouvrir l'éditeur n'est ni l'un ni l'autre.
+                    title={
+                      bloque
+                        ? `Non exécutable : ${issues.join(' ; ')}`
+                        : `Imposer ${profile.name} au chat — la case à côté dit seulement si le chat a le droit de l’invoquer lui-même, et le bouton Éditer n’impose rien`
+                    }
+                    // Re-cliquer le workflow imposé le DÉSÉLECTIONNE. C'est le seul chemin qui reste
+                    // vers « aucun workflow imposé » depuis que la ligne « Configuration courante » a
+                    // été retirée : sans ce retour, une sélection serait définitive.
+                    onClick={() => void select(actif ? null : profile.id)}
+                  >
+                    <span className="workflow-profile-line">
+                      {/* Le nom se corrige SUR PLACE. La frappe vit en local et n'est persistée
+                          qu'une fois retombée (300 ms) : une écriture IPC par caractère produisait
+                          autant de courses d'écriture que de lettres. */}
+                      <input
+                        className="workflow-profile-name"
+                        data-testid={`workflow-rename-${profile.id}`}
+                        value={nom}
+                        aria-label={`Nom du workflow ${profile.name}`}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => rename(profile, e.target.value)}
+                      />
+                      {actif && <span className="wf-badge is-on">actif</span>}
+                      {issues.length > 0 && (
+                        <span
+                          className="wf-badge is-broken"
+                          data-testid={`workflow-unrunnable-${profile.id}`}
+                        >
+                          non exécutable
+                        </span>
+                      )}
+                      <span className="workflow-profile-summary">{profileSummary(profile)}</span>
+                    </span>
+                    {profile.description && (
+                      <span className="workflow-profile-desc">{profile.description}</span>
+                    )}
+                  </button>
+                  {/* Invocable ou non par le chat. Distinct de la sélection : cocher n'impose rien,
+                      décocher retire du choix automatique sans supprimer le workflow. */}
+                  <label
+                    className="workflow-profile-toggle"
+                    title={
+                      profile.enabled === false
+                        ? `${profile.name} : le chat ne peut pas l’invoquer`
+                        : `${profile.name} : le chat peut l’invoquer`
+                    }
+                  >
                     <input
-                      className="workflow-profile-name"
-                      data-testid={`workflow-rename-${profile.id}`}
-                      value={profile.name}
-                      aria-label={`Nom du workflow ${profile.name}`}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => {
-                        const name = e.target.value
-                        // Un nom vide rendrait le profil illisible ET le ferait rejeter à la
-                        // relecture : on refuse l'enregistrement plutôt que de le perdre.
-                        if (name.trim()) void save({ ...profile, name })
-                      }}
+                      type="checkbox"
+                      data-testid={`workflow-enabled-${profile.id}`}
+                      checked={profile.enabled !== false}
+                      aria-label={`Rendre ${profile.name} invocable par le chat`}
+                      onChange={(e) => void save({ ...profile, enabled: e.target.checked })}
                     />
-                    {file.activeId === profile.id && <span className="wf-badge is-on">actif</span>}
-                    <span className="workflow-profile-summary">{profileSummary(profile)}</span>
-                  </span>
-                  {profile.description && (
-                    <span className="workflow-profile-desc">{profile.description}</span>
+                  </label>
+                  {/* Ouvrir l'éditeur était réservé au workflow imposé : on ne pouvait pas corriger
+                      un workflow sans d'abord l'imposer au chat. Les deux gestes sont séparés. */}
+                  <button
+                    type="button"
+                    className="workflow-profile-action"
+                    data-testid={`workflow-edit-${profile.id}`}
+                    aria-pressed={editingId === profile.id}
+                    title={`Ouvrir l’éditeur de ${profile.name} sans l’imposer au chat`}
+                    aria-label={`Ouvrir l’éditeur de ${profile.name}`}
+                    onClick={() => setEditingId(editingId === profile.id ? null : profile.id)}
+                  >
+                    Éditer
+                  </button>
+                  <button
+                    type="button"
+                    className="workflow-profile-action"
+                    data-testid={`workflow-export-${profile.id}`}
+                    title={`Exporter ${profile.name}`}
+                    aria-label={`Exporter ${profile.name}`}
+                    onClick={() => void exporter(profile.id)}
+                  >
+                    <Icone nom="export" />
+                  </button>
+                  {/* Suppression irréversible et voisine d'Exporter : elle se confirme, et elle ne
+                      porte pas la même apparence que son voisin (`is-danger`). */}
+                  {confirmRemoveId === profile.id ? (
+                    <span
+                      className="workflow-profile-confirm"
+                      role="alertdialog"
+                      aria-label={`Confirmer la suppression de ${profile.name}`}
+                    >
+                      <span>Supprimer ?</span>
+                      <button
+                        type="button"
+                        className="workflow-profile-action is-danger"
+                        data-testid={`workflow-remove-confirm-${profile.id}`}
+                        onClick={() => {
+                          setConfirmRemoveId(null)
+                          void remove(profile.id)
+                        }}
+                      >
+                        Oui
+                      </button>
+                      <button
+                        type="button"
+                        className="workflow-profile-action"
+                        data-testid={`workflow-remove-cancel-${profile.id}`}
+                        onClick={() => setConfirmRemoveId(null)}
+                      >
+                        Non
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="workflow-profile-action is-danger"
+                      data-testid={`workflow-remove-${profile.id}`}
+                      title={`Supprimer ${profile.name}`}
+                      aria-label={`Supprimer ${profile.name}`}
+                      onClick={() => setConfirmRemoveId(profile.id)}
+                    >
+                      <Icone nom="poubelle" />
+                    </button>
                   )}
-                </button>
-                {/* Invocable ou non par le chat. Distinct de la sélection : cocher n'impose rien,
-                    décocher retire du choix automatique sans supprimer le workflow. */}
-                <label
-                  className="workflow-profile-toggle"
-                  title={
-                    profile.enabled === false
-                      ? `${profile.name} : le chat ne peut pas l’invoquer`
-                      : `${profile.name} : le chat peut l’invoquer`
-                  }
-                >
-                  <input
-                    type="checkbox"
-                    data-testid={`workflow-enabled-${profile.id}`}
-                    checked={profile.enabled !== false}
-                    aria-label={`Rendre ${profile.name} invocable par le chat`}
-                    onChange={(e) => void save({ ...profile, enabled: e.target.checked })}
+                </div>
+                {issues.length > 0 && (
+                  <ul
+                    className="workflow-profile-issues"
+                    data-testid={`workflow-issues-${profile.id}`}
+                  >
+                    {issues.map((issue) => (
+                      <li key={issue}>{issue}</li>
+                    ))}
+                  </ul>
+                )}
+                {/* Quel modèle joue quoi, RÉELLEMENT : le workflow imposé écrase la topologie rôle
+                    par rôle. Sans cette dérivation, deux sources de vérité cohabitent en silence. */}
+                {actif && rolesEffectifs(profile).length > 0 && (
+                  <ul
+                    className="workflow-profile-roles"
+                    data-testid={`workflow-roles-${profile.id}`}
+                  >
+                    {rolesEffectifs(profile).map((ligne) => (
+                      <li key={ligne.role}>
+                        <b>{ligne.role}</b> → {ligne.modele}{' '}
+                        <em>
+                          {ligne.origine === 'workflow'
+                            ? '(imposé par ce workflow)'
+                            : '(topologie)'}
+                        </em>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {/* La portée reste visible même quand l'éditeur est ouvert : on ne perd jamais la
+                    vue d'ensemble. */}
+                <WorkflowTrack profile={profile} />
+                {editingId === profile.id && (
+                  <WorkflowGraphEditor
+                    profile={profile}
+                    onSave={(graph) => void save({ ...profile, graph })}
                   />
-                </label>
-                <button
-                  type="button"
-                  className="workflow-profile-remove"
-                  data-testid={`workflow-export-${profile.id}`}
-                  title={`Exporter ${profile.name}`}
-                  aria-label={`Exporter ${profile.name}`}
-                  onClick={() => void exporter(profile.id)}
-                >
-                  <Icone nom="export" />
-                </button>
-                <button
-                  type="button"
-                  className="workflow-profile-remove"
-                  data-testid={`workflow-remove-${profile.id}`}
-                  title={`Supprimer ${profile.name}`}
-                  aria-label={`Supprimer ${profile.name}`}
-                  onClick={() => void remove(profile.id)}
-                >
-                  <Icone nom="poubelle" />
-                </button>
-              </div>
-              {/* La portée reste visible même quand l'éditeur est ouvert : on ne perd jamais la vue d'ensemble. */}
-              <WorkflowTrack profile={profile} />
-              {file.activeId === profile.id && (
-                <WorkflowGraphEditor
-                  profile={profile}
-                  onSave={(graph) => void save({ ...profile, graph })}
-                />
-              )}
-            </li>
-          ))}
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
 
