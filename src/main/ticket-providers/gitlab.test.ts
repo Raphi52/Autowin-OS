@@ -127,4 +127,36 @@ describe('adaptateur GitLab Issues', () => {
     expect(url.searchParams.get('search')).toBe('quota workflow')
     expect(url.searchParams.get('in')).toBe('title')
   })
+
+  it('relit puis clôt une issue et publie le compte-rendu', async () => {
+    const issue = {
+      id: 9001,
+      iid: 42,
+      title: 'Quota du workflow',
+      state: 'closed',
+      web_url: 'https://gitlab.com/group/subgroup/project/-/issues/42',
+      updated_at: '2026-08-10T10:00:00Z',
+      labels: []
+    }
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ ...issue, state: 'opened' }))
+      .mockResolvedValueOnce(Response.json(issue))
+      .mockResolvedValueOnce(Response.json({ id: 99, body: 'Tests verts.' }))
+
+    await expect(
+      gitlabTicketProvider.get!({ source, id: '42' }, { token: 'secret', fetchFn })
+    ).resolves.toMatchObject({ id: '42', state: 'opened' })
+    await expect(
+      gitlabTicketProvider.update!(
+        { source, id: '42', state: 'closed', comment: 'Tests verts.' },
+        { token: 'secret', fetchFn }
+      )
+    ).resolves.toMatchObject({ id: '42', state: 'closed' })
+    expect(fetchFn.mock.calls[1]?.[1]).toMatchObject({ method: 'PUT' })
+    expect(JSON.parse(String(fetchFn.mock.calls[1]?.[1]?.body))).toEqual({
+      state_event: 'close'
+    })
+    expect(String(fetchFn.mock.calls[2]?.[0])).toContain('/issues/42/notes')
+  })
 })

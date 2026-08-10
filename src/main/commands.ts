@@ -31,7 +31,12 @@ import { appendConvActivity } from './activity/conv-activity'
 import { createTicketFromCommand, type TicketCreateArgs } from './ticket-create-command'
 import { searchTicketsFromCommand, type TicketSearchArgs } from './ticket-search-command'
 import { getTicketFromCommand, type TicketGetArgs } from './ticket-get-command'
-import type { TicketCreateRequest, TicketGetRequest } from './ticket-providers/provider-contract'
+import { updateTicketFromCommand, type TicketUpdateArgs } from './ticket-update-command'
+import type {
+  TicketCreateRequest,
+  TicketGetRequest,
+  TicketUpdateRequest
+} from './ticket-providers/provider-contract'
 import type { TicketItem, TicketListRequest, TicketSourceProfile } from '../shared/tickets'
 import { buildAutowinKaizenTask, collectAutowinKaizenEvidence } from './autowin-kaizen-context'
 import type { OrchestrationStep, OrchestrationPhase } from './orchestrator'
@@ -369,6 +374,24 @@ const CATALOG: CommandSpec[] = [
     }
   },
   {
+    name: 'ticket_update',
+    description:
+      'Mettre à jour une fiche existante après preuve du travail : publier un compte-rendu factuel, changer son état ou son assigné',
+    args: {
+      id: 'le numéro de la fiche (ex. 1227)',
+      comment: 'facultatif — preuves, changements et vérifications réellement effectués',
+      state: 'facultatif — état final exact accepté par le fournisseur',
+      assignee: 'facultatif — personne à assigner',
+      sourceId: 'facultatif si une seule source est configurée ; OBLIGATOIRE s’il y en a plusieurs'
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true
+    }
+  },
+  {
     name: 'ticket_search',
     description:
       'Lire les fiches (work items) du fournisseur de tickets configuré, avec une recherche par titre — à utiliser AVANT de créer une fiche, pour vérifier qu’un doublon n’existe pas déjà',
@@ -587,7 +610,9 @@ export class AppCommandBus {
     /** Lecture d'UNE fiche par id, câblée depuis index.ts. */
     private readonly getTicket?: (request: TicketGetRequest) => Promise<TicketItem>,
     /** Controle Windows local, reserve aux commandes explicites du chat. */
-    private readonly desktop?: DesktopController
+    private readonly desktop?: DesktopController,
+    /** Retour réel vers une fiche existante, câblé depuis index.ts. */
+    private readonly updateTicket?: (request: TicketUpdateRequest) => Promise<TicketItem>
   ) {}
 
   catalog(): CommandSpec[] {
@@ -1122,6 +1147,11 @@ export class AppCommandBus {
         return await getTicketFromCommand(a as TicketGetArgs, {
           listSources: this.listTicketSources,
           ...(this.getTicket ? { get: this.getTicket } : {})
+        })
+      case 'ticket_update':
+        return await updateTicketFromCommand(a as TicketUpdateArgs, {
+          listSources: this.listTicketSources,
+          ...(this.updateTicket ? { update: this.updateTicket } : {})
         })
       case 'ticket_search':
         // Lecture chez un tiers : même garde de cible que la création (le modèle nomme au plus un

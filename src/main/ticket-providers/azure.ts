@@ -120,7 +120,11 @@ function isWorkItem(item: unknown): item is AzureWorkItem {
 }
 
 function assertWorkItemsResponse(value: unknown): asserts value is AzureWorkItemsResponse {
-  if (!isRecord(value) || !Array.isArray(value.value) || value.value.some((item) => !isWorkItem(item))) {
+  if (
+    !isRecord(value) ||
+    !Array.isArray(value.value) ||
+    value.value.some((item) => !isWorkItem(item))
+  ) {
     throw invalidResponse()
   }
 }
@@ -469,6 +473,61 @@ export const azureTicketProvider: TicketProviderAdapter = {
       comments
     )
   },
+  async update(request, context) {
+    if (request.source.provider !== 'azure') {
+      throw invalidResponse('Source Azure DevOps invalide.')
+    }
+    const raw = typeof request.id === 'string' ? request.id.trim() : ''
+    if (!/^[1-9]\d*$/.test(raw)) {
+      throw invalidResponse(`Identifiant de fiche Azure DevOps invalide : « ${raw} ».`)
+    }
+    const source = request.source
+    const authorization = authorizationHeader(context)
+    const organization = encodeURIComponent(source.organization)
+    const project = encodeURIComponent(source.project)
+    const baseUrl = `https://dev.azure.com/${organization}/${project}`
+    const operations = [
+      ...(request.state ? [{ op: 'add', path: '/fields/System.State', value: request.state }] : []),
+      ...(request.assignee
+        ? [{ op: 'add', path: '/fields/System.AssignedTo', value: request.assignee }]
+        : [])
+    ]
+
+    let updated: AzureWorkItem | undefined
+    if (operations.length) {
+      const response = await fetchTicketJson<unknown>(
+        `${baseUrl}/_apis/wit/workitems/${raw}?api-version=${API_VERSION}`,
+        {
+          fetchFn: context.fetchFn,
+          signal: context.signal,
+          method: 'PATCH',
+          headers: { authorization },
+          contentType: JSON_PATCH_CONTENT_TYPE,
+          body: operations
+        }
+      )
+      assertCreatedWorkItem(response)
+      updated = response
+    }
+    if (request.comment) {
+      await fetchTicketJson<unknown>(
+        `${baseUrl}/_apis/wit/workItems/${raw}/comments?api-version=${API_VERSION}-preview.4`,
+        {
+          fetchFn: context.fetchFn,
+          signal: context.signal,
+          method: 'POST',
+          headers: { authorization },
+          body: { text: request.comment }
+        }
+      )
+    }
+    if (!updated) {
+      const [current] = await fetchWorkItems(baseUrl, [Number(raw)], authorization, context)
+      if (!current) throw invalidResponse(`Fiche Azure DevOps ${raw} introuvable.`)
+      updated = current
+    }
+    return normalizeWorkItem(updated, source.id, source.organization, source.project)
+  },
   async create(request, context) {
     if (request.source.provider !== 'azure') {
       throw invalidResponse('Source Azure DevOps invalide.')
@@ -491,7 +550,9 @@ export const azureTicketProvider: TicketProviderAdapter = {
 
     const operations = [
       { op: 'add', path: '/fields/System.Title', value: title },
-      ...(description ? [{ op: 'add', path: '/fields/System.Description', value: description }] : []),
+      ...(description
+        ? [{ op: 'add', path: '/fields/System.Description', value: description }]
+        : []),
       ...(assignee ? [{ op: 'add', path: '/fields/System.AssignedTo', value: assignee }] : [])
     ]
 

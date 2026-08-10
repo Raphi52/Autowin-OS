@@ -48,7 +48,9 @@ function isTreatmentRecord(value: unknown): value is TicketTreatmentRecord {
 }
 
 /** Trace locale bornée : permet de retrouver le run d'une fiche après un rafraîchissement. */
-export function loadTicketTreatmentRecords(storage: Pick<TreatmentStorage, 'getItem'>): TicketTreatmentRecords {
+export function loadTicketTreatmentRecords(
+  storage: Pick<TreatmentStorage, 'getItem'>
+): TicketTreatmentRecords {
   try {
     const raw = storage.getItem(TREATMENT_RECORDS_KEY)
     const parsed: unknown = raw ? JSON.parse(raw) : {}
@@ -144,7 +146,7 @@ function definitionOfDone(context: TicketExecutionContext): string {
       : '3. Commit(s) poussé(s) — donner le sujet du commit et la branche distante.',
     '4. Pull request ouverte — donner son URL, ou dire explicitement « pas de PR » et pourquoi.',
     '5. Compte-rendu : ce qui a été changé (fichiers), ce qui a été vérifié, ce qui reste.',
-    `6. État visé du ticket après ce travail (ex. « en revue ») + blocages restants.`
+    '6. État visé du ticket : après les preuves seulement, appelle `ticket_update` avec `sourceId`, `id`, un commentaire factuel et l’état final ; si le fournisseur refuse, rapporte ce refus sans prétendre la fiche close.'
   ]
   return lines.join('\n')
 }

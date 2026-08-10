@@ -540,7 +540,8 @@ const bus = new AppCommandBus(
   (request) => tickets.create(request),
   (request) => tickets.list(request),
   (request) => tickets.get(request),
-  desktopController
+  desktopController,
+  (request) => tickets.update(request)
 )
 seedRegistrySnapshot({
   tools: bus.catalog().map((command) => ({

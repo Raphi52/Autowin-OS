@@ -348,6 +348,7 @@ describe('#3 contrat de sortie — definition of done falsifiable, plus de narra
     const prompt = formatTicketTreatmentPrompt(base)
     expect(prompt).not.toContain('le traitement effectué, les blocages et la prochaine action')
     expect(prompt).toContain('Definition of done')
+    expect(prompt).toContain('ticket_update')
     for (const step of ['1.', '2.', '3.', '4.', '5.', '6.']) expect(prompt).toContain(step)
     expect(prompt).toContain('exit code')
     expect(prompt).toContain('Pull request')

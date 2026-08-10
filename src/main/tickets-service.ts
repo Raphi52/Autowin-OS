@@ -11,6 +11,7 @@ import type { TicketCredentialStore } from './ticket-credential-store'
 import type {
   TicketCreateRequest,
   TicketGetRequest,
+  TicketUpdateRequest,
   TicketProviderRegistry
 } from './ticket-providers/provider-contract'
 import type { TicketSourceStore } from './ticket-source-store'
@@ -61,6 +62,8 @@ const MAX_TITLE_LENGTH = 255
 const MAX_TITLE_SEARCH_LENGTH = 400
 const MAX_DESCRIPTION_LENGTH = 100_000
 const MAX_ASSIGNEE_LENGTH = 320
+const MAX_UPDATE_COMMENT_LENGTH = 20_000
+const MAX_STATE_LENGTH = 100
 /**
  * Le type de fiche est INTERPOLÉ DANS LE CHEMIN de l'URL de création. `encodeURIComponent` protège
  * déjà côté adaptateur ; on refuse néanmoins en amont tout ce qui n'a pas la forme d'un type réel
@@ -211,6 +214,40 @@ export class TicketService {
     return normalizeTicketItem(
       await this.dependencies.registry.get(
         { source, id },
+        { ...credential, ...(signal ? { signal } : {}) }
+      )
+    )
+  }
+
+  /** Écrit uniquement sur une source strictement autorisée et avec des champs bornés. */
+  async update(value: TicketUpdateRequest, signal?: AbortSignal): Promise<TicketItem> {
+    const source = this.authorizedSource(value?.source)
+    const id = typeof value?.id === 'string' ? value.id.trim() : ''
+    if (!/^[1-9]\d*$/.test(id)) {
+      throw new Error(`Identifiant de fiche invalide : « ${id} » (entier positif attendu)`)
+    }
+    const comment = typeof value?.comment === 'string' ? value.comment.trim() : ''
+    const state = typeof value?.state === 'string' ? value.state.trim() : ''
+    const assignee = typeof value?.assignee === 'string' ? value.assignee.trim() : ''
+    if (!comment && !state && !assignee) throw new Error('Au moins une modification est requise')
+    if (comment.length > MAX_UPDATE_COMMENT_LENGTH) {
+      throw new Error(`Commentaire trop long (max ${MAX_UPDATE_COMMENT_LENGTH} caractères)`)
+    }
+    if (state.length > MAX_STATE_LENGTH) throw new Error('État de fiche invalide')
+    if (assignee.length > MAX_ASSIGNEE_LENGTH) throw new Error('Assigné de fiche invalide')
+    if (!this.dependencies.registry.supports(source)) {
+      throw new Error(`Fournisseur Tickets non supporté : ${source.provider}`)
+    }
+    const credential = await this.resolveCredential(source)
+    return normalizeTicketItem(
+      await this.dependencies.registry.update(
+        {
+          source,
+          id,
+          ...(comment ? { comment } : {}),
+          ...(state ? { state } : {}),
+          ...(assignee ? { assignee } : {})
+        },
         { ...credential, ...(signal ? { signal } : {}) }
       )
     )

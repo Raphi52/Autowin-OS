@@ -33,12 +33,23 @@ export interface TicketGetIpcRequest {
   requestId?: string
 }
 
+/** Mise à jour telle qu'elle arrive du renderer ; validation métier dans TicketService. */
+export interface TicketUpdateIpcRequest {
+  source: TicketSourceProfile
+  id: string
+  requestId?: string
+  comment?: string
+  state?: string
+  assignee?: string
+}
+
 interface TicketsServicePort {
   sources(): TicketSourceSummary[]
   saveSource(value: unknown): TicketSourceSummary[]
   list(value: TicketListRequest, signal?: AbortSignal): Promise<TicketPage>
   create(value: TicketCreateIpcRequest, signal?: AbortSignal): Promise<TicketItem>
   get(value: TicketGetIpcRequest, signal?: AbortSignal): Promise<TicketItem>
+  update(value: TicketUpdateIpcRequest, signal?: AbortSignal): Promise<TicketItem>
 }
 
 interface RegisterTicketsIpcOptions {
@@ -223,6 +234,24 @@ export function registerTicketsIpc({
     senderRequests.set(id, controller)
     try {
       return await service.get(request, controller.signal)
+    } finally {
+      if (senderRequests.get(id) === controller) senderRequests.delete(id)
+      if (senderRequests.size === 0) active.delete(event.sender)
+    }
+  })
+  ipc.handle('tickets:update', async (event, request: TicketUpdateIpcRequest) => {
+    assertTrusted(event, 'Tickets')
+    const id = requestId(request?.requestId)
+    let senderRequests = active.get(event.sender)
+    if (!senderRequests) {
+      senderRequests = new Map()
+      active.set(event.sender, senderRequests)
+    }
+    senderRequests.get(id)?.abort()
+    const controller = new AbortController()
+    senderRequests.set(id, controller)
+    try {
+      return await service.update(request, controller.signal)
     } finally {
       if (senderRequests.get(id) === controller) senderRequests.delete(id)
       if (senderRequests.size === 0) active.delete(event.sender)

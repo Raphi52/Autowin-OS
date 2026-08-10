@@ -157,6 +157,27 @@ function searchIssuesUrl(
   return url.toString()
 }
 
+function issueUrl(source: GitHubTicketSource, id: string, suffix = ''): string {
+  const base = (source.apiBaseUrl ?? 'https://api.github.com').replace(/\/+$/, '')
+  return `${base}/repos/${encodeURIComponent(source.owner)}/${encodeURIComponent(source.repository)}/issues/${id}${suffix}`
+}
+
+function githubHeaders(context: TicketProviderContext): Record<string, string> {
+  return {
+    accept: 'application/vnd.github+json',
+    ...(context.token ? { authorization: `Bearer ${context.token}` } : {}),
+    'x-github-api-version': '2022-11-28'
+  }
+}
+
+function positiveIssueId(value: unknown): string {
+  const id = typeof value === 'string' ? value.trim() : ''
+  if (!/^[1-9]\d*$/.test(id)) {
+    throw new TicketProviderError('INVALID_RESPONSE', 'Identifiant GitHub invalide.')
+  }
+  return id
+}
+
 async function listGitHubIssues(
   source: GitHubTicketSource,
   cursor: string | undefined,
@@ -186,9 +207,7 @@ async function listGitHubIssues(
       }
     }
   )
-  const issues = query
-    ? (payload as GitHubSearchResponse)?.items
-    : payload
+  const issues = query ? (payload as GitHubSearchResponse)?.items : payload
   if (!Array.isArray(issues)) {
     throw new TicketProviderError('INVALID_RESPONSE', 'Réponse GitHub invalide.')
   }
@@ -216,5 +235,56 @@ export const githubTicketProvider: TicketProviderAdapter = {
       request.titleContains,
       context
     )
+  },
+  async get(request, context) {
+    if (request.source.provider !== 'github') {
+      throw new TicketProviderError('UNSUPPORTED_PROVIDER', 'Source GitHub requise.')
+    }
+    const payload = await fetchTicketJson<GitHubIssue>(
+      issueUrl(request.source, positiveIssueId(request.id)),
+      {
+        fetchFn: context.fetchFn,
+        signal: context.signal,
+        headers: githubHeaders(context)
+      }
+    )
+    return normalizeIssue(payload, request.source)
+  },
+  async update(request, context) {
+    if (request.source.provider !== 'github') {
+      throw new TicketProviderError('UNSUPPORTED_PROVIDER', 'Source GitHub requise.')
+    }
+    const id = positiveIssueId(request.id)
+    const body: Record<string, unknown> = {
+      ...(request.state ? { state: request.state } : {}),
+      ...(request.assignee ? { assignees: [request.assignee] } : {})
+    }
+    let updated: GitHubIssue | undefined
+    if (Object.keys(body).length) {
+      updated = await fetchTicketJson<GitHubIssue>(issueUrl(request.source, id), {
+        fetchFn: context.fetchFn,
+        signal: context.signal,
+        method: 'PATCH',
+        headers: githubHeaders(context),
+        body
+      })
+    }
+    if (request.comment) {
+      await fetchTicketJson<unknown>(issueUrl(request.source, id, '/comments'), {
+        fetchFn: context.fetchFn,
+        signal: context.signal,
+        method: 'POST',
+        headers: githubHeaders(context),
+        body: { body: request.comment }
+      })
+    }
+    if (!updated) {
+      updated = await fetchTicketJson<GitHubIssue>(issueUrl(request.source, id), {
+        fetchFn: context.fetchFn,
+        signal: context.signal,
+        headers: githubHeaders(context)
+      })
+    }
+    return normalizeIssue(updated, request.source)
   }
 }

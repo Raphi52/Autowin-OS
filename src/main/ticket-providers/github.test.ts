@@ -155,4 +155,37 @@ describe('adaptateur GitHub Issues', () => {
     expect(url.searchParams.get('q')).toBe('repo:openai/codex is:issue quota workflow in:title')
     expect(page.items.map((item) => item.id)).toEqual(['42'])
   })
+
+  it('relit puis met à jour une issue et publie le compte-rendu', async () => {
+    const issue = {
+      id: 9001,
+      number: 42,
+      title: 'Quota du workflow',
+      state: 'closed',
+      html_url: 'https://github.com/openai/codex/issues/42',
+      updated_at: '2026-08-10T10:00:00Z',
+      labels: []
+    }
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ ...issue, state: 'open' }))
+      .mockResolvedValueOnce(Response.json(issue))
+      .mockResolvedValueOnce(Response.json({ id: 99, body: 'Tests verts.' }))
+
+    await expect(
+      githubTicketProvider.get!({ source, id: '42' }, { token: 'secret', fetchFn })
+    ).resolves.toMatchObject({ id: '42', state: 'open' })
+    await expect(
+      githubTicketProvider.update!(
+        { source, id: '42', state: 'closed', assignee: 'octocat', comment: 'Tests verts.' },
+        { token: 'secret', fetchFn }
+      )
+    ).resolves.toMatchObject({ id: '42', state: 'closed' })
+    expect(fetchFn.mock.calls[1]?.[1]).toMatchObject({ method: 'PATCH' })
+    expect(JSON.parse(String(fetchFn.mock.calls[1]?.[1]?.body))).toEqual({
+      state: 'closed',
+      assignees: ['octocat']
+    })
+    expect(String(fetchFn.mock.calls[2]?.[0])).toContain('/issues/42/comments')
+  })
 })
