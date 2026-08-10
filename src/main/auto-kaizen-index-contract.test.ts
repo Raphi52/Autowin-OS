@@ -27,6 +27,19 @@ describe('branchement runtime Auto-Kaizen', () => {
     expect(source).toContain('activeChatTurns.markDeliberateStop(conversationId)')
   })
 
+  it('propage l’identité du RUN dans orchestrate-end sur le chemin de REPRISE durable', () => {
+    // Mesuré : un réveil « orchestration-red » est arrivé SANS segment « RUN : », donc avec
+    // `e.runPath === undefined`. Le chemin de reprise durable diffusait `orchestrate-end` sans
+    // runPath alors que `resumedCurrentRunId` était disponible : l'incident perdait son scope
+    // (`orchestration-end:<convId>:red`) et l'agent réveillé n'avait aucun artefact à lire.
+    const resumeBroadcasts =
+      source.match(
+        /broadcast\(\{\s*type: 'orchestrate-end',\s*convId: conversationId,[\s\S]{0,220}?status: '(?:red|green)'\s*\}\)/g
+      ) ?? []
+    expect(resumeBroadcasts.length).toBeGreaterThan(0)
+    for (const call of resumeBroadcasts) expect(call).toContain('runPath: resumedCurrentRunId')
+  })
+
   it('transforme la perte du replay et chaque diagnostic exploitable en incident', () => {
     expect(source).toContain('const recap = summarizeJournal(lignes)')
     expect(source).toContain('journal-replay-loss:')
