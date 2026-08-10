@@ -499,8 +499,10 @@ describe('Observatory contextual toolbar', () => {
     const event = view.querySelector('.observatory-event')
     const decisions = view.querySelector('[data-testid="observatory-decision-ledger"]')
     expect(event?.compareDocumentPosition(lane as Node) ?? 0).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    // « Décisions & preuves » remonte AVANT la timeline : un verdict ou une décision ouverte se lit
+    // sans parcourir tout le run.
     expect(event?.compareDocumentPosition(decisions as Node) ?? 0).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
+      Node.DOCUMENT_POSITION_PRECEDING
     )
   })
 

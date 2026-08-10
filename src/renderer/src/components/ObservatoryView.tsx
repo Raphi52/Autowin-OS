@@ -8,6 +8,7 @@ import {
 import { QUICK_FILTERS, matchesQuickFilter, type QuickFilter } from './observatory-quick-filters'
 import { compareObservatoryEvents } from './observatory-comparison-model'
 import { buildObservatoryDecisionLedger } from './observatory-decision-ledger'
+import { buildObservatoryPrioritySignals } from './observatory-priority-signals'
 import type {
   ShadowRouteInsufficientData,
   ShadowRouteRecommendation
@@ -463,8 +464,14 @@ export function ObservatoryView({
   const convNativeTraces = nativeTraces.filter((t) => t.conversationId === conversationId)
   const nativeSummary = summarizeNativeTraces(convNativeMetadata)
   const legacyBrainTraces = convBrainTraces.filter((trace) => !trace.turnId)
+  // SCOPE : un payload natif SANS conversationId n'appartient à AUCUNE conversation — l'afficher
+  // dans celle qui est ouverte le fait fuiter d'une conv à l'autre (même liste partout). On ne
+  // remonte donc que les traces de CETTE conversation dont le rattachement causal (turnId) manque.
   const unlinkedNativeTraces = nativeTraces.filter(
-    (trace) => !trace.conversationId || !trace.turnId || trace.turnId === 'unknown'
+    (trace) =>
+      Boolean(conversationId) &&
+      trace.conversationId === conversationId &&
+      (!trace.turnId || trace.turnId === 'unknown')
   )
   const hasNativeTraces = convNativeTraces.length > 0 || nativeSummary.count > 0
   const typeOptions = [...new Set(allEvents.map((event) => event.kind))]
@@ -492,6 +499,7 @@ export function ObservatoryView({
         (anomaly) => !focusUnavailable && anomaly.turnIds.includes(turnFocus.turnId)
       )
     : timeline.anomalies
+  const prioritySignals = buildObservatoryPrioritySignals(visibleAnomalies, allEvents)
   const visibleEventCount = visibleTurns.reduce((sum, turn) => sum + turn.events.length, 0)
   const activeFilterCount =
     Number(Boolean(needle)) +
@@ -1149,17 +1157,24 @@ export function ObservatoryView({
           </section>
           <section className="observatory-diagnostics">
             <span className="observatory-panel-title">SIGNAUX PRIORITAIRES</span>
-            {visibleAnomalies.length === 0 ? (
+            {prioritySignals.length === 0 ? (
               <p>Aucun signal évident.</p>
             ) : (
-              visibleAnomalies.map((item) => (
+              prioritySignals.map((item) => (
                 <button
-                  key={`${item.kind}:${item.eventId}`}
+                  key={item.id}
+                  data-severity={item.severity}
+                  data-signal-id={item.eventId}
                   onClick={() => openEvent(item.eventId)}
                 >
-                  <strong>{item.impact.toLocaleString('fr-FR')} caractères</strong>
+                  <strong>
+                    {item.severityLabel} · {item.impact.toLocaleString('fr-FR')} caractères
+                  </strong>
                   <span>
-                    {item.label} · {item.turnIds.length} tour{item.turnIds.length > 1 ? 's' : ''}
+                    {item.label}
+                    {item.turnIds.length > 0
+                      ? ` · ${item.turnIds.length} tour${item.turnIds.length > 1 ? 's' : ''}`
+                      : ''}
                   </span>
                 </button>
               ))
@@ -1411,6 +1426,54 @@ export function ObservatoryView({
               </table>
             </section>
           )}
+          {!loading && decisionLedger.length > 0 && (
+            <details
+              className="observatory-decision-ledger"
+              data-testid="observatory-decision-ledger"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <summary>
+                <div>
+                  <b>Décisions & preuves</b>
+                  <small>
+                    {decisionLedger.filter((entry) => entry.status === 'open').length} ouverte
+                    {decisionLedger.filter((entry) => entry.status === 'open').length > 1
+                      ? 's'
+                      : ''}
+                  </small>
+                </div>
+                <span>Hypothèse → signal → observation → verdict</span>
+              </summary>
+              <div>
+                {decisionLedger.map((entry) => (
+                  <article key={entry.decisionId} data-status={entry.status}>
+                    <header>
+                      <strong>{entry.hypothesis}</strong>
+                      <b>{entry.status === 'open' ? 'ouverte' : 'clôturée'}</b>
+                    </header>
+                    <dl>
+                      <div>
+                        <dt>Signal attendu</dt>
+                        <dd>{entry.expectedSignal ?? 'non déclaré'}</dd>
+                      </div>
+                      <div>
+                        <dt>Observation</dt>
+                        <dd>{entry.observation ?? 'non observée'}</dd>
+                      </div>
+                      <div>
+                        <dt>Gate</dt>
+                        <dd>{entry.gate ?? 'non passé'}</dd>
+                      </div>
+                      <div>
+                        <dt>Verdict</dt>
+                        <dd>{entry.verdict ?? 'en attente'}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                ))}
+              </div>
+            </details>
+          )}
           {viewMode === 'timeline' &&
             visibleTurns.map((turn, turnIndex) => (
               <section className="observatory-turn" key={turn.id}>
@@ -1521,54 +1584,6 @@ export function ObservatoryView({
                     </article>
                   )
                 })}
-              </div>
-            </details>
-          )}
-          {!loading && decisionLedger.length > 0 && (
-            <details
-              className="observatory-decision-ledger"
-              data-testid="observatory-decision-ledger"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <summary>
-                <div>
-                  <b>Décisions & preuves</b>
-                  <small>
-                    {decisionLedger.filter((entry) => entry.status === 'open').length} ouverte
-                    {decisionLedger.filter((entry) => entry.status === 'open').length > 1
-                      ? 's'
-                      : ''}
-                  </small>
-                </div>
-                <span>Hypothèse → signal → observation → verdict</span>
-              </summary>
-              <div>
-                {decisionLedger.map((entry) => (
-                  <article key={entry.decisionId} data-status={entry.status}>
-                    <header>
-                      <strong>{entry.hypothesis}</strong>
-                      <b>{entry.status === 'open' ? 'ouverte' : 'clôturée'}</b>
-                    </header>
-                    <dl>
-                      <div>
-                        <dt>Signal attendu</dt>
-                        <dd>{entry.expectedSignal ?? 'non déclaré'}</dd>
-                      </div>
-                      <div>
-                        <dt>Observation</dt>
-                        <dd>{entry.observation ?? 'non observée'}</dd>
-                      </div>
-                      <div>
-                        <dt>Gate</dt>
-                        <dd>{entry.gate ?? 'non passé'}</dd>
-                      </div>
-                      <div>
-                        <dt>Verdict</dt>
-                        <dd>{entry.verdict ?? 'en attente'}</dd>
-                      </div>
-                    </dl>
-                  </article>
-                ))}
               </div>
             </details>
           )}
