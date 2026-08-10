@@ -202,6 +202,36 @@ describe('vue Tickets', () => {
     await act(async () => root.unmount())
   })
 
+  it('relit les fiches sélectionnées avant de préparer le prompt', async () => {
+    api({
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      conversationsCreate: vi.fn(async () => ({ id: 'conv-enriched' })),
+      appCommand: vi.fn(async () => ({ ok: true })),
+      getTicket: vi.fn(async ({ id }: { id: string }) => ({
+        ...item(id),
+        comments: [{ author: 'Alice', text: 'Décision issue de la discussion distante.' }]
+      }))
+    })
+    const prompts: string[] = []
+    const listener = (event: Event): void => {
+      void prompts.push((event as CustomEvent<{ prompt: string }>).detail.prompt)
+    }
+    window.addEventListener('autowin:prefill-conversation', listener)
+    const { root, container } = await render()
+    const checks = container.querySelectorAll<HTMLInputElement>(
+      '[data-testid="ticket-process-checkbox"]'
+    )
+    await act(async () => checks[0].click())
+    await act(async () => {
+      ;(container.querySelector('[data-testid="tickets-treat-selection"]') as HTMLButtonElement).click()
+      for (let index = 0; index < 20; index += 1) await Promise.resolve()
+    })
+
+    expect(prompts[0]).toContain('Décision issue de la discussion distante.')
+    window.removeEventListener('autowin:prefill-conversation', listener)
+    await act(async () => root.unmount())
+  })
+
   it('filtre par assigné avec autocomplete alimenté par l’annuaire Azure + les assignés chargés', async () => {
     api({ listTicketPeople: vi.fn(async () => ['Alice Martin']) })
     const { root, container } = await render()
@@ -841,7 +871,9 @@ describe('vue Tickets — lots automatiques différés', () => {
       appCommand
     })
     const opened: string[] = []
-    const listener = (event: Event): void => opened.push((event as CustomEvent<string>).detail)
+    const listener = (event: Event): void => {
+      void opened.push((event as CustomEvent<string>).detail)
+    }
     window.addEventListener('autowin:open-conversation', listener)
     const { root, container } = await render()
     const checks = container.querySelectorAll<HTMLInputElement>(

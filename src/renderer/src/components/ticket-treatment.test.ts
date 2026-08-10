@@ -171,6 +171,24 @@ describe('traitement groupé des tickets', () => {
 
     await expect(run).resolves.toMatchObject({ total: 5, succeeded: 4, failed: 1 })
   })
+
+  it('relit la fiche enrichie AVANT de construire le prompt', async () => {
+    const prompts: string[] = []
+    await runTicketTreatmentBatch([ticket('1')], {
+      shouldContinue: () => true,
+      enrichItem: async (item) => ({
+        ...item,
+        comments: [{ author: 'Alice', text: 'La décision finale est dans la discussion.' }]
+      }),
+      createConversation: async () => ({ id: 'conv-1' }),
+      promptConversation: async (_conversation, _item, prompt) => {
+        prompts.push(prompt)
+        return { ok: true }
+      }
+    })
+
+    expect(prompts[0]).toContain('La décision finale est dans la discussion.')
+  })
 })
 
 describe('formatTicketSelectionPrompt — UNE conversation pour N tickets (prompt-first)', () => {

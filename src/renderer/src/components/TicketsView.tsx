@@ -190,17 +190,49 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     loadTicketTreatmentRecords(localStorage)
   )
 
-  const recordTreatment = (
-    item: Pick<TicketItem, 'sourceId' | 'id'>,
-    record: TicketTreatmentRecord
-  ): void => {
-    setTreatmentRecords(saveTicketTreatmentRecord(localStorage, item, record))
-  }
+  const recordTreatment = useCallback(
+    (item: Pick<TicketItem, 'sourceId' | 'id'>, record: TicketTreatmentRecord): void => {
+      setTreatmentRecords(saveTicketTreatmentRecord(localStorage, item, record))
+    },
+    []
+  )
 
-  const openTreatmentConversation = async (conversationId: string): Promise<void> => {
+  const openTreatmentConversation = useCallback(async (conversationId: string): Promise<void> => {
     await window.api.appCommand?.('navigate', { tab: 'chat' })
     window.dispatchEvent(new CustomEvent('autowin:open-conversation', { detail: conversationId }))
-  }
+  }, [])
+
+  const enrichTicket = useCallback(
+    async (item: TicketItem, source: TicketSourceProfile | undefined): Promise<TicketItem> => {
+      if (!source || typeof window.api.getTicket !== 'function') return item
+      try {
+        return (await window.api.getTicket({
+          source,
+          id: item.id,
+          requestId: `ticket-detail-${crypto.randomUUID()}`
+        })) as TicketItem
+      } catch {
+        return item
+      }
+    },
+    []
+  )
+
+  const selectTicket = useCallback(
+    (item: TicketItem): void => {
+      const identity = `${item.sourceId}::${item.id}`
+      setSelectedId(identity)
+      void enrichTicket(item, activeSourceRef.current).then((enriched) => {
+        if (enriched === item) return
+        setItems((current) =>
+          current.map((candidate) =>
+            `${candidate.sourceId}::${candidate.id}` === identity ? enriched : candidate
+          )
+        )
+      })
+    },
+    [enrichTicket]
+  )
 
   useEffect(() => {
     activeRef.current = active
@@ -622,6 +654,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         ...(activeSourceRef.current ? { source: activeSourceRef.current } : {}),
         shouldContinue: () =>
           autoBusyRef.current && autoModeEnabledRef.current && !isAutoModeStopped(),
+        enrichItem: (item) => enrichTicket(item, activeSourceRef.current),
         createConversation: async (item) => {
           const conv = await window.api.conversationsCreate({
             title: ticketConversationTitle(item),
@@ -688,7 +721,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
             ` · ${remainingSessionRuns(settings, launchedRef.current)} run(s) restants sur le plafond`
         : 'arrêté'
     )
-  }, [autoMode])
+  }, [autoMode, enrichTicket, recordTreatment])
 
   // Chaque rafraichissement de la liste est un cycle de veille : les nouveaux arrives passent.
   useEffect(() => {
@@ -696,8 +729,13 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   }, [items, autoMode, treatIncoming])
 
   const openSelectionConversation = useCallback(async () => {
-    const selection = checkedVisibleItems
-    if (!selection.length) return
+    const selected = checkedVisibleItems
+    if (!selected.length) return
+    // Les listes fournisseur sont légères. Le prompt, lui, relit chaque fiche pour inclure la
+    // discussion et les titres de relations réellement courants.
+    const selection = await Promise.all(
+      selected.map((item) => enrichTicket(item, activeSourceRef.current))
+    )
     const prompt = formatTicketSelectionPrompt(selection, activeSourceRef.current)
     if (!prompt) return
     let provider: string | undefined
@@ -735,7 +773,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         detail: { conversationId: conv.id, prompt, send: sendDirectly }
       })
     )
-  }, [checkedVisibleItems, sendDirectly])
+  }, [checkedVisibleItems, enrichTicket, recordTreatment, sendDirectly])
 
   const retry = (): void => {
     if (sourceError) void loadSources()
@@ -1181,7 +1219,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                       type="button"
                       data-testid="ticket-row"
                       className={selectedItem === item ? 'is-selected' : ''}
-                      onClick={() => setSelectedId(identity)}
+                      onClick={() => selectTicket(item)}
                     >
                       <span className="tickets-id">#{item.id}</span>
                       <strong className="tickets-title">{item.title}</strong>
@@ -1310,11 +1348,28 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                       {selectedItem.relations.map((relation, index) => (
                         <li key={`${relation.kind}:${relation.target}:${index}`}>
                           <span>{relation.kind}</span> <strong>#{relation.target}</strong>
+                          {relation.title ? <span> — {relation.title}</span> : null}
                         </li>
                       ))}
                     </ul>
                   ) : (
                     <p>Aucune relation.</p>
+                  )}
+                </section>
+                <section>
+                  <h3>Discussion</h3>
+                  {selectedItem.comments?.length ? (
+                    <ul data-testid="ticket-comments">
+                      {selectedItem.comments.map((comment, index) => (
+                        <li key={comment.id ?? `${comment.createdAt ?? 'comment'}:${index}`}>
+                          <strong>{comment.author ?? 'Auteur inconnu'}</strong>
+                          {comment.createdAt ? <time>{relativeDate(comment.createdAt)}</time> : null}
+                          <p>{plainText(comment.text)}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>Aucun commentaire chargé.</p>
                   )}
                 </section>
                 <a href={selectedItem.url} target="_blank" rel="noreferrer">

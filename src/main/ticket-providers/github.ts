@@ -25,6 +25,11 @@ interface GitHubIssue {
   pull_request?: unknown
 }
 
+interface GitHubSearchResponse {
+  total_count?: unknown
+  items?: unknown
+}
+
 function boundedInteger(
   value: number | undefined,
   fallback: number,
@@ -138,10 +143,25 @@ function issuesUrl(source: GitHubTicketSource, page: number, pageSize: number): 
   return url.toString()
 }
 
+function searchIssuesUrl(
+  source: GitHubTicketSource,
+  query: string,
+  page: number,
+  pageSize: number
+): string {
+  const base = (source.apiBaseUrl ?? 'https://api.github.com').replace(/\/+$/, '')
+  const url = new URL(`${base}/search/issues`)
+  url.searchParams.set('q', `repo:${source.owner}/${source.repository} is:issue ${query} in:title`)
+  url.searchParams.set('per_page', String(pageSize))
+  url.searchParams.set('page', String(page))
+  return url.toString()
+}
+
 async function listGitHubIssues(
   source: GitHubTicketSource,
   cursor: string | undefined,
   pageSize: number | undefined,
+  titleContains: string | undefined,
   context: TicketProviderContext
 ): Promise<TicketPage> {
   let linkHeader: string | null = null
@@ -151,8 +171,11 @@ async function listGitHubIssues(
     linkHeader = response.headers.get('link')
     return response
   }
+  const page = cursorPage(cursor)
+  const size = boundedInteger(pageSize, 50, 1, 100)
+  const query = titleContains?.trim() ?? ''
   const payload = await fetchTicketJson<unknown>(
-    issuesUrl(source, cursorPage(cursor), boundedInteger(pageSize, 50, 1, 100)),
+    query ? searchIssuesUrl(source, query, page, size) : issuesUrl(source, page, size),
     {
       fetchFn: captureFetch,
       signal: context.signal,
@@ -163,13 +186,16 @@ async function listGitHubIssues(
       }
     }
   )
-  if (!Array.isArray(payload)) {
+  const issues = query
+    ? (payload as GitHubSearchResponse)?.items
+    : payload
+  if (!Array.isArray(issues)) {
     throw new TicketProviderError('INVALID_RESPONSE', 'Réponse GitHub invalide.')
   }
 
   const next = nextPage(linkHeader)
   return {
-    items: (payload as GitHubIssue[])
+    items: (issues as GitHubIssue[])
       .filter((issue) => issue.pull_request === undefined)
       .map((issue) => normalizeIssue(issue, source)),
     ...(next ? { cursor: next } : {}),
@@ -183,6 +209,12 @@ export const githubTicketProvider: TicketProviderAdapter = {
     if (request.source.provider !== 'github') {
       throw new TicketProviderError('UNSUPPORTED_PROVIDER', 'Source GitHub requise.')
     }
-    return listGitHubIssues(request.source, request.cursor, request.pageSize, context)
+    return listGitHubIssues(
+      request.source,
+      request.cursor,
+      request.pageSize,
+      request.titleContains,
+      context
+    )
   }
 }

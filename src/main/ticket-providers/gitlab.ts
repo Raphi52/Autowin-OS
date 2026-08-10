@@ -97,9 +97,16 @@ export const gitlabTicketProvider: TicketProviderAdapter = {
     const project = encodeURIComponent(`${source.namespace}/${source.repository}`)
     const perPage = boundedInteger(request.pageSize, 50, 100)
     const page = pageFromCursor(request.cursor)
-    const url =
-      `${baseUrl}/api/v4/projects/${project}/issues` +
-      `?scope=all&state=all&per_page=${perPage}&page=${page}`
+    const url = new URL(`${baseUrl}/api/v4/projects/${project}/issues`)
+    url.searchParams.set('scope', 'all')
+    url.searchParams.set('state', 'all')
+    url.searchParams.set('per_page', String(perPage))
+    url.searchParams.set('page', String(page))
+    const titleContains = request.titleContains?.trim()
+    if (titleContains) {
+      url.searchParams.set('search', titleContains)
+      url.searchParams.set('in', 'title')
+    }
 
     let nextPage: string | undefined
     const fetchFn: typeof fetch = async (input, init) => {
@@ -108,7 +115,7 @@ export const gitlabTicketProvider: TicketProviderAdapter = {
       nextPage = header && /^[1-9]\d*$/.test(header) ? header : undefined
       return response
     }
-    const payload = await fetchTicketJson<unknown>(url, {
+    const payload = await fetchTicketJson<unknown>(url.toString(), {
       fetchFn,
       signal: context.signal,
       headers: {

@@ -126,4 +126,33 @@ describe('adaptateur GitHub Issues', () => {
       githubTicketProvider.list({ source }, { token: 'secret', fetchFn: fetchFn as typeof fetch })
     ).rejects.toEqual(new TicketProviderError('INVALID_RESPONSE', 'Réponse GitHub invalide.'))
   })
+
+  it('recherche côté serveur dans TOUS les titres via Search Issues', async () => {
+    const fetchFn = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      Response.json({
+        total_count: 1,
+        items: [
+          {
+            id: 9001,
+            number: 42,
+            title: 'Quota du workflow',
+            state: 'open',
+            html_url: 'https://github.com/openai/codex/issues/42',
+            updated_at: '2026-07-23T09:30:00Z',
+            labels: []
+          }
+        ]
+      })
+    )
+
+    const page = await githubTicketProvider.list(
+      { source, titleContains: 'quota workflow', pageSize: 25 },
+      { token: 'secret', fetchFn: fetchFn as typeof fetch }
+    )
+
+    const url = new URL(String(fetchFn.mock.calls[0]?.[0]))
+    expect(url.pathname).toBe('/search/issues')
+    expect(url.searchParams.get('q')).toBe('repo:openai/codex is:issue quota workflow in:title')
+    expect(page.items.map((item) => item.id)).toEqual(['42'])
+  })
 })

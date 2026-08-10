@@ -72,6 +72,72 @@ describe('adaptateur Azure — lecture par id', () => {
       )
     ).rejects.toThrow(TicketProviderError)
   })
+
+  it('enrichit la fiche avec les commentaires récents et les titres des work items liés', async () => {
+    const linked = {
+      id: 1300,
+      fields: {
+        'System.WorkItemType': 'Tache',
+        'System.Title': 'Corriger le déploiement',
+        'System.State': 'Ouvert',
+        'System.ChangedDate': '2026-08-09T10:00:00.000Z'
+      }
+    }
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        json({
+          value: [
+            {
+              ...fiche1227,
+              relations: [
+                {
+                  rel: 'System.LinkTypes.Dependency-Forward',
+                  url: 'https://dev.azure.com/AmitelGTC/RIG/_apis/wit/workItems/1300'
+                },
+                {
+                  rel: 'AttachedFile',
+                  url: 'https://dev.azure.com/AmitelGTC/RIG/_apis/wit/attachments/a',
+                  attributes: { name: 'preuve.png' }
+                }
+              ]
+            }
+          ]
+        })
+      )
+      .mockResolvedValueOnce(json({ value: [linked] }))
+      .mockResolvedValueOnce(
+        json({
+          comments: [
+            {
+              id: 9,
+              text: '<p>La décision finale est ici.</p>',
+              createdDate: '2026-08-10T09:00:00.000Z',
+              createdBy: { displayName: 'Alice' }
+            }
+          ]
+        })
+      )
+
+    const item = await azureTicketProvider.get!(
+      { source: DEFAULT_TICKET_SOURCE, id: '1227' },
+      { token: 'pat', fetchFn: fetchFn as unknown as typeof fetch }
+    )
+
+    expect(item.relations).toEqual([
+      expect.objectContaining({ target: '1300', title: 'Corriger le déploiement' }),
+      expect.objectContaining({ title: 'preuve.png' })
+    ])
+    expect(item.comments).toEqual([
+      {
+        id: '9',
+        text: '<p>La décision finale est ici.</p>',
+        createdAt: '2026-08-10T09:00:00.000Z',
+        author: 'Alice'
+      }
+    ])
+    expect(String(fetchFn.mock.calls[2]?.[0])).toContain('/workItems/1227/comments')
+  })
 })
 
 describe('registre — la lecture par id est optionnelle côté adaptateur', () => {

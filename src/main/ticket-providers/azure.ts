@@ -33,6 +33,7 @@ interface AzureWiqlResponse {
 interface AzureRelation {
   rel: string
   url: string
+  attributes?: { name?: unknown }
 }
 
 interface AzureWorkItem {
@@ -43,6 +44,15 @@ interface AzureWorkItem {
 
 interface AzureWorkItemsResponse {
   value: AzureWorkItem[]
+}
+
+interface AzureCommentsResponse {
+  comments: Array<{
+    id?: unknown
+    text?: unknown
+    createdDate?: unknown
+    createdBy?: { displayName?: unknown; uniqueName?: unknown }
+  }>
 }
 
 function invalidResponse(message = 'Réponse Azure DevOps invalide.'): TicketProviderError {
@@ -152,27 +162,39 @@ function relationTarget(url: string): string {
   }
 }
 
-function normalizeRelations(relations: AzureRelation[] | undefined): TicketRelation[] | undefined {
+function normalizeRelations(
+  relations: AzureRelation[] | undefined,
+  linkedTitles: ReadonlyMap<string, string> = new Map()
+): TicketRelation[] | undefined {
   if (!relations?.length) return undefined
-  return relations.map((relation) => ({
-    kind: relation.rel,
-    target: relationTarget(relation.url),
-    url: relation.url
-  }))
+  return relations.map((relation) => {
+    const target = relationTarget(relation.url)
+    const attachmentName =
+      typeof relation.attributes?.name === 'string' ? relation.attributes.name : undefined
+    const title = linkedTitles.get(target) ?? attachmentName
+    return {
+      kind: relation.rel,
+      target,
+      url: relation.url,
+      ...(title ? { title } : {})
+    }
+  })
 }
 
 function normalizeWorkItem(
   item: AzureWorkItem,
   sourceId: string,
   organization: string,
-  project: string
+  project: string,
+  linkedTitles: ReadonlyMap<string, string> = new Map(),
+  comments?: TicketItem['comments']
 ): TicketItem {
   const fields = item.fields
   const createdAt = optionalString(fields, 'System.CreatedDate')
   const assignee = assignedTo(fields)
   const priority = fields['Microsoft.VSTS.Common.Priority']
   const description = optionalString(fields, 'System.Description')
-  const relations = normalizeRelations(item.relations)
+  const relations = normalizeRelations(item.relations, linkedTitles)
 
   return {
     id: String(item.id),
@@ -187,8 +209,56 @@ function normalizeWorkItem(
     ...(typeof priority === 'string' || typeof priority === 'number' ? { priority } : {}),
     ...(description ? { description } : {}),
     ...(relations ? { relations } : {}),
+    ...(comments?.length ? { comments } : {}),
     fields
   }
+}
+
+function linkedWorkItemIds(relations: AzureRelation[] | undefined): number[] {
+  if (!relations?.length) return []
+  const ids = new Set<number>()
+  for (const relation of relations) {
+    if (!/\/_apis\/wit\/workitems\//i.test(relation.url)) continue
+    const target = relationTarget(relation.url)
+    if (/^[1-9]\d*$/.test(target)) ids.add(Number(target))
+  }
+  return [...ids]
+}
+
+async function fetchComments(
+  baseUrl: string,
+  id: string,
+  authorization: string,
+  context: TicketProviderContext
+): Promise<TicketItem['comments']> {
+  const response = await fetchTicketJson<unknown>(
+    `${baseUrl}/_apis/wit/workItems/${id}/comments?$top=20&api-version=${API_VERSION}-preview.4`,
+    {
+      fetchFn: context.fetchFn,
+      signal: context.signal,
+      headers: { authorization }
+    }
+  )
+  if (!isRecord(response) || !Array.isArray(response.comments)) throw invalidResponse()
+  return (response as unknown as AzureCommentsResponse).comments.flatMap((comment) => {
+    if (typeof comment.text !== 'string' || !comment.text.trim()) return []
+    const author =
+      typeof comment.createdBy?.displayName === 'string'
+        ? comment.createdBy.displayName
+        : typeof comment.createdBy?.uniqueName === 'string'
+          ? comment.createdBy.uniqueName
+          : undefined
+    return [
+      {
+        ...(typeof comment.id === 'number' || typeof comment.id === 'string'
+          ? { id: String(comment.id) }
+          : {}),
+        ...(author ? { author } : {}),
+        ...(typeof comment.createdDate === 'string' ? { createdAt: comment.createdDate } : {}),
+        text: comment.text
+      }
+    ]
+  })
 }
 
 async function fetchWorkItems(
@@ -369,7 +439,35 @@ export const azureTicketProvider: TicketProviderAdapter = {
 
     const [item] = await fetchWorkItems(baseUrl, [Number(raw)], authorization, context)
     if (!item) throw invalidResponse(`Fiche Azure DevOps ${raw} introuvable.`)
-    return normalizeWorkItem(item, source.id, source.organization, source.project)
+    let linkedTitles = new Map<string, string>()
+    const linkedIds = linkedWorkItemIds(item.relations)
+    if (linkedIds.length) {
+      try {
+        const linked = await fetchWorkItems(baseUrl, linkedIds, authorization, context)
+        linkedTitles = new Map(
+          linked.flatMap((candidate) => {
+            const title = optionalString(candidate.fields, 'System.Title')
+            return title ? [[String(candidate.id), title] as const] : []
+          })
+        )
+      } catch {
+        // L'enrichissement d'une relation ne doit pas rendre la fiche principale illisible.
+      }
+    }
+    let comments: TicketItem['comments']
+    try {
+      comments = await fetchComments(baseUrl, raw, authorization, context)
+    } catch {
+      // Un PAT sans scope Comments garde l'accès au work item ; on dégrade explicitement en absence.
+    }
+    return normalizeWorkItem(
+      item,
+      source.id,
+      source.organization,
+      source.project,
+      linkedTitles,
+      comments
+    )
   },
   async create(request, context) {
     if (request.source.provider !== 'azure') {

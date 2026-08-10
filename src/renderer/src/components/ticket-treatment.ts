@@ -311,6 +311,8 @@ interface TreatmentConversation {
 
 interface TreatmentDeps {
   shouldContinue: () => boolean
+  /** Relit la fiche distante juste avant le prompt (discussion, relations, état courant). */
+  enrichItem?: (item: TicketItem) => Promise<TicketItem>
   createConversation: (item: TicketItem) => Promise<TreatmentConversation>
   promptConversation: (
     conversation: TreatmentConversation,
@@ -366,9 +368,17 @@ export async function runTicketTreatmentBatch(
       let conversation: TreatmentConversation | undefined
       try {
         if (!deps.shouldContinue()) return
-        conversation = await deps.createConversation(item)
+        let promptItem = item
+        if (deps.enrichItem) {
+          try {
+            promptItem = await deps.enrichItem(item)
+          } catch {
+            // La liste reste une donnée valide : l'enrichissement est best-effort, jamais bloquant.
+          }
+        }
+        conversation = await deps.createConversation(promptItem)
         result.conversationIds.push(conversation.id)
-        deps.onConversationCreated?.(conversation, item)
+        deps.onConversationCreated?.(conversation, promptItem)
         if (!deps.shouldContinue()) {
           await deps.abandonConversation?.(conversation)
           result.failed += 1
@@ -376,8 +386,8 @@ export async function runTicketTreatmentBatch(
         }
         const response = await deps.promptConversation(
           conversation,
-          item,
-          formatTicketTreatmentPrompt(item, deps.source)
+          promptItem,
+          formatTicketTreatmentPrompt(promptItem, deps.source)
         )
         succeeded = response.ok && !response.cancelled
         if (succeeded) result.succeeded += 1

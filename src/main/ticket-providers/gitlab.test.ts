@@ -112,4 +112,19 @@ describe('adaptateur GitLab Issues', () => {
       gitlabTicketProvider.list({ source }, { token: 'secret', fetchFn: fetchFn as typeof fetch })
     ).rejects.toEqual(new TicketProviderError('INVALID_RESPONSE', 'Réponse GitLab invalide.'))
   })
+
+  it('transmet la recherche serveur au filtre de titre GitLab', async () => {
+    const fetchFn = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
+      Response.json([])
+    )
+
+    await gitlabTicketProvider.list(
+      { source, titleContains: 'quota workflow' },
+      { token: 'secret', fetchFn: fetchFn as typeof fetch }
+    )
+
+    const url = new URL(String(fetchFn.mock.calls[0]?.[0]))
+    expect(url.searchParams.get('search')).toBe('quota workflow')
+    expect(url.searchParams.get('in')).toBe('title')
+  })
 })
