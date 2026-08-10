@@ -220,8 +220,14 @@ function AgentOffice({
           {(agent.excludedDirtyFiles?.length ?? 0) > 0 && (
             <details className="wt-office-excluded">
               <summary>
-                {agent.excludedDirtyFiles!.length} changement
-                {agent.excludedDirtyFiles!.length > 1 ? 's locaux' : ' local'} non inclus
+                {agent.excludedDirtyFileCount ?? agent.excludedDirtyFiles!.length} changement
+                {(agent.excludedDirtyFileCount ?? agent.excludedDirtyFiles!.length) > 1
+                  ? 's locaux'
+                  : ' local'}{' '}
+                non inclus
+                {agent.excludedDirtyFilesTruncated
+                  ? ` · ${agent.excludedDirtyFiles!.length} affichés`
+                  : ''}
               </summary>
               <ul>
                 {agent.excludedDirtyFiles!.map((path) => (

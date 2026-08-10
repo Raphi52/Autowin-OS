@@ -56,6 +56,8 @@ export interface WorktreeAgentActivity {
   sourceSha?: string
   canonicalBaseRef?: string
   excludedDirtyFiles?: string[]
+  excludedDirtyFileCount?: number
+  excludedDirtyFilesTruncated?: boolean
   publishedSha?: string
   verdict?: 'unknown' | 'running' | 'green' | 'red' | 'cancelled' | 'interrupted'
   publication?:

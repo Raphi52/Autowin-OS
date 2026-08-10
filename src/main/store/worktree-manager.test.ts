@@ -144,6 +144,23 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
     expect(context.excludedDirtyFiles).toEqual(['local-only.txt'])
   })
 
+  it('borne l affichage de 501 fichiers sales sans bloquer ni contaminer le nouveau job', () => {
+    const repo = tempRepo()
+    for (let index = 0; index < 501; index += 1) {
+      writeFileSync(join(repo, `dirty-${String(index).padStart(3, '0')}.txt`), 'local\n')
+    }
+    const wm = manager(repo)
+
+    const context = wm.describeForLaunch('dirty-large')
+    const worktree = wm.acquire('dirty-large', context)
+
+    expect(context.excludedDirtyFiles).toHaveLength(500)
+    expect(context.excludedDirtyFileCount).toBe(501)
+    expect(context.excludedDirtyFilesTruncated).toBe(true)
+    expect(existsSync(join(worktree, 'dirty-000.txt'))).toBe(false)
+    expect(existsSync(join(worktree, 'dirty-500.txt'))).toBe(false)
+  })
+
   it('en mode production refuse un lancement sans base distante canonique', () => {
     const repo = tempRepo()
     const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))

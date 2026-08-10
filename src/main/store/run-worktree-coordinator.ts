@@ -108,6 +108,8 @@ interface Tracked {
   sourceSha?: string
   canonicalBaseRef?: string
   excludedDirtyFiles?: string[]
+  excludedDirtyFileCount?: number
+  excludedDirtyFilesTruncated?: boolean
   verdict?: WorktreeRunVerdict
   publication?: WorktreePublicationState
   recovered?: boolean
@@ -202,6 +204,8 @@ export class RunWorktreeCoordinator {
             sourceSha: record.sourceSha,
             canonicalBaseRef: record.canonicalBaseRef,
             excludedDirtyFiles: record.excludedDirtyFiles,
+            excludedDirtyFileCount: record.excludedDirtyFileCount,
+            excludedDirtyFilesTruncated: record.excludedDirtyFilesTruncated,
             verdict: record.verdict,
             publication: record.publication,
             recovered: true,
@@ -258,7 +262,9 @@ export class RunWorktreeCoordinator {
         baseSha: tracked.baseSha!,
         sourceSha: tracked.sourceSha,
         canonicalBaseRef: tracked.canonicalBaseRef,
-        excludedDirtyFiles: tracked.excludedDirtyFiles
+        excludedDirtyFiles: tracked.excludedDirtyFiles,
+        excludedDirtyFileCount: tracked.excludedDirtyFileCount,
+        excludedDirtyFilesTruncated: tracked.excludedDirtyFilesTruncated
       }
       const validation = this.manager.validateRecoveryContext(runId, {
         worktreePath: context.worktreePath,
@@ -355,7 +361,9 @@ export class RunWorktreeCoordinator {
         baseSha: tracked.baseSha!,
         sourceSha: tracked.sourceSha,
         canonicalBaseRef: tracked.canonicalBaseRef,
-        excludedDirtyFiles: tracked.excludedDirtyFiles
+        excludedDirtyFiles: tracked.excludedDirtyFiles,
+        excludedDirtyFileCount: tracked.excludedDirtyFileCount,
+        excludedDirtyFilesTruncated: tracked.excludedDirtyFilesTruncated
       }
       const validation = this.manager.validateRecoveryContextAsync
         ? await this.manager.validateRecoveryContextAsync(runId, {
@@ -752,6 +760,8 @@ export class RunWorktreeCoordinator {
       sourceSha: t.sourceSha,
       canonicalBaseRef: t.canonicalBaseRef,
       excludedDirtyFiles: t.excludedDirtyFiles,
+      excludedDirtyFileCount: t.excludedDirtyFileCount,
+      excludedDirtyFilesTruncated: t.excludedDirtyFilesTruncated,
       publishedSha: t.publishedSha,
       verdict: t.verdict,
       publication: t.publication,
@@ -1013,6 +1023,19 @@ export class RunWorktreeCoordinator {
       ...((tracked.excludedDirtyFiles ?? previous?.excludedDirtyFiles)?.length
         ? { excludedDirtyFiles: tracked.excludedDirtyFiles ?? previous?.excludedDirtyFiles }
         : {}),
+      ...((tracked.excludedDirtyFileCount ?? previous?.excludedDirtyFileCount) !== undefined
+        ? {
+            excludedDirtyFileCount:
+              tracked.excludedDirtyFileCount ?? previous?.excludedDirtyFileCount
+          }
+        : {}),
+      ...((tracked.excludedDirtyFilesTruncated ?? previous?.excludedDirtyFilesTruncated) !==
+      undefined
+        ? {
+            excludedDirtyFilesTruncated:
+              tracked.excludedDirtyFilesTruncated ?? previous?.excludedDirtyFilesTruncated
+          }
+        : {}),
       verdict,
       publication,
       files: tracked.files,
@@ -1114,6 +1137,10 @@ export class RunWorktreeCoordinator {
           sourceSha: record?.sourceSha ?? orphanContext?.sourceSha,
           canonicalBaseRef: record?.canonicalBaseRef ?? orphanContext?.canonicalBaseRef,
           excludedDirtyFiles: record?.excludedDirtyFiles ?? orphanContext?.excludedDirtyFiles,
+          excludedDirtyFileCount:
+            record?.excludedDirtyFileCount ?? orphanContext?.excludedDirtyFileCount,
+          excludedDirtyFilesTruncated:
+            record?.excludedDirtyFilesTruncated ?? orphanContext?.excludedDirtyFilesTruncated,
           conflictBaseSha: record?.conflictBaseSha,
           conflictAgentSha: record?.conflictAgentSha,
           publishedSha: record?.publishedSha,
@@ -1186,6 +1213,10 @@ export class RunWorktreeCoordinator {
           sourceSha: record?.sourceSha ?? orphanContext?.sourceSha,
           canonicalBaseRef: record?.canonicalBaseRef ?? orphanContext?.canonicalBaseRef,
           excludedDirtyFiles: record?.excludedDirtyFiles ?? orphanContext?.excludedDirtyFiles,
+          excludedDirtyFileCount:
+            record?.excludedDirtyFileCount ?? orphanContext?.excludedDirtyFileCount,
+          excludedDirtyFilesTruncated:
+            record?.excludedDirtyFilesTruncated ?? orphanContext?.excludedDirtyFilesTruncated,
           conflictFile: record?.conflictFile,
           conflictBaseSha: record?.conflictBaseSha,
           conflictAgentSha: record?.conflictAgentSha,
@@ -1348,6 +1379,8 @@ export class RunWorktreeCoordinator {
       sourceSha: record?.sourceSha,
       canonicalBaseRef: record?.canonicalBaseRef,
       excludedDirtyFiles: record?.excludedDirtyFiles,
+      excludedDirtyFileCount: record?.excludedDirtyFileCount,
+      excludedDirtyFilesTruncated: record?.excludedDirtyFilesTruncated,
       conflictBaseSha: record?.conflictBaseSha,
       conflictAgentSha: record?.conflictAgentSha,
       publishedSha: record?.publishedSha,
@@ -1510,6 +1543,8 @@ export class RunWorktreeCoordinator {
       sourceSha: record?.sourceSha,
       canonicalBaseRef: record?.canonicalBaseRef,
       excludedDirtyFiles: record?.excludedDirtyFiles,
+      excludedDirtyFileCount: record?.excludedDirtyFileCount,
+      excludedDirtyFilesTruncated: record?.excludedDirtyFilesTruncated,
       conflictBaseSha: record?.conflictBaseSha,
       conflictAgentSha: record?.conflictAgentSha,
       publishedSha: record?.publishedSha,

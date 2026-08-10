@@ -210,7 +210,10 @@ describe('RunWorktreeCoordinator (flip live)', () => {
         workspacePath: root,
         worktreePath,
         baseBranch: 'main',
-        baseSha: TEST_SHA
+        baseSha: TEST_SHA,
+        excludedDirtyFiles: Array.from({ length: 500 }, (_, index) => `dirty-${index}.txt`),
+        excludedDirtyFileCount: 501,
+        excludedDirtyFilesTruncated: true
       }
       const stateStore = new WorktreeRunStateStore(root, 'repo-a')
       const prepareAsync = vi.fn(async () => ({ context, path: worktreePath }))
@@ -226,13 +229,17 @@ describe('RunWorktreeCoordinator (flip live)', () => {
 
       await expect(coordinator.beginAsync(runId, 'Builder', true)).resolves.toBe(worktreePath)
       expect(prepareAsync).toHaveBeenCalledWith(runId, undefined)
-      expect(stateStore.get(runId)).toMatchObject({
+      const stored = stateStore.get(runId)
+      expect(stored).toMatchObject({
         runId,
         worktreePath,
         baseBranch: 'main',
         baseSha: TEST_SHA,
+        excludedDirtyFileCount: 501,
+        excludedDirtyFilesTruncated: true,
         verdict: 'running'
       })
+      expect(stored?.excludedDirtyFiles).toHaveLength(500)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

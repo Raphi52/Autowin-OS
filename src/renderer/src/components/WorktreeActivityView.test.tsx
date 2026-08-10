@@ -119,6 +119,19 @@ describe('WorktreeActivityView — A2 Hub', () => {
     expect(container.textContent).toContain('src/wip.ts')
   })
 
+  it('affiche le total dirty reel quand la liste durable est tronquee', () => {
+    render([
+      {
+        ...offices[0],
+        excludedDirtyFiles: ['dirty-000.txt', 'dirty-001.txt'],
+        excludedDirtyFileCount: 501,
+        excludedDirtyFilesTruncated: true
+      }
+    ])
+
+    expect(container.textContent).toContain('501 changements locaux non inclus · 2 affichés')
+  })
+
   it('relie visuellement chaque worktree au workspace et explique son trajet', () => {
     render([
       offices[0],

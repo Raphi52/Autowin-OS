@@ -162,6 +162,9 @@ export interface WorktreeRunContext {
   canonicalBaseRef?: string
   /** Changements du workspace volontairement exclus du snapshot commité. */
   excludedDirtyFiles?: string[]
+  /** Total réel, conservé même si la liste d'affichage est bornée. */
+  excludedDirtyFileCount?: number
+  excludedDirtyFilesTruncated?: boolean
 }
 
 export interface WorktreeRecoveryContext extends Omit<WorktreeRunContext, 'workspacePath'> {
@@ -1239,13 +1242,17 @@ ${chainReferenceHook}exit 0
       }
       if (localBeforeRemote) sourceSha = remote.sha
     }
+    const excludedDirtyFiles = parsePorcelainPaths(
+      this.git(this.baseRepo, ['status', '--porcelain=v1', '-z', '--untracked-files=all'])
+    )
+    const excludedDirtyFileLimit = 500
     return {
       ...local,
       sourceSha,
       ...(remote ? { canonicalBaseRef: remote.ref } : {}),
-      excludedDirtyFiles: parsePorcelainPaths(
-        this.git(this.baseRepo, ['status', '--porcelain=v1', '-z', '--untracked-files=all'])
-      )
+      excludedDirtyFiles: excludedDirtyFiles.slice(0, excludedDirtyFileLimit),
+      excludedDirtyFileCount: excludedDirtyFiles.length,
+      excludedDirtyFilesTruncated: excludedDirtyFiles.length > excludedDirtyFileLimit
     }
   }
 
