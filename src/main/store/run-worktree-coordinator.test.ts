@@ -630,6 +630,55 @@ describe('RunWorktreeCoordinator (flip live)', () => {
     }
   })
 
+  it('rejoue au redemarrage une publication distante rejetee', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-autoclose-rejected-'))
+    try {
+      const runId = 'run-autoclose-rejected'
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      stateStore.save({
+        version: 1,
+        repoId: 'repo-a',
+        runId,
+        task: 'Publier apres panne',
+        agentName: 'Builder',
+        worktreePath: join(root, `agent__${runId}`),
+        baseBranch: 'main',
+        baseSha: '2'.repeat(40),
+        publicationBaseSha: TEST_SHA,
+        verdict: 'green',
+        publication: 'complete',
+        files: [],
+        publishedSha: PUBLISHED_SHA,
+        createdAtMs: 10,
+        updatedAtMs: 11
+      })
+      const failedPush = vi.fn().mockRejectedValue(new Error('reseau indisponible'))
+
+      new RunWorktreeCoordinator({
+        manager: fakeManager({ listAgentIds: () => [] }),
+        stateStore,
+        nowFn: () => 20,
+        onRecoveredPublication: failedPush
+      })
+
+      await vi.waitFor(() => expect(failedPush).toHaveBeenCalledTimes(1))
+      expect(stateStore.get(runId)?.causalPublicationDeliveredAtMs).toBeUndefined()
+
+      const recoveredPush = vi.fn().mockResolvedValue(undefined)
+      new RunWorktreeCoordinator({
+        manager: fakeManager({ listAgentIds: () => [] }),
+        stateStore,
+        nowFn: () => 30,
+        onRecoveredPublication: recoveredPush
+      })
+
+      await vi.waitFor(() => expect(stateStore.get(runId)?.causalPublicationDeliveredAtMs).toBe(30))
+      expect(recoveredPush).toHaveBeenCalledTimes(1)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('n invente pas la base causale d un ancien manifeste qui ne l a jamais persistee', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-causal-legacy-publication-'))
     try {

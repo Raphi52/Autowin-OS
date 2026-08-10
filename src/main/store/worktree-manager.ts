@@ -1780,6 +1780,15 @@ ${chainReferenceHook}exit 0
         if (publish.code === 0) {
           return { outcome: 'merged', agentId, committed, baseSha, publishedSha: publicationSha }
         }
+        if (!this.acknowledgePublication(agentId, publicationSha)) {
+          return {
+            outcome: 'blocked',
+            agentId,
+            files: agentFiles,
+            reason: 'merge-failed',
+            detail: 'La transaction refusée n’a pas pu être libérée sans course.'
+          }
+        }
 
         const operationAfterPublish = this.operationInProgress()
         if (operationAfterPublish) {

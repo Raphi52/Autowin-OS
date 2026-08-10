@@ -357,6 +357,18 @@ export interface AutoCloseReport {
   at: string
 }
 
+/**
+ * Une publication Git locale deja fusionnee ne peut etre acquittee tant que sa copie distante reste
+ * rejouable. Les blocages de contenu sont terminaux et visibles dans le rapport ; un echec transport
+ * ou l'absence temporaire de remote doivent au contraire rester dans le journal de reprise.
+ */
+export function projectPublicationNeedsRetry(report: AutoCloseReport): boolean {
+  return (
+    report.project.status === 'failed' ||
+    (report.project.status === 'skipped' && report.project.reason === 'no-remote')
+  )
+}
+
 /** Message de commit : la tâche du run, bornée, préfixée pour être reconnaissable dans l'historique. */
 export function autoCloseMessage(task: string, runId: string): string {
   const head = task.replace(/\s+/g, ' ').trim().slice(0, 100) || 'travail agent'

@@ -652,7 +652,7 @@ export interface RunWorktrees {
       merge?: boolean
       retainGreen?: boolean
       onPrepared?: (publication: { baseSha: string; agentSha: string }) => void
-      onPublished?: (publication: { baseSha: string; agentSha: string }) => void
+      onPublished?: (publication: { baseSha: string; agentSha: string }) => void | Promise<void>
     }
   ): unknown
   endAsync?(
@@ -661,7 +661,7 @@ export interface RunWorktrees {
       merge?: boolean
       retainGreen?: boolean
       onPrepared?: (publication: { baseSha: string; agentSha: string }) => void
-      onPublished?: (publication: { baseSha: string; agentSha: string }) => void
+      onPublished?: (publication: { baseSha: string; agentSha: string }) => void | Promise<void>
     }
   ): Promise<unknown>
   /** Snapshot d'observation du coordinateur ; ne pilote jamais la finalisation. */
@@ -1618,14 +1618,12 @@ export class Orchestrator {
       }): Promise<void> => {
         if (closeStarted || !green || !this.deps.closeGreenRun) return
         closeStarted = true
-        await this.deps.closeGreenRun
-          .close({
-            runId,
-            task,
-            workCwd: this.deps.executionWorkspace,
-            ...(publication ? { projectPublication: publication } : {})
-          })
-          .catch(() => undefined)
+        await this.deps.closeGreenRun.close({
+          runId,
+          task,
+          workCwd: this.deps.executionWorkspace,
+          ...(publication ? { projectPublication: publication } : {})
+        })
       }
       const onPublished = async (publication: {
         baseSha: string
@@ -1664,7 +1662,10 @@ export class Orchestrator {
             }
           }
         }
-        if (endReturned) await closePublishedRun(projectPublication)
+        // Le coordinateur n'acquitte la publication qu'apres resolution de ce callback. La publication
+        // distante doit donc etre TERMINEE ici, y compris quand la fusion locale est synchrone : sinon
+        // un crash entre l'acquittement et le push perdrait definitivement la publication distante.
+        await closePublishedRun(projectPublication)
       }
       const retained = green && requiresIsolatedWorkspace && runOptions.publication === 'hold'
       const finalizeOptions = {
@@ -1771,7 +1772,9 @@ export class Orchestrator {
       // La clôture est attendue pour que le statut distant soit déterministe avant la fin du run.
       // Son échec reste un rapport de clôture, jamais une raison d'invalider le run vert.
       if (green && integrated && this.deps.closeGreenRun) {
-        await closePublishedRun(projectPublication)
+        // Chemin legacy sans callback de publication. Un echec de cloture reste un rapport distant et
+        // ne rend pas rouge le travail valide ; le callback durable, lui, propage l'echec pour etre rejoue.
+        await closePublishedRun(projectPublication).catch(() => undefined)
       }
       // Un vert dont l'intégration n'est pas terminée reste reprenable. Un run rouge peut lui aussi
       // garder un provider en drainage après le watchdog : effacer son checkpoint ici supprimerait

@@ -48,6 +48,7 @@ import {
   captureCloseBaseline,
   type CloseBaseline,
   closeGreenRunOnDisk,
+  projectPublicationNeedsRetry,
   type AutoCloseReport
 } from './run-autoclose'
 import { amitelBrainRoot } from './amitel-context'
@@ -355,6 +356,11 @@ export class AutowinOS {
                 },
                 recoveredWithoutBrainBaseline: true
               })
+              if (projectPublicationNeedsRetry(this.lastAutoClose)) {
+                throw new Error(
+                  `Publication projet distante a rejouer: ${JSON.stringify(this.lastAutoClose.project)}`
+                )
+              }
             }
             const evidence = preparedCommitMutationEvidence(
               executionWorkspace,
@@ -541,6 +547,11 @@ export class AutowinOS {
             baseline: await baselinePromise,
             projectPublication
           })
+          if (projectPublication && projectPublicationNeedsRetry(this.lastAutoClose)) {
+            throw new Error(
+              `Publication projet distante a rejouer: ${JSON.stringify(this.lastAutoClose.project)}`
+            )
+          }
         }
       }
     }

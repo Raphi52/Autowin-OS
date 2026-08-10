@@ -11,6 +11,7 @@ import {
   closeGreenRunOnDisk,
   detectSecret,
   parsePorcelainPaths,
+  projectPublicationNeedsRetry,
   type GitRunner
 } from './run-autoclose'
 
@@ -24,6 +25,32 @@ const realGit: GitRunner = async (args, cwd) => (await run('git', args, { cwd })
 const dirs: string[] = []
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
+})
+
+describe('acquittement de publication projet', () => {
+  const report = (project: Parameters<typeof projectPublicationNeedsRetry>[0]['project']) => ({
+    runId: 'run-1',
+    branch: 'autowin/run-1',
+    project,
+    brain: { status: 'skipped' as const, reason: 'no-changes' as const },
+    at: new Date(0).toISOString()
+  })
+
+  it('laisse rejouables les echecs transport et l absence de remote', () => {
+    expect(projectPublicationNeedsRetry(report({ status: 'failed', error: 'reseau' }))).toBe(true)
+    expect(projectPublicationNeedsRetry(report({ status: 'skipped', reason: 'no-remote' }))).toBe(
+      true
+    )
+  })
+
+  it('acquitte un push reussi et un blocage terminal de contenu', () => {
+    expect(
+      projectPublicationNeedsRetry(report({ status: 'pushed', branch: 'autowin/run-1', files: 2 }))
+    ).toBe(false)
+    expect(
+      projectPublicationNeedsRetry(report({ status: 'skipped', reason: 'secret-detected' }))
+    ).toBe(false)
+  })
 })
 
 describe('defaultGitRunner — processus invisible', () => {

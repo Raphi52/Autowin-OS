@@ -820,6 +820,55 @@ describe('Orchestrator — flip live worktree', () => {
       )
     })
 
+    it('attend la publication distante avant d acquitter la fusion locale', async () => {
+      const provider = new CapturingProvider()
+      let finishClose!: () => void
+      const close = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishClose = resolve
+          })
+      )
+      let callbackFinished = false
+      const baseSha = '8'.repeat(40)
+      const publishedSha = '9'.repeat(40)
+      const orch = new Orchestrator({
+        registry: new ProviderRegistry().register(provider),
+        roles: new RoleModelConfig({
+          subagent: { provider: provider.id, model: 'worker' },
+          judge: { provider: provider.id, model: 'judge' }
+        }),
+        cost: new CostAggregator(),
+        trust: new TrustLedger(),
+        executionWorkspace: 'C:\\base',
+        worktrees: {
+          begin: () => 'C:\\wt\\run-1',
+          end: () => undefined,
+          endAsync: async (_runId, options) => {
+            await options?.onPublished?.({ baseSha, agentSha: publishedSha })
+            callbackFinished = true
+            return {
+              outcome: 'merged' as const,
+              agentId: 'run-1',
+              committed: true,
+              baseSha,
+              publishedSha
+            }
+          }
+        },
+        closeGreenRun: { begin: vi.fn(), close }
+      })
+
+      const running = orch.run('modifie le projet')
+      await vi.waitFor(() => expect(close).toHaveBeenCalledTimes(1))
+      expect(callbackFinished).toBe(false)
+
+      finishClose()
+      await running
+
+      expect(callbackFinished).toBe(true)
+    })
+
     it('clôture aussi une publication différée après la fin du processus agent', async () => {
       const provider = new CapturingProvider()
       const close = vi.fn().mockResolvedValue(undefined)

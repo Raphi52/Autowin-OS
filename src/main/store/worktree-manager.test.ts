@@ -628,6 +628,42 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
     expect(() => wm.acquire('builder')).not.toThrow()
   })
 
+  it('base avancée après l ancre → libère l ancre puis réussit au retry', () => {
+    const repo = tempRepo()
+    let advanced = false
+    const tryGitFn = (dir: string, args: string[]) => {
+      if (!advanced && dir === repo && args.includes('merge') && args.includes('--ff-only')) {
+        advanced = true
+        writeFileSync(join(repo, 'concurrent.txt'), 'avance concurrente\n')
+        git(repo, 'add', 'concurrent.txt')
+        git(repo, 'commit', '-q', '-m', 'avance concurrente')
+      }
+      const result = spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
+      return {
+        code: result.status ?? 1,
+        stdout: result.stdout ?? '',
+        stderr: result.stderr ?? ''
+      }
+    }
+    const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
+    roots.push(wtRoot)
+    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot, tryGitFn })
+    const path = wm.acquire('builder')
+    writeFileSync(join(path, 'b.txt'), 'travail de la copie\n')
+
+    const first = wm.finalize('builder')
+
+    expect(first).toMatchObject({ outcome: 'blocked', reason: 'base-in-progress' })
+    expect(() => git(repo, 'rev-parse', 'refs/autowin/publications/builder')).toThrow()
+
+    const retried = wm.finalize('builder')
+
+    expect(retried).toMatchObject({ outcome: 'merged' })
+    expect(readFileSync(join(repo, 'b.txt'), 'utf8')).toContain('travail de la copie')
+    expect(readFileSync(join(repo, 'concurrent.txt'), 'utf8')).toContain('avance concurrente')
+    expect(git(repo, 'rev-parse', 'refs/autowin/publications/builder')).toMatch(/^[0-9a-f]{40}$/)
+  })
+
   it('index utilisateur modifié pendant la publication → bloque sans avancer HEAD', () => {
     const repo = tempRepo()
     const baseSha = git(repo, 'rev-parse', 'HEAD')
