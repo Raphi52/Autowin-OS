@@ -1656,6 +1656,16 @@ export class Orchestrator {
         finalizeOutcome === 'nothing' ||
         finalizeOutcome === 'cleanup-pending' ||
         finalizeOutcome === 'published-residue'
+      const finalizeDiagnosis =
+        typeof finalized === 'object' && finalized !== null
+          ? (() => {
+              const raw = finalized as { reason?: string; files?: string[]; detail?: string }
+              if (!raw.reason) return undefined
+              const files = raw.files?.slice(0, 5) ?? []
+              const filesPart = files.length > 0 ? ` — fichiers en cause: ${files.join(', ')}` : ''
+              return `blocage d’intégration: ${raw.reason}${filesPart}`
+            })()
+          : undefined
       const finalActivity = activityForRun()
       if (retained && produced && isolatedCwd) {
         produced.retainedWorkspace = {
@@ -1707,6 +1717,11 @@ export class Orchestrator {
         produced.gateBlocked = true
         if (!produced.gateReasons.includes('intégration locale non terminée')) {
           produced.gateReasons.push('intégration locale non terminée')
+        }
+        // La cause exacte (base-dirty / base-in-progress / merge-failed + fichiers) doit atterrir
+        // dans le rapport : sinon le run rouge ne dit PAS pourquoi et le diagnostic recommence.
+        if (finalizeDiagnosis && !produced.gateReasons.includes(finalizeDiagnosis)) {
+          produced.gateReasons.push(finalizeDiagnosis)
         }
       }
       // Le rapport a ete redige DANS la copie isolee ; la ligne ci-dessus vient de la fusionner puis de
