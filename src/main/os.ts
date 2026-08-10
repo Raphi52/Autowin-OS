@@ -336,7 +336,8 @@ export class AutowinOS {
         )
         const manager = new WorktreeManager({
           baseRepo: executionWorkspace,
-          worktreeRoot: identity.root
+          worktreeRoot: identity.root,
+          requireCanonicalRemote: true
         })
         this.worktrees = new RunWorktreeCoordinator({
           manager,
@@ -515,7 +516,7 @@ export class AutowinOS {
             captureCloseBaseline(executionWorkspace, amitelBrainRoot())
           )
         },
-        close: async ({ runId, task }) => {
+        close: async ({ runId, task, projectPublication }) => {
           const baselinePromise = this.closeBaselines.get(runId)
           this.closeBaselines.delete(runId)
           if (!this.autoClose || !baselinePromise) return
@@ -524,7 +525,8 @@ export class AutowinOS {
             task,
             projectRepo: executionWorkspace,
             brainRepo: amitelBrainRoot(),
-            baseline: await baselinePromise
+            baseline: await baselinePromise,
+            projectPublication
           })
         }
       }

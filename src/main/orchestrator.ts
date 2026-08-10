@@ -681,7 +681,12 @@ export interface RunWorktrees {
  */
 export interface RunCloser {
   begin(runId: string): void
-  close(context: { runId: string; task: string; workCwd: string }): Promise<void>
+  close(context: {
+    runId: string
+    task: string
+    workCwd: string
+    projectPublication?: { baseSha: string; publishedSha: string }
+  }): Promise<void>
 }
 
 const MUTATION_STEM =
@@ -1606,7 +1611,28 @@ export class Orchestrator {
       // garde sa copie isolée (l'exception saute le `green = true` ci-dessus) : on ne ramène plus
       // automatiquement dans la base un travail jugé raté.
       let endReturned = false
+      let projectPublication: { baseSha: string; publishedSha: string } | undefined
+      let closeStarted = false
+      const closePublishedRun = async (
+        publication?: { baseSha: string; publishedSha: string }
+      ): Promise<void> => {
+        if (closeStarted || !green || !this.deps.closeGreenRun) return
+        closeStarted = true
+        await this.deps.closeGreenRun
+          .close({
+            runId,
+            task,
+            workCwd: this.deps.executionWorkspace,
+            ...(publication ? { projectPublication: publication } : {})
+          })
+          .catch(() => undefined)
+      }
       const onPublished = (publication: { baseSha: string; agentSha: string }): void => {
+        projectPublication = {
+          baseSha: publication.baseSha,
+          publishedSha: publication.agentSha
+        }
+        if (endReturned) void closePublishedRun(projectPublication)
         if (!produced || causalWatchPaths.length === 0) return
         const evidence = preparedCommitMutationEvidence(
           this.deps.executionWorkspace,
@@ -1738,11 +1764,10 @@ export class Orchestrator {
         produced.phaseOutputs = aligned.phaseOutputs ?? produced.phaseOutputs
       }
       // Clôture auto APRÈS la fusion (le travail est dans la base) et seulement si vert.
-      // `void` + catch : publier est un service rendu, jamais une raison de faire échouer le run.
+      // La clôture est attendue pour que le statut distant soit déterministe avant la fin du run.
+      // Son échec reste un rapport de clôture, jamais une raison d'invalider le run vert.
       if (green && integrated && this.deps.closeGreenRun) {
-        void this.deps.closeGreenRun
-          .close({ runId, task, workCwd: this.deps.executionWorkspace })
-          .catch(() => undefined)
+        await closePublishedRun(projectPublication)
       }
       // Un vert dont l'intégration n'est pas terminée reste reprenable. Un run rouge peut lui aussi
       // garder un provider en drainage après le watchdog : effacer son checkpoint ici supprimerait

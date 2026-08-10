@@ -76,6 +76,9 @@ export interface WorktreeRunRecord {
   worktreeAvailable?: boolean
   baseBranch: string
   baseSha: string
+  sourceSha?: string
+  canonicalBaseRef?: string
+  excludedDirtyFiles?: string[]
   verdict: WorktreeRunVerdict
   publication: WorktreePublicationState
   files: WorktreeFileChange[]
@@ -164,6 +167,14 @@ function isRecord(value: unknown, worktreeRoot: string): value is WorktreeRunRec
     isSafeBranch(candidate.baseBranch) &&
     typeof candidate.baseSha === 'string' &&
     FULL_SHA.test(candidate.baseSha) &&
+    (candidate.sourceSha === undefined || FULL_SHA.test(candidate.sourceSha)) &&
+    (candidate.canonicalBaseRef === undefined || isSafeBranch(candidate.canonicalBaseRef)) &&
+    (candidate.excludedDirtyFiles === undefined ||
+      (Array.isArray(candidate.excludedDirtyFiles) &&
+        candidate.excludedDirtyFiles.length <= 500 &&
+        candidate.excludedDirtyFiles.every((path) =>
+          isSafeRelativeFile({ path, kind: 'mod' })
+        ))) &&
     VERDICT_PUBLICATIONS[verdict].has(publication) &&
     Array.isArray(candidate.files) &&
     candidate.files.every(isSafeRelativeFile) &&

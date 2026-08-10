@@ -237,6 +237,38 @@ describe('travail DÉJÀ COMMITÉ par la fusion du worktree (arbre propre)', () 
     expect((await run('git', ['branch'], { cwd: remote })).stdout).toContain('auto/run-77')
   })
 
+  it('publie la plage Git exacte même si le commit agent porte un sujet conventionnel', async () => {
+    const { repo, remote } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+    writeFileSync(join(repo, 'du-run.ts'), 'export const y = 2\n')
+    await run('git', ['add', '-A'], { cwd: repo })
+    await run('git', ['commit', '-m', 'feat: add the requested behavior'], { cwd: repo })
+    const publishedSha = (await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout.trim()
+    writeFileSync(join(repo, 'autrui.ts'), 'export const foreign = true\n')
+    await run('git', ['add', '-A'], { cwd: repo })
+    await run('git', ['commit', '-m', 'chore: concurrent local work'], { cwd: repo })
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-conventional',
+      task: 'ajoute un fichier',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      projectPublication: { baseSha: baseline.projectHead!, publishedSha },
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({
+      status: 'pushed',
+      branch: 'auto/run-conventional',
+      files: 1
+    })
+    expect(
+      (await run('git', ['rev-parse', 'refs/heads/auto/run-conventional'], { cwd: remote })).stdout.trim()
+    ).toBe(publishedSha)
+  })
+
   it('s’abstient si l’historique contient le commit d’une AUTRE session', async () => {
     const { repo, remote } = await repoWithRemote()
     const brain = (await repoWithRemote()).repo
@@ -258,6 +290,33 @@ describe('travail DÉJÀ COMMITÉ par la fusion du worktree (arbre propre)', () 
 
     expect(report.project).toMatchObject({ status: 'skipped', reason: 'concurrent-commits' })
     expect((await run('git', ['branch'], { cwd: remote })).stdout).not.toContain('auto/run-88')
+  })
+
+  it('refuse une plage attestée dont le commit publié est introuvable', async () => {
+    const { repo, remote } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-invalid-range',
+      task: 'publie une plage impossible',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      projectPublication: {
+        baseSha: baseline.projectHead!,
+        publishedSha: 'f'.repeat(40)
+      },
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({
+      status: 'skipped',
+      reason: 'invalid-publication-range'
+    })
+    expect((await run('git', ['branch'], { cwd: remote })).stdout).not.toContain(
+      'auto/run-invalid-range'
+    )
   })
 
   it('un run vert qui n’a produit AUCUN commit ne publie rien', async () => {

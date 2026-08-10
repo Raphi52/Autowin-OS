@@ -160,6 +160,30 @@ describe('SourceControlPane (prompt-first)', () => {
     )
   })
 
+  it('affiche le dernier résultat réel de clôture au lieu de promettre un push absolu', async () => {
+    mockApi(GIT)
+    const api = (window as unknown as { api: Record<string, unknown> }).api
+    api.getAutoClose = () =>
+      Promise.resolve({
+        enabled: true,
+        last: {
+          runId: 'run-42',
+          branch: 'auto/run-42',
+          at: '2026-08-10T12:00:00.000Z',
+          project: { status: 'skipped', reason: 'no-remote' },
+          brain: { status: 'skipped', reason: 'no-changes' }
+        }
+      })
+    await render()
+    await openWorkspaceView()
+
+    const toggle = container.querySelector('[data-testid="sc-autoclose"]') as HTMLButtonElement
+    expect(toggle.title).toContain('tente de publier')
+    expect(container.querySelector('[data-testid="sc-autoclose-last"]')?.textContent).toContain(
+      'Projet · non publié · aucun distant'
+    )
+  })
+
   it('ouvre le vrai diff read-only du bureau conflictuel sans écrire dans le prompt', async () => {
     mockApi(GIT)
     const getWorktreeConflictDiff = vi.fn(() =>

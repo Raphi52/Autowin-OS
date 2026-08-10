@@ -104,6 +104,21 @@ describe('WorktreeActivityView — A2 Hub', () => {
     expect(container.textContent).toContain('agent__a1')
   })
 
+  it('annonce les changements locaux que le snapshot de l’agent exclut', () => {
+    render([
+      {
+        ...offices[0],
+        canonicalBaseRef: 'origin/main',
+        excludedDirtyFiles: ['notes-locales.md', 'src/wip.ts']
+      }
+    ])
+
+    expect(container.textContent).toContain('Base vérifiée · origin/main')
+    expect(container.textContent).toContain('2 changements locaux non inclus')
+    expect(container.textContent).toContain('notes-locales.md')
+    expect(container.textContent).toContain('src/wip.ts')
+  })
+
   it('relie visuellement chaque worktree au workspace et explique son trajet', () => {
     render([
       offices[0],

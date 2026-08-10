@@ -201,7 +201,7 @@ describe('RunWorktreeCoordinator (flip live)', () => {
     expect(co.activity()[0]).toMatchObject({ agentId: 'run-1', state: 'working' })
   })
 
-  it('persiste un contexte complet avant la preparation asynchrone du bureau', async () => {
+  it('prépare atomiquement la base fraîche puis persiste le contexte complet', async () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-async-begin-'))
     try {
       const runId = 'run-async-begin'
@@ -225,7 +225,7 @@ describe('RunWorktreeCoordinator (flip live)', () => {
       })
 
       await expect(coordinator.beginAsync(runId, 'Builder', true)).resolves.toBe(worktreePath)
-      expect(prepareAsync).toHaveBeenCalledWith(runId, context)
+      expect(prepareAsync).toHaveBeenCalledWith(runId, undefined)
       expect(stateStore.get(runId)).toMatchObject({
         runId,
         worktreePath,
@@ -238,17 +238,16 @@ describe('RunWorktreeCoordinator (flip live)', () => {
     }
   })
 
-  it('ne masque pas une erreur de description asynchrone par un manifeste vide', async () => {
+  it('ne masque pas une erreur de préparation atomique par un manifeste vide', async () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-async-describe-error-'))
     try {
       const stateStore = new WorktreeRunStateStore(root, 'repo-a')
       const coordinator = new RunWorktreeCoordinator({
         manager: {
           ...fakeManager(),
-          describeAsync: vi.fn(async () => {
+          prepareAsync: vi.fn(async () => {
             throw new Error('description Git indisponible')
-          }),
-          prepareAsync: vi.fn()
+          })
         },
         stateStore,
         nowFn: () => 10

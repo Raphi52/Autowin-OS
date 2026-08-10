@@ -244,6 +244,20 @@
   color: var(--muted, #8b939f);
   padding: 2px 0 4px;
 }
+.sc-autoclose-last {
+  display: grid;
+  gap: 3px;
+  margin-top: 8px;
+  padding: 8px 9px;
+  border: 1px solid var(--line, #262b33);
+  border-radius: 8px;
+  color: var(--muted, #8b939f);
+  font-size: 10.5px;
+}
+.sc-autoclose-last strong {
+  color: var(--text, #e6e9ee);
+  font-size: 11px;
+}
 .sc-brain-call {
   padding: 9px 0;
   border-top: 1px solid var(--line, #262b33);

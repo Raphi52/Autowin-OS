@@ -109,7 +109,15 @@ function tryGit(repo: string, args: string[]): { code: number; stdout: string; s
 }
 
 export type FinalizeResult =
-  | { outcome: 'merged'; agentId: string; committed: boolean }
+  | {
+      outcome: 'merged'
+      agentId: string
+      committed: boolean
+      /** HEAD de la branche cible juste avant l'intégration. */
+      baseSha?: string
+      /** Commit exact publié dans la branche cible (peut être un commit de merge). */
+      publishedSha?: string
+    }
   | { outcome: 'nothing'; agentId: string }
   | { outcome: 'conflict'; agentId: string; files: string[]; baseSha: string; agentSha: string }
   | {
@@ -140,6 +148,12 @@ export interface WorktreeRunContext {
   worktreePath: string
   baseBranch: string
   baseSha: string
+  /** Révision exacte remise à l'agent. Absente dans les anciens manifestes = baseSha. */
+  sourceSha?: string
+  /** Base distante fraîche dont sourceSha contient l'historique, par ex. origin/main. */
+  canonicalBaseRef?: string
+  /** Changements du workspace volontairement exclus du snapshot commité. */
+  excludedDirtyFiles?: string[]
 }
 
 export interface WorktreeRecoveryContext extends Omit<WorktreeRunContext, 'workspacePath'> {
@@ -152,6 +166,8 @@ export interface WorktreeManagerOptions {
   worktreeRoot: string
   /** Branche de base sur laquelle fusionner (défaut : la branche courante du repo). */
   baseBranch?: string
+  /** En production, refuse un job de mutation si origin/main|master ne peut pas être vérifié. */
+  requireCanonicalRemote?: boolean
   git?: GitRunner
   /** tryGit injectable (tests) ; défaut = wrapper execFileSync non-jetant. */
   tryGitFn?: typeof tryGit
@@ -236,6 +252,7 @@ export class WorktreeManager {
   private readonly tryGitFn: typeof tryGit
   private readonly removeDirFn: (path: string) => void
   private readonly configuredBaseBranch?: string
+  private readonly requireCanonicalRemote: boolean
   private readonly processIdentity: (pid: number) => string | null | undefined
   private readonly now: () => number
   private readonly operationClient?: WorktreeOperationClient
@@ -248,6 +265,7 @@ export class WorktreeManager {
     this.removeDirFn =
       opts.removeDirFn ?? ((path) => rmSync(path, { recursive: true, force: true }))
     this.configuredBaseBranch = opts.baseBranch
+    this.requireCanonicalRemote = opts.requireCanonicalRemote ?? false
     this.processIdentity = opts.processIdentityFn ?? defaultProcessIdentity
     this.now = opts.nowFn ?? Date.now
     const operationWorkerPath = join(__dirname, 'worktree-operation-worker.js')
@@ -264,7 +282,8 @@ export class WorktreeManager {
             workerData: {
               baseRepo: this.baseRepo,
               worktreeRoot: this.worktreeRoot,
-              ...(this.configuredBaseBranch ? { baseBranch: this.configuredBaseBranch } : {})
+              ...(this.configuredBaseBranch ? { baseBranch: this.configuredBaseBranch } : {}),
+              requireCanonicalRemote: this.requireCanonicalRemote
             }
           })
       })
@@ -276,7 +295,7 @@ export class WorktreeManager {
     context?: WorktreeRunContext
   ): Promise<{ context: WorktreeRunContext; path: string }> {
     if (!this.operationClient) {
-      const resolvedContext = context ?? this.describe(agentId)
+      const resolvedContext = context ?? this.describeForLaunch(agentId)
       return { context: resolvedContext, path: this.acquire(agentId, resolvedContext) }
     }
     return this.operationClient.run({ operation: 'prepare', agentId, context })
@@ -961,6 +980,41 @@ export class WorktreeManager {
     )
   }
 
+  private canonicalRemoteBase(): { ref: string; sha: string } | undefined {
+    const origin = this.tryGitFn(this.baseRepo, ['remote', 'get-url', 'origin'])
+    if (origin.code !== 0 || !origin.stdout.trim()) {
+      if (this.requireCanonicalRemote) {
+        throw new Error('Lancement bloqué : le distant origin est absent.')
+      }
+      return undefined
+    }
+    const fetched = this.tryGitFn(this.baseRepo, ['fetch', '--no-tags', '--prune', 'origin'])
+    if (fetched.code !== 0) {
+      const detail = (fetched.stderr || fetched.stdout).trim()
+      throw new Error(`Lancement bloqué : origin est impossible à synchroniser${detail ? ` (${detail})` : ''}.`)
+    }
+
+    const symbolic = this.tryGitFn(this.baseRepo, [
+      'symbolic-ref',
+      '--quiet',
+      '--short',
+      'refs/remotes/origin/HEAD'
+    ])
+    const candidates = [
+      symbolic.code === 0 ? symbolic.stdout.trim() : '',
+      'origin/main',
+      'origin/master'
+    ].filter((ref, index, refs) => ref && refs.indexOf(ref) === index)
+    for (const ref of candidates) {
+      if (!/^origin\/(?:main|master)$/.test(ref)) continue
+      const resolved = this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', `${ref}^{commit}`])
+      if (resolved.code === 0 && /^[0-9a-f]{40,64}$/i.test(resolved.stdout.trim())) {
+        return { ref, sha: resolved.stdout.trim() }
+      }
+    }
+    throw new Error('Lancement bloqué : origin/main ou origin/master est introuvable après fetch.')
+  }
+
   private isExpectedBaseBranch(expectedBaseBranch: string): boolean {
     const currentRef = this.tryGitFn(this.baseRepo, ['symbolic-ref', '--quiet', '--short', 'HEAD'])
     return currentRef.code === 0 && currentRef.stdout.trim() === expectedBaseBranch
@@ -1108,10 +1162,14 @@ ${chainReferenceHook}exit 0
     ) {
       throw new Error('Contexte de bureau incohérent avec ce dépôt.')
     }
-    if (context && !/^[0-9a-f]{40,64}$/i.test(context.baseSha)) {
+    if (
+      context &&
+      (!/^[0-9a-f]{40,64}$/i.test(context.baseSha) ||
+        (context.sourceSha !== undefined && !/^[0-9a-f]{40,64}$/i.test(context.sourceSha)))
+    ) {
       throw new Error('SHA de départ du bureau invalide.')
     }
-    const startRevision = context?.baseSha ?? this.currentBaseBranch()
+    const startRevision = context?.sourceSha ?? context?.baseSha ?? this.currentBaseBranch()
     if (
       context &&
       this.tryGitFn(this.baseRepo, ['cat-file', '-e', `${startRevision}^{commit}`]).code !== 0
@@ -1120,7 +1178,7 @@ ${chainReferenceHook}exit 0
     }
     mkdirSync(this.worktreeRoot, { recursive: true })
     this.git(this.baseRepo, ['worktree', 'add', '--detach', path, startRevision])
-    if (context && this.git(path, ['rev-parse', 'HEAD']) !== context.baseSha) {
+    if (context && this.git(path, ['rev-parse', 'HEAD']) !== startRevision) {
       this.cleanupWorktree(path)
       throw new Error('La copie créée ne correspond pas à la révision capturée.')
     }
@@ -1137,6 +1195,37 @@ ${chainReferenceHook}exit 0
       // Résout la branche lue, pas HEAD : un changement de branche entre ces deux appels ne peut
       // plus produire une paire branche/SHA incohérente.
       baseSha: this.git(this.baseRepo, ['rev-parse', `refs/heads/${baseBranch}`])
+    }
+  }
+
+  /**
+   * Prépare le snapshot d'un NOUVEAU job : fetch distant sans toucher au workspace, puis choisit la
+   * révision la plus fraîche tant que local et origin/main|master restent linéaires. Une divergence
+   * est refusée : elle exige une intégration contrôlée, jamais un choix silencieux.
+   */
+  describeForLaunch(agentId: string): WorktreeRunContext {
+    const local = this.describe(agentId)
+    const remote = this.canonicalRemoteBase()
+    let sourceSha = local.baseSha
+    if (remote) {
+      const localBeforeRemote =
+        this.tryGitFn(this.baseRepo, ['merge-base', '--is-ancestor', local.baseSha, remote.sha]).code === 0
+      const remoteBeforeLocal =
+        this.tryGitFn(this.baseRepo, ['merge-base', '--is-ancestor', remote.sha, local.baseSha]).code === 0
+      if (!localBeforeRemote && !remoteBeforeLocal) {
+        throw new Error(
+          `Lancement bloqué : ${local.baseBranch} et ${remote.ref} ont divergé ; intègre-les avant de lancer un job.`
+        )
+      }
+      if (localBeforeRemote) sourceSha = remote.sha
+    }
+    return {
+      ...local,
+      sourceSha,
+      ...(remote ? { canonicalBaseRef: remote.ref } : {}),
+      excludedDirtyFiles: parsePorcelainPaths(
+        this.git(this.baseRepo, ['status', '--porcelain=v1', '-z', '--untracked-files=all'])
+      )
     }
   }
 
@@ -1162,6 +1251,10 @@ ${chainReferenceHook}exit 0
     }
     if (!/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/i.test(context.baseSha)) {
       return { ok: false, detail: 'Le SHA de départ durable est invalide.' }
+    }
+    const sourceSha = context.sourceSha ?? context.baseSha
+    if (!/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/i.test(sourceSha) || !this.revisionExists(sourceSha)) {
+      return { ok: false, detail: 'Le SHA source durable est invalide ou indisponible.' }
     }
     const branchRef = `refs/heads/${context.baseBranch}`
     if (
@@ -1219,7 +1312,7 @@ ${chainReferenceHook}exit 0
     if (
       head.code !== 0 ||
       !/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/i.test(head.stdout.trim()) ||
-      this.tryGitFn(path, ['merge-base', '--is-ancestor', context.baseSha, head.stdout.trim()])
+      this.tryGitFn(path, ['merge-base', '--is-ancestor', sourceSha, head.stdout.trim()])
         .code !== 0
     ) {
       return { ok: false, detail: 'La copie ne descend pas du SHA de départ autorisé.' }
@@ -1567,7 +1660,9 @@ ${chainReferenceHook}exit 0
           '--ff-only',
           integratedSha
         ])
-        if (publish.code === 0) return { outcome: 'merged', agentId, committed }
+        if (publish.code === 0) {
+          return { outcome: 'merged', agentId, committed, baseSha, publishedSha: integratedSha }
+        }
 
         const operationAfterPublish = this.operationInProgress()
         if (operationAfterPublish) {
