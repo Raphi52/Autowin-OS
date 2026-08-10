@@ -95,6 +95,7 @@ import {
 import { deleteListedRun } from './dashboards/runs-scan'
 import { createOrchestrateTurnPersistence } from './runs/orchestrate-turn-persistence'
 import { StartupResumeQueue } from './runs/startup-resume-queue'
+import { publishedWorktreeProofForResume } from './runs/startup-resume-publication'
 import {
   admitAutomaticResumeRuntime,
   admitLiveReattachment,
@@ -441,8 +442,12 @@ const budgetedArtifactRenderers = new Set<number>()
 
 /** Diffuse un événement d'app à toutes les fenêtres (UI live quand un agent pilote). */
 /** Réveille les règles Watchdog sur un incident interne. Volontairement best-effort. */
-function wakeWatchdog(event: WatchdogAppEvent, context: string): void {
-  void watchdogEngine?.notifyAppEvent(event, context)
+function wakeWatchdog(
+  event: WatchdogAppEvent,
+  context: string,
+  sourceConversationId?: string
+): void {
+  void watchdogEngine?.notifyAppEvent(event, context, sourceConversationId)
 }
 
 /**
@@ -451,11 +456,14 @@ function wakeWatchdog(event: WatchdogAppEvent, context: string): void {
  * Seuls les trois « problèmes de workflow » vérifiés passent — un échec provider ou un refus
  * d'autorité n'est pas un problème de workflow, c'est un problème d'infrastructure ou de droits.
  */
-function notifyWatchdogWorkflowIncident(incident: {
-  kind: string
-  summary: string
-  detail: string
-}): void {
+function notifyWatchdogWorkflowIncident(
+  incident: {
+    kind: string
+    summary: string
+    detail: string
+  },
+  sourceConversationId?: string
+): void {
   const event =
     incident.kind === 'gate-failed'
       ? 'workflow-gate-failed'
@@ -466,7 +474,8 @@ function notifyWatchdogWorkflowIncident(incident: {
   wakeWatchdog(
     event,
     `${incident.summary}
-${incident.detail}`
+${incident.detail}`,
+    sourceConversationId
   )
 }
 
@@ -480,7 +489,8 @@ function broadcast(e: AppEvent): void {
       'orchestration-red',
       `Une orchestration s'est terminée en ROUGE.${e.runPath ? ` RUN : ${e.runPath}` : ''}${
         e.convId ? ` Conversation : ${e.convId}` : ''
-      }`
+      }`,
+      e.convId
     )
   }
   if (!autoKaizenSupervisor) return
@@ -3066,7 +3076,7 @@ Le fil reprend ensuite normalement.`
             // Les mêmes incidents structurés alimentent les règles Watchdog. La détection existait
             // déjà (`incidentFromPilotEvent`) mais n'était exposée nulle part : elle mourait dans un
             // module invisible. On ne la réécrit pas, on la BRANCHE.
-            void notifyWatchdogWorkflowIncident(structuredIncident)
+            void notifyWatchdogWorkflowIncident(structuredIncident, conversationId)
             reportAutoKaizen({
               dedupeKey:
                 terminalRunError ??
@@ -4295,7 +4305,37 @@ app.whenReady().then(async () => {
   // bouton, pas de question). Un run d'orchestration tué avec la mort du process main laisse son
   // acquis persisté ; on relance ICI à la phase suivante, en réinjectant les livrables déjà produits
   // (aucune phase refaite). Rien à reprendre → aucun effet (démarrage normal strictement inchangé).
-  const resumableRuns = os.resumableOrchestrations()
+  const worktreeActivityAtStartup = os.getWorktreeActivity()
+  const resumableRuns = os.resumableOrchestrations().filter((state) => {
+    const publication = publishedWorktreeProofForResume(state.runId, worktreeActivityAtStartup)
+    if (!publication) return true
+
+    // Le coordinateur ecrit `publication=complete|published|...` AVANT le callback de publication.
+    // Une ecriture dans src/main peut ensuite tuer Electron par hot-reload avant le `.then()` du run.
+    // Cette preuve Git durable est donc plus forte que le checkpoint de phases encore present : on
+    // clot le tour, on retire le checkpoint et surtout on ne repaie AUCUN provider au boot suivant.
+    if (state.conversationId && state.turnId) {
+      const turn = createOrchestrateTurnPersistence({
+        conversations: os.conversations,
+        conversationId: state.conversationId,
+        turnId: state.turnId,
+        resumeExisting: true,
+        journal: (event) =>
+          appendTurnEvent(turnJournalRoot, state.conversationId!, state.turnId!, event)
+      })
+      turn.begin(state.task)
+      turn.succeed({
+        result: `Publication Git deja acquise (${publication.publication}) ; reprise automatique annulee sans nouvel appel provider.`
+      })
+    }
+    os.forgetResumableOrchestration(state.runId)
+    console.warn(
+      '[resume-orchestration]',
+      state.runId,
+      `-> checkpoint terminal retire: publication Git ${publication.publication} deja prouvee`
+    )
+    return false
+  })
   const resumeElection = electStartupOrchestrationResumes(resumableRuns)
   const suppressedDuplicateByRunId = new Map(
     resumeElection.suppressed.map(({ state, electedRunId }) => [state.runId, electedRunId])
@@ -4696,7 +4736,12 @@ app.whenReady().then(async () => {
         'Appel provider terminé sans preuve récupérable — relance bloquée pour éviter un double coût.'
       const conversationId = resumableRun.conversationId ?? '__autonomous__'
       durableLiveReattachment?.fail(reason, false)
-      broadcast({ type: 'orchestrate-end', convId: conversationId, status: 'red' })
+      broadcast({
+        type: 'orchestrate-end',
+        convId: conversationId,
+        runPath: resumableRun.runId,
+        status: 'red'
+      })
       broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
       console.warn('[resume-orchestration]', resumableRun.runId, '→', reason)
       continue
@@ -4719,7 +4764,12 @@ app.whenReady().then(async () => {
                 : 'Rattachement expiré sans preuve de fin — aucun appel provider n’a été relancé.'
             const conversationId = latest.conversationId ?? '__autonomous__'
             durableLiveReattachment?.fail(reason, false)
-            broadcast({ type: 'orchestrate-end', convId: conversationId, status: 'red' })
+            broadcast({
+              type: 'orchestrate-end',
+              convId: conversationId,
+              runPath: latest.runId,
+              status: 'red'
+            })
             broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
             console.warn('[resume-orchestration]', latest.runId, '→', reason)
           } else {

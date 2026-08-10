@@ -37,7 +37,9 @@ describe('branchement runtime Auto-Kaizen', () => {
         /broadcast\(\{\s*type: 'orchestrate-end',\s*convId: conversationId,[\s\S]{0,220}?status: '(?:red|green)'\s*\}\)/g
       ) ?? []
     expect(resumeBroadcasts.length).toBeGreaterThan(0)
-    for (const call of resumeBroadcasts) expect(call).toContain('runPath: resumedCurrentRunId')
+    for (const call of resumeBroadcasts) {
+      expect(call).toMatch(/runPath: (?:resumedCurrentRunId|resumableRun\.runId|latest\.runId)/)
+    }
   })
 
   it('transforme la perte du replay et chaque diagnostic exploitable en incident', () => {

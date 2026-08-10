@@ -118,6 +118,8 @@ export class WatchdogEngine {
   /** Dernier motif de NON-reveil, pour que « rien ne s'est passe » soit explicable. */
   private readonly suppressions = new Map<string, string>()
   private readonly rememberedMutationClaimEvents = new Set<string>()
+  /** Une orchestration autonome est lourde : une meme regle n'en lance jamais deux en parallele. */
+  private readonly inFlightOrchestrations = new Set<string>()
   /** Partagé par SOURCE : deux règles du même fichier doivent hériter de la même causalité. */
   private readonly pendingSelfLineage = new Map<string, PendingSelfLineage>()
   private selfLineageSequence = 0
@@ -226,7 +228,11 @@ export class WatchdogEngine {
    * Un incident applicatif deja emis reveille les regles qui l'ecoutent. Appele par le cablage de
    * l'app ; le moteur ne s'abonne a rien lui-meme, pour rester testable sans monter Electron.
    */
-  async notifyAppEvent(event: WatchdogAppEvent, context: string): Promise<void> {
+  async notifyAppEvent(
+    event: WatchdogAppEvent,
+    context: string,
+    sourceConversationId?: string
+  ): Promise<void> {
     for (const task of this.watchdogTasks()) {
       const source = task.watchdog?.source
       if (
@@ -235,6 +241,15 @@ export class WatchdogEngine {
         !source.events.includes(event)
       )
         continue
+      const destinationConversationId = task.destination.conversationId
+      if (
+        sourceConversationId &&
+        destinationConversationId &&
+        sourceConversationId === destinationConversationId
+      ) {
+        this.suppressions.set(task.id, 'self-conversation')
+        continue
+      }
       const signature = `${event}:${lineSignature(context)}`
       const observedAt = this.clock.now()
       await this.fire(task, {
@@ -317,6 +332,12 @@ export class WatchdogEngine {
     }
     this.suppressions.delete(task.id)
 
+    const singleFlight = task.watchdog?.action === 'orchestration'
+    if (singleFlight && this.inFlightOrchestrations.has(task.id)) {
+      this.suppressions.set(task.id, 'in-flight')
+      return
+    }
+
     const guards = task.watchdog?.guards ?? DEFAULT_WATCHDOG_GUARDS
     let book = this.books.get(task.id)
     if (!book) {
@@ -333,15 +354,21 @@ export class WatchdogEngine {
     const rememberLate: WatchdogMutationClaimsSink = (claims) => {
       this.rememberDispatchClaims(task, signal, claims)
     }
-    const dispatchResult = await this.causalDepth.run(signal.depth + 1, () =>
-      this.causalRoot.run(signal.rootSignature, () =>
-        this.dispatch.runWatchdog(task.id, signal, rememberLate)
+    if (singleFlight) this.inFlightOrchestrations.add(task.id)
+    let dispatchResult: unknown
+    try {
+      dispatchResult = await this.causalDepth.run(signal.depth + 1, () =>
+        this.causalRoot.run(signal.rootSignature, () =>
+          this.dispatch.runWatchdog(task.id, signal, rememberLate)
+        )
       )
-    )
+    } finally {
+      if (singleFlight) this.inFlightOrchestrations.delete(task.id)
+    }
 
     // On ne saute JAMAIS à la fin du fichier : une écriture externe concurrente serait perdue. Seules
     // les lignes revendiquées par les outils du tour héritent de sa causalité au prochain poll.
-    if (typeof dispatchResult === 'object')
+    if (typeof dispatchResult === 'object' && dispatchResult !== null)
       this.rememberDispatchClaims(task, signal, dispatchResult)
   }
 

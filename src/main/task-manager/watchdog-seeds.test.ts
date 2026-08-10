@@ -132,7 +132,7 @@ describe('seedWatchdogTasks — l’auto-kaizen comme VRAIE tâche', () => {
   })
 
   it('borne la largeur : une panne unique ne lance pas un agent par orchestration cassée', () => {
-    expect(autoKaizenSeed().watchdog?.guards.maxPerRoot).toBe(3)
+    expect(autoKaizenSeed().watchdog?.guards.maxPerRoot).toBe(1)
   })
 
   it('son prompt REFUSE de réparer sur une cause supposée', () => {

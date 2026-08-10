@@ -101,6 +101,65 @@ describe('WatchdogEngine — observer, filtrer, deleguer', () => {
     expect(dispatch.calls).toHaveLength(0)
   })
 
+  it('ne reveille jamais une regle sur un incident produit par sa propre conversation', async () => {
+    const dispatch = spy()
+    const task = watchdogTask(logPath, {
+      destination: {
+        kind: 'new',
+        title: 'Auto-kaizen',
+        category: 'Qualite',
+        provider: 'claude',
+        conversationId: 'conv-auto-kaizen'
+      },
+      watchdog: {
+        source: { kind: 'app-event', events: ['orchestration-red'] },
+        action: 'orchestration',
+        guards: { dedupWindowMs: 0, maxTriggersPerHour: 100, maxChainDepth: 0, maxPerRoot: 20 }
+      }
+    })
+    const engine = new WatchdogEngine(() => [task], dispatch, clock)
+
+    await engine.notifyAppEvent(
+      'orchestration-red',
+      'le run Auto-kaizen est rouge',
+      'conv-auto-kaizen'
+    )
+
+    expect(dispatch.calls).toHaveLength(0)
+    expect(engine.lastSuppression(task.id)).toBe('self-conversation')
+  })
+
+  it('ne lance jamais deux occurrences de la meme regle en parallele', async () => {
+    let release!: () => void
+    const calls: WatchdogSignal[] = []
+    const dispatch: WatchdogDispatch = {
+      async runWatchdog(_taskId, signal) {
+        calls.push(signal)
+        await new Promise<void>((resolve) => {
+          release = resolve
+        })
+        return true
+      }
+    }
+    const task = watchdogTask(logPath, {
+      watchdog: {
+        source: { kind: 'app-event', events: ['orchestration-red'] },
+        action: 'orchestration',
+        guards: { dedupWindowMs: 0, maxTriggersPerHour: 100, maxChainDepth: 0, maxPerRoot: 20 }
+      }
+    })
+    const engine = new WatchdogEngine(() => [task], dispatch, clock)
+
+    const first = engine.notifyAppEvent('orchestration-red', 'incident un')
+    await vi.waitFor(() => expect(calls).toHaveLength(1))
+    await engine.notifyAppEvent('orchestration-red', 'incident deux')
+
+    expect(calls).toHaveLength(1)
+    expect(engine.lastSuppression(task.id)).toBe('in-flight')
+    release()
+    await first
+  })
+
   it('DoD : l historique du fichier ne reveille PERSONNE au demarrage', async () => {
     await writeFile(logPath, 'ERROR vieille 1\nERROR vieille 2\n')
     const dispatch = spy()

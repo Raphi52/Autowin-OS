@@ -1,5 +1,5 @@
 import type { TaskStore } from './task-store'
-import type { ScheduledTaskInput } from './types'
+import type { ScheduledTask, ScheduledTaskInput } from './types'
 
 /**
  * Les regles livrees d'origine.
@@ -31,6 +31,9 @@ export function autoKaizenSeed(): ScheduledTaskInput {
   return {
     title: 'Auto-kaizen — orchestration rouge ou workflow douteux',
     prompt: [
+      'build Auto-kaizen borne : traite cet incident sans relancer un chantier complet.',
+      'Budget operationnel : une phase build, une verification, aucun fan-out volontaire.',
+      '',
       'Un workflow vient de mal se terminer — soit en echec, soit en annoncant un succes que rien',
       "n'etaye. Etablis ce qui s'est reellement passe avant de conclure.",
       '',
@@ -74,15 +77,64 @@ export function autoKaizenSeed(): ScheduledTaskInput {
         dedupWindowMs: 300_000,
         // Une journee de travail normale produit quelques rouges ; au-dela, c'est le systeme qui va
         // mal, pas une orchestration — et lancer un agent par echec aggraverait la situation.
-        maxTriggersPerHour: 4,
+        maxTriggersPerHour: 2,
         // Un kaizen ne declenche pas un kaizen. C'est le reglage qui empeche la boucle : l'agent
         // corrige, sa correction relance une orchestration, qui pourrait echouer a son tour.
         maxChainDepth: 0,
         // Une panne unique fait echouer des dizaines d'orchestrations. La largeur les rattache a la
         // meme cause au lieu de lancer un agent pour chacune.
-        maxPerRoot: 3
+        maxPerRoot: 1
       }
     }
+  }
+}
+
+const LEGACY_AUTO_KAIZEN_TITLE = 'Auto-kaizen — une orchestration rouge'
+const LEGACY_AUTO_KAIZEN_PROMPT = [
+  "Une orchestration vient d'echouer. Etablis ce qui s'est reellement passe avant de conclure.",
+  '',
+  '1. Lis le RUN.md cite dans le contexte : son besoin, ses decisions, son journal.',
+  '2. Cherche la cause RACINE, pas le symptome le plus visible. Un echec en fin de chaine vient',
+  "   souvent d'une decision prise bien plus tot.",
+  '3. Si la cause est claire ET la correction bornee, corrige-la et prouve-le par un signal',
+  '   hors-modele (test rouge->vert, code de sortie, requete). Sans preuve, ne dis pas que',
+  "   c'est repare.",
+  "4. Si la cause n'est pas etablie, ne repare rien : rapporte ce que tu as ecarte et ce qui",
+  '   reste a verifier. Une reparation sur une cause supposee cree le defaut suivant.'
+].join('\n')
+
+function isUntouchedLegacyAutoKaizen(task: ScheduledTask): boolean {
+  return (
+    task.title === LEGACY_AUTO_KAIZEN_TITLE &&
+    task.prompt === LEGACY_AUTO_KAIZEN_PROMPT &&
+    task.destination.kind === 'new' &&
+    task.destination.title === 'Auto-kaizen' &&
+    task.watchdog?.action === 'orchestration' &&
+    task.watchdog.source.kind === 'app-event' &&
+    task.watchdog.source.events.length === 1 &&
+    task.watchdog.source.events[0] === 'orchestration-red' &&
+    task.watchdog.guards.dedupWindowMs === 300_000 &&
+    task.watchdog.guards.maxTriggersPerHour === 4 &&
+    task.watchdog.guards.maxChainDepth === 0 &&
+    task.watchdog.guards.maxPerRoot === 3
+  )
+}
+
+/** Migre uniquement le semis historique INTACT ; une regle editee par l'utilisateur reste sienne. */
+function upgradeLegacyAutoKaizen(store: TaskStore): void {
+  for (const task of store.listTasks()) {
+    if (!isUntouchedLegacyAutoKaizen(task) || task.destination.kind !== 'new') continue
+    const next = autoKaizenSeed()
+    if (next.destination.kind !== 'new') continue
+    store.update(task.id, {
+      ...next,
+      enabled: task.enabled,
+      mode: task.mode,
+      destination: {
+        ...next.destination,
+        ...task.destination
+      }
+    })
   }
 }
 
@@ -95,6 +147,7 @@ const SEEDS: { id: string; build: () => ScheduledTaskInput }[] = [
  * demarrage, et vide aussi apres une suppression par l'utilisateur.
  */
 export function seedWatchdogTasks(store: TaskStore): string[] {
+  upgradeLegacyAutoKaizen(store)
   const created: string[] = []
   for (const seed of SEEDS) {
     if (store.hasSeed(seed.id)) continue
