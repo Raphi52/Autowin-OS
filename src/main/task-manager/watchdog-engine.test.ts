@@ -799,10 +799,15 @@ describe('WatchdogEngine — ce qui ne mérite AUCUN agent', () => {
     const engine = new WatchdogEngine(() => [listening], dispatch, clock)
     await engine.start()
 
-    await engine.notifyAppEvent(
-      'orchestration-red',
-      'Budget tokens total depasse (7825566/6000000)'
-    )
+    for (const terminalCause of [
+      'Budget tokens total depasse (7825566/6000000)',
+      'Budget USD depasse (3.42/3)',
+      "Budget d'appels provider atteint (6)",
+      'Budget tokens frais entierement reserve (900000)',
+      'Budget duree depasse (1200000 ms)'
+    ]) {
+      await engine.notifyAppEvent('orchestration-red', terminalCause)
+    }
 
     expect(dispatch.calls).toHaveLength(0)
     expect(engine.lastSuppression('budget-interne')).toBe('non-actionable')

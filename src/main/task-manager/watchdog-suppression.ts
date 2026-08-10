@@ -28,10 +28,13 @@ export function isNonActionableWall(summary: string, detail: string): boolean {
     /\bpurchase more credits\b/.test(text) ||
     /\bbudget\s+tokens?\s+total\s+(?:depasse|dépassé|exceeded)\b/.test(text) ||
     /\btotal\s+token\s+budget\s+exceeded\b/.test(text) ||
+    /\bbudget\s+(?:usd|d['’]appels?\s+provider|d['’]agents|de\s+concurrence|dur[ée]e|tokens?\s+(?:total|frais)|du\s+tour)\s+(?:atteint(?:e)?|depasse|dépassé|exceeded|entierement\s+reserve|entièrement\s+réservé|compromis)\b/.test(
+      text
+    ) ||
+    /\bdevis impossible avant ex[ée]cution\b/.test(text) ||
     /\bhttp 429\b/.test(text)
   )
 }
-
 
 /**
  * ABANDON VOULU — l'arrêt vient d'un humain, il n'y a aucun défaut à analyser.
