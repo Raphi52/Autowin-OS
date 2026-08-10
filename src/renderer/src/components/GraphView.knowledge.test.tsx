@@ -246,4 +246,60 @@ describe('GraphView — le poste de travail du savoir est atteignable (items 1 e
       refreshCallsBefore
     )
   })
+
+  it.each([
+    ['Promote', 'button.is-promote', 'promoteInbox'],
+    ['Reject', 'button.is-reject', 'rejectInbox']
+  ] as const)(
+    '%s efface puis relance aussi la question courante du banc',
+    async (_label, actionSelector, apiMethod) => {
+      const searchBrain = vi
+        .fn()
+        .mockResolvedValueOnce(envelope({ note: 'ANCIEN-BANC' }))
+        .mockResolvedValueOnce(envelope({ note: 'FRAIS-BANC' }))
+      const api = installApi({
+        searchBrain,
+        listInbox: vi.fn().mockResolvedValue([
+          {
+            id: 'inbox/a',
+            file: 'C:/brain/inbox/a.md',
+            title: 'Candidat',
+            body: 'corps',
+            nearDuplicates: []
+          }
+        ])
+      })
+      await mount()
+      await act(async () =>
+        container
+          .querySelector<HTMLButtonElement>('[aria-label="Poste de travail du savoir"]')
+          ?.click()
+      )
+      await flush()
+
+      const question = container.querySelector<HTMLInputElement>(
+        '[aria-label="Question posée au Brain"]'
+      )
+      if (!question) throw new Error('question du banc absente')
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      await act(async () => {
+        setter?.call(question, 'promotion')
+        question.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      await act(async () => question.closest('.brain-bench')?.querySelector('button')?.click())
+      await flush()
+      expect(container.textContent).toContain('ANCIEN-BANC')
+
+      await act(async () => container.querySelector<HTMLButtonElement>(actionSelector)?.click())
+      await flush()
+
+      expect(api[apiMethod] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(
+        'C:\\brain',
+        'inbox/a'
+      )
+      expect(searchBrain).toHaveBeenCalledTimes(2)
+      expect(container.textContent).toContain('FRAIS-BANC')
+      expect(container.textContent).not.toContain('ANCIEN-BANC')
+    }
+  )
 })

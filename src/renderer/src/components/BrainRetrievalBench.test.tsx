@@ -191,4 +191,45 @@ describe('BrainRetrievalBench — tester une question depuis la vue Knowledge', 
     await ask()
     expect(container.querySelector('.brain-bench__local')?.textContent).toContain('2 fiches')
   })
+
+  it('efface immédiatement puis relance la question courante après une invalidation', async () => {
+    const searchBrain = vi
+      .fn()
+      .mockResolvedValueOnce(envelope({ note: 'ANCIEN' }))
+      .mockResolvedValueOnce(envelope({ note: 'FRAIS' }))
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      searchBrain,
+      readNodeFile: vi.fn().mockResolvedValue({ path: 'x', content: 'contenu de la note' })
+    }
+
+    await act(async () => {
+      root.render(<BrainRetrievalBench brainPath="C:/brain" resetToken={0} reloadToken={0} />)
+    })
+    const input = container.querySelector('input') as HTMLInputElement
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    await act(async () => {
+      setter?.call(input, 'où vit la promotion ?')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => container.querySelector('button')?.click())
+    await flush()
+    expect(container.textContent).toContain('ANCIEN')
+
+    await act(async () => {
+      root.render(<BrainRetrievalBench brainPath="C:/brain" resetToken={1} reloadToken={0} />)
+    })
+    expect(container.querySelector('[data-retrieval-status]')).toBeNull()
+    expect((container.querySelector('input') as HTMLInputElement).value).toBe(
+      'où vit la promotion ?'
+    )
+    expect(searchBrain).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      root.render(<BrainRetrievalBench brainPath="C:/brain" resetToken={1} reloadToken={1} />)
+    })
+    await flush()
+    expect(searchBrain).toHaveBeenCalledTimes(2)
+    expect(container.textContent).toContain('FRAIS')
+    expect(container.textContent).not.toContain('ANCIEN')
+  })
 })

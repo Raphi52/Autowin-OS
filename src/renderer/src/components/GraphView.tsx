@@ -186,6 +186,7 @@ export function GraphView({
   const [err, setErr] = useState('')
   const [themeQuery, setThemeQuery] = useState('')
   const [searchReload, setSearchReload] = useState(0)
+  const [benchReset, setBenchReset] = useState(0)
   const [activeThemes, setActiveThemes] = useState<Set<string>>(() => new Set())
   const [themeNodes, setThemeNodes] = useState<GraphNode[]>([])
   const [settings, setSettings] = useState<GraphVisibilitySettings>(initialVisibilitySettings)
@@ -265,6 +266,7 @@ export function GraphView({
     setErr('')
     setVaultSearch([])
     setSearchRetrieval(null)
+    setBenchReset((request) => request + 1)
     void window.api
       .refreshBrain(selected)
       .then(() => {
@@ -1841,7 +1843,11 @@ export function GraphView({
               </button>
             </div>
             <KnowledgeInboxPanel brainPath={selected} onIndexChanged={refreshGraph} />
-            <BrainRetrievalBench brainPath={selected} />
+            <BrainRetrievalBench
+              brainPath={selected}
+              resetToken={benchReset}
+              reloadToken={searchReload}
+            />
           </div>
         )}
         <button

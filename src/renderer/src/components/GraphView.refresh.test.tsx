@@ -205,6 +205,85 @@ describe('GraphView refresh', () => {
     )
   })
 
+  it('efface immédiatement puis relance aussi le banc Knowledge après Refresh', async () => {
+    const refresh = deferred<{ ok: boolean }>()
+    const budget = {
+      questionSubmittedChars: 8,
+      questionChars: 8,
+      questionMax: 500,
+      questionTruncated: false,
+      knowledgeAvailableChars: 6,
+      knowledgeChars: 6,
+      knowledgeMax: 6_000,
+      knowledgeTruncated: false,
+      knowledgeDroppedChars: 0
+    }
+    const searchBrain = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 'found',
+        note: 'ANCIEN-BANC',
+        query: 'decision',
+        results: [],
+        budget
+      })
+      .mockResolvedValueOnce({
+        status: 'found',
+        note: 'FRAIS-BANC',
+        query: 'decision',
+        results: [],
+        budget
+      })
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      listBrains: vi
+        .fn()
+        .mockResolvedValue([
+          { id: 'brain', label: 'Brain', path: 'C:\\brain', sizeMb: 1, kind: 'vault' }
+        ]),
+      loadBrainGraphPreview: vi.fn().mockResolvedValue({ nodes: [], links: [] }),
+      loadBrainGraph: vi.fn().mockResolvedValue({ nodes: [], links: [] }),
+      refreshBrain: vi.fn().mockReturnValue(refresh.promise),
+      loadBrainThemes: vi.fn().mockResolvedValue([]),
+      loadBrainThemeNodes: vi.fn().mockResolvedValue([]),
+      listInbox: vi.fn().mockResolvedValue([]),
+      searchBrain
+    }
+
+    await act(async () =>
+      root.render(createElement(GraphView, { active: true, onCleanMemory: vi.fn() }))
+    )
+    await flush()
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Poste de travail du savoir"]')
+        ?.click()
+    )
+    await flush()
+    const question = container.querySelector<HTMLInputElement>(
+      '[aria-label="Question posée au Brain"]'
+    )
+    if (!question) throw new Error('question du banc absente')
+    await act(async () => changeText(question, 'decision'))
+    await act(async () => question.closest('.brain-bench')?.querySelector('button')?.click())
+    await flush()
+    expect(container.textContent).toContain('ANCIEN-BANC')
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[aria-label="Rafraîchir les graphes"]')?.click()
+    )
+    await flush()
+    expect(container.textContent).not.toContain('ANCIEN-BANC')
+    expect(searchBrain).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      refresh.resolve({ ok: true })
+      await Promise.resolve()
+    })
+    await flush()
+    expect(searchBrain).toHaveBeenCalledTimes(2)
+    expect(container.textContent).toContain('FRAIS-BANC')
+  })
+
   it('ne traite jamais un aperçu interrompu comme un graphe complet au retour A→B→A', async () => {
     const firstFullA = deferred<{ nodes: never[]; links: never[] }>()
     const loadBrainGraphPreview = vi

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { BrainNavigationCard, type BrainTraceView } from './BrainNavigationCard'
 
 /**
@@ -20,9 +20,9 @@ import { BrainNavigationCard, type BrainTraceView } from './BrainNavigationCard'
 
 type BenchState =
   | { phase: 'idle' }
-  | { phase: 'running' }
-  | { phase: 'done'; envelope: BrainSearchEnvelopeView }
-  | { phase: 'failed'; message: string }
+  | { phase: 'running'; scope: string }
+  | { phase: 'done'; scope: string; envelope: BrainSearchEnvelopeView }
+  | { phase: 'failed'; scope: string; message: string }
 
 /** Forme LUE de l'enveloppe — le renderer n'en consomme que ce qu'il affiche. */
 export interface BrainSearchEnvelopeView {
@@ -98,34 +98,61 @@ function BudgetRow({
 
 export function BrainRetrievalBench({
   brainPath,
-  disabled
+  disabled,
+  resetToken = 0,
+  reloadToken = 0
 }: {
   brainPath: string
   disabled?: boolean
+  resetToken?: number
+  reloadToken?: number
 }): React.JSX.Element {
   const [question, setQuestion] = useState('')
   const [state, setState] = useState<BenchState>({ phase: 'idle' })
+  const requestGenerationRef = useRef(0)
+  const observedReloadRef = useRef(reloadToken)
+  const requestScope = `${brainPath}\u0000${resetToken}`
 
   const run = useCallback(async (): Promise<void> => {
     const asked = question.trim()
     if (!asked || !brainPath) return
-    setState({ phase: 'running' })
+    const requestGeneration = ++requestGenerationRef.current
+    setState({ phase: 'running', scope: requestScope })
     try {
       const envelope = (await window.api.searchBrain(
         brainPath,
         asked
       )) as unknown as BrainSearchEnvelopeView
-      setState({ phase: 'done', envelope })
+      if (requestGeneration !== requestGenerationRef.current) return
+      setState({ phase: 'done', scope: requestScope, envelope })
     } catch (error) {
+      if (requestGeneration !== requestGenerationRef.current) return
       // Une panne du canal reste une PANNE : on ne la déguise pas en « 0 résultat ».
       setState({
         phase: 'failed',
+        scope: requestScope,
         message: error instanceof Error ? error.message : String(error)
       })
     }
-  }, [brainPath, question])
+  }, [brainPath, question, requestScope])
 
-  const envelope = state.phase === 'done' ? state.envelope : undefined
+  useEffect(() => {
+    if (observedReloadRef.current === reloadToken) return
+    observedReloadRef.current = reloadToken
+    let current = true
+    void Promise.resolve().then(() => {
+      if (current) return run()
+      return undefined
+    })
+    return () => {
+      current = false
+    }
+  }, [reloadToken, run])
+
+  const running = state.phase === 'running' && state.scope === requestScope
+  const failed = state.phase === 'failed' && state.scope === requestScope ? state : undefined
+  const envelope =
+    state.phase === 'done' && state.scope === requestScope ? state.envelope : undefined
 
   return (
     <section className="brain-bench" aria-label="Banc d’essai de récupération">
@@ -145,16 +172,16 @@ export function BrainRetrievalBench({
         />
         <button
           onClick={() => void run()}
-          disabled={disabled || !brainPath || !question.trim() || state.phase === 'running'}
+          disabled={disabled || !brainPath || !question.trim() || running}
         >
-          {state.phase === 'running' ? 'recherche…' : 'Tester'}
+          {running ? 'recherche…' : 'Tester'}
         </button>
       </div>
 
-      {state.phase === 'failed' && (
+      {failed && (
         <p className="brain-bench__status is-failed" data-retrieval-status="failed" role="alert">
           <strong>Recherche impossible</strong>
-          <span>{state.message}</span>
+          <span>{failed.message}</span>
         </p>
       )}
 
