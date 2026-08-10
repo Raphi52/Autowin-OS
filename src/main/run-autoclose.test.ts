@@ -96,6 +96,7 @@ describe('autoCloseRun — publication d’un run vert', () => {
     const { repo } = await repoWithRemote()
     writeFileSync(join(repo, 'du-run.md'), '# produit par le run\n')
     writeFileSync(join(repo, 'autrui.md'), '# travail de quelqu_un d_autre\n')
+    await realGit(['add', 'autrui.md'], repo)
 
     const res = await autoCloseRun({
       repo,
@@ -112,9 +113,9 @@ describe('autoCloseRun — publication d’un run vert', () => {
     ).stdout
     expect(committed).toContain('du-run.md')
     expect(committed).not.toContain('autrui.md')
-    // Le fichier d'autrui reste non suivi, intact.
+    // Le fichier d'autrui reste indexé, intact.
     expect((await run('git', ['status', '--porcelain'], { cwd: repo })).stdout).toContain(
-      'autrui.md'
+      'A  autrui.md'
     )
   })
 
@@ -135,6 +136,62 @@ describe('autoCloseRun — publication d’un run vert', () => {
     expect(
       (await run('git', ['log', '--oneline'], { cwd: repo })).stdout.trim().split('\n')
     ).toHaveLength(1)
+  })
+
+  it('bloque un secret dans un nouveau fichier avant commit et restaure l index', async () => {
+    const { repo, remote } = await repoWithRemote()
+    writeFileSync(join(repo, 'nouveau.env'), 'AKIAIOSFODNN7EXAMPLE\n')
+    writeFileSync(join(repo, 'deja-indexe.txt'), 'travail utilisateur\n')
+    await realGit(['add', 'deja-indexe.txt'], repo)
+    const indexBefore = (await realGit(['write-tree'], repo)).trim()
+
+    const res = await autoCloseRun({
+      repo,
+      branch: 'auto/run-new-secret',
+      message: 'ajoute un fichier',
+      paths: ['nouveau.env'],
+      runGit: realGit
+    })
+
+    expect(res).toMatchObject({ status: 'skipped', reason: 'secret-detected' })
+    expect((await realGit(['write-tree'], repo)).trim()).toBe(indexBefore)
+    expect((await realGit(['rev-list', '--count', 'HEAD'], repo)).trim()).toBe('1')
+    expect(await realGit(['branch'], remote)).not.toContain('auto/run-new-secret')
+  })
+
+  it('bloque un secret dans le chemin avant commit', async () => {
+    const { repo, remote } = await repoWithRemote()
+    const secretName = 'AKIAIOSFODNN7EXAMPLE.txt'
+    writeFileSync(join(repo, secretName), 'contenu bénin\n')
+
+    const res = await autoCloseRun({
+      repo,
+      branch: 'auto/run-path-secret',
+      message: 'ajoute un fichier',
+      paths: [secretName],
+      runGit: realGit
+    })
+
+    expect(res).toMatchObject({ status: 'skipped', reason: 'secret-detected' })
+    expect((await realGit(['rev-list', '--count', 'HEAD'], repo)).trim()).toBe('1')
+    expect(await realGit(['branch'], remote)).not.toContain('auto/run-path-secret')
+  })
+
+  it('bloque un secret dans le message avant commit', async () => {
+    const { repo, remote } = await repoWithRemote()
+    writeFileSync(join(repo, 'benign.txt'), 'contenu bénin\n')
+
+    const res = await autoCloseRun({
+      repo,
+      branch: 'auto/run-message-secret',
+      message: 'task AKIAIOSFODNN7EXAMPLE',
+      paths: ['benign.txt'],
+      runGit: realGit
+    })
+
+    expect(res).toMatchObject({ status: 'skipped', reason: 'secret-detected' })
+    expect((await realGit(['rev-list', '--count', 'HEAD'], repo)).trim()).toBe('1')
+    expect(await realGit(['branch'], remote)).not.toContain('auto/run-message-secret')
   })
 
   it('une défaillance git devient un échec rapporté, jamais une exception', async () => {

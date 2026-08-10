@@ -116,28 +116,54 @@ export async function autoCloseRun(input: AutoCloseInput): Promise<AutoCloseResu
   if (PROTECTED.test(branch.trim())) {
     return { status: 'skipped', reason: 'protected-branch', detail: branch }
   }
+  let indexTree: string | undefined
+  let committed = false
   try {
     const scope = paths?.length ? ['--', ...paths] : []
     const changed = parsePorcelainPaths(
       await runGit(['status', '--porcelain=v1', '-z', '-uall', ...scope], repo)
     )
     if (changed.length === 0) return { status: 'skipped', reason: 'no-changes' }
+    const metadataSecret = detectSecret(`${message}\n${changed.join('\n')}`)
+    if (metadataSecret) {
+      return { status: 'skipped', reason: 'secret-detected', detail: metadataSecret }
+    }
 
-    // Dernier filet anti-secret : on inspecte ce qu'on s'apprête à publier, pas l'arbre entier.
-    const diff = await runGit(['diff', 'HEAD', ...scope], repo)
-    const secret = detectSecret(diff)
-    if (secret) return { status: 'skipped', reason: 'secret-detected', detail: secret }
-
+    // Sauvegarde exacte de l'index utilisateur : l'ajout temporaire rend aussi les fichiers non
+    // suivis visibles au scanner, puis `read-tree` restaure l'index sans toucher au workspace.
+    indexTree = (await runGit(['write-tree'], repo)).trim()
     await runGit(paths?.length ? ['add', '--', ...paths] : ['add', '-A'], repo)
-    await runGit(['commit', '-m', message], repo)
-    if (input.push === false) return { status: 'committed', files: changed.length }
+    const stagedDiff = await runGit(['diff', '--cached', indexTree, ...scope], repo)
+    const secret = detectSecret(stagedDiff)
+    if (secret) {
+      await runGit(['read-tree', indexTree], repo)
+      return { status: 'skipped', reason: 'secret-detected', detail: secret }
+    }
 
-    const remotes = (await runGit(['remote'], repo)).trim()
-    if (!remotes) return { status: 'skipped', reason: 'no-remote' }
-    // HEAD:refs/heads/<branche> → publie sans créer ni basculer de branche locale.
-    await runGit(['push', 'origin', `HEAD:refs/heads/${branch}`], repo)
-    return { status: 'pushed', branch, files: changed.length }
+    const baseSha = (await runGit(['rev-parse', 'HEAD'], repo)).trim()
+    await runGit(
+      paths?.length
+        ? ['commit', '--only', '-m', message, '--', ...paths]
+        : ['commit', '-m', message],
+      repo
+    )
+    committed = true
+    if (input.push === false) return { status: 'committed', files: changed.length }
+    const publishedSha = (await runGit(['rev-parse', 'HEAD'], repo)).trim()
+    return await publishRunCommits({
+      repo,
+      publication: { baseSha, publishedSha },
+      branch,
+      runGit
+    })
   } catch (error) {
+    if (indexTree && !committed) {
+      try {
+        await runGit(['read-tree', indexTree], repo)
+      } catch {
+        // L'échec reste rapporté ; cette restauration ne réécrit jamais le workspace.
+      }
+    }
     return { status: 'failed', error: error instanceof Error ? error.message : String(error) }
   }
 }

@@ -52,6 +52,8 @@ export interface RunWorktreeCoordinatorDeps {
         | 'changedFilesAsync'
         | 'finalizeAsync'
         | 'cleanupPublishedAsync'
+        | 'acknowledgePublication'
+        | 'acknowledgePublicationAsync'
         | 'operationsAreIsolated'
         | 'recoveryInventoryAsync'
         | 'describeAsync'
@@ -507,10 +509,18 @@ export class RunWorktreeCoordinator {
         this.persist(tracked, 'green', 'integrating')
         preparedPublication = { baseSha, agentSha }
         this.publicationCallbacks.get(runId)?.onPrepared?.(preparedPublication)
+      },
+      onIntegrated: (integratedSha, agentSha, baseSha) => {
+        tracked.publishedSha = integratedSha
+        tracked.publicationAgentSha = agentSha
+        tracked.publicationBaseSha = baseSha
+        this.persist(tracked, 'green', 'integrating')
+        preparedPublication = { baseSha, agentSha: integratedSha }
       }
     })
     this.applyFinalize(tracked, res)
     this.persistFinalize(tracked, res)
+    this.acknowledgePublication(tracked, res)
     void this.finishPublicationCallbacks(tracked, res, preparedPublication)
     this.emit()
     return res
@@ -587,10 +597,18 @@ export class RunWorktreeCoordinator {
           this.persist(tracked, 'green', 'integrating')
           preparedPublication = { baseSha, agentSha }
           this.publicationCallbacks.get(runId)?.onPrepared?.(preparedPublication)
+        },
+        onIntegrated: (integratedSha, agentSha, baseSha) => {
+          tracked.publishedSha = integratedSha
+          tracked.publicationAgentSha = agentSha
+          tracked.publicationBaseSha = baseSha
+          this.persist(tracked, 'green', 'integrating')
+          preparedPublication = { baseSha, agentSha: integratedSha }
         }
       })
       this.applyFinalize(tracked, res)
       this.persistFinalize(tracked, res)
+      await this.acknowledgePublicationAsync(tracked, res)
       await this.finishPublicationCallbacks(tracked, res, preparedPublication)
       this.emit()
       return res
@@ -1081,6 +1099,47 @@ export class RunWorktreeCoordinator {
     )
   }
 
+  private publicationShaToAcknowledge(
+    tracked: Tracked,
+    result: FinalizeResult
+  ): string | undefined {
+    if (
+      result.outcome !== 'merged' &&
+      result.outcome !== 'cleanup-pending' &&
+      result.outcome !== 'published-residue'
+    ) {
+      return undefined
+    }
+    return result.publishedSha ?? tracked.publishedSha
+  }
+
+  private acknowledgePublication(tracked: Tracked, result: FinalizeResult): void {
+    const publishedSha = this.publicationShaToAcknowledge(tracked, result)
+    if (!publishedSha || !this.manager.acknowledgePublication) return
+    try {
+      this.manager.acknowledgePublication(tracked.runId, publishedSha)
+    } catch {
+      // L'ancre restante est sûre et sera acquittée lors d'une reprise ultérieure.
+    }
+  }
+
+  private async acknowledgePublicationAsync(
+    tracked: Tracked,
+    result: FinalizeResult
+  ): Promise<void> {
+    const publishedSha = this.publicationShaToAcknowledge(tracked, result)
+    if (!publishedSha) return
+    try {
+      if (this.manager.acknowledgePublicationAsync) {
+        await this.manager.acknowledgePublicationAsync(tracked.runId, publishedSha)
+      } else {
+        this.manager.acknowledgePublication?.(tracked.runId, publishedSha)
+      }
+    } catch {
+      // L'ancre restante est sûre et sera acquittée lors d'une reprise ultérieure.
+    }
+  }
+
   /**
    * Au redémarrage, le worktree Git est la source durable : on reprend chaque copie agent.
    * Une copie intégrable est fusionnée/nettoyée ; un conflit reste intact et redevient visible.
@@ -1419,6 +1478,10 @@ export class RunWorktreeCoordinator {
         this.persist(tracked, 'green', 'blocked', validation.detail)
         return
       }
+      if (validation.publishedSha) {
+        tracked.publishedSha = validation.publishedSha
+        this.persist(tracked, 'green', 'integrating')
+      }
       recoveryDecision = validation.decision
     }
     try {
@@ -1470,10 +1533,18 @@ export class RunWorktreeCoordinator {
                 this.persist(tracked, 'green', 'integrating')
                 preparedPublication = { baseSha, agentSha }
                 this.publicationCallbacks.get(runId)?.onPrepared?.(preparedPublication)
+              },
+              onIntegrated: (integratedSha, agentSha, baseSha) => {
+                tracked.publishedSha = integratedSha
+                tracked.publicationAgentSha = agentSha
+                tracked.publicationBaseSha = baseSha
+                this.persist(tracked, 'green', 'integrating')
+                preparedPublication = { baseSha, agentSha: integratedSha }
               }
             })
       this.applyFinalize(tracked, result)
       this.persistFinalize(tracked, result)
+      this.acknowledgePublication(tracked, result)
       void this.finishPublicationCallbacks(tracked, result, preparedPublication)
     } catch {
       tracked.state = 'blocked'
@@ -1586,6 +1657,10 @@ export class RunWorktreeCoordinator {
         this.persist(tracked, 'green', 'blocked', validation.detail)
         return
       }
+      if (validation.publishedSha) {
+        tracked.publishedSha = validation.publishedSha
+        this.persist(tracked, 'green', 'integrating')
+      }
       recoveryDecision = validation.decision
     }
     try {
@@ -1637,6 +1712,13 @@ export class RunWorktreeCoordinator {
                   this.persist(tracked, 'green', 'integrating')
                   preparedPublication = { baseSha, agentSha }
                   this.publicationCallbacks.get(runId)?.onPrepared?.(preparedPublication)
+                },
+                onIntegrated: (integratedSha, agentSha, baseSha) => {
+                  tracked.publishedSha = integratedSha
+                  tracked.publicationAgentSha = agentSha
+                  tracked.publicationBaseSha = baseSha
+                  this.persist(tracked, 'green', 'integrating')
+                  preparedPublication = { baseSha, agentSha: integratedSha }
                 }
               })
             : this.manager.finalize(runId, {
@@ -1645,6 +1727,7 @@ export class RunWorktreeCoordinator {
               })
       this.applyFinalize(tracked, result)
       this.persistFinalize(tracked, result)
+      await this.acknowledgePublicationAsync(tracked, result)
       await this.finishPublicationCallbacks(tracked, result, preparedPublication)
     } catch {
       tracked.state = 'blocked'

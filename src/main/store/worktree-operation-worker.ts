@@ -35,7 +35,9 @@ port.on('message', (request: WorktreeOperationRequest) => {
         value = manager.finalize(request.agentId, {
           ...request.options,
           onPrepared: (agentSha, baseSha) =>
-            port.postMessage({ type: 'prepared', agentSha, baseSha })
+            port.postMessage({ type: 'prepared', agentSha, baseSha }),
+          onIntegrated: (integratedSha, agentSha, baseSha) =>
+            port.postMessage({ type: 'integrated', integratedSha, agentSha, baseSha })
         })
         break
       case 'cleanupPublished':
@@ -45,6 +47,9 @@ port.on('message', (request: WorktreeOperationRequest) => {
           request.baseBranch,
           request.agentSha
         )
+        break
+      case 'acknowledgePublication':
+        value = manager.acknowledgePublication(request.agentId, request.publishedSha)
         break
       case 'recoveryInventory':
         value = manager.recoveryInventory()

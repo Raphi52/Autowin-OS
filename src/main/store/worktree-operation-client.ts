@@ -40,7 +40,10 @@ export class WorktreeOperationClient {
 
   run<T>(
     request: WorktreeOperationRequest,
-    onPrepared?: (agentSha: string, baseSha: string) => void
+    callbacks: {
+      onPrepared?: (agentSha: string, baseSha: string) => void
+      onIntegrated?: (integratedSha: string, agentSha: string, baseSha: string) => void
+    } = {}
   ): Promise<T> {
     const worker = this.workerFactory()
     this.active += 1
@@ -63,7 +66,11 @@ export class WorktreeOperationClient {
 
       worker.on('message', (message) => {
         if (message.type === 'prepared') {
-          onPrepared?.(message.agentSha, message.baseSha)
+          callbacks.onPrepared?.(message.agentSha, message.baseSha)
+          return
+        }
+        if (message.type === 'integrated') {
+          callbacks.onIntegrated?.(message.integratedSha, message.agentSha, message.baseSha)
           return
         }
         if (message.type === 'error') finish({ error: new Error(message.error) })

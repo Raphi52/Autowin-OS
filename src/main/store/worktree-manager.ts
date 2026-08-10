@@ -327,13 +327,14 @@ export class WorktreeManager {
       baseBranch?: string
       expectedAgentSha?: string
       onPrepared?: (agentSha: string, baseSha: string) => void
+      onIntegrated?: (integratedSha: string, agentSha: string, baseSha: string) => void
     } = {}
   ): Promise<FinalizeResult> {
     if (!this.operationClient) return this.finalize(agentId, options)
-    const { onPrepared, ...serializable } = options
+    const { onPrepared, onIntegrated, ...serializable } = options
     return this.operationClient.run(
       { operation: 'finalize', agentId, options: serializable },
-      onPrepared
+      { onPrepared, onIntegrated }
     )
   }
 
@@ -352,6 +353,12 @@ export class WorktreeManager {
           agentSha
         })
       : this.cleanupPublished(agentId, publishedSha, baseBranch, agentSha)
+  }
+
+  async acknowledgePublicationAsync(agentId: string, publishedSha: string): Promise<boolean> {
+    return this.operationClient
+      ? this.operationClient.run({ operation: 'acknowledgePublication', agentId, publishedSha })
+      : this.acknowledgePublication(agentId, publishedSha)
   }
 
   /** Vrai uniquement quand les opérations Git sont réellement déportées hors du main Electron. */
@@ -1266,7 +1273,12 @@ ${chainReferenceHook}exit 0
     agentId: string,
     context: WorktreeRecoveryContext
   ):
-    { ok: true; decision?: 'resume-publication' | 'cleanup-only' } | { ok: false; detail: string } {
+    | {
+        ok: true
+        decision?: 'resume-publication' | 'cleanup-only'
+        publishedSha?: string
+      }
+    | { ok: false; detail: string } {
     try {
       assertSafeId(agentId, 'agentId')
     } catch (error) {
@@ -1315,6 +1327,30 @@ ${chainReferenceHook}exit 0
         context.publishedSha ?? preparedAgentSha!,
         branchRef
       ]).code === 0
+    const publicationMarker = this.tryGitFn(this.baseRepo, [
+      'rev-parse',
+      '--verify',
+      this.publicationMarkerRef(agentId)
+    ])
+    const markerSha = publicationMarker.code === 0 ? publicationMarker.stdout.trim() : undefined
+    const markerIsValid =
+      Boolean(markerSha) &&
+      this.revisionExists(markerSha!) &&
+      this.tryGitFn(this.baseRepo, ['merge-base', '--is-ancestor', context.baseSha, markerSha!])
+        .code === 0 &&
+      (!preparedAgentSha ||
+        this.tryGitFn(this.baseRepo, ['merge-base', '--is-ancestor', preparedAgentSha, markerSha!])
+          .code === 0)
+    if (markerSha && !markerIsValid) {
+      return { ok: false, detail: 'La transaction de publication durable est invalide.' }
+    }
+    const markerIsPublished =
+      markerIsValid &&
+      this.tryGitFn(this.baseRepo, ['merge-base', '--is-ancestor', markerSha!, branchRef]).code ===
+        0
+    if (!context.publishedSha && markerIsPublished) {
+      return { ok: true, decision: 'cleanup-only', publishedSha: markerSha }
+    }
     if (publishedState) {
       if (!preparedShaIsValid || !preparedShaIsPublished) {
         return {
@@ -1329,7 +1365,22 @@ ${chainReferenceHook}exit 0
     if (hasPreparedSha && !preparedShaIsValid) {
       return { ok: false, detail: 'Le SHA préparé pour la publication est invalide.' }
     }
-    if (preparedShaIsPublished) return { ok: true, decision: 'cleanup-only' }
+    if (preparedShaIsPublished) {
+      if (!context.publishedSha) {
+        const branchSha = this.tryGitFn(this.baseRepo, ['rev-parse', branchRef]).stdout.trim()
+        if (branchSha !== preparedAgentSha) {
+          return {
+            ok: false,
+            detail: 'La SHA exacte de la publication historique est indisponible.'
+          }
+        }
+      }
+      return {
+        ok: true,
+        decision: 'cleanup-only',
+        publishedSha: context.publishedSha ?? preparedAgentSha
+      }
+    }
 
     if (!existsSync(path)) {
       return { ok: false, detail: 'La copie durable à reprendre n’existe plus.' }
@@ -1417,6 +1468,7 @@ ${chainReferenceHook}exit 0
       baseBranch?: string
       expectedAgentSha?: string
       onPrepared?: (agentSha: string, baseSha: string) => void
+      onIntegrated?: (integratedSha: string, agentSha: string, baseSha: string) => void
     } = {}
   ): FinalizeResult {
     const expectedBaseBranch = options.baseBranch ?? this.currentBaseBranch()
@@ -1674,10 +1726,48 @@ ${chainReferenceHook}exit 0
           }
         }
 
+        const publicationRef = this.publicationMarkerRef(agentId)
+        const existingPublication = this.tryGitFn(this.baseRepo, [
+          'rev-parse',
+          '--verify',
+          publicationRef
+        ])
+        let publicationSha = integratedSha
+        if (existingPublication.code === 0) {
+          const candidate = existingPublication.stdout.trim()
+          const validCandidate =
+            this.revisionExists(candidate) &&
+            this.tryGitFn(this.baseRepo, ['merge-base', '--is-ancestor', baseSha, candidate])
+              .code === 0 &&
+            this.tryGitFn(this.baseRepo, ['merge-base', '--is-ancestor', sha, candidate]).code === 0
+          if (!validCandidate) {
+            return {
+              outcome: 'blocked',
+              agentId,
+              files: agentFiles,
+              reason: 'merge-failed',
+              detail: 'La transaction de publication durable ne correspond plus à ce run.'
+            }
+          }
+          publicationSha = candidate
+        } else {
+          const marker = this.tryGitFn(this.baseRepo, ['update-ref', publicationRef, integratedSha])
+          if (marker.code !== 0) {
+            return {
+              outcome: 'blocked',
+              agentId,
+              files: agentFiles,
+              reason: 'merge-failed',
+              detail: 'La transaction de publication n’a pas pu être rendue durable.'
+            }
+          }
+        }
+        options.onIntegrated?.(publicationSha, sha, baseSha)
+
         const publishHooksPath = this.preparePublishHooks(
           integrationPath,
           baseSha,
-          integratedSha,
+          publicationSha,
           expectedBaseBranch
         )
         const publish = this.tryGitFn(this.baseRepo, [
@@ -1685,10 +1775,10 @@ ${chainReferenceHook}exit 0
           `core.hooksPath=${shellPath(publishHooksPath)}`,
           'merge',
           '--ff-only',
-          integratedSha
+          publicationSha
         ])
         if (publish.code === 0) {
-          return { outcome: 'merged', agentId, committed, baseSha, publishedSha: integratedSha }
+          return { outcome: 'merged', agentId, committed, baseSha, publishedSha: publicationSha }
         }
 
         const operationAfterPublish = this.operationInProgress()
@@ -1837,6 +1927,22 @@ ${chainReferenceHook}exit 0
     return (
       this.tryGitFn(this.baseRepo, ['merge-base', '--is-ancestor', expectedSha, target]).code === 0
     )
+  }
+
+  private publicationMarkerRef(agentId: string): string {
+    assertSafeId(agentId, 'agentId')
+    return `refs/autowin/publications/${agentId}`
+  }
+
+  /** Supprime l'ancre transactionnelle seulement après persistance durable de la SHA publiée. */
+  acknowledgePublication(agentId: string, publishedSha: string): boolean {
+    const ref = this.publicationMarkerRef(agentId)
+    const before = this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', ref])
+    if (before.code !== 0) return true
+    if (before.stdout.trim() !== publishedSha) return false
+    const deletion = this.tryGitFn(this.baseRepo, ['update-ref', '-d', ref, publishedSha])
+    const current = this.tryGitFn(this.baseRepo, ['rev-parse', '--verify', ref])
+    return deletion.code === 0 && current.code !== 0
   }
 
   /**
