@@ -15,13 +15,64 @@ const MAX_BUFFER = 8 * 1024 * 1024
 const DEFAULT_BASE_CANDIDATES = ['main', 'master'] as const
 /** Une copie enorme ne doit pas faire ramer la vue : au-dela, on arrete de compter et on le dit. */
 const SIZE_SCAN_ENTRY_CAP = 40_000
+/** Le scan recursif d'une copie volumineuse coute cher : on ne le refait pas avant ce délai. */
+const SIZE_CACHE_TTL_MS = 60_000
 
 export interface WorktreeMapReadOptions {
   /** Branche de reference du retard. Sinon `main`, puis `master`, puis la tete courante. */
   baseBranch?: string
-  /** Coupe la mesure de taille disque : c'est le seul appel non borné en O(1). */
+  /** Mesure la taille disque : scan recursif coûteux, donc HORS par défaut. Le premier affichage
+   *  reste rapide ; la taille n'arrive que sur demande explicite (`measureSize: true`). */
   measureSize?: boolean
 }
+
+interface SizeCacheEntry {
+  size: number | undefined
+  at: number
+}
+
+/** Cache TTL par (dépôt, copie) : deux dépôts distincts ne partagent jamais leur mesure. */
+const sizeCache = new Map<string, SizeCacheEntry>()
+
+function sizeCacheKey(repoPath: string, worktreePath: string): string {
+  return `${repoPath}\u0000${worktreePath}`
+}
+
+/** Vide le cache de tailles — usage tests uniquement. */
+export function __clearWorktreeSizeCacheForTests(): void {
+  sizeCache.clear()
+}
+
+/** File d'attente FIFO bornant le nombre d'appels `git` menés de front (pas de dépendance
+ *  externe) : un dépôt à dizaines de worktrees ne doit pas saturer l'hôte de process git. */
+function createLimiter(limit: number): <T>(task: () => Promise<T>) => Promise<T> {
+  let active = 0
+  const queue: Array<() => void> = []
+  const next = (): void => {
+    if (active >= limit) return
+    const runNext = queue.shift()
+    if (!runNext) return
+    active += 1
+    runNext()
+  }
+  return function limited<T>(task: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      queue.push(() => {
+        task()
+          .then(resolve, reject)
+          .finally(() => {
+            active -= 1
+            next()
+          })
+      })
+      next()
+    })
+  }
+}
+
+const GIT_CONCURRENCY = 4
+const gitLimiter = createLimiter(GIT_CONCURRENCY)
+const limitedGit = <T>(task: () => Promise<T>): Promise<T> => gitLimiter(task)
 
 /**
  * Lecture STRICTEMENT read-only de l'etat des worktrees git, enrichie des trois grandeurs que
