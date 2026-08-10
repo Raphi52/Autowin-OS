@@ -298,6 +298,118 @@ describe('travail DÉJÀ COMMITÉ par la fusion du worktree (arbre propre)', () 
     expect(await realGit(['branch'], remote)).not.toContain('auto/run-secret-history')
   })
 
+  it('refuse un secret transitoire sur une ligne commençant par deux plus', async () => {
+    const { repo, remote } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+    const secretPath = join(repo, 'ambiguous.patch')
+    writeFileSync(secretPath, '++token = "0123456789abcdef"\n')
+    await realGit(['add', 'ambiguous.patch'], repo)
+    await realGit(['commit', '-m', 'feat: add generated patch'], repo)
+    rmSync(secretPath)
+    await realGit(['add', '-A'], repo)
+    await realGit(['commit', '-m', 'fix: remove generated patch'], repo)
+    const publishedSha = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-secret-plus-prefix',
+      task: 'publie deux commits',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      projectPublication: { baseSha: baseline.projectHead!, publishedSha },
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({ status: 'skipped', reason: 'secret-detected' })
+    expect(await realGit(['branch'], remote)).not.toContain('auto/run-secret-plus-prefix')
+  })
+
+  it('refuse un secret présent uniquement dans le message du commit', async () => {
+    const { repo, remote } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+    writeFileSync(join(repo, 'benign.txt'), 'contenu sans secret\n')
+    await realGit(['add', 'benign.txt'], repo)
+    await realGit(['commit', '-m', 'feat: benign content', '-m', 'AKIAIOSFODNN7EXAMPLE'], repo)
+    const publishedSha = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-secret-message',
+      task: 'publie un commit',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      projectPublication: { baseSha: baseline.projectHead!, publishedSha },
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({ status: 'skipped', reason: 'secret-detected' })
+    expect(await realGit(['branch'], remote)).not.toContain('auto/run-secret-message')
+  })
+
+  it('refuse un secret présent uniquement dans un chemin transitoire', async () => {
+    const { repo, remote } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+    const secretName = 'AKIAIOSFODNN7EXAMPLE.txt'
+    writeFileSync(join(repo, secretName), 'contenu sans secret\n')
+    await realGit(['add', secretName], repo)
+    await realGit(['commit', '-m', 'feat: add temporary file'], repo)
+    rmSync(join(repo, secretName))
+    await realGit(['add', '-A'], repo)
+    await realGit(['commit', '-m', 'fix: remove temporary file'], repo)
+    const publishedSha = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-secret-path',
+      task: 'publie deux commits',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      projectPublication: { baseSha: baseline.projectHead!, publishedSha },
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({ status: 'skipped', reason: 'secret-detected' })
+    expect(await realGit(['branch'], remote)).not.toContain('auto/run-secret-path')
+  })
+
+  it('refuse un secret transitoire introduit par une résolution de merge', async () => {
+    const { repo, remote } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+    await realGit(['switch', '-c', 'agent-merge'], repo)
+    writeFileSync(join(repo, 'base.txt'), 'agent\n')
+    await realGit(['add', 'base.txt'], repo)
+    await realGit(['commit', '-m', 'feat: agent side'], repo)
+    await realGit(['switch', 'travail'], repo)
+    writeFileSync(join(repo, 'base.txt'), 'base side\n')
+    await realGit(['add', 'base.txt'], repo)
+    await realGit(['commit', '-m', 'feat: base side'], repo)
+    await expect(realGit(['merge', '--no-ff', 'agent-merge'], repo)).rejects.toThrow()
+    writeFileSync(join(repo, 'base.txt'), 'AKIAIOSFODNN7EXAMPLE\n')
+    await realGit(['add', 'base.txt'], repo)
+    await realGit(['commit', '-m', 'merge: resolve both sides'], repo)
+    writeFileSync(join(repo, 'base.txt'), 'base\n')
+    await realGit(['add', 'base.txt'], repo)
+    await realGit(['commit', '-m', 'fix: remove merge residue'], repo)
+    const publishedSha = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-secret-merge',
+      task: 'publie une fusion',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      projectPublication: { baseSha: baseline.projectHead!, publishedSha },
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({ status: 'skipped', reason: 'secret-detected' })
+    expect(await realGit(['branch'], remote)).not.toContain('auto/run-secret-merge')
+  })
+
   it('s’abstient si l’historique contient le commit d’une AUTRE session', async () => {
     const { repo, remote } = await repoWithRemote()
     const brain = (await repoWithRemote()).repo

@@ -75,7 +75,7 @@ export function detectSecret(text: string): string | undefined {
 function addedPatchContent(patch: string): string {
   return patch
     .split(/\r?\n/)
-    .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
+    .filter((line) => line.startsWith('>'))
     .map((line) => line.slice(1))
     .join('\n')
 }
@@ -194,6 +194,10 @@ export async function publishRunCommits(input: {
       .map((line) => line.trim())
       .filter(Boolean)
     const finalSecret = detectSecret(await runGit(['diff', range], repo))
+    const publishedMetadata = await runGit(
+      ['log', '--format=raw', '--name-only', '--no-renames', '-m', range],
+      repo
+    )
     const historyPatch = await runGit(
       [
         'log',
@@ -204,11 +208,15 @@ export async function publishRunCommits(input: {
         '-m',
         '-p',
         '--unified=0',
+        '--output-indicator-new=>',
         range
       ],
       repo
     )
-    const secret = finalSecret ?? detectSecret(addedPatchContent(historyPatch))
+    const secret =
+      finalSecret ??
+      detectSecret(publishedMetadata) ??
+      detectSecret(addedPatchContent(historyPatch))
     if (secret) return { status: 'skipped', reason: 'secret-detected', detail: secret }
 
     const remotes = (await runGit(['remote'], repo)).trim()
