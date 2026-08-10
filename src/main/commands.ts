@@ -3,9 +3,9 @@ import {
   decideEdit,
   decoderUtf8,
   editDiff,
-  refusRacineSysteme,
-  refusSiPasUtf8
+  refusRacineSysteme
 } from './edit-file-command'
+import { encodeFile, readFileText, unrepresentableCharacters } from './file-encoding'
 import {
   conversationRecenteEquivalente,
   titreDeConversationDemandee
@@ -3816,39 +3816,47 @@ export class AppCommandBus {
     path?: string
     diff?: string
   } {
-    const decision = decideEdit(input, workspaceRoot, (absolutePath) =>
-      existsSync(absolutePath) ? readFileSync(absolutePath, 'utf8') : null
-    )
+    // ENCODAGE PRÉSERVÉ. Cette commande lisait et écrivait en `'utf8'` codé en dur, ce qui la rendait
+    // inutilisable — et dangereuse — sur un dépôt VB6, dont les sources sont en mono-octet. Mesuré le
+    // 2026-08-07 sur `ULT_1RIL_SE.cls` : la lecture rendait « l'<?>quipe » au lieu de « l'équipe »,
+    // donc `oldText` ne correspondait JAMAIS ; et la réécriture aurait remplacé chaque accent du
+    // fichier ENTIER par `EF BF BD`. Choix de `latin1` et garanties : voir `file-encoding.ts`.
+    //
+    // L'encodage est résolu UNE SEULE FOIS, à la lecture, puis réutilisé pour l'écriture : le détecter
+    // deux fois pourrait donner deux réponses différentes et écrire dans un encodage autre que celui
+    // sur lequel la correspondance a été validée.
+    let lecture: ReturnType<typeof readFileText> | undefined
+    const decision = decideEdit(input, workspaceRoot, (absolutePath) => {
+      if (!existsSync(absolutePath)) return null
+      lecture = readFileText(readFileSync(absolutePath), absolutePath)
+      // Illisible : on rend un contenu vide pour arrêter `decideEdit`, mais c'est le motif RÉEL qui
+      // est rendu à l'agent juste en dessous — pas « texte introuvable », qui serait mensonger.
+      return lecture.ok ? lecture.text : ''
+    })
+    if (lecture && !lecture.ok) return { allowed: false, reason: lecture.reason }
     if (!decision.allowed) return { allowed: false, reason: decision.reason }
+    if (!lecture?.ok) return { allowed: false, reason: 'fichier illisible' }
     /*
-     * LES OCTETS D'AVANT, RENDUS A L'APPELANT — pas relus plus tard.
-     *
-     * La baseline differentielle a besoin de l'etat PRE-EDITION. Une premiere version le redemandait
-     * a `git show HEAD:<chemin>`, ce qui supposait un bureau propre (faux : les bureaux sont
-     * REUTILISES par (conversation, cible)), suivait les liens symboliques, et lancait un process
-     * synchrone non borne dans le main d'Electron. Le contenu est ICI, lu une fois, sur le chemin
-     * deja borne par `decideEdit` : le passer coute zero et supprime les trois problemes.
-     *
-     * En BUFFER : la restauration doit etre une identite d'OCTETS. (L'edition elle-meme normalise
-     * encore en utf8 — defaut PREEXISTANT a ce changement, mesure le 2026-08-27 : un fichier cp1252
-     * voit son octet `e9` devenir `efbfbd` des `applyEdit`. Il est dispatche a part ; on ne
-     * l'aggrave pas ici.)
+     * CARACTERES IMPOSSIBLES A ECRIRE dans l'encodage REEL du fichier : on refuse en le NOMMANT,
+     * plutot que de detruire des octets hors de la zone editee. L'encodage n'est plus force en
+     * UTF-8 : il est resolu une fois a la lecture et reutilise a l'ecriture.
      */
-    const octetsAvant = readFileSync(decision.absolutePath)
+    const impossibles = unrepresentableCharacters(decision.newText, lecture.encoding)
+    if (impossibles.length > 0) {
+      return {
+        allowed: false,
+        reason: `caractère(s) impossible(s) à écrire dans ce fichier (${lecture.encoding}) : ${impossibles.join(' ')}. Utilise l’équivalent simple (apostrophe droite, « EUR »…) — les écrire quand même les transformerait en caractères de contrôle.`
+      }
+    }
     /*
-     * GARDE D'ENCODAGE — avant toute ecriture, et avant meme de rendre les octets a l'appelant :
-     * un contenu non-UTF-8 ne survit pas au `toString('utf8')` ci-dessous (substitution silencieuse
-     * en U+FFFD, jamais une exception). On refuse en le NOMMANT plutot que de detruire des octets
-     * hors de la zone editee. Voir `refusSiPasUtf8`.
+     * LES OCTETS D'AVANT, RENDUS A L'APPELANT — pas relus plus tard. La baseline differentielle a
+     * besoin de l'etat PRE-EDITION, en BUFFER (la restauration doit etre une identite d'OCTETS).
+     * Le chemin est deja borne par `decideEdit`.
      */
-    const refusEncodage = refusSiPasUtf8(octetsAvant, decision.relativePath)
-    if (refusEncodage) return { allowed: false, reason: refusEncodage }
-    avantEdition?.(octetsAvant)
-    const content = octetsAvant.toString('utf8')
+    avantEdition?.(readFileSync(decision.absolutePath))
     writeFileSync(
       decision.absolutePath,
-      applyEdit(content, decision.oldText, decision.newText),
-      'utf8'
+      encodeFile(applyEdit(lecture.text, decision.oldText, decision.newText), lecture.encoding)
     )
     this.broadcast({ type: 'refresh', scope: 'conversations' })
     return {

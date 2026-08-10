@@ -40,6 +40,21 @@
   Markdown versionnés (git, portable, zéro lock-in), signature HMAC et protections de chemins.
   *Contribution en append/supersede ; audit de sécurité formel et mesure de coût : à publier.*
 
+## Éditer du code sans lancer le pipeline
+
+- 🔧 **Petite correction ciblée** (`edit_file`) — remplacement d'un extrait UNIQUE, dans un bureau
+  isolé, **vérifié puis publié seulement si la vérification passe**. C'est le seul point qui donne le
+  droit d'écrire hors pipeline, et il ne l'est que parce que l'agent peut prouver son changement.
+  *Limite structurelle, à connaître : la vérification est la commande de test **déclarée par le projet**
+  (`package.json` → `test:unit`/`test`). **Un dépôt qui n'en déclare aucune ne peut donc pas être édité**
+  — l'édition est refusée puis jetée. C'est le cas des dépôts VB6/.NET comme RigApplication.*
+- 🟢 **L'encodage du fichier est préservé** — mono-octet (VB6 `.cls`/`.bas`/`.frm`), UTF-8 avec ou sans
+  BOM, UTF-16LE. Auto-contrôle d'aller-retour : on refuse d'éditer un fichier qu'on ne saurait pas
+  réécrire octet pour octet, et un caractère non représentable dans l'encodage cible est refusé au lieu
+  d'être tronqué silencieusement. *Avant ce correctif, `edit_file` lisait et écrivait en UTF-8 codé en
+  dur : sur une ULT VB6, `oldText` ne correspondait jamais, et une écriture aurait remplacé chaque accent
+  du fichier entier par `EF BF BD`. Détail : en-tête de `src/main/file-encoding.ts`.*
+
 ## Robustesse & mises à jour
 
 - 🔧 **Fermer la fenêtre ne coupe pas le travail** — l'app reste en tray, les runs continuent.
