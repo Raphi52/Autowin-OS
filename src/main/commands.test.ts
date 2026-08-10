@@ -203,7 +203,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     }
   })
 
-  it('clot le RUN des le lifecycle terminal sans attendre le retour de runTask', async () => {
+  it('clot le RUN avec son statut exact des le lifecycle terminal avant le retour', async () => {
     const os = fakeOs()
     const broadcasts: Array<Record<string, unknown>> = []
     let releaseRunTask!: () => void
@@ -220,7 +220,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
         runId: 'run-terminal-before-return',
         timestampMs: 1,
         stage: 'closure',
-        closure: { status: 'green', totalDurationMs: 12, totalCostUsd: 0 }
+        closure: { status: 'degraded-closed', totalDurationMs: 12, totalCostUsd: 0 }
       })
       reportClosure()
       await runTaskReleased
@@ -245,7 +245,9 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
       runPath = broadcasts.find((event) => event.type === 'orchestrate-start')?.runPath as
         string | undefined
       expect(runPath).toBeTypeOf('string')
-      expect(readFileSync(runPath as string, 'utf8')).toMatch(/^status: green$/m)
+      const run = readFileSync(runPath as string, 'utf8')
+      expect(run).toMatch(/^status: degraded-closed$/m)
+      expect(run).toMatch(/^ {2}- \[ \] le juge valide/m)
     } finally {
       releaseRunTask()
       await execution

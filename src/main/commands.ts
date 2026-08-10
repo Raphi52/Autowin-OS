@@ -991,7 +991,7 @@ export class AppCommandBus {
                 if (runPath && lifecycle.closure.status !== 'open') {
                   closeConvRun(
                     runPath,
-                    lifecycle.closure.status !== 'red',
+                    lifecycle.closure.status,
                     `Cycle de vie terminal: ${lifecycle.closure.status} (${lifecycle.closure.totalDurationMs} ms).`
                   )
                   this.broadcast({ type: 'refresh', scope: 'workflows' })
@@ -1025,7 +1025,7 @@ export class AppCommandBus {
               if (runPath) {
                 closeConvRun(
                   runPath,
-                  terminalLifecycle.closure.status === 'green',
+                  terminalLifecycle.closure.status,
                   `Usage provider finalisee apres cloture: ${usage.totalTokens} tokens, ${costCoverage ?? 'cout non rapporte'}, ${usage.activeCalls} appel(s) actif(s).`
                 )
               }
@@ -1056,9 +1056,15 @@ export class AppCommandBus {
             })
             saveConvRunTrace(runPath, steps)
             populateConvRunSections(runPath, r.phaseOutputs) // J2 — RUN.md peuplé du vrai livrable
+            const runStatus =
+              terminalLifecycle && terminalLifecycle.closure.status !== 'open'
+                ? terminalLifecycle.closure.status
+                : r.gateBlocked
+                  ? 'red'
+                  : 'green'
             closeConvRun(
               runPath,
-              !r.gateBlocked,
+              runStatus,
               r.gateBlocked
                 ? `Gate BLOQUÉ: ${r.gateReasons.join('; ')}`
                 : `Juge: validé — clôture autorisée (${costCoverage ?? 'coût non rapporté'}).`
@@ -1090,7 +1096,7 @@ export class AppCommandBus {
         } catch (e) {
           if (runPath) {
             saveConvRunTrace(runPath, steps)
-            closeConvRun(runPath, false, `Orchestration en échec: ${String(e).slice(0, 120)}`)
+            closeConvRun(runPath, 'red', `Orchestration en échec: ${String(e).slice(0, 120)}`)
           }
           this.broadcast({
             type: 'orchestrate-end',
