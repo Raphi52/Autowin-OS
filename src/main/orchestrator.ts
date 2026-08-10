@@ -3423,15 +3423,29 @@ export class Orchestrator {
       // fix-ok: cause PROUVÉE en live (verdict conv-30 : « le livrable requis est un RUN.md
       // physique ») — A2 a chargé le SKILL judge du kit qui exige un RUN.md/fingerprint absent
       // in-app ; on neutralise ce couplage côté juge, comme J4/B2 côté exec.
-      const judgePrompt =
-        `Tu es un juge outillé en lecture seule. Inspecte réellement le workspace et confronte au moins une preuve d'outil ci-dessous. ` +
-        `Une affirmation sans preuve d'exécution observable est un défaut.\n` +
-        `IMPORTANT (in-app Autowin OS) : le livrable est le TEXTE agrégé ci-dessous, PAS un fichier ` +
-        `RUN.md sur disque (Autowin le gère). N'exige jamais de RUN.md physique, d'empreinte SHA-256 ` +
-        `ni de chemin kit ; juge la SUBSTANCE du livrable et les preuves d'outil réellement observées.\n` +
-        `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${exec.text}\n` +
-        `PREUVES OUTILS OBSERVÉES: ${JSON.stringify(exec.executionEvidence ?? [])}\n` +
-        `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
+      // Une demande `judge` explicite ne joue AUCUNE phase d'exécution (`regimePhases` rend `[]`) :
+      // l'agrégat et les preuves sont alors vides PAR CONSTRUCTION. Réclamer « au moins une preuve
+      // d'outil ci-dessous » sur une liste vide condamnait ce cas au rouge quel que soit l'état réel
+      // du dépôt — mesuré sur le run conv-1078 (« DEFAUT: livrable agrégé vide et aucune preuve
+      // d'outil observée », trace : judge + gate, zéro exec). Ici le juge n'atteste pas le travail
+      // d'un autre : il EST l'unique agent, et sa propre inspection read-only est la preuve.
+      const jugeSeul = phaseOutputs.length === 0 && !exec.text.trim()
+      const judgePrompt = jugeSeul
+        ? `Tu es un juge outillé en lecture seule, et tu es le SEUL agent de ce run : AUCUNE phase d’exécution ` +
+          `n’a tourné avant toi, il n’existe donc ni livrable agrégé ni preuve d’outil préalable — ce n’est pas un défaut. ` +
+          `Inspecte TOI-MÊME le workspace avec tes outils de lecture et fonde ton verdict sur ce que tu as réellement lu ; ` +
+          `n’affirme rien que ton inspection n’établit pas.\n` +
+          `IMPORTANT (in-app Autowin OS) : n'exige jamais de RUN.md physique, d'empreinte SHA-256 ni de chemin kit.\n` +
+          `TÂCHE: ${task}\n` +
+          `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
+        : `Tu es un juge outillé en lecture seule. Inspecte réellement le workspace et confronte au moins une preuve d'outil ci-dessous. ` +
+          `Une affirmation sans preuve d'exécution observable est un défaut.\n` +
+          `IMPORTANT (in-app Autowin OS) : le livrable est le TEXTE agrégé ci-dessous, PAS un fichier ` +
+          `RUN.md sur disque (Autowin le gère). N'exige jamais de RUN.md physique, d'empreinte SHA-256 ` +
+          `ni de chemin kit ; juge la SUBSTANCE du livrable et les preuves d'outil réellement observées.\n` +
+          `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${exec.text}\n` +
+          `PREUVES OUTILS OBSERVÉES: ${JSON.stringify(exec.executionEvidence ?? [])}\n` +
+          `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
       const judgeMessages = [{ role: 'user' as const, content: judgePrompt }]
       let judgeEnvelope
       // A2 — le juge charge le SKILL.md judge du kit ; F6 — blocs nommés pour l'observabilité.
