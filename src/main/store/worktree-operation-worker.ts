@@ -5,11 +5,17 @@ import type { WorktreeOperationRequest } from './worktree-operation-protocol'
 if (!parentPort) throw new Error('worktree-operation-worker doit être exécuté dans un Worker')
 const port = parentPort
 
-const data = workerData as { baseRepo: string; worktreeRoot: string; baseBranch?: string }
+const data = workerData as {
+  baseRepo: string
+  worktreeRoot: string
+  baseBranch?: string
+  requireCanonicalRemote?: boolean
+}
 const manager = new WorktreeManager({
   baseRepo: data.baseRepo,
   worktreeRoot: data.worktreeRoot,
   ...(data.baseBranch ? { baseBranch: data.baseBranch } : {}),
+  requireCanonicalRemote: data.requireCanonicalRemote,
   disableAsyncOperations: true
 })
 
@@ -18,7 +24,7 @@ port.on('message', (request: WorktreeOperationRequest) => {
     let value: unknown
     switch (request.operation) {
       case 'prepare': {
-        const context = request.context ?? manager.describe(request.agentId)
+        const context = request.context ?? manager.describeForLaunch(request.agentId)
         value = { context, path: manager.acquire(request.agentId, context) }
         break
       }
@@ -29,15 +35,21 @@ port.on('message', (request: WorktreeOperationRequest) => {
         value = manager.finalize(request.agentId, {
           ...request.options,
           onPrepared: (agentSha, baseSha) =>
-            port.postMessage({ type: 'prepared', agentSha, baseSha })
+            port.postMessage({ type: 'prepared', agentSha, baseSha }),
+          onIntegrated: (integratedSha, agentSha, baseSha) =>
+            port.postMessage({ type: 'integrated', integratedSha, agentSha, baseSha })
         })
         break
       case 'cleanupPublished':
         value = manager.cleanupPublished(
           request.agentId,
-          request.expectedSha,
-          request.baseBranch
+          request.publishedSha,
+          request.baseBranch,
+          request.agentSha
         )
+        break
+      case 'acknowledgePublication':
+        value = manager.acknowledgePublication(request.agentId, request.publishedSha)
         break
       case 'recoveryInventory':
         value = manager.recoveryInventory()

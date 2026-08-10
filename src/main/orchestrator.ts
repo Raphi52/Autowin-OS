@@ -652,7 +652,7 @@ export interface RunWorktrees {
       merge?: boolean
       retainGreen?: boolean
       onPrepared?: (publication: { baseSha: string; agentSha: string }) => void
-      onPublished?: (publication: { baseSha: string; agentSha: string }) => void
+      onPublished?: (publication: { baseSha: string; agentSha: string }) => void | Promise<void>
     }
   ): unknown
   endAsync?(
@@ -661,7 +661,7 @@ export interface RunWorktrees {
       merge?: boolean
       retainGreen?: boolean
       onPrepared?: (publication: { baseSha: string; agentSha: string }) => void
-      onPublished?: (publication: { baseSha: string; agentSha: string }) => void
+      onPublished?: (publication: { baseSha: string; agentSha: string }) => void | Promise<void>
     }
   ): Promise<unknown>
   /** Snapshot d'observation du coordinateur ; ne pilote jamais la finalisation. */
@@ -681,7 +681,12 @@ export interface RunWorktrees {
  */
 export interface RunCloser {
   begin(runId: string): void
-  close(context: { runId: string; task: string; workCwd: string }): Promise<void>
+  close(context: {
+    runId: string
+    task: string
+    workCwd: string
+    projectPublication?: { baseSha: string; publishedSha: string }
+  }): Promise<void>
 }
 
 const MUTATION_STEM =
@@ -1521,8 +1526,7 @@ export class Orchestrator {
       // Un modèle explicitement choisi pour la tâche doit rester l'unique décideur du run :
       // le décomposeur est lié au rôle orchestrateur global et casserait cet invariant.
       const decompositionAllowed =
-        !explicitPhase &&
-        (!executionQuote || executionQuote.decomposition.mode === 'build-only')
+        !explicitPhase && (!executionQuote || executionQuote.decomposition.mode === 'build-only')
       if (
         decompositionAllowed &&
         !bindingOverride &&
@@ -1606,35 +1610,62 @@ export class Orchestrator {
       // garde sa copie isolée (l'exception saute le `green = true` ci-dessus) : on ne ramène plus
       // automatiquement dans la base un travail jugé raté.
       let endReturned = false
-      const onPublished = (publication: { baseSha: string; agentSha: string }): void => {
-        if (!produced || causalWatchPaths.length === 0) return
-        const evidence = preparedCommitMutationEvidence(
-          this.deps.executionWorkspace,
-          publication.baseSha,
-          publication.agentSha,
-          causalWatchPaths
-        )
-        produced.causalMutationEvidence = evidence
-        // Une finalisation différée arrive APRÈS le retour de la commande : elle doit publier sa
-        // trace elle-même, sinon le scheduler a déjà lu un résultat vide et la ligne reboucle.
-        if (endReturned && conversationId && turnId && evidence.length > 0) {
-          const publicationEventId = `worktree-publication:${runId}:${publication.agentSha}`
-          appendExecutionEvidenceFileTrace(evidence, {
-            conversationId,
-            turnId,
-            workspaceRoot: this.deps.executionWorkspace,
-            published: true,
-            eventId: publicationEventId
-          })
-          try {
-            onLateCausalMutationClaims?.({
-              ...watchdogClaimsFromEvidence(evidence, this.deps.executionWorkspace),
+      let projectPublication: { baseSha: string; publishedSha: string } | undefined
+      let closeStarted = false
+      const closePublishedRun = async (publication?: {
+        baseSha: string
+        publishedSha: string
+      }): Promise<void> => {
+        if (closeStarted || !green || !this.deps.closeGreenRun) return
+        closeStarted = true
+        await this.deps.closeGreenRun.close({
+          runId,
+          task,
+          workCwd: this.deps.executionWorkspace,
+          ...(publication ? { projectPublication: publication } : {})
+        })
+      }
+      const onPublished = async (publication: {
+        baseSha: string
+        agentSha: string
+      }): Promise<void> => {
+        projectPublication = {
+          baseSha: publication.baseSha,
+          publishedSha: publication.agentSha
+        }
+        if (produced && causalWatchPaths.length > 0) {
+          const evidence = preparedCommitMutationEvidence(
+            this.deps.executionWorkspace,
+            publication.baseSha,
+            publication.agentSha,
+            causalWatchPaths
+          )
+          produced.causalMutationEvidence = evidence
+          // Une finalisation différée arrive APRÈS le retour de la commande : elle doit publier sa
+          // trace elle-même, sinon le scheduler a déjà lu un résultat vide et la ligne reboucle.
+          if (endReturned && conversationId && turnId && evidence.length > 0) {
+            const publicationEventId = `worktree-publication:${runId}:${publication.agentSha}`
+            appendExecutionEvidenceFileTrace(evidence, {
+              conversationId,
+              turnId,
+              workspaceRoot: this.deps.executionWorkspace,
+              published: true,
               eventId: publicationEventId
             })
-          } catch {
-            // L'observateur ne doit jamais invalider une publication Git déjà réussie.
+            try {
+              onLateCausalMutationClaims?.({
+                ...watchdogClaimsFromEvidence(evidence, this.deps.executionWorkspace),
+                eventId: publicationEventId
+              })
+            } catch {
+              // L'observateur ne doit jamais invalider une publication Git déjà réussie.
+            }
           }
         }
+        // Le coordinateur n'acquitte la publication qu'apres resolution de ce callback. La publication
+        // distante doit donc etre TERMINEE ici, y compris quand la fusion locale est synchrone : sinon
+        // un crash entre l'acquittement et le push perdrait definitivement la publication distante.
+        await closePublishedRun(projectPublication)
       }
       const retained = green && requiresIsolatedWorkspace && runOptions.publication === 'hold'
       const finalizeOptions = {
@@ -1738,11 +1769,12 @@ export class Orchestrator {
         produced.phaseOutputs = aligned.phaseOutputs ?? produced.phaseOutputs
       }
       // Clôture auto APRÈS la fusion (le travail est dans la base) et seulement si vert.
-      // `void` + catch : publier est un service rendu, jamais une raison de faire échouer le run.
+      // La clôture est attendue pour que le statut distant soit déterministe avant la fin du run.
+      // Son échec reste un rapport de clôture, jamais une raison d'invalider le run vert.
       if (green && integrated && this.deps.closeGreenRun) {
-        void this.deps.closeGreenRun
-          .close({ runId, task, workCwd: this.deps.executionWorkspace })
-          .catch(() => undefined)
+        // Chemin legacy sans callback de publication. Un echec de cloture reste un rapport distant et
+        // ne rend pas rouge le travail valide ; le callback durable, lui, propage l'echec pour etre rejoue.
+        await closePublishedRun(projectPublication).catch(() => undefined)
       }
       // Un vert dont l'intégration n'est pas terminée reste reprenable. Un run rouge peut lui aussi
       // garder un provider en drainage après le watchdog : effacer son checkpoint ici supprimerait

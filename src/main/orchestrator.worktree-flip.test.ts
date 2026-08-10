@@ -781,6 +781,130 @@ describe('Orchestrator — flip live worktree', () => {
       expect(close).not.toHaveBeenCalled()
     })
 
+    it('transmet à la clôture la plage Git exacte réellement publiée', async () => {
+      const provider = new CapturingProvider()
+      const close = vi.fn().mockResolvedValue(undefined)
+      const baseSha = 'b'.repeat(40)
+      const publishedSha = 'c'.repeat(40)
+      const orch = new Orchestrator({
+        registry: new ProviderRegistry().register(provider),
+        roles: new RoleModelConfig({
+          subagent: { provider: provider.id, model: 'worker' },
+          judge: { provider: provider.id, model: 'judge' }
+        }),
+        cost: new CostAggregator(),
+        trust: new TrustLedger(),
+        executionWorkspace: 'C:\\base',
+        worktrees: {
+          begin: () => 'C:\\wt\\run-1',
+          end: (_runId, options) => {
+            options?.onPublished?.({ baseSha, agentSha: publishedSha })
+            return {
+              outcome: 'merged' as const,
+              agentId: 'run-1',
+              committed: true,
+              baseSha,
+              publishedSha
+            }
+          }
+        },
+        closeGreenRun: { begin: vi.fn(), close }
+      })
+
+      await orch.run('modifie le projet')
+
+      expect(close).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectPublication: { baseSha, publishedSha }
+        })
+      )
+    })
+
+    it('attend la publication distante avant d acquitter la fusion locale', async () => {
+      const provider = new CapturingProvider()
+      let finishClose!: () => void
+      const close = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishClose = resolve
+          })
+      )
+      let callbackFinished = false
+      const baseSha = '8'.repeat(40)
+      const publishedSha = '9'.repeat(40)
+      const orch = new Orchestrator({
+        registry: new ProviderRegistry().register(provider),
+        roles: new RoleModelConfig({
+          subagent: { provider: provider.id, model: 'worker' },
+          judge: { provider: provider.id, model: 'judge' }
+        }),
+        cost: new CostAggregator(),
+        trust: new TrustLedger(),
+        executionWorkspace: 'C:\\base',
+        worktrees: {
+          begin: () => 'C:\\wt\\run-1',
+          end: () => undefined,
+          endAsync: async (_runId, options) => {
+            await options?.onPublished?.({ baseSha, agentSha: publishedSha })
+            callbackFinished = true
+            return {
+              outcome: 'merged' as const,
+              agentId: 'run-1',
+              committed: true,
+              baseSha,
+              publishedSha
+            }
+          }
+        },
+        closeGreenRun: { begin: vi.fn(), close }
+      })
+
+      const running = orch.run('modifie le projet')
+      await vi.waitFor(() => expect(close).toHaveBeenCalledTimes(1))
+      expect(callbackFinished).toBe(false)
+
+      finishClose()
+      await running
+
+      expect(callbackFinished).toBe(true)
+    })
+
+    it('clôture aussi une publication différée après la fin du processus agent', async () => {
+      const provider = new CapturingProvider()
+      const close = vi.fn().mockResolvedValue(undefined)
+      let publish: (() => void) | undefined
+      const baseSha = 'd'.repeat(40)
+      const publishedSha = 'e'.repeat(40)
+      const orch = new Orchestrator({
+        registry: new ProviderRegistry().register(provider),
+        roles: new RoleModelConfig({
+          subagent: { provider: provider.id, model: 'worker' },
+          judge: { provider: provider.id, model: 'judge' }
+        }),
+        cost: new CostAggregator(),
+        trust: new TrustLedger(),
+        executionWorkspace: 'C:\\base',
+        worktrees: {
+          begin: () => 'C:\\wt\\run-1',
+          end: (_runId, options) => {
+            publish = () => options?.onPublished?.({ baseSha, agentSha: publishedSha })
+            return undefined
+          }
+        },
+        closeGreenRun: { begin: vi.fn(), close }
+      })
+
+      await orch.run('modifie le projet')
+      expect(close).not.toHaveBeenCalled()
+
+      publish?.()
+      await Promise.resolve()
+
+      expect(close).toHaveBeenCalledWith(
+        expect.objectContaining({ projectPublication: { baseSha, publishedSha } })
+      )
+    })
+
     it('exécute le gate dans la copie isolée, pas dans le workspace principal', async () => {
       const hookCwds: string[] = []
       const hooks = new HookBus().register('pre-green', ({ cwd }) => {

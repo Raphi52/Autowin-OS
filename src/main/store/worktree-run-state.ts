@@ -76,6 +76,11 @@ export interface WorktreeRunRecord {
   worktreeAvailable?: boolean
   baseBranch: string
   baseSha: string
+  sourceSha?: string
+  canonicalBaseRef?: string
+  excludedDirtyFiles?: string[]
+  excludedDirtyFileCount?: number
+  excludedDirtyFilesTruncated?: boolean
   verdict: WorktreeRunVerdict
   publication: WorktreePublicationState
   files: WorktreeFileChange[]
@@ -83,6 +88,8 @@ export interface WorktreeRunRecord {
   conflictBaseSha?: string
   conflictAgentSha?: string
   publishedSha?: string
+  /** HEAD agent utilisé uniquement pour prouver/nettoyer sa copie après un commit de merge. */
+  publicationAgentSha?: string
   /** SHA de la base au moment exact où le commit agent était prêt à être publié. */
   publicationBaseSha?: string
   /** Acquittement durable de la trace causale, écrit seulement après le callback réussi. */
@@ -164,6 +171,17 @@ function isRecord(value: unknown, worktreeRoot: string): value is WorktreeRunRec
     isSafeBranch(candidate.baseBranch) &&
     typeof candidate.baseSha === 'string' &&
     FULL_SHA.test(candidate.baseSha) &&
+    (candidate.sourceSha === undefined || FULL_SHA.test(candidate.sourceSha)) &&
+    (candidate.canonicalBaseRef === undefined || isSafeBranch(candidate.canonicalBaseRef)) &&
+    (candidate.excludedDirtyFiles === undefined ||
+      (Array.isArray(candidate.excludedDirtyFiles) &&
+        candidate.excludedDirtyFiles.length <= 500 &&
+        candidate.excludedDirtyFiles.every((path) => isSafeRelativeFile({ path, kind: 'mod' })))) &&
+    (candidate.excludedDirtyFileCount === undefined ||
+      (Number.isInteger(candidate.excludedDirtyFileCount) &&
+        candidate.excludedDirtyFileCount >= (candidate.excludedDirtyFiles?.length ?? 0))) &&
+    (candidate.excludedDirtyFilesTruncated === undefined ||
+      typeof candidate.excludedDirtyFilesTruncated === 'boolean') &&
     VERDICT_PUBLICATIONS[verdict].has(publication) &&
     Array.isArray(candidate.files) &&
     candidate.files.every(isSafeRelativeFile) &&
@@ -172,6 +190,7 @@ function isRecord(value: unknown, worktreeRoot: string): value is WorktreeRunRec
       (typeof candidate.conflictFile === 'string' &&
         isSafeRelativeFile({ path: candidate.conflictFile, kind: 'mod' }))) &&
     (candidate.publishedSha === undefined || FULL_SHA.test(candidate.publishedSha)) &&
+    (candidate.publicationAgentSha === undefined || FULL_SHA.test(candidate.publicationAgentSha)) &&
     (candidate.publicationBaseSha === undefined || FULL_SHA.test(candidate.publicationBaseSha)) &&
     (candidate.causalPublicationDeliveredAtMs === undefined ||
       (Number.isFinite(candidate.causalPublicationDeliveredAtMs) &&

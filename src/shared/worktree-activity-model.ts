@@ -53,6 +53,11 @@ export interface WorktreeAgentActivity {
   workspacePath?: string
   baseBranch?: string
   baseSha?: string
+  sourceSha?: string
+  canonicalBaseRef?: string
+  excludedDirtyFiles?: string[]
+  excludedDirtyFileCount?: number
+  excludedDirtyFilesTruncated?: boolean
   publishedSha?: string
   verdict?: 'unknown' | 'running' | 'green' | 'red' | 'cancelled' | 'interrupted'
   publication?:

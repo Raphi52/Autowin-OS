@@ -21,6 +21,13 @@
   conversation dédiée par ticket**, avec annulation. Filtre par ton nom → tes tickets.
 - 🟢 **Parallélisation, premier agent revenu débloque la suite** (mode greedy, `Promise.race`).
   *(Le fan-out d'agrégation attend, lui, tous ses membres avant la synthèse.)*
+- 🔧 **Consulter les bases greffes RIG en lecture seule** (`sql_query`) — un seul `SELECT`, périmètre
+  défini par l'autorité métier (`COMMUN_RIG.dbo.GREFFE`, `GRF_IS_EXPLOIT = 1`), garde lexicale et
+  enveloppe transactionnelle systématiquement annulée. *Deux limites à connaître AVANT de s'en servir :
+  la connexion utilise le compte Windows de l'utilisateur, qui est `db_datawriter` sur la production —
+  la protection est donc ENTIÈREMENT logicielle ; et les résultats entrent dans le contexte du modèle,
+  donc des données nominatives de greffe quittent le poste. Détail, historique d'audit et risque
+  résiduel : [`docs/sql-read.md`](sql-read.md).*
 
 ## Transparence & mémoire (avec les limites honnêtes)
 

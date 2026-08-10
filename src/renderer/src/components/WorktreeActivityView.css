@@ -15,6 +15,27 @@
   min-width: 0;
 }
 
+.wt-office-base {
+  margin-top: 7px;
+  color: var(--ok);
+  font-size: 10.5px;
+}
+
+.wt-office-excluded {
+  margin-top: 6px;
+  color: var(--warn);
+  font-size: 10.5px;
+}
+.wt-office-excluded summary {
+  cursor: pointer;
+}
+.wt-office-excluded ul {
+  margin: 5px 0 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
 .wt-hub-head {
   display: flex;
   align-items: center;

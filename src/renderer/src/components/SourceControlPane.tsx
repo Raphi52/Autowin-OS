@@ -38,6 +38,39 @@ const EMPTY_GIT: GitReadResult = {
   state: { branch: '', ahead: 0, behind: 0, changes: [] }
 }
 
+type AutoCloseViewResult =
+  | { status: 'pushed'; branch: string; files: number }
+  | { status: 'committed'; files: number }
+  | { status: 'skipped'; reason: string; detail?: string }
+  | { status: 'failed'; error: string }
+
+interface AutoCloseViewState {
+  enabled: boolean
+  last?: {
+    runId: string
+    branch: string
+    project: AutoCloseViewResult
+    brain: AutoCloseViewResult
+    at: string
+  }
+}
+
+function autoCloseResultLabel(scope: string, result: AutoCloseViewResult): string {
+  if (result.status === 'pushed') return `${scope} · publié · ${result.branch}`
+  if (result.status === 'committed') return `${scope} · commité localement`
+  if (result.status === 'failed') return `${scope} · échec · ${result.error}`
+  const reasons: Record<string, string> = {
+    'no-changes': 'aucun changement',
+    'no-remote': 'aucun distant',
+    'recovery-baseline-missing': 'baseline de reprise absente',
+    'protected-branch': 'branche protégée',
+    'secret-detected': 'secret détecté',
+    'concurrent-commits': 'commits concurrents',
+    'invalid-publication-range': 'plage Git non vérifiable'
+  }
+  return `${scope} · non publié · ${reasons[result.reason] ?? result.reason}`
+}
+
 export function SourceControlPane({
   conversationId,
   onSendPrompt
@@ -71,7 +104,12 @@ export function SourceControlPane({
     void window.api.getWorktreeStatus?.().then((status) => {
       if (alive) setWorktreeStatus(status)
     })
-    const off = window.api.onWorktreeActivity?.((a) => setWorktrees(a))
+    const off = window.api.onWorktreeActivity?.((a) => {
+      setWorktrees(a)
+      // Une publication peut se terminer après le retour du run : son résultat auto-close
+      // doit apparaître sans attendre un autre événement de chat ni un rafraîchissement manuel.
+      setRefreshTick((tick) => tick + 1)
+    })
     return () => {
       alive = false
       off?.()
@@ -155,17 +193,17 @@ export function SourceControlPane({
     }
   }, [conversationId])
 
-  const [autoClose, setAutoClose] = useState<{ enabled: boolean; last?: unknown } | null>(null)
+  const [autoClose, setAutoClose] = useState<AutoCloseViewState | null>(null)
   const [autoCloseError, setAutoCloseError] = useState<string>()
   useEffect(() => {
     let alive = true
     void window.api.getAutoClose?.().then((state) => {
-      if (alive) setAutoClose(state as { enabled: boolean })
+      if (alive) setAutoClose(state as AutoCloseViewState)
     })
     return () => {
       alive = false
     }
-  }, [])
+  }, [refreshTick])
 
   const toggleAutoClose = async (): Promise<void> => {
     // fix-ok: l'état optimiste est rétabli et expliqué si le main process ne peut pas le persister.
@@ -175,7 +213,7 @@ export function SourceControlPane({
     setAutoClose({ enabled: next })
     try {
       const applied = await window.api.setAutoClose(next)
-      setAutoClose(applied as { enabled: boolean })
+      setAutoClose(applied as AutoCloseViewState)
     } catch {
       setAutoClose({ enabled: previous })
       setAutoCloseError('Impossible de conserver ce réglage sur le disque.')
@@ -452,7 +490,7 @@ export function SourceControlPane({
                 aria-pressed={autoClose?.enabled ?? false}
                 title={
                   autoClose?.enabled
-                    ? 'Activée — chaque run vert sera commité et poussé sur une branche dédiée. Clic : désactiver.'
+                    ? 'Activée — tente de publier chaque run vert sur une branche dédiée, jamais sur main. Clic : désactiver.'
                     : 'Désactivée — rien n’est publié automatiquement. Clic : activer.'
                 }
                 onClick={() => void toggleAutoClose()}
@@ -471,6 +509,13 @@ export function SourceControlPane({
             {autoCloseError && (
               <div className="sc-clean" data-testid="sc-autoclose-error" role="alert">
                 {autoCloseError}
+              </div>
+            )}
+            {autoClose?.last && (
+              <div className="sc-autoclose-last" data-testid="sc-autoclose-last">
+                <strong>Dernière clôture · {autoClose.last.runId}</strong>
+                <span>{autoCloseResultLabel('Projet', autoClose.last.project)}</span>
+                <span>{autoCloseResultLabel('Brain', autoClose.last.brain)}</span>
               </div>
             )}
           </section>

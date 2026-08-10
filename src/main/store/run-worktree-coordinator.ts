@@ -1,4 +1,4 @@
-import { WorktreeManager, type FinalizeResult } from './worktree-manager'
+import { WorktreeManager, type FinalizeResult, type WorktreeRunContext } from './worktree-manager'
 import type {
   WorktreeAgentActivity,
   WorktreeConflictDiffResult,
@@ -52,9 +52,12 @@ export interface RunWorktreeCoordinatorDeps {
         | 'changedFilesAsync'
         | 'finalizeAsync'
         | 'cleanupPublishedAsync'
+        | 'acknowledgePublication'
+        | 'acknowledgePublicationAsync'
         | 'operationsAreIsolated'
         | 'recoveryInventoryAsync'
         | 'describeAsync'
+        | 'describeForLaunch'
         | 'hasActiveProcessesAsync'
         | 'validateRecoveryContextAsync'
         | 'readConflictDiffAsync'
@@ -68,12 +71,13 @@ export interface RunWorktreeCoordinatorDeps {
   /** Publication reprise après redémarrage, quand le callback mémoire du run n'existe plus. */
   onRecoveredPublication?: (publication: {
     runId: string
+    task?: string
     conversationId?: string
     turnId?: string
     causalWatchPaths: readonly string[]
     baseSha: string
     agentSha: string
-  }) => void
+  }) => void | Promise<void>
 }
 
 interface Tracked {
@@ -89,6 +93,7 @@ interface Tracked {
   conflictBaseSha?: string
   conflictAgentSha?: string
   publishedSha?: string
+  publicationAgentSha?: string
   publicationBaseSha?: string
   causalPublicationDeliveredAtMs?: number
   attentionReason?: WorktreeAgentActivity['attentionReason']
@@ -102,6 +107,11 @@ interface Tracked {
   worktreeAvailable?: boolean
   baseBranch?: string
   baseSha?: string
+  sourceSha?: string
+  canonicalBaseRef?: string
+  excludedDirtyFiles?: string[]
+  excludedDirtyFileCount?: number
+  excludedDirtyFilesTruncated?: boolean
   verdict?: WorktreeRunVerdict
   publication?: WorktreePublicationState
   recovered?: boolean
@@ -135,7 +145,7 @@ export class RunWorktreeCoordinator {
     string,
     {
       onPrepared?: (publication: { baseSha: string; agentSha: string }) => void
-      onPublished?: (publication: { baseSha: string; agentSha: string }) => void
+      onPublished?: (publication: { baseSha: string; agentSha: string }) => void | Promise<void>
     }
   >()
   private readonly now: () => number
@@ -193,6 +203,11 @@ export class RunWorktreeCoordinator {
             worktreeAvailable: record.worktreeAvailable,
             baseBranch: record.baseBranch,
             baseSha: record.baseSha,
+            sourceSha: record.sourceSha,
+            canonicalBaseRef: record.canonicalBaseRef,
+            excludedDirtyFiles: record.excludedDirtyFiles,
+            excludedDirtyFileCount: record.excludedDirtyFileCount,
+            excludedDirtyFilesTruncated: record.excludedDirtyFilesTruncated,
             verdict: record.verdict,
             publication: record.publication,
             recovered: true,
@@ -215,16 +230,7 @@ export class RunWorktreeCoordinator {
     return tracked
   }
 
-  private activateResumed(
-    tracked: Tracked,
-    context: {
-      workspacePath: string
-      worktreePath: string
-      baseBranch: string
-      baseSha: string
-    },
-    cwd: string
-  ): void {
+  private activateResumed(tracked: Tracked, context: WorktreeRunContext, cwd: string): void {
     Object.assign(tracked, context)
     tracked.worktreePath = cwd
     tracked.worktreeAvailable = true
@@ -255,12 +261,20 @@ export class RunWorktreeCoordinator {
         ...described,
         worktreePath: tracked.worktreePath!,
         baseBranch: tracked.baseBranch!,
-        baseSha: tracked.baseSha!
+        baseSha: tracked.baseSha!,
+        sourceSha: tracked.sourceSha,
+        canonicalBaseRef: tracked.canonicalBaseRef,
+        excludedDirtyFiles: tracked.excludedDirtyFiles,
+        excludedDirtyFileCount: tracked.excludedDirtyFileCount,
+        excludedDirtyFilesTruncated: tracked.excludedDirtyFilesTruncated
       }
       const validation = this.manager.validateRecoveryContext(runId, {
         worktreePath: context.worktreePath,
         baseBranch: context.baseBranch,
         baseSha: context.baseSha,
+        sourceSha: context.sourceSha,
+        canonicalBaseRef: context.canonicalBaseRef,
+        excludedDirtyFiles: context.excludedDirtyFiles,
         publication: 'pending'
       })
       if (!validation.ok || validation.decision === 'cleanup-only') {
@@ -286,17 +300,25 @@ export class RunWorktreeCoordinator {
     this.runs.set(runId, tracked)
     let cwd: string | undefined
     if (isMutation) {
-      const described = this.manager.describe(runId)
-      if (Boolean(sourceWorkspacePath) !== Boolean(sourceBaseSha)) {
-        throw new Error('Checkpoint worktree incomplet.')
-      }
-      const context =
-        sourceWorkspacePath && sourceBaseSha
-          ? { ...described, workspacePath: sourceWorkspacePath, baseSha: sourceBaseSha }
-          : described
-      Object.assign(tracked, context)
-      this.persist(tracked, 'running', 'not-requested')
       try {
+        const described =
+          sourceWorkspacePath && sourceBaseSha
+            ? this.manager.describe(runId)
+            : (this.manager.describeForLaunch?.(runId) ?? this.manager.describe(runId))
+        if (Boolean(sourceWorkspacePath) !== Boolean(sourceBaseSha)) {
+          throw new Error('Checkpoint worktree incomplet.')
+        }
+        const context =
+          sourceWorkspacePath && sourceBaseSha
+            ? {
+                ...described,
+                workspacePath: sourceWorkspacePath,
+                baseSha: sourceBaseSha,
+                sourceSha: sourceBaseSha
+              }
+            : described
+        Object.assign(tracked, context)
+        this.persist(tracked, 'running', 'not-requested')
         cwd = this.manager.acquire(runId, context)
         tracked.worktreePath = cwd
         tracked.worktreeAvailable = true
@@ -306,12 +328,10 @@ export class RunWorktreeCoordinator {
         tracked.state = 'blocked'
         tracked.endedAtMs = this.now()
         tracked.attentionReason = 'merge-failed'
-        this.persist(
-          tracked,
-          'interrupted',
-          'blocked',
-          error instanceof Error ? error.message : String(error)
-        )
+        tracked.detail = error instanceof Error ? error.message : String(error)
+        if (tracked.worktreePath && tracked.baseBranch && tracked.baseSha) {
+          this.persist(tracked, 'interrupted', 'blocked', tracked.detail)
+        }
         this.emit()
         throw error
       }
@@ -340,19 +360,30 @@ export class RunWorktreeCoordinator {
         ...described,
         worktreePath: tracked.worktreePath!,
         baseBranch: tracked.baseBranch!,
-        baseSha: tracked.baseSha!
+        baseSha: tracked.baseSha!,
+        sourceSha: tracked.sourceSha,
+        canonicalBaseRef: tracked.canonicalBaseRef,
+        excludedDirtyFiles: tracked.excludedDirtyFiles,
+        excludedDirtyFileCount: tracked.excludedDirtyFileCount,
+        excludedDirtyFilesTruncated: tracked.excludedDirtyFilesTruncated
       }
       const validation = this.manager.validateRecoveryContextAsync
         ? await this.manager.validateRecoveryContextAsync(runId, {
             worktreePath: context.worktreePath,
             baseBranch: context.baseBranch,
             baseSha: context.baseSha,
+            sourceSha: context.sourceSha,
+            canonicalBaseRef: context.canonicalBaseRef,
+            excludedDirtyFiles: context.excludedDirtyFiles,
             publication: 'pending'
           })
         : this.manager.validateRecoveryContext(runId, {
             worktreePath: context.worktreePath,
             baseBranch: context.baseBranch,
             baseSha: context.baseSha,
+            sourceSha: context.sourceSha,
+            canonicalBaseRef: context.canonicalBaseRef,
+            excludedDirtyFiles: context.excludedDirtyFiles,
             publication: 'pending'
           })
       if (!validation.ok || validation.decision === 'cleanup-only') {
@@ -377,19 +408,21 @@ export class RunWorktreeCoordinator {
     }
     this.runs.set(runId, tracked)
     try {
-      const described = this.manager.describeAsync
-        ? await this.manager.describeAsync(runId)
-        : this.manager.describe(runId)
       if (Boolean(sourceWorkspacePath) !== Boolean(sourceBaseSha)) {
         throw new Error('Checkpoint worktree incomplet.')
       }
-      const context =
+      const explicitContext =
         sourceWorkspacePath && sourceBaseSha
-          ? { ...described, workspacePath: sourceWorkspacePath, baseSha: sourceBaseSha }
-          : described
-      Object.assign(tracked, context)
-      this.persist(tracked, 'running', 'not-requested')
-      const prepared = await this.manager.prepareAsync(runId, context)
+          ? {
+              ...(this.manager.describeAsync
+                ? await this.manager.describeAsync(runId)
+                : this.manager.describe(runId)),
+              workspacePath: sourceWorkspacePath,
+              baseSha: sourceBaseSha,
+              sourceSha: sourceBaseSha
+            }
+          : undefined
+      const prepared = await this.manager.prepareAsync(runId, explicitContext)
       Object.assign(tracked, prepared.context)
       tracked.worktreePath = prepared.path
       tracked.worktreeAvailable = true
@@ -401,15 +434,11 @@ export class RunWorktreeCoordinator {
       tracked.state = 'blocked'
       tracked.endedAtMs = this.now()
       tracked.attentionReason = 'merge-failed'
+      tracked.detail = error instanceof Error ? error.message : String(error)
       // `describeAsync` peut échouer avant que le contexte durable existe. Dans ce cas, persister
       // fabriquerait trois chaînes vides et masquerait l'erreur Git par « manifeste invalide ».
       if (tracked.worktreePath && tracked.baseBranch && tracked.baseSha) {
-        this.persist(
-          tracked,
-          'interrupted',
-          'blocked',
-          error instanceof Error ? error.message : String(error)
-        )
+        this.persist(tracked, 'interrupted', 'blocked', tracked.detail)
       }
       this.emit()
       throw error
@@ -429,7 +458,7 @@ export class RunWorktreeCoordinator {
       merge?: boolean
       retainGreen?: boolean
       onPrepared?: (publication: { baseSha: string; agentSha: string }) => void
-      onPublished?: (publication: { baseSha: string; agentSha: string }) => void
+      onPublished?: (publication: { baseSha: string; agentSha: string }) => void | Promise<void>
     } = {}
   ): FinalizeResult | undefined {
     const tracked = this.runs.get(runId)
@@ -475,16 +504,24 @@ export class RunWorktreeCoordinator {
     const res = this.manager.finalize(runId, {
       baseBranch: tracked.baseBranch,
       onPrepared: (agentSha, baseSha) => {
-        tracked.publishedSha = agentSha
+        tracked.publicationAgentSha = agentSha
         tracked.publicationBaseSha = baseSha
         this.persist(tracked, 'green', 'integrating')
         preparedPublication = { baseSha, agentSha }
         this.publicationCallbacks.get(runId)?.onPrepared?.(preparedPublication)
+      },
+      onIntegrated: (integratedSha, agentSha, baseSha) => {
+        tracked.publishedSha = integratedSha
+        tracked.publicationAgentSha = agentSha
+        tracked.publicationBaseSha = baseSha
+        this.persist(tracked, 'green', 'integrating')
+        preparedPublication = { baseSha, agentSha: integratedSha }
       }
     })
     this.applyFinalize(tracked, res)
     this.persistFinalize(tracked, res)
-    this.finishPublicationCallbacks(tracked, res, preparedPublication)
+    this.acknowledgePublication(tracked, res)
+    void this.finishPublicationCallbacks(tracked, res, preparedPublication)
     this.emit()
     return res
   }
@@ -495,7 +532,7 @@ export class RunWorktreeCoordinator {
       merge?: boolean
       retainGreen?: boolean
       onPrepared?: (publication: { baseSha: string; agentSha: string }) => void
-      onPublished?: (publication: { baseSha: string; agentSha: string }) => void
+      onPublished?: (publication: { baseSha: string; agentSha: string }) => void | Promise<void>
     } = {}
   ): Promise<FinalizeResult | undefined> {
     if (!this.manager.finalizeAsync || !this.manager.changedFilesAsync) {
@@ -555,16 +592,24 @@ export class RunWorktreeCoordinator {
       const res = await this.manager.finalizeAsync(runId, {
         baseBranch: tracked.baseBranch,
         onPrepared: (agentSha, baseSha) => {
-          tracked.publishedSha = agentSha
+          tracked.publicationAgentSha = agentSha
           tracked.publicationBaseSha = baseSha
           this.persist(tracked, 'green', 'integrating')
           preparedPublication = { baseSha, agentSha }
           this.publicationCallbacks.get(runId)?.onPrepared?.(preparedPublication)
+        },
+        onIntegrated: (integratedSha, agentSha, baseSha) => {
+          tracked.publishedSha = integratedSha
+          tracked.publicationAgentSha = agentSha
+          tracked.publicationBaseSha = baseSha
+          this.persist(tracked, 'green', 'integrating')
+          preparedPublication = { baseSha, agentSha: integratedSha }
         }
       })
       this.applyFinalize(tracked, res)
       this.persistFinalize(tracked, res)
-      this.finishPublicationCallbacks(tracked, res, preparedPublication)
+      await this.acknowledgePublicationAsync(tracked, res)
+      await this.finishPublicationCallbacks(tracked, res, preparedPublication)
       this.emit()
       return res
     } catch (error) {
@@ -730,6 +775,11 @@ export class RunWorktreeCoordinator {
       worktreeAvailable: t.worktreeAvailable,
       baseBranch: t.baseBranch,
       baseSha: t.baseSha,
+      sourceSha: t.sourceSha,
+      canonicalBaseRef: t.canonicalBaseRef,
+      excludedDirtyFiles: t.excludedDirtyFiles,
+      excludedDirtyFileCount: t.excludedDirtyFileCount,
+      excludedDirtyFilesTruncated: t.excludedDirtyFilesTruncated,
       publishedSha: t.publishedSha,
       verdict: t.verdict,
       publication: t.publication,
@@ -847,11 +897,11 @@ export class RunWorktreeCoordinator {
     }
   }
 
-  private finishPublicationCallbacks(
+  private async finishPublicationCallbacks(
     tracked: Tracked,
     result: FinalizeResult,
     preparedPublication: { baseSha: string; agentSha: string } | undefined
-  ): void {
+  ): Promise<void> {
     const runId = tracked.runId
     const callbacks = this.publicationCallbacks.get(runId)
     const published =
@@ -859,29 +909,40 @@ export class RunWorktreeCoordinator {
       result.outcome === 'nothing' ||
       result.outcome === 'cleanup-pending' ||
       result.outcome === 'published-residue'
-    if (published && preparedPublication && tracked.causalPublicationDeliveredAtMs === undefined) {
-      let delivered = false
+    const exactPublication =
+      result.outcome === 'merged' && result.baseSha && result.publishedSha
+        ? { baseSha: result.baseSha, agentSha: result.publishedSha }
+        : result.outcome === 'cleanup-pending' || result.outcome === 'published-residue'
+          ? (result.baseSha ?? preparedPublication?.baseSha ?? tracked.publicationBaseSha)
+            ? {
+                baseSha:
+                  result.baseSha ?? preparedPublication?.baseSha ?? tracked.publicationBaseSha!,
+                agentSha: result.publishedSha
+              }
+            : undefined
+          : preparedPublication
+    if (published && exactPublication && tracked.causalPublicationDeliveredAtMs === undefined) {
       try {
         if (callbacks?.onPublished) {
-          callbacks.onPublished(preparedPublication)
-          delivered = true
-        } else if (tracked.causalWatchPaths?.length && this.onRecoveredPublication) {
-          this.onRecoveredPublication({
+          await callbacks.onPublished(exactPublication)
+        } else if (this.onRecoveredPublication) {
+          await this.onRecoveredPublication({
             runId,
+            ...(tracked.task ? { task: tracked.task } : {}),
             conversationId: tracked.conversationId,
             turnId: tracked.turnId,
-            causalWatchPaths: tracked.causalWatchPaths,
-            ...preparedPublication
+            causalWatchPaths: tracked.causalWatchPaths ?? [],
+            ...exactPublication
           })
-          delivered = true
+        } else {
+          return
         }
       } catch {
         // Le manifeste reste non acquitté : le prochain démarrage rejouera la publication.
+        return
       }
-      if (delivered) {
-        tracked.causalPublicationDeliveredAtMs = this.now()
-        this.persistFinalize(tracked, result)
-      }
+      tracked.causalPublicationDeliveredAtMs = this.now()
+      this.persistFinalize(tracked, result)
     }
     const retryable =
       result.outcome === 'cleanup-pending' ||
@@ -905,8 +966,10 @@ export class RunWorktreeCoordinator {
       tracked.conflictAgentSha = res.agentSha
       tracked.files = res.files.map((path) => ({ path, kind: 'mod' as const }))
     }
+    if (res.outcome === 'merged' && res.publishedSha) tracked.publishedSha = res.publishedSha
     if (res.outcome === 'cleanup-pending') {
       tracked.publishedSha = res.publishedSha
+      tracked.publicationAgentSha = res.agentSha ?? tracked.publicationAgentSha ?? res.publishedSha
       tracked.worktreeAvailable = res.worktreeAvailable ?? true
       tracked.files = res.files.map((path) => ({ path, kind: 'mod' as const }))
       const retries = (this.retryCounts.get(tracked.runId) ?? 0) + 1
@@ -920,6 +983,7 @@ export class RunWorktreeCoordinator {
     }
     if (res.outcome === 'published-residue') {
       tracked.publishedSha = res.publishedSha
+      tracked.publicationAgentSha = res.agentSha ?? tracked.publicationAgentSha ?? res.publishedSha
       tracked.worktreeAvailable = true
       tracked.files = res.files.map((path) => ({ path, kind: 'mod' as const }))
       tracked.attentionReason = 'post-publish-change'
@@ -968,6 +1032,28 @@ export class RunWorktreeCoordinator {
       worktreeAvailable: tracked.worktreeAvailable ?? previous?.worktreeAvailable,
       baseBranch: tracked.baseBranch ?? previous?.baseBranch ?? '',
       baseSha: tracked.baseSha ?? previous?.baseSha ?? '',
+      ...((tracked.sourceSha ?? previous?.sourceSha)
+        ? { sourceSha: tracked.sourceSha ?? previous?.sourceSha }
+        : {}),
+      ...((tracked.canonicalBaseRef ?? previous?.canonicalBaseRef)
+        ? { canonicalBaseRef: tracked.canonicalBaseRef ?? previous?.canonicalBaseRef }
+        : {}),
+      ...((tracked.excludedDirtyFiles ?? previous?.excludedDirtyFiles)?.length
+        ? { excludedDirtyFiles: tracked.excludedDirtyFiles ?? previous?.excludedDirtyFiles }
+        : {}),
+      ...((tracked.excludedDirtyFileCount ?? previous?.excludedDirtyFileCount) !== undefined
+        ? {
+            excludedDirtyFileCount:
+              tracked.excludedDirtyFileCount ?? previous?.excludedDirtyFileCount
+          }
+        : {}),
+      ...((tracked.excludedDirtyFilesTruncated ?? previous?.excludedDirtyFilesTruncated) !==
+      undefined
+        ? {
+            excludedDirtyFilesTruncated:
+              tracked.excludedDirtyFilesTruncated ?? previous?.excludedDirtyFilesTruncated
+          }
+        : {}),
       verdict,
       publication,
       files: tracked.files,
@@ -975,6 +1061,7 @@ export class RunWorktreeCoordinator {
       ...(tracked.conflictBaseSha ? { conflictBaseSha: tracked.conflictBaseSha } : {}),
       ...(tracked.conflictAgentSha ? { conflictAgentSha: tracked.conflictAgentSha } : {}),
       ...(tracked.publishedSha ? { publishedSha: tracked.publishedSha } : {}),
+      ...(tracked.publicationAgentSha ? { publicationAgentSha: tracked.publicationAgentSha } : {}),
       ...(tracked.publicationBaseSha ? { publicationBaseSha: tracked.publicationBaseSha } : {}),
       ...(tracked.causalPublicationDeliveredAtMs !== undefined
         ? { causalPublicationDeliveredAtMs: tracked.causalPublicationDeliveredAtMs }
@@ -1012,6 +1099,47 @@ export class RunWorktreeCoordinator {
     )
   }
 
+  private publicationShaToAcknowledge(
+    tracked: Tracked,
+    result: FinalizeResult
+  ): string | undefined {
+    if (
+      result.outcome !== 'merged' &&
+      result.outcome !== 'cleanup-pending' &&
+      result.outcome !== 'published-residue'
+    ) {
+      return undefined
+    }
+    return result.publishedSha ?? tracked.publishedSha
+  }
+
+  private acknowledgePublication(tracked: Tracked, result: FinalizeResult): void {
+    const publishedSha = this.publicationShaToAcknowledge(tracked, result)
+    if (!publishedSha || !this.manager.acknowledgePublication) return
+    try {
+      this.manager.acknowledgePublication(tracked.runId, publishedSha)
+    } catch {
+      // L'ancre restante est sûre et sera acquittée lors d'une reprise ultérieure.
+    }
+  }
+
+  private async acknowledgePublicationAsync(
+    tracked: Tracked,
+    result: FinalizeResult
+  ): Promise<void> {
+    const publishedSha = this.publicationShaToAcknowledge(tracked, result)
+    if (!publishedSha) return
+    try {
+      if (this.manager.acknowledgePublicationAsync) {
+        await this.manager.acknowledgePublicationAsync(tracked.runId, publishedSha)
+      } else {
+        this.manager.acknowledgePublication?.(tracked.runId, publishedSha)
+      }
+    } catch {
+      // L'ancre restante est sûre et sera acquittée lors d'une reprise ultérieure.
+    }
+  }
+
   /**
    * Au redémarrage, le worktree Git est la source durable : on reprend chaque copie agent.
    * Une copie intégrable est fusionnée/nettoyée ; un conflit reste intact et redevient visible.
@@ -1020,7 +1148,8 @@ export class RunWorktreeCoordinator {
     const residues = inventory?.residues ?? this.manager.reconcileResidues?.()
     const records = new Map((this.stateStore?.list() ?? []).map((record) => [record.runId, record]))
     const observed = new Map(inventory?.agents.map((agent) => [agent.agentId, agent]) ?? [])
-    const managerIds = inventory?.agents.map((agent) => agent.agentId) ?? this.manager.listAgentIds()
+    const managerIds =
+      inventory?.agents.map((agent) => agent.agentId) ?? this.manager.listAgentIds()
     const ids = [
       ...managerIds,
       ...[...records.keys()].filter((runId) => !managerIds.includes(runId))
@@ -1042,9 +1171,7 @@ export class RunWorktreeCoordinator {
         this.retryCounts.set(runId, record!.retryCount!)
       }
       if (
-        inventory
-          ? (observed.get(runId)?.active ?? false)
-          : this.manager.hasActiveProcesses(runId)
+        inventory ? (observed.get(runId)?.active ?? false) : this.manager.hasActiveProcesses(runId)
       ) {
         const timestamp = record?.createdAtMs ?? this.now()
         this.runs.set(runId, {
@@ -1066,9 +1193,17 @@ export class RunWorktreeCoordinator {
           workspacePath: orphanContext?.workspacePath,
           baseBranch: record?.baseBranch ?? orphanContext?.baseBranch,
           baseSha: record?.baseSha ?? orphanContext?.baseSha,
+          sourceSha: record?.sourceSha ?? orphanContext?.sourceSha,
+          canonicalBaseRef: record?.canonicalBaseRef ?? orphanContext?.canonicalBaseRef,
+          excludedDirtyFiles: record?.excludedDirtyFiles ?? orphanContext?.excludedDirtyFiles,
+          excludedDirtyFileCount:
+            record?.excludedDirtyFileCount ?? orphanContext?.excludedDirtyFileCount,
+          excludedDirtyFilesTruncated:
+            record?.excludedDirtyFilesTruncated ?? orphanContext?.excludedDirtyFilesTruncated,
           conflictBaseSha: record?.conflictBaseSha,
           conflictAgentSha: record?.conflictAgentSha,
           publishedSha: record?.publishedSha,
+          publicationAgentSha: record?.publicationAgentSha,
           publicationBaseSha: record?.publicationBaseSha,
           causalPublicationDeliveredAtMs: record?.causalPublicationDeliveredAtMs,
           attentionReason: record?.attentionReason as Tracked['attentionReason'],
@@ -1134,10 +1269,18 @@ export class RunWorktreeCoordinator {
           workspacePath: orphanContext?.workspacePath,
           baseBranch: record?.baseBranch ?? orphanContext?.baseBranch,
           baseSha: record?.baseSha ?? orphanContext?.baseSha,
+          sourceSha: record?.sourceSha ?? orphanContext?.sourceSha,
+          canonicalBaseRef: record?.canonicalBaseRef ?? orphanContext?.canonicalBaseRef,
+          excludedDirtyFiles: record?.excludedDirtyFiles ?? orphanContext?.excludedDirtyFiles,
+          excludedDirtyFileCount:
+            record?.excludedDirtyFileCount ?? orphanContext?.excludedDirtyFileCount,
+          excludedDirtyFilesTruncated:
+            record?.excludedDirtyFilesTruncated ?? orphanContext?.excludedDirtyFilesTruncated,
           conflictFile: record?.conflictFile,
           conflictBaseSha: record?.conflictBaseSha,
           conflictAgentSha: record?.conflictAgentSha,
           publishedSha: record?.publishedSha,
+          publicationAgentSha: record?.publicationAgentSha,
           publicationBaseSha: record?.publicationBaseSha,
           causalPublicationDeliveredAtMs: record?.causalPublicationDeliveredAtMs,
           attentionReason: !record
@@ -1206,21 +1349,29 @@ export class RunWorktreeCoordinator {
       tracked.causalPublicationDeliveredAtMs !== undefined ||
       !tracked.publicationBaseSha ||
       !tracked.publishedSha ||
-      !tracked.causalWatchPaths?.length ||
       !this.onRecoveredPublication
     )
       return
     try {
-      this.onRecoveredPublication({
+      const delivery = this.onRecoveredPublication({
         runId: tracked.runId,
+        ...(tracked.task ? { task: tracked.task } : {}),
         conversationId: tracked.conversationId,
         turnId: tracked.turnId,
-        causalWatchPaths: tracked.causalWatchPaths,
+        causalWatchPaths: tracked.causalWatchPaths ?? [],
         baseSha: tracked.publicationBaseSha,
         agentSha: tracked.publishedSha
       })
-      tracked.causalPublicationDeliveredAtMs = this.now()
-      this.persist(tracked, 'green', 'complete', tracked.detail)
+      const acknowledge = (): void => {
+        tracked.causalPublicationDeliveredAtMs = this.now()
+        this.persist(tracked, 'green', 'complete', tracked.detail)
+        this.emit()
+      }
+      if (delivery && typeof delivery.then === 'function') {
+        void delivery.then(acknowledge).catch(() => undefined)
+      } else {
+        acknowledge()
+      }
     } catch {
       // L'absence d'acquittement garde la publication rejouable au prochain démarrage.
     }
@@ -1284,9 +1435,15 @@ export class RunWorktreeCoordinator {
       worktreeAvailable: record?.worktreeAvailable,
       baseBranch: record?.baseBranch,
       baseSha: record?.baseSha,
+      sourceSha: record?.sourceSha,
+      canonicalBaseRef: record?.canonicalBaseRef,
+      excludedDirtyFiles: record?.excludedDirtyFiles,
+      excludedDirtyFileCount: record?.excludedDirtyFileCount,
+      excludedDirtyFilesTruncated: record?.excludedDirtyFilesTruncated,
       conflictBaseSha: record?.conflictBaseSha,
       conflictAgentSha: record?.conflictAgentSha,
       publishedSha: record?.publishedSha,
+      publicationAgentSha: record?.publicationAgentSha,
       publicationBaseSha: record?.publicationBaseSha,
       causalPublicationDeliveredAtMs: record?.causalPublicationDeliveredAtMs,
       attentionReason: record?.attentionReason as Tracked['attentionReason'],
@@ -1307,15 +1464,23 @@ export class RunWorktreeCoordinator {
         worktreePath: record.worktreePath,
         baseBranch: record.baseBranch,
         baseSha: record.baseSha,
+        sourceSha: record.sourceSha,
+        canonicalBaseRef: record.canonicalBaseRef,
+        excludedDirtyFiles: record.excludedDirtyFiles,
         publication: recoveryPublication as
           'pending' | 'integrating' | 'published' | 'cleanup-pending',
-        ...(recoveryPublishedSha ? { publishedSha: recoveryPublishedSha } : {})
+        ...(recoveryPublishedSha ? { publishedSha: recoveryPublishedSha } : {}),
+        ...(record.publicationAgentSha ? { agentSha: record.publicationAgentSha } : {})
       })
       if (!validation.ok) {
         tracked.state = 'blocked'
         tracked.attentionReason = 'merge-failed'
         this.persist(tracked, 'green', 'blocked', validation.detail)
         return
+      }
+      if (validation.publishedSha) {
+        tracked.publishedSha = validation.publishedSha
+        this.persist(tracked, 'green', 'integrating')
       }
       recoveryDecision = validation.decision
     }
@@ -1339,6 +1504,8 @@ export class RunWorktreeCoordinator {
             }
           : undefined
       if (!preparedPublication?.baseSha) preparedPublication = undefined
+      const cleanupAgentSha =
+        record?.publicationAgentSha ?? tracked.publicationAgentSha ?? publishedSha
       const result =
         (publicationCanOnlyNeedCleanup ||
           tracked.publication === 'cleanup-pending' ||
@@ -1348,24 +1515,37 @@ export class RunWorktreeCoordinator {
           ? this.manager.cleanupPublished(
               runId,
               publishedSha,
-              record?.baseBranch ?? tracked.baseBranch
+              record?.baseBranch ?? tracked.baseBranch,
+              ...(cleanupAgentSha && cleanupAgentSha !== publishedSha ? [cleanupAgentSha] : [])
             )
           : this.manager.finalize(runId, {
               ...((record?.baseBranch ?? tracked.baseBranch)
                 ? { baseBranch: record?.baseBranch ?? tracked.baseBranch }
                 : {}),
-              ...(publishedSha ? { expectedAgentSha: publishedSha } : {}),
+              ...((record?.publicationAgentSha ?? tracked.publicationAgentSha)
+                ? {
+                    expectedAgentSha: record?.publicationAgentSha ?? tracked.publicationAgentSha
+                  }
+                : {}),
               onPrepared: (agentSha, baseSha) => {
-                tracked.publishedSha = agentSha
+                tracked.publicationAgentSha = agentSha
                 tracked.publicationBaseSha = baseSha
                 this.persist(tracked, 'green', 'integrating')
                 preparedPublication = { baseSha, agentSha }
                 this.publicationCallbacks.get(runId)?.onPrepared?.(preparedPublication)
+              },
+              onIntegrated: (integratedSha, agentSha, baseSha) => {
+                tracked.publishedSha = integratedSha
+                tracked.publicationAgentSha = agentSha
+                tracked.publicationBaseSha = baseSha
+                this.persist(tracked, 'green', 'integrating')
+                preparedPublication = { baseSha, agentSha: integratedSha }
               }
             })
       this.applyFinalize(tracked, result)
       this.persistFinalize(tracked, result)
-      this.finishPublicationCallbacks(tracked, result, preparedPublication)
+      this.acknowledgePublication(tracked, result)
+      void this.finishPublicationCallbacks(tracked, result, preparedPublication)
     } catch {
       tracked.state = 'blocked'
       tracked.attentionReason = 'merge-failed'
@@ -1431,9 +1611,15 @@ export class RunWorktreeCoordinator {
       worktreeAvailable: record?.worktreeAvailable,
       baseBranch: record?.baseBranch,
       baseSha: record?.baseSha,
+      sourceSha: record?.sourceSha,
+      canonicalBaseRef: record?.canonicalBaseRef,
+      excludedDirtyFiles: record?.excludedDirtyFiles,
+      excludedDirtyFileCount: record?.excludedDirtyFileCount,
+      excludedDirtyFilesTruncated: record?.excludedDirtyFilesTruncated,
       conflictBaseSha: record?.conflictBaseSha,
       conflictAgentSha: record?.conflictAgentSha,
       publishedSha: record?.publishedSha,
+      publicationAgentSha: record?.publicationAgentSha,
       publicationBaseSha: record?.publicationBaseSha,
       causalPublicationDeliveredAtMs: record?.causalPublicationDeliveredAtMs,
       attentionReason: record?.attentionReason as Tracked['attentionReason'],
@@ -1454,12 +1640,13 @@ export class RunWorktreeCoordinator {
         worktreePath: record.worktreePath,
         baseBranch: record.baseBranch,
         baseSha: record.baseSha,
+        sourceSha: record.sourceSha,
+        canonicalBaseRef: record.canonicalBaseRef,
+        excludedDirtyFiles: record.excludedDirtyFiles,
         publication: recoveryPublication as
-          | 'pending'
-          | 'integrating'
-          | 'published'
-          | 'cleanup-pending',
-        ...(recoveryPublishedSha ? { publishedSha: recoveryPublishedSha } : {})
+          'pending' | 'integrating' | 'published' | 'cleanup-pending',
+        ...(recoveryPublishedSha ? { publishedSha: recoveryPublishedSha } : {}),
+        ...(record.publicationAgentSha ? { agentSha: record.publicationAgentSha } : {})
       }
       const validation = this.manager.validateRecoveryContextAsync
         ? await this.manager.validateRecoveryContextAsync(runId, context)
@@ -1469,6 +1656,10 @@ export class RunWorktreeCoordinator {
         tracked.attentionReason = 'merge-failed'
         this.persist(tracked, 'green', 'blocked', validation.detail)
         return
+      }
+      if (validation.publishedSha) {
+        tracked.publishedSha = validation.publishedSha
+        this.persist(tracked, 'green', 'integrating')
       }
       recoveryDecision = validation.decision
     }
@@ -1493,23 +1684,41 @@ export class RunWorktreeCoordinator {
           : undefined
       if (!preparedPublication?.baseSha) preparedPublication = undefined
       const baseBranch = record?.baseBranch ?? tracked.baseBranch
+      const cleanupAgentSha =
+        record?.publicationAgentSha ?? tracked.publicationAgentSha ?? publishedSha
       const result =
         (publicationCanOnlyNeedCleanup ||
           tracked.publication === 'cleanup-pending' ||
           tracked.publication === 'published') &&
         publishedSha &&
         this.manager.cleanupPublishedAsync
-          ? await this.manager.cleanupPublishedAsync(runId, publishedSha, baseBranch)
+          ? await this.manager.cleanupPublishedAsync(
+              runId,
+              publishedSha,
+              baseBranch,
+              ...(cleanupAgentSha && cleanupAgentSha !== publishedSha ? [cleanupAgentSha] : [])
+            )
           : this.manager.finalizeAsync
             ? await this.manager.finalizeAsync(runId, {
                 ...(baseBranch ? { baseBranch } : {}),
-                ...(publishedSha ? { expectedAgentSha: publishedSha } : {}),
+                ...((record?.publicationAgentSha ?? tracked.publicationAgentSha)
+                  ? {
+                      expectedAgentSha: record?.publicationAgentSha ?? tracked.publicationAgentSha
+                    }
+                  : {}),
                 onPrepared: (agentSha, baseSha) => {
-                  tracked.publishedSha = agentSha
+                  tracked.publicationAgentSha = agentSha
                   tracked.publicationBaseSha = baseSha
                   this.persist(tracked, 'green', 'integrating')
                   preparedPublication = { baseSha, agentSha }
                   this.publicationCallbacks.get(runId)?.onPrepared?.(preparedPublication)
+                },
+                onIntegrated: (integratedSha, agentSha, baseSha) => {
+                  tracked.publishedSha = integratedSha
+                  tracked.publicationAgentSha = agentSha
+                  tracked.publicationBaseSha = baseSha
+                  this.persist(tracked, 'green', 'integrating')
+                  preparedPublication = { baseSha, agentSha: integratedSha }
                 }
               })
             : this.manager.finalize(runId, {
@@ -1518,7 +1727,8 @@ export class RunWorktreeCoordinator {
               })
       this.applyFinalize(tracked, result)
       this.persistFinalize(tracked, result)
-      this.finishPublicationCallbacks(tracked, result, preparedPublication)
+      await this.acknowledgePublicationAsync(tracked, result)
+      await this.finishPublicationCallbacks(tracked, result, preparedPublication)
     } catch {
       tracked.state = 'blocked'
       tracked.attentionReason = 'merge-failed'
@@ -1536,8 +1746,7 @@ export class RunWorktreeCoordinator {
       this.recoveryTimer = undefined
       if (this.manager.operationsAreIsolated?.()) {
         void this.retryRecoveryAsync().catch((error) => this.recordRecoveryFailure(error))
-      }
-      else this.retryRecovery()
+      } else this.retryRecovery()
     }, 5_000)
     this.recoveryTimer.unref?.()
   }

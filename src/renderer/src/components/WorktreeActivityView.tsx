@@ -91,7 +91,7 @@ function stateCopy(agent: WorktreeAgentActivity): { label: string; outcome: stri
     }
     return {
       label: 'Copie conservée',
-      outcome: 'Le retour automatique est bloqué. Aucun fichier local n’a été touché.',
+      outcome: `Le retour automatique est bloqué. Aucun fichier local n’a été touché.${agent.detail ? ` ${agent.detail}` : ''}`,
       tone: 'danger'
     }
   }
@@ -213,6 +213,28 @@ function AgentOffice({
             <code className="wt-office-path" title={agent.worktreePath}>
               {agent.worktreePath}
             </code>
+          )}
+          {agent.canonicalBaseRef && (
+            <div className="wt-office-base">Base vérifiée · {agent.canonicalBaseRef}</div>
+          )}
+          {(agent.excludedDirtyFiles?.length ?? 0) > 0 && (
+            <details className="wt-office-excluded">
+              <summary>
+                {agent.excludedDirtyFileCount ?? agent.excludedDirtyFiles!.length} changement
+                {(agent.excludedDirtyFileCount ?? agent.excludedDirtyFiles!.length) > 1
+                  ? 's locaux'
+                  : ' local'}{' '}
+                non inclus
+                {agent.excludedDirtyFilesTruncated
+                  ? ` · ${agent.excludedDirtyFiles!.length} affichés`
+                  : ''}
+              </summary>
+              <ul>
+                {agent.excludedDirtyFiles!.map((path) => (
+                  <li key={path}>{path}</li>
+                ))}
+              </ul>
+            </details>
           )}
           {agent.recovered && <span className="wt-recovered">↻ Récupéré après redémarrage</span>}
           <FileList agent={agent} />

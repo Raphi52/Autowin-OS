@@ -48,6 +48,7 @@ import {
   captureCloseBaseline,
   type CloseBaseline,
   closeGreenRunOnDisk,
+  projectPublicationNeedsRetry,
   type AutoCloseReport
 } from './run-autoclose'
 import { amitelBrainRoot } from './amitel-context'
@@ -336,12 +337,31 @@ export class AutowinOS {
         )
         const manager = new WorktreeManager({
           baseRepo: executionWorkspace,
-          worktreeRoot: identity.root
+          worktreeRoot: identity.root,
+          requireCanonicalRemote: true
         })
         this.worktrees = new RunWorktreeCoordinator({
           manager,
           stateStore: new WorktreeRunStateStore(identity.root, identity.repoId),
-          onRecoveredPublication: (publication) => {
+          onRecoveredPublication: async (publication) => {
+            if (this.autoClose) {
+              this.lastAutoClose = await closeGreenRunOnDisk({
+                runId: publication.runId,
+                task: publication.task ?? 'Run récupéré',
+                projectRepo: executionWorkspace,
+                brainRepo: amitelBrainRoot(),
+                projectPublication: {
+                  baseSha: publication.baseSha,
+                  publishedSha: publication.agentSha
+                },
+                recoveredWithoutBrainBaseline: true
+              })
+              if (projectPublicationNeedsRetry(this.lastAutoClose)) {
+                throw new Error(
+                  `Publication projet distante a rejouer: ${JSON.stringify(this.lastAutoClose.project)}`
+                )
+              }
+            }
             const evidence = preparedCommitMutationEvidence(
               executionWorkspace,
               publication.baseSha,
@@ -515,7 +535,7 @@ export class AutowinOS {
             captureCloseBaseline(executionWorkspace, amitelBrainRoot())
           )
         },
-        close: async ({ runId, task }) => {
+        close: async ({ runId, task, projectPublication }) => {
           const baselinePromise = this.closeBaselines.get(runId)
           this.closeBaselines.delete(runId)
           if (!this.autoClose || !baselinePromise) return
@@ -524,8 +544,14 @@ export class AutowinOS {
             task,
             projectRepo: executionWorkspace,
             brainRepo: amitelBrainRoot(),
-            baseline: await baselinePromise
+            baseline: await baselinePromise,
+            projectPublication
           })
+          if (projectPublication && projectPublicationNeedsRetry(this.lastAutoClose)) {
+            throw new Error(
+              `Publication projet distante a rejouer: ${JSON.stringify(this.lastAutoClose.project)}`
+            )
+          }
         }
       }
     }

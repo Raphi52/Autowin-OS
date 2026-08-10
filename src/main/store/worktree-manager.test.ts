@@ -90,6 +90,91 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
     expect(wm.changedFiles('scout')).toContain('a.txt')
   })
 
+  it('prépare un nouveau job depuis le main distant frais sans muter la branche locale', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-wmremote-'))
+    roots.push(root)
+    const remote = join(root, 'origin.git')
+    const repo = join(root, 'work')
+    const peer = join(root, 'peer')
+    git(root, 'init', '--bare', '-q', remote)
+    git(root, 'clone', '-q', remote, repo)
+    git(repo, 'switch', '-c', 'main')
+    git(repo, 'config', 'user.email', 't@t')
+    git(repo, 'config', 'user.name', 'T')
+    git(repo, 'config', 'commit.gpgsign', 'false')
+    writeFileSync(join(repo, 'base.txt'), 'base\n')
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-q', '-m', 'base')
+    git(repo, 'push', '-q', '-u', 'origin', 'main')
+    git(root, '--git-dir', remote, 'symbolic-ref', 'HEAD', 'refs/heads/main')
+    git(root, 'clone', '-q', remote, peer)
+    git(peer, 'config', 'user.email', 't@t')
+    git(peer, 'config', 'user.name', 'T')
+    writeFileSync(join(peer, 'remote.txt'), 'remote\n')
+    git(peer, 'add', '-A')
+    git(peer, 'commit', '-q', '-m', 'remote advances')
+    git(peer, 'push', '-q', 'origin', 'main')
+
+    const localHead = git(repo, 'rev-parse', 'HEAD')
+    const wm = manager(repo)
+    const context = wm.describeForLaunch('fresh')
+    expect(context.canonicalBaseRef).toBe('origin/main')
+    expect(context.baseSha).toBe(localHead)
+    expect(context.sourceSha).toBe(git(repo, 'rev-parse', 'origin/main'))
+    expect(git(repo, 'rev-parse', 'HEAD')).toBe(localHead)
+    const path = wm.acquire('fresh', context)
+    expect(git(path, 'rev-parse', 'HEAD')).toBe(context.sourceSha)
+    writeFileSync(join(path, 'agent.txt'), 'agent\n')
+    const finalized = wm.finalize('fresh', { baseBranch: 'main' })
+    expect(finalized).toMatchObject({
+      outcome: 'merged',
+      baseSha: localHead,
+      publishedSha: git(repo, 'rev-parse', 'HEAD')
+    })
+    expect(readFileSync(join(repo, 'remote.txt'), 'utf8')).toContain('remote')
+    expect(readFileSync(join(repo, 'agent.txt'), 'utf8')).toContain('agent')
+  })
+
+  it('énumère les changements locaux exclus du snapshot remis à l’agent', () => {
+    const repo = tempRepo()
+    writeFileSync(join(repo, 'local-only.txt'), 'pas commité\n')
+
+    const context = manager(repo).describeForLaunch('dirty')
+
+    expect(context.excludedDirtyFiles).toEqual(['local-only.txt'])
+  })
+
+  it('borne l affichage de 501 fichiers sales sans bloquer ni contaminer le nouveau job', () => {
+    const repo = tempRepo()
+    for (let index = 0; index < 501; index += 1) {
+      writeFileSync(join(repo, `dirty-${String(index).padStart(3, '0')}.txt`), 'local\n')
+    }
+    const wm = manager(repo)
+
+    const context = wm.describeForLaunch('dirty-large')
+    const worktree = wm.acquire('dirty-large', context)
+
+    expect(context.excludedDirtyFiles).toHaveLength(500)
+    expect(context.excludedDirtyFileCount).toBe(501)
+    expect(context.excludedDirtyFilesTruncated).toBe(true)
+    expect(existsSync(join(worktree, 'dirty-000.txt'))).toBe(false)
+    expect(existsSync(join(worktree, 'dirty-500.txt'))).toBe(false)
+  })
+
+  it('en mode production refuse un lancement sans base distante canonique', () => {
+    const repo = tempRepo()
+    const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
+    roots.push(wtRoot)
+    const wm = new WorktreeManager({
+      baseRepo: repo,
+      worktreeRoot: wtRoot,
+      requireCanonicalRemote: true
+    })
+
+    expect(() => wm.describeForLaunch('strict')).toThrow(/distant origin est absent/i)
+    expect(existsSync(join(wtRoot, 'agent__strict'))).toBe(false)
+  })
+
   it('prouve le contexte Git durable avant une reprise automatique', () => {
     const repo = tempRepo()
     const wm = manager(repo)
@@ -543,6 +628,42 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
     expect(() => wm.acquire('builder')).not.toThrow()
   })
 
+  it('base avancée après l ancre → libère l ancre puis réussit au retry', () => {
+    const repo = tempRepo()
+    let advanced = false
+    const tryGitFn = (dir: string, args: string[]) => {
+      if (!advanced && dir === repo && args.includes('merge') && args.includes('--ff-only')) {
+        advanced = true
+        writeFileSync(join(repo, 'concurrent.txt'), 'avance concurrente\n')
+        git(repo, 'add', 'concurrent.txt')
+        git(repo, 'commit', '-q', '-m', 'avance concurrente')
+      }
+      const result = spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
+      return {
+        code: result.status ?? 1,
+        stdout: result.stdout ?? '',
+        stderr: result.stderr ?? ''
+      }
+    }
+    const wtRoot = mkdtempSync(join(tmpdir(), 'autowin-wmroot-'))
+    roots.push(wtRoot)
+    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot, tryGitFn })
+    const path = wm.acquire('builder')
+    writeFileSync(join(path, 'b.txt'), 'travail de la copie\n')
+
+    const first = wm.finalize('builder')
+
+    expect(first).toMatchObject({ outcome: 'blocked', reason: 'base-in-progress' })
+    expect(() => git(repo, 'rev-parse', 'refs/autowin/publications/builder')).toThrow()
+
+    const retried = wm.finalize('builder')
+
+    expect(retried).toMatchObject({ outcome: 'merged' })
+    expect(readFileSync(join(repo, 'b.txt'), 'utf8')).toContain('travail de la copie')
+    expect(readFileSync(join(repo, 'concurrent.txt'), 'utf8')).toContain('avance concurrente')
+    expect(git(repo, 'rev-parse', 'refs/autowin/publications/builder')).toMatch(/^[0-9a-f]{40}$/)
+  })
+
   it('index utilisateur modifié pendant la publication → bloque sans avancer HEAD', () => {
     const repo = tempRepo()
     const baseSha = git(repo, 'rev-parse', 'HEAD')
@@ -795,7 +916,6 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
     const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: wtRoot, tryGitFn })
     const agentPath = wm.acquire('builder')
     writeFileSync(join(agentPath, 'b.txt'), 'travail de la copie\n')
-
     const res = wm.finalize('builder')
 
     expect(failedIntegrationRemove).toBe(true)
@@ -844,6 +964,10 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
     })
     const agentPath = wm.acquire('builder')
     writeFileSync(join(agentPath, 'b.txt'), 'travail de la copie\n')
+    writeFileSync(join(repo, 'concurrent.txt'), 'avance concurrente de la base\n')
+    git(repo, 'add', 'concurrent.txt')
+    git(repo, 'commit', '-q', '-m', 'avance base')
+    const baseBeforeFinalize = git(repo, 'rev-parse', 'HEAD')
 
     const res = wm.finalize('builder')
 
@@ -853,11 +977,17 @@ describe('WorktreeManager (full-auto merge + garde-fou conflit)', () => {
     expect(existsSync(agentPath)).toBe(true)
 
     const publishedHead = git(repo, 'rev-parse', 'HEAD')
-    locked = false
+    expect(res).toMatchObject({
+      baseSha: baseBeforeFinalize,
+      publishedSha: publishedHead,
+      agentSha: expect.any(String)
+    })
     if (res.outcome !== 'cleanup-pending') throw new Error('cleanup-pending attendu')
+    expect(res.agentSha).not.toBe(res.publishedSha)
+    locked = false
     git(repo, 'checkout', '-q', 'autre-branche')
     const otherBranchHead = git(repo, 'rev-parse', 'HEAD')
-    const resumed = wm.cleanupPublished('builder', res.publishedSha, publishedBranch)
+    const resumed = wm.cleanupPublished('builder', res.publishedSha, publishedBranch, res.agentSha)
 
     expect(resumed).toMatchObject({ outcome: 'merged', committed: false })
     expect(git(repo, 'rev-parse', 'HEAD')).toBe(otherBranchHead)

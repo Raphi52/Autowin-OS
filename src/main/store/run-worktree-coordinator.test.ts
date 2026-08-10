@@ -108,8 +108,8 @@ describe('RunWorktreeCoordinator (flip live)', () => {
         createdAtMs: 10,
         updatedAtMs: 20
       })
-      const acquire = vi.fn((_id: string, context?: { worktreePath: string }) =>
-        context?.worktreePath ?? ''
+      const acquire = vi.fn(
+        (_id: string, context?: { worktreePath: string }) => context?.worktreePath ?? ''
       )
       const coordinator = new RunWorktreeCoordinator({
         manager: fakeManager({
@@ -201,7 +201,7 @@ describe('RunWorktreeCoordinator (flip live)', () => {
     expect(co.activity()[0]).toMatchObject({ agentId: 'run-1', state: 'working' })
   })
 
-  it('persiste un contexte complet avant la preparation asynchrone du bureau', async () => {
+  it('prépare atomiquement la base fraîche puis persiste le contexte complet', async () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-async-begin-'))
     try {
       const runId = 'run-async-begin'
@@ -210,7 +210,10 @@ describe('RunWorktreeCoordinator (flip live)', () => {
         workspacePath: root,
         worktreePath,
         baseBranch: 'main',
-        baseSha: TEST_SHA
+        baseSha: TEST_SHA,
+        excludedDirtyFiles: Array.from({ length: 500 }, (_, index) => `dirty-${index}.txt`),
+        excludedDirtyFileCount: 501,
+        excludedDirtyFilesTruncated: true
       }
       const stateStore = new WorktreeRunStateStore(root, 'repo-a')
       const prepareAsync = vi.fn(async () => ({ context, path: worktreePath }))
@@ -225,30 +228,33 @@ describe('RunWorktreeCoordinator (flip live)', () => {
       })
 
       await expect(coordinator.beginAsync(runId, 'Builder', true)).resolves.toBe(worktreePath)
-      expect(prepareAsync).toHaveBeenCalledWith(runId, context)
-      expect(stateStore.get(runId)).toMatchObject({
+      expect(prepareAsync).toHaveBeenCalledWith(runId, undefined)
+      const stored = stateStore.get(runId)
+      expect(stored).toMatchObject({
         runId,
         worktreePath,
         baseBranch: 'main',
         baseSha: TEST_SHA,
+        excludedDirtyFileCount: 501,
+        excludedDirtyFilesTruncated: true,
         verdict: 'running'
       })
+      expect(stored?.excludedDirtyFiles).toHaveLength(500)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
   })
 
-  it('ne masque pas une erreur de description asynchrone par un manifeste vide', async () => {
+  it('ne masque pas une erreur de préparation atomique par un manifeste vide', async () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-async-describe-error-'))
     try {
       const stateStore = new WorktreeRunStateStore(root, 'repo-a')
       const coordinator = new RunWorktreeCoordinator({
         manager: {
           ...fakeManager(),
-          describeAsync: vi.fn(async () => {
+          prepareAsync: vi.fn(async () => {
             throw new Error('description Git indisponible')
-          }),
-          prepareAsync: vi.fn()
+          })
         },
         stateStore,
         nowFn: () => 10
@@ -564,6 +570,110 @@ describe('RunWorktreeCoordinator (flip live)', () => {
         onRecoveredPublication: replayAfterAck
       })
       expect(replayAfterAck).not.toHaveBeenCalled()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reprend une auto-publication sans trace causale et ne l acquitte qu apres le push async', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-autoclose-recovery-'))
+    try {
+      const runId = 'run-autoclose-recovery'
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      stateStore.save({
+        version: 1,
+        repoId: 'repo-a',
+        runId,
+        task: 'Corriger la publication',
+        agentName: 'Builder',
+        worktreePath: join(root, `agent__${runId}`),
+        baseBranch: 'main',
+        baseSha: '2'.repeat(40),
+        publicationBaseSha: TEST_SHA,
+        verdict: 'green',
+        publication: 'complete',
+        files: [],
+        publishedSha: PUBLISHED_SHA,
+        createdAtMs: 10,
+        updatedAtMs: 11
+      })
+      let finishPush!: () => void
+      const pendingPush = new Promise<void>((resolve) => {
+        finishPush = resolve
+      })
+      const onRecoveredPublication = vi.fn(() => pendingPush)
+      const onActivity = vi.fn()
+
+      new RunWorktreeCoordinator({
+        manager: fakeManager({ listAgentIds: () => [] }),
+        stateStore,
+        nowFn: () => 20,
+        onRecoveredPublication,
+        onActivity
+      })
+
+      expect(onRecoveredPublication).toHaveBeenCalledWith({
+        runId,
+        task: 'Corriger la publication',
+        causalWatchPaths: [],
+        baseSha: TEST_SHA,
+        agentSha: PUBLISHED_SHA
+      })
+      expect(stateStore.get(runId)?.causalPublicationDeliveredAtMs).toBeUndefined()
+      const eventsBeforePush = onActivity.mock.calls.length
+
+      finishPush()
+      await vi.waitFor(() => expect(stateStore.get(runId)?.causalPublicationDeliveredAtMs).toBe(20))
+      expect(onActivity.mock.calls.length).toBeGreaterThan(eventsBeforePush)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('rejoue au redemarrage une publication distante rejetee', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-autoclose-rejected-'))
+    try {
+      const runId = 'run-autoclose-rejected'
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      stateStore.save({
+        version: 1,
+        repoId: 'repo-a',
+        runId,
+        task: 'Publier apres panne',
+        agentName: 'Builder',
+        worktreePath: join(root, `agent__${runId}`),
+        baseBranch: 'main',
+        baseSha: '2'.repeat(40),
+        publicationBaseSha: TEST_SHA,
+        verdict: 'green',
+        publication: 'complete',
+        files: [],
+        publishedSha: PUBLISHED_SHA,
+        createdAtMs: 10,
+        updatedAtMs: 11
+      })
+      const failedPush = vi.fn().mockRejectedValue(new Error('reseau indisponible'))
+
+      new RunWorktreeCoordinator({
+        manager: fakeManager({ listAgentIds: () => [] }),
+        stateStore,
+        nowFn: () => 20,
+        onRecoveredPublication: failedPush
+      })
+
+      await vi.waitFor(() => expect(failedPush).toHaveBeenCalledTimes(1))
+      expect(stateStore.get(runId)?.causalPublicationDeliveredAtMs).toBeUndefined()
+
+      const recoveredPush = vi.fn().mockResolvedValue(undefined)
+      new RunWorktreeCoordinator({
+        manager: fakeManager({ listAgentIds: () => [] }),
+        stateStore,
+        nowFn: () => 30,
+        onRecoveredPublication: recoveredPush
+      })
+
+      await vi.waitFor(() => expect(stateStore.get(runId)?.causalPublicationDeliveredAtMs).toBe(30))
+      expect(recoveredPush).toHaveBeenCalledTimes(1)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

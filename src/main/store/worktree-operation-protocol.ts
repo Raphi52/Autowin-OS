@@ -26,9 +26,11 @@ export type WorktreeOperationRequest =
   | {
       operation: 'cleanupPublished'
       agentId: string
-      expectedSha: string
+      publishedSha: string
+      agentSha: string
       baseBranch?: string
     }
+  | { operation: 'acknowledgePublication'; agentId: string; publishedSha: string }
   | { operation: 'recoveryInventory' }
   | { operation: 'describe'; agentId: string }
   | { operation: 'hasActiveProcesses'; agentId: string }
@@ -42,5 +44,6 @@ export type WorktreeOperationRequest =
 
 export type WorktreeOperationResponse =
   | { type: 'prepared'; agentSha: string; baseSha: string }
+  | { type: 'integrated'; integratedSha: string; agentSha: string; baseSha: string }
   | { type: 'result'; value: unknown }
   | { type: 'error'; error: string }
