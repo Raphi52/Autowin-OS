@@ -32,6 +32,7 @@ import { createTicketFromCommand, type TicketCreateArgs } from './ticket-create-
 import { searchTicketsFromCommand, type TicketSearchArgs } from './ticket-search-command'
 import { getTicketFromCommand, type TicketGetArgs } from './ticket-get-command'
 import { updateTicketFromCommand, type TicketUpdateArgs } from './ticket-update-command'
+import { runSqlRead } from './sql-read-command'
 import type {
   TicketCreateRequest,
   TicketGetRequest,
@@ -358,6 +359,25 @@ const CATALOG: CommandSpec[] = [
     }
   },
   {
+    name: 'sql_query',
+    description:
+      'Consulter les bases RIG des greffes en LECTURE SEULE (un seul SELECT) — pour constater un paramétrage ou une spécificité. Seuls les greffes EXPLOITÉS sont lisibles (la liste vient de COMMUN_RIG.dbo.GREFFE, GRF_IS_EXPLOIT = 1) : les maquettes, copies figées et bases de formation sont refusées. Toute écriture est refusée avant d’atteindre le serveur.',
+    args: {
+      query: 'un SELECT unique, sans point-virgule ni commentaire (obligatoire)',
+      database: 'la base greffe visée, ex. RIG_AMIENS (obligatoire)',
+      server:
+        'facultatif — défaut SQL-PROD\\PROD (métropole) ; RIGBD-ANTILLES, RIGBD-REUNION ou RIGBD-POLYNESIE pour les DROM ; SQL-DEV\\DEV pour RIG_DEV et RIG_RECETTE. En cas de refus, le message liste les bases disponibles sur le serveur visé.'
+    },
+    annotations: {
+      // Lecture stricte : l'enveloppe annule systématiquement sa transaction. Mais `openWorldHint` —
+      // la donnée vient d'une base de PRODUCTION, hors de l'app.
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true
+    }
+  },
+  {
     name: 'ticket_get',
     description:
       'Lire UNE fiche (work item) par son numéro — à utiliser dès qu’un numéro de fiche est mentionné ; chercher ce numéro avec ticket_search ne le trouvera PAS (la recherche porte sur les titres)',
@@ -612,7 +632,17 @@ export class AppCommandBus {
     /** Controle Windows local, reserve aux commandes explicites du chat. */
     private readonly desktop?: DesktopController,
     /** Retour réel vers une fiche existante, câblé depuis index.ts. */
-    private readonly updateTicket?: (request: TicketUpdateRequest) => Promise<TicketItem>
+    private readonly updateTicket?: (request: TicketUpdateRequest) => Promise<TicketItem>,
+    /**
+     * Chemin de `sqlcmd`, résolu au démarrage. Absent → `sql_query` annonce l'indisponibilité au lieu
+     * de tenter un binaire inexistant.
+     *
+     * Ajouté EN DERNIER lors de la fusion de `main` : les paramètres de ce constructeur sont
+     * positionnels, donc l'insérer avant `desktop`/`updateTicket` aurait décalé tous les sites d'appel
+     * de l'amont — mes valeurs auraient pris la place des leurs, sans que le typage s'en plaigne
+     * forcément.
+     */
+    private readonly sqlcmdPath?: string
   ) {}
 
   catalog(): CommandSpec[] {
@@ -1163,6 +1193,17 @@ export class AppCommandBus {
           listSources: this.listTicketSources,
           ...(this.createTicket ? { create: this.createTicket } : {})
         })
+      case 'sql_query':
+        // La cible et la nature de la requête sont décidées hors du modèle (`sql-read-guard.ts`),
+        // jamais d'après les arguments bruts : le compte Windows utilisé PEUT écrire en production.
+        return await runSqlRead(
+          {
+            server: typeof a.server === 'string' && a.server ? a.server : 'SQL-PROD\\PROD',
+            database: a.database,
+            query: a.query
+          },
+          { ...(this.sqlcmdPath ? { sqlcmdPath: this.sqlcmdPath } : {}) }
+        )
       case 'ticket_get':
         return await getTicketFromCommand(a as TicketGetArgs, {
           listSources: this.listTicketSources,
