@@ -250,6 +250,36 @@ describe('SettingsView diagnostic', () => {
     expect(container.querySelector('[data-testid="settings-provider-gemini"]')).toBeTruthy()
   })
 
+  it('affiche un etat de chargement sans inventer des providers non configures', async () => {
+    const providerStatus = vi.fn(() => new Promise<never>(() => {}))
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        providerStatus,
+        getPreflight: vi.fn().mockResolvedValue(null),
+        recheckPreflight: vi.fn(),
+        onPreflight: () => () => {}
+      }
+    })
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    mounted.push({ root, container })
+
+    await act(async () => {
+      root.render(
+        createElement(SettingsView, {
+          active: true,
+          section: 'providers',
+          onSectionChange: vi.fn()
+        })
+      )
+    })
+
+    expect(container.querySelector('[role="status"]')?.textContent).toMatch(/chargement/i)
+    expect(container.textContent).not.toContain('non configuré')
+  })
+
   it('rend une alerte quand le recheck échoue', async () => {
     const recheckPreflight = vi.fn().mockRejectedValue(new Error('boom'))
     Object.defineProperty(window, 'api', {

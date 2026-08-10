@@ -319,6 +319,7 @@ export function costSamplesFrom(
   const samples = calls.map(sampleFromCall).filter(hasSpend)
   const hasCanonicalCalls = samples.length > 0
   const canonicalIds = new Set(samples.flatMap((sample) => (sample.callId ? [sample.callId] : [])))
+  const seenActivityIds = new Set<string>()
   // Multiset des prompt-calls encore appariables, par cle de cout. Les indices permettent aussi
   // d'enrichir une trace d'echec sans usage lorsque le provider rend ses vrais compteurs plus tard.
   const unmatched = new Map<string, number[]>()
@@ -329,7 +330,10 @@ export function costSamplesFrom(
     unmatched.set(key, indices)
   }
   for (const entry of activity) {
-    if (entry.usageCallId && canonicalIds.has(entry.usageCallId)) continue
+    if (entry.usageCallId) {
+      if (canonicalIds.has(entry.usageCallId) || seenActivityIds.has(entry.usageCallId)) continue
+      seenActivityIds.add(entry.usageCallId)
+    }
     // `chat` est un cumul de tour, pas un appel atomique. Des appels fins presents font foi.
     if (entry.kind === 'chat' && hasCanonicalCalls) continue
     const sample = sampleFromActivity(entry)

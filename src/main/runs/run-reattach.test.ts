@@ -173,6 +173,7 @@ describe('fin réussie pendant le rattachement', () => {
     saveOrchestrationState(root, {
       runId: 'run-detached-success',
       task: 'chantier critique',
+      conversationId: 'conv-detached-success',
       phaseOutputs: [
         { phase: 'scout', text: 'scout acquis' },
         { phase: 'frame', text: 'frame acquis' },
@@ -215,7 +216,10 @@ describe('fin réussie pendant le rattachement', () => {
       updatedAt: 2
     })
 
-    const settled = settleCompletedDetachedPhase(root, 'run-detached-success')
+    const recoveredUsage: unknown[] = []
+    const settled = settleCompletedDetachedPhase(root, 'run-detached-success', (usage) =>
+      recoveredUsage.push(usage)
+    )
 
     expect(settled?.phaseOutputs.at(-1)).toEqual({
       phase: 'build',
@@ -234,6 +238,18 @@ describe('fin réussie pendant le rattachement', () => {
       freshTokens: 150,
       knownCostUsd: 3.5
     })
+    expect(recoveredUsage).toEqual([
+      expect.objectContaining({
+        conversationId: 'conv-detached-success',
+        callId: 'detached:run-detached-success:agent-build',
+        phase: 'build',
+        provider: 'claude',
+        costUsd: 2.5,
+        inputTokens: 140,
+        outputTokens: 20,
+        cacheReadTokens: 90
+      })
+    ])
     expect(
       loadOrchestrationStates(root)
         .find((state) => state.runId === 'run-detached-success')

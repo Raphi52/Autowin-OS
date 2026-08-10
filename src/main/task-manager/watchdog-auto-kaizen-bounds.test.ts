@@ -16,6 +16,35 @@ describe('Auto-kaizen borne', () => {
     // prefixe verbal repartait en scout quand la conversation Auto-kaizen gardait son workflow.
     expect(routeSkillRequest(seed.prompt)?.explicitPhase).toBe('build')
     expect(seed.watchdog?.guards.maxPerRoot).toBe(1)
+    expect(seed.watchdog?.guards.maxTriggersPerHour).toBe(1)
+    expect(seed.watchdog?.guards.dedupWindowMs).toBe(1_800_000)
+  })
+
+  it('durcit la version bornee precedente sans toucher une regle personnalisee', () => {
+    const tasks = store()
+    const current = autoKaizenSeed()
+    const previous = tasks.create({
+      ...current,
+      watchdog: {
+        ...current.watchdog!,
+        guards: {
+          dedupWindowMs: 300_000,
+          maxTriggersPerHour: 2,
+          maxChainDepth: 0,
+          maxPerRoot: 1
+        }
+      }
+    })
+    tasks.markSeeded(AUTO_KAIZEN_SEED_ID)
+
+    seedWatchdogTasks(tasks)
+
+    expect(tasks.getTask(previous.id)?.watchdog?.guards).toMatchObject({
+      dedupWindowMs: 1_800_000,
+      maxTriggersPerHour: 1,
+      maxChainDepth: 0,
+      maxPerRoot: 1
+    })
   })
 
   it('migre le semis historique intact sans perdre sa conversation dediee', () => {

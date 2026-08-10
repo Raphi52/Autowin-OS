@@ -96,7 +96,11 @@ import {
   selectWorkflowForConversation,
   workflowForConversation
 } from './workflow-selection'
-import { preparePersistedRunForRelaunch, type ProcessIdentity } from './runs/run-reattach'
+import {
+  preparePersistedRunForRelaunch,
+  type ProcessIdentity,
+  type RecoveredDetachedUsageSettlement
+} from './runs/run-reattach'
 
 interface ExecutionWorkspaceInput {
   cwd?: string
@@ -888,9 +892,16 @@ export class AutowinOS {
   /** Persiste la preuve de fin des providers orphelins avant de remettre leur budget au supervisor. */
   reconcileResumableOrchestrationForRelaunch(
     runId: string,
-    identityOf: ProcessIdentity
+    identityOf: ProcessIdentity,
+    onRecoveredUsage?: (settlement: RecoveredDetachedUsageSettlement) => void
   ): OrchestrationRunState | null {
-    return preparePersistedRunForRelaunch(this.orchestrationStateRoot, runId, identityOf)
+    return preparePersistedRunForRelaunch(
+      this.orchestrationStateRoot,
+      runId,
+      identityOf,
+      Date.now(),
+      onRecoveredUsage
+    )
   }
 
   /**

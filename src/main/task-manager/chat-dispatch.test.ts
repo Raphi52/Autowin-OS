@@ -301,12 +301,20 @@ describe('Task Manager — une règle qui ORCHESTRE au lieu de discuter', () => 
 
   it('lit le tri rendu par le pipeline comme celui d’un chat', async () => {
     const chat = runtime({
-      runOrchestration: vi.fn(async () => ({ ok: true, turnId: 't', text: 'ISSUE: repair' }))
+      runOrchestration: vi.fn(async () => ({
+        ok: true,
+        turnId: 't',
+        text: 'ISSUE: repair',
+        knownCostUsd: 0.42,
+        totalTokens: 12_345,
+        unpricedCalls: 1
+      }))
     })
 
     const result = await new ScheduledChatDispatcher(chat).run(orchestrating(), watchdogOccurrence)
 
     expect(result.outcome).toBe('repair')
+    expect(result).toMatchObject({ knownCostUsd: 0.42, totalTokens: 12_345, unpricedCalls: 1 })
   })
 
   it('retombe sur le chat si le runtime ne sait pas orchestrer, au lieu d’échouer', async () => {

@@ -1085,6 +1085,7 @@ export class AppCommandBus {
             costUsd: r.costUsd,
             knownCostUsd: r.usage?.knownCostUsd,
             unpricedCalls: r.usage?.unpricedCalls,
+            totalTokens: r.usage?.totalTokens,
             result: r.result,
             gateReasons: r.gateReasons,
             turnId: orchestrationTurnId,

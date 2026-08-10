@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { parseTaskUpdate, registerTaskManagerIpc } from './task-manager-ipc'
+import {
+  parseTaskUpdate,
+  registerTaskManagerIpc,
+  summarizeTaskUsageLastHour
+} from './task-manager-ipc'
 import { TaskStore } from './task-store'
 import type { ScheduledTaskInput } from './types'
 
@@ -20,6 +24,44 @@ const base: ScheduledTaskInput = {
 }
 
 describe('Task Manager IPC — remplacement du declencheur', () => {
+  it('additionne seulement le cout connu de la derniere heure pour cette tache', () => {
+    expect(
+      summarizeTaskUsageLastHour(
+        [
+          {
+            id: 'recent',
+            taskId: 'task-cost',
+            scheduledFor: 4_000_000,
+            mode: 'active-only',
+            status: 'completed',
+            claimedAt: 4_000_000,
+            finishedAt: 4_000_000,
+            knownCostUsd: 0.42,
+            totalTokens: 12_345,
+            unpricedCalls: 1
+          },
+          {
+            id: 'old',
+            taskId: 'task-cost',
+            scheduledFor: 1,
+            mode: 'active-only',
+            status: 'completed',
+            claimedAt: 1,
+            finishedAt: 1,
+            knownCostUsd: 99,
+            totalTokens: 99
+          }
+        ],
+        'task-cost',
+        4_000_000
+      )
+    ).toEqual({
+      knownCostUsdLastHour: 0.42,
+      totalTokensLastHour: 12_345,
+      unpricedCallsLastHour: 1
+    })
+  })
+
   it('ne restaure pas l horaire retire quand le renderer envoie un watchdog', () => {
     const watchdog = {
       source: { kind: 'app-event' as const, events: ['task-failed' as const] },
@@ -47,6 +89,24 @@ describe('Task Manager IPC — remplacement du declencheur', () => {
       schedule,
       watchdog: undefined
     })
+  })
+
+  it('preserve tous les evenements Auto-kaizen lors d une sauvegarde UI', () => {
+    const events = [
+      'orchestration-red',
+      'workflow-gate-failed',
+      'workflow-unverified',
+      'workflow-proof-lost'
+    ] as const
+    const watchdog = {
+      source: { kind: 'app-event' as const, events: [...events] },
+      guards: { dedupWindowMs: 300_000, maxTriggersPerHour: 2, maxChainDepth: 0, maxPerRoot: 1 },
+      action: 'orchestration' as const
+    }
+
+    const updated = parseTaskUpdate({ ...base, schedule: undefined, watchdog }, { watchdog })
+
+    expect(updated.watchdog?.source).toEqual({ kind: 'app-event', events })
   })
 
   it('refuse la suppression IPC pendant une occurrence active puis la permet terminee', async () => {

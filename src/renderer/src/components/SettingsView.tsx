@@ -32,6 +32,7 @@ export function SettingsView({
 
   const [providers, setProviders] = useState<ProviderRow[] | null>(null)
   const [providersError, setProvidersError] = useState<string | null>(null)
+  const providersLoading = providers === null && providersError === null
 
   /**
    * `keepError` : le recheck déclenché par un échec de réparation ne doit PAS effacer le message
@@ -191,29 +192,32 @@ export function SettingsView({
                 {providersError}
               </p>
             )}
-            <ul className="settings-providers-list">
-              {KNOWN_PROVIDERS.map((name) => {
-                const row = providers?.find((entry) => entry.provider === name)
-                return (
-                  <li key={name} data-testid={`settings-provider-${name}`}>
-                    <strong>{name}</strong>
-                    <span>{row ? row.status : 'non configuré'}</span>
-                    {row?.detail && <span>{row.detail}</span>}
-                  </li>
-                )
-              })}
-              {providers
-                ?.filter(
-                  (entry) => !(KNOWN_PROVIDERS as readonly string[]).includes(entry.provider)
-                )
-                .map((entry) => (
-                  <li key={entry.provider} data-testid={`settings-provider-${entry.provider}`}>
-                    <strong>{entry.provider}</strong>
-                    <span>{entry.status}</span>
-                    {entry.detail && <span>{entry.detail}</span>}
-                  </li>
-                ))}
-            </ul>
+            {providersLoading && <p role="status">Chargement des providers…</p>}
+            {!providersLoading && !providersError && (
+              <ul className="settings-providers-list">
+                {KNOWN_PROVIDERS.map((name) => {
+                  const row = providers?.find((entry) => entry.provider === name)
+                  return (
+                    <li key={name} data-testid={`settings-provider-${name}`}>
+                      <strong>{name}</strong>
+                      <span>{row ? row.status : 'non configuré'}</span>
+                      {row?.detail && <span>{row.detail}</span>}
+                    </li>
+                  )
+                })}
+                {providers
+                  ?.filter(
+                    (entry) => !(KNOWN_PROVIDERS as readonly string[]).includes(entry.provider)
+                  )
+                  .map((entry) => (
+                    <li key={entry.provider} data-testid={`settings-provider-${entry.provider}`}>
+                      <strong>{entry.provider}</strong>
+                      <span>{entry.status}</span>
+                      {entry.detail && <span>{entry.detail}</span>}
+                    </li>
+                  ))}
+              </ul>
+            )}
             <p className="domain-hint">
               Lecture seule : la configuration (connexion, test, mode) se pilote depuis la page
               Routeur.

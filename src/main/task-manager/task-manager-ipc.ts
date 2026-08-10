@@ -5,6 +5,7 @@ import type {
   ScheduledTaskInput,
   TaskDestination,
   TaskManagerSnapshot,
+  TaskOccurrence,
   WatchdogAppEvent,
   WatchdogGuards,
   WatchdogRule
@@ -29,12 +30,19 @@ export function registerTaskManagerIpc(options: RegisterTaskManagerIpcOptions): 
     assertTrusted(event, 'Task Manager')
     const state = scheduler.state()
     const tasks = store.listTasks()
+    const snapshot = store.snapshot()
     return {
-      ...store.snapshot(),
+      ...snapshot,
       watchdogs: Object.fromEntries(
         tasks
           .filter((task) => Boolean(task.watchdog))
-          .map((task) => [task.id, watchdogDiagnostics(task.id)])
+          .map((task) => [
+            task.id,
+            {
+              ...watchdogDiagnostics(task.id),
+              ...summarizeTaskUsageLastHour(snapshot.occurrences, task.id)
+            }
+          ])
       ),
       scheduler: {
         running: state.running,
@@ -87,6 +95,32 @@ export function registerTaskManagerIpc(options: RegisterTaskManagerIpcOptions): 
   })
 }
 
+export function summarizeTaskUsageLastHour(
+  occurrences: readonly TaskOccurrence[],
+  taskId: string,
+  now = Date.now()
+): {
+  knownCostUsdLastHour: number
+  totalTokensLastHour: number
+  unpricedCallsLastHour: number
+} {
+  const cutoff = now - 3_600_000
+  return occurrences
+    .filter(
+      (occurrence) =>
+        occurrence.taskId === taskId &&
+        (occurrence.finishedAt ?? occurrence.startedAt ?? occurrence.claimedAt) >= cutoff
+    )
+    .reduce(
+      (total, occurrence) => ({
+        knownCostUsdLastHour: total.knownCostUsdLastHour + (occurrence.knownCostUsd ?? 0),
+        totalTokensLastHour: total.totalTokensLastHour + (occurrence.totalTokens ?? 0),
+        unpricedCallsLastHour: total.unpricedCallsLastHour + (occurrence.unpricedCalls ?? 0)
+      }),
+      { knownCostUsdLastHour: 0, totalTokensLastHour: 0, unpricedCallsLastHour: 0 }
+    )
+}
+
 export function parseTaskUpdate(current: ScheduledTaskInput, raw: unknown): ScheduledTaskInput {
   const patch = object(raw, 'mise à jour')
   const replacesTrigger = hasOwn(patch, 'schedule') || hasOwn(patch, 'watchdog')
@@ -121,7 +155,10 @@ function parseTaskInput(raw: unknown): ScheduledTaskInput {
 const WATCHDOG_APP_EVENTS: readonly WatchdogAppEvent[] = [
   'orchestration-red',
   'task-failed',
-  'task-missed'
+  'task-missed',
+  'workflow-gate-failed',
+  'workflow-unverified',
+  'workflow-proof-lost'
 ]
 
 /** Bornes des gardes. Ce sont des valeurs qui arrivent du renderer : on les CONTRAINT, on ne les

@@ -21,6 +21,9 @@ export interface WatchdogOrchestrationDispatch {
   turnId?: string
   text?: string
   error?: string
+  knownCostUsd?: number
+  totalTokens?: number
+  unpricedCalls?: number
   mutatedPaths?: readonly string[]
   mutatedLineFingerprints?: Record<string, readonly string[]>
   mutatedPathGenerationMarkers?: Record<string, string>
@@ -34,6 +37,10 @@ function record(value: unknown): Record<string, unknown> | undefined {
 
 function text(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined
+}
+
+function nonNegativeNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
 }
 
 /**
@@ -52,12 +59,7 @@ export async function runWatchdogOrchestration(
     const causalWatchPaths = source?.kind === 'file-match' ? [source.path] : []
     const envelope = record(
       onLateMutationClaims
-        ? await dependencies.exec(
-            prompt,
-            conversationId,
-            causalWatchPaths,
-            onLateMutationClaims
-          )
+        ? await dependencies.exec(prompt, conversationId, causalWatchPaths, onLateMutationClaims)
         : await dependencies.exec(prompt, conversationId, causalWatchPaths)
     )
     if (!envelope) return { ok: false, error: 'Réponse d’orchestration illisible.' }
@@ -76,12 +78,21 @@ export async function runWatchdogOrchestration(
       ? (dependencies.readMutatedPathGenerationMarkers?.(conversationId, turnId) ?? {})
       : {}
     const resultText = text(raw.result)
+    const knownCostUsd = nonNegativeNumber(raw.knownCostUsd)
+    const totalTokens = nonNegativeNumber(raw.totalTokens)
+    const unpricedCalls = nonNegativeNumber(raw.unpricedCalls)
+    const metering = {
+      ...(knownCostUsd === undefined ? {} : { knownCostUsd }),
+      ...(totalTokens === undefined ? {} : { totalTokens }),
+      ...(unpricedCalls === undefined ? {} : { unpricedCalls })
+    }
     const succeeded = raw.status === 'succeeded' && raw.gateBlocked !== true
     if (succeeded) {
       return {
         ok: true,
         ...(resultText ? { text: resultText } : {}),
         ...(turnId ? { turnId } : {}),
+        ...metering,
         mutatedPaths,
         mutatedLineFingerprints,
         mutatedPathGenerationMarkers
@@ -95,6 +106,7 @@ export async function runWatchdogOrchestration(
       ok: false,
       ...(resultText ? { text: resultText } : {}),
       ...(turnId ? { turnId } : {}),
+      ...metering,
       mutatedPaths,
       mutatedLineFingerprints,
       mutatedPathGenerationMarkers,

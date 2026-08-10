@@ -5,11 +5,7 @@ import type { ReasoningEffort } from '../roles'
 
 export interface ScheduledChatRuntime {
   hasConversation(conversationId: string): boolean
-  createConversation(input: {
-    title: string
-    category: string
-    provider: string
-  }): { id: string }
+  createConversation(input: { title: string; category: string; provider: string }): { id: string }
   bindConversation(taskId: string, conversationId: string): void
   isConversationBusy(conversationId: string): boolean
   interruptAndWait(conversationId: string, reason: string): Promise<boolean>
@@ -30,6 +26,9 @@ export interface ScheduledChatRuntime {
     mutatedPaths?: readonly string[]
     mutatedLineFingerprints?: Record<string, readonly string[]>
     mutatedPathGenerationMarkers?: Record<string, string>
+    knownCostUsd?: number
+    totalTokens?: number
+    unpricedCalls?: number
   }>
   /**
    * Lance le PIPELINE complet (scout/frame/terrain/build/clean/judge) sur une tâche, au lieu d'un
@@ -53,6 +52,9 @@ export interface ScheduledChatRuntime {
     mutatedPaths?: readonly string[]
     mutatedLineFingerprints?: Record<string, readonly string[]>
     mutatedPathGenerationMarkers?: Record<string, string>
+    knownCostUsd?: number
+    totalTokens?: number
+    unpricedCalls?: number
   }>
 }
 
@@ -106,11 +108,17 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
         : binding
           ? await this.runtime.runPrompt(conversationId, prompt, binding)
           : await this.runtime.runPrompt(conversationId, prompt)
+    const metering = {
+      ...(result.knownCostUsd === undefined ? {} : { knownCostUsd: result.knownCostUsd }),
+      ...(result.totalTokens === undefined ? {} : { totalTokens: result.totalTokens }),
+      ...(result.unpricedCalls === undefined ? {} : { unpricedCalls: result.unpricedCalls })
+    }
     if (result.cancelled) {
       return {
         status: 'cancelled',
         conversationId,
         turnId: result.turnId,
+        ...metering,
         error: result.error
       }
     }
@@ -119,12 +127,14 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
         status: 'failed',
         conversationId,
         turnId: result.turnId,
+        ...metering,
         error: result.error ?? 'Le tour Chat planifié a échoué.'
       }
     }
     return {
       status: 'completed',
       conversationId,
+      ...metering,
       ...(occurrence.watchdog ? { outcome: parseWatchdogOutcome(result.text) } : {}),
       mutatedPaths: result.mutatedPaths,
       mutatedLineFingerprints: result.mutatedLineFingerprints,

@@ -12,10 +12,7 @@ import {
 } from '../providers/claude'
 import type { ExecutionEvidence } from '../providers/types'
 import { normalizeClaudeUsage } from '../providers/claude'
-import {
-  codexExecutionEvidenceFromItem,
-  type CodexExecItem
-} from '../providers/codex'
+import { codexExecutionEvidenceFromItem, type CodexExecItem } from '../providers/codex'
 import { isSameProcessIdentity } from '../process-identity'
 
 /**
@@ -238,7 +235,8 @@ export function preparePersistedRunForRelaunch(
   root: string,
   runId: string,
   identityOf: ProcessIdentity,
-  nowMs = Date.now()
+  nowMs = Date.now(),
+  onRecoveredUsage?: (settlement: RecoveredDetachedUsageSettlement) => void
 ): OrchestrationRunState | null {
   const state = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
   if (!state?.usage || state.usage.activeCalls <= 0) return state ?? null
@@ -255,7 +253,7 @@ export function preparePersistedRunForRelaunch(
   // Point d'entrée COMMUN à toutes les reprises (`relancer` immédiat ou après rattachement).
   // Un succès terminal du journal doit devenir un acquis avant que l'appel mort soit facturé comme
   // un échec. Le faire ici ferme les deux chemins sans dépendre du câblage de démarrage.
-  const completed = settleCompletedDetachedPhase(root, runId)
+  const completed = settleCompletedDetachedPhase(root, runId, onRecoveredUsage)
   if (completed) return completed
 
   // Seule une sortie NON-ZERO certifiee autorise un retry : exit=0 signifie que le provider a pu
@@ -372,6 +370,17 @@ function nonNegativeTokenCount(value: unknown): number | undefined {
 
 function safeCounterSum(...values: number[]): number | undefined {
   return nonNegativeTokenCount(values.reduce((sum, value) => sum + value, 0))
+}
+
+export interface RecoveredDetachedUsageSettlement {
+  conversationId: string
+  callId: string
+  phase: OrchestrationRunState['phaseOutputs'][number]['phase']
+  provider: string
+  costUsd?: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
 }
 
 /**
@@ -679,7 +688,8 @@ function detachedSingleAgent(state: OrchestrationRunState): {
  */
 export function settleCompletedDetachedPhase(
   root: string,
-  runId: string
+  runId: string,
+  onRecoveredUsage?: (settlement: RecoveredDetachedUsageSettlement) => void
 ): OrchestrationRunState | null {
   const state = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
   if (!state?.usage || state.usage.activeCalls !== 1) return null
@@ -788,6 +798,20 @@ export function settleCompletedDetachedPhase(
       tokenCoverage: unmeteredCalls > 0 ? 'partial' : 'complete'
     },
     updatedAt: Date.now()
+  }
+  if (state.conversationId && onRecoveredUsage) {
+    // Publier AVANT le checkpoint : si le process retombe ici, le même règlement sera rejoué avec
+    // le même callId et la comptabilité le dédupliquera. Sauver d'abord créerait une perte durable.
+    onRecoveredUsage({
+      conversationId: state.conversationId,
+      callId: `detached:${runId}:${attribution.agent.token}`,
+      phase,
+      provider: attribution.agent.provider,
+      ...(success.costUsd === undefined ? {} : { costUsd: success.costUsd }),
+      inputTokens: inputTokens - (prior.inputTokens ?? 0),
+      outputTokens: outputTokens - (prior.outputTokens ?? 0),
+      cacheReadTokens: cacheReadTokens - (prior.cacheReadTokens ?? 0)
+    })
   }
   saveOrchestrationState(root, settled)
   return settled

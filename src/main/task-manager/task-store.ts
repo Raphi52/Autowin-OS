@@ -292,6 +292,9 @@ export class TaskStore {
       conversationId?: string
       turnId?: string
       error?: string
+      knownCostUsd?: number
+      totalTokens?: number
+      unpricedCalls?: number
       /** Le tri rendu par un agent réveillé. Absent = l'agent n'a pas conclu, on ne le devine pas. */
       outcome?: WatchdogOutcome
     } = {}

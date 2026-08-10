@@ -19,6 +19,9 @@ export interface DispatchResult {
   conversationId?: string
   turnId?: string
   error?: string
+  knownCostUsd?: number
+  totalTokens?: number
+  unpricedCalls?: number
   /** Le tri conclu par un agent réveillé, quand il a pu être lu dans sa réponse. */
   outcome?: WatchdogOutcome
   /** Fichiers réellement attribués à ce tour par les preuves d'exécution. */
@@ -227,6 +230,9 @@ export class TaskScheduler {
         conversationId: result.conversationId,
         turnId: result.turnId,
         error: result.error,
+        knownCostUsd: result.knownCostUsd,
+        totalTokens: result.totalTokens,
+        unpricedCalls: result.unpricedCalls,
         outcome: result.outcome
       })
       return result

@@ -63,7 +63,10 @@ describe('adaptateur orchestration watchdog', () => {
         status: 'succeeded',
         gateBlocked: false,
         result: 'ISSUE: repair',
-        turnId: 'turn-green'
+        turnId: 'turn-green',
+        knownCostUsd: 0.42,
+        totalTokens: 12_345,
+        unpricedCalls: 1
       }
     })
 
@@ -81,7 +84,14 @@ describe('adaptateur orchestration watchdog', () => {
     )
 
     expect(exec).toHaveBeenCalledWith('prompt', 'conv-dedicated', [])
-    expect(result).toMatchObject({ ok: true, text: 'ISSUE: repair', turnId: 'turn-green' })
+    expect(result).toMatchObject({
+      ok: true,
+      text: 'ISSUE: repair',
+      turnId: 'turn-green',
+      knownCostUsd: 0.42,
+      totalTokens: 12_345,
+      unpricedCalls: 1
+    })
   })
 
   it('conserve une erreur du bus sans inventer un statut orchestration', async () => {

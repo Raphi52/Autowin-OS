@@ -82,6 +82,9 @@ interface TaskOccurrence {
   conversationId?: string
   turnId?: string
   error?: string
+  knownCostUsd?: number
+  totalTokens?: number
+  unpricedCalls?: number
   /** Nombre d'échéances représentées par cette occurrence agrégée (absent = une seule). */
   missedCount?: number
   trigger?: 'schedule' | 'manual' | 'watchdog'
@@ -103,7 +106,16 @@ interface Snapshot {
   tasks: ScheduledTask[]
   occurrences: TaskOccurrence[]
   alerts: TaskAlert[]
-  watchdogs?: Record<string, { admittedLastHour: number; complaint?: string }>
+  watchdogs?: Record<
+    string,
+    {
+      admittedLastHour: number
+      knownCostUsdLastHour?: number
+      totalTokensLastHour?: number
+      unpricedCallsLastHour?: number
+      complaint?: string
+    }
+  >
   scheduler: {
     running: boolean
     nextWakeAt: number | null
@@ -244,6 +256,28 @@ function durationLabel(startedAt?: number, finishedAt?: number): string | null {
   return `Durée ${hours} h${minutes % 60 ? ` ${minutes % 60} min` : ''}`
 }
 
+function usageMeta(usage: {
+  knownCostUsd?: number
+  totalTokens?: number
+  unpricedCalls?: number
+}): string[] {
+  const meta: string[] = []
+  if (typeof usage.knownCostUsd === 'number') {
+    meta.push(
+      `${usage.knownCostUsd.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} $ connus`
+    )
+  }
+  if (typeof usage.totalTokens === 'number') {
+    meta.push(`${usage.totalTokens.toLocaleString('fr-FR')} tokens`)
+  }
+  if (usage.unpricedCalls) {
+    meta.push(
+      `${usage.unpricedCalls} appel${usage.unpricedCalls > 1 ? 's' : ''} non chiffré${usage.unpricedCalls > 1 ? 's' : ''}`
+    )
+  }
+  return meta
+}
+
 /** Les métadonnées DÉJÀ stockées, dans l'ordre de lecture. Une valeur absente est omise, pas devinée. */
 function occurrenceMeta(occurrence: TaskOccurrence): string[] {
   const meta: string[] = []
@@ -254,6 +288,13 @@ function occurrenceMeta(occurrence: TaskOccurrence): string[] {
     meta.push(TRIGGER_LABELS[occurrence.trigger])
   const duration = durationLabel(occurrence.startedAt, occurrence.finishedAt)
   if (duration) meta.push(duration)
+  meta.push(
+    ...usageMeta({
+      knownCostUsd: occurrence.knownCostUsd,
+      totalTokens: occurrence.totalTokens,
+      unpricedCalls: occurrence.unpricedCalls
+    })
+  )
   if (occurrence.missedCount && occurrence.missedCount > 1)
     meta.push(`${occurrence.missedCount} échéances agrégées`)
   const context = occurrence.watchdog?.context?.trim()
@@ -1121,6 +1162,21 @@ export function TaskManagerView({
                         dernière heure
                       </dd>
                     </div>
+                    {(() => {
+                      const diagnostic = snapshot.watchdogs?.[selected.id]
+                      if (!diagnostic) return null
+                      const recentUsage = usageMeta({
+                        knownCostUsd: diagnostic.knownCostUsdLastHour,
+                        totalTokens: diagnostic.totalTokensLastHour,
+                        unpricedCalls: diagnostic.unpricedCallsLastHour
+                      })
+                      return recentUsage.length ? (
+                        <div>
+                          <dt>Coût dernière heure</dt>
+                          <dd>{recentUsage.join(' · ')}</dd>
+                        </div>
+                      ) : null
+                    })()}
                     {snapshot.watchdogs?.[selected.id]?.complaint && (
                       <div>
                         <dt>Diagnostic</dt>

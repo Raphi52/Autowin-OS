@@ -428,7 +428,7 @@
 }
 
 .task-manager-occurrence > span {
-  grid-row: 1 / -1;
+  grid-row: 1 / span 3;
   padding: 3px 6px;
   border-radius: 999px;
   color: var(--text-dim);
@@ -461,7 +461,10 @@
 }
 
 .task-manager-occurrence-open {
+  grid-column: 2;
+  grid-row: 3;
   justify-self: start;
+  min-width: 0;
   max-width: 100%;
   padding: 2px 8px;
   border: 1px solid var(--container-border);

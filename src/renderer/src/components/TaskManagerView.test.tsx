@@ -171,13 +171,22 @@ describe('TaskManagerView', () => {
       guards: { dedupWindowMs: 60_000, maxTriggersPerHour: 12, maxChainDepth: 0, maxPerRoot: 20 }
     }
     snapshot.watchdogs = {
-      'task-1': { admittedLastHour: 3, complaint: 'Fichier surveillé illisible' }
+      'task-1': {
+        admittedLastHour: 3,
+        knownCostUsdLastHour: 0.42,
+        totalTokensLastHour: 12_345,
+        unpricedCallsLastHour: 1,
+        complaint: 'Fichier surveillé illisible'
+      }
     }
     mockApi.taskManagerSnapshot.mockResolvedValue(snapshot)
 
     const { container } = await mount(mockApi)
 
     expect(container.textContent).toContain('3 réveils sur la dernière heure')
+    expect(container.textContent).toContain('0,42 $ connus')
+    expect(container.textContent).toContain('12 345 tokens')
+    expect(container.textContent).toContain('1 appel non chiffré')
     expect(container.textContent).toContain('Fichier surveillé illisible')
   })
 
@@ -611,6 +620,9 @@ describe('TaskManagerView', () => {
         turnId: 'turn-9',
         trigger: 'watchdog',
         outcome: 'investigate',
+        knownCostUsd: 0.42,
+        totalTokens: 12_345,
+        unpricedCalls: 1,
         missedCount: 3,
         watchdog: { context: 'ERROR relay down', depth: 1, source: 'file-match' }
       }
@@ -623,6 +635,9 @@ describe('TaskManagerView', () => {
     expect(meta?.textContent).toContain('À investiguer')
     expect(meta?.textContent).toContain('Réveil')
     expect(meta?.textContent).toContain('Durée 2 min 5 s')
+    expect(meta?.textContent).toContain('0,42 $')
+    expect(meta?.textContent).toContain('12 345 tokens')
+    expect(meta?.textContent).toContain('1 appel non chiffré')
     expect(meta?.textContent).toContain('3 échéances agrégées')
     expect(meta?.textContent).toContain('ERROR relay down')
   })

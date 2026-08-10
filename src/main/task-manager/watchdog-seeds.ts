@@ -73,11 +73,12 @@ export function autoKaizenSeed(): ScheduledTaskInput {
       },
       action: 'orchestration',
       guards: {
-        // Une meme orchestration rouge peut etre rediffusee : 5 min de silence evitent le doublon.
-        dedupWindowMs: 300_000,
-        // Une journee de travail normale produit quelques rouges ; au-dela, c'est le systeme qui va
-        // mal, pas une orchestration — et lancer un agent par echec aggraverait la situation.
-        maxTriggersPerHour: 2,
+        // Un incident reste actionnable dans son fil : 30 min de silence empêchent les variantes
+        // de texte d'un même run de repayer une analyse pendant que l'utilisateur travaille.
+        dedupWindowMs: 1_800_000,
+        // Un seul chantier automatique par heure. Les autres rouges restent visibles, mais ne
+        // peuvent plus cumuler jusqu'à 6 $/h avec le plafond global de 3 $ par orchestration.
+        maxTriggersPerHour: 1,
         // Un kaizen ne declenche pas un kaizen. C'est le reglage qui empeche la boucle : l'agent
         // corrige, sa correction relance une orchestration, qui pourrait echouer a son tour.
         maxChainDepth: 0,
@@ -152,11 +153,38 @@ function isUntouchedBareBuildAutoKaizen(task: ScheduledTask): boolean {
   )
 }
 
+/** Version `/build` précédente : 5 min et deux runs/h, durcie après mesure du coût dogfood. */
+function isUntouchedPriorBoundedAutoKaizen(task: ScheduledTask): boolean {
+  const current = autoKaizenSeed()
+  const destination = current.destination
+  const watchdog = current.watchdog
+  const source = task.watchdog?.source
+  return (
+    destination.kind === 'new' &&
+    watchdog?.source.kind === 'app-event' &&
+    task.title === current.title &&
+    task.prompt === current.prompt &&
+    task.destination.kind === 'new' &&
+    task.destination.title === destination.title &&
+    task.destination.category === destination.category &&
+    task.destination.provider === destination.provider &&
+    task.watchdog?.action === watchdog.action &&
+    source?.kind === 'app-event' &&
+    JSON.stringify(source.events) === JSON.stringify(watchdog.source.events) &&
+    task.watchdog?.guards.dedupWindowMs === 300_000 &&
+    task.watchdog?.guards.maxTriggersPerHour === 2 &&
+    task.watchdog?.guards.maxChainDepth === 0 &&
+    task.watchdog?.guards.maxPerRoot === 1
+  )
+}
+
 /** Migre uniquement le semis historique INTACT ; une regle editee par l'utilisateur reste sienne. */
 function upgradeLegacyAutoKaizen(store: TaskStore): void {
   for (const task of store.listTasks()) {
     if (
-      (!isUntouchedLegacyAutoKaizen(task) && !isUntouchedBareBuildAutoKaizen(task)) ||
+      (!isUntouchedLegacyAutoKaizen(task) &&
+        !isUntouchedBareBuildAutoKaizen(task) &&
+        !isUntouchedPriorBoundedAutoKaizen(task)) ||
       task.destination.kind !== 'new'
     )
       continue

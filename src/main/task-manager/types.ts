@@ -166,6 +166,11 @@ export interface TaskOccurrence {
   conversationId?: string
   turnId?: string
   error?: string
+  /** Coût connu ; absent si aucun provider ne l'a chiffré. */
+  knownCostUsd?: number
+  totalTokens?: number
+  /** Appels exécutés sans tarif exposé, donc en plus du coût connu. */
+  unpricedCalls?: number
   /** Nombre d'échéances représentées par cette occurrence agrégée (absent = une seule). */
   missedCount?: number
   /** Dernière échéance couverte par un retard agrégé. */
@@ -206,7 +211,16 @@ export interface TaskStoreSnapshot {
 
 export interface TaskManagerSnapshot extends TaskStoreSnapshot {
   /** Diagnostic live des règles : coût récent et panne de leur source, indexés par tâche. */
-  watchdogs: Record<string, { admittedLastHour: number; complaint?: string }>
+  watchdogs: Record<
+    string,
+    {
+      admittedLastHour: number
+      knownCostUsdLastHour: number
+      totalTokensLastHour: number
+      unpricedCallsLastHour: number
+      complaint?: string
+    }
+  >
   scheduler: {
     running: boolean
     nextWakeAt: number | null

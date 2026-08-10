@@ -77,7 +77,8 @@ const defaultGit: GitRunner = (repo, args) => {
     cwd: repo,
     encoding: 'utf8',
     windowsHide: true,
-    timeout: GIT_COMMAND_TIMEOUT_MS
+    timeout: GIT_COMMAND_TIMEOUT_MS,
+    stdio: ['ignore', 'pipe', 'pipe']
   })
   return args.includes('-z') ? stdout : stdout.trim()
 }
@@ -93,7 +94,8 @@ function tryGit(repo: string, args: string[]): { code: number; stdout: string; s
       cwd: repo,
       encoding: 'utf8',
       windowsHide: true,
-      timeout: GIT_COMMAND_TIMEOUT_MS
+      timeout: GIT_COMMAND_TIMEOUT_MS,
+      stdio: ['ignore', 'pipe', 'pipe']
     })
     return { code: 0, stdout, stderr: '' }
   } catch (err) {
@@ -255,20 +257,17 @@ export class WorktreeManager {
       !opts.tryGitFn &&
       existsSync(operationWorkerPath)
     ) {
-      this.operationClient = new WorktreeOperationClient(
-        operationWorkerPath,
-        {
-          timeoutMs: opts.operationTimeoutMs ?? GIT_COMMAND_TIMEOUT_MS + 2_000,
-          workerFactory: () =>
-            new Worker(operationWorkerPath, {
-              workerData: {
-                baseRepo: this.baseRepo,
-                worktreeRoot: this.worktreeRoot,
-                ...(this.configuredBaseBranch ? { baseBranch: this.configuredBaseBranch } : {})
-              }
-            })
-        }
-      )
+      this.operationClient = new WorktreeOperationClient(operationWorkerPath, {
+        timeoutMs: opts.operationTimeoutMs ?? GIT_COMMAND_TIMEOUT_MS + 2_000,
+        workerFactory: () =>
+          new Worker(operationWorkerPath, {
+            workerData: {
+              baseRepo: this.baseRepo,
+              worktreeRoot: this.worktreeRoot,
+              ...(this.configuredBaseBranch ? { baseBranch: this.configuredBaseBranch } : {})
+            }
+          })
+      })
     }
   }
 

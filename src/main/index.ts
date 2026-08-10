@@ -257,6 +257,7 @@ import {
 import { graphDefects, worstCaseNodeExecutions, type WorkflowGraph } from './workflow-graph'
 import { recapMessage, summarizeJournal } from './runs/journal-replay'
 import { tailJournalOnce } from './runs/stdout-journal'
+import { summarizeInterruptedWorktrees } from './store/interrupted-worktree-summary'
 import { defaultProcessIdentity } from './store/worktree-manager'
 import {
   appendConversationFileTrace,
@@ -4291,14 +4292,8 @@ app.whenReady().then(async () => {
     // ici. Jamais de suppression automatique : le travail de l'agent est récupérable, et une
     // copie effacée ne revient pas — le nettoyage reste une décision humaine, prise sur cette liste.
     try {
-      const orphelins = os.worktrees?.interruptedWorktrees() ?? []
-      for (const orphelin of orphelins) {
-        console.log(
-          `[worktrees] copie isolée orpheline (run interrompu) : ${orphelin.runId}` +
-            `${orphelin.worktreePath ? ` → ${orphelin.worktreePath}` : ''}` +
-            `${orphelin.conversationId ? ` (${orphelin.conversationId})` : ''}`
-        )
-      }
+      for (const line of summarizeInterruptedWorktrees(os.worktrees?.interruptedWorktrees() ?? []))
+        console.log(line)
     } catch (error) {
       console.warn('[worktrees] inventaire des copies interrompues impossible', error)
     }
@@ -4544,7 +4539,20 @@ app.whenReady().then(async () => {
     ): Promise<void> => {
       const resumableRun = os.reconcileResumableOrchestrationForRelaunch(
         candidate.runId,
-        defaultProcessIdentity
+        defaultProcessIdentity,
+        (settlement) => {
+          appendConvActivity(settlement.conversationId, {
+            kind: settlement.phase === 'judge' ? 'judge' : 'exec',
+            label: settlement.phase,
+            provider: settlement.provider,
+            costUsd: settlement.costUsd,
+            inputTokens: settlement.inputTokens,
+            outputTokens: settlement.outputTokens,
+            cacheReadTokens: settlement.cacheReadTokens,
+            usageCallId: settlement.callId,
+            text: `Usage provider récupéré après redémarrage du run ${candidate.runId}.`
+          })
+        }
       )
       if (!resumableRun) return
       try {
