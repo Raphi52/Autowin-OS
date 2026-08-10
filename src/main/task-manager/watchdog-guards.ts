@@ -23,6 +23,12 @@ export type WatchdogRejection = 'depth' | 'dedup' | 'rate' | 'root-width'
 export type WatchdogVerdict =
   { admitted: true } | { admitted: false; reason: WatchdogRejection; detail: string }
 
+export interface WatchdogAdmission {
+  signature: string
+  rootSignature: string
+  admittedAt: number
+}
+
 /** Valeurs par defaut : genereuses pour l'usage normal, fermes sur les trois pathologies. */
 export const DEFAULT_WATCHDOG_GUARDS: WatchdogGuards = {
   dedupWindowMs: 60_000,
@@ -52,6 +58,34 @@ export class WatchdogGuardBook {
 
   updateGuards(guards: WatchdogGuards): void {
     this.guards = guards
+  }
+
+  /**
+   * Recharge les admissions persistées après un redémarrage/HMR. Sans cette étape, les limites
+   * affichées dans le Task Manager existent bien sur disque mais le moteur repart à zéro et peut
+   * relancer plusieurs Auto-kaizen sur le même incident.
+   */
+  restore(admissions: readonly WatchdogAdmission[]): void {
+    const at = this.now()
+    for (const admission of admissions
+      .filter(
+        ({ signature, rootSignature, admittedAt }) =>
+          signature.length > 0 &&
+          rootSignature.length > 0 &&
+          Number.isFinite(admittedAt) &&
+          admittedAt <= at &&
+          at - admittedAt < HOUR_MS
+      )
+      .sort((left, right) => left.admittedAt - right.admittedAt)) {
+      const previous = this.lastAdmitted.get(admission.signature)
+      if (previous === undefined || admission.admittedAt > previous) {
+        this.lastAdmitted.set(admission.signature, admission.admittedAt)
+      }
+      this.admissions.push(admission.admittedAt)
+      const fromRoot = this.perRoot.get(admission.rootSignature) ?? []
+      fromRoot.push(admission.admittedAt)
+      this.perRoot.set(admission.rootSignature, fromRoot)
+    }
   }
 
   /**

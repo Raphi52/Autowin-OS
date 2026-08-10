@@ -1,6 +1,11 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { resolve } from 'node:path'
-import { DEFAULT_WATCHDOG_GUARDS, WatchdogGuardBook, lineSignature } from './watchdog-guards'
+import {
+  DEFAULT_WATCHDOG_GUARDS,
+  WatchdogGuardBook,
+  lineSignature,
+  type WatchdogAdmission
+} from './watchdog-guards'
 import { lineFingerprint } from './watchdog-line'
 import {
   beginAtEnd,
@@ -142,7 +147,8 @@ export class WatchdogEngine {
     private readonly dispatch: WatchdogDispatch,
     private readonly clock: WatchdogEngineClock = systemClock,
     private readonly pollMs = DEFAULT_WATCHDOG_POLL_MS,
-    private readonly onDiagnosticsChanged?: () => void
+    private readonly onDiagnosticsChanged?: () => void,
+    private readonly loadAdmissions: (taskId: string) => readonly WatchdogAdmission[] = () => []
   ) {}
 
   /**
@@ -153,6 +159,7 @@ export class WatchdogEngine {
     if (this.running) return
     this.running = true
     for (const task of this.watchdogTasks()) {
+      this.bookFor(task)
       const source = task.watchdog?.source
       if (source?.kind !== 'file-match') continue
       if (!this.states.has(task.id)) {
@@ -171,7 +178,8 @@ export class WatchdogEngine {
 
   /** Reveils admis sur l'heure glissante, par tache — pour rendre le cout VISIBLE dans la vue. */
   admittedLastHour(taskId: string): number {
-    return this.books.get(taskId)?.admittedLastHour() ?? 0
+    const task = this.watchdogTasks().find(({ id }) => id === taskId)
+    return task ? this.bookFor(task).admittedLastHour() : 0
   }
 
   /** Pourquoi une regle n'a pas reveille d'agent alors qu'un signal est arrive. */
@@ -339,16 +347,14 @@ export class WatchdogEngine {
     }
 
     const guards = task.watchdog?.guards ?? DEFAULT_WATCHDOG_GUARDS
-    let book = this.books.get(task.id)
-    if (!book) {
-      book = new WatchdogGuardBook(guards, () => this.clock.now())
-      this.books.set(task.id, book)
-    } else {
-      book.updateGuards(guards)
-    }
+    const book = this.bookFor(task)
+    book.updateGuards(guards)
 
     const verdict = book.admit(signal.signature, signal.depth, signal.rootSignature)
-    if (!verdict.admitted) return
+    if (!verdict.admitted) {
+      this.suppressions.set(task.id, verdict.reason)
+      return
+    }
     this.notifyDiagnosticsChanged()
 
     const rememberLate: WatchdogMutationClaimsSink = (claims) => {
@@ -388,6 +394,16 @@ export class WatchdogEngine {
       ([path]) => canonicalPath(path) === canonicalPath(source.path)
     )?.[1]
     this.rememberSelfLineage(source.path, matchingEntry[1], signal, generationMarker)
+  }
+
+  private bookFor(task: ScheduledTask): WatchdogGuardBook {
+    let book = this.books.get(task.id)
+    if (book) return book
+    const guards = task.watchdog?.guards ?? DEFAULT_WATCHDOG_GUARDS
+    book = new WatchdogGuardBook(guards, () => this.clock.now())
+    book.restore(this.loadAdmissions(task.id))
+    this.books.set(task.id, book)
+    return book
   }
 
   private acceptMutationClaimEvent(claims: WatchdogMutationClaims): boolean {

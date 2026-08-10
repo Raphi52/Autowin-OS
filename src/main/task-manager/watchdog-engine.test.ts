@@ -728,6 +728,79 @@ describe('WatchdogEngine — observer, filtrer, deleguer', () => {
 
     expect(engine.admittedLastHour('task-1')).toBe(2)
   })
+
+  it('conserve le dedoublonnage apres un redemarrage du moteur', async () => {
+    const task = watchdogTask(logPath, {
+      watchdog: {
+        source: { kind: 'app-event', events: ['orchestration-red'] },
+        guards: {
+          dedupWindowMs: 300_000,
+          maxTriggersPerHour: 2,
+          maxChainDepth: 0,
+          maxPerRoot: 1
+        }
+      }
+    })
+    const firstDispatch = spy()
+    const first = new WatchdogEngine(() => [task], firstDispatch, clock)
+    await first.start()
+    await first.notifyAppEvent('orchestration-red', 'meme run rouge')
+    const admitted = firstDispatch.calls[0]
+
+    const restartedDispatch = spy()
+    const restarted = new WatchdogEngine(
+      () => [task],
+      restartedDispatch,
+      clock,
+      3_000,
+      undefined,
+      () => [
+        {
+          signature: admitted.signature,
+          rootSignature: admitted.rootSignature,
+          admittedAt: admitted.observedAt
+        }
+      ]
+    )
+    await restarted.start()
+    await restarted.notifyAppEvent('orchestration-red', 'meme run rouge')
+
+    expect(restartedDispatch.calls).toHaveLength(0)
+    expect(restarted.admittedLastHour(task.id)).toBe(1)
+    expect(restarted.lastSuppression(task.id)).toBe('dedup')
+  })
+
+  it('conserve le plafond horaire apres un redemarrage du moteur', async () => {
+    const task = watchdogTask(logPath, {
+      watchdog: {
+        source: { kind: 'app-event', events: ['orchestration-red'] },
+        guards: {
+          dedupWindowMs: 0,
+          maxTriggersPerHour: 2,
+          maxChainDepth: 0,
+          maxPerRoot: 20
+        }
+      }
+    })
+    const dispatch = spy()
+    const restarted = new WatchdogEngine(
+      () => [task],
+      dispatch,
+      clock,
+      3_000,
+      undefined,
+      () => [
+        { signature: 'red:a', rootSignature: 'root:a', admittedAt: clock.now() - 2_000 },
+        { signature: 'red:b', rootSignature: 'root:b', admittedAt: clock.now() - 1_000 }
+      ]
+    )
+    await restarted.start()
+    await restarted.notifyAppEvent('orchestration-red', 'troisieme run rouge')
+
+    expect(dispatch.calls).toHaveLength(0)
+    expect(restarted.admittedLastHour(task.id)).toBe(2)
+    expect(restarted.lastSuppression(task.id)).toBe('rate')
+  })
 })
 
 describe('watchdog-prompt — ce que l agent recoit et ce qu il doit rendre', () => {

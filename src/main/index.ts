@@ -3759,7 +3759,18 @@ Le fil reprend ensuite normalement.`
       },
       undefined,
       undefined,
-      () => broadcast({ type: 'refresh', scope: 'task-manager' })
+      () => broadcast({ type: 'refresh', scope: 'task-manager' }),
+      (taskId) =>
+        scheduledTasks
+          .listOccurrences(taskId)
+          .filter(
+            (occurrence) => occurrence.trigger === 'watchdog' && occurrence.watchdog !== undefined
+          )
+          .map((occurrence) => ({
+            signature: occurrence.watchdog!.signature,
+            rootSignature: occurrence.watchdog!.rootSignature,
+            admittedAt: occurrence.claimedAt
+          }))
     )
   }
   os.onRecoveredCausalMutationClaims((claims) => {
