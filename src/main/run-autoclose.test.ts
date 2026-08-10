@@ -271,6 +271,33 @@ describe('travail DÉJÀ COMMITÉ par la fusion du worktree (arbre propre)', () 
     ).toBe(publishedSha)
   })
 
+  it('refuse un secret ajouté puis supprimé dans un commit intermédiaire', async () => {
+    const { repo, remote } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+    const secretPath = join(repo, 'ephemeral.env')
+    writeFileSync(secretPath, 'AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\n')
+    await run('git', ['add', 'ephemeral.env'], { cwd: repo })
+    await run('git', ['commit', '-m', 'feat: temporary credentials'], { cwd: repo })
+    rmSync(secretPath)
+    await run('git', ['add', '-A'], { cwd: repo })
+    await run('git', ['commit', '-m', 'fix: remove temporary credentials'], { cwd: repo })
+    const publishedSha = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-secret-history',
+      task: 'publie deux commits',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      projectPublication: { baseSha: baseline.projectHead!, publishedSha },
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({ status: 'skipped', reason: 'secret-detected' })
+    expect(await realGit(['branch'], remote)).not.toContain('auto/run-secret-history')
+  })
+
   it('s’abstient si l’historique contient le commit d’une AUTRE session', async () => {
     const { repo, remote } = await repoWithRemote()
     const brain = (await repoWithRemote()).repo

@@ -71,6 +71,15 @@ export function detectSecret(text: string): string | undefined {
   return SECRET_PATTERNS.find(({ re }) => re.test(text))?.name
 }
 
+/** Lignes réellement introduites par les commits d'une plage, hors en-têtes de patch. */
+function addedPatchContent(patch: string): string {
+  return patch
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
+    .map((line) => line.slice(1))
+    .join('\n')
+}
+
 /**
  * Enregistrements NUL de `git status --porcelain=v1 -z` → chemins exacts.
  *
@@ -184,7 +193,22 @@ export async function publishRunCommits(input: {
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean)
-    const secret = detectSecret(await runGit(['diff', range], repo))
+    const finalSecret = detectSecret(await runGit(['diff', range], repo))
+    const historyPatch = await runGit(
+      [
+        'log',
+        '--format=',
+        '--no-ext-diff',
+        '--no-textconv',
+        '--no-renames',
+        '-m',
+        '-p',
+        '--unified=0',
+        range
+      ],
+      repo
+    )
+    const secret = finalSecret ?? detectSecret(addedPatchContent(historyPatch))
     if (secret) return { status: 'skipped', reason: 'secret-detected', detail: secret }
 
     const remotes = (await runGit(['remote'], repo)).trim()
