@@ -26,6 +26,8 @@ export function isNonActionableWall(summary: string, detail: string): boolean {
     /\bquota (?:exceeded|epuise|épuisé|exhausted)\b/.test(text) ||
     /\binsufficient_quota\b/.test(text) ||
     /\bpurchase more credits\b/.test(text) ||
+    /\bbudget\s+tokens?\s+total\s+(?:depasse|dépassé|exceeded)\b/.test(text) ||
+    /\btotal\s+token\s+budget\s+exceeded\b/.test(text) ||
     /\bhttp 429\b/.test(text)
   )
 }

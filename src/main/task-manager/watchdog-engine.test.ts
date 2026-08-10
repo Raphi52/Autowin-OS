@@ -787,6 +787,27 @@ describe('WatchdogEngine — ce qui ne mérite AUCUN agent', () => {
     expect(engine.lastSuppression('quota')).toBe('non-actionable')
   })
 
+  it('ne lance pas Auto-kaizen sur le budget interne déjà épuisé', async () => {
+    // Incident réel du dogfood Tickets : aucune phase supplémentaire ne peut rentrer dans le devis
+    // déjà consommé. Le relancer a pourtant ouvert scout et risquait de repayer un pipeline complet.
+    const dispatch = spy()
+    const listening = watchdogTask('x', { id: 'budget-interne' })
+    listening.watchdog = {
+      source: { kind: 'app-event', events: ['orchestration-red'] },
+      guards: { dedupWindowMs: 0, maxTriggersPerHour: 100, maxChainDepth: 0, maxPerRoot: 20 }
+    }
+    const engine = new WatchdogEngine(() => [listening], dispatch, clock)
+    await engine.start()
+
+    await engine.notifyAppEvent(
+      'orchestration-red',
+      'Budget tokens total depasse (7825566/6000000)'
+    )
+
+    expect(dispatch.calls).toHaveLength(0)
+    expect(engine.lastSuppression('budget-interne')).toBe('non-actionable')
+  })
+
   it('réveille bien un agent sur un VRAI défaut, lui', async () => {
     // Le contre-test : la suppression ne doit pas devenir un filtre qui avale tout.
     const dispatch = spy()

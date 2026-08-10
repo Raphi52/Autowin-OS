@@ -31,7 +31,7 @@ export function autoKaizenSeed(): ScheduledTaskInput {
   return {
     title: 'Auto-kaizen — orchestration rouge ou workflow douteux',
     prompt: [
-      'build Auto-kaizen borne : traite cet incident sans relancer un chantier complet.',
+      '/build Auto-kaizen borne : traite cet incident sans relancer un chantier complet.',
       'Budget operationnel : une phase build, une verification, aucun fan-out volontaire.',
       '',
       'Un workflow vient de mal se terminer — soit en echec, soit en annoncant un succes que rien',
@@ -120,10 +120,46 @@ function isUntouchedLegacyAutoKaizen(task: ScheduledTask): boolean {
   )
 }
 
+/**
+ * Version livrée brièvement avec le mot naturel `build`. `regimePhases` le comprenait, mais le
+ * workflow explicite de la conversation ne s'efface que devant une vraie commande `/build` : le
+ * dogfood Tickets a donc rejoué scout. Cette empreinte exacte migre le semis, jamais une variante
+ * personnalisée.
+ */
+function isUntouchedBareBuildAutoKaizen(task: ScheduledTask): boolean {
+  const current = autoKaizenSeed()
+  const destination = current.destination
+  const watchdog = current.watchdog
+  const taskWatchdog = task.watchdog
+  const taskSource = taskWatchdog?.source
+  return (
+    destination.kind === 'new' &&
+    watchdog?.source.kind === 'app-event' &&
+    task.title === current.title &&
+    task.prompt === current.prompt.replace(/^\/build /, 'build ') &&
+    task.destination.kind === 'new' &&
+    task.destination.title === destination.title &&
+    task.destination.category === destination.category &&
+    task.destination.provider === destination.provider &&
+    taskWatchdog !== undefined &&
+    taskWatchdog.action === watchdog.action &&
+    taskSource?.kind === 'app-event' &&
+    JSON.stringify(taskSource.events) === JSON.stringify(watchdog.source.events) &&
+    taskWatchdog.guards.dedupWindowMs === watchdog.guards.dedupWindowMs &&
+    taskWatchdog.guards.maxTriggersPerHour === watchdog.guards.maxTriggersPerHour &&
+    taskWatchdog.guards.maxChainDepth === watchdog.guards.maxChainDepth &&
+    taskWatchdog.guards.maxPerRoot === watchdog.guards.maxPerRoot
+  )
+}
+
 /** Migre uniquement le semis historique INTACT ; une regle editee par l'utilisateur reste sienne. */
 function upgradeLegacyAutoKaizen(store: TaskStore): void {
   for (const task of store.listTasks()) {
-    if (!isUntouchedLegacyAutoKaizen(task) || task.destination.kind !== 'new') continue
+    if (
+      (!isUntouchedLegacyAutoKaizen(task) && !isUntouchedBareBuildAutoKaizen(task)) ||
+      task.destination.kind !== 'new'
+    )
+      continue
     const next = autoKaizenSeed()
     if (next.destination.kind !== 'new') continue
     store.update(task.id, {

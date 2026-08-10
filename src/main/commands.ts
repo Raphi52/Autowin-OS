@@ -150,7 +150,14 @@ export type AppEvent =
       delta: string
     }
   | { type: 'orchestrate-step'; convId?: string; runPath?: string; step: OrchestrationStep }
-  | { type: 'orchestrate-end'; convId?: string; runPath?: string; status: 'green' | 'red' }
+  | {
+      type: 'orchestrate-end'
+      convId?: string
+      runPath?: string
+      status: 'green' | 'red'
+      /** Cause terminale structurée : permet au Watchdog de filtrer budget/quota/annulation. */
+      detail?: string
+    }
   | { type: 'orchestrate-usage'; convId?: string; runPath?: string }
   | { type: 'causal-trace-updated'; convId: string }
 
@@ -1023,7 +1030,8 @@ export class AppCommandBus {
             type: 'orchestrate-end',
             convId,
             runPath,
-            status: r.gateBlocked ? 'red' : 'green'
+            status: r.gateBlocked ? 'red' : 'green',
+            ...(r.gateBlocked ? { detail: r.gateReasons.join('; ') } : {})
           })
           this.broadcast({ type: 'refresh', scope: 'workflows' })
           this.broadcast({ type: 'refresh', scope: 'orchestration' })
@@ -1046,7 +1054,13 @@ export class AppCommandBus {
             saveConvRunTrace(runPath, steps)
             closeConvRun(runPath, false, `Orchestration en échec: ${String(e).slice(0, 120)}`)
           }
-          this.broadcast({ type: 'orchestrate-end', convId, runPath, status: 'red' })
+          this.broadcast({
+            type: 'orchestrate-end',
+            convId,
+            runPath,
+            status: 'red',
+            detail: e instanceof Error ? e.message : String(e)
+          })
           this.broadcast({ type: 'refresh', scope: 'workflows' })
           throw e
         } finally {

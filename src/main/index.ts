@@ -489,7 +489,7 @@ function broadcast(e: AppEvent): void {
       'orchestration-red',
       `Une orchestration s'est terminée en ROUGE.${e.runPath ? ` RUN : ${e.runPath}` : ''}${
         e.convId ? ` Conversation : ${e.convId}` : ''
-      }`,
+      }${e.detail ? `\nCause terminale : ${e.detail}` : ''}`,
       e.convId
     )
   }

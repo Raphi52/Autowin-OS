@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { routeSkillRequest } from '../skill-routing'
 import { TaskStore } from './task-store'
 import { AUTO_KAIZEN_SEED_ID, autoKaizenSeed, seedWatchdogTasks } from './watchdog-seeds'
 
@@ -10,7 +11,10 @@ function store(): TaskStore {
 describe('Auto-kaizen borne', () => {
   it('ne reserve que le build et une seule occurrence par cause', () => {
     const seed = autoKaizenSeed()
-    expect(seed.prompt.trimStart()).toMatch(/^build\b/i)
+    // Le moteur d'orchestration ne neutralise un workflow compose que pour une COMMANDE de skill
+    // (`/build`), pas pour le mot naturel « build ». Le dogfood Tickets a prouve qu'un simple
+    // prefixe verbal repartait en scout quand la conversation Auto-kaizen gardait son workflow.
+    expect(routeSkillRequest(seed.prompt)?.explicitPhase).toBe('build')
     expect(seed.watchdog?.guards.maxPerRoot).toBe(1)
   })
 
@@ -51,7 +55,7 @@ describe('Auto-kaizen borne', () => {
 
     const migrated = tasks.getTask(legacy.id)!
     expect(migrated.destination).toMatchObject({ conversationId: 'conv-auto-kaizen' })
-    expect(migrated.prompt.trimStart()).toMatch(/^build\b/i)
+    expect(routeSkillRequest(migrated.prompt)?.explicitPhase).toBe('build')
     expect(migrated.watchdog?.guards.maxPerRoot).toBe(1)
     expect(migrated.watchdog?.source).toMatchObject({
       events: [
@@ -61,6 +65,24 @@ describe('Auto-kaizen borne', () => {
         'workflow-proof-lost'
       ]
     })
+  })
+
+  it('migre la version build naturelle observée en production vers la commande /build', () => {
+    const tasks = store()
+    const previous = autoKaizenSeed()
+    if (previous.destination.kind !== 'new') throw new Error('destination de semis inattendue')
+    const legacy = tasks.create({
+      ...previous,
+      prompt: previous.prompt.replace(/^\/build /, 'build '),
+      destination: { ...previous.destination, conversationId: 'conv-auto-kaizen-active' }
+    })
+    tasks.markSeeded(AUTO_KAIZEN_SEED_ID)
+
+    seedWatchdogTasks(tasks)
+
+    const migrated = tasks.getTask(legacy.id)!
+    expect(routeSkillRequest(migrated.prompt)?.explicitPhase).toBe('build')
+    expect(migrated.destination).toMatchObject({ conversationId: 'conv-auto-kaizen-active' })
   })
 
   it('ne remplace jamais une variante historique editee par l utilisateur', () => {
