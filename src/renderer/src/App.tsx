@@ -292,6 +292,14 @@ export function MainApp(): React.JSX.Element {
     }, 0)
   }
 
+  /** Preuve d'une occurrence : on ouvre la conversation réelle, le tour n'est transmis que s'il existe. */
+  function openTaskConversation(target: { conversationId: string; turnId?: string }): void {
+    navigate('chat')
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('autowin:open-conversation', { detail: target }))
+    }, 0)
+  }
+
   function inspectTurn(target: InspectTurnTarget): void {
     setObservatoryFocus({ ...target, requestId: Date.now() })
     navigate('observatory')
@@ -444,7 +452,10 @@ export function MainApp(): React.JSX.Element {
         )}
         {visitedTabs.has('task-manager') && (
           <div className={`view-slot${tab === 'task-manager' ? ' is-active' : ''}`}>
-            <TaskManagerView active={tab === 'task-manager'} />
+            <TaskManagerView
+              active={tab === 'task-manager'}
+              onOpenConversation={openTaskConversation}
+            />
           </div>
         )}
         {visitedTabs.has('tickets') && (

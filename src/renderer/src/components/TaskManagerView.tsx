@@ -77,8 +77,13 @@ interface TaskOccurrence {
   scheduledFor: number
   mode: ExecutionMode
   status: string
+  startedAt?: number
+  finishedAt?: number
   conversationId?: string
+  turnId?: string
   error?: string
+  /** Nombre d'échéances représentées par cette occurrence agrégée (absent = une seule). */
+  missedCount?: number
   trigger?: 'schedule' | 'manual' | 'watchdog'
   outcome?: 'benign' | 'report' | 'investigate' | 'repair'
   watchdog?: { context: string; depth: number; source: string }
@@ -214,6 +219,48 @@ function modeLabel(mode: ExecutionMode | 'legacy-unknown'): string {
   return mode === 'windows' ? 'Autonome Windows' : 'Autowin actif uniquement'
 }
 
+const TRIGGER_LABELS: Record<string, string> = {
+  schedule: 'Horaire',
+  manual: 'Manuel',
+  watchdog: 'Réveil'
+}
+
+const OUTCOME_LABELS: Record<string, string> = {
+  benign: 'Bénin',
+  report: 'À signaler',
+  investigate: 'À investiguer',
+  repair: 'Réparation'
+}
+
+/** Durée réellement mesurée : sans les deux bornes, on n'affiche rien plutôt qu'un chiffre inventé. */
+function durationLabel(startedAt?: number, finishedAt?: number): string | null {
+  if (!startedAt || !finishedAt || finishedAt < startedAt) return null
+  const seconds = Math.round((finishedAt - startedAt) / 1000)
+  if (seconds < 60) return `Durée ${seconds} s`
+  const minutes = Math.floor(seconds / 60)
+  const rest = seconds % 60
+  if (minutes < 60) return `Durée ${minutes} min${rest ? ` ${rest} s` : ''}`
+  const hours = Math.floor(minutes / 60)
+  return `Durée ${hours} h${minutes % 60 ? ` ${minutes % 60} min` : ''}`
+}
+
+/** Les métadonnées DÉJÀ stockées, dans l'ordre de lecture. Une valeur absente est omise, pas devinée. */
+function occurrenceMeta(occurrence: TaskOccurrence): string[] {
+  const meta: string[] = []
+  if (occurrence.error) meta.push(occurrence.error)
+  if (occurrence.outcome && OUTCOME_LABELS[occurrence.outcome])
+    meta.push(OUTCOME_LABELS[occurrence.outcome])
+  if (occurrence.trigger && TRIGGER_LABELS[occurrence.trigger])
+    meta.push(TRIGGER_LABELS[occurrence.trigger])
+  const duration = durationLabel(occurrence.startedAt, occurrence.finishedAt)
+  if (duration) meta.push(duration)
+  if (occurrence.missedCount && occurrence.missedCount > 1)
+    meta.push(`${occurrence.missedCount} échéances agrégées`)
+  const context = occurrence.watchdog?.context?.trim()
+  if (context) meta.push(`Signal : ${context.slice(0, 160)}`)
+  return meta
+}
+
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : 'Opération impossible.'
 }
@@ -239,7 +286,14 @@ function uniqueModelsForPicker(models: RuntimeModel[]): RuntimeModel[] {
   })
 }
 
-export function TaskManagerView({ active }: { active: boolean }): React.JSX.Element {
+export function TaskManagerView({
+  active,
+  onOpenConversation
+}: {
+  active: boolean
+  /** Remonte la preuve à l'application : elle seule sait naviguer vers le Chat. */
+  onOpenConversation?: (target: { conversationId: string; turnId?: string }) => void
+}): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<Snapshot>({
     tasks: [],
     occurrences: [],
@@ -1090,7 +1144,25 @@ export function TaskManagerView({ active }: { active: boolean }): React.JSX.Elem
                       <strong>
                         {formatDateTime(occurrence.scheduledFor)} · {modeLabel(occurrence.mode)}
                       </strong>
-                      <small>{occurrence.error ?? occurrence.conversationId ?? 'Tour Chat'}</small>
+                      <small data-testid="task-manager-occurrence-meta">
+                        {occurrenceMeta(occurrence).join(' · ') || 'Tour Chat'}
+                      </small>
+                      {occurrence.conversationId && (
+                        <button
+                          className="task-manager-occurrence-open"
+                          data-testid="task-manager-occurrence-open"
+                          onClick={() =>
+                            onOpenConversation?.({
+                              conversationId: occurrence.conversationId!,
+                              ...(occurrence.turnId ? { turnId: occurrence.turnId } : {})
+                            })
+                          }
+                          title={`Conversation ${occurrence.conversationId}`}
+                          type="button"
+                        >
+                          Ouvrir la conversation
+                        </button>
+                      )}
                     </div>
                   ))
                 )}

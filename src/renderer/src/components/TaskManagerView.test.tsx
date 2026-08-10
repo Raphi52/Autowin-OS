@@ -124,13 +124,16 @@ function api() {
   }
 }
 
-async function mount(mockApi = api()) {
+async function mount(
+  mockApi = api(),
+  props: { onOpenConversation?: (target: { conversationId: string; turnId?: string }) => void } = {}
+) {
   Object.defineProperty(window, 'api', { configurable: true, value: mockApi })
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
   mounted.push({ root, container })
-  await act(async () => root.render(createElement(TaskManagerView, { active: true })))
+  await act(async () => root.render(createElement(TaskManagerView, { active: true, ...props })))
   return { container, mockApi, root }
 }
 
@@ -590,5 +593,119 @@ describe('TaskManagerView', () => {
     expect(mockApi.taskManagerSnapshot).toHaveBeenCalledTimes(2)
     expect(container.querySelector('[data-testid="task-manager-load-error"]')).toBeNull()
     expect(container.textContent).toContain('Rapport du matin')
+  })
+  it('détaille chaque occurrence avec les métadonnées déjà stockées', async () => {
+    const mockApi = api()
+    const snapshot = await mockApi.taskManagerSnapshot()
+    snapshot.occurrences = [
+      {
+        id: 'task-1@2',
+        taskId: 'task-1',
+        scheduledFor: Date.parse('2026-08-03T07:30:00.000Z'),
+        status: 'completed',
+        mode: 'windows',
+        claimedAt: Date.parse('2026-08-03T07:30:00.000Z'),
+        startedAt: Date.parse('2026-08-03T07:30:00.000Z'),
+        finishedAt: Date.parse('2026-08-03T07:32:05.000Z'),
+        conversationId: 'conv-1',
+        turnId: 'turn-9',
+        trigger: 'watchdog',
+        outcome: 'investigate',
+        missedCount: 3,
+        watchdog: { context: 'ERROR relay down', depth: 1, source: 'file-match' }
+      }
+    ]
+    mockApi.taskManagerSnapshot.mockResolvedValue(snapshot)
+
+    const { container } = await mount(mockApi)
+    const meta = container.querySelector('[data-testid="task-manager-occurrence-meta"]')
+
+    expect(meta?.textContent).toContain('À investiguer')
+    expect(meta?.textContent).toContain('Réveil')
+    expect(meta?.textContent).toContain('Durée 2 min 5 s')
+    expect(meta?.textContent).toContain('3 échéances agrégées')
+    expect(meta?.textContent).toContain('ERROR relay down')
+  })
+
+  it("omet les métadonnées absentes plutôt que d'inventer", async () => {
+    const mockApi = api()
+    const snapshot = await mockApi.taskManagerSnapshot()
+    snapshot.occurrences = [
+      {
+        id: 'task-1@3',
+        taskId: 'task-1',
+        scheduledFor: Date.parse('2026-08-03T07:30:00.000Z'),
+        status: 'claimed',
+        mode: 'windows',
+        claimedAt: Date.parse('2026-08-03T07:30:00.000Z')
+      }
+    ]
+    mockApi.taskManagerSnapshot.mockResolvedValue(snapshot)
+
+    const { container } = await mount(mockApi)
+    const occurrence = container.querySelector('.task-manager-occurrence')
+
+    expect(occurrence?.textContent).not.toContain('Durée')
+    expect(occurrence?.textContent).not.toContain('échéances agrégées')
+    expect(occurrence?.textContent).not.toContain('undefined')
+    expect(occurrence?.querySelector('[data-testid="task-manager-occurrence-open"]')).toBeNull()
+  })
+
+  it('ouvre la conversation de preuve avec son tour quand ils existent', async () => {
+    const mockApi = api()
+    const snapshot = await mockApi.taskManagerSnapshot()
+    snapshot.occurrences = [
+      {
+        id: 'task-1@4',
+        taskId: 'task-1',
+        scheduledFor: 1,
+        status: 'completed',
+        mode: 'windows',
+        claimedAt: 1,
+        conversationId: 'conv-1',
+        turnId: 'turn-9'
+      }
+    ]
+    mockApi.taskManagerSnapshot.mockResolvedValue(snapshot)
+    const onOpenConversation = vi.fn()
+
+    const { container } = await mount(mockApi, { onOpenConversation })
+    const open = container.querySelector<HTMLButtonElement>(
+      '[data-testid="task-manager-occurrence-open"]'
+    )
+    expect(open?.textContent).toContain('Ouvrir la conversation')
+    await act(async () => open?.click())
+
+    expect(onOpenConversation).toHaveBeenCalledWith({
+      conversationId: 'conv-1',
+      turnId: 'turn-9'
+    })
+  })
+
+  it("n'envoie pas de tour fictif quand l'occurrence n'en a pas", async () => {
+    const mockApi = api()
+    const snapshot = await mockApi.taskManagerSnapshot()
+    snapshot.occurrences = [
+      {
+        id: 'task-1@5',
+        taskId: 'task-1',
+        scheduledFor: 1,
+        status: 'completed',
+        mode: 'windows',
+        claimedAt: 1,
+        conversationId: 'conv-1'
+      }
+    ]
+    mockApi.taskManagerSnapshot.mockResolvedValue(snapshot)
+    const onOpenConversation = vi.fn()
+
+    const { container } = await mount(mockApi, { onOpenConversation })
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="task-manager-occurrence-open"]')
+        ?.click()
+    )
+
+    expect(onOpenConversation).toHaveBeenCalledWith({ conversationId: 'conv-1' })
   })
 })
