@@ -25,6 +25,7 @@ const PUBLICATION_STATES = new Set<WorktreePublicationState>([
   'pending',
   'integrating',
   'published',
+  'held',
   'cleanup-pending',
   'complete',
   'blocked'
@@ -34,7 +35,15 @@ const SAFE_BRANCH = /^(?![-.])(?!.*(?:\.\.|\/\/|@\{|[~^:?*[\]\\\s]))[A-Za-z0-9][
 const VERDICT_PUBLICATIONS: Record<WorktreeRunVerdict, ReadonlySet<WorktreePublicationState>> = {
   unknown: new Set(['blocked']),
   running: new Set(['not-requested']),
-  green: new Set(['pending', 'integrating', 'published', 'cleanup-pending', 'complete', 'blocked']),
+  green: new Set([
+    'pending',
+    'integrating',
+    'published',
+    'held',
+    'cleanup-pending',
+    'complete',
+    'blocked'
+  ]),
   red: new Set(['not-requested']),
   cancelled: new Set(['not-requested']),
   interrupted: new Set(['not-requested', 'blocked'])
@@ -48,6 +57,7 @@ export type WorktreePublicationState =
   | 'pending'
   | 'integrating'
   | 'published'
+  | 'held'
   | 'cleanup-pending'
   | 'complete'
   | 'blocked'
@@ -57,6 +67,8 @@ export interface WorktreeRunRecord {
   repoId: string
   runId: string
   conversationId?: string
+  turnId?: string
+  causalWatchPaths?: string[]
   agentName: string
   role?: string
   task?: string
@@ -64,6 +76,11 @@ export interface WorktreeRunRecord {
   worktreeAvailable?: boolean
   baseBranch: string
   baseSha: string
+  sourceSha?: string
+  canonicalBaseRef?: string
+  excludedDirtyFiles?: string[]
+  excludedDirtyFileCount?: number
+  excludedDirtyFilesTruncated?: boolean
   verdict: WorktreeRunVerdict
   publication: WorktreePublicationState
   files: WorktreeFileChange[]
@@ -71,6 +88,12 @@ export interface WorktreeRunRecord {
   conflictBaseSha?: string
   conflictAgentSha?: string
   publishedSha?: string
+  /** HEAD agent utilisé uniquement pour prouver/nettoyer sa copie après un commit de merge. */
+  publicationAgentSha?: string
+  /** SHA de la base au moment exact où le commit agent était prêt à être publié. */
+  publicationBaseSha?: string
+  /** Acquittement durable de la trace causale, écrit seulement après le callback réussi. */
+  causalPublicationDeliveredAtMs?: number
   attentionReason?: string
   detail?: string
   retryCount?: number
@@ -148,6 +171,17 @@ function isRecord(value: unknown, worktreeRoot: string): value is WorktreeRunRec
     isSafeBranch(candidate.baseBranch) &&
     typeof candidate.baseSha === 'string' &&
     FULL_SHA.test(candidate.baseSha) &&
+    (candidate.sourceSha === undefined || FULL_SHA.test(candidate.sourceSha)) &&
+    (candidate.canonicalBaseRef === undefined || isSafeBranch(candidate.canonicalBaseRef)) &&
+    (candidate.excludedDirtyFiles === undefined ||
+      (Array.isArray(candidate.excludedDirtyFiles) &&
+        candidate.excludedDirtyFiles.length <= 500 &&
+        candidate.excludedDirtyFiles.every((path) => isSafeRelativeFile({ path, kind: 'mod' })))) &&
+    (candidate.excludedDirtyFileCount === undefined ||
+      (Number.isInteger(candidate.excludedDirtyFileCount) &&
+        candidate.excludedDirtyFileCount >= (candidate.excludedDirtyFiles?.length ?? 0))) &&
+    (candidate.excludedDirtyFilesTruncated === undefined ||
+      typeof candidate.excludedDirtyFilesTruncated === 'boolean') &&
     VERDICT_PUBLICATIONS[verdict].has(publication) &&
     Array.isArray(candidate.files) &&
     candidate.files.every(isSafeRelativeFile) &&
@@ -156,8 +190,20 @@ function isRecord(value: unknown, worktreeRoot: string): value is WorktreeRunRec
       (typeof candidate.conflictFile === 'string' &&
         isSafeRelativeFile({ path: candidate.conflictFile, kind: 'mod' }))) &&
     (candidate.publishedSha === undefined || FULL_SHA.test(candidate.publishedSha)) &&
+    (candidate.publicationAgentSha === undefined || FULL_SHA.test(candidate.publicationAgentSha)) &&
+    (candidate.publicationBaseSha === undefined || FULL_SHA.test(candidate.publicationBaseSha)) &&
+    (candidate.causalPublicationDeliveredAtMs === undefined ||
+      (Number.isFinite(candidate.causalPublicationDeliveredAtMs) &&
+        candidate.causalPublicationDeliveredAtMs >= 0)) &&
     (!requiresPublishedSha || FULL_SHA.test(candidate.publishedSha ?? '')) &&
     isOptionalText(candidate.conversationId) &&
+    isOptionalText(candidate.turnId) &&
+    (candidate.causalWatchPaths === undefined ||
+      (Array.isArray(candidate.causalWatchPaths) &&
+        candidate.causalWatchPaths.length <= 16 &&
+        candidate.causalWatchPaths.every(
+          (path) => typeof path === 'string' && path.trim().length > 0
+        ))) &&
     isOptionalText(candidate.role) &&
     isOptionalText(candidate.task) &&
     isOptionalText(candidate.attentionReason) &&

@@ -27,7 +27,9 @@ describe('Auto-Kaizen — incident causal unique', () => {
         conversations.push(input.link)
         return { id: `conv-${conversations.length}` }
       },
-      appendSourceUpdate() {},
+      appendSourceUpdate() {
+        // Ce scénario observe uniquement la causalité, pas la projection dans la conversation source.
+      },
       async runAnalysis(conversationId) {
         return { ok: true, turnId: `${conversationId}:analysis`, text: 'Cause localisée.' }
       },

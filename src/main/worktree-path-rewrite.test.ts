@@ -139,7 +139,9 @@ describe('câblage — l’alignement a lieu APRÈS le verdict de fusion', () =>
   it('le verdict vient du RETOUR de end(), pas d’une supposition sur `green`', () => {
     // Un run vert dont la fusion CONFLICTE ne doit pas voir ses chemins reecrits vers la base.
     expect(source).toContain("=== 'merged'")
-    expect(source).toContain('const finalized = this.deps.worktrees?.end(runId')
+    expect(source).toMatch(
+      /const finalized = this\.deps\.worktrees\?\.endAsync[\s\S]{0,240}: this\.deps\.worktrees\?\.end\(runId, finalizeOptions\)/
+    )
   })
 
   it('le rapport rendu est MUTÉ (réassigner la variable ne changerait pas la valeur retournée)', () => {

@@ -7,6 +7,7 @@ const legacyConversation = (): Conversation =>
     title: 'Legacy',
     category: 'codex',
     provider: 'codex',
+    authorityMode: 'plan',
     messages: [
       { role: 'user', content: 'Question', ts: 10 },
       { role: 'assistant', content: 'Réponse', ts: 11, turnId: 'turn-legacy' }
@@ -33,11 +34,8 @@ describe('conversation schema v3', () => {
     expect(first.hydrate([legacyConversation()])).toBe(true)
     const migrated = structuredClone(first.get('conv-7')!)
 
-    expect(migrated).toMatchObject({
-      schemaVersion: 3,
-      workspaceId: 'workspace-conv-7',
-      authorityMode: 'auto'
-    })
+    expect(migrated).toMatchObject({ schemaVersion: 3, workspaceId: 'workspace-conv-7' })
+    expect(migrated).not.toHaveProperty('authorityMode')
     // Les champs de branche ne sont plus portes : forker cree une conversation a part.
     expect('branches' in migrated).toBe(false)
     expect('rootBranchId' in migrated).toBe(false)
@@ -59,7 +57,7 @@ describe('conversation schema v3', () => {
     store.beginTurn(conversation.id, { content: 'Go' }, { turnId: 'turn-new' })
 
     expect(conversation.schemaVersion).toBe(3)
-    expect(conversation.authorityMode).toBe('auto')
+    expect(conversation).not.toHaveProperty('authorityMode')
     expect(conversation.messages[0]).toMatchObject({ messageId: 'message-conv-1-1' })
     expect(conversation.messages[1]).toMatchObject({
       messageId: 'message-conv-1-2',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Orchestrator, type RunWorktrees } from './orchestrator'
+import { Orchestrator, type RunAgentRef, type RunWorktrees } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
 import type {
   Message,
@@ -11,21 +11,22 @@ import type {
 import { RoleModelConfig } from './roles'
 import { CostAggregator } from './dashboards/cost'
 import { TrustLedger } from './trust/ledger'
-import { AuthoritySas } from './authority/sas'
 import type { PipelinePhase } from './skill-pipeline'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
 import type { ExecutionQuote } from './execution-quote'
 import { compileExecutionQuote } from './execution-quote'
 import { ExecutionSupervisor } from './execution-supervisor'
 import {
+  clearOrchestrationState,
   loadOrchestrationStates,
   saveOrchestrationAgentCheckpoint,
   saveOrchestrationState
 } from './runs/orchestration-state'
 import { preparePersistedRunForRelaunch } from './runs/run-reattach'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { spawnSurvivable } from './runs/survivable-spawn'
 
 /** Provider qui enregistre chaque appel (modèle, resumeSessionId, message) et rend un sessionId. */
 class RecordingProvider implements ProviderAdapter {
@@ -78,18 +79,37 @@ function makeOrchestrator(
     onPhaseCompleted?: (info: {
       runId: string
       task: string
-      phaseOutputs: { phase: PipelinePhase; text: string }[]
+      phaseOutputs: { phase: PipelinePhase; text: string; agentToken?: string }[]
       executionQuote?: ExecutionQuote
       usage?: ReturnType<ExecutionSupervisor['currentSnapshot']>
-      agents?: Array<{ token: string; pid?: number; identity?: string; journalPath?: string }>
+      agents?: Array<{
+        token: string
+        provider?: string
+        phase?: PipelinePhase
+        active?: boolean
+        fanOut?: boolean
+        pid?: number
+        identity?: string
+        journalPath?: string
+      }>
     }) => void
     onAgentsChanged?: (
       runId: string,
-      agents: Array<{ token: string; pid?: number; identity?: string; journalPath?: string }>
+      agents: Array<{
+        token: string
+        provider?: string
+        phase?: PipelinePhase
+        active?: boolean
+        fanOut?: boolean
+        pid?: number
+        identity?: string
+        journalPath?: string
+      }>
     ) => void
     onRunSettled?: (runId: string) => void
     processIdentity?: (pid: number) => string | undefined
     currentExecutionQuote?: () => ExecutionQuote | undefined
+    currentExecutionUsage?: () => ReturnType<ExecutionSupervisor['currentSnapshot']>
     executionSupervisor?: ExecutionSupervisor
     worktrees?: RunWorktrees
   } = {}
@@ -102,7 +122,6 @@ function makeOrchestrator(
     }),
     cost: new CostAggregator(),
     trust: new TrustLedger(),
-    authority: new AuthoritySas(),
     executionWorkspace: 'C:\\ws',
     worktrees: opts.worktrees ?? makeTestWorktrees('C:\\ws'),
     classifyPhases: opts.classifyPhases,
@@ -110,6 +129,7 @@ function makeOrchestrator(
     onAgentsChanged: opts.onAgentsChanged,
     ...(opts.processIdentity ? { processIdentity: opts.processIdentity } : {}),
     currentExecutionQuote: opts.currentExecutionQuote,
+    currentExecutionUsage: opts.currentExecutionUsage,
     onRunSettled: opts.onRunSettled
   })
 }
@@ -129,6 +149,28 @@ describe('#1 pipeline adaptatif', () => {
     const orch = makeOrchestrator(provider) // ni classifyPhases ni execPhases → défaut ['build']
     await orch.run('corrige le bug')
     expect(provider.execCount).toBe(1)
+  })
+
+  it('ne repaye pas le juge terminal déjà récupéré dans les acquis', async () => {
+    const provider = new RecordingProvider()
+    const orch = makeOrchestrator(provider, { classifyPhases: () => ['build'] })
+
+    const result = await orch.run(
+      'analyse architecture',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      '',
+      [
+        { phase: 'build', text: 'analyse terminée' },
+        { phase: 'judge', text: 'VALIDE' }
+      ]
+    )
+
+    expect(provider.calls).toHaveLength(0)
+    expect(result.valid).toBe(true)
+    expect(result.phaseOutputs.at(-1)).toEqual({ phase: 'judge', text: 'VALIDE' })
   })
 })
 
@@ -184,14 +226,14 @@ describe('#2 modèle par phase', () => {
 })
 
 describe('#3 session-resume chaîné', () => {
-  it('la phase N+1 reçoit le sessionId de la phase N et un message allégé', async () => {
+  it('deux phases aux mêmes droits chaînent la session et allègent le message', async () => {
     const provider = new RecordingProvider()
-    const orch = makeOrchestrator(provider, { classifyPhases: () => ['frame', 'build'] })
+    const orch = makeOrchestrator(provider, { classifyPhases: () => ['frame', 'terrain'] })
     await orch.run('ajoute une fonctionnalité')
-    // Phase 1 (frame) : pas de resume, message complet contient la TÂCHE.
+    // Phase 1 (frame) : pas de resume, message complet contient le besoin global subordonné à FRAME.
     expect(provider.calls[0].resumeSessionId).toBeUndefined()
-    expect(provider.userMessages[0]).toContain('TÂCHE')
-    // Phase 2 (build) : reprend la session de la phase 1, message allégé (pas de re-injection TÂCHE).
+    expect(provider.userMessages[0]).toContain('BESOIN GLOBAL')
+    // Phase 2 (terrain, même sandbox read-only) : reprend la session de la phase 1.
     expect(provider.calls[1].resumeSessionId).toBe('sess-1')
     expect(provider.userMessages[1]).toContain('Continue À PARTIR de l')
     expect(provider.userMessages[1]).not.toContain('TÂCHE:')
@@ -208,6 +250,49 @@ describe('#3 session-resume chaîné', () => {
     expect(provider.calls[0].resumeSessionId).toBeUndefined()
     expect(provider.calls[1].resumeSessionId).toBeUndefined()
     expect(provider.userMessages[1]).toContain('[phase frame]') // re-injection complète (fallback)
+  })
+})
+
+describe('discipline des phases et continuite du worktree', () => {
+  it('borne les droits a la responsabilite de chaque phase', async () => {
+    const provider = new RecordingProvider()
+    const orch = makeOrchestrator(provider, {
+      classifyPhases: () => ['scout', 'frame', 'terrain', 'build', 'clean']
+    })
+
+    await orch.run('ajoute une fonctionnalite')
+
+    expect(provider.calls.slice(0, 5).map((call) => call.execution?.sandbox)).toEqual([
+      'read-only',
+      'read-only',
+      'read-only',
+      'danger-full-access',
+      'danger-full-access'
+    ])
+  })
+
+  it('ancre chaque phase sur le worktree et ne reprend pas une session a travers un changement de droits', async () => {
+    const provider = new RecordingProvider()
+    const worktree = 'C:\\ws\\.worktrees\\agent-1'
+    const orch = makeOrchestrator(provider, {
+      classifyPhases: () => ['frame', 'terrain', 'build'],
+      worktrees: {
+        begin: () => worktree,
+        end: () => ({ outcome: 'merged' })
+      }
+    })
+
+    await orch.run('ajoute une fonctionnalite')
+
+    const phaseCalls = provider.calls.slice(0, 3)
+    for (const call of phaseCalls) {
+      expect(call.execution?.cwd).toBe(worktree)
+      expect(call.systemBlocks?.map((block) => block.name)).toContain('workspaceIsolation')
+      expect(call.system).toContain('agent-1')
+    }
+    expect(phaseCalls[1].resumeSessionId).toBe('sess-1')
+    expect(phaseCalls[2].resumeSessionId).toBeUndefined()
+    expect(provider.userMessages[2]).toContain('TÂCHE:')
   })
 })
 
@@ -253,7 +338,7 @@ describe('survie niveau 3 — garde-fou acquis vide', () => {
     ])
     // frame + build + juge = 3 appels ; si frame avait été sautée à tort, il n'y en aurait que 2.
     expect(provider.calls).toHaveLength(3)
-    expect(provider.userMessages[0]).toContain('TÂCHE')
+    expect(provider.userMessages[0]).toContain('BESOIN GLOBAL')
   })
 })
 
@@ -274,6 +359,56 @@ class JournalingProvider extends RecordingProvider {
   }
 }
 
+class PreSpawnMarkerProvider extends RecordingProvider {
+  constructor(
+    private readonly journalRoot: string,
+    private readonly writer: string
+  ) {
+    super()
+  }
+
+  async *send(
+    _messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const token = 'tok-pre-spawn'
+    options.execution?.onSpawnIntent?.(token, true)
+    const run = spawnSurvivable({
+      bin: process.execPath,
+      args: [this.writer],
+      journalRoot: this.journalRoot,
+      runId: token,
+      onJournalPrepared: (journalPath) => options.execution?.onJournal?.(token, journalPath)
+    })
+    this.execCount += 1
+    await new Promise<void>((resolve, reject) => {
+      run.child.once('error', reject)
+      run.child.once('close', () => resolve())
+    })
+    run.release()
+    return { text: 'provider démarré', provider: this.id, systemInjected: true }
+  }
+}
+
+class ProcessLifecycleProvider extends RecordingProvider {
+  private sequence = 0
+
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const index = ++this.sequence
+    const token = `tok-life-${index}`
+    const pid = 4300 + index
+    options.execution?.onSpawnIntent?.(token, true)
+    options.execution?.onJournal?.(token, `C:/journaux/${token}.stdout.jsonl`)
+    options.execution?.onSpawned?.(token, pid)
+    const result = yield* super.send(messages, options)
+    options.execution?.onProcess?.(pid, false)
+    return result
+  }
+}
+
 class SpawnIntentProvider extends RecordingProvider {
   private announced = false
 
@@ -287,6 +422,17 @@ class SpawnIntentProvider extends RecordingProvider {
       options.execution?.onSpawned?.('tok-pending', 4242)
     }
     return yield* super.send(messages, options)
+  }
+}
+
+class ActiveThenRejectedProvider extends RecordingProvider {
+  async *send(
+    _messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    options.execution?.onSpawnIntent?.('tok-watchdog-active', true)
+    yield* [] as StreamChunk[]
+    throw new Error('watchdog coordination')
   }
 }
 
@@ -359,6 +505,31 @@ class ConcurrentObserverProvider extends RecordingProvider {
 }
 
 describe('rattachement — l’état persisté porte les agents lancés', () => {
+  it('empêche réellement le spawn si la persistance obligatoire du journal échoue', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orch-pre-spawn-barrier-'))
+    const marker = join(root, 'provider-a-demarre')
+    const writer = join(root, 'writer.cjs')
+    writeFileSync(writer, `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'oui')`)
+    const provider = new PreSpawnMarkerProvider(root, writer)
+    const orch = makeOrchestrator(provider, {
+      classifyPhases: () => ['build'],
+      // Aucun checkpoint initial sur disque : le cas réel où il a disparu/été écarté comme corrompu.
+      onAgentsChanged: (runId, agents) =>
+        void saveOrchestrationAgentCheckpoint(root, runId, agents, undefined)
+    })
+
+    try {
+      await expect(orch.run('modifie un fichier')).rejects.toThrow(
+        'checkpoint orchestration absent'
+      )
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      expect(provider.execCount).toBe(0)
+      expect(existsSync(marker)).toBe(false)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('libère les agents en mémoire quand le run atteint son état terminal', async () => {
     const provider = new SpawnIntentProvider()
     const orch = makeOrchestrator(provider, { classifyPhases: () => ['build'] })
@@ -367,6 +538,105 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
 
     const state = orch as unknown as { runAgents: Map<string, unknown> }
     expect(state.runAgents.size).toBe(0)
+  })
+
+  it("ne clôt pas le checkpoint rouge tant qu'un appel provider reste actif", async () => {
+    const provider = new ActiveThenRejectedProvider()
+    const settled: string[] = []
+    const usage: NonNullable<ReturnType<ExecutionSupervisor['currentSnapshot']>> = {
+      quoteId: 'quote-watchdog-active',
+      startedAgents: 1,
+      startedCalls: 1,
+      completedCalls: 0,
+      failedCalls: 0,
+      activeCalls: 1,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      totalTokens: 0,
+      freshTokens: 0,
+      knownCostUsd: null,
+      unpricedCalls: 0,
+      unmeteredCalls: 0,
+      tokenCoverage: 'complete'
+    }
+    const orch = makeOrchestrator(provider, {
+      classifyPhases: () => ['build'],
+      currentExecutionUsage: () => usage,
+      onRunSettled: (runId) => settled.push(runId)
+    })
+
+    await expect(orch.run('reste actif après watchdog')).rejects.toThrow(/watchdog coordination/i)
+
+    expect(settled).toEqual([])
+    const state = orch as unknown as { runAgents: Map<string, unknown> }
+    expect(state.runAgents.size).toBe(1)
+  })
+
+  it('clot le checkpoint rouge quand la derniere reservation se regle apres le watchdog', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orch-late-provider-settlement-'))
+    const provider = new ActiveThenRejectedProvider()
+    const usage: NonNullable<ReturnType<ExecutionSupervisor['currentSnapshot']>> = {
+      quoteId: 'quote-late-settlement',
+      startedAgents: 1,
+      startedCalls: 1,
+      completedCalls: 0,
+      failedCalls: 0,
+      activeCalls: 1,
+      activeReservationIds: ['reservation-late'],
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      totalTokens: 0,
+      freshTokens: 0,
+      knownCostUsd: null,
+      unpricedCalls: 0,
+      unmeteredCalls: 0,
+      tokenCoverage: 'complete'
+    }
+    let runId = ''
+    const orch = makeOrchestrator(provider, {
+      classifyPhases: () => ['build'],
+      currentExecutionUsage: () => usage,
+      onPhaseCompleted: (info) => {
+        runId = info.runId
+      },
+      onRunSettled: (settledRunId) => clearOrchestrationState(root, settledRunId)
+    })
+
+    try {
+      await expect(orch.run('regle tardivement apres watchdog')).rejects.toThrow(
+        /watchdog coordination/i
+      )
+      const internal = orch as unknown as {
+        runAgents: Map<string, Map<string, RunAgentRef>>
+        terminalRunsAwaitingProviderSettlement?: Set<string>
+        settleAgentReservationInMemory: (runId: string, reservationId: string) => void
+      }
+      const byToken = internal.runAgents.get(runId)!
+      const agent = byToken.get('tok-watchdog-active')!
+      const activeAgent = { ...agent, reservationId: 'reservation-late' }
+      byToken.set(agent.token, activeAgent)
+      saveOrchestrationState(root, {
+        runId,
+        task: 'regle tardivement apres watchdog',
+        phaseOutputs: [],
+        usage,
+        agents: [activeAgent],
+        startedAt: 1,
+        updatedAt: 2
+      })
+      expect(loadOrchestrationStates(root)).toHaveLength(1)
+
+      expect(internal.terminalRunsAwaitingProviderSettlement?.has(runId)).toBe(true)
+      internal.settleAgentReservationInMemory(runId, 'reservation-late')
+
+      expect(loadOrchestrationStates(root)).toEqual([])
+      expect(internal.runAgents.size).toBe(0)
+      expect(internal.terminalRunsAwaitingProviderSettlement?.size).toBe(0)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it("conserve les agents d'un run vert dont l'intégration reste reprenable", async () => {
@@ -417,6 +687,44 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
     ])
   })
 
+  it('isole aussi les chemins causaux de deux runs concurrents multi-phases', async () => {
+    const provider = new ConcurrentObserverProvider()
+    const orch = makeOrchestrator(provider, { classifyPhases: () => ['build'] })
+    const runWithPath = (task: string, path: string) =>
+      orch.run(
+        task,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        [path]
+      )
+
+    const first = runWithPath('analyse concurrente A', 'C:\\ws\\a.log')
+    await provider.firstEntered
+    const second = runWithPath('analyse concurrente B', 'C:\\ws\\b.log')
+    await provider.secondEntered
+    provider.releaseFirst()
+    await first
+    provider.releaseSecond()
+    await second
+
+    expect(provider.calls.map((call) => call.execution?.causalWatchPaths)).toEqual([
+      ['C:\\ws\\a.log'],
+      ['C:\\ws\\a.log'],
+      ['C:\\ws\\b.log'],
+      ['C:\\ws\\b.log']
+    ])
+  })
+
   it("persiste le token pending avant que le provider n'annonce son pid", async () => {
     const provider = new SpawnIntentProvider()
     const snapshots: Array<Array<{ token: string; pid?: number }>> = []
@@ -428,8 +736,17 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
     await orch.run('modifie un fichier')
 
     expect(snapshots.slice(0, 2)).toEqual([
-      [{ token: 'tok-pending' }],
-      [{ token: 'tok-pending', pid: 4242 }]
+      [{ token: 'tok-pending', provider: 'rec', phase: 'build', active: true, fanOut: false }],
+      [
+        {
+          token: 'tok-pending',
+          provider: 'rec',
+          phase: 'build',
+          active: true,
+          fanOut: false,
+          pid: 4242
+        }
+      ]
     ])
   })
 
@@ -443,6 +760,7 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
       classifyPhases: () => ['build'],
       executionSupervisor: supervisor,
       currentExecutionQuote: () => supervisor.currentQuote(),
+      currentExecutionUsage: () => supervisor.currentSnapshot(),
       onPhaseCompleted: (info) =>
         saveOrchestrationState(root, {
           runId: info.runId,
@@ -463,10 +781,27 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
     try {
       await supervisor.run(quote, undefined, () => orch.run('modifie un fichier'))
       expect(checkpointAtIntent).toMatchObject({
-        agents: [{ token: 'tok-pending' }],
-        usage: { startedAgents: 1, startedCalls: 1, activeCalls: 1 },
+        agents: [
+          { token: 'tok-pending', provider: 'rec', phase: 'build', active: true, fanOut: false }
+        ],
+        usage: {
+          startedAgents: 1,
+          startedCalls: 1,
+          activeCalls: 1,
+          activeReservationIds: [expect.any(String)]
+        },
         updatedAt: 2
       })
+      expect(checkpointAtIntent?.agents?.[0]?.reservationId).toBe(
+        checkpointAtIntent?.usage?.activeReservationIds?.[0]
+      )
+      const completedCheckpoint = loadOrchestrationStates(root)[0]
+      expect(completedCheckpoint).toMatchObject({
+        phaseOutputs: [{ phase: 'build', text: 'livrable', agentToken: 'tok-pending' }],
+        usage: { activeCalls: 0, activeReservationIds: [] },
+        agents: [{ token: 'tok-pending', active: false }]
+      })
+      expect(completedCheckpoint?.agents?.[0]?.reservationId).toBeUndefined()
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
@@ -482,7 +817,10 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
 
     await expect(orch.run('modifie un fichier')).rejects.toThrow(/annul.*processus/i)
 
-    expect(snapshots.slice(0, 2)).toEqual([[{ token: 'tok-failed' }], []])
+    expect(snapshots.slice(0, 2)).toEqual([
+      [{ token: 'tok-failed', provider: 'rec', phase: 'build', active: true, fanOut: false }],
+      []
+    ])
   })
 
   it("règle l'appel avant de persister le retrait d'un spawn annulé", async () => {
@@ -567,8 +905,17 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
 
   it('le journal et le pid annoncés par le provider arrivent jusqu’au point de sauvegarde', async () => {
     const provider = new JournalingProvider()
-    const saved: Array<{ agents?: Array<{ token: string; pid?: number; journalPath?: string }> }> =
-      []
+    const saved: Array<{
+      agents?: Array<{
+        token: string
+        provider?: string
+        phase?: PipelinePhase
+        active?: boolean
+        fanOut?: boolean
+        pid?: number
+        journalPath?: string
+      }>
+    }> = []
     const orch = makeOrchestrator(provider, {
       classifyPhases: () => ['build'],
       onPhaseCompleted: (info) => saved.push({ agents: info.agents })
@@ -578,7 +925,67 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
 
     const dernier = saved.at(-1)
     expect(dernier?.agents).toEqual([
-      { token: 'tok-1', pid: 4242, journalPath: 'C:/journaux/tok-1.stdout.jsonl' }
+      {
+        token: 'tok-1',
+        provider: 'rec',
+        phase: 'build',
+        active: true,
+        fanOut: false,
+        pid: 4242,
+        journalPath: 'C:/journaux/tok-1.stdout.jsonl'
+      }
+    ])
+  })
+
+  it('marque chaque CLI terminé inactif tout en conservant sa phase historique', async () => {
+    const provider = new ProcessLifecycleProvider()
+    const snapshots: Array<
+      Array<{
+        token: string
+        provider?: string
+        phase?: PipelinePhase
+        active?: boolean
+        fanOut?: boolean
+        pid?: number
+      }>
+    > = []
+    const orch = makeOrchestrator(provider, {
+      classifyPhases: () => ['build'],
+      onAgentsChanged: (_runId, agents) => snapshots.push(agents)
+    })
+
+    await orch.run('modifie un fichier')
+
+    expect(
+      snapshots.some((agents) =>
+        agents.some((agent) => agent.phase === 'build' && agent.active === false)
+      )
+    ).toBe(true)
+    expect(
+      snapshots.some((agents) =>
+        agents.some((agent) => agent.phase === 'judge' && agent.active === false)
+      )
+    ).toBe(true)
+  })
+
+  it("relie chaque occurrence persistée au CLI exact qui l'a produite", async () => {
+    const provider = new ProcessLifecycleProvider()
+    const orch = makeOrchestrator(provider, {
+      classifyPhases: () => ['build']
+    })
+
+    const result = await orch.run('modifie un fichier')
+
+    expect(result.phaseOutputs).toEqual([
+      expect.objectContaining({
+        phase: 'build',
+        text: 'livrable',
+        agentToken: 'tok-life-1',
+        executionEvidence: expect.arrayContaining([
+          expect.objectContaining({ kind: 'mutation', ok: true }),
+          expect.objectContaining({ kind: 'verification', ok: true })
+        ])
+      })
     ])
   })
 })

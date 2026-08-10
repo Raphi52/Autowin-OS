@@ -19,6 +19,9 @@
 }
 
 .domain-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   border: 1px solid transparent;
   border-radius: 999px;
   padding: 7px 12px;
@@ -81,6 +84,91 @@
 
 .domain-warning {
   color: var(--warning);
+}
+
+.domain-badge-alert {
+  display: inline-grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border: 1px solid color-mix(in srgb, var(--danger) 70%, transparent);
+  border-radius: 50%;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.settings-providers {
+  height: 100%;
+  margin: 0;
+  padding: 20px;
+  overflow: auto;
+}
+
+.settings-providers header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings-providers h2 {
+  margin: 4px 0 0;
+}
+
+.settings-providers-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin: 20px 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-providers-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--surface-card);
+}
+
+.settings-providers-list strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.settings-providers-list li > span:first-of-type {
+  justify-self: end;
+  padding: 4px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: var(--surface-panel);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.settings-providers-list li > span:nth-of-type(2) {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.settings-providers .domain-hint {
+  max-width: 72ch;
+  margin: 0;
 }
 
 .settings-preflight-list {

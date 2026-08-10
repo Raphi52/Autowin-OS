@@ -5,7 +5,11 @@ const ev = (kind: string, content = ''): MinimalEvent => ({ kind, content })
 
 describe('layoutTurnEvents', () => {
   it('regroupe message + injection + boundary en un groupe zone « sortant »', () => {
-    const items = layoutTurnEvents([ev('message', 'salut'), ev('injection', 'sys'), ev('boundary', '{}')])
+    const items = layoutTurnEvents([
+      ev('message', 'salut'),
+      ev('injection', 'sys'),
+      ev('boundary', '{}')
+    ])
     expect(items).toHaveLength(1)
     expect(items[0]).toMatchObject({ type: 'group', zone: 'sortant' })
     expect(items[0].type === 'group' && items[0].events.map((e) => e.event.kind)).toEqual([
@@ -62,5 +66,33 @@ describe('layoutTurnEvents', () => {
 
   it('normalizeResponse écrase espaces/bords', () => {
     expect(normalizeResponse('  a\n b  ')).toBe('a b')
+  })
+})
+
+describe('artefact — zone « réponse »', () => {
+  // Ajouté le 2026-08-07 avec le traçage des artefacts : un artefact est une SORTIE du modèle, il
+  // appartient donc à la zone réponse. Sans entrée dans ZONE_OF il serait rendu « hors zone »,
+  // c'est-à-dire isolé au milieu de la chronologie, comme s'il n'avait aucun lien avec la réponse
+  // qu'il accompagne.
+  it('regroupe un artefact AVEC la réponse du modèle', () => {
+    const items = layoutTurnEvents([
+      { kind: 'model-response', content: 'voici ton rapport' },
+      { kind: 'artifact', content: 'artefact : rapport.md' }
+    ])
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ type: 'group', zone: 'reponse' })
+    const group = items[0] as { type: 'group'; events: Array<{ event: { kind: string } }> }
+    expect(group.events.map((entry) => entry.event.kind)).toEqual(['model-response', 'artifact'])
+  })
+
+  it('ne masque JAMAIS un artefact au titre de la déduplication de réponse', () => {
+    // La dédup ne concerne que model-response vs response-displayed ; un artefact au contenu
+    // ressemblant ne doit pas disparaître.
+    const items = layoutTurnEvents([
+      { kind: 'model-response', content: 'rapport' },
+      { kind: 'artifact', content: 'rapport' }
+    ])
+    const group = items[0] as { type: 'group'; events: Array<{ event: { kind: string } }> }
+    expect(group.events.map((entry) => entry.event.kind)).toContain('artifact')
   })
 })

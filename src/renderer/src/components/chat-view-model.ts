@@ -10,11 +10,27 @@ import {
 import { parseScoutSuggestions, type SuggestionGroup } from './scout-suggestions'
 import { parseScoutTable, type ScoutRow } from './scout-table'
 import type { PilotEventKind } from '../../../shared/pilot-events'
+import {
+  AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX,
+  authoritativeOrchestrationClosureSpan,
+  isAuthoritativeOrchestrationClosureLine,
+  isDeliveredOrchestrationOutcome,
+  markdownCodeContinuationPrefixes,
+  markdownCodeLineProtection,
+  ORCHESTRATION_ALREADY_ISSUED_REFUSAL,
+  reconcileClosedOrchestrationTextParts,
+  rewriteUnprotectedMarkdownLines,
+  type OrchestrationOutcome
+} from '../../../shared/orchestration-outcome'
 
 export type ChatActionPart = PersistedChatActionPart
 export type ChatArtifactPart = PersistedChatArtifactPart
-export type ChatTextPart = PersistedChatTextPart
+export type ChatTextPart = PersistedChatTextPart & {
+  /** Contexte de fence calculé pour le rendu seulement — jamais persisté. */
+  markdownContinuationPrefix?: string
+}
 export type ChatPart = PersistedChatPart
+type ChatDisplayPart = ChatTextPart | ChatActionPart | ChatArtifactPart
 export type ChatActivityBlock = { kind: 'activity'; actions: ChatActionPart[] }
 export type ChatSuggestionsBlock = { kind: 'suggestions'; groups: SuggestionGroup[] }
 export type ChatScoutTableBlock = { kind: 'scout-table'; rows: ScoutRow[] }
@@ -164,12 +180,149 @@ export function settleIfDone(message: HydratedAssistantMessage): HydratedAssista
   return parts === message.parts ? message : { ...message, parts }
 }
 
+function duplicateAuthoritativeClosureIndex(line: string): number | undefined {
+  let searchFrom = AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX.length
+  while (searchFrom < line.length) {
+    const index = line.indexOf(AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX, searchFrom)
+    if (index < 0) return undefined
+    const before = line[index - 1]
+    const suffix = line.slice(index + AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX.length)
+    if (/\s/u.test(before) && (suffix === '' || /^\s*[.;]/u.test(suffix))) return index
+    searchFrom = index + AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX.length
+  }
+  return undefined
+}
+
+function withoutPersistedAuthoritativeClosure(line: string): string | undefined {
+  let reconciled = line
+  let changed = false
+  for (;;) {
+    const closure = authoritativeOrchestrationClosureSpan(reconciled)
+    if (!closure) break
+    const leadingDecorationOnly = isAuthoritativeOrchestrationClosureLine(reconciled)
+    const before = (leadingDecorationOnly ? '' : reconciled.slice(0, closure.start))
+      .replace(/\s*[,;:|·/—-]\s*$/u, '')
+      .trimEnd()
+    const after = reconciled
+      .slice(closure.end)
+      .replace(/^\s*(?:(?:\*\*|__|~~|\*|_)\s*)+/u, '')
+      .replace(/^\s*[,;:|·/—-]\s*/u, '')
+      .trimStart()
+    reconciled = [before, after].filter(Boolean).join(' ')
+    changed = true
+  }
+  if (!changed) return line
+  const useful = reconciled.trim()
+  return useful && !/^(?:\*\*|__|~~|\*|_)$/u.test(useful) ? useful : undefined
+}
+
+function removePersistedAuthoritativeClosures(parts: ChatPart[]): ChatPart[] {
+  let changed = false
+  const textParts = parts.filter((part): part is ChatTextPart => part.kind === 'text')
+  const protectedLines = markdownCodeLineProtection(textParts.map((part) => part.text))
+  let textIndex = 0
+  const reconciled = parts.flatMap((part): ChatPart[] => {
+    if (part.kind !== 'text') return [part]
+    const text = rewriteUnprotectedMarkdownLines(
+      part.text,
+      protectedLines[textIndex++],
+      withoutPersistedAuthoritativeClosure
+    )
+    if (text === part.text) return [part]
+    changed = true
+    return text ? [{ ...part, text }] : []
+  })
+  return changed ? reconciled : parts
+}
+
+function reconcileStoredOrchestrationClosure(parts: ChatPart[]): ChatPart[] {
+  let actionIndex = -1
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = parts[index]
+    if (
+      part.kind === 'action' &&
+      part.name === 'orchestrate' &&
+      !(
+        part.ok === false &&
+        typeof part.data === 'string' &&
+        part.data === ORCHESTRATION_ALREADY_ISSUED_REFUSAL
+      )
+    ) {
+      actionIndex = index
+      break
+    }
+  }
+  const action = actionIndex >= 0 ? parts[actionIndex] : undefined
+  if (action?.kind !== 'action') return parts
+  if (action.ok !== true || !action.data || typeof action.data !== 'object') {
+    return removePersistedAuthoritativeClosures(parts)
+  }
+
+  const outcome = action.data as OrchestrationOutcome
+  if (!isDeliveredOrchestrationOutcome(outcome)) return removePersistedAuthoritativeClosures(parts)
+  const textIndexes = parts.flatMap((part, index) => (part.kind === 'text' ? [index] : []))
+  const mutableTextStart = textIndexes.findIndex((index) => index > actionIndex)
+  const reconciledText = reconcileClosedOrchestrationTextParts(
+    textIndexes.map((index) => (parts[index] as ChatTextPart).text),
+    outcome,
+    mutableTextStart < 0 ? textIndexes.length : mutableTextStart
+  )
+  const textByIndex = new Map(
+    textIndexes.map((index, position) => [index, reconciledText[position]])
+  )
+  const candidateParts = parts.map((part, index) => {
+    if (part.kind !== 'text') return part
+    const text = textByIndex.get(index) ?? part.text
+    return text === part.text ? part : { ...part, text }
+  })
+  let changed = candidateParts.some((part, index) => part !== parts[index])
+  let closureSeen = false
+  const protectedLines = markdownCodeLineProtection(
+    candidateParts
+      .filter((part): part is ChatTextPart => part.kind === 'text')
+      .map((part) => part.text)
+  )
+  let textIndex = 0
+  const reconciled = candidateParts.flatMap((part): ChatPart[] => {
+    if (part.kind !== 'text') return [part]
+    const uniqueText = rewriteUnprotectedMarkdownLines(
+      part.text,
+      protectedLines[textIndex++],
+      (line) => {
+        if (!isAuthoritativeOrchestrationClosureLine(line)) return line
+        if (closureSeen) return undefined
+        closureSeen = true
+        const duplicate = duplicateAuthoritativeClosureIndex(line)
+        if (duplicate === undefined) return line
+        const beforeDuplicate = line.slice(0, duplicate).trimEnd()
+        return beforeDuplicate || undefined
+      }
+    )
+    if (uniqueText === part.text) return [part]
+    changed = true
+    return uniqueText ? [{ ...part, text: uniqueText }] : []
+  })
+  if (!closureSeen) {
+    reconciled.push({
+      kind: 'text',
+      text: 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
+    })
+    changed = true
+  }
+  return changed ? reconciled : parts
+}
+
 export function hydrateStoredAssistant(message: StoredAssistantMessage): HydratedAssistantMessage {
-  const status = message.status ?? 'completed'
+  const status = message.status ?? (message.error ? 'failed' : 'completed')
   const done = status !== 'streaming'
   const parts =
     message.parts?.map((part) => ({ ...part })) ??
     (message.content ? [{ kind: 'text' as const, text: message.content }] : [])
+  const terminalParts = done
+    ? status === 'completed'
+      ? reconcileStoredOrchestrationClosure(settleUnresolvedActions(parts))
+      : removePersistedAuthoritativeClosures(settleUnresolvedActions(parts))
+    : parts
   return {
     role: 'assistant',
     ...(message.turnId ? { turnId: message.turnId } : {}),
@@ -177,7 +330,7 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
     // le tour sous le fork, ou il n'existe pas.
     ...(message.turnConversationId ? { turnConversationId: message.turnConversationId } : {}),
     // Tour déjà clos à la relecture (dont : app fermée en plein run) → plus rien « en cours ».
-    parts: done ? settleUnresolvedActions(parts) : parts,
+    parts: terminalParts,
     status,
     done,
     ...(message.error ? { error: message.error } : {})
@@ -856,12 +1009,27 @@ export function stripAssistantThinking(text: string): string {
   return sanitized
 }
 
-export function coalesceAssistantParts(parts: ChatPart[]): ChatPart[] {
-  const compact: ChatPart[] = []
-  let pendingText: string[] = []
+export function coalesceAssistantParts(parts: ChatPart[]): ChatDisplayPart[] {
+  const compact: ChatDisplayPart[] = []
+  const textParts = parts.filter((part): part is PersistedChatTextPart => part.kind === 'text')
+  const continuationPrefixes = markdownCodeContinuationPrefixes(textParts.map((part) => part.text))
+  let textIndex = 0
+  let pendingText: Array<{ text: string; continuationPrefix?: string }> = []
   const flushText = (): void => {
-    const text = stripAssistantThinking(pendingText.join('\n\n')).trim()
-    if (text) compact.push({ kind: 'text', text })
+    // Même séparateur que `markdownCodeLineProtection` / `reconcileClosedOrchestrationTextParts` :
+    // hydratation et affichage doivent projeter exactement le même flux Markdown.
+    const text = stripAssistantThinking(pendingText.map((part) => part.text).join('\n'))
+    // La décision de vacuité peut ignorer les espaces, mais la source rendue ne le peut pas : une
+    // indentation de quatre espaces est un bloc de code CommonMark et les espaces finaux peuvent
+    // appartenir à une preuve. `trim()` changeait donc la sémantique entre hydratation et écran.
+    if (text.trim()) {
+      const continuationPrefix = pendingText[0]?.continuationPrefix
+      compact.push({
+        kind: 'text',
+        text,
+        ...(continuationPrefix ? { markdownContinuationPrefix: continuationPrefix } : {})
+      })
+    }
     pendingText = []
   }
   for (const part of parts) {
@@ -870,7 +1038,10 @@ export function coalesceAssistantParts(parts: ChatPart[]): ChatPart[] {
       compact.push(part)
       continue
     }
-    pendingText.push(part.text)
+    pendingText.push({
+      text: part.text,
+      continuationPrefix: continuationPrefixes[textIndex++]
+    })
   }
   flushText()
   return compact

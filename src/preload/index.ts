@@ -13,7 +13,6 @@ import type {
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
 import type { UpdateStrategy } from '../shared/update-contract'
 import type { GitReadResult, GitDiffResult } from '../shared/git-read'
-import type { GitGraphSnapshot } from '../shared/git-graph'
 import type { WorktreeMapSnapshot } from '../shared/worktree-map'
 import type {
   TicketItem,
@@ -22,10 +21,16 @@ import type {
   TicketListRequest,
   TicketPage
 } from '../shared/tickets'
-import type { TicketCreateIpcRequest, TicketGetIpcRequest } from '../main/tickets-ipc'
+import type {
+  TicketCreateIpcRequest,
+  TicketGetIpcRequest,
+  TicketUpdateIpcRequest
+} from '../main/tickets-ipc'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
+import type { BrainSearchEnvelope } from '../main/brain-search-envelope'
+import type { InboxCandidate, InboxMove } from '../main/brain-inbox'
 import type { RunEntry } from '../main/dashboards/runs-scan'
 import type { CapabilityItem } from '../main/capability-controls'
 import type { SkillRegistryItem } from '../main/skill-registry'
@@ -34,6 +39,7 @@ import type { PendingModelQuestion } from '../main/model-questions'
 import type { ImportedModel } from '../main/models'
 import type { PromptCallRecord, CostBreakdownRow } from '../main/activity/prompt-observability'
 import type { ProviderDisplayStatus, ProviderStatus } from '../main/provider-status'
+import type { SemanticTemporalProjectionV1 } from '../main/knowledge/semantic-temporal-projection'
 
 export interface ClaudeAccountEntry {
   id: string
@@ -58,7 +64,7 @@ import type { Role, RoleBinding } from '../main/roles'
 import type { WorkflowProfilesFile } from '../main/workflow-profiles'
 import type { WorkflowBenchReport } from '../main/workflow-bench'
 import type { AutowinProfile } from '../main/profile-store'
-import type { ShadowRouteRecommendation } from '../main/shadow-router'
+import type { ShadowRouteResult } from '../main/shadow-router'
 import type { PersistedCheckpoint, CheckpointForkManifest } from '../main/wire-checkpoint-fork'
 import type { OrchestrationRunState } from '../main/runs/orchestration-state'
 import type { CommandSpec, CommandResult, AppSnapshot } from '../main/commands'
@@ -113,8 +119,6 @@ const api = {
     workspaceRoot: string
   ): Promise<GitDiffResult> =>
     ipcRenderer.invoke('git:conversationDiff', conversationId, path, workspaceRoot),
-  getGitGraph: (repoPath?: string): Promise<GitGraphSnapshot> =>
-    ipcRenderer.invoke('git:graph', repoPath),
   getWorktreeMap: (repoPath?: string): Promise<WorktreeMapSnapshot> =>
     ipcRenderer.invoke('git:worktreeMap', repoPath),
   getGitDiff: (path: string, repoPath?: string): Promise<GitDiffResult> =>
@@ -139,10 +143,15 @@ const api = {
     reference?: string
     dirty?: boolean
     strategies?: UpdateStrategy[]
+    error?: string
   }> => ipcRenderer.invoke('update:check'),
-  applyUpdate: (strategy?: UpdateStrategy): Promise<{
+  applyUpdate: (
+    strategy?: UpdateStrategy
+  ): Promise<{
     ok: boolean
     relaunch?: boolean
+    reload?: boolean
+    effect?: 'none' | 'reload' | 'relaunch'
     npmInstalled?: boolean
     error?: string
     strategy?: UpdateStrategy
@@ -159,6 +168,8 @@ const api = {
     ipcRenderer.invoke('tickets:create', request),
   getTicket: (request: TicketGetIpcRequest): Promise<TicketItem> =>
     ipcRenderer.invoke('tickets:get', request),
+  updateTicket: (request: TicketUpdateIpcRequest): Promise<TicketItem> =>
+    ipcRenderer.invoke('tickets:update', request),
   cancelTickets: (requestId: string): Promise<boolean> =>
     ipcRenderer.invoke('tickets:cancel', requestId),
   listTicketPeople: (source: unknown): Promise<string[]> =>
@@ -173,6 +184,8 @@ const api = {
     ipcRenderer.invoke('worktree:conflict-diff', agentId),
   retryWorktreeRecovery: (agentId: string): Promise<WorktreeAgentActivity | undefined> =>
     ipcRenderer.invoke('worktree:retry-recovery', agentId),
+  discardHeldWorktree: (agentId: string): Promise<boolean> =>
+    ipcRenderer.invoke('worktree:discard-held', agentId),
   setWorktreeFixture: (fixture: {
     activity: WorktreeAgentActivity[]
     status: WorktreeRuntimeStatus
@@ -213,8 +226,7 @@ const api = {
   // `id` nul = tout le fichier ; un id = ce seul workflow, pour en partager un sans donner le reste.
   workflowProfilesExport: (id: string | null): Promise<unknown> =>
     ipcRenderer.invoke('os:workflowProfiles:export', id),
-  workflowProfilesImport: (): Promise<unknown> =>
-    ipcRenderer.invoke('os:workflowProfiles:import'),
+  workflowProfilesImport: (): Promise<unknown> => ipcRenderer.invoke('os:workflowProfiles:import'),
   checkWorkflowGraph: (graph: unknown): Promise<unknown> =>
     ipcRenderer.invoke('os:workflowGraph:check', graph),
   conversationWorkflow: (conversationId: string): Promise<string | null> =>
@@ -226,9 +238,11 @@ const api = {
     ipcRenderer.invoke('os:workflowSelection:set', conversationId, profileId),
   workflowBenchRun: (
     objective: string,
-    profileIds: (string | null)[]
+    profileIds: (string | null)[],
+    options?: { mode?: 'comparison' | 'tournament' | 'counterfactual' }
   ): Promise<WorkflowBenchReport> =>
-    ipcRenderer.invoke('os:workflowBench:run', { objective, profileIds }),
+    ipcRenderer.invoke('os:workflowBench:run', { objective, profileIds, ...options }),
+  workflowBenchCancel: (): Promise<boolean> => ipcRenderer.invoke('os:workflowBench:cancel'),
   // La confrontation dure plusieurs runs : sans ce flux, l'attente serait aveugle.
   onWorkflowBenchProgress: (
     listener: (p: { done: number; total: number; label: string }) => void
@@ -239,6 +253,8 @@ const api = {
     return () => ipcRenderer.removeListener('os:workflowBench:progress', handler)
   },
   roles: (): Promise<Record<Role, RoleBinding>> => ipcRenderer.invoke('os:roles'),
+  semanticTimeline: (conversationId: string): Promise<SemanticTemporalProjectionV1> =>
+    ipcRenderer.invoke('os:semanticTimeline', conversationId),
   setRole: (
     role: string,
     provider: string,
@@ -270,8 +286,7 @@ const api = {
   shadowRouteRecommendation: (
     phase: string,
     champion: { provider: string; model: string }
-  ): Promise<ShadowRouteRecommendation> =>
-    ipcRenderer.invoke('os:shadowRoute:recommend', phase, champion),
+  ): Promise<ShadowRouteResult> => ipcRenderer.invoke('os:shadowRoute:recommend', phase, champion),
   modelQuotas: (force = false): Promise<ModelQuotaSnapshot> =>
     ipcRenderer.invoke('os:models:quotas', force),
   profiles: (): Promise<AutowinProfile[]> => ipcRenderer.invoke('os:profiles:list'),
@@ -279,7 +294,6 @@ const api = {
     ipcRenderer.invoke('os:profiles:save', profile),
   applyProfile: (id: string): Promise<{ topology: AgentTopology }> =>
     ipcRenderer.invoke('os:profiles:apply', id),
-  kimiLogin: (): Promise<{ ok: true }> => ipcRenderer.invoke('os:kimiLogin'),
   providerLogin: (provider: string): Promise<{ ok: true }> =>
     ipcRenderer.invoke('os:providerLogin', provider),
   /** Comptes Claude multiples — un CLAUDE_CONFIG_DIR par compte, bascule sans re-login. */
@@ -291,17 +305,13 @@ const api = {
     ipcRenderer.invoke('os:claudeAccounts:switch', id),
   claudeAccountRemove: (id: string): Promise<ClaudeAccountsPayload> =>
     ipcRenderer.invoke('os:claudeAccounts:remove', id),
-  claudeAccountLogin: (id: string): Promise<{ ok: true }> =>
-    ipcRenderer.invoke('os:claudeAccounts:login', id),
-  claudeAccountRefresh: (): Promise<ClaudeAccountsPayload> =>
-    ipcRenderer.invoke('os:claudeAccounts:refresh'),
   topology: (): Promise<AgentTopology> => ipcRenderer.invoke('os:topology:get'),
   setTopology: (topology: AgentTopology): Promise<AgentTopology> =>
     ipcRenderer.invoke('os:topology:set', topology),
   capabilityControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins'): Promise<CapabilityItem[]> =>
     ipcRenderer.invoke('os:capabilities:list', kind),
   skills: (): Promise<SkillRegistryItem[]> => ipcRenderer.invoke('skills:registry:list'),
-  promptCalls: (conversationId?: string): Promise<PromptCallRecord[]> =>
+  promptCalls: (conversationId: string): Promise<PromptCallRecord[]> =>
     ipcRenderer.invoke('os:promptCalls', conversationId),
   /** Repartition du cout par role/modele/provider, triee par cout decroissant. */
   costBreakdown: (
@@ -309,9 +319,7 @@ const api = {
     conversationId?: string
   ): Promise<CostBreakdownRow[]> =>
     ipcRenderer.invoke('os:costBreakdown', dimension, conversationId),
-  promptTraces: (conversationId: string): Promise<NativePreflightTrace[]> =>
-    ipcRenderer.invoke('os:promptTraces', conversationId),
-  brainTraces: (conversationId?: string): Promise<BrainTrace[]> =>
+  brainTraces: (conversationId: string): Promise<BrainTrace[]> =>
     ipcRenderer.invoke('os:brainTraces', conversationId),
   behaviourComposition: (
     workspace?: string
@@ -364,13 +372,6 @@ const api = {
   toolUsage: (): Promise<
     Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
   > => ipcRenderer.invoke('os:toolUsage'),
-  // Sas d'autorité
-  authorityPending: (): Promise<Array<{ id: string; question: string }>> =>
-    ipcRenderer.invoke('os:authority:pending'),
-  // `bus.resolveDecision()` (src/main/commands.ts) est lui-même typé `Promise<unknown>` : la décision
-  // résolue est de forme libre selon le type de question d'autorité posée.
-  authorityResolve: (id: string, choice: unknown): Promise<unknown> =>
-    ipcRenderer.invoke('os:authority:resolve', id, choice),
   // Conversations
   conversations: (): Promise<ConversationSummary[]> => ipcRenderer.invoke('os:conversations'),
   conversation: (id: string): Promise<Conversation | null> =>
@@ -379,7 +380,6 @@ const api = {
     title: string
     category: string
     provider: string
-    authorityMode?: 'plan' | 'ask' | 'auto'
   }): Promise<{ id: string; title: string; category: string; provider: string }> =>
     ipcRenderer.invoke('os:conversations:create', p),
   routeConversationMessage: (
@@ -396,10 +396,6 @@ const api = {
     ipcRenderer.invoke('os:conversations:routeMessage', conversationId, message, attachmentNames),
   conversationsRename: (id: string, title: string): Promise<void> =>
     ipcRenderer.invoke('os:conversations:rename', id, title),
-  conversationsSetAuthorityMode: (
-    id: string,
-    mode: 'plan' | 'ask' | 'auto'
-  ): Promise<Conversation> => ipcRenderer.invoke('os:conversations:authorityMode', id, mode),
   /**
    * Range une conversation dans un dossier de travail — ce qui la groupe dans la liste.
    * `path` OMIS → le main ouvre le sélecteur natif (le renderer n'a pas le disque) ;
@@ -553,25 +549,16 @@ const api = {
     ipcRenderer.invoke('os:loadBrainNeighborhood', path, nodeId),
   readNodeFile: (path: string): Promise<{ path: string; content: string }> =>
     ipcRenderer.invoke('os:readNodeFile', path),
-  searchBrain: (
-    path: string,
-    query: string
-  ): Promise<
-    Array<{
-      id: string
-      label: string
-      file: string
-      themes: string[]
-      score: number
-      denseScore?: number
-      lexicalScore?: number
-      graphScore?: number
-      fusedScore?: number
-      relations: Array<{ type: string; target: string }>
-    }>
-  > => ipcRenderer.invoke('os:searchBrain', path, query),
+  searchBrain: (path: string, query: string): Promise<BrainSearchEnvelope> =>
+    ipcRenderer.invoke('os:searchBrain', path, query),
   refreshBrain: (path: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('os:refreshBrain', path),
+  // Boîte de réception du savoir : lister les candidats de `inbox/`, puis la décision HUMAINE.
+  listInbox: (path: string): Promise<InboxCandidate[]> => ipcRenderer.invoke('os:listInbox', path),
+  promoteInbox: (path: string, id: string): Promise<InboxMove> =>
+    ipcRenderer.invoke('os:promoteInbox', path, id),
+  rejectInbox: (path: string, id: string): Promise<InboxMove> =>
+    ipcRenderer.invoke('os:rejectInbox', path, id),
   listRuns: (): Promise<
     Array<{
       subject: string

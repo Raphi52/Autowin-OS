@@ -76,9 +76,6 @@ export function resolveCodexLoginCwd(
   return undefined
 }
 
-export type PreflightCheckId =
-  'brain' | 'codex' | 'codex-session' | 'claude' | 'claude-session' | 'kimi' | 'brain-token'
-
 export type PreflightRepairPlan =
   /** Ouvre une console où le CLI mène son propre flow d'authentification. */
   | { kind: 'login'; provider: 'codex' | 'claude'; label: string; note: string }

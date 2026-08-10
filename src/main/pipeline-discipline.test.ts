@@ -56,6 +56,13 @@ describe('discipline de pipeline canonique', () => {
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/tu NOMMES l'obstacle/)
   })
 
+  it('ne transforme pas le contrat read-only de scout frame terrain en faux blocage', () => {
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(
+      /absence de Write\/Edit\/Bash n'est ni un obstacle ni un droit manquant/i
+    )
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/ne la mentionne pas comme un blocage/i)
+  })
+
   it('reconcilie la regle avec la phase JUDGE au lieu de la contredire', () => {
     // Le « bloqué » de JUDGE doit rester un cas de rendu de main EXPLICITEMENT autorisé.
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(

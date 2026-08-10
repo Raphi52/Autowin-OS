@@ -231,6 +231,46 @@ describe('Observatory RAG causal trace', () => {
     expect(view.querySelectorAll('.observatory-rag-causal-step .brain-nav-card')).toHaveLength(1)
   })
 
+  it('corrèle deux récupérations Brain distinctes dans le même tour par identité', async () => {
+    const secondBlock = ragBlock
+      .replaceAll('Pourquoi le cache ?', 'Pourquoi la latence ?')
+      .replaceAll('knowledge/domain/cache.md', 'knowledge/domain/latence.md')
+    const repeated = [
+      ...eventsWithRag,
+      event('call-2:0', 'message', 'Pourquoi la latence ?', 4, 'call-1:3'),
+      event('call-2:1', 'injection', secondBlock, 5, 'call-2:0'),
+      event('call-2:2', 'boundary', '{}', 6, 'call-2:1'),
+      event('call-2:3', 'model-response', 'Seconde réponse.', 7, 'call-2:2')
+    ]
+    const mockApi = api(repeated)
+    mockApi.promptCalls.mockResolvedValue([
+      {
+        id: 'call-1', conversationId: 'conv-1', turnId: 'turn-1', provider: 'codex',
+        model: 'gpt-test', boundary: 'provider', limitation: 'opaque', brainTraceId: 'brain-1',
+        system: ragBlock, messages: [{ role: 'user', content: 'Pourquoi le cache ?' }], options: {}, response: ''
+      },
+      {
+        id: 'call-2', conversationId: 'conv-1', turnId: 'turn-1', provider: 'codex',
+        model: 'gpt-test', boundary: 'provider', limitation: 'opaque', brainTraceId: 'brain-2',
+        system: secondBlock, messages: [{ role: 'user', content: 'Pourquoi la latence ?' }], options: {}, response: ''
+      }
+    ])
+    mockApi.brainTraces.mockResolvedValue([
+      { id: 'brain-2', timestamp: '2026-07-24T10:00:04.500Z', conversationId: 'conv-1', turnId: 'turn-1', kind: 'query', query: 'Pourquoi la latence ?', injectedChars: secondBlock.length },
+      { id: 'brain-1', timestamp: '2026-07-24T10:00:00.500Z', conversationId: 'conv-1', turnId: 'turn-1', kind: 'automatic', query: 'Pourquoi le cache ?', injectedChars: ragBlock.length }
+    ])
+
+    const view = await mount(mockApi)
+    const steps = [...view.querySelectorAll<HTMLElement>('[data-testid="observatory-rag-causal-step"]')]
+
+    expect(steps).toHaveLength(2)
+    expect(steps.map((step) => step.dataset.correlation)).toEqual(['exact', 'exact'])
+    expect(steps.map((step) => step.dataset.evidence)).toEqual(['retrieval', 'retrieval'])
+    expect(steps[0].textContent).toContain('Pourquoi le cache ?')
+    expect(steps[1].textContent).toContain('Pourquoi la latence ?')
+    expect(steps[0].textContent).not.toContain('Pourquoi la latence ?')
+  })
+
   it('keeps the RAG evidence attached to the injection in causal mode', async () => {
     const view = await mount(api(eventsWithRag))
     const causal = [...view.querySelectorAll('button')].find(

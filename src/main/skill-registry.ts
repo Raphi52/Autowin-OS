@@ -122,12 +122,6 @@ function metadata(path: string): { label: string; description: string } | null {
   }
 }
 
-export async function discoverSkillRegistry(
-  roots: SkillRegistryRoots = defaultSkillRegistryRoots()
-): Promise<SkillRegistryItem[]> {
-  return discoverSkillProviders(providersFromRoots(roots))
-}
-
 export async function discoverConfiguredSkillRegistry(
   configPath: string,
   roots: SkillRegistryRoots = defaultSkillRegistryRoots()

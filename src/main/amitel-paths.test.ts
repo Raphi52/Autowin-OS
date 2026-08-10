@@ -29,6 +29,12 @@ describe('amitel-paths — source unique et surchargeable', () => {
     expect(amitelBrainTooling({ AUTOWIN_BRAIN_TOOLING: 'D:\\t' })).toBe('D:\\t')
   })
 
+  it('refuse une origine Brain distante avant tout envoi de token ou requête', () => {
+    expect(() =>
+      amitelBrainOrigin({ AMITEL_BRAIN_ORIGIN: 'https://remote.example.invalid:9443' })
+    ).toThrow(/loopback/)
+  })
+
   it('le tooling SUIT la racine du Brain — avant, les deux litteraux pouvaient diverger', () => {
     // Le partage fournit les donnees, jamais du code executable.
     expect(amitelBrainTooling({ AMITEL_BRAIN_ROOT: 'D:\\brain', LOCALAPPDATA: 'C:\\Local' })).toBe(

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
 import { Orchestrator, type OrchestrationPhase } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
@@ -76,7 +75,6 @@ function makeOrchestrator(
     roles,
     cost,
     trust: new TrustLedger(),
-    authority: new AuthoritySas(),
     executionWorkspace: 'C:\\ws',
     worktrees: makeTestWorktrees('C:\\ws'),
     execPhases: [phase],
@@ -106,7 +104,6 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
       roles,
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       classifyPhases: () => ['frame', 'build'],
@@ -146,7 +143,6 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       classifyPhases: () => ['frame', 'build'],
@@ -166,11 +162,10 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
       'prépare le terrain de vérification'
     )
 
-    expect(provider.calls.map((call) => call.model).slice(0, 4)).toEqual([
-      'm1',
-      'm2',
-      'orch',
-      'judge'
+    expect(provider.calls.map((call) => call.model).slice(0, 3)).toEqual(['m1', 'm2', 'orch'])
+    expect(provider.calls.slice(0, 2).map((call) => call.execution?.sandbox)).toEqual([
+      'read-only',
+      'read-only'
     ])
     const terrainSteps = result.trace.filter((step) => step.execution?.groupId === 'terrain:fanout')
     expect(terrainSteps).toHaveLength(2)
@@ -193,7 +188,6 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
       roles,
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['terrain', 'build'],
@@ -234,7 +228,6 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
       roles,
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['terrain', 'build'],
@@ -343,7 +336,6 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
       roles,
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['frame']
@@ -370,7 +362,6 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
         roles,
         cost: new CostAggregator(),
         trust: new TrustLedger(),
-        authority: new AuthoritySas(),
         executionWorkspace: 'C:\\ws',
         worktrees: makeTestWorktrees('C:\\ws'),
         execPhases: [phase],
@@ -401,7 +392,6 @@ describe('Orchestrator — fan-out juge (quorum de vote)', () => {
       roles,
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['frame'],
@@ -477,7 +467,6 @@ describe('Orchestrator — fan-out exec : cas limites', () => {
       roles,
       cost,
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['frame'],
@@ -506,7 +495,6 @@ describe('Orchestrator — fan-out exec : cas limites', () => {
       roles,
       cost,
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['frame'],

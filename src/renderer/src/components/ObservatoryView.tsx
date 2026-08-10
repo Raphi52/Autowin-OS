@@ -5,12 +5,27 @@ import {
   type HarnessTimelineEvent,
   type HarnessTimeline
 } from './harness-timeline-model'
+import { QUICK_FILTERS, matchesQuickFilter, type QuickFilter } from './observatory-quick-filters'
+import { compareObservatoryEvents } from './observatory-comparison-model'
+import { buildObservatoryDecisionLedger } from './observatory-decision-ledger'
+import { buildObservatoryPrioritySignals } from './observatory-priority-signals'
+import type {
+  ShadowRouteInsufficientData,
+  ShadowRouteRecommendation
+} from '../../../main/shadow-router'
 import { HumanJson } from './HumanJson'
 import { BrainMarkdown } from './BrainMarkdown'
 import { summarizeNativeTraces, type NativeTraceSummaryInput } from './native-trace-summary'
-import { extractHumanMessage } from './human-message'
+import {
+  eventTurnId,
+  humanEventPreview,
+  lastUserMessagePreview,
+  splitLabeledJson
+} from './observatory-event-preview'
 import './ObservatoryView.css'
 import { ModuleHeader } from './ModuleHeader'
+import { useObservatorySources, type ActivitySessionMeta } from './useObservatorySources'
+import { ObservatoryRagCausalStep } from './ObservatoryRagCausalStep'
 import { RagTraceCard } from './RagTraceCard'
 import { BrainNavigationCard, type BrainTraceView } from './BrainNavigationCard'
 import { summarizeRagTrace } from './rag-trace-model'
@@ -28,11 +43,13 @@ interface ConversationItem {
 }
 interface PromptCall {
   id: string
+  brainTraceId?: string
   ts: string
   conversationId: string
   turnId: string
   provider: string
   actor?: string
+  phase?: string
   model?: string
   boundary: string
   limitation: string
@@ -42,25 +59,17 @@ interface PromptCall {
   response: string
   usage?: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; costUsd?: number }
 }
-interface NativeDiagnosticTrace extends NativeTraceSummaryInput {
+/**
+ * Trace native COMPLETE — la requete brute, par opposition au RESUME (`NativeTraceSummaryInput`)
+ * dont elle herite. L'ancien nom, `NativeRawTrace`, ne disait pas cette opposition : rien
+ * n'indiquait lequel des deux portait le payload integral.
+ */
+interface NativeRawTrace extends NativeTraceSummaryInput {
   apiRequestId: string
   messageCount: number
   toolCount: number
   request: Record<string, unknown>
   fidelity: 'exact-redacted'
-}
-interface ConversationActivity {
-  ts: string
-  kind: string
-  label: string
-  text?: string
-}
-interface ActivitySessionMeta {
-  id: string
-  project: string
-  path: string
-  sizeMb: number
-  mtime: number
 }
 interface ActivitySession {
   meta: ActivitySessionMeta
@@ -71,6 +80,7 @@ interface ActivitySession {
 const EMPTY: HarnessTimeline = { turns: [], anomalies: [], totalTokens: 0, totalCostUsd: 0 }
 const LABEL: Record<HarnessTimelineEvent['kind'], string> = {
   'response-displayed': 'Réponse affichée',
+  artifact: 'Artefact produit',
   message: 'Message',
   injection: 'Injection',
   decision: 'Décision',
@@ -95,129 +105,7 @@ const ZONE_HINT: Record<'sortant' | 'reponse' | 'sousagent', string> = {
   reponse: 'ce que le modèle a produit et ce qui a été affiché',
   sousagent: 'délégation et jugements des sous-agents'
 }
-type QuickFilter = 'all' | 'errors' | 'tools' | 'prompt' | 'agents'
 type CausalScope = 'all' | 'critical' | 'signals'
-
-const QUICK_FILTERS: Array<{ value: QuickFilter; label: string }> = [
-  { value: 'errors', label: 'Erreurs' },
-  { value: 'tools', label: 'Outils' },
-  { value: 'prompt', label: 'Prompt / RAG' },
-  { value: 'agents', label: 'Sous-agents' }
-]
-
-function matchesQuickFilter(event: HarnessTimelineEvent, filter: QuickFilter): boolean {
-  if (filter === 'all') return true
-  if (filter === 'errors') return ['error', 'retry', 'cancellation'].includes(event.kind)
-  if (filter === 'tools') return ['tool-call', 'tool-result'].includes(event.kind)
-  if (filter === 'prompt') return ['injection', 'boundary'].includes(event.kind)
-  return ['handoff', 'verdict'].includes(event.kind)
-}
-
-function eventTurnId(event: HarnessTimelineEvent): string {
-  if (!event.raw || typeof event.raw !== 'object') return ''
-  const turnId = (event.raw as { turnId?: unknown }).turnId
-  return typeof turnId === 'string' ? turnId : ''
-}
-
-/** Sépare un préfixe libellé ("ÉTAT DE L'APP: {…}") du JSON qui suit, si le JSON parse. */
-function splitLabeledJson(content: string): { prefix: string; json: string } | null {
-  const start = content.search(/[{[]/)
-  if (start < 0) return null
-  const json = content.slice(start).trim()
-  try {
-    JSON.parse(json)
-  } catch {
-    return null
-  }
-  return { prefix: content.slice(0, start).trim(), json }
-}
-
-// `extractHumanMessage` vit désormais dans `human-message.ts` : la vue Sous-agents affrontait le même
-// contenu composé et affichait le JSON d'état en titre. Deux copies auraient divergé à la première
-// évolution du format de tour.
-
-/** Tente de parser le contenu JSON d'un événement ; null si ce n'est pas du JSON objet. */
-function parseEventJson(content: string): Record<string, unknown> | null {
-  const trimmed = (content ?? '').trim()
-  if (!trimmed.startsWith('{')) return null
-  try {
-    const value = JSON.parse(trimmed)
-    return value && typeof value === 'object' && !Array.isArray(value) ? value : null
-  } catch {
-    return null
-  }
-}
-
-/** Aperçu HUMAIN d'un événement selon son type (retry/frontière lisibles ; sinon message ou brut). */
-function humanEventPreview(kind: string, content: string, max = 140): string {
-  const data = parseEventJson(content)
-  if (kind === 'retry' && data) {
-    const attempt = Number(data.attempt ?? data.attemptNumber ?? 0)
-    const maxAttempts = Number(data.maxAttempts ?? data.max ?? 0)
-    const reason = typeof data.reason === 'string' ? ` — ${data.reason}` : ''
-    if (attempt && maxAttempts)
-      return `Nouvel essai · tentative ${attempt} sur ${maxAttempts}${reason}`
-    return `Nouvel essai${reason}`
-  }
-  if (kind === 'boundary' && data) {
-    const parts: string[] = []
-    if ('stream' in data) parts.push(data.stream ? 'streaming' : 'sans streaming')
-    if (typeof data.reasoningEffort === 'string')
-      parts.push(
-        data.reasoningEffort === 'none' ? 'effort par défaut' : `effort ${data.reasoningEffort}`
-      )
-    if ('resumed' in data) parts.push(data.resumed ? 'session réutilisée' : 'nouvelle session')
-    if (typeof data.model === 'string') parts.push(`modèle ${data.model}`)
-    // Clés restantes non couvertes, pour ne rien cacher.
-    for (const [k, v] of Object.entries(data)) {
-      if (['stream', 'reasoningEffort', 'resumed', 'model'].includes(k)) continue
-      if (v != null && typeof v !== 'object') parts.push(`${k} : ${v}`)
-    }
-    if (parts.length) {
-      const text = `Passage au provider · ${parts.join(' · ')}`
-      return text.length > max ? `${text.slice(0, max)}…` : text
-    }
-  }
-  if (kind === 'cancellation' && data) {
-    const reason = typeof data.reason === 'string' ? data.reason : ''
-    if (reason === 'user') return 'Annulé par l’utilisateur'
-    return reason ? `Annulé — ${reason}` : 'Annulé'
-  }
-  // Filet générique : tout objet JSON restant → « clé : valeur · … » (jamais de JSON brut).
-  if (data) {
-    const pairs = Object.entries(data)
-      .filter(([, v]) => v != null && typeof v !== 'object')
-      .map(([k, v]) => `${k} : ${v}`)
-    if (pairs.length) {
-      const text = pairs.join(' · ')
-      return text.length > max ? `${text.slice(0, max)}…` : text
-    }
-  }
-  return extractHumanMessage(content, max)
-}
-
-/** Aperçu du dernier message humain d'un appel (liste + détail). */
-function lastUserMessagePreview(
-  messages: Array<{ role: string; content: string }>,
-  max = 100
-): string {
-  const userMsg = [...messages].reverse().find((m) => m.role === 'user')
-  return userMsg ? extractHumanMessage(userMsg.content, max) : ''
-}
-
-/** Refuse les enveloppes provider : elles ne constituent pas une action humaine observable. */
-function trustworthyRagTrigger(content: string, max = 180): string {
-  const trimmed = content.trim()
-  if (
-    !trimmed ||
-    trimmed.length > 500 ||
-    /^[{[]/.test(trimmed) ||
-    /"(?:instructions|messages|model)"\s*:/.test(trimmed)
-  ) {
-    return ''
-  }
-  return extractHumanMessage(trimmed, max)
-}
 
 /** Rendu lisible d'un contenu de payload : JSON embarqué → arbre HumanJson ; sinon Markdown. */
 function PayloadContent({ content }: { content: string }): React.JSX.Element {
@@ -240,10 +128,12 @@ function PayloadContent({ content }: { content: string }): React.JSX.Element {
 export function ObservatoryView({
   active,
   focus = null,
+  onDismissFocus,
   onOpenCapabilities
 }: {
   active: boolean
   focus?: ObservatoryFocus | null
+  onDismissFocus?: () => void
   onOpenCapabilities?: () => void
 }): React.JSX.Element {
   const [conversations, setConversations] = useState<ConversationItem[]>([])
@@ -251,7 +141,6 @@ export function ObservatoryView({
   const [timeline, setTimeline] = useState<HarnessTimeline>(EMPTY)
   const [promptCalls, setPromptCalls] = useState<PromptCall[]>([])
   const [selectedCall, setSelectedCall] = useState<PromptCall | null>(null)
-  const [nativeTraces, setNativeTraces] = useState<NativeDiagnosticTrace[]>([])
   const [nativeMetadata, setNativeMetadata] = useState<NativeTraceSummaryInput[]>([])
   const [brainTraces, setBrainTraces] = useState<BrainTraceView[]>([])
   const [selected, setSelected] = useState<HarnessTimelineEvent | null>(null)
@@ -265,6 +154,7 @@ export function ObservatoryView({
   const [refreshing, setRefreshing] = useState(false)
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number>()
   const [refreshKey, setRefreshKey] = useState(0)
+  const [semanticRetryKey, setSemanticRetryKey] = useState(0)
   const [viewMode, setViewMode] = useState<'timeline' | 'causal'>('timeline')
   const [sourceErrors, setSourceErrors] = useState<Record<string, string>>({})
   const [turnFocus, setTurnFocus] = useState<ObservatoryFocus | null>(null)
@@ -272,22 +162,54 @@ export function ObservatoryView({
     'conversation' | 'turn' | 'source' | null
   >(null)
   const [causalTracePartial, setCausalTracePartial] = useState(false)
-  const [conversationActivity, setConversationActivity] = useState<ConversationActivity[]>([])
-  const [activitySessions, setActivitySessions] = useState<ActivitySessionMeta[]>([])
   const [activitySession, setActivitySession] = useState<ActivitySession | null>(null)
   const [activityImage, setActivityImage] = useState('')
-  const [shadowRecommendation, setShadowRecommendation] = useState<unknown>(null)
+  /**
+   * Type REEL de la recommandation, au lieu d'`unknown`.
+   *
+   * Le contrat existait deja (`ShadowRouteRecommendation` / `ShadowRouteInsufficientData`, declares
+   * dans le preload) : la vue jetait un type disponible et diffusait la valeur en `unknown` jusqu'a
+   * l'affichage. `import type` est efface a la compilation — aucun code de `main` n'entre dans le
+   * bundle du renderer.
+   */
+  const [shadowRecommendation, setShadowRecommendation] = useState<
+    ShadowRouteRecommendation | ShadowRouteInsufficientData | null
+  >(null)
+  const [shadowLoading, setShadowLoading] = useState(false)
+  const [shadowError, setShadowError] = useState('')
   const causalRequestGate = useRef(new LatestRequestGate())
+  const promptRequestGate = useRef(new LatestRequestGate())
+  const brainRequestGate = useRef(new LatestRequestGate())
+  const shadowRequestGate = useRef(new LatestRequestGate())
   const refreshStartedAt = useRef(0)
+  const liveRefreshTimer = useRef<number | null>(null)
 
-  function updateSourceError(source: string, message?: string): void {
+  const updateSourceError = useCallback((source: string, message?: string): void => {
     setSourceErrors((current) => {
       const next = { ...current }
       if (message) next[source] = message
       else delete next[source]
       return next
     })
-  }
+  }, [])
+
+  const { activitySessions, conversationActivity, nativeTraces, semanticTimeline } =
+    useObservatorySources<NativeRawTrace>({
+      active,
+      conversationId,
+      refreshKey,
+      semanticRetryKey,
+      onSourceError: updateSourceError
+    })
+
+  useEffect(() => {
+    shadowRequestGate.current.begin()
+    // Une recommandation n'est valable que pour l'appel qui l'a demandée.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setShadowRecommendation(null)
+    setShadowLoading(false)
+    setShadowError('')
+  }, [selectedCall?.id])
 
   const resetTimelineFilters = useCallback((): void => {
     setQuery('')
@@ -318,15 +240,8 @@ export function ObservatoryView({
       setSelectedCall(null)
       setCompare([])
     }
-    void window.api
-      .brainTraces?.()
-      ?.then((t) => {
-        if (!disposed) setBrainTraces(t as BrainTraceView[])
-      })
-      ?.catch(() => undefined)
     void settleObservatorySources({
       conversations: window.api.conversations(),
-      promptCalls: window.api.promptCalls(),
       native: window.api.promptTraceSummary()
     }).then(({ values, errors }) => {
       if (disposed) return
@@ -347,11 +262,10 @@ export function ObservatoryView({
           setConversationId((current) => current || sorted[0]?.id || '')
         }
       }
-      if (values.promptCalls) setPromptCalls(values.promptCalls as PromptCall[])
       if (values.native) setNativeMetadata(values.native as NativeTraceSummaryInput[])
       setSourceErrors((current) => {
         const next = { ...current }
-        for (const source of ['conversations', 'promptCalls', 'native']) delete next[source]
+        for (const source of ['conversations', 'native']) delete next[source]
         for (const [source, message] of Object.entries(errors)) next[source] = message ?? 'Erreur'
         return next
       })
@@ -360,45 +274,59 @@ export function ObservatoryView({
     return () => {
       disposed = true
     }
-  }, [active, refreshKey, focus, resetConversationFilters])
+  }, [active, refreshKey, focus, resetConversationFilters, updateSourceError])
 
   useEffect(() => {
-    if (!active) return
-    void window.api.activitySessions?.().then((sessions) => setActivitySessions(sessions ?? []))
-  }, [active, refreshKey])
-
-  useEffect(() => {
-    if (!active || !conversationId) return
-    void (window.api.conversationActivity?.(conversationId) ?? Promise.resolve([]))
-      .then((entries) => setConversationActivity(entries as ConversationActivity[]))
-      .catch(() => setConversationActivity([]))
-  }, [active, conversationId, refreshKey])
-
-  useEffect(() => {
-    if (!active) return
-    let disposed = false
-    void window.api
-      .authorizeDiagnostics()
-      .then((capability) =>
-        capability ? window.api.promptTracesGlobal(capability) : Promise.resolve([])
-      )
+    const request = brainRequestGate.current.begin()
+    if (!active || !conversationId) {
+      // Efface explicitement la source de la conversation precedente quand aucun scope n'est actif.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setBrainTraces([])
+      updateSourceError('brainTraces')
+      return
+    }
+    void (window.api.brainTraces?.(conversationId) ?? Promise.resolve([]))
       .then((traces) => {
-        if (!disposed) {
-          setNativeTraces(traces as NativeDiagnosticTrace[])
-          updateSourceError('nativeDetails')
-        }
+        if (!brainRequestGate.current.isCurrent(request)) return
+        setBrainTraces(traces as BrainTraceView[])
+        updateSourceError('brainTraces')
       })
       .catch((error: unknown) => {
-        if (!disposed)
-          updateSourceError('nativeDetails', error instanceof Error ? error.message : String(error))
+        if (!brainRequestGate.current.isCurrent(request)) return
+        setBrainTraces([])
+        updateSourceError('brainTraces', error instanceof Error ? error.message : String(error))
       })
-    return () => {
-      disposed = true
-    }
-  }, [active, refreshKey])
+  }, [active, conversationId, refreshKey, updateSourceError])
 
   useEffect(() => {
-    if (!active) return
+    if (!conversationId) {
+      const requestId = promptRequestGate.current.begin()
+      queueMicrotask(() => {
+        if (!promptRequestGate.current.isCurrent(requestId)) return
+        setPromptCalls([])
+        updateSourceError('promptCalls')
+      })
+      return
+    }
+    const requestId = promptRequestGate.current.begin()
+    queueMicrotask(() => {
+      if (promptRequestGate.current.isCurrent(requestId)) setPromptCalls([])
+    })
+    void window.api
+      .promptCalls(conversationId)
+      .then((calls) => {
+        if (!promptRequestGate.current.isCurrent(requestId)) return
+        setPromptCalls(calls as PromptCall[])
+        updateSourceError('promptCalls')
+      })
+      .catch((error: unknown) => {
+        if (!promptRequestGate.current.isCurrent(requestId)) return
+        setPromptCalls([])
+        updateSourceError('promptCalls', error instanceof Error ? error.message : String(error))
+      })
+  }, [active, conversationId, refreshKey, updateSourceError])
+
+  useEffect(() => {
     if (!conversationId) {
       causalRequestGate.current.begin()
       // Évite d'afficher la timeline de la conversation précédente hors contexte.
@@ -408,6 +336,7 @@ export function ObservatoryView({
       setSelectedCall(null)
       setCompare([])
       setLoading(false)
+      setRefreshing(false)
       return
     }
     setLoading(true)
@@ -446,6 +375,23 @@ export function ObservatoryView({
     // A tab change must not reload or clear Observatory's local state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, refreshKey, turnFocus])
+
+  useEffect(() => {
+    if (!conversationId || !window.api.onAppEvent) return
+    const unsubscribe = window.api.onAppEvent((event) => {
+      if (event.type !== 'causal-trace-updated' || event.convId !== conversationId) return
+      if (liveRefreshTimer.current !== null) return
+      liveRefreshTimer.current = window.setTimeout(() => {
+        liveRefreshTimer.current = null
+        setRefreshKey((value) => value + 1)
+      }, 40)
+    })
+    return () => {
+      unsubscribe()
+      if (liveRefreshTimer.current !== null) window.clearTimeout(liveRefreshTimer.current)
+      liveRefreshTimer.current = null
+    }
+  }, [conversationId])
 
   useEffect(() => {
     if (
@@ -490,6 +436,10 @@ export function ObservatoryView({
       ),
     [currentCalls]
   )
+  const semanticComparison = useMemo(
+    () => (compare.length === 2 ? compareObservatoryEvents(compare[0], compare[1]) : null),
+    [compare]
+  )
   const scopedTurns = useMemo(
     () =>
       timeline.turns.filter(
@@ -502,6 +452,8 @@ export function ObservatoryView({
     [conversationId, focusUnavailable, timeline.turns, turnFocus]
   )
   const allEvents = useMemo(() => scopedTurns.flatMap((turn) => turn.events), [scopedTurns])
+  const authorityEvents = useMemo(() => allEvents.filter((event) => event.authority), [allEvents])
+  const decisionLedger = useMemo(() => buildObservatoryDecisionLedger(allEvents), [allEvents])
   const causalPath = useMemo(() => buildCausalPath(allEvents), [allEvents])
   const causalNodes = flattenCausalNodes(causalPath.roots)
   // Les traces/RAG ne concernent que les tours réellement capturés. On SCOPE à la conversation
@@ -512,8 +464,14 @@ export function ObservatoryView({
   const convNativeTraces = nativeTraces.filter((t) => t.conversationId === conversationId)
   const nativeSummary = summarizeNativeTraces(convNativeMetadata)
   const legacyBrainTraces = convBrainTraces.filter((trace) => !trace.turnId)
+  // SCOPE : un payload natif SANS conversationId n'appartient à AUCUNE conversation — l'afficher
+  // dans celle qui est ouverte le fait fuiter d'une conv à l'autre (même liste partout). On ne
+  // remonte donc que les traces de CETTE conversation dont le rattachement causal (turnId) manque.
   const unlinkedNativeTraces = nativeTraces.filter(
-    (trace) => !trace.conversationId || !trace.turnId || trace.turnId === 'unknown'
+    (trace) =>
+      Boolean(conversationId) &&
+      trace.conversationId === conversationId &&
+      (!trace.turnId || trace.turnId === 'unknown')
   )
   const hasNativeTraces = convNativeTraces.length > 0 || nativeSummary.count > 0
   const typeOptions = [...new Set(allEvents.map((event) => event.kind))]
@@ -541,6 +499,7 @@ export function ObservatoryView({
         (anomaly) => !focusUnavailable && anomaly.turnIds.includes(turnFocus.turnId)
       )
     : timeline.anomalies
+  const prioritySignals = buildObservatoryPrioritySignals(visibleAnomalies, allEvents)
   const visibleEventCount = visibleTurns.reduce((sum, turn) => sum + turn.events.length, 0)
   const activeFilterCount =
     Number(Boolean(needle)) +
@@ -569,14 +528,14 @@ export function ObservatoryView({
     refreshStartedAt.current = Date.now()
     setRefreshing(true)
     setRefreshKey((value) => value + 1)
+    setSemanticRetryKey((value) => value + 1)
   }
 
   function openEvent(eventId: string): void {
-    setQuery('')
-    setTypeFilter('all')
-    setProviderFilter('all')
-    setQuickFilter('all')
-    setCausalScope('all')
+    // Recopiait les cinq mêmes setters que `resetConversationFilters` : une règle de remise à zéro
+    // écrite à TROIS endroits divergeait au premier filtre ajouté — un filtre neuf aurait été remis
+    // à zéro ici mais pas là, sans que rien ne le signale.
+    resetConversationFilters()
     setSelectedCall(null)
     setSelected(allEvents.find((event) => event.id === eventId) ?? null)
   }
@@ -643,76 +602,6 @@ export function ObservatoryView({
   }
 
   /** Rend une ligne d'event de la timeline (extrait pour permettre le regroupement « Sortant »). */
-  const renderRagCausalStep = (
-    event: HarnessTimelineEvent,
-    turnId: string
-  ): React.JSX.Element | null => {
-    if (event.kind !== 'injection') return null
-    const rag = summarizeRagTrace({ system: event.content })
-    if (rag.status !== 'injected' || rag.engine !== 'Amitel Brain') return null
-    const turn = scopedTurns.find((candidate) => candidate.id === turnId)
-    const firstRagEvent = turn?.events.find((candidate) => {
-      if (candidate.kind !== 'injection') return false
-      const summary = summarizeRagTrace({ system: candidate.content })
-      return summary.status === 'injected' && summary.engine === 'Amitel Brain'
-    })
-    const isFirstDelivery = firstRagEvent?.id === event.id
-    const call = currentCalls.find((candidate) => event.id.startsWith(`${candidate.id}:`))
-    const brainTrace = convBrainTraces.find((trace) => trace.turnId === turnId)
-    const callTrigger = call ? lastUserMessagePreview(call.messages, 500) : ''
-    const trigger = brainTrace?.query?.trim() || trustworthyRagTrigger(callTrigger)
-    const hasRetrievalTime = Boolean(isFirstDelivery && brainTrace?.timestamp)
-    const observedAt = hasRetrievalTime ? brainTrace!.timestamp : (event.timestamp ?? '')
-    const timeKind = hasRetrievalTime ? 'retrieval' : 'trace'
-    const provider = event.provider ?? event.recipient ?? call?.provider ?? 'provider non exposé'
-
-    return (
-      <section
-        className="observatory-rag-causal-step"
-        data-testid="observatory-rag-causal-step"
-        data-turn-id={turnId}
-        data-provider={provider}
-        data-observed-at={observedAt}
-        data-time-kind={timeKind}
-        data-evidence={isFirstDelivery && brainTrace ? 'retrieval' : 'injection'}
-      >
-        <header>
-          <span aria-hidden="true">↳</span>
-          <div>
-            <strong>
-              {isFirstDelivery && brainTrace
-                ? 'Autowin interroge Amitel Brain'
-                : 'Autowin remet le contexte Brain au modèle'}
-            </strong>
-            <small>
-              {hasRetrievalTime
-                ? `${new Date(observedAt).toLocaleTimeString('fr-FR')} · récupération terminée · remis à ${provider}`
-                : observedAt
-                  ? `${new Date(observedAt).toLocaleTimeString('fr-FR')} · heure de trace · remise non horodatée à ${provider}`
-                  : `heure et remise non exposées · destinataire ${provider}`}
-            </small>
-          </div>
-          <b>
-            {rag.sources.length} source{rag.sources.length > 1 ? 's' : ''} ·{' '}
-            {rag.injectedCharacters.toLocaleString('fr-FR')} caractères
-          </b>
-        </header>
-        <p>
-          <b>Déclenché par</b>
-          <span>{trigger ? `« ${trigger} »` : 'Action déclenchante non exposée'}</span>
-        </p>
-        <RagTraceCard
-          request={{ system: event.content }}
-          queryOverride={brainTrace?.query || trigger || null}
-        />
-        {isFirstDelivery && brainTrace?.navigation && <BrainNavigationCard trace={brainTrace} />}
-        <small className="observatory-rag-boundary">
-          Preuve observée à la frontière Autowin → provider · le fournisseur peut encore transformer
-          l’enveloppe.
-        </small>
-      </section>
-    )
-  }
 
   const renderEvent = (
     event: HarnessTimelineEvent,
@@ -721,7 +610,13 @@ export function ObservatoryView({
     turnId = ''
   ): React.JSX.Element => (
     <div key={event.id} className="observatory-event-wrap">
-      {renderRagCausalStep(event, turnId)}
+      <ObservatoryRagCausalStep
+        event={event}
+        turnId={turnId}
+        scopedTurns={scopedTurns}
+        currentCalls={currentCalls}
+        convBrainTraces={convBrainTraces}
+      />
       <button
         className={`observatory-event is-${event.kind}${selected?.id === event.id ? ' is-selected' : ''}${compare.some((item) => item.id === event.id) ? ' is-compared' : ''}`}
         onClick={(click) => {
@@ -1058,6 +953,9 @@ export function ObservatoryView({
               setFocusUnavailable(null)
               setCausalTracePartial(false)
               if (!conversationId) setConversationId(conversations[0]?.id ?? '')
+              // Le congédiement doit remonter au parent : sinon la prop `focus` reste posée
+              // et le prochain rafraîchissement live ré-enferme la vue sur l'ancien tour.
+              onDismissFocus?.()
             }}
           >
             Toute la conversation
@@ -1074,7 +972,23 @@ export function ObservatoryView({
                 .join(' · ')}
             </small>
           </div>
-          <button onClick={() => setRefreshKey((value) => value + 1)}>Réessayer</button>
+          <button
+            onClick={() => {
+              setRefreshKey((value) => value + 1)
+              setSemanticRetryKey((value) => value + 1)
+            }}
+          >
+            Réessayer
+          </button>
+        </aside>
+      )}
+      {conversationId && semanticTimeline && (
+        <aside className="observatory-semantic-timeline" data-testid="semantic-timeline-summary">
+          <strong>Memoire temporelle reconstruite</strong>
+          <small>
+            {semanticTimeline.nodes.length} noeud{semanticTimeline.nodes.length > 1 ? 's' : ''} ·{' '}
+            {semanticTimeline.edges.length} lien{semanticTimeline.edges.length > 1 ? 's' : ''}
+          </small>
         </aside>
       )}
       {legacyBrainTraces.length > 0 && (
@@ -1243,17 +1157,24 @@ export function ObservatoryView({
           </section>
           <section className="observatory-diagnostics">
             <span className="observatory-panel-title">SIGNAUX PRIORITAIRES</span>
-            {visibleAnomalies.length === 0 ? (
+            {prioritySignals.length === 0 ? (
               <p>Aucun signal évident.</p>
             ) : (
-              visibleAnomalies.map((item) => (
+              prioritySignals.map((item) => (
                 <button
-                  key={`${item.kind}:${item.eventId}`}
+                  key={item.id}
+                  data-severity={item.severity}
+                  data-signal-id={item.eventId}
                   onClick={() => openEvent(item.eventId)}
                 >
-                  <strong>{item.impact.toLocaleString('fr-FR')} caractères</strong>
+                  <strong>
+                    {item.severityLabel} · {item.impact.toLocaleString('fr-FR')} caractères
+                  </strong>
                   <span>
-                    {item.label} · {item.turnIds.length} tour{item.turnIds.length > 1 ? 's' : ''}
+                    {item.label}
+                    {item.turnIds.length > 0
+                      ? ` · ${item.turnIds.length} tour${item.turnIds.length > 1 ? 's' : ''}`
+                      : ''}
                   </span>
                 </button>
               ))
@@ -1349,7 +1270,13 @@ export function ObservatoryView({
                           </div>
                           <button onClick={() => setSelected(null)}>Fermer</button>
                         </header>
-                        {renderRagCausalStep(node.event, eventTurnId(node.event))}
+                        <ObservatoryRagCausalStep
+                          event={node.event}
+                          turnId={eventTurnId(node.event)}
+                          scopedTurns={scopedTurns}
+                          currentCalls={currentCalls}
+                          convBrainTraces={convBrainTraces}
+                        />
                         <PayloadContent content={node.event.content} />
                         <p>{node.event.detail}</p>
                         {node.event.payloads.length > 0 && (
@@ -1390,17 +1317,40 @@ export function ObservatoryView({
               <small>{selectedCall.limitation}</small>
               <button
                 type="button"
-                onClick={() =>
+                disabled={!selectedCall.phase}
+                title={
+                  selectedCall.phase
+                    ? 'Comparer les routes observées pour cette phase'
+                    : 'Phase inconnue pour cet ancien appel'
+                }
+                onClick={() => {
+                  if (!selectedCall.phase) return
+                  const requestId = shadowRequestGate.current.begin()
+                  setShadowRecommendation(null)
+                  setShadowError('')
+                  setShadowLoading(true)
                   void window.api
-                    .shadowRouteRecommendation(selectedCall.actor ?? selectedCall.boundary, {
+                    .shadowRouteRecommendation(selectedCall.phase, {
                       provider: selectedCall.provider,
                       model: selectedCall.model ?? 'default'
                     })
-                    .then(setShadowRecommendation)
-                }
+                    .then((recommendation) => {
+                      if (shadowRequestGate.current.isCurrent(requestId))
+                        setShadowRecommendation(recommendation)
+                    })
+                    .catch((error: unknown) => {
+                      if (shadowRequestGate.current.isCurrent(requestId))
+                        setShadowError(error instanceof Error ? error.message : String(error))
+                    })
+                    .finally(() => {
+                      if (shadowRequestGate.current.isCurrent(requestId)) setShadowLoading(false)
+                    })
+                }}
               >
                 Comparer en shadow
               </button>
+              {shadowLoading && <small role="status">Comparaison shadow en coursâ€¦</small>}
+              {shadowError && <small role="alert">Shadow indisponible : {shadowError}</small>}
               {shadowRecommendation != null && (
                 <section data-testid="shadow-route-recommendation">
                   <b>Recommandation shadow · jamais appliquée automatiquement</b>
@@ -1421,10 +1371,16 @@ export function ObservatoryView({
               <pre className="observatory-payload">{selectedCall.response || '(vide)'}</pre>
             </article>
           )}
-          {compare.length === 2 && (
+          {compare.length === 2 && semanticComparison && (
             <section className="observatory-diff">
               <header>
-                <b>Comparaison de payloads</b>
+                <div>
+                  <b>Comparaison causale A/B</b>
+                  <small>
+                    {semanticComparison.changed} changement
+                    {semanticComparison.changed > 1 ? 's' : ''}
+                  </small>
+                </div>
                 <button
                   onClick={(event) => {
                     event.stopPropagation()
@@ -1434,11 +1390,89 @@ export function ObservatoryView({
                   Fermer
                 </button>
               </header>
-              <div>
-                <pre>{compare[0].content || '(vide)'}</pre>
-                <pre>{compare[1].content || '(vide)'}</pre>
-              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Champ</th>
+                    <th>A</th>
+                    <th>B</th>
+                    <th>Delta</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {semanticComparison.rows.map((row) => (
+                    <tr key={row.key} data-change={row.change}>
+                      <th>{row.label}</th>
+                      <td>
+                        <code>
+                          {row.before == null || row.before === '' ? '—' : String(row.before)}
+                        </code>
+                      </td>
+                      <td>
+                        <code>
+                          {row.after == null || row.after === '' ? '—' : String(row.after)}
+                        </code>
+                      </td>
+                      <td>
+                        {row.delta != null
+                          ? `${row.delta > 0 ? '+' : ''}${row.delta}`
+                          : row.change === 'same'
+                            ? '='
+                            : row.change}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </section>
+          )}
+          {!loading && decisionLedger.length > 0 && (
+            <details
+              className="observatory-decision-ledger"
+              data-testid="observatory-decision-ledger"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <summary>
+                <div>
+                  <b>Décisions & preuves</b>
+                  <small>
+                    {decisionLedger.filter((entry) => entry.status === 'open').length} ouverte
+                    {decisionLedger.filter((entry) => entry.status === 'open').length > 1
+                      ? 's'
+                      : ''}
+                  </small>
+                </div>
+                <span>Hypothèse → signal → observation → verdict</span>
+              </summary>
+              <div>
+                {decisionLedger.map((entry) => (
+                  <article key={entry.decisionId} data-status={entry.status}>
+                    <header>
+                      <strong>{entry.hypothesis}</strong>
+                      <b>{entry.status === 'open' ? 'ouverte' : 'clôturée'}</b>
+                    </header>
+                    <dl>
+                      <div>
+                        <dt>Signal attendu</dt>
+                        <dd>{entry.expectedSignal ?? 'non déclaré'}</dd>
+                      </div>
+                      <div>
+                        <dt>Observation</dt>
+                        <dd>{entry.observation ?? 'non observée'}</dd>
+                      </div>
+                      <div>
+                        <dt>Gate</dt>
+                        <dd>{entry.gate ?? 'non passé'}</dd>
+                      </div>
+                      <div>
+                        <dt>Verdict</dt>
+                        <dd>{entry.verdict ?? 'en attente'}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                ))}
+              </div>
+            </details>
           )}
           {viewMode === 'timeline' &&
             visibleTurns.map((turn, turnIndex) => (
@@ -1485,6 +1519,74 @@ export function ObservatoryView({
                 </div>
               </section>
             ))}
+          {!loading && authorityEvents.length > 0 && (
+            <details
+              className="observatory-authority-ledger"
+              data-testid="observatory-authority-ledger"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <summary>
+                <div>
+                  <b>Ancienne autorité & mutations</b>
+                  <small>
+                    {authorityEvents.length} reçu{authorityEvents.length > 1 ? 's' : ''}
+                  </small>
+                </div>
+                <span>Historique antérieur à la politique unique</span>
+              </summary>
+              <div>
+                {authorityEvents.map((event) => {
+                  const receipt = event.authority!
+                  const decisionLabel =
+                    receipt.decision === 'confirm'
+                      ? 'confirmation'
+                      : receipt.decision === 'allow'
+                        ? 'autorisée'
+                        : 'refusée'
+                  const resolutionLabel =
+                    receipt.resolution === 'approve'
+                      ? 'approuvée'
+                      : receipt.resolution === 'cancel'
+                        ? 'annulée'
+                        : receipt.decision === 'allow'
+                          ? 'autorisée'
+                          : receipt.decision === 'deny'
+                            ? 'refusée'
+                            : 'non résolue historiquement'
+                  return (
+                    <article key={event.id} data-decision={receipt.decision}>
+                      <header>
+                        <strong>{event.recipient ?? event.label ?? 'commande'}</strong>
+                        <b>{resolutionLabel}</b>
+                      </header>
+                      <dl>
+                        <div>
+                          <dt>Mode</dt>
+                          <dd>{receipt.mode}</dd>
+                        </div>
+                        <div>
+                          <dt>Risque</dt>
+                          <dd>{receipt.commandAuthority}</dd>
+                        </div>
+                        <div>
+                          <dt>Mutation</dt>
+                          <dd>{receipt.mutates ? 'oui' : 'non'}</dd>
+                        </div>
+                        <div>
+                          <dt>Décision</dt>
+                          <dd>{decisionLabel}</dd>
+                        </div>
+                        <div>
+                          <dt>Arbitre</dt>
+                          <dd>{receipt.resolvedBy ?? 'non applicable'}</dd>
+                        </div>
+                      </dl>
+                    </article>
+                  )
+                })}
+              </div>
+            </details>
+          )}
         </main>
       </div>
     </section>

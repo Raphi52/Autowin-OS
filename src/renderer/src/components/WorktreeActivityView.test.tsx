@@ -3,9 +3,10 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorktreeActivityView } from './WorktreeActivityView'
-import type {
-  WorktreeAgentActivity,
-  WorktreeRuntimeStatus
+import {
+  requiresAttention,
+  type WorktreeAgentActivity,
+  type WorktreeRuntimeStatus
 } from '../../../shared/worktree-activity-model'
 
 ;(
@@ -101,6 +102,34 @@ describe('WorktreeActivityView — A2 Hub', () => {
     expect(container.textContent).toContain('TON WORKSPACE')
     expect(container.textContent).toContain('Sécuriser la reprise')
     expect(container.textContent).toContain('agent__a1')
+  })
+
+  it('annonce les changements locaux que le snapshot de l’agent exclut', () => {
+    render([
+      {
+        ...offices[0],
+        canonicalBaseRef: 'origin/main',
+        excludedDirtyFiles: ['notes-locales.md', 'src/wip.ts']
+      }
+    ])
+
+    expect(container.textContent).toContain('Base vérifiée · origin/main')
+    expect(container.textContent).toContain('2 changements locaux non inclus')
+    expect(container.textContent).toContain('notes-locales.md')
+    expect(container.textContent).toContain('src/wip.ts')
+  })
+
+  it('affiche le total dirty reel quand la liste durable est tronquee', () => {
+    render([
+      {
+        ...offices[0],
+        excludedDirtyFiles: ['dirty-000.txt', 'dirty-001.txt'],
+        excludedDirtyFileCount: 501,
+        excludedDirtyFilesTruncated: true
+      }
+    ])
+
+    expect(container.textContent).toContain('501 changements locaux non inclus · 2 affichés')
   })
 
   it('relie visuellement chaque worktree au workspace et explique son trajet', () => {
@@ -236,7 +265,7 @@ describe('WorktreeActivityView — A2 Hub', () => {
     )
 
     expect(container.textContent).toContain('rangement à vérifier')
-    expect(container.textContent).toContain('Après six essais')
+    expect(container.textContent).toContain('Après 6 essais')
     expect(container.querySelector('.wt-office-route')?.textContent).toContain(
       'Revenu dans ton workspace · rangement à vérifier'
     )
@@ -301,5 +330,66 @@ describe('WorktreeActivityView — A2 Hub', () => {
     expect(retry?.textContent).toContain('Réessayer maintenant')
     act(() => retry!.click())
     expect(onRetryOffice).toHaveBeenCalledWith('a1')
+  })
+  it('nomme le fichier et les parties en conflit sans prétendre avoir écrasé une version', () => {
+    render([
+      {
+        ...offices[1],
+        conflictFile: 'src/main/os.ts',
+        conflictWith: ['Builder', 'Cleaner']
+      }
+    ])
+
+    const office = container.querySelector('[data-testid="wt-agent-office"]')!
+    expect(office.textContent).toContain('src/main/os.ts')
+    expect(office.textContent).toContain('Builder')
+    expect(office.textContent).toContain('Cleaner')
+    expect(office.textContent).toContain('Aucune version n’a été écrasée')
+  })
+
+  it('omet proprement fichier et parties inconnus au lieu d’inventer', () => {
+    render([{ ...offices[1], conflictFile: undefined, conflictWith: undefined }])
+
+    const outcome = container.querySelector('.wt-office-outcome')!.textContent!
+    expect(outcome).toContain('Aucune version n’a été écrasée')
+    expect(outcome).not.toContain('undefined')
+    expect(outcome).not.toMatch(/fichier\s*:/i)
+  })
+
+  it('compte à vérifier exactement comme le modèle partagé', () => {
+    const agents: WorktreeAgentActivity[] = [
+      offices[1],
+      {
+        ...offices[0],
+        agentId: 'p',
+        state: 'ready',
+        publication: 'published',
+        attentionReason: 'post-publish-change'
+      },
+      { ...offices[0], agentId: 'i', state: 'blocked', attentionReason: 'base-in-progress' },
+      { ...offices[0], agentId: 'm', state: 'merged', endedAtMs: 9 }
+    ]
+    render(agents)
+
+    const expected = agents.filter(requiresAttention).length
+    expect(expected).toBe(2)
+    expect(container.querySelector('[data-testid="wt-inbox"]')!.textContent).toContain(
+      `${expected} bureaux à vérifier`
+    )
+  })
+
+  it('affiche le nombre réel d’essais au lieu d’un chiffre en dur', () => {
+    render([
+      {
+        ...offices[0],
+        state: 'ready',
+        publication: 'cleanup-pending',
+        attentionReason: 'retry-exhausted',
+        retryCount: 3
+      }
+    ])
+
+    expect(container.textContent).toContain('Après 3 essais')
+    expect(container.textContent).not.toContain('Après 6 essais')
   })
 })

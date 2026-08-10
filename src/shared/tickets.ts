@@ -4,6 +4,17 @@ interface TicketSourceBase {
   id: string
   label: string
   provider: TicketProvider
+  /**
+   * CONTEXTE D'EXÉCUTION — déclaré par l'utilisateur sur la SOURCE, jamais deviné.
+   *
+   * Un ticket dit QUOI faire ; il ne dit jamais dans quel dépôt, sur quelle branche, avec quelle
+   * convention de commit, ni comment vérifier. Sans ces éléments l'agent invente — et invente mal.
+   * Ils sont donc OPTIONNELS et strictement déclaratifs : absents, ils ne sont pas injectés dans le
+   * prompt (aucune valeur par défaut inventée).
+   */
+  branchPrefix?: string
+  commitConvention?: string
+  verifyCommand?: string
 }
 
 export interface AzureTicketSource extends TicketSourceBase {
@@ -38,6 +49,20 @@ export interface TicketRelation {
   kind: string
   target: string
   url?: string
+  /**
+   * Titre LISIBLE de la fiche liée. Sans lui, une relation est un id nu (« target: 2041 ») : le
+   * lecteur — humain ou agent — ne peut pas savoir si c'est un doublon, un parent ou un bloquant
+   * sans une lecture supplémentaire. Optionnel : le fournisseur ne le remonte pas toujours.
+   */
+  title?: string
+}
+
+/** Un message de la discussion d'une fiche. `text` est du TEXTE BRUT (jamais du HTML). */
+export interface TicketComment {
+  id?: string
+  author?: string
+  createdAt?: string
+  text: string
 }
 
 export interface TicketItem {
@@ -53,6 +78,8 @@ export interface TicketItem {
   priority?: string | number
   description?: string
   relations?: TicketRelation[]
+  /** Discussion de la fiche, du plus ancien au plus récent. Souvent l'information décisive. */
+  comments?: TicketComment[]
   fields: Record<string, unknown>
 }
 
@@ -84,10 +111,37 @@ export const DEFAULT_TICKET_SOURCE: AzureTicketSource = {
   repository: 'RigApplication'
 }
 
+/** Clés du contexte d'exécution, communes aux trois fournisseurs. */
+const EXECUTION_KEYS = ['branchPrefix', 'commitConvention', 'verifyCommand'] as const
+
 const PROVIDER_KEYS: Record<TicketProvider, ReadonlySet<string>> = {
-  azure: new Set(['id', 'label', 'provider', 'organization', 'project', 'repository']),
-  github: new Set(['id', 'label', 'provider', 'owner', 'repository', 'apiBaseUrl']),
-  gitlab: new Set(['id', 'label', 'provider', 'namespace', 'repository', 'baseUrl'])
+  azure: new Set([
+    'id',
+    'label',
+    'provider',
+    'organization',
+    'project',
+    'repository',
+    ...EXECUTION_KEYS
+  ]),
+  github: new Set([
+    'id',
+    'label',
+    'provider',
+    'owner',
+    'repository',
+    'apiBaseUrl',
+    ...EXECUTION_KEYS
+  ]),
+  gitlab: new Set([
+    'id',
+    'label',
+    'provider',
+    'namespace',
+    'repository',
+    'baseUrl',
+    ...EXECUTION_KEYS
+  ])
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -122,12 +176,12 @@ export function isSafeForgeHost(host: string): boolean {
   return (
     normalized.length > 0 &&
     normalized.length <= 253 &&
-    normalized.split('.').every(
-      (label) =>
-        label.length > 0 &&
-        label.length <= 63 &&
-        /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(label)
-    )
+    normalized
+      .split('.')
+      .every(
+        (label) =>
+          label.length > 0 && label.length <= 63 && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(label)
+      )
   )
 }
 
@@ -149,6 +203,25 @@ function isSafeHttpsUrl(value: unknown): value is string | undefined {
   }
 }
 
+/**
+ * Champs du contexte d'exécution, validés et NORMALISÉS : chaque champ absent, vide ou invalide est
+ * simplement OMIS (`null` signale un rejet du profil entier). Le prompt n'injectera donc jamais une
+ * valeur douteuse — il n'injectera rien.
+ */
+function executionFields(
+  value: Record<string, unknown>
+): Pick<TicketSourceBase, 'branchPrefix' | 'commitConvention' | 'verifyCommand'> | null {
+  const result: Record<string, string> = {}
+  for (const key of EXECUTION_KEYS) {
+    const raw = value[key]
+    if (raw === undefined) continue
+    if (!isSafeText(raw, 500)) return null
+    const trimmed = raw.trim()
+    if (trimmed) result[key] = trimmed
+  }
+  return result
+}
+
 export function parseTicketSourceProfile(value: unknown): TicketSourceProfile | null {
   if (!isRecord(value) || !isSafeText(value.provider)) return null
   if (value.provider !== 'azure' && value.provider !== 'github' && value.provider !== 'gitlab') {
@@ -157,6 +230,8 @@ export function parseTicketSourceProfile(value: unknown): TicketSourceProfile | 
   const allowed = PROVIDER_KEYS[value.provider]
   if (Object.keys(value).some((key) => !allowed.has(key))) return null
   if (!isSafeText(value.id) || !isSafeText(value.label)) return null
+  const execution = executionFields(value)
+  if (!execution) return null
 
   if (value.provider === 'azure') {
     if (
@@ -172,7 +247,8 @@ export function parseTicketSourceProfile(value: unknown): TicketSourceProfile | 
       provider: 'azure',
       organization: value.organization,
       project: value.project,
-      ...(value.repository ? { repository: value.repository } : {})
+      ...(value.repository ? { repository: value.repository } : {}),
+      ...execution
     }
   }
 
@@ -190,7 +266,8 @@ export function parseTicketSourceProfile(value: unknown): TicketSourceProfile | 
       provider: 'github',
       owner: value.owner,
       repository: value.repository,
-      ...(value.apiBaseUrl ? { apiBaseUrl: value.apiBaseUrl } : {})
+      ...(value.apiBaseUrl ? { apiBaseUrl: value.apiBaseUrl } : {}),
+      ...execution
     }
   }
 
@@ -207,10 +284,85 @@ export function parseTicketSourceProfile(value: unknown): TicketSourceProfile | 
     provider: 'gitlab',
     namespace: value.namespace,
     repository: value.repository,
-    ...(value.baseUrl ? { baseUrl: value.baseUrl } : {})
+    ...(value.baseUrl ? { baseUrl: value.baseUrl } : {}),
+    ...execution
   }
 }
 
 export function canonicalTicketId(item: Pick<TicketItem, 'sourceId' | 'id'>): string {
   return `${item.sourceId}::${item.id}`
+}
+
+/**
+ * CONTEXTE D'EXÉCUTION résolu pour UNE fiche. Chaque champ est présent UNIQUEMENT s'il découle de
+ * données réellement déclarées : aucun dépôt, aucune branche, aucune commande n'est inventée.
+ */
+export interface TicketExecutionContext {
+  repository?: string
+  branch?: string
+  commitConvention?: string
+  verifyCommand?: string
+}
+
+/** Fragment de branche sûr : minuscules, tirets, jamais vide-ambigu. */
+function branchSlug(title: string): string {
+  return title
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48)
+    .replace(/-+$/g, '')
+}
+
+/** Dépôt CIBLE déclaré sur la source, sous sa forme canonique, ou `undefined` s'il n'y en a pas. */
+export function ticketTargetRepository(source: TicketSourceProfile): string | undefined {
+  if (source.provider === 'azure') return source.repository
+  if (source.provider === 'github') return `${source.owner}/${source.repository}`
+  return `${source.namespace}/${source.repository}`
+}
+
+export function ticketExecutionContext(
+  source: TicketSourceProfile | undefined,
+  item: Pick<TicketItem, 'id' | 'title'>
+): TicketExecutionContext {
+  if (!source) return {}
+  const repository = ticketTargetRepository(source)
+  const slug = branchSlug(item.title ?? '')
+  // La branche n'est proposée QUE si la source déclare une convention de préfixe : sans elle,
+  // nommer une branche serait une invention.
+  const branch = source.branchPrefix
+    ? `${source.branchPrefix.replace(/\/+$/, '')}/${item.id}${slug ? `-${slug}` : ''}`
+    : undefined
+  return {
+    ...(repository ? { repository } : {}),
+    ...(branch ? { branch } : {}),
+    ...(source.commitConvention ? { commitConvention: source.commitConvention } : {}),
+    ...(source.verifyCommand ? { verifyCommand: source.verifyCommand } : {})
+  }
+}
+
+/**
+ * Requête de LISTE normalisée — le seul endroit qui décide de ce qui part au main.
+ *
+ * Motif : la vue filtrait le titre CÔTÉ CLIENT sur les 50 items déjà chargés ; chercher une fiche
+ * plus ancienne ne renvoyait rien alors qu'elle existait. `titleContains` (déjà au contrat) doit
+ * donc être transmis. Une recherche vide/blanche est OMISE (aucun filtre), jamais envoyée vide.
+ */
+export function buildTicketListRequest(input: {
+  source: TicketSourceProfile
+  requestId?: string
+  cursor?: string
+  pageSize?: number
+  titleContains?: string
+}): TicketListRequest {
+  const search = typeof input.titleContains === 'string' ? input.titleContains.trim() : ''
+  return {
+    source: input.source,
+    ...(input.requestId ? { requestId: input.requestId } : {}),
+    ...(input.cursor ? { cursor: input.cursor } : {}),
+    ...(input.pageSize ? { pageSize: input.pageSize } : {}),
+    ...(search ? { titleContains: search } : {})
+  }
 }

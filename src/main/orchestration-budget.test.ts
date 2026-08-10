@@ -44,14 +44,35 @@ describe('orchestration budget settings', () => {
     expect(breaker.observe({ step: 'exec', costUsd: 0.01 })?.reason).toContain('seuil 1.50$')
   })
 
-  it('rejects unsafe caps and safely falls back to no limit for malformed persisted data', () => {
+  it('rejects unsafe caps and blocks on malformed persisted data without recovery', () => {
     const path = settingPath()
     expect(() => saveOrchestrationBudget(path, { maxUsd: 0 })).toThrow(/strictement positif/)
     writeFileSync(path, '{"maxUsd":"not-a-number"}', 'utf8')
-    expect(loadOrchestrationBudget(path)).toEqual({
-      maxUsd: null,
-      maxProviderCalls: 24,
-      maxTotalTokens: 15_000_000
-    })
+    expect(() => loadOrchestrationBudget(path)).toThrow(/budget.*invalide|corrompu/i)
+  })
+
+  it('récupère le dernier plafond valide après corruption du fichier principal', () => {
+    const path = settingPath()
+    saveOrchestrationBudget(path, { maxUsd: 1.5 })
+    // La seconde publication crée une version précédente récupérable.
+    saveOrchestrationBudget(path, { maxUsd: 1.5 })
+    writeFileSync(path, '{"maxUsd":', 'utf8')
+
+    const recovered = loadOrchestrationBudget(path)
+    expect(recovered.maxUsd).toBe(1.5)
+    const breaker = new CostCircuitBreaker(costLimitsFromSettings(recovered))
+    expect(breaker.observe({ step: 'exec', costUsd: 1.51 })?.trip).toBe(true)
+  })
+
+  it('récupère le plafond si le JSON reste parsable mais perd un champ structurant', () => {
+    const path = settingPath()
+    saveOrchestrationBudget(path, { maxUsd: 1.5 })
+    saveOrchestrationBudget(path, { maxUsd: 1.5 })
+    writeFileSync(path, JSON.stringify({ maxProviderCalls: 24, maxTotalTokens: 15_000_000 }))
+
+    const recovered = loadOrchestrationBudget(path)
+    expect(recovered.maxUsd).toBe(1.5)
+    const breaker = new CostCircuitBreaker(costLimitsFromSettings(recovered))
+    expect(breaker.observe({ step: 'exec', costUsd: 1.51 })?.trip).toBe(true)
   })
 })

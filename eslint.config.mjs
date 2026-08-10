@@ -6,7 +6,9 @@ import eslintPluginReactHooks from 'eslint-plugin-react-hooks'
 import eslintPluginReactRefresh from 'eslint-plugin-react-refresh'
 
 export default defineConfig(
-  { ignores: ['**/node_modules', '**/dist', '**/out', 'Audit/**'] },
+  {
+    ignores: ['**/node_modules', '**/dist', '**/out', 'Audit/**', '.autowin-data/**']
+  },
   tseslint.configs.recommended,
   eslintPluginReact.configs.flat.recommended,
   eslintPluginReact.configs.flat['jsx-runtime'],
@@ -60,6 +62,7 @@ export default defineConfig(
       'src/main/orchestrator.lean-fast.test.ts',
       'src/main/orchestrator.provider-identity.test.ts',
       'src/main/orchestrator.resume-skips-paid-phases.test.ts',
+      'src/main/orchestrator.workflow-override.test.ts',
       'src/main/orchestrator.worktree-flip.test.ts'
     ],
     rules: { 'require-yield': 'off' }

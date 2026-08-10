@@ -57,6 +57,12 @@ export interface ExecutionTopologyRequest {
    * avec des boucles au lieu de renoncer à la garantie de clôture.
    */
   worstCaseNodeExecutions?: number
+  /**
+   * Appels provider exacts du graphe après expansion des panels, synthèses et reprises. Quand il
+   * est fourni, ce total est déjà complet : l'allocateur ne doit ni lui ajouter un juge fantôme,
+   * ni recompter seulement le fan-out de la première visite d'un nœud rejoué.
+   */
+  worstCaseProviderCalls?: number
 }
 
 export interface ExecutionQuoteCaps {
@@ -152,11 +158,40 @@ export function allocateExecutionTopology(
     remainingPhases.length,
     Math.floor(request.worstCaseNodeExecutions ?? 0)
   )
-  const mandatory = nodeExecutions + judgePasses + recoveries
+  // Dans un graphe, chaque visite de nœud est déjà un appel complet : les retours incluent donc les
+  // builds de réparation et les nouveaux juges. Les rajouter une seconde fois créait un juge
+  // fantôme dans le devis. Le pipeline plat conserve son calcul historique explicite.
+  const exactWorkflowCalls = positiveInteger(request.worstCaseProviderCalls)
+  const mandatory =
+    exactWorkflowCalls ??
+    (request.worstCaseNodeExecutions === undefined
+      ? nodeExecutions + judgePasses + recoveries
+      : nodeExecutions)
   if (mandatory > available) {
     throw new Error(
       `Devis impossible avant exécution : ${mandatory} agent(s) obligatoires pour ${available} place(s) restante(s).`
     )
+  }
+
+  if (exactWorkflowCalls !== undefined) {
+    const phaseMembers: Partial<Record<PipelinePhase, number>> = {}
+    for (const phase of remainingPhases) {
+      const configured = boundedCount(request.phaseFanOut[phase])
+      if (configured > 0) phaseMembers[phase] = Math.min(configured, quote.limits.maxConcurrency)
+    }
+    const configuredJudges = boundedCount(request.judgeFanOut)
+    const judgeMembers =
+      configuredJudges > 0 ? Math.min(configuredJudges, quote.limits.maxConcurrency) : 1
+    return {
+      phaseMembers,
+      judgeMembers,
+      // Le graphe décrit déjà ses nœuds parallèles. Lui superposer un DAG dynamique rendrait le
+      // nombre d'appels impossible à déduire du canevas qui vient d'être accepté.
+      maxGreedyNodes: 1,
+      reservedMandatoryAgents: mandatory,
+      estimatedMaxAgents: startedAgents + mandatory,
+      estimatedMaxCalls: startedCalls + mandatory
+    }
   }
 
   let optional = available - mandatory
@@ -183,7 +218,7 @@ export function allocateExecutionTopology(
       continue
     }
     if (configured >= 2 && optional >= 2) {
-      const admitted = Math.min(configured, optional)
+      const admitted = Math.min(configured, optional, quote.limits.maxConcurrency)
       phaseMembers[phase] = admitted
       // N membres + une synthèse remplacent un worker mono : surcoût net = N.
       optional -= admitted
@@ -196,7 +231,7 @@ export function allocateExecutionTopology(
   let judgeMembers = 1
   if (configuredJudges >= 2) {
     const maxByCapacity = 1 + Math.floor(optional / judgePasses)
-    judgeMembers = Math.min(configuredJudges, maxByCapacity)
+    judgeMembers = Math.min(configuredJudges, maxByCapacity, quote.limits.maxConcurrency)
     if (judgeMembers >= 2) optional -= (judgeMembers - 1) * judgePasses
     else judgeMembers = 1
   }

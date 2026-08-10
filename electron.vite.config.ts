@@ -8,7 +8,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve('src/main/index.ts'),
-          'brain-worker': resolve('src/main/viz/brain-worker.ts')
+          'brain-worker': resolve('src/main/viz/brain-worker.ts'),
+          'worktree-operation-worker': resolve('src/main/store/worktree-operation-worker.ts')
         },
         output: { entryFileNames: '[name].js' }
       }

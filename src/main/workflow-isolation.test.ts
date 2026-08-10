@@ -43,8 +43,10 @@ describe('isolation du workflow entre conversations', () => {
    * fuir d'un run à l'autre parce qu'il n'existe plus d'endroit où il pourrait être partagé.
    */
   it('chaque run construit son orchestrateur, avec SA closure de workflow', () => {
-    // Le workflow du tour est résolu…
-    expect(os).toMatch(/const workflowDuRun = await this\.poseConversationWorkflow\(/)
+    // Un override explicite reste propre au run ; sinon le workflow du tour est résolu normalement.
+    expect(os).toMatch(
+      /const workflowDuRun\s*=\s*runOptions\.workflowOverride\s*\?\?\s*\(await this\.poseConversationWorkflow\(/
+    )
     // …puis enfermé dans un orchestrateur bâti pour lui seul, via la fabrique.
     expect(os).toMatch(/const orchestrator = this\.orchestrateurPour\(workflowDuRun\)/)
     expect(os).toMatch(

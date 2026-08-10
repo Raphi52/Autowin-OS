@@ -1,4 +1,5 @@
-import { join } from 'node:path'
+import { basename, dirname, join, normalize } from 'node:path'
+import { AUTOWIN_APP_DATA_DIR } from '../shared/app-identity'
 
 export interface AutomationInstanceMode {
   isolated: boolean
@@ -52,13 +53,18 @@ export function resolveExplicitUserDataDir(argv: readonly string[]): string | un
 }
 
 /**
- * Une instance marquée isolée avec un user-data explicite doit aussi déplacer les stores Autowin.
- * Sinon Chromium est isolé mais conversations/artefacts continuent d’écrire dans le profil réel.
+ * Tout user-data explicite qui déplace l'identité du verrou Electron doit déplacer les stores
+ * Autowin avec lui. Sinon deux profils Electron distincts peuvent partager les mêmes checkpoints.
  */
-export function resolveIsolatedAppDataBase(
+export function resolveInstanceAppDataBase(
   defaultBase: string,
-  isolated: boolean,
   explicitUserDataPath: string | undefined
 ): string {
-  return isolated && explicitUserDataPath ? join(explicitUserDataPath, 'app-data') : defaultBase
+  if (!explicitUserDataPath) return defaultBase
+  const normalized = normalize(explicitUserDataPath)
+  // Le relais Task Manager retransmet `app.getPath('userData')`, donc une racine déjà canonique.
+  // La reconnaître rend parent → relais → enfant strictement idempotent.
+  return basename(normalized).toLowerCase() === AUTOWIN_APP_DATA_DIR.toLowerCase()
+    ? dirname(normalized)
+    : join(normalized, 'app-data')
 }

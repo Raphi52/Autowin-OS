@@ -27,7 +27,7 @@ export function loadWorkflowSelections(path = workflowSelectionPath()): Workflow
   try {
     // Le BOM est retiré : sous Windows presque tout ce qui écrit un fichier à la main en pose un, et
     // `JSON.parse` échouerait — un réglage silencieusement perdu s'est déjà produit ici.
-    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8').replace(/^﻿/, ''))
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8').replace(/^\uFEFF/, ''))
     if (!parsed || typeof parsed !== 'object') return { byConversation: {} }
     const brut = (parsed as { byConversation?: unknown }).byConversation
     if (!brut || typeof brut !== 'object') return { byConversation: {} }

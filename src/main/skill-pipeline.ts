@@ -53,11 +53,6 @@ export function loadEngineText(root = skillsRoot()): string {
   return readIfExists(join(root, '_engine', 'ENGINE.md'))
 }
 
-/** true si le kit de skills est disponible sur ce poste (au moins une phase clé présente). */
-export function kitAvailable(root = skillsRoot()): boolean {
-  return loadSkillText('frame', root).length > 0 || loadSkillText('build', root).length > 0
-}
-
 /**
  * Skill invoquée EN TÊTE d'un message (`/remake …`), sinon undefined.
  *

@@ -1,25 +1,49 @@
 import type { IpcMain, IpcMainInvokeEvent } from 'electron'
 import type { TaskScheduler } from './task-scheduler'
 import type { TaskStore } from './task-store'
-import type { ScheduledTaskInput, TaskDestination, TaskManagerSnapshot } from './types'
+import type {
+  ScheduledTaskInput,
+  TaskDestination,
+  TaskManagerSnapshot,
+  TaskOccurrence,
+  WatchdogAppEvent,
+  WatchdogGuards,
+  WatchdogRule
+} from './types'
 import type { StructuredRecurrence, StructuredSchedule } from './schedule'
+import { watchdogRegexProblem } from '../../shared/watchdog-regex'
+import { isReasoningEffort, type ReasoningEffort } from '../roles'
 
 interface RegisterTaskManagerIpcOptions {
   ipc: IpcMain
   store: TaskStore
   scheduler: TaskScheduler
+  watchdogDiagnostics(taskId: string): { admittedLastHour: number; complaint?: string }
   assertTrusted(event: IpcMainInvokeEvent, scope: string): void
   onChanged(): void
 }
 
 export function registerTaskManagerIpc(options: RegisterTaskManagerIpcOptions): void {
-  const { ipc, store, scheduler, assertTrusted, onChanged } = options
+  const { ipc, store, scheduler, watchdogDiagnostics, assertTrusted, onChanged } = options
 
   ipc.handle('task-manager:snapshot', (event) => {
     assertTrusted(event, 'Task Manager')
     const state = scheduler.state()
+    const tasks = store.listTasks()
+    const snapshot = store.snapshot()
     return {
-      ...store.snapshot(),
+      ...snapshot,
+      watchdogs: Object.fromEntries(
+        tasks
+          .filter((task) => Boolean(task.watchdog))
+          .map((task) => [
+            task.id,
+            {
+              ...watchdogDiagnostics(task.id),
+              ...summarizeTaskUsageLastHour(snapshot.occurrences, task.id)
+            }
+          ])
+      ),
       scheduler: {
         running: state.running,
         nextWakeAt: state.nextWakeAt,
@@ -42,18 +66,7 @@ export function registerTaskManagerIpc(options: RegisterTaskManagerIpcOptions): 
     const id = requiredString(rawId, 'id')
     const current = store.getTask(id)
     if (!current) throw new Error(`Tâche inconnue: ${id}`)
-    const patch = object(raw, 'mise à jour')
-    const task = store.update(
-      id,
-      parseTaskInput({
-        title: patch.title ?? current.title,
-        prompt: patch.prompt ?? current.prompt,
-        enabled: patch.enabled ?? current.enabled,
-        mode: patch.mode ?? current.mode,
-        destination: patch.destination ?? current.destination,
-        schedule: patch.schedule ?? current.schedule
-      })
-    )
+    const task = store.update(id, parseTaskUpdate(current, raw))
     await scheduler.refresh()
     onChanged()
     return task
@@ -82,6 +95,50 @@ export function registerTaskManagerIpc(options: RegisterTaskManagerIpcOptions): 
   })
 }
 
+export function summarizeTaskUsageLastHour(
+  occurrences: readonly TaskOccurrence[],
+  taskId: string,
+  now = Date.now()
+): {
+  knownCostUsdLastHour: number
+  totalTokensLastHour: number
+  unpricedCallsLastHour: number
+} {
+  const cutoff = now - 3_600_000
+  return occurrences
+    .filter(
+      (occurrence) =>
+        occurrence.taskId === taskId &&
+        (occurrence.finishedAt ?? occurrence.startedAt ?? occurrence.claimedAt) >= cutoff
+    )
+    .reduce(
+      (total, occurrence) => ({
+        knownCostUsdLastHour: total.knownCostUsdLastHour + (occurrence.knownCostUsd ?? 0),
+        totalTokensLastHour: total.totalTokensLastHour + (occurrence.totalTokens ?? 0),
+        unpricedCallsLastHour: total.unpricedCallsLastHour + (occurrence.unpricedCalls ?? 0)
+      }),
+      { knownCostUsdLastHour: 0, totalTokensLastHour: 0, unpricedCallsLastHour: 0 }
+    )
+}
+
+export function parseTaskUpdate(current: ScheduledTaskInput, raw: unknown): ScheduledTaskInput {
+  const patch = object(raw, 'mise à jour')
+  const replacesTrigger = hasOwn(patch, 'schedule') || hasOwn(patch, 'watchdog')
+  return parseTaskInput({
+    title: patch.title ?? current.title,
+    prompt: patch.prompt ?? current.prompt,
+    enabled: patch.enabled ?? current.enabled,
+    mode: patch.mode ?? current.mode,
+    destination: patch.destination ?? current.destination,
+    schedule: replacesTrigger ? patch.schedule : current.schedule,
+    watchdog: replacesTrigger ? patch.watchdog : current.watchdog
+  })
+}
+
+function hasOwn(value: object, key: PropertyKey): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key)
+}
+
 function parseTaskInput(raw: unknown): ScheduledTaskInput {
   const value = object(raw, 'tâche')
   return {
@@ -90,8 +147,74 @@ function parseTaskInput(raw: unknown): ScheduledTaskInput {
     enabled: boolean(value.enabled, 'enabled'),
     mode: mode(value.mode),
     destination: destination(value.destination),
-    schedule: schedule(value.schedule)
+    ...(value.schedule === undefined ? {} : { schedule: schedule(value.schedule) }),
+    ...(value.watchdog === undefined ? {} : { watchdog: watchdog(value.watchdog) })
   }
+}
+
+const WATCHDOG_APP_EVENTS: readonly WatchdogAppEvent[] = [
+  'orchestration-red',
+  'task-failed',
+  'task-missed',
+  'workflow-gate-failed',
+  'workflow-unverified',
+  'workflow-proof-lost'
+]
+
+/** Bornes des gardes. Ce sont des valeurs qui arrivent du renderer : on les CONTRAINT, on ne les
+ *  croit pas. Un plafond a 0 desarmerait la regle, un plafond immense annulerait l'anti-rafale. */
+function guards(raw: unknown): WatchdogGuards {
+  const value = object(raw, 'watchdog.guards')
+  const clamp = (input: unknown, min: number, max: number, fallback: number): number => {
+    const parsed = typeof input === 'number' && Number.isFinite(input) ? input : fallback
+    return Math.min(max, Math.max(min, Math.round(parsed)))
+  }
+  return {
+    dedupWindowMs: clamp(value.dedupWindowMs, 0, 24 * 3_600_000, 60_000),
+    maxTriggersPerHour: clamp(value.maxTriggersPerHour, 1, 240, 12),
+    // La profondeur reste la garde la plus sensible : une chaine longue est une boucle qui ecrit.
+    maxChainDepth: clamp(value.maxChainDepth, 0, 3, 0),
+    // Largeur de cascade : bornee comme le reste. Un plafond a 0 desarmerait la regle entierement.
+    maxPerRoot: clamp(value.maxPerRoot, 1, 500, 20)
+  }
+}
+
+function watchdog(raw: unknown): WatchdogRule {
+  const value = object(raw, 'watchdog')
+  const source = object(value.source, 'watchdog.source')
+  if (source.kind === 'file-match') {
+    const pattern = requiredString(source.pattern, 'watchdog.source.pattern')
+    const regexProblem = watchdogRegexProblem(pattern)
+    if (regexProblem) throw new Error(regexProblem)
+    return {
+      source: {
+        kind: 'file-match',
+        path: requiredString(source.path, 'watchdog.source.path'),
+        pattern,
+        ...(source.caseSensitive === true ? { caseSensitive: true } : {})
+      },
+      guards: guards(value.guards),
+      ...(value.action === undefined ? {} : { action: watchdogAction(value.action) })
+    }
+  }
+  if (source.kind === 'app-event') {
+    const raw = Array.isArray(source.events) ? source.events : []
+    // Une règle sans AUCUN événement ne se déclencherait jamais, en silence : on la refuse à
+    // l'entrée plutôt que de laisser croire qu'elle surveille quelque chose.
+    const events = WATCHDOG_APP_EVENTS.filter((candidate) => raw.includes(candidate))
+    if (!events.length) throw new Error('Choisis au moins un événement interne à surveiller')
+    return {
+      source: { kind: 'app-event', events },
+      guards: guards(value.guards),
+      ...(value.action === undefined ? {} : { action: watchdogAction(value.action) })
+    }
+  }
+  throw new Error('Source de réveil invalide')
+}
+
+function watchdogAction(raw: unknown): 'chat' | 'orchestration' {
+  if (raw === 'chat' || raw === 'orchestration') return raw
+  throw new Error(`Action watchdog inconnue: ${String(raw)}`)
 }
 
 function destination(raw: unknown): TaskDestination {
@@ -112,8 +235,6 @@ function destination(raw: unknown): TaskDestination {
     }
   }
   if (value.kind === 'new') {
-    const authorityMode =
-      value.authorityMode === undefined ? undefined : authority(value.authorityMode)
     return {
       kind: 'new',
       title: requiredString(value.title, 'destination.title'),
@@ -125,7 +246,6 @@ function destination(raw: unknown): TaskDestination {
       ...(value.reasoningEffort === undefined
         ? {}
         : { reasoningEffort: reasoningEffort(value.reasoningEffort) }),
-      ...(authorityMode ? { authorityMode } : {}),
       ...(typeof value.conversationId === 'string' && value.conversationId.trim()
         ? { conversationId: value.conversationId.trim() }
         : {})
@@ -190,22 +310,9 @@ function mode(value: unknown): ScheduledTaskInput['mode'] {
   return value
 }
 
-function authority(value: unknown): 'plan' | 'ask' | 'auto' {
-  if (value !== 'plan' && value !== 'ask' && value !== 'auto') {
-    throw new Error('Mode d’autorité invalide')
-  }
-  return value
-}
-
-function reasoningEffort(
-  value: unknown
-): 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra' {
-  if (
-    !['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'].includes(
-      String(value)
-    )
-  ) {
+function reasoningEffort(value: unknown): ReasoningEffort {
+  if (!isReasoningEffort(value)) {
     throw new Error('Effort de raisonnement invalide')
   }
-  return value as 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
+  return value
 }

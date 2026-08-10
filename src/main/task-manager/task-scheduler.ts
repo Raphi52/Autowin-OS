@@ -1,6 +1,12 @@
 import { occurrenceIdFor, resolveNextOccurrence } from './schedule'
 import type { TaskStore } from './task-store'
-import type { ScheduledTask, TaskOccurrence } from './types'
+import type {
+  ScheduledTask,
+  TaskOccurrence,
+  WatchdogMutationClaimsSink,
+  WatchdogOutcome,
+  WatchdogSignal
+} from './types'
 
 export interface SchedulerClock {
   now(): number
@@ -13,10 +19,24 @@ export interface DispatchResult {
   conversationId?: string
   turnId?: string
   error?: string
+  knownCostUsd?: number
+  totalTokens?: number
+  unpricedCalls?: number
+  /** Le tri conclu par un agent réveillé, quand il a pu être lu dans sa réponse. */
+  outcome?: WatchdogOutcome
+  /** Fichiers réellement attribués à ce tour par les preuves d'exécution. */
+  mutatedPaths?: readonly string[]
+  /** Empreintes des lignes écrites par le tour, indexées par chemin absolu. */
+  mutatedLineFingerprints?: Record<string, readonly string[]>
+  mutatedPathGenerationMarkers?: Record<string, string>
 }
 
 export interface TaskDispatcher {
-  run(task: ScheduledTask, occurrence: TaskOccurrence): Promise<DispatchResult>
+  run(
+    task: ScheduledTask,
+    occurrence: TaskOccurrence,
+    onLateMutationClaims?: WatchdogMutationClaimsSink
+  ): Promise<DispatchResult>
 }
 
 export interface RelayState {
@@ -156,28 +176,83 @@ export class TaskScheduler {
     return true
   }
 
+  /**
+   * Entree EVENEMENTIELLE. Volontairement batie sur le meme claim et le meme dispatch que les
+   * echeances horaires : un reveil ajoute une facon d'ENTRER dans l'execution, pas un second moteur.
+   * Une occurrence de reveil ne touche jamais `nextRunAt` — il n'y a pas d'echeance a avancer.
+   */
+  async runWatchdog(
+    taskId: string,
+    signal: WatchdogSignal,
+    onLateMutationClaims?: WatchdogMutationClaimsSink
+  ): Promise<{
+    fired: boolean
+    mutatedPaths?: readonly string[]
+    mutatedLineFingerprints?: Record<string, readonly string[]>
+    mutatedPathGenerationMarkers?: Record<string, string>
+  }> {
+    const task = this.store.getTask(taskId)
+    if (!task?.enabled || !task.watchdog) return { fired: false }
+    const observedAt = signal.observedAt || this.clock.now()
+    const occurrenceId = `${task.id}@watchdog-${observedAt}-${occurrenceSalt(signal.signature)}`
+    const claim = this.store.claim(task.id, occurrenceId, observedAt, {
+      trigger: 'watchdog',
+      watchdog: signal
+    })
+    if (!claim.claimed) return { fired: false }
+    const result = await this.execute(task, claim.occurrence, onLateMutationClaims)
+    return {
+      fired: true,
+      ...(result.mutatedPaths ? { mutatedPaths: result.mutatedPaths } : {}),
+      ...(result.mutatedLineFingerprints
+        ? { mutatedLineFingerprints: result.mutatedLineFingerprints }
+        : {}),
+      ...(result.mutatedPathGenerationMarkers
+        ? { mutatedPathGenerationMarkers: result.mutatedPathGenerationMarkers }
+        : {})
+    }
+  }
+
   async refresh(): Promise<void> {
     if (!this.running) return
     await this.plan()
   }
 
-  private async execute(task: ScheduledTask, occurrence: TaskOccurrence): Promise<void> {
+  private async execute(
+    task: ScheduledTask,
+    occurrence: TaskOccurrence,
+    onLateMutationClaims?: WatchdogMutationClaimsSink
+  ): Promise<DispatchResult> {
     this.store.markRunning(occurrence.id)
     try {
-      const result = await this.dispatcher.run(task, occurrence)
+      const result = await this.dispatcher.run(task, occurrence, onLateMutationClaims)
       this.store.finish(occurrence.id, result.status, {
         conversationId: result.conversationId,
         turnId: result.turnId,
-        error: result.error
+        error: result.error,
+        knownCostUsd: result.knownCostUsd,
+        totalTokens: result.totalTokens,
+        unpricedCalls: result.unpricedCalls,
+        outcome: result.outcome
       })
+      return result
     } catch (error) {
-      this.store.finish(occurrence.id, 'failed', {
+      const failed: DispatchResult = {
+        status: 'failed',
         error: error instanceof Error ? error.message : String(error)
+      }
+      this.store.finish(occurrence.id, 'failed', {
+        error: failed.error
       })
+      return failed
     }
   }
 
   private advanceTask(task: ScheduledTask, scheduledFor: number): void {
+    if (!task.schedule) {
+      this.store.setNextRunAt(task.id, null)
+      return
+    }
     const next = resolveNextOccurrence(task.schedule, scheduledFor)
     this.store.setNextRunAt(task.id, task.enabled ? next : null)
   }
@@ -185,21 +260,15 @@ export class TaskScheduler {
   private async markStartupMisses(): Promise<void> {
     const now = this.clock.now()
     for (const listedTask of this.store.listTasks()) {
-      let task = this.store.getTask(listedTask.id)
-      while (task?.enabled && task.nextRunAt !== null && task.nextRunAt <= now) {
-        const scheduledFor = task.nextRunAt
-        const occurrenceId = occurrenceIdFor(task.id, scheduledFor)
-        this.store.markMissed(
-          task.id,
-          occurrenceId,
-          scheduledFor,
-          task.mode === 'active-only'
-            ? 'Autowin n’était pas actif à l’échéance.'
-            : 'Le relais Windows n’a pas exécuté cette échéance.'
-        )
-        this.advanceTask(task, scheduledFor)
-        task = this.store.getTask(task.id)
-      }
+      if (!listedTask.enabled || listedTask.nextRunAt === null || listedTask.nextRunAt > now)
+        continue
+      this.store.markMissedThrough(
+        listedTask.id,
+        now,
+        listedTask.mode === 'active-only'
+          ? 'Autowin n’était pas actif à l’échéance.'
+          : 'Le relais Windows n’a pas exécuté cette échéance.'
+      )
     }
   }
 
@@ -254,4 +323,18 @@ function parseOccurrenceId(
   const scheduledFor = Number(occurrenceId.slice(separator + 1))
   if (!taskId || !Number.isSafeInteger(scheduledFor) || scheduledFor < 0) return undefined
   return { taskId, scheduledFor }
+}
+
+/**
+ * Deux signaux DIFFERENTS observes a la meme milliseconde doivent produire deux occurrences
+ * distinctes : sans ce discriminant, le second serait avale par le claim du premier et l'incident
+ * disparaitrait en silence.
+ */
+function occurrenceSalt(signature: string): string {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < signature.length; i += 1) {
+    hash ^= signature.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193) >>> 0
+  }
+  return hash.toString(36)
 }

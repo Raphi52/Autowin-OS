@@ -128,10 +128,6 @@ export function migrateLegacyAppDataDetailed(base = appDataBase()): MigrationRep
   return { copied: outcomes.filter((outcome) => outcome.status === 'copied').length, outcomes }
 }
 
-export function migrateLegacyAppData(base = appDataBase()): number {
-  return migrateLegacyAppDataDetailed(base).copied
-}
-
 export function ensureAutowinAppData(base = appDataBase()): string {
   const target = createAutowinAppDataRoot(base)
   if (!migratedBases.has(base)) {

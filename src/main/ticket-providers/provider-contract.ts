@@ -64,6 +64,16 @@ export interface TicketGetRequest {
   requestId?: string
 }
 
+/** Retour factuel de l'agent vers une fiche existante. Au moins un champ doit être fourni. */
+export interface TicketUpdateRequest {
+  source: TicketSourceProfile
+  id: string
+  requestId?: string
+  comment?: string
+  state?: string
+  assignee?: string
+}
+
 export interface TicketProviderAdapter {
   readonly provider: TicketProvider
   list(request: TicketListRequest, context: TicketProviderContext): Promise<TicketPage>
@@ -74,22 +84,25 @@ export interface TicketProviderAdapter {
   create?(request: TicketCreateRequest, context: TicketProviderContext): Promise<TicketItem>
   /** Lecture par id — OPTIONNELLE : tous les fournisseurs n'exposent pas d'accès direct. */
   get?(request: TicketGetRequest, context: TicketProviderContext): Promise<TicketItem>
+  /** Mise à jour d'une fiche existante — OPTIONNELLE pour les adaptateurs en lecture seule. */
+  update?(request: TicketUpdateRequest, context: TicketProviderContext): Promise<TicketItem>
 }
 
 export interface TicketProviderRegistry {
   list(request: TicketListRequest, context: TicketProviderContext): Promise<TicketPage>
   create(request: TicketCreateRequest, context: TicketProviderContext): Promise<TicketItem>
   get(request: TicketGetRequest, context: TicketProviderContext): Promise<TicketItem>
+  update(request: TicketUpdateRequest, context: TicketProviderContext): Promise<TicketItem>
   supports(source: TicketSourceProfile): boolean
 }
 
 interface FetchTicketJsonOptions {
   fetchFn?: typeof fetch
   headers?: Readonly<Record<string, string>>
-  method?: 'GET' | 'POST'
+  method?: 'GET' | 'POST' | 'PATCH' | 'PUT'
   /** Objet JSON, ou TABLEAU pour un corps JSON-Patch (`[{ op, path, value }, …]`). */
   body?: Readonly<Record<string, unknown>> | readonly unknown[]
-  /** Surcharge du content-type du POST (défaut `application/json`), ex. `application/json-patch+json`. */
+  /** Surcharge du content-type d'une écriture, ex. `application/json-patch+json`. */
   contentType?: string
   timeoutMs?: number
   signal?: AbortSignal
@@ -132,7 +145,7 @@ export async function fetchTicketJson<T>(
   const method = options.method ?? 'GET'
   const headers = {
     ...options.headers,
-    ...(method === 'POST' ? { 'content-type': options.contentType ?? 'application/json' } : {})
+    ...(method !== 'GET' ? { 'content-type': options.contentType ?? 'application/json' } : {})
   }
   let response: Response
   const timeoutSignal = AbortSignal.timeout(options.timeoutMs ?? 10_000)
@@ -141,7 +154,7 @@ export async function fetchTicketJson<T>(
     response = await fetchFn(url, {
       method,
       headers,
-      ...(method === 'POST' ? { body: JSON.stringify(options.body ?? {}) } : {}),
+      ...(method !== 'GET' ? { body: JSON.stringify(options.body ?? {}) } : {}),
       signal
     })
   } catch {
@@ -209,6 +222,16 @@ export function createTicketProviderRegistry(
         )
       }
       return await adapter.get(request, context)
+    },
+    update: async (request, context) => {
+      const adapter = adapterFor(request.source)
+      if (!adapter.update) {
+        throw new TicketProviderError(
+          'UNSUPPORTED_PROVIDER',
+          `Mise à jour non supportée par le fournisseur ${request.source.provider}.`
+        )
+      }
+      return await adapter.update(request, context)
     }
   }
 }

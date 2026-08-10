@@ -5,7 +5,6 @@ import type { PromptSnapshot } from './commands'
 const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
   tab: 'chat',
   providers: [],
-  pendingDecisions: [],
   runsBlocked: [],
   conversationsCount: 0
 })

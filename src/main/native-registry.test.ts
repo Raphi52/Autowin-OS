@@ -1,10 +1,17 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+  rmSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   enablementPath,
-  nativeRegistryActive,
   listNativeRegistry,
   setNativeEnablement,
   seedRegistrySnapshot,
@@ -18,18 +25,19 @@ describe('native-registry (Chantier 1 — souveraineté inventaire)', () => {
   })
   afterEach(() => {
     rmSync(base, { recursive: true, force: true })
-    delete process.env.AUTOWIN_NATIVE_REGISTRY
   })
 
-  it('actif si flag=1, inactif si flag=0, sinon dépend de la présence du fichier', () => {
-    process.env.AUTOWIN_NATIVE_REGISTRY = '1'
-    expect(nativeRegistryActive(base)).toBe(true)
-    process.env.AUTOWIN_NATIVE_REGISTRY = '0'
-    expect(nativeRegistryActive(base)).toBe(false)
-    delete process.env.AUTOWIN_NATIVE_REGISTRY
-    expect(nativeRegistryActive(base)).toBe(false) // pas de fichier
-    setNativeEnablement('tools', 'x', true, base)
-    expect(nativeRegistryActive(base)).toBe(true) // fichier créé
+  it('reste récupérable si un crash laisse seulement le backup', () => {
+    seedRegistrySnapshot(
+      {
+        tools: [{ id: 't1', label: 't1', description: 'outil', enabled: false, mutable: true }]
+      },
+      base
+    )
+    const primary = enablementPath(base)
+    renameSync(primary, `${primary}.bak`)
+
+    expect(listNativeRegistry('tools', base)[0].enabled).toBe(false)
   })
 
   it('enablement persisté : un toggle survit à une relecture (plus aucun native.exe)', () => {
@@ -100,5 +108,97 @@ describe('native-registry (Chantier 1 — souveraineté inventaire)', () => {
     expect(afterUpdate.listNativeRegistry('tools', base)).toEqual([
       { id: 't1', label: 't1', description: 'outil', enabled: true, mutable: true }
     ])
+  })
+
+  it('ne réactive ni n’écrase les désactivations si le fichier principal est corrompu', () => {
+    seedRegistrySnapshot(
+      {
+        tools: [{ id: 't1', label: 't1', description: 'outil', enabled: false, mutable: true }]
+      },
+      base
+    )
+    // Une seconde écriture valide doit devenir la dernière version récupérable.
+    setNativeEnablement('tools', 't1', false, base)
+    writeFileSync(enablementPath(base), '{json tronqué', 'utf8')
+
+    expect(listNativeRegistry('tools', base)[0].enabled).toBe(false)
+    setNativeEnablement('tools', 't2', true, base)
+    const recovered = JSON.parse(readFileSync(enablementPath(base), 'utf8'))
+    expect(recovered.tools).toEqual({ t1: false, t2: true })
+  })
+
+  it('récupère une désactivation si le JSON parsable perd sa structure', () => {
+    seedRegistrySnapshot(
+      {
+        tools: [{ id: 't1', label: 't1', description: 'outil', enabled: false, mutable: true }]
+      },
+      base
+    )
+    setNativeEnablement('tools', 't1', false, base)
+    writeFileSync(enablementPath(base), '{}', 'utf8')
+
+    expect(listNativeRegistry('tools', base)[0].enabled).toBe(false)
+  })
+
+  it('récupère le snapshot complet si le primaire ne garde qu’une catégorie', () => {
+    seedRegistrySnapshot(
+      {
+        tools: [{ id: 't1', label: 't1', description: 'outil', enabled: false, mutable: true }]
+      },
+      base
+    )
+    setNativeEnablement('tools', 't1', false, base)
+    writeFileSync(enablementPath(base), JSON.stringify({ skills: {} }), 'utf8')
+
+    expect(listNativeRegistry('tools', base)[0].enabled).toBe(false)
+  })
+
+  it('crée une copie récupérable dès le premier snapshot courant', () => {
+    seedRegistrySnapshot(
+      {
+        tools: [{ id: 't1', label: 't1', description: 'outil', enabled: false, mutable: true }]
+      },
+      base
+    )
+    const primary = enablementPath(base)
+    expect(existsSync(`${primary}.bak`)).toBe(true)
+    expect(JSON.parse(readFileSync(primary, 'utf8')).schemaVersion).toBe(1)
+    writeFileSync(primary, JSON.stringify({ skills: {} }), 'utf8')
+
+    expect(listNativeRegistry('tools', base)[0].enabled).toBe(false)
+  })
+
+  it('migre une désactivation legacy partielle sans la réactiver', () => {
+    const primary = enablementPath(base)
+    writeFileSync(primary, JSON.stringify({ tools: { legacyOff: false } }), 'utf8')
+
+    setNativeEnablement('tools', 'newTool', true, base)
+
+    const migrated = JSON.parse(readFileSync(primary, 'utf8'))
+    const backup = JSON.parse(readFileSync(`${primary}.bak`, 'utf8'))
+    expect(migrated).toMatchObject({
+      schemaVersion: 1,
+      skills: {},
+      tools: { legacyOff: false, newTool: true },
+      plugins: {},
+      hooks: {}
+    })
+    expect(backup.schemaVersion).toBe(1)
+  })
+
+  it('bloque un primaire partiel si un backup courant existe mais est corrompu', () => {
+    seedRegistrySnapshot(
+      {
+        tools: [{ id: 't1', label: 't1', description: 'outil', enabled: false, mutable: true }]
+      },
+      base
+    )
+    const primary = enablementPath(base)
+    writeFileSync(primary, JSON.stringify({ tools: {} }), 'utf8')
+    writeFileSync(`${primary}.bak`, '{', 'utf8')
+
+    expect(() => listNativeRegistry('tools', base)).toThrow(/corrompu|invalide/i)
+    expect(JSON.parse(readFileSync(primary, 'utf8'))).toEqual({ tools: {} })
+    expect(readFileSync(`${primary}.bak`, 'utf8')).toBe('{')
   })
 })

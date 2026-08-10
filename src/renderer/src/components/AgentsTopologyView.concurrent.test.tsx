@@ -50,6 +50,16 @@ const models = [
 let container: HTMLDivElement
 let root: Root
 
+/**
+ * React suit la valeur des champs par un tracker interne : écrire `input.value` directement fait
+ * partir l'évènement mais React le considère « sans changement ». On passe donc par le setter natif.
+ */
+function saisir(champ: HTMLInputElement, valeur: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+  setter.call(champ, valeur)
+  champ.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
 const flush = (): Promise<void> =>
   act(async () => {
     await Promise.resolve()
@@ -214,6 +224,90 @@ describe('AgentsTopologyView concurrent persistence', () => {
       (element) => element.textContent
     )
     expect(labels).toEqual(['alpha 2', 'Éclair 3', 'Zulu 10'])
+  })
+
+  it('affiche le rejet de saveProfile dans l’alerte, sans rejet non géré', async () => {
+    const unhandled: unknown[] = []
+    const onUnhandled = (event: PromiseRejectionEvent): void => {
+      event.preventDefault()
+      unhandled.push(event.reason)
+    }
+    window.addEventListener('unhandledrejection', onUnhandled)
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      models: async () => models,
+      topology: async () => topology,
+      roles: async () => ({ orchestrator: { provider: 'openai', model: 'gpt' } }),
+      profiles: async () => [],
+      onAppEvent: () => () => undefined,
+      setTopology: vi.fn(),
+      saveProfile: vi.fn(async () => {
+        throw new Error('profil non enregistrable')
+      })
+    }
+
+    await act(async () => root.render(createElement(AgentsTopologyView)))
+    await flush()
+
+    // Le nom se saisit DANS l'application (plus de `window.prompt`, qui bloquait et restait
+    // intestable) : ouvrir le champ, le remplir, puis enregistrer.
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="topology-profile-new"]')!.click()
+    )
+    const champ = container.querySelector<HTMLInputElement>(
+      '[data-testid="topology-profile-name"]'
+    )!
+    await act(async () => {
+      saisir(champ, 'Profil A')
+    })
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="topology-profile-save"]')!.click()
+    )
+    await flush()
+
+    const alert = container.querySelector('[role="alert"]')
+    expect(alert?.textContent).toContain('profil non enregistrable')
+    window.removeEventListener('unhandledrejection', onUnhandled)
+    expect(unhandled).toEqual([])
+  })
+
+  it('affiche le rejet de applyProfile dans l’alerte, sans rejet non géré', async () => {
+    const unhandled: unknown[] = []
+    const onUnhandled = (event: PromiseRejectionEvent): void => {
+      event.preventDefault()
+      unhandled.push(event.reason)
+    }
+    window.addEventListener('unhandledrejection', onUnhandled)
+    ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
+      models: async () => models,
+      topology: async () => topology,
+      roles: async () => ({ orchestrator: { provider: 'openai', model: 'gpt' } }),
+      profiles: async () => [{ id: 'p1', name: 'Profil A', updatedAt: '2026-01-01', topology }],
+      onAppEvent: () => () => undefined,
+      setTopology: vi.fn(),
+      applyProfile: vi.fn(async () => {
+        throw new Error('profil illisible')
+      })
+    }
+
+    await act(async () => root.render(createElement(AgentsTopologyView)))
+    await flush()
+
+    const select = container.querySelector<HTMLSelectElement>('[aria-label="Appliquer un profil"]')!
+    await act(async () => {
+      select.value = 'p1'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await flush()
+    // Appliquer écrase la topologie : le choix ne part plus au `change`, il se confirme.
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="topology-apply-yes"]')!.click()
+    )
+    await flush()
+
+    const alert = container.querySelector('[role="alert"]')
+    expect(alert?.textContent).toContain('profil illisible')
+    window.removeEventListener('unhandledrejection', onUnhandled)
+    expect(unhandled).toEqual([])
   })
 
   it('serializes rapid edits and builds the second save from the first optimistic snapshot', async () => {

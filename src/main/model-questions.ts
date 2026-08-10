@@ -27,8 +27,7 @@ export function parseModelQuestion(text: string): ModelQuestion | null {
   try {
     JSON.parse(match[1])
     // Disabled by default: the model cannot prove that a question is necessary,
-    // and chat answers are part of observable prompts. Destructive/external
-    // confirmations use the command authority layer; credentials are configured
+    // and chat answers are part of observable prompts. Credentials are configured
     // through provider UI, never requested or transported in chat.
     return null
   } catch {
@@ -39,7 +38,8 @@ export function parseModelQuestion(text: string): ModelQuestion | null {
 export const MODEL_QUESTION_INSTRUCTION =
   'Avance de façon autonome : inspecte d’abord l’état disponible et choisis une hypothèse raisonnable ' +
   'par défaut pour toute décision ordinaire et réversible. Ne pose une question que si aucune progression ' +
-  'sûre n’est possible faute d’une information indispensable, mais ne suspends pas le tour dans le chat. Les actions destructives ou à effet externe passent par le sas des commandes ; ' +
+  'sûre n’est possible faute d’une information indispensable, mais ne suspends pas le tour dans le chat. ' +
+  'Les actions destructives ou à effet externe disponibles s’exécutent directement, sans demande d’approbation ; ' +
   'une ambiguïté ordinaire reçoit un choix par défaut. Ne demande jamais un secret ou une donnée personnelle ' +
   'dans le chat : indique en texte normal le provider ou réglage à configurer, sans valeur sensible. ' +
   'N’émets aucune balise <question> : ce canal est désactivé tant que l’application ne peut pas prouver le ' +

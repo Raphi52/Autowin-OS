@@ -1,6 +1,5 @@
 import { createHmac } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
-import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
 import { Orchestrator } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
@@ -92,7 +91,6 @@ describe('Orchestrator execution contract', () => {
         }),
         cost: new CostAggregator(),
         trust: new TrustLedger(),
-        authority: new AuthoritySas(),
         executionWorkspace: process.cwd(),
         retrieveBrain
       })
@@ -140,7 +138,6 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: process.cwd()
     })
 
@@ -157,6 +154,40 @@ describe('Orchestrator execution contract', () => {
 
     expect(provider.messages[0].map((message) => message.content).join('\n')).toContain(
       'le code Python vient uniquement de installation locale'
+    )
+  })
+
+  it('injecte la memoire causale observee du meme fil dans un run ulterieur', async () => {
+    const provider = new CapturingProvider()
+    const causalMemoryFor = vi.fn(
+      () => 'MEMOIRE CAUSALE OBSERVEE\n- build · claude/fable · issue failed'
+    )
+    const orchestrator = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: process.cwd(),
+      causalMemoryFor
+    })
+
+    await orchestrator.run(
+      'analyse la decision precedente en lecture seule',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      '',
+      [],
+      'conv-causal-memory'
+    )
+
+    expect(causalMemoryFor).toHaveBeenCalledWith('conv-causal-memory')
+    expect(provider.messages[0].map((message) => message.content).join('\n')).toContain(
+      'MEMOIRE CAUSALE OBSERVEE'
     )
   })
 
@@ -183,7 +214,6 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: process.cwd()
     })
 
@@ -206,11 +236,20 @@ describe('Orchestrator execution contract', () => {
   it('isole le vrai workspace RigApplication d une source Autowin adverse', async () => {
     const provider = new CapturingProvider()
     const seenCorpus: Array<readonly string[] | undefined> = []
-    const mixedContext = [
-      '[AMITEL BRAIN REFERENCE DATA]',
-      '### Source 1 — knowledge/domain/rigapplication-documentation/reference/proc.md\nRIG_SOURCE_AUTORISEE',
-      '### Source 2 — knowledge/domain/autowin-os-realite-produit-v5.md\nAUTOWIN_SOURCE_INTERDITE'
-    ].join('\n\n---\n\n')
+    const preamble = '[AMITEL BRAIN REFERENCE DATA]\n\n'
+    const sources = [
+      {
+        path: 'knowledge/domain/rigapplication-documentation/reference/proc.md',
+        content:
+          '### Source 1 — knowledge/domain/rigapplication-documentation/reference/proc.md\nRIG_SOURCE_AUTORISEE'
+      },
+      {
+        path: 'knowledge/domain/autowin-os-realite-produit-v5.md',
+        content:
+          '### Source 2 — knowledge/domain/autowin-os-realite-produit-v5.md\nAUTOWIN_SOURCE_INTERDITE'
+      }
+    ]
+    const mixedContext = preamble + sources.map(({ content }) => content).join('\n\n---\n\n')
     const orchestrator = new Orchestrator({
       registry: new ProviderRegistry().register(provider),
       roles: new RoleModelConfig({
@@ -219,11 +258,15 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'D:\\DevSrc\\RigApplication',
       retrieveBrain: async (_query, options) => {
         seenCorpus.push(options?.corpus)
-        return { context: mixedContext, status: 'found' }
+        return {
+          context: mixedContext,
+          status: 'found',
+          corpus: options?.corpus,
+          structuredContext: { preamble, sources }
+        }
       }
     })
 
@@ -263,7 +306,6 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: process.cwd(),
       retrieveBrain: (query, options) =>
         retrieveBrainContext(query, {
@@ -303,7 +345,6 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: process.cwd()
     })
 
@@ -337,7 +378,6 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\workspace',
       worktrees: makeTestWorktrees('C:\\workspace'),
       execPhases: ['frame', 'build'],
@@ -362,6 +402,36 @@ describe('Orchestrator execution contract', () => {
     ])
   })
 
+  it('utilise par defaut le contrat natif in-app, sans protocole RUN du kit externe', async () => {
+    const provider = new CapturingProvider()
+    const orchestrator = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\workspace',
+      worktrees: makeTestWorktrees('C:\\workspace'),
+      execPhases: ['terrain']
+    })
+
+    await orchestrator.run('prepare le terrain de verification')
+
+    expect(provider.calls[0].systemBlocks?.map((block) => block.name)).toContain(
+      'consigne:terrain'
+    )
+    expect(provider.calls[0].systemBlocks?.map((block) => block.name)).not.toContain(
+      'skill:terrain'
+    )
+    expect(provider.calls[0].system).toContain('Livrable : ## SOP')
+    expect(provider.calls[0].system).not.toMatch(/\.claude[\\/]runs/)
+    expect(provider.calls[0].system).toContain(
+      'Autowin OS crée et tient le RUN de la conversation'
+    )
+  })
+
   it('retombe sur la consigne embarquée lorsque le kit est absent', async () => {
     const provider = new CapturingProvider()
     const orchestrator = new Orchestrator({
@@ -372,7 +442,6 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\workspace',
       worktrees: makeTestWorktrees('C:\\workspace'),
       skillInstruction: () => ''
@@ -400,7 +469,6 @@ describe('Orchestrator execution contract', () => {
       roles,
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\workspace',
       worktrees: makeTestWorktrees('C:\\workspace')
     })
@@ -424,7 +492,6 @@ describe('Orchestrator execution contract', () => {
   it('garde le gate rouge si le worker prétend réussir sans preuve d’outil', async () => {
     const provider = new CapturingProvider(false)
     const registry = new ProviderRegistry().register(provider)
-    const authority = new AuthoritySas()
     const roles = new RoleModelConfig({
       subagent: { provider: provider.id, model: 'worker' },
       judge: { provider: provider.id, model: 'judge' }
@@ -434,7 +501,6 @@ describe('Orchestrator execution contract', () => {
       roles,
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority,
       executionWorkspace: 'C:\\workspace',
       worktrees: makeTestWorktrees('C:\\workspace')
     })
@@ -445,8 +511,7 @@ describe('Orchestrator execution contract', () => {
 
     expect(result.valid).toBe(false)
     expect(result.gateBlocked).toBe(true)
-    expect(result.pendingDecisionId).toBeUndefined()
-    expect(authority.pending()).toHaveLength(0)
+    expect(result).not.toHaveProperty('pendingDecisionId')
   })
 
   it('B1 — une tâche NON-mutation sans preuve d’outil passe si le juge valide', async () => {
@@ -459,7 +524,6 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\workspace',
       worktrees: makeTestWorktrees('C:\\workspace')
     })
@@ -510,7 +574,6 @@ describe('Orchestrator execution contract', () => {
         }),
         cost: new CostAggregator(),
         trust: new TrustLedger(),
-        authority: new AuthoritySas(),
         executionWorkspace: 'C:\\workspace',
         worktrees: makeTestWorktrees('C:\\workspace')
       })
@@ -536,7 +599,6 @@ describe('Orchestrator execution contract', () => {
         }),
         cost: new CostAggregator(),
         trust: new TrustLedger(),
-        authority: new AuthoritySas(),
         executionWorkspace: ws,
         worktrees: makeTestWorktrees(ws)
       })
@@ -597,7 +659,6 @@ describe('Orchestrator execution contract', () => {
       }),
       cost: new CostAggregator(),
       trust: new TrustLedger(),
-      authority: new AuthoritySas(),
       executionWorkspace: 'C:\\workspace',
       worktrees: makeTestWorktrees('C:\\workspace')
     })

@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
-import { boundingRadius, layoutRadial } from './graph-radial-layout'
+import { brainSubjectOf } from './graph-brain-categories'
 import {
+  layoutTree,
+  pickVisibleLabels,
+  projectTreeVisibility,
+  semanticZoomTier,
+  shouldLabelTreeNode,
+  treeBoundingRadius,
+  type SemanticZoomTier
+} from './graph-tree-layout'
+import {
+  focusCameraView,
   rememberViewBeforeFocus,
   restoreView,
   type CameraHandle,
@@ -13,6 +23,7 @@ import {
   loadGraphVisibilitySettings,
   saveGraphVisibilitySettings,
   loadGraphLayoutMode,
+  nextGraphLayoutMode,
   saveGraphLayoutMode,
   loadGraphVisualMode,
   saveGraphVisualMode,
@@ -43,6 +54,7 @@ import {
   highlightedNodeIdsForThemes,
   floatingNodeIdsForThemeHighlight,
   isLinkAttachedToNode,
+  knowledgeHealthIssues,
   brainScoreChannelLabel,
   linkedNodesFor,
   mergeGraphDelta,
@@ -77,6 +89,8 @@ import {
   ToggleRow
 } from './GraphView.panels'
 import { ModuleHeader } from './ModuleHeader'
+import { KnowledgeInboxPanel } from './KnowledgeInboxPanel'
+import { BrainRetrievalBench } from './BrainRetrievalBench'
 import './GraphView.css'
 
 type BrainTheme = { id: string; label: string }
@@ -88,12 +102,38 @@ type Brain = {
   kind: 'vault' | 'graphify'
   themes?: BrainTheme[]
 }
-type PanelTab = 'visibility' | 'node'
+type PanelTab = 'visibility' | 'node' | 'workbench'
 type ResizableColumn = 'theme' | 'visibility' | 'detail'
 type ColumnWidths = GraphColumnWidths
 const EMPTY_THEME_SELECTION = new Set<string>()
 /** Couleurs des BANDES radiales — une teinte par famille, du centre vers l'extérieur. */
-const BAND_COLORS = ["#8b5cf6", "#22d3ee", "#a78bfa", "#f472b6", "#facc15", "#34d399", "#60a5fa"] as const
+/** Écart vertical minimal entre deux libellés de couronne, en unités de scène. Calé sur la hauteur
+ *  d'une étiquette rendue : en dessous, deux libellés voisins se recouvrent. */
+const MIN_LABEL_GAP = 34
+
+/** Hauteur d'une etiquette, en FRACTION de la hauteur du viewport — c'est l'unite des sprites. */
+const LABEL_SCREEN_HEIGHT = 0.035
+
+/** Ce que fera le PROCHAIN clic — un bouton doit annoncer sa destination, pas son état. */
+const LIBELLE_BASCULE: Record<GraphLayoutMode, string> = {
+  force: 'Passer en arborescence (un anneau = un niveau, les branches portent la filiation)',
+  tree: 'Repasser en disposition libre (montre la connectivité)'
+}
+
+const ICONE_BASCULE: Record<GraphLayoutMode, string> = {
+  force: '⁘',
+  tree: '⁂'
+}
+
+const BAND_COLORS = [
+  '#8b5cf6',
+  '#22d3ee',
+  '#a78bfa',
+  '#f472b6',
+  '#facc15',
+  '#34d399',
+  '#60a5fa'
+] as const
 
 function initialVisibilitySettings(): GraphVisibilitySettings {
   return loadGraphVisibilitySettings(localStorage)
@@ -106,6 +146,17 @@ function initialColumnWidths(): ColumnWidths {
     visibility: compact ? 220 : 290,
     detail: null
   }
+}
+
+/**
+ * Traduit une erreur (souvent une stack IPC brute) en message métier lisible.
+ * Le détail technique n'est conservé que s'il est court et n'expose pas la plomberie IPC.
+ */
+function toBusinessError(headline: string, error: unknown): string {
+  const raw = (error instanceof Error ? error.message : String(error)).replace(/^Error:\s*/, '')
+  const opaque =
+    raw === '' || raw.length > 120 || /invoking remote method|\n|\bat\s+\S+:\d+|Error:/i.test(raw)
+  return opaque ? headline : `${headline} (${raw})`
 }
 
 /** Observatoire 3D : thèmes en surbrillance, visibilité réglable et lecture du nœud. */
@@ -128,10 +179,14 @@ export function GraphView({
   /** Vue d'avant le premier rapprochement, rendue à la fermeture de la fiche. */
   const viewBeforeFocusRef = useRef<CameraView | undefined>(undefined)
   const [graph, setGraph] = useState<GraphData>({ nodes: [], links: [] })
+  const [collapsedTreeNodeIds, setCollapsedTreeNodeIds] = useState<Set<string>>(() => new Set())
+  const [treeZoomTier, setTreeZoomTier] = useState<SemanticZoomTier>('overview')
   const [graphReload, setGraphReload] = useState(0)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
   const [themeQuery, setThemeQuery] = useState('')
+  const [searchReload, setSearchReload] = useState(0)
+  const [benchReset, setBenchReset] = useState(0)
   const [activeThemes, setActiveThemes] = useState<Set<string>>(() => new Set())
   const [themeNodes, setThemeNodes] = useState<GraphNode[]>([])
   const [settings, setSettings] = useState<GraphVisibilitySettings>(initialVisibilitySettings)
@@ -145,6 +200,14 @@ export function GraphView({
   const [node, setNode] = useState<GraphNode | null>(null)
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null)
   const [vaultSearch, setVaultSearch] = useState<GraphNode[]>([])
+  /**
+   * Verdict du retrieval pour la recherche courante. `null` = pas de recherche en cours. `failed` est
+   * l'échec du CANAL, distinct des quatre états que le serveur sait rendre.
+   */
+  const [searchRetrieval, setSearchRetrieval] = useState<{
+    status: 'found' | 'empty' | 'invalid' | 'unavailable' | 'not-requested' | 'failed'
+    note: string
+  } | null>(null)
   const [file, setFile] = useState<{ path: string; content: string } | null>(null)
   const [fileErr, setFileErr] = useState('')
   const [expandingNodeId, setExpandingNodeId] = useState<string | null>(null)
@@ -188,7 +251,9 @@ export function GraphView({
           available.some((brain) => brain.path === current) ? current : (available[0]?.path ?? '')
         )
       })
-      .catch((error) => setErr(String(error)))
+      .catch((error) =>
+        setErr(toBusinessError('Impossible de lister les graphes de connaissances.', error))
+      )
   }, [])
 
   const refreshGraph = useCallback((): void => {
@@ -199,21 +264,38 @@ export function GraphView({
 
     setLoading(true)
     setErr('')
+    setVaultSearch([])
+    setSearchRetrieval(null)
+    setBenchReset((request) => request + 1)
     void window.api
       .refreshBrain(selected)
       .then(() => {
-        graphCacheRef.current.delete(`${selected}\u0000${settings.lod}`)
+        const brainPrefix = `${selected}\u0000`
+        for (const key of graphCacheRef.current.keys()) {
+          if (key.startsWith(brainPrefix)) graphCacheRef.current.delete(key)
+        }
         dynamicGraphKeyRef.current = ''
         dynamicGraphRef.current = { nodes: [], links: [] }
-        setVaultSearch([])
+        setSearchReload((request) => request + 1)
         setGraphReload((request) => request + 1)
         refreshBrains()
       })
       .catch((error) => {
-        setErr(`Rafraîchissement impossible : ${String(error)}`)
+        setErr(toBusinessError('Impossible de rafraîchir le graphe de connaissances.', error))
         setLoading(false)
       })
-  }, [refreshBrains, selected, settings.lod])
+  }, [refreshBrains, selected])
+
+  /** Réessai : relance le chargement par le MÊME chemin que le chargement initial. */
+  const retryGraph = useCallback((): void => {
+    setErr('')
+    if (!selected) {
+      refreshBrains()
+      return
+    }
+    setLoading(true)
+    setGraphReload((request) => request + 1)
+  }, [refreshBrains, selected])
 
   useEffect(() => {
     refreshBrains()
@@ -226,23 +308,36 @@ export function GraphView({
       // Une recherche devenue inapplicable doit retirer immédiatement ses anciens résultats.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setVaultSearch([])
+      // …et son ancien verdict de retrieval avec eux, sinon la note survit à la question.
+      setSearchRetrieval(null)
       return
     }
     let current = true
     const timeout = window.setTimeout(() => {
       window.api
         .searchBrain(selected, query)
-        .then((results) => {
+        .then((envelope) => {
           if (!current) return
-          setVaultSearch(results.map((result) => ({ ...result, group: 0 })))
+          setVaultSearch(envelope.results.map((result) => ({ ...result, group: 0 })))
+          // Le STATUT du retrieval était jeté ici : `empty`, `invalid` et `unavailable` produisaient
+          // tous une liste vide muette. On le conserve pour pouvoir DIRE lequel des trois c'est.
+          setSearchRetrieval({ status: envelope.status, note: envelope.note })
         })
-        .catch(() => current && setVaultSearch([]))
+        .catch((error) => {
+          if (!current) return
+          // Une panne du canal n'est PAS « aucun résultat » : c'est le bug qu'on corrige.
+          setVaultSearch([])
+          setSearchRetrieval({
+            status: 'failed',
+            note: toBusinessError('Recherche indisponible.', error)
+          })
+        })
     }, 200)
     return () => {
       current = false
       window.clearTimeout(timeout)
     }
-  }, [brains, selected, themeQuery])
+  }, [brains, searchReload, selected, themeQuery])
 
   useEffect(() => {
     if (!selected) return
@@ -256,10 +351,14 @@ export function GraphView({
     const cached = graphCacheRef.current.get(cacheKey)
     if (cached) {
       setGraph(cached)
+      setLoading(false)
+      setErr('')
       if (shouldAutoFitGraphPhase('cached')) setInitialFitRequest((request) => request + 1)
       return
     }
     let current = true
+    // Une sélection sans cache ne doit jamais laisser les nœuds du Brain précédent actionnables.
+    setGraph({ nodes: [], links: [] })
     queueMicrotask(() => {
       if (!current) return
       setLoading(true)
@@ -270,7 +369,6 @@ export function GraphView({
       .then((loaded) => {
         if (current) {
           const next = loaded as GraphData
-          graphCacheRef.current.set(cacheKey, next)
           setGraph(next)
         }
         return window.api.loadBrainGraph(selected, settings.lod)
@@ -289,7 +387,8 @@ export function GraphView({
         })
       })
       .catch((error) => {
-        if (current) setErr(String(error))
+        if (current)
+          setErr(toBusinessError('Impossible de charger le graphe de connaissances.', error))
       })
       .finally(() => {
         if (current) setLoading(false)
@@ -329,7 +428,7 @@ export function GraphView({
       if (initialFitTimeoutRef.current !== null) window.clearTimeout(initialFitTimeoutRef.current)
       initialFitTimeoutRef.current = null
     }
-  }, [initialFitRequest])
+  }, [graph.nodes.length, initialFitRequest])
 
   const selectedBrain = useMemo(
     () => brains.find((brain) => brain.path === selected),
@@ -352,95 +451,218 @@ export function GraphView({
     () => filterGraphVisibility(graph, settings.orphans),
     [graph, settings.orphans]
   )
-  /**
-   * Points du mode radial. Un point = un GROUPE de fiches, pas une fiche : mesuré sur le brain réel,
-   * `knowledge/domain/rigapplication-documentation` porte 345 des 530 fiches — un point par fiche
-   * empile 345 points au même endroit, ce qui a rendu la première version illisible.
-   */
-  const radial = useMemo(
+  const healthIssues = useMemo(() => knowledgeHealthIssues(graph), [graph])
+  const healthRelationByNode = useMemo(() => {
+    const relations = new Map<string, 'contradicts' | 'supersedes'>()
+    for (const issue of healthIssues) {
+      for (const id of [issue.source.id, issue.target.id]) {
+        if (issue.relation === 'contradicts' || !relations.has(id))
+          relations.set(id, issue.relation)
+      }
+    }
+    return relations
+  }, [healthIssues])
+  const tree = useMemo(
     () =>
-      layoutMode === 'radial'
-        ? layoutRadial(displayGraph.nodes)
-        : { dots: [], bands: [] as ReturnType<typeof layoutRadial>['bands'] },
+      layoutMode === 'tree'
+        ? // Le premier anneau porte l'axe SUJET — « de quoi ça parle ». C'est celui que la campagne
+          // d'architecture a désigné : 78 % de premier choix juste et surtout l'étendue la plus
+          // FAIBLE (72-83 %), là où l'axe par nature cognitive oscillait de 44 % à 83 % selon le
+          // tirage. Une lecture dont le résultat dépend du tirage ne peut pas servir de socle.
+          // Toujours une couche de lecture dérivée : aucun fichier n'est déplacé dans le Brain.
+          layoutTree(displayGraph.nodes, { groupOf: brainSubjectOf })
+        : null,
     [layoutMode, displayGraph.nodes]
+  )
+  const visibleTree = useMemo(
+    () => (tree ? projectTreeVisibility(tree, collapsedTreeNodeIds) : null),
+    [collapsedTreeNodeIds, tree]
   )
 
   const renderedGraph = useMemo(() => {
-    if (layoutMode !== 'radial') {
+    if (layoutMode !== 'tree' || !visibleTree) {
       return {
         nodes: displayGraph.nodes.map((graphNode) => ({ ...graphNode })),
         links: displayGraph.links.map((graphLink) => ({ ...graphLink }))
       }
     }
-    const placement = new Map(radial.dots.map((dot) => [dot.id, dot]))
-    return {
-      // Un point = UNE fiche, avec son `file` et ses `themes` INTACTS : le clic continue d'ouvrir la
-      // vraie fiche, et la coloration par thème de l'app s'applique telle quelle — c'est elle qui, avec
-      // le tri par thème du layout, produit les arcs colorés. La v2 écrasait `themes` par la famille et
-      // perdait donc les 30 couleurs réelles.
-      nodes: displayGraph.nodes.flatMap((graphNode) => {
-        const dot = placement.get(String(graphNode.id))
-        if (!dot) return []
-        return [
-          {
-            ...graphNode,
-            // Épinglé : la simulation d3 tourne encore, elle repousserait sinon les points hors de
-            // leurs rangées en une seconde.
-            fx: dot.fx,
-            fy: dot.fy,
-            fz: dot.fz,
-            x: dot.fx,
-            y: dot.fy,
-            z: dot.fz
-          }
-        ]
-      }),
-      // AUCUN lien en radial. Des liens droits entre points agrégés traverseraient le disque en tous
-      // sens : c'est le « hairball » documenté, et la raison pour laquelle la référence visuelle n'en
-      // montre aucun. La réponse canonique (Hierarchical Edge Bundling, Holten 2006) exige un arbre à
-      // parent unique que ces données n'ont pas — donc on n'en dessine pas plutôt que d'en mentir.
-      links: []
+    {
+      // Une fiche = une FEUILLE. Les nœuds internes (dossiers) ne sont pas des fiches : ils sont
+      // dessinés à part, avec les branches et les anneaux.
+      const parNote = new Map(
+        visibleTree.nodes.filter((n) => n.noteId !== undefined).map((n) => [String(n.noteId), n])
+      )
+      return {
+        nodes: [
+          ...displayGraph.nodes.flatMap((graphNode) => {
+            const feuille = parNote.get(String(graphNode.id))
+            if (!feuille) return []
+            return [
+              {
+                ...graphNode,
+                fx: feuille.fx,
+                fy: feuille.fy,
+                fz: 0,
+                x: feuille.fx,
+                y: feuille.fy,
+                z: 0
+              }
+            ]
+          }),
+          ...visibleTree.nodes
+            .filter((treeNode) => !treeNode.isLeaf && treeNode.depth > 0)
+            .map((treeNode): GraphNode => ({
+              id: `__tree__:${treeNode.id}`,
+              label: treeNode.label,
+              group: treeNode.depth,
+              treeNodeId: treeNode.id,
+              treeDepth: treeNode.depth,
+              treeLeaves: treeNode.leaves,
+              treeCollapsed: collapsedTreeNodeIds.has(treeNode.id),
+              fx: treeNode.fx,
+              fy: treeNode.fy,
+              fz: 4,
+              x: treeNode.fx,
+              y: treeNode.fy,
+              z: 4
+            }))
+        ],
+        // Les liens SÉMANTIQUES restent absents : le commentaire du mode bandes vaut ici aussi, ils
+        // traverseraient le disque en tous sens. Ce qui est dessiné, ce sont les branches de
+        // FILIATION — un jeu d'arêtes différent, et celui-là a bien un parent unique.
+        links: []
+      }
     }
-  }, [displayGraph, layoutMode, radial])
+  }, [collapsedTreeNodeIds, displayGraph, layoutMode, visibleTree])
 
   /**
-   * DESSIN des bandes : cercles + libellé de famille, ajoutés directement à la scène three.js.
+   * DESSIN de l'arborescence : les anneaux de niveau, les branches de filiation, les nœuds internes.
    *
-   * Sans ceci, la v2 calculait des rayons que RIEN ne rendait — mesuré : 0 étiquette affichée sur 30, et
-   * donc aucune structure visible. Ce sont les cercles et les noms qui FONT l'image concentrique ; la
-   * position des points seule ne suffit pas à la lire.
+   * Les fiches elles-mêmes sont rendues par le graphe (elles sont épinglées sur leurs feuilles) ;
+   * ce qui manque et que rien d'autre ne trace, c'est la STRUCTURE — sans elle on retombe sur des
+   * points sans lien, exactement ce que cette vue doit corriger.
+   *
+   * Étiquetage : seuls les nœuds INTERNES portent un nom. L'utilisateur a demandé l'arbre complet
+   * jusqu'à la note, ce qui met ~564 feuilles sur l'anneau externe, à ~0,64° l'une de l'autre. La
+   * structure se lit très bien à cette densité, mais 564 étiquettes simultanées seraient une bouillie
+   * illisible — c'est une limite physique, pas un choix de goût.
    */
   useEffect(() => {
     const instance = graphRef.current
-    if (!instance || layoutMode !== 'radial' || radial.bands.length === 0) return
+    if (!instance || layoutMode !== 'tree' || !tree || !visibleTree) return
     const scene = instance.scene()
     if (!scene) return
     const added: THREE.Object3D[] = []
-    radial.bands.forEach((band, index) => {
-      const color = new THREE.Color(BAND_COLORS[index % BAND_COLORS.length])
-      for (const radius of [band.innerRadius, band.outerRadius]) {
-        const points: THREE.Vector3[] = []
-        for (let step = 0; step <= 96; step++) {
-          const angle = (step / 96) * Math.PI * 2
-          points.push(new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, 0))
-        }
-        const loop = new THREE.Line(
-          new THREE.BufferGeometry().setFromPoints(points),
-          new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.32 })
-        )
-        scene.add(loop)
-        added.push(loop)
+
+    // Les anneaux de niveau, en pointillé discret : ils disent « ceci est une profondeur ».
+    tree.ringRadii.forEach((radius, depth) => {
+      if (radius <= 0) return
+      const points: THREE.Vector3[] = []
+      for (let step = 0; step <= 128; step++) {
+        const angle = (step / 128) * Math.PI * 2
+        points.push(new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, -2))
       }
-      const label = createConnectedLabel(
-        `${band.family === '<racine>' ? 'RACINE' : band.family.toUpperCase()} · ${band.notes}`,
-        color.getStyle()
+      const loop = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(points),
+        new THREE.LineBasicMaterial({
+          color: new THREE.Color(BAND_COLORS[depth % BAND_COLORS.length]),
+          transparent: true,
+          opacity: 0.14
+        })
       )
-      // Étiquette posée sur l'axe vertical de la bande : toujours au même endroit d'une bande à l'autre,
-      // donc lisible comme une légende plutôt que dispersée au hasard des points.
-      label.position.set(0, band.labelRadius, 12)
+      scene.add(loop)
+      added.push(loop)
+    })
+
+    // Les branches, en UN seul objet : ~700 arêtes en autant d'objets three.js écroulerait le rendu.
+    const parId = new Map(visibleTree.nodes.map((n) => [n.id, n]))
+    const sommets: number[] = []
+    const couleurs: number[] = []
+    for (const edge of visibleTree.edges) {
+      const from = parId.get(edge.from)
+      const to = parId.get(edge.to)
+      if (!from || !to) continue
+      const teinte = new THREE.Color(BAND_COLORS[edge.depth % BAND_COLORS.length])
+      sommets.push(from.fx, from.fy, -1, to.fx, to.fy, -1)
+      // Une branche profonde est plus pâle : la hiérarchie se lit d'un coup d'œil.
+      const fondu = Math.max(0.25, 1 - edge.depth * 0.16)
+      for (let i = 0; i < 2; i += 1)
+        couleurs.push(teinte.r * fondu, teinte.g * fondu, teinte.b * fondu)
+    }
+    if (sommets.length > 0) {
+      const geometrie = new THREE.BufferGeometry()
+      geometrie.setAttribute('position', new THREE.Float32BufferAttribute(sommets, 3))
+      geometrie.setAttribute('color', new THREE.Float32BufferAttribute(couleurs, 3))
+      const branches = new THREE.LineSegments(
+        geometrie,
+        new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55 })
+      )
+      scene.add(branches)
+      added.push(branches)
+    }
+
+    // Les étiquettes sont décidées AVANT d'être posées : il faut les connaître toutes pour savoir
+    // lesquelles se marchent dessus. Mesuré sur le vault réel — les huit dossiers sous `projects`
+    // empilaient huit libellés au même endroit, exactement le défaut corrigé sur les couronnes.
+    const aNommer = visibleTree.nodes.filter(
+      (n) => !n.isLeaf && shouldLabelTreeNode(n, treeZoomTier)
+    )
+    // CONVERSION D'UNITÉS — c'est tout le sujet des deux corrections ratées avant celle-ci. Les
+    // étiquettes sont des sprites en `sizeAttenuation: false` : leur taille est une FRACTION DE
+    // L'ÉCRAN (3,5 % de la hauteur), constante quelle que soit la distance. Leur POSITION, elle, est
+    // en unités de scène. Écarter de « 34 » revenait donc à écarter de ~17 px au zoom courant —
+    // moitié moins qu'une étiquette, d'où des libellés toujours empilés sur la capture.
+    //
+    // Le facteur se CALCULE, il ne se tâtonne pas : avec un FOV vertical de 50°, la demi-hauteur
+    // visible à la distance d vaut d·tan(25°) ≈ 0,466·d. Le champ fait donc 0,932·d unités de haut,
+    // et un sprite de 3,5 % d'écran y mesure 0,035 × 0,932 × d unités.
+    const distanceCamera = (treeBoundingRadius(tree) + 26 + MIN_LABEL_GAP * 3) * 2.6
+    const hauteurEtiquette = LABEL_SCREEN_HEIGHT * 0.932 * distanceCamera
+
+    // On calcule d'abord OÙ chaque étiquette tomberait, puis on décide lesquelles sont dessinées.
+    // Les étiquettes de CATÉGORIE sont posées sur le pourtour du disque, pas contre leur nœud. À
+    // l'anneau 1 les cinq catégories sont très proches en angle — `Savoir` occupe 83 % du cercle et
+    // tasse les autres dans le reste — donc leurs libellés se disputaient le même coin : mesuré sur
+    // capture, deux seulement survivaient. Au rayon extérieur, le même écart angulaire donne
+    // largement la place, et la catégorie reste alignée sur son propre secteur.
+    const rayonPourtour = treeBoundingRadius(tree) + 40
+    const poses = aNommer.map((n) => {
+      const pousse = n.depth === 1 ? rayonPourtour : n.radius + 26
+      return {
+        x: Math.cos(n.angle) * pousse,
+        y: Math.sin(n.angle) * pousse,
+        // Dans la MÊME unité que la position : ~0,55 hauteur par caractère.
+        width: `${n.label} · ${n.leaves}`.length * hauteurEtiquette * 0.55,
+        height: hauteurEtiquette,
+        // Le nombre de fiches sous le nœud fait l'importance — SAUF pour le premier anneau. Les
+        // catégories cognitives sont l'ancrage de toute la lecture : sans leurs noms, l'anneau ne
+        // dit plus rien. Mesuré sur capture — seule `Savoir · 250` survivait, les trois autres
+        // perdant l'arbitrage face à des dossiers voisins plus gros.
+        priority: n.depth === 1 ? Number.MAX_SAFE_INTEGER - n.depth : n.leaves
+      }
+    })
+    const visibles = pickVisibleLabels(poses)
+    const poseDe = new Map(
+      aNommer.flatMap((n, i) => (visibles[i] ? [[n.id, { x: poses[i].x, y: poses[i].y }]] : []))
+    )
+
+    // Les disques internes sont rendus par ForceGraph pour rester cliquables ; cette couche ne pose
+    // que leurs libellés connectés.
+    for (const noeud of visibleTree.nodes) {
+      if (noeud.isLeaf) continue
+      const pose = poseDe.get(noeud.id)
+      if (pose === undefined) continue
+      const label = createConnectedLabel(
+        `${collapsedTreeNodeIds.has(noeud.id) ? '▸ ' : ''}${noeud.label} · ${noeud.leaves}`,
+        new THREE.Color(BAND_COLORS[noeud.depth % BAND_COLORS.length]).getStyle()
+      )
+      // Poussée vers l'EXTÉRIEUR le long de son propre rayon, puis écartée en Y si elle recouvrait
+      // une voisine — l'écartement radial seul ne séparait pas les libellés visant la gauche.
+      label.position.set(pose.x, pose.y, 14)
       scene.add(label)
       added.push(label)
-    })
+    }
+
     return () => {
       for (const object of added) {
         scene.remove(object)
@@ -452,29 +674,89 @@ export function GraphView({
         disposable.material?.dispose?.()
       }
     }
-  }, [layoutMode, radial])
+  }, [collapsedTreeNodeIds, layoutMode, tree, treeZoomTier, visibleTree])
 
   /**
-   * Recadrage DÉDIÉ au mode radial. L'effet de cadrage initial plus haut ne dépend volontairement pas
-   * du layout (un filtre ne doit jamais bouger la caméra), mais un CHANGEMENT DE LAYOUT, si : le disque
-   * radial est strictement plat (tous `fz = 0`), donc vu depuis la caméra héritée du force-directed il
-   * apparaît PAR LA TRANCHE — une ligne. C'était l'une des deux causes certaines de l'illisibilité de
-   * la première version. On se place d'aplomb sur l'axe Z, puis on cadre.
+   * L'arbre est une vue 2D : on coupe la 3ᵉ dimension et on fait converger le zoom vers le CURSEUR.
+   *
+   * Pourquoi c'est nécessaire : le disque est strictement plat (tous les nœuds à `z = 0`), mais les
+   * contrôles par défaut de la bibliothèque sont des trackball, qui tournent librement sur trois
+   * axes. Un simple glissement fait donc basculer le disque jusqu'à le voir PAR LA TRANCHE — une
+   * ligne. Et la molette zoome vers le centre de l'écran, alors que sur un arbre l'information
+   * intéressante est en périphérie : il fallait zoomer puis recadrer à la main, en boucle.
+   *
+   * `OrbitControls` fait exactement cela nativement — `zoomToCursor` existe pour ça. On ne
+   * réimplémente donc rien : on désarme la rotation, on met le panoramique dans le plan de l'écran,
+   * et on branche le zoom sur le pointeur.
    */
   useEffect(() => {
-    if (layoutMode !== 'radial' || radial.dots.length === 0) return
-    const radius = boundingRadius(radial.dots)
+    if (layoutMode !== 'tree' || !tree) return
+    const controls = graphRef.current?.controls() as
+      | {
+          enableRotate?: boolean
+          screenSpacePanning?: boolean
+          zoomToCursor?: boolean
+          target?: { x: number; y: number; z: number }
+          mouseButtons?: { LEFT?: number; MIDDLE?: number; RIGHT?: number }
+          touches?: { ONE?: number; TWO?: number }
+          addEventListener?: (type: 'change', listener: () => void) => void
+          removeEventListener?: (type: 'change', listener: () => void) => void
+          update?: () => void
+        }
+      | undefined
+    if (!controls) return
+    controls.enableRotate = false
+    controls.screenSpacePanning = true
+    controls.zoomToCursor = true
+    // Le bouton GAUCHE doit déplacer, pas tourner : c'est le geste naturel sur une carte, et la
+    // rotation étant désarmée il ne ferait plus rien du tout.
+    if (controls.mouseButtons) {
+      controls.mouseButtons.LEFT = THREE.MOUSE.PAN
+      controls.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY
+      controls.mouseButtons.RIGHT = THREE.MOUSE.PAN
+    }
+    if (controls.touches) controls.touches.ONE = THREE.TOUCH.PAN
+    const updateSemanticZoom = (): void => {
+      const position = (
+        graphRef.current as unknown as { cameraPosition(): { x: number; y: number; z: number } }
+      )?.cameraPosition?.()
+      if (!position) return
+      const target = controls.target ?? { x: 0, y: 0, z: 0 }
+      const zoomDistance = Math.hypot(
+        position.x - target.x,
+        position.y - target.y,
+        position.z - target.z
+      )
+      const tier = semanticZoomTier(zoomDistance, treeBoundingRadius(tree))
+      if (wrap.current) {
+        wrap.current.dataset.treeZoomDistance = String(Math.round(zoomDistance * 100) / 100)
+        wrap.current.dataset.cameraZ = String(Math.round(position.z * 100) / 100)
+        wrap.current.dataset.cameraSample = 'measured'
+      }
+      setTreeZoomTier((current) => (current === tier ? current : tier))
+    }
+    controls.addEventListener?.('change', updateSemanticZoom)
+    controls.update?.()
+    updateSemanticZoom()
+    return () => controls.removeEventListener?.('change', updateSemanticZoom)
+  }, [layoutMode, tree])
+
+  /** Recadrage de l'arborescence — même raison qu'en bandes : le disque est plat, donc vu par la tranche. */
+  useEffect(() => {
+    if (layoutMode !== 'tree' || !tree) return
+    // L'ouverture d'une fiche charge ensuite son voisinage, ce qui recrée `tree`. Ce rafraîchissement
+    // de données ne doit pas être pris pour une première ouverture de la vue et écraser le gros plan.
+    if (viewBeforeFocusRef.current) return
+    // Cadrer sur les NŒUDS seuls coupait le haut et la droite : les étiquettes vivent plus loin que
+    // le nœud qu'elles nomment, et la colonne de gauche mange encore de la largeur. On cadre donc sur
+    // le rayon des nœuds AUGMENTÉ de la portée maximale d'une étiquette.
+    const radius = treeBoundingRadius(tree) + 26 + MIN_LABEL_GAP * 3
     if (radius <= 0) return
     const timeout = window.setTimeout(() => {
-      // 2,35× le rayon, et SURTOUT pas de `zoomToFit` derrière : MESURÉ, c'est lui qui repoussait la
-      // caméra à 3413 unités pour des nœuds de 16-33 — chaque point faisait moins de 1 % du champ.
-      // Le facteur vient de la géométrie, pas d'un tâtonnement : avec un FOV vertical de 50°, la
-      // demi-hauteur visible à la distance d vaut d·tan(25°) ≈ 0,466·d, donc contenir un rayon R exige
-      // d ≥ 2,15·R. À 1,45·R le disque était ROGNÉ et 4 libellés de bande sur 7 tombaient hors cadre.
-      graphRef.current?.cameraPosition({ x: 0, y: 0, z: radius * 2.35 }, { x: 0, y: 0, z: 0 }, 600)
+      graphRef.current?.cameraPosition({ x: 0, y: 0, z: radius * 2.6 }, { x: 0, y: 0, z: 0 }, 600)
     }, 120)
     return () => window.clearTimeout(timeout)
-  }, [layoutMode, radial])
+  }, [layoutMode, tree])
 
   // react-force-graph-3d positionne ses nœuds par mutation. `renderedGraph` est une copie profonde
   // dédiée au moteur impératif : `graph` et `displayGraph`, détenus par React, restent immuables.
@@ -583,7 +865,7 @@ export function GraphView({
    * légende est portée par les libellés de BANDE dessinés dans la scène (`FAMILLE · effectif`), qui sont
    * posés à un rayon fixe et ne se recouvrent donc jamais.
    */
-  const showThemeClusterLabels = layoutMode !== 'radial' && visibleThemeLabelIds.size > 0
+  const showThemeClusterLabels = layoutMode !== 'tree' && visibleThemeLabelIds.size > 0
 
   useEffect(() => {
     const requestId = ++themeNodesRequestRef.current
@@ -613,6 +895,7 @@ export function GraphView({
       wrap.current.dataset.cameraDistance = String(
         Math.round(Math.hypot(camera.x, camera.y, camera.z) * 100) / 100
       )
+      wrap.current.dataset.cameraZ = String(Math.round(camera.z * 100) / 100)
     }
     if (!layer || !showThemeClusterLabels) return
     const anchors = themeClusterAnchors(renderedGraph.nodes, themeSummaries)
@@ -849,6 +1132,10 @@ export function GraphView({
     setActiveThemes((current) => selectExclusiveTheme(current, theme))
   }
 
+  function surClicDeFond(): void {
+    clearNodeSelection()
+  }
+
   function clearNodeSelection(): void {
     // Rendre le point de vue d'où l'on est parti : c'est ce qui « réintègre » visuellement le nœud
     // dans le graphe. La mémoire est libérée par `restoreView`, jamais rejouée deux fois.
@@ -866,20 +1153,64 @@ export function GraphView({
   }
 
   function focusNode(nextNode: GraphNode): void {
-    if ([nextNode.x, nextNode.y, nextNode.z].some((coordinate) => typeof coordinate !== 'number'))
+    const treeLeaf =
+      layoutMode === 'tree' && tree
+        ? tree.nodes.find((treeNode) => String(treeNode.noteId) === String(nextNode.id))
+        : undefined
+    const coordinates = treeLeaf
+      ? { x: treeLeaf.fx, y: treeLeaf.fy, z: 0 }
+      : { x: nextNode.x, y: nextNode.y, z: nextNode.z }
+    if (
+      [coordinates.x, coordinates.y, coordinates.z].some(
+        (coordinate) => typeof coordinate !== 'number'
+      )
+    )
       return
+    if (treeLeaf && tree) {
+      const parentById = new Map(tree.nodes.map((treeNode) => [treeNode.id, treeNode.parentId]))
+      const ancestors = new Set<string>()
+      let parentId = treeLeaf.parentId
+      while (parentId) {
+        ancestors.add(parentId)
+        parentId = parentById.get(parentId) ?? null
+      }
+      // Une alerte de santé peut viser une note masquée dans une branche repliée : l'ouvrir doit la
+      // rendre visible, pas seulement déplacer la caméra vers un point absent.
+      setCollapsedTreeNodeIds((current) => {
+        if (![...ancestors].some((id) => current.has(id))) return current
+        const next = new Set(current)
+        for (const id of ancestors) next.delete(id)
+        return next
+      })
+    }
     // Mémoriser AVANT de s'approcher : sans ça, refermer la fiche laisse la caméra braquée sur le
     // nœud, qui paraît figé au centre de l'écran, seul, tout le reste hors champ.
     viewBeforeFocusRef.current = rememberViewBeforeFocus(
       viewBeforeFocusRef.current,
       graphRef.current as unknown as CameraHandle
     )
-    const x = nextNode.x as number
-    const y = nextNode.y as number
-    const z = nextNode.z as number
-    const distance = Math.hypot(x, y, z) || 1
-    const ratio = 1 + 220 / distance
-    graphRef.current?.cameraPosition({ x: x * ratio, y: y * ratio, z: z * ratio }, { x, y, z }, 700)
+    const x = coordinates.x as number
+    const y = coordinates.y as number
+    const z = coordinates.z as number
+    const treeRadius = layoutMode === 'tree' && tree ? treeBoundingRadius(tree) : undefined
+    const focus = focusCameraView(
+      { x, y, z },
+      layoutMode === 'tree',
+      treeRadius === undefined ? undefined : treeRadius * 0.72
+    )
+    if (layoutMode === 'tree' && tree) {
+      // `cameraPosition(..., duration)` anime la caméra sans garantir un événement `change` des
+      // contrôles OrbitControls. Le focus piloté par la fiche doit donc publier lui-même le niveau
+      // de zoom attendu, sinon les libellés restent bloqués sur « overview » malgré le rapprochement.
+      const zoomDistance = Math.hypot(
+        focus.position.x - focus.target.x,
+        focus.position.y - focus.target.y,
+        focus.position.z - focus.target.z
+      )
+      setTreeZoomTier(semanticZoomTier(zoomDistance, treeRadius ?? treeBoundingRadius(tree)))
+      if (wrap.current) wrap.current.dataset.cameraSample = 'pending'
+    }
+    graphRef.current?.cameraPosition(focus.position, focus.target, 700)
   }
 
   async function openNode(nextNode: GraphNode): Promise<void> {
@@ -924,21 +1255,77 @@ export function GraphView({
     }
   }
 
-  const nodeColor = (value: object): string =>
-    nodeColorForTheme(
-      value as GraphNode,
-      visualActiveThemes,
-      settings.contextOpacity,
-      themeOrder,
-      visualProfile.palette,
-      themeCounts
+  function activateGraphNode(nextNode: GraphNode): void {
+    if (layoutMode === 'tree' && nextNode.treeNodeId) {
+      toggleTreeBranch(nextNode.treeNodeId)
+      setHoveredNode(null)
+      return
+    }
+    void openNode(nextNode)
+  }
+
+  function toggleTreeBranch(treeNodeId: string): void {
+    setCollapsedTreeNodeIds((current) => {
+      const updated = new Set(current)
+      if (updated.has(treeNodeId)) updated.delete(treeNodeId)
+      else updated.add(treeNodeId)
+      return updated
+    })
+  }
+
+  const healthColor = useCallback(
+    (nextNode: GraphNode): string | undefined => {
+      if (!settings.health) return undefined
+      const relation = healthRelationByNode.get(nextNode.id)
+      return relation === 'contradicts'
+        ? '#ff5c8a'
+        : relation === 'supersedes'
+          ? '#facc15'
+          : undefined
+    },
+    [healthRelationByNode, settings.health]
+  )
+  const nodeColor = (value: object): string => {
+    const nextNode = value as GraphNode
+    return (
+      healthColor(nextNode) ??
+      nodeColorForTheme(
+        nextNode,
+        visualActiveThemes,
+        settings.contextOpacity,
+        themeOrder,
+        visualProfile.palette,
+        themeCounts
+      )
     )
-  const nodeValue = (value: object): number =>
-    nodeValueForTheme(value as GraphNode, visualActiveThemes, settings.nodeSize) *
-    visualProfile.nodeScale
+  }
+  const nodeValue = (value: object): number => {
+    const nextNode = value as GraphNode
+    return (
+      nodeValueForTheme(nextNode, visualActiveThemes, settings.nodeSize) *
+      visualProfile.nodeScale *
+      (healthColor(nextNode) ? 1.35 : 1)
+    )
+  }
+  const treeBranchObject = useCallback((nextNode: GraphNode): THREE.Object3D => {
+    const radius = Math.max(3, Math.min(14, 2.4 * Math.sqrt(nextNode.treeLeaves ?? 1)))
+    return new THREE.Mesh(
+      new THREE.CircleGeometry(radius, 20),
+      new THREE.MeshBasicMaterial({
+        color: new THREE.Color(
+          nextNode.treeCollapsed
+            ? '#ff9f43'
+            : BAND_COLORS[(nextNode.treeDepth ?? 0) % BAND_COLORS.length]
+        ),
+        transparent: true,
+        opacity: 0.92
+      })
+    )
+  }, [])
   const galaxyNodeObject = useCallback(
     (value: object): THREE.Object3D => {
       const nextNode = value as GraphNode
+      if (nextNode.treeNodeId) return treeBranchObject(nextNode)
       const appearance = galaxyNodeAppearance(
         nextNode,
         visualActiveThemes,
@@ -947,6 +1334,7 @@ export function GraphView({
         visualProfile.palette,
         themeCounts
       )
+      appearance.color = healthColor(nextNode) ?? appearance.color
       const emphasis = nodeSelectionEmphasis(
         nextNode.id,
         nodeFocus.focusedNodeId,
@@ -960,19 +1348,26 @@ export function GraphView({
           visualProfile.nodeScale *
           emphasis.scale
       )
-      if (settings.labels && shouldShowFloatingNodeName(nextNode, floatingNodeIds))
+      if (
+        settings.labels &&
+        ((layoutMode === 'tree' && treeZoomTier === 'notes') ||
+          shouldShowFloatingNodeName(nextNode, floatingNodeIds))
+      )
         star.add(createConnectedLabel(nextNode.label, appearance.color, star.scale.x, 0.03))
       return star
     },
     [
       floatingNodeIds,
-      node,
+      healthColor,
+      layoutMode,
       nodeFocus,
-      selectedNodeIds,
       settings.contextOpacity,
+      settings.labels,
       settings.nodeSize,
       themeCounts,
       themeOrder,
+      treeBranchObject,
+      treeZoomTier,
       visualActiveThemes,
       visualProfile
     ]
@@ -980,6 +1375,7 @@ export function GraphView({
   const seriousNodeObject = useCallback(
     (value: object): THREE.Object3D => {
       const nextNode = value as GraphNode
+      if (nextNode.treeNodeId) return treeBranchObject(nextNode)
       const appearance = galaxyNodeAppearance(
         nextNode,
         visualActiveThemes,
@@ -988,6 +1384,7 @@ export function GraphView({
         visualProfile.palette,
         themeCounts
       )
+      appearance.color = healthColor(nextNode) ?? appearance.color
       const emphasis = nodeSelectionEmphasis(
         nextNode.id,
         nodeFocus.focusedNodeId,
@@ -1000,18 +1397,23 @@ export function GraphView({
         nodeValueForTheme(nextNode, visualActiveThemes, settings.nodeSize) *
           visualProfile.nodeScale *
           emphasis.scale,
-        settings.labels && shouldShowFloatingNodeName(nextNode, floatingNodeIds)
+        settings.labels &&
+          ((layoutMode === 'tree' && treeZoomTier === 'notes') ||
+            shouldShowFloatingNodeName(nextNode, floatingNodeIds))
       )
     },
     [
       floatingNodeIds,
-      node,
+      healthColor,
+      layoutMode,
       nodeFocus,
-      selectedNodeIds,
       settings.contextOpacity,
+      settings.labels,
       settings.nodeSize,
       themeCounts,
       themeOrder,
+      treeBranchObject,
+      treeZoomTier,
       visualActiveThemes,
       visualProfile
     ]
@@ -1050,6 +1452,7 @@ export function GraphView({
             clearNodeSelection()
             setSelected(event.target.value)
             setActiveThemes(new Set())
+            setCollapsedTreeNodeIds(new Set())
           }}
         >
           {brains.length === 0 && <option value="">Aucun graphe accessible</option>}
@@ -1073,21 +1476,21 @@ export function GraphView({
         <button
           type="button"
           role="switch"
-          className={`graph-layout-switch${layoutMode === 'radial' ? ' is-radial' : ''}`}
+          className={`graph-layout-switch${layoutMode === 'tree' ? ' is-tree' : ''}`}
           onClick={() => {
-            const next = layoutMode === 'radial' ? 'force' : 'radial'
+            const next = nextGraphLayoutMode(layoutMode)
             setLayoutMode(next)
             saveGraphLayoutMode(localStorage, next)
           }}
-          aria-checked={layoutMode === 'radial'}
+          // Le bouton a TROIS états, donc `aria-checked` ne peut plus valoir « radial ou rien » : en
+          // arborescence il aurait annoncé « éteint » à un lecteur d'écran alors qu'un agencement est
+          // bien actif. `mixed` est la valeur prévue par ARIA pour un troisième état.
+          aria-checked={layoutMode === 'tree'}
           aria-label="Disposition du graphe"
-          title={
-            layoutMode === 'radial'
-              ? 'Repasser en disposition libre (montre la connectivité)'
-              : 'Passer en anneaux concentriques (montre la structure)'
-          }
+          data-layout-mode={layoutMode}
+          title={LIBELLE_BASCULE[layoutMode]}
         >
-          {layoutMode === 'radial' ? '◎' : '⁘'}
+          {ICONE_BASCULE[layoutMode]}
         </button>
         <button
           type="button"
@@ -1160,6 +1563,17 @@ export function GraphView({
               : graph.nodes.length}
           </small>
         </button>
+        {/* Le verdict du Brain, DISTINCT du nombre de fiches locales : un serveur éteint et « le savoir
+            ne couvre pas la question » ne se disaient pas, ils se taisaient tous les deux. */}
+        {searchRetrieval && (
+          <p
+            className={`theme-sidebar__retrieval is-${searchRetrieval.status}`}
+            data-retrieval-status={searchRetrieval.status}
+            role={searchRetrieval.status === 'failed' ? 'alert' : undefined}
+          >
+            {searchRetrieval.note}
+          </p>
+        )}
         <div className="theme-list">
           {themeQuery.trim() && [...vaultSearch, ...catalogSearch.nodes].length > 0 && (
             <div className="node-search-results" aria-label="Fiches trouvées">
@@ -1249,13 +1663,29 @@ export function GraphView({
         {expandingNodeId && !loading && (
           <div className="graph-status">Chargement des connexions…</div>
         )}
-        {err && <div className="graph-status graph-status--error">{err}</div>}
+        {err && (
+          <div className="graph-status graph-status--error" role="alert">
+            <span className="graph-status__message">{err}</span>
+            <button type="button" className="graph-status__retry" onClick={retryGraph}>
+              Réessayer
+            </button>
+          </div>
+        )}
         {!loading && !err && graph.nodes.length === 0 && (
           <div className="graph-status">Aucun nœud disponible pour ce graphe.</div>
         )}
-        <div ref={wrap} className="graph-canvas">
+        <div
+          ref={wrap}
+          className="graph-canvas"
+          data-tree-zoom-tier={layoutMode === 'tree' ? treeZoomTier : undefined}
+          data-tree-visible-nodes={layoutMode === 'tree' ? visibleTree?.nodes.length : undefined}
+        >
           <ForceGraph3D
             ref={graphRef}
+            // `controlType` n'est lu qu'à l'initialisation de la vue : sans une `key` qui change
+            // avec le mode, passer en arbre garderait les contrôles trackball déjà en place.
+            key={layoutMode === 'tree' ? 'orbit' : 'trackball'}
+            controlType={layoutMode === 'tree' ? 'orbit' : 'trackball'}
             width={size.w}
             height={size.h}
             graphData={renderedGraph}
@@ -1277,9 +1707,12 @@ export function GraphView({
             linkDirectionalArrowColor={() => graphLinkArrowColor(visualMode)}
             onEngineTick={syncThemeClusterLabels}
             onEngineStop={syncThemeClusterLabels}
-            onBackgroundClick={clearNodeSelection}
-            onNodeHover={(value) => setHoveredNode(value ? (value as GraphNode) : null)}
-            onNodeClick={(value) => openNode(value as GraphNode)}
+            onBackgroundClick={surClicDeFond}
+            onNodeHover={(value) => {
+              const nextNode = value ? (value as GraphNode) : null
+              setHoveredNode(nextNode?.treeNodeId ? null : nextNode)
+            }}
+            onNodeClick={(value) => activateGraphNode(value as GraphNode)}
           />
           <div
             ref={themeLabelsRef}
@@ -1312,6 +1745,56 @@ export function GraphView({
               ) : null
             )}
           </div>
+          {layoutMode === 'tree' && visibleTree && (
+            <div className="tree-branch-controls" role="toolbar" aria-label="Branches du Brain">
+              {visibleTree.nodes
+                .filter((treeNode) => treeNode.depth === 1 && !treeNode.isLeaf)
+                .map((treeNode) => (
+                  <button
+                    key={treeNode.id}
+                    type="button"
+                    className={collapsedTreeNodeIds.has(treeNode.id) ? 'is-collapsed' : ''}
+                    aria-pressed={collapsedTreeNodeIds.has(treeNode.id)}
+                    data-tree-leaves={treeNode.leaves}
+                    onClick={() => toggleTreeBranch(treeNode.id)}
+                    title={`${collapsedTreeNodeIds.has(treeNode.id) ? 'Déplier' : 'Replier'} ${treeNode.label}`}
+                  >
+                    <span aria-hidden="true">
+                      {collapsedTreeNodeIds.has(treeNode.id) ? '▸' : '▾'}
+                    </span>
+                    {treeNode.label}
+                    <small>{treeNode.leaves}</small>
+                  </button>
+                ))}
+            </div>
+          )}
+          {settings.health && (
+            <aside className="graph-health-lens" aria-label="Relations à vérifier">
+              <header>
+                <strong>Relations à vérifier</strong>
+                <span>{healthIssues.length}</span>
+              </header>
+              {healthIssues.length === 0 ? (
+                <p>Aucune contradiction ni connaissance remplacée dans cette vue.</p>
+              ) : (
+                healthIssues.slice(0, 12).map((issue) => (
+                  <div
+                    className={`graph-health-issue is-${issue.relation}`}
+                    key={`${issue.relation}:${issue.source.id}:${issue.target.id}`}
+                  >
+                    <span>{issue.relation === 'contradicts' ? 'Contradiction' : 'Remplace'}</span>
+                    <button type="button" onClick={() => void openNode(issue.source)}>
+                      {issue.source.label}
+                    </button>
+                    <i aria-hidden="true">→</i>
+                    <button type="button" onClick={() => void openNode(issue.target)}>
+                      {issue.target.label}
+                    </button>
+                  </div>
+                ))
+              )}
+            </aside>
+          )}
         </div>
         {node && (
           <button className="selected-node" onClick={() => setPanelTab('node')}>
@@ -1330,6 +1813,42 @@ export function GraphView({
             <strong>{node.label}</strong>
             <span>Ouvrir le détail →</span>
           </button>
+        )}
+        {/* POSTE DE TRAVAIL du savoir : la revue de `inbox/` et le banc d'essai de récupération. Réservé
+            aux brains de type vault — un graphe graphify n'a ni boîte de réception ni retrieval. */}
+        {selectedBrain?.kind === 'vault' && (
+          <button
+            type="button"
+            className={`graph-workbench-button ${panelTab === 'workbench' ? 'is-active' : ''}`}
+            aria-label="Poste de travail du savoir"
+            aria-expanded={panelTab === 'workbench'}
+            title="Boîte de réception et banc d’essai de récupération"
+            onClick={() =>
+              setPanelTab((current) => (current === 'workbench' ? 'node' : 'workbench'))
+            }
+          >
+            ✦
+          </button>
+        )}
+        {panelTab === 'workbench' && selectedBrain?.kind === 'vault' && (
+          <div className="graph-workbench-popover">
+            <div className="graph-settings-popover__heading">
+              <strong>Savoir</strong>
+              <button
+                type="button"
+                onClick={() => setPanelTab('node')}
+                aria-label="Fermer le poste de travail"
+              >
+                ×
+              </button>
+            </div>
+            <KnowledgeInboxPanel brainPath={selected} onIndexChanged={refreshGraph} />
+            <BrainRetrievalBench
+              brainPath={selected}
+              resetToken={benchReset}
+              reloadToken={searchReload}
+            />
+          </div>
         )}
         <button
           type="button"
@@ -1368,20 +1887,29 @@ export function GraphView({
                   checked={settings.labels}
                   onChange={(labels) => patchSettings({ labels })}
                 />
-                <ToggleRow
-                  label="Liens"
-                  checked={settings.links}
-                  onChange={(links) => patchSettings({ links })}
-                />
+                {layoutMode !== 'tree' && (
+                  <ToggleRow
+                    label="Liens"
+                    checked={settings.links}
+                    onChange={(links) => patchSettings({ links })}
+                  />
+                )}
                 <ToggleRow
                   label="Nœuds sans lien"
                   checked={settings.orphans}
                   onChange={(orphans) => patchSettings({ orphans })}
                 />
+                {layoutMode !== 'tree' && (
+                  <ToggleRow
+                    label="Flèches de direction"
+                    checked={settings.arrows}
+                    onChange={(arrows) => patchSettings({ arrows })}
+                  />
+                )}
                 <ToggleRow
-                  label="Flèches de direction"
-                  checked={settings.arrows}
-                  onChange={(arrows) => patchSettings({ arrows })}
+                  label="Relations à vérifier"
+                  checked={settings.health}
+                  onChange={(health) => patchSettings({ health })}
                 />
               </SettingsSection>
               <SettingsSection title="Lisibilité">
@@ -1403,33 +1931,37 @@ export function GraphView({
                   display={`${Math.round(settings.nodeSize * 100)}%`}
                   onChange={(nodeSize) => patchSettings({ nodeSize })}
                 />
-                <RangeRow
-                  label="Épaisseur des liens"
-                  value={settings.linkWidth}
-                  min={0.1}
-                  max={2}
-                  step={0.1}
-                  display={settings.linkWidth.toFixed(1)}
-                  onChange={(linkWidth) => patchSettings({ linkWidth })}
-                />
+                {layoutMode !== 'tree' && (
+                  <RangeRow
+                    label="Épaisseur des liens"
+                    value={settings.linkWidth}
+                    min={0.1}
+                    max={2}
+                    step={0.1}
+                    display={settings.linkWidth.toFixed(1)}
+                    onChange={(linkWidth) => patchSettings({ linkWidth })}
+                  />
+                )}
               </SettingsSection>
-              <SettingsSection title="Disposition">
-                <RangeRow
-                  label="Espacement des nœuds"
-                  value={settings.nodeSpacing}
-                  min={30}
-                  max={240}
-                  step={6}
-                  display={String(settings.nodeSpacing)}
-                  onChange={(nodeSpacing) => {
-                    invalidatePendingGraphFit()
-                    patchSettings({ nodeSpacing })
-                  }}
-                />
-                <p className="setting-help">
-                  Augmentez cette valeur pour étaler le Brain et distinguer les relations.
-                </p>
-              </SettingsSection>
+              {layoutMode !== 'tree' && (
+                <SettingsSection title="Disposition">
+                  <RangeRow
+                    label="Espacement des nœuds"
+                    value={settings.nodeSpacing}
+                    min={30}
+                    max={240}
+                    step={6}
+                    display={String(settings.nodeSpacing)}
+                    onChange={(nodeSpacing) => {
+                      invalidatePendingGraphFit()
+                      patchSettings({ nodeSpacing })
+                    }}
+                  />
+                  <p className="setting-help">
+                    Augmentez cette valeur pour étaler le Brain et distinguer les relations.
+                  </p>
+                </SettingsSection>
+              )}
               <SettingsSection title="Nombre de nœuds">
                 <RangeRow
                   label="Nœuds affichés"
@@ -1447,7 +1979,11 @@ export function GraphView({
             </div>
           </div>
         )}
-        <div className="graph-hint">Glisser : pivoter · molette : zoomer · clic : sélectionner</div>
+        <div className="graph-hint">
+          {layoutMode === 'tree'
+            ? 'Glisser : déplacer · molette : zoomer · clic : sélectionner'
+            : 'Glisser : pivoter · molette : zoomer · clic : sélectionner'}
+        </div>
       </main>
 
       {detailOpen && (

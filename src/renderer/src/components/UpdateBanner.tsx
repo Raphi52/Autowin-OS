@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   UPDATE_STRATEGY_HINTS,
   UPDATE_STRATEGY_LABELS,
@@ -17,6 +17,7 @@ interface UpdateInfo {
   dirty?: boolean
   /** Voies d'intégration possibles ici, la première étant la recommandée. */
   strategies?: UpdateStrategy[]
+  error?: string
 }
 
 /**
@@ -25,6 +26,10 @@ interface UpdateInfo {
  * `git fetch --quiet` local — négligeable — pour une information dont la fraîcheur est tout l'intérêt.
  */
 const POLL_INTERVAL_MS = 180_000
+
+function errorMessage(reason: unknown, fallback: string): string {
+  return reason instanceof Error && reason.message ? reason.message : fallback
+}
 
 /**
  * Bouton de mise à jour, au bas du rail.
@@ -40,14 +45,38 @@ const POLL_INTERVAL_MS = 180_000
  *
  * Rail replié → l'icône seule, l'information reste dans l'infobulle.
  */
-export function UpdateBanner({ collapsed = false }: { collapsed?: boolean }): React.JSX.Element | null {
+export function UpdateBanner({
+  collapsed = false
+}: {
+  collapsed?: boolean
+}): React.JSX.Element | null {
   const [info, setInfo] = useState<UpdateInfo | null>(null)
   const [applying, setApplying] = useState<UpdateStrategy | null>(null)
-  const [error, setError] = useState<string>()
+  const [checkError, setCheckError] = useState<string>()
+  const [applyError, setApplyError] = useState<string>()
   const [choicesOpen, setChoicesOpen] = useState(false)
+  const checkGeneration = useRef(0)
+  const applyOwnsBanner = useRef(false)
 
   const check = useCallback((): void => {
-    void window.api.checkUpdate?.().then((r) => setInfo(r as UpdateInfo))
+    const generation = ++checkGeneration.current
+    const request = window.api.checkUpdate
+    if (!request) return
+    void request()
+      .then((result) => {
+        if (generation !== checkGeneration.current || applyOwnsBanner.current) return
+        const nextInfo = result as UpdateInfo
+        if (nextInfo.error !== undefined) {
+          setCheckError(nextInfo.error || 'Verification des mises a jour impossible.')
+          return
+        }
+        setInfo(nextInfo)
+        setCheckError(undefined)
+      })
+      .catch((reason: unknown) => {
+        if (generation !== checkGeneration.current || applyOwnsBanner.current) return
+        setCheckError(errorMessage(reason, 'Verification des mises a jour impossible.'))
+      })
   }, [])
 
   useEffect(() => {
@@ -61,26 +90,70 @@ export function UpdateBanner({ collapsed = false }: { collapsed?: boolean }): Re
     window.addEventListener('focus', onWake)
     document.addEventListener('visibilitychange', onWake)
     return () => {
+      checkGeneration.current += 1
       window.clearInterval(timer)
       window.removeEventListener('focus', onWake)
       document.removeEventListener('visibilitychange', onWake)
     }
   }, [check])
 
+  if (checkError) {
+    const retryLabel = `Verification des mises a jour impossible : ${checkError}. Reessayer`
+    return (
+      <div className="rail-update" data-testid="update-banner">
+        <button
+          type="button"
+          className="rail-update-btn is-error"
+          data-testid="update-retry"
+          aria-label={retryLabel}
+          title={retryLabel}
+          onClick={check}
+        >
+          <span className="rail-update-icon" aria-hidden="true">
+            &#8635;
+          </span>
+          {!collapsed && <span className="rail-update-label">Reessayer</span>}
+        </button>
+        <span
+          className={`rail-update-error${collapsed ? ' is-visually-hidden' : ''}`}
+          data-testid="update-error"
+          role="status"
+        >
+          {checkError}
+        </span>
+      </div>
+    )
+  }
+
   if (!info?.available) return null
 
-  const strategies = info.strategies?.length ? info.strategies : (['fast-forward'] as UpdateStrategy[])
+  const strategies = info.strategies?.length
+    ? info.strategies
+    : (['fast-forward'] as UpdateStrategy[])
   const primary = strategies[0]
   const alternatives = strategies.slice(1)
 
   const apply = async (strategy: UpdateStrategy): Promise<void> => {
+    applyOwnsBanner.current = true
     setApplying(strategy)
-    setError(undefined)
+    setApplyError(undefined)
     setChoicesOpen(false)
-    const r = await window.api.applyUpdate?.(strategy)
-    // Succès → le main relance l'app (app.relaunch/quit) : rien à faire ici. Échec → afficher la raison.
-    if (!r?.ok) {
-      setError(r?.error ?? 'Échec de la mise à jour.')
+    try {
+      const r = await window.api.applyUpdate?.(strategy)
+      // Succès → le main relance l'app (app.relaunch/quit) : rien à faire ici. Échec → afficher la raison.
+      if (r?.ok) {
+        const noEffect = r.effect === 'none' || (r.reload === false && r.relaunch === false)
+        if (noEffect) {
+          applyOwnsBanner.current = false
+          setApplying(null)
+          check()
+        }
+        return
+      }
+      setApplyError(r?.error ?? 'Échec de la mise à jour.')
+      setApplying(null)
+    } catch (reason) {
+      setApplyError(errorMessage(reason, 'Échec de la mise à jour.'))
       setApplying(null)
     }
   }
@@ -91,11 +164,11 @@ export function UpdateBanner({ collapsed = false }: { collapsed?: boolean }): Re
   const elsewhere = info.branch && info.branch !== 'main' ? ` · tu es sur ${info.branch}` : ''
   const stash = info.dirty ? ' · ton travail en cours sera mis de côté puis remis' : ''
   const detail = `${info.behind} commit(s) à récupérer depuis ${reference}${elsewhere}${stash}`
-  const buttonState = applying ? ' is-applying' : error ? ' is-error' : ''
+  const buttonState = applying ? ' is-applying' : applyError ? ' is-error' : ''
   const actionLabel = applying
     ? 'Mise à jour en cours'
-    : error
-      ? `Échec de la mise à jour : ${error}. Réessayer`
+    : applyError
+      ? `Échec de la mise à jour : ${applyError}. Réessayer`
       : `${UPDATE_STRATEGY_LABELS[primary]} — ${detail}. ${UPDATE_STRATEGY_HINTS[primary]}`
   return (
     <div className="rail-update" data-testid="update-banner">
@@ -163,13 +236,13 @@ export function UpdateBanner({ collapsed = false }: { collapsed?: boolean }): Re
           ))}
         </div>
       )}
-      {error && (
+      {applyError && (
         <span
           className={`rail-update-error${collapsed ? ' is-visually-hidden' : ''}`}
           data-testid="update-error"
           role="status"
         >
-          {error}
+          {applyError}
         </span>
       )}
     </div>

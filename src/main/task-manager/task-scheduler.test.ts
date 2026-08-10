@@ -117,7 +117,7 @@ describe('Task Manager — ordonnanceur durable', () => {
     expect(h.dispatched).toHaveLength(1)
   })
 
-  it('marque au démarrage chaque échéance passée sans la rattraper', async () => {
+  it('agrège au démarrage les échéances passées sans les rattraper', async () => {
     const firstDue = Date.parse('2026-08-03T07:30:00.000Z')
     const h = harness(Date.parse('2026-08-03T07:00:00.000Z'))
     const task = h.store.create(input('active-only'))
@@ -127,14 +127,41 @@ describe('Task Manager — ordonnanceur durable', () => {
     await scheduler.start()
 
     expect(h.dispatched).toEqual([])
-    expect(h.store.listOccurrences(task.id).map((entry) => entry.status)).toEqual([
-      'missed',
-      'missed',
-      'missed'
+    expect(h.store.listOccurrences(task.id)).toEqual([
+      expect.objectContaining({
+        status: 'missed',
+        scheduledFor: firstDue,
+        lastMissedFor: Date.parse('2026-08-05T07:30:00.000Z'),
+        missedCount: 3
+      })
     ])
-    expect(h.store.listAlerts()).toHaveLength(3)
-    expect(h.store.getOccurrence(`${task.id}@${firstDue}`)?.status).toBe('missed')
+    expect(h.store.listAlerts()).toHaveLength(1)
     expect(h.store.getTask(task.id)?.nextRunAt).toBe(Date.parse('2026-08-06T07:30:00.000Z'))
+  })
+
+  it('agrège 24 heures de retards à la minute en une seule occurrence', async () => {
+    const firstDue = Date.parse('2026-08-03T07:30:00.000Z')
+    const h = harness(firstDue - 60_000)
+    const task = h.store.create(
+      input('active-only', {
+        schedule: {
+          ...input('active-only').schedule!,
+          recurrence: { unit: 'minute', interval: 1 }
+        }
+      })
+    )
+    const scheduler = new TaskScheduler(h.store, h.dispatch, h.relay, h.clock)
+
+    await h.advanceTo(firstDue + 24 * 60 * 60_000)
+    const startedAt = performance.now()
+    await scheduler.start()
+
+    expect(performance.now() - startedAt).toBeLessThan(250)
+    expect(h.store.listOccurrences(task.id)).toEqual([
+      expect.objectContaining({ missedCount: 1_441, lastMissedFor: firstDue + 24 * 60 * 60_000 })
+    ])
+    expect(h.store.listAlerts()).toHaveLength(1)
+    expect(h.store.getTask(task.id)?.nextRunAt).toBe(firstDue + 24 * 60 * 60_000 + 60_000)
   })
 
   it("ne rattrape pas les échéances d'une tâche réactivée après plusieurs jours", async () => {
@@ -235,5 +262,41 @@ describe('Task Manager — ordonnanceur durable', () => {
 
     await scheduler.runOccurrence(occurrenceId)
     expect(h.dispatched).toEqual([occurrenceId])
+  })
+
+  it('conserve le canal de causalite tardive sur le chemin watchdog uniquement', async () => {
+    const now = Date.parse('2026-08-03T08:00:00.000Z')
+    const h = harness(now)
+    const task = h.store.create(
+      input('active-only', {
+        schedule: undefined,
+        watchdog: {
+          source: { kind: 'app-event', events: ['orchestration-red'] },
+          guards: { dedupWindowMs: 0, maxTriggersPerHour: 12, maxChainDepth: 0, maxPerRoot: 20 }
+        }
+      })
+    )
+    const onLateMutationClaims = vi.fn()
+    const dispatch = {
+      run: vi.fn(async (_task, _occurrence, _onLateMutationClaims) => ({
+        status: 'completed' as const
+      }))
+    } satisfies TaskDispatcher
+    const scheduler = new TaskScheduler(h.store, dispatch, h.relay, h.clock)
+
+    await scheduler.runWatchdog(
+      task.id,
+      {
+        signature: 'red',
+        rootSignature: 'red@1',
+        context: 'red',
+        depth: 0,
+        source: 'app-event',
+        observedAt: now
+      },
+      onLateMutationClaims
+    )
+
+    expect(dispatch.run.mock.calls[0][2]).toBe(onLateMutationClaims)
   })
 })

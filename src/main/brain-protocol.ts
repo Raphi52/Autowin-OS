@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import { createCipheriv, createHash, createHmac, timingSafeEqual } from 'node:crypto'
 
 export interface SignedBrainPayload {
   service?: unknown
@@ -12,9 +12,15 @@ export interface SignedBrainPayload {
 export interface VerifiedBrainPayload {
   context: string
   navigation?: unknown
+  corpus?: readonly string[]
+  structuredContext?: {
+    preamble: string
+    sources: ReadonlyArray<{ path: string; content: string }>
+  }
 }
 
 const SERVICE = 'amitel-brain'
+const REQUEST_AAD = Buffer.from('amitel-brain/request-v1', 'utf8')
 const MAX_AUTHENTICATED_BYTES = 1024 * 1024
 export const MAX_BRAIN_CONTEXT_CHARS = 3_000
 export const MAX_SIGNED_BRAIN_RESPONSE_BYTES = 3 * 1024 * 1024
@@ -31,10 +37,94 @@ type BrainResponseLike = {
   json?: () => Promise<unknown>
 }
 
+/** Chiffre le POST pour qu'une reprise de port entre challenge et requête n'expose aucun prompt. */
+export function sealBrainRequest(
+  payload: Record<string, unknown>,
+  token: string,
+  nonce: string
+): { nonce: string; ciphertext: string } {
+  if (!/^[0-9a-f]{24}$/.test(nonce)) throw new Error('Nonce Amitel Brain invalide')
+  const key = createHash('sha256').update(token, 'utf8').digest()
+  const cipher = createCipheriv('aes-256-gcm', key, Buffer.from(nonce, 'hex'))
+  cipher.setAAD(REQUEST_AAD)
+  const encrypted = Buffer.concat([
+    cipher.update(JSON.stringify(payload), 'utf8'),
+    cipher.final(),
+    cipher.getAuthTag()
+  ])
+  return { nonce, ciphertext: encrypted.toString('base64') }
+}
+
 function assertContextBound(context: string): void {
-  if (context.length > MAX_BRAIN_CONTEXT_CHARS) {
+  // Protocole: caractères Unicode (points de code), identique à len(str) côté Python.
+  if (Array.from(context).length > MAX_BRAIN_CONTEXT_CHARS) {
     throw new Error('Contexte Amitel Brain trop volumineux')
   }
+}
+
+function parseCorpusAttestation(value: unknown): readonly string[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.length > 8) {
+    throw new Error('Attestation de corpus Amitel Brain invalide')
+  }
+  return value.map((entry) => {
+    if (
+      typeof entry !== 'string' ||
+      !entry ||
+      entry.length > 100 ||
+      entry !== entry.trim().toLowerCase() ||
+      entry === '*' ||
+      !entry.startsWith('knowledge/') ||
+      entry.includes('\\') ||
+      entry.includes('//') ||
+      entry.replace(/\/$/, '').split('/').some((part) => !part || part === '.' || part === '..')
+    ) {
+      throw new Error('Attestation de corpus Amitel Brain invalide')
+    }
+    return entry
+  })
+}
+
+function parseStructuredContext(
+  value: unknown
+): VerifiedBrainPayload['structuredContext'] | undefined {
+  if (value === undefined) return undefined
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Contexte structuré Amitel Brain invalide')
+  }
+  const structured = value as Record<string, unknown>
+  if (typeof structured.preamble !== 'string' || !Array.isArray(structured.sources)) {
+    throw new Error('Contexte structuré Amitel Brain invalide')
+  }
+  if (structured.sources.length > 100) {
+    throw new Error('Contexte structuré Amitel Brain invalide')
+  }
+  const sources = structured.sources.map((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw new Error('Contexte structuré Amitel Brain invalide')
+    }
+    const source = entry as Record<string, unknown>
+    if (
+      typeof source.path !== 'string' ||
+      !source.path.trim() ||
+      source.path.length > 4096 ||
+      typeof source.content !== 'string'
+    ) {
+      throw new Error('Contexte structuré Amitel Brain invalide')
+    }
+    return { path: source.path, content: source.content }
+  })
+  const reconstructed = [structured.preamble, ...sources.map((source) => source.content)]
+    .filter(Boolean)
+    .join('\n\n---\n\n')
+  assertContextBound(reconstructed)
+  return { preamble: structured.preamble, sources }
+}
+
+function renderStructuredContext(
+  structured: NonNullable<VerifiedBrainPayload['structuredContext']>
+): string {
+  return structured.preamble + structured.sources.map((source) => source.content).join('\n\n---\n\n')
 }
 
 /** Lit une réponse JSON avec une borne avant allocation si Content-Length est disponible. */
@@ -155,8 +245,14 @@ export function verifySignedBrainPayload(
   const body = decoded as Record<string, unknown>
   if (typeof body.context !== 'string') throw new Error('Reponse Amitel Brain invalide')
   assertContextBound(body.context)
+  const structuredContext = parseStructuredContext(body.structuredContext)
+  if (structuredContext && renderStructuredContext(structuredContext) !== body.context) {
+    throw new Error('Les frontières du contexte Amitel Brain sont incohérentes')
+  }
   return {
     context: body.context,
-    ...('navigation' in body ? { navigation: body.navigation } : {})
+    ...('navigation' in body ? { navigation: body.navigation } : {}),
+    ...(body.corpus !== undefined ? { corpus: parseCorpusAttestation(body.corpus) } : {}),
+    ...(structuredContext ? { structuredContext } : {})
   }
 }

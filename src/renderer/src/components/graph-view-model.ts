@@ -10,6 +10,14 @@ export type GraphNode = {
   graphScore?: number
   fusedScore?: number
   relations?: Array<{ type: string; target: string }>
+  /** Métadonnées uniquement présentes sur les dossiers synthétiques de l'arbre radial. */
+  treeNodeId?: string
+  treeDepth?: number
+  treeLeaves?: number
+  treeCollapsed?: boolean
+  fx?: number
+  fy?: number
+  fz?: number
   x?: number
   y?: number
   z?: number
@@ -36,6 +44,11 @@ export type GraphLink = {
   relation?: string
 }
 export type GraphData = { nodes: GraphNode[]; links: GraphLink[]; totalNodes?: number }
+export type KnowledgeHealthIssue = {
+  relation: 'contradicts' | 'supersedes'
+  source: GraphNode
+  target: GraphNode
+}
 export type GraphVisualMode = 'serious' | 'galaxy'
 export type GraphVisualProfile = {
   modeClass: string
@@ -94,6 +107,23 @@ export const GRAPH_PALETTE = [
 ]
 
 export const DEFAULT_GRAPH_NODE_SPACING = 72
+
+/** Relations de santé strictement explicites : aucune analyse de prose ou de label. */
+export function knowledgeHealthIssues(graph: GraphData): KnowledgeHealthIssue[] {
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+  const issues = graph.links.flatMap((link): KnowledgeHealthIssue[] => {
+    if (link.relation !== 'contradicts' && link.relation !== 'supersedes') return []
+    const source = byId.get(endpointId(link.source))
+    const target = byId.get(endpointId(link.target))
+    return source && target ? [{ relation: link.relation, source, target }] : []
+  })
+  return issues.sort(
+    (left, right) =>
+      left.relation.localeCompare(right.relation) ||
+      left.source.label.localeCompare(right.source.label, 'fr') ||
+      left.target.label.localeCompare(right.target.label, 'fr')
+  )
+}
 
 export function graphMotionProfile(): { warmupTicks: number; cooldownTicks: number } {
   return { warmupTicks: 80, cooldownTicks: 0 }

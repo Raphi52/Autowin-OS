@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  analyzeDecomposition,
-  buildOrchestratorDecomposer,
-  parseDecompositionPlan
-} from './greedy-decompose'
+import { analyzeDecomposition, buildOrchestratorDecomposer } from './greedy-decompose'
 import type { DecompositionOutcome } from './greedy-decompose'
 import { compileExecutionQuote } from './execution-quote'
 import { ExecutionSupervisor } from './execution-supervisor'
@@ -17,9 +13,14 @@ import type {
 } from './providers/types'
 import { RoleModelConfig } from './roles'
 
-describe('parseDecompositionPlan', () => {
+const planNodes = (text: string) => {
+  const outcome = analyzeDecomposition(text)
+  return outcome.kind === 'plan' ? outcome.nodes : []
+}
+
+describe('analyzeDecomposition — vue des nœuds validés', () => {
   it('parse un tableau JSON propre en nœuds', () => {
-    const plan = parseDecompositionPlan(
+    const plan = planNodes(
       '[{"id":"a","prompt":"fais a","deps":[]},{"id":"b","prompt":"fais b","deps":["a"]}]'
     )
     expect(plan).toEqual([
@@ -30,16 +31,16 @@ describe('parseDecompositionPlan', () => {
 
   it('extrait le JSON même entouré de prose / fences ```json', () => {
     const text = 'Voici le plan :\n```json\n[{"id":"x","prompt":"p","deps":[]}]\n```\nVoilà.'
-    expect(parseDecompositionPlan(text)).toEqual([{ id: 'x', prompt: 'p', deps: [] }])
+    expect(planNodes(text)).toEqual([{ id: 'x', prompt: 'p', deps: [] }])
   })
 
   it('rejette (→ []) un plan avec dépendance inconnue', () => {
-    expect(parseDecompositionPlan('[{"id":"a","prompt":"p","deps":["ghost"]}]')).toEqual([])
+    expect(planNodes('[{"id":"a","prompt":"p","deps":["ghost"]}]')).toEqual([])
   })
 
   it('rejette (→ []) un cycle', () => {
     expect(
-      parseDecompositionPlan(
+      planNodes(
         '[{"id":"a","prompt":"p","deps":["b"]},{"id":"b","prompt":"q","deps":["a"]}]'
       )
     ).toEqual([])
@@ -47,23 +48,23 @@ describe('parseDecompositionPlan', () => {
 
   it('rejette (→ []) ids dupliqués, prompt vide, ou item non-objet', () => {
     expect(
-      parseDecompositionPlan(
+      planNodes(
         '[{"id":"a","prompt":"p","deps":[]},{"id":"a","prompt":"q","deps":[]}]'
       )
     ).toEqual([])
-    expect(parseDecompositionPlan('[{"id":"a","prompt":"","deps":[]}]')).toEqual([])
-    expect(parseDecompositionPlan('[42]')).toEqual([])
+    expect(planNodes('[{"id":"a","prompt":"","deps":[]}]')).toEqual([])
+    expect(planNodes('[42]')).toEqual([])
   })
 
   it('renvoie [] sur absence de JSON, JSON invalide, ou tableau vide', () => {
-    expect(parseDecompositionPlan('aucun plan ici')).toEqual([])
-    expect(parseDecompositionPlan('[{cassé}]')).toEqual([])
-    expect(parseDecompositionPlan('[]')).toEqual([])
-    expect(parseDecompositionPlan('')).toEqual([])
+    expect(planNodes('aucun plan ici')).toEqual([])
+    expect(planNodes('[{cassé}]')).toEqual([])
+    expect(planNodes('[]')).toEqual([])
+    expect(planNodes('')).toEqual([])
   })
 
   it('tolère deps absent (⇒ [])', () => {
-    expect(parseDecompositionPlan('[{"id":"a","prompt":"p"}]')).toEqual([
+    expect(planNodes('[{"id":"a","prompt":"p"}]')).toEqual([
       { id: 'a', prompt: 'p', deps: [] }
     ])
   })
@@ -71,9 +72,9 @@ describe('parseDecompositionPlan', () => {
 
 describe('analyzeDecomposition — un échec ne se déguise plus en tâche atomique', () => {
   it('distingue « le modèle juge la tâche atomique » de « le modèle a foiré son JSON »', () => {
-    // Les deux retombent en séquentiel via parseDecompositionPlan : c'était exactement le point aveugle.
-    expect(parseDecompositionPlan('[]')).toEqual([])
-    expect(parseDecompositionPlan('{"pas":"un tableau"}')).toEqual([])
+    // Les deux retombent en séquentiel dans la vue de nœuds : c'était exactement le point aveugle.
+    expect(planNodes('[]')).toEqual([])
+    expect(planNodes('{"pas":"un tableau"}')).toEqual([])
     // ...mais l'issue nommée les sépare.
     expect(analyzeDecomposition('[]')).toEqual({ kind: 'atomic' })
     expect(analyzeDecomposition('{"pas":"un tableau"}')).toEqual({
@@ -102,7 +103,7 @@ describe('analyzeDecomposition — un échec ne se déguise plus en tâche atomi
     const text = '[{"id":"a","prompt":"fais a","deps":[]},{"id":"b","prompt":"fais b","deps":["a"]}]'
     const outcome = analyzeDecomposition(text)
     expect(outcome.kind).toBe('plan')
-    expect(outcome.kind === 'plan' ? outcome.nodes : []).toEqual(parseDecompositionPlan(text))
+    expect(outcome.kind === 'plan' ? outcome.nodes : []).toEqual(planNodes(text))
   })
 })
 

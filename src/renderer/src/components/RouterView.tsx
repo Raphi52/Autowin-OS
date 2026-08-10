@@ -57,10 +57,14 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
   const [statuses, setStatuses] = useState<ProviderStatus[]>([])
   const [binding, setBinding] = useState<Binding | null>(null)
   const [loaded, setLoaded] = useState(false)
+  /** Échec du CHARGEMENT du catalogue — distinct d'un catalogue vide. */
+  const [catalogError, setCatalogError] = useState<string | null>(null)
   const [testing, setTesting] = useState<Record<string, boolean>>({})
   const [modePending, setModePending] = useState<Record<string, boolean>>({})
   const [accounts, setAccounts] = useState<ClaudeAccountEntry[]>([])
   const [accountBusy, setAccountBusy] = useState(false)
+  /** Dernier échec d'une action de compte (ajout/bascule/retrait) — affiché, jamais avalé. */
+  const [accountError, setAccountError] = useState<string | null>(null)
   const [modelPending, setModelPending] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
   const [catalogActive, setCatalogActive] = useState(active)
@@ -71,6 +75,7 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
     setModels([])
     setStatuses([])
     setLoaded(false)
+    setCatalogError(null)
   }
 
   const reloadCatalog = useCallback(async (): Promise<void> => {
@@ -78,11 +83,23 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
     setModels([])
     setStatuses([])
     setLoaded(false)
-    const [nextModels, nextStatuses, roles] = await Promise.all([
-      window.api.models().catch(() => []),
-      window.api.providerStatus().catch(() => []),
-      window.api.roles().catch(() => ({}))
-    ])
+    setCatalogError(null)
+    // Un échec de chargement N'EST PAS un poste vide : avaler les rejets affichait « Aucun provider
+    // détecté. » sur une panne IPC, indiscernable d'un catalogue réellement vide et sans recours.
+    let nextModels: unknown
+    let nextStatuses: unknown
+    let roles: unknown
+    try {
+      ;[nextModels, nextStatuses, roles] = await Promise.all([
+        window.api.models(),
+        window.api.providerStatus(),
+        window.api.roles()
+      ])
+    } catch (reason) {
+      if (generation !== reloadGenerationRef.current) return
+      setCatalogError(reason instanceof Error ? reason.message : String(reason))
+      return
+    }
     if (generation !== reloadGenerationRef.current) return
     setModels(nextModels as RuntimeModel[])
     setStatuses(nextStatuses as ProviderStatus[])
@@ -204,14 +221,18 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
   ): Promise<void> => {
     if (accountBusy) return
     setAccountBusy(true)
+    setAccountError(null)
     try {
       const result = await action()
       if ('accounts' in result) setAccounts(result.accounts)
       // Le compte actif change l'identite du CLI : le badge d'auth affiche ne vaut plus rien tant
       // qu'il n'a pas ete re-teste. On recharge donc les statuts au lieu de laisser un vert perime.
       await reloadCatalog()
-    } catch {
-      // fail-open : la liste precedente reste affichee plutot qu'un ecran vide
+    } catch (error) {
+      // fail-open sur la LISTE (on garde l'affichage précédent plutôt qu'un écran vide), mais
+      // l'échec est DIT : un `catch {}` muet rendait « + Ajouter un compte » sans effet apparent —
+      // rien ne se créait et aucune raison n'était visible, donc rien de diagnosticable.
+      setAccountError(error instanceof Error ? error.message : String(error))
     } finally {
       setAccountBusy(false)
     }
@@ -329,9 +350,7 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
                           }
                         >
                           {account.displayName}
-                          {account.tier && (
-                            <em className="router-account-tier">{account.tier}</em>
-                          )}
+                          {account.tier && <em className="router-account-tier">{account.tier}</em>}
                         </button>
                         {account.id !== 'default' && (
                           <button
@@ -359,6 +378,15 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
                       + Ajouter un compte
                     </button>
                   </div>
+                  {accountError && (
+                    <p
+                      className="router-account-error"
+                      role="alert"
+                      data-testid="claude-account-error"
+                    >
+                      Action impossible : {accountError}
+                    </p>
+                  )}
                   <p className="router-hint">
                     Chaque compte garde sa propre session : basculer ne redemande pas de connexion.
                     Ajouter un compte ouvre un terminal de login dédié.
@@ -400,7 +428,15 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
             </section>
           )
         })}
-        {loaded && providers.length === 0 && (
+        {catalogError && (
+          <div className="router-catalog-error" role="alert" data-testid="router-catalog-error">
+            <p>Chargement du catalogue impossible : {catalogError}</p>
+            <button type="button" onClick={() => void reloadCatalog()}>
+              Réessayer
+            </button>
+          </div>
+        )}
+        {!catalogError && loaded && providers.length === 0 && (
           <p className="router-empty">Aucun provider détecté.</p>
         )}
       </div>

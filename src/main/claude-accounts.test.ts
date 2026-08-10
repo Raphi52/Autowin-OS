@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { join } from 'node:path'
 import {
   ClaudeAccountsStore,
   DEFAULT_ACCOUNT_ID,
@@ -149,7 +150,6 @@ describe('accountEnv', () => {
   })
 })
 
-
 describe('describeAccounts — deux comptes, MÊME email, niveaux différents', () => {
   const base = { addedAt: 'x' }
   const sameMail = [
@@ -242,5 +242,144 @@ describe('parseIdentity', () => {
     for (const raw of ['', 'pas du json', '{"loggedIn":"oui"}']) {
       expect(parseIdentity(raw)).toBeUndefined()
     }
+  })
+})
+
+describe('persistance — un compte non écrit est un compte perdu', () => {
+  function storeWithFailingWrite(): ClaudeAccountsStore {
+    return new ClaudeAccountsStore('C:/state/accounts.json', 'C:/state/accounts', {
+      readFile: () => {
+        throw new Error('ENOENT')
+      },
+      writeFile: () => {
+        throw new Error('EACCES: permission denied')
+      },
+      makeDir: () => undefined,
+      removeDir: () => undefined,
+      now: () => '2026-08-06T00:00:00.000Z'
+    })
+  }
+
+  it('ADD échoue bruyamment quand l’état ne peut pas être écrit', () => {
+    // Vécu le 2026-08-07 : le compte apparaissait dans l’UI puis disparaissait a chaque
+    // redemarrage, sans aucun signal — parce que l’echec d’ecriture etait avale en silence.
+    const store = storeWithFailingWrite()
+    expect(() => store.add()).toThrow(/EACCES/)
+  })
+
+  it('l’echec d’ecriture est EXPOSE, jamais avale', () => {
+    const store = storeWithFailingWrite()
+    try {
+      store.add()
+    } catch {
+      // l’erreur est attendue ; ce qui compte ici c’est la trace laissee.
+    }
+    expect(store.persistError).toMatch(/EACCES/)
+  })
+
+  it('une BASCULE reste fail-open (ne casse pas l’appel en cours) mais trace l’echec', () => {
+    const store = storeWithFailingWrite()
+    expect(() => store.switchTo(DEFAULT_ACCOUNT_ID)).not.toThrow()
+    expect(store.persistError).toMatch(/EACCES/)
+  })
+})
+
+describe('relocation du userData — le dossier d’un compte suit la racine courante', () => {
+  // Vecu le 2026-08-07 : le passage au stockage PORTABLE a deplace le userData dans le depot,
+  // mais `dir` etait fige en ABSOLU dans l’etat -> le compte pointait encore sur l’ancien
+  // %APPDATA%, hors du nouveau userData. Un chemin absolu persiste ne survit pas a un demenagement.
+  const stale = JSON.stringify({
+    version: 1,
+    activeId: 'compte-2',
+    accounts: [
+      { id: 'default', addedAt: '2026-08-06T00:00:00.000Z' },
+      {
+        id: 'compte-2',
+        dir: 'C:/ancien-emplacement/autowin-os/claude-accounts/compte-2',
+        addedAt: '2026-08-06T00:00:00.000Z'
+      }
+    ]
+  })
+
+  function storeAt(root: string): ClaudeAccountsStore {
+    return new ClaudeAccountsStore('C:/nouveau/accounts.json', root, {
+      readFile: () => stale,
+      writeFile: () => undefined,
+      makeDir: () => undefined,
+      removeDir: () => undefined,
+      now: () => '2026-08-06T00:00:00.000Z'
+    })
+  }
+
+  it('re-enracine le dossier du compte sur la racine COURANTE', () => {
+    const store = storeAt('C:/nouveau/claude-accounts')
+    const account = store.current().accounts.find((it) => it.id === 'compte-2')
+    expect(account?.dir).toBe(join('C:/nouveau/claude-accounts', 'compte-2'))
+  })
+
+  it('l’env injecte au spawn pointe sur la racine COURANTE, pas l’ancienne', () => {
+    const store = storeAt('C:/nouveau/claude-accounts')
+    expect(store.env().CLAUDE_CONFIG_DIR).toBe(join('C:/nouveau/claude-accounts', 'compte-2'))
+    expect(store.env().CLAUDE_CONFIG_DIR).not.toContain('ancien-emplacement')
+  })
+
+  it('le compte par defaut n’acquiert JAMAIS de dossier (non-regression)', () => {
+    const store = storeAt('C:/nouveau/claude-accounts')
+    const def = store.current().accounts.find((it) => it.id === 'default')
+    expect(def?.dir).toBeUndefined()
+  })
+})
+
+describe('rotation d’abonnement — choisir le compte suivant', () => {
+  // Le store est le SEUL a connaitre la liste des comptes : la politique de choix vit donc ici, pas
+  // dans le registre d'appels (qui, lui, connait les murs de quota mais pas les comptes).
+  function storeAvecComptes(ids: string[]): ClaudeAccountsStore {
+    const accounts = [
+      { id: DEFAULT_ACCOUNT_ID, addedAt: '2026-08-06T00:00:00.000Z' },
+      ...ids.map((id) => ({ id, dir: `C:/racine/${id}`, addedAt: '2026-08-06T00:00:00.000Z' }))
+    ]
+    return new ClaudeAccountsStore('C:/state/accounts.json', 'C:/racine', {
+      readFile: () => JSON.stringify({ version: 1, activeId: DEFAULT_ACCOUNT_ID, accounts }),
+      writeFile: () => undefined,
+      makeDir: () => undefined,
+      removeDir: () => undefined,
+      now: () => '2026-08-06T00:00:00.000Z'
+    })
+  }
+
+  it('bascule sur un AUTRE compte et le rend actif', () => {
+    const store = storeAvecComptes(['compte-2'])
+    const suivant = store.rotateAwayFrom(DEFAULT_ACCOUNT_ID)
+    expect(suivant).toBe('compte-2')
+    expect(store.active().id).toBe('compte-2')
+  })
+
+  it('ne rend RIEN quand il n’y a pas d’autre compte — pas de rotation en rond', () => {
+    const store = storeAvecComptes([])
+    expect(store.rotateAwayFrom(DEFAULT_ACCOUNT_ID)).toBeUndefined()
+    expect(store.active().id).toBe(DEFAULT_ACCOUNT_ID)
+  })
+
+  it('ne rend JAMAIS le compte epuise lui-meme', () => {
+    const store = storeAvecComptes(['compte-2', 'compte-3'])
+    const suivant = store.rotateAwayFrom('compte-2')
+    expect(suivant).not.toBe('compte-2')
+    expect(['default', 'compte-3']).toContain(suivant)
+  })
+
+  it('avance dans le pool au lieu de reboucler entre les deux premiers comptes', () => {
+    const store = storeAvecComptes(['compte-2', 'compte-3'])
+
+    expect(store.rotateAwayFrom(DEFAULT_ACCOUNT_ID)).toBe('compte-2')
+    expect(store.rotateAwayFrom('compte-2')).toBe('compte-3')
+    expect(store.rotateAwayFrom('compte-3')).toBe(DEFAULT_ACCOUNT_ID)
+  })
+
+  it('un id inconnu ne casse rien et ne change pas le compte actif', () => {
+    const store = storeAvecComptes(['compte-2'])
+    const avant = store.active().id
+    expect(() => store.rotateAwayFrom('compte-inexistant')).not.toThrow()
+    expect(['default', 'compte-2']).toContain(store.active().id)
+    void avant
   })
 })

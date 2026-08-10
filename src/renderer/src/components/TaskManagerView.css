@@ -428,7 +428,7 @@
 }
 
 .task-manager-occurrence > span {
-  grid-row: 1 / 3;
+  grid-row: 1 / span 3;
   padding: 3px 6px;
   border-radius: 999px;
   color: var(--text-dim);
@@ -446,15 +446,38 @@
 }
 
 .task-manager-occurrence strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 11px;
 }
 
 .task-manager-occurrence small {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-faint);
   font-size: 9px;
+}
+
+.task-manager-occurrence-open {
+  grid-column: 2;
+  grid-row: 3;
+  justify-self: start;
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px 8px;
+  border: 1px solid var(--container-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.task-manager-occurrence-open:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--text) 40%, var(--container-border));
 }
 
 .task-manager-alert {
@@ -642,4 +665,203 @@
   .task-manager-field.is-wide {
     grid-column: auto;
   }
+}
+
+/* Watchdog Agents — les règles qui lancent un agent sans qu'on le demande.
+   Les bornes restent visibles en permanence : c'est la contrepartie du pouvoir accordé. */
+.watchdog-section {
+  margin: var(--s3, 16px) 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r2, 10px);
+  background: var(--bg-inset);
+}
+.watchdog-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.watchdog-section-head h2 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 650;
+}
+.watchdog-section-head p {
+  margin: 0;
+  max-width: 62ch;
+  color: #9fb3c8;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.watchdog-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+  color: #9fb3c8;
+  font-size: 11px;
+}
+.watchdog-stats strong {
+  color: #e6e9ef;
+  font-variant-numeric: tabular-nums;
+}
+.watchdog-stats .watchdog-pending strong {
+  color: #f0c274;
+}
+.watchdog-empty {
+  margin: 12px 0 0;
+  color: #9fb3c8;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.watchdog-rules {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.watchdog-rules > li {
+  border: 1px solid var(--line);
+  border-radius: var(--r1, 8px);
+  padding: 10px 12px;
+}
+.watchdog-rules > li.is-disarmed {
+  opacity: 0.55;
+}
+.watchdog-rule-main {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.watchdog-rule-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+}
+.watchdog-rule-state {
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: #9fb3c8;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.watchdog-rule-source {
+  color: #c7d3df;
+  font-size: 12px;
+}
+.watchdog-rule-guards {
+  color: #8fa3b6;
+  font-size: 11px;
+}
+.watchdog-rule-history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+.watchdog-rule-history li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+.watchdog-rule-history time {
+  color: #8fa3b6;
+}
+.watchdog-outcome {
+  padding: 1px 7px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 10px;
+}
+.watchdog-outcome.is-neutral {
+  color: #7ee2a8;
+  border-color: rgba(126, 226, 168, 0.35);
+  background: rgba(126, 226, 168, 0.12);
+}
+.watchdog-outcome.is-info {
+  color: #8fbcf0;
+  border-color: rgba(143, 188, 240, 0.35);
+  background: rgba(143, 188, 240, 0.12);
+}
+.watchdog-outcome.is-act {
+  color: #f0c274;
+  border-color: rgba(240, 194, 116, 0.35);
+  background: rgba(240, 194, 116, 0.12);
+}
+/* « Non renseignée » se voit : un agent a travaillé et personne ne sait sur quoi il a conclu. */
+.watchdog-outcome.is-unknown {
+  color: #b6a2c8;
+  border-color: rgba(182, 162, 200, 0.4);
+  background: rgba(182, 162, 200, 0.12);
+  border-style: dashed;
+}
+
+/* Saisie d'une règle de réveil : les bornes sont dans le flux du formulaire, jamais repliées. */
+.watchdog-fields {
+  display: contents;
+}
+.watchdog-fields-note,
+.watchdog-fields-warning {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.watchdog-fields-note {
+  color: #8fa3b6;
+}
+.watchdog-fields-warning {
+  padding: 7px 10px;
+  border: 1px solid rgba(240, 194, 116, 0.4);
+  border-radius: var(--r1, 8px);
+  color: #f0c274;
+  background: rgba(240, 194, 116, 0.1);
+}
+.watchdog-fields-reset {
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r1, 8px);
+  color: #9fb3c8;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.watchdog-fields-reset:hover {
+  color: #e6e9ef;
+}
+
+/* Événements surveillés : une règle peut en écouter plusieurs, les cases restent lisibles en colonne. */
+.watchdog-events {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r1, 8px);
+}
+.watchdog-events legend {
+  padding: 0 4px;
+  color: #9fb3c8;
+  font-size: 11px;
 }

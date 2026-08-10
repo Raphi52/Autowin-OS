@@ -2,7 +2,9 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { profileSummary, WorkflowProfilesView } from './WorkflowProfilesView'
+import { WorkflowProfilesView } from './WorkflowProfilesView'
+import { workflowIssues } from './workflow-executability'
+import { profileSummary } from './workflow-profile-summary'
 
 let container: HTMLDivElement
 let root: Root
@@ -74,7 +76,9 @@ describe('vue Workflows — lister et sélectionner', () => {
       workflowProfiles: vi.fn().mockResolvedValue({ profiles: [rapide], activeId: null })
     })
     await render()
-    expect(container.querySelector('[data-testid="workflow-pick-rapide"]')!.getAttribute('aria-pressed')).toBe('false')
+    expect(
+      container.querySelector('[data-testid="workflow-pick-rapide"]')!.getAttribute('aria-pressed')
+    ).toBe('false')
     expect(container.textContent).not.toContain('actif')
   })
 
@@ -111,7 +115,9 @@ describe('vue Workflows — lister et sélectionner', () => {
     api({ workflowProfileSave: save })
     await render()
 
-    const case_ = container.querySelector<HTMLInputElement>('[data-testid="workflow-enabled-rapide"]')!
+    const case_ = container.querySelector<HTMLInputElement>(
+      '[data-testid="workflow-enabled-rapide"]'
+    )!
     expect(case_.checked).toBe(true) // `enabled` absent vaut invocable
     // `.click()` et non `.checked = false` : React suit la valeur des cases par un tracker interne,
     // qu'une écriture directe contourne — l'évènement part, mais React le considère sans changement.
@@ -131,7 +137,8 @@ describe('vue Workflows — lister et sélectionner', () => {
 
     expect(select).toHaveBeenCalledWith('rapide')
     expect(
-      container.querySelector<HTMLButtonElement>('[data-testid="workflow-pick-rapide"]')!
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="workflow-pick-rapide"]')!
         .getAttribute('aria-pressed')
     ).toBe('true')
   })
@@ -186,5 +193,178 @@ describe('résumé d’un workflow', () => {
     expect(
       profileSummary({ id: 'b', name: 'B', instructions: { mode: 'replace', text: 'ma méthode' } })
     ).toContain('consignes remplacées')
+  })
+})
+
+/** Écrire `input.value` contourne le tracker interne de React : on passe par le setter natif. */
+function saisir(champ: HTMLInputElement, valeur: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+  setter.call(champ, valeur)
+  champ.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+describe('vue Workflows — renommer sans écrire à chaque frappe', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('cinq frappes ne produisent QU’UN enregistrement, avec le nom final', async () => {
+    // Défaut : l'input était piloté par `profile.name` et appelait `workflowProfileSave` dans son
+    // `onChange` — une écriture IPC PAR CARACTÈRE, donc cinq courses d'écriture pour « Rapid ».
+    vi.useFakeTimers()
+    const save = vi.fn().mockResolvedValue({ profiles: [rapide], activeId: null })
+    api({ workflowProfileSave: save })
+    await render()
+
+    const champ = container.querySelector<HTMLInputElement>(
+      '[data-testid="workflow-rename-rapide"]'
+    )!
+    for (const valeur of ['R', 'Ra', 'Rap', 'Rapi', 'Rapid']) {
+      await act(async () => saisir(champ, valeur))
+    }
+    // Avant la retombée du debounce : rien n'est encore parti.
+    expect(save).not.toHaveBeenCalled()
+    // La frappe reste à l'écran — c'est l'état local qui pilote le champ.
+    expect(champ.value).toBe('Rapid')
+
+    await act(async () => {
+      vi.advanceTimersByTime(300)
+      await Promise.resolve()
+    })
+
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ id: 'rapide', name: 'Rapid' }))
+  })
+
+  it('un renommage rejeté le DIT et rend le nom persisté (rollback visible)', async () => {
+    vi.useFakeTimers()
+    const save = vi.fn().mockRejectedValue(new Error('EACCES workflows.json'))
+    api({ workflowProfileSave: save })
+    await render()
+
+    const champ = container.querySelector<HTMLInputElement>(
+      '[data-testid="workflow-rename-rapide"]'
+    )!
+    await act(async () => saisir(champ, 'Foudre'))
+    await act(async () => {
+      vi.advanceTimersByTime(300)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'EACCES workflows.json'
+    )
+    expect(
+      container.querySelector<HTMLInputElement>('[data-testid="workflow-rename-rapide"]')!.value
+    ).toBe('Rapide')
+  })
+})
+
+describe('vue Workflows — un échec dit POURQUOI', () => {
+  it.each([
+    ['workflowProfileSave', 'workflow-enabled-rapide'],
+    ['workflowProfileSelect', 'workflow-pick-rapide']
+  ])('%s : la raison IPC réelle atteint l’alerte', async (canal, testid) => {
+    // Défaut : des `catch {}` remplaçaient la raison par « L'enregistrement a échoué ». Disque
+    // plein, fichier verrouillé, schéma refusé — tout se lisait pareil, donc rien de diagnostiquable.
+    api({ [canal]: vi.fn().mockRejectedValue(new Error('disque plein')) })
+    await render()
+    await act(async () => container.querySelector<HTMLElement>(`[data-testid="${testid}"]`)!.click())
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('disque plein')
+  })
+
+  it('une lecture en échec nomme la raison au lieu d’une phrase passe-partout', async () => {
+    api({ workflowProfiles: vi.fn().mockRejectedValue(new Error('EPERM roles.json')) })
+    await render()
+    expect(container.textContent).toContain('EPERM roles.json')
+  })
+})
+
+describe('exécutabilité d’un workflow', () => {
+  it('un workflow sain ne signale rien', () => {
+    expect(workflowIssues(rapide)).toEqual([])
+  })
+
+  it('remonte une phase que rien ne sait jouer', () => {
+    expect(workflowIssues({ id: 'x', name: 'X', phases: ['brainstorm'] })).toEqual([
+      'phase inconnue : brainstorm'
+    ])
+  })
+
+  it('remonte l’arête orpheline que la portée ignorait en silence', () => {
+    // `WorkflowTrack` faisait `return null` sur une arête dont un bout n'existe pas : le graphe
+    // paraissait sain alors qu'un retour ne menait nulle part.
+    const issues = workflowIssues({
+      id: 'x',
+      name: 'X',
+      graph: {
+        nodes: [{ id: 'n1', phase: 'build', agents: [{ id: 'a' }] }],
+        edges: [{ from: 'n1', to: 'disparu', when: 'fail' }]
+      } as never
+    })
+    expect(issues).toEqual(['arête orpheline : n1 → disparu (cible inconnue)'])
+  })
+
+  it('un workflow sans phase ne peut rien jouer et le dit', () => {
+    expect(workflowIssues({ id: 'x', name: 'X' })[0]).toContain('aucune phase')
+  })
+
+  it('l’activation est REFUSÉE tant qu’un workflow n’est pas exécutable', async () => {
+    const casse = { id: 'casse', name: 'Cassé', phases: ['brainstorm'] }
+    const select = vi.fn()
+    api({
+      workflowProfiles: vi.fn().mockResolvedValue({ profiles: [casse], activeId: null }),
+      workflowProfileSelect: select
+    })
+    await render()
+
+    const pick = container.querySelector<HTMLButtonElement>('[data-testid="workflow-pick-casse"]')!
+    expect(pick.disabled).toBe(true)
+    expect(container.querySelector('[data-testid="workflow-unrunnable-casse"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="workflow-issues-casse"]')?.textContent).toContain(
+      'brainstorm'
+    )
+    await act(async () => pick.click())
+    expect(select).not.toHaveBeenCalled()
+  })
+})
+
+describe('vue Workflows — gestes séparés et suppression confirmée', () => {
+  it('l’éditeur s’ouvre SANS imposer le workflow au chat', async () => {
+    const select = vi.fn()
+    api({ workflowProfileSelect: select })
+    await render()
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="workflow-edit-rapide"]')!.click()
+    )
+    expect(select).not.toHaveBeenCalled()
+    expect(
+      container.querySelector('[data-testid="workflow-edit-rapide"]')!.getAttribute('aria-pressed')
+    ).toBe('true')
+  })
+
+  it('supprimer demande confirmation — le premier clic n’efface rien', async () => {
+    const remove = vi.fn().mockResolvedValue({ profiles: [], activeId: null })
+    api({ workflowProfileRemove: remove })
+    await render()
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="workflow-remove-rapide"]')!.click()
+    )
+    expect(remove).not.toHaveBeenCalled()
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="workflow-remove-confirm-rapide"]')!
+        .click()
+    )
+    expect(remove).toHaveBeenCalledWith('rapide')
+  })
+
+  it('le bouton destructif ne porte pas la même apparence qu’Exporter', async () => {
+    api()
+    await render()
+    const exporter = container.querySelector('[data-testid="workflow-export-rapide"]')!
+    const supprimer = container.querySelector('[data-testid="workflow-remove-rapide"]')!
+    expect(exporter.className).not.toContain('is-danger')
+    expect(supprimer.className).toContain('is-danger')
   })
 })

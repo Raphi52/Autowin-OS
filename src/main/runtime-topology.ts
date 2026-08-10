@@ -42,8 +42,27 @@ export function runtimeRoleBinding(binding: SlotBinding, models: ImportedModel[]
 
 export class UnresolvedRuntimeModelError extends Error {
   constructor(readonly modelId: string) {
-    super(`Alias de modèle indisponible hors catalogue : ${modelId}`)
+    super(`Modèle indisponible hors catalogue : ${modelId}`)
     this.name = 'UnresolvedRuntimeModelError'
+  }
+}
+
+/** Valide aussi les overrides ponctuels, qui ne font pas partie de la topologie persistée. */
+export function assertRuntimeBindingAvailable(binding: RoleBinding, models: ImportedModel[]): void {
+  const requestedId = binding.model?.includes('/')
+    ? binding.model
+    : `${binding.provider}/${binding.model ?? ''}`
+  const model = binding.model
+    ? (findModel(models, requestedId) ??
+      models.find(
+        (candidate) => candidate.provider === binding.provider && candidate.model === binding.model
+      ))
+    : defaultModelForProvider(models, binding.provider)
+  if (!model || model.provider !== binding.provider) {
+    throw new UnresolvedRuntimeModelError(requestedId)
+  }
+  if (binding.reasoningEffort && !model.reasoningEfforts.includes(binding.reasoningEffort)) {
+    throw new Error(`Effort indisponible pour ${model.id} : ${binding.reasoningEffort}`)
   }
 }
 
@@ -60,7 +79,10 @@ export function assertRuntimeTopologyAvailable(
     ...topology.panels.terrain,
     ...topology.panels.judge
   ]
-  for (const binding of bindings) runtimeRoleBinding(binding, models)
+  for (const binding of bindings) {
+    if (!findModel(models, binding.modelId)) throw new UnresolvedRuntimeModelError(binding.modelId)
+    runtimeRoleBinding(binding, models)
+  }
 }
 
 /**

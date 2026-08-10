@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { workflowQuoteLabel } from './WorkflowExecutionGraph'
+import { workflowQuoteLabel } from './workflow-quote-label'
 
 /**
  * Ce que ces tests protègent : que la carte « Devis d'exécution » nomme la façon de travailler qui

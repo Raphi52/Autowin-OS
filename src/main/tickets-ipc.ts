@@ -33,12 +33,23 @@ export interface TicketGetIpcRequest {
   requestId?: string
 }
 
+/** Mise à jour telle qu'elle arrive du renderer ; validation métier dans TicketService. */
+export interface TicketUpdateIpcRequest {
+  source: TicketSourceProfile
+  id: string
+  requestId?: string
+  comment?: string
+  state?: string
+  assignee?: string
+}
+
 interface TicketsServicePort {
   sources(): TicketSourceSummary[]
   saveSource(value: unknown): TicketSourceSummary[]
   list(value: TicketListRequest, signal?: AbortSignal): Promise<TicketPage>
   create(value: TicketCreateIpcRequest, signal?: AbortSignal): Promise<TicketItem>
   get(value: TicketGetIpcRequest, signal?: AbortSignal): Promise<TicketItem>
+  update(value: TicketUpdateIpcRequest, signal?: AbortSignal): Promise<TicketItem>
 }
 
 interface RegisterTicketsIpcOptions {
@@ -86,7 +97,28 @@ function proofFixture(value: unknown): { source: TicketSourceProfile; page: Tick
           const rawRelation = relation as Record<string, unknown>
           return {
             kind: requiredText(rawRelation.kind, 'relation.kind'),
-            target: requiredText(rawRelation.target, 'relation.target')
+            target: requiredText(rawRelation.target, 'relation.target'),
+            // Titre OPTIONNEL : une relation sans titre reste un id nu, jamais un titre inventé.
+            ...(typeof rawRelation.title === 'string' && rawRelation.title
+              ? { title: rawRelation.title.slice(0, 255) }
+              : {})
+          }
+        })
+      : []
+    const comments = Array.isArray(item.comments)
+      ? item.comments.slice(-20).map((comment) => {
+          if (!comment || typeof comment !== 'object' || Array.isArray(comment)) {
+            throw new Error('Commentaire de fixture Tickets invalide')
+          }
+          const rawComment = comment as Record<string, unknown>
+          return {
+            text: requiredText(rawComment.text, 'comment.text').slice(0, 2_000),
+            ...(typeof rawComment.author === 'string' && rawComment.author
+              ? { author: rawComment.author.slice(0, 320) }
+              : {}),
+            ...(typeof rawComment.createdAt === 'string' && rawComment.createdAt
+              ? { createdAt: rawComment.createdAt.slice(0, 40) }
+              : {})
           }
         })
       : []
@@ -106,6 +138,7 @@ function proofFixture(value: unknown): { source: TicketSourceProfile; page: Tick
         ? { description: item.description.slice(0, 10_000) }
         : {}),
       relations,
+      ...(comments.length ? { comments } : {}),
       fields: { __autowinTicketsProofFixture: true }
     }
   })
@@ -201,6 +234,24 @@ export function registerTicketsIpc({
     senderRequests.set(id, controller)
     try {
       return await service.get(request, controller.signal)
+    } finally {
+      if (senderRequests.get(id) === controller) senderRequests.delete(id)
+      if (senderRequests.size === 0) active.delete(event.sender)
+    }
+  })
+  ipc.handle('tickets:update', async (event, request: TicketUpdateIpcRequest) => {
+    assertTrusted(event, 'Tickets')
+    const id = requestId(request?.requestId)
+    let senderRequests = active.get(event.sender)
+    if (!senderRequests) {
+      senderRequests = new Map()
+      active.set(event.sender, senderRequests)
+    }
+    senderRequests.get(id)?.abort()
+    const controller = new AbortController()
+    senderRequests.set(id, controller)
+    try {
+      return await service.update(request, controller.signal)
     } finally {
       if (senderRequests.get(id) === controller) senderRequests.delete(id)
       if (senderRequests.size === 0) active.delete(event.sender)

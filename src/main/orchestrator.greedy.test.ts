@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import { AuthoritySas } from './authority/sas'
 import { CostAggregator } from './dashboards/cost'
 import { HookBus } from './hooks/hook-bus'
 import { Orchestrator, type GreedyTaskNode, type OrchestrationStep } from './orchestrator'
@@ -75,6 +74,24 @@ class GreedyProvider implements ProviderAdapter {
   }
 }
 
+class LifecycleGreedyProvider extends GreedyProvider {
+  private sequence = 0
+
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const token = `greedy-${++this.sequence}`
+    const pid = 8100 + this.sequence
+    options.execution?.onSpawnIntent?.(token, true)
+    options.execution?.onJournal?.(token, `C:/journaux/${token}.stdout.jsonl`)
+    options.execution?.onSpawned?.(token, pid)
+    const result = yield* super.send(messages, options)
+    options.execution?.onProcess?.(pid, false)
+    return result
+  }
+}
+
 function makeGreedy(
   provider: GreedyProvider,
   decompose: (task: string) => Promise<GreedyTaskNode[]>,
@@ -92,7 +109,6 @@ function makeGreedy(
     roles,
     cost: new CostAggregator(),
     trust: new TrustLedger(),
-    authority: new AuthoritySas(),
     executionWorkspace: 'C:\\ws',
     worktrees: makeTestWorktrees('C:\\ws'),
     greedyConcurrency: 4,
@@ -103,6 +119,30 @@ function makeGreedy(
 }
 
 describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonctionnement normal)', () => {
+  it("marque chaque membre d'un DAG greedy comme non récupérable sans son agrégat", async () => {
+    const provider = new LifecycleGreedyProvider()
+    const snapshots: Array<
+      Array<{ phase?: string; active?: boolean; fanOut?: boolean; provider?: string }>
+    > = []
+    const orchestrator = makeGreedy(
+      provider,
+      async () => [
+        { id: 'A', deps: [], prompt: 'fais A' },
+        { id: 'B', deps: ['A'], prompt: 'fais B' }
+      ],
+      () => ['build'],
+      { onAgentsChanged: (_runId, agents) => snapshots.push(agents) }
+    )
+
+    await orchestrator.run('analyse le projet en DAG')
+
+    const greedyAgents = snapshots
+      .flatMap((agents) => agents)
+      .filter((agent) => agent.phase === 'build' && agent.active === true)
+    expect(greedyAgents.length).toBeGreaterThanOrEqual(2)
+    expect(greedyAgents.every((agent) => agent.fanOut === true)).toBe(true)
+  })
+
   it('ne décompose pas un workflow explicite sans build', async () => {
     const provider = new GreedyProvider()
     const decompose = vi.fn().mockResolvedValue([
@@ -129,6 +169,20 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
     expect(provider.contents).toHaveLength(1)
     expect(result.result).toBe('VALIDE')
     expect(result.phaseOutputs).toEqual([])
+  })
+
+  it('/build reste atomique meme si le decomposeur propose un fan-out', async () => {
+    const provider = new GreedyProvider()
+    const decompose = vi.fn().mockResolvedValue([
+      { id: 'A', deps: [], prompt: 'verifie git' },
+      { id: 'B', deps: [], prompt: 'lance les tests' }
+    ])
+    const result = await makeGreedy(provider, decompose, () => ['build']).run(
+      '/build verifie uniquement la publication existante'
+    )
+
+    expect(decompose).not.toHaveBeenCalled()
+    expect(result.phaseOutputs.map((output) => output.phase)).toEqual(['build'])
   })
 
   it('conserve les phases standard autour de la frontière build parallélisée', async () => {

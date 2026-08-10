@@ -30,12 +30,14 @@ export function loadAutoClose(path = autoClosePath()): boolean {
   }
 }
 
-/** Écrit l'état. Best-effort : un disque en échec ne doit pas casser le réglage en cours. */
-export function saveAutoClose(enabled: boolean, path = autoClosePath()): void {
+/** Écrit l'état et dit explicitement si le disque porte réellement le réglage demandé. */
+export function saveAutoClose(enabled: boolean, path = autoClosePath()): boolean {
+  // fix-ok: l'appelant ne doit modifier l'état mémoire qu'après confirmation de la persistance.
   try {
     mkdirSync(dirname(path), { recursive: true })
     writeFileSync(path, JSON.stringify({ enabled }, null, 2), 'utf8')
+    return true
   } catch {
-    /* le réglage vaut pour cette session, il ne survivra pas — sans casser quoi que ce soit */
+    return false
   }
 }

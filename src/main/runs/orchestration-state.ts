@@ -8,11 +8,13 @@ import {
   writeFileSync
 } from 'node:fs'
 import { join } from 'node:path'
-import type { PipelinePhase } from '../skill-pipeline'
-import type { RoleBinding } from '../roles'
+import { PIPELINE_PHASES, type PipelinePhase } from '../skill-pipeline'
+import { decodeRoleBinding } from '../role-store'
+import { ALL_ROLES, type RoleBinding } from '../roles'
 import type { ExecutionQuote } from '../execution-quote'
 import type { ExecutionUsageSnapshot } from '../execution-supervisor'
 import type { OrchestrationRuntimeSnapshot } from '../orchestrator'
+import type { ExecutionEvidence } from '../providers/types'
 
 /**
  * SURVIE NIVEAU 3 — état reprenable d'une ORCHESTRATION.
@@ -33,6 +35,10 @@ import type { OrchestrationRuntimeSnapshot } from '../orchestrator'
 export interface OrchestrationPhaseOutput {
   phase: PipelinePhase
   text: string
+  /** CLI exact ayant produit cette occurrence ; absent sur les checkpoints historiques/fan-out. */
+  agentToken?: string
+  /** Preuves outils acquises avec cette phase, indispensables au gate apres un redemarrage. */
+  executionEvidence?: ExecutionEvidence[]
 }
 
 export interface OrchestrationRunState {
@@ -58,6 +64,12 @@ export interface OrchestrationRunState {
   executionQuote?: ExecutionQuote
   /** Consommation deja engagee : une reprise ne repart jamais avec des compteurs a zero. */
   usage?: ExecutionUsageSnapshot
+  /** Decision durable : ce pipeline doublon ne doit plus jamais etre relance. */
+  resumeDisposition?: {
+    kind: 'superseded-duplicate'
+    electedRunId: string
+    decidedAt: number
+  }
   startedAt: number
   updatedAt: number
   /**
@@ -67,6 +79,16 @@ export interface OrchestrationRunState {
    */
   agents?: Array<{
     token: string
+    /** Provider qui a produit le journal brut. */
+    provider?: string
+    /** Phase réellement exécutée par ce CLI ; ne jamais la redéduire de l'ordre du devis. */
+    phase?: PipelinePhase
+    /** `true` de la réservation jusqu'au règlement provider, y compris après la sortie du PID. */
+    active?: boolean
+    /** Un membre de fan-out ne peut pas, seul, devenir le livrable agrégé de sa phase. */
+    fanOut?: boolean
+    /** Réservation provider exacte encore associée à cette occurrence. */
+    reservationId?: string
     pid?: number
     /** Empreinte du processus au lancement — distingue notre agent d'un pid recyclé. */
     identity?: string
@@ -75,9 +97,307 @@ export interface OrchestrationRunState {
   }>
 }
 
+function isPhaseOutput(value: unknown): value is OrchestrationPhaseOutput {
+  if (!value || typeof value !== 'object') return false
+  const output = value as Record<string, unknown>
+  return (
+    typeof output.phase === 'string' &&
+    PIPELINE_PHASES.includes(output.phase as PipelinePhase) &&
+    typeof output.text === 'string' &&
+    (output.agentToken === undefined || isNonEmptyString(output.agentToken)) &&
+    (output.executionEvidence === undefined ||
+      (Array.isArray(output.executionEvidence) &&
+        output.executionEvidence.every(isExecutionEvidence)))
+  )
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && Boolean(value.trim())
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === 'string'
+}
+
+function isStringArray(value: unknown): boolean {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
+
+function isStringRecord(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    Object.values(value).every((item) => typeof item === 'string' || item === null)
+  )
+}
+
+function isStringArrayRecord(value: unknown): boolean {
+  return isRecord(value) && Object.values(value).every(isStringArray)
+}
+
+function isExecutionEvidence(value: unknown): value is ExecutionEvidence {
+  if (!isRecord(value)) return false
+  return (
+    typeof value.type === 'string' &&
+    ['mutation', 'verification', 'inspection', 'other'].includes(String(value.kind)) &&
+    typeof value.status === 'string' &&
+    typeof value.ok === 'boolean' &&
+    typeof value.summary === 'string' &&
+    isOptionalString(value.command) &&
+    (value.exitCode === undefined || Number.isSafeInteger(value.exitCode)) &&
+    isOptionalString(value.stdout) &&
+    isOptionalString(value.diff) &&
+    isOptionalString(value.path) &&
+    (value.paths === undefined || isStringArray(value.paths)) &&
+    (value.writtenLineFingerprints === undefined || isStringArray(value.writtenLineFingerprints)) &&
+    (value.writtenLineFingerprintsByPath === undefined ||
+      isStringArrayRecord(value.writtenLineFingerprintsByPath)) &&
+    isOptionalString(value.workspaceRoot) &&
+    (value.pathFingerprints === undefined || isStringRecord(value.pathFingerprints)) &&
+    (value.pathBaseFingerprints === undefined || isStringRecord(value.pathBaseFingerprints)) &&
+    (value.pathGenerationMarkers === undefined || isStringRecord(value.pathGenerationMarkers)) &&
+    (value.pathBaseGenerationMarkers === undefined ||
+      isStringRecord(value.pathBaseGenerationMarkers))
+  )
+}
+
+const RUN_ID_PATTERN = /^[A-Za-z0-9._-]{1,120}$/
+
+function isRunId(value: unknown): value is string {
+  return typeof value === 'string' && RUN_ID_PATTERN.test(value)
+}
+
+function isRoleBinding(value: unknown): value is RoleBinding {
+  const decoded = decodeRoleBinding(value)
+  if (!decoded || !isRecord(value)) return false
+  if (value.provider !== decoded.provider || value.model !== decoded.model) return false
+  if (value.phaseModel === undefined) return true
+  const rawPhaseModel = value.phaseModel as Record<string, Record<string, unknown>>
+  return Object.entries(rawPhaseModel).every(
+    ([phase, override]) => override.model === decoded.phaseModel?.[phase as PipelinePhase]?.model
+  )
+}
+
+function isRuntimeSnapshot(value: unknown): value is OrchestrationRuntimeSnapshot {
+  if (!isRecord(value) || !isRecord(value.roles)) return false
+  const roles = value.roles
+  if (!ALL_ROLES.every((role) => isRoleBinding(roles[role]))) return false
+  if (!isRecord(value.phaseFanOut)) return false
+  if (
+    !Object.entries(value.phaseFanOut).every(
+      ([phase, members]) =>
+        PIPELINE_PHASES.includes(phase as PipelinePhase) &&
+        Array.isArray(members) &&
+        members.every(isRoleBinding)
+    )
+  ) {
+    return false
+  }
+  return Array.isArray(value.judgeFanOut) && value.judgeFanOut.every(isRoleBinding)
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) > 0
+}
+
+function isExecutionQuote(value: unknown): value is ExecutionQuote {
+  if (!isRecord(value) || value.schema !== 'autowin.execution-quote/v1') return false
+  if (
+    typeof value.id !== 'string' ||
+    !value.id.trim() ||
+    typeof value.createdAt !== 'string' ||
+    !Number.isFinite(Date.parse(value.createdAt)) ||
+    typeof value.taskFingerprint !== 'string' ||
+    !value.taskFingerprint.trim() ||
+    !['trivial', 'standard', 'critical'].includes(String(value.regime)) ||
+    !Array.isArray(value.phases) ||
+    !value.phases.every(
+      (phase) => typeof phase === 'string' && PIPELINE_PHASES.includes(phase as PipelinePhase)
+    )
+  ) {
+    return false
+  }
+  if (!isRecord(value.decomposition) || !isPositiveInteger(value.decomposition.maxNodes)) {
+    return false
+  }
+  if (
+    (value.decomposition.mode !== 'disabled' && value.decomposition.mode !== 'build-only') ||
+    (value.decomposition.mode === 'disabled' && value.decomposition.maxNodes !== 1)
+  ) {
+    return false
+  }
+  if (!isRecord(value.limits)) return false
+  const positiveLimits = [
+    value.limits.maxProviderCalls,
+    value.limits.maxFreshTokens,
+    value.limits.maxTotalTokens,
+    value.limits.maxAgents,
+    value.limits.maxConcurrency,
+    value.limits.maxDurationMs
+  ]
+  if (
+    !positiveLimits.every(isPositiveInteger) ||
+    !isNonNegativeInteger(value.limits.maxRecoveries) ||
+    (value.limits.maxUsd !== null &&
+      !(
+        typeof value.limits.maxUsd === 'number' &&
+        Number.isFinite(value.limits.maxUsd) &&
+        value.limits.maxUsd >= 0
+      ))
+  ) {
+    return false
+  }
+  if (value.allocation === undefined) return true
+  if (!isRecord(value.allocation) || !isRecord(value.allocation.phaseMembers)) return false
+  if (
+    !Object.entries(value.allocation.phaseMembers).every(
+      ([phase, count]) =>
+        PIPELINE_PHASES.includes(phase as PipelinePhase) && isPositiveInteger(count)
+    )
+  ) {
+    return false
+  }
+  return (
+    isNonNegativeInteger(value.allocation.judgeMembers) &&
+    isPositiveInteger(value.allocation.maxGreedyNodes) &&
+    isNonNegativeInteger(value.allocation.reservedMandatoryAgents) &&
+    isNonNegativeInteger(value.allocation.estimatedMaxAgents) &&
+    isNonNegativeInteger(value.allocation.estimatedMaxCalls)
+  )
+}
+
+function isExecutionUsageSnapshot(value: unknown): value is ExecutionUsageSnapshot {
+  if (!isRecord(value) || typeof value.quoteId !== 'string' || !value.quoteId.trim()) return false
+  const counters = [
+    value.startedCalls,
+    value.completedCalls,
+    value.failedCalls,
+    value.activeCalls,
+    value.inputTokens,
+    value.outputTokens,
+    value.cacheReadTokens,
+    value.totalTokens,
+    value.freshTokens,
+    value.unpricedCalls,
+    value.unmeteredCalls
+  ]
+  return (
+    (value.startedAgents === undefined || isNonNegativeInteger(value.startedAgents)) &&
+    counters.every(isNonNegativeInteger) &&
+    (value.activeReservationIds === undefined ||
+      (Array.isArray(value.activeReservationIds) &&
+        value.activeReservationIds.every(isNonEmptyString) &&
+        new Set(value.activeReservationIds).size === value.activeReservationIds.length &&
+        value.activeReservationIds.length === value.activeCalls)) &&
+    (value.knownCostUsd === null ||
+      (typeof value.knownCostUsd === 'number' &&
+        Number.isFinite(value.knownCostUsd) &&
+        value.knownCostUsd >= 0)) &&
+    (value.tokenCoverage === 'complete' || value.tokenCoverage === 'partial') &&
+    (value.stoppedReason === undefined || typeof value.stoppedReason === 'string')
+  )
+}
+
+function isRunAgentRef(
+  value: unknown
+): value is NonNullable<OrchestrationRunState['agents']>[number] {
+  if (!isRecord(value) || typeof value.token !== 'string' || !value.token.trim()) return false
+  return (
+    (value.provider === undefined || typeof value.provider === 'string') &&
+    (value.phase === undefined ||
+      (typeof value.phase === 'string' &&
+        PIPELINE_PHASES.includes(value.phase as PipelinePhase))) &&
+    (value.active === undefined || typeof value.active === 'boolean') &&
+    (value.fanOut === undefined || typeof value.fanOut === 'boolean') &&
+    (value.reservationId === undefined || isNonEmptyString(value.reservationId)) &&
+    (value.pid === undefined || isPositiveInteger(value.pid)) &&
+    (value.identity === undefined || typeof value.identity === 'string') &&
+    (value.journalPath === undefined || typeof value.journalPath === 'string') &&
+    (value.offset === undefined || isNonNegativeInteger(value.offset))
+  )
+}
+
+function hasConsistentActiveReservationLinks(value: Record<string, unknown>): boolean {
+  const usage = value.usage as ExecutionUsageSnapshot | undefined
+  const activeReservationIds = usage?.activeReservationIds
+  if (activeReservationIds === undefined) return true // checkpoint historique
+  const agents = (value.agents ?? []) as NonNullable<OrchestrationRunState['agents']>
+  const linkedAgents = agents.filter((agent) => agent.reservationId !== undefined)
+  if (new Set(linkedAgents.map((agent) => agent.reservationId)).size !== linkedAgents.length) {
+    return false
+  }
+  const activeAgents = agents.filter((agent) => agent.active === true)
+  if (activeAgents.length !== activeReservationIds.length) return false
+  return activeReservationIds.every(
+    (reservationId) =>
+      activeAgents.filter((agent) => agent.reservationId === reservationId).length === 1
+  )
+}
+
+function isForkOrigin(value: unknown): value is NonNullable<OrchestrationRunState['forkedFrom']> {
+  if (!isRecord(value)) return false
+  return (
+    isNonEmptyString(value.checkpointId) &&
+    isRunId(value.runId) &&
+    isNonEmptyString(value.checkpointCreatedAt) &&
+    Number.isFinite(Date.parse(value.checkpointCreatedAt)) &&
+    isNonEmptyString(value.contentHash)
+  )
+}
+
+function isResumeDisposition(
+  value: unknown,
+  currentRunId: string
+): value is NonNullable<OrchestrationRunState['resumeDisposition']> {
+  return (
+    isRecord(value) &&
+    value.kind === 'superseded-duplicate' &&
+    isRunId(value.electedRunId) &&
+    value.electedRunId !== currentRunId &&
+    typeof value.decidedAt === 'number' &&
+    Number.isFinite(value.decidedAt) &&
+    value.decidedAt >= 0
+  )
+}
+
+function isOrchestrationRunState(value: unknown): value is OrchestrationRunState {
+  if (!isRecord(value)) return false
+  return (
+    isRunId(value.runId) &&
+    isNonEmptyString(value.task) &&
+    (value.conversationId === undefined || isNonEmptyString(value.conversationId)) &&
+    (value.turnId === undefined || isNonEmptyString(value.turnId)) &&
+    (value.forkedFrom === undefined || isForkOrigin(value.forkedFrom)) &&
+    Array.isArray(value.phaseOutputs) &&
+    value.phaseOutputs.every(isPhaseOutput) &&
+    (value.bindingOverride === undefined || isRoleBinding(value.bindingOverride)) &&
+    (value.runtimeSnapshot === undefined || isRuntimeSnapshot(value.runtimeSnapshot)) &&
+    (value.executionQuote === undefined || isExecutionQuote(value.executionQuote)) &&
+    (value.usage === undefined || isExecutionUsageSnapshot(value.usage)) &&
+    (value.resumeDisposition === undefined ||
+      isResumeDisposition(value.resumeDisposition, value.runId)) &&
+    (value.agents === undefined ||
+      (Array.isArray(value.agents) && value.agents.every(isRunAgentRef))) &&
+    hasConsistentActiveReservationLinks(value) &&
+    typeof value.startedAt === 'number' &&
+    Number.isFinite(value.startedAt) &&
+    value.startedAt >= 0 &&
+    typeof value.updatedAt === 'number' &&
+    Number.isFinite(value.updatedAt) &&
+    value.updatedAt >= 0
+  )
+}
+
 /** Un `runId` est un nom de fichier : on refuse tout ce qui pourrait sortir du dossier. */
 function safeRunId(runId: string): string {
-  if (!/^[A-Za-z0-9._-]{1,120}$/.test(runId)) throw new Error('runId invalide')
+  if (!isRunId(runId)) throw new Error('runId invalide')
   return runId
 }
 
@@ -86,6 +406,10 @@ function statePath(root: string, runId: string): string {
 }
 
 export function saveOrchestrationState(root: string, state: OrchestrationRunState): void {
+  safeRunId(state.runId)
+  if (!isOrchestrationRunState(state)) {
+    throw new Error('checkpoint orchestration causalement invalide')
+  }
   mkdirSync(root, { recursive: true })
   // Écriture atomique : un kill au milieu d'un `writeFileSync` laisserait un JSON tronqué que la
   // reprise devrait jeter. On écrit à côté puis on renomme (rename = atomique sur le même volume).
@@ -95,6 +419,35 @@ export function saveOrchestrationState(root: string, state: OrchestrationRunStat
   // `rename` remplace la cible sur les plateformes supportées par Node. Supprimer d'abord le JSON
   // créerait une fenêtre de crash où seul le `.tmp` subsiste et où le loader perdrait le checkpoint.
   renameSync(temporary, target)
+}
+
+/**
+ * Rend irreversible l'election d'un autre workflow pour la meme demande. L'agent eventuellement
+ * actif reste dans le checkpoint pour etre draine, mais ce pipeline ne redeviendra jamais candidat.
+ */
+export function suppressOrchestrationPipeline(
+  root: string,
+  runId: string,
+  electedRunId: string,
+  nowMs = Date.now()
+): OrchestrationRunState {
+  const current = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
+  if (!current) throw new Error(`checkpoint orchestration absent ou invalide: ${runId}`)
+  if (current.resumeDisposition) {
+    if (current.resumeDisposition.electedRunId !== electedRunId) {
+      throw new Error(
+        `suppression de pipeline deja liee a ${current.resumeDisposition.electedRunId}`
+      )
+    }
+    return current
+  }
+  const suppressed: OrchestrationRunState = {
+    ...current,
+    resumeDisposition: { kind: 'superseded-duplicate', electedRunId, decidedAt: nowMs },
+    updatedAt: nowMs
+  }
+  saveOrchestrationState(root, suppressed)
+  return suppressed
 }
 
 /**
@@ -108,9 +461,11 @@ export function saveOrchestrationAgentCheckpoint(
   agents: NonNullable<OrchestrationRunState['agents']>,
   usage: ExecutionUsageSnapshot | undefined,
   nowMs = Date.now()
-): OrchestrationRunState | null {
+): OrchestrationRunState {
   const current = loadOrchestrationStates(root).find((candidate) => candidate.runId === runId)
-  if (!current) return null
+  if (!current) {
+    throw new Error(`checkpoint orchestration absent ou invalide: ${runId}`)
+  }
   const updated: OrchestrationRunState = {
     ...current,
     agents,
@@ -136,15 +491,8 @@ export function loadOrchestrationStates(root: string): OrchestrationRunState[] {
   for (const entry of readdirSync(root)) {
     if (!entry.endsWith('.json')) continue
     try {
-      const parsed = JSON.parse(readFileSync(join(root, entry), 'utf8')) as OrchestrationRunState
-      if (
-        typeof parsed?.runId === 'string' &&
-        typeof parsed.task === 'string' &&
-        parsed.task.trim() &&
-        Array.isArray(parsed.phaseOutputs)
-      ) {
-        states.push(parsed)
-      }
+      const parsed: unknown = JSON.parse(readFileSync(join(root, entry), 'utf8'))
+      if (isOrchestrationRunState(parsed) && entry === `${parsed.runId}.json`) states.push(parsed)
     } catch {
       // JSON tronqué par un crash : on ignore ce run plutôt que de perdre les autres.
     }
@@ -166,7 +514,7 @@ export function pickOrchestrationToResume(
   //    tâche (c'est le cas le plus courant, la première phase étant la plus longue).
   //  - Des phases enregistrées mais TOUTES sans livrable (vu en réel) : les reprendre les ferait
   //    sauter sans avoir leur travail → pire que tout rejouer. Celui-là reste écarté.
-  return pickOrchestrationsToResume(states)[0] ?? null
+  return electStartupOrchestrationResumes(states).elected[0] ?? null
 }
 
 /**
@@ -179,16 +527,97 @@ export function pickOrchestrationsToResume(
   const mostRecentFirst = (candidates: readonly OrchestrationRunState[]): OrchestrationRunState[] =>
     [...candidates].sort((left, right) => right.updatedAt - left.updatedAt)
 
-  const withWork = states.filter((state) =>
-    state.phaseOutputs.some((output) => typeof output.text === 'string' && output.text.trim())
+  const suppressed = states.filter((state) => state.resumeDisposition !== undefined)
+  const suppressedIds = new Set(suppressed.map((state) => state.runId))
+  const activeLocks = states.filter(
+    (state) => !suppressedIds.has(state.runId) && (state.usage?.activeCalls ?? 0) > 0
   )
-  const neverStarted = states.filter((state) => state.phaseOutputs.length === 0)
-  return [...mostRecentFirst(withWork), ...mostRecentFirst(neverStarted)]
+  const activeIds = new Set(activeLocks.map((state) => state.runId))
+  const withWork = states.filter(
+    (state) =>
+      !suppressedIds.has(state.runId) &&
+      !activeIds.has(state.runId) &&
+      state.phaseOutputs.some((output) => typeof output.text === 'string' && output.text.trim())
+  )
+  const neverStarted = states.filter(
+    (state) =>
+      !suppressedIds.has(state.runId) &&
+      !activeIds.has(state.runId) &&
+      state.phaseOutputs.length === 0
+  )
+  return [
+    ...mostRecentFirst(activeLocks),
+    ...mostRecentFirst(withWork),
+    ...mostRecentFirst(neverStarted),
+    ...mostRecentFirst(suppressed)
+  ]
 }
 
 /** Normalise un libelle de tache pour comparer « la meme tache » ecrite a l'espace pres. */
 export function normalizeTaskKey(task: string): string {
-  return task.trim().replace(/\s+/g, ' ').toLowerCase()
+  return task.normalize('NFC').trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+/** Portee d'une reprise : une conversation et une demande canonique forment un seul workflow. */
+export function orchestrationResumeScopeKey(state: OrchestrationRunState): string {
+  return `${state.conversationId ?? '__autonomous__'}\u0000${normalizeTaskKey(state.task)}`
+}
+
+export interface StartupOrchestrationResumeElection {
+  elected: OrchestrationRunState[]
+  suppressed: Array<{ state: OrchestrationRunState; electedRunId: string }>
+}
+
+/**
+ * Elit un seul workflow par demande au demarrage. Un provider encore actif gagne sur un simple
+ * livrable, puis le checkpoint le plus recent gagne. Les autres occurrences restent observables :
+ * l'appelant doit laisser finir leur provider eventuel, mais ne doit jamais relancer leur pipeline.
+ */
+export function electStartupOrchestrationResumes(
+  states: readonly OrchestrationRunState[]
+): StartupOrchestrationResumeElection {
+  const candidates = pickOrchestrationsToResume(states)
+  const alreadySuppressed = candidates.filter((candidate) => candidate.resumeDisposition)
+  const contenders = candidates.filter((candidate) => !candidate.resumeDisposition)
+  const byScope = new Map<string, OrchestrationRunState[]>()
+  for (const candidate of contenders) {
+    const key = orchestrationResumeScopeKey(candidate)
+    byScope.set(key, [...(byScope.get(key) ?? []), candidate])
+  }
+
+  const winners = new Map<string, OrchestrationRunState>()
+  for (const [key, group] of byScope) {
+    winners.set(
+      key,
+      group.reduce((best, candidate) => {
+        const bestActive = (best.usage?.activeCalls ?? 0) > 0
+        const candidateActive = (candidate.usage?.activeCalls ?? 0) > 0
+        if (candidateActive !== bestActive) return candidateActive ? candidate : best
+        const bestHasWork = best.phaseOutputs.some((output) => output.text.trim())
+        const candidateHasWork = candidate.phaseOutputs.some((output) => output.text.trim())
+        if (candidateHasWork !== bestHasWork) return candidateHasWork ? candidate : best
+        return candidate.updatedAt > best.updatedAt ? candidate : best
+      })
+    )
+  }
+
+  const electedIds = new Set([...winners.values()].map((state) => state.runId))
+  const newlySuppressed = contenders
+    .filter((candidate) => !electedIds.has(candidate.runId))
+    .map((state) => ({
+      state,
+      electedRunId: winners.get(orchestrationResumeScopeKey(state))!.runId
+    }))
+  return {
+    elected: contenders.filter((candidate) => electedIds.has(candidate.runId)),
+    suppressed: [
+      ...alreadySuppressed.map((state) => ({
+        state,
+        electedRunId: state.resumeDisposition!.electedRunId
+      })),
+      ...newlySuppressed
+    ]
+  }
 }
 
 export interface ResumeLookup {
@@ -361,7 +790,7 @@ export function admitAutomaticResumeRuntime(
  * un faux positif produit un livrable base sur du travail etranger :
  *  - meme tache (a la normalisation d'espaces pres) ;
  *  - meme conversation (un acquis sans conversation n'est pas repris ici : il appartient au demarrage) ;
- *  - au moins un livrable NON VIDE (sinon on sauterait une phase sans avoir son travail) ;
+ *  - au moins un livrable NON VIDE, OU un appel encore actif qui doit verrouiller la relance ;
  *  - moins de `maxAgeMs`.
  * Plusieurs candidats -> le plus recent.
  */
@@ -373,18 +802,27 @@ export function pickResumeForTask(
   const wanted = normalizeTaskKey(lookup.task)
   if (!wanted) return null
   const maxAge = lookup.maxAgeMs ?? DEFAULT_RESUME_MAX_AGE_MS
-  const usable = states.filter(
-    (state) =>
-      state.conversationId === lookup.conversationId &&
+  const usable = states.filter((state) => {
+    if (state.conversationId !== lookup.conversationId || normalizeTaskKey(state.task) !== wanted) {
+      return false
+    }
+    // Un appel encore actif est un VERROU, pas un livrable à réutiliser. Il reste prioritaire
+    // même si le modèle/topologie a changé ou si le délai de reprise a expiré : aucun de ces
+    // changements ne prouve que l'ancien provider a cessé d'être facturé.
+    if ((state.usage?.activeCalls ?? 0) > 0) return true
+    if (state.resumeDisposition) return false
+    return (
       bindingIdentity(state.bindingOverride) === bindingIdentity(lookup.bindingOverride) &&
       (lookup.bindingOverride !== undefined ||
         runtimeSnapshotIdentity(state.runtimeSnapshot) ===
           runtimeSnapshotIdentity(lookup.runtimeSnapshot)) &&
-      normalizeTaskKey(state.task) === wanted &&
       lookup.nowMs - state.updatedAt <= maxAge &&
       lookup.nowMs >= state.updatedAt &&
       state.phaseOutputs.some((output) => typeof output.text === 'string' && output.text.trim())
-  )
+    )
+  })
   if (usable.length === 0) return null
-  return usable.reduce((best, state) => (state.updatedAt > best.updatedAt ? state : best))
+  const activeLocks = usable.filter((state) => (state.usage?.activeCalls ?? 0) > 0)
+  const candidates = activeLocks.length > 0 ? activeLocks : usable
+  return candidates.reduce((best, state) => (state.updatedAt > best.updatedAt ? state : best))
 }

@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
-import { readFile, readdir } from 'node:fs/promises'
-import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
+import { readFile, readdir, realpath as realpathAsync, stat as statAsync } from 'node:fs/promises'
+import { dirname, extname, isAbsolute, join, posix, relative, resolve, win32 } from 'node:path'
 import { amitelBrainRoot, amitelWorkspaces } from '../amitel-paths'
 import type { BrainNavigation } from '../brain-retrieval'
 import {
@@ -11,6 +11,8 @@ import {
   type VizGraph,
   type VizNode
 } from './graph'
+import { foldWindowsOrdinalCase } from './windows-ordinal-case'
+import { GenerationCache, GenerationFence } from './generation-cache'
 
 /**
  * Accès DISQUE aux graphes de connaissance réels (graphify) — côté main uniquement.
@@ -50,24 +52,272 @@ export interface BrainNoteSearchResult {
   }>
 }
 
-function retrievalNoteId(path: string, root?: string): string {
-  const normalizedPath = path.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '')
-  const normalizedRoot = root?.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '')
-  const pathLower = normalizedPath.toLowerCase()
-  const rootLower = normalizedRoot?.toLowerCase()
-  const relativePath =
-    normalizedRoot && rootLower && pathLower.startsWith(`${rootLower}/`)
-      ? normalizedPath.slice(normalizedRoot.length + 1)
-      : normalizedPath
-  return relativePath.replace(/^\/+/, '').replace(/\.md$/i, '').toLowerCase()
+interface NormalizedRetrievalPath {
+  kind: 'unc' | 'volume' | 'windows' | 'path'
+  value: string
+  absolute: boolean
+}
+
+function normalizeRetrievalPath(path: string): NormalizedRetrievalPath {
+  let slashed = path.replace(/\\/g, '/')
+  if (/^\/\/[?.]\/unc\//i.test(slashed)) {
+    slashed = `//${slashed.slice(8)}`
+  } else if (/^\/\/[?.]\/[a-z]:\//i.test(slashed)) {
+    slashed = slashed.slice(4)
+  }
+  if (/^\/\/[?.]\/volume\{[0-9a-f-]+\}(?:\/|$)/i.test(slashed)) {
+    return {
+      kind: 'volume',
+      value: win32.normalize(slashed).replace(/\\/g, '/').replace(/\/$/, ''),
+      absolute: true
+    }
+  }
+  if (slashed.startsWith('//')) {
+    const value = win32.normalize(slashed).replace(/\\/g, '/').replace(/\/$/, '')
+    return {
+      kind: value.startsWith('//') ? 'unc' : 'path',
+      value,
+      absolute: true
+    }
+  }
+  if (/^[a-z]:(?:\/|$)/i.test(slashed)) {
+    return {
+      kind: 'windows',
+      value: win32.normalize(slashed).replace(/\\/g, '/').replace(/\/$/, ''),
+      absolute: true
+    }
+  }
+  return {
+    kind: 'path',
+    value: slashed ? posix.normalize(slashed).replace(/\/$/, '') : '',
+    absolute: slashed.startsWith('/')
+  }
+}
+
+function retrievalNoteId(path: string, root?: string, stripMarkdownExtension = true): string {
+  const normalizedPath = normalizeRetrievalPath(path)
+  const normalizedRoot = root ? normalizeRetrievalPath(root) : undefined
+  const pathIdentity = foldWindowsOrdinalCase(normalizedPath.value)
+  const rootPrefix = normalizedRoot
+    ? normalizedRoot.value.endsWith('/')
+      ? normalizedRoot.value
+      : `${normalizedRoot.value}/`
+    : undefined
+  const rootPrefixIdentity = rootPrefix ? foldWindowsOrdinalCase(rootPrefix) : undefined
+  const outsideRootId = `@${normalizedPath.kind}:${normalizedPath.value}`
+  let relativePath: string
+  if (!normalizedRoot || !root) {
+    relativePath = normalizedPath.value
+  } else if (!normalizedPath.absolute) {
+    const operational = operationalLocalRelative(win32.resolve(root, path), root)
+    relativePath = operational === null ? outsideRootId : (operational ?? normalizedPath.value)
+  } else if (
+    normalizedPath.kind === normalizedRoot.kind &&
+    rootPrefix &&
+    rootPrefixIdentity &&
+    pathIdentity.startsWith(rootPrefixIdentity)
+  ) {
+    const operational = operationalLocalRelative(path, root)
+    relativePath =
+      operational === null
+        ? outsideRootId
+        : (operational ?? normalizedPath.value.slice(rootPrefix.length))
+  } else {
+    relativePath = operationalLocalRelative(path, root) ?? outsideRootId
+  }
+  const id = relativePath.replace(/^\/+/, '')
+  return foldWindowsOrdinalCase(stripMarkdownExtension ? id.replace(/\.md$/i, '') : id)
+}
+
+/** Identité textuelle d'une racine, sans accès disque ni résolution réseau. */
+function retrievalRootId(root: string): string {
+  const normalized = normalizeRetrievalPath(root)
+  if (normalized.kind === 'unc') {
+    return `unc:${foldWindowsOrdinalCase(normalized.value.slice(2))}`
+  }
+  if (normalized.kind === 'windows') {
+    return `windows:${foldWindowsOrdinalCase(normalized.value)}`
+  }
+  if (normalized.kind === 'volume') {
+    return `volume:${foldWindowsOrdinalCase(normalized.value)}`
+  }
+  return `path:${normalized.value}`
+}
+
+/**
+ * Les namespaces drive `\\?\` / `\\.\` ne suivent pas toujours les réductions de `win32.normalize`
+ * au niveau de la racine. Node peut parcourir `\\?\C:\`, mais refuse `\\?\C:`, `\\?\C:\.` et
+ * `\\?\C:\Windows\..` alors que les trois se replient textuellement sur `C:`. Les accepter comme
+ * alias injecterait une navigation que le worker n'a pas réellement pu lire.
+ */
+function unusableDeviceRoot(root: string): boolean {
+  const slashed = root.replace(/\\/g, '/')
+  const volumeMatch = /^(\/\/[?.]\/volume\{[0-9a-f-]+\})(.*)$/i.exec(slashed)
+  if (volumeMatch) {
+    if (volumeMatch[2] === '/') return false
+    const normalized = win32.normalize(slashed).replace(/[\\/]+$/, '')
+    const volumeRoot = win32.normalize(`${volumeMatch[1]}/`).replace(/[\\/]+$/, '')
+    return foldWindowsOrdinalCase(normalized) === foldWindowsOrdinalCase(volumeRoot)
+  }
+  if (!/^\/\/[?.]\/[a-z]:(?:\/|$)/i.test(slashed)) return false
+  const drivePath = slashed.slice(4)
+  if (/^[a-z]:\/$/i.test(drivePath)) return false
+  const normalized = win32.normalize(drivePath)
+  return /^[a-z]:$/i.test(drivePath) || win32.parse(normalized).root === normalized
+}
+
+function isLocalDrivePath(path: string): boolean {
+  const kind = normalizeRetrievalPath(path).kind
+  return kind === 'windows' || kind === 'volume'
+}
+
+function ordinalPathRelative(path: string, root: string): string | null {
+  const normalizedPath = normalizeRetrievalPath(path)
+  const normalizedRoot = normalizeRetrievalPath(root)
+  if (normalizedPath.kind !== normalizedRoot.kind) return null
+  const pathSegments = normalizedPath.value.split('/')
+  const rootSegments = normalizedRoot.value.split('/')
+  if (
+    pathSegments.length < rootSegments.length ||
+    rootSegments.some(
+      (segment, index) =>
+        foldWindowsOrdinalCase(segment) !== foldWindowsOrdinalCase(pathSegments[index])
+    )
+  ) {
+    return null
+  }
+  return pathSegments.slice(rootSegments.length).join('/')
+}
+
+/** Contenance réelle pour les alias locaux que la comparaison textuelle ne peut pas exprimer. */
+function operationalLocalRelative(path: string, root: string): string | null | undefined {
+  if (!isLocalDrivePath(path) || !isLocalDrivePath(root) || unusableDeviceRoot(root)) {
+    return undefined
+  }
+  try {
+    const realRoot = realpathSync.native(root)
+    const realPath = realpathSync.native(path)
+    return ordinalPathRelative(realPath, realRoot)
+  } catch {
+    return undefined
+  }
+}
+
+function retrievalRootsMatch(navigationRoot: string, expectedRoot: string): boolean {
+  if (unusableDeviceRoot(navigationRoot) || unusableDeviceRoot(expectedRoot)) return false
+  if (retrievalRootId(navigationRoot) === retrievalRootId(expectedRoot)) return true
+  // Ne jamais transformer une comparaison textuelle en accès réseau : la résolution opérationnelle
+  // supplémentaire sert uniquement aux alias locaux DOS 8.3 / noms longs et aux jonctions de drive,
+  // y compris sous un préfixe device réellement parcourable.
+  if (!isLocalDrivePath(navigationRoot) || !isLocalDrivePath(expectedRoot)) return false
+  try {
+    // Les alias DOS 8.3, jonctions et noms longs ne sont comparables correctement qu'après la
+    // résolution que le runtime Node applique réellement. Ce chemin n'est pris qu'après l'échec de
+    // l'identité textuelle commune, donc la recherche normale n'ajoute aucun accès disque.
+    return (
+      retrievalRootId(realpathSync.native(navigationRoot)) ===
+      retrievalRootId(realpathSync.native(expectedRoot))
+    )
+  } catch {
+    return false
+  }
+}
+
+interface FileIdentity {
+  dev: bigint
+  ino: bigint
+}
+
+async function fileIdentity(path: string): Promise<FileIdentity | undefined> {
+  try {
+    const info = await statAsync(path, { bigint: true })
+    if (info.dev === 0n && info.ino === 0n) return undefined
+    return { dev: info.dev, ino: info.ino }
+  } catch {
+    return undefined
+  }
+}
+
+function identitiesMatch(left?: FileIdentity, right?: FileIdentity): boolean {
+  return Boolean(left && right && left.dev === right.dev && left.ino === right.ino)
+}
+
+async function retrievalRootsMatchAsync(
+  navigationRoot: string,
+  expectedRoot: string
+): Promise<boolean> {
+  if (unusableDeviceRoot(navigationRoot) || unusableDeviceRoot(expectedRoot)) return false
+  if (retrievalRootsMatch(navigationRoot, expectedRoot)) return true
+  const [navigationIdentity, expectedIdentity] = await Promise.all([
+    fileIdentity(navigationRoot),
+    fileIdentity(expectedRoot)
+  ])
+  return identitiesMatch(navigationIdentity, expectedIdentity)
+}
+
+/** Autorise un vault avant tout appel au retrieval global, avec la même identité disque que la fusion. */
+export async function assertAuthorizedBrainVaultAsync(
+  requestedRoot: string,
+  allowedRoot = AMITEL_BRAIN_ROOT
+): Promise<string> {
+  let requestedRealRoot: string
+  let allowedRealRoot: string
+  try {
+    ;[requestedRealRoot, allowedRealRoot] = await Promise.all([
+      realpathAsync(resolve(requestedRoot)),
+      realpathAsync(resolve(allowedRoot))
+    ])
+  } catch {
+    throw new Error('brain vault hors périmètre autorisé')
+  }
+  if (!(await retrievalRootsMatchAsync(requestedRealRoot, allowedRealRoot))) {
+    throw new Error('brain vault hors périmètre autorisé')
+  }
+  return requestedRealRoot
+}
+
+async function operationalRelativeAsync(
+  path: string,
+  realRoot: string,
+  rootIdentity?: FileIdentity
+): Promise<string | null> {
+  let realPath: string
+  try {
+    realPath = await realpathAsync(path)
+  } catch {
+    return null
+  }
+  const direct = ordinalPathRelative(realPath, realRoot)
+  if (direct !== null) return direct
+  if (!rootIdentity) return null
+
+  const segments: string[] = []
+  let cursor = realPath
+  for (let depth = 0; depth < 256; depth += 1) {
+    if (identitiesMatch(await fileIdentity(cursor), rootIdentity)) {
+      return segments.reverse().join('/')
+    }
+    const parent = win32.dirname(cursor)
+    if (parent === cursor) return null
+    segments.push(win32.basename(cursor))
+    cursor = parent
+  }
+  return null
 }
 
 /** Ajoute aux résultats locaux les scores signés produits par le retriever Brain. */
 export function applyBrainRetrievalScores(
   results: readonly BrainNoteSearchResult[],
-  navigation?: BrainNavigation
+  navigation?: BrainNavigation,
+  expectedRoot?: string
 ): BrainNoteSearchResult[] {
-  if (!navigation) return results.map((result) => ({ ...result }))
+  if (
+    !navigation ||
+    (expectedRoot !== undefined &&
+      (!navigation.root || !retrievalRootsMatch(navigation.root, expectedRoot)))
+  ) {
+    return results.map((result) => ({ ...result }))
+  }
   const candidates = new Map(
     navigation.candidates.map((candidate) => [
       retrievalNoteId(candidate.path, navigation.root),
@@ -75,7 +325,7 @@ export function applyBrainRetrievalScores(
     ])
   )
   return results.map((result) => {
-    const candidate = candidates.get(retrievalNoteId(result.id))
+    const candidate = candidates.get(retrievalNoteId(result.id, undefined, false))
     if (!candidate) return { ...result }
     const relations = [...result.relations]
     const seen = new Set(relations.map((relation) => `${relation.type}\0${relation.target}`))
@@ -95,6 +345,46 @@ export function applyBrainRetrievalScores(
       relations
     }
   })
+}
+
+export async function applyBrainRetrievalScoresAsync(
+  results: readonly BrainNoteSearchResult[],
+  navigation?: BrainNavigation,
+  expectedRoot?: string
+): Promise<BrainNoteSearchResult[]> {
+  if (!navigation?.root || !expectedRoot) {
+    return applyBrainRetrievalScores(results, navigation, expectedRoot)
+  }
+  const navigationRoot = navigation.root
+  const navigationKind = normalizeRetrievalPath(navigationRoot).kind
+  const expectedKind = normalizeRetrievalPath(expectedRoot).kind
+  if (navigationKind !== 'unc' && expectedKind !== 'unc') {
+    return applyBrainRetrievalScores(results, navigation, expectedRoot)
+  }
+  if (!(await retrievalRootsMatchAsync(navigationRoot, expectedRoot))) {
+    return results.map((result) => ({ ...result }))
+  }
+  let realRoot: string
+  try {
+    realRoot = await realpathAsync(navigationRoot)
+  } catch {
+    return results.map((result) => ({ ...result }))
+  }
+  const rootIdentity = await fileIdentity(realRoot)
+  const candidates = (
+    await mapWithConcurrency(navigation.candidates, 8, async (candidate) => {
+      const candidatePath = normalizeRetrievalPath(candidate.path).absolute
+        ? candidate.path
+        : win32.resolve(navigationRoot, candidate.path)
+      const relativePath = await operationalRelativeAsync(candidatePath, realRoot, rootIdentity)
+      return relativePath === null ? undefined : { ...candidate, path: relativePath }
+    })
+  ).filter((candidate): candidate is BrainNavigation['candidates'][number] => Boolean(candidate))
+  return applyBrainRetrievalScores(
+    results,
+    { ...navigation, root: expectedRoot, candidates },
+    expectedRoot
+  )
 }
 
 /** Racine du Brain — SOURCE UNIQUE dans `amitel-paths.ts`, surchargeable par `AMITEL_BRAIN_ROOT`. */
@@ -302,6 +592,20 @@ function graphFromVaultRecords(records: VaultNoteRecord[], lod: number): VizGrap
       const resolved = resolveWikiTarget(record.id, target, ids, byBasename)
       if (resolved) links.push({ source: record.id, target: resolved, weight: 1 })
     }
+    for (const relation of record.relations) {
+      // Les wiki-liens sont déjà projetés ci-dessus. Ici, on conserve le type des relations
+      // frontmatter explicites afin que Knowledge puisse distinguer remplacement et contradiction.
+      if (relation.type === 'links_to') continue
+      const resolved = resolveWikiTarget(record.id, relation.target, ids, byBasename)
+      if (resolved) {
+        links.push({
+          source: record.id,
+          target: resolved,
+          weight: 1,
+          relation: relation.type
+        })
+      }
+    }
   }
   const graph: VizGraph = {
     nodes: records.map((record) => ({
@@ -378,12 +682,52 @@ function graphNeighborhood(graph: VizGraph, nodeId: string): VizGraph {
 export function searchVaultBrainNotes(
   root: string,
   query: string,
-  limit = 40
+  limit = 40,
+  allowedRoot = AMITEL_BRAIN_ROOT
 ): BrainNoteSearchResult[] {
   const normalized = normalizeSearchText(query)
   const tokens = normalized.split(/[^a-z0-9_.-]+/).filter((token) => token.length >= 2)
   if (!normalized || tokens.length === 0 || limit <= 0) return []
-  return vaultNoteRecords(root)
+  let requestedRoot: string
+  let trustedRoot: string
+  try {
+    requestedRoot = realpathSync.native(resolve(root))
+    trustedRoot = realpathSync.native(resolve(allowedRoot))
+  } catch {
+    throw new Error('brain vault hors périmètre autorisé')
+  }
+  if (!retrievalRootsMatch(requestedRoot, trustedRoot)) {
+    throw new Error('brain vault hors périmètre autorisé')
+  }
+  return rankVaultSearchResults(vaultNoteRecords(requestedRoot), normalized, tokens, limit)
+}
+
+export async function searchVaultBrainNotesAsync(
+  root: string,
+  query: string,
+  limit = 40,
+  allowedRoot = AMITEL_BRAIN_ROOT
+): Promise<BrainNoteSearchResult[]> {
+  const normalized = normalizeSearchText(query)
+  const tokens = normalized.split(/[^a-z0-9_.-]+/).filter((token) => token.length >= 2)
+  if (!normalized || tokens.length === 0 || limit <= 0) return []
+  const cacheEpochAtStart = vaultRecordsFence.capture()
+  const requestedRoot = await assertAuthorizedBrainVaultAsync(root, allowedRoot)
+  return rankVaultSearchResults(
+    await vaultNoteRecordsAsync(requestedRoot, cacheEpochAtStart),
+    normalized,
+    tokens,
+    limit
+  )
+}
+
+function rankVaultSearchResults(
+  records: readonly VaultNoteRecord[],
+  normalized: string,
+  tokens: string[],
+  limit: number
+): BrainNoteSearchResult[] {
+  return records
     .map((record) => ({ record, score: vaultSearchScore(record, normalized, tokens) }))
     .filter((entry) => entry.score > 0)
     .sort((a, b) => b.score - a.score || a.record.label.localeCompare(b.record.label))
@@ -399,16 +743,13 @@ export function searchVaultBrainNotes(
 }
 
 type VaultNoteRecord = BrainNoteSearchResult & { content: string }
-const vaultRecordsCache = new Map<string, VaultNoteRecord[]>()
+const vaultRecordsCache = new GenerationCache<string, VaultNoteRecord[]>()
 const vaultRecordsPromises = new Map<string, Promise<VaultNoteRecord[]>>()
+const vaultRecordsFence = new GenerationFence()
 
-export function invalidateBrainCaches(root?: string): void {
-  if (root) {
-    vaultRecordsCache.delete(root)
-    vaultRecordsPromises.delete(root)
-    return
-  }
-  vaultRecordsCache.clear()
+export function invalidateBrainCaches(): void {
+  vaultRecordsFence.invalidate()
+  vaultRecordsCache.invalidate()
   vaultRecordsPromises.clear()
 }
 
@@ -422,12 +763,23 @@ function normalizeSearchText(value: string): string {
 function noteRelations(content: string): BrainNoteSearchResult['relations'] {
   const relations: BrainNoteSearchResult['relations'] = []
   const seen = new Set<string>()
+  const frontmatter = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)/)?.[1] ?? ''
   for (const type of ['related', 'supersedes', 'contradicts', 'caused_by'] as const) {
-    const raw = content.match(new RegExp(`^${type}\\s*:\\s*(.+)$`, 'mi'))?.[1] ?? ''
+    // Seul le YAML signé fait foi : une phrase du corps ne doit jamais devenir une relation de
+    // santé simplement parce qu'elle commence par `contradicts:` ou `supersedes:`.
+    const raw = frontmatter.match(new RegExp(`^${type}\\s*:\\s*(.+)$`, 'mi'))?.[1] ?? ''
     for (const target of raw
       .replace(/^\[|\]$/g, '')
       .split(/[,;]/)
-      .map((value) => value.trim().replace(/^['"]|['"]$/g, ''))
+      .map((value) => {
+        let clean = value.trim().replace(/^['"]|['"]$/g, '')
+        // Le Brain partagé emploie aussi la forme wiki dans les listes YAML :
+        // `supersedes: [[workflow-contribution-brain]]`. L'enveloppe de liste retirée ci-dessus
+        // laisse alors `[workflow-contribution-brain]`; enlever les crochets restants préserve les
+        // chemins bruts tout en rendant les deux écritures équivalentes.
+        clean = clean.replace(/^\[+|\]+$/g, '')
+        return clean.split('|')[0].split('#')[0].trim()
+      })
       .filter(Boolean)) {
       const key = `${type}\0${target}`
       if (!seen.has(key)) {
@@ -476,33 +828,10 @@ function vaultSearchScore(record: VaultNoteRecord, phrase: string, tokens: strin
 function vaultNoteRecords(root: string): VaultNoteRecord[] {
   const cached = vaultRecordsCache.get(root)
   if (cached) return cached
-  const records = markdownFiles(root).map((file) => {
-    const content = readFileSync(file, 'utf8')
-    const id = relative(root, file).replace(/\\/g, '/').replace(/\.md$/i, '')
-    const label = content.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? id.split('/').at(-1) ?? id
-    return {
-      id,
-      file,
-      content,
-      label,
-      themes: noteThemes(id, content),
-      score: 0,
-      relations: noteRelations(content)
-    }
-  })
-  vaultRecordsCache.set(root, records)
-  return records
-}
-
-async function vaultNoteRecordsAsync(root: string): Promise<VaultNoteRecord[]> {
-  const cached = vaultRecordsCache.get(root)
-  if (cached) return cached
-  const pending = vaultRecordsPromises.get(root)
-  if (pending) return pending
-  const loading = (async () => {
-    const files = await markdownFilesAsync(root)
-    const records = await mapWithConcurrency(files, 32, async (file) => {
-      const content = await readFile(file, 'utf8')
+  const lease = vaultRecordsCache.capture(root)
+  try {
+    const records = markdownFiles(root).map((file) => {
+      const content = readFileSync(file, 'utf8')
       const id = relative(root, file).replace(/\\/g, '/').replace(/\.md$/i, '')
       const label = content.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? id.split('/').at(-1) ?? id
       return {
@@ -515,12 +844,61 @@ async function vaultNoteRecordsAsync(root: string): Promise<VaultNoteRecord[]> {
         relations: noteRelations(content)
       }
     })
-    vaultRecordsCache.set(root, records)
-    vaultRecordsPromises.delete(root)
+    if (!vaultRecordsCache.publish(lease, records)) {
+      throw new Error('cache Brain invalidé pendant le chargement')
+    }
     return records
+  } catch (error) {
+    vaultRecordsCache.abandon(lease)
+    throw error
+  }
+}
+
+async function vaultNoteRecordsAsync(
+  root: string,
+  cacheEpochAtStart = vaultRecordsFence.capture()
+): Promise<VaultNoteRecord[]> {
+  if (!vaultRecordsFence.isCurrent(cacheEpochAtStart)) {
+    throw new Error('cache Brain invalidé pendant le chargement')
+  }
+  const cached = vaultRecordsCache.get(root)
+  if (cached) return cached
+  const pending = vaultRecordsPromises.get(root)
+  if (pending) return pending
+  const lease = vaultRecordsCache.capture(root)
+  const loading = (async () => {
+    try {
+      const files = await markdownFilesAsync(root)
+      const records = await mapWithConcurrency(files, 32, async (file) => {
+        const content = await readFile(file, 'utf8')
+        const id = relative(root, file).replace(/\\/g, '/').replace(/\.md$/i, '')
+        const label = content.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? id.split('/').at(-1) ?? id
+        return {
+          id,
+          file,
+          content,
+          label,
+          themes: noteThemes(id, content),
+          score: 0,
+          relations: noteRelations(content)
+        }
+      })
+      if (
+        !vaultRecordsFence.isCurrent(cacheEpochAtStart) ||
+        !vaultRecordsCache.publish(lease, records)
+      ) {
+        throw new Error('cache Brain invalidé pendant le chargement')
+      }
+      return records
+    } catch (error) {
+      vaultRecordsCache.abandon(lease)
+      throw error
+    }
   })()
   vaultRecordsPromises.set(root, loading)
-  return loading
+  return loading.finally(() => {
+    if (vaultRecordsPromises.get(root) === loading) vaultRecordsPromises.delete(root)
+  })
 }
 
 async function markdownFilesAsync(root: string): Promise<string[]> {

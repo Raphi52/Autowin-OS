@@ -47,7 +47,6 @@ function api(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     runTrace: vi.fn().mockResolvedValue(null),
     readNodeFile: vi.fn(async (path: string) => ({ path, content: 'status: green' })),
     listRuns: vi.fn().mockResolvedValue([]),
-    authorityPending: vi.fn().mockResolvedValue([]),
     topology: vi.fn().mockResolvedValue({
       orchestrator: { provider: 'codex', modelId: 'gpt', reasoningEffort: 'auto' }
     }),
@@ -587,7 +586,9 @@ describe('ChatView behavior under concurrent UI actions', () => {
     })
     const scrollTo = vi.fn()
     scroll.scrollTo = scrollTo
-    scroll.dispatchEvent(new Event('scroll', { bubbles: true }))
+    await act(async () => {
+      scroll.dispatchEvent(new Event('scroll', { bubbles: true }))
+    })
 
     await click('.directive-queue-steer')
     await act(async () => flushAnimationFrames())
@@ -1225,7 +1226,8 @@ describe('ChatView behavior under concurrent UI actions', () => {
         container!.querySelector('.directive-queue-item')!.querySelectorAll('button'),
         (element) => element.textContent
       )
-    ).toEqual(['⏹ Interrompre et envoyer', '🧭 Orienter', 'BTW', '✕'])
+      // ↑/↓ = réordonnancement de la file, ajoutés devant les actions existantes.
+    ).toEqual(['↑', '↓', '⏹ Interrompre et envoyer', '🧭 Orienter', 'BTW', '✕'])
     expect(
       Array.from(
         container!.querySelectorAll('.directive-queue-text'),
@@ -2338,5 +2340,83 @@ describe('ChatView behavior under concurrent UI actions', () => {
     expect(forkBtn).toBeTruthy()
     await act(async () => (forkBtn as HTMLButtonElement).click())
     expect(fork).toHaveBeenCalledWith('A', 'm1') // forke depuis le 1er message user
+  })
+  /**
+   * P1 statuts terminaux : un tour clos par annulation ou interruption laissait la bulle MUETTE
+   * (au mieux « (aucune réponse) »). L'utilisateur ne savait ni ce qui s'était passé, ni comment
+   * repartir. Les trois statuts terminaux doivent être lisibles, et `failed` rester INCHANGÉ.
+   */
+  describe('statuts terminaux du tour', () => {
+    it('annulé : affiche « Réponse annulée » et propose de renvoyer le même prompt', async () => {
+      const turn = deferred<{ ok: boolean; cancelled?: boolean }>()
+      const pilotChat = vi.fn((_payload: Array<{ role: string; content: string }>) => turn.promise)
+      const mockApi = api({
+        conversations: vi.fn().mockResolvedValue([conversation('A')]),
+        pilotChat
+      })
+      await mount(mockApi)
+      await click('.conv-pick')
+      await type('ma question')
+      await click('.composer-send')
+      await act(async () => {
+        turn.resolve({ ok: false, cancelled: true })
+        await flushAnimationFrames()
+      })
+
+      expect(container!.textContent).toContain('Réponse annulée')
+      const action = container!.querySelector('.msg-terminal-action') as HTMLButtonElement
+      expect(action).toBeTruthy()
+
+      await act(async () => action.click())
+      expect(pilotChat.mock.calls.length).toBe(2)
+      expect(pilotChat.mock.calls[1][0]).toEqual(
+        expect.arrayContaining([expect.objectContaining({ role: 'user', content: 'ma question' })])
+      )
+    })
+
+    it('interrompu : affiche « Réponse interrompue avant la fin » et propose la reprise', async () => {
+      const turn = deferred<{ ok: boolean }>()
+      const orchestrate = vi.fn().mockResolvedValue({ ok: true })
+      const mockApi = api({
+        conversations: vi.fn().mockResolvedValue([conversation('A')]),
+        pilotChat: vi.fn(() => turn.promise),
+        orchestrate
+      })
+      await mount(mockApi)
+      await click('.conv-pick')
+      await type('ma tâche longue')
+      await click('.composer-send')
+      await act(async () => {
+        turn.resolve({ ok: true })
+        await flushAnimationFrames()
+      })
+
+      expect(container!.textContent).toContain('Réponse interrompue avant la fin')
+      const action = container!.querySelector('.msg-terminal-action') as HTMLButtonElement
+      expect(action).toBeTruthy()
+      await act(async () => action.click())
+      expect(orchestrate).toHaveBeenCalledWith('ma tâche longue', 'A')
+    })
+
+    it('échoué : garde son texte d’erreur ⚠️ et n’affiche aucun statut terminal', async () => {
+      const turn = deferred<{ ok: boolean; error?: string }>()
+      const mockApi = api({
+        conversations: vi.fn().mockResolvedValue([conversation('A')]),
+        pilotChat: vi.fn(() => turn.promise)
+      })
+      await mount(mockApi)
+      await click('.conv-pick')
+      await type('ça va casser')
+      await click('.composer-send')
+      await act(async () => {
+        turn.resolve({ ok: false, error: 'boom' })
+        await flushAnimationFrames()
+      })
+
+      expect(container!.textContent).toContain('⚠️ boom')
+      expect(container!.textContent).not.toContain('Réponse annulée')
+      expect(container!.textContent).not.toContain('Réponse interrompue avant la fin')
+      expect(container!.querySelector('.msg-terminal-action')).toBeNull()
+    })
   })
 })

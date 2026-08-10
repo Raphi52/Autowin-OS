@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { recommendShadowRoute, type RouteSample } from './shadow-router'
 
@@ -54,6 +55,16 @@ const samples: RouteSample[] = [
 ]
 
 describe('shadow route recommendations', () => {
+  it('expose l union complete sur les deux contrats preload', () => {
+    for (const relative of ['../preload/index.ts', '../preload/index.d.ts']) {
+      const source = readFileSync(new URL(relative, import.meta.url), 'utf8')
+      expect(source).toMatch(
+        /import type \{ ShadowRouteResult \} from ['"]\.\.\/main\/shadow-router['"]/
+      )
+      expect(source).toMatch(/shadowRouteRecommendation:[\s\S]{0,180}Promise<ShadowRouteResult>/)
+    }
+  })
+
   it('deterministically recommends a better challenger for the requested phase', () => {
     const request = {
       phase: 'build',

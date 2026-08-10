@@ -1,4 +1,6 @@
+import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
+import { normalize } from 'node:path'
 import { promisify } from 'node:util'
 import type { RelayState, WindowsRelay } from './task-scheduler'
 
@@ -10,11 +12,20 @@ type ProcessRunner = (
 ) => Promise<ProcessResult>
 
 const runProcess = promisify(execFile) as unknown as ProcessRunner
+export const LEGACY_WINDOWS_RELAY_TASK_NAME = 'Autowin OS - Prompt Relay'
+
+export function windowsRelayTaskName(userDataPath: string): string {
+  const identity = normalize(userDataPath).replaceAll('\\', '/').toLowerCase()
+  const suffix = createHash('sha256').update(identity, 'utf8').digest('hex').slice(0, 16)
+  return `Autowin OS - Prompt Relay - ${suffix}`
+}
 
 interface PowerShellWindowsRelayOptions {
   scriptPath: string
   executablePath: string
   taskName?: string
+  legacyTaskName?: string
+  migrateUnscopedLegacy?: boolean
   launchArguments?: string[]
   run?: ProcessRunner
 }
@@ -24,11 +35,14 @@ export function isolatedRelayLaunchArguments(options: {
   remoteDebuggingPort: string
   userDataPath: string
 }): string[] {
-  if (!options.isolated) return []
+  const profileArgument = `--user-data-dir=${options.userDataPath}`
+  // L'identité de données appartient à TOUS les relais. Les drapeaux suivants ne concernent que
+  // l'automatisation isolée/headless ; les confondre faisait perdre son store à un parent explicite.
+  if (!options.isolated) return [profileArgument]
   const port = options.remoteDebuggingPort.match(/^\d{1,5}/)?.[0]
   return [
     ...(port ? [`--remote-debugging-port=${port}`] : []),
-    `--user-data-dir=${options.userDataPath}`,
+    profileArgument,
     '--isolated-test-instance',
     '--headless-test-instance'
   ]
@@ -38,14 +52,21 @@ export class PowerShellWindowsRelay implements WindowsRelay {
   private readonly scriptPath: string
   private readonly executablePath: string
   private readonly taskName: string
+  private readonly legacyTaskName: string
+  private readonly legacyOwnerArgument: string
+  private readonly migrateUnscopedLegacy: boolean
   private readonly launchArguments: string[]
   private readonly run: ProcessRunner
 
   constructor(options: PowerShellWindowsRelayOptions) {
     this.scriptPath = options.scriptPath
     this.executablePath = options.executablePath
-    this.taskName = options.taskName ?? 'Autowin OS - Prompt Relay'
+    this.taskName = options.taskName ?? LEGACY_WINDOWS_RELAY_TASK_NAME
+    this.legacyTaskName = options.legacyTaskName ?? LEGACY_WINDOWS_RELAY_TASK_NAME
     this.launchArguments = options.launchArguments ?? []
+    this.legacyOwnerArgument =
+      this.launchArguments.find((argument) => argument.startsWith('--user-data-dir=')) ?? ''
+    this.migrateUnscopedLegacy = options.migrateUnscopedLegacy ?? false
     this.run = options.run ?? runProcess
   }
 
@@ -66,9 +87,14 @@ export class PowerShellWindowsRelay implements WindowsRelay {
       action,
       '-TaskName',
       this.taskName,
+      '-LegacyTaskName',
+      this.legacyTaskName,
+      '-LegacyOwnerArgument',
+      this.legacyOwnerArgument,
       '-ExecutablePath',
       this.executablePath
     ]
+    if (this.migrateUnscopedLegacy) args.push('-MigrateUnscopedLegacy')
     if (scheduledFor !== null && occurrenceId !== null) {
       args.push('-ScheduledForEpochMs', String(scheduledFor), '-OccurrenceId', occurrenceId)
       if (this.launchArguments.length > 0) {

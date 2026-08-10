@@ -38,7 +38,22 @@ vi.mock('node:child_process', async (importOriginal) => ({
       const events = spawnCapture.stdoutEvents.splice(0)
       if (!events.length)
         events.push({ type: 'result', result: 'ok', session_id: 's', is_error: false })
-      for (const event of events) stdout.emit('data', Buffer.from(`${JSON.stringify(event)}\n`))
+      for (const event of events) {
+        const emitted =
+          event.type === 'result'
+            ? {
+                subtype: 'success',
+                is_error: false,
+                usage: {
+                  input_tokens: 1,
+                  output_tokens: 1,
+                  cache_read_input_tokens: 0
+                },
+                ...event
+              }
+            : event
+        stdout.emit('data', Buffer.from(`${JSON.stringify(emitted)}\n`))
+      }
       child.emit('close', 0)
     }, 0)
     return child

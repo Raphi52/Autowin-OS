@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { assertArgvWithinLimit, createStreamWatchdog, withHardDeadline } from './watchdog'
+import {
+  assertArgvWithinLimit,
+  createStreamWatchdog,
+  SUBAGENT_INACTIVITY_MS,
+  SUBAGENT_TOTAL_MS,
+  withHardDeadline
+} from './watchdog'
 
 const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
@@ -28,6 +34,28 @@ describe('withHardDeadline', () => {
 })
 
 describe('createStreamWatchdog', () => {
+  it('ne tue pas un build encore actif au seuil historique de 20 minutes', () => {
+    vi.useFakeTimers()
+    try {
+      const onTrip = vi.fn()
+      const wd = createStreamWatchdog({
+        inactivityMs: SUBAGENT_INACTIVITY_MS,
+        totalMs: SUBAGENT_TOTAL_MS,
+        onTrip
+      })
+
+      for (let minute = 0; minute < 20; minute += 1) {
+        vi.advanceTimersByTime(60_000)
+        wd.beat()
+      }
+
+      expect(onTrip).not.toHaveBeenCalled()
+      wd.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('déclenche sur INACTIVITÉ quand aucun beat n’arrive', async () => {
     const onTrip = vi.fn()
     const wd = createStreamWatchdog({ inactivityMs: 30, onTrip })

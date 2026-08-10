@@ -56,7 +56,8 @@ describe('Observatory visual contracts', () => {
     'boundary',
     'response-displayed'
   ] as const
-  const readCss = (): string => readFileSync(new URL('./ObservatoryView.css', import.meta.url), 'utf8')
+  const readCss = (): string =>
+    readFileSync(new URL('./ObservatoryView.css', import.meta.url), 'utf8')
   const barColor = (css: string, kind: string): string | undefined => {
     const rule = css.match(new RegExp(`\\.observatory-event\\.is-${kind}\\s*{[^}]*}`, 's'))?.[0]
     return rule?.match(/box-shadow:\s*inset 3px 0 (#[0-9a-fA-F]{6})/)?.[1]?.toLowerCase()
@@ -91,6 +92,26 @@ describe('Observatory visual contracts', () => {
 
   it('conserve le rouge d’erreur existant (pas de régression)', () => {
     expect(barColor(readCss(), 'error')).toBe('#ff6078')
+  })
+
+  it('habille les boutons TRANSCRIPTS comme les autres listes du panneau', () => {
+    // Vu le 2026-08-07 dans l'app : les entrees TRANSCRIPTS s'affichaient en PAVES CLAIRS, police
+    // systeme, dans une vue sombre — parce que `.observatory-transcripts button` avait ete oublie de
+    // la regle partagee des listes. Un bouton sans regle retombe sur le style par defaut du
+    // navigateur : c'est invisible en test unitaire, et criant a l'ecran.
+    const css = readFileSync(new URL('./ObservatoryView.css', import.meta.url), 'utf8')
+    const listeRule = css.match(/[^}]*\.observatory-diagnostics button\s*{[^}]*}/s)?.[0]
+
+    expect(listeRule).toMatch(/\.observatory-transcripts button/)
+    expect(listeRule).toMatch(/background:\s*var\(--surface-card\)/)
+
+    // Le theme serious a sa PROPRE liste de surcharges : l'oubli s'y repetait a l'identique.
+    const seriousRule = css.match(
+      /[^}]*\.theme-serious \.observatory-view \.observatory-diagnostics button,[^}]*{[^}]*}/s
+    )?.[0]
+    expect(seriousRule).toMatch(
+      /\.theme-serious \.observatory-view \.observatory-transcripts button/
+    )
   })
 
   it('uses the Models gold selection in the critical-path view', () => {

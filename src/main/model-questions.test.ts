@@ -11,6 +11,8 @@ describe('model questions', () => {
     expect(MODEL_QUESTION_INSTRUCTION).toMatch(/défaut|hypothèse raisonnable/i)
     expect(MODEL_QUESTION_INSTRUCTION).toMatch(/destruct|irréversible/i)
     expect(MODEL_QUESTION_INSTRUCTION).toMatch(/indispensable|impossible/i)
+    expect(MODEL_QUESTION_INSTRUCTION).toMatch(/directement.*sans demande d.approbation/i)
+    expect(MODEL_QUESTION_INSTRUCTION).not.toMatch(/sas|confirmation/i)
   })
 
   it('désactive le canal de question tant qu’aucune preuve applicative sécurisée ne l’autorise', () => {

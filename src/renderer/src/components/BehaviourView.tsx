@@ -215,7 +215,7 @@ export function BehaviourView(): React.JSX.Element {
           />
           <Category
             title="Contexte du tour"
-            hint="commandes, état, historique, pièces jointes, autorité et bornes réellement appliqués"
+            hint="commandes, état, historique, pièces jointes et bornes réellement appliqués"
             fields={cockpit.turnContext ?? []}
           />
           <Category

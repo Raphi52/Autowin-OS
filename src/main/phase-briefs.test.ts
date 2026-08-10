@@ -22,9 +22,32 @@ describe('phase-briefs (consignes courtes in-app)', () => {
     expect(scout).toMatch(/d[ée]croissant/i)
   })
 
+  it('le brief frame exige un inventaire de confiance ADOSSÉ À DES PREUVES, pas un ressenti', () => {
+    const frame = PHASE_BRIEFS.frame
+
+    // La section est un livrable, pas une suggestion.
+    expect(frame).toContain('## Confiance')
+    // Les trois états d'une affirmation, dont celui qui oblige à nommer sa source.
+    expect(frame).toMatch(/VÉRIFIÉ/)
+    expect(frame).toMatch(/NON VÉRIFIÉ/)
+    // Le cœur : une affirmation vérifiée NOMME l'artefact ouvert — le garde-fou anti-hallucination.
+    expect(frame).toMatch(/NOMME l'artefact/)
+    // Et l'obligation de RÉSOUDRE, pas seulement de signaler.
+    expect(frame).toMatch(/RÉSOUS/)
+    expect(frame).toMatch(/jamais un fait silencieux/)
+  })
+
   it('phaseBrief enveloppe la consigne avec un en-tête de phase', () => {
     expect(phaseBrief('scout')).toContain('=== CONSIGNE SCOUT ===')
     expect(phaseBrief('scout')).toContain('SCOUT')
+  })
+
+  it('les phases d analyse savent que la lecture seule est leur contrat normal', () => {
+    for (const phase of ['scout', 'frame', 'terrain'] as const) {
+      expect(PHASE_BRIEFS[phase], phase).toMatch(/lecture seule/i)
+      expect(PHASE_BRIEFS[phase], phase).toMatch(/pas un blocage/i)
+      expect(PHASE_BRIEFS[phase], phase).toMatch(/tu n'es pas BUILD/i)
+    }
   })
 
   it('kaizen couvre les mécanismes propres à Autowin et reste en proposition', () => {

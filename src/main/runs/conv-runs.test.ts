@@ -29,18 +29,30 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
     expect(runs[0].summary.dodTotal).toBe(1)
   })
 
-  it('closeConvRun green coche le DoD + statut green ; red laisse le DoD ouvert', async () => {
+  it('closeConvRun preserve les quatre statuts et ne coche le DoD que pour green', async () => {
     const g = createConvRun('conv-9', 'tâche verte', root, () => 2000)
-    closeConvRun(g, true, 'Juge: validé.')
+    closeConvRun(g, 'green', 'Juge: validé.')
     const green = (await listConvRuns('conv-9', [], root)).find((r) => r.path === g)!
     expect(green.summary.status).toBe('green')
     expect(green.summary.dodChecked).toBe(1)
 
     const r = createConvRun('conv-9', 'tâche rouge', root, () => 3000)
-    closeConvRun(r, false, 'Gate BLOQUÉ: défaut.')
+    closeConvRun(r, 'red', 'Gate BLOQUÉ: défaut.')
     const red = (await listConvRuns('conv-9', [], root)).find((x) => x.path === r)!
     expect(red.summary.status).toBe('red')
     expect(readFileSync(r, 'utf8')).toContain('Gate BLOQUÉ')
+
+    const d = createConvRun('conv-9', 'tâche dégradée', root, () => 3500)
+    closeConvRun(d, 'degraded-closed', 'Clôture dégradée assumée.')
+    const degraded = (await listConvRuns('conv-9', [], root)).find((x) => x.path === d)!
+    expect(degraded.summary.status).toBe('degraded-closed')
+    expect(degraded.summary.dodChecked).toBe(0)
+
+    const o = createConvRun('conv-9', 'tâche encore ouverte', root, () => 3750)
+    closeConvRun(o, 'open', 'Ne doit pas clore le RUN.')
+    const open = (await listConvRuns('conv-9', [], root)).find((x) => x.path === o)!
+    expect(open.summary.status).toBe('open')
+    expect(open.summary.dodChecked).toBe(0)
   })
 
   it('pas de collision quand la même tâche est relancée (suffixe horodaté)', () => {

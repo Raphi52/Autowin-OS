@@ -22,6 +22,136 @@ export function ticketSeenKey(item: Pick<TicketItem, 'sourceId' | 'id'>): string
 
 export const AUTO_MODE_CAP_PER_CYCLE = 3
 
+/**
+ * REGLAGES VISIBLES du mode auto (garde-fou 4). Avant, la concurrence et le plafond etaient deux
+ * constantes enfouies dans deux fichiers : personne ne pouvait savoir combien de runs payants une
+ * case a cocher allait declencher, ni les reduire sans recompiler.
+ */
+export interface AutoModeSettings {
+  /** Conversations menees EN PARALLELE. */
+  concurrency: number
+  /** Tickets retenus par cycle de veille. */
+  capPerCycle: number
+  /** Plafond DUR de runs pour la session : atteint, le mode auto s'arrete de lui-meme. */
+  maxRunsPerSession: number
+}
+
+export const AUTO_MODE_DEFAULTS: AutoModeSettings = {
+  concurrency: 3,
+  capPerCycle: AUTO_MODE_CAP_PER_CYCLE,
+  maxRunsPerSession: 20
+}
+
+/** Bornes DURES : un reglage hors bornes est ramene dedans, jamais applique tel quel. */
+export const AUTO_MODE_LIMITS = {
+  concurrency: { min: 1, max: 5 },
+  capPerCycle: { min: 1, max: 20 },
+  maxRunsPerSession: { min: 1, max: 200 }
+} as const
+
+function clamp(value: unknown, fallback: number, bounds: { min: number; max: number }): number {
+  const numeric = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(numeric)) return fallback
+  return Math.min(bounds.max, Math.max(bounds.min, Math.trunc(numeric)))
+}
+
+export function normalizeAutoModeSettings(value: unknown): AutoModeSettings {
+  const raw = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>
+  return {
+    concurrency: clamp(
+      raw.concurrency,
+      AUTO_MODE_DEFAULTS.concurrency,
+      AUTO_MODE_LIMITS.concurrency
+    ),
+    capPerCycle: clamp(
+      raw.capPerCycle,
+      AUTO_MODE_DEFAULTS.capPerCycle,
+      AUTO_MODE_LIMITS.capPerCycle
+    ),
+    maxRunsPerSession: clamp(
+      raw.maxRunsPerSession,
+      AUTO_MODE_DEFAULTS.maxRunsPerSession,
+      AUTO_MODE_LIMITS.maxRunsPerSession
+    )
+  }
+}
+
+const SETTINGS_STORAGE_KEY = 'autowin:tickets-auto-settings'
+
+export function loadAutoModeSettings(storage: Pick<Storage, 'getItem'>): AutoModeSettings {
+  try {
+    const raw = storage.getItem(SETTINGS_STORAGE_KEY)
+    return normalizeAutoModeSettings(raw ? JSON.parse(raw) : {})
+  } catch {
+    return { ...AUTO_MODE_DEFAULTS }
+  }
+}
+
+export function saveAutoModeSettings(
+  storage: Pick<Storage, 'setItem'>,
+  settings: AutoModeSettings
+): AutoModeSettings {
+  const normalized = normalizeAutoModeSettings(settings)
+  try {
+    storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(normalized))
+  } catch {
+    /* quota atteint : les reglages restent valables pour la session */
+  }
+  return normalized
+}
+
+/**
+ * COUT ANNONCE, avant de lancer quoi que ce soit. Un run = une orchestration payante ; l'utilisateur
+ * doit lire le pire cas AVANT de cocher, pas le decouvrir sur sa facture.
+ */
+export function describeAutoModeCost(settings: AutoModeSettings, pendingRuns: number): string {
+  const normalized = normalizeAutoModeSettings(settings)
+  const planned = Math.max(0, Math.trunc(pendingRuns))
+  return (
+    `${planned} run(s) à lancer · ${normalized.concurrency} en parallèle · ` +
+    `max ${normalized.capPerCycle}/cycle · plafond session ${normalized.maxRunsPerSession} run(s) payants`
+  )
+}
+
+/**
+ * KILL-SWITCH GLOBAL — un seul point d'arret, consultable de partout et INDEPENDANT de React.
+ *
+ * Avant, l'arret reposait sur un `ref` interne au composant : decocher la case pendant un cycle,
+ * changer de vue ou re-render laissait des workers continuer a piocher. Ici l'etat vit au niveau du
+ * module : `shouldContinue` le consulte a chaque boucle, donc l'arret est immediat et irrevocable
+ * jusqu'a une reprise EXPLICITE.
+ */
+let stopped = false
+const stopListeners = new Set<() => void>()
+
+export function stopAutoModeNow(): void {
+  stopped = true
+  for (const listener of [...stopListeners]) listener()
+}
+
+/** Reprise EXPLICITE : jamais implicite, sinon le kill-switch ne protegerait rien. */
+export function resumeAutoMode(): void {
+  stopped = false
+}
+
+export function isAutoModeStopped(): boolean {
+  return stopped
+}
+
+export function onAutoModeStop(listener: () => void): () => void {
+  stopListeners.add(listener)
+  return () => stopListeners.delete(listener)
+}
+
+/**
+ * Budget de runs de la SESSION. Retourne le nombre de tickets encore autorises : 0 = plafond
+ * atteint, le mode auto doit s'arreter (et le dire), pas ralentir silencieusement.
+ */
+export function remainingSessionRuns(settings: AutoModeSettings, launched: number): number {
+  const { maxRunsPerSession } = normalizeAutoModeSettings(settings)
+  return Math.max(0, maxRunsPerSession - Math.max(0, Math.trunc(launched)))
+}
+
 export interface IncomingSelection {
   /** Tickets a traiter MAINTENANT (bornes par le cap). */
   toTreat: TicketItem[]
@@ -40,6 +170,9 @@ export function pickIncomingTickets(
   seen: ReadonlySet<string>,
   cap: number = AUTO_MODE_CAP_PER_CYCLE
 ): IncomingSelection {
+  // Kill-switch : arret demande ⇒ AUCUN ticket n'est retenu, et rien n'est marque « vu » (les
+  // entrants restent eligibles apres une reprise explicite).
+  if (isAutoModeStopped()) return { toTreat: [], seenAdditions: [], deferred: 0 }
   const fresh = items.filter((item) => !seen.has(ticketSeenKey(item)))
   const limit = Math.max(0, cap)
   const toTreat = fresh.slice(0, limit)
@@ -66,7 +199,9 @@ export function loadSeen(storage: Pick<Storage, 'getItem'>): Set<string> {
     const raw = storage.getItem(SEEN_STORAGE_KEY)
     if (!raw) return new Set()
     const parsed: unknown = JSON.parse(raw)
-    return new Set(Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [])
+    return new Set(
+      Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : []
+    )
   } catch {
     return new Set() // registre illisible : on repart d'un registre vide (l'amorce protege)
   }

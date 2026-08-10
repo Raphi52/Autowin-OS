@@ -33,5 +33,10 @@ describe('frontière Git worktree — aucune console Windows', () => {
     expect(calls).toHaveLength(3)
     expect(calls.every((call) => call.bin === 'git')).toBe(true)
     expect(calls.every((call) => call.options.windowsHide === true)).toBe(true)
+    expect(
+      calls
+        .slice(1)
+        .every((call) => Number.isFinite(call.options.timeout) && Number(call.options.timeout) > 0)
+    ).toBe(true)
   })
 })

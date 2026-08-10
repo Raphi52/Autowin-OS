@@ -82,6 +82,9 @@ try {
             Invoke-NativeStep 'Autowin full test gate' { & npm test }
             Invoke-NativeStep 'Autowin Electron build' { & npm run build }
             Invoke-NativeStep 'Autowin Electron package' { & npx electron-builder --dir }
+            Invoke-NativeStep 'Autowin package contents' {
+                & powershell -NoProfile -File (Join-Path $PSScriptRoot 'assert-package-content.ps1')
+            }
             Invoke-NativeStep 'Autowin package freshness' {
                 & powershell -NoProfile -File (Join-Path $PSScriptRoot 'assert-ui-package-fresh.ps1')
             }

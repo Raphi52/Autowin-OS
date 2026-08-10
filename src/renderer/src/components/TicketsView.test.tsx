@@ -106,6 +106,19 @@ describe('vue Tickets', () => {
     await act(async () => root.unmount())
   })
 
+  it('expose un title dynamique sur le bouton de sélection globale', async () => {
+    api()
+    const { root, container } = await render()
+    const selectAll = container.querySelector(
+      '[data-testid="tickets-select-all"]'
+    ) as HTMLButtonElement
+
+    expect(selectAll.getAttribute('title')).toBe('Tout sélectionner (3)')
+    await act(async () => selectAll.click())
+    expect(selectAll.getAttribute('title')).toBe('Tout désélectionner')
+    await act(async () => root.unmount())
+  })
+
   it('PROMPT-FIRST : ouvre UNE conversation pour la sélection et pré-remplit sans envoyer', async () => {
     const conversationsCreate = vi.fn(async ({ title }: { title: string }) => ({
       id: `conv-${title}`
@@ -115,7 +128,6 @@ describe('vue Tickets', () => {
     api({
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       conversationsCreate,
-      conversationsSetAuthorityMode: vi.fn(async () => ({})),
       orchestrate,
       appCommand
     })
@@ -160,7 +172,6 @@ describe('vue Tickets', () => {
     api({
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       conversationsCreate: vi.fn(async () => ({ id: 'conv-1' })),
-      conversationsSetAuthorityMode: vi.fn(async () => ({})),
       appCommand: vi.fn(async () => ({ ok: true }))
     })
     const prefills: Array<{ send?: boolean }> = []
@@ -187,6 +198,36 @@ describe('vue Tickets', () => {
     })
     expect(prefills).toHaveLength(1)
     expect(prefills[0].send).toBe(true)
+    window.removeEventListener('autowin:prefill-conversation', listener)
+    await act(async () => root.unmount())
+  })
+
+  it('relit les fiches sélectionnées avant de préparer le prompt', async () => {
+    api({
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      conversationsCreate: vi.fn(async () => ({ id: 'conv-enriched' })),
+      appCommand: vi.fn(async () => ({ ok: true })),
+      getTicket: vi.fn(async ({ id }: { id: string }) => ({
+        ...item(id),
+        comments: [{ author: 'Alice', text: 'Décision issue de la discussion distante.' }]
+      }))
+    })
+    const prompts: string[] = []
+    const listener = (event: Event): void => {
+      void prompts.push((event as CustomEvent<{ prompt: string }>).detail.prompt)
+    }
+    window.addEventListener('autowin:prefill-conversation', listener)
+    const { root, container } = await render()
+    const checks = container.querySelectorAll<HTMLInputElement>(
+      '[data-testid="ticket-process-checkbox"]'
+    )
+    await act(async () => checks[0].click())
+    await act(async () => {
+      ;(container.querySelector('[data-testid="tickets-treat-selection"]') as HTMLButtonElement).click()
+      for (let index = 0; index < 20; index += 1) await Promise.resolve()
+    })
+
+    expect(prompts[0]).toContain('Décision issue de la discussion distante.')
     window.removeEventListener('autowin:prefill-conversation', listener)
     await act(async () => root.unmount())
   })
@@ -431,8 +472,10 @@ describe('vue Tickets', () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       'Authentification requise'
     )
+    const retry = container.querySelector('[data-testid="tickets-retry"]') as HTMLButtonElement
+    expect(retry.getAttribute('title')).toBe('Réessayer le chargement des tickets')
     await act(async () => {
-      ;(container.querySelector('[data-testid="tickets-retry"]') as HTMLButtonElement).click()
+      retry.click()
       await Promise.resolve()
     })
     expect(listTickets).toHaveBeenCalledTimes(2)
@@ -449,8 +492,10 @@ describe('vue Tickets', () => {
     const { root, container } = await render()
 
     expect(container.textContent).toContain('Store de sources indisponible')
+    const retry = container.querySelector('[data-testid="tickets-retry"]') as HTMLButtonElement
+    expect(retry.getAttribute('title')).toBe('Réessayer le chargement des tickets')
     await act(async () => {
-      ;(container.querySelector('[data-testid="tickets-retry"]') as HTMLButtonElement).click()
+      retry.click()
       await Promise.resolve()
       await Promise.resolve()
     })
@@ -547,6 +592,29 @@ describe('vue Tickets', () => {
       await Promise.resolve()
     })
     expect(listTickets).toHaveBeenCalledTimes(2)
+    await act(async () => root.unmount())
+  })
+
+  it('expose aria-label et title sur le bouton actualiser', async () => {
+    api()
+    const { root, container } = await render()
+    const btn = container.querySelector('[data-testid="tickets-refresh"]') as HTMLButtonElement
+    expect(btn.getAttribute('aria-label')).toBe('Actualiser les tickets')
+    expect(btn.getAttribute('title')).toBe('Actualiser les tickets')
+    await act(async () => root.unmount())
+  })
+
+  it('expose aria-label et title sur le bouton enregistrer la source', async () => {
+    api()
+    const { root, container } = await render()
+    await act(async () => {
+      const add = container.querySelector('[aria-label="Ajouter une source"]') as HTMLButtonElement
+      add.click()
+    })
+    const btn = container.querySelector('[aria-label="Enregistrer la source"]') as HTMLButtonElement
+    expect(btn).not.toBeNull()
+    expect(btn.getAttribute('aria-label')).toBe('Enregistrer la source')
+    expect(btn.getAttribute('title')).toBe('Enregistrer la source')
     await act(async () => root.unmount())
   })
 
@@ -650,7 +718,6 @@ describe('vue Tickets', () => {
     api({
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       conversationsCreate: vi.fn(async () => ({ id: 'c' })),
-      conversationsSetAuthorityMode: vi.fn(async () => ({})),
       orchestrate
     })
     const { root, container } = await render()
@@ -707,7 +774,6 @@ describe('vue Tickets — lots automatiques différés', () => {
       })),
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       conversationsCreate,
-      conversationsSetAuthorityMode: vi.fn(async () => ({})),
       orchestrate: vi.fn(async () => ({ ok: true }))
     })
 
@@ -717,6 +783,117 @@ describe('vue Tickets — lots automatiques différés', () => {
     })
 
     expect(conversationsCreate).toHaveBeenCalledTimes(5)
+    await act(async () => root.unmount())
+  })
+
+  it('ne consomme pas les entrants sans provider puis les lance une seule fois apres configuration', async () => {
+    localStorage.setItem('autowin:tickets-auto-mode', '1')
+    const roles = vi
+      .fn()
+      .mockResolvedValueOnce({})
+      .mockResolvedValue({ orchestrator: { provider: 'claude' } })
+    const conversationsCreate = vi.fn(async ({ title }: { title: string }) => ({
+      id: `conv-${title}`
+    }))
+    api({
+      listTickets: vi.fn(async () => ({ items: [item('1')], hasMore: false })),
+      roles,
+      conversationsCreate,
+      orchestrate: vi.fn(async () => ({ ok: true }))
+    })
+
+    const { root } = await render()
+    await act(async () => {
+      for (let index = 0; index < 10; index += 1) await Promise.resolve()
+    })
+
+    expect(conversationsCreate).not.toHaveBeenCalled()
+    expect(localStorage.getItem('autowin:tickets-auto-seen')).toBeNull()
+
+    await act(async () => {
+      root.render(createElement(TicketsView, { active: false }))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      root.render(createElement(TicketsView, { active: true }))
+      for (let index = 0; index < 20; index += 1) await Promise.resolve()
+    })
+
+    expect(conversationsCreate).toHaveBeenCalledTimes(1)
+    await act(async () => root.unmount())
+  })
+
+  it('ne consomme pas sans provider mais ne REPAYE jamais un lancement deja tente', async () => {
+    localStorage.setItem('autowin:tickets-auto-mode', '1')
+    const providerStatus = vi
+      .fn()
+      .mockResolvedValueOnce([{ provider: 'claude', status: 'expired', testable: false }])
+      .mockResolvedValue([{ provider: 'claude', status: 'authenticated', testable: false }])
+    const orchestrate = vi.fn().mockResolvedValueOnce({ ok: false }).mockResolvedValue({ ok: true })
+    api({
+      listTickets: vi.fn(async () => ({ items: [item('1')], hasMore: false })),
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      providerStatus,
+      conversationsCreate: vi.fn(async () => ({ id: 'conv-ticket' })),
+      orchestrate
+    })
+
+    const first = await render()
+    await act(async () => {
+      for (let index = 0; index < 10; index += 1) await Promise.resolve()
+    })
+    expect(orchestrate).not.toHaveBeenCalled()
+    expect(localStorage.getItem('autowin:tickets-auto-seen')).toBeNull()
+    await act(async () => first.root.unmount())
+
+    const second = await render()
+    await act(async () => {
+      for (let index = 0; index < 20; index += 1) await Promise.resolve()
+    })
+    expect(orchestrate).toHaveBeenCalledTimes(1)
+    expect(localStorage.getItem('autowin:tickets-auto-seen')).toContain('::1')
+    await act(async () => second.root.unmount())
+
+    const third = await render()
+    await act(async () => {
+      for (let index = 0; index < 20; index += 1) await Promise.resolve()
+    })
+    expect(orchestrate).toHaveBeenCalledTimes(1)
+    expect(localStorage.getItem('autowin:tickets-auto-seen')).toContain('::1')
+    await act(async () => third.root.unmount())
+  })
+
+  it('affiche et rouvre la conversation liee a un ticket prepare', async () => {
+    const appCommand = vi.fn(async () => ({ ok: true }))
+    api({
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      conversationsCreate: vi.fn(async () => ({ id: 'conv-ticket-1' })),
+      appCommand
+    })
+    const opened: string[] = []
+    const listener = (event: Event): void => {
+      void opened.push((event as CustomEvent<string>).detail)
+    }
+    window.addEventListener('autowin:open-conversation', listener)
+    const { root, container } = await render()
+    const checks = container.querySelectorAll<HTMLInputElement>(
+      '[data-testid="ticket-process-checkbox"]'
+    )
+    await act(async () => checks[0].click())
+    await act(async () => {
+      ;(container.querySelector('[data-testid="tickets-treat-selection"]') as HTMLButtonElement).click()
+      for (let index = 0; index < 10; index += 1) await Promise.resolve()
+    })
+
+    const badge = container.querySelector(
+      '[data-testid="ticket-treatment-status"]'
+    ) as HTMLButtonElement
+    expect(badge.textContent).toContain('prêt')
+    await act(async () => badge.click())
+    expect(appCommand).toHaveBeenCalledWith('navigate', { tab: 'chat' })
+    expect(opened).toContain('conv-ticket-1')
+
+    window.removeEventListener('autowin:open-conversation', listener)
     await act(async () => root.unmount())
   })
 
@@ -739,7 +916,6 @@ describe('vue Tickets — lots automatiques différés', () => {
       })),
       roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
       conversationsCreate,
-      conversationsSetAuthorityMode: vi.fn(async () => ({})),
       orchestrate
     })
 
@@ -759,6 +935,51 @@ describe('vue Tickets — lots automatiques différés', () => {
     })
 
     expect(conversationsCreate).toHaveBeenCalledTimes(3)
+    await act(async () => root.unmount())
+  })
+
+  it('décocher « Mode auto » arrête le cycle en cours et affiche le statut arrêté', async () => {
+    localStorage.setItem('autowin:tickets-auto-mode', '1')
+    const pending: Array<(value: { ok: boolean }) => void> = []
+    const orchestrate = vi.fn(
+      () =>
+        new Promise<{ ok: boolean }>((resolve) => {
+          pending.push(resolve)
+        })
+    )
+    const conversationsCreate = vi.fn(async ({ title }: { title: string }) => {
+      // Decochage AU 2e item : la case est cherchee au moment de l'appel (le cycle a deja demarre).
+      if (conversationsCreate.mock.calls.length === 2) {
+        ;(
+          document.querySelector('[data-testid="tickets-mode-auto"] input') as HTMLInputElement
+        )?.click()
+      }
+      return { id: `conv-${title}` }
+    })
+    api({
+      listTickets: vi.fn(async () => ({
+        items: [item('1'), item('2'), item('3'), item('4'), item('5'), item('6')],
+        hasMore: false
+      })),
+      roles: vi.fn(async () => ({ orchestrator: { provider: 'claude' } })),
+      conversationsCreate,
+      orchestrate
+    })
+
+    const { root, container } = await render()
+
+    await act(async () => {
+      for (let index = 0; index < 20; index += 1) await Promise.resolve()
+    })
+    await act(async () => {
+      pending.splice(0).forEach((resolve) => resolve({ ok: true }))
+      for (let index = 0; index < 20; index += 1) await Promise.resolve()
+    })
+
+    expect(conversationsCreate.mock.calls.length).toBeLessThanOrEqual(3)
+    expect(container.querySelector('[data-testid="tickets-auto-status"]')?.textContent).toContain(
+      'arrêté'
+    )
     await act(async () => root.unmount())
   })
 })

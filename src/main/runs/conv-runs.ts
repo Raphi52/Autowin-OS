@@ -15,6 +15,7 @@ import { parseRun } from '../dashboards/runs'
 import { scanRuns, type RunEntry } from '../dashboards/runs-scan'
 import type { OrchestrationStep } from '../orchestrator'
 import { ensureAutowinAppData } from '../app-data'
+import type { RunClosureStatus } from '../../shared/run-execution'
 
 /**
  * RUN.md PAR CONVERSATION — chaque tâche/orchestration lancée depuis une conversation
@@ -167,12 +168,13 @@ export function populateConvRunSections(
   }
 }
 
-/** Clôt le RUN selon le verdict du gate (green = validé, red = rejeté/crash). */
-export function closeConvRun(path: string, green: boolean, journalLine: string): void {
+/** Applique au RUN le statut exact du lifecycle ; `open` n'est pas une clôture. */
+export function closeConvRun(path: string, status: RunClosureStatus, journalLine: string): void {
+  if (status === 'open') return
   try {
     let md = readFileSync(path, 'utf8')
-    md = md.replace(/^status: open/m, `status: ${green ? 'green' : 'red'}`)
-    if (green) md = md.replace(/^ {2}- \[ \] (le juge valide.*)$/m, '  - [x] $1')
+    md = md.replace(/^status: open/m, `status: ${status}`)
+    if (status === 'green') md = md.replace(/^ {2}- \[ \] (le juge valide.*)$/m, '  - [x] $1')
     md = md.replace(/^## Journal$/m, `## Journal`)
     md = md.replace(
       /(## Journal\n)/,
@@ -261,7 +263,7 @@ export function reconcileAbandonedConvRuns(options: {
       }
       closeConvRun(
         path,
-        false,
+        'red',
         "Abandonné : l'app s'est arrêtée avant la clôture, aucun verdict n'a été rendu."
       )
       closed += 1

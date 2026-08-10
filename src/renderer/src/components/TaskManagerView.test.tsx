@@ -124,13 +124,16 @@ function api() {
   }
 }
 
-async function mount(mockApi = api()) {
+async function mount(
+  mockApi = api(),
+  props: { onOpenConversation?: (target: { conversationId: string; turnId?: string }) => void } = {}
+) {
   Object.defineProperty(window, 'api', { configurable: true, value: mockApi })
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
   mounted.push({ root, container })
-  await act(async () => root.render(createElement(TaskManagerView, { active: true })))
+  await act(async () => root.render(createElement(TaskManagerView, { active: true, ...props })))
   return { container, mockApi, root }
 }
 
@@ -142,6 +145,49 @@ describe('TaskManagerView', () => {
     expect(container.textContent).toContain('Autonome Windows')
     expect(container.textContent).toContain('Autowin était arrêté.')
     expect(container.querySelector('[data-testid="task-manager-view"]')).not.toBeNull()
+  })
+
+  it('désactive la suppression tant qu’une occurrence est active', async () => {
+    const mockApi = api()
+    const snapshot = await mockApi.taskManagerSnapshot()
+    snapshot.occurrences[0].status = 'running'
+    mockApi.taskManagerSnapshot.mockResolvedValue(snapshot)
+
+    const { container } = await mount(mockApi)
+    const remove = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Supprimer'
+    )
+
+    expect(remove?.disabled).toBe(true)
+    expect(remove?.title).toMatch(/en cours/i)
+  })
+
+  it('rend visibles le coût récent et une panne de surveillance', async () => {
+    const mockApi = api()
+    const snapshot = await mockApi.taskManagerSnapshot()
+    snapshot.tasks[0].schedule = undefined
+    snapshot.tasks[0].watchdog = {
+      source: { kind: 'file-match', path: 'C:/logs/app.log', pattern: 'ERROR' },
+      guards: { dedupWindowMs: 60_000, maxTriggersPerHour: 12, maxChainDepth: 0, maxPerRoot: 20 }
+    }
+    snapshot.watchdogs = {
+      'task-1': {
+        admittedLastHour: 3,
+        knownCostUsdLastHour: 0.42,
+        totalTokensLastHour: 12_345,
+        unpricedCallsLastHour: 1,
+        complaint: 'Fichier surveillé illisible'
+      }
+    }
+    mockApi.taskManagerSnapshot.mockResolvedValue(snapshot)
+
+    const { container } = await mount(mockApi)
+
+    expect(container.textContent).toContain('3 réveils sur la dernière heure')
+    expect(container.textContent).toContain('0,42 $ connus')
+    expect(container.textContent).toContain('12 345 tokens')
+    expect(container.textContent).toContain('1 appel non chiffré')
+    expect(container.textContent).toContain('Fichier surveillé illisible')
   })
 
   it("affiche le mode figé sur chaque ligne d'historique", async () => {
@@ -217,7 +263,9 @@ describe('TaskManagerView', () => {
       ?.querySelector('select')
     const options = [...model!.options]
 
-    expect(options.filter((option) => option.textContent === 'Claude Opus 5 · CLI · claude')).toHaveLength(1)
+    expect(
+      options.filter((option) => option.textContent === 'Claude Opus 5 · CLI · claude')
+    ).toHaveLength(1)
     expect(options.map((option) => option.value)).toContain('claude:opus')
     expect(options.map((option) => option.value)).not.toContain('claude:opus-5')
     expect(options.map((option) => option.value)).toContain('claude:opus-4-8')
@@ -500,5 +548,179 @@ describe('TaskManagerView', () => {
     expect(mockApi.taskManagerCreate).not.toHaveBeenCalled()
 
     await act(async () => pending.resolve([]))
+  })
+
+  it('affiche un état de chargement au lieu des états vides tant que le snapshot est en attente', async () => {
+    const pending = deferred<unknown>()
+    const mockApi = api()
+    mockApi.taskManagerSnapshot.mockImplementationOnce(() => pending.promise)
+
+    const { container } = await mount(mockApi)
+
+    expect(container.textContent).not.toContain('Aucune tâche')
+    expect(container.textContent).not.toContain('Sélectionne ou crée une tâche')
+    expect(
+      container.querySelectorAll('[data-testid="task-manager-loading"]').length
+    ).toBeGreaterThan(0)
+
+    await act(async () =>
+      pending.resolve({
+        tasks: [],
+        occurrences: [],
+        alerts: [],
+        scheduler: { running: false, nextWakeAt: null, relayAvailable: false }
+      })
+    )
+  })
+
+  it('affiche une bannière de chargement échoué quand l’IPC rejette', async () => {
+    const mockApi = api()
+    mockApi.taskManagerSnapshot.mockRejectedValueOnce(new Error('IPC coupé'))
+
+    const { container } = await mount(mockApi)
+
+    const banner = container.querySelector('[data-testid="task-manager-load-error"]')
+    expect(banner).not.toBeNull()
+    expect(banner?.textContent).toContain('IPC coupé')
+    expect(
+      [...banner!.querySelectorAll('button')].some((button) => button.textContent === 'Réessayer')
+    ).toBe(true)
+  })
+
+  it('rappelle réellement le chargement au clic sur Réessayer', async () => {
+    const mockApi = api()
+    mockApi.taskManagerSnapshot.mockRejectedValueOnce(new Error('IPC coupé'))
+
+    const { container } = await mount(mockApi)
+    expect(mockApi.taskManagerSnapshot).toHaveBeenCalledTimes(1)
+
+    const retry = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Réessayer'
+    )
+    await act(async () => retry?.click())
+
+    expect(mockApi.taskManagerSnapshot).toHaveBeenCalledTimes(2)
+    expect(container.querySelector('[data-testid="task-manager-load-error"]')).toBeNull()
+    expect(container.textContent).toContain('Rapport du matin')
+  })
+  it('détaille chaque occurrence avec les métadonnées déjà stockées', async () => {
+    const mockApi = api()
+    const snapshot = await mockApi.taskManagerSnapshot()
+    snapshot.occurrences = [
+      {
+        id: 'task-1@2',
+        taskId: 'task-1',
+        scheduledFor: Date.parse('2026-08-03T07:30:00.000Z'),
+        status: 'completed',
+        mode: 'windows',
+        claimedAt: Date.parse('2026-08-03T07:30:00.000Z'),
+        startedAt: Date.parse('2026-08-03T07:30:00.000Z'),
+        finishedAt: Date.parse('2026-08-03T07:32:05.000Z'),
+        conversationId: 'conv-1',
+        turnId: 'turn-9',
+        trigger: 'watchdog',
+        outcome: 'investigate',
+        knownCostUsd: 0.42,
+        totalTokens: 12_345,
+        unpricedCalls: 1,
+        missedCount: 3,
+        watchdog: { context: 'ERROR relay down', depth: 1, source: 'file-match' }
+      }
+    ]
+    mockApi.taskManagerSnapshot.mockResolvedValue(snapshot)
+
+    const { container } = await mount(mockApi)
+    const meta = container.querySelector('[data-testid="task-manager-occurrence-meta"]')
+
+    expect(meta?.textContent).toContain('À investiguer')
+    expect(meta?.textContent).toContain('Réveil')
+    expect(meta?.textContent).toContain('Durée 2 min 5 s')
+    expect(meta?.textContent).toContain('0,42 $')
+    expect(meta?.textContent).toContain('12 345 tokens')
+    expect(meta?.textContent).toContain('1 appel non chiffré')
+    expect(meta?.textContent).toContain('3 échéances agrégées')
+    expect(meta?.textContent).toContain('ERROR relay down')
+  })
+
+  it("omet les métadonnées absentes plutôt que d'inventer", async () => {
+    const mockApi = api()
+    const snapshot = await mockApi.taskManagerSnapshot()
+    snapshot.occurrences = [
+      {
+        id: 'task-1@3',
+        taskId: 'task-1',
+        scheduledFor: Date.parse('2026-08-03T07:30:00.000Z'),
+        status: 'claimed',
+        mode: 'windows',
+        claimedAt: Date.parse('2026-08-03T07:30:00.000Z')
+      }
+    ]
+    mockApi.taskManagerSnapshot.mockResolvedValue(snapshot)
+
+    const { container } = await mount(mockApi)
+    const occurrence = container.querySelector('.task-manager-occurrence')
+
+    expect(occurrence?.textContent).not.toContain('Durée')
+    expect(occurrence?.textContent).not.toContain('échéances agrégées')
+    expect(occurrence?.textContent).not.toContain('undefined')
+    expect(occurrence?.querySelector('[data-testid="task-manager-occurrence-open"]')).toBeNull()
+  })
+
+  it('ouvre la conversation de preuve avec son tour quand ils existent', async () => {
+    const mockApi = api()
+    const snapshot = await mockApi.taskManagerSnapshot()
+    snapshot.occurrences = [
+      {
+        id: 'task-1@4',
+        taskId: 'task-1',
+        scheduledFor: 1,
+        status: 'completed',
+        mode: 'windows',
+        claimedAt: 1,
+        conversationId: 'conv-1',
+        turnId: 'turn-9'
+      }
+    ]
+    mockApi.taskManagerSnapshot.mockResolvedValue(snapshot)
+    const onOpenConversation = vi.fn()
+
+    const { container } = await mount(mockApi, { onOpenConversation })
+    const open = container.querySelector<HTMLButtonElement>(
+      '[data-testid="task-manager-occurrence-open"]'
+    )
+    expect(open?.textContent).toContain('Ouvrir la conversation')
+    await act(async () => open?.click())
+
+    expect(onOpenConversation).toHaveBeenCalledWith({
+      conversationId: 'conv-1',
+      turnId: 'turn-9'
+    })
+  })
+
+  it("n'envoie pas de tour fictif quand l'occurrence n'en a pas", async () => {
+    const mockApi = api()
+    const snapshot = await mockApi.taskManagerSnapshot()
+    snapshot.occurrences = [
+      {
+        id: 'task-1@5',
+        taskId: 'task-1',
+        scheduledFor: 1,
+        status: 'completed',
+        mode: 'windows',
+        claimedAt: 1,
+        conversationId: 'conv-1'
+      }
+    ]
+    mockApi.taskManagerSnapshot.mockResolvedValue(snapshot)
+    const onOpenConversation = vi.fn()
+
+    const { container } = await mount(mockApi, { onOpenConversation })
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="task-manager-occurrence-open"]')
+        ?.click()
+    )
+
+    expect(onOpenConversation).toHaveBeenCalledWith({ conversationId: 'conv-1' })
   })
 })

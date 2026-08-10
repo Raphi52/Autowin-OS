@@ -2,6 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { groupAssistantActivity, hydrateStoredAssistant } from './chat-view-model'
 import { Markdown, extractRecommendation } from './Markdown'
 
 let container: HTMLDivElement
@@ -21,6 +22,39 @@ afterEach(() => {
 
 function render(text: string, highlightFinalSummary = false): void {
   act(() => root.render(createElement(Markdown, { text, highlightFinalSummary })))
+}
+
+const CLOSURE = 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
+
+function renderHydrated(
+  message: Parameters<typeof hydrateStoredAssistant>[0],
+  highlightFinalSummary = false
+): void {
+  const hydrated = hydrateStoredAssistant(message)
+  const texts = groupAssistantActivity(hydrated.parts).filter((part) => part.kind === 'text')
+  act(() =>
+    root.render(
+      createElement(
+        'div',
+        null,
+        ...texts.map((part, index) =>
+          createElement(Markdown as React.ComponentType<Record<string, unknown>>, {
+            key: index,
+            text: part.text,
+            continuationPrefix: (part as { markdownContinuationPrefix?: string })
+              .markdownContinuationPrefix,
+            highlightFinalSummary
+          })
+        )
+      )
+    )
+  )
+}
+
+function textOutsideCode(): string {
+  const copy = container.cloneNode(true) as HTMLElement
+  copy.querySelectorAll('pre').forEach((node) => node.remove())
+  return copy.textContent ?? ''
 }
 
 describe('Markdown', () => {
@@ -113,31 +147,37 @@ describe('Markdown', () => {
     expect(container.querySelector('pre code')?.textContent).toContain('| a |')
   })
 
-  it('renders only a closed html-render fence as a sandboxed surface', () => {
+  // Le rendu du chat n'est plus une iframe encadrée mais un rendu INLINE assaini (décision
+  // utilisateur 2026-08-08 : « ça doit pas faire une boîte »). L'intention testée est inchangée —
+  // seule une fence FERMÉE `html-render` produit une surface rendue — mais la surface a changé.
+  it('renders only a closed html-render fence as inline sanitized content', () => {
     render('Avant\n```html-render\n<!doctype html><button id="demo">Démo</button>\n```\nAprès')
-    const preview = container.querySelector('[data-testid="html-render-preview"]')
-    expect(preview).not.toBeNull()
-    expect(preview?.querySelector('iframe')?.getAttribute('src')).toMatch(/^data:text\/html/)
+    const rendered = container.querySelector('[data-testid="chat-inline-html"]')
+    expect(rendered).not.toBeNull()
+    expect(container.querySelector('iframe')).toBeNull()
+    // `<button>` n'est pas dans la whitelist : le libellé survit, la balise non.
+    expect(rendered?.textContent).toContain('Démo')
+    expect(rendered?.querySelector('button')).toBeNull()
     expect(container.textContent).toContain('Avant')
     expect(container.textContent).toContain('Après')
   })
 
   it('keeps ordinary and incomplete HTML fences inert', () => {
     render('```html\n<script>window.evil = true</script>\n```')
-    expect(container.querySelector('[data-testid="html-render-preview"]')).toBeNull()
+    expect(container.querySelector('[data-testid="chat-inline-html"]')).toBeNull()
     expect(container.querySelector('pre code')?.textContent).toContain('<script>')
 
     render('```html-render\n<script>window.evil = true</script>')
-    expect(container.querySelector('[data-testid="html-render-preview"]')).toBeNull()
+    expect(container.querySelector('[data-testid="chat-inline-html"]')).toBeNull()
     expect(container.querySelector('pre code')?.textContent).toContain('<script>')
   })
 
   it('accepts Markdown fence indentation without rendering ordinary HTML', () => {
     render('1. Vue proposée\n   ```html-render\n   <strong>Rendue</strong>\n   ```')
-    expect(container.querySelector('[data-testid="html-render-preview"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="chat-inline-html"]')).not.toBeNull()
 
     render('1. Exemple\n   ```html\n   <strong>Code</strong>\n   ```')
-    expect(container.querySelector('[data-testid="html-render-preview"]')).toBeNull()
+    expect(container.querySelector('[data-testid="chat-inline-html"]')).toBeNull()
     expect(container.querySelector('pre code')?.textContent).toContain('<strong>Code</strong>')
   })
 
@@ -146,21 +186,39 @@ describe('Markdown', () => {
       JSON.stringify({ content: '```html-render\n<h1>Après redémarrage</h1>\n```' })
     ) as { content: string }
     render(persisted.content)
-    expect(container.querySelector('iframe')?.getAttribute('src')).toMatch(/^data:text\/html/)
+    expect(container.querySelector('[data-testid="chat-inline-html"]')?.innerHTML).toBe(
+      '<h1>Après redémarrage</h1>'
+    )
   })
 
   it('keeps an oversized html-render block explicit instead of degrading it to code', () => {
     const oversizedSource = `<img src="data:image/png;base64,${'a'.repeat(1_000_001)}">`
     render(`\`\`\`html-render\n${oversizedSource}\n\`\`\``)
 
-    expect(container.querySelector('[data-testid="html-render-preview"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="html-render-too-large"]')).not.toBeNull()
-    expect(container.querySelector('iframe')).toBeNull()
-    expect(container.querySelector('pre.md-code')).toBeNull()
+    // La limite compte PLUS qu'avant : en rendu inline, ce document deviendrait des noeuds DOM de
+    // l'application au lieu d'un contexte séparé. Il est annoncé comme refusé, et reste consultable.
+    const refused = container.querySelector('[data-testid="chat-inline-html-too-large"]')
+    expect(refused).not.toBeNull()
+    expect(container.querySelector('[data-testid="chat-inline-html"]')).toBeNull()
+    expect(refused?.querySelector('summary')?.textContent).toContain('au-delà de la limite')
+    expect(refused?.querySelector('pre code')?.textContent).toContain('data:image/png')
+  })
 
-    act(() => (container.querySelector('[data-action="html-source"]') as HTMLButtonElement).click())
-    expect(container.querySelector('.html-render-preview__source')?.textContent).toContain(
-      'data:image/png'
+  it.each([
+    '```html-render\n<b>LIVE</b>\n    ```',
+    '```html-render\n<b>LIVE</b>\n\t```',
+    '- ```html-render\n  <b>LIVE</b>\n      ```',
+    '> ```html-render\n> <b>LIVE</b>\n>     ```'
+  ])('keeps an html-render fence inert when CommonMark did not close it: %s', (source) => {
+    render(source)
+    expect(container.querySelector('[data-testid="chat-inline-html"]')).toBeNull()
+    expect(container.querySelector('pre code')?.textContent).toContain('<b>LIVE</b>')
+  })
+
+  it('still activates a truly closed html-render fence containing a marker-like code line', () => {
+    render('```html-render\n<b>LIVE</b>\n    ```\n```')
+    expect(container.querySelector('[data-testid="chat-inline-html"]')?.textContent).toContain(
+      'LIVE'
     )
   })
 
@@ -208,11 +266,213 @@ describe('Markdown', () => {
     render('```text\n✅ Fait\n```', true)
     expect(container.querySelector('.md-final-summary')).toBeNull()
   })
+
+  it.each([
+    `~~~text\n${CLOSURE}\n~~~`,
+    `    ${CLOSURE}`,
+    `> \`\`\`text\n> ${CLOSURE}\n> \`\`\``,
+    `- \`\`\`text\n  ${CLOSURE}\n  \`\`\``,
+    `10. Preuve :\n    ~~~text\n    ${CLOSURE}\n    ~~~`
+  ])(
+    'renders every CommonMark code citation as code after successful hydration: %s',
+    (citation) => {
+      renderHydrated({
+        content: 'projection',
+        status: 'completed',
+        parts: [
+          {
+            kind: 'action',
+            name: 'orchestrate',
+            ok: true,
+            data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+          },
+          { kind: 'text', text: citation }
+        ]
+      })
+
+      expect(
+        Array.from(container.querySelectorAll('pre code')).some((node) =>
+          node.textContent?.includes(CLOSURE)
+        )
+      ).toBe(true)
+      expect(textOutsideCode().match(/Clôture Autowin : gate validé/g)).toHaveLength(1)
+    }
+  )
+
+  it.each(
+    (['failed', 'interrupted', 'cancelled'] as const).flatMap((status) =>
+      [
+        `~~~text\n${CLOSURE}\n~~~`,
+        `    ${CLOSURE}`,
+        `> \`\`\`text\n> ${CLOSURE}\n> \`\`\``,
+        `- \`\`\`text\n  ${CLOSURE}\n  \`\`\``
+      ].map((citation) => [status, citation] as const)
+    )
+  )('never exposes a cited green closure as prose after %s hydration: %s', (status, citation) => {
+    renderHydrated({
+      content: 'projection',
+      status,
+      parts: [{ kind: 'text', text: `${citation}\n\nÉchec final : timeout.` }]
+    })
+
+    expect(
+      Array.from(container.querySelectorAll('pre code')).some((node) =>
+        node.textContent?.includes(CLOSURE)
+      )
+    ).toBe(true)
+    expect(textOutsideCode()).not.toContain(CLOSURE)
+    expect(textOutsideCode()).toContain('Échec final : timeout.')
+  })
+
+  it.each([
+    '~~~text\n✅ Fait\n📍 Maintenant\n⏳ Reste à faire\n👉 Recommandé\n~~~',
+    '    ✅ Fait\n    📍 Maintenant\n    ⏳ Reste à faire\n    👉 Recommandé'
+  ])('does not frame final-summary labels contained in CommonMark code: %s', (source) => {
+    render(source, true)
+    expect(container.querySelector('.md-final-summary')).toBeNull()
+  })
+
+  it.each(['completed', 'failed', 'interrupted', 'cancelled'] as const)(
+    'keeps action-separated fenced evidence aligned with the visible DOM for %s',
+    (status) => {
+      const delivered = status === 'completed'
+      renderHydrated({
+        content: 'projection',
+        status,
+        parts: [
+          { kind: 'text', text: '~~~text' },
+          {
+            kind: 'action',
+            name: 'orchestrate',
+            ok: delivered,
+            data: delivered
+              ? { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+              : { error: 'timeout' }
+          },
+          { kind: 'text', text: `${CLOSURE}\n~~~\n\nÉchec final : timeout.` }
+        ]
+      })
+
+      expect(
+        Array.from(container.querySelectorAll('pre code')).some((node) =>
+          node.textContent?.includes(CLOSURE)
+        )
+      ).toBe(true)
+      expect(textOutsideCode().match(/Clôture Autowin : gate validé/g) ?? []).toHaveLength(
+        delivered ? 1 : 0
+      )
+      expect(textOutsideCode()).toContain('Échec final : timeout.')
+    }
+  )
+
+  it('does not frame final-summary labels when a fence crosses an action boundary', () => {
+    renderHydrated(
+      {
+        content: 'projection',
+        status: 'completed',
+        parts: [
+          { kind: 'text', text: '~~~text' },
+          { kind: 'action', name: 'get_state', ok: true },
+          {
+            kind: 'text',
+            text: '✅ Fait\n📍 Maintenant\n⏳ Reste à faire\n👉 Recommandé\n~~~'
+          }
+        ]
+      },
+      true
+    )
+
+    expect(container.querySelector('.md-final-summary')).toBeNull()
+    expect(
+      Array.from(container.querySelectorAll('pre code')).some((node) =>
+        node.textContent?.includes('✅ Fait')
+      )
+    ).toBe(true)
+  })
+
+  it.each(['completed', 'failed', 'interrupted', 'cancelled'] as const)(
+    'keeps an html-render closure citation inert across an action for %s',
+    (status) => {
+      const delivered = status === 'completed'
+      renderHydrated({
+        content: 'projection',
+        status,
+        parts: [
+          { kind: 'text', text: '```html-render' },
+          {
+            kind: 'action',
+            name: 'orchestrate',
+            ok: delivered,
+            data: delivered
+              ? { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+              : { error: 'timeout' }
+          },
+          { kind: 'text', text: `<p>${CLOSURE}</p>\n\`\`\`\n\nÉchec final : timeout.` }
+        ]
+      })
+
+      expect(container.querySelector('[data-testid="chat-inline-html"]')).toBeNull()
+      expect(
+        Array.from(container.querySelectorAll('pre code')).some((node) =>
+          node.textContent?.includes(CLOSURE)
+        )
+      ).toBe(true)
+      expect(textOutsideCode().match(/Clôture Autowin : gate validé/g) ?? []).toHaveLength(
+        delivered ? 1 : 0
+      )
+    }
+  )
+
+  it('keeps an html-render payload split by an action inert', () => {
+    renderHydrated({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        { kind: 'text', text: '```html-render\n<section><b>' },
+        { kind: 'action', name: 'verify', ok: true },
+        { kind: 'text', text: 'LIVE</b></section>\n```' }
+      ]
+    })
+
+    expect(container.querySelector('[data-testid="chat-inline-html"]')).toBeNull()
+    expect(container.textContent).toContain('LIVE')
+  })
+
+  it('keeps every html-render fragment inert across action and artifact cards', () => {
+    renderHydrated({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        { kind: 'text', text: '```html-render\n<section>' },
+        { kind: 'action', name: 'verify', ok: true },
+        { kind: 'text', text: '<b>LIVE' },
+        {
+          kind: 'artifact',
+          artifact: {
+            id: 'artifact-proof',
+            name: 'proof.txt',
+            mimeType: 'text/plain',
+            kind: 'text',
+            size: 5,
+            createdAt: 1,
+            encoding: 'utf8',
+            content: 'proof',
+            source: { provider: 'test' }
+          }
+        },
+        { kind: 'text', text: '</b></section>\n```' }
+      ]
+    })
+
+    expect(container.querySelector('[data-testid="chat-inline-html"]')).toBeNull()
+    expect(container.textContent).toContain('LIVE')
+  })
 })
 
 describe('extractRecommendation — ghost-text du composer', () => {
   it('extrait la reco avec libellé en gras et deux-points', () => {
-    const txt = "blabla\n\n✅ Fait\n📍 Maintenant : x\n⏳ Reste : y\n👉 **Recommandé** : relance le build"
+    const txt =
+      'blabla\n\n✅ Fait\n📍 Maintenant : x\n⏳ Reste : y\n👉 **Recommandé** : relance le build'
     expect(extractRecommendation(txt)).toBe('relance le build')
   })
   it('gère le tiret — comme séparateur', () => {

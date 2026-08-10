@@ -4,6 +4,10 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BrainNavigationCard, type BrainTraceView } from './BrainNavigationCard'
 
+;(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true
+
 let root: Root | null = null
 let host: HTMLElement | null = null
 
@@ -50,7 +54,15 @@ describe('BrainNavigationCard — dépli + surlignage du passage retenu', () => 
         minDense: 0.25,
         root: '//ged2/rig/Projets IA/Amitel Brain',
         candidates: [
-          { rank: 1, path: 'knowledge/a.md', type: 'domain', denseCos: 0.5, retained: true, chunkByteStart: byteStart, chunkByteEnd: byteEnd }
+          {
+            rank: 1,
+            path: 'knowledge/a.md',
+            type: 'domain',
+            denseCos: 0.5,
+            retained: true,
+            chunkByteStart: byteStart,
+            chunkByteEnd: byteEnd
+          }
         ]
       }
     })
@@ -110,7 +122,9 @@ describe('BrainNavigationCard — dépli + surlignage du passage retenu', () => 
       navigation: {
         query: 'q',
         minDense: 0.25,
-        candidates: [{ rank: 1, path: 'knowledge/a.md', type: 'domain', denseCos: 0.5, retained: true }]
+        candidates: [
+          { rank: 1, path: 'knowledge/a.md', type: 'domain', denseCos: 0.5, retained: true }
+        ]
       }
     })
     const details = host!.querySelector('details') as HTMLDetailsElement

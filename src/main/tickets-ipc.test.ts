@@ -26,6 +26,16 @@ function setup(isolated = false) {
       updatedAt: '2026-08-06T10:00:00.000Z',
       fields: {}
     })),
+    update: vi.fn(async (_request?: unknown, _signal?: AbortSignal) => ({
+      id: '1227',
+      sourceId: DEFAULT_TICKET_SOURCE.id,
+      type: 'Fiche Team',
+      title: 'Fiche mise à jour',
+      state: 'Clos',
+      url: 'https://dev.azure.com/AmitelGTC/RIG/_workitems/edit/1227',
+      updatedAt: '2026-08-10T10:00:00.000Z',
+      fields: {}
+    })),
     create: vi.fn(async (_request?: unknown, _signal?: AbortSignal) => ({
       id: '4242',
       sourceId: DEFAULT_TICKET_SOURCE.id,
@@ -160,6 +170,26 @@ describe('IPC Tickets', () => {
     expect(handlers.get('tickets:cancel')!(event, 'get-2')).toBe(true)
 
     await expect(pending).rejects.toThrow(/annul/i)
+  })
+
+  it('valide et délègue le retour vers une fiche existante', async () => {
+    const { handlers, service, assertTrusted } = setup()
+    const event = { senderFrame: { url: 'app://trusted' } }
+
+    const updated = await handlers.get('tickets:update')!(event, {
+      source: DEFAULT_TICKET_SOURCE,
+      id: '1227',
+      comment: 'Tests verts.',
+      state: 'Clos',
+      requestId: 'update-1'
+    })
+
+    expect(assertTrusted).toHaveBeenCalledTimes(1)
+    expect(updated).toMatchObject({ id: '1227', state: 'Clos' })
+    expect(service.update).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '1227', comment: 'Tests verts.' }),
+      expect.any(AbortSignal)
+    )
   })
 
   it('annule réellement une lecture active à la demande du renderer', async () => {

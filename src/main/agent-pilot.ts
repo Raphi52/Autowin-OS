@@ -7,7 +7,6 @@ import { evictedCount, rememberedFacts, sessionMemoryBlock } from './session-mem
 import { buildTurnMessages } from './chat-turn-messages'
 import { invokedSkillId, skillInstruction } from './skill-pipeline'
 import { VisibleStreamFilter } from '../shared/stream-markup-filter'
-import type { ConversationAuthorityMode } from './conversation-capabilities'
 import { randomUUID } from 'node:crypto'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
@@ -16,6 +15,8 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { startTurnTimer } from './turn-timing'
 import {
   formatOrchestrationOutcome,
+  isDeliveredOrchestrationOutcome,
+  ORCHESTRATION_ALREADY_ISSUED_REFUSAL,
   type OrchestrationOutcome
 } from '../shared/orchestration-outcome'
 import type { ChatArtifact } from '../shared/artifacts'
@@ -51,7 +52,17 @@ export type PilotEventVariant =
   | { kind: 'reasoning'; text: string; iteration: number }
   | { kind: 'command'; actionId: string; name: string; args: unknown }
   | { kind: 'result'; actionId: string; name: string; ok: boolean; data?: unknown }
-  | { kind: 'done'; text: string; usage?: TurnUsage }
+  | {
+      kind: 'done'
+      text: string
+      usage?: TurnUsage
+      /**
+       * Issue d'orchestration STRUCTUREE. `text` en est la mise en forme humaine ; la trace, elle,
+       * a besoin des champs (gateBlocked, valid, reused) pour etre filtrable et comptable — un
+       * texte libre ne se filtre pas.
+       */
+      outcome?: Record<string, unknown>
+    }
   | { kind: 'error'; text: string; usage?: TurnUsage }
   | { kind: 'retry'; iteration: number; name: string; text: string; data: unknown }
   | { kind: 'cancellation'; iteration: number; name: string; text: string; data: unknown }
@@ -84,6 +95,12 @@ export interface PilotEvent {
    */
   kind: PilotEventKind
   text?: string
+  /**
+   * Issue d'orchestration STRUCTUREE, portee par le `done`. `text` en est la mise en forme humaine ;
+   * la trace, elle, a besoin des champs (gateBlocked, valid, reused) pour etre filtrable et
+   * comptable — un texte libre ne se filtre ni ne se compte.
+   */
+  outcome?: Record<string, unknown>
   name?: string
   args?: unknown
   ok?: boolean
@@ -259,7 +276,6 @@ export class AgentPilot {
     maxIter = 12,
     conversationId?: string,
     signal?: AbortSignal,
-    authorityMode: ConversationAuthorityMode = 'ask',
     /** Directives injectées par l'utilisateur PENDANT le tour — drainées à chaque itération. */
     drainDirectives?: () => string[],
     /** Binding figé pour ce tour uniquement (ex. tâche planifiée), sans mutation du rôle global. */
@@ -280,12 +296,12 @@ export class AgentPilot {
     const execCommand = (name: string, args: Record<string, unknown>): Promise<CommandResult> => {
       if (bindingOverride) {
         return turnId
-          ? this.bus.exec(name, args, conversationId, authorityMode, bindingOverride, turnId)
-          : this.bus.exec(name, args, conversationId, authorityMode, bindingOverride)
+          ? this.bus.exec(name, args, conversationId, bindingOverride, turnId)
+          : this.bus.exec(name, args, conversationId, bindingOverride)
       }
       return turnId
-        ? this.bus.exec(name, args, conversationId, authorityMode, undefined, turnId)
-        : this.bus.exec(name, args, conversationId, authorityMode)
+        ? this.bus.exec(name, args, conversationId, undefined, turnId)
+        : this.bus.exec(name, args, conversationId)
     }
     const provider = binding.provider
     // Autorite du tour : une demande utilisateur ne peut ouvrir qu'un run. Une reparation ou reprise
@@ -343,6 +359,9 @@ export class AgentPilot {
             result.ok ? (result.data as OrchestrationOutcome | undefined) : undefined,
             result.ok ? undefined : String(result.error ?? '')
           ) + directiveNotice,
+        outcome: result.ok
+          ? ((result.data as Record<string, unknown> | undefined) ?? undefined)
+          : undefined,
         usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 }
       })
       return
@@ -470,17 +489,23 @@ export class AgentPilot {
      */
     let anySpokenText = false
     let conclusionRecoveryAvailable = true
+    let commandAttachments: NonNullable<Message['attachments']> = []
     for (let i = 0; i < iterationLimit; i++) {
       // Pilotage continu : les directives envoyées PENDANT le tour entrent au prochain
       // point d'itération (priorité immédiate, sans attendre la fin du tour).
       for (const directive of drainDirectives?.() ?? []) {
         convo.push(`UTILISATEUR (DIRECTIVE INJECTÉE EN COURS DE TOUR — PRIORITAIRE): ${directive}`)
       }
+      const iterationAttachments = [
+        ...(i === 0 ? (currentAttachments ?? []) : []),
+        ...commandAttachments
+      ]
+      commandAttachments = []
       const messages: Message[] = [
         {
           role: 'user',
           content: `${convo.join('\n\n')}\n\n(Réponds à l'utilisateur / agis.)`,
-          ...(i === 0 && currentAttachments?.length ? { attachments: currentAttachments } : {})
+          ...(iterationAttachments.length ? { attachments: iterationAttachments } : {})
         }
       ]
       let prompt = this.registry.describePrompt(
@@ -756,8 +781,7 @@ export class AgentPilot {
         anyActionExecuted = true
         emit({ kind: 'command', actionId, name: token.name, args: token.args })
         if (token.name === 'orchestrate' && orchestrationIssued) {
-          const refusal =
-            'Une orchestration a deja ete lancee dans ce tour. Termine avec son resultat ; un nouveau run exige un nouveau message utilisateur.'
+          const refusal = ORCHESTRATION_ALREADY_ISSUED_REFUSAL
           emit({
             kind: 'result',
             actionId,
@@ -772,6 +796,7 @@ export class AgentPilot {
         if (token.name === 'orchestrate') orchestrationIssued = true
         signal?.throwIfAborted()
         const r = await execCommand(token.name, token.args)
+        if (r.attachments?.length) commandAttachments.push(...r.attachments)
         emit({
           kind: 'result',
           actionId,
@@ -779,6 +804,29 @@ export class AgentPilot {
           ok: r.ok,
           data: r.ok ? r.data : r.error
         })
+        // `orchestrate` rend déjà l'issue AUTORITATIVE du pipeline complet : build, juge, gate,
+        // publication et fermeture du RUN. Redemander au modèle de l'interpréter coûtait un appel
+        // supplémentaire et, pire, lui faisait parfois suivre le rapport PROVISOIRE du worker
+        // (« RUN open, lance judge ») alors que le gate venait de fermer et publier le run. On clôt
+        // donc mécaniquement le tour sur le résultat structuré, comme le chemin `/skill` explicite.
+        if (token.name === 'orchestrate') {
+          const outcome = r.ok ? (r.data as OrchestrationOutcome | undefined) : undefined
+          const deliveryClosed = r.ok && isDeliveredOrchestrationOutcome(outcome ?? {})
+          const closureNotice = deliveryClosed
+            ? 'Clôture Autowin : gate validé, RUN fermé green ; aucune autre orchestration ni aucun second judge ne sont nécessaires dans ce tour.'
+            : 'Clôture Autowin : résultat terminal rendu ; aucune autre orchestration n’est relancée dans ce tour.'
+          emit({
+            kind: 'done',
+            text: `${formatOrchestrationOutcome(
+              r.ok,
+              outcome,
+              r.ok ? undefined : String(r.error ?? '')
+            )}\n\n${closureNotice}`,
+            outcome: r.ok ? ((r.data as Record<string, unknown> | undefined) ?? undefined) : undefined,
+            usage
+          })
+          return
+        }
         results.push(`${token.name} → ${r.ok ? JSON.stringify(r.data) : 'ERREUR ' + r.error}`)
         tokenIndex += 1
       }

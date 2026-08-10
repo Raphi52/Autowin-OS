@@ -324,6 +324,23 @@ describe('reconciliation des deux journaux — ni double comptage, ni perte', ()
     expect(samples).toHaveLength(2)
   })
 
+  it('deduplique un reglement detache rejoue apres un second crash', () => {
+    const recovered = {
+      kind: 'exec',
+      label: 'build',
+      provider: 'claude',
+      costUsd: 1.1564625,
+      inputTokens: 100,
+      outputTokens: 20,
+      usageCallId: 'detached:run-recovered:agent-build'
+    }
+
+    const samples = costSamplesFrom([], [recovered, recovered])
+
+    expect(samples).toHaveLength(1)
+    expect(samples[0].costUsd).toBe(1.1564625)
+  })
+
   it('des providers DIFFERENTS au meme cout ne s’apparient pas', () => {
     const samples = costSamplesFrom(
       [callFixture('subagent', 0.3, 100)],

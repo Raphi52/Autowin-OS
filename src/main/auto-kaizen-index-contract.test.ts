@@ -24,7 +24,22 @@ describe('branchement runtime Auto-Kaizen', () => {
       'if (conversationId && !activeChatTurns.wasDeliberatelyStopped(conversationId))'
     )
     // Le chemin qui ne coupe QUE l orchestration doit marquer l intention lui aussi.
-    expect(source).toContain("activeChatTurns.markDeliberateStop(conversationId)")
+    expect(source).toContain('activeChatTurns.markDeliberateStop(conversationId)')
+  })
+
+  it('propage l’identité du RUN dans orchestrate-end sur le chemin de REPRISE durable', () => {
+    // Mesuré : un réveil « orchestration-red » est arrivé SANS segment « RUN : », donc avec
+    // `e.runPath === undefined`. Le chemin de reprise durable diffusait `orchestrate-end` sans
+    // runPath alors que `resumedCurrentRunId` était disponible : l'incident perdait son scope
+    // (`orchestration-end:<convId>:red`) et l'agent réveillé n'avait aucun artefact à lire.
+    const resumeBroadcasts =
+      source.match(
+        /broadcast\(\{\s*type: 'orchestrate-end',\s*convId: conversationId,[\s\S]{0,220}?status: '(?:red|green)'\s*\}\)/g
+      ) ?? []
+    expect(resumeBroadcasts.length).toBeGreaterThan(0)
+    for (const call of resumeBroadcasts) {
+      expect(call).toMatch(/runPath: (?:resumedCurrentRunId|resumableRun\.runId|latest\.runId)/)
+    }
   })
 
   it('transforme la perte du replay et chaque diagnostic exploitable en incident', () => {
@@ -36,12 +51,22 @@ describe('branchement runtime Auto-Kaizen', () => {
 
   it('reprend périodiquement les transitions persistées', () => {
     expect(source).toContain("'auto-kaizen-incidents.json'")
-    expect(source).toContain('autoKaizenSupervisor.resumePending()')
+    expect(source).toContain('autoKaizenSupervisor?.resumePending()')
     expect(source).toContain('autoKaizenResumeTimer.unref()')
   })
 
-  it('hérite strictement de l’autorité de la conversation source', () => {
-    expect(source).toContain('authorityMode: inheritAutoKaizenAuthority(source?.authorityMode)')
-    expect(source).not.toContain("authorityMode: 'auto',\n          autoKaizen: link")
+  it('rend le superviseur legacy activable dans un mode exclusif du Watchdog', () => {
+    expect(source).toContain('legacyAutoKaizenSupervisorEnabled(process.env)')
+    expect(source).toContain(
+      'if (!AUTO_KAIZEN_SUPERVISOR_ENABLED) {\n    watchdogEngine = new WatchdogEngine('
+    )
+    expect(source).toContain(
+      'if (!AUTO_KAIZEN_SUPERVISOR_ENABLED) {\n        const seeded = seedWatchdogTasks'
+    )
+  })
+
+  it('crée les conversations Auto-Kaizen sans mode d’autorité', () => {
+    expect(source).not.toContain('inheritAutoKaizenAuthority')
+    expect(source).not.toContain('authorityMode')
   })
 })

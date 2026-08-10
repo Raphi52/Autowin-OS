@@ -73,9 +73,9 @@ describe('buildBehaviourComposition — COMPLÉTUDE', () => {
       'snapshot courant',
       'historique complet',
       'pièces jointes',
-      "mode d'autorité",
+      'exécutées directement',
       'directives',
-      '6 itérations'
+      '12 itérations'
     ]) {
       expect(blob).toContain(token)
     }

@@ -7,6 +7,7 @@ files:
   - '!dist-*/**'
   - '!Audit/**'
   - '!artifacts/**'
+  - '!.autowin-data/**'
   - '!sketches/**'
   - '!*.png'
   - '!.git/**'

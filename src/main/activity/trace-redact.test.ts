@@ -12,6 +12,20 @@ describe('redactTrace — familles de secrets couvertes', () => {
     expect(red('token: abcDEF123456')).toContain('[REDACTED]')
   })
   it('masque les préfixes connus (sk-, ghp_, xox, AKIA, AIza, JWT, PEM)', () => {
+    for (const input of [
+      'const token = "old-secret-123"',
+      '{"apiKey":"new-secret-456"}',
+      'password: "space secret"',
+      'const token: string = "ACTUAL-SECRET-123"',
+      '{"token":"prefix\\"ACTUAL-SECRET-456"}',
+      'const password /* comment */ = "ACTUAL-SECRET-789"'
+    ]) {
+      expect(red(input)).toContain('[REDACTED]')
+      expect(red(input)).not.toMatch(
+        /old-secret-123|new-secret-456|space secret|ACTUAL-SECRET-[123456789]+/
+      )
+    }
+
     expect(red('sk-proj-ABCDEFGH12345678')).toContain('[REDACTED]')
     expect(red('ghp_ABCDEFGH12345678')).toContain('[REDACTED]')
     expect(red('AKIAIOSFODNN7EXAMPLE')).toContain('[REDACTED]')

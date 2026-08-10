@@ -1,12 +1,36 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  focusCameraView,
   readCameraView,
   rememberViewBeforeFocus,
   restoreView,
   type CameraHandle,
   type CameraView
 } from './graph-camera'
+
+describe('focus dans un graphe plan', () => {
+  it('garde la caméra au-dessus du disque quand le nœud est sur z=0', () => {
+    const view = focusCameraView({ x: 120, y: -60, z: 0 }, true)
+    expect(view.target).toEqual({ x: 120, y: -60, z: 0 })
+    expect(view.position.z).toBeGreaterThan(0)
+    expect(view.position.x).toBe(120)
+    expect(view.position.y).toBe(-60)
+  })
+
+  it('respecte une distance de focus adaptée au rayon du disque', () => {
+    const view = focusCameraView({ x: 25, y: 40, z: 0 }, true, 72)
+    expect(Math.hypot(view.position.x - 25, view.position.y - 40, view.position.z)).toBe(72)
+  })
+
+  it('conserve le rapprochement radial historique hors vue plane', () => {
+    expect(focusCameraView({ x: 100, y: 0, z: 100 }, false).position).toEqual({
+      x: expect.closeTo(255.563, 3),
+      y: 0,
+      z: expect.closeTo(255.563, 3)
+    })
+  })
+})
 
 function faux(
   position = { x: 10, y: 20, z: 30 },
@@ -123,9 +147,7 @@ describe('la vue du graphe utilise réellement cette mémoire', () => {
   })
 
   it('restaure la vue quand la fiche se ferme', () => {
-    expect(source).toMatch(
-      /function clearNodeSelection\(\): void \{[\s\S]{0,400}restoreView\(/
-    )
+    expect(source).toMatch(/function clearNodeSelection\(\): void \{[\s\S]{0,400}restoreView\(/)
   })
 
   it('réaffecte la mémoire au retour de restoreView, au lieu de la laisser périmée', () => {

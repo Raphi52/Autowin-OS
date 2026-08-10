@@ -13,6 +13,8 @@ export interface ExecutionUsageSnapshot {
   completedCalls: number
   failedCalls: number
   activeCalls: number
+  /** Identités causales des réservations encore actives, persistées avec leur agent exact. */
+  activeReservationIds?: string[]
   inputTokens: number
   outputTokens: number
   cacheReadTokens: number
@@ -33,6 +35,8 @@ export function sameExecutionUsage(
   right: ComparableExecutionUsage | undefined
 ): boolean {
   if (!left || !right) return left === right
+  const leftReservations = [...(left.activeReservationIds ?? [])].sort()
+  const rightReservations = [...(right.activeReservationIds ?? [])].sort()
   return (
     (left.quoteId === undefined || right.quoteId === undefined || left.quoteId === right.quoteId) &&
     left.startedAgents === right.startedAgents &&
@@ -40,6 +44,8 @@ export function sameExecutionUsage(
     left.completedCalls === right.completedCalls &&
     left.failedCalls === right.failedCalls &&
     left.activeCalls === right.activeCalls &&
+    leftReservations.length === rightReservations.length &&
+    leftReservations.every((id, index) => id === rightReservations[index]) &&
     left.inputTokens === right.inputTokens &&
     left.outputTokens === right.outputTokens &&
     left.cacheReadTokens === right.cacheReadTokens &&
@@ -64,6 +70,7 @@ interface ExecutionRuntime {
   completedCalls: number
   failedCalls: number
   activeCalls: number
+  activeReservationIds: Set<string>
   reservedTotalTokens: number
   reservedFreshTokens: number
   inputTokens: number
@@ -111,6 +118,7 @@ function snapshot(runtime: ExecutionRuntime): ExecutionUsageSnapshot {
     completedCalls: runtime.completedCalls,
     failedCalls: runtime.failedCalls,
     activeCalls: runtime.activeCalls,
+    activeReservationIds: [...runtime.activeReservationIds],
     inputTokens: runtime.inputTokens,
     outputTokens: runtime.outputTokens,
     cacheReadTokens: runtime.cacheReadTokens,
@@ -190,6 +198,7 @@ export class ExecutionSupervisor {
       // Une reprise ne doit jamais effacer un provider encore vivant du checkpoint. Le refus
       // conservateur ci-dessous empeche deux transports de consommer le meme budget en parallele.
       activeCalls: prior?.activeCalls ?? 0,
+      activeReservationIds: new Set(prior?.activeReservationIds ?? []),
       reservedTotalTokens: 0,
       reservedFreshTokens: 0,
       inputTokens: prior?.inputTokens ?? 0,
@@ -287,11 +296,19 @@ export class ExecutionSupervisor {
     }
     const remainingCalls = Math.max(1, limits.maxProviderCalls - runtime.startedCalls)
     const totalReservation = Math.ceil(
-      Math.max(0, limits.maxTotalTokens - runtime.totalTokens) / remainingCalls
+      Math.max(0, limits.maxTotalTokens - runtime.totalTokens - runtime.reservedTotalTokens) /
+        remainingCalls
     )
     const freshReservation = Math.ceil(
-      Math.max(0, limits.maxFreshTokens - runtime.freshTokens) / remainingCalls
+      Math.max(0, limits.maxFreshTokens - runtime.freshTokens - runtime.reservedFreshTokens) /
+        remainingCalls
     )
+    if (totalReservation <= 0) {
+      deny(`Budget tokens total entierement reserve (${limits.maxTotalTokens})`)
+    }
+    if (freshReservation <= 0) {
+      deny(`Budget tokens frais entierement reserve (${limits.maxFreshTokens})`)
+    }
     if (
       runtime.totalTokens + runtime.reservedTotalTokens + totalReservation >
       limits.maxTotalTokens
@@ -305,11 +322,13 @@ export class ExecutionSupervisor {
       deny(`Budget tokens frais atteint (${limits.maxFreshTokens})`)
     }
 
+    const reservationId = randomUUID()
     // Les deux compteurs sont reserves dans la meme section synchrone, avant que l'adaptateur ne
     // voie l'appel. Deux fan-outs concurrents ne peuvent donc pas tous deux franchir le plafond.
     if (launchesAgent) runtime.startedAgents += 1
     runtime.startedCalls += 1
     runtime.activeCalls += 1
+    runtime.activeReservationIds.add(reservationId)
     runtime.reservedTotalTokens += totalReservation
     runtime.reservedFreshTokens += freshReservation
     let settled = false
@@ -317,6 +336,7 @@ export class ExecutionSupervisor {
       if (settled) return
       settled = true
       runtime.activeCalls = Math.max(0, runtime.activeCalls - 1)
+      runtime.activeReservationIds.delete(reservationId)
       runtime.reservedTotalTokens = Math.max(0, runtime.reservedTotalTokens - totalReservation)
       runtime.reservedFreshTokens = Math.max(0, runtime.reservedFreshTokens - freshReservation)
       if (failed) runtime.failedCalls += 1
@@ -345,8 +365,18 @@ export class ExecutionSupervisor {
       if (runtime.totalTokens > limits.maxTotalTokens) {
         runtime.stoppedReason = `Budget tokens total depasse (${runtime.totalTokens}/${limits.maxTotalTokens})`
         runtime.controller.abort(runtime.stoppedReason)
+      } else if (runtime.totalTokens + runtime.reservedTotalTokens > limits.maxTotalTokens) {
+        runtime.stoppedReason =
+          `Budget tokens total compromis ` +
+          `(${runtime.totalTokens + runtime.reservedTotalTokens}/${limits.maxTotalTokens}, reservations actives incluses)`
+        runtime.controller.abort(runtime.stoppedReason)
       } else if (runtime.freshTokens > limits.maxFreshTokens) {
         runtime.stoppedReason = `Budget tokens frais depasse (${runtime.freshTokens}/${limits.maxFreshTokens})`
+        runtime.controller.abort(runtime.stoppedReason)
+      } else if (runtime.freshTokens + runtime.reservedFreshTokens > limits.maxFreshTokens) {
+        runtime.stoppedReason =
+          `Budget tokens frais compromis ` +
+          `(${runtime.freshTokens + runtime.reservedFreshTokens}/${limits.maxFreshTokens}, reservations actives incluses)`
         runtime.controller.abort(runtime.stoppedReason)
       } else if (limits.maxUsd !== null && runtime.knownCostUsd > limits.maxUsd) {
         runtime.stoppedReason = `Budget USD depasse (${runtime.knownCostUsd}/${limits.maxUsd})`
@@ -366,7 +396,7 @@ export class ExecutionSupervisor {
       }
     }
     return {
-      id: randomUUID(),
+      id: reservationId,
       signal: combinedSignal(runtime.signal, externalSignal),
       complete: (usage) => settle(usage, false),
       fail: (usage) => settle(usage, true),

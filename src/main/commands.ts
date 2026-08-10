@@ -31,8 +31,13 @@ import { appendConvActivity } from './activity/conv-activity'
 import { createTicketFromCommand, type TicketCreateArgs } from './ticket-create-command'
 import { searchTicketsFromCommand, type TicketSearchArgs } from './ticket-search-command'
 import { getTicketFromCommand, type TicketGetArgs } from './ticket-get-command'
+import { updateTicketFromCommand, type TicketUpdateArgs } from './ticket-update-command'
 import { runSqlRead } from './sql-read-command'
-import type { TicketCreateRequest, TicketGetRequest } from './ticket-providers/provider-contract'
+import type {
+  TicketCreateRequest,
+  TicketGetRequest,
+  TicketUpdateRequest
+} from './ticket-providers/provider-contract'
 import type { TicketItem, TicketListRequest, TicketSourceProfile } from '../shared/tickets'
 import { buildAutowinKaizenTask, collectAutowinKaizenEvidence } from './autowin-kaizen-context'
 import type { OrchestrationStep, OrchestrationPhase } from './orchestrator'
@@ -42,10 +47,6 @@ import {
   persistRunLifecycle
 } from './activity/orchestration-observability'
 import { createHash, randomUUID } from 'node:crypto'
-import {
-  decideConversationCapability,
-  type ConversationAuthorityMode
-} from './conversation-capabilities'
 import { APP_DESTINATIONS, resolveAppLocation, type AppDestination } from '../shared/navigation'
 import { formatExecutionCostCoverage } from '../shared/orchestration-outcome'
 import type { RunLifecycleEvent } from '../shared/run-execution'
@@ -61,7 +62,34 @@ import {
 } from './graphify-command'
 import { ensureAutowinAppData } from './app-data'
 import type { TraceStore } from './activity/trace-store'
+import { redactTrace } from './activity/trace-redact'
 import { reconcileLateRunLifecycle } from './activity/late-run-usage-settlement'
+import { addedLineFingerprints } from './exact-line-fingerprint'
+import type { WatchdogMutationClaimsSink } from './task-manager/types'
+import type { DesktopController } from './desktop-control'
+
+/** Le log déclencheur reste une preuve en lecture seule ; l'agent reçoit un chemin relatif au bureau. */
+export function isolateWatchdogPromptPaths(
+  prompt: string,
+  watchedPaths: readonly string[],
+  workspaceRoot: string
+): string {
+  let isolated = prompt
+  for (const watchedPath of watchedPaths) {
+    const absolute = isAbsolute(watchedPath)
+      ? resolve(watchedPath)
+      : resolve(workspaceRoot, watchedPath)
+    const rel = relative(workspaceRoot, absolute)
+    if (!rel || rel === '..' || /^\.\.[\\/]/.test(rel) || isAbsolute(rel)) continue
+    const replacement = rel.replaceAll('\\', '/')
+    for (const candidate of [watchedPath, watchedPath.replaceAll('\\', '/'), absolute]) {
+      isolated = isolated.split(candidate).join(replacement)
+    }
+  }
+  return watchedPaths.length
+    ? `${isolated}\n\nCONTRAINTE WATCHDOG : la source surveillée est une preuve en lecture seule. Ne la modifie, ne la tronque et ne la recrée jamais ; corrige uniquement la cause dans les fichiers du bureau isolé.`
+    : isolated
+}
 
 /**
  * Bus de commandes de l'app — le PLAN DE CONTRÔLE que les agents pilotent.
@@ -72,7 +100,6 @@ import { reconcileLateRunLifecycle } from './activity/late-run-usage-settlement'
 export interface CommandSpec {
   name: string
   description: string
-  authority?: 'automatic' | 'sensitive' | 'destructive'
   args: Record<string, string> // nom → description courte du type
   annotations?: {
     readOnlyHint: boolean
@@ -85,6 +112,8 @@ export interface CommandResult {
   ok: boolean
   data?: unknown
   error?: string
+  /** Pieces jointes ephemeres pour l'iteration modele suivante ; jamais journalisees dans le texte. */
+  attachments?: NonNullable<Message['attachments']>
 }
 
 /** Instantané de l'état que l'agent PEUT VOIR (ce qu'il pilote). */
@@ -94,7 +123,6 @@ export interface AppSnapshot {
   providers: string[]
   roles: Record<string, { provider: string; model?: string }>
   conversations: Array<{ id: string; title: string; category: string }>
-  pendingDecisions: Array<{ id: string; question: string }>
   runs: Array<{ subject: string; status: string; blocked: boolean }>
   budgetUsd: number
 }
@@ -109,7 +137,6 @@ export interface PromptSnapshot {
   tab: AppDestination
   activeConversationId?: string
   providers: string[]
-  pendingDecisions: Array<{ id: string; question: string }>
   runsBlocked: Array<{ subject: string; status: string }>
   conversationsCount: number
 }
@@ -129,11 +156,45 @@ export type AppEvent =
       delta: string
     }
   | { type: 'orchestrate-step'; convId?: string; runPath?: string; step: OrchestrationStep }
-  | { type: 'orchestrate-end'; convId?: string; runPath?: string; status: 'green' | 'red' }
+  | {
+      type: 'orchestrate-end'
+      convId?: string
+      runPath?: string
+      status: 'green' | 'red'
+      /** Cause terminale structurée : permet au Watchdog de filtrer budget/quota/annulation. */
+      detail?: string
+    }
   | { type: 'orchestrate-usage'; convId?: string; runPath?: string }
   | { type: 'causal-trace-updated'; convId: string }
 
 const CATALOG: CommandSpec[] = [
+  {
+    name: 'desktop_observe',
+    description:
+      "Capturer l'ecran Windows courant. L'image est fournie visuellement a l'iteration suivante. A utiliser avant toute action pointeur et apres les gestes pour verifier leur effet.",
+    args: {},
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true
+    }
+  },
+  {
+    name: 'desktop_act',
+    description:
+      "Agir sur le PC Windows apres desktop_observe. Les coordonnees x/y vont de 0 a 1000 dans l'image capturee. Envoyer une courte sequence puis observer de nouveau.",
+    args: {
+      actions:
+        "tableau (max 20) de {type:'move',x,y}, {type:'click',x,y,button?,clicks?}, {type:'scroll',delta,x?,y?}, {type:'type',text}, {type:'key',keys:['CTRL','A']}, {type:'open',target,args?}, {type:'wait',ms}"
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true
+    }
+  },
   {
     name: 'navigate',
     description: 'Afficher une vue',
@@ -196,7 +257,6 @@ const CATALOG: CommandSpec[] = [
     name: 'remove_conversation',
     description: 'Supprimer',
     args: { id: 'id' },
-    authority: 'destructive',
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
@@ -334,6 +394,24 @@ const CATALOG: CommandSpec[] = [
     }
   },
   {
+    name: 'ticket_update',
+    description:
+      'Mettre à jour une fiche existante après preuve du travail : publier un compte-rendu factuel, changer son état ou son assigné',
+    args: {
+      id: 'le numéro de la fiche (ex. 1227)',
+      comment: 'facultatif — preuves, changements et vérifications réellement effectués',
+      state: 'facultatif — état final exact accepté par le fournisseur',
+      assignee: 'facultatif — personne à assigner',
+      sourceId: 'facultatif si une seule source est configurée ; OBLIGATOIRE s’il y en a plusieurs'
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true
+    }
+  },
+  {
     name: 'ticket_search',
     description:
       'Lire les fiches (work items) du fournisseur de tickets configuré, avec une recherche par titre — à utiliser AVANT de créer une fiche, pour vérifier qu’un doublon n’existe pas déjà',
@@ -393,8 +471,6 @@ const DEFAULT_COMMAND_ANNOTATIONS: NonNullable<CommandSpec['annotations']> = {
   openWorldHint: false
 }
 
-const SECRET_KEY = /(?:api[_-]?key|token|secret|password|credential|authorization)/i
-
 function canonicalValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalValue)
   if (!value || typeof value !== 'object') return value
@@ -405,9 +481,13 @@ function canonicalValue(value: unknown): unknown {
   )
 }
 
-function actionFingerprint(name: string, args: Record<string, unknown>): string {
+function actionFingerprint(
+  name: string,
+  args: Record<string, unknown>,
+  scope?: { conversationId?: string }
+): string {
   return createHash('sha256')
-    .update(JSON.stringify(canonicalValue({ name, args })), 'utf8')
+    .update(JSON.stringify(canonicalValue({ name, args, scope })), 'utf8')
     .digest('hex')
 }
 
@@ -416,38 +496,14 @@ function redactedArgs(name: string, args: Record<string, unknown>): Record<strin
   if (name === 'attach_run') return { path: '[redacted]', conversationId: '[redacted]' }
   if (name === 'chat_send')
     return { message: '[redacted]', provider: args.provider, role: args.role }
-  return Object.fromEntries(
-    Object.entries(args).map(([key, value]) => [key, SECRET_KEY.test(key) ? '[redacted]' : value])
-  )
-}
-
-function safePreview(value: unknown, fallback: string): string {
-  const text = String(value ?? '').trim()
-  if (
-    !text ||
-    SECRET_KEY.test(text) ||
-    /(?:bearer\s+|token\s*[=:]|secret\s*[=:]|password\s*[=:]|\bsk-[a-z0-9_-]+)/i.test(text)
-  )
-    return fallback
-  return text.replace(/\s+/g, ' ').slice(0, 96)
-}
-
-function approvalQuestion(name: string, args: Record<string, unknown>): string {
-  switch (name) {
-    case 'remove_conversation':
-      return 'Supprimer définitivement cette conversation ?'
-    case 'attach_run':
-      return `Attacher le RUN.md « ${safePreview(
-        String(args.path ?? '')
-          .split(/[\\/]/)
-          .pop(),
-        'nom masqué'
-      )} » à la conversation active ?`
-    case 'orchestrate':
-      return `Lancer l’orchestration : « ${safePreview(args.task, 'tâche masquée car sensible')} » ?`
-    default:
-      return 'Autoriser cette action sensible ?'
+  if (name === 'edit_file') {
+    return {
+      path: args.path,
+      oldText: '[REDACTED]',
+      newText: '[REDACTED]'
+    }
   }
+  return redactTrace(args) as Record<string, unknown>
 }
 
 /**
@@ -464,16 +520,6 @@ export class AppCommandBus {
   trace?: (name: string, args: Record<string, unknown>, ok: boolean) => void
   /** Conversation active (contexte posé par le chat) : les workflows créés s'y rattachent. */
   activeConversationId?: string
-  private readonly pendingActions = new Map<
-    string,
-    {
-      name: string
-      args: Record<string, unknown>
-      fingerprint: string
-      action: () => Promise<unknown>
-    }
-  >()
-  private readonly pendingDecisionByFingerprint = new Map<string, string>()
   /** Orchestrations en vol, par conversation : permet de STOPPER le sous-agent. */
   private readonly activeOrchestrations = new Map<string, AbortController>()
   /**
@@ -583,9 +629,18 @@ export class AppCommandBus {
     ) => Promise<{ items: TicketItem[]; hasMore: boolean; cursor?: string }>,
     /** Lecture d'UNE fiche par id, câblée depuis index.ts. */
     private readonly getTicket?: (request: TicketGetRequest) => Promise<TicketItem>,
+    /** Controle Windows local, reserve aux commandes explicites du chat. */
+    private readonly desktop?: DesktopController,
+    /** Retour réel vers une fiche existante, câblé depuis index.ts. */
+    private readonly updateTicket?: (request: TicketUpdateRequest) => Promise<TicketItem>,
     /**
      * Chemin de `sqlcmd`, résolu au démarrage. Absent → `sql_query` annonce l'indisponibilité au lieu
      * de tenter un binaire inexistant.
+     *
+     * Ajouté EN DERNIER lors de la fusion de `main` : les paramètres de ce constructeur sont
+     * positionnels, donc l'insérer avant `desktop`/`updateTicket` aurait décalé tous les sites d'appel
+     * de l'amont — mes valeurs auraient pris la place des leurs, sans que le typage s'en plaigne
+     * forcément.
      */
     private readonly sqlcmdPath?: string
   ) {}
@@ -601,76 +656,6 @@ export class AppCommandBus {
     }))
   }
 
-  /** Consomme une approbation UI ; elle n'est volontairement pas exposée au modèle. */
-  async resolveDecision(id: string, choice: unknown): Promise<unknown> {
-    const resolution = this.os.authority.resolve(id, choice)
-    const pending = this.pendingActions.get(id)
-    this.pendingActions.delete(id)
-    if (pending) this.pendingDecisionByFingerprint.delete(pending.fingerprint)
-    this.trace?.(
-      'authority_decision',
-      { action: pending?.name ?? 'unknown', choice: String(choice), by: resolution.by },
-      true
-    )
-    this.broadcast({ type: 'refresh', scope: 'decisions' })
-    if (!pending || choice !== 'approve') return resolution
-    try {
-      const data = await pending.action()
-      this.trace?.(pending.name, pending.args, true)
-      this.broadcast({ type: 'refresh', scope: 'conversations' })
-      this.broadcast({ type: 'refresh', scope: 'workflows' })
-      return { ...resolution, executed: true, data }
-    } catch (error) {
-      this.trace?.(pending.name, pending.args, false)
-      throw error
-    }
-  }
-
-  sweepExpired(): unknown[] {
-    const resolutions = this.os.authority.sweepExpired()
-    for (const resolution of resolutions) {
-      const pending = this.pendingActions.get(resolution.id)
-      this.pendingActions.delete(resolution.id)
-      if (pending) this.pendingDecisionByFingerprint.delete(pending.fingerprint)
-      this.trace?.(
-        'authority_decision',
-        { action: pending?.name ?? 'unknown', choice: 'cancel', by: resolution.by },
-        true
-      )
-    }
-    if (resolutions.length) this.broadcast({ type: 'refresh', scope: 'decisions' })
-    return resolutions
-  }
-
-  private deferSensitiveAction(
-    name: string,
-    args: Record<string, unknown>,
-    action: () => Promise<unknown>
-  ): { pendingApproval: true; decisionId: string } {
-    const fingerprint = actionFingerprint(name, args)
-    const existingId = this.pendingDecisionByFingerprint.get(fingerprint)
-    if (existingId && this.os.authority.pending().some((decision) => decision.id === existingId)) {
-      return { pendingApproval: true, decisionId: existingId }
-    }
-    if (existingId) this.pendingDecisionByFingerprint.delete(fingerprint)
-
-    const decisionId = this.os.authority.propose({
-      question: approvalQuestion(name, args),
-      options: ['approve', 'cancel'],
-      safeDefault: 'cancel',
-      ttlMs: 15 * 60_000
-    })
-    this.pendingActions.set(decisionId, {
-      name,
-      args: redactedArgs(name, args),
-      fingerprint,
-      action
-    })
-    this.pendingDecisionByFingerprint.set(fingerprint, decisionId)
-    this.broadcast({ type: 'refresh', scope: 'decisions' })
-    return { pendingApproval: true, decisionId }
-  }
-
   async snapshot(): Promise<AppSnapshot> {
     const runs = await this.os.runsWithGate()
     return {
@@ -681,9 +666,6 @@ export class AppCommandBus {
       conversations: this.os.conversations
         .list()
         .map((c) => ({ id: c.id, title: c.title, category: c.category })),
-      pendingDecisions: (
-        this.os.authority.pending() as Array<{ id: string; question: string }>
-      ).map((d) => ({ id: d.id, question: d.question })),
       runs: runs
         .slice(0, 12)
         .map((r) => ({ subject: r.subject, status: r.summary.status, blocked: r.blocked })),
@@ -698,7 +680,6 @@ export class AppCommandBus {
       tab: full.tab,
       activeConversationId: full.activeConversationId,
       providers: full.providers,
-      pendingDecisions: full.pendingDecisions,
       runsBlocked: full.runs
         .filter((r) => r.blocked)
         .map((r) => ({ subject: r.subject, status: r.status })),
@@ -711,7 +692,6 @@ export class AppCommandBus {
     name: string,
     args: Record<string, unknown> = {},
     conversationId?: string,
-    authorityMode: ConversationAuthorityMode = 'ask',
     bindingOverride?: RoleBinding,
     turnId?: string
   ): Promise<CommandResult> {
@@ -719,20 +699,11 @@ export class AppCommandBus {
       const specification = CATALOG.find((command) => command.name === name)
       if (!specification) throw new Error(`Commande inconnue: ${name}`)
       if (!this.isCommandEnabled(name)) throw new Error(`Capacité désactivée: ${name}`)
-      const decision = decideConversationCapability({
-        mode: authorityMode,
-        mutates: !specification.annotations?.readOnlyHint,
-        authority: specification.authority ?? 'automatic'
-      })
-      if (decision === 'deny') {
-        this.trace?.(name, redactedArgs(name, args), false)
-        return { ok: false, error: `Action interdite en mode Plan: ${name}` }
-      }
-      if (decision === 'confirm') {
-        const pending = this.deferSensitiveAction(name, args, () =>
-          this.run(name, args, conversationId, bindingOverride, turnId)
-        )
-        return { ok: true, data: pending }
+      if (name === 'desktop_observe') {
+        if (!this.desktop) throw new Error('Controle desktop indisponible')
+        const observed = await this.desktop.observe()
+        this.trace?.(name, redactedArgs(name, args), true)
+        return { ok: true, data: observed.data, attachments: [observed.attachment] }
       }
       const data = await this.run(name, args, conversationId, bindingOverride, turnId)
       this.trace?.(name, redactedArgs(name, args), true)
@@ -752,6 +723,10 @@ export class AppCommandBus {
   ): Promise<unknown> {
     const s = (k: string): string => String(a[k] ?? '')
     switch (name) {
+      case 'desktop_act': {
+        if (!this.desktop) throw new Error('Controle desktop indisponible')
+        return await this.desktop.act(a.actions)
+      }
       case 'navigate': {
         const requestedTab = s('tab')
         const location = resolveAppLocation(requestedTab)
@@ -794,6 +769,15 @@ export class AppCommandBus {
           conversationId ||
           this.activeConversationId ||
           '__autonomous__'
+        const causalWatchPaths = Array.isArray(a.causalWatchPaths)
+          ? a.causalWatchPaths
+              .filter((path): path is string => typeof path === 'string' && path.trim().length > 0)
+              .slice(0, 16)
+          : []
+        const onLateMutationClaims =
+          typeof a.onLateMutationClaims === 'function'
+            ? (a.onLateMutationClaims as WatchdogMutationClaimsSink)
+            : undefined
         // Rang pris ICI, dans le préfixe synchrone de `exec` : c'est le seul point qui reflète
         // l'ordre d'APPEL. Plus loin, le préambule asynchrone peut réordonner les lancements.
         const orchestrationRank = ++this.orchestrationRank
@@ -823,14 +807,24 @@ export class AppCommandBus {
             ? (this.os.conversations.get(conversation.autoKaizen.sourceConversationId) ??
               conversation)
             : conversation
-        const task =
+        const rawTask =
           /^\/kaizen(?=\s|$)/i.test(requestedTask) && kaizenEvidenceConversation
             ? buildAutowinKaizenTask(
                 requestedTask,
                 collectAutowinKaizenEvidence(kaizenEvidenceConversation)
               )
             : requestedTask
-        const fingerprint = actionFingerprint('orchestrate', { convId, task, bindingOverride })
+        const task = isolateWatchdogPromptPaths(
+          rawTask,
+          causalWatchPaths,
+          this.os.executionWorkspace
+        )
+        const fingerprint = actionFingerprint('orchestrate', {
+          convId,
+          task,
+          bindingOverride,
+          causalWatchPaths
+        })
         const existingRun = this.activeOrchestrationByFingerprint.get(fingerprint)
         if (existingRun) {
           const existing = await existingRun
@@ -855,7 +849,7 @@ export class AppCommandBus {
           collectedContext = collectOrchestrationContext({
             task,
             conversation,
-            app: app && { tab: app.tab, pendingDecisions: app.pendingDecisions },
+            app: app && { tab: app.tab },
             runs: app?.runs,
             unavailable
           })
@@ -914,11 +908,6 @@ export class AppCommandBus {
                 undefined,
                 this.traceStore
               )
-              appendExecutionEvidenceFileTrace(step.evidence, {
-                conversationId: convId,
-                turnId: orchestrationTurnId,
-                workspaceRoot: this.os.executionWorkspace
-              })
               // A3 — peuplement LIVE du RUN.md : à chaque phase exec terminée, on réécrit le
               // livrable dans le RUN.md que Workflows affiche (au lieu d'un template vide 7 min).
               // Chantier 3 — trace native (spool Autowin) pour l'observabilité RAG/injection.
@@ -1004,7 +993,12 @@ export class AppCommandBus {
               // deja payees lorsqu'une admission echoue. Une fois admis, le nouveau run prend le relais.
               if (resumable && !resumedCheckpointReleased) {
                 resumedCheckpointReleased = true
-                this.os.forgetResumableOrchestration(resumable.runId)
+                // La reprise conserve désormais son runId pour rouvrir le même worktree. Dans ce
+                // cas l'orchestrateur vient de réécrire CE checkpoint : l'effacer ici détruirait la
+                // prochaine reprise si le process retombe avant la phase suivante.
+                if (currentRunId !== resumable.runId) {
+                  this.os.forgetResumableOrchestration(resumable.runId)
+                }
                 const reused = resumeOutputs.map((output) => output.phase).join(', ')
                 this.broadcast({
                   type: 'orchestrate-step',
@@ -1019,7 +1013,20 @@ export class AppCommandBus {
                   } as OrchestrationStep
                 })
               }
-              if (lifecycle.stage === 'closure') terminalLifecycle = lifecycle
+              if (lifecycle.stage === 'closure') {
+                terminalLifecycle = lifecycle
+                // Le lifecycle terminal est le premier verdict durable du moteur. Un commit peut
+                // redémarrer Electron avant que runTask retourne : attendre ce retour laissait alors
+                // le RUN.md ouvert malgré une clôture déjà acquise dans la trace.
+                if (runPath && lifecycle.closure.status !== 'open') {
+                  closeConvRun(
+                    runPath,
+                    lifecycle.closure.status,
+                    `Cycle de vie terminal: ${lifecycle.closure.status} (${lifecycle.closure.totalDurationMs} ms).`
+                  )
+                  this.broadcast({ type: 'refresh', scope: 'workflows' })
+                }
+              }
               persistRunLifecycle(
                 lifecycle,
                 {
@@ -1048,7 +1055,7 @@ export class AppCommandBus {
               if (runPath) {
                 closeConvRun(
                   runPath,
-                  terminalLifecycle.closure.status === 'green',
+                  terminalLifecycle.closure.status,
                   `Usage provider finalisee apres cloture: ${usage.totalTokens} tokens, ${costCoverage ?? 'cout non rapporte'}, ${usage.activeCalls} appel(s) actif(s).`
                 )
               }
@@ -1056,8 +1063,21 @@ export class AppCommandBus {
               this.broadcast({ type: 'refresh', scope: 'workflows' })
               this.broadcast({ type: 'refresh', scope: 'orchestration' })
             },
-            runtimeSnapshot
+            runtimeSnapshot,
+            causalWatchPaths,
+            onLateMutationClaims
           )
+          if (!r.gateBlocked) {
+            const causalEvidence = causalWatchPaths.length
+              ? (r.causalMutationEvidence ?? [])
+              : steps.flatMap((step) => step.evidence ?? [])
+            appendExecutionEvidenceFileTrace(causalEvidence, {
+              conversationId: convId,
+              turnId: orchestrationTurnId,
+              workspaceRoot: this.os.executionWorkspace,
+              published: true
+            })
+          }
           if (runPath) {
             const costCoverage = formatExecutionCostCoverage({
               costUsd: r.costUsd,
@@ -1066,9 +1086,15 @@ export class AppCommandBus {
             })
             saveConvRunTrace(runPath, steps)
             populateConvRunSections(runPath, r.phaseOutputs) // J2 — RUN.md peuplé du vrai livrable
+            const runStatus =
+              terminalLifecycle && terminalLifecycle.closure.status !== 'open'
+                ? terminalLifecycle.closure.status
+                : r.gateBlocked
+                  ? 'red'
+                  : 'green'
             closeConvRun(
               runPath,
-              !r.gateBlocked,
+              runStatus,
               r.gateBlocked
                 ? `Gate BLOQUÉ: ${r.gateReasons.join('; ')}`
                 : `Juge: validé — clôture autorisée (${costCoverage ?? 'coût non rapporté'}).`
@@ -1078,19 +1104,21 @@ export class AppCommandBus {
             type: 'orchestrate-end',
             convId,
             runPath,
-            status: r.gateBlocked ? 'red' : 'green'
+            status: r.gateBlocked ? 'red' : 'green',
+            ...(r.gateBlocked ? { detail: r.gateReasons.join('; ') } : {})
           })
           this.broadcast({ type: 'refresh', scope: 'workflows' })
           this.broadcast({ type: 'refresh', scope: 'orchestration' })
-          // Gate bloqué → une décision d'autorité est ouverte : la surfacer TOUT DE SUITE.
-          if (r.gateBlocked) this.broadcast({ type: 'refresh', scope: 'decisions' })
           return {
             valid: r.valid,
             gateBlocked: r.gateBlocked,
             costUsd: r.costUsd,
             knownCostUsd: r.usage?.knownCostUsd,
             unpricedCalls: r.usage?.unpricedCalls,
+            totalTokens: r.usage?.totalTokens,
             result: r.result,
+            gateReasons: r.gateReasons,
+            turnId: orchestrationTurnId,
             runId: runPath,
             runPath,
             status: r.gateBlocked ? 'failed' : 'succeeded',
@@ -1099,9 +1127,15 @@ export class AppCommandBus {
         } catch (e) {
           if (runPath) {
             saveConvRunTrace(runPath, steps)
-            closeConvRun(runPath, false, `Orchestration en échec: ${String(e).slice(0, 120)}`)
+            closeConvRun(runPath, 'red', `Orchestration en échec: ${String(e).slice(0, 120)}`)
           }
-          this.broadcast({ type: 'orchestrate-end', convId, runPath, status: 'red' })
+          this.broadcast({
+            type: 'orchestrate-end',
+            convId,
+            runPath,
+            status: 'red',
+            detail: e instanceof Error ? e.message : String(e)
+          })
           this.broadcast({ type: 'refresh', scope: 'workflows' })
           throw e
         } finally {
@@ -1174,6 +1208,11 @@ export class AppCommandBus {
         return await getTicketFromCommand(a as TicketGetArgs, {
           listSources: this.listTicketSources,
           ...(this.getTicket ? { get: this.getTicket } : {})
+        })
+      case 'ticket_update':
+        return await updateTicketFromCommand(a as TicketUpdateArgs, {
+          listSources: this.listTicketSources,
+          ...(this.updateTicket ? { update: this.updateTicket } : {})
         })
       case 'ticket_search':
         // Lecture chez un tiers : même garde de cible que la création (le modèle nomme au plus un
@@ -1286,11 +1325,14 @@ export class AppCommandBus {
       throw new Error(`isolation workspace indisponible : ${command} refusé`)
     }
     const runId = `command-${command === 'edit_file' ? 'edit' : 'graphify'}-${randomUUID()}`
-    const workspaceRoot = this.os.worktrees.begin(runId, `Commande ${command}`, true, {
+    const beginOptions = {
       task: command,
       role: 'command',
       ...(conversationId ? { conversationId } : {})
-    })
+    }
+    const workspaceRoot = this.os.worktrees.beginAsync
+      ? await this.os.worktrees.beginAsync(runId, `Commande ${command}`, true, beginOptions)
+      : this.os.worktrees.begin(runId, `Commande ${command}`, true, beginOptions)
     if (!workspaceRoot) throw new Error(`isolation workspace indisponible : ${command} refusé`)
     let completed = false
     try {
@@ -1306,7 +1348,9 @@ export class AppCommandBus {
           )
         }
       }
-      const finalized = this.os.worktrees.end(runId, { merge: true })
+      const finalized = this.os.worktrees.endAsync
+        ? await this.os.worktrees.endAsync(runId, { merge: true })
+        : this.os.worktrees.end(runId, { merge: true })
       completed = true
       if (
         finalized?.outcome !== 'merged' &&
@@ -1318,7 +1362,10 @@ export class AppCommandBus {
       }
       return result
     } catch (error) {
-      if (!completed) this.os.worktrees.end(runId, { merge: false })
+      if (!completed) {
+        if (this.os.worktrees.endAsync) await this.os.worktrees.endAsync(runId, { merge: false })
+        else this.os.worktrees.end(runId, { merge: false })
+      }
       throw error
     }
   }
@@ -1389,6 +1436,12 @@ export class AppCommandBus {
     this.editFileTail = previous.then(() => current)
     await previous
     try {
+      const baseDecision = decideEdit(input, this.os.executionWorkspace, (absolutePath) =>
+        existsSync(absolutePath) ? readFileSync(absolutePath, 'utf8') : null
+      )
+      const baseContentBefore = baseDecision.allowed
+        ? readFileSync(baseDecision.absolutePath, 'utf8')
+        : undefined
       const before = await captureWorkspaceMutationSnapshot(this.os.executionWorkspace)
       const outcome = await this.withIsolatedMutation(
         'edit_file',
@@ -1415,6 +1468,9 @@ export class AppCommandBus {
           this.os.executionWorkspace,
           path
         )
+        const baseContentAfter = existsSync(resolve(this.os.executionWorkspace, path))
+          ? readFileSync(resolve(this.os.executionWorkspace, path), 'utf8')
+          : ''
         appendConversationFileTrace({
           timestamp: new Date().toISOString(),
           conversationId,
@@ -1425,7 +1481,14 @@ export class AppCommandBus {
           ...(fingerprint ? { pathFingerprints: { [path]: fingerprint } } : {}),
           pathBaseFingerprints: { [path]: baseFingerprint ?? null },
           pathGenerationMarkers: { [path]: generationMarker },
-          pathBaseGenerationMarkers: { [path]: baseGenerationMarker ?? null }
+          pathBaseGenerationMarkers: { [path]: baseGenerationMarker ?? null },
+          ...(baseContentBefore !== undefined
+            ? {
+                pathLineFingerprints: {
+                  [path]: addedLineFingerprints(baseContentBefore, baseContentAfter)
+                }
+              }
+            : {})
         })
       }
       return outcome

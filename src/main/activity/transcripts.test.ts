@@ -3,10 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import {
-  listSessions,
   listSessionsAsync,
   parseSession,
-  aggregateHabits,
   resolveListedSessionAsync,
   resolveListedSessionImage,
   type SessionMeta
@@ -78,8 +76,8 @@ const meta: SessionMeta = {
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
 describe('transcripts — parse streaming des sessions Claude Code', () => {
-  it('liste les sessions par projet, triées par mtime', () => {
-    const s = listSessions(10, root)
+  it('liste les sessions par projet, triées par mtime', async () => {
+    const s = await listSessionsAsync(10, root, 0)
     expect(s).toHaveLength(1)
     expect(s[0].project).toBe('C--Mon-Projet')
     expect(s[0].id).toBe('abc-123')
@@ -107,15 +105,8 @@ describe('transcripts — parse streaming des sessions Claude Code', () => {
     expect(second).toBe(first) // même objet = cache hit
   })
 
-  it('agrège les habitudes de tools sur les sessions récentes', async () => {
-    const h = await aggregateHabits(10, root)
-    expect(h.sessionsScanned).toBe(1)
-    expect(h.tools[0]).toEqual({ tool: 'Read', count: 2 })
-    expect(h.imagesConsulted).toBe(1)
-  })
-
-  it('racine absente → liste vide, pas de crash', () => {
-    expect(listSessions(10, join(root, 'nexiste-pas'))).toEqual([])
+  it('racine absente → liste vide, pas de crash', async () => {
+    await expect(listSessionsAsync(10, join(root, 'nexiste-pas'), 0)).resolves.toEqual([])
   })
 
   it('résout sessions et images depuis l’inventaire serveur, jamais depuis un chemin forgé', async () => {

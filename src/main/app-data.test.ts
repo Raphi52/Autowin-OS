@@ -16,7 +16,6 @@ import {
   configureAutowinAppDataBase,
   ensureAutowinAppData,
   legacyAppDataRoot,
-  migrateLegacyAppData,
   migrateLegacyAppDataDetailed,
   portableAppDataBase,
   resolveAutowinAppDataBase
@@ -75,7 +74,7 @@ describe('migration APPDATA Autowin OS', () => {
     for (const [name, content] of Object.entries(fixtures)) put(join(legacy, name), content)
     put(join(legacy, 'Cache', 'ignored.bin'), 'cache')
 
-    migrateLegacyAppData(base)
+    migrateLegacyAppDataDetailed(base)
 
     for (const [name, content] of Object.entries(fixtures)) {
       expect(readFileSync(join(target, name), 'utf8')).toBe(content)
@@ -94,9 +93,9 @@ describe('migration APPDATA Autowin OS', () => {
     put(join(target, 'conversations.json'), '[{"title":"current"}]')
     put(join(target, 'activity', 'shared.jsonl'), 'current\n')
 
-    migrateLegacyAppData(base)
+    migrateLegacyAppDataDetailed(base)
     const first = fingerprint(target)
-    migrateLegacyAppData(base)
+    migrateLegacyAppDataDetailed(base)
 
     expect(readFileSync(join(target, 'conversations.json'), 'utf8')).toBe('[{"title":"current"}]')
     expect(readFileSync(join(target, 'activity', 'shared.jsonl'), 'utf8')).toBe('current\n')
@@ -113,7 +112,7 @@ describe('migration APPDATA Autowin OS', () => {
     put(join(target, 'roles.json'), '{"provider":"current"}')
     const before = fingerprint(target)
 
-    expect(migrateLegacyAppData(base)).toBe(0)
+    expect(migrateLegacyAppDataDetailed(base).copied).toBe(0)
     expect(fingerprint(target)).toEqual(before)
 
     const emptyBase = fixtureRoot()
@@ -130,7 +129,7 @@ describe('migration APPDATA Autowin OS', () => {
     put(join(target, 'conversations.json'), '[{"title":"same"}]')
     const before = fingerprint(target)
 
-    expect(migrateLegacyAppData(base)).toBe(0)
+    expect(migrateLegacyAppDataDetailed(base).copied).toBe(0)
     expect(fingerprint(target)).toEqual(before)
     expect(readFileSync(join(legacy, 'conversations.json'), 'utf8')).toBe('[{"title":"same"}]')
   })

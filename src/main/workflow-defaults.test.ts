@@ -9,7 +9,8 @@ import {
 } from './workflow-profiles'
 import { PIPELINE_PHASES } from './skill-pipeline'
 import { DEFAULT_WORKFLOWS } from './workflow-defaults'
-import { graphDefects, worstCaseNodeExecutions } from './workflow-graph'
+import { graphDefects, nodeRanks, worstCaseNodeExecutions } from './workflow-graph'
+import { initialBudget, nextNode, type NodeVerdict } from './workflow-walk'
 import { PERSONAS } from '../shared/persona'
 
 /**
@@ -53,6 +54,70 @@ describe('semis du catalogue', () => {
 })
 
 describe('workflows livrés d’origine', () => {
+  const chantier = (): NonNullable<(typeof DEFAULT_WORKFLOWS)[number]['graph']> => {
+    const graph = DEFAULT_WORKFLOWS.find((profil) => profil.id === 'chantier-autowin')?.graph
+    expect(graph, 'le profil Chantier Autowin doit être livré').toBeDefined()
+    return graph!
+  }
+
+  const marche = (verdictsJudge: NodeVerdict[]): string[] => {
+    const graph = chantier()
+    const ranks = nodeRanks(graph)
+    const budget = initialBudget(graph, ranks)
+    const visites: string[] = []
+    let courant: string | undefined = graph.entry
+    let indexJudge = 0
+    while (courant && visites.length < 30) {
+      visites.push(courant)
+      const node = graph.nodes.find((candidat) => candidat.id === courant)!
+      const verdict = node.phase === 'judge' ? (verdictsJudge[indexJudge++] ?? 'green') : 'green'
+      courant = nextNode(graph, courant, verdict, budget, ranks)?.to
+    }
+    return visites
+  }
+
+  it('livre un Chantier Autowin complet qui respecte Agent Studio', () => {
+    const graph = chantier()
+    expect(graph.nodes.map((node) => node.phase)).toEqual([
+      'scout',
+      'frame',
+      'terrain',
+      'build',
+      'clean',
+      'judge'
+    ])
+    // Aucun fournisseur, modèle ou fan-out caché : le moteur reprend la configuration Agent Studio.
+    expect(graph.nodes.every((node) => node.agents === undefined)).toBe(true)
+  })
+
+  it('termine le chemin nominal seulement après clean puis judge vert', () => {
+    expect(marche(['green'])).toEqual([
+      'scout-1',
+      'frame-1',
+      'terrain-1',
+      'build-1',
+      'clean-1',
+      'judge-1'
+    ])
+  })
+
+  it('un judge rouge rejoue build → clean → judge, au plus deux fois', () => {
+    expect(marche(['red', 'red', 'red'])).toEqual([
+      'scout-1',
+      'frame-1',
+      'terrain-1',
+      'build-1',
+      'clean-1',
+      'judge-1',
+      'build-1',
+      'clean-1',
+      'judge-1',
+      'build-1',
+      'clean-1',
+      'judge-1'
+    ])
+  })
+
   it('aucun ne porte de défaut — ils sont enregistrables tels quels', () => {
     for (const profil of DEFAULT_WORKFLOWS) {
       expect(graphDefects(profil.graph!), `${profil.name} : ${JSON.stringify(graphDefects(profil.graph!))}`).toEqual([])

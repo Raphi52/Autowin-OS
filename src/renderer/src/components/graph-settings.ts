@@ -10,6 +10,7 @@ export type GraphVisibilitySettings = {
   links: boolean
   orphans: boolean
   arrows: boolean
+  health: boolean
   contextOpacity: number
   nodeSize: number
   linkWidth: number
@@ -30,6 +31,7 @@ export const DEFAULT_GRAPH_VISIBILITY_SETTINGS: GraphVisibilitySettings = {
   links: true,
   orphans: true,
   arrows: false,
+  health: false,
   contextOpacity: 0.22,
   nodeSize: 1.4,
   linkWidth: 0.7,
@@ -64,11 +66,11 @@ export function loadGraphVisibilitySettings(storage: StorageLike): GraphVisibili
     links: boolean('links') ?? DEFAULT_GRAPH_VISIBILITY_SETTINGS.links,
     orphans: boolean('orphans') ?? DEFAULT_GRAPH_VISIBILITY_SETTINGS.orphans,
     arrows: boolean('arrows') ?? DEFAULT_GRAPH_VISIBILITY_SETTINGS.arrows,
+    health: boolean('health') ?? DEFAULT_GRAPH_VISIBILITY_SETTINGS.health,
     contextOpacity:
       boundedNumber(stored.contextOpacity, 0.05, 0.8) ??
       DEFAULT_GRAPH_VISIBILITY_SETTINGS.contextOpacity,
-    nodeSize:
-      boundedNumber(stored.nodeSize, 0.5, 3) ?? DEFAULT_GRAPH_VISIBILITY_SETTINGS.nodeSize,
+    nodeSize: boundedNumber(stored.nodeSize, 0.5, 3) ?? DEFAULT_GRAPH_VISIBILITY_SETTINGS.nodeSize,
     linkWidth:
       boundedNumber(stored.linkWidth, 0.1, 2) ?? DEFAULT_GRAPH_VISIBILITY_SETTINGS.linkWidth,
     nodeSpacing:
@@ -130,22 +132,34 @@ export function saveGraphVisualMode(storage: StorageLike, mode: GraphVisualMode)
 }
 
 /**
- * DISPOSITION des nœuds. `force` = positions émergentes (historique, défaut HARD) ; `radial` = anneaux
- * concentriques par profondeur hiérarchique, découpés en secteurs thématiques.
+ * DISPOSITION des nœuds — DEUX lectures des mêmes fiches, dont aucune ne subsume l'autre.
  *
- * Pourquoi un mode et non un remplacement : le force-directed montre la CONNECTIVITÉ (ce qui est lié à
- * quoi), le radial montre la STRUCTURE (où vit quoi). Aucun des deux ne subsume l'autre, et supprimer
- * le premier ferait perdre une lecture qui fonctionne.
+ * - `force` : positions émergentes (historique, défaut HARD). Montre la CONNECTIVITÉ — ce qui est
+ *   lié à quoi.
+ * - `tree` : arborescence radiale, un anneau = un NIVEAU de profondeur, les branches portent la
+ *   FILIATION, et le premier anneau porte le SUJET. Montre la hiérarchie réelle du vault.
+ *
+ * Un troisième mode a existé — `radial`, des bandes concentriques par famille — et il a été SUPPRIMÉ
+ * sur demande de l'utilisateur : l'arborescence montre graphiquement la même hiérarchie que ces
+ * bandes suggéraient, en la rendant navigable. Le forage textuel qui y était accroché disparaît avec
+ * lui, pour la même raison : l'arbre l'affiche au lieu de le lister.
  */
-export type GraphLayoutMode = 'force' | 'radial'
+export type GraphLayoutMode = 'force' | 'tree'
 
 export const GRAPH_LAYOUT_MODE_SUFFIX = 'memory.layout-mode.v1'
 
+const MODES_CONNUS: readonly GraphLayoutMode[] = ['force', 'tree']
+
 export function loadGraphLayoutMode(storage: StorageLike): GraphLayoutMode {
   // Toute valeur inconnue retombe sur `force` : une clé corrompue ne doit pas rendre le graphe illisible.
-  return readMigratedStorageValue(storage, GRAPH_LAYOUT_MODE_SUFFIX) === 'radial'
-    ? 'radial'
-    : 'force'
+  const brut = readMigratedStorageValue(storage, GRAPH_LAYOUT_MODE_SUFFIX)
+  return MODES_CONNUS.includes(brut as GraphLayoutMode) ? (brut as GraphLayoutMode) : 'force'
+}
+
+/** L'ordre de bascule du bouton : libre → arbre → libre. */
+export function nextGraphLayoutMode(mode: GraphLayoutMode): GraphLayoutMode {
+  const index = MODES_CONNUS.indexOf(mode)
+  return MODES_CONNUS[(index + 1) % MODES_CONNUS.length]
 }
 
 export function saveGraphLayoutMode(storage: StorageLike, mode: GraphLayoutMode): void {

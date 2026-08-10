@@ -65,6 +65,17 @@ export function AgentsTopologyView({
   const [state, setState] = useState<'loading' | 'ready' | 'saving' | 'error'>('loading')
   const [error, setError] = useState('')
   const [profiles, setProfiles] = useState<Profile[]>([])
+  /** Profil réellement appliqué, l'empreinte de la topologie qu'il a posée, et le profil en attente
+   *  de confirmation : appliquer ÉCRASE la topologie courante, ce n'est pas un geste anodin. */
+  const [appliedProfileId, setAppliedProfileId] = useState('')
+  const [appliedFingerprint, setAppliedFingerprint] = useState('')
+  const [pendingProfileId, setPendingProfileId] = useState('')
+  /** Nom du profil saisi DANS l'application : `window.prompt` bloque le processus de rendu et reste
+   *  intestable — aucun test ne pouvait couvrir l'enregistrement d'un profil. */
+  const [profileName, setProfileName] = useState('')
+  const [namingProfile, setNamingProfile] = useState(false)
+  /** Relance manuelle du chargement initial : une erreur de lecture laissait la vue morte. */
+  const [reloadKey, setReloadKey] = useState(0)
   const topologyRef = useRef<AgentTopology | null>(null)
   const persistQueueRef = useRef<Promise<void>>(Promise.resolve())
   const persistVersionRef = useRef(0)
@@ -75,6 +86,8 @@ export function AgentsTopologyView({
   }
 
   useEffect(() => {
+    // L'état « loading » est posé par le déclencheur (montage initial, ou clic sur Réessayer) :
+    // l'écrire ici synchroniserait deux rendus en cascade pour rien.
     Promise.all([window.api.models(), window.api.topology()])
       .then(([catalog, current]) => {
         setModels(catalog)
@@ -86,7 +99,7 @@ export function AgentsTopologyView({
         setError(reason instanceof Error ? reason.message : String(reason))
         setState('error')
       })
-  }, [])
+  }, [reloadKey])
   useEffect(() => {
     if (!active) return
     const off = window.api.onAppEvent((event) => {
@@ -114,24 +127,42 @@ export function AgentsTopologyView({
 
   async function saveProfile(): Promise<void> {
     if (!topology) return
-    const name = window.prompt('Nom du profil')?.trim()
+    const name = profileName.trim()
     if (!name) return
     const id = `${name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '')}-${Date.now().toString(36)}`
-    setProfiles(
-      (await window.api.saveProfile({
-        schema: 'autowin.profile/v1',
-        id,
-        name,
-        topology
-      })) as Profile[]
-    )
+    // Même contrat que `persist()` : un rejet IPC devient une erreur AFFICHÉE, jamais un
+    // unhandledRejection muet avec un bouton qui semble sans effet.
+    setError('')
+    try {
+      setProfiles(
+        (await window.api.saveProfile({
+          schema: 'autowin.profile/v1',
+          id,
+          name,
+          topology
+        })) as Profile[]
+      )
+      setProfileName('')
+      setNamingProfile(false)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+      setState('error')
+    }
   }
   async function applyProfile(id: string): Promise<void> {
-    const applied = await window.api.applyProfile(id)
-    replaceTopology(applied.topology)
+    setError('')
+    try {
+      const applied = await window.api.applyProfile(id)
+      replaceTopology(applied.topology)
+      setAppliedProfileId(id)
+      setAppliedFingerprint(JSON.stringify(applied.topology))
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+      setState('error')
+    }
   }
 
   const modelsById = useMemo(() => new Map(models.map((model) => [model.id, model])), [models])
@@ -139,6 +170,25 @@ export function AgentsTopologyView({
   // vue qui faisait référence, elle garde donc exactement son comportement.
   const sortedModels = useMemo(() => libraryModels(models), [models])
   const selectedModel = modelsById.get(selectedModelId)
+  /**
+   * Un slot dont le `modelId` n'existe plus au catalogue (modèle désimporté, id périmé) s'affichait
+   * comme un modèle valide — `model?.label ?? slot.modelId` rend l'identifiant brut, indiscernable
+   * d'un vrai libellé — et son sélecteur d'effort n'avait plus qu'une option fantôme. On le nomme,
+   * et on interdit d'en figer ou d'en appliquer un profil tant qu'il n'est pas résolu.
+   */
+  const unresolvedSlots = useMemo(() => {
+    if (!topology || models.length === 0) return []
+    const tous = [
+      topology.orchestrator,
+      ...topology.subagents,
+      ...topology.panels.scout,
+      ...topology.panels.frame,
+      ...topology.panels.terrain,
+      ...topology.panels.judge
+    ]
+    return tous.filter((slot) => !modelsById.has(slot.modelId))
+  }, [topology, models, modelsById])
+  const topologyDirty = appliedFingerprint !== '' && JSON.stringify(topology) !== appliedFingerprint
 
   async function persist(next: AgentTopology): Promise<void> {
     const version = ++persistVersionRef.current
@@ -181,6 +231,15 @@ export function AgentsTopologyView({
   function assign(model: ImportedModel | undefined, target: Target, slotId?: string): void {
     const current = topologyRef.current
     if (!model || !current) return
+    // Le fan-out des sous-agents n'est pas branché : un 2e slot était persisté puis étiqueté « non
+    // actif ». On refuse le dépôt inerte plutôt que d'enregistrer une configuration sans effet.
+    if (target === 'subagents' && !slotId && current.subagents.length >= 1) {
+      setError(
+        'Le fan-out des sous-agents n’est pas branché : un second sous-agent ne serait pas exécuté. Remplacez le slot existant.'
+      )
+      setState('error')
+      return
+    }
     const id = target === 'orchestrator' ? 'orchestrator' : (slotId ?? nextSlotId(target, current))
     const binding = bindingFor(model, id)
     const next =
@@ -291,7 +350,7 @@ export function AgentsTopologyView({
             const model = modelsById.get(slot.modelId)
             return (
               <article
-                className="topology-slot"
+                className={`topology-slot${!model && models.length > 0 ? ' is-unresolved' : ''}`}
                 key={slot.slotId}
                 data-slot-id={slot.slotId}
                 onDragOver={(event) => event.preventDefault()}
@@ -308,6 +367,15 @@ export function AgentsTopologyView({
                   <span>
                     {slot.provider} · {model?.model ?? slot.modelId}
                   </span>
+                  {!model && models.length > 0 && (
+                    <b
+                      className="slot-unresolved"
+                      data-testid={`slot-unresolved-${slot.slotId}`}
+                      title={`Aucun modèle « ${slot.modelId} » au catalogue : déposez-en un pour résoudre ce slot`}
+                    >
+                      modèle introuvable
+                    </b>
+                  )}
                 </div>
                 <label>
                   Effort
@@ -359,12 +427,24 @@ export function AgentsTopologyView({
         <button
           type="button"
           className="topology-assign-button"
-          disabled={!selectedModel || (target === 'orchestrator' && slots.length > 0)}
+          data-testid={`topology-add-${target}`}
+          disabled={
+            !selectedModel ||
+            (target === 'orchestrator' && slots.length > 0) ||
+            (target === 'subagents' && slots.length > 0)
+          }
+          title={
+            target === 'subagents' && slots.length > 0
+              ? 'Fan-out des sous-agents non branché : un second slot ne serait pas exécuté'
+              : undefined
+          }
           onClick={() => assign(selectedModel, target)}
         >
           {target === 'orchestrator'
             ? 'Remplacer avec le modèle sélectionné'
-            : '+ Ajouter le modèle sélectionné'}
+            : target === 'subagents' && slots.length > 0
+              ? 'Fan-out non branché — remplacez le slot existant'
+              : '+ Ajouter le modèle sélectionné'}
         </button>
       </section>
     )
@@ -374,6 +454,22 @@ export function AgentsTopologyView({
     return (
       <div className="agents-topology-loading">
         {state === 'error' ? `⛔ ${error}` : 'Chargement de la topologie…'}
+        {state === 'error' && (
+          // Sans ce bouton, une lecture en échec laissait la vue définitivement morte : le seul
+          // recours était de redémarrer l'application.
+          <button
+            type="button"
+            className="topology-assign-button"
+            data-testid="topology-retry"
+            onClick={() => {
+              setState('loading')
+              setError('')
+              setReloadKey((key) => key + 1)
+            }}
+          >
+            Réessayer
+          </button>
+        )}
       </div>
     )
   }
@@ -382,7 +478,10 @@ export function AgentsTopologyView({
     <div className="agents-topology">
       <header className="topology-toolbar">
         <ModuleHeader eyebrow="Configuration des agents" title="Models" />
-        <strong className={`topology-state is-${state}`}>
+        <strong
+          className={`topology-state is-${state}`}
+          role={state === 'error' ? 'alert' : undefined}
+        >
           {state === 'saving'
             ? 'Enregistrement…'
             : state === 'error'
@@ -390,17 +489,60 @@ export function AgentsTopologyView({
               : 'Enregistré dans le profil Autowin'}
         </strong>
         <div className="topology-profiles">
-          <button
-            type="button"
-            className="topology-assign-button"
-            onClick={() => void saveProfile()}
-          >
-            ＋ Profil
-          </button>
+          {namingProfile ? (
+            <span className="topology-profile-naming">
+              <input
+                data-testid="topology-profile-name"
+                aria-label="Nom du profil"
+                value={profileName}
+                placeholder="Nom du profil"
+                onChange={(event) => setProfileName(event.target.value)}
+              />
+              <button
+                type="button"
+                className="topology-assign-button"
+                data-testid="topology-profile-save"
+                disabled={!profileName.trim() || unresolvedSlots.length > 0}
+                onClick={() => void saveProfile()}
+              >
+                Enregistrer
+              </button>
+              <button
+                type="button"
+                className="topology-assign-button"
+                data-testid="topology-profile-cancel"
+                onClick={() => {
+                  setNamingProfile(false)
+                  setProfileName('')
+                }}
+              >
+                Annuler
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="topology-assign-button"
+              data-testid="topology-profile-new"
+              disabled={unresolvedSlots.length > 0}
+              title={
+                unresolvedSlots.length > 0
+                  ? 'Un slot pointe un modèle introuvable : résolvez-le avant de figer un profil'
+                  : undefined
+              }
+              onClick={() => setNamingProfile(true)}
+            >
+              ＋ Profil
+            </button>
+          )}
+          {/* Select CONTRÔLÉ : en `defaultValue`, il retombait sur « Profils sauvegardés » après une
+              application — rien ne disait plus quel profil était en place. */}
           <select
             aria-label="Appliquer un profil"
-            defaultValue=""
-            onChange={(event) => event.target.value && void applyProfile(event.target.value)}
+            data-testid="topology-profile-select"
+            value={pendingProfileId || appliedProfileId}
+            disabled={unresolvedSlots.length > 0}
+            onChange={(event) => setPendingProfileId(event.target.value)}
           >
             <option value="">Profils sauvegardés</option>
             {profiles.map((profile) => (
@@ -409,8 +551,57 @@ export function AgentsTopologyView({
               </option>
             ))}
           </select>
+          {appliedProfileId && (
+            <span className="topology-profile-badge" data-testid="topology-profile-applied">
+              {profiles.find((profile) => profile.id === appliedProfileId)?.name ?? appliedProfileId}
+              {topologyDirty ? ' · modifié' : ''}
+            </span>
+          )}
+          {/* Appliquer ÉCRASE la topologie courante : le geste se confirme, et il le dit d'autant
+              plus fort que la topologie a été modifiée depuis la dernière application. */}
+          {pendingProfileId && pendingProfileId !== appliedProfileId && (
+            <span
+              className="topology-profile-confirm"
+              role="alertdialog"
+              aria-label="Confirmer l’application du profil"
+              data-testid="topology-apply-confirm"
+            >
+              <span>
+                Écraser la topologie courante
+                {topologyDirty ? ' (modifications non enregistrées dans un profil)' : ''} ?
+              </span>
+              <button
+                type="button"
+                className="topology-assign-button"
+                data-testid="topology-apply-yes"
+                onClick={() => {
+                  const id = pendingProfileId
+                  setPendingProfileId('')
+                  void applyProfile(id)
+                }}
+              >
+                Appliquer
+              </button>
+              <button
+                type="button"
+                className="topology-assign-button"
+                data-testid="topology-apply-no"
+                onClick={() => setPendingProfileId('')}
+              >
+                Annuler
+              </button>
+            </span>
+          )}
         </div>
       </header>
+
+      {unresolvedSlots.length > 0 && (
+        <p className="topology-unresolved-banner" role="alert" data-testid="topology-unresolved">
+          {unresolvedSlots.length} slot(s) pointent un modèle introuvable au catalogue (
+          {unresolvedSlots.map((slot) => slot.slotId).join(', ')}) : profils et application gelés
+          tant qu’ils ne sont pas résolus.
+        </p>
+      )}
 
       <aside className="topology-library">
         <span className="topology-eyebrow">Modèles importés</span>

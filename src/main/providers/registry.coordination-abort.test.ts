@@ -141,13 +141,18 @@ describe('ProviderRegistry — expiration de coordination', () => {
     const { ProviderRegistry } = await import('./registry')
     const supervisor = new ExecutionSupervisor()
     let releaseProvider!: () => void
+    let releaseFinalizer!: () => void
     let markProviderSettled!: () => void
     const providerCanFinish = new Promise<void>((resolve) => {
       releaseProvider = resolve
     })
+    const finalizerCanFinish = new Promise<void>((resolve) => {
+      releaseFinalizer = resolve
+    })
     const providerSettled = new Promise<void>((resolve) => {
       markProviderSettled = resolve
     })
+    const finalizerEntered = vi.fn()
     const terminate = vi.fn()
     const provider: ProviderAdapter = {
       id: 'abort-ignorant',
@@ -168,6 +173,11 @@ describe('ProviderRegistry — expiration de coordination', () => {
             systemInjected: true
           }
         } finally {
+          // Un async-generator peut légalement rendre `done:false` depuis son finally après
+          // `return()`. Ce yield ne prouve donc surtout pas la fin réelle du provider.
+          finalizerEntered()
+          yield { delta: 'nettoyage intermédiaire non terminal' }
+          await finalizerCanFinish
           markProviderSettled()
         }
       }
@@ -188,23 +198,36 @@ describe('ProviderRegistry — expiration de coordination', () => {
     ).rejects.toThrow(/watchdog coordination/i)
 
     expect(supervisor.lastSnapshot()).toMatchObject({ activeCalls: 1, failedCalls: 0 })
-    await vi.waitFor(
-      () => {
-        expect(terminate).toHaveBeenCalledTimes(1)
-        expect(supervisor.lastSnapshot()).toMatchObject({
-          startedCalls: 1,
-          completedCalls: 0,
-          failedCalls: 1,
-          activeCalls: 0,
-          unmeteredCalls: 1
-        })
-      },
-      { timeout: 1_000 }
-    )
-    // Le double ignore aussi le terminateur : la réservation est pourtant close et la pompe du
-    // registre ne livre plus rien. On le libère seulement pour ne pas laisser le test lui-même ouvert.
+    await vi.waitFor(() => expect(terminate).toHaveBeenCalledTimes(1), { timeout: 1_000 })
+    // Le terminateur est best-effort : tant que ce provider récalcitrant vit vraiment, son appel
+    // reste actif et continue de verrouiller toute reprise au lieu de fabriquer une terminaison.
+    expect(supervisor.lastSnapshot()).toMatchObject({
+      startedCalls: 1,
+      completedCalls: 0,
+      failedCalls: 0,
+      activeCalls: 1
+    })
     releaseProvider()
+    try {
+      await vi.waitFor(() => expect(finalizerEntered).toHaveBeenCalledTimes(1), { timeout: 1_000 })
+      expect(supervisor.lastSnapshot()).toMatchObject({
+        completedCalls: 0,
+        failedCalls: 0,
+        activeCalls: 1
+      })
+    } finally {
+      releaseFinalizer()
+    }
     await providerSettled
+    await vi.waitFor(() => {
+      expect(supervisor.lastSnapshot()).toMatchObject({
+        startedCalls: 1,
+        completedCalls: 0,
+        failedCalls: 1,
+        activeCalls: 0,
+        unmeteredCalls: 1
+      })
+    })
     expect(onChunk).toHaveBeenCalledTimes(1)
   })
 

@@ -68,6 +68,33 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
     }
   },
   {
+    id: 'chantier-autowin',
+    name: 'Chantier Autowin',
+    description:
+      'Une mission menée de bout en bout : découvrir, cadrer, préparer le terrain, construire, nettoyer et faire juger. Un refus repart au build, toujours via clean.',
+    graph: {
+      entry: 'scout-1',
+      // Aucun agent imposé : chaque phase reprend le fournisseur, le modèle et le fan-out réglés
+      // dans Agent Studio au moment du run.
+      nodes: [
+        { id: 'scout-1', phase: 'scout' },
+        { id: 'frame-1', phase: 'frame' },
+        { id: 'terrain-1', phase: 'terrain' },
+        { id: 'build-1', phase: 'build' },
+        { id: 'clean-1', phase: 'clean' },
+        { id: 'judge-1', phase: 'judge' }
+      ],
+      edges: [
+        { from: 'scout-1', to: 'frame-1', when: 'always' },
+        { from: 'frame-1', to: 'terrain-1', when: 'always' },
+        { from: 'terrain-1', to: 'build-1', when: 'always' },
+        { from: 'build-1', to: 'clean-1', when: 'always' },
+        { from: 'clean-1', to: 'judge-1', when: 'always' },
+        { from: 'judge-1', to: 'build-1', when: 'red', maxTraversals: 2 }
+      ]
+    }
+  },
+  {
     id: 'panel-critique',
     name: 'Panel critique',
     description:

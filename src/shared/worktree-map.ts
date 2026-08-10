@@ -16,12 +16,62 @@ export interface WorktreeMapEntry {
   branch?: string
   detached: boolean
   locked: boolean
+  lockedReason?: string
+  prunableReason?: string
+  /** Existence physique du dossier. `undefined` = non vérifiable. */
+  pathExists?: boolean
   /** Commits de retard sur la branche de reference. `undefined` = non calculable, jamais 0 par defaut. */
   behind?: number
   /** Fichiers non commités. 0 = copie propre. `undefined` = non mesuré. */
   dirtyFiles?: number
   /** Taille sur disque en octets, `undefined` si non mesurée. */
   sizeBytes?: number
+}
+
+export interface GitWorktreePorcelainEntry {
+  path: string
+  head: string
+  branch?: string
+  detached: boolean
+  locked: boolean
+  lockedReason?: string
+  prunableReason?: string
+}
+
+/** Parse la sortie de `git worktree list --porcelain`, avec ou sans séparateurs NUL. */
+export function parseGitWorktrees(input: string): GitWorktreePorcelainEntry[] {
+  const blocks = input.includes('\0')
+    ? input.split('\0\0').map((block) => block.split('\0').filter(Boolean))
+    : input
+        .trim()
+        .split(/\r?\n\r?\n/)
+        .map((block) => block.split(/\r?\n/))
+
+  return blocks.flatMap((fields) => {
+    const path = fields.find((field) => field.startsWith('worktree '))?.slice('worktree '.length)
+    const head = fields.find((field) => field.startsWith('HEAD '))?.slice('HEAD '.length)
+    if (!path || !head) return []
+    const branchRef = fields.find((field) => field.startsWith('branch '))?.slice('branch '.length)
+    const lockedField = fields.find((field) => field === 'locked' || field.startsWith('locked '))
+    const prunableField = fields.find(
+      (field) => field === 'prunable' || field.startsWith('prunable ')
+    )
+    const lockedReason = lockedField?.slice('locked'.length).trim()
+    const prunableReason = prunableField?.slice('prunable'.length).trim()
+    return [
+      {
+        path,
+        head,
+        ...(branchRef ? { branch: branchRef.replace(/^refs\/heads\//, '') } : {}),
+        detached: fields.includes('detached'),
+        locked: Boolean(lockedField),
+        ...(lockedReason ? { lockedReason } : {}),
+        ...(prunableField
+          ? { prunableReason: prunableReason || 'entrée déclarée prunable par Git' }
+          : {})
+      }
+    ]
+  })
 }
 
 export interface WorktreeMapSnapshot {
@@ -33,8 +83,35 @@ export interface WorktreeMapSnapshot {
   /** SHA court de la tete de la branche de reference. */
   baseHead?: string
   entries: WorktreeMapEntry[]
+  doctor?: WorktreeDoctorReport
   /** Renseigné quand la lecture a partiellement echoué : la vue doit le DIRE, pas le masquer. */
   error?: string
+}
+
+export type WorktreeDoctorSeverity = 'info' | 'warning' | 'blocked'
+export type WorktreeDoctorAction = 'repair' | 'prune-preview' | 'prune' | 'lock' | 'unlock'
+
+export interface WorktreeDoctorProposal {
+  action: WorktreeDoctorAction
+  cwd: string
+  argv: readonly string[]
+  reason: string
+  mutates: boolean
+  automatic: false
+  requiresConfirmation: boolean
+}
+
+export interface WorktreeDoctorFinding {
+  code: 'prunable' | 'missing' | 'unreadable' | 'locked'
+  severity: WorktreeDoctorSeverity
+  path: string
+  evidence: string
+  proposals: readonly WorktreeDoctorProposal[]
+}
+
+export interface WorktreeDoctorReport {
+  status: 'healthy' | 'attention' | 'blocked'
+  findings: readonly WorktreeDoctorFinding[]
 }
 
 /* ------------------------------------------------------------------ agregats */
@@ -72,7 +149,7 @@ export function summarizeWorktreeMap(entries: readonly WorktreeMapEntry[]): Work
 
 /* ------------------------------------------------------------------ geometrie */
 
-export type WorktreeLineKind = 'live' | 'closed'
+export type WorktreeLineKind = 'live' | 'closed' | 'unknown'
 
 export interface WorktreeMapStation {
   x: number
@@ -156,7 +233,8 @@ export function layoutWorktreeMap(
   for (const group of groups) {
     const x = cursor
     const live = group.entries.filter((entry) => (entry.dirtyFiles ?? 0) > 0)
-    const closed = group.entries.filter((entry) => (entry.dirtyFiles ?? 0) === 0)
+    const closed = group.entries.filter((entry) => entry.dirtyFiles === 0)
+    const unknown = group.entries.filter((entry) => entry.dirtyFiles === undefined)
 
     const interchange: WorktreeMapInterchange = {
       x,
@@ -189,6 +267,13 @@ export function layoutWorktreeMap(
       const line = buildLine(x, 1, lane, [entry], 'closed')
       lines.push(line)
       maxLaneBelow = Math.max(maxLaneBelow, lane)
+      extent = Math.max(extent, line.terminus[0])
+    })
+    unknown.forEach((entry, lane) => {
+      const actualLane = closed.length + lane
+      const line = buildLine(x, 1, actualLane, [entry], 'unknown')
+      lines.push(line)
+      maxLaneBelow = Math.max(maxLaneBelow, actualLane)
       extent = Math.max(extent, line.terminus[0])
     })
 
@@ -273,6 +358,7 @@ function buildLine(
 
 function terminusLabel(entries: readonly WorktreeMapEntry[], kind: WorktreeLineKind): string {
   if (kind === 'closed') return 'FERMÉ'
+  if (kind === 'unknown') return 'INCONNU'
   const files = entries.reduce((sum, entry) => sum + (entry.dirtyFiles ?? 0), 0)
   return `EN TRAVAUX · ${files} ${files === 1 ? 'fichier' : 'fichiers'}`
 }

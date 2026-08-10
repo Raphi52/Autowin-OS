@@ -116,16 +116,6 @@ export function analyzeDecomposition(text: string): DecompositionOutcome {
   return { kind: 'plan', nodes }
 }
 
-/**
- * Vue « nœuds seuls » de {@link analyzeDecomposition} : [] ⇒ fallback séquentiel, que la tâche soit
- * atomique ou que le plan ait été rejeté. Conservée pour les appelants qui n'ont pas besoin du motif ;
- * préférer `analyzeDecomposition` dès qu'il faut distinguer les deux.
- */
-export function parseDecompositionPlan(text: string): GreedyTaskNode[] {
-  const outcome = analyzeDecomposition(text)
-  return outcome.kind === 'plan' ? outcome.nodes : []
-}
-
 /** Détection de cycle (Kahn) — un plan cyclique est rejeté. */
 function hasCycle(nodes: GreedyTaskNode[]): boolean {
   const indeg = new Map<string, number>(nodes.map((n) => [n.id, n.deps.length]))

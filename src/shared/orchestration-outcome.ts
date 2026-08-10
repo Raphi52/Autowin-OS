@@ -1,3 +1,5 @@
+import { fromMarkdown } from 'mdast-util-from-markdown'
+
 /**
  * CARTE DE LIVRAISON d'une orchestration — les faits, pas une formule.
  *
@@ -26,6 +28,218 @@ export interface OrchestrationOutcome {
   error?: unknown
 }
 
+export const ORCHESTRATION_ALREADY_ISSUED_REFUSAL =
+  'Une orchestration a deja ete lancee dans ce tour. Termine avec son resultat ; un nouveau run exige un nouveau message utilisateur.'
+
+export const AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX =
+  'Clôture Autowin : gate validé, RUN fermé green'
+
+const CLOSURE_LEADING_DECORATIONS =
+  /^(?:(?:#{1,6}|>|[-+*•]|\d+[.)])\s+|\[[ xX]\]\s+|(?:✅|⚠️?|🧪)\s*|(?:\*\*|__|\*|_)\s*)+/u
+
+const MARKDOWN_INLINE_WRAPPER_SOURCE = '(?:\\*\\*|__|\\*|_|\\[|\\](?:\\([^\\n)]*\\))?)'
+
+const MARKDOWN_PUBLICATION_TERMINATED_SOURCE =
+  `(?:(?:${MARKDOWN_INLINE_WRAPPER_SOURCE}\\s*)*publication\\s+` +
+  `(?:${MARKDOWN_INLINE_WRAPPER_SOURCE}\\s*)*termin[ée]e` +
+  `(?:\\s*${MARKDOWN_INLINE_WRAPPER_SOURCE})*)`
+
+const AUTHORITATIVE_CLOSURE_SUFFIX_SOURCE = `(?:${MARKDOWN_PUBLICATION_TERMINATED_SOURCE}|aucune\\s+autre\\s+orchestration\\s+ni\\s+aucun\\s+second\\s+judge\\s+ne\\s+sont\\s+n[ée]cessaires\\s+dans\\s+ce\\s+tour)`
+
+const AUTHORITATIVE_CLOSURE_BOUNDARY_SOURCE =
+  '(?:\\s*\\.(?=\\s|$|[*_])|(?=\\s*(?:$|[,;:|·/—-]))|(?=\\s+(?:[ée]chec|erreur|interrompu|annul[ée]|failed|interrupted|cancelled)\\b))'
+
+const AUTHORITATIVE_CLOSURE_PATTERN = new RegExp(
+  `${AUTHORITATIVE_ORCHESTRATION_CLOSURE_PREFIX}(?:\\s*;\\s*${AUTHORITATIVE_CLOSURE_SUFFIX_SOURCE}${AUTHORITATIVE_CLOSURE_BOUNDARY_SOURCE}|${AUTHORITATIVE_CLOSURE_BOUNDARY_SOURCE})`,
+  'iu'
+)
+
+export interface OrchestrationClosureSpan {
+  start: number
+  end: number
+}
+
+interface MarkdownAstNode {
+  type?: string
+  lang?: string | null
+  position?: {
+    start?: { line?: number; offset?: number }
+    end?: { line?: number; offset?: number }
+  }
+  children?: MarkdownAstNode[]
+}
+
+interface PreservedTextLine {
+  text: string
+  ending: string
+  originalIndex: number
+  protected: boolean
+}
+
+function splitTextLines(text: string, protectedLines: ReadonlySet<number>): PreservedTextLine[] {
+  if (!text) return [{ text: '', ending: '', originalIndex: 0, protected: false }]
+  const lines: PreservedTextLine[] = []
+  let start = 0
+  let index = 0
+  while (start < text.length) {
+    const newline = text.indexOf('\n', start)
+    if (newline < 0) {
+      lines.push({
+        text: text.slice(start),
+        ending: '',
+        originalIndex: index,
+        protected: protectedLines.has(index + 1)
+      })
+      break
+    }
+    const crlf = newline > start && text[newline - 1] === '\r'
+    lines.push({
+      text: text.slice(start, crlf ? newline - 1 : newline),
+      ending: crlf ? '\r\n' : '\n',
+      originalIndex: index,
+      protected: protectedLines.has(index + 1)
+    })
+    start = newline + 1
+    index += 1
+  }
+  return lines
+}
+
+/** Les lignes `code` du même parseur CommonMark que la pile ReactMarkdown. */
+export function markdownCodeLineProtection(reports: readonly string[]): Array<Set<number>> {
+  const lineCounts = reports.map((report) => report.split(/\r?\n/u).length)
+  const starts: number[] = []
+  let nextStart = 1
+  for (const count of lineCounts) {
+    starts.push(nextStart)
+    nextStart += count
+  }
+  const protectedLines = reports.map(() => new Set<number>())
+  try {
+    const tree = fromMarkdown(reports.join('\n')) as MarkdownAstNode
+    const visit = (node: MarkdownAstNode): void => {
+      const start = node.position?.start?.line
+      const end = node.position?.end?.line
+      if (node.type === 'code' && start !== undefined && end !== undefined) {
+        for (let reportIndex = 0; reportIndex < reports.length; reportIndex += 1) {
+          const reportStart = starts[reportIndex]
+          const reportEnd = reportStart + lineCounts[reportIndex] - 1
+          const overlapStart = Math.max(start, reportStart)
+          const overlapEnd = Math.min(end, reportEnd)
+          for (let line = overlapStart; line <= overlapEnd; line += 1) {
+            protectedLines[reportIndex].add(line - reportStart + 1)
+          }
+        }
+      }
+      for (const child of node.children ?? []) visit(child)
+    }
+    visit(tree)
+  } catch {
+    // En cas d'entrée illisible, ne jamais détruire une preuve potentielle.
+    return lineCounts.map(
+      (count) => new Set(Array.from({ length: count }, (_, index) => index + 1))
+    )
+  }
+  return protectedLines
+}
+
+/**
+ * Préfixe de fence à réinjecter quand un fragment texte commence au milieu d'un bloc fenced.
+ * Les actions restent des cartes séparées dans le DOM, mais elles ne doivent pas réinitialiser la
+ * grammaire Markdown que l'hydratation a projetée sur le flux texte complet.
+ */
+export function markdownCodeContinuationPrefixes(
+  reports: readonly string[]
+): Array<string | undefined> {
+  const lineCounts = reports.map((report) => report.split(/\r?\n/u).length)
+  const starts: number[] = []
+  let nextStart = 1
+  for (const count of lineCounts) {
+    starts.push(nextStart)
+    nextStart += count
+  }
+  const prefixes = reports.map(() => undefined as string | undefined)
+  const source = reports.join('\n')
+  const lines = source.split(/\r?\n/u)
+  try {
+    const tree = fromMarkdown(source) as MarkdownAstNode
+    const visit = (node: MarkdownAstNode): void => {
+      if (node.type === 'code') {
+        const start = node.position?.start?.line
+        const end = node.position?.end?.line
+        const offset = node.position?.start?.offset
+        const fenced = offset !== undefined && /^(?:`{3,}|~{3,})/u.test(source.slice(offset))
+        // Une fence `html-render` n'est exécutable que si son document complet reste dans un seul
+        // bloc visuel. La recréer artificiellement après une carte action/artefact pourrait exécuter
+        // un suffixe HTML privé de son contexte et produire un DOM différent de la source jointe.
+        if (fenced && start !== undefined && end !== undefined) {
+          const openingLine = lines[start - 1]
+          const continuationPrefix =
+            node.lang?.toLowerCase() === 'html-render'
+              ? openingLine.replace(/html-render/iu, 'html')
+              : openingLine
+          for (let index = 1; index < starts.length; index += 1) {
+            if (starts[index] > start && starts[index] <= end && prefixes[index] === undefined) {
+              prefixes[index] = continuationPrefix
+            }
+          }
+        }
+      }
+      node.children?.forEach(visit)
+    }
+    visit(tree)
+  } catch {
+    // La protection principale échoue déjà fermée ; sans projection fiable, ne pas inventer de
+    // fence de continuation qui pourrait activer `html-render`.
+  }
+  return prefixes
+}
+
+/** Réécrit seulement les lignes hors code, sans normaliser les octets des lignes protégées. */
+export function rewriteUnprotectedMarkdownLines(
+  text: string,
+  protectedLines: ReadonlySet<number>,
+  rewrite: (line: string) => string | undefined
+): string {
+  const original = splitTextLines(text, protectedLines)
+  let changed = false
+  const rewritten = original.flatMap((line): PreservedTextLine[] => {
+    if (line.protected) return [line]
+    const next = rewrite(line.text)
+    if (next === line.text) return [line]
+    changed = true
+    return next === undefined ? [] : [{ ...line, text: next }]
+  })
+  if (!changed) return text
+  const kept = rewritten.filter((line, index) => {
+    if (line.protected || line.text.trim()) return true
+    const previous = rewritten[index - 1]
+    return !previous || previous.protected || previous.text.trim().length > 0
+  })
+  while (kept[0] && !kept[0].protected && !kept[0].text.trim()) kept.shift()
+  while (kept.at(-1) && !kept.at(-1)?.protected && !kept.at(-1)?.text.trim()) kept.pop()
+  const last = kept.at(-1)
+  if (last && last.originalIndex < original.length - 1) last.ending = ''
+  return kept.map((line) => `${line.text}${line.ending}`).join('')
+}
+
+/** Localise une vraie clause de clôture, mais jamais sa citation entre guillemets ou backticks. */
+export function authoritativeOrchestrationClosureSpan(
+  line: string
+): OrchestrationClosureSpan | undefined {
+  const searchable = line.replace(
+    /«[^»\n]*»|"(?:\\.|[^"\\\n])*"|(?<![\p{L}\p{N}])'(?:\\.|[^'\\\n])*'|`[^`\n]*`/gu,
+    (quoted) => ' '.repeat(quoted.length)
+  )
+  const match = AUTHORITATIVE_CLOSURE_PATTERN.exec(searchable)
+  return match ? { start: match.index, end: match.index + match[0].length } : undefined
+}
+
+export function isAuthoritativeOrchestrationClosureLine(line: string): boolean {
+  const candidate = line.trimStart().replace(CLOSURE_LEADING_DECORATIONS, '')
+  return authoritativeOrchestrationClosureSpan(candidate)?.start === 0
+}
+
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined
 }
@@ -37,6 +251,319 @@ function asNumber(value: unknown): number | undefined {
 function asCallCount(value: unknown): number {
   const count = asNumber(value)
   return count === undefined ? 0 : Math.max(0, Math.floor(count))
+}
+
+const PROOF_DECORATION_PREFIX =
+  /^(?:(?:[-+*>•]|\d+[.)])\s+|\[[ xX]\]\s+|(?:✅|⚠️?|🧪)\s*|\|\s*|(?:\*\*|__|\*|_))+/u
+
+function maskQuotedEvidence(text: string): string {
+  return text.replace(
+    /«[^»\n]*»|"(?:\\.|[^"\\\n])*"|(?<![\p{L}\p{N}])'(?:\\.|[^'\\\n])*'/gu,
+    (quoted) => ' '.repeat(quoted.length)
+  )
+}
+
+const RUN_LIFECYCLE_ASSERTION_SOURCE =
+  'run\\s+(?:est\\s+)?(?:(?:(?:reste|toujours)\\s+)?(?:(?:standard\\s*\\/\\s*)?(?:open|ouvert))|encore\\s+ouvert)'
+
+const LIFECYCLE_ASSERTION_SOURCE = `(?:${RUN_LIFECYCLE_ASSERTION_SOURCE}|non\\s+(?:publi[ée]e?s?|commit[ée]e?s?)|publication\\s+(?:est\\s+)?(?:reste|non\\s+ex[ée]cut(?:[ée]e?s?)?|en\\s+attente|[àa]\\s+faire)|(?:modifications?|changements?)\\s+non\\s+(?:publi[ée]e?s?|commit[ée]e?s?)|(?:les\\s+)?changements?\\s+(?:(?:ne\\s+sont\\s+)?pas\\s+encore|non)\\s+publi[ée]s?|gate\\s+(?:est\\s+)?(?:(?:reste|toujours|encore)\\s+)?bloqu[ée]|(?:autoriser|d[ée]clencher)\\s+(?:la\\s+)?publication|(?:lancer|relancer)\\s+(?:le\\s+)?judge|judge\\s+[àa]\\s+lancer|judge[^\\n]*(?:refus[ée]|reste|non\\s+cl[oô]tur)|clean\\s+(?:puis|et)\\s+judge|encha[iî]ner\\s+clean[^\\n]*judge)`
+
+const LIFECYCLE_WRAPPED_SOURCE =
+  '(?:(?:\\*\\*|__|~~|\\*|_|\\[|`|\\/)\\s*)*' +
+  LIFECYCLE_ASSERTION_SOURCE +
+  '(?:\\s*(?:\\*\\*|__|~~|\\*|_|`|\\/|\\](?:\\([^\\n)]*\\))?))*'
+
+const NEGATED_LIFECYCLE_BEFORE = new RegExp(
+  `\\b(?:absence\\s+de|(?:aucune|z[ée]ro)\\s+(?:occurrence|mention)\\s+de|sans\\s+(?:occurrence|mention)\\s+de|il\\s+n['’]y\\s+a\\s+plus\\s+de)\\s+${LIFECYCLE_WRAPPED_SOURCE}`,
+  'giu'
+)
+
+const NEGATED_LIFECYCLE_AFTER = new RegExp(
+  `${LIFECYCLE_WRAPPED_SOURCE}\\s+(?:(?:(?:est|reste)\\s+)?(?:absent(?:e)?|introuvable|supprim[ée]e?|exclu(?:e)?|faux|fausse)|a\\s+disparu|n['’]appara[iî]t\\s+plus|n['’]est\\s+(?:pas\\s+pr[ée]sent|plus\\s+vrai)|ne\\s+(?:matche|correspond|contient|comprend|affiche|figure)\\s+(?:plus|pas)|=\\s*(?:false|0\\s+occurrences?))`,
+  'giu'
+)
+
+const FORMATTED_LIFECYCLE_REFERENCE = /`[^`\n]+`|\[[^\]\n]+\]\([^)\n]*\)|\/[^/\n]+\/[a-z]*/giu
+
+const ACTIVE_LIFECYCLE = new RegExp(
+  `(?<![\\p{L}\\p{N}])${LIFECYCLE_ASSERTION_SOURCE}(?![\\p{L}\\p{N}])`,
+  'iu'
+)
+
+const ACTIVE_RUN_LIFECYCLE = new RegExp(
+  `(?<![\\p{L}\\p{N}])${RUN_LIFECYCLE_ASSERTION_SOURCE}(?![\\p{L}\\p{N}])`,
+  'iu'
+)
+
+/** Masque seulement l'assertion lifecycle niée, pas les autres faits présents sur la même ligne. */
+function maskNegatedLifecycleEvidence(text: string): string {
+  return text
+    .replace(NEGATED_LIFECYCLE_BEFORE, (assertion) => ' '.repeat(assertion.length))
+    .replace(NEGATED_LIFECYCLE_AFTER, (assertion) => ' '.repeat(assertion.length))
+}
+
+function maskHistoricalLifecycleEvidence(text: string): string {
+  return text.replace(FORMATTED_LIFECYCLE_REFERENCE, (formatted, offset: number) => {
+    const literal = formatted.startsWith('`')
+      ? formatted.slice(1, formatted.lastIndexOf('`'))
+      : formatted.startsWith('[')
+        ? (/^\[([^\]\n]+)\]/u.exec(formatted)?.[1] ?? formatted)
+        : formatted.slice(1, formatted.lastIndexOf('/'))
+    if (!ACTIVE_LIFECYCLE.test(literal)) return formatted
+    const context = `${text.slice(Math.max(0, offset - 80), offset)} ${text.slice(offset + formatted.length, offset + formatted.length + 120)}`
+    const historical =
+      /\b(?:ancien(?:ne)?|historique|logs?|trace|assertion|cha[iî]ne\s+attendue)\b|\b(?:observ|figur|cit|captur|trouv)[\p{L}]*\s+(?:dans|par)\b/iu.test(
+        context
+      )
+    const future = /\b(?:plan\s+restant|prochaine\s+[ée]tape|reste\s+[àa]\s+faire)\b/iu.test(
+      context
+    )
+    return historical && !future ? ' '.repeat(formatted.length) : formatted
+  })
+}
+
+function lifecycleSearchableSource(text: string): string {
+  return maskHistoricalLifecycleEvidence(
+    maskNegatedLifecycleEvidence(maskQuotedEvidence(text))
+  ).replace(/[`*_]/g, ' ')
+}
+
+function lifecycleSearchable(text: string): string {
+  return lifecycleSearchableSource(text).trim()
+}
+
+function factualSuffixAfterStale(text: string, staleEnd: number): string | undefined {
+  const tail = text.slice(staleEnd)
+  const boundary = /(?:[.;:—|·,/]\s+|\s+-\s+)/u.exec(tail)
+  if (!boundary) return undefined
+  const candidate = tail.slice(boundary.index + boundary[0].length).trim()
+  if (!candidate) return undefined
+  const searchable = lifecycleSearchable(candidate)
+  const staleLead =
+    /^(?:maintenant|reste\s+[àa]\s+faire|recommand[ée]|encha[iî]ner|clean)(?=\s|[”—:,-]|$)/iu.test(
+      searchable
+    ) && /\b(?:publication|commit|judge|clean)\b/iu.test(searchable)
+  return ACTIVE_LIFECYCLE.test(searchable) || staleLead ? undefined : candidate
+}
+
+function splitMarkdownTableCells(line: string): string[] | undefined {
+  const text = line.trim()
+  if (!text.startsWith('|') || !text.endsWith('|')) return undefined
+  const cells: string[] = []
+  let start = 1
+  let codeMarkerLength = 0
+  for (let index = 1; index < text.length - 1; index += 1) {
+    if (text[index] === '\\') {
+      index += 1
+      continue
+    }
+    if (text[index] === '`') {
+      let end = index + 1
+      while (text[end] === '`') end += 1
+      const length = end - index
+      if (codeMarkerLength === 0) codeMarkerLength = length
+      else if (codeMarkerLength === length) codeMarkerLength = 0
+      index = end - 1
+      continue
+    }
+    if (text[index] === '|' && codeMarkerLength === 0) {
+      cells.push(text.slice(start, index))
+      start = index + 1
+    }
+  }
+  cells.push(text.slice(start, -1))
+  return cells.length >= 2 ? cells : undefined
+}
+
+function stripStaleLifecycleClause(cell: string): string {
+  let rewritten = cell
+  // Une cellule peut cumuler plusieurs conclusions périmées. On retire une clause à la fois puis
+  // on reparcourt le résultat : un seul `exec` laissait la seconde contradiction visible à côté de
+  // la clôture autoritative. La borne empêche toute boucle en cas de future regex non consommatrice.
+  for (let pass = 0; pass < 32; pass += 1) {
+    const searchable = lifecycleSearchableSource(rewritten)
+    // Dans un tableau d'audit, une mention de rôle `judge` peut précéder le vrai statut du RUN.
+    // Le statut du RUN est plus précis que le motif générique et doit donc gagner.
+    const staleSignal = ACTIVE_RUN_LIFECYCLE.exec(searchable) ?? ACTIVE_LIFECYCLE.exec(searchable)
+    if (!staleSignal) return rewritten
+
+    const staleStart = staleSignal.index
+    const staleEnd = staleStart + staleSignal[0].length
+    const prefix = rewritten.slice(0, staleStart)
+    const separators = [...prefix.matchAll(/(?:[.!?;:,](?:[*_]+)?\s+|[—–]\s*|\s-\s+)/gu)]
+    const previous = separators.at(-1)
+    // Si une suppression précédente a consommé le séparateur, conserver le préfixe factuel au lieu
+    // de traiter toute la cellule comme une unique clause lifecycle.
+    const clauseStart = previous?.index ?? (prefix.trim() ? staleStart : 0)
+    const tail = rewritten.slice(staleEnd)
+    const next = /^\s*(?:[*_`]+\s*)*(?:[.!?;,]\s*|[—–]\s*|\s-\s+)/u.exec(tail)
+    const clauseEnd = next ? staleEnd + next[0].length : staleEnd
+    const before = rewritten.slice(0, clauseStart).trimEnd()
+    const after = rewritten.slice(clauseEnd).trimStart()
+    const nextValue = [before, after].filter(Boolean).join(' ')
+    if (nextValue === rewritten) return rewritten
+    rewritten = nextValue
+  }
+  return rewritten
+}
+
+/** Réconcilie cellule par cellule pour qu'un statut périmé ne supprime jamais toute une ligne. */
+function withoutStaleLifecycleTableRow(line: string): string | undefined {
+  const cells = splitMarkdownTableCells(line)
+  if (!cells) return undefined
+  const rewritten = cells.map(stripStaleLifecycleClause)
+  if (rewritten.every((cell, index) => cell === cells[index])) return line
+  // Compatibilité avec les anciennes preuves à deux cellules : une dernière cellule entièrement
+  // périmée disparaît, tandis qu'une vraie ligne multi-colonnes conserve sa géométrie.
+  if (rewritten.length === 2 && !rewritten[1].trim()) rewritten.pop()
+  if (rewritten.every((cell) => !cell.trim())) return ''
+  return `| ${rewritten.map((cell) => cell.trim()).join(' | ')} |`
+}
+
+function withoutStaleWorkerLifecycleLine(line: string): string | undefined {
+  const text = line.trim()
+  if (/^#{1,6}\s+(?:\d+[.)]\s*)?publication\s*$/iu.test(text)) return undefined
+  const tableRow = withoutStaleLifecycleTableRow(line)
+  if (tableRow !== undefined) return tableRow || undefined
+  const proofSubject = text.replace(PROOF_DECORATION_PREFIX, '')
+  const proofLike = /^(?:preuve|tests?(?:\s+verts?)?|contr[oô]le|r[ée]sultat)\b/iu.test(
+    proofSubject
+  )
+  // Les citations historiques et les négations sont des preuves même sans préfixe « Preuve: ».
+  // Restreindre ce masquage aux lignes proof-like effaçait des diagnostics autonomes tels que
+  // « Ancienne trace : `RUN reste open` » ou « Aucune occurrence de RUN open ».
+  const searchable = lifecycleSearchable(text)
+
+  const staleSignal = ACTIVE_LIFECYCLE.exec(searchable)
+  const staleLead =
+    /^(?:maintenant|reste\s+[àa]\s+faire|recommand[ée]|encha[iî]ner|clean)(?=\s|[—:,-]|$)/iu.test(
+      searchable
+    ) && /\b(?:publication|commit|judge|clean)\b/iu.test(searchable)
+  if (!staleSignal && !staleLead) return line
+
+  if (staleSignal && proofLike) {
+    const proofPrefix = text
+      .slice(0, staleSignal.index)
+      .trimEnd()
+      .replace(/(?:\*\*|__|\*|_|\[|`|\/)\s*$/u, '')
+      .trimEnd()
+    const hasProofBoundary = /[.!?;:—|-]$/u.test(proofPrefix)
+    const proof = proofPrefix
+      .trimEnd()
+      .replace(/\s*(?:[—-]|[;,:])\s*$/u, '')
+      .trimEnd()
+    const proofContent = proof
+      .replace(PROOF_DECORATION_PREFIX, '')
+      .replace(/^(?:preuve|tests?(?:\s+verts?)?|contr[oô]le|r[ée]sultat)\b\s*:?\s*/iu, '')
+      .trim()
+    const suffixProof = factualSuffixAfterStale(text, staleSignal.index + staleSignal[0].length)
+    if (hasProofBoundary && proofContent) return suffixProof ? `${proof} ${suffixProof}` : proof
+    if (suffixProof) return suffixProof
+  }
+  return undefined
+}
+
+function isStaleWorkerLifecycleSection(line: string): boolean {
+  const heading = /^\s*#{1,6}\s+(.+?)\s*$/u.exec(line)?.[1]
+  if (!heading) return false
+  const title = heading.replace(/[`*_]/g, '').trim()
+  if (isStaleWorkerLifecycleMarker(title)) return true
+  return /^(?:\d+[.)]\s*)?(?:publication|maintenant|reste\s+[àa]\s+faire|recommand[ée])(?=\s|$)/iu.test(
+    title
+  )
+}
+
+function isStaleWorkerLifecycleMarker(line: string): boolean {
+  const text = line
+    .trim()
+    .replace(/^#{1,6}\s+/u, '')
+    .replace(/\*\*/gu, '')
+    .trim()
+  return /^(?:📍\s*maintenant|⏳\s*reste\s+[àa]\s+faire|👉\s*recommand(?:é|ée|ation))(?=\s|[—:,-]|$)/iu.test(
+    text
+  )
+}
+
+/**
+ * Le rapport du worker est capturé AVANT la gate et la publication. Une fois l'issue structurée
+ * `succeeded` connue, ses preuves restent utiles mais ses recommandations de cycle de vie deviennent
+ * fausses. On retire uniquement ces lignes, jamais les tests, diffs ou diagnostics.
+ */
+function removeStaleWorkerLifecycleAdvice(
+  report: string,
+  protectedLines: ReadonlySet<number>
+): string {
+  let staleHeadingLevel: number | undefined
+  let staleMarkerParagraph = false
+  return rewriteUnprotectedMarkdownLines(report, protectedLines, (line) => {
+    if (isAuthoritativeOrchestrationClosureLine(line)) {
+      staleHeadingLevel = undefined
+      staleMarkerParagraph = false
+      return line
+    }
+
+    const heading = /^(\s*(#{1,6})\s+)(.+?)\s*$/u.exec(line)
+    if (heading) {
+      const level = heading[2].length
+      if (staleHeadingLevel !== undefined && level <= staleHeadingLevel) {
+        staleHeadingLevel = undefined
+      }
+      if (staleHeadingLevel !== undefined) return undefined
+      staleMarkerParagraph = false
+      if (isStaleWorkerLifecycleSection(line)) {
+        staleHeadingLevel = level
+        return undefined
+      }
+      const usefulHeading = withoutStaleWorkerLifecycleLine(heading[3])
+      return usefulHeading === undefined ? undefined : `${heading[1]}${usefulHeading}`
+    }
+
+    if (staleHeadingLevel !== undefined) return undefined
+    if (!line.trim()) {
+      staleMarkerParagraph = false
+      return line
+    }
+    if (isStaleWorkerLifecycleMarker(line)) {
+      staleMarkerParagraph = true
+      return undefined
+    }
+    return staleMarkerParagraph ? undefined : withoutStaleWorkerLifecycleLine(line)
+  })
+}
+
+export function isDeliveredOrchestrationOutcome(outcome: OrchestrationOutcome): boolean {
+  return (
+    asString(outcome.status) === 'succeeded' &&
+    outcome.valid === true &&
+    outcome.gateBlocked === false &&
+    outcome.reused === false
+  )
+}
+
+/**
+ * Réconcilie aussi les anciens messages déjà persistés : leur texte worker a été écrit avant la
+ * publication, mais leur action `orchestrate` conserve l'outcome structuré qui fait autorité.
+ */
+export function reconcileClosedOrchestrationText(
+  report: string,
+  outcome: OrchestrationOutcome
+): string {
+  return isDeliveredOrchestrationOutcome(outcome)
+    ? removeStaleWorkerLifecycleAdvice(report, markdownCodeLineProtection([report])[0])
+    : report
+}
+
+/** Réconcilie un flux persisté en projetant d'abord ses spans Markdown sur tous les fragments. */
+export function reconcileClosedOrchestrationTextParts(
+  reports: readonly string[],
+  outcome: OrchestrationOutcome,
+  mutableStart = 0
+): string[] {
+  if (!isDeliveredOrchestrationOutcome(outcome)) return [...reports]
+  const protectedLines = markdownCodeLineProtection(reports)
+  return reports.map((report, index) =>
+    index < mutableStart ? report : removeStaleWorkerLifecycleAdvice(report, protectedLines[index])
+  )
 }
 
 /** Libellé de coût honnête, compatible avec les anciens résultats qui n'avaient que `costUsd`. */
@@ -82,10 +609,12 @@ export function formatOrchestrationOutcome(
   const outcome = data ?? {}
   const gateBlocked = outcome.gateBlocked === true
   const invalid = outcome.valid === false
+  const delivered = isDeliveredOrchestrationOutcome(outcome)
   const status = asString(outcome.status)
   const cost = formatExecutionCostCoverage(outcome)
   const run = runLabelFromPath(asString(outcome.runPath) ?? asString(outcome.runId))
   const result = asString(outcome.result)
+  const visibleResult = result ? reconcileClosedOrchestrationText(result, outcome) : result
 
   const headline = gateBlocked
     ? '⛔ Workflow BLOQUÉ par le gate — livrable non validé'
@@ -93,7 +622,9 @@ export function formatOrchestrationOutcome(
       ? '⚠️ Workflow terminé mais le juge a REFUSÉ le livrable'
       : outcome.reused === true
         ? '↻ Workflow déjà en cours réutilisé (aucun nouveau run lancé)'
-        : '✅ Workflow terminé'
+        : delivered
+          ? '✅ Workflow terminé'
+          : '⚠️ Workflow terminé — preuve incomplète de livraison'
 
   const facts = [
     status && `statut ${status}`,
@@ -102,6 +633,10 @@ export function formatOrchestrationOutcome(
   ].filter((fact): fact is string => Boolean(fact))
 
   const lines = [facts.length ? `${headline} · ${facts.join(' · ')}` : headline]
-  if (result) lines.push('', result.length > 4_000 ? `${result.slice(0, 4_000)}…[tronqué]` : result)
+  if (visibleResult)
+    lines.push(
+      '',
+      visibleResult.length > 4_000 ? `${visibleResult.slice(0, 4_000)}…[tronqué]` : visibleResult
+    )
   return lines.join('\n')
 }

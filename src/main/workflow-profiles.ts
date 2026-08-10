@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { ensureAutowinAppData } from './app-data'
+import { readDurableJson, writeDurableJson } from './durable-json'
 import { ALL_ROLES, type Role, type RoleBinding } from './roles'
 import type { PipelinePhase } from './skill-pipeline'
 import { graphDefects, graphFromPhases, type WorkflowGraph } from './workflow-graph'
@@ -252,19 +252,14 @@ function normalizeProfile(value: unknown): WorkflowProfile | undefined {
  * Relit les profils. Un fichier absent, corrompu ou partiellement invalide ne fait JAMAIS échouer :
  * on rend ce qui est lisible. Un réglage de confort ne doit pas empêcher l'app de démarrer.
  */
-export function loadWorkflowProfiles(path = workflowProfilesPath()): WorkflowProfilesFile {
-  if (!existsSync(path)) return { ...EMPTY }
-  let parsed: unknown
-  try {
-    // Le BOM est retiré : sous Windows, presque tout ce qui écrit un fichier à la main en pose un.
-    parsed = JSON.parse(readFileSync(path, 'utf8').replace(/^﻿/, ''))
-  } catch {
-    return { ...EMPTY }
-  }
-  if (!isPlainObject(parsed)) return { ...EMPTY }
+function decodeWorkflowProfiles(parsed: unknown): WorkflowProfilesFile | undefined {
+  if (!isPlainObject(parsed)) return undefined
+  if (!Array.isArray(parsed.profiles)) return undefined
+  if (parsed.activeId !== null && typeof parsed.activeId !== 'string') return undefined
+  if (parsed.seeded !== undefined && typeof parsed.seeded !== 'boolean') return undefined
   const profiles: WorkflowProfile[] = []
   const seen = new Set<string>()
-  for (const raw of Array.isArray(parsed.profiles) ? parsed.profiles : []) {
+  for (const raw of parsed.profiles) {
     const profile = normalizeProfile(raw)
     // Deux profils de même identifiant rendraient la sélection ambiguë : le premier gagne.
     if (profile && !seen.has(profile.id)) {
@@ -280,17 +275,22 @@ export function loadWorkflowProfiles(path = workflowProfilesPath()): WorkflowPro
   return { profiles, activeId, ...(parsed.seeded === true ? { seeded: true } : {}) }
 }
 
-/** Écrit les profils. Best-effort : un disque en échec ne casse pas le réglage en cours. */
+export function loadWorkflowProfiles(path = workflowProfilesPath()): WorkflowProfilesFile {
+  try {
+    return readDurableJson(path, decodeWorkflowProfiles) ?? { ...EMPTY }
+  } catch {
+    // Un réglage de confort corrompu ne doit pas empêcher le démarrage. Une version valide précédente
+    // a déjà été tentée par readDurableJson ; sans elle, on repart d'un catalogue vide explicite.
+    return { ...EMPTY }
+  }
+}
+
+/** Écrit les profils de façon atomique. Toute erreur remonte avant l'application runtime. */
 export function saveWorkflowProfiles(
   file: WorkflowProfilesFile,
   path = workflowProfilesPath()
 ): void {
-  try {
-    mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(path, JSON.stringify(file, null, 2), 'utf8')
-  } catch {
-    /* le réglage vaut pour cette session ; il ne survivra pas — sans rien casser */
-  }
+  writeDurableJson(path, file, decodeWorkflowProfiles)
 }
 
 /** Ajoute ou remplace un profil, en conservant la sélection courante quand elle reste valide. */

@@ -91,7 +91,10 @@ for (let attempt = 0; attempt < 90; attempt += 1) {
 }
 
 const proof = await evaluate(`(async () => {
-  const calls = await window.api.promptCalls()
+  const state = await window.api.appState()
+  const calls = state.activeConversationId
+    ? await window.api.promptCalls(state.activeConversationId)
+    : []
   const call = [...calls].reverse().find((candidate) =>
     candidate.messages?.some((message) => message.content?.includes(${JSON.stringify(sentinel)})))
   const brains = await window.api.listBrains()

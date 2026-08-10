@@ -11,7 +11,6 @@ import type {
 import { RoleModelConfig } from './roles'
 import { CostAggregator } from './dashboards/cost'
 import { TrustLedger } from './trust/ledger'
-import { AuthoritySas } from './authority/sas'
 import { HookBus } from './hooks/hook-bus'
 import { createDefaultHookBus } from './hooks/default-gate-hooks'
 import type { VerifyRunner } from './hooks/verify-replay-hook'
@@ -62,7 +61,6 @@ function makeOrchestrator(
     }),
     cost: new CostAggregator(),
     trust: new TrustLedger(),
-    authority: new AuthoritySas(),
     executionWorkspace: 'C:\\ws',
     worktrees: makeTestWorktrees(extra.executionWorkspace ?? 'C:\\ws'),
     classifyPhases: () => ['build'],

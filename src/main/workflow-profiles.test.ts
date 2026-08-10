@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -57,10 +57,56 @@ describe('profils de workflow — écrire, relire, sélectionner', () => {
     expect(loadWorkflowProfiles(path)).toEqual({ profiles: [], activeId: null })
   })
 
+  it('recrée un backup dès la première sauvegarde après un primaire corrompu', () => {
+    const path = tempFile()
+    const file = { profiles: [rapide], activeId: 'rapide' }
+    writeFileSync(path, '{ ceci nest pas du json', 'utf8')
+
+    saveWorkflowProfiles(file, path)
+
+    expect(existsSync(`${path}.bak`)).toBe(true)
+    writeFileSync(path, '{ corrompu de nouveau', 'utf8')
+    expect(loadWorkflowProfiles(path)).toEqual(file)
+  })
+
+  it('remplace aussi un backup corrompu lors d’une sauvegarde valide', () => {
+    const path = tempFile()
+    const file = { profiles: [rapide], activeId: 'rapide' }
+    writeFileSync(path, '{ primaire corrompu', 'utf8')
+    writeFileSync(`${path}.bak`, '{ backup corrompu', 'utf8')
+
+    saveWorkflowProfiles(file, path)
+    writeFileSync(path, '{ corrompu de nouveau', 'utf8')
+
+    expect(loadWorkflowProfiles(path)).toEqual(file)
+  })
+
+  it('récupère le profil précédent si le JSON parsable perd sa structure', () => {
+    const path = tempFile()
+    const file = { profiles: [rapide], activeId: 'rapide' }
+    saveWorkflowProfiles(file, path)
+    saveWorkflowProfiles(file, path)
+    writeFileSync(path, JSON.stringify({ profiles: 'broken', activeId: 'rapide' }), 'utf8')
+
+    expect(loadWorkflowProfiles(path)).toEqual(file)
+  })
+
   it('un fichier écrit avec un BOM reste lisible', () => {
     const path = tempFile()
     writeFileSync(path, '﻿' + JSON.stringify({ profiles: [rapide], activeId: null }), 'utf8')
     expect(loadWorkflowProfiles(path).profiles).toHaveLength(1)
+  })
+
+  it('signale une sauvegarde impossible au lieu d’annoncer un état non persisté', () => {
+    const parentFile = tempFile()
+    writeFileSync(parentFile, 'ce chemin est un fichier', 'utf8')
+
+    expect(() =>
+      saveWorkflowProfiles(
+        { profiles: [{ id: 'non-persiste', name: 'Non persisté' }], activeId: 'non-persiste' },
+        join(parentFile, 'workflow-profiles.json')
+      )
+    ).toThrow()
   })
 
   it('écarte un profil sans nom ou sans identifiant — une ligne fantôme est pire qu’une absence', () => {

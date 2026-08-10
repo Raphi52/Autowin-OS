@@ -1,16 +1,18 @@
 import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { ProviderRegistry } from './providers/registry'
 import type { Role, RoleBinding, RoleModelConfig, ReasoningEffort } from './roles'
 import { resolvePhaseBinding } from './roles'
 import { defaultQuorumThreshold } from './quorum'
 import type { CostAggregator } from './dashboards/cost'
 import type { TrustLedger } from './trust/ledger'
-import type { AuthoritySas } from './authority/sas'
 import { evaluateClosure } from './gates/stopgate'
 import { HookBus } from './hooks/hook-bus'
 import { createDefaultHookBus } from './hooks/default-gate-hooks'
 import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
-import { phaseInstruction, type PipelinePhase } from './skill-pipeline'
+import { PIPELINE_PHASES, type PipelinePhase } from './skill-pipeline'
+import { routeSkillRequest } from './skill-routing'
 import { combinePhaseInstruction, type PhaseInstructionOverride } from './workflow-instruction'
 import {
   agentsForPhase,
@@ -20,6 +22,7 @@ import {
   quorumForPhase,
   recoveriesFromGraph,
   worstCaseNodeExecutions,
+  worstCaseVisits,
   type WorkflowGraph
 } from './workflow-graph'
 import {
@@ -80,6 +83,73 @@ function verdictDePhase(phase: PipelinePhase, text: string): NodeVerdict {
   // Ni rejet lisible, ni approbation contractuelle : un juge muet sur sa conclusion ne vaut pas un OK.
   return APPROBATION_CONTRAT.test(propre) ? 'green' : 'red'
 }
+
+/**
+ * Le retour judge rouge → build est exécuté par la boucle de réparation enrichie du moteur, pas par
+ * le marcheur générique. Le retirer ici donne au devis et à l'exécution la même topologie effective.
+ */
+function sansRetourReparationJuge(graph: WorkflowGraph): WorkflowGraph {
+  return {
+    ...graph,
+    edges: graph.edges.filter((edge) => {
+      if (edge.when !== 'red') return true
+      const depuis = graph.nodes.find((node) => node.id === edge.from)?.phase
+      const vers = graph.nodes.find((node) => node.id === edge.to)?.phase
+      return !(depuis === 'judge' && vers === 'build')
+    })
+  }
+}
+
+/**
+ * Phases situées entre le build ciblé par un retour rouge et le juge qui l'a déclenché.
+ * Le build est exécuté par la réparation enrichie ; le juge par le gate final. Ce tableau est donc
+ * exactement le milieu à rejouer (par exemple `clean` dans build → clean → judge).
+ */
+function phasesApresBuildDeReparation(graph: WorkflowGraph): PipelinePhase[] {
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+  const retour = graph.edges.find((edge) => {
+    if (edge.when !== 'red') return false
+    return byId.get(edge.from)?.phase === 'judge' && byId.get(edge.to)?.phase === 'build'
+  })
+  if (!retour) return []
+  const phases: PipelinePhase[] = []
+  const vus = new Set<string>([retour.to])
+  let courant = retour.to
+  for (let pas = 0; pas < graph.nodes.length; pas++) {
+    const suivantes = graph.edges.filter((edge) => edge.from === courant && edge.when === 'always')
+    if (suivantes.length !== 1) return []
+    courant = suivantes[0].to
+    if (courant === retour.from) return phases
+    if (vus.has(courant)) return []
+    vus.add(courant)
+    const node = byId.get(courant)
+    if (!node || node.phase === 'judge') return []
+    phases.push(node.phase)
+  }
+  return []
+}
+
+/** Nombre d'appels réellement promis par le graphe, panels et synthèses compris. */
+function appelsRequisParWorkflow(
+  graph: WorkflowGraph,
+  allocation?: WorkflowRunOverride['allocation']
+): number {
+  const visits = worstCaseVisits(graph)
+  let total = 0
+  for (const node of graph.nodes) {
+    const passages = visits.get(node.id) ?? 0
+    if (passages === 0) continue
+    const membres =
+      node.phase === 'judge'
+        ? (allocation?.judgeMembers ?? node.agents?.length ?? 1)
+        : (allocation?.phaseMembers?.[node.phase] ?? node.agents?.length ?? 1)
+    // Un panel d'exécution de N membres est suivi d'une synthèse ; le jury agrège mécaniquement.
+    const appelsParPassage =
+      node.phase === 'judge' ? Math.max(1, membres) : membres >= 2 ? membres + 1 : 1
+    total += passages * appelsParPassage
+  }
+  return total
+}
 import { phaseBrief } from './phase-briefs'
 import { personaInstruction, WORKFLOW_IS_A_TOOL_INSTRUCTION } from '../shared/persona'
 import type { DecompositionOutcome } from './greedy-decompose'
@@ -93,6 +163,9 @@ import {
 } from './session-memory-echo'
 import { projectContextBlock } from './context-files'
 import type { ExecutionEvidence, PromptEnvelope, SendOptions, Usage } from './providers/types'
+import { preparedCommitMutationEvidence } from './providers/workspace-mutation-evidence'
+import { appendExecutionEvidenceFileTrace } from './activity/conversation-file-trace-spool'
+import type { WatchdogMutationClaims, WatchdogMutationClaimsSink } from './task-manager/types'
 import { isShellMutation, isStateOracle } from './providers/evidence-vocabulary'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
@@ -106,6 +179,47 @@ import type { WorktreeAgentActivity } from '../shared/worktree-activity-model'
 import { allocateExecutionTopology, type ExecutionQuote } from './execution-quote'
 import type { ExecutionUsageSnapshot } from './execution-supervisor'
 
+function canonicalCausalPath(root: string, path: string): string {
+  const normalized = resolve(root, path).replaceAll('\\', '/')
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized
+}
+
+/** Convertit la preuve Git publiée en claims directement consommables par le moteur vivant. */
+export function watchdogClaimsFromEvidence(
+  evidence: readonly ExecutionEvidence[],
+  workspaceRoot: string
+): WatchdogMutationClaims {
+  const paths = new Set<string>()
+  const mutatedLineFingerprints: Record<string, string[]> = {}
+  const mutatedPathGenerationMarkers: Record<string, string> = {}
+  for (const item of evidence) {
+    if (!item.ok || item.kind !== 'mutation') continue
+    for (const path of item.paths ?? (item.path ? [item.path] : [])) {
+      const absolute = resolve(workspaceRoot, path)
+      const canonical = canonicalCausalPath(workspaceRoot, path)
+      paths.add(absolute)
+      const fingerprints = Object.entries(item.writtenLineFingerprintsByPath ?? {}).find(
+        ([candidate]) => canonicalCausalPath(workspaceRoot, candidate) === canonical
+      )?.[1]
+      if (fingerprints?.length) {
+        mutatedLineFingerprints[absolute] = [
+          ...(mutatedLineFingerprints[absolute] ?? []),
+          ...fingerprints
+        ]
+      }
+      const generationMarker = Object.entries(item.pathGenerationMarkers ?? {}).find(
+        ([candidate]) => canonicalCausalPath(workspaceRoot, candidate) === canonical
+      )?.[1]
+      if (generationMarker) mutatedPathGenerationMarkers[absolute] = generationMarker
+    }
+  }
+  return {
+    mutatedPaths: [...paths],
+    mutatedLineFingerprints,
+    mutatedPathGenerationMarkers
+  }
+}
+
 /**
  * Boucle d'orchestration DISCIPLINÉE — le cœur d'Autowin OS.
  *
@@ -118,6 +232,16 @@ import type { ExecutionUsageSnapshot } from './execution-supervisor'
 /** Un agent CLI lancé par un run : de quoi le retrouver vivant et relire ce qu'il a écrit. */
 export interface RunAgentRef {
   token: string
+  /** Décodeur du journal brut à employer après crash. */
+  provider?: string
+  /** Attribution persistée : le graphe/devis ne suffit pas à redéduire la phase après un crash. */
+  phase?: PipelinePhase
+  /** Réservation provider non réglée ; reste vraie entre la sortie du PID et le règlement du stream. */
+  active?: boolean
+  /** Un résultat de membre doit repasser par l'agrégateur ; il n'est jamais un acquis de phase seul. */
+  fanOut?: boolean
+  /** Réservation provider exacte portée par cette occurrence, pour une reprise sans déduction. */
+  reservationId?: string
   pid?: number
   /** Empreinte du processus au lancement (heure de démarrage + chemin) — anti pid recyclé. */
   identity?: string
@@ -185,10 +309,13 @@ export interface OrchestrationResult {
   quote?: ExecutionQuote
   /** Consommation atomique locale a ce run, jamais le cumul historique. */
   usage?: ExecutionUsageSnapshot
-  /** Id de la décision d'autorité ouverte si le gate a bloqué (sinon undefined). */
-  pendingDecisionId?: string
   /** Sortie brute de chaque phase exec — sert à peupler le RUN.md de la conversation (J2). */
-  phaseOutputs: { phase: PipelinePhase; text: string }[]
+  phaseOutputs: {
+    phase: PipelinePhase
+    text: string
+    agentToken?: string
+    executionEvidence?: ExecutionEvidence[]
+  }[]
   /** Requête envoyée au Brain (RAG 1×/run) — pour la traçabilité Observatory. */
   brainQuery?: string
   /** Heure à laquelle la récupération Brain s'est terminée, avant le premier appel modèle. */
@@ -197,11 +324,29 @@ export interface OrchestrationResult {
   brainNavigation?: BrainNavigation
   /** Caractères de contexte Brain réellement injectés. */
   brainInjectedChars?: number
+  /** Delta causal du commit préparé puis effectivement publié (sans doublons fan-out ni TOCTOU). */
+  causalMutationEvidence?: ExecutionEvidence[]
   trace: OrchestrationStep[]
   /** Mode greedy : ids des sous-tâches dont le run a échoué (rejet). */
   failedTasks?: string[]
   /** Mode greedy : ids des sous-tâches jamais lancées car une dépendance a échoué (cascade). */
   skippedTasks?: string[]
+  /** Copie verte volontairement conservée (tournoi) ; elle n'a pas été publiée dans la base. */
+  retainedWorkspace?: {
+    runId: string
+    path: string
+    baseSha?: string
+    files: string[]
+  }
+}
+
+export interface OrchestrationRunOptions {
+  /** `hold` conserve un run vert dans sa copie isolée et interdit sa publication automatique. */
+  publication?: 'auto' | 'hold'
+  /** Source Git immuable imposée aux bras d'un contrefactuel. */
+  sourceSnapshot?: { workspaceId: string; baseSha: string; contentHash: string }
+  /** Reprise interne : conserve l'identité qui possède déjà la copie Git durable du run. */
+  resumeRunId?: string
 }
 
 export interface BrainRetrievalEvent {
@@ -232,9 +377,10 @@ export interface OrchestratorCollaboratorDeps {
   roles: RoleModelConfig
   cost: CostAggregator
   trust: TrustLedger
-  authority: AuthoritySas
   /** Retriever substituable pour prouver les frontières d'injection sans serveur global. */
   retrieveBrain?: typeof retrieveBrainContext
+  /** Résumé metadata-only des décisions reliées à leurs issues observées dans cette conversation. */
+  causalMemoryFor?: (conversationId: string) => string
 }
 
 /**
@@ -323,7 +469,12 @@ export interface OrchestratorLifecycleDeps {
     bindingOverride?: RoleBinding
     /** Topologie exacte admise au debut du run, reutilisee telle quelle apres un crash. */
     runtimeSnapshot: OrchestrationRuntimeSnapshot
-    phaseOutputs: { phase: PipelinePhase; text: string }[]
+    phaseOutputs: {
+      phase: PipelinePhase
+      text: string
+      agentToken?: string
+      executionEvidence?: ExecutionEvidence[]
+    }[]
     executionQuote?: ExecutionQuote
     usage?: ExecutionUsageSnapshot
     /** Agents CLI du run : ce qui permettra de s'y RATTACHER après un redémarrage. */
@@ -334,7 +485,7 @@ export interface OrchestratorLifecycleDeps {
   /** Notifié quand le run atteint sa fin (vert, rouge ou abandon) → l'appelant efface l'état repris. */
   onRunSettled?: (runId: string) => void
   /** Empreinte d'un processus vivant — sert à savoir, au redémarrage, si un agent travaille encore. */
-  processIdentity?: (pid: number) => string | undefined
+  processIdentity?: (pid: number) => string | null | undefined
   /**
    * Clôture automatique appelée UNIQUEMENT sur un run vert, APRÈS la fusion du worktree (le travail
    * est alors dans la base). Best-effort : son échec ne change pas le verdict du run.
@@ -465,13 +616,54 @@ export interface RunWorktrees {
     runId: string,
     agentName: string,
     isMutation: boolean,
-    metadata?: { task?: string; role?: string; conversationId?: string }
+    metadata?: {
+      task?: string
+      role?: string
+      conversationId?: string
+      turnId?: string
+      causalWatchPaths?: readonly string[]
+      sourceWorkspacePath?: string
+      sourceBaseSha?: string
+      resumeExisting?: boolean
+    }
   ): string | undefined
+  beginAsync?(
+    runId: string,
+    agentName: string,
+    isMutation: boolean,
+    metadata?: {
+      task?: string
+      role?: string
+      conversationId?: string
+      turnId?: string
+      causalWatchPaths?: readonly string[]
+      sourceWorkspacePath?: string
+      sourceBaseSha?: string
+      resumeExisting?: boolean
+    }
+  ): Promise<string | undefined>
   /**
    * Clôt le run ; appelé en fin de run, y compris sur erreur. `merge: false` (run non vert) ⇒ le
    * travail N'EST PAS fusionné dans la base et la copie isolée est conservée pour décision humaine.
    */
-  end(runId: string, options?: { merge?: boolean }): unknown
+  end(
+    runId: string,
+    options?: {
+      merge?: boolean
+      retainGreen?: boolean
+      onPrepared?: (publication: { baseSha: string; agentSha: string }) => void
+      onPublished?: (publication: { baseSha: string; agentSha: string }) => void | Promise<void>
+    }
+  ): unknown
+  endAsync?(
+    runId: string,
+    options?: {
+      merge?: boolean
+      retainGreen?: boolean
+      onPrepared?: (publication: { baseSha: string; agentSha: string }) => void
+      onPublished?: (publication: { baseSha: string; agentSha: string }) => void | Promise<void>
+    }
+  ): Promise<unknown>
   /** Snapshot d'observation du coordinateur ; ne pilote jamais la finalisation. */
   activity?(): WorktreeAgentActivity[]
   /** Attache/détache un processus CLI réel au lease durable du run. */
@@ -489,7 +681,12 @@ export interface RunWorktrees {
  */
 export interface RunCloser {
   begin(runId: string): void
-  close(context: { runId: string; task: string; workCwd: string }): Promise<void>
+  close(context: {
+    runId: string
+    task: string
+    workCwd: string
+    projectPublication?: { baseSha: string; publishedSha: string }
+  }): Promise<void>
 }
 
 const MUTATION_STEM =
@@ -585,6 +782,38 @@ export function isMutationTask(task: string): boolean {
 }
 
 /**
+ * Les droits suivent la RESPONSABILITE de la phase, pas seulement le verbe de la demande.
+ *
+ * Une demande de mutation traverse aussi scout/frame/terrain : leur donner les droits de la tache
+ * globale permettait a scout d'implementer, builder et tester avant la phase build. Seules BUILD et
+ * CLEAN produisent ou nettoient le livrable ; toutes les autres phases observent et decident.
+ */
+export function sandboxForPhase(
+  task: string,
+  phase: PipelinePhase
+): NonNullable<SendOptions['execution']>['sandbox'] {
+  return isMutationTask(task) && (phase === 'build' || phase === 'clean')
+    ? 'danger-full-access'
+    : 'read-only'
+}
+
+/**
+ * Le préfixe slash choisit le routage, il ne fait pas partie du besoin métier.
+ *
+ * Le conserver dans `TÂCHE:` devient contradictoire dès qu'un workflow explicite élargit `/build`
+ * en scout → frame → terrain → build : les phases amont lisent alors l'ordre « build » comme leur
+ * propre mission et tentent d'écrire malgré leur contrat read-only. Le routage a déjà été calculé
+ * avant la construction du contexte ; on peut donc retirer uniquement une phase native reconnue.
+ */
+export function taskForPipelineContext(task: string): string {
+  const match = /^\s*\/([a-z][a-z0-9-]*)\b\s*/i.exec(task)
+  if (!match) return task
+  const phase = match[1].toLowerCase() as PipelinePhase
+  if (!PIPELINE_PHASES.includes(phase)) return task
+  return task.slice(match[0].length).trimStart()
+}
+
+/**
  * Ce que l'agent doit savoir quand il travaille dans une COPIE isolée — et qu'il ignorait.
  *
  * Incident du 2026-08-04 : l'agent a correctement fait un `git stash` sur le dépôt réel (via
@@ -677,6 +906,8 @@ export function evidenceSatisfiesTask(task: string, evidence: ExecutionEvidence[
 }
 
 export class Orchestrator {
+  private readonly causalWatchPathsByRun = new Map<string, readonly string[]>()
+
   constructor(private readonly deps: OrchestratorDeps) {}
 
   /**
@@ -754,17 +985,29 @@ export class Orchestrator {
 
   /** Le graphe qui pilote CE run, ou rien si la demande ne justifie pas d'en sortir un. */
   private graphePourTache(task: string): WorkflowGraph | undefined {
+    // Une phase nommée (`/build`, `/clean`, ...) est une commande, pas une suggestion. Le workflow
+    // sélectionné reste le contexte du run, mais son graphe ne doit pas réinjecter les autres phases.
+    if (routeSkillRequest(task)?.explicitPhase) return undefined
     if (this.tacheTriviale(task)) return undefined
     return this.workflowDuRun()?.graph
   }
 
   private effectivePhases(task: string): PipelinePhase[] {
+    const explicitPhase = routeSkillRequest(task)?.explicitPhase
+    if (explicitPhase) return explicitPhase === 'judge' ? [] : [explicitPhase]
     const workflow = this.workflowDuRun()
     // Trivial : la proportionnalité prime sur le workflow composé, sans quoi le moindre échange
     // paierait le pipeline entier.
     if (this.tacheTriviale(task)) return this.deps.classifyPhases!(task)
     const fromGraph = workflow?.graph ? linearPhasesOf(workflow.graph) : undefined
-    const imposed = fromGraph?.length ? fromGraph : workflow?.phases
+    // Un graphe explicite à retour n'est pas linéarisable, mais ses nœuds restent les phases que le
+    // devis doit réserver et afficher. Retomber sur la classification rendait « Chantier Autowin »
+    // visible tout en annonçant seulement frame → build.
+    const explicitGraphPhases =
+      workflow?.explicit && workflow.graph?.nodes.length
+        ? workflow.graph.nodes.map((node) => node.phase)
+        : undefined
+    const imposed = fromGraph?.length ? fromGraph : (explicitGraphPhases ?? workflow?.phases)
     if (imposed?.length) return [...imposed]
     return this.deps.classifyPhases
       ? this.deps.classifyPhases(task)
@@ -772,9 +1015,11 @@ export class Orchestrator {
   }
 
   private phasePrompt(phase: PipelinePhase, withFoundation: boolean): PhasePromptBlock {
-    const installed =
-      this.deps.skillInstruction?.(phase, { withFoundation }) ??
-      phaseInstruction(phase, undefined, { withFoundation })
+    // Le pipeline IN-APP utilise ses contrats natifs courts. Les SKILL.md du kit externe exigent
+    // leurs propres RUN.md/hooks et demandaient donc a scout/frame/terrain d'ecrire alors que ces
+    // phases sont volontairement read-only. Une instruction explicitement injectee reste prioritaire
+    // (tests, extension embarquee), mais l'absence d'injection ne consulte plus le kit de la machine.
+    const installed = this.deps.skillInstruction?.(phase, { withFoundation }) ?? ''
     const base = installed || phaseBrief(phase)
     // Point de passage UNIQUE des consignes de phase : y brancher le workflow suffit à couvrir
     // exec, judge et greedy sans les threader un par un.
@@ -792,9 +1037,23 @@ export class Orchestrator {
     string,
     {
       process: (pid: number, active: boolean) => void
-      spawnIntent: (token: string, active: boolean) => void
-      spawned: (token: string, pid: number) => void
-      journal: (token: string, journalPath: string) => void
+      spawnIntent: (
+        token: string,
+        active: boolean,
+        assignment: Pick<RunAgentRef, 'provider' | 'phase' | 'fanOut'>,
+        reservationId?: string
+      ) => void
+      spawned: (
+        token: string,
+        pid: number,
+        assignment: Pick<RunAgentRef, 'provider' | 'phase' | 'fanOut'>
+      ) => void
+      journal: (
+        token: string,
+        journalPath: string,
+        assignment: Pick<RunAgentRef, 'provider' | 'phase' | 'fanOut'>
+      ) => void
+      reservationSettled: (reservationId: string) => void
     }
   >()
   /**
@@ -803,15 +1062,29 @@ export class Orchestrator {
    * a produit pendant son absence.
    */
   private readonly runAgents = new Map<string, Map<string, RunAgentRef>>()
+  /** Runs deja terminaux dont le checkpoint ne peut etre libere qu'apres le dernier provider. */
+  private readonly terminalRunsAwaitingProviderSettlement = new Set<string>()
 
-  private rememberAgent(runId: string, token: string, patch: Partial<RunAgentRef>): void {
+  private rememberAgent(
+    runId: string,
+    token: string,
+    patch: Partial<RunAgentRef>,
+    persistence: 'best-effort' | 'required' = 'best-effort'
+  ): void {
     const byToken = this.runAgents.get(runId) ?? new Map<string, RunAgentRef>()
+    const previous = byToken.get(token)
     byToken.set(token, { ...(byToken.get(token) ?? { token }), ...patch, token })
     this.runAgents.set(runId, byToken)
     try {
       this.deps.onAgentsChanged?.(runId, this.agentsOf(runId))
-    } catch {
-      /* persistance best-effort : elle ne casse jamais le run vivant */
+    } catch (error) {
+      if (persistence === 'required') {
+        if (previous) byToken.set(token, previous)
+        else byToken.delete(token)
+        if (byToken.size === 0) this.runAgents.delete(runId)
+        throw error
+      }
+      /* Les mises à jour post-spawn restent observables sans casser le run vivant. */
     }
   }
 
@@ -824,6 +1097,35 @@ export class Orchestrator {
     } catch {
       /* persistance best-effort : elle ne casse jamais le run vivant */
     }
+  }
+
+  /**
+   * Le règlement et le livrable de phase seront checkpointés ensemble par `onPhaseCompleted`.
+   * Modifier seulement la mémoire ici évite une fenêtre disque `activeCalls=0` sans phaseOutput,
+   * qui autoriserait à rejouer un provider pourtant déjà payé après un crash immédiat.
+   */
+  private settleAgentReservationInMemory(runId: string, reservationId: string): void {
+    const byToken = this.runAgents.get(runId)
+    if (!byToken) return
+    const entry = [...byToken.entries()].find(([, agent]) => agent.reservationId === reservationId)
+    if (!entry) return
+    const [token, agent] = entry
+    const historical = { ...agent }
+    delete historical.reservationId
+    byToken.set(token, { ...historical, active: false })
+    if (!this.terminalRunsAwaitingProviderSettlement.has(runId)) return
+    const stillActive = [...byToken.values()].some(
+      (candidate) => candidate.active === true || Boolean(candidate.reservationId)
+    )
+    if (stillActive) return
+    try {
+      this.deps.onRunSettled?.(runId)
+    } catch {
+      // Le checkpoint reste volontairement sur disque : le prochain demarrage le reconciliera.
+      return
+    }
+    this.terminalRunsAwaitingProviderSettlement.delete(runId)
+    this.runAgents.delete(runId)
   }
 
   /** Agents connus d'un run, pour la persistance de reprise. */
@@ -846,18 +1148,57 @@ export class Orchestrator {
   private executionOptions(
     cwd: string,
     sandbox: NonNullable<SendOptions['execution']>['sandbox'],
-    runId: string
+    runId: string,
+    phase: PipelinePhase,
+    provider: string,
+    fanOut = false
   ): NonNullable<SendOptions['execution']> {
     const observers = this.processObservers.get(runId)
+    let executorProvider = provider
+    const assignment = (): Pick<RunAgentRef, 'provider' | 'phase' | 'fanOut'> => ({
+      provider: executorProvider,
+      phase,
+      fanOut
+    })
+    const causalWatchPaths = this.causalWatchPathsFor(cwd, runId)
     return {
       cwd,
       sandbox,
       ...(cwd !== this.deps.executionWorkspace ? { causallyIsolated: true } : {}),
+      ...(causalWatchPaths.length ? { causalWatchPaths } : {}),
       onProcess: observers?.process,
-      onSpawnIntent: observers?.spawnIntent,
-      onSpawned: observers?.spawned,
-      onJournal: observers?.journal
+      onExecutorResolved: (resolvedProvider) => {
+        executorProvider = resolvedProvider
+      },
+      onSpawnIntent: observers
+        ? (token, active, reservationId) =>
+            observers.spawnIntent(token, active, assignment(), reservationId)
+        : undefined,
+      onSpawned: observers
+        ? (token, pid) => observers.spawned(token, pid, assignment())
+        : undefined,
+      onJournal: observers
+        ? (token, journalPath) => observers.journal(token, journalPath, assignment())
+        : undefined,
+      onReservationSettled: observers
+        ? (reservationId) => observers.reservationSettled(reservationId)
+        : undefined
     }
+  }
+
+  private causalWatchPathsFor(cwd: string, runId: string): string[] {
+    return (this.causalWatchPathsByRun.get(runId) ?? []).flatMap((path) => {
+      const absolute = isAbsolute(path)
+        ? resolve(path)
+        : resolve(this.deps.executionWorkspace, path)
+      const rel = relative(this.deps.executionWorkspace, absolute)
+      if (!rel || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return []
+      const mapped = resolve(cwd, rel)
+      // Un log existant mais ignoré par Git n'est pas présent dans le worktree : ne pas inviter
+      // l'agent à en fabriquer une copie. À l'inverse, une source absente PARTOUT est légitime
+      // (beginAtEnd la suit dès sa création) et doit rester observée dans le worktree.
+      return existsSync(mapped) || !existsSync(absolute) ? [mapped] : []
+    })
   }
 
   /**
@@ -877,7 +1218,12 @@ export class Orchestrator {
      * ne sont PAS rejouées au modèle — leur livrable est réinjecté tel quel et l'exécution redémarre
      * à la phase suivante (aucun token regaspillé).
      */
-    resumeOutputs: { phase: PipelinePhase; text: string }[] = [],
+    resumeOutputs: {
+      phase: PipelinePhase
+      text: string
+      agentToken?: string
+      executionEvidence?: ExecutionEvidence[]
+    }[] = [],
     /** Conversation d'origine, persistée avec l'acquis pour qu'une reprise s'affiche au bon endroit. */
     conversationId?: string,
     /** Binding figé pour ce run, prioritaire sur tous les rôles et panels de la topologie. */
@@ -887,9 +1233,13 @@ export class Orchestrator {
     /** Tour Chat causal, persisté avec l'état reprenable. */
     turnId?: string,
     onRunLifecycle?: (event: RunLifecycleEvent) => void,
-    runtimeSnapshot?: OrchestrationRuntimeSnapshot
+    runtimeSnapshot?: OrchestrationRuntimeSnapshot,
+    causalWatchPaths: readonly string[] = [],
+    onLateCausalMutationClaims?: WatchdogMutationClaimsSink,
+    runOptions: OrchestrationRunOptions = {}
   ): Promise<OrchestrationResult> {
-    const runId = `run-${this.runNamespace}-${++this.runSeq}`
+    const runId = runOptions.resumeRunId ?? `run-${this.runNamespace}-${++this.runSeq}`
+    this.causalWatchPathsByRun.set(runId, [...causalWatchPaths])
     const runStartedAtMs = Date.now()
     const executionQuote = this.deps.currentExecutionQuote?.()
     const emitLifecycle = (event: RunLifecycleEvent): void => {
@@ -902,8 +1252,50 @@ export class Orchestrator {
     const activityForRun = (): WorktreeAgentActivity | undefined =>
       this.deps.worktrees?.activity?.().find((activity) => activity.agentId === runId)
     const isMut = isMutationTask(task)
+    // Un tournoi compare des solutions, pas seulement des textes : même une tâche classée
+    // lecture-seule doit donc disposer de son propre bureau attestable et conservé.
+    const requiresIsolatedWorkspace = isMut || runOptions.publication === 'hold'
     const workflow = this.workflowDuRun()
     const phases = this.effectivePhases(task)
+    const explicitPhase = routeSkillRequest(task)?.explicitPhase
+    const workflowGraph = this.graphePourTache(task)
+    const depuisGraphe = workflowGraph ? allocationFromGraph(workflowGraph) : undefined
+    const impose =
+      workflow?.allocation || depuisGraphe
+        ? {
+            ...depuisGraphe,
+            ...workflow?.allocation,
+            phaseMembers: {
+              ...depuisGraphe?.phaseMembers,
+              ...workflow?.allocation?.phaseMembers
+            }
+          }
+        : undefined
+    const appelsWorkflow = workflowGraph
+      ? appelsRequisParWorkflow(workflowGraph, impose)
+      : undefined
+    if (executionQuote && workflow?.explicit && workflowGraph) {
+      // Une sélection manuelle engage le graphe affiché. Le devis doit donc refléter ses phases et
+      // la borne de reprise qu'il porte, puis lui réserver les places nécessaires sans dépasser le
+      // plafond d'appels déjà fixé par le régime / l'utilisateur.
+      executionQuote.phases = [...phases]
+      const graphRecoveries = recoveriesFromGraph(workflowGraph)
+      if (graphRecoveries !== undefined) executionQuote.limits.maxRecoveries = graphRecoveries
+      const mandatory = appelsWorkflow!
+      const maxPanel = Math.max(
+        impose?.judgeMembers ?? 1,
+        ...Object.values(impose?.phaseMembers ?? {}).map((count) => count ?? 1)
+      )
+      if (
+        mandatory > executionQuote.limits.maxProviderCalls ||
+        maxPanel > executionQuote.limits.maxConcurrency
+      ) {
+        throw new Error(
+          `Devis impossible avant exécution : workflow exige ${mandatory} appel(s) et ${maxPanel} agent(s) simultané(s), plafonds ${executionQuote.limits.maxProviderCalls}/${executionQuote.limits.maxConcurrency}.`
+        )
+      }
+      executionQuote.limits.maxAgents = Math.max(executionQuote.limits.maxAgents, mandatory)
+    }
     const admittedRuntime: OrchestrationRuntimeSnapshot = runtimeSnapshot ?? {
       roles: this.deps.roles.all(),
       phaseFanOut: Object.fromEntries(
@@ -919,7 +1311,9 @@ export class Orchestrator {
       const phaseFanOut = Object.fromEntries(
         phases.map((phase) => [
           phase,
-          bindingOverride ? 0 : (admittedRuntime.phaseFanOut[phase] ?? []).length
+          bindingOverride
+            ? 0
+            : (impose?.phaseMembers?.[phase] ?? (admittedRuntime.phaseFanOut[phase] ?? []).length)
         ])
       ) as Partial<Record<PipelinePhase, number>>
       executionQuote.allocation = allocateExecutionTopology(executionQuote, {
@@ -928,13 +1322,20 @@ export class Orchestrator {
         startedAgents: usage?.startedAgents ?? usage?.startedCalls ?? 0,
         startedCalls: usage?.startedCalls ?? 0,
         mutation: isMut,
-        hasDecomposer: Boolean(!bindingOverride && this.deps.decompose),
+        hasDecomposer: Boolean(
+          !explicitPhase && !workflowGraph && !bindingOverride && this.deps.decompose
+        ),
         phaseFanOut,
-        judgeFanOut: bindingOverride ? 0 : admittedRuntime.judgeFanOut.length,
+        judgeFanOut: bindingOverride
+          ? 0
+          : (impose?.judgeMembers ?? admittedRuntime.judgeFanOut.length),
         // Un graphe à boucles rejoue des nœuds : provisionner sa seule chaîne ferait accepter un run
         // qui serait ensuite coupé en plein milieu, faute de places.
-        ...(workflow?.graph
-          ? { worstCaseNodeExecutions: worstCaseNodeExecutions(workflow.graph) }
+        ...(workflowGraph
+          ? {
+              worstCaseNodeExecutions: worstCaseNodeExecutions(workflowGraph),
+              worstCaseProviderCalls: appelsWorkflow
+            }
           : {})
       })
       // Le workflow impose son allocation PAR-DESSUS le calcul du devis, clé par clé : c'est tout
@@ -943,27 +1344,21 @@ export class Orchestrator {
       // Les agents composés sur les nœuds DICTENT l'allocation : sans cela le devis provisionnerait
       // un panel d'un membre et le fan-out serait tronqué — trois juges composés, un seul joué. Une
       // allocation écrite explicitement dans le profil reste prioritaire sur cette déduction.
-      const depuisGraphe = workflow?.graph ? allocationFromGraph(workflow.graph) : undefined
-      const impose =
-        workflow?.allocation || depuisGraphe
-          ? {
-              ...depuisGraphe,
-              ...workflow?.allocation,
-              phaseMembers: {
-                ...depuisGraphe?.phaseMembers,
-                ...workflow?.allocation?.phaseMembers
-              }
-            }
-          : undefined
       if (impose) {
-        executionQuote.allocation = {
-          ...executionQuote.allocation,
-          ...(impose.judgeMembers !== undefined ? { judgeMembers: impose.judgeMembers } : {}),
-          ...(impose.maxGreedyNodes !== undefined ? { maxGreedyNodes: impose.maxGreedyNodes } : {}),
-          phaseMembers: {
-            ...executionQuote.allocation.phaseMembers,
-            ...impose.phaseMembers
-          }
+        const refusesJudge =
+          impose.judgeMembers !== undefined &&
+          executionQuote.allocation.judgeMembers !== impose.judgeMembers
+        const refusePhase = Object.entries(impose.phaseMembers ?? {}).find(
+          ([phase, count]) =>
+            executionQuote.allocation?.phaseMembers[phase as PipelinePhase] !== count
+        )
+        const refuseGreedy =
+          impose.maxGreedyNodes !== undefined &&
+          executionQuote.allocation.maxGreedyNodes < impose.maxGreedyNodes
+        if (refusesJudge || refusePhase || refuseGreedy) {
+          throw new Error(
+            `Devis impossible avant exécution : l'allocation du workflow dépasse les plafonds du run.`
+          )
         }
       }
       executionQuote.decomposition =
@@ -971,9 +1366,9 @@ export class Orchestrator {
           ? { mode: 'build-only', maxNodes: executionQuote.allocation.maxGreedyNodes }
           : { mode: 'disabled', maxNodes: 1 }
     }
-    if (isMut && !this.deps.worktrees) {
+    if (requiresIsolatedWorkspace && !this.deps.worktrees) {
       throw new Error(
-        'Mutation bloquée : le moteur d’isolation workspace est indisponible pour ce projet.'
+        'Isolation bloquée : le moteur de bureaux workspace est indisponible pour ce projet.'
       )
     }
     // Verdict du run, lu dans le `finally` : seul un run VERT ramène son travail dans la base.
@@ -1000,13 +1395,38 @@ export class Orchestrator {
       usage: this.deps.currentExecutionUsage?.(),
       agents: this.agentsOf(runId)
     })
-    const isolatedCwd = this.deps.worktrees?.begin(runId, 'Agent', isMut, {
-      task,
-      role: 'build',
-      conversationId
-    })
-    if (isMut && !isolatedCwd) {
-      throw new Error('Mutation bloquée : Autowin n’a pas pu créer un bureau agent isolé.')
+    const beginWorktree = this.deps.worktrees?.beginAsync?.bind(this.deps.worktrees)
+    const isolatedCwd = beginWorktree
+      ? await beginWorktree(runId, 'Agent', requiresIsolatedWorkspace, {
+          task,
+          role: 'build',
+          conversationId,
+          ...(turnId ? { turnId } : {}),
+          ...(causalWatchPaths.length ? { causalWatchPaths } : {}),
+          ...(runOptions.resumeRunId ? { resumeExisting: true } : {}),
+          ...(runOptions.sourceSnapshot
+            ? {
+                sourceWorkspacePath: runOptions.sourceSnapshot.workspaceId,
+                sourceBaseSha: runOptions.sourceSnapshot.baseSha
+              }
+            : {})
+        })
+      : this.deps.worktrees?.begin(runId, 'Agent', requiresIsolatedWorkspace, {
+          task,
+          role: 'build',
+          conversationId,
+          ...(turnId ? { turnId } : {}),
+          ...(causalWatchPaths.length ? { causalWatchPaths } : {}),
+          ...(runOptions.resumeRunId ? { resumeExisting: true } : {}),
+          ...(runOptions.sourceSnapshot
+            ? {
+                sourceWorkspacePath: runOptions.sourceSnapshot.workspaceId,
+                sourceBaseSha: runOptions.sourceSnapshot.baseSha
+              }
+            : {})
+        })
+    if (requiresIsolatedWorkspace && !isolatedCwd) {
+      throw new Error('Isolation bloquée : Autowin n’a pas pu créer un bureau agent isolé.')
     }
     const workCwd = isolatedCwd ?? this.deps.executionWorkspace
     const initialActivity = activityForRun()
@@ -1060,24 +1480,43 @@ export class Orchestrator {
     // restent conditionnels — sans copie, il n'y a pas de bail à tenir.
     this.processObservers.set(runId, {
       process: (pid, active) => {
+        const agent = this.agentsOf(runId).find((candidate) => candidate.pid === pid)
+        // `active` suit la RÉSERVATION provider, pas seulement le PID. Entre la fermeture du CLI et
+        // le règlement du stream, la conserver vraie maintient la liaison causale récupérable.
+        if (agent && (active || !agent.reservationId)) {
+          this.rememberAgent(runId, agent.token, { active })
+        }
         if (isMut) this.deps.worktrees?.process?.(runId, pid, active)
       },
-      spawnIntent: (token, active) => {
+      spawnIntent: (token, active, assignment, reservationId) => {
         // L'intention est émise AVANT le spawn. À cet instant la réservation provider porte déjà
         // activeCalls=1 : checkpoint-er le token maintenant ferme la fenêtre où un CLI détaché
         // pouvait naître avant que son PID/journal ne soit persisté. Un spawn avorté retire ce pending.
-        if (active) this.rememberAgent(runId, token, {})
-        else this.forgetPendingAgent(runId, token)
+        if (active) {
+          this.rememberAgent(runId, token, {
+            ...assignment,
+            active: true,
+            ...(reservationId ? { reservationId } : {})
+          })
+        } else this.forgetPendingAgent(runId, token)
         if (isMut) this.deps.worktrees?.spawnIntent?.(runId, token, active)
       },
-      spawned: (token, pid) => {
+      spawned: (token, pid, assignment) => {
         // Empreinte capturée MAINTENANT : au redémarrage, elle distingue notre agent d'un processus
         // étranger ayant hérité du même numéro de pid.
         const identity = this.deps.processIdentity?.(pid)
-        this.rememberAgent(runId, token, { pid, ...(identity ? { identity } : {}) })
+        this.rememberAgent(runId, token, {
+          ...assignment,
+          active: true,
+          pid,
+          ...(identity ? { identity } : {})
+        })
         if (isMut) this.deps.worktrees?.spawned?.(runId, token, pid)
       },
-      journal: (token, journalPath) => this.rememberAgent(runId, token, { journalPath })
+      journal: (token, journalPath, assignment) =>
+        this.rememberAgent(runId, token, { ...assignment, active: true, journalPath }, 'required'),
+      reservationSettled: (reservationId) =>
+        this.settleAgentReservationInMemory(runId, reservationId)
     })
     try {
       // Fonctionnement NORMAL : on tente TOUJOURS de décomposer (le modèle orchestrateur juge s'il
@@ -1087,7 +1526,7 @@ export class Orchestrator {
       // Un modèle explicitement choisi pour la tâche doit rester l'unique décideur du run :
       // le décomposeur est lié au rôle orchestrateur global et casserait cet invariant.
       const decompositionAllowed =
-        !executionQuote || executionQuote.decomposition.mode === 'build-only'
+        !explicitPhase && (!executionQuote || executionQuote.decomposition.mode === 'build-only')
       if (
         decompositionAllowed &&
         !bindingOverride &&
@@ -1166,22 +1605,113 @@ export class Orchestrator {
       return result
     } finally {
       this.processObservers.delete(runId)
+      this.causalWatchPathsByRun.delete(runId)
       // Le travail n'est fusionné dans la base QUE si le run est vert. Un run rouge, annulé ou planté
       // garde sa copie isolée (l'exception saute le `green = true` ci-dessus) : on ne ramène plus
       // automatiquement dans la base un travail jugé raté.
-      const finalized = this.deps.worktrees?.end(runId, { merge: green })
+      let endReturned = false
+      let projectPublication: { baseSha: string; publishedSha: string } | undefined
+      let closeStarted = false
+      const closePublishedRun = async (publication?: {
+        baseSha: string
+        publishedSha: string
+      }): Promise<void> => {
+        if (closeStarted || !green || !this.deps.closeGreenRun) return
+        closeStarted = true
+        await this.deps.closeGreenRun.close({
+          runId,
+          task,
+          workCwd: this.deps.executionWorkspace,
+          ...(publication ? { projectPublication: publication } : {})
+        })
+      }
+      const onPublished = async (publication: {
+        baseSha: string
+        agentSha: string
+      }): Promise<void> => {
+        projectPublication = {
+          baseSha: publication.baseSha,
+          publishedSha: publication.agentSha
+        }
+        if (produced && causalWatchPaths.length > 0) {
+          const evidence = preparedCommitMutationEvidence(
+            this.deps.executionWorkspace,
+            publication.baseSha,
+            publication.agentSha,
+            causalWatchPaths
+          )
+          produced.causalMutationEvidence = evidence
+          // Une finalisation différée arrive APRÈS le retour de la commande : elle doit publier sa
+          // trace elle-même, sinon le scheduler a déjà lu un résultat vide et la ligne reboucle.
+          if (endReturned && conversationId && turnId && evidence.length > 0) {
+            const publicationEventId = `worktree-publication:${runId}:${publication.agentSha}`
+            appendExecutionEvidenceFileTrace(evidence, {
+              conversationId,
+              turnId,
+              workspaceRoot: this.deps.executionWorkspace,
+              published: true,
+              eventId: publicationEventId
+            })
+            try {
+              onLateCausalMutationClaims?.({
+                ...watchdogClaimsFromEvidence(evidence, this.deps.executionWorkspace),
+                eventId: publicationEventId
+              })
+            } catch {
+              // L'observateur ne doit jamais invalider une publication Git déjà réussie.
+            }
+          }
+        }
+        // Le coordinateur n'acquitte la publication qu'apres resolution de ce callback. La publication
+        // distante doit donc etre TERMINEE ici, y compris quand la fusion locale est synchrone : sinon
+        // un crash entre l'acquittement et le push perdrait definitivement la publication distante.
+        await closePublishedRun(projectPublication)
+      }
+      const retained = green && requiresIsolatedWorkspace && runOptions.publication === 'hold'
+      const finalizeOptions = {
+        merge: retained ? false : green,
+        ...(retained ? { retainGreen: true } : {}),
+        onPublished
+      }
+      const finalized = this.deps.worktrees?.endAsync
+        ? await this.deps.worktrees.endAsync(runId, finalizeOptions)
+        : this.deps.worktrees?.end(runId, finalizeOptions)
+      endReturned = true
       const finalizeOutcome =
         typeof finalized === 'object' && finalized !== null
           ? (finalized as { outcome?: string }).outcome
           : undefined
       const integrated =
-        !isMut ||
+        !requiresIsolatedWorkspace ||
         finalizeOutcome === 'merged' ||
         finalizeOutcome === 'nothing' ||
         finalizeOutcome === 'cleanup-pending' ||
         finalizeOutcome === 'published-residue'
+      const finalizeDiagnosis =
+        typeof finalized === 'object' && finalized !== null
+          ? (() => {
+              const raw = finalized as { reason?: string; files?: string[]; detail?: string }
+              if (!raw.reason) return undefined
+              const files = raw.files?.slice(0, 5) ?? []
+              const filesPart = files.length > 0 ? ` — fichiers en cause: ${files.join(', ')}` : ''
+              return `blocage d’intégration: ${raw.reason}${filesPart}`
+            })()
+          : undefined
       const finalActivity = activityForRun()
-      if (isMut && finalized && typeof finalized === 'object' && finalizeOutcome) {
+      if (retained && produced && isolatedCwd) {
+        produced.retainedWorkspace = {
+          runId,
+          path: finalActivity?.worktreePath ?? isolatedCwd,
+          ...(finalActivity?.baseSha ? { baseSha: finalActivity.baseSha } : {}),
+          files: finalActivity?.files.map((file) => file.path) ?? []
+        }
+      }
+      if (
+        requiresIsolatedWorkspace &&
+        finalized &&
+        typeof finalized === 'object' &&
+        finalizeOutcome
+      ) {
         const result = finalized as {
           outcome: string
           files?: string[]
@@ -1213,11 +1743,16 @@ export class Orchestrator {
           }
         })
       }
-      if (green && !integrated && produced) {
+      if (green && !integrated && !retained && produced) {
         produced.valid = false
         produced.gateBlocked = true
         if (!produced.gateReasons.includes('intégration locale non terminée')) {
           produced.gateReasons.push('intégration locale non terminée')
+        }
+        // La cause exacte (base-dirty / base-in-progress / merge-failed + fichiers) doit atterrir
+        // dans le rapport : sinon le run rouge ne dit PAS pourquoi et le diagnostic recommence.
+        if (finalizeDiagnosis && !produced.gateReasons.includes(finalizeDiagnosis)) {
+          produced.gateReasons.push(finalizeDiagnosis)
         }
       }
       // Le rapport a ete redige DANS la copie isolee ; la ligne ci-dessus vient de la fusionner puis de
@@ -1234,28 +1769,37 @@ export class Orchestrator {
         produced.phaseOutputs = aligned.phaseOutputs ?? produced.phaseOutputs
       }
       // Clôture auto APRÈS la fusion (le travail est dans la base) et seulement si vert.
-      // `void` + catch : publier est un service rendu, jamais une raison de faire échouer le run.
+      // La clôture est attendue pour que le statut distant soit déterministe avant la fin du run.
+      // Son échec reste un rapport de clôture, jamais une raison d'invalider le run vert.
       if (green && integrated && this.deps.closeGreenRun) {
-        void this.deps.closeGreenRun
-          .close({ runId, task, workCwd: this.deps.executionWorkspace })
-          .catch(() => undefined)
+        // Chemin legacy sans callback de publication. Un echec de cloture reste un rapport distant et
+        // ne rend pas rouge le travail valide ; le callback durable, lui, propage l'echec pour etre rejoue.
+        await closePublishedRun(projectPublication).catch(() => undefined)
       }
-      // Un vert dont l'intégration n'est pas terminée reste reprenable. Tous les autres runs ont
-      // réellement atteint un état terminal : leur acquis de phase peut alors être rangé.
-      if (!green || integrated) {
-        try {
-          this.deps.onRunSettled?.(runId)
-        } catch {
-          /* effacement best-effort */
+      // Un vert dont l'intégration n'est pas terminée reste reprenable. Un run rouge peut lui aussi
+      // garder un provider en drainage après le watchdog : effacer son checkpoint ici supprimerait
+      // la seule garde durable contre une relance/double facturation après crash.
+      const hasUnsettledProviderCall = (this.deps.currentExecutionUsage?.()?.activeCalls ?? 0) > 0
+      const terminalRun = !green || integrated || retained
+      if (terminalRun) {
+        if (hasUnsettledProviderCall) {
+          this.terminalRunsAwaitingProviderSettlement.add(runId)
+        } else {
+          try {
+            this.deps.onRunSettled?.(runId)
+          } catch {
+            /* effacement best-effort */
+          }
+          this.terminalRunsAwaitingProviderSettlement.delete(runId)
+          this.runAgents.delete(runId)
         }
-        this.runAgents.delete(runId)
       }
       emitLifecycle({
         stage: 'closure',
         runId,
         timestampMs: Date.now(),
         closure: {
-          status: green && integrated ? 'green' : 'red',
+          status: green && (integrated || retained) ? 'green' : 'red',
           totalDurationMs: Math.max(0, Date.now() - runStartedAtMs),
           totalCostUsd: this.deps.currentExecutionUsage?.()?.knownCostUsd ?? produced?.costUsd ?? 0,
           gateReasons: produced?.gateReasons,
@@ -1405,7 +1949,7 @@ export class Orchestrator {
       systemBlocks,
       model: judgeBinding.model,
       reasoningEffort: judgeBinding.reasoningEffort,
-      execution: this.executionOptions(workCwd, 'read-only', runId),
+      execution: this.executionOptions(workCwd, 'read-only', runId, 'judge', judgeProvider),
       signal,
       observePrompt: (observed) => {
         observed.systemBlocks = systemBlocks
@@ -1424,6 +1968,7 @@ export class Orchestrator {
     }
     onPhase?.({
       step: 'judge',
+      phase: 'judge',
       provider: judgeProvider,
       role: 'judge',
       model: judgeBinding.model,
@@ -1623,7 +2168,7 @@ export class Orchestrator {
                 systemBlocks,
                 model: phaseBinding.model,
                 reasoningEffort: phaseBinding.reasoningEffort,
-                execution: this.executionOptions(workCwd, sandbox, runId),
+                execution: this.executionOptions(workCwd, sandbox, runId, phase, subProvider, true),
                 signal,
                 observePrompt: (observed) => {
                   observed.systemBlocks = systemBlocks
@@ -1813,7 +2358,14 @@ export class Orchestrator {
               system: CONSTITUTION + CONCISE_STRUCTURED_RESPONSE_INSTRUCTION + projectContext,
               model: orchBinding.model,
               reasoningEffort: orchBinding.reasoningEffort,
-              execution: this.executionOptions(workCwd, 'read-only', runId),
+              execution: this.executionOptions(
+                workCwd,
+                'read-only',
+                runId,
+                phase,
+                orchBinding.provider,
+                true
+              ),
               signal
             }
             const synthExecution = {
@@ -1958,7 +2510,12 @@ export class Orchestrator {
     collectedContext = '',
     runId = '',
     /** SURVIE NIVEAU 3 : acquis d'un run interrompu → ces phases sont REJOUÉES, pas refaites. */
-    resumeOutputs: { phase: PipelinePhase; text: string }[] = [],
+    resumeOutputs: {
+      phase: PipelinePhase
+      text: string
+      agentToken?: string
+      executionEvidence?: ExecutionEvidence[]
+    }[] = [],
     conversationId?: string,
     bindingOverride?: RoleBinding,
     onBrainRetrieved?: (event: BrainRetrievalEvent) => void,
@@ -2018,15 +2575,7 @@ export class Orchestrator {
      * fois, et doublerait silencieusement le coût que le devis a provisionné.
      */
     const graphePilote: WorkflowGraph | undefined = grapheBrut
-      ? {
-          ...grapheBrut,
-          edges: grapheBrut.edges.filter((edge) => {
-            if (edge.when !== 'red') return true
-            const depuis = grapheBrut.nodes.find((n) => n.id === edge.from)?.phase
-            const vers = grapheBrut.nodes.find((n) => n.id === edge.to)?.phase
-            return !(depuis === 'judge' && vers === 'build')
-          })
-        }
+      ? sansRetourReparationJuge(grapheBrut)
       : undefined
     const suitePhases = function* (): Generator<PipelinePhase> {
       if (!graphePilote?.nodes?.length) {
@@ -2040,7 +2589,16 @@ export class Orchestrator {
       // Garde-fou de dernier ressort : les budgets bornent déjà le run, ce plafond n'existe que pour
       // qu'un graphe corrompu (arête vers un nœud absent, budget incohérent) ne fige pas le process.
       for (let pas = 0; pas < 200 && courant && parId.has(courant); pas++) {
-        yield parId.get(courant)!.phase
+        const node = parId.get(courant)!
+        // Le juge TERMINAL du canevas est le gate final exécuté juste après cette marche. Le jouer
+        // ici aussi ferait deux appels identiques (constaté sur le run réel conv-1071), dont le
+        // premier avait en plus le sandbox d'une phase de mutation. Après retrait du retour rouge
+        // pris en charge par la boucle de réparation, l'absence d'arête sortante prouve qu'il s'agit
+        // bien de ce juge terminal. Un juge intermédiaire garde son comportement de routage.
+        if (node.phase === 'judge' && !graphePilote.edges.some((edge) => edge.from === courant)) {
+          return
+        }
+        yield node.phase
         const voulu = souhaitModele
         souhaitModele = undefined // consommé : un souhait ne vaut que pour CETTE transition
         const suivant = nextNode(graphePilote, courant, dernierVerdict, budget, rangs, voulu)
@@ -2057,7 +2615,15 @@ export class Orchestrator {
     // (constaté en réel — un run interrompu avait persisté `frame` avec 0 caractère). On ne reprend
     // donc que les phases porteuses de contenu ; les autres seront rejouées normalement.
     const usableResume = resumeOutputs.filter((output) => output.text.trim().length > 0)
-    const phaseOutputs: { phase: PipelinePhase; text: string }[] = [...usableResume]
+    const phaseOutputs: {
+      phase: PipelinePhase
+      text: string
+      agentToken?: string
+      executionEvidence?: ExecutionEvidence[]
+    }[] = [...usableResume]
+    for (const output of usableResume) {
+      aggregatedEvidence.push(...(output.executionEvidence ?? []))
+    }
     /**
      * Les phases déjà payées, comptées par OCCURRENCE et non par nom.
      *
@@ -2087,20 +2653,26 @@ export class Orchestrator {
       file.push(output.text)
       textesRepris.set(output.phase, file)
     }
-    /** Consomme un crédit de reprise pour cette phase. `true` = déjà payée, on saute cette visite. */
-    const dejaPayee = (phase: PipelinePhase): boolean => {
+    /** Consomme et rend le texte d'une occurrence déjà payée, dans son ordre réel. */
+    const takePaidPhase = (phase: PipelinePhase): string | undefined => {
       const reste = resteAPasser.get(phase) ?? 0
-      if (reste <= 0) return false
+      if (reste <= 0) return undefined
       resteAPasser.set(phase, reste - 1)
       // Le verdict de CETTE visite rejouée — même décompte que `resteAPasser`, donc la Nᵉ visite de la
       // phase consomme le Nᵉ acquis de cette phase. C'est ce qui fait suivre au rejeu le chemin
       // RÉELLEMENT emprunté avant l'interruption, et non celui du dernier acquis.
       const texte = textesRepris.get(phase)?.shift()
       if (texte !== undefined) dernierVerdict = verdictDePhase(phase, texte)
-      return true
+      return texte
     }
+    /** `true` = occurrence déjà payée, donc aucun appel provider à rejouer. */
+    const dejaPayee = (phase: PipelinePhase): boolean => takePaidPhase(phase) !== undefined
     /** Enregistre une phase terminée ET notifie l'appelant pour qu'il persiste l'acquis. */
-    const recordPhase = (phase: PipelinePhase, text: string): void => {
+    const recordPhase = (
+      phase: PipelinePhase,
+      text: string,
+      executionEvidence: ExecutionEvidence[] = []
+    ): void => {
       // Point d'accroche UNIQUE du verdict : tous les chemins de phase (séquentiel, fan-out, greedy)
       // passent par ici. Le brancher ailleurs laisserait une branche muette, donc un retour jamais pris.
       //
@@ -2113,7 +2685,23 @@ export class Orchestrator {
       // est un outil, et l'agent qui vient de travailler sait mieux que le plan si l'étape prévue a
       // encore un sens. Silence = le graphe décide, ce qui reste le cas courant.
       souhaitModele = readModelChoice(text)
-      phaseOutputs.push({ phase, text })
+      const alreadyAttributed = new Set(
+        phaseOutputs.flatMap((output) => (output.agentToken ? [output.agentToken] : []))
+      )
+      const attributableAgents = this.agentsOf(runId).filter(
+        (agent) =>
+          agent.phase === phase &&
+          agent.fanOut === false &&
+          agent.active === false &&
+          !alreadyAttributed.has(agent.token)
+      )
+      const agentToken = attributableAgents.length === 1 ? attributableAgents[0].token : undefined
+      phaseOutputs.push({
+        phase,
+        text,
+        ...(agentToken ? { agentToken } : {}),
+        ...(executionEvidence.length > 0 ? { executionEvidence: [...executionEvidence] } : {})
+      })
       try {
         this.deps.onPhaseCompleted?.({
           runId,
@@ -2151,6 +2739,14 @@ export class Orchestrator {
       ECHO_MAX_BLOCK_CHARS,
       evictedCount(conversationId, this.deps.executionWorkspace)
     )
+    let causalMemory = ''
+    if (conversationId && this.deps.causalMemoryFor) {
+      try {
+        causalMemory = this.deps.causalMemoryFor(conversationId).slice(0, 3_000)
+      } catch {
+        // Une vue dérivée de la mémoire ne doit jamais empêcher le run courant.
+      }
+    }
     const brainQuery = scopedBrain.navigation?.query || task
     try {
       onBrainRetrieved?.({
@@ -2168,24 +2764,53 @@ export class Orchestrator {
     // chaque phase coûtait +206k tokens (ON 573k vs OFF 367k) SANS réduire la lecture agentique du
     // sous-agent → contre-productif (piège du soft-steer saturé). Levier retiré. Cf. harnais
     // scripts/measure-orchestration-tokens.mjs pour re-mesurer une éventuelle version micro.
+    const taskBody = taskForPipelineContext(task)
+    const taskContext = `TÂCHE: ${taskBody}`
     const phaseContext: string[] = [
       ...(memoryEcho ? [memoryEcho] : []),
+      ...(causalMemory ? [causalMemory] : []),
       ...(brainContext
         ? [
             brainContext,
             `Sers-toi de la CONNAISSANCE (Brain) ci-dessus en priorité ; ne relis le dépôt que si strictement nécessaire.`
           ]
         : []),
-      `TÂCHE: ${task}`,
+      taskContext,
       ...(collectedContext ? [collectedContext] : [])
     ]
+    /**
+     * Une demande de mutation reste le BUT du workflow, pas la mission immédiate des phases amont.
+     *
+     * Le dire seulement dans le system prompt ne suffisait pas en réel : le message user
+     * `TÂCHE: ajoute ...` dominait et scout/frame tentaient le patch avant d'afficher un faux
+     * « bloqué — Edit absent ». On rend donc la hiérarchie explicite au même niveau que le besoin.
+     */
+    const analysisMission = (phase: PipelinePhase): string => {
+      if (phase !== 'scout' && phase !== 'frame' && phase !== 'terrain') return ''
+      return [
+        `MISSION ACTIVE — ${phase.toUpperCase()} UNIQUEMENT : produis le livrable textuel de cette phase en lecture seule.`,
+        `Le BESOIN GLOBAL ci-dessous décrit le résultat final du workflow ; ses verbes de mutation sont réservés à BUILD. N'essaie pas d'écrire ni de préparer un patch, et ne signale pas l'absence de Write/Edit/Bash comme un blocage.`
+      ].join(' ')
+    }
+    const userContextForPhase = (phase: PipelinePhase): string => {
+      const mission = analysisMission(phase)
+      if (!mission) return phaseContext.join('\n\n')
+      const context = phaseContext.map((entry) =>
+        entry === taskContext
+          ? `BESOIN GLOBAL (contexte, pas une action immédiate) : ${taskBody}`
+          : entry
+      )
+      return [mission, ...context].join('\n\n')
+    }
     // Session-resume chaîné (levier coût) : on RÉUTILISE la session de l'exécuteur d'une phase à la
     // suivante quand le provider rend un sessionId. La tâche + le Brain + l'acquis des phases sont
     // alors DÉJÀ dans l'historique de session → on n'envoie que l'instruction de la nouvelle phase
     // (supprime la re-injection ×N). Dégrade proprement : pas de sessionId → resumeSessionId undefined
-    // → on retombe sur la re-injection complète (comportement actuel). Le sandbox est constant sur un
-    // run (isMutationTask(task) fixe) → jamais de resume à travers un changement de sandbox.
+    // → on retombe sur la re-injection complète (comportement actuel). Une phase d'analyse reste
+    // read-only meme pour une tache de mutation : on ne reprend donc jamais une session a travers
+    // le changement de sandbox qui ouvre ensuite BUILD/CLEAN en ecriture.
     let prevSessionId: string | undefined
+    let prevSessionSandbox: NonNullable<SendOptions['execution']>['sandbox'] | undefined
     // Réinjecte l'acquis d'un run repris pour que la phase suivante l'ait dans son contexte.
     for (const output of usableResume) {
       const carried =
@@ -2196,10 +2821,11 @@ export class Orchestrator {
       phaseContext.push(`[phase ${output.phase}] ${carried}`)
       lastExecText = output.text
     }
-    for (const phase of suitePhases()) {
+    const executePipelinePhase = async (phase: PipelinePhase): Promise<void> => {
       // SURVIE NIVEAU 3 : phase déjà terminée avant l'interruption → on ne la refait pas. Compté par
       // occurrence : une visite ULTÉRIEURE du même nœud, via une arête de retour, doit bien s'exécuter.
-      if (dejaPayee(phase)) continue
+      if (dejaPayee(phase)) return
+      const evidenceStart = aggregatedEvidence.length
       // DECOUPAGE DE TOUTE PHASE (et non du seul `build`). Mesure du 2026-07-28 sur conv-75 : une
       // phase d'exploration monolithique a coute 10,90 $ en 11 min, quand le meme travail decoupe en
       // 5 sous-taches ciblees revenait a ~0,8 $ et ~1 min chacune. Rien ne justifiait de reserver ce
@@ -2224,7 +2850,7 @@ export class Orchestrator {
         )
         aggregatedEvidence.push(...greedy.evidence)
         lastExecText = greedy.aggregate
-        recordPhase(phase, greedy.aggregate)
+        recordPhase(phase, greedy.aggregate, aggregatedEvidence.slice(evidenceStart))
         const carried =
           greedy.aggregate.length > PHASE_CONTEXT_CAP
             ? `${greedy.aggregate.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
@@ -2235,7 +2861,7 @@ export class Orchestrator {
         failedTasks = [...new Set([...(failedTasks ?? []), ...greedy.failed])]
         skippedTasks = [...new Set([...(skippedTasks ?? []), ...greedy.skipped])]
         prevSessionId = undefined
-        continue
+        return
       }
       // Panel scout/frame/terrain : ≥1 modèle déposé dans le bloc topology → la phase s'exécute sur
       // CHAQUE membre. Avec un seul membre, sa sortie est réutilisée directement sans synthèse ;
@@ -2243,7 +2869,7 @@ export class Orchestrator {
       const fanMembers = bindingOverride ? [] : this.resolvePhaseFanOut(phase, runtimeSnapshot)
       if (fanMembers.length >= 1) {
         // Le fan-out casse la chaîne de session (N sessions //). Chaque membre part du contexte complet.
-        const fanMessages = [{ role: 'user' as const, content: phaseContext.join('\n\n') }]
+        const fanMessages = [{ role: 'user' as const, content: userContextForPhase(phase) }]
         const parts = [
           { name: 'constitution', text: CONSTITUTION },
           this.phasePrompt(phase, true),
@@ -2262,7 +2888,7 @@ export class Orchestrator {
           .filter((p) => p.text)
           .map((p) => ({ name: p.name, chars: p.text.length }))
         const fanSystem = parts.map((p) => p.text).join('')
-        const sandbox = isMutationTask(task) ? 'danger-full-access' : 'read-only'
+        const sandbox = sandboxForPhase(task, phase)
         const memberOutputs = await Promise.all(
           fanMembers.map(async (member, rang) => {
             // L'identité prend la persona quand il y en a une, sinon le modèle. Le rang n'est ajouté
@@ -2295,7 +2921,14 @@ export class Orchestrator {
                 : fanSystemBlocks,
               model: member.model,
               reasoningEffort: member.reasoningEffort,
-              execution: this.executionOptions(workCwd, sandbox, runId),
+              execution: this.executionOptions(
+                workCwd,
+                sandbox,
+                runId,
+                phase,
+                member.provider,
+                fanMembers.length > 1
+              ),
               signal
             }
             const startedAt = performance.now()
@@ -2398,14 +3031,14 @@ export class Orchestrator {
           // synthèse (inutile + risque de reformulation d'un texte unique).
           const solo = good[0].text
           lastExecText = solo
-          recordPhase(phase, solo)
+          recordPhase(phase, solo, aggregatedEvidence.slice(evidenceStart))
           const carriedSolo =
             solo.length > PHASE_CONTEXT_CAP
               ? `${solo.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
               : solo
           phaseContext.push(`[phase ${phase}] ${carriedSolo}`)
           prevSessionId = undefined
-          continue
+          return
         }
         const orchBinding =
           bindingOverride ?? runtimeSnapshot?.roles.orchestrator ?? roles.getBinding('orchestrator')
@@ -2427,7 +3060,13 @@ export class Orchestrator {
             .map((p) => ({ name: p.name, chars: p.text.length })),
           model: orchBinding.model,
           reasoningEffort: orchBinding.reasoningEffort,
-          execution: this.executionOptions(workCwd, 'read-only', runId),
+          execution: this.executionOptions(
+            workCwd,
+            'read-only',
+            runId,
+            phase,
+            orchBinding.provider
+          ),
           signal
         }
         const synthMessages = [
@@ -2494,19 +3133,24 @@ export class Orchestrator {
         })
         lastExecText = synth.text
         lastUsage = synth.usage
-        recordPhase(phase, synth.text)
+        recordPhase(phase, synth.text, aggregatedEvidence.slice(evidenceStart))
         const carried =
           synth.text.length > PHASE_CONTEXT_CAP
             ? `${synth.text.slice(0, PHASE_CONTEXT_CAP)}\n…[tronqué — voir le fil des sous-agents]`
             : synth.text
         phaseContext.push(`[phase ${phase}] ${carried}`)
         prevSessionId = undefined // fan-out : pas de session linéaire à chaîner
-        continue
+        return
       }
       // Un nœud `judge` répond au rôle JUDGE — sinon l'exécutant s'évalue avec son propre modèle, ce
       // qui n'est pas une vérification. `bindingOverride` reste autoritaire : un binding figé pour le
       // run prime sur tous les rôles (même règle qu'au chemin décomposé et qu'au gate final).
       const jugeDedie = phase === 'judge' && !bindingOverride
+      const phaseSandbox = sandboxForPhase(task, phase)
+      if (prevSessionId && prevSessionSandbox !== phaseSandbox) {
+        prevSessionId = undefined
+        prevSessionSandbox = undefined
+      }
       // Et il ne REPREND PAS la session de l'exécution : son provider peut différer, où cette session
       // n'existe pas. Reprendre y aurait remplacé tout le contexte par « acquis déjà connus, ne les
       // redemande pas » — le juge aurait jugé à l'aveugle. Il reçoit donc le contexte complet.
@@ -2518,12 +3162,13 @@ export class Orchestrator {
       const framed = phaseContext.find((entry) => entry.startsWith('[phase frame]')) ?? ''
       const userContent = resuming
         ? [
+            analysisMission(phase),
             `Phase suivante du pipeline : ${phase}. Continue À PARTIR de l'état de la session (tâche, connaissance Brain et acquis des phases précédentes déjà connus — ne les redemande pas). Applique la consigne de phase et enrichis le livrable existant.`,
             framed && `RAPPEL DU CADRAGE — c'est LA référence du livrable :\n${framed}`
           ]
             .filter(Boolean)
             .join('\n\n')
-        : phaseContext.join('\n\n')
+        : userContextForPhase(phase)
       const phaseMessages = [{ role: 'user' as const, content: userContent }]
       // F6 — le system est composé de blocs NOMMÉS : on garde leur décomposition (nom + taille)
       // pour l'observabilité, en plus de la chaîne concaténée réellement envoyée.
@@ -2544,7 +3189,11 @@ export class Orchestrator {
       const parts = resuming
         ? [
             this.phasePrompt(phase, false),
-            { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION }
+            { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
+            {
+              name: 'workspaceIsolation',
+              text: workspaceIsolationNotice(workCwd, this.deps.executionWorkspace)
+            }
           ]
         : [
             { name: 'constitution', text: CONSTITUTION },
@@ -2554,7 +3203,11 @@ export class Orchestrator {
             // d'étapes qui n'existent pas, et inviterait à sortir d'un chemin qu'on ne suit pas.
             { name: 'workflowTool', text: grapheBrut ? WORKFLOW_IS_A_TOOL_INSTRUCTION : '' },
             { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
-            { name: 'projectContext', text: projectContext }
+            { name: 'projectContext', text: projectContext },
+            {
+              name: 'workspaceIsolation',
+              text: workspaceIsolationNotice(workCwd, this.deps.executionWorkspace)
+            }
           ]
       const systemBlocks = parts
         .filter((p) => p.text)
@@ -2571,8 +3224,10 @@ export class Orchestrator {
           workCwd,
           // B3 — une tâche NON-mutation (cadrage/analyse) n'a aucune raison d'écrire : sandbox
           // read-only → pas d'effet de bord (ex. RUN.md fantôme dans Audit/). Mutation → full access.
-          isMutationTask(task) ? 'danger-full-access' : 'read-only',
-          runId
+          phaseSandbox,
+          runId,
+          phase,
+          providerDeLaPhase
         ),
         signal,
         observePrompt: (observed) => {
@@ -2646,6 +3301,7 @@ export class Orchestrator {
         : registry.honoursSessionResume(providerDeLaPhase)
           ? (phaseRes.sessionId ?? prevSessionId)
           : undefined
+      prevSessionSandbox = prevSessionId ? phaseSandbox : undefined
       if (phaseRes.usage) {
         cost.add({
           // Provider RÉEL ayant répondu (le registre peut rerouter une exécution vers un executor
@@ -2681,7 +3337,7 @@ export class Orchestrator {
       aggregatedEvidence.push(...(phaseRes.executionEvidence ?? []))
       lastExecText = phaseRes.text
       lastUsage = phaseRes.usage
-      recordPhase(phase, phaseRes.text)
+      recordPhase(phase, phaseRes.text, aggregatedEvidence.slice(evidenceStart))
       // B4 — le contexte PORTÉ à la phase suivante est borné (la sortie complète reste dans
       // phaseOutputs + la trace) : évite une croissance quadratique du prompt sur les chaînes longues.
       const carried =
@@ -2690,6 +3346,7 @@ export class Orchestrator {
           : phaseRes.text
       phaseContext.push(`[phase ${phase}] ${carried}`)
     }
+    for (const phase of suitePhases()) await executePipelinePhase(phase)
     // J1 — le juge (et le résultat) reçoivent l'AGRÉGAT de toutes les phases, jamais la seule
     // dernière : sinon un livrable produit en frame/terrain devient invisible si clean dérive.
     // Recalculable : une phase de réparation (B5) ajoute à phaseOutputs, l'agrégat suit.
@@ -2756,18 +3413,71 @@ export class Orchestrator {
         return { valid: false, gate: preGate }
       }
 
+      // Un juge terminal peut avoir fini dans son CLI détaché après la mort d'Electron. Le
+      // rattachement l'ajoute alors aux acquis APRÈS les éventuels juges intermédiaires du graphe.
+      // Consommer ici l'occurrence restante évite de payer/rejouer exactement le même verdict.
+      const resumedJudgeText = takePaidPhase('judge')
+      if (resumedJudgeText !== undefined) {
+        const ok = evidenceOk && /^\s*valide/i.test(resumedJudgeText)
+        lastJudgeText = resumedJudgeText.trim()
+        trust.record({ judgeModel: judgeProvider, verdict: ok ? 'green' : 'red' })
+        push({
+          step: 'judge',
+          provider: judgeProvider,
+          role: 'judge',
+          model: judgeBinding.model,
+          text: lastJudgeText,
+          detail: ok ? 'verdict repris · validé' : 'verdict repris · défaut',
+          status: 'completed',
+          execution: {
+            phase: 'judge',
+            agentId: 'judge:recovered',
+            taskId: 'judge:recovered',
+            groupId: 'judge:recovered',
+            dependencyIds: []
+          }
+        })
+        onPhase?.({ step: 'gate' })
+        const recoveredGate = evaluateClosure({
+          status: ok ? 'green' : 'red',
+          dod: [{ checked: ok, hasContent: true }]
+        })
+        push({
+          step: 'gate',
+          role: 'gate',
+          detail: recoveredGate.blocked
+            ? `BLOQUÉ: ${recoveredGate.reasons.join('; ')}`
+            : 'clôture autorisée'
+        })
+        return { valid: ok, gate: recoveredGate }
+      }
+
       // fix-ok: cause PROUVÉE en live (verdict conv-30 : « le livrable requis est un RUN.md
       // physique ») — A2 a chargé le SKILL judge du kit qui exige un RUN.md/fingerprint absent
       // in-app ; on neutralise ce couplage côté juge, comme J4/B2 côté exec.
-      const judgePrompt =
-        `Tu es un juge outillé en lecture seule. Inspecte réellement le workspace et confronte au moins une preuve d'outil ci-dessous. ` +
-        `Une affirmation sans preuve d'exécution observable est un défaut.\n` +
-        `IMPORTANT (in-app Autowin OS) : le livrable est le TEXTE agrégé ci-dessous, PAS un fichier ` +
-        `RUN.md sur disque (Autowin le gère). N'exige jamais de RUN.md physique, d'empreinte SHA-256 ` +
-        `ni de chemin kit ; juge la SUBSTANCE du livrable et les preuves d'outil réellement observées.\n` +
-        `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${exec.text}\n` +
-        `PREUVES OUTILS OBSERVÉES: ${JSON.stringify(exec.executionEvidence ?? [])}\n` +
-        `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
+      // Une demande `judge` explicite ne joue AUCUNE phase d'exécution (`regimePhases` rend `[]`) :
+      // l'agrégat et les preuves sont alors vides PAR CONSTRUCTION. Réclamer « au moins une preuve
+      // d'outil ci-dessous » sur une liste vide condamnait ce cas au rouge quel que soit l'état réel
+      // du dépôt — mesuré sur le run conv-1078 (« DEFAUT: livrable agrégé vide et aucune preuve
+      // d'outil observée », trace : judge + gate, zéro exec). Ici le juge n'atteste pas le travail
+      // d'un autre : il EST l'unique agent, et sa propre inspection read-only est la preuve.
+      const jugeSeul = phaseOutputs.length === 0 && !exec.text.trim()
+      const judgePrompt = jugeSeul
+        ? `Tu es un juge outillé en lecture seule, et tu es le SEUL agent de ce run : AUCUNE phase d’exécution ` +
+          `n’a tourné avant toi, il n’existe donc ni livrable agrégé ni preuve d’outil préalable — ce n’est pas un défaut. ` +
+          `Inspecte TOI-MÊME le workspace avec tes outils de lecture et fonde ton verdict sur ce que tu as réellement lu ; ` +
+          `n’affirme rien que ton inspection n’établit pas.\n` +
+          `IMPORTANT (in-app Autowin OS) : n'exige jamais de RUN.md physique, d'empreinte SHA-256 ni de chemin kit.\n` +
+          `TÂCHE: ${task}\n` +
+          `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
+        : `Tu es un juge outillé en lecture seule. Inspecte réellement le workspace et confronte au moins une preuve d'outil ci-dessous. ` +
+          `Une affirmation sans preuve d'exécution observable est un défaut.\n` +
+          `IMPORTANT (in-app Autowin OS) : le livrable est le TEXTE agrégé ci-dessous, PAS un fichier ` +
+          `RUN.md sur disque (Autowin le gère). N'exige jamais de RUN.md physique, d'empreinte SHA-256 ` +
+          `ni de chemin kit ; juge la SUBSTANCE du livrable et les preuves d'outil réellement observées.\n` +
+          `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${exec.text}\n` +
+          `PREUVES OUTILS OBSERVÉES: ${JSON.stringify(exec.executionEvidence ?? [])}\n` +
+          `Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".`
       const judgeMessages = [{ role: 'user' as const, content: judgePrompt }]
       let judgeEnvelope
       // A2 — le juge charge le SKILL.md judge du kit ; F6 — blocs nommés pour l'observabilité.
@@ -2784,7 +3494,7 @@ export class Orchestrator {
         systemBlocks: judgeBlocks,
         model: judgeBinding.model,
         reasoningEffort: judgeBinding.reasoningEffort,
-        execution: this.executionOptions(workCwd, 'read-only', runId),
+        execution: this.executionOptions(workCwd, 'read-only', runId, 'judge', judgeProvider),
         signal,
         observePrompt: (observed) => {
           observed.systemBlocks = judgeBlocks
@@ -2810,6 +3520,7 @@ export class Orchestrator {
       if (judgeMembers.length < 2) {
         onPhase?.({
           step: 'judge',
+          phase: 'judge',
           provider: judgeProvider,
           role: 'judge',
           model: judgeBinding.model,
@@ -2836,11 +3547,20 @@ export class Orchestrator {
             const opts: SendOptions = {
               ...judgeOptions,
               model: member.model,
-              reasoningEffort: member.reasoningEffort
+              reasoningEffort: member.reasoningEffort,
+              execution: this.executionOptions(
+                workCwd,
+                'read-only',
+                runId,
+                'judge',
+                member.provider,
+                true
+              )
             }
             const startedAt = performance.now()
             onPhase?.({
               step: 'judge',
+              phase: 'judge',
               provider: member.provider,
               role: 'judge',
               model: member.model,
@@ -3016,109 +3736,34 @@ export class Orchestrator {
     // d'escalader à l'humain (résolveur avant interruption). Bornée à 1, jamais de boucle infinie.
     // Un graphe qui dessine « juge rouge → build, au plus N fois » PILOTE ce nombre : c'est la même
     // boucle, nommée à l'écran au lieu d'être déduite du régime.
-    const graphRecoveries = this.workflowDuRun()?.graph
-      ? recoveriesFromGraph(this.workflowDuRun()!.graph!)
-      : undefined
+    const graphRecoveries = grapheBrut ? recoveriesFromGraph(grapheBrut) : undefined
     const allowedRecoveries = isMutationTask(task)
-      ? (graphRecoveries ?? this.deps.currentExecutionQuote?.()?.limits.maxRecoveries ?? 1)
+      ? grapheBrut
+        ? (graphRecoveries ?? 0)
+        : (this.deps.currentExecutionQuote?.()?.limits.maxRecoveries ?? 1)
       : 0
     const MAX_ATTEMPTS = 1 + Math.max(0, Math.floor(allowedRecoveries))
     let valid = false
     let gate!: ReturnType<typeof evaluateClosure>
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       if (attempt > 0) {
-        // Phase de réparation = un BUILD supplémentaire nourri du feedback du gate.
-        const repairMessages = [
-          {
-            role: 'user' as const,
-            content: [
-              ...phaseContext,
-              `[RÉPARATION] Le gate a bloqué : ${gate.reasons.join('; ')}. Corrige le livrable et fournis une PREUVE d'outil (test rouge→vert / exit-code).`
-            ].join('\n\n')
-          }
-        ]
-        let repairPrompt
-        const repairOptions: SendOptions = {
-          system:
-            this.phasePrompt('build', true).text +
-            PIPELINE_DISCIPLINE_INSTRUCTION +
-            CONCISE_STRUCTURED_RESPONSE_INSTRUCTION +
-            projectContext,
-          model: subBinding.model,
-          reasoningEffort: subBinding.reasoningEffort,
-          execution: this.executionOptions(workCwd, 'danger-full-access', runId),
-          signal,
-          observePrompt: (observed) => {
-            repairPrompt = observed
-          }
-        }
-        repairPrompt = registry.describePrompt(
-          subProvider,
-          repairMessages,
-          repairOptions,
-          subBinding.model
+        // Une reprise n'est pas une primitive parallèle au graphe : elle REJOUE le vrai nœud build,
+        // donc son panel, sa synthèse, sa concurrence et sa télémétrie. L'ancien chemin spécialisé
+        // appelait toujours le binding `subagent` seul ; devis et graphe promettaient alors trois
+        // membres tandis que l'exécution n'en payait qu'un.
+        phaseContext.push(
+          `[RÉPARATION ${attempt}] Le gate a bloqué : ${gate.reasons.join('; ')}. Corrige le livrable et fournis une PREUVE d'outil (test rouge→vert / exit-code).`
         )
-        const repairExecution = {
-          phase: 'build' as const,
-          agentId: 'build:repair',
-          taskId: 'build:repair',
-          groupId: 'build:repair',
-          dependencyIds: [] as string[],
-          attemptId: randomUUID()
+        // Le nouveau passage doit recevoir le contexte complet, pas reprendre une session linéaire
+        // qui ne contient ni le verdict du juge ni, dans le cas d'un panel, les autres membres.
+        prevSessionId = undefined
+        await executePipelinePhase('build')
+        // Le graphe reste la source de vérité après un rouge : le build de réparation est suivi de
+        // toutes les étapes dessinées avant le nouveau juge (notamment clean), pas d'un raccourci
+        // codé en dur build → judge.
+        for (const phase of grapheBrut ? phasesApresBuildDeReparation(grapheBrut) : []) {
+          await executePipelinePhase(phase)
         }
-        onPhase?.({
-          step: 'exec',
-          provider: subProvider,
-          role: 'subagent',
-          model: subBinding.model,
-          reasoningEffort: subBinding.reasoningEffort,
-          phase: 'build',
-          execution: repairExecution
-        })
-        const repairStartedAt = performance.now()
-        const repairRes = await this.sendWithRoleContext(
-          'réparation',
-          'subagent',
-          subProvider,
-          repairOptions.model,
-          () =>
-            registry.send(subProvider, repairMessages, repairOptions, (c) =>
-              onDelta?.('exec', c.delta)
-            )
-        )
-        if (repairRes.usage) {
-          cost.add({
-            provider: subProvider,
-            role: 'subagent',
-            inputTokens: repairRes.usage.inputTokens,
-            outputTokens: repairRes.usage.outputTokens,
-            cacheReadTokens: repairRes.usage.cacheReadTokens,
-            costUsd: repairRes.usage.costUsd
-          })
-        }
-        push({
-          step: 'exec',
-          provider: repairRes.provider ?? subProvider,
-          role: 'subagent',
-          model: repairRes.model ?? subBinding.model,
-          text: repairRes.text,
-          tokens: repairRes.usage
-            ? repairRes.usage.inputTokens + repairRes.usage.outputTokens
-            : undefined,
-          costUsd: repairRes.usage?.costUsd,
-          usage: repairRes.usage,
-          prompt: repairPrompt,
-          status: 'completed',
-          durationMs: performance.now() - repairStartedAt,
-          evidence: repairRes.executionEvidence,
-          artifacts: repairRes.artifacts,
-          detail: 'phase build (réparation)',
-          execution: repairExecution
-        })
-        aggregatedEvidence.push(...(repairRes.executionEvidence ?? []))
-        lastExecText = repairRes.text
-        lastUsage = repairRes.usage
-        phaseOutputs.push({ phase: 'build', text: repairRes.text })
         exec = buildExec()
       }
       const r = await judgeAndGate()

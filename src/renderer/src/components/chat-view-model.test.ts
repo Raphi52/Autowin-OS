@@ -231,6 +231,951 @@ describe('durable assistant hydration and streaming', () => {
     ).toBe(legacy)
   })
 
+  it('reconciles stale worker advice with the successful structured outcome on reload', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: {
+            status: 'succeeded',
+            valid: true,
+            gateBlocked: false,
+            reused: false,
+            runId: 'run-1'
+          }
+        },
+        {
+          kind: 'text',
+          text: 'Tests 12/12 verts.\n\n### Publication\n⚠️ Non publiée. La publication reste à déclencher.\n📍 Maintenant — diff non commité.\n⏳ Reste à faire — gate/publication non exécutées.\n👉 Recommandé — lancer judge.\n\nClôture Autowin : gate validé, RUN fermé green.'
+        }
+      ]
+    })
+
+    const text = hydrated.parts.find((part) => part.kind === 'text')?.text ?? ''
+    expect(text).toContain('Tests 12/12 verts.')
+    expect(text).toContain('Clôture Autowin : gate validé')
+    expect(text).not.toMatch(
+      /non publiée|publication reste|non commité|gate\/publication|lancer judge/i
+    )
+  })
+
+  it('preserves unresolved advice when the structured outcome is not a delivered success', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'failed', valid: false, gateBlocked: true }
+        },
+        { kind: 'text', text: 'Gate/publication non exécutées.' }
+      ]
+    })
+
+    expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toContain(
+      'Gate/publication non exécutées.'
+    )
+  })
+
+  it('adds the authoritative closure when an older successful message did not persist one', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: 'Tests verts. RUN toujours open.' }
+      ]
+    })
+
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+    expect(text).not.toContain('RUN toujours open')
+    expect(text).toContain('Clôture Autowin : gate validé, RUN fermé green')
+  })
+
+  it('does not let an older success hide a later failed orchestration', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: 'Premier run livré.' },
+        { kind: 'action', name: 'orchestrate', ok: false, data: { error: 'timeout' } },
+        { kind: 'text', text: 'Dernier run en échec : publication non exécutée.' }
+      ]
+    })
+
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+    expect(text).toContain('Dernier run en échec')
+    expect(text).not.toContain('Clôture Autowin : gate validé')
+  })
+
+  it.each(['failed', 'interrupted', 'cancelled'] as const)(
+    'does not let an older success hide a terminal %s message',
+    (status) => {
+      const hydrated = hydrateStoredAssistant({
+        content: 'projection',
+        status,
+        error: status === 'failed' ? 'timeout après orchestration' : undefined,
+        parts: [
+          {
+            kind: 'action',
+            name: 'orchestrate',
+            ok: true,
+            data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+          },
+          { kind: 'text', text: 'Échec final : publication non exécutée.' }
+        ]
+      })
+
+      const text = hydrated.parts
+        .filter((part) => part.kind === 'text')
+        .map((part) => part.text)
+        .join('\n')
+      expect(text).toContain('Échec final : publication non exécutée.')
+      expect(text).not.toContain('Clôture Autowin : gate validé')
+    }
+  )
+
+  it('treats a legacy message with an error and no status as failed', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      error: 'timeout après orchestration',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: 'Échec final : publication non exécutée.' }
+      ]
+    })
+
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+    expect(hydrated.status).toBe('failed')
+    expect(text).toContain('Échec final : publication non exécutée.')
+    expect(text).not.toContain('Clôture Autowin : gate validé')
+  })
+
+  it.each(['failed', 'interrupted', 'cancelled'] as const)(
+    'removes a persisted green closure when the message is %s',
+    (status) => {
+      const hydrated = hydrateStoredAssistant({
+        content: 'projection',
+        status,
+        parts: [
+          {
+            kind: 'action',
+            name: 'orchestrate',
+            ok: true,
+            data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+          },
+          {
+            kind: 'text',
+            text: 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
+          },
+          { kind: 'text', text: 'Échec final : publication non exécutée.' }
+        ]
+      })
+      const text = hydrated.parts
+        .filter((part) => part.kind === 'text')
+        .map((part) => part.text)
+        .join('\n')
+
+      expect(text).toContain('Échec final : publication non exécutée.')
+      expect(text).not.toContain('Clôture Autowin : gate validé')
+    }
+  )
+
+  it('keeps failure evidence appended to a stale closure on the same line', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'failed',
+      parts: [
+        {
+          kind: 'text',
+          text: 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée. Échec final : timeout.'
+        }
+      ]
+    })
+
+    const text = hydrated.parts.find((part) => part.kind === 'text')?.text ?? ''
+    expect(text).toBe('Échec final : timeout.')
+  })
+
+  it.each([
+    '1. Clôture Autowin : gate validé, RUN fermé green ; publication terminée.',
+    '- [x] Clôture Autowin : gate validé, RUN fermé green ; publication terminée.',
+    '✅ Clôture Autowin : gate validé, RUN fermé green ; publication terminée.',
+    '### Clôture Autowin : gate validé, RUN fermé green ; publication terminée.',
+    '_Clôture Autowin : gate validé, RUN fermé green ; publication terminée._'
+  ])('removes a decorated green closure from a failed message: %s', (closure) => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'failed',
+      parts: [
+        { kind: 'text', text: closure },
+        { kind: 'text', text: 'Échec final : timeout.' }
+      ]
+    })
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+
+    expect(text).toBe('Échec final : timeout.')
+  })
+
+  it.each([
+    [
+      'Clôture Autowin : gate validé, RUN fermé green ; Échec final : timeout.',
+      'Échec final : timeout.'
+    ],
+    [
+      'Clôture Autowin : gate validé, RUN fermé green - Échec final : timeout.',
+      'Échec final : timeout.'
+    ],
+    [
+      'Clôture Autowin : gate validé, RUN fermé green ; publication terminée ; Échec final : timeout.',
+      'Échec final : timeout.'
+    ],
+    [
+      'Échec final : timeout. Clôture Autowin : gate validé, RUN fermé green ; publication terminée.',
+      'Échec final : timeout.'
+    ],
+    [
+      'Clôture Autowin : gate validé, RUN fermé green Échec final : timeout.',
+      'Échec final : timeout.'
+    ],
+    [
+      'Clôture Autowin : gate validé, RUN fermé green : Échec final : timeout.',
+      'Échec final : timeout.'
+    ],
+    [
+      'Clôture Autowin : gate validé, RUN fermé green ; publication terminée, Échec final : timeout.',
+      'Échec final : timeout.'
+    ],
+    [
+      'Clôture Autowin : gate validé, RUN fermé green ; publication terminée | Échec final : timeout.',
+      'Échec final : timeout.'
+    ],
+    [
+      'Clôture Autowin : gate validé, RUN fermé green ; publication terminée · Échec final : timeout.',
+      'Échec final : timeout.'
+    ],
+    [
+      'Clôture Autowin : gate validé, RUN fermé green ; publication terminée / Échec final : timeout.',
+      'Échec final : timeout.'
+    ]
+  ])('removes only the stale closure clause from a failed line: %s', (line, expected) => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'failed',
+      parts: [{ kind: 'text', text: line }]
+    })
+
+    expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe(expected)
+  })
+
+  it.each([
+    '**publication terminée**',
+    'publication **terminée**',
+    '[publication terminée](#done)'
+  ])('removes a Markdown-wrapped closure suffix from a failed line: %s', (suffix) => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'failed',
+      parts: [
+        {
+          kind: 'text',
+          text: `Clôture Autowin : gate validé, RUN fermé green ; ${suffix} ; Échec final : timeout.`
+        }
+      ]
+    })
+
+    expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe('Échec final : timeout.')
+  })
+
+  it.each(['```', '~~~'])(
+    'preserves a closure citation inside a %s fenced code block on failure',
+    (fence) => {
+      const text = `${fence}text\nClôture Autowin : gate validé, RUN fermé green ; publication terminée.\n${fence}\nÉchec final : timeout.`
+      const hydrated = hydrateStoredAssistant({
+        content: 'projection',
+        status: 'failed',
+        parts: [{ kind: 'text', text }]
+      })
+
+      expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe(text)
+    }
+  )
+
+  it('does not count a closure citation in a fenced block as the completed verdict', () => {
+    const citation =
+      '```text\nClôture Autowin : gate validé, RUN fermé green ; publication terminée.\n```'
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: citation }
+      ]
+    })
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+
+    expect(text).toContain(citation)
+    expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(2)
+    expect(text.trimEnd().endsWith('publication terminée.')).toBe(true)
+  })
+
+  it.each([
+    ['````', '```'],
+    ['~~~~', '~~~']
+  ])(
+    'keeps a closure citation inside a longer %s fence containing %s on failure',
+    (outerFence, innerFence) => {
+      const text =
+        `${outerFence}text\n${innerFence}js\n` +
+        `Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n` +
+        `${innerFence}\n${outerFence}\nÉchec final : timeout.`
+      const hydrated = hydrateStoredAssistant({
+        content: 'projection',
+        status: 'failed',
+        parts: [{ kind: 'text', text }]
+      })
+
+      expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe(text)
+    }
+  )
+
+  it.each(['```', '~~~'])(
+    'does not treat a %s fence with an info-string as a closing fence on failure',
+    (fence) => {
+      const text =
+        `${fence}text\n${fence}not-a-close\n` +
+        `Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n` +
+        `${fence}\nÉchec final : timeout.`
+      const hydrated = hydrateStoredAssistant({
+        content: 'projection',
+        status: 'failed',
+        parts: [{ kind: 'text', text }]
+      })
+
+      expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe(text)
+    }
+  )
+
+  it.each([
+    ['````', '```js', '```'],
+    ['~~~~', '~~~js', '~~~'],
+    ['```', '```not-a-close', ''],
+    ['~~~', '~~~not-a-close', '']
+  ])(
+    'adds the real completed verdict outside %s when %s is fenced evidence',
+    (outerFence, embeddedFence, embeddedClose) => {
+      const citation =
+        `${outerFence}text\n${embeddedFence}\n` +
+        `Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n` +
+        `${embeddedClose ? `${embeddedClose}\n` : ''}${outerFence}`
+      const hydrated = hydrateStoredAssistant({
+        content: 'projection',
+        status: 'completed',
+        parts: [
+          {
+            kind: 'action',
+            name: 'orchestrate',
+            ok: true,
+            data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+          },
+          { kind: 'text', text: citation }
+        ]
+      })
+      const text = hydrated.parts
+        .filter((part) => part.kind === 'text')
+        .map((part) => part.text)
+        .join('\n')
+
+      expect(text).toContain(citation)
+      expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(2)
+      expect(text.trimEnd().endsWith('publication terminée.')).toBe(true)
+    }
+  )
+
+  it.each(['```', '~~~'])('shares %s fence state across persisted text parts', (fence) => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: `${fence}text` },
+        { kind: 'text', text: 'RUN reste open — lancer judge.' },
+        { kind: 'text', text: fence }
+      ]
+    })
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+
+    expect(text).toContain(`${fence}text\nRUN reste open — lancer judge.\n${fence}`)
+    expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(1)
+  })
+
+  it.each(['```', '~~~'])(
+    'keeps a %s fenced blockquote intact and adds a real completed verdict',
+    (fence) => {
+      const citation =
+        `> ${fence}text\n> RUN reste open — lancer judge.\n` +
+        `> Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n> ${fence}`
+      const hydrated = hydrateStoredAssistant({
+        content: 'projection',
+        status: 'completed',
+        parts: [
+          {
+            kind: 'action',
+            name: 'orchestrate',
+            ok: true,
+            data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+          },
+          { kind: 'text', text: citation }
+        ]
+      })
+      const text = hydrated.parts
+        .filter((part) => part.kind === 'text')
+        .map((part) => part.text)
+        .join('\n')
+
+      expect(text).toContain(citation)
+      expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(2)
+    }
+  )
+
+  it.each(['```', '~~~'])('keeps a %s fenced blockquote intact on failure', (fence) => {
+    const text =
+      `> ${fence}text\n` +
+      `> Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n` +
+      `> ${fence}\nÉchec final : timeout.`
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'failed',
+      parts: [{ kind: 'text', text }]
+    })
+
+    expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe(text)
+  })
+
+  it.each(['```', '~~~'])(
+    'does not close a %s fence on a four-space-indented delimiter',
+    (fence) => {
+      const citation =
+        `${fence}text\n    ${fence}\n` +
+        `Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n${fence}`
+      const hydrated = hydrateStoredAssistant({
+        content: 'projection',
+        status: 'completed',
+        parts: [
+          {
+            kind: 'action',
+            name: 'orchestrate',
+            ok: true,
+            data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+          },
+          { kind: 'text', text: citation }
+        ]
+      })
+      const text = hydrated.parts
+        .filter((part) => part.kind === 'text')
+        .map((part) => part.text)
+        .join('\n')
+
+      expect(text).toContain(citation)
+      expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(2)
+    }
+  )
+
+  it.each(['```', '~~~'])('inherits a %s fence opened before the successful action', (fence) => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        { kind: 'text', text: `${fence}text` },
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: '  RUN reste open  \n' },
+        { kind: 'text', text: fence }
+      ]
+    })
+    const texts = hydrated.parts.filter((part) => part.kind === 'text').map((part) => part.text)
+
+    expect(texts.slice(0, 3)).toEqual([`${fence}text`, '  RUN reste open  \n', fence])
+    expect(texts.join('\n').match(/Clôture Autowin : gate validé/g)).toHaveLength(1)
+  })
+
+  it('keeps an indented CommonMark code block intact and adds a real completed verdict', () => {
+    const citation =
+      '    Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n' +
+      '    RUN reste open — lancer judge.\n\n    SHA-256 abc123 vérifié.  '
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: citation }
+      ]
+    })
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+
+    expect(text).toContain(citation)
+    expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(2)
+  })
+
+  it('keeps an indented CommonMark closure citation intact on failure', () => {
+    const text =
+      '    Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n' +
+      '    RUN reste open — lancer judge.\n\nÉchec final : timeout.'
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'failed',
+      parts: [{ kind: 'text', text }]
+    })
+
+    expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe(text)
+  })
+
+  it.each([
+    '- ```text\n  Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n  ```',
+    '- ~~~text\n  Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n  ~~~',
+    '10. Preuve :\n    ```text\n    Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n    ```',
+    '-   Preuve :\n    ~~~text\n    Clôture Autowin : gate validé, RUN fermé green ; publication terminée.\n    ~~~'
+  ])('keeps a list-contained closure citation and adds the real verdict', (citation) => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: citation }
+      ]
+    })
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+
+    expect(text).toContain(citation)
+    expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(2)
+  })
+
+  it('preserves fenced whitespace after removing an adjacent stale line', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: 'RUN reste open.\n```text\n  value  \n' }
+      ]
+    })
+
+    expect(hydrated.parts.filter((part) => part.kind === 'text')[0]?.text).toBe(
+      '```text\n  value  \n'
+    )
+  })
+
+  it.each([
+    'Ancienne trace : `RUN reste open.`.',
+    'Historique : [RUN reste open](#ancien).',
+    'Log observé : /lancer judge/.',
+    'Aucune occurrence de RUN open.',
+    'Sans mention de RUN reste open.',
+    'Il n’y a plus de RUN reste open.'
+  ])('keeps standalone historical or negated lifecycle evidence: %s', (evidence) => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: evidence }
+      ]
+    })
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+
+    expect(text).toContain(evidence)
+    expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(1)
+  })
+
+  it('does not rewrite factual evidence emitted before the latest successful orchestration', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        { kind: 'action', name: 'orchestrate', ok: false, data: { error: 'timeout' } },
+        { kind: 'text', text: 'Échec initial : publication non exécutée.' },
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: 'Tests 12/12 verts.' }
+      ]
+    })
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+
+    expect(text).toContain('Échec initial : publication non exécutée.')
+    expect(text).toContain('Tests 12/12 verts.')
+    expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(1)
+  })
+
+  it('removes a persisted green closure when the latest orchestration failed', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        {
+          kind: 'text',
+          text: 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
+        },
+        { kind: 'action', name: 'orchestrate', ok: false, data: { error: 'timeout' } },
+        { kind: 'text', text: 'Échec final : publication non exécutée.' }
+      ]
+    })
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+
+    expect(text).toContain('Échec final : publication non exécutée.')
+    expect(text).not.toContain('Clôture Autowin : gate validé')
+  })
+
+  it('ignores the historical same-turn duplicate refusal because it launched no run', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: false,
+          data: 'Une orchestration a deja ete lancee dans ce tour. Termine avec son resultat ; un nouveau run exige un nouveau message utilisateur.'
+        },
+        { kind: 'text', text: 'RUN open — lancer judge.' }
+      ]
+    })
+
+    const text = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .map((part) => part.text)
+      .join('\n')
+    expect(text).not.toContain('RUN open')
+    expect(text).toContain('Clôture Autowin : gate validé')
+  })
+
+  it('refuses to synthesize a closure from incomplete structured data', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        { kind: 'action', name: 'orchestrate', ok: true, data: { status: 'succeeded' } },
+        { kind: 'text', text: 'Publication non exécutée.' }
+      ]
+    })
+
+    expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe(
+      'Publication non exécutée.'
+    )
+  })
+
+  it('deduplicates an authoritative closure persisted in multiple text parts', () => {
+    const closure = 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: `Preuve.\n\n${closure}` },
+        { kind: 'text', text: closure }
+      ]
+    })
+
+    const occurrences = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .flatMap((part) => part.text.match(/Clôture Autowin : gate validé/g) ?? [])
+    expect(occurrences).toHaveLength(1)
+  })
+
+  it('recognizes a persisted closure wrapped in Markdown without adding a second one', () => {
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        {
+          kind: 'text',
+          text: '**Clôture Autowin : gate validé, RUN fermé green ; publication terminée.**'
+        }
+      ]
+    })
+
+    const occurrences = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .flatMap((part) => part.text.match(/Clôture Autowin : gate validé/g) ?? [])
+    expect(occurrences).toHaveLength(1)
+  })
+
+  it('deduplicates authoritative closures concatenated on the same line', () => {
+    const closure = 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: `${closure} ${closure}` }
+      ]
+    })
+
+    const text = hydrated.parts.find((part) => part.kind === 'text')?.text ?? ''
+    expect(text.match(/Clôture Autowin : gate validé/g)).toHaveLength(1)
+  })
+
+  it('does not mistake a quoted closure assertion for an authoritative closure line', () => {
+    const quote = 'Test vert : expect(text).toContain("Clôture Autowin : gate validé").'
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: quote }
+      ]
+    })
+    const lines = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .flatMap((part) => part.text.split('\n'))
+
+    expect(lines).toContain(quote)
+    expect(
+      lines.filter((line) => line.startsWith('Clôture Autowin : gate validé, RUN fermé green'))
+    ).toHaveLength(1)
+  })
+
+  it('preserves a quoted assertion after the authoritative closure', () => {
+    const closure = 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
+    const quote = 'Test vert : expect(text).toContain("Clôture Autowin : gate validé").'
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: `${closure}\n${quote}` }
+      ]
+    })
+    const lines = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .flatMap((part) => part.text.split('\n'))
+
+    expect(lines).toContain(quote)
+    expect(lines.filter((line) => line.startsWith(closure))).toHaveLength(1)
+  })
+
+  it('does not treat an explanatory sentence starting with the short label as a verdict', () => {
+    const explanation =
+      'Clôture Autowin : gate validé est la chaîne attendue par le test, pas le verdict.'
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: explanation }
+      ]
+    })
+    const lines = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .flatMap((part) => part.text.split('\n'))
+
+    expect(lines).toContain(explanation)
+    expect(
+      lines.filter((line) => line.startsWith('Clôture Autowin : gate validé, RUN fermé green'))
+    ).toHaveLength(1)
+  })
+
+  it('preserves a short closure citation on the same line as the real closure', () => {
+    const line =
+      'Clôture Autowin : gate validé, RUN fermé green ; publication terminée. Test vert : expect(text).toContain("Clôture Autowin : gate validé") — PASS.'
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: line }
+      ]
+    })
+
+    expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe(line)
+  })
+
+  it('does not treat the full closure label followed by explanatory prose as a verdict', () => {
+    const explanation =
+      'Clôture Autowin : gate validé, RUN fermé green est la chaîne attendue par le test, pas le verdict.'
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: explanation }
+      ]
+    })
+    const lines = hydrated.parts
+      .filter((part) => part.kind === 'text')
+      .flatMap((part) => part.text.split('\n'))
+
+    expect(lines).toContain(explanation)
+    expect(
+      lines.filter((line) => line.startsWith('Clôture Autowin : gate validé, RUN fermé green ;'))
+    ).toHaveLength(1)
+  })
+
+  it('preserves a full canonical closure citation on the same line as the verdict', () => {
+    const closure = 'Clôture Autowin : gate validé, RUN fermé green ; publication terminée.'
+    const line = `${closure} Test vert : expect(text).toContain("${closure}") — PASS.`
+    const hydrated = hydrateStoredAssistant({
+      content: 'projection',
+      status: 'completed',
+      parts: [
+        {
+          kind: 'action',
+          name: 'orchestrate',
+          ok: true,
+          data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+        },
+        { kind: 'text', text: line }
+      ]
+    })
+
+    expect(hydrated.parts.find((part) => part.kind === 'text')?.text).toBe(line)
+  })
+
   it('binds the first turn id then reduces progressive deltas without duplication', () => {
     const empty = hydrateStoredAssistant({ content: '', status: 'streaming', parts: [] })
     const first = reduceAssistantPilotEvent(empty, {
@@ -342,7 +1287,7 @@ describe('coalesceAssistantParts', () => {
         { kind: 'text', text: 'Conclusion.' }
       ])
     ).toEqual([
-      { kind: 'text', text: 'Premiere phrase.\n\nDeuxieme phrase.' },
+      { kind: 'text', text: 'Premiere phrase.\nDeuxieme phrase.' },
       { kind: 'action', name: 'navigate', ok: true, data: { tab: 'memory' } },
       { kind: 'text', text: 'Conclusion.' }
     ])
@@ -356,6 +1301,33 @@ describe('coalesceAssistantParts', () => {
         { kind: 'text', text: '' }
       ])
     ).toEqual([{ kind: 'action', name: 'get_state' }])
+  })
+
+  it('preserves source whitespace when CommonMark code spans cross text fragments', () => {
+    expect(
+      coalesceAssistantParts([
+        { kind: 'text', text: '    première ligne  \n' },
+        { kind: 'text', text: '    seconde ligne\n' }
+      ])
+    ).toEqual([{ kind: 'text', text: '    première ligne  \n\n    seconde ligne\n' }])
+  })
+
+  it('carries a fenced-code continuation across an intervening action', () => {
+    expect(
+      coalesceAssistantParts([
+        { kind: 'text', text: '~~~text' },
+        { kind: 'action', name: 'verify', ok: true },
+        { kind: 'text', text: 'preuve\n~~~\nAprès.' }
+      ])
+    ).toEqual([
+      { kind: 'text', text: '~~~text' },
+      { kind: 'action', name: 'verify', ok: true },
+      {
+        kind: 'text',
+        text: 'preuve\n~~~\nAprès.',
+        markdownContinuationPrefix: '~~~text'
+      }
+    ])
   })
 })
 
@@ -441,7 +1413,7 @@ describe('chat scrolling and layout rules', () => {
     expect(scrolls).toHaveLength(scrollsBeforeUnmount)
   })
 
-  it("abandonne la descente si le lecteur remonte lui-même entre deux frames", () => {
+  it('abandonne la descente si le lecteur remonte lui-même entre deux frames', () => {
     const queue: Array<() => void> = []
     const targets: Array<{ top: number }> = []
     const element = {

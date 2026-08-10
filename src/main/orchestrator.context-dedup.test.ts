@@ -11,7 +11,6 @@ import type {
 import { RoleModelConfig } from './roles'
 import { CostAggregator } from './dashboards/cost'
 import { TrustLedger } from './trust/ledger'
-import { AuthoritySas } from './authority/sas'
 import type { PipelinePhase } from './skill-pipeline'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
 
@@ -53,7 +52,6 @@ function makeOrchestrator(
     }),
     cost: new CostAggregator(),
     trust: new TrustLedger(),
-    authority: new AuthoritySas(),
     executionWorkspace: 'C:\\ws',
     worktrees: makeTestWorktrees('C:\\ws'),
     classifyPhases
@@ -65,19 +63,19 @@ const names = (o: SendOptions): string[] => (o.systemBlocks ?? []).map((b) => b.
 describe('#2 anti-perte-de-contexte : pas de ré-injection discipline/projectContext en session-resume', () => {
   it('phase 1 (non-resume) envoie discipline ; phase 2 (resume) ne la ré-envoie plus', async () => {
     const provider = new RecordingProvider()
-    const orch = makeOrchestrator(provider, () => ['frame', 'build'])
+    const orch = makeOrchestrator(provider, () => ['frame', 'terrain'])
     await orch.run('ajoute une fonctionnalité')
 
     // Phase 1 (frame) : pas de resume → system complet, discipline présente.
     expect(provider.calls[0].resumeSessionId).toBeUndefined()
     expect(names(provider.calls[0])).toContain('discipline')
 
-    // Phase 2 (build) : reprend la session → discipline/projectContext NON ré-envoyés.
+    // Phase 2 (terrain, mêmes droits) : reprend la session → blocs stables non ré-envoyés.
     expect(provider.calls[1].resumeSessionId).toBe('sess-1')
     expect(names(provider.calls[1])).not.toContain('discipline')
     expect(names(provider.calls[1])).not.toContain('projectContext')
-    // Le skill de phase installé (qui CHANGE) et le style restent, eux.
-    expect(names(provider.calls[1])).toContain('skill:build')
+    // Le contrat natif de phase (qui CHANGE) et le style restent, eux.
+    expect(names(provider.calls[1])).toContain('consigne:terrain')
     expect(names(provider.calls[1])).toContain('style')
 
     // Conséquence mesurable : le system de la phase resume est STRICTEMENT plus court.

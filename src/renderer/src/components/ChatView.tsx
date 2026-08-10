@@ -1,8 +1,7 @@
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Markdown, extractRecommendation } from './Markdown'
+import { extractRecommendation } from './Markdown'
 import { SuggestionGrid } from './SuggestionGrid'
-import { ScoutTable } from './ScoutTable'
 import { ModuleHeader } from './ModuleHeader'
 import { pickTurnToResume, type UnfinishedTurn } from './resume-unfinished'
 import { refreshesActiveConversation } from './chat-event-routing'
@@ -12,7 +11,6 @@ import {
   clampConversationPaneWidth,
   createLiveRunDeltaBatcher,
   deriveConversationState,
-  groupAssistantActivity,
   hydrateStoredAssistant,
   isRunRequestCurrent,
   isChatNearBottom,
@@ -30,23 +28,46 @@ import {
   type SlashCommand,
   type OrchStep,
   type ChatPart,
-  type HydratedAssistantMessage,
   type ChatRuntimeIdentity,
   type OrchestratorModelOption,
   type RunRequestIdentity,
   type ScopedLiveRun
 } from './chat-view-model'
+import { buildHomeSuggestions } from './chat-home-suggestions'
+import { buildRefineDraft, type TerminalStatus } from './chat-resume-refine'
+import { buildScopeEcho, formatScopeEcho } from './chat-scope-echo'
+import { moveQueueEntry } from './chat-queue-order'
+import { ChatQueuePanel } from './ChatQueuePanel'
+import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
+import { lastUserPromptBefore, messageKey } from './chat-message-keys'
+import type {
+  AsstMsg,
+  ChatAttachment,
+  ComposerDraft,
+  Conv,
+  DirectiveReceipt,
+  Msg,
+  PilotEvent,
+  QueuedDirective,
+  RunEntry,
+  SendOptions
+} from './chat-view-types'
+import {
+  applyMention,
+  buildMentionSources,
+  matchMentions,
+  resolveMentionsForSend,
+  type MentionCandidate
+} from './chat-mentions'
 import { visibleScopedRuns, type WorkflowPanelSection } from './workflows-panel-sections'
-import { ForkIcon, InspectIcon } from './chat-view-icons'
+import { ForkIcon } from './chat-view-icons'
 import { formatFileSize, encodeAttachment } from './chat-attachments'
 import { searchConversations } from './conversation-search'
 import { estReplie, grouperConversations } from './conversation-groups'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { ConversationCostIndicator } from './ConversationCostIndicator'
 import { ModelQuotaIndicator } from './ModelQuotaIndicator'
-import { AssistantActivityGroup } from './ChatView.parts'
 import { WorkflowsPanel } from './WorkflowsPanel'
-import { ArtifactPreview } from './ArtifactPreview'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
 import {
   mergeLiveAndPersisted,
@@ -55,466 +76,26 @@ import {
 } from './subagent-thread-from-trace'
 import './ChatView.css'
 import './SlashPalette.css'
+import './ChatComposerExtras.css'
 import type { InspectTurnTarget } from '../observatory-focus'
-import type { ChatArtifact } from '../../../shared/artifacts'
-import type { PilotEventKind } from '../../../shared/pilot-events'
 
 /* ---------- Types ---------- */
 
-type Part = ChatPart
-
-interface AttachmentMeta {
-  name: string
-  mimeType: string
-  size: number
-  /** Miniature downscalée (data URL) pour les images — persistée, affichée dans le fil. */
-  thumbnail?: string
-  /** Original gardé uniquement dans le fil live, avant rechargement depuis le store. */
-  content?: string
-  /** Original durable matérialisé côté main après l’envoi. */
-  artifact?: ChatArtifact
-  turnId?: string
-  /** L’écriture durable a échoué ; la miniature ne doit pas usurper l’original. */
-  originalUnavailable?: boolean
-}
-interface ChatAttachment extends AttachmentMeta {
-  kind: 'text' | 'image' | 'file'
-  content: string
-}
-interface ComposerDraft {
-  input: string
-  attachments: ChatAttachment[]
-  error: string | null
-}
-type SendOptions = { keepComposerDraft?: boolean; targetConversationId?: string }
-interface UserMsg {
-  role: 'user'
-  content: string
-  attachments?: AttachmentMeta[]
-}
-type AsstMsg = HydratedAssistantMessage
-type Msg = (UserMsg | AsstMsg) & { messageId?: string }
-
-interface PilotEvent {
-  conversationId?: string
-  turnId?: string
-  /**
-   * Même vocabulaire que le main (`src/shared/pilot-events.ts`), plus recopié ici. Cette liste avait
-   * dérivé : il lui manquait `reasoning` et `prompt-call`, que le main émet — et comme la réception
-   * fait `raw as PilotEvent`, le renderer les ignorait en silence au lieu de ne pas compiler.
-   */
-  kind: PilotEventKind
-  text?: string
-  streamId?: string
-  actionId?: string
-  iteration?: number
-  name?: string
-  args?: unknown
-  ok?: boolean
-  data?: unknown
-  artifact?: ChatArtifact
-  usage?: { inputTokens?: number; outputTokens?: number; costUsd?: number }
-}
-
-type Conv = {
-  id: string
-  title: string
-  category: string
-  provider: string
-  messages?: Array<{
-    role: 'user' | 'assistant'
-    content: string
-    ts: number
-    attachments?: AttachmentMeta[]
-    messageId?: string
-    parentMessageId?: string
-    turnId?: string
-    turnConversationId?: string
-    status?: 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
-    runtime?: TurnRuntimeIdentity
-    parts?: Part[]
-    error?: string
-  }>
-  messageCount?: number
-  lastMessageRole?: 'user' | 'assistant'
-  lastAssistantStatus?: 'streaming' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
-  /** Le dossier de travail qui GROUPE la conversation dans la liste. Absent → « Divers ». */
-  projectPath?: string
-  /** Marque une analyse Auto-Kaizen : elles vivent dans leur propre groupe, replié par défaut. */
-  autoKaizen?: unknown
-  updatedAt: number
-}
-
-export type RunEntry = {
-  subject: string
-  session: string
-  path: string
-  mtime: number
-  summary: {
-    status: string
-    regime?: string
-    dodTotal: number
-    dodChecked: number
-    journalEvents: number
-    defauts: number
-  }
-}
-export type CheckpointEntry = { id: string; runId: string; createdAt: string }
-
-type Decision = { id: string; question: string; options?: unknown[]; safeDefault?: unknown }
-
+// Types partagés : dans `chat-view-types.ts` depuis la découpe. Ré-exportés ici pour que les
+// importateurs historiques (`RunEntry`, `CheckpointEntry`) n'aient RIEN à changer.
+export type { RunEntry, CheckpointEntry } from './chat-view-types'
+import type { CheckpointEntry } from './chat-view-types'
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
-type QueuedDirective = { id: number; text: string; mode?: 'btw' }
-type DirectiveReceipt = {
-  id: number
-  text: string
-  status: 'sending' | 'sent' | 'failed'
-  afterMessageIndex: number
-  afterPartIndex: number
-  afterTextOffset?: number
-}
-
-function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }): React.JSX.Element {
-  return (
-    <div className={`msg user directive-receipt is-${receipt.status}`}>
-      <div className="msg-meta">
-        <span className="msg-role">Toi</span>
-        <span className="directive-receipt-status" role="status">
-          {receipt.status === 'sending'
-            ? '⏳ Orientation…'
-            : receipt.status === 'sent'
-              ? '✓ Orienté'
-              : '⚠ Échec — remis en file'}
-        </span>
-      </div>
-      <div className="msg-body" dir="auto">
-        {receipt.text}
-      </div>
-    </div>
-  )
-}
-
-type AssistantTimelineItem =
-  { kind: 'parts'; parts: ChatPart[] } | { kind: 'receipt'; receipt: DirectiveReceipt }
-
-function splitAssistantTimeline(
-  parts: ChatPart[],
-  receipts: DirectiveReceipt[]
-): AssistantTimelineItem[] {
-  if (receipts.length === 0) return [{ kind: 'parts', parts }]
-  const ordered = receipts
-    .slice()
-    .sort(
-      (left, right) =>
-        left.afterPartIndex - right.afterPartIndex ||
-        (left.afterTextOffset ?? Number.MAX_SAFE_INTEGER) -
-          (right.afterTextOffset ?? Number.MAX_SAFE_INTEGER) ||
-        left.id - right.id
-    )
-  const timeline: AssistantTimelineItem[] = []
-  let pendingParts: ChatPart[] = []
-  let receiptIndex = 0
-  const flushParts = (): void => {
-    if (pendingParts.length === 0) return
-    timeline.push({ kind: 'parts', parts: pendingParts })
-    pendingParts = []
-  }
-  const appendReceipt = (receipt: DirectiveReceipt): void => {
-    flushParts()
-    timeline.push({ kind: 'receipt', receipt })
-  }
-
-  while (ordered[receiptIndex]?.afterPartIndex < 0) {
-    appendReceipt(ordered[receiptIndex])
-    receiptIndex += 1
-  }
-  parts.forEach((part, partIndex) => {
-    if (part.kind === 'text') {
-      let textOffset = 0
-      while (ordered[receiptIndex]?.afterPartIndex === partIndex) {
-        const receipt = ordered[receiptIndex]
-        const receiptOffset = Math.max(
-          textOffset,
-          Math.min(part.text.length, receipt.afterTextOffset ?? part.text.length)
-        )
-        if (receiptOffset > textOffset)
-          pendingParts.push({ ...part, text: part.text.slice(textOffset, receiptOffset) })
-        appendReceipt(receipt)
-        textOffset = receiptOffset
-        receiptIndex += 1
-      }
-      if (textOffset < part.text.length)
-        pendingParts.push({ ...part, text: part.text.slice(textOffset) })
-      return
-    }
-    pendingParts.push(part)
-    while (ordered[receiptIndex]?.afterPartIndex === partIndex) {
-      appendReceipt(ordered[receiptIndex])
-      receiptIndex += 1
-    }
-  })
-  while (receiptIndex < ordered.length) {
-    appendReceipt(ordered[receiptIndex])
-    receiptIndex += 1
-  }
-  flushParts()
-  return timeline
-}
 
 /* ---------- Constantes ---------- */
 
-const SUGGESTIONS = [
-  'Crée une conversation « Revue archi » en catégorie codex',
-  'Mets le juge sur codex',
-  'Ouvre le graphe du brain rig-tv',
-  'Quel est l’état des workflows ?'
-]
+// Les suggestions d'accueil ne sont plus figées : elles se DÉRIVENT de l'état réel
+// (`buildHomeSuggestions`), le jeu historique restant le repli quand l'état est vide.
 
 const MAX_ATTACHMENTS = 8
 const NEW_DRAFT_KEY = '__new__'
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 const MAX_ATTACHMENTS_BYTES = 20 * 1024 * 1024
-function messageKey(message: Msg, index: number): string {
-  return `${message.role}:${index}`
-}
-
-function sentImageArtifact(file: AttachmentMeta, index: number): ChatArtifact | undefined {
-  if (!file.mimeType.startsWith('image/')) return undefined
-  if (file.artifact?.kind === 'image') return file.artifact
-  if (file.content)
-    return {
-      id: `sent-image-${index}-${file.name}-${file.size}`,
-      name: file.name,
-      mimeType: file.mimeType,
-      kind: 'image',
-      size: file.size,
-      createdAt: 0,
-      encoding: 'base64',
-      content: file.content,
-      source: { provider: 'user' }
-    }
-  if (file.originalUnavailable)
-    return {
-      id: `sent-image-unavailable-${index}-${file.name}-${file.size}`,
-      name: file.name,
-      mimeType: file.mimeType,
-      kind: 'image',
-      size: file.size,
-      createdAt: 0,
-      source: { provider: 'user' }
-    }
-  if (!file.thumbnail?.startsWith('data:image/')) return undefined
-  return {
-    id: `sent-image-${index}-${file.name}-${file.size}`,
-    name: file.name,
-    mimeType: file.mimeType,
-    kind: 'image',
-    size: file.size,
-    createdAt: 0,
-    url: file.thumbnail,
-    source: { provider: 'utilisateur' }
-  }
-}
-
-const ChatMessageRow = memo(
-  function ChatMessageRow({
-    message,
-    conversationId,
-    onInspectTurn,
-    onFork,
-    onOpenImage,
-    onPickSuggestion,
-    onOpenLiveAction,
-    directiveReceipts
-  }: {
-    message: Msg
-    conversationId: string | null
-    onInspectTurn?: (target: InspectTurnTarget) => void
-    onFork?: (messageId: string) => void
-    onOpenImage?: (image: { src: string; name: string }) => void
-    onPickSuggestion?: (prompt: string) => void
-    onOpenLiveAction?: (mode: 'live' | 'history') => void
-    directiveReceipts?: DirectiveReceipt[]
-  }): React.JSX.Element {
-    if (message.role === 'user') {
-      return (
-        <div className="msg user fade-in">
-          <div className="msg-meta">
-            <span className="msg-role">Toi</span>
-          </div>
-          {message.content && (
-            <div className="msg-body" dir="auto">
-              {message.content}
-            </div>
-          )}
-          {message.attachments && message.attachments.length > 0 && (
-            <div
-              className={`attachment-list sent${
-                message.attachments.some((file) => sentImageArtifact(file, 0)) ? ' has-preview' : ''
-              }`}
-            >
-              {message.attachments.map((file, fileIndex) => {
-                const artifact = sentImageArtifact(file, fileIndex)
-                return artifact ? (
-                  <ArtifactPreview
-                    key={`${file.name}-${fileIndex}`}
-                    artifact={artifact}
-                    displayName="image envoyée"
-                    sourceLabel={`Envoyée · ${file.name}`}
-                    previewError={
-                      file.originalUnavailable
-                        ? 'Image originale non conservée · stockage indisponible'
-                        : undefined
-                    }
-                    conversationId={conversationId}
-                    turnId={file.turnId}
-                    onOpenImage={onOpenImage}
-                  />
-                ) : (
-                  <span className="attachment-chip" key={`${file.name}-${fileIndex}`}>
-                    <span aria-hidden="true">{file.mimeType.startsWith('image/') ? '▧' : '▤'}</span>
-                    <span className="attachment-name">{file.name}</span>
-                    <small>{formatFileSize(file.size)}</small>
-                  </span>
-                )
-              })}
-            </div>
-          )}
-          {message.messageId && onFork && (
-            <div className="msg-turn-actions">
-              {onFork && (
-                <button
-                  type="button"
-                  className="msg-turn-icon"
-                  title="Créer une branche à partir de ce message"
-                  aria-label="Créer une branche à partir de ce message"
-                  onClick={() => onFork(message.messageId!)}
-                >
-                  <ForkIcon />
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      )
-    }
-    return (
-      <div className="msg assistant fade-in">
-        <div className="msg-meta">
-          <span className="msg-role">Agent</span>
-          {!message.done && <span className="spinner" />}
-        </div>
-        {/* Réflexion EN DIRECT : seule chose qui se passe pendant les secondes d'attente avant le
-            premier mot. Disparaît dès que la réponse arrive (transitoire, jamais persistée). */}
-        {!message.done && message.reasoning && message.parts.length === 0 && (
-          <div className="msg-reasoning" data-testid="msg-reasoning">
-            <span className="msg-reasoning-label">réflexion</span>
-            <p>{message.reasoning}</p>
-          </div>
-        )}
-        <div className="msg-turn">
-          {message.parts.length === 0 && !message.done && (
-            <div className="msg-body c-faint">réflexion…</div>
-          )}
-          {splitAssistantTimeline(message.parts, directiveReceipts ?? []).map(
-            (timelineItem, timelineIndex) =>
-              timelineItem.kind === 'receipt' ? (
-                <DirectiveReceiptRow
-                  key={`receipt-${timelineItem.receipt.id}`}
-                  receipt={timelineItem.receipt}
-                />
-              ) : (
-                <Fragment key={`parts-${timelineIndex}`}>
-                  {groupAssistantActivity(timelineItem.parts).map((part, index) =>
-                    part.kind === 'text' ? (
-                      <div key={index} className="msg-body" dir="auto">
-                        <Markdown text={part.text} highlightFinalSummary />
-                      </div>
-                    ) : part.kind === 'suggestions' ? (
-                      <SuggestionGrid
-                        key={index}
-                        groups={part.groups}
-                        onPick={(prompt) => onPickSuggestion?.(prompt)}
-                      />
-                    ) : part.kind === 'scout-table' ? (
-                      <ScoutTable
-                        key={index}
-                        rows={part.rows}
-                        onPick={(prompt) => onPickSuggestion?.(prompt)}
-                      />
-                    ) : part.kind === 'artifact' ? (
-                      <ArtifactPreview
-                        key={part.artifact.id}
-                        artifact={part.artifact}
-                        conversationId={conversationId}
-                        turnId={message.turnId}
-                        onOpenImage={onOpenImage}
-                      />
-                    ) : (
-                      <AssistantActivityGroup
-                        key={index}
-                        actions={part.actions}
-                        onOpenLiveAction={onOpenLiveAction}
-                        // Reprendre passe par le canal d'orchestration DIRECT : le main y retrouve l'acquis
-                        // persisté et repart à la phase suivante, sans écrire dans le fil un message que
-                        // l'utilisateur n'a pas tapé (le renvoi par le composer fabriquait un faux tour).
-                        // Le résultat est RENVOYÉ au bouton (plus de `void`) : il porte l'état de
-                        // chargement et rend visible un `{ok:false, error}` au lieu de le jeter.
-                        onResume={(task) =>
-                          window.api?.orchestrate?.(task, conversationId ?? undefined) ??
-                          Promise.resolve({ ok: false, error: 'orchestration indisponible' })
-                        }
-                      />
-                    )
-                  )}
-                </Fragment>
-              )
-          )}
-        </div>
-        <div className="msg-turn-actions">
-          {message.turnId && message.turnId !== 'pending' && conversationId && onInspectTurn && (
-            <button
-              type="button"
-              className="msg-turn-icon"
-              title="Inspecter ce tour dans l'Observatory"
-              aria-label="Inspecter ce tour"
-              // Un message COPIE par un fork garde son tour, mais le journal de ce tour vit dans
-              // la conversation d'origine : on l'ouvre LA-BAS plutot que de chercher sous le fork.
-              onClick={() =>
-                onInspectTurn({
-                  conversationId: message.turnConversationId ?? conversationId,
-                  turnId: message.turnId!
-                })
-              }
-            >
-              <InspectIcon />
-            </button>
-          )}
-          {message.messageId && onFork && (
-            <button
-              type="button"
-              className="msg-turn-icon"
-              title="Créer une branche à partir de ce tour"
-              aria-label="Créer une branche à partir de ce tour"
-              onClick={() => onFork(message.messageId!)}
-            >
-              <ForkIcon />
-            </button>
-          )}
-        </div>
-      </div>
-    )
-  },
-  (prev, next) =>
-    // Comparateur DATA-ONLY : la ligne ne re-rend QUE si sa donnée change (message/conversation/reçus).
-    // Les props callbacks sont déjà stables (send via sendRef→pickSuggestion, fork/inspect via useCallback,
-    // setters useState) → les ignorer n'introduit aucun stale et immunise la ligne contre le churn du
-    // composer (frappe/ghost-text) : garantit l'invariant perf « composer change ≠ re-render des lignes ».
-    prev.message === next.message &&
-    prev.conversationId === next.conversationId &&
-    prev.directiveReceipts === next.directiveReceipts
-)
-
 /* ---------- Vue ---------- */
 
 /**
@@ -539,6 +120,9 @@ export function ChatView({
   const [input, setInput] = useState('')
   const [slashIndex, setSlashIndex] = useState(0)
   const [slashDismissed, setSlashDismissed] = useState(false)
+  // Palette de MENTIONS (`@run…`, `@fichier…`) : même mécanique d'état que la palette slash.
+  const [mentionIndex, setMentionIndex] = useState(0)
+  const [mentionDismissed, setMentionDismissed] = useState(false)
   // Ghost-text (façon CLI) : la recommandation « 👉 Recommandé » du DERNIER message assistant,
   // proposée en placeholder grisé quand le champ est vide et acceptée par Tab. null si aucune.
   const ghostRecommendation = useMemo(() => {
@@ -627,6 +211,34 @@ export function ChatView({
   /** Miroir stable : `revealLiveAction` lit la liste courante sans se recreer a chaque chargement. */
   const runsRef = useRef<RunEntry[]>([])
   runsRef.current = runs
+  /**
+   * Cibles mentionnables, dérivées de l'état DÉJÀ chargé (aucun nouvel IPC, aucun balayage disque).
+   * Ne dépend PAS de `input` : taper dans le composer ne recalcule donc rien ici.
+   */
+  const mentionSources = useMemo(
+    () =>
+      buildMentionSources({
+        runs,
+        attachments,
+        citedTexts: messages
+          .filter((m) => m.role === 'user')
+          .slice(-6)
+          .map((m) => m.content)
+      }),
+    [runs, attachments, messages]
+  )
+  const mentionSourcesRef = useRef(mentionSources)
+  mentionSourcesRef.current = mentionSources
+  /**
+   * Chips d'accueil dérivées de l'état RÉEL (runs bloqués, brouillon repris) ; repli
+   * statique si rien à dire. Rendues par le `SuggestionGrid` déjà existant.
+   */
+  /** Récapitulatif de visée affiché au-dessus du composer (null = rien à dire, pas de bruit). */
+  const scopeEcho = useMemo(() => buildScopeEcho(input, mentionSources), [input, mentionSources])
+  const homeSuggestions = useMemo(
+    () => buildHomeSuggestions({ runs, resumedDraft: input }),
+    [runs, input]
+  )
   const [openRun, setOpenRun] = useState<{ path: string; content: string } | null>(null)
   const [openTrace, setOpenTrace] = useState<OrchStep[] | null>(null)
   // Détail d'un run : bascule entre le fil des sous-agents (trace) et le RUN.md brut.
@@ -655,9 +267,6 @@ export function ChatView({
       liveRunCardRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     )
   }, [])
-  const [decisions, setDecisions] = useState<Decision[]>([])
-  const [showDecisions, setShowDecisions] = useState(false)
-  const [decisionError, setDecisionError] = useState<string | null>(null)
   const [deleteCandidate, setDeleteCandidate] = useState<Conv | null>(null)
   const [deleteRunCandidate, setDeleteRunCandidate] = useState<{
     run: RunEntry
@@ -1035,19 +644,9 @@ export function ChatView({
   useEffect(() => {
     window.api.setActiveConversation(activeId)
   }, [activeId])
-  // Une décision en attente doit se VOIR (questionnaire déplié), pas rester derrière un toggle.
-  useEffect(() => {
-    if (decisions.length > 0) setShowDecisions(true)
-  }, [decisions.length])
-  async function refreshDecisions(): Promise<void> {
-    const d = (await window.api.authorityPending()) as Decision[]
-    setDecisions(Array.isArray(d) ? d : [])
-  }
-
   useEffect(() => {
     void Promise.resolve().then(() => {
       void refreshConvs()
-      void refreshDecisions()
       void refreshRuntimeIdentity()
     })
     // Les mutations faites par l'agent (bus) rafraîchissent les listes SANS toucher le fil.
@@ -1076,7 +675,6 @@ export function ChatView({
       if (e.type !== 'orchestrate-delta') deltaBatcher.flush()
       if (e.type === 'refresh') {
         if (e.scope === 'conversations') refreshConvs()
-        if (e.scope === 'decisions') refreshDecisions()
         if (e.scope === 'workflows') refreshRuns()
         if (e.scope === 'roles') refreshRuntimeIdentity()
         if (refreshesActiveConversation(e, activeRef.current)) {
@@ -1162,11 +760,7 @@ export function ChatView({
   }, [])
 
   useEffect(() => {
-    if (!isActive) return
-    void Promise.resolve().then(refreshDecisions)
-    void Promise.resolve().then(() => refreshRuntimeIdentity())
-    const timer = setInterval(refreshDecisions, 8000)
-    return () => clearInterval(timer)
+    if (isActive) void Promise.resolve().then(() => refreshRuntimeIdentity())
   }, [isActive])
 
   /* --- fil : événements de pilotage → patch de la dernière bulle agent --- */
@@ -1552,6 +1146,16 @@ export function ChatView({
     )
   }
 
+  /** Réordonne la file d'un cran. L'ordre de frappe n'est plus une fatalité. */
+  function moveQueuedMessage(entry: QueuedDirective, delta: -1 | 1): void {
+    const id = activeRef.current
+    if (!id) return
+    const q = queueRef.current.get(id) ?? []
+    const next = moveQueueEntry(q, entry.id, delta)
+    if (next === q) return
+    setConversationQueue(id, next)
+  }
+
   function moveQueuedMessageToBtw(entry: QueuedDirective): void {
     const id = activeRef.current
     if (!id) return
@@ -1614,6 +1218,20 @@ export function ChatView({
     setSlashIndex(0)
     requestAnimationFrame(() => composerInputRef.current?.focus())
   }
+  /** Palette « @ » : remplace la frappe par la référence RÉSOLUE de la cible choisie. */
+  function acceptMention(candidate: MentionCandidate): void {
+    const caret = composerInputRef.current?.selectionStart ?? input.length
+    const { text, caret: nextCaret } = applyMention(input, candidate, caret)
+    setDraftInput(composerDraftKeyRef.current, text)
+    setMentionIndex(0)
+    setMentionDismissed(true)
+    requestAnimationFrame(() => {
+      const el = composerInputRef.current
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(nextCaret, nextCaret)
+    })
+  }
   // À la libération de `busy` (render frais, busy=false), on draine la FILE D'ATTENTE — un message
   // par tour (chacun = sa propre paire Q/R). Vaut aussi bien pour l'auto-drain fin de tour que pour
   // une interruption manuelle (les deux passent par une transition busy→false).
@@ -1645,6 +1263,41 @@ export function ChatView({
   const sendRef = useRef(send)
   sendRef.current = send
   const pickSuggestion = useCallback((prompt: string) => void sendRef.current(prompt), [])
+  /**
+   * Reprise d'un tour INTERROMPU : passe par le canal d'orchestration direct (même raison que le
+   * bouton « Reprendre » des actions) ; à défaut, on renvoie simplement le prompt d'origine.
+   */
+  const resumeTurnPrompt = useCallback(
+    (prompt: string) => {
+      const orchestrate = window.api?.orchestrate
+      if (orchestrate) void orchestrate(prompt, activeId ?? undefined)
+      else void sendRef.current(prompt)
+    },
+    [activeId]
+  )
+
+  /**
+   * « Reprendre en précisant… » : REMPLIT le composer (prompt d'origine + motif), et s'arrête là.
+   * Aucun envoi, aucune orchestration — le geste appartient à l'utilisateur.
+   * Callback STABLE (le row est memo'd) : passe par un ref, comme fork/send.
+   */
+  const refineDraftRef = useRef<
+    (prompt: string, status: TerminalStatus, reason?: string | null) => void
+  >(() => {})
+  refineDraftRef.current = (prompt, status, reason) => {
+    setDraftInput(composerDraftKeyRef.current, buildRefineDraft(prompt, status, reason))
+    requestAnimationFrame(() => {
+      const el = composerInputRef.current
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(el.value.length, el.value.length)
+    })
+  }
+  const refineResumeDraft = useCallback(
+    (prompt: string, status: TerminalStatus, reason?: string | null) =>
+      refineDraftRef.current(prompt, status, reason),
+    []
+  )
 
   /* --- envoi --- */
 
@@ -1801,6 +1454,12 @@ export function ChatView({
         attachments?: ChatAttachment[]
       }> = flatten(history.slice(0, -1))
       payload[payload.length - 1].attachments = outgoingAttachments
+      // Mentions `@run:` / `@fichier:` : le fil garde le texte TAPÉ (lisible), le prompt ENVOYÉ porte
+      // en plus le bloc de cibles résolues — désigner au lieu de décrire, sans polluer l'affichage.
+      payload[payload.length - 1].content = resolveMentionsForSend(
+        payload[payload.length - 1].content,
+        mentionSourcesRef.current
+      )
       const res = await window.api.pilotChat(payload, convId)
       if (!res.ok || res.cancelled)
         patchLast(convId, (m) => {
@@ -1848,7 +1507,10 @@ export function ChatView({
         patchLast(convId, (m) => {
           if (m.status === 'streaming') m.status = 'interrupted'
           m.done = true
-          if (m.parts.length === 0) m.parts.push({ kind: 'text', text: '_(aucune réponse)_' })
+          // Un tour annulé/interrompu porte désormais son propre libellé terminal (msg-terminal) :
+          // le remplissage « aucune réponse » ferait doublon et masquerait la vraie raison.
+          if (m.parts.length === 0 && m.status !== 'cancelled' && m.status !== 'interrupted')
+            m.parts.push({ kind: 'text', text: '_(aucune réponse)_' })
         })
         setConversationBusy(convId, false)
         await new Promise<void>((resolve) =>
@@ -2349,15 +2011,6 @@ export function ChatView({
             </div>
           </div>
           <div className="row gap2 chat-head-actions">
-            {decisions.length > 0 && (
-              <button
-                className={`btn btn-sm${showDecisions ? ' btn-accent' : ''}`}
-                onClick={() => setShowDecisions((v) => !v)}
-              >
-                <span className="status-dot st-warn" /> {decisions.length} décision
-                {decisions.length > 1 ? 's' : ''}
-              </button>
-            )}
             <button
               type="button"
               className={`workflow-toggle${showRuns ? ' is-active' : ''}`}
@@ -2370,36 +2023,6 @@ export function ChatView({
             </button>
           </div>
         </header>
-
-        {showDecisions && decisions.length > 0 && (
-          <div className="decision-strip col fade-in">
-            {decisions.map((d) => (
-              <div key={d.id} className="decision-row">
-                <span className="decision-q">{d.question}</span>
-                <div className="row gap2">
-                  {(d.options ?? []).slice(0, 4).map((o, i) => (
-                    <button
-                      key={i}
-                      className="btn btn-sm"
-                      onClick={async () => {
-                        try {
-                          setDecisionError(null)
-                          await window.api.authorityResolve(d.id, o)
-                          refreshDecisions()
-                        } catch (error) {
-                          setDecisionError(error instanceof Error ? error.message : String(error))
-                        }
-                      }}
-                    >
-                      {String(o)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-            {decisionError && <div className="attachment-error">⚠️ {decisionError}</div>}
-          </div>
-        )}
 
         {deleteCandidate && (
           <div
@@ -2526,11 +2149,7 @@ export function ChatView({
                 </div>
               </div>
               <div className="chat-suggest">
-                {SUGGESTIONS.map((s) => (
-                  <button key={s} className="btn btn-sm btn-ghost" onClick={() => send(s)}>
-                    {s}
-                  </button>
-                ))}
+                <SuggestionGrid groups={homeSuggestions} onPick={pickSuggestion} />
               </div>
             </div>
           )}
@@ -2551,6 +2170,12 @@ export function ChatView({
                 onFork={handleFork}
                 onOpenImage={setOpenImage}
                 onOpenLiveAction={revealLiveAction}
+                retryPrompt={
+                  message.role === 'assistant' ? lastUserPromptBefore(messages, index) : undefined
+                }
+                onResend={pickSuggestion}
+                onResumeTurn={resumeTurnPrompt}
+                onRefineResume={refineResumeDraft}
                 directiveReceipts={
                   message.role === 'assistant'
                     ? activeDirectiveReceiptsByMessage.get(index)
@@ -2580,93 +2205,17 @@ export function ChatView({
           </button>
         )}
 
-        {pendingDirectives.length > 0 && (
-          <div className="directive-queue" aria-label="Messages en attente">
-            <div className="directive-queue-head">
-              <span className="directive-queue-title">
-                ⚡ File d’attente · {pendingDirectives.length}
-              </span>
-              <span className="directive-queue-hint">
-                envoyés un par un à la fin du tour en cours
-              </span>
-              {busy && (
-                <button
-                  type="button"
-                  className="directive-queue-send directive-queue-send-all"
-                  title="Interrompre le tour en cours et envoyer tous les messages en file maintenant"
-                  aria-label="Interrompre et envoyer tout"
-                  disabled={interruptingConversations.has(activeId ?? '')}
-                  onClick={interruptAndFlushQueue}
-                >
-                  {interruptingConversations.has(activeId ?? '')
-                    ? '⏳ Interruption…'
-                    : '⏹ Interrompre et envoyer tout'}
-                </button>
-              )}
-            </div>
-            {pendingDirectives.map((directive, index) => (
-              <div className="directive-queue-item" key={directive.id}>
-                <span className="directive-queue-index">{index + 1}</span>
-                <span className="directive-queue-text" title={directive.text}>
-                  {directive.text}
-                </span>
-                {/* Hors tour actif il n'y a RIEN à interrompre : afficher le bouton donnait un clic
-                    mort qui figeait la file sur « ⏳ Interruption… ». La file se draine alors seule. */}
-                {busy && (
-                  <button
-                    type="button"
-                    className="directive-queue-send"
-                    title="Interrompre le tour en cours et envoyer la file maintenant, en commençant par ce message"
-                    aria-label={`Interrompre et envoyer à partir du message ${index + 1}`}
-                    disabled={interruptingConversations.has(activeId ?? '')}
-                    onClick={interruptAndFlushQueue}
-                  >
-                    {interruptingConversations.has(activeId ?? '')
-                      ? '⏳ Interruption…'
-                      : '⏹ Interrompre et envoyer'}
-                  </button>
-                )}
-                {busy && (
-                  <button
-                    type="button"
-                    className="directive-queue-steer"
-                    title="Orienter maintenant — injecter ce message comme directive PRIORITAIRE dans le tour en cours, sans l’interrompre"
-                    aria-label={`Orienter le tour en cours avec le message ${index + 1}`}
-                    disabled={steeringDirectives.has(directive.id)}
-                    onClick={() => void steerWithoutInterrupt(directive)}
-                  >
-                    {steeringDirectives.has(directive.id) ? '⏳ Orientation…' : '🧭 Orienter'}
-                  </button>
-                )}
-                {busy && (
-                  <button
-                    type="button"
-                    className="directive-queue-send directive-queue-btw"
-                    title={
-                      directive.mode === 'btw'
-                        ? 'BTW confirmé — ce message reste en dernier : il partira après les autres messages en file, y compris ceux tapés ensuite'
-                        : 'BTW — remettre ce message à la fin de la file sans interrompre le tour en cours'
-                    }
-                    aria-label={`Remettre le message ${index + 1} en file via BTW`}
-                    disabled={directive.mode === 'btw'}
-                    onClick={() => moveQueuedMessageToBtw(directive)}
-                  >
-                    {directive.mode === 'btw' ? '✓ BTW' : 'BTW'}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="directive-queue-remove"
-                  title="Retirer de la file"
-                  aria-label={`Retirer le message ${index + 1}`}
-                  onClick={() => restoreQueuedMessageToDraft(directive)}
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+        <ChatQueuePanel
+          pendingDirectives={pendingDirectives}
+          busy={busy}
+          interrupting={interruptingConversations.has(activeId ?? '')}
+          steeringDirectives={steeringDirectives}
+          interruptAndFlushQueue={interruptAndFlushQueue}
+          steerWithoutInterrupt={(directive) => void steerWithoutInterrupt(directive)}
+          moveQueuedMessage={moveQueuedMessage}
+          moveQueuedMessageToBtw={moveQueuedMessageToBtw}
+          restoreQueuedMessageToDraft={restoreQueuedMessageToDraft}
+        />
         <div className="composer">
           <div className="composer-field">
             {attachments.length > 0 && (
@@ -2704,6 +2253,45 @@ export function ChatView({
               </div>
             )}
             {attachmentError && <div className="attachment-error">{attachmentError}</div>}
+            {/* Écho de PÉRIMÈTRE : ce que le tour va probablement faire, et sur quoi — AVANT
+                l'envoi, pour pouvoir corriger la visée plutôt que de découvrir l'écart après. */}
+            {scopeEcho && (
+              <div className="composer-scope-echo" data-testid="scope-echo">
+                <span aria-hidden="true">◎</span> {formatScopeEcho(scopeEcho)}
+              </div>
+            )}
+            {(() => {
+              const items = matchMentions(input, mentionSources)
+              if (mentionDismissed || items.length === 0) return null
+              const sel = Math.min(mentionIndex, items.length - 1)
+              return (
+                <ul
+                  className="slash-palette mention-palette"
+                  role="listbox"
+                  aria-label="Cibles"
+                  data-testid="mention-palette"
+                >
+                  {items.map((c, i) => (
+                    <li
+                      key={`${c.kind}:${c.id}`}
+                      role="option"
+                      aria-selected={i === sel}
+                      className={`slash-item${i === sel ? ' is-selected' : ''}`}
+                      data-testid="mention-item"
+                      onMouseDown={(ev) => {
+                        ev.preventDefault() // garde le focus du composer
+                        acceptMention(c)
+                      }}
+                    >
+                      <span className="slash-name mono">
+                        {c.kind === 'run' ? '@run' : '@fichier'} {c.label}
+                      </span>
+                      {c.hint && <span className="slash-hint">{c.hint}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )
+            })()}
             {(() => {
               const items = matchSlashCommands(input)
               if (slashDismissed || items.length === 0) return null
@@ -2774,8 +2362,35 @@ export function ChatView({
                   setDraftInput(composerDraftKeyRef.current, e.target.value)
                   setSlashDismissed(false)
                   setSlashIndex(0)
+                  setMentionDismissed(false)
+                  setMentionIndex(0)
                 }}
                 onKeyDown={(e) => {
+                  // La palette de MENTIONS passe avant la slash : les deux ne peuvent pas être
+                  // ouvertes en même temps (une mention exclut un `/` en tête de frappe).
+                  const mentions = matchMentions(input, mentionSources)
+                  if (!mentionDismissed && mentions.length > 0) {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault()
+                      setMentionIndex((i) => (i + 1) % mentions.length)
+                      return
+                    }
+                    if (e.key === 'ArrowUp') {
+                      e.preventDefault()
+                      setMentionIndex((i) => (i - 1 + mentions.length) % mentions.length)
+                      return
+                    }
+                    if (e.key === 'Enter' || e.key === 'Tab') {
+                      e.preventDefault()
+                      acceptMention(mentions[Math.min(mentionIndex, mentions.length - 1)])
+                      return
+                    }
+                    if (e.key === 'Escape') {
+                      e.preventDefault()
+                      setMentionDismissed(true)
+                      return
+                    }
+                  }
                   const items = matchSlashCommands(input)
                   if (!slashDismissed && items.length > 0) {
                     if (e.key === 'ArrowDown') {

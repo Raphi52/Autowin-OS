@@ -2,7 +2,8 @@ import type { GitLabTicketSource, TicketItem } from '../../shared/tickets'
 import {
   fetchTicketJson,
   TicketProviderError,
-  type TicketProviderAdapter
+  type TicketProviderAdapter,
+  type TicketProviderContext
 } from './provider-contract'
 
 function boundedInteger(value: number | undefined, fallback: number, maximum: number): number {
@@ -85,6 +86,38 @@ function normalizeIssue(value: unknown, source: GitLabTicketSource): TicketItem 
   }
 }
 
+function gitlabIssueUrl(source: GitLabTicketSource, id: string, suffix = ''): string {
+  const baseUrl = (source.baseUrl ?? 'https://gitlab.com').replace(/\/+$/, '')
+  const project = encodeURIComponent(`${source.namespace}/${source.repository}`)
+  return `${baseUrl}/api/v4/projects/${project}/issues/${id}${suffix}`
+}
+
+function gitlabHeaders(context: TicketProviderContext): Record<string, string> {
+  return {
+    accept: 'application/json',
+    ...(context.token ? { authorization: `Bearer ${context.token}` } : {})
+  }
+}
+
+function positiveIssueId(value: unknown): string {
+  const id = typeof value === 'string' ? value.trim() : ''
+  if (!/^[1-9]\d*$/.test(id)) {
+    throw new TicketProviderError('INVALID_RESPONSE', 'Identifiant GitLab invalide.')
+  }
+  return id
+}
+
+function gitlabStateEvent(state: string | undefined): string | undefined {
+  if (!state) return undefined
+  const normalized = state.trim().toLowerCase()
+  if (['closed', 'close', 'clos', 'fermé', 'fermee', 'fermée'].includes(normalized)) return 'close'
+  if (['open', 'opened', 'reopen', 'ouvert', 'ouverte'].includes(normalized)) return 'reopen'
+  throw new TicketProviderError(
+    'INVALID_RESPONSE',
+    `État GitLab « ${state} » invalide (opened/closed attendu).`
+  )
+}
+
 export const gitlabTicketProvider: TicketProviderAdapter = {
   provider: 'gitlab',
   async list(request, context) {
@@ -97,9 +130,16 @@ export const gitlabTicketProvider: TicketProviderAdapter = {
     const project = encodeURIComponent(`${source.namespace}/${source.repository}`)
     const perPage = boundedInteger(request.pageSize, 50, 100)
     const page = pageFromCursor(request.cursor)
-    const url =
-      `${baseUrl}/api/v4/projects/${project}/issues` +
-      `?scope=all&state=all&per_page=${perPage}&page=${page}`
+    const url = new URL(`${baseUrl}/api/v4/projects/${project}/issues`)
+    url.searchParams.set('scope', 'all')
+    url.searchParams.set('state', 'all')
+    url.searchParams.set('per_page', String(perPage))
+    url.searchParams.set('page', String(page))
+    const titleContains = request.titleContains?.trim()
+    if (titleContains) {
+      url.searchParams.set('search', titleContains)
+      url.searchParams.set('in', 'title')
+    }
 
     let nextPage: string | undefined
     const fetchFn: typeof fetch = async (input, init) => {
@@ -108,7 +148,7 @@ export const gitlabTicketProvider: TicketProviderAdapter = {
       nextPage = header && /^[1-9]\d*$/.test(header) ? header : undefined
       return response
     }
-    const payload = await fetchTicketJson<unknown>(url, {
+    const payload = await fetchTicketJson<unknown>(url.toString(), {
       fetchFn,
       signal: context.signal,
       headers: {
@@ -125,5 +165,59 @@ export const gitlabTicketProvider: TicketProviderAdapter = {
       ...(nextPage ? { cursor: nextPage } : {}),
       hasMore: nextPage !== undefined
     }
+  },
+  async get(request, context) {
+    if (request.source.provider !== 'gitlab') {
+      throw new TicketProviderError('INVALID_RESPONSE', 'Source GitLab invalide.')
+    }
+    const payload = await fetchTicketJson<unknown>(
+      gitlabIssueUrl(request.source, positiveIssueId(request.id)),
+      {
+        fetchFn: context.fetchFn,
+        signal: context.signal,
+        headers: gitlabHeaders(context)
+      }
+    )
+    return normalizeIssue(payload, request.source)
+  },
+  async update(request, context) {
+    if (request.source.provider !== 'gitlab') {
+      throw new TicketProviderError('INVALID_RESPONSE', 'Source GitLab invalide.')
+    }
+    const id = positiveIssueId(request.id)
+    if (request.assignee) {
+      throw new TicketProviderError(
+        'INVALID_RESPONSE',
+        'GitLab exige un identifiant numérique pour changer l’assigné ; assigne-le dans GitLab.'
+      )
+    }
+    const stateEvent = gitlabStateEvent(request.state)
+    let updated: unknown
+    if (stateEvent) {
+      updated = await fetchTicketJson<unknown>(gitlabIssueUrl(request.source, id), {
+        fetchFn: context.fetchFn,
+        signal: context.signal,
+        method: 'PUT',
+        headers: gitlabHeaders(context),
+        body: { state_event: stateEvent }
+      })
+    }
+    if (request.comment) {
+      await fetchTicketJson<unknown>(gitlabIssueUrl(request.source, id, '/notes'), {
+        fetchFn: context.fetchFn,
+        signal: context.signal,
+        method: 'POST',
+        headers: gitlabHeaders(context),
+        body: { body: request.comment }
+      })
+    }
+    if (!updated) {
+      updated = await fetchTicketJson<unknown>(gitlabIssueUrl(request.source, id), {
+        fetchFn: context.fetchFn,
+        signal: context.signal,
+        headers: gitlabHeaders(context)
+      })
+    }
+    return normalizeIssue(updated, request.source)
   }
 }

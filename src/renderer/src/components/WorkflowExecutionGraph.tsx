@@ -5,9 +5,9 @@ import {
   type HarnessTimelineEvent,
   type HarnessTraceEvent
 } from './harness-timeline-model'
-import type { RunWorkflowObservation } from '../../../shared/run-execution'
 import { LatestRequestGate } from './observatory-reliability'
 import { projectLatestRequestExecution } from './request-execution-tree-model'
+import { workflowQuoteLabel } from './workflow-quote-label'
 import './WorkflowExecutionGraph.css'
 
 interface WorkflowExecutionGraphProps {
@@ -23,6 +23,7 @@ const EVENT_LABEL: Record<HarnessTimelineEvent['kind'], string> = {
   decision: 'Décision',
   'tool-call': 'Appel outil',
   'tool-result': 'Résultat outil',
+  artifact: 'Artefact produit',
   'model-response': 'Réponse modèle',
   'response-displayed': 'Réponse affichée',
   handoff: 'Relais',
@@ -81,24 +82,6 @@ function closureStatusLabel(status: string | undefined): string {
 
 function workspaceModeLabel(mode: string | undefined): string {
   return mode === 'worktree' ? 'Copie isolée' : 'Dépôt de travail'
-}
-
-/**
- * Le workflow qui pilote le run, avec sa PROVENANCE.
- *
- * Le nom seul ne suffit pas : un workflow que l'utilisateur n'a jamais demandé — choisi par le
- * modèle, voire composé par lui à la volée — n'engage pas la même confiance qu'un workflow choisi à
- * la main. Le cas où l'utilisateur a le moins décidé est celui qui doit le plus se voir.
- */
-export function workflowQuoteLabel(workflow: RunWorkflowObservation | undefined): string {
-  if (!workflow) return 'aucun workflow'
-  const provenance =
-    workflow.source === 'manuel'
-      ? 'choisi à la main'
-      : workflow.source === 'modele'
-        ? 'choisi par le modèle'
-        : 'composé à la volée'
-  return `${workflow.name} — ${provenance}`
 }
 
 function ExecutionNodeMeta({ event }: { event: HarnessTimelineEvent }): React.JSX.Element {

@@ -15,7 +15,6 @@ describe('filiation des conversations Auto-Kaizen', () => {
         title: 'Auto-Kaizen — erreur provider',
         category: 'codex',
         provider: 'codex',
-        authorityMode: 'auto',
         autoKaizen: {
           incidentId: 'ak-1',
           sourceConversationId: 'conv-source',

@@ -2,8 +2,13 @@ import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { parseGitWorktrees, type GitGraphWorktree } from '../shared/git-graph'
-import type { WorktreeMapEntry, WorktreeMapSnapshot } from '../shared/worktree-map'
+import {
+  parseGitWorktrees,
+  type GitWorktreePorcelainEntry,
+  type WorktreeMapEntry,
+  type WorktreeMapSnapshot
+} from '../shared/worktree-map'
+import { diagnoseWorktrees } from './worktree-doctor'
 
 const run = promisify(execFile)
 const MAX_BUFFER = 8 * 1024 * 1024
@@ -39,7 +44,7 @@ export async function readWorktreeMap(
       maxBuffer: MAX_BUFFER
     })
     repoPath = rootResult.stdout.trim() || cwd
-    const listResult = await run('git', ['worktree', 'list', '--porcelain'], {
+    const listResult = await run('git', ['worktree', 'list', '--porcelain', '-z'], {
       cwd: repoPath,
       windowsHide: true,
       maxBuffer: MAX_BUFFER
@@ -60,7 +65,8 @@ export async function readWorktreeMap(
       repositoryName: path.basename(repoPath),
       ...(baseBranch ? { baseBranch } : {}),
       ...(baseHead ? { baseHead } : {}),
-      entries
+      entries,
+      doctor: diagnoseWorktrees(repoPath, entries)
     }
   } catch (error) {
     // Degrade au lieu de propager : une exception traversant l'IPC laisse la vue muette.
@@ -75,14 +81,15 @@ export async function readWorktreeMap(
 
 async function describeWorktree(
   repoPath: string,
-  worktree: GitGraphWorktree,
+  worktree: GitWorktreePorcelainEntry,
   baseBranch: string | undefined,
   measureSize: boolean
 ): Promise<WorktreeMapEntry> {
-  const [behind, dirtyFiles, sizeBytes] = await Promise.all([
+  const [behind, dirtyFiles, sizeBytes, pathExists] = await Promise.all([
     baseBranch ? countBehind(repoPath, worktree.head, baseBranch) : Promise.resolve(undefined),
     countDirtyFiles(worktree.path),
-    measureSize ? directorySize(worktree.path) : Promise.resolve(undefined)
+    measureSize ? directorySize(worktree.path) : Promise.resolve(undefined),
+    exists(worktree.path)
   ])
   return {
     path: worktree.path,
@@ -90,9 +97,22 @@ async function describeWorktree(
     ...(worktree.branch ? { branch: worktree.branch } : {}),
     detached: worktree.detached,
     locked: worktree.locked,
+    ...(worktree.lockedReason ? { lockedReason: worktree.lockedReason } : {}),
+    ...(worktree.prunableReason ? { prunableReason: worktree.prunableReason } : {}),
+    ...(pathExists === undefined ? {} : { pathExists }),
     ...(behind === undefined ? {} : { behind }),
     ...(dirtyFiles === undefined ? {} : { dirtyFiles }),
     ...(sizeBytes === undefined ? {} : { sizeBytes })
+  }
+}
+
+async function exists(target: string): Promise<boolean | undefined> {
+  try {
+    await fs.stat(target)
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    return code === 'ENOENT' ? false : undefined
   }
 }
 

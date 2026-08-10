@@ -360,9 +360,24 @@
 
 .ticket-select-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
+}
+
+.ticket-treatment-status {
+  padding: 4px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.ticket-treatment-status.is-succeeded {
+  color: var(--success, #73d9a2);
+}
+
+.ticket-treatment-status.is-failed {
+  color: var(--danger, #ff7185);
 }
 .ticket-select-row > input {
   width: 16px;
@@ -601,5 +616,39 @@
 .tickets-auto-status {
   font-size: 11.5px;
   color: var(--warn, #e8a33d);
+  white-space: nowrap;
+}
+
+/* Garde-fous VISIBLES du mode auto : le coût d'un run est annoncé, les bornes sont réglables. */
+.tickets-auto-guards {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  opacity: 0.9;
+}
+
+.tickets-auto-guards label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.tickets-auto-guards input[type='number'] {
+  width: 52px;
+}
+
+.tickets-auto-kill {
+  color: var(--danger, #e05252);
+  font-weight: 600;
+}
+
+/* Recherche SERVEUR active : l'utilisateur doit voir que la liste est filtrée en amont. */
+.tickets-server-query {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
   white-space: nowrap;
 }

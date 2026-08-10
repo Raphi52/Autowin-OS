@@ -32,6 +32,126 @@ class CountedProvider implements ProviderAdapter {
 }
 
 describe('ExecutionSupervisor', () => {
+  it('publie l’identité exacte de chaque réservation active puis la retire au règlement', async () => {
+    const supervisor = new ExecutionSupervisor()
+    const quote = compileExecutionQuote('suivre deux membres du fan-out')
+    quote.limits.maxProviderCalls = 2
+    quote.limits.maxConcurrency = 2
+
+    await supervisor.run(quote, undefined, async () => {
+      const first = supervisor.reserveProviderCall()!
+      const second = supervisor.reserveProviderCall()!
+      expect(supervisor.currentSnapshot()?.activeReservationIds).toEqual([first.id, second.id])
+
+      first.fail()
+      expect(supervisor.currentSnapshot()?.activeReservationIds).toEqual([second.id])
+
+      second.complete()
+      expect(supervisor.currentSnapshot()?.activeReservationIds).toEqual([])
+    })
+
+    expect(supervisor.lastSnapshot()).toMatchObject({
+      activeCalls: 0,
+      activeReservationIds: [],
+      completedCalls: 1,
+      failedCalls: 1
+    })
+  })
+
+  it('lie la réservation du registre au token de spawn avant tout lancement', async () => {
+    const supervisor = new ExecutionSupervisor()
+    let observedReservationId: string | undefined
+    let settledReservationId: string | undefined
+    const provider: ProviderAdapter = {
+      id: 'reservation-aware',
+      supportsExecution: true,
+      auth: async () => true,
+      async *send(_messages, options) {
+        options?.execution?.onSpawnIntent?.('agent-token', true)
+        yield* [] as StreamChunk[]
+        return { text: 'ok', provider: 'reservation-aware', systemInjected: true }
+      }
+    }
+    const registry = new ProviderRegistry(undefined, supervisor).register(provider)
+    const quote = compileExecutionQuote('lier une occurrence à son coût')
+
+    await supervisor.run(quote, undefined, async () => {
+      await registry.send(
+        'reservation-aware',
+        [{ role: 'user', content: 'go' }],
+        {
+          execution: {
+            cwd: process.cwd(),
+            sandbox: 'read-only',
+            onSpawnIntent: (_token, active, reservationId) => {
+              if (active) observedReservationId = reservationId
+            },
+            onReservationSettled: (reservationId) => {
+              settledReservationId = reservationId
+            }
+          }
+        }
+      )
+    })
+
+    expect(observedReservationId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(settledReservationId).toBe(observedReservationId)
+  })
+
+  it('reserve tout le fan-out autorise sans sur-reserver le budget tokens', async () => {
+    const supervisor = new ExecutionSupervisor()
+    const quote = compileExecutionQuote('analyse trois pistes')
+    quote.limits.maxProviderCalls = 3
+    quote.limits.maxConcurrency = 3
+    quote.limits.maxTotalTokens = 300
+    quote.limits.maxFreshTokens = 300
+
+    await supervisor.run(quote, undefined, async () => {
+      expect(supervisor.reserveProviderCall()).toBeDefined()
+      expect(supervisor.reserveProviderCall()).toBeDefined()
+      expect(supervisor.reserveProviderCall()).toBeDefined()
+      expect(() => supervisor.reserveProviderCall()).toThrow(/budget.*appels/i)
+    })
+
+    expect(supervisor.lastSnapshot()).toMatchObject({ startedCalls: 3, activeCalls: 3 })
+  })
+
+  it('interrompt le fan-out restant quand un reglement consomme ses reservations', async () => {
+    const supervisor = new ExecutionSupervisor()
+    const quote = compileExecutionQuote('analyse trois pistes')
+    quote.limits.maxProviderCalls = 3
+    quote.limits.maxConcurrency = 3
+    quote.limits.maxTotalTokens = 300
+    quote.limits.maxFreshTokens = 300
+
+    await supervisor.run(quote, undefined, async () => {
+      const first = supervisor.reserveProviderCall()!
+      const second = supervisor.reserveProviderCall()!
+      const third = supervisor.reserveProviderCall()!
+
+      first.complete({ inputTokens: 90, outputTokens: 90 })
+
+      expect(second.signal.aborted).toBe(true)
+      expect(third.signal.aborted).toBe(true)
+    })
+  })
+
+  it("n'admet aucun appel dont la reservation tokens serait nulle", async () => {
+    const supervisor = new ExecutionSupervisor()
+    const quote = compileExecutionQuote('analyse trois pistes')
+    quote.limits.maxProviderCalls = 3
+    quote.limits.maxConcurrency = 3
+    quote.limits.maxTotalTokens = 1
+    quote.limits.maxFreshTokens = 1
+
+    await supervisor.run(quote, undefined, async () => {
+      expect(supervisor.reserveProviderCall()).toBeDefined()
+      expect(() => supervisor.reserveProviderCall()).toThrow(/budget.*tokens/i)
+    })
+
+    expect(supervisor.lastSnapshot()).toMatchObject({ startedCalls: 1, activeCalls: 1 })
+  })
+
   it('refuse le prochain appel AVANT de demarrer le provider', async () => {
     const supervisor = new ExecutionSupervisor()
     const provider = new CountedProvider({ inputTokens: 10, outputTokens: 2 })

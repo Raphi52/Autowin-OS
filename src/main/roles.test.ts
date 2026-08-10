@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, it, expect } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { RoleModelConfig, ALL_ROLES, type Role } from './roles'
@@ -206,6 +214,41 @@ describe('role-store Autowin OS', () => {
       bindings
     )
     expect(existsSync(legacyPath)).toBe(true)
+  })
+
+  it('récupère roles.json si un crash laisse seulement sa dernière version valide', () => {
+    saveRoleBindings(bindings)
+    const path = join(appDataRoot, 'autowin-os', 'roles.json')
+    renameSync(path, `${path}.bak`)
+
+    expect(loadRoleBindings()).toEqual(bindings)
+  })
+
+  it('écarte les bindings persistés mal formés au lieu de les injecter au runtime', () => {
+    const path = join(appDataRoot, 'autowin-os', 'roles.json')
+    mkdirSync(join(appDataRoot, 'autowin-os'), { recursive: true })
+    writeFileSync(
+      path,
+      JSON.stringify({
+        orchestrator: { provider: 'claude', model: 'fable', reasoningEffort: 'high' },
+        subagent: { provider: 'claude', phaseModel: { phaseFantome: { model: 'fable' } } },
+        judge: { provider: 42, model: ['gemini-2.5-pro'] },
+        scout: { provider: 'codex', model: 'gpt', reasoningEffort: 'impossible' },
+        roleFantome: { provider: 'gemini' }
+      }),
+      'utf8'
+    )
+
+    expect(loadRoleBindings()).toBeUndefined()
+  })
+
+  it('récupère le snapshot précédent si un binding devient structurellement invalide', () => {
+    saveRoleBindings(bindings)
+    saveRoleBindings(bindings)
+    const path = join(appDataRoot, 'autowin-os', 'roles.json')
+    writeFileSync(path, JSON.stringify({ judge: { provider: 42 } }), 'utf8')
+
+    expect(loadRoleBindings()).toEqual(bindings)
   })
 })
 

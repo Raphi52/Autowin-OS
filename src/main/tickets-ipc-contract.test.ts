@@ -7,6 +7,7 @@ const TICKET_CHANNELS = [
   'tickets:list',
   'tickets:create',
   'tickets:get',
+  'tickets:update',
   'tickets:cancel',
   'tickets:people'
 ] as const

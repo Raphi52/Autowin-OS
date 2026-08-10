@@ -1,12 +1,45 @@
 import React from 'react'
-import type {
-  WorktreeAgentActivity,
-  WorktreeRuntimeStatus
+import {
+  requiresAttention,
+  type WorktreeAgentActivity,
+  type WorktreeRuntimeStatus
 } from '../../../shared/worktree-activity-model'
 import './WorktreeActivityView.css'
 
+function joinNames(names: string[]): string {
+  if (names.length === 1) return names[0]
+  return `${names.slice(0, -1).join(', ')} et ${names[names.length - 1]}`
+}
+
+/** Décrit un conflit avec les SEULES informations réellement fournies (jamais de valeur inventée). */
+function conflictOutcome(agent: WorktreeAgentActivity): string {
+  const parts: string[] = []
+  parts.push(
+    agent.conflictFile
+      ? `Deux versions touchent le même fichier : ${agent.conflictFile}.`
+      : 'Deux versions touchent le même fichier.'
+  )
+  const others = (agent.conflictWith ?? []).filter((name) => name.trim().length > 0)
+  if (others.length > 0) {
+    parts.push(`Versions en présence : ${joinNames([agent.agentName, ...others])}.`)
+  }
+  parts.push('Aucune version n’a été écrasée : les deux sont conservées, à toi de trancher.')
+  return parts.join(' ')
+}
+
+/** « après six essais » était un chiffre en dur : on montre le compteur réel quand il existe. */
+function attemptsPhrase(agent: WorktreeAgentActivity): string {
+  const count = agent.retryCount
+  if (typeof count !== 'number' || !Number.isFinite(count) || count <= 0) {
+    return 'plusieurs essais'
+  }
+  return `${count} essai${count > 1 ? 's' : ''}`
+}
+
 function stateCopy(agent: WorktreeAgentActivity): { label: string; outcome: string; tone: string } {
   if (agent.attentionReason === 'retry-exhausted') {
+    const attempts = attemptsPhrase(agent)
+    const detail = agent.detail ? ` ${agent.detail}` : ''
     return {
       label:
         agent.publication === 'cleanup-pending'
@@ -14,8 +47,8 @@ function stateCopy(agent: WorktreeAgentActivity): { label: string; outcome: stri
           : 'Essais automatiques arrêtés',
       outcome:
         agent.publication === 'cleanup-pending'
-          ? 'Le résultat est déjà dans ton workspace. Après six essais, la copie reste protégée et demande une vérification.'
-          : 'Autowin a arrêté ses essais après six tentatives. La copie reste protégée sans autre action automatique.',
+          ? `Le résultat est déjà dans ton workspace. Après ${attempts}, la copie reste protégée et demande une vérification.${detail}`
+          : `Autowin a arrêté ses essais après ${attempts}. La copie reste protégée sans autre action automatique.${detail}`,
       tone: 'waiting'
     }
   }
@@ -37,7 +70,7 @@ function stateCopy(agent: WorktreeAgentActivity): { label: string; outcome: stri
   if (agent.state === 'conflict') {
     return {
       label: 'Décision requise',
-      outcome: 'Deux versions touchent le même fichier. Rien n’a été écrasé.',
+      outcome: conflictOutcome(agent),
       tone: 'danger'
     }
   }
@@ -58,7 +91,7 @@ function stateCopy(agent: WorktreeAgentActivity): { label: string; outcome: stri
     }
     return {
       label: 'Copie conservée',
-      outcome: 'Le retour automatique est bloqué. Aucun fichier local n’a été touché.',
+      outcome: `Le retour automatique est bloqué. Aucun fichier local n’a été touché.${agent.detail ? ` ${agent.detail}` : ''}`,
       tone: 'danger'
     }
   }
@@ -87,16 +120,6 @@ function stateCopy(agent: WorktreeAgentActivity): { label: string; outcome: stri
     outcome: 'Il travaille dans son propre bureau. Ton workspace reste disponible.',
     tone: 'working'
   }
-}
-
-function requiresAttention(agent: WorktreeAgentActivity): boolean {
-  if (agent.state === 'conflict') return true
-  if (
-    agent.attentionReason === 'retry-exhausted' ||
-    agent.attentionReason === 'post-publish-change'
-  )
-    return true
-  return agent.state === 'blocked' && agent.attentionReason !== 'base-in-progress'
 }
 
 function routeCopy(agent: WorktreeAgentActivity): { label: string; tone: string; glyph: string } {
@@ -148,59 +171,6 @@ function FileList({ agent }: { agent: WorktreeAgentActivity }): React.JSX.Elemen
   )
 }
 
-function freshnessLabel(agent: WorktreeAgentActivity, nowMs: number): string {
-  const timestamp = agent.endedAtMs ?? agent.startedAtMs
-  if (!Number.isFinite(timestamp) || timestamp <= 0) return 'Fraîcheur inconnue'
-  const ageMs = Math.max(0, nowMs - timestamp)
-  if (!agent.endedAtMs && ageMs > 30 * 60_000) return 'Obsolète'
-  if (ageMs < 60_000) return 'À l’instant'
-  if (ageMs < 3_600_000) return `Il y a ${Math.floor(ageMs / 60_000)} min`
-  return `Il y a ${Math.floor(ageMs / 3_600_000)} h`
-}
-
-/** Carte compacte partagée par le cockpit Worktrees, alimentée par les mêmes traductions métier. */
-export function WorktreeActivitySummary({
-  agent,
-  nowMs,
-  onOpen,
-  showFiles = true
-}: {
-  agent: WorktreeAgentActivity
-  nowMs?: number
-  onOpen?: (agent: WorktreeAgentActivity) => void
-  showFiles?: boolean
-}): React.JSX.Element {
-  const [renderedAt] = React.useState(() => Date.now())
-  const copy = stateCopy(agent)
-  const freshness = freshnessLabel(agent, nowMs ?? renderedAt)
-  return (
-    <article className="wt-activity-summary">
-      <header>
-        {onOpen ? (
-          <button type="button" className="wt-summary-open" onClick={() => onOpen(agent)}>
-            <strong>{agent.task ?? agent.agentName}</strong>
-            <span>{agent.agentName}</span>
-          </button>
-        ) : (
-          <div>
-            <strong>{agent.task ?? agent.agentName}</strong>
-            <span>{agent.agentName}</span>
-          </div>
-        )}
-        <span className={`wt-office-state is-${copy.tone}`}>{copy.label}</span>
-      </header>
-      <div className="wt-summary-meta">
-        <span>Phase · {agent.role || 'Inconnue'}</span>
-        <span>
-          Verdict · {agent.verdict && agent.verdict !== 'unknown' ? agent.verdict : 'inconnu'}
-        </span>
-        <span className={freshness === 'Obsolète' ? 'is-stale' : ''}>{freshness}</span>
-      </div>
-      {showFiles && <FileList agent={agent} />}
-    </article>
-  )
-}
-
 function AgentOffice({
   agent,
   onResolveConflict,
@@ -243,6 +213,28 @@ function AgentOffice({
             <code className="wt-office-path" title={agent.worktreePath}>
               {agent.worktreePath}
             </code>
+          )}
+          {agent.canonicalBaseRef && (
+            <div className="wt-office-base">Base vérifiée · {agent.canonicalBaseRef}</div>
+          )}
+          {(agent.excludedDirtyFiles?.length ?? 0) > 0 && (
+            <details className="wt-office-excluded">
+              <summary>
+                {agent.excludedDirtyFileCount ?? agent.excludedDirtyFiles!.length} changement
+                {(agent.excludedDirtyFileCount ?? agent.excludedDirtyFiles!.length) > 1
+                  ? 's locaux'
+                  : ' local'}{' '}
+                non inclus
+                {agent.excludedDirtyFilesTruncated
+                  ? ` · ${agent.excludedDirtyFiles!.length} affichés`
+                  : ''}
+              </summary>
+              <ul>
+                {agent.excludedDirtyFiles!.map((path) => (
+                  <li key={path}>{path}</li>
+                ))}
+              </ul>
+            </details>
           )}
           {agent.recovered && <span className="wt-recovered">↻ Récupéré après redémarrage</span>}
           <FileList agent={agent} />

@@ -35,6 +35,23 @@ export interface TurnMessageParts {
 }
 
 /**
+ * Borne l'historique sans laisser une réponse assistant privée de sa question en tête.
+ *
+ * Un tour entrant contient normalement `2n + 1` messages (les paires précédentes, puis la nouvelle
+ * question). Une tranche paire comme `slice(-40)` commence alors par la dernière réponse du tour
+ * écarté. On conserve la même borne puis on réaligne uniquement le début sur le prochain utilisateur.
+ */
+export function boundedTurnHistory<T extends { role: 'user' | 'assistant' }>(
+  history: readonly T[],
+  maxMessages = 40
+): T[] {
+  if (!Number.isInteger(maxMessages) || maxMessages <= 0) return []
+  const tail = history.slice(-maxMessages)
+  const firstUser = tail.findIndex((message) => message.role === 'user')
+  return firstUser < 0 ? [] : tail.slice(firstUser)
+}
+
+/**
  * Rend les entrées du message, dans l'ordre, sans aucune entrée vide.
  *
  * Une entrée vide (pas de contexte récupéré, pas d'écho) laisserait un trou de deux sauts de ligne dans

@@ -1,6 +1,7 @@
 import { execFileSync, spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
-import { basename, join, resolve } from 'node:path'
+import { basename, join, normalize, resolve } from 'node:path'
 
 function argument(name, fallback) {
   const index = process.argv.indexOf(name)
@@ -19,7 +20,13 @@ const sentinel = `sentinel-${runId}`
 const screenshotPath = join(outputDir, `${runId}.png`)
 const proofPath = join(outputDir, `${runId}.json`)
 const taskName = `Task ${runId}`
-const relayTaskName = 'Autowin OS - Prompt Relay'
+const canonicalStoreRoot = join(instanceRoot, 'user-data', 'app-data', 'autowin-os')
+const relayIdentity = normalize(canonicalStoreRoot).replaceAll('\\', '/').toLowerCase()
+const relayTaskSuffix = createHash('sha256')
+  .update(relayIdentity, 'utf8')
+  .digest('hex')
+  .slice(0, 16)
+const relayTaskName = `Autowin OS - Prompt Relay - ${relayTaskSuffix}`
 mkdirSync(outputDir, { recursive: true })
 
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms))
@@ -255,8 +262,8 @@ try {
     'occurrence planifiée terminée'
   )
 
-  const taskStorePath = join(instanceRoot, 'appdata', 'autowin-os', 'scheduled-tasks.json')
-  const conversationStorePath = join(instanceRoot, 'appdata', 'autowin-os', 'conversations.json')
+  const taskStorePath = join(canonicalStoreRoot, 'scheduled-tasks.json')
+  const conversationStorePath = join(canonicalStoreRoot, 'conversations.json')
   const taskStore = readJson(taskStorePath)
   const conversations = readJson(conversationStorePath)
   const conversation = conversations.find(

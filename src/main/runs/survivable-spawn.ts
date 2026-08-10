@@ -1,10 +1,13 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { closeSync, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import {
   openStdoutJournal,
+  openStderrJournal,
+  survivableExitPath,
   tailJsonLines,
+  writeSurvivableExit,
   type TailOptions,
   type TailResult
 } from './stdout-journal'
@@ -39,6 +42,11 @@ export interface SurvivableSpawnInput {
   detachedEnabled?: boolean
   /** Entrée complète remise au CLI. Nécessaire au relais Windows, dont les stdio sont matérialisés. */
   stdin?: string
+  /**
+   * Barrière durable appelée APRÈS création du journal mais AVANT tout spawn. Si elle échoue, aucun
+   * provider n'est lancé. Sa présence rend le journal obligatoire : pas de dégradation silencieuse.
+   */
+  onJournalPrepared?: (journalPath: string) => void
 }
 
 export interface SurvivableRun {
@@ -48,6 +56,10 @@ export interface SurvivableRun {
   spawnToken: string
   /** Chemin du journal, ou undefined en mode dégradé (pipes). */
   journalPath?: string
+  /** Diagnostics CLI séparés de stdout : ils ne peuvent pas devenir un faux résultat après crash. */
+  diagnosticPath?: string
+  /** Preuve de fermeture du relais, physiquement séparée des flux contrôlés par le provider. */
+  completionPath?: string
   /** Vrai si ce run continue de produire même l'app fermée. */
   survivable: boolean
   /** Suit la sortie ligne par ligne. En mode dégradé, lit le pipe stdout. */
@@ -69,6 +81,8 @@ const WINDOWS_SURVIVAL_RELAY = String.raw`param(
   [Parameter(Mandatory = $true)][string]$ExecutableB64,
   [Parameter(Mandatory = $true)][string]$ArgumentsB64,
   [Parameter(Mandatory = $true)][string]$JournalPathB64,
+  [Parameter(Mandatory = $true)][string]$DiagnosticPathB64,
+  [Parameter(Mandatory = $true)][string]$CompletionPathB64,
   [Parameter(Mandatory = $true)][string]$InputPathB64,
   [Parameter(Mandatory = $true)][uint32]$RelayPid
 )
@@ -157,7 +171,7 @@ public static class AutowinHiddenRunner {
     return result.ToString();
   }
 
-  public static int Run(string executable, string[] args, string cwd, string inputPath, string journalPath, uint relayPid) {
+  public static int Run(string executable, string[] args, string cwd, string inputPath, string journalPath, string diagnosticPath, uint relayPid) {
     var command = new StringBuilder(Quote(executable));
     foreach (string arg in args) command.Append(' ').Append(Quote(arg ?? ""));
     IntPtr job = CreateJobObject(IntPtr.Zero, null);
@@ -173,12 +187,13 @@ public static class AutowinHiddenRunner {
     } finally { Marshal.FreeHGlobal(limitsPtr); }
 
     using (var input = new FileStream(inputPath, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete))
-    using (var output = new FileStream(journalPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete)) {
+    using (var output = new FileStream(journalPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
+    using (var diagnostic = new FileStream(diagnosticPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete)) {
       var startup = new STARTUPINFO();
       startup.cb = Marshal.SizeOf(startup); startup.dwFlags = STARTF_USESTDHANDLES;
       startup.hStdInput = InheritableHandle(input.SafeFileHandle.DangerousGetHandle());
       startup.hStdOutput = InheritableHandle(output.SafeFileHandle.DangerousGetHandle());
-      startup.hStdError = InheritableHandle(output.SafeFileHandle.DangerousGetHandle());
+      startup.hStdError = InheritableHandle(diagnostic.SafeFileHandle.DangerousGetHandle());
       PROCESS_INFORMATION child;
       if (!CreateProcessW(executable, command, IntPtr.Zero, IntPtr.Zero, true,
         CREATE_NO_WINDOW | CREATE_SUSPENDED, IntPtr.Zero, cwd, ref startup, out child)) {
@@ -213,10 +228,15 @@ Add-Type -TypeDefinition $source
 $executable = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($ExecutableB64))
 $argumentsJson = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($ArgumentsB64))
 $journalPath = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($JournalPathB64))
+$diagnosticPath = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($DiagnosticPathB64))
+$completionPath = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($CompletionPathB64))
 $inputPath = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($InputPathB64))
 [string[]]$childArguments = @((ConvertFrom-Json $argumentsJson) | ForEach-Object { [string]$_ })
 try {
-  $childExitCode = [AutowinHiddenRunner]::Run($executable, $childArguments, (Get-Location).Path, $inputPath, $journalPath, $RelayPid)
+  $childExitCode = [AutowinHiddenRunner]::Run($executable, $childArguments, (Get-Location).Path, $inputPath, $journalPath, $diagnosticPath, $RelayPid)
+  $marker = '{"type":"autowin.survivable-exit","exit_code":' + [string]$childExitCode + '}'
+  $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+  [IO.File]::WriteAllText($completionPath, $marker, $utf8NoBom)
   exit $childExitCode
 } finally {
   Remove-Item -LiteralPath $inputPath -Force -ErrorAction SilentlyContinue
@@ -227,18 +247,20 @@ const WINDOWS_SURVIVAL_NODE_RELAY = String.raw`const { spawn } = require('node:c
 const { closeSync, openSync } = require('node:fs')
 const powershellArgs = JSON.parse(Buffer.from(process.argv[2], 'base64').toString('utf8'))
 const journalPath = Buffer.from(process.argv[3], 'base64').toString('utf8')
+const diagnosticPath = Buffer.from(process.argv[4], 'base64').toString('utf8')
 powershellArgs.push('-RelayPid', String(process.pid))
 const childEnv = { ...process.env }
 delete childEnv.ELECTRON_RUN_AS_NODE
 const journalFd = openSync(journalPath, 'a')
+const diagnosticFd = openSync(diagnosticPath, 'a')
 const child = spawn('powershell.exe', powershellArgs, {
   shell: false,
   windowsHide: true,
-  stdio: ['ignore', journalFd, journalFd],
+  stdio: ['ignore', journalFd, diagnosticFd],
   env: childEnv
 })
-child.once('error', () => { closeSync(journalFd); process.exit(1) })
-child.once('exit', (code) => { closeSync(journalFd); process.exit(code == null ? 1 : code) })
+child.once('error', () => { closeSync(journalFd); closeSync(diagnosticFd); process.exit(1) })
+child.once('exit', (code) => { closeSync(journalFd); closeSync(diagnosticFd); process.exit(code == null ? 1 : code) })
 `
 
 export function usesWindowsSurvivalRelay(platform: NodeJS.Platform = process.platform): boolean {
@@ -248,8 +270,8 @@ export function usesWindowsSurvivalRelay(platform: NodeJS.Platform = process.pla
 function windowsSurvivalRelayPaths(root: string): { powershell: string; node: string } {
   const runtime = join(root, '.runtime')
   mkdirSync(runtime, { recursive: true })
-  const powershell = join(runtime, 'windows-survivable-runner-v8.ps1')
-  const node = join(runtime, 'windows-survivable-relay-v2.cjs')
+  const powershell = join(runtime, 'windows-survivable-runner-v12.ps1')
+  const node = join(runtime, 'windows-survivable-relay-v3.cjs')
   if (!existsSync(powershell))
     writeFileSync(powershell, WINDOWS_SURVIVAL_RELAY, { encoding: 'utf8', flag: 'wx' })
   if (!existsSync(node))
@@ -263,9 +285,18 @@ export function backgroundSurvivalInvocation(
   journalRoot: string,
   journalPath: string,
   stdin = '',
-  platform: NodeJS.Platform = process.platform
-): { bin: string; args: string[]; env?: NodeJS.ProcessEnv; relay: boolean; inputPath?: string } {
-  if (!usesWindowsSurvivalRelay(platform)) return { bin, args, relay: false }
+  platform: NodeJS.Platform = process.platform,
+  diagnosticPath = `${journalPath}.stderr.log`
+): {
+  bin: string
+  args: string[]
+  env?: NodeJS.ProcessEnv
+  relay: boolean
+  inputPath?: string
+  completionPath: string
+} {
+  const completionPath = survivableExitPath(journalPath)
+  if (!usesWindowsSurvivalRelay(platform)) return { bin, args, relay: false, completionPath }
   const inputPath = `${journalPath}.${randomUUID()}.stdin`
   writeFileSync(inputPath, stdin, { encoding: 'utf8', flag: 'wx' })
   const relayPaths = windowsSurvivalRelayPaths(journalRoot)
@@ -283,6 +314,10 @@ export function backgroundSurvivalInvocation(
     Buffer.from(JSON.stringify(args), 'utf8').toString('base64'),
     '-JournalPathB64',
     Buffer.from(journalPath, 'utf8').toString('base64'),
+    '-DiagnosticPathB64',
+    Buffer.from(diagnosticPath, 'utf8').toString('base64'),
+    '-CompletionPathB64',
+    Buffer.from(completionPath, 'utf8').toString('base64'),
     '-InputPathB64',
     Buffer.from(inputPath, 'utf8').toString('base64')
   ]
@@ -291,11 +326,13 @@ export function backgroundSurvivalInvocation(
     args: [
       relayPaths.node,
       Buffer.from(JSON.stringify(powershellArgs), 'utf8').toString('base64'),
-      Buffer.from(journalPath, 'utf8').toString('base64')
+      Buffer.from(journalPath, 'utf8').toString('base64'),
+      Buffer.from(diagnosticPath, 'utf8').toString('base64')
     ],
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
     relay: true,
-    inputPath
+    inputPath,
+    completionPath
   }
 }
 
@@ -303,18 +340,71 @@ export function backgroundSurvivalInvocation(
 export function spawnSurvivable(input: SurvivableSpawnInput): SurvivableRun {
   const spawnToken = input.runId ?? randomUUID()
   const root = journalRootFrom(input)
-  let journal: { path: string; fd: number } | undefined
+  let journal:
+    | {
+        path: string
+        fd: number
+        diagnosticPath: string
+        diagnosticFd: number
+        completionPath: string
+      }
+    | undefined
   if (detachedAllowed(input) && root) {
+    let stdout: { path: string; fd: number } | undefined
     try {
-      journal = openStdoutJournal(root, spawnToken)
+      stdout = openStdoutJournal(root, spawnToken)
+      const diagnostic = openStderrJournal(root, spawnToken)
+      journal = {
+        path: stdout.path,
+        fd: stdout.fd,
+        diagnosticPath: diagnostic.path,
+        diagnosticFd: diagnostic.fd,
+        completionPath: survivableExitPath(stdout.path)
+      }
     } catch {
+      if (stdout) {
+        closeSync(stdout.fd)
+        rmSync(stdout.path, { force: true })
+      }
       journal = undefined // journal impossible → pipes, plutôt que d'échouer le lancement
     }
   }
 
+  if (input.onJournalPrepared) {
+    if (!journal) {
+      throw new Error('Journal survivable indisponible — provider non lancé pour éviter un doublon')
+    }
+    try {
+      input.onJournalPrepared(journal.path)
+    } catch (error) {
+      try {
+        closeSync(journal.fd)
+      } catch {
+        /* déjà fermé */
+      }
+      try {
+        closeSync(journal.diagnosticFd)
+      } catch {
+        /* déjà fermé */
+      }
+      rmSync(journal.path, { force: true })
+      rmSync(journal.diagnosticPath, { force: true })
+      rmSync(journal.completionPath, { force: true })
+      throw error
+    }
+  }
+
   const invocation = journal
-    ? backgroundSurvivalInvocation(input.bin, input.args, root!, journal.path, input.stdin ?? '')
-    : { bin: input.bin, args: input.args, relay: false }
+    ? backgroundSurvivalInvocation(
+        input.bin,
+        input.args,
+        root!,
+        journal.path,
+        input.stdin ?? '',
+        process.platform,
+        journal.diagnosticPath
+      )
+    : { bin: input.bin, args: input.args, relay: false, completionPath: '' }
   const child = spawn(invocation.bin, invocation.args, {
     shell: false,
     ...(input.cwd ? { cwd: input.cwd } : {}),
@@ -325,7 +415,7 @@ export function spawnSurvivable(input: SurvivableSpawnInput): SurvivableRun {
           detached: true,
           stdio: invocation.relay
             ? ('ignore' as const)
-            : (['pipe', journal.fd, journal.fd] as const)
+            : (['pipe', journal.fd, journal.diagnosticFd] as const)
         }
       : { stdio: ['pipe', 'pipe', 'pipe'] as const })
   })
@@ -340,6 +430,17 @@ export function spawnSurvivable(input: SurvivableSpawnInput): SurvivableRun {
     }
   }
   child.once('close', cleanupInput)
+  // Hors Windows il n'y a pas encore de relais intermédiaire : tant que le main est vivant, il
+  // écrit tout de même la preuve de sortie. Sous Windows, le relais l'écrit même après sa mort.
+  if (journal && !invocation.relay) {
+    child.once('close', (code) => {
+      try {
+        writeSurvivableExit(journal!.path, code == null ? 1 : code)
+      } catch {
+        /* preuve indisponible : le récupérateur restera prudemment inactif */
+      }
+    })
+  }
   if (!journal && input.stdin !== undefined) child.stdin?.end(input.stdin)
   // `unref` : l'app peut mourir sans emporter le CLI. Absent sur les doubles de test.
   if (journal && typeof child.unref === 'function') child.unref()
@@ -352,6 +453,11 @@ export function spawnSurvivable(input: SurvivableSpawnInput): SurvivableRun {
       closeSync(journal.fd)
     } catch {
       /* fd déjà fermé : sans conséquence */
+    }
+    try {
+      closeSync(journal.diagnosticFd)
+    } catch {
+      /* fd déjà fermé */
     }
   }
 
@@ -378,7 +484,15 @@ export function spawnSurvivable(input: SurvivableSpawnInput): SurvivableRun {
     // Fermer le descripteur AVANT d'effacer : sous Windows, un fichier encore ouvert ne s'efface pas.
     release()
     try {
-      if (statSync(journal.path).size === 0) rmSync(journal.path, { force: true })
+      const content = readFileSync(journal.path, 'utf8')
+      const hasProviderOutput = Boolean(content.trim())
+      if (!hasProviderOutput) {
+        rmSync(journal.path, { force: true })
+        rmSync(journal.completionPath, { force: true })
+      }
+      if (!readFileSync(journal.diagnosticPath, 'utf8').trim()) {
+        rmSync(journal.diagnosticPath, { force: true })
+      }
     } catch {
       /* déjà effacé, ou verrouillé par le relais : un journal vide de plus n'est pas un échec de run */
     }
@@ -391,6 +505,8 @@ export function spawnSurvivable(input: SurvivableSpawnInput): SurvivableRun {
     pid: child.pid,
     spawnToken,
     journalPath: journal?.path,
+    diagnosticPath: journal?.diagnosticPath,
+    completionPath: journal?.completionPath,
     survivable: journal !== undefined,
     release,
     tail: async (onLine, options = {}) => {

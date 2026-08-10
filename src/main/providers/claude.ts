@@ -9,7 +9,12 @@ import {
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { closeSync, existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { openStdoutJournal, tailJsonLines, type StdoutJournalHandle } from '../runs/stdout-journal'
+import {
+  openStdoutJournal,
+  survivableExitCode,
+  tailJsonLines,
+  type StdoutJournalHandle
+} from '../runs/stdout-journal'
 import { backgroundSurvivalInvocation } from '../runs/survivable-spawn'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 import { findNpmGlobalFile } from './npm-global-resolve'
@@ -33,6 +38,7 @@ import type {
   Usage
 } from './types'
 import type { ProviderArtifactCandidate } from '../../shared/artifacts'
+import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-fingerprint'
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { claudeAccountEnv } from '../claude-accounts'
 
@@ -41,6 +47,7 @@ export interface ClaudeRawUsage {
   input_tokens?: number
   output_tokens?: number
   cache_read_input_tokens?: number
+  cache_creation_input_tokens?: number
 }
 
 /**
@@ -56,16 +63,41 @@ export interface ClaudeRawUsage {
  * Normaliser à la SOURCE plutôt que chez le consommateur : l'adaptateur est le seul endroit qui
  * connaisse la convention de son propre provider.
  */
-export function normalizeClaudeUsage(raw: ClaudeRawUsage, costUsd?: number): Usage {
-  const nonCache = Number.isFinite(raw.input_tokens) ? Math.max(0, raw.input_tokens as number) : 0
-  const cache = Number.isFinite(raw.cache_read_input_tokens)
-    ? Math.max(0, raw.cache_read_input_tokens as number)
-    : undefined
+export function normalizeClaudeUsage(
+  raw: unknown,
+  costUsd?: unknown,
+  hasReportedCost = costUsd !== undefined
+): Usage | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const usage = raw as Record<string, unknown>
+  const tokenCount = (value: unknown): number | undefined =>
+    typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
+  const nonCache = tokenCount(usage.input_tokens)
+  const output = tokenCount(usage.output_tokens)
+  const cache = tokenCount(usage.cache_read_input_tokens)
+  const hasCacheCreation = Object.prototype.hasOwnProperty.call(
+    usage,
+    'cache_creation_input_tokens'
+  )
+  const cacheCreation = hasCacheCreation ? tokenCount(usage.cache_creation_input_tokens) : 0
+  if (
+    nonCache === undefined ||
+    output === undefined ||
+    cache === undefined ||
+    cacheCreation === undefined
+  ) {
+    return undefined
+  }
+  const inputTokens = nonCache + cache + cacheCreation
+  if (!Number.isSafeInteger(inputTokens)) return undefined
+  const normalizedCost =
+    typeof costUsd === 'number' && Number.isFinite(costUsd) && costUsd >= 0 ? costUsd : undefined
+  if (hasReportedCost && normalizedCost === undefined) return undefined
   return {
-    inputTokens: nonCache + (cache ?? 0),
-    outputTokens: Number.isFinite(raw.output_tokens) ? Math.max(0, raw.output_tokens as number) : 0,
-    ...(cache === undefined ? {} : { cacheReadTokens: cache }),
-    ...(costUsd === undefined ? {} : { costUsd })
+    inputTokens,
+    outputTokens: output,
+    cacheReadTokens: cache,
+    ...(normalizedCost === undefined ? {} : { costUsd: normalizedCost })
   }
 }
 
@@ -96,7 +128,7 @@ export function normalizeClaudeUsage(raw: ClaudeRawUsage, costUsd?: number): Usa
  * que l'API répond, et remplacer ce paragraphe par le résultat OBSERVÉ.
  *
  * C'est pourquoi la défense ne repose PAS sur cette propriété : les verbes retenus n'ont aucune
- * option écrivante (voir CHAT_SHELL_REJECTED), et NON_INTERACTIVE_ENV neutralise pagers, visualiseurs
+ * option écrivante dans la liste refusée ci-dessous, et NON_INTERACTIVE_ENV neutralise pagers, visualiseurs
  * d'aide et invites d'identifiants au niveau du PROCESSUS FILS — indépendamment du CLI.
  *
  * SONT EXCLUS À DESSEIN, bien qu'ils commencent par `git` : `branch` (`-d` supprime), `remote`
@@ -130,8 +162,6 @@ export const CHAT_READ_ONLY_SHELL = [
  * LEÇON DE MÉTHODE : un périmètre par préfixe ne borne QUE le verbe, jamais ses options. Toute
  * entrée ajoutée ici doit être justifiée option par option, pas par le verbe.
  */
-export const CHAT_SHELL_REJECTED = ['git diff', 'git show', 'git log', 'git ls-remote'] as const
-
 /**
  * Environnement imposé au processus fils pour qu'aucune commande git n'ouvre quoi que ce soit.
  *
@@ -193,6 +223,53 @@ export function claudeToolResultText(content: unknown): string {
       .join('\n')
   }
   return ''
+}
+
+/** Lignes dont l'outil d'édition revendique directement l'écriture ; jamais le stdout d'un shell. */
+export function claudeWrittenLineFingerprints(
+  input: Record<string, unknown> | undefined
+): string[] {
+  if (!input) return []
+  const fingerprints: string[] = []
+  const wholeContent = (value: unknown): void => {
+    if (typeof value !== 'string') return
+    fingerprints.push(...value.split(/\r?\n/).filter(Boolean).map(exactLineFingerprint))
+  }
+  wholeContent(input.content)
+  if (typeof input.new_string === 'string') {
+    fingerprints.push(
+      ...addedLineFingerprints(
+        typeof input.old_string === 'string' ? input.old_string : '',
+        input.new_string
+      )
+    )
+  }
+  if (typeof input.new_source === 'string') {
+    fingerprints.push(
+      ...addedLineFingerprints(
+        typeof input.old_source === 'string' ? input.old_source : '',
+        input.new_source
+      )
+    )
+  }
+  if (Array.isArray(input.edits)) {
+    for (const edit of input.edits) {
+      if (
+        edit &&
+        typeof edit === 'object' &&
+        typeof (edit as { new_string?: unknown }).new_string === 'string'
+      ) {
+        const change = edit as { old_string?: unknown; new_string: string }
+        fingerprints.push(
+          ...addedLineFingerprints(
+            typeof change.old_string === 'string' ? change.old_string : '',
+            change.new_string
+          )
+        )
+      }
+    }
+  }
+  return fingerprints
 }
 
 /** Images/documents structurés éventuellement remontés par Claude ou un résultat d'outil. */
@@ -439,7 +516,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     try {
       mutationBefore =
         execution?.causallyIsolated && execution.sandbox !== 'read-only'
-          ? await captureWorkspaceMutationSnapshot(execution.cwd)
+          ? await captureWorkspaceMutationSnapshot(execution.cwd, execution.causalWatchPaths)
           : undefined
       opts.signal?.throwIfAborted()
     } catch (error) {
@@ -591,9 +668,34 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         journal = undefined // journal impossible → on retombe sur le pipe plutôt que d'échouer
       }
     }
+    if (execution?.onJournal) {
+      if (!journal) {
+        throw new Error(
+          'Journal survivable Claude indisponible — provider non lancé pour éviter un doublon'
+        )
+      }
+      try {
+        execution.onJournal(spawnToken, journal.path)
+      } catch (error) {
+        try {
+          closeSync(journal.fd)
+        } catch {
+          /* déjà fermé */
+        }
+        rmSync(journal.path, { force: true })
+        throw error
+      }
+    }
     const invocation = journal
       ? backgroundSurvivalInvocation(this.bin, args, journalRoot!, journal.path, lastUser)
-      : { bin: this.bin, args, relay: false }
+      : {
+          bin: this.bin,
+          args,
+          relay: false,
+          env: undefined,
+          inputPath: undefined,
+          completionPath: ''
+        }
     const child = spawn(invocation.bin, invocation.args, {
       shell: false,
       windowsHide: true,
@@ -621,8 +723,6 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     // `unref` n'existe que sur un vrai ChildProcess (doubles de test / stubs peuvent l'omettre).
     if (journal && typeof child.unref === 'function') child.unref() // l'app peut mourir sans emporter le CLI
     const childPid = child.pid
-    // Le journal est le point de rattachement : sans lui, une app qui revient ne sait pas où lire.
-    if (journal) execution?.onJournal?.(spawnToken, journal.path)
     if (childPid) {
       if (execution?.onSpawned) execution.onSpawned(spawnToken, childPid)
       else {
@@ -658,10 +758,14 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         )
       )
     }
-    const pendingTools = new Map<string, { name: string; command: string; filePath: string }>()
+    const pendingTools = new Map<
+      string,
+      { name: string; command: string; filePath: string; writtenLineFingerprints: string[] }
+    >()
     const queue: StreamChunk[] = []
     let done = false
     let childClosed = false
+    let relayCompletionPoll: ReturnType<typeof setInterval> | undefined
     let errored: Error | null = null
     let resolveWait: (() => void) | null = null
 
@@ -675,6 +779,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     // et tue le process en escalade SIGTERM→SIGKILL. L'abort utilisateur passe par le même chemin.
     const forceSettle = (err: Error): void => {
       if (!errored) errored = err
+      if (relayCompletionPoll) clearInterval(relayCompletionPoll)
       done = true
       wake()
     }
@@ -749,7 +854,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             // B — mémorise l'appel outil ; la preuve (ok/échec) arrive dans le tool_result associé.
             const filePath = String(part.input?.file_path ?? '')
             const command = String(part.input?.command ?? filePath)
-            pendingTools.set(part.id, { name: part.name, command, filePath })
+            pendingTools.set(part.id, {
+              name: part.name,
+              command,
+              filePath,
+              writtenLineFingerprints: claudeWrittenLineFingerprints(part.input)
+            })
           }
         }
       } else if (t === 'user') {
@@ -783,7 +893,10 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             ...(isFile
               ? {
                   path: call.filePath,
-                  paths: [claudeEvidencePath(call.filePath, execution?.cwd ?? process.cwd())]
+                  paths: [claudeEvidencePath(call.filePath, execution?.cwd ?? process.cwd())],
+                  ...(call.writtenLineFingerprints.length > 0
+                    ? { writtenLineFingerprints: call.writtenLineFingerprints }
+                    : {})
                 }
               : call.command
                 ? { command: call.command }
@@ -797,13 +910,14 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         if (o['is_error'] === true)
           errored = new Error(`claude result error: ${String(o['result'] ?? '')}`)
         // Tokens/coût RÉELS du tour (le result event du CLI les porte).
-        const u = o['usage'] as ClaudeRawUsage | undefined
-        if (u) {
-          usage = normalizeClaudeUsage(
-            u,
-            typeof o['total_cost_usd'] === 'number' ? (o['total_cost_usd'] as number) : undefined
-          )
-        }
+        const hasReportedCost = Object.prototype.hasOwnProperty.call(o, 'total_cost_usd')
+        const normalizedUsage = normalizeClaudeUsage(
+          o['usage'],
+          o['total_cost_usd'],
+          hasReportedCost
+        )
+        if (normalizedUsage) usage = normalizedUsage
+        else if (!errored) errored = new Error('claude result usage invalide ou incomplet')
       }
     }
 
@@ -847,14 +961,16 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       child.stdout?.on('data', (chunk: Buffer) => consumeText(chunk.toString('utf8')))
     }
     child.on('error', (e) => {
+      if (relayCompletionPoll) clearInterval(relayCompletionPoll)
       watchdog.dispose()
       if (!childPid) execution?.onSpawnIntent?.(spawnToken, false)
       errored = e
       done = true
       wake()
     })
-    child.on('close', async (code) => {
+    child.once('close', async (code) => {
       childClosed = true
+      if (relayCompletionPoll) clearInterval(relayCompletionPoll)
       const tailError = await tailSettled
       watchdog.dispose()
       if (childPid) execution?.onProcess?.(childPid, false)
@@ -900,6 +1016,20 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       done = true
       wake()
     })
+
+    if (journal && invocation.relay) {
+      // Sous Windows, le relais DETACHE peut avoir certifie la sortie dans `.exit.json` sans que
+      // Node livre l'event `close` au parent (observe en reel sur un Judge : resultat VALIDE ecrit,
+      // relais termine, run reste `active` jusqu'au watchdog). La preuve atomique du relais est plus
+      // forte que cet event volatil : on la convertit en la meme cloture locale, apres installation
+      // du listener et avec `once` pour ignorer un event tardif du processus.
+      relayCompletionPoll = setInterval(() => {
+        if (childClosed) return
+        const exitCode = survivableExitCode(journal.path)
+        if (exitCode !== undefined) child.emit('close', exitCode)
+      }, 80)
+      relayCompletionPoll.unref?.()
+    }
 
     // Prompt remis sur STDIN (et non en argv) → aucune limite de longueur de ligne de commande.
     // Best-effort : un stdin fermé (process déjà mort) ne doit pas jeter hors du flux normal.

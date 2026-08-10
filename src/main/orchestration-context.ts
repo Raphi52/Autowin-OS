@@ -5,7 +5,7 @@
 export interface OrchestrationContextInput {
   task: string
   conversation?: { id: string; title?: string; category?: string; runPaths?: string[] }
-  app?: { tab: string; pendingDecisions: Array<{ id: string; question: string }> }
+  app?: { tab: string }
   runs?: Array<{ subject: string; status: string; blocked: boolean }>
   unavailable?: string[]
 }
@@ -22,7 +22,7 @@ export function collectOrchestrationContext(input: OrchestrationContextInput): s
     )
   }
   if (input.app) {
-    lines.push(`État application: onglet ${input.app.tab}; décisions en attente ${input.app.pendingDecisions.length}`)
+    lines.push(`État application: onglet ${input.app.tab}`)
   }
   const relevantRuns = (input.runs ?? []).filter((run) => run.blocked || run.status === 'open').slice(0, 8)
   lines.push(

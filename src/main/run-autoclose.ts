@@ -40,6 +40,9 @@ export type AutoCloseResult =
         | 'protected-branch'
         | 'secret-detected'
         | 'no-remote'
+        | 'invalid-publication-range'
+        /** Reprise legacy : aucune preuve durable ne permet d'attribuer le dirty Brain au run. */
+        | 'recovery-baseline-missing'
         /** L'historique à publier contient un commit qui n'appartient pas à ce run. */
         | 'concurrent-commits'
       detail?: string
@@ -56,7 +59,10 @@ const SECRET_PATTERNS: Array<{ name: string; re: RegExp }> = [
   { name: 'clé privée', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
   { name: 'token GitHub', re: /\bgh[pousr]_[A-Za-z0-9]{20,}/ },
   { name: 'clé AWS', re: /\bAKIA[0-9A-Z]{16}\b/ },
-  { name: 'clé API générique', re: /\b(?:api[_-]?key|secret|password|token)\s*[:=]\s*['"][^'"]{16,}['"]/i },
+  {
+    name: 'clé API générique',
+    re: /\b(?:api[_-]?key|secret|password|token)\s*[:=]\s*['"][^'"]{16,}['"]/i
+  },
   { name: 'jeton Bearer', re: /\bBearer\s+[A-Za-z0-9._-]{24,}/ }
 ]
 
@@ -65,8 +71,17 @@ export function detectSecret(text: string): string | undefined {
   return SECRET_PATTERNS.find(({ re }) => re.test(text))?.name
 }
 
+/** Lignes réellement introduites par les commits d'une plage, hors en-têtes de patch. */
+function addedPatchContent(patch: string): string {
+  return patch
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('>'))
+    .map((line) => line.slice(1))
+    .join('\n')
+}
+
 /**
- * Lignes de `git status --porcelain` → chemins (gère le renommage `a -> b`).
+ * Enregistrements NUL de `git status --porcelain=v1 -z` → chemins exacts.
  *
  * NB : tous les appels passent `-uall`. Sans lui, git REPLIE un dossier non suivi en une seule
  * entrée (`?? inbox/`) : un fichier ajouté dans un dossier déjà non suivi devient alors invisible
@@ -74,15 +89,22 @@ export function detectSecret(text: string): string | undefined {
  * compris le travail d'autrui. Constaté en vrai sur le Brain.
  */
 export function parsePorcelainPaths(stdout: string): string[] {
-  return stdout
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const path = line.slice(2).trim().replace(/^"|"$/g, '')
-      const renamed = path.split(' -> ')
-      return renamed[renamed.length - 1]
-    })
+  const records = stdout.split('\0')
+  const paths: string[] = []
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index]
+    if (!record) continue
+    const separator = record[2] === ' ' ? 2 : record[1] === ' ' ? 1 : -1
+    if (separator < 0) continue
+    const status = record.slice(0, separator)
+    const path = record.slice(separator + 1)
+    if (!path) continue
+    paths.push(path)
+    // En mode -z, Git écrit le NOUVEAU chemin dans l'enregistrement status, puis l'ANCIEN
+    // chemin comme enregistrement NUL séparé. Il n'existe aucun séparateur textuel ` -> `.
+    if (status.includes('R') || status.includes('C')) index += 1
+  }
+  return paths
 }
 
 /**
@@ -94,26 +116,54 @@ export async function autoCloseRun(input: AutoCloseInput): Promise<AutoCloseResu
   if (PROTECTED.test(branch.trim())) {
     return { status: 'skipped', reason: 'protected-branch', detail: branch }
   }
+  let indexTree: string | undefined
+  let committed = false
   try {
     const scope = paths?.length ? ['--', ...paths] : []
-    const changed = parsePorcelainPaths(await runGit(['status', '--porcelain', '-uall', ...scope], repo))
+    const changed = parsePorcelainPaths(
+      await runGit(['status', '--porcelain=v1', '-z', '-uall', ...scope], repo)
+    )
     if (changed.length === 0) return { status: 'skipped', reason: 'no-changes' }
+    const metadataSecret = detectSecret(`${message}\n${changed.join('\n')}`)
+    if (metadataSecret) {
+      return { status: 'skipped', reason: 'secret-detected', detail: metadataSecret }
+    }
 
-    // Dernier filet anti-secret : on inspecte ce qu'on s'apprête à publier, pas l'arbre entier.
-    const diff = await runGit(['diff', 'HEAD', ...scope], repo)
-    const secret = detectSecret(diff)
-    if (secret) return { status: 'skipped', reason: 'secret-detected', detail: secret }
-
+    // Sauvegarde exacte de l'index utilisateur : l'ajout temporaire rend aussi les fichiers non
+    // suivis visibles au scanner, puis `read-tree` restaure l'index sans toucher au workspace.
+    indexTree = (await runGit(['write-tree'], repo)).trim()
     await runGit(paths?.length ? ['add', '--', ...paths] : ['add', '-A'], repo)
-    await runGit(['commit', '-m', message], repo)
-    if (input.push === false) return { status: 'committed', files: changed.length }
+    const stagedDiff = await runGit(['diff', '--cached', indexTree, ...scope], repo)
+    const secret = detectSecret(stagedDiff)
+    if (secret) {
+      await runGit(['read-tree', indexTree], repo)
+      return { status: 'skipped', reason: 'secret-detected', detail: secret }
+    }
 
-    const remotes = (await runGit(['remote'], repo)).trim()
-    if (!remotes) return { status: 'skipped', reason: 'no-remote' }
-    // HEAD:refs/heads/<branche> → publie sans créer ni basculer de branche locale.
-    await runGit(['push', 'origin', `HEAD:refs/heads/${branch}`], repo)
-    return { status: 'pushed', branch, files: changed.length }
+    const baseSha = (await runGit(['rev-parse', 'HEAD'], repo)).trim()
+    await runGit(
+      paths?.length
+        ? ['commit', '--only', '-m', message, '--', ...paths]
+        : ['commit', '-m', message],
+      repo
+    )
+    committed = true
+    if (input.push === false) return { status: 'committed', files: changed.length }
+    const publishedSha = (await runGit(['rev-parse', 'HEAD'], repo)).trim()
+    return await publishRunCommits({
+      repo,
+      publication: { baseSha, publishedSha },
+      branch,
+      runGit
+    })
   } catch (error) {
+    if (indexTree && !committed) {
+      try {
+        await runGit(['read-tree', indexTree], repo)
+      } catch {
+        // L'échec reste rapporté ; cette restauration ne réécrit jamais le workspace.
+      }
+    }
     return { status: 'failed', error: error instanceof Error ? error.message : String(error) }
   }
 }
@@ -126,43 +176,109 @@ export async function autoCloseRun(input: AutoCloseInput): Promise<AutoCloseResu
  * modifiés » n'y voit alors rien et sortait en `no-changes` — la publication ne se déclenchait
  * jamais. C'est ce trou-là que cette fonction ferme.
  *
- * Garde : si l'historique à publier contient un commit étranger au run (autre session travaillant
- * sur la même base), on s'abstient plutôt que d'emporter le travail d'autrui sur une branche.
+ * La propriété n'est jamais déduite du message : le moteur worktree fournit les deux SHA exacts.
+ * Le push vise publishedSha, pas HEAD, donc un commit concurrent arrivé ensuite reste hors branche.
  */
+export interface GitPublicationRange {
+  baseSha: string
+  publishedSha: string
+}
+
 export async function publishRunCommits(input: {
   repo: string
-  /** HEAD de la base au démarrage du run. Absent ⇒ rien à comparer, on s'abstient. */
-  baseHead: string | undefined
-  runId: string
+  /** Plage exacte attestée par la finalisation du worktree. */
+  publication: Readonly<GitPublicationRange>
   branch: string
   runGit: GitRunner
 }): Promise<AutoCloseResult> {
-  const { repo, baseHead, runId, branch, runGit } = input
+  const { repo, publication, branch, runGit } = input
   if (PROTECTED.test(branch.trim())) {
     return { status: 'skipped', reason: 'protected-branch', detail: branch }
   }
-  if (!baseHead) return { status: 'skipped', reason: 'no-changes' }
+  const { baseSha, publishedSha } = publication
+  if (![baseSha, publishedSha].every((sha) => /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/i.test(sha))) {
+    return { status: 'skipped', reason: 'invalid-publication-range', detail: 'SHA invalide' }
+  }
   try {
-    const range = `${baseHead}..HEAD`
-    const subjects = (await runGit(['log', '--format=%s', range], repo))
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-    if (subjects.length === 0) return { status: 'skipped', reason: 'no-changes' }
-    const foreign = subjects.find((subject) => !subject.includes(runId))
-    if (foreign) return { status: 'skipped', reason: 'concurrent-commits', detail: foreign }
+    await runGit(['cat-file', '-e', `${baseSha}^{commit}`], repo)
+    await runGit(['cat-file', '-e', `${publishedSha}^{commit}`], repo)
+    await runGit(['merge-base', '--is-ancestor', baseSha, publishedSha], repo)
+  } catch (error) {
+    return {
+      status: 'skipped',
+      reason: 'invalid-publication-range',
+      detail: error instanceof Error ? error.message : String(error)
+    }
+  }
+  try {
+    const range = `${baseSha}..${publishedSha}`
+    const count = Number((await runGit(['rev-list', '--count', range], repo)).trim())
+    if (!Number.isFinite(count) || count <= 0) return { status: 'skipped', reason: 'no-changes' }
 
     const files = (await runGit(['diff', '--name-only', range], repo))
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean)
-    const secret = detectSecret(await runGit(['diff', range], repo))
+    const finalSecret = detectSecret(await runGit(['diff', range], repo))
+    const publishedMetadata = await runGit(
+      ['log', '--format=raw', '--name-only', '--no-renames', '-m', range],
+      repo
+    )
+    const historyPatch = await runGit(
+      [
+        'log',
+        '--format=',
+        '--no-ext-diff',
+        '--no-textconv',
+        '--no-renames',
+        '-m',
+        '-p',
+        '--unified=0',
+        '--output-indicator-new=>',
+        range
+      ],
+      repo
+    )
+    const secret =
+      finalSecret ??
+      detectSecret(publishedMetadata) ??
+      detectSecret(addedPatchContent(historyPatch))
     if (secret) return { status: 'skipped', reason: 'secret-detected', detail: secret }
 
     const remotes = (await runGit(['remote'], repo)).trim()
     if (!remotes) return { status: 'skipped', reason: 'no-remote' }
-    await runGit(['push', 'origin', `HEAD:refs/heads/${branch}`], repo)
+    await runGit(['push', 'origin', `${publishedSha}:refs/heads/${branch}`], repo)
     return { status: 'pushed', branch, files: files.length }
+  } catch (error) {
+    return { status: 'failed', error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+/** Compatibilité des clôtures sans attestation worktree : attribution prudente par message. */
+async function publishLegacyRunCommits(input: {
+  repo: string
+  baseHead: string
+  runId: string
+  branch: string
+  runGit: GitRunner
+}): Promise<AutoCloseResult> {
+  try {
+    const publishedSha = (await input.runGit(['rev-parse', 'HEAD'], input.repo)).trim()
+    const subjects = (
+      await input.runGit(['log', '--format=%s', `${input.baseHead}..${publishedSha}`], input.repo)
+    )
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+    if (subjects.length === 0) return { status: 'skipped', reason: 'no-changes' }
+    const foreign = subjects.find((subject) => !subject.includes(input.runId))
+    if (foreign) return { status: 'skipped', reason: 'concurrent-commits', detail: foreign }
+    return publishRunCommits({
+      repo: input.repo,
+      publication: { baseSha: input.baseHead, publishedSha },
+      branch: input.branch,
+      runGit: input.runGit
+    })
   } catch (error) {
     return { status: 'failed', error: error instanceof Error ? error.message : String(error) }
   }
@@ -180,7 +296,7 @@ export function autoCloseBranch(runId: string): string {
  */
 export async function snapshotChangedPaths(repo: string, runGit: GitRunner): Promise<string[]> {
   try {
-    return parsePorcelainPaths(await runGit(['status', '--porcelain', '-uall'], repo))
+    return parsePorcelainPaths(await runGit(['status', '--porcelain=v1', '-z', '-uall'], repo))
   } catch {
     return [] // dépôt illisible → aucune baseline ; le filtrage se comporte comme avant
   }
@@ -241,6 +357,18 @@ export interface AutoCloseReport {
   at: string
 }
 
+/**
+ * Une publication Git locale deja fusionnee ne peut etre acquittee tant que sa copie distante reste
+ * rejouable. Les blocages de contenu sont terminaux et visibles dans le rapport ; un echec transport
+ * ou l'absence temporaire de remote doivent au contraire rester dans le journal de reprise.
+ */
+export function projectPublicationNeedsRetry(report: AutoCloseReport): boolean {
+  return (
+    report.project.status === 'failed' ||
+    (report.project.status === 'skipped' && report.project.reason === 'no-remote')
+  )
+}
+
 /** Message de commit : la tâche du run, bornée, préfixée pour être reconnaissable dans l'historique. */
 export function autoCloseMessage(task: string, runId: string): string {
   const head = task.replace(/\s+/g, ' ').trim().slice(0, 100) || 'travail agent'
@@ -259,6 +387,10 @@ export async function closeGreenRunOnDisk(input: {
   brainRepo: string
   /** Fichiers déjà modifiés AVANT le run, par dépôt : ils sont exclus de la publication. */
   baseline?: Readonly<CloseBaseline>
+  /** Publication projet attestée par le moteur worktree ; elle prime sur HEAD et le dirty courant. */
+  projectPublication?: Readonly<GitPublicationRange>
+  /** Après crash sans baseline Brain durable, interdit toute attribution opportuniste du dirty. */
+  recoveredWithoutBrainBaseline?: boolean
   runGit?: GitRunner
 }): Promise<AutoCloseReport> {
   const runGit: GitRunner = input.runGit ?? (await defaultGitRunner())
@@ -273,11 +405,20 @@ export async function closeGreenRunOnDisk(input: {
     baseHead: string | undefined
   ): Promise<AutoCloseResult> => {
     try {
-      const after = parsePorcelainPaths(await runGit(['status', '--porcelain', '-uall'], repo))
+      const after = parsePorcelainPaths(
+        await runGit(['status', '--porcelain=v1', '-z', '-uall'], repo)
+      )
       const mine = pathsFromRun(before, after)
       // Arbre propre : le travail du run a pu être DÉJÀ commité par la fusion du worktree.
       if (mine.length === 0) {
-        return await publishRunCommits({ repo, baseHead, runId: input.runId, branch, runGit })
+        if (!baseHead) return { status: 'skipped', reason: 'no-changes' }
+        return await publishLegacyRunCommits({
+          repo,
+          baseHead,
+          runId: input.runId,
+          branch,
+          runGit
+        })
       }
       return await autoCloseRun({ repo, branch, message, paths: mine, runGit })
     } catch (error) {
@@ -287,16 +428,21 @@ export async function closeGreenRunOnDisk(input: {
 
   // Les DEUX dépôts sont traités au périmètre du run : côté projet aussi, un `add -A` emporterait le
   // travail en cours d'une autre session partageant l'arbre.
-  const project = await closeScoped(
-    input.projectRepo,
-    input.baseline?.project ?? [],
-    input.baseline?.projectHead
-  )
-  const brain = await closeScoped(
-    input.brainRepo,
-    input.baseline?.brain ?? [],
-    input.baseline?.brainHead
-  )
+  const project = input.projectPublication
+    ? await publishRunCommits({
+        repo: input.projectRepo,
+        publication: input.projectPublication,
+        branch,
+        runGit
+      })
+    : await closeScoped(
+        input.projectRepo,
+        input.baseline?.project ?? [],
+        input.baseline?.projectHead
+      )
+  const brain: AutoCloseResult = input.recoveredWithoutBrainBaseline
+    ? { status: 'skipped', reason: 'recovery-baseline-missing' }
+    : await closeScoped(input.brainRepo, input.baseline?.brain ?? [], input.baseline?.brainHead)
 
   return { runId: input.runId, branch, project, brain, at: new Date().toISOString() }
 }

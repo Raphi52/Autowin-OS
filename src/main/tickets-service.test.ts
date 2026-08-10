@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { DEFAULT_TICKET_SOURCE, type TicketSourceProfile } from '../shared/tickets'
+import { DEFAULT_TICKET_SOURCE, type TicketItem, type TicketSourceProfile } from '../shared/tickets'
 import type { TicketCredentialStore } from './ticket-credential-store'
 import type { TicketProviderRegistry } from './ticket-providers/provider-contract'
 import type { TicketSourceStore } from './ticket-source-store'
-import { TicketService, ticketCredentialKey } from './tickets-service'
+import { TicketService, normalizeTicketItem, ticketCredentialKey } from './tickets-service'
 
 function fixture() {
   const profiles: TicketSourceProfile[] = [DEFAULT_TICKET_SOURCE]
@@ -119,5 +119,61 @@ describe('service Tickets côté main', () => {
     expect(ticketCredentialKey(original)).not.toBe(ticketCredentialKey(replacement))
     expect(deps.credentialStore.delete).toHaveBeenCalledWith(ticketCredentialKey(original))
     expect(deps.sourceStore.save).toHaveBeenCalledWith(replacement)
+  })
+})
+
+describe('#4 enrichissement borné à la frontière (discussion + titre des relations)', () => {
+  const item = (over: Partial<TicketItem> = {}): TicketItem => ({
+    id: '1',
+    sourceId: DEFAULT_TICKET_SOURCE.id,
+    type: 'Bug',
+    title: 'T',
+    state: 'Ouvert',
+    url: 'https://x/1',
+    updatedAt: '2026-08-01T00:00:00.000Z',
+    fields: {},
+    ...over
+  })
+
+  it('garde les commentaires les plus RÉCENTS et borne leur taille', () => {
+    const comments = Array.from({ length: 40 }, (_, index) => ({
+      author: 'A',
+      text: `m${index} ${'x'.repeat(5_000)}`
+    }))
+    const normalized = normalizeTicketItem(item({ comments }))
+    expect(normalized.comments).toHaveLength(20)
+    expect(normalized.comments?.[0].text.startsWith('m20')).toBe(true)
+    expect(normalized.comments?.[0].text.length).toBeLessThanOrEqual(2_000)
+  })
+
+  it('ignore un commentaire vide et n’invente aucun titre de relation', () => {
+    const normalized = normalizeTicketItem(
+      item({
+        comments: [{ text: '   ' }, { text: 'utile' }],
+        relations: [{ kind: 'parent', target: '2' }, { kind: 'related', target: '3', title: ' É ' }]
+      })
+    )
+    expect(normalized.comments).toEqual([{ text: 'utile' }])
+    expect(normalized.relations?.[0]).not.toHaveProperty('title')
+    expect(normalized.relations?.[1].title).toBe('É')
+  })
+
+  it('une fiche sans enrichissement traverse inchangée', () => {
+    const plain = item()
+    expect(normalizeTicketItem(plain)).toEqual(plain)
+  })
+
+  it('list() normalise les fiches remontées par l’adaptateur', async () => {
+    const deps = fixture()
+    const registry = {
+      supports: vi.fn(() => true),
+      list: vi.fn(async () => ({
+        items: [item({ comments: Array.from({ length: 30 }, () => ({ text: 'c' })) })],
+        hasMore: false
+      }))
+    } as unknown as TicketProviderRegistry
+    const service = new TicketService({ ...deps, registry })
+    const page = await service.list({ source: DEFAULT_TICKET_SOURCE })
+    expect(page.items[0].comments).toHaveLength(20)
   })
 })

@@ -186,6 +186,87 @@ describe('récupération des worktrees après redémarrage', () => {
     }
   )
 
+  it('reprend la SHA exacte d un merge publie avant la persistance finale', async () => {
+    const repo = tempRepo()
+    const remote = mkdtempSync(join(tmpdir(), 'autowin-recovery-remote-'))
+    roots.push(remote)
+    git(remote, 'init', '--bare', '-q')
+    git(repo, 'remote', 'add', 'origin', remote)
+    const previous = manager(repo)
+    const runId = 'crash-after-merge-publish'
+    const context = previous.manager.describe(runId)
+    const agentPath = previous.manager.acquire(runId, context)
+    writeFileSync(join(agentPath, 'agent.txt'), 'agent\n')
+    git(agentPath, 'add', 'agent.txt')
+    git(agentPath, 'commit', '-q', '-m', 'agent work')
+    const agentSha = git(agentPath, 'rev-parse', 'HEAD')
+
+    writeFileSync(join(repo, 'concurrent.txt'), 'base concurrente\n')
+    git(repo, 'add', 'concurrent.txt')
+    git(repo, 'commit', '-q', '-m', 'concurrent base')
+    const publicationBaseSha = git(repo, 'rev-parse', 'HEAD')
+    const integrationPath = mkdtempSync(join(tmpdir(), 'autowin-recovery-integration-'))
+    rmSync(integrationPath, { recursive: true, force: true })
+    roots.push(integrationPath)
+    git(repo, 'worktree', 'add', '--detach', integrationPath, publicationBaseSha)
+    git(integrationPath, '-c', 'commit.gpgsign=false', 'merge', '--no-edit', agentSha)
+    const integratedSha = git(integrationPath, 'rev-parse', 'HEAD')
+    git(repo, 'update-ref', `refs/autowin/publications/${runId}`, integratedSha)
+    git(repo, 'merge', '--ff-only', integratedSha)
+    git(repo, 'worktree', 'remove', '--force', integrationPath)
+
+    const store = stateStore(previous.worktreeRoot)
+    store.save({
+      version: 1,
+      repoId: 'repo-test',
+      runId,
+      agentName: 'Builder',
+      role: 'build',
+      task: 'reprend un merge exact',
+      worktreePath: context.worktreePath,
+      baseBranch: context.baseBranch,
+      baseSha: context.baseSha,
+      publicationBaseSha,
+      publicationAgentSha: agentSha,
+      verdict: 'green',
+      publication: 'integrating',
+      files: [{ path: 'agent.txt', kind: 'add' }],
+      createdAtMs: 10,
+      updatedAtMs: 20
+    })
+    const publications: Array<{ baseSha: string; agentSha: string }> = []
+    new RunWorktreeCoordinator({
+      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot: previous.worktreeRoot }),
+      stateStore: store,
+      onRecoveredPublication: (publication) => {
+        publications.push(publication)
+        git(repo, 'push', 'origin', `${publication.agentSha}:refs/heads/auto/${runId}`)
+      }
+    })
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    expect(publications).toEqual([
+      expect.objectContaining({ baseSha: publicationBaseSha, agentSha: integratedSha })
+    ])
+    expect(git(remote, 'rev-parse', `refs/heads/auto/${runId}`)).toBe(integratedSha)
+    expect(store.get(runId)).toMatchObject({
+      publication: 'complete',
+      publishedSha: integratedSha,
+      causalPublicationDeliveredAtMs: expect.any(Number)
+    })
+    expect(() => git(repo, 'rev-parse', `refs/autowin/publications/${runId}`)).toThrow()
+
+    new RunWorktreeCoordinator({
+      manager: new WorktreeManager({ baseRepo: repo, worktreeRoot: previous.worktreeRoot }),
+      stateStore: store,
+      onRecoveredPublication: (publication) => {
+        publications.push(publication)
+      }
+    })
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    expect(publications).toHaveLength(1)
+  })
+
   it('reprend la publication après un crash juste après la préparation du commit agent', () => {
     const repo = tempRepo()
     const previous = manager(repo)
@@ -422,7 +503,7 @@ describe('récupération des worktrees après redémarrage', () => {
 
   it('nettoie une copie qui ne contient que des sorties régénérables', () => {
     const repo = tempRepo()
-    writeFileSync(join(repo, '.gitignore'), 'node_modules\nout\n.eslintcache\n')
+    writeFileSync(join(repo, '.gitignore'), 'node_modules\nout\n.eslintcache\n*.tsbuildinfo\n')
     git(repo, 'add', '.gitignore')
     git(repo, 'commit', '-q', '-m', 'ignore generated')
     const current = manager(repo)
@@ -432,6 +513,7 @@ describe('récupération des worktrees après redémarrage', () => {
     writeFileSync(join(path, 'node_modules', 'pkg', 'index.js'), 'generated\n')
     writeFileSync(join(path, 'out', 'bundle.js'), 'generated\n')
     writeFileSync(join(path, '.eslintcache'), 'generated\n')
+    writeFileSync(join(path, 'tsconfig.web.tsbuildinfo'), 'generated\n')
 
     expect(current.manager.finalize('run-generated')).toMatchObject({ outcome: 'nothing' })
     expect(current.manager.listAgentIds()).toEqual([])

@@ -7,8 +7,13 @@
  * Toute dégradation reste non bloquante et typée : empty, invalid ou unavailable.
  */
 import { existsSync, readFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import { readSignedBrainPayload, verifySignedBrainPayload } from './brain-protocol'
+import {
+  readSignedBrainPayload,
+  sealBrainRequest,
+  verifySignedBrainPayload
+} from './brain-protocol'
 
 type FetchLike = typeof fetch
 
@@ -30,8 +35,8 @@ export interface BrainRetrievalOptions {
   port?: number
   fetchFn?: FetchLike
   env?: NodeJS.ProcessEnv
-  /** Horloge injectable — les tests font expirer la mémoire courte sans attendre. */
-  now?: () => number
+  /** Identifiant injectable pour corréler une récupération sans journaliser la requête. */
+  traceId?: () => string
   /** Identités/préfixes de chemins ancrés autorisés, dérivés du workspace courant. */
   corpus?: readonly string[]
 }
@@ -73,6 +78,13 @@ export type BrainRetrievalStatus = 'found' | 'empty' | 'invalid' | 'unavailable'
 export interface BrainRetrievalResult {
   context: string
   navigation?: BrainNavigation
+  /** Sélecteurs effectivement appliqués par le serveur, dans l'enveloppe HMAC. */
+  corpus?: readonly string[]
+  /** Frontières signées : le client ne redéduit jamais les sources depuis du Markdown ambigu. */
+  structuredContext?: {
+    preamble: string
+    sources: ReadonlyArray<{ path: string; content: string }>
+  }
   status: BrainRetrievalStatus
 }
 
@@ -155,32 +167,12 @@ function parseNavigation(raw: unknown): BrainNavigation | undefined {
 }
 
 /**
- * Mémoire courte des récupérations : même requête, même corpus ⇒ même résultat.
- *
- * Mesuré sur un journal réel : 15 appels pour 4 requêtes distinctes sur une seule conversation, et
- * 24 appels redondants sur 51 au total — ~26 800 caractères réinjectés pour rien, plus ~500 ms
- * d'attente à chaque fois. Relancer une tâche est légitime ; réinterroger le Brain avec la MÊME
- * question dans la foulée n'apprend rien.
- *
- * Volontairement COURT : le Brain est un corpus vivant (le hook d'ingestion y écrit). Un cache long
- * servirait du savoir périmé — ce serait pire que le gâchis qu'il évite.
- */
-const RETRIEVAL_CACHE_TTL_MS = 5 * 60 * 1000
-const RETRIEVAL_CACHE_MAX = 32
-const retrievalCache = new Map<string, { at: number; result: BrainRetrievalResult }>()
-
-/** Vide la mémoire courte — pour les tests, et pour un rechargement explicite du corpus. */
-export function clearBrainRetrievalCache(): void {
-  retrievalCache.clear()
-}
-
-/**
  * Récupère le contexte Brain pertinent pour `query` (borné) + sa navigation interne si le serveur
  * l'expose. `{ context: '' }` si indisponible (jamais throw). Dégrade proprement : un serveur ancien
  * sans champ `navigation` → `navigation` undefined, le run continue.
  *
- * Une requête identique servie il y a moins de {@link RETRIEVAL_CACHE_TTL_MS} est rendue depuis la
- * mémoire courte, sans appel réseau.
+ * Chaque appel consulte le service : le protocole v1 ne transporte pas de génération authentifiée,
+ * donc un cache client rendrait les publications du Brain invisibles jusqu'à son expiration.
  */
 export async function retrieveBrainContext(
   query: string,
@@ -194,23 +186,42 @@ export async function retrieveBrainContext(
   if (process.env.VITEST && !opts.fetchFn) return { context: '', status: 'unavailable' }
   const token = brainServiceToken(opts.env)
   if (!token || !query.trim()) return { context: '', status: 'unavailable' }
-  // Mémoire courte AVANT le réseau : une question déjà posée ne se repose pas.
-  const now = opts.now?.() ?? Date.now()
   const corpus = (opts.corpus ?? []).map((fragment) => fragment.trim()).filter(Boolean)
-  const cacheKey = `${opts.port ?? 8765}|${corpus.join(',')}|${query.trim()}`
-  const cached = retrievalCache.get(cacheKey)
-  if (cached && now - cached.at < RETRIEVAL_CACHE_TTL_MS) return cached.result
   const doFetch = opts.fetchFn ?? fetch
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 5000)
   try {
-    const res = await doFetch(`http://127.0.0.1:${opts.port ?? 8765}/query`, {
+    const origin = `http://127.0.0.1:${opts.port ?? 8765}`
+    let nonce = ''
+    const challengeResponse = await doFetch(`${origin}/challenge`, {
+      method: 'GET',
+      signal: controller.signal
+    })
+    if (!challengeResponse.ok) return { context: '', status: 'unavailable' }
+    try {
+      const challenge = verifySignedBrainPayload(
+        await readSignedBrainPayload(challengeResponse),
+        token
+      )
+      const challengeNonce = /^challenge:([0-9a-f]{24})$/.exec(challenge.context)?.[1]
+      if (!challengeNonce) {
+        return { context: '', status: 'invalid' }
+      }
+      nonce = challengeNonce
+    } catch {
+      return { context: '', status: 'invalid' }
+    }
+
+    const requestPayload = {
+      query: query.slice(0, 8000),
+      harness: 'autowin-os',
+      trace_id: opts.traceId?.() ?? randomUUID(),
+      ...(corpus.length > 0 ? { corpus } : {})
+    }
+    const res = await doFetch(`${origin}/query-secure`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: query.slice(0, 8000),
-        ...(corpus.length > 0 ? { corpus } : {})
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sealBrainRequest(requestPayload, token, nonce)),
       signal: controller.signal
     })
     if (!res.ok) return { context: '', status: 'unavailable' }
@@ -222,16 +233,19 @@ export async function retrieveBrainContext(
       return { context: '', status: 'invalid' }
     }
     const context = verified.context
+    if (
+      corpus.length > 0 &&
+      (verified.corpus?.length !== corpus.length ||
+        verified.corpus.some((selector, index) => selector !== corpus[index]))
+    ) {
+      return { context: '', status: 'invalid' }
+    }
     const result: BrainRetrievalResult = {
       context,
       navigation: parseNavigation(verified.navigation),
+      ...(verified.corpus ? { corpus: verified.corpus } : {}),
+      ...(verified.structuredContext ? { structuredContext: verified.structuredContext } : {}),
       status: context ? 'found' : 'empty'
-    }
-    // On ne mémorise QUE les réponses servies : un serveur indisponible ne doit pas figer un vide.
-    retrievalCache.set(cacheKey, { at: now, result })
-    if (retrievalCache.size > RETRIEVAL_CACHE_MAX) {
-      const oldest = retrievalCache.keys().next().value
-      if (oldest) retrievalCache.delete(oldest)
     }
     return result
   } catch {

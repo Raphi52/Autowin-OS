@@ -1,18 +1,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type {
-  TicketItem,
-  TicketPage,
-  TicketProvider,
-  TicketSourceProfile
+import {
+  buildTicketListRequest,
+  type TicketItem,
+  type TicketPage,
+  type TicketProvider,
+  type TicketSourceProfile
 } from '../../../shared/tickets'
 import { ModuleHeader } from './ModuleHeader'
 import {
   formatTicketSelectionPrompt,
+  loadTicketTreatmentRecords,
+  plainText,
   runTicketTreatmentBatch,
+  saveTicketTreatmentRecord,
   ticketConversationTitle,
-  ticketSelectionTitle
+  ticketSelectionTitle,
+  type TicketTreatmentRecord
 } from './ticket-treatment'
-import { loadSeen, pickIncomingTickets, primeSeen, saveSeen } from './ticket-auto-mode'
+import {
+  AUTO_MODE_LIMITS,
+  describeAutoModeCost,
+  isAutoModeStopped,
+  loadAutoModeSettings,
+  loadSeen,
+  pickIncomingTickets,
+  primeSeen,
+  remainingSessionRuns,
+  resumeAutoMode,
+  saveAutoModeSettings,
+  saveSeen,
+  stopAutoModeNow,
+  type AutoModeSettings
+} from './ticket-auto-mode'
 import './TicketsView.css'
 
 interface TicketSourceSummary {
@@ -45,13 +64,6 @@ type SortKey = 'recent' | 'priority' | 'id' | 'title'
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Impossible de charger les tickets.'
-}
-
-function plainText(value: string | undefined): string {
-  if (!value) return ''
-  const element = document.createElement('div')
-  element.innerHTML = value
-  return element.textContent?.trim() ?? ''
 }
 
 /** Initiales (2 lettres max) pour l'avatar d'assigné. */
@@ -171,6 +183,56 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const activeRequestId = useRef<string | undefined>(undefined)
   const activeSourceRef = useRef<TicketSourceProfile | undefined>(undefined)
   const itemsRef = useRef(items)
+  /** Recherche ACTUELLEMENT appliquee cote serveur (titleContains). '' = aucun filtre. */
+  const serverQueryRef = useRef('')
+  const [serverQuery, setServerQuery] = useState('')
+  const [treatmentRecords, setTreatmentRecords] = useState(() =>
+    loadTicketTreatmentRecords(localStorage)
+  )
+
+  const recordTreatment = useCallback(
+    (item: Pick<TicketItem, 'sourceId' | 'id'>, record: TicketTreatmentRecord): void => {
+      setTreatmentRecords(saveTicketTreatmentRecord(localStorage, item, record))
+    },
+    []
+  )
+
+  const openTreatmentConversation = useCallback(async (conversationId: string): Promise<void> => {
+    await window.api.appCommand?.('navigate', { tab: 'chat' })
+    window.dispatchEvent(new CustomEvent('autowin:open-conversation', { detail: conversationId }))
+  }, [])
+
+  const enrichTicket = useCallback(
+    async (item: TicketItem, source: TicketSourceProfile | undefined): Promise<TicketItem> => {
+      if (!source || typeof window.api.getTicket !== 'function') return item
+      try {
+        return (await window.api.getTicket({
+          source,
+          id: item.id,
+          requestId: `ticket-detail-${crypto.randomUUID()}`
+        })) as TicketItem
+      } catch {
+        return item
+      }
+    },
+    []
+  )
+
+  const selectTicket = useCallback(
+    (item: TicketItem): void => {
+      const identity = `${item.sourceId}::${item.id}`
+      setSelectedId(identity)
+      void enrichTicket(item, activeSourceRef.current).then((enriched) => {
+        if (enriched === item) return
+        setItems((current) =>
+          current.map((candidate) =>
+            `${candidate.sourceId}::${candidate.id}` === identity ? enriched : candidate
+          )
+        )
+      })
+    },
+    [enrichTicket]
+  )
 
   useEffect(() => {
     activeRef.current = active
@@ -183,6 +245,13 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const selectedSummary = sources.find(({ profile }) => profile.id === sourceId)
   const selectedSource = selectedSummary?.profile
 
+  /** Lance une recherche SERVEUR (titleContains) : la page repart de zero avec ce filtre. */
+  const runServerSearch = (value: string): void => {
+    const next = value.trim()
+    setServerQuery(next)
+    if (selectedSource) void load(selectedSource, { titleContains: next })
+  }
+
   const resetFilters = (): void => {
     setQuery('')
     setTypeFilter('')
@@ -190,8 +259,20 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
     setAssigneeFilter('')
   }
 
+  /**
+   * RECHERCHE SERVEUR — `titleContains` part au fournisseur.
+   *
+   * Avant, le champ de recherche ne filtrait que les 50 items DEJA charges : une fiche plus ancienne
+   * existait mais la vue repondait « aucun resultat ». La recherche courante est memorisee dans une
+   * ref pour rester appliquee a la pagination et a « Actualiser ».
+   */
   const load = useCallback(
-    async (source: TicketSourceProfile, nextCursor?: string, append = false): Promise<void> => {
+    async (
+      source: TicketSourceProfile,
+      options: { cursor?: string; append?: boolean; titleContains?: string } = {}
+    ): Promise<void> => {
+      const { cursor: nextCursor, append = false } = options
+      if (options.titleContains !== undefined) serverQueryRef.current = options.titleContains.trim()
       if (!activeRef.current) return
       const previousSource = activeSourceRef.current
       const sourceChanged =
@@ -210,6 +291,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         setTypeFilter('')
         setStateFilter('')
         setAssigneeFilter('')
+        serverQueryRef.current = ''
       }
       if (activeRequestId.current) {
         void window.api.cancelTickets(activeRequestId.current)
@@ -220,12 +302,15 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       setLoading(true)
       setError(undefined)
       try {
-        const page = (await window.api.listTickets({
-          source,
-          requestId,
-          ...(nextCursor ? { cursor: nextCursor } : {}),
-          pageSize: 50
-        })) as TicketPage
+        const page = (await window.api.listTickets(
+          buildTicketListRequest({
+            source,
+            requestId,
+            ...(nextCursor ? { cursor: nextCursor } : {}),
+            pageSize: 50,
+            titleContains: serverQueryRef.current
+          })
+        )) as TicketPage
         if (generation !== requestGeneration.current) return
         setItems((current) => (append ? [...current, ...page.items] : page.items))
         setCursor(page.cursor)
@@ -453,7 +538,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
    * Le perimetre est exactement ce que l'utilisateur voit (les filtres actifs sont le garde-fou).
    * A l'activation, l'existant est AMORCE (marque vu, non traite) : cocher la case ne declenche
    * jamais un run par ticket deja affiche. Chaque cycle est borne (AUTO_MODE_CAP_PER_CYCLE) et les
-   * tickets retenus sont marques AVANT traitement, pour qu'un echec ne les rejoue pas.
+   * tickets ne sont marques vus qu APRES succes ; un echec reste donc eligible au prochain cycle.
    */
   const [autoMode, setAutoMode] = useState(
     () => localStorage.getItem('autowin:tickets-auto-mode') === '1'
@@ -462,31 +547,74 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const seenRef = useRef<Set<string>>(loadSeen(localStorage))
   const autoBusyRef = useRef(false)
   const [autoStatus, setAutoStatus] = useState<string>()
+  /** Garde-fous VISIBLES : concurrence, cap par cycle, plafond de runs de la session. */
+  const [autoSettings, setAutoSettings] = useState<AutoModeSettings>(() =>
+    loadAutoModeSettings(localStorage)
+  )
+  const autoSettingsRef = useRef(autoSettings)
+  const launchedRef = useRef(0)
+  const [launched, setLaunched] = useState(0)
+  useEffect(() => {
+    autoSettingsRef.current = autoSettings
+  }, [autoSettings])
+
+  /**
+   * Le kill-switch est une LATCH de session, partagee par tout le module. Monter la vue avec la case
+   * deja cochee est un choix EXPLICITE de l'utilisateur : c'est la reprise attendue. Sans cela, un
+   * arret precedent gelerait definitivement le mode auto, meme reactive.
+   */
+  useEffect(() => {
+    if (autoModeEnabledRef.current) resumeAutoMode()
+    // Au MONTAGE uniquement : les (re)prises suivantes passent par la case a cocher.
+  }, [])
+
+  const updateAutoSetting = (key: keyof AutoModeSettings, value: number): void => {
+    setAutoSettings((current) =>
+      saveAutoModeSettings(localStorage, { ...current, [key]: value })
+    )
+  }
 
   const setAutoModeChecked = (checked: boolean): void => {
     localStorage.setItem('autowin:tickets-auto-mode', checked ? '1' : '0')
     autoModeEnabledRef.current = checked
     setAutoMode(checked)
     if (checked) {
+      // Reprise EXPLICITE du kill-switch : cocher la case est ce geste explicite.
+      resumeAutoMode()
       // AMORCE : l'existant devient « connu » sans etre traite.
       for (const key of primeSeen(visibleItemsRef.current)) seenRef.current.add(key)
       saveSeen(localStorage, seenRef.current)
-      setAutoStatus(`en veille · ${visibleItemsRef.current.length} ticket(s) déjà présents ignorés`)
-    } else setAutoStatus(undefined)
+      setAutoStatus(
+        `en veille · ${visibleItemsRef.current.length} ticket(s) déjà présents ignorés · ` +
+          describeAutoModeCost(autoSettingsRef.current, 0)
+      )
+    } else {
+      // ARRET IMMEDIAT : kill-switch global (les workers en cours le consultent a chaque boucle).
+      stopAutoModeNow()
+      autoBusyRef.current = false
+      setAutoStatus('arrêté')
+    }
   }
 
   const treatIncoming = useCallback(async () => {
-    if (!autoMode || autoBusyRef.current) return
-    let selection = pickIncomingTickets(visibleItemsRef.current, seenRef.current)
+    if (!autoMode || autoBusyRef.current || isAutoModeStopped()) return
+    const settings = autoSettingsRef.current
+    let budget = remainingSessionRuns(settings, launchedRef.current)
+    if (budget <= 0) {
+      setAutoStatus(`arrêté · plafond de session atteint (${settings.maxRunsPerSession} runs)`)
+      return
+    }
+    let selection = pickIncomingTickets(
+      visibleItemsRef.current,
+      seenRef.current,
+      Math.min(settings.capPerCycle, budget)
+    )
     if (!selection.toTreat.length) return
-    // Marquage AVANT traitement (garde-fou 2) : un echec ne doit pas relancer le meme ticket.
-    for (const key of selection.seenAdditions) seenRef.current.add(key)
-    saveSeen(localStorage, seenRef.current)
     autoBusyRef.current = true
     setAutoStatus(
       `traitement de ${selection.toTreat.length} entrant(s)${
         selection.deferred ? ` · ${selection.deferred} reporté(s)` : ''
-      }`
+      } · ${describeAutoModeCost(settings, selection.toTreat.length)}`
     )
     let provider: string | undefined
     try {
@@ -503,19 +631,36 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       setAutoStatus('en veille · aucun rôle configuré')
       return
     }
+    if (typeof window.api.providerStatus === 'function') {
+      const statuses = await window.api.providerStatus().catch(() => [])
+      const providerState = statuses.find((entry) => entry.provider === provider)?.status
+      if (providerState && ['absent', 'expired', 'standby'].includes(providerState)) {
+        autoBusyRef.current = false
+        setAutoStatus(`en veille · provider ${provider} indisponible (${providerState})`)
+        return
+      }
+    }
+    // MARQUAGE AVANT le premier appel payant : un échec ou un remontage ne doit jamais repayer le
+    // même ticket automatiquement. Un provider indisponible, contrôlé au-dessus, ne consomme rien.
+    for (const key of selection.seenAdditions) seenRef.current.add(key)
+    saveSeen(localStorage, seenRef.current)
+    const attemptedThisCycle = new Set<string>()
     let succeeded = 0
     let failed = 0
     let total = 0
     while (selection.toTreat.length) {
       const result = await runTicketTreatmentBatch(selection.toTreat, {
-        shouldContinue: () => autoBusyRef.current,
+        concurrency: settings.concurrency,
+        ...(activeSourceRef.current ? { source: activeSourceRef.current } : {}),
+        shouldContinue: () =>
+          autoBusyRef.current && autoModeEnabledRef.current && !isAutoModeStopped(),
+        enrichItem: (item) => enrichTicket(item, activeSourceRef.current),
         createConversation: async (item) => {
           const conv = await window.api.conversationsCreate({
             title: ticketConversationTitle(item),
             category: provider as string,
             provider: provider as string
           })
-          await window.api.conversationsSetAuthorityMode(conv.id, 'ask')
           return { id: conv.id }
         },
         promptConversation: async (conv, _item, prompt) => {
@@ -525,22 +670,58 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
           } catch {
             return { ok: false }
           }
+        },
+        onConversationCreated: (conversation, item) => {
+          recordTreatment(item, {
+            conversationId: conversation.id,
+            status: 'running',
+            updatedAt: new Date().toISOString()
+          })
+        },
+        onItemSettled: (item, ok, conversation) => {
+          const key = `${item.sourceId}::${item.id}`
+          attemptedThisCycle.add(key)
+          if (conversation) {
+            recordTreatment(item, {
+              conversationId: conversation.id,
+              status: ok ? 'succeeded' : 'failed',
+              updatedAt: new Date().toISOString()
+            })
+          }
         }
       })
       succeeded += result.succeeded
       failed += result.failed
       total += result.total
-      if (!selection.deferred || !autoBusyRef.current || !autoModeEnabledRef.current) break
-      selection = pickIncomingTickets(visibleItemsRef.current, seenRef.current)
+      launchedRef.current += result.completed
+      setLaunched(launchedRef.current)
+      budget = remainingSessionRuns(settings, launchedRef.current)
+      if (
+        !selection.deferred ||
+        !autoBusyRef.current ||
+        !autoModeEnabledRef.current ||
+        isAutoModeStopped() ||
+        budget <= 0
+      ) {
+        break
+      }
+      selection = pickIncomingTickets(
+        visibleItemsRef.current,
+        new Set([...seenRef.current, ...attemptedThisCycle]),
+        Math.min(settings.capPerCycle, budget)
+      )
       if (!selection.toTreat.length) break
       for (const key of selection.seenAdditions) seenRef.current.add(key)
       saveSeen(localStorage, seenRef.current)
     }
     autoBusyRef.current = false
     setAutoStatus(
-      `en veille · ${succeeded}/${total} lancés${failed ? ` · ${failed} échec(s)` : ''}`
+      autoModeEnabledRef.current && !isAutoModeStopped()
+        ? `en veille · ${succeeded}/${total} lancés${failed ? ` · ${failed} échec(s)` : ''}` +
+            ` · ${remainingSessionRuns(settings, launchedRef.current)} run(s) restants sur le plafond`
+        : 'arrêté'
     )
-  }, [autoMode])
+  }, [autoMode, enrichTicket, recordTreatment])
 
   // Chaque rafraichissement de la liste est un cycle de veille : les nouveaux arrives passent.
   useEffect(() => {
@@ -548,9 +729,14 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   }, [items, autoMode, treatIncoming])
 
   const openSelectionConversation = useCallback(async () => {
-    const selection = checkedVisibleItems
-    if (!selection.length) return
-    const prompt = formatTicketSelectionPrompt(selection)
+    const selected = checkedVisibleItems
+    if (!selected.length) return
+    // Les listes fournisseur sont légères. Le prompt, lui, relit chaque fiche pour inclure la
+    // discussion et les titres de relations réellement courants.
+    const selection = await Promise.all(
+      selected.map((item) => enrichTicket(item, activeSourceRef.current))
+    )
+    const prompt = formatTicketSelectionPrompt(selection, activeSourceRef.current)
     if (!prompt) return
     let provider: string | undefined
     try {
@@ -568,7 +754,13 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
       category: provider,
       provider
     })
-    await window.api.conversationsSetAuthorityMode(conv.id, 'ask')
+    for (const item of selection) {
+      recordTreatment(item, {
+        conversationId: conv.id,
+        status: sendDirectly ? 'running' : 'prepared',
+        updatedAt: new Date().toISOString()
+      })
+    }
     // On amène l'utilisateur SUR le Chat : préparer un prompt qu'il ne voit pas serait inutile.
     // Le main reste l'autorité de navigation (même chemin que la rail), puis le Chat pré-remplit.
     try {
@@ -581,7 +773,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         detail: { conversationId: conv.id, prompt, send: sendDirectly }
       })
     )
-  }, [checkedVisibleItems, sendDirectly])
+  }, [checkedVisibleItems, enrichTicket, recordTreatment, sendDirectly])
 
   const retry = (): void => {
     if (sourceError) void loadSources()
@@ -696,7 +888,12 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
               </span>
             </>
           )}
-          <button type="button" onClick={() => void saveSource()}>
+          <button
+            type="button"
+            onClick={() => void saveSource()}
+            aria-label="Enregistrer la source"
+            title="Enregistrer la source"
+          >
             Enregistrer
           </button>
         </div>
@@ -734,10 +931,42 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         <input
           type="search"
           aria-label="Rechercher les tickets"
-          placeholder="ID, titre ou assigné…"
+          placeholder="ID, titre ou assigné… (Entrée = recherche serveur)"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              runServerSearch(query)
+            }
+          }}
         />
+        {/* La recherche SERVEUR interroge tout le projet ; le champ seul ne filtrait que les
+            50 items déjà chargés, et répondait « aucun résultat » sur une fiche existante. */}
+        <button
+          data-testid="tickets-search-server"
+          type="button"
+          title="Chercher ce titre sur le serveur (tout le projet), pas seulement dans la page chargée"
+          disabled={!selectedSource || loading}
+          onClick={() => runServerSearch(query)}
+        >
+          Chercher
+        </button>
+        {serverQuery && (
+          <span className="tickets-server-query" data-testid="tickets-server-query">
+            serveur : « {serverQuery} »
+            <button
+              type="button"
+              title="Effacer la recherche serveur"
+              onClick={() => {
+                setQuery('')
+                runServerSearch('')
+              }}
+            >
+              ×
+            </button>
+          </span>
+        )}
         <select
           aria-label="Filtrer par type"
           value={typeFilter}
@@ -796,6 +1025,8 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         <button
           data-testid="tickets-refresh"
           type="button"
+          aria-label="Actualiser les tickets"
+          title="Actualiser les tickets"
           disabled={!selectedSource || loading}
           onClick={() => selectedSource && void load(selectedSource)}
         >
@@ -807,6 +1038,9 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
         <button
           data-testid="tickets-select-all"
           type="button"
+          title={
+            allVisibleChecked ? 'Tout désélectionner' : `Tout sélectionner (${visibleItems.length})`
+          }
           disabled={visibleItems.length === 0}
           onClick={toggleAllVisible}
         >
@@ -848,7 +1082,65 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
           />
           Mode auto (traite les entrants du filtre)
         </label>
-        {autoMode && autoStatus && (
+        {/* GARDE-FOUS VISIBLES : le mode auto lance des runs PAYANTS. Le nombre simultané, le cap
+            par cycle et le plafond de session sont réglables ici, et le coût est annoncé. */}
+        <span className="tickets-auto-guards" data-testid="tickets-auto-guards">
+          <label>
+            Parallèle
+            <input
+              type="number"
+              aria-label="Runs en parallèle"
+              data-testid="tickets-auto-concurrency"
+              min={AUTO_MODE_LIMITS.concurrency.min}
+              max={AUTO_MODE_LIMITS.concurrency.max}
+              value={autoSettings.concurrency}
+              onChange={(e) => updateAutoSetting('concurrency', Number(e.target.value))}
+            />
+          </label>
+          <label>
+            Par cycle
+            <input
+              type="number"
+              aria-label="Tickets traités par cycle"
+              data-testid="tickets-auto-cap"
+              min={AUTO_MODE_LIMITS.capPerCycle.min}
+              max={AUTO_MODE_LIMITS.capPerCycle.max}
+              value={autoSettings.capPerCycle}
+              onChange={(e) => updateAutoSetting('capPerCycle', Number(e.target.value))}
+            />
+          </label>
+          <label>
+            Plafond session
+            <input
+              type="number"
+              aria-label="Plafond de runs pour la session"
+              data-testid="tickets-auto-max-runs"
+              min={AUTO_MODE_LIMITS.maxRunsPerSession.min}
+              max={AUTO_MODE_LIMITS.maxRunsPerSession.max}
+              value={autoSettings.maxRunsPerSession}
+              onChange={(e) => updateAutoSetting('maxRunsPerSession', Number(e.target.value))}
+            />
+          </label>
+          <span data-testid="tickets-auto-cost">
+            {describeAutoModeCost(autoSettings, 0)} · {launched} lancé(s)
+          </span>
+          {/* KILL-SWITCH : arrêt global immédiat, indépendant du rendu React. */}
+          <button
+            type="button"
+            data-testid="tickets-auto-kill"
+            className="tickets-auto-kill"
+            title="Arrêt immédiat du mode auto (kill-switch global)"
+            onClick={() => {
+              stopAutoModeNow()
+              autoBusyRef.current = false
+              setAutoModeChecked(false)
+              setAutoStatus('arrêté (kill-switch)')
+            }}
+          >
+            Stop
+          </button>
+        </span>
+        {autoStatus && (
           <span className="tickets-auto-status" data-testid="tickets-auto-status">
             {autoStatus}
           </span>
@@ -860,7 +1152,12 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
           <div className="tickets-error" role="alert">
             <strong>Chargement des sources impossible</strong>
             <span>{sourceError}</span>
-            <button data-testid="tickets-retry" type="button" onClick={retry}>
+            <button
+              data-testid="tickets-retry"
+              type="button"
+              title="Réessayer le chargement des tickets"
+              onClick={retry}
+            >
               Réessayer
             </button>
           </div>
@@ -873,7 +1170,12 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
           <div className="tickets-error" role="alert">
             <strong>Chargement impossible</strong>
             <span>{error}</span>
-            <button data-testid="tickets-retry" type="button" onClick={retry}>
+            <button
+              data-testid="tickets-retry"
+              type="button"
+              title="Réessayer le chargement des tickets"
+              onClick={retry}
+            >
               Réessayer
             </button>
           </div>
@@ -903,6 +1205,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
             <div className="tickets-list" role="list" aria-label="Tickets">
               {visibleItems.map((item) => {
                 const identity = `${item.sourceId}::${item.id}`
+                const treatment = treatmentRecords[identity]
                 return (
                   <div className="ticket-select-row" key={identity} role="listitem">
                     <input
@@ -916,7 +1219,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                       type="button"
                       data-testid="ticket-row"
                       className={selectedItem === item ? 'is-selected' : ''}
-                      onClick={() => setSelectedId(identity)}
+                      onClick={() => selectTicket(item)}
                     >
                       <span className="tickets-id">#{item.id}</span>
                       <strong className="tickets-title">{item.title}</strong>
@@ -952,6 +1255,23 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                         </span>
                       </span>
                     </button>
+                    {treatment && (
+                      <button
+                        type="button"
+                        data-testid="ticket-treatment-status"
+                        className={`ticket-treatment-status is-${treatment.status}`}
+                        title="Ouvrir la conversation de traitement"
+                        onClick={() => void openTreatmentConversation(treatment.conversationId)}
+                      >
+                        {treatment.status === 'prepared'
+                          ? 'prêt'
+                          : treatment.status === 'running'
+                            ? 'en cours'
+                            : treatment.status === 'succeeded'
+                              ? 'traité'
+                              : 'échec'}
+                      </button>
+                    )}
                   </div>
                 )
               })}
@@ -961,7 +1281,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                   type="button"
                   disabled={loading}
                   onClick={() =>
-                    selectedSource && cursor ? void load(selectedSource, cursor, true) : undefined
+                    selectedSource && cursor ? void load(selectedSource, { cursor, append: true }) : undefined
                   }
                 >
                   {loading ? 'Chargement…' : 'Charger la suite'}
@@ -1028,11 +1348,28 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
                       {selectedItem.relations.map((relation, index) => (
                         <li key={`${relation.kind}:${relation.target}:${index}`}>
                           <span>{relation.kind}</span> <strong>#{relation.target}</strong>
+                          {relation.title ? <span> — {relation.title}</span> : null}
                         </li>
                       ))}
                     </ul>
                   ) : (
                     <p>Aucune relation.</p>
+                  )}
+                </section>
+                <section>
+                  <h3>Discussion</h3>
+                  {selectedItem.comments?.length ? (
+                    <ul data-testid="ticket-comments">
+                      {selectedItem.comments.map((comment, index) => (
+                        <li key={comment.id ?? `${comment.createdAt ?? 'comment'}:${index}`}>
+                          <strong>{comment.author ?? 'Auteur inconnu'}</strong>
+                          {comment.createdAt ? <time>{relativeDate(comment.createdAt)}</time> : null}
+                          <p>{plainText(comment.text)}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>Aucun commentaire chargé.</p>
                   )}
                 </section>
                 <a href={selectedItem.url} target="_blank" rel="noreferrer">

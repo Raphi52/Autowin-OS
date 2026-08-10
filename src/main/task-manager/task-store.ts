@@ -3,7 +3,8 @@ import {
   occurrenceIdFor,
   resolveFirstOccurrence,
   resolveFirstOccurrenceAtOrAfter,
-  resolveNextOccurrence
+  resolveNextOccurrence,
+  type StructuredSchedule
 } from './schedule'
 import type {
   ScheduledTask,
@@ -11,8 +12,12 @@ import type {
   TaskAlert,
   TaskOccurrence,
   TaskOccurrenceStatus,
-  TaskStoreSnapshot
+  TaskStoreSnapshot,
+  WatchdogAppEvent,
+  WatchdogOutcome,
+  WatchdogSignal
 } from './types'
+import { DEFAULT_WATCHDOG_GUARDS } from './watchdog-guards'
 
 interface TaskStoreOptions {
   now?: () => number
@@ -27,8 +32,11 @@ export class TaskStore {
   private readonly tasks = new Map<string, ScheduledTask>()
   private readonly occurrences = new Map<string, TaskOccurrence>()
   private readonly alerts = new Map<string, TaskAlert>()
+  /** Identifiants des semis deja poses, persistes avec le reste du store. */
+  private readonly seeds = new Set<string>()
   private readonly now: () => number
   private readonly makeId: () => string
+  private readonly listeners = new Set<(snapshot: TaskStoreSnapshot) => void>()
   onChange?: (snapshot: TaskStoreSnapshot) => void
 
   constructor(options: TaskStoreOptions = {}) {
@@ -37,10 +45,45 @@ export class TaskStore {
   }
 
   hydrate(snapshot: TaskStoreSnapshot): void {
+    this.seeds.clear()
+    for (const seed of snapshot.seeds ?? []) this.seeds.add(seed)
     this.tasks.clear()
     this.occurrences.clear()
     this.alerts.clear()
-    for (const task of snapshot.tasks) this.tasks.set(task.id, structuredClone(task))
+    for (const task of snapshot.tasks) {
+      const hydrated = structuredClone(task)
+      if (hydrated.destination.kind === 'new') {
+        // Compatibilite legacy uniquement : les anciens snapshots portaient ce champ,
+        // qui n'existe plus dans les types ni dans le comportement runtime.
+        delete (hydrated.destination as typeof hydrated.destination & Record<string, unknown>)
+          .authorityMode
+      }
+      const watchdog = hydrated.watchdog as unknown
+      if (watchdog && typeof watchdog === 'object' && !Array.isArray(watchdog)) {
+        const persistedWatchdog = watchdog as Record<string, unknown>
+        const source = persistedWatchdog.source
+        if (source && typeof source === 'object' && !Array.isArray(source)) {
+          const persistedSource = source as Record<string, unknown>
+          if (persistedSource.kind === 'app-event') {
+            if (
+              !Array.isArray(persistedSource.events) &&
+              typeof persistedSource.event === 'string'
+            ) {
+              persistedSource.events = [persistedSource.event as WatchdogAppEvent]
+            }
+            delete persistedSource.event
+          }
+          if (persistedSource.kind === 'app-event' || persistedSource.kind === 'file-match') {
+            const guards = persistedWatchdog.guards
+            persistedWatchdog.guards = {
+              ...DEFAULT_WATCHDOG_GUARDS,
+              ...(guards && typeof guards === 'object' && !Array.isArray(guards) ? guards : {})
+            }
+          }
+        }
+      }
+      this.tasks.set(hydrated.id, hydrated)
+    }
     for (const occurrence of snapshot.occurrences) {
       const hydrated = structuredClone(occurrence)
       if (hydrated.mode !== 'windows' && hydrated.mode !== 'active-only') {
@@ -56,12 +99,31 @@ export class TaskStore {
       schemaVersion: 1,
       tasks: this.listTasks(),
       occurrences: this.listOccurrences(),
-      alerts: this.listAlerts()
+      alerts: this.listAlerts(),
+      seeds: [...this.seeds]
     }
   }
 
+  /** Un semis deja pose ne se repose pas — c'est ce qui rend une tache livree vraiment supprimable. */
+  hasSeed(seedId: string): boolean {
+    return this.seeds.has(seedId)
+  }
+
+  markSeeded(seedId: string): void {
+    if (this.seeds.has(seedId)) return
+    this.seeds.add(seedId)
+    this.changed()
+  }
+
   private changed(): void {
-    this.onChange?.(this.snapshot())
+    const snapshot = this.snapshot()
+    this.onChange?.(snapshot)
+    for (const listener of this.listeners) listener(snapshot)
+  }
+
+  subscribe(listener: (snapshot: TaskStoreSnapshot) => void): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
   }
 
   listTasks(): ScheduledTask[] {
@@ -97,7 +159,8 @@ export class TaskStore {
   create(input: ScheduledTaskInput): ScheduledTask {
     validateTaskInput(input)
     const timestamp = this.now()
-    const nextRunAt = input.enabled ? requireUpcomingOccurrence(input.schedule, timestamp) : null
+    const nextRunAt =
+      input.enabled && input.schedule ? requireUpcomingOccurrence(input.schedule, timestamp) : null
     const task: ScheduledTask = {
       ...structuredClone(input),
       id: this.makeId(),
@@ -114,24 +177,26 @@ export class TaskStore {
   update(id: string, patch: TaskPatch): ScheduledTask {
     const current = this.tasks.get(id)
     if (!current) throw new Error(`Tâche inconnue: ${id}`)
+    const replacesTrigger = hasOwn(patch, 'schedule') || hasOwn(patch, 'watchdog')
     const input: ScheduledTaskInput = {
       title: patch.title ?? current.title,
       prompt: patch.prompt ?? current.prompt,
       enabled: patch.enabled ?? current.enabled,
       mode: patch.mode ?? current.mode,
       destination: structuredClone(patch.destination ?? current.destination),
-      schedule: structuredClone(patch.schedule ?? current.schedule)
+      schedule: structuredClone(replacesTrigger ? patch.schedule : current.schedule),
+      watchdog: structuredClone(replacesTrigger ? patch.watchdog : current.watchdog)
     }
     validateTaskInput(input)
     const timestamp = this.now()
     const scheduleChanged =
-      patch.schedule !== undefined &&
-      JSON.stringify(patch.schedule) !== JSON.stringify(current.schedule)
-    const plannedNextRunAt = !input.enabled
-      ? null
-      : !current.enabled || scheduleChanged
-        ? requireUpcomingOccurrence(input.schedule, timestamp)
-        : undefined
+      replacesTrigger && JSON.stringify(input.schedule) !== JSON.stringify(current.schedule)
+    const plannedNextRunAt =
+      !input.enabled || !input.schedule
+        ? null
+        : !current.enabled || scheduleChanged
+          ? requireUpcomingOccurrence(input.schedule, timestamp)
+          : undefined
     this.reconcilePastDueBeforeUpdate(current, timestamp)
     const nextRunAt = plannedNextRunAt === undefined ? current.nextRunAt : plannedNextRunAt
     const task: ScheduledTask = {
@@ -146,6 +211,14 @@ export class TaskStore {
   }
 
   remove(id: string): boolean {
+    const activeOccurrence = [...this.occurrences.values()].find(
+      (occurrence) =>
+        occurrence.taskId === id &&
+        (occurrence.status === 'claimed' || occurrence.status === 'running')
+    )
+    if (activeOccurrence) {
+      throw new Error(`La tâche ${id} est en cours et ne peut pas être supprimée.`)
+    }
     if (!this.tasks.delete(id)) return false
     for (const [occurrenceId, occurrence] of this.occurrences) {
       if (occurrence.taskId === id) this.occurrences.delete(occurrenceId)
@@ -181,7 +254,9 @@ export class TaskStore {
   claim(
     taskId: string,
     occurrenceId: string,
-    scheduledFor: number
+    scheduledFor: number,
+    /** Renseigne l'origine : un réveil événementiel porte le signal qui l'a causé. */
+    origin: { trigger?: TaskOccurrence['trigger']; watchdog?: WatchdogSignal } = {}
   ): { claimed: boolean; occurrence: TaskOccurrence } {
     const existing = this.occurrences.get(occurrenceId)
     if (existing) return { claimed: false, occurrence: structuredClone(existing) }
@@ -194,7 +269,9 @@ export class TaskStore {
       scheduledFor,
       mode: task.mode,
       status: 'claimed',
-      claimedAt: this.now()
+      claimedAt: this.now(),
+      ...(origin.trigger ? { trigger: origin.trigger } : {}),
+      ...(origin.watchdog ? { watchdog: structuredClone(origin.watchdog) } : {})
     }
     this.occurrences.set(occurrenceId, occurrence)
     this.changed()
@@ -211,7 +288,16 @@ export class TaskStore {
   finish(
     occurrenceId: string,
     status: Extract<TaskOccurrenceStatus, 'completed' | 'failed' | 'cancelled'>,
-    details: { conversationId?: string; turnId?: string; error?: string } = {}
+    details: {
+      conversationId?: string
+      turnId?: string
+      error?: string
+      knownCostUsd?: number
+      totalTokens?: number
+      unpricedCalls?: number
+      /** Le tri rendu par un agent réveillé. Absent = l'agent n'a pas conclu, on ne le devine pas. */
+      outcome?: WatchdogOutcome
+    } = {}
   ): TaskOccurrence {
     const occurrence = this.updateOccurrence(occurrenceId, status, {
       finishedAt: this.now(),
@@ -249,6 +335,20 @@ export class TaskStore {
     return structuredClone(occurrence)
   }
 
+  /**
+   * Condense toutes les échéances déjà dépassées en une seule occurrence durable et avance la
+   * tâche directement à la première échéance strictement future. Le démarrage reste ainsi borné
+   * même après plusieurs milliers de minutes hors ligne.
+   */
+  markMissedThrough(taskId: string, cutoff: number, reason: string): TaskOccurrence | null {
+    const task = this.tasks.get(taskId)
+    if (!task) throw new Error(`Tâche inconnue: ${taskId}`)
+    const occurrence = this.reconcilePastDueRange(task, cutoff, reason)
+    if (!occurrence) return null
+    this.changed()
+    return structuredClone(occurrence)
+  }
+
   acknowledgeAlert(alertId: string): boolean {
     const alert = this.alerts.get(alertId)
     if (!alert) return false
@@ -274,26 +374,50 @@ export class TaskStore {
   }
 
   private reconcilePastDueBeforeUpdate(task: ScheduledTask, timestamp: number): void {
-    while (task.enabled && task.nextRunAt !== null && task.nextRunAt <= timestamp) {
-      const scheduledFor = task.nextRunAt
-      const occurrenceId = occurrenceIdFor(task.id, scheduledFor)
-      if (!this.occurrences.has(occurrenceId)) {
-        const reason = 'Échéance dépassée avant la mise à jour de la tâche.'
-        const occurrence: TaskOccurrence = {
-          id: occurrenceId,
-          taskId: task.id,
-          scheduledFor,
-          mode: task.mode,
-          status: 'missed',
-          claimedAt: timestamp,
-          finishedAt: timestamp,
-          error: reason
-        }
-        this.occurrences.set(occurrenceId, occurrence)
-        this.createAlertOnce(occurrence, 'missed', reason, false)
-      }
-      task.nextRunAt = resolveNextOccurrence(task.schedule, scheduledFor)
+    this.reconcilePastDueRange(
+      task,
+      timestamp,
+      'Échéance dépassée avant la mise à jour de la tâche.'
+    )
+  }
+
+  private reconcilePastDueRange(
+    task: ScheduledTask,
+    cutoff: number,
+    reason: string
+  ): TaskOccurrence | null {
+    if (!task.schedule) {
+      task.nextRunAt = null
+      return null
     }
+    if (!task.enabled || task.nextRunAt === null || task.nextRunAt > cutoff) return null
+
+    const range = missedOccurrenceRange(task.schedule, task.nextRunAt, cutoff)
+    const occurrenceId = occurrenceIdFor(task.id, range.first)
+    const summary =
+      range.count === 1
+        ? reason
+        : `${range.count} échéances manquées entre ${new Date(range.first).toISOString()} et ${new Date(range.last).toISOString()}. ${reason}`
+    let occurrence = this.occurrences.get(occurrenceId)
+    if (!occurrence) {
+      occurrence = {
+        id: occurrenceId,
+        taskId: task.id,
+        scheduledFor: range.first,
+        mode: task.mode,
+        status: 'missed',
+        claimedAt: cutoff,
+        finishedAt: cutoff,
+        error: summary,
+        missedCount: range.count,
+        lastMissedFor: range.last
+      }
+      this.occurrences.set(occurrenceId, occurrence)
+      this.createAlertOnce(occurrence, 'missed', summary, false)
+    }
+    task.nextRunAt = range.next
+    task.updatedAt = cutoff
+    return occurrence
   }
 
   private updateOccurrence(
@@ -329,15 +453,44 @@ export class TaskStore {
   }
 }
 
-function requireUpcomingOccurrence(
-  schedule: ScheduledTaskInput['schedule'],
-  threshold: number
-): number {
+function hasOwn(value: object, key: PropertyKey): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key)
+}
+
+function requireUpcomingOccurrence(schedule: StructuredSchedule, threshold: number): number {
   const nextRunAt = resolveFirstOccurrenceAtOrAfter(schedule, threshold)
   if (nextRunAt === null) {
     throw new Error('La planification ne contient aucune échéance future.')
   }
   return nextRunAt
+}
+
+function missedOccurrenceRange(
+  schedule: StructuredSchedule,
+  first: number,
+  cutoff: number
+): { first: number; last: number; count: number; next: number | null } {
+  const next = resolveFirstOccurrenceAtOrAfter(schedule, cutoff + 1)
+  const fixedStep =
+    schedule.recurrence.unit === 'minute'
+      ? schedule.recurrence.interval * 60_000
+      : schedule.recurrence.unit === 'hour'
+        ? schedule.recurrence.interval * 3_600_000
+        : null
+  if (fixedStep !== null && next !== null) {
+    const count = Math.max(1, Math.round((next - first) / fixedStep))
+    return { first, last: next - fixedStep, count, next }
+  }
+
+  let count = 1
+  let last = first
+  let cursor = resolveNextOccurrence(schedule, first)
+  while (cursor !== null && cursor <= cutoff) {
+    count += 1
+    last = cursor
+    cursor = resolveNextOccurrence(schedule, cursor)
+  }
+  return { first, last, count, next: cursor }
 }
 
 function validateTaskInput(input: ScheduledTaskInput): void {
@@ -352,5 +505,8 @@ function validateTaskInput(input: ScheduledTaskInput): void {
     if (!input.destination.category.trim()) throw new Error('Catégorie de conversation requise')
     if (!input.destination.provider.trim()) throw new Error('Provider de conversation requis')
   }
-  resolveFirstOccurrence(input.schedule)
+  if (Boolean(input.schedule) === Boolean(input.watchdog)) {
+    throw new Error('Une tâche requiert soit un horaire, soit un réveil événementiel')
+  }
+  if (input.schedule) resolveFirstOccurrence(input.schedule)
 }

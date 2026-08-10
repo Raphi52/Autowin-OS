@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { overrideFor, registerWorkflowBenchIpc } from './workflow-bench-ipc'
 import type { OrchestrationResult } from './orchestrator'
 import type { WorkflowProfile } from './workflow-profiles'
+import { DEFAULT_WORKFLOWS } from './workflow-defaults'
+import { TEST_MODEL_CATALOG } from './models.fixture'
+import { assertRuntimeBindingAvailable } from './runtime-topology'
 
 const ok = (costUsd: number): OrchestrationResult =>
   ({
@@ -26,6 +29,14 @@ const lent: WorkflowProfile = {
   name: 'Lent',
   roles: { subagent: { provider: 'claude', model: 'gros' } }
 }
+const robuste: WorkflowProfile = { id: 'robuste', name: 'Robuste' }
+const currentRoles = () => ({
+  subagent: {
+    provider: 'claude',
+    model: 'claude-fable-5',
+    reasoningEffort: 'high' as const
+  }
+})
 
 function harness(
   overrides: {
@@ -40,8 +51,21 @@ function harness(
   registerWorkflowBenchIpc({
     ipcMain: { handle: (channel: string, fn: never) => handlers.set(channel, fn) } as never,
     assertTrusted: vi.fn(),
+    assertBindingAvailable: vi.fn(),
+    currentRoles,
+    captureCheckpoint: vi.fn(async (objective: string) => ({
+      id: 'checkpoint-before-run',
+      runId: 'counterfactual-parent',
+      createdAt: '2026-08-08T12:00:00.000Z',
+      sourceSnapshot: {
+        workspaceId: 'C:/repo',
+        baseSha: 'base-sha',
+        contentHash: 'sha256:workspace-before-run'
+      },
+      state: { objective, dirty: false }
+    })),
     runOrchestration: runOrchestration as never,
-    loadProfiles: () => ({ profiles: overrides.profiles ?? [vif, lent], activeId: null })
+    loadProfiles: () => ({ profiles: overrides.profiles ?? [vif, lent, robuste], activeId: null })
   })
   const invoke = (raw: unknown): Promise<unknown> =>
     handlers.get('os:workflowBench:run')!(event, raw)
@@ -51,6 +75,29 @@ function harness(
 describe('canal de confrontation', () => {
   it('expose le canal — sans lui, tout le moteur est injoignable', () => {
     expect(harness().handlers.has('os:workflowBench:run')).toBe(true)
+    expect(harness().handlers.has('os:workflowBench:cancel')).toBe(true)
+  })
+
+  it('annule réellement le run actif du renderer', async () => {
+    let observedSignal: AbortSignal | undefined
+    const runOrchestration = vi.fn(
+      (_objective, _binding, signal: AbortSignal) =>
+        new Promise<OrchestrationResult>((_resolve, reject) => {
+          observedSignal = signal
+          signal.addEventListener('abort', () => reject(new Error('annulé')), { once: true })
+        })
+    )
+    const { handlers } = harness({ runOrchestration })
+    const sender = { isDestroyed: () => false, send: vi.fn() }
+    const running = handlers.get('os:workflowBench:run')!(
+      { sender },
+      { objective: 'ranger', profileIds: ['vif', 'lent'] }
+    )
+    await vi.waitFor(() => expect(runOrchestration).toHaveBeenCalledTimes(1))
+
+    await expect(handlers.get('os:workflowBench:cancel')!({ sender }, undefined)).resolves.toBe(true)
+    await running
+    expect(observedSignal?.aborted).toBe(true)
   })
 
   it('refuse un renderer non fiable AVANT de dépenser quoi que ce soit', async () => {
@@ -62,6 +109,8 @@ describe('canal de confrontation', () => {
     registerWorkflowBenchIpc({
       ipcMain: { handle: (c: string, f: never) => handlers.set(c, f) } as never,
       assertTrusted,
+      assertBindingAvailable: vi.fn(),
+      currentRoles,
       runOrchestration: runOrchestration as never,
       loadProfiles: () => ({ profiles: [vif, lent], activeId: null })
     })
@@ -72,7 +121,10 @@ describe('canal de confrontation', () => {
   it('injecte le binding du workflow dans le run — sinon les runs seraient identiques', async () => {
     const { invoke, runOrchestration } = harness()
     await invoke({ objective: 'ranger', profileIds: ['vif', 'lent'] })
-    expect(runOrchestration.mock.calls[0][1]).toMatchObject({ model: 'petit', reasoningEffort: 'low' })
+    expect(runOrchestration.mock.calls[0][1]).toMatchObject({
+      model: 'petit',
+      reasoningEffort: 'low'
+    })
     expect(runOrchestration.mock.calls[1][1]).toMatchObject({ model: 'gros' })
   })
 
@@ -101,16 +153,147 @@ describe('canal de confrontation', () => {
     expect(runOrchestration).not.toHaveBeenCalled()
   })
 
+  it('bloque un modèle de workflow hors catalogue avant tout appel provider', async () => {
+    const handlers = new Map<string, (e: unknown, r: unknown) => Promise<unknown>>()
+    const runOrchestration = vi.fn().mockResolvedValue(ok(1))
+    const fantome: WorkflowProfile = {
+      id: 'fantome',
+      name: 'Fantôme',
+      roles: { subagent: { model: 'modele-fantome' } }
+    }
+    registerWorkflowBenchIpc({
+      ipcMain: { handle: (c: string, f: never) => handlers.set(c, f) } as never,
+      assertTrusted: vi.fn(),
+      assertBindingAvailable: (binding) =>
+        assertRuntimeBindingAvailable(binding, TEST_MODEL_CATALOG),
+      currentRoles,
+      runOrchestration: runOrchestration as never,
+      loadProfiles: () => ({ profiles: [fantome, robuste], activeId: null })
+    })
+
+    const report = (await handlers.get('os:workflowBench:run')!(
+      { sender: { isDestroyed: () => false, send: vi.fn() } },
+      { objective: 'o', profileIds: ['fantome', 'robuste'] }
+    )) as { rows: { profileId: string | null; green: boolean; caveat?: string }[] }
+    expect(report.rows.find((row) => row.profileId === 'fantome')).toMatchObject({
+      green: false,
+      caveat: expect.stringContaining('non vert')
+    })
+    expect(runOrchestration).toHaveBeenCalledTimes(1)
+    expect(runOrchestration.mock.calls[0][1]).toBeUndefined()
+  })
+
+  it('résout un delta modèle valide sur le binding runtime courant', async () => {
+    const handlers = new Map<string, (e: unknown, r: unknown) => Promise<unknown>>()
+    const runOrchestration = vi.fn().mockResolvedValue(ok(1))
+    const delta: WorkflowProfile = {
+      id: 'delta-valide',
+      name: 'Delta valide',
+      roles: { subagent: { model: 'claude-fable-5' } }
+    }
+    registerWorkflowBenchIpc({
+      ipcMain: { handle: (c: string, f: never) => handlers.set(c, f) } as never,
+      assertTrusted: vi.fn(),
+      assertBindingAvailable: (binding) =>
+        assertRuntimeBindingAvailable(binding, TEST_MODEL_CATALOG),
+      currentRoles,
+      runOrchestration: runOrchestration as never,
+      loadProfiles: () => ({ profiles: [delta, robuste], activeId: null })
+    })
+
+    await handlers.get('os:workflowBench:run')!(
+      { sender: { isDestroyed: () => false, send: vi.fn() } },
+      { objective: 'o', profileIds: ['delta-valide', 'robuste'] }
+    )
+    expect(runOrchestration.mock.calls[0][1]).toEqual({
+      provider: 'claude',
+      model: 'claude-fable-5',
+      reasoningEffort: 'high'
+    })
+  })
+
   it('refuse de « comparer » un seul workflow', async () => {
     await expect(harness().invoke({ objective: 'o', profileIds: ['vif'] })).rejects.toThrow(
       'au moins deux'
     )
   })
 
-  it('refuse un objectif vide', async () => {
-    await expect(harness().invoke({ objective: '   ', profileIds: ['vif', 'lent'] })).rejects.toThrow(
-      'Objectif manquant'
+  it('le tournoi est facultatif et exige exactement trois workflows', async () => {
+    const { invoke, runOrchestration } = harness()
+    await expect(
+      invoke({ objective: 'o', profileIds: ['vif', 'lent'], mode: 'tournament' })
+    ).rejects.toThrow('exactement trois')
+    expect(runOrchestration).not.toHaveBeenCalled()
+
+    await invoke({ objective: 'o', profileIds: ['vif', 'lent', 'robuste'], mode: 'tournament' })
+    expect(runOrchestration).toHaveBeenCalledTimes(3)
+    expect(runOrchestration.mock.calls.every((call) => call[4] === 'hold')).toBe(true)
+  })
+
+  it('transmet chaque workflow au run sans état global en mode tournoi', async () => {
+    const handlers = new Map<string, (e: unknown, r: unknown) => Promise<unknown>>()
+    const runOrchestration = vi.fn().mockResolvedValue(ok(1))
+    registerWorkflowBenchIpc({
+      ipcMain: { handle: (c: string, f: never) => handlers.set(c, f) } as never,
+      assertTrusted: vi.fn(),
+      assertBindingAvailable: vi.fn(),
+      currentRoles,
+      runOrchestration: runOrchestration as never,
+      loadProfiles: () => ({ profiles: [vif, lent, robuste], activeId: null })
+    })
+    await handlers.get('os:workflowBench:run')!(
+      { sender: { isDestroyed: () => false, send: vi.fn() } },
+      { objective: 'o', profileIds: ['vif', 'lent', 'robuste'], mode: 'tournament' }
     )
+    expect(runOrchestration.mock.calls[0][3]).toMatchObject({ identity: { name: 'Vif' } })
+    expect(runOrchestration.mock.calls[1][3]).toMatchObject({ identity: { name: 'Lent' } })
+  })
+
+  it('le contrefactuel exige exactement deux workflows, fige le checkpoint avant les runs et retient les deux bureaux', async () => {
+    const captureCheckpoint = vi.fn(async (objective: string) => ({
+      id: 'checkpoint-before-run',
+      runId: 'counterfactual-parent',
+      createdAt: '2026-08-08T12:00:00.000Z',
+      sourceSnapshot: {
+        workspaceId: 'C:/repo',
+        baseSha: 'base-sha',
+        contentHash: 'sha256:workspace-before-run'
+      },
+      state: { objective, dirty: false }
+    }))
+    const handlers = new Map<string, (e: unknown, r: unknown) => Promise<unknown>>()
+    const runOrchestration = vi.fn().mockResolvedValue(ok(1))
+    registerWorkflowBenchIpc({
+      ipcMain: { handle: (c: string, f: never) => handlers.set(c, f) } as never,
+      assertTrusted: vi.fn(),
+      assertBindingAvailable: vi.fn(),
+      currentRoles,
+      captureCheckpoint,
+      runOrchestration: runOrchestration as never,
+      loadProfiles: () => ({ profiles: [vif, lent, robuste], activeId: null })
+    })
+    const invoke = (profileIds: string[]) =>
+      handlers.get('os:workflowBench:run')!(
+        { sender: { isDestroyed: () => false, send: vi.fn() } },
+        { objective: 'o', profileIds, mode: 'counterfactual' }
+      )
+
+    await expect(invoke(['vif', 'lent', 'robuste'])).rejects.toThrow('exactement deux')
+    await invoke(['vif', 'lent'])
+
+    expect(captureCheckpoint).toHaveBeenCalledWith('o')
+    expect(runOrchestration).toHaveBeenCalledTimes(2)
+    expect(runOrchestration.mock.calls.every((call) => call[4] === 'hold')).toBe(true)
+    expect(runOrchestration.mock.calls.every((call) => call[5]?.baseSha === 'base-sha')).toBe(true)
+    expect(captureCheckpoint.mock.invocationCallOrder[0]).toBeLessThan(
+      runOrchestration.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('refuse un objectif vide', async () => {
+    await expect(
+      harness().invoke({ objective: '   ', profileIds: ['vif', 'lent'] })
+    ).rejects.toThrow('Objectif manquant')
   })
 
   it('pousse la progression pour que l’attente ne soit pas aveugle', async () => {
@@ -134,6 +317,7 @@ describe('le canal est réellement branché à l’application', () => {
     // on vérifie le symbole, pas la forme exacte de la ligne d'import.
     expect(entree).toMatch(/registerWorkflowBenchIpc[^\n]*from '\.\/workflow-bench-ipc'/)
     expect(entree).toMatch(/registerWorkflowBenchIpc\(\{/)
+    expect(entree).toContain('assertRuntimeBindingAvailable(binding, agentModels)')
   })
 
   /**
@@ -156,8 +340,8 @@ describe('le canal est réellement branché à l’application', () => {
     expect(applications.length).toBeGreaterThanOrEqual(4) // définition + ouverture + select + upsert + remove
   })
 
-  it('index.ts relie la pose du workflow à l’OS — sans ça, phases et consignes n’arrivent nulle part', () => {
-    expect(entree).toMatch(/setActiveWorkflow: \(workflow\) => os\.setActiveWorkflow\(workflow\)/)
+  it('index.ts relie un override run-scoped à l’OS — sans ça, phases et consignes n’arrivent nulle part', () => {
+    expect(entree).toContain('{ workflowOverride, publication, sourceSnapshot }')
     const os = readFileSync(new URL('./os.ts', import.meta.url), 'utf8')
     // L'etat partage a disparu : chaque run construit son orchestrateur avec SA closure.
     expect(os).toContain('currentWorkflow: () => workflow')
@@ -166,6 +350,7 @@ describe('le canal est réellement branché à l’application', () => {
   it('le preload expose le lancement ET la progression', () => {
     const preload = readFileSync(new URL('../preload/index.ts', import.meta.url), 'utf8')
     expect(preload).toContain("ipcRenderer.invoke('os:workflowBench:run'")
+    expect(preload).toContain("ipcRenderer.invoke('os:workflowBench:cancel'")
     expect(preload).toContain("ipcRenderer.on('os:workflowBench:progress'")
   })
 })
@@ -186,32 +371,55 @@ describe('phases, allocation et consignes atteignent l’orchestrateur', () => {
     expect(over.instructionFor?.('build')).toEqual({ mode: 'replace', text: 'ma méthode' })
   })
 
+  it('transmet aussi le graphe et ses retours bornés au moteur', () => {
+    const graph = {
+      entry: 'scout-1',
+      nodes: [
+        { id: 'scout-1', phase: 'scout' as const },
+        { id: 'build-1', phase: 'build' as const },
+        { id: 'judge-1', phase: 'judge' as const }
+      ],
+      edges: [
+        { from: 'scout-1', to: 'build-1', when: 'always' as const },
+        { from: 'build-1', to: 'judge-1', when: 'always' as const },
+        { from: 'judge-1', to: 'build-1', when: 'red' as const, maxTraversals: 2 }
+      ]
+    }
+
+    expect(overrideFor({ id: 'graphe', name: 'Graphe', graph })?.graph).toEqual(graph)
+  })
+
   it('la configuration courante n’impose aucun écart', () => {
     expect(overrideFor(null)).toBeUndefined()
   })
 
-  it('POSE le workflow avant le run et le RETIRE après', async () => {
-    const poses: (string | undefined)[] = []
-    const setActiveWorkflow = vi.fn((w?: { phases?: string[] }) =>
-      poses.push(w?.phases?.[0] ?? (w ? 'sans-phase' : undefined))
-    )
+  it('transmet le workflow dans le run sans pose globale', async () => {
+    const runOrchestration = vi.fn().mockResolvedValue(ok(1))
     const handlers = new Map<string, (e: unknown, r: unknown) => Promise<unknown>>()
     registerWorkflowBenchIpc({
       ipcMain: { handle: (c: string, f: never) => handlers.set(c, f) } as never,
       assertTrusted: vi.fn(),
-      runOrchestration: (async () => ok(1)) as never,
-      setActiveWorkflow: setActiveWorkflow as never,
+      assertBindingAvailable: vi.fn(),
+      currentRoles,
+      runOrchestration: runOrchestration as never,
       loadProfiles: () => ({ profiles: [vif, bavard], activeId: null })
     })
     await handlers.get('os:workflowBench:run')!(
       { sender: { isDestroyed: () => false, send: vi.fn() } },
       { objective: 'o', profileIds: ['bavard', 'vif'] }
     )
-    expect(poses).toEqual(['build', undefined, 'sans-phase', undefined])
+    expect(runOrchestration).toHaveBeenNthCalledWith(
+      1,
+      'o',
+      undefined,
+      expect.any(AbortSignal),
+      expect.objectContaining({ phases: ['build'] }),
+      'auto',
+      undefined
+    )
   })
 
   it('un run qui ÉCHOUE ne laisse pas ses réglages au workflow suivant', async () => {
-    const poses: unknown[] = []
     const runOrchestration = vi
       .fn()
       .mockRejectedValueOnce(new Error('mort'))
@@ -220,8 +428,9 @@ describe('phases, allocation et consignes atteignent l’orchestrateur', () => {
     registerWorkflowBenchIpc({
       ipcMain: { handle: (c: string, f: never) => handlers.set(c, f) } as never,
       assertTrusted: vi.fn(),
+      assertBindingAvailable: vi.fn(),
+      currentRoles,
       runOrchestration: runOrchestration as never,
-      setActiveWorkflow: ((w: unknown) => poses.push(w)) as never,
       loadProfiles: () => ({ profiles: [vif, bavard], activeId: null })
     })
     await handlers.get('os:workflowBench:run')!(
@@ -229,7 +438,8 @@ describe('phases, allocation et consignes atteignent l’orchestrateur', () => {
       { objective: 'o', profileIds: ['bavard', 'vif'] }
     )
     // Sinon le verdict comparerait deux fois le même réglage sans le dire.
-    expect(poses[1]).toBeUndefined()
+    expect(runOrchestration.mock.calls[0][3]).toMatchObject({ identity: { name: 'Bavard' } })
+    expect(runOrchestration.mock.calls[1][3]).toMatchObject({ identity: { name: 'Vif' } })
   })
 })
 
@@ -254,5 +464,41 @@ describe('overrideFor — l’identité du workflow survit à la conversion', ()
     // C'est un ajout d'observabilité : si elle changeait ce que le moteur joue, elle serait un bug.
     const o = overrideFor({ id: 'x', name: 'X', phases: ['build'] })
     expect(o?.phases).toEqual(['build'])
+  })
+})
+
+/**
+ * Régression sur le workflow RÉELLEMENT livré, pas sur un profil de test.
+ *
+ * Les cas ci-dessus utilisent des profils fabriqués : ils prouvent la mécanique de conversion, pas
+ * que le pipeline embarqué survit à la traversée. Si `DEFAULT_WORKFLOWS` dérive (une phase perdue,
+ * un ordre inversé, un retour rouge dé-borné), le moteur jouerait autre chose sans qu'un test bouge.
+ */
+describe('overrideFor — le workflow livré « Chantier Autowin » arrive intact au moteur', () => {
+  const chantier = DEFAULT_WORKFLOWS.find((profile) => profile.id === 'chantier-autowin')!
+
+  it('le profil livré existe — sans lui, la régression testerait du vide', () => {
+    expect(chantier).toBeDefined()
+  })
+
+  it('transmet ses SIX phases dans l’ordre du profil', () => {
+    const graphe = overrideFor(chantier)?.graph
+    expect(graphe?.nodes.map((node) => node.phase)).toEqual([
+      'scout',
+      'frame',
+      'terrain',
+      'build',
+      'clean',
+      'judge'
+    ])
+    expect(graphe?.entry).toBe('scout-1')
+  })
+
+  it('un juge ROUGE borne la boucle de build à 2 itérations', () => {
+    const graphe = overrideFor(chantier)?.graph
+    const retours = (graphe?.edges ?? []).filter((edge) => edge.when === 'red')
+    // Un seul retour rouge : deux arêtes rouges cumuleraient leurs plafonds sans le dire.
+    expect(retours).toHaveLength(1)
+    expect(retours[0]).toMatchObject({ from: 'judge-1', to: 'build-1', maxTraversals: 2 })
   })
 })

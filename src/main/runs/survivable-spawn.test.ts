@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { stdoutJournalPath } from './stdout-journal'
+import { stdoutJournalPath, survivableExitCode } from './stdout-journal'
 import { spawnSurvivable, usesWindowsSurvivalRelay } from './survivable-spawn'
 
 /** Vrais processus : c'est la SURVIE qu'on veut prouver, pas notre idée de la survie. */
@@ -81,6 +81,59 @@ describe('lancement survivable — la sortie n’est pas perdue avec l’app', (
     expect(lines.length).toBe(3)
     // Le journal existe VRAIMENT sur disque : c'est lui qui rend la reprise possible.
     expect(readFileSync(run.journalPath!, 'utf8')).toContain('"n":3')
+    expect(survivableExitCode(run.journalPath!)).toBe(0)
+  })
+
+  it('persiste le point de rattachement avant que le provider puisse démarrer', async () => {
+    const root = tempRoot()
+    const marker = join(root, 'provider-a-demarre')
+    const writer = join(root, 'writer-immediat.mjs')
+    writeFileSync(writer, `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'oui')`)
+
+    expect(() =>
+      spawnSurvivable({
+        bin: process.execPath,
+        args: [writer],
+        journalRoot: root,
+        runId: 'journal-avant-spawn',
+        onJournalPrepared: (journalPath) => {
+          expect(existsSync(journalPath)).toBe(true)
+          throw new Error('persistance checkpoint impossible')
+        }
+      })
+    ).toThrow('persistance checkpoint impossible')
+
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(existsSync(marker)).toBe(false)
+  })
+
+  it('sépare stderr de la sortie récupérable du provider', async () => {
+    const root = tempRoot()
+    const writer = join(root, 'stdout-stderr.mjs')
+    writeFileSync(
+      writer,
+      `process.stderr.write('warning diagnostic seulement\\n')
+process.stdout.write('RESULTAT PROVIDER\\n')
+`
+    )
+    const run = spawnSurvivable({
+      bin: process.execPath,
+      args: [writer],
+      journalRoot: root,
+      runId: 'run-streams-separes'
+    })
+    const lines: string[] = []
+    await run.tail((line) => lines.push(line), {
+      isComplete: () => run.child.exitCode !== null,
+      pollMs: 20
+    })
+    run.release()
+
+    expect(lines).toContain('RESULTAT PROVIDER')
+    expect(lines).not.toContain('warning diagnostic seulement')
+    expect(readFileSync(run.journalPath!, 'utf8')).not.toContain('warning diagnostic seulement')
+    expect(run.diagnosticPath).toBeDefined()
+    expect(readFileSync(run.diagnosticPath!, 'utf8')).toContain('warning diagnostic seulement')
   })
 
   it('reprend la lecture depuis un offset — rien n’est rejoué deux fois', async () => {
@@ -164,6 +217,12 @@ setInterval(() => {}, 1000) // reste vivant jusqu'a ce qu'on le tue
 
     // Parent mort. L'enfant doit AVOIR CONTINUE jusqu'au bout, dans le journal.
     expect(await waitUntil(() => lu().includes('"n":8'), 40_000)).toBe(true)
+    if (process.platform === 'win32') {
+      // Le relais survit lui aussi et certifie la fermeture réelle HORS de stdout : le provider ne
+      // peut pas usurper cette preuve en imprimant une ligne ressemblante dans sa réponse.
+      expect(await waitUntil(() => survivableExitCode(path) === 0, 10_000), lu()).toBe(true)
+      expect(lu()).not.toContain('autowin.survivable-exit')
+    }
   })
 
   it('tuer le relais arrête son CLI et efface le prompt matérialisé', async () => {
@@ -384,15 +443,14 @@ describe('journal de run — pas de trace vide laissée derrière', () => {
       journalRoot: root,
       runId: 'run-introuvable'
     })
-    const chemin = run.journalPath!
+    const diagnostic = run.diagnosticPath!
 
     await waitUntil(() => run.child.exitCode !== null, 10_000)
     run.release()
 
-    // Le nettoyage n'efface QUE le vide. Ici le relais a écrit pourquoi il a échoué : cette trace est
-    // la seule explication disponible du run manqué, et un nettoyage trop large la détruirait.
-    // (Assertion d'abord écrite à l'envers : je réclamais la suppression, le code avait raison.)
-    expect(existsSync(chemin)).toBe(true)
-    expect(readFileSync(chemin, 'utf8').length).toBeGreaterThan(0)
+    // Stdout vide peut disparaître ; la raison d'échec reste dans le canal diagnostic séparé.
+    // Ainsi une erreur CLI demeure observable sans pouvoir être prise pour un résultat provider.
+    expect(existsSync(diagnostic)).toBe(true)
+    expect(readFileSync(diagnostic, 'utf8').length).toBeGreaterThan(0)
   })
 })

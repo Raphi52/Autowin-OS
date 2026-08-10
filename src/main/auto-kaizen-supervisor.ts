@@ -1,14 +1,26 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
+import { dirname, join } from 'node:path'
 
 export type AutoKaizenConversationRole = 'analysis' | 'fix'
-export type AutoKaizenAuthorityMode = 'plan' | 'ask' | 'auto'
 
-export function inheritAutoKaizenAuthority(
-  sourceMode: AutoKaizenAuthorityMode | undefined
-): AutoKaizenAuthorityMode {
-  return sourceMode ?? 'ask'
+export const LEGACY_AUTO_KAIZEN_ENABLED_ENV = 'AUTOWIN_LEGACY_AUTO_KAIZEN_ENABLED'
+
+export function legacyAutoKaizenSupervisorEnabled(
+  env: Readonly<Record<string, string | undefined>> = process.env
+): boolean {
+  const flag = env[LEGACY_AUTO_KAIZEN_ENABLED_ENV]?.trim().toLowerCase()
+  return flag === '1' || flag === 'true'
 }
 
 export interface AutoKaizenConversationLink {
@@ -137,6 +149,8 @@ export interface AutoKaizenLimits {
    * 10 figés gelaient tout le système par `active-limit`, sans le moindre signal.
    */
   staleActiveMs: number
+  /** Nombre maximal d'incidents terminaux conserves dans le snapshot chaud. */
+  maxRetainedTerminal: number
 }
 
 const DEFAULT_LIMITS: AutoKaizenLimits = {
@@ -144,7 +158,8 @@ const DEFAULT_LIMITS: AutoKaizenLimits = {
   maxDepth: 3,
   maxPerHour: 50,
   maxPerRoot: 12,
-  staleActiveMs: 60 * 60_000
+  staleActiveMs: 60 * 60_000,
+  maxRetainedTerminal: 1_000
 }
 
 /**
@@ -178,6 +193,98 @@ const ACTIVE_STATUSES = new Set<AutoKaizenIncidentStatus>([
   'analysis-completed',
   'fix-running'
 ])
+
+export const MAX_AUTO_KAIZEN_ARCHIVE_BYTES = 16 * 1024 * 1024
+
+function compactIncidentHistory(
+  incidents: readonly AutoKaizenIncident[],
+  requestedTerminalLimit: number
+): { retained: AutoKaizenIncident[]; removed: AutoKaizenIncident[] } {
+  const active = incidents.filter((incident) => ACTIVE_STATUSES.has(incident.status))
+  const terminal = incidents.filter((incident) => !ACTIVE_STATUSES.has(incident.status))
+  const referencedByActive = new Set(
+    active
+      .flatMap((incident) => [incident.rootIncidentId, incident.parentIncidentId])
+      .filter(Boolean)
+  )
+  const required = terminal.filter((incident) => referencedByActive.has(incident.id))
+  const terminalLimit = Math.max(
+    required.length,
+    Number.isFinite(requestedTerminalLimit)
+      ? Math.max(0, Math.floor(requestedTerminalLimit))
+      : DEFAULT_LIMITS.maxRetainedTerminal
+  )
+  const keepIds = new Set(required.map(({ id }) => id))
+  const newest = terminal
+    .filter((incident) => !keepIds.has(incident.id))
+    .sort((left, right) => right.updatedAt - left.updatedAt)
+    .slice(0, Math.max(0, terminalLimit - keepIds.size))
+  for (const incident of newest) keepIds.add(incident.id)
+
+  return {
+    retained: incidents.filter(
+      (incident) => ACTIVE_STATUSES.has(incident.status) || keepIds.has(incident.id)
+    ),
+    removed: terminal.filter((incident) => !keepIds.has(incident.id))
+  }
+}
+
+function archivedVersions(path: string): Set<string> {
+  const versions = new Set<string>()
+  const scan = (file: string): void => {
+    if (!existsSync(file)) return
+    for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
+      if (line) versions.add(createHash('sha256').update(`${line}\n`).digest('hex'))
+    }
+  }
+  scan(`${path}.archive.jsonl`)
+  // Compatibilite de migration : les anciennes versions creaient un segment par lot. Ils sont lus
+  // une seule fois au demarrage, mais aucun nouveau segment n'est plus cree.
+  const archiveDir = `${path}.archive`
+  if (existsSync(archiveDir) && statSync(archiveDir).isDirectory()) {
+    for (const file of readdirSync(archiveDir)) {
+      if (file.endsWith('.jsonl')) scan(join(archiveDir, file))
+    }
+  }
+  return versions
+}
+
+function archiveIncidents(
+  path: string,
+  incidents: readonly AutoKaizenIncident[],
+  versions: Set<string>
+): void {
+  if (incidents.length === 0) return
+  const pendingPayloads = incidents
+    .map((incident) => `${JSON.stringify(incident)}\n`)
+    .filter((payload) => !versions.has(createHash('sha256').update(payload).digest('hex')))
+  if (pendingPayloads.length === 0) return
+  const archivePath = `${path}.archive.jsonl`
+  const selected: string[] = []
+  let selectedBytes = 0
+  for (const payload of pendingPayloads.slice().reverse()) {
+    const bytes = Buffer.byteLength(payload)
+    if (bytes > MAX_AUTO_KAIZEN_ARCHIVE_BYTES) continue
+    if (selectedBytes + bytes > MAX_AUTO_KAIZEN_ARCHIVE_BYTES) break
+    selected.unshift(payload)
+    selectedBytes += bytes
+  }
+  if (selected.length === 0) return
+  const payload = selected.join('')
+  const currentBytes = existsSync(archivePath) ? statSync(archivePath).size : 0
+  if (currentBytes + selectedBytes > MAX_AUTO_KAIZEN_ARCHIVE_BYTES) {
+    const temporary = `${archivePath}.${process.pid}.tmp`
+    rmSync(temporary, { force: true })
+    writeFileSync(temporary, payload, { encoding: 'utf8', mode: 0o600 })
+    renameSync(temporary, archivePath)
+    versions.clear()
+  } else {
+    appendFileSync(archivePath, payload, { encoding: 'utf8', mode: 0o600 })
+  }
+  for (const entry of selected) {
+    versions.add(createHash('sha256').update(entry).digest('hex'))
+  }
+}
 
 function incidentId(dedupeKey: string): string {
   return `ak-${createHash('sha256').update(dedupeKey).digest('hex').slice(0, 16)}`
@@ -496,6 +603,161 @@ function clipped(value: string, max = 8_000): string {
   return normalized.length <= max ? normalized : `${normalized.slice(0, max)}…[tronqué]`
 }
 
+const INCIDENT_STATUSES = new Set<AutoKaizenIncidentStatus>([
+  'detected',
+  'analysis-running',
+  'analysis-completed',
+  'fix-running',
+  'completed',
+  'validation-blocked',
+  'failed',
+  'suppressed'
+])
+
+function finiteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function stringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) return undefined
+  return value
+}
+
+function normalizeVerification(value: unknown): AutoKaizenVerification | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const verification = value as Record<string, unknown>
+  if (typeof verification.complete !== 'boolean' || typeof verification.evidence !== 'string') {
+    return undefined
+  }
+  const greenOracles = stringArray(verification.greenOracles)
+  const redOracles = stringArray(verification.redOracles)
+  return {
+    complete: verification.complete,
+    evidence: verification.evidence,
+    ...(greenOracles ? { greenOracles } : {}),
+    ...(redOracles ? { redOracles } : {})
+  }
+}
+
+const OPTIONAL_INCIDENT_STRINGS = [
+  'parentIncidentId',
+  'sourceTurnId',
+  'analysisConversationId',
+  'analysisTurnId',
+  'analysisResult',
+  'fixConversationId',
+  'fixTurnId',
+  'fixResult',
+  'error',
+  'errorStack',
+  'failureSourceIncidentId'
+] as const
+
+const SUPPRESSION_REASONS = new Set<NonNullable<AutoKaizenIncident['suppressionReason']>>([
+  'active-limit',
+  'depth-limit',
+  'rate-limit',
+  'breadth-limit',
+  'non-actionable',
+  'upstream-outage',
+  'aborted',
+  'remediation-red'
+])
+
+function normalizePersistedIncident(value: unknown): AutoKaizenIncident | undefined {
+  // fix-ok: un snapshot est une entrée persistée non fiable ; chaque incident est validé avant accès.
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const incident = value as Record<string, unknown>
+  const requiredStrings = [
+    'id',
+    'dedupeKey',
+    'rootIncidentId',
+    'sourceConversationId',
+    'kind',
+    'summary',
+    'detail'
+  ] as const
+  if (requiredStrings.some((field) => typeof incident[field] !== 'string')) return undefined
+  if (
+    typeof incident.status !== 'string' ||
+    !INCIDENT_STATUSES.has(incident.status as AutoKaizenIncidentStatus) ||
+    !finiteNumber(incident.depth) ||
+    !finiteNumber(incident.detectedAt) ||
+    !finiteNumber(incident.updatedAt)
+  ) {
+    return undefined
+  }
+
+  const dedupeKey = incident.dedupeKey as string
+  const occurrenceCount =
+    finiteNumber(incident.occurrenceCount) && incident.occurrenceCount >= 1
+      ? Math.floor(incident.occurrenceCount)
+      : 1
+  const severity =
+    incident.severity === 'warning' ||
+    incident.severity === 'high' ||
+    incident.severity === 'critical'
+      ? incident.severity
+      : severityForOccurrences(occurrenceCount)
+  const persistedEventKeys = Array.isArray(incident.eventKeys)
+    ? incident.eventKeys.filter((key): key is string => typeof key === 'string')
+    : []
+  const normalized: AutoKaizenIncident = {
+    id: incident.id as string,
+    dedupeKey,
+    correlationKey:
+      typeof incident.correlationKey === 'string' && incident.correlationKey
+        ? incident.correlationKey
+        : correlationKeyForIncident({
+            dedupeKey,
+            sourceConversationId: incident.sourceConversationId as string,
+            kind: incident.kind as string,
+            summary: incident.summary as string,
+            detail: incident.detail as string
+          }),
+    eventKeys: persistedEventKeys.length > 0 ? persistedEventKeys : [dedupeKey],
+    rootIncidentId: incident.rootIncidentId as string,
+    depth: incident.depth,
+    sourceConversationId: incident.sourceConversationId as string,
+    kind: incident.kind as string,
+    summary: incident.summary as string,
+    detail: incident.detail as string,
+    status: incident.status as AutoKaizenIncidentStatus,
+    occurrenceCount,
+    severity,
+    lastSeenAt: finiteNumber(incident.lastSeenAt) ? incident.lastSeenAt : incident.updatedAt,
+    detectedAt: incident.detectedAt,
+    updatedAt: incident.updatedAt
+  }
+  const mutable = normalized as unknown as Record<string, unknown>
+  for (const field of OPTIONAL_INCIDENT_STRINGS) {
+    if (typeof incident[field] === 'string') mutable[field] = incident[field]
+  }
+  if (
+    typeof incident.suppressionReason === 'string' &&
+    SUPPRESSION_REASONS.has(
+      incident.suppressionReason as NonNullable<AutoKaizenIncident['suppressionReason']>
+    )
+  ) {
+    normalized.suppressionReason = incident.suppressionReason as NonNullable<
+      AutoKaizenIncident['suppressionReason']
+    >
+  }
+  const verification = normalizeVerification(incident.verification)
+  if (verification) normalized.verification = verification
+  if (
+    incident.validationOracles &&
+    typeof incident.validationOracles === 'object' &&
+    !Array.isArray(incident.validationOracles)
+  ) {
+    const oracles = incident.validationOracles as Record<string, unknown>
+    const green = stringArray(oracles.green)
+    const red = stringArray(oracles.red)
+    if (green && red) normalized.validationOracles = { green, red }
+  }
+  return normalized
+}
+
 function loadSnapshot(path: string): AutoKaizenSnapshot {
   try {
     if (!existsSync(path)) return { schemaVersion: 1, incidents: [] }
@@ -503,7 +765,12 @@ function loadSnapshot(path: string): AutoKaizenSnapshot {
     if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.incidents)) {
       return { schemaVersion: 1, incidents: [] }
     }
-    return { schemaVersion: 1, incidents: parsed.incidents }
+    return {
+      schemaVersion: 1,
+      incidents: parsed.incidents
+        .map((incident) => normalizePersistedIncident(incident))
+        .filter((incident): incident is AutoKaizenIncident => incident !== undefined)
+    }
   } catch {
     return { schemaVersion: 1, incidents: [] }
   }
@@ -612,6 +879,8 @@ export class AutoKaizenSupervisor {
   private readonly state: AutoKaizenSnapshot
   private readonly running = new Set<Promise<void>>()
   private readonly runningIncidentIds = new Set<string>()
+  private persistenceDirty = false
+  private readonly archivedVersions: Set<string>
 
   constructor(options: {
     path: string
@@ -623,7 +892,14 @@ export class AutoKaizenSupervisor {
     this.runtime = options.runtime
     this.now = options.now ?? (() => Date.now())
     this.limits = { ...DEFAULT_LIMITS, ...options.limits }
-    this.state = loadSnapshot(this.path)
+    this.archivedVersions = archivedVersions(this.path)
+    const loaded = loadSnapshot(this.path)
+    const compacted = compactIncidentHistory(loaded.incidents, this.limits.maxRetainedTerminal)
+    this.state = { schemaVersion: 1, incidents: compacted.retained }
+    if (compacted.removed.length > 0) {
+      archiveIncidents(this.path, compacted.removed, this.archivedVersions)
+      saveSnapshot(this.path, this.state)
+    }
   }
 
   snapshot(): AutoKaizenSnapshot {
@@ -657,7 +933,10 @@ export class AutoKaizenSupervisor {
       (incident) =>
         incident.dedupeKey === input.dedupeKey || incident.eventKeys?.includes(input.dedupeKey)
     )
-    if (exact) return exact
+    if (exact) {
+      if (this.persistenceDirty) this.persist()
+      return exact
+    }
     const correlationKey = correlationKeyForIncident(input)
     const id = incidentId(correlationKey)
     // Trois chemins de fusion, du plus précis au plus large :
@@ -785,7 +1064,7 @@ export class AutoKaizenSupervisor {
       return incident
     }
 
-    this.track(incident, this.process(incident))
+    this.start(incident)
     return incident
   }
 
@@ -813,7 +1092,7 @@ export class AutoKaizenSupervisor {
     for (const incident of this.state.incidents) {
       if (!ACTIVE_STATUSES.has(incident.status) || this.runningIncidentIds.has(incident.id))
         continue
-      this.track(incident, this.process(incident))
+      this.start(incident)
     }
   }
 
@@ -822,7 +1101,17 @@ export class AutoKaizenSupervisor {
   }
 
   private persist(): void {
-    saveSnapshot(this.path, this.state)
+    const recoveringDirtyState = this.persistenceDirty
+    this.persistenceDirty = true
+    const compacted = compactIncidentHistory(this.state.incidents, this.limits.maxRetainedTerminal)
+    const candidate: AutoKaizenSnapshot = { ...this.state, incidents: compacted.retained }
+    archiveIncidents(this.path, compacted.removed, this.archivedVersions)
+    saveSnapshot(this.path, candidate)
+    // L'etat chaud ne perd les incidents retires qu'apres leur archivage ET la sauvegarde du
+    // snapshot candidat. Si l'une des deux ecritures echoue, le prochain persist peut tout reprendre.
+    this.state.incidents = compacted.retained
+    this.persistenceDirty = false
+    if (recoveringDirtyState) this.resumeUntrackedActive()
   }
 
   /**
@@ -858,8 +1147,18 @@ export class AutoKaizenSupervisor {
     this.persist()
   }
 
-  private track(incident: AutoKaizenIncident, promise: Promise<void>): void {
+  private resumeUntrackedActive(): void {
+    for (const incident of this.state.incidents) {
+      if (ACTIVE_STATUSES.has(incident.status) && !this.runningIncidentIds.has(incident.id)) {
+        this.start(incident)
+      }
+    }
+  }
+
+  private start(incident: AutoKaizenIncident): void {
+    if (this.runningIncidentIds.has(incident.id)) return
     this.runningIncidentIds.add(incident.id)
+    const promise = this.process(incident)
     this.running.add(promise)
     void promise.finally(() => {
       this.running.delete(promise)

@@ -11,6 +11,7 @@ import {
   closeGreenRunOnDisk,
   detectSecret,
   parsePorcelainPaths,
+  projectPublicationNeedsRetry,
   type GitRunner
 } from './run-autoclose'
 
@@ -24,6 +25,32 @@ const realGit: GitRunner = async (args, cwd) => (await run('git', args, { cwd })
 const dirs: string[] = []
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
+})
+
+describe('acquittement de publication projet', () => {
+  const report = (project: Parameters<typeof projectPublicationNeedsRetry>[0]['project']) => ({
+    runId: 'run-1',
+    branch: 'autowin/run-1',
+    project,
+    brain: { status: 'skipped' as const, reason: 'no-changes' as const },
+    at: new Date(0).toISOString()
+  })
+
+  it('laisse rejouables les echecs transport et l absence de remote', () => {
+    expect(projectPublicationNeedsRetry(report({ status: 'failed', error: 'reseau' }))).toBe(true)
+    expect(projectPublicationNeedsRetry(report({ status: 'skipped', reason: 'no-remote' }))).toBe(
+      true
+    )
+  })
+
+  it('acquitte un push reussi et un blocage terminal de contenu', () => {
+    expect(
+      projectPublicationNeedsRetry(report({ status: 'pushed', branch: 'autowin/run-1', files: 2 }))
+    ).toBe(false)
+    expect(
+      projectPublicationNeedsRetry(report({ status: 'skipped', reason: 'secret-detected' }))
+    ).toBe(false)
+  })
 })
 
 describe('defaultGitRunner — processus invisible', () => {
@@ -70,7 +97,9 @@ describe('autoCloseRun — publication d’un run vert', () => {
 
     expect(res).toMatchObject({ status: 'pushed', branch: 'auto/run-42' })
     // La branche locale n'a PAS changé : l'utilisateur reste où il travaillait.
-    expect((await run('git', ['branch', '--show-current'], { cwd: repo })).stdout.trim()).toBe('travail')
+    expect((await run('git', ['branch', '--show-current'], { cwd: repo })).stdout.trim()).toBe(
+      'travail'
+    )
     // Le distant a bien reçu la branche dédiée…
     const remoteBranches = (await run('git', ['branch'], { cwd: remote })).stdout
     expect(remoteBranches).toContain('auto/run-42')
@@ -94,6 +123,7 @@ describe('autoCloseRun — publication d’un run vert', () => {
     const { repo } = await repoWithRemote()
     writeFileSync(join(repo, 'du-run.md'), '# produit par le run\n')
     writeFileSync(join(repo, 'autrui.md'), '# travail de quelqu_un d_autre\n')
+    await realGit(['add', 'autrui.md'], repo)
 
     const res = await autoCloseRun({
       repo,
@@ -105,11 +135,15 @@ describe('autoCloseRun — publication d’un run vert', () => {
     })
 
     expect(res).toMatchObject({ status: 'committed', files: 1 })
-    const committed = (await run('git', ['show', '--name-only', '--format=', 'HEAD'], { cwd: repo })).stdout
+    const committed = (
+      await run('git', ['show', '--name-only', '--format=', 'HEAD'], { cwd: repo })
+    ).stdout
     expect(committed).toContain('du-run.md')
     expect(committed).not.toContain('autrui.md')
-    // Le fichier d'autrui reste non suivi, intact.
-    expect((await run('git', ['status', '--porcelain'], { cwd: repo })).stdout).toContain('autrui.md')
+    // Le fichier d'autrui reste indexé, intact.
+    expect((await run('git', ['status', '--porcelain'], { cwd: repo })).stdout).toContain(
+      'A  autrui.md'
+    )
   })
 
   it('ne crée pas de commit vide quand le run n’a rien changé', async () => {
@@ -126,7 +160,65 @@ describe('autoCloseRun — publication d’un run vert', () => {
 
     expect(res).toMatchObject({ status: 'skipped', reason: 'secret-detected' })
     // Rien n'a été commité.
-    expect((await run('git', ['log', '--oneline'], { cwd: repo })).stdout.trim().split('\n')).toHaveLength(1)
+    expect(
+      (await run('git', ['log', '--oneline'], { cwd: repo })).stdout.trim().split('\n')
+    ).toHaveLength(1)
+  })
+
+  it('bloque un secret dans un nouveau fichier avant commit et restaure l index', async () => {
+    const { repo, remote } = await repoWithRemote()
+    writeFileSync(join(repo, 'nouveau.env'), 'AKIAIOSFODNN7EXAMPLE\n')
+    writeFileSync(join(repo, 'deja-indexe.txt'), 'travail utilisateur\n')
+    await realGit(['add', 'deja-indexe.txt'], repo)
+    const indexBefore = (await realGit(['write-tree'], repo)).trim()
+
+    const res = await autoCloseRun({
+      repo,
+      branch: 'auto/run-new-secret',
+      message: 'ajoute un fichier',
+      paths: ['nouveau.env'],
+      runGit: realGit
+    })
+
+    expect(res).toMatchObject({ status: 'skipped', reason: 'secret-detected' })
+    expect((await realGit(['write-tree'], repo)).trim()).toBe(indexBefore)
+    expect((await realGit(['rev-list', '--count', 'HEAD'], repo)).trim()).toBe('1')
+    expect(await realGit(['branch'], remote)).not.toContain('auto/run-new-secret')
+  })
+
+  it('bloque un secret dans le chemin avant commit', async () => {
+    const { repo, remote } = await repoWithRemote()
+    const secretName = 'AKIAIOSFODNN7EXAMPLE.txt'
+    writeFileSync(join(repo, secretName), 'contenu bénin\n')
+
+    const res = await autoCloseRun({
+      repo,
+      branch: 'auto/run-path-secret',
+      message: 'ajoute un fichier',
+      paths: [secretName],
+      runGit: realGit
+    })
+
+    expect(res).toMatchObject({ status: 'skipped', reason: 'secret-detected' })
+    expect((await realGit(['rev-list', '--count', 'HEAD'], repo)).trim()).toBe('1')
+    expect(await realGit(['branch'], remote)).not.toContain('auto/run-path-secret')
+  })
+
+  it('bloque un secret dans le message avant commit', async () => {
+    const { repo, remote } = await repoWithRemote()
+    writeFileSync(join(repo, 'benign.txt'), 'contenu bénin\n')
+
+    const res = await autoCloseRun({
+      repo,
+      branch: 'auto/run-message-secret',
+      message: 'task AKIAIOSFODNN7EXAMPLE',
+      paths: ['benign.txt'],
+      runGit: realGit
+    })
+
+    expect(res).toMatchObject({ status: 'skipped', reason: 'secret-detected' })
+    expect((await realGit(['rev-list', '--count', 'HEAD'], repo)).trim()).toBe('1')
+    expect(await realGit(['branch'], remote)).not.toContain('auto/run-message-secret')
   })
 
   it('une défaillance git devient un échec rapporté, jamais une exception', async () => {
@@ -171,8 +263,9 @@ describe('périmètre du run (ce qui traînait AVANT n’est pas publié)', () =
       [repo, 'du-run.ts', 'travail-concurrent.ts'],
       [brain, 'du-run.md', 'note-en-attente.md']
     ] as const) {
-      const committed = (await run('git', ['show', '--name-only', '--format=', 'HEAD'], { cwd: dir }))
-        .stdout
+      const committed = (
+        await run('git', ['show', '--name-only', '--format=', 'HEAD'], { cwd: dir })
+      ).stdout
       expect(committed).toContain(mine)
       expect(committed).not.toContain(autrui) // le travail d'autrui reste non commité
     }
@@ -228,6 +321,179 @@ describe('travail DÉJÀ COMMITÉ par la fusion du worktree (arbre propre)', () 
     expect((await run('git', ['branch'], { cwd: remote })).stdout).toContain('auto/run-77')
   })
 
+  it('publie la plage Git exacte même si le commit agent porte un sujet conventionnel', async () => {
+    const { repo, remote } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+    writeFileSync(join(repo, 'du-run.ts'), 'export const y = 2\n')
+    await run('git', ['add', '-A'], { cwd: repo })
+    await run('git', ['commit', '-m', 'feat: add the requested behavior'], { cwd: repo })
+    const publishedSha = (await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout.trim()
+    writeFileSync(join(repo, 'autrui.ts'), 'export const foreign = true\n')
+    await run('git', ['add', '-A'], { cwd: repo })
+    await run('git', ['commit', '-m', 'chore: concurrent local work'], { cwd: repo })
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-conventional',
+      task: 'ajoute un fichier',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      projectPublication: { baseSha: baseline.projectHead!, publishedSha },
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({
+      status: 'pushed',
+      branch: 'auto/run-conventional',
+      files: 1
+    })
+    expect(
+      (
+        await run('git', ['rev-parse', 'refs/heads/auto/run-conventional'], { cwd: remote })
+      ).stdout.trim()
+    ).toBe(publishedSha)
+  })
+
+  it('refuse un secret ajouté puis supprimé dans un commit intermédiaire', async () => {
+    const { repo, remote } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+    const secretPath = join(repo, 'ephemeral.env')
+    writeFileSync(secretPath, 'AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\n')
+    await run('git', ['add', 'ephemeral.env'], { cwd: repo })
+    await run('git', ['commit', '-m', 'feat: temporary credentials'], { cwd: repo })
+    rmSync(secretPath)
+    await run('git', ['add', '-A'], { cwd: repo })
+    await run('git', ['commit', '-m', 'fix: remove temporary credentials'], { cwd: repo })
+    const publishedSha = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-secret-history',
+      task: 'publie deux commits',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      projectPublication: { baseSha: baseline.projectHead!, publishedSha },
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({ status: 'skipped', reason: 'secret-detected' })
+    expect(await realGit(['branch'], remote)).not.toContain('auto/run-secret-history')
+  })
+
+  it('refuse un secret transitoire sur une ligne commençant par deux plus', async () => {
+    const { repo, remote } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+    const secretPath = join(repo, 'ambiguous.patch')
+    writeFileSync(secretPath, '++token = "0123456789abcdef"\n')
+    await realGit(['add', 'ambiguous.patch'], repo)
+    await realGit(['commit', '-m', 'feat: add generated patch'], repo)
+    rmSync(secretPath)
+    await realGit(['add', '-A'], repo)
+    await realGit(['commit', '-m', 'fix: remove generated patch'], repo)
+    const publishedSha = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-secret-plus-prefix',
+      task: 'publie deux commits',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      projectPublication: { baseSha: baseline.projectHead!, publishedSha },
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({ status: 'skipped', reason: 'secret-detected' })
+    expect(await realGit(['branch'], remote)).not.toContain('auto/run-secret-plus-prefix')
+  })
+
+  it('refuse un secret présent uniquement dans le message du commit', async () => {
+    const { repo, remote } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+    writeFileSync(join(repo, 'benign.txt'), 'contenu sans secret\n')
+    await realGit(['add', 'benign.txt'], repo)
+    await realGit(['commit', '-m', 'feat: benign content', '-m', 'AKIAIOSFODNN7EXAMPLE'], repo)
+    const publishedSha = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-secret-message',
+      task: 'publie un commit',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      projectPublication: { baseSha: baseline.projectHead!, publishedSha },
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({ status: 'skipped', reason: 'secret-detected' })
+    expect(await realGit(['branch'], remote)).not.toContain('auto/run-secret-message')
+  })
+
+  it('refuse un secret présent uniquement dans un chemin transitoire', async () => {
+    const { repo, remote } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+    const secretName = 'AKIAIOSFODNN7EXAMPLE.txt'
+    writeFileSync(join(repo, secretName), 'contenu sans secret\n')
+    await realGit(['add', secretName], repo)
+    await realGit(['commit', '-m', 'feat: add temporary file'], repo)
+    rmSync(join(repo, secretName))
+    await realGit(['add', '-A'], repo)
+    await realGit(['commit', '-m', 'fix: remove temporary file'], repo)
+    const publishedSha = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-secret-path',
+      task: 'publie deux commits',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      projectPublication: { baseSha: baseline.projectHead!, publishedSha },
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({ status: 'skipped', reason: 'secret-detected' })
+    expect(await realGit(['branch'], remote)).not.toContain('auto/run-secret-path')
+  })
+
+  it('refuse un secret transitoire introduit par une résolution de merge', async () => {
+    const { repo, remote } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+    await realGit(['switch', '-c', 'agent-merge'], repo)
+    writeFileSync(join(repo, 'base.txt'), 'agent\n')
+    await realGit(['add', 'base.txt'], repo)
+    await realGit(['commit', '-m', 'feat: agent side'], repo)
+    await realGit(['switch', 'travail'], repo)
+    writeFileSync(join(repo, 'base.txt'), 'base side\n')
+    await realGit(['add', 'base.txt'], repo)
+    await realGit(['commit', '-m', 'feat: base side'], repo)
+    await expect(realGit(['merge', '--no-ff', 'agent-merge'], repo)).rejects.toThrow()
+    writeFileSync(join(repo, 'base.txt'), 'AKIAIOSFODNN7EXAMPLE\n')
+    await realGit(['add', 'base.txt'], repo)
+    await realGit(['commit', '-m', 'merge: resolve both sides'], repo)
+    writeFileSync(join(repo, 'base.txt'), 'base\n')
+    await realGit(['add', 'base.txt'], repo)
+    await realGit(['commit', '-m', 'fix: remove merge residue'], repo)
+    const publishedSha = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-secret-merge',
+      task: 'publie une fusion',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      projectPublication: { baseSha: baseline.projectHead!, publishedSha },
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({ status: 'skipped', reason: 'secret-detected' })
+    expect(await realGit(['branch'], remote)).not.toContain('auto/run-secret-merge')
+  })
+
   it('s’abstient si l’historique contient le commit d’une AUTRE session', async () => {
     const { repo, remote } = await repoWithRemote()
     const brain = (await repoWithRemote()).repo
@@ -251,6 +517,33 @@ describe('travail DÉJÀ COMMITÉ par la fusion du worktree (arbre propre)', () 
     expect((await run('git', ['branch'], { cwd: remote })).stdout).not.toContain('auto/run-88')
   })
 
+  it('refuse une plage attestée dont le commit publié est introuvable', async () => {
+    const { repo, remote } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseline = await captureCloseBaseline(repo, brain, realGit)
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-invalid-range',
+      task: 'publie une plage impossible',
+      projectRepo: repo,
+      brainRepo: brain,
+      baseline,
+      projectPublication: {
+        baseSha: baseline.projectHead!,
+        publishedSha: 'f'.repeat(40)
+      },
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({
+      status: 'skipped',
+      reason: 'invalid-publication-range'
+    })
+    expect((await run('git', ['branch'], { cwd: remote })).stdout).not.toContain(
+      'auto/run-invalid-range'
+    )
+  })
+
   it('un run vert qui n’a produit AUCUN commit ne publie rien', async () => {
     const { repo } = await repoWithRemote()
     const brain = (await repoWithRemote()).repo
@@ -270,6 +563,38 @@ describe('travail DÉJÀ COMMITÉ par la fusion du worktree (arbre propre)', () 
 })
 
 describe('dossier NON SUIVI (le cas Brain : notes déposées dans inbox/)', () => {
+  it('une reprise sans baseline publie le projet atteste mais ne touche jamais au Brain partage', async () => {
+    const { repo } = await repoWithRemote()
+    const brain = (await repoWithRemote()).repo
+    const baseSha = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+    const brainHead = (await realGit(['rev-parse', 'HEAD'], brain)).trim()
+    writeFileSync(join(repo, 'recovered.txt'), 'publication recuperee\n')
+    await realGit(['add', 'recovered.txt'], repo)
+    await realGit(['commit', '-m', 'feat: recovered project'], repo)
+    const publishedSha = (await realGit(['rev-parse', 'HEAD'], repo)).trim()
+    writeFileSync(join(brain, 'brouillon-autrui.md'), '# ne jamais aspirer\n')
+
+    const report = await closeGreenRunOnDisk({
+      runId: 'run-recovered-safe',
+      task: 'reprend le projet',
+      projectRepo: repo,
+      brainRepo: brain,
+      projectPublication: { baseSha, publishedSha },
+      recoveredWithoutBrainBaseline: true,
+      runGit: realGit
+    })
+
+    expect(report.project).toMatchObject({ status: 'pushed', branch: 'auto/run-recovered-safe' })
+    expect(report.brain).toMatchObject({
+      status: 'skipped',
+      reason: 'recovery-baseline-missing'
+    })
+    expect((await realGit(['rev-parse', 'HEAD'], brain)).trim()).toBe(brainHead)
+    expect(await realGit(['status', '--porcelain', '-uall'], brain)).toContain(
+      'brouillon-autrui.md'
+    )
+  })
+
   it('publie la note du run sans emporter le brouillon d’une autre session', async () => {
     const { repo } = await repoWithRemote()
     const brain = (await repoWithRemote()).repo
@@ -291,8 +616,9 @@ describe('dossier NON SUIVI (le cas Brain : notes déposées dans inbox/)', () =
     })
 
     expect(report.brain).toMatchObject({ status: 'pushed', files: 1 })
-    const committed = (await run('git', ['show', '--name-only', '--format=', 'HEAD'], { cwd: brain }))
-      .stdout
+    const committed = (
+      await run('git', ['show', '--name-only', '--format=', 'HEAD'], { cwd: brain })
+    ).stdout
     expect(committed).toContain('note-du-run.md')
     expect(committed).not.toContain('autrui-en-cours.md')
     // Le brouillon d'autrui reste non suivi, intact.
@@ -309,11 +635,23 @@ describe('helpers', () => {
     expect(detectSecret('-----BEGIN RSA PRIVATE KEY-----')).toBe('clé privée')
   })
 
-  it('parsePorcelainPaths gère modifications, ajouts et renommages', () => {
-    expect(parsePorcelainPaths(' M src/a.ts\n?? b.md\nR  vieux.md -> neuf.md\n')).toEqual([
-      'src/a.ts',
-      'b.md',
-      'neuf.md'
+  it('parsePorcelainPaths conserve les chemins exacts du format porcelain -z', () => {
+    expect(
+      parsePorcelainPaths(
+        [
+          ' M café -> littéral.ts',
+          'R  nouveau\nnom.ts',
+          'ancien "nom".ts',
+          '?? ligne\nsuivante.txt',
+          '?? guillemet"brut.ts',
+          ''
+        ].join('\0')
+      )
+    ).toEqual([
+      'café -> littéral.ts',
+      'nouveau\nnom.ts',
+      'ligne\nsuivante.txt',
+      'guillemet"brut.ts'
     ])
   })
 

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { autowinAppDataRoot } from './app-data'
 import {
   automationAppIdentity,
   presentAutomationWindow,
   resolveAutomationInstanceMode,
   resolveExplicitUserDataDir,
-  resolveIsolatedAppDataBase
+  resolveInstanceAppDataBase
 } from './headless-instance'
 
 describe('mode instance automatisée', () => {
@@ -67,12 +68,26 @@ describe('mode instance automatisée', () => {
       ])
     ).toBeUndefined()
   })
-  it('place aussi les conversations et artefacts sous le profil de test explicite', () => {
+  it('aligne toujours les stores Autowin sur le profil qui porte le verrou Electron', () => {
     expect(
-      resolveIsolatedAppDataBase('C:\\Users\\real\\AppData\\Roaming', true, 'C:\\proof\\user-data')
+      resolveInstanceAppDataBase('C:\\Users\\real\\AppData\\Roaming', 'C:\\proof\\user-data')
     ).toBe('C:\\proof\\user-data\\app-data')
     expect(
-      resolveIsolatedAppDataBase('C:\\Users\\real\\AppData\\Roaming', false, 'C:\\proof\\user-data')
-    ).toBe('C:\\Users\\real\\AppData\\Roaming')
+      resolveInstanceAppDataBase('C:\\Users\\real\\AppData\\Roaming', 'C:\\proof\\user-data')
+    ).toBe('C:\\proof\\user-data\\app-data')
+    expect(resolveInstanceAppDataBase('C:\\portable', 'C:\\profil-a')).not.toBe(
+      resolveInstanceAppDataBase('C:\\portable', 'C:\\profil-b')
+    )
+
+    const explicitRoot = autowinAppDataRoot(
+      resolveInstanceAppDataBase('C:\\portable', 'C:\\profil')
+    )
+    const isolatedRoot = autowinAppDataRoot(
+      resolveInstanceAppDataBase('C:\\profil\\app-data', undefined)
+    )
+    expect(explicitRoot).toBe(isolatedRoot)
+
+    const childRoot = autowinAppDataRoot(resolveInstanceAppDataBase('C:\\autre-base', explicitRoot))
+    expect(childRoot).toBe(explicitRoot)
   })
 })

@@ -3,7 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const capture = vi.hoisted(() => ({
   direct: [] as string[],
-  survivable: [] as Array<{ bin: string; args: string[]; cwd?: string; runId?: string }>,
+  survivable: [] as Array<{
+    bin: string
+    args: string[]
+    cwd?: string
+    runId?: string
+    onJournalPrepared?: (journalPath: string) => void
+  }>,
   journals: [] as Array<{ token: string; path: string }>
 }))
 
@@ -40,8 +46,15 @@ vi.mock('node:child_process', async (importOriginal) => ({
 }))
 
 vi.mock('../runs/survivable-spawn', () => ({
-  spawnSurvivable: (input: { bin: string; args: string[]; cwd?: string; runId?: string }) => {
+  spawnSurvivable: (input: {
+    bin: string
+    args: string[]
+    cwd?: string
+    runId?: string
+    onJournalPrepared?: (journalPath: string) => void
+  }) => {
     capture.survivable.push(input)
+    input.onJournalPrepared?.('C:\\journals\\kimi.jsonl')
     const child = fakeChild()
     return {
       child,

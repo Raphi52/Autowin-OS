@@ -38,9 +38,31 @@ export function amitelBrainRoot(env: NodeJS.ProcessEnv = process.env): string {
   return configured ? configured : DEFAULT_BRAIN_ROOT
 }
 
+export function requireLoopbackBrainOrigin(value: string): string {
+  let parsed: URL
+  try {
+    parsed = new URL(value)
+  } catch {
+    throw new Error('Origine Amitel Brain invalide : loopback HTTP requis')
+  }
+  const loopbackHosts = new Set(['127.0.0.1', 'localhost', '[::1]'])
+  if (
+    parsed.protocol !== 'http:' ||
+    !loopbackHosts.has(parsed.hostname.toLowerCase()) ||
+    parsed.username ||
+    parsed.password ||
+    parsed.pathname !== '/' ||
+    parsed.search ||
+    parsed.hash
+  ) {
+    throw new Error('Origine Amitel Brain invalide : loopback HTTP requis')
+  }
+  return parsed.origin
+}
+
 export function amitelBrainOrigin(env: NodeJS.ProcessEnv = process.env): string {
   const configured = env.AMITEL_BRAIN_ORIGIN?.trim()
-  return configured ? configured : DEFAULT_BRAIN_ORIGIN
+  return requireLoopbackBrainOrigin(configured || DEFAULT_BRAIN_ORIGIN)
 }
 
 /** Etat et runtime installes localement par Hermes-Brain. Le partage ne contient que les donnees. */

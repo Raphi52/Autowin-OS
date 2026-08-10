@@ -11,7 +11,6 @@ import type {
 import { RoleModelConfig } from './roles'
 import { CostAggregator } from './dashboards/cost'
 import { TrustLedger } from './trust/ledger'
-import { AuthoritySas } from './authority/sas'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
 import { compileExecutionQuote, type ExecutionQuote } from './execution-quote'
 
@@ -55,6 +54,37 @@ class Recorder implements ProviderAdapter {
   }
 }
 
+/** Rend le premier gate rouge puis le suivant vert, et conserve l'ordre réellement payé. */
+class RedPuisVert extends Recorder {
+  readonly phases: string[] = []
+  private verdicts = 0
+
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const phase = /SKILL\s+(scout|frame|terrain|build|clean|judge)/.exec(options.system ?? '')?.[1]
+    if (phase) this.phases.push(phase)
+    const result = yield* super.send(messages, options)
+    if (phase !== 'judge' || options.execution?.sandbox !== 'read-only') return result
+    this.verdicts += 1
+    return { ...result, text: this.verdicts === 1 ? 'DEFAUT: reprise requise' : 'VALIDE' }
+  }
+}
+
+/** Même verdict rouge→vert, avec la preuve du binding réellement payé à chaque appel. */
+class RedPuisVertParModele extends RedPuisVert {
+  readonly modeles: string[] = []
+
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    this.modeles.push(options.model ?? '(défaut)')
+    return yield* super.send(messages, options)
+  }
+}
+
 function makeOrchestrator(
   provider: ProviderAdapter,
   workflow?: WorkflowRunOverride,
@@ -71,7 +101,6 @@ function makeOrchestrator(
     }),
     cost: new CostAggregator(),
     trust: new TrustLedger(),
-    authority: new AuthoritySas(),
     executionWorkspace: 'C:\\ws',
     worktrees: makeTestWorktrees('C:\\ws'),
     classifyPhases: () => ['frame', 'build'],
@@ -96,7 +125,55 @@ describe('un workflow impose ses phases', () => {
   it('sans écart de phases, la classification reprend la main', async () => {
     const provider = new Recorder()
     await makeOrchestrator(provider, {}).run('corrige le bug')
-    expect(provider.execCount).toBe(2) // frame + build
+    expect(provider.prompts.some((prompt) => prompt.includes('SKILL frame'))).toBe(true)
+    expect(provider.prompts.some((prompt) => prompt.includes('SKILL build'))).toBe(true)
+    expect(provider.execCount).toBe(1) // seule build a le droit de muter
+  })
+
+  it('une phase explicite court-circuite le workflow choisi', async () => {
+    const provider = new Recorder()
+    await makeOrchestrator(provider, {
+      explicit: true,
+      phases: ['scout', 'frame', 'terrain', 'build']
+    }).run('/build corrige le bug')
+
+    expect(provider.prompts.some((prompt) => prompt.includes('SKILL scout'))).toBe(false)
+    expect(provider.prompts.some((prompt) => prompt.includes('SKILL frame'))).toBe(false)
+    expect(provider.prompts.some((prompt) => prompt.includes('SKILL terrain'))).toBe(false)
+    expect(provider.prompts.filter((prompt) => prompt.includes('SKILL build'))).toHaveLength(1)
+    expect(provider.execCount).toBe(1)
+  })
+
+  it('une phase explicite ne réserve pas non plus le pire cas du graphe écarté', async () => {
+    const provider = new Recorder()
+    const quote = compileExecutionQuote('/build corrige le bug', { maxProviderCalls: 4 })
+    await expect(
+      makeOrchestrator(
+        provider,
+        {
+          explicit: true,
+          graph: {
+            entry: 'scout',
+            nodes: [
+              { id: 'scout', phase: 'scout' },
+              { id: 'frame', phase: 'frame' },
+              { id: 'terrain', phase: 'terrain' },
+              { id: 'build', phase: 'build' },
+              { id: 'clean', phase: 'clean' }
+            ],
+            edges: [
+              { from: 'scout', to: 'frame', when: 'always' },
+              { from: 'frame', to: 'terrain', when: 'always' },
+              { from: 'terrain', to: 'build', when: 'always' },
+              { from: 'build', to: 'clean', when: 'always' }
+            ]
+          }
+        },
+        quote
+      ).run('/build corrige le bug')
+    ).resolves.toBeDefined()
+    expect(quote.phases).toEqual(['build'])
+    expect(provider.execCount).toBe(1)
   })
 })
 
@@ -133,7 +210,14 @@ describe('un workflow impose ses consignes', () => {
 })
 
 describe('un workflow impose son allocation', () => {
-  const quoteFor = (): ExecutionQuote => compileExecutionQuote('corrige le bug')
+  const quoteFor = (): ExecutionQuote => {
+    const quote = compileExecutionQuote('corrige le bug')
+    // Ce bloc teste la priorité de l'allocation, pas son admission : on lui donne volontairement
+    // assez de capacité pour quatre juges. Les tests de refus hors caps vivent avec les graphes.
+    quote.limits.maxAgents = 12
+    quote.limits.maxConcurrency = 4
+    return quote
+  }
 
   it('le nombre de juges du workflow prime sur le calcul du devis', async () => {
     const quote = quoteFor()
@@ -203,6 +287,212 @@ describe('un graphe pilote le run', () => {
         'corrige le bug'
       )
     ).rejects.toThrow('Devis impossible')
+  })
+
+  it('un graphe explicitement choisi réserve son chemin complet et ses deux reprises', async () => {
+    const graph = {
+      entry: 'scout-1',
+      nodes: [
+        { id: 'scout-1', phase: 'scout' as const },
+        { id: 'frame-1', phase: 'frame' as const },
+        { id: 'terrain-1', phase: 'terrain' as const },
+        { id: 'build-1', phase: 'build' as const },
+        { id: 'clean-1', phase: 'clean' as const },
+        { id: 'judge-1', phase: 'judge' as const }
+      ],
+      edges: [
+        { from: 'scout-1', to: 'frame-1', when: 'always' as const },
+        { from: 'frame-1', to: 'terrain-1', when: 'always' as const },
+        { from: 'terrain-1', to: 'build-1', when: 'always' as const },
+        { from: 'build-1', to: 'clean-1', when: 'always' as const },
+        { from: 'clean-1', to: 'judge-1', when: 'always' as const },
+        { from: 'judge-1', to: 'build-1', when: 'red' as const, maxTraversals: 2 }
+      ]
+    }
+    const quote = compileExecutionQuote('corrige le sommaire du README')
+
+    await expect(
+      makeOrchestrator(new Recorder(), { explicit: true, graph }, quote).run(
+        'corrige le sommaire du README'
+      )
+    ).resolves.toBeDefined()
+    expect(quote.phases).toEqual(['scout', 'frame', 'terrain', 'build', 'clean', 'judge'])
+    expect(quote.limits.maxRecoveries).toBe(2)
+    expect(quote.limits.maxAgents).toBeGreaterThanOrEqual(11)
+    expect(quote.limits.maxAgents).toBeLessThanOrEqual(quote.limits.maxProviderCalls)
+  })
+
+  it('un juge terminal du workflow est le gate final, pas un appel de juge en double', async () => {
+    const provider = new Recorder()
+    await makeOrchestrator(provider, {
+      graph: {
+        entry: 'b',
+        nodes: [
+          { id: 'b', phase: 'build' },
+          { id: 'j', phase: 'judge' }
+        ],
+        edges: [{ from: 'b', to: 'j', when: 'always' }]
+      }
+    }).run('corrige le bug')
+
+    expect(provider.prompts.filter((prompt) => prompt.includes('SKILL judge'))).toHaveLength(1)
+    expect(provider.prompts).toHaveLength(2) // build + gate judge
+  })
+
+  it('un juge rouge rejoue tout le sous-chemin build → clean avant le nouveau gate', async () => {
+    const provider = new RedPuisVert()
+    const quote = compileExecutionQuote('corrige le bug')
+    await makeOrchestrator(
+      provider,
+      {
+        explicit: true,
+        graph: {
+          entry: 'scout',
+          nodes: [
+            { id: 'scout', phase: 'scout' },
+            { id: 'frame', phase: 'frame' },
+            { id: 'terrain', phase: 'terrain' },
+            { id: 'build', phase: 'build' },
+            { id: 'clean', phase: 'clean' },
+            { id: 'judge', phase: 'judge' }
+          ],
+          edges: [
+            { from: 'scout', to: 'frame', when: 'always' },
+            { from: 'frame', to: 'terrain', when: 'always' },
+            { from: 'terrain', to: 'build', when: 'always' },
+            { from: 'build', to: 'clean', when: 'always' },
+            { from: 'clean', to: 'judge', when: 'always' },
+            { from: 'judge', to: 'build', when: 'red', maxTraversals: 1 }
+          ]
+        }
+      },
+      quote
+    ).run('corrige le bug')
+
+    expect(provider.phases).toEqual([
+      'scout',
+      'frame',
+      'terrain',
+      'build',
+      'clean',
+      'judge',
+      'build',
+      'clean',
+      'judge'
+    ])
+  })
+
+  it('un graphe avec une reprise tient dans un cap égal à son vrai pire cas', async () => {
+    const provider = new RedPuisVert()
+    const quote = compileExecutionQuote('corrige le bug', { maxProviderCalls: 5 })
+    await expect(
+      makeOrchestrator(
+        provider,
+        {
+          explicit: true,
+          graph: {
+            entry: 'frame',
+            nodes: [
+              { id: 'frame', phase: 'frame' },
+              { id: 'build', phase: 'build' },
+              { id: 'judge', phase: 'judge' }
+            ],
+            edges: [
+              { from: 'frame', to: 'build', when: 'always' },
+              { from: 'build', to: 'judge', when: 'always' },
+              { from: 'judge', to: 'build', when: 'red', maxTraversals: 1 }
+            ]
+          }
+        },
+        quote
+      ).run('corrige le bug')
+    ).resolves.toBeDefined()
+    expect(provider.prompts).toHaveLength(5)
+  })
+
+  it('refuse un panel composé hors caps avant le premier appel provider', async () => {
+    const provider = new Recorder()
+    const quote = compileExecutionQuote('refonte architecture sécurité migration')
+    const agents = Array.from({ length: 25 }, (_, index) => ({
+      provider: 'rec',
+      model: `juge-${index + 1}`
+    }))
+    await expect(
+      makeOrchestrator(
+        provider,
+        {
+          explicit: true,
+          graph: {
+            entry: 'build',
+            nodes: [
+              { id: 'build', phase: 'build' },
+              { id: 'judge', phase: 'judge', agents, quorum: 13 }
+            ],
+            edges: [{ from: 'build', to: 'judge', when: 'always' }]
+          }
+        },
+        quote
+      ).run('refonte architecture sécurité migration')
+    ).rejects.toThrow('Devis impossible')
+    expect(provider.prompts).toHaveLength(0)
+  })
+
+  it('un graphe sans arête rouge ne déclenche aucune réparation cachée', async () => {
+    const provider = new RedPuisVert()
+    const quote = compileExecutionQuote('corrige le bug', { maxProviderCalls: 2 })
+    const result = await makeOrchestrator(
+      provider,
+      {
+        explicit: true,
+        graph: {
+          entry: 'build',
+          nodes: [
+            { id: 'build', phase: 'build' },
+            { id: 'judge', phase: 'judge' }
+          ],
+          edges: [{ from: 'build', to: 'judge', when: 'always' }]
+        }
+      },
+      quote
+    ).run('corrige le bug')
+
+    expect(result.valid).toBe(false)
+    expect(provider.phases).toEqual(['build', 'judge'])
+    expect(provider.prompts).toHaveLength(2)
+  })
+
+  it('une reprise rejoue le panel composé du nœud build et sa synthèse', async () => {
+    const provider = new RedPuisVertParModele()
+    const quote = compileExecutionQuote('refonte architecture sécurité migration')
+    await makeOrchestrator(
+      provider,
+      {
+        explicit: true,
+        graph: {
+          entry: 'build',
+          nodes: [
+            {
+              id: 'build',
+              phase: 'build',
+              agents: [
+                { provider: 'rec', model: 'a' },
+                { provider: 'rec', model: 'b' },
+                { provider: 'rec', model: 'c' }
+              ]
+            },
+            { id: 'judge', phase: 'judge' }
+          ],
+          edges: [
+            { from: 'build', to: 'judge', when: 'always' },
+            { from: 'judge', to: 'build', when: 'red', maxTraversals: 1 }
+          ]
+        }
+      },
+      quote
+    ).run('refonte architecture sécurité migration')
+
+    expect(provider.modeles).toEqual(['a', 'b', 'c', 'chef', 'juge', 'a', 'b', 'c', 'chef', 'juge'])
+    expect(quote.allocation?.estimatedMaxCalls).toBe(10)
   })
 })
 

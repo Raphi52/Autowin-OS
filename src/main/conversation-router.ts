@@ -250,9 +250,6 @@ export class ConversationRouteCoordinator {
       category: source.category,
       provider: source.provider
     })
-    if (source.authorityMode && source.authorityMode !== target.authorityMode) {
-      this.conversations.setAuthorityMode(target.id, source.authorityMode)
-    }
     return {
       sourceConversationId,
       conversationId: target.id,

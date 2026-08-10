@@ -6,8 +6,7 @@ import {
   buildBrainLaunchCommand,
   ensureBrainServerStarted,
   resetBrainLaunchAttempt,
-  resolveBrainRuntime,
-  resolveBrainTooling
+  resolveBrainRuntime
 } from './brain-server-launch'
 
 let tooling: string
@@ -129,9 +128,9 @@ describe('ensureBrainServerStarted', () => {
     expect(unc?.args).toContain('/d')
   })
 
-  it('resolveBrainTooling : env override sinon défaut Amitel', () => {
-    expect(resolveBrainTooling({ AUTOWIN_BRAIN_TOOLING: 'X:/t' })).toBe('X:/t')
-    expect(resolveBrainTooling({})).toBe('')
+  it('resolveBrainRuntime : env tooling prioritaire sinon vide', () => {
+    expect(resolveBrainRuntime({ AUTOWIN_BRAIN_TOOLING: 'X:/t' }).tooling).toBe('X:/t')
+    expect(resolveBrainRuntime({}).tooling).toBe('')
   })
 
   it('resout le runtime INSTALLE localement sans jamais executer le tooling du partage GED', () => {

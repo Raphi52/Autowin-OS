@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AutoKaizenSupervisor,
   correlationKeyForIncident,
-  inheritAutoKaizenAuthority,
   incidentFromPilotEvent,
   isUpstreamOutage,
   isDeliberateAbort,
@@ -72,13 +71,6 @@ describe('AutoKaizenSupervisor — boucle conversationnelle persistante', () => 
       fixPrompts
     }
   }
-
-  it('hérite de chaque mode d’autorité et choisit ask si la source a disparu', () => {
-    expect(inheritAutoKaizenAuthority('plan')).toBe('plan')
-    expect(inheritAutoKaizenAuthority('ask')).toBe('ask')
-    expect(inheritAutoKaizenAuthority('auto')).toBe('auto')
-    expect(inheritAutoKaizenAuthority(undefined)).toBe('ask')
-  })
 
   it('transforme une erreur en analyse Kaizen puis correction liées, sans doublon au reload', async () => {
     const h = harness()
@@ -305,12 +297,98 @@ describe('AutoKaizenSupervisor — boucle conversationnelle persistante', () => 
       errorStack: failure.stack,
       failureSourceIncidentId: source.id
     })
-    expect(new AutoKaizenSupervisor({ path, runtime: h.runtime }).snapshot().incidents[0]).toMatchObject({
+    expect(
+      new AutoKaizenSupervisor({ path, runtime: h.runtime }).snapshot().incidents[0]
+    ).toMatchObject({
       id: source.id,
       error: 'provider indisponible',
       errorStack: failure.stack,
       failureSourceIncidentId: source.id
     })
+  })
+
+  it('ignore les entrées de snapshot mal typées sans perdre un incident historique valide', () => {
+    const h = harness()
+    const path = join(h.root, 'auto-kaizen-incidents.json')
+    writeFileSync(
+      path,
+      JSON.stringify({
+        schemaVersion: 1,
+        incidents: [
+          null,
+          { status: 'completed' },
+          {
+            id: 'ak-legacy',
+            dedupeKey: 'legacy-1',
+            rootIncidentId: 'ak-legacy',
+            depth: 0,
+            sourceConversationId: 'conv-source',
+            kind: 'test-red',
+            summary: 'incident historique',
+            detail: 'preuve historique',
+            status: 'completed',
+            detectedAt: 1,
+            updatedAt: 2
+          }
+        ]
+      }),
+      'utf8'
+    )
+
+    const supervisor = new AutoKaizenSupervisor({ path, runtime: h.runtime })
+
+    expect(supervisor.snapshot().incidents).toEqual([
+      expect.objectContaining({
+        id: 'ak-legacy',
+        correlationKey: expect.any(String),
+        eventKeys: ['legacy-1'],
+        occurrenceCount: 1,
+        severity: 'warning',
+        lastSeenAt: 2
+      })
+    ])
+  })
+
+  it('nettoie une vérification persistée mal typée avant de reprendre un correctif', async () => {
+    const h = harness()
+    h.runtime.readConversationResult = () => ({ text: 'correctif récupéré' })
+    const path = join(h.root, 'auto-kaizen-incidents.json')
+    writeFileSync(
+      path,
+      JSON.stringify({
+        schemaVersion: 1,
+        incidents: [
+          {
+            id: 'ak-bad-verification',
+            dedupeKey: 'bad-verification',
+            rootIncidentId: 'ak-bad-verification',
+            depth: 0,
+            sourceConversationId: 'conv-source',
+            kind: 'test-red',
+            summary: 'vérification persistée invalide',
+            detail: 'evidence devrait être une chaîne',
+            status: 'fix-running',
+            analysisConversationId: 'conv-analysis',
+            analysisResult: 'diagnostic récupéré',
+            fixConversationId: 'conv-fix',
+            verification: { complete: true, evidence: null },
+            detectedAt: 1,
+            updatedAt: 2
+          }
+        ]
+      }),
+      'utf8'
+    )
+    const supervisor = new AutoKaizenSupervisor({ path, runtime: h.runtime, now: () => 3 })
+
+    supervisor.resumePending()
+    await supervisor.drain()
+
+    expect(supervisor.snapshot().incidents[0]).toMatchObject({
+      id: 'ak-bad-verification',
+      status: 'validation-blocked'
+    })
+    expect(supervisor.snapshot().incidents[0].error).toBeUndefined()
   })
 
   it('reprend après redémarrage une analyse déjà acquise sans la repayer', async () => {
@@ -691,7 +769,9 @@ describe('ABANDON VOULU — reproduit sur les incidents REELS du 2026-08-05', ()
         conversations.push(input.title)
         return { id: `conv-ab-${conversations.length}` }
       },
-      appendSourceUpdate() {},
+      appendSourceUpdate() {
+        // Ce harnais vérifie l'abandon ; aucune mise à jour de la conversation source n'est attendue.
+      },
       async runAnalysis(_c, prompt) {
         analysisPrompts.push(prompt)
         return { ok: true, text: 'analyse' }
@@ -740,7 +820,8 @@ describe('ABANDON VOULU — reproduit sur les incidents REELS du 2026-08-05', ()
       sourceConversationId: 'conv-1039',
       kind: 'execution-failed',
       summary: 'orchestrate a echoue',
-      detail: 'Phase build — le role subagent est binde sur claude (claude-opus-5) : This operation was aborted'
+      detail:
+        'Phase build — le role subagent est binde sur claude (claude-opus-5) : This operation was aborted'
     })
     await supervisor.drain()
 
@@ -836,7 +917,13 @@ describe('ROUGE D UNE REMEDIATION — « le run que je viens de lancer a fini ro
     expect(isRemediationRed('orchestration-red', 0)).toBe(false)
     expect(isRemediationRed('orchestration-red', 1)).toBe(true)
     // La frontiere qui rend la regle sure : un defaut NOUVEAU garde son incident, meme dans un run kaizen.
-    for (const kind of ['test-red', 'gate-failed', 'journal-replay-loss', 'provider-error', 'stderr-error']) {
+    for (const kind of [
+      'test-red',
+      'gate-failed',
+      'journal-replay-loss',
+      'provider-error',
+      'stderr-error'
+    ]) {
       expect(isRemediationRed(kind, 3)).toBe(false)
     }
   })

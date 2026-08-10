@@ -15,6 +15,8 @@ import type {
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
+import type { BrainSearchEnvelope } from '../main/brain-search-envelope'
+import type { InboxCandidate, InboxMove } from '../main/brain-inbox'
 import type { RunEntry } from '../main/dashboards/runs-scan'
 import type { CapabilityItem } from '../main/capability-controls'
 import type { SkillRegistryItem } from '../main/skill-registry'
@@ -23,6 +25,7 @@ import type { PendingModelQuestion } from '../main/model-questions'
 import type { ImportedModel } from '../main/models'
 import type { PromptCallRecord, CostBreakdownRow } from '../main/activity/prompt-observability'
 import type { ProviderDisplayStatus, ProviderStatus } from '../main/provider-status'
+import type { SemanticTemporalProjectionV1 } from '../main/knowledge/semantic-temporal-projection'
 import type { BehaviourComposition } from '../main/behaviour-composition'
 import type { BrainTrace } from '../main/activity/brain-trace-spool'
 import type { PreflightResult } from '../main/preflight'
@@ -34,7 +37,7 @@ import type { Role, RoleBinding } from '../main/roles'
 import type { WorkflowProfilesFile } from '../main/workflow-profiles'
 import type { WorkflowBenchReport } from '../main/workflow-bench'
 import type { AutowinProfile } from '../main/profile-store'
-import type { ShadowRouteRecommendation } from '../main/shadow-router'
+import type { ShadowRouteResult } from '../main/shadow-router'
 import type { PersistedCheckpoint, CheckpointForkManifest } from '../main/wire-checkpoint-fork'
 import type { OrchestrationRunState } from '../main/runs/orchestration-state'
 import type { CommandSpec, CommandResult, AppSnapshot } from '../main/commands'
@@ -99,7 +102,6 @@ interface ChatApi {
     path: string,
     workspaceRoot: string
   ) => Promise<import('../shared/git-read').GitDiffResult>
-  getGitGraph: (repoPath?: string) => Promise<import('../shared/git-graph').GitGraphSnapshot>
   getWorktreeMap: (
     repoPath?: string
   ) => Promise<import('../shared/worktree-map').WorktreeMapSnapshot>
@@ -128,6 +130,8 @@ interface ChatApi {
   applyUpdate: (strategy?: UpdateStrategy) => Promise<{
     ok: boolean
     relaunch?: boolean
+    reload?: boolean
+    effect?: 'none' | 'reload' | 'relaunch'
     npmInstalled?: boolean
     error?: string
     strategy?: UpdateStrategy
@@ -148,6 +152,9 @@ interface ChatApi {
   getTicket: (
     request: import('../main/tickets-ipc').TicketGetIpcRequest
   ) => Promise<import('../shared/tickets').TicketItem>
+  updateTicket: (
+    request: import('../main/tickets-ipc').TicketUpdateIpcRequest
+  ) => Promise<import('../shared/tickets').TicketItem>
   cancelTickets: (requestId: string) => Promise<boolean>
   listTicketPeople: (source: unknown) => Promise<string[]>
   setTicketsFixture: (fixture: unknown) => Promise<boolean>
@@ -155,6 +162,7 @@ interface ChatApi {
   getWorktreeStatus: () => Promise<WorktreeRuntimeStatus>
   getWorktreeConflictDiff: (agentId: string) => Promise<WorktreeConflictDiffResult>
   retryWorktreeRecovery: (agentId: string) => Promise<WorktreeAgentActivity | undefined>
+  discardHeldWorktree: (agentId: string) => Promise<boolean>
   setWorktreeFixture: (fixture: {
     activity: WorktreeAgentActivity[]
     status: WorktreeRuntimeStatus
@@ -190,12 +198,15 @@ interface ChatApi {
   /** Confrontation : un même objectif joué sous plusieurs workflows, puis comparé. */
   workflowBenchRun: (
     objective: string,
-    profileIds: (string | null)[]
+    profileIds: (string | null)[],
+    options?: { mode?: 'comparison' | 'tournament' | 'counterfactual' }
   ) => Promise<WorkflowBenchReport>
+  workflowBenchCancel: () => Promise<boolean>
   onWorkflowBenchProgress: (
     listener: (p: { done: number; total: number; label: string }) => void
   ) => () => void
   roles: () => Promise<Record<Role, RoleBinding>>
+  semanticTimeline: (conversationId: string) => Promise<SemanticTemporalProjectionV1>
   setRole: (
     role: string,
     provider: string,
@@ -220,33 +231,29 @@ interface ChatApi {
   shadowRouteRecommendation: (
     phase: string,
     champion: { provider: string; model: string }
-  ) => Promise<ShadowRouteRecommendation>
+  ) => Promise<ShadowRouteResult>
   modelQuotas: (force?: boolean) => Promise<ModelQuotaSnapshot>
   profiles: () => Promise<AutowinProfile[]>
   saveProfile: (profile: unknown) => Promise<AutowinProfile[]>
   applyProfile: (id: string) => Promise<{ topology: AgentTopology }>
-  kimiLogin: () => Promise<{ ok: true }>
   providerLogin: (provider: string) => Promise<{ ok: true }>
   /** Comptes Claude multiples : un CLAUDE_CONFIG_DIR par compte, bascule sans re-login. */
   claudeAccounts: () => Promise<ClaudeAccountsPayload>
   claudeAccountAdd: (label?: string) => Promise<ClaudeAccountsPayload>
   claudeAccountSwitch: (id: string) => Promise<ClaudeAccountsPayload>
   claudeAccountRemove: (id: string) => Promise<ClaudeAccountsPayload>
-  claudeAccountLogin: (id: string) => Promise<{ ok: true }>
-  claudeAccountRefresh: () => Promise<ClaudeAccountsPayload>
   topology: () => Promise<AgentTopology>
   setTopology: (topology: AgentTopology) => Promise<AgentTopology>
   capabilityControls: (kind: 'skills' | 'hooks' | 'tools' | 'plugins') => Promise<CapabilityItem[]>
   skills: () => Promise<SkillRegistryItem[]>
-  promptCalls: (conversationId?: string) => Promise<PromptCallRecord[]>
+  promptCalls: (conversationId: string) => Promise<PromptCallRecord[]>
   // fix-ok: golden test src/main/activity/cost-breakdown.test.ts asserts this file's source text
   // contains the literal 'cacheHitRatio' (see CostBreakdownRow) — keep the substring even after typing.
   costBreakdown: (
     dimension?: 'actor' | 'model' | 'provider',
     conversationId?: string
   ) => Promise<CostBreakdownRow[]>
-  promptTraces: (conversationId: string) => Promise<NativePreflightTrace[]>
-  brainTraces: (conversationId?: string) => Promise<BrainTrace[]>
+  brainTraces: (conversationId: string) => Promise<BrainTrace[]>
   behaviourComposition: (workspace?: string) => Promise<
     BehaviourComposition & {
       inspection: { workspace: string; files: Array<BehaviourFile & { excerpt?: string }> }
@@ -281,21 +288,9 @@ interface ChatApi {
   toolUsage: () => Promise<
     Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
   >
-  authorityPending: () => Promise<Array<{ id: string; question: string }>>
-  /**
-   * `bus.resolveDecision()` (src/main/commands.ts) est lui-même typé `Promise<unknown>` : la décision
-   * résolue est un objet de forme libre selon le type de la question d'autorité posée.
-   */
-  authorityResolve: (id: string, choice: unknown) => Promise<unknown>
-
   conversations: () => Promise<ConversationSummary[]>
   conversation: (id: string) => Promise<Conversation | null>
-  conversationsCreate: (p: {
-    title: string
-    category: string
-    provider: string
-    authorityMode?: 'plan' | 'ask' | 'auto'
-  }) => Promise<{
+  conversationsCreate: (p: { title: string; category: string; provider: string }) => Promise<{
     id: string
     title: string
     category: string
@@ -313,10 +308,6 @@ interface ChatApi {
     decision: { route: 'current' | 'new'; confidence: number; reason: string }
   }>
   conversationsRename: (id: string, title: string) => Promise<void>
-  conversationsSetAuthorityMode: (
-    id: string,
-    mode: 'plan' | 'ask' | 'auto'
-  ) => Promise<Conversation>
   /** Range une conversation dans un dossier. Chemin omis → sélecteur natif ; `null` → « Divers ». */
   conversationsSetProject: (id: string, path?: string | null) => Promise<string | null>
   conversationsFork: (id: string, messageId: string) => Promise<Conversation>
@@ -428,24 +419,11 @@ interface ChatApi {
   loadBrainThemeNodes: (path: string, themeIds: string[]) => Promise<VizGraph['nodes']>
   loadBrainNeighborhood: (path: string, nodeId: string) => Promise<VizGraph>
   readNodeFile: (path: string) => Promise<{ path: string; content: string }>
-  searchBrain: (
-    path: string,
-    query: string
-  ) => Promise<
-    Array<{
-      id: string
-      label: string
-      file: string
-      themes: string[]
-      score: number
-      denseScore?: number
-      lexicalScore?: number
-      graphScore?: number
-      fusedScore?: number
-      relations: Array<{ type: string; target: string }>
-    }>
-  >
+  searchBrain: (path: string, query: string) => Promise<BrainSearchEnvelope>
   refreshBrain: (path: string) => Promise<{ ok: boolean }>
+  listInbox: (path: string) => Promise<InboxCandidate[]>
+  promoteInbox: (path: string, id: string) => Promise<InboxMove>
+  rejectInbox: (path: string, id: string) => Promise<InboxMove>
   listRuns: () => Promise<RunEntry[]>
   deleteRun: (path: string) => Promise<{ ok: boolean }>
 
