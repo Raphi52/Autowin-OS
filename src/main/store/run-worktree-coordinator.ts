@@ -158,6 +158,7 @@ export class RunWorktreeCoordinator {
   private readonly waitingForProcess = new Set<string>()
   private readonly waitingForRetry = new Set<string>()
   private readonly retryCounts = new Map<string, number>()
+  private readonly resumeClaims = new Set<string>()
   private recoveryTimer?: ReturnType<typeof setTimeout>
 
   constructor(deps: RunWorktreeCoordinatorDeps) {
@@ -232,12 +233,61 @@ export class RunWorktreeCoordinator {
     return tracked
   }
 
+  private claimResume(runId: string): void {
+    if (this.resumeClaims.has(runId)) {
+      throw new Error(`Reprise du worktree déjà en cours pour ${runId}.`)
+    }
+    this.resumeClaims.add(runId)
+  }
+
+  private assertResumePublicationIsOpen(tracked: Tracked): void {
+    if (tracked.publication !== 'blocked' && tracked.publication !== 'not-requested') {
+      throw new Error(
+        `Reprise du worktree refusée pour ${tracked.runId} : publication ${tracked.publication ?? 'inconnue'} déjà engagée.`
+      )
+    }
+  }
+
+  private assertResumeStateAfterProcessCheck(tracked: Tracked): void {
+    const recoveredProcessJustEnded =
+      tracked.state === 'working' && this.waitingForProcess.has(tracked.runId)
+    if (
+      tracked.state === 'isolated' ||
+      (tracked.state === 'working' && !recoveredProcessJustEnded)
+    ) {
+      throw new Error(`Reprise du worktree refusée pour ${tracked.runId} : run déjà actif.`)
+    }
+  }
+
+  private assertNoActiveResumeProcess(runId: string): void {
+    if (this.manager.hasActiveProcesses(runId)) {
+      throw new Error(`Reprise du worktree refusée pour ${runId} : processus agent encore actif.`)
+    }
+  }
+
+  private async assertNoActiveResumeProcessAsync(runId: string): Promise<void> {
+    const active = this.manager.hasActiveProcessesAsync
+      ? await this.manager.hasActiveProcessesAsync(runId)
+      : this.manager.hasActiveProcesses(runId)
+    if (active) {
+      throw new Error(`Reprise du worktree refusée pour ${runId} : processus agent encore actif.`)
+    }
+  }
+
   private activateResumed(tracked: Tracked, context: WorktreeRunContext, cwd: string): void {
     Object.assign(tracked, context)
     tracked.worktreePath = cwd
     tracked.worktreeAvailable = true
     tracked.state = 'working'
     tracked.endedAtMs = undefined
+    tracked.conflictWith = undefined
+    tracked.conflictFile = undefined
+    tracked.conflictBaseSha = undefined
+    tracked.conflictAgentSha = undefined
+    tracked.publishedSha = undefined
+    tracked.publicationAgentSha = undefined
+    tracked.publicationBaseSha = undefined
+    tracked.causalPublicationDeliveredAtMs = undefined
     tracked.attentionReason = undefined
     tracked.detail = undefined
     tracked.recovered = true
@@ -257,38 +307,46 @@ export class RunWorktreeCoordinator {
   ): string | undefined {
     const { sourceWorkspacePath, sourceBaseSha, resumeExisting, ...trackedMetadata } = metadata
     if (isMutation && resumeExisting) {
-      const tracked = this.resumeCandidate(runId, agentName, trackedMetadata)
-      const described = this.manager.describe(runId)
-      const context = {
-        ...described,
-        worktreePath: tracked.worktreePath!,
-        baseBranch: tracked.baseBranch!,
-        baseSha: tracked.baseSha!,
-        sourceSha: tracked.sourceSha,
-        canonicalBaseRef: tracked.canonicalBaseRef,
-        excludedDirtyFiles: tracked.excludedDirtyFiles,
-        excludedDirtyFileCount: tracked.excludedDirtyFileCount,
-        excludedDirtyFilesTruncated: tracked.excludedDirtyFilesTruncated
+      this.claimResume(runId)
+      try {
+        const tracked = this.resumeCandidate(runId, agentName, trackedMetadata)
+        this.assertResumePublicationIsOpen(tracked)
+        this.assertNoActiveResumeProcess(runId)
+        this.assertResumeStateAfterProcessCheck(tracked)
+        const described = this.manager.describe(runId)
+        const context = {
+          ...described,
+          worktreePath: tracked.worktreePath!,
+          baseBranch: tracked.baseBranch!,
+          baseSha: tracked.baseSha!,
+          sourceSha: tracked.sourceSha,
+          canonicalBaseRef: tracked.canonicalBaseRef,
+          excludedDirtyFiles: tracked.excludedDirtyFiles,
+          excludedDirtyFileCount: tracked.excludedDirtyFileCount,
+          excludedDirtyFilesTruncated: tracked.excludedDirtyFilesTruncated
+        }
+        const validation = this.manager.validateRecoveryContext(runId, {
+          worktreePath: context.worktreePath,
+          baseBranch: context.baseBranch,
+          baseSha: context.baseSha,
+          sourceSha: context.sourceSha,
+          canonicalBaseRef: context.canonicalBaseRef,
+          excludedDirtyFiles: context.excludedDirtyFiles,
+          publication: 'pending'
+        })
+        if (!validation.ok || validation.decision === 'cleanup-only') {
+          throw new Error(
+            !validation.ok
+              ? `Reprise du worktree refusée : ${validation.detail}`
+              : 'Reprise du worktree refusée : cette copie est déjà publiée.'
+          )
+        }
+        const cwd = this.manager.acquire(runId, context)
+        this.activateResumed(tracked, context, cwd)
+        return cwd
+      } finally {
+        this.resumeClaims.delete(runId)
       }
-      const validation = this.manager.validateRecoveryContext(runId, {
-        worktreePath: context.worktreePath,
-        baseBranch: context.baseBranch,
-        baseSha: context.baseSha,
-        sourceSha: context.sourceSha,
-        canonicalBaseRef: context.canonicalBaseRef,
-        excludedDirtyFiles: context.excludedDirtyFiles,
-        publication: 'pending'
-      })
-      if (!validation.ok || validation.decision === 'cleanup-only') {
-        throw new Error(
-          !validation.ok
-            ? `Reprise du worktree refusée : ${validation.detail}`
-            : 'Reprise du worktree refusée : cette copie est déjà publiée.'
-        )
-      }
-      const cwd = this.manager.acquire(runId, context)
-      this.activateResumed(tracked, context, cwd)
-      return cwd
     }
     const tracked: Tracked = {
       runId,
@@ -354,50 +412,58 @@ export class RunWorktreeCoordinator {
     }
     const { sourceWorkspacePath, sourceBaseSha, resumeExisting, ...trackedMetadata } = metadata
     if (resumeExisting) {
-      const tracked = this.resumeCandidate(runId, agentName, trackedMetadata)
-      const described = this.manager.describeAsync
-        ? await this.manager.describeAsync(runId)
-        : this.manager.describe(runId)
-      const context = {
-        ...described,
-        worktreePath: tracked.worktreePath!,
-        baseBranch: tracked.baseBranch!,
-        baseSha: tracked.baseSha!,
-        sourceSha: tracked.sourceSha,
-        canonicalBaseRef: tracked.canonicalBaseRef,
-        excludedDirtyFiles: tracked.excludedDirtyFiles,
-        excludedDirtyFileCount: tracked.excludedDirtyFileCount,
-        excludedDirtyFilesTruncated: tracked.excludedDirtyFilesTruncated
+      this.claimResume(runId)
+      try {
+        const tracked = this.resumeCandidate(runId, agentName, trackedMetadata)
+        this.assertResumePublicationIsOpen(tracked)
+        await this.assertNoActiveResumeProcessAsync(runId)
+        this.assertResumeStateAfterProcessCheck(tracked)
+        const described = this.manager.describeAsync
+          ? await this.manager.describeAsync(runId)
+          : this.manager.describe(runId)
+        const context = {
+          ...described,
+          worktreePath: tracked.worktreePath!,
+          baseBranch: tracked.baseBranch!,
+          baseSha: tracked.baseSha!,
+          sourceSha: tracked.sourceSha,
+          canonicalBaseRef: tracked.canonicalBaseRef,
+          excludedDirtyFiles: tracked.excludedDirtyFiles,
+          excludedDirtyFileCount: tracked.excludedDirtyFileCount,
+          excludedDirtyFilesTruncated: tracked.excludedDirtyFilesTruncated
+        }
+        const validation = this.manager.validateRecoveryContextAsync
+          ? await this.manager.validateRecoveryContextAsync(runId, {
+              worktreePath: context.worktreePath,
+              baseBranch: context.baseBranch,
+              baseSha: context.baseSha,
+              sourceSha: context.sourceSha,
+              canonicalBaseRef: context.canonicalBaseRef,
+              excludedDirtyFiles: context.excludedDirtyFiles,
+              publication: 'pending'
+            })
+          : this.manager.validateRecoveryContext(runId, {
+              worktreePath: context.worktreePath,
+              baseBranch: context.baseBranch,
+              baseSha: context.baseSha,
+              sourceSha: context.sourceSha,
+              canonicalBaseRef: context.canonicalBaseRef,
+              excludedDirtyFiles: context.excludedDirtyFiles,
+              publication: 'pending'
+            })
+        if (!validation.ok || validation.decision === 'cleanup-only') {
+          throw new Error(
+            !validation.ok
+              ? `Reprise du worktree refusée : ${validation.detail}`
+              : 'Reprise du worktree refusée : cette copie est déjà publiée.'
+          )
+        }
+        const prepared = await this.manager.prepareAsync(runId, context)
+        this.activateResumed(tracked, prepared.context, prepared.path)
+        return prepared.path
+      } finally {
+        this.resumeClaims.delete(runId)
       }
-      const validation = this.manager.validateRecoveryContextAsync
-        ? await this.manager.validateRecoveryContextAsync(runId, {
-            worktreePath: context.worktreePath,
-            baseBranch: context.baseBranch,
-            baseSha: context.baseSha,
-            sourceSha: context.sourceSha,
-            canonicalBaseRef: context.canonicalBaseRef,
-            excludedDirtyFiles: context.excludedDirtyFiles,
-            publication: 'pending'
-          })
-        : this.manager.validateRecoveryContext(runId, {
-            worktreePath: context.worktreePath,
-            baseBranch: context.baseBranch,
-            baseSha: context.baseSha,
-            sourceSha: context.sourceSha,
-            canonicalBaseRef: context.canonicalBaseRef,
-            excludedDirtyFiles: context.excludedDirtyFiles,
-            publication: 'pending'
-          })
-      if (!validation.ok || validation.decision === 'cleanup-only') {
-        throw new Error(
-          !validation.ok
-            ? `Reprise du worktree refusée : ${validation.detail}`
-            : 'Reprise du worktree refusée : cette copie est déjà publiée.'
-        )
-      }
-      const prepared = await this.manager.prepareAsync(runId, context)
-      this.activateResumed(tracked, prepared.context, prepared.path)
-      return prepared.path
     }
     const tracked: Tracked = {
       runId,

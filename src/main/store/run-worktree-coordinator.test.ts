@@ -155,6 +155,340 @@ describe('RunWorktreeCoordinator (flip live)', () => {
     }
   })
 
+  it('reprend en worker un run green bloqué sans republier ses anciens champs de conflit', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-resume-blocked-worktree-'))
+    try {
+      const runId = 'run-resume-blocked'
+      const worktreePath = join(root, `agent__${runId}`)
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      stateStore.save({
+        version: 1,
+        repoId: 'repo-a',
+        runId,
+        agentName: 'Builder',
+        worktreePath,
+        baseBranch: 'main',
+        baseSha: TEST_SHA,
+        verdict: 'green',
+        publication: 'blocked',
+        files: [{ path: 'src/feature.ts', kind: 'mod' }],
+        conflictFile: 'src/feature.ts',
+        conflictBaseSha: '2'.repeat(40),
+        conflictAgentSha: '3'.repeat(40),
+        publicationBaseSha: '2'.repeat(40),
+        publicationAgentSha: '3'.repeat(40),
+        attentionReason: 'conflict',
+        detail: 'conflit précédent',
+        createdAtMs: 10,
+        updatedAtMs: 20
+      })
+      const context = {
+        workspacePath: root,
+        worktreePath,
+        baseBranch: 'main',
+        baseSha: TEST_SHA
+      }
+      const coordinator = new RunWorktreeCoordinator({
+        manager: {
+          ...fakeManager({
+            listAgentIds: () => [runId],
+            describe: () => context
+          }),
+          describeAsync: vi.fn(async () => context),
+          prepareAsync: vi.fn(async () => ({ context, path: worktreePath })),
+          validateRecoveryContextAsync: vi.fn(async () => ({ ok: true as const }))
+        },
+        stateStore,
+        nowFn: () => 30
+      })
+
+      await expect(
+        coordinator.beginAsync(runId, 'Builder', true, {
+          task: 'reprends',
+          role: 'build',
+          resumeExisting: true
+        })
+      ).resolves.toBe(worktreePath)
+      expect(stateStore.get(runId)).toMatchObject({
+        verdict: 'running',
+        publication: 'not-requested',
+        worktreePath,
+        baseSha: TEST_SHA
+      })
+      expect(stateStore.get(runId)).not.toMatchObject({
+        conflictFile: expect.anything(),
+        conflictBaseSha: expect.anything(),
+        conflictAgentSha: expect.anything(),
+        publicationBaseSha: expect.anything(),
+        publicationAgentSha: expect.anything()
+      })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('refuse deux reprises worker concurrentes du même worktree', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-double-resume-worktree-'))
+    let releaseFirst: (() => void) | undefined
+    try {
+      const runId = 'run-double-resume'
+      const worktreePath = join(root, `agent__${runId}`)
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      stateStore.save({
+        version: 1,
+        repoId: 'repo-a',
+        runId,
+        agentName: 'Builder',
+        worktreePath,
+        baseBranch: 'main',
+        baseSha: TEST_SHA,
+        verdict: 'interrupted',
+        publication: 'blocked',
+        files: [],
+        createdAtMs: 10,
+        updatedAtMs: 20
+      })
+      const context = {
+        workspacePath: root,
+        worktreePath,
+        baseBranch: 'main',
+        baseSha: TEST_SHA
+      }
+      let firstEntered!: () => void
+      const firstEnteredPromise = new Promise<void>((resolve) => {
+        firstEntered = resolve
+      })
+      const firstGate = new Promise<void>((resolve) => {
+        releaseFirst = resolve
+      })
+      const prepareAsync = vi
+        .fn()
+        .mockImplementationOnce(async () => {
+          firstEntered()
+          await firstGate
+          return { context, path: worktreePath }
+        })
+        .mockResolvedValue({ context, path: worktreePath })
+      const coordinator = new RunWorktreeCoordinator({
+        manager: {
+          ...fakeManager({ listAgentIds: () => [runId], describe: () => context }),
+          describeAsync: vi.fn(async () => context),
+          prepareAsync,
+          validateRecoveryContextAsync: vi.fn(async () => ({ ok: true as const })),
+          hasActiveProcessesAsync: vi.fn(async () => false)
+        },
+        stateStore,
+        nowFn: () => 30
+      })
+
+      const first = coordinator.beginAsync(runId, 'Builder', true, { resumeExisting: true })
+      await firstEnteredPromise
+      const second = coordinator.beginAsync(runId, 'Builder', true, { resumeExisting: true })
+      const secondOutcome = await Promise.race([
+        second.then(
+          () => 'resolved',
+          () => 'rejected'
+        ),
+        new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 100))
+      ])
+
+      expect(secondOutcome).toBe('rejected')
+      expect(prepareAsync).toHaveBeenCalledTimes(1)
+      releaseFirst?.()
+      await expect(first).resolves.toBe(worktreePath)
+    } finally {
+      releaseFirst?.()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('refuse une reprise sync ou worker tant que le CLI du run est actif', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-active-resume-worktree-'))
+    try {
+      const runId = 'run-active-resume'
+      const worktreePath = join(root, `agent__${runId}`)
+      const context = {
+        workspacePath: root,
+        worktreePath,
+        baseBranch: 'main',
+        baseSha: TEST_SHA
+      }
+      const saveRecord = (): WorktreeRunStateStore => {
+        const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+        stateStore.save({
+          version: 1,
+          repoId: 'repo-a',
+          runId,
+          agentName: 'Builder',
+          worktreePath,
+          baseBranch: 'main',
+          baseSha: TEST_SHA,
+          verdict: 'interrupted',
+          publication: 'blocked',
+          files: [],
+          createdAtMs: 10,
+          updatedAtMs: 20
+        })
+        return stateStore
+      }
+      const acquire = vi.fn(() => worktreePath)
+      const syncCoordinator = new RunWorktreeCoordinator({
+        manager: fakeManager({
+          acquire,
+          listAgentIds: () => [runId],
+          describe: () => context,
+          hasActiveProcesses: () => true
+        }),
+        stateStore: saveRecord(),
+        nowFn: () => 30
+      })
+
+      expect(() => syncCoordinator.begin(runId, 'Builder', true, { resumeExisting: true })).toThrow(
+        /déjà actif|processus.*actif/i
+      )
+      expect(acquire).not.toHaveBeenCalled()
+
+      const prepareAsync = vi.fn(async () => ({ context, path: worktreePath }))
+      const asyncCoordinator = new RunWorktreeCoordinator({
+        manager: {
+          ...fakeManager({ listAgentIds: () => [runId], describe: () => context }),
+          describeAsync: vi.fn(async () => context),
+          prepareAsync,
+          validateRecoveryContextAsync: vi.fn(async () => ({ ok: true as const })),
+          hasActiveProcessesAsync: vi.fn(async () => true)
+        },
+        stateStore: saveRecord(),
+        nowFn: () => 30
+      })
+
+      await expect(
+        asyncCoordinator.beginAsync(runId, 'Builder', true, { resumeExisting: true })
+      ).rejects.toThrow(/processus.*actif/i)
+      expect(prepareAsync).not.toHaveBeenCalled()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('autorise la reprise récupérée quand le CLI vient de finir malgré un état working périmé', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-stale-working-resume-'))
+    try {
+      const runId = 'run-stale-working'
+      const worktreePath = join(root, `agent__${runId}`)
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      stateStore.save({
+        version: 1,
+        repoId: 'repo-a',
+        runId,
+        agentName: 'Builder',
+        worktreePath,
+        baseBranch: 'main',
+        baseSha: TEST_SHA,
+        verdict: 'green',
+        publication: 'blocked',
+        files: [{ path: 'src/feature.ts', kind: 'mod' }],
+        conflictFile: 'src/feature.ts',
+        conflictBaseSha: '2'.repeat(40),
+        conflictAgentSha: '3'.repeat(40),
+        createdAtMs: 10,
+        updatedAtMs: 20
+      })
+      const context = {
+        workspacePath: root,
+        worktreePath,
+        baseBranch: 'main',
+        baseSha: TEST_SHA
+      }
+      let active = true
+      const prepareAsync = vi.fn(async () => ({ context, path: worktreePath }))
+      const coordinator = new RunWorktreeCoordinator({
+        manager: {
+          ...fakeManager({
+            listAgentIds: () => [runId],
+            describe: () => context,
+            hasActiveProcesses: () => active
+          }),
+          describeAsync: vi.fn(async () => context),
+          prepareAsync,
+          validateRecoveryContextAsync: vi.fn(async () => ({ ok: true as const })),
+          hasActiveProcessesAsync: vi.fn(async () => active)
+        },
+        stateStore,
+        nowFn: () => 30
+      })
+      expect(coordinator.activity()[0]).toMatchObject({ agentId: runId, state: 'working' })
+
+      active = false
+      await expect(
+        coordinator.beginAsync(runId, 'Builder', true, { resumeExisting: true })
+      ).resolves.toBe(worktreePath)
+      await expect(
+        coordinator.beginAsync(runId, 'Builder', true, { resumeExisting: true })
+      ).rejects.toThrow(/déjà actif/i)
+      expect(prepareAsync).toHaveBeenCalledTimes(1)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('ne rouvre jamais comme pending un résidu déjà publié', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-published-residue-resume-'))
+    try {
+      const runId = 'run-published-residue'
+      const worktreePath = join(root, `agent__${runId}`)
+      const stateStore = new WorktreeRunStateStore(root, 'repo-a')
+      const context = {
+        workspacePath: root,
+        worktreePath,
+        baseBranch: 'main',
+        baseSha: TEST_SHA
+      }
+      const prepareAsync = vi.fn(async () => ({ context, path: worktreePath }))
+      const coordinator = new RunWorktreeCoordinator({
+        manager: {
+          ...fakeManager({ listAgentIds: () => [], describe: () => context }),
+          describeAsync: vi.fn(async () => context),
+          prepareAsync,
+          validateRecoveryContextAsync: vi.fn(async () => ({ ok: true as const })),
+          hasActiveProcessesAsync: vi.fn(async () => false)
+        },
+        stateStore,
+        nowFn: () => 30
+      })
+      stateStore.save({
+        version: 1,
+        repoId: 'repo-a',
+        runId,
+        agentName: 'Builder',
+        worktreePath,
+        worktreeAvailable: true,
+        baseBranch: 'main',
+        baseSha: TEST_SHA,
+        verdict: 'green',
+        publication: 'published',
+        files: [{ path: 'src/human-after-publish.ts', kind: 'mod' }],
+        publishedSha: '4'.repeat(40),
+        publicationBaseSha: TEST_SHA,
+        publicationAgentSha: '5'.repeat(40),
+        attentionReason: 'post-publish-change',
+        createdAtMs: 10,
+        updatedAtMs: 20
+      })
+
+      await expect(
+        coordinator.beginAsync(runId, 'Builder', true, { resumeExisting: true })
+      ).rejects.toThrow(/publication.*published|déjà publiée/i)
+      expect(prepareAsync).not.toHaveBeenCalled()
+      expect(stateStore.get(runId)).toMatchObject({
+        publication: 'published',
+        publishedSha: '4'.repeat(40),
+        files: [{ path: 'src/human-after-publish.ts', kind: 'mod' }]
+      })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('récupère l’inventaire Git en worker sans bloquer le heartbeat du main', async () => {
     const listAgentIds = vi.fn(() => {
       throw new Error('le chemin synchrone ne doit pas être appelé')
