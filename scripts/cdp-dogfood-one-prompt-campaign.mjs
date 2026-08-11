@@ -16,10 +16,16 @@ const allViews = [
   ['tickets', 'Tickets'],
   ['settings', 'Settings']
 ]
+// Le slug historique de ce script diverge du catalogue de l'application : `APP_DESTINATIONS`
+// (src/shared/navigation.ts) déclare `worktree` au singulier. Demander la vue par son vrai nom
+// échouait donc en « Vue(s) dogfood inconnue(s) ». On accepte les deux plutôt que de renommer,
+// pour ne pas invalider les registres de campagne déjà écrits sur disque.
+const VIEW_ALIASES = { worktree: 'worktrees' }
+const canonicalView = (value) => VIEW_ALIASES[value] ?? value
 const requestedViews = new Set(
   (process.env.AUTOWIN_DOGFOOD_VIEWS || '')
     .split(',')
-    .map((value) => value.trim())
+    .map((value) => canonicalView(value.trim()))
     .filter(Boolean)
 )
 const views = requestedViews.size ? allViews.filter(([slug]) => requestedViews.has(slug)) : allViews
