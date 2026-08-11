@@ -11,6 +11,14 @@ import { evaluateClosure } from './gates/stopgate'
 import { HookBus } from './hooks/hook-bus'
 import { createDefaultHookBus } from './hooks/default-gate-hooks'
 import { resolveVerifyCmd } from './hooks/resolve-verify-cmd'
+import { loadTrustedLearningOracles } from './providers/learning-oracle-manifest'
+import { workspaceSlug } from './brain-corpus-scope'
+import {
+  createIndependentLearningAttestation,
+  learningProposalAttestation,
+  parseAttestedLearningProposal,
+  type IndependentLearningAttestation
+} from './outcome-learning-proposal'
 import { PIPELINE_PHASES, type PipelinePhase } from './skill-pipeline'
 import { routeSkillRequest } from './skill-routing'
 import { combinePhaseInstruction, type PhaseInstructionOverride } from './workflow-instruction'
@@ -162,7 +170,13 @@ import {
   sessionMemoryBlock
 } from './session-memory-echo'
 import { projectContextBlock } from './context-files'
-import type { ExecutionEvidence, PromptEnvelope, SendOptions, Usage } from './providers/types'
+import type {
+  ExecutionEvidence,
+  PromptEnvelope,
+  SendOptions,
+  TrustedLearningOracle,
+  Usage
+} from './providers/types'
 import { preparedCommitMutationEvidence } from './providers/workspace-mutation-evidence'
 import { appendExecutionEvidenceFileTrace } from './activity/conversation-file-trace-spool'
 import type { WatchdogMutationClaims, WatchdogMutationClaimsSink } from './task-manager/types'
@@ -316,6 +330,8 @@ export interface OrchestrationResult {
     agentToken?: string
     executionEvidence?: ExecutionEvidence[]
   }[]
+  /** Attestation locale émise uniquement depuis le retour d'un rôle judge distinct de l'auteur. */
+  learningAttestations?: IndependentLearningAttestation[]
   /** Requête envoyée au Brain (RAG 1×/run) — pour la traçabilité Observatory. */
   brainQuery?: string
   /** Heure à laquelle la récupération Brain s'est terminée, avant le premier appel modèle. */
@@ -338,6 +354,30 @@ export interface OrchestrationResult {
     baseSha?: string
     files: string[]
   }
+}
+
+function attestJudgeApprovedLearning(
+  aggregate: string,
+  approved: boolean,
+  runId: string,
+  provider: string,
+  model: string | undefined,
+  workspace: string
+): IndependentLearningAttestation[] {
+  if (!approved) return []
+  const parsed = parseAttestedLearningProposal(aggregate)
+  if (!parsed) return []
+  const proposal = {
+    ...parsed,
+    scope: parsed.scope.trim().toLowerCase() === 'global' ? 'global' : workspaceSlug(workspace)
+  }
+  return [
+    createIndependentLearningAttestation(
+      learningProposalAttestation(proposal),
+      runId,
+      `${provider}:${model ?? 'default'}`
+    )
+  ]
 }
 
 export interface OrchestrationRunOptions {
@@ -907,6 +947,7 @@ export function evidenceSatisfiesTask(task: string, evidence: ExecutionEvidence[
 
 export class Orchestrator {
   private readonly causalWatchPathsByRun = new Map<string, readonly string[]>()
+  private readonly learningOraclesByRun = new Map<string, readonly TrustedLearningOracle[]>()
 
   constructor(private readonly deps: OrchestratorDeps) {}
 
@@ -1161,11 +1202,17 @@ export class Orchestrator {
       fanOut
     })
     const causalWatchPaths = this.causalWatchPathsFor(cwd, runId)
+    let learningOracles = this.learningOraclesByRun.get(runId)
+    if (!learningOracles) {
+      learningOracles = loadTrustedLearningOracles(cwd)
+      this.learningOraclesByRun.set(runId, learningOracles)
+    }
     return {
       cwd,
       sandbox,
       ...(cwd !== this.deps.executionWorkspace ? { causallyIsolated: true } : {}),
       ...(causalWatchPaths.length ? { causalWatchPaths } : {}),
+      ...(learningOracles.length ? { learningOracles: [...learningOracles] } : {}),
       onProcess: observers?.process,
       onExecutorResolved: (resolvedProvider) => {
         executorProvider = resolvedProvider
@@ -1606,6 +1653,7 @@ export class Orchestrator {
     } finally {
       this.processObservers.delete(runId)
       this.causalWatchPathsByRun.delete(runId)
+      this.learningOraclesByRun.delete(runId)
       // Le travail n'est fusionné dans la base QUE si le run est vert. Un run rouge, annulé ou planté
       // garde sa copie isolée (l'exception saute le `green = true` ci-dessus) : on ne ramène plus
       // automatiquement dans la base un travail jugé raté.
@@ -1850,7 +1898,7 @@ export class Orchestrator {
       runtimeSnapshot
     )
 
-    const { valid, gate } = await this.greedyJudgeAndGate(
+    const { valid, gate, learningAttestations } = await this.greedyJudgeAndGate(
       task,
       greedy.aggregate,
       greedy.evidence,
@@ -1876,6 +1924,7 @@ export class Orchestrator {
         phase: 'build' as PipelinePhase,
         text: output.text
       })),
+      ...(learningAttestations.length ? { learningAttestations } : {}),
       trace,
       failedTasks: greedy.failed,
       skippedTasks: greedy.skipped
@@ -1895,7 +1944,11 @@ export class Orchestrator {
     signal?: AbortSignal,
     bindingOverride?: RoleBinding,
     runtimeSnapshot?: OrchestrationRuntimeSnapshot
-  ): Promise<{ valid: boolean; gate: ReturnType<typeof evaluateClosure> }> {
+  ): Promise<{
+    valid: boolean
+    gate: ReturnType<typeof evaluateClosure>
+    learningAttestations: IndependentLearningAttestation[]
+  }> {
     const { registry, roles, cost, trust } = this.deps
     // Le chemin greedy doit respecter le même ordre économique que le séquentiel : les oracles
     // locaux falsifiables passent AVANT le juge payant. S'ils réfutent le livrable, aucun appel
@@ -1921,7 +1974,7 @@ export class Orchestrator {
         role: 'gate',
         detail: `PRÉ-GATE BLOQUÉ: ${preGate.reasons.join('; ')}`
       })
-      return { valid: false, gate: preGate }
+      return { valid: false, gate: preGate, learningAttestations: [] }
     }
 
     const projectContext = projectContextBlock(this.deps.executionWorkspace)
@@ -2019,7 +2072,18 @@ export class Orchestrator {
       role: 'gate',
       detail: gate.blocked ? `BLOQUÉ: ${gate.reasons.join('; ')}` : 'clôture autorisée'
     })
-    return { valid: ok, gate }
+    return {
+      valid: ok,
+      gate,
+      learningAttestations: attestJudgeApprovedLearning(
+        aggregate,
+        ok,
+        runId,
+        res.provider ?? judgeProvider,
+        res.model ?? judgeBinding.model,
+        workCwd
+      )
+    }
   }
 
   /** Exécute une tâche à travers le pipeline discipliné complet (appels réels). */
@@ -2494,7 +2558,17 @@ export class Orchestrator {
           provider,
           ...(model ? { model } : {}),
           message: error instanceof Error ? error.message : String(error)
-        })
+        }),
+        // La NATURE de l'erreur doit survivre a l'enveloppe.
+        //
+        // Sans `cause`, un budget epuise devenait un `Error` generique indistinguable d'un modele
+        // en panne — et le run se fermait `failed` comme n'importe quel echec. Constate le
+        // 2026-08-10 : un run a heurte le plafond de tokens en phase `clean`, APRES avoir produit un
+        // commit verifie (lint, TypeScript, 183 tests cibles, suite complete). Le commit est reste
+        // orphelin dans son worktree et il a fallu deux prompts de recuperation manuelle pour le
+        // retrouver. Un plafond atteint n'est pas un defaut du livrable : c'est une limite de
+        // depense, et le travail deja prouve doit rester rattrapable.
+        { cause: error }
       )
     }
   }
@@ -3385,6 +3459,7 @@ export class Orchestrator {
     const judgeAndGate = async (): Promise<{
       valid: boolean
       gate: ReturnType<typeof evaluateClosure>
+      learningAttestations: IndependentLearningAttestation[]
     }> => {
       // Les contrôles locaux falsifiables passent AVANT le juge payant. Un livrable sans preuve ou
       // bloqué par pre-green part directement en réparation : le juge ne peut rien apprendre qu'un
@@ -3410,7 +3485,7 @@ export class Orchestrator {
           role: 'gate',
           detail: `PRÉ-GATE BLOQUÉ: ${preGate.reasons.join('; ')}`
         })
-        return { valid: false, gate: preGate }
+        return { valid: false, gate: preGate, learningAttestations: [] }
       }
 
       // Un juge terminal peut avoir fini dans son CLI détaché après la mort d'Electron. Le
@@ -3449,7 +3524,18 @@ export class Orchestrator {
             ? `BLOQUÉ: ${recoveredGate.reasons.join('; ')}`
             : 'clôture autorisée'
         })
-        return { valid: ok, gate: recoveredGate }
+        return {
+          valid: ok,
+          gate: recoveredGate,
+          learningAttestations: attestJudgeApprovedLearning(
+            exec.text,
+            ok,
+            runId,
+            judgeProvider,
+            judgeBinding.model,
+            workCwd
+          )
+        }
       }
 
       // fix-ok: cause PROUVÉE en live (verdict conv-30 : « le livrable requis est un RUN.md
@@ -3729,7 +3815,18 @@ export class Orchestrator {
         role: 'gate',
         detail: g.blocked ? `BLOQUÉ: ${g.reasons.join('; ')}` : 'clôture autorisée'
       })
-      return { valid: ok, gate: g }
+      return {
+        valid: ok,
+        gate: g,
+        learningAttestations: attestJudgeApprovedLearning(
+          exec.text,
+          ok,
+          runId,
+          judgeMembers.length >= 2 ? 'judge-panel' : judgeProvider,
+          judgeMembers.length >= 2 ? undefined : (verdict.model ?? judgeBinding.model),
+          workCwd
+        )
+      }
     }
 
     // B5 — pour une MUTATION bloquée, UNE réparation ciblée (feedback = raisons du gate) AVANT
@@ -3745,6 +3842,7 @@ export class Orchestrator {
     const MAX_ATTEMPTS = 1 + Math.max(0, Math.floor(allowedRecoveries))
     let valid = false
     let gate!: ReturnType<typeof evaluateClosure>
+    let learningAttestations: IndependentLearningAttestation[] = []
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       if (attempt > 0) {
         // Une reprise n'est pas une primitive parallèle au graphe : elle REJOUE le vrai nœud build,
@@ -3769,6 +3867,7 @@ export class Orchestrator {
       const r = await judgeAndGate()
       valid = r.valid
       gate = r.gate
+      learningAttestations = r.learningAttestations
       if (!gate.blocked) break
     }
 
@@ -3779,6 +3878,7 @@ export class Orchestrator {
       gateBlocked: gate.blocked,
       gateReasons: gate.reasons,
       phaseOutputs,
+      ...(learningAttestations.length ? { learningAttestations } : {}),
       brainQuery,
       brainRetrievedAt,
       brainNavigation: scopedBrain.navigation,

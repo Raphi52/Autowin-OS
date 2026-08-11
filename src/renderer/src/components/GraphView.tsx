@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph3D, { type ForceGraphMethods } from 'react-force-graph-3d'
+import type { BrainGraphRef } from '../../../main/viz/fs-brains'
 import { brainSubjectOf } from './graph-brain-categories'
 import {
   layoutTree,
@@ -56,6 +57,7 @@ import {
   isLinkAttachedToNode,
   knowledgeHealthIssues,
   brainScoreChannelLabel,
+  brainBusinessError,
   linkedNodesFor,
   mergeGraphDelta,
   nodeColorForTheme,
@@ -93,15 +95,6 @@ import { KnowledgeInboxPanel } from './KnowledgeInboxPanel'
 import { BrainRetrievalBench } from './BrainRetrievalBench'
 import './GraphView.css'
 
-type BrainTheme = { id: string; label: string }
-type Brain = {
-  id: string
-  label: string
-  path: string
-  sizeMb: number
-  kind: 'vault' | 'graphify'
-  themes?: BrainTheme[]
-}
 type PanelTab = 'visibility' | 'node' | 'workbench'
 type ResizableColumn = 'theme' | 'visibility' | 'detail'
 type ColumnWidths = GraphColumnWidths
@@ -148,17 +141,6 @@ function initialColumnWidths(): ColumnWidths {
   }
 }
 
-/**
- * Traduit une erreur (souvent une stack IPC brute) en message métier lisible.
- * Le détail technique n'est conservé que s'il est court et n'expose pas la plomberie IPC.
- */
-function toBusinessError(headline: string, error: unknown): string {
-  const raw = (error instanceof Error ? error.message : String(error)).replace(/^Error:\s*/, '')
-  const opaque =
-    raw === '' || raw.length > 120 || /invoking remote method|\n|\bat\s+\S+:\d+|Error:/i.test(raw)
-  return opaque ? headline : `${headline} (${raw})`
-}
-
 /** Observatoire 3D : thèmes en surbrillance, visibilité réglable et lecture du nœud. */
 export function GraphView({
   active,
@@ -174,8 +156,12 @@ export function GraphView({
   const [visualMode, setVisualMode] = useState<GraphVisualMode>(() =>
     loadGraphVisualMode(localStorage)
   )
-  const [brains, setBrains] = useState<Brain[]>([])
+  const [brains, setBrains] = useState<BrainGraphRef[]>([])
   const [selected, setSelected] = useState('')
+  const selectedRef = useRef(selected)
+  useLayoutEffect(() => {
+    selectedRef.current = selected
+  }, [selected])
   /** Vue d'avant le premier rapprochement, rendue à la fermeture de la fiche. */
   const viewBeforeFocusRef = useRef<CameraView | undefined>(undefined)
   const [graph, setGraph] = useState<GraphData>({ nodes: [], links: [] })
@@ -186,6 +172,7 @@ export function GraphView({
   const [err, setErr] = useState('')
   const [themeQuery, setThemeQuery] = useState('')
   const [searchReload, setSearchReload] = useState(0)
+  const searchGenerationRef = useRef(0)
   const [benchReset, setBenchReset] = useState(0)
   const [activeThemes, setActiveThemes] = useState<Set<string>>(() => new Set())
   const [themeNodes, setThemeNodes] = useState<GraphNode[]>([])
@@ -210,6 +197,14 @@ export function GraphView({
   } | null>(null)
   const [file, setFile] = useState<{ path: string; content: string } | null>(null)
   const [fileErr, setFileErr] = useState('')
+  /** Erreurs PAR CANAL : chacune porte son propre réessai, au lieu d'un cul-de-sac global. */
+  const [brainsErr, setBrainsErr] = useState('')
+  const [themesErr, setThemesErr] = useState('')
+  const [themeNodesErr, setThemeNodesErr] = useState('')
+  const [themesReload, setThemesReload] = useState(0)
+  const [themeNodesReload, setThemeNodesReload] = useState(0)
+  /** Candidats en attente dans `inbox/` — comptés SANS ouvrir le poste de travail. */
+  const [inboxPending, setInboxPending] = useState(0)
   const [expandingNodeId, setExpandingNodeId] = useState<string | null>(null)
   const wrap = useRef<HTMLDivElement>(null)
   const layoutRef = useRef<HTMLElement>(null)
@@ -246,17 +241,48 @@ export function GraphView({
     window.api
       .listBrains()
       .then((available) => {
-        setBrains(available)
+        // Le catalogue fourni par le scan est GLOBAL. Pour un vault, il ne doit jamais servir de
+        // valeur provisoire avant que loadBrainThemes applique le corpus du workspace.
+        const safeAvailable = available.map((brain) =>
+          brain.kind === 'vault' ? { ...brain, themes: [] } : brain
+        )
+        setBrains(safeAvailable)
+        setBrainsErr('')
         setSelected((current) =>
-          available.some((brain) => brain.path === current) ? current : (available[0]?.path ?? '')
+          safeAvailable.some((brain) => brain.path === current)
+            ? current
+            : (safeAvailable[0]?.path ?? '')
         )
       })
       .catch((error) =>
-        setErr(toBusinessError('Impossible de lister les graphes de connaissances.', error))
+        setBrainsErr(
+          brainBusinessError('Impossible de lister les graphes de connaissances.', error)
+        )
       )
   }, [])
 
-  const refreshGraph = useCallback((): void => {
+  const resetPrimaryBrainSearchResults = useCallback((): void => {
+    searchGenerationRef.current += 1
+    setVaultSearch([])
+    setSearchRetrieval(null)
+  }, [])
+
+  const resetBrainSearchResults = useCallback((): void => {
+    resetPrimaryBrainSearchResults()
+    setBenchReset((request) => request + 1)
+  }, [resetPrimaryBrainSearchResults])
+
+  const evictGraphCache = useCallback((brainPath: string): void => {
+    const brainPrefix = `${brainPath}\u0000`
+    for (const key of graphCacheRef.current.keys()) {
+      if (key.startsWith(brainPrefix)) graphCacheRef.current.delete(key)
+    }
+    if (selectedRef.current !== brainPath) return
+    dynamicGraphKeyRef.current = ''
+    dynamicGraphRef.current = { nodes: [], links: [] }
+  }, [])
+
+  const refreshGraph = useCallback((): void | Promise<void> => {
     if (!selected) {
       refreshBrains()
       return
@@ -264,27 +290,39 @@ export function GraphView({
 
     setLoading(true)
     setErr('')
-    setVaultSearch([])
-    setSearchRetrieval(null)
-    setBenchReset((request) => request + 1)
-    void window.api
+    resetBrainSearchResults()
+    // La promesse est RENDUE : la boîte de réception attend la fin de la réindexation pour dire
+    // « trouvable », au lieu de l'annoncer avant que l'index n'ait bougé.
+    return window.api
       .refreshBrain(selected)
       .then(() => {
-        const brainPrefix = `${selected}\u0000`
-        for (const key of graphCacheRef.current.keys()) {
-          if (key.startsWith(brainPrefix)) graphCacheRef.current.delete(key)
-        }
-        dynamicGraphKeyRef.current = ''
-        dynamicGraphRef.current = { nodes: [], links: [] }
+        evictGraphCache(selected)
         setSearchReload((request) => request + 1)
         setGraphReload((request) => request + 1)
         refreshBrains()
       })
       .catch((error) => {
-        setErr(toBusinessError('Impossible de rafraîchir le graphe de connaissances.', error))
+        setErr(brainBusinessError('Impossible de rafraîchir le graphe de connaissances.', error))
         setLoading(false)
       })
-  }, [refreshBrains, selected])
+  }, [evictGraphCache, refreshBrains, resetBrainSearchResults, selected])
+
+  const reloadAfterInboxDecision = useCallback(
+    (brainPath: string): void => {
+      // Promote/Reject ne résolvent qu'après l'invalidation main. Ici on invalide seulement le cache
+      // renderer correspondant, sans refaire un second refresh IPC. Si l'utilisateur a déjà changé
+      // de vault, son écran courant ne doit ni clignoter ni relancer sa recherche.
+      evictGraphCache(brainPath)
+      if (selectedRef.current !== brainPath) return
+      setLoading(true)
+      setErr('')
+      setGraph({ nodes: [], links: [] })
+      setSearchReload((request) => request + 1)
+      setGraphReload((request) => request + 1)
+      refreshBrains()
+    },
+    [evictGraphCache, refreshBrains]
+  )
 
   /** Réessai : relance le chargement par le MÊME chemin que le chargement initial. */
   const retryGraph = useCallback((): void => {
@@ -301,6 +339,53 @@ export function GraphView({
     refreshBrains()
   }, [refreshBrains])
 
+  // CANAL THÈMES — sorti de la chaîne du graphe pour pouvoir être réessayé SEUL : une panne des
+  // thèmes n'oblige plus à recharger tout le graphe.
+  useEffect(() => {
+    if (!selected) return
+    let current = true
+    window.api
+      .loadBrainThemes(selected)
+      .then((themes) => {
+        if (!current) return
+        setThemesErr('')
+        setBrains((available) =>
+          available.map((brain) => (brain.path === selected ? { ...brain, themes } : brain))
+        )
+      })
+      .catch((error) => {
+        if (current)
+          setThemesErr(brainBusinessError('Impossible de charger les thèmes du workspace.', error))
+      })
+    return () => {
+      current = false
+    }
+  }, [selected, themesReload])
+
+  // CANAL BOÎTE DE RÉCEPTION — le compte des candidats en attente doit être VISIBLE sans ouvrir le
+  // poste de travail : sinon la revue humaine s'accumule sans que rien ne la réclame.
+  useEffect(() => {
+    const brain = brains.find((candidate) => candidate.path === selected)
+    if (!selected || brain?.kind !== 'vault') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setInboxPending(0)
+      return
+    }
+    let current = true
+    // Le compteur est un CONFORT : un préchargement qui n'expose pas ce canal ne doit pas casser la vue.
+    if (typeof window.api.listInbox !== 'function') return
+    Promise.resolve(window.api.listInbox(selected))
+      .then((found) => {
+        if (current) setInboxPending((found as unknown[]).length)
+      })
+      .catch(() => {
+        if (current) setInboxPending(0)
+      })
+    return () => {
+      current = false
+    }
+  }, [brains, graphReload, selected])
+
   useEffect(() => {
     const query = themeQuery.trim()
     const selectedBrain = brains.find((brain) => brain.path === selected)
@@ -313,23 +398,27 @@ export function GraphView({
       return
     }
     let current = true
+    const searchGeneration = searchGenerationRef.current
+    const isCurrentSearch = (): boolean =>
+      current && searchGeneration === searchGenerationRef.current
     const timeout = window.setTimeout(() => {
+      if (!isCurrentSearch()) return
       window.api
         .searchBrain(selected, query)
         .then((envelope) => {
-          if (!current) return
+          if (!isCurrentSearch()) return
           setVaultSearch(envelope.results.map((result) => ({ ...result, group: 0 })))
           // Le STATUT du retrieval était jeté ici : `empty`, `invalid` et `unavailable` produisaient
           // tous une liste vide muette. On le conserve pour pouvoir DIRE lequel des trois c'est.
           setSearchRetrieval({ status: envelope.status, note: envelope.note })
         })
         .catch((error) => {
-          if (!current) return
+          if (!isCurrentSearch()) return
           // Une panne du canal n'est PAS « aucun résultat » : c'est le bug qu'on corrige.
           setVaultSearch([])
           setSearchRetrieval({
             status: 'failed',
-            note: toBusinessError('Recherche indisponible.', error)
+            note: brainBusinessError('Recherche indisponible.', error)
           })
         })
     }, 200)
@@ -339,16 +428,30 @@ export function GraphView({
     }
   }, [brains, searchReload, selected, themeQuery])
 
+  const selectedBrain = useMemo(
+    () => brains.find((brain) => brain.path === selected),
+    [brains, selected]
+  )
+
   useEffect(() => {
     if (!selected) return
     const cacheKey = `${selected}\u0000${settings.lod}`
-    dynamicGraphRef.current = dynamicGraphForKey(
-      dynamicGraphKeyRef.current,
-      cacheKey,
-      dynamicGraphRef.current
-    )
+    if (selectedBrain?.kind === 'vault') {
+      // Le renderer ne reçoit pas l'identité de corpus. Chaque reload du vault invalide donc les
+      // voisinages dynamiques et leurs lectures en vol avant de fusionner preview puis graphe complet.
+      dynamicGraphRef.current = { nodes: [], links: [] }
+      fileRequestRef.current += 1
+    } else {
+      dynamicGraphRef.current = dynamicGraphForKey(
+        dynamicGraphKeyRef.current,
+        cacheKey,
+        dynamicGraphRef.current
+      )
+    }
     dynamicGraphKeyRef.current = cacheKey
-    const cached = graphCacheRef.current.get(cacheKey)
+    // Un vault partage peut changer de corpus lorsque le workspace d'execution change.
+    // Le worker possede un cache indexe par corpus ; le renderer ne connait pas cette cle.
+    const cached = selectedBrain?.kind === 'vault' ? undefined : graphCacheRef.current.get(cacheKey)
     if (cached) {
       setGraph(cached)
       setLoading(false)
@@ -376,19 +479,13 @@ export function GraphView({
       .then((loaded) => {
         if (!current) return
         const next = completeProgressiveGraph(loaded as GraphData, dynamicGraphRef.current)
-        graphCacheRef.current.set(cacheKey, next)
+        if (selectedBrain?.kind !== 'vault') graphCacheRef.current.set(cacheKey, next)
         setGraph(next)
         if (shouldAutoFitGraphPhase('complete')) setInitialFitRequest((request) => request + 1)
-        void window.api.loadBrainThemes(selected).then((themes) => {
-          if (!current) return
-          setBrains((available) =>
-            available.map((brain) => (brain.path === selected ? { ...brain, themes } : brain))
-          )
-        })
       })
       .catch((error) => {
         if (current)
-          setErr(toBusinessError('Impossible de charger le graphe de connaissances.', error))
+          setErr(brainBusinessError('Impossible de charger le graphe de connaissances.', error))
       })
       .finally(() => {
         if (current) setLoading(false)
@@ -396,7 +493,7 @@ export function GraphView({
     return () => {
       current = false
     }
-  }, [graphReload, selected, settings.lod])
+  }, [graphReload, selected, selectedBrain?.kind, settings.lod])
 
   useEffect(() => {
     const element = wrap.current
@@ -430,12 +527,30 @@ export function GraphView({
     }
   }, [graph.nodes.length, initialFitRequest])
 
-  const selectedBrain = useMemo(
-    () => brains.find((brain) => brain.path === selected),
-    [brains, selected]
-  )
+  useEffect(() => {
+    if (!selected || selectedBrain?.kind !== 'vault') return
+    let current = true
+    void window.api
+      .loadBrainThemes(selected)
+      .then((themes) => {
+        if (!current) return
+        setBrains((available) =>
+          available.map((brain) => (brain.path === selected ? { ...brain, themes } : brain))
+        )
+      })
+      .catch((error) => {
+        if (current)
+          setErr(brainBusinessError('Impossible de charger les thèmes du workspace.', error))
+      })
+    return () => {
+      current = false
+    }
+  }, [graphReload, selected, selectedBrain?.kind])
   const themeSummaries = useMemo(
-    () => buildThemeSummaries(graph.nodes, selectedBrain?.themes),
+    () =>
+      selectedBrain?.kind === 'vault' && selectedBrain.themes
+        ? selectedBrain.themes.map((theme) => ({ ...theme, count: theme.count ?? 0 }))
+        : buildThemeSummaries(graph.nodes, selectedBrain?.themes),
     [graph.nodes, selectedBrain]
   )
   const themeOrder = useMemo(() => themeSummaries.map((theme) => theme.id), [themeSummaries])
@@ -443,10 +558,23 @@ export function GraphView({
     () => new Map(themeSummaries.map((theme) => [theme.id, theme.count])),
     [themeSummaries]
   )
-  const catalogSearch = useMemo(
-    () => searchGraphCatalog(themeQuery, graph.nodes, themeSummaries),
-    [graph.nodes, themeQuery, themeSummaries]
+  const searchCatalogThemes = useMemo(
+    () =>
+      selectedBrain?.kind === 'vault' && themeQuery.trim()
+        ? buildThemeSummaries(vaultSearch)
+        : themeSummaries,
+    [selectedBrain?.kind, themeQuery, themeSummaries, vaultSearch]
   )
+  const catalogSearch = useMemo(
+    () =>
+      searchGraphCatalog(
+        themeQuery,
+        selectedBrain?.kind === 'vault' ? vaultSearch : graph.nodes,
+        searchCatalogThemes
+      ),
+    [graph.nodes, searchCatalogThemes, selectedBrain?.kind, themeQuery, vaultSearch]
+  )
+  const visibleSearchNodes = selectedBrain?.kind === 'vault' ? vaultSearch : catalogSearch.nodes
   const displayGraph = useMemo(
     () => filterGraphVisibility(graph, settings.orphans),
     [graph, settings.orphans]
@@ -874,15 +1002,19 @@ export function GraphView({
     window.api
       .loadBrainThemeNodes(selected, themeIds)
       .then((loaded) => {
-        if (requestId === themeNodesRequestRef.current) setThemeNodes(loaded as GraphNode[])
+        if (requestId === themeNodesRequestRef.current) {
+          setThemeNodes(loaded as GraphNode[])
+          setThemeNodesErr('')
+        }
       })
       .catch((error) => {
         if (requestId === themeNodesRequestRef.current) {
           setThemeNodes([])
-          setErr(String(error))
+          // Ce canal écrasait l'erreur GLOBALE du graphe : il porte désormais la sienne, réessayable.
+          setThemeNodesErr(brainBusinessError('Impossible de charger les notes du thème.', error))
         }
       })
-  }, [activeThemes, selected])
+  }, [activeThemes, graphReload, selected, themeNodesReload])
 
   const syncThemeClusterLabels = useCallback((): void => {
     const graphApi = graphRef.current
@@ -1231,14 +1363,15 @@ export function GraphView({
         const cacheKey = `${selected}\u0000${settings.lod}`
         setGraph((currentGraph) => {
           const merged = mergeGraphDelta(currentGraph, delta)
-          graphCacheRef.current.set(cacheKey, merged)
+          if (selectedBrain?.kind !== 'vault') graphCacheRef.current.set(cacheKey, merged)
           return merged
         })
         const loadedNode = delta.nodes.find((candidate) => candidate.id === nextNode.id)
         if (loadedNode) setNode(loadedNode)
       })
       .catch((error) => {
-        if (requestId === fileRequestRef.current) setFileErr(String(error))
+        if (requestId === fileRequestRef.current)
+          setFileErr(brainBusinessError('Impossible de charger le voisinage.', error))
       })
       .finally(() => {
         if (requestId === fileRequestRef.current) setExpandingNodeId(null)
@@ -1248,10 +1381,43 @@ export function GraphView({
       return
     }
     try {
-      const loadedFile = await window.api.readNodeFile(nextNode.file)
+      const loadedFile = await window.api.readNodeFile(
+        nextNode.file,
+        selectedBrain?.kind === 'vault' ? selected : undefined
+      )
       if (requestId === fileRequestRef.current) setFile(loadedFile)
     } catch (error) {
-      if (requestId === fileRequestRef.current) setFileErr(String(error))
+      if (requestId === fileRequestRef.current)
+        setFileErr(brainBusinessError('Impossible de lire la fiche.', error))
+    }
+  }
+
+  async function retractSelectedKnowledge(): Promise<void> {
+    if (!node || !node.id.startsWith('knowledge/') || selectedBrain?.kind !== 'vault') return
+    setFileErr('')
+    try {
+      await window.api.retractKnowledge(selected, node.id)
+      clearNodeSelection()
+      reloadAfterInboxDecision(selected)
+    } catch (error) {
+      setFileErr(brainBusinessError('Impossible de retirer cette fiche du Brain.', error))
+    }
+  }
+
+  async function supersedeSelectedKnowledge(): Promise<void> {
+    if (!node || !node.id.startsWith('knowledge/') || selectedBrain?.kind !== 'vault') return
+    const replacementId = window.prompt(
+      'Identifiant de la fiche canonique de remplacement (knowledge/…)',
+      'knowledge/'
+    )
+    if (!replacementId?.trim()) return
+    setFileErr('')
+    try {
+      await window.api.supersedeKnowledge(selected, node.id, replacementId.trim())
+      clearNodeSelection()
+      reloadAfterInboxDecision(selected)
+    } catch (error) {
+      setFileErr(brainBusinessError('Impossible de remplacer cette fiche.', error))
     }
   }
 
@@ -1447,6 +1613,9 @@ export function GraphView({
           aria-label="Graphe de connaissances"
           value={selected}
           onChange={(event) => {
+            resetBrainSearchResults()
+            // Les résultats appartiennent au vault quitté : les garder jusqu'à la recherche suivante
+            // ferait momentanément passer une fiche de A pour une fiche de B.
             // Second chemin de sortie de la fiche : il dupliquait la remise à plat et oubliait donc
             // la caméra, laissant un gros plan sur un nœud qui n'existe plus dans le graphe suivant.
             clearNodeSelection()
@@ -1463,6 +1632,20 @@ export function GraphView({
             </option>
           ))}
         </select>
+        {/* Un catalogue vide ou en panne n'est plus un cul-de-sac : la détection se relance ici. */}
+        {(brains.length === 0 || brainsErr) && (
+          <span className="graph-brains-recovery" role={brainsErr ? 'alert' : undefined}>
+            {brainsErr && <span className="graph-brains-recovery__message">{brainsErr}</span>}
+            <button
+              type="button"
+              className="graph-brains-retry"
+              onClick={refreshBrains}
+              title="Relancer la détection des graphes de connaissances"
+            >
+              Réessayer la détection
+            </button>
+          </span>
+        )}
         <button
           type="button"
           className="graph-refresh"
@@ -1537,6 +1720,11 @@ export function GraphView({
           <span>
             <strong>{themeSummaries.length}</strong> thèmes
           </span>
+          {inboxPending > 0 && (
+            <span className="graph-stat-inbox">
+              <strong>{inboxPending}</strong> en attente de revue
+            </span>
+          )}
         </div>
       </header>
 
@@ -1549,7 +1737,12 @@ export function GraphView({
           aria-label="Rechercher un thème ou une fiche"
           placeholder="Thème ou fiche…"
           value={themeQuery}
-          onChange={(event) => setThemeQuery(event.target.value)}
+          onChange={(event) => {
+            // Retire A dans le même rendu qui affiche la saisie B : aucun verdict/résultat
+            // d'une question précédente ne doit survivre pendant le debounce de la suivante.
+            resetPrimaryBrainSearchResults()
+            setThemeQuery(event.target.value)
+          }}
         />
         <button
           className={`theme-filter ${activeThemes.size === 0 ? 'is-active' : ''}`}
@@ -1574,35 +1767,54 @@ export function GraphView({
             {searchRetrieval.note}
           </p>
         )}
+        {themesErr && (
+          <p className="theme-sidebar__error" role="alert">
+            <span>{themesErr}</span>
+            <button
+              type="button"
+              className="graph-themes-retry"
+              onClick={() => setThemesReload((request) => request + 1)}
+            >
+              Réessayer
+            </button>
+          </p>
+        )}
+        {themeNodesErr && (
+          <p className="theme-sidebar__error" role="alert">
+            <span>{themeNodesErr}</span>
+            <button
+              type="button"
+              className="graph-theme-nodes-retry"
+              onClick={() => setThemeNodesReload((request) => request + 1)}
+            >
+              Réessayer
+            </button>
+          </p>
+        )}
         <div className="theme-list">
-          {themeQuery.trim() && [...vaultSearch, ...catalogSearch.nodes].length > 0 && (
+          {themeQuery.trim() && visibleSearchNodes.length > 0 && (
             <div className="node-search-results" aria-label="Fiches trouvées">
               <span className="search-results-heading">Fiches</span>
-              {[...vaultSearch, ...catalogSearch.nodes]
-                .filter(
-                  (resultNode, index, all) =>
-                    all.findIndex((item) => item.id === resultNode.id) === index
-                )
-                .map((resultNode) => (
-                  <button
-                    key={resultNode.id}
-                    className="node-search-result"
-                    onClick={() => void openNode(resultNode)}
-                  >
-                    <i aria-hidden="true">✦</i>
-                    <span>{resultNode.label}</span>
-                    <small className="node-search-result__meta">
-                      {brainScoreChannelLabel(resultNode)}
-                      {' · '}
-                      {resultNode.score !== undefined
-                        ? `pertinence locale ${Math.round(resultNode.score)}`
-                        : 'pertinence locale —'}
-                      {(resultNode.relations?.length ?? 0) > 0
-                        ? ` · ${resultNode.relations?.length} relation${resultNode.relations?.length === 1 ? '' : 's'}`
-                        : ''}
-                    </small>
-                  </button>
-                ))}
+              {visibleSearchNodes.map((resultNode) => (
+                <button
+                  key={resultNode.id}
+                  className="node-search-result"
+                  onClick={() => void openNode(resultNode)}
+                >
+                  <i aria-hidden="true">✦</i>
+                  <span>{resultNode.label}</span>
+                  <small className="node-search-result__meta">
+                    {brainScoreChannelLabel(resultNode)}
+                    {' · '}
+                    {resultNode.score !== undefined
+                      ? `pertinence locale ${Math.round(resultNode.score)}`
+                      : 'pertinence locale —'}
+                    {(resultNode.relations?.length ?? 0) > 0
+                      ? ` · ${resultNode.relations?.length} relation${resultNode.relations?.length === 1 ? '' : 's'}`
+                      : ''}
+                  </small>
+                </button>
+              ))}
             </div>
           )}
           {themeQuery.trim() && catalogSearch.themes.length > 0 && (
@@ -1672,8 +1884,47 @@ export function GraphView({
           </div>
         )}
         {!loading && !err && graph.nodes.length === 0 && (
-          <div className="graph-status">Aucun nœud disponible pour ce graphe.</div>
+          <div className="graph-status graph-status--empty">
+            <span>Aucun nœud disponible pour ce graphe.</span>
+            {/* Un écran vide sans issue laissait l'utilisateur sans recours : deux sorties concrètes. */}
+            <div className="graph-empty-actions">
+              <button
+                type="button"
+                className="graph-empty-reindex"
+                onClick={() => void refreshGraph()}
+                disabled={!selected}
+              >
+                Réindexer ce graphe
+              </button>
+              <button type="button" className="graph-empty-brains" onClick={refreshBrains}>
+                Relancer la détection des graphes
+              </button>
+            </div>
+          </div>
         )}
+        {!loading &&
+          !err &&
+          Boolean(graph.totalNodes) &&
+          (graph.totalNodes as number) > graph.nodes.length && (
+            <div className="graph-truncation" role="status">
+              <span>
+                Graphe TRONQUÉ : {graph.nodes.length} nœuds affichés sur {graph.totalNodes}. Les
+                autres ne sont ni cherchés ni cliquables.
+              </span>
+              <button
+                type="button"
+                className="graph-truncation__extend"
+                onClick={() =>
+                  patchSettings({
+                    lod: Math.min(10_000, Math.max(settings.lod * 2, graph.nodes.length * 2))
+                  })
+                }
+                disabled={settings.lod >= 10_000}
+              >
+                Charger plus de nœuds
+              </button>
+            </div>
+          )}
         <div
           ref={wrap}
           className="graph-canvas"
@@ -1822,12 +2073,21 @@ export function GraphView({
             className={`graph-workbench-button ${panelTab === 'workbench' ? 'is-active' : ''}`}
             aria-label="Poste de travail du savoir"
             aria-expanded={panelTab === 'workbench'}
-            title="Boîte de réception et banc d’essai de récupération"
+            title={
+              inboxPending > 0
+                ? `${inboxPending} candidat${inboxPending === 1 ? '' : 's'} en attente de revue`
+                : 'Boîte de réception et banc d’essai de récupération'
+            }
             onClick={() =>
               setPanelTab((current) => (current === 'workbench' ? 'node' : 'workbench'))
             }
           >
             ✦
+            {inboxPending > 0 && (
+              <span className="graph-workbench-badge" aria-hidden="true">
+                {inboxPending}
+              </span>
+            )}
           </button>
         )}
         {panelTab === 'workbench' && selectedBrain?.kind === 'vault' && (
@@ -1842,7 +2102,11 @@ export function GraphView({
                 ×
               </button>
             </div>
-            <KnowledgeInboxPanel brainPath={selected} onIndexChanged={refreshGraph} />
+            <KnowledgeInboxPanel
+              brainPath={selected}
+              onIndexChangeStarted={resetBrainSearchResults}
+              onIndexChanged={reloadAfterInboxDecision}
+            />
             <BrainRetrievalBench
               brainPath={selected}
               resetToken={benchReset}
@@ -1996,7 +2260,18 @@ export function GraphView({
                 file={file}
                 fileErr={fileErr}
                 linkedNodes={linkedNodes}
+                onRetry={() => void openNode(node)}
                 onNavigate={(nextNode) => openNode(nextNode)}
+                onRetract={
+                  selectedBrain?.kind === 'vault' && node.id.startsWith('knowledge/')
+                    ? () => void retractSelectedKnowledge()
+                    : undefined
+                }
+                onSupersede={
+                  selectedBrain?.kind === 'vault' && node.id.startsWith('knowledge/')
+                    ? () => void supersedeSelectedKnowledge()
+                    : undefined
+                }
               />
             ) : (
               <ThemeNodesPanel

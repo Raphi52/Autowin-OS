@@ -26,16 +26,18 @@ import {
   appendWorkspaceMutationEvidence,
   captureWorkspaceMutationSnapshot
 } from './workspace-mutation-evidence'
-import type {
-  Attachment,
-  ExecutionEvidence,
-  Message,
-  PromptEnvelope,
-  ProviderAdapter,
-  SendOptions,
-  SendResult,
-  StreamChunk,
-  Usage
+import { attestIsolatedVerificationEvidence } from './causal-verification-evidence'
+import {
+  ProviderCallError,
+  type Attachment,
+  type ExecutionEvidence,
+  type Message,
+  type PromptEnvelope,
+  type ProviderAdapter,
+  type SendOptions,
+  type SendResult,
+  type StreamChunk,
+  type Usage
 } from './types'
 import type { ProviderArtifactCandidate } from '../../shared/artifacts'
 import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-fingerprint'
@@ -425,6 +427,9 @@ export interface ClaudeAdapterOptions {
 /** Ajoute au spawn les choix Agents réellement supportés par le CLI installé. */
 export function appendClaudeSelectionArgs(args: string[], opts: SendOptions): void {
   if (opts.model) args.push('--model', opts.model)
+  if (Number.isFinite(opts.maxBudgetUsd) && (opts.maxBudgetUsd as number) > 0) {
+    args.push('--max-budget-usd', String(opts.maxBudgetUsd))
+  }
   if (opts.reasoningEffort && opts.reasoningEffort !== 'none') {
     args.push('--effort', opts.reasoningEffort)
   }
@@ -588,20 +593,36 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       const readOnlyWorkspace = process.env[AUTOWIN_WORKSPACE_ENV]
       if (readOnlyWorkspace && existsSync(readOnlyWorkspace)) {
         readOnlyCwd = readOnlyWorkspace
-        args.push(
-          '--add-dir',
-          readOnlyWorkspace,
-          '--tools',
-          'Read,Grep,Glob,Bash',
-          '--allowedTools',
-          'Read',
-          'Grep',
-          'Glob',
-          // Bash n'est JAMAIS autorisé nu ici : uniquement par périmètres incapables de muter
-          // (voir CHAT_READ_ONLY_SHELL). Sans eux, une question sur l'état du dépôt forçait une
-          // orchestration, qui répond depuis un worktree isolé — donc à côté de la question.
-          ...CHAT_READ_ONLY_SHELL
-        )
+        if (opts.toolProfile === 'watchdog-read-only') {
+          // Frontiere de securite du fond autonome : le contexte de l'evenement est non fiable.
+          // Aucun Bash, meme prefixe, car le traitement des commandes chainees par Claude CLI n'est
+          // pas etabli. Le prompt systeme n'est qu'une consigne ; cette liste est la capacite reelle.
+          args.push(
+            '--add-dir',
+            readOnlyWorkspace,
+            '--tools',
+            'Read,Grep,Glob',
+            '--allowedTools',
+            'Read',
+            'Grep',
+            'Glob'
+          )
+        } else {
+          args.push(
+            '--add-dir',
+            readOnlyWorkspace,
+            '--tools',
+            'Read,Grep,Glob,Bash',
+            '--allowedTools',
+            'Read',
+            'Grep',
+            'Glob',
+            // Bash n'est JAMAIS autorisé nu ici : uniquement par périmètres incapables de muter
+            // (voir CHAT_READ_ONLY_SHELL). Sans eux, une question sur l'état du dépôt forçait une
+            // orchestration, qui répond depuis un worktree isolé — donc à côté de la question.
+            ...CHAT_READ_ONLY_SHELL
+          )
+        }
       } else {
         // Aucun workspace resolu : on garde le comportement d'origine plutot que de deviner un dossier.
         args.push('--disallowedTools', '*')
@@ -668,14 +689,15 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         journal = undefined // journal impossible → on retombe sur le pipe plutôt que d'échouer
       }
     }
-    if (execution?.onJournal) {
+    const onJournal = execution?.onJournal ?? opts.onJournal
+    if (onJournal) {
       if (!journal) {
         throw new Error(
           'Journal survivable Claude indisponible — provider non lancé pour éviter un doublon'
         )
       }
       try {
-        execution.onJournal(spawnToken, journal.path)
+        onJournal(spawnToken, journal.path)
       } catch (error) {
         try {
           closeSync(journal.fd)
@@ -907,8 +929,6 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       } else if (t === 'result') {
         if (typeof o['result'] === 'string' && !text) text = o['result'] as string
         if (typeof o['session_id'] === 'string') sessionId = o['session_id'] as string
-        if (o['is_error'] === true)
-          errored = new Error(`claude result error: ${String(o['result'] ?? '')}`)
         // Tokens/coût RÉELS du tour (le result event du CLI les porte).
         const hasReportedCost = Object.prototype.hasOwnProperty.call(o, 'total_cost_usd')
         const normalizedUsage = normalizeClaudeUsage(
@@ -917,7 +937,24 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           hasReportedCost
         )
         if (normalizedUsage) usage = normalizedUsage
-        else if (!errored) errored = new Error('claude result usage invalide ou incomplet')
+        const resultFailed = o['is_error'] === true
+        if (resultFailed) {
+          const code = typeof o['subtype'] === 'string' ? o['subtype'] : 'provider-result-error'
+          const reported = String(o['result'] ?? '').trim()
+          const cost = normalizedUsage?.costUsd
+          const detail =
+            reported || (cost === undefined ? code : `${code} · ${cost.toFixed(4)} USD`)
+          // Un event `result` est deja la decision terminale du CLI (qui gere ses propres retries).
+          // Le rejouer au niveau AgentPilot repaie le meme prompt et contourne la borne provider.
+          errored = new ProviderCallError(`Claude a interrompu l'appel : ${detail}`, {
+            code,
+            retryable: false,
+            usage: normalizedUsage,
+            resolvedModel
+          })
+        } else if (!normalizedUsage) {
+          errored = new Error('claude result usage invalide ou incomplet')
+        }
       }
     }
 
@@ -1053,6 +1090,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     if (mutationBefore && execution) {
       await appendWorkspaceMutationEvidence(mutationBefore, execution.cwd, executionEvidence)
     }
+    attestIsolatedVerificationEvidence(
+      executionEvidence,
+      execution?.causallyIsolated === true,
+      execution?.learningOracles
+    )
     const inlineArtifacts = normalizeProviderArtifacts(artifactCandidates, {
       provider: this.id,
       model: resolvedModel,

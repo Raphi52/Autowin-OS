@@ -13,15 +13,15 @@
  * que 4 documents, qui restent atteignables.
  *
  * PRINCIPE DE PRUDENCE : un workspace sans identité déclarée est fail-closed. L'opérateur peut
- * explicitement demander le corpus global avec `AUTOWIN_BRAIN_CORPUS=*`, mais une absence de mapping
- * ne doit jamais devenir silencieusement « tout autoriser ».
+ * explicitement demander le corpus canonique global avec `AUTOWIN_BRAIN_CORPUS=*` ; les zones de
+ * quarantaine restent toujours exclues et une absence de mapping ne devient jamais silencieusement
+ * « tout autoriser ».
  */
 import { readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import type { BrainRetrievalResult } from './brain-retrieval'
-
-/** Séparateur entre deux sources dans le bloc rendu par le Brain (`brain_context.py:128`). */
-const SOURCE_SEPARATOR = '\n\n---\n\n'
+import { renderStructuredBrainContext } from './brain-protocol'
+import { retrieveBrainContext, type BrainRetrievalResult } from './brain-retrieval'
+import type { BrainNoteSearchResult } from './viz/fs-brains'
 /** En-tête d'une source : `### Source N — <chemin>`. */
 
 /**
@@ -33,36 +33,24 @@ const SOURCE_SEPARATOR = '\n\n---\n\n'
  * (« Code RIG » → la doc s'appelle `rigapplication-documentation`). Un workspace absent de cette table
  * est fail-closed.
  */
+const RIG_BRAIN_CORPUS = [
+  'knowledge/_maps/rig.md',
+  'knowledge/_maps/rig-',
+  'knowledge/decisions/rig-',
+  'knowledge/domain/rig-',
+  'knowledge/domain/rigapplication-documentation/',
+  'knowledge/lessons/rig-'
+] as const
+
 const WORKSPACE_BRAIN_CORPUS: Readonly<Record<string, readonly string[]>> = {
   'autowin-os': [
     'knowledge/_maps/autowin-os.md',
     'knowledge/domain/autowin-os-',
     'knowledge/runbooks/autowin-os-'
   ],
-  'code-rig': [
-    'knowledge/_maps/rig.md',
-    'knowledge/_maps/rig-',
-    'knowledge/decisions/rig-',
-    'knowledge/domain/rig-',
-    'knowledge/domain/rigapplication-documentation/',
-    'knowledge/lessons/rig-'
-  ],
-  rigapplication: [
-    'knowledge/_maps/rig.md',
-    'knowledge/_maps/rig-',
-    'knowledge/decisions/rig-',
-    'knowledge/domain/rig-',
-    'knowledge/domain/rigapplication-documentation/',
-    'knowledge/lessons/rig-'
-  ],
-  rig: [
-    'knowledge/_maps/rig.md',
-    'knowledge/_maps/rig-',
-    'knowledge/decisions/rig-',
-    'knowledge/domain/rig-',
-    'knowledge/domain/rigapplication-documentation/',
-    'knowledge/lessons/rig-'
-  ]
+  'code-rig': RIG_BRAIN_CORPUS,
+  rigapplication: RIG_BRAIN_CORPUS,
+  rig: RIG_BRAIN_CORPUS
 }
 
 let invalidOverrideWarningEmitted = false
@@ -100,7 +88,7 @@ export function workspaceSlug(workspacePath: string): string {
  * opérateur explicite (aucun filtrage).
  *
  * Échappatoire opérateur : `AUTOWIN_BRAIN_CORPUS` (fragments séparés par des virgules) surclasse la
- * table ; la valeur `*` désactive explicitement le filtrage.
+ * table ; la valeur `*` ouvre tout le corpus canonique mais jamais les zones de quarantaine.
  */
 export function brainCorpusForWorkspace(
   workspacePath: string | undefined,
@@ -115,7 +103,11 @@ export function brainCorpusForWorkspace(
     // Le wildcard n'est valide que SEUL et chaque élément doit être explicite. Une virgule finale,
     // une liste vide ou `*,foo` est une erreur de configuration : elle coupe le Brain au lieu de
     // transformer une faute de frappe en accès global.
-    if (fragments.some((fragment) => !fragment || fragment === '*' || !isCanonicalCorpusSelector(fragment))) {
+    if (
+      fragments.some(
+        (fragment) => !fragment || fragment === '*' || !isCanonicalCorpusSelector(fragment)
+      )
+    ) {
       warnInvalidCorpusOverride()
       return []
     }
@@ -140,7 +132,7 @@ export function brainCorpusForWorkspace(
   // un parent : `gitdir: <dépôt>/.git/worktrees/<copie>`. Cette frontière est aussi valable pour un
   // dépôt externe (RigApplication) et évite de lui attribuer par erreur le corpus d'Autowin OS.
   const owner = worktreeOwner(workspacePath)
-  return owner ? WORKSPACE_BRAIN_CORPUS[workspaceSlug(owner)] ?? [] : []
+  return owner ? (WORKSPACE_BRAIN_CORPUS[workspaceSlug(owner)] ?? []) : []
 }
 
 function gitWorktreeOwner(workspacePath: string): string | undefined {
@@ -154,24 +146,30 @@ function gitWorktreeOwner(workspacePath: string): string | undefined {
 }
 
 /** Ramène un chemin absolu/UNC ou relatif à son identité stable `knowledge/...`. */
-function normalizedKnowledgePath(value: string): string {
+function normalizedKnowledgePath(value: string): string | undefined {
   const normalized = value
     .trim()
     .toLowerCase()
     .replace(/\\/g, '/')
     .replace(/\/{2,}/g, '/')
-  if (normalized.startsWith('knowledge/')) return normalized
-  const marker = '/knowledge/'
-  const markerIndex = normalized.indexOf(marker)
-  if (markerIndex >= 0) return normalized.slice(markerIndex + 1)
-  return normalized.replace(/^\.\//, '').replace(/^\//, '')
+  const markerIndex = normalized.indexOf('/knowledge/')
+  const candidate = normalized.startsWith('knowledge/')
+    ? normalized
+    : markerIndex >= 0
+      ? normalized.slice(markerIndex + 1)
+      : normalized.replace(/^\//, '')
+  const segments = candidate.split('/')
+  return segments.some((segment) => !segment || segment === '.' || segment === '..')
+    ? undefined
+    : candidate
 }
 
 /** Exact par défaut ; `/` ou `-` final déclare explicitement une famille de chemins. */
 function matchesCorpusSelector(path: string, selector: string): boolean {
   if (!isCanonicalCorpusSelector(selector)) return false
   const normalizedPath = normalizedKnowledgePath(path)
-  const normalizedSelector = normalizedKnowledgePath(selector)
+  if (!normalizedPath) return false
+  const normalizedSelector = selector.trim().toLowerCase()
   return normalizedSelector.endsWith('/') || normalizedSelector.endsWith('-')
     ? normalizedPath.startsWith(normalizedSelector)
     : normalizedPath === normalizedSelector
@@ -182,6 +180,12 @@ export function brainSourcePathAllowed(
   path: string,
   selectors: readonly string[] | undefined
 ): boolean {
+  const segments = path.trim().toLowerCase().replace(/\\/gu, '/').split('/').filter(Boolean)
+  // Ces zones ne sont jamais du savoir canonique, même sous wildcard opérateur.
+  if (
+    segments.some((segment) => segment === 'inbox' || segment === '.trash' || segment === 'escrow')
+  )
+    return false
   if (selectors === undefined) return true
   if (selectors.length === 0) return false
   return selectors.some((selector) => matchesCorpusSelector(path, selector))
@@ -200,12 +204,25 @@ export function brainCorpusAttestationMatches(
   )
 }
 
+function scopeBrainLocalResults(
+  results: readonly BrainNoteSearchResult[],
+  fragments: readonly string[] | undefined
+): BrainNoteSearchResult[] {
+  return results
+    .filter((result) => brainSourcePathAllowed(result.file, fragments))
+    .map((result) => ({
+      ...result,
+      relations: result.relations.filter((relation) =>
+        brainSourcePathAllowed(relation.target, fragments)
+      )
+    }))
+}
+
 /** Projette ensemble contexte, statut et navigation après application de la portée workspace. */
 export function scopeBrainRetrieval(
   result: BrainRetrievalResult,
   fragments: readonly string[] | undefined
 ): BrainRetrievalResult {
-  if (fragments === undefined) return result
   const attested = brainCorpusAttestationMatches(result.corpus, fragments)
   const structured = attested ? result.structuredContext : undefined
   const sources = structured
@@ -213,17 +230,23 @@ export function scopeBrainRetrieval(
     : []
   const context =
     sources.length > 0
-      ? (structured?.preamble ?? '') + sources.map((source) => source.content).join(SOURCE_SEPARATOR)
+      ? renderStructuredBrainContext({ preamble: structured?.preamble ?? '', sources })
       : ''
   const status = result.status === 'found' && !context ? 'empty' : result.status
   const navigation = result.navigation
     ? {
         ...result.navigation,
-        candidates: result.navigation.candidates.map((candidate) => ({
-          ...candidate,
-          retained:
-            attested && candidate.retained && brainSourcePathAllowed(candidate.path, fragments)
-        }))
+        candidates: attested
+          ? result.navigation.candidates
+              .filter((candidate) => brainSourcePathAllowed(candidate.path, fragments))
+              .map((candidate, index) => ({
+                ...candidate,
+                rank: index + 1,
+                relations: candidate.relations?.filter((relation) =>
+                  brainSourcePathAllowed(relation.target, fragments)
+                )
+              }))
+          : []
       }
     : undefined
   return {
@@ -234,5 +257,36 @@ export function scopeBrainRetrieval(
     ...(structured
       ? { structuredContext: { preamble: structured.preamble, sources } }
       : { structuredContext: undefined })
+  }
+}
+
+type WorkspaceBrainRetriever = (
+  query: string,
+  options: { corpus?: readonly string[] }
+) => Promise<BrainRetrievalResult>
+
+interface WorkspaceBrainScope {
+  corpus: readonly string[] | undefined
+  localResults(results: readonly BrainNoteSearchResult[]): BrainNoteSearchResult[]
+  retrieve(query: string, retrieve?: WorkspaceBrainRetriever): Promise<BrainRetrievalResult>
+}
+
+/** Portée immuable d'une opération : recherche locale et retrieval partagent les mêmes sélecteurs. */
+export function brainScopeForWorkspace(workspacePath: string | undefined): WorkspaceBrainScope {
+  const corpus = brainCorpusForWorkspace(workspacePath)
+  return {
+    corpus,
+    localResults: (results: readonly BrainNoteSearchResult[]): BrainNoteSearchResult[] =>
+      scopeBrainLocalResults(results, corpus),
+    retrieve: async (
+      query: string,
+      retrieve: WorkspaceBrainRetriever = retrieveBrainContext
+    ): Promise<BrainRetrievalResult> => {
+      const raw =
+        corpus?.length === 0
+          ? ({ context: '', status: 'empty' } as const)
+          : await retrieve(query, { corpus })
+      return scopeBrainRetrieval(raw, corpus)
+    }
   }
 }

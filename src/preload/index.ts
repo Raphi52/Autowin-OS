@@ -8,6 +8,8 @@ import type {
 import type {
   WorktreeAgentActivity,
   WorktreeConflictDiffResult,
+  WorktreeConflictResolutionChoice,
+  WorktreeConflictResolutionResult,
   WorktreeRuntimeStatus
 } from '../shared/worktree-activity-model'
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
@@ -29,6 +31,7 @@ import type {
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
+import type { BrainGraphRef, BrainTheme } from '../main/viz/fs-brains'
 import type { BrainSearchEnvelope } from '../main/brain-search-envelope'
 import type { InboxCandidate, InboxMove } from '../main/brain-inbox'
 import type { RunEntry } from '../main/dashboards/runs-scan'
@@ -182,6 +185,11 @@ const api = {
   getWorktreeStatus: (): Promise<WorktreeRuntimeStatus> => ipcRenderer.invoke('worktree:status'),
   getWorktreeConflictDiff: (agentId: string): Promise<WorktreeConflictDiffResult> =>
     ipcRenderer.invoke('worktree:conflict-diff', agentId),
+  resolveWorktreeConflict: (
+    agentId: string,
+    choice: WorktreeConflictResolutionChoice
+  ): Promise<WorktreeConflictResolutionResult> =>
+    ipcRenderer.invoke('worktree:resolve-conflict', agentId, choice),
   retryWorktreeRecovery: (agentId: string): Promise<WorktreeAgentActivity | undefined> =>
     ipcRenderer.invoke('worktree:retry-recovery', agentId),
   discardHeldWorktree: (agentId: string): Promise<boolean> =>
@@ -527,38 +535,54 @@ const api = {
   setActiveConversation: (convId: string | null): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('os:setActiveConversation', convId),
   // Graphe brain 3D + workflow
-  listBrains: (): Promise<
-    Array<{
-      id: string
-      label: string
-      path: string
-      sizeMb: number
-      kind: 'vault' | 'graphify'
-      themes?: Array<{ id: string; label: string }>
-    }>
-  > => ipcRenderer.invoke('os:listBrains'),
+  listBrains: (): Promise<BrainGraphRef[]> => ipcRenderer.invoke('os:listBrains'),
   loadBrainGraph: (path: string, lod?: number, community?: number): Promise<VizGraph> =>
     ipcRenderer.invoke('os:loadBrainGraph', path, lod, community),
   loadBrainGraphPreview: (path: string, lod?: number): Promise<VizGraph> =>
     ipcRenderer.invoke('os:loadBrainGraphPreview', path, lod),
-  loadBrainThemes: (path: string): Promise<Array<{ id: string; label: string }>> =>
+  loadBrainThemes: (path: string): Promise<BrainTheme[]> =>
     ipcRenderer.invoke('os:loadBrainThemes', path),
   loadBrainThemeNodes: (path: string, themeIds: string[]): Promise<VizGraph['nodes']> =>
     ipcRenderer.invoke('os:loadBrainThemeNodes', path, themeIds),
   loadBrainNeighborhood: (path: string, nodeId: string): Promise<VizGraph> =>
     ipcRenderer.invoke('os:loadBrainNeighborhood', path, nodeId),
-  readNodeFile: (path: string): Promise<{ path: string; content: string }> =>
-    ipcRenderer.invoke('os:readNodeFile', path),
+  readNodeFile: (path: string, vaultRoot?: string): Promise<{ path: string; content: string }> =>
+    ipcRenderer.invoke('os:readNodeFile', path, vaultRoot),
   searchBrain: (path: string, query: string): Promise<BrainSearchEnvelope> =>
     ipcRenderer.invoke('os:searchBrain', path, query),
   refreshBrain: (path: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('os:refreshBrain', path),
-  // Boîte de réception du savoir : lister les candidats de `inbox/`, puis la décision HUMAINE.
+  // Curation Brain : revue inbox et retrait/restauration explicites du savoir canonique.
   listInbox: (path: string): Promise<InboxCandidate[]> => ipcRenderer.invoke('os:listInbox', path),
+  readInboxCandidateBody: (path: string, id: string): Promise<{ id: string; body: string }> =>
+    ipcRenderer.invoke('os:readInboxCandidateBody', path, id),
   promoteInbox: (path: string, id: string): Promise<InboxMove> =>
     ipcRenderer.invoke('os:promoteInbox', path, id),
   rejectInbox: (path: string, id: string): Promise<InboxMove> =>
     ipcRenderer.invoke('os:rejectInbox', path, id),
+  retractKnowledge: (path: string, id: string): Promise<InboxMove> =>
+    ipcRenderer.invoke('os:retractKnowledge', path, id),
+  restoreKnowledge: (path: string, id: string): Promise<InboxMove> =>
+    ipcRenderer.invoke('os:restoreKnowledge', path, id),
+  supersedeKnowledge: (
+    path: string,
+    obsoleteId: string,
+    replacementId: string
+  ): Promise<InboxMove> =>
+    ipcRenderer.invoke('os:supersedeKnowledge', path, obsoleteId, replacementId),
+  outcomeLearning: (): Promise<{ mode: 'off' | 'shadow' | 'inbox' | 'auto'; events: unknown[] }> =>
+    ipcRenderer.invoke('os:outcomeLearning:get'),
+  outcomeLearningCurations: (
+    offset = 0,
+    limit = 20
+  ): Promise<{ events: unknown[]; total: number }> =>
+    ipcRenderer.invoke('os:outcomeLearning:curations', offset, limit),
+  setOutcomeLearningMode: (
+    mode: 'off' | 'shadow' | 'inbox' | 'auto'
+  ): Promise<{ mode: 'off' | 'shadow' | 'inbox' | 'auto' }> =>
+    ipcRenderer.invoke('os:outcomeLearning:setMode', mode),
+  undoOutcomeLearningCuration: (eventId: string): Promise<InboxMove> =>
+    ipcRenderer.invoke('os:outcomeLearning:undoCuration', eventId),
   listRuns: (): Promise<
     Array<{
       subject: string

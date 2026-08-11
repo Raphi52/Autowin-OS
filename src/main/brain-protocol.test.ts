@@ -14,13 +14,15 @@ function signedV2(
   context: string,
   navigation: unknown,
   corpus?: readonly string[],
-  structuredContext?: unknown
+  structuredContext?: unknown,
+  request?: unknown
 ): SignedBrainPayload {
   const authenticated = JSON.stringify({
     context,
     navigation,
     ...(corpus ? { corpus } : {}),
-    ...(structuredContext ? { structuredContext } : {})
+    ...(structuredContext ? { structuredContext } : {}),
+    ...(request ? { request } : {})
   })
   return {
     service: 'amitel-brain',
@@ -55,7 +57,10 @@ describe('protocole Brain v2', () => {
 
   it('rend contexte et navigation seulement après vérification de l’enveloppe complète', () => {
     expect(
-      verifySignedBrainPayload(signedV2('contexte fiable', navigation, ['knowledge/domain/autowin-os-']), TOKEN)
+      verifySignedBrainPayload(
+        signedV2('contexte fiable', navigation, ['knowledge/domain/autowin-os-']),
+        TOKEN
+      )
     ).toEqual({
       context: 'contexte fiable',
       navigation,
@@ -63,8 +68,41 @@ describe('protocole Brain v2', () => {
     })
   })
 
+  it('authentifie et expose la question et le trace_id liés à la réponse', () => {
+    expect(
+      verifySignedBrainPayload(
+        signedV2('contexte fiable', null, undefined, undefined, {
+          query: 'question normalisée',
+          trace_id: 'trace-42'
+        }),
+        TOKEN
+      ).request
+    ).toEqual({ query: 'question normalisée', traceId: 'trace-42' })
+  })
+
+  it('rejette une liaison de requête signée mais malformée', () => {
+    expect(() =>
+      verifySignedBrainPayload(
+        signedV2('contexte fiable', null, undefined, undefined, {
+          query: ' question non normalisée ',
+          trace_id: 'trace-42'
+        }),
+        TOKEN
+      )
+    ).toThrow('Liaison de requête')
+  })
+
   it('rejette une attestation de corpus malformée même correctement signée', () => {
-    for (const malformed of ['ok', '', '*', 'c:/mistyped/knowledge/', '../knowledge/', 'knowledge/../']) {
+    for (const malformed of [
+      'ok',
+      '',
+      '*',
+      'c:/mistyped/knowledge/',
+      '../knowledge/',
+      'knowledge/../',
+      'inbox/',
+      '.trash/'
+    ]) {
       expect(() =>
         verifySignedBrainPayload(signedV2('contexte', null, [malformed]), TOKEN)
       ).toThrow('corpus')
@@ -72,8 +110,12 @@ describe('protocole Brain v2', () => {
   })
 
   it('compte la borne de contexte en points de code comme le serveur Python', () => {
-    expect(verifySignedBrainPayload(signedV2('😀'.repeat(3000), null), TOKEN).context).toHaveLength(6000)
-    expect(() => verifySignedBrainPayload(signedV2('😀'.repeat(3001), null), TOKEN)).toThrow('volumineux')
+    expect(verifySignedBrainPayload(signedV2('😀'.repeat(3000), null), TOKEN).context).toHaveLength(
+      6000
+    )
+    expect(() => verifySignedBrainPayload(signedV2('😀'.repeat(3001), null), TOKEN)).toThrow(
+      'volumineux'
+    )
   })
 
   it('rejette des frontières signées qui ne reconstruisent pas exactement le contexte signé', () => {
@@ -86,6 +128,25 @@ describe('protocole Brain v2', () => {
         TOKEN
       )
     ).toThrow('frontières')
+  })
+
+  it('accepte un préambule et une source sérialisés avec leur frontière canonique', () => {
+    const context = 'Préambule\n\n---\n\nExtrait source'
+    expect(
+      verifySignedBrainPayload(
+        signedV2(context, null, ['knowledge/domain/autowin-os-'], {
+          preamble: 'Préambule',
+          sources: [{ path: 'knowledge/a.md', content: 'Extrait source' }]
+        }),
+        TOKEN
+      )
+    ).toMatchObject({
+      context,
+      structuredContext: {
+        preamble: 'Préambule',
+        sources: [{ path: 'knowledge/a.md', content: 'Extrait source' }]
+      }
+    })
   })
 
   it.each([

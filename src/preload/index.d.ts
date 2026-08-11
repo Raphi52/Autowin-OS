@@ -2,6 +2,8 @@ import { ElectronAPI } from '@electron-toolkit/preload'
 import type {
   WorktreeAgentActivity,
   WorktreeConflictDiffResult,
+  WorktreeConflictResolutionChoice,
+  WorktreeConflictResolutionResult,
   WorktreeRuntimeStatus
 } from '../shared/worktree-activity-model'
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
@@ -15,6 +17,7 @@ import type {
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
 import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
+import type { BrainGraphRef, BrainTheme } from '../main/viz/fs-brains'
 import type { BrainSearchEnvelope } from '../main/brain-search-envelope'
 import type { InboxCandidate, InboxMove } from '../main/brain-inbox'
 import type { RunEntry } from '../main/dashboards/runs-scan'
@@ -161,6 +164,10 @@ interface ChatApi {
   getWorktreeActivity: () => Promise<WorktreeAgentActivity[]>
   getWorktreeStatus: () => Promise<WorktreeRuntimeStatus>
   getWorktreeConflictDiff: (agentId: string) => Promise<WorktreeConflictDiffResult>
+  resolveWorktreeConflict: (
+    agentId: string,
+    choice: WorktreeConflictResolutionChoice
+  ) => Promise<WorktreeConflictResolutionResult>
   retryWorktreeRecovery: (agentId: string) => Promise<WorktreeAgentActivity | undefined>
   discardHeldWorktree: (agentId: string) => Promise<boolean>
   setWorktreeFixture: (fixture: {
@@ -403,27 +410,41 @@ interface ChatApi {
   conversationActivity: (convId: string) => Promise<ConvActivityEntry[]>
   runTrace: (path: string) => Promise<OrchestrationStep[] | null>
   setActiveConversation: (convId: string | null) => Promise<{ ok: boolean }>
-  listBrains: () => Promise<
-    Array<{
-      id: string
-      label: string
-      path: string
-      sizeMb: number
-      kind: 'vault' | 'graphify'
-      themes?: Array<{ id: string; label: string }>
-    }>
-  >
+  listBrains: () => Promise<BrainGraphRef[]>
   loadBrainGraph: (path: string, lod?: number, community?: number) => Promise<VizGraph>
   loadBrainGraphPreview: (path: string, lod?: number) => Promise<VizGraph>
-  loadBrainThemes: (path: string) => Promise<Array<{ id: string; label: string }>>
+  loadBrainThemes: (path: string) => Promise<BrainTheme[]>
   loadBrainThemeNodes: (path: string, themeIds: string[]) => Promise<VizGraph['nodes']>
   loadBrainNeighborhood: (path: string, nodeId: string) => Promise<VizGraph>
-  readNodeFile: (path: string) => Promise<{ path: string; content: string }>
+  readNodeFile: (path: string, vaultRoot?: string) => Promise<{ path: string; content: string }>
   searchBrain: (path: string, query: string) => Promise<BrainSearchEnvelope>
   refreshBrain: (path: string) => Promise<{ ok: boolean }>
   listInbox: (path: string) => Promise<InboxCandidate[]>
+  readInboxCandidateBody: (path: string, id: string) => Promise<{ id: string; body: string }>
   promoteInbox: (path: string, id: string) => Promise<InboxMove>
   rejectInbox: (path: string, id: string) => Promise<InboxMove>
+  retractKnowledge: (path: string, id: string) => Promise<InboxMove>
+  restoreKnowledge: (path: string, id: string) => Promise<InboxMove>
+  supersedeKnowledge: (
+    path: string,
+    obsoleteId: string,
+    replacementId: string
+  ) => Promise<InboxMove>
+  outcomeLearning: () => Promise<{
+    mode: 'off' | 'shadow' | 'inbox' | 'auto'
+    events: Array<{ kind: string; value: Record<string, unknown> }>
+  }>
+  outcomeLearningCurations: (
+    offset?: number,
+    limit?: number
+  ) => Promise<{
+    events: Array<{ kind: 'curation'; value: Record<string, unknown> }>
+    total: number
+  }>
+  setOutcomeLearningMode: (
+    mode: 'off' | 'shadow' | 'inbox' | 'auto'
+  ) => Promise<{ mode: 'off' | 'shadow' | 'inbox' | 'auto' }>
+  undoOutcomeLearningCuration: (eventId: string) => Promise<InboxMove>
   listRuns: () => Promise<RunEntry[]>
   deleteRun: (path: string) => Promise<{ ok: boolean }>
 

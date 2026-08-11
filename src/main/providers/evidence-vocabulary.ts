@@ -27,17 +27,52 @@ const LAUNCHER_WITH_INLINE =
   /^(?:pwsh|powershell|pwsh\.exe|powershell\.exe|bash|sh|zsh|cmd|cmd\.exe)\s+(?:-c|-Command|\/c|\/C)\s+(.+)$/i
 
 type Rule = true | ((args: string[]) => boolean)
-const firstIs = (...verbs: string[]) => (args: string[]) =>
-  verbs.includes((args[0] ?? '').toLowerCase())
+const firstIs =
+  (...verbs: string[]) =>
+  (args: string[]) =>
+    verbs.includes((args[0] ?? '').toLowerCase())
 
 const GIT_READ = new Set([
-  'status', 'log', 'diff', 'show', 'rev-parse', 'ls-files', 'ls-remote', 'show-ref', 'describe',
-  'blame', 'cat-file', 'rev-list', 'shortlog'
+  'status',
+  'log',
+  'diff',
+  'show',
+  'rev-parse',
+  'ls-files',
+  'ls-remote',
+  'show-ref',
+  'describe',
+  'blame',
+  'cat-file',
+  'rev-list',
+  'shortlog'
 ])
 const GIT_WRITE = new Set([
-  'commit', 'checkout', 'switch', 'restore', 'reset', 'revert', 'merge', 'rebase', 'cherry-pick',
-  'apply', 'am', 'clean', 'mv', 'rm', 'push', 'pull', 'fetch', 'init', 'add', 'gc', 'prune',
-  'update-ref', 'symbolic-ref', 'submodule', 'filter-branch'
+  'commit',
+  'checkout',
+  'switch',
+  'restore',
+  'reset',
+  'revert',
+  'merge',
+  'rebase',
+  'cherry-pick',
+  'apply',
+  'am',
+  'clean',
+  'mv',
+  'rm',
+  'push',
+  'pull',
+  'fetch',
+  'init',
+  'add',
+  'gc',
+  'prune',
+  'update-ref',
+  'symbolic-ref',
+  'submodule',
+  'filter-branch'
 ])
 
 /** Les arguments de `git` une fois retirés les drapeaux globaux (`-C <dir>`, `-c k=v`, `--no-pager`). */
@@ -80,7 +115,20 @@ function isReadingGit(args: string[]): boolean {
 function isMutatingContainer(args: string[]): boolean {
   const flat = args.map((a) => a.toLowerCase())
   const verb = flat[0] === 'compose' ? (flat[1] ?? '') : (flat[0] ?? '')
-  return ['run', 'up', 'start', 'stop', 'restart', 'rm', 'rmi', 'kill', 'push', 'create', 'exec', 'cp'].includes(verb)
+  return [
+    'run',
+    'up',
+    'start',
+    'stop',
+    'restart',
+    'rm',
+    'rmi',
+    'kill',
+    'push',
+    'create',
+    'exec',
+    'cp'
+  ].includes(verb)
 }
 
 function isMutatingDotnet(args: string[]): boolean {
@@ -99,17 +147,47 @@ function isVerifyingScript(args: string[]): boolean {
 /** Verbes qui CHANGENT un état. `true` = toujours ; sinon un prédicat sur les arguments. */
 const MUTATING: Record<string, Rule> = {
   git: isMutatingGit,
-  mv: true, rm: true, cp: true, mkdir: true, rmdir: true, ren: true, move: true, del: true,
-  rd: true, touch: true, erase: true, copy: true, xcopy: true, robocopy: true, tee: true,
-  'rename-item': true, 'remove-item': true, 'new-item': true, 'copy-item': true, 'move-item': true,
-  'set-content': true, 'add-content': true, 'clear-content': true, 'out-file': true,
-  'expand-archive': true, 'compress-archive': true, 'new-itemproperty': true,
+  mv: true,
+  rm: true,
+  cp: true,
+  mkdir: true,
+  rmdir: true,
+  ren: true,
+  move: true,
+  del: true,
+  rd: true,
+  touch: true,
+  erase: true,
+  copy: true,
+  xcopy: true,
+  robocopy: true,
+  tee: true,
+  'rename-item': true,
+  'remove-item': true,
+  'new-item': true,
+  'copy-item': true,
+  'move-item': true,
+  'set-content': true,
+  'add-content': true,
+  'clear-content': true,
+  'out-file': true,
+  'expand-archive': true,
+  'compress-archive': true,
+  'new-itemproperty': true,
   'set-itemproperty': true,
   sed: (args) => args.some((a) => a === '-i' || a.startsWith('-i')),
   perl: (args) => args.some((a) => a.startsWith('-pi') || a === '-i'),
-  apply_patch: true, patch: true,
-  'restart-service': true, 'stop-service': true, 'start-service': true, 'set-service': true,
-  'stop-process': true, 'stop-computer': true, taskkill: true, kill: true, pkill: true,
+  apply_patch: true,
+  patch: true,
+  'restart-service': true,
+  'stop-service': true,
+  'start-service': true,
+  'set-service': true,
+  'stop-process': true,
+  'stop-computer': true,
+  taskkill: true,
+  kill: true,
+  pkill: true,
   sc: firstIs('start', 'stop', 'config', 'delete', 'create'),
   'sc.exe': firstIs('start', 'stop', 'config', 'delete', 'create'),
   systemctl: firstIs('start', 'stop', 'restart', 'reload', 'enable', 'disable'),
@@ -132,7 +210,12 @@ const MUTATING: Record<string, Rule> = {
 
 /** Verbes de VÉRIFICATION : un oracle qui échoue si le code est cassé. */
 const VERIFYING: Record<string, Rule> = {
-  vitest: true, jest: true, pytest: true, tsc: true, eslint: true, ctest: true,
+  vitest: true,
+  jest: true,
+  pytest: true,
+  tsc: true,
+  eslint: true,
+  ctest: true,
   npm: isVerifyingScript,
   'npm.cmd': isVerifyingScript,
   pnpm: isVerifyingScript,
@@ -152,14 +235,56 @@ const VERIFYING: Record<string, Rule> = {
  */
 const STATE_ORACLE: Record<string, Rule> = {
   git: isReadingGit,
-  'get-service': true, 'get-process': true, 'get-item': true, 'get-childitem': true,
-  'get-content': true, 'test-path': true, 'get-itemproperty': true,
+  'get-service': true,
+  'get-process': true,
+  'get-item': true,
+  'get-childitem': true,
+  'get-content': true,
+  'test-path': true,
+  'get-itemproperty': true,
   sc: firstIs('query'),
   'sc.exe': firstIs('query'),
   systemctl: firstIs('status', 'is-active', 'is-enabled'),
   docker: firstIs('ps', 'inspect', 'images', 'logs'),
   podman: firstIs('ps', 'inspect', 'images', 'logs'),
   dotnet: (args) => args.slice(0, 3).join(' ').toLowerCase() === 'ef migrations list'
+}
+
+function hasOption(args: string[], ...names: string[]): boolean {
+  return args.some((arg) =>
+    names.some((name) => arg === name || arg.toLowerCase().startsWith(`${name.toLowerCase()}=`))
+  )
+}
+
+function isStrictlyReadingRipgrep(args: string[]): boolean {
+  return !hasOption(args, '--pre', '--pre-glob', '--generate')
+}
+
+/**
+ * Lectures locales admises pendant une séquence d'attestation. Cette liste est volontairement
+ * fermée : une commande inconnue (`python -c`, `node -e`, script maison…) peut écrire même si son
+ * nom ne ressemble pas à un mutateur. Les redirections sont rejetées par `tokensOf`.
+ */
+const STRICTLY_READ_ONLY: Record<string, Rule> = {
+  rg: isStrictlyReadingRipgrep,
+  grep: true,
+  findstr: true,
+  'select-string': true,
+  cat: true,
+  type: true,
+  head: true,
+  tail: true,
+  wc: true,
+  ls: true,
+  dir: true,
+  pwd: true,
+  'get-content': true,
+  'get-childitem': true,
+  'get-item': true,
+  'get-location': true,
+  'get-filehash': true,
+  'test-path': true,
+  'measure-object': true
 }
 
 /** Découpe une commande composée en segments réellement exécutés. */
@@ -176,7 +301,10 @@ function tokensOf(segment: string): string[] {
   for (let i = 0; i < 3; i += 1) {
     const inline = current.match(LAUNCHER_WITH_INLINE)
     if (inline) {
-      current = inline[1].trim().replace(/^["'](.*)["']$/s, '$1').trim()
+      current = inline[1]
+        .trim()
+        .replace(/^["'](.*)["']$/s, '$1')
+        .trim()
       continue
     }
     const stripped = current.replace(LAUNCHER, '')
@@ -234,6 +362,25 @@ export function isShellMutation(command: string | undefined): boolean {
 
 export function isVerificationCommand(command: string | undefined): boolean {
   return classifyShellCommand(command) === 'verification'
+}
+
+/** Vrai seulement si CHAQUE segment est une lecture explicitement connue et sans redirection. */
+export function isStrictlyReadOnlyCommand(command: string | undefined): boolean {
+  if (!command) return false
+  // Une lecture n'est fiable que sous forme d'une commande simple. Ces caractères ouvrent une
+  // seconde évaluation dans PowerShell/cmd/POSIX (substitution, pipeline, bloc ou redirection).
+  if (/[\r\n`$%(){}<>;&|^!]/u.test(command)) return false
+  // Le mode strict ne dépile AUCUN lanceur : chacun ajoute une seconde sémantique d'évaluation et
+  // peut cacher un environnement ou une commande inline. Seule une lecture directe est admissible.
+  if (
+    /^\s*(?:sudo|command|time|nice|env|set|pwsh|powershell|pwsh\.exe|powershell\.exe|bash|sh|zsh|cmd|cmd\.exe)(?:\s|$)/iu.test(
+      command
+    )
+  )
+    return false
+  if (/^\s*[\w.]+\s*=/u.test(command)) return false
+  const segments = segmentsOf(command).map(tokensOf)
+  return segments.length > 0 && segments.every((tokens) => matches(STRICTLY_READ_ONLY, tokens))
 }
 
 /** Un oracle d'ÉTAT : vrai si un segment constate un état, et qu'aucun ne mute. */

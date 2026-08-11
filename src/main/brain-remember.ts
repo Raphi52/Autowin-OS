@@ -10,7 +10,8 @@
  * DESTINATION : le Brain partagé, pas un dossier local — choix de l'utilisateur. Conséquences assumées :
  *  - ce qu'on retient sert à TOUTE la boîte, et remplit un corpus Autowin qui ne pesait que 0,19 % de
  *    l'index (15 342 chunks, dont 99 % de doc RIG — mesuré le 2026-07-29) ;
- *  - un candidat va dans `inbox/`, JAMAIS dans `knowledge/` : la promotion reste HUMAINE. Le serveur
+ *  - un candidat va d'abord dans `inbox/`, JAMAIS directement dans `knowledge/` : une promotion séparée
+ *    peut ensuite être décidée par l'humain ou par la politique causale `OutcomeLearningSupervisor`. Le serveur
  *    l'impose, ce module ne fait que l'annoncer honnêtement à l'agent ;
  *  - ce n'est PAS relu au tour suivant. L'index se reconstruit par générations, donc un fait retenu
  *    aujourd'hui devient trouvable plus tard. C'est la différence de mécanique avec claude.exe, et elle
@@ -286,6 +287,35 @@ export function decideRemember(args: Record<string, unknown>): RememberDecision 
     }
   }
 
+  if (
+    (args.learningOutcome === 'success' || args.learningOutcome === 'failure') &&
+    /(?:ignore|oublie|contourne).{0,40}(?:instruction|prompt|règle)|(?:system|developer)\s+prompt|<\/?(?:script|tool_call)|\btu\s+es\s+(?:maintenant|désormais)\b|\[(?:BEGIN|END)\s+AMITEL\s+BRAIN/iu.test(
+      rawBody
+    )
+  ) {
+    return {
+      allowed: false,
+      reason:
+        'leçon refusée — directive adressée au futur modèle détectée dans une donnée non fiable'
+    }
+  }
+
+  if (args.learningOutcome === 'failure') {
+    const completeFailure = [
+      /\bTentative\s*:/iu,
+      /\bSymptôme\s*:/iu,
+      /\bCause\s*\((?:prouvée|hypothèse)\)\s*:/iu,
+      /\bProchaine stratégie\s*:/iu
+    ].every((pattern) => pattern.test(rawBody))
+    if (!completeFailure) {
+      return {
+        allowed: false,
+        reason:
+          'leçon d’échec incomplète — distinguer Tentative, Symptôme, Cause (prouvée|hypothèse) et Prochaine stratégie'
+      }
+    }
+  }
+
   const rawType = text(args.type).toLowerCase()
   const type = (REMEMBER_TYPES as readonly string[]).includes(rawType)
     ? (rawType as RememberType)
@@ -342,12 +372,14 @@ export function decideRemember(args: Record<string, unknown>): RememberDecision 
 }
 
 export interface RememberOutcome {
-  /** Le candidat a été DÉPOSÉ. Ne dit pas qu'il est promu : la promotion est humaine. */
+  /** Le candidat a été DÉPOSÉ. Ne dit pas qu'il est promu : la promotion est une étape séparée. */
   stored: boolean
   /** Ce qui s'est passé, à afficher tel quel. */
   detail: string
   /** Nom du fichier candidat, quand le serveur le rend. */
   note?: string
+  /** Identité relative signée, utilisable par une promotion no-clobber sans reconstruire un chemin. */
+  candidateId?: string
   /**
    * L'état du dépôt est INDÉTERMINÉ (abort, réponse illisible) : ni succès, ni refus.
    * Le distinguer d'un refus est ce qui empêche un agent de retenter et de créer un doublon — or le
@@ -358,7 +390,16 @@ export interface RememberOutcome {
    * Ce qui a réellement été validé et envoyé. Présent dès que la demande est recevable, même si le dépôt
    * a échoué : c'est ce qui permet de retenir le fait DANS le fil quand le Brain ne répond pas.
    */
-  fact?: { title: string; body: string; scope: string; truncated: boolean }
+  fact?: {
+    title: string
+    body: string
+    type: RememberType
+    scope: string
+    source: string
+    tags: string[]
+    confidence: 'low' | 'medium' | 'high'
+    truncated: boolean
+  }
 }
 
 /**
@@ -493,7 +534,11 @@ export async function rememberFact(
     fact: {
       title: decision.title,
       body: decision.body,
+      type: decision.type,
       scope: decision.scope,
+      source: decision.source,
+      tags: decision.tags,
+      confidence: decision.confidence,
       truncated: decision.truncated
     }
   }
@@ -634,11 +679,13 @@ async function performDepositCandidate(
         }
       }
       const note = verifiedContext.split(/[\\/]/).pop() ?? verifiedContext
+      const candidateId = signedInboxCandidateId(verifiedContext)
       recordDepositState(deposited, decision, note, deps.workspace)
       return {
         allowed: true,
         stored: true,
         note,
+        ...(candidateId ? { candidateId } : {}),
         detail:
           'retenu comme CANDIDAT dans la boîte de réception du Brain — un humain le promeut, et il ne sera relisible qu’après réindexation' +
           (decision.truncated
@@ -676,4 +723,14 @@ async function performDepositCandidate(
   } finally {
     clearTimeout(timer)
   }
+}
+
+function signedInboxCandidateId(context: string): string | undefined {
+  const parts = context.replace(/\\/gu, '/').split('/').filter(Boolean)
+  const inbox = parts.lastIndexOf('inbox')
+  if (inbox < 0 || inbox !== parts.length - 2) return undefined
+  const basename = parts.at(-1)
+  if (!basename || basename === '.' || basename === '..' || basename.includes('\0'))
+    return undefined
+  return `inbox/${basename}`
 }

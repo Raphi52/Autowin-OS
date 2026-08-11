@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import './BehaviourView.css'
 import { ModuleHeader } from './ModuleHeader'
 
@@ -52,6 +52,15 @@ interface BehaviourComposition {
     modelSelection: InfluencerField[]
   }
 }
+type OutcomeLearningMode = 'off' | 'shadow' | 'inbox' | 'auto'
+interface LearningCurationEvent {
+  kind: 'curation'
+  value: {
+    eventId: string
+    action: 'retract' | 'restore' | 'supersede'
+    knowledgeId: string
+  }
+}
 
 function Field({ field }: { field: InfluencerField }): React.JSX.Element {
   return (
@@ -101,22 +110,82 @@ export function BehaviourView(): React.JSX.Element {
   const [composition, setComposition] = useState<BehaviourComposition | null>(null)
   const [path, setPath] = useState<'cockpit' | 'orchestrated' | 'direct'>('cockpit')
   const [error, setError] = useState('')
+  // Le choix de workspace ouvre un dialogue natif : son échec ne doit pas partir en promesse
+  // non gérée, et son attente doit être VISIBLE.
+  const [choosing, setChoosing] = useState(false)
+  const [workspace, setWorkspace] = useState<string | undefined>(undefined)
+  const [learningMode, setLearningMode] = useState<OutcomeLearningMode>()
+  const [learningEvents, setLearningEvents] = useState(0)
+  const [learningAudit, setLearningAudit] = useState<
+    Array<{ kind: string; value: Record<string, unknown> }>
+  >([])
+  const [learningCurations, setLearningCurations] = useState<LearningCurationEvent[]>([])
+  const [learningCurationTotal, setLearningCurationTotal] = useState(0)
 
-  async function loadComposition(workspace?: string): Promise<void> {
+  const loadComposition = useCallback(async (next?: string): Promise<void> => {
     setError('')
     try {
-      setComposition((await window.api.behaviourComposition(workspace)) as BehaviourComposition)
+      setComposition((await window.api.behaviourComposition(next)) as BehaviourComposition)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     }
-  }
+  }, [])
+
+  const loadOutcomeLearning = useCallback(async (): Promise<void> => {
+    const load = window.api?.outcomeLearning
+    if (typeof load !== 'function') return
+    const state = await load()
+    const page =
+      typeof window.api.outcomeLearningCurations === 'function'
+        ? await window.api.outcomeLearningCurations(0, 20)
+        : undefined
+    setLearningMode(state.mode)
+    setLearningEvents(state.events.length)
+    setLearningAudit(state.events)
+    const curations = page
+      ? (page.events as LearningCurationEvent[])
+      : state.events.filter((event): event is LearningCurationEvent => event.kind === 'curation')
+    setLearningCurations(curations)
+    setLearningCurationTotal(page?.total ?? curations.length)
+  }, [])
+
+  const loadMoreCurations = useCallback(async (): Promise<void> => {
+    if (typeof window.api.outcomeLearningCurations !== 'function') return
+    const page = await window.api.outcomeLearningCurations(learningCurations.length, 20)
+    setLearningCurations((current) => [
+      ...current,
+      ...(page.events as LearningCurationEvent[]).filter(
+        (event) => !current.some((known) => known.value.eventId === event.value.eventId)
+      )
+    ])
+    setLearningCurationTotal(page.total)
+  }, [learningCurations.length])
 
   useEffect(() => {
-    window.api
-      .behaviourComposition()
-      .then((result) => setComposition(result as BehaviourComposition))
-      .catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)))
-  }, [])
+    queueMicrotask(() => void loadComposition(workspace))
+  }, [loadComposition, workspace])
+
+  useEffect(() => {
+    void loadOutcomeLearning().catch((reason) =>
+      setError(reason instanceof Error ? reason.message : String(reason))
+    )
+  }, [loadOutcomeLearning])
+
+  async function chooseWorkspace(): Promise<void> {
+    setChoosing(true)
+    setError('')
+    try {
+      const chosen = await window.api.chooseBehaviourWorkspace()
+      if (chosen) {
+        setWorkspace(chosen)
+        await loadComposition(chosen)
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setChoosing(false)
+    }
+  }
 
   const orch = composition?.orchestrated
   const direct = composition?.direct
@@ -133,17 +202,87 @@ export function BehaviourView(): React.JSX.Element {
           <span title={composition?.inspection?.workspace}>
             Workspace : {composition?.inspection?.workspace ?? 'chargement…'}
           </span>
-          <button
-            type="button"
-            onClick={() =>
-              void window.api.chooseBehaviourWorkspace().then((workspace) => {
-                if (workspace) void loadComposition(workspace)
-              })
-            }
-          >
-            Choisir un workspace
+          <button type="button" disabled={choosing} onClick={() => void chooseWorkspace()}>
+            {choosing ? 'Sélection…' : 'Choisir un workspace'}
           </button>
         </div>
+        {learningMode && (
+          <div className="behaviour-workspace" aria-label="Apprentissage Brain des runs">
+            <span>
+              Brain des runs : {learningEvents} événements audités ·{' '}
+              {learningMode === 'off' ? 'arrêté' : learningMode}
+            </span>
+            <label>
+              Mode{' '}
+              <select
+                aria-label="Mode d’apprentissage Brain"
+                value={learningMode}
+                onChange={(event) => {
+                  const mode = event.currentTarget.value as OutcomeLearningMode
+                  void window.api
+                    .setOutcomeLearningMode(mode)
+                    .then((state) => setLearningMode(state.mode))
+                    .catch((reason) =>
+                      setError(reason instanceof Error ? reason.message : String(reason))
+                    )
+                }}
+              >
+                <option value="auto">Auto</option>
+                <option value="inbox">Inbox uniquement</option>
+                <option value="shadow">Simulation</option>
+                <option value="off">Off · kill switch</option>
+              </select>
+            </label>
+            {learningCurations.map((curation) => (
+              <button
+                type="button"
+                key={curation.value.eventId}
+                onClick={() => {
+                  void window.api
+                    .undoOutcomeLearningCuration(curation.value.eventId)
+                    .then(loadOutcomeLearning)
+                    .catch((reason) =>
+                      setError(reason instanceof Error ? reason.message : String(reason))
+                    )
+                }}
+              >
+                Annuler {curation.value.action} · {curation.value.knowledgeId}
+              </button>
+            ))}
+            {learningCurations.length < learningCurationTotal && (
+              <button
+                type="button"
+                onClick={() =>
+                  void loadMoreCurations().catch((reason) =>
+                    setError(reason instanceof Error ? reason.message : String(reason))
+                  )
+                }
+              >
+                Afficher plus de curations
+              </button>
+            )}
+            <details>
+              <summary>Journal détaillé · {learningAudit.length} plus récents</summary>
+              <ol aria-label="Journal outcome-learning détaillé">
+                {learningAudit.map((event, index) => (
+                  <li key={String(event.value.eventId ?? `${event.kind}-${index}`)}>
+                    <strong>{event.kind}</strong>{' '}
+                    {String(
+                      event.value.route ??
+                        event.value.action ??
+                        event.value.status ??
+                        event.value.title ??
+                        'enregistré'
+                    )}
+                    {Array.isArray(event.value.reasons)
+                      ? ` · ${event.value.reasons.join(', ')}`
+                      : ''}
+                  </li>
+                ))}
+              </ol>
+            </details>
+          </div>
+        )}
         <div className="behaviour-path-toggle" role="tablist" aria-label="Chemin de chat">
           <button
             type="button"
@@ -175,7 +314,14 @@ export function BehaviourView(): React.JSX.Element {
         </div>
       </header>
 
-      {error && <div className="behaviour-error">{error}</div>}
+      {error && (
+        <div className="behaviour-error">
+          <p role="alert">{error}</p>
+          <button type="button" onClick={() => void loadComposition(workspace)}>
+            Réessayer
+          </button>
+        </div>
+      )}
       {!composition && !error && <p className="behaviour-empty">Chargement de la composition…</p>}
       {composition?.inspection && (
         <section className="behaviour-inspection" aria-label="Instructions du workspace inspecté">
@@ -187,7 +333,9 @@ export function BehaviourView(): React.JSX.Element {
               {composition.inspection.files.map((file) => (
                 <li key={file.id} data-active={file.active ? 'true' : 'false'}>
                   <span>{file.label}</span>
-                  <small>{file.engine} · {file.state} · {file.reason}</small>
+                  <small>
+                    {file.engine} · {file.state} · {file.reason}
+                  </small>
                   {file.excerpt && <pre>{file.excerpt}</pre>}
                 </li>
               ))}

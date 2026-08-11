@@ -30,6 +30,7 @@ import { dirname, join } from 'node:path'
 import type { ProviderArtifactCandidate } from '../../shared/artifacts'
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { addedLineFingerprintsFromUnifiedDiff } from '../exact-line-fingerprint'
+import { attestIsolatedVerificationEvidence } from './causal-verification-evidence'
 
 /**
  * Adaptateur voie Codex — abonnement ChatGPT via OAuth device-code (cf. codex-auth).
@@ -367,9 +368,10 @@ async function runCodexExec(
       cwd: spec.cwd,
       runId: spawnToken,
       stdin: prompt,
-      onJournalPrepared: execution.onJournal
-        ? (journalPath) => execution.onJournal?.(spawnToken, journalPath)
-        : undefined
+      onJournalPrepared:
+        (execution.onJournal ?? opts.onJournal)
+          ? (journalPath) => (execution.onJournal ?? opts.onJournal)?.(spawnToken, journalPath)
+          : undefined
     })
     const child = run.child
     const childPid = child.pid
@@ -505,6 +507,11 @@ async function runCodexExec(
       if (mutationBefore) {
         await appendWorkspaceMutationEvidence(mutationBefore, spec.cwd, executionEvidence)
       }
+      attestIsolatedVerificationEvidence(
+        executionEvidence,
+        execution.causallyIsolated === true,
+        execution.learningOracles
+      )
       const artifacts = artifactsFromExecutionEvidence(executionEvidence, {
         provider: 'codex',
         model,

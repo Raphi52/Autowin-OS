@@ -88,13 +88,19 @@ export function NodePanel({
   file,
   fileErr,
   linkedNodes,
-  onNavigate
+  onNavigate,
+  onRetry,
+  onRetract,
+  onSupersede
 }: {
   node: GraphNode
   file: { path: string; content: string } | null
   fileErr: string
   linkedNodes: Array<{ node: GraphNode; direction: 'incoming' | 'outgoing'; relation?: string }>
   onNavigate: (node: GraphNode) => void
+  onRetry?: () => void
+  onRetract?: () => void
+  onSupersede?: () => void
 }): React.JSX.Element {
   return (
     <div className="node-panel">
@@ -120,7 +126,29 @@ export function NodePanel({
         <span className="node-panel__theme">{nodeThemeIds(node).join(' · ')}</span>
         <h2>{node.label}</h2>
         <div className="node-panel__path">{node.file ?? 'Aucun fichier associé'}</div>
-        {fileErr && <div className="node-panel__error">{fileErr}</div>}
+        {onRetract && (
+          <div>
+            <button type="button" className="node-panel__retry" onClick={onRetract}>
+              Retirer du Brain canonique
+            </button>
+            {onSupersede && (
+              <button type="button" className="node-panel__retry" onClick={onSupersede}>
+                Remplacer par une autre fiche
+              </button>
+            )}
+          </div>
+        )}
+        {fileErr && (
+          <div className="node-panel__error" role="alert">
+            <span>{fileErr}</span>
+            {/* La fiche ET son voisinage passent par le même chargement : un seul réessai les couvre. */}
+            {onRetry && (
+              <button type="button" className="node-panel__retry" onClick={onRetry}>
+                Réessayer
+              </button>
+            )}
+          </div>
+        )}
         {!file && !fileErr && <div className="node-panel__loading">Chargement du contenu…</div>}
         {file &&
           (/\.md$/i.test(file.path) ? (

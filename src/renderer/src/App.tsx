@@ -111,6 +111,12 @@ export function MainApp(): React.JSX.Element {
   const [observatoryFocus, setObservatoryFocus] = useState<ObservatoryFocus | null>(null)
   const [agentStudioSection, setAgentStudioSection] = useState<AgentStudioSection>('topology')
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('capabilities')
+  // L'alerte preflight vit dans la NAV principale : un prérequis KO ne doit pas rester caché
+  // derrière deux clics dans l'onglet Diagnostic.
+  const [preflightAlert, setPreflightAlert] = useState(false)
+  // Une section choisie par l'humain (ou par une navigation ciblée) fait autorité : le défaut
+  // « Diagnostic » ne s'applique que tant que personne n'a tranché.
+  const settingsSectionPinned = useRef(false)
   const [navigationOrigin] = useState(() => `renderer-${globalThis.crypto.randomUUID()}`)
   const navigationGeneration = useRef(0)
 
@@ -203,12 +209,36 @@ export function MainApp(): React.JSX.Element {
         setAgentStudioSection(location.section as AgentStudioSection)
       }
       if (location.destination === 'settings' && location.section) {
+        settingsSectionPinned.current = true
         setSettingsSection(location.section as SettingsSection)
       }
       activateTab(location.destination)
     },
     [activateTab]
   )
+
+  useEffect(() => {
+    let alive = true
+    const apply = (result: { ok?: boolean; checks?: Array<{ ok: boolean }> } | null): void => {
+      if (!alive || !result) return
+      const ko = result.ok === false || (result.checks ?? []).some((check) => !check.ok)
+      setPreflightAlert(ko)
+      // Point d'entrée honnête : Settings s'ouvre sur le Diagnostic tant que quelque chose cloche.
+      if (!settingsSectionPinned.current) setSettingsSection(ko ? 'preflight' : 'capabilities')
+    }
+    void (async () => {
+      try {
+        apply((await window.api?.getPreflight?.()) as never)
+      } catch {
+        /* l'absence de diagnostic ne casse pas le shell. */
+      }
+    })()
+    const off = window.api?.onPreflight?.((result) => apply(result as never))
+    return () => {
+      alive = false
+      off?.()
+    }
+  }, [])
 
   const navigate = useCallback(
     (nextTab: Tab): void => {
@@ -405,6 +435,16 @@ export function MainApp(): React.JSX.Element {
                   )}
                 </span>
                 <span>{it.label}</span>
+                {it.id === 'settings' && preflightAlert && (
+                  <span
+                    className="domain-badge-alert nav-alert-badge"
+                    data-testid="nav-settings-alert"
+                    title="Un prérequis est en échec"
+                    aria-label="Un prérequis est en échec"
+                  >
+                    !
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -468,7 +508,14 @@ export function MainApp(): React.JSX.Element {
             <SettingsView
               active={tab === 'settings'}
               section={settingsSection}
-              onSectionChange={setSettingsSection}
+              onSectionChange={(next) => {
+                settingsSectionPinned.current = true
+                setSettingsSection(next)
+              }}
+              onOpenRouter={() => {
+                setAgentStudioSection('routing')
+                navigate('agent-studio')
+              }}
             />
           </div>
         )}

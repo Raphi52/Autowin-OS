@@ -13,6 +13,10 @@ export interface VerifiedBrainPayload {
   context: string
   navigation?: unknown
   corpus?: readonly string[]
+  request?: {
+    query: string
+    traceId: string
+  }
   structuredContext?: {
     preamble: string
     sources: ReadonlyArray<{ path: string; content: string }>
@@ -34,7 +38,6 @@ type BrainResponseLike = {
     }
   } | null
   text?: () => Promise<string>
-  json?: () => Promise<unknown>
 }
 
 /** Chiffre le POST pour qu'une reprise de port entre challenge et requête n'expose aucun prompt. */
@@ -77,7 +80,10 @@ function parseCorpusAttestation(value: unknown): readonly string[] | undefined {
       !entry.startsWith('knowledge/') ||
       entry.includes('\\') ||
       entry.includes('//') ||
-      entry.replace(/\/$/, '').split('/').some((part) => !part || part === '.' || part === '..')
+      entry
+        .replace(/\/$/, '')
+        .split('/')
+        .some((part) => !part || part === '.' || part === '..')
     ) {
       throw new Error('Attestation de corpus Amitel Brain invalide')
     }
@@ -114,17 +120,37 @@ function parseStructuredContext(
     }
     return { path: source.path, content: source.content }
   })
-  const reconstructed = [structured.preamble, ...sources.map((source) => source.content)]
-    .filter(Boolean)
-    .join('\n\n---\n\n')
+  const reconstructed = renderStructuredBrainContext({ preamble: structured.preamble, sources })
   assertContextBound(reconstructed)
   return { preamble: structured.preamble, sources }
 }
 
-function renderStructuredContext(
+function parseRequestBinding(value: unknown): VerifiedBrainPayload['request'] | undefined {
+  if (value === undefined) return undefined
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Liaison de requête Amitel Brain invalide')
+  }
+  const request = value as Record<string, unknown>
+  if (
+    typeof request.query !== 'string' ||
+    !request.query ||
+    request.query !== request.query.trim() ||
+    Array.from(request.query).length > 8000 ||
+    typeof request.trace_id !== 'string' ||
+    !request.trace_id ||
+    Array.from(request.trace_id).length > 128
+  ) {
+    throw new Error('Liaison de requête Amitel Brain invalide')
+  }
+  return { query: request.query, traceId: request.trace_id }
+}
+
+export function renderStructuredBrainContext(
   structured: NonNullable<VerifiedBrainPayload['structuredContext']>
 ): string {
-  return structured.preamble + structured.sources.map((source) => source.content).join('\n\n---\n\n')
+  return [structured.preamble, ...structured.sources.map((source) => source.content)]
+    .filter(Boolean)
+    .join('\n\n---\n\n')
 }
 
 /** Lit une réponse JSON avec une borne avant allocation si Content-Length est disponible. */
@@ -171,18 +197,6 @@ export async function readSignedBrainPayload(
       decoded = JSON.parse(raw)
     } catch {
       throw new Error('Réponse Amitel Brain invalide')
-    }
-  } else if (typeof response.json === 'function') {
-    // Repli réservé aux doubles de test historiques. Les Response natives passent toujours par text().
-    decoded = await response.json()
-    let encoded: string
-    try {
-      encoded = JSON.stringify(decoded)
-    } catch {
-      throw new Error('Réponse Amitel Brain invalide')
-    }
-    if (Buffer.byteLength(encoded, 'utf8') > MAX_SIGNED_BRAIN_RESPONSE_BYTES) {
-      throw new Error('Réponse Amitel Brain trop volumineuse')
     }
   } else {
     throw new Error('Réponse Amitel Brain invalide')
@@ -246,13 +260,15 @@ export function verifySignedBrainPayload(
   if (typeof body.context !== 'string') throw new Error('Reponse Amitel Brain invalide')
   assertContextBound(body.context)
   const structuredContext = parseStructuredContext(body.structuredContext)
-  if (structuredContext && renderStructuredContext(structuredContext) !== body.context) {
+  const request = parseRequestBinding(body.request)
+  if (structuredContext && renderStructuredBrainContext(structuredContext) !== body.context) {
     throw new Error('Les frontières du contexte Amitel Brain sont incohérentes')
   }
   return {
     context: body.context,
     ...('navigation' in body ? { navigation: body.navigation } : {}),
     ...(body.corpus !== undefined ? { corpus: parseCorpusAttestation(body.corpus) } : {}),
+    ...(request ? { request } : {}),
     ...(structuredContext ? { structuredContext } : {})
   }
 }

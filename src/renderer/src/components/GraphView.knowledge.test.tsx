@@ -34,6 +34,20 @@ const flush = (): Promise<void> =>
     for (let index = 0; index < 12; index += 1) await Promise.resolve()
   })
 
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason: unknown) => void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (reason: unknown) => void
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done
+    reject = fail
+  })
+  return { promise, resolve, reject }
+}
+
 function envelope(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     status: 'found',
@@ -177,6 +191,324 @@ describe('GraphView — les 4 états de retrieval cessent d’être aplatis (ite
     expect(container.textContent).toContain('Fiche A')
   })
 
+  it('ne refusionne ni fiche ni thème hors workspace depuis le preview global', async () => {
+    installApi({
+      loadBrainGraphPreview: vi.fn().mockResolvedValue({
+        nodes: [
+          {
+            id: 'knowledge/domain/rigapplication-documentation/proc',
+            label: 'Procédure RIG',
+            file: 'C:/brain/knowledge/domain/rigapplication-documentation/proc.md',
+            themes: ['rig']
+          },
+          {
+            id: 'knowledge/projects/autowin-os/guide',
+            label: 'Guide Autowin',
+            file: 'C:/brain/knowledge/projects/autowin-os/guide.md',
+            themes: ['autowin']
+          }
+        ],
+        links: []
+      }),
+      searchBrain: vi.fn().mockResolvedValue(
+        envelope({
+          query: 'rig',
+          results: [
+            {
+              id: 'knowledge/projects/autowin-os/guide',
+              label: 'Guide Autowin',
+              file: 'C:/brain/knowledge/projects/autowin-os/guide.md',
+              themes: ['autowin'],
+              score: 3,
+              relations: []
+            }
+          ]
+        })
+      )
+    })
+    await mount()
+    await search('rig')
+
+    const searchResults = container.querySelector('[aria-label="Fiches trouvées"]')
+    expect(searchResults?.textContent).toContain('Guide Autowin')
+    expect(searchResults?.textContent).not.toContain('Procédure RIG')
+    expect(container.querySelector('[data-theme-id="rig"]')).toBeNull()
+  })
+
+  it('un clic sur un thème scopé ne réintroduit pas les fiches du preview global', async () => {
+    const loadBrainThemeNodes = vi.fn().mockResolvedValue([
+      {
+        id: 'knowledge/domain/autowin-os-guide',
+        label: 'Guide Autowin',
+        file: 'C:/brain/knowledge/domain/autowin-os-guide.md',
+        themes: ['theme/architecture'],
+        group: 0
+      }
+    ])
+    installApi({
+      loadBrainGraphPreview: vi.fn().mockResolvedValue({
+        nodes: [
+          {
+            id: 'knowledge/domain/rigapplication-documentation/proc',
+            label: 'Procédure RIG',
+            file: 'C:/brain/knowledge/domain/rigapplication-documentation/proc.md',
+            themes: ['theme/architecture']
+          }
+        ],
+        links: []
+      }),
+      loadBrainThemeNodes,
+      searchBrain: vi.fn().mockResolvedValue(
+        envelope({
+          query: 'architecture',
+          results: [
+            {
+              id: 'knowledge/domain/autowin-os-guide',
+              label: 'Guide Autowin',
+              file: 'C:/brain/knowledge/domain/autowin-os-guide.md',
+              themes: ['theme/architecture'],
+              score: 3,
+              relations: []
+            }
+          ]
+        })
+      )
+    })
+    await mount()
+    await search('architecture')
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-theme-id="theme/architecture"]')?.click()
+    )
+    await flush()
+
+    expect(loadBrainThemeNodes).toHaveBeenCalledWith('C:\\brain', ['theme/architecture'])
+    const panel = container.querySelector(
+      '[aria-label="Nœuds des thèmes actifs par ordre alphabétique"]'
+    )
+    expect(panel?.textContent).toContain('Guide Autowin')
+    expect(panel?.textContent).not.toContain('Procédure RIG')
+  })
+
+  it('assainit une erreur IPC de thème et Réessayer relance réellement ce chargement', async () => {
+    const loadBrainThemeNodes = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error("Error invoking remote method 'os:loadBrainThemeNodes': Error: EIO")
+      )
+      .mockResolvedValueOnce([
+        {
+          id: 'knowledge/domain/autowin-os-guide',
+          label: 'Guide Autowin',
+          file: 'C:/brain/knowledge/domain/autowin-os-guide.md',
+          themes: ['theme/architecture'],
+          group: 0
+        }
+      ])
+    installApi({
+      loadBrainThemes: vi
+        .fn()
+        .mockResolvedValue([{ id: 'theme/architecture', label: 'Architecture', count: 1 }]),
+      loadBrainThemeNodes
+    })
+    await mount()
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-theme-id="theme/architecture"]')?.click()
+    )
+    await flush()
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'Impossible de charger les notes du thème.'
+    )
+    expect(container.textContent).not.toContain('Error invoking remote method')
+    const retry = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      button.textContent?.includes('Réessayer')
+    )
+    await act(async () => retry?.click())
+    await flush()
+
+    expect(loadBrainThemeNodes).toHaveBeenCalledTimes(2)
+    expect(
+      container.querySelector('[aria-label="Nœuds des thèmes actifs par ordre alphabétique"]')
+        ?.textContent
+    ).toContain('Guide Autowin')
+  })
+
+  it("l'ouverture d'un résultat scopé conserve un voisinage sans fiche RIG", async () => {
+    const loadBrainNeighborhood = vi.fn().mockResolvedValue({
+      nodes: [
+        {
+          id: 'knowledge/domain/autowin-os-guide',
+          label: 'Guide Autowin',
+          file: 'C:/brain/knowledge/domain/autowin-os-guide.md',
+          themes: ['theme/architecture'],
+          group: 0
+        }
+      ],
+      links: []
+    })
+    installApi({
+      loadBrainNeighborhood,
+      searchBrain: vi.fn().mockResolvedValue(
+        envelope({
+          results: [
+            {
+              id: 'knowledge/domain/autowin-os-guide',
+              label: 'Guide Autowin',
+              file: 'C:/brain/knowledge/domain/autowin-os-guide.md',
+              themes: ['theme/architecture'],
+              score: 4,
+              relations: []
+            }
+          ]
+        })
+      ),
+      readNodeFile: vi.fn().mockResolvedValue({
+        path: 'C:/brain/knowledge/domain/autowin-os-guide.md',
+        content: '# Guide Autowin\n'
+      })
+    })
+    await mount()
+    await search('promotion')
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('.node-search-result')?.click()
+    )
+    await flush()
+
+    expect(loadBrainNeighborhood).toHaveBeenCalledWith(
+      'C:\\brain',
+      'knowledge/domain/autowin-os-guide'
+    )
+    expect(container.textContent).toContain('Guide Autowin')
+    expect(container.textContent).not.toContain('Procédure RIG')
+  })
+
+  it('assainit une erreur IPC de voisinage', async () => {
+    installApi({
+      loadBrainNeighborhood: vi
+        .fn()
+        .mockRejectedValue(
+          new Error("Error invoking remote method 'os:loadBrainNeighborhood': Error: EIO")
+        ),
+      readNodeFile: vi.fn().mockResolvedValue({ path: 'C:/brain/knowledge/a.md', content: '# A' })
+    })
+    await mount()
+    await search('promotion')
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('.node-search-result')?.click()
+    )
+    await flush()
+
+    expect(container.textContent).toContain('Impossible de charger le voisinage.')
+    expect(container.textContent).not.toContain('Error invoking remote method')
+  })
+
+  it('assainit une erreur IPC de lecture de fiche', async () => {
+    installApi({
+      loadBrainNeighborhood: vi.fn().mockResolvedValue({ nodes: [], links: [] }),
+      readNodeFile: vi
+        .fn()
+        .mockRejectedValue(new Error("Error invoking remote method 'os:readNodeFile': Error: EIO"))
+    })
+    await mount()
+    await search('promotion')
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('.node-search-result')?.click()
+    )
+    await flush()
+
+    expect(container.textContent).toContain('Impossible de lire la fiche.')
+    expect(container.textContent).not.toContain('Error invoking remote method')
+  })
+
+  it('conserve le catalogue de thèmes scopé avant recherche et après effacement', async () => {
+    installApi({
+      loadBrainGraphPreview: vi.fn().mockResolvedValue({
+        nodes: [
+          {
+            id: 'knowledge/domain/rigapplication-documentation/proc',
+            label: 'Procédure RIG',
+            file: 'C:/brain/knowledge/domain/rigapplication-documentation/proc.md',
+            themes: ['theme/rig']
+          }
+        ],
+        links: []
+      }),
+      loadBrainThemes: vi.fn().mockResolvedValue([
+        { id: 'theme/autowin-os', label: 'Autowin OS', count: 2 },
+        { id: 'theme/architecture', label: 'Architecture', count: 1 }
+      ]),
+      searchBrain: vi.fn().mockResolvedValue(
+        envelope({
+          query: 'architecture',
+          results: [
+            {
+              id: 'knowledge/domain/autowin-os-guide',
+              label: 'Guide Autowin',
+              file: 'C:/brain/knowledge/domain/autowin-os-guide.md',
+              themes: ['theme/architecture'],
+              score: 4,
+              relations: []
+            }
+          ]
+        })
+      )
+    })
+    await mount()
+
+    expect(container.querySelector('[data-theme-id="theme/autowin-os"]')).not.toBeNull()
+    expect(container.querySelector('[data-theme-id="theme/rig"]')).toBeNull()
+    await search('architecture')
+    await search('')
+    expect(container.querySelector('[data-theme-id="theme/autowin-os"]')).not.toBeNull()
+    expect(container.querySelector('[data-theme-id="theme/rig"]')).toBeNull()
+  })
+
+  it('ne flashe aucun thème global pendant le chargement du catalogue scopé', async () => {
+    const themes = deferred<Array<{ id: string; label: string; count: number }>>()
+    installApi({
+      listBrains: vi.fn().mockResolvedValue([
+        {
+          id: 'brain',
+          label: 'Brain',
+          path: 'C:\\brain',
+          sizeMb: 1,
+          kind: 'vault',
+          themes: [{ id: 'theme/rig', label: 'RIG' }]
+        }
+      ]),
+      loadBrainThemes: vi.fn().mockReturnValue(themes.promise)
+    })
+    await mount()
+
+    expect(container.querySelector('[data-theme-id="theme/rig"]')).toBeNull()
+    themes.resolve([{ id: 'theme/autowin-os', label: 'Autowin OS', count: 2 }])
+    await flush()
+    expect(container.querySelector('[data-theme-id="theme/autowin-os"]')).not.toBeNull()
+    expect(container.querySelector('[data-theme-id="theme/rig"]')).toBeNull()
+  })
+
+  it('garde le catalogue vide et affiche une erreur métier si son chargement échoue', async () => {
+    installApi({
+      listBrains: vi.fn().mockResolvedValue([
+        {
+          id: 'brain',
+          label: 'Brain',
+          path: 'C:\\brain',
+          sizeMb: 1,
+          kind: 'vault',
+          themes: [{ id: 'theme/rig', label: 'RIG' }]
+        }
+      ]),
+      loadBrainThemes: vi.fn().mockRejectedValue(new Error('catalogue hors ligne'))
+    })
+    await mount()
+
+    expect(container.querySelector('[data-theme-id="theme/rig"]')).toBeNull()
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'Impossible de charger les thèmes du workspace.'
+    )
+  })
+
   it('effacer la question retire la note avec les résultats', async () => {
     installApi()
     await mount()
@@ -216,7 +548,7 @@ describe('GraphView — le poste de travail du savoir est atteignable (items 1 e
     expect(container.querySelector('button.is-reject')).not.toBeNull()
   })
 
-  it('promouvoir depuis la vue déclenche la RÉINDEXATION du graphe', async () => {
+  it('promouvoir recharge le graphe sans doubler l’invalidation déjà faite par le main', async () => {
     const api = installApi({
       listInbox: vi.fn().mockResolvedValue([
         {
@@ -229,7 +561,7 @@ describe('GraphView — le poste de travail du savoir est atteignable (items 1 e
       ])
     })
     await mount()
-    const refreshCallsBefore = (api.refreshBrain as ReturnType<typeof vi.fn>).mock.calls.length
+    const graphCallsBefore = (api.loadBrainGraph as ReturnType<typeof vi.fn>).mock.calls.length
     await act(async () =>
       container
         .querySelector<HTMLButtonElement>('[aria-label="Poste de travail du savoir"]')
@@ -240,10 +572,11 @@ describe('GraphView — le poste de travail du savoir est atteignable (items 1 e
     await flush()
 
     expect(api.promoteInbox).toHaveBeenCalledWith('C:\\brain', 'inbox/a')
-    // `onIndexChanged` est branché sur le rafraîchissement du graphe : sans lui, le nœud promu
-    // resterait affiché à son ancien emplacement.
-    expect((api.refreshBrain as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(
-      refreshCallsBefore
+    // Promote ne résout qu'après l'invalidation main : le renderer recharge son graphe sans payer un
+    // second `refreshBrain` qui pourrait perturber un autre vault entre-temps.
+    expect(api.refreshBrain).not.toHaveBeenCalled()
+    expect((api.loadBrainGraph as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(
+      graphCallsBefore
     )
   })
 
@@ -253,12 +586,14 @@ describe('GraphView — le poste de travail du savoir est atteignable (items 1 e
   ] as const)(
     '%s efface puis relance aussi la question courante du banc',
     async (_label, actionSelector, apiMethod) => {
+      const mutation = deferred<{ ok: boolean }>()
       const searchBrain = vi
         .fn()
         .mockResolvedValueOnce(envelope({ note: 'ANCIEN-BANC' }))
         .mockResolvedValueOnce(envelope({ note: 'FRAIS-BANC' }))
       const api = installApi({
         searchBrain,
+        [apiMethod]: vi.fn().mockReturnValue(mutation.promise),
         listInbox: vi.fn().mockResolvedValue([
           {
             id: 'inbox/a',
@@ -297,9 +632,177 @@ describe('GraphView — le poste de travail du savoir est atteignable (items 1 e
         'C:\\brain',
         'inbox/a'
       )
+      expect(container.textContent).not.toContain('ANCIEN-BANC')
+      expect(question.value).toBe('promotion')
+      expect(searchBrain).toHaveBeenCalledTimes(1)
+      expect(api.refreshBrain).not.toHaveBeenCalled()
+
+      await act(async () => {
+        mutation.resolve({ ok: true })
+        await Promise.resolve()
+      })
+      await flush()
+      expect(api.refreshBrain).not.toHaveBeenCalled()
       expect(searchBrain).toHaveBeenCalledTimes(2)
       expect(container.textContent).toContain('FRAIS-BANC')
       expect(container.textContent).not.toContain('ANCIEN-BANC')
+    }
+  )
+
+  it.each([
+    ['mutation Promote', 'button.is-promote', 'promoteInbox'],
+    ['mutation Reject', 'button.is-reject', 'rejectInbox']
+  ] as const)(
+    '%s efface ANCIEN sans relancer quand l’opération échoue',
+    async (_label, actionSelector, apiMethod) => {
+      const searchBrain = vi.fn().mockResolvedValue(envelope({ note: 'ANCIEN-BANC' }))
+      const api = installApi({
+        searchBrain,
+        [apiMethod]: vi.fn().mockRejectedValue(new Error('mutation refusée')),
+        listInbox: vi.fn().mockResolvedValue([
+          {
+            id: 'inbox/a',
+            file: 'C:/brain/inbox/a.md',
+            title: 'Candidat',
+            body: 'corps',
+            nearDuplicates: []
+          }
+        ])
+      })
+      await mount()
+      await act(async () =>
+        container
+          .querySelector<HTMLButtonElement>('[aria-label="Poste de travail du savoir"]')
+          ?.click()
+      )
+      await flush()
+      const question = container.querySelector<HTMLInputElement>(
+        '[aria-label="Question posée au Brain"]'
+      )
+      if (!question) throw new Error('question du banc absente')
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      await act(async () => {
+        setter?.call(question, 'promotion')
+        question.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      await act(async () => question.closest('.brain-bench')?.querySelector('button')?.click())
+      await flush()
+      expect(container.textContent).toContain('ANCIEN-BANC')
+
+      await act(async () => container.querySelector<HTMLButtonElement>(actionSelector)?.click())
+      await flush()
+
+      expect(container.textContent).not.toContain('ANCIEN-BANC')
+      expect(question.value).toBe('promotion')
+      expect(searchBrain).toHaveBeenCalledTimes(1)
+      expect(api[apiMethod] as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(1)
+      expect(api.refreshBrain).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([
+    ['Promote', 'button.is-promote', 'promoteInbox'],
+    ['Reject', 'button.is-reject', 'rejectInbox']
+  ] as const)(
+    '%s empêche aussi une ancienne recherche principale de repeindre',
+    async (_label, actionSelector, apiMethod) => {
+      const oldSearch = deferred<Record<string, unknown>>()
+      const mutation = deferred<{ ok: boolean }>()
+      const searchBrain = vi
+        .fn()
+        .mockReturnValueOnce(oldSearch.promise)
+        .mockResolvedValueOnce(envelope({ note: 'FRAIS-PRINCIPAL' }))
+      const api = installApi({
+        searchBrain,
+        [apiMethod]: vi.fn().mockReturnValue(mutation.promise),
+        listInbox: vi.fn().mockResolvedValue([
+          {
+            id: 'inbox/a',
+            file: 'C:/brain/inbox/a.md',
+            title: 'Candidat',
+            body: 'corps',
+            nearDuplicates: []
+          }
+        ])
+      })
+      await mount()
+      await act(async () =>
+        container
+          .querySelector<HTMLButtonElement>('[aria-label="Poste de travail du savoir"]')
+          ?.click()
+      )
+      await flush()
+      await search('promotion')
+      expect(searchBrain).toHaveBeenCalledTimes(1)
+
+      await act(async () => container.querySelector<HTMLButtonElement>(actionSelector)?.click())
+      await act(async () => {
+        oldSearch.resolve(envelope({ note: 'ANCIEN-PRINCIPAL' }))
+        await Promise.resolve()
+      })
+      await flush()
+      expect(container.textContent).not.toContain('ANCIEN-PRINCIPAL')
+      expect(searchBrain).toHaveBeenCalledTimes(1)
+      expect(api.refreshBrain).not.toHaveBeenCalled()
+
+      await act(async () => {
+        mutation.resolve({ ok: true })
+        await Promise.resolve()
+      })
+      await flush()
+      expect(api.refreshBrain).not.toHaveBeenCalled()
+      await act(async () => {
+        vi.advanceTimersByTime(250)
+      })
+      await flush()
+      expect(searchBrain).toHaveBeenCalledTimes(2)
+      expect(container.textContent).toContain('FRAIS-PRINCIPAL')
+      expect(
+        container.querySelector<HTMLInputElement>('[aria-label="Rechercher un thème ou une fiche"]')
+          ?.value
+      ).toBe('promotion')
+    }
+  )
+
+  it.each([
+    ['mutation Promote', 'button.is-promote', 'promoteInbox'],
+    ['mutation Reject', 'button.is-reject', 'rejectInbox']
+  ] as const)(
+    '%s ne laisse ni repeindre ni relancer la recherche principale en échec',
+    async (_label, actionSelector, apiMethod) => {
+      const oldSearch = deferred<Record<string, unknown>>()
+      const searchBrain = vi.fn().mockReturnValue(oldSearch.promise)
+      const api = installApi({
+        searchBrain,
+        [apiMethod]: vi.fn().mockRejectedValue(new Error('mutation refusée')),
+        listInbox: vi.fn().mockResolvedValue([
+          {
+            id: 'inbox/a',
+            file: 'C:/brain/inbox/a.md',
+            title: 'Candidat',
+            body: 'corps',
+            nearDuplicates: []
+          }
+        ])
+      })
+      await mount()
+      await act(async () =>
+        container
+          .querySelector<HTMLButtonElement>('[aria-label="Poste de travail du savoir"]')
+          ?.click()
+      )
+      await flush()
+      await search('promotion')
+      await act(async () => container.querySelector<HTMLButtonElement>(actionSelector)?.click())
+      await act(async () => {
+        oldSearch.resolve(envelope({ note: 'ANCIEN-PRINCIPAL' }))
+        await Promise.resolve()
+      })
+      await flush()
+
+      expect(container.textContent).not.toContain('ANCIEN-PRINCIPAL')
+      expect(searchBrain).toHaveBeenCalledTimes(1)
+      expect(api.refreshBrain).not.toHaveBeenCalled()
     }
   )
 })

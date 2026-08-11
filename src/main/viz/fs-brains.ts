@@ -1,8 +1,18 @@
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import {
+  closeSync,
+  existsSync,
+  fstatSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync
+} from 'node:fs'
 import { readFile, readdir, realpath as realpathAsync, stat as statAsync } from 'node:fs/promises'
-import { dirname, extname, isAbsolute, join, posix, relative, resolve, win32 } from 'node:path'
+import { dirname, extname, join, posix, relative, resolve, win32 } from 'node:path'
 import { amitelBrainRoot, amitelWorkspaces } from '../amitel-paths'
+import { brainSourcePathAllowed } from '../brain-corpus-scope'
 import type { BrainNavigation } from '../brain-retrieval'
+import { openVaultNoteDescriptor, readVaultNote, readVaultNoteSync } from './brain-file-reader'
 import {
   normalize,
   topByDegree,
@@ -12,7 +22,6 @@ import {
   type VizNode
 } from './graph'
 import { foldWindowsOrdinalCase } from './windows-ordinal-case'
-import { GenerationCache, GenerationFence } from './generation-cache'
 
 /**
  * Accès DISQUE aux graphes de connaissance réels (graphify) — côté main uniquement.
@@ -33,6 +42,7 @@ export interface BrainGraphRef {
 export interface BrainTheme {
   id: string
   label: string
+  count?: number
 }
 
 /** Métadonnées légères d'une note, disponibles même lorsqu'elle est hors LOD. */
@@ -218,6 +228,33 @@ function retrievalRootsMatch(navigationRoot: string, expectedRoot: string): bool
       retrievalRootId(realpathSync.native(navigationRoot)) ===
       retrievalRootId(realpathSync.native(expectedRoot))
     )
+  } catch {
+    return false
+  }
+}
+
+/** Frontière synchrone commune à toutes les lectures renderer d'un vault. */
+export function assertAuthorizedBrainVaultSync(
+  requestedRoot: string,
+  allowedRoot = AMITEL_BRAIN_ROOT
+): string {
+  let requestedRealRoot: string
+  let allowedRealRoot: string
+  try {
+    requestedRealRoot = realpathSync.native(resolve(requestedRoot))
+    allowedRealRoot = realpathSync.native(resolve(allowedRoot))
+  } catch {
+    throw new Error('brain vault hors périmètre autorisé')
+  }
+  if (!retrievalRootsMatch(requestedRealRoot, allowedRealRoot)) {
+    throw new Error('brain vault hors périmètre autorisé')
+  }
+  return requestedRealRoot
+}
+
+function realPathIsWithinRoot(realPath: string, root: string): boolean {
+  try {
+    return ordinalPathRelative(realPath, realpathSync.native(resolve(root))) !== null
   } catch {
     return false
   }
@@ -476,22 +513,15 @@ const MAX_GRAPH_BYTES = 120 * 1024 * 1024
 export function loadBrainGraph(path: string, lod = 300, community?: number): VizGraph {
   if (!existsSync(path)) throw new Error(`graphe introuvable: ${path}`)
   if (statSync(path).isDirectory()) {
-    const requestedRoot = realpathSync(resolve(path)).toLowerCase()
-    const allowedRoot = realpathSync(resolve(AMITEL_BRAIN_ROOT)).toLowerCase()
-    if (requestedRoot !== allowedRoot) throw new Error('brain vault hors périmètre autorisé')
-    return loadVaultBrainGraph(path, lod)
+    const root = assertAuthorizedBrainVaultSync(path)
+    return loadVaultBrainGraph(root, lod)
   }
   // Confinement (défense en profondeur, audit sécu #3) : un graphe FICHIER doit vivre sous une racine
   // de graphes légitime (defaultBrainRoots) ou le vault — sinon lecture de fichier arbitraire via IPC.
-  const realFile = realpathSync(resolve(path))
-  const underAllowedGraphRoot = [...defaultBrainRoots(), AMITEL_BRAIN_ROOT].some((root) => {
-    try {
-      const rel = relative(realpathSync(resolve(root)), realFile)
-      return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
-    } catch {
-      return false
-    }
-  })
+  const realFile = realpathSync.native(resolve(path))
+  const underAllowedGraphRoot = [...defaultBrainRoots(), AMITEL_BRAIN_ROOT].some((root) =>
+    realPathIsWithinRoot(realFile, root)
+  )
   if (!underAllowedGraphRoot) throw new Error('graphe hors périmètre autorisé')
   if (statSync(path).size > MAX_GRAPH_BYTES) throw new Error('graphe trop volumineux à charger')
   const raw = JSON.parse(readFileSync(path, 'utf8')) as RawGraph
@@ -506,31 +536,47 @@ export function loadBrainGraph(path: string, lod = 300, community?: number): Viz
   }
 }
 
-const SKIPPED_VAULT_DIRS = new Set(['.git', '.obsidian', 'node_modules', 'tooling'])
+const SKIPPED_VAULT_DIRS = new Set([
+  '.git',
+  '.obsidian',
+  'node_modules',
+  'tooling',
+  'inbox',
+  '.trash',
+  'escrow'
+])
 const WIKI_LINK_RE = /\[\[([^\]]+)\]\]/g
 
 /** Charge les notes Markdown du Brain comme un graphe navigable, sans les modifier. */
-export function loadVaultBrainGraph(root: string, lod = 300): VizGraph {
-  const records = vaultNoteRecords(root)
+export function loadVaultBrainGraph(root: string, lod = 300, corpus?: readonly string[]): VizGraph {
+  if (corpus?.length === 0) return { nodes: [], links: [], totalNodes: 0 }
+  const records = vaultNoteRecords(root, corpus)
   return graphFromVaultRecords(records, lod)
 }
 
-export function loadVaultBrainNodesForThemes(root: string, themeIds: readonly string[]): VizNode[] {
+export function loadVaultBrainNodesForThemes(
+  root: string,
+  themeIds: readonly string[],
+  corpus?: readonly string[]
+): VizNode[] {
   const activeThemes = new Set(themeIds)
-  if (activeThemes.size === 0) return []
-  return vaultNoteRecords(root)
+  if (activeThemes.size === 0 || corpus?.length === 0) return []
+  return vaultNoteRecords(root, corpus)
     .filter((record) => record.themes.some((theme) => activeThemes.has(theme)))
     .map(({ id, label, file, themes }) => ({ id, label, file, themes, group: 0 }))
 }
 
 /** Métadonnées exhaustives des nœuds d'un thème, indépendantes du LOD 3D. */
-export function loadBrainThemeNodes(path: string, themeIds: readonly string[]): VizNode[] {
+export function loadBrainThemeNodes(
+  path: string,
+  themeIds: readonly string[],
+  corpus?: readonly string[]
+): VizNode[] {
+  if (corpus?.length === 0) return []
   if (!existsSync(path)) throw new Error(`graphe introuvable: ${path}`)
   if (statSync(path).isDirectory()) {
-    const requestedRoot = realpathSync(resolve(path)).toLowerCase()
-    const allowedRoot = realpathSync(resolve(AMITEL_BRAIN_ROOT)).toLowerCase()
-    if (requestedRoot !== allowedRoot) throw new Error('brain vault hors périmètre autorisé')
-    return loadVaultBrainNodesForThemes(path, themeIds)
+    const root = assertAuthorizedBrainVaultSync(path)
+    return loadVaultBrainNodesForThemes(root, themeIds, corpus)
   }
   const activeThemes = new Set(themeIds)
   if (activeThemes.size === 0) return []
@@ -542,14 +588,26 @@ export function loadBrainThemeNodes(path: string, themeIds: readonly string[]): 
 }
 
 /** Variante asynchrone : les petites notes réseau sont lues en parallèle hors du main Electron. */
-export async function loadVaultBrainGraphAsync(root: string, lod = 300): Promise<VizGraph> {
-  const records = await vaultNoteRecordsAsync(root)
+export async function loadVaultBrainGraphAsync(
+  root: string,
+  lod = 300,
+  corpus?: readonly string[]
+): Promise<VizGraph> {
+  if (corpus?.length === 0) return { nodes: [], links: [], totalNodes: 0 }
+  const records = await vaultNoteRecordsAsync(root, corpus)
   return graphFromVaultRecords(records, lod)
 }
 
 /** Premier lot borné pour afficher Memory avant l'indexation complète du vault. */
-export async function loadVaultBrainGraphPreviewAsync(root: string, lod = 100): Promise<VizGraph> {
-  const files = await markdownFilesAsync(root)
+export async function loadVaultBrainGraphPreviewAsync(
+  root: string,
+  lod = 100,
+  corpus?: readonly string[]
+): Promise<VizGraph> {
+  if (corpus?.length === 0) return { nodes: [], links: [], totalNodes: 0 }
+  const files = (await markdownFilesAsync(root)).filter((file) =>
+    brainSourcePathAllowed(file, corpus)
+  )
   const selectedFiles = files.slice(0, Math.max(1, Math.min(lod, 100)))
   const records = await mapWithConcurrency(selectedFiles, 32, async (file) => {
     const content = await readFile(file, 'utf8')
@@ -568,12 +626,14 @@ export async function loadVaultBrainGraphPreviewAsync(root: string, lod = 100): 
   return { ...graphFromVaultRecords(records, records.length), totalNodes: files.length }
 }
 
-export async function loadBrainGraphPreviewAsync(path: string, lod = 100): Promise<VizGraph> {
+export async function loadBrainGraphPreviewAsync(
+  path: string,
+  lod = 100,
+  corpus?: readonly string[]
+): Promise<VizGraph> {
   if (!existsSync(path) || !statSync(path).isDirectory()) return loadBrainGraph(path, lod)
-  const requestedRoot = realpathSync(resolve(path)).toLowerCase()
-  const allowedRoot = realpathSync(resolve(AMITEL_BRAIN_ROOT)).toLowerCase()
-  if (requestedRoot !== allowedRoot) throw new Error('brain vault hors périmètre autorisé')
-  return loadVaultBrainGraphPreviewAsync(path, lod)
+  const root = assertAuthorizedBrainVaultSync(path)
+  return loadVaultBrainGraphPreviewAsync(root, lod, corpus)
 }
 
 function graphFromVaultRecords(records: VaultNoteRecord[], lod: number): VizGraph {
@@ -631,32 +691,40 @@ function graphFromVaultRecords(records: VaultNoteRecord[], lod: number): VizGrap
 export async function loadBrainGraphAsync(
   path: string,
   lod = 300,
-  community?: number
+  community?: number,
+  corpus?: readonly string[]
 ): Promise<VizGraph> {
   if (!existsSync(path) || !statSync(path).isDirectory())
     return loadBrainGraph(path, lod, community)
-  const requestedRoot = realpathSync(resolve(path)).toLowerCase()
-  const allowedRoot = realpathSync(resolve(AMITEL_BRAIN_ROOT)).toLowerCase()
-  if (requestedRoot !== allowedRoot) throw new Error('brain vault hors périmètre autorisé')
-  return loadVaultBrainGraphAsync(path, lod)
+  const root = assertAuthorizedBrainVaultSync(path)
+  return loadVaultBrainGraphAsync(root, lod, corpus)
 }
 
 /** Charge uniquement un nœud du vault et ses voisins directs. */
-export function loadVaultBrainNeighborhood(root: string, nodeId: string): VizGraph {
-  return graphNeighborhood(loadVaultBrainGraph(root, Number.MAX_SAFE_INTEGER), nodeId)
+export function loadVaultBrainNeighborhood(
+  root: string,
+  nodeId: string,
+  corpus?: readonly string[]
+): VizGraph {
+  if (corpus?.length === 0) return { nodes: [], links: [], totalNodes: 0 }
+  const records = vaultNoteRecords(root, corpus)
+  return graphNeighborhood(graphFromVaultRecords(records, Number.MAX_SAFE_INTEGER), nodeId)
 }
 
 /**
  * Charge un voisinage borné depuis une source autorisée. Le renderer fusionne ce
  * delta avec son LOD courant au lieu de remplacer le graphe déjà positionné.
  */
-export function loadBrainNeighborhood(path: string, nodeId: string): VizGraph {
+export function loadBrainNeighborhood(
+  path: string,
+  nodeId: string,
+  corpus?: readonly string[]
+): VizGraph {
+  if (corpus?.length === 0) return { nodes: [], links: [], totalNodes: 0 }
   if (!existsSync(path)) throw new Error(`graphe introuvable: ${path}`)
   if (statSync(path).isDirectory()) {
-    const requestedRoot = realpathSync(resolve(path)).toLowerCase()
-    const allowedRoot = realpathSync(resolve(AMITEL_BRAIN_ROOT)).toLowerCase()
-    if (requestedRoot !== allowedRoot) throw new Error('brain vault hors périmètre autorisé')
-    return loadVaultBrainNeighborhood(path, nodeId)
+    const root = assertAuthorizedBrainVaultSync(path)
+    return loadVaultBrainNeighborhood(root, nodeId, corpus)
   }
   return graphNeighborhood(loadBrainGraph(path, Number.MAX_SAFE_INTEGER), nodeId)
 }
@@ -674,47 +742,22 @@ function graphNeighborhood(graph: VizGraph, nodeId: string): VizGraph {
   }
 }
 
-/**
- * Recherche dans les métadonnées de TOUT le vault, et non seulement dans le
- * sous-graphe LOD chargé à l'écran. Le renderer peut ensuite demander le
- * voisinage de la note trouvée sans rendre tout le Brain.
- */
-export function searchVaultBrainNotes(
-  root: string,
-  query: string,
-  limit = 40,
-  allowedRoot = AMITEL_BRAIN_ROOT
-): BrainNoteSearchResult[] {
-  const normalized = normalizeSearchText(query)
-  const tokens = normalized.split(/[^a-z0-9_.-]+/).filter((token) => token.length >= 2)
-  if (!normalized || tokens.length === 0 || limit <= 0) return []
-  let requestedRoot: string
-  let trustedRoot: string
-  try {
-    requestedRoot = realpathSync.native(resolve(root))
-    trustedRoot = realpathSync.native(resolve(allowedRoot))
-  } catch {
-    throw new Error('brain vault hors périmètre autorisé')
-  }
-  if (!retrievalRootsMatch(requestedRoot, trustedRoot)) {
-    throw new Error('brain vault hors périmètre autorisé')
-  }
-  return rankVaultSearchResults(vaultNoteRecords(requestedRoot), normalized, tokens, limit)
-}
-
 export async function searchVaultBrainNotesAsync(
   root: string,
   query: string,
-  limit = 40,
-  allowedRoot = AMITEL_BRAIN_ROOT
+  options: {
+    limit?: number
+    allowedRoot?: string
+    corpus?: readonly string[]
+  } = {}
 ): Promise<BrainNoteSearchResult[]> {
+  const { limit = 40, allowedRoot = AMITEL_BRAIN_ROOT, corpus } = options
   const normalized = normalizeSearchText(query)
   const tokens = normalized.split(/[^a-z0-9_.-]+/).filter((token) => token.length >= 2)
-  if (!normalized || tokens.length === 0 || limit <= 0) return []
-  const cacheEpochAtStart = vaultRecordsFence.capture()
+  if (!normalized || tokens.length === 0 || limit <= 0 || corpus?.length === 0) return []
   const requestedRoot = await assertAuthorizedBrainVaultAsync(root, allowedRoot)
   return rankVaultSearchResults(
-    await vaultNoteRecordsAsync(requestedRoot, cacheEpochAtStart),
+    await vaultNoteRecordsAsync(requestedRoot, corpus),
     normalized,
     tokens,
     limit
@@ -743,14 +786,17 @@ function rankVaultSearchResults(
 }
 
 type VaultNoteRecord = BrainNoteSearchResult & { content: string }
-const vaultRecordsCache = new GenerationCache<string, VaultNoteRecord[]>()
+const vaultRecordsCache = new Map<string, VaultNoteRecord[]>()
 const vaultRecordsPromises = new Map<string, Promise<VaultNoteRecord[]>>()
-const vaultRecordsFence = new GenerationFence()
 
-export function invalidateBrainCaches(): void {
-  vaultRecordsFence.invalidate()
-  vaultRecordsCache.invalidate()
+export function invalidateVaultBrainNotesCache(): void {
+  vaultRecordsCache.clear()
   vaultRecordsPromises.clear()
+}
+
+function vaultRecordsKey(root: string, corpus?: readonly string[]): string {
+  const scope = corpus === undefined ? '*' : JSON.stringify([...new Set(corpus)].sort())
+  return `${root}\0${scope}`
 }
 
 function normalizeSearchText(value: string): string {
@@ -825,13 +871,44 @@ function vaultSearchScore(record: VaultNoteRecord, phrase: string, tokens: strin
   return score
 }
 
-function vaultNoteRecords(root: string): VaultNoteRecord[] {
-  const cached = vaultRecordsCache.get(root)
+function vaultNoteRecords(root: string, corpus?: readonly string[]): VaultNoteRecord[] {
+  const cacheKey = vaultRecordsKey(root, corpus)
+  const cached = vaultRecordsCache.get(cacheKey)
   if (cached) return cached
-  const lease = vaultRecordsCache.capture(root)
-  try {
-    const records = markdownFiles(root).map((file) => {
-      const content = readFileSync(file, 'utf8')
+  const files = markdownFiles(root).filter((file) => brainSourcePathAllowed(file, corpus))
+  const records = files.map((file) => {
+    const content = readVaultNoteSync(file)
+    const id = relative(root, file).replace(/\\/g, '/').replace(/\.md$/i, '')
+    const label = content.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? id.split('/').at(-1) ?? id
+    return {
+      id,
+      file,
+      content,
+      label,
+      themes: noteThemes(id, content),
+      score: 0,
+      relations: noteRelations(content)
+    }
+  })
+  vaultRecordsCache.set(cacheKey, records)
+  return records
+}
+
+async function vaultNoteRecordsAsync(
+  root: string,
+  corpus?: readonly string[]
+): Promise<VaultNoteRecord[]> {
+  const cacheKey = vaultRecordsKey(root, corpus)
+  const cached = vaultRecordsCache.get(cacheKey)
+  if (cached) return cached
+  const pending = vaultRecordsPromises.get(cacheKey)
+  if (pending) return pending
+  const loading = (async () => {
+    const files = (await markdownFilesAsync(root)).filter((file) =>
+      brainSourcePathAllowed(file, corpus)
+    )
+    const records = await mapWithConcurrency(files, 32, async (file) => {
+      const content = await readVaultNote(file)
       const id = relative(root, file).replace(/\\/g, '/').replace(/\.md$/i, '')
       const label = content.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? id.split('/').at(-1) ?? id
       return {
@@ -844,60 +921,12 @@ function vaultNoteRecords(root: string): VaultNoteRecord[] {
         relations: noteRelations(content)
       }
     })
-    if (!vaultRecordsCache.publish(lease, records)) {
-      throw new Error('cache Brain invalidé pendant le chargement')
-    }
+    vaultRecordsCache.set(cacheKey, records)
     return records
-  } catch (error) {
-    vaultRecordsCache.abandon(lease)
-    throw error
-  }
-}
-
-async function vaultNoteRecordsAsync(
-  root: string,
-  cacheEpochAtStart = vaultRecordsFence.capture()
-): Promise<VaultNoteRecord[]> {
-  if (!vaultRecordsFence.isCurrent(cacheEpochAtStart)) {
-    throw new Error('cache Brain invalidé pendant le chargement')
-  }
-  const cached = vaultRecordsCache.get(root)
-  if (cached) return cached
-  const pending = vaultRecordsPromises.get(root)
-  if (pending) return pending
-  const lease = vaultRecordsCache.capture(root)
-  const loading = (async () => {
-    try {
-      const files = await markdownFilesAsync(root)
-      const records = await mapWithConcurrency(files, 32, async (file) => {
-        const content = await readFile(file, 'utf8')
-        const id = relative(root, file).replace(/\\/g, '/').replace(/\.md$/i, '')
-        const label = content.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? id.split('/').at(-1) ?? id
-        return {
-          id,
-          file,
-          content,
-          label,
-          themes: noteThemes(id, content),
-          score: 0,
-          relations: noteRelations(content)
-        }
-      })
-      if (
-        !vaultRecordsFence.isCurrent(cacheEpochAtStart) ||
-        !vaultRecordsCache.publish(lease, records)
-      ) {
-        throw new Error('cache Brain invalidé pendant le chargement')
-      }
-      return records
-    } catch (error) {
-      vaultRecordsCache.abandon(lease)
-      throw error
-    }
   })()
-  vaultRecordsPromises.set(root, loading)
+  vaultRecordsPromises.set(cacheKey, loading)
   return loading.finally(() => {
-    if (vaultRecordsPromises.get(root) === loading) vaultRecordsPromises.delete(root)
+    if (vaultRecordsPromises.get(cacheKey) === loading) vaultRecordsPromises.delete(cacheKey)
   })
 }
 
@@ -936,16 +965,27 @@ async function mapWithConcurrency<T, R>(
   return results
 }
 
-function vaultThemeCatalog(root: string): BrainTheme[] {
-  return themeCatalog(vaultNoteRecords(root))
+function vaultThemeCatalog(root: string, corpus?: readonly string[]): BrainTheme[] {
+  return themeCatalog(vaultNoteRecords(root, corpus))
 }
 
-export function loadBrainThemes(path: string): BrainTheme[] {
+export function loadBrainThemes(
+  path: string,
+  corpus?: readonly string[],
+  allowedRoot = AMITEL_BRAIN_ROOT
+): BrainTheme[] {
+  if (corpus?.length === 0) return []
   if (!existsSync(path) || !statSync(path).isDirectory()) return []
-  const requestedRoot = realpathSync(resolve(path)).toLowerCase()
-  const allowedRoot = realpathSync(resolve(AMITEL_BRAIN_ROOT)).toLowerCase()
-  if (requestedRoot !== allowedRoot) throw new Error('brain vault hors périmètre autorisé')
-  return vaultThemeCatalog(path)
+  const root = assertAuthorizedBrainVaultSync(path, allowedRoot)
+  if (corpus === undefined) return vaultThemeCatalog(root)
+  const records = vaultNoteRecords(root, corpus)
+  const counts = new Map<string, number>()
+  for (const record of records) {
+    for (const theme of record.themes) counts.set(theme, (counts.get(theme) ?? 0) + 1)
+  }
+  return [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([id, count]) => ({ id, label: themeLabel(id), count }))
 }
 
 function themeCatalog(records: readonly Pick<VaultNoteRecord, 'themes'>[]): BrainTheme[] {
@@ -1125,7 +1165,7 @@ function allowedReadRoots(): string[] {
     join(home, '.claude', 'runs'), // RUN.md du pipeline (vue Workflow)
     join(appData, 'autowin-os', 'runs'), // RUN.md créés par les conversations Autowin
     ...amitelWorkspaces()
-  ].map((p) => p.toLowerCase())
+  ]
 }
 
 const MAX_TEXT_BYTES = 2 * 1024 * 1024
@@ -1135,16 +1175,69 @@ const MAX_TEXT_BYTES = 2 * 1024 * 1024
  * contenu dans une racine autorisée (protection anti-path-traversal : on résout
  * le chemin réel et on vérifie le préfixe). Renvoie un extrait borné.
  */
-export function readNodeFile(path: string): { path: string; content: string } {
+export function readNodeFile(
+  path: string,
+  vaultRoot?: string,
+  corpus?: readonly string[],
+  allowedVaultRoot = AMITEL_BRAIN_ROOT,
+  openDescriptor: (canonicalPath: string) => number = openVaultNoteDescriptor
+): { path: string; content: string } {
   if (!existsSync(path)) throw new Error('fichier introuvable')
-  const real = realpathSync(resolve(path)).toLowerCase()
-  const insideAllowedRoot = allowedReadRoots().some((root) => {
-    const remainder = relative(root, real)
-    return remainder === '' || (!remainder.startsWith('..') && !isAbsolute(remainder))
-  })
+  const real = realpathSync.native(resolve(path))
+  let authorizedVault: string | undefined
+  if (vaultRoot !== undefined) {
+    authorizedVault = assertAuthorizedBrainVaultSync(vaultRoot, allowedVaultRoot)
+    if (!realPathIsWithinRoot(real, authorizedVault) || !brainSourcePathAllowed(real, corpus)) {
+      throw new Error('fichier hors corpus du workspace')
+    }
+  }
+  // `readNodeFile` sert aussi aux RUN hors Brain. En revanche, toute lecture qui tombe sous le
+  // Brain canonique reste soumise au corpus, même si un ancien appelant omet `vaultRoot`.
+  if (
+    authorizedVault === undefined &&
+    realPathIsWithinRoot(real, allowedVaultRoot) &&
+    !brainSourcePathAllowed(real, corpus)
+  ) {
+    throw new Error('fichier hors corpus du workspace')
+  }
+  const insideAllowedRoot =
+    (authorizedVault !== undefined && realPathIsWithinRoot(real, authorizedVault)) ||
+    allowedReadRoots().some((root) => realPathIsWithinRoot(real, root))
   if (!insideAllowedRoot) {
     throw new Error('fichier hors périmètre autorisé')
   }
-  if (statSync(path).size > MAX_TEXT_BYTES) throw new Error('fichier trop volumineux')
-  return { path, content: readFileSync(path, 'utf8').slice(0, 200_000) }
+  // Ouvre l'objet CANONIQUE déjà autorisé, puis vérifie et lit ce même descripteur. Une junction
+  // repointée après `realpathSync` ne peut ainsi ni changer le fichier lu, ni contourner la taille.
+  const descriptor = openDescriptor(real)
+  try {
+    const reopenedReal = realpathSync.native(real)
+    const openedIdentity = fstatSync(descriptor, { bigint: true })
+    const namedIdentity = statSync(reopenedReal, { bigint: true })
+    if (
+      retrievalRootId(reopenedReal) !== retrievalRootId(real) ||
+      openedIdentity.dev !== namedIdentity.dev ||
+      openedIdentity.ino !== namedIdentity.ino
+    ) {
+      throw new Error('fichier hors périmètre autorisé — identité changée')
+    }
+    if (
+      authorizedVault !== undefined &&
+      (!realPathIsWithinRoot(reopenedReal, authorizedVault) ||
+        !brainSourcePathAllowed(reopenedReal, corpus))
+    ) {
+      throw new Error('fichier hors corpus du workspace')
+    }
+    const reopenedInsideAllowedRoot =
+      (authorizedVault !== undefined && realPathIsWithinRoot(reopenedReal, authorizedVault)) ||
+      allowedReadRoots().some((root) => realPathIsWithinRoot(reopenedReal, root))
+    if (!reopenedInsideAllowedRoot) {
+      throw new Error('fichier hors périmètre autorisé')
+    }
+    const stats = fstatSync(descriptor)
+    if (!stats.isFile()) throw new Error('chemin autorisé non fichier')
+    if (stats.size > MAX_TEXT_BYTES) throw new Error('fichier trop volumineux')
+    return { path, content: readFileSync(descriptor, 'utf8').slice(0, 200_000) }
+  } finally {
+    closeSync(descriptor)
+  }
 }

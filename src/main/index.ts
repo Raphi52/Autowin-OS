@@ -46,16 +46,18 @@ import { execFileSync } from 'node:child_process'
 import { ensureBrainServerStarted } from './brain-server-launch'
 import { configureSessionMemoryEcho } from './session-memory-echo'
 import { configureRememberDepositStore } from './brain-remember'
-import { retrieveBrainContext } from './brain-retrieval'
-import { AMITEL_BRAIN_ROOT, type BrainNoteSearchResult } from './viz/fs-brains'
+import { brainScopeForWorkspace } from './brain-corpus-scope'
+import { AMITEL_BRAIN_ROOT } from './viz/fs-brains'
 import { buildBrainSearchEnvelope } from './brain-search-envelope'
 import {
   assertBrainVaultRoot,
-  listInboxCandidates,
   promoteInboxCandidate,
-  rejectInboxCandidate
+  promoteOutcomeLearningCandidate,
+  rejectInboxCandidate,
+  restoreTrashedKnowledge,
+  retractKnowledgeCandidate,
+  supersedeKnowledgeCandidate
 } from './brain-inbox'
-import { createHeadShaResolver } from './brain-source-sha'
 import { amitelWorkspaces } from './amitel-paths'
 import { installCrashHandlers } from './crash-handlers'
 import { CostCircuitBreaker } from './cost-circuit-breaker'
@@ -70,9 +72,16 @@ import {
 import { repairPreflightCheck } from './preflight-repair'
 import { RoleModelConfig, type ReasoningEffort, type Role, type RoleBinding } from './roles'
 import { AppCommandBus, type AppEvent } from './commands'
+import { compensateOutcomeCuration } from './outcome-learning-curation'
+import {
+  executeCurationTransaction,
+  reconcileCurationIntents
+} from './outcome-learning-curation-transaction'
+import { OutcomeLearningLedger } from './activity/outcome-learning-ledger'
+import { OutcomeLearningSupervisor, parseOutcomeLearningMode } from './outcome-learning-supervisor'
 import { WindowsDesktopController } from './desktop-control'
 import { captureElectronDesktop } from './electron-desktop-capture'
-import { AgentPilot, type PilotEvent } from './agent-pilot'
+import { AgentPilot, type PilotEvent, type RecoveredPilotProviderCall } from './agent-pilot'
 import { ActiveChatTurns } from './active-chat-turns'
 import { ConversationRouteCoordinator, ConversationRouter } from './conversation-router'
 import { boundedTurnHistory } from './chat-turn-messages'
@@ -105,12 +114,24 @@ import {
 } from './runs/orchestration-state'
 import {
   appendTurnEvent,
+  isTurnFinished,
   listUnfinishedTurns,
   pruneFinishedTurnJournals,
   readTurnJournal
 } from './runs/turn-journal'
+import {
+  listRecoverableChatProviderCalls,
+  recoverCompletedChatProviderCall,
+  streamedPrefixForProviderCall,
+  type RecoverableChatProviderCall
+} from './runs/chat-provider-recovery'
+import { survivableExitCode } from './runs/stdout-journal'
 import { appendConvActivity, loadConvActivity } from './activity/conv-activity'
-import { persistChatUsageSettlement } from './activity/chat-usage-settlement'
+import {
+  persistChatUsageSettlement,
+  persistRecoveredChatProviderUsage
+} from './activity/chat-usage-settlement'
+import { taskUsageMetricsFromExecution } from './activity/task-usage-metrics'
 import { sameExecutionUsage, type ExecutionUsageSnapshot } from './execution-supervisor'
 import { reconcileLateRunLifecycle } from './activity/late-run-usage-settlement'
 import {
@@ -301,8 +322,8 @@ import { persistTaskStore } from './task-manager/task-store-disk'
 import { TaskScheduler } from './task-manager/task-scheduler'
 import { WatchdogEngine } from './task-manager/watchdog-engine'
 import { seedWatchdogTasks } from './task-manager/watchdog-seeds'
-import type { WatchdogAppEvent } from './task-manager/types'
-import { ScheduledChatDispatcher } from './task-manager/chat-dispatch'
+import type { TaskUsageSettlementSink, WatchdogAppEvent } from './task-manager/types'
+import { ScheduledChatDispatcher, scheduledTaskBinding } from './task-manager/chat-dispatch'
 import { runWatchdogOrchestration } from './task-manager/watchdog-orchestration-adapter'
 import {
   isolatedRelayLaunchArguments,
@@ -391,26 +412,35 @@ configureRememberDepositStore(join(app.getPath('userData'), 'remember-deposits.j
 
 /** Noyau applicatif unique (P0-P4 câblés) : kit SOUL injecté, 2 voies, modules. */
 const os = new AutowinOS()
+const turnJournalRoot = join(app.getPath('userData'), 'turn-journals')
 const brainWorkerPath = join(__dirname, 'brain-worker.js')
 const brainWorker = new BrainWorkerClient(brainWorkerPath)
 const brainSearchWorker = new BrainWorkerClient(brainWorkerPath)
+const brainInboxWorker = new BrainWorkerClient(brainWorkerPath)
 const brainSearchCoordinator = new BrainSearchCoordinator()
 const BRAIN_SEARCH_BOUNDARY_TIMEOUT_MS = 2_500
+const BRAIN_INBOX_BOUNDARY_TIMEOUT_MS = 5_000
 const invalidateBrainRuntime = async (): Promise<void> => {
   brainSearchCoordinator.invalidate()
-  await Promise.all([brainWorker.invalidate(), brainSearchWorker.invalidate()])
+  await Promise.all([
+    brainWorker.invalidate(),
+    brainSearchWorker.invalidate(),
+    brainInboxWorker.invalidate()
+  ])
 }
 // Conversations persistées sur disque : rechargées au démarrage, sauvées à chaque mutation.
 // SORTIE DE L'ÉTAT D'ATTENTE. Un tour laissé `streaming` sur disque appartient à un run mort avec
 // l'app : plus aucun process ne viendra le clore. Le chargement le clôt donc et le DIT dans la
 // conversation d'origine — sauf pour les tours dont le checkpoint survit, qui vont vraiment
 // reprendre quelques lignes plus bas. Sans ce discriminant on mentirait dans un sens ou dans l'autre.
-const resumableTurnIds = new Set(
-  os
+const startupRecoverableChatCalls = listRecoverableChatProviderCalls(turnJournalRoot)
+const resumableTurnIds = new Set([
+  ...os
     .resumableOrchestrations()
     .map((state) => state.turnId)
-    .filter((turnId): turnId is string => Boolean(turnId))
-)
+    .filter((turnId): turnId is string => Boolean(turnId)),
+  ...startupRecoverableChatCalls.map((call) => call.turnId)
+])
 const flushConversations = persistConversations(os.conversations, undefined, { resumableTurnIds })
 const scheduledTasks = new TaskStore()
 /** Alertes déjà transmises au moteur de réveil : le store rediffuse tout son instantané à chaque
@@ -528,6 +558,72 @@ function reportAutoKaizen(input: AutoKaizenIncidentInput): void {
 }
 
 const desktopController = new WindowsDesktopController({ capture: captureElectronDesktop })
+const outcomeLearningDirectory = join(app.getPath('userData'), 'outcome-learning')
+const outcomeLearningModePath = join(outcomeLearningDirectory, 'mode.txt')
+let persistedOutcomeLearningMode: string | undefined
+try {
+  persistedOutcomeLearningMode = readFileSync(outcomeLearningModePath, 'utf8')
+} catch {
+  // Premier démarrage : le défaut auto reste explicite et le contrôle UI créera le fichier.
+}
+const outcomeLearning = new OutcomeLearningSupervisor({
+  ledger: new OutcomeLearningLedger(join(outcomeLearningDirectory, 'events-v1.jsonl')),
+  mode: parseOutcomeLearningMode(
+    process.env.AUTOWIN_OUTCOME_LEARNING_MODE ?? persistedOutcomeLearningMode
+  ),
+  promote: (candidateId, scope) =>
+    promoteOutcomeLearningCandidate(amitelBrainRoot(), candidateId, scope),
+  invalidate: invalidateBrainRuntime
+})
+void outcomeLearning.reconcilePending()
+const curationRecoveryReady = reconcileCurationIntents(
+  outcomeLearning,
+  (intent) => {
+    if (intent.requestedTargetId?.startsWith('undo:')) {
+      const event = outcomeLearning.eventById(intent.requestedTargetId.slice('undo:'.length))
+      if (!event || event.kind !== 'curation') throw new Error('curation undo introuvable')
+      const compensation = compensateOutcomeCuration(event.value, {
+        restore: (id) => restoreTrashedKnowledge(amitelBrainRoot(), id),
+        retract: (id) => retractKnowledgeCandidate(amitelBrainRoot(), id)
+      })
+      return {
+        moved: compensation.moved,
+        knowledgeId: compensation.knowledgeId,
+        targetId: compensation.targetId,
+        rollbackId: compensation.rollbackId,
+        previousEventId: compensation.previousEventId
+      }
+    }
+    if (intent.action === 'retract') {
+      const moved = retractKnowledgeCandidate(amitelBrainRoot(), intent.knowledgeId)
+      return { moved, knowledgeId: intent.knowledgeId, targetId: moved.to }
+    }
+    if (intent.action === 'restore') {
+      const previous = outcomeLearning.latestCurationForStoredId(intent.knowledgeId)
+      const moved = restoreTrashedKnowledge(amitelBrainRoot(), intent.knowledgeId)
+      return {
+        moved,
+        knowledgeId: previous?.value.knowledgeId ?? moved.to,
+        targetId: moved.to,
+        rollbackId: intent.knowledgeId,
+        previousEventId: previous?.value.eventId
+      }
+    }
+    if (!intent.requestedTargetId) throw new Error('supersession sans remplacement demandé')
+    const result = supersedeKnowledgeCandidate(
+      amitelBrainRoot(),
+      intent.knowledgeId,
+      intent.requestedTargetId
+    )
+    return {
+      moved: result.moved,
+      knowledgeId: intent.knowledgeId,
+      targetId: result.replacementId,
+      rollbackId: result.moved.to
+    }
+  },
+  invalidateBrainRuntime
+)
 const bus = new AppCommandBus(
   os,
   broadcast,
@@ -547,7 +643,8 @@ const bus = new AppCommandBus(
   // `sqlcmd` est resolu UNE fois au demarrage, par lecture du PATH (jamais en lancant un process).
   // Absent -> `sql_query` annoncera l'indisponibilite plutot que de tenter un binaire inexistant.
   // L'ORDRE compte : ce parametre est le DERNIER du constructeur, apres desktop et updateTicket.
-  resolveBinOnPath('sqlcmd') ?? undefined
+  resolveBinOnPath('sqlcmd') ?? undefined,
+  outcomeLearning
 )
 seedRegistrySnapshot({
   tools: bus.catalog().map((command) => ({
@@ -565,7 +662,7 @@ const pilot = new AgentPilot(
   bus,
   createAmitelContextProvider({
     graphEvidence: (raw, query, limit) =>
-      brainWorker.request<string>('graphifyEvidence', raw, query, limit),
+      brainWorker.request('graphifyEvidence', raw, query, limit),
     // PORTEE PAR WORKSPACE (O3) : le Brain est a 99 % de la doc RIG, donc une question Autowin ramenait
     // majoritairement des sources d'un AUTRE projet. Le corpus autorise se DERIVE du workspace, il n'est
     // pas ecrit en dur : dans un workspace RIG, la doc RIG est exactement ce qu'il faut.
@@ -983,8 +1080,7 @@ function askModelQuestion(
   })
 }
 /** Ledger d'activité in-app : chaque action d'agent laisse une trace consultable. */
-/** Journaux de tour (survie niveau 2 : rejeu/reprise après fermeture complète de l'app). */
-const turnJournalRoot = join(app.getPath('userData'), 'turn-journals')
+/** Journaux de tour : racine initialisée avant l'hydratation des conversations. */
 // Racine des journaux de SORTIE BRUTE des CLI (mode détaché opt-in AUTOWIN_DETACHED_RUNS=1) :
 // transmise aux providers par l'environnement, pour qu'ils n'aient pas à connaître Electron.
 process.env.AUTOWIN_RUN_JOURNAL_ROOT ??= join(app.getPath('userData'), 'run-stdout')
@@ -1516,6 +1612,7 @@ Le fil reprend ensuite normalement.`
     let terminalLifecycle: Extract<RunLifecycleEvent, { stage: 'closure' }> | undefined
     let resumedCheckpointReleased = false
     let phaseStartIteration = 0
+    let learningAuthor: { model?: string; role?: string } = {}
     try {
       durableTurn.begin(guardString(task, 'task'))
       // Acquis d'un run interrompu portant la MÊME tâche dans CETTE conversation.
@@ -1530,6 +1627,9 @@ Le fil reprend ensuite normalement.`
       const result = await os.runTask(
         guardString(task, 'task'),
         (step) => {
+          if (step.text?.includes('AUTOWIN_LESSON_V1:')) {
+            learningAuthor = { model: step.model, role: step.role }
+          }
           pendingExecutionEvidence.push(...(step.evidence ?? []))
           persistOrchestrationStep(
             step,
@@ -1662,11 +1762,39 @@ Le fil reprend ensuite normalement.`
       } catch {
         /* observabilité best-effort : l'issue utilisateur reste prioritaire */
       }
-      durableTurn.succeed(result)
-      return { ok: true, result }
+      const learning = await bus.observeOutcomeLearning({
+        conversationId,
+        turnId,
+        runId: currentRunId ?? turnId,
+        resultText: result.result,
+        valid: result.valid,
+        gateBlocked: result.gateBlocked,
+        gateReasons: result.gateReasons,
+        reused: Boolean(resumedAcquis),
+        evidence: result.phaseOutputs.flatMap((output) => output.executionEvidence ?? []),
+        model: learningAuthor.model ?? orchestratorBinding.model,
+        role: learningAuthor.role ?? 'orchestrator',
+        proposalAttestations: result.learningAttestations
+      })
+      const delivered = { ...result, ...(learning ? { learning } : {}) }
+      durableTurn.succeed(delivered)
+      return { ok: true, result: delivered }
     } catch (e) {
       const aborted = controller.signal.aborted
       const error = aborted ? 'Run annulé' : e instanceof Error ? e.message : String(e)
+      await bus.observeOutcomeLearning({
+        conversationId,
+        turnId,
+        runId: currentRunId ?? turnId,
+        resultText: '',
+        valid: false,
+        gateBlocked: true,
+        gateReasons: [error],
+        reused: false,
+        evidence: pendingExecutionEvidence,
+        model: orchestratorBinding.model,
+        terminalClass: aborted ? 'external' : 'defect'
+      })
       // Un échec doit se CONCLURE dans le fil : le renderer jette la promesse (`void`), donc sans ce
       // tour terminal l'erreur disparaissait entièrement.
       durableTurn.fail(error, aborted)
@@ -1809,6 +1937,16 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('worktree:conflict-diff', (event, agentId: unknown) => {
     assertTrustedRendererSender(event, 'WorktreeConflictDiff')
     return os.getWorktreeConflictDiff(typeof agentId === 'string' ? agentId : '')
+  })
+  ipcMain.handle('worktree:resolve-conflict', (event, agentId: unknown, choice: unknown) => {
+    assertTrustedRendererSender(event, 'WorktreeResolveConflict')
+    if (typeof agentId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(agentId)) {
+      throw new Error('Identifiant de bureau invalide')
+    }
+    if (choice !== 'agent' && choice !== 'mine') {
+      throw new Error('Choix de résolution invalide')
+    }
+    return os.resolveWorktreeConflict(agentId, choice)
   })
   ipcMain.handle('worktree:retry-recovery', (event, agentId: unknown) => {
     assertTrustedRendererSender(event, 'WorktreeRetryRecovery')
@@ -2641,56 +2779,68 @@ Le fil reprend ensuite normalement.`
   })
   ipcMain.handle('os:loadBrainGraphPreview', (event, path: string, lod?: number) => {
     assertTrustedRendererSender(event, 'Brain')
-    return brainWorker.request('loadPreview', guardString(path, 'path'), lod)
+    const corpus = brainScopeForWorkspace(os.executionWorkspace).corpus
+    return brainWorker.request('loadPreview', guardString(path, 'path'), lod, corpus)
   })
   ipcMain.handle('os:loadBrainThemes', (event, path: string) => {
     assertTrustedRendererSender(event, 'Brain')
-    return brainWorker.request('loadThemes', guardString(path, 'path'))
+    const corpus = brainScopeForWorkspace(os.executionWorkspace).corpus
+    return brainWorker.request('loadThemes', guardString(path, 'path'), corpus)
   })
   ipcMain.handle('os:loadBrainThemeNodes', (event, path: string, rawThemeIds: unknown) => {
     assertTrustedRendererSender(event, 'Brain')
     if (!Array.isArray(rawThemeIds) || rawThemeIds.length > 100)
       throw new Error('IPC themeIds: tableau borné attendu')
     const themeIds = rawThemeIds.map((themeId, index) => guardString(themeId, `themeIds[${index}]`))
-    return brainWorker.request('loadThemeNodes', guardString(path, 'path'), themeIds)
+    const corpus = brainScopeForWorkspace(os.executionWorkspace).corpus
+    return brainWorker.request('loadThemeNodes', guardString(path, 'path'), themeIds, corpus)
   })
   ipcMain.handle('os:loadBrainGraph', (event, path: string, lod?: number, community?: number) => {
     assertTrustedRendererSender(event, 'Brain')
-    return brainWorker.request('loadGraph', guardString(path, 'path'), lod, community)
+    const corpus = brainScopeForWorkspace(os.executionWorkspace).corpus
+    return brainWorker.request('loadGraph', guardString(path, 'path'), lod, community, corpus)
   })
   ipcMain.handle('os:loadBrainNeighborhood', (event, path: string, nodeId: string) => {
     assertTrustedRendererSender(event, 'Brain')
     return brainWorker.request(
       'loadNeighborhood',
       guardString(path, 'path'),
-      guardString(nodeId, 'nodeId')
+      guardString(nodeId, 'nodeId'),
+      brainScopeForWorkspace(os.executionWorkspace).corpus
     )
   })
-  ipcMain.handle('os:readNodeFile', (event, path: string) => {
+  ipcMain.handle('os:readNodeFile', (event, path: string, vaultRoot?: string) => {
     assertTrustedRendererSender(event, 'Brain')
-    return brainWorker.request('readNodeFile', guardString(path, 'path'))
+    const guardedVaultRoot =
+      vaultRoot === undefined ? undefined : guardString(vaultRoot, 'vaultRoot')
+    const corpus = brainScopeForWorkspace(os.executionWorkspace).corpus
+    return brainWorker.request('readNodeFile', guardString(path, 'path'), guardedVaultRoot, corpus)
   })
   ipcMain.handle('os:searchBrain', async (event, path: string, query: string) => {
     assertTrustedRendererSender(event, 'BrainSearch')
     const selectedPath = guardString(path, 'path')
     const boundedQuery = guardString(query, 'query')
+    const brainScope = brainScopeForWorkspace(os.executionWorkspace)
     const resolution = await brainSearchCoordinator.searchDetailed(selectedPath, boundedQuery, {
       authorize: (root) =>
-        brainSearchWorker.requestWithTimeout<string>(
+        brainSearchWorker.requestWithTimeout(
           BRAIN_SEARCH_BOUNDARY_TIMEOUT_MS,
           'authorizeVault',
           root
         ),
-      searchLocal: (root, searchQuery) =>
-        brainSearchWorker.requestWithTimeout<BrainNoteSearchResult[]>(
-          BRAIN_SEARCH_BOUNDARY_TIMEOUT_MS,
-          'searchBrain',
-          root,
-          searchQuery
+      searchLocal: async (root, searchQuery) =>
+        brainScope.localResults(
+          await brainSearchWorker.requestWithTimeout(
+            BRAIN_SEARCH_BOUNDARY_TIMEOUT_MS,
+            'searchBrain',
+            root,
+            searchQuery,
+            brainScope.corpus
+          )
         ),
-      retrieve: retrieveBrainContext,
+      retrieve: (searchQuery) => brainScope.retrieve(searchQuery),
       fuse: (local, navigation, root) =>
-        brainSearchWorker.requestWithTimeout<BrainNoteSearchResult[]>(
+        brainSearchWorker.requestWithTimeout(
           BRAIN_SEARCH_BOUNDARY_TIMEOUT_MS,
           'fuseRetrieval',
           local,
@@ -2709,11 +2859,25 @@ Le fil reprend ensuite normalement.`
   })
   // BOÎTE DE RÉCEPTION du savoir : `brain-remember` dépose en `inbox/` et laisse la promotion à
   // l'humain. Ces trois canaux sont cette main humaine, et ils sont bornés à la racine Brain autorisée.
-  ipcMain.handle('os:listInbox', (event, path: string) => {
+  ipcMain.handle('os:listInbox', async (event, path: string) => {
     assertTrustedRendererSender(event, 'BrainInbox')
-    return listInboxCandidates(assertBrainVaultRoot(guardString(path, 'path'), AMITEL_BRAIN_ROOT), {
-      headShaFor: createHeadShaResolver(amitelWorkspaces())
-    })
+    const root = assertBrainVaultRoot(guardString(path, 'path'), AMITEL_BRAIN_ROOT)
+    return brainInboxWorker.requestWithTimeout(
+      BRAIN_INBOX_BOUNDARY_TIMEOUT_MS,
+      'listInbox',
+      root,
+      amitelWorkspaces()
+    )
+  })
+  ipcMain.handle('os:readInboxCandidateBody', async (event, path: string, id: string) => {
+    assertTrustedRendererSender(event, 'BrainInboxBody')
+    const root = assertBrainVaultRoot(guardString(path, 'path'), AMITEL_BRAIN_ROOT)
+    return brainInboxWorker.requestWithTimeout(
+      BRAIN_INBOX_BOUNDARY_TIMEOUT_MS,
+      'readInboxCandidateBody',
+      root,
+      guardString(id, 'id')
+    )
   })
   ipcMain.handle('os:promoteInbox', async (event, path: string, id: string) => {
     assertTrustedRendererSender(event, 'BrainInboxPromote')
@@ -2729,6 +2893,141 @@ Le fil reprend ensuite normalement.`
     const moved = rejectInboxCandidate(root, guardString(id, 'id'))
     await invalidateBrainRuntime()
     return moved
+  })
+  ipcMain.handle('os:retractKnowledge', async (event, path: string, id: string) => {
+    assertTrustedRendererSender(event, 'BrainKnowledgeRetract')
+    const root = assertBrainVaultRoot(guardString(path, 'path'), AMITEL_BRAIN_ROOT)
+    const knowledgeId = guardString(id, 'id')
+    await curationRecoveryReady
+    return executeCurationTransaction(
+      outcomeLearning,
+      { action: 'retract', knowledgeId },
+      {
+        mutate: () => {
+          const moved = retractKnowledgeCandidate(root, knowledgeId)
+          return { moved, knowledgeId, targetId: moved.to }
+        },
+        compensate: (result) => restoreTrashedKnowledge(root, result.moved.to),
+        invalidate: invalidateBrainRuntime
+      }
+    )
+  })
+  ipcMain.handle('os:restoreKnowledge', async (event, path: string, id: string) => {
+    assertTrustedRendererSender(event, 'BrainKnowledgeRestore')
+    const root = assertBrainVaultRoot(guardString(path, 'path'), AMITEL_BRAIN_ROOT)
+    const sourceId = guardString(id, 'id')
+    await curationRecoveryReady
+    return executeCurationTransaction(
+      outcomeLearning,
+      { action: 'restore', knowledgeId: sourceId },
+      {
+        mutate: () => {
+          const previous = outcomeLearning.latestCurationForStoredId(sourceId)
+          const moved = restoreTrashedKnowledge(root, sourceId)
+          return {
+            moved,
+            knowledgeId: previous?.value.knowledgeId ?? moved.to,
+            targetId: moved.to,
+            rollbackId: sourceId,
+            previousEventId: previous?.value.eventId
+          }
+        },
+        compensate: (result) => retractKnowledgeCandidate(root, result.moved.to),
+        invalidate: invalidateBrainRuntime
+      }
+    )
+  })
+  ipcMain.handle(
+    'os:supersedeKnowledge',
+    async (event, path: string, obsoleteId: string, replacementId: string) => {
+      assertTrustedRendererSender(event, 'BrainKnowledgeSupersede')
+      const root = assertBrainVaultRoot(guardString(path, 'path'), AMITEL_BRAIN_ROOT)
+      const oldId = guardString(obsoleteId, 'obsoleteId')
+      const requestedTargetId = guardString(replacementId, 'replacementId')
+      await curationRecoveryReady
+      return executeCurationTransaction(
+        outcomeLearning,
+        { action: 'supersede', knowledgeId: oldId, requestedTargetId },
+        {
+          mutate: () => {
+            const result = supersedeKnowledgeCandidate(root, oldId, requestedTargetId)
+            return {
+              moved: result.moved,
+              knowledgeId: oldId,
+              targetId: result.replacementId,
+              rollbackId: result.moved.to
+            }
+          },
+          compensate: (result) => restoreTrashedKnowledge(root, result.moved.to),
+          invalidate: invalidateBrainRuntime
+        }
+      )
+    }
+  )
+  ipcMain.handle('os:outcomeLearning:get', (event) => {
+    assertTrustedRendererSender(event, 'OutcomeLearningRead')
+    return { mode: outcomeLearning.getMode(), events: outcomeLearning.audit(30) }
+  })
+  ipcMain.handle(
+    'os:outcomeLearning:curations',
+    (event, rawOffset: number = 0, rawLimit: number = 20) => {
+      assertTrustedRendererSender(event, 'OutcomeLearningCurations')
+      return outcomeLearning.curationPage(rawOffset, rawLimit)
+    }
+  )
+  ipcMain.handle('os:outcomeLearning:setMode', (event, rawMode: string) => {
+    assertTrustedRendererSender(event, 'OutcomeLearningMode')
+    const mode = guardString(rawMode, 'mode').trim().toLowerCase()
+    if (!['off', 'shadow', 'inbox', 'auto'].includes(mode)) {
+      throw new Error('mode outcome-learning invalide')
+    }
+    mkdirSync(outcomeLearningDirectory, { recursive: true })
+    writeFileSync(outcomeLearningModePath, `${mode}\n`, { encoding: 'utf8', mode: 0o600 })
+    return { mode: outcomeLearning.setMode(mode as 'off' | 'shadow' | 'inbox' | 'auto') }
+  })
+  ipcMain.handle('os:outcomeLearning:undoCuration', async (event, rawEventId: string) => {
+    assertTrustedRendererSender(event, 'OutcomeLearningUndo')
+    const eventId = guardString(rawEventId, 'eventId')
+    await curationRecoveryReady
+    const curation = outcomeLearning.eventById(eventId)
+    if (!curation || curation.kind !== 'curation') throw new Error('curation introuvable')
+    const root = amitelBrainRoot()
+    const inverseAction = curation.value.action === 'restore' ? 'retract' : 'restore'
+    const inverseSource =
+      curation.value.action === 'retract'
+        ? curation.value.targetId
+        : curation.value.action === 'restore'
+          ? curation.value.targetId
+          : curation.value.rollbackId
+    if (!inverseSource) throw new Error('curation sans point de rollback')
+    return executeCurationTransaction(
+      outcomeLearning,
+      {
+        action: inverseAction,
+        knowledgeId: inverseSource,
+        requestedTargetId: `undo:${curation.value.eventId}`
+      },
+      {
+        mutate: () => {
+          const compensation = compensateOutcomeCuration(curation.value, {
+            restore: (id) => restoreTrashedKnowledge(root, id),
+            retract: (id) => retractKnowledgeCandidate(root, id)
+          })
+          return {
+            moved: compensation.moved,
+            knowledgeId: compensation.knowledgeId,
+            targetId: compensation.targetId,
+            rollbackId: compensation.rollbackId,
+            previousEventId: compensation.previousEventId
+          }
+        },
+        compensate: (result) =>
+          inverseAction === 'restore'
+            ? retractKnowledgeCandidate(root, result.targetId)
+            : restoreTrashedKnowledge(root, result.targetId),
+        invalidate: invalidateBrainRuntime
+      }
+    )
   })
   ipcMain.handle('os:refreshBrain', async (event, path: string) => {
     assertTrustedRendererSender(event, 'BrainRefresh')
@@ -2767,6 +3066,11 @@ Le fil reprend ensuite normalement.`
   })
   // Chat transparent : l'agent converse ET pilote l'app dans le même tour.
   // conversationId (optionnel) → le tour est PERSISTÉ dans la conversation (fil rechargeable).
+  type DirectChatRecovery = {
+    turnId: string
+    call: RecoverableChatProviderCall
+    providerCall: RecoveredPilotProviderCall
+  }
   const runPilotChat = async (
     sender: WebContents | undefined,
     messages: Array<{
@@ -2775,7 +3079,15 @@ Le fil reprend ensuite normalement.`
       attachments?: Message['attachments']
     }>,
     conversationId?: string,
-    bindingOverride?: RoleBinding
+    bindingOverride?: RoleBinding,
+    recovery?: DirectChatRecovery,
+    policy?: {
+      readOnly: boolean
+      maxIterations: number
+      background?: boolean
+      maxBudgetUsd?: number
+    },
+    onLateTaskUsageSettlement?: TaskUsageSettlementSink
   ): Promise<{
     ok: boolean
     cancelled: boolean
@@ -2783,6 +3095,10 @@ Le fil reprend ensuite normalement.`
     text?: string
     error?: string
     verification?: { complete: boolean; evidence: string }
+    resolvedModel?: string
+    knownCostUsd?: number
+    totalTokens?: number
+    unpricedCalls?: number
   }> => {
     await os.waitUntilReady()
     const turnRuntimeBinding = bindingOverride ?? os.roles.getBinding('orchestrator')
@@ -2794,7 +3110,9 @@ Le fil reprend ensuite normalement.`
     const completion = new Promise<void>((resolve) => {
       resolveCompletion = resolve
     })
-    const turnId = randomUUID()
+    const turnId = recovery?.turnId ?? randomUUID()
+    // Correlation durable AVANT le spawn : apres un crash, le reglement peut retrouver l'occurrence.
+    onLateTaskUsageSettlement?.({ conversationId, turnId })
     /**
      * Plafond d'un TOUR de chat. Réutilise le circuit-breaker déjà éprouvé sur l'orchestration
      * (module pur, testé) avec un seuil PROPRE au chat : un tour conversationnel n'a pas le même
@@ -2811,7 +3129,8 @@ Le fil reprend ensuite normalement.`
       maxCalls: Number.isFinite(chatCallCap) && chatCallCap > 0 ? chatCallCap : 6
     })
     const spoken: string[] = []
-    let streamedSpoken = ''
+    let streamedSpoken = recovery?.providerCall.streamedPrefix ?? ''
+    let durableResponseTextSeen = Boolean(streamedSpoken.trim())
     /**
      * Raisonnement du modele ACCUMULE sur le tour.
      *
@@ -2825,6 +3144,7 @@ Le fil reprend ensuite normalement.`
     let turnUsage: { inputTokens: number; outputTokens: number; costUsd?: number } | undefined
     let turnPromptIdentity:
       { provider: string; model?: string; reasoningEffort?: string } | undefined
+    let turnResolvedModel: string | undefined
     let activityLabel = 'tour agent'
     let supervisedUsage: ExecutionUsageSnapshot | undefined
     let persistedSupervisedUsage: ExecutionUsageSnapshot | undefined
@@ -2838,7 +3158,11 @@ Le fil reprend ensuite normalement.`
         usage,
         previous: persistedSupervisedUsage,
         provider: turnPromptIdentity?.provider ?? turnRuntimeBinding.provider,
-        model: turnPromptIdentity?.model ?? turnRuntimeBinding.model,
+        model:
+          turnResolvedModel ??
+          recovery?.providerCall.result.model ??
+          turnPromptIdentity?.model ??
+          turnRuntimeBinding.model,
         reasoningEffort: turnPromptIdentity?.reasoningEffort ?? turnRuntimeBinding.reasoningEffort,
         label: activityLabel,
         durationMs: Math.round(performance.now() - turnStartedAtMs),
@@ -2850,8 +3174,26 @@ Le fil reprend ensuite normalement.`
     const onSupervisedUsageSettlement = (usage: ExecutionUsageSnapshot): void => {
       supervisedUsage = usage
       if (usagePersistenceReady) persistSupervisedChatUsage(usage)
+      const metrics = taskUsageMetricsFromExecution(usage)
+      onLateTaskUsageSettlement?.(metrics)
+      if (conversationId) {
+        const occurrence = scheduledTasks.reconcileUsageForTurn(conversationId, turnId, metrics)
+        if (occurrence?.trigger === 'watchdog') {
+          watchdogEngine?.rememberRecoveredUsage(occurrence.taskId, {
+            ...metrics,
+            eventId: occurrence.id,
+            conversationId,
+            turnId
+          })
+        }
+      }
     }
+    if (!policy?.background) await activeChatTurns.waitForInteractiveAccess()
     if (conversationId) activeChatTurns.set(conversationId, controller, completion)
+    // Le lease ne protege que la frontiere controle -> enregistrement. Une fois le tour de fond
+    // visible dans ActiveChatTurns, retenir l'utilisateur pendant tout l'appel provider serait a son
+    // tour invasif ; il peut reprendre son travail sans que le Watchdog n'interrompe quoi que ce soit.
+    if (policy?.background) activeChatTurns.releaseIdleLease()
     try {
       const safe = boundedTurnHistory(Array.isArray(messages) ? messages : [], 40).map((m) => ({
         role: m.role,
@@ -2872,7 +3214,51 @@ Le fil reprend ensuite normalement.`
       let turnSessionId: string | undefined
       const last = safe[safe.length - 1]
       activityLabel = last?.role === 'user' ? last.content : 'tour agent'
-      if (conversationId && last?.role === 'user' && os.conversations.get(conversationId)) {
+      const recoveredProviderUsage = recovery?.providerCall.result.usage
+      if (
+        conversationId &&
+        recovery &&
+        recoveredProviderUsage &&
+        persistRecoveredChatProviderUsage({
+          conversationId,
+          usageCallId: recovery.call.token,
+          provider: recovery.call.provider,
+          model:
+            recovery.providerCall.result.model ??
+            turnPromptIdentity?.model ??
+            turnRuntimeBinding.model,
+          reasoningEffort:
+            turnPromptIdentity?.reasoningEffort ?? turnRuntimeBinding.reasoningEffort,
+          label: activityLabel,
+          usage: recoveredProviderUsage
+        })
+      ) {
+        const recoveredOccurrence = scheduledTasks.reconcileUsageForTurn(conversationId, turnId, {
+          knownCostUsd: recoveredProviderUsage.costUsd,
+          totalTokens: recoveredProviderUsage.inputTokens + recoveredProviderUsage.outputTokens,
+          unpricedCalls: recoveredProviderUsage.costUsd === undefined ? 1 : 0,
+          resolvedModel: recovery.providerCall.result.model
+        })
+        if (recoveredOccurrence?.trigger === 'watchdog') {
+          watchdogEngine?.rememberRecoveredUsage(recoveredOccurrence.taskId, {
+            eventId: recoveredOccurrence.id,
+            conversationId,
+            turnId,
+            knownCostUsd: recoveredProviderUsage.costUsd,
+            totalTokens: recoveredProviderUsage.inputTokens + recoveredProviderUsage.outputTokens,
+            unpricedCalls: recoveredProviderUsage.costUsd === undefined ? 1 : 0,
+            resolvedModel: recovery.providerCall.result.model
+          })
+        }
+        broadcast({ type: 'refresh', scope: 'workflows' })
+      }
+      if (conversationId && recovery && os.conversations.get(conversationId)) {
+        os.conversations.applyTurnEvent(conversationId, turnId, { kind: 'resumed' })
+        appendTurnEvent(turnJournalRoot, conversationId, turnId, {
+          kind: 'resumed',
+          at: Date.now()
+        })
+      } else if (conversationId && last?.role === 'user' && os.conversations.get(conversationId)) {
         os.conversations.beginTurn(
           conversationId,
           {
@@ -2948,7 +3334,10 @@ Le fil reprend ensuite normalement.`
               `${pilotEvent.iteration ?? 0}:${Math.max(0, traceActionIndex - 1)}`,
             name: pilotEvent.name,
             ok: pilotEvent.ok,
-            data: pilotEvent.data
+            data: pilotEvent.data,
+            ...(pilotEvent.attachments?.length
+              ? { attachments: guardAttachments(pilotEvent.attachments) }
+              : {})
           }
         else if (pilotEvent.kind === 'artifact' && pilotEvent.artifact)
           durableEvent = { kind: 'artifact', artifact: pilotEvent.artifact }
@@ -2966,7 +3355,7 @@ Le fil reprend ensuite normalement.`
            * n'a ete emis pendant le tour (sinon le texte du `done` reprend ce qui a deja ete dit).
            */
           const closing = pilotEvent.text?.trim()
-          if (closing && !streamedSpoken.trim()) {
+          if (closing && !durableResponseTextSeen) {
             os.conversations.applyTurnEvent(conversationId, turnId, {
               kind: 'delta',
               // Flux dedie : ce texte de cloture n'appartient a aucun stream deja ouvert.
@@ -3023,7 +3412,15 @@ Le fil reprend ensuite normalement.`
           durableEvent = { kind: 'done', sessionId: turnSessionId }
         } else if (pilotEvent.kind === 'cancellation') durableEvent = { kind: 'cancelled' }
         if (durableEvent) {
-          os.conversations.applyTurnEvent(conversationId, turnId, durableEvent)
+          if (durableEvent.kind === 'result' && durableEvent.attachments?.length) {
+            // La conversation n'a besoin que de la carte resultat. Le binaire brut reste dans le
+            // journal de reprise borne ci-dessous, pas dans le WAL general ni dans la vue.
+            const conversationEvent = { ...durableEvent }
+            delete conversationEvent.attachments
+            os.conversations.applyTurnEvent(conversationId, turnId, conversationEvent)
+          } else {
+            os.conversations.applyTurnEvent(conversationId, turnId, durableEvent)
+          }
           // Survie niveau 2 : le même événement va AUSSI dans le journal fichier du tour, pour
           // pouvoir repérer/rejouer un tour resté inachevé après une fermeture complète de l'app.
           try {
@@ -3112,9 +3509,15 @@ Le fil reprend ensuite normalement.`
             }
           }
         }
-        if (pilotEvent.kind === 'delta' && pilotEvent.text) streamedSpoken += pilotEvent.text
+        if (pilotEvent.kind === 'delta' && pilotEvent.text) {
+          streamedSpoken += pilotEvent.text
+          durableResponseTextSeen = true
+        }
         if (pilotEvent.kind === 'reasoning' && pilotEvent.text) streamedReasoning += pilotEvent.text
-        if (pilotEvent.kind === 'think' && pilotEvent.text) spoken.push(pilotEvent.text)
+        if (pilotEvent.kind === 'think' && pilotEvent.text) {
+          spoken.push(pilotEvent.text)
+          durableResponseTextSeen = true
+        }
         if (pilotEvent.kind === 'command' && pilotEvent.name)
           spoken.push(`[a exécuté ${pilotEvent.name}]`)
         if (pilotEvent.kind === 'done' && pilotEvent.usage) turnUsage = pilotEvent.usage
@@ -3141,12 +3544,24 @@ Le fil reprend ensuite normalement.`
         }
         if (pilotEvent.kind === 'prompt-call' && pilotEvent.sessionId)
           turnSessionId = pilotEvent.sessionId
+        if (pilotEvent.kind === 'prompt-call' && pilotEvent.resolvedModel)
+          turnResolvedModel = pilotEvent.resolvedModel
         if (pilotEvent.kind === 'prompt-call' && pilotEvent.prompt) {
           const reasoningEffort = pilotEvent.prompt.options.reasoningEffort
           turnPromptIdentity ??= {
             provider: pilotEvent.prompt.provider,
             model: pilotEvent.prompt.model,
             reasoningEffort: typeof reasoningEffort === 'string' ? reasoningEffort : undefined
+          }
+        }
+        if (pilotEvent.kind === 'prompt-call') {
+          // `ExecutionSupervisor` a deja solde la reservation avant que le pilote emette cet
+          // evenement. Persister ce snapshot MAINTENANT evite qu'un crash a l'appel suivant perde
+          // le cout du precedent ; la publication terminale reste dedupliquee par snapshot.
+          const settledUsage = os.executionSupervisor.currentSnapshot()
+          if (settledUsage) {
+            supervisedUsage = settledUsage
+            persistSupervisedChatUsage(settledUsage)
           }
         }
         applyDurableEvent(pilotEvent)
@@ -3160,6 +3575,7 @@ Le fil reprend ensuite normalement.`
             actor: 'orchestrator',
             provider: pilotEvent.prompt.provider,
             model: pilotEvent.prompt.model,
+            resolvedModel: pilotEvent.resolvedModel,
             transport: pilotEvent.prompt.transport,
             boundary: 'Autowin OS -> provider adapter',
             limitation: pilotEvent.prompt.limitation,
@@ -3254,8 +3670,10 @@ Le fil reprend ensuite normalement.`
         }
         // Idem pour le flux de chat : une fenetre fermee est un non-evenement, pas une erreur du
         // tour en cours (qui est deja paye et persiste).
+        const livePilotEvent = { ...pilotEvent }
+        delete livePilotEvent.attachments
         emitToLiveWindows(BrowserWindow.getAllWindows(), 'pilot:event', {
-          ...pilotEvent,
+          ...livePilotEvent,
           conversationId,
           turnId
         })
@@ -3286,6 +3704,12 @@ Le fil reprend ensuite normalement.`
           { kind: 'done', text: 'Erreur structurée de fixture transmise à Auto-Kaizen.' }
         ]
         for (const fixtureEvent of fixtureEvents) handlePilotEvent(fixtureEvent)
+        broadcast({
+          type: 'orchestrate-end',
+          convId: conversationId,
+          status: 'red',
+          detail: 'Fixture isolée : orchestration rouge vérifiable de bout en bout.'
+        })
       } else if (durableStreamFixture) {
         const target = safe.at(-1)?.content.slice(durableStreamPrefix.length).trim() || 'fixture'
         let fixtureCall = 0
@@ -3444,7 +3868,27 @@ Le fil reprend ensuite normalement.`
             // Le supervisor peut annuler pour budget/watchdog sans que le controller UI soit lui-meme
             // aborté. Le pilote doit voir CE signal combine pour ne jamais retenter apres le cut-off.
             const supervisedSignal = os.executionSupervisor.currentSignal() ?? controller.signal
-            return pilot.chat(
+            const turnPilot = policy?.readOnly
+              ? new AgentPilot(os.registry, os.roles, {
+                  catalog: () => [],
+                  snapshotForPrompt: async () => ({ mode: 'watchdog-read-only' }),
+                  exec: async () => ({
+                    ok: false,
+                    error: 'Triage Watchdog en lecture seule : aucune commande autorisee.'
+                  })
+                } as unknown as AppCommandBus)
+              : pilot
+            const watchdogReadOnlyProfile = policy?.readOnly && policy.background
+            const pilotSendLimits =
+              policy?.maxBudgetUsd || watchdogReadOnlyProfile
+                ? {
+                    ...(policy?.maxBudgetUsd ? { maxBudgetUsd: policy.maxBudgetUsd } : {}),
+                    ...(watchdogReadOnlyProfile
+                      ? { systemProfile: 'watchdog-read-only' as const }
+                      : {})
+                  }
+                : undefined
+            return turnPilot.chat(
               safe,
               handlePilotEvent,
               (question) =>
@@ -3455,13 +3899,24 @@ Le fil reprend ensuite normalement.`
                         'Une tâche planifiée ne peut pas répondre à une question interactive du modèle.'
                       )
                     ),
-              6,
+              policy?.maxIterations ?? 6,
               conversationId,
               supervisedSignal,
               conversationId ? () => drainPendingDirectives(conversationId) : undefined,
               bindingOverride,
               turnId,
-              turnRuntimeBinding
+              turnRuntimeBinding,
+              recovery?.providerCall,
+              conversationId
+                ? (link) =>
+                    appendTurnEvent(turnJournalRoot, conversationId, turnId, {
+                      kind: 'provider-journal',
+                      ...link,
+                      ...(policy ? { policy } : {}),
+                      at: Date.now()
+                    })
+                : undefined,
+              pilotSendLimits
             )
           },
           onSupervisedUsageSettlement
@@ -3469,13 +3924,30 @@ Le fil reprend ensuite normalement.`
       // Journal d'activité de la conversation : le tour de chat, avec son coût ET sa durée.
       const turnDurationMs = Math.round(performance.now() - turnStartedAtMs)
       if (conversationId) {
+        const recoveredUsage = recovery?.providerCall.result.usage
+        if (recovery && recoveredUsage)
+          persistRecoveredChatProviderUsage({
+            conversationId,
+            usageCallId: recovery.call.token,
+            provider: recovery.call.provider,
+            model:
+              turnResolvedModel ??
+              recovery.providerCall.result.model ??
+              turnPromptIdentity?.model ??
+              turnRuntimeBinding.model,
+            reasoningEffort:
+              turnPromptIdentity?.reasoningEffort ?? turnRuntimeBinding.reasoningEffort,
+            label: activityLabel,
+            usage: recoveredUsage,
+            durationMs: turnDurationMs
+          })
         if (supervisedUsage) persistSupervisedChatUsage(supervisedUsage)
         else {
           appendConvActivity(conversationId, {
             kind: 'chat',
             label: activityLabel,
             provider: turnPromptIdentity?.provider ?? turnRuntimeBinding.provider,
-            model: turnPromptIdentity?.model ?? turnRuntimeBinding.model,
+            model: turnResolvedModel ?? turnPromptIdentity?.model ?? turnRuntimeBinding.model,
             reasoningEffort:
               turnPromptIdentity?.reasoningEffort ?? turnRuntimeBinding.reasoningEffort,
             inputTokens: turnUsage?.inputTokens,
@@ -3493,7 +3965,9 @@ Le fil reprend ensuite normalement.`
         cancelled: false,
         turnId,
         text: completedText || streamedSpoken.trim() || spoken.join('\n').trim(),
-        verification
+        verification,
+        ...(turnResolvedModel ? { resolvedModel: turnResolvedModel } : {}),
+        ...taskUsageMetricsFromExecution(supervisedUsage)
       }
     } catch (e) {
       /**
@@ -3529,7 +4003,9 @@ Le fil reprend ensuite normalement.`
           ok: true,
           cancelled: true,
           turnId,
-          text: completedText || streamedSpoken.trim() || spoken.join('\n').trim()
+          text: completedText || streamedSpoken.trim() || spoken.join('\n').trim(),
+          ...(turnResolvedModel ? { resolvedModel: turnResolvedModel } : {}),
+          ...taskUsageMetricsFromExecution(supervisedUsage)
         }
       // Le `return` ci-dessus couvre l'abort du contrôleur du TOUR. Ce garde couvre le cas où l'arrêt de
       // l'ORCHESTRATION fait jeter le tour sans que son propre contrôleur ait été aborté : même geste
@@ -3548,7 +4024,9 @@ Le fil reprend ensuite normalement.`
         ok: false,
         cancelled: false,
         turnId,
-        error: e instanceof Error ? e.message : String(e)
+        error: e instanceof Error ? e.message : String(e),
+        ...(turnResolvedModel ? { resolvedModel: turnResolvedModel } : {}),
+        ...taskUsageMetricsFromExecution(supervisedUsage)
       }
     } finally {
       usagePersistenceReady = true
@@ -3563,6 +4041,120 @@ Le fil reprend ensuite normalement.`
       }
       resolveCompletion()
     }
+  }
+  /**
+   * Reprend les appels de chat dont le CLI a survécu au main. La réservation locale empêche un
+   * nouveau message d'entrer dans la même conversation pendant qu'on attend la preuve `.exit.json`.
+   * Aucun timeout ne transforme une ignorance en relance : seule une sortie certifiée est traitée.
+   */
+  for (const call of startupRecoverableChatCalls) {
+    const recoveryController = new AbortController()
+    let resolveRecovery!: () => void
+    const recoveryCompletion = new Promise<void>((resolve) => {
+      resolveRecovery = resolve
+    })
+    activeChatTurns.set(call.conversationId, recoveryController, recoveryCompletion)
+    setImmediate(() => {
+      void (async () => {
+        try {
+          let exitCode: number | undefined
+          while (!recoveryController.signal.aborted) {
+            exitCode = survivableExitCode(call.journalPath)
+            if (exitCode !== undefined) break
+            await new Promise<void>((resolve) => {
+              const timer = setTimeout(resolve, 250)
+              timer.unref?.()
+            })
+          }
+
+          const closeWithoutRecovery = (event: ChatTurnEvent): void => {
+            if (os.conversations.get(call.conversationId)) {
+              os.conversations.applyTurnEvent(call.conversationId, call.turnId, event)
+            }
+            appendTurnEvent(turnJournalRoot, call.conversationId, call.turnId, {
+              ...event,
+              at: Date.now()
+            })
+            broadcast({ type: 'refresh', scope: 'conversations' })
+          }
+          if (recoveryController.signal.aborted) {
+            closeWithoutRecovery({ kind: 'cancelled' })
+            return
+          }
+          if (exitCode !== 0) {
+            closeWithoutRecovery({
+              kind: 'failed',
+              error: `Appel provider détaché terminé avec le code ${exitCode ?? 'inconnu'}`
+            })
+            return
+          }
+
+          const events = readTurnJournal(turnJournalRoot, call.conversationId, call.turnId)
+          if (isTurnFinished(events)) return
+          const result = recoverCompletedChatProviderCall(call.provider, call.journalPath)
+          if (!result) {
+            closeWithoutRecovery({
+              kind: 'failed',
+              error: 'Sortie provider certifiée mais résultat terminal illisible ou incomplet'
+            })
+            return
+          }
+
+          const conversation = os.conversations.get(call.conversationId)
+          const assistantIndex = conversation?.messages.findIndex(
+            (message) => message.role === 'assistant' && message.turnId === call.turnId
+          )
+          if (!conversation || assistantIndex === undefined || assistantIndex < 1) {
+            appendTurnEvent(turnJournalRoot, call.conversationId, call.turnId, {
+              kind: 'failed',
+              error: 'Conversation ou tour d’origine introuvable pour la reprise',
+              at: Date.now()
+            })
+            return
+          }
+          const assistant = conversation.messages[assistantIndex]
+          const messages = conversation.messages
+            .slice(0, assistantIndex)
+            .filter(
+              (message): message is typeof message & { role: 'user' | 'assistant' } =>
+                message.role === 'user' || message.role === 'assistant'
+            )
+            .map((message) => ({ role: message.role, content: message.content }))
+          const runtime = assistant.runtime
+          const binding = runtime
+            ? {
+                provider: runtime.provider,
+                model: runtime.model,
+                reasoningEffort: runtime.reasoningEffort as ReasoningEffort | undefined
+              }
+            : undefined
+          await runPilotChat(
+            undefined,
+            messages,
+            call.conversationId,
+            binding,
+            {
+              turnId: call.turnId,
+              call,
+              providerCall: {
+                iteration: call.iteration,
+                attempt: call.attempt,
+                streamId: call.streamId,
+                streamedPrefix: streamedPrefixForProviderCall(events, call.streamId),
+                ...(call.settledActions?.length ? { settledActions: call.settledActions } : {}),
+                result
+              }
+            },
+            call.policy
+          )
+        } catch (error) {
+          console.warn('[resume-chat-provider] reprise impossible :', call.turnId, error)
+        } finally {
+          activeChatTurns.delete(call.conversationId, recoveryController)
+          resolveRecovery()
+        }
+      })()
+    })
   }
   // Désarmé : la règle Watchdog « Auto-kaizen » a repris son rôle (voir
   // AUTO_KAIZEN_SUPERVISOR_ENABLED). Laisser les deux actifs déclencherait DEUX agents par incident.
@@ -3690,12 +4282,17 @@ Le fil reprend ensuite normalement.`
     isConversationBusy: (conversationId) => Boolean(activeChatTurns.get(conversationId)),
     interruptAndWait: (conversationId, reason) =>
       activeChatTurns.abortAndWait(conversationId, reason),
-    runPrompt: async (conversationId, prompt, binding) => {
+    waitForInteractiveIdle: (timeoutMs) => activeChatTurns.waitForIdle(timeoutMs),
+    releaseInteractiveIdle: () => activeChatTurns.releaseIdleLease(),
+    runPrompt: async (conversationId, prompt, binding, policy, onLateUsageSettlement) => {
       const result = await runPilotChat(
         undefined,
         [{ role: 'user', content: prompt }],
         conversationId,
-        binding
+        binding,
+        undefined,
+        policy,
+        onLateUsageSettlement
       )
       const mutations = readConversationTurnFileMutations(conversationId, result.turnId)
       return {
@@ -3709,18 +4306,20 @@ Le fil reprend ensuite normalement.`
      * Règle Watchdog en action `orchestration` : on passe par le MÊME `orchestrate` que le chat et
      * les agents, donc par le pipeline complet avec son gate à preuve et son juge.
      */
-    runOrchestration: (conversationId, prompt, task, onLateMutationClaims) =>
+    runOrchestration: (conversationId, request, task, onLateMutationClaims) =>
       runWatchdogOrchestration(
         {
-          exec: (requestedTask, convId, causalWatchPaths, onLateClaims) =>
+          exec: (requested, convId, causalWatchPaths, onLateClaims) =>
             bus.exec(
               'orchestrate',
               {
-                task: requestedTask,
+                task: requested.instruction,
                 causalWatchPaths,
+                ...(requested.evidence ? { watchdogEvidence: requested.evidence } : {}),
                 ...(onLateClaims ? { onLateMutationClaims: onLateClaims } : {})
               },
-              convId
+              convId,
+              scheduledTaskBinding(task)
             ),
           readMutatedPaths: (convId, turnId) => readConversationTurnFilePaths(convId, turnId),
           readMutatedLineFingerprints: (convId, turnId) =>
@@ -3729,7 +4328,7 @@ Le fil reprend ensuite normalement.`
             readConversationTurnFileMutations(convId, turnId).generationMarkersByPath
         },
         conversationId,
-        prompt,
+        request,
         task,
         onLateMutationClaims
       )
@@ -3751,14 +4350,18 @@ Le fil reprend ensuite normalement.`
     watchdogEngine = new WatchdogEngine(
       () => scheduledTasks.listTasks(),
       {
-        runWatchdog: async (taskId, signal, onLateMutationClaims) => {
-          const result = (await scheduledTaskScheduler?.runWatchdog(
-            taskId,
-            signal,
-            onLateMutationClaims
-          )) ?? {
-            fired: false
-          }
+        runWatchdog: async (taskId, signal, onLateMutationClaims, onLateUsageSettlement) => {
+          const result = await os.executionSupervisor.runOutsideCurrent(
+            async () =>
+              (await scheduledTaskScheduler?.runWatchdog(
+                taskId,
+                signal,
+                onLateMutationClaims,
+                onLateUsageSettlement
+              )) ?? {
+                fired: false
+              }
+          )
           if (result.fired) broadcast({ type: 'refresh', scope: 'task-manager' })
           return result
         }
@@ -3773,9 +4376,12 @@ Le fil reprend ensuite normalement.`
             (occurrence) => occurrence.trigger === 'watchdog' && occurrence.watchdog !== undefined
           )
           .map((occurrence) => ({
+            eventId: occurrence.id,
             signature: occurrence.watchdog!.signature,
             rootSignature: occurrence.watchdog!.rootSignature,
-            admittedAt: occurrence.claimedAt
+            admittedAt: occurrence.claimedAt,
+            knownCostUsd: occurrence.knownCostUsd,
+            unpricedCalls: occurrence.unpricedCalls
           }))
     )
   }
@@ -4599,6 +5205,7 @@ app.whenReady().then(async () => {
       let resumedTerminalLifecycle: Extract<RunLifecycleEvent, { stage: 'closure' }> | undefined
       let resumedCheckpointReleased = false
       let resumedPhaseStartIteration = 0
+      let resumedLearningAuthor: { model?: string; role?: string } = {}
       durableResumeTurn.begin(resumedRuntime.task)
       broadcast({ type: 'orchestrate-start', convId: conversationId, task: resumableRun.task })
       console.log(
@@ -4612,6 +5219,9 @@ app.whenReady().then(async () => {
           os.runTask(
             resumableRun.task,
             (step) => {
+              if (step.text?.includes('AUTOWIN_LESSON_V1:')) {
+                resumedLearningAuthor = { model: step.model, role: step.role }
+              }
               pendingResumedExecutionEvidence.push(...(step.evidence ?? []))
               durableResumeTurn.step(step)
               broadcast({ type: 'orchestrate-step', convId: conversationId, step })
@@ -4713,7 +5323,7 @@ app.whenReady().then(async () => {
             runtimeSnapshot
           )
         )
-        .then((result) => {
+        .then(async (result) => {
           if (!result.gateBlocked) {
             appendExecutionEvidenceFileTrace(pendingResumedExecutionEvidence, {
               conversationId,
@@ -4734,7 +5344,22 @@ app.whenReady().then(async () => {
           } catch {
             /* observabilité best-effort pendant la reprise */
           }
-          durableResumeTurn.succeed(result)
+          const learning = await bus.observeOutcomeLearning({
+            conversationId,
+            turnId: resumeTurnId,
+            runId: resumedCurrentRunId ?? resumableRun.runId,
+            resultText: result.result,
+            valid: result.valid,
+            gateBlocked: result.gateBlocked,
+            gateReasons: result.gateReasons,
+            reused: true,
+            evidence: result.phaseOutputs.flatMap((output) => output.executionEvidence ?? []),
+            model: resumedLearningAuthor.model ?? resumeBinding.model,
+            role: resumedLearningAuthor.role ?? 'orchestrator',
+            proposalAttestations: result.learningAttestations
+          })
+          const delivered = { ...result, ...(learning ? { learning } : {}) }
+          durableResumeTurn.succeed(delivered)
           broadcast({
             type: 'orchestrate-end',
             convId: conversationId,
@@ -4742,9 +5367,22 @@ app.whenReady().then(async () => {
             status: 'green'
           })
           broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
-          return result
+          return delivered
         })
-        .catch((error: unknown) => {
+        .catch(async (error: unknown) => {
+          await bus.observeOutcomeLearning({
+            conversationId,
+            turnId: resumeTurnId,
+            runId: resumedCurrentRunId ?? resumableRun.runId,
+            resultText: '',
+            valid: false,
+            gateBlocked: true,
+            gateReasons: [error instanceof Error ? error.message : String(error)],
+            reused: true,
+            evidence: pendingResumedExecutionEvidence,
+            model: resumeBinding.model,
+            terminalClass: 'defect'
+          })
           durableResumeTurn.fail(error instanceof Error ? error.message : String(error), false)
           broadcast({
             type: 'orchestrate-end',

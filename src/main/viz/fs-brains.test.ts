@@ -2,28 +2,30 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
-  readFileSync,
   realpathSync,
+  rmSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join, win32 } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   AMITEL_BRAIN_THEMES,
   applyBrainRetrievalScores,
   applyBrainRetrievalScoresAsync,
-  invalidateBrainCaches,
   loadBrainGraph,
+  loadBrainNeighborhood,
+  loadBrainThemeNodes,
+  loadBrainThemes,
   loadVaultBrainGraph,
+  loadVaultBrainGraphAsync,
   loadVaultBrainNodesForThemes,
   loadVaultBrainGraphPreviewAsync,
   loadVaultBrainNeighborhood,
   readNodeFile,
   scanBrainGraphs,
-  searchVaultBrainNotes,
   searchVaultBrainNotesAsync
 } from './fs-brains'
 
@@ -470,21 +472,6 @@ describe('Amitel Brain graph', () => {
     }
   })
 
-  it("rejette une recherche commencee avant l'invalidation meme si son lease serait capture apres", async () => {
-    const root = mkdtempSync(join(tmpdir(), 'autowin-search-pre-invalidate-'))
-    writeFileSync(join(root, 'decision.md'), '# OLD LABEL\nold-cache-proof', 'utf8')
-
-    const staleSearch = searchVaultBrainNotesAsync(root, 'old-cache-proof', 40, root)
-    invalidateBrainCaches()
-
-    await expect(staleSearch).rejects.toThrow(/cache Brain invalidé pendant le chargement/)
-    writeFileSync(join(root, 'decision.md'), '# NEW LABEL\nnew-cache-proof', 'utf8')
-    expect(await searchVaultBrainNotesAsync(root, 'new-cache-proof', 40, root)).toMatchObject([
-      { label: 'NEW LABEL' }
-    ])
-    expect(await searchVaultBrainNotesAsync(root, 'old-cache-proof', 40, root)).toEqual([])
-  })
-
   it('résout les alias UNC sans laisser une jonction sortir du vault', async () => {
     const parent = realpathSync.native(mkdtempSync(join(tmpdir(), 'autowin-unc-boundary-')))
     const root = join(parent, 'vault')
@@ -503,11 +490,10 @@ describe('Amitel Brain graph', () => {
     if (!existsSync(localRoot) || !existsSync(aliasRoot)) return
 
     expect(
-      await searchVaultBrainNotesAsync(localRoot, 'alias-search-proof', 40, root)
+      await searchVaultBrainNotesAsync(localRoot, 'alias-search-proof', { allowedRoot: root })
     ).toMatchObject([{ id: 'same' }])
-    invalidateBrainCaches()
     expect(
-      await searchVaultBrainNotesAsync(root, 'alias-search-proof', 40, localRoot)
+      await searchVaultBrainNotesAsync(root, 'alias-search-proof', { allowedRoot: localRoot })
     ).toMatchObject([{ id: 'same' }])
 
     const escapedLocal = [
@@ -1665,60 +1651,14 @@ describe('Amitel Brain graph', () => {
     expect(result).toEqual(local[0])
   })
 
-  it('branche la recherche Memory sur le retriever signé avant de rendre les scores', () => {
-    const source = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
-    const coordinatorSource = readFileSync(join(__dirname, 'brain-search-coordinator.ts'), 'utf8')
-    const workerSource = readFileSync(join(__dirname, 'brain-worker.ts'), 'utf8')
-    expect(source).toContain('retrieve: retrieveBrainContext')
-    expect(source).toContain("'fuseRetrieval'")
-    expect(source).toContain('const brainSearchWorker = new BrainWorkerClient(')
-    expect(source).toContain('brainSearchCoordinator.invalidate()')
-    expect(source).toMatch(/brainSearchWorker\s*\.requestWithTimeout<BrainNoteSearchResult\[\]>/)
-    expect(source).toContain('BRAIN_SEARCH_BOUNDARY_TIMEOUT_MS = 2_500')
-    expect(coordinatorSource).toContain('.catch(() => [])')
-    expect(coordinatorSource).toContain('.catch(() => local)')
-    expect(coordinatorSource).toContain('!this.fence.isCurrent(epochAtStart)')
-    expect(source).toContain('brainWorker.invalidate()')
-    expect(source).toContain('brainSearchWorker.invalidate()')
-    expect(source).not.toContain('applyBrainRetrievalScoresAsync')
-    expect(workerSource).toContain("case 'fuseRetrieval':")
-    expect(workerSource).toContain('await applyBrainRetrievalScoresAsync(')
-    expect(workerSource).toContain('await searchVaultBrainNotesAsync(')
-    expect(workerSource).toContain('new GenerationCache<')
-    expect(workerSource).toContain('!responseFence.isCurrent(epochAtStart)')
-    expect(workerSource).toContain('invalidateBrainCaches()')
-  })
-
-  it("refuse de rechercher les notes d'un dossier hors du vault autorisé", () => {
+  it("refuse de rechercher les notes d'un dossier hors du vault autorisé", async () => {
     const allowedRoot = mkdtempSync(join(tmpdir(), 'autowin-os-vault-allowed-'))
     const outsideRoot = mkdtempSync(join(tmpdir(), 'autowin-os-vault-outside-'))
     writeFileSync(join(outsideRoot, 'secret.md'), '# Secret\nultra-secret-7429', 'utf8')
 
-    expect(() => searchVaultBrainNotes(outsideRoot, 'ultra-secret-7429', 40, allowedRoot)).toThrow(
-      /hors périmètre autorisé/
-    )
-  })
-
-  it('recherche le contenu et recharge une note modifiee apres invalidation', () => {
-    const root = mkdtempSync(join(tmpdir(), 'autowin-os-vault-search-'))
-    const note = join(root, 'decision.md')
-    writeFileSync(
-      note,
-      '---\nrelated: [knowledge/runtime.md]\n---\n# Decision\nLe fournisseur est local uniquement.\n',
-      'utf8'
-    )
-
-    const first = searchVaultBrainNotes(root, 'fournisseur local', 40, root)
-    expect(first[0]).toMatchObject({
-      id: 'decision',
-      score: expect.any(Number),
-      relations: [{ type: 'related', target: 'knowledge/runtime.md' }]
-    })
-
-    writeFileSync(note, '# Decision\nLa source devient canonique apres promotion.\n', 'utf8')
-    expect(searchVaultBrainNotes(root, 'canonique', 40, root)).toEqual([])
-    invalidateBrainCaches()
-    expect(searchVaultBrainNotes(root, 'canonique', 40, root)[0]?.id).toBe('decision')
+    await expect(
+      searchVaultBrainNotesAsync(outsideRoot, 'ultra-secret-7429', { allowedRoot })
+    ).rejects.toThrow(/hors périmètre autorisé/)
   })
 
   it('discovers Amitel Brain with a broad multi-category catalog', () => {
@@ -1843,7 +1783,7 @@ describe('Amitel Brain graph', () => {
     )
   })
 
-  it('discovers YAML themes dynamically and searches notes outside the displayed LOD', () => {
+  it('discovers YAML themes dynamically and searches notes outside the displayed LOD', async () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-os-dynamic-theme-'))
     mkdirSync(join(root, 'knowledge/domain'), { recursive: true })
     writeFileSync(
@@ -1867,7 +1807,7 @@ describe('Amitel Brain graph', () => {
 
     // LOD 1 masque au moins une note, mais la recherche reste exhaustive.
     expect(loadVaultBrainGraph(root, 1).nodes).toHaveLength(1)
-    expect(searchVaultBrainNotes(root, 'autowin', 40, root)).toEqual(
+    expect(await searchVaultBrainNotesAsync(root, 'autowin', { allowedRoot: root })).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: 'knowledge/domain/autowin',
@@ -1876,13 +1816,67 @@ describe('Amitel Brain graph', () => {
         })
       ])
     )
-    expect(searchVaultBrainNotes(root, 'theme/autowin-os', 40, root)).toHaveLength(2)
+    expect(
+      await searchVaultBrainNotesAsync(root, 'theme/autowin-os', { allowedRoot: root })
+    ).toHaveLength(2)
     expect(loadVaultBrainNodesForThemes(root, ['theme/autowin-os'])).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'knowledge/domain/autowin', label: 'Autowin OS' }),
         expect.objectContaining({ id: 'knowledge/domain/other', label: 'Other' })
       ])
     )
+  })
+
+  it("applique le corpus avant le top 40 et avant le chargement d'un thème partagé", async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-os-scoped-ranking-'))
+    const rig = join(root, 'knowledge/domain/rigapplication-documentation')
+    const domain = join(root, 'knowledge/domain')
+    mkdirSync(rig, { recursive: true })
+    for (let index = 0; index < 40; index += 1) {
+      writeFileSync(
+        join(rig, `needle-${index}.md`),
+        `---\ntags: [theme/architecture]\n---\n# Needle RIG ${index}\n`,
+        'utf8'
+      )
+    }
+    writeFileSync(
+      join(domain, 'autowin-os-guide.md'),
+      '---\ntags: [theme/architecture]\n---\n# Guide Autowin\nneedle\n',
+      'utf8'
+    )
+    const corpus = ['knowledge/domain/autowin-os-']
+
+    const global = await searchVaultBrainNotesAsync(root, 'needle', { allowedRoot: root })
+    expect(global).toHaveLength(40)
+    expect(global.some((result) => result.id === 'knowledge/domain/autowin-os-guide')).toBe(false)
+
+    const scoped = await searchVaultBrainNotesAsync(root, 'needle', { allowedRoot: root, corpus })
+    expect(scoped.map((result) => result.id)).toEqual(['knowledge/domain/autowin-os-guide'])
+    expect(loadVaultBrainNodesForThemes(root, ['theme/architecture'], corpus)).toEqual([
+      expect.objectContaining({ id: 'knowledge/domain/autowin-os-guide' })
+    ])
+    expect(loadBrainThemes(root, corpus, root)).toEqual([
+      { id: 'theme/architecture', label: 'Architecture', count: 1 }
+    ])
+  })
+
+  it('un corpus vide ne touche pas le vault', async () => {
+    const missing = join(tmpdir(), `autowin-os-missing-vault-${process.pid}-${Date.now()}`)
+
+    await expect(searchVaultBrainNotesAsync(missing, 'needle', { corpus: [] })).resolves.toEqual([])
+    expect(loadVaultBrainNodesForThemes(missing, ['theme/architecture'], [])).toEqual([])
+    expect(loadVaultBrainNeighborhood(missing, 'knowledge/anything', [])).toEqual({
+      nodes: [],
+      links: [],
+      totalNodes: 0
+    })
+    expect(loadBrainThemeNodes(missing, ['theme/architecture'], [])).toEqual([])
+    expect(loadBrainThemes(missing, [])).toEqual([])
+    expect(loadBrainNeighborhood(missing, 'knowledge/anything', [])).toEqual({
+      nodes: [],
+      links: [],
+      totalNodes: 0
+    })
   })
 
   it('loads only an out-of-LOD note and its direct neighbourhood', () => {
@@ -1904,6 +1898,63 @@ describe('Amitel Brain graph', () => {
     expect(delta.nodes.some((node) => node.id === 'unrelated')).toBe(false)
   })
 
+  it('coupe les voisins hors corpus avant de rendre un voisinage', () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-os-scoped-neighborhood-'))
+    const domain = join(root, 'knowledge/domain')
+    const rig = join(domain, 'rigapplication-documentation')
+    mkdirSync(rig, { recursive: true })
+    writeFileSync(
+      join(domain, 'autowin-os-guide.md'),
+      '# Guide Autowin\n[[knowledge/domain/rigapplication-documentation/proc]]\n',
+      'utf8'
+    )
+    writeFileSync(join(rig, 'proc.md'), '# Procédure RIG\n', 'utf8')
+    const corpus = ['knowledge/domain/autowin-os-']
+
+    expect(
+      loadVaultBrainNeighborhood(root, 'knowledge/domain/autowin-os-guide').nodes
+    ).toHaveLength(2)
+    const scoped = loadVaultBrainNeighborhood(root, 'knowledge/domain/autowin-os-guide', corpus)
+    expect(scoped.nodes.map((node) => node.id)).toEqual(['knowledge/domain/autowin-os-guide'])
+    expect(scoped.links).toEqual([])
+    expect(
+      loadVaultBrainNeighborhood(root, 'knowledge/domain/rigapplication-documentation/proc', corpus)
+        .nodes
+    ).toEqual([])
+    expect(loadVaultBrainGraph(root, 300, corpus).nodes.map((node) => node.id)).toEqual([
+      'knowledge/domain/autowin-os-guide'
+    ])
+    expect(readNodeFile(join(domain, 'autowin-os-guide.md'), root, corpus, root).content).toContain(
+      'Guide Autowin'
+    )
+    expect(() => readNodeFile(join(rig, 'proc.md'), root, corpus, root)).toThrow(
+      'fichier hors corpus du workspace'
+    )
+    expect(() => readNodeFile(join(rig, 'proc.md'), undefined, corpus, root)).toThrow(
+      'fichier hors corpus du workspace'
+    )
+  })
+
+  it('filtre le corpus avant le LOD du preview et du graphe asynchrone', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'autowin-os-scoped-preview-'))
+    const early = join(root, 'knowledge/_maps')
+    const rig = join(root, 'knowledge/domain/rigapplication-documentation')
+    mkdirSync(early, { recursive: true })
+    mkdirSync(rig, { recursive: true })
+    writeFileSync(join(early, 'foreign.md'), '# Foreign\n', 'utf8')
+    writeFileSync(join(rig, 'proc.md'), '# Procédure RIG\n', 'utf8')
+    const corpus = ['knowledge/domain/rigapplication-documentation/']
+
+    const preview = await loadVaultBrainGraphPreviewAsync(root, 1, corpus)
+    expect(preview.nodes.map((node) => node.id)).toEqual([
+      'knowledge/domain/rigapplication-documentation/proc'
+    ])
+    expect(preview.totalNodes).toBe(1)
+    expect(
+      (await loadVaultBrainGraphAsync(root, 300, corpus)).nodes.map((node) => node.id)
+    ).toEqual(['knowledge/domain/rigapplication-documentation/proc'])
+  })
+
   it('returns a bounded preview before the full vault graph', async () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-os-preview-'))
     writeFileSync(join(root, 'a.md'), '# A\n', 'utf8')
@@ -1920,6 +1971,87 @@ describe('Amitel Brain graph', () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-os-forbidden-vault-'))
     writeFileSync(join(root, 'secret.md'), '# Secret\n', 'utf8')
     expect(() => loadBrainGraph(root)).toThrow('brain vault hors périmètre autorisé')
+  })
+
+  it('ne confond pas K et le signe Kelvin entre le vault autorisé et le vault demandé', async () => {
+    const parent = mkdtempSync(join(tmpdir(), 'autowin-os-unicode-vault-'))
+    const allowed = join(parent, 'Knowledge-K')
+    const foreign = join(parent, 'Knowledge-K')
+    const previousRoot = process.env.AMITEL_BRAIN_ROOT
+    try {
+      mkdirSync(allowed)
+      mkdirSync(foreign)
+      writeFileSync(join(foreign, 'foreign-secret.md'), '# FOREIGN SECRET\n', 'utf8')
+      process.env.AMITEL_BRAIN_ROOT = allowed
+      vi.resetModules()
+      const isolated = await import('./fs-brains')
+
+      expect(() => isolated.loadBrainGraph(foreign)).toThrow('brain vault hors périmètre autorisé')
+      expect(() => isolated.loadBrainThemeNodes(foreign, ['category/brain'])).toThrow(
+        'brain vault hors périmètre autorisé'
+      )
+      await expect(isolated.loadBrainGraphPreviewAsync(foreign)).rejects.toThrow(
+        'brain vault hors périmètre autorisé'
+      )
+      await expect(isolated.loadBrainGraphAsync(foreign)).rejects.toThrow(
+        'brain vault hors périmètre autorisé'
+      )
+      expect(() => isolated.loadBrainNeighborhood(foreign, 'foreign-secret')).toThrow(
+        'brain vault hors périmètre autorisé'
+      )
+      expect(() => isolated.loadBrainThemes(foreign)).toThrow('brain vault hors périmètre autorisé')
+      expect(() => isolated.readNodeFile(join(foreign, 'foreign-secret.md'))).toThrow(
+        'fichier hors périmètre autorisé'
+      )
+    } finally {
+      if (previousRoot === undefined) delete process.env.AMITEL_BRAIN_ROOT
+      else process.env.AMITEL_BRAIN_ROOT = previousRoot
+      vi.resetModules()
+    }
+  })
+
+  it('lit toujours la racine canonique si une junction est repointée pendant le chargement async', async () => {
+    const parent = mkdtempSync(join(tmpdir(), 'autowin-os-rebind-vault-'))
+    const allowed = join(parent, 'allowed')
+    const outside = join(parent, 'outside')
+    const alias = join(parent, 'alias')
+    const previousRoot = process.env.AMITEL_BRAIN_ROOT
+    try {
+      mkdirSync(allowed)
+      mkdirSync(outside)
+      for (let index = 0; index < 100; index += 1) {
+        writeFileSync(join(allowed, `inside-${index}.md`), `# INSIDE-${index}\n`, 'utf8')
+        writeFileSync(join(outside, `outside-${index}.md`), `# OUTSIDE-${index}\n`, 'utf8')
+      }
+      process.env.AMITEL_BRAIN_ROOT = allowed
+      vi.resetModules()
+      const isolated = await import('./fs-brains')
+      const linkType = process.platform === 'win32' ? 'junction' : 'dir'
+      symlinkSync(allowed, alias, linkType)
+
+      const previewPending = isolated.loadBrainGraphPreviewAsync(alias, 100)
+      rmSync(alias, { force: true })
+      symlinkSync(outside, alias, linkType)
+      const preview = await previewPending
+
+      expect(preview.nodes).toHaveLength(100)
+      expect(preview.nodes.every(({ label }) => label.startsWith('INSIDE-'))).toBe(true)
+
+      rmSync(alias, { force: true })
+      symlinkSync(allowed, alias, linkType)
+      const graphPending = isolated.loadBrainGraphAsync(alias, 100)
+      rmSync(alias, { force: true })
+      symlinkSync(outside, alias, linkType)
+      const graph = await graphPending
+
+      expect(graph.nodes).toHaveLength(100)
+      expect(graph.nodes.every(({ label }) => label.startsWith('INSIDE-'))).toBe(true)
+    } finally {
+      if (previousRoot === undefined) delete process.env.AMITEL_BRAIN_ROOT
+      else process.env.AMITEL_BRAIN_ROOT = previousRoot
+      vi.resetModules()
+      rmSync(parent, { recursive: true, force: true })
+    }
   })
 
   it('rejects a file in a sibling whose name only shares an allowed-root prefix', () => {

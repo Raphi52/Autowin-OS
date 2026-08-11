@@ -32,6 +32,10 @@ export interface Message {
 export interface SendOptions {
   /** Modèle exact choisi dans Agents. */
   model?: string
+  /** Plafond dur transmis au provider quand son transport sait l'appliquer avant la depense. */
+  maxBudgetUsd?: number
+  /** Surface d'outils imposee par le controleur pour les tours automatiques sensibles. */
+  toolProfile?: 'watchdog-read-only'
   /** Niveau d'effort choisi dans Agents, si le provider le supporte. */
   reasoningEffort?: string
   /**
@@ -51,6 +55,13 @@ export interface SendOptions {
   requestId?: string
   /** Observation du payload final, juste avant spawn/fetch. Jamais transmis au provider. */
   observePrompt?: (prompt: PromptEnvelope) => void
+  /**
+   * Journal survivable d'un appel DIRECT (chat). Distinct de `execution.onJournal` : ajouter un bloc
+   * `execution` au chat ferait basculer le registre vers un exécuteur outillé et changerait le
+   * provider demandé. Le contrôleur de conversation persiste ce lien AVANT le spawn pour pouvoir
+   * réinjecter, après redémarrage, le résultat déjà payé au lieu de relancer le même appel.
+   */
+  onJournal?: (token: string, journalPath: string) => void
   /** Mode agentique local, réservé à l'étape d'exécution d'une orchestration. */
   execution?: {
     cwd: string
@@ -59,6 +70,8 @@ export interface SendOptions {
     causallyIsolated?: boolean
     /** Fichiers surveillés présents dans la copie isolée, à attribuer exactement. */
     causalWatchPaths?: string[]
+    /** Oracles et couverture déclarés par l'opérateur, figés avant toute mutation du run. */
+    learningOracles?: TrustedLearningOracle[]
     /** Lease interne du processus CLI ; jamais transmis au fournisseur. */
     onProcess?: (pid: number, active: boolean) => void
     /** Route d'exécution réellement retenue après fallback (ex. Gemini demandé → Codex). */
@@ -142,11 +155,42 @@ export interface Usage {
   costUsd?: number
 }
 
+/**
+ * Echec TERMINAL rapporte par un provider apres avoir quand meme consomme un appel.
+ *
+ * Un simple `Error` perdait les compteurs du `result` Claude et la boucle de chat relancait le meme
+ * prompt : le coupe-circuit `--max-budget-usd` coutait alors deux fois sa borne et l'occurrence
+ * affichait une reservation theorique de 500 000 tokens. Ce contrat transporte la consommation
+ * reelle jusqu'au superviseur et dit explicitement si repayer une tentative est autorise.
+ */
+export class ProviderCallError extends Error {
+  readonly code?: string
+  readonly retryable: boolean
+  readonly usage?: Usage
+  readonly resolvedModel?: string
+
+  constructor(
+    message: string,
+    details: { code?: string; retryable?: boolean; usage?: Usage; resolvedModel?: string } = {}
+  ) {
+    super(message)
+    this.name = 'ProviderCallError'
+    this.code = details.code
+    this.retryable = details.retryable ?? true
+    this.usage = details.usage
+    this.resolvedModel = details.resolvedModel
+  }
+}
+
 export interface ExecutionEvidence {
   type: string
   kind: 'mutation' | 'verification' | 'inspection' | 'other'
   status: string
   ok: boolean
+  /** Oracle explicitement classé stable par le producteur de preuve ; absent = non publiable seul. */
+  oracleStable?: boolean
+  /** Hash de la déclaration opérateur qui atteste commande + couverture. */
+  oracleAttestation?: string
   summary: string
   /** Commande exécutée (command_execution) — affichée telle quelle dans le Chat. */
   command?: string
@@ -174,6 +218,13 @@ export interface ExecutionEvidence {
   pathGenerationMarkers?: Record<string, string>
   /** Génération filesystem avant mutation ; complète le hash de base pour chaîner causalement. */
   pathBaseGenerationMarkers?: Record<string, string | null>
+}
+
+export interface TrustedLearningOracle {
+  command: string
+  covers: string[]
+  attestedFiles: string[]
+  attestation: string
 }
 
 /** Résultat final d'un tour, après consommation du stream. */

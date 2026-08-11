@@ -20,14 +20,7 @@ import { loadRoleBindings, saveRoleBindings } from './role-store'
 import { CostAggregator } from './dashboards/cost'
 import { isBlocked } from './dashboards/runs'
 import { recurrentPatterns, parseJsonl } from './dashboards/kaizen'
-import {
-  loadBrainGraph,
-  loadBrainNeighborhood,
-  scanBrainGraphs,
-  readNodeFile,
-  searchVaultBrainNotes,
-  type BrainGraphRef
-} from './viz/fs-brains'
+import { loadBrainGraph, scanBrainGraphs, type BrainGraphRef } from './viz/fs-brains'
 import { scanRuns, type RunEntry } from './dashboards/runs-scan'
 import { ConversationStore } from './store/conversations'
 import { TrustLedger } from './trust/ledger'
@@ -78,6 +71,8 @@ import { repositoryWorktreeIdentity } from './store/worktree-repository'
 import type {
   WorktreeAgentActivity,
   WorktreeConflictDiffResult,
+  WorktreeConflictResolutionChoice,
+  WorktreeConflictResolutionResult,
   WorktreeRuntimeStatus
 } from '../shared/worktree-activity-model'
 import { existsSync } from 'node:fs'
@@ -635,6 +630,18 @@ export class AutowinOS {
       : { available: false, reason: 'not-conflict' }
   }
 
+  async resolveWorktreeConflict(
+    agentId: string,
+    choice: WorktreeConflictResolutionChoice
+  ): Promise<WorktreeConflictResolutionResult> {
+    return (
+      (await this.worktrees?.resolveConflictAsync(agentId, choice)) ?? {
+        resolved: false,
+        reason: 'unsupported'
+      }
+    )
+  }
+
   async retryWorktreeRecovery(agentId: string): Promise<WorktreeAgentActivity | undefined> {
     return this.worktrees?.retryRunAsync(agentId)
   }
@@ -1014,20 +1021,6 @@ export class AutowinOS {
     const graph = loadBrainGraph(path, lod, community)
     this.brainGraphCache.set(key, graph)
     return graph
-  }
-  loadBrainNeighborhood(path: string, nodeId: string): ReturnType<typeof loadBrainNeighborhood> {
-    const key = `${path}\u0000neighbourhood\u0000${nodeId}`
-    const cached = this.brainGraphCache.get(key)
-    if (cached) return cached
-    const graph = loadBrainNeighborhood(path, nodeId)
-    this.brainGraphCache.set(key, graph)
-    return graph
-  }
-  readNodeFile(path: string): ReturnType<typeof readNodeFile> {
-    return readNodeFile(path)
-  }
-  searchBrain(path: string, query: string): ReturnType<typeof searchVaultBrainNotes> {
-    return searchVaultBrainNotes(path, query)
   }
   listRuns(): Promise<RunEntry[]> {
     return scanRuns()
