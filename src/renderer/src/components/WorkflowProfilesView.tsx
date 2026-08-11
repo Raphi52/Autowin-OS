@@ -344,8 +344,12 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
   }
 
   const create = async (): Promise<void> => {
-    // Un identifiant lisible dérivé du rang : on ne demande pas à l'utilisateur d'inventer une clé.
-    const rang = file.profiles.length + 1
+    // Un identifiant lisible, mais RÉELLEMENT libre : `profiles.length + 1` collisionnait dès qu'un
+    // workflow intermédiaire avait été supprimé (3 workflows, on retire le 2e → « Nouveau »
+    // régénérait `workflow-3` et ÉCRASAIT le workflow existant, sans un mot).
+    const pris = new Set(file.profiles.map((profile) => profile.id))
+    let rang = file.profiles.length + 1
+    while (pris.has(`workflow-${rang}`)) rang += 1
     try {
       const next = (await window.api.workflowProfileSave?.({
         id: `workflow-${rang}`,
@@ -394,7 +398,18 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
         </p>
       )}
 
-      {file.profiles.length === 0 && !loading ? (
+      {/* L'état vide était gardé par `!loading` mais AUCUNE branche ne couvrait le chargement :
+          pendant la lecture, la vue ne rendait ni liste ni message. */}
+      {loading && file.profiles.length === 0 ? (
+        <p
+          className="workflow-profiles-empty"
+          role="status"
+          aria-busy="true"
+          data-testid="workflow-loading"
+        >
+          Chargement des workflows…
+        </p>
+      ) : file.profiles.length === 0 && !loading ? (
         <p className="workflow-profiles-empty" data-testid="workflow-empty">
           Aucun workflow pour l’instant. Crée-en un pour figer une façon de travailler et pouvoir la
           comparer à une autre.

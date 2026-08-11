@@ -268,7 +268,9 @@ describe('vue Workflows — un échec dit POURQUOI', () => {
     // plein, fichier verrouillé, schéma refusé — tout se lisait pareil, donc rien de diagnostiquable.
     api({ [canal]: vi.fn().mockRejectedValue(new Error('disque plein')) })
     await render()
-    await act(async () => container.querySelector<HTMLElement>(`[data-testid="${testid}"]`)!.click())
+    await act(async () =>
+      container.querySelector<HTMLElement>(`[data-testid="${testid}"]`)!.click()
+    )
     expect(container.querySelector('[role="alert"]')?.textContent).toContain('disque plein')
   })
 
@@ -357,6 +359,78 @@ describe('vue Workflows — gestes séparés et suppression confirmée', () => {
         .click()
     )
     expect(remove).toHaveBeenCalledWith('rapide')
+  })
+
+  it('créer après suppression d’un workflow intermédiaire n’écrase aucun workflow existant', async () => {
+    // Défaut : `id = workflow-${profiles.length + 1}`. Avec 3 workflows, supprimer le 2e ramène la
+    // longueur à 2 → « Nouveau » régénère `workflow-3`, qui ÉCRASE le workflow existant.
+    const profils = ['workflow-1', 'workflow-2', 'workflow-3'].map((id) => ({
+      ...rapide,
+      id,
+      name: id
+    }))
+    let fichier = { profiles: profils, activeId: null as string | null }
+    const save = vi.fn(async (profile: { id: string; name: string }) => {
+      const index = fichier.profiles.findIndex((p) => p.id === profile.id)
+      const suivant =
+        index >= 0
+          ? fichier.profiles.map((p, i) => (i === index ? { ...p, ...profile } : p))
+          : [...fichier.profiles, { ...rapide, ...profile }]
+      fichier = { ...fichier, profiles: suivant }
+      return fichier
+    })
+    api({
+      workflowProfiles: vi.fn(async () => fichier),
+      workflowProfileRemove: vi.fn(async (id: string) => {
+        fichier = { ...fichier, profiles: fichier.profiles.filter((p) => p.id !== id) }
+        return fichier
+      }),
+      workflowProfileSave: save
+    })
+    await render()
+
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="workflow-remove-workflow-2"]')!
+        .click()
+    )
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[data-testid="workflow-remove-confirm-workflow-2"]')!
+        .click()
+    )
+    expect(fichier.profiles).toHaveLength(2)
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="workflow-create"]')!.click()
+    )
+
+    const ids = fichier.profiles.map((p) => p.id)
+    expect(fichier.profiles).toHaveLength(3)
+    expect(new Set(ids).size).toBe(3)
+    expect(ids).toContain('workflow-3')
+  })
+
+  it('annonce le chargement des workflows au lieu de ne rien rendre', async () => {
+    let resoudre!: (value: unknown) => void
+    const attente = new Promise((done) => {
+      resoudre = done
+    })
+    api({ workflowProfiles: vi.fn(() => attente) })
+    await render()
+
+    const chargement = container.querySelector('[data-testid="workflow-loading"]')
+    expect(chargement).not.toBeNull()
+    expect(chargement?.getAttribute('aria-busy')).toBe('true')
+    expect(container.querySelector('[data-testid="workflow-empty"]')).toBeNull()
+
+    await act(async () => {
+      resoudre({ profiles: [rapide], activeId: null })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-testid="workflow-loading"]')).toBeNull()
+    expect(container.querySelector('[data-testid="workflow-profile-rapide"]')).not.toBeNull()
   })
 
   it('le bouton destructif ne porte pas la même apparence qu’Exporter', async () => {
